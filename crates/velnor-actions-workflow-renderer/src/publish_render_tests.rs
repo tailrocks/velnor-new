@@ -253,7 +253,7 @@ fn both_mode_preserves_hosted_publication_and_hosted_api_output() {
 }
 
 #[test]
-fn scale_set_mode_requires_an_immutable_job_image() {
+fn scale_set_mode_without_global_image_stays_containerless() {
     let selector = ScaleSetSelector::try_new(
         "linux-amd64",
         &["velnor".to_owned(), "linux-amd64".to_owned()],
@@ -269,5 +269,8 @@ fn scale_set_mode_requires_an_immutable_job_image() {
         runs_on: "ubuntu-24.04".to_owned(),
     };
 
-    assert!(render_publish_workflow_with_routing(&spec(), &context, &routing).is_err());
+    let rendered = render_publish_workflow_with_routing(&spec(), &context, &routing)
+        .expect("selector-only Scale Set publication remains valid");
+    assert!(rendered.bytes.contains("runs-on: [velnor, linux-amd64]"));
+    assert!(!rendered.bytes.contains("container:"));
 }

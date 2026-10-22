@@ -1,6 +1,6 @@
 //! Bounded discovery of an already-published channel candidate; never publication.
 use super::{
-    github::{GitHubApi, unique_release},
+    github::GitHubApi,
     identity::read_regular,
     recovery::promotion_context::{Invocation, Purpose},
     run_identity::RunSource,
@@ -126,50 +126,17 @@ fn select_preview(
     };
     let identity =
         PreviewIdentity::derive(&plan.base_version, sha, count).map_err(|_| invalid("version"))?;
-    let releases = api.release_list(&identity.tag)?;
-    if releases.is_empty() {
+    let Some(release) = api.release_by_tag(&identity.tag)? else {
         return Ok(None);
-    }
-    let release = unique_release(&releases, &identity.tag)?;
-    if release.draft == Some(true) {
-        return Ok(None);
-    }
+    };
     let tag = api
         .tag_identity(&identity.tag)?
         .ok_or_else(|| invalid("tag"))?;
     if tag.source_sha != sha {
         return Err(invalid("tag"));
     }
-    let journal = super::rolling_state::Envelope::parse(release.body.as_deref())?
-        .ok_or_else(|| invalid("journal"))?;
-    let release_id = super::published::configured_preview_release_id()?;
-    if release.id != release_id
-        || release.immutable != Some(false)
-        || journal.schema != "velnor.rolling-preview-journal.v1"
-        || journal.repository != plan.repository
-        || journal.repository_id != repo_id
-        || journal.release_id != release_id
-        || journal.tag != "preview"
-        || journal.journal.identity.source_sha != sha
-        || journal.journal.phase
-            != velnor_actions_contract::publication_retry::rolling::RollingPhase::Committed
-    {
-        return Err(invalid("journal"));
-    }
-    let original = super::recovery::rolling_original::verify(
-        api,
-        &plan.repository,
-        repo_id,
-        &journal.journal.original,
-    )?;
-    super::published::verify_published_release(&original.signed)?;
-    let receipt = original.signed.receipt();
-    if receipt.source.commit_sha != sha
-        || receipt.version.commit_count != Some(count)
-        || receipt.version.value != identity.version
-    {
-        return Err(invalid("receipt"));
-    }
+    let tag_message = tag.message.as_deref().ok_or_else(|| invalid("tag"))?;
+    let receipt = envelope::preview_receipt_hint(&release, plan, repo_id, sha, count, tag_message)?;
     if source::head(api, &plan.default_branch)? != sha {
         return Ok(None);
     }
@@ -211,13 +178,11 @@ fn select_stable(
     else {
         return Ok(None);
     };
-    let releases = api.release_list(&tag_name)?;
-    if releases.is_empty() {
+    let Some(release) = api.release_by_tag(&tag_name)? else {
         return Ok(None);
-    }
-    let release = unique_release(&releases, &tag_name)?;
+    };
     let receipt = envelope::stable_receipt_hint(
-        release,
+        &release,
         &exact_plan,
         repo_id,
         tag.message.as_deref().ok_or_else(|| invalid("tag"))?,

@@ -12,12 +12,13 @@ pub(super) fn ensure_job_container(
     path: &str,
     job_id: &str,
 ) -> Result<(), RenderError> {
-    let image =
-        image.ok_or_else(|| invalid(format!("job_container_image_missing:{path}:{job_id}")))?;
     let existing = fields.iter().position(|(key, _)| key == "container");
     if let Some(index) = existing {
         validate_container(&fields[index].1, path, job_id)?;
     } else {
+        let Some(image) = image else {
+            return Ok(());
+        };
         fields.push((
             "container".to_owned(),
             Yaml::Map(vec![("image".to_owned(), Yaml::str(image.as_str()))]),

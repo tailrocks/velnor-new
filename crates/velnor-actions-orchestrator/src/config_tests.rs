@@ -2,7 +2,7 @@
 
 use std::error::Error;
 
-use super::{CONFIG_REL, PartialConfig};
+use super::{CONFIG_REL, PartialConfig, load_config, load_config_from_text};
 use velnor_actions_contract::{PullRequestCachePolicy, VelnorConfig};
 
 #[test]
@@ -22,6 +22,25 @@ fn pull_request_cache_policy_defaults_and_opts_in_for_both_schemas() -> Result<(
             "schema {schema} opt-in"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn exact_text_loader_matches_file_defaults_and_rejects_invalid_schema() -> Result<(), Box<dyn Error>>
+{
+    let source = "schema = 1\n[workflow]\nname = \"CI\"\n";
+    let root = tempfile::tempdir()?;
+    let config_dir = root.path().join(".velnor");
+    std::fs::create_dir(&config_dir)?;
+    std::fs::write(config_dir.join("config.toml"), source)?;
+
+    let from_file = load_config(root.path())?;
+    let from_text = load_config_from_text(source)?;
+    assert_eq!(
+        serde_json::to_value(from_text)?,
+        serde_json::to_value(from_file)?
+    );
+    assert!(load_config_from_text("schema = 99\n").is_err());
     Ok(())
 }
 

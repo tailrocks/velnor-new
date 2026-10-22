@@ -27,6 +27,7 @@ use velnor_actions_contract::{
 use velnor_actions_mise::CheckDeadline;
 
 pub(super) struct AdmittedLeaves {
+    pub(super) request: ReleaseProductionRequest,
     pub(super) manifests: Vec<PreviewLeafManifest>,
     pub(super) inputs: Vec<TaskInput>,
     pub(super) pinned: Vec<HeldFile>,
@@ -64,15 +65,45 @@ pub(super) fn acquire(
 ) -> Result<AdmittedLeaves, OrchestratorError> {
     let root = handoff::fresh_directory(temp, "preview-leaves")?;
     let mut admitted = AdmittedLeaves {
+        request: request.clone(),
         manifests: Vec::new(),
         inputs: Vec::new(),
         pinned: Vec::new(),
         manifest_bytes: 0,
         asset_bytes: 0,
     };
-    acquire_release_artifacts(request, &root, deadline, |artifact| {
+    let completed_request = acquire_release_artifacts(request, &root, deadline, |artifact| {
         admit_leaf(&root, request, deadline, artifact, &mut admitted)
     })?;
+    complete_acquisition(admitted, request, completed_request, deadline)
+}
+
+/// Seal the exact request returned by the authenticated artifact inventory.
+/// This is shared by the production acquisition path and its composed test.
+/// # Errors
+/// Rejects caller drift, incomplete inventory identity, or changed retained files.
+pub(super) fn complete_acquisition(
+    mut admitted: AdmittedLeaves,
+    original: &ReleaseProductionRequest,
+    completed: ReleaseProductionRequest,
+    deadline: CheckDeadline,
+) -> Result<AdmittedLeaves, OrchestratorError> {
+    let mut expected = completed.clone();
+    if original.plan.channel
+        == velnor_actions_contract::package_release::PackageReleaseChannel::Preview
+    {
+        let ReleaseProductionStage::Assemble { inputs } = &original.stage else {
+            return Err(internal("preview_acquisition_original_stage"));
+        };
+        if !inputs.is_empty() {
+            return Err(internal("preview_acquisition_original_inputs"));
+        }
+        expected.stage = original.stage.clone();
+    }
+    if expected != *original || completed.validate().is_err() || admitted.request != *original {
+        return Err(internal("preview_acquisition_completed_request"));
+    }
+    admitted.request = completed;
     admitted.inputs.sort_by(|a, b| a.name.cmp(&b.name));
     admitted.recheck(deadline)?;
     Ok(admitted)

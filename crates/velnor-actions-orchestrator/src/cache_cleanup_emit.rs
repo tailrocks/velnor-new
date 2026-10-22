@@ -15,7 +15,9 @@ pub(crate) fn files(
     routing: &WorkflowRoutingPolicy,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
     let selected = selected_scale_set_target(prep, routing)?;
-    let target = selected.as_ref().map(|(selector, image)| (selector, image));
+    let target = selected
+        .as_ref()
+        .map(|(selector, image)| (selector, image.as_ref()));
     let mut files = files_for(
         prep.config.workflow.pull_request_cache_policy,
         &prep.runner_label,
@@ -29,7 +31,7 @@ pub(crate) fn files(
 fn selected_scale_set_target(
     prep: &GenerationPreparation,
     routing: &WorkflowRoutingPolicy,
-) -> Result<Option<(ScaleSetSelector, ValidatedImageReference)>, OrchestratorError> {
+) -> Result<Option<(ScaleSetSelector, Option<ValidatedImageReference>)>, OrchestratorError> {
     if !routing.is_scale_set() {
         return Ok(None);
     }
@@ -48,18 +50,15 @@ fn selected_scale_set_target(
     let image = execution
         .profiles
         .get(&execution.scale_set_profile)
-        .and_then(|profile| profile.job_container_image.as_ref())
-        .ok_or_else(|| OrchestratorError::Contract {
-            problem: "cache_housekeeping_scale_set_container_missing".to_owned(),
-        })?;
-    Ok(Some((selector, image.clone())))
+        .and_then(|profile| profile.job_container_image.clone());
+    Ok(Some((selector, image)))
 }
 
 fn files_for(
     policy: PullRequestCachePolicy,
     runner_label: &str,
     routing: &WorkflowRoutingPolicy,
-    selected: Option<(&ScaleSetSelector, &ValidatedImageReference)>,
+    selected: Option<(&ScaleSetSelector, Option<&ValidatedImageReference>)>,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
     if policy != PullRequestCachePolicy::SameRepositoryScoped {
         return Ok(Vec::new());
@@ -77,11 +76,11 @@ fn files_for(
 fn route<'a>(
     runner_label: &str,
     routing: &WorkflowRoutingPolicy,
-    selected: Option<(&'a ScaleSetSelector, &'a ValidatedImageReference)>,
+    selected: Option<(&'a ScaleSetSelector, Option<&'a ValidatedImageReference>)>,
 ) -> Result<(String, Option<&'a ValidatedImageReference>), OrchestratorError> {
     match (routing.is_scale_set(), selected) {
         (false, None) => Ok((runner_label.to_owned(), None)),
-        (true, Some((selector, image))) => Ok((selector.token(), Some(image))),
+        (true, Some((selector, image))) => Ok((selector.token(), image)),
         (true, None) => Err(OrchestratorError::Contract {
             problem: "cache_housekeeping_scale_set_route_missing".to_owned(),
         }),

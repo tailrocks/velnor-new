@@ -51,7 +51,7 @@ fn scale_set_cleanup_uses_the_selected_selector_and_immutable_container() {
         PullRequestCachePolicy::SameRepositoryScoped,
         "ubuntu-26.04",
         &policy,
-        Some((&selected, &image)),
+        Some((&selected, Some(&image))),
     )
     .expect("The test could not render Scale Set cleanup.");
     assert_eq!(files.len(), 1);
@@ -62,6 +62,27 @@ fn scale_set_cleanup_uses_the_selected_selector_and_immutable_container() {
     );
     assert!(files[0].bytes.contains(&format!("image: {IMAGE}")));
     assert!(!files[0].bytes.contains("runs-on: ubuntu-latest"));
+}
+
+#[test]
+fn scale_set_cleanup_can_remain_containerless() {
+    let policy = WorkflowRoutingPolicy::configured(ExecutionMode::ScaleSet, selector(), None);
+    let selected = selector();
+    let files = files_for(
+        PullRequestCachePolicy::SameRepositoryScoped,
+        "ubuntu-26.04",
+        &policy,
+        Some((&selected, None)),
+    )
+    .expect("The selector-only cleanup job remains containerless.");
+    assert_eq!(files.len(), 1);
+    assert!(
+        files[0]
+            .bytes
+            .contains("runs-on: [velnor, ubuntu-26.04-scale-set]\n")
+    );
+    assert!(!files[0].bytes.contains("container:"));
+    assert!(!files[0].bytes.contains("ubuntu-latest"));
 }
 
 #[test]

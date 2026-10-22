@@ -83,6 +83,7 @@ pub use crate::workflow_routing::{
     AuthorityCall, AuthorityConcurrency, AuthorityJob, AuthorityPermissions, AuthorityTrigger,
     AuthorityWorkflow, WorkflowRoutingPolicy, extract_workflow_authority,
     validate_generated_workflow_calls, validate_generated_workflow_calls_with_ir,
+    validate_generated_workflow_calls_with_native_preview_ir,
 };
 pub use crate::workflow_size::MAX_WORKFLOW_BYTES;
 pub use crate::yaml::{Yaml, quote_scalar, render_yaml};

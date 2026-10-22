@@ -1,4 +1,4 @@
-//! Stable uses the same product matrix and isolated custody as rolling preview.
+//! Stable uses the same product matrix and isolated custody as per-source preview.
 use super::{fixture, job};
 
 fn hosted_policy() -> crate::workflow_routing::WorkflowRoutingPolicy {
@@ -11,7 +11,6 @@ use velnor_actions_contract::package_release::PackageReleaseChannel;
 pub(super) fn stable() -> ConsumerReleaseSpec {
     let mut spec = fixture();
     spec.policy.channel = PackageReleaseChannel::Stable;
-    spec.preview = None;
     spec.stable = Some(ConsumerStableReleaseSpec {
         version_package: "scanner".to_owned(),
         release_pr: true,

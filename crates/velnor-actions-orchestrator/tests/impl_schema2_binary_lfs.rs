@@ -34,11 +34,19 @@ fn native_preview_stable_and_reconcile_honor_workflow_checkout_lfs() -> TestResu
                 yaml.contains("actions/checkout@"),
                 "sourceful fixture: {path}"
             );
-            assert_eq!(
-                yaml.contains("lfs: \"true\""),
-                flag == Some(true),
-                "LFS propagation: {path}"
-            );
+            if path == ".github/workflows/binary-preview.yml" {
+                assert!(yaml.contains("lfs: ${{ steps.source-select.outputs.checkout_lfs }}"));
+                assert!(
+                    yaml.contains("lfs: ${{ needs.preview-eligibility.outputs.checkout_lfs }}")
+                );
+                assert!(!yaml.contains("lfs: \"true\""));
+            } else {
+                assert_eq!(
+                    yaml.contains("lfs: \"true\""),
+                    flag == Some(true),
+                    "literal LFS propagation: {path}"
+                );
+            }
             native.push(yaml.to_owned());
         }
         if flag == Some(false) {

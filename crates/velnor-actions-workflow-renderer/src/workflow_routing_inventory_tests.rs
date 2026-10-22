@@ -224,21 +224,30 @@ fn configured_modes_require_an_immutable_container_on_every_selector_leaf() {
 }
 
 #[test]
-fn selector_leaf_requires_default_image_even_when_it_has_an_explicit_container() {
+fn selector_leaf_can_use_an_explicit_container_without_a_default_image() {
     let file = workflow(
         "explicit-container",
         "on: push\njobs:\n  check:\n    runs-on: [velnor, linux-amd64]\n    container:\n      image: ghcr.io/team/job@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n",
     );
-    let error = validate_generated_workflow_calls(
+    let result = validate_generated_workflow_calls(
         &[file],
         &configured_without_image(ExecutionMode::Hosted),
-    )
-    .expect_err("the configured default image remains mandatory");
+    );
+    assert_eq!(result, Ok(()));
+}
+
+#[test]
+fn selector_leaf_can_be_containerless_without_a_default_image() {
+    let file = workflow(
+        "containerless",
+        "on: push\njobs:\n  check:\n    runs-on: [velnor, linux-amd64]\n",
+    );
     assert_eq!(
-        error,
-        RenderError::InvalidWorkflow(
-            "job_container_image_missing:.github/workflows/explicit-container.yml:check".to_owned()
-        )
+        validate_generated_workflow_calls(
+            &[file],
+            &configured_without_image(ExecutionMode::Hosted),
+        ),
+        Ok(())
     );
 }
 

@@ -57,6 +57,7 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
             "playwright_resolve.rs",
             "prepare.rs",
             "preview_producer_entry.rs",
+            "preview_source_admission_finalize.rs",
             "private_fetch.rs",
             "qualification_cache_backend.rs",
             "qualification_resolver.rs",
@@ -64,7 +65,7 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
             "tap_prepare.rs",
             "tap_prepare_execute.rs",
         ],
-        "preparation, execution, image preview, preview budget admission, routing, owned preview, qualification admission, cache backend, captured tap preparation, private dependency lock, private fetch, and Playwright browser lock load configuration at their boundaries"
+        "preparation, execution, image preview, preview budget admission and source finalization, routing, owned preview, qualification admission and cache backend, captured tap preparation, the private dependency lock/fetch, and the Playwright browser lock load configuration at their boundaries"
     );
     Ok(())
 }
@@ -128,7 +129,7 @@ fn rust_qualification_jobs_keep_the_private_fetch_authority() -> TestResult {
 }
 
 #[test]
-fn preview_budget_admission_passes_one_validated_config_to_shared_preparation() -> TestResult {
+fn preview_admission_bypasses_shared_preparation_while_stable_retains_it() -> TestResult {
     let mut callers = Vec::new();
     for path in product_src_files()? {
         let name = path.file_name().unwrap_or_default().to_string_lossy();
@@ -149,13 +150,36 @@ fn preview_budget_admission_passes_one_validated_config_to_shared_preparation() 
             .count(),
         1
     );
-    assert!(entry.contains("prepare_with_config(&workspace, config)?"));
+    assert!(entry.contains("producer_deadline(started, minutes)?"));
+    let compact_entry = entry.split_whitespace().collect::<String>();
+    assert!(compact_entry.contains("deadline.scope(||"));
+    assert!(entry.contains("admitted_policy_plan(&temp, deadline)?"));
     assert_eq!(entry.matches("prepare_with_config(").count(), 1);
-    let compact = entry.split_whitespace().collect::<String>();
-    assert!(compact.contains(
-        "deadline.scope(||{let(policy,plan)=crate::release_policy_admission::admitted_policy_plan(&temp,deadline)?;letprep=prepare_with_config(&workspace,config)?;"
-    ));
-    assert!(compact.contains("execution::execute(&prep,&temp,&preview,&request,deadline,guard)"));
+    let compact_entry = entry.split_whitespace().collect::<String>();
+    let preview = compact_entry
+        .split_once("PackageReleaseChannel::Preview=>{")
+        .and_then(|(_, tail)| {
+            tail.split_once("PackageReleaseChannel::Stable=>{")
+                .map(|pair| pair.0)
+        })
+        .expect("Preview branch precedes Stable");
+    assert!(preview.contains("preflight_preview_source("));
+    assert!(preview.contains("context::derive(&workspace,&policy,plan,deadline)?"));
+    assert!(preview.contains("execution::execute("));
+    assert!(preview.contains("deadline"));
+    assert!(
+        !preview.contains("prepare_with_config(")
+            && !preview.contains("binary_preview_emit::release_policy"),
+        "Preview uses its authenticated A admission without repository metadata"
+    );
+    let stable = compact_entry
+        .split_once("PackageReleaseChannel::Stable=>{")
+        .map(|(_, stable)| stable)
+        .expect("Stable branch remains explicit");
+    assert!(stable.contains("prepare_with_config(&workspace,config)?"));
+    assert!(stable.contains("source_preview(&prep,&policy,&plan)?"));
+    assert!(stable.contains("execution::execute("));
+    assert!(stable.contains("deadline"));
     assert!(!entry.contains("let mut config"));
     let prepare = std::fs::read_to_string(orch_src().join("prepare.rs"))?;
     assert!(prepare.contains("prepare_inner(root, None, None)"));

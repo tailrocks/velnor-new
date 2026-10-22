@@ -42,7 +42,7 @@ fn scale_set_pruning_uses_the_selected_container_without_hosted_fallback() {
         "ubuntu-26.04",
         "main",
         &policy,
-        Some((&selected, &image)),
+        Some((&selected, Some(&image))),
     )
     .expect("The Scale Set workflow renders.");
     assert!(
@@ -53,4 +53,25 @@ fn scale_set_pruning_uses_the_selected_container_without_hosted_fallback() {
     assert!(files[0].bytes.contains(&format!("image: {IMAGE}\n")));
     assert!(!files[0].bytes.contains("ubuntu-latest"));
     assert!(!files[0].bytes.contains("gh cache"));
+}
+
+#[test]
+fn selector_only_pruning_remains_containerless() {
+    let policy = WorkflowRoutingPolicy::configured(ExecutionMode::ScaleSet, selector(), None);
+    let selected = selector();
+    let files = files_for(
+        true,
+        "ubuntu-26.04",
+        "main",
+        &policy,
+        Some((&selected, None)),
+    )
+    .expect("The selector-only pruning job can use its host runtime.");
+    assert_eq!(files.len(), 1);
+    assert!(
+        files[0]
+            .bytes
+            .contains("runs-on: [velnor, ubuntu-26.04-scale-set]\n")
+    );
+    assert!(!files[0].bytes.contains("container:"));
 }

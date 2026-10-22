@@ -1,6 +1,6 @@
 //! Actual native transport guard compensates the audit's whole-on comment scope.
+use super::super::preview_trigger;
 use super::*;
-use crate::schema2::consumer_release_eligibility::preview_trigger;
 
 fn document() -> Yaml {
     Yaml::Map(vec![

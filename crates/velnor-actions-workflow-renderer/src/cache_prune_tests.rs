@@ -72,7 +72,7 @@ fn the_workflow_is_marked_push_only_and_gives_write_scope_to_one_job() {
 }
 
 #[test]
-fn a_scale_set_route_requires_and_uses_its_immutable_container() {
+fn a_scale_set_route_uses_its_optional_immutable_container() {
     let image = ValidatedImageReference::parse(IMAGE).expect("The test image is immutable.");
     let file = render_cache_prune_yml(SCALE_TOKEN, Some(&image), "main", "0.1.38")
         .expect("The Scale Set workflow renders.");
@@ -85,7 +85,14 @@ fn a_scale_set_route_requires_and_uses_its_immutable_container() {
             .contains(&format!("container:\n      image: {IMAGE}\n"))
     );
     assert!(!file.bytes.contains("ubuntu-latest"));
-    assert!(render_cache_prune_yml(SCALE_TOKEN, None, "main", "0.1.38").is_err());
+    let containerless = render_cache_prune_yml(SCALE_TOKEN, None, "main", "0.1.38")
+        .expect("The selected runner can use its configured host runtime.");
+    assert!(!containerless.bytes.contains("container:"));
+    assert!(
+        containerless
+            .bytes
+            .contains("runs-on: [velnor, ubuntu-26.04-scale-set]\n")
+    );
     assert!(render_cache_prune_yml("ubuntu-26.04", Some(&image), "main", "0.1.38").is_err());
 }
 

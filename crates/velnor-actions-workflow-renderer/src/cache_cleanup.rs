@@ -72,7 +72,7 @@ pub(crate) fn client_script() -> String {
 
 /// Render cleanup for the route selected by the generator.
 ///
-/// A `ScaleSet` route requires the selected immutable job container image.
+/// A `ScaleSet` route may select an immutable job container image.
 /// A hosted route uses the selected hosted runner label and rejects a container.
 ///
 /// # Errors
@@ -86,15 +86,12 @@ pub fn render_cache_cleanup_yml(
     let runner = RunsOn::parse(runs_on).map_err(RenderError::Contract)?;
     let (label, container) = match (runner, image) {
         (RunsOn::Hosted(label), None) => (label, String::new()),
-        (RunsOn::ScaleSet(selector), Some(image)) => (
+        (RunsOn::ScaleSet(selector), image) => (
             format!("[{}]", selector.labels().join(", ")),
-            format!("    container:\n      image: {}\n", image.as_str()),
+            image.map_or_else(String::new, |image| {
+                format!("    container:\n      image: {}\n", image.as_str())
+            }),
         ),
-        (RunsOn::ScaleSet(_), None) => {
-            return Err(RenderError::InvalidWorkflow(
-                "cache_cleanup_scale_set_container_missing".to_owned(),
-            ));
-        }
         (RunsOn::Hosted(_), Some(_)) => {
             return Err(RenderError::InvalidWorkflow(
                 "cache_cleanup_hosted_container_unexpected".to_owned(),

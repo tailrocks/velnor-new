@@ -7,9 +7,6 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-#[path = "rolling_publication.rs"]
-pub mod rolling;
-
 /// Authenticated immutable receipt identity, including its complete asset set.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -61,8 +58,8 @@ pub enum PublicationState {
 /// Sole permitted next transition; no branch authorizes overwriting any object.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PublicationAction {
-    /// Create a tag without force, then a draft.
-    CreateTagAndDraft,
+    /// Create the immutable source tag without force, then reobserve before draft creation.
+    CreateTag,
     /// Resume after tag creation, preserving the exact existing tag.
     CreateDraft,
     /// Upload only these missing original assets, then publish after rechecks.
@@ -131,7 +128,7 @@ pub fn publication_action(
                 .keys()
                 .all(|name| available_original_assets.contains(name))
             {
-                PublicationAction::CreateTagAndDraft
+                PublicationAction::CreateTag
             } else {
                 Reject(Rejection::UnavailableOriginalAssets)
             }

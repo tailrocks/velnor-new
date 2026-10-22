@@ -15,17 +15,9 @@ fn both_channels_share_exactly_one_qualified_inventory() {
 }
 
 #[test]
-fn rolling_requires_an_existing_release_but_stable_does_not() {
+fn immutable_preview_needs_no_mutable_release_binding() {
     let mut config = enabled_preview();
-    config.preview.release_id = 0;
-    let error = config
-        .validate("config.toml")
-        .expect_err("rolling identity missing");
-    assert!(
-        error
-            .to_string()
-            .contains("existing_rolling_release_required")
-    );
+    assert!(config.validate("config.toml").is_ok());
     config.preview.enabled = false;
     config.stable.enabled = true;
     assert!(config.validate("config.toml").is_ok());
@@ -73,31 +65,13 @@ fn removed_single_binary_and_preview_inventory_shapes_are_rejected() {
 }
 
 #[test]
-fn legacy_bootstrap_requires_explicit_strict_fingerprint_and_enabled_release_binding() {
-    let mut config = enabled_preview();
-    assert!(config.preview.bootstrap_snapshot_sha256.is_none());
-    assert!(
-        !serde_json::to_value(&config).expect("config")["preview"]
-            .as_object()
-            .expect("preview")
-            .contains_key("bootstrap_snapshot_sha256")
-    );
-    config.preview.bootstrap_snapshot_sha256 = Some("ab".repeat(32));
-    assert!(config.validate("config.toml").is_ok());
-    for digest in [
-        "A".repeat(64),
-        "g".repeat(64),
-        "a".repeat(63),
-        "a".repeat(65),
-        String::new(),
-    ] {
-        config.preview.bootstrap_snapshot_sha256 = Some(digest);
-        assert!(config.validate("config.toml").is_err());
+fn mutable_release_and_bootstrap_configuration_are_rejected() {
+    for field in ["release_id", "bootstrap_snapshot_sha256"] {
+        let mut value = serde_json::to_value(enabled_preview()).expect("config");
+        value["preview"][field] = serde_json::json!(1);
+        assert!(
+            serde_json::from_value::<RustBinaryReleaseConfig>(value).is_err(),
+            "{field}"
+        );
     }
-    config.preview.bootstrap_snapshot_sha256 = Some("ab".repeat(32));
-    config.preview.enabled = false;
-    assert!(config.validate("config.toml").is_err());
-    config.preview.enabled = true;
-    config.preview.release_id = 0;
-    assert!(config.validate("config.toml").is_err());
 }

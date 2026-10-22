@@ -56,7 +56,7 @@ pub(super) fn receipt() -> PackageReleaseReceipt {
             "run_id":42,"run_attempt":2,"producer_run_id":42,"producer_run_attempt":2,
             "signer_job_id":channel.signer_job_id(),"signer_workflow":channel.workflow_path()},
         "version":{"base":"1.2.3","value":"1.2.3-preview.9+aaaaaaa","commit_count":9,"source_sha7":"aaaaaaa"},
-        "tag":"preview",
+        "tag":format!("preview-{}", "a".repeat(40)),
         "products":[{"id":"app","package":"app","package_version":"1.2.3","bins":["app"],
             "payloads":[{"format":"tar-gz","target":"aarch64-apple-darwin","name":PAYLOAD,"members":["app"]}]}],
         "companions":[],"assets":assets,

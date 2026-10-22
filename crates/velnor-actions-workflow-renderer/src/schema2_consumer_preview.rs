@@ -2,7 +2,6 @@
 
 use super::{
     MiseSetup,
-    consumer_release_eligibility::{ReleaseEligibilityContext, consumer_script},
     features::{base, finish, run_step},
 };
 use crate::{
@@ -23,27 +22,22 @@ pub(super) use invocation::TapInvocationContext;
 mod reconcile;
 pub use reconcile::render_release_tap_reconcile;
 
+#[path = "schema2_consumer_preview_trigger.rs"]
+mod preview_trigger;
 #[path = "schema2_consumer_preview_production.rs"]
 pub(super) mod production;
+#[path = "schema2_consumer_preview_source.rs"]
+mod source;
 #[path = "schema2_consumer_preview_steps.rs"]
 pub(super) mod steps;
 #[path = "schema2_consumer_preview_tap.rs"]
 pub(super) mod tap;
-use steps::{Artifact, needs, operation, outputs, permissions, setup, transfer};
+use steps::{Artifact, needs, operation, permissions, setup, transfer};
 pub use tap::ConsumerReleaseTapSpec;
 
 #[path = "schema2_consumer_release_admission.rs"]
 mod admission;
 use admission::{aggregate_admission, finish_policy_job, policy_admission};
-
-/// Fixed existing mutable release authority, never inferred from a receipt URL.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ConsumerRollingPreviewSpec {
-    /// Positive existing mutable release database ID.
-    pub release_id: u64,
-    /// Exact legacy inventory authorization for the first committed generation.
-    pub bootstrap_snapshot_sha256: Option<String>,
-}
 
 /// Generation-time, inventory-only authority for a native preview workflow.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,8 +56,14 @@ pub struct ConsumerReleaseSpec {
     pub linux_acquire: Step,
     /// Verified helper acquisition for the declared producer platform.
     pub producer_acquire: Step,
+    /// Velnor-owned helper acquisitions from the current workflow authority's
+    /// verified manifest, selected at runtime by the actual runner host.
+    pub producer_acquire_by_target: BTreeMap<velnor_actions_contract::targets::ReleaseTarget, Step>,
     /// Verified Mise setup matching the producer platform.
     pub producer_setup: MiseSetup,
+    /// Velnor-owned Mise setup pins selected by the actual preview producer host.
+    pub producer_setup_by_target:
+        BTreeMap<velnor_actions_contract::targets::ReleaseTarget, MiseSetup>,
     /// Velnor-owned Mise pin used only to obtain the pinned GitHub CLI.
     pub linux_setup: MiseSetup,
     /// Fixed qualified GitHub CLI installation argv.
@@ -82,8 +82,6 @@ pub struct ConsumerReleaseSpec {
     pub homebrew_tap: Option<ConsumerReleaseTapSpec>,
     /// Closed manual tag coordination, present only for the stable channel.
     pub stable: Option<super::consumer_binary_release::ConsumerStableReleaseSpec>,
-    /// Explicit fixed rolling target authority, absent for permanent stable.
-    pub preview: Option<ConsumerRollingPreviewSpec>,
 }
 
 /// Render the independently enabled native preview workflow.
@@ -107,36 +105,17 @@ pub fn render_consumer_preview(
             "preview_spec_invalid".to_owned(),
         ));
     }
-    let preview = spec
-        .preview
-        .as_ref()
-        .ok_or_else(|| RenderError::InvalidWorkflow("rolling_policy_missing".to_owned()))?;
-    if spec.stable.is_some()
-        || preview.release_id == 0
-        || preview
-            .bootstrap_snapshot_sha256
-            .as_ref()
-            .is_some_and(|value| {
-                value.len() != 64
-                    || !value
-                        .bytes()
-                        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-            })
-    {
+    if spec.stable.is_some() {
         return Err(RenderError::InvalidWorkflow(
-            "rolling_policy_invalid".to_owned(),
+            "preview_policy_invalid".to_owned(),
         ));
     }
-    let gate = consumer_script(
-        &ReleaseEligibilityContext {
-            repository: spec.policy.repository.clone(),
-            default_branch: spec.policy.default_branch.clone(),
-            channel: PackageReleaseChannel::Preview,
-        },
-        &spec.gh_argv,
-        false,
-    )?;
-    let jobs = preview_jobs(spec, &gate)?;
+    let mut jobs = vec![source::job(spec, routing.is_scale_set())?];
+    jobs.extend(production::jobs(spec)?);
+    jobs.extend([signer(spec)?, publisher(spec)?, recovery(spec)?]);
+    if let Some(tap) = &spec.homebrew_tap {
+        jobs.extend(tap::jobs(spec, tap, TapInvocationContext::Preview)?);
+    }
     let document = Yaml::Map(vec![
         (
             "name".to_owned(),
@@ -145,9 +124,7 @@ pub fn render_consumer_preview(
         (
             "on".to_owned(),
             Yaml::Map(vec![
-                super::consumer_release_eligibility::preview_trigger::trigger(
-                    &spec.policy.default_branch,
-                ),
+                preview_trigger::trigger(&spec.policy.default_branch),
                 ("workflow_dispatch".to_owned(), steps::recovery_inputs()),
             ]),
         ),
@@ -157,14 +134,16 @@ pub fn render_consumer_preview(
             Yaml::Map(vec![
                 (
                     "group".to_owned(),
-                    Yaml::str("native-preview-${{ github.repository }}"),
+                    Yaml::str(
+                        "native-preview-${{ github.repository }}-${{ github.event.workflow_run.head_sha || inputs.original_run_id }}",
+                    ),
                 ),
                 ("cancel-in-progress".to_owned(), Yaml::Bool(false)),
             ]),
         ),
         ("jobs".to_owned(), Yaml::Map(jobs)),
     ]);
-    let document = crate::workflow_routing::route_workflow_yaml(
+    let document = crate::workflow_routing::route_native_preview_workflow_yaml(
         PackageReleaseChannel::Preview.workflow_path(),
         document,
         routing,
@@ -175,27 +154,11 @@ pub fn render_consumer_preview(
     })
 }
 
-fn preview_jobs(
-    spec: &ConsumerReleaseSpec,
-    gate: &str,
-) -> Result<Vec<(String, Yaml)>, RenderError> {
-    let mut jobs = vec![eligibility(spec, gate)?];
-    jobs.extend(production::jobs(spec)?);
-    jobs.extend([signer(spec)?, publisher(spec)?, recovery(spec)?]);
-    if let Some(tap) = &spec.homebrew_tap {
-        jobs.extend(tap::jobs(spec, tap, TapInvocationContext::Preview)?);
-    }
-    Ok(jobs)
-}
-
 fn render_preview_document(
     spec: &ConsumerReleaseSpec,
     document: &Yaml,
 ) -> Result<String, RenderError> {
-    super::consumer_release_eligibility::preview_trigger::validate(
-        document,
-        steps::recovery_inputs(),
-    )?;
+    preview_trigger::validate(document, steps::recovery_inputs())?;
     crate::render::fallback::render_checked_workflow(
         PackageReleaseChannel::Preview.workflow_path(),
         document,
@@ -205,70 +168,6 @@ fn render_preview_document(
 
 pub(super) fn acquire(step: &Step, job: &str, runner: &str) -> Result<Yaml, RenderError> {
     non_internal_step_to_yaml(job, step, &BTreeMap::new(), runner)
-}
-
-pub(super) fn eligibility(
-    spec: &ConsumerReleaseSpec,
-    gate: &str,
-) -> Result<(String, Yaml), RenderError> {
-    let mut fields = base(
-        "Verify exact-commit Required CI",
-        Yaml::str("ubuntu-26.04"),
-        JobTimeout::DEFAULT,
-    );
-    fields.push((
-        "if".to_owned(),
-        Yaml::str(match spec.policy.channel { PackageReleaseChannel::Preview => "${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}", PackageReleaseChannel::Stable => "${{ github.event_name == 'workflow_dispatch' }}" }),
-    ));
-    fields.push((
-        "permissions".to_owned(),
-        permissions(&[("actions", "read"), ("contents", "read")]),
-    ));
-    let mut output = outputs(&[
-        "source_sha",
-        "workflow_authority_sha",
-        "ci_run_id",
-        "ci_attempt",
-    ]);
-    if let Yaml::Map(fields) = &mut output {
-        fields.push((
-            "commit_count".to_owned(),
-            Yaml::str("${{ steps.history.outputs.commit_count }}"),
-        ));
-    }
-    fields.push(("outputs".to_owned(), output));
-    let mut env = vec![("GH_TOKEN", "${{ github.token }}")];
-    if spec.policy.channel == PackageReleaseChannel::Stable {
-        env.extend([
-            ("VELNOR_STABLE_OPERATION", "${{ inputs.operation }}"),
-            (
-                "VELNOR_STABLE_ORIGINAL_RUN_ID",
-                "${{ inputs.original_run_id }}",
-            ),
-            (
-                "VELNOR_STABLE_ORIGINAL_RUN_ATTEMPT",
-                "${{ inputs.original_run_attempt }}",
-            ),
-        ]);
-    }
-    let step = steps::script("Verify source and CI", "source", gate, &env);
-    Ok(finish(
-        &format!(
-            "{}-eligibility",
-            TapInvocationContext::for_channel(spec.policy.channel).prefix()
-        ),
-        fields,
-        vec![
-            steps::history_checkout(spec),
-            setup(&spec.linux_setup),
-            run_step(
-                "Install pinned GitHub CLI",
-                &join_argv_for_run(&spec.install_gh_argv)?,
-            ),
-            step,
-            steps::history_count(TapInvocationContext::for_channel(spec.policy.channel)),
-        ],
-    ))
 }
 
 pub(super) fn signer(spec: &ConsumerReleaseSpec) -> Result<(String, Yaml), RenderError> {
@@ -307,11 +206,22 @@ pub(super) fn signer(spec: &ConsumerReleaseSpec) -> Result<(String, Yaml), Rende
             true,
             TapInvocationContext::for_channel(spec.policy.channel),
         )?,
-        steps::attest(&spec.policy),
+        preview_attestation(spec),
         transfer(spec, false, Artifact::Signed),
     ];
     job_steps.insert(3, policy_admission(spec)?);
     finish_policy_job(&id, fields, job_steps)
+}
+
+fn preview_attestation(spec: &ConsumerReleaseSpec) -> Yaml {
+    let mut step = steps::attest(&spec.policy);
+    if let Yaml::Map(fields) = &mut step
+        && let Some((_, Yaml::Map(with))) = fields.iter_mut().find(|(key, _)| key == "with")
+        && let Some((_, subject_path)) = with.iter_mut().find(|(key, _)| key == "subject-path")
+    {
+        *subject_path = Yaml::str("${{ steps.release.outputs.attestation_subject_paths }}");
+    }
+    step
 }
 
 pub(super) fn publisher(spec: &ConsumerReleaseSpec) -> Result<(String, Yaml), RenderError> {

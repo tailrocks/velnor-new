@@ -41,6 +41,8 @@ mod impl_rust_release_graph;
 mod impl_rust_release_modes;
 #[path = "impl_rust_release_order.rs"]
 mod impl_rust_release_order;
+#[path = "impl_rust_release_projection.rs"]
+mod impl_rust_release_projection;
 #[path = "impl_rust_release_select.rs"]
 mod impl_rust_release_select;
 #[path = "impl_rust_task_locality.rs"]

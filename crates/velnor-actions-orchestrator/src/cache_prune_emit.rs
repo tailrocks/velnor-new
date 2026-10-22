@@ -10,7 +10,7 @@ use crate::{OrchestratorError, prepare::GenerationPreparation};
 pub(crate) fn files(
     prep: &GenerationPreparation,
     routing: &WorkflowRoutingPolicy,
-    selected: Option<(&ScaleSetSelector, &ValidatedImageReference)>,
+    selected: Option<(&ScaleSetSelector, Option<&ValidatedImageReference>)>,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
     files_for(
         has_cache_writers(prep),
@@ -26,7 +26,7 @@ fn files_for(
     runner_label: &str,
     default_branch: &str,
     routing: &WorkflowRoutingPolicy,
-    selected: Option<(&ScaleSetSelector, &ValidatedImageReference)>,
+    selected: Option<(&ScaleSetSelector, Option<&ValidatedImageReference>)>,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
     if !writes {
         return Ok(Vec::new());

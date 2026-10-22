@@ -173,7 +173,7 @@ pub(crate) fn release() -> VerifiedPackageRelease {
             commit_count: Some(9),
             source_sha7: Some(source_sha[..7].to_owned()),
         },
-        tag: "preview".to_owned(),
+        tag: format!("preview-{source_sha}"),
         products: vec![release_product(archive)],
         companions: Vec::new(),
         assets,
@@ -278,7 +278,7 @@ fn formula() -> Vec<u8> {
         "# source-sha: {}\nclass CliPreview < Formula\n  version \"{}\"\n      url \"https://github.com/owner/source/releases/download/{}/cli-aarch64-apple-darwin.tar.gz\"\n      sha256 \"{}\"\n  def install\n    bin.install \"cli\"\n  end\nend\n",
         "bbbbbbb000000000000000000000000000000000",
         "1.2.3-preview.8+bbbbbbb",
-        "preview",
+        "preview-bbbbbbb000000000000000000000000000000000",
         "a".repeat(64),
     )
     .into_bytes()
@@ -292,7 +292,10 @@ fn canonical_formula(base: &[u8], release: &VerifiedPackageRelease) -> Vec<u8> {
         &release.receipt.source.commit_sha,
     )
     .replace("1.2.3-preview.8+bbbbbbb", &release.receipt.version.value)
-    .replace("v1.2.3-preview.8+bbbbbbb", &release.receipt.tag)
+    .replace(
+        "preview-bbbbbbb000000000000000000000000000000000",
+        &release.receipt.tag,
+    )
     .replace("cli-aarch64-apple-darwin.tar.gz", archive)
     .into_bytes()
 }

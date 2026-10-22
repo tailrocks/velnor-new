@@ -21,6 +21,8 @@ mod inventory;
 mod labels;
 #[path = "workflow_routing_matrix.rs"]
 mod matrix;
+#[path = "workflow_routing_native_preview.rs"]
+mod native_preview;
 #[path = "workflow_routing_parse.rs"]
 mod parse;
 #[path = "workflow_routing_runner.rs"]
@@ -109,7 +111,7 @@ pub(crate) fn route_workflow_yaml(
     workflow: Yaml,
     policy: &WorkflowRoutingPolicy,
 ) -> Result<Yaml, RenderError> {
-    route_workflow_yaml_inner(path, workflow, policy, None)
+    route_workflow_yaml_inner(path, workflow, policy, None, None)
 }
 
 pub(crate) fn route_workflow_yaml_for_jobs(
@@ -118,7 +120,15 @@ pub(crate) fn route_workflow_yaml_for_jobs(
     policy: &WorkflowRoutingPolicy,
     typed_jobs: &std::collections::BTreeMap<String, velnor_actions_contract::Job>,
 ) -> Result<Yaml, RenderError> {
-    route_workflow_yaml_inner(path, workflow, policy, Some(typed_jobs))
+    route_workflow_yaml_inner(path, workflow, policy, Some(typed_jobs), None)
+}
+
+pub(crate) fn route_native_preview_workflow_yaml(
+    path: &str,
+    workflow: Yaml,
+    policy: &WorkflowRoutingPolicy,
+) -> Result<Yaml, RenderError> {
+    route_workflow_yaml_inner(path, workflow, policy, None, Some(native_preview::Context))
 }
 
 fn route_workflow_yaml_inner(
@@ -126,8 +136,12 @@ fn route_workflow_yaml_inner(
     mut workflow: Yaml,
     policy: &WorkflowRoutingPolicy,
     typed_jobs: Option<&std::collections::BTreeMap<String, velnor_actions_contract::Job>>,
+    native_context: Option<native_preview::Context>,
 ) -> Result<Yaml, RenderError> {
     workflow = aliases::materialize(&workflow)?;
+    if native_context.is_some() {
+        native_preview::validate_emitted_workflow(path, &workflow, policy)?;
+    }
     let selector = policy.selector();
     let workflow_shell = container::workflow_run_shell(&workflow, path)?;
     let Yaml::Map(document) = &mut workflow else {
@@ -166,7 +180,15 @@ fn route_workflow_yaml_inner(
             continue;
         }
         let typed_job = typed_jobs.and_then(|jobs| jobs.get(job_id));
-        let routed = route_runner_fields(fields, runs_on_index, path, job_id, policy, typed_job)?;
+        let routed = route_runner_fields(
+            fields,
+            runs_on_index,
+            path,
+            job_id,
+            policy,
+            typed_job,
+            native_context,
+        )?;
         if routed && policy.has_container_policy() {
             container::ensure_job_container(
                 fields,
@@ -187,12 +209,19 @@ fn route_runner_fields(
     job_id: &str,
     policy: &WorkflowRoutingPolicy,
     typed_job: Option<&velnor_actions_contract::Job>,
+    native_context: Option<native_preview::Context>,
 ) -> Result<bool, RenderError> {
     let Some(runs_on_index) = runs_on_index else {
         return Err(invalid(format!(
             "workflow_job_runs_on_missing:{path}:{job_id}"
         )));
     };
+    if let Some(context) = native_context
+        && let Some(routed) =
+            native_preview::route_runner(context, fields, runs_on_index, path, job_id, policy)?
+    {
+        return Ok(routed);
+    }
     if typed_jobs::accept_typed_native_check(
         yaml_scalar(&fields[runs_on_index].1),
         fields
@@ -244,7 +273,7 @@ pub fn validate_generated_workflow_calls(
     files: &[RenderedFile],
     policy: &WorkflowRoutingPolicy,
 ) -> Result<(), RenderError> {
-    inventory::validate_final_workflow_inventory(files, policy, None)
+    inventory::validate_final_workflow_inventory(files, policy, None, None)
 }
 
 /// Examine final files against the typed workflow used to render them.
@@ -264,7 +293,31 @@ pub fn validate_generated_workflow_calls_with_ir(
     workflow
         .validate()
         .map_err(|error| invalid(format!("typed_workflow_invalid:{error}")))?;
-    inventory::validate_final_workflow_inventory(files, policy, Some(&workflow.jobs))
+    inventory::validate_final_workflow_inventory(files, policy, Some(&workflow.jobs), None)
+}
+
+/// Validate generated workflows when this tree includes the authenticated native preview graph.
+///
+/// This keeps exact source-derived preview runner expressions behind a typed entry point; the
+/// general file and IR validators continue to reject unresolved runners.
+///
+/// # Errors
+///
+/// Returns an error if the typed workflow or the generated workflow files fail validation.
+pub fn validate_generated_workflow_calls_with_native_preview_ir(
+    files: &[RenderedFile],
+    policy: &WorkflowRoutingPolicy,
+    workflow: &velnor_actions_contract::WorkflowIr,
+) -> Result<(), RenderError> {
+    workflow
+        .validate()
+        .map_err(|error| invalid(format!("typed_workflow_invalid:{error}")))?;
+    inventory::validate_final_workflow_inventory(
+        files,
+        policy,
+        Some(&workflow.jobs),
+        Some(native_preview::Context),
+    )
 }
 
 fn invalid(problem: String) -> RenderError {

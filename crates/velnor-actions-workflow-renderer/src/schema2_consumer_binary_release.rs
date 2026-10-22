@@ -32,9 +32,7 @@ pub(super) fn render_consumer_binary_release(
         .stable
         .as_ref()
         .ok_or_else(|| invalid("stable_policy_missing"))?;
-    if spec.policy.channel != PackageReleaseChannel::Stable
-        || spec.policy.default_branch != "main"
-        || spec.preview.is_some()
+    if spec.policy.channel != PackageReleaseChannel::Stable || spec.policy.default_branch != "main"
     {
         return Err(invalid("stable_channel_invalid"));
     }

@@ -26,6 +26,7 @@ pub mod release_error;
 pub mod release_facts;
 pub mod release_graph;
 pub mod release_products;
+pub mod release_projection;
 pub mod release_select;
 pub mod release_semver;
 pub mod release_versions;
@@ -83,6 +84,7 @@ pub use release_graph::{PackagingEdge, PublicationGraph, RegistryState, publicat
 pub use release_products::{
     ResolvedReleaseProducts, release_version_policy, resolve_release_products,
 };
+pub use release_projection::{project_release_workspace, release_workspace_manifest_paths};
 pub use release_select::{
     DEFAULT_REGISTRY, ReleaseRequest, ReleaseScope, ReleaseSelection, ResolvedScope,
     SelectedPackage, select_release_set,

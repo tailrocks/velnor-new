@@ -1,8 +1,8 @@
 # Native release channels and Homebrew contract
 
-**Status:** the human owner's 2026-10-20 rolling-preview and manual-stable
-requirements replace immutable preview publication. This is the implementation
-contract, not evidence that either new channel has passed runtime qualification.
+**Status:** immutable per-source preview and manual-stable channels. This is the
+implementation contract, not evidence that either channel has passed runtime
+qualification.
 The existing producer, receipt, signature, publication and Homebrew boundaries
 remain the foundation. No parallel release system or compatibility parser exists.
 
@@ -26,7 +26,6 @@ version_env = "JACKIN_VERSION_OVERRIDE"
 enabled = true
 versioning = "package-preview-commit-count-sha7"
 environment = "preview-publish"
-release_id = 328385904
 
 [stacks.rust.binary_release.stable]
 enabled = true
@@ -66,9 +65,7 @@ path = "capsule-manifest.json"
 asset_name = "capsule-manifest.json"
 ```
 
-The example release ID is Jackin's observed existing mutable preview release,
-not a portable default. Every enabled rolling channel must explicitly bind its
-own qualified existing release. The example producer closure is abbreviated;
+The example producer closure is abbreviated;
 real configuration must declare the complete tracked task, tool and system-tool
 closure, including its observed Xcode tuple when applicable.
 
@@ -79,8 +76,8 @@ Shared producer, product, archive, companion and evidence types are named
 `RustBinaryReleaseEvidenceProfile`. Old preview-only aliases are removed.
 
 `PackageReleaseChannel`, `PackageReleasePlan` and `PackageReleaseReceipt` remain
-shared typed owners. Preview means rolling publication; stable means permanent
-version publication. Channel selection is a closed enum, not an arbitrary tag,
+shared typed owners. Preview means one immutable release per source commit;
+stable means permanent version publication. Channel selection is a closed enum, not an arbitrary tag,
 URL, event, permission, command or evidence override. The trusted task request
 carries the selected channel and literal version; a producer cannot choose them.
 A consumer may choose its declared preview Cargo profile from that typed request.
@@ -97,13 +94,38 @@ five minutes. General crate-job policy is independent and is not changed here.
 
 ## Source and version authority
 
-Preview is automatically selected only by completion of the exact source's
-full default-branch push CI. The actual source SHA, workflow authority SHA,
-repository, default branch and original CI run attempt must agree. The latest
-CI attempt, `Required`, every source-declared execution obligation and all
-required job results must be successful before publication. Recheck current
-main and these facts before every mutation and final commit. A newer main makes
-an unfinished older preview ineligible; retained evidence is not new authority.
+Preview admission keeps source and workflow authority separate. Let A be the
+full source SHA selected from successful push CI, B the full SHA of the active
+preview workflow definition, and H the current protected `main` tip. Authenticate
+the ancestry relation `A <= B <= H`, along with the repository, branch, workflow,
+run and attempt identities. A does not have to equal B or H. The latest
+successful CI attempt for exact source A, its `Required` job, every source-
+declared execution obligation and all required job results remain mandatory,
+including during recovery. A newer CI attempt for A must be checked; historical
+success cannot stand in for the latest exact-A attempt. Every remote mutation
+rechecks the current ancestry and the relevant current run/attempt authority.
+
+Source selection is two-phase. Before checkout, a credential-free admission
+step authenticates the CI source A and workflow authority B from GitHub facts;
+it performs no source execution. A is then checked out with complete history in
+a credential-free context. From A, native code reads canonical configuration,
+projects the package/product inventory with the bounded pure manifest
+projection, and discovers the declared task and its exact input closure with
+`discover_preview_producer`. Explicit qualified-tool declarations and producer
+policy come from A. B supplies workflow custody and trusted bootstrap tools;
+source-controlled tools are only admitted through A's declared qualification.
+The resulting canonical admission record binds A's policy, plan, task closure,
+tool declarations and execution tuple before any declared task runs.
+
+The producer executes the admitted A task, while the active run, workflow,
+signer certificate, run attempt and job authority are bound to B. The signed
+release receipt records source A and workflow authority B separately. The
+version and immutable tag remain A-derived: `<base>-preview.<full-history-count>+
+<A-sha7>` and `preview-<full-A-sha>`. A later protected tip H may be newer than
+A; it does not revoke an otherwise admitted ancestor release. Homebrew promotion
+has a narrower rule: it proceeds only if A is still the current protected
+`main` tip at the tap mutation boundary. Otherwise the result is a typed clean
+skip, leaving the immutable release intact.
 
 Workflow identity is admitted active once per SDK invocation, with exact workflow
 ID, canonical path and display name. GitHub documents that
@@ -111,21 +133,27 @@ ID, canonical path and display name. GitHub documents that
 prevents new triggers and reruns but does not cancel existing runs. Disabling is
 therefore not a cancellation authority for an already admitted producing run.
 Its current attempt and required running/completed state remain fresh checks.
-Successful completed CI-attempt evidence, including the exact-source `Required`
+Successful completed CI-attempt evidence, including the exact-A `Required`
 job, may be reused within that invocation under its full repository, source,
 branch, workflow, run and attempt identity. Failed or incomplete evidence is
-never cached as success. Every latest-CI admission still reads the latest source
-CI listing and current run attempt, status and conclusion; this cache never
-substitutes historical success for a newer or unsuccessful current attempt.
+never cached as success. Every latest exact-A CI admission still reads the
+latest matching source-CI listing and current run attempt, status and
+conclusion; this cache never substitutes historical success for a newer or
+unsuccessful current attempt.
 Artifact expiry after immutable bytes are admitted cannot change those held
 bytes, but may prevent a future recovery invocation from reacquiring them. The
-terminal publication verifier deliberately refreshes the retained artifact pointer
-rather than treating invocation-local admission as permanent availability.
+terminal publication verifier reauthenticates the held original closure and
+retained signed bytes, including their signature and exact source, workflow run
+and attempt identity. It then revalidates the published tag and complete asset
+inventory against that authenticated candidate. It does not refresh the original
+workflow artifact pointer; a new recovery invocation must independently reacquire
+and authenticate the original artifact before it can resume publication.
 
 For numeric base version `P`, complete-history count `N` and source SHA `S`, the
-preview version is `P-preview.N+S[0..7]`. Its only public tag is literal `preview`.
-There are no versioned preview tags or preview releases per commit. Reruns retain
-source/count identity and must not silently substitute different signed bytes.
+preview version remains `P-preview.N+S[0..7]`. Its immutable tag is
+`preview-<full lowercase S>`. Each source SHA owns a separate prerelease; reruns
+retain source/count identity and must not silently substitute different signed
+bytes. Neither an existing preview nor its assets are replaced or republished.
 
 Stable starts only through the manual release-plz flow in
 [binary-release-contract.md](binary-release-contract.md). Release-plz prepares
@@ -140,33 +168,31 @@ Existing image and package publication triggers, attested main-digest promotion,
 private-source fetch custody and permanent release-asset bundles retain their
 contracts. This preview exception does not widen those mechanisms.
 
-## Qualified existing rolling release
+## Immutable per-source preview release
 
-Repository-wide immutable releases stay enabled. GitHub documents that releases
-published before enabling immutability remain mutable unless republished.
-Rolling admission requires the configured positive release ID, same repository,
-exact tag `preview`, `draft=false`, `prerelease=true` and `immutable=false`.
-An absent or immutable target is a prerequisite failure, not permission to create
-another release or toggle a repository/organization setting. Never delete,
-recreate, redraft or republish the rolling release.
+Repository-wide immutable releases stay enabled. Every preview tag names its
+full source SHA and is created once with an authenticated recovery envelope that
+binds the source SHA, canonical receipt digest and complete release inventory.
+The publisher creates the tag without force, then reobserves and authenticates
+it before creating the prerelease draft. An existing tag without the exact
+recovery envelope, a tag for another source or an existing release with a
+different receipt is a conflict. Never delete, recreate, redraft, move or
+republish a preview tag or release.
 
-Resolve the actual Git ref rather than trusting release `target_commitish`,
-which can remain stale for an existing tag. Preview advancement uses only a
-normal `force=false` fast-forward update after proving the previous committed
-source is an ancestor. Never delete or force-move a tag. Keep existing tag
-non-fast-forward/deletion protection; do not add a bypass or exception unless a
-separately reviewed actual provider restriction proves one necessary.
-
-This one-time existing-mutable-release prerequisite is real. GitHub has no
-per-new-release opt-out demonstrated under globally enabled immutability.
-A fresh repository without such a release cannot claim rolling readiness from
-configuration or mocks alone.
+An unfinished draft may resume only from the original retained signed artifact
+and exact authenticated receipt. Upload only missing assets whose expected
+names, sizes and digests match the receipt. Publish once after complete asset
+verification. A published preview must be immutable and match the exact receipt
+and complete asset set; otherwise fail closed. A newer protected tip H does
+not revoke an unfinished source A when authenticated `A <= B <= H`, exact-A CI
+remains successful, and original evidence is reacquired. It never authorizes
+changing that candidate's tag or bytes.
 
 ## Complete signed generation and publication transaction
 
 Producer and assembly still emit one complete, bounded typed inventory. Each
-product/target has one leaf with its human product/target name, followed by
-complete-union assembly. No unselected product, undeclared companion, arbitrary
+product/target is one entry in a bounded source matrix, followed by complete
+API-union assembly. No unselected product, undeclared companion, arbitrary
 path or proof-disable option is admitted. The six Jackin executable archives,
 archive checksums, SBOMs, capsule manifest, detached bundles, aggregate checksum
 list and canonical receipt remain mandatory where declared by the shared plan.
@@ -174,7 +200,7 @@ Desktop companions retain their existing task and signing/notarization custody;
 a new Cask or executable formula change is not implied by this contract.
 
 Canonical `velnor.package-release.v2` receipt bytes bind channel, repository slug
-and numeric ID, source/ref/event and original CI attempt, workflow authority and
+and numeric ID, source A/ref/event and original CI attempt, workflow authority B and
 original producer/signer run attempt, version, tag, complete products and members,
 companion inventory, asset sizes/digests, evidence profile and signer identity.
 Unknown/duplicate fields and noncanonical JSON fail. Preview uses `workflow_run`
@@ -185,19 +211,18 @@ old one-bin Apple-only raw payload path. Receipt and detached bundle are exclude
 from receipt self-digests; signatures authenticate those exact receipt bytes.
 
 Every required archive and companion, and the receipt, has its required detached
-signature and GitHub SLSA attestation with exact source, workflow, run/attempt,
-issuer and hosted-runner identity. SBOM entries come from actual compiled units
+signature and GitHub SLSA attestation with exact source A, workflow authority B,
+run/attempt, issuer and hosted-runner identity. SBOM entries come from actual compiled units
 and bind their archive bytes; workspace presence is not compilation evidence.
 No field claiming successful verification replaces actual cryptographic checks.
 
-Rolling publication reuses the original authenticated retained signed artifact.
-A native bounded journal binds the fixed release ID, original source/run/receipt,
-complete logical inventory, generation-specific remote names, uploaded asset IDs
-and exact sizes/digests. Staging names are derived from trusted generation
-identity, never accepted from arbitrary producer URLs. Upload and verify all new
-generation bytes before treating them as committed. Commit the authenticated
-generation receipt/pointer last, with the source tag and complete inventory
-admitted again. Only then may native Homebrew promotion consume the generation.
+Preview publication reuses the original authenticated retained signed artifact.
+A native bounded journal binds the immutable source tag, original source/run/receipt,
+complete logical inventory, uploaded asset IDs and exact sizes/digests. Remote
+names come from the trusted receipt, never arbitrary producer URLs. Upload and
+verify the complete asset set before publishing the draft. Only then may native
+Homebrew promotion consume that immutable source generation, and only while A
+is still current protected `main`; otherwise promotion is a typed clean skip.
 
 The executor proposes transitions; it does not grant write authority. The
 backend consumes each private observation once, including on failure, and checks
@@ -210,19 +235,16 @@ After interruption or an ambiguous API response, reobserve asset IDs and
 size/digest/state before acting. Resume only the same authenticated original
 signed candidate. Delete only exact journal-owned obsolete/staging asset IDs
 whose identity still matches; never adopt or clean arbitrary unknown assets.
-A stale journal cannot overwrite a newer committed generation, roll back its
-tag, or cause an old candidate to replace newer formula metadata. Unknown state
-fails closed for inspected reconciliation; elapsed time grants no authority.
+A stale journal cannot overwrite a release, roll back a tag, or cause an old
+candidate to replace newer formula metadata. Unknown state fails closed for
+inspected reconciliation; elapsed time grants no authority.
 Stable recovery preserves its permanent tag, matching draft and original signed
 candidate, uploads only missing exact assets, and never overwrites a publication.
 
-GitHub's public asset API has no atomic multi-asset swap. The existing live
-release can temporarily list old and staged assets or have replacement gaps.
-This contract promises no mixed-generation *acceptance*, not an instantaneous
-physical listing swap or uninterrupted historical rolling URLs. Readers verify
-one committed signed generation, its complete closed inventory and digests, and
-reread generation/tag before and after acquisition. A change or partial state
-rejects; it is not a reason to accept whichever subset downloaded successfully.
+Preview releases are immutable after publication, so readers verify one signed
+receipt, its complete closed inventory and digests, and the source-specific tag
+before acquisition. A partial draft is not a published release and cannot be
+accepted as a complete generation.
 
 ## Credential and execution boundaries
 

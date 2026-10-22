@@ -190,8 +190,14 @@ fn scale_set_workflow_uses_selected_labels_and_container_without_hosted_fallback
 }
 
 #[test]
-fn scale_set_without_image_and_hosted_with_image_fail_closed() {
-    assert!(render_cache_cleanup_yml(SCALE_TOKEN, None, "0.1.37").is_err());
+fn scale_set_without_image_stays_containerless_and_hosted_with_image_fails_closed() {
+    let file = render_cache_cleanup_yml(SCALE_TOKEN, None, "0.1.37")
+        .expect("The selected runner can use its configured host runtime.");
+    assert!(
+        file.bytes
+            .contains("runs-on: [velnor, ubuntu-26.04-scale-set]\n")
+    );
+    assert!(!file.bytes.contains("container:"));
     let image =
         ValidatedImageReference::parse(IMAGE).expect("The test image reference is not immutable.");
     assert!(render_cache_cleanup_yml("ubuntu-26.04", Some(&image), "0.1.37").is_err());

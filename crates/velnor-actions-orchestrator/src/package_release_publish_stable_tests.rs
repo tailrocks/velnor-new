@@ -89,3 +89,60 @@ fn changed_asset_identity_blocks_the_consumed_target_before_any_write() {
     calls.assert_drained();
     assert_eq!(calls.observed().len(), 2);
 }
+
+#[test]
+fn preview_tag_authority_rejects_appearance_movement_and_other_signed_envelope() {
+    use super::super::super::github::TagObservation;
+
+    let source = "a".repeat(40);
+    let envelope = "signed envelope A";
+    assert!(authorize_preview_tag(None, &source, envelope, true).is_ok());
+    assert!(
+        authorize_preview_tag(
+            Some(TagObservation {
+                source_sha: source.clone(),
+                message: Some(envelope.to_owned()),
+            }),
+            &source,
+            envelope,
+            true,
+        )
+        .is_err()
+    );
+    assert!(
+        authorize_preview_tag(
+            Some(TagObservation {
+                source_sha: source.clone(),
+                message: Some("signed envelope B".to_owned()),
+            }),
+            &source,
+            envelope,
+            false,
+        )
+        .is_err()
+    );
+    assert!(
+        authorize_preview_tag(
+            Some(TagObservation {
+                source_sha: "b".repeat(40),
+                message: Some(envelope.to_owned()),
+            }),
+            &source,
+            envelope,
+            false,
+        )
+        .is_err()
+    );
+    assert!(
+        authorize_preview_tag(
+            Some(TagObservation {
+                source_sha: source.clone(),
+                message: Some(envelope.to_owned()),
+            }),
+            &source,
+            envelope,
+            false,
+        )
+        .is_ok()
+    );
+}

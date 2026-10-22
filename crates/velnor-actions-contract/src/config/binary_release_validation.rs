@@ -81,27 +81,6 @@ impl RustBinaryReleaseConfig {
                 "preview_environment_must_be_preview_publish",
             ));
         }
-        if self.preview.enabled && self.preview.release_id == 0 {
-            return Err(config_error(
-                file,
-                &format!("{prefix}.preview.release_id"),
-                "existing_rolling_release_required",
-            ));
-        }
-        if let Some(digest) = &self.preview.bootstrap_snapshot_sha256
-            && (!self.preview.enabled
-                || self.preview.release_id == 0
-                || digest.len() != 64
-                || !digest
-                    .bytes()
-                    .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f')))
-        {
-            return Err(config_error(
-                file,
-                &format!("{prefix}.preview.bootstrap_snapshot_sha256"),
-                "invalid_bootstrap_snapshot_binding",
-            ));
-        }
         if self.stable.environment != "release" {
             return Err(config_error(
                 file,

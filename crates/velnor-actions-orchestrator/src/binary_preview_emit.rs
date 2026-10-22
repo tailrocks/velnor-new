@@ -12,6 +12,7 @@ use crate::{
     utf8::strings_of,
 };
 use std::{
+    collections::BTreeMap,
     ffi::{OsStr, OsString},
     path::Path,
 };
@@ -24,8 +25,8 @@ use velnor_actions_rust::resolve_release_products;
 use velnor_actions_workflow_renderer::{
     RenderedFile,
     schema2::{
-        ConsumerReleaseSpec, ConsumerReleaseTapSpec, ConsumerRollingPreviewSpec,
-        render_consumer_preview, render_release_tap_reconcile,
+        ConsumerReleaseSpec, ConsumerReleaseTapSpec, render_consumer_preview,
+        render_release_tap_reconcile,
     },
 };
 
@@ -71,6 +72,24 @@ pub(crate) fn specification(
     let linux_acquire = consumer_acquire_step("ubuntu-26.04", version, &prep.discovery)?;
     let producer_acquire =
         consumer_acquire_step(release.producer.runner.runs_on(), version, &prep.discovery)?;
+    let mut producer_acquire_by_target = BTreeMap::new();
+    let mut producer_setup_by_target = BTreeMap::new();
+    if channel == PackageReleaseChannel::Preview {
+        for target in ReleaseTarget::ALL {
+            producer_acquire_by_target.insert(
+                target,
+                crate::pins::consumer_acquire_for_target(
+                    target,
+                    version,
+                    prep.discovery.consumer_manifest_json.as_deref(),
+                )?,
+            );
+            producer_setup_by_target.insert(
+                target,
+                resolve_mise_setup_for_release_target(&prep.config, target)?,
+            );
+        }
+    }
     let install =
         MiseInstall::new(vec![PinnedTool::Gh]).map_err(|error| internal(&error.to_string()))?;
     let rust_install =
@@ -95,6 +114,8 @@ pub(crate) fn specification(
         producer_timeout_minutes: release.producer.timeout_minutes,
         linux_acquire,
         producer_acquire,
+        producer_acquire_by_target,
+        producer_setup_by_target,
         producer_setup: resolve_verification_mise_setup(&prep.config, release.producer.runner)?,
         linux_setup: resolve_mise_setup_for_release_target(
             &prep.config,
@@ -110,10 +131,6 @@ pub(crate) fn specification(
         gh_argv: strings_of(exec.argv(&native_catalog)).map_err(|error| internal(&error))?,
         homebrew_tap: tap_spec(prep)?.filter(|tap| tap.policy.destination(channel).is_some()),
         stable: None,
-        preview: (channel == PackageReleaseChannel::Preview).then(|| ConsumerRollingPreviewSpec {
-            release_id: release.preview.release_id,
-            bootstrap_snapshot_sha256: release.preview.bootstrap_snapshot_sha256.clone(),
-        }),
     };
     Ok(spec)
 }

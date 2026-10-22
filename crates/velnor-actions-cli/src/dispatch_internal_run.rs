@@ -8,10 +8,11 @@ use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{
     DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV, PlanOutputMode,
-    admit_release_policy_from_env, admit_stable_tag_origin_from_env, execute_check, merge_internal,
-    merge_passed, plan_internal, plan_outputs_from_staged_admission, publish_final_report,
-    publish_plan_files_with_outputs, resolve_task_execution, response_path_for, retrieve_reports,
-    run_bun_registry_install, run_gradle_run, run_private_fetch, run_private_revoke,
+    acquire_preview_source_from_env, admit_stable_tag_origin_from_env, execute_check,
+    finalize_preview_source_from_env, merge_internal, merge_passed, plan_internal,
+    plan_outputs_from_staged_admission, publish_final_report, publish_plan_files_with_outputs,
+    resolve_task_execution, response_path_for, retrieve_reports, run_bun_registry_install,
+    run_gradle_run, run_private_fetch, run_private_revoke, select_preview_source_from_env,
     select_stable_release_source_from_env, write_preseed_manifest,
     write_qualification_source_evidence, write_request, write_stable_tag_intent_from_env,
     write_stable_tag_origin_from_env, write_task_report,
@@ -37,11 +38,17 @@ pub(super) fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::AdmitReleaseAggregate => preview_production::admit(),
         InternalOp::ExecuteCheck => finish_internal_result(execute_check()),
         InternalOp::ExecuteReleaseProducer => preview_production::produce(),
+        InternalOp::PreviewSourceSelection => {
+            preview_production::native(select_preview_source_from_env())
+        }
+        InternalOp::PreviewSourceFinalization => {
+            preview_production::native(finalize_preview_source_from_env())
+        }
+        InternalOp::PreviewSourceAcquisition => {
+            preview_production::native(acquire_preview_source_from_env())
+        }
         InternalOp::StableSourceSelection => {
             preview_production::native(select_stable_release_source_from_env())
-        }
-        InternalOp::ReleasePolicyAdmission => {
-            preview_production::native(admit_release_policy_from_env())
         }
         InternalOp::StableTagIntent => {
             preview_production::native(write_stable_tag_intent_from_env())
@@ -86,13 +93,7 @@ pub(super) fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::WriteQualificationSourceEvidence => {
             finish_internal_result(write_qualification_source_evidence())
         }
-        InternalOp::ResolveTaskExecution => match resolve_task_execution() {
-            Ok(frame) => match std::io::stdout().lock().write_all(&frame) {
-                Ok(()) => ExitCode::SUCCESS,
-                Err(error) => fail_internal(&format!("write task execution frame: {error}")),
-            },
-            Err(error) => fail_internal(&error.to_string()),
-        },
+        InternalOp::ResolveTaskExecution => run_task_execution(),
         InternalOp::PackageSigner => package_release::run(),
         InternalOp::PackagePublisher => package_release_publish::run(),
         InternalOp::PackageRecovery => package_release_recovery::run(),
@@ -100,6 +101,16 @@ pub(super) fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::TapAdmission => tap_prepare::run_admission(),
         InternalOp::TapWriter => tap_prepare::run_writer(),
         InternalOp::TapMerge => tap_merge::run(),
+    }
+}
+
+fn run_task_execution() -> ExitCode {
+    match resolve_task_execution() {
+        Ok(frame) => match std::io::stdout().lock().write_all(&frame) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&format!("write task execution frame: {error}")),
+        },
+        Err(error) => fail_internal(&error.to_string()),
     }
 }
 

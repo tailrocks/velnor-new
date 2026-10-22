@@ -25,17 +25,36 @@ pub(super) fn validate_final_workflow_inventory(
     files: &[RenderedFile],
     policy: &WorkflowRoutingPolicy,
     typed_jobs: Option<&BTreeMap<String, velnor_actions_contract::Job>>,
+    native_context: Option<super::native_preview::Context>,
 ) -> Result<(), RenderError> {
     let mut workflows = BTreeMap::new();
+    let mut native_preview_found = false;
     for file in files.iter().filter(|file| is_workflow_path(&file.path)) {
         let document = parse_final_workflow(file)?;
+        let file_native_context =
+            native_context.filter(|_| file.path == super::native_preview::preview_path());
+        if let Some(context) = file_native_context {
+            super::native_preview::validate_parsed_workflow(
+                context, &file.path, &document, policy,
+            )?;
+            native_preview_found = true;
+        }
         let typed_jobs = (file.path == ".github/workflows/ci.yml")
             .then_some(typed_jobs)
             .flatten();
-        let entry = inspect_workflow(&file.path, &document, policy, typed_jobs)?;
+        let entry = inspect_workflow(
+            &file.path,
+            &document,
+            policy,
+            typed_jobs,
+            file_native_context,
+        )?;
         if workflows.insert(file.path.clone(), entry).is_some() {
             return Err(invalid(format!("duplicate_workflow_path:{}", file.path)));
         }
+    }
+    if native_context.is_some() && !native_preview_found {
+        return Err(invalid("native_preview_workflow_missing".to_owned()));
     }
     calls::validate_reusable_calls(&workflows)
 }
@@ -45,6 +64,7 @@ fn inspect_workflow(
     document: &Yaml<'_>,
     policy: &WorkflowRoutingPolicy,
     typed_jobs: Option<&BTreeMap<String, velnor_actions_contract::Job>>,
+    native_context: Option<super::native_preview::Context>,
 ) -> Result<WorkflowEntry, RenderError> {
     if untagged(document).as_mapping().is_none() {
         return Err(invalid(format!("workflow_document_not_map:{path}")));
@@ -62,7 +82,9 @@ fn inspect_workflow(
         if !job_ids.insert(job_id.to_owned()) {
             return Err(invalid(format!("duplicate_workflow_job:{path}:{job_id}")));
         }
-        if let Some(call) = inspect_workflow_job(path, job_id, job, policy, typed_jobs)? {
+        if let Some(call) =
+            inspect_workflow_job(path, job_id, job, policy, typed_jobs, native_context)?
+        {
             calls.push(call);
         }
     }
@@ -79,6 +101,7 @@ fn inspect_workflow_job(
     job: &Yaml<'_>,
     policy: &WorkflowRoutingPolicy,
     typed_jobs: Option<&BTreeMap<String, velnor_actions_contract::Job>>,
+    native_context: Option<super::native_preview::Context>,
 ) -> Result<Option<ReusableCall>, RenderError> {
     let Some(fields) = untagged(job).as_mapping() else {
         return Err(invalid(format!("workflow_job_not_map:{path}:{job_id}")));
@@ -98,6 +121,18 @@ fn inspect_workflow_job(
             "workflow_job_runs_on_missing:{path}:{job_id}"
         )));
     };
+    if let Some(context) = native_context
+        && super::native_preview::accept_final_runner(
+            context,
+            path,
+            job_id,
+            scalar_text(runs_on),
+            container_value.is_some(),
+            policy,
+        )?
+    {
+        return Ok(None);
+    }
     let typed_job = typed_jobs.and_then(|jobs| jobs.get(job_id));
     if super::typed_jobs::accept_typed_native_check(
         scalar_text(runs_on),
@@ -256,15 +291,15 @@ fn validate_runner_choice(
                     "scale_set_selector_unconfigured:{path}:{job_id}"
                 )));
             }
-            if policy.image().is_none() {
-                return Err(invalid(format!(
-                    "job_container_image_missing:{path}:{job_id}"
-                )));
+            match (policy.image(), container_value) {
+                (Some(_), None) => {
+                    return Err(invalid(format!("job_container_missing:{path}:{job_id}")));
+                }
+                (Some(_) | None, Some(container_value)) => {
+                    container::validate_parsed_container(container_value, path, job_id)?;
+                }
+                (None, None) => {}
             }
-            let Some(container_value) = container_value else {
-                return Err(invalid(format!("job_container_missing:{path}:{job_id}")));
-            };
-            container::validate_parsed_container(container_value, path, job_id)?;
             Ok(())
         }
         RunnerChoice::Hosted(labels) => {

@@ -58,7 +58,7 @@ pub(super) fn verify_release_attestation(
         repository_uri: &repository_uri,
         owner_uri: &owner_uri,
         workflow_uri: &workflow_uri,
-        source_sha: &expected.source_sha,
+        workflow_sha: &expected.workflow_sha,
         source_ref: &expected.source_ref,
         run_id: expected.run_id,
         run_attempt: expected.run_attempt,
@@ -73,7 +73,7 @@ pub(super) fn verify_release_attestation(
             &path,
             &expected.repository,
             &signer_workflow,
-            &expected.source_sha,
+            &expected.workflow_sha,
             &expected.source_ref,
             &source_token,
         )?;
@@ -115,7 +115,7 @@ fn verify_one(
     path: &std::path::Path,
     repository: &str,
     workflow_uri: &str,
-    source_sha: &str,
+    workflow_sha: &str,
     source_ref: &str,
     source_token: &str,
 ) -> Result<Vec<u8>, OrchestratorError> {
@@ -128,9 +128,9 @@ fn verify_one(
         OsString::from("--signer-workflow"),
         OsString::from(workflow_uri),
         OsString::from("--signer-digest"),
-        OsString::from(source_sha),
+        OsString::from(workflow_sha),
         OsString::from("--source-digest"),
-        OsString::from(source_sha),
+        OsString::from(workflow_sha),
         OsString::from("--source-ref"),
         OsString::from(source_ref),
         OsString::from("--predicate-type"),
@@ -263,7 +263,7 @@ struct AttestationExpectation<'a> {
     repository_uri: &'a str,
     owner_uri: &'a str,
     workflow_uri: &'a str,
-    source_sha: &'a str,
+    workflow_sha: &'a str,
     source_ref: &'a str,
     run_id: u64,
     run_attempt: u32,
@@ -321,12 +321,12 @@ fn validate_output(
         || certificate.source_repository_uri != expected.repository_uri
         || certificate.source_repository_owner_uri != expected.owner_uri
         || certificate.source_repository_identifier != expected.repository_id
-        || certificate.source_repository_digest != expected.source_sha
+        || certificate.source_repository_digest != expected.workflow_sha
         || certificate.source_repository_ref != expected.source_ref
         || certificate.build_signer_uri != expected.workflow_uri
-        || certificate.build_signer_digest != expected.source_sha
+        || certificate.build_signer_digest != expected.workflow_sha
         || certificate.build_config_uri != expected.workflow_uri
-        || certificate.build_config_digest != expected.source_sha
+        || certificate.build_config_digest != expected.workflow_sha
         || certificate.build_trigger != expected.trigger
         || certificate.run_invocation_uri != expected.invocation_uri
         || certificate.runner_environment != "github-hosted"

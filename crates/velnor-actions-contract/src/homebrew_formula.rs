@@ -214,7 +214,12 @@ impl FormulaRewriteState {
             .as_deref()
             .ok_or_else(|| invalid("formula_version_must_precede_urls"))?;
         let expected_old_tag = match release.receipt.channel {
-            PackageReleaseChannel::Preview => "preview".to_owned(),
+            PackageReleaseChannel::Preview => format!(
+                "preview-{}",
+                self.prior_source
+                    .as_deref()
+                    .ok_or_else(|| invalid("formula_source_sha_missing"))?
+            ),
             PackageReleaseChannel::Stable => format!("v{old_version}"),
         };
         if tag != expected_old_tag || release.archive(name).is_none() {

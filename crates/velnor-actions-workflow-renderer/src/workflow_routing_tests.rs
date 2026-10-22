@@ -278,9 +278,33 @@ fn scale_set_routing_injects_image_and_preserves_bash_shell() {
 }
 
 #[test]
-fn configured_selector_needs_an_image_even_when_container_is_explicit() {
+fn selector_can_remain_containerless_without_a_configured_image() {
+    let policy = WorkflowRoutingPolicy::configured(ExecutionMode::ScaleSet, selector(), None);
+    let routed = route_workflow_yaml(
+        "ci.yml",
+        workflow(vec![("build", runner_job("ubuntu-26.04"))]),
+        &policy,
+    )
+    .expect("A selector can use its already-configured host runtime.");
+    let Yaml::Map(document) = routed else {
+        panic!("workflow map")
+    };
+    let Some((_, Yaml::Map(jobs))) = document.iter().find(|(key, _)| key == "jobs") else {
+        panic!("jobs map")
+    };
+    let Some((_, Yaml::Map(fields))) = jobs.first() else {
+        panic!("job map")
+    };
+    assert!(fields.iter().any(|(key, value)| {
+        key == "runs-on" && *value == Yaml::Flow(selector().labels().to_vec())
+    }));
+    assert!(!fields.iter().any(|(key, _)| key == "container"));
+}
+
+#[test]
+fn an_explicit_container_is_still_validated_without_a_default_image() {
     let policy = WorkflowRoutingPolicy::configured(ExecutionMode::Hosted, selector(), None);
-    let error = route_workflow_yaml(
+    let routed = route_workflow_yaml(
         "ci.yml",
         workflow(vec![(
             "build",
@@ -294,11 +318,27 @@ fn configured_selector_needs_an_image_even_when_container_is_explicit() {
         )]),
         &policy,
     )
-    .expect_err("configuration must provide the default immutable image");
-    assert_eq!(
-        error,
-        RenderError::InvalidWorkflow("job_container_image_missing:ci.yml:build".to_owned())
-    );
+    .expect("An existing immutable container remains valid without a default image.");
+    let Yaml::Map(document) = routed else {
+        panic!("workflow map")
+    };
+    let Some((_, Yaml::Map(jobs))) = document.iter().find(|(key, _)| key == "jobs") else {
+        panic!("jobs map")
+    };
+    let Some((_, Yaml::Map(fields))) = jobs.first() else {
+        panic!("job map")
+    };
+    let Some((_, Yaml::Map(container))) = fields.iter().find(|(key, _)| key == "container") else {
+        panic!("explicit container map")
+    };
+    assert!(container.iter().any(|(key, value)| {
+        key == "image"
+            && value
+                == &Yaml::str(
+                    "ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                )
+    }));
+    assert!(container.iter().any(|(key, _)| key == "volumes"));
 }
 
 #[test]

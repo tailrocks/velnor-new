@@ -7,14 +7,34 @@ impl GitHubApi {
         &self,
         expected_id: u64,
     ) -> Result<(), OrchestratorError> {
-        let repository: RepositoryResponse =
-            self.get_json(&format!("repos/{}", self.repository))?;
+        let repository = self.repository_identity()?;
         if repository.id != expected_id
             || repository.full_name.as_deref() != Some(self.repository.as_str())
         {
             return Err(internal("package_publish_repository_mismatch"));
         }
         Ok(())
+    }
+
+    pub(in crate::package_release_publish) fn verify_preview_repository_identity(
+        &self,
+        expected_id: u64,
+        expected_default_branch: &str,
+    ) -> Result<(), OrchestratorError> {
+        let repository = self.repository_identity()?;
+        if repository.id != expected_id
+            || repository.full_name.as_deref() != Some(self.repository.as_str())
+        {
+            return Err(internal("package_publish_repository_mismatch"));
+        }
+        if repository.default_branch.as_deref() != Some(expected_default_branch) {
+            return Err(internal("package_publish_default_branch_mismatch"));
+        }
+        Ok(())
+    }
+
+    fn repository_identity(&self) -> Result<RepositoryResponse, OrchestratorError> {
+        self.get_json(&format!("repos/{}", self.repository))
     }
 
     pub(in crate::package_release_publish) fn get_json<T: serde::de::DeserializeOwned>(

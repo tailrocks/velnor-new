@@ -61,7 +61,7 @@ pub struct PackageReleaseReceipt {
     pub workflow: PackageReleaseWorkflow,
     /// Base package version and deterministic channel version.
     pub version: PackageReleaseVersion,
-    /// Channel tag: rolling preview `preview`, permanent stable `v<base>`.
+    /// Channel tag: immutable preview `preview-<source-sha>`, permanent stable `v<base>`.
     pub tag: String,
     /// Product inventories sorted by product ID.
     pub products: Vec<PackageReleaseProduct>,

@@ -177,7 +177,7 @@ fn scale_set_completion_keeps_triggers_and_publication_authority() {
 }
 
 #[test]
-fn scale_set_completion_rejects_missing_image() {
+fn scale_set_completion_without_global_image_stays_containerless() {
     use velnor_actions_contract::{ExecutionMode, ScaleSetSelector};
 
     let selector = ScaleSetSelector::try_new(
@@ -186,5 +186,8 @@ fn scale_set_completion_rejects_missing_image() {
     )
     .expect("valid selector");
     let policy = WorkflowRoutingPolicy::configured(ExecutionMode::ScaleSet, selector, None);
-    assert!(render_review_completion(&spec(), &policy).is_err());
+    let rendered = render_review_completion(&spec(), &policy)
+        .expect("selector-only Scale Set completion remains valid");
+    assert!(rendered.bytes.contains("runs-on: [velnor, linux-amd64]"));
+    assert!(!rendered.bytes.contains("container:"));
 }

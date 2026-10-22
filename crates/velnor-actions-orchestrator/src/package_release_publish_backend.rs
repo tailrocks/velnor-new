@@ -4,7 +4,7 @@ use super::{
     GitHubPackagePublisher, OrchestratorError, OriginalVerification,
     github::{ReleaseResponse, encode_segment, sha256},
     identity::{local_identity, read_regular},
-    internal, make_latest, require_stable,
+    internal, make_latest, prerelease,
     run_identity::RunSource,
 };
 use crate::package_publication::PackagePublicationBackend;
@@ -12,6 +12,7 @@ use std::collections::BTreeSet;
 #[path = "package_release_publish_stable.rs"]
 pub(super) mod stable;
 use velnor_actions_contract::{
+    CI_WORKFLOW_PATH, WORKFLOW_DISPLAY_NAME,
     package_release::PackageReleaseChannel,
     publication_retry::{PublicationIdentity, PublicationState},
 };
@@ -48,27 +49,44 @@ impl PackagePublicationBackend for GitHubPackagePublisher {
 
     fn observe(&mut self) -> Result<PublicationState, OrchestratorError> {
         self.stable_observation = None;
-        require_stable(self.receipt.channel)?;
         self.verify_remote_repository()?;
-        self.verify_stable_origin()?;
-        let tag = self
-            .api
-            .tag_identity(&self.tag)?
-            .ok_or_else(|| internal("stable_authorized_tag_missing"))?;
-        let releases = self.release_list()?;
-        if releases.len() > 1 {
-            return Err(internal("package_publish_duplicate_release_tag"));
+        if self.receipt.channel == PackageReleaseChannel::Stable {
+            self.verify_stable_origin()?;
         }
-        let Some(mut release) = releases.into_iter().next() else {
+        let tag = self.api.tag_identity(&self.tag)?;
+        let Some(mut release) = self.release_by_tag()? else {
+            let Some(tag) = tag else {
+                if self.receipt.channel == PackageReleaseChannel::Preview {
+                    let state = PublicationState::Absent;
+                    self.stable_observation = Some(stable::capture(&state, None));
+                    return Ok(state);
+                }
+                return Err(internal("stable_authorized_tag_missing"));
+            };
             if tag.source_sha != self.identity.source_sha {
                 return Err(internal("stable_authorized_tag_source_changed"));
             }
-            let state = PublicationState::AuthorizedStableTag {
-                identity: self.identity.clone(),
+            let state = match self.receipt.channel {
+                PackageReleaseChannel::Stable => PublicationState::AuthorizedStableTag {
+                    identity: self.identity.clone(),
+                },
+                PackageReleaseChannel::Preview
+                    if tag.message.as_deref() == Some(self.recovery_body.as_str()) =>
+                {
+                    PublicationState::TagOnly {
+                        source_sha: tag.source_sha,
+                        original_receipt_digest: Some(self.identity.receipt_digest.clone()),
+                    }
+                }
+                PackageReleaseChannel::Preview => PublicationState::TagOnly {
+                    source_sha: tag.source_sha,
+                    original_receipt_digest: None,
+                },
             };
             self.stable_observation = Some(stable::capture(&state, None));
             return Ok(state);
         };
+        let tag = tag.ok_or_else(|| internal("package_publish_release_tag_missing"))?;
         release.assets = self.api.complete_release_assets(release.id)?;
         let state = self.remote_state(&release, tag)?;
         self.stable_observation = Some(stable::capture(&state, Some(&release)));
@@ -112,36 +130,78 @@ impl PackagePublicationBackend for GitHubPackagePublisher {
             self.original_closure.verify()?;
             return Ok(true);
         }
-        let source = RunSource {
-            repository_id: self.receipt.repository.id,
-            sha: &self.receipt.source.commit_sha,
-            branch: &self.receipt.source.default_branch,
+        verify_preview_source_ci(&self.api, self.receipt.repository.id, &self.receipt.source)?;
+        let retained = matches!(
+            &self.original_verification,
+            OriginalVerification::RetainedRun { .. }
+        );
+        let coordinator_sha = if retained {
+            super::recovery::promotion_context::Invocation::from_env()?.source_sha
+        } else {
+            self.receipt.workflow.authority_sha.clone()
         };
-        self.api.verify_ci_identity(
-            self.receipt.source.ci_run_id,
-            self.receipt.source.ci_run_attempt,
-            source,
-            false,
+        verify_current_preview_ci(
+            &self.api,
+            self.receipt.repository.id,
+            &self.receipt.source,
+            self.current_ci,
         )?;
-        self.api
-            .verify_ci_identity(self.current_ci.0, self.current_ci.1, source, true)?;
-        let protected_source = self.api.verify_release_channel_environment(
-            self.receipt.channel,
-            &self.receipt.source.default_branch,
-        )?;
+        verify_preview_lineage(self, &coordinator_sha)?;
         self.original_closure.verify()?;
-        Ok(protected_source.as_deref() == Some(self.receipt.source.commit_sha.as_str()))
+        Ok(true)
     }
 
     fn create_tag(&mut self) -> Result<(), OrchestratorError> {
-        Err(internal("stable_tag_owned_by_native_metadata_job"))
+        if self.receipt.channel != PackageReleaseChannel::Preview {
+            return Err(internal("stable_tag_owned_by_native_metadata_job"));
+        }
+        let observed = stable::take(self, &stable::Action::Tag)?;
+        stable::authorize(self, observed, true)?;
+        self.original_closure.verify()?;
+        let object = self.api.create_tag_object(
+            &self.tag,
+            &self.recovery_body,
+            &self.receipt.source.commit_sha,
+        )?;
+        if object.tag != self.tag
+            || object.message != self.recovery_body
+            || object.object.object_type != "commit"
+            || object.object.sha != self.receipt.source.commit_sha
+            || !super::github::is_lowercase_git_sha(&object.sha)
+        {
+            return Err(internal("preview_tag_object_invalid"));
+        }
+        self.original_closure.verify()?;
+        if self.api.tag_identity(&self.tag)?.is_some() || self.release_by_tag()?.is_some() {
+            return Err(internal("package_publication_refused:ConflictingTag"));
+        }
+        self.original_closure.verify()?;
+        if !PackagePublicationBackend::candidate_current(self)? {
+            return Err(internal("package_publication_refused:StaleCandidate"));
+        }
+        self.api.post_fields(
+            &self.api.route("git/refs"),
+            &[
+                ("ref", format!("refs/tags/{}", self.tag)),
+                ("sha", object.sha),
+            ],
+        )?;
+        let observed = self
+            .api
+            .tag_identity(&self.tag)?
+            .ok_or_else(|| internal("preview_tag_created_missing"))?;
+        if observed.source_sha != self.receipt.source.commit_sha
+            || observed.message.as_deref() != Some(self.recovery_body.as_str())
+        {
+            return Err(internal("preview_tag_created_conflict"));
+        }
+        Ok(())
     }
 
     fn create_draft(&mut self) -> Result<(), OrchestratorError> {
         let observed = stable::take(self, &stable::Action::Draft)?;
-        require_stable(self.receipt.channel)?;
-        stable::authorize(self, observed)?;
-        let prerelease = false;
+        stable::authorize(self, observed, false)?;
+        let prerelease = prerelease(self.receipt.channel);
         self.api.post_fields(
             &self.api.route("releases"),
             &[
@@ -159,7 +219,6 @@ impl PackagePublicationBackend for GitHubPackagePublisher {
 
     fn upload_original_asset(&mut self, name: &str) -> Result<(), OrchestratorError> {
         let observed = stable::take(self, &stable::Action::Upload(name))?;
-        require_stable(self.receipt.channel)?;
         let expected = self
             .identity
             .assets
@@ -170,7 +229,7 @@ impl PackagePublicationBackend for GitHubPackagePublisher {
         if &sha256(&bytes) != expected {
             return Err(internal("package_publish_original_asset_changed"));
         }
-        let release_id = stable::authorize(self, observed)?
+        let release_id = stable::authorize(self, observed, false)?
             .ok_or_else(|| internal("stable_write_release_missing"))?;
         let route = format!(
             "{}?name={}",
@@ -182,11 +241,10 @@ impl PackagePublicationBackend for GitHubPackagePublisher {
 
     fn publish_draft(&mut self) -> Result<(), OrchestratorError> {
         let observed = stable::take(self, &stable::Action::Publish)?;
-        let release_id = stable::authorize(self, observed)?
+        let release_id = stable::authorize(self, observed, false)?
             .ok_or_else(|| internal("stable_write_release_missing"))?;
         let route = self.api.route(&format!("releases/{release_id}"));
-        require_stable(self.receipt.channel)?;
-        let prerelease = false;
+        let prerelease = prerelease(self.receipt.channel);
         let make_latest = make_latest(self.receipt.channel);
         self.api.patch_fields(
             &route,
@@ -202,4 +260,84 @@ impl PackagePublicationBackend for GitHubPackagePublisher {
         }
         Ok(())
     }
+}
+
+fn preview_ci_source(
+    repository_id: u64,
+    source: &velnor_actions_contract::package_release::PackageReleaseSource,
+) -> RunSource<'_> {
+    RunSource {
+        repository_id,
+        sha: &source.commit_sha,
+        branch: &source.default_branch,
+    }
+}
+
+fn verify_current_preview_ci(
+    api: &super::github::GitHubApi,
+    repository_id: u64,
+    source_record: &velnor_actions_contract::package_release::PackageReleaseSource,
+    current_ci: (u64, u32),
+) -> Result<(), OrchestratorError> {
+    api.verify_ci_identity(
+        current_ci.0,
+        current_ci.1,
+        preview_ci_source(repository_id, source_record),
+        true,
+    )
+}
+
+#[cfg(test)]
+#[path = "package_release_publish_backend_tests.rs"]
+mod tests;
+
+fn verify_preview_source_ci(
+    api: &super::github::GitHubApi,
+    repository_id: u64,
+    source_record: &velnor_actions_contract::package_release::PackageReleaseSource,
+) -> Result<(), OrchestratorError> {
+    let source = RunSource {
+        repository_id,
+        sha: &source_record.commit_sha,
+        branch: &source_record.default_branch,
+    };
+    api.verify_ci_identity(
+        source_record.ci_run_id,
+        source_record.ci_run_attempt,
+        source,
+        false,
+    )?;
+    // Preserve signed CI identity while independently requiring successful latest A CI.
+    let workflow = api.admitted_workflow(CI_WORKFLOW_PATH, WORKFLOW_DISPLAY_NAME)?;
+    let latest = api.latest_source_ci(&workflow, source)?;
+    let id = latest
+        .id
+        .filter(|id| *id > 0)
+        .ok_or_else(|| internal("package_ci_latest_attempt_mismatch"))?;
+    let attempt = latest
+        .run_attempt
+        .filter(|attempt| *attempt > 0)
+        .ok_or_else(|| internal("package_ci_latest_attempt_mismatch"))?;
+    api.verify_ci_identity(id, attempt, source, true)
+}
+
+fn verify_preview_lineage(
+    publisher: &GitHubPackagePublisher,
+    coordinator_sha: &str,
+) -> Result<(), OrchestratorError> {
+    publisher.api.verify_preview_main_ancestry(
+        publisher.receipt.repository.id,
+        &publisher.receipt.source.default_branch,
+        &publisher.receipt.source.commit_sha,
+        &publisher.receipt.workflow.authority_sha,
+    )?;
+    if coordinator_sha != publisher.receipt.workflow.authority_sha {
+        publisher.api.verify_preview_main_ancestry(
+            publisher.receipt.repository.id,
+            &publisher.receipt.source.default_branch,
+            &publisher.receipt.source.commit_sha,
+            coordinator_sha,
+        )?;
+    }
+    Ok(())
 }

@@ -1,13 +1,15 @@
 use super::*;
 
+use std::collections::BTreeMap;
 use velnor_actions_contract::VerificationRunner;
-use velnor_actions_workflow_renderer::workflow_routing::WorkflowRoutingPolicy;
+use velnor_actions_contract::targets::ReleaseTarget;
 use velnor_actions_workflow_renderer::{
     HelperProvenance, MiseSetup, provision_acquire_step,
     schema2::{
-        ConsumerReleaseSpec, ConsumerRollingPreviewSpec, ConsumerStableReleaseSpec,
-        render_consumer_binary_release, render_consumer_preview,
+        ConsumerReleaseSpec, ConsumerStableReleaseSpec, render_consumer_binary_release,
+        render_consumer_preview,
     },
+    workflow_routing::WorkflowRoutingPolicy,
 };
 
 impl Fixture {
@@ -95,7 +97,9 @@ fn fixture(channel: PackageReleaseChannel) -> ConsumerReleaseSpec {
         producer_timeout_minutes: 20,
         linux_acquire: acquire.clone(),
         producer_acquire: acquire,
+        producer_acquire_by_target: producer_acquires(channel, "0.1.33"),
         producer_setup: setup.clone(),
+        producer_setup_by_target: producer_setups(channel, &setup),
         linux_setup: setup,
         install_gh_argv: vec!["mise".into(), "install".into(), "gh@2.102.1".into()],
         verify_rust_argv: vec![
@@ -132,11 +136,56 @@ fn fixture(channel: PackageReleaseChannel) -> ConsumerReleaseSpec {
                 "release-plz".into(),
             ],
         }),
-        preview: (channel == PackageReleaseChannel::Preview).then_some(
-            ConsumerRollingPreviewSpec {
-                release_id: 123,
-                bootstrap_snapshot_sha256: None,
-            },
-        ),
+    }
+}
+
+fn producer_acquires(
+    channel: PackageReleaseChannel,
+    version: &str,
+) -> BTreeMap<ReleaseTarget, velnor_actions_contract::Step> {
+    if channel != PackageReleaseChannel::Preview {
+        return BTreeMap::new();
+    }
+    ReleaseTarget::ALL
+        .into_iter()
+        .map(|target| {
+            let asset = format!("velnor-actions-{version}-{}", target.triple());
+            let checksum = match target {
+                ReleaseTarget::LinuxX86_64 => "sha256sum -c -",
+                ReleaseTarget::MacosArm64 | ReleaseTarget::MacosX86_64 => "shasum -a 256 -c -",
+            };
+            let step = provision_acquire_step(
+                &HelperProvenance::ReleaseAsset {
+                    url: format!(
+                        "https://github.com/tailrocks/velnor-new/releases/download/v{version}/{asset}"
+                    ),
+                    sha256: "c".repeat(64),
+                    commit: "b".repeat(40),
+                },
+                vec![
+                    "sh".into(),
+                    "-c".into(),
+                    format!(
+                        r#"curl -fsSL "$VELNOR_ASSET_URL" -o "$RUNNER_TEMP/velnor/bin/velnor-actions-{version}" && printf '%s  %s\n' "$VELNOR_ASSET_SHA256" "$RUNNER_TEMP/velnor/bin/velnor-actions-{version}" | {checksum}"#
+                    ),
+                ],
+            )
+            .expect("target-specific typed acquisition");
+            (target, step)
+        })
+        .collect()
+}
+
+fn producer_setups(
+    channel: PackageReleaseChannel,
+    setup: &MiseSetup,
+) -> BTreeMap<ReleaseTarget, MiseSetup> {
+    if channel == PackageReleaseChannel::Preview {
+        ReleaseTarget::ALL
+            .into_iter()
+            .map(|target| (target, setup.clone()))
+            .collect()
+    } else {
+        BTreeMap::new()
     }
 }

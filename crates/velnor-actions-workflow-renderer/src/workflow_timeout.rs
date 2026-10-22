@@ -20,6 +20,11 @@ pub(crate) fn validate(path: &str, document: &Yaml) -> Result<(), RenderError> {
         let minutes = fields
             .iter()
             .find_map(|(key, value)| (key == "timeout-minutes").then_some(value));
+        if let Some(value) = minutes
+            && authenticated_preview_timeout(path, id, fields, value)
+        {
+            continue;
+        }
         let Some(Yaml::Int(minutes)) = minutes else {
             return Err(invalid(id, "timeout_missing_or_dynamic"));
         };
@@ -27,6 +32,74 @@ pub(crate) fn validate(path: &str, document: &Yaml) -> Result<(), RenderError> {
         JobTimeout::try_from(minutes).map_err(RenderError::Contract)?;
     }
     Ok(())
+}
+
+/// Preview runner budgets are produced by the native source admission, which
+/// validates the source policy's 1..=30 minute operation limit. Admit only the
+/// two exact downstream expressions and their exact selector dependency.
+fn authenticated_preview_timeout(
+    path: &str,
+    id: &str,
+    fields: &[(String, Yaml)],
+    timeout: &Yaml,
+) -> bool {
+    if path
+        != velnor_actions_contract::package_release::PackageReleaseChannel::Preview.workflow_path()
+    {
+        return false;
+    }
+    let expr = match timeout {
+        Yaml::Str(value) | Yaml::Quoted(value) => value.as_str(),
+        _ => return false,
+    };
+    let needs = fields
+        .iter()
+        .find_map(|(key, value)| (key == "needs").then_some(value));
+    let Some(Yaml::Seq(needs)) = needs else {
+        return false;
+    };
+    let has_eligibility = needs.iter().any(|need| {
+        matches!(need, Yaml::Str(value) | Yaml::Quoted(value) if value == "preview-eligibility")
+    });
+    if !has_eligibility {
+        return false;
+    }
+    let has_workflow_run_gate = fields.iter().any(|(key, value)| {
+        key == "if"
+            && matches!(value, Yaml::Str(value) | Yaml::Quoted(value)
+                if value == "${{ github.event_name == 'workflow_run' }}")
+    });
+    if !has_workflow_run_gate {
+        return false;
+    }
+    match (id, expr) {
+        ("preview-payload", "${{ matrix.timeout_minutes }}") => {
+            let strategy = fields
+                .iter()
+                .find_map(|(key, value)| (key == "strategy").then_some(value));
+            let Some(Yaml::Map(strategy)) = strategy else {
+                return false;
+            };
+            let fail_fast_disabled = strategy.iter().any(|(key, value)| {
+                key == "fail-fast" && matches!(value, Yaml::Bool(false))
+            });
+            fail_fast_disabled
+                && strategy.iter().any(|(key, matrix)| {
+                    key == "matrix"
+                        && matches!(matrix, Yaml::Str(value) | Yaml::Quoted(value)
+                            if value == "${{ fromJSON(needs.preview-eligibility.outputs.payload_matrix) }}")
+                })
+        }
+        (
+            "preview-assemble",
+            "${{ fromJSON(needs.preview-eligibility.outputs.producer_timeout_minutes) }}",
+        ) => {
+            needs.iter().any(|need| {
+                matches!(need, Yaml::Str(value) | Yaml::Quoted(value) if value == "preview-payload")
+            })
+        }
+        _ => false,
+    }
 }
 
 pub(crate) fn validate_tree(documents: &[(&str, &Yaml)]) -> Result<(), RenderError> {
