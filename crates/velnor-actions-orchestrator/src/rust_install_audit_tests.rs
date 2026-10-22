@@ -29,6 +29,38 @@ fn problem(files: &[RenderedFile]) -> String {
     }
 }
 
+fn inline_step(name: &str, template: &crate::verifier_actions::InlineVerifierTemplate) -> String {
+    inline_step_with_env(name, template, template.env.iter())
+}
+
+fn inline_step_with_env<'a>(
+    name: &str,
+    template: &'a crate::verifier_actions::InlineVerifierTemplate,
+    env: impl Iterator<Item = (&'a String, &'a String)>,
+) -> String {
+    let mut lines = vec![
+        format!(
+            "      - name: {}",
+            velnor_actions_workflow_renderer::yaml::quote_scalar(name)
+        ),
+        "        env:".to_owned(),
+    ];
+    lines.extend(env.map(|(key, value)| {
+        format!(
+            "          {key}: {}",
+            velnor_actions_workflow_renderer::yaml::quote_scalar(value)
+        )
+    }));
+    lines.push(format!(
+        "        shell: {}",
+        velnor_actions_workflow_renderer::yaml::quote_scalar(
+            template.shell.expect("canonical verifier shell")
+        )
+    ));
+    lines.push(format!("        run: {}", template.run_scalar));
+    lines.join("\n") + "\n"
+}
+
 const INSTALLED: &str = "      - name: Verify Rust channel manifest
         uses: ./.github/actions/velnor-verify-rust-manifest # zizmor: ignore[self-repository]
 ";
@@ -189,15 +221,17 @@ fn missing_or_changed_verifier_composite_blocks_audit() {
 #[test]
 fn existing_inline_release_verifiers_remain_exactly_audited() {
     let verifiers = verifiers();
-    let rust_run = verifiers.inline_rust_run_scalars["Verify Rust channel manifest"]
-        .last()
+    let rust_template = verifiers.inline_rust_templates["Verify Rust channel manifest"]
+        .get(1)
         .expect("canonical direct-shell Rust verifier");
-    let jactionlint_run = verifiers
-        .inline_jactionlint_run_scalars
+    let jactionlint_template = verifiers
+        .inline_jactionlint_templates
         .last()
         .expect("canonical direct-shell jactionlint verifier");
     let workflow = format!(
-        "jobs:\n  release:\n    steps:\n      - name: Install pinned Rust\n        run: mise install rust@1.99.1\n      - name: Verify Rust channel manifest\n        run: {rust_run}\n      - name: Verify jactionlint\n        run: {jactionlint_run}\n"
+        "jobs:\n  release:\n    steps:\n      - name: Install pinned Rust\n        run: mise install rust@1.99.1\n{}{}",
+        inline_step("Verify Rust channel manifest", rust_template),
+        inline_step("Verify jactionlint", jactionlint_template),
     );
     assert_eq!(
         problem(&files(".github/workflows/release.yml", &workflow)),
@@ -213,14 +247,194 @@ fn existing_inline_release_verifiers_remain_exactly_audited() {
 }
 
 #[test]
+fn standalone_source_prep_verifier_accepts_only_its_shared_exact_job_environment() {
+    let actions = verifiers();
+    let template = actions.inline_rust_templates["Verify Rust channel manifest"]
+        .last()
+        .expect("canonical producer-home Rust verifier");
+    assert_eq!(template.env["MISE_AUTO_INSTALL"], "false");
+    assert_eq!(template.env["MISE_NO_CONFIG"], "1");
+    assert_eq!(template.env["CARGO_HOME"], template.env["MISE_CARGO_HOME"]);
+    assert_eq!(
+        template.env["RUSTUP_HOME"],
+        template.env["MISE_RUSTUP_HOME"]
+    );
+    assert_eq!(template.env["RUSTUP_TOOLCHAIN"], "1.99.1");
+
+    let canonical = format!(
+        "jobs:\n  producer:\n    steps:\n      - name: Install pinned Rust\n        run: mise install rust@1.99.1\n{}",
+        inline_step("Verify Rust channel manifest", template),
+    );
+    assert_eq!(
+        problem(&files(".github/workflows/binary-release.yml", &canonical)),
+        ""
+    );
+
+    let reordered = format!(
+        "jobs:\n  producer:\n    steps:\n      - name: Install pinned Rust\n        run: mise install rust@1.99.1\n{}",
+        inline_step_with_env(
+            "Verify Rust channel manifest",
+            template,
+            template.env.iter().rev(),
+        ),
+    );
+    assert_eq!(
+        problem(&files(".github/workflows/binary-release.yml", &reordered)),
+        "",
+        "environment declaration order does not change the exact mapping"
+    );
+
+    let changed_flag = canonical.replace(
+        &format!(
+            "          MISE_NO_CONFIG: {}",
+            velnor_actions_workflow_renderer::yaml::quote_scalar(&template.env["MISE_NO_CONFIG"])
+        ),
+        "          MISE_NO_CONFIG: \"0\"",
+    );
+    assert_ne!(changed_flag, canonical);
+    assert!(
+        problem(&files(
+            ".github/workflows/binary-release.yml",
+            &changed_flag
+        ))
+        .contains("noncanonical verifier call or body"),
+        "changed project-config isolation must fail closed"
+    );
+
+    let changed_home = canonical.replace(
+        &format!(
+            "          RUSTUP_HOME: {}",
+            velnor_actions_workflow_renderer::yaml::quote_scalar(&template.env["RUSTUP_HOME"])
+        ),
+        "          RUSTUP_HOME: /tmp/untrusted-rustup",
+    );
+    assert_ne!(changed_home, canonical);
+    assert!(
+        problem(&files(
+            ".github/workflows/binary-release.yml",
+            &changed_home
+        ))
+        .contains("noncanonical verifier call or body"),
+        "changed producer home must fail closed"
+    );
+
+    let no_config = format!(
+        "          MISE_NO_CONFIG: {}\n",
+        velnor_actions_workflow_renderer::yaml::quote_scalar(&template.env["MISE_NO_CONFIG"])
+    );
+    let missing_entry = canonical.replace(&no_config, "");
+    assert_ne!(missing_entry, canonical);
+    assert!(
+        problem(&files(
+            ".github/workflows/binary-release.yml",
+            &missing_entry
+        ))
+        .contains("noncanonical verifier call or body"),
+        "missing project-config isolation must fail closed"
+    );
+
+    let duplicate_entry = canonical.replace(&no_config, &format!("{no_config}{no_config}"));
+    assert_ne!(duplicate_entry, canonical);
+    assert!(
+        problem(&files(
+            ".github/workflows/binary-release.yml",
+            &duplicate_entry
+        ))
+        .contains("noncanonical verifier call or body"),
+        "duplicate environment keys must fail closed"
+    );
+
+    let extra_entry = canonical.replace(
+        "        env:\n",
+        "        env:\n          UNEXPECTED: \"1\"\n",
+    );
+    assert_ne!(extra_entry, canonical);
+    assert!(
+        problem(&files(".github/workflows/binary-release.yml", &extra_entry))
+            .contains("noncanonical verifier call or body"),
+        "additional caller environment must fail closed"
+    );
+}
+
+#[test]
+fn inline_verifiers_reject_skips_and_noncanonical_shell_or_environment() {
+    let actions = verifiers();
+    let rust_template = actions.inline_rust_templates["Verify Rust channel manifest"]
+        .first()
+        .expect("canonical Rust verifier with owned homes");
+    let jactionlint_template = actions
+        .inline_jactionlint_templates
+        .last()
+        .expect("canonical direct-shell jactionlint verifier");
+    let canonical = format!(
+        "jobs:\n  release:\n    steps:\n{}{}",
+        inline_step("Verify Rust channel manifest", rust_template),
+        inline_step("Verify jactionlint", jactionlint_template),
+    );
+    assert_eq!(
+        problem(&files(".github/workflows/release.yml", &canonical)),
+        ""
+    );
+
+    for (case, changed) in [
+        (
+            "skipped condition",
+            canonical.replace(
+                "      - name: Verify Rust channel manifest\n        env:",
+                "      - name: Verify Rust channel manifest\n        if: false\n        env:",
+            ),
+        ),
+        (
+            "wrong shell",
+            canonical.replace(
+                &format!(
+                    "        shell: {}",
+                    velnor_actions_workflow_renderer::yaml::quote_scalar(
+                        jactionlint_template.shell.unwrap()
+                    )
+                ),
+                "        shell: sh",
+            ),
+        ),
+        (
+            "wrong rustup home",
+            canonical.replace(
+                &format!(
+                    "          RUSTUP_HOME: {}",
+                    velnor_actions_workflow_renderer::yaml::quote_scalar(
+                        rust_template.env["RUSTUP_HOME"].as_str()
+                    )
+                ),
+                "          RUSTUP_HOME: /tmp/untrusted-rustup",
+            ),
+        ),
+        (
+            "unexpected environment",
+            canonical.replace(
+                "        env:\n",
+                "        env:\n          JACTIONLINT_HOME: /tmp/untrusted\n",
+            ),
+        ),
+    ] {
+        assert_ne!(changed, canonical, "{case} control must mutate its source");
+        let found = problem(&files(".github/workflows/release.yml", &changed));
+        assert!(
+            found.contains("noncanonical verifier call or body"),
+            "{case} must fail closed: {found}"
+        );
+    }
+}
+
+#[test]
 fn direct_jactionlint_script_is_exactly_audited() {
     let actions = verifiers();
-    let jactionlint_run = actions
-        .inline_jactionlint_run_scalars
+    let jactionlint_template = actions
+        .inline_jactionlint_templates
         .last()
         .expect("canonical direct-shell jactionlint verifier");
     let workflow = format!(
-        "jobs:\n  release:\n    steps:\n      - name: Verify jactionlint\n        run: {jactionlint_run}\n"
+        "jobs:\n  release:\n    steps:\n{}",
+        inline_step("Verify jactionlint", jactionlint_template),
     );
     assert_eq!(
         problem(&files(".github/workflows/upgrades.yml", &workflow)),

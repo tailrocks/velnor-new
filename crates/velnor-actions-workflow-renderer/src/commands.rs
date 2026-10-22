@@ -90,9 +90,12 @@ pub(crate) fn join_validated_argv_for_run(argv: &[String]) -> Result<String, Ren
     Ok(words.join(" "))
 }
 
-/// True for `sh -c <script>`/`bash -c <script>` vectors.
+/// True for the supported `sh -c <script>`/`bash -c <script>` vectors and
+/// the exact absolute `/bin/sh -c <script>` used by trusted verifiers.
 pub(crate) fn is_inline_shell(argv: &[String]) -> bool {
-    argv.len() > 2 && matches!(argv[0].as_str(), "sh" | "bash") && argv[1].as_str() == "-c"
+    argv.len() > 2
+        && matches!(argv[0].as_str(), "sh" | "bash" | "/bin/sh")
+        && argv[1].as_str() == "-c"
 }
 
 pub(crate) fn inline_shell_script_at(argv: &[String]) -> Option<usize> {
@@ -285,4 +288,36 @@ fn check_command_line(command: &str) -> Result<(), RenderError> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod verifier_shell_tests {
+    use super::join_argv_for_run;
+
+    #[test]
+    fn absolute_verifier_shell_preserves_script_and_quotes_project_refs() {
+        let argv = vec![
+            "/bin/sh".to_owned(),
+            "-c".to_owned(),
+            "set -eu; v=\"${VELNOR_TOOL_RUST}\"".to_owned(),
+        ];
+        let joined = join_argv_for_run(&argv).expect("canonical absolute shell");
+        let quoted = super::super::project_tool_resolver::quote_project_tool_run_refs(&joined)
+            .expect("dynamic version remains safely quoted");
+
+        assert!(quoted.starts_with("/bin/sh -c '"), "{quoted}");
+        assert!(quoted.contains("'\"${VELNOR_TOOL_RUST}\"'"), "{quoted}");
+        assert!(quoted.ends_with('\''), "{quoted}");
+    }
+
+    #[test]
+    fn absolute_verifier_shell_does_not_relax_unbalanced_reference_checks() {
+        assert!(
+            super::super::project_tool_resolver::quote_project_tool_run_refs(
+                "/bin/sh -c 'printf %s ${VELNOR_TOOL_RUST}"
+            )
+            .is_err(),
+            "unbalanced inline script must remain invalid"
+        );
+    }
 }

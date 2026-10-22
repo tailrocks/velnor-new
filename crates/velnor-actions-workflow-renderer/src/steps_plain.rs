@@ -37,6 +37,14 @@ pub(crate) fn plain_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
             Ok(Yaml::Map(entries))
         }
         StepKind::Shell { run, env } => {
+            if matches!(
+                step.name.as_str(),
+                "Verify restored Rust toolchain"
+                    | crate::VERIFY_RUST_TOOLCHAIN_STEP
+                    | "Verify jactionlint"
+            ) {
+                return crate::document_steps::verifier_shell_step_to_yaml(step);
+            }
             crate::action_mbx_shell::validate_step_argv(run, step.role)?;
             commands::validate_env(env)?;
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];

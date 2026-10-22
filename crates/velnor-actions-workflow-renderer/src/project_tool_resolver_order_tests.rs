@@ -1,3 +1,4 @@
+use super::super::bind_verifier_composite;
 use super::{SETUP, bind_workflow, step, workflow};
 use crate::yaml::{Yaml, render_yaml};
 
@@ -28,6 +29,248 @@ fn resolver_follows_both_checkout_and_mise_and_binding_remains_idempotent() {
         assert_eq!(render_yaml(&doc), text);
         assert_eq!(text.matches("Resolve project tool versions").count(), 1);
     }
+}
+
+#[test]
+fn verifier_actions_bind_their_project_tools_in_the_job_before_cache_restore() {
+    for (uses, variable) in [
+        (
+            velnor_actions_contract::workflow::RUST_VERIFIER_USES[0],
+            "VELNOR_TOOL_RUST",
+        ),
+        (
+            velnor_actions_contract::workflow::RUST_VERIFIER_USES[1],
+            "VELNOR_TOOL_RUST",
+        ),
+        (
+            crate::verifier_composite::VERIFY_JACTIONLINT_USES,
+            "VELNOR_TOOL_JACTIONLINT",
+        ),
+    ] {
+        let checkout = step(&[("uses", "actions/checkout@0123")]);
+        let setup = step(&[("uses", SETUP)]);
+        let restore = step(&[
+            ("name", "Restore cached tools"),
+            ("uses", "actions/cache@0123"),
+        ]);
+        let verifier = step(&[("name", "Verify tool"), ("uses", uses)]);
+        let prepare = step(&[
+            ("name", "Prepare pinned tools"),
+            (
+                "run",
+                match variable {
+                    "VELNOR_TOOL_RUST" => "mise install rust@${VELNOR_TOOL_RUST}",
+                    _ => "mise install jactionlint@${VELNOR_TOOL_JACTIONLINT}",
+                },
+            ),
+        ]);
+        let mut doc = workflow(
+            Vec::new(),
+            vec![checkout, setup, prepare, restore, verifier],
+        );
+
+        bind_workflow(&mut doc).expect("verifier action requires a job-scoped binding");
+        let rendered = render_yaml(&doc);
+        let resolver = rendered
+            .find("name: Resolve project tool versions")
+            .expect("resolver step");
+        let restore = rendered
+            .find("name: Restore cached tools")
+            .expect("restore step");
+        let verifier = rendered.find("name: Verify tool").expect("verifier step");
+        assert!(resolver < restore && restore < verifier, "{rendered}");
+        assert!(
+            rendered.contains(&format!("velnor_tool {variable} '")),
+            "{rendered}"
+        );
+        assert!(
+            rendered.contains(&format!("PATH={}", crate::VERIFY_PATH)),
+            "{rendered}"
+        );
+        assert!(
+            rendered.contains("unset ACTIONS_ID_TOKEN_REQUEST_TOKEN"),
+            "{rendered}"
+        );
+        assert!(
+            rendered.contains("shell: /bin/bash --noprofile --norc -e -o pipefail {0}"),
+            "{rendered}"
+        );
+        assert!(
+            rendered.contains("${HOME:?missing HOME}/.local/share/mise/bin/mise"),
+            "{rendered}"
+        );
+        assert_eq!(rendered.matches("Resolve project tool versions").count(), 1);
+    }
+}
+
+#[test]
+fn a_dynamic_verifier_job_without_setup_mise_fails_but_a_pinned_private_job_needs_no_binding() {
+    let checkout = step(&[("uses", "actions/checkout@0123")]);
+    let prepare = step(&[
+        ("name", "Prepare pinned tools"),
+        ("run", "mise install jactionlint@${VELNOR_TOOL_JACTIONLINT}"),
+    ]);
+    let verifier = step(&[
+        ("name", "Verify jactionlint"),
+        ("uses", crate::verifier_composite::VERIFY_JACTIONLINT_USES),
+    ]);
+    let mut dynamic_without_setup = workflow(
+        Vec::new(),
+        vec![checkout.clone(), prepare, verifier.clone()],
+    );
+    let error = bind_workflow(&mut dynamic_without_setup)
+        .expect_err("a project-tool reference requires Setup Mise");
+    assert!(error.to_string().contains("build:no_mise_setup"), "{error}");
+
+    // Private wiring can render a verifier call when the action body is built
+    // from literal catalog pins. In that case no project-version resolver is
+    // needed, and the renderer must not invent a Mise prerequisite.
+    let mut pinned_without_setup = workflow(Vec::new(), vec![checkout, verifier]);
+    bind_workflow(&mut pinned_without_setup).expect("literal verifier pins need no resolver");
+    let rendered = render_yaml(&pinned_without_setup);
+    assert!(
+        !rendered.contains("Resolve project tool versions"),
+        "{rendered}"
+    );
+}
+
+#[test]
+fn verifier_composite_binding_preserves_static_pins_and_only_rewrites_its_own_ref() {
+    let reference = "VELNOR_TOOL_JACTIONLINT";
+    let mut pinned = Yaml::Seq(vec![Yaml::str(
+        "mise exec jactionlint@2.3.0 -- jactionlint",
+    )]);
+    bind_verifier_composite(&mut pinned, reference).expect("literal pin needs no binding");
+    assert_eq!(
+        pinned,
+        Yaml::Seq(vec![Yaml::str(
+            "mise exec jactionlint@2.3.0 -- jactionlint"
+        )])
+    );
+
+    let mut dynamic = Yaml::Seq(vec![Yaml::str(
+        "mise exec jactionlint@${VELNOR_TOOL_JACTIONLINT} -- jactionlint",
+    )]);
+    bind_verifier_composite(&mut dynamic, reference).expect("canonical dynamic ref");
+    assert_eq!(
+        dynamic,
+        Yaml::Seq(vec![Yaml::str(
+            "mise exec jactionlint@${{ env.VELNOR_TOOL_JACTIONLINT }} -- jactionlint",
+        )])
+    );
+
+    let mut unrelated = Yaml::Seq(vec![Yaml::str(
+        "mise exec jactionlint@${VELNOR_TOOL_RUST} -- jactionlint",
+    )]);
+    let error = bind_verifier_composite(&mut unrelated, reference)
+        .expect_err("a different project binding must not be accepted");
+    assert!(
+        error
+            .to_string()
+            .contains("verifier_composite_tool_binding"),
+        "{error}"
+    );
+}
+
+#[test]
+fn verifier_resolver_is_exact_and_rejects_tampered_or_overridden_trust_inputs() {
+    let checkout = step(&[("uses", "actions/checkout@0123")]);
+    let setup = step(&[("uses", SETUP)]);
+    let verifier = step(&[
+        ("name", "Verify Rust channel manifest"),
+        ("run", "echo rust@${VELNOR_TOOL_RUST}"),
+    ]);
+    let mut doc = workflow(
+        Vec::new(),
+        vec![checkout.clone(), setup.clone(), verifier.clone()],
+    );
+    bind_workflow(&mut doc).expect("canonical resolver");
+    let Yaml::Map(root) = &mut doc else {
+        panic!("workflow map")
+    };
+    let jobs = root
+        .iter_mut()
+        .find(|(key, _)| key == "jobs")
+        .expect("jobs");
+    let Yaml::Map(jobs) = &mut jobs.1 else {
+        panic!("jobs map")
+    };
+    let job = &mut jobs[0].1;
+    let Yaml::Map(job) = job else {
+        panic!("job map")
+    };
+    let steps = job
+        .iter_mut()
+        .find(|(key, _)| key == "steps")
+        .expect("steps");
+    let Yaml::Seq(steps) = &mut steps.1 else {
+        panic!("steps sequence")
+    };
+    let resolver = steps
+        .iter_mut()
+        .find(|step| {
+            matches!(
+                step,
+                Yaml::Map(fields)
+                    if fields.iter().any(|(key, value)| {
+                        key == "name" && matches!(value, Yaml::Str(name) if name == "Resolve project tool versions")
+                    })
+            )
+        })
+        .expect("resolver");
+    let Yaml::Map(fields) = resolver else {
+        panic!("resolver map")
+    };
+    fields
+        .iter_mut()
+        .find(|(key, _)| key == "shell")
+        .expect("shell")
+        .1 = Yaml::str("bash");
+    let error = bind_workflow(&mut doc).expect_err("tampered resolver must fail closed");
+    assert!(
+        error.to_string().contains("resolver_step_tampered"),
+        "{error}"
+    );
+
+    let mut overridden = workflow(
+        vec![("HOME".to_owned(), Yaml::str("/tmp/attacker-home"))],
+        vec![checkout, setup, verifier],
+    );
+    let error = bind_workflow(&mut overridden).expect_err("job HOME must be fixed");
+    assert!(
+        error
+            .to_string()
+            .contains("verifier_trusted_environment_override"),
+        "{error}"
+    );
+    let mut overridden = workflow(
+        Vec::new(),
+        vec![
+            step(&[("uses", "actions/checkout@0123")]),
+            step(&[("uses", SETUP)]),
+            step(&[
+                ("name", "Verify Rust channel manifest"),
+                ("run", "echo rust@${VELNOR_TOOL_RUST}"),
+            ]),
+        ],
+    );
+    let Yaml::Map(fields) = &mut overridden else {
+        panic!("workflow map")
+    };
+    fields.insert(
+        1,
+        (
+            "env".to_owned(),
+            Yaml::Map(vec![("PATH".to_owned(), Yaml::str("/tmp/attacker-bin"))]),
+        ),
+    );
+    let error = bind_workflow(&mut overridden).expect_err("workflow PATH must be fixed");
+    assert!(
+        error
+            .to_string()
+            .contains("verifier_trusted_environment_override"),
+        "{error}"
+    );
 }
 
 #[test]

@@ -16,14 +16,56 @@ pub(crate) struct VerifierAction {
     pub(crate) file: RenderedFile,
 }
 
+/// One supported direct-shell verifier shape retained for release workflows.
+#[derive(Debug, Clone)]
+pub(crate) struct InlineVerifierTemplate {
+    pub(crate) run_scalar: String,
+    pub(crate) shell: Option<&'static str>,
+    pub(crate) env: BTreeMap<String, String>,
+    pub(crate) required_env: Vec<&'static str>,
+}
+
+impl InlineVerifierTemplate {
+    fn wrapped(step: &Step, required_env: &[&'static str]) -> Result<Self, OrchestratorError> {
+        let StepKind::Shell { env, .. } = &step.kind else {
+            return Err(OrchestratorError::Contract {
+                problem: "verifier_inline_template_not_shell".to_owned(),
+            });
+        };
+        Ok(Self {
+            run_scalar: run_scalar(step)?,
+            shell: Some(velnor_actions_workflow_renderer::VERIFY_SHELL),
+            env: env.clone(),
+            required_env: required_env.to_vec(),
+        })
+    }
+}
+
+/// Environment carried by the standalone preview producer's Rust source-prep
+/// job. Keep this shared with source preparation so its inline verifier audit
+/// expects exactly the resolved Mise/Cargo/Rustup context the renderer emits.
+pub(crate) fn producer_cargo_env(
+    catalog: &ToolCatalog,
+) -> Result<BTreeMap<String, String>, OrchestratorError> {
+    let mut env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
+    for (native, mise) in [
+        ("CARGO_HOME", "MISE_CARGO_HOME"),
+        ("RUSTUP_HOME", "MISE_RUSTUP_HOME"),
+    ] {
+        let value = env[mise].clone();
+        env.insert(native.to_owned(), value);
+    }
+    Ok(env)
+}
+
 /// One immutable set of the three verifier definitions emitted for a catalog.
 #[derive(Debug, Clone)]
 pub(crate) struct VerifierActionSet {
     pub(crate) restored_rust: VerifierAction,
     pub(crate) installed_rust: VerifierAction,
     pub(crate) jactionlint: VerifierAction,
-    pub(crate) inline_rust_run_scalars: BTreeMap<&'static str, Vec<String>>,
-    pub(crate) inline_jactionlint_run_scalars: Vec<String>,
+    pub(crate) inline_rust_templates: BTreeMap<&'static str, Vec<InlineVerifierTemplate>>,
+    pub(crate) inline_jactionlint_templates: Vec<InlineVerifierTemplate>,
 }
 
 impl VerifierActionSet {
@@ -51,33 +93,55 @@ impl VerifierActionSet {
             crate::workflow::workflow_policy::jactionlint_verify_step::verifier_shell_step(
                 catalog,
             )?;
-        let default_home_step = velnor_actions_workflow_renderer::steps::shell_step(
-            crate::workflow::VERIFY_RUST_MANIFEST_STEP,
-            crate::workflow::verify_rust_argv(catalog),
-            BTreeMap::new(),
-        )?;
-        let mut inline_rust_run_scalars = BTreeMap::new();
-        inline_rust_run_scalars.insert(
+        let default_home_step =
+            velnor_actions_workflow_renderer::verifier_composite::verifier_shell_step(
+                crate::workflow::VERIFY_RUST_MANIFEST_STEP,
+                crate::workflow::verify_rust_argv(catalog),
+                BTreeMap::new(),
+            )?;
+        let producer_env = producer_cargo_env(catalog)?;
+        let producer_home_step =
+            velnor_actions_workflow_renderer::verifier_composite::verifier_shell_step(
+                crate::workflow::VERIFY_RUST_MANIFEST_STEP,
+                crate::workflow::verify_rust_argv(catalog),
+                producer_env,
+            )?;
+        let jactionlint_inline_step =
+            velnor_actions_workflow_renderer::verifier_composite::verifier_shell_step(
+                crate::workflow::VERIFY_JACTIONLINT_STEP,
+                crate::workflow::jactionlint_verify_argv(catalog),
+                BTreeMap::new(),
+            )?;
+        let mut inline_rust_templates = BTreeMap::new();
+        let mut producer_home_template =
+            InlineVerifierTemplate::wrapped(&producer_home_step, &["RUSTUP_HOME", "CARGO_HOME"])?;
+        // The workflow renderer binds project tool references in step env to
+        // `${{ env.* }}` after constructing the canonical Step. The audit
+        // template models that final emitted YAML mapping at the same
+        // boundary; keep the Step input itself in shell form for normal
+        // validation and source-preparation reuse.
+        for value in producer_home_template.env.values_mut() {
+            *value = velnor_actions_contract::config::project_tool_refs::
+                project_tool_refs_to_expressions(value);
+        }
+        inline_rust_templates.insert(
             crate::workflow::VERIFY_RESTORED_RUST_STEP,
-            vec![run_scalar(&restored_step)?],
+            vec![InlineVerifierTemplate::wrapped(
+                &restored_step,
+                &["RUSTUP_HOME", "CARGO_HOME"],
+            )?],
         );
-        inline_rust_run_scalars.insert(
+        inline_rust_templates.insert(
             crate::workflow::VERIFY_RUST_MANIFEST_STEP,
             vec![
-                run_scalar(&installed_step)?,
-                run_scalar(&default_home_step)?,
-                // Schema-2 release/qualification renderers preserve their
-                // canonical direct-shell body; unlike workflow Steps they
-                // do not pass through the shell-step credential wrapper.
-                run_scalar_from_argv(&crate::workflow::verify_rust_argv(catalog))?,
+                InlineVerifierTemplate::wrapped(&installed_step, &["RUSTUP_HOME", "CARGO_HOME"])?,
+                InlineVerifierTemplate::wrapped(&default_home_step, &[])?,
+                producer_home_template,
             ],
         );
-        let inline_jactionlint_run_scalars = vec![
-            run_scalar(&jactionlint_step)?,
-            run_scalar_from_argv(&crate::workflow::jactionlint_verify_argv(catalog))?,
-            run_scalar_from_script(
-                &crate::workflow::workflow_policy::jactionlint_verify_step::script(catalog),
-            )?,
+        let inline_jactionlint_templates = vec![
+            InlineVerifierTemplate::wrapped(&jactionlint_step, &[])?,
+            InlineVerifierTemplate::wrapped(&jactionlint_inline_step, &[])?,
         ];
         Ok(Self {
             restored_rust: VerifierAction {
@@ -110,8 +174,8 @@ impl VerifierActionSet {
                     generator_version,
                 )?,
             },
-            inline_rust_run_scalars,
-            inline_jactionlint_run_scalars,
+            inline_rust_templates,
+            inline_jactionlint_templates,
         })
     }
 
@@ -129,24 +193,6 @@ impl VerifierActionSet {
             .find(|action| action.uses == uses)
     }
 
-    pub(crate) fn is_canonical_inline_rust_step(
-        &self,
-        name: &str,
-        run_scalar: Option<&str>,
-    ) -> bool {
-        self.inline_rust_run_scalars
-            .get(name)
-            .is_some_and(|expected| run_scalar.is_some_and(|run| expected.iter().any(|v| v == run)))
-    }
-
-    pub(crate) fn is_canonical_inline_jactionlint_step(&self, run_scalar: Option<&str>) -> bool {
-        run_scalar.is_some_and(|run| {
-            self.inline_jactionlint_run_scalars
-                .iter()
-                .any(|expected| expected == run)
-        })
-    }
-
     pub(crate) fn canonical_call(step: &Step, action: &VerifierAction) -> bool {
         step.name == action.name
             && step.role == action.role
@@ -162,16 +208,11 @@ impl VerifierActionSet {
 }
 
 fn run_scalar(step: &Step) -> Result<String, OrchestratorError> {
-    let StepKind::Shell { run, .. } = &step.kind else {
-        return Err(OrchestratorError::Contract {
-            problem: "verifier_inline_template_not_shell".to_owned(),
-        });
-    };
-    run_scalar_from_argv(run)
-}
-
-fn run_scalar_from_argv(argv: &[String]) -> Result<String, OrchestratorError> {
-    let joined = velnor_actions_workflow_renderer::join_argv_for_run(argv).map_err(|error| {
+    let argv = velnor_actions_workflow_renderer::verifier_composite::verifier_shell_argv(step)
+        .map_err(|error| OrchestratorError::Contract {
+            problem: error.to_string(),
+        })?;
+    let joined = velnor_actions_workflow_renderer::join_argv_for_run(&argv).map_err(|error| {
         OrchestratorError::Contract {
             problem: error.to_string(),
         }
