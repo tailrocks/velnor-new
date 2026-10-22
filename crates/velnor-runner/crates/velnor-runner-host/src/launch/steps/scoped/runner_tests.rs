@@ -86,7 +86,7 @@ async fn acquire_rejects_connection_scale_set_and_request_identity_mismatches_be
             .await
             .is_err()
     );
-    assert!(lane.methods.is_empty());
+    assert_eq!(lane.methods, [] as [velnor_runner_github::Method; 0]);
 
     assert!(
         validate_scope_binding(&fixture.binding, &fixture.scope, SET_ID + 1)
@@ -123,7 +123,7 @@ async fn stale_acquire_witness_keeps_charge_and_prevents_storage_or_jit() -> Res
     let (lane, docker, identity) = reject_stale_acquire_before_storage(&fixture).await?;
     assert_eq!(lane.methods, [Method::Post]);
     assert!(lane.paths[0].ends_with("/acquirejobs"));
-    assert!(docker.finish().await?.is_empty());
+    assert_eq!(docker.finish().await?, [] as [std::string::String; 0]);
     assert_eq!(fixture.journal.occupied_reservation_count().await, Ok(1));
     assert_eq!(
         fixture

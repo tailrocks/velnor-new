@@ -22,8 +22,6 @@ pub(crate) use containers::{
     create_owned_network, remove_owned_network, remove_owned_network_for_retirement,
     start_bootstrap_pair,
 };
-#[cfg(test)]
-use containers::{create_spec, verify_pre_jit_created};
 pub(crate) use delivery::ListenerDeliveryReceipt;
 #[cfg(test)]
 pub(crate) use pre_jit_recovery::remove_bootstrap_with_claim;

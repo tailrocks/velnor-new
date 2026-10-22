@@ -51,7 +51,7 @@ async fn started_only_event_is_stored_before_ack_and_replay_is_idempotent() -> R
 
     assert!(decision.completion_only);
     assert!(!decision.session_delete_candidate);
-    assert!(decision.started_request_ids.is_empty());
+    assert_eq!(decision.started_request_ids, [] as [i64; 0]);
     assert!(acknowledged.get());
     assert!(inbox_stored_before_ack.get());
     let pending = scope
@@ -160,7 +160,7 @@ async fn partially_recorded_lifecycle_batch_is_acked_only_after_exact_inbox_writ
     .map_err(|error| error.to_string())?;
 
     assert!(decision.completion_only);
-    assert!(decision.started_request_ids.is_empty());
+    assert_eq!(decision.started_request_ids, [] as [i64; 0]);
     assert!(acknowledged.get());
     assert!(inbox_stored_before_ack.get());
     let pending = scope

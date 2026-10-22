@@ -48,7 +48,7 @@ async fn late_lifecycle_batch_acks_without_resuming_or_scheduling_cleanup_inner(
     assert!(acknowledged.load(Ordering::SeqCst));
     assert!(decision.completion_only);
     assert!(!decision.wake_cleanup);
-    assert!(decision.started_request_ids.is_empty());
+    assert_eq!(decision.started_request_ids, [] as [i64; 0]);
     late_events::assert_historical_intake_state(&fixture).await
 }
 

@@ -2,8 +2,6 @@ mod network;
 mod pair;
 mod storage_object;
 pub(crate) use network::{remove_owned_network, remove_owned_network_for_retirement};
-#[cfg(test)]
-pub(crate) use pair::PairStartFailure;
 
 pub(in crate::launch::bootstrap) use network::validate_pre_jit_network;
 pub(crate) use network::{

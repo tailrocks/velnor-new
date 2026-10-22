@@ -142,7 +142,7 @@ async fn missing_stats_completion_ack_allows_the_next_poll_on_fixture_stack() ->
     .map_err(|error| error.to_string())?;
     assert_eq!(outcome.acknowledgement, Acknowledgement::Acknowledged);
     assert_eq!(outcome.settlement, Settlement::Settled);
-    assert!(outcome.started_request_ids.is_empty());
+    assert_eq!(outcome.started_request_ids, [] as [i64; 0]);
 
     let next_poll = test_positive_poll_once_with_response(
         launch::PositivePollContext {

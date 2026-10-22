@@ -22,8 +22,6 @@ pub(super) use offer_authorization::authorize_offer;
 pub(super) use offer_authorization::authorize_offer_with_transport;
 use source_authorization::source_blocked;
 
-#[cfg(test)]
-pub(crate) use scoped::run_native_quarantine_composition;
 pub(crate) use scoped::{
     AcquiredProvisioning, CheckedAcquiredRecovery, KnownNoAcquire, ScopedProvisioningOutcome,
     acquire_authorized_request, acquire_scoped,
