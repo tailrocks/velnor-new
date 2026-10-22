@@ -33,7 +33,14 @@ pub(super) fn validate(
     if compilers.next().is_some() {
         return Err(bad());
     }
-    super::probes::validate_recipe_probe(&recipe.version, platform.platform, compiler, file, key)?;
+    super::probes::validate_recipe_probe(
+        &recipe.version,
+        &recipe.backend,
+        platform.platform,
+        compiler,
+        file,
+        key,
+    )?;
     let QualifiedToolProbe::RustcVerbose { expected } = &compiler.probe else {
         return Err(bad());
     };

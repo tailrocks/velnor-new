@@ -6,6 +6,7 @@ mod api;
 mod attach;
 mod binary_preview_emit;
 mod binary_release_emit;
+mod bun_assets_handoff;
 mod stable_release_emit;
 pub(crate) use package_release_publish::release_policy_admission;
 pub(crate) use package_release_publish::stable_tag_origin;

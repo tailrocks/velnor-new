@@ -43,6 +43,9 @@ pub struct BunSuitePolicy {
     pub matrix: Option<BunLegMatrix>,
     /// The non-gating job that merges the legs' blobs, when configured.
     pub report: Option<BunReportPolicy>,
+    /// The member's assets job this suite needs, when the repository pins
+    /// private release assets (`bun-<slug>--assets`).
+    pub assets: Option<String>,
 }
 
 /// Job id suffix of a sharded suite's report job.
@@ -62,8 +65,25 @@ pub struct BunReportPolicy {
 }
 
 impl BunSuitePolicy {
+    /// `needs` of the suite job: the plan, then the assets job if any.
+    fn needs(&self) -> Vec<String> {
+        let mut needs = vec![crate::render::PLAN_JOB_ID.to_owned()];
+        needs.extend(self.assets.iter().cloned());
+        needs
+    }
+
     fn validate(&self) -> Result<(), RenderError> {
         let invalid = |code: &str| RenderError::InvalidWorkflow(format!("{code}:{}", self.id));
+        if let Some(assets) = &self.assets {
+            let member_id = self
+                .id
+                .split(BUN_SUITE_SEPARATOR)
+                .next()
+                .unwrap_or_default();
+            if *assets != format!("{member_id}{}", super::bun_assets_jobs::BUN_ASSETS_SUFFIX) {
+                return Err(invalid("bun_suite_assets_job"));
+            }
+        }
         let suffix = format!("{BUN_SUITE_SEPARATOR}{}", self.suite);
         let member_id = self
             .id
@@ -143,7 +163,7 @@ pub fn build_bun_suite_job(
         display_name: format!("Bun / {} / {}", policy.member, policy.suite),
         runs_on: BUN_RUNNER.to_owned(),
         timeout_minutes: policy.timeout,
-        needs: vec![crate::render::PLAN_JOB_ID.to_owned()],
+        needs: policy.needs(),
         condition: Some(crate::plan_gate::not_affected_gate(&policy.id)),
         permissions: Some(bun_permissions(&policy.steps)),
         cache_mode: None,
@@ -187,7 +207,11 @@ pub fn build_bun_report_job(
         display_name: format!("Bun / {} / {} / report", policy.member, policy.suite),
         runs_on: BUN_RUNNER.to_owned(),
         timeout_minutes: report.timeout,
-        needs: vec![crate::render::PLAN_JOB_ID.to_owned(), policy.id.clone()],
+        needs: {
+            let mut needs = policy.needs();
+            needs.push(policy.id.clone());
+            needs
+        },
         condition: Some(format!(
             "!cancelled() && needs.{}.result != 'skipped'",
             policy.id

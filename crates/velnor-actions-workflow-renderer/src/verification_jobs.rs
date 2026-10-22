@@ -19,6 +19,8 @@ pub(crate) mod build_task_mise;
 pub(crate) mod build_task_mise_tools;
 #[path = "bun_artifact_steps.rs"]
 pub(crate) mod bun_artifact_steps;
+#[path = "bun_assets_jobs.rs"]
+pub(crate) mod bun_assets_jobs;
 #[path = "bun_member_jobs.rs"]
 pub(crate) mod bun_member_jobs;
 #[path = "bun_registry_step.rs"]
@@ -48,9 +50,12 @@ pub use build_task_jobs::{
     BuildTaskArtifact, BuildTaskPolicy, BuildTaskTool, build_build_task_job,
 };
 pub use bun_artifact_steps::{
-    BUN_ARTIFACT_PREFIX, BUN_BLOB_DIR, BUN_BLOBS_DIR, BUN_REPORT_DIR, NOT_CANCELLED,
-    bun_blob_upload_step, bun_blobs_download_step, bun_report_upload_step, bun_results_upload_step,
+    BUN_ARTIFACT_PREFIX, BUN_ASSETS_ARCHIVE_PREFIX, BUN_ASSETS_DIR, BUN_ASSETS_STAGE_DIR,
+    BUN_BLOB_DIR, BUN_BLOBS_DIR, BUN_REPORT_DIR, NOT_CANCELLED, bun_assets_archive_name,
+    bun_assets_download_step, bun_assets_upload_step, bun_blob_upload_step,
+    bun_blobs_download_step, bun_report_upload_step, bun_results_upload_step,
 };
+pub use bun_assets_jobs::{BUN_ASSETS_SUFFIX, BunAssetsPolicy, build_bun_assets_job};
 pub use bun_member_jobs::{BUN_RUNNER, BunMemberPolicy, build_bun_member_job};
 pub use bun_registry_step::{
     BUN_REGISTRY_STEP_NAME, BUN_ROOT_ENV, BUN_SCOPES_ENV, bun_registry_step,
