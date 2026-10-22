@@ -1,25 +1,11 @@
 set -euo pipefail
-: "${GH_TOKEN:?}" "${VELNOR_UPGRADE_DIR:?}" "${VELNOR_UPGRADE_BRANCH:?}" "${VELNOR_DEFAULT_BRANCH:?}" "${GITHUB_REPOSITORY:?}"
+: "${GH_TOKEN:?}" "${VELNOR_UPGRADE_DIR:?}" "${VELNOR_UPGRADE_BRANCH:?}" "${VELNOR_DEFAULT_BRANCH:?}" "${GITHUB_REPOSITORY:?}" "${VELNOR_VERIFIED_TREE:?}"
 dir=$VELNOR_UPGRADE_DIR
 velnor_gh() { mise --no-config --no-env --no-hooks exec "gh@${VELNOR_GH_VERSION:?}" -- gh "$@"; }
-patch=$dir/upgrade.patch
-test -s "$patch"
-# The patch came from a job that ran repository code; ship only the paths the
-# upgrade owns, exactly as the prepare job filtered them.
-git apply --numstat "$patch" | cut -f3 > "$dir/paths"
-while IFS= read -r path; do
-  case "$path" in
-    mise.toml|.mise.toml|mise.lock|.mise.lock|.velnor/release-manifest.json|.github/*) ;;
-    rust-toolchain.toml|*/rust-toolchain.toml|rust-toolchain|*/rust-toolchain) ;;
-    Cargo.toml|Cargo.lock|*/Cargo.toml|*/Cargo.lock) ;;
-    package.json|bun.lock|*/package.json|*/bun.lock) ;;
-    gradle/libs.versions.toml|*/gradle/libs.versions.toml|gradle.lockfile|*/gradle.lockfile|gradle/verification-metadata.xml|*/gradle/verification-metadata.xml) ;;
-    "") ;;
-    *) echo "::error::upgrade_patch_path_rejected: $path"; exit 1 ;;
-  esac
-done < "$dir/paths"
-git -c core.hooksPath=/dev/null apply --index --binary "$patch"
+# The previous step, which held no token, left the index at exactly the tree
+# the verify job accepted; nothing else is ever committed.
 tree=$(git write-tree)
+[ "$tree" = "$VELNOR_VERIFIED_TREE" ] || { echo "::error::upgrade_patch_unverified: the index is not the verified tree"; exit 1; }
 base=$(git rev-parse HEAD)
 velnor_gh auth setup-git --hostname github.com
 parents=(-p "$base")

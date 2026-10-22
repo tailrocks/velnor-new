@@ -16,4 +16,4 @@ mise.lock not found; Velnor will not create or refresh it
 mise.toml not found; Velnor will use its pinned tools
 persist_evidence: no MBX or Nextest usage detected; to adopt either, add a durable signal
 rust-toolchain.toml not found; Velnor will not create it
-tool_install_unverified:3 installs skip verification (no mise.lock): gh@2.102.1, nextest@0.9.149, shellcheck@0.11.0; install on the CI platform and commit the resulting lock
+tool_install_unverified:4 installs skip verification (no mise.lock): gh@2.102.1, nextest@0.9.149, shellcheck@0.11.0, zizmor@1.31.1; install on the CI platform and commit the resulting lock

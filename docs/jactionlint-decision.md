@@ -49,14 +49,26 @@ actions).**
 - `github-env` is a `default` rule. An unsafe `$GITHUB_ENV` write on a
   `pull_request_target` workflow is reported by both tools, and is suppressed
   by the same `# zizmor: ignore[github-env]` annotation
-  (`impl_schema2_binary_preview_lint.rs` runs the pinned binary). jactionlint
-  reports fewer raw instances than zizmor because it accepts writes it can
-  prove carry no attacker-controlled value.
-- `self-repository` is a `pedantic` rule in jactionlint. zizmor never
-  enforced it here: every instance carried an ignore annotation.
+  (`impl_schema2_binary_preview_lint.rs` runs the pinned binary).
 - The zizmor auditor-persona classes (`undocumented-permissions`,
   `anonymous-definition`, `secrets-outside-env`, `concurrency-limits`) are
   `pedantic` rules in jactionlint. Velnor never ran that persona.
+
+**Evidence gaps.** The retirement does not show a one-to-one match, and two
+differences are accepted knowingly:
+
+1. **`github-env` raw hits differ.** With annotations ignored, zizmor reports
+   33 `github-env` instances on this tree and jactionlint at `default`
+   reports 0. jactionlint accepts a `$GITHUB_ENV` write it can prove carries
+   no attacker-controlled value (Velnor's resolver writes only validated
+   digits-and-dots versions and lock digests), so it reports fewer raw hits.
+   Every one of the 33 was already annotated, so CI enforced none of them
+   under zizmor either; an unsafe write is still reported (see above).
+2. **`self-repository` runs only at `pedantic`.** jactionlint has the audit
+   (137 raw hits at `pedantic --no-ignores`, against zizmor's 178), but not in
+   the `default` profile velnor-new uses. zizmor never enforced it here
+   either: every instance carries `# zizmor: ignore[self-repository]`, which
+   is kept, so a later move to `pedantic` keeps the same suppressions.
 
 **Status.** Adopted on the owner's instruction above; recorded as hard
 decision 10 in [hard decisions](hard-decisions.md). Changing it needs the

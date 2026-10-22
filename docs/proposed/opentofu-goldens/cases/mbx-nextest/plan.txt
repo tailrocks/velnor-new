@@ -17,12 +17,12 @@ Workflow to generate
   Push branch: main
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
-    - dependency-seed (22 steps)
+    - dependency-seed (23 steps)
     - jactionlint (8 steps)
-    - plan (13 steps)
+    - plan (14 steps)
     - required (8 steps)
     - required-gate (1 steps)
-    - rust-app (25 steps)
+    - rust-app (26 steps)
     - 1 Rust crate job
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check
@@ -61,4 +61,4 @@ Recommendations
   mise.lock not found; Velnor will not create or refresh it
   mise.toml is read-only input; Velnor never modifies it
   rust-toolchain.toml not found; Velnor will not create it
-  tool_install_unverified:3 installs skip verification (no mise.lock): gh@2.102.1, nextest@0.9.149, shellcheck@0.11.0; install on the CI platform and commit the resulting lock
+  tool_install_unverified:4 installs skip verification (no mise.lock): gh@2.102.1, nextest@0.9.149, shellcheck@0.11.0, zizmor@1.31.1; install on the CI platform and commit the resulting lock
