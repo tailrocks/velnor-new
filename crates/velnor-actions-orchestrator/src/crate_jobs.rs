@@ -319,6 +319,9 @@ fn render_job(
     let suite: Option<crate::matrix_step::CrateSuite> =
         crate::matrix_step::suite_for_package(&model.package_name);
     let needs_validators = crate::matrix_step::crate_needs_generate_validators(policy, suite);
+    if use_rust {
+        steps.push(crate::workflow::verify_restored_rust_step(catalog)?);
+    }
     steps.push(crate::matrix_step::prepare_crate_tools_step(
         catalog,
         use_rust,

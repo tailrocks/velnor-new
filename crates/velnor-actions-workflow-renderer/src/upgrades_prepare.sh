@@ -36,15 +36,24 @@ mise_files=$(git ls-files -- mise.toml .mise.toml mise.lock .mise.lock)
 # with it and roll back with it.
 toolchain_files=$(git ls-files -- rust-toolchain.toml '*/rust-toolchain.toml' rust-toolchain '*/rust-toolchain')
 rust_files="$mise_files $toolchain_files"
+# Portable in-place rewrite (no GNU `sed -i`) of the toolchain `channel`,
+# in either TOML string quoting; it fails unless the file then names the new
+# Rust, so an unrecognised layout rolls the Rust scope back.
+set_channel() {
+  sed -E -e "s/^([[:space:]]*channel[[:space:]]*=[[:space:]]*\")[0-9]+[.][0-9]+[.][0-9]+(\")/\1$new_rust\2/" \
+    -e "s/^([[:space:]]*channel[[:space:]]*=[[:space:]]*')[0-9]+[.][0-9]+[.][0-9]+(')/\1$new_rust\2/" "$1" > "$1.velnor-next" \
+    && mv "$1.velnor-next" "$1" \
+    && grep -Eq "^[[:space:]]*channel[[:space:]]*=[[:space:]]*[\"']${new_rust}[\"']" "$1"
+}
 mirror_rust() {
   new_rust=$(mise ls --local --json | jq -r '(.rust // .["core:rust"] // [])[0].requested_version // empty')
   [ -n "$new_rust" ] || return 0
   for file in $toolchain_files; do
     case "$file" in
-      *.toml) sed -i -E "s/^([[:space:]]*channel[[:space:]]*=[[:space:]]*\")[0-9]+[.][0-9]+[.][0-9]+(\")/\1$new_rust\2/" "$file" ;;
+      *.toml) set_channel "$file" || return 1 ;;
       *)
         if grep -q '^[[:space:]]*\[' "$file"; then
-          sed -i -E "s/^([[:space:]]*channel[[:space:]]*=[[:space:]]*\")[0-9]+[.][0-9]+[.][0-9]+(\")/\1$new_rust\2/" "$file"
+          set_channel "$file" || return 1
         else
           printf '%s\n' "$new_rust" > "$file"
         fi
@@ -91,7 +100,7 @@ if [ -n "$cargo_roots" ]; then
       if ! cmp -s "$dir/Cargo.lock.before" "$root/Cargo.lock"; then changed "Cargo dependencies in $root"; fi
     else
       failed "Cargo upgrade in $root failed (private git sources need the fetch credential; resolve by hand)"
-      git diff --name-only -- "$root" | grep -E '(^|/)Cargo[.](toml|lock)$' | xargs -r git checkout --
+      git diff --name-only -- "$root" | { grep -E '(^|/)Cargo[.](toml|lock)$' || true; } | xargs -r git checkout --
     fi
   done
 fi
@@ -123,10 +132,22 @@ done
 
 # 6. Regenerate .github/ (and every generated file) with the selected Velnor.
 generate() { velnor_generate_prerequisites > "$dir/generate.log" 2>&1 && "$dir/velnor/bin/velnor-actions" generate >> "$dir/generate.log" 2>&1; }
+rust_bumped() {
+  [ -d "$dir/pre-rust" ] || return 1
+  for file in $rust_files; do cmp -s "$dir/pre-rust/$file" "$file" || return 0; done
+  return 1
+}
 if ! generate; then
-  if grep -q 'rust_channel_manifest_not_catalogued' "$dir/generate.log" && [ -d "$dir/pre-rust" ]; then
+  if rust_bumped; then
+    # Whatever made regeneration fail after the Rust bump, the Rust scope
+    # rolls back alone and the rest of the upgrade still ships.
+    reason=$(grep -m 1 'velnor-actions:' "$dir/generate.log" | cut -c1-240 || true)
     for file in $rust_files; do cp "$dir/pre-rust/$file" "$file"; done
-    failed "the newest Rust is not in velnor-actions $version's channel-manifest catalog yet; Rust stays pinned until a Velnor release adds it"
+    if grep -q 'rust_channel_manifest_not_catalogued' "$dir/generate.log"; then
+      failed "the newest Rust is not in velnor-actions $version's channel-manifest catalog yet; Rust stays pinned until a Velnor release adds it"
+    else
+      failed "regenerating with the Rust bump failed (${reason:-see the job log}); Rust stays pinned"
+    fi
     generate || { cat "$dir/generate.log"; failed "velnor-actions generate failed; .github/ is not regenerated"; }
   else
     cat "$dir/generate.log"
@@ -147,6 +168,19 @@ while read -r code path; do failed "unexpected change left out of the upgrade ($
   if [ -s "$dir/changes.md" ]; then cat "$dir/changes.md"; else echo "- regenerated files only"; fi
   if [ -s "$failures" ]; then echo; echo "## Needs migration"; cat "$failures"; fi
 } > "$summary"
+# A scope that failed and rolled back is behind even when nothing else
+# changed: the freshness gate reports it as `upgrade_scope_needs_migration`.
+if [ -s "$failures" ]; then
+  delimiter="velnor-failures-$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
+  {
+    echo "failed=true"
+    echo "failures<<$delimiter"
+    cat "$failures"
+    echo "$delimiter"
+  } >> "$GITHUB_OUTPUT"
+else
+  echo "failed=false" >> "$GITHUB_OUTPUT"
+fi
 if git diff --cached --quiet; then
   echo "changed=false" >> "$GITHUB_OUTPUT"
   cat "$summary"

@@ -98,6 +98,7 @@ fn lock_acquire_inserts_digest_verified_stage() {
         names,
         [
             "Checkout",
+            "Verify restored Rust toolchain",
             "Prepare pinned tools",
             "Acquire Velnor",
             "Verify jactionlint",
@@ -230,6 +231,7 @@ fn preseed_attach_builds_once_and_sets_mode() {
         names,
         [
             "Checkout",
+            "Verify restored Rust toolchain",
             "Prepare pinned tools",
             "Verify jactionlint",
             "Prepare Rust components",

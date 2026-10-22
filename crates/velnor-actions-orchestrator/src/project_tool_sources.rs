@@ -163,7 +163,7 @@ pub(crate) fn is_mise_config(rel: &str) -> bool {
 }
 
 /// Every existing declaration source under `root`, in a stable order.
-fn source_paths(root: &Path) -> Result<Vec<String>, OrchestratorError> {
+pub(crate) fn source_paths(root: &Path) -> Result<Vec<String>, OrchestratorError> {
     let mut dirs: Vec<&str> = PROJECT_MISE_CONFIG_PATTERNS
         .iter()
         .map(|pattern| pattern.rsplit_once('/').map_or("", |(dir, _)| dir))
@@ -275,7 +275,7 @@ pub(crate) fn read_nested_toolchains(
 
 /// Repository-relative nested toolchain files: tracked plus untracked
 /// non-ignored paths in a git checkout, a bounded filesystem walk otherwise.
-fn nested_toolchain_paths(root: &Path) -> Vec<String> {
+pub(crate) fn nested_toolchain_paths(root: &Path) -> Vec<String> {
     let listed = [
         ["--cached"].as_slice(),
         ["--others", "--exclude-standard"].as_slice(),
