@@ -58,7 +58,7 @@ pub(crate) fn owned_preparation(
 ///
 /// # Errors
 ///
-/// Returns lock, render, actionlint, or unsafe-path errors.
+/// Returns lock, render, workflow-lint, or unsafe-path errors.
 pub fn finalized_jobs(
     prep: &GenerationPreparation,
 ) -> Result<BTreeMap<String, Job>, OrchestratorError> {

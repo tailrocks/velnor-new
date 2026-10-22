@@ -1,10 +1,13 @@
-//! Pinned actionlint configuration, capability, and action-schema types.
+//! Workflow-lint adapter: pinned jactionlint config, capabilities and
+//! argument vectors, plus the pinned action refs and their schemas.
 //!
-//! Owns generated `actionlint.yaml` bytes, the pinned actionlint
-//! capability flags, pinned action refs with override/input validation,
-//! and lint-tool pins. Pure data plus validation: never spawns
-//! processes, never reads the filesystem; Mise executes tools while the
-//! orchestrator invokes this crate for config and validation.
+//! Owns generated `.github/jactionlint.yaml` bytes, the pinned jactionlint
+//! capability flags and lint argv, pinned action refs with override/input
+//! validation, the staging-only zizmor config, and lint-tool pins. Pure
+//! data plus validation: never spawns processes, never reads the
+//! filesystem; Mise executes tools while the orchestrator invokes this
+//! crate for config and validation. The crate keeps its historical
+//! `actionlint` name; jactionlint is the only workflow linter.
 
 pub mod actions;
 pub mod capabilities;
@@ -30,15 +33,12 @@ pub use actions::{
     UPLOAD_ARTIFACT_ACTION_VERSION,
 };
 pub use capabilities::{
-    ACTIONLINT_VERSION, ActionlintCapabilities, STEP_PARALLELISM_IGNORES, StepSyntax,
+    JACTIONLINT_VERSION, JactionlintCapabilities, StepSyntax, is_known_hosted_label,
 };
-pub use config::{
-    ActionlintConfigInput, ActionlintConfigOutput, IgnoreEntry, IgnorePolicy, RUNNER_LABEL_BRIDGE,
-    render_actionlint_yaml,
-};
+pub use config::{JactionlintConfigInput, render_jactionlint_yaml};
 pub use error::ActionlintError;
 pub use metadata::{
-    ACTIONLINT_CONFIG_FILE, FOREIGN_TOOL_FILES, OWNED_SYMBOLS, is_owned_actionlint_file,
+    FOREIGN_TOOL_FILES, JACTIONLINT_CONFIG_FILE, OWNED_SYMBOLS, is_owned_jactionlint_file,
     stack_for_symbol,
 };
 pub use overrides::{
@@ -46,9 +46,9 @@ pub use overrides::{
     validate_action_inputs,
 };
 pub use tools::{
-    ActionlintToolchain, SHELLCHECK_VERSION, ShellcheckToolchain, WorkflowLintTools,
-    ZizmorToolchain, step_parallelism_ignore_args, workflow_lint_args,
+    JACTIONLINT_CONFIG_PATH, JactionlintToolchain, LINT_FILE_GLOBS, LINT_FLAGS, SHELLCHECK_VERSION,
+    ShellcheckToolchain, WorkflowLintTools, ZizmorToolchain, workflow_lint_script,
 };
 
-/// Stable identifier for the actionlint tool metadata.
-pub const TOOL_ID: &str = "actionlint";
+/// Stable identifier for the workflow-lint tool metadata.
+pub const TOOL_ID: &str = "jactionlint";

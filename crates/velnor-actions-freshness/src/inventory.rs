@@ -20,7 +20,7 @@ const CATALOG: &str = "crates/velnor-actions-mise/src/catalog.rs";
 const ACTIONS: &str = "crates/velnor-actions-actionlint/src/actions.rs";
 const TOOLS: &str = "crates/velnor-actions-actionlint/src/tools.rs";
 const CAPABILITIES: &str = "crates/velnor-actions-actionlint/src/capabilities.rs";
-const CONFIG: &str = "crates/velnor-actions-actionlint/src/config.rs";
+const RUNNER_DEFAULT: &str = "crates/velnor-actions-contract/src/config/workflow.rs";
 const RENDERER: &str = "crates/velnor-actions-workflow-renderer/src/render.rs";
 const RENDERER_STEPS: &str = "crates/velnor-actions-workflow-renderer/src/steps.rs";
 
@@ -29,7 +29,6 @@ pub(crate) const EXPECTED_TOOLS: &[(&str, &str)] = &[
     ("rust", "RUST_VERSION"),
     ("mr-boxington", "MR_BOXINGTON_VERSION"),
     ("gh", "GH_VERSION"),
-    ("actionlint", "ACTIONLINT_VERSION"),
     ("jactionlint", "JACTIONLINT_VERSION"),
     ("shellcheck", "SHELLCHECK_VERSION"),
     ("zizmor", "ZIZMOR_VERSION"),

@@ -106,7 +106,7 @@ fn consumer_rejects_velnor_only_candidate_and_duplicates() {
             .contains("consumer_validator_rejected:cargo-deny"),
         "{err}"
     );
-    let lint = verify_support(vec![ValidatorKind::Actionlint]);
+    let lint = verify_support(vec![ValidatorKind::Jactionlint]);
     let err = merge_consumer_verify(&mut gate_jobs(), Some(&lint), &ctx)
         .expect_err("actionlint rejected");
     assert!(

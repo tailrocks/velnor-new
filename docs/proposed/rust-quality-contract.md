@@ -54,7 +54,7 @@ All first-party Rust packages MUST be under `crates/`; root MUST be virtual with
 exactly the eight product package names below plus repository-only member `velnor-actions-freshness`
 and utility `velnor-archive-guard`. Cargo metadata defines membership; V1 adds
 no custom architecture linter; §5, Alint, Clippy, tests, and review govern boundaries.
-Within V1 product behavior, Rust/Cargo metadata and `rust-toolchain.toml` belong to `velnor-actions-rust`; Mise syntax, environment, and task metadata belong to `velnor-actions-mise`; actionlint metadata belongs to `velnor-actions-actionlint`.
+Within V1 product behavior, Rust/Cargo metadata and `rust-toolchain.toml` belong to `velnor-actions-rust`; Mise syntax, environment, and task metadata belong to `velnor-actions-mise`; jactionlint metadata belongs to `velnor-actions-actionlint`.
 Freshness may inspect Velnor-owned Cargo/Mise sources for private maintenance;
 results MUST NOT feed V1 planning. Scripts provision archive guard. Neither
 helper enters V1 Rust task derivation or the product crate matrix. The
@@ -73,7 +73,7 @@ The `velnor-actions` binary is owned by package `velnor-actions-cli`. Future sta
 | `velnor-actions-contract` | Stack-neutral workflow/task contracts, task graph, identities, reports, recommendations | Rust/Cargo, Mise, process, filesystem, YAML implementation, CLI, generic application models |
 | `velnor-actions-rust` | All Rust/Cargo discovery, metadata conversion, targets, graph, affected selection, Rust task proposals, `rust-toolchain.toml` inspection | Mise config/commands, workflow YAML, process execution, or non-Rust stack behavior |
 | `velnor-actions-mise` | Mise tool selection, pinned command construction, fixed subprocess/environment wrapper, `mise.toml`/`mise.lock` inspection, Mise cache integration | Cargo metadata, Rust graph/selection rules, `rust-toolchain.toml`, GitHub YAML, stack discovery |
-| `velnor-actions-actionlint` | actionlint pin/capability metadata, generated config, action-schema validation | Mise process execution, stack scanning, generic workflow rendering |
+| `velnor-actions-actionlint` | jactionlint pin/capability metadata, generated config, action-schema validation | Mise process execution, stack scanning, generic workflow rendering |
 | `velnor-actions-workflow-renderer` | Generic GitHub Actions workflow YAML from typed workflow IR | Rust/Cargo, Mise syntax, repository scanning, subprocesses, stack policy |
 | `velnor-actions-orchestrator` | Composition, obligation selection, cache evidence, scheduling, generation coordination, typed process-request coordination | Parsing Cargo/Mise files, direct YAML templates, CLI parsing, OS process details and process creation/control, except the read-only `rustix::process::geteuid()` caller-owner lookup in the private generation-stage validator |
 | `velnor-actions-cli` | Clap parser, typed dispatch, concise deterministic human plan renderer, generation output, and exit-code formatting; emits binary `velnor-actions` | Orchestration algorithms or Rust, Mise, and renderer domain rules; process creation or any `std::process` item but `ExitCode`, under any import spelling or namespace alias (checked on Rust syntax by `impl_repo_deps_process_policy.rs`) |
@@ -342,7 +342,7 @@ Velnor's own `.velnor/config.toml` MUST set
 `workflow.policy = "velnor-repository-v1"`, which emits a dedicated
 `alint` job. The job MUST use the configured Alint action, defaulting to the
 full-SHA pin (repository-structure alint, distinct
-from workflow-syntax actionlint):
+from workflow-syntax jactionlint):
 
 ```yaml
 - uses: asamarts/alint@f39a25a7e061bb8738a87372561d8b9a6a29ca87 # v0.19.0

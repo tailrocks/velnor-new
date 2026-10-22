@@ -50,18 +50,19 @@ fn release_gate_linters_run_without_ambient_tokens() -> Result<(), Box<dyn Error
     ])?;
     let all = all_text(&product);
     let mut gates = 0;
-    for name in ["name: Run actionlint", "name: Run zizmor"] {
+    for name in ["name: Run jactionlint", "name: Run zizmor"] {
         for step in all.split(name).skip(1) {
             let run = step
                 .lines()
                 .find(|line| line.trim_start().starts_with("run:"))
                 .ok_or("lint step run line")?;
-            assert!(
-                run.contains("env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN")
-                    && run.contains("-u GITHUB_TOKEN")
-                    && run.contains("-u GH_TOKEN"),
-                "{name}: {run}"
-            );
+            let env_scrub = run.contains("env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN")
+                && run.contains("-u GITHUB_TOKEN")
+                && run.contains("-u GH_TOKEN");
+            let inline_scrub = run.contains("bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN")
+                && run.contains(" GITHUB_TOKEN ")
+                && run.contains(" GH_TOKEN ");
+            assert!(env_scrub || inline_scrub, "{name}: {run}");
             gates += 1;
         }
     }

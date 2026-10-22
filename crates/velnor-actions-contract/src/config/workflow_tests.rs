@@ -23,6 +23,7 @@ fn named(name: &str) -> WorkflowConfig {
         tofu_apply: None,
         review_completion: None,
         verify: VerifyConfig::default(),
+        lint: crate::config::WorkflowLintConfig::default(),
         dispatch: crate::config::WorkflowDispatchConfig::default(),
         preserve_workflows: Vec::new(),
     }
@@ -349,7 +350,7 @@ fn verify_jobs_reject_unknown_and_duplicates() {
         err.to_string().contains("unknown_verify_job:bogus"),
         "{err}"
     );
-    for forbidden in ["cargo-deny", "cargo-machete", "actionlint", "plan"] {
+    for forbidden in ["cargo-deny", "cargo-machete", "jactionlint", "plan"] {
         config.verify.jobs = vec![forbidden.to_owned()];
         let err = config
             .validate("config.toml")

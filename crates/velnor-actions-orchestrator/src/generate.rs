@@ -4,11 +4,11 @@
 
 use std::path::{Path, PathBuf};
 
-use velnor_actions_actionlint::render_actionlint_yaml;
+use velnor_actions_actionlint::render_jactionlint_yaml;
 use velnor_actions_contract::{ExecutionMode, expand_workflow};
 use velnor_actions_workflow_renderer::guard::{self, SafeTreePath};
 use velnor_actions_workflow_renderer::render::RenderedTree;
-use velnor_actions_workflow_renderer::steps::rehead_actionlint_marker;
+use velnor_actions_workflow_renderer::steps::rehead_lint_config_marker;
 use velnor_actions_workflow_renderer::tree::render_tree_with_claude_mode;
 
 use crate::OrchestratorError;
@@ -81,7 +81,7 @@ pub struct GenerateReport {
 ///
 /// # Errors
 ///
-/// Returns profile, render, actionlint, preview, unsafe-path, or IO
+/// Returns profile, render, workflow-lint, preview, unsafe-path, or IO
 /// errors; the profile gate runs before any write, leaving outputs untouched.
 pub fn generate(
     prep: &GenerationPreparation,
@@ -131,7 +131,7 @@ pub fn generate_dispatched(
 ///
 /// # Errors
 ///
-/// Returns lock, render, actionlint, or unsafe-path errors.
+/// Returns lock, render, workflow-lint, or unsafe-path errors.
 pub fn render_staged_tree(prep: &GenerationPreparation) -> Result<RenderedTree, OrchestratorError> {
     render_staged_tree_with(prep, None)
 }
@@ -165,8 +165,8 @@ fn render_all(
     })?;
     let mut render_context = prep.workflow.context.clone();
     render_context.scale_set_selector = scale_set_selector_for_dispatch(&prep.config, dispatch)?;
-    let mut actionlint_input = prep.workflow.actionlint.clone();
-    actionlint_input.extra_runner_labels = runner_labels::collect(
+    let mut lint_input = prep.workflow.lint_config.clone();
+    lint_input.runner_labels = runner_labels::collect(
         &prep.config,
         &ir,
         render_context.scale_set_selector.as_ref(),
@@ -179,8 +179,7 @@ fn render_all(
         &mise,
     )?;
     let workflow = rendered.yaml;
-    let actionlint = render_actionlint_yaml(&actionlint_input)?;
-    let actionlint = rehead_actionlint_marker(&actionlint.yaml, version)?;
+    let lint_config = rehead_lint_config_marker(&render_jactionlint_yaml(&lint_input)?, version)?;
     let mut extra = crate::release_emit::release_files(prep, &mise)?;
     extra.extend(crate::publish_emit::publish_files(prep, &mise)?);
     extra.extend(crate::binary_release_emit::files(prep)?);
@@ -205,7 +204,7 @@ fn render_all(
     extra.extend(rendered.shared);
     let tree = render_tree_with_claude_mode(
         &workflow,
-        &actionlint,
+        &lint_config,
         &extra,
         version,
         prep.config.agents.claude_md,

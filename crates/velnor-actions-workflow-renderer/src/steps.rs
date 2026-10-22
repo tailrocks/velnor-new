@@ -201,16 +201,16 @@ pub fn action_step_with_env(
     })
 }
 
-/// Replace the actionlint header line with the renderer marker.
+/// Replace the lint-config header line with the renderer marker.
 ///
-/// The actionlint adapter emits its own header comment while the renderer
-/// requires its exact marker on every tree file; the composition boundary
-/// normalizes the first line only and passes the body through untouched.
+/// The workflow-lint adapter emits its own header comment while the
+/// renderer requires its exact marker on every tree file; the composition
+/// boundary normalizes the first line only and passes the body through.
 /// # Errors
-pub fn rehead_actionlint_marker(yaml: &str, version: &str) -> Result<String, RenderError> {
+pub fn rehead_lint_config_marker(yaml: &str, version: &str) -> Result<String, RenderError> {
     let Some((_, body)) = yaml.split_once('\n') else {
         return Err(RenderError::BadCommand(
-            "actionlint_without_header".to_owned(),
+            "lint_config_without_header".to_owned(),
         ));
     };
     Ok(format!("{}\n{body}", marker::marker_for_version(version)?))

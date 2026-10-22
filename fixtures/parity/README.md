@@ -1,7 +1,7 @@
 # parity corpus
 
 Intent: refactor-parity goldens (plan text, plan JSON, matrix JSON,
-task report, expected set, generated workflow, actionlint config).
+task report, expected set, generated workflow, jactionlint config).
 Each case holds `input/` (repo fixture) plus `expected/` (goldens).
 The comparator normalizes repo path, run key, and generator SHA.
 

@@ -235,7 +235,7 @@ fn take_job_rustup(id: &str, env: &mut Yaml) -> Result<bool, RenderError> {
     Ok(pairs.len() != before)
 }
 
-/// Remove a step's `env` mapping once it is empty (actionlint rejects it).
+/// Remove a step's `env` mapping once it is empty (the workflow linter rejects it).
 fn drop_empty_env(step: &mut Yaml) {
     if let Yaml::Map(fields) = step {
         fields.retain(|(key, value)| {

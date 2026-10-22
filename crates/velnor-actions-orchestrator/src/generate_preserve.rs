@@ -243,6 +243,23 @@ pub(super) fn generated_marked_dco(
     first_line_is_generated_marker(source)
 }
 
+/// Recognize the retired generated actionlint config by exact path and marker.
+///
+/// jactionlint replaced actionlint (hard decision 10): a marked
+/// `.github/actionlint.yaml` is stale generator output and is removed by the
+/// next generation, so no consumer keeps a second, ignored lint config. An
+/// unmarked file stays repository-owned and is preserved untouched.
+pub(super) fn retired_marked_lint_config(
+    relative: &Path,
+    source: &Path,
+    metadata: &std::fs::Metadata,
+) -> Result<bool, OrchestratorError> {
+    if relative != Path::new("actionlint.yaml") || !metadata.is_file() {
+        return Ok(false);
+    }
+    first_line_is_generated_marker(source)
+}
+
 fn first_line_is_generated_marker(source: &Path) -> Result<bool, OrchestratorError> {
     let file = fs::File::open(source).map_err(|error| io(source, &error))?;
     let mut reader = std::io::BufReader::new(file);
@@ -272,6 +289,7 @@ fn copy_entry(
         || generated_shared_action(relative, source, &metadata)?
         || generated_marked_script(relative, source, &metadata)?
         || generated_marked_dco(relative, source, &metadata)?
+        || retired_marked_lint_config(relative, source, &metadata)?
     {
         return Ok(false);
     }

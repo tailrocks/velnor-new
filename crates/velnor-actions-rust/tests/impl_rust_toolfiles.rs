@@ -17,7 +17,7 @@ fn symbols_route_to_owning_stacks() {
     for foreign in ["mise.toml", "mise.lock"] {
         assert_eq!(stack_for_symbol(foreign), Some("mise"));
     }
-    for unknown in ["actionlint.yaml", "package.json", "README.md", ""] {
+    for unknown in ["jactionlint.yaml", "package.json", "README.md", ""] {
         assert_eq!(stack_for_symbol(unknown), None);
     }
     assert_eq!(stack_for_symbol("nested/rust-toolchain.toml"), Some("rust"));

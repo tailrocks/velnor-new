@@ -41,9 +41,9 @@ and overlaps the independent checks.
   dependency-seed family) so Cargo's target-directory lock never serializes test execution
   and doctests behind them. Tests and doctests reuse the built executables.
 - `workflow.crate_timeout_minutes` bounds the one crate job (decision 2).
-- The pinned actionlint does not parse the native step keys yet; the narrow,
-  documented bridge in `velnor-actions-actionlint` (`STEP_PARALLELISM_IGNORES`)
-  suppresses only the unknown `background` key and the body-less join step.
+- The pinned jactionlint parses and validates the native step keys (every
+  member and the body-less `wait-all` join) with no ignore pattern
+  (decision 10).
 
 - The dependency-seed job is not a crate job: it runs no checks and is not in
   Required, so this decision governs crate jobs only. Crate jobs restore
@@ -156,7 +156,7 @@ declaration, because Mise (idiomatic version files) and rustup both read it.
 
 **Mechanism.**
 
-- Generation classifies every catalog tool (Rust, MBX, Nextest, actionlint,
+- Generation classifies every catalog tool (Rust, MBX, Nextest, jactionlint,
   shellcheck, zizmor, OpenTofu, release-plz) as project-declared
   when **any** project source names it under any backend spelling (for
   example `"aqua:nextest-rs/nextest/cargo-nextest"` or `core:rust`). The
@@ -397,4 +397,4 @@ deleting a published release asset or moving a published tag.
 exception and manual stable version/tag authority are recorded in
 [release publication decisions](release-publication-decisions.md).
 
-**Gradle stack decisions (HD-4a adapter version grammars, HD-5 one job per Gradle project) and the release-asset Maven bundle choice** are recorded in [Gradle stack contract](proposed/gradle-contract.md#decisions); adopted per the split brief, owner may revisit. **Host deployment (HD-9)** stays operator-run, outside generated CI/CD: [host deployment decision](host-deployment-decision.md); adopted per the split brief, owner may revisit.
+**Gradle stack decisions (HD-4a adapter version grammars, HD-5 one job per Gradle project) and the release-asset Maven bundle choice** are recorded in [Gradle stack contract](proposed/gradle-contract.md#decisions); adopted per the split brief, owner may revisit. **Host deployment (HD-9)** stays operator-run, outside generated CI/CD: [host deployment decision](host-deployment-decision.md); adopted per the split brief, owner may revisit. **Workflow linter (hard decision 10)**: jactionlint replaces actionlint completely and is the only workflow linter, per the owner's instruction of 2026-10-22: [jactionlint decision](jactionlint-decision.md).

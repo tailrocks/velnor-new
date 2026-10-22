@@ -17,8 +17,8 @@ const RESTORE_STEP: &str = "Restore Mise tools";
 fn render_cache_fixture() -> Result<RenderedWorkflow, RenderError> {
     let tool_step = || {
         scrubbed_shell_step(
-            "Run actionlint",
-            mise_argv("actionlint@1.7.12", "actionlint", &["-color"]),
+            "Run jactionlint",
+            mise_argv("jactionlint@2.3.0", "jactionlint", &["-color"]),
         )
     };
     let hosted = job(

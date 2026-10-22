@@ -290,7 +290,7 @@ fn scrub_coverage_allows_ambient_auth_steps_and_release() -> Result<(), RenderEr
         (DENY_STEP_NAME, StepRole::CargoDeny),
         (MACHETE_STEP_NAME, StepRole::CargoMachete),
         ("Run zizmor", StepRole::Zizmor),
-        ("Run actionlint", StepRole::Actionlint),
+        ("Run jactionlint", StepRole::Jactionlint),
     ] {
         let mut ambient = ambient_shell_step(name, vec!["true".to_owned()], BTreeMap::new())?;
         ambient.role = Some(role);

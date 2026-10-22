@@ -65,8 +65,8 @@ never grant the task-derivation exclusion.
 | `velnor-actions-rust` | All V1 Rust/Cargo behavior: manifest discovery inputs, metadata conversion, Rust targets/graph, reverse-dependency selection, Rust task proposals and requirements, read-only `rust-toolchain.toml` inspection | Mise command/config/task syntax, GitHub YAML, process execution, or non-Rust stack behavior |
 | `velnor-actions-tofu` | All OpenTofu stack behavior: HCL/JSON structural parsing, file families, local-module closure, tofu task proposals and requirements, root diagnostics, fixed payload argv | Mise command/config/task syntax, GitHub YAML, process execution, or non-tofu stack behavior |
 | `velnor-actions-mise` | Mise version/tool selection, command construction, read-only `mise.toml`/`mise.lock` inspection, environment isolation, task-cache integration, execution of tool requests through a fixed Mise subprocess wrapper | Cargo metadata/graph rules, `rust-toolchain.toml`, stack discovery, GitHub YAML, or other stack semantics |
-| `velnor-actions-actionlint` | Pinned actionlint capability/version metadata, generated `.github/actionlint.yaml`, invocation, and actionlint-specific pre-write validation | Rust/Cargo, Mise execution, generic YAML rendering, or workflow planning |
-| `velnor-actions-workflow-renderer` | Stack-neutral GitHub Actions YAML from workflow IR: jobs, matrices, steps, triggers, permissions, and syntax supported by pinned actionlint | Rust/Cargo, Mise syntax, repository scanning, subprocesses, or stack-specific policy |
+| `velnor-actions-actionlint` | Workflow-lint adapter (historical crate name): pinned jactionlint capability/version metadata, generated `.github/jactionlint.yaml`, the shared lint argv and file set, pinned action refs and schemas, and the staging-only zizmor config | Rust/Cargo, Mise execution, generic YAML rendering, or workflow planning |
+| `velnor-actions-workflow-renderer` | Stack-neutral GitHub Actions YAML from workflow IR: jobs, matrices, steps, triggers, permissions, and syntax supported by pinned jactionlint | Rust/Cargo, Mise syntax, repository scanning, subprocesses, or stack-specific policy |
 | `velnor-actions-orchestrator` | Compose stack adapter, Mise adapter, contract, and renderer; plan obligations, apply selection/cache evidence, schedule resource-safe tasks, coordinate generation and writes | Parsing Cargo/Mise inputs, YAML templates, CLI parsing, building shell commands, or launching processes |
 | `velnor-actions-cli` | Clap parser, typed dispatch, concise human plan report, generation output, exit codes; declares binary `velnor-actions` | Planning rules, Cargo/Mise policies, YAML/Mise rendering, or orchestration algorithms |
 
@@ -77,7 +77,7 @@ contains no product planning or stack logic. The orchestrator asks the Rust
 adapter for Rust inventory, `rust-toolchain.toml` findings, and stack-neutral
 task proposals; asks the Mise adapter to resolve tool requests and inspect Mise
 files; and asks the workflow renderer to render generic workflow IR. It asks
-the actionlint crate to validate rendered output before any write. `plan` and
+the workflow-lint adapter to validate rendered output with pinned jactionlint before any write. `plan` and
 `generate` use the same validated analysis snapshot;
 `plan` prints its concise text summary, while `generate` serializes the same
 workflow IR to YAML and writes `.github`. Rust, Mise, and workflow-renderer crates MUST
@@ -132,7 +132,7 @@ crates/velnor-actions-freshness/  # repository-only support, outside V1 product 
 crates/velnor-archive-guard/      # repository-only build protection
 crates/velnor-runner/             # nested runner workspace (crates/velnor-runner/Cargo.toml)
 fixtures/rust-workspaces/
-.github/actionlint.yaml
+.github/jactionlint.yaml
 .github/workflows/ci.yml
 ```
 

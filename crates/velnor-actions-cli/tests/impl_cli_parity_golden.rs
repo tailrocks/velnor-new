@@ -311,8 +311,8 @@ fn check_case(case: &str) -> Result<(), Box<dyn Error>> {
     )?;
     check_golden(
         case,
-        "actionlint.yaml",
-        &std::fs::read(preview.join(".github/actionlint.yaml"))?,
+        "jactionlint.yaml",
+        &std::fs::read(preview.join(".github/jactionlint.yaml"))?,
     )?;
     let response = plan_v1(&repo, &head)?;
     check_golden(

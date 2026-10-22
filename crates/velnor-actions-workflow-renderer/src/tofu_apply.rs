@@ -22,7 +22,7 @@ pub const TOFU_APPLY_JOB_ID: &str = "tofu-apply";
 pub const TOFU_APPLY_TIMEOUT_MINUTES: u16 = JobTimeout::DEFAULT.minutes();
 /// Stable step ID consumed by the `OpenTofu` credential env maps.
 pub const AWS_CREDENTIALS_STEP_ID: &str = "aws-credentials";
-/// Locally mirrored immutable AWS credentials action pin; actionlint owns its inventory.
+/// Locally mirrored immutable AWS credentials action pin; the action-pin adapter owns its inventory.
 pub const AWS_CREDENTIALS_USES: &str =
     "aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd";
 /// Version comment paired with [`AWS_CREDENTIALS_USES`].

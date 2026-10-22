@@ -2,14 +2,13 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_actionlint::ACTIONLINT_VERSION;
 use velnor_actions_contract::{
     CRATE_JOB_ID_PREFIX, Job, ProposedTask, RequiredCheckMigration, RunnerSelection,
     WorkflowPolicy, is_crate_job_id,
 };
 use velnor_actions_rust::KIND_DISPLAY_WORDS;
 use velnor_actions_workflow_renderer::action_pins;
-use velnor_actions_workflow_renderer::render::{ACTIONLINT_PATH, WORKFLOW_PATH};
+use velnor_actions_workflow_renderer::render::{JACTIONLINT_PATH, WORKFLOW_PATH};
 
 use crate::OrchestratorError;
 use crate::finalized::finalized_jobs;
@@ -24,7 +23,7 @@ mod companions;
 ///
 /// # Errors
 ///
-/// Returns render, actionlint, lock, or unsafe-path errors from the
+/// Returns render, workflow-lint, lock, or unsafe-path errors from the
 /// discarded renderer pass.
 pub fn plan_text_checked(prep: &GenerationPreparation) -> Result<String, OrchestratorError> {
     let _ = render_staged_tree(prep)?;
@@ -59,7 +58,7 @@ pub(crate) fn push(out: &mut String, line: &str) {
 fn workflow_section(out: &mut String, prep: &GenerationPreparation, jobs: &BTreeMap<String, Job>) {
     out.push('\n');
     push(out, "Workflow to generate");
-    push(out, &format!("  {ACTIONLINT_PATH}"));
+    push(out, &format!("  {JACTIONLINT_PATH}"));
     push(out, &format!("  {WORKFLOW_PATH}"));
     companions::file_lines(out, prep);
     push(
@@ -100,12 +99,15 @@ fn workflow_section(out: &mut String, prep: &GenerationPreparation, jobs: &BTree
     critical_path_lines(out, prep);
     clippy_lines(out, prep);
     push(out, &format!("  Cache layers: {}", cache_layers(prep)));
-    let actionlint = prep
-        .config
-        .tools
-        .get("actionlint")
-        .unwrap_or(ACTIONLINT_VERSION);
-    push(out, &format!("  Actionlint: {actionlint} pinned"));
+    push(
+        out,
+        &format!(
+            "  Jactionlint: {} pinned, profile {}",
+            prep.catalog
+                .version(velnor_actions_mise::PinnedTool::Jactionlint),
+            prep.config.workflow.lint.profile.as_str()
+        ),
+    );
     pin_lines(out, jobs);
     ineligible_lines(out, prep);
     feature_lines(out, prep);

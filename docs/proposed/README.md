@@ -16,7 +16,7 @@ registered stack IDs, `[stacks.<name>]` holds stack-specific settings, and
 |---|---|---|
 | Rust adapter | Cargo inventory, local package graph, affected Rust task proposals | Mise config/commands, workflow YAML, process execution |
 | Mise adapter | Tool selection, pinned command/environment construction, tool-file inspection, task-result cache integration | Rust package graph or GitHub YAML |
-| Actionlint adapter | Pinned actionlint capability, generated `.github/actionlint.yaml`, workflow-lint validation | Mise execution, Rust scanning, generic workflow rendering |
+| Workflow-lint adapter (`velnor-actions-actionlint`) | Pinned jactionlint capability, generated `.github/jactionlint.yaml`, workflow-lint validation | Mise execution, Rust scanning, generic workflow rendering |
 | Orchestrator | Combines stack proposals, Mise execution, selection, cache evidence, scheduling, and outputs | Stack/tool parsing or rendering implementation |
 | Workflow renderer | Generic GitHub Actions YAML | Stack and Mise semantics |
 | CLI | Clap arguments, typed dispatch, output and exit codes | Orchestration and stack/tool rules |
@@ -86,5 +86,6 @@ The generator crates MUST NOT implement a runner, a Scale Set client, or an Acti
 29. [Bun contract](bun-contract.md) defines the Bun stack (hard decision 6): `[stacks.bun]`, the `bun.lock`-only policy, workspace members, the Velnor-written `bunfig.toml`, affected-member claims, Playwright browsers and npm publication.
 30. [dbt contract](dbt-contract.md) defines the dbt-fusion stack: `[stacks.dbt]`, the `X.Y.Z-preview.N` or stable `X.Y.Z` version grammar (HD-4a), the package-lock and profile policies, artifact admission and affected-project claims.
 31. [Ansible contract](ansible-contract.md) defines the Ansible stack: `[stacks.ansible]`, hash-pinned Python requirements, offline collection pins, playbook discovery, vault refusal and affected-root claims; host deployment stays operator-run (HD-9).
+32. [Workflow lint contract](workflow-lint-contract.md) defines jactionlint as the only workflow linter (hard decision 10): `[workflow.lint] profile`, the generated `.github/jactionlint.yaml`, the shared `hk` file set and flags, executable digest verification and the check-only `hk` step.
 
 The listed documents are intended to be implementable without inventing behavior. If a behavior is not specified, fail with a clear error and add a decision to the spec before implementing it. Do not silently broaden V1.

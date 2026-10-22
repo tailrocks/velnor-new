@@ -12,7 +12,7 @@ use super::impl_common::{TestResult, make_repo};
 
 /// True for generated crate jobs (neither plan, lint, gate, nor publish).
 fn is_crate_job(id: &str) -> bool {
-    id != PLAN_JOB_ID && id != "actionlint" && id != FINAL_JOB_ID && id != "required-gate"
+    id != PLAN_JOB_ID && id != "jactionlint" && id != FINAL_JOB_ID && id != "required-gate"
 }
 
 /// YAML slice of one rendered job: from its `  <id>:` header line to

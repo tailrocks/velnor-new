@@ -259,7 +259,7 @@ pub(crate) fn prepare_crate_tools_step(
     tools.extend((use_rust && catalog.rust_mr_boxington()).then_some(PinnedTool::MrBoxington));
     if needs_validators {
         tools.extend([
-            PinnedTool::Actionlint,
+            PinnedTool::Jactionlint,
             PinnedTool::Shellcheck,
             PinnedTool::Zizmor,
         ]);

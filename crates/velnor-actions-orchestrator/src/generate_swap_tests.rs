@@ -15,7 +15,7 @@ fn commit_failure_preserves_old_tree_without_partial_write() {
     std::fs::write(target.join("workflows/old.yml"), "old: true\n").expect("old");
     let err = swap_directories(&root, &target, &root.join("missing-staged")).expect_err("fails");
     assert!(
-        !target.join("actionlint.yaml").exists(),
+        !target.join("jactionlint.yaml").exists(),
         "no partial write: {err}"
     );
     assert_eq!(

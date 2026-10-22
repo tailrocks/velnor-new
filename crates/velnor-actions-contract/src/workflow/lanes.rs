@@ -53,7 +53,7 @@ enum EmitLane {
 /// Classify a planner job id.
 #[must_use]
 pub fn lane_class(job_id: &str) -> LaneClass {
-    if job_id == ValidatorKind::Actionlint.job_id()
+    if job_id == ValidatorKind::Jactionlint.job_id()
         || matches!(
             job_id,
             PLAN_JOB_ID | REQUIRED_JOB_ID | REQUIRED_GATE_JOB_ID | "compare" | "queue-monitor"
