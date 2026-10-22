@@ -22,13 +22,25 @@ async fn split_handoff_guards_preserve_identity_and_repair_exact_draft_trigger()
     bootstrap(&connection).await?;
     insert_ready_held(&connection).await?;
 
+    assert_attached_transition_guards(&connection).await?;
+    repair_legacy_draft_trigger(&connection).await?;
+    drop(connection);
+    drop(database);
+
+    reopen_current_version_path().await?;
+    Ok(())
+}
+
+async fn assert_attached_transition_guards(
+    connection: &turso::Connection,
+) -> Result<(), HostError> {
     assert_rejected(
-        &connection,
+        connection,
         "UPDATE capacity_reservation_storage_handoffs SET connection_id = 'other' WHERE reservation_id = 1",
     )
     .await?;
     assert_rejected(
-        &connection,
+        connection,
         &format!(
             "UPDATE capacity_reservation_storage_handoffs SET state = 'attached', mount_evidence_digest = '{}', runner_container_id = '{}', dind_container_id = '{}' WHERE reservation_id = 1",
             "f".repeat(64),
@@ -38,7 +50,7 @@ async fn split_handoff_guards_preserve_identity_and_repair_exact_draft_trigger()
     )
     .await?;
     assert_rejected(
-        &connection,
+        connection,
         &format!(
             "UPDATE capacity_reservation_storage_handoffs SET state = 'attached', mount_evidence_digest = '{}', runner_container_id = '{}', dind_container_id = '{}' WHERE reservation_id = 1",
             "f".repeat(64),
@@ -60,7 +72,10 @@ async fn split_handoff_guards_preserve_identity_and_repair_exact_draft_trigger()
         )
         .await
         .map_err(|_| HostError::Journal)?;
+    Ok(())
+}
 
+async fn repair_legacy_draft_trigger(connection: &turso::Connection) -> Result<(), HostError> {
     // Simulate the exact unreleased v27 draft. Bootstrap may replace this
     // trigger, but must reject unknown or partial guard sets.
     for (name, _) in TRANSITION_TRIGGERS {
@@ -73,8 +88,8 @@ async fn split_handoff_guards_preserve_identity_and_repair_exact_draft_trigger()
         .execute(LEGACY_TRANSITION_TRIGGER, ())
         .await
         .map_err(|_| HostError::Journal)?;
-    bootstrap(&connection).await?;
-    validate(&connection).await?;
+    bootstrap(connection).await?;
+    validate(connection).await?;
 
     let mut rows = connection
         .query(
@@ -101,13 +116,14 @@ async fn split_handoff_guards_preserve_identity_and_repair_exact_draft_trigger()
         "e".repeat(64)
     );
     assert_rejected(
-        &connection,
+        connection,
         "UPDATE capacity_reservation_storage_handoffs SET ready_digest = '0' WHERE reservation_id = 1",
     )
     .await?;
-    drop(connection);
-    drop(database);
+    Ok(())
+}
 
+async fn reopen_current_version_path() -> Result<(), HostError> {
     // Exercise the real Journal::open current-version path after restoring an
     // exact old-draft trigger. Its outer startup transaction applies the same
     // recognized-only replacement before strict schema validation.
