@@ -41,6 +41,24 @@ crate_timeout_minutes = 20 # every Rust crate job and OpenTofu root job
 plan_timeout_minutes = 15  # planning job only
 ```
 
+Bun jobs resolve their bound most specific first:
+`[stacks.bun.members."<name>"] timeout_minutes` for that member's job, then
+`[stacks.bun] timeout_minutes` for every member job, then
+`[workflow] crate_timeout_minutes`. The member value is validated by the same
+contract check (`bad_timeout:<n>:expected_1..=360`, never clamped); the stack
+value keeps its `must_be_between_1_and_360` code. Both are optional and omitted
+from serialization, so a repository that sets neither generates the same bytes.
+The public Rust `BunMemberConfig` struct gained a `timeout_minutes` field; it
+derives `Default`, so downstream literals add `..Default::default()`.
+
+```toml
+[stacks.bun]
+timeout_minutes = 30                          # every Bun member job
+
+[stacks.bun.members."@chainargos/platform"]
+timeout_minutes = 60                          # this member's job only
+```
+
 The public Rust `WorkflowConfig` struct now has a `plan_timeout_minutes`
 field. Downstream Rust struct literals must provide it; TOML and Serde inputs
 that omit it continue to default to five, and default generated workflow bytes

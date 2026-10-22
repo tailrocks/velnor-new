@@ -40,11 +40,8 @@ pub(crate) fn policies(
         .map_or_else(Vec::new, |sources| sources.npm_scopes.clone());
     scopes.sort();
     scopes.dedup();
-    let timeout = bun
-        .timeout_minutes
-        .map_or(Ok(config.workflow.crate_timeout_minutes), u16::try_from)
-        .map_err(|_| failure("bun_timeout"))?;
-    let timeout = JobTimeout::new(timeout)?;
+    let stack_timeout =
+        resolve_timeout(bun.timeout_minutes, config.workflow.crate_timeout_minutes)?;
     let playwright_lock = crate::config::playwright_lock::read_playwright_lock(root)?;
     let mut out = Vec::new();
     for bun_root in &discovery.bun.roots {
@@ -59,10 +56,12 @@ pub(crate) fn policies(
             None => Vec::new(),
         };
         for member in &workspace.members {
-            let browsers = bun
-                .members
-                .get(&member.name)
-                .map_or(&[][..], |member| member.browsers.as_slice());
+            let member_config = bun.members.get(&member.name);
+            let browsers = member_config.map_or(&[][..], |member| member.browsers.as_slice());
+            let timeout = resolve_timeout(
+                member_config.and_then(|member| member.timeout_minutes),
+                stack_timeout.minutes(),
+            )?;
             let playwright =
                 playwright_step(workspace, member, browsers, playwright_lock.as_ref())?;
             out.push(policy(
@@ -84,6 +83,15 @@ pub(crate) fn policies(
     }
     out.sort_by(|left, right| left.id.cmp(&right.id));
     Ok(out)
+}
+
+/// The configured minutes, or the next less specific bound (hard decision 2:
+/// validated, never clamped).
+fn resolve_timeout(minutes: Option<u32>, fallback: u16) -> Result<JobTimeout, OrchestratorError> {
+    let minutes = minutes
+        .map_or(Ok(fallback), u16::try_from)
+        .map_err(|_| failure("bun_timeout"))?;
+    Ok(JobTimeout::new(minutes)?)
 }
 
 /// The Playwright install step of one member, checked against both locks.
