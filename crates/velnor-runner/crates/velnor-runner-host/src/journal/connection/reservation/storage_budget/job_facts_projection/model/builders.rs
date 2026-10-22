@@ -19,6 +19,8 @@ pub(in crate::journal::connection::reservation::storage_budget::job_facts_projec
         Sample,
     pub(in crate::journal::connection::reservation::storage_budget::job_facts_projection) instance_binding:
         InstanceBinding,
+    pub(in crate::journal::connection::reservation::storage_budget::job_facts_projection) guest_image_sha256:
+        String,
     pub(in crate::journal::connection::reservation::storage_budget::job_facts_projection) cache:
         Cache,
     pub(in crate::journal::connection::reservation::storage_budget::job_facts_projection) job_facts_mount:
@@ -39,6 +41,7 @@ pub(in crate::journal::connection::reservation::storage_budget::job_facts_projec
         sample: parts.sample,
         instance_binding: parts.instance_binding,
         instance_binding_digest: String::new(),
+        guest_image_sha256: parts.guest_image_sha256,
         cache: parts.cache,
         job_facts_mount: parts.job_facts_mount,
         projection_digest: String::new(),

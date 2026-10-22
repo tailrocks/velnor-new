@@ -40,7 +40,7 @@ impl<'ast> Visit<'ast> for ProcessFeatureAudit {
     }
 
     fn visit_item_use(&mut self, item: &'ast syn::ItemUse) {
-        if forbidden_rustix_import(&item.tree, &[]) {
+        if !allowed_errno_import(&item.tree) && forbidden_rustix_import(&item.tree, &[]) {
             self.violations += 1;
         }
         visit::visit_item_use(self, item);
@@ -122,6 +122,23 @@ fn forbidden_rustix_import(tree: &UseTree, prefix: &[String]) -> bool {
                 && prefix.get(1).is_none_or(|module| module != "fs")
         }
     }
+}
+
+fn allowed_errno_import(tree: &UseTree) -> bool {
+    let UseTree::Path(root) = tree else {
+        return false;
+    };
+    if root.ident != "rustix" {
+        return false;
+    }
+    let UseTree::Path(module) = &*root.tree else {
+        return false;
+    };
+    if module.ident != "io" {
+        return false;
+    }
+    matches!(&*module.tree, UseTree::Name(name) if name.ident == "Errno")
+        || matches!(&*module.tree, UseTree::Rename(rename) if rename.ident == "Errno")
 }
 
 fn rustix_import_outside_fs(path: &[String]) -> bool {
@@ -222,6 +239,32 @@ fn process_feature_guard_rejects_import_aliases_and_other_apis() -> Result<(), B
         assert!(
             audit.violations > 0,
             "accepted process-feature source: {source}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn process_feature_guard_allows_only_a_typed_errno_import() -> Result<(), Box<dyn Error>> {
+    for source in [
+        "use rustix::io::Errno; fn owner(error: Errno) { let _ = error; }",
+        "use rustix::io::Errno as IoErrno; fn owner(error: IoErrno) { let _ = error; }",
+    ] {
+        let audit = audit_source(source)?;
+        assert_eq!(audit.violations, 0, "rejected typed Errno import: {source}");
+    }
+
+    for source in [
+        "use rustix::io::{Errno};",
+        "use rustix::io::*;",
+        "use rustix::io as io;",
+        "use rustix::process::geteuid as current_uid;",
+        "use rustix::process::{geteuid};",
+    ] {
+        let audit = audit_source(source)?;
+        assert!(
+            audit.violations > 0,
+            "accepted grouped, glob, module, or process import: {source}"
         );
     }
     Ok(())

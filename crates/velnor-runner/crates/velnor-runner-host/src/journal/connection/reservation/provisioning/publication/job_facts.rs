@@ -23,6 +23,7 @@ impl ConnectionJournal {
         claim: &JobFactsPublicationClaim,
         ready: &VerifiedStorageInitializationReady,
         channel: &VerifiedProofChannelBinding,
+        guest_image_sha256: &str,
     ) -> Result<BoundJobFactsSnapshot, HostError> {
         validate_publication_claim(self, claim)?;
         read_job_facts_snapshot(
@@ -42,6 +43,7 @@ impl ConnectionJournal {
                 profile_generation_id: &claim.profile_generation_id,
                 profile_digest: &claim.profile_digest,
                 sample_generation_id: &claim.sample_generation_id,
+                guest_image_sha256,
             },
             ready,
             channel,

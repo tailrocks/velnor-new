@@ -32,6 +32,7 @@ mod post_jit_effect_fences;
 #[path = "schema/post_jit_effect_fences_tests.rs"]
 mod post_jit_effect_fences_tests;
 mod post_jit_retirement;
+mod pr_source_transition;
 mod pre_jit_cleanup;
 #[cfg(test)]
 pub(in crate::journal) mod provisioning;
@@ -55,7 +56,7 @@ mod storage_root_backing;
 mod v30_migration_tests;
 mod validation;
 
-pub(super) const JOURNAL_VERSION: i64 = 37;
+pub(super) const JOURNAL_VERSION: i64 = 38;
 use current_columns::CURRENT_COLUMNS;
 pub(super) use validation::validate_persisted_schema_v35;
 
@@ -107,6 +108,7 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
         cleanup_observer_witness::bootstrap(conn).await?;
         post_jit_retirement::validate_v37(conn).await?;
         post_jit_effect_fences::validate(conn).await?;
+        pr_source_transition::validate(conn).await?;
     } else {
         driver::migrate_to_current(conn, version).await?;
     }
@@ -122,7 +124,7 @@ mod migration_driver_tests;
 pub(crate) mod historical_fixture;
 
 async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostError> {
-    validate_persisted_schema_v37(conn).await
+    validate_persisted_schema_v38(conn).await
 }
 
 pub(super) async fn validate_persisted_schema_v36(
@@ -140,6 +142,14 @@ pub(super) async fn validate_persisted_schema_v37(
     physical_attempts::validate_v35(conn).await?;
     post_jit_effect_fences::validate(conn).await?;
     post_jit_retirement::validate_v37(conn).await
+}
+
+pub(super) async fn validate_persisted_schema_v38(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
+    validate_persisted_schema_v37(conn).await?;
+    pr_source_transition::validate(conn).await?;
+    crate::journal::pr_source_transition::validate_persisted_rows(conn).await
 }
 
 pub(super) async fn validate_persisted_schema_v33(

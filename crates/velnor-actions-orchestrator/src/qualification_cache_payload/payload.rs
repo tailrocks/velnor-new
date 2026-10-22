@@ -68,8 +68,8 @@ pub(super) fn digest_open_directory(
 #[path = "payload_inventory.rs"]
 mod inventory;
 pub(crate) use inventory::{
-    ArchiveEntry, ArchiveEntryKind, inventory_directory, open_inventory_file,
-    validate_inventory_directory, validate_inventory_symlink,
+    ArchiveEntry, ArchiveEntryKind, digest_archive_entries, inventory_directory,
+    open_inventory_file, validate_inventory_directory, validate_inventory_symlink,
 };
 
 fn payload_format_version() -> u8 {

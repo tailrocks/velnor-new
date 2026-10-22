@@ -56,7 +56,9 @@ pub(super) fn validate_context(context: &JobFactsPublicationContext) -> Result<(
     }
     let document = serde_json::from_slice::<serde_json::Value>(&bytes)
         .map_err(|_| ProbeError::Invalid("job_facts_payload_json"))?;
-    if !valid_document_shape(&document) {
+    if !valid_document_shape(&document)
+        || !valid_document_guest_image_binding(&document, &context.guest_image_sha256)
+    {
         return Err(ProbeError::Invalid("job_facts_payload_json"));
     }
     let guest_document = serde_json::from_slice::<serde_json::Value>(&guest_image)
@@ -113,6 +115,7 @@ pub(super) fn valid_document_shape(document: &serde_json::Value) -> bool {
         "sample",
         "instance_binding",
         "instance_binding_digest",
+        "guest_image_sha256",
         "cache",
         "job_facts_mount",
         "projection_digest",
@@ -122,6 +125,13 @@ pub(super) fn valid_document_shape(document: &serde_json::Value) -> bool {
         && object.get("schema").and_then(serde_json::Value::as_str)
             == Some("velnor.storage-cache-admission")
         && object.get("version").and_then(serde_json::Value::as_u64) == Some(1)
+}
+
+fn valid_document_guest_image_binding(document: &serde_json::Value, expected: &str) -> bool {
+    document
+        .get("guest_image_sha256")
+        .and_then(serde_json::Value::as_str)
+        == Some(expected)
 }
 
 pub(super) fn decode_payload(value: &str) -> Result<Vec<u8>, ProbeError> {

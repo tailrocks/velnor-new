@@ -157,7 +157,7 @@ pub(super) fn read_verified_budget(
 ) -> Result<VerifiedCacheBudget, &'static str> {
     #[cfg(target_os = "linux")]
     {
-        let (bytes, mount) = mount::read_projection()?;
+        let (bytes, mount, guest_image_bytes) = mount::read_projection()?;
         if bytes.is_empty() || bytes.len() > MAX_DOCUMENT_BYTES {
             return Err("cache_storage_projection_size_invalid");
         }
@@ -170,6 +170,7 @@ pub(super) fn read_verified_budget(
         if !mount.agrees_with(&document.job_facts_mount) {
             return Err("cache_storage_mount_identity_mismatch");
         }
+        mount::verify_guest_image_digest(&guest_image_bytes, &document.guest_image_sha256)?;
         Ok(budget_from_document(&document))
     }
     #[cfg(not(target_os = "linux"))]

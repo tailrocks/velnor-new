@@ -136,6 +136,7 @@ pub(super) fn document() -> StorageCacheAdmissionV1 {
         },
         instance_binding: instance_binding(role_rows()),
         instance_binding_digest: String::new(),
+        guest_image_sha256: digest('e'),
         cache: CacheLimitsV1 {
             live_path: "/tmp/runner/velnor/cache".to_owned(),
             stage_path: "/tmp/runner/velnor/cache-staging".to_owned(),
@@ -310,6 +311,25 @@ fn projection_rejects_runner_and_path_substitution() {
     assert_eq!(
         parse_projection(&bytes(&value), Path::new("/tmp/elsewhere"), "runner-17").err(),
         Some("cache_storage_cache_path_or_limit_invalid")
+    );
+}
+
+#[test]
+fn guest_image_sha256_is_validated_and_bound_into_the_projection_digest() {
+    let value = document();
+    let mut changed = value.clone();
+    changed.guest_image_sha256 = digest('f');
+    assert_ne!(
+        canonical_projection_digest(&value).expect("projection digest"),
+        canonical_projection_digest(&changed).expect("changed projection digest")
+    );
+
+    let mut invalid = value;
+    invalid.guest_image_sha256 = "G".repeat(64);
+    invalid.projection_digest = canonical_projection_digest(&invalid).expect("projection digest");
+    assert_eq!(
+        parse_projection(&bytes(&invalid), Path::new("/tmp/runner"), "runner-17").err(),
+        Some("cache_storage_digest_invalid")
     );
 }
 

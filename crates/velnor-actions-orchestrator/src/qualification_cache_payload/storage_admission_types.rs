@@ -13,6 +13,7 @@ pub(super) struct StorageCacheAdmissionV1 {
     pub(super) sample: SampleV1,
     pub(super) instance_binding: InstanceBindingV1,
     pub(super) instance_binding_digest: String,
+    pub(super) guest_image_sha256: String,
     pub(super) cache: CacheLimitsV1,
     pub(super) job_facts_mount: JobFactsMountV1,
     pub(super) projection_digest: String,
@@ -172,6 +173,7 @@ pub(super) struct ProjectionPreimageV1<'a> {
     pub(super) sample: &'a SampleV1,
     pub(super) instance_binding: &'a InstanceBindingV1,
     pub(super) instance_binding_digest: &'a str,
+    pub(super) guest_image_sha256: &'a str,
     pub(super) cache: &'a CacheLimitsV1,
     pub(super) job_facts_mount: &'a JobFactsMountV1,
 }
