@@ -99,8 +99,7 @@ fn merge_consumes_no_publish_verbs() -> TestResult {
 }
 
 /// Analysis, planning and generation never call the credentialed fetch: only
-/// the module mount, the public re-export, and the fetch modules (including
-/// the Bun registry phase) themselves name it.
+/// the module mount, public re-export, and runtime acquisition modules name it.
 #[test]
 fn private_fetch_is_unreachable_from_analysis() -> TestResult {
     for path in product_src_files()? {
@@ -116,6 +115,7 @@ fn private_fetch_is_unreachable_from_analysis() -> TestResult {
                 | "private_fetch_root.rs"
                 | "private_fetch_session.rs"
                 | "private_revoke.rs"
+                | "bun_assets_handoff.rs"
                 | "api.rs"
                 | "config.rs"
         ) {
