@@ -1,17 +1,15 @@
 use std::cell::Cell;
 
+use crate::reconcile::LaunchPhase;
+
 use super::*;
 
-#[tokio::test]
-async fn deferred_mode_persists_lifecycle_and_source_before_ack_without_acquire()
--> Result<(), String> {
-    use crate::reconcile::LaunchPhase;
-
-    let fixture = crate::journal::request_lifecycle::tests::native_started_intake_fixture()
-        .await
-        .map_err(|error| error.to_string())?;
-    let scope = &fixture.scope;
-    let request_id = 88;
+async fn prepare_started_offer(
+    scope: &crate::journal::ConnectionJournal,
+    fixture: &crate::journal::request_lifecycle::tests::NativeStartedIntakeFixture,
+    request_id: i64,
+    set_id: i64,
+) -> Result<(Poll, DeferredAuthorizedOffers), String> {
     let polled = batch(
         71,
         vec![
@@ -30,7 +28,6 @@ async fn deferred_mode_persists_lifecycle_and_source_before_ack_without_acquire(
             },
         ],
     );
-    let set_id = 501;
     let connection = native_fixture_connection()?;
     let identity = scope
         .assignment_identity(AssignmentKey::AssignedRequest { request_id })
@@ -51,17 +48,62 @@ async fn deferred_mode_persists_lifecycle_and_source_before_ack_without_acquire(
         .record_source_authorization(&identity, &receipt)
         .await
         .map_err(|error| error.to_string())?;
-    let mut receipts = Some(
-        DeferredAuthorizedOffers::from_receipts(
-            &connection,
-            scope,
-            set_id,
-            &polled,
-            vec![(request_id, receipt)],
-        )
-        .await
-        .map_err(|error| format!("Could not link the saved request: {error:?}"))?,
+    let receipts = DeferredAuthorizedOffers::from_receipts(
+        &connection,
+        scope,
+        set_id,
+        &polled,
+        vec![(request_id, receipt)],
+    )
+    .await
+    .map_err(|error| format!("Could not link the saved request: {error:?}"))?;
+    Ok((polled, receipts))
+}
+
+async fn observe_durable_ack(
+    scope: &crate::journal::ConnectionJournal,
+    intent_id: i64,
+    request_id: i64,
+    ack_saw_durable_lifecycle: &Cell<bool>,
+    ack_saw_durable_offer: &Cell<bool>,
+) -> Result<(), crate::scale_set::EnsureError> {
+    ack_saw_durable_lifecycle.set(
+        !scope
+            .pending_completion_inbox(4_102_444_800, 10)
+            .await
+            .map_err(|_| crate::scale_set::EnsureError::AdmissionClosed)?
+            .is_empty(),
     );
+    ack_saw_durable_lifecycle.set(
+        ack_saw_durable_lifecycle.get()
+            && scope
+                .intent(intent_id)
+                .await
+                .map_err(|_| crate::scale_set::EnsureError::AdmissionClosed)?
+                .launch_phase
+                == Some(LaunchPhase::RunnerStarted),
+    );
+    ack_saw_durable_offer.set(
+        scope
+            .authorized_offer(request_id, 71)
+            .await
+            .map_err(|_| crate::scale_set::EnsureError::AdmissionClosed)?
+            .is_some(),
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn deferred_mode_persists_lifecycle_and_source_before_ack_without_acquire()
+-> Result<(), String> {
+    let fixture = crate::journal::request_lifecycle::tests::native_started_intake_fixture()
+        .await
+        .map_err(|error| error.to_string())?;
+    let scope = &fixture.scope;
+    let request_id = 88;
+    let set_id = 501;
+    let (polled, saved_offer) = prepare_started_offer(scope, &fixture, request_id, set_id).await?;
+    let mut receipts = Some(saved_offer);
     assert_ne!(
         scope
             .intent(fixture.intent_id)
@@ -87,30 +129,14 @@ async fn deferred_mode_persists_lifecycle_and_source_before_ack_without_acquire(
         },
         async || {
             ack_count.set(ack_count.get() + 1);
-            ack_saw_durable_lifecycle.set(
-                !scope
-                    .pending_completion_inbox(4_102_444_800, 10)
-                    .await
-                    .map_err(|_| crate::scale_set::EnsureError::AdmissionClosed)?
-                    .is_empty(),
-            );
-            ack_saw_durable_lifecycle.set(
-                ack_saw_durable_lifecycle.get()
-                    && scope
-                        .intent(fixture.intent_id)
-                        .await
-                        .map_err(|_| crate::scale_set::EnsureError::AdmissionClosed)?
-                        .launch_phase
-                        == Some(LaunchPhase::RunnerStarted),
-            );
-            ack_saw_durable_offer.set(
-                scope
-                    .authorized_offer(request_id, 71)
-                    .await
-                    .map_err(|_| crate::scale_set::EnsureError::AdmissionClosed)?
-                    .is_some(),
-            );
-            Ok(())
+            observe_durable_ack(
+                scope,
+                fixture.intent_id,
+                request_id,
+                &ack_saw_durable_lifecycle,
+                &ack_saw_durable_offer,
+            )
+            .await
         },
     )
     .await
