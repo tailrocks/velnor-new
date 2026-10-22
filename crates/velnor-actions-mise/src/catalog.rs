@@ -79,9 +79,9 @@ pub const RUST_VERSION: &str = "1.99.1";
 /// Selected `mr-boxington` tool (binary on PATH is `mbx`; tag `v1.26.0`).
 /// Source: `https://api.github.com/repos/jdx/mr-boxington/releases/latest`; checked 2026-10-21.
 pub const MR_BOXINGTON_VERSION: &str = "1.26.0";
-/// Qualified GitHub CLI (tag `v2.102.1`).
-/// Source: `https://api.github.com/repos/cli/cli/releases/latest`; checked 2026-10-21.
-pub const GH_VERSION: &str = "2.102.1";
+/// Qualified GitHub CLI (tag `v2.103.0`).
+/// Source: `https://api.github.com/repos/cli/cli/releases/latest`; checked 2026-10-22.
+pub const GH_VERSION: &str = "2.103.0";
 /// Qualified jactionlint release (`jdx/jactionlint` tag `v2.3.0`, stable,
 /// published 2026-10-21). Install: Mise registry name `jactionlint`
 /// (backend `github:jdx/jactionlint`), which checks the release-API digest
@@ -103,42 +103,42 @@ pub const SHELLCHECK_VERSION: &str = "0.11.0";
 /// `cargo-nextest-0.9.149`, published 2026-10-20).
 /// Source: `https://crates.io/api/v1/crates/cargo-nextest`; checked 2026-10-21.
 pub const NEXTEST_VERSION: &str = "0.9.149";
-/// Qualified `OpenTofu` engine release (tag `v1.13.1`).
-/// Source: `https://github.com/opentofu/opentofu/releases/tag/v1.13.1`; checked 2026-10-02.
+/// Qualified `OpenTofu` engine release (tag `v1.13.2`).
+/// Source: `https://github.com/opentofu/opentofu/releases/tag/v1.13.2`; checked 2026-10-22.
 /// Install: bare `opentofu@<exact>` via the aqua backend (isolated probe
-/// passed 2026-10-02); the mise version index lags the release, so pin
+/// passed 2026-10-22); the mise version index lags the release, so pin
 /// exact, never float.
-pub const OPENTOFU_VERSION: &str = "1.13.1";
-/// sha256 of `tofu_1.13.1_linux_amd64.tar.gz` (`v1.13.1` `SHA256SUMS`,
-/// release-API `digest`, and fetched bytes agree; verified 2026-10-02).
+pub const OPENTOFU_VERSION: &str = "1.13.2";
+/// sha256 of `tofu_1.13.2_linux_amd64.tar.gz` (`v1.13.2` `SHA256SUMS`,
+/// release-API `digest`, and fetched bytes agree; Cosign-verified 2026-10-22).
 /// This is the catalog digest: the runner fleet is x64-Linux (§4.3).
 pub const OPENTOFU_SHA256_LINUX_AMD64: &str =
-    "378ada19d4bc70c43732004e8159be771b23b9a5afdf059e5f8a2b3fa2c70a69";
-/// sha256 of `tofu_1.13.1_linux_arm64.tar.gz` (same `SHA256SUMS`, verified 2026-10-02).
+    "ac05d9952662c7db28dd57e93f0a68018837bfdf9342384ec0987977c16a9645";
+/// sha256 of `tofu_1.13.2_linux_arm64.tar.gz` (same `SHA256SUMS`, verified 2026-10-22).
 pub const OPENTOFU_SHA256_LINUX_ARM64: &str =
-    "9c1ef375aa1852db0b2888aa921b640c71f8140d4682aa4fec99378a64fa7dc3";
-/// sha256 of `tofu_1.13.1_darwin_amd64.tar.gz` (same `SHA256SUMS`, verified 2026-10-02).
+    "88e2d9e3f94f97b76ab2faf55ade87578f56aed19c5e45fa139d70e994366d1f";
+/// sha256 of `tofu_1.13.2_darwin_amd64.tar.gz` (same `SHA256SUMS`, verified 2026-10-22).
 pub const OPENTOFU_SHA256_DARWIN_AMD64: &str =
-    "a73720443ba38712d7d96dc1e857add02c15a790919c653ad07492e9952f8c27";
-/// sha256 of `tofu_1.13.1_darwin_arm64.tar.gz` (same `SHA256SUMS`, verified 2026-10-02).
+    "dc6e4eb1d3ed6550c2ef052596f933dbcd8c806957665ea83ae7537147cb3074";
+/// sha256 of `tofu_1.13.2_darwin_arm64.tar.gz` (same `SHA256SUMS`, verified 2026-10-22).
 pub const OPENTOFU_SHA256_DARWIN_ARM64: &str =
-    "be78f659f04ef06a9dbd9b3934d46af95d787a3aa38396d459dea395261816a9";
-/// Selected release-plz coordinator release (tag `release-plz-v0.3.173`).
-/// Source: `https://crates.io/api/v1/crates/release-plz`; published 2026-10-19, checked 2026-10-20.
-pub const RELEASE_PLZ_VERSION: &str = "0.3.173";
+    "0d1cdc85f38992055b48e7fb161304a2ddfe2e5ee0ff68ffec9d0349c8bd1b59";
+/// Selected release-plz coordinator release (tag `release-plz-v0.3.174`).
+/// Source: `https://crates.io/api/v1/crates/release-plz`; published 2026-10-21, checked 2026-10-22.
+pub const RELEASE_PLZ_VERSION: &str = "0.3.174";
 /// Qualified `crane` (`google/go-containerregistry` tag `v0.22.1`, published
 /// 2026-09-04): pushes OCI layouts and tags digests in the image publication jobs.
 /// Source: `https://api.github.com/repos/google/go-containerregistry/releases/latest`; checked 2026-10-20.
 /// Install: Mise registry name `crane` through the aqua backend, which checks
 /// the release `checksums.txt` before the binary is used.
 pub const CRANE_VERSION: &str = "0.22.1";
-/// Qualified Bun (`oven-sh/bun` tag `bun-v1.4.3`): the package manager and
+/// Qualified Bun (`oven-sh/bun` tag `bun-v1.4.4`): the package manager and
 /// script runner of Bun workspace jobs. A project declares its own exact
 /// version in `mise.toml` (hard decision 4); this pin applies only to
 /// callers that declare none.
-/// Source: `https://api.github.com/repos/oven-sh/bun/releases/latest`; checked 2026-10-20.
+/// Source: `https://api.github.com/repos/oven-sh/bun/releases/latest`; checked 2026-10-22.
 /// Install: Mise core `bun@<exact>`.
-pub const BUN_VERSION: &str = "1.4.3";
+pub const BUN_VERSION: &str = "1.4.4";
 /// Fixed Cosign signer helper (release tag `v3.1.4`), not installed by Mise.
 /// Source release assets and GitHub API SHA-256 digest were verified 2026-10-21.
 pub const COSIGN_VERSION: &str = "3.1.4";
