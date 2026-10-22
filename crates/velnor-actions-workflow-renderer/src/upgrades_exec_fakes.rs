@@ -139,3 +139,22 @@ pub(super) fn text(output: &Output) -> String {
         String::from_utf8_lossy(&output.stderr)
     )
 }
+
+/// Stand-in Rust verification: records which Rust it was asked to check.
+pub(super) const VERIFY_RUST_STUB: &str =
+    "printf 'verify-rust %s\\n' \"${VELNOR_TOOL_RUST}\" >> \"$SANDBOX_LOG\"";
+
+impl super::exec_support::Sandbox {
+    /// One file of the pushed `velnor/upgrades` head.
+    pub(super) fn pushed_file(&self, path: &str) -> TestResult<String> {
+        let output = git_fixture::sterile_command()
+            .arg("--git-dir")
+            .arg(&self.origin)
+            .args(["show", &format!("refs/heads/velnor/upgrades:{path}")])
+            .output()?;
+        if !output.status.success() {
+            return Err(format!("{path} is not on velnor/upgrades").into());
+        }
+        Ok(String::from_utf8(output.stdout)?)
+    }
+}

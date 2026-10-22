@@ -263,7 +263,7 @@ impl Sandbox {
             .env("VELNOR_GH_VERSION", "2.102.1")
             .env(
                 "VELNOR_VERIFY_RUST_SCRIPT",
-                "printf 'verify-rust %s\\n' \"${VELNOR_TOOL_RUST}\" >> \"$SANDBOX_LOG\"",
+                super::exec_fakes::VERIFY_RUST_STUB,
             )
             .env(
                 "VELNOR_GENERATE_TOOLS",
@@ -382,19 +382,6 @@ impl Sandbox {
             .status
             .success()
             .then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned()))
-    }
-
-    /// One file of the pushed `velnor/upgrades` head.
-    pub(super) fn pushed_file(&self, path: &str) -> TestResult<String> {
-        let output = git_fixture::sterile_command()
-            .arg("--git-dir")
-            .arg(&self.origin)
-            .args(["show", &format!("refs/heads/velnor/upgrades:{path}")])
-            .output()?;
-        if !output.status.success() {
-            return Err(format!("{path} is not on velnor/upgrades").into());
-        }
-        Ok(String::from_utf8(output.stdout)?)
     }
 
     pub(super) fn calls(&self) -> TestResult<String> {
