@@ -10,7 +10,9 @@ mod witness;
 pub(crate) use guest_capacity::checked_guest_capacity;
 pub(in crate::launch) use production_profile::retained_tmpfs_bytes;
 pub(crate) use recovery::RecoveryObservation;
-pub(in crate::launch) use storage_admission::filesystem_instance_digest;
+pub(in crate::launch) use storage_admission::{
+    FilesystemInstanceDigestInput, filesystem_instance_digest,
+};
 pub(crate) use witness::StartObservationWitness;
 #[cfg(test)]
 mod storage_admission_tests;

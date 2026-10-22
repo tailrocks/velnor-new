@@ -12,7 +12,7 @@ use self::provider::ReleaseImageProvider;
 pub(crate) use self::sample::RecoveryObservation;
 pub(crate) use self::sample::{StartObservationWitness, StartPermit};
 pub(crate) use readiness::ReadinessSample;
-pub(in crate::launch) use sample::filesystem_instance_digest;
+pub(in crate::launch) use sample::{FilesystemInstanceDigestInput, filesystem_instance_digest};
 
 mod cleanup_observer;
 mod doctor;

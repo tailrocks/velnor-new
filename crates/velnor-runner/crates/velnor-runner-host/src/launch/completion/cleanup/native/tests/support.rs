@@ -10,17 +10,19 @@ pub(in crate::launch::completion::cleanup::native) async fn capacity_retry_fixtu
     let permit =
         crate::launch::StartPermit::test_fixture_with_engine_id(&sample_generation, TEST_ENGINE_ID);
     let digest = crate::launch::resource_probe::filesystem_instance_digest(
-        permit.engine_id(),
-        permit.docker_root_digest(),
-        b"12345678-1234-1234-1234-123456789abc",
-        b"/dev/vdb",
-        b"btrfs",
-        0x9123_683e,
-        0,
-        38,
-        0,
-        41,
-        17,
+        crate::launch::resource_probe::FilesystemInstanceDigestInput {
+            engine_id: permit.engine_id(),
+            docker_root_digest: permit.docker_root_digest(),
+            guest_boot_id: b"12345678-1234-1234-1234-123456789abc",
+            mount_source: b"/dev/vdb",
+            filesystem_type_name: b"btrfs",
+            filesystem_type_magic: 0x9123_683e,
+            mount_device_major: 0,
+            mount_device_minor: 38,
+            statx_device_major: 0,
+            statx_device_minor: 41,
+            filesystem_id: 17,
+        },
     );
     let base = native_started_intake_fixture_with_filesystem_digest(Some(digest)).await?;
     crate::launch::bootstrap::cleanup_runtime_fixture_for_base(base).await
