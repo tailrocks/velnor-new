@@ -37,7 +37,8 @@ use crate::workflow_jobs::{PlanJobToolNeeds, final_job, lint_job, plan_job};
 pub(super) mod workflow_policy;
 pub(crate) use workflow_policy::prepare_rust_components_step;
 pub(crate) use workflow_policy::rust_manifest_step::{
-    NOT_CATALOGUED_CODE, VERIFY_RUST_MANIFEST_STEP, verify_rust_manifest_step,
+    NOT_CATALOGUED_CODE, VERIFY_RUST_MANIFEST_STEP, verify_restored_rust_step,
+    verify_rust_manifest_step,
 };
 
 pub(crate) use crate::workflow_jobs::LINT_JOB_ID;
