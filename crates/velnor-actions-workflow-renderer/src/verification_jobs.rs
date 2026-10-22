@@ -17,6 +17,8 @@ pub(crate) mod build_task_jobs;
 pub(crate) mod build_task_mise;
 #[path = "build_task_mise_tools.rs"]
 pub(crate) mod build_task_mise_tools;
+#[path = "bun_artifact_steps.rs"]
+pub(crate) mod bun_artifact_steps;
 #[path = "bun_member_jobs.rs"]
 pub(crate) mod bun_member_jobs;
 #[path = "bun_registry_step.rs"]
@@ -41,12 +43,17 @@ pub(crate) mod workflow_task_jobs;
 pub use build_task_jobs::{
     BuildTaskArtifact, BuildTaskPolicy, BuildTaskTool, build_build_task_job,
 };
+pub use bun_artifact_steps::{
+    BUN_ARTIFACT_PREFIX, BUN_BLOB_DIR, BUN_BLOBS_DIR, BUN_REPORT_DIR, NOT_CANCELLED,
+    bun_blob_upload_step, bun_blobs_download_step, bun_report_upload_step, bun_results_upload_step,
+};
 pub use bun_member_jobs::{BUN_RUNNER, BunMemberPolicy, build_bun_member_job};
 pub use bun_registry_step::{
     BUN_REGISTRY_STEP_NAME, BUN_ROOT_ENV, BUN_SCOPES_ENV, bun_registry_step,
 };
 pub use bun_suite_jobs::{
-    BUN_SUITE_SEPARATOR, BunLeg, BunLegMatrix, BunSuitePolicy, build_bun_suite_job,
+    BUN_REPORT_SUFFIX, BUN_SUITE_SEPARATOR, BunLeg, BunLegMatrix, BunReportPolicy, BunSuitePolicy,
+    build_bun_report_job, build_bun_suite_job,
 };
 pub use image_build_jobs::{
     BUILDKIT_IMAGE, ImageBuildPolicy, artifact_name, artifact_path, build_image_build_job,

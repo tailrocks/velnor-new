@@ -329,7 +329,7 @@ fn assert_image_producer(body: &str) -> TestResult {
 fn assert_macos_producer(body: &str) -> TestResult {
     let build = job_body(body, "build-binary")?;
     assert!(build.contains("runs-on: macos-15"), "{build}");
-    assert!(build.contains("jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde"));
+    assert!(build.contains("jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550"));
     assert!(
         build.contains(&format!(
             "rust@{}",

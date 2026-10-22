@@ -26,3 +26,4 @@ timeout_minutes = 25
 [stacks.bun.members."@fixture/web".suites.browser.playwright]
 projects = ["chromium-desktop", "chromium-mobile"]
 shards = 2
+report = "merge"

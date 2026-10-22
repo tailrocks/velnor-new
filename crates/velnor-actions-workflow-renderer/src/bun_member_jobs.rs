@@ -76,6 +76,7 @@ pub(crate) fn validate_bun_steps(id: &str, steps: &[Step]) -> Result<(), RenderE
         if matches!(step.kind, StepKind::Action { .. })
             && step.role != Some(StepRole::PrivateTokenMint)
             && !crate::verification_jobs::stack_jobs::is_family_cache_role(step.role)
+            && !crate::verification_jobs::bun_artifact_steps::is_bun_artifact_step(step)
         {
             return Err(invalid("bun_job_action_step"));
         }

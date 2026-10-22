@@ -4,7 +4,7 @@ set -eu
 [ "$1" = "--no-env" ] && shift
 [ "$1" = "--no-hooks" ] && shift
 [ "$1" = "exec" ] && shift
-[ "$1" = "gh@2.102.1" ] && shift
+[ "$1" = "gh@2.103.0" ] && shift
 [ "$1" = "--" ] && shift
 [ "$1" = "gh" ] && shift
 exec gh "$@"

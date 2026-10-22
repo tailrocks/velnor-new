@@ -4,6 +4,7 @@ mod impl_bench_p13;
 mod impl_bun;
 mod impl_bun_golden;
 mod impl_bun_playwright;
+mod impl_bun_report;
 mod impl_bun_select;
 mod impl_bun_suites;
 mod impl_bun_timeout;

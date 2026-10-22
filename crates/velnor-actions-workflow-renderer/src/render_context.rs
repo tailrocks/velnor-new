@@ -53,7 +53,7 @@ pub const TASK_JOB_ID: &str = "velnor-task";
 /// Candidate validation job ID (Velnor policy only).
 pub const CANDIDATE_JOB_ID: &str = "candidate";
 /// Full-SHA Alint pin for the repository-policy `alint` job.
-pub const ALINT_USES: &str = "asamarts/alint@f39a25a7e061bb8738a87372561d8b9a6a29ca87";
+pub const ALINT_USES: &str = "asamarts/alint@10d1c0a2bafd0bd316dbad9fe63ea5e1e3761c71";
 
 /// Caller-supplied validated scalars the IR cannot carry.
 #[derive(Debug, Clone)]

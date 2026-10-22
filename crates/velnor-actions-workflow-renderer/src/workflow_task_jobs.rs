@@ -62,9 +62,11 @@ impl WorkflowTaskPolicy {
             Self::Bun(policy) => {
                 (policy.id == job_id).then_some(super::bun_member_jobs::BUN_RUNNER)
             }
-            Self::BunSuite(policy) => {
-                (policy.id == job_id).then_some(super::bun_member_jobs::BUN_RUNNER)
-            }
+            Self::BunSuite(policy) => policy
+                .job_ids()
+                .iter()
+                .any(|id| id == job_id)
+                .then_some(super::bun_member_jobs::BUN_RUNNER),
             Self::Stack(policy) => (policy.id == job_id).then_some(super::stack_jobs::STACK_RUNNER),
         }
     }
@@ -88,7 +90,7 @@ impl WorkflowTaskPolicy {
             Self::NativeImage(policy) => policy.job_id() == job_id,
             Self::Image(policy) => policy.platform_for_job(job_id).is_some(),
             Self::Bun(policy) => policy.id == job_id,
-            Self::BunSuite(policy) => policy.id == job_id,
+            Self::BunSuite(policy) => policy.job_ids().iter().any(|id| id == job_id),
             Self::Stack(policy) => policy.id == job_id,
         }
     }
