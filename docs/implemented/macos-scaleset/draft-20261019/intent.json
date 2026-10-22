@@ -1,9 +1,0 @@
-{
-  "canonical_head": "197658c23d7f9e286a94b64da53b7e75ab890365",
-  "command": "env -u RUST_MIN_STACK MISE_AUTO_INSTALL=false MISE_EXEC_AUTO_INSTALL=false MBX_CARGO_SHIM_MODE=1 RUSTUP_TOOLCHAIN=1.99.1 CARGO_HOME=<isolated>/cargo-home CARGO_TARGET_DIR=<isolated>/target mise --no-config exec rust@1.99.1 mr-boxington@1.24.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.148 -- sh -c PATH=<pinned-rust-bin>:$PATH exec mbx nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --workspace --no-fail-fast",
-  "runtime_stack": "Native macOS arm64 execution. RUST_MIN_STACK unset explicitly.",
-  "source_manifest_sha256": "fbed1749b1cf63fd7dbe04197bf4e6a6af3a131952066491571063119ba47a97",
-  "source_status_lines": 308,
-  "started_utc": "2026-10-19T16:21:41.345756+00:00",
-  "test_scope": "Full nested runner workspace. No filter. No fail-fast."
-}
