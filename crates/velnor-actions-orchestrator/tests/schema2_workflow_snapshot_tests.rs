@@ -4,6 +4,7 @@ use super::*;
 fn schema2_workflows_match_expected_bytes() -> TestResult {
     let repo = make_repo(&workflow_config())?;
     let tree = render_staged_tree(&prepare(repo.path())?)?;
+    schema2_snapshot_capture::capture_if_requested(&tree)?;
     let qualification = required_file(&tree, ".github/workflows/qualification.yml")?;
     assert_eq!(
         qualification,

@@ -85,6 +85,7 @@ fn preview_payload_matrix_is_selected_from_authenticated_source_outputs() {
     let Yaml::Seq(payload_steps) = field(payload, "steps") else {
         panic!("payload steps")
     };
+    assert_payload_source_acquire(payload_steps);
     let executor = payload_steps
         .iter()
         .find(|step| has_operation(step, "execute-release-producer-v1"))
@@ -107,10 +108,43 @@ fn preview_payload_matrix_is_selected_from_authenticated_source_outputs() {
     );
     let rendered = crate::yaml::render_yaml(assembly);
     assert!(rendered.contains("VELNOR_RELEASE_STAGE: assemble"));
+    let Yaml::Seq(assembly_steps) = field(assembly, "steps") else {
+        panic!("assembly steps")
+    };
+    assert_assembly_source_acquire(assembly_steps);
     assert!(rendered.contains("needs.preview-eligibility.outputs.producer_runner"));
     assert!(!rendered.contains("VELNOR_RELEASE_NEEDS_JSON"));
     assert!(!rendered.contains("id-token:"));
     assert!(!rendered.contains("environment:"));
+}
+
+fn assert_payload_source_acquire(steps: &[Yaml]) {
+    let source_admission = steps
+        .iter()
+        .find(|step| has_operation(step, "acquire-preview-source-v1"))
+        .expect("payload source admission");
+    assert!(env_value(source_admission, "VELNOR_RELEASE_STAGE").is_none());
+    for (key, expected) in [
+        ("VELNOR_RELEASE_PRODUCT_ID", "${{ matrix.product_id }}"),
+        ("VELNOR_RELEASE_TARGET", "${{ matrix.target }}"),
+    ] {
+        assert_eq!(env_value(source_admission, key), Some(&Yaml::str(expected)));
+    }
+    assert!(env_value(source_admission, "VELNOR_RELEASE_ADMISSION_DIGEST").is_none());
+    let acquire_yaml = crate::yaml::render_yaml(source_admission);
+    assert!(acquire_yaml.contains("VELNOR_INTERNAL_OP: acquire-preview-source-v1"));
+    assert!(acquire_yaml.contains("VELNOR_RELEASE_PRODUCT_ID: ${{ matrix.product_id }}"));
+    assert!(acquire_yaml.contains("VELNOR_RELEASE_TARGET: ${{ matrix.target }}"));
+}
+
+fn assert_assembly_source_acquire(steps: &[Yaml]) {
+    let source_admission = steps
+        .iter()
+        .find(|step| has_operation(step, "acquire-preview-source-v1"))
+        .expect("assembly source admission");
+    assert!(env_value(source_admission, "VELNOR_RELEASE_PRODUCT_ID").is_none());
+    assert!(env_value(source_admission, "VELNOR_RELEASE_TARGET").is_none());
+    assert!(env_value(source_admission, "VELNOR_RELEASE_ADMISSION_DIGEST").is_none());
 }
 
 #[test]

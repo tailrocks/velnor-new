@@ -58,8 +58,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
-          version: 2026.10.17
+          sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
+          version: 2026.10.18
       - name: Resolve project tool versions
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -80,14 +80,14 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 6693558aef57f8228183e7094807c3198f660220c1f323fdd5b0e3999faa76f7-${{ env.VELNOR_TOOL_BUN }}-${{ env.VELNOR_TOOL_BUN_LOCK }}
+          d: b705001e7369cff167b084b86e040c992dc3ff080e1353bff5f4532010ae47b7-${{ env.VELNOR_TOOL_BUN }}-${{ env.VELNOR_TOOL_BUN_LOCK }}
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
-          mise-sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          mise-sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Prepare pinned tools
         env:
@@ -228,8 +228,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
-          version: 2026.10.17
+          sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
+          version: 2026.10.18
       - name: Resolve project tool versions
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -250,14 +250,14 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 6693558aef57f8228183e7094807c3198f660220c1f323fdd5b0e3999faa76f7-${{ env.VELNOR_TOOL_BUN }}-${{ env.VELNOR_TOOL_BUN_LOCK }}
+          d: b705001e7369cff167b084b86e040c992dc3ff080e1353bff5f4532010ae47b7-${{ env.VELNOR_TOOL_BUN }}-${{ env.VELNOR_TOOL_BUN_LOCK }}
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
-          mise-sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          mise-sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Acquire Velnor
         timeout-minutes: 6
@@ -439,20 +439,20 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
-          version: 2026.10.17
+          sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
+          version: 2026.10.18
       - name: V2 identity
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 3aac407dfd278eafb394e3ea80bec450f29f386c0c6c122f8028b4436c10d207
+          d: d952f37febb8e60ad0db8a51a080afd679d78814e21606167a548033c4e8a2e7
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
-          mise-sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          mise-sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Prepare pinned tools
         env:
@@ -500,20 +500,20 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
-          version: 2026.10.17
+          sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
+          version: 2026.10.18
       - name: V2 identity
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 3aac407dfd278eafb394e3ea80bec450f29f386c0c6c122f8028b4436c10d207
+          d: d952f37febb8e60ad0db8a51a080afd679d78814e21606167a548033c4e8a2e7
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
-          mise-sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          mise-sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Prepare pinned tools
         env:
@@ -610,8 +610,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
-          version: 2026.10.17
+          sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
+          version: 2026.10.18
       - name: Acquire Velnor
         timeout-minutes: 6
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-<version>\"&&mkdir -p \"${d%/*}\"&&s=\"/opt/velnor/seed/generator/${d##*/}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|sha256sum -c -;then cp \"$s\" \"$d\";else curl -fsSL --connect-timeout 15 --max-time 120 --retry 5 --retry-all-errors --retry-max-time 180 --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|sha256sum -c -;fi&&chmod +x \"$d\"'"

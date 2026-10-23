@@ -152,7 +152,7 @@ fn producer_steps(
     pair: Option<&ReleasePayloadPair>,
     preview_matrix: bool,
 ) -> Result<(Vec<Yaml>, Yaml), RenderError> {
-    let mut steps = acquisition_steps(spec, id, pair.is_none() && !preview_matrix)?;
+    let mut steps = acquisition_steps(spec, id, pair.is_none() && !preview_matrix, preview_matrix)?;
     steps.extend(support::source_steps(spec, id)?);
     let (mut operation, public_plan) =
         production_operation(spec, "execute-release-producer-v1", false)?;
@@ -174,11 +174,15 @@ fn acquisition_steps(
     spec: &ConsumerReleaseSpec,
     id: &str,
     needed: bool,
+    preview_matrix: bool,
 ) -> Result<Vec<Yaml>, RenderError> {
     if spec.policy.channel == PackageReleaseChannel::Preview {
         let mut result = preview_producer_acquisition_steps(spec, id)?;
         let (mut admission, _) = production_operation(spec, "acquire-preview-source-v1", true)?;
         set_id(&mut admission, "policy-admission");
+        if preview_matrix {
+            support::bind_payload_pair(&mut admission, None, true)?;
+        }
         result.push(admission);
         if needed {
             let (mut admission, _) = production_operation(spec, "acquire-release-leaves-v1", true)?;

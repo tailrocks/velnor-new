@@ -1,4 +1,4 @@
-min_version = "2026.10.17"
+min_version = "2026.10.18"
 
 [tools]
 # Owner standard layout: `mr_boxington = true` plus `[wrappers.cargo]` run
@@ -14,7 +14,7 @@ rust = { version = "1.99.1", profile = "minimal", components = [
   "aarch64-unknown-linux-gnu",
   "x86_64-unknown-linux-gnu",
 ], mr_boxington = true }
-mr-boxington = "1.26.0"
+mr-boxington = "1.27.0"
 hk = "2.8.0"
 cargo-binstall = "1.26.0"
 "aqua:nextest-rs/nextest/cargo-nextest" = "0.9.149"
