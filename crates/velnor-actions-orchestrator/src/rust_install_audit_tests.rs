@@ -259,3 +259,6 @@ mod parse_with_alias_tests;
 
 #[path = "rust_install_audit_parse_with_map_tests.rs"]
 mod parse_with_map_tests;
+
+#[path = "rust_install_audit_jactionlint_call_tests.rs"]
+mod jactionlint_call_tests;

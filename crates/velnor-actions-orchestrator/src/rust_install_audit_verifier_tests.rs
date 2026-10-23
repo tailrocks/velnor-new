@@ -390,3 +390,6 @@ fn a_step_that_verifies_its_own_install_before_any_use_passes() {
         "{found}"
     );
 }
+
+#[path = "rust_install_audit_installed_phase_matrix_tests.rs"]
+mod installed_phase_matrix;

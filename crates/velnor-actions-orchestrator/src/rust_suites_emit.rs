@@ -249,3 +249,7 @@ fn build_render_spec(
         ),
     }))
 }
+
+#[cfg(test)]
+#[path = "rust_suites_emit_tests.rs"]
+mod tests;

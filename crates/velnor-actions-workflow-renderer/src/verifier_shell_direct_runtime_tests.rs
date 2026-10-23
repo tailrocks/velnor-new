@@ -70,3 +70,6 @@ fn direct_release_verifier_rejects_wrong_shape_and_altered_payloads() {
         .is_err()
     );
 }
+
+#[path = "verifier_shell_standalone_argv_runtime_tests.rs"]
+mod standalone_argv_runtime;
