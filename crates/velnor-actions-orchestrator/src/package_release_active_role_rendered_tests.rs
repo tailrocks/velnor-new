@@ -1,9 +1,11 @@
 //! Compose real renderers with the runtime's closed role selection.
 use super::*;
 use std::collections::BTreeMap;
+use std::process::Command;
 use velnor_actions_contract::{
     CargoVersionBinding, CargoVersionPolicy, PACKAGE_RELEASE_POLICY_SCHEMA_V1,
-    PackageReleasePolicy, VerificationRunner, targets::ReleaseTarget,
+    PackageReleasePolicy, VerificationRunner, preview_production::expected_release_payload_pairs,
+    targets::ReleaseTarget,
 };
 use velnor_actions_workflow_renderer::{
     HelperProvenance, MiseSetup, provision_acquire_step,
@@ -275,3 +277,8 @@ fn actual_rendered_channel_and_tap_jobs_match_shared_runtime_role_mapping() {
         }
     }
 }
+
+const MATRIX_ROLE_CHILD: &str = "VELNOR_PREVIEW_MATRIX_ROLE_CHILD";
+
+#[path = "package_release_active_role_preview_acquire_tests.rs"]
+mod preview_acquire_tests;

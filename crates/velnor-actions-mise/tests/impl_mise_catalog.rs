@@ -9,17 +9,17 @@ use velnor_actions_mise::{
 
 #[test]
 fn pinned_catalog_matches_qualified_versions() {
-    assert_eq!(MISE_VERSION, "2026.10.17");
+    assert_eq!(MISE_VERSION, "2026.10.18");
     let catalog = ToolCatalog::pinned();
     assert_eq!(catalog.version(PinnedTool::Rust), "1.99.1");
-    assert_eq!(catalog.version(PinnedTool::MrBoxington), "1.26.0");
+    assert_eq!(catalog.version(PinnedTool::MrBoxington), "1.27.0");
     assert_eq!(catalog.version(PinnedTool::Gh), "2.103.0");
     assert_eq!(catalog.version(PinnedTool::Jactionlint), "2.3.0");
     assert_eq!(catalog.version(PinnedTool::Shellcheck), "0.11.0");
     assert_eq!(catalog.version(PinnedTool::Nextest), "0.9.149");
     assert_eq!(catalog.version(PinnedTool::Opentofu), "1.13.2");
     assert_eq!(RUST_VERSION, "1.99.1");
-    assert_eq!(MR_BOXINGTON_VERSION, "1.26.0");
+    assert_eq!(MR_BOXINGTON_VERSION, "1.27.0");
     assert_eq!(GH_VERSION, "2.103.0");
     assert_eq!(JACTIONLINT_VERSION, "2.3.0");
     assert_eq!(SHELLCHECK_VERSION, "0.11.0");
@@ -33,7 +33,7 @@ fn tool_specs_use_registry_names() {
     assert_eq!(catalog.tool_spec(PinnedTool::Rust), "rust@1.99.1");
     assert_eq!(
         catalog.tool_spec(PinnedTool::MrBoxington),
-        "mr-boxington@1.26.0"
+        "mr-boxington@1.27.0"
     );
     assert_eq!(catalog.tool_spec(PinnedTool::Gh), "gh@2.103.0");
     assert_eq!(
@@ -51,7 +51,7 @@ fn tool_specs_use_registry_names() {
     assert_eq!(catalog.tool_spec(PinnedTool::Opentofu), "opentofu@1.13.2");
     assert_eq!(
         catalog.tool_specs(&[PinnedTool::Rust, PinnedTool::MrBoxington]),
-        vec!["rust@1.99.1".to_owned(), "mr-boxington@1.26.0".to_owned()]
+        vec!["rust@1.99.1".to_owned(), "mr-boxington@1.27.0".to_owned()]
     );
 }
 

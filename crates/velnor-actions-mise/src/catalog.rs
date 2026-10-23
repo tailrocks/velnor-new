@@ -71,17 +71,17 @@ pub use tool::PinnedTool;
 pub mod project;
 use versions::tool_source;
 
-/// Selected Mise release (tag `v2026.10.17`); official asset bytes and the signed
-/// checksums file were verified 2026-10-21. Runtime and hosted
+/// Selected Mise release (tag `v2026.10.18`); official asset bytes and the signed
+/// checksums file were verified 2026-10-23. Runtime and hosted
 /// qualification remain part of the release gates.
-/// Source: `https://api.github.com/repos/jdx/mise/releases/tags/v2026.10.17`.
-pub const MISE_VERSION: &str = "2026.10.17";
+/// Source: `https://api.github.com/repos/jdx/mise/releases/tags/v2026.10.18`.
+pub const MISE_VERSION: &str = "2026.10.18";
 /// Selected Rust stable toolchain (2026-10-15 official stable manifest).
 /// Source: `https://static.rust-lang.org/dist/channel-rust-stable.toml`; checked 2026-10-18.
 pub const RUST_VERSION: &str = "1.99.1";
-/// Selected `mr-boxington` tool (binary on PATH is `mbx`; tag `v1.26.0`).
-/// Source: `https://api.github.com/repos/jdx/mr-boxington/releases/latest`; checked 2026-10-21.
-pub const MR_BOXINGTON_VERSION: &str = "1.26.0";
+/// Selected `mr-boxington` tool (binary on PATH is `mbx`; tag `v1.27.0`).
+/// Source: `https://api.github.com/repos/jdx/mr-boxington/releases/latest`; checked 2026-10-23.
+pub const MR_BOXINGTON_VERSION: &str = "1.27.0";
 /// Qualified GitHub CLI (tag `v2.103.0`).
 /// Source: `https://api.github.com/repos/cli/cli/releases/latest`; checked 2026-10-22.
 pub const GH_VERSION: &str = "2.103.0";
@@ -113,9 +113,9 @@ pub const OPENTOFU_SHA256_DARWIN_AMD64: &str =
 /// sha256 of `tofu_1.13.2_darwin_arm64.tar.gz` (same `SHA256SUMS`, verified 2026-10-22).
 pub const OPENTOFU_SHA256_DARWIN_ARM64: &str =
     "0d1cdc85f38992055b48e7fb161304a2ddfe2e5ee0ff68ffec9d0349c8bd1b59";
-/// Selected release-plz coordinator release (tag `release-plz-v0.3.174`).
-/// Source: `https://crates.io/api/v1/crates/release-plz`; published 2026-10-21, checked 2026-10-22.
-pub const RELEASE_PLZ_VERSION: &str = "0.3.174";
+/// Selected release-plz coordinator release (tag `release-plz-v0.4.0`).
+/// Source: `https://crates.io/api/v1/crates/release-plz`; published 2026-10-23, checked 2026-10-23.
+pub const RELEASE_PLZ_VERSION: &str = "0.4.0";
 /// Qualified `crane` (`google/go-containerregistry` tag `v0.22.1`, published
 /// 2026-09-04): pushes OCI layouts and tags digests in the image publication jobs.
 /// Source: `https://api.github.com/repos/google/go-containerregistry/releases/latest`; checked 2026-10-20.

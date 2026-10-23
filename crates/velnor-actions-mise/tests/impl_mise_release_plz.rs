@@ -25,11 +25,11 @@ fn pinned() -> ToolCatalog {
 
 #[test]
 fn release_plz_pin_is_exact() {
-    assert_eq!(RELEASE_PLZ_VERSION, "0.3.174");
-    assert_eq!(pinned().version(PinnedTool::ReleasePlz), "0.3.174");
+    assert_eq!(RELEASE_PLZ_VERSION, "0.4.0");
+    assert_eq!(pinned().version(PinnedTool::ReleasePlz), "0.4.0");
     assert_eq!(
         pinned().tool_spec(PinnedTool::ReleasePlz),
-        "release-plz@0.3.174"
+        "release-plz@0.4.0"
     );
     assert_eq!(PinnedTool::ReleasePlz.tool_name(), "release-plz");
     assert_eq!(
@@ -48,7 +48,7 @@ fn release_plz_pin_is_exact() {
 fn release_plz_cksum_is_full_sha256() {
     assert_eq!(
         RELEASE_PLZ_CKSUM,
-        "a0742b43fe270de052d0bb5a1cd5db966ca854dd9d1d311669ed87848cd75d07"
+        "dd854677aeb762bc0291da39d8479cf6006084a20fef3ac244d0a5b80ef6105f"
     );
     assert_eq!(RELEASE_PLZ_CKSUM.len(), 64);
     assert!(
@@ -319,7 +319,7 @@ fn coordinator_command_selects_pinned_tools() {
         .iter()
         .position(|arg| arg == "--")
         .expect("payload separator");
-    for spec in ["rust@1.99.1", "release-plz@0.3.174"] {
+    for spec in ["rust@1.99.1", "release-plz@0.4.0"] {
         assert!(
             argv[..separator].iter().any(|arg| arg == spec),
             "missing tool spec before --: {spec}"
@@ -340,7 +340,7 @@ fn repo_policy_mirror_covers_release_plz() {
     );
     let text = std::fs::read_to_string(path).expect("repo version-policy exists");
     assert!(
-        text.contains("release-plz = \"0.3.174\""),
+        text.contains("release-plz = \"0.4.0\""),
         "policy pins release-plz"
     );
     verify_version_policy(&text, &pinned()).expect("policy mirrors catalog");
@@ -355,8 +355,8 @@ fn freshness_inventory_mirrors_release_plz() {
     let text = std::fs::read_to_string(path).expect("freshness inventory exists");
     for needle in [
         "\"name\": \"release-plz\"",
-        "\"pinned\": \"0.3.174\"",
-        "\"qualified\": \"0.3.174\"",
+        "\"pinned\": \"0.4.0\"",
+        "\"qualified\": \"0.4.0\"",
         "\"source\": \"https://crates.io/api/v1/crates/release-plz\"",
         "\"status\": \"current\"",
     ] {
