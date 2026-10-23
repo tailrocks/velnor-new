@@ -16,6 +16,7 @@ use std::time::Duration;
 
 use velnor_actions_mise::MISE_GLOBAL_FLAGS;
 use velnor_actions_mise::command::IsolatedCommand;
+use velnor_actions_mise::command::is_safe_credential_value;
 
 use crate::OrchestratorError;
 use crate::internal::internal;
@@ -32,16 +33,12 @@ const GIT_USER: &str = "x-access-token";
 pub(crate) struct Token(String);
 
 impl Token {
-    /// Validate the token charset (`ghs_` tokens are alphanumeric, `_`, `-`, `.`).
+    /// Validate transport-safe bytes; the credential remains opaque.
     pub(crate) fn new(value: &str) -> Result<Self, OrchestratorError> {
         if value.is_empty() {
             return Err(internal("private_source_credential_unavailable"));
         }
-        if value.len() > 512
-            || !value
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.'))
-        {
+        if !is_safe_credential_value(value) {
             return Err(internal("private_source_credential_malformed"));
         }
         Ok(Self(value.to_owned()))

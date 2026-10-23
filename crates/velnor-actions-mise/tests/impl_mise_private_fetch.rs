@@ -155,6 +155,39 @@ fn private_fetch_without_a_credential_carries_none() -> Result<(), String> {
 }
 
 #[test]
+fn both_private_fetch_credentials_accept_long_dotted_opaque_values() -> Result<(), String> {
+    let token = format!("legacy.{}.suffix", "x".repeat(600));
+    for kind in [
+        PrivateFetchCredential::AppInstallation,
+        PrivateFetchCredential::NpmRegistryRead,
+    ] {
+        let command = fetch(Some((kind, &token)))?;
+        let child = command.spawn_env(&hostile_parent());
+        assert_eq!(value(&child, kind.env_key()), Some(&OsString::from(&token)));
+        assert_eq!(
+            child
+                .iter()
+                .filter(|(key, _)| key == kind.env_key())
+                .count(),
+            1
+        );
+        for other in CREDENTIAL_ALLOWLIST_PRIVATE_FETCH {
+            if other != kind.env_key() {
+                assert!(!has(&child, other), "ambient {other} leaked");
+            }
+        }
+        assert!(!format!("{command:?}").contains(&token));
+        assert!(
+            !command
+                .argv()
+                .iter()
+                .any(|arg| arg == &OsString::from(&token))
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn private_fetch_rejects_relative_config_and_unsafe_credentials() {
     let relative = IsolatedCommand::private_fetch(
         "git",
