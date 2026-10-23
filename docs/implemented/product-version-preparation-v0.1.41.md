@@ -15,7 +15,8 @@ v0.1.41 ships everything merged since v0.1.40:
   Every other answer still fails closed.
 - Empty CI run inventory retries and a cold planning budget (#353).
 - The owner mise and hk standard (#348).
-- Playwright locks the browsers a member's suites declare (#356).
+- Playwright locks the browsers a member's suites declare (#356) and installs
+  WebKit and Firefox system libraries on hosted runners (#358).
 
 The root workspace version and exact internal path requirements advance from
 0.1.40 to 0.1.41. Cargo controls the lock update: only the fourteen workspace
