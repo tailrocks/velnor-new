@@ -14,9 +14,7 @@
 
 use std::collections::BTreeSet;
 
-use velnor_actions_contract::config::project_tool_refs::{
-    PROJECT_TOOLS_STEP_NAME, project_tool_ref_names, project_tool_refs_to_expressions,
-};
+use velnor_actions_contract::config::project_tool_refs::PROJECT_TOOLS_STEP_NAME;
 use velnor_actions_contract::config::project_tool_resolver::project_tool_resolver_script;
 
 use crate::{RenderError, setup::MISE_ACTION_NAME, yaml::Yaml};
@@ -24,6 +22,12 @@ use crate::{RenderError, setup::MISE_ACTION_NAME, yaml::Yaml};
 #[path = "project_tool_resolver_quote.rs"]
 mod quote;
 use quote::quote_run_refs;
+
+#[path = "project_tool_resolver_tree.rs"]
+mod tree;
+use tree::{names, rewrite_mappings, scalar};
+#[path = "project_tool_resolver_verifier.rs"]
+mod verifier;
 
 /// Apply the canonical shell quoting used when a `run:` scalar references a
 /// project-declared tool version.
@@ -49,14 +53,14 @@ pub fn quote_project_tool_run_refs(text: &str) -> Result<String, RenderError> {
 /// version without preceding Mise and checkout steps, an earlier step reads
 /// one, or workflow/job env carries one outside `RUSTUP_TOOLCHAIN`.
 pub(crate) fn bind_workflow(document: &mut Yaml) -> Result<(), RenderError> {
-    let has_verifier = contains_verifier_step(document);
+    let has_verifier = verifier::contains_verifier_step(document);
     let Yaml::Map(entries) = document else {
         return Ok(());
     };
     if has_verifier
         && entries
             .iter()
-            .any(|(key, value)| key == "env" && has_trusted_environment_override(value))
+            .any(|(key, value)| key == "env" && verifier::has_trusted_environment_override(value))
     {
         return Err(invalid("workflow:verifier_trusted_environment_override"));
     }
@@ -82,8 +86,8 @@ pub(crate) fn bind_workflow(document: &mut Yaml) -> Result<(), RenderError> {
 }
 
 fn bind_job(id: &str, job: &mut Yaml) -> Result<(), RenderError> {
-    let has_verifier = contains_verifier_step(job);
-    if has_verifier && has_verifier_job_environment_override(job) {
+    let has_verifier = verifier::contains_verifier_step(job);
+    if has_verifier && verifier::has_verifier_job_environment_override(job) {
         return Err(invalid(&format!(
             "{id}:verifier_trusted_environment_override"
         )));
@@ -144,7 +148,7 @@ fn bind_job(id: &str, job: &mut Yaml) -> Result<(), RenderError> {
     let verifier_positions = steps
         .iter()
         .enumerate()
-        .filter_map(|(index, step)| verifier_action_ref(step).map(|_| index))
+        .filter_map(|(index, step)| verifier::verifier_action_ref(step).map(|_| index))
         .collect::<Vec<_>>();
     let insertion = prerequisites + 1;
     if verifier_positions
@@ -181,44 +185,7 @@ pub(crate) fn bind_verifier_composite(
     document: &mut Yaml,
     expected_reference: &str,
 ) -> Result<(), RenderError> {
-    let expected = BTreeSet::from([expected_reference.to_owned()]);
-    let found = names(document);
-    // A project-declared verifier version has exactly one reference and is
-    // rewritten to the caller's env binding. A pinned catalog has no project
-    // references at all; its exact literal body is checked by the orchestrator
-    // audit. Any partial or unrelated reference remains invalid.
-    if found.is_empty() {
-        return Ok(());
-    }
-    if found != expected {
-        return Err(invalid("verifier_composite_tool_binding"));
-    }
-    rewrite_mappings(document, false)
-}
-
-fn verifier_action_ref(step: &Yaml) -> Option<&'static str> {
-    let (Yaml::Map(fields)
-    | Yaml::AnchoredMap {
-        entries: fields, ..
-    }) = step
-    else {
-        return None;
-    };
-    fields
-        .iter()
-        .find_map(|(key, value)| (key == "uses").then(|| scalar(value)))
-        .flatten()
-        .and_then(verifier_action_ref_name)
-}
-
-fn verifier_action_ref_name(uses: &str) -> Option<&'static str> {
-    if velnor_actions_contract::workflow::RUST_VERIFIER_USES.contains(&uses) {
-        Some("VELNOR_TOOL_RUST")
-    } else if uses == crate::verifier_composite::VERIFY_JACTIONLINT_USES {
-        Some("VELNOR_TOOL_JACTIONLINT")
-    } else {
-        None
-    }
+    verifier::bind_verifier_composite(document, expected_reference)
 }
 
 fn hoist_early_rustup(id: &str, steps: &mut [Yaml]) -> Result<bool, RenderError> {
@@ -330,7 +297,7 @@ fn resolver_step(
             super::document_steps::string_map_yaml(&env),
         ));
         fields.push(("shell".to_owned(), Yaml::str(crate::VERIFY_SHELL)));
-        let script = trusted_resolver_script(referenced, export_rustup)?;
+        let script = verifier::trusted_resolver_script(referenced, export_rustup)?;
         fields.push(("run".to_owned(), resolver_run(script)));
     } else {
         fields.push((
@@ -341,89 +308,12 @@ fn resolver_step(
     Ok(Yaml::Map(fields))
 }
 
-fn trusted_resolver_script(
-    referenced: &BTreeSet<String>,
-    export_rustup: bool,
-) -> Result<String, RenderError> {
-    const ORIGINAL: &str = r#"velnor_mise() { mise --no-config --no-env --no-hooks "$@"; }"#;
-    const TRUSTED: &str = r#"velnor_mise() { mise_bin="${HOME:?missing HOME}/.local/share/mise/bin/mise"; [ -f "$mise_bin" ] && [ -x "$mise_bin" ] && [ ! -L "$mise_bin" ] || velnor_fail "trusted Mise executable missing: $mise_bin"; MISE_DATA_DIR="${HOME:?missing HOME}/.local/share/mise" "$mise_bin" --no-config --no-env --no-hooks "$@"; }"#;
-    let mut script = project_tool_resolver_script(referenced, export_rustup);
-    if script.matches(ORIGINAL).count() != 1 {
-        return Err(invalid("verifier_resolver_mise_binding_shape"));
-    }
-    script = script.replace(ORIGINAL, TRUSTED);
-    Ok(format!(
-        "{} PATH={}; export PATH; {script}",
-        crate::toolchain_env::credential_unset_prelude(),
-        crate::VERIFY_PATH
-    ))
-}
-
 fn resolver_run(script: String) -> Yaml {
     // jactionlint's `github-env` audit (which honours zizmor annotations)
     // checks every composite and privileged job `GITHUB_ENV` write; this one
     // appends only digits-and-dots values and lock digests (64 hex
     // characters or `unlocked`) the script validated.
     Yaml::annotated(script, "zizmor: ignore[github-env]")
-}
-
-fn contains_verifier_step(node: &Yaml) -> bool {
-    match node {
-        Yaml::Seq(items) => items.iter().any(contains_verifier_step),
-        Yaml::Map(fields)
-        | Yaml::AnchoredMap {
-            entries: fields, ..
-        } => {
-            let is_verifier = fields.iter().any(|(key, value)| {
-                key == "name"
-                    && scalar(value).is_some_and(|name| {
-                        matches!(
-                            name,
-                            "Verify restored Rust toolchain"
-                                | crate::VERIFY_RUST_TOOLCHAIN_STEP
-                                | "Verify jactionlint"
-                        )
-                    })
-            }) || fields.iter().any(|(key, value)| {
-                key == "uses"
-                    && scalar(value).is_some_and(|uses| verifier_action_ref_name(uses).is_some())
-            });
-            is_verifier
-                || fields
-                    .iter()
-                    .any(|(_, value)| contains_verifier_step(value))
-        }
-        _ => false,
-    }
-}
-
-fn has_trusted_environment_override(node: &Yaml) -> bool {
-    let (Yaml::Map(fields)
-    | Yaml::AnchoredMap {
-        entries: fields, ..
-    }) = node
-    else {
-        return false;
-    };
-    fields.iter().any(|(key, _)| {
-        matches!(
-            key.as_str(),
-            "HOME" | "MISE_DATA_DIR" | "XDG_DATA_HOME" | "PATH" | "BASH_ENV" | "ENV"
-        )
-    })
-}
-
-fn has_verifier_job_environment_override(job: &Yaml) -> bool {
-    let (Yaml::Map(fields)
-    | Yaml::AnchoredMap {
-        entries: fields, ..
-    }) = job
-    else {
-        return false;
-    };
-    fields
-        .iter()
-        .any(|(key, value)| key == "env" && has_trusted_environment_override(value))
 }
 
 /// Whether `step` is the generated resolver step.
@@ -470,92 +360,6 @@ fn uses_starts_with(step: &Yaml, prefix: &str) -> bool {
     fields.iter().any(|(key, value)| {
         key == "uses" && scalar(value).is_some_and(|uses| uses.starts_with(prefix))
     })
-}
-
-/// Rewrite every non-`run` scalar to the expression form and quote every
-/// `run` reference as one shell word ([`quote_run_refs`]).
-fn rewrite_mappings(node: &mut Yaml, in_run: bool) -> Result<(), RenderError> {
-    let rewrite = |text: &mut String| -> Result<(), RenderError> {
-        *text = if in_run {
-            quote_run_refs(text)?
-        } else {
-            project_tool_refs_to_expressions(text)
-        };
-        Ok(())
-    };
-    match node {
-        Yaml::Str(text) | Yaml::Quoted(text) => rewrite(text)?,
-        Yaml::Annotated { value, .. } | Yaml::AnchoredScalar { value, .. } => rewrite(value)?,
-        Yaml::Flow(items) => {
-            for item in items {
-                rewrite(item)?;
-            }
-        }
-        Yaml::FlowMap(pairs) => {
-            for (_, value) in pairs {
-                rewrite(value)?;
-            }
-        }
-        Yaml::Seq(items) => {
-            for item in items {
-                rewrite_mappings(item, in_run)?;
-            }
-        }
-        Yaml::Map(pairs) | Yaml::AnchoredMap { entries: pairs, .. } => {
-            for (key, value) in pairs {
-                rewrite_mappings(value, key == "run")?;
-            }
-        }
-        Yaml::Null | Yaml::Bool(_) | Yaml::Int(_) | Yaml::Alias(_) => {}
-    }
-    Ok(())
-}
-
-/// Project reference names anywhere under `node`.
-fn names(node: &Yaml) -> BTreeSet<String> {
-    let mut out = BTreeSet::new();
-    collect(node, &mut out);
-    out
-}
-
-fn add(out: &mut BTreeSet<String>, text: &str) {
-    out.extend(project_tool_ref_names(text).into_iter().map(str::to_owned));
-}
-
-fn collect(node: &Yaml, out: &mut BTreeSet<String>) {
-    match node {
-        Yaml::Str(text) | Yaml::Quoted(text) => add(out, text),
-        Yaml::Annotated { value, .. } | Yaml::AnchoredScalar { value, .. } => add(out, value),
-        Yaml::Flow(items) => {
-            for item in items {
-                add(out, item);
-            }
-        }
-        Yaml::FlowMap(pairs) => {
-            for (_, value) in pairs {
-                add(out, value);
-            }
-        }
-        Yaml::Seq(items) => {
-            for item in items {
-                collect(item, out);
-            }
-        }
-        Yaml::Map(pairs) | Yaml::AnchoredMap { entries: pairs, .. } => {
-            for (_, value) in pairs {
-                collect(value, out);
-            }
-        }
-        Yaml::Null | Yaml::Bool(_) | Yaml::Int(_) | Yaml::Alias(_) => {}
-    }
-}
-
-fn scalar(node: &Yaml) -> Option<&str> {
-    match node {
-        Yaml::Str(text) | Yaml::Quoted(text) => Some(text),
-        Yaml::Annotated { value, .. } | Yaml::AnchoredScalar { value, .. } => Some(value),
-        _ => None,
-    }
 }
 
 pub(super) fn invalid(context: &str) -> RenderError {
