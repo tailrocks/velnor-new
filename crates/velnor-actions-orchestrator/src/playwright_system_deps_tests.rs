@@ -228,8 +228,11 @@ fn a_first_success_runs_once_and_a_failure_then_success_runs_twice() {
 fn two_failures_stop_at_two_with_the_last_error() {
     let (result, runs) = scripted(vec![Ok(false), Err(spawn_failed("timeout_after_secs:480"))]);
     assert_eq!(runs, 2);
-    let error = result.expect_err("two failures").to_string();
-    assert!(error.contains("timeout_after_secs:480"), "{error}");
+    assert!(matches!(
+        result.expect_err("two failures"),
+        OrchestratorError::Internal { problem }
+            if problem == "playwright_system_deps_spawn:spawn_failed: mise: timeout_after_secs:480"
+    ));
 }
 
 #[test]
@@ -244,6 +247,9 @@ fn a_cleaned_up_timeout_retries_and_a_failed_cleanup_never_does() {
         Ok(true),
     ]);
     assert_eq!(runs, 1, "the previous process group may still run");
-    let error = result.expect_err("cleanup failure is terminal").to_string();
-    assert!(error.contains(";cleanup_failed:reap: EPERM"), "{error}");
+    assert!(matches!(
+        result.expect_err("cleanup failure is terminal"),
+        OrchestratorError::Internal { problem }
+            if problem == "playwright_system_deps_spawn:spawn_failed: mise: timeout_after_secs:480;cleanup_failed:reap: EPERM"
+    ));
 }
