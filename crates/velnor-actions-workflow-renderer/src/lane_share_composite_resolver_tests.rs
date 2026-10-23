@@ -123,7 +123,7 @@ fn write_fake_mise(root: &Path, interpreter: &str) -> Result<(PathBuf, PathBuf),
     fs::write(
         &executable,
         format!(
-            "#!{interpreter}\nset -eu\nprintf '%s|%s|%s\\n' \"$0\" \"$MISE_DATA_DIR\" \"$*\" >> \"$MISE_AUDIT\"\nenv > \"$MISE_ENV_AUDIT\"\ncommand -v env >> \"$MISE_COMMAND_AUDIT\"\ncommand -v sh >> \"$MISE_COMMAND_AUDIT\"\nsh -c 'printf \"nested-shell-ok\\n\"' >> \"$MISE_NESTED_AUDIT\"\ncase \"$*\" in *' config get -f '*) case \"$*\" in *' tools') printf 'rust = \\\"1.99.1\\\"\\n' ;; esac ;; *) exit 93 ;; esac\n"
+            "#!{interpreter}\nset -eu\nprintf '%s|%s|%s\\n' \"$0\" \"$MISE_DATA_DIR\" \"$*\" >> \"$MISE_AUDIT\"\nenv > \"$MISE_ENV_AUDIT\"\ncommand -v env >> \"$MISE_COMMAND_AUDIT\"\ncommand -v sh >> \"$MISE_COMMAND_AUDIT\"\nsh -c 'printf \"nested-shell-ok\\n\"' >> \"$MISE_NESTED_AUDIT\"\ncase \"$*\" in *' config get -f '*) case \"$*\" in *' tools') printf '%s\\n' 'rust = \"1.99.1\"' ;; esac ;; *) exit 93 ;; esac\n"
         ),
     )?;
     let mut permissions = fs::metadata(&executable)?.permissions();
