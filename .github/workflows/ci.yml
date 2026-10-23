@@ -537,7 +537,8 @@ jobs:
       sources_key: ${{ steps.cache-keys.outputs.sources_key }}
       sources_restore_keys: ${{ steps.cache-keys.outputs.sources_restore_keys }}
     steps:
-      - name: Record optional cache budget
+      - &s39
+        name: Record optional cache budget
         id: velnor-cache-clock
         run: *r1
         env:
@@ -642,7 +643,7 @@ jobs:
         id: velnor-optional-sources-save-budget
         if: always() && !cancelled() && steps.sources-fetch.outcome == 'success' && steps.cache-keys.outputs.sources_save == 'true' && steps.sources-restore.outputs.cache-hit != 'true' && !endsWith(steps.sources-restore.outputs.cache-matched-key, steps.cache-keys.outputs.sources_snapshot)
         run: *r2
-        env: &m28
+        env: &m29
           VELNOR_CACHE_JOB_SECONDS: "900"
           VELNOR_CACHE_STARTED: ${{ steps.velnor-cache-clock.outputs.started }}
           VELNOR_CACHE_DEADLINE: ${{ steps.velnor-cache-clock.outputs.deadline }}
@@ -659,11 +660,12 @@ jobs:
       - name: Report optional cache save failure
         if: always() && !cancelled() && steps.velnor-optional-sources-save.outcome == 'failure'
         run: *r3
-      - name: Admit optional cache save
+      - &s40
+        name: Admit optional cache save
         id: velnor-optional-tools-save-budget
         if: success() && ((github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true) || (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork)) && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         run: *r2
-        env: *m28
+        env: *m29
       - *s6
       - *s7
       - *s32
@@ -756,18 +758,13 @@ jobs:
   rust-velnor-actions-actionlint:
     name: Rust / velnor-actions-actionlint
     runs-on: ubuntu-26.04
-    timeout-minutes: 8
+    timeout-minutes: 15
     env: *m12
     needs:
       - plan
     if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-actionlint,')"
     steps:
-      - &s39
-        name: Record optional cache budget
-        id: velnor-cache-clock
-        run: *r1
-        env:
-          VELNOR_CACHE_JOB_SECONDS: "480"
+      - *s39
       - *s1
       - *s3
       - *s14
@@ -823,23 +820,14 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - &s40
-        name: Admit optional cache save
-        id: velnor-optional-tools-save-budget
-        if: success() && ((github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true) || (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork)) && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        run: *r2
-        env:
-          VELNOR_CACHE_JOB_SECONDS: "480"
-          VELNOR_CACHE_STARTED: ${{ steps.velnor-cache-clock.outputs.started }}
-          VELNOR_CACHE_DEADLINE: ${{ steps.velnor-cache-clock.outputs.deadline }}
-          VELNOR_CACHE_REQUIRED_SECONDS: "90"
+      - *s40
       - *s6
       - *s7
       - *s32
   rust-velnor-actions-ansible:
     name: Rust / velnor-actions-ansible
     runs-on: ubuntu-26.04
-    timeout-minutes: 8
+    timeout-minutes: 15
     env: *m12
     needs:
       - plan
@@ -904,7 +892,7 @@ jobs:
   rust-velnor-actions-bun:
     name: Rust / velnor-actions-bun
     runs-on: ubuntu-26.04
-    timeout-minutes: 8
+    timeout-minutes: 15
     env: *m12
     needs:
       - plan
@@ -969,7 +957,7 @@ jobs:
   rust-velnor-actions-cli:
     name: Rust / velnor-actions-cli
     runs-on: ubuntu-26.04
-    timeout-minutes: 8
+    timeout-minutes: 15
     env: *m12
     needs:
       - plan
@@ -1048,7 +1036,7 @@ jobs:
   rust-velnor-actions-contract:
     name: Rust / velnor-actions-contract
     runs-on: ubuntu-26.04
-    timeout-minutes: 8
+    timeout-minutes: 15
     env: *m12
     needs:
       - plan
@@ -1113,7 +1101,7 @@ jobs:
   rust-velnor-actions-dbt:
     name: Rust / velnor-actions-dbt
     runs-on: ubuntu-26.04
-    timeout-minutes: 8
+    timeout-minutes: 15
     env: *m12
     needs:
       - plan
@@ -1178,7 +1166,7 @@ jobs:
   rust-velnor-actions-gradle:
     name: Rust / velnor-actions-gradle
     runs-on: ubuntu-26.04
-    timeout-minutes: 8
+    timeout-minutes: 15
     env: *m12
     needs:
       - plan
@@ -1243,7 +1231,7 @@ jobs:
   rust-velnor-actions-mise:
     name: Rust / velnor-actions-mise
     runs-on: ubuntu-26.04
-    timeout-minutes: 8
+    timeout-minutes: 15
     env: *m12
     needs:
       - plan
@@ -1321,7 +1309,7 @@ jobs:
   rust-velnor-actions-orchestrator:
     name: Rust / velnor-actions-orchestrator
     runs-on: ubuntu-26.04
-    timeout-minutes: 8
+    timeout-minutes: 15
     env: *m12
     needs:
       - plan
@@ -1388,7 +1376,7 @@ jobs:
   rust-velnor-actions-rust:
     name: Rust / velnor-actions-rust
     runs-on: ubuntu-26.04
-    timeout-minutes: 8
+    timeout-minutes: 15
     env: *m12
     needs:
       - plan
@@ -1453,7 +1441,7 @@ jobs:
   rust-velnor-actions-tofu:
     name: Rust / velnor-actions-tofu
     runs-on: ubuntu-26.04
-    timeout-minutes: 8
+    timeout-minutes: 15
     env: *m12
     needs:
       - plan
@@ -1518,7 +1506,7 @@ jobs:
   rust-velnor-actions-workflow-renderer:
     name: Rust / velnor-actions-workflow-renderer
     runs-on: ubuntu-26.04
-    timeout-minutes: 8
+    timeout-minutes: 15
     env: *m12
     needs:
       - plan
@@ -1583,7 +1571,7 @@ jobs:
   rust-velnor-resource-probe:
     name: Rust / velnor-resource-probe
     runs-on: ubuntu-26.04
-    timeout-minutes: 8
+    timeout-minutes: 15
     env: *m12
     needs:
       - plan
@@ -1648,7 +1636,7 @@ jobs:
   rust-velnor-runner-attestation:
     name: Rust / velnor-runner-attestation
     runs-on: ubuntu-26.04
-    timeout-minutes: 8
+    timeout-minutes: 15
     env: *m12
     needs:
       - plan
@@ -1709,7 +1697,7 @@ jobs:
   rust-velnor-runner-cli:
     name: Rust / velnor-runner-cli
     runs-on: ubuntu-26.04
-    timeout-minutes: 8
+    timeout-minutes: 15
     env: *m12
     needs:
       - plan
@@ -1774,7 +1762,7 @@ jobs:
   rust-velnor-runner-core:
     name: Rust / velnor-runner-core
     runs-on: ubuntu-26.04
-    timeout-minutes: 8
+    timeout-minutes: 15
     env: *m12
     needs:
       - plan
@@ -1839,7 +1827,7 @@ jobs:
   rust-velnor-runner-github:
     name: Rust / velnor-runner-github
     runs-on: ubuntu-26.04
-    timeout-minutes: 8
+    timeout-minutes: 15
     env: *m12
     needs:
       - plan
@@ -1904,7 +1892,7 @@ jobs:
   rust-velnor-runner-host:
     name: Rust / velnor-runner-host
     runs-on: ubuntu-26.04
-    timeout-minutes: 8
+    timeout-minutes: 15
     env: *m12
     needs:
       - plan
