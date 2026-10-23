@@ -25,5 +25,15 @@ pub(super) fn validate(workflow: &WorkflowConfig, file: &str) -> Result<(), Cont
             ));
         }
     }
+    for (index, suite) in workflow.task_suites.iter().enumerate() {
+        if let Some(snapshot) = &suite.evidence_snapshot {
+            snapshot.validate_inventory(
+                &workflow.task_suites,
+                &suite.id,
+                file,
+                &format!("workflow.task_suites[{index}].evidence_snapshot"),
+            )?;
+        }
+    }
     Ok(())
 }

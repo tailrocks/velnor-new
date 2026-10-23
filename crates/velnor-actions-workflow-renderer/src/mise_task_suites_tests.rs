@@ -1,7 +1,11 @@
 use super::*;
 use std::error::Error;
 
-use velnor_actions_contract::{MiseTaskSource, RustSuiteArtifactWhen, VerificationRunner};
+use velnor_actions_contract::{
+    GitHubEvidenceArtifactSource, GitHubEvidenceSnapshotInput, GitHubEvidenceWorkflowSource,
+    MiseTaskSource, ReleaseManifest, RustSuiteArtifact, RustSuiteArtifactWhen, TargetRecord,
+    VerificationRunner,
+};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -25,6 +29,7 @@ fn policy(id: &str, events: Vec<MiseTaskSuiteEvent>, schedule: Vec<String>) -> M
             events,
             schedule,
             artifacts: Vec::new(),
+            evidence_snapshot: None,
         },
         runner_label: "ubuntu-26.04".to_owned(),
         mise_setup: setup(),
@@ -32,7 +37,28 @@ fn policy(id: &str, events: Vec<MiseTaskSuiteEvent>, schedule: Vec<String>) -> M
         mise_config_sha256: Some("c".repeat(64)),
         mise_lock_sha256: None,
         rust_toolchain_sha256: None,
+        evidence_fetch_spec: None,
+        evidence_helper: None,
     }
+}
+
+#[test]
+fn no_evidence_push_workflow_matches_pre_feature_bytes() -> TestResult {
+    let mut push = policy("push-head", vec![MiseTaskSuiteEvent::Push], Vec::new());
+    push.suite.artifacts.push(RustSuiteArtifact {
+        name: "ledger".to_owned(),
+        paths: vec!["target/evidence/ledger.jsonl".to_owned()],
+        when: RustSuiteArtifactWhen::Success,
+        retention_days: 45,
+    });
+    let mut render_spec = spec(vec![push]);
+    render_spec.generator_version = "0.1.0".to_owned();
+    let rendered = render_mise_task_suites(&render_spec)?;
+    assert_eq!(
+        rendered[0].bytes.as_bytes(),
+        include_bytes!("mise_task_suites_legacy_push.golden.yml")
+    );
+    Ok(())
 }
 
 fn spec(suites: Vec<MiseTaskSuitePolicy>) -> MiseTaskSuitesRenderSpec {
@@ -40,8 +66,52 @@ fn spec(suites: Vec<MiseTaskSuitePolicy>) -> MiseTaskSuitesRenderSpec {
         suites,
         default_branch: "main".to_owned(),
         checkout_uses: crate::steps::CHECKOUT_USES.to_owned(),
-        generator_version: "0.1.0".to_owned(),
+        generator_version: env!("CARGO_PKG_VERSION").to_owned(),
     }
+}
+
+fn evidence_helper() -> EvidenceHelperProvenance {
+    let version = env!("CARGO_PKG_VERSION");
+    let manifest = evidence_helper_manifest();
+    EvidenceHelperProvenance::from_release_manifest(&manifest, "ubuntu-26.04", version)
+        .expect("verified evidence helper")
+}
+
+fn evidence_suites() -> Vec<MiseTaskSuitePolicy> {
+    let mut collector = policy(
+        "collector",
+        vec![MiseTaskSuiteEvent::Schedule],
+        vec!["0 3 * * *".to_owned()],
+    );
+    let input = GitHubEvidenceSnapshotInput {
+        window_days: 7,
+        workflow_sources: vec![
+            GitHubEvidenceWorkflowSource::PrimaryCi,
+            GitHubEvidenceWorkflowSource::TaskSuite {
+                suite_id: "push-head".to_owned(),
+            },
+        ],
+        artifact_sources: vec![GitHubEvidenceArtifactSource {
+            suite_id: "push-head".to_owned(),
+            artifact_name: "ledger".to_owned(),
+        }],
+    };
+    let mut producer = policy("push-head", vec![MiseTaskSuiteEvent::Push], Vec::new());
+    producer.suite.artifacts.push(RustSuiteArtifact {
+        name: "ledger".to_owned(),
+        paths: vec!["target/evidence/push-ledger.jsonl".to_owned()],
+        when: RustSuiteArtifactWhen::Always,
+        retention_days: 45,
+    });
+    let inventory = [collector.suite.clone(), producer.suite.clone()];
+    collector.evidence_fetch_spec = Some(
+        input
+            .resolve_spec(&inventory, &collector.suite.id, "main")
+            .expect("spec"),
+    );
+    collector.suite.evidence_snapshot = Some(input);
+    collector.evidence_helper = Some(evidence_helper());
+    vec![collector, producer]
 }
 
 #[test]
@@ -97,6 +167,27 @@ fn mixed_event_companion_gates_jobs_and_has_no_concurrency() -> TestResult {
     assert!(!yaml.contains("GH_TOKEN: ${{ github.token }}"));
     assert!(!yaml.contains("GITHUB_TOKEN: ${{ github.token }}"));
     Ok(())
+}
+
+fn evidence_helper_manifest() -> ReleaseManifest {
+    let version = env!("CARGO_PKG_VERSION");
+    ReleaseManifest {
+        schema: ReleaseManifest::SCHEMA,
+        version: version.to_owned(),
+        repository: velnor_actions_contract::EXPECTED_REPOSITORY.to_owned(),
+        commit: "b".repeat(40),
+        targets: velnor_actions_contract::SUPPORTED_TARGETS
+            .iter()
+            .map(|target| TargetRecord {
+                target: (*target).to_owned(),
+                artifact: format!(
+                    "https://github.com/{}/releases/download/v{version}/velnor-actions-{version}-{target}",
+                    velnor_actions_contract::EXPECTED_REPOSITORY
+                ),
+                sha256: "a".repeat(64),
+            })
+            .collect(),
+    }
 }
 
 #[test]
@@ -201,3 +292,6 @@ fn suite_tool_bootstrap_rejects_missing_lock_for_selected_tools() {
     });
     assert!(render_mise_task_suites(&spec(vec![suite])).is_err());
 }
+
+#[path = "mise_task_suites_evidence_tests.rs"]
+mod evidence_tests;

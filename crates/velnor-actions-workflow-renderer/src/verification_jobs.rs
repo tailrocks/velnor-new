@@ -68,7 +68,8 @@ pub use image_build_jobs::{
     BUILDKIT_IMAGE, ImageBuildPolicy, artifact_name, artifact_path, build_image_build_job,
 };
 pub use mise_task_suites::{
-    MiseTaskSuitePolicy, MiseTaskSuitesRenderSpec, render_mise_task_suites,
+    EvidenceHelperProvenance, MiseTaskSuitePolicy, MiseTaskSuitesRenderSpec,
+    render_mise_task_suites,
 };
 pub use native_image_jobs::{NativeImageTaskPolicy, build_native_image_job};
 pub use playwright_install_step::{
@@ -116,6 +117,7 @@ pub(crate) struct MiseTaskBootstrapPolicy {
     pub(crate) rust_toolchain_sha256: Option<String>,
     pub(crate) root_prefix: &'static str,
     pub(crate) run_step_name: &'static str,
+    pub(crate) evidence_input: bool,
 }
 
 impl MiseTaskBootstrapPolicy {
@@ -131,6 +133,7 @@ impl MiseTaskBootstrapPolicy {
             rust_toolchain_sha256: policy.rust_toolchain_sha256.clone(),
             root_prefix: "verification",
             run_step_name: RUN_VERIFICATION_TASK_NAME,
+            evidence_input: false,
         }
     }
 }

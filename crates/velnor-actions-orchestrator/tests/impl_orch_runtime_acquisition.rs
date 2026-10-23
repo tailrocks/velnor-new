@@ -2,6 +2,21 @@
 
 use crate::impl_common::TestResult;
 
+#[path = "impl_orch_evidence_spec_legacy.rs"]
+mod evidence_spec_legacy;
+
+pub(crate) fn mask_resolved_evidence_spec_for_legacy_scan(
+    path: &std::path::Path,
+    orchestrator_src: &std::path::Path,
+    source: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    evidence_spec_legacy::mask_resolved_evidence_spec_for_legacy_scan(
+        path,
+        orchestrator_src,
+        source,
+    )
+}
+
 pub(crate) fn scrub_bound_acquisition(name: &str, code: &str) -> String {
     if name != "check_tool_acquire.rs" {
         return code.to_owned();

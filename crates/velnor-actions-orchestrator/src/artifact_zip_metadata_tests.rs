@@ -89,6 +89,7 @@ fn maximum_zip_comment_fits_fixed_tail_budget_for_every_profile() {
         ZipProfile::Recovery,
         ZipProfile::PreviewLeaf,
         ZipProfile::PreviewAggregate,
+        ZipProfile::Evidence,
     ] {
         let deadline = CheckDeadline::after(Duration::from_secs(5)).expect("deadline");
         let manifest = deadline
@@ -142,6 +143,7 @@ fn zip64_fixed_end_records_with_maximum_comment_fit_every_profile() {
         ZipProfile::Recovery,
         ZipProfile::PreviewLeaf,
         ZipProfile::PreviewAggregate,
+        ZipProfile::Evidence,
     ] {
         assert_eq!(
             manifest(&bytes, profile).expect("ZIP64 metadata"),
@@ -230,4 +232,22 @@ fn false_footer_storm_and_excessive_declared_entries_still_fail_closed() {
             "finite metadata work plus initial two seeks"
         );
     }
+
+    let mut evidence_storm = streaming_zip(usize::from(u16::MAX));
+    let comment = evidence_storm.len() - usize::from(u16::MAX);
+    for chunk in evidence_storm[comment..].as_chunks_mut::<22>().0 {
+        chunk.fill(255);
+        chunk[..4].copy_from_slice(b"PK\x05\x06");
+    }
+    let operations = Rc::new(Cell::new(0));
+    let input = Counted {
+        input: Cursor::new(evidence_storm),
+        bytes: Rc::new(Cell::new(0)),
+        operations: Rc::clone(&operations),
+    };
+    CheckDeadline::after(Duration::from_secs(5))
+        .expect("deadline")
+        .scope(|| drop(reader::open(input, ZipProfile::Evidence)))
+        .expect("scope");
+    assert!(operations.get() <= 256 + ZipProfile::Evidence.entries() * 32 + 2);
 }

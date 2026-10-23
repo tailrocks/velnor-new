@@ -10,8 +10,7 @@ use velnor_actions_actionlint::overrides::{
     ActionPinOverride as ApprovedOverride, ApprovedPinCatalog,
 };
 use velnor_actions_contract::{
-    BuildTaskRunner, GeneratorLock, RELEASE_MANIFEST_FILENAME, ReleaseManifest, ReleaseTarget,
-    Step, VelnorConfig, VerificationRunner, check_release_artifact,
+    BuildTaskRunner, GeneratorLock, ReleaseTarget, Step, VelnorConfig, VerificationRunner,
 };
 use velnor_actions_mise::MISE_VERSION;
 use velnor_actions_workflow_renderer::{
@@ -27,6 +26,11 @@ const MISE_ACTION_KEY: &str = "jdx/mise-action";
 use velnor_actions_workflow_renderer::setup::{
     MISE_BINARY_SHA256_LINUX_X64, MISE_BINARY_SHA256_MACOS_ARM64, MISE_BINARY_SHA256_MACOS_X64,
 };
+
+#[path = "pins_consumer_evidence.rs"]
+mod consumer_evidence;
+pub(crate) use consumer_evidence::consumer_evidence_helper;
+use consumer_evidence::validated_consumer_manifest;
 
 #[path = "pins_mise_pin_qualification.rs"]
 mod mise_pin_qualification;
@@ -178,39 +182,13 @@ fn consumer_acquire_for_target(
     version: &str,
     json: Option<&str>,
 ) -> Result<Step, OrchestratorError> {
-    let Some(json) = json else {
-        return Err(OrchestratorError::Contract {
-            problem: "consumer_requires_release_install:install an official velnor-actions release"
-                .to_owned(),
-        });
-    };
-    let manifest = ReleaseManifest::parse_json(json, RELEASE_MANIFEST_FILENAME)?;
-    manifest.validate(RELEASE_MANIFEST_FILENAME)?;
-    if manifest.version != version {
-        return Err(OrchestratorError::Contract {
-            problem: format!(
-                "release_manifest_version_mismatch:{}:{version}",
-                manifest.version
-            ),
-        });
-    }
-    crate::local_release_manifest::verify_current_exe_matches_consumer_manifest(&manifest)?;
+    let manifest = validated_consumer_manifest(target, version, json)?;
     let record =
         manifest
             .record_for_target(target.triple())
             .ok_or_else(|| OrchestratorError::Contract {
                 problem: format!("manifest_missing_target:{}", target.triple()),
             })?;
-    // Defense in depth: re-bind the consumed record's URL even though
-    // `validate` already bound every record (X1).
-    check_release_artifact(
-        &record.artifact,
-        &manifest.version,
-        &manifest.commit,
-        target.triple(),
-        RELEASE_MANIFEST_FILENAME,
-        "targets.artifact",
-    )?;
     acquire_step(
         &record.artifact,
         &record.sha256,
