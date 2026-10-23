@@ -48,7 +48,10 @@ impl PublishRole {
             Self::Authority | Self::BranchAuthority => 0,
             Self::TagRelease | Self::ArtifactBuild | Self::ImagePublish | Self::ImagePromote => 1,
             Self::ArtifactAttest => 2,
-            Self::ArtifactPublish | Self::NpmPublish => 3,
+            Self::ArtifactPublish => 3,
+            // After `ArtifactPublish`: with a Sigstore bundle, the npm push
+            // needs the job that recorded the bundle in the tag's release.
+            Self::NpmPublish => 4,
         }
     }
 

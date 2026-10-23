@@ -84,6 +84,8 @@ mod impl_renderer_private_sources;
 mod impl_renderer_protocol;
 #[path = "impl_renderer_publish_images.rs"]
 mod impl_renderer_publish_images;
+#[path = "impl_renderer_publish_sign.rs"]
+mod impl_renderer_publish_sign;
 #[path = "impl_renderer_publish_spec.rs"]
 mod impl_renderer_publish_spec;
 #[path = "impl_renderer_release_checkouts.rs"]

@@ -10,5 +10,9 @@ pub const RELEASE_PLZ_VERSION: &str = "0.3.172";
 pub const CRANE_VERSION: &str = "0.22.1";
 pub const BUN_VERSION: &str = "1.4.3";
 pub const COSIGN_VERSION: &str = "3.1.3";
+pub const COSIGN_LINUX_AMD64_BYTES: usize = 141_178_250;
 pub const COSIGN_LINUX_AMD64_SHA256: &str =
     "4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71";
+pub const COSIGN_LINUX_ARM64_BYTES: usize = 132_747_403;
+pub const COSIGN_LINUX_ARM64_SHA256: &str =
+    "c5d324e091826b0d7a78eb16fef316450b4eb9aaec045611c08ba06f5e73220a";
