@@ -82,6 +82,7 @@ mod impl_orch_gate;
 mod impl_orch_gen;
 mod impl_orch_gen2;
 mod impl_orch_gen_lfs;
+mod impl_orch_gen_qualification;
 mod impl_orch_gradle;
 mod impl_orch_install_sets;
 mod impl_orch_intake;
