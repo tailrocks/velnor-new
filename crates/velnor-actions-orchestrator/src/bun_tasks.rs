@@ -296,6 +296,7 @@ fn playwright_step(
         &workspace.root,
         version,
         &pin_list(&archives),
+        &names,
     )?))
 }
 

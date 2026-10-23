@@ -6,6 +6,8 @@ mod test_temp_dir;
 mod impl_adapter_wire_mise;
 #[path = "impl_mise.rs"]
 mod impl_mise;
+#[path = "impl_mise_app_token.rs"]
+mod impl_mise_app_token;
 #[path = "impl_mise_build.rs"]
 mod impl_mise_build;
 #[path = "impl_mise_cache.rs"]

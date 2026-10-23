@@ -63,6 +63,7 @@ fn request(dir: &Path, bytes: &[u8]) -> InstallRequest {
         root: "frontend".to_owned(),
         workspace: dir.join("work"),
         runner_temp: dir.join("temp"),
+        system_deps: Vec::new(),
     }
 }
 

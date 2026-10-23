@@ -6,7 +6,9 @@
 //! and `bun.lock` and refuses to run on any difference, downloads each archive
 //! from the pinned URL, verifies its SHA-256 before extracting, and extracts
 //! through the hardened archive reader. No credential is involved and no
-//! repository code runs; `playwright install --with-deps` never does.
+//! repository code runs; `playwright install --with-deps` never does. With
+//! `VELNOR_PLAYWRIGHT_SYSTEM_DEPS` it first installs those browsers' system
+//! libraries through the verified `playwright-core` (`playwright_system_deps.rs`).
 
 use std::ffi::OsString;
 use std::fs;
@@ -20,7 +22,7 @@ use velnor_actions_contract::config::playwright_lock::{
 };
 use velnor_actions_mise::{CheckDeadline, IsolatedCommand};
 use velnor_actions_workflow_renderer::verification_jobs::{
-    PLAYWRIGHT_PINS_ENV, PLAYWRIGHT_ROOT_ENV, PLAYWRIGHT_VERSION_ENV,
+    PLAYWRIGHT_PINS_ENV, PLAYWRIGHT_ROOT_ENV, PLAYWRIGHT_SYSTEM_DEPS_ENV, PLAYWRIGHT_VERSION_ENV,
 };
 
 use crate::OrchestratorError;
@@ -50,6 +52,9 @@ pub(crate) struct InstallRequest {
     pub(crate) root: String,
     pub(crate) workspace: PathBuf,
     pub(crate) runner_temp: PathBuf,
+    /// Browsers whose system libraries Playwright's `install-deps` installs
+    /// (sorted; empty for none).
+    pub(crate) system_deps: Vec<String>,
 }
 
 impl InstallRequest {
@@ -100,6 +105,9 @@ impl InstallRequest {
             root,
             workspace: absolute("GITHUB_WORKSPACE")?,
             runner_temp: absolute("RUNNER_TEMP")?,
+            system_deps: super::playwright_system_deps::parse_system_deps(
+                get(PLAYWRIGHT_SYSTEM_DEPS_ENV).as_deref(),
+            )?,
         })
     }
 
@@ -309,6 +317,17 @@ pub fn run_playwright_install() -> Result<(), OrchestratorError> {
     };
     let lock = read_playwright_lock(&request.workspace)?;
     let archives = verified_archives(&request, lock.as_ref(), &bun_lock)?;
+    if !request.system_deps.is_empty() {
+        let bun_version = get(super::playwright_system_deps::BUN_VERSION_ENV)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| internal("playwright_missing_env:VELNOR_TOOL_BUN"))?;
+        super::playwright_system_deps::install_system_deps(
+            &request,
+            &archives,
+            &Curl,
+            &super::playwright_system_deps::BunInstallDeps { bun_version },
+        )?;
+    }
     let fetched = install(&request, &archives, &Curl)?;
     println!(
         "velnor: playwright browsers ready ({} archives, {fetched} downloaded)",

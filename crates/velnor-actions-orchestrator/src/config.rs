@@ -32,6 +32,8 @@ pub(crate) mod playwright_install;
 pub(crate) mod playwright_lock;
 #[path = "playwright_resolve.rs"]
 pub(crate) mod playwright_resolve;
+#[path = "playwright_system_deps.rs"]
+pub(crate) mod playwright_system_deps;
 #[path = "private_fetch.rs"]
 pub(crate) mod private_fetch;
 #[path = "private_fetch_http.rs"]

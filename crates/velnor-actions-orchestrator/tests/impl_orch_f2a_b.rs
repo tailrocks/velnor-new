@@ -158,7 +158,8 @@ fn offline_deps_fail_closed_without_fetch() -> TestResult {
         // HD-7: the credentialed private-source fetch is a dedicated runtime
         // operation (`private-fetch-v1`) behind its own CLI gate; its three
         // modules the Bun registry phase (`bun-registry-install-v1`) and the Playwright browser install
-        // (`playwright-browsers-install-v1`) are the only product files exempt from the fetch-verb scan,
+        // (`playwright-browsers-install-v1`, with its system-dependency half) are the only product
+        // files exempt from the fetch-verb scan,
         // and `private_fetch_is_unreachable_from_analysis` pins that nothing
         // else in the crate calls into them.
         if matches!(
@@ -169,6 +170,7 @@ fn offline_deps_fail_closed_without_fetch() -> TestResult {
                 | "private_revoke.rs"
                 | "bun_registry_install.rs"
                 | "playwright_install.rs"
+                | "playwright_system_deps.rs"
         ) {
             continue;
         }
