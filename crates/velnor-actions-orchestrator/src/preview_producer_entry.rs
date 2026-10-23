@@ -28,6 +28,7 @@ mod context;
 mod execution;
 #[path = "preview_production_handoff.rs"]
 mod handoff;
+pub(crate) use handoff::write_upload;
 #[path = "preview_production_leaf_manifest.rs"]
 mod leaf_manifest;
 #[path = "preview_producer_proof.rs"]

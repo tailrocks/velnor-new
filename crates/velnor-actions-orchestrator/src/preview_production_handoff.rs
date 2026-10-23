@@ -144,7 +144,7 @@ pub(super) fn stage_asset(
 }
 
 /// Only newly created upload files receive the literal mode expected in service ZIPs.
-pub(super) fn write_upload(
+pub(crate) fn write_upload(
     path: &Path,
     bytes: &[u8],
     deadline: CheckDeadline,
