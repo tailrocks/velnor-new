@@ -975,14 +975,14 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-actionlint"
-version = "0.1.41"
+version = "0.1.43"
 dependencies = [
  "velnor-actions-contract",
 ]
 
 [[package]]
 name = "velnor-actions-ansible"
-version = "0.1.41"
+version = "0.1.43"
 dependencies = [
  "thiserror",
  "toml",
@@ -991,7 +991,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-bun"
-version = "0.1.41"
+version = "0.1.43"
 dependencies = [
  "serde_json",
  "thiserror",
@@ -1001,7 +1001,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-cli"
-version = "0.1.41"
+version = "0.1.43"
 dependencies = [
  "clap",
  "proc-macro2",
@@ -1014,7 +1014,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-contract"
-version = "0.1.41"
+version = "0.1.43"
 dependencies = [
  "blake3",
  "serde",
@@ -1025,7 +1025,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-dbt"
-version = "0.1.41"
+version = "0.1.43"
 dependencies = [
  "thiserror",
  "toml",
@@ -1034,7 +1034,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-freshness"
-version = "0.1.41"
+version = "0.1.43"
 dependencies = [
  "flate2",
  "rustix",
@@ -1048,14 +1048,14 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-gradle"
-version = "0.1.41"
+version = "0.1.43"
 dependencies = [
  "sha2",
 ]
 
 [[package]]
 name = "velnor-actions-mise"
-version = "0.1.41"
+version = "0.1.43"
 dependencies = [
  "rustix",
  "serde",
@@ -1067,15 +1067,15 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator"
-version = "0.1.41"
+version = "0.1.43"
 dependencies = [
  "base64",
  "flate2",
  "lzma-rust2",
  "proc-macro2",
+ "rustix",
  "rustls",
  "rustls-native-certs",
- "rustix",
  "serde",
  "serde_json",
  "sha1-checked",
@@ -1101,7 +1101,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-rust"
-version = "0.1.41"
+version = "0.1.43"
 dependencies = [
  "serde",
  "serde_json",
@@ -1111,7 +1111,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-tofu"
-version = "0.1.41"
+version = "0.1.43"
 dependencies = [
  "hcl-rs",
  "serde",
@@ -1121,7 +1121,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-workflow-renderer"
-version = "0.1.41"
+version = "0.1.43"
 dependencies = [
  "velnor-actions-actionlint",
  "velnor-actions-contract",
@@ -1130,7 +1130,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-archive-guard"
-version = "0.1.41"
+version = "0.1.43"
 dependencies = [
  "flate2",
  "sha2",

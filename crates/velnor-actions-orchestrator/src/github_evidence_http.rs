@@ -361,12 +361,17 @@ fn build_agent() -> Result<ureq::Agent, String> {
         .root_certs(roots.into())
         .unversioned_rustls_crypto_provider(Arc::new(rustls::crypto::ring::default_provider()))
         .build();
-    let config = ureq::Agent::config_builder()
+    let config = agent_config(tls);
+    Ok(ureq::Agent::new_with_config(config))
+}
+
+fn agent_config(tls: ureq::tls::TlsConfig) -> ureq::config::Config {
+    ureq::Agent::config_builder()
         .tls_config(tls)
+        .proxy(None)
         .timeout_global(Some(std::time::Duration::from_secs(30)))
         .max_redirects(0)
-        .build();
-    Ok(ureq::Agent::new_with_config(config))
+        .build()
 }
 
 fn hex_lower(bytes: &[u8]) -> String {

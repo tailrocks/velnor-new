@@ -3,6 +3,7 @@
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use velnor_actions_mise::CheckDeadline;
 
 use velnor_actions_contract::GitHubEvidenceFetchSpecV1;
 
@@ -19,12 +20,14 @@ const SPEC_LIMIT: usize = 64 * 1024;
 mod tests;
 
 pub(super) fn run() -> Result<(), OrchestratorError> {
+    let deadline = files::new_deadline()?;
     let spec = read_spec()?;
-    let workspace = workspace_root()?;
-    let bundle = bundle_root()?;
-    let snapshot = files::load_snapshot(&bundle, &spec)?;
+    files::check_deadline(deadline)?;
+    let workspace = workspace_root(deadline)?;
+    let bundle = bundle_root(deadline)?;
+    let snapshot = files::load_snapshot(&bundle, &spec, deadline)?;
     let context = ImportContext::from_env()?;
-    import_snapshot(&spec, &bundle, &workspace, &snapshot, &context)
+    import_snapshot(&spec, &bundle, &workspace, &snapshot, &context, deadline)
 }
 
 #[cfg(test)]
@@ -34,8 +37,9 @@ pub(super) fn import_with_context(
     workspace: &Path,
     context: &ImportContext,
 ) -> Result<(), OrchestratorError> {
-    let snapshot = files::load_snapshot(bundle, spec)?;
-    import_snapshot(spec, bundle, workspace, &snapshot, context)
+    let deadline = files::new_deadline()?;
+    let snapshot = files::load_snapshot(bundle, spec, deadline)?;
+    import_snapshot(spec, bundle, workspace, &snapshot, context, deadline)
 }
 
 fn import_snapshot(
@@ -44,10 +48,12 @@ fn import_snapshot(
     workspace: &Path,
     snapshot: &velnor_actions_contract::GitHubEvidenceSnapshotV1,
     context: &ImportContext,
+    deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
+    files::check_deadline(deadline)?;
     validate_context(spec, snapshot, context)?;
-    files::verify_bundle(bundle, snapshot)?;
-    files::stage_bundle(bundle, workspace, snapshot)
+    files::check_deadline(deadline)?;
+    files::stage_bundle(bundle, workspace, snapshot, deadline)
 }
 
 #[cfg(test)]
@@ -55,8 +61,9 @@ pub(super) fn verify_test_bundle(
     root: &Path,
     spec: &GitHubEvidenceFetchSpecV1,
 ) -> Result<velnor_actions_contract::GitHubEvidenceSnapshotV1, OrchestratorError> {
-    let snapshot = files::load_snapshot(root, spec)?;
-    files::verify_bundle(root, &snapshot)?;
+    let deadline = files::new_deadline()?;
+    let snapshot = files::load_snapshot(root, spec, deadline)?;
+    files::verify_bundle(root, &snapshot, deadline)?;
     Ok(snapshot)
 }
 
@@ -172,21 +179,27 @@ fn repository_matches(owner: &str, name: &str, candidate: &str) -> bool {
         && velnor_actions_contract::config::is_valid_github_repo_name(name)
 }
 
-fn workspace_root() -> Result<PathBuf, OrchestratorError> {
+fn workspace_root(deadline: CheckDeadline) -> Result<PathBuf, OrchestratorError> {
+    files::check_deadline(deadline)?;
     let path = PathBuf::from(required_env("GITHUB_WORKSPACE")?);
     if !path.is_absolute() || !real_directory(&path) {
         return Err(internal("github_evidence_workspace"));
     }
-    fs::canonicalize(path).map_err(|_| internal("github_evidence_workspace"))
+    let path = fs::canonicalize(path).map_err(|_| internal("github_evidence_workspace"))?;
+    files::check_deadline(deadline)?;
+    Ok(path)
 }
 
-fn bundle_root() -> Result<PathBuf, OrchestratorError> {
+fn bundle_root(deadline: CheckDeadline) -> Result<PathBuf, OrchestratorError> {
+    files::check_deadline(deadline)?;
     let runner_temp = PathBuf::from(required_env("RUNNER_TEMP")?);
     let root = runner_temp.join("velnor/github-evidence-bundle");
     if !runner_temp.is_absolute() || !real_directory(&runner_temp) || !real_directory(&root) {
         return Err(internal("github_evidence_bundle_root"));
     }
-    fs::canonicalize(root).map_err(|_| internal("github_evidence_bundle_root"))
+    let root = fs::canonicalize(root).map_err(|_| internal("github_evidence_bundle_root"))?;
+    files::check_deadline(deadline)?;
+    Ok(root)
 }
 
 fn real_directory(path: &Path) -> bool {

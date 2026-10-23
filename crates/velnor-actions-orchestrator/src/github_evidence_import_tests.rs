@@ -1,15 +1,20 @@
 use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 use sha2::{Digest, Sha256};
 use velnor_actions_contract::{
     GITHUB_EVIDENCE_SNAPSHOT_SCHEMA, GitHubEvidenceAcquisitionV1, GitHubEvidenceArtifactCaptureV1,
     GitHubEvidenceArtifactRefV1, GitHubEvidenceDocumentKindV1, GitHubEvidenceDocumentV1,
-    GitHubEvidenceRepositoryV1, GitHubEvidenceSnapshotV1, canonical_json_bytes,
+    GitHubEvidenceRepositoryV1, GitHubEvidenceSnapshotV1, MAX_GITHUB_EVIDENCE_DOCUMENTS,
+    canonical_json_bytes,
 };
+use velnor_actions_mise::CheckDeadline;
 
-use super::files::{stage_bundle, verify_bundle};
+use super::files::{
+    new_deadline, stage_bundle, stage_bundle_with_after_create_for_test, verify_bundle,
+};
 
 fn fixture(root: &Path) -> GitHubEvidenceSnapshotV1 {
     fs::create_dir_all(root.join("documents")).expect("documents");
@@ -92,9 +97,10 @@ fn import_verifies_and_stages_exact_original_files() {
     fs::create_dir(&workspace).expect("workspace");
     fs::create_dir(workspace.join(".velnor")).expect("config directory");
     let snapshot = fixture(&bundle);
+    let deadline = new_deadline().expect("import deadline");
 
-    verify_bundle(&bundle, &snapshot).expect("valid source bundle");
-    stage_bundle(&bundle, &workspace, &snapshot).expect("staging");
+    verify_bundle(&bundle, &snapshot, deadline).expect("valid source bundle");
+    stage_bundle(&bundle, &workspace, &snapshot, deadline).expect("staging");
     let staged = workspace.join(".velnor/evidence");
     assert_eq!(
         fs::read(staged.join("index.json")).expect("index"),
@@ -104,7 +110,7 @@ fn import_verifies_and_stages_exact_original_files() {
         fs::read(staged.join("archives/7.zip")).expect("archive"),
         crate::api::github_evidence::test_support::archive()
     );
-    verify_bundle(&staged, &snapshot).expect("valid staged bundle");
+    verify_bundle(&staged, &snapshot, deadline).expect("valid staged bundle");
 }
 
 #[test]
@@ -113,19 +119,25 @@ fn import_rejects_missing_extra_and_changed_archive_files() {
     let bundle = temp.path().join("bundle");
     fs::create_dir(&bundle).expect("bundle");
     let snapshot = fixture(&bundle);
+    let deadline = new_deadline().expect("import deadline");
 
     fs::remove_file(bundle.join("archives/7.zip")).expect("remove archive");
-    assert!(verify_bundle(&bundle, &snapshot).is_err());
+    assert!(verify_bundle(&bundle, &snapshot, deadline).is_err());
     fs::write(
         bundle.join("archives/7.zip"),
         crate::api::github_evidence::test_support::archive(),
     )
     .expect("restore archive");
     fs::write(bundle.join("extra.txt"), b"extra").expect("extra");
-    assert!(verify_bundle(&bundle, &snapshot).is_err());
+    let error = verify_bundle(&bundle, &snapshot, deadline).expect_err("extra file rejected");
+    assert!(
+        error
+            .to_string()
+            .contains("github_evidence_bundle_extra_file")
+    );
     fs::remove_file(bundle.join("extra.txt")).expect("remove extra");
     fs::write(bundle.join("archives/7.zip"), b"PK\x03\x05").expect("change archive");
-    assert!(verify_bundle(&bundle, &snapshot).is_err());
+    assert!(verify_bundle(&bundle, &snapshot, deadline).is_err());
 }
 
 #[test]
@@ -143,5 +155,109 @@ fn import_rejects_pk_prefix_when_indexed_size_and_digest_match() {
         canonical_json_bytes(&snapshot).expect("canonical index"),
     )
     .expect("replace index");
-    assert!(verify_bundle(&bundle, &snapshot).is_err());
+    assert!(verify_bundle(&bundle, &snapshot, new_deadline().expect("deadline")).is_err());
+}
+
+#[test]
+fn import_rejects_unexpected_directory_before_descending_into_it() {
+    let temp = tempfile::tempdir().expect("temp");
+    let bundle = temp.path().join("bundle");
+    fs::create_dir(&bundle).expect("bundle");
+    let snapshot = fixture(&bundle);
+    fs::create_dir_all(bundle.join("unexpected/nested")).expect("unexpected directory");
+    fs::write(bundle.join("unexpected/nested/file"), b"extra").expect("unexpected file");
+
+    let error = verify_bundle(&bundle, &snapshot, new_deadline().expect("deadline"))
+        .expect_err("unexpected directory rejected");
+    assert!(
+        error
+            .to_string()
+            .contains("github_evidence_bundle_extra_directory")
+    );
+}
+
+#[test]
+fn import_rejects_oversized_expected_file_count_before_building_inventory() {
+    let temp = tempfile::tempdir().expect("temp");
+    let bundle = temp.path().join("bundle");
+    fs::create_dir(&bundle).expect("bundle");
+    let mut snapshot = fixture(&bundle);
+    let document = snapshot.documents[0].clone();
+    snapshot
+        .documents
+        .resize(MAX_GITHUB_EVIDENCE_DOCUMENTS + 1, document);
+
+    let error = verify_bundle(&bundle, &snapshot, new_deadline().expect("deadline"))
+        .expect_err("oversized file count rejected");
+    assert!(
+        error
+            .to_string()
+            .contains("github_evidence_bundle_file_count")
+    );
+}
+
+#[test]
+fn import_checks_an_expired_deadline_before_touching_the_bundle_root() {
+    let temp = tempfile::tempdir().expect("temp");
+    let bundle = temp.path().join("missing-bundle");
+    let snapshot = GitHubEvidenceSnapshotV1 {
+        schema: GITHUB_EVIDENCE_SNAPSHOT_SCHEMA,
+        spec_sha256: "0".repeat(64),
+        repository: GitHubEvidenceRepositoryV1 {
+            id: 1,
+            owner: "tailrocks".to_owned(),
+            name: "velnor".to_owned(),
+            default_branch: "main".to_owned(),
+        },
+        acquisition: GitHubEvidenceAcquisitionV1 {
+            run_id: 2,
+            run_attempt: 1,
+            collector_ref: "refs/heads/main".to_owned(),
+            collector_sha: "a".repeat(40),
+            captured_at: "2026-10-23T00:00:00Z".to_owned(),
+            window_start: "2026-10-22T00:00:00Z".to_owned(),
+            window_end: "2026-10-23T00:00:00Z".to_owned(),
+        },
+        workflow_sources: Vec::new(),
+        documents: Vec::new(),
+        run_attempts: Vec::new(),
+        artifacts: Vec::new(),
+    };
+    let expired = CheckDeadline::from_start(
+        Instant::now()
+            .checked_sub(Duration::from_secs(601))
+            .expect("past instant"),
+        Duration::from_secs(600),
+    )
+    .expect("expired deadline");
+
+    let error = verify_bundle(&bundle, &snapshot, expired).expect_err("deadline rejected");
+    assert_eq!(
+        error.to_string(),
+        "internal: github_evidence_import_deadline"
+    );
+}
+
+#[test]
+fn failed_staging_copy_removes_the_partial_staging_directory() {
+    let temp = tempfile::tempdir().expect("temp");
+    let bundle = temp.path().join("bundle");
+    let workspace = temp.path().join("workspace");
+    fs::create_dir(&bundle).expect("bundle");
+    fs::create_dir(&workspace).expect("workspace");
+    fs::create_dir(workspace.join(".velnor")).expect("config directory");
+    let snapshot = fixture(&bundle);
+    let archive = bundle.join("archives/7.zip");
+    let staging = workspace.join(".velnor/evidence.importing");
+
+    let result = stage_bundle_with_after_create_for_test(
+        &bundle,
+        &workspace,
+        &snapshot,
+        new_deadline().expect("deadline"),
+        || fs::remove_file(&archive).expect("remove archive after source validation"),
+    );
+    assert!(result.is_err());
+    assert!(!staging.exists());
+    assert!(!workspace.join(".velnor/evidence").exists());
 }

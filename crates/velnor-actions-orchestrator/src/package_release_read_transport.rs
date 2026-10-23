@@ -2,6 +2,18 @@
 use super::{GitHubApi, JSON_LIMIT, RepositoryResponse};
 use crate::{OrchestratorError, internal::internal};
 
+const MAX_API_JSON_BYTES: usize = 8 * 1024 * 1024;
+
+fn decode_json_bounded<T: serde::de::DeserializeOwned>(
+    bytes: &[u8],
+    limit: usize,
+) -> Result<T, OrchestratorError> {
+    if bytes.len() > limit.min(MAX_API_JSON_BYTES) {
+        return Err(internal("package_publish_api_failed"));
+    }
+    serde_json::from_slice(bytes).map_err(|_| internal("package_publish_api_json"))
+}
+
 impl GitHubApi {
     pub(in crate::package_release_publish) fn verify_repository_identity(
         &self,
@@ -49,15 +61,14 @@ impl GitHubApi {
         route: &str,
         limit: usize,
     ) -> Result<T, OrchestratorError> {
+        let limit = limit.min(MAX_API_JSON_BYTES);
         #[cfg(test)]
         if let Some(fixture) = &self.fixture {
-            return serde_json::from_value(fixture.read(route)?)
-                .map_err(|_| internal("package_publish_api_json"));
+            let bytes = serde_json::to_vec(&fixture.read(route)?)
+                .map_err(|_| internal("package_publish_api_json"))?;
+            return decode_json_bounded(&bytes, limit);
         }
-        let bytes = self.request(
-            crate::github_authority_read::arguments(route)?,
-            limit.min(8 * 1024 * 1024),
-        )?;
-        serde_json::from_slice(&bytes).map_err(|_| internal("package_publish_api_json"))
+        let bytes = self.request(crate::github_authority_read::arguments(route)?, limit)?;
+        decode_json_bounded(&bytes, limit)
     }
 }

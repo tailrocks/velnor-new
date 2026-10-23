@@ -40,7 +40,7 @@ use self::env::{pairs_of, redact_env_for_debug, strip_credentials};
 pub(crate) use self::output::redact_argv_for_debug;
 pub use self::output::{
     CancelHandle, ProcessFileOutput, ProcessOutput, SPAWN_CANCELLED_MESSAGE,
-    SPAWN_DEADLINE_MESSAGE, SPAWN_TIMEOUT_MESSAGE_PREFIX, is_cancel_or_timeout,
+    SPAWN_DEADLINE_MESSAGE, SPAWN_TIMEOUT_MESSAGE_PREFIX, is_cancel_or_timeout, is_cleanup_failure,
 };
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;

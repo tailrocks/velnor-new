@@ -1,9 +1,10 @@
+use std::process::Command;
 use std::time::{Duration, Instant};
 
 use sha2::{Digest, Sha256};
 
 use super::{
-    JSON_LIMIT, REDIRECT_LIMIT, api_request_headers, checked_storage_uri, hex_lower,
+    JSON_LIMIT, REDIRECT_LIMIT, agent_config, api_request_headers, checked_storage_uri, hex_lower,
     next_storage_uri, read_json_response, storage_request_headers, stream_archive,
     valid_archive_response_headers,
 };
@@ -24,6 +25,45 @@ fn test_response(
 
 fn deadline() -> Instant {
     Instant::now() + Duration::from_secs(10)
+}
+
+#[test]
+fn poisoned_proxy_environment_cannot_select_the_evidence_agent_proxy() {
+    const CHILD_MARKER: &str = "VELNOR_EVIDENCE_PROXY_CONFIG_CHILD";
+    if std::env::var_os(CHILD_MARKER).is_some() {
+        let tls = ureq::tls::TlsConfig::builder().build();
+        assert!(agent_config(tls).proxy().is_none());
+        println!("proxy configuration probe completed");
+        return;
+    }
+
+    let executable = std::env::current_exe().expect("test executable");
+    let output = Command::new(executable)
+        .args([
+            "--exact",
+            "api::github_evidence_http::tests::poisoned_proxy_environment_cannot_select_the_evidence_agent_proxy",
+            "--nocapture",
+        ])
+        .env_clear()
+        .env(CHILD_MARKER, "1")
+        .env("HTTP_PROXY", "http://127.0.0.1:9")
+        .env("HTTPS_PROXY", "http://127.0.0.1:9")
+        .env("ALL_PROXY", "http://127.0.0.1:9")
+        .env("http_proxy", "http://127.0.0.1:9")
+        .env("https_proxy", "http://127.0.0.1:9")
+        .env("all_proxy", "http://127.0.0.1:9")
+        .output()
+        .expect("run isolated proxy configuration probe");
+    assert!(
+        output.status.success(),
+        "proxy configuration child failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("proxy configuration probe completed"),
+        "proxy configuration child did not execute the exact test: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
 }
 
 #[test]

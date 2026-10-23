@@ -70,6 +70,17 @@ pub fn is_cancel_or_timeout(error: &MiseError) -> bool {
         || primary.starts_with(SPAWN_TIMEOUT_MESSAGE_PREFIX)
 }
 
+/// Whether terminating or reaping the aborted child's process group failed.
+///
+/// The runner appends a bounded `;cleanup_failed:` diagnostic in that case, so
+/// the previous process group may still be running: a caller must not start
+/// the same work again.
+#[must_use]
+pub fn is_cleanup_failure(error: &MiseError) -> bool {
+    matches!(error, MiseError::SpawnFailed { message, .. }
+        if message.contains(CLEANUP_FAILURE_DELIMITER))
+}
+
 /// Typed child-process result: captured streams plus a typed exit.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcessOutput {
