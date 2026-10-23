@@ -91,11 +91,14 @@ fn maintenance_check_declares_archive_and_freshness_policy_inputs() -> Result<()
     }
     for path in [
         ".config/nextest.toml",
+        ".velnor/freshness-inventory.json",
         ".velnor/version-policy.toml",
+        "crates/velnor-actions-freshness/src/inventory/pins_cosign_tests.rs",
         "crates/velnor-actions-freshness/src/inventory.rs",
         "crates/velnor-actions-freshness/src/inventory/tests.rs",
         "crates/velnor-actions-freshness/src/probe/transport/range.rs",
         "crates/velnor-actions-freshness/tests/freshness_contract.rs",
+        "crates/velnor-actions-mise/src/catalog.rs",
         "mise.toml",
     ] {
         assert!(

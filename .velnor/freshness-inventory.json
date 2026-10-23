@@ -269,8 +269,11 @@
       "qualified": "3.1.4",
       "latest": "v3.1.4",
       "sha256": "424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa",
+      "bytes": 145688404,
+      "arm64_sha256": "ade83b7aac62e131cacfe96d958948b2150cc9efec46a570a2649b8e27dedad2",
+      "arm64_bytes": 136437761,
       "source": "https://api.github.com/repos/sigstore/cosign/releases/latest",
-      "checked_at": "2026-10-22T10:40:59+00:00",
+      "checked_at": "2026-10-23T03:53:17+00:00",
       "status": "current"
     }
   ]

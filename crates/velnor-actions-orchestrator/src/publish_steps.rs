@@ -9,7 +9,7 @@
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 
-use velnor_actions_contract::config::{PublishBundle, VersionSource};
+use velnor_actions_contract::config::{PublishBundle, PublishProvenance, VersionSource};
 use velnor_actions_contract::{ImageConfig, JobTimeout, Step};
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
 use velnor_actions_workflow_renderer::publish_scripts as script;
@@ -36,6 +36,8 @@ mod npm_steps;
 pub(crate) use npm_steps::NpmPlan;
 #[path = "publish_image_steps.rs"]
 pub(crate) mod image_steps;
+#[path = "publish_provenance_steps.rs"]
+mod provenance_steps;
 
 /// Tag authority job id; every bundle job needs it.
 pub(crate) const AUTHORITY_JOB: &str = "publish-authority";
@@ -70,6 +72,8 @@ pub(crate) struct Inputs<'a> {
     pub(crate) label: &'a str,
     /// Protected environment for asset upload.
     pub(crate) environment: &'a str,
+    /// Declared provenance store for every tag-driven artifact.
+    pub(crate) provenance: PublishProvenance,
     /// Pinned Mise setup step inputs.
     pub(crate) mise: &'a MiseSetup,
     /// Pinned tool catalog.
@@ -174,6 +178,11 @@ pub(crate) fn assemble_jobs(
 }
 
 /// The build, attest and publish chain of every tag-driven artifact kind.
+///
+/// The attest job id is the same in both provenance modes; its role and
+/// steps follow `[publish] provenance`. With a Sigstore bundle, npm gains a
+/// `npm-provenance-<id>` job that records the bundle in the tag's release
+/// before the package is pushed.
 fn insert_tag_chains(
     inputs: &Inputs<'_>,
     gh: &str,
@@ -185,7 +194,7 @@ fn insert_tag_chains(
             format!("bundle-build-{id}"),
             build_job(inputs, plan.bundle)?,
         );
-        jobs.insert(format!("bundle-attest-{id}"), attest_job(inputs, id)?);
+        jobs.insert(format!("bundle-attest-{id}"), attest_job(inputs, id, gh)?);
         jobs.insert(format!("bundle-publish-{id}"), publish_job(inputs, id, gh)?);
     }
     for plan in inputs.npm {
@@ -196,8 +205,14 @@ fn insert_tag_chains(
         );
         jobs.insert(
             format!("npm-attest-{id}"),
-            npm_steps::attest_job(inputs, plan.entry)?,
+            npm_steps::attest_job(inputs, plan.entry, gh)?,
         );
+        if inputs.provenance == PublishProvenance::SigstoreBundle {
+            jobs.insert(
+                format!("npm-provenance-{id}"),
+                npm_steps::provenance_job(inputs, plan.entry, gh)?,
+            );
+        }
         jobs.insert(
             format!("npm-publish-{id}"),
             npm_steps::publish_job(inputs, plan.entry)?,
@@ -211,7 +226,7 @@ fn insert_tag_chains(
         );
         jobs.insert(
             format!("maven-attest-{id}"),
-            maven_steps::attest_job(inputs, plan.entry)?,
+            maven_steps::attest_job(inputs, plan.entry, gh)?,
         );
         jobs.insert(
             format!("maven-publish-{id}"),

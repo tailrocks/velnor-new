@@ -127,6 +127,20 @@ impl FreshnessContext {
         }
     }
 
+    /// Extract one unconditional public `usize` literal from Rust source.
+    pub(crate) fn rust_usize_const(&mut self, path: &str, name: &str) -> Option<String> {
+        let relative = format!("{path}::{name}");
+        match read_capped(&self.path(path), RUST_SOURCE_CAP)
+            .and_then(|source| parse_rust_usize_const(&source, name))
+        {
+            Ok(value) => Some(value),
+            Err(error) => {
+                self.fail_row("local-pin", &relative, &error);
+                None
+            }
+        }
+    }
+
     /// Print accumulated machine rows and human summary; return process code.
     pub(crate) fn finish(self) -> i32 {
         print!("{}", self.output);
@@ -144,6 +158,18 @@ impl FreshnessContext {
 }
 
 fn parse_rust_const(source: &[u8], name: &str) -> Result<String, String> {
+    parse_const(source, name, extract_const_literal)
+}
+
+fn parse_rust_usize_const(source: &[u8], name: &str) -> Result<String, String> {
+    parse_const(source, name, extract_usize_literal)
+}
+
+fn parse_const<T>(
+    source: &[u8],
+    name: &str,
+    extract: impl FnOnce(&syn::ItemConst, &str) -> Result<T, String>,
+) -> Result<T, String> {
     if source.len() > RUST_SOURCE_CAP {
         return Err(format!("source exceeds {RUST_SOURCE_CAP} bytes"));
     }
@@ -164,7 +190,7 @@ fn parse_rust_const(source: &[u8], name: &str) -> Result<String, String> {
     if constants.next().is_some() {
         return Err(format!("duplicate const {name}"));
     }
-    extract_const_literal(item, name)
+    extract(item, name)
 }
 
 fn extract_const_literal(item: &syn::ItemConst, name: &str) -> Result<String, String> {
@@ -206,6 +232,42 @@ fn plain_string_literal(item: &syn::ItemConst, name: &str) -> Result<String, Str
         return Err(invalid());
     };
     Ok(value.value())
+}
+
+fn extract_usize_literal(item: &syn::ItemConst, name: &str) -> Result<String, String> {
+    let invalid = || format!("const {name} must be one public decimal usize literal");
+    if !matches!(&item.vis, syn::Visibility::Public(_))
+        || item
+            .attrs
+            .iter()
+            .any(|attribute| !attribute.path().is_ident("doc"))
+    {
+        return Err(invalid());
+    }
+    let Type::Path(path) = item.ty.as_ref() else {
+        return Err(invalid());
+    };
+    if path.qself.is_some() || path.path.segments.len() != 1 || !path.path.is_ident("usize") {
+        return Err(invalid());
+    }
+    let syn::Expr::Lit(expression) = item.expr.as_ref() else {
+        return Err(invalid());
+    };
+    let Lit::Int(value) = &expression.lit else {
+        return Err(invalid());
+    };
+    if !value.suffix().is_empty()
+        || !value
+            .to_string()
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || byte == b'_')
+    {
+        return Err(invalid());
+    }
+    value
+        .base10_parse::<usize>()
+        .map(|parsed| parsed.to_string())
+        .map_err(|_| invalid())
 }
 
 fn is_conditional_attribute(attribute: &syn::Attribute) -> bool {
