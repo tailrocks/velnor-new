@@ -28,6 +28,7 @@ const MAX_TASK_OUTPUT: usize = 8 * 1024 * 1024;
 
 #[path = "preview_producer_entry.rs"]
 mod entry;
+pub(crate) use entry::write_upload;
 pub use entry::{
     ACQUIRE_RELEASE_LEAVES_OP, ADMIT_RELEASE_AGGREGATE_OP, EXECUTE_RELEASE_PRODUCER_OP,
     acquire_release_leaves, admit_release_aggregate, execute_release_producer,
