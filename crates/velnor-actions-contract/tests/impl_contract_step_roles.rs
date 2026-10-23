@@ -27,7 +27,6 @@ fn plan_step(name: &str) -> Step {
         },
     }
 }
-
 #[test]
 fn display_name_does_not_change_typed_output_identity() {
     let mut step = plan_step("Plan");

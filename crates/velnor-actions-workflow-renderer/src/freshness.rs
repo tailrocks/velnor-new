@@ -114,11 +114,12 @@ pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, R
         ],
         BTreeMap::new(),
     )?;
-    let verify_rust = shell_step(
+    let mut verify_rust = shell_step(
         crate::VERIFY_RUST_TOOLCHAIN_STEP,
         spec.verify_rust_argv.clone(),
         BTreeMap::new(),
     )?;
+    verify_rust.role = Some(StepRole::VerifyRustManifest);
     let probe = shell_step(
         "Check upstream freshness",
         vec![

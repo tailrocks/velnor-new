@@ -112,10 +112,7 @@ fn bind_job(id: &str, job: &mut Yaml) -> Result<(), RenderError> {
     }
     steps.insert(
         prerequisites + 1,
-        Yaml::Map(vec![
-            ("name".to_owned(), Yaml::str(PROJECT_TOOLS_STEP_NAME)),
-            ("run".to_owned(), resolver_run(&referenced, export_rustup)),
-        ]),
+        resolver_step(&referenced, export_rustup, false)?,
     );
     Ok(())
 }
@@ -193,26 +190,23 @@ fn bind_composite_steps(steps: &mut Vec<Yaml>) -> Result<(), RenderError> {
         .iter()
         .position(is_mise_setup)
         .map_or(0, |setup| setup + 1);
-    steps.insert(
-        at,
-        Yaml::Map(vec![
-            ("name".to_owned(), Yaml::str(PROJECT_TOOLS_STEP_NAME)),
-            ("shell".to_owned(), Yaml::str("bash")),
-            ("run".to_owned(), resolver_run(&referenced, false)),
-        ]),
-    );
+    steps.insert(at, resolver_step(&referenced, false, true)?);
     Ok(())
 }
 
 /// Job and composite resolvers share the same narrowly validated write.
-fn resolver_run(referenced: &BTreeSet<String>, export_rustup: bool) -> Yaml {
+fn resolver_step(
+    referenced: &BTreeSet<String>,
+    export_rustup: bool,
+    composite: bool,
+) -> Result<Yaml, RenderError> {
     // jactionlint's `github-env` audit (which honours zizmor annotations)
     // checks every composite and privileged job `GITHUB_ENV` write; this one
     // appends only digits-and-dots values and lock digests (64 hex
     // characters or `unlocked`) the script validated.
-    Yaml::annotated(
-        project_tool_resolver_script(referenced, export_rustup),
-        "zizmor: ignore[github-env]",
+    crate::verifier_shell::render_project_tool_resolver(
+        &project_tool_resolver_script(referenced, export_rustup),
+        composite,
     )
 }
 

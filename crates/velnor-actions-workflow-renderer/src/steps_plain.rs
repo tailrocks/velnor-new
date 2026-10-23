@@ -37,6 +37,15 @@ pub(crate) fn plain_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
             Ok(Yaml::Map(entries))
         }
         StepKind::Shell { run, env } => {
+            if let Some(verifier) = crate::verifier_shell::render_typed_step(
+                step,
+                run,
+                env,
+                &std::collections::BTreeMap::new(),
+                false,
+            )? {
+                return Ok(verifier);
+            }
             crate::action_mbx_shell::validate_step_argv(run, step.role)?;
             commands::validate_env(env)?;
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];

@@ -1,14 +1,16 @@
 use super::action_snapshots::{Actions, action};
 use std::error::Error;
-use std::fs;
-use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
-use std::process::Command;
+
+#[path = "schema2_generator_release_environment_matrix.rs"]
+mod environment_matrix;
+#[path = "schema2_generator_release_job_boundary_tests.rs"]
+mod job_boundary_tests;
 
 #[derive(Clone, Copy)]
 struct TargetJobs {
     target: &'static str,
     build: &'static str,
+    build_action: &'static str,
     qualify: &'static str,
     attest: &'static str,
     qualifier_action: &'static str,
@@ -16,13 +18,18 @@ struct TargetJobs {
 }
 
 pub(super) fn assert_isolated_candidate_execution(
-    workflow: &str,
+    generator_workflow: &str,
+    workflows: &[&str],
     actions: &Actions,
+    project_tool_resolver: bool,
 ) -> Result<(), Box<dyn Error>> {
+    environment_matrix::assert_action_environment_matrix(actions, project_tool_resolver)?;
+    environment_matrix::assert_workflow_environment_matrix(workflows, project_tool_resolver)?;
     for target in [
         TargetJobs {
             target: "linux",
             build: "build-linux",
+            build_action: "generator-release-build-linux",
             qualify: "qualify-linux",
             attest: "attest-linux",
             qualifier_action: "generator-release-qualify-linux",
@@ -31,6 +38,7 @@ pub(super) fn assert_isolated_candidate_execution(
         TargetJobs {
             target: "macos",
             build: "build-macos",
+            build_action: "generator-release-build-macos",
             qualify: "qualify-macos",
             attest: "attest-macos",
             qualifier_action: "generator-release-qualify-macos",
@@ -39,15 +47,16 @@ pub(super) fn assert_isolated_candidate_execution(
         TargetJobs {
             target: "macos-intel",
             build: "build-macos-intel",
+            build_action: "generator-release-build-macos-intel",
             qualify: "qualify-macos-intel",
             attest: "attest-macos-intel",
             qualifier_action: "generator-release-qualify-macos-intel",
             attester_action: "generator-release-attest-macos-intel",
         },
     ] {
-        assert_target_boundary(workflow, actions, target)?;
+        assert_target_boundary(generator_workflow, actions, target, project_tool_resolver)?;
     }
-    candidate_environment_writes_cannot_cross_job_boundary()?;
+    job_boundary_tests::candidate_environment_writes_cannot_cross_job_boundary()?;
     Ok(())
 }
 
@@ -55,9 +64,27 @@ fn assert_target_boundary(
     workflow: &str,
     actions: &Actions,
     target: TargetJobs,
+    project_tool_resolver: bool,
 ) -> Result<(), Box<dyn Error>> {
     assert_build_artifact_outputs(workflow, target.build)?;
-    assert_qualifier_boundary(workflow, actions, target)?;
+    let build_action = action(actions, target.build_action)?;
+    assert_resolver_count(build_action, project_tool_resolver)?;
+    let build_verifiers = if project_tool_resolver {
+        &[
+            "Resolve project tool versions",
+            "Verify Rust channel manifest",
+        ][..]
+    } else {
+        &["Verify Rust channel manifest"][..]
+    };
+    super::verifier_snapshots::assert_exact_empty_verifier_credentials_with_authenticated_binding(
+        build_action,
+        build_verifiers,
+        "Install pinned Rust and MBX",
+        "GITHUB_TOKEN",
+        "${{ github.token }}",
+    )?;
+    assert_qualifier_boundary(workflow, actions, target, project_tool_resolver)?;
     assert_attester_boundary(workflow, actions, target)
 }
 
@@ -77,13 +104,41 @@ fn assert_qualifier_boundary(
     workflow: &str,
     actions: &Actions,
     target: TargetJobs,
+    project_tool_resolver: bool,
 ) -> Result<(), Box<dyn Error>> {
     let qualifier = super::super::job_body(workflow, target.qualify)?;
     assert_qualifier_job_permissions(qualifier, target);
     assert_qualifier_job_inputs(qualifier, target)?;
     let qualifier_body = action(actions, target.qualifier_action)?;
+    assert_resolver_count(qualifier_body, project_tool_resolver)?;
     assert_qualifier_action_boundary(qualifier_body)?;
+    let verifier_steps = if project_tool_resolver {
+        &[
+            "Resolve project tool versions",
+            "Verify Rust channel manifest",
+            "Verify jactionlint",
+        ][..]
+    } else {
+        &["Verify Rust channel manifest", "Verify jactionlint"][..]
+    };
+    super::verifier_snapshots::assert_exact_empty_verifier_credentials(
+        qualifier_body,
+        verifier_steps,
+    )?;
     assert_job_action(workflow, target.qualify, target.qualifier_action)?;
+    Ok(())
+}
+
+fn assert_resolver_count(body: &str, expected: bool) -> Result<(), Box<dyn Error>> {
+    let found = body
+        .matches("- name: Resolve project tool versions")
+        .count();
+    let expected = usize::from(expected);
+    if found != expected {
+        return Err(
+            format!("expected {expected} project-tool resolver steps, found {found}").into(),
+        );
+    }
     Ok(())
 }
 
@@ -177,7 +232,6 @@ fn assert_qualifier_action_boundary(qualifier_body: &str) -> Result<(), Box<dyn 
             .count(),
         1
     );
-    assert!(!qualifier_body.contains("GH_TOKEN:"), "{qualifier_body}");
     assert!(
         !qualifier_body.contains("Attest built artifacts"),
         "{qualifier_body}"
@@ -276,86 +330,5 @@ fn assert_job_action(workflow: &str, id: &str, action_name: &str) -> Result<(), 
         job.contains(&format!("uses: ./.github/actions/{action_name}")),
         "{job}"
     );
-    Ok(())
-}
-
-fn candidate_environment_writes_cannot_cross_job_boundary() -> Result<(), Box<dyn Error>> {
-    let qualifier = tempfile::TempDir::new()?;
-    let attester = tempfile::TempDir::new()?;
-    let qualifier_bin = qualifier.path().join("bin");
-    let attester_bin = attester.path().join("bin");
-    fs::create_dir_all(&qualifier_bin)?;
-    fs::create_dir_all(&attester_bin)?;
-    let malicious_gh = qualifier_bin.join("gh");
-    write_executable(
-        &malicious_gh,
-        "#!/bin/sh\nprintf '%s\\n' leaked > \"$QUALIFIER_TOKEN_CAPTURE\"\n",
-    )?;
-    let candidate = qualifier.path().join("candidate.sh");
-    write_executable(
-        &candidate,
-        "#!/bin/sh\nprintf '%s\\n' \"$QUALIFIER_BIN\" >> \"$GITHUB_PATH\"\nprintf '%s\\n' 'INJECTED=1' >> \"$GITHUB_ENV\"\n(sleep 0.05; : > \"$QUALIFIER_BACKGROUND\") >/dev/null 2>&1 &\n",
-    )?;
-    let qualifier_path = qualifier.path().join("github-path");
-    let qualifier_env = qualifier.path().join("github-env");
-    let background = qualifier.path().join("background-finished");
-    fs::write(&qualifier_path, "")?;
-    fs::write(&qualifier_env, "")?;
-    let candidate_status = Command::new(&candidate)
-        .env("QUALIFIER_BIN", &qualifier_bin)
-        .env("GITHUB_PATH", &qualifier_path)
-        .env("GITHUB_ENV", &qualifier_env)
-        .env("QUALIFIER_BACKGROUND", &background)
-        .status()?;
-    assert!(candidate_status.success());
-
-    let trusted_gh = attester_bin.join("gh");
-    write_executable(
-        &trusted_gh,
-        "#!/bin/sh\nprintf '%s\\n' \"$GH_TOKEN\" > \"$ATTEST_TOKEN_CAPTURE\"\n",
-    )?;
-    let attest_path = attester.path().join("github-path");
-    let attest_env = attester.path().join("github-env");
-    let token_capture = attester.path().join("token-capture");
-    fs::write(&attest_path, "")?;
-    fs::write(&attest_env, "")?;
-    let gh_status = Command::new("gh")
-        .arg("api")
-        .env("PATH", &attester_bin)
-        .env("GITHUB_PATH", &attest_path)
-        .env("GITHUB_ENV", &attest_env)
-        .env("GH_TOKEN", "attest-job-token")
-        .env("ATTEST_TOKEN_CAPTURE", &token_capture)
-        .status()?;
-    assert!(gh_status.success());
-    assert_eq!(fs::read_to_string(&token_capture)?, "attest-job-token\n");
-    assert!(!qualifier.path().join("token-capture").exists());
-    assert_eq!(fs::read_to_string(&qualifier_env)?, "INJECTED=1\n");
-    assert!(
-        fs::read_to_string(&qualifier_path)?
-            .contains(qualifier_bin.to_str().ok_or("non-UTF8 path")?)
-    );
-    assert_eq!(fs::read_to_string(&attest_path)?, "");
-    assert_eq!(fs::read_to_string(&attest_env)?, "");
-    for _ in 0..50 {
-        if background.exists() {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(10));
-    }
-    assert!(
-        background.exists(),
-        "candidate background process did not run"
-    );
-    assert_eq!(fs::read_to_string(&attest_path)?, "");
-    assert_eq!(fs::read_to_string(&attest_env)?, "");
-    Ok(())
-}
-
-fn write_executable(path: &Path, content: &str) -> Result<(), Box<dyn Error>> {
-    fs::write(path, content)?;
-    let mut permissions = fs::metadata(path)?.permissions();
-    permissions.set_mode(0o755);
-    fs::set_permissions(path, permissions)?;
     Ok(())
 }

@@ -12,6 +12,12 @@ const GH_COMMAND_TIMEOUT_SECONDS: u16 = 60;
 const GH_COMMAND_KILL_AFTER_SECONDS: u16 = 5;
 
 pub(super) fn command_step(name: &str, argv: &[String]) -> Result<Yaml, RenderError> {
+    if matches!(
+        name,
+        crate::VERIFY_RUST_TOOLCHAIN_STEP | "Verify jactionlint"
+    ) {
+        return crate::verifier_shell::render_command(name, argv);
+    }
     Ok(bash_step(name, &join_argv_for_run(argv)?))
 }
 

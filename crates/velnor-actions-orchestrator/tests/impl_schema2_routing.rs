@@ -320,7 +320,13 @@ fn assert_image_producer(body: &str) -> TestResult {
     assert!(body.contains("workflow_call:"));
     assert!(!body.contains("workflow_dispatch:"));
     assert!(!body.contains("packages:"));
-    assert!(!body.contains("CARGO_REGISTRY_TOKEN"));
+    schema2_product_release_snapshots::assert_release_workflow_verifier(
+        body,
+        "Verify Rust channel manifest",
+        "CARGO_REGISTRY_TOKEN",
+        "Install pinned Rust for the resource probe",
+        Some(("GITHUB_TOKEN", "${{ github.token }}")),
+    )?;
     assert!(!body.contains("secrets:"));
     assert!(!body.contains("pull_request"));
     Ok(())
@@ -359,7 +365,13 @@ fn assert_macos_producer(body: &str) -> TestResult {
     assert!(body.contains("workflow_call:"));
     assert!(!body.contains("workflow_dispatch:"));
     assert!(!body.contains("packages:"));
-    assert!(!body.contains("CARGO_REGISTRY_TOKEN"));
+    schema2_product_release_snapshots::assert_release_workflow_verifier(
+        body,
+        "Verify Rust channel manifest",
+        "CARGO_REGISTRY_TOKEN",
+        "Install pinned Rust and MBX",
+        None,
+    )?;
     Ok(())
 }
 

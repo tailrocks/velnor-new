@@ -99,9 +99,9 @@ fn tofu_config_rejects_raw_yaml_keys() -> TestResult {
     Ok(())
 }
 
-/// Rendered tofu legs carry the fixed payload under the default shell.
+/// Tofu legs keep the default shell; only the pinned linter verifier is hardened.
 #[test]
-fn tofu_rendered_steps_carry_no_custom_shell() -> TestResult {
+fn tofu_rendered_steps_keep_default_shell_outside_the_linter_verifier() -> TestResult {
     let config = config_with_extra("\"stacks/a\", \"stacks/b\"", "");
     let dir = make_pure_tofu_repo(
         &config,
@@ -111,12 +111,7 @@ fn tofu_rendered_steps_carry_no_custom_shell() -> TestResult {
         ],
     )?;
     let yaml = staged_yaml(dir.path())?;
-    assert!(
-        !yaml
-            .lines()
-            .any(|line| line.trim_start().starts_with("shell:")),
-        "no custom shell anywhere:\n{yaml}"
-    );
+    assert_jactionlint_verifier_shells(&yaml);
     let mut tofu_runs = 0;
     for line in yaml.lines() {
         if line.contains("-chdir stacks/") {
@@ -315,10 +310,24 @@ fn assert_provider_save_budget(yaml: &str) -> TestResult {
         );
     }
     assert!(body.contains("Record optional cache budget"));
-    assert!(
-        !yaml
-            .lines()
-            .any(|line| line.trim_start().starts_with("shell:"))
-    );
+    assert_jactionlint_verifier_shells(yaml);
     Ok(())
+}
+
+fn assert_jactionlint_verifier_shells(yaml: &str) {
+    let shell_lines = yaml
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with("shell:"))
+        .collect::<Vec<_>>();
+    let verifier_count = yaml.matches("- name: Verify jactionlint").count();
+    assert_eq!(shell_lines.len(), verifier_count, "{yaml}");
+    assert!(
+        shell_lines.iter().all(|line| *line
+            == format!(
+                "shell: {}",
+                velnor_actions_workflow_renderer::VERIFY_VERIFIER_SHELL
+            )),
+        "only the fixed jactionlint verifier shell is customized: {shell_lines:?}"
+    );
 }

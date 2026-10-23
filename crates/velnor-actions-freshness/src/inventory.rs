@@ -17,6 +17,8 @@ use toml::Value as TomlValue;
 use crate::context::FreshnessContext;
 
 const CATALOG: &str = "crates/velnor-actions-mise/src/catalog.rs";
+const JACTIONLINT_VERIFIER: &str =
+    "crates/velnor-actions-contract/src/config/jactionlint_verifier.rs";
 const ACTIONS: &str = "crates/velnor-actions-actionlint/src/actions.rs";
 const TOOLS: &str = "crates/velnor-actions-actionlint/src/tools.rs";
 const CAPABILITIES: &str = "crates/velnor-actions-actionlint/src/capabilities.rs";
@@ -24,19 +26,19 @@ const RUNNER_DEFAULT: &str = "crates/velnor-actions-contract/src/config/workflow
 const RENDERER: &str = "crates/velnor-actions-workflow-renderer/src/render.rs";
 const RENDERER_STEPS: &str = "crates/velnor-actions-workflow-renderer/src/steps.rs";
 
-pub(crate) const EXPECTED_TOOLS: &[(&str, &str)] = &[
-    ("mise", "MISE_VERSION"),
-    ("rust", "RUST_VERSION"),
-    ("mr-boxington", "MR_BOXINGTON_VERSION"),
-    ("gh", "GH_VERSION"),
-    ("jactionlint", "JACTIONLINT_VERSION"),
-    ("shellcheck", "SHELLCHECK_VERSION"),
-    ("nextest", "NEXTEST_VERSION"),
-    ("opentofu", "OPENTOFU_VERSION"),
-    ("release-plz", "RELEASE_PLZ_VERSION"),
-    ("crane", "CRANE_VERSION"),
-    ("bun", "BUN_VERSION"),
-    ("cosign", "COSIGN_VERSION"),
+pub(crate) const EXPECTED_TOOLS: &[(&str, &str, &str)] = &[
+    ("mise", CATALOG, "MISE_VERSION"),
+    ("rust", CATALOG, "RUST_VERSION"),
+    ("mr-boxington", CATALOG, "MR_BOXINGTON_VERSION"),
+    ("gh", CATALOG, "GH_VERSION"),
+    ("jactionlint", JACTIONLINT_VERIFIER, "JACTIONLINT_VERSION"),
+    ("shellcheck", CATALOG, "SHELLCHECK_VERSION"),
+    ("nextest", CATALOG, "NEXTEST_VERSION"),
+    ("opentofu", CATALOG, "OPENTOFU_VERSION"),
+    ("release-plz", CATALOG, "RELEASE_PLZ_VERSION"),
+    ("crane", CATALOG, "CRANE_VERSION"),
+    ("bun", CATALOG, "BUN_VERSION"),
+    ("cosign", CATALOG, "COSIGN_VERSION"),
 ];
 
 pub(crate) const EXPECTED_ACTIONS: &[(&str, &str)] = &[

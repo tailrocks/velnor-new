@@ -196,6 +196,9 @@ fn run_aliases_reject_malformed_and_duplicate_definitions() {
     );
 }
 
+#[path = "validate_shell_yaml_verifier_tests.rs"]
+mod verifier;
+
 #[test]
 fn run_aliases_cannot_cross_workflow_files() -> Result<(), String> {
     let definition = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: definition\n        run: &r1 echo safe\n";

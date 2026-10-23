@@ -2,6 +2,7 @@ use super::*;
 
 const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 const GOLDEN: &str = "tests/goldens/upgrades.yml";
+const VERIFY_RUN_PREFIX: &str = r#"function_env_unset=(); while IFS= read -r env_name; do case \"$env_name\" in BASH_FUNC_*) function_env_unset+=(-u \"$env_name\");; esac; done < <(compgen -e); exec /usr/bin/env \"${function_env_unset[@]}\" -u BASH_ENV -u ENV -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR /bin/bash --noprofile --norc -p -e -o pipefail -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; "#;
 
 fn spec() -> UpgradesSpec {
     UpgradesSpec {
@@ -23,7 +24,9 @@ fn spec() -> UpgradesSpec {
             "shellcheck@0.11.0".to_owned(),
         ],
         verify_rust_script: "v=\"${VELNOR_TOOL_RUST}\"; echo verify \"$v\"".to_owned(),
-        jactionlint_verify: "set -eu; echo verify-jactionlint".to_owned(),
+        jactionlint_verify: crate::jactionlint_verifier_script(
+            velnor_actions_mise::JACTIONLINT_VERSION,
+        ),
     }
 }
 
@@ -43,6 +46,69 @@ fn job_text<'a>(yaml: &'a str, id: &str) -> &'a str {
         })
         .unwrap_or(rest.len());
     &rest[..end]
+}
+
+fn named_step_text<'a>(job: &'a str, name: &str) -> &'a str {
+    let marker = format!("      - name: {name}\n");
+    let start = job
+        .find(&marker)
+        .unwrap_or_else(|| panic!("missing step {name:?}:\n{job}"));
+    let rest = &job[start..];
+    let step_indent = rest.lines().next().expect("step line").len()
+        - rest.lines().next().expect("step line").trim_start().len();
+    let end = rest
+        .match_indices('\n')
+        .map(|(at, _)| at + 1)
+        .find(|at| {
+            let line = &rest[*at..];
+            let indent = line.len() - line.trim_start().len();
+            indent == step_indent && line.trim_start().starts_with("- name: ")
+        })
+        .unwrap_or(rest.len());
+    &rest[..end]
+}
+
+fn assert_jactionlint_verifier_boundary(job: &str) {
+    let step = named_step_text(job, "Verify jactionlint");
+    assert_eq!(crate::VERIFY_PATH, "/usr/bin:/bin:/usr/sbin:/sbin");
+    assert!(
+        step.contains("shell: /bin/bash --noprofile --norc -p -e -o pipefail {0}"),
+        "{step}"
+    );
+    let run = step
+        .lines()
+        .find_map(|line| line.trim_start().strip_prefix("run: "))
+        .expect("verifier run command");
+    let run = run.strip_prefix('"').unwrap_or(run);
+    assert!(run.starts_with(VERIFY_RUN_PREFIX), "{step}");
+    let env = step.split_once("        env:\n").expect("verifier env").1;
+    let mut entries = std::collections::BTreeMap::new();
+    for line in env
+        .lines()
+        .take_while(|line| line.starts_with("          "))
+    {
+        let (key, value) = line.trim().split_once(": ").expect("env entry");
+        assert!(entries.insert(key, value).is_none(), "duplicate {key}");
+    }
+    let expected = crate::toolchain_env::STEP_CREDENTIAL_DENYLIST
+        .into_iter()
+        .chain(crate::toolchain_env::STEP_ENDPOINT_DENYLIST)
+        .chain(std::iter::once("PATH"))
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(
+        entries
+            .keys()
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>(),
+        expected
+    );
+    for key in crate::toolchain_env::STEP_CREDENTIAL_DENYLIST
+        .into_iter()
+        .chain(crate::toolchain_env::STEP_ENDPOINT_DENYLIST)
+    {
+        assert_eq!(entries.get(key), Some(&"\"\""), "{key}");
+    }
+    assert_eq!(entries.get("PATH"), Some(&"/usr/bin:/bin:/usr/sbin:/sbin"));
 }
 
 #[test]
@@ -280,7 +346,11 @@ fn every_regeneration_verifies_jactionlint_before_running_generate() {
             .unwrap_or_else(|| panic!("{id} verifies jactionlint:\n{job}"));
         let run = job.find(generate).expect("regeneration step");
         assert!(install < verify && verify < run, "{id} order:\n{job}");
-        assert!(job.contains("verify-jactionlint"), "{id}:\n{job}");
+        assert!(
+            job.contains("jactionlint_executable_digest_mismatch"),
+            "{id}:\n{job}"
+        );
+        assert_jactionlint_verifier_boundary(job);
     }
     for script in ["", "a\nb", "echo ${{ x }}"] {
         let mut bad = spec();

@@ -56,6 +56,8 @@ pub enum StepRole {
     PrepareRustComponents,
     /// Verify the pinned Rust channel manifest and installed component hashes.
     VerifyRustManifest,
+    /// Verify the installed jactionlint executable against Velnor's digest pin.
+    VerifyJactionlint,
     /// Pinned Mise action that owns its built-in tools cache.
     MiseSetup,
     /// Authenticated cargo-deny analyzer bootstrap.
@@ -251,6 +253,7 @@ impl StepRole {
             | Self::MbxBundleExport
             | Self::PrepareRustComponents
             | Self::VerifyRustManifest
+            | Self::VerifyJactionlint
             | Self::CargoDeny
             | Self::CargoMachete
             | Self::Jactionlint
