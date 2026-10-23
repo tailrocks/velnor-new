@@ -109,6 +109,7 @@ pub(crate) fn specification(
         policy,
         producer_runner: release.producer.runner,
         producer_timeout_minutes: release.producer.timeout_minutes,
+        publication_timeout_minutes: release.publication_timeout_minutes,
         linux_acquire,
         producer_acquire,
         producer_acquire_by_target,

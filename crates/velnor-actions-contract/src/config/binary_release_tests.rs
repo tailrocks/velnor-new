@@ -48,12 +48,69 @@ fn preview_defaults_independently_disabled_with_mandatory_evidence() {
     let preview = RustBinaryReleaseConfig::default();
     assert!(!preview.enabled());
     assert_eq!(preview.producer.timeout_minutes, 5);
+    assert_eq!(preview.publication_timeout_minutes.minutes(), 5);
     assert_eq!(preview.version_env, "");
     assert_eq!(
         preview.evidence.profile,
         RustBinaryReleaseEvidenceProfile::SignedSbomV1
     );
     assert!(preview.validate("config.toml").is_ok());
+}
+
+#[test]
+fn publication_timeout_defaults_to_five_and_accepts_bounded_explicit_values() {
+    let value = serde_json::to_value(enabled_preview()).expect("release config");
+    let mut omitted = value.clone();
+    omitted
+        .as_object_mut()
+        .expect("config object")
+        .remove("publication_timeout_minutes");
+    let omitted = serde_json::from_value::<RustBinaryReleaseConfig>(omitted)
+        .expect("default publication timeout");
+    assert_eq!(omitted.publication_timeout_minutes.minutes(), 5);
+    for minutes in [1, 5, 15, 360] {
+        let mut configured = value.clone();
+        configured["publication_timeout_minutes"] = serde_json::json!(minutes);
+        let config = serde_json::from_value::<RustBinaryReleaseConfig>(configured)
+            .expect("typed publication timeout");
+        assert_eq!(config.publication_timeout_minutes.minutes(), minutes);
+        assert!(config.validate("config.toml").is_ok(), "{minutes}");
+    }
+}
+
+#[test]
+fn publication_timeout_rechecks_serde_bypassed_values_and_rejects_bad_shapes() {
+    let value = serde_json::to_value(enabled_preview()).expect("release config");
+    for minutes in [0, 361] {
+        let mut configured = value.clone();
+        configured["publication_timeout_minutes"] = serde_json::json!(minutes);
+        let config = serde_json::from_value::<RustBinaryReleaseConfig>(configured)
+            .expect("u16 can deserialize before validation");
+        let error = config
+            .validate("config.toml")
+            .expect_err("invalid timeout rejected after deserialization");
+        assert!(
+            error
+                .to_string()
+                .contains("stacks.rust.binary_release.publication_timeout_minutes")
+        );
+    }
+    for invalid in [
+        serde_json::json!(-1),
+        serde_json::json!(1.5),
+        serde_json::json!("15"),
+        serde_json::json!(65536),
+    ] {
+        let mut configured = value.clone();
+        configured["publication_timeout_minutes"] = invalid;
+        assert!(serde_json::from_value::<RustBinaryReleaseConfig>(configured).is_err());
+    }
+    let serialized = serde_json::to_string(&value).expect("serialized config");
+    let duplicate = format!(
+        "{},\"publication_timeout_minutes\":15}}",
+        serialized.strip_suffix('}').expect("object")
+    );
+    assert!(serde_json::from_str::<RustBinaryReleaseConfig>(&duplicate).is_err());
 }
 
 #[test]
