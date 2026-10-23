@@ -152,7 +152,7 @@ fn step_text(
         env_fields,
         unexpected_nested,
         invalid_anchor: top_fields_invalid_anchor,
-        anchor_unsafe,
+        anchor_unsafe: anchor_tainted,
     } = step_top_fields(
         block,
         layout,
@@ -185,7 +185,7 @@ fn step_text(
                 ..step
             };
         }
-        if duplicate_anchors.contains(name) || anchors.contains_key(name) || anchor_unsafe {
+        if duplicate_anchors.contains(name) || anchors.contains_key(name) || anchor_tainted {
             anchors.insert(name.to_owned(), None);
             return StepText {
                 unexpected_nested: true,
