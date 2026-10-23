@@ -87,8 +87,22 @@ pub(crate) fn audit_with_verifiers(
         if !(file.path.starts_with(".github/") && yaml) {
             continue;
         }
+        if let Some(anchor) = parse::duplicate_anchor_names(&file.bytes).iter().next() {
+            return Err(unverified(
+                &file.path,
+                anchor,
+                "duplicate YAML anchor in document",
+            ));
+        }
         for (owner, steps) in step_lists(&file.bytes) {
             for step in &steps {
+                if step.invalid_anchor {
+                    return Err(unverified(
+                        &format!("{}:{owner}", file.path),
+                        &step.name,
+                        "unresolved or malformed YAML anchor",
+                    ));
+                }
                 if !is_verifier_step_valid(step, verifiers) {
                     return Err(unverified(
                         &format!("{}:{owner}", file.path),
@@ -215,7 +229,8 @@ fn canonical_inline_shape(
 }
 
 fn canonical_action_call(step: &StepText, action: &VerifierAction) -> bool {
-    step.fields.len() == 2
+    !step.unexpected_nested
+        && step.fields.len() == 2
         && step.fields[0].0 == "name"
         && !step.fields[0].1.trim().is_empty()
         && step.fields[0].1 == step.name
