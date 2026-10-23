@@ -17,6 +17,8 @@ mod monitoring_fixture;
 mod named_check_lanes_tests;
 #[path = "schema2_feature_snapshots.rs"]
 mod schema2_feature_snapshots;
+#[path = "schema2_fixture_owner_export.rs"]
+mod schema2_fixture_owner_export;
 #[path = "schema2_product_release_snapshots.rs"]
 mod schema2_product_release_snapshots;
 #[path = "schema2_snapshot_capture.rs"]
