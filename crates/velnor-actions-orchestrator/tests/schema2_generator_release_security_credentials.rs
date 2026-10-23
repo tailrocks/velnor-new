@@ -98,6 +98,9 @@ fn assert_verifier_envs(
     verifier_steps: &[&str],
     expected_keys: &std::collections::BTreeSet<&'static str>,
 ) -> Result<(), Box<dyn Error>> {
+    let mut expected_env_keys = expected_keys.clone();
+    expected_env_keys.insert("PATH");
+    let trusted_path = velnor_actions_workflow_renderer::VERIFY_PATH;
     for expected_name in verifier_steps {
         let matching = steps
             .iter()
@@ -114,27 +117,28 @@ fn assert_verifier_envs(
             return Err(format!("missing env mapping in verifier step {expected_name:?}").into());
         };
         let mut observed = std::collections::BTreeMap::new();
-        let mut trusted_path_found = false;
         for (key, value) in entries {
             if observed.insert(key.as_str(), value.as_str()).is_some() {
                 return Err(format!("duplicate {key:?} env binding in {expected_name:?}").into());
             }
-            if !expected_keys.contains(key.as_str()) {
-                if key == "PATH" && value == velnor_actions_workflow_renderer::VERIFY_PATH {
-                    trusted_path_found = true;
-                    continue;
-                }
+            if !expected_env_keys.contains(key.as_str()) {
                 return Err(format!("unexpected env binding {key:?} in {expected_name:?}").into());
             }
-            if value != "\"\"" {
+            if key == "PATH" && value != trusted_path {
+                return Err(
+                    format!("PATH must be exactly {trusted_path:?} in {expected_name:?}").into(),
+                );
+            }
+            if key != "PATH" && value != "\"\"" {
                 return Err(format!("{key:?} must be exactly empty in {expected_name:?}").into());
             }
         }
-        if observed.len() != expected_keys.len() + 1
-            || !trusted_path_found
-            || expected_keys.iter().any(|key| !observed.contains_key(key))
+        if observed.len() != expected_env_keys.len()
+            || expected_env_keys
+                .iter()
+                .any(|key| !observed.contains_key(key))
         {
-            return Err(format!("verifier credential env set differs in {expected_name:?}").into());
+            return Err(format!("verifier environment set differs in {expected_name:?}").into());
         }
     }
     Ok(())
