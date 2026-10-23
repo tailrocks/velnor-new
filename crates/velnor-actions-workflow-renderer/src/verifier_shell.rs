@@ -76,6 +76,11 @@ pub(crate) fn render_typed_step(
             "verifier_credential_prelude_missing".to_owned(),
         ));
     };
+    if script.starts_with(&expected_prefix) {
+        return Err(RenderError::InvalidWorkflow(
+            "verifier_shell_script_duplicate_credential_prelude".to_owned(),
+        ));
+    }
 
     render_script(
         &step.name,
