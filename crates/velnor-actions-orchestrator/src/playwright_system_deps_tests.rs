@@ -193,3 +193,57 @@ fn the_step_env_carries_the_system_deps() {
     );
     assert!(InstallRequest::parse(&env(Some("chromium"))).is_err());
 }
+
+/// Scripted `install-deps` outcomes for [`install_with_retry`].
+fn scripted(
+    outcomes: Vec<Result<bool, velnor_actions_mise::MiseError>>,
+) -> (Result<(), OrchestratorError>, usize) {
+    let mut outcomes = outcomes.into_iter();
+    let mut runs = 0;
+    let result = install_with_retry(2, &mut || {
+        runs += 1;
+        outcomes.next().expect("scripted outcome")
+    });
+    (result, runs)
+}
+
+fn spawn_failed(message: &str) -> velnor_actions_mise::MiseError {
+    velnor_actions_mise::MiseError::SpawnFailed {
+        program: "mise".to_owned(),
+        message: message.to_owned(),
+    }
+}
+
+#[test]
+fn a_first_success_runs_once_and_a_failure_then_success_runs_twice() {
+    let (result, runs) = scripted(vec![Ok(true), Ok(true)]);
+    assert!(result.is_ok());
+    assert_eq!(runs, 1);
+    let (result, runs) = scripted(vec![Ok(false), Ok(true)]);
+    assert!(result.is_ok());
+    assert_eq!(runs, 2);
+}
+
+#[test]
+fn two_failures_stop_at_two_with_the_last_error() {
+    let (result, runs) = scripted(vec![Ok(false), Err(spawn_failed("timeout_after_secs:480"))]);
+    assert_eq!(runs, 2);
+    let error = result.expect_err("two failures").to_string();
+    assert!(error.contains("timeout_after_secs:480"), "{error}");
+}
+
+#[test]
+fn a_cleaned_up_timeout_retries_and_a_failed_cleanup_never_does() {
+    let (result, runs) = scripted(vec![Err(spawn_failed("timeout_after_secs:480")), Ok(true)]);
+    assert!(result.is_ok());
+    assert_eq!(runs, 2);
+    let (result, runs) = scripted(vec![
+        Err(spawn_failed(
+            "timeout_after_secs:480;cleanup_failed:reap: EPERM",
+        )),
+        Ok(true),
+    ]);
+    assert_eq!(runs, 1, "the previous process group may still run");
+    let error = result.expect_err("cleanup failure is terminal").to_string();
+    assert!(error.contains(";cleanup_failed:reap: EPERM"), "{error}");
+}

@@ -90,30 +90,48 @@ impl DepsInstaller for BunInstallDeps {
                 )])
             })
             .map_err(|err| internal(&format!("playwright_system_deps_command:{err}")))?;
-        let mut failure = internal("playwright_system_deps_failed");
-        for attempt in 1..=INSTALL_ATTEMPTS {
+        install_with_retry(INSTALL_ATTEMPTS, &mut || {
             // Live, escaped output: an apt run that stalls shows where in the
             // job log instead of only after the deadline kills it.
-            let result = CheckDeadline::after(INSTALL_TIMEOUT).and_then(|deadline| {
-                command.run_until_with_progress(
-                    CAPTURE_BYTES,
-                    deadline,
-                    &mut std::io::stderr().lock(),
-                )
-            });
-            failure = match result {
-                Ok(output) if output.success => return Ok(()),
-                Ok(_) => internal("playwright_system_deps_failed"),
-                Err(err) => internal(&format!("playwright_system_deps_spawn:{err}")),
-            };
-            if attempt < INSTALL_ATTEMPTS {
-                eprintln!(
-                    "velnor: playwright install-deps attempt {attempt} failed ({failure}); retrying"
-                );
-            }
-        }
-        Err(failure)
+            let deadline = CheckDeadline::after(INSTALL_TIMEOUT)?;
+            command
+                .run_until_with_progress(CAPTURE_BYTES, deadline, &mut std::io::stderr().lock())
+                .map(|output| output.success)
+        })
     }
+}
+
+/// Run `install-deps` up to `attempts` times; `run` reports whether one run
+/// exited successfully.
+///
+/// A nonzero exit or a deadline whose process group was cleaned up is retried.
+/// A failed cleanup is terminal: the previous apt and sudo processes may still
+/// run, so a second attempt could overlap them and a later success would hide
+/// the failure.
+///
+/// # Errors
+/// The last failure, or the first cleanup failure.
+pub(crate) fn install_with_retry(
+    attempts: u32,
+    run: &mut dyn FnMut() -> Result<bool, velnor_actions_mise::MiseError>,
+) -> Result<(), OrchestratorError> {
+    let mut failure = internal("playwright_system_deps_failed");
+    for attempt in 1..=attempts {
+        failure = match run() {
+            Ok(true) => return Ok(()),
+            Ok(false) => internal("playwright_system_deps_failed"),
+            Err(err) if velnor_actions_mise::command::is_cleanup_failure(&err) => {
+                return Err(internal(&format!("playwright_system_deps_spawn:{err}")));
+            }
+            Err(err) => internal(&format!("playwright_system_deps_spawn:{err}")),
+        };
+        if attempt < attempts {
+            eprintln!(
+                "velnor: playwright install-deps attempt {attempt} failed ({failure}); retrying"
+            );
+        }
+    }
+    Err(failure)
 }
 
 fn io_error(path: &Path, err: &std::io::Error) -> OrchestratorError {
