@@ -3,9 +3,9 @@
 
 use std::ffi::{OsStr, OsString};
 use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use velnor_actions_mise::command::PROXY_ENV_KEYS;
-use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
+use velnor_actions_mise::{GH_VERSION, PinnedTool, PinnedToolExec, ToolCatalog};
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
@@ -22,17 +22,38 @@ fn github_token_child_uses_only_the_filtered_mise_environment() -> TestResult {
     let fixture = crate::test_temp_dir::TestTempDir::new("velnor-gh-token")?;
     let bin = fixture.path().join("bin");
     let home = fixture.path().join("home");
-    let data = fixture.path().join("mise-data");
+    let xdg_data = fixture.path().join("xdg-data");
+    let data = xdg_data.join("mise");
     std::fs::create_dir(&bin)?;
     std::fs::create_dir(&home)?;
-    std::fs::create_dir(&data)?;
+    std::fs::create_dir(&xdg_data)?;
+    write_cached_gh(&data)?;
     write_fake_mise(&bin.join("mise"))?;
-    run_github_token_child_test(fixture.path(), &bin, &home, &data)?;
+    run_github_token_child_test(fixture.path(), &bin, &home, &xdg_data)?;
+    Ok(())
+}
+
+fn write_cached_gh(data: &Path) -> TestResult {
+    let gh = data
+        .join("installs")
+        .join("gh")
+        .join(GH_VERSION)
+        .join("bin");
+    std::fs::create_dir_all(&gh)?;
+    let cached = gh.join("gh");
+    std::fs::write(
+        &cached,
+        "#!/bin/sh\nprintf 'executed\\n' > \"$MISE_DATA_DIR/gh-executed\"\n",
+    )?;
+    std::fs::set_permissions(cached, std::fs::Permissions::from_mode(0o755))?;
     Ok(())
 }
 
 fn write_fake_mise(mise: &Path) -> TestResult {
-    std::fs::write(mise, FAKE_MISE_SCRIPT)?;
+    std::fs::write(
+        mise,
+        FAKE_MISE_SCRIPT.replace("__PINNED_GH_VERSION__", GH_VERSION),
+    )?;
     std::fs::set_permissions(mise, std::fs::Permissions::from_mode(0o755))?;
     Ok(())
 }
@@ -41,6 +62,10 @@ const FAKE_MISE_SCRIPT: &str = "#!/bin/sh\n\
     printf 'PATH=%s\\n' \"$PATH\"\n\
     printf 'HOME=%s\\n' \"$HOME\"\n\
     printf 'MISE_DATA_DIR=%s\\n' \"$MISE_DATA_DIR\"\n\
+    printf 'XDG_DATA_HOME=%s\\n' \"${XDG_DATA_HOME-<missing>}\"\n\
+    test -x \"$MISE_DATA_DIR/installs/gh/__PINNED_GH_VERSION__/bin/gh\" || exit 88\n\
+    \"$MISE_DATA_DIR/installs/gh/__PINNED_GH_VERSION__/bin/gh\" || exit 89\n\
+    test -s \"$MISE_DATA_DIR/gh-executed\" || exit 90\n\
     printf 'GH_TOKEN=%s\\n' \"$GH_TOKEN\"\n\
     printf 'GITHUB_TOKEN=%s\\n' \"${GITHUB_TOKEN-<missing>}\"\n\
     printf 'VELNOR_TAP_TOKEN=%s\\n' \"${VELNOR_TAP_TOKEN-<missing>}\"\n\
@@ -71,14 +96,19 @@ const FAKE_MISE_SCRIPT: &str = "#!/bin/sh\n\
     printf 'MISE_EXEC_AUTO_INSTALL=%s\\n' \"$MISE_EXEC_AUTO_INSTALL\"\n\
     printf 'ARG=%s\\n' \"$@\"\n";
 
-fn run_github_token_child_test(root: &Path, bin: &Path, home: &Path, data: &Path) -> TestResult {
+fn run_github_token_child_test(
+    root: &Path,
+    bin: &Path,
+    home: &Path,
+    xdg_data: &Path,
+) -> TestResult {
     let child = std::process::Command::new(std::env::current_exe()?)
         .args(["--exact", CHILD_TEST, "--nocapture"])
         .env_clear()
         .env(CHILD_MARKER, "1")
         .env("PATH", bin)
         .env("HOME", home)
-        .env("MISE_DATA_DIR", data)
+        .env("XDG_DATA_HOME", xdg_data)
         .env("GH_TOKEN", "ambient-token-bait")
         .env("GITHUB_TOKEN", "ambient-token-bait")
         .env("VELNOR_TAP_TOKEN", "app-token-bait")
@@ -145,7 +175,13 @@ fn expected_child_environment(
     let expected = vec![
         format!("PATH={}", std::env::var("PATH")?),
         format!("HOME={}", std::env::var("HOME")?),
-        format!("MISE_DATA_DIR={}", std::env::var("MISE_DATA_DIR")?),
+        format!(
+            "MISE_DATA_DIR={}",
+            PathBuf::from(std::env::var("XDG_DATA_HOME")?)
+                .join("mise")
+                .display()
+        ),
+        "XDG_DATA_HOME=<missing>".to_owned(),
         "GH_TOKEN=ghs_selected_test_token".to_owned(),
         "GITHUB_TOKEN=<missing>".to_owned(),
         "VELNOR_TAP_TOKEN=<missing>".to_owned(),

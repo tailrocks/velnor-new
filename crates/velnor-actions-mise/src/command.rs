@@ -54,23 +54,35 @@ fn cleared_parent_passthrough(
     parent: &[(OsString, OsString)],
 ) -> Vec<(OsString, OsString)> {
     match policy {
-        // Mise needs PATH and HOME, with only its owned data cache optional.
-        EnvPolicy::GitHubToken => parent
-            .iter()
-            .filter(|(key, _)| key == "PATH" || key == "HOME" || key == "MISE_DATA_DIR")
-            .cloned()
-            .collect(),
+        // Mise needs runner discovery plus its selected owned cache.
+        EnvPolicy::GitHubToken => {
+            let mut env: Vec<_> = parent
+                .iter()
+                .filter(|(key, _)| key == "PATH" || key == "HOME")
+                .cloned()
+                .collect();
+            let last_env = |name: &str| {
+                parent
+                    .iter()
+                    .rfind(|(key, _)| key == name)
+                    .map(|(_, value)| value.clone())
+            };
+            let data_dir = last_env("MISE_DATA_DIR")
+                .filter(|value| !value.is_empty())
+                .or_else(|| {
+                    last_env("XDG_DATA_HOME")
+                        .filter(|value| !value.is_empty())
+                        .map(|value| PathBuf::from(value).join("mise").into_os_string())
+                });
+            env.extend(data_dir.map(|value| (OsString::from("MISE_DATA_DIR"), value)));
+            env
+        }
         policy if policy.allows_proxy_passthrough() => proxy_passthrough(parent),
         _ => Vec::new(),
     }
 }
 
-/// Mise global flags, always placed before the subcommand.
-///
-/// Every mise invocation carries all three, installs included: no mise
-/// command ever loads repo config, env files, or hooks. Explicit
-/// `tool@exact` specs carry the version: the project's declared version
-/// (hard decision 5) or the Velnor catalog pin.
+/// Flags disable project config/env/hooks; exact specs carry project (decision 5) or catalog pins.
 pub const MISE_GLOBAL_FLAGS: [&str; 3] = ["--no-config", "--no-env", "--no-hooks"];
 
 /// Separator between mise tool selectors and the payload command.

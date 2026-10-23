@@ -8,11 +8,13 @@ uses the cleared child environment when resolving a bare executable after an
 environment reset. Removing `PATH` can therefore prevent pinned Mise from
 starting before any GitHub request occurs.
 
-Explicit-token GitHub commands retain only runner `PATH`, `HOME`, and an
-explicitly present `MISE_DATA_DIR` for tool discovery and the already acquired
-cache. They still clear all other ambient state, add only the selected token,
-disable installation, and reject project configuration, hooks, proxies, and
+Explicit-token GitHub commands retain runner `PATH` and `HOME`. For Mise's
+acquired cache, a nonempty `MISE_DATA_DIR` takes precedence; otherwise a
+nonempty `XDG_DATA_HOME` selects its `mise` child. With neither set, Mise uses
+its normal home-based default. The launcher never inherits `XDG_DATA_HOME`
+itself. It clears all other ambient state, adds only the selected token,
+disables installation, and rejects project configuration, hooks, proxies, and
 alternate GitHub credentials. A real subprocess regression places Mise outside
-default system paths and checks both launch and the child environment. This
-qualifies local execution behavior; live preview publication remains a separate
-release acceptance step.
+default system paths and witnesses the cached pinned `gh` under the XDG-derived
+root. This qualifies local execution behavior; live preview publication
+remains a separate release acceptance step.
