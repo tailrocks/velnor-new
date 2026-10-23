@@ -5,8 +5,11 @@
 6ee445b804aed9432b953e4c189a43f2f3c516fae4f483aa3d0c44542403214c  ./.github/actions/velnor-tool-seed/action.yml
 5d2406ce1cd80cd365d606260e0463fb82c2eea27c7cb4de3d4f285091585c55  ./.github/actions/velnor-tools-cache-restore/action.yml
 f8faff0cdb6eae9223eb601ecdfb8ece2d1e924bf85497028839597dd12bc418  ./.github/actions/velnor-tools-prelude-u26/action.yml
+d9d5120ef66818d8446d3f1d91ad745435f0126cec457998fd2967de61d3f182  ./.github/actions/velnor-verify-jactionlint/action.yml
+e1af1480f2c713479e8b27aead22ece2a2b3e756aecd85719439f4ccad8e0ffb  ./.github/actions/velnor-verify-restored-rust/action.yml
+c7b3395ddf9d977dc7572543e43a5f894b176def8df0fcf48fc9b0fe3dfa876a  ./.github/actions/velnor-verify-rust-manifest/action.yml
 5890ee89a25c3ec8b6c8869019ad7598b9b602a98f29e78be3db1e1cd950e0a2  ./.github/jactionlint.yaml
 ae56eef96c548334af208dede9e77f1bde7ee5cdd37c9024061e02cc9eca5990  ./.github/scripts/velnor-tools-cache-identity.sh
 867b9cd5924866a2dfd189aa22d08be18fb0d3428765f50cb94c01db461cdec2  ./.github/velnor/task-execution-manifest-v1.json
 9221e816669c48e95fa0de60f86bcff36bb557504b1077bf14d097250d32a0b6  ./.github/workflows/cache-prune.yml
-d54b1effabb99acb88f87c66b41e4c727497ce0c7f3ec7bb469d2bdfd2de8fd9  ./.github/workflows/ci.yml
+9892e02d14db901c24077159749a1b685894ee542e2beaf1a4bc375e96a3537d  ./.github/workflows/ci.yml
