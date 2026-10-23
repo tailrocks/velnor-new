@@ -25,7 +25,9 @@ pub(super) fn verify_already_promoted(
     api: &TapMergeGitHub,
     protection_reader: &impl super::protection_observer::ClassicProtectionReader,
 ) -> Result<(), OrchestratorError> {
-    let selection = candidate.selection();
+    let selection = candidate
+        .selection()
+        .ok_or_else(|| internal("tap_merge_selection_missing"))?;
     let Some((expected_merge_sha, expected_merged_at)) = selection.merged else {
         return Err(internal("tap_merge_completed_outcome_required"));
     };

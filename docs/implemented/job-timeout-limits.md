@@ -22,6 +22,29 @@ validators, candidate, release and publish) keep the five-minute default except
 that `[workflow] plan_timeout_minutes` may set the planning job independently
 (default `5`, bounded `1..=360`). It does not change other control-job budgets.
 
+Dependency-seed jobs use `[workflow] dependency_seed_timeout_minutes` (default
+`30`, bounded `1..=360`) independently of crate and plan budgets. Each MBX
+workspace has one optional non-crate seed job that serially compiles test,
+Clippy and documentation lanes for the whole workspace. A crate's budget is
+not a budget for those three workspace-wide builds. The Cargo driver emits no
+seed job. The public `WorkflowConfig` field has the same name; default values
+are omitted from serialized configuration. Rust struct literals must supply
+the new field.
+
+Jackin main runs [39809903680](https://github.com/jackin-project/jackin/actions/runs/39809903680),
+[39801216166](https://github.com/jackin-project/jackin/actions/runs/39801216166)
+and [39797125851](https://github.com/jackin-project/jackin/actions/runs/39797125851)
+reached their ten-minute seed envelope while the final documentation lane was
+still compiling. The test and Clippy seed lanes succeeded; GitHub then cancelled
+the documentation processes without a Rust diagnostic. The repeated timing is
+consistent with the configured job limit; the API does not identify a canceller
+or an explicit reason. Their required checks passed, but the cancelled overall
+CI runs could not authorize native Preview publication. Thirty minutes provides
+bounded headroom, not measured completion proof. The seed remains optional,
+protected-push-only and outside Required, and cancelled or partial producers
+still cannot save. Native publication still requires a successful exact-source
+CI run.
+
 The three official generator compiler jobs (Linux, macOS ARM64, and macOS Intel)
 and the official `velnor-host` binary compiler job use ten minutes. This bound
 covers checkout, tool setup, compilation, artifact upload, and job cleanup.
@@ -39,6 +62,7 @@ checks, evidence, retries, permissions, or protected approval.
 [workflow]
 crate_timeout_minutes = 20 # every Rust crate job and OpenTofu root job
 plan_timeout_minutes = 15  # planning job only
+dependency_seed_timeout_minutes = 30 # each MBX workspace dependency seed only
 ```
 
 Bun jobs resolve their bound most specific first:
@@ -113,14 +137,12 @@ Regression coverage exercises configuration boundaries, all workflow families,
 reusable callee admission, cumulative preparation and retry budgets, scoped
 restoration, descendant termination, and proof cleanup after outer expiry.
 
-
 Automatic preview begins after the canonical exact-commit CI workflow completes.
 Its authenticated completion gate does not wait or poll for unfinished CI.
 Manual product/stable release keeps its existing explicit authorization and
 fails eligibility when CI is not already complete. This separates CI scheduling
 from each job's execution budget without adding dispatch credentials or
 misrepresenting the producing event.
-
 
 Enabled native binary publication requires the exact generated CI name `CI`.
 Configuration rejects custom names at the shared release-authority boundary,

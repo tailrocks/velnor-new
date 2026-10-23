@@ -45,8 +45,8 @@ pub(super) struct PromotionSelection<'a> {
 }
 
 impl MergeCandidate {
-    pub(super) fn selection(&self) -> PromotionSelection<'_> {
-        match &self.promotion.outcome {
+    pub(super) fn selection(&self) -> Option<PromotionSelection<'_>> {
+        Some(match &self.promotion.outcome {
             TapPromotionOutcome::PullRequest {
                 pull_request,
                 head_sha,
@@ -77,11 +77,12 @@ impl MergeCandidate {
                 candidate_proof_digest,
                 merged: Some((merge_sha, merged_at)),
             },
-        }
+            TapPromotionOutcome::SkippedStaleSource { .. } => return None,
+        })
     }
 
     pub(super) fn selection_for(&self, pull_request: u64) -> Option<PromotionSelection<'_>> {
-        let selection = self.selection();
+        let selection = self.selection()?;
         (selection.pull_request == pull_request).then_some(selection)
     }
 }
@@ -201,6 +202,9 @@ fn validate_handoff(
             && is_hex(base_sha, 40)
             && is_hex(merge_sha, 40)
             && !merged_at.is_empty() => {}
+        TapPromotionOutcome::SkippedStaleSource { .. } => {
+            return Err(internal("tap_merge_skipped_promotion_invalid"));
+        }
         _ => return Err(internal("tap_merge_handoff_binding_mismatch")),
     }
     Ok(())

@@ -15,12 +15,12 @@ fn identity() -> PublicationIdentity {
 }
 
 #[test]
-fn absent_and_tag_only_resume_without_moving_tag() {
+fn absent_creates_only_the_tag_and_tag_only_recovery_resumes_draft() {
     let expected = identity();
     let available = expected.assets.keys().cloned().collect();
     assert_eq!(
         publication_action(&expected, &PublicationState::Absent, true, &available),
-        PublicationAction::CreateTagAndDraft
+        PublicationAction::CreateTag
     );
     let tag = PublicationState::TagOnly {
         source_sha: expected.source_sha.clone(),

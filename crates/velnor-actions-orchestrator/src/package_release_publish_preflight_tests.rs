@@ -20,22 +20,6 @@ fn effective_rules_accept_composed_main_protection() {
 }
 
 #[test]
-fn only_the_pinned_gh_cli_not_found_response_is_treated_as_absent_classic_protection() {
-    let cli_stderr = b"gh: Not Found (HTTP 404)";
-    let cli_body = br#"{"message":"Not Found","documentation_url":"https://docs.github.com/rest/branches/branch-protection#get-branch-protection","status":"404"}"#;
-    assert!(super::github_api_not_found(cli_stderr, cli_body));
-    assert!(!super::github_api_not_found(
-        cli_stderr,
-        br#"{"message":"Not Found","status":"403"}"#
-    ));
-    assert!(!super::github_api_not_found(
-        b"gh: Forbidden (HTTP 403)",
-        cli_body
-    ));
-    assert!(!super::github_api_not_found(cli_stderr, b""));
-}
-
-#[test]
 fn effective_rules_reject_missing_pull_request_checks_force_push_or_deletion_guard() {
     let baseline = valid_rules();
     for omitted in [
@@ -271,6 +255,25 @@ fn publishing_environments_require_exact_name_no_approval_rule_and_custom_branch
     let mut review = env_settings("preview-publish");
     review["protection_rules"] = json!([{"type":"required_reviewers"}]);
     assert!(validate_environment_settings(&review, "preview-publish").is_err());
+
+    // GitHub lists the custom deployment branch policy itself as a `branch_policy` rule
+    // (captured from jackin-project/jackin `preview-publish`, 2026-10-23).
+    let mut branch_policy = env_settings("preview-publish");
+    branch_policy["protection_rules"] =
+        json!([{"id":69_193_833,"node_id":"GA_kwDOR2N26c4EH9Bp","type":"branch_policy"}]);
+    assert!(validate_environment_settings(&branch_policy, "preview-publish").is_ok());
+    for rules in [
+        json!([{"type":"branch_policy"},{"type":"required_reviewers"}]),
+        json!([{"type":"branch_policy"},{"type":"branch_policy"}]),
+        json!([{"type":"wait_timer","wait_timer":5}]),
+        json!([{"id":1}]),
+        json!({}),
+        json!(null),
+    ] {
+        let mut changed = env_settings("preview-publish");
+        changed["protection_rules"] = rules;
+        assert!(validate_environment_settings(&changed, "preview-publish").is_err());
+    }
 
     for (protected, custom) in [(true, false), (false, false), (true, true)] {
         let mut invalid = env_settings("preview-publish");

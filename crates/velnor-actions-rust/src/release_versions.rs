@@ -56,7 +56,7 @@ pub fn resolve_release_policy(
     }
     policy.resolve((*base).clone())
 }
-fn package_version(
+pub(crate) fn package_version(
     binding: &CargoVersionBinding,
     manifests: &BTreeMap<&str, toml::Value>,
 ) -> Result<String, ContractError> {

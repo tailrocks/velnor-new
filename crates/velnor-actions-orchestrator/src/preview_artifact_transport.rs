@@ -1,9 +1,10 @@
 //! Current-attempt, ID-addressed acquisition of unsigned native preview leaves.
 //!
-//! The artifact API has no attempt field. Literal current-attempt upload outputs,
-//! canonical pair/run/attempt names and reauthenticated run identity jointly bind
-//! these bytes; timestamps never serve as attempt evidence. ZIP admission follows
-//! in a separate owner, and these bytes alone are not an admitted payload.
+//! The artifact API has no attempt field. Preview assembly derives the complete
+//! pair union from the authenticated current-attempt job inventory and exact
+//! deterministic artifact names; stable assembly retains literal upload outputs.
+//! Timestamps never serve as attempt evidence. ZIP admission follows separately,
+//! and acquired bytes alone are not an admitted payload.
 
 use super::artifact_zip::{ZipProfile, leaf_union_compressed_bound};
 use super::github::ReleaseArtifactApi;
@@ -21,6 +22,9 @@ use velnor_actions_contract::preview_production::{
 };
 use velnor_actions_mise::CheckDeadline;
 
+#[path = "preview_artifact_transport_discovery.rs"]
+mod discovery;
+
 #[path = "preview_artifact_transport_aggregate.rs"]
 mod aggregate;
 pub(crate) use aggregate::acquire_release_aggregate;
@@ -33,15 +37,15 @@ pub(crate) struct AdmittedReleaseArtifact {
     pub archive: SealedArchive,
 }
 
-/// Acquire exactly the literal assembly references under one cumulative budget.
-/// The caller must first admit the request against its trusted source plan and
-/// authenticated job context; this function independently reauthenticates GitHub.
+/// Acquire exactly the admitted assembly union under one cumulative budget.
+/// Stable uses literal references; preview derives them from GitHub's current
+/// attempt artifact and successful job inventories. This reauthenticates GitHub.
 pub(crate) fn acquire_release_artifacts(
     request: &ReleaseProductionRequest,
     directory: &Path,
     deadline: CheckDeadline,
     mut consume: impl FnMut(AdmittedReleaseArtifact) -> Result<(), OrchestratorError>,
-) -> Result<(), OrchestratorError> {
+) -> Result<ReleaseProductionRequest, OrchestratorError> {
     require_consumer_environment(ReleaseConsumer::Assembler, request.plan.channel)?;
     let api = ReleaseArtifactApi::new(&request.plan.repository);
     deadline
@@ -100,6 +104,7 @@ pub(super) trait ArtifactReadApi {
         consumer: ReleaseConsumer,
     ) -> Result<(), OrchestratorError>;
     fn page(&self, run: u64, page: usize) -> Result<ArtifactPage, OrchestratorError>;
+    fn jobs(&self, run: u64, attempt: u32) -> Result<Vec<JobRecord>, OrchestratorError>;
     fn download(
         &self,
         id: u64,
@@ -109,22 +114,58 @@ pub(super) trait ArtifactReadApi {
     ) -> Result<(), OrchestratorError>;
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct JobRecord {
+    pub run_id: u64,
+    pub name: String,
+    pub head_sha: Option<String>,
+    pub status: Option<String>,
+    pub conclusion: Option<String>,
+}
+
 fn acquire(
     api: &impl ArtifactReadApi,
     request: &ReleaseProductionRequest,
     directory: &Path,
     deadline: CheckDeadline,
     consume: &mut impl FnMut(AdmittedReleaseArtifact) -> Result<(), OrchestratorError>,
-) -> Result<(), OrchestratorError> {
-    request
-        .validate()
-        .map_err(|_| internal("preview_artifact_request"))?;
-    let ReleaseProductionStage::Assemble { inputs } = &request.stage else {
+) -> Result<ReleaseProductionRequest, OrchestratorError> {
+    let preview = request.plan.channel
+        == velnor_actions_contract::package_release::PackageReleaseChannel::Preview;
+    if preview {
+        discovery::validate_preview_discovery_request(request)?;
+    } else {
+        request
+            .validate()
+            .map_err(|_| internal("preview_artifact_request"))?;
+    }
+    let ReleaseProductionStage::Assemble { .. } = &request.stage else {
         return Err(internal("preview_artifact_assembly_required"));
     };
     checkpoint(deadline)?;
     api.authenticate(&request.plan, &request.context, ReleaseConsumer::Assembler)?;
     let inventory = inventory(api, request.context.run_id, deadline)?;
+    let completed_request = if request.plan.channel
+        == velnor_actions_contract::package_release::PackageReleaseChannel::Preview
+    {
+        let jobs = api.jobs(request.context.run_id, request.context.run_attempt)?;
+        let mut completed = request.clone();
+        let ReleaseProductionStage::Assemble { inputs } = &mut completed.stage else {
+            return Err(internal("preview_artifact_assembly_required"));
+        };
+        inputs.clone_from(&discovery::discover_preview_inputs(
+            request, &inventory, &jobs,
+        )?);
+        completed
+            .validate()
+            .map_err(|_| internal("preview_artifact_request"))?;
+        completed
+    } else {
+        request.clone()
+    };
+    let ReleaseProductionStage::Assemble { inputs } = &completed_request.stage else {
+        return Err(internal("preview_artifact_assembly_required"));
+    };
     let mut total = 0_u64;
     for reference in inputs {
         checkpoint(deadline)?;
@@ -161,7 +202,7 @@ fn acquire(
     }
     api.authenticate(&request.plan, &request.context, ReleaseConsumer::Assembler)?;
     checkpoint(deadline)?;
-    Ok(())
+    Ok(completed_request)
 }
 
 fn inventory(
@@ -235,7 +276,7 @@ fn validate_metadata(
         run.id == context.run_id
             && run.repository_id == context.repository_id
             && run.head_repository_id == context.head_repository_id
-            && run.head_sha == context.source_sha
+            && run.head_sha == context.workflow_authority_sha
             && run.head_branch == plan.default_branch
     });
     if artifact.id != artifact_id
@@ -286,7 +327,7 @@ pub(super) mod fixture;
 
 #[cfg(test)]
 #[path = "preview_artifact_transport_tests.rs"]
-mod tests;
+pub(super) mod tests;
 
 #[cfg(test)]
 #[path = "preview_artifact_transport_environment_tests.rs"]

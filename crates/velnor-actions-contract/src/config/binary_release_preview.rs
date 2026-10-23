@@ -17,13 +17,6 @@ pub struct RustBinaryPreviewConfig {
     /// Protected environment authorizing automatic preview publication.
     #[serde(default = "default_preview_environment")]
     pub environment: String,
-    /// Existing mutable rolling release selected by immutable source policy.
-    #[serde(default)]
-    pub release_id: u64,
-    /// Reviewed canonical legacy snapshot fingerprint for the first native transition.
-    /// This never authorizes a reset of established native journal history.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub bootstrap_snapshot_sha256: Option<String>,
 }
 
 impl Default for RustBinaryPreviewConfig {
@@ -32,8 +25,6 @@ impl Default for RustBinaryPreviewConfig {
             enabled: false,
             versioning: RustBinaryPreviewVersioning::PackagePreviewCommitCountSha7,
             environment: default_preview_environment(),
-            release_id: 0,
-            bootstrap_snapshot_sha256: None,
         }
     }
 }
@@ -43,6 +34,7 @@ impl Default for RustBinaryPreviewConfig {
 #[serde(rename_all = "kebab-case")]
 pub enum RustBinaryPreviewVersioning {
     /// `<cargo-version>-preview.<all-history-commit-count>+<source-sha7>`.
+    /// The preview tag uses the full source SHA.
     #[default]
     PackagePreviewCommitCountSha7,
 }

@@ -4,9 +4,6 @@
 //! retained evidence before exposing an identity or remote observation. This
 //! executor never treats a computed retry plan as continuing authorization.
 
-#[path = "package_publication_rolling.rs"]
-pub(crate) mod rolling;
-
 use crate::{OrchestratorError, internal::internal};
 use std::collections::BTreeSet;
 use velnor_actions_contract::publication_retry::{
@@ -98,7 +95,7 @@ pub fn publish_package_release(
         // observation and checks live authority at its actual transport boundary.
         let current = true;
         match publication_action(&expected, &observed, current, &available) {
-            PublicationAction::CreateTagAndDraft => {
+            PublicationAction::CreateTag => {
                 backend.create_tag()?;
             }
             PublicationAction::CreateDraft => {

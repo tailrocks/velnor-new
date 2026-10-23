@@ -33,13 +33,14 @@ use runner_spec::RunnerSpec;
 #[path = "schema2_consumer_preview.rs"]
 mod consumer_preview;
 pub use consumer_preview::{
-    ConsumerReleaseSpec, ConsumerReleaseTapSpec, ConsumerRollingPreviewSpec,
-    render_consumer_preview, render_release_tap_reconcile,
+    ConsumerReleaseSpec, ConsumerReleaseTapSpec, render_consumer_preview,
+    render_release_tap_reconcile,
 };
+#[path = "schema2_ci_run_lookup.rs"]
+mod ci_run_lookup;
+pub(super) use ci_run_lookup::RETRY_DELAYS_SECONDS;
 #[path = "schema2_consumer_binary_release.rs"]
 mod consumer_binary_release;
-#[path = "schema2_consumer_release_eligibility.rs"]
-mod consumer_release_eligibility;
 #[path = "schema2_features.rs"]
 mod features;
 #[path = "schema2_generator_release.rs"]

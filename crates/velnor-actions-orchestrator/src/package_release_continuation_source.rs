@@ -1,9 +1,10 @@
 //! Read-only current-main and latest exact-source CI admission.
 use super::super::{
-    github::{GitHubApi, GitRefResponse, RepositoryResponse, WorkflowRunList},
-    run_identity::{RunSource, ci_run_is_success},
+    github::{GitHubApi, GitRefResponse, RepositoryResponse},
+    run_identity::{RunSource, ci_run_is_success, sleep_for_retry},
 };
 use crate::{OrchestratorError, internal::internal};
+use std::time::Duration;
 use velnor_actions_contract::{CI_WORKFLOW_PATH, WORKFLOW_DISPLAY_NAME};
 
 pub(super) fn repository_id(api: &GitHubApi, repository: &str) -> Result<u64, OrchestratorError> {
@@ -32,17 +33,22 @@ pub(super) fn latest_ci(
     api: &GitHubApi,
     source: RunSource<'_>,
 ) -> Result<Option<(u64, u32)>, OrchestratorError> {
+    latest_ci_with_sleep(api, source, sleep_for_retry)
+}
+
+/// Lists the exact-source CI runs by `head_sha` only and retries only a listing
+/// with no run at all (shared policy of `retry_empty_workflow_run_inventory`).
+/// A mismatching run, an API error or a malformed listing is never retried;
+/// a listing that stays empty is `None`, which callers treat as not admitted.
+fn latest_ci_with_sleep(
+    api: &GitHubApi,
+    source: RunSource<'_>,
+    mut sleep: impl FnMut(Duration) -> Result<(), OrchestratorError>,
+) -> Result<Option<(u64, u32)>, OrchestratorError> {
     let workflow = api.admitted_workflow(CI_WORKFLOW_PATH, WORKFLOW_DISPLAY_NAME)?;
-    let first: WorkflowRunList = api.get_json(&api.route(&format!(
-        "actions/workflows/{}/runs?head_sha={}&branch={}&event=push&per_page=100&page=1",
-        workflow.id,
-        super::super::github::encode_segment(source.sha),
-        super::super::github::encode_segment(source.branch)
-    )))?;
-    if first.workflow_runs.is_empty() {
+    let Some(run) = api.latest_source_ci_optional_with_sleep(&workflow, source, &mut sleep)? else {
         return Ok(None);
-    }
-    let run = api.latest_source_ci(&workflow, source)?;
+    };
     let id = run
         .id
         .filter(|id| *id > 0)
@@ -54,7 +60,7 @@ pub(super) fn latest_ci(
     if !ci_run_is_success(&run, id, attempt, source, &workflow) {
         return Ok(None);
     }
-    api.verify_ci_identity(id, attempt, source, true)?;
+    api.verify_ci_identity_with_sleep(id, attempt, source, true, sleep)?;
     Ok(Some((id, attempt)))
 }
 
@@ -64,7 +70,7 @@ pub(crate) fn verify_current_source(
     sha: &str,
 ) -> Result<(), OrchestratorError> {
     let api = GitHubApi::new(repository.to_owned());
-    verify_source(&api, repository, branch, sha)
+    verify_source(&api, repository, branch, sha, sleep_for_retry)
 }
 
 fn verify_source(
@@ -72,18 +78,20 @@ fn verify_source(
     repository: &str,
     branch: &str,
     sha: &str,
+    sleep: impl FnMut(Duration) -> Result<(), OrchestratorError>,
 ) -> Result<(), OrchestratorError> {
     let id = repository_id(api, repository)?;
     if head(api, branch)? != sha {
         return Err(internal("tap_source_release_superseded"));
     }
-    if latest_ci(
+    if latest_ci_with_sleep(
         api,
         RunSource {
             repository_id: id,
             sha,
             branch,
         },
+        sleep,
     )?
     .is_none()
     {

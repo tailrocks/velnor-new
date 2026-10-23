@@ -1,7 +1,7 @@
 //! Native source access honors the same opt-in as ordinary workflow jobs.
 use super::*;
 
-fn checkout_count(node: &Yaml, expected_lfs: bool) -> usize {
+fn checkout_count(node: &Yaml, expected_lfs: Option<&Yaml>) -> usize {
     match node {
         Yaml::Map(fields) => {
             let checkout = fields.iter().any(|(key, value)| {
@@ -14,10 +14,7 @@ fn checkout_count(node: &Yaml, expected_lfs: bool) -> usize {
                     panic!("checkout inputs");
                 };
                 let lfs = inputs.iter().find(|(key, _)| key == "lfs");
-                assert_eq!(
-                    lfs.map(|(_, value)| value),
-                    expected_lfs.then(|| Yaml::str("true")).as_ref()
-                );
+                assert_eq!(lfs.map(|(_, value)| value), expected_lfs);
                 assert!(inputs.contains(&("fetch-depth".to_owned(), Yaml::Int(0))));
                 assert!(inputs.contains(&("persist-credentials".to_owned(), Yaml::Bool(false))));
                 assert!(inputs.iter().any(|(key, _)| key == "ref"));
@@ -40,10 +37,10 @@ fn checkout_count(node: &Yaml, expected_lfs: bool) -> usize {
 fn native_checkout_lfs_opt_in_preserves_all_other_inputs_and_default_bytes() {
     let mut spec = fixture();
     let original = steps::history_checkout(&spec);
-    assert_eq!(checkout_count(&original, false), 1);
+    assert_eq!(checkout_count(&original, None), 1);
     spec.checkout_lfs = true;
     let mut enabled = steps::history_checkout(&spec);
-    assert_eq!(checkout_count(&enabled, true), 1);
+    assert_eq!(checkout_count(&enabled, Some(&Yaml::str("true"))), 1);
     let Yaml::Map(fields) = &mut enabled else {
         panic!("checkout");
     };
@@ -63,17 +60,30 @@ fn native_production_and_both_tap_channels_apply_lfs_without_privileged_checkout
         for mut spec in [with_tap(), stable::stable()] {
             spec.checkout_lfs = enabled;
             let production = production::jobs(&spec).expect("production");
+            let expected_lfs = if spec.policy.channel == PackageReleaseChannel::Preview {
+                Some(Yaml::str(
+                    "${{ needs.preview-eligibility.outputs.checkout_lfs }}",
+                ))
+            } else {
+                enabled.then(|| Yaml::str("true"))
+            };
             let count = production
                 .iter()
-                .map(|(_, job)| checkout_count(job, enabled))
+                .map(|(_, job)| checkout_count(job, expected_lfs.as_ref()))
                 .sum::<usize>();
-            assert_eq!(count, spec.policy.payload_pairs().expect("pairs").len() + 1);
+            let expected_production_checkouts =
+                if spec.policy.channel == PackageReleaseChannel::Preview {
+                    2 // One matrix payload job and one aggregate checkout.
+                } else {
+                    spec.policy.payload_pairs().expect("pairs").len() + 1
+                };
+            assert_eq!(count, expected_production_checkouts);
             for (_, job) in [
                 signer(&spec).expect("signer"),
                 publisher(&spec).expect("publisher"),
                 recovery(&spec).expect("recovery"),
             ] {
-                assert_eq!(checkout_count(&job, enabled), 0);
+                assert_eq!(checkout_count(&job, expected_lfs.as_ref()), 0);
             }
         }
         for mut spec in [with_tap(), stable_with_tap()] {
@@ -92,9 +102,16 @@ fn native_production_and_both_tap_channels_apply_lfs_without_privileged_checkout
             };
             for context in contexts {
                 let jobs = tap::jobs(&spec, tap, context).expect("tap jobs");
-                assert_eq!(checkout_count(&jobs[0].1, enabled), 1);
+                let expected_lfs = if matches!(context, TapInvocationContext::Preview) {
+                    Some(Yaml::str(
+                        "${{ needs.preview-eligibility.outputs.checkout_lfs }}",
+                    ))
+                } else {
+                    enabled.then(|| Yaml::str("true"))
+                };
+                assert_eq!(checkout_count(&jobs[0].1, expected_lfs.as_ref()), 1);
                 for (_, job) in &jobs[1..] {
-                    assert_eq!(checkout_count(job, enabled), 0);
+                    assert_eq!(checkout_count(job, expected_lfs.as_ref()), 0);
                 }
             }
         }

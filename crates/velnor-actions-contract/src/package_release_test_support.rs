@@ -13,7 +13,7 @@ pub(crate) fn fixture(channel: PackageReleaseChannel) -> PackageReleaseReceipt {
     let commit_count = (channel == PackageReleaseChannel::Preview).then_some(9);
     let value = preview_value(base, commit_count, source_sha7.as_deref());
     let tag = match channel {
-        PackageReleaseChannel::Preview => "preview".to_owned(),
+        PackageReleaseChannel::Preview => format!("preview-{commit}"),
         PackageReleaseChannel::Stable => format!("v{base}"),
     };
     PackageReleaseReceipt {

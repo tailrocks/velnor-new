@@ -73,7 +73,8 @@ pub use mise_task_suites::{
 };
 pub use native_image_jobs::{NativeImageTaskPolicy, build_native_image_job};
 pub use playwright_install_step::{
-    PLAYWRIGHT_INSTALL_STEP_NAME, PLAYWRIGHT_PINS_ENV, PLAYWRIGHT_ROOT_ENV, PLAYWRIGHT_VERSION_ENV,
+    PLAYWRIGHT_INSTALL_STEP_NAME, PLAYWRIGHT_PINS_ENV, PLAYWRIGHT_ROOT_ENV,
+    PLAYWRIGHT_SYSTEM_DEPS_BROWSERS, PLAYWRIGHT_SYSTEM_DEPS_ENV, PLAYWRIGHT_VERSION_ENV,
     playwright_install_step,
 };
 pub use stack_jobs::{STACK_RUNNER, StackJobKind, StackJobPolicy, build_stack_job};

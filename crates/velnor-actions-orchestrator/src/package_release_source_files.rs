@@ -20,6 +20,16 @@ pub(super) struct SourceFiles<'a> {
     trees: BTreeMap<String, Tree>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct SourceFileEntry {
+    pub path: String,
+    pub mode: String,
+    pub sha: String,
+}
+
+const MAX_SOURCE_TREE_ENTRIES: usize = 100_000;
+
 #[derive(Deserialize)]
 struct Commit {
     sha: String,
@@ -69,6 +79,70 @@ impl<'a> SourceFiles<'a> {
     }
 
     pub(super) fn read(&mut self, path: &str) -> Result<Vec<u8>, OrchestratorError> {
+        let entry = self.regular_entry(path)?;
+        self.blob(&entry.sha)
+    }
+
+    pub(super) fn identity(&mut self, path: &str) -> Result<SourceFileEntry, OrchestratorError> {
+        let entry = self.regular_entry(path)?;
+        Ok(SourceFileEntry {
+            path: path.to_owned(),
+            mode: entry.mode,
+            sha: entry.sha,
+        })
+    }
+
+    pub(super) fn regular_files(&self) -> Result<Vec<SourceFileEntry>, OrchestratorError> {
+        let tree: Tree = self.api.get_json(
+            &self
+                .api
+                .route(&format!("git/trees/{}?recursive=1", self.root_tree)),
+        )?;
+        if tree.sha != self.root_tree
+            || tree.truncated
+            || tree.entries.len() > MAX_SOURCE_TREE_ENTRIES
+        {
+            return Err(internal("release_source_tree_identity"));
+        }
+        let mut entries = BTreeMap::new();
+        for entry in tree.entries {
+            if entry.path.is_empty()
+                || entry.path.len() > 1024
+                || entry.path.starts_with('/')
+                || entry.path.contains('\\')
+                || entry
+                    .path
+                    .split('/')
+                    .any(|part| part.is_empty() || matches!(part, "." | ".."))
+                || !valid_sha(&entry.sha)
+            {
+                return Err(internal("release_source_tree_entry"));
+            }
+            if entry.path == ".velnor/config.toml"
+                && (entry.kind != "blob" || !matches!(entry.mode.as_str(), "100644" | "100755"))
+            {
+                return Err(internal("release_source_config_not_regular"));
+            }
+            if matches!(entry.mode.as_str(), "100644" | "100755")
+                && (entry.kind != "blob"
+                    || entries
+                        .insert(
+                            entry.path.clone(),
+                            SourceFileEntry {
+                                path: entry.path,
+                                mode: entry.mode,
+                                sha: entry.sha,
+                            },
+                        )
+                        .is_some())
+            {
+                return Err(internal("release_source_tree_entry"));
+            }
+        }
+        Ok(entries.into_values().collect())
+    }
+
+    fn regular_entry(&mut self, path: &str) -> Result<Entry, OrchestratorError> {
         let components: Vec<_> = path.split('/').collect();
         if path.len() > 1024
             || components.len() > 32
@@ -89,7 +163,7 @@ impl<'a> SourceFiles<'a> {
                 if entry.kind != "blob" || !matches!(entry.mode.as_str(), "100644" | "100755") {
                     return Err(internal("release_version_manifest_not_regular"));
                 }
-                return self.blob(&entry.sha);
+                return Ok(entry);
             }
             if entry.kind != "tree" || entry.mode != "040000" {
                 return Err(internal("release_version_manifest_parent_not_tree"));
@@ -146,7 +220,7 @@ impl<'a> SourceFiles<'a> {
     }
 }
 
-fn git_blob_sha1(bytes: &[u8]) -> Result<String, OrchestratorError> {
+pub(super) fn git_blob_sha1(bytes: &[u8]) -> Result<String, OrchestratorError> {
     let mut hasher = Sha1::new();
     hasher.update(format!("blob {}\0", bytes.len()).as_bytes());
     hasher.update(bytes);

@@ -1,3 +1,6 @@
+//! Structural receipt identity. Preview source and workflow authority may differ;
+//! runtime admission must authenticate both and their relationship independently.
+
 use super::{PackageReleaseChannel, PackageReleaseReceipt, invalid};
 use crate::{ContractError, config::is_exact_semver, is_valid_branch_name};
 
@@ -37,7 +40,8 @@ fn validate_workflow(receipt: &PackageReleaseReceipt) -> Result<(), ContractErro
     if workflow.path != receipt.channel.workflow_path()
         || workflow.workflow_ref != receipt.source.source_ref
         || !hex_string(&workflow.authority_sha, 40)
-        || workflow.authority_sha != receipt.source.commit_sha
+        || (receipt.channel == PackageReleaseChannel::Stable
+            && workflow.authority_sha != receipt.source.commit_sha)
         || workflow.run_id == 0
         || workflow.run_attempt == 0
         || workflow.producer_run_id == 0
@@ -68,7 +72,7 @@ fn validate_version(receipt: &PackageReleaseReceipt) -> Result<(), ContractError
                 || !hex_string(sha7, 7)
                 || !receipt.source.commit_sha.starts_with(sha7)
                 || version.value != format!("{}-preview.{count}+{sha7}", version.base)
-                || receipt.tag != "preview"
+                || receipt.tag != format!("preview-{}", receipt.source.commit_sha)
             {
                 return Err(invalid("version_does_not_match_preview_policy"));
             }

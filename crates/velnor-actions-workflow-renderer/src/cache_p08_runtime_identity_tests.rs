@@ -24,7 +24,7 @@ struct Fixture {
 
 impl Fixture {
     fn new() -> std::io::Result<Self> {
-        let base = fs::canonicalize(std::env::current_dir()?)?;
+        let base = fs::canonicalize(std::env::temp_dir())?;
         let id = NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed);
         let root = base.join(format!(
             ".tool-cache-identity-{}-{id} space",

@@ -316,6 +316,9 @@ fn pull_number(promotion: &crate::tap_prepare::TapPromotionReceipt) -> u64 {
         | crate::tap_prepare::TapPromotionOutcome::AlreadyPromoted { pull_request, .. } => {
             *pull_request
         }
+        crate::tap_prepare::TapPromotionOutcome::SkippedStaleSource { .. } => {
+            panic!("stale source has no PR")
+        }
     }
 }
 
@@ -323,6 +326,9 @@ fn pull_head(promotion: &crate::tap_prepare::TapPromotionReceipt) -> &str {
     match &promotion.outcome {
         crate::tap_prepare::TapPromotionOutcome::PullRequest { head_sha, .. }
         | crate::tap_prepare::TapPromotionOutcome::AlreadyPromoted { head_sha, .. } => head_sha,
+        crate::tap_prepare::TapPromotionOutcome::SkippedStaleSource { .. } => {
+            panic!("stale source has no PR")
+        }
     }
 }
 
@@ -330,6 +336,9 @@ fn pull_base(promotion: &crate::tap_prepare::TapPromotionReceipt) -> &str {
     match &promotion.outcome {
         crate::tap_prepare::TapPromotionOutcome::PullRequest { base_sha, .. }
         | crate::tap_prepare::TapPromotionOutcome::AlreadyPromoted { base_sha, .. } => base_sha,
+        crate::tap_prepare::TapPromotionOutcome::SkippedStaleSource { .. } => {
+            panic!("stale source has no PR")
+        }
     }
 }
 

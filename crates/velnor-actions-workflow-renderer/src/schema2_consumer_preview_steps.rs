@@ -110,6 +110,24 @@ pub(in crate::schema2) fn checkout(spec: &ConsumerReleaseSpec, source_ref: &str)
     ])
 }
 
+pub(in crate::schema2) fn checkout_with_lfs(
+    spec: &ConsumerReleaseSpec,
+    source_ref: &str,
+    lfs: &str,
+) -> Yaml {
+    let mut step = checkout(spec, source_ref);
+    if let Yaml::Map(fields) = &mut step
+        && let Some((_, Yaml::Map(inputs))) = fields.iter_mut().find(|(key, _)| key == "with")
+    {
+        if let Some((_, value)) = inputs.iter_mut().find(|(key, _)| key == "lfs") {
+            *value = Yaml::str(lfs);
+        } else {
+            inputs.push(("lfs".to_owned(), Yaml::str(lfs)));
+        }
+    }
+    step
+}
+
 #[path = "schema2_consumer_release_env.rs"]
 mod native_env;
 
@@ -126,6 +144,8 @@ pub(in crate::schema2) fn operation(
         "sign-package-release-v1"
             | "prepare-homebrew-tap-v1"
             | "execute-release-producer-v1"
+            | "finalize-preview-source-v1"
+            | "acquire-preview-source-v1"
             | "acquire-release-leaves-v1"
             | "admit-release-aggregate-v1"
             | "publish-package-release-v1"
