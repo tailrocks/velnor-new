@@ -23,6 +23,7 @@ mod image_grammar;
 mod image_jobs;
 mod image_task;
 mod images;
+pub mod jactionlint_verifier;
 mod mise;
 mod mise_task_suites;
 pub mod playwright_lock;
@@ -45,6 +46,8 @@ mod rust_inputs;
 mod rust_suites;
 mod rust_suites_validate;
 mod rust_toolchain_source;
+/// Shared, fixed shell binding for the Setup Mise data directory and binary.
+pub mod selected_mise;
 mod stacks;
 mod task_source;
 mod tofu;
@@ -125,8 +128,8 @@ pub use private_sources::{
     is_valid_source_id, is_valid_source_tag, split_repository,
 };
 pub use publish::{
-    PublishBundle, PublishConfig, RELEASE_TAG_GLOB, ReleaseTag, VersionSource, is_artifact_id,
-    is_strict_semver,
+    PublishBundle, PublishConfig, PublishProvenance, RELEASE_TAG_GLOB, ReleaseTag, VersionSource,
+    is_artifact_id, is_strict_semver,
 };
 pub use publish_maven::{
     MAVEN_BUNDLE_OUTPUT_DIR, MAVEN_BUNDLE_TASK, MAVEN_VERSION_FILE, PublishMaven,

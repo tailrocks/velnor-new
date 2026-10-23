@@ -246,6 +246,51 @@ fn direct_jactionlint_script_is_exactly_audited() {
 }
 
 #[test]
+fn inline_verifier_acceptance_uses_exact_payload_and_rust_install_phase() {
+    let actions = verifiers();
+    let installed_rust = actions
+        .inline_installed_rust_templates
+        .first()
+        .expect("installed Rust inline verifier");
+    let renamed_rust = inline_step("Check pinned toolchain evidence", installed_rust);
+    let installed_workflow = format!(
+        "jobs:\n  release:\n    steps:\n      - name: Install pinned Rust\n        run: mise install rust@1.99.1\n{renamed_rust}"
+    );
+    assert_eq!(
+        problem(&files(".github/workflows/release.yml", &installed_workflow)),
+        "",
+        "a canonical installed verifier remains valid after a display-name change"
+    );
+
+    let restored_rust = actions.inline_rust_templates["Verify restored Rust toolchain"]
+        .first()
+        .expect("restored Rust inline verifier");
+    let restored_workflow = format!(
+        "jobs:\n  release:\n    steps:\n      - name: Install pinned Rust\n        run: mise install rust@1.99.1\n{}",
+        inline_step("Check pinned toolchain evidence", restored_rust),
+    );
+    let found = problem(&files(".github/workflows/release.yml", &restored_workflow));
+    assert!(
+        found.contains("no verification follows the install"),
+        "a restored-cache verifier cannot satisfy the installed phase: {found}"
+    );
+
+    let jactionlint = actions
+        .inline_jactionlint_templates
+        .last()
+        .expect("canonical direct-shell Jactionlint verifier");
+    let renamed_jactionlint = inline_step("Check executable digest", jactionlint);
+    assert_eq!(
+        problem(&files(
+            ".github/workflows/release.yml",
+            &format!("jobs:\n  release:\n    steps:\n{renamed_jactionlint}"),
+        )),
+        "",
+        "a canonical Jactionlint payload remains valid after a display-name change"
+    );
+}
+
+#[test]
 fn jactionlint_composite_binds_its_digest_table() {
     let digest = velnor_actions_mise::JACTIONLINT_DIGESTS[0].executable_sha256;
     let zero_digest = "0".repeat(64);

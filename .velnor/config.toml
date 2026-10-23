@@ -6,7 +6,7 @@ policy = "velnor-repository-v1"
 default_branch = "main"
 generator_validation = "bootstrap"
 max_parallel_jobs = 2
-crate_timeout_minutes = 8
+crate_timeout_minutes = 15
 plan_timeout_minutes = 15
 pull_request_cache_policy = "same-repository-scoped"
 
@@ -99,6 +99,7 @@ task = "test-maintenance-helpers"
 inputs = [
   ".config/nextest.toml",
   ".mise-version",
+  ".velnor/freshness-inventory.json",
   ".velnor/version-policy.toml",
   "Cargo.lock",
   "Cargo.toml",
@@ -118,6 +119,7 @@ inputs = [
   "crates/velnor-actions-freshness/src/inventory/tests.rs",
   "crates/velnor-actions-freshness/src/inventory/mirror.rs",
   "crates/velnor-actions-freshness/src/inventory/pins.rs",
+  "crates/velnor-actions-freshness/src/inventory/pins_cosign_tests.rs",
   "crates/velnor-actions-freshness/src/inventory/pins_mirrors.rs",
   "crates/velnor-actions-freshness/src/inventory/shape.rs",
   "crates/velnor-actions-freshness/src/lib.rs",
@@ -135,6 +137,7 @@ inputs = [
   "crates/velnor-actions-freshness/src/time.rs",
   "crates/velnor-actions-freshness/src/validation.rs",
   "crates/velnor-actions-freshness/tests/freshness_contract.rs",
+  "crates/velnor-actions-mise/src/catalog.rs",
   "crates/velnor-archive-guard/Cargo.toml",
   "crates/velnor-archive-guard/build.rs",
   "crates/velnor-archive-guard/build_support/archive_guard_inputs.rs",

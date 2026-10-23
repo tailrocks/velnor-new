@@ -9,7 +9,10 @@ use std::collections::BTreeSet;
 
 #[path = "step_identity_payload.rs"]
 mod payload;
-use payload::{action_has_prefix_for_kind, internal_operation, valid_rust_verifier_payload};
+use payload::{
+    action_has_prefix_for_kind, internal_operation, valid_jactionlint_verifier_payload,
+    valid_rust_verifier_payload,
+};
 pub use payload::{is_configured_checkout, is_tool_seed_step};
 
 /// Fixed local action path used for exact provider-cache admission.
@@ -29,6 +32,19 @@ pub const RUST_VERIFIER_USES: [&str; 2] = [
     "./.github/actions/velnor-verify-restored-rust",
     "./.github/actions/velnor-verify-rust-manifest",
 ];
+/// Fixed local action path for the generated jactionlint executable verifier.
+pub const JACTIONLINT_VERIFIER_USES: &str = "./.github/actions/velnor-verify-jactionlint";
+
+/// Return the required semantic role for one exact generated verifier action.
+pub(super) fn verifier_action_role(uses: &str) -> Option<StepRole> {
+    if RUST_VERIFIER_USES.contains(&uses) {
+        Some(StepRole::VerifyRustManifest)
+    } else if uses == JACTIONLINT_VERIFIER_USES {
+        Some(StepRole::VerifyJactionlint)
+    } else {
+        None
+    }
+}
 /// Static tool digest input for the runtime-qualified tools identity action.
 pub const TOOLS_CACHE_IDENTITY_DIGEST_INPUT: &str = "d";
 /// Expression path for the job-private `OpenTofu` plugin cache.
@@ -63,6 +79,8 @@ pub enum StepRole {
     PrepareRustComponents,
     /// Verify the pinned Rust channel manifest and installed component hashes.
     VerifyRustManifest,
+    /// Verify the installed jactionlint executable against Velnor's digest pin.
+    VerifyJactionlint,
     /// Pinned Mise action that owns its built-in tools cache.
     MiseSetup,
     /// Authenticated cargo-deny analyzer bootstrap.
@@ -247,6 +265,7 @@ impl StepRole {
             Self::MbxCache => super::step_mbx_lifecycle::valid_mbx_cache(kind),
             Self::PlaywrightInstall => super::step_protocol::valid_playwright_install(kind),
             Self::VerifyRustManifest => valid_rust_verifier_payload(kind),
+            Self::VerifyJactionlint => valid_jactionlint_verifier_payload(kind),
             Self::PreparePinnedTools
             | Self::MbxVersionCheck
             | Self::MbxWorkspaceCleanup

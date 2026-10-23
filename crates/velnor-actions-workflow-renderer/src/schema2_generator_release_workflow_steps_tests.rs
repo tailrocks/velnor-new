@@ -41,13 +41,14 @@ impl Drop for Scratch {
 }
 
 #[test]
-fn inline_fixed_catalog_verifiers_reject_inherited_trust_overrides() -> Result<(), Box<dyn Error>> {
+fn inline_fixed_catalog_verifiers_keep_selected_environment_context() -> Result<(), Box<dyn Error>>
+{
     let pins = crate::schema2::product_release_test_pins::test_pins();
     let fixed_verifiers = [
         verify_rust_step(&pins)?,
         command_step("Verify jactionlint", &pins.verify_lint_argv)?,
     ];
-    let forbidden_environment = [
+    let selected_environment = [
         "HOME",
         "MISE_DATA_DIR",
         "XDG_DATA_HOME",
@@ -65,18 +66,21 @@ fn inline_fixed_catalog_verifiers_reject_inherited_trust_overrides() -> Result<(
             "fixed verifier acquired an unnecessary resolver"
         );
 
-        for key in forbidden_environment {
-            let mut overridden = verifier_job(
+        for key in selected_environment {
+            let mut selected = verifier_job(
                 step.clone(),
-                vec![(key.to_owned(), Yaml::str("/tmp/attacker-value"))],
+                vec![(key.to_owned(), Yaml::str("/tmp/selected-context"))],
             );
-            let error = crate::project_tool_resolver::bind_workflow(&mut overridden)
-                .expect_err("inline fixed-pin verifier rejects inherited trust overrides");
+            crate::project_tool_resolver::bind_workflow(&mut selected)
+                .expect("fixed pins do not require a project resolver");
+            let rendered = render_yaml(&selected);
             assert!(
-                error
-                    .to_string()
-                    .contains("verify:verifier_trusted_environment_override"),
-                "environment {key}: {error}"
+                rendered.contains(&format!("{key}: /tmp/selected-context")),
+                "selected environment {key} was dropped: {rendered}"
+            );
+            assert!(
+                !rendered.contains("Resolve project tool versions"),
+                "{rendered}"
             );
         }
     }

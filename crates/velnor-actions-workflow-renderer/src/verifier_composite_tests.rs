@@ -4,9 +4,10 @@ use velnor_actions_contract::workflow::{RUST_VERIFIER_USES, Step, StepKind, Step
 
 use super::{
     VERIFY_JACTIONLINT_USES, render_verifier_composite, verifier_composite_document,
-    verifier_shell_argv, verifier_shell_step,
+    verifier_shell_argv, verifier_shell_run_scalar, verifier_shell_step,
+    verifier_shell_step_to_yaml,
 };
-use crate::VERIFY_SHELL;
+use crate::VERIFY_VERIFIER_SHELL;
 use crate::yaml::Yaml;
 
 fn rust_step(uses: &str) -> Step {
@@ -39,6 +40,14 @@ fn rust_step(uses: &str) -> Step {
     step
 }
 
+fn pinned_rust_step(uses: &str) -> Step {
+    let mut step = rust_step(uses);
+    if let StepKind::Shell { run, .. } = &mut step.kind {
+        run[2] = run[2].replace("${VELNOR_TOOL_RUST}", "1.88.0");
+    }
+    step
+}
+
 fn mapping(node: &Yaml) -> &[(String, Yaml)] {
     let Yaml::Map(entries) = node else {
         panic!("expected YAML mapping, got {node:?}");
@@ -55,46 +64,62 @@ fn field<'a>(node: &'a Yaml, key: &str) -> &'a Yaml {
 
 fn scalar(node: &Yaml) -> &str {
     let Yaml::Str(value) = node else {
-        panic!("expected YAML string, got {node:?}");
+        match node {
+            Yaml::Quoted(value)
+            | Yaml::Annotated { value, .. }
+            | Yaml::AnchoredScalar { value, .. } => return value,
+            _ => panic!("expected YAML string, got {node:?}"),
+        }
     };
     value
 }
 
+fn scalar_map(node: &Yaml) -> BTreeMap<String, String> {
+    let mut result = BTreeMap::new();
+    for (key, value) in mapping(node) {
+        assert!(
+            result
+                .insert(key.clone(), scalar(value).to_owned())
+                .is_none(),
+            "duplicate YAML key {key:?}"
+        );
+    }
+    result
+}
+
 #[test]
 fn verifier_composite_keeps_scrubbed_shell_body_homes_and_trusted_shell() {
-    let step = rust_step(RUST_VERIFIER_USES[0]);
+    let step = pinned_rust_step(RUST_VERIFIER_USES[0]);
     let file =
         render_verifier_composite(RUST_VERIFIER_USES[0], &step, "0.1.40").expect("fixed composite");
     assert_eq!(
         file.path,
         ".github/actions/velnor-verify-restored-rust/action.yml"
     );
-    assert!(file.bytes.contains(&format!("shell: {VERIFY_SHELL}")));
+    assert!(
+        file.bytes
+            .contains(&format!("shell: {VERIFY_VERIFIER_SHELL}"))
+    );
+    assert!(!file.bytes.contains("Resolve project tool versions"));
     assert!(file.bytes.contains("RUSTUP_HOME:"));
     assert!(file.bytes.contains("${{ runner.temp }}/velnor/rustup"));
     assert!(file.bytes.contains("CARGO_HOME:"));
     assert!(file.bytes.contains("${{ runner.temp }}/velnor/cargo"));
-    let document =
-        verifier_composite_document("Velnor restored Rust verifier", "VELNOR_TOOL_RUST", &step)
-            .expect("structured verifier composite");
+    let document = verifier_composite_document("Velnor restored Rust verifier", &step)
+        .expect("structured verifier composite");
     let runs = field(&document, "runs");
     assert_eq!(scalar(field(runs, "using")), "composite");
     let Yaml::Seq(steps) = field(runs, "steps") else {
         panic!("composite steps must be a sequence");
     };
-    assert_eq!(
-        steps.len(),
-        1,
-        "there is no resolver or extra executable step"
-    );
+    assert_eq!(steps.len(), 1, "literal catalog pins need no resolver");
     let verifier = &steps[0];
     assert_eq!(
         scalar(field(verifier, "name")),
         "Verify restored Rust toolchain"
     );
-    assert_eq!(scalar(field(verifier, "shell")), VERIFY_SHELL);
+    assert_eq!(scalar(field(verifier, "shell")), VERIFY_VERIFIER_SHELL);
     assert!(mapping(verifier).iter().all(|(key, _)| key != "uses"));
-    let env = mapping(field(verifier, "env"));
     let mut expected_env = crate::toolchain_env::STEP_CREDENTIAL_DENYLIST
         .into_iter()
         .chain(crate::toolchain_env::STEP_ENDPOINT_DENYLIST)
@@ -108,30 +133,14 @@ fn verifier_composite_keeps_scrubbed_shell_body_homes_and_trusted_shell() {
         "CARGO_HOME".to_owned(),
         "${{ runner.temp }}/velnor/cargo".to_owned(),
     );
-    assert_eq!(
-        env.len(),
-        expected_env.len(),
-        "no duplicate or extra env keys"
-    );
-    for (key, expected) in expected_env {
-        let values = env
-            .iter()
-            .filter_map(|(actual_key, value)| (actual_key == &key).then_some(value))
-            .collect::<Vec<_>>();
-        assert_eq!(values.len(), 1, "exactly one {key} binding");
-        assert_eq!(scalar(values[0]), expected, "exact {key} value");
-    }
+    expected_env.insert("PATH".to_owned(), crate::VERIFY_PATH.to_owned());
+    assert_eq!(scalar_map(field(verifier, "env")), expected_env);
     let run = scalar(field(verifier, "run"));
+    assert!(!run.contains("${VELNOR_TOOL_RUST}"), "{run}");
     assert!(
-        run.contains(&format!("PATH={}", crate::VERIFY_PATH)),
-        "{run}"
+        run.contains("set -eu; echo verified; echo rust@1.88.0"),
+        "canonical payload and literal version remain in the verifier step: {run}"
     );
-    assert_eq!(run.matches("${VELNOR_TOOL_RUST}").count(), 1, "{run}");
-    assert!(
-        run.contains(r#"set -eu; echo verified; echo rust@'"${VELNOR_TOOL_RUST}"'"#),
-        "canonical payload and caller binding remain in the verifier step: {run}"
-    );
-    assert!(!run.contains("Resolve project tool versions"));
     let prelude = format!(
         "unset {};",
         crate::toolchain_env::CREDENTIAL_UNSET_VARS.join(" ")
@@ -140,34 +149,47 @@ fn verifier_composite_keeps_scrubbed_shell_body_homes_and_trusted_shell() {
 }
 
 #[test]
-fn jactionlint_composite_uses_the_trusted_shell_and_scrubbed_script() {
-    let step = crate::steps::shell_step(
-        "Verify jactionlint",
-        vec![
-            "sh".to_owned(),
-            "-c".to_owned(),
-            "set -eu; echo digest-verified; echo jactionlint@${VELNOR_TOOL_JACTIONLINT}".to_owned(),
-        ],
-        BTreeMap::new(),
-    )
-    .expect("canonical scrubbed shell");
-    let file = render_verifier_composite(VERIFY_JACTIONLINT_USES, &step, "0.1.40")
-        .expect("fixed jactionlint composite");
+fn dynamic_verifier_composite_self_binds_its_project_tool_reference() {
+    let step = rust_step(RUST_VERIFIER_USES[1]);
+    let file = render_verifier_composite(RUST_VERIFIER_USES[1], &step, "0.1.40")
+        .expect("dynamic verifier composite");
+    let document = verifier_composite_document("Velnor Rust channel verifier", &step)
+        .expect("structured dynamic verifier composite");
+    let runs = field(&document, "runs");
+    let Yaml::Seq(steps) = field(runs, "steps") else {
+        panic!("composite steps must be a sequence");
+    };
+    assert_eq!(steps.len(), 2, "one resolver precedes the verifier");
+    let resolver = &steps[0];
     assert_eq!(
-        file.path,
-        ".github/actions/velnor-verify-jactionlint/action.yml"
+        scalar(field(resolver, "name")),
+        "Resolve project tool versions"
     );
-    assert!(file.bytes.contains(&format!("shell: {VERIFY_SHELL}")));
-    assert!(file.bytes.contains("GITHUB_TOKEN: \"\""));
-    let prelude = format!(
-        "unset {};",
-        crate::toolchain_env::CREDENTIAL_UNSET_VARS.join(" ")
+    assert_eq!(scalar(field(resolver, "shell")), VERIFY_VERIFIER_SHELL);
+    let resolver_run = scalar(field(resolver, "run"));
+    assert!(resolver_run.contains("velnor_bind_selected_mise"));
+    assert!(resolver_run.contains("function_env_scan_complete=0"));
+    assert!(resolver_run.contains("unset ACTIONS_ID_TOKEN_REQUEST_TOKEN"));
+    let verifier = &steps[1];
+    assert_eq!(scalar(field(verifier, "shell")), VERIFY_VERIFIER_SHELL);
+    assert!(scalar(field(verifier, "run")).contains("${VELNOR_TOOL_RUST}"));
+    assert_eq!(
+        file.bytes.matches("Resolve project tool versions").count(),
+        1
     );
-    assert!(file.bytes.contains(&prelude));
-    assert!(file.bytes.contains("digest-verified"));
-    assert!(!file.bytes.contains("Resolve project tool versions"));
-    assert!(file.bytes.contains(&format!("PATH={}", crate::VERIFY_PATH)));
-    assert!(file.bytes.contains("VELNOR_TOOL_JACTIONLINT"));
+
+    let mut wrong_reference = rust_step(RUST_VERIFIER_USES[1]);
+    if let StepKind::Shell { run, .. } = &mut wrong_reference.kind {
+        run[2] = run[2].replace("VELNOR_TOOL_RUST", "VELNOR_TOOL_JACTIONLINT");
+    }
+    let error = render_verifier_composite(RUST_VERIFIER_USES[1], &wrong_reference, "0.1.40")
+        .expect_err("the verifier cannot bind a different tool");
+    assert!(
+        error
+            .to_string()
+            .contains("verifier_composite_tool_binding"),
+        "{error}"
+    );
 }
 
 #[test]
@@ -187,14 +209,16 @@ fn verifier_composite_rejects_unregistered_paths_and_mutated_step_identity() {
     assert!(render_verifier_composite(VERIFY_JACTIONLINT_USES, &canonical, "0.1.40").is_err());
     let mut changed_name = canonical.clone();
     changed_name.name = "anything".to_owned();
-    assert!(render_verifier_composite(RUST_VERIFIER_USES[1], &changed_name, "0.1.40").is_err());
+    let renamed = render_verifier_composite(RUST_VERIFIER_USES[1], &changed_name, "0.1.40")
+        .expect("display names do not control verifier authority");
+    assert!(renamed.bytes.contains("name: anything"));
     let mut changed_role = canonical;
     changed_role.role = None;
     assert!(render_verifier_composite(RUST_VERIFIER_USES[1], &changed_role, "0.1.40").is_err());
 }
 
 #[test]
-fn shared_verifier_argv_fails_closed_on_forged_step_shapes() {
+fn verifier_renderer_reapplies_scrub_and_rejects_forged_step_shapes() {
     let canonical = rust_step(RUST_VERIFIER_USES[1]);
     assert!(verifier_shell_argv(&canonical).is_ok());
 
@@ -202,24 +226,59 @@ fn shared_verifier_argv_fails_closed_on_forged_step_shapes() {
     if let StepKind::Shell { env, .. } = &mut missing_scrub.kind {
         env.remove("GITHUB_TOKEN");
     }
-    assert!(verifier_shell_argv(&missing_scrub).is_err());
+    let rendered = verifier_shell_step_to_yaml(&missing_scrub)
+        .expect("renderer reapplies the complete credential boundary");
+    let emitted_env = scalar_map(field(&rendered, "env"));
+    assert_eq!(
+        emitted_env.get("GITHUB_TOKEN").map(String::as_str),
+        Some("")
+    );
+    for key in crate::toolchain_env::STEP_CREDENTIAL_DENYLIST
+        .into_iter()
+        .chain(crate::toolchain_env::STEP_ENDPOINT_DENYLIST)
+    {
+        assert_eq!(emitted_env.get(key).map(String::as_str), Some(""), "{key}");
+    }
+    assert_eq!(
+        emitted_env.len(),
+        14,
+        "11 scrub values, PATH, and two homes"
+    );
+    assert_eq!(
+        emitted_env.get("PATH").map(String::as_str),
+        Some(crate::VERIFY_PATH)
+    );
+    assert!(emitted_env.contains_key("RUSTUP_HOME"));
+    assert!(emitted_env.contains_key("CARGO_HOME"));
 
     let mut changed_identity = canonical.clone();
     changed_identity.name = "Verify something else".to_owned();
-    assert!(verifier_shell_argv(&changed_identity).is_err());
+    assert!(verifier_shell_argv(&changed_identity).is_ok());
+
+    let mut roleless = canonical.clone();
+    roleless.role = None;
+    assert!(verifier_shell_argv(&roleless).is_err());
 
     let mut untrusted_path = canonical;
     if let StepKind::Shell { env, .. } = &mut untrusted_path.kind {
         env.insert("PATH".to_owned(), "/tmp/poison".to_owned());
     }
-    assert!(verifier_shell_argv(&untrusted_path).is_err());
+    let rendered = verifier_shell_step_to_yaml(&untrusted_path)
+        .expect("renderer replaces an input PATH with the trusted verifier PATH");
+    assert_eq!(
+        scalar_map(field(&rendered, "env"))
+            .get("PATH")
+            .map(String::as_str),
+        Some(crate::VERIFY_PATH)
+    );
 }
 
 #[test]
 fn canonical_verifier_step_requires_one_full_credential_prelude() {
     let prelude = crate::toolchain_env::credential_unset_prelude();
     let canonical = verifier_shell_step(
-        "Verify jactionlint",
+        StepRole::VerifyRustManifest,
+        "Verify Rust manifest",
         vec![
             "sh".to_owned(),
             "-c".to_owned(),
@@ -235,15 +294,36 @@ fn canonical_verifier_step_requires_one_full_credential_prelude() {
     assert_eq!(env.get("GITHUB_TOKEN").map(String::as_str), Some(""));
 
     let argv = verifier_shell_argv(&canonical).expect("trusted fixed-shell argv");
-    assert_eq!(argv[2].matches(&prelude).count(), 1, "{}", argv[2]);
-    let path = argv[2].find("PATH=").expect("trusted PATH assignment");
-    let payload = argv[2].find("set -eu").expect("canonical payload");
-    assert!(path < payload, "{}", argv[2]);
+    assert_eq!(
+        &argv[..8],
+        [
+            "/bin/bash",
+            "--noprofile",
+            "--norc",
+            "-p",
+            "-e",
+            "-o",
+            "pipefail",
+            "-c",
+        ]
+    );
+    let run = verifier_shell_run_scalar(&canonical).expect("actual rendered run scalar");
+    assert_eq!(argv.last(), Some(&run));
+    assert_eq!(run.matches(&prelude).count(), 1, "{run}");
+    let emitted = verifier_shell_step_to_yaml(&canonical).expect("rendered verifier step");
+    assert_eq!(
+        scalar_map(field(&emitted, "env"))
+            .get("PATH")
+            .map(String::as_str),
+        Some(crate::VERIFY_PATH),
+        "trusted PATH is a step environment value"
+    );
 
     for script in ["set -eu".to_owned(), format!("{prelude} {prelude} set -eu")] {
         assert!(
             verifier_shell_step(
-                "Verify jactionlint",
+                StepRole::VerifyRustManifest,
+                "Verify Rust manifest",
                 vec!["sh".to_owned(), "-c".to_owned(), script],
                 BTreeMap::new(),
             )
@@ -255,6 +335,9 @@ fn canonical_verifier_step_requires_one_full_credential_prelude() {
 
 #[path = "verifier_composite_exec_tests.rs"]
 mod exec_tests;
+
+#[path = "verifier_composite_jactionlint_tests.rs"]
+mod jactionlint_tests;
 
 #[cfg(unix)]
 #[test]
@@ -282,21 +365,15 @@ fn emitted_verifiers_replace_poisoned_path_and_remove_all_credentials() {
     for (name, role, uses, reference) in [
         (
             "Verify restored Rust toolchain",
-            Some(StepRole::VerifyRustManifest),
+            StepRole::VerifyRustManifest,
             RUST_VERIFIER_USES[0],
             "VELNOR_TOOL_RUST",
         ),
         (
             crate::VERIFY_RUST_TOOLCHAIN_STEP,
-            Some(StepRole::VerifyRustManifest),
+            StepRole::VerifyRustManifest,
             RUST_VERIFIER_USES[1],
             "VELNOR_TOOL_RUST",
-        ),
-        (
-            "Verify jactionlint",
-            None,
-            VERIFY_JACTIONLINT_USES,
-            "VELNOR_TOOL_JACTIONLINT",
         ),
     ] {
         exec_tests::execute_emitted_verifier(

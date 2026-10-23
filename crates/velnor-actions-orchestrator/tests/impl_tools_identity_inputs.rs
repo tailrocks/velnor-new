@@ -11,11 +11,18 @@ use std::process::Command;
 
 use velnor_actions_mise::RUST_VERSION;
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
+use velnor_actions_workflow_renderer::RenderedTree;
+use velnor_actions_workflow_renderer::{VERIFY_PATH, toolchain_env::credential_scrub};
 
 use crate::impl_common::{TestResult, make_repo};
 
+#[path = "impl_tools_identity_parser.rs"]
+mod parser;
+use parser::{ResolverStep, resolver_steps};
 #[path = "impl_tools_identity_runtime.rs"]
 mod runtime;
+#[path = "impl_tools_identity_security.rs"]
+mod security;
 
 const CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust]\ncompile_driver = \"mbx\"\ntest_runner = \"cargo_nextest\"\n";
 
@@ -51,70 +58,18 @@ fn mise_lock(
     lock
 }
 
-/// Decode a YAML double-quoted scalar the generator emits.
-fn unquote(raw: &str) -> String {
-    let mut out = String::with_capacity(raw.len());
-    let mut chars = raw.chars();
-    while let Some(ch) = chars.next() {
-        if ch != '\\' {
-            out.push(ch);
-            continue;
-        }
-        match chars.next() {
-            Some('n') => out.push('\n'),
-            Some('t') => out.push('\t'),
-            Some(other) => out.push(other),
-            None => {}
-        }
-    }
-    out
-}
-
-/// Read one complete resolver script by its emitted step identity, rather
-/// than assuming the old raw-script prefix. Trusted verifier jobs now add a
-/// credential and fixed-PATH prelude before the resolver payload.
-fn resolver_script(file: &str) -> Option<String> {
-    let mut resolver_step = false;
-    for line in file.lines().map(str::trim_start) {
-        if line == "- name: Resolve project tool versions" {
-            resolver_step = true;
-            continue;
-        }
-        if !resolver_step {
-            continue;
-        }
-        if let Some(raw) = line.strip_prefix("run: \"") {
-            let raw = raw
-                .strip_suffix("\" # zizmor: ignore[github-env]")
-                .or_else(|| raw.strip_suffix('"'))?;
-            return Some(unquote(raw));
-        }
-        if line.starts_with("- name:") {
-            return None;
-        }
-    }
-    None
-}
-
-fn is_trusted_resolver(script: &str) -> bool {
-    let unset = velnor_actions_workflow_renderer::toolchain_env::credential_unset_prelude();
-    let prefix = format!(
-        "{unset} PATH={}; export PATH; set -eu",
-        velnor_actions_workflow_renderer::VERIFY_PATH
-    );
-    script.starts_with(&prefix)
-        && script.contains("mise_bin=\"${HOME:?missing HOME}/.local/share/mise/bin/mise\"")
-        && !script.contains("velnor_mise() { mise --no-config")
-}
-
-/// Every resolver script and every identity `d` input across the tree.
-fn generated() -> Result<(Vec<String>, Vec<String>), Box<dyn std::error::Error>> {
+pub(super) fn rendered_tree() -> Result<RenderedTree, Box<dyn std::error::Error>> {
     let repo = make_repo(CONFIG)?;
     fs::write(
         repo.path().join("mise.toml"),
         mise_toml("0.9.148", "20.1.0", "a"),
     )?;
-    let tree = render_staged_tree(&prepare(repo.path())?)?;
+    Ok(render_staged_tree(&prepare(repo.path())?)?)
+}
+
+/// Every resolver script and every identity `d` input across the tree.
+fn generated() -> Result<(Vec<String>, Vec<String>), Box<dyn std::error::Error>> {
+    let tree = rendered_tree()?;
     let mut scripts = Vec::new();
     let mut inputs = Vec::new();
     for file in &tree.files {
@@ -127,19 +82,7 @@ fn generated() -> Result<(Vec<String>, Vec<String>), Box<dyn std::error::Error>>
                 inputs.push(value.to_owned());
             }
         }
-        if let Some(script) = resolver_script(&file.bytes) {
-            assert!(
-                script.contains("velnor_tool VELNOR_TOOL_"),
-                "resolver step has no tool binding in {}:\n{script}",
-                file.path
-            );
-            assert!(
-                is_trusted_resolver(&script),
-                "resolver has an unexpected trust prelude in {}:\n{script}",
-                file.path
-            );
-            scripts.push(script);
-        }
+        scripts.extend(resolver_steps(&file.bytes).into_iter().map(|step| step.run));
     }
     scripts.sort();
     scripts.dedup();
@@ -155,30 +98,38 @@ fn identities(
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let dir = tempfile::TempDir::new()?;
     let (workspace, runner_temp) = (dir.path().join("ws"), dir.path().join("tmp"));
-    let home = dir.path().join("home");
-    let trusted_mise = home.join(".local/share/mise/bin/mise");
     for (rel, text) in files {
         let path = workspace.join(rel);
         fs::create_dir_all(path.parent().ok_or("no parent")?)?;
         fs::write(path, text)?;
     }
     fs::create_dir_all(&runner_temp)?;
-    fs::create_dir_all(trusted_mise.parent().ok_or("no trusted Mise parent")?)?;
-    let real_mise = runtime::executable_on_path("mise")?;
-    runtime::write_executable(&trusted_mise, &runtime::mise_delegate_wrapper(&real_mise))?;
+    let mise_data = dir.path().join("mise-data");
+    crate::impl_common::write_fixture_mise(&mise_data)?;
     let github_env = dir.path().join("github-env");
     let mut env = BTreeMap::new();
     for script in &generated.0 {
         fs::write(&github_env, "")?;
-        let output = Command::new("bash")
-            .args(["--noprofile", "--norc", "-eo", "pipefail", "-c", script])
+        let output = Command::new("/bin/bash")
+            .args([
+                "--noprofile",
+                "--norc",
+                "-p",
+                "-e",
+                "-o",
+                "pipefail",
+                "-c",
+                script,
+            ])
             .current_dir(&workspace)
+            .env("PATH", VERIFY_PATH)
             .env("GITHUB_ENV", &github_env)
             .env("RUNNER_TEMP", &runner_temp)
-            .env("HOME", &home)
+            .env("MISE_DATA_DIR", &mise_data)
             .env("RUNNER_OS", "Linux")
             .env("RUNNER_ARCH", "X64")
             .env("CI", "true")
+            .envs(credential_scrub())
             .output()
             .map_err(|err| format!("the identity tests need bash and mise on PATH: {err}"))?;
         assert!(output.status.success(), "{output:?}\n{script}");
@@ -248,10 +199,6 @@ fn config(nextest: &str) -> String {
 fn baseline() -> Result<(Generated, Vec<String>), Box<dyn std::error::Error>> {
     let generated = generated()?;
     assert!(!generated.0.is_empty(), "no resolver step rendered");
-    assert!(
-        generated.0.iter().all(|script| is_trusted_resolver(script)),
-        "every dynamically-bound resolver must use its trusted shell and Mise path"
-    );
     assert!(
         generated
             .1

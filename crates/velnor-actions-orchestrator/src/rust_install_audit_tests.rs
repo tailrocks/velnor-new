@@ -136,6 +136,24 @@ fn verifier_call_requires_exact_path_and_no_caller_inputs() {
 }
 
 #[test]
+fn typed_verifier_action_calls_keep_display_names_presentational() {
+    let renamed_rust = VERIFIED.replace(
+        "      - name: Verify Rust channel manifest\n        uses:",
+        "      - name: Neutral verifier label\n        uses:",
+    );
+    let renamed = format!(
+        "{renamed_rust}      - name: Another neutral verifier label\n        uses: {} # zizmor: ignore[self-repository]\n",
+        velnor_actions_contract::workflow::JACTIONLINT_VERIFIER_USES
+    );
+    assert_ne!(renamed, VERIFIED);
+    assert_eq!(
+        problem(&files(".github/workflows/release.yml", &renamed)),
+        "",
+        "the exact typed verifier reference remains authoritative after its label changes"
+    );
+}
+
+#[test]
 fn missing_or_changed_verifier_composite_blocks_audit() {
     let mut missing = files(".github/workflows/release.yml", VERIFIED);
     missing.retain(|file| file.path != ".github/actions/velnor-verify-jactionlint/action.yml");

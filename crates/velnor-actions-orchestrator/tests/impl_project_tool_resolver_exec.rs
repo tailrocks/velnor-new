@@ -41,14 +41,17 @@ pub(crate) fn run(
     }
     let temp = dir.path().join("runner-temp");
     fs::create_dir_all(&temp)?;
+    let mise_data = dir.path().join("mise-data");
+    crate::impl_common::write_fixture_mise(&mise_data)?;
     let env_file = dir.path().join("github-env");
     fs::write(&env_file, "")?;
     let set: BTreeSet<String> = names.iter().map(|name| (*name).to_owned()).collect();
     let script = project_tool_resolver_script(&set, rustup);
-    let output = Command::new("bash")
+    let output = Command::new("/bin/bash")
         .args([
             "--noprofile",
             "--norc",
+            "-p",
             "-e",
             "-o",
             "pipefail",
@@ -58,6 +61,7 @@ pub(crate) fn run(
         .current_dir(&root)
         .env("GITHUB_ENV", &env_file)
         .env("RUNNER_TEMP", &temp)
+        .env("MISE_DATA_DIR", &mise_data)
         // GitHub runners set CI=true, under which Mise auto-trusts config.
         .env("CI", "true")
         .output()

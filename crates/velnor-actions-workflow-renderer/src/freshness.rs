@@ -115,6 +115,7 @@ pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, R
         BTreeMap::new(),
     )?;
     let verify_rust = crate::verifier_composite::verifier_shell_step(
+        velnor_actions_contract::StepRole::VerifyRustManifest,
         crate::VERIFY_RUST_TOOLCHAIN_STEP,
         spec.verify_rust_argv.clone(),
         BTreeMap::new(),

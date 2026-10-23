@@ -44,3 +44,17 @@ associated-PR source selection from irreversible tag mutation. Tag, signer and
 publisher jobs remain source-free; no general privileged checkout or execution
 is authorized. The release is published once with complete signed assets and
 stays immutable. See [manual stable coordination](proposed/binary-release-contract.md).
+
+**Declared Sigstore-bundle provenance (2026-10-23).** Private repositories on a
+plan without artifact attestations cannot persist an attestation (#364). The
+attest job keeps the existing fixed `ArtifactAttest` role and keyless OIDC
+signing through GitHub's Sigstore instance. A repository may declare
+`[publish] provenance = "sigstore_bundle"` to keep the signed bundle and a
+receipt as immutable release assets instead of in the attestation store,
+verified with `gh attestation verify --bundle` before anything is published.
+The default stays the attestation store and fails closed. The bundle never
+goes to the public-good log (private identities stay private). The existing
+Maven `attest = false` opt-out remains available with a validated reason and
+warning; it takes precedence over either repository-level provenance mode.
+See the
+[package publication contract](proposed/package-publication-contract.md#10-provenance-store-publish-provenance).

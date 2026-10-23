@@ -1,7 +1,5 @@
 //! Exact schema-2 product-release workflow and action snapshots.
 
-use std::path::Path;
-
 use velnor_actions_workflow_renderer::RenderedTree;
 
 #[path = "schema2_generator_release_action_snapshots.rs"]
@@ -16,6 +14,8 @@ mod publication_snapshots;
 mod qualification_snapshots;
 #[path = "schema2_generator_release_security_snapshots.rs"]
 mod security_snapshots;
+#[path = "schema2_generator_release_verifier_snapshots.rs"]
+pub(super) mod verifier_snapshots;
 
 use action_snapshots::{Actions, action_text};
 
@@ -23,8 +23,30 @@ pub(super) fn assert_release_workflow_verifier(
     workflow: &str,
     step_name: &str,
     globally_scoped_key: &str,
+    install_step_name: &str,
+    install_token: Option<(&str, &str)>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    security_snapshots::assert_release_workflow_verifier(workflow, step_name, globally_scoped_key)
+    security_snapshots::assert_release_workflow_verifier(workflow, step_name, globally_scoped_key)?;
+    verifier_snapshots::assert_release_workflow_verifier(
+        workflow,
+        step_name,
+        globally_scoped_key,
+        install_step_name,
+        install_token,
+    )?;
+    Ok(())
+}
+
+pub(super) fn assert_full_workflow_verifier_environment(
+    workflow: &str,
+    verifier_steps: &[&str],
+    authenticated_bindings: &[(&str, &str, &str)],
+) -> Result<(), Box<dyn std::error::Error>> {
+    verifier_snapshots::assert_exact_empty_verifier_credentials_with_bindings(
+        workflow,
+        verifier_steps,
+        authenticated_bindings,
+    )
 }
 
 pub(super) const PRODUCT_RELEASE: &str = include_str!("snapshots/product-release.yml");
@@ -56,12 +78,12 @@ pub(super) fn assert_rendered(tree: &RenderedTree) -> Result<(), Box<dyn std::er
         workflows.push(body);
     }
     let actions = action_snapshots::rendered_actions(tree)?;
-    assert_product(&workflows, &actions)
+    assert_product(&workflows, &actions, false)
 }
 
 /// The checked-in workflows and actions match schema-2 output.
 pub(super) fn assert_committed(
-    root: &Path,
+    root: &std::path::Path,
     tree: &RenderedTree,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let paths = [
@@ -91,10 +113,25 @@ pub(super) fn assert_committed(
     }
     let workflow_refs = workflows.iter().map(String::as_str).collect::<Vec<_>>();
     let actions = action_snapshots::committed_actions_matching_tree(root, tree)?;
-    assert_product(&workflow_refs, &actions)
+    assert_repository_project_tools(root)?;
+    assert_product(&workflow_refs, &actions, true)
 }
 
-fn assert_product(workflows: &[&str], actions: &Actions) -> Result<(), Box<dyn std::error::Error>> {
+fn assert_repository_project_tools(
+    root: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mise = std::fs::read_to_string(root.join("mise.toml"))?;
+    if !mise.contains("[tools]") || !mise.contains("rust =") || !mise.contains("mr-boxington =") {
+        return Err("the committed-release fixture must declare Rust and MBX project tools".into());
+    }
+    Ok(())
+}
+
+fn assert_product(
+    workflows: &[&str],
+    actions: &Actions,
+    project_tool_resolver: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     let [parent, images, binary, generator] = workflows else {
         return Err("expected coordinator and three family workflows".into());
     };
@@ -133,7 +170,12 @@ fn assert_product(workflows: &[&str], actions: &Actions) -> Result<(), Box<dyn s
     assert!(!all.contains("generator-${GITHUB_SHA}"), "{all}");
     assert_permissions(images, binary, generator)?;
     assert_checkouts(parent, generator, actions)?;
-    security_snapshots::assert_isolated_candidate_execution(&all_workflows, actions)?;
+    security_snapshots::assert_isolated_candidate_execution(
+        generator,
+        workflows,
+        actions,
+        project_tool_resolver,
+    )?;
     publication_snapshots::assert_asset_catalog(&action_text(actions));
     publication_snapshots::assert_pinned_gh_policy(actions);
     cross_snapshots::assert_portable_gh_watchdog(actions);

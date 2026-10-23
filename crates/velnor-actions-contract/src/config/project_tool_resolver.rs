@@ -30,6 +30,7 @@ use super::project_tool_refs::{
     PROJECT_MISE_CONFIG_PATTERNS, PROJECT_TOOL_LOCK_FILES, PROJECT_TOOL_VERSIONS_FILE,
     RUST_TOOLCHAIN_SOURCE_FILES, project_tool_lock_base, project_tool_lock_name,
 };
+use super::selected_mise::BIND_SELECTED_MISE_FUNCTION;
 
 /// `(variable, [tools] keys)` for every catalog tool; the first key is the
 /// canonical spelling, the rest are other backends' spellings of the
@@ -107,10 +108,12 @@ velnor_db="$velnor_dir/declared"
 velnor_tab=$(printf '\t')
 velnor_safe() { printf '%s' "$1" | cut -c1-64 | tr -c 'A-Za-z0-9._/@+-' '?'; }
 velnor_fail() { printf 'velnor: %s\n' "$1" >&2; exit 1; }
-velnor_mise() { mise --no-config --no-env --no-hooks "$@"; }
+@@VELNOR_BIND_SELECTED_MISE@@
+velnor_mise() { "$mise_bin" --no-config --no-env --no-hooks "$@"; }
 rm -rf "$velnor_dir"
 mkdir -p "$velnor_dir"
 : > "$velnor_db"
+velnor_bind_selected_mise "$velnor_dir/mise-data-dir" || { velnor_mise_status=$?; velnor_fail "Setup Mise data directory or binary is invalid (status $velnor_mise_status)"; }
 velnor_regular() {
   if [ -L "$1" ] || [ ! -f "$1" ]; then velnor_fail "$1 must be a regular file"; fi
 }
@@ -278,7 +281,7 @@ pub fn project_tool_resolver_script(names: &BTreeSet<String>, export_rustup: boo
         .iter()
         .map(|name| project_tool_lock_base(name).unwrap_or(name))
         .collect();
-    let mut script = PRELUDE.to_owned();
+    let mut script = PRELUDE.replace("@@VELNOR_BIND_SELECTED_MISE@@", BIND_SELECTED_MISE_FUNCTION);
     push_grammar_functions(&mut script, &tools);
     script.push_str("velnor_locks='");
     script.push_str(&PROJECT_TOOL_LOCK_FILES.join(" "));

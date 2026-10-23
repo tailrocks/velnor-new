@@ -65,6 +65,7 @@ pub(super) fn jobs(
     validate_exact_version(&request.mbx_version, "mbx")?;
     validate_exact_version(&request.rust_version, "rust")?;
     let verify_rust_step = crate::verifier_composite::verifier_shell_step(
+        velnor_actions_contract::StepRole::VerifyRustManifest,
         crate::VERIFY_RUST_TOOLCHAIN_STEP,
         request.verify_rust_argv.clone(),
         std::collections::BTreeMap::default(),

@@ -9,12 +9,11 @@ use velnor_actions_mise::{PREPARE_PINNED_TOOLS_STEP, PinnedTool, ToolCatalog};
 
 use crate::lock_audit::audit_prepare_installs_with_catalog;
 use crate::workflow::verifier_actions::call_step;
-use crate::workflow::{
-    NOT_CATALOGUED_CODE, VERIFY_JACTIONLINT_STEP, VERIFY_RESTORED_RUST_STEP,
-    VERIFY_RUST_MANIFEST_STEP,
-};
+use crate::workflow::{NOT_CATALOGUED_CODE, VERIFY_RESTORED_RUST_STEP, VERIFY_RUST_MANIFEST_STEP};
 use velnor_actions_contract::workflow::RUST_VERIFIER_USES;
-use velnor_actions_workflow_renderer::verifier_composite::VERIFY_JACTIONLINT_USES;
+
+#[path = "lock_audit_jactionlint_tests.rs"]
+mod jactionlint_tests;
 
 fn step(name: &str, role: Option<StepRole>, run: &[&str]) -> Step {
     Step {
@@ -294,96 +293,4 @@ fn verified_uncatalogued_rust_blocks_once() {
         .filter(|line| line.starts_with(&format!("{NOT_CATALOGUED_CODE}:rust@1.84.1")))
         .collect();
     assert_eq!(hits.len(), 1, "{:?}", outcome.blocking);
-}
-
-/// One plan job installing jactionlint, with or without `Verify jactionlint`.
-fn jactionlint_ir(spec: &str, verified: bool) -> WorkflowIr {
-    let mut workflow = ir(false);
-    let job = workflow.jobs.get_mut("plan").expect("plan job");
-    job.steps = vec![step(
-        PREPARE_PINNED_TOOLS_STEP,
-        Some(StepRole::PreparePinnedTools),
-        &["mise", "--no-config", "install", spec],
-    )];
-    if verified {
-        job.steps.push(call_step(
-            VERIFY_JACTIONLINT_STEP,
-            VERIFY_JACTIONLINT_USES,
-            None,
-        ));
-    }
-    workflow
-}
-
-#[test]
-fn a_verified_catalogued_jactionlint_needs_no_lock_row() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let spec = format!("jactionlint@{}", velnor_actions_mise::JACTIONLINT_VERSION);
-    let verified = audit_prepare_installs_with_catalog(
-        dir.path(),
-        &jactionlint_ir(&spec, true),
-        "ubuntu-26.04",
-        &[],
-        &ToolCatalog::pinned(),
-    );
-    assert!(verified.blocking.is_empty(), "{:?}", verified.blocking);
-    assert_eq!(verified.recommendation, None);
-    let unverified = audit_prepare_installs_with_catalog(
-        dir.path(),
-        &jactionlint_ir(&spec, false),
-        "ubuntu-26.04",
-        &[],
-        &ToolCatalog::pinned(),
-    );
-    let summary = unverified
-        .recommendation
-        .expect("gap without the verify step");
-    assert!(summary.contains(&spec), "{summary}");
-}
-
-#[test]
-fn a_verified_uncatalogued_jactionlint_still_needs_its_lock_row() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let catalog = ToolCatalog::pinned()
-        .with_project_tool(PinnedTool::Jactionlint, "9.9.9")
-        .expect("exact");
-    let outcome = audit_prepare_installs_with_catalog(
-        dir.path(),
-        &jactionlint_ir("jactionlint@9.9.9", true),
-        "ubuntu-26.04",
-        &[],
-        &catalog,
-    );
-    let summary = outcome
-        .recommendation
-        .expect("gap for an uncatalogued version");
-    assert!(summary.contains("jactionlint@9.9.9"), "{summary}");
-}
-
-#[test]
-fn jactionlint_verifier_must_follow_the_pinned_tool_install_immediately() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let spec = format!("jactionlint@{}", velnor_actions_mise::JACTIONLINT_VERSION);
-    let mut workflow = jactionlint_ir(&spec, true);
-    workflow
-        .jobs
-        .get_mut("plan")
-        .expect("plan job")
-        .steps
-        .insert(1, step("Unrelated step", None, &["echo", "between"]));
-    let outcome = audit_prepare_installs_with_catalog(
-        dir.path(),
-        &workflow,
-        "ubuntu-26.04",
-        &[],
-        &ToolCatalog::pinned(),
-    );
-    assert!(
-        outcome
-            .blocking
-            .iter()
-            .any(|message| message.starts_with("jactionlint_verifier_sequence_invalid:plan:")),
-        "{:?}",
-        outcome.blocking
-    );
 }

@@ -49,14 +49,15 @@ pub(super) fn verifier_positions(
                 }
                 _ => unreachable!("lookup returns only registered verifier actions"),
             }
-        } else if step.role == Some(StepRole::VerifyRustManifest)
-            || matches!(
-                step.name.as_str(),
-                crate::workflow::VERIFY_RESTORED_RUST_STEP
-                    | crate::workflow::VERIFY_RUST_MANIFEST_STEP
-                    | crate::workflow::VERIFY_JACTIONLINT_STEP
-            )
-        {
+        } else if matches!(
+            step.role,
+            Some(StepRole::VerifyRustManifest | StepRole::VerifyJactionlint)
+        ) || matches!(
+            step.name.as_str(),
+            crate::workflow::VERIFY_RESTORED_RUST_STEP
+                | crate::workflow::VERIFY_RUST_MANIFEST_STEP
+                | crate::workflow::VERIFY_JACTIONLINT_STEP
+        ) {
             blocking.push(format!("forged_verifier_call:{id}:{}", step.name));
         }
     }

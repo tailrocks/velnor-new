@@ -3,7 +3,10 @@
 
 use crate::RenderError;
 use velnor_actions_contract::workflow::step_identity::{
-    RUST_VERIFIER_USES, TOOL_SEED_USES, TOOLS_CACHE_PRELUDE_USES, TOOLS_CACHE_RESTORE_USES,
+    TOOL_SEED_USES, TOOLS_CACHE_PRELUDE_USES, TOOLS_CACHE_RESTORE_USES,
+};
+use velnor_actions_contract::workflow::{
+    JACTIONLINT_VERIFIER_USES, RUST_VERIFIER_USES, Step, StepKind, StepRole,
 };
 
 /// Prefix for renderer-generated shared `ToFu` setup composites.
@@ -24,7 +27,7 @@ pub(crate) const DECLARED_TASK_ACTION_PREFIX: &str = "./.github/actions/declared
 /// name, a forbidden installer action, or a short ref.
 pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
     if RUST_VERIFIER_USES.contains(&uses)
-        || uses == crate::verifier_composite::VERIFY_JACTIONLINT_USES
+        || uses == JACTIONLINT_VERIFIER_USES
         || matches!(
             uses,
             TOOL_SEED_USES
@@ -97,6 +100,39 @@ pub(crate) fn is_generated_declared_task(uses: &str) -> bool {
                     .parse::<usize>()
                     .is_ok_and(|index| index.to_string() == suffix)
         })
+}
+
+pub(crate) fn validate_verifier_call(
+    step: &Step,
+    uses: &str,
+    with: &std::collections::BTreeMap<String, String>,
+    env: &std::collections::BTreeMap<String, String>,
+) -> Result<(), RenderError> {
+    let expected_role = if RUST_VERIFIER_USES.contains(&uses) {
+        Some(StepRole::VerifyRustManifest)
+    } else if uses == JACTIONLINT_VERIFIER_USES {
+        Some(StepRole::VerifyJactionlint)
+    } else {
+        None
+    };
+    let verifier_role = matches!(
+        step.role,
+        Some(StepRole::VerifyRustManifest | StepRole::VerifyJactionlint)
+    );
+    if expected_role.is_none() && !verifier_role {
+        return Ok(());
+    }
+    if expected_role != step.role || !with.is_empty() || !env.is_empty() {
+        return Err(RenderError::InvalidWorkflow(
+            "verifier_action_identity_mismatch".to_owned(),
+        ));
+    }
+    if !matches!(&step.kind, StepKind::Action { .. }) {
+        return Err(RenderError::InvalidWorkflow(
+            "verifier_action_payload_mismatch".to_owned(),
+        ));
+    }
+    Ok(())
 }
 
 /// True for `owner/repo` over alphanumerics plus `.-_`.

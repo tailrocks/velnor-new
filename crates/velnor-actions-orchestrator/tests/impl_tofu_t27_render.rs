@@ -53,14 +53,6 @@ fn config_with_extra(roots: &str, extra: &str) -> String {
     )
 }
 
-/// Staged `ci.yml` text `generate` would write for one repo root.
-fn staged_yaml(root: &Path) -> Result<String, Box<dyn std::error::Error>> {
-    let tree = render_staged_tree(&prepare(root)?)?;
-    tree.get(WORKFLOW_PATH)
-        .map(str::to_owned)
-        .ok_or_else(|| "missing workflow in staged tree".into())
-}
-
 /// Plan the pull request ending at `head` over a two-commit tofu repo.
 fn plan_tofu_pr(root: &Path) -> Result<Plan, Box<dyn std::error::Error>> {
     let base = git_line(&["rev-parse", "HEAD~1"], root)?;
@@ -99,9 +91,9 @@ fn tofu_config_rejects_raw_yaml_keys() -> TestResult {
     Ok(())
 }
 
-/// Rendered tofu legs carry the fixed payload under the default shell.
+/// Tofu legs keep the default shell; only the pinned linter verifier is hardened.
 #[test]
-fn tofu_rendered_steps_carry_no_custom_shell() -> TestResult {
+fn tofu_rendered_steps_keep_default_shell_outside_the_linter_verifier() -> TestResult {
     let config = config_with_extra("\"stacks/a\", \"stacks/b\"", "");
     let dir = make_pure_tofu_repo(
         &config,
@@ -110,12 +102,15 @@ fn tofu_rendered_steps_carry_no_custom_shell() -> TestResult {
             ("stacks/b/main.tf", "variable \"b\" {}\n"),
         ],
     )?;
-    let yaml = staged_yaml(dir.path())?;
+    let prep = prepare(dir.path())?;
+    let tree = render_staged_tree(&prep)?;
+    let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
+    assert_jactionlint_verifier_calls(yaml);
+    assert_jactionlint_action_definition(&prep, &tree)?;
     assert!(
-        !yaml
-            .lines()
-            .any(|line| line.trim_start().starts_with("shell:")),
-        "no custom shell anywhere:\n{yaml}"
+        yaml.lines()
+            .all(|line| !line.trim_start().starts_with("shell:")),
+        "workflow verifier calls and Tofu legs keep the default shell:\n{yaml}"
     );
     let mut tofu_runs = 0;
     for line in yaml.lines() {
@@ -276,7 +271,10 @@ fn tofu_provider_save_shares_job_budget_without_weakening_elected_custody() -> T
         with.get("path").map(String::as_str),
         Some(TOFU_PROVIDERS_PATH_OUTPUT_EXPR)
     );
-    assert_provider_save_budget(&staged_yaml(dir.path())?)
+    let tree = render_staged_tree(&prep)?;
+    let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
+    assert_jactionlint_action_definition(&prep, &tree)?;
+    assert_provider_save_budget(yaml)
 }
 
 /// Inspect the actual provider job and its action/guard/reporter ordering.
@@ -315,10 +313,65 @@ fn assert_provider_save_budget(yaml: &str) -> TestResult {
         );
     }
     assert!(body.contains("Record optional cache budget"));
+    assert_jactionlint_verifier_calls(yaml);
+    Ok(())
+}
+
+fn assert_jactionlint_verifier_calls(yaml: &str) {
+    let lines = yaml.lines().collect::<Vec<_>>();
+    let mut verifier_count = 0;
+    for (index, line) in lines.iter().enumerate() {
+        let trimmed = line.trim_start();
+        if trimmed != "- name: Verify jactionlint" {
+            continue;
+        }
+        verifier_count += 1;
+        let indent = line.len() - trimmed.len();
+        let mut fields = vec![trimmed.to_owned()];
+        for next in lines.iter().skip(index + 1) {
+            let next_trimmed = next.trim_start();
+            let next_indent = next.len() - next_trimmed.len();
+            if next_indent < indent || (next_indent == indent && next_trimmed.starts_with("- ")) {
+                break;
+            }
+            fields.push(next_trimmed.to_owned());
+        }
+        assert_eq!(
+            fields.len(),
+            2,
+            "verifier call has only name and uses: {fields:?}"
+        );
+        assert_eq!(
+            fields[1],
+            "uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]"
+        );
+    }
     assert!(
-        !yaml
-            .lines()
-            .any(|line| line.trim_start().starts_with("shell:"))
+        verifier_count > 0,
+        "a Tofu workflow includes verifier calls"
     );
+}
+
+fn assert_jactionlint_action_definition(
+    prep: &velnor_actions_orchestrator::GenerationPreparation,
+    tree: &velnor_actions_workflow_renderer::render::RenderedTree,
+) -> TestResult {
+    let catalog = prep.emission_catalog();
+    let version = catalog.version(velnor_actions_mise::PinnedTool::Jactionlint);
+    let script = velnor_actions_workflow_renderer::jactionlint_verifier_script(version);
+    let verifier = velnor_actions_workflow_renderer::steps::jactionlint_verifier_step(
+        "Verify jactionlint",
+        vec!["sh".to_owned(), "-c".to_owned(), script],
+        std::collections::BTreeMap::new(),
+    )?;
+    let expected = velnor_actions_workflow_renderer::verifier_composite::render_verifier_composite(
+        velnor_actions_contract::workflow::JACTIONLINT_VERIFIER_USES,
+        &verifier,
+        env!("CARGO_PKG_VERSION"),
+    )?;
+    let actual = tree
+        .get(&expected.path)
+        .ok_or("missing Jactionlint action")?;
+    assert_eq!(actual, expected.bytes);
     Ok(())
 }

@@ -1,6 +1,7 @@
 use super::{assert_exact_empty_verifier_credentials, assert_release_workflow_verifier};
 
 const VALID: &str = include_str!("snapshots/generator-release-qualify-linux.yml");
+const TRUSTED_PATH: &str = velnor_actions_workflow_renderer::VERIFY_PATH;
 
 #[test]
 fn exact_empty_credentials_are_limited_to_both_verifier_steps() {
@@ -10,6 +11,33 @@ fn exact_empty_credentials_are_limited_to_both_verifier_steps() {
             &["Verify Rust channel manifest", "Verify jactionlint"],
         )
         .is_ok()
+    );
+}
+
+#[test]
+fn verifier_path_is_required_and_trusted() {
+    let path_entry = format!("        PATH: {TRUSTED_PATH}\n");
+    let missing = VALID.replacen(&path_entry, "", 1);
+    assert_ne!(
+        missing, VALID,
+        "missing-PATH tamper must change its fixture"
+    );
+    assert!(
+        assert_exact_empty_verifier_credentials(
+            &missing,
+            &["Verify Rust channel manifest", "Verify jactionlint"],
+        )
+        .is_err()
+    );
+
+    let poisoned = VALID.replacen(TRUSTED_PATH, "/tmp/poison", 1);
+    assert_ne!(poisoned, VALID, "wrong-PATH tamper must change its fixture");
+    assert!(
+        assert_exact_empty_verifier_credentials(
+            &poisoned,
+            &["Verify Rust channel manifest", "Verify jactionlint"],
+        )
+        .is_err()
     );
 }
 

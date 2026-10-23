@@ -17,6 +17,7 @@ pub(crate) fn plain_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
     crate::parallel_steps::reject_parallel(step, "plain")?;
     match &step.kind {
         StepKind::Action { uses, with, env } => {
+            crate::action_ref::validate_verifier_call(step, uses, with, env)?;
             crate::steps::validate_uses(uses)?;
             for entry in with.keys().chain(with.values()) {
                 crate::steps::scan_for_private_subcommands(entry)?;
@@ -37,13 +38,14 @@ pub(crate) fn plain_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
             Ok(Yaml::Map(entries))
         }
         StepKind::Shell { run, env } => {
-            if matches!(
-                step.name.as_str(),
-                "Verify restored Rust toolchain"
-                    | crate::VERIFY_RUST_TOOLCHAIN_STEP
-                    | "Verify jactionlint"
-            ) {
-                return crate::document_steps::verifier_shell_step_to_yaml(step);
+            if let Some(verifier) = crate::verifier_shell::render_typed_step(
+                step,
+                run,
+                env,
+                &std::collections::BTreeMap::new(),
+                false,
+            )? {
+                return Ok(verifier);
             }
             crate::action_mbx_shell::validate_step_argv(run, step.role)?;
             commands::validate_env(env)?;

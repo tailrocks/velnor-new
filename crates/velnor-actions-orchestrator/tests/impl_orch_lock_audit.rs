@@ -2,7 +2,7 @@
 use std::fs;
 
 use tempfile::TempDir;
-use velnor_actions_contract::StepKind;
+use velnor_actions_contract::{StepKind, config::project_tool_refs::PROJECT_TOOLS_STEP_NAME};
 use velnor_actions_mise::PREPARE_PINNED_TOOLS_STEP;
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
 
@@ -63,6 +63,51 @@ fn preview_generate(repo: &TempDir) -> Result<String, Box<dyn std::error::Error>
         },
     )?;
     plan_for(&prep)
+}
+
+fn resolver_script_from_workflow(yaml: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let step_header = format!("      - name: {PROJECT_TOOLS_STEP_NAME}");
+    let mut in_resolver = false;
+    for line in yaml.lines() {
+        if line.starts_with("      - ") {
+            in_resolver = line == step_header;
+            continue;
+        }
+        if !in_resolver {
+            continue;
+        }
+        let Some(scalar) = line.strip_prefix("        run: ") else {
+            continue;
+        };
+        let end = quoted_yaml_scalar_end(scalar).ok_or("resolver run scalar is not quoted")?;
+        let run: String = serde_json::from_str(&scalar[..end])?;
+        let (_, script) = run
+            .rsplit_once(" -c '")
+            .ok_or("resolver run has no isolated shell payload")?;
+        return Ok(script
+            .strip_suffix('\'')
+            .ok_or("resolver shell payload is not closed")?
+            .replace("'\\''", "'"));
+    }
+    Err("generated workflow has no project-tool resolver run".into())
+}
+
+fn quoted_yaml_scalar_end(value: &str) -> Option<usize> {
+    let bytes = value.as_bytes();
+    if bytes.first() != Some(&b'"') {
+        return None;
+    }
+    let mut escaped = false;
+    for (index, byte) in bytes.iter().enumerate().skip(1) {
+        if escaped {
+            escaped = false;
+        } else if *byte == b'\\' {
+            escaped = true;
+        } else if *byte == b'"' {
+            return Some(index + 1);
+        }
+    }
+    None
 }
 
 #[test]
@@ -227,15 +272,21 @@ fn hostile_config_ignored_by_isolated_installs() -> TestResult {
         !yaml.contains(&format!("rust@{}", velnor_actions_mise::RUST_VERSION)),
         "declared version copied: {yaml}"
     );
+    let resolver = resolver_script_from_workflow(&yaml)?;
+    let selected_mise_binder =
+        velnor_actions_contract::config::selected_mise::BIND_SELECTED_MISE_FUNCTION;
+    assert_eq!(resolver.matches(selected_mise_binder).count(), 1);
     assert!(
-        yaml.contains(
-            r#"mise_bin=\"${HOME:?missing HOME}/.local/share/mise/bin/mise\"; [ -f \"$mise_bin\" ]"#
-        )
-            && yaml.contains(
-                r#"MISE_DATA_DIR=\"${HOME:?missing HOME}/.local/share/mise\" \"$mise_bin\" --no-config --no-env --no-hooks \"$@\""#
-            )
-            && yaml.contains("velnor_mise config get -f"),
-        "{yaml}"
+        resolver.contains(r#"velnor_mise() { "$mise_bin" --no-config --no-env --no-hooks "$@"; }"#),
+        "resolver does not bind isolated Mise to the selected binary"
+    );
+    assert!(
+        resolver.contains(r#"[ -f "$mise_bin" ] && [ -x "$mise_bin" ] && [ ! -L "$mise_bin" ]"#),
+        "resolver does not retain the final executable checks"
+    );
+    assert!(
+        resolver.contains("velnor_mise config get -f"),
+        "resolver must read project configuration through the isolated wrapper"
     );
     for line in yaml.lines() {
         if line.contains("mise ") && line.contains(" install ") {

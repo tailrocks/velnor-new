@@ -17,7 +17,7 @@ pub(crate) fn check_policy_mirror(ctx: &mut FreshnessContext) {
     let policy_tools = policy.get("tools").and_then(TomlValue::as_table);
     let names = EXPECTED_TOOLS
         .iter()
-        .map(|(name, _)| *name)
+        .map(|(name, _, _)| *name)
         .chain(
             policy_tools
                 .into_iter()
@@ -29,7 +29,10 @@ pub(crate) fn check_policy_mirror(ctx: &mut FreshnessContext) {
         let got = policy_tools
             .and_then(|table| table.get(name))
             .and_then(TomlValue::as_str);
-        if !EXPECTED_TOOLS.iter().any(|(expected, _)| *expected == name) {
+        if !EXPECTED_TOOLS
+            .iter()
+            .any(|(expected, _, _)| *expected == name)
+        {
             ctx.fail_row(
                 "policy-mirror",
                 &format!("tool {name}"),

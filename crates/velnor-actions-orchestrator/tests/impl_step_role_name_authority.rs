@@ -23,9 +23,20 @@ fn finalized_generation_is_invariant_to_typed_step_display_names() -> TestResult
     let original_tree = render_staged_tree(&original)?;
     assert_checkoutless_required_has_no_local_action(&original_tree)?;
     let mut renamed = original.clone();
-    rename_authority_steps(&mut renamed.workflow.ir.jobs);
+    rename_authority_steps(
+        &mut renamed.workflow.ir.jobs,
+        "Renamed jactionlint verifier",
+    );
     let renamed_tree = render_staged_tree(&renamed)?;
-    assert_generation_equivalent(&original_tree, &renamed_tree)
+    assert_generation_equivalent(&original_tree, &renamed_tree)?;
+
+    let mut colliding = original;
+    rename_authority_steps(
+        &mut colliding.workflow.ir.jobs,
+        "Verify Rust channel manifest",
+    );
+    let colliding_tree = render_staged_tree(&colliding)?;
+    assert_generation_equivalent(&renamed_tree, &colliding_tree)
 }
 
 fn assert_checkoutless_required_has_no_local_action(
@@ -53,7 +64,7 @@ fn assert_checkoutless_required_has_no_local_action(
 }
 
 /// Build a schema-2 Rust, `ToFu`, and MBX fixture with both runner lanes.
-fn authority_fixture() -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
+pub(super) fn authority_fixture() -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
     let config = format!(
         "{}\n[execution]\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\nmode = \"both\"\n[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"ubuntu-26.04-scale-set\", \"velnor\"]\nplatform = \"linux/amd64\"\n[stacks.tofu]\nroots = [\"stacks/a\"]\n",
         config_with_branch()
@@ -89,6 +100,7 @@ fn assert_finalized_roles(jobs: &std::collections::BTreeMap<String, Job>) {
         StepRole::MbxPreflight,
         StepRole::MbxCache,
         StepRole::MbxVersionCheck,
+        StepRole::VerifyJactionlint,
     ] {
         assert!(
             roles.contains(&role),
@@ -98,11 +110,18 @@ fn assert_finalized_roles(jobs: &std::collections::BTreeMap<String, Job>) {
 }
 
 /// Rename every relevant source role and require the fixture has each target.
-fn rename_authority_steps(jobs: &mut std::collections::BTreeMap<String, Job>) {
+fn rename_authority_steps(
+    jobs: &mut std::collections::BTreeMap<String, Job>,
+    jactionlint_name: &str,
+) {
     let mut changed = Vec::new();
     for step in jobs.values_mut().flat_map(|job| &mut job.steps) {
         if let Some(role) = step.role.filter(|role| is_authority_role(*role)) {
-            step.name = format!("renamed for role authority: {role:?}");
+            step.name = if role == StepRole::VerifyJactionlint {
+                jactionlint_name.to_owned()
+            } else {
+                format!("renamed for role authority: {role:?}")
+            };
             changed.push(role);
         }
     }
@@ -117,6 +136,7 @@ fn rename_authority_steps(jobs: &mut std::collections::BTreeMap<String, Job>) {
         StepRole::MbxPreflight,
         StepRole::MbxCache,
         StepRole::MbxVersionCheck,
+        StepRole::VerifyJactionlint,
     ] {
         assert!(changed.contains(&role), "fixture must rename {role:?}");
     }
@@ -225,6 +245,7 @@ fn is_authority_role(role: StepRole) -> bool {
             | StepRole::MbxPreflight
             | StepRole::MbxCache
             | StepRole::MbxVersionCheck
+            | StepRole::VerifyJactionlint
     )
 }
 

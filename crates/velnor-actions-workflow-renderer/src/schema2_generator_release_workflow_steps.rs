@@ -12,20 +12,13 @@ const GH_COMMAND_TIMEOUT_SECONDS: u16 = 60;
 const GH_COMMAND_KILL_AFTER_SECONDS: u16 = 5;
 
 pub(super) fn command_step(name: &str, argv: &[String]) -> Result<Yaml, RenderError> {
-    let verifier_role = match name {
-        crate::VERIFY_RUST_TOOLCHAIN_STEP => {
-            Some(velnor_actions_contract::StepRole::VerifyRustManifest)
-        }
-        "Verify jactionlint" => None,
-        _ => return Ok(bash_step(name, &join_argv_for_run(argv)?)),
-    };
-    let step = crate::verifier_composite::verifier_shell_step(
+    if matches!(
         name,
-        argv.to_vec(),
-        std::collections::BTreeMap::default(),
-    )?;
-    debug_assert_eq!(step.role, verifier_role);
-    crate::document_steps::verifier_shell_step_to_yaml(&step)
+        crate::VERIFY_RUST_TOOLCHAIN_STEP | "Verify jactionlint"
+    ) {
+        return crate::verifier_shell::render_command(name, argv);
+    }
+    Ok(bash_step(name, &join_argv_for_run(argv)?))
 }
 
 /// The file-by-file Rust toolchain check, run right after every Rust install.

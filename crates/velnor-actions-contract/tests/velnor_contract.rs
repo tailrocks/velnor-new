@@ -41,6 +41,8 @@ mod impl_contract_reports_b;
 mod impl_contract_reports_qual;
 #[path = "impl_contract_step_parallel.rs"]
 mod impl_contract_step_parallel;
+#[path = "impl_contract_step_role_verifier_tests.rs"]
+mod impl_contract_step_role_verifier_tests;
 #[path = "impl_contract_step_roles.rs"]
 mod impl_contract_step_roles;
 #[path = "impl_contract_step_seed.rs"]

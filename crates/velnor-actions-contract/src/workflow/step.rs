@@ -2,6 +2,7 @@
 
 use super::step_identity::{
     MBX_WORKSPACE_CLEAN_CONDITION, StepId, StepRole, TOFU_PROVIDER_ADMISSION_USES,
+    verifier_action_role,
 };
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
@@ -139,6 +140,15 @@ impl Step {
             return Err(ContractError::identity(
                 "step.parallel",
                 format!("parallel_step_authority:{job}"),
+            ));
+        }
+        if let StepKind::Action { uses, .. } = &self.kind
+            && let Some(expected) = verifier_action_role(uses)
+            && self.role != Some(expected)
+        {
+            return Err(ContractError::identity(
+                "step.role",
+                format!("verifier_action_role_mismatch:{job}:{expected:?}"),
             ));
         }
         if let Some(role) = self.role {

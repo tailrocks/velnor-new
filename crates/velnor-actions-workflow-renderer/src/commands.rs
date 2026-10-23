@@ -293,9 +293,10 @@ fn check_command_line(command: &str) -> Result<(), RenderError> {
 #[cfg(test)]
 mod verifier_shell_tests {
     use super::join_argv_for_run;
+    use std::process::Command;
 
     #[test]
-    fn absolute_verifier_shell_preserves_script_and_quotes_project_refs() {
+    fn absolute_posix_shell_preserves_script_and_quotes_project_refs() {
         let argv = vec![
             "/bin/sh".to_owned(),
             "-c".to_owned(),
@@ -319,5 +320,50 @@ mod verifier_shell_tests {
             .is_err(),
             "unbalanced inline script must remain invalid"
         );
+    }
+
+    #[test]
+    fn absolute_posix_shell_keeps_inner_scope_and_env_unset_behavior() {
+        let argv = [
+            "env",
+            "-u",
+            "DROP_ME",
+            "/bin/sh",
+            "-c",
+            "local_value='inner value'; printf '<%s>|<%s>|<%s>' \"$local_value\" \"${DROP_ME-unset}\" \"$KEEP_VALUE\"",
+        ]
+        .map(str::to_owned);
+        let joined = join_argv_for_run(&argv).expect("fixed POSIX shell argv");
+        assert!(joined.contains("/bin/sh -c 'local_value='"), "{joined}");
+
+        let outer = format!("export DROP_ME=poison KEEP_VALUE='quoted value'; {joined}");
+        let output = Command::new("/bin/sh")
+            .args(["-c", &outer])
+            .output()
+            .expect("execute emitted POSIX command");
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            String::from_utf8(output.stdout).expect("UTF-8 output"),
+            "<inner value>|<unset>|<quoted value>"
+        );
+    }
+
+    #[test]
+    fn absolute_posix_shell_keeps_generic_forbidden_syntax_rejections() {
+        for script in [
+            "printf '%s' $(id)",
+            "printf '%s' `id`",
+            "printf first\nprintf second",
+        ] {
+            let argv = vec!["/bin/sh".to_owned(), "-c".to_owned(), script.to_owned()];
+            assert!(
+                join_argv_for_run(&argv).is_err(),
+                "unsafe generic script was accepted: {script:?}"
+            );
+        }
     }
 }

@@ -86,6 +86,7 @@ pub(super) fn source_steps(spec: &ConsumerReleaseSpec, id: &str) -> Result<Vec<Y
     crate::toolchain_env::check_toolchain_homes(&spec.producer_cargo_env)?;
     crate::toolchain_env::reject_denied_step_keys(&spec.producer_cargo_env)?;
     let verify_step = crate::verifier_composite::verifier_shell_step(
+        velnor_actions_contract::StepRole::VerifyRustManifest,
         crate::VERIFY_RUST_TOOLCHAIN_STEP,
         spec.verify_rust_argv.clone(),
         BTreeMap::new(),

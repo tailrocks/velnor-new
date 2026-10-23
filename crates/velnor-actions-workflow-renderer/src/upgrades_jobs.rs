@@ -1,7 +1,5 @@
 //! The four jobs of `upgrades.yml` and their shared step builders.
 
-use std::collections::BTreeMap;
-
 use velnor_actions_contract::{JobTimeout, StepRole};
 
 use super::scripts::{GATE, PUBLISH, RELEASE, prepare_script, publish_check_script, verify_script};
@@ -376,16 +374,14 @@ fn install_generate_tools(spec: &UpgradesSpec) -> Yaml {
 }
 
 fn verify_jactionlint(spec: &UpgradesSpec) -> Result<Yaml, RenderError> {
-    let step = crate::verifier_composite::verifier_shell_step(
+    crate::verifier_shell::render_command(
         "Verify jactionlint",
-        vec![
+        &[
             "sh".to_owned(),
             "-c".to_owned(),
             spec.jactionlint_verify.clone(),
         ],
-        BTreeMap::new(),
-    )?;
-    crate::document_steps::verifier_shell_step_to_yaml(&step)
+    )
 }
 
 /// String map (`env:`, `with:`, `permissions:`, `outputs:`).

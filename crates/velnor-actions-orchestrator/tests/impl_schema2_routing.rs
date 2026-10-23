@@ -18,6 +18,8 @@ mod named_check_lanes_tests;
 mod schema2_feature_snapshots;
 #[path = "schema2_product_release_snapshots.rs"]
 mod schema2_product_release_snapshots;
+#[path = "schema2_workflow_snapshot_tests.rs"]
+mod schema2_workflow_snapshot_tests;
 #[path = "impl_schema2_routing_shell.rs"]
 mod shell_tests;
 
@@ -117,36 +119,6 @@ fn dispatch_mode_overrides_configured_mode() -> TestResult {
     assert!(job_ids(hosted_ci).contains(&"rust-demo"), "{hosted_ci}");
     assert!(!hosted_ci.contains("rust-demo__hosted"), "{hosted_ci}");
     assert_both_ci(forced_ci)?;
-    Ok(())
-}
-
-#[test]
-fn schema2_workflows_match_expected_bytes() -> TestResult {
-    let repo = make_repo(&workflow_config())?;
-    let tree = render_staged_tree(&prepare(repo.path())?)?;
-    let qualification = required_file(&tree, ".github/workflows/qualification.yml")?;
-    assert_eq!(
-        qualification,
-        &marked(schema2_feature_snapshots::QUALIFICATION)
-    );
-    required_file(&tree, ".github/workflows/product-release.yml")?;
-    schema2_product_release_snapshots::assert_rendered(&tree)?;
-    let images = required_file(&tree, ".github/workflows/product-release-images.yml")?;
-    let binary = required_file(&tree, ".github/workflows/product-release-binary.yml")?;
-    assert_image_producer(images)?;
-    assert_macos_producer(binary)?;
-    assert_eq!(
-        required_file(&tree, ".github/workflows/monitoring.yml")?,
-        &marked(MONITORING)
-    );
-    Ok(())
-}
-
-#[test]
-fn committed_release_files_match_schema2_bytes() -> TestResult {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let tree = render_staged_tree(&prepare(&root)?)?;
-    schema2_product_release_snapshots::assert_committed(&root, &tree)?;
     Ok(())
 }
 
@@ -324,6 +296,20 @@ fn assert_image_producer(body: &str) -> TestResult {
         body,
         "Verify Rust channel manifest",
         "CARGO_REGISTRY_TOKEN",
+        "Install pinned Rust for the resource probe",
+        Some(("GITHUB_TOKEN", "${{ github.token }}")),
+    )?;
+    schema2_product_release_snapshots::assert_full_workflow_verifier_environment(
+        body,
+        &["Verify Rust channel manifest"],
+        &[
+            (
+                "Install pinned Rust for the resource probe",
+                "GITHUB_TOKEN",
+                "${{ github.token }}",
+            ),
+            ("Publish GitHub release", "GH_TOKEN", "${{ github.token }}"),
+        ],
     )?;
     assert!(!body.contains("secrets:"));
     assert!(!body.contains("pull_request"));
@@ -367,6 +353,13 @@ fn assert_macos_producer(body: &str) -> TestResult {
         body,
         "Verify Rust channel manifest",
         "CARGO_REGISTRY_TOKEN",
+        "Install pinned Rust and MBX",
+        None,
+    )?;
+    schema2_product_release_snapshots::assert_full_workflow_verifier_environment(
+        body,
+        &["Verify Rust channel manifest"],
+        &[("Publish GitHub release", "GH_TOKEN", "${{ github.token }}")],
     )?;
     Ok(())
 }

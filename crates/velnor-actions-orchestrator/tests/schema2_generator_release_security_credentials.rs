@@ -114,18 +114,24 @@ fn assert_verifier_envs(
             return Err(format!("missing env mapping in verifier step {expected_name:?}").into());
         };
         let mut observed = std::collections::BTreeMap::new();
+        let mut trusted_path_found = false;
         for (key, value) in entries {
             if observed.insert(key.as_str(), value.as_str()).is_some() {
                 return Err(format!("duplicate {key:?} env binding in {expected_name:?}").into());
             }
             if !expected_keys.contains(key.as_str()) {
+                if key == "PATH" && value == velnor_actions_workflow_renderer::VERIFY_PATH {
+                    trusted_path_found = true;
+                    continue;
+                }
                 return Err(format!("unexpected env binding {key:?} in {expected_name:?}").into());
             }
             if value != "\"\"" {
                 return Err(format!("{key:?} must be exactly empty in {expected_name:?}").into());
             }
         }
-        if observed.len() != expected_keys.len()
+        if observed.len() != expected_keys.len() + 1
+            || !trusted_path_found
             || expected_keys.iter().any(|key| !observed.contains_key(key))
         {
             return Err(format!("verifier credential env set differs in {expected_name:?}").into());

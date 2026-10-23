@@ -156,24 +156,24 @@ fn is_verifier_step_valid(step: &StepText, verifiers: &VerifierActionSet) -> boo
     {
         return canonical_action_call(step, action);
     }
-    if let Some(templates) = verifiers.inline_rust_templates.get(step.name.as_str()) {
-        let matches = templates
-            .iter()
-            .any(|template| canonical_inline_shape(step, step.name.as_str(), template));
-        return matches;
+    let known_inline_name = verifiers
+        .inline_rust_templates
+        .contains_key(step.name.as_str())
+        || step.name == verifiers.jactionlint.name;
+    let matches = verifiers
+        .inline_rust_templates
+        .values()
+        .flatten()
+        .chain(&verifiers.inline_jactionlint_templates)
+        .any(|template| canonical_inline_shape(step, template));
+    if matches {
+        return true;
     }
-    if step.name == verifiers.jactionlint.name {
-        return verifiers
-            .inline_jactionlint_templates
-            .iter()
-            .any(|template| canonical_inline_shape(step, verifiers.jactionlint.name, template));
-    }
-    true
+    !known_inline_name
 }
 
 fn canonical_inline_shape(
     step: &StepText,
-    name: &str,
     template: &crate::workflow::verifier_actions::InlineVerifierTemplate,
 ) -> bool {
     if step.unexpected_nested
@@ -187,12 +187,23 @@ fn canonical_inline_shape(
     let Some(shell) = template.shell else {
         return false;
     };
-    let expected_top = vec![
-        ("name".to_owned(), quote_scalar(name)),
-        ("env".to_owned(), String::new()),
-        ("shell".to_owned(), quote_scalar(shell)),
-        ("run".to_owned(), template.run_scalar.clone()),
-    ];
+    let mut expected_top = template.top_fields.clone();
+    let Some((_, name)) = expected_top.iter_mut().find(|(key, _)| key == "name") else {
+        return false;
+    };
+    if step.name.trim().is_empty() {
+        return false;
+    }
+    *name = quote_scalar(&step.name);
+    if !expected_top
+        .iter()
+        .any(|(key, value)| key == "shell" && value == &quote_scalar(shell))
+        || !expected_top
+            .iter()
+            .any(|(key, value)| key == "run" && value == &template.run_scalar)
+    {
+        return false;
+    }
     let mut actual_env = step.env_fields.clone();
     actual_env.sort_unstable();
     let expected_env = template
@@ -204,10 +215,10 @@ fn canonical_inline_shape(
 }
 
 fn canonical_action_call(step: &StepText, action: &VerifierAction) -> bool {
-    step.name == action.name
-        && step.fields.len() == 2
+    step.fields.len() == 2
         && step.fields[0].0 == "name"
-        && step.fields[0].1 == action.name
+        && !step.fields[0].1.trim().is_empty()
+        && step.fields[0].1 == step.name
         && step.fields[1].0 == "uses"
         && step.fields[1].1 == format!("{} # zizmor: ignore[self-repository]", action.uses)
 }
@@ -292,15 +303,15 @@ fn is_rust_verifier(step: &StepText, verifiers: &VerifierActionSet) -> bool {
         return canonical_action_call(step, &verifiers.installed_rust);
     }
     verifiers
-        .inline_rust_templates
-        .get(step.name.as_str())
-        .is_some_and(|templates| {
-            templates
-                .iter()
-                .any(|template| canonical_inline_shape(step, &step.name, template))
-        })
+        .inline_installed_rust_templates
+        .iter()
+        .any(|template| canonical_inline_shape(step, template))
 }
 
 #[cfg(test)]
 #[path = "rust_install_audit_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "rust_install_audit_verifier_action_tests.rs"]
+mod verifier_action_tests;

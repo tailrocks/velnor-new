@@ -59,6 +59,7 @@ fn owned_home_step(
     // admits only cache roles).
     Ok(
         velnor_actions_workflow_renderer::verifier_composite::verifier_shell_step(
+            StepRole::VerifyRustManifest,
             name,
             vec!["sh".to_owned(), "-c".to_owned(), script],
             env,

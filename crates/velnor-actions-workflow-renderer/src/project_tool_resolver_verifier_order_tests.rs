@@ -1,4 +1,3 @@
-use super::super::super::bind_verifier_composite;
 use super::super::{SETUP, bind_workflow, step, workflow};
 use crate::yaml::{Yaml, render_yaml};
 
@@ -50,26 +49,37 @@ fn verifier_actions_bind_their_project_tools_in_the_job_before_cache_restore() {
             .expect("restore step");
         let verifier = rendered.find("name: Verify tool").expect("verifier step");
         assert!(resolver < restore && restore < verifier, "{rendered}");
+        let resolver_environment = rendered[resolver..restore]
+            .split_once("\n        env:\n")
+            .and_then(|(_, environment)| {
+                environment
+                    .split_once("\n        shell:")
+                    .map(|part| part.0)
+            })
+            .expect("resolver step environment");
         assert!(
             rendered.contains(&format!("velnor_tool {variable} '")),
             "{rendered}"
         );
         assert!(
-            rendered.contains(&format!("PATH={}", crate::VERIFY_PATH)),
-            "{rendered}"
+            resolver_environment
+                .lines()
+                .any(|line| line.trim() == format!("PATH: {}", crate::VERIFY_PATH)),
+            "trusted PATH is in the resolver step environment:\n{rendered}"
         );
         assert!(
             rendered.contains("unset ACTIONS_ID_TOKEN_REQUEST_TOKEN"),
             "{rendered}"
         );
         assert!(
-            rendered.contains("shell: /bin/bash --noprofile --norc -e -o pipefail {0}"),
+            rendered.contains(crate::VERIFY_VERIFIER_SHELL),
             "{rendered}"
         );
         assert!(
-            rendered.contains("${HOME:?missing HOME}/.local/share/mise/bin/mise"),
+            rendered.contains("function_env_scan_complete=0"),
             "{rendered}"
         );
+        assert!(rendered.contains("velnor_bind_selected_mise"), "{rendered}");
         assert_eq!(rendered.matches("Resolve project tool versions").count(), 1);
     }
 }
@@ -106,13 +116,13 @@ fn a_dynamic_verifier_job_without_setup_mise_fails_but_a_pinned_private_job_need
 }
 
 #[test]
-fn literal_verifier_jobs_reject_all_inherited_trust_overrides_without_needing_setup() {
+fn literal_verifier_jobs_preserve_supported_selector_context_without_project_binding() {
     let verifier_actions = [
         velnor_actions_contract::workflow::RUST_VERIFIER_USES[0],
         velnor_actions_contract::workflow::RUST_VERIFIER_USES[1],
         crate::verifier_composite::VERIFY_JACTIONLINT_USES,
     ];
-    let forbidden_environment = [
+    let selector_environment = [
         "HOME",
         "MISE_DATA_DIR",
         "XDG_DATA_HOME",
@@ -137,62 +147,27 @@ fn literal_verifier_jobs_reject_all_inherited_trust_overrides_without_needing_se
         );
         assert!(!rendered.contains(SETUP), "{rendered}");
 
-        for key in forbidden_environment {
-            let mut overridden = workflow(
-                vec![(key.to_owned(), Yaml::str("/tmp/attacker-value"))],
+        for key in selector_environment {
+            let mut selected = workflow(
+                vec![(key.to_owned(), Yaml::str("/tmp/selected-context"))],
                 vec![
                     step(&[("uses", "actions/checkout@0123")]),
                     step(&[("name", "Verify pinned tool"), ("uses", uses)]),
                 ],
             );
-            let error = bind_workflow(&mut overridden)
-                .expect_err("literal verifier jobs reject inherited trust overrides");
+            bind_workflow(&mut selected)
+                .expect("literal verifier needs no project resolver or selector ban");
+            let rendered = render_yaml(&selected);
             assert!(
-                error
-                    .to_string()
-                    .contains("build:verifier_trusted_environment_override"),
-                "action {uses}, environment {key}: {error}"
+                !rendered.contains("Resolve project tool versions"),
+                "{rendered}"
+            );
+            assert!(
+                rendered.contains(&format!("{key}: /tmp/selected-context")),
+                "selected environment {key} was dropped: {rendered}"
             );
         }
     }
-}
-
-#[test]
-fn verifier_composite_binding_preserves_static_pins_and_only_rewrites_its_own_ref() {
-    let reference = "VELNOR_TOOL_JACTIONLINT";
-    let mut pinned = Yaml::Seq(vec![Yaml::str(
-        "mise exec jactionlint@2.3.0 -- jactionlint",
-    )]);
-    bind_verifier_composite(&mut pinned, reference).expect("literal pin needs no binding");
-    assert_eq!(
-        pinned,
-        Yaml::Seq(vec![Yaml::str(
-            "mise exec jactionlint@2.3.0 -- jactionlint"
-        )])
-    );
-
-    let mut dynamic = Yaml::Seq(vec![Yaml::str(
-        "mise exec jactionlint@${VELNOR_TOOL_JACTIONLINT} -- jactionlint",
-    )]);
-    bind_verifier_composite(&mut dynamic, reference).expect("canonical dynamic ref");
-    assert_eq!(
-        dynamic,
-        Yaml::Seq(vec![Yaml::str(
-            "mise exec jactionlint@${{ env.VELNOR_TOOL_JACTIONLINT }} -- jactionlint",
-        )])
-    );
-
-    let mut unrelated = Yaml::Seq(vec![Yaml::str(
-        "mise exec jactionlint@${VELNOR_TOOL_RUST} -- jactionlint",
-    )]);
-    let error = bind_verifier_composite(&mut unrelated, reference)
-        .expect_err("a different project binding must not be accepted");
-    assert!(
-        error
-            .to_string()
-            .contains("verifier_composite_tool_binding"),
-        "{error}"
-    );
 }
 
 fn rust_verifier_workflow() -> Yaml {
@@ -290,38 +265,30 @@ fn verifier_resolver_rejects_tampered_shell() {
 }
 
 #[test]
-fn verifier_jobs_reject_a_home_override() {
-    let mut document = workflow(
-        vec![("HOME".to_owned(), Yaml::str("/tmp/attacker-home"))],
-        rust_verifier_workflow_steps(),
-    );
-    let error = bind_workflow(&mut document).expect_err("job HOME must be fixed");
-    assert!(
-        error
-            .to_string()
-            .contains("verifier_trusted_environment_override"),
-        "{error}"
-    );
-}
-
-#[test]
-fn verifier_jobs_reject_a_path_override() {
-    let mut document = workflow(Vec::new(), rust_verifier_workflow_steps());
-    let Yaml::Map(fields) = &mut document else {
-        panic!("workflow map")
-    };
-    fields.insert(
-        1,
-        (
-            "env".to_owned(),
-            Yaml::Map(vec![("PATH".to_owned(), Yaml::str("/tmp/attacker-bin"))]),
-        ),
-    );
-    let error = bind_workflow(&mut document).expect_err("workflow PATH must be fixed");
-    assert!(
-        error
-            .to_string()
-            .contains("verifier_trusted_environment_override"),
-        "{error}"
-    );
+fn project_resolver_keeps_supported_selector_context_behind_its_trusted_envelope() {
+    for key in [
+        "HOME",
+        "MISE_DATA_DIR",
+        "XDG_DATA_HOME",
+        "PATH",
+        "BASH_ENV",
+        "ENV",
+    ] {
+        let mut document = workflow(
+            vec![(key.to_owned(), Yaml::str("/tmp/selected-context"))],
+            rust_verifier_workflow_steps(),
+        );
+        bind_workflow(&mut document).expect("the canonical verifier boundary owns these inputs");
+        let rendered = render_yaml(&document);
+        let resolver = rendered
+            .find("Resolve project tool versions")
+            .expect("project references require one resolver");
+        assert!(
+            rendered.contains(&format!("{key}: /tmp/selected-context")),
+            "{rendered}"
+        );
+        assert!(rendered[resolver..].contains(crate::VERIFY_VERIFIER_SHELL));
+        assert!(rendered[resolver..].contains("function_env_scan_complete=0"));
+        assert!(rendered[resolver..].contains("velnor_bind_selected_mise"));
+    }
 }

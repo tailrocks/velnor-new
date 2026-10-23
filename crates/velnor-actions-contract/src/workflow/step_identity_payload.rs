@@ -1,7 +1,7 @@
 //! Payload predicates used by semantic step identity validation.
 
 use super::super::step_payloads::{valid_configured_checkout_payload, valid_tool_seed_payload};
-use super::{RUST_VERIFIER_USES, Step, StepKind, StepRole};
+use super::{JACTIONLINT_VERIFIER_USES, RUST_VERIFIER_USES, Step, StepKind, StepRole};
 
 /// Preserve the original shell role and admit only the two empty-input
 /// generated action calls used for the fixed restored/installed phases.
@@ -10,6 +10,17 @@ pub(super) fn valid_rust_verifier_payload(kind: &StepKind) -> bool {
         StepKind::Shell { .. } => true,
         StepKind::Action { uses, with, env } => {
             RUST_VERIFIER_USES.contains(&uses.as_str()) && with.is_empty() && env.is_empty()
+        }
+        StepKind::TaskExecution { .. } | StepKind::Internal { .. } => false,
+    }
+}
+
+/// Preserve inline Jactionlint shells and admit only the exact empty-binding action.
+pub(super) fn valid_jactionlint_verifier_payload(kind: &StepKind) -> bool {
+    match kind {
+        StepKind::Shell { .. } => true,
+        StepKind::Action { uses, with, env } => {
+            uses == JACTIONLINT_VERIFIER_USES && with.is_empty() && env.is_empty()
         }
         StepKind::TaskExecution { .. } | StepKind::Internal { .. } => false,
     }

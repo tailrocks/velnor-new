@@ -1,4 +1,5 @@
 use crate::OrchestratorError;
+use velnor_actions_workflow_renderer::{VERIFY_SHELL, VERIFY_VERIFIER_SHELL};
 
 use super::super::{shellcheck_fail, unquote_run_scalar};
 use super::ShellDialect;
@@ -6,8 +7,7 @@ use super::ShellDialect;
 pub(super) fn parse_shell(value: &str) -> Result<ShellDialect, OrchestratorError> {
     let shell = unquote_run_scalar(value)?;
     match shell.as_str() {
-        value if value == velnor_actions_workflow_renderer::VERIFY_SHELL => Ok(ShellDialect::Bash),
-        "bash" | "bash -e {0}" => Ok(ShellDialect::Bash),
+        "bash" | "bash -e {0}" | VERIFY_SHELL | VERIFY_VERIFIER_SHELL => Ok(ShellDialect::Bash),
         "sh" | "sh -e {0}" => Ok(ShellDialect::Sh),
         _ => Err(shellcheck_fail("shell_form_unsupported")),
     }
