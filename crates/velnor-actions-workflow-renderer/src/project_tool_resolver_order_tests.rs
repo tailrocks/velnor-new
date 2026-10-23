@@ -135,6 +135,58 @@ fn a_dynamic_verifier_job_without_setup_mise_fails_but_a_pinned_private_job_need
 }
 
 #[test]
+fn literal_verifier_jobs_reject_all_inherited_trust_overrides_without_needing_setup() {
+    let verifier_actions = [
+        velnor_actions_contract::workflow::RUST_VERIFIER_USES[0],
+        velnor_actions_contract::workflow::RUST_VERIFIER_USES[1],
+        crate::verifier_composite::VERIFY_JACTIONLINT_USES,
+    ];
+    let forbidden_environment = [
+        "HOME",
+        "MISE_DATA_DIR",
+        "XDG_DATA_HOME",
+        "PATH",
+        "BASH_ENV",
+        "ENV",
+    ];
+
+    for uses in verifier_actions {
+        let mut clean = workflow(
+            Vec::new(),
+            vec![
+                step(&[("uses", "actions/checkout@0123")]),
+                step(&[("name", "Verify pinned tool"), ("uses", uses)]),
+            ],
+        );
+        bind_workflow(&mut clean).expect("literal verifier job does not need project resolution");
+        let rendered = render_yaml(&clean);
+        assert!(
+            !rendered.contains("Resolve project tool versions"),
+            "{rendered}"
+        );
+        assert!(!rendered.contains(SETUP), "{rendered}");
+
+        for key in forbidden_environment {
+            let mut overridden = workflow(
+                vec![(key.to_owned(), Yaml::str("/tmp/attacker-value"))],
+                vec![
+                    step(&[("uses", "actions/checkout@0123")]),
+                    step(&[("name", "Verify pinned tool"), ("uses", uses)]),
+                ],
+            );
+            let error = bind_workflow(&mut overridden)
+                .expect_err("literal verifier jobs reject inherited trust overrides");
+            assert!(
+                error
+                    .to_string()
+                    .contains("build:verifier_trusted_environment_override"),
+                "action {uses}, environment {key}: {error}"
+            );
+        }
+    }
+}
+
+#[test]
 fn verifier_composite_binding_preserves_static_pins_and_only_rewrites_its_own_ref() {
     let reference = "VELNOR_TOOL_JACTIONLINT";
     let mut pinned = Yaml::Seq(vec![Yaml::str(

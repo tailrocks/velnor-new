@@ -1,4 +1,8 @@
-use super::{Yaml, gh_confirmation_function, gh_function, gh_function_with_timeout};
+use super::{
+    Yaml, command_step, gh_confirmation_function, gh_function, gh_function_with_timeout,
+    verify_rust_step,
+};
+use crate::yaml::render_yaml;
 use std::error::Error;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -7,6 +11,18 @@ use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 struct Scratch(PathBuf);
+
+fn verifier_job(step: Yaml, job_env: Vec<(String, Yaml)>) -> Yaml {
+    let mut fields = vec![("runs-on".to_owned(), Yaml::str("ubuntu-26.04"))];
+    if !job_env.is_empty() {
+        fields.push(("env".to_owned(), Yaml::Map(job_env)));
+    }
+    fields.push(("steps".to_owned(), Yaml::Seq(vec![step])));
+    Yaml::Map(vec![(
+        "jobs".to_owned(),
+        Yaml::Map(vec![("verify".to_owned(), Yaml::Map(fields))]),
+    )])
+}
 
 impl Scratch {
     fn new() -> Result<Self, Box<dyn Error>> {
@@ -22,6 +38,49 @@ impl Drop for Scratch {
     fn drop(&mut self) {
         drop(fs::remove_dir_all(&self.0));
     }
+}
+
+#[test]
+fn inline_fixed_catalog_verifiers_reject_inherited_trust_overrides() -> Result<(), Box<dyn Error>> {
+    let pins = crate::schema2::product_release_test_pins::test_pins();
+    let fixed_verifiers = [
+        verify_rust_step(&pins)?,
+        command_step("Verify jactionlint", &pins.verify_lint_argv)?,
+    ];
+    let forbidden_environment = [
+        "HOME",
+        "MISE_DATA_DIR",
+        "XDG_DATA_HOME",
+        "PATH",
+        "BASH_ENV",
+        "ENV",
+    ];
+
+    for step in fixed_verifiers {
+        let mut clean = verifier_job(step.clone(), Vec::new());
+        crate::project_tool_resolver::bind_workflow(&mut clean)
+            .expect("canonical fixed-pin verifier does not require a resolver");
+        assert!(
+            !render_yaml(&clean).contains("Resolve project tool versions"),
+            "fixed verifier acquired an unnecessary resolver"
+        );
+
+        for key in forbidden_environment {
+            let mut overridden = verifier_job(
+                step.clone(),
+                vec![(key.to_owned(), Yaml::str("/tmp/attacker-value"))],
+            );
+            let error = crate::project_tool_resolver::bind_workflow(&mut overridden)
+                .expect_err("inline fixed-pin verifier rejects inherited trust overrides");
+            assert!(
+                error
+                    .to_string()
+                    .contains("verify:verifier_trusted_environment_override"),
+                "environment {key}: {error}"
+            );
+        }
+    }
+    Ok(())
 }
 
 #[test]
