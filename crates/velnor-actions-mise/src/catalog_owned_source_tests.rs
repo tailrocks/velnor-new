@@ -10,7 +10,7 @@ fn source() -> ApprovedOwnedSource {
         version: "2026.10.14-owned-cargo-wrapper".to_owned(),
         source_commit: "1".repeat(40),
         source_tree: "2".repeat(40),
-        upstream_base_commit: "f0636505badf917a68cf5d5ed815c046593eaed4".to_owned(),
+        upstream_base_commit: "8369bc78dc4761660337a2518b1445447438159d".to_owned(),
         archive_url: format!("{base}/source.tar"),
         archive_sha256: "4".repeat(64),
         receipt_url: format!("{base}/source-receipt.json"),
@@ -37,7 +37,7 @@ fn admits_complete_owned_source_and_rejects_nonportable_license_aliases() {
 
 #[test]
 fn source_approval_rejects_dispatch_injection_and_partial_transport() {
-    let mutations: [fn(&mut ApprovedOwnedSource); 9] = [
+    let mutations: [fn(&mut ApprovedOwnedSource); 10] = [
         |value: &mut ApprovedOwnedSource| value.archive_sha256 = "0".repeat(64),
         |value: &mut ApprovedOwnedSource| value.tool = "sh".to_owned(),
         |value: &mut ApprovedOwnedSource| value.version = "${{ inputs.version }}".to_owned(),
@@ -47,6 +47,9 @@ fn source_approval_rejects_dispatch_injection_and_partial_transport() {
         },
         |value: &mut ApprovedOwnedSource| {
             value.upstream_base_commit = "6be3cbdc639a66c03651479428e4c5f60b00485f".to_owned();
+        },
+        |value: &mut ApprovedOwnedSource| {
+            value.upstream_base_commit = "f0636505badf917a68cf5d5ed815c046593eaed4".to_owned();
         },
         |value: &mut ApprovedOwnedSource| value.patch_url.push_str("?redirect=1"),
         |value: &mut ApprovedOwnedSource| {

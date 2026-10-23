@@ -127,27 +127,20 @@ pub(super) fn bind_stage(
     pair: Option<&ReleasePayloadPair>,
     preview_matrix: bool,
 ) -> Result<(), RenderError> {
-    let env = if preview_matrix {
-        vec![
-            ("VELNOR_RELEASE_STAGE", "payload"),
-            ("VELNOR_RELEASE_PRODUCT_ID", "${{ matrix.product_id }}"),
-            ("VELNOR_RELEASE_TARGET", "${{ matrix.target }}"),
-        ]
-    } else if let Some(pair) = pair {
-        vec![
-            ("VELNOR_RELEASE_STAGE", "payload"),
-            ("VELNOR_RELEASE_PRODUCT_ID", pair.product_id.as_str()),
-            ("VELNOR_RELEASE_TARGET", pair.target.as_str()),
-        ]
+    if preview_matrix || pair.is_some() {
+        operation_env(operation, &[("VELNOR_RELEASE_STAGE", "payload")])?;
+        bind_payload_pair(operation, pair, preview_matrix)?;
     } else if spec.policy.channel == PackageReleaseChannel::Preview {
-        vec![("VELNOR_RELEASE_STAGE", "assemble")]
+        operation_env(operation, &[("VELNOR_RELEASE_STAGE", "assemble")])?;
     } else {
-        vec![
-            ("VELNOR_RELEASE_STAGE", "assemble"),
-            ("VELNOR_RELEASE_NEEDS_JSON", "${{ toJSON(needs) }}"),
-        ]
-    };
-    operation_env(operation, &env)?;
+        operation_env(
+            operation,
+            &[
+                ("VELNOR_RELEASE_STAGE", "assemble"),
+                ("VELNOR_RELEASE_NEEDS_JSON", "${{ toJSON(needs) }}"),
+            ],
+        )?;
+    }
     if spec.policy.channel
         == velnor_actions_contract::package_release::PackageReleaseChannel::Stable
     {
@@ -179,5 +172,30 @@ pub(super) fn bind_stage(
             )],
         )?;
     }
+    Ok(())
+}
+
+/// Bind only the matrix/literal payload identity, without downstream admission digests.
+pub(super) fn bind_payload_pair(
+    operation: &mut Yaml,
+    pair: Option<&ReleasePayloadPair>,
+    preview_matrix: bool,
+) -> Result<(), RenderError> {
+    let env = if preview_matrix {
+        vec![
+            ("VELNOR_RELEASE_PRODUCT_ID", "${{ matrix.product_id }}"),
+            ("VELNOR_RELEASE_TARGET", "${{ matrix.target }}"),
+        ]
+    } else if let Some(pair) = pair {
+        vec![
+            ("VELNOR_RELEASE_PRODUCT_ID", pair.product_id.as_str()),
+            ("VELNOR_RELEASE_TARGET", pair.target.as_str()),
+        ]
+    } else {
+        return Err(RenderError::InvalidWorkflow(
+            "preview_payload_pair_missing".to_owned(),
+        ));
+    };
+    operation_env(operation, &env)?;
     Ok(())
 }

@@ -9,7 +9,7 @@ use velnor_actions_orchestrator::{prepare, render_staged_tree};
 
 use crate::impl_common::{TestResult, make_repo};
 
-const CACHE_GENERATION: &str = "velnor-qualification-mbx-1.26.0-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-47ce49b32025d93a7a2f4570815afaa2b7092240";
+const CACHE_GENERATION: &str = "velnor-qualification-mbx-1.27.0-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-47ce49b32025d93a7a2f4570815afaa2b7092240";
 
 fn assert_candidate_ref(writer: &str) {
     assert!(
@@ -31,7 +31,7 @@ fn assert_candidate_ref(writer: &str) {
 
 fn assert_candidate_owner(job: &str) {
     for fragment in [
-        "version: 1.26.0",
+        "version: 1.27.0",
         "toolchain: 1.99.1",
         "isolate-objects-cache: \"true\"",
         "RUSTUP_TOOLCHAIN: 1.99.1",
@@ -78,7 +78,7 @@ fn assert_writer(writer: &str) {
         writer.contains(&format!("{CACHE_GENERATION}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}")),
         "{writer}"
     );
-    assert!(writer.contains("version: 1.26.0"), "{writer}");
+    assert!(writer.contains("version: 1.27.0"), "{writer}");
     assert!(writer.contains("RUSTUP_TOOLCHAIN: 1.99.1"), "{writer}");
     assert!(
         writer
@@ -129,7 +129,7 @@ fn assert_reader(reader: &str) {
         reader.contains(".savings.cached_compilations > 0"),
         "{reader}"
     );
-    assert!(reader.contains("version: 1.26.0"), "{reader}");
+    assert!(reader.contains("version: 1.27.0"), "{reader}");
     assert!(
         reader.contains("df -B1 -P \\\"$RUNNER_TEMP\\\""),
         "{reader}"

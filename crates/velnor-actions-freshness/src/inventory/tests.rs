@@ -14,9 +14,9 @@ fn verify_local_toolchain_specs_come_from_policy_when_local_mise_pins_differ() {
     let specs = specs.unwrap_or_default();
     assert_eq!(specs.len(), 3);
     assert!(specs.contains(&"rust@1.99.1".to_owned()));
-    assert!(specs.contains(&"mr-boxington@1.26.0".to_owned()));
+    assert!(specs.contains(&"mr-boxington@1.27.0".to_owned()));
     assert!(specs.contains(&"aqua:nextest-rs/nextest/cargo-nextest@0.9.149".to_owned()));
-    assert_eq!(policy_mise_version(&root), Ok("2026.10.17".to_owned()));
+    assert_eq!(policy_mise_version(&root), Ok("2026.10.18".to_owned()));
     let check_freshness = fs::read_to_string(root.join("scripts/check-freshness.sh"));
     assert!(
         check_freshness.is_ok(),

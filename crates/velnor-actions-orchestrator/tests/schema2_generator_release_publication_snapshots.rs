@@ -161,7 +161,7 @@ fn assert_build_actions(body: &str, actions: &Actions) -> Result<(), Box<dyn std
         "{linux_action}"
     );
     assert!(
-        linux_action.contains("rust@1.99.1 mr-boxington@1.26.0")
+        linux_action.contains("rust@1.99.1 mr-boxington@1.27.0")
             || linux_action.contains(
                 r#"'rust@'\"${VELNOR_TOOL_RUST}\" 'mr-boxington@'\"${VELNOR_TOOL_MR_BOXINGTON}\""#
             ),
@@ -285,7 +285,7 @@ fn assert_manifest_builder_contract(manifest: &str) {
     let version = env!("CARGO_PKG_VERSION");
     assert!(
         manifest.contains(&format!(
-            "create-release-manifest.sh '{version}' 'tailrocks/velnor-new' '1.99.1' '1.26.0'"
+            "create-release-manifest.sh '{version}' 'tailrocks/velnor-new' '1.99.1' '1.27.0'"
         )) || manifest.contains(&format!(
             r#"create-release-manifest.sh '{version}' 'tailrocks/velnor-new' ''\"${{VELNOR_TOOL_RUST}}\"'' ''\"${{VELNOR_TOOL_MR_BOXINGTON}}\"''"#
         )),
