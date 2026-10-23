@@ -141,6 +141,8 @@ pub fn verifier_shell_run_scalar(step: &Step) -> Result<String, RenderError> {
 pub fn verifier_shell_argv(step: &Step) -> Result<Vec<String>, RenderError> {
     let run = verifier_shell_run_scalar(step)?;
     Ok(vec![
+        "/usr/bin/env".to_owned(),
+        format!("PATH={}", crate::VERIFY_PATH),
         "/bin/bash".to_owned(),
         "--noprofile".to_owned(),
         "--norc".to_owned(),
