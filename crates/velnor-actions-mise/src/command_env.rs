@@ -323,8 +323,8 @@ impl EnvPolicy {
                     env.push((key.clone(), value.clone()));
                 }
             }
-        } else if self.allows_proxy_passthrough() {
-            env.extend(proxy_passthrough(parent));
+        } else {
+            env.extend(super::cleared_parent_passthrough(*self, parent));
         }
         env.extend(additions.iter().cloned());
         env

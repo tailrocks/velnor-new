@@ -49,12 +49,40 @@ use std::time::Duration;
 
 use crate::error::MiseError;
 
-/// Mise global flags, always placed before the subcommand.
-///
-/// Every mise invocation carries all three, installs included: no mise
-/// command ever loads repo config, env files, or hooks. Explicit
-/// `tool@exact` specs carry the version: the project's declared version
-/// (hard decision 5) or the Velnor catalog pin.
+fn cleared_parent_passthrough(
+    policy: EnvPolicy,
+    parent: &[(OsString, OsString)],
+) -> Vec<(OsString, OsString)> {
+    match policy {
+        // Mise needs runner discovery plus its selected owned cache.
+        EnvPolicy::GitHubToken => {
+            let mut env: Vec<_> = parent
+                .iter()
+                .filter(|(key, _)| key == "PATH" || key == "HOME")
+                .cloned()
+                .collect();
+            let last_env = |name: &str| {
+                parent
+                    .iter()
+                    .rfind(|(key, _)| key == name)
+                    .map(|(_, value)| value.clone())
+            };
+            let data_dir = last_env("MISE_DATA_DIR")
+                .filter(|value| !value.is_empty())
+                .or_else(|| {
+                    last_env("XDG_DATA_HOME")
+                        .filter(|value| !value.is_empty())
+                        .map(|value| PathBuf::from(value).join("mise").into_os_string())
+                });
+            env.extend(data_dir.map(|value| (OsString::from("MISE_DATA_DIR"), value)));
+            env
+        }
+        policy if policy.allows_proxy_passthrough() => proxy_passthrough(parent),
+        _ => Vec::new(),
+    }
+}
+
+/// Flags disable project config/env/hooks; exact specs carry project (decision 5) or catalog pins.
 pub const MISE_GLOBAL_FLAGS: [&str; 3] = ["--no-config", "--no-env", "--no-hooks"];
 
 /// Separator between mise tool selectors and the payload command.
@@ -303,10 +331,8 @@ impl IsolatedCommand {
             strip_credentials(&mut command, self.policy);
         } else {
             command.env_clear();
-            if self.policy.allows_proxy_passthrough() {
-                let parent: Vec<(OsString, OsString)> = std::env::vars_os().collect();
-                command.envs(proxy_passthrough(&parent));
-            }
+            let parent: Vec<(OsString, OsString)> = std::env::vars_os().collect();
+            command.envs(cleared_parent_passthrough(self.policy, &parent));
         }
         for (key, value) in self.full_env() {
             command.env(key, value);

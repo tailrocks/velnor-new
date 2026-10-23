@@ -395,6 +395,6 @@ for the bounded diagnostic output protocol and its runner-source references.
 
 See [native release asset upload](../implemented/native-release-upload.md) for
 the qualified upload-host, authentication and binary-input source contract.
-
 See [optional dependency-seed failure isolation](../implemented/optional-dependency-seed.md)
 and [immutable preview API qualification](../implemented/immutable-preview-api-qualification.md).
+See [explicit-token tool launch](../implemented/explicit-token-tool-launch.md).
