@@ -237,9 +237,78 @@ fn app_token_rejects_empty_or_malformed_token() {
         vec![OsString::from("api")],
     )
     .expect("gh command");
-    for token in ["", "token with spaces", "token\nvalue"] {
+    for token in [
+        "",
+        "token with spaces",
+        "token\nvalue",
+        "a\0b",
+        "a\u{7f}b",
+        "é",
+    ] {
+        let error = exec
+            .command_with_github_token(&ToolCatalog::pinned(), token)
+            .expect_err("malformed credential rejected");
+        let display = error.to_string();
+        assert!(display.contains("GH_TOKEN"));
+        assert!(display.contains("credential_rejected"));
+        assert!(token.is_empty() || !display.contains(token));
+    }
+}
+
+#[test]
+fn shared_transport_predicate_accepts_only_opaque_safe_ascii_bytes() {
+    use crate::command::is_safe_credential_value;
+
+    assert!(is_safe_credential_value("legacy-token"));
+    assert!(is_safe_credential_value("legacy.opaque_token-v2"));
+    assert!(!is_safe_credential_value(""));
+    for value in ["a b", "a\tb", "a\nb", "a\0b", "a\u{7f}b", "é", "a/b", "a+b"] {
+        assert!(!is_safe_credential_value(value), "{value:?}");
+    }
+}
+
+#[test]
+fn app_token_accepts_legacy_and_long_dotted_opaque_values() {
+    let exec = PinnedToolExec::new(
+        vec![PinnedTool::Gh],
+        OsStr::new("gh"),
+        vec![OsString::from("api")],
+    )
+    .expect("gh command");
+    for token in [
+        "legacy-token",
+        &format!("legacy.{}.suffix", "x".repeat(600)),
+    ] {
+        let command = exec
+            .command_with_github_token(&ToolCatalog::pinned(), token)
+            .expect("opaque token accepted");
         assert!(
-            exec.command_with_github_token(&ToolCatalog::pinned(), token)
+            command
+                .full_env()
+                .contains(&(OsString::from("GH_TOKEN"), OsString::from(token)))
+        );
+        assert!(!exec.args().iter().any(|arg| arg == token));
+        assert!(!command.argv().iter().any(|arg| arg == token));
+        assert!(!format!("{exec:?} {command:?}").contains(token));
+        let child = command.spawn_env(&poisoned_github_parent());
+        assert_eq!(child.iter().filter(|(key, _)| key == "GH_TOKEN").count(), 1);
+        assert_eq!(child, expected_github_child_env(&command, true));
+        assert!(!child.iter().any(|(key, value)| {
+            key != "GH_TOKEN" && value.to_string_lossy().contains("source-token")
+        }));
+    }
+}
+
+#[test]
+fn dotted_token_does_not_expand_github_token_command_authority() {
+    for (tools, program) in [
+        (vec![PinnedTool::Gh], "git"),
+        (vec![PinnedTool::Gh, PinnedTool::Jactionlint], "gh"),
+    ] {
+        let exec = PinnedToolExec::new(tools, OsStr::new(program), vec![OsString::from("api")])
+            .expect("valid pinned execution");
+        assert!(
+            exec.command_with_github_token(&ToolCatalog::pinned(), "legacy.token.v1")
                 .is_err()
         );
     }

@@ -178,11 +178,29 @@ fn curl_config_pins_https_and_the_api_origin_and_rejects_hostile_input() {
 
 #[test]
 fn tokens_validate_and_never_print() {
-    assert!(Token::new("").is_err());
-    for bad in ["a b", "a\nb", "a\"b", "a$b", "a;b"] {
-        assert!(Token::new(bad).is_err(), "{bad:?}");
+    let empty = Token::new("").expect_err("empty credential unavailable");
+    assert!(format!("{empty:?}").contains("private_source_credential_unavailable"));
+    for bad in ["a b", "a\nb", "a\0b", "a\u{7f}b", "é", "a\"b", "a$b", "a;b"] {
+        let error = Token::new(bad).expect_err("malformed credential rejected");
+        assert!(
+            format!("{error:?}").contains("private_source_credential_malformed"),
+            "{bad:?}"
+        );
+        assert!(!format!("{error:?}").contains(bad));
     }
     assert!(!format!("{:?}", token()).contains(SECRET));
+}
+
+#[test]
+fn legacy_and_long_dotted_tokens_remain_opaque_and_redacted() {
+    for value in [
+        "legacy-token",
+        &format!("legacy.{}.suffix", "x".repeat(600)),
+    ] {
+        let credential = Token::new(value).expect("safe opaque credential");
+        assert_eq!(credential.expose(), value);
+        assert_eq!(format!("{credential:?}"), "Token(<redacted>)");
+    }
 }
 
 #[cfg(unix)]
