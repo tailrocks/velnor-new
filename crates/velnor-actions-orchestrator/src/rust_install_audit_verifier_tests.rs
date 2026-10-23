@@ -28,7 +28,7 @@ fn existing_inline_release_verifiers_remain_exactly_audited() {
     );
 }
 
-fn producer_home_template() -> crate::verifier_actions::InlineVerifierTemplate {
+fn producer_home_template() -> crate::workflow::verifier_actions::InlineVerifierTemplate {
     verifiers().inline_rust_templates["Verify Rust channel manifest"]
         .last()
         .expect("canonical producer-home Rust verifier")
@@ -36,7 +36,7 @@ fn producer_home_template() -> crate::verifier_actions::InlineVerifierTemplate {
 }
 
 fn source_prep_workflow(
-    template: &crate::verifier_actions::InlineVerifierTemplate,
+    template: &crate::workflow::verifier_actions::InlineVerifierTemplate,
     env_reversed: bool,
 ) -> String {
     let step = if env_reversed {
