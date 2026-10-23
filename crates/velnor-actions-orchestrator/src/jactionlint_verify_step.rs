@@ -85,7 +85,7 @@ pub(crate) fn argv(catalog: &ToolCatalog) -> Vec<String> {
 ///
 /// Returns a contract error when the renderer rejects the fixed argv.
 pub(crate) fn verify_jactionlint_step(_catalog: &ToolCatalog) -> Step {
-    crate::verifier_actions::call_step(
+    crate::workflow::verifier_actions::call_step(
         VERIFY_JACTIONLINT_STEP,
         velnor_actions_workflow_renderer::verifier_composite::VERIFY_JACTIONLINT_USES,
         None,

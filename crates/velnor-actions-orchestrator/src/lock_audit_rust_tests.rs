@@ -8,7 +8,7 @@ use velnor_actions_contract::{
 use velnor_actions_mise::{PREPARE_PINNED_TOOLS_STEP, PinnedTool, ToolCatalog};
 
 use crate::lock_audit::audit_prepare_installs_with_catalog;
-use crate::verifier_actions::call_step;
+use crate::workflow::verifier_actions::call_step;
 use crate::workflow::{
     NOT_CATALOGUED_CODE, VERIFY_JACTIONLINT_STEP, VERIFY_RESTORED_RUST_STEP,
     VERIFY_RUST_MANIFEST_STEP,

@@ -14,7 +14,7 @@ use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::{render::RenderedFile, yaml::quote_scalar};
 
 use crate::OrchestratorError;
-use crate::verifier_actions::{VerifierAction, VerifierActionSet};
+use crate::workflow::verifier_actions::{VerifierAction, VerifierActionSet};
 
 #[path = "rust_install_audit_parse.rs"]
 mod parse;
@@ -174,7 +174,7 @@ fn is_verifier_step_valid(step: &StepText, verifiers: &VerifierActionSet) -> boo
 fn canonical_inline_shape(
     step: &StepText,
     name: &str,
-    template: &crate::verifier_actions::InlineVerifierTemplate,
+    template: &crate::workflow::verifier_actions::InlineVerifierTemplate,
 ) -> bool {
     if step.unexpected_nested
         || template

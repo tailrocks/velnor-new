@@ -2,7 +2,7 @@ use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::render::RenderedFile;
 
 use super::audit;
-use crate::verifier_actions::VerifierActionSet;
+use crate::workflow::verifier_actions::VerifierActionSet;
 
 fn verifiers() -> VerifierActionSet {
     VerifierActionSet::build(
@@ -29,13 +29,16 @@ fn problem(files: &[RenderedFile]) -> String {
     }
 }
 
-fn inline_step(name: &str, template: &crate::verifier_actions::InlineVerifierTemplate) -> String {
+fn inline_step(
+    name: &str,
+    template: &crate::workflow::verifier_actions::InlineVerifierTemplate,
+) -> String {
     inline_step_with_env(name, template, template.env.iter())
 }
 
 fn inline_step_with_env<'a>(
     name: &str,
-    template: &'a crate::verifier_actions::InlineVerifierTemplate,
+    template: &'a crate::workflow::verifier_actions::InlineVerifierTemplate,
     env: impl Iterator<Item = (&'a String, &'a String)>,
 ) -> String {
     let mut lines = vec![
