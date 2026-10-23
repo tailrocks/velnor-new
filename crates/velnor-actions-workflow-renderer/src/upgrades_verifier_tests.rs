@@ -40,6 +40,32 @@ fn upgrade_jactionlint_verifiers_use_the_canonical_release_renderer() {
     );
 }
 
+#[test]
+fn upgrade_rust_verifier_preserves_the_credential_prefixed_script() {
+    let mut upgrades = spec();
+    upgrades.verify_rust_script = crate::toolchain_env::with_credential_unset_script(
+        "v=\"${VELNOR_TOOL_RUST}\"; echo verify \"$v\"",
+    );
+    let prefix = crate::toolchain_env::credential_unset_prelude();
+    let file = render_upgrades_workflow(&upgrades).expect("render");
+
+    for id in ["prepare", "verify"] {
+        let job = job_text(&file.bytes, id);
+        let binding = job
+            .lines()
+            .find(|line| line.contains("VELNOR_VERIFY_RUST_SCRIPT:"))
+            .expect("the public verifier script is bound into each generation job");
+        assert!(
+            binding.contains(&prefix),
+            "{id} preserves the credential-unset prefix: {binding}"
+        );
+        assert!(
+            job.contains("sh -c \\\"$VELNOR_VERIFY_RUST_SCRIPT\\\""),
+            "{id} executes the bound script value"
+        );
+    }
+}
+
 fn indent_workflow_step(yaml: &str) -> String {
     let mut lines = yaml.lines();
     let first = lines.next().expect("step has a first line");

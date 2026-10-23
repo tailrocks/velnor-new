@@ -15,6 +15,49 @@ use velnor_actions_workflow_renderer::{
 
 const VERSION: &str = "0.1.0";
 
+fn assert_oversized_workflow_path(
+    error: RenderError,
+    expected_path: &str,
+) -> Result<(), RenderError> {
+    let problem = match error {
+        RenderError::InvalidWorkflow(problem) => problem,
+        other => {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "oversized workflow should be rejected with a size validation error: {other}"
+            )));
+        }
+    };
+    let mut parts = problem.split(':');
+    if parts.next() != Some("workflow_too_large") {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "unexpected size error: {problem}"
+        )));
+    }
+    if parts.next() != Some(expected_path) {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "size error path did not match {expected_path}: {problem}"
+        )));
+    }
+    let Some(actual) = parts.next().and_then(|value| value.parse::<usize>().ok()) else {
+        return Err(RenderError::InvalidWorkflow(
+            "size error has no actual byte count".to_owned(),
+        ));
+    };
+    let Some(maximum) = parts.next().and_then(|value| value.parse::<usize>().ok()) else {
+        return Err(RenderError::InvalidWorkflow(
+            "size error has no configured byte limit".to_owned(),
+        ));
+    };
+    assert!(actual > maximum, "reported size must exceed its limit");
+    assert_eq!(maximum, MAX_WORKFLOW_BYTES);
+    if parts.next().is_some() {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "size error has trailing fields: {problem}"
+        )));
+    }
+    Ok(())
+}
+
 fn oversized_schedule() -> ScheduleTrigger {
     ScheduleTrigger {
         cron: vec!["0 6 * * 1".to_owned(); 30_000],
@@ -102,10 +145,10 @@ fn direct_release_renderer_rejects_an_oversized_workflow() -> Result<(), RenderE
 }
 
 #[test]
-fn direct_freshness_renderer_rejects_an_oversized_workflow() {
-    let spec = FreshnessSpec {
+fn direct_freshness_renderer_rejects_an_oversized_workflow() -> Result<(), RenderError> {
+    let mut spec = FreshnessSpec {
         schedule: ScheduleTrigger {
-            cron: oversized_schedule().cron,
+            cron: vec!["0 6 * * 1".to_owned()],
         },
         runs_on: "ubuntu-26.04".to_owned(),
         checkout_uses: "actions/checkout@0123456789abcdef0123456789abcdef01234567".to_owned(),
@@ -124,18 +167,18 @@ fn direct_freshness_renderer_rejects_an_oversized_workflow() {
         ],
         generator_version: VERSION.to_owned(),
     };
+    let small = render_freshness_workflow(&spec)?;
+    assert_eq!(small.path, ".github/workflows/freshness.yml");
+    assert!(small.bytes.len() <= MAX_WORKFLOW_BYTES);
+    spec.schedule = oversized_schedule();
     let error =
         render_freshness_workflow(&spec).expect_err("direct freshness render must enforce the cap");
-    assert!(
-        error
-            .to_string()
-            .contains("workflow_too_large:.github/workflows/freshness.yml")
-    );
+    assert_oversized_workflow_path(error, ".github/workflows/freshness.yml")?;
+    Ok(())
 }
 
 #[test]
 fn direct_schema2_renderer_rejects_an_oversized_workflow() -> Result<(), RenderError> {
-    let large_mbx_version = format!("{}.0.0", "9".repeat(MAX_WORKFLOW_BYTES / 4));
     let request = Schema2WorkflowRequest {
         version: VERSION.to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
@@ -149,7 +192,7 @@ fn direct_schema2_renderer_rejects_an_oversized_workflow() -> Result<(), RenderE
             },
             candidate_action_uses:
                 "jdx/mr-boxington-action@0123456789abcdef0123456789abcdef01234567".to_owned(),
-            mbx_version: large_mbx_version,
+            mbx_version: "1.98.0".to_owned(),
             rust_version: "1.98.0".to_owned(),
             verify_rust_argv: vec![
                 "sh".to_owned(),
@@ -173,12 +216,20 @@ fn direct_schema2_renderer_rejects_an_oversized_workflow() -> Result<(), RenderE
         }),
         product_release: None,
     };
+    let small = render_schema2_workflows(&request)?;
+    let qualification = small
+        .iter()
+        .find(|file| file.path == ".github/workflows/qualification.yml")
+        .expect("qualification workflow is rendered");
+    assert!(qualification.bytes.len() <= MAX_WORKFLOW_BYTES);
+    let mut request = request;
+    request
+        .mbx_qualification
+        .as_mut()
+        .expect("qualification pins exist")
+        .mbx_version = format!("{}.0.0", "9".repeat(MAX_WORKFLOW_BYTES / 4));
     let error =
         render_schema2_workflows(&request).expect_err("direct routing render must enforce the cap");
-    assert!(
-        error
-            .to_string()
-            .contains("workflow_too_large:.github/workflows/qualification.yml")
-    );
+    assert_oversized_workflow_path(error, ".github/workflows/qualification.yml")?;
     Ok(())
 }
