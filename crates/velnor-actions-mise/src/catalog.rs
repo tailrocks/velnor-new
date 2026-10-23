@@ -137,6 +137,13 @@ pub const COSIGN_LINUX_AMD64_BYTES: usize = 145_688_404;
 /// Official Linux `x86_64` Cosign asset digest from the v3.1.4 release API.
 pub const COSIGN_LINUX_AMD64_SHA256: &str =
     "424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa";
+/// Exact bytes in the pinned Linux arm64 Cosign executable; bounds transport and reads.
+/// Source: v3.1.4 release API, cross-checked against `cosign_checksums.txt` on 2026-10-23.
+pub const COSIGN_LINUX_ARM64_BYTES: usize = 136_437_761;
+/// Official Linux `arm64` Cosign asset digest from the v3.1.4 release API and checksums file.
+/// Source: <https://api.github.com/repos/sigstore/cosign/releases/tags/v3.1.4>; checked 2026-10-23.
+pub const COSIGN_LINUX_ARM64_SHA256: &str =
+    "ade83b7aac62e131cacfe96d958948b2150cc9efec46a570a2649b8e27dedad2";
 
 // Nextest needs its backend-qualified aqua-registry path: no `nextest`
 // shorthand exists, `github:` tags carry a `cargo-nextest-` prefix, and

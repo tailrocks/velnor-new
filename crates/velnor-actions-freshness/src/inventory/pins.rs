@@ -98,13 +98,7 @@ fn check_tool_pins(ctx: &mut FreshnessContext) {
             tool.get("pinned").and_then(Value::as_str),
         );
         if name == "cosign" {
-            let digest = ctx.rust_const(CATALOG, "COSIGN_LINUX_AMD64_SHA256");
-            compare_pin(
-                ctx,
-                "tool cosign Linux x86_64 release digest",
-                digest.as_deref(),
-                tool.get("sha256").and_then(Value::as_str),
-            );
+            check_cosign_asset_pins(ctx, &tool);
         }
     }
     for (name, _, _) in EXPECTED_TOOLS
@@ -115,6 +109,45 @@ fn check_tool_pins(ctx: &mut FreshnessContext) {
             "local-pin",
             &format!("tool {name}"),
             "inventory row missing",
+        );
+    }
+}
+
+fn check_cosign_asset_pins(ctx: &mut FreshnessContext, tool: &Value) {
+    for (platform, bytes_constant, size_field, digest_constant, digest_field) in [
+        (
+            "Linux x86_64",
+            "COSIGN_LINUX_AMD64_BYTES",
+            "bytes",
+            "COSIGN_LINUX_AMD64_SHA256",
+            "sha256",
+        ),
+        (
+            "Linux arm64",
+            "COSIGN_LINUX_ARM64_BYTES",
+            "arm64_bytes",
+            "COSIGN_LINUX_ARM64_SHA256",
+            "arm64_sha256",
+        ),
+    ] {
+        let bytes = ctx.rust_usize_const(CATALOG, bytes_constant);
+        let inventory_bytes = tool
+            .get(size_field)
+            .and_then(Value::as_u64)
+            .map(|value| value.to_string());
+        compare_pin(
+            ctx,
+            &format!("tool cosign {platform} release size"),
+            bytes.as_deref(),
+            inventory_bytes.as_deref(),
+        );
+
+        let digest = ctx.rust_const(CATALOG, digest_constant);
+        compare_pin(
+            ctx,
+            &format!("tool cosign {platform} release digest"),
+            digest.as_deref(),
+            tool.get(digest_field).and_then(Value::as_str),
         );
     }
 }
@@ -351,3 +384,7 @@ mod duplicate_tests {
         assert_eq!(probe_rows, [] as [serde_json::Value; 0]);
     }
 }
+
+#[cfg(test)]
+#[path = "pins_cosign_tests.rs"]
+mod cosign_tests;

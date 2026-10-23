@@ -55,7 +55,6 @@ pub fn upload_script(gh: &str, id: &str) -> String {
 #[must_use]
 pub fn attest_disabled_script(reason: &str) -> String {
     format!(
-        "set -eu; printf '::warning title=Provenance attestation disabled::%s\\n' \
-         'publish.maven attest=false: {reason}'"
+        "set -eu; printf '::warning title=Provenance attestation disabled::%s\\n' 'publish.maven attest=false: {reason}'"
     )
 }
