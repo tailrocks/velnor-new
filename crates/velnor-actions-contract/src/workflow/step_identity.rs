@@ -1,13 +1,16 @@
 //! Typed workflow step identity and semantic role.
 
 use super::step::{Step, StepKind};
-use super::step_payloads::{
-    valid_checkout_payload, valid_configured_checkout_payload, valid_mise_setup,
-    valid_tool_seed_payload,
-};
+use super::step_payloads::{valid_checkout_payload, valid_mise_setup, valid_tool_seed_payload};
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
+
+#[path = "step_identity_payload.rs"]
+mod payload;
+pub(super) use payload::valid_tools_cache_identity;
+use payload::{action_has_prefix_for_kind, internal_operation, valid_rust_verifier_payload};
+pub use payload::{is_configured_checkout, is_tool_seed_step};
 
 /// Fixed local action path used for exact provider-cache admission.
 pub const TOFU_PROVIDER_ADMISSION_USES: &str = "./.github/actions/tofu-provider-admission";
@@ -311,64 +314,6 @@ impl StepRole {
     }
 }
 
-/// Preserve the original shell role and admit only the two empty-input
-/// generated action calls used for the fixed restored/installed phases.
-fn valid_rust_verifier_payload(kind: &StepKind) -> bool {
-    match kind {
-        StepKind::Shell { .. } => true,
-        StepKind::Action { uses, with, env } => {
-            RUST_VERIFIER_USES.contains(&uses.as_str()) && with.is_empty() && env.is_empty()
-        }
-        StepKind::TaskExecution { .. } | StepKind::Internal { .. } => false,
-    }
-}
-
-/// Check that a step is the configured checkout owner in this workflow scope.
-///
-/// Checkout is a semantic role, not a display-name convention. The caller
-/// supplies the exact pinned action ref from its validated render context.
-#[must_use]
-pub fn is_configured_checkout(step: &Step, expected_uses: &str) -> bool {
-    step.role == Some(StepRole::Checkout)
-        && step.condition.is_none()
-        && matches!(&step.kind, StepKind::Action { uses, .. } if uses == expected_uses)
-        && valid_configured_checkout_payload(&step.kind)
-}
-
-/// Check that a step is the unconditional local tool-seed consumer.
-#[must_use]
-pub fn is_tool_seed_step(step: &Step) -> bool {
-    step.role == Some(StepRole::ToolSeed)
-        && step.condition.is_none()
-        && valid_tool_seed_payload(&step.kind)
-}
-
-/// Require the fixed generated hosted identity-and-seed composite and digest.
-pub(super) fn valid_tools_cache_identity(kind: &StepKind) -> bool {
-    matches!(kind, StepKind::Action { uses, with, env }
-        if TOOLS_CACHE_PRELUDE_USES.contains(&uses.as_str())
-            && with.len() == 1
-            && with
-                .get(TOOLS_CACHE_IDENTITY_DIGEST_INPUT)
-                .is_some_and(|digest| crate::config::project_tool_refs::is_tools_identity_input(digest))
-            && env.is_empty())
-}
-
-/// True when an action payload uses a fixed name prefix.
-fn action_has_prefix_for_kind(kind: &StepKind, prefix: &str) -> bool {
-    matches!(kind, StepKind::Action { uses, .. } if action_has_prefix(uses, prefix))
-}
-
-/// True when a pinned action ref starts with its required owner/repository.
-fn action_has_prefix(uses: &str, prefix: &str) -> bool {
-    uses.starts_with(prefix)
-}
-
-/// True when an internal operation matches its role contract.
-fn internal_operation(kind: &StepKind, expected: &str) -> bool {
-    matches!(kind, StepKind::Internal { operation, .. } if operation == expected)
-}
-
 /// Validate one serialized step scope, including role payloads and unique output IDs.
 ///
 /// Workflow jobs and composite actions use separate output-ID scopes, so renderers
@@ -413,100 +358,5 @@ fn validate_step_identities(steps: &[Step], scope: &str) -> Result<(), ContractE
 }
 
 #[cfg(test)]
-mod rust_verifier_role_tests {
-    use std::collections::BTreeMap;
-
-    use super::{RUST_VERIFIER_USES, StepRole, validate_step_identity_scope};
-    use crate::workflow::{Step, StepKind};
-
-    fn action(uses: &str, with: BTreeMap<String, String>, env: BTreeMap<String, String>) -> Step {
-        Step {
-            name: "Verify Rust channel manifest".to_owned(),
-            id: None,
-            role: Some(StepRole::VerifyRustManifest),
-            condition: None,
-            parallel: false,
-            kind: StepKind::Action {
-                uses: uses.to_owned(),
-                with,
-                env,
-            },
-        }
-    }
-
-    fn validate(step: Step) -> Result<(), crate::ContractError> {
-        validate_step_identity_scope(&[step], "verifier-role-test")
-    }
-
-    #[test]
-    fn rust_verifier_role_accepts_only_the_two_empty_binding_actions() {
-        for uses in RUST_VERIFIER_USES {
-            validate(action(uses, BTreeMap::new(), BTreeMap::new()))
-                .expect("fixed verifier action is a valid role payload");
-        }
-
-        // The existing inline shell role remains supported for callers that
-        // verify in place, including release and upgrade workflows.
-        let shell = Step {
-            name: "Verify Rust channel manifest".to_owned(),
-            id: None,
-            role: Some(StepRole::VerifyRustManifest),
-            condition: None,
-            parallel: false,
-            kind: StepKind::Shell {
-                run: vec!["sh".to_owned(), "-c".to_owned(), "true".to_owned()],
-                env: BTreeMap::new(),
-            },
-        };
-        validate(shell).expect("previous shell payload shape remains valid");
-    }
-
-    #[test]
-    fn rust_verifier_role_rejects_path_mutations_and_unrelated_actions() {
-        for uses in [
-            "./.github/actions/velnor-verify-restored-rust/",
-            "./.github/actions/velnor-verify-restored-rust@deadbeef",
-            "./.github/actions/velnor-verify-restored-rust/../velnor-verify-rust-manifest",
-            "./.github/actions/velnor-verify-restored-rust ",
-            "./.github/actions/Velnor-verify-restored-rust",
-            "./.github/actions/velnor-verify-rust-manifest-extra",
-            "./.github/actions/velnor-verify-jactionlint",
-            "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-        ] {
-            assert!(
-                validate(action(uses, BTreeMap::new(), BTreeMap::new())).is_err(),
-                "unexpected accepted action path: {uses}"
-            );
-        }
-    }
-
-    #[test]
-    fn rust_verifier_role_rejects_even_empty_caller_inputs_and_environment() {
-        let uses = RUST_VERIFIER_USES[1];
-        for (key, value) in [
-            ("phase", ""),
-            ("rust-version", ""),
-            ("RUSTUP_HOME", ""),
-            ("CARGO_HOME", ""),
-        ] {
-            assert!(
-                validate(action(
-                    uses,
-                    BTreeMap::from([(key.to_owned(), value.to_owned())]),
-                    BTreeMap::new(),
-                ))
-                .is_err(),
-                "unexpected accepted action input: {key}"
-            );
-            assert!(
-                validate(action(
-                    uses,
-                    BTreeMap::new(),
-                    BTreeMap::from([(key.to_owned(), value.to_owned())]),
-                ))
-                .is_err(),
-                "unexpected accepted action environment: {key}"
-            );
-        }
-    }
-}
+#[path = "step_identity_verifier_tests.rs"]
+mod rust_verifier_role_tests;
