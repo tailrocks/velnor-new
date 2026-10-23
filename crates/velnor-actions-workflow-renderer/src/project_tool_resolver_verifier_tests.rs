@@ -90,7 +90,7 @@ fn only_generated_resolver_writes_receive_the_same_narrow_annotation() {
         }
         assert!(map_value(resolver, "run").is_some_and(|value| {
             matches!(value, Yaml::Annotated { value, comment }
-                if value.starts_with("function_env_unset=(); while IFS= read -r env_name;")
+                if value.starts_with("function_env_unset=(); function_env_scan_complete=0; while IFS= read -r -d '' env_entry;")
                     && value.contains("exec /usr/bin/env \"${function_env_unset[@]}\" -u BASH_ENV -u ENV -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u")
                     && comment == "zizmor: ignore[github-env]")
         }));

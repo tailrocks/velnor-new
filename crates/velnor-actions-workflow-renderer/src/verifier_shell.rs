@@ -24,7 +24,7 @@ const INNER_SHELL: [&str; 7] = [
     "-o",
     "pipefail",
 ];
-const FUNCTION_ENV_UNSET_PRELUDE: &str = r#"function_env_unset=(); while IFS= read -r env_name; do case "$env_name" in BASH_FUNC_*) function_env_unset+=(-u "$env_name");; esac; done < <(compgen -e)"#;
+const FUNCTION_ENV_UNSET_PRELUDE: &str = r#"function_env_unset=(); function_env_scan_complete=0; while IFS= read -r -d '' env_entry; do case "$env_entry" in BASH_FUNC_*=*) function_env_unset+=(-u "${env_entry%%=*}");; VELNOR_VERIFIER_ENV_SCAN_COMPLETE) function_env_scan_complete=$((function_env_scan_complete + 1));; esac; done < <({ /usr/bin/env -0 && printf '%s\000' 'VELNOR_VERIFIER_ENV_SCAN_COMPLETE'; }); [ "$function_env_scan_complete" -eq 1 ] || exit 1"#;
 
 #[derive(Clone, Copy)]
 struct ScriptMetadata<'a> {

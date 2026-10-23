@@ -289,8 +289,8 @@ fn rejects_verifier_startup_and_runtime_boundary_tampering() {
         &changed_verifier(
             QUALIFIER,
             RUST,
-            r#"BASH_FUNC_*) function_env_unset+=(-u \"$env_name\");;"#,
-            "BASH_FUNC_*) :;;",
+            r#"BASH_FUNC_*=*) function_env_unset+=(-u \"${env_entry%%=*}\");;"#,
+            "BASH_FUNC_*=*) :;;",
         ),
     );
     reject_synthetic_tamper(
