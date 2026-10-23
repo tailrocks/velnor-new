@@ -11,6 +11,7 @@ When designing workflows in the Velnor V1 generator or implementing runner infra
 ## Official Source Repositories
 
 ### 1. Runner Core & Execution Protocol
+
 - **Repository**: [actions/runner](https://github.com/actions/runner)
 - **Role**: Official GitHub Actions runner daemon and execution engine.
 - **Reference Areas**:
@@ -19,6 +20,7 @@ When designing workflows in the Velnor V1 generator or implementing runner infra
   - `src/Runner.Common`: Shared contracts, constants, job message schemas, and configuration formats.
 
 ### 2. Auto-scaling Runner Scale Sets
+
 - **Repository**: [actions/scaleset](https://github.com/actions/scaleset)
 - **Role**: Official controller and listener for GitHub Actions Runner Scale Sets.
 - **Reference Areas**:
@@ -27,6 +29,7 @@ When designing workflows in the Velnor V1 generator or implementing runner infra
   - Compatibility with GitHub Enterprise Server and GitHub.com scale set endpoints.
 
 ### 3. Runner Environments & Tooling Inventories
+
 - **Repository**: [actions/runner-images](https://github.com/actions/runner-images)
 - **Role**: Canonical image definitions and software inventories for GitHub-hosted runners.
 - **Reference Areas**:
@@ -35,14 +38,10 @@ When designing workflows in the Velnor V1 generator or implementing runner infra
   - OS-specific tool locations for Ubuntu Linux and macOS runner images.
 
 The official [`xcode-27` runner image inventory](https://github.com/actions/runner-images/blob/main/images/macos/xcode-27-arm64-Readme.md)
-identifies an ARM64 macOS 27.0.1 host and lists Xcode 27.1 build `27A9275`
-at `/Applications/Xcode_27.1_Release_Candidate.app`. Velnor represents this
-host as the typed `xcode-27-arm64` runner (`runs-on: xcode-27`) and binds
-consumer qualification to the exact Xcode version/build through `system_tools`.
-The image's default Xcode is 27.0, so a task needing Xcode 27.1 pins
-`version = "27.1"`, `build = "27A9275"`, `sdk_version = "27.0"`, and
-`developer_dir = "/Applications/Xcode_27.1_Release_Candidate.app/Contents/Developer"`.
-Velnor probes and runs the named task with that `DEVELOPER_DIR` and never changes
+identifies an ARM64 macOS 27.0.1 host and lists Xcode 27.1 build `27A9275` at `/Applications/Xcode_27.1_Release_Candidate.app`. Velnor represents this
+host as the typed `xcode-27-arm64` runner (`runs-on: xcode-27`) and binds consumer qualification to the exact Xcode version/build through `system_tools`.
+The image's default Xcode is 27.0, so a task needing Xcode 27.1 pins `version = "27.1"`, `build = "27A9275"`, `sdk_version = "27.0"`, and
+`developer_dir = "/Applications/Xcode_27.1_Release_Candidate.app/Contents/Developer"`. Velnor probes and runs the named task with that `DEVELOPER_DIR` and never changes
 the host's `xcode-select` setting.
 
 ---
@@ -54,8 +53,11 @@ the host's `xcode-select` setting.
 Jackin run `39495895585`, attempt 1, demonstrated executing producer jobs while the aggregate run remained `queued`; requiring only `in_progress` incorrectly rejected them before checkout. Aggregate status alone never establishes caller authority.
 The official [attempt-specific jobs endpoint](https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run-attempt) supplies the bounded complete inventory selecting one generated role's positive job ID. The [individual job endpoint](https://docs.github.com/en/rest/actions/workflow-jobs#get-a-job-for-a-workflow-run) refreshes its identity, status and conclusion using existing Actions read permissions. The runner's [GitHubContext export](https://github.com/actions/runner/blob/main/src/Runner.Worker/GitHubContext.cs) exports `GITHUB_JOB`; Velnor maps this machine identifier to the generated display name through a closed mapping checked against actual rendered jobs.
 Native guards authenticate exact source, workflow, run and attempt; aggregate `queued` or `in_progress` requires no conclusion plus the unique expected job executing with no conclusion. Only immutable locators are cached; subsequent guards fetch the individual job again. Historical signed-run evidence remains separate from the current publisher, recovery or tap caller's authority.
+
 ### Step shell resolution and `addPath` (checked 2026-10-22)
+
 [`ScriptHandler.cs`](https://github.com/actions/runner/blob/4c989f2f108bb6798e07ea5935bc8bc4aab7de2f/src/Runner.Worker/Handlers/ScriptHandler.cs) resolves a step's shell with `WhichUtil.Which(command, …, prependPath)`, where `prependPath` holds every `core.addPath`/`GITHUB_PATH` entry ahead of the job `PATH`. In a composite action (`IsActionStep`) even `shell: bash` takes this route. [`WhichUtil.cs`](https://github.com/actions/runner/blob/4c989f2f108bb6798e07ea5935bc8bc4aab7de2f/src/Runner.Sdk/Util/WhichUtil.cs) returns a fully qualified command as given when the file exists and never searches `PATH` for it; a custom shell string is split at its first space and must contain `{0}`. `jdx/mise-action` adds the Mise `bin/` and, by default, `shims/` with `core.addPath`, so after a tools-cache restore a bare shell or helper name can resolve to restored bytes. Velnor's restore checks therefore use `/bin/bash --noprofile --norc -e -o pipefail {0}` and reset `PATH` to `/usr/bin:/bin:/usr/sbin:/sbin` first ([hermetic checks](tools-cache-v2.md#the-checks-run-hermetically)).
+
 ### Workflow YAML sharing (checked 2026-10-19)
 
 GitHub's official [workflow reuse reference](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#yaml-anchors-and-aliases) documents same-document environment mapping aliases and an entire job alias containing a steps sequence. These are YAML node substitution, not a reusable
@@ -64,14 +66,10 @@ their use-site job and step context. The [official announcement](https://github.
 records workflow anchor/alias support.
 
 Velnor uses a narrower grammar only when a workflow exceeds its unchanged
-500,000-byte transport limit: exact job `env`, step `env`/`with`, whole step
-mapping, and existing `run` scalar reuse. It never moves execution, credentials,
-permissions, dependencies, caches or outputs into a different scope. Definitions
-precede uses in one globally unique document namespace. Staged shell validation
-normalizes only those emitted forms before its existing ancestry, effective-shell
-and ShellCheck checks. Input is bounded to 500,000 bytes, nesting to 32 levels,
-and normalization work to 262,144 nodes and 16 MiB; merge keys, tags on shared
-nodes, forward/cyclic references and other alias scopes fail closed.
+500,000-byte transport limit: exact job `env`, step `env`/`with`, whole step mapping, and existing `run` scalar reuse. It never moves execution, credentials,
+permissions, dependencies, caches or outputs into a different scope. Definitions precede uses in one globally unique document namespace. Staged shell validation
+normalizes only those emitted forms before its existing ancestry, effective-shell and ShellCheck checks. Input is bounded to 500,000 bytes, nesting to 32 levels,
+and normalization work to 262,144 nodes and 16 MiB; merge keys, tags on shared nodes, forward/cyclic references and other alias scopes fail closed.
 
 This Velnor admission does **not** extend to local action manifests. The original
 runner's [legacy `YamlObjectReader.EvaluateCurrent`](https://github.com/actions/runner/blob/main/src/Sdk/DTPipelines/Pipelines/ObjectTemplating/YamlObjectReader.cs)
@@ -99,6 +97,7 @@ change; Velnor emits no new aliases into composite `action.yml` files.
 ## 2026 GitHub Actions & Dependabot Platform Contracts
 
 ### 1. Native Step Concurrency (`background`, `wait`, `wait-all`, `cancel`, `parallel`) — `2026-06-25`
+
 - **Upstream Contract** ([Changelog](https://github.blog/changelog/2026-06-25-actions-steps-can-now-be-run-in-parallel/), [workflow syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsbackground), `actions/runner` v2.335.0+; pinned runner v2.338.0 `src/Runner.Worker/BackgroundStepCoordinator.cs`, `JobExtension.cs`):
   - `background: true` on a `run` or `uses` step starts it asynchronously; the job continues to the next step. A composite action may run as a background step but cannot declare background steps or `parallel:` internally.
   - `wait` (one id or a list) and `wait-all` (no arguments) block until the referenced or all active background steps finish; neither accepts `if:` and both always run. Outputs and environment changes of a background step become visible only after a wait that includes it.
@@ -112,6 +111,7 @@ change; Velnor emits no new aliases into composite `action.yml` files.
   - Pinned `jactionlint` v2.3.0 parses and validates `background:` members and the body-less `wait-all` join natively (rejecting `background: "yes"`, a `wait-all` with `run:`, and a step with neither `run` nor `uses`), so generation-time and CI lint pass no ignore pattern ([hard decision 10](../jactionlint-decision.md)). The superseded actionlint v1.7.12 could not parse the keys (rhysd/actionlint#693). Pinned `zizmor` v1.31.1 (support since v1.27.0) parses the syntax.
 
 ### 2. Workflow Execution Protections — `2026-09-17`
+
 - **Upstream Contract** ([Changelog](https://github.blog/changelog/2026-09-17-actions-new-workflow-execution-protections/)):
   - GitHub separates general workflow execution permissions from **restricted untrusted-actor triggers** that can run workflow code on a privileged ref or react to untrusted public events:
     - `pull_request_target`
@@ -131,6 +131,7 @@ change; Velnor emits no new aliases into composite `action.yml` files.
   - Velnor's `Trigger` IR is structurally disjoint from `RESTRICTED_ACTION_EVENTS`: generic generated workflows never emit `pull_request_target`, `workflow_run`, or comment/issue triggers, ensuring public-repository forks execute under `pull_request` with read-only permissions and no secrets without requiring manual maintainer approval for restricted triggers.
 
 ### 3. Cache Access Control (`cache-mode`) — `2026-09-10`
+
 - **Upstream Contract** ([Changelog](https://github.blog/changelog/2026-09-10-actions-control-cache-access-in-workflows-with-cache-mode/)):
   - Workflows and jobs can declare `cache-mode` at the workflow root or per job (`jobs.<job_id>.cache-mode`) to enforce runtime-level GitHub Actions cache service permissions:
     - `write`: read and write cache entries (default on standard events).
@@ -144,6 +145,7 @@ change; Velnor emits no new aliases into composite `action.yml` files.
   - Pinned `jactionlint` v2.3.0 parses workflow- and job-level `cache-mode` literals (`read`, `write`, `write-only`, `none`) and rejects any other value, including a `${{ }}` expression; `JactionlintCapabilities::check_step_syntax(StepSyntax::CacheMode)` records the capability and generation vets it.
 
 ### 4. Dependabot Default Package Cooldown & Velnor Freshness — `2026-07-14`
+
 - **Upstream Contract** ([Changelog](https://github.blog/changelog/2026-07-14-supply-chain-defense-by-default-dependabot-adds-3-day-package-cooldown/)):
   - Dependabot applies a **3-day default cooldown** (`cooldown.default-days: 3`, configurable from `1` to `90` days) to newly published package versions for version updates, reducing exposure to compromised releases during the initial publication window while keeping **security updates immediate**.
 - **Velnor Implementation**:
@@ -332,14 +334,14 @@ and [writes the webhook payload](https://github.com/actions/runner/blob/9abfe11d
 The service's event selection and privilege semantics are documented contracts,
 not behavior proven by this runner implementation.
 
-Before producer execution, the eligibility job independently authenticates the
-canonical CI workflow and completed successful same-repository push run/attempt,
-Required job, and latest source head. The upstream head must equal the actual
-source SHA, workflow authority SHA, and live main tip. A completion for older,
-foreign, PR, failed, or superseded evidence cannot authorize preview. No CI
-artifact is consumed to select source. Signer and publisher retain isolated
-permissions and independent revalidation. Receipt, certificate and SLSA claims
-bind the true producing `workflow_run`; authenticated source CI remains `push`.
+Before producer execution, eligibility authenticates the canonical CI workflow,
+successful same-repository push run/attempt, Required job and latest exact-A CI.
+Source A may precede workflow authority B and protected main tip H only when
+`A <= B <= H` is independently proven. Foreign, PR, failed or superseded CI
+cannot authorize preview. No CI artifact selects A. Signer and publisher retain
+isolated permissions and independent revalidation. Receipts bind source A;
+certificates and standard SLSA workflow claims bind B's producing `workflow_run`.
+See [provider A/B evidence](../implemented/immutable-preview-api-qualification.md#workflow-run-source-and-authority-observation).
 
 The payload shape was checked against original `octokit/webhooks` commit
 `aa80c24a3f55354465b8b1438d33dd5602956d0d`: the
@@ -349,7 +351,6 @@ requires the event action, repository, workflow, and workflow-run envelope; the
 provides the workflow ID/path/name, repository and head repository, attempt,
 source, and terminal status used by admission. The envelope's workflow identity
 must agree with independently fetched canonical CI metadata.
-
 
 ## Native completion trigger scanner disposition (2026-10-18)
 
@@ -370,7 +371,6 @@ annotation and require rejection before output. The generic restricted-event
 policy, full staged scanner invocation, and other audits remain unchanged. An
 inline annotation alone is never sufficient release authority.
 
-
 ## Recursive MBX input matching qualification (2026-10-19)
 
 The runner's original [hashFiles implementation](https://github.com/actions/runner/blob/397b032cbf865e9c3ddfab89d533ec19325e1273/src/Misc/layoutbin/hashFiles/index.js)
@@ -390,11 +390,11 @@ only the selected workspace's mutable target, never every directory named target
 The native Rust regression tests also bind these patterns to the rendered cache
 keys and unchanged generation, job, toolchain and restore-prefix boundaries.
 
-
 See [credential-free preview progress encoding](../implemented/native-preview-progress.md)
 for the bounded diagnostic output protocol and its runner-source references.
 
 See [native release asset upload](../implemented/native-release-upload.md) for
 the qualified upload-host, authentication and binary-input source contract.
-
-See [optional dependency-seed failure isolation](../implemented/optional-dependency-seed.md).
+See [optional dependency-seed failure isolation](../implemented/optional-dependency-seed.md)
+and [immutable preview API qualification](../implemented/immutable-preview-api-qualification.md).
+See [explicit-token tool launch](../implemented/explicit-token-tool-launch.md).

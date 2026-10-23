@@ -18,7 +18,6 @@ use crate::{
 
 #[path = "release_policy_admission.rs"]
 pub(crate) mod release_policy_admission;
-pub use release_policy_admission::{ADMIT_RELEASE_POLICY_OP, admit_release_policy_from_env};
 
 #[path = "stable_tag_origin.rs"]
 pub(crate) mod stable_tag_origin;
@@ -31,12 +30,19 @@ pub use stable_tag_origin::{
 
 #[path = "package_release_published.rs"]
 mod published;
-#[path = "package_release_rolling_state.rs"]
-mod rolling_state;
 pub(crate) use published::verify_published_release;
 
-#[path = "package_release_rolling_backend.rs"]
-mod rolling_backend;
+/// Authenticate the protected source main tip for downstream promotion decisions.
+pub(crate) fn verify_preview_main_tip(
+    repository: &str,
+    repository_id: u64,
+    branch: &str,
+) -> Result<String, OrchestratorError> {
+    if !velnor_actions_contract::vcs::is_safe_github_repository(repository) {
+        return Err(internal("package_publish_preview_tip_repository_invalid"));
+    }
+    github::GitHubApi::new(repository.to_owned()).verify_preview_main_tip(repository_id, branch)
+}
 
 #[path = "package_release_publish_backend.rs"]
 mod backend;
@@ -56,6 +62,8 @@ mod run_identity;
 pub(crate) mod artifact_zip;
 #[path = "preview_artifact_transport.rs"]
 mod preview_artifacts;
+#[cfg(test)]
+pub(crate) use preview_artifacts::tests::discover_request_for_sealing_test;
 pub(crate) use preview_artifacts::{
     AdmittedReleaseArtifact, acquire_release_aggregate, acquire_release_artifacts,
 };
@@ -106,22 +114,9 @@ pub fn publish_package_release_from_env() -> Result<PackagePublicationOutcome, O
 fn publish_backend(
     backend: &mut GitHubPackagePublisher,
 ) -> Result<PackagePublicationOutcome, OrchestratorError> {
-    match backend.receipt.channel {
-        PackageReleaseChannel::Preview => {
-            let outcome = crate::package_publication::rolling::publish_rolling_package_release(
-                &mut rolling_backend::RollingPublisher::new(backend)?,
-            )?;
-            // Metadata equality is not final byte authority, including retries
-            // whose remote marker was already committed before this invocation.
-            published::verify_published_release(&backend.signed)?;
-            Ok(outcome)
-        }
-        PackageReleaseChannel::Stable => {
-            let outcome = publish_package_release(backend)?;
-            published::verify_published_release(&backend.signed)?;
-            Ok(outcome)
-        }
-    }
+    let outcome = publish_package_release(backend)?;
+    published::verify_published_release(&backend.signed)?;
+    Ok(outcome)
 }
 
 /// Resume release publication from an authenticated original workflow artifact.
@@ -194,8 +189,8 @@ impl GitHubPackagePublisher {
             .verify_local(&self.signed)
     }
 
-    fn release_list(&self) -> Result<Vec<ReleaseResponse>, OrchestratorError> {
-        self.api.release_list(&self.tag)
+    fn release_by_tag(&self) -> Result<Option<ReleaseResponse>, OrchestratorError> {
+        self.api.release_by_tag(&self.tag)
     }
 
     fn verify_remote_repository(&self) -> Result<(), OrchestratorError> {
@@ -207,9 +202,14 @@ impl GitHubPackagePublisher {
         release: &ReleaseResponse,
         tag: TagObservation,
     ) -> Result<PublicationState, OrchestratorError> {
-        require_stable(self.receipt.channel)?;
-        admit_stable_release_lifecycle(release, &self.tag)?;
-        self.verify_stable_origin()?;
+        admit_release_lifecycle(release, &self.tag, self.receipt.channel)?;
+        if self.receipt.channel == PackageReleaseChannel::Stable {
+            self.verify_stable_origin()?;
+        } else if tag.source_sha != self.identity.source_sha
+            || tag.message.as_deref() != Some(self.recovery_body.as_str())
+        {
+            return Err(internal("preview_release_tag_origin_changed"));
+        }
         let assets = self.api.remote_assets(release)?;
         if release.draft == Some(true) {
             return Ok(PublicationState::Draft {
@@ -227,7 +227,7 @@ impl GitHubPackagePublisher {
             return Err(internal("package_publish_release_state_invalid"));
         }
         if release.body.as_deref() != Some(self.recovery_body.as_str()) {
-            return Err(internal("stable_published_envelope_changed"));
+            return Err(internal("package_published_envelope_changed"));
         }
         Ok(PublicationState::Published {
             identity: PublicationIdentity {
@@ -235,32 +235,32 @@ impl GitHubPackagePublisher {
                 receipt_digest: assets.get("release.json").cloned().unwrap_or_default(),
                 assets,
             },
-            immutable: release.immutable == Some(true) && release.prerelease == Some(false),
+            immutable: release.immutable == Some(true)
+                && release.prerelease
+                    == Some(self.receipt.channel == PackageReleaseChannel::Preview),
         })
     }
 }
 
-fn admit_stable_release_lifecycle(
+fn admit_release_lifecycle(
     release: &ReleaseResponse,
     expected_tag: &str,
+    channel: PackageReleaseChannel,
 ) -> Result<(), OrchestratorError> {
     if release.id == 0
         || release.tag_name != expected_tag
-        || release.prerelease != Some(false)
+        || release.prerelease != Some(channel == PackageReleaseChannel::Preview)
         || release.draft.is_none()
         || (release.draft == Some(true) && release.immutable != Some(false))
     {
-        return Err(internal("stable_release_lifecycle_invalid"));
+        return Err(internal("package_release_lifecycle_invalid"));
     }
     // Published immutability is independently required by the publication planner.
     Ok(())
 }
 
-fn require_stable(channel: PackageReleaseChannel) -> Result<(), OrchestratorError> {
-    if channel != PackageReleaseChannel::Stable {
-        return Err(internal("immutable_publication_requires_stable"));
-    }
-    Ok(())
+fn prerelease(channel: PackageReleaseChannel) -> bool {
+    channel == PackageReleaseChannel::Preview
 }
 
 fn make_latest(_channel: PackageReleaseChannel) -> bool {

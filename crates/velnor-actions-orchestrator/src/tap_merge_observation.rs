@@ -1,12 +1,17 @@
 //! Authenticated GitHub observations used for every poll and final admission.
 
-use std::{collections::BTreeSet, env};
+use std::collections::BTreeSet;
 
 use base64::Engine as _;
 use serde_json::Value;
 use velnor_actions_contract::homebrew_merge_gate::{
     TapMergeObservation, TapMergePolicy, TapServerMergeProtection,
 };
+
+#[path = "tap_merge_observation_helpers.rs"]
+mod helpers;
+use helpers::verify_repo_id;
+pub(super) use helpers::{encode_segment, required_numeric, required_string, valid_app_slug};
 
 use crate::{OrchestratorError, internal::internal};
 
@@ -129,7 +134,9 @@ pub(super) fn observe(
     api: &TapMergeGitHub,
     protection_reader: &impl super::protection_observer::ClassicProtectionReader,
 ) -> Result<Option<TapMergeObservation>, OrchestratorError> {
-    let selection = candidate.selection();
+    let selection = candidate
+        .selection()
+        .ok_or_else(|| internal("tap_merge_selection_missing"))?;
     if selection.merged.is_some() {
         return Err(internal("tap_merge_open_pr_outcome_required"));
     }
@@ -196,7 +203,9 @@ fn validate_pr_state(
     authority: &MergeAuthority,
     api: &TapMergeGitHub,
 ) -> Result<(String, String), OrchestratorError> {
-    let selection = candidate.selection();
+    let selection = candidate
+        .selection()
+        .ok_or_else(|| internal("tap_merge_selection_missing"))?;
     let number = selection.pull_request;
     let pr: Value = api.get(&format!(
         "repos/{}/pulls/{number}",
@@ -214,6 +223,7 @@ fn validate_pr_state(
         .pointer("/head/sha")
         .and_then(Value::as_str)
         .ok_or_else(|| internal("tap_merge_head_missing"))?;
+    let expected_body = expected_pr_body(candidate)?;
     let valid = current_base == selection.base_sha
         && current_head == selection.head_sha
         && pr["state"].as_str() == Some("open")
@@ -227,7 +237,7 @@ fn validate_pr_state(
         && pr.pointer("/user/login").and_then(Value::as_str) == Some(authority.bot_login.as_str())
         && pr.pointer("/user/id").and_then(Value::as_u64) == Some(authority.bot_user_id)
         && pr["title"].as_str() == Some(expected_pr_title(candidate).as_str())
-        && pr["body"].as_str() == Some(expected_pr_body(candidate).as_str());
+        && pr["body"].as_str() == Some(expected_body.as_str());
     if !valid {
         return Err(internal("tap_merge_pull_request_identity_changed"));
     }
@@ -244,13 +254,15 @@ pub(super) fn expected_pr_title(candidate: &MergeCandidate) -> String {
     )
 }
 
-pub(super) fn expected_pr_body(candidate: &MergeCandidate) -> String {
-    let selection = candidate.selection();
-    expected_pr_body_for(
+pub(super) fn expected_pr_body(candidate: &MergeCandidate) -> Result<String, OrchestratorError> {
+    let selection = candidate
+        .selection()
+        .ok_or_else(|| internal("tap_merge_selection_missing"))?;
+    Ok(expected_pr_body_for(
         candidate,
         selection.base_sha,
         selection.candidate_proof_digest,
-    )
+    ))
 }
 
 pub(super) fn expected_pr_body_for(
@@ -334,54 +346,6 @@ pub(super) fn check_runs(
         }
     }
     Err(internal("tap_merge_check_page_limit"))
-}
-
-pub(super) fn required_numeric(name: &str) -> Result<u64, OrchestratorError> {
-    env::var(name)
-        .ok()
-        .and_then(|value| value.parse::<u64>().ok())
-        .filter(|value| *value > 0)
-        .ok_or_else(|| internal("tap_merge_numeric_identity_missing"))
-}
-
-pub(super) fn required_string(name: &str) -> Result<String, OrchestratorError> {
-    env::var(name)
-        .ok()
-        .filter(|value| !value.is_empty() && value.len() <= 128)
-        .ok_or_else(|| internal("tap_merge_identity_missing"))
-}
-
-pub(super) fn valid_app_slug(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 39
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
-        && !value.starts_with('-')
-        && !value.ends_with('-')
-}
-
-fn verify_repo_id(value: Option<&Value>, expected: u64) -> Result<(), OrchestratorError> {
-    if value.and_then(Value::as_u64) == Some(expected) {
-        Ok(())
-    } else {
-        Err(internal("tap_merge_target_repository_mismatch"))
-    }
-}
-
-pub(super) fn encode_segment(value: &str) -> String {
-    const HEX: &[u8; 16] = b"0123456789ABCDEF";
-    let mut encoded = String::with_capacity(value.len());
-    for byte in value.bytes() {
-        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
-            encoded.push(char::from(byte));
-        } else {
-            encoded.push('%');
-            encoded.push(char::from(HEX[usize::from(byte >> 4)]));
-            encoded.push(char::from(HEX[usize::from(byte & 0x0f)]));
-        }
-    }
-    encoded
 }
 
 #[cfg(test)]

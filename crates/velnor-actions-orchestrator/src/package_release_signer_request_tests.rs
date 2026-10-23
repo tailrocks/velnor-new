@@ -148,7 +148,13 @@ fn mutate(command: &mut Command, root: &Path, channel: PackageReleaseChannel, mu
             );
         }
         "source" => {
-            command.env("GITHUB_SHA", "b".repeat(40));
+            if channel == PackageReleaseChannel::Preview {
+                command.env("VELNOR_RELEASE_SOURCE_SHA", "c".repeat(40));
+            } else {
+                command
+                    .env("GITHUB_SHA", "c".repeat(40))
+                    .env("GITHUB_WORKFLOW_SHA", "c".repeat(40));
+            }
         }
         "attempt" => {
             command.env("GITHUB_RUN_ATTEMPT", "2");
@@ -176,7 +182,11 @@ fn fixture(runner: &Path, root: &Path, channel: PackageReleaseChannel) -> Comman
         head_repository_id: 42,
         source_sha: source.clone(),
         source_ref: "refs/heads/main".into(),
-        workflow_authority_sha: source.clone(),
+        workflow_authority_sha: if channel == PackageReleaseChannel::Preview {
+            "b".repeat(40)
+        } else {
+            source.clone()
+        },
         run_id: 10,
         run_attempt: 1,
         ci_run_id: 9,
@@ -250,8 +260,31 @@ fn child(
         )
         .env("GITHUB_REPOSITORY", &plan.repository)
         .env("GITHUB_REPOSITORY_ID", "42")
-        .env("GITHUB_SHA", source)
-        .env("GITHUB_WORKFLOW_SHA", source)
+        .env(
+            "GITHUB_SHA",
+            if plan.channel == PackageReleaseChannel::Preview {
+                "b".repeat(40)
+            } else {
+                source.to_owned()
+            },
+        )
+        .env(
+            "GITHUB_WORKFLOW_SHA",
+            if plan.channel == PackageReleaseChannel::Preview {
+                "b".repeat(40)
+            } else {
+                source.to_owned()
+            },
+        )
+        .env("VELNOR_RELEASE_SOURCE_SHA", source)
+        .env(
+            "VELNOR_RELEASE_WORKFLOW_AUTHORITY_SHA",
+            if plan.channel == PackageReleaseChannel::Preview {
+                "b".repeat(40)
+            } else {
+                source.to_owned()
+            },
+        )
         .env("GITHUB_REF", "refs/heads/main")
         .env(
             "GITHUB_WORKFLOW_REF",
@@ -278,8 +311,21 @@ fn admission(
     plan: &[u8],
 ) -> Value {
     if channel == PackageReleaseChannel::Preview {
-        json!({"schema":"velnor.release-policy-admission.v1", "policy_sha256":super::super::sha256(policy),
-            "plan_sha256":super::super::sha256(plan), "context":context})
+        let producer: velnor_actions_contract::config::RustBinaryReleaseProducer =
+            serde_json::from_value(json!({})).expect("default producer");
+        json!({
+            "schema":"velnor.preview-source-admission.v1",
+            "policy_sha256":super::super::sha256(policy),
+            "plan_sha256":super::super::sha256(plan),
+            "context":context,
+            "source_files":[],
+            "producer":producer,
+            "task_config":"",
+            "task_inputs":[],
+            "tool_specs":[],
+            "qualified_tools":[],
+            "qualification_digest":""
+        })
     } else {
         json!({"schema":"velnor.stable-production-admission.v1", "intent":{
             "schema":"velnor.stable-tag-authorization.v1", "repository":"jackin-project/jackin",
@@ -289,89 +335,5 @@ fn admission(
     }
 }
 
-#[test]
-fn only_explicit_tap_reads_can_use_direct_or_retained_authority() {
-    for op in [
-        "admit-homebrew-tap-v1",
-        "write-homebrew-tap-pr-v1",
-        "merge-homebrew-tap-pr-v1",
-    ] {
-        for event in ["workflow_run", "workflow_dispatch"] {
-            assert_eq!(
-                route(Some(op), Some(event), None, Some("")).expect("direct"),
-                VerificationRoute::DirectTap
-            );
-        }
-        for event in ["workflow_dispatch", "schedule"] {
-            assert_eq!(
-                route(Some(op), Some(event), Some("11"), Some("2")).expect("retained"),
-                VerificationRoute::Retained
-            );
-        }
-        for (event, id, attempt) in [
-            ("workflow_run", Some("11"), Some("2")),
-            ("schedule", None, None),
-            ("push", None, None),
-            ("workflow_dispatch", Some("11"), None),
-        ] {
-            assert!(route(Some(op), Some(event), id, attempt).is_err());
-        }
-    }
-    for op in [
-        None,
-        Some("sign-package-release-v1"),
-        Some("publish-package-release-v1"),
-        Some("prepare-homebrew-tap-v1"),
-        Some("recover-package-release-v1"),
-        Some("unknown"),
-    ] {
-        assert_eq!(
-            route(op, Some("workflow_dispatch"), Some("11"), Some("2")).expect("signing path"),
-            VerificationRoute::Admitted
-        );
-    }
-}
-
-#[test]
-fn direct_tap_entry_rejects_cross_channel_events_and_stable_nonrelease_before_http() {
-    for channel in [
-        PackageReleaseChannel::Preview,
-        PackageReleaseChannel::Stable,
-    ] {
-        for operation in [
-            "admit-homebrew-tap-v1",
-            "write-homebrew-tap-pr-v1",
-            "merge-homebrew-tap-pr-v1",
-        ] {
-            let temp = tempfile::tempdir().expect("private fixture");
-            let runner = temp.path().canonicalize().expect("canonical runner");
-            let root = runner.join("velnor");
-            fs::create_dir(&root).expect("root");
-            let mut command = fixture(&runner, &root, channel);
-            command
-                .env("VELNOR_INTERNAL_OP", operation)
-                .env("VELNOR_DIRECT_NEGATIVE", "1")
-                .env(
-                    "GITHUB_EVENT_NAME",
-                    if channel == PackageReleaseChannel::Preview {
-                        "workflow_dispatch"
-                    } else {
-                        "workflow_run"
-                    },
-                );
-            assert!(command.status().expect("cross-channel child").success());
-            if channel == PackageReleaseChannel::Stable {
-                command.env("GITHUB_EVENT_NAME", "workflow_dispatch");
-                for phase in ["prepare", "", "invalid"] {
-                    assert!(
-                        command
-                            .env("VELNOR_STABLE_OPERATION", phase)
-                            .status()
-                            .expect("phase child")
-                            .success()
-                    );
-                }
-            }
-        }
-    }
-}
+#[path = "package_release_signer_request_route_tests.rs"]
+mod route_tests;

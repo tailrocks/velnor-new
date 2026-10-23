@@ -270,6 +270,7 @@ are retained at `/tmp/runner25-b3-image-build.log` and
 checks the `_work` mount, private `/tmp/velnor-jit.*` location, and absence of
 a runner mount at `/tmp`. Its source SHA-256 is
 `6e27926566362fb05ca792437ed8a148644c31589cfbdb56af77745620c3fe04`.
+
 ## Earlier helper-branch image receipt
 
 This receipt applies to the separately reviewed helper branch before the

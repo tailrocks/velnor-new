@@ -1,45 +1,32 @@
-//! Public generation policy cannot infer mutable publication authority from URLs.
+//! Public generation policy fixes preview and stable publication authority.
 use super::*;
 use velnor_actions_contract::package_release::PackageReleaseChannel;
 #[test]
-fn preview_requires_explicit_existing_release_authority() {
-    let mut spec = fixture();
-    spec.preview = None;
-    assert!(render_consumer_preview(&spec).is_err());
-    let mut spec = fixture();
-    spec.preview.as_mut().expect("preview").release_id = 0;
-    assert!(render_consumer_preview(&spec).is_err());
-    let mut spec = fixture();
-    spec.preview
-        .as_mut()
-        .expect("preview")
-        .bootstrap_snapshot_sha256 = Some("A".repeat(64));
-    assert!(render_consumer_preview(&spec).is_err());
-    let mut spec = fixture();
-    spec.preview
-        .as_mut()
-        .expect("preview")
-        .bootstrap_snapshot_sha256 = Some("b".repeat(64));
+fn preview_has_no_mutable_release_or_bootstrap_environment() {
+    let spec = fixture();
     let step = steps::operation(
         &spec,
         "publish-package-release-v1",
         true,
         TapInvocationContext::Preview,
     )
-    .expect("fixed rolling policy");
+    .expect("immutable preview policy");
     let Yaml::Map(fields) = step else {
         panic!("operation map");
     };
     let Some((_, Yaml::Map(env))) = fields.iter().find(|(key, _)| key == "env") else {
         panic!("operation environment");
     };
-    assert!(env.contains(&("VELNOR_PREVIEW_RELEASE_ID".to_owned(), Yaml::str("123"))));
-    assert!(env.contains(&(
-        "VELNOR_PREVIEW_BOOTSTRAP_SNAPSHOT_SHA256".to_owned(),
-        Yaml::str("b".repeat(64))
-    )));
+    assert!(
+        !env.iter()
+            .any(|(key, _)| key == "VELNOR_PREVIEW_RELEASE_ID")
+    );
+    assert!(
+        !env.iter()
+            .any(|(key, _)| key == "VELNOR_PREVIEW_BOOTSTRAP_SNAPSHOT_SHA256")
+    );
     let yaml = render_consumer_preview(&spec)
-        .expect("fixed rolling workflow")
+        .expect("immutable preview workflow")
         .bytes;
     assert!(
         !job(&yaml, "preview-publisher", Some("preview-recovery")).contains("actions/checkout")
@@ -69,13 +56,17 @@ fn both_channels_bound_native_work_inside_larger_producer_jobs() {
             } else {
                 "stable"
             };
-            let mut producers: std::collections::BTreeSet<_> = spec
-                .policy
-                .payload_pairs()
-                .expect("pairs")
-                .iter()
-                .map(|pair| spec.policy.payload_job_id(pair).expect("job ID"))
-                .collect();
+            let mut producers: std::collections::BTreeSet<_> =
+                if channel == PackageReleaseChannel::Preview {
+                    ["preview-payload".to_owned()].into_iter().collect()
+                } else {
+                    spec.policy
+                        .payload_pairs()
+                        .expect("pairs")
+                        .iter()
+                        .map(|pair| spec.policy.payload_job_id(pair).expect("job ID"))
+                        .collect()
+                };
             producers.insert(format!("{prefix}-assemble"));
             let rendered = if channel == PackageReleaseChannel::Preview {
                 render_consumer_preview(&spec)
@@ -83,7 +74,16 @@ fn both_channels_bound_native_work_inside_larger_producer_jobs() {
                 crate::schema2::render_consumer_binary_release(&spec)
             }
             .expect("bounded native production");
-            assert_job_envelopes(&rendered.bytes, &producers, minutes);
+            if channel == PackageReleaseChannel::Preview {
+                assert!(
+                    rendered
+                        .bytes
+                        .contains("timeout-minutes: ${{ matrix.timeout_minutes }}")
+                );
+                assert!(rendered.bytes.contains("timeout-minutes: ${{ fromJSON(needs.preview-eligibility.outputs.producer_timeout_minutes) }}"));
+            } else {
+                assert_job_envelopes(&rendered.bytes, &producers, minutes);
+            }
         }
     }
     let mut spec = with_tap();

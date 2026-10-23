@@ -10,7 +10,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, Step, StepRole};
+use velnor_actions_contract::{Job, JobTimeout, Step, StepRole};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::steps::{MbxTransport, mbx_producer_mark_step, shell_step};
 
@@ -47,13 +47,14 @@ pub(crate) fn seed_jobs(
     input: &CrateJobInputs<'_>,
     workspaces: &[SeedWorkspace],
     private: Option<&PrivateWiring>,
+    timeout: JobTimeout,
 ) -> Result<Vec<(String, Job)>, OrchestratorError> {
     workspaces
         .iter()
         .map(|workspace| {
             Ok((
                 seed_job_id(&workspace.root),
-                seed_job(input, workspace, private)?,
+                seed_job(input, workspace, private, timeout)?,
             ))
         })
         .collect()
@@ -63,6 +64,7 @@ fn seed_job(
     input: &CrateJobInputs<'_>,
     workspace: &SeedWorkspace,
     private: Option<&PrivateWiring>,
+    timeout: JobTimeout,
 ) -> Result<Job, OrchestratorError> {
     let catalog = input.catalog;
     crate::source_prep::validate_root(&workspace.root)?;
@@ -110,7 +112,7 @@ fn seed_job(
         display_name: display_name(&workspace.root),
         runs_on: input.label.to_owned(),
         check_runner: None,
-        timeout_minutes: input.timeout,
+        timeout_minutes: timeout,
         needs: vec![velnor_actions_workflow_renderer::render::PLAN_JOB_ID.to_owned()],
         condition: Some(
             velnor_actions_contract::workflow::DEPENDENCY_SEED_JOB_CONDITION.to_owned(),

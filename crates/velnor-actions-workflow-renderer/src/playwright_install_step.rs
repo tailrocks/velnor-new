@@ -2,6 +2,10 @@
 //! operation of the staged Velnor binary, never a shell and never
 //! `playwright install`. It holds no credential; the pins it carries are the
 //! literal expectations the operation recomputes from the checked-out locks.
+//! A job whose browsers include `WebKit` or Firefox also names them in
+//! [`PLAYWRIGHT_SYSTEM_DEPS_ENV`]: the operation then installs their system
+//! libraries with Playwright's own `install-deps`, run from the
+//! integrity-verified `playwright-core` tarball (tailrocks/velnor-new#352).
 
 use std::collections::BTreeMap;
 
@@ -20,6 +24,11 @@ pub const PLAYWRIGHT_VERSION_ENV: &str = "VELNOR_PLAYWRIGHT_VERSION";
 pub const PLAYWRIGHT_PINS_ENV: &str = "VELNOR_PLAYWRIGHT_PINS";
 /// Env key naming the workspace root whose `bun.lock` anchors the browser lock.
 pub const PLAYWRIGHT_ROOT_ENV: &str = "VELNOR_PLAYWRIGHT_ROOT";
+/// Env key naming the browsers (sorted, comma-joined) whose system libraries
+/// the step installs; absent when the hosted image carries them (Chromium).
+pub const PLAYWRIGHT_SYSTEM_DEPS_ENV: &str = "VELNOR_PLAYWRIGHT_SYSTEM_DEPS";
+/// Browsers the hosted `ubuntu-26.04` image lacks system libraries for.
+pub const PLAYWRIGHT_SYSTEM_DEPS_BROWSERS: [&str; 2] = ["firefox", "webkit"];
 
 fn bad(detail: &str) -> RenderError {
     RenderError::BadCommand(format!("playwright_install:{detail}"))
@@ -37,13 +46,33 @@ fn valid_pin(pin: &str) -> bool {
 
 /// Build the install step for one member.
 ///
-/// `pins` is the sorted, comma-joined `directory:sha256` list.
+/// `pins` is the sorted, comma-joined `directory:sha256` list; `browsers` are
+/// the job's Playwright browser names, of which the ones in
+/// [`PLAYWRIGHT_SYSTEM_DEPS_BROWSERS`] get their system libraries installed.
 ///
 /// # Errors
 ///
 /// Returns [`RenderError::BadCommand`] for a malformed version, root or pin
-/// list, or pins that are empty, unsorted or repeated.
-pub fn playwright_install_step(root: &str, version: &str, pins: &str) -> Result<Step, RenderError> {
+/// list, pins that are empty, unsorted or repeated, or browsers that are
+/// unknown, unsorted or repeated.
+pub fn playwright_install_step(
+    root: &str,
+    version: &str,
+    pins: &str,
+    browsers: &[&str],
+) -> Result<Step, RenderError> {
+    if !browsers.windows(2).all(|pair| pair[0] < pair[1])
+        || !browsers
+            .iter()
+            .all(|name| matches!(*name, "chromium" | "firefox" | "webkit"))
+    {
+        return Err(bad("browsers"));
+    }
+    let system_deps: Vec<&str> = browsers
+        .iter()
+        .copied()
+        .filter(|name| PLAYWRIGHT_SYSTEM_DEPS_BROWSERS.contains(name))
+        .collect();
     if !velnor_actions_contract::config::is_exact_semver(version) {
         return Err(bad("version"));
     }
@@ -60,6 +89,14 @@ pub fn playwright_install_step(root: &str, version: &str, pins: &str) -> Result<
     {
         return Err(bad("pins"));
     }
+    let mut env = BTreeMap::from([
+        (PLAYWRIGHT_VERSION_ENV.to_owned(), version.to_owned()),
+        (PLAYWRIGHT_ROOT_ENV.to_owned(), root.to_owned()),
+        (PLAYWRIGHT_PINS_ENV.to_owned(), pins.to_owned()),
+    ]);
+    if !system_deps.is_empty() {
+        env.insert(PLAYWRIGHT_SYSTEM_DEPS_ENV.to_owned(), system_deps.join(","));
+    }
     Ok(Step {
         parallel: false,
         name: PLAYWRIGHT_INSTALL_STEP_NAME.to_owned(),
@@ -68,11 +105,33 @@ pub fn playwright_install_step(root: &str, version: &str, pins: &str) -> Result<
         condition: None,
         kind: StepKind::Internal {
             operation: PLAYWRIGHT_INSTALL_OPERATION.to_owned(),
-            env: BTreeMap::from([
-                (PLAYWRIGHT_VERSION_ENV.to_owned(), version.to_owned()),
-                (PLAYWRIGHT_ROOT_ENV.to_owned(), root.to_owned()),
-                (PLAYWRIGHT_PINS_ENV.to_owned(), pins.to_owned()),
-            ]),
+            env,
         },
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// tailrocks/velnor-new#352: `WebKit` and Firefox get their system
+    /// libraries, Chromium (carried by the hosted image) does not.
+    #[test]
+    fn webkit_and_firefox_jobs_name_their_system_dependencies() -> Result<(), RenderError> {
+        let pins = format!("webkit-2370:{}", "c".repeat(64));
+        let deps = |browsers: &[&str]| -> Result<Option<String>, RenderError> {
+            let step = playwright_install_step("frontend", "1.64.1", &pins, browsers)?;
+            let StepKind::Internal { env, .. } = &step.kind else {
+                return Err(RenderError::BadCommand("not internal".to_owned()));
+            };
+            Ok(env.get(PLAYWRIGHT_SYSTEM_DEPS_ENV).cloned())
+        };
+        assert_eq!(deps(&["chromium"])?, None);
+        assert_eq!(deps(&["chromium", "webkit"])?.as_deref(), Some("webkit"));
+        assert_eq!(
+            deps(&["chromium", "firefox", "webkit"])?.as_deref(),
+            Some("firefox,webkit")
+        );
+        Ok(())
+    }
 }

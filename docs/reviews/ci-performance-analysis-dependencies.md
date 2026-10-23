@@ -2,7 +2,7 @@
 
 Qualified on 2026-10-03: reporting-only PyYAML **6.0.3**, MIT license,
 Python >=3.8. The generator and generated workflows do not depend on Python or
-PyYAML. [Requirements](../../scripts/ci-performance-analysis-requirements.txt)
+PyYAML. Requirements
 pin the exact version and all 72 wheel SHA-256 hashes published in the official
 [version metadata](https://pypi.org/pypi/PyYAML/6.0.3/json). No source distribution
 is authorized; installation requires a published compatible wheel.

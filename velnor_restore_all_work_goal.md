@@ -34,7 +34,7 @@ Record any changes since this review.
 Do not move the target back to TARGET_REVIEW.
 
 Each source row gives the PR number, original branch, and reviewed head SHA.
-The PR URL is https://github.com/tailrocks/velnor-new/pull/<number>.
+The PR URL is <https://github.com/tailrocks/velnor-new/pull/><number>.
 
 | PR | Original branch | Reviewed head SHA |
 |---|---|---|
@@ -478,6 +478,7 @@ A preserved branch, merge commit, copied snapshot, or written plan is not suffic
 Target branch `consolidate/all-work-clean-2026-10-14` contains exactly 26 pull request merge commits in its first-parent history (from commit `1762a73609` for PR #12 to commit `ca69bdb108` for PR #150).
 
 Technical verification of the Git object database proves:
+
 - All 26 merge commits were executed with `git merge -s ours`.
 - Commit `89f5d4bf19` (merging PR #97 `121138a959`) has zero tree differences from its parent `18643215fa` (`0 files changed, 0 insertions, 0 deletions`).
 - The entire 78-crate modular tree from PR #97 was discarded. The target working tree remained 100% on the monolithic 10-crate layout.
@@ -513,12 +514,14 @@ Section 5 (lines 338-366) of the original proposal instructed:
 > "Preserve runner capacity transactions, daemon-bound reservations, and per-row outcomes... Preserve the AppArmor policy identity checks and Linux Available acknowledgement guard."
 
 This instruction directly conflicts with repository invariants defined in `AGENTS.md`:
+
 - "V1 is a workflow generator: `plan`/`generate` turn repository evidence into CI workflows. It is not a runner, interpreter, or second task graph."
 - "Do not implement runner behavior in V1 generator crates. The active runner spec is `docs/proposed/macos-scaleset-runner.md` (nested `crates/velnor-runner`)."
 - Root `Cargo.toml` explicitly sets `exclude = ["crates/velnor-runner"]`.
 - `crates/velnor-runner` is an independent workspace with its own `Cargo.toml`, `deny.toml`, and `clippy.toml`.
 
 **Boundary Correction**:
+
 - Generator crates under `crates/adapters/`, `crates/apps/`, `crates/core/`, `crates/services/`, and `crates/tools/` (for tools like `velnor-archive-guard`) must remain pure V1 workflow generator code.
 - Runner host daemons, AppArmor policies, capacity reservations, and runner CLI code from PR #97, #143, and #150 must NEVER be added to the root generator workspace. Any useful runner improvements belong exclusively within the nested `crates/velnor-runner/` workspace.
 
@@ -527,6 +530,7 @@ This instruction directly conflicts with repository invariants defined in `AGENT
 The original proposal in Section 2 evaluated 17 PRs (#77 through #151). The user's goal requested accounting for 26 PRs (#12 through #151).
 
 The reconciliation confirms:
+
 - The 9 earlier PRs (#12, #13, #25, #28, #29, #30, #38, #56, #65) are historical foundation branches.
 - All 9 were merged via `-s ours` prior to commit `f37321a047` (PR #77).
 - Their functional improvements (cache selection qualification, qualification dispatch, tar member extraction staging, hosted qualification, and generator release provenance) were already integrated into main prior to release `v0.1.8`, or were superseded by the modern native MBX/Mise toolchain and v2 cache receipts (PR #127).
@@ -576,7 +580,7 @@ The reconciliation confirms:
 
 The target workspace replaces the 10 monolithic crates with the following modular domain packages:
 
-```
+```text
 crates/
 ├── adapters/
 │   ├── velnor-actions-actionlint/
@@ -624,7 +628,8 @@ crates/
         └── velnor-resource-probe/
 ```
 
-#### Detailed Porting Guarantees:
+#### Detailed Porting Guarantees
+
 1. **OpenTofu 1.13.1**:
    - `crates/adapters/velnor-actions-tofu-core` receives the HCL parser, module grammar (`src/modules/grammar.rs`), canonical module identity (`src/modules/identity.rs`), and proposal engine.
    - `crates/adapters/velnor-actions-tofu` receives the closure builder, selection logic, build.rs, and golden test suite.

@@ -1,17 +1,11 @@
 //! Identity, version, and filesystem helpers used by the native release signer.
 
-use std::{
-    collections::BTreeSet,
-    env, fs,
-    path::{Path, PathBuf},
-    time::Duration,
-};
+use std::{env, path::PathBuf, time::Duration};
 
-use sha2::{Digest, Sha256};
 use velnor_actions_contract::{
     PackageReleasePlan,
     config::RustBinaryReleaseCompanion,
-    package_release::{PackageReleaseChannel, PackageReleaseEvent, PackageReleaseReceipt},
+    package_release::{PackageReleaseChannel, PackageReleaseEvent},
     preview_identity::PreviewIdentity,
 };
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
@@ -62,10 +56,10 @@ fn identity_for_repository(
     repository_id: u64,
 ) -> Result<PackageReleaseSigningIdentity, OrchestratorError> {
     let repository = required_env("GITHUB_REPOSITORY")?;
-    let source_sha = required_env("GITHUB_SHA")?;
+    let event_sha = required_env("GITHUB_SHA")?;
     let source_ref = required_env("GITHUB_REF")?;
     let workflow_ref = required_env("GITHUB_WORKFLOW_REF")?;
-    let workflow_sha = required_env("GITHUB_WORKFLOW_SHA")?;
+    let github_workflow_sha = required_env("GITHUB_WORKFLOW_SHA")?;
     let event = signing_event(plan, &required_env("GITHUB_EVENT_NAME")?)?;
     let run_id = positive_u64("GITHUB_RUN_ID")?;
     let run_attempt = positive_u32("GITHUB_RUN_ATTEMPT")?;
@@ -75,6 +69,20 @@ fn identity_for_repository(
         PackageReleaseChannel::Preview => Some(positive_u64("VELNOR_RELEASE_COMMIT_COUNT")?),
         PackageReleaseChannel::Stable => None,
     };
+    let (source_sha, workflow_sha) = preview_signing_authorities(
+        plan,
+        &PreviewSigningAuthorityFacts {
+            repository_id,
+            source_ref: &source_ref,
+            event_sha: &event_sha,
+            github_workflow_sha: &github_workflow_sha,
+            run_id,
+            run_attempt,
+            ci_run_id,
+            ci_run_attempt,
+            commit_count,
+        },
+    )?;
     let identity = PackageReleaseSigningIdentity {
         repository,
         repository_id,
@@ -93,6 +101,74 @@ fn identity_for_repository(
     };
     validate_identity(plan, &identity)?;
     Ok(identity)
+}
+
+struct PreviewSigningAuthorityFacts<'a> {
+    repository_id: u64,
+    source_ref: &'a str,
+    event_sha: &'a str,
+    github_workflow_sha: &'a str,
+    run_id: u64,
+    run_attempt: u32,
+    ci_run_id: u64,
+    ci_run_attempt: u32,
+    commit_count: Option<u64>,
+}
+
+fn preview_signing_authorities(
+    plan: &PackageReleasePlan,
+    facts: &PreviewSigningAuthorityFacts<'_>,
+) -> Result<(String, String), OrchestratorError> {
+    if plan.channel == PackageReleaseChannel::Preview
+        && matches!(
+            env::var("VELNOR_INTERNAL_OP").ok().as_deref(),
+            Some("sign-package-release-v1" | "publish-package-release-v1")
+        )
+    {
+        let source_sha = required_env("VELNOR_RELEASE_SOURCE_SHA")?;
+        let workflow_authority_sha = required_env("VELNOR_RELEASE_WORKFLOW_AUTHORITY_SHA")?;
+        let temp = PathBuf::from(required_env("RUNNER_TEMP")?).join("velnor");
+        if !temp.is_absolute() {
+            return Err(internal("package_signer_runner_temp_invalid"));
+        }
+        let deadline = velnor_actions_mise::CheckDeadline::after(Duration::from_secs(300))
+            .map_err(|_| internal("package_signer_deadline"))?;
+        let admitted = crate::package_release_publish::release_policy_admission::admitted_context(
+            &temp, deadline,
+        )?;
+        let expected_version = velnor_actions_contract::preview_identity::PreviewIdentity::derive(
+            &plan.base_version,
+            &source_sha,
+            facts
+                .commit_count
+                .ok_or_else(|| internal("package_signer_commit_count_missing"))?,
+        )
+        .map_err(|_| internal("package_signer_preview_version_invalid"))?;
+        if !is_full_sha(&source_sha)
+            || !is_full_sha(facts.event_sha)
+            || !is_full_sha(facts.github_workflow_sha)
+            || facts.event_sha != workflow_authority_sha
+            || facts.github_workflow_sha != workflow_authority_sha
+            || admitted.repository_id != facts.repository_id
+            || admitted.head_repository_id != facts.repository_id
+            || admitted.source_sha != source_sha
+            || admitted.workflow_authority_sha != workflow_authority_sha
+            || admitted.source_ref != facts.source_ref
+            || admitted.run_id != facts.run_id
+            || admitted.run_attempt != facts.run_attempt
+            || admitted.ci_run_id != facts.ci_run_id
+            || admitted.ci_run_attempt != facts.ci_run_attempt
+            || Some(admitted.commit_count) != facts.commit_count
+            || admitted.version != expected_version.version
+        {
+            return Err(internal("package_signer_authority_mismatch"));
+        }
+        return Ok((source_sha, workflow_authority_sha));
+    }
+    Ok((
+        facts.event_sha.to_owned(),
+        facts.github_workflow_sha.to_owned(),
+    ))
 }
 
 pub(super) fn require_stable_context(
@@ -140,7 +216,8 @@ pub(super) fn validate_identity(
     if identity.repository != plan.repository
         || identity.repository_id == 0
         || !is_full_sha(&identity.source_sha)
-        || identity.workflow_sha != identity.source_sha
+        || (plan.channel == PackageReleaseChannel::Stable
+            && identity.workflow_sha != identity.source_sha)
         || identity.source_ref != format!("refs/heads/{}", plan.default_branch)
         || identity.workflow_path != plan.channel.workflow_path()
         || identity.workflow_ref != workflow_ref
@@ -237,129 +314,9 @@ pub(super) fn query_repository_id(repository: &str) -> Result<u64, OrchestratorE
         .ok_or_else(|| internal("package_signer_repository_id_invalid"))
 }
 
-pub(super) fn validate_release_directory(
-    directory: &Path,
-    receipt: &PackageReleaseReceipt,
-) -> Result<(), OrchestratorError> {
-    let metadata = fs::symlink_metadata(directory)
-        .map_err(|_| internal("package_release_directory_missing"))?;
-    if metadata.file_type().is_symlink() || !metadata.is_dir() {
-        return Err(internal("package_release_directory_invalid"));
-    }
-    let expected = receipt
-        .assets
-        .iter()
-        .map(|asset| asset.name.as_str())
-        .chain(["release.json", "release.json.bundle"])
-        .collect::<BTreeSet<_>>();
-    let mut observed = BTreeSet::new();
-    for entry in
-        fs::read_dir(directory).map_err(|_| internal("package_release_directory_read_failed"))?
-    {
-        let entry = entry.map_err(|_| internal("package_release_directory_read_failed"))?;
-        let name = entry
-            .file_name()
-            .into_string()
-            .map_err(|_| internal("package_release_asset_name_invalid"))?;
-        if !expected.contains(name.as_str()) || observed.len() >= expected.len() {
-            return Err(internal("package_release_directory_inventory_mismatch"));
-        }
-        let metadata = fs::symlink_metadata(entry.path())
-            .map_err(|_| internal("package_release_asset_invalid"))?;
-        if metadata.file_type().is_symlink() || !metadata.is_file() || !observed.insert(name) {
-            return Err(internal("package_release_directory_entry_invalid"));
-        }
-    }
-    if observed.len() != expected.len() || !expected.iter().all(|name| observed.contains(*name)) {
-        return Err(internal("package_release_directory_inventory_mismatch"));
-    }
-    Ok(())
-}
-
-pub(super) fn read_regular_file(path: &Path, max_bytes: u64) -> Result<Vec<u8>, OrchestratorError> {
-    let metadata =
-        fs::symlink_metadata(path).map_err(|_| internal("package_signer_file_missing"))?;
-    if metadata.file_type().is_symlink()
-        || !metadata.is_file()
-        || metadata.len() == 0
-        || metadata.len() > max_bytes
-    {
-        return Err(internal("package_signer_file_invalid"));
-    }
-    fs::read(path).map_err(|_| internal("package_signer_file_read_failed"))
-}
-
-pub(super) fn require_private_directory(path: &Path) -> Result<(), OrchestratorError> {
-    let metadata =
-        fs::symlink_metadata(path).map_err(|_| internal("package_signer_directory_missing"))?;
-    if metadata.file_type().is_symlink() || !metadata.is_dir() {
-        return Err(internal("package_signer_directory_invalid"));
-    }
-    Ok(())
-}
-
-pub(super) fn absolute_env(name: &str) -> Result<PathBuf, OrchestratorError> {
-    let path = PathBuf::from(required_env(name)?);
-    if !path.is_absolute() {
-        return Err(internal("package_signer_path_not_absolute"));
-    }
-    Ok(path)
-}
-
-pub(super) fn required_env(name: &str) -> Result<String, OrchestratorError> {
-    env::var(name)
-        .ok()
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| internal("package_signer_context_missing"))
-}
-
-pub(super) fn positive_u64(name: &str) -> Result<u64, OrchestratorError> {
-    required_env(name)?
-        .parse::<u64>()
-        .ok()
-        .filter(|value| *value > 0)
-        .ok_or_else(|| internal("package_signer_run_identity_invalid"))
-}
-
-pub(super) fn positive_u32(name: &str) -> Result<u32, OrchestratorError> {
-    required_env(name)?
-        .parse::<u32>()
-        .ok()
-        .filter(|value| *value > 0)
-        .ok_or_else(|| internal("package_signer_run_identity_invalid"))
-}
-
-pub(super) fn is_full_sha(value: &str) -> bool {
-    value.len() == 40
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
-}
-
-pub(super) fn write_new_file(path: &Path, bytes: &[u8]) -> Result<(), OrchestratorError> {
-    use std::io::Write;
-    let mut options = fs::OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut file = options
-        .open(path)
-        .map_err(|_| internal("package_signer_create_failed"))?;
-    file.write_all(bytes)
-        .map_err(|_| internal("package_signer_write_failed"))?;
-    file.sync_all()
-        .map_err(|_| internal("package_signer_sync_failed"))
-}
-
-pub(super) fn sha256(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut result = String::with_capacity(64);
-    for byte in Sha256::digest(bytes) {
-        result.push(char::from(HEX[usize::from(byte >> 4)]));
-        result.push(char::from(HEX[usize::from(byte & 0x0f)]));
-    }
-    result
-}
+#[path = "runtime_files.rs"]
+mod files;
+pub(super) use files::{
+    absolute_env, is_full_sha, positive_u32, positive_u64, read_regular_file,
+    require_private_directory, required_env, sha256, validate_release_directory, write_new_file,
+};

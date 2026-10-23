@@ -5,8 +5,7 @@ use velnor_actions_contract::{
     PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlan, PackageReleasePlanProduct,
     package_release::{PackageReleaseChannel, PackageReleasePayloadFormat},
     preview_production::{
-        RELEASE_PRODUCTION_SCHEMA_V1, ReleasePayloadPair, ReleaseProductionContext,
-        release_plan_sha256,
+        RELEASE_PRODUCTION_SCHEMA_V1, ReleaseProductionContext, release_plan_sha256,
     },
 };
 
@@ -36,7 +35,7 @@ pub(in crate::package_release_publish) fn request() -> ReleaseProductionRequest 
             head_repository_id: 101,
             source_sha: "a".repeat(40),
             source_ref: "refs/heads/main".into(),
-            workflow_authority_sha: "a".repeat(40),
+            workflow_authority_sha: "b".repeat(40),
             run_id: 202,
             run_attempt: 2,
             ci_run_id: 201,
@@ -44,36 +43,29 @@ pub(in crate::package_release_publish) fn request() -> ReleaseProductionRequest 
             commit_count: 1306,
             version: "0.6.4-preview.1306+aaaaaaa".into(),
         },
-        stage: ReleaseProductionStage::Assemble {
-            inputs: vec![PayloadArtifactRef {
-                pair: ReleasePayloadPair {
-                    product_id: "app".into(),
-                    target: "aarch64-apple-darwin".into(),
-                },
-                artifact_id: 303,
-                sha256: sha256(b"closed ZIP bytes"),
-            }],
-        },
+        stage: ReleaseProductionStage::Assemble { inputs: Vec::new() },
     }
 }
 
 pub(in crate::package_release_publish) fn record() -> ArtifactRecord {
     let request = request();
-    let ReleaseProductionStage::Assemble { inputs } = &request.stage else {
-        unreachable!()
-    };
+    let pair =
+        velnor_actions_contract::preview_production::expected_release_payload_pairs(&request.plan)
+            .expect("pairs")
+            .into_iter()
+            .next()
+            .expect("one pair");
     ArtifactRecord {
         id: 303,
-        name: release_payload_artifact_name(&request.plan, &inputs[0].pair, &request.context)
-            .expect("name"),
+        name: release_payload_artifact_name(&request.plan, &pair, &request.context).expect("name"),
         expired: false,
         size_in_bytes: 16,
-        digest: Some(format!("sha256:{}", inputs[0].sha256)),
+        digest: Some(format!("sha256:{}", sha256(b"closed ZIP bytes"))),
         workflow_run: Some(ArtifactSource {
             id: 202,
             repository_id: 101,
             head_repository_id: 101,
-            head_sha: "a".repeat(40),
+            head_sha: "b".repeat(40),
             head_branch: "main".into(),
         }),
     }

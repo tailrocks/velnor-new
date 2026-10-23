@@ -1,5 +1,6 @@
 //! A private observed action is consumed before validation or transport.
 use super::super::{GitHubPackagePublisher, OrchestratorError, github::ReleaseResponse, internal};
+use velnor_actions_contract::package_release::PackageReleaseChannel;
 use velnor_actions_contract::publication_retry::{
     PublicationAction, PublicationState, publication_action,
 };
@@ -21,6 +22,7 @@ pub(in crate::package_release_publish) struct Observation {
 }
 
 pub(super) enum Action<'a> {
+    Tag,
     Draft,
     Upload(&'a str),
     Publish,
@@ -75,7 +77,8 @@ fn take_observation(
     let available = identity.assets.keys().cloned().collect();
     let planned = publication_action(identity, &observed.state, true, &available);
     let matches = match (requested, &planned) {
-        (Action::Draft, PublicationAction::CreateDraft) => observed.release.is_none(),
+        (Action::Tag, PublicationAction::CreateTag)
+        | (Action::Draft, PublicationAction::CreateDraft) => observed.release.is_none(),
         (Action::Upload(name), PublicationAction::CompleteDraft { missing_assets }) => {
             missing_assets.first().is_some_and(|first| first == name) && observed.release.is_some()
         }
@@ -93,12 +96,13 @@ fn take_observation(
 pub(super) fn authorize(
     publisher: &mut GitHubPackagePublisher,
     observed: Observation,
+    require_absent_tag: bool,
 ) -> Result<Option<u64>, OrchestratorError> {
     let id = if let Some(expected) = observed.release {
         refresh_snapshot(&publisher.api, &expected)?;
         Some(expected.id)
     } else {
-        if !publisher.release_list()?.is_empty() {
+        if publisher.release_by_tag()?.is_some() {
             return Err(internal("stable_write_release_appeared"));
         }
         None
@@ -106,7 +110,38 @@ pub(super) fn authorize(
     if !crate::package_publication::PackagePublicationBackend::candidate_current(publisher)? {
         return Err(internal("package_publication_refused:StaleCandidate"));
     }
+    if publisher.receipt.channel == PackageReleaseChannel::Preview {
+        let tag = publisher.api.tag_identity(&publisher.tag)?;
+        authorize_preview_tag(
+            tag,
+            &publisher.identity.source_sha,
+            &publisher.recovery_body,
+            require_absent_tag,
+        )?;
+    }
     Ok(id)
+}
+
+fn authorize_preview_tag(
+    tag: Option<super::super::github::TagObservation>,
+    source_sha: &str,
+    recovery_body: &str,
+    require_absent: bool,
+) -> Result<(), OrchestratorError> {
+    if require_absent {
+        return if tag.is_none() {
+            Ok(())
+        } else {
+            Err(internal("preview_write_tag_appeared"))
+        };
+    }
+    if tag.is_some_and(|tag| {
+        tag.source_sha == source_sha && tag.message.as_deref() == Some(recovery_body)
+    }) {
+        Ok(())
+    } else {
+        Err(internal("preview_write_tag_changed"))
+    }
 }
 
 fn refresh_snapshot(

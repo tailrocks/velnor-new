@@ -60,6 +60,44 @@ fn recovery_envelope_size_is_checked_before_any_remote_write() {
 }
 
 #[test]
+fn same_source_new_preview_attempt_cannot_resume_another_signed_envelope() {
+    use std::collections::{BTreeMap, BTreeSet};
+    use velnor_actions_contract::publication_retry::{
+        PublicationAction, PublicationIdentity, PublicationState, publication_action,
+    };
+
+    let source_sha = "a".repeat(40);
+    let assets = BTreeMap::from([("release.json".to_owned(), "c".repeat(64))]);
+    let attempt_a = PublicationIdentity {
+        source_sha: source_sha.clone(),
+        receipt_digest: "b".repeat(64),
+        assets: assets.clone(),
+    };
+    let attempt_b = PublicationIdentity {
+        source_sha: source_sha.clone(),
+        receipt_digest: "d".repeat(64),
+        assets: assets.clone(),
+    };
+    let retained_tag = PublicationState::TagOnly {
+        source_sha,
+        original_receipt_digest: Some(attempt_a.receipt_digest.clone()),
+    };
+    let available = BTreeSet::from(["release.json".to_owned()]);
+
+    assert_eq!(
+        publication_action(&attempt_b, &retained_tag, true, &available),
+        PublicationAction::Reject(
+            velnor_actions_contract::publication_retry::PublicationRejection::ConflictingIdentity
+        )
+    );
+    assert_eq!(
+        publication_action(&attempt_a, &retained_tag, true, &available),
+        PublicationAction::CreateDraft,
+        "recovery retains original A bytes and envelope"
+    );
+}
+
+#[test]
 fn publisher_ci_gate_binds_exact_run_and_attempt() {
     let run = WorkflowRunResponse {
         id: Some(22),
@@ -68,13 +106,19 @@ fn publisher_ci_gate_binds_exact_run_and_attempt() {
         name: Some(velnor_actions_contract::WORKFLOW_DISPLAY_NAME.to_owned()),
         workflow_id: Some(7),
         run_number: Some(12),
-        head_repository: Some(RunRepository { id: 9 }),
+        head_repository: Some(RunRepository {
+            id: 9,
+            full_name: Some("example/app".to_owned()),
+        }),
         head_sha: Some("a".repeat(40)),
         head_branch: Some("main".to_owned()),
         event: Some("push".to_owned()),
         status: Some("completed".to_owned()),
         conclusion: Some("success".to_owned()),
-        repository: Some(RunRepository { id: 9 }),
+        repository: Some(RunRepository {
+            id: 9,
+            full_name: Some("example/app".to_owned()),
+        }),
     };
     let workflow = WorkflowMetadata {
         state: "active".to_owned(),
@@ -106,19 +150,17 @@ fn stable_and_preview_publications_never_request_latest() {
 }
 
 #[test]
-fn immutable_backend_rejects_preview_channel() {
-    assert!(require_stable(PackageReleaseChannel::Stable).is_ok());
-    assert!(require_stable(PackageReleaseChannel::Preview).is_err());
-}
-
-#[test]
-fn stable_release_json_lifecycle_admission_rejects_unknown_or_malformed_drafts() {
+fn release_json_lifecycle_admission_preserves_channel_prerelease_state() {
     use serde_json::{Value, json};
     let draft = json!({"id":42,"tag_name":"v1.2.3","draft":true,"prerelease":false,"immutable":false,"assets":[]});
     let parse =
         |value| serde_json::from_value::<ReleaseResponse>(value).expect("actual release response");
-    admit_stable_release_lifecycle(&parse(draft.clone()), "v1.2.3")
-        .expect("native mutable stable draft");
+    admit_release_lifecycle(
+        &parse(draft.clone()),
+        "v1.2.3",
+        PackageReleaseChannel::Stable,
+    )
+    .expect("native mutable stable draft");
     for (field, replacement) in [
         ("id", json!(0)),
         ("tag_name", json!("preview")),
@@ -131,7 +173,8 @@ fn stable_release_json_lifecycle_admission_rejects_unknown_or_malformed_drafts()
         let mut changed = draft.clone();
         changed[field] = replacement;
         assert!(
-            admit_stable_release_lifecycle(&parse(changed), "v1.2.3").is_err(),
+            admit_release_lifecycle(&parse(changed), "v1.2.3", PackageReleaseChannel::Stable)
+                .is_err(),
             "{field}"
         );
     }
@@ -139,20 +182,43 @@ fn stable_release_json_lifecycle_admission_rejects_unknown_or_malformed_drafts()
         let mut changed = draft.clone();
         changed.as_object_mut().expect("object").remove(missing);
         assert!(
-            admit_stable_release_lifecycle(&parse(changed), "v1.2.3").is_err(),
+            admit_release_lifecycle(&parse(changed), "v1.2.3", PackageReleaseChannel::Stable)
+                .is_err(),
             "missing {missing}"
         );
     }
     let mut published = draft;
     published["draft"] = json!(false);
     published["immutable"] = json!(true);
-    admit_stable_release_lifecycle(&parse(published.clone()), "v1.2.3")
-        .expect("immutable stable publication");
+    admit_release_lifecycle(
+        &parse(published.clone()),
+        "v1.2.3",
+        PackageReleaseChannel::Stable,
+    )
+    .expect("immutable stable publication");
     for immutable in [json!(false), Value::Null] {
         published["immutable"] = immutable;
         let response = parse(published.clone());
-        admit_stable_release_lifecycle(&response, "v1.2.3")
+        admit_release_lifecycle(&response, "v1.2.3", PackageReleaseChannel::Stable)
             .expect("published planner owns immutability verdict");
         assert_ne!(response.immutable, Some(true));
     }
+
+    let preview_draft = json!({"id":43,"tag_name":"preview-abc","draft":true,"prerelease":true,"immutable":false,"assets":[]});
+    admit_release_lifecycle(
+        &parse(preview_draft.clone()),
+        "preview-abc",
+        PackageReleaseChannel::Preview,
+    )
+    .expect("preview remains a prerelease draft");
+    let mut invalid_preview = preview_draft;
+    invalid_preview["prerelease"] = json!(false);
+    assert!(
+        admit_release_lifecycle(
+            &parse(invalid_preview),
+            "preview-abc",
+            PackageReleaseChannel::Preview
+        )
+        .is_err()
+    );
 }

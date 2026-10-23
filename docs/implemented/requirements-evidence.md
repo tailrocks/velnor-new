@@ -175,11 +175,12 @@ not a deviation.
    2. Human update/security runs (VER NEEDS-HUMAN; procedures exist but no
    current run is recorded). 3. Risk-triggered tool runs — mutants/fuzz/Miri/Loom/semver
    (manual procedure in `verification-triggers.md` only; no recorded runs).
-4. Two-minute warm SMALL-FIXTURE path on a named runner (no small-fixture
+2. Two-minute warm SMALL-FIXTURE path on a named runner (no small-fixture
    CI run exists; full-dogfood green run is 21 m 19 s for 47 jobs).
 
 Resolved in this refresh: stale `_sample` citation (gate-2 record
 corrected), TE transient finding + exit 1 (Gap C: `TRANSIENT_EVIDENCE_CODE`
+
 + `generate.rs` fail-closed gate + `impl_gapc` tests), perf measurements
 (`performance.md` + green-run timings), CI run links (run `36569723507`),
 proof-vocabulary labels (all gate records).

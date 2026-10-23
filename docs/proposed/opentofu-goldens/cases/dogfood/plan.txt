@@ -1,8 +1,10 @@
-Velnor Actions plan 0.1.39
+Velnor Actions plan 0.1.42
 Repository: <repo>
 
 Detected stacks
   Rust: selected
+  Tofu: not detected (strong evidence; add [stacks.tofu] roots to enable)
+    evidence: mise-tool:opentofu
   Mise check maintenance-helpers: test-maintenance-helpers (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
   Workspace crates: 20
     - velnor-actions-actionlint (crates/velnor-actions-actionlint/Cargo.toml) [lib, test; depends on velnor-actions-contract]
@@ -29,15 +31,15 @@ Detected stacks
   Nextest profile .: ci (.config/nextest.toml)
     evidence .config/nextest.toml:4 [profile.ci] [durable]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
-    evidence mise.toml:10 rust = { version = "1.99.1", profile = "minimal", components = ["clippy", "rustfmt"], targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"], mr_bo [durable]
-    evidence mise.toml:26 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
+    evidence mise.toml:16 ], mr_boxington = true } [durable]
+    evidence mise.toml:40 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
   Profile crates/velnor-runner: mbx compile driver (declared), cargo_nextest test runner (declared)
   Nextest profile crates/velnor-runner: ci (crates/velnor-runner/.config/nextest.toml)
     evidence .config/nextest.toml:4 [profile.ci] [durable]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
     evidence crates/velnor-runner/.config/nextest.toml:3 [profile.ci] [durable]
-    evidence mise.toml:10 rust = { version = "1.99.1", profile = "minimal", components = ["clippy", "rustfmt"], targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"], mr_bo [durable]
-    evidence mise.toml:26 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
+    evidence mise.toml:16 ], mr_boxington = true } [durable]
+    evidence mise.toml:40 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
 
 Workflow to generate
   .github/jactionlint.yaml
@@ -235,4 +237,4 @@ Recommendations
   mise.toml is read-only input; Velnor never modifies it
   rust-toolchain.toml is read-only input; Velnor never modifies it
   shadowed_nextest_config: .config/nextest.toml shadowed by crates/velnor-runner/.config/nextest.toml; profile selected from crates/velnor-runner/.config/nextest.toml
-  tool_install_unverified:4 installs skip verification: cargo-deny@0.20.2(no_entry), cargo-machete@0.9.2(no_entry), gh@2.103.0(no_entry), opentofu@1.13.2(no_entry); install on the CI platform and commit the lock to verify them
+  tool_install_unverified:2 installs skip verification: cargo-machete@0.9.2(no_entry), gh@2.103.0(no_entry); install on the CI platform and commit the lock to verify them

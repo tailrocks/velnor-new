@@ -85,7 +85,7 @@ fn selection(spec: &ConsumerReleaseSpec) -> Result<(String, Yaml), RenderError> 
     let id = context(spec).selection();
     let mut fields = base(
         match spec.policy.channel {
-            PackageReleaseChannel::Preview => "Select the current committed rolling preview",
+            PackageReleaseChannel::Preview => "Select the current committed immutable preview",
             PackageReleaseChannel::Stable => "Select the authenticated permanent stable release",
         },
         Yaml::str("ubuntu-26.04"),
@@ -149,10 +149,6 @@ fn selector_operation(spec: &ConsumerReleaseSpec) -> Result<Yaml, RenderError> {
         "set -euo pipefail\numask 077\nmkdir -p \"$RUNNER_TEMP/velnor\"\n(set -C; printf '%s' \"$VELNOR_RELEASE_POLICY\" > \"$VELNOR_REQUEST_FILE\")\n\"$RUNNER_TEMP/velnor/bin/velnor-actions-{}\"\n",
         spec.generator_version
     );
-    let release_id = spec
-        .preview
-        .as_ref()
-        .map(|preview| preview.release_id.to_string());
     let mut env = vec![
         ("VELNOR_INTERNAL_OP", "select-release-tap-continuation-v1"),
         ("VELNOR_RELEASE_POLICY", plan.as_str()),
@@ -170,15 +166,6 @@ fn selector_operation(spec: &ConsumerReleaseSpec) -> Result<Yaml, RenderError> {
             "${{ secrets.RELEASE_STATUS_READ_TOKEN }}",
         ),
     ];
-    if let Some(preview) = &spec.preview {
-        env.push((
-            "VELNOR_PREVIEW_RELEASE_ID",
-            release_id.as_deref().unwrap_or_default(),
-        ));
-        if let Some(snapshot) = &preview.bootstrap_snapshot_sha256 {
-            env.push(("VELNOR_PREVIEW_BOOTSTRAP_SNAPSHOT_SHA256", snapshot));
-        }
-    }
     if let Some(stable) = &spec.stable {
         env.push((
             "VELNOR_STABLE_VERSION_PACKAGE",

@@ -4,6 +4,7 @@ use crate::RenderError;
 use crate::yaml::Yaml;
 use velnor_actions_contract::JobTimeout;
 
+use super::ci_run_lookup;
 use super::features::{CHECKOUT_USES, base, finish};
 use super::generator_release;
 use super::{ProductReleasePins, ReleaseTarget};
@@ -129,6 +130,7 @@ fn render_function() -> String {
         .replace("@CI_WORKFLOW_API_ID@", CI_WORKFLOW_API_ID)
         .replace("@LATEST_RUN_JQ@", LATEST_RUN_JQ)
         .replace("@REQUIRED_JOB_JQ@", REQUIRED_JOB_JQ)
+        .replace("@CI_RUN_LISTING_FUNCTION@", &ci_run_lookup::bash_function())
 }
 
 const ELIGIBILITY_FUNCTION: &str = r#"release_eligibility() {
@@ -172,14 +174,18 @@ current_main_sha() {
     || fail 'main commit response is invalid'
 }
 
+@CI_RUN_LISTING_FUNCTION@
+
 latest_ci_run() {
-  gh_api --paginate --slurp -X GET \
-    "repos/$repository/actions/workflows/@CI_WORKFLOW_API_ID@/runs?head_sha=$source_sha&branch=main&event=push&per_page=100" \
-    | jq -c \
-        --arg source_sha "$source_sha" \
-        --arg workflow_path "$ci_workflow_path" \
-        --arg repository "$repository" \
-        '@LATEST_RUN_JQ@' \
+  local listing
+  listing="$(list_exact_source_ci_runs 'release eligibility' gh_api --paginate --slurp -X GET \
+    "repos/$repository/actions/workflows/@CI_WORKFLOW_API_ID@/runs?head_sha=$source_sha&per_page=100")" \
+    || fail 'CI run lookup failed'
+  printf '%s\n' "$listing" | jq -c \
+      --arg source_sha "$source_sha" \
+      --arg workflow_path "$ci_workflow_path" \
+      --arg repository "$repository" \
+      '@LATEST_RUN_JQ@' \
     || fail 'CI run response is invalid'
 }
 

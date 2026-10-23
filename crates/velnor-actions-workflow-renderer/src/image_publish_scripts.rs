@@ -54,15 +54,35 @@ pub fn owner_script(owner: &str) -> String {
 pub fn download_script(gh: &str, id: &str, branch: &str, platforms: &[ImagePlatform]) -> String {
     let dir = work_dir(id);
     let archs = archs(platforms);
-    let program = format!(
-        "[.workflow_runs[] | select(.head_sha == env.GITHUB_SHA and .event == \"push\" and .conclusion == \"success\" and .head_branch == \"{branch}\" and .head_repository.full_name == env.GITHUB_REPOSITORY)] | sort_by(.id) | last | .id // error(\"ci_run_not_found\")"
+    let delays = crate::schema2::RETRY_DELAYS_SECONDS
+        .iter()
+        .map(u16::to_string)
+        .collect::<Vec<_>>()
+        .join(" ");
+    let empty_program = concat!(
+        r#"if type != "array" then error("ci_run_listing_invalid") "#,
+        r#"elif length == 0 then error("ci_run_listing_invalid") "#,
+        r#"elif any(.[]; type != "object") then error("ci_run_listing_invalid") "#,
+        r#"elif any(.[]; (.workflow_runs | type) != "array") then error("ci_run_listing_invalid") "#,
+        r#"else ([.[] | .workflow_runs[]] | length == 0) end"#,
     );
+    let program = format!(
+        "[.[] | .workflow_runs[] | select(.head_sha == env.GITHUB_SHA and .event == \"push\" and .conclusion == \"success\" and .head_branch == \"{branch}\" and .head_repository.full_name == env.GITHUB_REPOSITORY)] | sort_by(.id) | last | .id // error(\"ci_run_not_found\")"
+    );
+    // GitHub caps `head_sha`-filtered listings at 1,000 results, so `per_page=100`
+    // bounds pagination to ten pages.
     format!(
-        "set -eu; {gh}; dir=\"{dir}\"; rm -rf \"$dir\"; mkdir -p \"$dir/in\"; \
-         gh api \"repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&event=push&status=success&per_page=30\" --jq '{program}' \
-         | {{ read -r run; printf '%s\\n' \"$run\" | grep -Eqx '[0-9]+'; \
+        "set -eu; {gh}; {GET}; dir=\"{dir}\"; rm -rf \"$dir\"; mkdir -p \"$dir/in\"; \
+         for delay in {delays} ''; do \
+         gh api --paginate --slurp \"repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&per_page=100\" > \"$dir/.listing\"; \
+         get jq -r '{empty_program}' \"$dir/.listing\"; \
+         if [ \"$val\" = false ]; then break; fi; \
+         if [ -z \"$delay\" ]; then break; fi; \
+         sleep \"$delay\"; done; \
+         get jq -er '{program}' \"$dir/.listing\"; run=$val; \
+         printf '%s\\n' \"$run\" | grep -Eqx '[0-9]+'; \
          for arch in {archs}; do gh run download \"$run\" --repo \"$GITHUB_REPOSITORY\" \
-         --name \"velnor-image-{id}-$arch\" --dir \"$dir/in/$arch\"; done; }}"
+         --name \"velnor-image-{id}-$arch\" --dir \"$dir/in/$arch\"; done;"
     )
 }
 

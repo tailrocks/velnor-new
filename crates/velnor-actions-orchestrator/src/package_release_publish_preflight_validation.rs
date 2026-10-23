@@ -278,10 +278,16 @@ pub(super) fn validate_environment_settings(
     if settings.get("name").and_then(Value::as_str) != Some(expected_name) {
         return Err(());
     }
-    if settings
+    // GitHub reports a configured deployment branch policy as one `branch_policy`
+    // protection rule. Any other rule (reviewers, wait timer, custom gate) rejects.
+    let rules = settings
         .get("protection_rules")
         .and_then(Value::as_array)
-        .is_none_or(|rules| !rules.is_empty())
+        .ok_or(())?;
+    if rules.len() > 1
+        || rules
+            .iter()
+            .any(|rule| rule.get("type").and_then(Value::as_str) != Some("branch_policy"))
     {
         return Err(());
     }

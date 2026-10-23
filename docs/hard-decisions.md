@@ -44,7 +44,6 @@ and overlaps the independent checks.
 - The pinned jactionlint parses and validates the native step keys (every
   member and the body-less `wait-all` join) with no ignore pattern
   (decision 10).
-
 - The dependency-seed job is not a crate job: it runs no checks and is not in
   Required, so this decision governs crate jobs only. Crate jobs restore
   compiled caches read-only. See the
@@ -341,6 +340,7 @@ repository-wide credential for dependency fetch (classic PAT, deploy keys),
 a credential binding in any step other than the fetch step, a fetch that
 runs build scripts or repository hooks while the token is live, or
 `pull_request_target` to obtain secrets.
+
 ## 8. Publication only from the default branch or a release tag
 
 **Decision.** Container images (and later packages) are published only from a
@@ -393,8 +393,8 @@ code, a release tag that rebuilds instead of promoting, BuildKit cache
 backends and mounts that hand a credential to the build, or overwriting or
 deleting a published release asset or moving a published tag.
 
-**Native release channel decisions (2026-10-20).** The scoped rolling preview
-exception and manual stable version/tag authority are recorded in
+**Native release channel decisions (2026-10-22).** Immutable per-source preview
+publication and manual stable version/tag authority are recorded in
 [release publication decisions](release-publication-decisions.md).
 
 **Gradle stack decisions (HD-4a adapter version grammars, HD-5 one job per Gradle project) and the release-asset Maven bundle choice** are recorded in [Gradle stack contract](proposed/gradle-contract.md#decisions); adopted per the split brief, owner may revisit. **Host deployment (HD-9)** stays operator-run, outside generated CI/CD: [host deployment decision](host-deployment-decision.md); adopted per the split brief, owner may revisit. **Workflow linter (hard decision 10)**: jactionlint replaces actionlint completely and is the only workflow linter, per the owner's instruction of 2026-10-22, and also retires the separate zizmor job: [jactionlint decision](jactionlint-decision.md).

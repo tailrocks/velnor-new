@@ -95,3 +95,22 @@ fn both_tap_routes_end_authenticated_admission_before_checkout_and_token_free_pr
         }
     }
 }
+
+#[test]
+fn stale_preview_source_skips_the_tap_merge_job() {
+    let spec = with_tap();
+    let policy = spec.homebrew_tap.as_ref().expect("tap");
+    let jobs = tap::jobs(&spec, policy, TapInvocationContext::Preview).expect("preview tap jobs");
+    let writer = &jobs[1].1;
+    let merge = &jobs[2].1;
+    assert_eq!(
+        field(field(writer, "outputs"), "promotion_state"),
+        &Yaml::str("${{ steps.release.outputs.promotion_state }}")
+    );
+    assert_eq!(
+        field(merge, "if"),
+        &Yaml::str(
+            "${{ needs.preview-tap-writer.outputs.promotion_state != 'skipped_stale_source' }}"
+        )
+    );
+}

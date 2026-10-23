@@ -21,7 +21,8 @@ Mutations ran in pristine clones; the working tree was never
 modified for measurement. Former case 7 (lockfile touch) is
 REMOVED: the goal forbids touch-benchmarks; dependency-bump
 qualification is UNMEASURED (needs a scratch-clone version bump
-+ MSRV-toolchain run + machete/deny timing).
+
+- MSRV-toolchain run + machete/deny timing).
 
 Reference: `docs/proposed/agent-and-performance-contract.md`
 (wall, queue, peak RSS, compiled targets, tool install, cache
@@ -215,7 +216,8 @@ success (artifact-verified, not log-inferred).
 Legs-era historical runs (obsolete 42-entry topology; walls kept
 for the trail, never cited for current-topology verdicts): green
 36569723507 at `bdfffb9` (47 jobs, 21 m 20 s = queue 6 + Plan 81
-+ gap 3 + tasks 1132 + gap 5 + Required 52 + tail 1 — the old
+
+- gap 3 + tasks 1132 + gap 5 + Required 52 + tail 1 — the old
 21 m 19 s was off by one); red 36540401062 (91 s, Plan failed at
 `Check generated files`); outlier 36528572043 (11 m 10 s, see
 case 6). Merge-queue timing UNMEASURED (no samples).

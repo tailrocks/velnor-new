@@ -18,7 +18,8 @@ mod validation;
 pub const RELEASE_PRODUCTION_SCHEMA_V1: &str = "velnor.release-production.v1";
 /// Maximum encoded request size, including its complete static plan.
 pub const MAX_RELEASE_PRODUCTION_BYTES: usize = 1024 * 1024;
-/// Maximum literal preview leaf jobs admitted by the bounded workflow graph.
+/// Maximum product/target pairs admitted by the bounded release matrix.
+/// Preview may map this inventory to one shared machine job ID per channel.
 /// The separate full release archive limit remains unchanged.
 pub const MAX_RELEASE_PAYLOAD_PAIRS: usize = 128;
 
@@ -56,7 +57,8 @@ pub struct ReleaseProductionContext {
     pub source_sha: String,
     /// Exact protected default-branch ref.
     pub source_ref: String,
-    /// Workflow authority commit, required to equal the source commit.
+    /// Full SHA of the workflow definition that ran; preview may differ from the source SHA.
+    /// Runtime admission must authenticate this authority independently.
     pub workflow_authority_sha: String,
     /// Current producing preview workflow run ID.
     pub run_id: u64,
@@ -176,7 +178,8 @@ pub fn release_plan_sha256(plan: &PackageReleasePlan) -> Result<String, Contract
     Ok(crate::canonical::sha256_hex(&plan.canonical_bytes()?))
 }
 
-/// Derive the fixed machine job ID from the pair's canonical full-plan index.
+/// Derive the channel machine job ID for a member of the complete payload matrix.
+/// Preview leaves share one fixed job ID; stable leaves use their canonical index.
 /// # Errors
 /// Rejects invalid full plans and pairs outside their bounded inventory.
 pub fn release_payload_job_id(
@@ -187,11 +190,12 @@ pub fn release_payload_job_id(
     let index = pairs
         .binary_search(pair)
         .map_err(|_| invalid("unknown_payload_pair"))?;
-    let prefix = match plan.channel {
-        crate::package_release::PackageReleaseChannel::Preview => "preview",
-        crate::package_release::PackageReleaseChannel::Stable => "stable",
-    };
-    Ok(format!("{prefix}-payload-{index:03}"))
+    match plan.channel {
+        crate::package_release::PackageReleaseChannel::Preview => Ok("preview-payload".to_owned()),
+        crate::package_release::PackageReleaseChannel::Stable => {
+            Ok(format!("stable-payload-{index:03}"))
+        }
+    }
 }
 
 /// Validate the claimed context against the complete preview plan's syntax.
