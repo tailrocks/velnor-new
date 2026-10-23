@@ -5,8 +5,8 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 
 use super::{
-    MiseTaskSource, RustSuiteArtifact, VerificationRunner, is_valid_mise_task_name,
-    is_valid_workflow_task_id,
+    GitHubEvidenceSnapshotInput, MiseTaskSource, RustSuiteArtifact, VerificationRunner,
+    is_valid_mise_task_name, is_valid_workflow_task_id,
 };
 use crate::{ContractError, workflow::timeout::JobTimeout};
 
@@ -80,6 +80,9 @@ pub struct MiseTaskSuite {
     /// Renderer names encode the suite and artifact identity per attempt.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub artifacts: Vec<RustSuiteArtifact>,
+    /// Optional trusted, credential-separated GitHub evidence input collector.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence_snapshot: Option<GitHubEvidenceSnapshotInput>,
 }
 
 impl MiseTaskSuite {
@@ -88,7 +91,18 @@ impl MiseTaskSuite {
     pub fn validate(&self, file: &str, prefix: &str) -> Result<(), ContractError> {
         self.validate_identity_and_limits(file, prefix)?;
         self.validate_events(file, prefix)?;
-        self.validate_artifacts(file, prefix)
+        self.validate_artifacts(file, prefix)?;
+        if let Some(snapshot) = &self.evidence_snapshot {
+            if self.events.as_slice() != [MiseTaskSuiteEvent::Schedule] {
+                return Err(ContractError::config(
+                    file,
+                    format!("{prefix}.evidence_snapshot"),
+                    "github_evidence_collector_must_be_schedule_only",
+                ));
+            }
+            snapshot.validate(file, &format!("{prefix}.evidence_snapshot"))?;
+        }
+        Ok(())
     }
 
     fn validate_identity_and_limits(&self, file: &str, prefix: &str) -> Result<(), ContractError> {
@@ -220,4 +234,47 @@ fn valid_workflow_slug(slug: &str) -> bool {
         && bytes.all(|byte| {
             byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b'-')
         })
+}
+
+/// Canonical attempt-qualified artifact identity for a generated task suite.
+///
+/// Kept in the contract so producer rendering and typed evidence references
+/// share one length-prefixed identity function.
+#[must_use]
+pub fn mise_task_suite_artifact_name(suite_id: &str, artifact_name: &str) -> String {
+    task_suite_artifact_name_with_attempt(
+        suite_id,
+        artifact_name,
+        "${{ github.run_id }}",
+        "${{ github.run_attempt }}",
+    )
+}
+
+/// Runtime attempt-qualified task-suite artifact name used by the collector.
+#[must_use]
+pub fn mise_task_suite_artifact_name_for_attempt(
+    suite_id: &str,
+    artifact_name: &str,
+    run_id: u64,
+    attempt: u32,
+) -> String {
+    task_suite_artifact_name_with_attempt(
+        suite_id,
+        artifact_name,
+        &run_id.to_string(),
+        &attempt.to_string(),
+    )
+}
+
+fn task_suite_artifact_name_with_attempt(
+    suite_id: &str,
+    artifact_name: &str,
+    run_id: &str,
+    attempt: &str,
+) -> String {
+    format!(
+        "velnor-mise-task-suite-{}-{suite_id}-artifact-{}-{artifact_name}-{run_id}-attempt-{attempt}",
+        suite_id.len(),
+        artifact_name.len(),
+    )
 }

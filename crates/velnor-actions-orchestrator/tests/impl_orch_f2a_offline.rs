@@ -15,7 +15,7 @@ mod execution;
 mod sources;
 
 pub(crate) use execution::source_prep_executes_text;
-pub(crate) use sources::production_src_files;
+pub(crate) use sources::{production_src_files, production_src_files_from};
 
 pub(crate) fn is_source_prep_source(path: &Path, source_prep: &Path) -> bool {
     path == source_prep

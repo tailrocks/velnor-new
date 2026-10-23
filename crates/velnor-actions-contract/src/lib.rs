@@ -11,6 +11,7 @@ pub mod candidate_manifest;
 pub mod canonical;
 pub mod closure;
 pub mod config;
+mod config_reexports;
 pub mod deps_lock;
 pub mod discover;
 pub mod errors;
@@ -19,6 +20,7 @@ pub mod extensions;
 pub mod finding;
 pub mod formats;
 pub mod freshness;
+pub mod github_evidence_snapshot;
 pub mod graph;
 pub mod homebrew_formula;
 pub mod homebrew_merge_gate;
@@ -50,41 +52,7 @@ pub use canonical::{
     is_valid_digest, normalize_posix_path, validate_digest,
 };
 pub use closure::{ClosureBuilder, Provenance, TaskInputClosure};
-pub use config::{
-    AgentsConfig, BuildTask, BuildTaskRunner, BuildTaskXcodeCapability, CheckEvidence,
-    CheckExecutor, CheckPlatform, CheckRunner, CheckSystemTool, CheckSystemToolKind, ClaudeMdMode,
-    ContainerPlatform, DCO_CONFIG_PATH, DEFAULT_SUITE_PARTITIONS, DEFAULT_SUITE_RETENTION_DAYS,
-    DEFAULT_SUITE_TIMEOUT_MINUTES, DEFAULT_SUITE_WORKFLOW_SLUG, DaemonIdentityPolicy, DcoConfig,
-    DcoRemediationCommits, DcoRequire, DeclaredCompileDriver, DeclaredTestRunner, DiscoveryConfig,
-    ExecutionConfig, ExecutionMode, ExecutionOverride, ExecutionParity, ExecutionProfile,
-    ExecutionRole, GENERATOR_OWNED_WORKFLOW_FILES, GeneratorValidation, GitHubTokenSecret,
-    GithubConfig, HOSTED_PROFILE_ID, HostContainerProfile, HostDockerCli, HostDockerDaemon,
-    HostOrbStackSdk, ImageConfig, ImageDockerfile, ImagePlatform, ImagePrebuilt,
-    MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES, MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES,
-    MAX_CHECK_CONTAINER_DAEMON_CAPTURE_BYTES, MAX_CHECK_CONTAINER_IDENTITY_CAPTURE_BYTES,
-    MAX_CHECK_CONTAINER_PATH_BYTES, MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,
-    MAX_CHECK_CONTAINER_RUNTIME_ENTRIES, MAX_CHECK_CONTAINER_RUNTIME_ENTRY_PATH_BYTES,
-    MAX_CHECK_EXECUTION_RECEIPT_BYTES, MAX_CHECK_QUALIFIED_PROBE_CAPTURE_BYTES,
-    MAX_CHECK_QUALIFIED_PROBE_EXPECTED_BYTES, MAX_CHECK_SOURCE_BYTES,
-    MAX_CHECK_SYSTEM_VERSION_BYTES, MAX_SUITE_PARTITIONS, MAX_SUITE_RETENTION_DAYS,
-    MAX_SUITE_TEST_THREADS, MAX_SUITE_TIMEOUT_MINUTES, MiseCheck, MiseTaskSource,
-    NativeImageCachePolicy, NativeImagePlatform, NativeImageTask, NextestRunIgnored,
-    OVERRIDABLE_TOOLS, ProfileKind, PullRequestCachePolicy, QualifiedCargoInstallation,
-    QualifiedTool, QualifiedToolArtifact, QualifiedToolBackend, QualifiedToolExecutable,
-    QualifiedToolOptions, QualifiedToolPlatform, QualifiedToolProbe, RESERVED_SUITE_IDS,
-    RESERVED_SUITE_WORKFLOW_SLUGS, ResourcesConfig, RootProblem, RoutingWorkflow, RunnerSelection,
-    RunsOn, RustConfiguration, RustCrateConfig, RustInputRule, RustStackConfig, RustSuiteArtifact,
-    RustSuiteArtifactWhen, RustSuiteBuildMode, RustSuiteConfig, RustSuiteTrigger, S3BackendConfig,
-    SCALE_SET_NAME, SCALE_SET_PROFILE_ID, ScaleSetSelector, ShardTimingEvidence, StacksConfig,
-    TestShardingConfig, TofuApplyConfig, TofuStackConfig, ToolsConfig, UnmanagedPolicy,
-    Utf8RepoRelDir, VELNOR_LABEL, VelnorConfig, VelnorSupportWorkflow, VerificationRunner,
-    VerificationTask, VerifyConfig, WORKFLOW_TASK_JOB_PREFIX, WorkflowConfig,
-    WorkflowDispatchConfig, WorkflowDispatchInputConfig, WorkflowDispatchInputType, WorkflowPolicy,
-    WorkflowTask, check_execution_receipt_upper_bound, is_exact_semver, is_valid_build_tool_key,
-    is_valid_feature_name, is_valid_mise_task_name, is_valid_rust_target,
-    is_valid_workflow_task_id, validate_preserve_workflows, validate_qualified_tools,
-    validate_rust_suites, validate_shard_changes_need_evidence, validate_suites_with_dispatch,
-};
+pub use config_reexports::*;
 pub use discover::{
     BUILTIN_EXCLUSIONS, DETECTION_SCHEMA, DetectError, DetectedProject, DetectionStatus,
     DetectorEntry, FileIndex, IGNORED_REASON, IndexError, IndexMode, Stack, apply_stack_ignores,
@@ -109,6 +77,16 @@ pub use formats::{
 pub use freshness::{
     FRESHNESS_CLASSES, FreshnessRequirement, RunnerImageEvidence, UNOBSERVED_IMAGE_VALUE,
     runner_family_changed, validate_freshness_class,
+};
+pub use github_evidence_snapshot::{
+    GITHUB_EVIDENCE_SNAPSHOT_SCHEMA, GitHubEvidenceAcquisitionV1, GitHubEvidenceArtifactCaptureV1,
+    GitHubEvidenceArtifactRefV1, GitHubEvidenceDocumentKindV1, GitHubEvidenceDocumentV1,
+    GitHubEvidenceFetchSpecV1, GitHubEvidenceRepositoryV1, GitHubEvidenceRunAttemptV1,
+    GitHubEvidenceSnapshotV1, GitHubEvidenceWorkflowRefV1, GitHubEvidenceWorkflowSourceRefV1,
+    MAX_GITHUB_EVIDENCE_ARCHIVE_BYTES, MAX_GITHUB_EVIDENCE_ARCHIVES, MAX_GITHUB_EVIDENCE_ATTEMPTS,
+    MAX_GITHUB_EVIDENCE_BUNDLE_BYTES, MAX_GITHUB_EVIDENCE_DOCUMENT_BYTES,
+    MAX_GITHUB_EVIDENCE_DOCUMENTS, is_valid_github_evidence_conclusion,
+    is_valid_github_evidence_status,
 };
 pub use graph::{
     CachePolicy, EdgeKind, ResourceClass, ResourceDemand, TaskEdge, TaskGraph, TaskNode,

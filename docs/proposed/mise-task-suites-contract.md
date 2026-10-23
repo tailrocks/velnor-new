@@ -109,3 +109,47 @@ for the action's missing-file and path matching semantics.
 An empty artifact list emits no upload. Uploaded artifacts are outputs of
 unprivileged repository task jobs and do not authorize publication, protected
 checks, or conclusions in `Required`.
+
+## 5. Scheduled evidence snapshots
+
+A schedule-only suite MAY declare an `evidence_snapshot` input to consume
+bounded history from the same repository:
+
+```toml
+[workflow.task_suites.evidence_snapshot]
+window_days = 31
+workflow_sources = [
+  { kind = "primary_ci" },
+  { kind = "task_suite", suite_id = "push-head" },
+]
+artifact_sources = [
+  { suite_id = "push-head", artifact_name = "ledger" },
+]
+```
+
+The input accepts only the generator-owned `ci.yml` metadata source and exact
+push-enabled task-suite workflows on the configured default branch. Artifact
+references must name declared outputs from those suites; arbitrary workflow
+paths, API endpoints, headers, commands, or credentials are not configurable.
+Every in-window producer attempt, including failures and reruns, must have its
+own attempt-qualified artifact. The latest run immediately before the window
+is retained as temporal context; it does not replace an in-window run or
+require an archive. Missing producers, attempts, pages, artifacts, or metadata
+fail acquisition instead of silently shrinking the evidence set.
+
+The generated scheduled workflow separates acquisition from task execution.
+A trusted fetch-only job uses the digest-verified Velnor helper and a narrowly
+scoped read token to capture complete metadata pages and original artifact ZIP
+bytes. It does not check out the repository or run Mise or repository code.
+It uploads one indexed bundle bound to the collector's run and attempt. A
+separate consumer job downloads that exact same-run bundle, verifies its
+specification, complete file set, identities, and digests, then stages the
+verified snapshot under `.velnor/evidence` before the credential-scrubbed task
+runs. The task receives only `VELNOR_GITHUB_EVIDENCE_ROOT`; it receives no
+GitHub token or authenticated network fallback.
+
+Generation requires a verified immutable helper release that includes these
+operations. Source support does not make the currently published helper
+release compatible, and a generated workflow must not pin an unreleased or
+unverified helper version. Hosted repository qualification is still required
+to prove live API and archive access, retention, and scheduled delivery.

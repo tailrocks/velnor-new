@@ -89,6 +89,7 @@ fn workflow_task_suite_slug_cannot_collide_with_rust_suite() {
         events: vec![velnor_actions_contract::MiseTaskSuiteEvent::Push],
         schedule: Vec::new(),
         artifacts: Vec::new(),
+        evidence_snapshot: None,
     }];
     assert!(config.validate("config.toml").is_err_and(|error| {
         error

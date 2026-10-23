@@ -1,7 +1,9 @@
 //! Fixed payload shapes of the Mise setup and tool-seed roles.
 
 use super::step::StepKind;
-use super::step_identity::TOOL_SEED_USES;
+use super::step_identity::{
+    TOOL_SEED_USES, TOOLS_CACHE_IDENTITY_DIGEST_INPUT, TOOLS_CACHE_PRELUDE_USES,
+};
 
 /// Validate the typed Mise setup payload shape shared by render paths.
 pub(super) fn valid_mise_setup(kind: &StepKind) -> bool {
@@ -21,6 +23,17 @@ pub(super) fn valid_tool_seed_payload(kind: &StepKind) -> bool {
         if uses == TOOL_SEED_USES
             && with.len() == 1
             && with.get("cache_key").is_some_and(|key| !key.is_empty())
+            && env.is_empty())
+}
+
+/// Require the fixed generated hosted identity composite and digest.
+pub(super) fn valid_tools_cache_identity(kind: &StepKind) -> bool {
+    matches!(kind, StepKind::Action { uses, with, env }
+        if TOOLS_CACHE_PRELUDE_USES.contains(&uses.as_str())
+            && with.len() == 1
+            && with
+                .get(TOOLS_CACHE_IDENTITY_DIGEST_INPUT)
+                .is_some_and(|digest| crate::config::project_tool_refs::is_tools_identity_input(digest))
             && env.is_empty())
 }
 

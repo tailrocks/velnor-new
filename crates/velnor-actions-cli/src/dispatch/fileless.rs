@@ -20,6 +20,8 @@ pub(super) fn uses_runner_temp_gate(op: InternalOp) -> bool {
             | InternalOp::BunAssetsExport
             | InternalOp::BunAssetsPrepare
             | InternalOp::BunAssetsImport
+            | InternalOp::GitHubEvidenceFetch
+            | InternalOp::GitHubEvidenceImport
             | InternalOp::PrivateRevoke
             | InternalOp::PreseedManifest
             | InternalOp::RepoPolicy
@@ -47,6 +49,15 @@ pub(super) fn gate_runner_temp_operation(op: InternalOp) -> Option<InternalReque
         | InternalOp::BunAssetsPrepare
         | InternalOp::BunAssetsImport
         | InternalOp::PreseedManifest => {
+            runner_velnor_dir().map(|path| InternalRequest { op, path })
+        }
+        InternalOp::GitHubEvidenceFetch | InternalOp::GitHubEvidenceImport
+            if env::var("GITHUB_RUN_ID")
+                .is_ok_and(|id| id.parse::<u64>().is_ok_and(|id| id > 0))
+                && env::var("GITHUB_RUN_ATTEMPT").is_ok_and(|attempt| {
+                    attempt.parse::<u32>().is_ok_and(|attempt| attempt > 0)
+                }) =>
+        {
             runner_velnor_dir().map(|path| InternalRequest { op, path })
         }
         InternalOp::RepoPolicy => {

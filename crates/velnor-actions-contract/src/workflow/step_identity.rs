@@ -1,6 +1,7 @@
 //! Typed workflow step identity and semantic role.
 
 use super::step::{Step, StepKind};
+pub(super) use super::step_payloads::valid_tools_cache_identity;
 use super::step_payloads::{
     valid_checkout_payload, valid_configured_checkout_payload, valid_mise_setup,
     valid_tool_seed_payload,
@@ -33,9 +34,11 @@ pub const TOFU_PROVIDERS_PATH_OUTPUT_EXPR: &str = "${{ steps.tofu-providers.outp
 pub const MBX_WORKSPACE_CLEAN_CONDITION: &str = "always() && steps.mbx-ready.outcome == 'success'";
 pub use super::step_private::{
     BUN_ASSETS_EXPORT_OPERATION, BUN_ASSETS_IMPORT_OPERATION, BUN_ASSETS_PREPARE_OPERATION,
-    BUN_REGISTRY_INSTALL_OPERATION, PRIVATE_FETCH_OPERATION, PRIVATE_FETCH_TOKEN_ENV,
-    PRIVATE_NPM_READ_EXPR, PRIVATE_NPM_READ_TOKEN_ENV, PRIVATE_REVOKE_OPERATION,
-    PRIVATE_TOKEN_MINT_ACTION_PREFIX, PRIVATE_TOKEN_OUTPUT_EXPR,
+    BUN_REGISTRY_INSTALL_OPERATION, GITHUB_EVIDENCE_FETCH_OPERATION,
+    GITHUB_EVIDENCE_IMPORT_OPERATION, GITHUB_EVIDENCE_SPEC_ENV, GITHUB_EVIDENCE_TOKEN_ENV,
+    PRIVATE_FETCH_OPERATION, PRIVATE_FETCH_TOKEN_ENV, PRIVATE_NPM_READ_EXPR,
+    PRIVATE_NPM_READ_TOKEN_ENV, PRIVATE_REVOKE_OPERATION, PRIVATE_TOKEN_MINT_ACTION_PREFIX,
+    PRIVATE_TOKEN_OUTPUT_EXPR,
 };
 
 pub use super::step_id::StepId;
@@ -169,6 +172,10 @@ pub enum StepRole {
     BunAssetsHandoff,
     /// Hash-verified Playwright browser install; holds no credential.
     PlaywrightInstall,
+    /// Trusted fixed-route Actions evidence acquisition; token held only here.
+    GitHubEvidenceFetch,
+    /// Credential-free verification and import of the same-run snapshot.
+    GitHubEvidenceImport,
 }
 
 impl StepRole {
@@ -217,6 +224,10 @@ impl StepRole {
             Self::PrivateTokenMint => matches!(kind,
                 StepKind::Action { uses, .. } if uses.starts_with(PRIVATE_TOKEN_MINT_ACTION_PREFIX)),
             Self::PrivateFetch => internal_operation(kind, PRIVATE_FETCH_OPERATION),
+            Self::GitHubEvidenceFetch => internal_operation(kind, GITHUB_EVIDENCE_FETCH_OPERATION),
+            Self::GitHubEvidenceImport => {
+                internal_operation(kind, GITHUB_EVIDENCE_IMPORT_OPERATION)
+            }
             Self::PrivateRevoke => internal_operation(kind, PRIVATE_REVOKE_OPERATION),
             Self::BunRegistryInstall => internal_operation(kind, BUN_REGISTRY_INSTALL_OPERATION),
             Self::BunAssetsHandoff => [
@@ -324,17 +335,6 @@ pub fn is_tool_seed_step(step: &Step) -> bool {
     step.role == Some(StepRole::ToolSeed)
         && step.condition.is_none()
         && valid_tool_seed_payload(&step.kind)
-}
-
-/// Require the fixed generated hosted identity-and-seed composite and digest.
-pub(super) fn valid_tools_cache_identity(kind: &StepKind) -> bool {
-    matches!(kind, StepKind::Action { uses, with, env }
-        if TOOLS_CACHE_PRELUDE_USES.contains(&uses.as_str())
-            && with.len() == 1
-            && with
-                .get(TOOLS_CACHE_IDENTITY_DIGEST_INPUT)
-                .is_some_and(|digest| crate::config::project_tool_refs::is_tools_identity_input(digest))
-            && env.is_empty())
 }
 
 /// True when an action payload uses a fixed name prefix.

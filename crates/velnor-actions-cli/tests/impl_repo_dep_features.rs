@@ -99,6 +99,9 @@ fn allowed_feature(dir: &str, key: &str, feature: &str) -> bool {
                 || (key == "rustls" && feature == "ring")
                 || (key == "syn" && matches!(feature, "full" | "visit"))
                 || (key == "ureq" && feature == "rustls-no-provider")))
+        || (dir == "crates/velnor-actions-orchestrator"
+            && ((key == "rustls" && feature == "ring")
+                || (key == "ureq" && feature == "rustls-no-provider")))
         || (dir == "crates/velnor-actions-cli"
             && key == "syn"
             && matches!(feature, "full" | "visit"))
