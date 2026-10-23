@@ -40,6 +40,9 @@ pub(super) fn render_consumer_binary_release(
     {
         return Err(invalid("stable_producer_timeout"));
     }
+    spec.publication_timeout_minutes
+        .validate()
+        .map_err(RenderError::Contract)?;
     validate_coordinator(stable, spec)?;
     spec.linux_setup.validate()?;
     spec.producer_setup.validate()?;

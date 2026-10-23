@@ -8,6 +8,7 @@ use crate::config::is_valid_mise_task_name;
 use crate::config::{CheckPlatform, CheckSystemTool, VerificationRunner};
 use crate::errors::ContractError;
 use crate::package_release::valid_asset_name;
+use crate::workflow::JobTimeout;
 use std::collections::BTreeSet;
 
 #[path = "binary_release_inventory.rs"]
@@ -64,6 +65,11 @@ impl RustBinaryReleaseConfig {
                 "version_package_not_a_product",
             ));
         }
+        JobTimeout::check_config(
+            u32::from(self.publication_timeout_minutes.minutes()),
+            file,
+            "stacks.rust.binary_release.publication_timeout_minutes",
+        )?;
         self.validate_channels(file)?;
         self.producer.validate(file, required)?;
         inventory::validate_inventory(file, self)?;

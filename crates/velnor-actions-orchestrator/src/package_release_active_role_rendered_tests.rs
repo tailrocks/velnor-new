@@ -30,6 +30,7 @@ fn fixture(channel: PackageReleaseChannel) -> ConsumerReleaseSpec {
         policy: policy(channel),
         producer_runner: VerificationRunner::Macos26Arm64,
         producer_timeout_minutes: 20,
+        publication_timeout_minutes: velnor_actions_contract::JobTimeout::DEFAULT,
         linux_acquire: acquire.clone(),
         producer_acquire: acquire.clone(),
         producer_acquire_by_target: producer_acquires(channel, "0.1.30"),
@@ -277,6 +278,27 @@ fn actual_rendered_channel_and_tap_jobs_match_shared_runtime_role_mapping() {
                 name
             );
         }
+    }
+}
+
+#[test]
+fn channel_renderers_reject_deserialized_invalid_publication_timeout() {
+    let invalid = serde_json::from_str::<velnor_actions_contract::JobTimeout>("0")
+        .expect("serde bypass fixture");
+    for channel in [
+        PackageReleaseChannel::Preview,
+        PackageReleaseChannel::Stable,
+    ] {
+        let mut spec = fixture(channel);
+        spec.publication_timeout_minutes = invalid;
+        let rendered = match channel {
+            PackageReleaseChannel::Preview => render_consumer_preview(&spec),
+            PackageReleaseChannel::Stable => render_consumer_binary_release(&spec),
+        };
+        assert!(
+            rendered.is_err(),
+            "{channel:?} renderer rechecks typed timeout"
+        );
     }
 }
 

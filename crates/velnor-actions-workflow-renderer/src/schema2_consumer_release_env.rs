@@ -84,7 +84,9 @@ fn release_context_bindings(
     channel_bindings(env, spec, op, context)?;
     if matches!(
         op,
-        "recover-package-release-v1"
+        "select-preview-source-v1"
+            | "finalize-preview-source-v1"
+            | "recover-package-release-v1"
             | "admit-homebrew-tap-v1"
             | "prepare-homebrew-tap-v1"
             | "write-homebrew-tap-pr-v1"
