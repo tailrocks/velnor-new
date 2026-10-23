@@ -279,7 +279,7 @@ fn pinned_release_assets_wire_the_app_token_block_ahead_of_every_install() -> Te
     Ok(())
 }
 
-fn npm_config(extra: &str) -> String {
+pub(super) fn npm_config(extra: &str) -> String {
     format!(
         "{}[[publish.npm]]\nid = \"ui\"\nroot = \"frontend\"\nmember = \"@chainargos/ui\"\n\
 pack_script = \"pack\"\ntarballs = \"frontend/.portable/tarballs\"\nregistry = \"github\"\n{extra}",
@@ -287,7 +287,7 @@ pack_script = \"pack\"\ntarballs = \"frontend/.portable/tarballs\"\nregistry = \
     )
 }
 
-fn write_publishable(root: &Path, member_json: &str) -> TestResult {
+pub(super) fn write_publishable(root: &Path, member_json: &str) -> TestResult {
     write_workspace(root, MISE)?;
     fs::write(root.join("frontend/package.json"), ROOT_WITH_PACK)?;
     fs::write(root.join("frontend/packages/ui/package.json"), member_json)?;
@@ -304,7 +304,7 @@ fn write_publishable(root: &Path, member_json: &str) -> TestResult {
 }
 
 const ROOT_WITH_PACK: &str = r#"{"name":"frontend","private":true,"packageManager":"bun@1.4.2","workspaces":["docs","packages/*"],"scripts":{"pack":"bun scripts/pack.ts"}}"#;
-const UI_PUBLISHABLE: &str = r#"{"name":"@chainargos/ui","version":"1.4.0","publishConfig":{"registry":"https://npm.pkg.github.com"},"scripts":{"test":"vitest run"}}"#;
+pub(super) const UI_PUBLISHABLE: &str = r#"{"name":"@chainargos/ui","version":"1.4.0","publishConfig":{"registry":"https://npm.pkg.github.com"},"scripts":{"test":"vitest run"}}"#;
 
 #[test]
 fn npm_entries_generate_the_build_attest_publish_chain() -> TestResult {

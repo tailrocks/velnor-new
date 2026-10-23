@@ -12,7 +12,7 @@ use velnor_actions_workflow_renderer::release_permissions::PermissionLevel;
 use velnor_actions_workflow_renderer::release_tree::ReleaseRenderContext;
 use velnor_actions_workflow_renderer::{RenderError, action_step, ambient_shell_step};
 
-const LABEL: &str = "ubuntu-24.04";
+pub(super) const LABEL: &str = "ubuntu-24.04";
 
 fn shell(name: &str) -> Result<PublishStep, RenderError> {
     let argv = vec!["sh".to_owned(), "-c".to_owned(), "exit 0".to_owned()];
@@ -22,7 +22,7 @@ fn shell(name: &str) -> Result<PublishStep, RenderError> {
     })
 }
 
-fn job(role: PublishRole, needs: &[&str]) -> Result<PublishJobSpec, RenderError> {
+pub(super) fn job(role: PublishRole, needs: &[&str]) -> Result<PublishJobSpec, RenderError> {
     let publishing = matches!(role, PublishRole::ArtifactPublish | PublishRole::TagRelease);
     Ok(PublishJobSpec {
         role,
@@ -39,7 +39,7 @@ fn job(role: PublishRole, needs: &[&str]) -> Result<PublishJobSpec, RenderError>
     })
 }
 
-fn spec() -> Result<PublishWorkflowSpec, RenderError> {
+pub(super) fn spec() -> Result<PublishWorkflowSpec, RenderError> {
     let jobs = BTreeMap::from([
         (
             "publish-authority".to_owned(),
@@ -70,7 +70,7 @@ fn spec() -> Result<PublishWorkflowSpec, RenderError> {
     })
 }
 
-fn rejection(spec: &PublishWorkflowSpec) -> String {
+pub(super) fn rejection(spec: &PublishWorkflowSpec) -> String {
     match spec.validate() {
         Err(RenderError::InvalidWorkflow(text)) => text,
         other => format!("unexpected: {other:?}"),

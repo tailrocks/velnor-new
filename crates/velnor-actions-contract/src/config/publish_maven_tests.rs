@@ -62,25 +62,12 @@ fn ids_are_sorted_unique_and_shared_across_publish_kinds() {
 }
 
 #[test]
-fn attestation_is_default_on_and_opting_out_needs_a_clean_reason() {
-    let parsed: PublishMaven = serde_json::from_value(entry(|_| {})).expect("entry");
-    assert!(parsed.attest && parsed.attest_reason.is_none());
-    let off = |reason: Option<&str>| {
-        entry(|w| {
-            w["attest"] = json!(false);
-            if let Some(reason) = reason {
-                w["attest_reason"] = json!(reason);
-            }
-        })
-    };
-    let ok: PublishConfig = serde_json::from_value(json!({ "maven": [off(Some(
-        "private repository on a plan without artifact attestations"
-    ))] }))
-    .expect("config");
-    ok.validate("config.toml").expect("valid opt-out");
-    assert!(problem(&[off(None)]).contains("attest_reason"));
-    assert!(problem(&[off(Some("it's $(bad)"))]).contains("attest_reason"));
-    assert!(
-        problem(&[entry(|w| w["attest_reason"] = json!("why"))]).contains("only_with_attest_false")
-    );
+fn the_removed_attestation_opt_out_keys_are_rejected() {
+    for key in ["attest", "attest_reason"] {
+        let wire = entry(|w| w[key] = json!(false));
+        assert!(
+            serde_json::from_value::<PublishMaven>(wire).is_err(),
+            "{key}"
+        );
+    }
 }

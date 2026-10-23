@@ -117,8 +117,8 @@ pub use private_sources::{
     is_valid_source_id, is_valid_source_tag, split_repository,
 };
 pub use publish::{
-    PublishBundle, PublishConfig, RELEASE_TAG_GLOB, ReleaseTag, VersionSource, is_artifact_id,
-    is_strict_semver,
+    PublishBundle, PublishConfig, PublishProvenance, RELEASE_TAG_GLOB, ReleaseTag, VersionSource,
+    is_artifact_id, is_strict_semver,
 };
 pub use publish_maven::{
     MAVEN_BUNDLE_OUTPUT_DIR, MAVEN_BUNDLE_TASK, MAVEN_VERSION_FILE, PublishMaven,

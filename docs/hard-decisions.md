@@ -377,12 +377,12 @@ declared artifact and carries the manifest version the tag claims. Release
 bundles are the one tag-time build: a deterministic archive (sorted entries,
 zero mtimes, root owner) of files at a commit reachable from the default
 branch, built by a read-only job that runs no repository code. Roles are
-fixed (build, attest with OIDC and attestations, publish with
-`contents: write` in the protected environment, the last two without
-checkout) and permissions equal the role matrix exactly. Release assets are
-immutable: an existing asset fails the job. The concurrency group is one
-never-cancelled queue per pushed ref, because GitHub keeps one pending run
-per group and a per-artifact group would silently drop a queued release.
+fixed (build, attest with OIDC and attestations, or OIDC alone under a declared `[publish]
+provenance = "sigstore_bundle"`, publish with `contents: write` in the protected environment, the
+last two without checkout) and permissions equal the role matrix exactly. Release assets are
+immutable: an existing asset fails the job. The concurrency group is one never-cancelled queue per
+pushed ref, because GitHub keeps one pending run per group and a per-artifact group would silently
+drop a queued release.
 
 **Release-asset Maven bundle choice.** See the preserved decision in
 [release publication decisions](release-publication-decisions.md).

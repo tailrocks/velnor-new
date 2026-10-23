@@ -278,29 +278,87 @@ fn a_root_without_a_database_keeps_a_service_free_bundle_build() -> TestResult {
     Ok(())
 }
 
+/// `CONFIG` with `[publish] provenance = "sigstore_bundle"` declared.
+fn bundle_mode_config() -> String {
+    CONFIG.replace(
+        "[[publish.maven]]",
+        "[publish]\nprovenance = \"sigstore_bundle\"\n[[publish.maven]]",
+    )
+}
+
 #[test]
-fn attestation_is_default_on_and_an_opt_out_is_a_visible_warning_with_its_reason() -> TestResult {
+fn the_attestation_store_is_the_default_and_provenance_is_never_optional() -> TestResult {
     let on = preview(repo(CONFIG, PROPERTIES)?.path())?;
     let attest = section(&on, "maven-attest-processor-shared-libs")?;
     assert!(attest.contains("attest-build-provenance"), "{attest}");
-    assert!(!attest.contains("attestation disabled"), "{attest}");
+    assert!(attest.contains("attestations: write"), "{attest}");
+    assert!(!attest.contains("cosign"), "{attest}");
+    assert!(!on.contains("provenance.json"), "{on}");
 
-    let off_config = format!(
-        "{CONFIG}attest = false\nattest_reason = \"private repository on a plan without artifact attestations\"\n"
-    );
-    let off = preview(repo(&off_config, PROPERTIES)?.path())?;
-    let attest = section(&off, "maven-attest-processor-shared-libs")?;
-    assert!(!attest.contains("attest-build-provenance"), "{attest}");
+    for removed in [
+        "attest = false\n",
+        "attest = false\nattest_reason = \"private repository on a plan without artifact attestations\"\n",
+    ] {
+        let bad = repo(&format!("{CONFIG}{removed}"), PROPERTIES)?;
+        let err = err_of(prepare(bad.path()), "removed opt-out")?.to_string();
+        assert!(err.contains("attest"), "{err}");
+    }
+    let unknown = repo(
+        &CONFIG.replace(
+            "[[publish.maven]]",
+            "[publish]\nprovenance = \"none\"\n[[publish.maven]]",
+        ),
+        PROPERTIES,
+    )?;
+    let err = err_of(prepare(unknown.path()), "closed provenance modes")?.to_string();
+    assert!(err.contains("provenance") || err.contains("none"), "{err}");
+    Ok(())
+}
+
+#[test]
+fn a_declared_sigstore_bundle_signs_without_the_store_and_records_the_bundle() -> TestResult {
+    let yaml = preview(repo(&bundle_mode_config(), PROPERTIES)?.path())?;
+    let sign = section(&yaml, "maven-attest-processor-shared-libs")?;
     assert!(
-        attest.contains("::warning title=Provenance attestation disabled::")
-            && attest.contains("without artifact attestations"),
-        "{attest}"
+        sign.contains("name: Maven sign (processor-shared-libs)"),
+        "{sign}"
     );
-    assert!(attest.contains("Verify checksum"), "{attest}");
-
-    let no_reason = format!("{CONFIG}attest = false\n");
-    let bad = repo(&no_reason, PROPERTIES)?;
-    let err = err_of(prepare(bad.path()), "attest = false without a reason")?.to_string();
-    assert!(err.contains("attest_reason"), "{err}");
+    assert!(sign.contains("id-token: write"), "{sign}");
+    assert!(
+        !sign.contains("attestations:"),
+        "no attestation store: {sign}"
+    );
+    assert!(!sign.contains("attest-build-provenance"), "{sign}");
+    assert!(!sign.contains("checkout"), "{sign}");
+    for expected in [
+        "- maven-build-processor-shared-libs",
+        "attest-blob --yes --signing-config",
+        "https://fulcio.githubapp.com",
+        "https://timestamp.githubapp.com/api/v1/timestamp",
+        "rekorTlogUrls",
+        velnor_actions_mise::COSIGN_LINUX_AMD64_SHA256,
+        "gh attestation verify",
+        "name: maven-provenance-processor-shared-libs",
+    ] {
+        assert!(sign.contains(expected), "{expected} in {sign}");
+    }
+    assert!(!sign.contains("sigstore.dev"), "never public-good: {sign}");
+    let publish = section(&yaml, "maven-publish-processor-shared-libs")?;
+    assert!(
+        publish.contains("- maven-attest-processor-shared-libs"),
+        "{publish}"
+    );
+    assert!(publish.contains("contents: write"), "{publish}");
+    let download = publish
+        .find("Download provenance bundle")
+        .ok_or("download")?;
+    let verify = publish.find("Verify provenance bundle").ok_or("verify")?;
+    let upload = publish.find("Upload release assets").ok_or("upload")?;
+    assert!(download < verify && verify < upload, "{publish}");
+    assert!(
+        publish.contains("libs-$ver-maven.zip.sigstore.json")
+            && publish.contains("libs-$ver-maven.zip.provenance.json"),
+        "{publish}"
+    );
     Ok(())
 }

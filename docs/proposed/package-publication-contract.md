@@ -207,16 +207,12 @@ the tarball (*adopted per the split brief; owner may revisit*).
 [[publish.maven]]
 id = "processor-shared-libs"     # tag processor-shared-libs-v2.3.0, zip name stem
 root = "backend"                 # a [stacks.gradle] root
-# attest = false                 # opt out of provenance (default true)
-# attest_reason = "private repository on a plan without artifact attestations"
 ```
 
-`attest = false` exists for repositories whose GitHub plan cannot create
-artifact attestations (private repository without the feature). It requires
-`attest_reason` (clean text, at most 200 characters; rejected with `attest =
-true`), replaces the attestation action with a step that prints the reason as
-a `::warning` annotation, and keeps checksum verification and every other job
-unchanged. Attestation is never skipped silently and stays on by default.
+Provenance is never optional. Repositories whose plan has no attestation
+store declare `[publish] provenance = "sigstore_bundle"` (section 10). The
+earlier `attest = false` / `attest_reason` opt-out is removed, and both keys
+are now rejected as unknown.
 
 The root's own convention plugin owns the bundle: `./gradlew :mavenBundle`
 stages every published project and writes
@@ -252,3 +248,97 @@ ordering, determinism, stale declarations), `publish_maven_scripts_tests.rs`
 `impl_renderer_publish_spec.rs` (internal operations by role, staged helper)
 and `publish_maven_tests.rs` (config grammar). Owner blocker: the same tag
 rulesets and protected `release` environment as section 7.
+
+## 10. Provenance store (`[publish] provenance`)
+
+```toml
+[publish]
+provenance = "sigstore_bundle"   # default: "github_attestation"
+```
+
+One repository-level key covers every tag-driven artifact (`[[publish.bundles]]`,
+`[[publish.npm]]`, `[[publish.maven]]`). Both modes sign keylessly with the
+attest job's GitHub OIDC identity through GitHub's Sigstore instance. They
+differ only in where the signed statement is stored and how it is verified.
+`[[images]]` attestation is unchanged and still needs the attestation store.
+
+- **`github_attestation` (default).** `actions/attest-build-provenance` writes
+  the attestation to `POST /repos/{owner}/{repo}/attestations`. On a private
+  repository whose plan lacks artifact attestations (an organization below
+  GitHub Enterprise Cloud), this fails with "Failed to persist attestation:
+  Feature not available". The attest job fails, nothing is published, and
+  nothing downgrades automatically. This is the fail-closed default.
+- **`sigstore_bundle` (declared fallback).** The action cannot skip the write:
+  `@actions/attest` is called without `skipWrite`, the action has no input for
+  it, and the bundle file is written only after the write succeeds. So the
+  attest job (same id, `<kind>-attest-<id>`) gets the `ArtifactSign` role
+  instead: `contents: read`, `id-token: write`, no `attestations`, no checkout.
+  It sets up the pinned `gh`, re-verifies the checksum, and then:
+  1. fetches the catalog's Cosign (`v3.1.4` Linux amd64, the native signer's
+     pin) over HTTPS and admits it only by its exact sha256;
+  2. selects GitHub's trusted root from `gh attestation trusted-root`;
+  3. runs `cosign attest-blob --type slsaprovenance1` with a fixed signing
+     config that names only GitHub's Sigstore instance (Fulcio
+     `fulcio.githubapp.com`, TSA `timestamp.githubapp.com`) and no Rekor log,
+     so a private repository's identity never reaches a public transparency
+     log. The SLSA v1 predicate is built from the runner's GitHub context;
+     the binding identity is the Fulcio certificate;
+  4. requires a `application/vnd.dev.sigstore.bundle.v0.3+json` bundle and
+     verifies it at once with `gh attestation verify <subject> --bundle
+     <subject>.sigstore.json --repo $GITHUB_REPOSITORY --source-digest
+     $GITHUB_SHA --source-ref $GITHUB_REF --signer-workflow
+     $GITHUB_REPOSITORY/.github/workflows/publish.yml --signer-digest
+     $GITHUB_WORKFLOW_SHA --predicate-type https://slsa.dev/provenance/v1`;
+  5. writes the receipt `<subject>.provenance.json`: mode, reason, Sigstore
+     instance, subject and bundle sha256, source repository, ref and commit,
+     workflow ref and sha, run id and attempt, and the exact verify command.
+     It uploads the bundle and receipt as the run artifact
+     `<kind>-provenance-<id>`.
+
+  Every publishing job downloads that artifact and requires exactly the two
+  files. It re-runs the same `gh attestation verify`, and checks that the
+  receipt names this subject's sha256, the bundle's sha256, and this run's
+  source ref and commit. Then it records `<subject>.sigstore.json` and
+  `<subject>.provenance.json` as immutable assets of the tag's release, with
+  the same never-overwrite, same-sha256-skip upload as the artifact itself.
+
+| Kind | Where the bundle and receipt are recorded |
+|---|---|
+| `bundles`, `maven` | `<kind>-publish-<id>` uploads them beside the tarball/zip and its `.sha256` |
+| `npm` | A new `npm-provenance-<id>` job (`ArtifactPublish`: `contents: write`, environment `release`, no checkout) uploads the tarball, its `.sha256`, the bundle and the receipt to the tag's release. GitHub Packages holds no extra files. `npm-publish-<id>` then needs it and checks the receipt against the pushed bytes, so a package is never pushed without recorded provenance |
+
+Consumer verification needs no attestation-store access:
+
+```sh
+gh release download <id>-v<X.Y.Z> --repo <owner>/<repo> --pattern '<subject>*'
+gh attestation verify <subject> --bundle <subject>.sigstore.json --repo <owner>/<repo> \
+  --source-ref refs/tags/<id>-v<X.Y.Z> --signer-workflow <owner>/<repo>/.github/workflows/publish.yml
+```
+
+The receipt's `verify` field holds the full command, including the source and
+signer digests.
+
+Qualification (2026-10-23): a throwaway repository, since deleted, ran this
+exact cosign, signing-config and `gh attestation verify --bundle` sequence
+on a hosted runner.
+- The result was a v0.3 bundle with a certificate and RFC 3161 timestamp and
+  no tlog entry.
+- `gh attestation verify --bundle` passed, both in the run and offline on a
+  workstation.
+- A wrong `--source-digest` and a tampered subject both failed.
+- `cosign verify-blob-attestation` cannot verify these bundles: GitHub's
+  Fulcio issues no SCTs. `gh` is the verifier.
+
+ChainArgos private-repository runs already showed GitHub's Fulcio and TSA
+signing on a plan without the store: the error comes after signing, at the
+persist call.
+
+Tests: `publish_provenance_scripts_tests.rs` runs the sign, verify, receipt
+and stage scripts for real against fake `curl`, `gh` and Cosign. It covers:
+the pin admission, the GitHub-only signing config, the strict verify argv, the
+receipt content, and refusal of an unpinned Cosign, a failed verification, an
+old bundle format, a tampered subject, another commit and an extra file.
+`impl_orch_publish_maven.rs` and `impl_bun.rs` cover the generated chains in
+both modes and the rejected removed keys. `impl_renderer_publish_spec.rs`
+covers the `ArtifactSign` matrix and the npm record ordering. `publish_tests.rs`
+covers the closed, default-off key.
