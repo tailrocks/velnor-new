@@ -287,7 +287,7 @@ fn bundle_mode_config() -> String {
 }
 
 #[test]
-fn the_attestation_store_is_the_default_and_provenance_is_never_optional() -> TestResult {
+fn the_attestation_store_is_the_default_and_provenance_mode_is_closed() -> TestResult {
     let on = preview(repo(CONFIG, PROPERTIES)?.path())?;
     let attest = section(&on, "maven-attest-processor-shared-libs")?;
     assert!(attest.contains("attest-build-provenance"), "{attest}");
@@ -295,14 +295,6 @@ fn the_attestation_store_is_the_default_and_provenance_is_never_optional() -> Te
     assert!(!attest.contains("cosign"), "{attest}");
     assert!(!on.contains("provenance.json"), "{on}");
 
-    for removed in [
-        "attest = false\n",
-        "attest = false\nattest_reason = \"private repository on a plan without artifact attestations\"\n",
-    ] {
-        let bad = repo(&format!("{CONFIG}{removed}"), PROPERTIES)?;
-        let err = err_of(prepare(bad.path()), "removed opt-out")?.to_string();
-        assert!(err.contains("attest"), "{err}");
-    }
     let unknown = repo(
         &CONFIG.replace(
             "[[publish.maven]]",
@@ -316,7 +308,7 @@ fn the_attestation_store_is_the_default_and_provenance_is_never_optional() -> Te
 }
 
 #[test]
-fn a_declared_sigstore_bundle_signs_without_the_store_and_records_the_bundle() -> TestResult {
+fn a_declared_sigstore_bundle_signs_and_records_the_bundle() -> TestResult {
     let yaml = preview(repo(&bundle_mode_config(), PROPERTIES)?.path())?;
     let sign = section(&yaml, "maven-attest-processor-shared-libs")?;
     assert!(
@@ -324,10 +316,7 @@ fn a_declared_sigstore_bundle_signs_without_the_store_and_records_the_bundle() -
         "{sign}"
     );
     assert!(sign.contains("id-token: write"), "{sign}");
-    assert!(
-        !sign.contains("attestations:"),
-        "no attestation store: {sign}"
-    );
+    assert!(sign.contains("attestations: write"), "{sign}");
     assert!(!sign.contains("attest-build-provenance"), "{sign}");
     assert!(!sign.contains("checkout"), "{sign}");
     for expected in [
@@ -362,3 +351,6 @@ fn a_declared_sigstore_bundle_signs_without_the_store_and_records_the_bundle() -
     );
     Ok(())
 }
+
+#[path = "impl_orch_publish_maven/sigstore_optout.rs"]
+mod sigstore_optout;

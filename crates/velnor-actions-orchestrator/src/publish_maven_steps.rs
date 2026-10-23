@@ -115,14 +115,29 @@ fn checksum_step(id: &str) -> Result<PublishStep, OrchestratorError> {
 /// Attest: verify the checksum, then sign provenance for the zip.
 ///
 /// `github_attestation` writes to GitHub's attestation store; the declared
-/// `sigstore_bundle` signs a bundle the publish job records. Provenance is
-/// never optional.
+/// `sigstore_bundle` signs a bundle the publish job records. A validated
+/// Maven opt-out remains authoritative in either mode.
 pub(super) fn attest_job(
     inputs: &Inputs<'_>,
     entry: &PublishMaven,
     gh: &str,
 ) -> Result<PublishJobSpec, OrchestratorError> {
     let id = entry.id.as_str();
+    if !entry.attest {
+        let reason = entry.attest_reason.as_deref().unwrap_or_default();
+        let warning = script_step(
+            "Provenance attestation disabled by config",
+            script::attest_disabled_script(reason),
+            false,
+        )?;
+        return Ok(bundle_job(
+            inputs,
+            PublishRole::ArtifactAttest,
+            format!("Maven attest ({id})"),
+            format!("maven-build-{id}"),
+            vec![download_step(id)?, checksum_step(id)?, plain(warning)],
+        ));
+    }
     if inputs.provenance == PublishProvenance::SigstoreBundle {
         return provenance::sign_job(
             inputs,
@@ -166,7 +181,7 @@ pub(super) fn publish_job(
         download_step(id)?,
         checksum_step(id)?,
     ];
-    let upload = if inputs.provenance == PublishProvenance::SigstoreBundle {
+    let upload = if entry.attest && inputs.provenance == PublishProvenance::SigstoreBundle {
         let subject = subject(id);
         steps.push(provenance::download_step(&subject)?);
         steps.push(provenance::verify_step(&subject, gh)?);

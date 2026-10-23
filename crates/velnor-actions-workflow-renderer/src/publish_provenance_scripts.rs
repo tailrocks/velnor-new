@@ -15,13 +15,15 @@
 //! `gh attestation verify --bundle`, which selects GitHub's trusted root
 //! from the certificate issuer and checks the certificate's source
 //! repository, source digest, source ref, signer workflow and signer digest.
+//! It also binds verified certificate repository and owner IDs to the runner's
+//! GitHub context.
 
 use crate::publish_render::PUBLISH_WORKFLOW_PATH;
 
-/// The pinned Cosign Linux `x86_64` release asset the sign job admits.
+/// A pinned Cosign Linux release asset the sign job admits.
 ///
 /// The caller passes the catalog pin (`velnor_actions_mise`); the script
-/// downloads exactly `size` bytes at most and requires the exact `sha256`.
+/// requires exactly `size` bytes and the matching `sha256`.
 #[derive(Debug, Clone, Copy)]
 pub struct CosignPin<'a> {
     /// Release version without the `v` (`3.1.4`).
@@ -32,13 +34,32 @@ pub struct CosignPin<'a> {
     pub size: usize,
 }
 
+/// Architecture of the fixed Cosign release asset.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CosignPlatform {
+    /// Linux `x86_64` executable.
+    LinuxAmd64,
+    /// Linux `AArch64` executable.
+    LinuxArm64,
+}
+
 impl CosignPin<'_> {
     /// Release asset URL of the pin.
     #[must_use]
     pub fn url(&self) -> String {
+        self.url_for(CosignPlatform::LinuxAmd64)
+    }
+
+    /// Release asset URL of the pin for one supported architecture.
+    #[must_use]
+    pub fn url_for(&self, platform: CosignPlatform) -> String {
+        let asset = match platform {
+            CosignPlatform::LinuxAmd64 => "cosign-linux-amd64",
+            CosignPlatform::LinuxArm64 => "cosign-linux-arm64",
+        };
         format!(
-            "https://github.com/sigstore/cosign/releases/download/v{}/cosign-linux-amd64",
-            self.version
+            "https://github.com/sigstore/cosign/releases/download/v{}/{asset}",
+            self.version,
         )
     }
 
@@ -76,15 +97,28 @@ const GITHUB_ROOT_FILTER: &str = r#"select((.certificateAuthorities // []) | len
 const PREDICATE: &str = r#"{buildDefinition: {buildType: "https://actions.github.io/buildtypes/workflow/v1", externalParameters: {workflow: {ref: env.GITHUB_REF, repository: ("https://github.com/" + env.GITHUB_REPOSITORY), path: $path}}, internalParameters: {github: {event_name: env.GITHUB_EVENT_NAME, repository_id: env.GITHUB_REPOSITORY_ID, repository_owner_id: env.GITHUB_REPOSITORY_OWNER_ID, runner_environment: env.RUNNER_ENVIRONMENT}}, resolvedDependencies: [{uri: ("git+https://github.com/" + env.GITHUB_REPOSITORY + "@" + env.GITHUB_REF), digest: {gitCommit: env.GITHUB_SHA}}]}, runDetails: {builder: {id: ("https://github.com/actions/runner/" + (env.RUNNER_ENVIRONMENT // "unknown"))}, metadata: {invocationId: ("https://github.com/" + env.GITHUB_REPOSITORY + "/actions/runs/" + env.GITHUB_RUN_ID + "/attempts/" + env.GITHUB_RUN_ATTEMPT)}}}"#;
 
 /// Receipt recording the declared mode, the exact bytes and how to verify them.
-const RECEIPT: &str = r#"{schema: 1, kind: "velnor-publish-provenance", provenance: "sigstore_bundle", reason: "declared [publish] provenance = sigstore_bundle: the GitHub attestation store is not used", sigstore_instance: "github", predicate_type: $predicate, subject: {name: $name, sha256: $subject}, bundle: {name: ($name + $suffix), sha256: $bundle, media_type: $media}, source: {repository: env.GITHUB_REPOSITORY, ref: env.GITHUB_REF, sha: env.GITHUB_SHA}, workflow: {path: $path, ref: env.GITHUB_WORKFLOW_REF, sha: env.GITHUB_WORKFLOW_SHA}, run: {id: env.GITHUB_RUN_ID, attempt: env.GITHUB_RUN_ATTEMPT}, verify: ("gh attestation verify " + $name + " --bundle " + $name + $suffix + " --repo " + env.GITHUB_REPOSITORY + " --source-digest " + env.GITHUB_SHA + " --source-ref " + env.GITHUB_REF + " --signer-workflow " + env.GITHUB_REPOSITORY + "/" + $path + " --signer-digest " + env.GITHUB_WORKFLOW_SHA + " --predicate-type " + $predicate)}"#;
+const RECEIPT: &str = r#"{schema: 1, kind: "velnor-publish-provenance", provenance: "sigstore_bundle", reason: "declared [publish] provenance = sigstore_bundle: the GitHub attestation store is not used", sigstore_instance: "github", predicate_type: $predicate, subject: {name: $name, sha256: $subject}, bundle: {name: ($name + $suffix), sha256: $bundle, media_type: $media}, source: {repository: env.GITHUB_REPOSITORY, repository_id: env.GITHUB_REPOSITORY_ID, repository_owner_id: env.GITHUB_REPOSITORY_OWNER_ID, ref: env.GITHUB_REF, sha: env.GITHUB_SHA}, workflow: {path: $path, ref: env.GITHUB_WORKFLOW_REF, sha: env.GITHUB_WORKFLOW_SHA}, run: {id: env.GITHUB_RUN_ID, attempt: env.GITHUB_RUN_ATTEMPT}, verify: ("gh attestation verify " + $name + " --bundle " + $name + $suffix + " --repo " + env.GITHUB_REPOSITORY + " --source-digest " + env.GITHUB_SHA + " --source-ref " + env.GITHUB_REF + " --signer-workflow " + env.GITHUB_REPOSITORY + "/" + $path + " --signer-digest " + env.GITHUB_WORKFLOW_SHA + " --predicate-type " + $predicate + " --format json")}"#;
+
+/// Require nonempty canonical numeric IDs and bind every verified certificate result.
+const VERIFIED_IDENTITY_FILTER: &str = r#"def canonical_id: type == "string" and test("^[1-9][0-9]*$"); type == "array" and length > 0 and ($repository_id | canonical_id) and ($owner_id | canonical_id) and all(.[]; (.verificationResult.signature.certificate.sourceRepositoryIdentifier | canonical_id and . == $repository_id) and (.verificationResult.signature.certificate.sourceRepositoryOwnerIdentifier | canonical_id and . == $owner_id))"#;
 
 /// The exact `gh attestation verify` that admits `$s` with bundle `$p/$name.sigstore.json`.
-fn verify_command() -> String {
+fn verify_command(output: &str) -> String {
     format!(
         "gh attestation verify \"$s\" --bundle \"$p/$name{BUNDLE_SUFFIX}\" \
          --repo \"$GITHUB_REPOSITORY\" --source-digest \"$GITHUB_SHA\" --source-ref \"$GITHUB_REF\" \
          --signer-workflow \"$GITHUB_REPOSITORY/{PUBLISH_WORKFLOW_PATH}\" \
-         --signer-digest \"$GITHUB_WORKFLOW_SHA\" --predicate-type '{PREDICATE_TYPE}' > /dev/null"
+         --signer-digest \"$GITHUB_WORKFLOW_SHA\" --predicate-type '{PREDICATE_TYPE}' \
+         --format json > {output}"
+    )
+}
+
+/// Check verifier output against trusted immutable GitHub identities.
+fn verified_identity_check(output: &str) -> String {
+    format!(
+        "jq -e --arg repository_id \"$GITHUB_REPOSITORY_ID\" \
+         --arg owner_id \"$GITHUB_REPOSITORY_OWNER_ID\" \
+         '{VERIFIED_IDENTITY_FILTER}' {output} > /dev/null"
     )
 }
 
@@ -101,8 +135,8 @@ fn prelude(gh: &str, dir: &str, file: &str) -> String {
 
 /// Sign `dir/file` into a Sigstore bundle, verify it, and write the receipt.
 ///
-/// The pinned Cosign is fetched over HTTPS and admitted by its exact
-/// sha256. Signing uses the job's ambient GitHub OIDC token. The bundle is
+/// The pinned Cosign is fetched over HTTPS and admitted by its exact byte
+/// length and sha256. Signing uses the job's ambient GitHub OIDC token. The bundle is
 /// verified at once with the same `gh attestation verify` the publish job
 /// repeats; a bundle that does not verify fails the job before any receipt
 /// exists.
@@ -117,12 +151,29 @@ pub fn sign_script(
     file: &str,
     cosign: CosignPin<'_>,
 ) -> Result<String, &'static str> {
+    sign_script_for_platform(gh, dir, file, cosign, CosignPlatform::LinuxAmd64)
+}
+
+/// Sign with the exact architecture-specific Cosign release asset.
+///
+/// # Errors
+///
+/// Returns `invalid_cosign_pin` when the pin is not a strict version,
+/// lowercase sha256 and positive size.
+pub fn sign_script_for_platform(
+    gh: &str,
+    dir: &str,
+    file: &str,
+    cosign: CosignPin<'_>,
+    platform: CosignPlatform,
+) -> Result<String, &'static str> {
     if !cosign.is_valid() {
         return Err("invalid_cosign_pin");
     }
     let prelude = prelude(gh, dir, file);
-    let verify = verify_command();
-    let url = cosign.url();
+    let verify = verify_command("\"$w/verification.json\"");
+    let identity_check = verified_identity_check("\"$w/verification.json\"");
+    let url = cosign.url_for(platform);
     let size = cosign.size;
     let sha = cosign.sha256;
     Ok(format!(
@@ -130,6 +181,10 @@ pub fn sign_script(
          curl --disable --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
          --tlsv1.2 --retry 5 --retry-all-errors --max-time 300 --max-filesize {size} \
          -o \"$w/cosign\" '{url}'; \
+         wc -c < \"$w/cosign\" > \"$w/cosign.bytes\"; \
+         read -r actual_size < \"$w/cosign.bytes\"; \
+         case \"$actual_size\" in ''|*[!0-9]*) exit 1 ;; esac; \
+         test \"$actual_size\" -eq {size}; \
          printf '%s  %s\\n' '{sha}' \"$w/cosign\" | sha256sum -c - > /dev/null; \
          chmod 700 \"$w/cosign\"; \
          gh attestation trusted-root > \"$w/roots.jsonl\"; \
@@ -141,7 +196,7 @@ pub fn sign_script(
          --trusted-root \"$w/root.json\" --type slsaprovenance1 --predicate \"$w/predicate.json\" \
          --bundle \"$p/$name{BUNDLE_SUFFIX}\" \"$s\"; \
          jq -e --arg media '{BUNDLE_MEDIA_TYPE}' '.mediaType == $media' \"$p/$name{BUNDLE_SUFFIX}\" > /dev/null; \
-         {verify}; \
+         {verify}; {identity_check}; \
          sha256sum < \"$s\" > \"$w/subject.sum\"; read -r subject rest < \"$w/subject.sum\"; \
          sha256sum < \"$p/$name{BUNDLE_SUFFIX}\" > \"$w/bundle.sum\"; read -r bundle rest < \"$w/bundle.sum\"; \
          jq -n --arg name \"$name\" --arg subject \"$subject\" --arg bundle \"$bundle\" \
@@ -159,9 +214,12 @@ pub fn sign_script(
 #[must_use]
 pub fn verify_script(gh: &str, dir: &str, file: &str) -> String {
     let prelude = prelude(gh, dir, file);
-    let verify = verify_command();
+    let verify = verify_command("\"$w/verification.json\"");
+    let identity_check = verified_identity_check("\"$w/verification.json\"");
     format!(
-        "{prelude}; ls -- \"$p\" | wc -l | grep -Eqx ' *2'; {verify}; {receipt}",
+        "{prelude}; w=\"$RUNNER_TEMP/velnor-verify\"; mkdir -m 700 -- \"$w\"; \
+         trap 'rm -rf -- \"$w\"' EXIT; \
+         ls -- \"$p\" | wc -l | grep -Eqx ' *2'; {verify}; {identity_check}; {receipt}",
         receipt = receipt_check()
     )
 }
@@ -173,11 +231,14 @@ fn receipt_check() -> String {
          sha256sum < \"$p/$name{BUNDLE_SUFFIX}\" > \"$p.bundle.sum\"; read -r bundle rest < \"$p.bundle.sum\"; \
          rm -f -- \"$p.subject.sum\" \"$p.bundle.sum\"; \
          jq -e --arg name \"$name\" --arg subject \"$subject\" --arg bundle \"$bundle\" \
-         '.provenance == \"sigstore_bundle\" and .subject.name == $name and .subject.sha256 == $subject \
-         and .bundle.sha256 == $bundle and .source.sha == env.GITHUB_SHA and .source.ref == env.GITHUB_REF' \
+         --arg repository_id \"$GITHUB_REPOSITORY_ID\" \
+         --arg owner_id \"$GITHUB_REPOSITORY_OWNER_ID\" \
+         '{RECEIPT_CHECK_FILTER}' \
          \"$p/$name{RECEIPT_SUFFIX}\" > /dev/null"
     )
 }
+
+const RECEIPT_CHECK_FILTER: &str = r#"def canonical_id: type == "string" and test("^[1-9][0-9]*$"); .provenance == "sigstore_bundle" and .subject.name == $name and .subject.sha256 == $subject and .bundle.sha256 == $bundle and .source.repository == env.GITHUB_REPOSITORY and .source.sha == env.GITHUB_SHA and .source.ref == env.GITHUB_REF and ($repository_id | canonical_id) and ($owner_id | canonical_id) and .source.repository_id == $repository_id and .source.repository_owner_id == $owner_id"#;
 
 /// Receipt check for a job without `gh` (the npm push): binds the pushed
 /// bytes to the receipt the provenance job already verified and recorded.

@@ -2,8 +2,8 @@
 //! against fake `curl`, `gh` and Cosign executables on `PATH`.
 //!
 //! The fakes record their argv, so the cases prove what the generated job
-//! asks of the real tools: the pinned Cosign is admitted only by its exact
-//! sha256, signing targets GitHub's Sigstore instance with no transparency
+//! asks of the real tools: the pinned Cosign is admitted by its exact byte
+//! length and sha256, signing targets GitHub's Sigstore instance with no transparency
 //! log, every bundle passes `gh attestation verify` with the strict identity
 //! before a receipt exists, and the publish side refuses a bundle, receipt
 //! or subject that does not match.
@@ -56,7 +56,14 @@ case "$1 $2" in
   "attestation trusted-root")
     printf '%s\n' '{"certificateAuthorities":[{"uri":"https://fulcio.sigstore.dev"}],"tlogs":[{}]}'
     printf '%s\n' '{"certificateAuthorities":[{"uri":"fulcio.githubapp.com"},{"uri":"fulcio.githubapp.com"}],"tlogs":[]}' ;;
-  "attestation verify") printf '%s\n' "$*" >> "$FAKE_LOG/gh"; exit "${FAKE_VERIFY:-0}" ;;
+  "attestation verify")
+    printf '%s\n' "$*" >> "$FAKE_LOG/gh"
+    if [ "${FAKE_VERIFY_JSON+x}" = x ]; then
+      printf '%s\n' "$FAKE_VERIFY_JSON"
+    else
+      printf '%s\n' '[{"verificationResult":{"signature":{"certificate":{"sourceRepositoryIdentifier":"123456","sourceRepositoryOwnerIdentifier":"654321"}}}}]'
+    fi
+    exit "${FAKE_VERIFY:-0}" ;;
   *) exit 64 ;;
 esac
 "#;
@@ -126,6 +133,8 @@ fn run(fx: &Fixture, script: &str, extra: &[(&str, &str)]) -> std::io::Result<Ou
         .env("GITHUB_REF_NAME", "libs-v1.0.0")
         .env("GITHUB_REF", "refs/tags/libs-v1.0.0")
         .env("GITHUB_REPOSITORY", "acme/widgets")
+        .env("GITHUB_REPOSITORY_ID", "123456")
+        .env("GITHUB_REPOSITORY_OWNER_ID", "654321")
         .env("GITHUB_SHA", SHA)
         .env("GITHUB_WORKFLOW_SHA", SHA)
         .env(
@@ -149,7 +158,7 @@ fn sign(
     let pin = CosignPin {
         version: "3.1.4",
         sha256: sha,
-        size: 4096,
+        size: usize::try_from(fs::metadata(&fx.cosign)?.len())?,
     };
     let script = sign_script("gh() { command gh \"$@\"; }", DIR, SUBJECT, pin)?;
     Ok(run(fx, &script, extra)?)
@@ -170,11 +179,12 @@ fn signing_targets_github_sigstore_verifies_the_bundle_and_writes_the_receipt() 
     assert!(output.status.success(), "{output:?}");
 
     let curl = log(&fx, "curl");
+    let cosign_size = fs::metadata(&fx.cosign)?.len().to_string();
     assert!(
         curl.contains(
             "https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign-linux-amd64"
         ) && curl.contains("--proto =https")
-            && curl.contains("--max-filesize 4096"),
+            && curl.contains(&format!("--max-filesize {cosign_size}")),
         "{curl}"
     );
     let cosign = log(&fx, "cosign");
@@ -195,6 +205,7 @@ fn signing_targets_github_sigstore_verifies_the_bundle_and_writes_the_receipt() 
         "--signer-workflow acme/widgets/.github/workflows/publish.yml",
         &format!("--signer-digest {SHA}"),
         "--predicate-type https://slsa.dev/provenance/v1",
+        "--format json",
     ] {
         assert!(gh.contains(expected), "{expected} in {gh}");
     }
@@ -228,6 +239,8 @@ fn signing_targets_github_sigstore_verifies_the_bundle_and_writes_the_receipt() 
     );
     assert_eq!(receipt["source"]["sha"], SHA);
     assert_eq!(receipt["source"]["ref"], "refs/tags/libs-v1.0.0");
+    assert_eq!(receipt["source"]["repository_id"], "123456");
+    assert_eq!(receipt["source"]["repository_owner_id"], "654321");
     assert_eq!(receipt["workflow"]["path"], ".github/workflows/publish.yml");
     assert_eq!(receipt["run"]["id"], "42");
     let verify = receipt["verify"].as_str().unwrap_or_default();
@@ -277,6 +290,24 @@ fn a_cosign_digest_mismatch_or_a_failed_verification_fails_before_any_receipt() 
     let wrong = sign(&fx, &"0".repeat(64), &[])?;
     assert!(!wrong.status.success(), "unpinned cosign admitted");
     assert!(log(&fx, "cosign").is_empty(), "cosign ran unverified");
+
+    let fx = fixture()?;
+    let pin = hex_sha256(&fx.cosign)?;
+    let wrong_size = CosignPin {
+        version: "3.1.4",
+        sha256: &pin,
+        size: usize::try_from(fs::metadata(&fx.cosign)?.len())? + 1,
+    };
+    let script = sign_script("gh() { command gh \"$@\"; }", DIR, SUBJECT, wrong_size)?;
+    assert!(
+        !run(&fx, &script, &[])?.status.success(),
+        "wrong-length Cosign admitted"
+    );
+    assert!(
+        !fx.temp
+            .join("provenance/libs-1.0.0-maven.zip.provenance.json")
+            .exists()
+    );
 
     let fx = fixture()?;
     let pin = hex_sha256(&fx.cosign)?;
@@ -354,3 +385,8 @@ fn the_publish_side_reverifies_and_refuses_a_mismatched_subject_or_receipt() -> 
     }
     Ok(())
 }
+
+#[path = "publish_provenance_scripts_tests/identity.rs"]
+mod identity;
+#[path = "publish_provenance_scripts_tests/scripts.rs"]
+mod scripts;

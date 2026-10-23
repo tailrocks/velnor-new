@@ -22,6 +22,42 @@ mod limits;
 pub(crate) use limits::{NATIVE_MANIFEST_BYTES, ZipProfile, leaf_union_compressed_bound};
 const MAX_ENTRIES: usize = 4096;
 
+/// Validate an evidence artifact ZIP without extracting it.
+///
+/// This profile permits safe nested relative paths while retaining the stricter
+/// flat-name rules used by native recovery and preview archives.
+pub(crate) fn validate_evidence_archive(
+    file: &mut std::fs::File,
+    deadline: CheckDeadline,
+) -> Result<u64, OrchestratorError> {
+    deadline
+        .scope(|| validate_evidence_reader(file))
+        .map_err(|_| invalid("deadline"))?
+}
+
+fn validate_evidence_reader<R: Read + Seek>(input: R) -> Result<u64, OrchestratorError> {
+    let mut archive = reader::open(input, ZipProfile::Evidence)?;
+    let mut total = 0_u64;
+    for index in 0..archive.len() {
+        check()?;
+        let mut file = archive.by_index(index).map_err(|_| invalid("entry"))?;
+        let expected_size = file.size();
+        let limit = expected_size.min(ZipProfile::Evidence.member_unpacked());
+        let (copied, _) = copy(&mut file, &mut std::io::sink(), limit)?;
+        if copied != expected_size {
+            return Err(invalid("entry_size"));
+        }
+        if !file.is_dir() {
+            total = total
+                .checked_add(copied)
+                .filter(|size| *size <= ZipProfile::Evidence.unpacked())
+                .ok_or_else(|| invalid("unpacked_limit"))?;
+        }
+    }
+    check()?;
+    Ok(total)
+}
+
 /// One exact flat file, with optional historical signature-bundle byte identity.
 pub(crate) struct ExpectedZipEntry {
     pub name: String,
@@ -258,6 +294,24 @@ pub(super) fn hex_digest(digest: impl AsRef<[u8]>) -> String {
 fn safe_name(name: &str) -> bool {
     !name.is_empty() && name != "." && name != ".." && !name.contains(['/', '\\', '\0', ':'])
 }
+
+pub(super) fn safe_evidence_name(name: &str, is_dir: bool) -> bool {
+    let path = if is_dir {
+        name.strip_suffix('/')
+    } else if name.ends_with('/') {
+        None
+    } else {
+        Some(name)
+    };
+    path.is_some_and(|path| {
+        !path.is_empty()
+            && !path.starts_with('/')
+            && !path.contains(['\\', '\0', ':'])
+            && path
+                .split('/')
+                .all(|part| !part.is_empty() && part != "." && part != "..")
+    })
+}
 fn check() -> Result<(), OrchestratorError> {
     CheckDeadline::check_scope().map_err(|_| invalid("deadline"))
 }
@@ -286,6 +340,9 @@ mod tests;
 #[path = "artifact_zip_stream_tests.rs"]
 mod stream_tests;
 
+#[cfg(test)]
+#[path = "github_evidence_zip_tests.rs"]
+mod evidence_tests;
 #[cfg(test)]
 #[path = "artifact_zip_metadata_tests.rs"]
 mod metadata_tests;

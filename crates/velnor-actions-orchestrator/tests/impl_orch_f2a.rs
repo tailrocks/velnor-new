@@ -1,8 +1,10 @@
 //! F2 structural scans: spawning, paths, registries, suggestions.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use crate::impl_common::TestResult;
+use syn::spanned::Spanned;
 
 #[path = "impl_orch_runtime_acquisition.rs"]
 pub(crate) mod runtime_acquisition;
@@ -10,6 +12,131 @@ pub(crate) mod runtime_acquisition;
 /// Orchestrator `src/` directory.
 pub(crate) fn orch_src() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src")
+}
+
+/// Runtime acquisition is recognized only at its two canonical entry files.
+pub(crate) fn is_exact_runtime_source(
+    path: &Path,
+    src_root: &Path,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let path = path.canonicalize()?;
+    for name in ["github_evidence.rs", "github_evidence_collect_context.rs"] {
+        if path == src_root.join(name).canonicalize()? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// Mask only the exact public evidence re-export at canonical `src/api.rs`.
+pub(crate) fn mask_api_reexport_for_legacy_scan(
+    path: &Path,
+    src_root: &Path,
+    source: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    if path.canonicalize()? != src_root.join("api.rs").canonicalize()? {
+        return Ok(source.to_owned());
+    }
+    let syntax = syn::parse_file(source)?;
+    let candidates = syntax
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            syn::Item::Use(item) if evidence_use_root(&item.tree) => Some(item),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    if candidates.len() != 1 {
+        return Err(invalid_evidence_source(
+            "expected one evidence API re-export",
+        ));
+    }
+    validate_evidence_reexport(candidates[0])?;
+    mask_evidence_span(source, candidates[0].span()).map_err(Into::into)
+}
+
+fn evidence_use_root(tree: &syn::UseTree) -> bool {
+    matches!(tree, syn::UseTree::Path(path) if path.ident == "github_evidence")
+}
+
+fn validate_evidence_reexport(item: &syn::ItemUse) -> Result<(), syn::Error> {
+    let expected = [
+        "GITHUB_EVIDENCE_FETCH_OP",
+        "GITHUB_EVIDENCE_IMPORT_OP",
+        "run_github_evidence_fetch",
+        "run_github_evidence_import",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect::<BTreeSet<_>>();
+    let syn::UseTree::Path(root) = &item.tree else {
+        return Err(syn::Error::new(item.span(), "evidence API root changed"));
+    };
+    let syn::UseTree::Group(group) = &*root.tree else {
+        return Err(syn::Error::new(
+            item.span(),
+            "evidence API export must be grouped",
+        ));
+    };
+    let names = group
+        .items
+        .iter()
+        .map(|tree| match tree {
+            syn::UseTree::Name(name) => Ok(name.ident.to_string()),
+            _ => Err(syn::Error::new(
+                tree.span(),
+                "evidence API exports must be direct names",
+            )),
+        })
+        .collect::<Result<BTreeSet<_>, _>>()?;
+    if root.ident != "github_evidence"
+        || !matches!(item.vis, syn::Visibility::Public(_))
+        || !item.attrs.is_empty()
+        || item.leading_colon.is_some()
+        || names != expected
+    {
+        return Err(syn::Error::new(
+            item.span(),
+            "evidence API re-export changed",
+        ));
+    }
+    Ok(())
+}
+
+fn mask_evidence_span(source: &str, span: proc_macro2::Span) -> Result<String, syn::Error> {
+    let start = source_offset(source, span.start().line, span.start().column);
+    let end = source_offset(source, span.end().line, span.end().column);
+    if start >= end || end > source.len() {
+        return Err(syn::Error::new(span, "invalid API re-export source span"));
+    }
+    let mut bytes = source.as_bytes().to_vec();
+    for byte in &mut bytes[start..end] {
+        if !matches!(*byte, b'\n' | b'\r') {
+            *byte = b' ';
+        }
+    }
+    String::from_utf8(bytes).map_err(|_| syn::Error::new(span, "API masking changed UTF-8"))
+}
+
+fn source_offset(source: &str, line: usize, column: usize) -> usize {
+    let mut start = 0;
+    for _ in 1..line {
+        let Some(relative) = source.as_bytes()[start..]
+            .iter()
+            .position(|byte| *byte == b'\n')
+        else {
+            return source.len();
+        };
+        start += relative + 1;
+    }
+    let end = source[start..]
+        .find('\n')
+        .map_or(source.len(), |relative| start + relative);
+    (start + column).min(end)
+}
+
+fn invalid_evidence_source(message: &str) -> Box<dyn std::error::Error> {
+    std::io::Error::new(std::io::ErrorKind::InvalidData, message.to_owned()).into()
 }
 
 /// Sorted production `.rs` files directly under `src/`.
@@ -57,12 +184,16 @@ fn strip_line_comment(line: &str) -> &str {
 /// Code lines of one file: `(number, code)` with comments stripped.
 pub(crate) fn code_of(path: &Path) -> Result<Vec<(usize, String)>, Box<dyn std::error::Error>> {
     let text = std::fs::read_to_string(path)?;
-    Ok(text
-        .lines()
+    Ok(code_of_text(&text))
+}
+
+/// Code lines from source text, preserving `code_of`'s comment handling.
+pub(crate) fn code_of_text(text: &str) -> Vec<(usize, String)> {
+    text.lines()
         .enumerate()
         .map(|(number, line)| (number + 1, strip_line_comment(line).to_owned()))
         .filter(|(_, line)| !line.trim().is_empty())
-        .collect())
+        .collect()
 }
 
 /// Every `name:line` holding `token` in orchestrator code.

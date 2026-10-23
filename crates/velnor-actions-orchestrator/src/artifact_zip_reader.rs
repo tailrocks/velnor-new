@@ -1,8 +1,9 @@
 //! Deadline-aware ZIP metadata admission, including duplicate/overlap rejection.
-use super::{ZipProfile, check, invalid, safe_name};
+use super::{ZipProfile, check, invalid, safe_evidence_name, safe_name};
 use crate::OrchestratorError;
 use std::{
     cell::Cell,
+    collections::{BTreeMap, BTreeSet},
     io::{Read, Seek, SeekFrom},
     rc::Rc,
 };
@@ -77,17 +78,34 @@ pub(super) fn open<R: Read + Seek>(
         .validate_header_consistency()
         .map_err(|_| invalid("header_consistency"))?;
     let mut total = 0_u64;
+    let mut evidence_paths = BTreeMap::<String, bool>::new();
+    let mut seen = BTreeSet::new();
     for index in 0..archive.len() {
         check()?;
         let file = archive.by_index_raw(index).map_err(|_| invalid("entry"))?;
         let name = file.name().map_err(|_| invalid("path"))?;
-        if !safe_name(&name)
+        let is_evidence = matches!(profile, ZipProfile::Evidence);
+        let is_dir = file.is_dir();
+        let mode_type = file.unix_mode().map(|mode| mode & 0o170_000);
+        let evidence_type_ok = match (is_dir, mode_type) {
+            (true, None | Some(0 | 0o040_000)) => file.size() == 0,
+            (false, None | Some(0 | 0o100_000)) => true,
+            _ => false,
+        };
+        if (is_evidence
+            && (!safe_evidence_name(&name, is_dir)
+                || !evidence_type_ok
+                || file.size() > profile.member_unpacked()
+                || !seen.insert(name.to_string())
+                || evidence_path_collision(&name, is_dir, &mut evidence_paths)))
+            || (!is_evidence
+                && (!safe_name(&name)
+                    || file.is_dir()
+                    || file.unix_mode().is_some_and(|mode| {
+                        mode & 0o170_000 != 0 && mode & 0o170_000 != 0o100_000
+                    })))
             || name.as_bytes() != file.name_raw()
-            || file.is_dir()
             || file.encrypted()
-            || file
-                .unix_mode()
-                .is_some_and(|mode| mode & 0o170_000 != 0 && mode & 0o170_000 != 0o100_000)
         {
             return Err(invalid("path_or_type"));
         }
@@ -99,4 +117,31 @@ pub(super) fn open<R: Read + Seek>(
     operations.set(None);
     check()?;
     Ok(archive)
+}
+
+fn evidence_path_collision(name: &str, is_dir: bool, paths: &mut BTreeMap<String, bool>) -> bool {
+    let normalized = if is_dir {
+        name.trim_end_matches('/')
+    } else {
+        name
+    };
+    if paths.contains_key(normalized) {
+        return true;
+    }
+    let components = normalized.split('/').collect::<Vec<_>>();
+    for count in 1..components.len() {
+        let ancestor = components[..count].join("/");
+        if paths.get(&ancestor) == Some(&false) {
+            return true;
+        }
+    }
+    if !is_dir
+        && paths
+            .keys()
+            .any(|candidate| candidate.starts_with(&format!("{normalized}/")))
+    {
+        return true;
+    }
+    paths.insert(normalized.to_owned(), is_dir);
+    false
 }

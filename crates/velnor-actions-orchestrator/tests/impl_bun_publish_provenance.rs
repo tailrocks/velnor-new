@@ -34,8 +34,9 @@ fn npm_sigstore_bundle_records_verified_provenance_before_the_push() -> TestResu
     let tree = render_staged_tree(&prepare(repo.path())?)?;
     let publish = required_file(&tree, ".github/workflows/publish.yml")?;
     let sign = job_body(publish, "npm-attest-ui")?;
+    assert!(sign.contains("contents: read"), "{sign}");
     assert!(sign.contains("id-token: write"), "{sign}");
-    assert!(!sign.contains("attestations:"), "{sign}");
+    assert!(sign.contains("attestations: write"), "{sign}");
     assert!(!sign.contains("attest-build-provenance"), "{sign}");
     assert!(!sign.contains("actions/checkout@"), "{sign}");
     assert!(

@@ -34,6 +34,8 @@ pub(crate) fn split_internal_operation(operation: &str) -> Result<(&str, &str), 
         || operation == velnor_actions_contract::BUN_ASSETS_EXPORT_OPERATION
         || operation == velnor_actions_contract::BUN_ASSETS_PREPARE_OPERATION
         || operation == velnor_actions_contract::BUN_ASSETS_IMPORT_OPERATION
+        || operation == velnor_actions_contract::GITHUB_EVIDENCE_FETCH_OPERATION
+        || operation == velnor_actions_contract::GITHUB_EVIDENCE_IMPORT_OPERATION
         || operation
             == velnor_actions_contract::config::playwright_lock::PLAYWRIGHT_INSTALL_OPERATION
     {

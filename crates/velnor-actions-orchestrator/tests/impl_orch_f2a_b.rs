@@ -5,8 +5,148 @@
 use std::path::PathBuf;
 
 use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
-use crate::impl_orch_f2a::{code_of, product_src_files, runtime_acquisition, token_hits};
+use crate::impl_orch_f2a::{code_of_text, product_src_files, runtime_acquisition, token_hits};
+use crate::impl_orch_f2a::{is_exact_runtime_source, mask_api_reexport_for_legacy_scan};
 use crate::impl_orch_plansel::merge_status;
+use std::path::Path;
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct EvidenceModuleMount {
+    name: String,
+    path: Option<String>,
+    visibility: String,
+    external: bool,
+}
+
+type EvidenceMount = (&'static str, &'static str, &'static str);
+type EvidenceMountSet = (&'static str, Vec<EvidenceMount>);
+
+#[derive(Default)]
+struct EvidenceModuleMounts(Vec<EvidenceModuleMount>);
+
+impl<'ast> syn::visit::Visit<'ast> for EvidenceModuleMounts {
+    fn visit_item_mod(&mut self, module: &'ast syn::ItemMod) {
+        let path = module.attrs.iter().find_map(|attribute| {
+            if !attribute.path().is_ident("path") {
+                return None;
+            }
+            let syn::Meta::NameValue(value) = &attribute.meta else {
+                return Some("<invalid>".to_owned());
+            };
+            let syn::Expr::Lit(literal) = &value.value else {
+                return Some("<invalid>".to_owned());
+            };
+            let syn::Lit::Str(path) = &literal.lit else {
+                return Some("<invalid>".to_owned());
+            };
+            Some(path.value())
+        });
+        let visibility = match &module.vis {
+            syn::Visibility::Inherited => "private".to_owned(),
+            syn::Visibility::Public(_) => "public".to_owned(),
+            syn::Visibility::Restricted(value) => format!(
+                "restricted:{}",
+                value
+                    .path
+                    .segments
+                    .iter()
+                    .map(|part| part.ident.to_string())
+                    .collect::<Vec<_>>()
+                    .join("::")
+            ),
+        };
+        self.0.push(EvidenceModuleMount {
+            name: module.ident.to_string(),
+            path,
+            visibility,
+            external: module.content.is_none(),
+        });
+        syn::visit::visit_item_mod(self, module);
+    }
+}
+
+/// Pin every production mount in the evidence runtime closure.
+pub(crate) fn validate_evidence_module_mounts(
+    root: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for (file, expected) in evidence_mount_sets() {
+        let source = std::fs::read_to_string(root.join(file))?;
+        let production = crate::impl_orch_f2a_offline::production_source_of_text(&source)?;
+        let syntax = syn::parse_file(&production)?;
+        let mut mounts = EvidenceModuleMounts::default();
+        syn::visit::Visit::visit_file(&mut mounts, &syntax);
+        mounts.0.sort();
+        let mut expected = expected
+            .iter()
+            .map(|(name, path, visibility)| EvidenceModuleMount {
+                name: (*name).to_owned(),
+                path: Some((*path).to_owned()),
+                visibility: (*visibility).to_owned(),
+                external: true,
+            })
+            .collect::<Vec<_>>();
+        expected.sort();
+        if mounts.0 != expected {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("evidence module mounts in {file} changed"),
+            )
+            .into());
+        }
+    }
+    Ok(())
+}
+
+fn evidence_mount_sets() -> Vec<EvidenceMountSet> {
+    vec![
+        (
+            "api.rs",
+            vec![
+                ("github_evidence", "github_evidence.rs", "private"),
+                (
+                    "github_evidence_http",
+                    "github_evidence_http.rs",
+                    "restricted:crate",
+                ),
+            ],
+        ),
+        (
+            "github_evidence.rs",
+            vec![
+                ("collect", "github_evidence_collect.rs", "private"),
+                ("import", "github_evidence_import.rs", "private"),
+            ],
+        ),
+        (
+            "github_evidence_collect.rs",
+            vec![
+                ("api", "github_evidence_collect_api.rs", "private"),
+                (
+                    "artifacts",
+                    "github_evidence_collect_artifacts.rs",
+                    "private",
+                ),
+                ("bundle", "github_evidence_collect_bundle.rs", "private"),
+                ("context", "github_evidence_collect_context.rs", "private"),
+                ("time", "github_evidence_collect_time.rs", "private"),
+                ("validate", "github_evidence_collect_validate.rs", "private"),
+                (
+                    "workflows",
+                    "github_evidence_collect_workflows.rs",
+                    "private",
+                ),
+            ],
+        ),
+        (
+            "github_evidence_http.rs",
+            vec![("route", "github_evidence_http_route.rs", "private")],
+        ),
+        (
+            "github_evidence_import.rs",
+            vec![("files", "github_evidence_import_files.rs", "private")],
+        ),
+    ]
+}
 
 /// `TaskStatus` variants in declaration order.
 fn task_status_variants() -> Result<Vec<String>, Box<dyn std::error::Error>> {
@@ -154,6 +294,17 @@ fn offline_deps_fail_closed_without_fetch() -> TestResult {
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
+        if is_exact_runtime_source(&path, &crate::impl_orch_f2a::orch_src())? {
+            continue;
+        }
+        let source = std::fs::read_to_string(&path)?;
+        let source =
+            mask_api_reexport_for_legacy_scan(&path, &crate::impl_orch_f2a::orch_src(), &source)?;
+        let source = runtime_acquisition::mask_resolved_evidence_spec_for_legacy_scan(
+            &path,
+            &crate::impl_orch_f2a::orch_src(),
+            &source,
+        )?;
         // HD-7: the credentialed private-source fetch is a dedicated runtime
         // operation (`private-fetch-v1`) behind its own CLI gate; its three
         // modules the Bun registry phase (`bun-registry-install-v1`) and the Playwright browser install
@@ -172,7 +323,7 @@ fn offline_deps_fail_closed_without_fetch() -> TestResult {
         ) {
             continue;
         }
-        for (line, code) in code_of(&path)? {
+        for (line, code) in code_of_text(&source) {
             if name == "source_prep.rs" {
                 assert!(
                     !code.contains(".run("),

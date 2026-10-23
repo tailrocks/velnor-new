@@ -16,6 +16,7 @@ mod distribution;
 mod dockerfile;
 mod execution;
 mod github;
+mod github_evidence_snapshot;
 pub mod gradle;
 mod host_container;
 mod image_grammar;
@@ -96,6 +97,10 @@ pub use execution::{
     ExecutionRole, HOSTED_PROFILE_ID, ProfileKind, RoutingWorkflow, SCALE_SET_PROFILE_ID,
 };
 pub use github::{GithubConfig, UnmanagedPolicy};
+pub use github_evidence_snapshot::{
+    GitHubEvidenceArtifactSource, GitHubEvidenceSnapshotInput, GitHubEvidenceWorkflowSource,
+    MAX_GITHUB_EVIDENCE_ARTIFACTS, MAX_GITHUB_EVIDENCE_WINDOW_DAYS, MAX_GITHUB_EVIDENCE_WORKFLOWS,
+};
 pub use host_container::{
     ContainerPlatform, DaemonIdentityPolicy, HostContainerProfile, HostDockerCli, HostDockerDaemon,
     HostOrbStackSdk,
@@ -110,7 +115,10 @@ pub use mise::{
     CheckEvidence, CheckExecutor, CheckPlatform, CheckRunner, CheckSystemTool, CheckSystemToolKind,
     MiseCheck, is_valid_check_system_build, is_valid_check_system_version, is_valid_mise_task_name,
 };
-pub use mise_task_suites::{MiseTaskSuite, MiseTaskSuiteEvent};
+pub use mise_task_suites::{
+    MiseTaskSuite, MiseTaskSuiteEvent, mise_task_suite_artifact_name,
+    mise_task_suite_artifact_name_for_attempt,
+};
 pub use private_sources::{
     DEPS_LOCK_PATH, PrivateAssetSource, PrivateGitTreeSource, PrivateSourcesConfig,
     is_valid_asset_name, is_valid_extract_to, is_valid_github_owner, is_valid_github_repo_name,

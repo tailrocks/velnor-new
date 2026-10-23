@@ -1,5 +1,10 @@
 //! Public orchestrator API re-exports.
 
+#[path = "github_evidence.rs"]
+mod github_evidence;
+#[path = "github_evidence_http.rs"]
+pub(crate) mod github_evidence_http;
+
 pub use super::bun_assets_handoff::{
     ASSET_ID_ENV as BUN_ASSETS_ID_ENV, ASSET_PINS_ENV as BUN_ASSETS_PINS_ENV, BUN_ASSETS_EXPORT_OP,
     BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP, run_bun_assets_export, run_bun_assets_import,
@@ -89,6 +94,10 @@ pub use super::validators::{
     validate_select_diff_args, validate_select_show_args, validate_show_args, validate_show_path,
 };
 pub use super::workflow::{CHECKOUT_USES, DEFAULT_RUNNER_LABEL, WorkflowPlan};
+pub use github_evidence::{
+    GITHUB_EVIDENCE_FETCH_OP, GITHUB_EVIDENCE_IMPORT_OP, run_github_evidence_fetch,
+    run_github_evidence_import,
+};
 pub use velnor_actions_contract::ExecutionMode;
 pub use velnor_actions_contract::workflow::{
     QUALIFICATION_CACHE_ENABLED_OUTPUT, QUALIFICATION_CACHE_WRITE_OUTPUT,

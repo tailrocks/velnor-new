@@ -1,8 +1,8 @@
 //! Shared jobs and steps for `[publish] provenance = "sigstore_bundle"`.
 //!
 //! The declared fallback keeps keyless Sigstore signing and changes only the
-//! store. The sign job (`ArtifactSign`: OIDC, no attestation store, no
-//! checkout) signs the verified artifact into a Sigstore bundle through
+//! store. The sign job uses the existing `ArtifactAttest` role and checks out
+//! no code while signing the verified artifact into a Sigstore bundle through
 //! GitHub's Sigstore instance, verifies that bundle with
 //! `gh attestation verify --bundle`, writes a provenance receipt and uploads
 //! both as a run artifact. Every publishing job re-verifies them before it
@@ -15,20 +15,49 @@ use std::collections::BTreeMap;
 use velnor_actions_actionlint::actions::{
     DOWNLOAD_ARTIFACT_ACTION_USES, UPLOAD_ARTIFACT_ACTION_USES,
 };
-use velnor_actions_mise::{COSIGN_LINUX_AMD64_SHA256, COSIGN_MAX_BYTES, COSIGN_VERSION};
-use velnor_actions_workflow_renderer::publish_scripts::provenance::{self as script, CosignPin};
+use velnor_actions_mise::{
+    COSIGN_LINUX_AMD64_BYTES, COSIGN_LINUX_AMD64_SHA256, COSIGN_LINUX_ARM64_BYTES,
+    COSIGN_LINUX_ARM64_SHA256, COSIGN_VERSION,
+};
+use velnor_actions_workflow_renderer::publish_scripts::provenance::{
+    self as script, CosignPin, CosignPlatform,
+};
 use velnor_actions_workflow_renderer::publish_spec::{PublishJobSpec, PublishRole, PublishStep};
 use velnor_actions_workflow_renderer::{action_step, mise_setup_step};
 
 use super::{Inputs, bundle_job, plain, script_step};
 use crate::OrchestratorError;
 
-/// The catalog's Cosign pin, the same bytes the native package signer admits.
-const COSIGN: CosignPin<'static> = CosignPin {
-    version: COSIGN_VERSION,
-    sha256: COSIGN_LINUX_AMD64_SHA256,
-    size: COSIGN_MAX_BYTES,
-};
+/// Resolve one of the six admitted Linux runner labels to its official asset.
+fn cosign_for_runner(
+    label: &str,
+) -> Result<(CosignPin<'static>, CosignPlatform), OrchestratorError> {
+    let (sha256, size, platform) = match label {
+        "ubuntu-22.04" | "ubuntu-24.04" | "ubuntu-26.04" => (
+            COSIGN_LINUX_AMD64_SHA256,
+            COSIGN_LINUX_AMD64_BYTES,
+            CosignPlatform::LinuxAmd64,
+        ),
+        "ubuntu-22.04-arm" | "ubuntu-24.04-arm" | "ubuntu-26.04-arm" => (
+            COSIGN_LINUX_ARM64_SHA256,
+            COSIGN_LINUX_ARM64_BYTES,
+            CosignPlatform::LinuxArm64,
+        ),
+        _ => {
+            return Err(OrchestratorError::Contract {
+                problem: format!("unsupported_cosign_runner:{label}"),
+            });
+        }
+    };
+    Ok((
+        CosignPin {
+            version: COSIGN_VERSION,
+            sha256,
+            size,
+        },
+        platform,
+    ))
+}
 
 /// Subject of one sign job: where the verified artifact sits after download.
 pub(crate) struct Subject<'a> {
@@ -114,6 +143,7 @@ pub(crate) fn sign_job(
     checksum: PublishStep,
     display_kind: &str,
 ) -> Result<PublishJobSpec, OrchestratorError> {
+    let (cosign, platform) = cosign_for_runner(inputs.label)?;
     let upload = action_step(
         "Upload provenance bundle",
         UPLOAD_ARTIFACT_ACTION_USES,
@@ -133,18 +163,17 @@ pub(crate) fn sign_job(
         checksum,
         plain(script_step(
             "Sign provenance bundle",
-            script::sign_script(gh, subject.dir, &subject.file, COSIGN).map_err(|problem| {
-                OrchestratorError::Contract {
+            script::sign_script_for_platform(gh, subject.dir, &subject.file, cosign, platform)
+                .map_err(|problem| OrchestratorError::Contract {
                     problem: problem.to_owned(),
-                }
-            })?,
+                })?,
             true,
         )?),
         plain(upload),
     ];
     Ok(bundle_job(
         inputs,
-        PublishRole::ArtifactSign,
+        PublishRole::ArtifactAttest,
         format!("{display_kind} sign ({})", subject.id),
         format!("{}-build-{}", subject.kind, subject.id),
         steps,
@@ -154,3 +183,7 @@ pub(crate) fn sign_job(
 #[cfg(test)]
 #[path = "publish_provenance_scripts_tests.rs"]
 mod scripts_tests;
+
+#[cfg(test)]
+#[path = "publish_provenance_steps_tests.rs"]
+mod tests;

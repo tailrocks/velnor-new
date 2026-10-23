@@ -207,12 +207,16 @@ the tarball (*adopted per the split brief; owner may revisit*).
 [[publish.maven]]
 id = "processor-shared-libs"     # tag processor-shared-libs-v2.3.0, zip name stem
 root = "backend"                 # a [stacks.gradle] root
+# attest = false                 # explicit opt-out; default true
+# attest_reason = "private repository on a plan without artifact attestations"
 ```
 
-Provenance is never optional. Repositories whose plan has no attestation
-store declare `[publish] provenance = "sigstore_bundle"` (section 10). The
-earlier `attest = false` / `attest_reason` opt-out is removed, and both keys
-are now rejected as unknown.
+Maven provenance is on by default. The explicit `attest = false` opt-out is
+available to repositories whose GitHub plan cannot create artifact
+attestations; it requires a clean `attest_reason` of at most 200 characters
+and prints that reason as a workflow warning. Invalid or missing reasons fail
+validation. The repository-level `[publish] provenance` mode in section 10
+selects the store only for Maven entries whose `attest` setting is true.
 
 The root's own convention plugin owns the bundle: `./gradlew :mavenBundle`
 stages every published project and writes
@@ -257,9 +261,11 @@ provenance = "sigstore_bundle"   # default: "github_attestation"
 ```
 
 One repository-level key covers every tag-driven artifact (`[[publish.bundles]]`,
-`[[publish.npm]]`, `[[publish.maven]]`). Both modes sign keylessly with the
-attest job's GitHub OIDC identity through GitHub's Sigstore instance. They
-differ only in where the signed statement is stored and how it is verified.
+`[[publish.npm]]`, and Maven entries with their default `attest = true`). Both
+modes sign keylessly with the attest job's GitHub OIDC identity through
+GitHub's Sigstore instance. They differ only in where the signed statement is
+stored and how it is verified. An explicitly opted-out Maven entry keeps its
+warning-only path in either mode and creates no provenance bundle.
 `[[images]]` attestation is unchanged and still needs the attestation store.
 
 - **`github_attestation` (default).** `actions/attest-build-provenance` writes
@@ -271,11 +277,13 @@ differ only in where the signed statement is stored and how it is verified.
 - **`sigstore_bundle` (declared fallback).** The action cannot skip the write:
   `@actions/attest` is called without `skipWrite`, the action has no input for
   it, and the bundle file is written only after the write succeeds. So the
-  attest job (same id, `<kind>-attest-<id>`) gets the `ArtifactSign` role
-  instead: `contents: read`, `id-token: write`, no `attestations`, no checkout.
-  It sets up the pinned `gh`, re-verifies the checksum, and then:
-  1. fetches the catalog's Cosign (`v3.1.4` Linux amd64, the native signer's
-     pin) over HTTPS and admits it only by its exact sha256;
+  attest job (same id, `<kind>-attest-<id>`) uses the existing `ArtifactAttest`
+  role and its fixed permission tuple: `contents: read`, `id-token: write`,
+  `attestations: write`, no checkout. It sets up the pinned `gh`, re-verifies
+  the checksum, and then:
+  1. fetches the catalog's Cosign (`v3.1.4`) Linux asset matching the exact
+     runner architecture (amd64 or arm64) over HTTPS and admits it only by its
+     exact byte limit and sha256;
   2. selects GitHub's trusted root from `gh attestation trusted-root`;
   3. runs `cosign attest-blob --type slsaprovenance1` with a fixed signing
      config that names only GitHub's Sigstore instance (Fulcio
@@ -288,18 +296,24 @@ differ only in where the signed statement is stored and how it is verified.
      <subject>.sigstore.json --repo $GITHUB_REPOSITORY --source-digest
      $GITHUB_SHA --source-ref $GITHUB_REF --signer-workflow
      $GITHUB_REPOSITORY/.github/workflows/publish.yml --signer-digest
-     $GITHUB_WORKFLOW_SHA --predicate-type https://slsa.dev/provenance/v1`;
+     $GITHUB_WORKFLOW_SHA --predicate-type https://slsa.dev/provenance/v1
+     --format json`. Verifier output must be a nonempty array. Every result
+     must contain canonical numeric repository and owner IDs equal to the
+     trusted `GITHUB_REPOSITORY_ID` and `GITHUB_REPOSITORY_OWNER_ID`; matching
+     names alone do not authorize it;
   5. writes the receipt `<subject>.provenance.json`: mode, reason, Sigstore
-     instance, subject and bundle sha256, source repository, ref and commit,
-     workflow ref and sha, run id and attempt, and the exact verify command.
+     instance, subject and bundle sha256, source repository and immutable
+     repository/owner IDs, ref and commit, workflow ref and sha, run id and
+     attempt, and the exact verify command.
      It uploads the bundle and receipt as the run artifact
      `<kind>-provenance-<id>`.
 
   Every publishing job downloads that artifact and requires exactly the two
   files. It re-runs the same `gh attestation verify`, and checks that the
-  receipt names this subject's sha256, the bundle's sha256, and this run's
-  source ref and commit. Then it records `<subject>.sigstore.json` and
-  `<subject>.provenance.json` as immutable assets of the tag's release, with
+  receipt names this subject's sha256, the bundle's sha256, this repository's
+  immutable repository/owner IDs, and this run's source ref and commit. Then
+  it records `<subject>.sigstore.json` and `<subject>.provenance.json` as
+  immutable assets of the tag's release, with
   the same never-overwrite, same-sha256-skip upload as the artifact itself.
 
 | Kind | Where the bundle and receipt are recorded |
@@ -309,18 +323,55 @@ differ only in where the signed statement is stored and how it is verified.
 
 Consumer verification needs no attestation-store access:
 
-```sh
-gh release download <id>-v<X.Y.Z> --repo <owner>/<repo> --pattern '<subject>*'
-gh attestation verify <subject> --bundle <subject>.sigstore.json --repo <owner>/<repo> \
-  --source-ref refs/tags/<id>-v<X.Y.Z> --signer-workflow <owner>/<repo>/.github/workflows/publish.yml
+Replace the placeholders with expected release coordinates. Supply the
+numeric repository and owner IDs from trusted consumer configuration,
+independently of the release assets and receipt; never derive them from the
+bundle, receipt, repository name, or verifier output. `gh attestation verify`
+checks signed source constraints; this filter also requires a nonempty result
+array and binds every verified certificate to those immutable IDs:
+
+```bash
+set -euo pipefail
+REPOSITORY='<owner>/<repo>'
+TAG='<id>-v<X.Y.Z>'
+SUBJECT='<subject filename>'
+EXPECTED_SOURCE_DIGEST='<expected full commit SHA>'
+EXPECTED_WORKFLOW_SHA='<expected full workflow SHA>'
+EXPECTED_REPOSITORY_ID='<trusted positive decimal repository ID>'
+EXPECTED_OWNER_ID='<trusted positive decimal owner ID>'
+SOURCE_REF="refs/tags/$TAG"
+SIGNER_WORKFLOW="$REPOSITORY/.github/workflows/publish.yml"
+gh release download "$TAG" --repo "$REPOSITORY" --pattern "$SUBJECT*"
+gh attestation verify "$SUBJECT" --bundle "$SUBJECT.sigstore.json" \
+  --repo "$REPOSITORY" --source-digest "$EXPECTED_SOURCE_DIGEST" \
+  --source-ref "$SOURCE_REF" --signer-workflow "$SIGNER_WORKFLOW" \
+  --signer-digest "$EXPECTED_WORKFLOW_SHA" \
+  --predicate-type https://slsa.dev/provenance/v1 --format json |
+  jq -e --arg repository_id "$EXPECTED_REPOSITORY_ID" \
+    --arg owner_id "$EXPECTED_OWNER_ID" '
+      def canonical_id: type == "string" and test("^[1-9][0-9]*$");
+      type == "array" and length > 0 and
+      ($repository_id | canonical_id) and ($owner_id | canonical_id) and
+      all(.[];
+        (.verificationResult.signature.certificate.sourceRepositoryIdentifier
+          | canonical_id and . == $repository_id) and
+        (.verificationResult.signature.certificate.sourceRepositoryOwnerIdentifier
+          | canonical_id and . == $owner_id))
+    '
 ```
 
-The receipt's `verify` field holds the full command, including the source and
-signer digests.
+The producer's receipt records the full verification command and observed IDs,
+but it is not an authority for expected IDs or command arguments.
 
-Qualification (2026-10-23): a throwaway repository, since deleted, ran this
-exact cosign, signing-config and `gh attestation verify --bundle` sequence
-on a hosted runner.
+Qualification (2026-10-23): a throwaway repository, since deleted, ran the
+Cosign signing-config and bundle-verification sequence that existed at that
+time on a hosted runner. That historical probe predates the immutable
+repository/owner-ID binding described above; the ID filter is covered by the
+current fake-`gh` script tests. Do not treat the old probe as evidence for the
+new ID checks.
+
+That historical probe established:
+
 - The result was a v0.3 bundle with a certificate and RFC 3161 timestamp and
   no tlog entry.
 - `gh attestation verify --bundle` passed, both in the run and offline on a
@@ -334,11 +385,12 @@ signing on a plan without the store: the error comes after signing, at the
 persist call.
 
 Tests: `publish_provenance_scripts_tests.rs` runs the sign, verify, receipt
-and stage scripts for real against fake `curl`, `gh` and Cosign. It covers:
-the pin admission, the GitHub-only signing config, the strict verify argv, the
-receipt content, and refusal of an unpinned Cosign, a failed verification, an
-old bundle format, a tampered subject, another commit and an extra file.
-`impl_orch_publish_maven.rs` and `impl_bun.rs` cover the generated chains in
-both modes and the rejected removed keys. `impl_renderer_publish_spec.rs`
-covers the `ArtifactSign` matrix and the npm record ordering. `publish_tests.rs`
-covers the closed, default-off key.
+and stage scripts for real against fake `curl`, `gh` and Cosign. It covers
+architecture pin selection, the GitHub-only signing config, strict verifier
+arguments and immutable-ID binding, receipt content, and refusal of an
+unpinned Cosign, malformed or mismatched verifier identities, failed
+verification, an old bundle format, a tampered subject, another commit and
+an extra file. `impl_orch_publish_maven.rs` and `impl_bun.rs` cover generated
+chains in both modes and the validated Maven opt-out.
+`impl_renderer_publish_spec.rs` covers the `ArtifactAttest` matrix and npm
+record ordering. `publish_tests.rs` covers the closed, default-off key.

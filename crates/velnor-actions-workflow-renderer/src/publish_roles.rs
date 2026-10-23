@@ -15,9 +15,6 @@ pub enum PublishRole {
     ArtifactBuild,
     /// Attests the built artifact; holds OIDC and attestation authority, no checkout.
     ArtifactAttest,
-    /// Signs the built artifact into a Sigstore bundle (`[publish] provenance =
-    /// "sigstore_bundle"`); holds OIDC only, never the attestation store, no checkout.
-    ArtifactSign,
     /// Uploads the attested artifact as a release asset; no checkout.
     ArtifactPublish,
     /// Pushes built image layouts to the registry and attests the digests; no checkout.
@@ -38,7 +35,6 @@ impl PublishRole {
             Self::TagRelease => "tag-release",
             Self::ArtifactBuild => "artifact-build",
             Self::ArtifactAttest => "artifact-attest",
-            Self::ArtifactSign => "artifact-sign",
             Self::ArtifactPublish => "artifact-publish",
             Self::ImagePublish => "image-publish",
             Self::ImagePromote => "image-promote",
@@ -51,7 +47,7 @@ impl PublishRole {
         match self {
             Self::Authority | Self::BranchAuthority => 0,
             Self::TagRelease | Self::ArtifactBuild | Self::ImagePublish | Self::ImagePromote => 1,
-            Self::ArtifactAttest | Self::ArtifactSign => 2,
+            Self::ArtifactAttest => 2,
             Self::ArtifactPublish => 3,
             // After `ArtifactPublish`: with a Sigstore bundle, the npm push
             // needs the job that recorded the bundle in the tag's release.
@@ -79,7 +75,6 @@ impl PublishRole {
             Self::TagRelease | Self::ImagePublish => Some(Self::BranchAuthority),
             Self::ArtifactBuild
             | Self::ArtifactAttest
-            | Self::ArtifactSign
             | Self::ArtifactPublish
             | Self::NpmPublish
             | Self::ImagePromote => Some(Self::Authority),
@@ -118,7 +113,6 @@ impl PublishPermissions {
                 }
                 PublishRole::ArtifactBuild => (Read, None, None, None, None, None, None),
                 PublishRole::ArtifactAttest => (Read, None, Write, Write, None, None, None),
-                PublishRole::ArtifactSign => (Read, None, Write, None, None, None, None),
                 PublishRole::TagRelease => (Write, None, None, None, None, None, Read),
                 PublishRole::ArtifactPublish => (Write, None, None, None, None, None, None),
                 PublishRole::ImagePublish => (Read, None, Write, Write, Write, Read, None),

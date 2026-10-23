@@ -2,12 +2,22 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::{MiseTaskSuite, MiseTaskSuiteEvent, RunsOn, RustSuiteArtifact, Step};
+use velnor_actions_contract::{
+    GitHubEvidenceFetchSpecV1, MiseTaskSuite, MiseTaskSuiteEvent, RunsOn, RustSuiteArtifact,
+};
 
 use crate::verification_jobs::{
     MiseTaskBootstrapPolicy, build_task_jobs::BuildTaskTool, mise_task_bootstrap,
 };
-use crate::{MiseSetup, RenderError, RenderedFile, Yaml, document_steps, render, steps};
+use crate::{MiseSetup, RenderError, RenderedFile, Yaml, render, steps};
+
+#[path = "mise_task_suites_evidence.rs"]
+mod evidence;
+pub use evidence::EvidenceHelperProvenance;
+use evidence::{
+    evidence_bundle_name, evidence_collector_condition, evidence_fetch_job_id,
+    evidence_fetch_job_yaml, github_evidence_internal_step, job_step_to_yaml,
+};
 
 /// One orchestrator-resolved task suite and its locked tool closure.
 #[derive(Debug, Clone)]
@@ -26,6 +36,10 @@ pub struct MiseTaskSuitePolicy {
     pub mise_lock_sha256: Option<String>,
     /// SHA-256 of the task Rust toolchain file, when present.
     pub rust_toolchain_sha256: Option<String>,
+    /// Canonical closed GitHub snapshot specification, when enabled.
+    pub evidence_fetch_spec: Option<GitHubEvidenceFetchSpecV1>,
+    /// Validated immutable release provenance for the fixed evidence helper steps.
+    pub evidence_helper: Option<EvidenceHelperProvenance>,
 }
 
 /// Inputs required to render task-suite companion workflow files.
@@ -100,6 +114,7 @@ fn validate_spec(spec: &MiseTaskSuitesRenderSpec) -> Result<(), RenderError> {
             )));
         }
         policy.mise_setup.validate()?;
+        evidence::validate_policy(policy, spec)?;
         let bootstrap = bootstrap_policy(policy);
         mise_task_bootstrap::validate_policy(&bootstrap)?;
     }
@@ -113,15 +128,41 @@ fn render_workflow(
 ) -> Result<String, RenderError> {
     let mut jobs = Vec::with_capacity(suites.len());
     for policy in suites {
-        let condition = suite_condition(&policy.suite, &spec.default_branch);
+        if policy.evidence_fetch_spec.is_some() {
+            jobs.push((
+                evidence_fetch_job_id(&policy.suite.id),
+                evidence_fetch_job_yaml(policy, spec)?,
+            ));
+        }
+        let condition = if policy.evidence_fetch_spec.is_some() {
+            evidence_collector_condition(&policy.suite, &spec.default_branch)
+        } else {
+            suite_condition(&policy.suite, &spec.default_branch)
+        };
         let bootstrap = bootstrap_policy(policy);
-        let task_steps = mise_task_bootstrap::steps(
+        let mut task_steps = mise_task_bootstrap::steps(
             &bootstrap,
             &policy.mise_setup,
             &spec.checkout_uses,
             true,
             true,
         )?;
+        if let Some(evidence_spec) = &policy.evidence_fetch_spec {
+            let helper = policy.evidence_helper.as_ref().ok_or_else(|| {
+                RenderError::InvalidWorkflow("github_evidence_helper_missing".to_owned())
+            })?;
+            let mut evidence_steps = vec![helper.acquire_step()?];
+            evidence_steps.push(crate::steps::download_artifact_step(
+                &evidence_bundle_name(&policy.suite.id),
+                "${{ runner.temp }}/velnor/github-evidence-bundle",
+            )?);
+            evidence_steps.push(github_evidence_internal_step(
+                velnor_actions_contract::GITHUB_EVIDENCE_IMPORT_OPERATION,
+                evidence_spec,
+                None,
+            )?);
+            task_steps.splice(1..1, evidence_steps);
+        }
         let mut rendered_steps = task_steps
             .iter()
             .map(|step| job_step_to_yaml(policy, step))
@@ -130,7 +171,18 @@ fn render_workflow(
             rendered_steps.push(artifact_step(policy, artifact)?);
         }
         let job_id = format!("mise-task-{}", policy.suite.id);
-        jobs.push((job_id, job_yaml(policy, &condition, rendered_steps)?));
+        jobs.push((
+            job_id,
+            job_yaml(
+                policy,
+                &condition,
+                rendered_steps,
+                policy
+                    .evidence_fetch_spec
+                    .as_ref()
+                    .map(|_| evidence_fetch_job_id(&policy.suite.id)),
+            )?,
+        ));
     }
     let top = vec![
         ("name".to_owned(), Yaml::str(format!("Mise tasks ({slug})"))),
@@ -158,22 +210,15 @@ fn bootstrap_policy(policy: &MiseTaskSuitePolicy) -> MiseTaskBootstrapPolicy {
         rust_toolchain_sha256: policy.rust_toolchain_sha256.clone(),
         root_prefix: "mise-task-suite",
         run_step_name: mise_task_bootstrap::RUN_MISE_TASK_SUITE_NAME,
+        evidence_input: policy.evidence_fetch_spec.is_some(),
     }
-}
-
-fn job_step_to_yaml(policy: &MiseTaskSuitePolicy, step: &Step) -> Result<Yaml, RenderError> {
-    document_steps::non_internal_step_to_yaml(
-        &format!("mise-task-{}", policy.suite.id),
-        step,
-        &BTreeMap::new(),
-        &policy.runner_label,
-    )
 }
 
 fn job_yaml(
     policy: &MiseTaskSuitePolicy,
     condition: &str,
     rendered_steps: Vec<Yaml>,
+    needs: Option<String>,
 ) -> Result<Yaml, RenderError> {
     let runner = RunsOn::parse(&policy.runner_label).map_err(RenderError::Contract)?;
     let runs_on = match runner {
@@ -181,12 +226,17 @@ fn job_yaml(
         RunsOn::ScaleSet(selector) => Yaml::Flow(selector.labels().to_vec()),
     };
     steps::scan_for_private_subcommands(condition)?;
-    Ok(Yaml::Map(vec![
+    let mut entries = vec![
         (
             "name".to_owned(),
             Yaml::str(format!("Mise task {}", policy.suite.id)),
         ),
         ("runs-on".to_owned(), runs_on),
+    ];
+    if let Some(needs) = needs {
+        entries.push(("needs".to_owned(), Yaml::Seq(vec![Yaml::str(needs)])));
+    }
+    entries.extend([
         (
             "timeout-minutes".to_owned(),
             Yaml::Int(i64::from(policy.suite.timeout_minutes)),
@@ -194,7 +244,8 @@ fn job_yaml(
         ("permissions".to_owned(), contents_read_permissions()),
         ("if".to_owned(), Yaml::str(condition.to_owned())),
         ("steps".to_owned(), Yaml::Seq(rendered_steps)),
-    ]))
+    ]);
+    Ok(Yaml::Map(entries))
 }
 
 fn contents_read_permissions() -> Yaml {
@@ -272,7 +323,10 @@ fn artifact_step(
         BTreeMap::from([
             (
                 "name".to_owned(),
-                task_suite_artifact_name(&policy.suite.id, &artifact.name),
+                velnor_actions_contract::mise_task_suite_artifact_name(
+                    &policy.suite.id,
+                    &artifact.name,
+                ),
             ),
             ("path".to_owned(), path.clone()),
             ("if-no-files-found".to_owned(), "error".to_owned()),
@@ -284,14 +338,6 @@ fn artifact_step(
     )?;
     step.condition = Some(artifact.when.github_condition().to_owned());
     job_step_to_yaml(policy, &step)
-}
-
-fn task_suite_artifact_name(suite_id: &str, artifact_name: &str) -> String {
-    format!(
-        "velnor-mise-task-suite-{}-{suite_id}-artifact-{}-{artifact_name}-${{{{ github.run_id }}}}-attempt-${{{{ github.run_attempt }}}}",
-        suite_id.len(),
-        artifact_name.len(),
-    )
 }
 
 #[cfg(test)]
