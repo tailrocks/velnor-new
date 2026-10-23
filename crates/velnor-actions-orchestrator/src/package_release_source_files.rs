@@ -29,6 +29,7 @@ pub(super) struct SourceFileEntry {
 }
 
 const MAX_SOURCE_TREE_ENTRIES: usize = 100_000;
+const MAX_SOURCE_TREE_JSON_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Deserialize)]
 struct Commit {
@@ -93,10 +94,11 @@ impl<'a> SourceFiles<'a> {
     }
 
     pub(super) fn regular_files(&self) -> Result<Vec<SourceFileEntry>, OrchestratorError> {
-        let tree: Tree = self.api.get_json(
+        let tree: Tree = self.api.get_json_bounded(
             &self
                 .api
                 .route(&format!("git/trees/{}?recursive=1", self.root_tree)),
+            MAX_SOURCE_TREE_JSON_BYTES,
         )?;
         if tree.sha != self.root_tree
             || tree.truncated
