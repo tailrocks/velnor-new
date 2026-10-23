@@ -174,11 +174,12 @@ fn dispatch_mode_overrides_configured_mode() -> TestResult {
     let forced = render_staged_tree_with(&prep, Some(ExecutionMode::Both))?;
     let hosted_ci = required_file(&hosted, ".github/workflows/ci.yml")?;
     let forced_ci = required_file(&forced, ".github/workflows/ci.yml")?;
-    assert!(job_ids(hosted_ci).contains(&"rust-demo"));
-    assert!(!job_ids(hosted_ci).contains(&"rust-demo__hosted"));
-    assert!(!hosted_ci.contains("rust-demo-lint"));
-    assert!(!hosted_ci.contains("rust-demo-tests"));
-    assert!(!hosted_ci.contains("rust-demo-docs"));
+    assert!(job_ids(hosted_ci).contains(&"rust-demo"), "{hosted_ci}");
+    assert!(!hosted_ci.contains("rust-demo__hosted"), "{hosted_ci}");
+    assert!(!hosted_ci.contains("rust-demo__local"), "{hosted_ci}");
+    assert!(!hosted_ci.contains("rust-demo-lint"), "{hosted_ci}");
+    assert!(!hosted_ci.contains("rust-demo-tests"), "{hosted_ci}");
+    assert!(!hosted_ci.contains("rust-demo-docs"), "{hosted_ci}");
     assert_both_ci(forced_ci)?;
     assert!(
         forced.get(".github/actions/rust-demo/action.yml").is_none(),
@@ -222,13 +223,17 @@ fn assert_both_ci(ci: &str) -> TestResult {
     assert!(ids.contains(&"plan"), "{ids:?}");
     assert!(ids.contains(&"required"), "{ids:?}");
     assert!(!ids.contains(&"rust-demo"), "{ids:?}");
-    assert!(ids.contains(&"rust-demo__hosted"), "{ids:?}");
-    assert!(ids.contains(&"rust-demo__local"), "{ids:?}");
+    let logical = "rust-demo";
+    let hosted_id = format!("{logical}__hosted");
+    let local_id = format!("{logical}__local");
+    assert!(ids.contains(&hosted_id.as_str()), "{ids:?}");
+    assert!(ids.contains(&local_id.as_str()), "{ids:?}");
+    assert!(!ids.contains(&logical), "{ids:?}");
     assert!(!ids.contains(&"plan__hosted"), "{ids:?}");
     assert!(!ids.contains(&"required__local"), "{ids:?}");
     let required = job_body(ci, "required")?;
-    let hosted = job_body(ci, "rust-demo__hosted")?;
-    let local = job_body(ci, "rust-demo__local")?;
+    let hosted = job_body(ci, &hosted_id)?;
+    let local = job_body(ci, &local_id)?;
     for job in [hosted, local] {
         assert!(job.contains("./.github/actions/declared-task-0"), "{job}");
         assert!(job.contains("Wait for parallel checks"), "{job}");
@@ -239,8 +244,8 @@ fn assert_both_ci(ci: &str) -> TestResult {
     assert!(!local.contains(SCALE_REVERSED), "{local}");
     assert!(!local.contains("runs-on: ubuntu-26.04\n"), "{local}");
     shell_tests::assert_scale_set_shell_and_same_steps(hosted, local)?;
-    assert!(required.contains("rust-demo__hosted"), "{required}");
-    assert!(required.contains("rust-demo__local"), "{required}");
+    assert!(required.contains(&hosted_id), "{required}");
+    assert!(required.contains(&local_id), "{required}");
     assert!(
         !ids.iter().any(|id| ["-lint", "-tests", "-docs"]
             .iter()
@@ -248,13 +253,12 @@ fn assert_both_ci(ci: &str) -> TestResult {
         "{ids:?}"
     );
     let plan = job_body(ci, "plan")?;
-    assert!(plan.contains(HOSTED_RUNS), "{plan}");
-    assert!(
-        !plan
-            .lines()
-            .any(|line| line.trim_start().starts_with("runs-on: [velnor")),
-        "{plan}"
-    );
+    let plan_runners = plan
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with("runs-on:"))
+        .collect::<Vec<_>>();
+    assert_eq!(plan_runners, [HOSTED_RUNS], "plan job placement: {plan}");
     Ok(())
 }
 
@@ -366,7 +370,7 @@ fn execution_ids() -> &'static str {
 }
 
 fn profiles() -> &'static str {
-    "[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"ubuntu-26.04-scale-set\", \"velnor\"]\nplatform = \"linux/amd64\"\njob_container_image = \"ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\""
+    "[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"ubuntu-26.04-scale-set\", \"velnor\"]\nplatform = \"linux/amd64\""
 }
 
 fn marked(body: &str) -> String {

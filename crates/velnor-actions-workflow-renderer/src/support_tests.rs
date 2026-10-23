@@ -2,7 +2,9 @@
 
 use super::*;
 use velnor_actions_contract::{
-    JobTimeout, PullRequestCachePolicy, ValidatorKind, VelnorSupportWorkflow,
+    GitHubEvidenceArtifactRefV1, GitHubEvidenceFetchSpecV1, GitHubEvidenceWorkflowRefV1,
+    GitHubEvidenceWorkflowSourceRefV1, JobTimeout, PullRequestCachePolicy, Step, StepKind,
+    StepRole, ValidatorKind, VelnorSupportWorkflow, canonical_json_str,
 };
 
 /// Render context with the given validator commands.
@@ -152,4 +154,81 @@ fn consumer_ir_still_rejects_velnor_ids() {
     );
     let err = merge_consumer_verify(&mut jobs, None, &ctx).expect_err("IR alint rejected");
     assert!(err.to_string().contains("forbidden_job:alint"), "{err}");
+}
+
+fn evidence_fetch_spec() -> String {
+    let spec = GitHubEvidenceFetchSpecV1 {
+        schema: velnor_actions_contract::GITHUB_EVIDENCE_SNAPSHOT_SCHEMA,
+        collector_suite_id: "collector".to_owned(),
+        collector_workflow_path: ".github/workflows/nightly.yml".to_owned(),
+        default_branch: "main".to_owned(),
+        window_days: 7,
+        workflow_sources: vec![
+            GitHubEvidenceWorkflowRefV1 {
+                source: GitHubEvidenceWorkflowSourceRefV1::PrimaryCi,
+                path: ".github/workflows/ci.yml".to_owned(),
+                job_id: None,
+                job_name: None,
+            },
+            GitHubEvidenceWorkflowRefV1 {
+                source: GitHubEvidenceWorkflowSourceRefV1::TaskSuite {
+                    suite_id: "producer".to_owned(),
+                },
+                path: ".github/workflows/producer.yml".to_owned(),
+                job_id: Some("mise-task-producer".to_owned()),
+                job_name: Some("Mise task producer".to_owned()),
+            },
+        ],
+        artifact_sources: vec![GitHubEvidenceArtifactRefV1 {
+            suite_id: "producer".to_owned(),
+            artifact_name: "ledger".to_owned(),
+            workflow_path: ".github/workflows/producer.yml".to_owned(),
+            job_id: "mise-task-producer".to_owned(),
+            job_name: "Mise task producer".to_owned(),
+        }],
+    };
+    canonical_json_str(&spec).expect("canonical spec")
+}
+
+fn evidence_job(id: &str) -> BTreeMap<String, Job> {
+    let mut jobs = BTreeMap::new();
+    jobs.insert(
+        id.to_owned(),
+        Job {
+            services: Vec::new(),
+            display_name: "Evidence fetch".to_owned(),
+            runs_on: "ubuntu-26.04".to_owned(),
+            check_runner: None,
+            timeout_minutes: JobTimeout::VALIDATOR,
+            needs: Vec::new(),
+            condition: None,
+            permissions: None,
+            environment: None,
+            steps: vec![Step {
+                name: "Fetch evidence".to_owned(),
+                id: None,
+                role: Some(StepRole::GitHubEvidenceFetch),
+                condition: None,
+                parallel: false,
+                kind: StepKind::Internal {
+                    operation: velnor_actions_contract::GITHUB_EVIDENCE_FETCH_OPERATION.to_owned(),
+                    env: BTreeMap::from([
+                        ("GH_TOKEN".to_owned(), "${{ github.token }}".to_owned()),
+                        (
+                            velnor_actions_contract::GITHUB_EVIDENCE_SPEC_ENV.to_owned(),
+                            evidence_fetch_spec(),
+                        ),
+                    ]),
+                },
+            }],
+            cache_mode: None,
+        },
+    );
+    jobs
+}
+
+#[test]
+fn evidence_fetch_token_is_bound_to_its_exact_collector_job() {
+    assert!(tokens::check_token_hygiene(&evidence_job("github-evidence-fetch-collector")).is_ok());
+    assert!(tokens::check_token_hygiene(&evidence_job("github-evidence-fetch-unrelated")).is_err());
 }

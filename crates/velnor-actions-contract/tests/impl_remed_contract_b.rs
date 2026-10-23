@@ -85,6 +85,7 @@ fn assert_contract_modules(root: &str) {
             "finding",
             "formats",
             "freshness",
+            "github_evidence_snapshot",
             "graph",
             "homebrew_formula",
             "homebrew_merge_gate",

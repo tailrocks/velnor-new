@@ -24,6 +24,27 @@ pub fn shell_step(
     )
 }
 
+/// Construct the fixed, credential-scrubbed Jactionlint verifier step.
+///
+/// Its one shared Setup Mise binder is validated by the dedicated verifier
+/// validator; all other command bytes retain the generic argv checks.
+/// # Errors
+pub fn jactionlint_verifier_step(
+    name: &str,
+    argv: Vec<String>,
+    env: BTreeMap<String, String>,
+) -> Result<Step, RenderError> {
+    let mut step = shell_step_with_env_validation(
+        name,
+        argv,
+        env,
+        commands::validate_env,
+        crate::selected_mise_verifier::validate_argv,
+    )?;
+    step.role = Some(velnor_actions_contract::StepRole::VerifyJactionlint);
+    Ok(step)
+}
+
 /// Validated scrubbed shell step inside a generated composite action.
 /// # Errors
 pub(crate) fn composite_shell_step(

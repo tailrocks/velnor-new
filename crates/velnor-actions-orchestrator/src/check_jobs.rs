@@ -140,3 +140,7 @@ mod tests;
 #[cfg(test)]
 #[path = "check_jobs_package_tests.rs"]
 mod package_tests;
+
+#[cfg(test)]
+#[path = "check_jobs_maintenance_tests.rs"]
+mod maintenance_tests;

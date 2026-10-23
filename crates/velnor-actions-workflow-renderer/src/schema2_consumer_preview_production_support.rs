@@ -85,6 +85,11 @@ pub(super) fn source_steps(spec: &ConsumerReleaseSpec, id: &str) -> Result<Vec<Y
     let runner = spec.producer_runner.runs_on();
     crate::toolchain_env::check_toolchain_homes(&spec.producer_cargo_env)?;
     crate::toolchain_env::reject_denied_step_keys(&spec.producer_cargo_env)?;
+    let verify_rust = crate::verifier_shell::render_command(
+        velnor_actions_contract::StepRole::VerifyRustManifest,
+        crate::VERIFY_RUST_TOOLCHAIN_STEP,
+        &spec.verify_rust_argv,
+    )?;
     let mut producer_steps = vec![
         checkout,
         run_step(
@@ -95,10 +100,7 @@ pub(super) fn source_steps(spec: &ConsumerReleaseSpec, id: &str) -> Result<Vec<Y
             "Install pinned Cargo metadata toolchain",
             &join_argv_for_run(&spec.install_rust_argv)?,
         ),
-        run_step(
-            crate::VERIFY_RUST_TOOLCHAIN_STEP,
-            &join_argv_for_run(&spec.verify_rust_argv)?,
-        ),
+        verify_rust,
     ];
     for step in &spec.producer_source_prep {
         let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {

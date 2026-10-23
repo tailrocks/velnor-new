@@ -38,7 +38,7 @@ pub(crate) fn check_exceptions(ctx: &mut FreshnessContext) {
 fn known_subjects(ctx: &FreshnessContext) -> std::collections::BTreeSet<String> {
     let mut subjects = EXPECTED_TOOLS
         .iter()
-        .map(|(name, _)| (*name).to_owned())
+        .map(|(name, _, _)| (*name).to_owned())
         .chain(EXPECTED_ACTIONS.iter().map(|(name, _)| (*name).to_owned()))
         .collect::<std::collections::BTreeSet<_>>();
     subjects.extend(ctx.locked.iter().filter_map(|entry| {

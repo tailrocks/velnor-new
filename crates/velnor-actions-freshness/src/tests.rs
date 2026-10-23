@@ -85,6 +85,20 @@ fn check_source(source: &[u8]) -> (Option<String>, Vec<String>) {
     (value, failures)
 }
 
+fn check_usize_source(source: &[u8]) -> (Option<String>, Vec<String>) {
+    let (root, mut context) = match source_fixture(source) {
+        Ok(fixture) => fixture,
+        Err(error) => return (None, vec![error]),
+    };
+    let value = context.rust_usize_const("pins.rs", "PIN");
+    let failures = context.failures.clone();
+    let mut failures = failures;
+    if let Err(error) = remove_source_fixture(&root) {
+        failures.push(error);
+    }
+    (value, failures)
+}
+
 #[test]
 fn source_fixture_retries_stale_pid_scoped_paths() {
     let clock = SystemTime::now().duration_since(UNIX_EPOCH);
@@ -205,6 +219,30 @@ fn literal_authority_accepts_only_one_unconditional_public_str_constant() {
             .0
             .is_none()
     );
+}
+
+#[test]
+fn integer_literal_authority_accepts_only_public_decimal_usize_constants() {
+    assert_eq!(
+        check_usize_source(b"pub const PIN: usize = 145_688_404;"),
+        (Some("145688404".to_owned()), Vec::new())
+    );
+    for source in [
+        b"const PIN: usize = 145;".as_slice(),
+        b"pub const PIN: u64 = 145;",
+        b"pub const PIN: usize = 0x91;",
+        b"pub const PIN: usize = 145usize;",
+        b"pub const PIN: usize = 72 + 73;",
+        b"#[cfg(feature = \"alternate\")] pub const PIN: usize = 145;",
+        b"pub const PIN: usize = 145; pub const PIN: usize = 146;",
+    ] {
+        let (value, failures) = check_usize_source(source);
+        assert!(
+            value.is_none() && !failures.is_empty(),
+            "source accepted: {}",
+            String::from_utf8_lossy(source)
+        );
+    }
 }
 
 #[test]

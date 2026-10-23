@@ -5,11 +5,12 @@ use std::collections::BTreeMap;
 use velnor_actions_actionlint::actions::{
     ATTEST_BUILD_PROVENANCE_USES, DOWNLOAD_ARTIFACT_ACTION_USES, UPLOAD_ARTIFACT_ACTION_USES,
 };
-use velnor_actions_contract::config::PublishBundle;
+use velnor_actions_contract::config::{PublishBundle, PublishProvenance};
 use velnor_actions_workflow_renderer::publish_scripts as script;
 use velnor_actions_workflow_renderer::publish_spec::{PublishJobSpec, PublishRole, PublishStep};
 use velnor_actions_workflow_renderer::{action_step, checkout_step, mise_setup_step};
 
+use super::provenance_steps::{self as provenance, Subject};
 use super::{AUTHORITY_JOB, Inputs, bundle_job, plain, script_step};
 use crate::OrchestratorError;
 use crate::workflow::CHECKOUT_USES;
@@ -67,11 +68,43 @@ pub(super) fn build_job(
     Ok(job)
 }
 
+/// Provenance subject: the tarball in the bundle directory.
+fn subject(id: &str) -> Subject<'_> {
+    Subject {
+        kind: "bundle",
+        id,
+        dir: "$RUNNER_TEMP/bundle",
+        file: format!("{id}-$ver.tar.gz"),
+    }
+}
+
+fn checksum_step(id: &str) -> Result<PublishStep, OrchestratorError> {
+    Ok(plain(script_step(
+        "Verify checksum",
+        script::verify_checksum_script(id),
+        false,
+    )?))
+}
+
 /// Attest: verify the checksum, then sign provenance for the tarball.
+///
+/// `github_attestation` writes to GitHub's attestation store; the declared
+/// `sigstore_bundle` signs a bundle the publish job records.
 pub(super) fn attest_job(
     inputs: &Inputs<'_>,
     id: &str,
+    gh: &str,
 ) -> Result<PublishJobSpec, OrchestratorError> {
+    if inputs.provenance == PublishProvenance::SigstoreBundle {
+        return provenance::sign_job(
+            inputs,
+            gh,
+            &subject(id),
+            download_step(id)?,
+            checksum_step(id)?,
+            "Bundle",
+        );
+    }
     let attest = action_step(
         "Attest bundle provenance",
         ATTEST_BUILD_PROVENANCE_USES,
@@ -80,15 +113,7 @@ pub(super) fn attest_job(
             "${{ runner.temp }}/bundle/*.tar.gz".to_owned(),
         )]),
     )?;
-    let steps = vec![
-        download_step(id)?,
-        plain(script_step(
-            "Verify checksum",
-            script::verify_checksum_script(id),
-            false,
-        )?),
-        plain(attest),
-    ];
+    let steps = vec![download_step(id)?, checksum_step(id)?, plain(attest)];
     Ok(bundle_job(
         inputs,
         PublishRole::ArtifactAttest,
@@ -99,25 +124,36 @@ pub(super) fn attest_job(
 }
 
 /// Publish: re-verify, then upload immutable release assets.
+///
+/// With a Sigstore bundle the job also re-verifies the bundle and receipt
+/// and uploads them beside the tarball.
 pub(super) fn publish_job(
     inputs: &Inputs<'_>,
     id: &str,
     gh: &str,
 ) -> Result<PublishJobSpec, OrchestratorError> {
-    let steps = vec![
+    let mut steps = vec![
         plain(mise_setup_step(inputs.mise)?),
         download_step(id)?,
-        plain(script_step(
-            "Verify checksum",
-            script::verify_checksum_script(id),
-            false,
-        )?),
-        plain(script_step(
-            "Upload release assets",
-            script::upload_script(gh, id),
-            true,
-        )?),
+        checksum_step(id)?,
     ];
+    let upload = if inputs.provenance == PublishProvenance::SigstoreBundle {
+        let subject = subject(id);
+        steps.push(provenance::download_step(&subject)?);
+        steps.push(provenance::verify_step(&subject, gh)?);
+        steps.push(provenance::stage_step(&subject)?);
+        let [bundle, receipt] = subject.asset_names();
+        let names = [
+            subject.file.clone(),
+            format!("{}.sha256", subject.file),
+            bundle,
+            receipt,
+        ];
+        script::upload_files_script(gh, subject.dir, &names, "Release asset bundle")
+    } else {
+        script::upload_script(gh, id)
+    };
+    steps.push(plain(script_step("Upload release assets", upload, true)?));
     Ok(bundle_job(
         inputs,
         PublishRole::ArtifactPublish,

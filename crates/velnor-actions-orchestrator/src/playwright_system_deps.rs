@@ -29,7 +29,11 @@ const NPM_REGISTRY: &str = "https://registry.npmjs.org";
 const CORE_MAX_BYTES: u64 = 64 * 1024 * 1024;
 const CORE_SUBDIR: &str = "velnor/playwright-core";
 const EXTRACT_TIMEOUT: Duration = Duration::from_mins(5);
-const INSTALL_TIMEOUT: Duration = Duration::from_mins(20);
+/// One `install-deps` run takes well under a minute on the hosted image; a run
+/// that stalls on an apt mirror (seen on 7 of 10 concurrent legs once, every
+/// leg passing on rerun) is killed and retried once instead of holding the job.
+const INSTALL_TIMEOUT: Duration = Duration::from_mins(8);
+const INSTALL_ATTEMPTS: u32 = 2;
 const CAPTURE_BYTES: usize = 1024 * 1024;
 /// Exact Bun version, exported by the project-tool resolver step.
 pub(crate) const BUN_VERSION_ENV: &str = "VELNOR_TOOL_BUN";
@@ -77,7 +81,7 @@ impl DepsInstaller for BunInstallDeps {
             .map_err(|err| internal(&format!("playwright_system_deps_bun:{err}")))?;
         let mut args = vec![cli.as_os_str().to_owned(), OsString::from("install-deps")];
         args.extend(browsers.iter().map(OsString::from));
-        let output = PinnedToolExec::new(vec![PinnedTool::Bun], OsStr::new("bun"), args)
+        let command = PinnedToolExec::new(vec![PinnedTool::Bun], OsStr::new("bun"), args)
             .and_then(|exec| exec.command(&catalog))
             .and_then(|command| {
                 command.with_env(&[(
@@ -85,16 +89,49 @@ impl DepsInstaller for BunInstallDeps {
                     OsString::from(PLAYWRIGHT_HOST_PLATFORM),
                 )])
             })
-            .and_then(|command| command.run_bounded(CAPTURE_BYTES, INSTALL_TIMEOUT))
-            .map_err(|err| internal(&format!("playwright_system_deps_spawn:{err}")))?;
-        print!("{}", String::from_utf8_lossy(&output.stdout));
-        eprint!("{}", String::from_utf8_lossy(&output.stderr));
-        if output.success {
-            Ok(())
-        } else {
-            Err(internal("playwright_system_deps_failed"))
+            .map_err(|err| internal(&format!("playwright_system_deps_command:{err}")))?;
+        install_with_retry(INSTALL_ATTEMPTS, &mut || {
+            // Live, escaped output: an apt run that stalls shows where in the
+            // job log instead of only after the deadline kills it.
+            let deadline = CheckDeadline::after(INSTALL_TIMEOUT)?;
+            command
+                .run_until_with_progress(CAPTURE_BYTES, deadline, &mut std::io::stderr().lock())
+                .map(|output| output.success)
+        })
+    }
+}
+
+/// Run `install-deps` up to `attempts` times; `run` reports whether one run
+/// exited successfully.
+///
+/// A nonzero exit or a deadline whose process group was cleaned up is retried.
+/// A failed cleanup is terminal: the previous apt and sudo processes may still
+/// run, so a second attempt could overlap them and a later success would hide
+/// the failure.
+///
+/// # Errors
+/// The last failure, or the first cleanup failure.
+pub(crate) fn install_with_retry(
+    attempts: u32,
+    run: &mut dyn FnMut() -> Result<bool, velnor_actions_mise::MiseError>,
+) -> Result<(), OrchestratorError> {
+    let mut failure = internal("playwright_system_deps_failed");
+    for attempt in 1..=attempts {
+        failure = match run() {
+            Ok(true) => return Ok(()),
+            Ok(false) => internal("playwright_system_deps_failed"),
+            Err(err) if velnor_actions_mise::command::is_cleanup_failure(&err) => {
+                return Err(internal(&format!("playwright_system_deps_spawn:{err}")));
+            }
+            Err(err) => internal(&format!("playwright_system_deps_spawn:{err}")),
+        };
+        if attempt < attempts {
+            eprintln!(
+                "velnor: playwright install-deps attempt {attempt} failed ({failure}); retrying"
+            );
         }
     }
+    Err(failure)
 }
 
 fn io_error(path: &Path, err: &std::io::Error) -> OrchestratorError {

@@ -11,6 +11,7 @@ pub mod candidate_manifest;
 pub mod canonical;
 pub mod closure;
 pub mod config;
+mod config_reexports;
 pub mod deps_lock;
 pub mod discover;
 pub mod errors;
@@ -20,6 +21,7 @@ pub mod extensions;
 pub mod finding;
 pub mod formats;
 pub mod freshness;
+pub mod github_evidence_snapshot;
 pub mod graph;
 pub mod homebrew_formula;
 pub mod homebrew_merge_gate;
@@ -50,5 +52,16 @@ pub use config::{
     ImageConfig, ImageDockerfile, ImagePlatform, ImagePrebuilt, PrivateAssetSource,
     PrivateGitTreeSource, PrivateSourcesConfig, ReleaseRegistry, UnmanagedPolicy,
 };
+pub use config_reexports::*;
 pub use exports::*;
+pub use github_evidence_snapshot::{
+    GITHUB_EVIDENCE_SNAPSHOT_SCHEMA, GitHubEvidenceAcquisitionV1, GitHubEvidenceArtifactCaptureV1,
+    GitHubEvidenceArtifactRefV1, GitHubEvidenceDocumentKindV1, GitHubEvidenceDocumentV1,
+    GitHubEvidenceFetchSpecV1, GitHubEvidenceRepositoryV1, GitHubEvidenceRunAttemptV1,
+    GitHubEvidenceSnapshotV1, GitHubEvidenceWorkflowRefV1, GitHubEvidenceWorkflowSourceRefV1,
+    MAX_GITHUB_EVIDENCE_ARCHIVE_BYTES, MAX_GITHUB_EVIDENCE_ARCHIVES, MAX_GITHUB_EVIDENCE_ATTEMPTS,
+    MAX_GITHUB_EVIDENCE_BUNDLE_BYTES, MAX_GITHUB_EVIDENCE_DOCUMENT_BYTES,
+    MAX_GITHUB_EVIDENCE_DOCUMENTS, is_valid_github_evidence_conclusion,
+    is_valid_github_evidence_status,
+};
 pub use release_reexports::*;

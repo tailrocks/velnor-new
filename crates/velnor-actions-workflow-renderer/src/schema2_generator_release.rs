@@ -153,7 +153,11 @@ pub(super) fn lint_gate_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, Re
             "Install pinned release gate tools",
             &pins.install_gate_tools_argv,
         )?,
-        workflow_steps::command_step("Verify jactionlint", &pins.verify_lint_argv)?,
+        workflow_steps::verifier_command_step(
+            velnor_actions_contract::StepRole::VerifyJactionlint,
+            "Verify jactionlint",
+            &pins.verify_lint_argv,
+        )?,
         workflow_steps::command_step("Run jactionlint", &pins.lint_argv)?,
     ])
 }

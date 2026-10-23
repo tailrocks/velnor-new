@@ -8,6 +8,14 @@ use crate::schema2::{
     ConsumerReleaseSpec, ConsumerStableReleaseSpec, render_consumer_binary_release,
 };
 use velnor_actions_contract::package_release::PackageReleaseChannel;
+
+fn field<'a>(node: &'a crate::yaml::Yaml, name: &str) -> &'a crate::yaml::Yaml {
+    let crate::yaml::Yaml::Map(fields) = node else {
+        panic!("{name} parent is not a mapping");
+    };
+    &fields.iter().find(|(key, _)| key == name).expect(name).1
+}
+
 pub(super) fn stable() -> ConsumerReleaseSpec {
     let mut spec = fixture();
     spec.policy.channel = PackageReleaseChannel::Stable;
@@ -176,6 +184,67 @@ fn stable_shares_bounded_production_and_channel_specific_tap_destinations() {
     let mut spec = stable();
     spec.stable.as_mut().expect("stable").release_plz_argv[0] = "bash".to_owned();
     assert!(render_consumer_binary_release(&spec, &hosted_policy()).is_err());
+}
+
+#[test]
+fn stable_source_verifier_uses_the_typed_boundary_and_preserves_owned_homes() {
+    let spec = stable();
+    let mut document = crate::yaml::Yaml::Map(vec![(
+        "jobs".to_owned(),
+        crate::yaml::Yaml::Map(
+            super::super::production::jobs(&spec).expect("stable production jobs"),
+        ),
+    )]);
+    crate::project_tool_resolver::bind_workflow(&mut document).expect("project tool binding");
+    let job = field(field(&document, "jobs"), "stable-payload-000");
+    let steps = match field(job, "steps") {
+        crate::yaml::Yaml::Seq(steps) => steps,
+        other => panic!("stable steps are not a sequence: {other:?}"),
+    };
+    let actual = steps
+        .iter()
+        .find(|step| {
+            field(step, "name") == &crate::yaml::Yaml::str(crate::VERIFY_RUST_TOOLCHAIN_STEP)
+        })
+        .expect("stable Rust verifier");
+    let mut expected = crate::verifier_shell::render_command(
+        velnor_actions_contract::StepRole::VerifyRustManifest,
+        crate::VERIFY_RUST_TOOLCHAIN_STEP,
+        &spec.verify_rust_argv,
+    )
+    .expect("canonical verifier");
+    super::super::steps::with_producer_homes(&mut expected, &spec.producer_cargo_env)
+        .expect("owned Cargo and Rustup homes");
+    assert_eq!(actual, &expected);
+
+    let environment = field(actual, "env");
+    for (key, value) in &spec.producer_cargo_env {
+        assert_eq!(field(environment, key), &crate::yaml::Yaml::str(value));
+    }
+    for key in [
+        "GH_TOKEN",
+        "GITHUB_TOKEN",
+        "MISE_GITHUB_TOKEN",
+        "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+        "ACTIONS_ID_TOKEN_REQUEST_URL",
+    ] {
+        assert_eq!(field(environment, key), &crate::yaml::Yaml::str(""));
+    }
+    let install = steps
+        .iter()
+        .position(|step| {
+            field(step, "name")
+                == &crate::yaml::Yaml::str("Install pinned Cargo metadata toolchain")
+        })
+        .expect("Rust install step");
+    let verify = steps
+        .iter()
+        .position(|step| step == actual)
+        .expect("verifier index");
+    assert!(
+        install < verify,
+        "verification must follow the Rust install"
+    );
 }
 
 #[test]

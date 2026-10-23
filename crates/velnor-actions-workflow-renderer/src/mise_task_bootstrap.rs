@@ -295,6 +295,13 @@ fn run_script(policy: &MiseTaskBootstrapPolicy) -> String {
     {
         statements.extend(mbx_guard(&mbx.version));
     }
+    if policy.evidence_input {
+        statements.extend([
+            "evidence_root=\"$workspace_root/.velnor/evidence\"".to_owned(),
+            "test -d \"$evidence_root\" && test ! -L \"$evidence_root\"".to_owned(),
+            "export VELNOR_GITHUB_EVIDENCE_ROOT=\"$evidence_root\"".to_owned(),
+        ]);
+    }
     let locked = if policy.mise_lock_sha256.is_some() {
         "--locked "
     } else {

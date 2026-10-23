@@ -3,8 +3,10 @@
 
 use crate::RenderError;
 use velnor_actions_contract::workflow::step_identity::{
-    CACHE_TAR_LAUNCHER_USES, TOOL_SEED_USES, TOOLS_CACHE_PRELUDE_USES, TOOLS_CACHE_RESTORE_USES,
+    CACHE_TAR_LAUNCHER_USES, JACTIONLINT_VERIFIER_USES, RUST_VERIFIER_USES, TOOL_SEED_USES,
+    TOOLS_CACHE_PRELUDE_USES, TOOLS_CACHE_RESTORE_USES,
 };
+use velnor_actions_contract::workflow::{Step, StepKind, StepRole};
 
 /// Prefix for renderer-generated shared `ToFu` setup composites.
 pub(crate) const TOFU_PROVIDER_PRELUDE_ACTION_PREFIX: &str =
@@ -27,8 +29,10 @@ pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
         CACHE_TAR_LAUNCHER_USES
             | TOOL_SEED_USES
             | TOOLS_CACHE_RESTORE_USES
+            | JACTIONLINT_VERIFIER_USES
             | crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
-    ) || TOOLS_CACHE_PRELUDE_USES.contains(&uses)
+    ) || RUST_VERIFIER_USES.contains(&uses)
+        || TOOLS_CACHE_PRELUDE_USES.contains(&uses)
         || is_generated_provider_prelude(uses)
         || is_qualification_cache_composite(uses)
         || is_crate_obligation_action(uses)
@@ -52,6 +56,43 @@ pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
     }
     if !velnor_actions_contract::ids::is_lower_hex_len(sha, 40) {
         return Err(RenderError::BadActionRef(format!("unpinned_ref:{uses}")));
+    }
+    Ok(())
+}
+
+/// Validate the fixed role, empty input/environment envelope, and action kind
+/// for generated verifier calls.
+pub(crate) fn validate_verifier_call(
+    step: &Step,
+    uses: &str,
+    with: &std::collections::BTreeMap<String, String>,
+    env: &std::collections::BTreeMap<String, String>,
+) -> Result<(), RenderError> {
+    let expected_role = if RUST_VERIFIER_USES.contains(&uses) {
+        Some(StepRole::VerifyRustManifest)
+    } else if uses == JACTIONLINT_VERIFIER_USES {
+        Some(StepRole::VerifyJactionlint)
+    } else {
+        None
+    };
+    let verifier_role = matches!(
+        step.role,
+        Some(StepRole::VerifyRustManifest | StepRole::VerifyJactionlint)
+    );
+    if expected_role.is_none() && !verifier_role {
+        return Ok(());
+    }
+    if expected_role != step.role
+        || !with.is_empty()
+        || !env.is_empty()
+        || step.id.is_some()
+        || step.condition.is_some()
+        || step.parallel
+        || !matches!(&step.kind, StepKind::Action { .. })
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "verifier_action_identity_mismatch".to_owned(),
+        ));
     }
     Ok(())
 }

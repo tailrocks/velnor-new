@@ -132,3 +132,18 @@ fn continuously_readable_stdout_cannot_starve_deadline_or_group_cleanup() {
     std::thread::sleep(Duration::from_millis(600));
     assert!(!marker.exists(), "The descendant process group must stop.");
 }
+
+#[test]
+fn only_an_appended_cleanup_diagnostic_is_a_cleanup_failure() {
+    let spawn = |message: &str| MiseError::SpawnFailed {
+        program: "mise".to_owned(),
+        message: message.to_owned(),
+    };
+    let is = super::super::is_cleanup_failure;
+    assert!(is(&spawn(
+        "timeout_after_secs:480;cleanup_failed:reap: EPERM"
+    )));
+    assert!(!is(&spawn("timeout_after_secs:480")));
+    assert!(!is(&spawn("cancelled")));
+    assert!(!is(&MiseError::EmptyToolchain));
+}

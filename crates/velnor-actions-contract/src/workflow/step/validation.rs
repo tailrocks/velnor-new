@@ -6,7 +6,7 @@ use crate::errors::ContractError;
 use crate::workflow::step_identity::{
     MBX_WORKSPACE_CLEAN_CONDITION, NORMAL_TOOLS_CACHE_EXPORT_OPERATION,
     NORMAL_TOOLS_CACHE_IMPORT_OPERATION, NORMAL_TOOLS_CACHE_STAGE_OPERATION, StepId, StepRole,
-    TOFU_PROVIDER_ADMISSION_USES,
+    TOFU_PROVIDER_ADMISSION_USES, verifier_action_role,
 };
 use qualification_cache::qualification_cache_composite_id_matches;
 
@@ -59,6 +59,18 @@ fn validate_step_basics(step: &Step, job: &str) -> Result<(), ContractError> {
         return Err(ContractError::identity(
             "step.parallel",
             format!("parallel_step_authority:{job}"),
+        ));
+    }
+    if let StepKind::Action { uses, .. } = &step.kind
+        && let Some(expected) = verifier_action_role(uses)
+        && (step.role != Some(expected)
+            || step.id.is_some()
+            || step.condition.is_some()
+            || step.parallel)
+    {
+        return Err(ContractError::identity(
+            "step.role",
+            format!("verifier_action_role_mismatch:{job}:{expected:?}"),
         ));
     }
     Ok(())

@@ -14,11 +14,6 @@ jobs:
     steps:
       - name: Run scale-set lane
         run: echo scale-set-lane
-    container:
-      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-      volumes:
-        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
-        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   queue-monitor:
     name: Queue monitor
     runs-on: ubuntu-26.04

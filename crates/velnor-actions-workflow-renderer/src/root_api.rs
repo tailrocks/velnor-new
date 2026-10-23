@@ -2,6 +2,9 @@ pub use crate::artifact_paths::{
     CANDIDATE_OUTPUT_DIR_EXPR, CANDIDATE_STAGE_DIR_EXPR, PRESEED_OUTPUT_DIR_EXPR,
     PRESEED_STAGE_DIR_EXPR,
 };
+
+/// Renderer implementation version (typed Gate-2 renderer).
+pub const RENDERER_VERSION: u32 = 2;
 pub use crate::candidate::{
     VERIFY_MANIFEST_NAME, candidate_artifact_name, candidate_manifest_verify_script,
     candidate_manifest_verify_step, check_release_build,
@@ -75,9 +78,9 @@ pub use crate::tofu_apply::{
 };
 pub use crate::tree::{render_tree, render_tree_with_claude_mode, render_tree_with_extra};
 pub use crate::verification_jobs::{
-    INSTALL_VERIFICATION_TOOLS_NAME, MiseTaskSuitePolicy, MiseTaskSuitesRenderSpec,
-    RUN_VERIFICATION_TASK_NAME, VerificationTaskPolicy, build_verification_task_job,
-    render_mise_task_suites,
+    EvidenceHelperProvenance, INSTALL_VERIFICATION_TOOLS_NAME, MiseTaskSuitePolicy,
+    MiseTaskSuitesRenderSpec, RUN_VERIFICATION_TASK_NAME, VerificationTaskPolicy,
+    build_verification_task_job, render_mise_task_suites,
 };
 pub use crate::workflow_routing::{
     AuthorityCall, AuthorityConcurrency, AuthorityJob, AuthorityPermissions, AuthorityTrigger,

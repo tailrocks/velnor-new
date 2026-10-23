@@ -1,11 +1,12 @@
 use super::super::step::StepKind;
 use super::payload::{
     action_has_prefix_for_kind, internal_operation, valid_cache_tar_launcher,
-    valid_tools_cache_identity,
+    valid_jactionlint_verifier_payload, valid_rust_verifier_payload, valid_tools_cache_identity,
 };
 use super::{
     BUN_ASSETS_EXPORT_OPERATION, BUN_ASSETS_IMPORT_OPERATION, BUN_ASSETS_PREPARE_OPERATION,
-    BUN_REGISTRY_INSTALL_OPERATION, NORMAL_TOOLS_CACHE_EXPORT_OPERATION,
+    BUN_REGISTRY_INSTALL_OPERATION, GITHUB_EVIDENCE_FETCH_OPERATION,
+    GITHUB_EVIDENCE_IMPORT_OPERATION, NORMAL_TOOLS_CACHE_EXPORT_OPERATION,
     NORMAL_TOOLS_CACHE_IMPORT_OPERATION, NORMAL_TOOLS_CACHE_STAGE_OPERATION,
     PRIVATE_FETCH_OPERATION, PRIVATE_REVOKE_OPERATION, PRIVATE_TOKEN_MINT_ACTION_PREFIX,
     TOOLS_CACHE_RESTORE_USES,
@@ -29,6 +30,8 @@ pub enum StepRole {
     PrepareRustComponents,
     /// Verify the pinned Rust channel manifest and installed component hashes.
     VerifyRustManifest,
+    /// Verify the installed jactionlint executable against Velnor's digest pin.
+    VerifyJactionlint,
     /// Pinned Mise action that owns its built-in tools cache.
     MiseSetup,
     /// Authenticated cargo-deny analyzer bootstrap.
@@ -150,6 +153,10 @@ pub enum StepRole {
     BunAssetsHandoff,
     /// Hash-verified Playwright browser install; holds no credential.
     PlaywrightInstall,
+    /// Trusted fixed-route Actions evidence acquisition; token held only here.
+    GitHubEvidenceFetch,
+    /// Credential-free verification and import of the same-run snapshot.
+    GitHubEvidenceImport,
     /// Binding of one emitted job owner and cache layer.
     QualificationCacheBind,
     /// Restore action for one emitted job owner and cache layer.
@@ -217,6 +224,8 @@ impl StepRole {
             return matches!(kind, StepKind::Shell { .. });
         }
         match self {
+            Self::VerifyRustManifest => valid_rust_verifier_payload(kind),
+            Self::VerifyJactionlint => valid_jactionlint_verifier_payload(kind),
             Self::Checkout => super::super::step_payloads::valid_checkout_payload(kind),
             Self::ToolSeed => super::valid_tool_seed_payload(kind),
             Self::MiseSetup => super::valid_mise_setup(kind),
@@ -289,7 +298,6 @@ fn is_shell_role(role: StepRole) -> bool {
             | StepRole::CargoDeny
             | StepRole::CargoMachete
             | StepRole::Jactionlint
-            | StepRole::VerifyRustManifest
             | StepRole::Markdownlint
             | StepRole::StrictJson
             | StepRole::FrontmatterId
@@ -318,6 +326,8 @@ fn internal_operation_for_role(role: StepRole) -> Option<&'static str> {
         StepRole::NormalToolsCacheImport => Some(NORMAL_TOOLS_CACHE_IMPORT_OPERATION),
         StepRole::NormalToolsCacheExport => Some(NORMAL_TOOLS_CACHE_EXPORT_OPERATION),
         StepRole::PrivateFetch => Some(PRIVATE_FETCH_OPERATION),
+        StepRole::GitHubEvidenceFetch => Some(GITHUB_EVIDENCE_FETCH_OPERATION),
+        StepRole::GitHubEvidenceImport => Some(GITHUB_EVIDENCE_IMPORT_OPERATION),
         StepRole::PrivateRevoke => Some(PRIVATE_REVOKE_OPERATION),
         StepRole::BunRegistryInstall => Some(BUN_REGISTRY_INSTALL_OPERATION),
         StepRole::QualificationRuntimeIdentity

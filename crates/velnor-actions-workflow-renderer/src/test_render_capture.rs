@@ -14,6 +14,10 @@ pub struct RenderCapture {
 }
 
 /// Compare generated workflow documents after parsing their shared YAML form.
+///
+/// # Errors
+///
+/// Returns the parser diagnostic when either workflow document is invalid.
 pub fn workflow_yaml_is_semantically_equal(
     canonical: &str,
     selected: &str,

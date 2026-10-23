@@ -1,8 +1,31 @@
 use super::super::step::StepKind;
 use super::{
-    CACHE_TAR_LAUNCHER_SHA256_INPUT, CACHE_TAR_LAUNCHER_USES, PRESEED_HELPER_SHA256_OUTPUT_EXPR,
-    TOOLS_CACHE_IDENTITY_DIGEST_INPUT, TOOLS_CACHE_PRELUDE_USES,
+    CACHE_TAR_LAUNCHER_SHA256_INPUT, CACHE_TAR_LAUNCHER_USES, JACTIONLINT_VERIFIER_USES,
+    PRESEED_HELPER_SHA256_OUTPUT_EXPR, RUST_VERIFIER_USES, TOOLS_CACHE_IDENTITY_DIGEST_INPUT,
+    TOOLS_CACHE_PRELUDE_USES,
 };
+
+/// Preserve inline Rust verification and admit only the fixed empty-binding actions.
+pub(super) fn valid_rust_verifier_payload(kind: &StepKind) -> bool {
+    match kind {
+        StepKind::Shell { .. } => true,
+        StepKind::Action { uses, with, env } => {
+            RUST_VERIFIER_USES.contains(&uses.as_str()) && with.is_empty() && env.is_empty()
+        }
+        StepKind::TaskExecution { .. } | StepKind::Internal { .. } => false,
+    }
+}
+
+/// Preserve inline jactionlint verification and admit only its fixed empty-binding action.
+pub(super) fn valid_jactionlint_verifier_payload(kind: &StepKind) -> bool {
+    match kind {
+        StepKind::Shell { .. } => true,
+        StepKind::Action { uses, with, env } => {
+            uses == JACTIONLINT_VERIFIER_USES && with.is_empty() && env.is_empty()
+        }
+        StepKind::TaskExecution { .. } | StepKind::Internal { .. } => false,
+    }
+}
 
 /// Require the fixed generated hosted identity-and-seed composite and digest.
 pub(in crate::workflow) fn valid_tools_cache_identity(kind: &StepKind) -> bool {

@@ -15,9 +15,21 @@ pub(super) fn command_step(name: &str, argv: &[String]) -> Result<Yaml, RenderEr
     Ok(bash_step(name, &join_argv_for_run(argv)?))
 }
 
+pub(super) fn verifier_command_step(
+    role: velnor_actions_contract::StepRole,
+    name: &str,
+    argv: &[String],
+) -> Result<Yaml, RenderError> {
+    crate::verifier_shell::render_command(role, name, argv)
+}
+
 /// The file-by-file Rust toolchain check, run right after every Rust install.
 pub(super) fn verify_rust_step(pins: &super::ProductReleasePins) -> Result<Yaml, RenderError> {
-    command_step(crate::VERIFY_RUST_TOOLCHAIN_STEP, &pins.verify_rust_argv)
+    verifier_command_step(
+        velnor_actions_contract::StepRole::VerifyRustManifest,
+        crate::VERIFY_RUST_TOOLCHAIN_STEP,
+        &pins.verify_rust_argv,
+    )
 }
 
 pub(super) fn mise_install_step(name: &str, argv: &[String]) -> Result<Yaml, RenderError> {

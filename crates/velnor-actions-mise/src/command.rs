@@ -1,5 +1,5 @@
 //! Fixed subprocess wrapper: the sole `std::process::Command` constructor.
-//! Policy (`command_env.rs`) and output (`command_output.rs`) declare here.
+//! Environment policy and typed output live in their private sibling modules.
 #[path = "command_bounded_file_filter.rs"]
 mod bounded_file_filter;
 #[path = "command_cancellable.rs"]
@@ -13,6 +13,8 @@ mod env;
 mod git;
 #[path = "command_output.rs"]
 mod output;
+#[path = "command_parent_env.rs"]
+mod parent_env;
 #[path = "command_private_fetch.rs"]
 mod private_fetch;
 #[path = "command_progress.rs"]
@@ -43,7 +45,7 @@ use self::env::{pairs_of, redact_env_for_debug, strip_credentials};
 pub(crate) use self::output::redact_argv_for_debug;
 pub use self::output::{
     CancelHandle, ProcessFileOutput, ProcessOutput, SPAWN_CANCELLED_MESSAGE,
-    SPAWN_DEADLINE_MESSAGE, SPAWN_TIMEOUT_MESSAGE_PREFIX, is_cancel_or_timeout,
+    SPAWN_DEADLINE_MESSAGE, SPAWN_TIMEOUT_MESSAGE_PREFIX, is_cancel_or_timeout, is_cleanup_failure,
 };
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
@@ -51,39 +53,6 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use crate::error::MiseError;
-
-fn cleared_parent_passthrough(
-    policy: EnvPolicy,
-    parent: &[(OsString, OsString)],
-) -> Vec<(OsString, OsString)> {
-    match policy {
-        // Mise needs runner discovery plus its selected owned cache.
-        EnvPolicy::GitHubToken => {
-            let mut env: Vec<_> = parent
-                .iter()
-                .filter(|(key, _)| key == "PATH" || key == "HOME")
-                .cloned()
-                .collect();
-            let last_env = |name: &str| {
-                parent
-                    .iter()
-                    .rfind(|(key, _)| key == name)
-                    .map(|(_, value)| value.clone())
-            };
-            let data_dir = last_env("MISE_DATA_DIR")
-                .filter(|value| !value.is_empty())
-                .or_else(|| {
-                    last_env("XDG_DATA_HOME")
-                        .filter(|value| !value.is_empty())
-                        .map(|value| PathBuf::from(value).join("mise").into_os_string())
-                });
-            env.extend(data_dir.map(|value| (OsString::from("MISE_DATA_DIR"), value)));
-            env
-        }
-        policy if policy.allows_proxy_passthrough() => proxy_passthrough(parent),
-        _ => Vec::new(),
-    }
-}
 
 /// Flags disable project config/env/hooks; exact specs carry project (decision 5) or catalog pins.
 pub const MISE_GLOBAL_FLAGS: [&str; 3] = ["--no-config", "--no-env", "--no-hooks"];
@@ -354,7 +323,7 @@ impl IsolatedCommand {
         } else {
             command.env_clear();
             let parent: Vec<(OsString, OsString)> = std::env::vars_os().collect();
-            command.envs(cleared_parent_passthrough(self.policy, &parent));
+            command.envs(parent_env::cleared_parent_passthrough(self.policy, &parent));
         }
         for (key, value) in self.full_env() {
             command.env(key, value);

@@ -257,6 +257,10 @@ pub(crate) fn passing(prefix: &str) -> Result<Fixture, Box<dyn Error>> {
     for (rel, body) in [
         ("crates/velnor-actions-mise/src/catalog.rs", FIXTURE_CATALOG),
         (
+            "crates/velnor-actions-contract/src/config/jactionlint_verifier.rs",
+            include_str!("p12_jactionlint_verifier.txt"),
+        ),
+        (
             "crates/velnor-actions-actionlint/src/actions.rs",
             include_str!("p12_actions.txt"),
         ),

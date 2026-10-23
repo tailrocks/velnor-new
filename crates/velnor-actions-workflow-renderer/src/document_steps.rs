@@ -58,6 +58,9 @@ fn internal_env(
             (INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned())),
         ]));
     }
+    if let Some(env) = crate::document_evidence::internal_env(op, step_env)? {
+        return Ok(env);
+    }
     if op == velnor_actions_contract::PRIVATE_FETCH_OPERATION
         || op == velnor_actions_contract::PRIVATE_REVOKE_OPERATION
         || op == velnor_actions_contract::GRADLE_RUN_OPERATION
@@ -154,6 +157,11 @@ fn shell_step_to_yaml(
     job_env: &BTreeMap<String, String>,
     composite: bool,
 ) -> Result<Yaml, RenderError> {
+    if let Some(verifier) =
+        crate::verifier_shell::render_typed_step(step, run, env, job_env, composite)?
+    {
+        return Ok(verifier);
+    }
     crate::action_mbx_shell::validate_step_argv(run, step.role, env)?;
     if composite {
         commands::validate_composite_env(env)?;
@@ -289,7 +297,10 @@ fn internal_step_to_yaml(
         ));
     };
     let (op, target) = steps::split_internal_operation(operation)?;
-    if op == steps::FETCH_OPERATION && !step_context.actions_read {
+    if (op == steps::FETCH_OPERATION
+        || op == velnor_actions_contract::GITHUB_EVIDENCE_FETCH_OPERATION)
+        && !step_context.actions_read
+    {
         return Err(RenderError::InvalidWorkflow(
             "report_fetch_requires_actions_read".to_owned(),
         ));

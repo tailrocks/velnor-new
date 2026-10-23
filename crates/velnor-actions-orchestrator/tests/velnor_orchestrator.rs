@@ -4,6 +4,7 @@ mod impl_bench_p13;
 mod impl_bun;
 mod impl_bun_golden;
 mod impl_bun_playwright;
+mod impl_bun_publish_provenance;
 mod impl_bun_report;
 mod impl_bun_select;
 mod impl_bun_suites;
@@ -84,6 +85,8 @@ mod impl_orch_gate;
 mod impl_orch_gen;
 mod impl_orch_gen2;
 mod impl_orch_gen_lfs;
+#[path = "impl_orch_github_evidence_ingress.rs"]
+mod impl_orch_github_evidence_ingress;
 mod impl_orch_gradle;
 mod impl_orch_install_sets;
 mod impl_orch_intake;

@@ -210,6 +210,54 @@ fn qualification_and_monitoring_declare_shell_only_for_typed_scale_set() {
 }
 
 #[test]
+fn mbx_qualification_uses_the_typed_rust_verifier_in_both_jobs() {
+    let request = request();
+    let pins = request.mbx_qualification.as_ref().expect("MBX pins");
+    let expected = crate::verifier_shell::render_command(
+        velnor_actions_contract::StepRole::VerifyRustManifest,
+        crate::VERIFY_RUST_TOOLCHAIN_STEP,
+        &pins.verify_rust_argv,
+    )
+    .expect("canonical verifier");
+    let document = qualification(&request).expect("qualification workflow");
+    let jobs = map_field(&document, "jobs");
+
+    for job_id in ["mbx-cache-write-hosted", "mbx-cache-read-hosted"] {
+        let steps = match map_field(map_field(jobs, job_id), "steps") {
+            Yaml::Seq(steps) => steps,
+            other => panic!("qualification steps are not a sequence: {other:?}"),
+        };
+        let verifier = steps
+            .iter()
+            .find(|step| map_field(step, "name") == &Yaml::str(crate::VERIFY_RUST_TOOLCHAIN_STEP))
+            .expect("typed Rust verifier step");
+        assert_eq!(verifier, &expected, "{job_id}");
+        let install = step_index(steps, "Install pinned Rust toolchain");
+        let verify = step_index(steps, crate::VERIFY_RUST_TOOLCHAIN_STEP);
+        let expose = step_index(steps, "Put the verified Rust toolchain on PATH");
+        let mbx = step_index(steps, "Restore MBX objects");
+        assert!(
+            install < verify && verify < expose && expose < mbx,
+            "{job_id}"
+        );
+    }
+}
+
+fn map_field<'a>(node: &'a Yaml, key: &str) -> &'a Yaml {
+    let Yaml::Map(fields) = node else {
+        panic!("{key} parent is not a mapping");
+    };
+    &fields.iter().find(|(name, _)| name == key).expect(key).1
+}
+
+fn step_index(steps: &[Yaml], name: &str) -> usize {
+    steps
+        .iter()
+        .position(|step| map_field(step, "name") == &Yaml::str(name))
+        .unwrap_or_else(|| panic!("missing step {name:?}"))
+}
+
+#[test]
 fn candidate_mbx_roundtrip_defers_gc_and_cleans_after_each_last_consumer() {
     let workflow = render_schema2_workflows(&request())
         .expect("schema2 renders")

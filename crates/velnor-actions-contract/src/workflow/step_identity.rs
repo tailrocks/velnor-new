@@ -15,6 +15,13 @@ pub const TOFU_PROVIDER_ADMISSION_USES: &str = "./.github/actions/tofu-provider-
 pub const TOOL_SEED_USES: &str = "./.github/actions/velnor-tool-seed";
 /// Fixed local action path for the exact V2 tools-cache restore wrapper.
 pub const TOOLS_CACHE_RESTORE_USES: &str = "./.github/actions/velnor-tools-cache-restore";
+/// Fixed generated actions for the restored and installed Rust verifiers.
+pub const RUST_VERIFIER_USES: [&str; 2] = [
+    "./.github/actions/velnor-verify-restored-rust",
+    "./.github/actions/velnor-verify-rust-manifest",
+];
+/// Fixed generated action for the pinned jactionlint verifier.
+pub const JACTIONLINT_VERIFIER_USES: &str = "./.github/actions/velnor-verify-jactionlint";
 /// Fixed outer step ID exposing the restore wrapper's exact action outputs.
 pub const TOOLS_CACHE_RESTORE_ID: &str = "tools-cache-restore";
 /// Operation that computes the normal tools-cache payload staging path.
@@ -57,15 +64,28 @@ pub const MBX_WORKSPACE_CLEAN_CONDITION: &str = "always() && steps.mbx-ready.out
 
 pub use super::step_private::{
     BUN_ASSETS_EXPORT_OPERATION, BUN_ASSETS_IMPORT_OPERATION, BUN_ASSETS_PREPARE_OPERATION,
-    BUN_REGISTRY_INSTALL_OPERATION, PRIVATE_FETCH_OPERATION, PRIVATE_FETCH_TOKEN_ENV,
-    PRIVATE_NPM_READ_EXPR, PRIVATE_NPM_READ_TOKEN_ENV, PRIVATE_REVOKE_OPERATION,
-    PRIVATE_TOKEN_MINT_ACTION_PREFIX, PRIVATE_TOKEN_OUTPUT_EXPR,
+    BUN_REGISTRY_INSTALL_OPERATION, GITHUB_EVIDENCE_FETCH_OPERATION,
+    GITHUB_EVIDENCE_IMPORT_OPERATION, GITHUB_EVIDENCE_SPEC_ENV, GITHUB_EVIDENCE_TOKEN_ENV,
+    PRIVATE_FETCH_OPERATION, PRIVATE_FETCH_TOKEN_ENV, PRIVATE_NPM_READ_EXPR,
+    PRIVATE_NPM_READ_TOKEN_ENV, PRIVATE_REVOKE_OPERATION, PRIVATE_TOKEN_MINT_ACTION_PREFIX,
+    PRIVATE_TOKEN_OUTPUT_EXPR,
 };
 
 pub use super::step_id::{
     QualificationCacheCompositeId, QualificationCacheCompositePhase, QualificationCacheStepId,
     QualificationCacheStepStage, StepId,
 };
+
+/// Return the semantic role required by an exact generated verifier action.
+pub(super) fn verifier_action_role(uses: &str) -> Option<StepRole> {
+    if RUST_VERIFIER_USES.contains(&uses) {
+        Some(StepRole::VerifyRustManifest)
+    } else if uses == JACTIONLINT_VERIFIER_USES {
+        Some(StepRole::VerifyJactionlint)
+    } else {
+        None
+    }
+}
 
 mod role;
 pub use role::StepRole;

@@ -8,6 +8,8 @@ mod workflow_build;
 #[path = "workflow_context.rs"]
 mod workflow_context;
 pub(super) use workflow_build::{WorkflowBuildInput, build_workflow_for_consumer_release};
+#[path = "verifier_actions.rs"]
+pub(crate) mod verifier_actions;
 #[path = "workflow_dispatch.rs"]
 mod workflow_dispatch;
 

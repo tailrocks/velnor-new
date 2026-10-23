@@ -11,6 +11,8 @@ use std::process::Command;
 
 use velnor_actions_mise::RUST_VERSION;
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
+use velnor_actions_workflow_renderer::RenderedTree;
+use velnor_actions_workflow_renderer::{VERIFY_PATH, toolchain_env::credential_scrub};
 
 use crate::impl_common::{TestResult, make_repo};
 
@@ -67,14 +69,92 @@ fn unquote(raw: &str) -> String {
     out
 }
 
-/// Every resolver script and every identity `d` input across the tree.
-fn generated() -> Result<(Vec<String>, Vec<String>), Box<dyn std::error::Error>> {
+fn quoted_value(line: &str, prefix: &str) -> Option<String> {
+    let raw = line.strip_prefix(prefix)?;
+    let bytes = raw.as_bytes();
+    let mut escaped = false;
+    for (index, byte) in bytes.iter().enumerate() {
+        if *byte == b'"' && !escaped {
+            return Some(unquote(&raw[..index]));
+        }
+        if *byte == b'\\' {
+            escaped = !escaped;
+        } else {
+            escaped = false;
+        }
+    }
+    None
+}
+
+pub(super) struct ResolverStep {
+    pub(super) shell: String,
+    pub(super) run: String,
+    pub(super) env: BTreeMap<String, String>,
+}
+
+pub(super) fn resolver_steps(yaml: &str) -> Vec<ResolverStep> {
+    let lines = yaml.lines().collect::<Vec<_>>();
+    let mut steps = Vec::new();
+    for (index, line) in lines.iter().enumerate() {
+        let trimmed = line.trim_start();
+        if trimmed != "- name: Resolve project tool versions" {
+            continue;
+        }
+        let indent = line.len() - trimmed.len();
+        let mut shell = None;
+        let mut run = None;
+        let mut env = BTreeMap::new();
+        let mut in_env = false;
+        for next in &lines[index + 1..] {
+            let content = next.trim_start();
+            let next_indent = next.len() - content.len();
+            if !content.is_empty() && next_indent <= indent {
+                break;
+            }
+            if content.is_empty() {
+                continue;
+            }
+            if next_indent == indent + 2 {
+                in_env = content == "env:";
+                if let Some(value) = content.strip_prefix("shell: ") {
+                    shell = Some(yaml_scalar(value));
+                } else if let Some(value) = quoted_value(content, "run: \"") {
+                    run = Some(value);
+                }
+            } else if in_env
+                && next_indent == indent + 4
+                && let Some((key, value)) = content.split_once(": ")
+            {
+                env.insert(key.to_owned(), yaml_scalar(value));
+            }
+        }
+        if let (Some(shell), Some(run)) = (shell, run) {
+            steps.push(ResolverStep { shell, run, env });
+        }
+    }
+    steps
+}
+
+fn yaml_scalar(raw: &str) -> String {
+    let raw = raw.trim();
+    if let Some(value) = quoted_value(raw, "\"") {
+        return value;
+    }
+    raw.split(" # ").next().unwrap_or(raw).to_owned()
+}
+
+pub(super) fn rendered_tree() -> Result<RenderedTree, Box<dyn std::error::Error>> {
     let repo = make_repo(CONFIG)?;
     fs::write(
         repo.path().join("mise.toml"),
         mise_toml("0.9.148", "20.1.0", "a"),
     )?;
-    let tree = render_staged_tree(&prepare(repo.path())?)?;
+    Ok(render_staged_tree(&prepare(repo.path())?)?)
+}
+
+/// Every resolver script and every identity `d` input across the tree.
+fn generated() -> Result<(Vec<String>, Vec<String>), Box<dyn std::error::Error>> {
+    let tree = rendered_tree()?;
     let mut scripts = Vec::new();
     let mut inputs = Vec::new();
     for file in &tree.files {
@@ -86,14 +166,8 @@ fn generated() -> Result<(Vec<String>, Vec<String>), Box<dyn std::error::Error>>
             {
                 inputs.push(value.to_owned());
             }
-            if let Some(raw) = line.strip_prefix("run: \"set -eu\\n: \\\"${GITHUB_ENV")
-                && line.contains("velnor_tool VELNOR_TOOL_")
-            {
-                let raw = raw.split("\" # zizmor").next().unwrap_or(raw);
-                let raw = raw.strip_suffix('"').unwrap_or(raw);
-                scripts.push(format!("set -eu\n: \"${{GITHUB_ENV{}", unquote(raw)));
-            }
         }
+        scripts.extend(resolver_steps(&file.bytes).into_iter().map(|step| step.run));
     }
     scripts.sort();
     scripts.dedup();
@@ -115,18 +189,32 @@ fn identities(
         fs::write(path, text)?;
     }
     fs::create_dir_all(&runner_temp)?;
+    let mise_data = dir.path().join("mise-data");
+    crate::impl_common::write_fixture_mise(&mise_data)?;
     let github_env = dir.path().join("github-env");
     let mut env = BTreeMap::new();
     for script in &generated.0 {
         fs::write(&github_env, "")?;
-        let output = Command::new("bash")
-            .args(["--noprofile", "--norc", "-eo", "pipefail", "-c", script])
+        let output = Command::new("/bin/bash")
+            .args([
+                "--noprofile",
+                "--norc",
+                "-p",
+                "-e",
+                "-o",
+                "pipefail",
+                "-c",
+                script,
+            ])
             .current_dir(&workspace)
+            .env("PATH", VERIFY_PATH)
             .env("GITHUB_ENV", &github_env)
             .env("RUNNER_TEMP", &runner_temp)
+            .env("MISE_DATA_DIR", &mise_data)
             .env("RUNNER_OS", "Linux")
             .env("RUNNER_ARCH", "X64")
             .env("CI", "true")
+            .envs(credential_scrub())
             .output()
             .map_err(|err| format!("the identity tests need bash and mise on PATH: {err}"))?;
         assert!(output.status.success(), "{output:?}\n{script}");
@@ -150,6 +238,9 @@ fn identities(
 }
 
 type Generated = (Vec<String>, Vec<String>);
+
+#[path = "impl_tools_identity_security.rs"]
+mod security;
 
 fn checkout(toml: &str, lock: Option<&str>, config: Option<&str>) -> Vec<(&'static str, String)> {
     let mut files = vec![("mise.toml", toml.to_owned())];

@@ -69,7 +69,8 @@ fn project_declared_versions_never_appear_in_generated_text() -> TestResult {
     assert!(ci.contains("velnor_tool VELNOR_TOOL_NEXTEST '"), "{ci}");
     // The resolver reads stored values only: no project config is loaded.
     assert!(
-        ci.contains(r#"velnor_mise() { mise --no-config --no-env --no-hooks \"$@\"; }"#)
+        ci.contains(r#"velnor_mise() { \"$mise_bin\" --no-config --no-env --no-hooks \"$@\"; }"#)
+            && ci.contains("velnor_bind_selected_mise")
             && ci.contains("velnor_mise config get -f"),
         "{ci}"
     );

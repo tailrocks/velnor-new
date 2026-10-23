@@ -1,5 +1,6 @@
 use super::named;
 use crate::config::{
+    GitHubEvidenceArtifactSource, GitHubEvidenceSnapshotInput, GitHubEvidenceWorkflowSource,
     MiseTaskSource, MiseTaskSuite, MiseTaskSuiteEvent, RustSuiteArtifact, RustSuiteArtifactWhen,
     VerificationRunner, WorkflowConfig,
 };
@@ -15,6 +16,7 @@ fn suite(id: &str, events: Vec<MiseTaskSuiteEvent>) -> MiseTaskSuite {
         events,
         schedule: Vec::new(),
         artifacts: Vec::new(),
+        evidence_snapshot: None,
     }
 }
 
@@ -145,4 +147,77 @@ fn task_suite_policy_is_closed_to_credentials_and_unknown_fields() {
     let mut value = serde_json::to_value(config).expect("serialize config");
     value["task_suites"][0]["credentials"] = serde_json::json!("github-actions-read");
     assert!(serde_json::from_value::<WorkflowConfig>(value).is_err());
+}
+
+#[test]
+fn snapshot_contract_requires_schedule_collector_and_exact_push_producer_artifacts() {
+    let mut config = named("CI");
+    let mut collector = suite("nightly", vec![MiseTaskSuiteEvent::Schedule]);
+    collector.schedule = vec!["0 3 * * *".to_owned()];
+    collector.evidence_snapshot = Some(GitHubEvidenceSnapshotInput {
+        window_days: 31,
+        workflow_sources: vec![
+            GitHubEvidenceWorkflowSource::PrimaryCi,
+            GitHubEvidenceWorkflowSource::TaskSuite {
+                suite_id: "push-head".to_owned(),
+            },
+        ],
+        artifact_sources: vec![GitHubEvidenceArtifactSource {
+            suite_id: "push-head".to_owned(),
+            artifact_name: "event".to_owned(),
+        }],
+    });
+    let mut producer = suite("push-head", vec![MiseTaskSuiteEvent::Push]);
+    producer.artifacts = vec![RustSuiteArtifact {
+        name: "event".to_owned(),
+        paths: vec!["target/evidence/event.json".to_owned()],
+        when: RustSuiteArtifactWhen::Always,
+        retention_days: 45,
+    }];
+    config.task_suites = vec![collector.clone(), producer.clone()];
+    assert!(config.validate("config.toml").is_ok());
+
+    let mut bad = config.clone();
+    bad.task_suites[0]
+        .evidence_snapshot
+        .as_mut()
+        .expect("test config has a snapshot declaration")
+        .workflow_sources[1] = GitHubEvidenceWorkflowSource::TaskSuite {
+        suite_id: "missing".to_owned(),
+    };
+    assert!(bad.validate("config.toml").is_err());
+
+    let mut bad = config.clone();
+    bad.task_suites[0]
+        .evidence_snapshot
+        .as_mut()
+        .expect("test config has a snapshot declaration")
+        .artifact_sources[0]
+        .artifact_name = "undeclared".to_owned();
+    assert!(bad.validate("config.toml").is_err());
+
+    let mut bad = config;
+    bad.task_suites[0].events.push(MiseTaskSuiteEvent::Push);
+    assert!(bad.validate("config.toml").is_err());
+}
+
+#[test]
+fn snapshot_contract_rejects_unbounded_unsorted_and_open_fields() {
+    let mut declaration = GitHubEvidenceSnapshotInput {
+        window_days: 32,
+        workflow_sources: vec![GitHubEvidenceWorkflowSource::PrimaryCi],
+        artifact_sources: vec![GitHubEvidenceArtifactSource {
+            suite_id: "producer".to_owned(),
+            artifact_name: "event".to_owned(),
+        }],
+    };
+    assert!(declaration.validate("config.toml", "snapshot").is_err());
+    declaration.window_days = 7;
+    declaration
+        .workflow_sources
+        .push(GitHubEvidenceWorkflowSource::PrimaryCi);
+    assert!(declaration.validate("config.toml", "snapshot").is_err());
+    let mut value = serde_json::to_value(declaration).expect("serialize snapshot declaration");
+    value["raw_url"] = serde_json::json!("https://example.invalid");
+    assert!(serde_json::from_value::<GitHubEvidenceSnapshotInput>(value).is_err());
 }

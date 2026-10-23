@@ -15,6 +15,7 @@ struct Fixture {
     init_sha: String,
     hook_sha: String,
     wrapper_sha: String,
+    rust_version: String,
 }
 
 struct Scenario {
@@ -67,6 +68,14 @@ fn prepare() -> Result<Fixture, Box<dyn std::error::Error>> {
         .and_then(std::path::Path::parent)
         .ok_or("The workspace root is missing.")?
         .to_path_buf();
+    let mise: toml::Value = toml::from_str(&std::fs::read_to_string(workspace.join("mise.toml"))?)?;
+    let rust_version = mise
+        .get("tools")
+        .and_then(|tools| tools.get("rust"))
+        .and_then(|rust| rust.get("version"))
+        .and_then(toml::Value::as_str)
+        .ok_or("The workspace Rust fixture pin is missing.")?
+        .to_owned();
     let temporary = tempfile::tempdir()?;
     let bin = temporary.path().join("bin");
     let target = temporary.path().join("target");
@@ -96,6 +105,7 @@ fn prepare() -> Result<Fixture, Box<dyn std::error::Error>> {
         init_sha,
         hook_sha,
         wrapper_sha,
+        rust_version,
     })
 }
 
@@ -142,6 +152,7 @@ fn invoke(fixture: &Fixture, scenario: &Scenario) -> std::io::Result<std::proces
         .env("MISE_CALLS", mise_path(fixture, scenario))
         .env("TRACE", trace_path(fixture, scenario))
         .env("EXPECTED_PROBE_SHA", &fixture.probe_sha)
+        .env("MOCK_RUST_VERSION", &fixture.rust_version)
         .env("EXPECTED_INIT_SHA", &fixture.init_sha)
         .env("ACTUAL_INIT_SHA", scenario.image_sha)
         .env("ACTUAL_INIT_MODE", scenario.image_mode)
@@ -185,7 +196,10 @@ fn assert_rejected_before_docker(fixture: &Fixture, scenario: &Scenario) -> Test
 
 fn assert_mise_invoked(fixture: &Fixture, scenario: &Scenario) -> TestResult {
     let calls = std::fs::read_to_string(mise_path(fixture, scenario))?;
-    let expected = "--no-config --no-env --no-hooks exec rust@1.99.1 -- cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --package velnor-resource-probe --bin velnor-storage-init --bin velnor-job-start-hook --release --target x86_64-unknown-linux-musl\n";
+    let expected = format!(
+        "--no-config --no-env --no-hooks exec rust@{} -- cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --package velnor-resource-probe --bin velnor-storage-init --bin velnor-job-start-hook --release --target x86_64-unknown-linux-musl\n",
+        fixture.rust_version
+    );
     assert_eq!(calls, expected);
     let trace = std::fs::read_to_string(trace_path(fixture, scenario))?;
     assert_eq!(trace.lines().next(), Some("mise"));

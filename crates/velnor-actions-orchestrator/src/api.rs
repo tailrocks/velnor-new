@@ -1,5 +1,10 @@
 //! Public orchestrator API re-exports.
 
+#[path = "github_evidence.rs"]
+mod github_evidence;
+#[path = "github_evidence_http.rs"]
+pub(crate) mod github_evidence_http;
+
 pub use super::qualification_candidate::qualify_tools;
 
 pub use super::bun_assets_handoff::{
@@ -178,3 +183,8 @@ pub use super::package_release_publish::{
     write_stable_tag_origin_from_env,
 };
 pub use super::package_release_signer::{SIGN_PACKAGE_RELEASE_OP, sign_package_release_from_env};
+
+pub use github_evidence::{
+    GITHUB_EVIDENCE_FETCH_OP, GITHUB_EVIDENCE_IMPORT_OP, run_github_evidence_fetch,
+    run_github_evidence_import,
+};

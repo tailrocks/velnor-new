@@ -1,7 +1,7 @@
 pub(super) const MISE_MOCK: &str = r#"#!/bin/bash
 printf '%s\n' "$*" >> "$MISE_CALLS"
 printf 'mise\n' >> "$TRACE"
-[[ "$*" == '--no-config --no-env --no-hooks exec rust@1.99.1 -- cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --package velnor-resource-probe --bin velnor-storage-init --bin velnor-job-start-hook --release --target x86_64-unknown-linux-musl' ]] || exit 97
+[[ "$*" == "--no-config --no-env --no-hooks exec rust@${MOCK_RUST_VERSION} -- cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --package velnor-resource-probe --bin velnor-storage-init --bin velnor-job-start-hook --release --target x86_64-unknown-linux-musl" ]] || exit 97
 mkdir -p "$(dirname "$MOCK_STORAGE_INIT")"
 rm -f "$MOCK_STORAGE_INIT"
 [[ "$MOCK_UTILITY_KIND" == missing ]] || printf utility > "$MOCK_STORAGE_INIT"

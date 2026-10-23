@@ -16,12 +16,14 @@ mod distribution;
 mod dockerfile;
 mod execution;
 mod github;
+mod github_evidence_snapshot;
 pub mod gradle;
 mod host_container;
 mod image_grammar;
 mod image_jobs;
 mod image_task;
 mod images;
+pub mod jactionlint_verifier;
 mod job_authority;
 mod mise;
 mod mise_task_suites;
@@ -46,6 +48,8 @@ mod rust_suites;
 mod rust_suites_validate;
 mod rust_toolchain_source;
 mod schema;
+/// Shared, fixed shell binding for the Setup Mise data directory and binary.
+pub mod selected_mise;
 mod stacks;
 mod task_source;
 mod tofu;
@@ -99,6 +103,10 @@ pub use execution::{
     ValidatedImageReference,
 };
 pub use github::{GithubConfig, UnmanagedPolicy};
+pub use github_evidence_snapshot::{
+    GitHubEvidenceArtifactSource, GitHubEvidenceSnapshotInput, GitHubEvidenceWorkflowSource,
+    MAX_GITHUB_EVIDENCE_ARTIFACTS, MAX_GITHUB_EVIDENCE_WINDOW_DAYS, MAX_GITHUB_EVIDENCE_WORKFLOWS,
+};
 pub use host_container::{
     ContainerPlatform, DaemonIdentityPolicy, HostContainerProfile, HostDockerCli, HostDockerDaemon,
     HostOrbStackSdk,
@@ -114,15 +122,18 @@ pub use mise::{
     CheckEvidence, CheckExecutor, CheckPlatform, CheckRunner, CheckSystemTool, CheckSystemToolKind,
     MiseCheck, is_valid_check_system_build, is_valid_check_system_version, is_valid_mise_task_name,
 };
-pub use mise_task_suites::{MiseTaskSuite, MiseTaskSuiteEvent};
+pub use mise_task_suites::{
+    MiseTaskSuite, MiseTaskSuiteEvent, mise_task_suite_artifact_name,
+    mise_task_suite_artifact_name_for_attempt,
+};
 pub use private_sources::{
     DEPS_LOCK_PATH, PrivateAssetSource, PrivateGitTreeSource, PrivateSourcesConfig,
     is_valid_asset_name, is_valid_extract_to, is_valid_github_owner, is_valid_github_repo_name,
     is_valid_source_id, is_valid_source_tag, split_repository,
 };
 pub use publish::{
-    PublishBundle, PublishConfig, RELEASE_TAG_GLOB, ReleaseTag, VersionSource, is_artifact_id,
-    is_strict_semver,
+    PublishBundle, PublishConfig, PublishProvenance, RELEASE_TAG_GLOB, ReleaseTag, VersionSource,
+    is_artifact_id, is_strict_semver,
 };
 pub use publish_maven::{
     MAVEN_BUNDLE_OUTPUT_DIR, MAVEN_BUNDLE_TASK, MAVEN_VERSION_FILE, PublishMaven,

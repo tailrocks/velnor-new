@@ -9,6 +9,9 @@ use super::{
 };
 use crate::workflow::{QualificationCacheLayer, Step, StepKind};
 
+#[path = "step_identity_verifier_tests.rs"]
+mod verifier_tests;
+
 fn restore_step(id: Option<StepId>, role: Option<StepRole>, uses: &str) -> Step {
     Step {
         name: "Restore tools cache".to_owned(),

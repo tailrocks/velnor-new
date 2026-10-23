@@ -90,7 +90,9 @@ pub(crate) fn composite_yaml_with_inputs_and_outputs(
             ("steps".to_owned(), Yaml::Seq(steps)),
         ]),
     ));
-    Ok(Yaml::Map(fields))
+    let mut document = Yaml::Map(fields);
+    crate::project_tool_resolver::bind_workflow(&mut document)?;
+    Ok(document)
 }
 
 /// Composite `run` steps require an explicit shell. Workflow jobs do not.
@@ -102,7 +104,8 @@ pub(crate) fn push_composite_shell(entries: &mut Vec<(String, Yaml)>, composite:
 
 #[cfg(test)]
 mod tests {
-    use super::shared_call;
+    use super::{composite_yaml_with_inputs, shared_call};
+    use crate::yaml::Yaml;
 
     #[test]
     fn shared_calls_use_only_canonical_repository_local_actions() {
@@ -123,5 +126,39 @@ mod tests {
         ] {
             assert!(shared_call(uses).is_err(), "accepted {uses}");
         }
+    }
+
+    #[test]
+    fn composites_without_project_references_keep_their_original_document() {
+        let steps = vec![Yaml::Map(vec![
+            ("name".to_owned(), Yaml::str("Plain step")),
+            ("run".to_owned(), Yaml::str("printf ok")),
+            ("shell".to_owned(), Yaml::str("bash")),
+        ])];
+        let inputs = vec![(
+            "mode".to_owned(),
+            Yaml::Map(vec![("required".to_owned(), Yaml::Bool(true))]),
+        )];
+        let rendered = composite_yaml_with_inputs("plain", inputs.clone(), steps.clone())
+            .expect("reference-free composite");
+        assert_eq!(
+            rendered,
+            Yaml::Map(vec![
+                ("name".to_owned(), Yaml::str("plain")),
+                (
+                    "description".to_owned(),
+                    Yaml::str("Shared steps for plain"),
+                ),
+                ("inputs".to_owned(), Yaml::Map(inputs)),
+                (
+                    "runs".to_owned(),
+                    Yaml::Map(vec![
+                        ("using".to_owned(), Yaml::str("composite")),
+                        ("steps".to_owned(), Yaml::Seq(steps)),
+                    ]),
+                ),
+            ]),
+            "composites without project references must remain byte-stable"
+        );
     }
 }

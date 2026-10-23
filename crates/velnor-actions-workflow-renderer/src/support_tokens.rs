@@ -69,6 +69,7 @@ fn is_ambient_auth_role(role: Option<StepRole>) -> bool {
 /// token fails on the print even when it also lacks the scrub overlay.
 fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
     private::check_private_binding(id, step)?;
+    check_github_evidence_binding(id, step)?;
     if step.role == Some(StepRole::PrivateTokenMint) {
         // The mint step names the App secret by design; its exact shape was
         // validated above and it carries no other input or env.
@@ -76,7 +77,7 @@ fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
     }
     match &step.kind {
         StepKind::Shell { run, env } => {
-            check_env_tokens(id, env)?;
+            check_env_tokens(id, env, false)?;
             for arg in strip_unset_argv(run) {
                 if names_token(&strip_unset_prelude(arg)) {
                     return Err(RenderError::InvalidWorkflow(format!(
@@ -88,7 +89,7 @@ fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
             check_scrub_coverage(id, &step.name, step.role, env)?;
         }
         StepKind::TaskExecution { argv, env, .. } => {
-            check_env_tokens(id, env)?;
+            check_env_tokens(id, env, false)?;
             for arg in argv {
                 if names_token(arg) {
                     return Err(RenderError::InvalidWorkflow(format!(
@@ -121,8 +122,10 @@ fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
             }
         }
         StepKind::Internal { env, .. } => {
-            if private::is_private_binding_role(step.role) {
-                check_env_tokens(id, env)?;
+            if private::is_private_binding_role(step.role)
+                || step.role == Some(StepRole::GitHubEvidenceFetch)
+            {
+                check_env_tokens(id, env, step.role == Some(StepRole::GitHubEvidenceFetch))?;
             }
         }
     }
@@ -154,7 +157,23 @@ fn is_scoped_gh_token(id: &str, env: &BTreeMap<String, String>) -> bool {
             .is_some_and(|value| value == "${{ github.token }}")
 }
 
-fn check_env_tokens(id: &str, env: &BTreeMap<String, String>) -> Result<(), RenderError> {
+fn is_scoped_evidence_token(
+    id: &str,
+    env: &BTreeMap<String, String>,
+    evidence_fetch: bool,
+) -> bool {
+    evidence_fetch
+        && id.starts_with("github-evidence-fetch-")
+        && env
+            .get("GH_TOKEN")
+            .is_some_and(|value| value == "${{ github.token }}")
+}
+
+fn check_env_tokens(
+    id: &str,
+    env: &BTreeMap<String, String>,
+    evidence_fetch: bool,
+) -> Result<(), RenderError> {
     use crate::toolchain_env::is_denied_credential_key;
     for (key, value) in env {
         if STEP_PRIVATE_FETCH_ALLOWLIST.contains(&key.as_str()) {
@@ -167,7 +186,8 @@ fn check_env_tokens(id: &str, env: &BTreeMap<String, String>) -> Result<(), Rend
                 continue;
             }
             if key == "GH_TOKEN" {
-                if is_scoped_gh_token(id, env) {
+                if is_scoped_gh_token(id, env) || is_scoped_evidence_token(id, env, evidence_fetch)
+                {
                     continue;
                 }
                 return Err(RenderError::InvalidWorkflow(format!(
@@ -185,6 +205,71 @@ fn check_env_tokens(id: &str, env: &BTreeMap<String, String>) -> Result<(), Rend
         }
     }
     Ok(())
+}
+
+fn check_github_evidence_binding(id: &str, step: &Step) -> Result<(), RenderError> {
+    let fail = || {
+        RenderError::InvalidWorkflow(format!("github_evidence_binding_shape:{id}:{}", step.name))
+    };
+    let StepKind::Internal { operation, env } = &step.kind else {
+        if matches!(
+            step.role,
+            Some(StepRole::GitHubEvidenceFetch | StepRole::GitHubEvidenceImport)
+        ) {
+            return Err(fail());
+        }
+        return Ok(());
+    };
+    let evidence_operation = operation == velnor_actions_contract::GITHUB_EVIDENCE_FETCH_OPERATION
+        || operation == velnor_actions_contract::GITHUB_EVIDENCE_IMPORT_OPERATION;
+    if !evidence_operation
+        && matches!(
+            step.role,
+            Some(StepRole::GitHubEvidenceFetch | StepRole::GitHubEvidenceImport)
+        )
+    {
+        return Err(fail());
+    }
+    if !evidence_operation {
+        return Ok(());
+    }
+    let spec = env.get(velnor_actions_contract::GITHUB_EVIDENCE_SPEC_ENV);
+    if spec.is_none_or(String::is_empty)
+        || step.parallel
+        || step.condition.is_some()
+        || step.id.is_some()
+    {
+        return Err(fail());
+    }
+    let Some(collector_suite_id) = spec.and_then(|value| valid_evidence_spec_suite_id(value))
+    else {
+        return Err(fail());
+    };
+    match operation.as_str() {
+        velnor_actions_contract::GITHUB_EVIDENCE_FETCH_OPERATION
+            if step.role == Some(StepRole::GitHubEvidenceFetch)
+                && id == format!("github-evidence-fetch-{collector_suite_id}")
+                && env.len() == 2
+                && env.get("GH_TOKEN").map(String::as_str) == Some("${{ github.token }}") =>
+        {
+            Ok(())
+        }
+        velnor_actions_contract::GITHUB_EVIDENCE_IMPORT_OPERATION
+            if step.role == Some(StepRole::GitHubEvidenceImport)
+                && id == format!("mise-task-{collector_suite_id}")
+                && env.len() == 1
+                && !env.contains_key("GH_TOKEN") =>
+        {
+            Ok(())
+        }
+        _ => Err(fail()),
+    }
+}
+
+fn valid_evidence_spec_suite_id(value: &str) -> Option<String> {
+    let spec =
+        velnor_actions_contract::GitHubEvidenceFetchSpecV1::parse_canonical_json(value).ok()?;
+    Some(spec.collector_suite_id)
 }
 
 /// Require the full scrub overlay on every shell step outside the

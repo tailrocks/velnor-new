@@ -12,10 +12,10 @@ use velnor_actions_orchestrator::{
     finalize_preview_source_from_env, merge_internal, merge_passed, plan_internal,
     plan_outputs_from_staged_admission, publish_final_report, publish_plan_files_with_outputs,
     resolve_task_execution, response_path_for, retrieve_reports, run_bun_registry_install,
-    run_gradle_run, run_private_fetch, run_private_revoke, select_preview_source_from_env,
-    select_stable_release_source_from_env, write_preseed_manifest,
-    write_qualification_source_evidence, write_request, write_stable_tag_intent_from_env,
-    write_stable_tag_origin_from_env, write_task_report,
+    run_github_evidence_fetch, run_github_evidence_import, run_gradle_run, run_private_fetch,
+    run_private_revoke, select_preview_source_from_env, select_stable_release_source_from_env,
+    write_preseed_manifest, write_qualification_source_evidence, write_request,
+    write_stable_tag_intent_from_env, write_stable_tag_origin_from_env, write_task_report,
 };
 
 use super::{
@@ -63,6 +63,8 @@ pub(super) fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::Plan => run_plan_internal(&request.path),
         InternalOp::Merge => run_merge_internal(&request.path),
         InternalOp::Fetch => finish_internal_result(retrieve_reports()),
+        InternalOp::GitHubEvidenceFetch => finish_internal_result(run_github_evidence_fetch()),
+        InternalOp::GitHubEvidenceImport => finish_internal_result(run_github_evidence_import()),
         InternalOp::Report => finish_internal_result(write_task_report()),
         InternalOp::BunRegistryInstall => finish_internal_result(run_bun_registry_install()),
         InternalOp::BunAssetsExport

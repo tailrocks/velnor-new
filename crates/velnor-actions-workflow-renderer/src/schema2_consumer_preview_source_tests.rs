@@ -261,6 +261,12 @@ fn preview_steps_do_not_export_b_toolchain_or_home_environment() {
     let Some((_, Yaml::Seq(steps))) = fields.iter().find(|(key, _)| key == "steps") else {
         unreachable!()
     };
+    assert!(
+        !steps
+            .iter()
+            .any(|step| { field(step, "name") == &Yaml::str(crate::VERIFY_RUST_TOOLCHAIN_STEP) }),
+        "preview production retains its early return before Rust bootstrap"
+    );
     for step in steps {
         let Yaml::Map(fields) = step else {
             unreachable!()

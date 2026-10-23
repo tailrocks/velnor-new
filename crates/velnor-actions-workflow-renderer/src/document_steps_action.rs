@@ -53,6 +53,8 @@ pub(super) fn action_step_to_yaml(
         || uses == crate::tool_seed::TOOL_SEED_USES
         || uses == crate::cache_steps::TOOLS_RESTORE_USES
         || uses == steps::CACHE_TAR_LAUNCHER_USES
+        || velnor_actions_contract::workflow::step_identity::RUST_VERIFIER_USES.contains(&uses)
+        || uses == velnor_actions_contract::workflow::step_identity::JACTIONLINT_VERIFIER_USES
         || uses == crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
         || crate::action_ref::is_generated_provider_prelude(uses)
         || crate::action_ref::is_crate_obligation_action(uses)
@@ -95,6 +97,7 @@ fn validate_action_step(
     runs_on: Option<&str>,
     composite: bool,
 ) -> Result<bool, RenderError> {
+    crate::action_ref::validate_verifier_call(step, uses, with, env)?;
     let runtime_identity = step.role == Some(velnor_actions_contract::StepRole::ToolsCacheIdentity)
         || ["ubuntu-22.04", "ubuntu-24.04", "ubuntu-26.04"]
             .iter()

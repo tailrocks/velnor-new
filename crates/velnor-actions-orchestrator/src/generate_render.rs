@@ -39,12 +39,16 @@ pub(super) fn render_all(
 ) -> Result<RenderedTree, OrchestratorError> {
     let version = env!("CARGO_PKG_VERSION");
     let mise = resolve_mise_setup(&prep.config, &prep.runner_label)?;
+    let verifiers = crate::workflow::verifier_actions::VerifierActionSet::build(
+        &prep.emission_catalog(),
+        version,
+    )?;
     let WorkflowPreparation {
         routing,
         ir,
         rendered,
         lint_config,
-    } = prepare_workflow(prep, dispatch, &mise, version)?;
+    } = prepare_workflow(prep, dispatch, &mise, version, &verifiers)?;
     let workflow = rendered.yaml;
     let mut extra = crate::release_emit::release_files(prep, &mise, &routing)?;
     extra.extend(crate::publish_emit::publish_files(prep, &mise, &routing)?);
@@ -75,11 +79,13 @@ pub(super) fn render_all(
         )?);
     }
     extra.extend(rendered.shared);
-    super::rust_install_audit::audit(&extra)?;
-    super::rust_install_audit::audit(&[RenderedFile {
+    extra.extend(verifiers.files());
+    let mut audited_files = extra.clone();
+    audited_files.push(RenderedFile {
         path: velnor_actions_workflow_renderer::render::WORKFLOW_PATH.to_owned(),
         bytes: workflow.clone(),
-    }])?;
+    });
+    super::rust_install_audit::audit_with_verifiers(&audited_files, &verifiers)?;
     let tree = render_tree_with_claude_mode(
         &workflow,
         &lint_config,
@@ -106,6 +112,7 @@ fn prepare_workflow(
     dispatch: Option<ExecutionMode>,
     mise: &velnor_actions_workflow_renderer::render::MiseSetup,
     version: &str,
+    verifiers: &crate::workflow::verifier_actions::VerifierActionSet,
 ) -> Result<WorkflowPreparation, OrchestratorError> {
     let routing = workflow_routing_policy(&prep.config, dispatch)?;
     let qualification_sources = crate::crate_job_ids::qualification_job_sources_for_ir(
@@ -115,7 +122,7 @@ fn prepare_workflow(
     .map_err(|err| OrchestratorError::Contract {
         problem: err.to_string(),
     })?;
-    let ir = expand_workflow_with_qualification_sources(
+    let mut ir = expand_workflow_with_qualification_sources(
         &prep.workflow.ir,
         &prep.config,
         dispatch,
@@ -124,6 +131,7 @@ fn prepare_workflow(
     .map_err(|err| OrchestratorError::Contract {
         problem: err.to_string(),
     })?;
+    verifiers.lower_workflow_calls(&mut ir, &prep.workflow.context.workflow_tasks)?;
     let mut render_context = prep.workflow.context.clone();
     render_context.scale_set_selector = scale_set_selector_for_dispatch(&prep.config, dispatch)?;
     let mut lint_input = prep.workflow.lint_config.clone();

@@ -4,8 +4,7 @@ use std::fs;
 
 use tempfile::TempDir;
 use velnor_actions_orchestrator::{
-    ExecutionMode, GenerateOptions, OrchestratorError, generate, prepare, render_staged_tree,
-    render_staged_tree_with,
+    GenerateOptions, OrchestratorError, generate, prepare, render_staged_tree,
 };
 
 use crate::impl_common::{
@@ -13,13 +12,16 @@ use crate::impl_common::{
     without_ambient_identity,
 };
 
+#[path = "impl_orch_release_emit_scale_set_tests.rs"]
+mod scale_set_tests;
+
 /// Release-enabled consumer config selecting the fixture crate.
 const OIDC_CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\nregistry = \"crates-io\"\npackages = [\"demo\"]\n";
 
 const SCALE_SET_OIDC_CONFIG: &str = "schema = 2\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\nregistry = \"crates-io\"\npackages = [\"demo\"]\n[execution]\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\n[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"ubuntu-26.04-scale-set\", \"velnor\"]\nplatform = \"linux/amd64\"\njob_container_image = \"ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n";
 
 /// Full generated tree with release enabled, in sorted path order.
-const RELEASE_FAMILY: [&str; 16] = [
+const RELEASE_FAMILY: [&str; 19] = [
     ".github/AGENTS.md",
     ".github/CLAUDE.md",
     ".github/actions/declared-task-0/action.yml",
@@ -28,6 +30,9 @@ const RELEASE_FAMILY: [&str; 16] = [
     ".github/actions/velnor-tool-seed/action.yml",
     ".github/actions/velnor-tools-cache-restore/action.yml",
     ".github/actions/velnor-tools-prelude-u26/action.yml",
+    ".github/actions/velnor-verify-jactionlint/action.yml",
+    ".github/actions/velnor-verify-restored-rust/action.yml",
+    ".github/actions/velnor-verify-rust-manifest/action.yml",
     ".github/jactionlint.yaml",
     ".github/release-plz-bootstrap.toml",
     ".github/release-plz.toml",
@@ -115,6 +120,9 @@ fn release_disabled_emits_base_tree_only() -> TestResult {
                 ".github/actions/velnor-tool-seed/action.yml",
                 ".github/actions/velnor-tools-cache-restore/action.yml",
                 ".github/actions/velnor-tools-prelude-u26/action.yml",
+                ".github/actions/velnor-verify-jactionlint/action.yml",
+                ".github/actions/velnor-verify-restored-rust/action.yml",
+                ".github/actions/velnor-verify-rust-manifest/action.yml",
                 ".github/jactionlint.yaml",
                 ".github/scripts/velnor-tools-cache-identity.sh",
                 ".github/velnor/task-execution-manifest-v1.json",
@@ -210,22 +218,6 @@ fn release_enabled_emits_family_oidc() -> TestResult {
             "marker for {rel}"
         );
     }
-    Ok(())
-}
-
-#[test]
-fn scale_set_dispatch_routes_every_consumer_release_job() -> TestResult {
-    let repo = release_repo(SCALE_SET_OIDC_CONFIG)?;
-    let prep = prepare(repo.path())?;
-    let tree = render_staged_tree_with(&prep, Some(ExecutionMode::ScaleSet))?;
-    let yaml = tree
-        .get(".github/workflows/release.yml")
-        .ok_or("release workflow missing")?;
-    assert!(
-        yaml.contains("runs-on: [velnor, ubuntu-26.04-scale-set]"),
-        "{yaml}"
-    );
-    assert!(!yaml.contains("runs-on: ubuntu-26.04"), "{yaml}");
     Ok(())
 }
 

@@ -317,17 +317,20 @@ fn privileged_preview_gh_pin_cannot_come_from_consumer_catalog() -> TestResult {
     use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
     let repo = binary_repo(&preview_config(false))?;
-    let mut prep = prepare(repo.path())?;
-    let pinned = ToolCatalog::pinned();
-    prep.catalog = ToolCatalog::new(
-        pinned.version(PinnedTool::Rust),
-        pinned.version(PinnedTool::MrBoxington),
-        "2.0.0",
-        pinned.version(PinnedTool::Jactionlint),
-        pinned.version(PinnedTool::Shellcheck),
-        pinned.version(PinnedTool::Nextest),
-        pinned.version(PinnedTool::Opentofu),
+    let catalog = ToolCatalog::pinned();
+    std::fs::write(
+        repo.path().join("mise.toml"),
+        format!(
+            "[tools]\nrust = '{}'\ngh = '2.0.0'\n[tasks.release-preview]\nrun = 'true'\n",
+            catalog.version(PinnedTool::Rust)
+        ),
     )?;
+    let prep = prepare(repo.path())?;
+    let pinned = ToolCatalog::pinned();
+    assert_eq!(
+        prep.catalog.version(PinnedTool::Gh),
+        pinned.version(PinnedTool::Gh)
+    );
     let tree = render_staged_tree(&prep)?;
     let workflow = tree
         .get(".github/workflows/binary-preview.yml")

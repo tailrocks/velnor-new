@@ -202,7 +202,7 @@ fn run_upload(release: &Path, temp: &Path) -> std::io::Result<Output> {
 }
 
 #[test]
-fn any_existing_asset_fails_without_replacement_or_partial_upload() -> TestResult {
+fn matching_assets_are_idempotent_and_mismatches_prevent_partial_upload() -> TestResult {
     if !tools_present() {
         return Ok(());
     }
@@ -217,17 +217,15 @@ fn any_existing_asset_fails_without_replacement_or_partial_upload() -> TestResul
         fs::write(release.path().join(name), name)?;
     }
     let identical = run_upload(release.path(), temp.path())?;
-    assert!(!identical.status.success(), "{identical:?}");
-    assert!(
-        String::from_utf8_lossy(&identical.stderr)
-            .contains("already published, refusing to replace")
-    );
+    assert!(identical.status.success(), "{identical:?}");
+    assert!(String::from_utf8_lossy(&identical.stdout).contains("same sha256, skipping"));
     assert_eq!(fs::read_to_string(release.path().join(zip))?, zip);
     assert_eq!(fs::read_to_string(release.path().join(checksum))?, checksum);
 
     fs::write(release.path().join(zip), "manual upload")?;
     let different = run_upload(release.path(), temp.path())?;
     assert!(!different.status.success(), "{different:?}");
+    assert!(String::from_utf8_lossy(&different.stderr).contains("refusing to overwrite"));
     assert_eq!(
         fs::read_to_string(release.path().join(zip))?,
         "manual upload"
@@ -237,8 +235,29 @@ fn any_existing_asset_fails_without_replacement_or_partial_upload() -> TestResul
     fs::remove_file(release.path().join(checksum))?;
     fs::write(release.path().join(zip), zip)?;
     let partial = run_upload(release.path(), temp.path())?;
-    assert!(!partial.status.success(), "{partial:?}");
+    assert!(partial.status.success(), "{partial:?}");
     assert_eq!(fs::read_to_string(release.path().join(zip))?, zip);
-    assert!(!release.path().join(checksum).exists());
+    assert_eq!(fs::read_to_string(release.path().join(checksum))?, checksum);
+
+    let temp = TempDir::new()?;
+    let release = TempDir::new()?;
+    let bundle = temp.path().join("bundle");
+    fs::create_dir_all(&bundle)?;
+    fs::write(bundle.join(zip), zip)?;
+    fs::write(bundle.join(checksum), checksum)?;
+    fs::write(release.path().join(checksum), "manual checksum")?;
+    let mismatch_after_missing = run_upload(release.path(), temp.path())?;
+    assert!(
+        !mismatch_after_missing.status.success(),
+        "{mismatch_after_missing:?}"
+    );
+    assert!(
+        String::from_utf8_lossy(&mismatch_after_missing.stderr).contains("refusing to overwrite")
+    );
+    assert!(!release.path().join(zip).exists());
+    assert_eq!(
+        fs::read_to_string(release.path().join(checksum))?,
+        "manual checksum"
+    );
     Ok(())
 }

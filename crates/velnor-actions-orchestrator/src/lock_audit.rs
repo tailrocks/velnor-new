@@ -33,12 +33,15 @@ mod names;
 use names::subject_names;
 #[path = "lock_audit_rust.rs"]
 mod rust;
+#[path = "lock_audit_verifiers.rs"]
+mod verifiers;
 use rust::{is_catalogued_jactionlint, is_rust, rust_manifest_coverage};
 #[path = "lock_audit_vectors.rs"]
 mod vectors;
 use vectors::classify_mise_vectors;
 
 /// Audit outcome: one advisory summary plus fail-closed diagnostics.
+#[derive(Debug)]
 pub(crate) struct LockAuditOutcome {
     /// Advisory coverage summary, when anything is unverified.
     pub recommendation: Option<String>,
@@ -95,15 +98,16 @@ pub(crate) fn audit_prepare_installs_with_catalog(
 ) -> LockAuditOutcome {
     let mut blocking = Vec::new();
     let mut subjects: Vec<InstallSubject> = Vec::new();
+    let inline_verifiers = verifiers::build(&catalog.for_emission(), &mut blocking);
     for (id, job) in &ir.jobs {
         let manifest_verified = job
             .steps
             .iter()
-            .any(|step| step.name == crate::workflow::VERIFY_RUST_MANIFEST_STEP);
+            .any(|step| verifiers::installed_rust(step, inline_verifiers.as_ref()));
         let jactionlint_verified = job
             .steps
             .iter()
-            .any(|step| step.name == crate::workflow::VERIFY_JACTIONLINT_STEP);
+            .any(|step| verifiers::jactionlint(step, inline_verifiers.as_ref()));
         for step in &job.steps {
             if step.role != Some(StepRole::PreparePinnedTools) {
                 continue;

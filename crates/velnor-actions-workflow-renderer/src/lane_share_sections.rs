@@ -296,3 +296,7 @@ pub(crate) fn composite_file(
         bytes,
     })
 }
+
+#[cfg(test)]
+#[path = "lane_share_composite_resolver_tests.rs"]
+mod composite_resolver_tests;

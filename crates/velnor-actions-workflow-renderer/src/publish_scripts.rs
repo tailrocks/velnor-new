@@ -17,6 +17,9 @@ pub mod maven;
 /// npm publication scripts (hard decision 8).
 #[path = "publish_npm_scripts.rs"]
 pub mod npm;
+/// Declared Sigstore-bundle provenance scripts (`[publish] provenance`).
+#[path = "publish_provenance_scripts.rs"]
+pub mod provenance;
 
 /// Pattern a strict `X.Y.Z` version must match (POSIX ERE, whole line).
 const SEMVER_ERE: &str = r"(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*)){2}";
@@ -156,26 +159,51 @@ pub fn upload_script(gh: &str, id: &str) -> String {
 }
 
 /// Upload `file` and its `.sha256` from the bundle directory as immutable
-/// assets. Any release that already holds a target asset fails the job,
-/// regardless of whether its bytes match.
+/// assets of the tag's GitHub release.
 #[must_use]
 pub fn upload_assets_script(gh: &str, file: &str) -> String {
-    let files = format!("\"$RUNNER_TEMP/bundle/{file}\" \"$RUNNER_TEMP/bundle/{file}.sha256\"");
+    let names = [file.to_owned(), format!("{file}.sha256")];
+    upload_files_script(gh, "$RUNNER_TEMP/bundle", &names, "Release asset bundle")
+}
+
+/// Upload `names` from `dir` as immutable assets of the tag's GitHub release.
+///
+/// A release that already holds an asset is never overwritten: all existing
+/// assets are downloaded and compared by sha256 before any missing asset is
+/// uploaded. Identical assets are skipped; a different one fails the job.
+/// A missing release is created with every file at once (`--verify-tag`), so
+/// an immutable release is complete when it appears. `dir` is a fixed
+/// runner-temp directory, `names` are validated file names that may use
+/// `$ver`, and `notes` is fixed text.
+#[must_use]
+pub fn upload_files_script(gh: &str, dir: &str, names: &[String], notes: &str) -> String {
+    let quoted: Vec<String> = names.iter().map(|name| format!("\"{name}\"")).collect();
+    let list = quoted.join(" ");
+    let files: Vec<String> = names
+        .iter()
+        .map(|name| format!("\"{dir}/{name}\""))
+        .collect();
+    let files = files.join(" ");
     format!(
-        "set -eu; {gh}; ver=${{GITHUB_REF_NAME##*-v}}; b=\"$RUNNER_TEMP/bundle\"; \
+        "set -eu; {gh}; ver=${{GITHUB_REF_NAME##*-v}}; b=\"{dir}\"; \
          t=\"$RUNNER_TEMP/published\"; \
          if gh release view \"$GITHUB_REF_NAME\" --repo \"$GITHUB_REPOSITORY\" > /dev/null 2>&1; then \
          rm -rf -- \"$t\"; mkdir -p -- \"$t\"; \
          gh release view \"$GITHUB_REF_NAME\" --repo \"$GITHUB_REPOSITORY\" \
          --json assets --jq '.assets[].name' > \"$t/names\"; \
-         for f in \"{file}\" \"{file}.sha256\"; do \
+         for f in {list}; do \
          if grep -Fxq -- \"$f\" \"$t/names\"; then \
-         printf 'velnor: %s already published, refusing to replace it\\n' \"$f\" >&2; \
-         exit 1; fi; done; \
-         for f in \"{file}\" \"{file}.sha256\"; do \
-         gh release upload \"$GITHUB_REF_NAME\" --repo \"$GITHUB_REPOSITORY\" \"$b/$f\"; done; \
+         gh release download \"$GITHUB_REF_NAME\" --repo \"$GITHUB_REPOSITORY\" --pattern \"$f\" --dir \"$t\"; \
+         sha256sum < \"$t/$f\" > \"$t/old.sum\"; sha256sum < \"$b/$f\" > \"$t/new.sum\"; \
+         if cmp -s \"$t/old.sum\" \"$t/new.sum\"; then \
+         printf 'velnor: %s already published with the same sha256, skipping\\n' \"$f\"; \
+         else printf 'velnor: %s already published with a different sha256, refusing to overwrite\\n' \"$f\" >&2; \
+         exit 1; fi; fi; done; \
+         for f in {list}; do \
+         if ! grep -Fxq -- \"$f\" \"$t/names\"; then \
+         gh release upload \"$GITHUB_REF_NAME\" --repo \"$GITHUB_REPOSITORY\" \"$b/$f\"; fi; done; \
          else gh release create \"$GITHUB_REF_NAME\" --repo \"$GITHUB_REPOSITORY\" --verify-tag \
-         --title \"$GITHUB_REF_NAME\" --notes 'Release asset bundle' {files}; fi"
+         --title \"$GITHUB_REF_NAME\" --notes '{notes}' {files}; fi"
     )
 }
 

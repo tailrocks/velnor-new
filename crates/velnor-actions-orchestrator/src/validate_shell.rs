@@ -115,7 +115,7 @@ pub(crate) fn run_shellcheck_bodies(
     }
 }
 
-#[cfg(feature = "test-render-capture")]
+#[cfg(all(test, feature = "test-render-capture"))]
 pub(crate) fn staged_run_signatures(
     text: &str,
 ) -> Result<Vec<(String, &'static str)>, OrchestratorError> {
