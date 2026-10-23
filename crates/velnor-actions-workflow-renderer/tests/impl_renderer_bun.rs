@@ -185,7 +185,7 @@ fn the_playwright_install_is_single_validated_and_ahead_of_the_scripts() -> Resu
         "a".repeat(64),
         "b".repeat(64)
     );
-    let install = playwright_install_step("frontend", "1.64.1", &pins)?;
+    let install = playwright_install_step("frontend", "1.64.1", &pins, &["chromium"])?;
     assert_eq!(install.role, Some(StepRole::PlaywrightInstall));
     let StepKind::Internal { operation, env } = &install.kind else {
         return Err(RenderError::BadCommand("not internal".to_owned()));
@@ -195,7 +195,7 @@ fn the_playwright_install_is_single_validated_and_ahead_of_the_scripts() -> Resu
     assert_eq!(env[PLAYWRIGHT_VERSION_ENV], "1.64.1");
     assert_eq!(env[PLAYWRIGHT_ROOT_ENV], "frontend");
     assert_eq!(env.len(), 3, "no credential and no toolchain env");
-    let root = playwright_install_step("", "1.64.1", &pins)?;
+    let root = playwright_install_step("", "1.64.1", &pins, &["chromium"])?;
     let StepKind::Internal { env, .. } = &root.kind else {
         return Err(RenderError::BadCommand("not internal".to_owned()));
     };
@@ -225,9 +225,16 @@ fn the_playwright_install_is_single_validated_and_ahead_of_the_scripts() -> Resu
             &format!("b-1:{},a-1:{}", "a".repeat(64), "a".repeat(64)),
         ),
     ] {
-        assert!(playwright_install_step("frontend", version, pins).is_err());
+        assert!(playwright_install_step("frontend", version, pins, &["chromium"]).is_err());
     }
-    assert!(playwright_install_step("../x", "1.64.1", &pins).is_err());
+    assert!(playwright_install_step("../x", "1.64.1", &pins, &["chromium"]).is_err());
+    for browsers in [
+        &["webkit", "chromium"][..],
+        &["chromium", "chromium"],
+        &["safari"],
+    ] {
+        assert!(playwright_install_step("frontend", "1.64.1", &pins, browsers).is_err());
+    }
     Ok(())
 }
 
