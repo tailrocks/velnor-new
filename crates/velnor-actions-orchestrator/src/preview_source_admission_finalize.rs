@@ -44,7 +44,7 @@ fn finalize_until(deadline: CheckDeadline) -> Result<(), OrchestratorError> {
         &discovered.config_inputs,
     )?);
     let admission = make_admission(&state, &policy, &plan, discovered, entries)?;
-    emit_finalization(&state, &policy, &plan, &admission)
+    emit_finalization(&state, &policy, &plan, &admission, deadline)
 }
 
 fn prepare_finalization(deadline: CheckDeadline) -> Result<Finalization, OrchestratorError> {
@@ -263,6 +263,7 @@ fn emit_finalization(
     policy: &PackageReleasePolicy,
     plan: &velnor_actions_contract::PackageReleasePlan,
     admission: &Admission,
+    deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     let admission_bytes = canonical_json_bytes(admission)
         .map_err(|_| internal("preview_source_admission_encoding"))?;
@@ -275,7 +276,7 @@ fn emit_finalization(
     let plan_bytes = plan
         .canonical_bytes()
         .map_err(|_| internal("release_plan_encoding"))?;
-    write_finalization_files(&admission_bytes, &policy_bytes, &plan_bytes)?;
+    write_finalization_files(&admission_bytes, &policy_bytes, &plan_bytes, deadline)?;
     let matrix = super::projection::payload_matrix(plan, &state.release.producer)?;
     let timeout = u32::from(state.release.producer.timeout_minutes)
         + u32::from(RustBinaryReleaseProducer::JOB_HEADROOM_MINUTES);
@@ -295,10 +296,11 @@ fn write_finalization_files(
     admission: &[u8],
     policy: &[u8],
     plan: &[u8],
+    deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     let temp = runner_root()?;
+    crate::preview_producer::write_upload(&temp.join(ADMISSION_FILE), admission, deadline)?;
     for (name, bytes, label) in [
-        (ADMISSION_FILE, admission, "preview_source_admission"),
         ("package-release-policy.json", policy, "release_policy"),
         ("package-release-plan.json", plan, "release_plan"),
     ] {
@@ -306,3 +308,7 @@ fn write_finalization_files(
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "preview_source_admission_finalize_tests.rs"]
+mod tests;
