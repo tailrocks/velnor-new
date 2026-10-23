@@ -17,7 +17,9 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use velnor_actions_contract::config::playwright_lock::{LockedArchive, PLAYWRIGHT_HOST_PLATFORM};
-use velnor_actions_mise::{CheckDeadline, PinnedTool, PinnedToolExec, ToolCatalog};
+use velnor_actions_mise::{
+    CheckDeadline, MiseError, PinnedTool, PinnedToolExec, ProcessOutput, ToolCatalog,
+};
 use velnor_actions_workflow_renderer::verification_jobs::PLAYWRIGHT_SYSTEM_DEPS_BROWSERS;
 
 use super::playwright_install::{Downloader, InstallRequest};
@@ -90,30 +92,52 @@ impl DepsInstaller for BunInstallDeps {
                 )])
             })
             .map_err(|err| internal(&format!("playwright_system_deps_command:{err}")))?;
-        let mut failure = internal("playwright_system_deps_failed");
-        for attempt in 1..=INSTALL_ATTEMPTS {
+        run_install_deps_attempts(|| {
             // Live, escaped output: an apt run that stalls shows where in the
             // job log instead of only after the deadline kills it.
-            let result = CheckDeadline::after(INSTALL_TIMEOUT).and_then(|deadline| {
+            CheckDeadline::after(INSTALL_TIMEOUT).and_then(|deadline| {
                 command.run_until_with_progress(
                     CAPTURE_BYTES,
                     deadline,
                     &mut std::io::stderr().lock(),
                 )
-            });
-            failure = match result {
-                Ok(output) if output.success => return Ok(()),
-                Ok(_) => internal("playwright_system_deps_failed"),
-                Err(err) => internal(&format!("playwright_system_deps_spawn:{err}")),
-            };
-            if attempt < INSTALL_ATTEMPTS {
-                eprintln!(
-                    "velnor: playwright install-deps attempt {attempt} failed ({failure}); retrying"
-                );
-            }
-        }
-        Err(failure)
+            })
+        })
     }
+}
+
+fn run_install_deps_attempts(
+    mut run_attempt: impl FnMut() -> Result<ProcessOutput, MiseError>,
+) -> Result<(), OrchestratorError> {
+    let mut failure = internal("playwright_system_deps_failed");
+    for attempt in 1..=INSTALL_ATTEMPTS {
+        failure = match run_attempt() {
+            Ok(output) if output.success => return Ok(()),
+            Ok(_) => internal("playwright_system_deps_failed"),
+            Err(err) => {
+                let failure = internal(&format!("playwright_system_deps_spawn:{err}"));
+                if has_cleanup_failure(&err) {
+                    return Err(failure);
+                }
+                failure
+            }
+        };
+        if attempt < INSTALL_ATTEMPTS {
+            eprintln!(
+                "velnor: playwright install-deps attempt {attempt} failed ({failure}); retrying"
+            );
+        }
+    }
+    Err(failure)
+}
+
+fn has_cleanup_failure(error: &MiseError) -> bool {
+    let MiseError::SpawnFailed { message, .. } = error else {
+        return false;
+    };
+    message
+        .split_once(";cleanup_failed:")
+        .is_some_and(|(_, details)| !details.is_empty() && !details.contains(";cleanup_failed:"))
 }
 
 fn io_error(path: &Path, err: &std::io::Error) -> OrchestratorError {

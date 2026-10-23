@@ -6,6 +6,7 @@ use base64::engine::general_purpose::STANDARD;
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use sha2::{Digest, Sha512};
+use velnor_actions_mise::{MiseError, ProcessOutput};
 
 use super::*;
 
@@ -51,6 +52,16 @@ fn request(temp: &Path, system_deps: &[&str]) -> InstallRequest {
         workspace: temp.join("work"),
         runner_temp: temp.join("temp"),
         system_deps: system_deps.iter().map(|name| (*name).to_owned()).collect(),
+    }
+}
+
+fn output(success: bool) -> ProcessOutput {
+    ProcessOutput {
+        stdout: Vec::new(),
+        stderr: Vec::new(),
+        code: Some(i32::from(!success)),
+        signal: None,
+        success,
     }
 }
 
@@ -192,4 +203,92 @@ fn the_step_env_carries_the_system_deps() {
         ["webkit"]
     );
     assert!(InstallRequest::parse(&env(Some("chromium"))).is_err());
+}
+
+#[test]
+fn install_deps_retry_stops_after_first_success() {
+    let mut calls = 0;
+    run_install_deps_attempts(|| {
+        calls += 1;
+        Ok(output(true))
+    })
+    .expect("first attempt succeeds");
+    assert_eq!(calls, 1);
+}
+
+#[test]
+fn install_deps_retries_an_ordinary_failure_then_succeeds() {
+    let mut calls = 0;
+    run_install_deps_attempts(|| {
+        calls += 1;
+        Ok(output(calls == 2))
+    })
+    .expect("second attempt succeeds");
+    assert_eq!(calls, 2);
+}
+
+#[test]
+fn install_deps_exhaustion_returns_the_last_attempt_error() {
+    let mut calls = 0;
+    let error = run_install_deps_attempts(|| {
+        calls += 1;
+        if calls == 1 {
+            Ok(output(false))
+        } else {
+            Err(MiseError::SpawnFailed {
+                program: "bun".to_owned(),
+                message: "second_attempt_spawn_failure".to_owned(),
+            })
+        }
+    })
+    .expect_err("both attempts fail");
+    assert_eq!(calls, 2);
+    assert!(matches!(
+        error,
+        OrchestratorError::Internal { problem }
+            if problem == "playwright_system_deps_spawn:spawn_failed: bun: second_attempt_spawn_failure"
+    ));
+}
+
+#[test]
+fn install_deps_retries_a_timeout_after_successful_cleanup() {
+    let mut calls = 0;
+    run_install_deps_attempts(|| {
+        calls += 1;
+        if calls == 1 {
+            Err(MiseError::SpawnFailed {
+                program: "bun".to_owned(),
+                message: "timeout_after_absolute_deadline".to_owned(),
+            })
+        } else {
+            Ok(output(true))
+        }
+    })
+    .expect("clean timeout is retried");
+    assert_eq!(calls, 2);
+}
+
+#[test]
+fn install_deps_does_not_retry_a_cleanup_failure() {
+    let mut calls = 0;
+    let error = run_install_deps_attempts(|| {
+        calls += 1;
+        if calls == 1 {
+            Err(MiseError::SpawnFailed {
+                program: "bun".to_owned(),
+                message:
+                    "timeout_after_absolute_deadline;cleanup_failed:kill_group:permission denied"
+                        .to_owned(),
+            })
+        } else {
+            Ok(output(true))
+        }
+    })
+    .expect_err("cleanup failure is terminal");
+    assert_eq!(calls, 1, "a later success must not mask failed cleanup");
+    assert!(matches!(
+        error,
+        OrchestratorError::Internal { problem }
+            if problem == "playwright_system_deps_spawn:spawn_failed: bun: timeout_after_absolute_deadline;cleanup_failed:kill_group:permission denied"
+    ));
 }
