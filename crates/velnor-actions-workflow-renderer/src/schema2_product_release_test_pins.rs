@@ -76,12 +76,12 @@ pub(super) fn test_pins() -> ProductReleasePins {
                 ),
             ),
         ],
-        // The orchestrator renders the real digest check; the renderer only
-        // places the step, so the fixture carries a fixed stand-in script.
         verify_lint_argv: vec![
             "sh".to_owned(),
             "-c".to_owned(),
-            "echo verify jactionlint".to_owned(),
+            crate::jactionlint_verifier_script(
+                catalog.version(velnor_actions_mise::PinnedTool::Jactionlint),
+            ),
         ],
         gh_argv: exec_argv(&[PinnedTool::Gh], "gh", &[], &catalog),
         rust_version: catalog.version(PinnedTool::Rust).to_owned(),

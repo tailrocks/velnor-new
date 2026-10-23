@@ -78,9 +78,9 @@ fn check_tool_pins(ctx: &mut FreshnessContext) {
             .and_then(Value::as_str)
             .unwrap_or("<missing>");
         seen.insert(name.to_owned());
-        let Some((_, constant)) = EXPECTED_TOOLS
+        let Some((_, source, constant)) = EXPECTED_TOOLS
             .iter()
-            .find(|(expected, _)| *expected == name)
+            .find(|(expected, _, _)| *expected == name)
         else {
             ctx.fail_row(
                 "local-pin",
@@ -90,10 +90,10 @@ fn check_tool_pins(ctx: &mut FreshnessContext) {
             continue;
         };
         ctx.tools.push(tool.clone());
-        let actual = ctx.rust_const(CATALOG, constant);
+        let actual = ctx.rust_const(source, constant);
         compare_pin(
             ctx,
-            &format!("tool {name} ({CATALOG}::{constant})"),
+            &format!("tool {name} ({source}::{constant})"),
             actual.as_deref(),
             tool.get("pinned").and_then(Value::as_str),
         );
@@ -101,9 +101,9 @@ fn check_tool_pins(ctx: &mut FreshnessContext) {
             check_cosign_asset_pins(ctx, &tool);
         }
     }
-    for (name, _) in EXPECTED_TOOLS
+    for (name, _, _) in EXPECTED_TOOLS
         .iter()
-        .filter(|(name, _)| !seen.contains(*name))
+        .filter(|(name, _, _)| !seen.contains(*name))
     {
         ctx.fail_row(
             "local-pin",

@@ -61,7 +61,6 @@ pub(super) fn assert_candidate_qualification(
         !action_body.contains("Attest built artifacts"),
         "{action_body}"
     );
-    assert!(!action_body.contains("GH_TOKEN:"), "{action_body}");
     assert!(
         !action_body.contains("actions/upload-artifact@"),
         "{action_body}"

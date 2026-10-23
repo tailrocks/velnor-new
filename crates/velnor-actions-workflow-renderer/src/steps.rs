@@ -33,7 +33,7 @@ pub(crate) use crate::cache_steps::{tools_cache_restore_step, tools_cache_save_s
 pub use crate::parallel_target_seed::seed_parallel_targets_step;
 pub(crate) use crate::steps_shell::action_owned_mbx_shell_step;
 pub(crate) use crate::steps_shell::composite_shell_step;
-pub use crate::steps_shell::{ambient_shell_step, shell_step};
+pub use crate::steps_shell::{ambient_shell_step, jactionlint_verifier_step, shell_step};
 
 pub use crate::action_ref::validate_uses;
 pub use crate::steps_artifact::{

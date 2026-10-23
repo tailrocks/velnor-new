@@ -214,6 +214,11 @@ fn shell_step_to_yaml(
     job_env: &BTreeMap<String, String>,
     composite: bool,
 ) -> Result<Yaml, RenderError> {
+    if let Some(verifier) =
+        crate::verifier_shell::render_typed_step(step, run, env, job_env, composite)?
+    {
+        return Ok(verifier);
+    }
     crate::action_mbx_shell::validate_step_argv(run, step.role)?;
     if composite {
         commands::validate_composite_env(env)?;

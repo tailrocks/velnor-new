@@ -75,7 +75,7 @@ pub struct UpgradesSpec {
     /// file by file against its pinned channel manifest (it reads the
     /// version from `VELNOR_TOOL_RUST`).
     pub verify_rust_script: String,
-    /// One-line `sh` script that checks the installed jactionlint executable
+    /// Fixed `sh` script that checks the installed jactionlint executable
     /// against the catalog digest; it runs right after the install.
     pub jactionlint_verify: String,
 }
@@ -111,8 +111,13 @@ impl UpgradesSpec {
             return Err(RenderError::BadCommand("bad_verify_rust_script".to_owned()));
         }
         if self.jactionlint_verify.trim().is_empty()
-            || self.jactionlint_verify.contains('\n')
             || self.jactionlint_verify.contains("${{")
+            || crate::selected_mise_verifier::validate_argv(&[
+                "sh".to_owned(),
+                "-c".to_owned(),
+                self.jactionlint_verify.clone(),
+            ])
+            .is_err()
         {
             return Err(RenderError::BadCommand("bad_jactionlint_verify".to_owned()));
         }

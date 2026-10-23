@@ -50,13 +50,16 @@ pub use versions::{
 mod rust_manifests;
 pub use rust_manifests::{RUST_CHANNEL_MANIFESTS, rust_channel_manifest_sha256};
 
-/// Pinned jactionlint release digests (verifiable `jactionlint` installs).
-#[path = "catalog_jactionlint_digests.rs"]
-mod jactionlint_digests;
-pub use jactionlint_digests::{
+/// Pinned jactionlint release digests and verifier contract (verifiable installs).
+pub use velnor_actions_contract::config::jactionlint_verifier::{
     JACTIONLINT_DIGESTS, JactionlintDigest, jactionlint_archive_sha256,
     jactionlint_executable_sha256,
 };
+
+/// Mise-specific checks of the shared jactionlint release facts.
+#[cfg(test)]
+#[path = "catalog_jactionlint_digests.rs"]
+mod jactionlint_digests_tests;
 
 /// The typed catalog tool names (`PinnedTool`).
 #[path = "catalog_tool.rs"]
@@ -82,20 +85,7 @@ pub const MR_BOXINGTON_VERSION: &str = "1.26.0";
 /// Qualified GitHub CLI (tag `v2.103.0`).
 /// Source: `https://api.github.com/repos/cli/cli/releases/latest`; checked 2026-10-22.
 pub const GH_VERSION: &str = "2.103.0";
-/// Qualified jactionlint release (`jdx/jactionlint` tag `v2.3.0`, stable,
-/// published 2026-10-21). Install: Mise registry name `jactionlint`
-/// (backend `github:jdx/jactionlint`), which checks the release-API digest
-/// and the GitHub artifact attestation. Provenance was verified at this bump
-/// (2026-10-22), never at generate time: `cosign verify-blob-attestation`
-/// on `packslip.sigstore.json` (`--type https://packslip.dev/release/v1`,
-/// identity `https://github.com/jdx/jactionlint/.github/workflows/release.yaml@refs/tags/v2.3.0`,
-/// issuer `https://token.actions.githubusercontent.com`) and
-/// `gh attestation verify -R jdx/jactionlint --signer-workflow jdx/jactionlint/.github/workflows/release.yaml`
-/// both passed for the linux amd64, linux arm64, darwin arm64 and darwin
-/// amd64 archives.
-/// Per-platform digests: [`JACTIONLINT_DIGESTS`].
-/// Source: `https://api.github.com/repos/jdx/jactionlint/releases/latest`; checked 2026-10-22.
-pub const JACTIONLINT_VERSION: &str = "2.3.0";
+pub use velnor_actions_contract::config::jactionlint_verifier::JACTIONLINT_VERSION;
 /// Qualified shellcheck release (tag `v0.11.0`).
 /// Source: `https://api.github.com/repos/koalaman/shellcheck/releases/latest`; checked 2026-09-28.
 pub const SHELLCHECK_VERSION: &str = "0.11.0";

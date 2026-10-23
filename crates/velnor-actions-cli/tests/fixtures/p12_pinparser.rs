@@ -6,10 +6,16 @@ use std::fs;
 use super::p12_harness as harness;
 
 const CATALOG: &str = "crates/velnor-actions-mise/src/catalog.rs";
+const JACTIONLINT_VERIFIER: &str =
+    "crates/velnor-actions-contract/src/config/jactionlint_verifier.rs";
 const SOURCE_CAP: usize = 256 * 1024;
 
 fn read_catalog(fixture: &harness::Fixture) -> Result<String, Box<dyn Error>> {
     Ok(fs::read_to_string(fixture.dir.join(CATALOG))?)
+}
+
+fn read_jactionlint_verifier(fixture: &harness::Fixture) -> Result<String, Box<dyn Error>> {
+    Ok(fs::read_to_string(fixture.dir.join(JACTIONLINT_VERIFIER))?)
 }
 
 #[test]
@@ -160,6 +166,34 @@ fn invalid_rust_string_escape_fails_closed() -> Result<(), Box<dyn Error>> {
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_fail(&run, "unsupported Rust source");
     harness::cleanup(&fixture);
+    Ok(())
+}
+
+#[test]
+fn relocated_jactionlint_authority_rejects_drift_and_missing_source() -> Result<(), Box<dyn Error>>
+{
+    let drifted = harness::passing("p12-jactionlint-authority-drift")?;
+    let source = read_jactionlint_verifier(&drifted)?;
+    let changed = source.replace(
+        "JACTIONLINT_VERSION: &str = \"2.3.0\"",
+        "JACTIONLINT_VERSION: &str = \"9.9.9\"",
+    );
+    assert_ne!(source, changed, "fixture authority anchor must be unique");
+    harness::write(&drifted.dir, JACTIONLINT_VERIFIER, &changed)?;
+    let run = harness::run_script(&drifted.dir, &[])?;
+    harness::assert_fail(&run, "tool jactionlint");
+    assert!(
+        run.stdout.contains("code='9.9.9' inventory='2.3.0'"),
+        "wrong drift target:\n{}",
+        run.stdout
+    );
+    harness::cleanup(&drifted);
+
+    let missing = harness::passing("p12-jactionlint-authority-missing")?;
+    fs::remove_file(missing.dir.join(JACTIONLINT_VERIFIER))?;
+    let run = harness::run_script(&missing.dir, &[])?;
+    harness::assert_fail(&run, JACTIONLINT_VERIFIER);
+    harness::cleanup(&missing);
     Ok(())
 }
 

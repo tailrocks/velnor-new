@@ -73,6 +73,7 @@ mod required_gate;
 mod runs_on;
 pub mod rust_suites;
 pub mod schema2;
+mod selected_mise_verifier;
 pub mod setup;
 mod step_ids;
 pub mod steps;
@@ -95,13 +96,14 @@ mod tool_seed_test_support;
 pub mod toolchain_env;
 pub mod tree;
 pub mod upgrades;
+mod verifier_shell;
 
 /// Display name of the step that verifies an installed Rust toolchain file
 /// by file against its pinned channel manifest; every generated job that
 /// installs Rust runs it before the toolchain is used.
 pub const VERIFY_RUST_TOOLCHAIN_STEP: &str = "Verify Rust channel manifest";
 
-/// The only `PATH` a cache or toolchain verification script runs with:
+/// The only `PATH` a cache, toolchain, or release-verification script runs with:
 /// root-owned system directories. Setup Mise has already put the Mise
 /// `bin/` and `shims/` directories on `PATH` ahead of them, and the tools
 /// cache restores both, so a bare helper name (`sha256sum`, `curl`, `tar`)
@@ -114,6 +116,19 @@ pub const VERIFY_PATH: &str = "/usr/bin:/bin:/usr/sbin:/sbin";
 /// (`WhichUtil.Which`, with the `addPath` entries first) but runs a fully
 /// qualified path as given.
 pub const VERIFY_SHELL: &str = "/bin/bash --noprofile --norc -e -o pipefail {0}";
+
+/// Startup-safe shell used only by release-verifier steps.
+///
+/// Bash privileged mode prevents `BASH_ENV` and exported functions from
+/// running before the verifier's own credential boundary. Cache scripts keep
+/// using [`VERIFY_SHELL`] because their contract and execution context differ.
+pub const VERIFY_VERIFIER_SHELL: &str = "/bin/bash --noprofile --norc -p -e -o pipefail {0}";
+
+/// Fixed Jactionlint verifier script for one selected tool version.
+#[must_use]
+pub fn jactionlint_verifier_script(version: &str) -> String {
+    selected_mise_verifier::script_for_version(version)
+}
 pub mod verification_jobs;
 mod workflow_policy;
 mod workflow_size;

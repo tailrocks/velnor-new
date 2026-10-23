@@ -6,4 +6,4 @@ d9cbad88fd3f9400971e8ab9210597c422b39e14c5438c355dba9bcf32355f6b  .github/action
 4e919c92e20dfad378b818f4fec56a6151a3b67c4f363287cc8673379df1f781  .github/actions/velnor-tools-prelude-u26/action.yml
 76793a7f58a0ae96464b753b103169faac32826ff3fdc378a735b025045c5028  .github/jactionlint.yaml
 3e44adba1e8ff66af9d48dd1a8630aabeebac9e11b3f089e9654507b5ee1fb1f  .github/scripts/velnor-tools-cache-identity.sh
-73e2dbd7db729ba528ac7d5be1c8a3ae1afc2751df8a3f9942d1016d556f3b5a  .github/workflows/ci.yml
+31ff7715429c3c9e7ceee12a30c2edd8f4fd18e32915ce48fbeeb5406bd73de9  .github/workflows/ci.yml
