@@ -83,6 +83,11 @@ pub(crate) fn bind_workflow(document: &mut Yaml) -> Result<(), RenderError> {
 
 fn bind_job(id: &str, job: &mut Yaml) -> Result<(), RenderError> {
     let has_verifier = contains_verifier_step(job);
+    if has_verifier && has_verifier_job_environment_override(job) {
+        return Err(invalid(&format!(
+            "{id}:verifier_trusted_environment_override"
+        )));
+    }
     // A verifier action's variable use is represented by the caller's
     // canonical pinned-tool preparation step. Do not infer a project binding
     // from the local action path alone: pinned/private workflows may use the
@@ -103,11 +108,6 @@ fn bind_job(id: &str, job: &mut Yaml) -> Result<(), RenderError> {
             "steps" => {}
             "env" => {
                 export_rustup = take_job_rustup(id, value)?;
-                if has_verifier && has_trusted_environment_override(value) {
-                    return Err(invalid(&format!(
-                        "{id}:verifier_trusted_environment_override"
-                    )));
-                }
             }
             _ if !names(value).is_empty() => return Err(invalid(&format!("{id}:{key}"))),
             _ => {}
@@ -398,7 +398,11 @@ fn contains_verifier_step(node: &Yaml) -> bool {
 }
 
 fn has_trusted_environment_override(node: &Yaml) -> bool {
-    let Yaml::Map(fields) = node else {
+    let (Yaml::Map(fields)
+    | Yaml::AnchoredMap {
+        entries: fields, ..
+    }) = node
+    else {
         return false;
     };
     fields.iter().any(|(key, _)| {
@@ -407,6 +411,19 @@ fn has_trusted_environment_override(node: &Yaml) -> bool {
             "HOME" | "MISE_DATA_DIR" | "XDG_DATA_HOME" | "PATH" | "BASH_ENV" | "ENV"
         )
     })
+}
+
+fn has_verifier_job_environment_override(job: &Yaml) -> bool {
+    let (Yaml::Map(fields)
+    | Yaml::AnchoredMap {
+        entries: fields, ..
+    }) = job
+    else {
+        return false;
+    };
+    fields
+        .iter()
+        .any(|(key, value)| key == "env" && has_trusted_environment_override(value))
 }
 
 /// Whether `step` is the generated resolver step.
