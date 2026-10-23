@@ -11,11 +11,12 @@ use std::collections::BTreeMap;
 use velnor_actions_actionlint::actions::{
     ATTEST_BUILD_PROVENANCE_USES, DOWNLOAD_ARTIFACT_ACTION_USES, UPLOAD_ARTIFACT_ACTION_USES,
 };
-use velnor_actions_contract::config::PublishNpm;
-use velnor_actions_workflow_renderer::publish_scripts::npm as script;
+use velnor_actions_contract::config::{PublishNpm, PublishProvenance};
+use velnor_actions_workflow_renderer::publish_scripts::{self as scripts, npm as script};
 use velnor_actions_workflow_renderer::publish_spec::{PublishJobSpec, PublishRole, PublishStep};
 use velnor_actions_workflow_renderer::{action_step, checkout_step, mise_setup_step};
 
+use super::provenance_steps::{self as provenance, Subject};
 use super::{AUTHORITY_JOB, Inputs, bundle_job, plain, script_step};
 use crate::OrchestratorError;
 use crate::workflow::CHECKOUT_USES;
@@ -90,12 +91,44 @@ pub(super) fn build_job(
     Ok(job)
 }
 
+/// Provenance subject: the member's tarball in the npm directory.
+fn subject(entry: &PublishNpm) -> Subject<'_> {
+    Subject {
+        kind: "npm",
+        id: entry.id.as_str(),
+        dir: script::NPM_DIR,
+        file: format!("{}-$ver.tgz", script::tarball_stem(&entry.member)),
+    }
+}
+
+fn checksum_step(entry: &PublishNpm) -> Result<PublishStep, OrchestratorError> {
+    Ok(plain(script_step(
+        "Verify checksum",
+        script::verify_script(&entry.member),
+        false,
+    )?))
+}
+
 /// Attest: verify the checksum, then sign provenance for the tarball.
+///
+/// `github_attestation` writes to GitHub's attestation store; the declared
+/// `sigstore_bundle` signs a bundle that `npm-provenance-<id>` records.
 pub(super) fn attest_job(
     inputs: &Inputs<'_>,
     entry: &PublishNpm,
+    gh: &str,
 ) -> Result<PublishJobSpec, OrchestratorError> {
     let id = entry.id.as_str();
+    if inputs.provenance == PublishProvenance::SigstoreBundle {
+        return provenance::sign_job(
+            inputs,
+            gh,
+            &subject(entry),
+            download_step(id)?,
+            checksum_step(entry)?,
+            "npm",
+        );
+    }
     let attest = action_step(
         "Attest tarball provenance",
         ATTEST_BUILD_PROVENANCE_USES,
@@ -104,15 +137,7 @@ pub(super) fn attest_job(
             "${{ runner.temp }}/npm/*.tgz".to_owned(),
         )]),
     )?;
-    let steps = vec![
-        download_step(id)?,
-        plain(script_step(
-            "Verify checksum",
-            script::verify_script(&entry.member),
-            false,
-        )?),
-        plain(attest),
-    ];
+    let steps = vec![download_step(id)?, checksum_step(entry)?, plain(attest)];
     Ok(bundle_job(
         inputs,
         PublishRole::ArtifactAttest,
@@ -122,30 +147,74 @@ pub(super) fn attest_job(
     ))
 }
 
-/// Publish: re-verify, then `PUT` the package document with the job token.
-pub(super) fn publish_job(
+/// Record (Sigstore bundle only): re-verify the bundle, then upload the
+/// tarball, its checksum, the bundle and the receipt as immutable assets of
+/// the tag's release. GitHub Packages holds no extra files, so the release
+/// is where the provenance lives; the push needs this job.
+pub(super) fn provenance_job(
     inputs: &Inputs<'_>,
     entry: &PublishNpm,
+    gh: &str,
 ) -> Result<PublishJobSpec, OrchestratorError> {
     let id = entry.id.as_str();
+    let subject = subject(entry);
+    let [bundle, receipt] = subject.asset_names();
+    let names = [
+        subject.file.clone(),
+        format!("{}.sha256", subject.file),
+        bundle,
+        receipt,
+    ];
     let steps = vec![
+        plain(mise_setup_step(inputs.mise)?),
         download_step(id)?,
+        checksum_step(entry)?,
+        provenance::download_step(&subject)?,
+        provenance::verify_step(&subject, gh)?,
+        provenance::stage_step(&subject)?,
         plain(script_step(
-            "Verify checksum",
-            script::verify_script(&entry.member),
-            false,
-        )?),
-        plain(script_step(
-            "Publish to GitHub Packages",
-            script::publish_script(&entry.member),
+            "Upload provenance release assets",
+            scripts::upload_files_script(gh, subject.dir, &names, "npm package provenance"),
             true,
         )?),
     ];
     Ok(bundle_job(
         inputs,
+        PublishRole::ArtifactPublish,
+        format!("npm provenance ({id})"),
+        format!("npm-attest-{id}"),
+        steps,
+    ))
+}
+
+/// Publish: re-verify, then `PUT` the package document with the job token.
+///
+/// With a Sigstore bundle it needs `npm-provenance-<id>` and binds the
+/// pushed bytes to the recorded receipt first.
+pub(super) fn publish_job(
+    inputs: &Inputs<'_>,
+    entry: &PublishNpm,
+) -> Result<PublishJobSpec, OrchestratorError> {
+    let id = entry.id.as_str();
+    let mut steps = vec![download_step(id)?, checksum_step(entry)?];
+    let needs = if inputs.provenance == PublishProvenance::SigstoreBundle {
+        let subject = subject(entry);
+        steps.push(provenance::download_step(&subject)?);
+        steps.push(provenance::receipt_step(&subject)?);
+        format!("npm-provenance-{id}")
+    } else {
+        format!("npm-attest-{id}")
+    };
+    steps.push(plain(script_step(
+        "Publish to GitHub Packages",
+        script::publish_script(&entry.member),
+        true,
+    )?));
+    Ok(bundle_job(
+        inputs,
         PublishRole::NpmPublish,
         format!("npm publish ({id})"),
-        format!("npm-attest-{id}"),
+        needs,
         steps,
     ))
 }

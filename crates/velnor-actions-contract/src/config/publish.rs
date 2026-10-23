@@ -165,10 +165,41 @@ pub struct PublishBundle {
     pub version_file: Option<String>,
 }
 
+/// Where the signed provenance of a tag-driven artifact is stored (`[publish] provenance`).
+///
+/// Both modes sign keylessly with the job's GitHub OIDC identity through
+/// GitHub's Sigstore instance; they differ only in where the signed bundle
+/// lives and how it is verified.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PublishProvenance {
+    /// GitHub's artifact attestation store (`actions/attest-build-provenance`).
+    /// A plan without the feature fails the attest job closed; there is no
+    /// automatic downgrade.
+    #[default]
+    GithubAttestation,
+    /// Declared fallback for repositories whose plan has no attestation store:
+    /// the same keyless signature, kept as a Sigstore bundle plus a provenance
+    /// receipt in the tag's GitHub release, verified with
+    /// `gh attestation verify --bundle` before anything is published.
+    SigstoreBundle,
+}
+
+impl PublishProvenance {
+    /// True for the default mode (serialization skip predicate).
+    #[must_use]
+    pub fn is_default(&self) -> bool {
+        *self == Self::GithubAttestation
+    }
+}
+
 /// Publication section (`[publish]`).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PublishConfig {
+    /// Provenance store for every tag-driven artifact (bundles, npm, Maven).
+    #[serde(default, skip_serializing_if = "PublishProvenance::is_default")]
+    pub provenance: PublishProvenance,
     /// Release-asset bundles, sorted by id.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub bundles: Vec<PublishBundle>,

@@ -1,7 +1,8 @@
 //! Unit cases for the publication config and tag grammar.
 
 use super::{
-    PublishBundle, PublishConfig, ReleaseTag, VersionSource, is_artifact_id, is_strict_semver,
+    PublishBundle, PublishConfig, PublishProvenance, ReleaseTag, VersionSource, is_artifact_id,
+    is_strict_semver,
 };
 
 fn bundle(id: &str) -> PublishBundle {
@@ -217,4 +218,27 @@ fn invalid_paths_are_rejected() {
         })
         .contains("bad_path_count")
     );
+}
+
+#[test]
+fn provenance_defaults_to_the_attestation_store_and_the_fallback_must_be_declared() {
+    let empty: PublishConfig = serde_json::from_value(serde_json::json!({})).expect("config");
+    assert_eq!(empty.provenance, PublishProvenance::GithubAttestation);
+    assert_eq!(
+        serde_json::to_value(&empty).expect("serialize"),
+        serde_json::json!({})
+    );
+    let declared: PublishConfig =
+        serde_json::from_value(serde_json::json!({ "provenance": "sigstore_bundle" }))
+            .expect("config");
+    assert_eq!(declared.provenance, PublishProvenance::SigstoreBundle);
+    assert_eq!(
+        serde_json::to_value(&declared).expect("serialize"),
+        serde_json::json!({ "provenance": "sigstore_bundle" })
+    );
+    for bad in ["none", "off", "skip", "SigstoreBundle", ""] {
+        let parsed =
+            serde_json::from_value::<PublishConfig>(serde_json::json!({ "provenance": bad }));
+        assert!(parsed.is_err(), "{bad}");
+    }
 }

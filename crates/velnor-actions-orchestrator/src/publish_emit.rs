@@ -93,6 +93,7 @@ pub(crate) fn publish_files(
         branch: &prep.default_branch,
         label: &prep.runner_label,
         environment: DEFAULT_ENVIRONMENT,
+        provenance: prep.config.publish.provenance,
         mise,
         catalog: &catalog,
         bundles: &plans,
