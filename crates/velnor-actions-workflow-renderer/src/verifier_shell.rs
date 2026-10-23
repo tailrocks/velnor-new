@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Step, StepRole};
+use velnor_actions_contract::{Step, StepKind, StepRole};
 
 use crate::{RenderError, VERIFY_PATH, VERIFY_VERIFIER_SHELL, commands, yaml::Yaml};
 
@@ -76,6 +76,11 @@ pub(crate) fn render_typed_step(
             "verifier_credential_prelude_missing".to_owned(),
         ));
     };
+    if script.starts_with(&expected_prefix) {
+        return Err(RenderError::InvalidWorkflow(
+            "verifier_shell_script_duplicate_credential_prelude".to_owned(),
+        ));
+    }
 
     render_script(
         &step.name,
@@ -94,36 +99,28 @@ pub(crate) fn render_typed_step(
 
 /// Render the fixed `sh -c SCRIPT` vector used by release workflow builders.
 pub(crate) fn render_command(name: &str, argv: &[String]) -> Result<Yaml, RenderError> {
-    if !matches!(
+    let role = match name {
+        crate::VERIFY_RUST_TOOLCHAIN_STEP => StepRole::VerifyRustManifest,
+        VERIFY_JACTIONLINT_STEP => StepRole::VerifyJactionlint,
+        _ => {
+            return Err(RenderError::InvalidWorkflow(
+                "unrecognized_release_verifier".to_owned(),
+            ));
+        }
+    };
+    let step = crate::verifier_composite::verifier_shell_step(
+        role,
         name,
-        crate::VERIFY_RUST_TOOLCHAIN_STEP | VERIFY_JACTIONLINT_STEP
-    ) {
+        argv.to_owned(),
+        BTreeMap::new(),
+    )?;
+    let StepKind::Shell { run, env } = &step.kind else {
         return Err(RenderError::InvalidWorkflow(
-            "unrecognized_release_verifier".to_owned(),
+            "verifier_composite_requires_shell_step".to_owned(),
         ));
-    }
-    if name == VERIFY_JACTIONLINT_STEP {
-        crate::selected_mise_verifier::validate_argv(argv)?;
-    } else {
-        commands::validate_command_argv(argv)?;
-    }
-    if argv.len() != 3 || argv[0] != "sh" || argv[1] != "-c" {
-        return Err(RenderError::InvalidWorkflow(
-            "verifier_shell_shape_mismatch".to_owned(),
-        ));
-    }
-    render_script(
-        name,
-        &argv[2],
-        &BTreeMap::new(),
-        &BTreeMap::new(),
-        false,
-        ScriptMetadata {
-            id: None,
-            condition: None,
-            run_comment: None,
-        },
-    )
+    };
+    render_typed_step(&step, run, env, &BTreeMap::new(), false)?
+        .ok_or_else(|| RenderError::InvalidWorkflow("verifier_role_required".to_owned()))
 }
 
 /// Render the generated project-tool resolver through its fixed verifier

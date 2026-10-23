@@ -175,3 +175,7 @@ fn workflow_request(
         product_release,
     })
 }
+
+#[cfg(test)]
+#[path = "routing_verifier_boundary_tests.rs"]
+mod verifier_boundary_tests;

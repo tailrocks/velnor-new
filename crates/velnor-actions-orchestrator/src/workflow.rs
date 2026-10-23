@@ -11,6 +11,9 @@ pub(super) use workflow_build::{WorkflowBuildInput, build_workflow_for_consumer_
 #[path = "workflow_dispatch.rs"]
 mod workflow_dispatch;
 
+#[path = "verifier_actions.rs"]
+pub(crate) mod verifier_actions;
+
 #[path = "check_jobs.rs"]
 pub(crate) mod check_jobs;
 
@@ -39,8 +42,9 @@ pub(crate) use workflow_policy::jactionlint_verify_step::{
 };
 pub(crate) use workflow_policy::prepare_rust_components_step;
 pub(crate) use workflow_policy::rust_manifest_step::{
-    NOT_CATALOGUED_CODE, ToolchainPhase, VERIFY_RUST_MANIFEST_STEP, toolchain_script,
-    verify_restored_rust_step, verify_rust_argv, verify_rust_manifest_step, verify_rust_owned_argv,
+    NOT_CATALOGUED_CODE, ToolchainPhase, VERIFY_RESTORED_RUST_STEP, VERIFY_RUST_MANIFEST_STEP,
+    toolchain_script, verify_restored_rust_step, verify_rust_argv, verify_rust_manifest_step,
+    verify_rust_owned_argv,
 };
 
 pub(crate) use crate::workflow_jobs::LINT_JOB_ID;

@@ -90,9 +90,12 @@ pub(crate) fn join_validated_argv_for_run(argv: &[String]) -> Result<String, Ren
     Ok(words.join(" "))
 }
 
-/// True for `sh -c <script>`/`bash -c <script>` vectors.
+/// True for the supported `sh -c <script>`/`bash -c <script>` vectors and
+/// the exact absolute `/bin/sh -c <script>` used by trusted verifiers.
 pub(crate) fn is_inline_shell(argv: &[String]) -> bool {
-    argv.len() > 2 && matches!(argv[0].as_str(), "sh" | "bash") && argv[1].as_str() == "-c"
+    argv.len() > 2
+        && matches!(argv[0].as_str(), "sh" | "bash" | "/bin/sh")
+        && argv[1].as_str() == "-c"
 }
 
 pub(crate) fn inline_shell_script_at(argv: &[String]) -> Option<usize> {
@@ -285,4 +288,82 @@ fn check_command_line(command: &str) -> Result<(), RenderError> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod verifier_shell_tests {
+    use super::join_argv_for_run;
+    use std::process::Command;
+
+    #[test]
+    fn absolute_posix_shell_preserves_script_and_quotes_project_refs() {
+        let argv = vec![
+            "/bin/sh".to_owned(),
+            "-c".to_owned(),
+            "set -eu; v=\"${VELNOR_TOOL_RUST}\"".to_owned(),
+        ];
+        let joined = join_argv_for_run(&argv).expect("canonical absolute shell");
+        let quoted = super::super::project_tool_resolver::quote_project_tool_run_refs(&joined)
+            .expect("dynamic version remains safely quoted");
+
+        assert!(quoted.starts_with("/bin/sh -c '"), "{quoted}");
+        assert!(quoted.contains("'\"${VELNOR_TOOL_RUST}\"'"), "{quoted}");
+        assert!(quoted.ends_with('\''), "{quoted}");
+    }
+
+    #[test]
+    fn absolute_verifier_shell_does_not_relax_unbalanced_reference_checks() {
+        assert!(
+            super::super::project_tool_resolver::quote_project_tool_run_refs(
+                "/bin/sh -c 'printf %s ${VELNOR_TOOL_RUST}"
+            )
+            .is_err(),
+            "unbalanced inline script must remain invalid"
+        );
+    }
+
+    #[test]
+    fn absolute_posix_shell_keeps_inner_scope_and_env_unset_behavior() {
+        let argv = [
+            "env",
+            "-u",
+            "DROP_ME",
+            "/bin/sh",
+            "-c",
+            "local_value='inner value'; printf '<%s>|<%s>|<%s>' \"$local_value\" \"${DROP_ME-unset}\" \"$KEEP_VALUE\"",
+        ]
+        .map(str::to_owned);
+        let joined = join_argv_for_run(&argv).expect("fixed POSIX shell argv");
+        assert!(joined.contains("/bin/sh -c 'local_value='"), "{joined}");
+
+        let outer = format!("export DROP_ME=poison KEEP_VALUE='quoted value'; {joined}");
+        let output = Command::new("/bin/sh")
+            .args(["-c", &outer])
+            .output()
+            .expect("execute emitted POSIX command");
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            String::from_utf8(output.stdout).expect("UTF-8 output"),
+            "<inner value>|<unset>|<quoted value>"
+        );
+    }
+
+    #[test]
+    fn absolute_posix_shell_keeps_generic_forbidden_syntax_rejections() {
+        for script in [
+            "printf '%s' $(id)",
+            "printf '%s' `id`",
+            "printf first\nprintf second",
+        ] {
+            let argv = vec!["/bin/sh".to_owned(), "-c".to_owned(), script.to_owned()];
+            assert!(
+                join_argv_for_run(&argv).is_err(),
+                "unsafe generic script was accepted: {script:?}"
+            );
+        }
+    }
 }

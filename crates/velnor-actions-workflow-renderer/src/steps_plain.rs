@@ -17,6 +17,7 @@ pub(crate) fn plain_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
     crate::parallel_steps::reject_parallel(step, "plain")?;
     match &step.kind {
         StepKind::Action { uses, with, env } => {
+            crate::action_ref::validate_verifier_call(step, uses, with, env)?;
             crate::steps::validate_uses(uses)?;
             for entry in with.keys().chain(with.values()) {
                 crate::steps::scan_for_private_subcommands(entry)?;

@@ -6,6 +6,27 @@ mod environment_matrix;
 #[path = "schema2_generator_release_job_boundary_tests.rs"]
 mod job_boundary_tests;
 
+#[cfg(test)]
+#[path = "schema2_generator_release_security_credential_tests.rs"]
+mod credential_environment_tests;
+#[path = "schema2_generator_release_security_credentials.rs"]
+mod credentials;
+
+pub(super) fn assert_exact_empty_verifier_credentials(
+    body: &str,
+    verifier_steps: &[&str],
+) -> Result<(), Box<dyn Error>> {
+    credentials::assert_exact_empty_verifier_credentials(body, verifier_steps)
+}
+
+pub(super) fn assert_release_workflow_verifier(
+    workflow: &str,
+    step_name: &str,
+    globally_scoped_key: &str,
+) -> Result<(), Box<dyn Error>> {
+    credentials::assert_release_workflow_verifier(workflow, step_name, globally_scoped_key)
+}
+
 #[derive(Clone, Copy)]
 struct TargetJobs {
     target: &'static str,

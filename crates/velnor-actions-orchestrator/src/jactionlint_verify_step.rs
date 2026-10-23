@@ -38,12 +38,21 @@ pub(crate) fn argv(catalog: &ToolCatalog) -> Vec<String> {
     vec!["sh".to_owned(), "-c".to_owned(), script(catalog)]
 }
 
-/// Typed, credential-scrubbed verification step after `Prepare pinned tools`.
+/// Typed local verifier action call after `Prepare pinned tools`.
+pub(crate) fn verify_jactionlint_step(_catalog: &ToolCatalog) -> Step {
+    crate::workflow::verifier_actions::call_step(
+        VERIFY_JACTIONLINT_STEP,
+        velnor_actions_contract::workflow::JACTIONLINT_VERIFIER_USES,
+        Some(velnor_actions_contract::StepRole::VerifyJactionlint),
+    )
+}
+
+/// Canonical inline verifier shell retained for release and upgrade workflows.
 ///
 /// # Errors
 ///
 /// Returns a contract error when the renderer rejects the fixed argv.
-pub(crate) fn verify_jactionlint_step(catalog: &ToolCatalog) -> Result<Step, OrchestratorError> {
+pub(crate) fn verifier_shell_step(catalog: &ToolCatalog) -> Result<Step, OrchestratorError> {
     velnor_actions_workflow_renderer::steps::jactionlint_verifier_step(
         VERIFY_JACTIONLINT_STEP,
         argv(catalog),

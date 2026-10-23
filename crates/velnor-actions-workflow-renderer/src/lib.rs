@@ -56,6 +56,7 @@ mod preseed_closure;
 pub mod private_source_steps;
 /// Project tool-version resolver binding (hard decision 5).
 mod project_tool_resolver;
+pub use project_tool_resolver::quote_project_tool_run_refs;
 pub mod publish_render;
 pub mod publish_roles;
 pub mod publish_scripts;
@@ -130,6 +131,7 @@ pub fn jactionlint_verifier_script(version: &str) -> String {
     selected_mise_verifier::script_for_version(version)
 }
 pub mod verification_jobs;
+pub mod verifier_composite;
 mod workflow_policy;
 mod workflow_size;
 mod workflow_timeout;

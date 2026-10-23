@@ -75,7 +75,7 @@ fn cross_checkout_determinism() -> TestResult {
     let right_bytes = preview_bytes(right.path())?;
     assert_eq!(
         left_bytes.keys().len(),
-        12,
+        15,
         "generated files: {:?}",
         left_bytes.keys().collect::<Vec<_>>()
     );
@@ -88,6 +88,9 @@ fn cross_checkout_determinism() -> TestResult {
     assert!(left_bytes.contains_key(".github/actions/u26/action.yml"));
     assert!(left_bytes.contains_key(".github/actions/velnor-tools-cache-restore/action.yml"));
     assert!(left_bytes.contains_key(".github/actions/velnor-tools-prelude-u26/action.yml"));
+    assert!(left_bytes.contains_key(".github/actions/velnor-verify-jactionlint/action.yml"));
+    assert!(left_bytes.contains_key(".github/actions/velnor-verify-restored-rust/action.yml"));
+    assert!(left_bytes.contains_key(".github/actions/velnor-verify-rust-manifest/action.yml"));
     assert!(left_bytes.contains_key(".github/scripts/velnor-tools-cache-identity.sh"));
     assert_eq!(
         left_bytes, right_bytes,

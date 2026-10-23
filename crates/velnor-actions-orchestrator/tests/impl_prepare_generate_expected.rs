@@ -1,6 +1,6 @@
 //! Exact output inventory for the prepare/generate parity case.
 
-pub(super) const EXPECTED: [&str; 12] = [
+pub(super) const EXPECTED: [&str; 15] = [
     ".github/AGENTS.md",
     ".github/CLAUDE.md",
     ".github/actions/declared-task-0/action.yml",
@@ -8,6 +8,9 @@ pub(super) const EXPECTED: [&str; 12] = [
     ".github/actions/velnor-tool-seed/action.yml",
     ".github/actions/velnor-tools-cache-restore/action.yml",
     ".github/actions/velnor-tools-prelude-u26/action.yml",
+    ".github/actions/velnor-verify-jactionlint/action.yml",
+    ".github/actions/velnor-verify-restored-rust/action.yml",
+    ".github/actions/velnor-verify-rust-manifest/action.yml",
     ".github/jactionlint.yaml",
     ".github/scripts/velnor-tools-cache-identity.sh",
     ".github/velnor/task-execution-manifest-v1.json",

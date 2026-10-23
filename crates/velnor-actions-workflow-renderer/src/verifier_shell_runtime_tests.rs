@@ -14,7 +14,7 @@ use crate::{VERIFY_PATH, VERIFY_VERIFIER_SHELL, toolchain_env::CREDENTIAL_UNSET_
 
 use super::render_typed_step;
 
-const VERIFY_RUN_PREFIX: &str = r#"function_env_unset=(); function_env_scan_complete=0; while IFS= read -r -d '' env_entry; do case "$env_entry" in BASH_FUNC_*=*) function_env_unset+=(-u "${env_entry%%=*}");; VELNOR_VERIFIER_ENV_SCAN_COMPLETE) function_env_scan_complete=$((function_env_scan_complete + 1));; esac; done < <({ /usr/bin/env -0 && printf '%s\000' 'VELNOR_VERIFIER_ENV_SCAN_COMPLETE'; }); [ "$function_env_scan_complete" -eq 1 ] || exit 1; exec /usr/bin/env "${function_env_unset[@]}" -u BASH_ENV -u ENV -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR /bin/bash --noprofile --norc -p -e -o pipefail -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; "#;
+pub(crate) const VERIFY_RUN_PREFIX: &str = r#"function_env_unset=(); function_env_scan_complete=0; while IFS= read -r -d '' env_entry; do case "$env_entry" in BASH_FUNC_*=*) function_env_unset+=(-u "${env_entry%%=*}");; VELNOR_VERIFIER_ENV_SCAN_COMPLETE) function_env_scan_complete=$((function_env_scan_complete + 1));; esac; done < <({ /usr/bin/env -0 && printf '%s\000' 'VELNOR_VERIFIER_ENV_SCAN_COMPLETE'; }); [ "$function_env_scan_complete" -eq 1 ] || exit 1; exec /usr/bin/env "${function_env_unset[@]}" -u BASH_ENV -u ENV -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR /bin/bash --noprofile --norc -p -e -o pipefail -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; "#;
 
 pub(crate) struct Scratch(PathBuf);
 
@@ -302,17 +302,6 @@ fn assert_verifier_output(
 }
 
 #[test]
-fn release_verifier_command_uses_the_same_startup_safe_boundary() {
-    let script = crate::selected_mise_verifier::test_script("2.3.4");
-    let step = crate::verifier_shell::render_command(
-        "Verify jactionlint",
-        &["sh".to_owned(), "-c".to_owned(), script],
-    )
-    .expect("release verifier renders");
-    assert_emitted_boundary(&step);
-}
-
-#[test]
 fn emitted_verifier_roles_ignore_hostile_startup_and_search_path_inputs()
 -> Result<(), Box<dyn Error>> {
     let root = Scratch::new()?;
@@ -358,3 +347,6 @@ mod jactionlint_runtime;
 
 #[path = "verifier_shell_envp_tests.rs"]
 mod envp;
+
+#[path = "verifier_shell_direct_runtime_tests.rs"]
+mod direct_runtime;

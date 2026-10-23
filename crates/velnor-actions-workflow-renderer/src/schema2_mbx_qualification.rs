@@ -64,7 +64,13 @@ pub(super) fn jobs(
     }
     validate_exact_version(&request.mbx_version, "mbx")?;
     validate_exact_version(&request.rust_version, "rust")?;
-    let verify_rust = crate::commands::join_argv_for_run(&request.verify_rust_argv)?;
+    let verify_rust_step = crate::verifier_composite::verifier_shell_step(
+        velnor_actions_contract::StepRole::VerifyRustManifest,
+        crate::VERIFY_RUST_TOOLCHAIN_STEP,
+        request.verify_rust_argv.clone(),
+        std::collections::BTreeMap::default(),
+    )?;
+    let verify_rust = crate::document_steps::verifier_shell_step_to_yaml(&verify_rust_step)?;
 
     Ok(vec![
         job(request, hosted, true, &verify_rust),
@@ -76,7 +82,7 @@ fn job(
     request: &MbxQualificationPins,
     hosted: &RunnerSpec,
     writer: bool,
-    verify_rust: &str,
+    verify_rust: &Yaml,
 ) -> (String, Yaml) {
     let (id, title, mode) = if writer {
         (
@@ -111,13 +117,7 @@ fn job(
         checkout_step(),
         mise_setup_step(request),
         mise_install_step(request),
-        Yaml::Map(vec![
-            (
-                "name".to_owned(),
-                Yaml::str(crate::VERIFY_RUST_TOOLCHAIN_STEP),
-            ),
-            ("run".to_owned(), Yaml::str(verify_rust)),
-        ]),
+        verify_rust.clone(),
         expose_rust_step(request),
         mbx_action_step(request, writer),
         verify_action_step(request, writer),

@@ -2,13 +2,18 @@
 
 use super::step::{Step, StepKind};
 pub(super) use super::step_payloads::valid_tools_cache_identity;
-use super::step_payloads::{
-    valid_checkout_payload, valid_configured_checkout_payload, valid_mise_setup,
-    valid_tool_seed_payload,
-};
+use super::step_payloads::{valid_checkout_payload, valid_mise_setup, valid_tool_seed_payload};
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
+
+#[path = "step_identity_payload.rs"]
+mod payload;
+use payload::{
+    action_has_prefix_for_kind, internal_operation, valid_jactionlint_verifier_payload,
+    valid_rust_verifier_payload,
+};
+pub use payload::{is_configured_checkout, is_tool_seed_step};
 
 /// Fixed local action path used for exact provider-cache admission.
 pub const TOFU_PROVIDER_ADMISSION_USES: &str = "./.github/actions/tofu-provider-admission";
@@ -22,6 +27,24 @@ pub const TOOLS_CACHE_PRELUDE_USES: [&str; 3] = [
     "./.github/actions/velnor-tools-prelude-u24",
     "./.github/actions/velnor-tools-prelude-u26",
 ];
+/// Fixed local actions for the cache-restored and installed Rust verifiers.
+pub const RUST_VERIFIER_USES: [&str; 2] = [
+    "./.github/actions/velnor-verify-restored-rust",
+    "./.github/actions/velnor-verify-rust-manifest",
+];
+/// Fixed local action path for the generated jactionlint executable verifier.
+pub const JACTIONLINT_VERIFIER_USES: &str = "./.github/actions/velnor-verify-jactionlint";
+
+/// Return the required semantic role for one exact generated verifier action.
+pub(super) fn verifier_action_role(uses: &str) -> Option<StepRole> {
+    if RUST_VERIFIER_USES.contains(&uses) {
+        Some(StepRole::VerifyRustManifest)
+    } else if uses == JACTIONLINT_VERIFIER_USES {
+        Some(StepRole::VerifyJactionlint)
+    } else {
+        None
+    }
+}
 /// Static tool digest input for the runtime-qualified tools identity action.
 pub const TOOLS_CACHE_IDENTITY_DIGEST_INPUT: &str = "d";
 /// Expression path for the job-private `OpenTofu` plugin cache.
@@ -241,6 +264,8 @@ impl StepRole {
             .any(|operation| internal_operation(kind, operation)),
             Self::MbxCache => super::step_mbx_lifecycle::valid_mbx_cache(kind),
             Self::PlaywrightInstall => super::step_protocol::valid_playwright_install(kind),
+            Self::VerifyRustManifest => valid_rust_verifier_payload(kind),
+            Self::VerifyJactionlint => valid_jactionlint_verifier_payload(kind),
             Self::PreparePinnedTools
             | Self::MbxVersionCheck
             | Self::MbxWorkspaceCleanup
@@ -252,8 +277,6 @@ impl StepRole {
             | Self::MbxSeedBuild
             | Self::MbxBundleExport
             | Self::PrepareRustComponents
-            | Self::VerifyRustManifest
-            | Self::VerifyJactionlint
             | Self::CargoDeny
             | Self::CargoMachete
             | Self::Jactionlint
@@ -320,41 +343,6 @@ impl StepRole {
     }
 }
 
-/// Check that a step is the configured checkout owner in this workflow scope.
-///
-/// Checkout is a semantic role, not a display-name convention. The caller
-/// supplies the exact pinned action ref from its validated render context.
-#[must_use]
-pub fn is_configured_checkout(step: &Step, expected_uses: &str) -> bool {
-    step.role == Some(StepRole::Checkout)
-        && step.condition.is_none()
-        && matches!(&step.kind, StepKind::Action { uses, .. } if uses == expected_uses)
-        && valid_configured_checkout_payload(&step.kind)
-}
-
-/// Check that a step is the unconditional local tool-seed consumer.
-#[must_use]
-pub fn is_tool_seed_step(step: &Step) -> bool {
-    step.role == Some(StepRole::ToolSeed)
-        && step.condition.is_none()
-        && valid_tool_seed_payload(&step.kind)
-}
-
-/// True when an action payload uses a fixed name prefix.
-fn action_has_prefix_for_kind(kind: &StepKind, prefix: &str) -> bool {
-    matches!(kind, StepKind::Action { uses, .. } if action_has_prefix(uses, prefix))
-}
-
-/// True when a pinned action ref starts with its required owner/repository.
-fn action_has_prefix(uses: &str, prefix: &str) -> bool {
-    uses.starts_with(prefix)
-}
-
-/// True when an internal operation matches its role contract.
-fn internal_operation(kind: &StepKind, expected: &str) -> bool {
-    matches!(kind, StepKind::Internal { operation, .. } if operation == expected)
-}
-
 /// Validate one serialized step scope, including role payloads and unique output IDs.
 ///
 /// Workflow jobs and composite actions use separate output-ID scopes, so renderers
@@ -397,3 +385,7 @@ fn validate_step_identities(steps: &[Step], scope: &str) -> Result<(), ContractE
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "step_identity_verifier_tests.rs"]
+mod rust_verifier_role_tests;

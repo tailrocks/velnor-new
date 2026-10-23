@@ -44,7 +44,9 @@ fn fixture(channel: PackageReleaseChannel) -> ConsumerReleaseSpec {
         verify_rust_argv: vec![
             "sh".to_owned(),
             "-c".to_owned(),
-            "echo verify-rust".to_owned(),
+            velnor_actions_workflow_renderer::toolchain_env::with_credential_unset_script(
+                "echo verify-rust",
+            ),
         ],
         install_rust_argv: vec![
             "mise".to_owned(),

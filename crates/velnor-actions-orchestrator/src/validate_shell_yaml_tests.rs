@@ -382,3 +382,6 @@ fn validate_generated_workflow(body: &str) -> Result<(), String> {
         .map(|_| ())
         .map_err(|error| error.to_string())
 }
+
+#[path = "validate_shell_trusted_absolute_tests.rs"]
+mod trusted_absolute_shell_tests;

@@ -1,6 +1,7 @@
 //! Shell quoting of project version references inside `run:` text.
 
-use super::{RenderError, invalid, project_tool_ref_names};
+use super::{RenderError, invalid};
+use velnor_actions_contract::config::project_tool_refs::project_tool_ref_names;
 
 /// Quote each `${VELNOR_TOOL_<NAME>}` in shell text as its own expansion:
 /// unquoted becomes `"${..}"`, single-quoted becomes `'"${..}"'` (the

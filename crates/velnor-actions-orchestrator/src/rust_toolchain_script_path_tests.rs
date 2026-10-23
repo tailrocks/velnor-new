@@ -98,8 +98,11 @@ fn a_planted_helper_on_the_restored_mise_path_never_runs() -> TestResult {
 #[test]
 fn the_script_resets_path_before_any_command() {
     let script = toolchain_script("1.0.0", ToolchainPhase::Restored, &[]);
+    let unset = velnor_actions_workflow_renderer::toolchain_env::credential_unset_prelude();
     assert!(
-        script.starts_with(&format!("set -eu; PATH={VERIFY_PATH}; export PATH; ")),
+        script.starts_with(&format!(
+            "{unset} set -eu; PATH={VERIFY_PATH}; export PATH; "
+        )),
         "{script}"
     );
 }

@@ -218,6 +218,10 @@ fn rejects_live_duplicate_missing_and_extra_verifier_credentials() {
         &changed_verifier(QUALIFIER, RUST, VERIFY_PATH, "/tmp/poison"),
     );
     reject_synthetic_tamper(
+        "missing PATH",
+        &changed_verifier(QUALIFIER, RUST, &format!("PATH: {VERIFY_PATH}\n"), ""),
+    );
+    reject_synthetic_tamper(
         "extra",
         &changed_verifier(
             QUALIFIER,

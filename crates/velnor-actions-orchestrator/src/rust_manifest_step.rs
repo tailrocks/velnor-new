@@ -55,15 +55,28 @@ fn owned_home_step(
         phase,
         RUST_CHANNEL_MANIFESTS,
     );
-    let mut step = velnor_actions_workflow_renderer::steps::shell_step(
-        name,
-        vec!["sh".to_owned(), "-c".to_owned(), script],
-        env,
-    )?;
     // Both phases are the same cache-safe check (the dependency-seed job
     // admits only cache roles).
-    step.role = Some(StepRole::VerifyRustManifest);
-    Ok(step)
+    Ok(
+        velnor_actions_workflow_renderer::verifier_composite::verifier_shell_step(
+            StepRole::VerifyRustManifest,
+            name,
+            vec!["sh".to_owned(), "-c".to_owned(), script],
+            env,
+        )?,
+    )
+}
+
+/// Canonical scrubbed Rust verifier body used to render one fixed composite.
+pub(crate) fn verifier_shell_step(
+    catalog: &ToolCatalog,
+    phase: ToolchainPhase,
+) -> Result<Step, OrchestratorError> {
+    let name = match phase {
+        ToolchainPhase::Restored => VERIFY_RESTORED_RUST_STEP,
+        ToolchainPhase::Installed => VERIFY_RUST_MANIFEST_STEP,
+    };
+    owned_home_step(name, catalog, phase)
 }
 
 /// `sh -c` argv of one phase of the check for a renderer-built job on the
@@ -100,11 +113,11 @@ pub(crate) fn verify_rust_argv(catalog: &ToolCatalog) -> Vec<String> {
 /// # Errors
 ///
 /// Returns a contract error when the renderer rejects the fixed argv.
-pub(crate) fn verify_rust_manifest_step(catalog: &ToolCatalog) -> Result<Step, OrchestratorError> {
-    owned_home_step(
+pub(crate) fn verify_rust_manifest_step(_catalog: &ToolCatalog) -> Step {
+    crate::workflow::verifier_actions::call_step(
         VERIFY_RUST_MANIFEST_STEP,
-        catalog,
-        ToolchainPhase::Installed,
+        velnor_actions_contract::workflow::RUST_VERIFIER_USES[1],
+        Some(StepRole::VerifyRustManifest),
     )
 }
 
@@ -114,8 +127,12 @@ pub(crate) fn verify_rust_manifest_step(catalog: &ToolCatalog) -> Result<Step, O
 /// # Errors
 ///
 /// Returns a contract error when the renderer rejects the fixed argv.
-pub(crate) fn verify_restored_rust_step(catalog: &ToolCatalog) -> Result<Step, OrchestratorError> {
-    owned_home_step(VERIFY_RESTORED_RUST_STEP, catalog, ToolchainPhase::Restored)
+pub(crate) fn verify_restored_rust_step(_catalog: &ToolCatalog) -> Step {
+    crate::workflow::verifier_actions::call_step(
+        VERIFY_RESTORED_RUST_STEP,
+        velnor_actions_contract::workflow::RUST_VERIFIER_USES[0],
+        Some(StepRole::VerifyRustManifest),
+    )
 }
 
 #[cfg(test)]

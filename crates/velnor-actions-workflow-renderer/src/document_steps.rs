@@ -4,11 +4,15 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Step, StepKind};
 
+#[path = "document_steps_internal_env.rs"]
+mod internal_env_module;
+use internal_env_module::internal_env;
+
 use crate::{
     RenderError, commands,
     composite::push_composite_shell,
     render::{FINAL_JOB_ID, RenderContext},
-    steps::{self, INTERNAL_OP_ENV, REQUEST_FILE_ENV},
+    steps,
     yaml::Yaml,
 };
 
@@ -24,88 +28,6 @@ fn is_verdict_download(step: &Step) -> bool {
         )
 }
 
-/// Env for one internal step: op plus request file, authorized reads carry auth.
-///
-/// The fetch op takes no request file; it reads the plan from the run directory and
-/// authenticates `gh` with the job token plus the repository slug (fixed
-/// literals, never caller input). This render-time pair is emitted only on
-/// that exact internal step. Merge-family steps in the final job
-/// additionally carry the finalized `needs` conclusions channel plus the
-/// rendered expected inventory, so the merge binds required validators to
-/// the committed workflow.
-fn internal_env(
-    op: &str,
-    target: &str,
-    ctx: &RenderContext,
-    needs_envs: &[(String, String)],
-    job_env: &BTreeMap<String, String>,
-    step_env: &BTreeMap<String, String>,
-) -> Result<Yaml, RenderError> {
-    commands::validate_env(step_env)?;
-    if op == steps::FETCH_OPERATION {
-        if !step_env.is_empty() {
-            return Err(RenderError::InvalidWorkflow(
-                "fetch_internal_env_not_supported".to_owned(),
-            ));
-        }
-        return Ok(Yaml::Map(vec![
-            ("GH_REPO".to_owned(), Yaml::str("${{ github.repository }}")),
-            ("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")),
-            (INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned())),
-        ]));
-    }
-    if let Some(env) = crate::document_evidence::internal_env(op, step_env)? {
-        return Ok(env);
-    }
-    if op == velnor_actions_contract::PRIVATE_FETCH_OPERATION
-        || op == velnor_actions_contract::PRIVATE_REVOKE_OPERATION
-        || op == velnor_actions_contract::GRADLE_RUN_OPERATION
-        || op == velnor_actions_contract::BUN_REGISTRY_INSTALL_OPERATION
-        || op == velnor_actions_contract::BUN_ASSETS_EXPORT_OPERATION
-        || op == velnor_actions_contract::BUN_ASSETS_PREPARE_OPERATION
-        || op == velnor_actions_contract::BUN_ASSETS_IMPORT_OPERATION
-        || op == velnor_actions_contract::config::playwright_lock::PLAYWRIGHT_INSTALL_OPERATION
-    {
-        // Private-source operations take no request file: their whole input
-        // is the fixed step env (token binding plus the literal allowlist).
-        let mut env = vec![(INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned()))];
-        env.extend(
-            step_env
-                .iter()
-                .map(|(key, value)| (key.clone(), Yaml::str(value.clone()))),
-        );
-        return Ok(Yaml::Map(env));
-    }
-    let request = format!("{}/{target}-request.json", ctx.request_dir);
-    let mut env = Vec::new();
-    if op == steps::RESOLVE_QUALIFICATION_OPERATION {
-        env.push(("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")));
-    }
-    env.push((INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned())));
-    for (key, value) in needs_envs {
-        env.push((key.clone(), Yaml::str(value.clone())));
-    }
-    env.push((REQUEST_FILE_ENV.to_owned(), Yaml::str(request)));
-    if op == steps::PLAN_OPERATION && target == steps::PLAN_OPERATION {
-        for (key, value) in &ctx.plan_consumer_env {
-            if job_env.get(key).map(String::as_str) != Some(value.as_str()) {
-                env.push((key.clone(), Yaml::str(value.clone())));
-            }
-        }
-    }
-    let mut seen: std::collections::BTreeSet<String> =
-        env.iter().map(|(key, _)| key.clone()).collect();
-    for (key, value) in step_env {
-        if !seen.insert(key.clone()) {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "duplicate_internal_env:{key}"
-            )));
-        }
-        env.push((key.clone(), Yaml::str(value.clone())));
-    }
-    Ok(Yaml::Map(env))
-}
-
 /// Render one action step: name, condition, pin, inputs, step env.
 ///
 /// Step env (cache modes) renders after `with:`; absent env renders
@@ -119,34 +41,7 @@ fn action_step_to_yaml(
     job_env: &BTreeMap<String, String>,
     runs_on: Option<&str>,
 ) -> Result<Yaml, RenderError> {
-    let runtime_identity = step.role == Some(velnor_actions_contract::StepRole::ToolsCacheIdentity)
-        || ["ubuntu-22.04", "ubuntu-24.04", "ubuntu-26.04"]
-            .iter()
-            .any(|lane| {
-                crate::cache_p08::runtime_identity_action_uses(lane) == Some(uses)
-                    || crate::cache_p08::runtime_prelude_action_uses(lane) == Some(uses)
-            });
-    if runtime_identity {
-        let Some(lane) = runs_on else {
-            return Err(RenderError::InvalidWorkflow(
-                "tools_cache_identity_missing_runner".to_owned(),
-            ));
-        };
-        crate::cache_p08::validate_runtime_identity_action(step, uses, lane, with, env)?;
-    } else if uses == crate::tool_seed::TOOL_SEED_USES {
-        crate::tool_seed::validate_action_call(step, uses, with, env)?;
-    } else if uses == crate::cache_steps::TOOLS_RESTORE_USES {
-        crate::cache_steps::validate_tools_restore_call(step)?;
-    } else {
-        steps::validate_uses(uses)?;
-    }
-    for (key, value) in with {
-        crate::expressions::check_with_key(key)?;
-        crate::expressions::check_with_action_value(uses, key, value)?;
-        steps::scan_for_private_subcommands(key)?;
-        steps::scan_for_private_subcommands(value)?;
-    }
-    commands::validate_env(env)?;
+    let runtime_identity = validate_action_step(step, uses, with, env, runs_on)?;
     let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
     crate::step_ids::push_step_id(&mut entries, step);
     if let Some(condition) = &step.condition {
@@ -166,6 +61,8 @@ fn action_step_to_yaml(
         || uses == crate::tool_seed::TOOL_SEED_USES
         || uses == crate::cache_steps::TOOLS_RESTORE_USES
         || uses == crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
+        || velnor_actions_contract::workflow::RUST_VERIFIER_USES.contains(&uses)
+        || uses == velnor_actions_contract::workflow::JACTIONLINT_VERIFIER_USES
         || crate::action_ref::is_generated_provider_prelude(uses)
         || crate::action_ref::is_crate_obligation_action(uses)
         || crate::action_ref::is_generated_declared_task(uses)
@@ -198,6 +95,45 @@ fn action_step_to_yaml(
     Ok(Yaml::Map(entries))
 }
 
+fn validate_action_step(
+    step: &Step,
+    uses: &str,
+    with: &BTreeMap<String, String>,
+    env: &BTreeMap<String, String>,
+    runs_on: Option<&str>,
+) -> Result<bool, RenderError> {
+    crate::action_ref::validate_verifier_call(step, uses, with, env)?;
+    let runtime_identity = step.role == Some(velnor_actions_contract::StepRole::ToolsCacheIdentity)
+        || ["ubuntu-22.04", "ubuntu-24.04", "ubuntu-26.04"]
+            .iter()
+            .any(|lane| {
+                crate::cache_p08::runtime_identity_action_uses(lane) == Some(uses)
+                    || crate::cache_p08::runtime_prelude_action_uses(lane) == Some(uses)
+            });
+    if runtime_identity {
+        let Some(lane) = runs_on else {
+            return Err(RenderError::InvalidWorkflow(
+                "tools_cache_identity_missing_runner".to_owned(),
+            ));
+        };
+        crate::cache_p08::validate_runtime_identity_action(step, uses, lane, with, env)?;
+    } else if uses == crate::tool_seed::TOOL_SEED_USES {
+        crate::tool_seed::validate_action_call(step, uses, with, env)?;
+    } else if uses == crate::cache_steps::TOOLS_RESTORE_USES {
+        crate::cache_steps::validate_tools_restore_call(step)?;
+    } else {
+        steps::validate_uses(uses)?;
+    }
+    for (key, value) in with {
+        crate::expressions::check_with_key(key)?;
+        crate::expressions::check_with_action_value(uses, key, value)?;
+        steps::scan_for_private_subcommands(key)?;
+        steps::scan_for_private_subcommands(value)?;
+    }
+    commands::validate_env(env)?;
+    Ok(runtime_identity)
+}
+
 /// Sorted string map as YAML (shared by `with:` and `env:` emission).
 pub(crate) fn string_map_yaml(map: &BTreeMap<String, String>) -> Yaml {
     Yaml::Map(
@@ -213,6 +149,7 @@ fn shell_step_to_yaml(
     env: &BTreeMap<String, String>,
     job_env: &BTreeMap<String, String>,
     composite: bool,
+    composite_shell: Option<&str>,
 ) -> Result<Yaml, RenderError> {
     if let Some(verifier) =
         crate::verifier_shell::render_typed_step(step, run, env, job_env, composite)?
@@ -245,7 +182,12 @@ fn shell_step_to_yaml(
     if !filtered_env.is_empty() {
         entries.push(("env".to_owned(), string_map_yaml(&filtered_env)));
     }
-    push_composite_shell(&mut entries, composite);
+    if composite {
+        entries.push((
+            "shell".to_owned(),
+            Yaml::str(composite_shell.unwrap_or("bash")),
+        ));
+    }
     entries.push((
         "run".to_owned(),
         Yaml::str(commands::join_validated_argv_for_run(run)?),
@@ -266,7 +208,7 @@ pub(crate) fn non_internal_step_to_yaml(
         StepKind::Action { uses, with, env } => {
             action_step_to_yaml(job_id, step, uses, with, env, job_env, Some(runs_on))
         }
-        StepKind::Shell { run, env } => shell_step_to_yaml(step, run, env, job_env, false),
+        StepKind::Shell { run, env } => shell_step_to_yaml(step, run, env, job_env, false, None),
         StepKind::Internal { .. } | StepKind::TaskExecution { .. } => Err(
             RenderError::InvalidWorkflow("internal_op_rejected".to_owned()),
         ),
@@ -312,7 +254,7 @@ pub(crate) fn step_to_yaml(
             step_context.runs_on,
         ),
         StepKind::Shell { run, env } => {
-            shell_step_to_yaml(step, run, env, step_context.job_env, composite)
+            shell_step_to_yaml(step, run, env, step_context.job_env, composite, None)
         }
         StepKind::Internal { .. } => {
             internal_step_to_yaml(job_id, step, ctx, needs_envs, composite, step_context)
@@ -321,6 +263,12 @@ pub(crate) fn step_to_yaml(
             "unfactored_task_execution".to_owned(),
         )),
     }
+}
+
+/// Render a canonical shell step for a verifier composite with a fixed,
+/// trusted interpreter rather than resolving `bash` through restored PATH.
+pub(crate) fn verifier_shell_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
+    crate::verifier_composite::verifier_shell_step_to_yaml(step)
 }
 
 /// Render one internal planner step. The operation travels in env, never argv.
