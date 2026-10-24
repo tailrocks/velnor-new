@@ -10,6 +10,8 @@ import unicodedata
 EXPECTED = {
     "schema_version",
     "docker_root_mount_target",
+    "docker_root_mount_source",
+    "docker_root_mount_root",
     "docker_root_mount_id",
     "docker_root_device_major",
     "docker_root_device_minor",
@@ -43,6 +45,7 @@ EXPECTED = {
     "probe_cgroup_pids_max",
 }
 
+DOCKER_ROOT_TARGET = "/velnor/docker-root"
 MAX_CGROUP_ANCESTORS = 16
 MAX_EFFECTIVE_CPUS = 4096
 
@@ -58,6 +61,45 @@ def unique_object(pairs):
 
 def unsigned(value):
     return type(value) is int and value >= 0
+
+
+def has_ascii_controls(value):
+    return any(byte < 0x20 or byte == 0x7F for byte in value.encode("utf-8"))
+
+
+def valid_mount_source(value):
+    return (
+        type(value) is str
+        and bool(value)
+        and len(value.encode("utf-8")) <= 1024
+        and not has_ascii_controls(value)
+    )
+
+
+def valid_mount_root(value):
+    if type(value) is not str:
+        return False
+    if value == "/":
+        return True
+    encoded = value.encode("utf-8")
+    if not value or len(encoded) > 1024 or not value.startswith("/") or has_ascii_controls(value):
+        return False
+    for component in value.split("/")[1:]:
+        if not component or component in (".", ".."):
+            return False
+        bytes_component = component.encode("utf-8")
+        index = 0
+        while index < len(bytes_component):
+            if bytes_component[index] == ord("\\"):
+                if index + 3 >= len(bytes_component) or any(
+                    byte < ord("0") or byte > ord("7")
+                    for byte in bytes_component[index + 1 : index + 4]
+                ):
+                    return False
+                index += 4
+            else:
+                index += 1
+    return True
 
 
 def cgroup_path(value):
@@ -96,7 +138,7 @@ def validate_record(raw, root):
     canonical = (json.dumps(record, separators=(",", ":"), ensure_ascii=True) + "\n").encode()
     if raw != canonical:
         raise ValueError("Probe output is not the canonical compact record.")
-    if record["schema_version"] != 3 or type(record["schema_version"]) is not int:
+    if record["schema_version"] != 5 or type(record["schema_version"]) is not int:
         raise ValueError("The probe schema is not supported.")
     for key in (
         "docker_root_free_bytes",
@@ -199,8 +241,12 @@ def validate_record(raw, root):
         raise ValueError("Probe process IDs must be positive integers.")
     if host_pid != namespace_pid:
         raise ValueError("The probe host and namespace process IDs differ.")
-    if type(record["docker_root_mount_target"]) is not str or not record["docker_root_mount_target"].startswith("/"):
-        raise ValueError("The Docker-root target is not an absolute path.")
+    if record["docker_root_mount_target"] != DOCKER_ROOT_TARGET:
+        raise ValueError("The Docker-root target is not the fixed probe path.")
+    if not valid_mount_source(record["docker_root_mount_source"]):
+        raise ValueError("The Docker-root mount source is malformed.")
+    if not valid_mount_root(record["docker_root_mount_root"]):
+        raise ValueError("The Docker-root mount root is malformed.")
     if type(record["docker_root_fs_type_name"]) is not str or not record["docker_root_fs_type_name"]:
         raise ValueError("The filesystem type name is empty.")
     if type(record["guest_boot_id"]) is not str or len(record["guest_boot_id"]) != 36:

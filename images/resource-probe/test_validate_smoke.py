@@ -1,4 +1,4 @@
-"""Focused tests for the schema-3 resource-probe image smoke parser."""
+"""Focused tests for the schema-5 resource-probe image smoke parser."""
 
 import copy
 import json
@@ -11,8 +11,10 @@ import validate_smoke
 
 def valid_record():
     return {
-        "schema_version": 3,
-        "docker_root_mount_target": "/var/lib/docker",
+        "schema_version": 5,
+        "docker_root_mount_target": "/velnor/docker-root",
+        "docker_root_mount_source": "/dev/vdb",
+        "docker_root_mount_root": "/_data",
         "docker_root_mount_id": 42,
         "docker_root_device_major": 0,
         "docker_root_device_minor": 52,
@@ -83,13 +85,15 @@ class SmokeRecordTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.validate(record)
 
-    def test_accepts_schema_three_with_ordered_ancestor_chain(self):
+    def test_accepts_schema_five_with_mount_identity_and_ordered_ancestor_chain(self):
         self.validate(valid_record())
 
-    def test_rejects_schema_two(self):
-        record = valid_record()
-        record["schema_version"] = 2
-        self.assert_rejected(record)
+    def test_rejects_unsupported_schema_versions_and_boolean(self):
+        for version in (0, 2, 3, 4, 6, True):
+            with self.subTest(version=version):
+                record = valid_record()
+                record["schema_version"] = version
+                self.assert_rejected(record)
 
     def test_rejects_missing_or_extra_top_level_fields(self):
         record = valid_record()
@@ -97,6 +101,48 @@ class SmokeRecordTests(unittest.TestCase):
         self.assert_rejected(record)
         record = valid_record()
         record["unexpected"] = 1
+        self.assert_rejected(record)
+
+    def test_rejects_missing_or_malformed_mount_identity(self):
+        record = valid_record()
+        del record["docker_root_mount_source"]
+        self.assert_rejected(record)
+        record = valid_record()
+        del record["docker_root_mount_root"]
+        self.assert_rejected(record)
+        for key, value in (
+            ("docker_root_mount_source", None),
+            ("docker_root_mount_source", 17),
+            ("docker_root_mount_source", ""),
+            ("docker_root_mount_source", "dev\nvolume"),
+            ("docker_root_mount_source", "é" * 513),
+            ("docker_root_mount_root", None),
+            ("docker_root_mount_root", 17),
+            ("docker_root_mount_root", ""),
+            ("docker_root_mount_root", "relative"),
+            ("docker_root_mount_root", "/a//b"),
+            ("docker_root_mount_root", "/a/./b"),
+            ("docker_root_mount_root", "/a/../b"),
+            ("docker_root_mount_root", "/bad\\x"),
+            ("docker_root_mount_root", "/bad\tb"),
+            ("docker_root_mount_root", "/" + "a" * 1024),
+        ):
+            with self.subTest(key=key, value=value):
+                record = valid_record()
+                record[key] = value
+                self.assert_rejected(record)
+
+    def test_accepts_mount_root_slash_and_octal_escape(self):
+        record = valid_record()
+        record["docker_root_mount_source"] = "tmpfs"
+        record["docker_root_mount_root"] = "/docker\\040root"
+        self.validate(record)
+        record["docker_root_mount_root"] = "/"
+        self.validate(record)
+
+    def test_rejects_nonfixed_mount_target(self):
+        record = valid_record()
+        record["docker_root_mount_target"] = "/other/root"
         self.assert_rejected(record)
 
     def test_rejects_cpu_ancestor_order_and_count_inconsistency(self):

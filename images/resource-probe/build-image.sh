@@ -17,16 +17,19 @@ readonly authority_sha="${VELNOR_WORKFLOW_AUTHORITY_SHA:?missing workflow author
 
 python3 -B images/resource-probe/test_write_manifest.py
 python3 -B images/resource-probe/test_validate_smoke.py
+bash images/resource-probe/test_container_lifecycle.sh
 
 workdir="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/resource-probe-build.XXXXXXXX")"
 readonly workdir
+source images/resource-probe/container_lifecycle.sh
 readonly context="$workdir/context"
 readonly smoke_root="$workdir/docker-root"
 readonly smoke_output="$workdir/smoke-output.jsonl"
 readonly smoke_error="$workdir/smoke-error.log"
 readonly inspect_json="$workdir/loaded-inspect.json"
+readonly smoke_cidfile="$workdir/smoke-container.cid"
 mkdir -m 0755 "$context" "$smoke_root"
-trap 'rm -rf "$workdir"' EXIT
+trap 'resource_probe_cleanup_exit "$?" "$smoke_cidfile" "$workdir"' EXIT
 
 cp "$target_dir/x86_64-unknown-linux-musl/release/velnor-resource-probe" "$context/resource-probe"
 cp images/resource-probe/Dockerfile "$context/Dockerfile"
@@ -48,7 +51,7 @@ PY
 
 docker build --platform linux/amd64 --network none --build-arg "SOURCE_SHA=$source_sha" --tag "$image" "$context"
 chmod 0755 "$smoke_root"
-docker run --rm --pull=never --platform linux/amd64 --network none --read-only --cap-drop=ALL --security-opt no-new-privileges:true --user 65532:65532 --mount "type=bind,source=$smoke_root,target=/velnor/docker-root,readonly" "$image" > "$smoke_output" 2> "$smoke_error"
+timeout --signal=TERM --kill-after=10s 180s docker run --cidfile "$smoke_cidfile" --pull=never --platform linux/amd64 --cgroupns=host --pid=host --cpu-period=100000 --cpu-quota=10000 --memory=134217728 --memory-swap=134217728 --pids-limit=4 --network none --read-only --cap-drop=ALL --security-opt no-new-privileges:true --user 65532:65532 --mount "type=bind,source=$smoke_root,target=/velnor/docker-root,readonly" --mount "type=bind,source=/sys/fs/cgroup,target=/sys/fs/cgroup,readonly" "$image" > "$smoke_output" 2> "$smoke_error"
 test ! -s "$smoke_error"
 python3 images/resource-probe/validate_smoke.py "$smoke_output" "$smoke_root"
 docker image save --platform linux/amd64 --output "$archive" "$image"
