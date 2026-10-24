@@ -4,10 +4,11 @@ use serde::{Deserialize, Serialize};
 
 use super::super::identity::QualificationCacheLayer;
 use super::super::runtime::QualificationRuntimeIdentity;
-use crate::workflow::{QualificationPhase, QualificationRunRef};
+use crate::errors::ContractError;
+use crate::workflow::{QualificationDispatchMode, QualificationPhase, QualificationRunRef};
 
-/// Immutable uploaded receipt artifact name consumed by the dispatcher.
-pub const QUALIFICATION_CACHE_RECEIPT_ARTIFACT: &str = "velnor-qualification-cache-receipt-v2";
+/// Prefix for immutable receipt artifact names consumed by the dispatcher.
+pub const QUALIFICATION_CACHE_RECEIPT_ARTIFACT: &str = "velnor-qualification-cache-receipt-v4";
 /// The sole file inside each immutable qualification receipt artifact.
 pub const QUALIFICATION_CACHE_RECEIPT_FILENAME: &str = "qualification-cache-receipt.json";
 /// Maximum staged receipt document size before deserialization.
@@ -18,6 +19,19 @@ pub const MAX_QUALIFICATION_RECEIPT_DEPTH: usize = 4;
 pub(super) const MAX_JSON_NESTING: usize = 32;
 /// Maximum UTF-8 bytes in one externally supplied text field.
 pub(super) const MAX_RECEIPT_TEXT_BYTES: usize = 4_096;
+
+/// Give the artifact name for one exact workflow attempt.
+/// # Errors
+/// Gives an error when either run coordinate is zero or invalid.
+pub fn qualification_cache_receipt_artifact_name(
+    run: QualificationRunRef,
+) -> Result<String, ContractError> {
+    run.validate()?;
+    Ok(format!(
+        "{QUALIFICATION_CACHE_RECEIPT_ARTIFACT}-a{}",
+        run.run_attempt
+    ))
+}
 
 /// Exact cache restore result observed in a completed producer job.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -47,7 +61,7 @@ pub enum QualificationCacheSaveActionResult {
     Disabled,
 }
 
-/// One exact key/ref record returned by the cache backend API.
+/// One exact key/ref/version record returned by the cache backend API.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct QualificationCacheBackendEntry {
@@ -57,6 +71,8 @@ pub struct QualificationCacheBackendEntry {
     pub key: String,
     /// GitHub cache ref scope.
     pub git_ref: String,
+    /// SHA-256 archive version returned by the cache API.
+    pub version: String,
     /// Archive size in bytes.
     pub size_bytes: u64,
 }
@@ -103,15 +119,21 @@ pub struct QualificationCacheSave {
     pub after: QualificationCacheBackendObservation,
 }
 
-/// One layer's actual restore and save observations for one matrix lane.
+/// Restore and save results for one cache layer owned by a generated job.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct QualificationCacheLayerReceipt {
+    /// Exact generated job that owns this physical layer.
+    pub owner_id: String,
+    /// Platform identity shared by all members of this job.
+    pub platform_id: String,
+    /// Digest of the full sorted member list.
+    pub member_digest: String,
     /// Closed cache layer.
     pub layer: QualificationCacheLayer,
     /// Whether this layer is applicable to the selected lane.
     pub active: bool,
-    /// Identity commitment for this lane and layer.
+    /// Digest that identifies this owner's cache layer.
     pub identity_digest: String,
     /// Actual runtime image, ABI and toolchain evidence.
     pub runtime_identity: Option<QualificationRuntimeIdentity>,
@@ -121,6 +143,36 @@ pub struct QualificationCacheLayerReceipt {
     pub restore: QualificationCacheRestore,
     /// Save action plus immutable backend creation evidence.
     pub save: QualificationCacheSave,
+}
+
+/// One lane's link to its owner's cache layer result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct QualificationCacheLaneLayerReceipt {
+    /// Closed cache layer.
+    pub layer: QualificationCacheLayer,
+    /// Whether this logical lane participates in the shared owner layer.
+    pub active: bool,
+    /// Job-level physical identity shared with all owner members.
+    pub identity_digest: String,
+    /// Exact generated job that owns the physical cache state.
+    pub owner_id: Option<String>,
+}
+
+/// One generated job and the results for each cache layer it owns.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct QualificationCacheOwnerReceipt {
+    /// Exact generated job ID.
+    pub owner_id: String,
+    /// Common planned platform identity.
+    pub platform_id: String,
+    /// Digest of the full sorted member list.
+    pub member_digest: String,
+    /// All member records, in sorted order.
+    pub members: Vec<super::super::identity::QualificationCacheOwnerMemberRef>,
+    /// One result for each allowed cache layer.
+    pub layers: Vec<QualificationCacheLayerReceipt>,
 }
 
 /// Per-lane completed work and cache observations.
@@ -140,7 +192,7 @@ pub struct QualificationCacheLaneReceipt {
     /// Actual useful cache-state digest after job completion.
     pub useful_state_digest: String,
     /// Closed layer records, including explicit disabled `TaskResult` evidence.
-    pub layers: Vec<QualificationCacheLayerReceipt>,
+    pub layers: Vec<QualificationCacheLaneLayerReceipt>,
 }
 
 /// Link to the immutable receipt artifact admitted as a predecessor.
@@ -165,7 +217,7 @@ pub struct QualificationCacheReceipt {
     pub schema: u32,
     /// Derived plan identity for this exact run and attempt.
     pub plan_id: String,
-    /// Completed producer run and attempt.
+    /// Producer run and attempt identifiers.
     pub run: QualificationRunRef,
     /// Isolated experiment namespace.
     pub campaign: String,
@@ -182,6 +234,8 @@ pub struct QualificationCacheReceipt {
     pub predecessor: Option<QualificationCacheReceiptLink>,
     /// Actual completed matrix lanes.
     pub lanes: Vec<QualificationCacheLaneReceipt>,
+    /// One actual physical cache observation per generated job and layer.
+    pub owners: Vec<QualificationCacheOwnerReceipt>,
 }
 
 /// Bounded checked-out source change used only by `UsefulDelta`.
@@ -250,10 +304,12 @@ pub struct QualificationCacheArtifact {
     pub workflow_head_sha: String,
 }
 
-/// Runner-owned context captured by the completed producer workflow.
+/// Runner-owned context captured during the producer workflow.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct QualificationCacheProducerContext {
+    /// Dispatch flow authenticated by the runner.
+    pub mode: QualificationDispatchMode,
     /// Repository slug observed by the runner.
     pub repository: String,
     /// Default branch observed during planning.
@@ -272,16 +328,44 @@ pub struct QualificationCacheProducerContext {
     pub run: QualificationRunRef,
 }
 
-/// One immutable receipt artifact file uploaded by the post-job collector.
+/// Task and cache observations collected during the producer run.
+///
+/// This record carries no workflow-run conclusion. After the run ends, the
+/// resolver adds the completed-run result returned by GitHub.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct QualificationCacheProducerEvidence {
+    /// Derived plan identity for this exact run and attempt.
+    pub plan_id: String,
+    /// Isolated experiment namespace.
+    pub campaign: String,
+    /// Phase whose actual execution this record describes.
+    pub phase: QualificationPhase,
+    /// Source revision checked out by this run.
+    pub source_sha: String,
+    /// Static configuration and complete obligation-set commitment.
+    pub configuration_digest: String,
+    /// Verified source delta, present only for `UsefulDelta` records.
+    #[serde(default)]
+    pub source_delta: Option<QualificationSourceDelta>,
+    /// Immediate predecessor run and immutable receipt digest, when required.
+    pub predecessor: Option<QualificationCacheReceiptLink>,
+    /// Task and cache observations for each matrix lane.
+    pub lanes: Vec<QualificationCacheLaneReceipt>,
+    /// One actual physical cache observation per generated job and layer.
+    pub owners: Vec<QualificationCacheOwnerReceipt>,
+}
+
+/// One immutable producer artifact file uploaded before run completion.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct QualificationCacheReceiptArtifactDocument {
-    /// Artifact document schema version.
+    /// Producer artifact schema version.
     pub schema: u32,
-    /// Runner context attested by the workflow itself.
+    /// Immutable runner context captured by the workflow.
     pub producer: QualificationCacheProducerContext,
-    /// Completed job, action and backend observations.
-    pub receipt: QualificationCacheReceipt,
+    /// Task and cache observations collected during this run.
+    pub evidence: QualificationCacheProducerEvidence,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

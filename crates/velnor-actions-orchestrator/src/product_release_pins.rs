@@ -34,6 +34,7 @@ pub(crate) fn resolve(
 ) -> Result<ProductReleasePins, OrchestratorError> {
     let catalog = catalog.clone();
     let (linux_x86_64_setup, macos_arm64_setup, macos_x86_64_setup) = resolve_setups(config)?;
+    let (runner_build_argv, attestation_helper_build_argv) = binary_build_argv(&catalog)?;
     Ok(ProductReleasePins {
         linux_x86_64_setup,
         macos_arm64_setup,
@@ -70,20 +71,8 @@ pub(crate) fn resolve(
             &catalog,
         )?,
         install_resource_probe_target_argv: resource_probe_target_argv(&catalog)?,
-        runner_build_argv: mbx_locked_build_argv(
-            &[
-                "build",
-                "--locked",
-                "--manifest-path",
-                "crates/velnor-runner/Cargo.toml",
-                "--release",
-                "--package",
-                "velnor-runner-cli",
-                "--bin",
-                "velnor-host",
-            ],
-            &catalog,
-        )?,
+        runner_build_argv,
+        attestation_helper_build_argv,
         resource_probe_build_argv: resource_probe_build_argv(&catalog)?,
         // The release gates lint the committed tree exactly as the CI lint
         // job does, with the same token scrub: the linter needs no credential.
@@ -94,6 +83,40 @@ pub(crate) fn resolve(
         verify_rust_argv: crate::workflow::verify_rust_argv(&catalog),
         mr_boxington_version: catalog.version(PinnedTool::MrBoxington).to_owned(),
     })
+}
+
+fn binary_build_argv(
+    catalog: &ToolCatalog,
+) -> Result<(Vec<String>, Vec<String>), OrchestratorError> {
+    let runner = mbx_locked_build_argv(
+        &[
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/velnor-runner/Cargo.toml",
+            "--release",
+            "--package",
+            "velnor-runner-cli",
+            "--bin",
+            "velnor-host",
+        ],
+        catalog,
+    )?;
+    let helper = mbx_locked_build_argv(
+        &[
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/velnor-runner/Cargo.toml",
+            "--release",
+            "--package",
+            "velnor-runner-attestation",
+            "--bin",
+            "velnor-runner-attestation-helper",
+        ],
+        catalog,
+    )?;
+    Ok((runner, helper))
 }
 
 /// `bash -c` argv whose script first unsets the credential variables, the

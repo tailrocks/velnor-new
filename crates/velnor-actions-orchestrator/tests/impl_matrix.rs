@@ -40,7 +40,7 @@ fn crate_yaml_shape_exact() -> TestResult {
     let (_repo, _parent, text) = preview_yml(config_with_branch())?;
     for line in [
         "  rust-demo:",
-        "    name: Rust / demo\n",
+        "    name: Rust / demo",
         "  required:",
         "  plan:",
         "  jactionlint:",
@@ -72,7 +72,10 @@ fn rust_jobs_ignore_matrix_cap() -> TestResult {
     let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\nmax_parallel_jobs = 3\n";
     let repo = make_repo(config)?;
     let prep = prepare(repo.path())?;
-    assert!(plan_for(&prep)?.contains("1 Rust crate job"), "crate plan");
+    assert!(
+        plan_for(&prep)?.contains("1 Rust package job"),
+        "crate plan"
+    );
     let (_repo, _parent, text) = preview_yml(config)?;
     for marker in ["max-parallel:", "strategy:", "fromJSON"] {
         assert!(
@@ -141,12 +144,25 @@ fn tofu_root_jobs_honor_matrix_cap() -> TestResult {
 fn plan_crate_agreement() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let plan = plan_for(&prepare(repo.path())?)?;
-    assert!(plan.contains("1 Rust crate job"), "crate plan:\n{plan}");
+    assert!(plan.contains("1 Rust package job"), "crate plan:\n{plan}");
     assert!(plan.contains("rust-demo"), "crate entry:\n{plan}");
     let (_repo, _parent, text) = preview_yml(config_with_branch())?;
-    assert!(
-        text.contains("  rust-demo:") && !text.contains("  rust-demo-lint:"),
+    assert_eq!(
+        text.matches("  rust-demo:\n").count(),
+        1,
         "crate yaml:\n{text}"
+    );
+    assert!(
+        !text.contains("  rust-demo-lint:"),
+        "one job per package:\n{text}"
+    );
+    assert!(
+        !text.contains("  rust-demo-tests:"),
+        "one job per package:\n{text}"
+    );
+    assert!(
+        !text.contains("  rust-demo-docs:"),
+        "one job per package:\n{text}"
     );
     assert!(text.contains("name: Rust / demo"), "display yaml:\n{text}");
     let ignored =
@@ -197,10 +213,7 @@ fn ignored_rust_merges_to_no_work_never_passes() -> TestResult {
     let final_report = merge(&request)?;
     final_report.validate()?;
     assert_eq!(final_report.status, FinalStatus::NoWork);
-    assert_eq!(
-        final_report.expected_report_ids,
-        [] as [std::string::String; 0]
-    );
+    assert_eq!(final_report.expected_report_ids, [] as [String; 0]);
     assert_eq!(final_report.counts.selected, 0);
     assert_eq!(final_report.counts.executed, 0);
     assert_eq!(final_report.counts.covered, 0);
@@ -274,7 +287,7 @@ fn obligations_carry_fixed_identity() -> TestResult {
     };
     let record = manifest.tasks.get(task_id).ok_or("missing Clippy record")?;
     assert_eq!(*task_id, TASK_ID);
-    assert!(task_digest.starts_with("b3-"));
+    assert!(task_digest.as_str().starts_with("b3-"));
     assert_eq!(record.task_id, *task_id);
     assert_eq!(record.task_digest, *task_digest);
     assert_eq!(record.argv, *argv);

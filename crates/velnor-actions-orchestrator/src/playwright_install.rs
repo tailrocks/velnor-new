@@ -212,9 +212,9 @@ fn is_installed(directory: &Path, sha256: &str) -> bool {
         && fs::read_to_string(directory.join(PIN_MARKER)).is_ok_and(|text| text.trim() == sha256)
 }
 
-/// Fetch `archive` to `file` from its locked URL, then the Playwright mirrors
-/// for the same artifact. Each host gets the transport's own retries; the lock's
-/// sha256 and size must match whichever host served the bytes.
+/// Fetch `archive` into `file` from its locked URL, then try Playwright mirrors for the same artifact.
+/// The transport retries each host.
+/// The downloaded bytes must match the lock's SHA-256 and size, whichever host supplies them.
 fn download_verified(
     downloader: &dyn Downloader,
     archive: &velnor_actions_contract::config::playwright_lock::LockedArchive,

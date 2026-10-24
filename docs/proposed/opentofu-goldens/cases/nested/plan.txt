@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.52
+Velnor Actions plan 0.1.53
 Repository: <repo>
 
 Detected stacks
@@ -15,13 +15,13 @@ Workflow to generate
   Push branch: main
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
-    - jactionlint (8 steps)
-    - plan (18 steps)
-    - required (8 steps)
+    - jactionlint (10 steps)
+    - plan (19 steps)
+    - required (10 steps)
     - required-gate (1 steps)
-    - rust-a (20 steps)
-    - rust-lib (19 steps)
-    - 2 Rust crate jobs
+    - rust-a (21 steps)
+    - rust-lib (20 steps)
+    - 2 Rust package jobs
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> run tests -> doctests -> doc build -> format check
       Entries:

@@ -24,7 +24,8 @@ use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 
 use super::mbx_preflight::{ACTION_MBX_BIN, RESOLVE_ACTION_MBX_BIN};
 use crate::RenderError;
-use crate::steps::{action_owned_mbx_shell_step, action_step_with_env, shell_step};
+use crate::steps::{action_step_with_env, shell_step};
+use crate::tree::RenderedFile;
 
 /// Display name of the bundle key step.
 pub const MBX_BUNDLE_KEY_NAME: &str = "Compute MBX bundle key";
@@ -51,8 +52,9 @@ const HEAD_FORK_EXPR: &str = "${{ github.event.pull_request.head.repo.fork }}";
 const VERSION_ENV: &str = "VELNOR_MBX_BUNDLE_VERSION";
 const TOOLCHAIN_ENV: &str = "VELNOR_MBX_BUNDLE_TOOLCHAIN";
 const ROOT_ENV: &str = "VELNOR_MBX_BUNDLE_ROOT";
+const UNIT_ENV: &str = "VELNOR_MBX_BUNDLE_UNIT";
+const RUST_TOOLCHAIN_ENV: &str = "VELNOR_MBX_BUNDLE_RUST_TOOLCHAIN";
 const MARK_FILE: &str = "$RUNNER_TEMP/velnor/mbx-producer-ok";
-const BUNDLE_SHELL_DIR: &str = "$RUNNER_TEMP/velnor/mbx-bundle";
 const KIB: u64 = 1024;
 
 const RUNNER_TEMP_GUARD: &str = "case \"$RUNNER_TEMP\" in /*) ;; *) printf '%s\\n' 'RUNNER_TEMP must be absolute' >&2; exit 1 ;; esac";
@@ -91,48 +93,15 @@ pub(crate) fn mbx_bundle_prelude(
 }
 
 fn key_step(unit: &str, version: &str, toolchain: &str, root: &str) -> Result<Step, RenderError> {
-    let spec = CacheFamily::MbxBundle.spec();
-    let prefix = CacheFamily::MbxBundle.key_prefix();
-    let ceiling = spec.ceiling_bytes;
-    let script = [
-        "set -eu".to_owned(),
-        RUNNER_TEMP_GUARD.to_owned(),
-        "d=\"$RUNNER_TEMP/velnor/mbx-bundle-key\"".to_owned(),
-        "rm -rf \"$d\"".to_owned(),
-        "mkdir -p \"$d\"".to_owned(),
-        "s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in ''|*[!0-9a-f]*) printf '%s\\n' 'sha256sum returned no digest' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }".to_owned(),
-        format!("default_ref=\"${{{DEFAULT_REF_ENV}:-}}\""),
-        "trust=none".to_owned(),
-        "if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; fi".to_owned(),
-        format!("printf '%s\\n' 'family={}' 'schema={}' '{}' 'unit={unit}' \"mbx=${{{VERSION_ENV}}}\" \"toolchain=${{{TOOLCHAIN_ENV}}}\" \"root=${{{ROOT_ENV}}}\" 'ceiling={ceiling}' > \"$d/compat\"", spec.layer, spec.schema, spec.shell_paths(None).join("' '")),
-        "uname -s >> \"$d/compat\"".to_owned(),
-        "uname -m >> \"$d/compat\"".to_owned(),
-        "s256 \"$d/compat\"".to_owned(),
-        "compat=\"s256-$h\"".to_owned(),
-        format!("lock=\"$GITHUB_WORKSPACE/${{{ROOT_ENV}}}/Cargo.lock\""),
-        "if [ -f \"$lock\" ] && [ ! -L \"$lock\" ]; then s256 \"$lock\"; else printf '%s\\n' absent > \"$d/absent\"; s256 \"$d/absent\"; fi".to_owned(),
-        "snap=\"s256-$h\"".to_owned(),
-        format!("trusted=\"{prefix}trusted-$compat-\""),
-        "key=\"$trusted$snap\"".to_owned(),
-        format!("[ \"${{#key}}\" -le {} ] || {{ printf 'cache key exceeds the GitHub cap: %s\\n' \"$key\" >&2; exit 1; }}", velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES),
-        "save=false".to_owned(),
-        "[ \"$trust\" != trusted ] || save=true".to_owned(),
-        "printf '%s\\n' \"key=$key\" \"restore_keys=$trusted\" \"save=$save\" >> \"$GITHUB_OUTPUT\"".to_owned(),
-        "printf 'velnor: mbx bundle trust=%s key=%s save=%s\\n' \"$trust\" \"$key\" \"$save\"".to_owned(),
-    ]
-    .join("; ");
     let env = BTreeMap::from([
         (DEFAULT_REF_ENV.to_owned(), DEFAULT_REF_EXPR.to_owned()),
         (HEAD_FORK_ENV.to_owned(), HEAD_FORK_EXPR.to_owned()),
         (VERSION_ENV.to_owned(), version.to_owned()),
         (TOOLCHAIN_ENV.to_owned(), toolchain.to_owned()),
         (ROOT_ENV.to_owned(), root.to_owned()),
+        (UNIT_ENV.to_owned(), unit.to_owned()),
     ]);
-    let mut step = shell_step(
-        MBX_BUNDLE_KEY_NAME,
-        vec!["sh".to_owned(), "-c".to_owned(), script],
-        env,
-    )?;
+    let mut step = shell_step(MBX_BUNDLE_KEY_NAME, bundle_helper_command("key"), env)?;
     step.id = Some(StepId::MbxBundleKey);
     step.role = Some(StepRole::MbxBundleKey);
     Ok(step)
@@ -158,16 +127,6 @@ fn restore_step() -> Result<Step, RenderError> {
     Ok(step)
 }
 
-/// `cd` into the Cargo workspace so `mbx` sees the matching checkout state.
-fn workspace_cd(working_directory: Option<&str>) -> Result<String, RenderError> {
-    let root = workspace_root(working_directory)?;
-    Ok(if root == "." {
-        "cd \"$GITHUB_WORKSPACE\"".to_owned()
-    } else {
-        format!("cd \"$GITHUB_WORKSPACE/{root}\"")
-    })
-}
-
 /// Import the restored bundle; a bad bundle is discarded and the build runs cold.
 pub(crate) fn import_step(
     rust_toolchain: &str,
@@ -175,21 +134,13 @@ pub(crate) fn import_step(
     env: BTreeMap<String, String>,
 ) -> Result<Step, RenderError> {
     super::mbx_preflight::validate_rust_toolchain(rust_toolchain)?;
-    let script = [
-        "set -eu".to_owned(),
-        RUNNER_TEMP_GUARD.to_owned(),
-        format!("dir=\"{BUNDLE_SHELL_DIR}\""),
-        "if [ ! -d \"$dir\" ] || [ -L \"$dir\" ]; then printf '%s\\n' 'velnor: mbx bundle no_entry'; exit 0; fi".to_owned(),
-        RESOLVE_ACTION_MBX_BIN.to_owned(),
-        workspace_cd(working_directory)?,
-        format!("if mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- \"{ACTION_MBX_BIN}\" cache import \"$dir\"; then printf '%s\\n' 'velnor: mbx bundle imported'; else printf '%s\\n' '::warning::cache_corrupt: MBX bundle import failed; building cold'; fi"),
-        "rm -rf \"$dir\"".to_owned(),
-    ]
-    .join("; ");
-    let mut step = action_owned_mbx_shell_step(
+    let mut step_env = env;
+    step_env.insert(RUST_TOOLCHAIN_ENV.to_owned(), rust_toolchain.to_owned());
+    step_env.insert(ROOT_ENV.to_owned(), workspace_root(working_directory)?);
+    let mut step = shell_step(
         MBX_BUNDLE_IMPORT_NAME,
-        vec!["sh".to_owned(), "-c".to_owned(), script],
-        env,
+        bundle_helper_command("import"),
+        step_env,
     )?;
     step.condition = Some(MBX_BUNDLE_IMPORT_CONDITION.to_owned());
     step.role = Some(StepRole::MbxBundleImport);
@@ -244,39 +195,109 @@ pub(crate) fn export_step(
     env: BTreeMap<String, String>,
 ) -> Result<Step, RenderError> {
     super::mbx_preflight::validate_rust_toolchain(rust_toolchain)?;
-    let ceiling_kib = CacheFamily::MbxBundle.spec().ceiling_bytes / KIB;
-    let script = [
-        "set -eu".to_owned(),
-        RUNNER_TEMP_GUARD.to_owned(),
-        format!("dir=\"{BUNDLE_SHELL_DIR}\""),
-        format!("mark=\"{MARK_FILE}\""),
-        "out=${GITHUB_OUTPUT-}".to_owned(),
-        "skip() { if [ -n \"$out\" ]; then printf '%s\\n' 'exported=false' >> \"$out\"; fi; printf 'velnor: mbx bundle not exported (%s)\\n' \"$1\"; exit 0; }".to_owned(),
-        "if [ ! -f \"$mark\" ] || [ -L \"$mark\" ]; then skip producer_not_succeeded; fi".to_owned(),
-        format!("[ -n \"${{{MBX_EXPORT_GROUP_ENV}:-}}\" ] || skip export_group_missing"),
-        RESOLVE_ACTION_MBX_BIN.to_owned(),
-        workspace_cd(working_directory)?,
-        "rm -rf \"$dir\"".to_owned(),
-        format!("if mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- \"{ACTION_MBX_BIN}\" cache export --group \"${MBX_EXPORT_GROUP_ENV}\" --format directory \"$dir\"; then :; else rm -rf \"$dir\"; printf '%s\\n' '::warning::cache_unavailable: MBX export failed or had nothing new'; skip export_failed; fi"),
-        "if [ ! -d \"$dir\" ] || [ -L \"$dir\" ]; then skip export_missing; fi".to_owned(),
-        "du -sk \"$dir\" > \"$RUNNER_TEMP/velnor/mbx-bundle.size\"".to_owned(),
-        "kib=; rest=; read -r kib rest < \"$RUNNER_TEMP/velnor/mbx-bundle.size\" || [ -n \"$kib\" ]".to_owned(),
-        "case \"$kib\" in ''|*[!0-9]*) rm -rf \"$dir\"; skip size_unreadable ;; esac".to_owned(),
-        format!("if [ \"$kib\" -gt {ceiling_kib} ]; then rm -rf \"$dir\"; printf '%s\\n' '::warning::over_ceiling: MBX bundle exceeds the family ceiling; save refused'; skip over_ceiling; fi"),
-        "if [ \"$kib\" -eq 0 ]; then rm -rf \"$dir\"; skip empty_export; fi".to_owned(),
-        "if [ -n \"$out\" ]; then printf '%s\\n' 'exported=true' >> \"$out\"; fi".to_owned(),
-        "printf 'velnor: mbx bundle exported (%s KiB)\\n' \"$kib\"".to_owned(),
-    ]
-    .join("; ");
-    let mut step = action_owned_mbx_shell_step(
+    let mut step_env = env;
+    step_env.insert(RUST_TOOLCHAIN_ENV.to_owned(), rust_toolchain.to_owned());
+    step_env.insert(ROOT_ENV.to_owned(), workspace_root(working_directory)?);
+    let mut step = shell_step(
         MBX_BUNDLE_EXPORT_NAME,
-        vec!["sh".to_owned(), "-c".to_owned(), script],
-        env,
+        bundle_helper_command("export"),
+        step_env,
     )?;
     step.id = Some(StepId::MbxBundleExport);
     step.condition = Some(MBX_BUNDLE_EXPORT_CONDITION.to_owned());
     step.role = Some(StepRole::MbxBundleExport);
     Ok(step)
+}
+
+pub(crate) fn bundle_helper_command(mode: &str) -> Vec<String> {
+    vec![
+        "sh".to_owned(),
+        "-c".to_owned(),
+        format!("sh \"$GITHUB_WORKSPACE/.github/scripts/velnor-mbx-bundle.sh\" {mode}"),
+    ]
+}
+
+/// The generated tree contains this shared helper body.
+pub(crate) fn bundle_helper_script() -> String {
+    format!(
+        r#"set -eu
+{RUNNER_TEMP_GUARD}
+case "${{1-}}" in
+key)
+d="$RUNNER_TEMP/velnor/mbx-bundle-key"
+rm -rf "$d"
+mkdir -p "$d"
+s256() {{ sha256sum "$1" > "$d/sum"; h=; rest=; read -r h rest < "$d/sum" || [ -n "$h" ]; case "$h" in ''|*[!0-9a-f]*) printf '%s\n' 'sha256sum returned no digest' >&2; exit 1 ;; esac; [ "${{#h}}" -eq 64 ] || exit 1; }}
+default_ref="${{{DEFAULT_REF_ENV}:-}}"
+trust=none
+if [ "${{GITHUB_EVENT_NAME:-}}" = push ] && [ -n "${{default_ref#refs/heads/}}" ] && [ "${{GITHUB_REF:-}}" = "$default_ref" ] && [ "${{GITHUB_REF_PROTECTED:-}}" = true ]; then trust=trusted; fi
+printf '%s\n' 'family={family}' 'schema={schema}' '{paths}' "unit=${{{UNIT_ENV}}}" "mbx=${{{VERSION_ENV}}}" "toolchain=${{{TOOLCHAIN_ENV}}}" "root=${{{ROOT_ENV}}}" 'ceiling={ceiling}' > "$d/compat"
+uname -s >> "$d/compat"
+uname -m >> "$d/compat"
+s256 "$d/compat"
+compat="s256-$h"
+lock="$GITHUB_WORKSPACE/${{{ROOT_ENV}}}/Cargo.lock"
+if [ -f "$lock" ] && [ ! -L "$lock" ]; then s256 "$lock"; else printf '%s\n' absent > "$d/absent"; s256 "$d/absent"; fi
+snap="s256-$h"
+trusted="{prefix}trusted-$compat-"
+key="$trusted$snap"
+[ "${{#key}}" -le {key_cap} ] || {{ printf 'cache key exceeds the GitHub cap: %s\n' "$key" >&2; exit 1; }}
+save=false
+[ "$trust" != trusted ] || save=true
+printf '%s\n' "key=$key" "restore_keys=$trusted" "save=$save" >> "$GITHUB_OUTPUT"
+printf 'velnor: mbx bundle trust=%s key=%s save=%s\n' "$trust" "$key" "$save"
+;;
+import)
+dir="$RUNNER_TEMP/velnor/mbx-bundle"
+if [ ! -d "$dir" ] || [ -L "$dir" ]; then printf '%s\n' 'velnor: mbx bundle no_entry'; exit 0; fi
+{resolve}
+cd "$GITHUB_WORKSPACE/${{{ROOT_ENV}}}"
+if mise --no-config --no-env --no-hooks exec rust@${{{RUST_TOOLCHAIN_ENV}}} -- "{mbx_bin}" cache import "$dir"; then printf '%s\n' 'velnor: mbx bundle imported'; else printf '%s\n' '::warning::cache_corrupt: MBX bundle import failed; building cold'; fi
+rm -rf "$dir"
+;;
+export)
+dir="$RUNNER_TEMP/velnor/mbx-bundle"
+mark="$RUNNER_TEMP/velnor/mbx-producer-ok"
+out=${{GITHUB_OUTPUT-}}
+skip() {{ if [ -n "$out" ]; then printf '%s\n' 'exported=false' >> "$out"; fi; printf 'velnor: mbx bundle not exported (%s)\n' "$1"; exit 0; }}
+if [ ! -f "$mark" ] || [ -L "$mark" ]; then skip producer_not_succeeded; fi
+[ -n "${{{MBX_EXPORT_GROUP_ENV}:-}}" ] || skip export_group_missing
+{resolve}
+cd "$GITHUB_WORKSPACE/${{{ROOT_ENV}}}"
+rm -rf "$dir"
+if mise --no-config --no-env --no-hooks exec rust@${{{RUST_TOOLCHAIN_ENV}}} -- "{mbx_bin}" cache export --group "${MBX_EXPORT_GROUP_ENV}" --format directory "$dir"; then :; else rm -rf "$dir"; printf '%s\n' '::warning::cache_unavailable: MBX export failed or had nothing new'; skip export_failed; fi
+if [ ! -d "$dir" ] || [ -L "$dir" ]; then skip export_missing; fi
+du -sk "$dir" > "$RUNNER_TEMP/velnor/mbx-bundle.size"
+kib=; rest=; read -r kib rest < "$RUNNER_TEMP/velnor/mbx-bundle.size" || [ -n "$kib" ]
+case "$kib" in ''|*[!0-9]*) rm -rf "$dir"; skip size_unreadable ;; esac
+if [ "$kib" -gt {ceiling_kib} ]; then rm -rf "$dir"; printf '%s\n' '::warning::over_ceiling: MBX bundle exceeds the family ceiling; save refused'; skip over_ceiling; fi
+if [ "$kib" -eq 0 ]; then rm -rf "$dir"; skip empty_export; fi
+if [ -n "$out" ]; then printf '%s\n' 'exported=true' >> "$out"; fi
+printf 'velnor: mbx bundle exported (%s KiB)\n' "$kib"
+;;
+*) printf '%s\n' 'unknown MBX bundle operation' >&2; exit 2 ;;
+esac
+"#,
+        family = CacheFamily::MbxBundle.spec().layer,
+        schema = CacheFamily::MbxBundle.spec().schema,
+        paths = CacheFamily::MbxBundle.spec().shell_paths(None).join("' '"),
+        ceiling = CacheFamily::MbxBundle.spec().ceiling_bytes,
+        prefix = CacheFamily::MbxBundle.key_prefix(),
+        key_cap = velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES,
+        mbx_bin = ACTION_MBX_BIN,
+        resolve = RESOLVE_ACTION_MBX_BIN,
+        ceiling_kib = CacheFamily::MbxBundle.spec().ceiling_bytes / KIB,
+    )
+}
+
+/// This generated file supplies the shared helper for each job.
+pub(crate) fn bundle_helper_file(version: &str) -> Result<RenderedFile, RenderError> {
+    let bytes = crate::marker::with_marker(version, &bundle_helper_script())?;
+    crate::steps::scan_for_private_subcommands(&bytes)?;
+    Ok(RenderedFile {
+        path: ".github/scripts/velnor-mbx-bundle.sh".to_owned(),
+        bytes,
+    })
 }
 
 fn save_step() -> Result<Step, RenderError> {
@@ -298,7 +319,7 @@ fn save_step() -> Result<Step, RenderError> {
 ///
 /// Runs right before the workspace cleanup is appended, so the cleanup stays
 /// the final step. A job that restores a bundle but records no producer mark
-/// is a reader (crate jobs restore the dependency seed) and gets neither.
+/// has no export or save step. Crate jobs restore the dependency seed bundle.
 ///
 /// # Errors
 ///
@@ -314,7 +335,7 @@ pub(crate) fn append_bundle_postludes(
             continue;
         }
         if marks == 0 && exports == 0 {
-            // A reader: it restores the bundle and never writes one.
+            // This job restores the bundle and never writes one.
             continue;
         }
         if marks != 1 {

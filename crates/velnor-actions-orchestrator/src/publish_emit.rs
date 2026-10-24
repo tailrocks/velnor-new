@@ -14,13 +14,13 @@ use velnor_actions_contract::config::{
 };
 use velnor_actions_contract::{ImageConfig, WorkflowPolicy};
 use velnor_actions_rust::git_pins::unpinned_git_sources;
-use velnor_actions_workflow_renderer::publish_render::render_publish_workflow;
+use velnor_actions_workflow_renderer::publish_render::render_publish_workflow_with_routing;
 use velnor_actions_workflow_renderer::publish_spec::{PublishTriggers, PublishWorkflowSpec};
 use velnor_actions_workflow_renderer::release_config::{
     ReleasePlzConfig, ReleasePlzPackage, render_git_tag_release_plz_config,
 };
 use velnor_actions_workflow_renderer::release_tree::{RELEASE_CONFIG_PATH, ReleaseRenderContext};
-use velnor_actions_workflow_renderer::{MiseSetup, render::RenderedFile};
+use velnor_actions_workflow_renderer::{MiseSetup, WorkflowRoutingPolicy, render::RenderedFile};
 
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
@@ -29,10 +29,16 @@ use crate::prepare::GenerationPreparation;
 use crate::publish_steps::{BundlePlan, Inputs, PromotionPlan, VersionCheck, assemble_jobs};
 use crate::release_identity::origin_repository;
 
+#[path = "publish_release_steps.rs"]
+pub(crate) mod release;
+
 #[path = "publish_maven_emit.rs"]
 mod maven_emit;
 #[path = "publish_npm_emit.rs"]
 mod npm_emit;
+#[cfg(test)]
+#[path = "publish_scripts_tests.rs"]
+mod script_tests;
 
 /// Publication workflow display name.
 const PUBLISH_WORKFLOW_NAME: &str = "Velnor Publish";
@@ -50,6 +56,7 @@ const DEFAULT_ENVIRONMENT: &str = "release";
 pub(crate) fn publish_files(
     prep: &GenerationPreparation,
     mise: &MiseSetup,
+    routing: &WorkflowRoutingPolicy,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
     let bundles = &prep.config.publish.bundles;
     let npm = &prep.config.publish.npm;
@@ -126,7 +133,7 @@ pub(crate) fn publish_files(
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
         runs_on: prep.runner_label.clone(),
     };
-    let mut files = vec![render_publish_workflow(&spec, &ctx)?];
+    let mut files = vec![render_publish_workflow_with_routing(&spec, &ctx, routing)?];
     files.extend(tag_config);
     Ok(files)
 }

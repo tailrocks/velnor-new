@@ -1,21 +1,24 @@
 //! Plan-derived cache permissions consumed by cache-layer producers.
 
 use crate::errors::ContractError;
-use crate::workflow::QualificationPhase;
 use crate::workflow::plan::Plan;
 
 use super::MAX_QUALIFICATION_CACHE_LANES;
 use super::identity::{
     BoundQualificationCacheKeys, QualificationCacheLayer, QualificationCacheRestoreExpectation,
-    QualificationCacheSlot, QualificationRuntimeIdentity, configuration_commitment,
-    identity_commitment, key_for_slot, runtime_requirements, validate_runtime_identity,
+    QualificationRuntimeIdentity, configuration_commitment, key_for_slot,
+    validate_runtime_identity,
 };
-use super::receipt::{QualificationCacheAdmission, layer_applies};
+use super::receipt::QualificationCacheAdmission;
+mod owner;
+
+use owner::{lane_directive, owner_directive};
 
 pub use super::directive_types::{
-    QualificationCacheDirective, QualificationCacheLaneDirective, QualificationCacheLayerDirective,
-    QualificationCacheRestoreDirective, QualificationCacheRestorePolicy,
-    QualificationCacheSavePolicy,
+    QualificationCacheDirective, QualificationCacheLaneDirective,
+    QualificationCacheLaneLayerDirective, QualificationCacheLayerDirective,
+    QualificationCacheOwnerDirective, QualificationCacheRestoreDirective,
+    QualificationCacheRestorePolicy, QualificationCacheSavePolicy,
 };
 
 /// Output name for canonical phase/lane/layer cache directives.
@@ -39,7 +42,9 @@ impl QualificationCacheDirective {
                 Ok(None)
             };
         };
-        context.validate_for(&context.default_branch, &context.repository, &plan.head)?;
+        // Plan::validate has already compared this immutable context with the
+        // plan. The orchestrator compares the ref with the configured refs
+        // before planning. This stage keeps that ref for separate cache keys.
         if plan.matrix.include.len() > MAX_QUALIFICATION_CACHE_LANES {
             return Err(invalid("too_many_lanes"));
         }
@@ -50,11 +55,24 @@ impl QualificationCacheDirective {
             (Some(_), Some(value)) => value.validate_for_plan(plan)?,
         }
         let config_digest = configuration_commitment(plan)?;
+        let mut owner_ids = plan
+            .matrix
+            .include
+            .iter()
+            .map(|entry| entry.job_id.clone())
+            .collect::<Vec<_>>();
+        owner_ids.sort();
+        owner_ids.dedup();
+        let mut owners = owner_ids
+            .iter()
+            .map(|owner_id| owner_directive(plan, owner_id, admission))
+            .collect::<Result<Vec<_>, _>>()?;
+        owners.sort_by(|left, right| left.owner_id.cmp(&right.owner_id));
         let mut lanes = plan
             .matrix
             .include
             .iter()
-            .map(|entry| lane_directive(plan, entry, admission))
+            .map(|entry| lane_directive(entry, &owners))
             .collect::<Result<Vec<_>, _>>()?;
         lanes.sort_by(|left, right| left.matrix_key.cmp(&right.matrix_key));
         let (predecessor_receipt_digest, source_delta) = if let Some(value) = admission {
@@ -63,7 +81,7 @@ impl QualificationCacheDirective {
             (None, None)
         };
         Ok(Some(Self {
-            schema: 2,
+            schema: 4,
             campaign: context.campaign.clone(),
             phase: context.phase,
             plan_id: plan.plan_id.clone(),
@@ -72,6 +90,7 @@ impl QualificationCacheDirective {
             predecessor: context.predecessor,
             predecessor_receipt_digest,
             source_delta,
+            owners,
             lanes,
         }))
     }
@@ -83,9 +102,29 @@ impl QualificationCacheDirective {
         matrix_key: &str,
         layer: QualificationCacheLayer,
     ) -> Option<&QualificationCacheLayerDirective> {
-        self.lanes
+        self.owners
             .iter()
-            .find(|lane| lane.matrix_key == matrix_key)?
+            .find(|owner| {
+                owner
+                    .members
+                    .iter()
+                    .any(|member| member.matrix_key == matrix_key)
+            })?
+            .layers
+            .iter()
+            .find(|record| record.layer == layer)
+    }
+
+    /// Return the cache layer assigned to this generated job ID.
+    #[must_use]
+    pub fn owner_layer(
+        &self,
+        owner_id: &str,
+        layer: QualificationCacheLayer,
+    ) -> Option<&QualificationCacheLayerDirective> {
+        self.owners
+            .iter()
+            .find(|owner| owner.owner_id == owner_id)?
             .layers
             .iter()
             .find(|record| record.layer == layer)
@@ -97,11 +136,11 @@ impl QualificationCacheDirective {
     /// that differs from the plan-derived directive is rejected before keys
     /// are returned.
     /// # Errors
-    pub fn bind_runtime(
+    pub fn bind_runtime_owner(
         &self,
         plan: &Plan,
         admission: Option<&QualificationCacheAdmission>,
-        matrix_key: &str,
+        owner_id: &str,
         layer: QualificationCacheLayer,
         evidence: &QualificationRuntimeIdentity,
     ) -> Result<BoundQualificationCacheKeys, ContractError> {
@@ -110,18 +149,18 @@ impl QualificationCacheDirective {
         if self != &expected {
             return Err(invalid("serialized_directive_does_not_match_plan"));
         }
-        self.bind_validated_runtime(matrix_key, layer, evidence)
+        self.bind_validated_runtime(owner_id, layer, evidence)
     }
 
     fn bind_validated_runtime(
         &self,
-        matrix_key: &str,
+        owner_id: &str,
         layer: QualificationCacheLayer,
         evidence: &QualificationRuntimeIdentity,
     ) -> Result<BoundQualificationCacheKeys, ContractError> {
         let directive = self
-            .layer(matrix_key, layer)
-            .ok_or_else(|| invalid("lane_or_layer_not_in_directive"))?;
+            .owner_layer(owner_id, layer)
+            .ok_or_else(|| invalid("owner_or_layer_not_in_directive"))?;
         if !directive.active
             || directive.restore_policy == QualificationCacheRestorePolicy::Disabled
         {
@@ -133,7 +172,11 @@ impl QualificationCacheDirective {
                 runtime_identity_digest: None,
             });
         }
-        let runtime_digest = validate_runtime_identity(&directive.runtime, evidence)?;
+        let requirements = directive
+            .runtime
+            .as_ref()
+            .ok_or_else(|| invalid("active_layer_runtime_requirements_missing"))?;
+        let runtime_digest = validate_runtime_identity(requirements, evidence)?;
         if directive
             .expected_runtime
             .as_ref()
@@ -185,132 +228,6 @@ impl QualificationCacheDirective {
             expected_prior_state_digest: directive.expected_prior_state_digest.clone(),
             runtime_identity_digest: Some(runtime_digest),
         })
-    }
-}
-
-fn lane_directive(
-    plan: &Plan,
-    entry: &crate::workflow::MatrixEntry,
-    admission: Option<&QualificationCacheAdmission>,
-) -> Result<QualificationCacheLaneDirective, ContractError> {
-    let mut layers = Vec::with_capacity(5);
-    for layer in [
-        QualificationCacheLayer::MbxObjects,
-        QualificationCacheLayer::CargoSources,
-        QualificationCacheLayer::MiseTools,
-        QualificationCacheLayer::TofuProviders,
-        QualificationCacheLayer::TaskResult,
-    ] {
-        layers.push(layer_directive(plan, entry, layer, admission)?);
-    }
-    Ok(QualificationCacheLaneDirective {
-        matrix_key: entry.matrix_key.clone(),
-        stack_id: entry.stack_id.clone(),
-        task_id: entry.task_id.clone(),
-        layers,
-    })
-}
-
-fn layer_directive(
-    plan: &Plan,
-    entry: &crate::workflow::MatrixEntry,
-    layer: QualificationCacheLayer,
-    admission: Option<&QualificationCacheAdmission>,
-) -> Result<QualificationCacheLayerDirective, ContractError> {
-    let context = plan
-        .qualification
-        .as_ref()
-        .ok_or_else(|| invalid("missing_qualification_context"))?;
-    let phase = context.phase;
-    let active = layer_applies(entry, layer)
-        && layer != QualificationCacheLayer::TaskResult
-        && phase != QualificationPhase::Control;
-    let identity = identity_commitment(plan, entry, layer)?;
-    let runtime = runtime_requirements(plan, entry)?;
-    if !active {
-        return Ok(QualificationCacheLayerDirective {
-            layer,
-            active: false,
-            identity_digest: identity,
-            runtime,
-            expected_runtime: None,
-            restore: None,
-            restore_policy: QualificationCacheRestorePolicy::Disabled,
-            save_policy: QualificationCacheSavePolicy::Disabled,
-            expected_prior_state_digest: None,
-        });
-    }
-
-    let restore = phase_restore(phase, admission, &entry.matrix_key, layer)?;
-    let (expected_runtime, expected_prior_state_digest) = match admission {
-        None => (None, None),
-        Some(value) => {
-            let prior = value.layer_receipt(&entry.matrix_key, layer)?;
-            let runtime = prior
-                .runtime_identity
-                .clone()
-                .ok_or_else(|| invalid("predecessor_runtime_identity_missing"))?;
-            let state = prior
-                .state_digest
-                .clone()
-                .ok_or_else(|| invalid("predecessor_layer_state_missing"))?;
-            (Some(runtime), Some(state))
-        }
-    };
-    Ok(QualificationCacheLayerDirective {
-        layer,
-        active: true,
-        identity_digest: identity,
-        runtime,
-        expected_runtime,
-        restore_policy: QualificationCacheRestorePolicy::AdmissionGated,
-        restore: Some(restore),
-        save_policy: phase_save_policy(phase),
-        expected_prior_state_digest,
-    })
-}
-
-fn phase_restore(
-    phase: QualificationPhase,
-    admission: Option<&QualificationCacheAdmission>,
-    matrix_key: &str,
-    layer: QualificationCacheLayer,
-) -> Result<QualificationCacheRestoreDirective, ContractError> {
-    match phase {
-        QualificationPhase::Cold => Ok(QualificationCacheRestoreDirective {
-            slot: QualificationCacheSlot::K1,
-            expected_cache: None,
-        }),
-        QualificationPhase::Warm => {
-            let entry = admission
-                .ok_or_else(|| invalid("missing_predecessor_admission"))?
-                .saved_entry(matrix_key, layer, QualificationCacheSlot::K1)?;
-            Ok(QualificationCacheRestoreDirective {
-                slot: QualificationCacheSlot::K1,
-                expected_cache: Some(entry),
-            })
-        }
-        QualificationPhase::Third | QualificationPhase::UsefulDelta => {
-            let (slot, entry) = admission
-                .ok_or_else(|| invalid("missing_predecessor_admission"))?
-                .latest_saved_entry(matrix_key, layer)?;
-            Ok(QualificationCacheRestoreDirective {
-                slot,
-                expected_cache: Some(entry),
-            })
-        }
-        QualificationPhase::Control => Err(invalid("control_cache_layer_disabled")),
-    }
-}
-
-fn phase_save_policy(phase: QualificationPhase) -> QualificationCacheSavePolicy {
-    match phase {
-        QualificationPhase::Cold => QualificationCacheSavePolicy::K1,
-        QualificationPhase::Warm => QualificationCacheSavePolicy::K2WhenStateChanges,
-        QualificationPhase::Third | QualificationPhase::Control => {
-            QualificationCacheSavePolicy::Disabled
-        }
-        QualificationPhase::UsefulDelta => QualificationCacheSavePolicy::K3WhenStateChanges,
     }
 }
 

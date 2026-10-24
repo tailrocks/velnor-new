@@ -1,0 +1,362 @@
+use crate::config::ConnectionId;
+use crate::journal::{AssignedAcquireResult, RequestAcquireState, fixture_provisioning_profile};
+use crate::journal::{AssignmentIdentity, AssignmentKey};
+use crate::launch::inspect_tests::DockerStub;
+use crate::launch::resource_probe::StartPermit;
+use crate::launch::steps::ScopedProvisioningOutcome;
+use velnor_runner_github::Method;
+
+use super::super::acquire::{self, AcquireDisposition};
+use super::super::runner;
+use super::super::validate_scope_binding;
+use support::{
+    FakeLane, Fixture, REQUEST_ID, SET_ID, exchange, fixture_storage, selected_engine, test_images,
+};
+
+#[path = "runner_tests/adverse_acquire.rs"]
+mod adverse_acquire;
+#[path = "runner_tests/atomic_acquire.rs"]
+mod atomic_acquire;
+#[path = "runner_tests/docker_pair.rs"]
+mod docker_pair;
+pub(crate) use docker_pair::{
+    RunnerCreateFailure, run_native_quarantine_composition, runner_create_409,
+    runner_create_409_with_jobs,
+};
+#[path = "runner_tests/policy_change.rs"]
+mod policy_change;
+#[path = "runner_tests/provisioning.rs"]
+mod provisioning;
+#[path = "runner_tests/stale_auth.rs"]
+mod stale_auth;
+#[path = "runner_tests/support.rs"]
+mod support;
+
+#[tokio::test]
+async fn acquire_rejects_connection_scale_set_and_request_identity_mismatches_before_http()
+-> Result<(), String> {
+    let fixture = Fixture::open("scoped-identity-mismatch").await?;
+    let mut lane = FakeLane::new([
+        Ok(exchange(200, r#"{"count":1,"value":[41]}"#)),
+        Ok(exchange(200, r#"{"count":1,"value":[41]}"#)),
+        Ok(exchange(200, r#"{"count":1,"value":[41]}"#)),
+    ]);
+
+    let other_connection =
+        ConnectionId::parse("other-connection").map_err(|error| error.to_string())?;
+    let wrong_connection = AssignmentIdentity::new(
+        &other_connection,
+        SET_ID,
+        AssignmentKey::AssignedRequest {
+            request_id: REQUEST_ID,
+        },
+    )
+    .map_err(|error| error.to_string())?;
+    assert!(
+        acquire::run(&mut lane, "queue-token", &fixture.scope, &wrong_connection,)
+            .await
+            .is_err()
+    );
+
+    let connection_id = ConnectionId::parse("scoped-adapter").map_err(|error| error.to_string())?;
+    let wrong_set = AssignmentIdentity::new(
+        &connection_id,
+        SET_ID + 1,
+        AssignmentKey::AssignedRequest {
+            request_id: REQUEST_ID,
+        },
+    )
+    .map_err(|error| error.to_string())?;
+    assert!(
+        acquire::run(&mut lane, "queue-token", &fixture.scope, &wrong_set,)
+            .await
+            .is_err()
+    );
+
+    let wrong_request = AssignmentIdentity::new(
+        &connection_id,
+        SET_ID,
+        AssignmentKey::AssignedRequest {
+            request_id: REQUEST_ID + 1,
+        },
+    )
+    .map_err(|error| error.to_string())?;
+    assert!(
+        acquire::run(&mut lane, "queue-token", &fixture.scope, &wrong_request,)
+            .await
+            .is_err()
+    );
+    assert_eq!(lane.methods, [] as [velnor_runner_github::Method; 0]);
+
+    assert!(
+        validate_scope_binding(&fixture.binding, &fixture.scope, SET_ID + 1)
+            .await
+            .is_err()
+    );
+    let mut wrong_connection_binding = fixture.binding.clone();
+    wrong_connection_binding.connection_id = other_connection;
+    assert!(
+        validate_scope_binding(&wrong_connection_binding, &fixture.scope, SET_ID)
+            .await
+            .is_err()
+    );
+    let mut wrong_repository = fixture.binding.clone();
+    wrong_repository.repository = "owner/other-repository".to_owned();
+    assert!(
+        validate_scope_binding(&wrong_repository, &fixture.scope, SET_ID)
+            .await
+            .is_err()
+    );
+    let mut wrong_policy = fixture.binding.clone();
+    wrong_policy.source_policy.events.clear();
+    assert!(
+        validate_scope_binding(&wrong_policy, &fixture.scope, SET_ID)
+            .await
+            .is_err()
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn stale_acquire_witness_keeps_charge_and_prevents_storage_or_jit() -> Result<(), String> {
+    let fixture = Fixture::open("scoped-expiry").await?;
+    let (lane, docker, identity) = reject_stale_acquire_before_storage(&fixture).await?;
+    assert_eq!(lane.methods, [Method::Post]);
+    assert!(lane.paths[0].ends_with("/acquirejobs"));
+    assert_eq!(docker.finish().await?, [] as [std::string::String; 0]);
+    assert_eq!(fixture.journal.occupied_reservation_count().await, Ok(1));
+    assert_eq!(
+        fixture
+            .scope
+            .request_acquire_state(&fixture.request)
+            .await
+            .map_err(|error| error.to_string())?,
+        Some(RequestAcquireState::Acquired)
+    );
+    let reservations = fixture
+        .scope
+        .physical_runner_reservations()
+        .await
+        .map_err(|error| error.to_string())?;
+    let reservation = reservations
+        .first()
+        .ok_or_else(|| "The physical reservation is absent.".to_owned())?;
+    assert_eq!(
+        reservation.jit_state,
+        crate::journal::PhysicalRunnerJitState::Absent
+    );
+    assert!(
+        fixture
+            .scope
+            .claim_runner_jit_for_request(
+                identity.intent_id,
+                identity.reservation_id,
+                fixture
+                    .request
+                    .request_id()
+                    .ok_or_else(|| "Request ID is missing.".to_owned())?,
+                &identity.runner_name,
+                identity.authority_generation,
+                &identity.authority_digest,
+            )
+            .await
+            .map_err(|error| error.to_string())?
+            .is_none()
+    );
+    Ok(())
+}
+
+async fn reject_stale_acquire_before_storage(
+    fixture: &Fixture,
+) -> Result<(FakeLane, DockerStub, StaleAcquireIdentity), String> {
+    atomic_acquire::prepare_capacity(fixture).await?;
+    fixture
+        .journal
+        .configure_storage_profile(fixture_provisioning_profile())
+        .await
+        .map_err(|error| error.to_string())?;
+    let state = atomic_acquire::ActiveHostState::new(&fixture.binding)?;
+    let drive = atomic_acquire::drive(fixture, &state.path);
+    let permit =
+        StartPermit::test_fixture_with_available_memory(&"e".repeat(32), 32 * 1024 * 1024 * 1024);
+    let images = test_images(permit.docker_root_digest());
+    let selected = selected_engine(&images)?;
+    let poll = crate::launch_harness::available(&[REQUEST_ID]);
+    let mut lane = FakeLane::new([Ok(exchange(200, r#"{"count":1,"value":[41]}"#))]);
+    let outcome = crate::launch::steps::acquire_scoped(&mut lane, &drive, &poll, permit, &selected)
+        .await
+        .map_err(|error| error.to_string())?;
+    let ScopedProvisioningOutcome::Acquired(mut acquired) = outcome else {
+        return Err("The request did not produce an acquired continuation.".to_owned());
+    };
+    let identity = StaleAcquireIdentity {
+        intent_id: acquired.intent_id(),
+        reservation_id: acquired.reservation_id(),
+        runner_name: acquired.runner_name().to_owned(),
+        authority_generation: acquired.authority_generation(),
+        authority_digest: acquired.authority_digest().to_owned(),
+    };
+    acquired.mark_observation_stale_for_test();
+    let docker = DockerStub::open(Vec::new())?;
+    let result = crate::launch::bootstrap::adapter::prepare_acquired(
+        ScopedProvisioningOutcome::Acquired(acquired),
+        &docker.docker,
+        &fixture.scope,
+        &selected,
+        &images,
+    )
+    .await;
+    if !matches!(result, Err(crate::HostError::Identity)) {
+        return Err("The stale observation was not rejected before storage creation.".to_owned());
+    }
+    Ok((lane, docker, identity))
+}
+
+struct StaleAcquireIdentity {
+    intent_id: i64,
+    reservation_id: i64,
+    runner_name: String,
+    authority_generation: u64,
+    authority_digest: String,
+}
+
+#[tokio::test]
+async fn exact_no_effect_releases_only_the_unstarted_physical_charge() -> Result<(), String> {
+    let fixture = Fixture::open("scoped-no-effect").await?;
+    let permit = StartPermit::test_fixture();
+    let storage = fixture_storage(&permit)?;
+    let physical = runner::reserve(&fixture.scope, permit, storage)
+        .await
+        .map_err(|error| error.to_string())?;
+    let mut lane = FakeLane::new([Ok(exchange(200, r#"{"count":0,"value":[]}"#))]);
+    assert_eq!(
+        acquire::run(&mut lane, "queue-token", &fixture.scope, &fixture.request,)
+            .await
+            .map_err(|error| error.to_string())?,
+        AcquireDisposition::NoEffect
+    );
+    acquire::release_unstarted(&fixture.scope, physical.reservation_id)
+        .await
+        .map_err(|error| error.to_string())?;
+    assert_eq!(fixture.journal.occupied_reservation_count().await, Ok(0));
+    assert_eq!(
+        fixture
+            .scope
+            .request_acquire_state(&fixture.request)
+            .await
+            .map_err(|error| error.to_string())?,
+        Some(RequestAcquireState::NoEffect)
+    );
+    assert_eq!(lane.methods, [Method::Post]);
+    Ok(())
+}
+
+#[tokio::test]
+async fn uncertain_acquire_keeps_charge_and_blocks_jit_replay() -> Result<(), String> {
+    let fixture = Fixture::open("scoped-uncertain").await?;
+    let permit = StartPermit::test_fixture();
+    let storage = fixture_storage(&permit)?;
+    let physical = runner::reserve(&fixture.scope, permit, storage)
+        .await
+        .map_err(|error| error.to_string())?;
+    let mut lane = FakeLane::new([Err(velnor_runner_github::TransportFail::Timeout)]);
+    assert!(
+        acquire::run(&mut lane, "queue-token", &fixture.scope, &fixture.request,)
+            .await
+            .is_err()
+    );
+    assert_eq!(lane.methods, [velnor_runner_github::Method::Post]);
+    assert_eq!(fixture.journal.occupied_reservation_count().await, Ok(1));
+    assert_eq!(
+        fixture
+            .scope
+            .request_acquire_state(&fixture.request)
+            .await
+            .map_err(|error| error.to_string())?,
+        Some(RequestAcquireState::Uncertain)
+    );
+    assert!(
+        fixture
+            .scope
+            .claim_runner_jit_for_request(
+                physical.intent_id,
+                physical.reservation_id,
+                fixture
+                    .request
+                    .request_id()
+                    .ok_or_else(|| "Request ID is missing.".to_owned())?,
+                &physical.runner_name,
+                physical.authority_generation,
+                &physical.authority_digest,
+            )
+            .await
+            .map_err(|error| error.to_string())?
+            .is_none()
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn already_acquired_request_never_authorizes_a_new_runner() -> Result<(), String> {
+    let fixture = Fixture::open("scoped-already-acquired").await?;
+    let permit = StartPermit::test_fixture();
+    let storage = fixture_storage(&permit)?;
+    let physical = runner::reserve(&fixture.scope, permit, storage)
+        .await
+        .map_err(|error| error.to_string())?;
+    assert!(
+        fixture
+            .scope
+            .claim_request_acquire(&fixture.request)
+            .await
+            .map_err(|error| error.to_string())?
+    );
+    fixture
+        .scope
+        .record_request_acquire(&fixture.request, AssignedAcquireResult::AlreadyAcquired)
+        .await
+        .map_err(|error| error.to_string())?;
+
+    assert_eq!(
+        fixture
+            .scope
+            .request_acquire_state(&fixture.request)
+            .await
+            .map_err(|error| error.to_string())?,
+        Some(RequestAcquireState::AlreadyAcquired)
+    );
+    assert_eq!(fixture.journal.occupied_reservation_count().await, Ok(1));
+    assert!(
+        fixture
+            .scope
+            .claim_runner_jit_for_request(
+                physical.intent_id,
+                physical.reservation_id,
+                fixture
+                    .request
+                    .request_id()
+                    .ok_or_else(|| "Request ID is missing.".to_owned())?,
+                &physical.runner_name,
+                physical.authority_generation,
+                &physical.authority_digest,
+            )
+            .await
+            .map_err(|error| error.to_string())?
+            .is_none()
+    );
+    Ok(())
+}
+
+#[test]
+fn already_acquired_and_uncertain_acquire_results_never_authorize_a_jit() {
+    use super::super::acquire::classify;
+    use velnor_runner_github::{AcquireOutcome, SessionError};
+
+    let (already, disposition) = classify(&Ok(AcquireOutcome::Noop), support::REQUEST_ID);
+    assert_eq!(already, AssignedAcquireResult::AlreadyAcquired);
+    assert_eq!(disposition, AcquireDisposition::Uncertain);
+
+    let (uncertain, disposition) = classify(&Err(SessionError::Uncertain), support::REQUEST_ID);
+    assert_eq!(uncertain, AssignedAcquireResult::Uncertain);
+    assert_eq!(disposition, AcquireDisposition::Uncertain);
+}

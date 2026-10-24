@@ -1,6 +1,6 @@
-//! HTTP status probe for `private-revoke-v1` (HD-7): one authenticated
-//! request whose status alone is read, through its own mode-0700 directory
-//! under runner temp that is scrubbed in every case.
+//! Read the HTTP status of one authenticated request for `private-revoke-v1` (HD-7).
+//! Use a separate mode-0700 directory under runner temp.
+//! After the request, attempt to remove that directory and report cleanup errors.
 
 use std::ffi::OsString;
 use std::path::Path;
@@ -18,7 +18,7 @@ use crate::internal::internal;
 /// HTTP status of one authenticated request, body discarded.
 ///
 /// # Errors
-/// Fails when curl cannot run or prints no numeric status.
+/// The function fails if curl cannot run, its status is invalid, or cleanup fails.
 pub(crate) fn http_status(
     runner_temp: &Path,
     token: &Token,

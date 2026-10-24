@@ -1,8 +1,7 @@
 //! Workflow job constructors: plan, lint, and final gate.
 //!
-//! Crate jobs live in [`crate::crate_jobs`]: one job per crate and
-//! configuration runs its checks as parallel steps. Every owner needs the
-//! plan and its external gate owners; the final gate below needs them all.
+//! Crate jobs live in [`crate::crate_jobs`]: one Rust package job owns its
+//! ordered obligations. Each job needs the plan and external gate owners.
 
 use std::collections::BTreeMap;
 use std::ffi::OsString;
@@ -45,12 +44,11 @@ impl PlanRustNeed {
 /// Named planner tool needs; named fields prevent resolver/tool roles swapping.
 #[expect(
     clippy::struct_excessive_bools,
-    reason = "independent opt-in planner tool signals"
+    reason = "the independent planner tool requirements are opt-in signals"
 )]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct PlanJobToolNeeds {
     pub(crate) rust: PlanRustNeed,
-    /// A task runs `--all-features`; the source probe must resolve them.
     pub(crate) all_features: bool,
     pub(crate) nextest: bool,
     pub(crate) opentofu: bool,

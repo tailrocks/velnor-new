@@ -239,6 +239,7 @@ fn finalized_image_job(lock: &str) -> Vec<String> {
         workflow.support.as_ref(),
         &workflow.context,
         &mise,
+        &velnor_actions_workflow_renderer::WorkflowRoutingPolicy::hosted_only(),
     )
     .expect("finalized jobs");
     jobs["image-app-amd64"]

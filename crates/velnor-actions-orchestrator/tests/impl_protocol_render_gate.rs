@@ -32,14 +32,7 @@ fn internal_env_pairs(text: &str) -> Vec<(String, String)> {
     pairs
 }
 
-/// Render the plan job, extract its gate env, run the gate logic, accept.
-#[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "the exhaustive job literal grew by one catalog field"
-)]
-fn render_gate_roundtrip_accepts_plan() -> TestResult {
-    let pin = format!("actions/checkout@{:040x}", 0);
+fn workflow_ir(pin: &str) -> Result<WorkflowIr, Box<dyn std::error::Error>> {
     let mut jobs = BTreeMap::new();
     jobs.insert(
         "plan".to_owned(),
@@ -54,14 +47,14 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
             permissions: None,
             environment: None,
             steps: vec![
-                checkout_step(&pin)?,
+                checkout_step(pin)?,
                 write_request_step("plan-v1")?,
                 plan_step(),
             ],
             cache_mode: None,
         },
     );
-    let ir = WorkflowIr {
+    Ok(WorkflowIr {
         name: "CI".to_owned(),
         triggers: Trigger {
             pull_request_types: velnor_actions_workflow_renderer::render::EXPECTED_PR_TYPES
@@ -71,6 +64,7 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
             push_branches: vec!["main".to_owned()],
             merge_group: true,
             workflow_dispatch: None,
+            workflow_call: false,
             schedule: None,
         },
         permissions: Permissions::default(),
@@ -80,13 +74,19 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
         },
         jobs,
         cache_mode: None,
-    };
-    let ctx = RenderContext {
+    })
+}
+
+fn render_context(pin: String) -> RenderContext {
+    RenderContext {
         tool_pins: Vec::new(),
         generator_version: "0.1.0".to_owned(),
         report_helper_version: "0.1.0".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         scale_set_selector: None,
+        scale_set_image_source_sha: None,
+        verified_cache_helpers: BTreeMap::new(),
+        require_verified_cache_helper: false,
         staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
         request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
         checkout_uses: pin,
@@ -96,8 +96,16 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
         workflow_tasks: Vec::new(),
         pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         mise_quiet: true,
-        plan_consumer_env: std::collections::BTreeMap::new(),
-    };
+        plan_consumer_env: BTreeMap::new(),
+    }
+}
+
+/// Render the plan job, extract its gate env, run the gate logic, accept.
+#[test]
+fn render_gate_roundtrip_accepts_plan() -> TestResult {
+    let pin = format!("actions/checkout@{:040x}", 0);
+    let ir = workflow_ir(&pin)?;
+    let ctx = render_context(pin);
     let text = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx)?;
     let pairs = internal_env_pairs(&text);
     assert_eq!(pairs.len(), 2, "{text}");

@@ -1,0 +1,163 @@
+//! Connection-scoped journal records and shared host reservations.
+
+pub(crate) use reservation::JitConflictRecoveryClaim;
+#[cfg(test)]
+pub(crate) use reservation::ReservationSnapshot;
+pub(crate) use reservation::{
+    PhysicalRunnerJitState, PhysicalRunnerOwnership, PhysicalRunnerReservation,
+    ReadinessCapacityUsage, ReservationState,
+};
+pub(crate) use reservation::{
+    PostJitRetirementCandidate, PostJitRetirementClaim, PreparedRetirementRemoteAbsence,
+};
+mod completion;
+mod identity;
+mod intents;
+mod launch;
+pub(in crate::journal) mod reservation;
+mod runtime;
+mod scope;
+mod session;
+pub(super) mod storage;
+
+pub(in crate::journal) use reservation::validate_retirement_digest;
+
+pub(in crate::journal) struct RetirementDigestIdentity<'a> {
+    pub(in crate::journal) lineage_id: i64,
+    pub(in crate::journal) generation: i64,
+    pub(in crate::journal) reservation_id: i64,
+    pub(in crate::journal) claim_generation: i64,
+    pub(in crate::journal) metadata_generation: i64,
+    pub(in crate::journal) cleanup_probe_operation_id: &'a str,
+}
+
+pub(crate) use completion::{
+    ConnectionCompletionInboxEntry, NativeCompletionReservation, TerminalReplayBinding,
+};
+pub(crate) use identity::{AssignmentIdentity, AssignmentKey};
+pub(crate) use reservation::JobFactsPublicationClaim;
+pub(crate) use reservation::ListenerDeliveryClaim;
+pub(crate) use reservation::MetadataSettlementResult;
+pub(crate) use reservation::PreJitCapacityProbeClaim;
+pub(crate) use reservation::PreJitCleanupClaim;
+pub(crate) use reservation::PreJitCleanupSettlementResult;
+pub(crate) use reservation::{
+    PreJitBootstrapContainer, PreJitCleanupInventory, PreJitCreateSpec, PreJitInitializerIdentity,
+    PreJitNetworkIdentity, PreJitStorageObject,
+};
+
+pub(in crate::journal) async fn validate_resources_bound(
+    connection: &turso::Connection,
+    connection_id: &str,
+    intent_id: i64,
+) -> Result<bool, crate::error::HostError> {
+    reservation::resources_bound(connection, connection_id, intent_id).await
+}
+
+pub(in crate::journal) async fn reservation_release_ready(
+    connection: &turso::Connection,
+    reservation_id: i64,
+) -> Result<bool, crate::error::HostError> {
+    reservation::release_ready(connection, reservation_id).await
+}
+
+pub(in crate::journal) async fn record_no_acquire_outcome(
+    connection: &turso::Connection,
+    reservation_id: i64,
+    response_digest: &str,
+) -> Result<(), crate::error::HostError> {
+    reservation::record_no_acquire_outcome(connection, reservation_id, response_digest).await
+}
+
+pub(in crate::journal) async fn record_terminal_cleanup_outcome(
+    connection: &turso::Connection,
+    connection_id: &str,
+    reservation_id: i64,
+    intent_id: i64,
+) -> Result<bool, crate::error::HostError> {
+    reservation::record_terminal_cleanup_outcome(
+        connection,
+        connection_id,
+        reservation_id,
+        intent_id,
+    )
+    .await
+}
+pub(crate) use reservation::{
+    BootstrapContainerCreateClaim, BootstrapStartClaim, BoundJobFactsSnapshot, CapacityLimits,
+    CreateInterruptionOutcome, OperationalCapacityLimits, PhysicalSuccessorReservationResult,
+    RecordedStorageNetwork, RequestPhysicalReservationResult, ReservationRequest,
+    StorageAdmissionSample, StorageCleanupIdentity, StorageCleanupObserverWitness,
+    StorageFilesystemKind, StorageInitializationClaim, StorageInodePolicy, StorageMedium,
+    StorageMetadataSettlementClaim, StorageNetworkCreateClaim, StorageNetworkRemovalClaim,
+    StorageObjectCreateClaim, StorageObserver, StoragePoolLimit, StoragePoolObservation,
+    StoragePoolObservationInput, StorageProfile, StorageProvisioningAdmission,
+    StorageProvisioningMemoryObservation, StorageProvisioningPlan, StorageProvisioningRole,
+    StorageRole, StorageRoleLimit, StorageSampleIdentity, VerifiedMetadataInitialization,
+    VerifiedMetadataInitializationHandoff,
+};
+#[cfg(test)]
+pub(crate) use reservation::{CreateCommitStage, arm_create_commit_gate};
+#[cfg(test)]
+pub(crate) use reservation::{ReservationResult, StorageAdmission};
+#[cfg(test)]
+pub(crate) use reservation::{
+    fixture_admission, fixture_profile, fixture_provisioning_profile,
+    fixture_storage_provisioning_admission, fixture_storage_provisioning_admission_for_profile,
+};
+pub(crate) use runtime::{EngineContext, SourceAuthorizationBinding};
+#[cfg(test)]
+pub(crate) use session::SessionRefreshState;
+pub(crate) use session::{SessionCreateState, SessionRefreshClaim};
+
+use crate::config::ConnectionId;
+use crate::journal::Journal;
+
+/// Journal operations that belong to one immutable repository connection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ConnectionJournal {
+    journal: Journal,
+    connection_id: ConnectionId,
+    identity: String,
+    binding_digest: String,
+}
+
+pub(in crate::journal) async fn has_unresolved_legacy_work(
+    connection: &turso::Connection,
+) -> Result<bool, crate::error::HostError> {
+    storage::has_ambiguous_legacy_work(connection).await
+}
+
+pub(in crate::journal) async fn insert_metadata_settlement_claim(
+    connection: &turso::Connection,
+    scope: &ConnectionJournal,
+    reservation_id: i64,
+    seed: &crate::journal::resource_probe::ProbeSeed,
+) -> Result<StorageMetadataSettlementClaim, crate::error::HostError> {
+    reservation::insert_metadata_settlement_claim(connection, scope, reservation_id, seed).await
+}
+
+pub(in crate::journal) async fn record_metadata_probe_cleanup(
+    connection: &turso::Connection,
+    operation_id: &str,
+    engine_id: &str,
+    docker_root_digest: &str,
+    operation_name: &str,
+    container_id: &str,
+) -> Result<(), crate::error::HostError> {
+    reservation::record_metadata_probe_cleanup(
+        connection,
+        operation_id,
+        engine_id,
+        docker_root_digest,
+        operation_name,
+        container_id,
+    )
+    .await
+}
+
+pub(super) async fn validate_storage_budget_schema(
+    connection: &turso::Connection,
+) -> Result<(), crate::error::HostError> {
+    reservation::validate_storage_budget_schema(connection).await
+}

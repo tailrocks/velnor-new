@@ -22,6 +22,9 @@ pub(super) fn ctx() -> RenderContext {
         report_helper_version: "0.1.0".to_owned(),
         runs_on: HOSTED_RUNS.to_owned(),
         scale_set_selector: None,
+        scale_set_image_source_sha: None,
+        verified_cache_helpers: std::collections::BTreeMap::new(),
+        require_verified_cache_helper: false,
         staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
         request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
         checkout_uses: format!("actions/checkout@{:040x}", 0),
@@ -52,6 +55,7 @@ pub(super) fn workflow_ir() -> WorkflowIr {
             push_branches: vec!["main".to_owned()],
             merge_group: true,
             workflow_dispatch: None,
+            workflow_call: false,
             schedule: None,
         },
         permissions: Permissions::default(),
@@ -269,8 +273,8 @@ fn unpaired_jobs_stay_inline() {
         lane_job("jactionlint", HOSTED_RUNS, vec![echo_step(0, "one")]),
     );
     let shared = share_lanes(&jobs, &ctx()).expect("share");
-    assert_eq!(shared.calls.len(), 0);
-    assert_eq!(shared.files.len(), 0);
+    assert!(shared.calls.is_empty());
+    assert_eq!(shared.files, [] as [crate::RenderedFile; 0]);
     let kept = shared.jobs.get("jactionlint").expect("jactionlint");
     assert_eq!(kept.steps.len(), 1);
 }
@@ -309,7 +313,7 @@ fn elected_save_stays_on_the_winner_job() {
     );
     assert_eq!(hosted.steps.len(), 1);
     assert_eq!(hosted.steps.first().expect("save").name, "Save Mise tools");
-    assert_eq!(local.steps.len(), 0);
+    assert_eq!(local.steps, [] as [velnor_actions_contract::Step; 0]);
     let action = shared
         .files
         .iter()

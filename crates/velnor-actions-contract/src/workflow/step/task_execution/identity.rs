@@ -6,13 +6,13 @@ pub(super) fn validate_task_and_matrix(
     input: &TaskExecutionValidation<'_>,
 ) -> Result<(), ContractError> {
     crate::ids::validate_task_id(input.task_id)?;
-    crate::validate_digest(input.task_digest)?;
+    crate::validate_digest(input.task_digest.as_str())?;
     let toolchain_id = crate::cachekey::toolchain_id(input.toolchain_inputs)?;
     if super::super::super::crate_job::task_digest_for_execution(
         input.task_id,
         input.argv,
         &toolchain_id,
-    )? != input.task_digest
+    )? != input.task_digest.as_str()
     {
         return Err(ContractError::identity(
             "step.task.identity",

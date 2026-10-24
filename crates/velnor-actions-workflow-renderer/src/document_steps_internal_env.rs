@@ -25,9 +25,10 @@ pub(super) fn internal_env(
     needs_envs: &[(String, String)],
     job_env: &BTreeMap<String, String>,
     step_env: &BTreeMap<String, String>,
+    composite: bool,
 ) -> Result<Yaml, RenderError> {
-    commands::validate_env(step_env)?;
     if op == steps::FETCH_OPERATION {
+        commands::validate_env(step_env)?;
         if !step_env.is_empty() {
             return Err(RenderError::InvalidWorkflow(
                 "fetch_internal_env_not_supported".to_owned(),
@@ -51,6 +52,7 @@ pub(super) fn internal_env(
         || op == velnor_actions_contract::BUN_ASSETS_IMPORT_OPERATION
         || op == velnor_actions_contract::config::playwright_lock::PLAYWRIGHT_INSTALL_OPERATION
     {
+        commands::validate_env(step_env)?;
         // Private-source operations take no request file: their whole input
         // is the fixed step env (token binding plus the literal allowlist).
         let mut env = vec![(INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned()))];
@@ -61,6 +63,22 @@ pub(super) fn internal_env(
         );
         return Ok(Yaml::Map(env));
     }
+    if steps::is_qualification_cache_operation(op) {
+        if composite {
+            commands::validate_composite_qualification_cache_env(step_env)?;
+        } else {
+            commands::validate_qualification_cache_env(step_env)?;
+        }
+        super::cache_env::validate_qualification_cache_env(op, step_env)?;
+        let mut env = vec![(INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned()))];
+        env.extend(
+            step_env
+                .iter()
+                .map(|(key, value)| (key.clone(), Yaml::str(value.clone()))),
+        );
+        return Ok(Yaml::Map(env));
+    }
+    commands::validate_env(step_env)?;
     let request = format!("{}/{target}-request.json", ctx.request_dir);
     let mut env = Vec::new();
     if op == steps::RESOLVE_QUALIFICATION_OPERATION {

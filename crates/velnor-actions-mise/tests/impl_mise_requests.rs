@@ -32,6 +32,7 @@ fn discovery_argv_is_byte_exact() -> Result<(), String> {
             "--format-version",
             "1",
             "--no-deps",
+            "--all-features",
             "--manifest-path",
             "/tmp/x y/Cargo.toml",
         ])
@@ -69,6 +70,22 @@ fn discovery_command_matches_argv() -> Result<(), String> {
 }
 
 #[test]
+fn all_features_metadata_discovery_preserves_no_deps_boundary() -> Result<(), String> {
+    let request = MetadataDiscovery::new(PathBuf::from("Cargo.toml"))
+        .map_err(|err| err.to_string())?
+        .with_all_features(true);
+    let cargo = request.cargo_argv();
+    assert!(cargo.iter().any(|arg| arg == "--no-deps"));
+    assert!(cargo.iter().any(|arg| arg == "--all-features"));
+    assert!(
+        !cargo
+            .iter()
+            .any(|arg| arg == "--locked" || arg == "--offline")
+    );
+    Ok(())
+}
+
+#[test]
 fn qualification_argv_carries_locked_offline() -> Result<(), String> {
     let request = MetadataQualification::new(PathBuf::from("/repo/Cargo.toml"))
         .map_err(|err| err.to_string())?;
@@ -98,6 +115,22 @@ fn qualification_argv_carries_locked_offline() -> Result<(), String> {
         !argv.iter().any(|arg| arg == "--no-deps"),
         "qualification resolves with full dependencies"
     );
+    Ok(())
+}
+
+#[test]
+fn all_features_qualification_remains_locked_and_offline() -> Result<(), String> {
+    let request = MetadataQualification::new(PathBuf::from("/repo/Cargo.toml"))
+        .map_err(|err| err.to_string())?
+        .with_all_features(true);
+    let cargo = request.cargo_argv();
+    assert!(
+        cargo
+            .windows(2)
+            .any(|pair| pair == ["--locked", "--offline"])
+    );
+    assert!(cargo.iter().any(|arg| arg == "--all-features"));
+    assert!(!cargo.iter().any(|arg| arg == "--no-deps"));
     Ok(())
 }
 

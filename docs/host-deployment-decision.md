@@ -1,22 +1,26 @@
 # Host deployment stays operator-run, outside generated CI/CD (HD-9)
 
-**Decision.** Velnor generates CI and the delivery of artifacts (attested images
-pinned by digest, Maven, npm and bundle releases, git tags) but no job that
-rolls software onto a host. Rolling out `ansible-configs/deploy-*.yml` onto the
-operator-owned machines stays an operator-run Ansible invocation. Generated
-Ansible CI only validates deploy inputs (syntax, lint, hash-pinned tooling,
-offline collections); it never holds an SSH key, a vault password or an
-inventory credential.
+**Decision.** Velnor generates CI and artifact-delivery jobs. These jobs
+deliver attested images, Maven packages, npm packages, bundles, and Git tags.
+Velnor does not generate host-deployment jobs. Operators run
+`ansible-configs/deploy-*.yml` on their machines.
 
-**Status.** Adopted per the split brief; owner may revisit.
+Generated Ansible CI checks deployment inputs, syntax, lint rules, pinned
+tools, and local collections. It holds no SSH key, vault password, or inventory
+credential.
 
-**Rationale.** The hosts sit on a private network GitHub-hosted runners cannot
-reach; a CI deploy would add long-lived SSH keys and vault material to the
-trust model, the opposite of decision 7; the source monorepo never deployed
-from CI; and imported workflows must not deploy during import. A future
-`[[deploy.ansible]]` needs its own proposal: an ephemeral self-hosted runner
-inside the network, an environment with required reviewers, OIDC to a secrets
-broker, and `push` to the default branch only.
+**Status.** The owner adopted this decision through the split brief. The owner
+can review it again.
+
+**Rationale.** GitHub-hosted runners cannot reach these private-network hosts.
+CI deployment would add persistent SSH keys and vault credentials, contrary
+to decision 7. The source repository did not deploy from CI. Imported workflows
+must not deploy during import.
+
+Any future `[[deploy.ansible]]` feature requires a separate proposal. It must
+specify a temporary runner inside the network, required reviewers, OIDC
+authentication, and a secrets service. It must permit deployment only after a
+push to the default branch.
 
 **Must not be reintroduced without owner approval:** a generated job that
 connects to a managed host, holds an SSH key or vault password, or runs

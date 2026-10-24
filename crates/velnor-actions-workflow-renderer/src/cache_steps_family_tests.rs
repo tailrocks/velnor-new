@@ -1,6 +1,6 @@
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use velnor_actions_contract::workflow::cache_family::CacheFamily;
 use velnor_actions_contract::workflow::cache_family_steps::{
@@ -39,14 +39,14 @@ fn ansible() -> FamilyCachePlan {
 
 fn run_of(step: &velnor_actions_contract::Step) -> &str {
     let StepKind::Shell { run, .. } = &step.kind else {
-        panic!("shell step");
+        panic!("The step must run a shell command.");
     };
     &run[2]
 }
 
 fn with_of(step: &velnor_actions_contract::Step) -> &std::collections::BTreeMap<String, String> {
     let StepKind::Action { with, .. } = &step.kind else {
-        panic!("action step");
+        panic!("The step must be an action.");
     };
     with
 }
@@ -54,8 +54,8 @@ fn with_of(step: &velnor_actions_contract::Step) -> &std::collections::BTreeMap<
 #[test]
 fn restore_and_save_share_one_path_and_one_key_per_family() {
     for plan in [bun(), dbt(), ansible()] {
-        let restore = family_restore_step(&plan).expect("restore");
-        let save = family_save_step(&plan).expect("save");
+        let restore = family_restore_step(&plan).expect("The cache restore step must render.");
+        let save = family_save_step(&plan).expect("The cache save step must render.");
         assert_eq!(restore.role, Some(StepRole::FamilyRestore));
         assert_eq!(save.role, Some(StepRole::FamilySave));
         assert_eq!(with_of(&restore).get("path"), with_of(&save).get("path"));
@@ -80,7 +80,7 @@ fn restore_and_save_share_one_path_and_one_key_per_family() {
         assert_eq!(save.condition, Some(family_save_condition(plan.family)));
         assert!(
             restore.condition.is_none(),
-            "restores are read-only and ungated"
+            "Restores must remain read-only and have no condition."
         );
     }
 }
@@ -101,13 +101,16 @@ fn plans_reject_a_locator_mismatch_and_unsafe_inputs() {
     assert!(family_keys_step(&[injected]).is_err());
     let mut sources = bun();
     sources.family = CacheFamily::Sources;
-    assert!(family_save_step(&sources).is_err(), "only stack families");
+    assert!(
+        family_save_step(&sources).is_err(),
+        "Only the supported stack families may use this step."
+    );
     assert!(family_keys_step(&[]).is_err());
 }
 
 #[test]
 fn the_key_step_is_trusted_push_only_and_names_no_job_or_run() {
-    let step = family_keys_step(&[bun(), dbt()]).expect("keys");
+    let step = family_keys_step(&[bun(), dbt()]).expect("The cache key step must render.");
     assert_eq!(step.id, Some(StepId::FamilyKeys));
     let script = run_of(&step);
     for banned in ["github.job", "github.run_", "hashFiles"] {
@@ -119,8 +122,9 @@ fn the_key_step_is_trusted_push_only_and_names_no_job_or_run() {
 }
 
 fn write_exec(path: &Path, body: &str) {
-    std::fs::write(path, body).expect("stub");
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+    std::fs::write(path, body).expect("The test executable must be written.");
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755))
+        .expect("The test executable permissions must be set.");
 }
 
 struct Sandbox(std::path::PathBuf);
@@ -130,7 +134,7 @@ impl Sandbox {
         let root = std::env::temp_dir().join(format!("velnor-family-{tag}-{}", std::process::id()));
         drop(std::fs::remove_dir_all(&root));
         for dir in ["bin", "runner/velnor", "ws/web", "ws/analytics"] {
-            std::fs::create_dir_all(root.join(dir)).expect("dir");
+            std::fs::create_dir_all(root.join(dir)).expect("The test directory must exist.");
         }
         write_exec(
             &root.join("bin/sha256sum"),
@@ -140,16 +144,21 @@ impl Sandbox {
     }
 
     fn run(&self, script: &str, env: &[(&str, &str)]) -> (String, String) {
+        self.run_with("sh", script, env)
+    }
+
+    fn run_with(&self, shell: &str, script: &str, env: &[(&str, &str)]) -> (String, String) {
         let out = self.0.join("out");
-        std::fs::write(&out, "").expect("out");
+        std::fs::write(&out, "").expect("The output file must be created.");
         let path = format!(
             "{}:{}",
             self.0.join("bin").display(),
             std::env::var("PATH").unwrap_or_default()
         );
-        let mut command = Command::new("sh");
+        let mut command = Command::new(shell);
         command
             .args(["-c", script])
+            .stdin(Stdio::null())
             .env("PATH", path)
             .env("RUNNER_TEMP", self.0.join("runner"))
             .env("GITHUB_WORKSPACE", self.0.join("ws"))
@@ -157,7 +166,7 @@ impl Sandbox {
         for (key, value) in env {
             command.env(key, value);
         }
-        let output = command.output().expect("runs");
+        let output = command.output().expect("The test command must run.");
         assert!(
             output.status.success(),
             "{}",
@@ -165,7 +174,7 @@ impl Sandbox {
         );
         (
             String::from_utf8_lossy(&output.stdout).into_owned(),
-            std::fs::read_to_string(&out).expect("outputs"),
+            std::fs::read_to_string(&out).expect("The output file must be readable."),
         )
     }
 }
@@ -178,14 +187,18 @@ impl Drop for Sandbox {
 
 #[test]
 fn keys_script_publishes_per_family_keys_and_grants_save_only_to_a_trusted_push() {
-    let script = run_of(&family_keys_step(&[bun(), dbt(), ansible()]).expect("keys")).to_owned();
+    let script = run_of(
+        &family_keys_step(&[bun(), dbt(), ansible()]).expect("The cache key step must render."),
+    )
+    .to_owned();
     for (event, protected, expected) in [
         ("push", "true", "save=true"),
         ("push", "false", "save=false"),
         ("pull_request", "false", "save=false"),
     ] {
         let sandbox = Sandbox::new(&format!("keys-{event}-{protected}"));
-        std::fs::write(sandbox.0.join("ws/web/bun.lock"), "lock").expect("lock");
+        std::fs::write(sandbox.0.join("ws/web/bun.lock"), "lock")
+            .expect("The test lock file must be written.");
         let env = [
             ("VELNOR_DEFAULT_REF", "refs/heads/main"),
             ("GITHUB_EVENT_NAME", event),
@@ -209,20 +222,21 @@ fn keys_script_publishes_per_family_keys_and_grants_save_only_to_a_trusted_push(
 }
 
 fn size_script(plan: &FamilyCachePlan) -> String {
-    run_of(&family_size_step(plan).expect("size")).to_owned()
+    run_of(&family_size_step(plan).expect("The cache size step must render.")).to_owned()
 }
 
 #[test]
 fn the_size_step_admits_a_small_directory_and_refuses_a_missing_one() {
     let plan = bun();
     let sandbox = Sandbox::new("size-small");
-    let (stdout, outputs) = sandbox.run(&size_script(&plan), &[]);
+    let (stdout, outputs) = sandbox.run_with("bash", &size_script(&plan), &[]);
     assert!(stdout.contains("missing_directory"), "{stdout}");
     assert_eq!(outputs.trim(), "admitted=false");
     let dir = sandbox.0.join("runner/velnor/bun-cache");
-    std::fs::create_dir_all(&dir).expect("cache dir");
-    std::fs::write(dir.join("blob"), vec![7_u8; 4096]).expect("blob");
-    let (_, outputs) = sandbox.run(&size_script(&plan), &[]);
+    std::fs::create_dir_all(&dir).expect("The cache directory must exist.");
+    std::fs::write(dir.join("blob"), vec![7_u8; 4096])
+        .expect("The test cache data must be written.");
+    let (_, outputs) = sandbox.run_with("bash", &size_script(&plan), &[]);
     assert_eq!(outputs.trim(), "admitted=true");
 }
 
@@ -231,7 +245,7 @@ fn the_size_step_refuses_over_the_ceiling_with_or_without_zstd() {
     let plan = bun();
     let sandbox = Sandbox::new("size-big");
     let dir = sandbox.0.join("runner/velnor/bun-cache");
-    std::fs::create_dir_all(&dir).expect("cache dir");
+    std::fs::create_dir_all(&dir).expect("The cache directory must exist.");
     // A stub zstd/wc pair reporting a stored size just over the ceiling.
     let over = (plan.family.spec().ceiling_bytes + 1).to_string();
     write_exec(&sandbox.0.join("bin/zstd"), "#!/bin/sh\ncat >/dev/null\n");
@@ -239,7 +253,10 @@ fn the_size_step_refuses_over_the_ceiling_with_or_without_zstd() {
         &sandbox.0.join("bin/wc"),
         &format!("#!/bin/sh\nprintf '%s\\n' {over}\n"),
     );
-    let (stdout, outputs) = sandbox.run(&size_script(&plan), &[]);
+    let (stdout, outputs) = sandbox.run_with("bash", &size_script(&plan), &[]);
     assert!(stdout.contains("over_ceiling"), "{stdout}");
     assert_eq!(outputs.trim(), "admitted=false");
 }
+
+#[path = "cache_steps_family_tests/size_output.rs"]
+mod size_output;

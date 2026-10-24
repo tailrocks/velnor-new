@@ -1,6 +1,8 @@
 use std::collections::BTreeSet;
 
-use velnor_actions_contract::RoutingWorkflow;
+use crate::workflow_routing::WorkflowRoutingPolicy;
+use velnor_actions_contract::config::ValidatedImageReference;
+use velnor_actions_contract::{ExecutionMode, RoutingWorkflow};
 
 use crate::yaml::Yaml;
 
@@ -130,82 +132,8 @@ fn build_job_has_no_attestation_or_repository_writer_permissions() {
     );
 }
 
-#[test]
-fn buildx_installer_uses_the_lock_and_rejects_a_wrong_checksum() {
-    use std::fs;
-    use std::os::unix::fs::PermissionsExt;
-    const PAYLOAD: &str = "buildx-fixture";
-    const SHA256: &str = "21d63ac724e14102a2f8bc4ed01b0394c02bf09d44513ba1ed3b4a9b77362d83";
-    let root = temporary_directory("buildx-installer");
-    let workspace = root.join("workspace");
-    let runner_temp = root.join("runner-temp");
-    let fake_bin = root.join("bin");
-    fs::create_dir_all(workspace.join(".velnor")).expect("The source lock path is not available.");
-    fs::create_dir_all(&fake_bin).expect("The fake command path is not available.");
-    fs::write(workspace.join(".velnor/runner.lock"), lock_text(SHA256))
-        .expect("The source lock file is not available.");
-    let fake_curl = fake_bin.join("curl");
-    fs::write(
-        &fake_curl,
-        format!(
-            "#!/bin/sh\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = --output ]; then\n    shift\n    printf '%s' '{PAYLOAD}' > \"$1\"\n    exit 0\n  fi\n  shift\ndone\nexit 2\n"
-        ),
-    )
-    .expect("Write the curl test fixture.");
-    fs::set_permissions(&fake_curl, fs::Permissions::from_mode(0o755))
-        .expect("Set the curl test fixture mode.");
-
-    let success = run_installer(&workspace, &runner_temp, &fake_bin);
-    assert!(
-        success.status.success(),
-        "{}",
-        String::from_utf8_lossy(&success.stderr)
-    );
-    let plugin = runner_temp.join("velnor-docker-config/cli-plugins/docker-buildx");
-    assert_eq!(
-        fs::read(&plugin).expect("The installed plug-in is not available."),
-        PAYLOAD.as_bytes()
-    );
-    assert_eq!(
-        fs::metadata(&plugin)
-            .expect("The plug-in metadata is not available.")
-            .permissions()
-            .mode()
-            & 0o777,
-        0o755
-    );
-    assert_eq!(
-        fs::metadata(
-            plugin
-                .parent()
-                .expect("The plug-in directory is not available.")
-        )
-        .expect("The plug-in directory metadata is not available.")
-        .permissions()
-        .mode()
-            & 0o777,
-        0o700
-    );
-
-    let wrong_temp = root.join("wrong-runner-temp");
-    fs::write(
-        workspace.join(".velnor/runner.lock"),
-        lock_text(&"0".repeat(64)),
-    )
-    .expect("Write a source checksum with an incorrect value.");
-    let failure = run_installer(&workspace, &wrong_temp, &fake_bin);
-    assert!(!failure.status.success());
-    assert!(
-        String::from_utf8_lossy(&failure.stderr)
-            .contains("The Buildx checksum is different from the value in .velnor/runner.lock.")
-    );
-    assert!(
-        !wrong_temp
-            .join("velnor-docker-config/cli-plugins/docker-buildx")
-            .exists()
-    );
-    fs::remove_dir_all(root).expect("Remove the installer test files.");
-}
+#[path = "schema2_job_image_candidate_tests/buildx_installer_tests.rs"]
+mod buildx_installer_tests;
 
 #[test]
 fn attestation_download_uses_only_the_uploaded_artifact_id() {
@@ -300,13 +228,58 @@ fn no_image_selection_emits_no_candidate_workflow() {
     assert!(!files.iter().any(|file| file.path == WORKFLOW_PATH));
 }
 
+#[test]
+fn scale_set_candidate_without_image_uses_all_selector_labels() {
+    let request = request_with_image(None);
+    let files = crate::schema2::render_schema2_workflows(&request)
+        .expect("Render the image candidate on the configured Scale Set.");
+    let paths = files
+        .iter()
+        .map(|file| file.path.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        paths,
+        vec![
+            ".github/workflows/product-release.yml",
+            ".github/workflows/product-release-images.yml",
+            WORKFLOW_PATH,
+        ]
+    );
+    let file = files
+        .iter()
+        .find(|file| file.path == WORKFLOW_PATH)
+        .expect("Render the job image candidate workflow.");
+    assert_eq!(file.path, WORKFLOW_PATH);
+    let runs_on = format!("runs-on: [{}]", request.scale_set.labels().join(", "));
+    assert_eq!(file.bytes.matches(&runs_on).count(), 3);
+    assert!(!file.bytes.contains("container:"));
+    assert!(file.bytes.contains("candidate.py build"));
+    assert!(file.bytes.contains("--source-commit"));
+    assert!(file.bytes.contains("GITHUB_SHA"));
+}
+
+#[test]
+fn scale_set_candidate_rejects_a_non_linux_amd64_source_runner() {
+    let mut request = request_with_image(None);
+    request.hosted_label = "ubuntu-26.04-arm".to_owned();
+    assert!(crate::schema2::render_schema2_workflows(&request).is_err());
+}
+
 fn request() -> Schema2WorkflowRequest {
+    let image =
+        ValidatedImageReference::parse(&format!("ghcr.io/team/job@sha256:{}", "a".repeat(64)))
+            .expect("Read the image reference.");
+    request_with_image(Some(image))
+}
+
+fn request_with_image(image: Option<ValidatedImageReference>) -> Schema2WorkflowRequest {
     let scale_set =
         Schema2WorkflowRequest::canonical_scale_set().expect("Read the Scale Set selector.");
     Schema2WorkflowRequest {
         version: "0.1.19".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
-        scale_set,
+        scale_set: scale_set.clone(),
+        routing: WorkflowRoutingPolicy::configured(ExecutionMode::ScaleSet, scale_set, image),
         workflows: BTreeSet::from([RoutingWorkflow::ImageRelease]),
         mbx_qualification: None,
         mise_pin_qualification: None,

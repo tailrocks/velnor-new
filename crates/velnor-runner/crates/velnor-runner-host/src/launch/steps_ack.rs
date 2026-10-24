@@ -1,6 +1,6 @@
 //! Queue acknowledgement follows a bound worker pair.
 
-use velnor_runner_github::{Ack, AckScope, RefreshGate, ack};
+use velnor_runner_github::{Ack, AckScope, RefreshGate, WireError, ack};
 
 use crate::journal::{Journal, Outcome};
 use crate::listen::map_listen;
@@ -19,7 +19,7 @@ where
 {
     lane.on_queue()?;
     let gate = RefreshGate::new();
-    let refresh = || Ok(());
+    let refresh = || Err(WireError::RefreshExhausted);
     let scope = AckScope {
         replay_safe: true,
         sole_unacquired_offer: false,

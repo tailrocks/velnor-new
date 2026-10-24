@@ -8,7 +8,7 @@ use std::path::Path;
 use velnor_actions_contract::config::LATEST_RUNNER_LABEL;
 use velnor_actions_contract::{ExecutionConfig, ExecutionMode, RoutingWorkflow, VelnorConfig};
 use velnor_actions_workflow_renderer::{
-    MbxQualificationPins, RenderedFile, Schema2WorkflowRequest, render_schema2_workflows,
+    MbxQualificationPins, RenderedFile, Schema2WorkflowRequest, WorkflowRoutingPolicy,
 };
 
 use crate::OrchestratorError;
@@ -57,20 +57,59 @@ pub(crate) fn extra_files(
     config: &VelnorConfig,
     catalog: &velnor_actions_mise::ToolCatalog,
     version: &str,
-) -> Result<Vec<RenderedFile>, OrchestratorError> {
+    routing: &WorkflowRoutingPolicy,
+) -> Result<(Vec<RenderedFile>, WorkflowRoutingPolicy), OrchestratorError> {
     if config.schema != VelnorConfig::SCHEMA_V2 {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), routing.clone()));
     }
     let Some(execution) = &config.execution else {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), routing.clone()));
     };
     if execution.workflows.is_empty() {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), routing.clone()));
     }
-    let request = workflow_request(config, execution, catalog, version)?;
-    render_schema2_workflows(&request).map_err(|err| OrchestratorError::Render {
+    let request = workflow_request(config, execution, catalog, version, routing)?;
+    velnor_actions_workflow_renderer::schema2::render_schema2_workflows_with_verified_routing(
+        &request,
+    )
+    .map_err(|err| OrchestratorError::Render {
         problem: err.to_string(),
     })
+}
+
+/// Select the policy for every separate generated workflow.
+pub(crate) fn workflow_routing_policy(
+    config: &VelnorConfig,
+    dispatch: Option<ExecutionMode>,
+) -> Result<WorkflowRoutingPolicy, OrchestratorError> {
+    let Some(execution) = &config.execution else {
+        if dispatch == Some(ExecutionMode::ScaleSet) {
+            return Err(OrchestratorError::config(
+                CONFIG_REL,
+                "execution",
+                "scale_set_dispatch_requires_execution_profile",
+            ));
+        }
+        return Ok(WorkflowRoutingPolicy::hosted_only());
+    };
+    let mode = dispatch.or(execution.mode).unwrap_or_else(|| {
+        if execution.default_profile == execution.scale_set_profile {
+            ExecutionMode::ScaleSet
+        } else {
+            ExecutionMode::Hosted
+        }
+    });
+    let has_selector_leaves = mode != ExecutionMode::Hosted || execution.emits_scale_set_selector();
+    if has_selector_leaves {
+        let selector = execution.scale_selector().map_err(config_error)?;
+        let image = execution
+            .profiles
+            .get(&execution.scale_set_profile)
+            .and_then(|profile| profile.job_container_image.clone());
+        Ok(WorkflowRoutingPolicy::configured(mode, selector, image))
+    } else {
+        Ok(WorkflowRoutingPolicy::hosted_only())
+    }
 }
 
 fn proposed_text(root: &Path) -> Result<String, OrchestratorError> {
@@ -116,6 +155,7 @@ fn workflow_request(
     execution: &ExecutionConfig,
     catalog: &velnor_actions_mise::ToolCatalog,
     version: &str,
+    routing: &WorkflowRoutingPolicy,
 ) -> Result<Schema2WorkflowRequest, OrchestratorError> {
     let hosted = execution
         .profiles
@@ -162,13 +202,19 @@ fn workflow_request(
     ]
     .iter()
     .any(|workflow| execution.workflows.contains(workflow));
-    let product_release = product_release_requested
+    let product_pins_requested = product_release_requested
+        || (execution
+            .workflows
+            .contains(&RoutingWorkflow::Qualification)
+            && !routing.is_scale_set());
+    let product_release = product_pins_requested
         .then(|| crate::product_release_pins::resolve(config, catalog))
         .transpose()?;
     Ok(Schema2WorkflowRequest {
         version: version.to_owned(),
         hosted_label: hosted,
         scale_set,
+        routing: routing.clone(),
         workflows: execution.workflows.clone(),
         mbx_qualification,
         mise_pin_qualification,
@@ -176,6 +222,30 @@ fn workflow_request(
     })
 }
 
+/// Render the job image candidate with the configured runner policy.
+pub(crate) fn job_image_candidate_file(
+    config: &VelnorConfig,
+    catalog: &velnor_actions_mise::ToolCatalog,
+    version: &str,
+    dispatch: Option<ExecutionMode>,
+) -> Result<RenderedFile, OrchestratorError> {
+    let execution = config
+        .execution
+        .as_ref()
+        .ok_or_else(|| OrchestratorError::config(CONFIG_REL, "execution", "missing"))?;
+    let routing = workflow_routing_policy(config, dispatch)?;
+    let request = workflow_request(config, execution, catalog, version, &routing)?;
+    velnor_actions_workflow_renderer::schema2::schema2_job_image_candidate::render_candidate_workflow(
+        &request,
+    )
+    .map_err(|err| OrchestratorError::Render {
+        problem: err.to_string(),
+    })
+}
+
+#[cfg(test)]
+#[path = "routing_tests.rs"]
+mod tests;
 #[cfg(test)]
 #[path = "routing_verifier_boundary_tests.rs"]
 mod verifier_boundary_tests;

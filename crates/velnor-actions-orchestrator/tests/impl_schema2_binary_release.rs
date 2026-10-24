@@ -2,7 +2,9 @@
 
 use std::fs;
 use velnor_actions_contract::package_release::PackageReleaseChannel;
-use velnor_actions_orchestrator::{GenerateOptions, generate, prepare, render_staged_tree};
+use velnor_actions_orchestrator::{
+    ExecutionMode, GenerateOptions, generate, prepare, render_staged_tree, render_staged_tree_with,
+};
 
 use crate::impl_common::{TestResult, anchor_repo, git, make_repo};
 
@@ -34,6 +36,49 @@ package = "demo"
 bins = ["demo"]
 targets = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin"]
 archive = "tar.gz"
+"#;
+
+const SCALE_SET_ENABLED: &str = r#"schema = 2
+[workflow]
+policy = "consumer-v1"
+default_branch = "main"
+[stacks.rust.release]
+enabled = true
+registry = "git-tag"
+packages = ["demo"]
+tag_name = "v{{version}}"
+[stacks.rust.binary_release]
+version_package = "demo"
+version_env = "DEMO_VERSION_OVERRIDE"
+[stacks.rust.binary_release.evidence]
+profile = "signed-sbom-v1"
+[stacks.rust.binary_release.stable]
+enabled = true
+[stacks.rust.binary_release.producer]
+task = "release-preview"
+runner = "xcode-27-arm64"
+tools = ["rust"]
+inputs = ["mise.toml", "Cargo.toml", "Cargo.lock", "src/main.rs"]
+[[stacks.rust.binary_release.products]]
+id = "demo"
+package = "demo"
+bins = ["demo"]
+targets = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin"]
+archive = "tar.gz"
+[execution]
+default_profile = "hosted"
+hosted_profile = "hosted"
+scale_set_profile = "local"
+[execution.profiles.hosted]
+kind = "github-hosted"
+label = "ubuntu-26.04"
+platform = "linux/amd64"
+[execution.profiles.local]
+kind = "github-scale-set"
+name = "ubuntu-26.04-scale-set"
+labels = ["ubuntu-26.04-scale-set", "velnor"]
+platform = "linux/amd64"
+job_container_image = "ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 "#;
 
 fn qualified_tool_config(config: &str) -> Result<String, Box<dyn std::error::Error>> {
@@ -136,6 +181,21 @@ fn binary_release_is_default_off_and_generated_through_render_tree() -> TestResu
     assert_eq!(
         fs::read_to_string(preview.path().join(".github/workflows/binary-release.yml"))?,
         workflow
+    );
+    Ok(())
+}
+
+#[test]
+fn scale_set_dispatch_rejects_the_binary_workflows_macos_job() -> TestResult {
+    let repo = binary_repo(SCALE_SET_ENABLED)?;
+    let prep = prepare(repo.path())?;
+    let error = render_staged_tree_with(&prep, Some(ExecutionMode::ScaleSet))
+        .expect_err("the Apple Silicon build cannot use the Linux Scale Set");
+    assert!(
+        error.to_string().contains(
+            "unsupported_darwin_workload:.github/workflows/binary-release.yml:stable-payload-000:xcode-27"
+        ),
+        "{error}"
     );
     Ok(())
 }

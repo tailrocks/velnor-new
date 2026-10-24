@@ -202,7 +202,7 @@ fn run_upload(release: &Path, temp: &Path) -> std::io::Result<Output> {
 }
 
 #[test]
-fn an_existing_identical_asset_is_skipped_and_a_different_one_refused() -> TestResult {
+fn matching_assets_are_idempotent_and_mismatches_prevent_partial_upload() -> TestResult {
     if !tools_present() {
         return Ok(());
     }
@@ -210,28 +210,54 @@ fn an_existing_identical_asset_is_skipped_and_a_different_one_refused() -> TestR
     let release = TempDir::new()?;
     let bundle = temp.path().join("bundle");
     fs::create_dir_all(&bundle)?;
-    for name in ["libs-1.0.0-maven.zip", "libs-1.0.0-maven.zip.sha256"] {
+    let zip = "libs-1.0.0-maven.zip";
+    let checksum = "libs-1.0.0-maven.zip.sha256";
+    for name in [zip, checksum] {
         fs::write(bundle.join(name), name)?;
         fs::write(release.path().join(name), name)?;
     }
-    let same = run_upload(release.path(), temp.path())?;
-    assert!(same.status.success(), "{same:?}");
-    assert!(String::from_utf8_lossy(&same.stdout).contains("same sha256, skipping"));
-    fs::write(release.path().join("libs-1.0.0-maven.zip"), "manual upload")?;
+    let identical = run_upload(release.path(), temp.path())?;
+    assert!(identical.status.success(), "{identical:?}");
+    assert!(String::from_utf8_lossy(&identical.stdout).contains("same sha256, skipping"));
+    assert_eq!(fs::read_to_string(release.path().join(zip))?, zip);
+    assert_eq!(fs::read_to_string(release.path().join(checksum))?, checksum);
+
+    fs::write(release.path().join(zip), "manual upload")?;
     let different = run_upload(release.path(), temp.path())?;
-    assert!(!different.status.success());
+    assert!(!different.status.success(), "{different:?}");
     assert!(String::from_utf8_lossy(&different.stderr).contains("refusing to overwrite"));
     assert_eq!(
-        fs::read_to_string(release.path().join("libs-1.0.0-maven.zip"))?,
+        fs::read_to_string(release.path().join(zip))?,
         "manual upload"
     );
-    fs::remove_file(release.path().join("libs-1.0.0-maven.zip.sha256"))?;
-    fs::write(
-        release.path().join("libs-1.0.0-maven.zip"),
-        "libs-1.0.0-maven.zip",
-    )?;
+    assert_eq!(fs::read_to_string(release.path().join(checksum))?, checksum);
+
+    fs::remove_file(release.path().join(checksum))?;
+    fs::write(release.path().join(zip), zip)?;
     let partial = run_upload(release.path(), temp.path())?;
     assert!(partial.status.success(), "{partial:?}");
-    assert!(release.path().join("libs-1.0.0-maven.zip.sha256").exists());
+    assert_eq!(fs::read_to_string(release.path().join(zip))?, zip);
+    assert_eq!(fs::read_to_string(release.path().join(checksum))?, checksum);
+
+    let temp = TempDir::new()?;
+    let release = TempDir::new()?;
+    let bundle = temp.path().join("bundle");
+    fs::create_dir_all(&bundle)?;
+    fs::write(bundle.join(zip), zip)?;
+    fs::write(bundle.join(checksum), checksum)?;
+    fs::write(release.path().join(checksum), "manual checksum")?;
+    let mismatch_after_missing = run_upload(release.path(), temp.path())?;
+    assert!(
+        !mismatch_after_missing.status.success(),
+        "{mismatch_after_missing:?}"
+    );
+    assert!(
+        String::from_utf8_lossy(&mismatch_after_missing.stderr).contains("refusing to overwrite")
+    );
+    assert!(!release.path().join(zip).exists());
+    assert_eq!(
+        fs::read_to_string(release.path().join(checksum))?,
+        "manual checksum"
+    );
     Ok(())
 }

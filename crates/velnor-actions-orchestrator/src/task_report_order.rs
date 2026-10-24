@@ -2,13 +2,7 @@
 
 use velnor_actions_contract::{ExecuteTaskRef, Plan, Stack};
 
-/// Obligation IDs a failure actually skips, in the crate job's execution order.
-///
-/// `OpenTofu` and other sequential jobs skip every later obligation. A Rust
-/// crate job runs its sequential producers (the Nextest build) first and then
-/// every other check as one parallel group: a failed producer skips the whole
-/// group, while a failed parallel member skips nothing because its siblings
-/// still run and report for themselves.
+/// IDs actually skipped after a failed sequential obligation in one job.
 pub(super) fn derive_downstream(plan: &Plan, task_id: &str, job_id: &str) -> Vec<String> {
     let mut ordered = Vec::new();
     let mut rust_job = true;
@@ -20,7 +14,7 @@ pub(super) fn derive_downstream(plan: &Plan, task_id: &str, job_id: &str) -> Vec
         for (kind, task_ref) in &entry.execute_task_ids.tasks {
             let ids: &[String] = match task_ref {
                 ExecuteTaskRef::Single(id) => std::slice::from_ref(id),
-                ExecuteTaskRef::Shards(ids) => ids,
+                ExecuteTaskRef::Shards(shards) => shards,
             };
             for id in ids {
                 ordered.push((

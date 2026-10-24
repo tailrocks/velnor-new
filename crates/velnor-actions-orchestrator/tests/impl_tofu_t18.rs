@@ -150,63 +150,6 @@ fn one_job_per_validation_root_with_ordered_steps() -> TestResult {
     Ok(())
 }
 
-/// Staging needs chain lanes: at most `max_parallel_jobs` root jobs
-/// run concurrently (job[i] waits for job[i - max]).
-#[test]
-fn root_jobs_stage_needs_by_max_parallel() -> TestResult {
-    let dir = make_pure_tofu_repo(&three_root_config(), &three_root_files())?;
-    let jobs = finalized_jobs(&prepare(dir.path())?)?;
-    let ids = sorted_crate_ids(&jobs);
-    assert_eq!(ids.len(), 3, "one job per root: {ids:?}");
-    assert_eq!(
-        jobs[&ids[0]].needs,
-        vec![PLAN_JOB_ID.to_owned()],
-        "first lane needs plan only"
-    );
-    assert_eq!(
-        jobs[&ids[1]].needs,
-        vec![PLAN_JOB_ID.to_owned()],
-        "second lane needs plan only"
-    );
-    assert_eq!(
-        jobs[&ids[2]].needs,
-        vec![PLAN_JOB_ID.to_owned(), ids[0].clone()],
-        "third job waits for the first lane"
-    );
-    Ok(())
-}
-
-/// Rendered root jobs declare the cap as `max-parallel` while the
-/// marker trio itself never reaches the YAML.
-#[test]
-fn root_jobs_render_capped_strategy_without_markers() -> TestResult {
-    let dir = make_pure_tofu_repo(&three_root_config(), &three_root_files())?;
-    let prep = prepare(dir.path())?;
-    let jobs = finalized_jobs(&prep)?;
-    let ids = sorted_crate_ids(&jobs);
-    assert_eq!(ids.len(), 3, "one job per root: {ids:?}");
-    let tree = render_staged_tree(&prep)?;
-    let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
-    for id in &ids {
-        let window = job_window(yaml, id)?;
-        assert!(
-            window.contains("max-parallel: 2"),
-            "{id} declares the configured cap:\n{window}"
-        );
-    }
-    for marker in [
-        "VELNOR_MATRIX_NEEDS_JOB",
-        "VELNOR_MATRIX_OUTPUT",
-        "VELNOR_MATRIX_MAX_PARALLEL",
-    ] {
-        assert!(
-            !yaml.contains(marker),
-            "marker {marker} never renders:\n{yaml}"
-        );
-    }
-    Ok(())
-}
-
 /// Exactly one init proposal per root, each with a distinct task ID.
 #[test]
 fn init_runs_once_per_root() -> TestResult {
@@ -320,7 +263,7 @@ fn restore_precedes_init_precedes_validate() -> TestResult {
     assert_eq!(
         ids.join(","),
         "rust-demo,tofu-stacks-a",
-        "one Rust crate job and one unchanged Tofu root"
+        "one Rust package job and one Tofu root"
     );
     for id in &ids {
         let job = jobs.get(id).ok_or("missing crate job")?;
@@ -360,8 +303,8 @@ fn restore_precedes_init_precedes_validate() -> TestResult {
     Ok(())
 }
 
-/// Staged jobs carry `if: always()` so lane failures collect instead
-/// of skipping later lanes; first-in-lane jobs keep the default.
+/// Every affected job carries its plan disposition gate; staged jobs
+/// additionally carry `if: always()` so lane failures still collect.
 #[test]
 fn staged_root_jobs_carry_always_while_first_lane_stays_default() -> TestResult {
     let dir = make_pure_tofu_repo(&three_root_config(), &three_root_files())?;
@@ -369,27 +312,39 @@ fn staged_root_jobs_carry_always_while_first_lane_stays_default() -> TestResult 
     let jobs = finalized_jobs(&prep)?;
     let ids = sorted_crate_ids(&jobs);
     assert_eq!(ids.len(), 3, "one job per root: {ids:?}");
-    assert_eq!(jobs[&ids[0]].condition, None, "first lane default");
-    assert_eq!(jobs[&ids[1]].condition, None, "second lane default");
-    assert_eq!(
-        jobs[&ids[2]].condition.as_deref(),
-        Some("always()"),
-        "staged job collects lane failures"
+    assert!(
+        jobs[&ids[0]]
+            .condition
+            .as_deref()
+            .is_some_and(|condition| condition.contains("not_affected_jobs"))
+    );
+    assert!(
+        jobs[&ids[1]]
+            .condition
+            .as_deref()
+            .is_some_and(|condition| condition.contains("not_affected_jobs"))
+    );
+    let staged_condition = jobs[&ids[2]].condition.as_deref().unwrap_or_default();
+    assert!(
+        staged_condition.contains("always()") && staged_condition.contains("not_affected_jobs"),
+        "staged job collects lane failures and keeps its plan gate: {staged_condition}"
     );
     let tree = render_staged_tree(&prep)?;
     let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
-    // Job-level `if:` renders at four spaces; the always-on report
-    // upload step carries its own deeper `if: always()` in every job.
+    // Job-level plan gating and staged collection both render at four spaces.
     let window = job_window(yaml, &ids[2])?;
     assert!(
-        window.contains("\n    if: always()\n"),
-        "staged job renders the condition: {window}"
+        window.contains("\n    if: (always()) && !contains(needs.plan.outputs.not_affected_jobs"),
+        "staged job renders both conditions: {window}"
     );
     for id in &ids[..2] {
         assert!(
             !job_window(yaml, id)?.contains("\n    if: always()\n"),
-            "{id} renders no job-level condition"
+            "{id} does not need staged collection"
         );
     }
     Ok(())
 }
+
+#[path = "impl_tofu_t18_staging.rs"]
+mod staging_tests;

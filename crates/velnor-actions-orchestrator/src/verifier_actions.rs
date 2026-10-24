@@ -5,9 +5,12 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::workflow::{RUST_VERIFIER_USES, Step, StepKind, StepRole};
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::render::RenderedFile;
+use velnor_actions_workflow_renderer::verification_jobs::WorkflowTaskPolicy;
 
 use crate::OrchestratorError;
 
+#[path = "verifier_actions_lower.rs"]
+mod lower;
 #[path = "verifier_actions_rendered.rs"]
 mod rendered;
 
@@ -16,6 +19,7 @@ pub(crate) struct VerifierAction {
     pub(crate) uses: &'static str,
     pub(crate) name: &'static str,
     pub(crate) role: StepRole,
+    source_step: Step,
     pub(crate) file: RenderedFile,
 }
 
@@ -23,6 +27,7 @@ pub(crate) struct VerifierAction {
 #[derive(Debug, Clone)]
 pub(crate) struct InlineVerifierTemplate {
     pub(crate) top_fields: Vec<(String, String)>,
+    #[cfg(test)]
     pub(crate) run_scalar: String,
     pub(crate) shell: Option<&'static str>,
     pub(crate) env: BTreeMap<String, String>,
@@ -56,6 +61,7 @@ impl InlineVerifierTemplate {
             .collect::<Result<Vec<_>, OrchestratorError>>()?;
         Ok(Self {
             top_fields,
+            #[cfg(test)]
             run_scalar: rendered::scalar_field(&fields, "run")?,
             shell: rendered::shell(&fields)?,
             env: rendered::env(&fields)?,
@@ -87,18 +93,41 @@ pub(crate) struct VerifierActionSet {
     pub(crate) restored_rust: VerifierAction,
     pub(crate) installed_rust: VerifierAction,
     pub(crate) jactionlint: VerifierAction,
+    inline_source_steps: Vec<Step>,
     pub(crate) inline_rust_templates: BTreeMap<&'static str, Vec<InlineVerifierTemplate>>,
     pub(crate) inline_installed_rust_templates: Vec<InlineVerifierTemplate>,
     pub(crate) inline_jactionlint_templates: Vec<InlineVerifierTemplate>,
 }
 
-struct VerifierSteps {
+pub(crate) struct VerifierSteps {
     restored_rust: Step,
     installed_rust: Step,
     jactionlint: Step,
     default_home_rust: Step,
     producer_home_rust: Step,
     inline_jactionlint: Step,
+}
+
+impl VerifierSteps {
+    pub(crate) fn is_restored_rust_inline(&self, step: &Step) -> bool {
+        matches_canonical_shell_step(step, &self.restored_rust)
+    }
+
+    pub(crate) fn is_installed_rust_inline(&self, step: &Step) -> bool {
+        [
+            &self.installed_rust,
+            &self.default_home_rust,
+            &self.producer_home_rust,
+        ]
+        .into_iter()
+        .any(|expected| matches_canonical_shell_step(step, expected))
+    }
+
+    pub(crate) fn is_jactionlint_inline(&self, step: &Step) -> bool {
+        [&self.jactionlint, &self.inline_jactionlint]
+            .into_iter()
+            .any(|expected| matches_canonical_shell_step(step, expected))
+    }
 }
 
 struct InlineVerifierTemplates {
@@ -123,7 +152,7 @@ impl VerifierActionSet {
         Ok(Self {
             restored_rust: verifier_action(
                 RUST_VERIFIER_USES[0],
-                crate::workflow::VERIFY_RESTORED_RUST_STEP,
+                crate::workflow::workflow_policy::rust_manifest_step::VERIFY_RESTORED_RUST_STEP,
                 StepRole::VerifyRustManifest,
                 &steps.restored_rust,
                 generator_version,
@@ -142,6 +171,11 @@ impl VerifierActionSet {
                 &steps.jactionlint,
                 generator_version,
             )?,
+            inline_source_steps: vec![
+                steps.default_home_rust,
+                steps.producer_home_rust,
+                steps.inline_jactionlint,
+            ],
             inline_rust_templates: inline_templates.rust,
             inline_installed_rust_templates: inline_templates.installed_rust,
             inline_jactionlint_templates: inline_templates.jactionlint,
@@ -154,6 +188,20 @@ impl VerifierActionSet {
             self.installed_rust.file.clone(),
             self.jactionlint.file.clone(),
         ]
+    }
+
+    /// Replace only the canonical verifier shell steps in the main workflow
+    /// IR with their closed composite-action references.
+    ///
+    /// The complete typed payload selects the action, never the display name.
+    /// Release, freshness, and other separately rendered workflows keep their
+    /// supported inline verifier steps.
+    pub(crate) fn lower_workflow_calls(
+        &self,
+        workflow: &mut velnor_actions_contract::WorkflowIr,
+        workflow_tasks: &[WorkflowTaskPolicy],
+    ) -> Result<(), OrchestratorError> {
+        lower::lower(self, workflow, workflow_tasks)
     }
 
     pub(crate) fn by_uses(&self, uses: &str) -> Option<&VerifierAction> {
@@ -175,7 +223,36 @@ impl VerifierActionSet {
     }
 }
 
-fn verifier_steps(catalog: &ToolCatalog) -> Result<VerifierSteps, OrchestratorError> {
+impl VerifierAction {
+    fn matches_shell_step(&self, step: &Step) -> bool {
+        matches_canonical_shell_step(step, &self.source_step)
+    }
+}
+
+fn matches_canonical_shell_step(step: &Step, expected: &Step) -> bool {
+    if step.role != expected.role
+        || step.id.is_some()
+        || expected.id.is_some()
+        || step.condition.is_some()
+        || expected.condition.is_some()
+        || step.parallel
+        || expected.parallel
+    {
+        return false;
+    }
+    matches!(
+        (&step.kind, &expected.kind),
+        (
+            StepKind::Shell { run, env },
+            StepKind::Shell {
+                run: expected_run,
+                env: expected_env
+            }
+        ) if run == expected_run && env == expected_env
+    )
+}
+
+pub(crate) fn verifier_steps(catalog: &ToolCatalog) -> Result<VerifierSteps, OrchestratorError> {
     let restored_rust = crate::workflow::workflow_policy::rust_manifest_step::verifier_shell_step(
         catalog,
         crate::workflow::ToolchainPhase::Restored,
@@ -229,7 +306,7 @@ fn inline_templates(steps: &VerifierSteps) -> Result<InlineVerifierTemplates, Or
     // source-preparation reuse.
     let mut inline_rust_templates = BTreeMap::new();
     inline_rust_templates.insert(
-        crate::workflow::VERIFY_RESTORED_RUST_STEP,
+        crate::workflow::workflow_policy::rust_manifest_step::VERIFY_RESTORED_RUST_STEP,
         vec![InlineVerifierTemplate::wrapped(
             &steps.restored_rust,
             &["RUSTUP_HOME", "CARGO_HOME"],
@@ -273,6 +350,7 @@ fn verifier_action(
         uses,
         name,
         role,
+        source_step: step.clone(),
         file,
     })
 }
@@ -291,3 +369,7 @@ pub(crate) fn call_step(name: &str, uses: &'static str, role: Option<StepRole>) 
         },
     }
 }
+
+#[cfg(test)]
+#[path = "verifier_actions_lowering_tests.rs"]
+mod lowering_tests;

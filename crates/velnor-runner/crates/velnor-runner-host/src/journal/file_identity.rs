@@ -11,6 +11,8 @@ pub(super) struct JournalFile {
     path: PathBuf,
     identity: FileIdentity,
     anchor: Arc<File>,
+    database: turso::Database,
+    process_state: Arc<crate::journal_identity::JournalProcessState>,
 }
 
 impl PartialEq for JournalFile {
@@ -32,28 +34,31 @@ impl JournalFile {
             .map_err(|_| HostError::Journal)?;
         let connection = database.connect().map_err(|_| HostError::Journal)?;
         drop(connection);
-        drop(database);
         let canonical = fs::canonicalize(&path).map_err(|_| HostError::Path)?;
         if canonical != path {
             return Err(HostError::Path);
         }
+        let process_state = crate::journal_identity::process_state(&canonical)?;
         let file = Self {
             path: canonical,
             identity,
             anchor,
+            database,
+            process_state,
         };
         file.verify()?;
         Ok(file)
     }
 
-    pub(super) async fn connection(&self) -> Result<turso::Connection, HostError> {
+    pub(super) fn connection(
+        &self,
+    ) -> impl std::future::Future<Output = Result<turso::Connection, HostError>> + '_ {
+        std::future::poll_fn(|_| std::task::Poll::Ready(self.connect_verified()))
+    }
+
+    fn connect_verified(&self) -> Result<turso::Connection, HostError> {
         self.verify()?;
-        let text = self.path.to_str().ok_or(HostError::Path)?;
-        let database = turso::Builder::new_local(text)
-            .build()
-            .await
-            .map_err(|_| HostError::Journal)?;
-        let connection = database.connect().map_err(|_| HostError::Journal)?;
+        let connection = self.database.connect().map_err(|_| HostError::Journal)?;
         self.verify()?;
         Ok(connection)
     }
@@ -70,6 +75,12 @@ impl JournalFile {
             return Err(HostError::Path);
         }
         Ok(())
+    }
+}
+
+impl Drop for JournalFile {
+    fn drop(&mut self) {
+        crate::journal_identity::release_process_state(&self.path, &self.process_state);
     }
 }
 
@@ -208,5 +219,128 @@ fn canonical_candidate(path: &Path) -> Result<PathBuf, HostError> {
         Ok(metadata) if metadata.file_type().is_file() => Ok(candidate),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(candidate),
         _ => Err(HostError::Path),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::JournalFile;
+    use crate::error::HostError;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    struct Scratch(PathBuf);
+
+    impl Scratch {
+        fn new() -> Self {
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            let serial = NEXT.fetch_add(1, Ordering::Relaxed);
+            let path = std::env::temp_dir().join(format!(
+                "velnor-journal-file-identity-{}-{serial}",
+                std::process::id()
+            ));
+            std::fs::create_dir_all(&path).expect("scratch directory");
+            Self(path)
+        }
+
+        fn file(&self) -> PathBuf {
+            self.0.join("journal.db")
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _removed = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[tokio::test]
+    async fn cloned_file_opens_fresh_connections_and_cold_reopens_populated_schema() {
+        let scratch = Scratch::new();
+        let path = scratch.file();
+        drop(
+            crate::journal::Journal::open(&path)
+                .await
+                .expect("create journal schema"),
+        );
+
+        let file = JournalFile::open(&path)
+            .await
+            .expect("open populated journal");
+        let clone = file.clone();
+        let first = file.connection().await.expect("first connection");
+        first
+            .execute("CREATE TABLE identity_test (value INTEGER)", ())
+            .await
+            .expect("create test table");
+        first
+            .execute("BEGIN IMMEDIATE", ())
+            .await
+            .expect("begin transaction");
+        first
+            .execute("INSERT INTO identity_test VALUES (1)", ())
+            .await
+            .expect("write inside transaction");
+        let second = clone.connection().await.expect("fresh cloned connection");
+        let mut rows = second
+            .query("SELECT count(*) FROM identity_test", ())
+            .await
+            .expect("query from separate connection");
+        let row = rows.next().await.expect("read row").expect("count row");
+        assert_eq!(row.get::<i64>(0).expect("count value"), 0);
+        drop(rows);
+        drop(second);
+        first
+            .execute("ROLLBACK", ())
+            .await
+            .expect("rollback transaction");
+        drop(first);
+
+        let second = clone.connection().await.expect("connection after rollback");
+        let mut rows = second
+            .query("SELECT count(*) FROM identity_test", ())
+            .await
+            .expect("query after rollback");
+        let row = rows.next().await.expect("read row").expect("count row");
+        assert_eq!(row.get::<i64>(0).expect("count value"), 0);
+        drop(rows);
+        drop(second);
+        drop(clone);
+        drop(file);
+
+        let reopened = JournalFile::open(&path)
+            .await
+            .expect("cold reopen parses populated schema at default stack size");
+        let connection = reopened.connection().await.expect("reopened connection");
+        drop(connection);
+        drop(reopened);
+    }
+
+    #[tokio::test]
+    async fn changed_file_identity_rejects_connections() {
+        let scratch = Scratch::new();
+        let path = scratch.file();
+        let file = JournalFile::open(&path).await.expect("open journal file");
+        let connection = file.connection();
+        let moved = scratch.0.join("old-journal.db");
+        std::fs::rename(&path, &moved).expect("move original journal");
+        std::fs::write(&path, b"replacement").expect("write replacement file");
+
+        assert!(matches!(connection.await, Err(HostError::Path)));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn symlinked_journal_path_is_rejected() {
+        let scratch = Scratch::new();
+        let target = scratch.0.join("target.db");
+        std::fs::write(&target, b"journal").expect("write target file");
+        let link = scratch.file();
+        std::os::unix::fs::symlink(target, &link).expect("create journal symlink");
+
+        assert!(matches!(
+            JournalFile::open(&link).await,
+            Err(HostError::Path)
+        ));
     }
 }

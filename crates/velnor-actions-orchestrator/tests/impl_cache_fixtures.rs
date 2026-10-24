@@ -199,7 +199,18 @@ fn per_job_mise_keys_qualified_without_job_suffix() -> TestResult {
     for mbx in [false, true] {
         let yaml = yaml_for(mbx)?;
         let pairs = tools_keys_by_job(&yaml);
-        assert!(pairs.len() >= 3, "plan plus crates (mbx={mbx}): {pairs:?}");
+        assert_eq!(
+            pairs
+                .iter()
+                .map(|(job, _)| job.as_str())
+                .collect::<Vec<_>>(),
+            if mbx {
+                vec!["dependency-seed", "jactionlint", "plan", "rust-a", "rust-b"]
+            } else {
+                vec!["jactionlint", "plan", "rust-a", "rust-b"]
+            },
+            "each tool consumer has one cache key (mbx={mbx})"
+        );
         for (job, key) in &pairs {
             assert!(!job.is_empty(), "key inside a job: {key}");
             assert!(key.starts_with("mise-tools-v2-"), "qualified: {key}");
@@ -217,7 +228,17 @@ fn per_job_mise_keys_qualified_without_job_suffix() -> TestResult {
         let a = key_for("rust-a");
         let b = key_for("rust-b");
         assert!(a.is_some() && b.is_some() && key_for("plan").is_some());
-        assert_eq!(a, b, "identical unions share (mbx={mbx}): {pairs:?}");
+        assert_eq!(
+            a, b,
+            "the package tool sets have the same key (mbx={mbx}): {pairs:?}"
+        );
+        if mbx {
+            assert_eq!(
+                key_for("dependency-seed"),
+                a,
+                "The dependency seed must use the shared qualified cache key."
+            );
+        }
     }
     Ok(())
 }

@@ -65,7 +65,7 @@ fn decode_problem(document: &str) -> Option<String> {
 fn release_disabled_by_default_and_enabled_needs_allowlist() {
     let default = RustReleaseConfig::default();
     assert!(!default.enabled);
-    assert_eq!(default.packages, [] as [std::string::String; 0]);
+    assert_eq!(default.packages, Vec::<String>::new());
     assert_eq!(default.validate(FILE), Ok(()));
     assert_eq!(default.authentication, None);
     assert_eq!(
@@ -245,11 +245,10 @@ fn release_version_groups_are_non_lockstep_and_allowlist_bound() {
 fn release_wired_into_stack_validation_with_key_paths() {
     use velnor_actions_contract::{RustConfiguration, RustStackConfig};
     let stack = RustStackConfig {
-        clippy_all_features: false,
         configurations: vec![RustConfiguration {
-            all_features: false,
             name: "default".to_owned(),
             features: vec!["default".to_owned()],
+            all_features: false,
             target: "host".to_owned(),
         }],
         toolchain: None,
@@ -258,6 +257,7 @@ fn release_wired_into_stack_validation_with_key_paths() {
         test_runner: None,
         run_ignored: None,
         seed_parallel_targets: false,
+        clippy_all_features: false,
         release: valid_release(),
         binary_release: RustBinaryReleaseConfig::default(),
         suites: Vec::new(),

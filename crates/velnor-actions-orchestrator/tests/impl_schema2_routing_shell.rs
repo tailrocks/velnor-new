@@ -55,6 +55,7 @@ fn tool_lines(body: &str) -> Vec<&str> {
                         | "- name: Restore Velnor tool seed"
                         | "- name: Restore Mise tools"
                         | "- name: Save Mise tools"
+                        | "- name: Install cache tar adapters"
                         | "- name: Record optional cache budget"
                         | "- name: Admit optional cache save"
                         | "- name: Report optional cache save failure"

@@ -40,7 +40,7 @@ fn populate_cache_paths(root: &Path) -> (PathBuf, PathBuf) {
     let runner_temp = root.join("runner-temp");
     install_setup_mise(&home);
     let paths = [
-        home.join(".local/share/mise/installs"),
+        home.join(".local/share/mise"),
         runner_temp.join("velnor/rustup"),
         runner_temp.join("velnor/cargo/bin"),
     ];
@@ -69,8 +69,8 @@ fn run_script(
         .arg("-c")
         .arg(TOOLS_CACHE_ADMISSION_SCRIPT)
         .env("HOME", home)
-        .env("RUNNER_TEMP", runner_temp)
-        .env("TOOLS_MISE_SHA256", sha256(SETUP_MISE));
+        .env("TOOLS_MISE_SHA256", sha256(SETUP_MISE))
+        .env("RUNNER_TEMP", runner_temp);
     for (name, value) in [
         ("TOOLS_CACHE_HIT", cache_hit),
         ("TOOLS_EXPECTED_KEY", expected_key),
@@ -87,7 +87,7 @@ fn run_script(
 }
 
 fn assert_paths_kept(home: &Path, runner_temp: &Path) {
-    assert!(home.join(".local/share/mise/installs").is_dir());
+    assert!(home.join(".local/share/mise").is_dir());
     assert!(runner_temp.join("velnor/rustup").is_dir());
     assert!(runner_temp.join("velnor/cargo/bin").is_dir());
     assert!(runner_temp.join("velnor/cargo/.crates.toml").is_file());
@@ -142,119 +142,11 @@ fn assert_case(
     fs::remove_dir_all(root).expect("cleanup");
 }
 
-#[test]
-fn preserves_exact_hits_and_validated_seed_on_pure_cache_miss() {
-    let expected_key = format!("mise-tools-v2-{}", "a".repeat(64));
-    assert_case(
-        "exact-hit",
-        Some("true"),
-        Some(&expected_key),
-        Some(&expected_key),
-        Some("false"),
-        true,
-    );
-    assert_case(
-        "seed-miss",
-        None,
-        Some(&expected_key),
-        None,
-        Some("true"),
-        true,
-    );
-}
+#[path = "cache_steps_tools_restore_tests/admission_tests.rs"]
+mod admission_tests;
 
-#[test]
-fn removes_untrusted_partial_and_malformed_restore_state() {
-    let expected_key = format!("mise-tools-v2-{}", "a".repeat(64));
-    let other_v2_key = format!("mise-tools-v2-{}", "b".repeat(64));
-    assert_case(
-        "miss-without-admitted-seed",
-        None,
-        Some(&expected_key),
-        None,
-        None,
-        false,
-    );
-    assert_case(
-        "non-exact-restore",
-        Some("false"),
-        Some(&expected_key),
-        Some("mise-tools-v2-other"),
-        Some("true"),
-        false,
-    );
-    assert_case(
-        "non-exact-v2-restore",
-        Some("false"),
-        Some(&expected_key),
-        Some(&other_v2_key),
-        Some("false"),
-        false,
-    );
-    assert_case(
-        "false-without-matched-key",
-        Some("false"),
-        Some(&expected_key),
-        Some(""),
-        Some("true"),
-        false,
-    );
-    assert_case(
-        "inconsistent-restore-outputs",
-        Some("false"),
-        Some(&expected_key),
-        Some(&expected_key),
-        Some("true"),
-        false,
-    );
-    assert_case(
-        "exact-hit-with-malformed-key",
-        Some("true"),
-        Some("mise-tools-v2-"),
-        Some("mise-tools-v2-"),
-        Some("true"),
-        false,
-    );
-    assert_case(
-        "missing-expected-key",
-        Some("false"),
-        None,
-        Some(""),
-        Some("true"),
-        false,
-    );
-    assert_case(
-        "malformed-expected-key",
-        None,
-        Some("mise-tools-v2-"),
-        None,
-        Some("true"),
-        false,
-    );
-}
-
-#[test]
-fn restored_or_missing_mise_binary_must_match_the_pinned_digest() {
-    let expected_key = format!("mise-tools-v2-{}", "a".repeat(64));
-    for (name, hit, matched) in [
-        ("tampered-hit", Some("true"), Some(expected_key.as_str())),
-        ("tampered-miss", None, None),
-    ] {
-        let root = scratch(name);
-        let (home, runner_temp) = populate_cache_paths(&root);
-        fs::write(
-            home.join(".local/share/mise/bin/mise"),
-            "restored-other-bytes",
-        )
-        .expect("tampered binary");
-        let output = run_script(&home, &runner_temp, hit, Some(&expected_key), matched, None);
-        assert!(!output.status.success(), "{name}: {output:?}");
-        fs::remove_file(home.join(".local/share/mise/bin/mise")).expect("remove binary");
-        let output = run_script(&home, &runner_temp, hit, Some(&expected_key), matched, None);
-        assert!(!output.status.success(), "{name} missing: {output:?}");
-        fs::remove_dir_all(root).expect("cleanup");
-    }
-}
+#[path = "cache_steps_tools_restore_contract_tests.rs"]
+mod contract_tests;
 
 #[test]
 fn rendered_action_wires_seed_admission_and_unset_miss_outputs() {
@@ -337,4 +229,4 @@ fn restore_step() -> velnor_actions_contract::Step {
 }
 
 #[path = "cache_steps_tools_restore_seed_tests.rs"]
-mod seed;
+mod seed_tests;

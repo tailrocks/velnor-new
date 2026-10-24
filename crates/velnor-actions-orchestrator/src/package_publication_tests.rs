@@ -176,7 +176,7 @@ fn conflict_or_mutable_publication_blocks_reconciliation() {
             immutable,
         };
         assert!(publish_package_release(&mut backend).is_err());
-        assert_eq!(backend.mutations, [] as [std::string::String; 0]);
+        assert_eq!(backend.mutations, [] as [String; 0]);
     }
 }
 

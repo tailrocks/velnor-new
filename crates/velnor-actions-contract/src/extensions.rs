@@ -2,10 +2,11 @@
 //!
 //! The `rust-task-identity-v1` extension MUST record package, workspace,
 //! graph, targets, features, profile, driver, runner, config digests,
-//! Nextest digest, kind, and archive identity before selection. The
-//! optional `all_features` slot must be a boolean when present. The
-//! orchestrator stays opaque to adapter data; this validator pins the
-//! required slots so reuse never rests on a partial extension.
+//! Nextest digest, kind, and archive identity before selection. Optional
+//! adapter-owned mode fields, including the boolean `all_features` slot,
+//! are type-checked when present. The orchestrator stays opaque to adapter
+//! data; this validator pins the required slots so reuse never rests on a
+//! partial extension.
 
 use crate::cachekey::validate_semantic_text;
 use crate::cachekey::{RUST_EXTENSION_SCHEMA, TOFU_EXTENSION_SCHEMA};
@@ -64,7 +65,7 @@ pub fn validate_rust_extension(extension: &StackExtension) -> Result<(), Contrac
     check_string_array(data, "features")?;
     if data
         .get("all_features")
-        .is_some_and(|value| !value.is_boolean())
+        .is_some_and(|value| value.as_bool().is_none())
     {
         return Err(ContractError::identity(
             "stack_extension.data.all_features",

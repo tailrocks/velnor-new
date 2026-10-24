@@ -8,6 +8,8 @@ mod dispatch;
 mod dispatch_config;
 mod dispatch_deps;
 mod dispatch_generate;
+mod dispatch_job_authority;
+mod dispatch_job_image_preview;
 mod dispatch_local_release;
 mod dispatch_qualification;
 mod dispatch_qualify_tools;
@@ -18,6 +20,9 @@ use std::process::ExitCode;
 
 /// Run the private gate on bare invocations, else the public Clap tree.
 fn main() -> ExitCode {
+    if let Some(outcome) = dispatch::try_cache_tar_entrypoint() {
+        return outcome;
+    }
     if std::env::args_os().len() <= 1
         && let Some(outcome) = dispatch::try_internal()
     {

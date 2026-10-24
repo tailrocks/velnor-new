@@ -126,12 +126,15 @@ fn toolchains_bind_sorted_specs_driver_runner() {
         TestRunner::CargoTest,
     );
     assert_ne!(
-        toolchain_digest_for(&cargo, &catalog).expect("digest"),
-        toolchain_digest_for(&mbx, &catalog).expect("digest")
+        toolchain_id(&toolchain_inputs_for(&cargo, &catalog).expect("cargo inputs"))
+            .expect("cargo digest"),
+        toolchain_id(&toolchain_inputs_for(&mbx, &catalog).expect("mbx inputs"))
+            .expect("mbx digest")
     );
     assert_ne!(
-        toolchain_digest_for(&cargo, &catalog).expect("digest"),
-        toolchain_digest_for(&nextest, &catalog).expect("digest")
+        toolchain_id(&toolchain_inputs_for(&cargo, &catalog).expect("cargo inputs"))
+            .expect("cargo digest"),
+        toolchain_id(&nextest_inputs).expect("nextest digest")
     );
 }
 
@@ -260,7 +263,10 @@ fn tofu_toolchain_pins_opentofu_plus_provider_surface() {
 #[test]
 fn tofu_toolchain_flips_on_provider_surface() {
     let catalog = ToolCatalog::pinned();
-    let digest_for = |task: &ProposedTask| toolchain_digest_for(task, &catalog).expect("digest");
+    let digest_for = |task: &ProposedTask| {
+        let inputs = toolchain_inputs_for(task, &catalog).expect("toolchain inputs");
+        toolchain_id(&inputs).expect("digest")
+    };
     let validate = digest_for(&tofu_task("validate"));
     assert_eq!(validate, digest_for(&tofu_task("init")));
     assert_ne!(validate, digest_for(&tofu_task("fmt")));

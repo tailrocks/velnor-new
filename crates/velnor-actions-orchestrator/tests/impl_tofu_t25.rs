@@ -19,6 +19,7 @@ use crate::impl_tofu_t24_gates::{crate_src, is_crate_job, token_hits};
 /// diagnostics share it) and `build_plan` owns the plan-phase instance
 /// (every task shares it). The tofu adapter itself never constructs one:
 /// per-call fresh caches would share nothing.
+/// `qualification_cache_runtime_closure` uses one instance for its source check.
 #[test]
 fn file_cache_constructions_are_hoisted_per_phase() -> TestResult {
     let orch = crate_src("");
@@ -30,7 +31,11 @@ fn file_cache_constructions_are_hoisted_per_phase() -> TestResult {
         .collect();
     assert_eq!(
         files,
-        ["discover.rs", "internal.rs"],
+        [
+            "discover.rs",
+            "internal.rs",
+            "qualification_cache_runtime_closure.rs"
+        ],
         "one hoisted construction per phase: {sites:?}"
     );
     let tofu = crate_src("../velnor-actions-tofu");
@@ -72,5 +77,9 @@ fn plan_artifact_downloads_exactly_once_per_job() -> TestResult {
         }
     }
     assert_eq!(crate_jobs, 2, "two tofu stack jobs");
+    assert!(
+        !jobs.contains_key("publish-baseline"),
+        "baseline publication stays outside the required workflow"
+    );
     Ok(())
 }

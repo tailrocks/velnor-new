@@ -1,12 +1,11 @@
-//! Unprivileged container image build jobs (`image-<id>-<platform>`).
-//!
-//! One job per image and native platform. The job checks out the repository
-//! without credentials, verifies the source-bound Dockerfile, creates a
-//! task-owned Buildx builder from a digest-pinned `BuildKit` image, builds an
-//! OCI layout with an SBOM and maximal provenance, removes the builder on every
-//! exit path and uploads the layout. It holds `contents: read` only and no
-//! credential reaches the build: there is no secret mount, build argument or
-//! remote cache.
+//! This module defines container image build jobs that use no credentials.
+//! Each job builds one image for one platform.
+//! It checks out the repository and checks the Dockerfile against its saved digest.
+//! It creates a Buildx builder from a pinned `BuildKit` image.
+//! It builds an OCI layout with an SBOM and maximum provenance.
+//! It removes the builder after every exit and uploads the layout.
+//! Each job has only the `contents: read` permission.
+//! The build receives no credentials, secret mounts, build arguments, or remote cache.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -14,6 +13,7 @@ use velnor_actions_contract::{
     ImageConfig, ImagePlatform, Job, JobTimeout, PermissionLevel, Permissions, Step,
 };
 
+use super::SCALE_TASK_NAME_SUFFIX;
 use crate::{RenderError, shell_step, steps};
 
 #[cfg(test)]
@@ -24,7 +24,7 @@ mod tests;
 pub const BUILDKIT_IMAGE: &str =
     "moby/buildkit@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c";
 
-/// Source guard step name.
+/// This constant names the source check step.
 pub(crate) const VERIFY_IMAGE_SOURCE_NAME: &str = "Verify image Dockerfile source";
 /// Native Docker host step name.
 pub(crate) const VERIFY_IMAGE_HOST_NAME: &str = "Verify native Docker host";
@@ -145,6 +145,7 @@ pub(crate) fn validate_image_build_jobs(
     jobs: &BTreeMap<String, Job>,
     policy: &ImageBuildPolicy,
     checkout_uses: &str,
+    routing: &crate::workflow_routing::WorkflowRoutingPolicy,
 ) -> Result<Vec<String>, RenderError> {
     let mut seen = BTreeSet::new();
     let mut ids = Vec::new();
@@ -157,7 +158,27 @@ pub(crate) fn validate_image_build_jobs(
             .get(&id)
             .ok_or_else(|| invalid("image_build_job_missing", &id))?;
         let expected = build_image_build_job(policy, *platform, checkout_uses)?;
-        if !same_job_contract(actual, &expected) {
+        let mut expected_job = BTreeMap::from([(id.clone(), expected)]);
+        crate::workflow_routing::route_jobs(&mut expected_job, routing)?;
+        if routing.is_scale_set() {
+            expected_job
+                .get_mut(&id)
+                .ok_or_else(|| invalid("image_build_job_missing", &id))?
+                .display_name
+                .push_str(SCALE_TASK_NAME_SUFFIX);
+        }
+        let expected = expected_job
+            .get(&id)
+            .ok_or_else(|| invalid("image_build_job_missing", &id))?;
+        if actual.runs_on != platform.runs_on() && actual.runs_on != expected.runs_on {
+            return Err(invalid("image_build_job_contract", &id));
+        }
+        let mut actual_job = BTreeMap::from([(id.clone(), actual.clone())]);
+        crate::workflow_routing::route_jobs(&mut actual_job, routing)?;
+        let actual = actual_job
+            .get(&id)
+            .ok_or_else(|| invalid("image_build_job_missing", &id))?;
+        if !same_job_contract(actual, expected) {
             return Err(invalid("image_build_job_contract", &id));
         }
         ids.push(id);
@@ -342,10 +363,12 @@ fn image_build_permissions() -> Permissions {
 fn same_job_contract(actual: &Job, expected: &Job) -> bool {
     actual.display_name == expected.display_name
         && actual.runs_on == expected.runs_on
+        && actual.check_runner == expected.check_runner
         && actual.timeout_minutes == expected.timeout_minutes
         && actual.needs == expected.needs
         && actual.condition == expected.condition
         && actual.permissions == expected.permissions
+        && actual.cache_mode == expected.cache_mode
         && actual.environment == expected.environment
         && actual.steps == expected.steps
 }

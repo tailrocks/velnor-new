@@ -13,8 +13,11 @@ pub mod cache_p08;
 mod cache_p08_detect;
 mod cache_plan_outputs;
 pub mod cache_prune;
+mod cache_rest_client;
 mod cache_save_budget;
 mod cache_steps;
+mod cache_tar_action;
+mod cache_tar_setup;
 mod candidate;
 pub mod closure;
 mod closure_paths;
@@ -56,11 +59,12 @@ mod preseed_closure;
 pub mod private_source_steps;
 /// Project tool-version resolver binding (hard decision 5).
 mod project_tool_resolver;
-pub use project_tool_resolver::quote_project_tool_run_refs;
+pub use crate::project_tool_resolver::quote_project_tool_run_refs;
 pub mod publish_render;
 pub mod publish_roles;
 pub mod publish_scripts;
 pub mod publish_spec;
+mod qualification_cache_composites;
 pub mod release_checkout_gates;
 pub mod release_config;
 pub mod release_gates;
@@ -97,6 +101,7 @@ mod tool_seed_test_support;
 pub mod toolchain_env;
 pub mod tree;
 pub mod upgrades;
+pub mod verifier_composite;
 mod verifier_shell;
 
 /// Display name of the step that verifies an installed Rust toolchain file
@@ -131,17 +136,14 @@ pub fn jactionlint_verifier_script(version: &str) -> String {
     selected_mise_verifier::script_for_version(version)
 }
 pub mod verification_jobs;
-pub mod verifier_composite;
 mod workflow_policy;
+pub mod workflow_routing;
 mod workflow_size;
 mod workflow_timeout;
 pub mod yaml;
 
 mod root_api;
 pub use self::root_api::*;
-
-/// Renderer implementation version (typed Gate-2 renderer).
-pub const RENDERER_VERSION: u32 = 2;
 
 /// Source-free authenticated review completion companion.
 pub mod review_completion;

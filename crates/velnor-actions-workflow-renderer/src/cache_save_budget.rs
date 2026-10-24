@@ -3,7 +3,8 @@
 //! This is not the runner's job-start clock. The fixed reserve accounts for
 //! startup and cleanup conservatively; it does not guarantee whole-job fit.
 
-use velnor_actions_contract::{Step, StepKind, StepRole};
+use velnor_actions_contract::workflow::QualificationCacheStepStage;
+use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 
 use crate::{RenderError, yaml::Yaml};
 
@@ -11,9 +12,8 @@ const CLOCK_ID: &str = "velnor-cache-clock";
 const SOURCES_ID: &str = "velnor-optional-sources-save";
 const TOOLS_ID: &str = "velnor-optional-tools-save";
 const PROVIDERS_ID: &str = "velnor-optional-providers-save";
-/// Save-id prefix of the stack family saves (`...-<stem>-save`).
-const FAMILY_SAVE_ID_PREFIX: &str = "velnor-optional-family-";
 const MBX_BUNDLE_ID: &str = "velnor-optional-mbx-bundle-save";
+const FAMILY_SAVE_ID_PREFIX: &str = "velnor-optional-family-";
 const RESERVE_SECONDS: u32 = 30;
 const WRITE_SECONDS: u32 = 60;
 /// A compiled bundle is larger than the other families; it gets a longer attempt.
@@ -37,7 +37,7 @@ for value in "$now" "$seconds"; do
   case "$value" in 0|[1-9]*) ;; *) unavailable; exit 0 ;; esac
   [ "${#value}" -le 10 ] || { unavailable; exit 0; }
 done
-if [ -z "$output" ] || ! printf 'started=%s\ndeadline=%s\n' "$now" "$((now + seconds))" 2>/dev/null >> "$output"; then
+if [ -z "$output" ] || ! printf 'started=%s\ndeadline=%s\njob_seconds=%s\n' "$now" "$((now + seconds))" "$seconds" 2>/dev/null >> "$output"; then
   unavailable
 fi
 "#;
@@ -74,7 +74,34 @@ pub(crate) fn decorate(
     entries: &mut Vec<(String, Yaml)>,
     job_context: bool,
 ) -> Result<(), RenderError> {
-    let id: String = match step.role {
+    if step.role == Some(StepRole::QualificationCacheSave) {
+        let valid_identity = matches!(
+            step.id,
+            Some(StepId::QualificationCache(identity))
+                if identity.stage() == QualificationCacheStepStage::Save
+        );
+        let valid_action = matches!(
+            &step.kind,
+            StepKind::Action { uses, .. } if uses == crate::steps::TOOLS_SAVE_USES
+        );
+        if !job_context {
+            return Err(invalid_scope());
+        }
+        if !valid_identity
+            || !valid_action
+            || step.condition.is_none()
+            || step.parallel
+            || field(entries, "if").is_none()
+        {
+            return Err(invalid());
+        }
+        entries.extend([
+            ("timeout-minutes".to_owned(), Yaml::Int(1)),
+            ("continue-on-error".to_owned(), Yaml::Bool(true)),
+        ]);
+        return Ok(());
+    }
+    let id = match step.role {
         Some(StepRole::CargoSourcesSave) => SOURCES_ID.to_owned(),
         Some(StepRole::ToolsCacheSave) => TOOLS_ID.to_owned(),
         Some(StepRole::TofuProvidersSave) => PROVIDERS_ID.to_owned(),
@@ -82,10 +109,13 @@ pub(crate) fn decorate(
         Some(StepRole::FamilySave) => family_save_id(step)?,
         _ => return Ok(()),
     };
+    if !job_context {
+        return Err(invalid_scope());
+    }
     let StepKind::Action { uses, .. } = &step.kind else {
         return Err(invalid());
     };
-    if !job_context || uses != crate::steps::TOOLS_SAVE_USES || step.id.is_some() || step.parallel {
+    if uses != crate::steps::TOOLS_SAVE_USES || step.id.is_some() || step.parallel {
         return Err(invalid());
     }
     if step.condition.is_none() || field(entries, "if").is_none() {
@@ -102,7 +132,6 @@ pub(crate) fn decorate(
     Ok(())
 }
 
-/// Per-family save id, from the family stem of the save's key expression.
 fn family_save_id(step: &Step) -> Result<String, RenderError> {
     use velnor_actions_contract::workflow::cache_family_steps::{FAMILY_KEYS_ID, family_for_stem};
     let StepKind::Action { with, .. } = &step.kind else {
@@ -151,7 +180,13 @@ fn validate_ids(steps: &[Yaml]) -> Result<(), RenderError> {
     let mut seen = std::collections::BTreeSet::new();
     for step in steps {
         let Some(id) = step_id(step) else { continue };
-        if id == CLOCK_ID || id.ends_with("-save-budget") {
+        if id == CLOCK_ID
+            || id == format!("{SOURCES_ID}-budget")
+            || id == format!("{TOOLS_ID}-budget")
+            || id == format!("{PROVIDERS_ID}-budget")
+            || id == format!("{MBX_BUNDLE_ID}-budget")
+            || (id.starts_with(FAMILY_SAVE_ID_PREFIX) && id.ends_with("-save-budget"))
+        {
             return Err(invalid());
         }
         if save_id(step).is_some() && !seen.insert(id) {
@@ -179,10 +214,43 @@ fn step_id(step: &Yaml) -> Option<&str> {
 }
 
 fn save_id(step: &Yaml) -> Option<&str> {
-    step_id(step).filter(|id| {
-        matches!(*id, SOURCES_ID | TOOLS_ID | PROVIDERS_ID | MBX_BUNDLE_ID)
-            || (id.starts_with(FAMILY_SAVE_ID_PREFIX) && id.ends_with("-save"))
-    })
+    let id = step_id(step)?;
+    let Yaml::Map(entries) = step else {
+        return None;
+    };
+    let uses = match field(entries, "uses")? {
+        Yaml::Str(uses) | Yaml::Quoted(uses) => uses.as_str(),
+        Yaml::Annotated { value: uses, .. } => uses,
+        _ => return None,
+    };
+    if uses != crate::steps::TOOLS_SAVE_USES {
+        return None;
+    }
+    if id == SOURCES_ID
+        || id == TOOLS_ID
+        || id == PROVIDERS_ID
+        || id == MBX_BUNDLE_ID
+        || is_owner_save_id(id)
+        || (id.starts_with(FAMILY_SAVE_ID_PREFIX) && id.ends_with("-save"))
+    {
+        Some(id)
+    } else {
+        None
+    }
+}
+
+fn is_owner_save_id(id: &str) -> bool {
+    let Some(owner) = id.strip_prefix("qualification-cache-save-") else {
+        return false;
+    };
+    let Some((layer, tag)) = owner.rsplit_once('-') else {
+        return false;
+    };
+    matches!(
+        layer,
+        "mbx_objects" | "cargo_sources" | "mise_tools" | "tofu_providers" | "task_result"
+    ) && tag.len() == 16
+        && tag.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 fn clock(minutes: u16) -> Yaml {
@@ -202,21 +270,18 @@ fn job_seconds(minutes: u16) -> Vec<(String, Yaml)> {
 }
 
 fn admission(id: &str, minutes: u16, condition: &str) -> Yaml {
-    let mut env = job_seconds(minutes);
-    env.extend([
-        (
-            "VELNOR_CACHE_STARTED".to_owned(),
-            Yaml::str(format!("${{{{ steps.{CLOCK_ID}.outputs.started }}}}")),
-        ),
-        (
-            "VELNOR_CACHE_DEADLINE".to_owned(),
-            Yaml::str(format!("${{{{ steps.{CLOCK_ID}.outputs.deadline }}}}")),
-        ),
+    let started = format!("${{{{ steps.{CLOCK_ID}.outputs.started }}}}");
+    let deadline = format!("${{{{ steps.{CLOCK_ID}.outputs.deadline }}}}");
+    let seconds = (u32::from(minutes) * 60).to_string();
+    let env = vec![
+        ("VELNOR_CACHE_JOB_SECONDS".to_owned(), Yaml::str(seconds)),
+        ("VELNOR_CACHE_STARTED".to_owned(), Yaml::str(started)),
+        ("VELNOR_CACHE_DEADLINE".to_owned(), Yaml::str(deadline)),
         (
             "VELNOR_CACHE_REQUIRED_SECONDS".to_owned(),
             Yaml::str((write_seconds(id) + RESERVE_SECONDS).to_string()),
         ),
-    ]);
+    ];
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Admit optional cache save")),
         ("id".to_owned(), Yaml::str(format!("{id}-budget"))),
@@ -249,6 +314,10 @@ fn outcome(id: &str) -> Yaml {
 
 fn invalid() -> RenderError {
     RenderError::InvalidWorkflow("invalid_optional_cache_save_budget".to_owned())
+}
+
+fn invalid_scope() -> RenderError {
+    RenderError::InvalidWorkflow("optional_cache_save_requires_job_scope".to_owned())
 }
 
 #[cfg(test)]

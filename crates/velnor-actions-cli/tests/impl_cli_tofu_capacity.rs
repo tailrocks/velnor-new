@@ -53,7 +53,9 @@ fn paired_tofu_repo(
              [execution.profiles.local]\nkind = \"github-scale-set\"\n\
              name = \"ubuntu-26.04-scale-set\"\n\
              labels = [\"ubuntu-26.04-scale-set\", \"velnor\"]\n\
-             platform = \"linux/amd64\"\n[stacks.tofu]\nroots = [{roots}]\n"
+             platform = \"linux/amd64\"\n\
+             job_container_image = \"ghcr.io/tailrocks/velnor-job@sha256:b36946574402eb0c79fb6d7a9f7a77195d2ef943c92bc6b0fbc466ff3ea408f9\"\n\
+             [stacks.tofu]\nroots = [{roots}]\n"
         ),
     )?;
     for name in names {

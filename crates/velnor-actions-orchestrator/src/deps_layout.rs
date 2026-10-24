@@ -1,7 +1,7 @@
-//! Where fetched private bundles live in the workspace.
+//! Define workspace paths for fetched private bundles.
 //!
-//! One source of truth shared by the writer (the private fetch) and the
-//! readers (for example `gradle-run-v1`), so they cannot drift apart.
+//! Private fetch writes bundles to these paths.
+//! Consumers such as `gradle-run-v1` read the same paths.
 
 use std::path::{Path, PathBuf};
 

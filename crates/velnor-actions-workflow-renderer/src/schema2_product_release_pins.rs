@@ -36,6 +36,8 @@ pub struct ProductReleasePins {
     pub install_resource_probe_target_argv: Vec<String>,
     /// Exact pinned macOS host binary build argv.
     pub runner_build_argv: Vec<String>,
+    /// This field lists the arguments for the pinned macOS attestation helper build.
+    pub attestation_helper_build_argv: Vec<String>,
     /// Exact pinned MBX build argv for the static Linux resource probe.
     pub resource_probe_build_argv: Vec<String>,
     /// Exact pinned jactionlint argv over the committed lint file set.

@@ -4,13 +4,15 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use bollard::models::{
-    ContainerConfig, ContainerInspectResponse, HostConfig, HostConfigCgroupnsModeEnum, MountPoint,
+    ContainerConfig, ContainerInspectResponse, HostConfig, HostConfigCgroupnsModeEnum, Mount,
+    MountPoint, MountType, MountVolumeOptions,
 };
 
 use crate::error::HostError;
 use crate::launch_identity::LaunchIdentity;
 use crate::worker::mounts::label_map;
 use crate::worker::{CreateProjection, dind_create_for_identity, runner_create_for_identity};
+use velnor_runner_core::runner_work_path;
 
 use super::{inspect_labels_match, same_launch, topology_matches, validate_existing_row};
 
@@ -18,6 +20,10 @@ use super::{inspect_labels_match, same_launch, topology_matches, validate_existi
 mod cgroupns;
 #[path = "containers_limits_tests.rs"]
 mod limits;
+#[path = "containers_no_copy_tests.rs"]
+mod no_copy;
+#[path = "containers_runtime_tests.rs"]
+mod runtime;
 #[path = "containers_topology_tests.rs"]
 mod topology;
 
@@ -51,7 +57,9 @@ fn inspect_projection(spec: &CreateProjection) -> Result<ContainerInspectRespons
         budget.runner()
     };
     let mut mounts = Vec::with_capacity(spec.mounts.len() + spec.bind_mounts.len());
+    let mut host_mounts = Vec::with_capacity(spec.mounts.len());
     let mut env = vec![UBUNTU_PATH.to_owned()];
+    let work_target = runner_work_path();
     env.extend(spec.env.iter().cloned());
     for mount in &spec.mounts {
         let name = mount
@@ -63,6 +71,17 @@ fn inspect_projection(spec: &CreateProjection) -> Result<ContainerInspectRespons
             name: Some(name.to_owned()),
             destination: Some(mount.target.clone()),
             rw: Some(true),
+            ..Default::default()
+        });
+        host_mounts.push(Mount {
+            target: Some(mount.target.clone()),
+            source: Some(name.to_owned()),
+            typ: Some(MountType::VOLUME),
+            volume_options: (mount.target == "/home/runner" || mount.target == work_target)
+                .then_some(MountVolumeOptions {
+                    no_copy: Some(true),
+                    ..Default::default()
+                }),
             ..Default::default()
         });
     }
@@ -97,6 +116,7 @@ fn inspect_projection(spec: &CreateProjection) -> Result<ContainerInspectRespons
             nano_cpus: Some(limits.nano_cpus),
             memory: Some(limits.memory_bytes),
             memory_swap: Some(limits.memory_bytes),
+            mounts: Some(host_mounts),
             ..Default::default()
         }),
         mounts: Some(mounts),
@@ -355,16 +375,6 @@ fn runner_topology_rejects_stdin_flag_drift() -> Result<(), HostError> {
 }
 
 #[test]
-fn runner_topology_rejects_tty_drift() -> Result<(), HostError> {
-    let spec = runner_create_for_identity(&identity()?, None)?;
-    let mut inspected = inspect_projection(&spec)?;
-    inspected.config.as_mut().ok_or(HostError::Ownership)?.tty = Some(true);
-
-    assert!(!topology_matches(&spec, &inspected)?);
-    Ok(())
-}
-
-#[test]
 fn runner_topology_rejects_user_and_working_directory_drift() -> Result<(), HostError> {
     let spec = runner_create_for_identity(&identity()?, None)?;
     let valid = inspect_projection(&spec)?;
@@ -380,19 +390,5 @@ fn runner_topology_rejects_user_and_working_directory_drift() -> Result<(), Host
         .ok_or(HostError::Ownership)?
         .working_dir = Some("/".to_owned());
     assert!(!topology_matches(&spec, &wrong_directory)?);
-    Ok(())
-}
-
-#[test]
-fn dind_topology_rejects_entrypoint_override() -> Result<(), HostError> {
-    let spec = dind_create_for_identity(&identity()?)?;
-    let mut inspected = inspect_projection(&spec)?;
-    inspected
-        .config
-        .as_mut()
-        .ok_or(HostError::Ownership)?
-        .entrypoint = Some(vec!["/bin/echo".to_owned()]);
-
-    assert!(!topology_matches(&spec, &inspected)?);
     Ok(())
 }

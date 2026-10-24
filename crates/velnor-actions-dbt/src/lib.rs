@@ -1,8 +1,8 @@
-//! dbt-fusion stack adapter: version grammar, project model, package lock
-//! policy, profile hygiene, artifact admission and affected-project claims.
+//! Check dbt-fusion versions, project data, package locks, profiles, and artifact records.
+//! Select projects affected by source changes.
 //!
-//! This crate only reads text the orchestrator hands it; it launches no
-//! process, touches no file and renders no workflow text.
+//! This crate reads text from the orchestrator. It does not start processes,
+//! access files, or render workflow text.
 
 pub mod error;
 pub mod packages;

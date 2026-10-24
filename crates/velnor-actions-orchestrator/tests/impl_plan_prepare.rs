@@ -160,7 +160,9 @@ fn mbx_evidence_keeps_plan_mise_free_and_uses_task_action() -> TestResult {
         steps[prepare_at].1
     );
     {
-        let task_start = yaml.find("  rust-demo:").ok_or("missing MBX task job")?;
+        let task_start = yaml
+            .find("  rust-demo:")
+            .ok_or("missing Rust package job")?;
         let task_tail = &yaml[task_start..];
         let mut task_end = 0;
         for line in task_tail.split_inclusive('\n') {
@@ -175,7 +177,7 @@ fn mbx_evidence_keeps_plan_mise_free_and_uses_task_action() -> TestResult {
             task.matches("uses: jdx/mr-boxington-action@").count() == 1
                 && task.contains(&format!("version: {version}"))
                 && task.contains(MBX_VERSION_CHECK_NAME),
-            "the MBX task has one pinned native action and version guard:\n{task}"
+            "the Rust package job has one pinned MBX action and version guard:\n{task}"
         );
         assert!(
             !task.contains(&spec),

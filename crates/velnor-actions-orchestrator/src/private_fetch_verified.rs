@@ -1,11 +1,9 @@
 //! `.velnor/deps/verified.json`: what one private fetch verified (HD-7).
 //!
-//! Written by `private-fetch-v1` after every requested bundle and tree has
-//! been verified against `.velnor/deps.lock` and extracted, never before, so
-//! its presence means the whole fetch succeeded. Repository code (a build
-//! script, a test) can compare it with the lock instead of re-fetching. The
-//! format is a stable contract: `docs/proposed/private-sources-contract.md`,
-//! "Verified marker".
+//! `private-fetch-v1` writes this file only after it verifies and extracts every requested bundle and tree.
+//! Repository code can compare the file with `.velnor/deps.lock` without another fetch.
+//! Repository code can also change the file, so its presence alone does not prove fetch provenance.
+//! See "Verified marker" in `docs/proposed/private-sources-contract.md` for the stable format.
 
 use std::path::Path;
 
@@ -97,11 +95,11 @@ impl Verified {
             .map_err(|err| internal(&format!("private_verified_render:{err}")))
     }
 
-    /// Write the marker into the bundle root; nothing is written for an empty
-    /// fetch, so a repository with only Cargo sources sees no workspace file.
+    /// Write the marker into the bundle root.
+    /// An empty fetch writes no marker. A repository with only Cargo sources gets no workspace file.
     ///
     /// # Errors
-    /// A bundle extracted onto the marker path, or an I/O failure.
+    /// The function fails if a bundle occupies the marker path or a file operation fails.
     pub(crate) fn write(&self, deps: &Path) -> Result<(), OrchestratorError> {
         if self.sources.is_empty() {
             return Ok(());

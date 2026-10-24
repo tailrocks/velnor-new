@@ -10,6 +10,9 @@ use super::{
 use crate::VERIFY_VERIFIER_SHELL;
 use crate::yaml::Yaml;
 
+#[path = "verifier_composite_project_tool_tests.rs"]
+mod project_tool_tests;
+
 fn rust_step(uses: &str) -> Step {
     let restored = uses == RUST_VERIFIER_USES[0];
     let name = if restored {
@@ -149,50 +152,6 @@ fn verifier_composite_keeps_scrubbed_shell_body_homes_and_trusted_shell() {
 }
 
 #[test]
-fn dynamic_verifier_composite_self_binds_its_project_tool_reference() {
-    let step = rust_step(RUST_VERIFIER_USES[1]);
-    let file = render_verifier_composite(RUST_VERIFIER_USES[1], &step, "0.1.40")
-        .expect("dynamic verifier composite");
-    let document = verifier_composite_document("Velnor Rust channel verifier", &step)
-        .expect("structured dynamic verifier composite");
-    let runs = field(&document, "runs");
-    let Yaml::Seq(steps) = field(runs, "steps") else {
-        panic!("composite steps must be a sequence");
-    };
-    assert_eq!(steps.len(), 2, "one resolver precedes the verifier");
-    let resolver = &steps[0];
-    assert_eq!(
-        scalar(field(resolver, "name")),
-        "Resolve project tool versions"
-    );
-    assert_eq!(scalar(field(resolver, "shell")), VERIFY_VERIFIER_SHELL);
-    let resolver_run = scalar(field(resolver, "run"));
-    assert!(resolver_run.contains("velnor_bind_selected_mise"));
-    assert!(resolver_run.contains("function_env_scan_complete=0"));
-    assert!(resolver_run.contains("unset ACTIONS_ID_TOKEN_REQUEST_TOKEN"));
-    let verifier = &steps[1];
-    assert_eq!(scalar(field(verifier, "shell")), VERIFY_VERIFIER_SHELL);
-    assert!(scalar(field(verifier, "run")).contains("${VELNOR_TOOL_RUST}"));
-    assert_eq!(
-        file.bytes.matches("Resolve project tool versions").count(),
-        1
-    );
-
-    let mut wrong_reference = rust_step(RUST_VERIFIER_USES[1]);
-    if let StepKind::Shell { run, .. } = &mut wrong_reference.kind {
-        run[2] = run[2].replace("VELNOR_TOOL_RUST", "VELNOR_TOOL_JACTIONLINT");
-    }
-    let error = render_verifier_composite(RUST_VERIFIER_USES[1], &wrong_reference, "0.1.40")
-        .expect_err("the verifier cannot bind a different tool");
-    assert!(
-        error
-            .to_string()
-            .contains("verifier_composite_tool_binding"),
-        "{error}"
-    );
-}
-
-#[test]
 fn verifier_composite_rejects_unregistered_paths_and_mutated_step_identity() {
     let canonical = rust_step(RUST_VERIFIER_USES[1]);
     for uses in [
@@ -264,13 +223,13 @@ fn verifier_renderer_reapplies_scrub_and_rejects_forged_step_shapes() {
         env.insert("PATH".to_owned(), "/tmp/poison".to_owned());
     }
     let rendered = verifier_shell_step_to_yaml(&untrusted_path)
-        .expect("renderer replaces an input PATH with the trusted verifier PATH");
+        .expect("renderer replaces a caller PATH with the fixed trusted path");
+    let emitted_env = scalar_map(field(&rendered, "env"));
     assert_eq!(
-        scalar_map(field(&rendered, "env"))
-            .get("PATH")
-            .map(String::as_str),
+        emitted_env.get("PATH").map(String::as_str),
         Some(crate::VERIFY_PATH)
     );
+    assert!(verifier_shell_argv(&untrusted_path).is_ok());
 }
 
 #[test]
@@ -309,7 +268,7 @@ fn canonical_verifier_step_requires_one_full_credential_prelude() {
     assert_eq!(
         &argv[..expected_prefix.len()],
         expected_prefix.as_slice(),
-        "standalone argv binds the trusted PATH before the privileged Bash"
+        "standalone argv binds trusted PATH before privileged Bash"
     );
     let run = verifier_shell_run_scalar(&canonical).expect("actual rendered run scalar");
     assert_eq!(argv.last(), Some(&run));
@@ -323,18 +282,32 @@ fn canonical_verifier_step_requires_one_full_credential_prelude() {
         "trusted PATH is a step environment value"
     );
 
-    for script in ["set -eu".to_owned(), format!("{prelude} {prelude} set -eu")] {
-        assert!(
-            verifier_shell_step(
-                StepRole::VerifyRustManifest,
-                "Verify Rust manifest",
-                vec!["sh".to_owned(), "-c".to_owned(), script],
-                BTreeMap::new(),
-            )
-            .is_err(),
-            "partial or duplicate prelude must fail closed"
-        );
-    }
+    assert!(
+        verifier_shell_step(
+            StepRole::VerifyRustManifest,
+            "Verify Rust manifest",
+            vec!["sh".to_owned(), "-c".to_owned(), "set -eu".to_owned()],
+            BTreeMap::new(),
+        )
+        .is_err(),
+        "missing prelude must fail closed"
+    );
+    let duplicate = verifier_shell_step(
+        StepRole::VerifyRustManifest,
+        "Verify Rust manifest",
+        vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            format!("{prelude} {prelude} set -eu"),
+        ],
+        BTreeMap::new(),
+    )
+    .expect_err("a second leading prelude is not canonical");
+    assert!(matches!(
+        duplicate,
+        crate::RenderError::InvalidWorkflow(problem)
+            if problem == "verifier_shell_script_duplicate_credential_prelude"
+    ));
 }
 
 #[path = "verifier_composite_exec_tests.rs"]

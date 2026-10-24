@@ -1,4 +1,4 @@
-# PAX path overrides let BusyBox extract planned -P members directly.
+# Build PAX path overrides for tar-member's selected-stream rewrite mode.
 sub pax_record {
     my ($key, $value) = @_;
     my $body = " $key=$value\n";

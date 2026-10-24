@@ -109,7 +109,6 @@ fn extension_carries_workspace_and_profile() {
     let graph = digest_b3(b"graph");
     let config = digest_b3(b"config");
     let inputs = ExtensionInputs {
-        all_features: false,
         package_id: "demo 0.1.0",
         workspace_id: "workspace",
         profile: "default",
@@ -117,6 +116,7 @@ fn extension_carries_workspace_and_profile() {
         graph_digest: &graph,
         targets: &targets,
         features: &features,
+        all_features: false,
         target: "host",
         driver: CompileDriver::Cargo,
         runner: TestRunner::CargoTest,

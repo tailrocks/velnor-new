@@ -82,7 +82,7 @@ jobs:
         ports:
           - "6379:6379"
     steps:
-      - name: Localhost port
+      - name: Service check
         run: timeout 20 bash -c 'until echo >/dev/tcp/127.0.0.1/6379; do sleep 1; done'
   services-scale-set:
     name: Services / Velnor Scale Set
@@ -99,8 +99,8 @@ jobs:
         ports:
           - "6379:6379"
     steps:
-      - name: Localhost port
-        run: timeout 20 bash -c 'until echo >/dev/tcp/127.0.0.1/6379; do sleep 1; done'
+      - name: Service check
+        run: timeout 20 bash -c 'until echo >/dev/tcp/redis/6379; do sleep 1; done'
   artifacts-hosted:
     name: Artifacts / GitHub hosted
     if: inputs.mode == 'features' || inputs.mode == 'artifacts'
@@ -280,7 +280,11 @@ jobs:
     defaults:
       run:
         shell: sh -e {0}
-    container: alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395
+    container:
+      image: alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
     services:
       redis:
         image: redis:8.10.2-alpine@sha256:2d3814be5e9b06a30a0be54770b7e12052e7e79ec85271aefd34875c1f393b23
@@ -600,7 +604,7 @@ jobs:
         ports:
           - "6379:6379"
     steps:
-      - name: Probe service then sleep
+      - name: Service check
         run: "i=0; while [ \"$i\" -lt 30 ]; do nc -z -w 1 127.0.0.1 6379 && break; i=$((i+1)); sleep 1; done; nc -z -w 1 127.0.0.1 6379 && echo service-up && sleep 900"
   cancel-service-scale-set:
     name: Cancel service / Velnor Scale Set
@@ -617,8 +621,8 @@ jobs:
         ports:
           - "6379:6379"
     steps:
-      - name: Probe service then sleep
-        run: "i=0; while [ \"$i\" -lt 30 ]; do nc -z -w 1 127.0.0.1 6379 && break; i=$((i+1)); sleep 1; done; nc -z -w 1 127.0.0.1 6379 && echo service-up && sleep 900"
+      - name: Service check
+        run: "i=0; while [ \"$i\" -lt 30 ]; do nc -z -w 1 redis 6379 && break; i=$((i+1)); sleep 1; done; nc -z -w 1 redis 6379 && echo service-up && sleep 900"
   testcontainers-hosted:
     name: Testcontainers / GitHub hosted
     if: inputs.mode == 'testcontainers'
@@ -1019,3 +1023,157 @@ jobs:
           MISE_VERSION: 2026.10.18
           MISE_SHA256: 72e1ced3bac89d0e0aa28b04bd22f8941c111d3b20c74a77bfb6a9486f25f7d3
         run: "set -euo pipefail\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nversion=\"$(mise --version)\"\ncase \"$version\" in \"$MISE_VERSION macos-x64 (\"[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\")\") ;; *) echo \"unexpected Mise version: $version\" >&2; exit 1 ;; esac\nbinary=\"$(command -v mise)\"\nactual=\"$(shasum -a 256 \"$binary\" | awk '{print $1}')\"\ntest \"$actual\" = \"$MISE_SHA256\""
+  paired-sdk-build:
+    name: Build paired SDK fixture
+    if: inputs.mode == 'paired-sdk-build' || inputs.mode == 'paired-sdk-tls'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    permissions:
+      actions: write
+      contents: read
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      binary_sha256: ${{ steps.build.outputs.binary_sha256 }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Setup Mise
+        uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e
+        with:
+          version: 2026.10.18
+          sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
+          install: "false"
+          env: "false"
+          cache: "false"
+          cache_save: "false"
+      - name: Install pinned Rust for the paired SDK fixture
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: "set -eu\n: \"${GITHUB_TOKEN:?missing workflow token}\"\nmise --no-config --no-env --no-hooks install rust@1.99.1"
+      - name: Verify Rust channel manifest
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+          PATH: /usr/bin:/bin:/usr/sbin:/sbin
+        shell: /bin/bash --noprofile --norc -p -e -o pipefail {0}
+        run: "function_env_unset=(); function_env_scan_complete=0; while IFS= read -r -d '' env_entry; do case \"$env_entry\" in BASH_FUNC_*=*) function_env_unset+=(-u \"${env_entry%%=*}\");; VELNOR_VERIFIER_ENV_SCAN_COMPLETE) function_env_scan_complete=$((function_env_scan_complete + 1));; esac; done < <({ /usr/bin/env -0 && printf '%s\\000' 'VELNOR_VERIFIER_ENV_SCAN_COMPLETE'; }); [ \"$function_env_scan_complete\" -eq 1 ] || exit 1; exec /usr/bin/env \"${function_env_unset[@]}\" -u BASH_ENV -u ENV -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR /bin/bash --noprofile --norc -p -e -o pipefail -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; PATH=/usr/bin:/bin:/usr/sbin:/sbin; export PATH; v=\"1.99.1\"; fail() { printf \"%s\\n\" \"::error::$1\" >&2; exit 1; }; case \"$v\" in 1.85.0) want=009e8b5ff43f12bf644b5e5b9fd89f96453072062a450c623882f64e85405da5;; 1.85.1) want=1e7dae690cd12e27405a97e64704917489a27c650201bf47780a936055d67909;; 1.86.0) want=5ffe190473b7896d1f39e9d0ddfa04bec72000f25897669bb296814e10ceba42;; 1.87.0) want=2949b5ea91e3f9c45e75ff2fc6cfc7776616c693ab599ed43abc2120b7522415;; 1.88.0) want=431b7c5c0b9a511d8e31d29b378bbc74124e8521f14beb92d3a5a5f7e7e55449;; 1.89.0) want=fbd1662e100e7b305908ece23b441cb7534eadfa6336c5f173ff08d1cec174a1;; 1.90.0) want=489c19f20d331765ab2835661eb546de90f6446a107a8db83045e7371e45cae2;; 1.91.0) want=d9e59cdf15532aa839c0a4871b0b755e833f914042eb2dcc59f2a0ef8667f9f6;; 1.91.1) want=483bb8b271168ee654e3be4f111beefa23b9d0c8b7f4a563a8278978dbe982e5;; 1.92.0) want=b2a49624353173ecdacf59c158c00929300606e1963f6e4609fb483a508402d0;; 1.93.0) want=beb6ba4e41c84e9c11c80e6804a007497d0c8ba0810cd403fabc8f4a9c45b1f8;; 1.93.1) want=4812a3c610bacc74eed12c89c312e540722dccccd867bd55096402da13b3a516;; 1.94.0) want=aaa177def36e01d539bee6bde95295230b9ce378f81057845db8d0ebe97898ee;; 1.94.1) want=cc2f04dfc883549d683c8cc2a9393f523a3dfbd931f5d5eaef00303cca64a60d;; 1.95.0) want=821ff14e4c4a1cbe1e8915f35aff0a3fbbdf8d293ad48ab8f31e3b0440c581f9;; 1.96.0) want=9af50610e1d82699f78a40b985c9277ae1a2c5a0bec86ae430cfe58832038285;; 1.96.1) want=87eb76c53073e72b766083bed5530820694253b832a762d8385bda5759f03975;; 1.97.0) want=3804d2666f7c12ce64205baa69b6be52f910b45b158091013264beb7aa1de7f5;; 1.97.1) want=03569b1886ceb5c05276b50c8431ab111de944cd6140fe1fa7d821dd8e0f29cf;; 1.98.0) want=3f7d139b73bbbd0004ef6e58b430831c68cdad2b1f64ee2eb35d54c09199489a;; 1.98.1) want=a7c8774a5fd8441c997d94c029776cbc5eb111e9d72ab5d256fa69866644347e;; 1.99.0) want=ce6dddc886364f8d786514771212cebe9b731ba82d6b859951c6b0ccc516b6a2;; 1.99.1) want=fb152be80975c194aa5fc684b2aec3a6e14e2b855efe2faa4e5f8ae6e590f463;; *) fail \"rust_channel_manifest_not_catalogued: Rust $v has no channel-manifest digest in this Velnor catalog; upgrade velnor-actions or pin a catalogued Rust\";; esac; rh=\"${RUSTUP_HOME:-${MISE_RUSTUP_HOME:-$HOME/.rustup}}\"; r=\"$RUNNER_TEMP/velnor/rust-verified\"; d=\"$RUNNER_TEMP/velnor/rust-manifest\"; rm -rf \"$d\"; mkdir -p \"$d\" \"$r\"; set -- \"$rh/toolchains/$v\"-*; { [ \"$#\" -eq 1 ] && [ -d \"$1\" ] && [ ! -L \"$1\" ]; } || fail \"rust_toolchain_missing: $rh/toolchains holds no single real Rust $v toolchain directory\"; t=\"$1\"; if command -v sha256sum >/dev/null 2>&1; then h=\"sha256sum\"; else h=\"shasum -a 256\"; fi; get() { curl --proto \"=https\" --proto-redir \"=https\" --tlsv1.2 --fail --silent --show-error --location --retry 3 --output \"$1\" \"$2\"; }; get \"$d/channel.toml\" \"https://static.rust-lang.org/dist/channel-rust-$v.toml\"; printf \"%s  %s\\n\" \"$want\" \"$d/channel.toml\" > \"$d/channel.sha256\"; $h -c \"$d/channel.sha256\" >/dev/null || fail \"rust_channel_manifest_digest_mismatch: channel-rust-$v.toml is not SHA-256 $want\"; test -f \"$t/lib/rustlib/components\" || fail \"rust_installed_manifest_missing: $t/lib/rustlib/components\"; find \"$t\" ! -type f ! -type d > \"$d/special\"; test ! -s \"$d/special\" || fail \"rust_toolchain_file_unexpected: $t holds a symlink or a special file\"; awk -v comps=\"$t/lib/rustlib/components\" '\\''BEGIN { while ((getline line < comps) > 0) if (line != \"\") want[line] = 1 } /^\\[/ { key = \"\"; if ($0 ~ /^\\[pkg\\.[^]]*\\.target\\.[^]]*\\]$/) { s = substr($0, 6, length($0) - 6); p = index(s, \".target.\"); k = substr(s, 1, p - 1) \"-\" substr(s, p + 8); if (k in want) key = k } next } key != \"\" && $1 == \"xz_url\" { u = $3; gsub(/\"/, \"\", u); url[key] = u } key != \"\" && $1 == \"xz_hash\" { h = $3; gsub(/\"/, \"\", h); hash[key] = h } END { for (k in want) { if (!(k in url) || !(k in hash)) exit 1; print k, url[k], hash[k] } }'\\'' \"$d/channel.toml\" > \"$d/tarballs\" || fail \"rust_component_not_in_manifest: $t lists a component the verified channel-rust-$v.toml does not ship\"; test -s \"$d/tarballs\" || fail \"rust_installed_manifest_empty: $t lists no component\"; : > \"$d/expected\"; while read -r comp url hash; do case \"$comp\" in *[!A-Za-z0-9._-]*|\"\") fail \"rust_component_name_invalid: $comp\";; esac; case \"$url\" in https://static.rust-lang.org/dist/*.tar.xz) ;; *) fail \"rust_component_url_untrusted: $url\";; esac; if [ ! -f \"$r/$comp.$hash\" ]; then get \"$d/c.tar.xz\" \"$url\"; printf \"%s  %s\\n\" \"$hash\" \"$d/c.tar.xz\" > \"$d/c.sha256\"; $h -c \"$d/c.sha256\" >/dev/null || fail \"rust_component_tarball_digest_mismatch: $comp\"; rm -rf \"$d/x\"; mkdir \"$d/x\"; tar -xJf \"$d/c.tar.xz\" -C \"$d/x\" --strip-components=1; rm -f \"$d/c.tar.xz\"; : > \"$d/c.sums\"; while read -r sub; do case \"$sub\" in *[!A-Za-z0-9._-]*|\"\"|.|..) fail \"rust_component_name_invalid: $sub\";; esac; (cd \"$d/x/$sub\" && find . -type f ! -path ./manifest.in -exec $h {} +) >> \"$d/c.sums\"; done < \"$d/x/components\"; mv \"$d/c.sums\" \"$r/$comp.$hash\"; fi; cat \"$r/$comp.$hash\" >> \"$d/expected\"; done < \"$d/tarballs\"; (cd \"$t\" && find . -type f ! -path ./lib/rustlib/components ! -path \"./lib/rustlib/manifest-*\" ! -path ./lib/rustlib/multirust-channel-manifest.toml ! -path ./lib/rustlib/multirust-config.toml ! -path ./lib/rustlib/rust-installer-version -exec $h {} +) > \"$d/installed\"; LC_ALL=C sort -k2 \"$d/expected\" > \"$d/expected.sorted\"; LC_ALL=C sort -k2 \"$d/installed\" > \"$d/installed.sorted\"; if ! cmp -s \"$d/expected.sorted\" \"$d/installed.sorted\"; then LC_ALL=C diff \"$d/expected.sorted\" \"$d/installed.sorted\" | head -n 20 >&2 || true; fail \"rust_toolchain_bytes_mismatch: $t differs from the component tarballs of the verified channel-rust-$v.toml\"; fi; printf \"%s\\n\" \"velnor: Rust $v toolchain verified file by file against the component tarballs of channel-rust-$v.toml (SHA-256 $want)\"'"
+      - name: Verify Rust before MBX action
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
+          MISE_AUTO_INSTALL: "false"
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_EXEC_AUTO_INSTALL: "false"
+          MISE_GITHUB_TOKEN: ""
+          MISE_LOCKFILE: "0"
+          MISE_NO_CONFIG: "1"
+          MISE_NO_ENV: "1"
+          MISE_NO_HOOKS: "1"
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTUP_TOOLCHAIN: 1.99.1
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; [ -d \"$RUNNER_TEMP\" ] || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must exist'\\'' >&2; exit 1; }; check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }; check_no_symlink \"$RUNNER_TEMP\" || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP path contains a symlink'\\'' >&2; exit 1; }; mbx_cache_dir=\"$RUNNER_TEMP/velnor/mbx\"; [ \"${MBX_CACHE_DIR:-}\" = \"$mbx_cache_dir\" ] || { printf '\\''%s\\n'\\'' '\\''MBX_CACHE_DIR must use the stable runner-temp path'\\'' >&2; exit 1; }; [ ! -L \"$RUNNER_TEMP/velnor\" ] || { printf '\\''%s\\n'\\'' '\\''Velnor temp root must not be a symlink'\\'' >&2; exit 1; }; if [ ! -e \"$RUNNER_TEMP/velnor\" ]; then (umask 077 && mkdir -m 700 \"$RUNNER_TEMP/velnor\"); fi; [ -d \"$RUNNER_TEMP/velnor\" ] && check_no_symlink \"$RUNNER_TEMP/velnor\" || { printf '\\''%s\\n'\\'' '\\''Velnor temp root must be a real directory'\\'' >&2; exit 1; }; [ ! -e \"$mbx_cache_dir\" ] && [ ! -L \"$mbx_cache_dir\" ] || { printf '\\''%s\\n'\\'' '\\''MBX store root already exists in this private runner namespace'\\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 \"$mbx_cache_dir\" && mkdir -m 700 \"$mbx_cache_dir/actions\") || { printf '\\''%s\\n'\\'' '\\''could not reserve the MBX store root'\\'' >&2; exit 1; }; [ -n \"${GITHUB_ENV:-}\" ] && [ -f \"$GITHUB_ENV\" ] && [ ! -L \"$GITHUB_ENV\" ] || { printf '\\''%s\\n'\\'' '\\''GITHUB_ENV must be a regular runner file'\\'' >&2; exit 1; }; check_no_symlink \"$GITHUB_ENV\" || { printf '\\''%s\\n'\\'' '\\''GITHUB_ENV path contains a symlink'\\'' >&2; exit 1; }; printf '\\''MBX_CACHE_DIR=%s\\n'\\'' \"$mbx_cache_dir\" >> \"$GITHUB_ENV\"; [ -n \"$GITHUB_PATH\" ] || { printf '\\''%s\\n'\\'' '\\''GITHUB_PATH is required'\\'' >&2; exit 1; }; case \"$GITHUB_RUN_ID\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run id must be numeric'\\'' >&2; exit 1 ;; esac; case \"$GITHUB_RUN_ATTEMPT\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run attempt must be numeric'\\'' >&2; exit 1 ;; esac; probe_dir=\"$RUNNER_TEMP/velnor-mbx-preflight-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT\"; [ ! -e \"$probe_dir\" ] && [ ! -L \"$probe_dir\" ] || { printf '\\''%s\\n'\\'' '\\''preflight scratch already exists'\\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 \"$probe_dir\") || { printf '\\''%s\\n'\\'' '\\''could not reserve preflight scratch'\\'' >&2; exit 1; }; cleanup() { rm -f \"$probe_dir/rust-root\" \"$probe_dir/rustc-output\"; rmdir \"$probe_dir\"; }; trap cleanup EXIT; trap '\\''exit 1'\\'' HUP INT TERM; mise --no-config --no-env --no-hooks where '\\''rust@1.99.1'\\'' > \"$probe_dir/rust-root\"; exec 3< \"$probe_dir/rust-root\"; IFS= read -r rust_root <&3 || { printf '\\''%s\\n'\\'' '\\''Mise returned no Rust install path'\\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '\\''%s\\n'\\'' '\\''Mise returned multiple Rust install paths'\\'' >&2; exit 1; fi; exec 3<&-; [ -n \"$rust_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty Rust install path'\\'' >&2; exit 1; }; case \"$rust_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Rust install path must be absolute'\\'' >&2; exit 1 ;; esac; rustc_bin=\"$rust_root/rustc\"; [ -x \"$rustc_bin\" ] || { printf '\\''expected Rustup shim at %s\\n'\\'' \"$rustc_bin\" >&2; exit 1; }; \"$rustc_bin\" '\\''+1.99.1'\\'' -vV > \"$probe_dir/rustc-output\"; grep -Fqx '\\''release: 1.99.1'\\'' \"$probe_dir/rustc-output\" || { printf '\\''Rustup did not report exact toolchain 1.99.1\\n'\\'' >&2; exit 1; }; printf '\\''%s\\n'\\'' \"$rust_root\" >> \"$GITHUB_PATH\"; mbx_disk_sample() { boundary=$1; case \"${RUNNER_TEMP:-}\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''MBX_DISK_SAMPLE_ERROR runner_temp_not_absolute'\\'' >&2; return 0 ;; esac; if [ -d \"$RUNNER_TEMP\" ] && [ ! -L \"$RUNNER_TEMP\" ]; then printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp blocks_kib\\n'\\'' \"$boundary\"; if df -Pk \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_blocks\\n'\\'' \"$boundary\" >&2; fi; printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp inodes\\n'\\'' \"$boundary\"; if df -Pi \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_inodes\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s runner_temp_not_real_directory\\n'\\'' \"$boundary\" >&2; return 0; fi; store_path=\"$RUNNER_TEMP/velnor/mbx\"; if [ \"${MBX_CACHE_DIR:-}\" = \"$store_path\" ] && [ -d \"$store_path\" ] && [ ! -L \"$store_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=mbx_store\\n'\\'' \"$boundary\"; if du -sk \"$store_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store_unavailable\\n'\\'' \"$boundary\" >&2; fi; target_path=\"${target_dir:-target}\"; if [ ! -d \"$target_path\" ]; then for candidate in */target crates/*/target \"$RUNNER_TEMP/velnor/target\"; do if [ -d \"$candidate\" ]; then target_path=\"$candidate\"; break; fi; done; fi; if [ -L \"$target_path\" ]; then printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target_is_symlink\\n'\\'' \"$boundary\" >&2; elif [ -d \"$target_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target\\n'\\'' \"$boundary\"; if du -sk \"$target_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target state=absent\\n'\\'' \"$boundary\"; fi; }; mbx_disk_sample before-action-restore'"
+      - name: Set up MBX
+        uses: jdx/mr-boxington-action@47ce49b32025d93a7a2f4570815afaa2b7092240
+        with:
+          backend: local
+          toolchain: 1.99.1
+          version: 1.27.0
+        env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
+          MISE_AUTO_INSTALL: "false"
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_EXEC_AUTO_INSTALL: "false"
+          MISE_LOCKFILE: "0"
+          MISE_NO_CONFIG: "1"
+          MISE_NO_ENV: "1"
+          MISE_NO_HOOKS: "1"
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTUP_TOOLCHAIN: 1.99.1
+      - name: Verify native MBX version
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
+          MISE_AUTO_INSTALL: "false"
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_EXEC_AUTO_INSTALL: "false"
+          MISE_GITHUB_TOKEN: ""
+          MISE_LOCKFILE: "0"
+          MISE_NO_CONFIG: "1"
+          MISE_NO_ENV: "1"
+          MISE_NO_HOOKS: "1"
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTUP_TOOLCHAIN: 1.99.1
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }; [ -d \"$RUNNER_TEMP\" ] && check_no_symlink \"$RUNNER_TEMP\" || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be a real directory'\\'' >&2; exit 1; }; [ \"${MBX_CACHE_DIR:-}\" = \"$RUNNER_TEMP/velnor/mbx\" ] || { printf '\\''%s\\n'\\'' '\\''MBX_CACHE_DIR changed from its stable runner-temp path'\\'' >&2; exit 1; }; [ -d \"$RUNNER_TEMP/velnor\" ] && [ -d \"$MBX_CACHE_DIR\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] || { printf '\\''%s\\n'\\'' '\\''MBX store directories are missing'\\'' >&2; exit 1; }; check_no_symlink \"$RUNNER_TEMP/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '\\''%s\\n'\\'' '\\''MBX store path contains a symlink'\\'' >&2; exit 1; }; case \"$GITHUB_RUN_ID\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run id must be numeric'\\'' >&2; exit 1 ;; esac; case \"$GITHUB_RUN_ATTEMPT\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run attempt must be numeric'\\'' >&2; exit 1 ;; esac; probe_dir=\"$RUNNER_TEMP/velnor-mbx-verify-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT\"; [ ! -e \"$probe_dir\" ] && [ ! -L \"$probe_dir\" ] || { printf '\\''%s\\n'\\'' '\\''verification scratch already exists'\\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 \"$probe_dir\") || { printf '\\''%s\\n'\\'' '\\''could not reserve verification scratch'\\'' >&2; exit 1; }; cleanup() { rm -f \"$probe_dir/version\" \"$probe_dir/cache-dir\" \"$probe_dir/rustc-path\" \"$probe_dir/rustc-vv\" \"$probe_dir/mbx-rustc-vv\" \"$probe_dir/mbx-rustc\"; rmdir \"$probe_dir\"; }; trap cleanup EXIT; trap '\\''exit 1'\\'' HUP INT TERM; if ! mbx_bin=$(command -v mbx); then printf '\\''%s\\n'\\'' '\\''action-owned MBX is not on PATH'\\'' >&2; exit 1; fi; case \"$mbx_bin\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be absolute'\\'' >&2; exit 1 ;; esac; if [ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]; then printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be an executable file'\\'' >&2; exit 1; fi; mise --no-config --no-env --no-hooks exec rust@1.99.1 -- \"$mbx_bin\" --version > \"$probe_dir/version\"; exec 3< \"$probe_dir/version\"; IFS= read -r version_line <&3 || { printf '\\''%s\\n'\\'' '\\''MBX version output is empty or unterminated'\\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '\\''%s\\n'\\'' '\\''MBX version output has extra data'\\'' >&2; exit 1; fi; exec 3<&-; [ \"$version_line\" = '\\''mbx 1.27.0'\\'' ] || { printf '\\''%s\\n'\\'' '\\''MBX on PATH does not match the pinned action version'\\'' >&2; exit 1; }; mise --no-config --no-env --no-hooks exec rust@1.99.1 -- \"$mbx_bin\" cache dir > \"$probe_dir/cache-dir\"; exec 3< \"$probe_dir/cache-dir\"; IFS= read -r cache_dir <&3 || { printf '\\''%s\\n'\\'' '\\''MBX cache dir output is empty or unterminated'\\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '\\''%s\\n'\\'' '\\''MBX cache dir output has extra data'\\'' >&2; exit 1; fi; exec 3<&-; [ \"$cache_dir\" = \"$MBX_CACHE_DIR/actions\" ] || { printf '\\''%s\\n'\\'' '\\''MBX reported an unexpected object store path'\\'' >&2; exit 1; }; ln -s \"$mbx_bin\" \"$probe_dir/mbx-rustc\"; mise --no-config --no-env --no-hooks exec rust@1.99.1 -- rustup which --toolchain '\\''1.99.1'\\'' rustc > \"$probe_dir/rustc-path\"; exec 3< \"$probe_dir/rustc-path\"; IFS= read -r rustc_path <&3 || { printf '\\''%s\\n'\\'' '\\''rustup returned no rustc path'\\'' >&2; exit 1; }; exec 3<&-; case \"$rustc_path\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''rustc path must be absolute'\\'' >&2; exit 1 ;; esac; \"$rustc_path\" -vV > \"$probe_dir/rustc-vv\"; mise --no-config --no-env --no-hooks exec rust@1.99.1 -- \"$probe_dir/mbx-rustc\" \"$rustc_path\" -vV > \"$probe_dir/mbx-rustc-vv\"; cmp -s \"$probe_dir/rustc-vv\" \"$probe_dir/mbx-rustc-vv\" || { printf '\\''%s\\n'\\'' '\\''mbx-rustc -vV differs from rustc -vV'\\'' >&2; exit 1; }; mbx_disk_sample() { boundary=$1; case \"${RUNNER_TEMP:-}\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''MBX_DISK_SAMPLE_ERROR runner_temp_not_absolute'\\'' >&2; return 0 ;; esac; if [ -d \"$RUNNER_TEMP\" ] && [ ! -L \"$RUNNER_TEMP\" ]; then printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp blocks_kib\\n'\\'' \"$boundary\"; if df -Pk \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_blocks\\n'\\'' \"$boundary\" >&2; fi; printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp inodes\\n'\\'' \"$boundary\"; if df -Pi \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_inodes\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s runner_temp_not_real_directory\\n'\\'' \"$boundary\" >&2; return 0; fi; store_path=\"$RUNNER_TEMP/velnor/mbx\"; if [ \"${MBX_CACHE_DIR:-}\" = \"$store_path\" ] && [ -d \"$store_path\" ] && [ ! -L \"$store_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=mbx_store\\n'\\'' \"$boundary\"; if du -sk \"$store_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store_unavailable\\n'\\'' \"$boundary\" >&2; fi; target_path=\"${target_dir:-target}\"; if [ ! -d \"$target_path\" ]; then for candidate in */target crates/*/target \"$RUNNER_TEMP/velnor/target\"; do if [ -d \"$candidate\" ]; then target_path=\"$candidate\"; break; fi; done; fi; if [ -L \"$target_path\" ]; then printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target_is_symlink\\n'\\'' \"$boundary\" >&2; elif [ -d \"$target_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target\\n'\\'' \"$boundary\"; if du -sk \"$target_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target state=absent\\n'\\'' \"$boundary\"; fi; }; mbx_disk_sample after-cache-restore'"
+      - name: Build and record the fixture digest
+        id: build
+        shell: bash
+        run: "set -eu\noutput=$(bash scripts/qualification/paired-sdk-build.sh \"$RUNNER_TEMP/paired-sdk-artifact\")\ncase \"$output\" in binary_sha256=*) digest=${output#binary_sha256=} ;; *) exit 1 ;; esac\ncase \"$digest\" in *[!0123456789abcdef]*|'') exit 1 ;; esac\ntest \"${#digest}\" -eq 64\nprintf 'binary_sha256=%s\\n' \"$digest\" >> \"$GITHUB_OUTPUT\"\ntest -f \"$RUNNER_TEMP/paired-sdk-artifact/velnor-testcontainers-tls-fixture\" && test -s \"$RUNNER_TEMP/paired-sdk-artifact/velnor-testcontainers-tls-fixture\"\ntest -f \"$RUNNER_TEMP/paired-sdk-artifact/manifest.txt\" && test -s \"$RUNNER_TEMP/paired-sdk-artifact/manifest.txt\""
+      - name: Upload paired SDK fixture
+        id: upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: velnor-paired-sdk-${{ github.run_id }}-${{ github.run_attempt }}
+          path: "${{ runner.temp }}/paired-sdk-artifact/velnor-testcontainers-tls-fixture\n${{ runner.temp }}/paired-sdk-artifact/manifest.txt"
+          if-no-files-found: error
+          retention-days: 1
+  paired-sdk-tls:
+    name: Verify paired SDK HTTPS
+    if: inputs.mode == 'paired-sdk-tls'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 30
+    needs:
+      - paired-sdk-build
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Download this run's fixture
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: ${{ needs.paired-sdk-build.outputs.artifact_id }}
+          path: ${{ runner.temp }}/paired-sdk-artifact
+      - name: Run Node and Rust HTTPS checks
+        shell: bash
+        env:
+          VELNOR_PAIRED_SDK_BINARY_SHA256: ${{ needs.paired-sdk-build.outputs.binary_sha256 }}
+        run: "bash scripts/qualification/paired-sdk-run.sh \"$RUNNER_TEMP/paired-sdk-artifact\""

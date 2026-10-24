@@ -21,6 +21,10 @@ tag = \"v1.0.0\"\nasset = \"eth-sql.tar.gz\"\nextract_to = \"eth-sql\"\n",
     );
     let repo = make_repo(&config)?;
     fs::write(
+        repo.path().join("Cargo.lock"),
+        "version = 4\n\n[[package]]\nname = \"demo\"\nversion = \"0.1.0\"\n",
+    )?;
+    fs::write(
         repo.path().join(".velnor/deps.lock"),
         format!(
             "schema = 1\n[[release_assets]]\nid = \"eth-sql\"\nrepository = \"acme/eth-sql\"\n\
@@ -40,6 +44,27 @@ extract_to = \"eth-sql\"\n"
     )?;
     let workflow = fs::read_to_string(preview.join(".github/workflows/ci.yml"))?;
     assert!(workflow.contains("vars.VELNOR_DEPS_APP_ID"), "{workflow}");
+    let mint = workflow
+        .find("Mint read-only token for private sources")
+        .expect("The test failed.");
+    let fetch = workflow
+        .find("Fetch private sources")
+        .expect("The test failed.");
+    let revoke = workflow
+        .find("Revoke private-source token")
+        .expect("The test failed.");
+    assert!(mint < fetch && fetch < revoke);
+    assert!(
+        workflow
+            .lines()
+            .any(|line| line.trim() == "repositories: eth-sql"),
+        "{workflow}"
+    );
+    assert!(workflow.contains("permission-contents: read"), "{workflow}");
+    assert!(
+        workflow.contains("secrets.VELNOR_DEPS_APP_PRIVATE_KEY"),
+        "{workflow}"
+    );
     let lint_config = fs::read_to_string(preview.join(".github/jactionlint.yaml"))?;
     assert!(lint_config.contains("VELNOR_DEPS_APP_ID"), "{lint_config}");
     Ok(())
@@ -69,11 +94,12 @@ extract_to = \"eth-sql\"\n"
 const SEED_STEPS: &[&str] = &[
     "Record optional cache budget",
     "Checkout",
+    "Acquire Velnor",
+    "Install cache tar adapters",
     "Setup Mise",
     "Resolve project tool versions",
     "V2 identity",
     "Restore Mise tools",
-    "Acquire Velnor",
     "Verify restored Rust toolchain",
     "Prepare pinned tools",
     "Prepare Rust components",
@@ -93,9 +119,6 @@ const SEED_STEPS: &[&str] = &[
     "Compile Clippy lane (seed)",
     "Compile documentation lane (seed)",
     "Record MBX producer success",
-    "Admit optional cache save",
-    "Save Mise tools",
-    "Report optional cache save failure",
     "Export MBX bundle",
     "Admit optional cache save",
     "Save MBX bundle",
@@ -103,9 +126,8 @@ const SEED_STEPS: &[&str] = &[
     "Clean MBX workspace outputs",
 ];
 
-/// Regression (v0.1.37): `mr_boxington = true` plus a private release asset
-/// failed with `internal_without_acquire:dependency-seed`, because the seed
-/// job ran the private fetch helper without staging it first.
+/// In v0.1.37, `mr_boxington = true` with a private release asset failed with `internal_without_acquire:dependency-seed`.
+/// The seed job ran the private fetch helper before staging it.
 #[test]
 fn mbx_seed_job_with_private_sources_stages_the_helper_before_the_fetch() -> TestResult {
     let repo = private_repo()?;
@@ -168,13 +190,13 @@ fn assert_private_seed(workflow: &str, id: &str) -> TestResult {
     assert!(seed.contains("continue-on-error: true"), "{id}: {seed}");
     let acquire = seed
         .find("Acquire Velnor")
-        .ok_or("seed stages the helper")?;
+        .ok_or("The seed job must stage the helper.")?;
     let fetch = seed
         .find("vars.VELNOR_DEPS_APP_ID")
-        .ok_or("seed mints the token")?;
+        .ok_or("The seed job must mint the token.")?;
     assert!(
         acquire < fetch,
-        "Acquire precedes the private fetch:\n{seed}"
+        "The seed job must acquire the helper before the private fetch.\n{seed}"
     );
     let names: Vec<&str> = seed
         .lines()
@@ -186,7 +208,7 @@ fn assert_private_seed(workflow: &str, id: &str) -> TestResult {
         .skip(1)
         .take_while(|name| *name != "Plan")
         .collect();
-    let mut expected: Vec<_> = SEED_STEPS
+    let expected: Vec<_> = SEED_STEPS
         .iter()
         .map(|name| {
             if *name == "Fetch Cargo sources" && id != "dependency-seed" {
@@ -196,19 +218,8 @@ fn assert_private_seed(workflow: &str, id: &str) -> TestResult {
             }
         })
         .collect();
-    if id != "dependency-seed" {
-        // Equal tool identities elect one saver; the root seed owns this key.
-        let save = [
-            "Admit optional cache save",
-            "Save Mise tools",
-            "Report optional cache save failure",
-        ];
-        let at = expected
-            .windows(3)
-            .position(|steps| steps == save)
-            .ok_or("missing tool-cache save expectation")?;
-        expected.drain(at..at + 3);
-    }
+    // The Plan job is the only elected V2 tools-cache writer; seed jobs
+    // restore the shared tool key and only save their MBX bundle.
     assert_eq!(names, expected);
     Ok(())
 }

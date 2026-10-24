@@ -41,7 +41,16 @@ pub(crate) fn write_exclusive(
     bytes: &[u8],
     context: &str,
 ) -> Result<(), OrchestratorError> {
-    write_exclusive_until(path, bytes, context, || Ok(()))
+    write_exclusive_until_mode(path, bytes, context, CreationMode::Normal, || Ok(()))
+}
+
+/// Create a producer file with no group or other permission bits.
+pub(crate) fn write_private_exclusive(
+    path: &Path,
+    bytes: &[u8],
+    context: &str,
+) -> Result<(), OrchestratorError> {
+    write_exclusive_until_mode(path, bytes, context, CreationMode::Private, || Ok(()))
 }
 
 /// Exclusively write in bounded chunks, checking the owning operation's deadline.
@@ -49,6 +58,16 @@ pub(crate) fn write_exclusive_until(
     path: &Path,
     bytes: &[u8],
     context: &str,
+    checkpoint: impl FnMut() -> Result<(), OrchestratorError>,
+) -> Result<(), OrchestratorError> {
+    write_exclusive_until_mode(path, bytes, context, CreationMode::Normal, checkpoint)
+}
+
+fn write_exclusive_until_mode(
+    path: &Path,
+    bytes: &[u8],
+    context: &str,
+    mode: CreationMode,
     mut checkpoint: impl FnMut() -> Result<(), OrchestratorError>,
 ) -> Result<(), OrchestratorError> {
     checkpoint()?;
@@ -57,7 +76,7 @@ pub(crate) fn write_exclusive_until(
         Ok(_) => return Err(internal(&format!("{context}_exists"))),
         Err(_) => {}
     }
-    let mut file = open_exclusive(path, context)?;
+    let mut file = open_exclusive(path, context, mode)?;
     if !created_identity(&file, path) {
         return Err(internal("symlink_refused"));
     }
@@ -70,6 +89,12 @@ pub(crate) fn write_exclusive_until(
     Ok(())
 }
 
+#[derive(Clone, Copy)]
+enum CreationMode {
+    Normal,
+    Private,
+}
+
 /// Open one new file relative to its parent dirfd, never following symlinks.
 ///
 /// The parent opens with `O_DIRECTORY|O_NOFOLLOW` and the child creates
@@ -80,7 +105,11 @@ pub(crate) fn write_exclusive_until(
 /// Components above the immediate parent were pinned by
 /// [`create_dir_no_symlink`] at the call site, not here.
 #[cfg(unix)]
-fn open_exclusive(path: &Path, context: &str) -> Result<std::fs::File, OrchestratorError> {
+fn open_exclusive(
+    path: &Path,
+    context: &str,
+    mode: CreationMode,
+) -> Result<std::fs::File, OrchestratorError> {
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     let file_name = path
         .file_name()
@@ -96,7 +125,7 @@ fn open_exclusive(path: &Path, context: &str) -> Result<std::fs::File, Orchestra
         &parent_fd,
         file_name,
         OFlags::CREATE | OFlags::EXCL | OFlags::WRONLY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
-        file_mode(),
+        file_mode(mode),
     )
     .map_err(|err| child_open_error(err, context))?;
     Ok(std::fs::File::from(created))
@@ -104,7 +133,11 @@ fn open_exclusive(path: &Path, context: &str) -> Result<std::fs::File, Orchestra
 
 /// Portable fallback: exclusive create without dirfd pinning (non-unix).
 #[cfg(not(unix))]
-fn open_exclusive(path: &Path, context: &str) -> Result<std::fs::File, OrchestratorError> {
+fn open_exclusive(
+    path: &Path,
+    context: &str,
+    _mode: CreationMode,
+) -> Result<std::fs::File, OrchestratorError> {
     fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -114,8 +147,13 @@ fn open_exclusive(path: &Path, context: &str) -> Result<std::fs::File, Orchestra
 
 /// Creation mode for producer files: `0666` under the umask, like std.
 #[cfg(unix)]
-fn file_mode() -> Mode {
-    Mode::RUSR | Mode::WUSR | Mode::RGRP | Mode::WGRP | Mode::ROTH | Mode::WOTH
+fn file_mode(mode: CreationMode) -> Mode {
+    match mode {
+        CreationMode::Normal => {
+            Mode::RUSR | Mode::WUSR | Mode::RGRP | Mode::WGRP | Mode::ROTH | Mode::WOTH
+        }
+        CreationMode::Private => Mode::RUSR | Mode::WUSR,
+    }
 }
 
 /// Parent-open failure: a symlinked parent refuses, anything else is unwritable.

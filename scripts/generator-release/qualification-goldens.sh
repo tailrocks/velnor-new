@@ -43,6 +43,50 @@ file_size_bytes() {
   printf '%s\n' "$size"
 }
 
+canonical_rustup_home() {
+  local rustup_home="${RUSTUP_HOME:-${HOME:?HOME is required}/.rustup}"
+  if [ ! -d "$rustup_home" ]; then
+    echo "FATAL: canonical Rustup home is not a directory: $rustup_home" >&2
+    return 1
+  fi
+  (cd "$rustup_home" && pwd -P)
+}
+
+release_rust_toolchain_ready() {
+  local version="$1" cargo_home="$2" rustup_home="$3"
+  local inventory rustc_version cargo_version
+  if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+    || [ ! -d "$cargo_home" ] || [ ! -d "$rustup_home" ]; then
+    echo "FATAL: release Rust toolchain inputs are invalid" >&2
+    return 1
+  fi
+  if ! inventory="$(MISE_AUTO_INSTALL=false MISE_EXEC_AUTO_INSTALL=false \
+    CARGO_HOME="$cargo_home" RUSTUP_HOME="$rustup_home" \
+    mise --no-config --no-env --no-hooks ls --json rust)"; then
+    echo "FATAL: could not inspect installed Rust toolchains without installation" >&2
+    return 1
+  fi
+  if ! printf '%s\n' "$inventory" | jq -e --arg version "$version" \
+    '[.[] | select(.version == $version and .installed == true)] | length == 1' >/dev/null; then
+    echo "FATAL: pinned Rust toolchain rust@$version is not installed" >&2
+    return 1
+  fi
+  if ! rustc_version="$(MISE_AUTO_INSTALL=false MISE_EXEC_AUTO_INSTALL=false \
+    CARGO_HOME="$cargo_home" RUSTUP_HOME="$rustup_home" \
+    mise --no-config --no-env --no-hooks exec "rust@$version" -- rustc --version)" \
+    || [[ "$rustc_version" != "rustc $version" && "$rustc_version" != "rustc $version "* ]]; then
+    echo "FATAL: pinned Rust compiler rust@$version is unavailable without installation" >&2
+    return 1
+  fi
+  if ! cargo_version="$(MISE_AUTO_INSTALL=false MISE_EXEC_AUTO_INSTALL=false \
+    CARGO_HOME="$cargo_home" RUSTUP_HOME="$rustup_home" \
+    mise --no-config --no-env --no-hooks exec "rust@$version" -- cargo --version)" \
+    || [[ "$cargo_version" != "cargo $version" && "$cargo_version" != "cargo $version "* ]]; then
+    echo "FATAL: pinned Cargo rust@$version is unavailable without installation" >&2
+    return 1
+  fi
+}
+
 json_has_unique_keys() {
   local path="$1"
   if ! command -v python3 >/dev/null 2>&1; then
@@ -311,6 +355,7 @@ normalize_candidate_digests() {
 
 capture_release_dogfood() {
   local out="$1" repo="$WORK/dogfood-repo" preview="$1/preview" diff_status candidate_tree
+  local cargo_home="$1/cargo-home" rustup_home rust_version
   mkdir -p "$repo" "$out" "$preview"
   if ! candidate_tree="$(candidate_tree_oid)"; then
     echo "FATAL: could not identify staged dogfood candidate tree"
@@ -320,9 +365,24 @@ capture_release_dogfood() {
     echo "FATAL: could not stage indexed dogfood source"
     exit 2
   fi
+  if ! mkdir -p "$cargo_home"; then
+    echo "FATAL: could not create private release Cargo cache: $cargo_home" >&2
+    exit 2
+  fi
+  if ! rust_version="$(awk -v key=rust -f "$repo/scripts/toml-tool-pin.awk" \
+    "$repo/.velnor/version-policy.toml")"; then
+    echo "FATAL: could not read the dogfood Rust pin" >&2
+    exit 2
+  fi
+  if ! rustup_home="$(canonical_rustup_home)" \
+    || ! release_rust_toolchain_ready "$rust_version" "$cargo_home" "$rustup_home"; then
+    echo "FATAL: release qualification requires the installed pinned Rust toolchain" >&2
+    exit 2
+  fi
   stage_candidate_manifest "$repo" dogfood
   local git_log="$out/git-setup.log"
   (
+    export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
     cd "$repo" \
       && fixture_git init -q \
       && fixture_git remote add origin https://github.com/tailrocks/velnor-new.git \
@@ -337,12 +397,17 @@ capture_release_dogfood() {
   # Same HOME/mise environment as the candidate run below, so the same
   # cache is warmed. `--locked` keeps a lock rewrite from slipping in.
   for manifest in "$repo/Cargo.toml" "$repo/crates/velnor-runner/Cargo.toml"; do
-    if ! mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo fetch --locked --manifest-path "$manifest"; then
+    if ! MISE_AUTO_INSTALL=false MISE_EXEC_AUTO_INSTALL=false \
+      CARGO_HOME="$cargo_home" RUSTUP_HOME="$rustup_home" \
+      mise --no-config --no-env --no-hooks exec "rust@$rust_version" -- \
+        cargo fetch --locked --manifest-path "$manifest"; then
       echo "FATAL: could not fetch dogfood cargo sources for $manifest"
       exit 2
     fi
   done
-  if ! (cd "$repo" && "$BIN" generate --output-dir "$preview" >"$out/stdout.txt" 2>"$out/stderr.txt"); then
+  if ! (cd "$repo" && CARGO_HOME="$cargo_home" RUSTUP_HOME="$rustup_home" \
+    MISE_AUTO_INSTALL=false MISE_EXEC_AUTO_INSTALL=false \
+    "$BIN" generate --output-dir "$preview" >"$out/stdout.txt" 2>"$out/stderr.txt"); then
     echo "FATAL: release candidate dogfood generate failed"
     exit 2
   fi

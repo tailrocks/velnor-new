@@ -113,7 +113,7 @@ fn plan_emits_recommendations_once_to_stdout_only() -> Result<(), Box<dyn Error>
         "recommendations follow workflow:\n{stdout}"
     );
     let recs = plan_recommendations(&stdout);
-    assert_ne!(recs, [] as [std::string::String; 0]);
+    assert_ne!(recs, [] as [String; 0]);
     for rec in &recs {
         assert!(
             stdout.lines().any(|line| line == format!("  {rec}")),
@@ -136,7 +136,7 @@ fn generate_keeps_recommendations_on_stderr() -> Result<(), Box<dyn Error>> {
     let plan = spawn(&["plan"], &[], &tmp)?;
     assert_eq!(code(&plan), 0);
     let expected = plan_recommendations(&String::from_utf8_lossy(&plan.stdout));
-    assert_ne!(expected, [] as [std::string::String; 0]);
+    assert_ne!(expected, [] as [String; 0]);
     let outer = fresh_tempdir("smoke-gen-preview")?;
     let preview = outer.join("preview");
     let generated = spawn(

@@ -14,6 +14,9 @@ use crate::errors::ContractError;
 use crate::workflow::ValidatorKind;
 use serde::{Deserialize, Serialize};
 
+#[path = "workflow_verify.rs"]
+mod verify;
+
 /// Latest pinned runner label: the default when `workflow.runner_label` is absent.
 ///
 /// Qualified 2026-09-28 (`ubuntu-latest` then pointed at 24.04; 26.04 is the
@@ -42,6 +45,9 @@ pub struct WorkflowConfig {
     /// Default branch; required when `origin/HEAD` cannot be resolved.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_branch: Option<String>,
+    /// Optional non-default branch for verification-only runs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verification_branch: Option<String>,
     /// Generator validation mode.
     pub generator_validation: GeneratorValidation,
     /// Maximum parallel matrix jobs.
@@ -109,10 +115,6 @@ pub struct WorkflowConfig {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub preserve_workflows: Vec<String>,
 }
-
-/// The retired zizmor job (hard decision 10): jactionlint's `default` profile
-/// runs its audits, so naming it is an error that says what to set instead.
-const RETIRED_ZIZMOR_JOB: &str = "zizmor";
 
 /// `[workflow.verify]`: config-selected verification jobs.
 ///
@@ -228,10 +230,9 @@ impl WorkflowConfig {
             file,
             "workflow.plan_timeout_minutes",
         )?;
-        crate::workflow::timeout::JobTimeout::check_config(
-            u32::from(self.dependency_seed_timeout_minutes),
+        super::workflow_timeouts::validate_dependency_seed_timeout(
+            self.dependency_seed_timeout_minutes,
             file,
-            "workflow.dependency_seed_timeout_minutes",
         )?;
         if let Some(branch) = &self.default_branch
             && !crate::is_valid_branch_name(branch)
@@ -241,6 +242,22 @@ impl WorkflowConfig {
                 "workflow.default_branch",
                 "malformed_branch",
             ));
+        }
+        if let Some(branch) = &self.verification_branch {
+            if !crate::is_valid_branch_name(branch) {
+                return Err(ContractError::config(
+                    file,
+                    "workflow.verification_branch",
+                    "malformed_branch",
+                ));
+            }
+            if self.default_branch.as_deref() == Some(branch.as_str()) {
+                return Err(ContractError::config(
+                    file,
+                    "workflow.verification_branch",
+                    "must_differ_from_default_branch",
+                ));
+            }
         }
         if let Some(label) = &self.runner_label
             && !RUNNER_LABEL_CATALOG.contains(&label.as_str())
@@ -310,79 +327,6 @@ impl WorkflowConfig {
                 return Err(ContractError::config(file, "workflow.tasks", problem));
             }
             previous = Some(id);
-        }
-        Ok(())
-    }
-}
-
-impl VerifyConfig {
-    /// True when no verification job is selected.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.jobs.is_empty()
-    }
-
-    /// Validate the verify allowlist: known IDs, no duplicates.
-    /// # Errors
-    pub fn validate(&self, file: &str) -> Result<(), ContractError> {
-        let mut seen = std::collections::BTreeSet::new();
-        for job in &self.jobs {
-            if job == RETIRED_ZIZMOR_JOB {
-                return Err(ContractError::config(
-                    file,
-                    "workflow.verify.jobs",
-                    "zizmor_retired:jactionlint covers the zizmor audits; set [workflow.lint] profile = \"default\" and remove \"zizmor\" (hard decision 10)".to_owned(),
-                ));
-            }
-            if ValidatorKind::from_verify_name(job).is_none() {
-                return Err(ContractError::config(
-                    file,
-                    "workflow.verify.jobs",
-                    format!("unknown_verify_job:{job}"),
-                ));
-            }
-            if !seen.insert(job) {
-                return Err(ContractError::config(
-                    file,
-                    "workflow.verify.jobs",
-                    format!("duplicate_verify_job:{job}"),
-                ));
-            }
-        }
-        if let Some(files) = &self.strict_json_files {
-            if !self.jobs.iter().any(|job| job == "strict-json") || files.is_empty() {
-                return Err(ContractError::config(
-                    file,
-                    "workflow.verify.strict_json_files",
-                    "requires_strict_json_and_nonempty_files",
-                ));
-            }
-            let mut paths = std::collections::BTreeSet::new();
-            for path in files {
-                if !workflow_validation_helpers::valid_json_path(path) || !paths.insert(path) {
-                    return Err(ContractError::config(
-                        file,
-                        "workflow.verify.strict_json_files",
-                        format!("invalid_or_duplicate_path:{path}"),
-                    ));
-                }
-            }
-        }
-        for arg in &self.lychee_args {
-            if !workflow_validation_helpers::valid_lychee_arg(arg) {
-                return Err(ContractError::config(
-                    file,
-                    "workflow.verify.lychee_args",
-                    format!("invalid_or_duplicate_lychee_arg:{arg}"),
-                ));
-            }
-        }
-        if !self.lychee_args.is_empty() && !self.jobs.iter().any(|job| job == "link-check") {
-            return Err(ContractError::config(
-                file,
-                "workflow.verify.lychee_args",
-                "requires_link_check",
-            ));
         }
         Ok(())
     }

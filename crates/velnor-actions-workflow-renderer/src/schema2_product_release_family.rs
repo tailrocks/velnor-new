@@ -10,8 +10,8 @@ use super::release_eligibility as eligibility;
 
 const PREPARE_TEMPLATE: &str = include_str!("schema2_release_prepare.sh");
 const PUBLISH_TEMPLATE: &str = include_str!("schema2_release_publish.sh");
-// Leave three minutes of the five-minute job for setup and final asset checks.
-// Their variable costs remain bounded by the job timeout, not this phase cap.
+// Limit release confirmation to 120 seconds.
+// Keep the five-minute job limit for all other work.
 const RELEASE_CONFIRMATION_BUDGET_SECONDS: u16 = 120;
 
 /// Stable ID for the legacy family publisher before typed composition.
@@ -125,9 +125,13 @@ impl Family {
             ]
             .map(|name| format!("assets/{name}"))
             .to_vec(),
-            Self::Binary => ["velnor-host", "SHA256SUMS"]
-                .map(|name| format!("assets/{name}"))
-                .to_vec(),
+            Self::Binary => [
+                "velnor-host",
+                "velnor-runner-attestation-helper",
+                "SHA256SUMS",
+            ]
+            .map(|name| format!("assets/{name}"))
+            .to_vec(),
             Self::Generator => super::generator_release::publication_asset_paths(),
         }
     }

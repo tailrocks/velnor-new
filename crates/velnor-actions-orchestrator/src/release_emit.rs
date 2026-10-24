@@ -10,7 +10,11 @@
 //! registry state stays a runtime preflight concern: generation runs
 //! no registry queries.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
+
+#[path = "release_emit/spec.rs"]
+mod spec;
+use spec::{bootstrap_plan, release_triggers};
 
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::config::{ReleaseAuthentication, ReleaseRegistry, RustReleaseConfig};
@@ -22,11 +26,12 @@ use velnor_actions_rust::release_select::{
 use velnor_actions_workflow_renderer::release_config::BootstrapReleasePlzConfig;
 use velnor_actions_workflow_renderer::release_jobs::ReleaseWorkflowSpec;
 use velnor_actions_workflow_renderer::release_spec::{
-    BootstrapPlan, DispatchInput, ReleaseTriggers, lock::stable_lock_group, publish_gate_condition,
-    validate_source_sha,
+    lock::stable_lock_group, publish_gate_condition, validate_source_sha,
 };
-use velnor_actions_workflow_renderer::release_tree::{ReleaseRenderContext, render_release_files};
-use velnor_actions_workflow_renderer::{MiseSetup, render::RenderedFile};
+use velnor_actions_workflow_renderer::release_tree::{
+    ReleaseRenderContext, render_release_files_with_routing,
+};
+use velnor_actions_workflow_renderer::{MiseSetup, WorkflowRoutingPolicy, render::RenderedFile};
 
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
@@ -55,6 +60,7 @@ const RELEASE_WORKFLOW_NAME: &str = "Velnor Release";
 pub(crate) fn release_files(
     prep: &GenerationPreparation,
     mise: &MiseSetup,
+    routing: &WorkflowRoutingPolicy,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
     let Some(release) = enabled_release(prep)? else {
         return Ok(Vec::new());
@@ -94,8 +100,8 @@ pub(crate) fn release_files(
     );
     let gate = publish_gate_condition(&repository, &bootstrap);
     let catalog = &prep.emission_catalog();
-    // Keep Cargo’s implicit default implicit; pass `--registry` only for an
-    // explicitly selected alternative registry.
+    // Do not pass `--registry` for the Cargo default. Pass it only when the
+    // release configuration selects an alternative registry.
     let registry_arg = (registry != DEFAULT_REGISTRY).then_some(registry.as_str());
     let jobs = assemble_jobs(&JobInputs {
         release,
@@ -127,7 +133,10 @@ pub(crate) fn release_files(
     };
     let config = plz_config(release, &selection);
     let bootstrap_config = BootstrapReleasePlzConfig::new(config.clone())?;
-    Ok(render_release_files(&spec, &ctx, &config, &bootstrap_config)?.as_sorted_vec())
+    Ok(
+        render_release_files_with_routing(&spec, &ctx, &config, &bootstrap_config, routing)?
+            .as_sorted_vec(),
+    )
 }
 
 /// Borrow the active release section, enforcing the consumer-only policy.
@@ -329,64 +338,4 @@ fn approved_source(
         return Ok(record.source_sha.clone());
     }
     head_sha(root)
-}
-
-/// Assemble the approved exact-source plan from selection plus identity.
-///
-/// `version` is the configured bootstrap version, present only in
-/// bootstrap-token mode (config validation forbids the record under
-/// trusted publishing); routine publishers resolve versions at runtime.
-fn bootstrap_plan(
-    selection: &ReleaseSelection,
-    repository: &str,
-    sha: &str,
-    plan_id: &str,
-    registry: &str,
-    version: Option<&str>,
-) -> BootstrapPlan {
-    let packages: BTreeMap<String, String> = selection
-        .packages
-        .iter()
-        .map(|package| (package.name.clone(), package.version.clone()))
-        .collect();
-    BootstrapPlan {
-        plan_id: plan_id.to_owned(),
-        repository: repository.to_owned(),
-        source_sha: sha.to_owned(),
-        registry: registry.to_owned(),
-        packages,
-        version: version.map(str::to_owned),
-    }
-}
-
-/// Trusted-branch push plus plan-bound dispatch (no schedule: the config
-/// schema carries no cron field, so emission invents none).
-fn release_triggers(branch: &str, bootstrap: &BootstrapPlan) -> ReleaseTriggers {
-    let mut dispatch_inputs = vec![
-        DispatchInput {
-            name: "plan".to_owned(),
-            description: "Approved release plan".to_owned(),
-            required: true,
-            default: Some(bootstrap.plan_id.clone()),
-        },
-        DispatchInput {
-            name: "source_sha".to_owned(),
-            description: "Approved source SHA".to_owned(),
-            required: true,
-            default: Some(bootstrap.source_sha.clone()),
-        },
-    ];
-    if let Some(version) = &bootstrap.version {
-        dispatch_inputs.push(DispatchInput {
-            name: "version".to_owned(),
-            description: "Approved crate version".to_owned(),
-            required: true,
-            default: Some(version.clone()),
-        });
-    }
-    ReleaseTriggers {
-        push_branches: vec![branch.to_owned()],
-        schedule: None,
-        dispatch_inputs,
-    }
 }

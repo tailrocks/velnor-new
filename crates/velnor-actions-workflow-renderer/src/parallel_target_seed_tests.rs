@@ -74,7 +74,7 @@ fn python_for_seed_helper() -> String {
         tried.push(candidate);
     }
     panic!(
-        "the native target-seeding helper needs Python >= 3.11; tried {tried:?}; set VELNOR_TEST_PYTHON"
+        "The native target seed helper needs Python 3.11 or later. Tried: {tried:?}. Set VELNOR_TEST_PYTHON."
     );
 }
 

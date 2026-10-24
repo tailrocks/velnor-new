@@ -106,6 +106,13 @@ fn prepare_inner(
     };
     let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&canonical, &config)?;
     let default_branch = resolve_default_branch(&canonical, &config)?;
+    if config.workflow.verification_branch.as_deref() == Some(default_branch.as_str()) {
+        return Err(OrchestratorError::config(
+            crate::config::CONFIG_REL,
+            "workflow.verification_branch",
+            "must_differ_from_default_branch",
+        ));
+    }
     check_velnor_identity(&canonical, &config)?;
     let mut discovery = match phases {
         Some(phases) => discover_with_phase_timings(&canonical, &config, &catalog, phases)?,
@@ -174,9 +181,9 @@ pub(crate) fn runner_label_for(config: &VelnorConfig) -> (String, RunnerSelectio
 /// Default branch from the config override, local `origin/HEAD`, or the
 /// GitHub event payload (`repository.default_branch`).
 ///
-/// A CI checkout has no `origin/HEAD`, but every event payload carries the
-/// repository's default branch, so `workflow.default_branch` stays optional
-/// there. When none of the three resolves, preparation fails closed.
+/// A CI checkout can lack `origin/HEAD`.
+/// Use `repository.default_branch` from the event payload when no configured or local default branch is available.
+/// Return an error if none of these sources supplies a valid branch.
 fn resolve_default_branch(root: &Path, config: &VelnorConfig) -> Result<String, OrchestratorError> {
     if let Some(branch) = &config.workflow.default_branch {
         return Ok(branch.clone());

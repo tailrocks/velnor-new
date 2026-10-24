@@ -1,19 +1,13 @@
 //! Typed workflow step identity and semantic role.
 
 use super::step::{Step, StepKind};
-pub(super) use super::step_payloads::valid_tools_cache_identity;
-use super::step_payloads::{valid_checkout_payload, valid_mise_setup, valid_tool_seed_payload};
-use crate::errors::ContractError;
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
-
-#[path = "step_identity_payload.rs"]
-mod payload;
-use payload::{
-    action_has_prefix_for_kind, internal_operation, valid_jactionlint_verifier_payload,
-    valid_rust_verifier_payload,
+use super::step_payloads::{
+    valid_configured_checkout_payload, valid_mise_setup, valid_tool_seed_payload,
 };
-pub use payload::{is_configured_checkout, is_tool_seed_step};
+use crate::errors::ContractError;
+use std::collections::BTreeSet;
+mod payload;
+pub(super) use payload::{valid_cache_tar_launcher, valid_tools_cache_identity};
 
 /// Fixed local action path used for exact provider-cache admission.
 pub const TOFU_PROVIDER_ADMISSION_USES: &str = "./.github/actions/tofu-provider-admission";
@@ -21,40 +15,53 @@ pub const TOFU_PROVIDER_ADMISSION_USES: &str = "./.github/actions/tofu-provider-
 pub const TOOL_SEED_USES: &str = "./.github/actions/velnor-tool-seed";
 /// Fixed local action path for the exact V2 tools-cache restore wrapper.
 pub const TOOLS_CACHE_RESTORE_USES: &str = "./.github/actions/velnor-tools-cache-restore";
-/// Fixed generated V2 identity-and-seed composites, one per hosted Ubuntu lane.
-pub const TOOLS_CACHE_PRELUDE_USES: [&str; 3] = [
-    "./.github/actions/velnor-tools-prelude-u22",
-    "./.github/actions/velnor-tools-prelude-u24",
-    "./.github/actions/velnor-tools-prelude-u26",
-];
-/// Fixed local actions for the cache-restored and installed Rust verifiers.
+/// Fixed generated actions for the restored and installed Rust verifiers.
 pub const RUST_VERIFIER_USES: [&str; 2] = [
     "./.github/actions/velnor-verify-restored-rust",
     "./.github/actions/velnor-verify-rust-manifest",
 ];
-/// Fixed local action path for the generated jactionlint executable verifier.
+/// Fixed generated action for the pinned jactionlint verifier.
 pub const JACTIONLINT_VERIFIER_USES: &str = "./.github/actions/velnor-verify-jactionlint";
-
-/// Return the required semantic role for one exact generated verifier action.
-pub(super) fn verifier_action_role(uses: &str) -> Option<StepRole> {
-    if RUST_VERIFIER_USES.contains(&uses) {
-        Some(StepRole::VerifyRustManifest)
-    } else if uses == JACTIONLINT_VERIFIER_USES {
-        Some(StepRole::VerifyJactionlint)
-    } else {
-        None
-    }
-}
+/// Fixed outer step ID exposing the restore wrapper's exact action outputs.
+pub const TOOLS_CACHE_RESTORE_ID: &str = "tools-cache-restore";
+/// Operation that computes the normal tools-cache payload staging path.
+pub const NORMAL_TOOLS_CACHE_STAGE_OPERATION: &str = "normal-tools-cache-stage-path-v1";
+/// Operation that checks and imports the normal tools-cache payload.
+pub const NORMAL_TOOLS_CACHE_IMPORT_OPERATION: &str = "import-normal-tools-cache-payload-v1";
+/// Operation that checks and stages the normal tools-cache payload for saving.
+pub const NORMAL_TOOLS_CACHE_EXPORT_OPERATION: &str = "export-normal-tools-cache-payload-v1";
+/// Operation that installs verified `tar` aliases for one cache action.
+pub const CACHE_TAR_LAUNCHER_INSTALL_OPERATION: &str = "install-cache-tar-aliases-v1";
+/// Fixed local composite that installs the verified cache-action aliases.
+pub const CACHE_TAR_LAUNCHER_USES: &str = "./.github/actions/velnor-cache-tar-launchers";
+/// Composite input carrying the helper's expected SHA-256.
+pub const CACHE_TAR_LAUNCHER_SHA256_INPUT: &str = "helper-sha256";
+/// Output expression for the verified aliases plus the inherited PATH.
+pub const CACHE_TAR_LAUNCHER_PATH_OUTPUT_EXPR: &str =
+    "${{ steps.cache-tar-launchers.outputs.path }}";
+/// Output expression for the verified pre-seed helper digest.
+pub const PRESEED_HELPER_SHA256_OUTPUT_EXPR: &str =
+    "${{ steps.preseed-stage.outputs.helper-sha256 }}";
+/// Fixed generated V2 identity-and-seed composites for the supported runner lanes.
+pub const TOOLS_CACHE_PRELUDE_USES: [&str; 4] = [
+    "./.github/actions/velnor-tools-prelude-u22",
+    "./.github/actions/velnor-tools-prelude-u24",
+    "./.github/actions/velnor-tools-prelude-u26",
+    "./.github/actions/velnor-tools-prelude-scale-set",
+];
 /// Static tool digest input for the runtime-qualified tools identity action.
 pub const TOOLS_CACHE_IDENTITY_DIGEST_INPUT: &str = "d";
 /// Expression path for the job-private `OpenTofu` plugin cache.
 pub const TOFU_PROVIDER_CACHE_BASE_EXPR: &str = super::cache_family::TOFU_PROVIDER_CACHE_BASE_EXPR;
+/// Exact-key layer identity shared by the restore and save protocol.
+pub const TOFU_PROVIDERS_KEY_PREFIX: &str = "velnor-v1-tofu-providers";
 /// Composite output expression for the exact configured provider key.
 pub const TOFU_PROVIDERS_KEY_OUTPUT_EXPR: &str = "${{ steps.tofu-providers.outputs.cache-key }}";
 /// Composite output expression for the owned provider-cache path.
 pub const TOFU_PROVIDERS_PATH_OUTPUT_EXPR: &str = "${{ steps.tofu-providers.outputs.cache-path }}";
 /// Run MBX workspace cleanup only after the exact-version/store guard passed.
 pub const MBX_WORKSPACE_CLEAN_CONDITION: &str = "always() && steps.mbx-ready.outcome == 'success'";
+
 pub use super::step_private::{
     BUN_ASSETS_EXPORT_OPERATION, BUN_ASSETS_IMPORT_OPERATION, BUN_ASSETS_PREPARE_OPERATION,
     BUN_REGISTRY_INSTALL_OPERATION, GITHUB_EVIDENCE_FETCH_OPERATION,
@@ -64,283 +71,43 @@ pub use super::step_private::{
     PRIVATE_TOKEN_OUTPUT_EXPR,
 };
 
-pub use super::step_id::StepId;
-/// Semantic step role used for workflow composition and validation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum StepRole {
-    /// Checkout whose credentials are disabled.
-    Checkout,
-    /// Copy from the trusted, exact-key host tool seed.
-    ToolSeed,
-    /// Install the exact catalog tools used by later steps.
-    PreparePinnedTools,
-    /// Install the pinned Rust components used by task work.
-    PrepareRustComponents,
-    /// Verify the pinned Rust channel manifest and installed component hashes.
-    VerifyRustManifest,
-    /// Verify the installed jactionlint executable against Velnor's digest pin.
-    VerifyJactionlint,
-    /// Pinned Mise action that owns its built-in tools cache.
-    MiseSetup,
-    /// Authenticated cargo-deny analyzer bootstrap.
-    CargoDeny,
-    /// Authenticated cargo-machete analyzer bootstrap.
-    CargoMachete,
-    /// Workflow lint analyzer (jactionlint).
-    Jactionlint,
-    /// Authenticated markdownlint analyzer bootstrap.
-    Markdownlint,
-    /// Authenticated strict-JSON check bootstrap.
-    StrictJson,
-    /// Authenticated frontmatter-ID check bootstrap.
-    FrontmatterId,
-    /// Authenticated link-check analyzer bootstrap.
-    LinkCheck,
-    /// Authenticated native-validators probe bootstrap.
-    NativeValidators,
-    /// Planner producing the plan outputs.
-    PlanProducer,
-    /// Digest-verified Velnor executable acquisition.
-    AcquireVelnor,
-    /// Pre-seed copy of the helper into runner-temp staging.
-    PreseedStage,
-    /// Download of the plan artifact for final merging.
-    DownloadPlan,
-    /// Generated-tree freshness check.
-    CheckGenerated,
-    /// Upload of the planner report artifact.
-    PublishPlan,
-    /// Upload of one matrix task report.
-    MatrixReportUpload,
-    /// Download of a candidate attestation artifact.
-    AttestationDownload,
-    /// Fetch of exact matrix report artifacts.
-    FetchReports,
-    /// Upload of the final merged report.
-    PublishFinal,
-    /// `OpenTofu`/Rust plan formatting step.
-    PlanFormat,
-    /// Per-crate minimum-supported-Rust-version qualification.
-    MsrvQualification,
-    /// One elected tools-cache writer.
-    ToolsCacheSave,
-    /// Runtime identity action that gates the V2 tools-cache layer.
-    ToolsCacheIdentity,
-    /// Read-only restore wrapper for the V2 tools-cache payload.
-    ToolsCacheRestore,
-    /// Restore of the shared Cargo registry and git sources snapshot.
-    CargoSourcesRestore,
-    /// Single elected writer for the shared Cargo sources snapshot.
-    CargoSourcesSave,
-    /// Fetch probe used to populate the Cargo source snapshot on a miss.
-    CargoSourcesFetch,
-    /// Generated runtime cache trust and family key computation.
-    CacheKeys,
-    /// One elected `OpenTofu` provider-cache writer.
-    TofuProvidersSave,
-    /// `OpenTofu` provider-cache restore/admission composite before provider use.
-    TofuProvidersRestore,
-    /// `OpenTofu` init/validate shell that consumes the admitted plugin cache.
-    TofuProviderUse,
-    /// Pre-seed build of the candidate helper.
-    PreseedBuild,
-    /// Pre-seed manifest creation.
-    PreseedManifest,
-    /// Verification of the freshly built pre-seed candidate.
-    PreseedVerifyBuild,
-    /// Pre-seed candidate artifact upload.
-    PreseedUpload,
-    /// Pre-seed candidate artifact download.
-    PreseedDownload,
-    /// Pre-seed manifest verification.
-    PreseedVerifyManifest,
-    /// Native MBX action owns hosted and local object-cache lifecycle.
-    MbxCache,
-    /// Exact MBX binary and object-store verification after the native action.
-    MbxVersionCheck,
-    /// Exact MBX and Rust toolchain preflight.
-    MbxPreflight,
-    /// Final workspace-target cleanup after the MBX bundle save.
-    MbxWorkspaceCleanup,
-    /// Trust, compatibility and snapshot key of the opaque MBX bundle.
-    MbxBundleKey,
-    /// Restore of the opaque MBX bundle directory (`actions/cache/restore`).
-    MbxBundleRestore,
-    /// `mbx cache import` of the restored bundle; a failed import is discarded.
-    MbxBundleImport,
-    /// Marker written once the family's producer (the compile) succeeded.
-    MbxProducerMark,
-    /// One dependency-seed lane compile through `mbx`; the seed job's producer.
-    MbxSeedBuild,
-    /// `mbx cache export --format directory` gated on the producer marker.
-    MbxBundleExport,
-    /// Trusted-only `actions/cache/save` of the exported bundle directory.
-    MbxBundleSave,
-    /// Runtime trust and keys of the stack family caches (Bun, dbt, Ansible).
-    FamilyKeys,
-    /// Read-only restore of one stack family cache.
-    FamilyRestore,
-    /// On-disk size admission of one stack family cache against its ceiling.
-    FamilySizeCheck,
-    /// Trusted-only `actions/cache/save` of one stack family cache.
-    FamilySave,
-    /// Mint of the read-only App installation token for private sources (HD-7).
-    PrivateTokenMint,
-    /// Velnor-owned private-source fetch; with the revoke, the only credential binding (HD-7).
-    PrivateFetch,
-    /// Revocation of the private-source token, run `always()` (HD-7).
-    PrivateRevoke,
-    /// Registry phase of `bun install`; the only step binding the job token.
-    BunRegistryInstall,
-    /// Credential-free private asset archive handoff.
-    BunAssetsHandoff,
-    /// Hash-verified Playwright browser install; holds no credential.
-    PlaywrightInstall,
-    /// Trusted fixed-route Actions evidence acquisition; token held only here.
-    GitHubEvidenceFetch,
-    /// Credential-free verification and import of the same-run snapshot.
-    GitHubEvidenceImport,
+pub use super::step_id::{
+    QualificationCacheCompositeId, QualificationCacheCompositePhase, QualificationCacheStepId,
+    QualificationCacheStepStage, StepId,
+};
+
+/// Return the semantic role required by an exact generated verifier action.
+pub(super) fn verifier_action_role(uses: &str) -> Option<StepRole> {
+    if RUST_VERIFIER_USES.contains(&uses) {
+        Some(StepRole::VerifyRustManifest)
+    } else if uses == JACTIONLINT_VERIFIER_USES {
+        Some(StepRole::VerifyJactionlint)
+    } else {
+        None
+    }
 }
 
-impl StepRole {
-    /// Check role-specific payload kind and identity.
-    pub(crate) fn validate(self, kind: &StepKind, job: &str) -> Result<(), ContractError> {
-        if self.matches_payload(kind) {
-            Ok(())
-        } else {
-            Err(ContractError::identity(
-                "step.role",
-                format!("role_kind_mismatch:{job}:{self:?}"),
-            ))
-        }
-    }
+mod role;
+pub use role::StepRole;
 
-    /// Match one role against its fixed kind and payload family.
-    fn matches_payload(self, kind: &StepKind) -> bool {
-        match self {
-            Self::Checkout => valid_checkout_payload(kind),
-            Self::ToolSeed => valid_tool_seed_payload(kind),
-            Self::MiseSetup => valid_mise_setup(kind),
-            Self::TofuProviderUse => super::step_protocol::valid_provider_use(kind),
-            Self::PlanProducer => internal_operation(kind, "plan-v1"),
-            Self::FetchReports => internal_operation(kind, "fetch-reports-v1"),
-            Self::DownloadPlan | Self::AttestationDownload | Self::PreseedDownload => {
-                action_has_prefix_for_kind(kind, "actions/download-artifact@")
-            }
-            Self::PublishPlan
-            | Self::MatrixReportUpload
-            | Self::PublishFinal
-            | Self::PreseedUpload => action_has_prefix_for_kind(kind, "actions/upload-artifact@"),
-            Self::ToolsCacheSave
-            | Self::CargoSourcesSave
-            | Self::MbxBundleSave
-            | Self::FamilySave => action_has_prefix_for_kind(kind, "actions/cache/save@"),
-            Self::ToolsCacheIdentity => valid_tools_cache_identity(kind),
-            Self::ToolsCacheRestore => matches!(
-                kind,
-                StepKind::Action { uses, .. } if uses == TOOLS_CACHE_RESTORE_USES
-            ),
-            Self::CargoSourcesRestore | Self::MbxBundleRestore | Self::FamilyRestore => {
-                action_has_prefix_for_kind(kind, "actions/cache/restore@")
-            }
-            Self::TofuProvidersRestore => super::step_protocol::valid_provider_restore(kind),
-            Self::TofuProvidersSave => super::step_protocol::valid_provider_save(kind),
-            Self::PrivateTokenMint => matches!(kind,
-                StepKind::Action { uses, .. } if uses.starts_with(PRIVATE_TOKEN_MINT_ACTION_PREFIX)),
-            Self::PrivateFetch => internal_operation(kind, PRIVATE_FETCH_OPERATION),
-            Self::GitHubEvidenceFetch => internal_operation(kind, GITHUB_EVIDENCE_FETCH_OPERATION),
-            Self::GitHubEvidenceImport => {
-                internal_operation(kind, GITHUB_EVIDENCE_IMPORT_OPERATION)
-            }
-            Self::PrivateRevoke => internal_operation(kind, PRIVATE_REVOKE_OPERATION),
-            Self::BunRegistryInstall => internal_operation(kind, BUN_REGISTRY_INSTALL_OPERATION),
-            Self::BunAssetsHandoff => [
-                BUN_ASSETS_EXPORT_OPERATION,
-                BUN_ASSETS_PREPARE_OPERATION,
-                BUN_ASSETS_IMPORT_OPERATION,
-            ]
-            .into_iter()
-            .any(|operation| internal_operation(kind, operation)),
-            Self::MbxCache => super::step_mbx_lifecycle::valid_mbx_cache(kind),
-            Self::PlaywrightInstall => super::step_protocol::valid_playwright_install(kind),
-            Self::VerifyRustManifest => valid_rust_verifier_payload(kind),
-            Self::VerifyJactionlint => valid_jactionlint_verifier_payload(kind),
-            Self::PreparePinnedTools
-            | Self::MbxVersionCheck
-            | Self::MbxWorkspaceCleanup
-            | Self::MbxBundleKey
-            | Self::FamilyKeys
-            | Self::FamilySizeCheck
-            | Self::MbxBundleImport
-            | Self::MbxProducerMark
-            | Self::MbxSeedBuild
-            | Self::MbxBundleExport
-            | Self::PrepareRustComponents
-            | Self::CargoDeny
-            | Self::CargoMachete
-            | Self::Jactionlint
-            | Self::Markdownlint
-            | Self::StrictJson
-            | Self::FrontmatterId
-            | Self::LinkCheck
-            | Self::NativeValidators
-            | Self::AcquireVelnor
-            | Self::PreseedStage
-            | Self::CheckGenerated
-            | Self::PlanFormat
-            | Self::MsrvQualification
-            | Self::CargoSourcesFetch
-            | Self::CacheKeys
-            | Self::PreseedBuild
-            | Self::PreseedManifest
-            | Self::PreseedVerifyBuild
-            | Self::PreseedVerifyManifest
-            | Self::MbxPreflight => matches!(kind, StepKind::Shell { .. }),
-        }
-    }
+/// Check that a step is the configured checkout owner in this workflow scope.
+///
+/// Checkout is a semantic role, not a display-name convention. The caller
+/// supplies the exact pinned action ref from its validated render context.
+#[must_use]
+pub fn is_configured_checkout(step: &Step, expected_uses: &str) -> bool {
+    step.role == Some(StepRole::Checkout)
+        && step.condition.is_none()
+        && matches!(&step.kind, StepKind::Action { uses, .. } if uses == expected_uses)
+        && valid_configured_checkout_payload(&step.kind)
+}
 
-    /// Output identity required for a role that publishes step outputs.
-    pub(crate) const fn required_id(self) -> Option<StepId> {
-        match self {
-            Self::PlanProducer => Some(StepId::Plan),
-            Self::ToolsCacheIdentity => Some(StepId::ToolsCacheIdentity),
-            Self::TofuProvidersRestore => Some(StepId::TofuProviders),
-            Self::MbxVersionCheck => Some(StepId::MbxReady),
-            Self::CacheKeys => Some(StepId::CacheKeys),
-            Self::ToolsCacheRestore => Some(StepId::ToolsRestore),
-            Self::PrivateTokenMint => Some(StepId::DepsToken),
-            Self::MbxBundleKey => Some(StepId::MbxBundleKey),
-            Self::MbxBundleRestore => Some(StepId::MbxBundleRestore),
-            Self::MbxBundleExport => Some(StepId::MbxBundleExport),
-            Self::FamilyKeys => Some(StepId::FamilyKeys),
-            _ => None,
-        }
-    }
-
-    /// Role required for a typed step output identity.
-    pub(crate) const fn for_id(id: StepId) -> Self {
-        match id {
-            StepId::Plan => Self::PlanProducer,
-            StepId::ToolsCacheIdentity => Self::ToolsCacheIdentity,
-            StepId::TofuProviders => Self::TofuProvidersRestore,
-            StepId::MbxReady => Self::MbxVersionCheck,
-            StepId::CacheKeys => Self::CacheKeys,
-            StepId::SourcesRestore => Self::CargoSourcesRestore,
-            StepId::SourcesFetch => Self::CargoSourcesFetch,
-            StepId::ToolsRestore => Self::ToolsCacheRestore,
-            StepId::DepsToken => Self::PrivateTokenMint,
-            StepId::MbxBundleKey => Self::MbxBundleKey,
-            StepId::MbxBundleRestore => Self::MbxBundleRestore,
-            StepId::MbxBundleExport => Self::MbxBundleExport,
-            StepId::FamilyKeys => Self::FamilyKeys,
-            StepId::FamilySizeBunInstall
-            | StepId::FamilySizePlaywrightBrowsers
-            | StepId::FamilySizeDbtPackages
-            | StepId::FamilySizePythonVenv
-            | StepId::FamilySizeAnsibleCollections => Self::FamilySizeCheck,
-        }
-    }
+/// Check that a step is the unconditional local tool-seed consumer.
+#[must_use]
+pub fn is_tool_seed_step(step: &Step) -> bool {
+    step.role == Some(StepRole::ToolSeed)
+        && step.condition.is_none()
+        && valid_tool_seed_payload(&step.kind)
 }
 
 /// Validate one serialized step scope, including role payloads and unique output IDs.
@@ -379,7 +146,7 @@ fn validate_step_identities(steps: &[Step], scope: &str) -> Result<(), ContractE
         {
             return Err(ContractError::identity(
                 "job.steps.id",
-                format!("duplicate_step_id:{scope}:{}", step_id.as_str()),
+                format!("duplicate_step_id:{scope}:{}", step_id.as_string()),
             ));
         }
     }
@@ -387,5 +154,5 @@ fn validate_step_identities(steps: &[Step], scope: &str) -> Result<(), ContractE
 }
 
 #[cfg(test)]
-#[path = "step_identity_verifier_tests.rs"]
-mod rust_verifier_role_tests;
+#[path = "step_identity_tests.rs"]
+mod tests;

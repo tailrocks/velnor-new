@@ -11,9 +11,11 @@ name = "velnor-actions"
 path = "src/main.rs"
 
 [dependencies]
-velnor-actions-orchestrator = { version = "=0.1.52", path = "../velnor-actions-orchestrator" }
-velnor-actions-freshness = { version = "=0.1.52", path = "../velnor-actions-freshness" }
+velnor-actions-orchestrator = { version = "=0.1.53", path = "../velnor-actions-orchestrator" }
+velnor-actions-freshness = { version = "=0.1.53", path = "../velnor-actions-freshness" }
 clap = { version = "=4.6.7", features = ["derive"] }
+rustix = { version = "=1.1.5", features = ["fs"] }
+serde_json = { workspace = true }
 
 [lints]
 workspace = true
@@ -23,7 +25,7 @@ name = "velnor_cli"
 path = "tests/velnor_cli.rs"
 
 [dev-dependencies]
+toml = { version = "=1.1.8" }
 proc-macro2 = "=1.0.107"
 sha2 = "=0.11.1"
-serde_json = { workspace = true }
 syn = { version = "=3.0.9", features = ["full", "visit"] }

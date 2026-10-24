@@ -61,23 +61,47 @@ fn root_step_probes_before_fetch_with_miss_record() {
 }
 
 #[test]
-fn all_features_applies_only_to_plan_and_crate_probes() {
+fn all_features_applies_only_to_project_plan_and_crate_probes() {
     let catalog = ToolCatalog::pinned();
     let roots = [String::new()];
     let plan = fetch_steps_for_plan(&catalog, &roots, true).expect("all-features plan fetch");
     let crates = fetch_steps_for_crate(&catalog, &roots, true).expect("all-features crate fetch");
     for steps in [&plan, &crates] {
         let (run, _) = shell_parts(&steps[0].kind).expect("fetch shell");
-        assert!(run[2].contains("metadata --locked --offline --all-features --manifest-path"));
-        assert!(run[2].contains("cargo fetch --locked --manifest-path"));
+        assert!(run[2].contains("metadata --locked --offline --all-features"));
+        assert!(run[2].contains("cargo fetch --locked"));
+        assert!(
+            run[2].matches("--all-features").count() == 1,
+            "feature selection belongs to metadata resolution, not Cargo fetch"
+        );
     }
+
     let (_, env) = shell_parts(&plan[0].kind).expect("plan fetch shell");
     let preview = fetch_steps_for_preview(&catalog, &roots, env).expect("preview fetch");
     let (run, _) = shell_parts(&preview[0].kind).expect("preview fetch shell");
     assert!(
         !run[2].contains("--all-features"),
-        "preview keeps its probe"
+        "preview keeps its existing probe"
     );
+}
+
+#[test]
+fn crate_source_preparation_preserves_the_callers_validated_environment() {
+    let catalog = ToolCatalog::pinned();
+    let env = BTreeMap::from([
+        ("CARGO_HOME".to_owned(), "/tmp/task-cargo".to_owned()),
+        ("MISE_CARGO_HOME".to_owned(), "/tmp/task-cargo".to_owned()),
+        ("MISE_RUSTUP_HOME".to_owned(), "/tmp/task-rustup".to_owned()),
+        ("RUSTUP_TOOLCHAIN".to_owned(), "1.99.1".to_owned()),
+    ]);
+    let steps = fetch_steps_for_crate_with_env(&catalog, &[String::new()], &env, true)
+        .expect("crate source preparation");
+    let (_, actual) = shell_parts(&steps[0].kind).expect("fetch shell");
+    assert_eq!(actual, &env);
+    let (run, _) = shell_parts(&steps[0].kind).expect("fetch shell");
+    assert!(run[2].contains("metadata --locked --offline --all-features"));
+    assert!(run[2].contains("cargo fetch --locked"));
+    assert_eq!(run[2].matches("--all-features").count(), 1);
 }
 
 #[test]

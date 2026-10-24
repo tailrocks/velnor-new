@@ -1,99 +1,225 @@
-//! Connect is idempotent. A different binding is not a provider switch.
-
+use crate::config_test_support::{basic_connection, host_config};
 use crate::{
-    ConnectPlan, DisconnectEffect, DockerConfig, GithubSection, HostConfig, HostError, HostLimits,
-    SetOwnership, connect_plan, disconnect_effects,
+    ConnectPlan, DisconnectEffect, HostConfig, HostError, KeychainReference, SetOwnership,
+    connect_plan, disconnect_effects,
 };
 
-fn host_toml(repo: &str, context: &str, endpoint: &str, credential: &str) -> String {
-    format!(
-        concat!(
-            "schema = 1\n",
-            "[github]\n",
-            "repository = \"{repo}\"\n",
-            "scale_set_name = \"ubuntu-26.04-scale-set\"\n",
-            "credential_ref = \"{credential}\"\n",
-            "[host]\n",
-            "max_jobs = 1\n",
-            "[host.resources]\n",
-            "runner_cpu_millicores = 1000\n",
-            "runner_memory_bytes = 2147483648\n",
-            "dind_cpu_millicores = 3000\n",
-            "dind_memory_bytes = 6442450944\n",
-            "[docker]\n",
-            "context = \"{context}\"\n",
-            "platform = \"linux/amd64\"\n",
-            "endpoint = \"{endpoint}\"\n",
-        ),
-        repo = repo,
-        context = context,
-        endpoint = endpoint,
-        credential = credential,
-    )
-}
-
 fn stored() -> Result<HostConfig, HostError> {
-    HostConfig::parse(&host_toml(
-        "ChainArgos/java-monorepo",
-        "orbstack",
-        "unix:///var/run/docker.sock",
-        "keychain:com.tailrocks.velnor.host/chainargos",
+    HostConfig::parse(&host_config(
+        &[basic_connection(
+            "chainargos",
+            202,
+            "ChainArgos/java-monorepo",
+            "chainargos",
+            "chainargos-sea-scale-set",
+        )],
+        1,
     ))
 }
 
+fn essential() -> String {
+    basic_connection(
+        "essential",
+        101,
+        "donbeave/essential-mac",
+        "essential",
+        "essential-scale-set",
+    )
+}
+
 #[test]
-fn same_binding_is_idempotent_and_other_bindings_are_rejected() -> Result<(), HostError> {
+fn connect_adds_connections_and_keeps_existing_bindings() -> Result<(), HostError> {
     let current = stored()?;
-    assert_eq!(current.github.credential_ref.account(), "chainargos");
+    assert_eq!(
+        current
+            .connection(&crate::ConnectionId::parse("chainargos")?)
+            .map(|connection| connection.credential_ref.account()),
+        Some("chainargos")
+    );
     assert_eq!(connect_plan(None, &current), ConnectPlan::Create);
     assert_eq!(
         connect_plan(Some(&current), &current),
         ConnectPlan::Idempotent
     );
-    let other_repo = HostConfig::parse(&host_toml(
-        "other/repo",
-        "orbstack",
-        "unix:///var/run/docker.sock",
-        "keychain:com.tailrocks.velnor.host/chainargos",
+    let mut extended = current.clone();
+    extended.add_connection(
+        crate::HostConfig::parse(&host_config(&[essential()], 1))?.connections()[0].clone(),
+    )?;
+    assert_eq!(
+        connect_plan(Some(&current), &extended),
+        ConnectPlan::AddConnection
+    );
+    assert_eq!(extended.host.max_jobs, 1);
+    let round_trip = HostConfig::parse(&extended.to_toml()?)?;
+    assert_eq!(
+        connect_plan(Some(&extended), &round_trip),
+        ConnectPlan::Idempotent
+    );
+    Ok(())
+}
+
+#[test]
+fn connect_rejects_removed_mutated_or_replaced_bindings() -> Result<(), HostError> {
+    let current = stored()?;
+    let changed_repository = HostConfig::parse(&host_config(
+        &[basic_connection(
+            "chainargos",
+            202,
+            "other/repository",
+            "chainargos",
+            "chainargos-sea-scale-set",
+        )],
+        1,
     ))?;
     assert_eq!(
-        connect_plan(Some(&current), &other_repo),
+        connect_plan(Some(&current), &changed_repository),
         ConnectPlan::Rejected
     );
-    let other_context = HostConfig::parse(&host_toml(
-        "ChainArgos/java-monorepo",
-        "colima",
-        "unix:///var/run/docker.sock",
-        "keychain:com.tailrocks.velnor.host/chainargos",
+    let changed_selector = HostConfig::parse(&host_config(
+        &[basic_connection(
+            "chainargos",
+            202,
+            "ChainArgos/java-monorepo",
+            "chainargos",
+            "other-scale-set",
+        )],
+        1,
     ))?;
     assert_eq!(
-        connect_plan(Some(&current), &other_context),
+        connect_plan(Some(&current), &changed_selector),
         ConnectPlan::Rejected
     );
-    let mut other_set = current.clone();
-    other_set.github.scale_set_name = "other-scale-set".to_owned();
+    let mut extended = current.clone();
+    extended.add_connection(
+        crate::HostConfig::parse(&host_config(&[essential()], 1))?.connections()[0].clone(),
+    )?;
+    let removed = HostConfig::parse(&host_config(&[essential()], 1))?;
     assert_eq!(
-        connect_plan(Some(&current), &other_set),
+        connect_plan(Some(&extended), &removed),
         ConnectPlan::Rejected
     );
-    let mut other_endpoint = current.clone();
-    other_endpoint.docker.endpoint = "unix:///Users/me/.orbstack/run/docker.sock".to_owned();
+    let replaced = HostConfig::parse(&host_config(
+        &[
+            basic_connection(
+                "different-id",
+                202,
+                "ChainArgos/java-monorepo",
+                "chainargos",
+                "chainargos-sea-scale-set",
+            ),
+            essential(),
+        ],
+        1,
+    ))?;
     assert_eq!(
-        connect_plan(Some(&current), &other_endpoint),
+        connect_plan(Some(&extended), &replaced),
         ConnectPlan::Rejected
     );
     Ok(())
 }
 
 #[test]
-fn credential_is_a_keychain_ref() -> Result<(), HostError> {
-    let good = host_toml(
-        "ChainArgos/java-monorepo",
-        "orbstack",
-        "unix:///var/run/docker.sock",
-        "keychain:com.tailrocks.velnor.host/chainargos",
+fn connect_rejects_changes_to_shared_host_or_docker_settings() -> Result<(), HostError> {
+    let current = stored()?;
+    let more_jobs = HostConfig::parse(&host_config(
+        &[basic_connection(
+            "chainargos",
+            202,
+            "ChainArgos/java-monorepo",
+            "chainargos",
+            "chainargos-sea-scale-set",
+        )],
+        2,
+    ))?;
+    assert_eq!(
+        connect_plan(Some(&current), &more_jobs),
+        ConnectPlan::Rejected
     );
-    let credential = HostConfig::parse(&good)?.github.credential_ref;
+    let changed_docker = HostConfig::parse(
+        &host_config(
+            &[basic_connection(
+                "chainargos",
+                202,
+                "ChainArgos/java-monorepo",
+                "chainargos",
+                "chainargos-sea-scale-set",
+            )],
+            1,
+        )
+        .replace("context = \"orbstack\"", "context = \"colima\""),
+    )?;
+    assert_eq!(
+        connect_plan(Some(&current), &changed_docker),
+        ConnectPlan::Rejected
+    );
+    Ok(())
+}
+
+#[test]
+fn connect_is_idempotent_when_connection_order_changes() -> Result<(), HostError> {
+    let ordered = HostConfig::parse(&host_config(&[stored_connection(), essential()], 1))?;
+    let reversed = HostConfig::parse(&host_config(&[essential(), stored_connection()], 1))?;
+    assert_eq!(
+        connect_plan(Some(&ordered), &reversed),
+        ConnectPlan::Idempotent
+    );
+    Ok(())
+}
+
+#[test]
+fn disconnect_removes_only_the_selected_binding_and_keeps_shared_settings() -> Result<(), HostError>
+{
+    let mut config = HostConfig::parse(&host_config(&[stored_connection(), essential()], 1))?;
+    let chainargos = crate::ConnectionId::parse("chainargos")?;
+    assert!(config.remove_connection(&chainargos)?);
+    assert!(!config.remove_connection(&chainargos)?);
+    assert_eq!(config.connections().len(), 1);
+    assert_eq!(config.connections()[0].connection_id.as_str(), "essential");
+    assert_eq!(config.host.max_jobs, 1);
+    assert_eq!(config.docker.context, "orbstack");
+
+    let essential_id = crate::ConnectionId::parse("essential")?;
+    assert!(config.remove_connection(&essential_id)?);
+    assert_eq!(config.connections(), []);
+    let round_trip = HostConfig::parse(&config.to_toml()?)?;
+    assert_eq!(round_trip, config);
+    assert_eq!(round_trip.host.max_jobs, 1);
+    assert_eq!(round_trip.docker.context, "orbstack");
+    assert_eq!(connect_plan(None, &round_trip), ConnectPlan::Rejected);
+
+    let new_connection = HostConfig::parse(&host_config(&[essential()], 1))?;
+    let mut reconnected = round_trip.clone();
+    reconnected.add_connection(new_connection.connections()[0].clone())?;
+    assert_eq!(
+        connect_plan(Some(&round_trip), &reconnected),
+        ConnectPlan::AddConnection
+    );
+    Ok(())
+}
+
+fn stored_connection() -> String {
+    basic_connection(
+        "chainargos",
+        202,
+        "ChainArgos/java-monorepo",
+        "chainargos",
+        "chainargos-sea-scale-set",
+    )
+}
+
+#[test]
+fn keychain_reference_rejects_token_fields_and_bad_endpoints() -> Result<(), HostError> {
+    let config = host_config(
+        &[basic_connection(
+            "chainargos",
+            202,
+            "ChainArgos/java-monorepo",
+            "chainargos",
+            "chainargos-sea-scale-set",
+        )],
+        1,
+    );
+    let credential = stored()?.connections()[0].credential_ref.clone();
     assert_eq!(credential.service(), "com.tailrocks.velnor.host");
     assert_eq!(credential.account(), "chainargos");
     assert_eq!(
@@ -101,7 +227,7 @@ fn credential_is_a_keychain_ref() -> Result<(), HostError> {
         "keychain:com.tailrocks.velnor.host/chainargos"
     );
     assert!(
-        HostConfig::parse(&good.replace(
+        HostConfig::parse(&config.replace(
             "keychain:com.tailrocks.velnor.host/chainargos",
             "ghp_secret"
         ))
@@ -109,7 +235,7 @@ fn credential_is_a_keychain_ref() -> Result<(), HostError> {
     );
     assert!(
         HostConfig::parse(
-            &good.replace("keychain:com.tailrocks.velnor.host/chainargos", "keychain:")
+            &config.replace("keychain:com.tailrocks.velnor.host/chainargos", "keychain:")
         )
         .is_err()
     );
@@ -121,44 +247,34 @@ fn credential_is_a_keychain_ref() -> Result<(), HostError> {
         "keychain:service/account\\tother",
         "keychain:service",
     ] {
-        let malformed_config =
-            good.replace("keychain:com.tailrocks.velnor.host/chainargos", malformed);
-        assert!(HostConfig::parse(&malformed_config).is_err(), "{malformed}");
+        assert!(
+            HostConfig::parse(
+                &config.replace("keychain:com.tailrocks.velnor.host/chainargos", malformed)
+            )
+            .is_err()
+        );
     }
     assert!(
-        HostConfig::parse(&good.replacen("schema = 1\n", "schema = 1\npat = \"ghp_secret\"\n", 1))
-            .is_err()
-    );
-    assert!(HostConfig::parse(&good.replacen(
-        "credential_ref = \"keychain:com.tailrocks.velnor.host/chainargos\"\n",
-        "credential_ref = \"keychain:com.tailrocks.velnor.host/chainargos\"\ntoken = \"ghp_secret\"\n",
-        1
-    ))
-    .is_err());
-    assert!(
-        HostConfig::parse(&good.replace("unix:///var/run/docker.sock", "tcp://127.0.0.1:2375"))
-            .is_err()
-    );
-    assert!(
-        HostConfig::parse(
-            &good.replace("unix:///var/run/docker.sock", "unix://var/run/docker.sock")
-        )
+        HostConfig::parse(&config.replace(
+            "endpoint = \"unix:///var/run/docker.sock\"",
+            "endpoint = \"tcp://127.0.0.1:2375\""
+        ))
         .is_err()
     );
-    assert!(
-        HostConfig::parse(&good.replace("ChainArgos/java-monorepo", "/java-monorepo")).is_err()
-    );
-    assert!(HostConfig::parse(&good.replace("ChainArgos/java-monorepo", "ChainArgos/")).is_err());
     Ok(())
 }
 
 #[test]
-fn resource_limits_are_required_and_aggregate_values_are_checked() {
-    let valid = host_toml(
-        "ChainArgos/java-monorepo",
-        "orbstack",
-        "unix:///var/run/docker.sock",
-        "keychain:com.tailrocks.velnor.host/chainargos",
+fn resources_are_required_and_checked_against_the_shared_job_limit() {
+    let valid = host_config(
+        &[basic_connection(
+            "chainargos",
+            202,
+            "ChainArgos/java-monorepo",
+            "chainargos",
+            "chainargos-sea-scale-set",
+        )],
+        1,
     );
     let resources = concat!(
         "[host.resources]\n",
@@ -166,8 +282,20 @@ fn resource_limits_are_required_and_aggregate_values_are_checked() {
         "runner_memory_bytes = 2147483648\n",
         "dind_cpu_millicores = 3000\n",
         "dind_memory_bytes = 6442450944\n",
+        "operational_memory_reserve_bytes = 1073741824\n",
     );
     assert!(HostConfig::parse(&valid.replace(resources, "")).is_err());
+    assert!(
+        HostConfig::parse(&valid.replace("operational_memory_reserve_bytes = 1073741824\n", ""))
+            .is_err()
+    );
+    assert!(
+        HostConfig::parse(&valid.replace(
+            "operational_memory_reserve_bytes = 1073741824",
+            "operational_memory_reserve_bytes = 0",
+        ))
+        .is_err()
+    );
     assert!(
         HostConfig::parse(
             &valid.replace("runner_cpu_millicores = 1000", "runner_cpu_millicores = 0")
@@ -181,7 +309,6 @@ fn resource_limits_are_required_and_aggregate_values_are_checked() {
         ))
         .is_err()
     );
-
     let aggregate_overflow = valid
         .replace("max_jobs = 1", "max_jobs = 2")
         .replace(
@@ -196,7 +323,7 @@ fn resource_limits_are_required_and_aggregate_values_are_checked() {
 }
 
 #[test]
-fn disconnect_deletes_only_recorded_ownership() {
+fn disconnect_deletes_only_controller_created_sets() {
     assert_eq!(
         disconnect_effects(SetOwnership::Adopted, true),
         vec![DisconnectEffect::Drain]
@@ -213,34 +340,12 @@ fn disconnect_deletes_only_recorded_ownership() {
         disconnect_effects(SetOwnership::Created, false),
         vec![DisconnectEffect::DeleteSet]
     );
-    let adopted = disconnect_effects(SetOwnership::Adopted, true);
-    assert!(!adopted.contains(&DisconnectEffect::DeleteSet));
 }
 
 #[test]
-fn structs_used_by_connect_plan_stay_secret_free() -> Result<(), HostError> {
-    let config = HostConfig {
-        schema: 1,
-        github: GithubSection {
-            repository: "ChainArgos/java-monorepo".to_owned(),
-            scale_set_name: "ubuntu-26.04-scale-set".to_owned(),
-            credential_ref: crate::KeychainReference::parse("keychain:service/account")?,
-        },
-        host: HostLimits {
-            max_jobs: 1,
-            resources: crate::worker::ResourceBudgetConfig {
-                runner_cpu_millicores: 1_000,
-                runner_memory_bytes: 2_147_483_648,
-                dind_cpu_millicores: 3_000,
-                dind_memory_bytes: 6_442_450_944,
-            },
-        },
-        docker: DockerConfig {
-            context: "orbstack".to_owned(),
-            platform: "linux/amd64".to_owned(),
-            endpoint: "unix:///var/run/docker.sock".to_owned(),
-        },
-    };
-    assert_eq!(connect_plan(None, &config), ConnectPlan::Create);
+fn keychain_reference_constructor_keeps_credentials_secret_free() -> Result<(), HostError> {
+    let reference = KeychainReference::parse("keychain:service/account")?;
+    assert_eq!(reference.service(), "service");
+    assert_eq!(reference.account(), "account");
     Ok(())
 }

@@ -6,8 +6,12 @@ use bollard::models::{HostConfigCgroupnsModeEnum, MountType};
 
 use crate::error::HostError;
 use crate::launch_identity::LaunchIdentity;
+use velnor_runner_core::runner_work_path;
 
-use super::{bollard_create, dind_create_for_identity, runner_create_for_identity};
+use super::{
+    bollard_create, dind_create_for_identity, runner_create, runner_create_for_identity,
+    test_resource_budget,
+};
 
 const INSTANCE_ID: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const INTENT_ID: i64 = 7;
@@ -80,6 +84,78 @@ fn runner_and_dind_project_distinct_owned_names_and_labels() -> Result<(), HostE
         dind_create.options.name.as_deref(),
         Some(dind.name.as_str())
     );
+    Ok(())
+}
+
+#[test]
+fn runner_create_rejects_empty_or_mismatched_plan_mounts() -> Result<(), HostError> {
+    let identity = identity()?;
+    let mut empty = crate::docker_spec::runner_plan(identity.private_volume())?;
+    empty.mounts.clear();
+    assert_eq!(
+        runner_create(&empty, test_resource_budget()?).map(|_| ()),
+        Err(HostError::ForbiddenMount)
+    );
+
+    let mut mismatched = crate::docker_spec::runner_plan(identity.private_volume())?;
+    mismatched.mounts[0].target = "/tmp".to_owned();
+    assert_eq!(
+        runner_create(&mismatched, test_resource_budget()?).map(|_| ()),
+        Err(HostError::ForbiddenMount)
+    );
+    Ok(())
+}
+
+#[test]
+fn runner_and_dind_disable_copy_for_home_and_work_volumes() -> Result<(), HostError> {
+    let identity = identity()?;
+    let target = runner_work_path();
+    let runner = bollard_create(&runner_create_for_identity(&identity, None)?)?;
+    let dind = bollard_create(&dind_create_for_identity(&identity)?)?;
+    let runner_json = serde_json::to_value(runner.config).map_err(|_| HostError::Docker)?;
+    let dind_json = serde_json::to_value(dind.config).map_err(|_| HostError::Docker)?;
+    let runner_mounts = runner_json["HostConfig"]["Mounts"]
+        .as_array()
+        .ok_or(HostError::Docker)?;
+    let dind_mounts = dind_json["HostConfig"]["Mounts"]
+        .as_array()
+        .ok_or(HostError::Docker)?;
+    let runner_work = runner_mounts
+        .iter()
+        .find(|mount| mount["Target"].as_str() == Some(target.as_str()))
+        .ok_or(HostError::Docker)?;
+    let dind_work = dind_mounts
+        .iter()
+        .find(|mount| mount["Target"].as_str() == Some(target.as_str()))
+        .ok_or(HostError::Docker)?;
+
+    assert_eq!(runner_work["Type"].as_str(), Some("volume"));
+    assert_eq!(runner_work["VolumeOptions"]["NoCopy"].as_bool(), Some(true));
+    assert_eq!(dind_work["Type"].as_str(), Some("volume"));
+    assert_eq!(dind_work["Source"], runner_work["Source"]);
+    assert_eq!(dind_work["VolumeOptions"]["NoCopy"].as_bool(), Some(true));
+
+    let runner_home = runner_mounts
+        .iter()
+        .find(|mount| mount["Target"].as_str() == Some("/home/runner"))
+        .ok_or(HostError::Docker)?;
+    assert_eq!(runner_home["VolumeOptions"]["NoCopy"].as_bool(), Some(true));
+    let dind_home = dind_mounts
+        .iter()
+        .find(|mount| mount["Target"].as_str() == Some("/home/runner"))
+        .ok_or(HostError::Docker)?;
+    assert_eq!(dind_home["VolumeOptions"]["NoCopy"].as_bool(), Some(true));
+    for mounts in [runner_mounts, dind_mounts] {
+        for mount in mounts {
+            let mount_target = mount["Target"].as_str();
+            let no_copy = mount["VolumeOptions"]["NoCopy"].as_bool();
+            if mount_target == Some("/home/runner") || mount_target == Some(target.as_str()) {
+                assert_eq!(no_copy, Some(true));
+            } else {
+                assert_ne!(no_copy, Some(true));
+            }
+        }
+    }
     Ok(())
 }
 

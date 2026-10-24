@@ -16,7 +16,7 @@ complete.
   `DBT_PASSWORD`, ...); `dbt parse` needs no warehouse connection, so
   placeholder values suffice.
 - The documented parse path is the pinned Fusion Docker image (README "Build
-  and parse"): `dbt deps && dbt parse`. Generated CI replaces the image with the
+  and parse"): `dbt deps && dbt parse`. The proposed generated job will use the
   Mise-installed binary at the same exact version.
 - `lightdash-content/` is a separate concern (a Bun-stack tool member).
 
@@ -35,10 +35,9 @@ The table is strict. There is no shell, argv, YAML or `uses:` field. `dbt deps`
 always runs first and is not configurable. `env` accepts only the profile-data
 keys `DBT_HOST`, `DBT_PORT`, `DBT_USER`, `DBT_PASSWORD`, and `DBT_DBNAME`;
 project, profile, package, target, state, metadata, index, and log path
-overrides are rejected; so is `DBT_ALLOW_EXPERIMENTAL_ADAPTERS`, which the generator
-owns: when the project's `profiles.yml` declares a `type: postgres` output it
-sets `DBT_ALLOW_EXPERIMENTAL_ADAPTERS=true` on every dbt step, because dbt Fusion
-preview refuses the Postgres adapter otherwise (`dbt1005`). Values are inert literals over `[A-Za-z0-9._:/-]` (at
+overrides are rejected. The `env` table also rejects `DBT_ALLOW_EXPERIMENTAL_ADAPTERS`.
+The generator sets `DBT_ALLOW_EXPERIMENTAL_ADAPTERS=true` on every dbt step when `profiles.yml` declares `type: postgres`.
+dbt Fusion preview requires this setting for the Postgres adapter (`dbt1005`). Values are inert literals over `[A-Za-z0-9._:/-]` (at
 most 128 bytes, 32 entries): no expression, quote, `$` or whitespace, so a
 value can never carry syntax. The generator sets `DBT_PROJECT_DIR` and
 `DBT_PROFILES_DIR` to `.` on every dbt step, keeping Fusion's profile and
@@ -67,12 +66,12 @@ findings, each with a stable code.
 Rules:
 
 1. **Version.** `X.Y.Z-preview.N` or the stable `X.Y.Z` (Fusion 2.0.9 and
-   later) with canonical decimal components. Both forms use the same archive
-   `https://public.cdn.getdbt.com/fs/cli/fs-v<version>-<triple>.tar.gz` and a
-   sibling `.sha256` file (verified live 2026-10-21 for 2.0.9 and
-   2.0.0-preview.221). `latest`, a range, a pre-release other than `preview.N`, a template, a leading zero or any character
+   later) with canonical decimal components. Both forms use the archive URL
+   `https://public.cdn.getdbt.com/fs/cli/fs-v<version>-<triple>.tar.gz`.
+   The `.sha256` file is at the same URL with `.sha256` appended.
+   Live verification on 2026-10-21 covered 2.0.9 and 2.0.0-preview.221. `latest`, a range, a pre-release other than `preview.N`, a template, a leading zero or any character
    outside `[A-Za-z0-9.-]` fails with `project_tool_version_not_exact`.
-2. **Packages.** `dbt deps` is the only network step. Every hub or Git package
+2. **Packages.** `dbt deps` downloads project packages. Every hub or Git package
    in `packages.yml` needs an entry in `package-lock.yml` pinned by an exact hub
    version or a 40-hex Git revision. `local:` packages need no lock entry but
    must stay inside the project directory. Tarball packages are refused. The

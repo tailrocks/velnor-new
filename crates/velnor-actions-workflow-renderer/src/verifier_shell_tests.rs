@@ -235,3 +235,6 @@ fn jactionlint_verifier_role_survives_neutral_and_colliding_names() {
 
 #[path = "verifier_shell_runtime_tests.rs"]
 pub(crate) mod runtime;
+
+#[path = "verifier_shell_direct_tests.rs"]
+mod direct;

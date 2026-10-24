@@ -63,7 +63,8 @@ fn ids_are_sorted_unique_and_shared_across_publish_kinds() {
 
 #[test]
 fn attestation_is_default_on_and_opting_out_needs_a_clean_reason() {
-    let parsed: PublishMaven = serde_json::from_value(entry(|_| {})).expect("entry");
+    let parsed: PublishMaven =
+        serde_json::from_value(entry(|_| {})).expect("The Maven entry must parse.");
     assert!(parsed.attest && parsed.attest_reason.is_none());
     let off = |reason: Option<&str>| {
         entry(|w| {
@@ -76,8 +77,9 @@ fn attestation_is_default_on_and_opting_out_needs_a_clean_reason() {
     let ok: PublishConfig = serde_json::from_value(json!({ "maven": [off(Some(
         "private repository on a plan without artifact attestations"
     ))] }))
-    .expect("config");
-    ok.validate("config.toml").expect("valid opt-out");
+    .expect("The configuration must parse.");
+    ok.validate("config.toml")
+        .expect("The explicit attestation setting must be valid.");
     assert!(problem(&[off(None)]).contains("attest_reason"));
     assert!(problem(&[off(Some("it's $(bad)"))]).contains("attest_reason"));
     assert!(

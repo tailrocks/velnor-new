@@ -143,6 +143,7 @@ fn bind_check(
     let lane = NamedCheckLane {
         variant: entry.lane_variant,
         job_id: entry.job_id.clone(),
+        runs_on: Some(entry.planned_platform.runs_on.clone()),
     };
     let (expected, mut expected_entries) =
         crate::internal_plan::named_checks::plan::derive_lanes_until(

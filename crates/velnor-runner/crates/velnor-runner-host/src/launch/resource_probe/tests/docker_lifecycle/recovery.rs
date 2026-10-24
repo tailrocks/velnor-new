@@ -1,14 +1,17 @@
 use super::*;
+use crate::launch::inspect_tests::raw_http;
 use serde_json::Value;
 
 #[tokio::test]
 async fn cleanup_timeout_keeps_owned_container_retryable_after_reopen() -> Result<(), String> {
     let (scratch, journal, projection) = prepared().await?;
-    let info = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","NCPU":8,"MemTotal":17179869184}"#;
-    let delay = Duration::from_millis(150);
+    let info = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64","NCPU":8,"MemTotal":17179869184}"#;
+    let delay = Duration::from_millis(600);
     let mut responses = start_responses(&projection)?;
     responses.extend([
         http(200, "{}"),
+        http(200, info),
+        http(200, &inspect(&projection, "running", 0)?),
         http(200, r#"{"StatusCode":0,"Error":null}"#),
         http(200, &inspect(&projection, "exited", 0)?),
         raw_http(200, log_frame(&record_bytes())?),
@@ -16,16 +19,18 @@ async fn cleanup_timeout_keeps_owned_container_retryable_after_reopen() -> Resul
         delayed_http(200, info, delay),
     ]);
     let docker = DockerStub::open(responses)?;
-    let result = execute::run(
+    let result = Box::pin(execute::run(
         &docker.docker,
         &journal,
         &projection,
+        image_evidence(&projection),
         16 * 1024 * 1024 * 1024,
-        &Deadline::test_with_timeouts(Duration::from_millis(800), Duration::from_millis(80)),
-    )
+        &Deadline::test_with_timeouts(Duration::from_secs(10), Duration::from_millis(500)),
+    ))
     .await;
     assert!(matches!(result, Err(HostError::DockerTimeout)));
     let requests = docker.finish_observed().await?;
+    assert_request_order(&requests, &timeout_request_order())?;
     assert!(requests.iter().any(|request| request.contains("/info")));
     let retained = journal
         .active_probe()
@@ -37,10 +42,18 @@ async fn cleanup_timeout_keeps_owned_container_retryable_after_reopen() -> Resul
     assert_persisted_projection_rebuilds(&retained)?;
 
     drop(journal);
+    Box::pin(assert_cleanup_after_restart(&scratch, &projection, info)).await
+}
+
+async fn assert_cleanup_after_restart(
+    scratch: &Scratch,
+    projection: &ProbeProjection,
+    info: &str,
+) -> Result<(), String> {
     let journal = Journal::open(&scratch.file())
         .await
         .map_err(|error| error.to_string())?;
-    let exited = inspect(&projection, "exited", 0)?;
+    let exited = inspect(projection, "exited", 0)?;
     let retry = vec![
         http(200, info),
         http(200, info),
@@ -51,6 +64,9 @@ async fn cleanup_timeout_keeps_owned_container_retryable_after_reopen() -> Resul
         http(200, info),
         http(404, "{}"),
         http(404, "{}"),
+        http(404, "{}"),
+        http(404, "{}"),
+        http(200, info),
         http(404, "{}"),
         http(404, "{}"),
         http(200, info),
@@ -65,7 +81,8 @@ async fn cleanup_timeout_keeps_owned_container_retryable_after_reopen() -> Resul
     let recovery_requests = recovery.finish_observed().await?;
     let sample = result.map_err(|error| format!("{error}; requests: {recovery_requests:?}"))?;
     assert!(sample.is_none());
-    assert_eq!(recovery_requests.len(), 12);
+    assert_recovered_container_cleanup(&recovery_requests)?;
+    assert_eq!(recovery_requests.len(), 15);
     assert!(
         recovery_requests
             .iter()
@@ -84,6 +101,7 @@ async fn cleanup_timeout_keeps_owned_container_retryable_after_reopen() -> Resul
 fn assert_persisted_projection_rebuilds(row: &crate::journal::ProbeRow) -> Result<(), String> {
     let image = VerifiedProbeImage::from_journal(
         row.runtime_image_id.clone(),
+        "x86_64".to_owned(),
         row.source_revision.clone(),
         row.image_binding_digest.clone(),
     )
@@ -103,15 +121,16 @@ fn assert_persisted_projection_rebuilds(row: &crate::journal::ProbeRow) -> Resul
 #[tokio::test]
 async fn held_journal_transition_timeout_sends_no_docker_request() -> Result<(), String> {
     let (_scratch, journal, projection) = prepared().await?;
-    let _held = journal.write_guard().await;
+    let held = journal.write_guard().await;
     let docker = DockerStub::open(Vec::new())?;
-    let result = execute::run(
+    let result = Box::pin(execute::run(
         &docker.docker,
         &journal,
         &projection,
+        image_evidence(&projection),
         16 * 1024 * 1024 * 1024,
         &Deadline::test_with_timeouts(Duration::from_millis(40), Duration::from_millis(20)),
-    )
+    ))
     .await;
     let requests = docker.finish_observed().await?;
     assert!(matches!(result, Err(HostError::DockerTimeout)));
@@ -119,6 +138,7 @@ async fn held_journal_transition_timeout_sends_no_docker_request() -> Result<(),
         requests.is_empty(),
         "expired journal transition sent {requests:?}"
     );
+    drop(held);
     let retained = journal
         .active_probe()
         .await
@@ -129,7 +149,7 @@ async fn held_journal_transition_timeout_sends_no_docker_request() -> Result<(),
 }
 
 #[tokio::test]
-async fn failed_quarantine_commit_is_propagated_without_lifecycle_retry() -> Result<(), String> {
+async fn recovery_claim_timeout_sends_no_docker_request() -> Result<(), String> {
     let (_scratch, journal, projection) = prepared().await?;
     journal
         .transition_probe(
@@ -148,7 +168,7 @@ async fn failed_quarantine_commit_is_propagated_without_lifecycle_retry() -> Res
         .await
         .map_err(|error| error.to_string())?
         .ok_or_else(|| "probe row disappeared before recovery".to_owned())?;
-    let info = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","NCPU":8,"MemTotal":17179869184}"#;
+    let info = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64","NCPU":8,"MemTotal":17179869184}"#;
     let mut malformed = serde_json::from_str::<Value>(&inspect(&projection, "created", 0)?)
         .map_err(|error| error.to_string())?;
     malformed["Config"]["WorkingDir"] = serde_json::json!("/tmp");
@@ -159,8 +179,7 @@ async fn failed_quarantine_commit_is_propagated_without_lifecycle_retry() -> Res
         http(200, &malformed),
     ])?;
     let held = journal.write_guard().await;
-    // Allow real socket I/O to finish before the held journal write expires.
-    // An earlier HTTP timeout would not exercise quarantine commit propagation.
+    // Keep the journal write locked until the recovery deadline expires.
     let result = Box::pin(crate::launch::resource_probe::recover::active(
         &docker.docker,
         &journal,
@@ -175,8 +194,7 @@ async fn failed_quarantine_commit_is_propagated_without_lifecycle_retry() -> Res
     drop(held);
     assert!(matches!(result, Err(HostError::DockerTimeout)));
     let requests = docker.finish_observed().await?;
-    assert_eq!(requests.len(), 3);
-    assert!(requests.iter().all(|request| !request.starts_with("POST ")));
+    assert!(requests.is_empty(), "unclaimed recovery sent {requests:?}");
     let retained = journal
         .active_probe()
         .await

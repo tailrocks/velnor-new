@@ -4,7 +4,7 @@ use super::*;
 
 #[test]
 fn tap_jobs_separate_unprivileged_preparation_and_scoped_app_authority() {
-    let rendered = render_consumer_preview(&with_tap()).expect("tap workflow");
+    let rendered = render_preview(&with_tap()).expect("tap workflow");
     let yaml = &rendered.bytes;
     let prepare = job(yaml, "preview-tap-prepare", Some("preview-tap-writer"));
     assert!(prepare.contains("actions/checkout"));
@@ -35,7 +35,14 @@ fn tap_jobs_separate_unprivileged_preparation_and_scoped_app_authority() {
     assert!(!writer.contains("VELNOR_TAP_MERGE_TOKEN:"));
     let merge = job(yaml, "preview-tap-merge", None);
     assert!(merge.contains("permission-administration: read"));
-    assert!(!merge.contains("permission-checks: read"));
+    let tap_token = merge
+        .split("id: tap-token")
+        .nth(1)
+        .expect("tap token")
+        .split("id: tap-protection-token")
+        .next()
+        .expect("tap token boundary");
+    assert!(!tap_token.contains("permission-checks: read"));
     assert!(merge.contains("VELNOR_TAP_PROTECTION_TOKEN"));
     assert!(!writer.contains("VELNOR_TAP_PROTECTION_"));
     assert!(!writer.contains("${{ secrets.TAP_PROTECTION_APP_PRIVATE_KEY }}"));
@@ -61,7 +68,7 @@ fn credential_references_cannot_become_privileged_environment_keys() {
         .policy
         .review_completion
         .app_id_variable = "PATH".to_owned();
-    let yaml = render_consumer_preview(&spec)
+    let yaml = render_preview(&spec)
         .expect("literal variable reference")
         .bytes;
     let merge = job(&yaml, "preview-tap-merge", None);
@@ -81,5 +88,5 @@ fn tap_updater_rejects_self_hosted_execution_without_native_provisioning() {
         .runner;
     runner.executor = velnor_actions_contract::config::CheckExecutor::EphemeralSelfHosted;
     runner.label = "tap-updater".to_owned();
-    assert!(render_consumer_preview(&spec).is_err());
+    assert!(render_preview(&spec).is_err());
 }

@@ -12,14 +12,13 @@ use crate::internal::internal;
 /// Status transport for the revoke; the real one is `curl` under the fetch policy.
 pub(crate) trait StatusBackend {
     fn status(&self, method: &str, route: &str) -> Result<u16, OrchestratorError>;
-    /// Wait between probes; a fake records the wait instead of sleeping.
+    /// Wait between checks. A test backend records the delay without sleeping.
     fn pause(&self, duration: Duration);
 }
 
-/// Waits between the post-revoke probes. GitHub invalidates a deleted
-/// installation token eventually, so the first probe can still authenticate;
-/// the budget is bounded (29.5 s in total) and the revoke fails closed when
-/// the token still authenticates at the end.
+/// Delays between checks after the token delete request.
+/// The delays total 29.5 seconds and exclude HTTP request time.
+/// Each request retains the fetch policy's separate timeout.
 const PROBE_BACKOFF_MS: [u64; 7] = [500, 1_000, 2_000, 4_000, 8_000, 8_000, 6_000];
 
 struct CurlStatus {
@@ -39,13 +38,12 @@ impl StatusBackend for CurlStatus {
 
 /// Delete the installation token, then require the API to reject it.
 ///
-/// A token that is already dead (401) counts as revoked. Token invalidation
-/// is eventually consistent, so any other probe answer is retried with a
-/// bounded backoff.
+/// A 401 response counts as revoked. GitHub can take time to invalidate a token.
+/// Retry other response statuses after the configured delays.
 ///
 /// # Errors
-/// Fails closed when the delete is refused or the token still authenticates
-/// once the backoff budget is spent.
+/// Returns an error if the delete fails or the final check does not return 401.
+/// A transport error stops this function.
 pub(crate) fn revoke(backend: &dyn StatusBackend) -> Result<(), OrchestratorError> {
     match backend.status("DELETE", "installation/token")? {
         204 | 401 => {}

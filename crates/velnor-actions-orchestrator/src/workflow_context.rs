@@ -1,8 +1,10 @@
 //! Renderer context construction from discovered repository evidence.
 
+use std::collections::{BTreeMap, btree_map::Entry};
+
 use velnor_actions_contract::{
-    ExecutionMode, GeneratorValidation, ScaleSetSelector, ValidatorKind, VelnorConfig,
-    WorkflowPolicy,
+    ExecutionMode, GeneratorValidation, ReleaseTarget, ScaleSetSelector, ValidatorKind,
+    VelnorConfig, WorkflowPolicy,
 };
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::render::{CandidateSpec, RenderContext, ValidatorCommand};
@@ -45,14 +47,27 @@ pub(super) fn render_context(
     debug_assert!(REQUEST_DIR.starts_with(REQUEST_DIR_PREFIX));
     let validator_commands = validator_commands(&input)?;
     let candidate = candidate_spec_for(&input)?;
-    let scale_set_selector = scale_set_selector(input.config, None)?;
+    let active_scale_set_selector = scale_set_selector(input.config, None)?;
+    let cache_helper_scale_set_selector =
+        scale_set_selector(input.config, Some(ExecutionMode::ScaleSet))?;
+    let scale_set_image_source_sha = input
+        .config
+        .execution
+        .as_ref()
+        .and_then(|execution| execution.scale_set_image_source_sha())
+        .map(str::to_owned);
+    let (verified_cache_helpers, require_verified_cache_helper) =
+        verified_cache_helpers(&input, cache_helper_scale_set_selector.as_ref())?;
     Ok(RenderContext {
         tool_pins: tool_cache_pins::catalog_tool_pins(input.catalog),
         generator_version: input.generator_version.to_owned(),
         report_helper_version: input.report_helper_version.to_owned(),
         runs_on: input.label.to_owned(),
-        scale_set_selector,
+        scale_set_selector: active_scale_set_selector,
+        scale_set_image_source_sha,
         staged_binary: format!("{STAGED_BINARY_PREFIX}{}", input.report_helper_version),
+        verified_cache_helpers,
+        require_verified_cache_helper,
         request_dir: REQUEST_DIR.to_owned(),
         checkout_uses: CHECKOUT_USES.to_owned(),
         validator_commands,
@@ -67,6 +82,60 @@ pub(super) fn render_context(
             input.plan_needs_rust,
         )?,
     })
+}
+
+fn verified_cache_helpers(
+    input: &RenderContextInputs<'_>,
+    scale_set_selector: Option<&ScaleSetSelector>,
+) -> Result<(BTreeMap<String, Vec<velnor_actions_contract::Step>>, bool), OrchestratorError> {
+    if input.config.workflow.policy != WorkflowPolicy::ConsumerV1 {
+        return Ok((BTreeMap::new(), false));
+    }
+    let mut helpers = BTreeMap::new();
+    helpers.insert(
+        input.label.to_owned(),
+        vec![crate::pins::consumer_acquire_step(
+            input.label,
+            input.report_helper_version,
+            input.discovery,
+        )?],
+    );
+    for discovered in &input.discovery.mise_checks {
+        let label = discovered.check.runner.label.clone();
+        if let Entry::Vacant(entry) = helpers.entry(label) {
+            entry.insert(vec![crate::pins::consumer_acquire_for_runner(
+                &discovered.check.runner,
+                input.report_helper_version,
+                input.discovery.consumer_manifest_json.as_deref(),
+            )?]);
+        }
+    }
+    if let Some(rust) = &input.config.stacks.rust {
+        for suite in &rust.suites {
+            let label = suite.runner_label.as_deref().unwrap_or(input.label);
+            if !helpers.contains_key(label) {
+                helpers.insert(
+                    label.to_owned(),
+                    vec![crate::pins::consumer_acquire_step(
+                        &crate::rust_suites_emit::helper_release_label(label),
+                        input.report_helper_version,
+                        input.discovery,
+                    )?],
+                );
+            }
+        }
+    }
+    if let Some(selector) = scale_set_selector {
+        helpers.insert(
+            selector.token(),
+            vec![crate::pins::consumer_acquire_for_target(
+                ReleaseTarget::LinuxX86_64,
+                input.report_helper_version,
+                input.discovery.consumer_manifest_json.as_deref(),
+            )?],
+        );
+    }
+    Ok((helpers, true))
 }
 
 fn validator_commands(

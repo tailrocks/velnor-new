@@ -2,7 +2,9 @@
 
 use super::*;
 use velnor_actions_contract::config::{CheckPlatform, CheckRunner, MiseCheck, QualifiedTool};
-use velnor_actions_contract::{JobConclusion, RequiredJobResult, StepKind, VelnorConfig};
+use velnor_actions_contract::{
+    JobConclusion, RequiredJobResult, StepKind, VelnorConfig, WorkflowEvent,
+};
 use velnor_actions_mise::PinnedTool;
 
 fn check(id: &str, runner: CheckRunner) -> MiseCheck {
@@ -126,8 +128,12 @@ fn no_cargo_checks_gate_required_without_becoming_rust_jobs() {
     );
     assert!(!workflow.ir.jobs.keys().any(|id| id.starts_with("rust-")));
     let proposal = &discovery.proposals[0];
-    let owners = crate::crate_job_ids::JobOwners::new(&discovery.proposals).expect("owners");
-    let owner = owners.for_member(proposal).expect("check owner");
+    let owner = crate::crate_job_ids::job_id_for_member(
+        &discovery.proposals,
+        proposal,
+        WorkflowEvent::Qualification,
+    )
+    .expect("check owner");
     assert_eq!(owner, Some("check-ffi".to_owned()));
     assert_eq!(workflow.ir.jobs["plan"].runs_on, "ubuntu-26.04");
     assert!(
@@ -353,42 +359,11 @@ fn native_check_without_catalog_tools_adds_no_rust_install() {
     assert!(names.contains(&"Execute named check"));
 }
 
-#[test]
-fn ignored_rust_candidate_keeps_plan_inventory_toolchain() {
-    use velnor_actions_contract::{DetectedProject, DetectionStatus};
-    let (root, mut discovery) = fixture(&[]);
-    discovery.statuses.push(DetectionStatus::Ignored {
-        project: DetectedProject {
-            stack_id: "rust".to_owned(),
-            project_root: String::new(),
-            manifest: "Cargo.toml".to_owned(),
-        },
-        reason: "configured_ignore".to_owned(),
-    });
-    std::fs::create_dir(root.path().join(".velnor")).expect("config directory");
-    std::fs::write(
-        root.path().join(".velnor/config.toml"),
-        "schema = 1\n[workflow]\npolicy = 'velnor-repository-v1'\n",
-    )
-    .expect("config");
-    let config = crate::config::load_config(root.path()).expect("defaulted config");
-    let workflow = named_workflow(root.path(), &config, &discovery);
-    let plan = &workflow.ir.jobs["plan"];
-    let pinned_tools = plan
-        .steps
-        .iter()
-        .find(|step| step.name == "Prepare pinned tools")
-        .expect("plan inventory prepares its exact Rust compiler");
-    assert!(matches!(
-        &pinned_tools.kind,
-        StepKind::Shell { run, .. }
-            if run.contains(&ToolCatalog::pinned().tool_spec(PinnedTool::Rust))
-    ));
-    assert!(
-        !plan
-            .steps
-            .iter()
-            .any(|step| step.name == "Prepare Rust components"),
-        "an ignored candidate has no selected plan-owned Format step"
-    );
-}
+#[path = "check_jobs_ignored_candidate_tests.rs"]
+mod ignored_candidate_tests;
+
+#[path = "check_jobs_tests/identity.rs"]
+mod identity;
+
+#[path = "check_jobs_tests/topology.rs"]
+mod topology;

@@ -59,10 +59,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "arraydeque"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d902e3d592a523def97af8f317b08ce16b7ab854c1985a0c671e6f15cebc236"
+
+[[package]]
 name = "arrayvec"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
+
+[[package]]
+name = "autocfg"
+version = "1.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
 name = "base64"
@@ -331,6 +343,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
+name = "foldhash"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
+
+[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -367,6 +385,18 @@ name = "hashbrown"
 version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
+dependencies = [
+ "foldhash",
+]
+
+[[package]]
+name = "hashlink"
+version = "0.12.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a596f1b20ed2cc5ecac41a164aaebc7258057060f06c0cf7a2ba3991ee7990fb"
+dependencies = [
+ "hashbrown",
+]
 
 [[package]]
 name = "hcl-edit"
@@ -529,6 +559,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-traits"
+version = "0.2.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
+dependencies = [
+ "autocfg",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -545,6 +584,15 @@ name = "openssl-probe"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
+
+[[package]]
+name = "ordered-float"
+version = "5.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c7c9e0d9b23589f26070720bac724174bfec1083e82f7854cdd0267518343c0"
+dependencies = [
+ "num-traits",
+]
 
 [[package]]
 name = "percent-encoding"
@@ -661,6 +709,28 @@ name = "ryu"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
+
+[[package]]
+name = "saphyr"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0662b098655e5e779a80041b640702e341cf3ede4560ecc103cf0ef098c8e33e"
+dependencies = [
+ "hashlink",
+ "ordered-float",
+ "saphyr-parser",
+ "thiserror",
+]
+
+[[package]]
+name = "saphyr-parser"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c6220586c3dacac54bfddec87af86ddb31862d29666e7e35cf4baf70a25d387"
+dependencies = [
+ "arraydeque",
+ "thiserror",
+]
 
 [[package]]
 name = "schannel"
@@ -975,14 +1045,14 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-actionlint"
-version = "0.1.52"
+version = "0.1.53"
 dependencies = [
  "velnor-actions-contract",
 ]
 
 [[package]]
 name = "velnor-actions-ansible"
-version = "0.1.52"
+version = "0.1.53"
 dependencies = [
  "thiserror",
  "toml",
@@ -991,7 +1061,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-bun"
-version = "0.1.52"
+version = "0.1.53"
 dependencies = [
  "serde_json",
  "thiserror",
@@ -1001,20 +1071,22 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-cli"
-version = "0.1.52"
+version = "0.1.53"
 dependencies = [
  "clap",
  "proc-macro2",
+ "rustix",
  "serde_json",
  "sha2",
  "syn",
+ "toml",
  "velnor-actions-freshness",
  "velnor-actions-orchestrator",
 ]
 
 [[package]]
 name = "velnor-actions-contract"
-version = "0.1.52"
+version = "0.1.53"
 dependencies = [
  "blake3",
  "serde",
@@ -1025,7 +1097,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-dbt"
-version = "0.1.52"
+version = "0.1.53"
 dependencies = [
  "thiserror",
  "toml",
@@ -1034,7 +1106,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-freshness"
-version = "0.1.52"
+version = "0.1.53"
 dependencies = [
  "flate2",
  "rustix",
@@ -1048,28 +1120,30 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-gradle"
-version = "0.1.52"
+version = "0.1.53"
 dependencies = [
  "sha2",
 ]
 
 [[package]]
 name = "velnor-actions-mise"
-version = "0.1.52"
+version = "0.1.53"
 dependencies = [
  "rustix",
  "serde",
  "serde_json",
  "sha2",
+ "syn",
  "velnor-actions-contract",
  "velnor-actions-tofu",
 ]
 
 [[package]]
 name = "velnor-actions-orchestrator"
-version = "0.1.52"
+version = "0.1.53"
 dependencies = [
  "base64",
+ "blake3",
  "flate2",
  "lzma-rust2",
  "proc-macro2",
@@ -1096,12 +1170,13 @@ dependencies = [
  "velnor-actions-rust",
  "velnor-actions-tofu",
  "velnor-actions-workflow-renderer",
+ "velnor-archive-guard",
  "zip",
 ]
 
 [[package]]
 name = "velnor-actions-rust"
-version = "0.1.52"
+version = "0.1.53"
 dependencies = [
  "serde",
  "serde_json",
@@ -1111,7 +1186,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-tofu"
-version = "0.1.52"
+version = "0.1.53"
 dependencies = [
  "hcl-rs",
  "serde",
@@ -1121,8 +1196,10 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-workflow-renderer"
-version = "0.1.52"
+version = "0.1.53"
 dependencies = [
+ "saphyr",
+ "saphyr-parser",
  "velnor-actions-actionlint",
  "velnor-actions-contract",
  "velnor-actions-mise",
@@ -1130,7 +1207,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-archive-guard"
-version = "0.1.52"
+version = "0.1.53"
 dependencies = [
  "flate2",
  "sha2",

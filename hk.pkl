@@ -9,9 +9,15 @@ import "package://github.com/jdx/hk/releases/download/v2.8.0/hk@2.8.0#/Config.pk
 jobs = 2
 fail_fast = false
 
-// fixtures/ holds deliberately broken or foreign test projects (malformed Cargo.toml, invalid .tf, hostile configs);
-// docs/proposed/opentofu-goldens/ holds generated golden trees. Neither is source that the stack builtins own.
-local fixtureTrees = List("fixtures/**", "docs/proposed/opentofu-goldens/**")
+// Fixtures and generated output are not source: `fixtures/` and nested crate
+// fixtures may be intentionally invalid, while `build/` and OpenTofu goldens
+// are generated trees.
+local fixtureTrees = List(
+  "fixtures/**",
+  "crates/**/tests/fixtures/**",
+  "docs/proposed/opentofu-goldens/**",
+  "build/**",
+)
 
 steps {
   ["mise"] = Builtins.mise
@@ -42,7 +48,9 @@ steps {
     check = "sh scripts/check-rust-toolchain-mirror.sh"
   }
   ["rumdl"] = (Builtins.rumdl) { exclude = fixtureTrees }
-  ["tofu"] = (Builtins.tofu) { exclude = List("fixtures/**", "docs/**") }
+  ["tofu"] = (Builtins.tofu) {
+    exclude = List("fixtures/**", "crates/**/tests/fixtures/**", "docs/**", "build/**")
+  }
   // Native jactionlint (hard decision 10, docs/proposed/workflow-lint-contract.md "Local runs"): check-only, because
   // .github/ is generated; the same flags as CI, reading the generated .github/jactionlint.yaml.
   ["jactionlint"] = (Builtins.jactionlint) {

@@ -205,7 +205,7 @@ Pressure C, job [111137374561](https://github.com/tailrocks/velnor-new/actions/r
 
 Pressure A, job [111137374564](https://github.com/tailrocks/velnor-new/actions/runs/37099950570/job/111137374564), runner `m100000102`, container `7498be682741`. At `2026-10-03T05:33:51Z` it was `in_progress`. `kill -9` of pid 70466 left that container running with the same pid `671745`. Restart pid 83571 deleted session `c01c2ce4-f655-4e9d-9420-de511c818a2f` (204) and opened a new session while the container was still running. The job concluded `success` with one payload line `pressure-ok`. Pressure B then concluded `success` on `m100000105`.
 
-Scratch: `g4-crash.txt`, `g4-crash-kill.txt`, `launch-crash-restart.log`. This is not a G4 `PASS`. The Actions job log has no cgroup or `AssertCompatibleOS` line.
+Scratch: `g4-crash.txt`, `g4-crash-kill.txt`, `launch-crash-restart.log`. The crash/restart observation does not by itself mark full G4 `PASS`. Historical service job [111106680574](https://github.com/tailrocks/velnor-new/actions/runs/37089523814/job/111106680574) (run `37089523814`, commit `c1227471d6a39cff8be9a5d2a054276ff3dd249c`, runner `m100000046`, `actions/runner` `2.337.0`) separately succeeded through container initialization, local-port setup, and service health. The log reaches Docker version checks, network creation, and a healthy Redis service; tagged [v2.337.0 runner source](https://github.com/actions/runner/blob/v2.337.0/src/Runner.Worker/ContainerOperationProvider.cs#L486-L505) executes the cgroup guard before these normal non-hook operations. This is affirmative historical guard-path evidence without a success log, but does not bind the job to the current source/image or complete full G4.
 
 ## G3 kill and canary attempt
 
@@ -227,7 +227,7 @@ Later, example `stage_once` called `start_pair_until` on this Mac (`HEAD` `c7c7f
 
 Qualification run [37103831130](https://github.com/tailrocks/velnor-new/actions/runs/37103831130) at `4f512e27099d2ba1e869bcbea6abd5a43824efde` concluded `success`. Job [111148411061](https://github.com/tailrocks/velnor-new/actions/runs/37103831130/job/111148411061) (`Verify / Velnor Scale Set / Linux x64`) concluded `success` on runner `m100000108` in group `Default`, started `2026-10-03T06:49:25Z`, completed `2026-10-03T06:49:35Z`. `launch_once` printed `set_id=1 started=true runner_id=7e0e126d41c56f113f5ba16b621c48f545df99b36bb252066917ae804c1fb8c9 dind_id=948d97b50f004e26bb6f7e96bbeaf3ad6369b28f81ad374083dc140affa80edb` and exited 0. That runner container image was `velnor-runner:ubuntu-26.04-2.337.0`. It started `2026-10-03T06:49:16Z` and exited 0 at `2026-10-03T06:49:36Z`. `docker exec` at `2026-10-03T06:51:24Z` failed: `container 7e0e126d41c56f113f5ba16b621c48f545df99b36bb252066917ae804c1fb8c9 is not running`. Scratch: `launch-once-exec.txt`, `g3-jit.txt`.
 
-No canary secret was planted in that job. This observation does not mark G3. The job log still has no cgroup or `AssertCompatibleOS` line. G4's cgroup proof is `BLOCKED_EXTERNAL` in `verification.md`.
+No canary secret was planted in that job. This observation does not mark G3. Echo-only job [111148411061](https://github.com/tailrocks/velnor-new/actions/runs/37103831130/job/111148411061) does not exercise container initialization. Historical service job [111106680574](https://github.com/tailrocks/velnor-new/actions/runs/37089523814/job/111106680574) demonstrates the normal cgroup-guard path; current source/image-bound full G4 qualification remains `BLOCKED_EXTERNAL`.
 
 ## Live exec during sleep 180
 

@@ -1,131 +1,25 @@
 //! One session probe. Deletes the session before returning. No JIT and no job acquire.
 
+use std::cell::Cell;
+
 use velnor_runner_github::{
-    AdminConnection, AdminConnectionCall, Poll, QueueSession, RefreshGate, RegistrationScope,
-    RegistrationTokenCall, SessionError, WireError, admin_connection, create_session,
-    delete_session, poll, registration_token,
+    AdminConnection, Poll, QueueSession, RefreshGate, SessionError, Transport, WireError, poll,
+    workflow_run::VerifiedRepositoryScope,
+};
+#[cfg(test)]
+use velnor_runner_github::{
+    AdminConnectionCall, Exchange, SessionRequest, TransportFail, admin_connection,
 };
 use zeroize::Zeroize;
 
-use crate::Offer;
-use crate::offer;
-
+use crate::config::RepositoryConnection;
 use crate::error::HostError;
 use crate::https::HttpsTransport;
 use crate::scale_set::EnsureError;
-use crate::scale_set::ensure_product_scale_set;
 
 /// Session owner sent to the scale-set service.
 pub(crate) const OWNER_NAME: &str = "velnor-host";
 pub(crate) const GITHUB_API: &str = "https://api.github.com";
-
-/// Counts from session create. No token and no queue URL.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SessionCensus {
-    /// Scale-set id.
-    pub set_id: i64,
-    /// The create body included `statistics`.
-    pub statistics_present: bool,
-    /// `totalAvailableJobs`. Zero when statistics were absent.
-    pub available_jobs: i64,
-    /// `totalAcquiredJobs`.
-    pub acquired_jobs: i64,
-    /// `totalAssignedJobs`.
-    pub assigned_jobs: i64,
-    /// `totalRunningJobs`.
-    pub running_jobs: i64,
-    /// `totalRegisteredRunners`.
-    pub registered_runners: i64,
-    /// `totalBusyRunners`.
-    pub busy_runners: i64,
-    /// `totalIdleRunners`.
-    pub idle_runners: i64,
-}
-
-/// Open one session, read its statistics, then delete it. Does not poll.
-///
-/// # Errors
-///
-/// Returns [`EnsureError`] when registration, the session, or the delete is refused.
-pub fn session_census(pat: &str, owner: &str, repo: &str) -> Result<SessionCensus, EnsureError> {
-    let set = ensure_product_scale_set(pat, owner, repo)?;
-    let mut link = admin_link(pat, owner, repo)?;
-    let token = Secret::new(link.token());
-    let session = create_session(&mut link.transport, set.id, OWNER_NAME, token.expose())
-        .map_err(|err| annotate(err, "create-session"))?;
-    let census = census_of(set.id, &session);
-    delete_session(
-        &mut link.transport,
-        set.id,
-        &session.session_id,
-        token.expose(),
-    )
-    .map_err(map_listen)?;
-    Ok(census)
-}
-
-fn census_of(set_id: i64, session: &QueueSession) -> SessionCensus {
-    let Some(stats) = session.statistics() else {
-        return SessionCensus {
-            set_id,
-            statistics_present: false,
-            available_jobs: 0,
-            acquired_jobs: 0,
-            assigned_jobs: 0,
-            running_jobs: 0,
-            registered_runners: 0,
-            busy_runners: 0,
-            idle_runners: 0,
-        };
-    };
-    SessionCensus {
-        set_id,
-        statistics_present: true,
-        available_jobs: stats.total_available_jobs,
-        acquired_jobs: stats.total_acquired_jobs,
-        assigned_jobs: stats.total_assigned_jobs,
-        running_jobs: stats.total_running_jobs,
-        registered_runners: stats.total_registered_runners,
-        busy_runners: stats.total_busy_runners,
-        idle_runners: stats.total_idle_runners,
-    }
-}
-
-/// What one short session saw. No token and no queue URL.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SessionProbe {
-    /// Scale-set id.
-    pub set_id: i64,
-    /// A `JobAvailable` id was waiting. It was not acquired.
-    pub available: bool,
-}
-
-/// Open one session, poll once, then delete that session.
-///
-/// # Errors
-///
-/// Returns [`EnsureError`] when registration, the session, or the delete is refused.
-/// The session delete still runs when the poll fails.
-pub fn probe_once(pat: &str, owner: &str, repo: &str) -> Result<SessionProbe, EnsureError> {
-    let set = ensure_product_scale_set(pat, owner, repo)?;
-    let mut link = admin_link(pat, owner, repo)?;
-    let token = Secret::new(link.token());
-    let session = create_session(&mut link.transport, set.id, OWNER_NAME, token.expose())
-        .map_err(|err| annotate(err, "create-session"))?;
-    let polled = poll_available(&mut link, &session);
-    let closed = delete_session(
-        &mut link.transport,
-        set.id,
-        &session.session_id,
-        token.expose(),
-    );
-    let available = polled?;
-    closed.map_err(map_listen)?;
-    Ok(SessionProbe {
-        set_id: set.id,
-        available,
-    })
-}
 
 /// Path relative to the admin origin. Absolute URLs that are not under `base` are rejected.
 #[must_use]
@@ -171,11 +65,85 @@ pub(crate) struct Link {
     base: String,
 }
 
+/// Continue with the exact admin connection used to register a Scale Set.
+///
+/// The caller must have authenticated the repository scope before obtaining
+/// `admin`; this function does not create or broaden credentials.
+pub(crate) fn link_from_admin(
+    mut transport: HttpsTransport,
+    admin: AdminConnection,
+    binding: &RepositoryConnection,
+    verified_scope: &VerifiedRepositoryScope,
+) -> Result<Link, EnsureError> {
+    let (owner, name) = binding
+        .repository
+        .split_once('/')
+        .ok_or(EnsureError::Rejected)?;
+    if owner.is_empty()
+        || name.is_empty()
+        || verified_scope.id() != binding.repository_id
+        || verified_scope.owner() != owner
+        || verified_scope.name() != name
+    {
+        return Err(EnsureError::Rejected);
+    }
+    let base = admin.expose_url().to_owned();
+    transport.set_base(&base).map_err(map_host)?;
+    Ok(Link {
+        transport,
+        admin,
+        base,
+    })
+}
+
+/// Construct an inert admin link for offline unit tests only.
+#[cfg(test)]
+pub(crate) fn inert_link_for_offline_test() -> Link {
+    struct AdminFixture;
+
+    impl Transport for AdminFixture {
+        fn exchange(&mut self, request: &SessionRequest) -> Result<Exchange, TransportFail> {
+            assert_eq!(request.path, "/actions/runner-registration");
+            Ok(Exchange {
+                status: 200,
+                body: br#"{"url":"https://example.invalid","token":"fixture-token"}"#.to_vec(),
+            })
+        }
+    }
+
+    let mut fixture = AdminFixture;
+    let admin = admin_connection(
+        &mut fixture,
+        &AdminConnectionCall {
+            config_url: "https://github.com/example/repository",
+            registration_token: "fixture-registration-token",
+        },
+    )
+    .expect("offline fixture must produce a typed admin connection");
+    let mut transport = HttpsTransport::new(GITHUB_API)
+        .expect("fixed GitHub API origin is valid for the inert fixture");
+    let base = admin.expose_url().to_owned();
+    transport
+        .set_base(&base)
+        .expect("fixture service origin is valid");
+    Link {
+        transport,
+        admin,
+        base,
+    }
+}
+
 impl Link {
     /// Admin bearer. Not for logs.
     #[must_use]
     pub(crate) fn token(&self) -> &str {
         self.admin.expose_token()
+    }
+
+    /// Authenticated Scale Set admin origin, independent of the mutable queue base.
+    #[must_use]
+    pub(crate) fn admin_origin(&self) -> &str {
+        self.admin.expose_url()
     }
 
     /// Current service origin.
@@ -201,48 +169,6 @@ impl Link {
     }
 }
 
-/// Registration plus the admin service origin.
-///
-/// # Errors
-///
-/// Returns [`EnsureError`] when the token or the admin connection is refused.
-pub(crate) fn admin_link(pat: &str, owner: &str, repo: &str) -> Result<Link, EnsureError> {
-    let mut transport = HttpsTransport::new(GITHUB_API).map_err(map_host)?;
-    let registration = registration_token(
-        &mut transport,
-        &RegistrationTokenCall {
-            scope: RegistrationScope::Repository { owner, repo },
-            pat,
-        },
-    )
-    .map_err(map_listen)?;
-    let config_url = format!("https://github.com/{owner}/{repo}");
-    let admin = admin_connection(
-        &mut transport,
-        &AdminConnectionCall {
-            config_url: &config_url,
-            registration_token: registration.expose(),
-        },
-    )
-    .map_err(map_listen)?;
-    let base = admin.expose_url().to_owned();
-    transport.set_base(&base).map_err(map_host)?;
-    Ok(Link {
-        transport,
-        admin,
-        base,
-    })
-}
-
-fn poll_available(link: &mut Link, session: &QueueSession) -> Result<bool, EnsureError> {
-    let (saved, path) = point_at_queue(link, &session.message_queue_url)?;
-    let advertised = crate::launch::advertise_capacity(crate::launch::job_capacity());
-    let polled = poll_path(link, session, &path, advertised, 0);
-    restore_base(link, saved)?;
-    let polled = polled?;
-    Ok(matches!(offer(&polled), Offer::Acquire { .. }))
-}
-
 /// Move onto an absolute queue host. `None` means the queue is already on this origin.
 ///
 /// # Errors
@@ -252,19 +178,30 @@ pub(crate) fn point_at_queue(
     link: &mut Link,
     url: &str,
 ) -> Result<(Option<String>, String), EnsureError> {
-    if let Some(path) = queue_path(&link.base, url) {
+    let (origin, path) = resolve_queue_route(&link.base, url)?;
+    let Some(origin) = origin else {
+        return Ok((None, path));
+    };
+    let saved = link.base.clone();
+    link.transport.set_base(&origin).map_err(map_host)?;
+    link.base = origin;
+    Ok((Some(saved), path))
+}
+
+/// Check a refreshed queue URL with the same rules used before each queue request.
+pub(crate) fn validate_queue_url(base: &str, url: &str) -> Result<(), EnsureError> {
+    resolve_queue_route(base, url).map(|_| ())
+}
+
+fn resolve_queue_route(base: &str, url: &str) -> Result<(Option<String>, String), EnsureError> {
+    if let Some(path) = queue_path(base, url) {
         return Ok((None, path.to_owned()));
     }
     let absolute = absolute_https(url).ok_or(EnsureError::Unexpected {
         status: 0,
         step: "queue-path",
     })?;
-    let saved = link.base.clone();
-    link.transport
-        .set_base(&absolute.origin)
-        .map_err(map_host)?;
-    link.base = absolute.origin;
-    Ok((Some(saved), absolute.path))
+    Ok((Some(absolute.origin), absolute.path))
 }
 
 /// One poll on the current origin.
@@ -281,19 +218,53 @@ pub(crate) fn poll_path(
     path: &str,
     total_capacity: u32,
     cursor: i64,
-) -> Result<Poll, EnsureError> {
-    let gate = RefreshGate::new();
-    let refresh = || Ok::<(), WireError>(());
-    poll(
+) -> Result<PollPathResult, EnsureError> {
+    poll_path_with(
         &mut link.transport,
+        session.token(),
+        path,
+        total_capacity,
+        cursor,
+    )
+}
+
+/// One queue response, or a request for the durable caller to refresh and rebuild it.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum PollPathResult {
+    /// The queue returned a usable response.
+    Response(Poll),
+    /// The queue returned 401. No request was replayed with the old token.
+    RefreshRequired,
+}
+
+pub(crate) fn poll_path_with<T: Transport + ?Sized>(
+    transport: &mut T,
+    queue_token: &str,
+    path: &str,
+    total_capacity: u32,
+    cursor: i64,
+) -> Result<PollPathResult, EnsureError> {
+    let gate = RefreshGate::new();
+    let refresh_requested = Cell::new(false);
+    let refresh = || {
+        refresh_requested.set(true);
+        Err(WireError::RefreshExhausted)
+    };
+    match poll(
+        transport,
         path,
         cursor,
         total_capacity,
-        session.token(),
+        queue_token,
         &gate,
         refresh,
-    )
-    .map_err(|err| annotate(err, "poll"))
+    ) {
+        Ok(response) => Ok(PollPathResult::Response(response)),
+        Err(SessionError::Wire(WireError::RefreshExhausted)) if refresh_requested.get() => {
+            Ok(PollPathResult::RefreshRequired)
+        }
+        Err(error) => Err(annotate(error, "poll")),
+    }
 }
 
 /// Restore the admin origin saved by [`point_at_queue`].
@@ -351,7 +322,9 @@ pub(crate) fn annotate(error: SessionError, step: &'static str) -> EnsureError {
 #[must_use]
 pub(crate) fn map_listen(error: SessionError) -> EnsureError {
     match error {
-        SessionError::Uncertain => EnsureError::Uncertain,
+        SessionError::Uncertain | SessionError::Wire(WireError::RefreshExhausted) => {
+            EnsureError::Uncertain
+        }
         SessionError::Conflict => EnsureError::Conflict,
         SessionError::Wire(WireError::RegistrationRejected) => EnsureError::Rejected,
         SessionError::Wire(WireError::Forbidden) => EnsureError::Forbidden,
@@ -362,3 +335,7 @@ pub(crate) fn map_listen(error: SessionError) -> EnsureError {
         },
     }
 }
+
+#[cfg(test)]
+#[path = "listen/poll_tests.rs"]
+mod poll_tests;

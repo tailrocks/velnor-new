@@ -48,7 +48,7 @@ fn assert_source_ir(mbx: bool) -> TestResult {
         "${{ runner.temp }}/velnor/cargo/registry/cache",
         "${{ runner.temp }}/velnor/cargo/git/db",
     ];
-    for id in ["plan", "rust-demo"] {
+    for id in ["plan", "rust-demo", "rust-demo", "rust-demo"] {
         let job = prep
             .workflow
             .ir
@@ -78,17 +78,15 @@ fn assert_source_ir(mbx: bool) -> TestResult {
 fn assert_elected_writer(mbx: bool) -> TestResult {
     let plan = job_names("plan", mbx)?;
     assert!(plan.contains(&"Save Cargo sources".to_owned()), "{plan:?}");
-    {
-        let readers = job_names("rust-demo", mbx)?;
-        assert!(
-            readers.contains(&"Restore Cargo sources".to_owned()),
-            "{readers:?}"
-        );
-        assert!(
-            !readers.contains(&"Save Cargo sources".to_owned()),
-            "readers never save: {readers:?}"
-        );
-    }
+    let readers = job_names("rust-demo", mbx)?;
+    assert!(
+        readers.contains(&"Restore Cargo sources".to_owned()),
+        "{readers:?}"
+    );
+    assert!(
+        !readers.contains(&"Save Cargo sources".to_owned()),
+        "readers never save: {readers:?}"
+    );
     Ok(())
 }
 
@@ -151,13 +149,13 @@ fn c10_only_plan_saves_producer_successful_deltas() -> TestResult {
     assert_elected_writer(false)
 }
 
-/// The crate job restores both caches before fetching and its own tasks.
+/// The Rust package job restores both caches before it fetches sources and runs tasks.
 pub(super) fn assert_restore_before_obligations(
     prep: &velnor_actions_orchestrator::GenerationPreparation,
 ) -> TestResult {
     {
         let id = "rust-demo";
-        let job = prep.workflow.ir.jobs.get(id).ok_or("missing crate job")?;
+        let job = prep.workflow.ir.jobs.get(id).ok_or("missing package job")?;
         let names: Vec<_> = job.steps.iter().map(|step| step.name.as_str()).collect();
         let at = |name: &str| names.iter().position(|seen| *seen == name);
         let (Some(restore), Some(mbx), Some(fetch)) = (

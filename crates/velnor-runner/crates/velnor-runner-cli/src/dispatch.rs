@@ -1,17 +1,27 @@
 //! Parse and print. The host owns mutation.
 
-use std::io::Read;
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::ExitCode;
+use std::process::{Command as ProcessCommand, ExitCode};
+use std::time::Duration;
 
 use clap::Parser;
-use velnor_runner_host::{
-    ConnectPlan, DisconnectEffect, HostConfig, HostError, KeychainReference, READINESS_BUDGET,
-    Readiness, SetOwnership, connect_plan, disconnect_effects, doctor_json, import_secret,
-    read_secret, status_json,
-};
+use velnor_runner_host::{READINESS_BUDGET, Readiness, doctor_json, status_json};
 
-use crate::args::{Cli, Command, DaemonAction};
+use crate::args::{Cli, Command, CredentialAction, DaemonAction};
+
+mod connect;
+mod connect_authority;
+mod connect_config;
+mod connection_state;
+mod credential;
+mod disconnect;
+mod drain;
+mod marker;
+
+use connect::{ConnectRequest, connect};
+use disconnect::disconnect;
+use drain::{drain, remove_flag};
 
 /// Parse argv and run one command.
 #[must_use]
@@ -37,36 +47,47 @@ fn dispatch(cli: &Cli) -> ExitCode {
         Command::Status { json } => print_status(&state, *json),
         Command::Doctor { probe } => print_doctor(&state, *probe),
         Command::Logs { follow } => logs(*follow),
-        Command::Drain { .. } => flag(&state, "drain"),
+        Command::Drain { wait } => drain(&state, *wait),
         Command::Resume => remove_flag(&state, "drain"),
-        Command::Connect {
-            repo,
-            scale_set,
-            platform,
-            max_jobs,
-            docker_context,
-            endpoint,
-            runner_cpu_millicores,
-            runner_memory_bytes,
-            dind_cpu_millicores,
-            dind_memory_bytes,
-        } => connect(&ConnectRequest {
+        Command::Credential { action } => match action {
+            CredentialAction::ImportReleaseRead => credential::import_release_read(&state),
+        },
+        Command::Connect { args } => connect(&ConnectRequest {
             state: &state,
-            repo,
-            scale_set,
-            platform,
-            max_jobs: *max_jobs,
-            docker_context: docker_context.as_deref(),
-            endpoint: endpoint.as_deref(),
-            runner_cpu_millicores: *runner_cpu_millicores,
-            runner_memory_bytes: *runner_memory_bytes,
-            dind_cpu_millicores: *dind_cpu_millicores,
-            dind_memory_bytes: *dind_memory_bytes,
+            connection_id: &args.connection_id,
+            repo: &args.repo,
+            repository_id: args.repository_id,
+            job_authority_policy: args.job_authority_policy.as_deref(),
+            job_authority_inventory: args.job_authority_inventory.as_deref(),
+            job_authority_generator_source_sha: args.job_authority_generator_source_sha.as_deref(),
+            job_authority_generator_artifact_sha256: args
+                .job_authority_generator_artifact_sha256
+                .as_deref(),
+            job_authority_generation: args.job_authority_generation,
+            scale_set: &args.scale_set,
+            scale_set_labels: args.scale_set_labels.clone(),
+            source_policy_mode: &args.source_policy_mode,
+            events: args.events.clone(),
+            branches: args.branches.clone(),
+            tag_prefixes: args.tag_prefixes.clone(),
+            pull_request_rules: args.pull_request_rules.clone(),
+            platform: &args.platform,
+            max_jobs: args.max_jobs,
+            docker_context: args.docker_context.as_deref(),
+            endpoint: &args.endpoint,
+            runner_cpu_millicores: args.runner_cpu_millicores,
+            runner_memory_bytes: args.runner_memory_bytes,
+            dind_cpu_millicores: args.dind_cpu_millicores,
+            dind_memory_bytes: args.dind_memory_bytes,
+            operational_memory_reserve_bytes: args.operational_memory_reserve_bytes,
         }),
-        Command::Service { action } => crate::service::service(*action),
+        Command::Service { action } => crate::service::service(*action, &state),
         Command::Daemon { action } => daemon(&state, *action),
         Command::Compare { evidence, .. } => compare_command(evidence.as_deref()),
-        Command::Disconnect { drain, .. } => disconnect(*drain),
+        Command::Disconnect {
+            connection_id,
+            wait,
+        } => disconnect(&state, connection_id, *wait),
     }
 }
 
@@ -92,7 +113,19 @@ fn print_status(state: &Path, json: bool) -> ExitCode {
 }
 
 fn print_doctor(state: &Path, probe: bool) -> ExitCode {
-    println!("{}", doctor_json(observe(state), probe));
+    if probe {
+        return match velnor_runner_host::run_doctor_probe(state, Duration::from_secs(240)) {
+            Ok(report) => {
+                println!("{report}");
+                ExitCode::SUCCESS
+            }
+            Err(error) => {
+                eprintln!("doctor probe failed ({}): {error}", error.code());
+                ExitCode::from(1)
+            }
+        };
+    }
+    println!("{}", doctor_json(observe(state), false));
     ExitCode::SUCCESS
 }
 
@@ -110,202 +143,20 @@ fn observe(state: &Path) -> Readiness {
 
 fn logs(follow: bool) -> ExitCode {
     let path = crate::service::log_dir().join("host.log");
-    if follow && !path.is_file() {
-        eprintln!("log missing");
+    if follow {
+        if !path.is_file() {
+            eprintln!("log missing");
+            return ExitCode::from(1);
+        }
+        let error = ProcessCommand::new("tail").arg("-F").arg(path).exec();
+        eprintln!("failed to follow log: {error}");
         return ExitCode::from(1);
     }
     println!("{}", path.display());
     ExitCode::SUCCESS
 }
 
-fn flag(state: &Path, name: &str) -> ExitCode {
-    if std::fs::create_dir_all(state).is_err() {
-        return ExitCode::from(1);
-    }
-    if std::fs::write(state.join(name), b"1").is_err() {
-        return ExitCode::from(1);
-    }
-    println!("draining");
-    ExitCode::SUCCESS
-}
-
-fn remove_flag(state: &Path, name: &str) -> ExitCode {
-    let path = state.join(name);
-    if path.exists() && std::fs::remove_file(path).is_err() {
-        return ExitCode::from(1);
-    }
-    println!("ready_for_admission");
-    ExitCode::SUCCESS
-}
-
-pub(crate) const KEYCHAIN_SERVICE: &str = "com.tailrocks.velnor.host";
-const DEFAULT_KEYCHAIN_ACCOUNT: &str = "local";
-
-/// Fields for one `connect` invocation. The token is not a field.
-struct ConnectRequest<'a> {
-    state: &'a Path,
-    repo: &'a str,
-    scale_set: &'a str,
-    platform: &'a str,
-    max_jobs: Option<u32>,
-    docker_context: Option<&'a str>,
-    endpoint: Option<&'a str>,
-    runner_cpu_millicores: u64,
-    runner_memory_bytes: u64,
-    dind_cpu_millicores: u64,
-    dind_memory_bytes: u64,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ConnectError {
-    Config,
-    Rejected,
-    Secret(HostError),
-    Write,
-}
-
-impl std::fmt::Display for ConnectError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Config => formatter.write_str("invalid config"),
-            Self::Rejected => formatter.write_str("rejected connection"),
-            Self::Secret(error) => std::fmt::Display::fmt(error, formatter),
-            Self::Write => formatter.write_str("write failed"),
-        }
-    }
-}
-
-fn connect(request: &ConnectRequest<'_>) -> ExitCode {
-    let mut stdin = std::io::stdin();
-    match connect_with(&mut stdin, KEYCHAIN_SERVICE, request) {
-        Ok(()) => {
-            println!("{}", status_json(Readiness::WaitingForCredentials));
-            ExitCode::SUCCESS
-        }
-        Err(ConnectError::Rejected) => {
-            eprintln!("rejected connection");
-            ExitCode::from(1)
-        }
-        Err(ConnectError::Secret(error)) => {
-            eprintln!("{error}");
-            ExitCode::from(1)
-        }
-        Err(ConnectError::Config | ConnectError::Write) => ExitCode::from(1),
-    }
-}
-
-fn connect_with<R: Read>(
-    input: &mut R,
-    service: &str,
-    request: &ConnectRequest<'_>,
-) -> Result<(), ConnectError> {
-    connect_with_store(input, service, request, import_secret)
-}
-
-fn connect_with_store<R, F>(
-    input: &mut R,
-    service: &str,
-    request: &ConnectRequest<'_>,
-    store: F,
-) -> Result<(), ConnectError>
-where
-    R: Read,
-    F: FnOnce(&str, &str, &[u8]) -> Result<(), HostError>,
-{
-    let default_reference =
-        KeychainReference::parse(&format!("keychain:{service}/{DEFAULT_KEYCHAIN_ACCOUNT}"))
-            .map_err(|_| ConnectError::Config)?;
-    let params = SampleConfig {
-        repo: request.repo,
-        scale_set: request.scale_set,
-        platform: request.platform,
-        max_jobs: request.max_jobs.unwrap_or(1),
-        docker_context: request.docker_context,
-        endpoint: request.endpoint,
-        runner_cpu_millicores: request.runner_cpu_millicores,
-        runner_memory_bytes: request.runner_memory_bytes,
-        dind_cpu_millicores: request.dind_cpu_millicores,
-        dind_memory_bytes: request.dind_memory_bytes,
-    };
-    let candidate_text = sample_config(&params, &default_reference);
-    let candidate = HostConfig::parse(&candidate_text).map_err(|_| ConnectError::Config)?;
-    let existing = read_host(request.state);
-    if connect_plan(existing.as_ref(), &candidate) == ConnectPlan::Rejected {
-        return Err(ConnectError::Rejected);
-    }
-    let credential_ref = existing
-        .map(|config| config.github.credential_ref)
-        .unwrap_or(default_reference);
-    let text = sample_config(&params, &credential_ref);
-    store_token(input, &credential_ref, store)?;
-    persist_host(request.state, &text)
-}
-
-fn read_host(state: &Path) -> Option<HostConfig> {
-    let raw = std::fs::read_to_string(state.join("host.toml")).ok()?;
-    HostConfig::parse(&raw).ok()
-}
-
-fn store_token<R, F>(
-    input: &mut R,
-    credential_ref: &KeychainReference,
-    store: F,
-) -> Result<(), ConnectError>
-where
-    R: Read,
-    F: FnOnce(&str, &str, &[u8]) -> Result<(), HostError>,
-{
-    let secret = read_secret(input).map_err(ConnectError::Secret)?;
-    store(credential_ref.service(), credential_ref.account(), &secret).map_err(ConnectError::Secret)
-}
-
-fn persist_host(state: &Path, text: &str) -> Result<(), ConnectError> {
-    if std::fs::create_dir_all(state).is_err()
-        || std::fs::write(state.join("host.toml"), text).is_err()
-    {
-        return Err(ConnectError::Write);
-    }
-    Ok(())
-}
-
-#[derive(Clone, Copy)]
-struct SampleConfig<'a> {
-    repo: &'a str,
-    scale_set: &'a str,
-    platform: &'a str,
-    max_jobs: u32,
-    docker_context: Option<&'a str>,
-    endpoint: Option<&'a str>,
-    runner_cpu_millicores: u64,
-    runner_memory_bytes: u64,
-    dind_cpu_millicores: u64,
-    dind_memory_bytes: u64,
-}
-
-fn sample_config(params: &SampleConfig<'_>, credential_ref: &KeychainReference) -> String {
-    let context = params.docker_context.unwrap_or("orbstack");
-    let socket = params.endpoint.unwrap_or("unix:///var/run/docker.sock");
-    let credential_ref = toml_basic_string(&credential_ref.to_string());
-    let SampleConfig {
-        repo,
-        scale_set,
-        platform,
-        max_jobs,
-        runner_cpu_millicores,
-        runner_memory_bytes,
-        dind_cpu_millicores,
-        dind_memory_bytes,
-        ..
-    } = *params;
-    format!(
-        "schema = 1\n[github]\nrepository = \"{repo}\"\nscale_set_name = \"{scale_set}\"\ncredential_ref = {credential_ref}\n[host]\nmax_jobs = {max_jobs}\n[host.resources]\nrunner_cpu_millicores = {runner_cpu_millicores}\nrunner_memory_bytes = {runner_memory_bytes}\ndind_cpu_millicores = {dind_cpu_millicores}\ndind_memory_bytes = {dind_memory_bytes}\n[docker]\ncontext = \"{context}\"\nplatform = \"{platform}\"\nendpoint = \"{socket}\"\n"
-    )
-}
-
-fn toml_basic_string(value: &str) -> String {
-    let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
-    format!("\"{escaped}\"")
-}
+pub(super) const DRAIN_WAIT_BUDGET: Duration = Duration::from_secs(300);
 
 fn daemon(state: &Path, action: DaemonAction) -> ExitCode {
     match action {
@@ -331,13 +182,7 @@ fn not_proven() -> ExitCode {
 
 #[cfg(test)]
 mod connect_tests;
-
-fn disconnect(drain: bool) -> ExitCode {
-    let effects = disconnect_effects(SetOwnership::Adopted, drain);
-    if effects.contains(&DisconnectEffect::DeleteSet) {
-        eprintln!("refusing to delete an adopted set");
-        return ExitCode::from(1);
-    }
-    println!("disconnected");
-    ExitCode::SUCCESS
-}
+#[cfg(test)]
+mod credential_tests;
+#[cfg(test)]
+mod disconnect_tests;

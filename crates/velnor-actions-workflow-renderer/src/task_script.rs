@@ -92,10 +92,12 @@ mod tests {
             reported.replace(['/', ' '], "_")
         ));
         let bin = root.join("bin");
-        std::fs::create_dir_all(&bin).expect("fake bin dir");
+        std::fs::create_dir_all(&bin).expect("The test executable directory must exist.");
         let jq = bin.join("jq");
-        std::fs::write(&jq, format!("#!/bin/sh\necho '{reported}'\n")).expect("fake jq");
-        std::fs::set_permissions(&jq, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+        std::fs::write(&jq, format!("#!/bin/sh\necho '{reported}'\n"))
+            .expect("The simulated jq executable must be written.");
+        std::fs::set_permissions(&jq, std::fs::Permissions::from_mode(0o755))
+            .expect("The test executable permissions must be set.");
         let script = format!(
             "set -euo pipefail; task_root='{}'; {}",
             root.display(),
@@ -105,8 +107,8 @@ mod tests {
             .args(["-c", &script])
             .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
             .status()
-            .expect("bash runs");
-        std::fs::remove_dir_all(&root).expect("cleanup");
+            .expect("The test shell must run.");
+        std::fs::remove_dir_all(&root).expect("The test directory must be removed.");
         status.success()
     }
 
@@ -114,7 +116,10 @@ mod tests {
     #[test]
     fn guard_accepts_every_jq_1_8_patch_release() {
         for version in ["jq-1.8.0", "jq-1.8.1", "jq-1.8.2", "jq-1.8.10"] {
-            assert!(guard_accepts(version), "{version} must be accepted");
+            assert!(
+                guard_accepts(version),
+                "The jq check must accept {version}."
+            );
         }
     }
 
@@ -129,7 +134,10 @@ mod tests {
             "jq-1x8.1",
             "xjq-1.8.1",
         ] {
-            assert!(!guard_accepts(version), "{version} must be rejected");
+            assert!(
+                !guard_accepts(version),
+                "The jq check must reject {version}."
+            );
         }
     }
 }

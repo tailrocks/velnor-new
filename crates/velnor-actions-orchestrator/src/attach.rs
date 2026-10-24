@@ -8,7 +8,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    GeneratorLock, ReleaseTarget, Step, StepRole, WorkflowIr, is_crate_job_id,
+    GeneratorLock, ReleaseTarget, ScaleSetSelector, Step, StepRole, WorkflowIr, is_crate_job_id,
 };
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID};
@@ -66,6 +66,10 @@ pub(crate) fn attach_lock_acquire(
         } else if is_crate_job_id(id) {
             let step = lock_acquire_step(lock, label, &staged)?;
             job.steps.insert(1, step);
+        } else if id.starts_with("suite-") {
+            let label = crate::rust_suites_emit::helper_release_label(&job.runs_on);
+            let step = lock_acquire_step(lock, &label, &staged)?;
+            job.steps.insert(1.min(job.steps.len()), step);
         }
     }
     Ok(())
@@ -78,8 +82,8 @@ pub(crate) fn attach_lock_acquire(
 /// vector after the fetch steps that guarantee sources present, verifies
 /// the MBX compile output plus its pinned route, records the source
 /// commit in a manifest, uploads the exactly-named artifact, and stages
-/// its local build; every crate job, the final job, and the publish
-/// job download that artifact, verify the manifest (commit anchored
+/// its local build; every crate job, the final job, and suite job download
+/// that artifact, verify the manifest (commit anchored
 /// to this run's
 /// `$GITHUB_SHA`, generator-rendered target, recomputed sha256), and
 /// stage it instead of rebuilding. Build and verify run under the same
@@ -95,20 +99,23 @@ pub(crate) fn attach_preseed(
     version: &str,
     catalog: &ToolCatalog,
 ) -> Result<(), OrchestratorError> {
+    let selector = workflow.context.scale_set_selector.clone();
+    attach_preseed_with_selector(workflow, label, version, catalog, selector.as_ref())
+}
+
+pub(crate) fn attach_preseed_with_selector(
+    workflow: &mut WorkflowPlan,
+    label: &str,
+    version: &str,
+    catalog: &ToolCatalog,
+    scale_set_selector: Option<&ScaleSetSelector>,
+) -> Result<(), OrchestratorError> {
     let target = ReleaseTarget::for_runner_label(label)
         .map(ReleaseTarget::triple)
         .ok_or_else(|| OrchestratorError::Contract {
             problem: format!("unsupported_target_for_runner:{label}"),
         })?;
-    for (id, job) in &workflow.ir.jobs {
-        if let Some(runner) = &job.check_runner
-            && runner.platform.target() != target
-        {
-            return Err(OrchestratorError::Contract {
-                problem: format!("mixed_platform_preseed_requires_release_lock:{id}"),
-            });
-        }
-    }
+    validate_preseed_consumer_targets(&workflow.ir, target)?;
     let build = candidate_build_argv(catalog)?;
     let probe = mbx_probe_argv(catalog)?;
     let staged = format!("{STAGED_BINARY_PREFIX}{version}");
@@ -137,13 +144,62 @@ pub(crate) fn attach_preseed(
         .steps
         .splice(0..0, preseed_consumers(target, &staged)?);
     for (id, job) in &mut workflow.ir.jobs {
-        if is_crate_job_id(id) || job.check_runner.is_some() {
+        if is_crate_job_id(id) || job.check_runner.is_some() || id.starts_with("suite-") {
             let at = 1.min(job.steps.len());
             job.steps
                 .splice(at..at, preseed_consumers(target, &staged)?);
         }
     }
+    let helper_steps = preseed_consumers(target, &staged)?;
+    workflow
+        .context
+        .verified_cache_helpers
+        .insert(label.to_owned(), helper_steps.clone());
+    for (id, job) in &workflow.ir.jobs {
+        if is_crate_job_id(id) || job.check_runner.is_some() || id.starts_with("suite-") {
+            workflow
+                .context
+                .verified_cache_helpers
+                .entry(job.runs_on.clone())
+                .or_insert_with(|| helper_steps.clone());
+        }
+    }
+    if target == ReleaseTarget::LinuxX86_64.triple()
+        && let Some(selector) = scale_set_selector
+    {
+        workflow
+            .context
+            .verified_cache_helpers
+            .insert(selector.token(), helper_steps.clone());
+    }
+    workflow.context.require_verified_cache_helper = true;
     workflow.context.preseed = true;
+    Ok(())
+}
+
+fn validate_preseed_consumer_targets(
+    ir: &WorkflowIr,
+    target: &str,
+) -> Result<(), OrchestratorError> {
+    for (id, job) in &ir.jobs {
+        let preseed_consumer = is_crate_job_id(id)
+            || job.check_runner.is_some()
+            || id.starts_with("suite-")
+            || id == FINAL_JOB_ID;
+        let consumer_target = if let Some(runner) = &job.check_runner {
+            Some(runner.platform.target())
+        } else if preseed_consumer {
+            let release_label = crate::rust_suites_emit::helper_release_label(&job.runs_on);
+            ReleaseTarget::for_runner_label(&release_label).map(ReleaseTarget::triple)
+        } else {
+            None
+        };
+        if preseed_consumer && consumer_target != Some(target) {
+            return Err(OrchestratorError::Contract {
+                problem: format!("mixed_platform_preseed_requires_release_lock:{id}"),
+            });
+        }
+    }
     Ok(())
 }
 
@@ -195,9 +251,8 @@ fn insert_plan_mbx_restore(
     Ok(())
 }
 
-/// Insert after the pinned Rust setup, any separate component selection, and
-/// the channel-manifest verification, so nothing compiles with an unverified
-/// toolchain.
+/// Insert after Rust setup, separate component selection, and channel manifest verification.
+/// Thus, compilation starts only after the manifest check passes.
 fn after_rust_setup(steps: &[Step]) -> usize {
     steps
         .iter()

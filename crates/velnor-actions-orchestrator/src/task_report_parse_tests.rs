@@ -1,4 +1,4 @@
-//! Report-producer argument parsing: exit codes, downstream IDs, start stamps.
+//! Report-producer argument parsing: exit codes and start stamps.
 
 use super::*;
 
@@ -10,13 +10,6 @@ fn exit_codes_accept_the_eight_bit_range() {
     for bad in ["", " ", "-1", "256", "99999", "0x1", "1\n", "ok"] {
         assert!(parse_exit_code(bad).is_err(), "must reject {bad:?}");
     }
-}
-
-#[test]
-fn downstream_ids_split_dedupe_and_drop_blanks() {
-    assert_eq!(parse_downstream(None), [] as [std::string::String; 0]);
-    assert_eq!(parse_downstream(Some("")), [] as [std::string::String; 0]);
-    assert_eq!(parse_downstream(Some("b,a,b,, a ,")), ["b", "a"]);
 }
 
 #[test]

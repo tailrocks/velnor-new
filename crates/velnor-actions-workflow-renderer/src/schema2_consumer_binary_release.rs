@@ -23,6 +23,7 @@ pub struct ConsumerStableReleaseSpec {
 }
 pub(super) fn render_consumer_binary_release(
     spec: &ConsumerReleaseSpec,
+    routing: &crate::workflow_routing::WorkflowRoutingPolicy,
 ) -> Result<RenderedFile, RenderError> {
     spec.policy
         .validate()
@@ -95,6 +96,7 @@ pub(super) fn render_consumer_binary_release(
         ("jobs".to_owned(), Yaml::Map(jobs)),
     ]);
     let path = PackageReleaseChannel::Stable.workflow_path();
+    let document = crate::workflow_routing::route_workflow_yaml(path, document, routing)?;
     Ok(RenderedFile {
         path: path.to_owned(),
         bytes: crate::render::fallback::render_checked_workflow(
@@ -167,10 +169,23 @@ fn dispatch(prepare: bool) -> Yaml {
     }
     let mut inputs = vec![("operation".to_owned(), Yaml::Map(operation))];
     for key in ["original_run_id", "original_run_attempt"] {
-        inputs.push((key.to_owned(), Yaml::Map(vec![("description".to_owned(), Yaml::str("Original retained stable transaction; both recovery fields are required together")), ("required".to_owned(), Yaml::Bool(false)), ("type".to_owned(), Yaml::str("string"))])));
+        inputs.push((
+            key.to_owned(),
+            Yaml::Map(vec![
+                (
+                    "description".to_owned(),
+                    Yaml::str(
+                        "Original retained stable transaction; both recovery fields are required together",
+                    ),
+                ),
+                ("required".to_owned(), Yaml::Bool(false)),
+                ("type".to_owned(), Yaml::str("string")),
+            ]),
+        ));
     }
     Yaml::Map(vec![("inputs".to_owned(), Yaml::Map(inputs))])
 }
+
 fn invalid(message: &str) -> RenderError {
     RenderError::InvalidWorkflow(message.to_owned())
 }

@@ -15,20 +15,81 @@ use crate::render::RenderContext;
 use crate::tree::RenderedFile;
 use crate::{RenderError, marker, steps, yaml::render_yaml};
 
-/// Permit the one documented hosted-to-hosted named-check condition refinement.
-pub(crate) fn same_or_admitted_check_condition(hosted: &Job, local: &Job) -> bool {
+/// Accept equal conditions or an allowed condition difference for a lane pair.
+pub(crate) fn same_or_admitted_check_condition(
+    hosted_id: &str,
+    local_id: &str,
+    hosted: &Job,
+    local: &Job,
+) -> bool {
     if hosted.condition == local.condition {
         return true;
     }
-    hosted.condition.is_none()
-        && local.condition.as_deref() == Some(EPHEMERAL_CHECK_ADMISSION_CONDITION)
-        && matches!(
-            (&hosted.check_runner, &local.check_runner),
-            (Some(hosted_runner), Some(local_runner))
-                if hosted_runner == local_runner
-                    && hosted_runner.platform == CheckPlatform::LinuxX64
-                    && hosted_runner.executor == CheckExecutor::Hosted
+    same_affected_lane_condition(hosted_id, local_id, hosted, local)
+        || (hosted.condition.is_none()
+            && local.condition.as_deref() == Some(EPHEMERAL_CHECK_ADMISSION_CONDITION)
+            && matches!(
+                (&hosted.check_runner, &local.check_runner),
+                (Some(hosted_runner), Some(local_runner))
+                    if hosted_runner == local_runner
+                        && hosted_runner.platform == CheckPlatform::LinuxX64
+                        && hosted_runner.executor == CheckExecutor::Hosted
+            ))
+}
+
+/// Accept job-specific affected gates for one hosted/local crate pair.
+fn same_affected_lane_condition(
+    hosted_id: &str,
+    local_id: &str,
+    hosted: &Job,
+    local: &Job,
+) -> bool {
+    let Some(base_id) =
+        hosted_id.strip_suffix(velnor_actions_contract::workflow::lanes::HOSTED_SUFFIX)
+    else {
+        return false;
+    };
+    if local_id
+        != format!(
+            "{base_id}{}",
+            velnor_actions_contract::workflow::lanes::SCALE_SUFFIX
         )
+        || !velnor_actions_contract::is_crate_job_id(base_id)
+    {
+        return false;
+    }
+    let output = crate::matrix::NOT_AFFECTED_JOBS_OUTPUT;
+    let Some(hosted_condition) = hosted.condition.as_deref() else {
+        return false;
+    };
+    let Some(local_condition) = local.condition.as_deref() else {
+        return false;
+    };
+    let Some(hosted_base) = condition_before_affected_gate(hosted_condition, hosted_id, output)
+    else {
+        return false;
+    };
+    let Some(local_base) = condition_before_affected_gate(local_condition, local_id, output) else {
+        return false;
+    };
+    hosted_base == local_base
+}
+
+/// Return the shared condition before one exact affected-job gate.
+fn condition_before_affected_gate<'a>(
+    condition: &'a str,
+    job_id: &str,
+    output: &str,
+) -> Option<&'a str> {
+    let gate = format!("!contains(needs.plan.outputs.{output}, ',{job_id},')");
+    if condition == gate {
+        return Some("");
+    }
+    let (base, suffix) = condition.rsplit_once(" && ")?;
+    if suffix != gate {
+        return None;
+    }
+    base.strip_prefix('(')?.strip_suffix(')')
 }
 
 /// Separate lane-only upload/identity steps from the shared action body.

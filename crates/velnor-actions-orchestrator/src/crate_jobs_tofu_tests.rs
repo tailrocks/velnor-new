@@ -6,6 +6,9 @@ use super::*;
 use crate::matrix_step::step_name_for;
 use velnor_actions_rust::TaskKind;
 
+#[path = "crate_jobs_tofu_group_tests.rs"]
+mod group_tests;
+
 /// Tofu proposal via the T12 adapter constructor.
 fn tofu_group(root: &str, kind: velnor_actions_tofu::TofuTaskKind) -> ProposedTask {
     let group = velnor_actions_tofu::TofuTaskGroup {

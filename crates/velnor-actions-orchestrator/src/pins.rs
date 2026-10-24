@@ -220,7 +220,7 @@ pub(crate) fn lock_acquire_for_runner(
     lock_acquire_for_target(lock, runner.platform.release_target(), staged)
 }
 
-fn lock_acquire_for_target(
+pub(crate) fn lock_acquire_for_target(
     lock: &GeneratorLock,
     target: ReleaseTarget,
     staged: &str,

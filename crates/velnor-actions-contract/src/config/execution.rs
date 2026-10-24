@@ -4,28 +4,30 @@
 //! configured mode. With neither, overrides win over `default_profile`.
 //! Migration leaves mode unset and `default_profile` hosted.
 
-use super::runs_on::{
-    LINUX_AMD64, SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL, is_hosted_catalog,
-};
+use super::runs_on::{LINUX_AMD64, SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
 use super::workflow::RUNNER_LABEL_CATALOG;
 use crate::errors::ContractError;
+mod image_reference;
+mod validation;
+pub use image_reference::ValidatedImageReference;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use validation::{is_source_sha, missing};
 
 /// Profile id migration writes for GitHub-hosted runs.
 pub const HOSTED_PROFILE_ID: &str = "hosted";
 /// Profile id migration writes for the scale set.
 pub const SCALE_SET_PROFILE_ID: &str = "local";
 
-/// How eligible verification workloads are placed.
+/// How Linux/amd64 jobs are placed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ExecutionMode {
-    /// Every eligible workload stays on the hosted profile.
+    /// Every job keeps its configured runner.
     Hosted,
-    /// Eligible workloads use the scale-set profile. Control stays hosted.
+    /// Every Linux/amd64 job uses the configured Scale Set.
     ScaleSet,
-    /// Eligible workloads run on both profiles.
+    /// Eligible Linux/amd64 verification jobs run on both profiles.
     Both,
 }
 
@@ -91,6 +93,12 @@ pub struct ExecutionProfile {
     /// Optional capability profile name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub capability_profile: Option<String>,
+    /// Expected source revision for the immutable Scale Set guest images.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_source_sha: Option<String>,
+    /// Optional image reference for jobs on this profile.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub job_container_image: Option<ValidatedImageReference>,
 }
 
 /// Per-logical-job placement override.
@@ -213,10 +221,10 @@ impl ExecutionConfig {
             None => {
                 workflows
                     || self.default_profile == self.scale_set_profile
-                    || self.overrides.values().any(|item| {
-                        item.role == ExecutionRole::Verification
-                            && item.profile == self.scale_set_profile
-                    })
+                    || self
+                        .overrides
+                        .values()
+                        .any(|item| item.profile == self.scale_set_profile)
             }
         }
     }
@@ -236,6 +244,14 @@ impl ExecutionConfig {
             .as_deref()
             .ok_or_else(|| missing("execution.profiles.scale_set.name"))?;
         ScaleSetSelector::try_new(name, &profile.labels)
+    }
+
+    /// Expected Velnor source revision used to build Scale Set guest images.
+    #[must_use]
+    pub fn scale_set_image_source_sha(&self) -> Option<&str> {
+        self.profiles
+            .get(&self.scale_set_profile)
+            .and_then(|profile| profile.image_source_sha.as_deref())
     }
 
     /// Validate profiles, platforms, and overrides.
@@ -283,6 +299,30 @@ impl ExecutionConfig {
                 "profile_field_mismatch",
             ));
         }
+        if hosted.image_source_sha.is_some() {
+            return Err(ContractError::config(
+                file,
+                format!(
+                    "execution.profiles.{}.image_source_sha",
+                    self.hosted_profile
+                ),
+                "hosted_profile_cannot_pin_scale_set_image_source",
+            ));
+        }
+        if scale
+            .image_source_sha
+            .as_deref()
+            .is_some_and(|value| !is_source_sha(value))
+        {
+            return Err(ContractError::config(
+                file,
+                format!(
+                    "execution.profiles.{}.image_source_sha",
+                    self.scale_set_profile
+                ),
+                "must_be_40_lowercase_hex",
+            ));
+        }
         if hosted.platform != LINUX_AMD64 || scale.platform != hosted.platform {
             return Err(ContractError::config(
                 file,
@@ -315,44 +355,6 @@ impl ExecutionConfig {
     }
 }
 
-impl ExecutionProfile {
-    /// Hosted catalog profile.
-    ///
-    /// # Errors
-    ///
-    /// The label must be in the hosted catalog.
-    pub fn hosted(label: &str) -> Result<Self, ContractError> {
-        if !RUNNER_LABEL_CATALOG.contains(&label) || !is_hosted_catalog(label) {
-            return Err(ContractError::config(
-                "config.toml",
-                "execution.profiles.hosted.label",
-                format!("unsupported_label:{label}"),
-            ));
-        }
-        Ok(Self {
-            kind: ProfileKind::GithubHosted,
-            label: Some(label.to_owned()),
-            name: None,
-            labels: Vec::new(),
-            platform: LINUX_AMD64.to_owned(),
-            capability_profile: None,
-        })
-    }
-
-    /// Scale-set profile from an already validated selector.
-    #[must_use]
-    pub fn scale_set(selector: &ScaleSetSelector) -> Self {
-        Self {
-            kind: ProfileKind::GithubScaleSet,
-            label: None,
-            name: Some(selector.name().to_owned()),
-            labels: selector.labels().to_vec(),
-            platform: LINUX_AMD64.to_owned(),
-            capability_profile: None,
-        }
-    }
-}
-
-fn missing(key: &str) -> ContractError {
-    ContractError::config("config.toml", key, "missing")
-}
+#[cfg(test)]
+#[path = "execution_tests.rs"]
+mod tests;

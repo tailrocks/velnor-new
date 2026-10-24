@@ -117,8 +117,8 @@ pub(crate) fn resolve<'a>(
     })
 }
 
-/// Same provisioning the root's CI jobs use: a postgres service when any
-/// project of this root declares it under `[stacks.gradle.projects]`.
+/// Use the root CI provisioning rules.
+/// Add a postgres service if any root project declares it under `[stacks.gradle.projects]`.
 fn root_services(
     prep: &GenerationPreparation,
     gradle: &velnor_actions_contract::config::gradle::GradleStackConfig,

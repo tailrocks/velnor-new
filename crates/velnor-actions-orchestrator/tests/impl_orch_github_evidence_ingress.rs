@@ -205,7 +205,7 @@ fn assert_orchestrator_marker_files(root: &Path, files: &[PathBuf]) -> AuditResu
 
 fn assert_cli_marker_files(root: &Path, files: &[PathBuf]) -> AuditResult<()> {
     for marker in ["run_github_evidence_fetch", "run_github_evidence_import"] {
-        assert_marker_files(root, files, marker, &["dispatch.rs"])
+        assert_marker_files(root, files, marker, &["dispatch_internal_run.rs"])
             .map_err(|error| invalid(&format!("CLI {marker} ingress: {error}")))?;
     }
     Ok(())

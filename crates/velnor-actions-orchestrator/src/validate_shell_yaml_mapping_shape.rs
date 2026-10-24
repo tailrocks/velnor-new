@@ -146,10 +146,12 @@ pub(super) fn materialize(
         result.push(Line {
             indent: header.indent,
             content: format!("{key}:"),
+            raw_content: format!("{key}:"),
         });
         result.extend(body.iter().map(|line| Line {
             indent: header.indent + 2 + line.indent,
             content: line.content.clone(),
+            raw_content: line.raw_content.clone(),
         }));
     } else {
         let mut first = true;
@@ -167,6 +169,11 @@ pub(super) fn materialize(
                     format!("- {}", line.content)
                 } else {
                     line.content.clone()
+                },
+                raw_content: if first {
+                    format!("- {}", line.raw_content)
+                } else {
+                    line.raw_content.clone()
                 },
             });
             first = false;

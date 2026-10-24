@@ -16,7 +16,7 @@ fn step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload() {
 fn assert_configured_checkout_prelude(setup: &crate::MiseSetup) {
     let mut checkout = crate::steps::checkout_step(CHECKOUT).expect("checkout");
     checkout.name = "Fetch source".to_owned();
-    let mut rendered_job = job(vec![checkout, mise_shell()]);
+    let mut rendered_job = job(vec![checkout, super::verified_helper_step(), mise_shell()]);
     crate::cache_p08::ensure_tools_cache_v2(
         "fixture",
         &mut rendered_job,
@@ -26,21 +26,24 @@ fn assert_configured_checkout_prelude(setup: &crate::MiseSetup) {
         CHECKOUT,
     )
     .expect("setup and seed");
-    assert_eq!(rendered_job.steps[1].name, "Setup Mise");
-    assert_eq!(rendered_job.steps[1].role, Some(StepRole::MiseSetup));
+    let identity_index = rendered_job
+        .steps
+        .iter()
+        .position(|step| step.role == Some(StepRole::ToolsCacheIdentity))
+        .expect("V2 identity step");
     assert_eq!(
-        rendered_job.steps[2].name,
+        rendered_job.steps[identity_index].name,
         crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME
     );
     assert_eq!(
-        rendered_job.steps[2].role,
+        rendered_job.steps[identity_index].role,
         Some(StepRole::ToolsCacheIdentity)
     );
     assert_eq!(
-        rendered_job.steps[2].id,
+        rendered_job.steps[identity_index].id,
         Some(velnor_actions_contract::StepId::ToolsCacheIdentity)
     );
-    let StepKind::Action { with, .. } = &rendered_job.steps[2].kind else {
+    let StepKind::Action { with, .. } = &rendered_job.steps[identity_index].kind else {
         panic!("V2 identity and seed use the registered prelude composite")
     };
     assert_eq!(
@@ -49,9 +52,16 @@ fn assert_configured_checkout_prelude(setup: &crate::MiseSetup) {
         Some(tools_payload().static_digest())
     );
     assert_eq!(
-        rendered_job.steps[3].name,
+        rendered_job.steps[identity_index + 1].name,
         crate::cache_steps::TOOLS_RESTORE_NAME
     );
+    assert_eq!(rendered_job.steps[1].role, Some(StepRole::AcquireVelnor));
+    let setup_index = rendered_job
+        .steps
+        .iter()
+        .position(|step| step.role == Some(StepRole::MiseSetup))
+        .expect("Mise setup step");
+    assert_eq!(identity_index, setup_index + 1);
     let action = crate::cache_p08::runtime_prelude_action_file(TARGET_RUNS, "0.1.0")
         .expect("prelude action file");
     assert!(action.bytes.contains(&cache_key()));
@@ -63,7 +73,11 @@ fn assert_full_history_checkout_is_seedable(setup: &crate::MiseSetup) {
     if let StepKind::Action { with, .. } = &mut full_history_checkout.kind {
         with.insert("fetch-depth".to_owned(), "0".to_owned());
     }
-    let mut deep_job = job(vec![full_history_checkout, mise_shell()]);
+    let mut deep_job = job(vec![
+        full_history_checkout,
+        super::verified_helper_step(),
+        mise_shell(),
+    ]);
     crate::cache_p08::ensure_tools_cache_v2(
         "full-history-checkout",
         &mut deep_job,
@@ -73,7 +87,12 @@ fn assert_full_history_checkout_is_seedable(setup: &crate::MiseSetup) {
         CHECKOUT,
     )
     .expect("full-history checkout is an eligible seed owner");
-    assert_eq!(deep_job.steps[2].role, Some(StepRole::ToolsCacheIdentity));
+    assert!(
+        deep_job
+            .steps
+            .iter()
+            .any(|step| step.role == Some(StepRole::ToolsCacheIdentity))
+    );
 }
 
 fn assert_display_name_does_not_authorize_seed(setup: &crate::MiseSetup) {
@@ -179,6 +198,7 @@ fn malformed_seed_key_and_preexisting_v2_steps_are_rejected() {
     let setup = setup_config();
     let mut rendered_job = job(vec![
         crate::steps::checkout_step(CHECKOUT).expect("checkout"),
+        super::verified_helper_step(),
         mise_shell(),
     ]);
     crate::cache_p08::ensure_tools_cache_v2(
@@ -229,7 +249,12 @@ fn malformed_seed_key_and_preexisting_v2_steps_are_rejected() {
     );
 
     let mut mismatched_setup = rendered_job;
-    if let StepKind::Action { with, .. } = &mut mismatched_setup.steps[2].kind {
+    let identity_index = mismatched_setup
+        .steps
+        .iter()
+        .position(|step| step.role == Some(StepRole::ToolsCacheIdentity))
+        .expect("V2 identity step");
+    if let StepKind::Action { with, .. } = &mut mismatched_setup.steps[identity_index].kind {
         with.insert("d".to_owned(), "not-a-lowercase-static-digest".to_owned());
     }
     assert!(

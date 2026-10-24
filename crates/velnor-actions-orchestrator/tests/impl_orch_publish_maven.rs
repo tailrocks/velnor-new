@@ -262,7 +262,7 @@ fn a_root_whose_ci_declares_postgres_gets_the_same_service_in_the_bundle_build()
     let publish = section(&yaml, "maven-publish-processor-shared-libs")?;
     assert!(
         !attest.contains("services:") && !publish.contains("services:"),
-        "only the unprivileged build job carries the database"
+        "Only the build job without publication authority may have the database service."
     );
     assert!(attest.contains("attest"), "{attest}");
     Ok(())

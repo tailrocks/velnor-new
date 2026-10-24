@@ -213,9 +213,18 @@ fn credential_allowlists_are_exact() {
         ["MISE_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"]
     );
     assert_eq!(CREDENTIAL_ALLOWLIST_GH_API, ["GITHUB_TOKEN", "GH_TOKEN"]);
-    assert_eq!(EnvPolicy::Verify.allowed_credentials().len(), 0);
-    assert_eq!(EnvPolicy::Discovery.allowed_credentials().len(), 0);
-    assert_eq!(EnvPolicy::RepoTask.allowed_credentials().len(), 0);
+    assert_eq!(
+        EnvPolicy::Verify.allowed_credentials(),
+        &[] as &[&'static str]
+    );
+    assert_eq!(
+        EnvPolicy::Discovery.allowed_credentials(),
+        &[] as &[&'static str]
+    );
+    assert_eq!(
+        EnvPolicy::RepoTask.allowed_credentials(),
+        &[] as &[&'static str]
+    );
     assert!(EnvPolicy::Bootstrap.inherits_parent());
     assert!(EnvPolicy::GhApi.inherits_parent());
     assert!(!EnvPolicy::RepoTask.inherits_parent());

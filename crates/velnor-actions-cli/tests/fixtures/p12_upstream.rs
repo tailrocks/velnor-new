@@ -29,7 +29,7 @@ fn probe_tool_rows() -> Vec<ProbeRow> {
         (
             "https://api.github.com/repos/jdx/mise/releases/latest",
             "mise.json",
-            "{\"tag_name\": \"v2026.10.14\"}",
+            "{\"tag_name\": \"v2026.10.15\"}",
         ),
         (
             "https://static.rust-lang.org/dist/channel-rust-stable.toml",

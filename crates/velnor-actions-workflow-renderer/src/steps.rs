@@ -13,7 +13,7 @@ pub const ATTEST_BUILD_PROVENANCE_USES: &str =
 /// Native scoped App-token action ref; freshness checks compare the approved catalog.
 pub const CREATE_GITHUB_APP_TOKEN_USES: &str =
     "actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510";
-use velnor_actions_contract::{Step, StepKind, StepRole};
+use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 
 use crate::{RenderError, commands, marker};
 
@@ -41,8 +41,10 @@ pub use crate::steps_artifact::{
     matrix_report_upload_step, upload_artifact_step, upload_suite_archive_step,
     upload_suite_artifact_step,
 };
-pub(crate) use crate::steps_internal::split_internal_operation;
 pub use crate::steps_internal::{internal_step, merge_step, plan_step, write_request_step};
+pub(crate) use crate::steps_internal::{
+    is_qualification_cache_operation, split_internal_operation,
+};
 
 /// Env key selecting the staged-binary internal operation.
 pub const INTERNAL_OP_ENV: &str = "VELNOR_INTERNAL_OP";
@@ -60,6 +62,25 @@ pub const FETCH_OPERATION: &str = "fetch-reports-v1";
 pub const WRITE_REQUEST_OPERATION: &str = "write-request-v1";
 /// Resolve exact predecessor receipts for a typed qualification plan.
 pub const RESOLVE_QUALIFICATION_OPERATION: &str = "resolve-qualification-v1";
+/// Install `tar` and `gtar` aliases beside the verified staged CLI.
+pub const CACHE_TAR_LAUNCHER_INSTALL_OPERATION: &str =
+    velnor_actions_contract::workflow::step_identity::CACHE_TAR_LAUNCHER_INSTALL_OPERATION;
+/// Fixed local composite that installs the cache-action tar aliases.
+pub const CACHE_TAR_LAUNCHER_USES: &str =
+    velnor_actions_contract::workflow::step_identity::CACHE_TAR_LAUNCHER_USES;
+/// Composite input carrying the staged helper digest.
+pub const CACHE_TAR_LAUNCHER_SHA256_INPUT: &str =
+    velnor_actions_contract::workflow::step_identity::CACHE_TAR_LAUNCHER_SHA256_INPUT;
+/// Output expression carrying the action-local PATH with verified tar aliases.
+pub const CACHE_TAR_LAUNCHER_PATH_OUTPUT_EXPR: &str =
+    velnor_actions_contract::workflow::step_identity::CACHE_TAR_LAUNCHER_PATH_OUTPUT_EXPR;
+/// Output expression carrying the verified digest from a pre-seed staging step.
+pub const PRESEED_HELPER_SHA256_OUTPUT_EXPR: &str =
+    velnor_actions_contract::workflow::step_identity::PRESEED_HELPER_SHA256_OUTPUT_EXPR;
+/// Env key carrying the versioned staged helper name for cache tar adapters.
+pub const CACHE_TAR_VERSION_ENV: &str = "VELNOR_CACHE_TAR_VERSION";
+/// Env key carrying the verified staged helper digest for cache tar adapters.
+pub const CACHE_TAR_SHA256_ENV: &str = "VELNOR_CACHE_TAR_SHA256";
 /// Required prefix of the digest-verified staged binary path.
 pub const STAGED_BINARY_PREFIX: &str = "$RUNNER_TEMP/velnor/bin/velnor-actions-";
 /// Required prefix of internal request directories (expression form: shell
@@ -200,6 +221,22 @@ pub fn action_step_with_env(
             env,
         },
     })
+}
+
+/// One typed step installing aliases for cache action steps.
+/// # Errors
+pub fn cache_tar_launcher_step(helper_sha256: &str) -> Result<Step, RenderError> {
+    let mut step = action_step(
+        "Install cache tar adapters",
+        CACHE_TAR_LAUNCHER_USES,
+        BTreeMap::from([(
+            CACHE_TAR_LAUNCHER_SHA256_INPUT.to_owned(),
+            helper_sha256.to_owned(),
+        )]),
+    )?;
+    step.id = Some(StepId::CacheTarLaunchers);
+    step.role = Some(StepRole::CacheTarLaunchers);
+    Ok(step)
 }
 
 /// Replace the lint-config header line with the renderer marker.

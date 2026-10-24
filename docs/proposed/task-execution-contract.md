@@ -102,8 +102,8 @@ rustup component add --toolchain <exact>-<triple> clippy rustfmt`):
 the pinned toolchain's own rustup, writing only Velnor-owned tool homes.
 
 For an MBX profile, a Rust-only preflight first verifies the exact selected
-Rustup shim and toolchain. The pinned v1.6 `jdx/mr-boxington-action` then
-installs and owns production MBX at exact version `1.21.1`, with
+Rustup shim and toolchain. The pinned v1.7.2 `jdx/mr-boxington-action` then
+installs and owns production MBX at exact version `1.25.0`, with
 `github-cache-mode: objects`. Velnor keeps the action's default compiler
 identity key and binds cache generation to the action SHA, actual runner environment,
 GitHub job ID,

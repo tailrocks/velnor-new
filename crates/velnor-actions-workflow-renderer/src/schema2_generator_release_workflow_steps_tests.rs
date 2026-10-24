@@ -1,5 +1,5 @@
 use super::{
-    Yaml, command_step, gh_confirmation_function, gh_function, gh_function_with_timeout,
+    Yaml, gh_confirmation_function, gh_function, gh_function_with_timeout, verifier_command_step,
     verify_rust_step,
 };
 use crate::yaml::render_yaml;
@@ -46,7 +46,11 @@ fn inline_fixed_catalog_verifiers_keep_selected_environment_context() -> Result<
     let pins = crate::schema2::product_release_test_pins::test_pins();
     let fixed_verifiers = [
         verify_rust_step(&pins)?,
-        command_step("Verify jactionlint", &pins.verify_lint_argv)?,
+        verifier_command_step(
+            velnor_actions_contract::StepRole::VerifyJactionlint,
+            "Verify jactionlint",
+            &pins.verify_lint_argv,
+        )?,
     ];
     let selected_environment = [
         "HOME",

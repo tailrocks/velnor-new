@@ -8,11 +8,10 @@ mod workflow_build;
 #[path = "workflow_context.rs"]
 mod workflow_context;
 pub(super) use workflow_build::{WorkflowBuildInput, build_workflow_for_consumer_release};
-#[path = "workflow_dispatch.rs"]
-mod workflow_dispatch;
-
 #[path = "verifier_actions.rs"]
 pub(crate) mod verifier_actions;
+#[path = "workflow_dispatch.rs"]
+mod workflow_dispatch;
 
 #[path = "check_jobs.rs"]
 pub(crate) mod check_jobs;
@@ -148,6 +147,11 @@ fn workflow_ir(
             merge_group: true,
             workflow_dispatch: (policy == WorkflowPolicy::VelnorRepositoryV1)
                 .then(workflow_dispatch::qualification_dispatch),
+            workflow_call: config.execution.as_ref().is_some_and(|execution| {
+                execution
+                    .workflows
+                    .contains(&velnor_actions_contract::RoutingWorkflow::Qualification)
+            }),
             schedule: None,
         },
         permissions: Permissions::default(),

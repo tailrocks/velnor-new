@@ -24,6 +24,7 @@ mod image_jobs;
 mod image_task;
 mod images;
 pub mod jactionlint_verifier;
+mod job_authority;
 mod mise;
 mod mise_task_suites;
 pub mod playwright_lock;
@@ -46,6 +47,7 @@ mod rust_inputs;
 mod rust_suites;
 mod rust_suites_validate;
 mod rust_toolchain_source;
+mod schema;
 /// Shared, fixed shell binding for the Setup Mise data directory and binary.
 pub mod selected_mise;
 mod stacks;
@@ -62,12 +64,13 @@ mod workflow_lint;
 mod workflow_task;
 mod workflow_timeouts;
 
+pub(crate) use binary_release::validate_static_release_inventory;
+
 pub use actions::{ActionPinOverride, ActionsConfig, OVERRIDABLE_ACTIONS};
 pub use agents::{AgentsConfig, ClaudeMdMode};
 pub use ansible::{
     ANSIBLE_JOB_PREFIX, AnsibleCheck, AnsibleCollection, AnsibleStackConfig, LintProfile,
 };
-pub(crate) use binary_release::validate_static_release_inventory;
 pub use binary_release::{
     MAX_PUBLICATION_RUNTIME_MINUTES, PUBLICATION_CLEANUP_HEADROOM_MINUTES,
     PUBLICATION_PREPARATION_STEP_DEFAULT_MINUTES, RELEASE_ACQUIRE_STEP_TIMEOUT_MINUTES,
@@ -99,6 +102,7 @@ pub use dockerfile::{DockerfileFacts, DockerfileProblem, analyze_dockerfile, is_
 pub use execution::{
     ExecutionConfig, ExecutionMode, ExecutionOverride, ExecutionParity, ExecutionProfile,
     ExecutionRole, HOSTED_PROFILE_ID, ProfileKind, RoutingWorkflow, SCALE_SET_PROFILE_ID,
+    ValidatedImageReference,
 };
 pub use github::{GithubConfig, UnmanagedPolicy};
 pub use github_evidence_snapshot::{
@@ -115,6 +119,7 @@ pub use images::{
     DEFAULT_IMAGE_TIMEOUT_MINUTES, IMAGE_JOB_PREFIX, IMAGE_REGISTRY_HOST, ImageConfig,
     ImageDockerfile, ImagePlatform, ImagePrebuilt, validate_images,
 };
+pub use job_authority::{JobAuthorityBinding, JobAuthorityRole};
 pub use mise::{
     CheckEvidence, CheckExecutor, CheckPlatform, CheckRunner, CheckSystemTool, CheckSystemToolKind,
     MiseCheck, is_valid_check_system_build, is_valid_check_system_version, is_valid_mise_task_name,
@@ -148,8 +153,8 @@ pub use resources::{
     ResourcesConfig, ShardTimingEvidence, TestShardingConfig, validate_shard_changes_need_evidence,
 };
 pub use runs_on::{
-    LINUX_AMD64, RunsOn, SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL, is_hosted_catalog,
-    is_legacy_hosted_label,
+    LINUX_AMD64, RunnerPlatform, RunsOn, SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL,
+    is_hosted_catalog, is_legacy_hosted_label, runner_platform,
 };
 pub use rust_inputs::RustInputRule;
 pub use rust_suites::{
@@ -237,6 +242,9 @@ pub struct VelnorConfig {
     /// Optional downstream package promotion policy.
     #[serde(default, skip_serializing_if = "DistributionConfig::is_empty")]
     pub distribution: DistributionConfig,
+    /// Reviewed job roles for explicit authority inventory generation.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub job_authority: Vec<JobAuthorityBinding>,
     /// Private cross-repository dependency credentials (`[private_sources]`, HD-7).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub private_sources: Option<PrivateSourcesConfig>,
@@ -311,6 +319,7 @@ impl VelnorConfig {
             }
         }
         self.distribution.validate(file)?;
+        job_authority::validate_job_authority_bindings(&self.job_authority, file)?;
         if let Some(private_sources) = &self.private_sources {
             private_sources.validate(file)?;
         }
@@ -354,34 +363,6 @@ impl VelnorConfig {
             }
         }
         Ok(())
-    }
-
-    /// Schema 1 rejects routing. Schema 2 requires `[execution]`.
-    fn check_schema(&self, file: &str) -> Result<(), ContractError> {
-        match self.schema {
-            1 => {
-                if self.execution.is_some() {
-                    return Err(ContractError::config(
-                        file,
-                        "execution",
-                        "schema1_rejects_execution",
-                    ));
-                }
-                Ok(())
-            }
-            2 => {
-                let execution = self
-                    .execution
-                    .as_ref()
-                    .ok_or_else(|| ContractError::config(file, "execution", "missing_execution"))?;
-                execution.validate(file)
-            }
-            _ => Err(ContractError::UnsupportedSchema {
-                field: "schema",
-                found: self.schema.to_string(),
-                expected: "1 or 2",
-            }),
-        }
     }
 }
 

@@ -2,7 +2,7 @@
 
 use super::ir::WorkflowIr;
 use super::jobs::PLAN_JOB_ID;
-use super::lanes::{Placement, placement_for};
+use super::lanes::{Placement, placement_for, placement_for_source};
 use super::step::StepKind;
 use super::{HOSTED_SUFFIX, SCALE_SUFFIX, lane_class};
 use crate::config::{ExecutionMode, VelnorConfig};
@@ -26,6 +26,9 @@ pub struct NamedCheckLane {
     pub variant: Option<NamedCheckLaneVariant>,
     /// Exact emitted job ID; binds the plan entry to its upload artifact.
     pub job_id: String,
+    /// Exact runner selector emitted for this lane.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runs_on: Option<String>,
 }
 
 /// Typed variant of a duplicated named-check lane.
@@ -57,6 +60,7 @@ pub fn named_check_lanes(
                     vec![NamedCheckLane {
                         variant: None,
                         job_id: id.clone(),
+                        runs_on: Some(job.runs_on.clone()),
                     }],
                 );
             }
@@ -71,25 +75,115 @@ pub fn named_check_lanes(
         if job.check_runner.is_none() {
             continue;
         }
-        let lanes = match placement_for(config, execution, dispatch, lane_class(id), id, job)? {
-            Placement::HostedOnly | Placement::ScaleSetOnly => vec![NamedCheckLane {
-                variant: None,
-                job_id: id.clone(),
-            }],
-            Placement::Both => vec![
-                NamedCheckLane {
-                    variant: Some(NamedCheckLaneVariant::Hosted),
-                    job_id: format!("{id}{HOSTED_SUFFIX}"),
-                },
-                NamedCheckLane {
-                    variant: Some(NamedCheckLaneVariant::ScaleSet),
-                    job_id: format!("{id}{SCALE_SUFFIX}"),
-                },
-            ],
-        };
+        let placement = placement_for(config, execution, dispatch, lane_class(id), id, job)?;
+        let lanes = executor_lanes_for_placement(id, job, placement, execution)?;
         result.insert(id.clone(), lanes);
     }
     Ok(result)
+}
+
+/// Derive lanes for crate jobs selected by a Qualification plan.
+///
+/// `sources` binds each selected job to the identity used by runner overrides.
+/// # Errors
+pub fn qualification_job_lanes(
+    ir: &WorkflowIr,
+    config: &VelnorConfig,
+    dispatch: Option<ExecutionMode>,
+    sources: &BTreeMap<String, String>,
+) -> Result<BTreeMap<String, Vec<NamedCheckLane>>, ContractError> {
+    if config.schema != 2 {
+        return Ok(BTreeMap::new());
+    }
+    let execution = config
+        .execution
+        .as_ref()
+        .ok_or_else(|| ContractError::config("config.toml", "execution", "missing_execution"))?;
+    let mut result = BTreeMap::new();
+    for (id, source_id) in sources {
+        if !is_qualification_crate_job(id) {
+            return Err(ContractError::identity(
+                "workflow.qualification_sources",
+                "unsupported_qualification_job",
+            ));
+        }
+        let job = ir.jobs.get(id).ok_or_else(|| {
+            ContractError::identity(
+                "workflow.qualification_sources",
+                "missing_qualification_job",
+            )
+        })?;
+        if !ir.jobs.contains_key(source_id) {
+            return Err(ContractError::identity(
+                "workflow.qualification_sources",
+                "missing_source_job",
+            ));
+        }
+        let placement = placement_for_source(
+            config,
+            execution,
+            dispatch,
+            lane_class(id),
+            id,
+            source_id,
+            job,
+        )?;
+        let lanes = executor_lanes_for_placement(id, job, placement, execution)?;
+        result.insert(id.clone(), lanes);
+    }
+    for id in ir
+        .jobs
+        .keys()
+        .filter(|id| id.starts_with("tofu-qualification-"))
+    {
+        if !result.contains_key(id) {
+            return Err(ContractError::identity(
+                "workflow.qualification_sources",
+                "missing_source_mapping",
+            ));
+        }
+    }
+    Ok(result)
+}
+
+fn is_qualification_crate_job(id: &str) -> bool {
+    id.starts_with("rust-") || id.starts_with("tofu-")
+}
+
+fn executor_lanes_for_placement(
+    id: &str,
+    job: &super::Job,
+    placement: Placement,
+    execution: &crate::config::ExecutionConfig,
+) -> Result<Vec<NamedCheckLane>, ContractError> {
+    let hosted = || NamedCheckLane {
+        variant: None,
+        job_id: id.to_owned(),
+        runs_on: Some(job.runs_on.clone()),
+    };
+    let scale_set = || -> Result<NamedCheckLane, ContractError> {
+        Ok(NamedCheckLane {
+            variant: None,
+            job_id: id.to_owned(),
+            runs_on: Some(execution.scale_selector()?.token()),
+        })
+    };
+    match placement {
+        Placement::HostedOnly => Ok(vec![hosted()]),
+        Placement::ScaleSetOnly => Ok(vec![scale_set()?]),
+        Placement::Both => Ok(vec![
+            NamedCheckLane {
+                variant: Some(NamedCheckLaneVariant::Hosted),
+                job_id: format!("{id}{HOSTED_SUFFIX}"),
+                runs_on: Some(job.runs_on.clone()),
+            },
+            NamedCheckLane {
+                variant: Some(NamedCheckLaneVariant::ScaleSet),
+                job_id: format!("{id}{SCALE_SUFFIX}"),
+                runs_on: Some(execution.scale_selector()?.token()),
+            },
+        ]),
+    }
 }
 
 pub(super) fn add_named_check_lanes(

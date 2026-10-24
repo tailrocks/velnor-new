@@ -8,7 +8,7 @@
 use std::fs;
 
 use velnor_actions_mise::{JACTIONLINT_VERSION, MR_BOXINGTON_VERSION, RUST_VERSION};
-use velnor_actions_orchestrator::{prepare, render_staged_tree};
+use velnor_actions_orchestrator::{plan_internal, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::RenderedTree;
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
@@ -20,8 +20,12 @@ const MBX_NEXTEST_CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\ndefault
 /// Project config declaring Rust (generation inventory runs it locally,
 /// so it is the generator pin), MBX, and Nextest at non-Velnor versions.
 fn mise_toml(mbx: &str, nextest: &str) -> String {
+    mise_toml_with_rust(RUST_VERSION, mbx, nextest)
+}
+
+fn mise_toml_with_rust(rust: &str, mbx: &str, nextest: &str) -> String {
     format!(
-        "[tools]\nrust = \"{RUST_VERSION}\"\nmr-boxington = \"{mbx}\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"{nextest}\"\n"
+        "[tools]\nrust = \"{rust}\"\nmr-boxington = \"{mbx}\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"{nextest}\"\n"
     )
 }
 
@@ -90,6 +94,84 @@ fn bumping_project_versions_needs_no_regeneration() -> TestResult {
         texts(&after),
         "a mise.toml version bump must not change any generated file"
     );
+    Ok(())
+}
+
+fn plan_and_manifest(
+    rust: &str,
+    mbx: &str,
+) -> Result<(serde_json::Value, serde_json::Value), Box<dyn std::error::Error>> {
+    let repo = make_repo(MBX_NEXTEST_CONFIG)?;
+    let root = repo.path();
+    fs::write(
+        root.join("mise.toml"),
+        mise_toml_with_rust(rust, mbx, "0.9.977"),
+    )?;
+    crate::impl_common::git(&["add", "."], root)?;
+    crate::impl_common::git(&["commit", "-m", "tool identity fixture"], root)?;
+    let head = crate::impl_common::git_line(&["rev-parse", "HEAD"], root)?;
+    let request = serde_json::json!({
+        "schema": 1,
+        "run_key": "local",
+        "base": null,
+        "head": head,
+        "event": "push",
+        "root": root.display().to_string(),
+    });
+    let response: serde_json::Value = serde_json::from_str(&plan_internal(&request.to_string())?)?;
+    let manifest_text = render_staged_tree(&prepare(root)?)?
+        .get(".github/velnor/task-execution-manifest-v1.json")
+        .ok_or("missing task execution manifest")?
+        .to_owned();
+    let (_, manifest_json) = manifest_text
+        .split_once('\n')
+        .ok_or("missing task manifest marker")?;
+    let manifest: serde_json::Value = serde_json::from_str(manifest_json)?;
+    Ok((response["plan"].clone(), manifest))
+}
+
+#[test]
+fn project_tool_bumps_keep_static_manifest_binding_and_change_plan_identity() -> TestResult {
+    let (first_plan, first_manifest) = plan_and_manifest(RUST_VERSION, "1.30.7")?;
+    let (next_plan, next_manifest) = plan_and_manifest(RUST_VERSION, "1.31.0")?;
+    let task_id = "stack/rust/root/nextest/default";
+    let first_obligation = first_plan["obligations"]
+        .as_array()
+        .and_then(|items| items.iter().find(|item| item["task_id"] == task_id))
+        .ok_or_else(|| format!("missing first plan task: {first_plan}"))?;
+    let next_obligation = next_plan["obligations"]
+        .as_array()
+        .and_then(|items| items.iter().find(|item| item["task_id"] == task_id))
+        .ok_or("missing next plan task")?;
+    let first_record = &first_manifest["tasks"][task_id];
+    let next_record = &next_manifest["tasks"][task_id];
+    let matrix_toolchain = |plan: &serde_json::Value| {
+        plan["matrix"]["include"]
+            .as_array()?
+            .iter()
+            .find(|entry| entry["task_id"] == task_id)?
+            .get("toolchain_id")
+            .cloned()
+    };
+
+    assert_eq!(
+        first_record["task_digest"],
+        first_obligation["task_binding_digest"]
+    );
+    assert_eq!(
+        next_record["task_digest"],
+        next_obligation["task_binding_digest"]
+    );
+    assert_eq!(first_record["task_digest"], next_record["task_digest"]);
+    assert_ne!(
+        first_obligation["task_digest"],
+        next_obligation["task_digest"]
+    );
+    assert_ne!(
+        first_obligation["mbx_digest"],
+        next_obligation["mbx_digest"]
+    );
+    assert_ne!(matrix_toolchain(&first_plan), matrix_toolchain(&next_plan));
     Ok(())
 }
 

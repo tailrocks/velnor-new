@@ -9,10 +9,12 @@ use velnor_actions_contract::{Job, PullRequestCachePolicy, Step, StepKind, StepR
 
 use crate::RenderError;
 
+mod winner;
+
 /// Validate both cache families, then append every elected save atomically.
 ///
-/// Exactly one job per key receives a push-gated save. The plan job wins
-/// when it shares the key; otherwise the lowest job ID is deterministic.
+/// One eligible job outside the seed jobs can save each key on a push.
+/// Prefer the Plan job, then a job outside a matrix, then the job with the lowest ID.
 ///
 /// # Errors
 ///
@@ -61,30 +63,15 @@ fn plan_tools_saves(
                 "tools_cache_save_orphan:{id}"
             )));
         }
-        if let Some(identity) = identity {
+        if let Some(identity) = identity
+            && !job.is_dependency_seed()
+        {
             by_identity.entry(identity).or_default().push(id.clone());
         }
     }
     let mut elected = BTreeMap::new();
     for ((key, digest), owners) in &by_identity {
-        let winner = owners
-            .iter()
-            .find(|id| id.as_str() == crate::render::PLAN_JOB_ID)
-            .or_else(|| {
-                owners
-                    .iter()
-                    .filter(|id| {
-                        jobs.get(*id).is_some_and(|job| {
-                            !crate::matrix::suites::has_suite_matrix(job)
-                                && !crate::matrix::bun::has_bun_matrix(job)
-                                && !job.is_dependency_seed()
-                        })
-                    })
-                    .min()
-            })
-            .or_else(|| owners.iter().min())
-            .map(String::as_str)
-            .unwrap_or_default();
+        let winner = winner::choose_tools_cache_writer(owners, jobs)?;
         if elected
             .insert(winner.to_owned(), (key.clone(), digest.clone()))
             .is_some()
@@ -352,6 +339,10 @@ fn tools_restore_identity(id: &str, job: &Job) -> Result<Option<(String, String)
         .map(str::to_owned)
         .map_err(|_| RenderError::InvalidWorkflow(format!("tools_cache_restore_shape:{id}")))?;
     let identity = identities[0];
+    let needs_plan = job
+        .needs
+        .iter()
+        .any(|dependency| dependency == crate::render::PLAN_JOB_ID);
     let StepKind::Action {
         uses,
         with: identity_with,
@@ -363,7 +354,10 @@ fn tools_restore_identity(id: &str, job: &Job) -> Result<Option<(String, String)
         )));
     };
     if identity.id != Some(velnor_actions_contract::StepId::ToolsCacheIdentity)
-        || identity.condition.is_some()
+        || identity.condition.as_deref()
+            != Some(crate::cache_p08::tools_cache_identity_condition(needs_plan))
+        || step.condition.as_deref()
+            != Some(crate::cache_p08::tools_cache_restore_condition(needs_plan))
     {
         return Err(RenderError::InvalidWorkflow(format!(
             "tools_cache_identity_shape:{id}"

@@ -1,8 +1,8 @@
 //! Runner lookup and removal follow the pinned distributed-task API.
 
 use velnor_runner_github::{
-    Certainty, Method, RunnerReference, SessionError, TransportFail, WireError, get_runner_by_name,
-    remove_runner,
+    Certainty, Method, RunnerObservationOperation, RunnerReference, SessionError, TransportFail,
+    WireError, get_runner_by_name, observe_runner_by_name, remove_runner,
 };
 
 mod common;
@@ -79,6 +79,101 @@ fn only_an_exact_single_result_is_returned() {
             error(&get_runner_by_name(&mut malformed, "runner-31", ADMIN)),
             Ok(SessionError::Wire(WireError::Malformed))
         );
+    }
+}
+
+#[test]
+fn observe_runner_by_name_returns_scoped_observation_without_authorizing_actions()
+-> Result<(), String> {
+    let mut script = Script::once(
+        200,
+        r#"{"count":1,"value":[{"id":31,"name":"runner a/+","runnerScaleSetId":88}]}"#,
+    );
+    let (runner, receipt) = observe_runner_by_name(&mut script, "runner a/+", ADMIN)
+        .map_err(|failure| format!("{failure:?}"))?;
+
+    assert_eq!(
+        runner,
+        Some(RunnerReference {
+            id: 31,
+            name: "runner a/+".to_owned(),
+            runner_scale_set_id: 88,
+        })
+    );
+    assert_eq!(
+        receipt.operation(),
+        RunnerObservationOperation::LookupByName
+    );
+    assert_eq!(receipt.status(), Some(200));
+    assert!(receipt.status_verified());
+    assert_eq!(receipt.count(), Some(1));
+    assert_eq!(receipt.value_count(), Some(1));
+    assert!(receipt.observed_at_unix_ms() > 0);
+    assert_eq!(receipt.request_sha256().len(), 64);
+    assert_eq!(receipt.response_sha256().map(str::len), Some(64));
+    assert!(!format!("{receipt:?}").contains(ADMIN));
+
+    let request = script.seen.first().ok_or("request")?;
+    assert_eq!(request.method, Method::Get);
+    assert_eq!(request.path, "_apis/distributedtask/pools/0/agents");
+    assert_eq!(
+        request.query.as_deref(),
+        Some("agentName=runner+a%2F%2B&api-version=6.0-preview")
+    );
+    assert_eq!(script.seen.len(), 1);
+    Ok(())
+}
+
+#[test]
+fn observation_receipt_excludes_credentials_and_raw_response_body() -> Result<(), String> {
+    let body = r#"{"count":0,"value":[],"unexpectedCredential":"response-secret"}"#;
+    let mut first = Script::once(200, body);
+    let (first_runner, first_receipt) =
+        observe_runner_by_name(&mut first, "runner-31", "token-one")
+            .map_err(|failure| format!("{failure:?}"))?;
+    let mut second = Script::once(200, body);
+    let (second_runner, second_receipt) =
+        observe_runner_by_name(&mut second, "runner-31", "token-two")
+            .map_err(|failure| format!("{failure:?}"))?;
+
+    assert_eq!(first_runner, None);
+    assert_eq!(second_runner, None);
+    assert_eq!(first_receipt.count(), Some(0));
+    assert_eq!(first_receipt.value_count(), Some(0));
+    assert_eq!(
+        first_receipt.request_sha256(),
+        second_receipt.request_sha256()
+    );
+    assert_eq!(
+        first_receipt.response_sha256(),
+        second_receipt.response_sha256()
+    );
+    for (receipt, secret) in [
+        (&first_receipt, "token-one"),
+        (&second_receipt, "token-two"),
+    ] {
+        let debug = format!("{receipt:?}");
+        assert!(!debug.contains(secret));
+        assert!(!debug.contains("response-secret"));
+    }
+    assert_eq!(first.seen.len(), 1);
+    assert_eq!(second.seen.len(), 1);
+    Ok(())
+}
+
+#[test]
+fn observation_rejects_http_errors_without_followup_requests() {
+    for (status, expected) in [
+        (403, SessionError::Wire(WireError::Forbidden)),
+        (404, SessionError::Wire(WireError::UnexpectedStatus)),
+    ] {
+        let mut script = Script::once(status, "ignored");
+        assert_eq!(
+            observe_runner_by_name(&mut script, "runner-31", ADMIN),
+            Err(expected)
+        );
+        assert_eq!(script.seen.len(), 1);
+        assert_eq!(script.seen[0].method, Method::Get);
     }
 }
 

@@ -35,7 +35,8 @@ pub const TOFU_DATA_BASE_EXPR: &str = "${{ runner.temp }}/velnor/tofu-data";
 ///
 /// Shell spelling `$RUNNER_TEMP/velnor/tofu-cache/<slug>`; per-root
 /// slugs hang under this base, one job-private dir per root.
-pub const TOFU_PROVIDER_CACHE_BASE_EXPR: &str = "${{ runner.temp }}/velnor/tofu-cache";
+pub const TOFU_PROVIDER_CACHE_BASE_EXPR: &str =
+    velnor_actions_contract::workflow::cache_family::TOFU_PROVIDER_CACHE_BASE_EXPR;
 /// MBX objects are action-managed, never a filesystem archive path.
 pub const MBX_OBJECTS_OWNER: &str = "mr-boxington-action/objects";
 /// Mise task artifacts dir (task-result layer).

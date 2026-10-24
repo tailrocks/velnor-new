@@ -5,11 +5,17 @@ use velnor_actions_contract::config::RustBinaryReleaseConfig;
 use velnor_actions_contract::package_release::PackageReleaseChannel;
 use velnor_actions_mise::GitRequest;
 use velnor_actions_workflow_renderer::{
-    RenderedFile,
-    schema2::{ConsumerStableReleaseSpec, render_consumer_binary_release},
+    RenderedFile, WorkflowRoutingPolicy,
+    schema2::{
+        ConsumerStableReleaseSpec, render_consumer_binary_release, render_release_tap_reconcile,
+    },
 };
 
-pub(crate) fn files(prep: &GenerationPreparation) -> Result<Vec<RenderedFile>, OrchestratorError> {
+/// Render the generated stable binary release workflow when enabled.
+pub(crate) fn files(
+    prep: &GenerationPreparation,
+    routing: &WorkflowRoutingPolicy,
+) -> Result<Vec<RenderedFile>, OrchestratorError> {
     let Some(rust) = &prep.config.stacks.rust else {
         return Ok(Vec::new());
     };
@@ -25,9 +31,9 @@ pub(crate) fn files(prep: &GenerationPreparation) -> Result<Vec<RenderedFile>, O
         manifest_path: release.manifest_path.clone(),
         release_plz_argv: crate::stable_release_emit::release_plz_argv(prep)?,
     });
-    let mut files = vec![render_consumer_binary_release(&spec)?];
+    let mut files = vec![render_consumer_binary_release(&spec, routing)?];
     if spec.homebrew_tap.is_some() {
-        files.push(velnor_actions_workflow_renderer::schema2::render_release_tap_reconcile(&spec)?);
+        files.push(render_release_tap_reconcile(&spec, routing)?);
     }
     Ok(files)
 }

@@ -3,7 +3,7 @@
 use bollard::{
     Docker,
     errors::Error as DockerError,
-    models::{ContainerInspectResponse, ContainerStateStatusEnum},
+    models::{ContainerInspectResponse, ContainerStateStatusEnum, HostConfigCgroupnsModeEnum},
 };
 
 use crate::error::HostError;
@@ -39,10 +39,25 @@ pub(super) fn matches(
         && response.image.as_deref() == Some(projection.image.runtime_id())
         && response.restart_count == Some(0)
         && response.path.as_deref() == Some("/velnor/resource-probe")
-        && response.args.as_ref().is_none_or(Vec::is_empty)
+        && response
+            .args
+            .as_deref()
+            .is_none_or(|args| args == expected_arguments(projection.purpose))
         && config_matches(projection, response, container_id)
         && host_matches(projection, response)
         && mounts_match(projection, response)
+}
+
+fn expected_arguments(purpose: crate::journal::ResourceProbePurpose) -> Vec<String> {
+    match purpose {
+        crate::journal::ResourceProbePurpose::Capacity => Vec::new(),
+        crate::journal::ResourceProbePurpose::OwnedCgroups => {
+            vec!["--mode".to_owned(), "owned_container_cgroup".to_owned()]
+        }
+        crate::journal::ResourceProbePurpose::CleanupObserver => {
+            vec!["--mode".to_owned(), "cleanup_observer".to_owned()]
+        }
+    }
 }
 
 pub(super) fn exited_successfully(response: &ContainerInspectResponse) -> bool {
@@ -66,6 +81,14 @@ pub(super) fn running(response: &ContainerInspectResponse) -> bool {
             )
         )
     })
+}
+
+pub(super) fn running_host_pid(response: &ContainerInspectResponse) -> Option<u32> {
+    let state = response.state.as_ref()?;
+    if state.status != Some(ContainerStateStatusEnum::RUNNING) || state.running != Some(true) {
+        return None;
+    }
+    u32::try_from(state.pid?).ok().filter(|pid| *pid > 0)
 }
 
 pub(super) fn created(response: &ContainerInspectResponse) -> bool {
@@ -147,10 +170,30 @@ fn host_matches(projection: &ProbeProjection, response: &ContainerInspectRespons
     let Some(actual) = response.host_config.as_ref() else {
         return false;
     };
+    let (cpu_period, cpu_quota, memory, memory_swap, pids_limit) =
+        super::projection::resource_limits();
     actual.auto_remove == Some(false)
         && actual.privileged == Some(false)
         && actual.readonly_rootfs == Some(true)
+        && actual.cpu_period == Some(cpu_period)
+        && actual.cpu_quota == Some(cpu_quota)
+        && actual.memory == Some(memory)
+        && actual.memory_swap == Some(memory_swap)
+        && actual.pids_limit == Some(pids_limit)
+        && no_resource_limit(actual.cpu_shares)
+        && no_resource_limit(actual.cpu_realtime_period)
+        && no_resource_limit(actual.cpu_realtime_runtime)
+        && actual.cpuset_cpus.as_deref().is_none_or(str::is_empty)
+        && actual.cpuset_mems.as_deref().is_none_or(str::is_empty)
+        && no_resource_limit(actual.memory_reservation)
+        && no_resource_limit(actual.memory_swappiness)
+        && no_resource_limit(actual.nano_cpus)
+        && actual.oom_kill_disable.is_none_or(|disabled| !disabled)
+        && no_resource_limit(actual.cpu_count)
+        && no_resource_limit(actual.cpu_percent)
         && actual.network_mode.as_deref() == Some("none")
+        && actual.cgroupns_mode == Some(HostConfigCgroupnsModeEnum::HOST)
+        && actual.pid_mode.as_deref() == Some("host")
         && actual.cap_drop.as_deref() == Some(["ALL".to_owned()].as_slice())
         && actual.cap_add.as_ref().is_none_or(Vec::is_empty)
         && actual.security_opt.as_deref() == Some(["no-new-privileges:true".to_owned()].as_slice())
@@ -172,23 +215,53 @@ fn host_matches(projection: &ProbeProjection, response: &ContainerInspectRespons
             }) && policy.maximum_retry_count.is_none_or(|count| count == 0)
         })
         && actual.mounts.as_ref().is_some_and(|mounts| {
-            mounts.len() == 1
-                && mounts[0].source.as_deref() == Some(projection.root.path())
-                && mounts[0].target.as_deref() == Some("/velnor/docker-root")
-                && mounts[0]
-                    .typ
-                    .as_ref()
-                    .is_some_and(|kind| kind.to_string() == "bind")
-                && mounts[0].read_only == Some(true)
+            mounts.len() == 2
+                && mounts.iter().any(|mount| {
+                    expected_bind(mount, projection.root.path(), "/velnor/docker-root")
+                })
+                && mounts.iter().any(|mount| {
+                    expected_bind(
+                        mount,
+                        super::projection::CGROUP_TARGET,
+                        super::projection::CGROUP_TARGET,
+                    )
+                })
         })
+}
+
+fn expected_bind(mount: &bollard::models::Mount, source: &str, target: &str) -> bool {
+    mount.source.as_deref() == Some(source)
+        && mount.target.as_deref() == Some(target)
+        && mount
+            .typ
+            .as_ref()
+            .is_some_and(|kind| kind.to_string() == "bind")
+        && mount.read_only == Some(true)
+}
+
+fn no_resource_limit(value: Option<i64>) -> bool {
+    value.is_none_or(|value| value == 0)
 }
 
 fn mounts_match(projection: &ProbeProjection, response: &ContainerInspectResponse) -> bool {
     response.mounts.as_ref().is_some_and(|mounts| {
-        mounts.len() == 1
-            && mounts[0].source.as_deref() == Some(projection.root.path())
-            && mounts[0].destination.as_deref() == Some("/velnor/docker-root")
-            && mounts[0].typ.as_deref() == Some("bind")
-            && mounts[0].rw == Some(false)
+        mounts.len() == 2
+            && mounts
+                .iter()
+                .any(|mount| expected_mount(mount, projection.root.path(), "/velnor/docker-root"))
+            && mounts.iter().any(|mount| {
+                expected_mount(
+                    mount,
+                    super::projection::CGROUP_TARGET,
+                    super::projection::CGROUP_TARGET,
+                )
+            })
     })
+}
+
+fn expected_mount(mount: &bollard::models::MountPoint, source: &str, target: &str) -> bool {
+    mount.source.as_deref() == Some(source)
+        && mount.destination.as_deref() == Some(target)
+        && mount.typ.as_deref() == Some("bind")
+        && mount.rw == Some(false)
 }

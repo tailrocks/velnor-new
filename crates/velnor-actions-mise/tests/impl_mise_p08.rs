@@ -40,6 +40,20 @@ fn c1_inventory_lists_every_runtime_path_with_one_owner() {
 }
 
 #[test]
+fn tofu_provider_cache_base_matches_the_contract_path() {
+    let expected = "${{ runner.temp }}/velnor/tofu-cache";
+    let contract = velnor_actions_contract::workflow::step_identity::TOFU_PROVIDER_CACHE_BASE_EXPR;
+    assert_eq!(paths::TOFU_PROVIDER_CACHE_BASE_EXPR, expected);
+    assert_eq!(paths::TOFU_PROVIDER_CACHE_BASE_EXPR, contract);
+    let inventory_path = paths::inventory()
+        .into_iter()
+        .find(|entry| entry.id == "tofu-provider-cache")
+        .map(|entry| entry.path)
+        .expect("ToFu provider cache inventory entry");
+    assert_eq!(inventory_path, expected);
+}
+
+#[test]
 fn c1_dangling_symlink_never_counts_as_warm() {
     assert!(paths::is_warm_toolchain(true, true, Some(true)));
     assert!(!paths::is_warm_toolchain(true, true, Some(false)));

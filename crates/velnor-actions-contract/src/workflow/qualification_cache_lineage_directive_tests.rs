@@ -1,11 +1,18 @@
 use super::*;
 
+#[path = "qualification_cache_lineage_runtime_tests.rs"]
+mod runtime_identity_tests;
+
+use crate::cachekey::ToolchainInputs;
 use crate::ids::{plan_id_for_run, run_key_for_ci};
 use crate::workflow::{
     EntryCacheIds, ExecuteTaskIds, MatrixEntry, ObligationDecision, Plan, PlanGenerator,
     PlanMatrix, PlanObligation, PlanPackage, PlanRunner, PlannedPlatform, QualificationDispatch,
-    QualificationPhase, QualificationRuntimeIdentity, QualificationRuntimeIdentityRequirements,
-    QualificationRuntimePlatform, WorkflowEvent,
+    QualificationDispatchMode, QualificationPhase, QualificationRuntimeAbiObservation,
+    QualificationRuntimeIdentity, QualificationRuntimeIdentityRequirements,
+    QualificationRuntimeImageDigests, QualificationRuntimeImageIdentity,
+    QualificationRuntimePlatform, QualificationRuntimeScaleSet,
+    QualificationRuntimeToolObservation, TaskBindingDigest, WorkflowEvent,
 };
 use crate::{RunnerSelection, Trust, digest_b3};
 
@@ -13,6 +20,20 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
 fn serialized_disabled_layers_cannot_authorize_cache_access() -> TestResult {
+    let active_plan = qualification_plan(QualificationPhase::Cold, 701, &"a".repeat(40), None)?;
+    let active_entry = &active_plan.matrix.include[0];
+    let active_directive = QualificationCacheDirective::for_plan(&active_plan, None)?
+        .ok_or_else(|| std::io::Error::other("The active qualification directive is missing."))?;
+    let active_layer = active_directive
+        .layer(
+            &active_entry.matrix_key,
+            QualificationCacheLayer::CargoSources,
+        )
+        .ok_or_else(|| std::io::Error::other("The active Cargo directive is missing."))?;
+    let evidence =
+        runtime_identity(active_layer.runtime.as_ref().ok_or_else(|| {
+            std::io::Error::other("The active runtime requirements are missing.")
+        })?);
     for (phase, layer) in [
         (
             QualificationPhase::Control,
@@ -35,9 +56,8 @@ fn serialized_disabled_layers_cannot_authorize_cache_access() -> TestResult {
             .layer(&entry.matrix_key, layer)
             .ok_or_else(|| std::io::Error::other("layer directive missing"))?;
         assert!(!layer_directive.active);
-        let evidence = runtime_identity(&layer_directive.runtime);
         let mut serialized = serde_json::to_value(&directive)?;
-        let layers = serialized["lanes"][0]["layers"]
+        let layers = serialized["owners"][0]["layers"]
             .as_array_mut()
             .ok_or_else(|| std::io::Error::other("layers are not an array"))?;
         let forged = layers
@@ -52,7 +72,7 @@ fn serialized_disabled_layers_cannot_authorize_cache_access() -> TestResult {
         let forged: QualificationCacheDirective = serde_json::from_value(serialized)?;
         assert!(
             forged
-                .bind_runtime(&plan, None, &entry.matrix_key, layer, &evidence)
+                .bind_runtime_owner(&plan, None, &entry.job_id, layer, &evidence)
                 .is_err(),
             "{phase:?} forged {layer:?} directive must fail plan reconstruction"
         );
@@ -70,15 +90,53 @@ fn plan_reconstructed_cold_directive_binds_runtime_identity() -> TestResult {
     let layer_directive = directive
         .layer(&entry.matrix_key, QualificationCacheLayer::CargoSources)
         .ok_or_else(|| std::io::Error::other("layer directive missing"))?;
-    let keys = directive.bind_runtime(
+    let keys = directive.bind_runtime_owner(
         &plan,
         None,
-        &entry.matrix_key,
+        &entry.job_id,
         QualificationCacheLayer::CargoSources,
-        &runtime_identity(&layer_directive.runtime),
+        &runtime_identity(
+            layer_directive
+                .runtime
+                .as_ref()
+                .ok_or_else(|| std::io::Error::other("The runtime requirements are missing."))?,
+        ),
     )?;
     assert!(keys.restore.is_some());
     assert!(keys.save_key.is_some());
+    Ok(())
+}
+
+#[test]
+fn serialized_owner_with_missing_member_cannot_bind_runtime_identity() -> TestResult {
+    let plan = qualification_plan(QualificationPhase::Cold, 702, &"a".repeat(40), None)?;
+    let entry = &plan.matrix.include[0];
+    let directive = QualificationCacheDirective::for_plan(&plan, None)?
+        .ok_or_else(|| std::io::Error::other("qualification directive missing"))?;
+    let layer = directive
+        .owner_layer(&entry.job_id, QualificationCacheLayer::CargoSources)
+        .ok_or_else(|| std::io::Error::other("owner layer directive missing"))?;
+    let evidence = runtime_identity(
+        layer
+            .runtime
+            .as_ref()
+            .ok_or_else(|| std::io::Error::other("runtime requirements missing"))?,
+    );
+
+    let mut serialized = serde_json::to_value(&directive)?;
+    serialized["owners"][0]["members"] = serde_json::json!([]);
+    let forged: QualificationCacheDirective = serde_json::from_value(serialized)?;
+    assert!(
+        forged
+            .bind_runtime_owner(
+                &plan,
+                None,
+                &entry.job_id,
+                QualificationCacheLayer::CargoSources,
+                &evidence,
+            )
+            .is_err()
+    );
     Ok(())
 }
 
@@ -125,8 +183,13 @@ pub(super) fn qualification_plan(
             decision: ObligationDecision::Execute,
             reason: "qualification_full".to_owned(),
             task_digest: task_digest.clone(),
+            task_binding_digest: TaskBindingDigest::new(task_digest.clone())
+                .expect("binding digest"),
             input_digest,
             closure_digest: digest_b3(b"closure"),
+            graph_digest: digest_b3(b"graph"),
+            mbx_digest: digest_b3(b"mbx"),
+            profile: "default".to_owned(),
             job_id: entry.job_id.clone(),
         }],
         jobs: vec![crate::workflow::PlanJob {
@@ -165,13 +228,16 @@ fn qualification_entry(
         "rust-demo",
         planned_platform.clone(),
     )?;
+    let toolchain_inputs = test_toolchain_inputs();
     entry.cache_ids = Some(EntryCacheIds::new(
         &digest_b3(b"workspace"),
         &digest_b3(b"lane"),
         planned_platform.platform_id.as_str(),
-        &digest_b3(b"toolchain"),
+        &crate::cachekey::toolchain_id(&toolchain_inputs)?,
         &digest_b3(b"cache format"),
     )?);
+    entry.toolchain_id = Some(crate::cachekey::toolchain_id(&toolchain_inputs)?);
+    entry.toolchain_inputs = Some(toolchain_inputs);
     Ok(entry)
 }
 
@@ -182,6 +248,7 @@ fn qualification_context(
     predecessor: Option<crate::workflow::QualificationRunRef>,
 ) -> QualificationDispatch {
     QualificationDispatch {
+        mode: QualificationDispatchMode::Controlled,
         campaign: "directive-boundary".to_owned(),
         phase,
         repository: "tailrocks/velnor-new".to_owned(),
@@ -194,23 +261,99 @@ fn qualification_context(
         run_id,
         run_attempt: 1,
         predecessor,
+        scale_set_image_source_sha: None,
     }
 }
 
 pub(super) fn runtime_identity(
     requirements: &QualificationRuntimeIdentityRequirements,
 ) -> QualificationRuntimeIdentity {
+    let tools = requirements
+        .toolchain_inputs
+        .tools
+        .iter()
+        .map(|selector| {
+            let (_, version) = selector.rsplit_once('@').expect("pinned tool selector");
+            QualificationRuntimeToolObservation {
+                selector: selector.clone(),
+                reported_version: version.to_owned(),
+                executable_sha256: "a".repeat(64),
+            }
+        })
+        .collect();
+    let mut abi = vec![QualificationRuntimeAbiObservation::Host {
+        os: "Linux".to_owned(),
+        arch: "x86_64".to_owned(),
+        kernel: "6.12.0".to_owned(),
+        libc: Some("glibc 2.39".to_owned()),
+    }];
+    if let Some(version) = requirements
+        .toolchain_inputs
+        .tools
+        .iter()
+        .find_map(|selector| selector.strip_prefix("rust@"))
+    {
+        abi.push(QualificationRuntimeAbiObservation::Rust {
+            host: "x86_64-unknown-linux-gnu".to_owned(),
+            target: requirements.target.clone(),
+            version_verbose: format!(
+                "rustc {version} (test build)\nhost: x86_64-unknown-linux-gnu\nrelease: {version}"
+            ),
+            target_cfg: "target_arch=\"x86_64\"\ntarget_os=\"linux\"".to_owned(),
+            installed_components: requirements
+                .toolchain_inputs
+                .components
+                .iter()
+                .filter(|component| matches!(component.as_str(), "clippy" | "rustfmt"))
+                .cloned()
+                .collect(),
+        });
+    }
+    for selector in &requirements.toolchain_inputs.tools {
+        let Some((name, version)) = selector.rsplit_once('@') else {
+            continue;
+        };
+        if name == "java" || name.ends_with("/java") {
+            abi.push(QualificationRuntimeAbiObservation::Java {
+                version_output: format!("openjdk version \"{version}\""),
+                arch: "amd64".to_owned(),
+            });
+        } else if matches!(name, "node" | "nodejs" | "bun") {
+            abi.push(QualificationRuntimeAbiObservation::Node {
+                version_output: format!("v{version}"),
+                module_abi: "127".to_owned(),
+                napi: "10".to_owned(),
+                platform: "linux".to_owned(),
+                arch: "x64".to_owned(),
+            });
+        } else if name == "opentofu" {
+            abi.push(QualificationRuntimeAbiObservation::OpenTofu {
+                version_output: format!("OpenTofu v{version}"),
+                platform: "linux_amd64".to_owned(),
+            });
+        }
+    }
     QualificationRuntimeIdentity {
         platform: QualificationRuntimePlatform {
-            os: "linux".to_owned(),
-            arch: "x86_64".to_owned(),
-            runs_on: requirements.runner_label.clone(),
-            image_os: "ubuntu".to_owned(),
+            os: "Linux".to_owned(),
+            arch: "X64".to_owned(),
+            runner_label: requirements.runner_label.clone(),
+            runs_on: requirements.runs_on.clone(),
+            image_identity: QualificationRuntimeImageIdentity::Hosted {
+                image_os: "ubuntu".to_owned(),
+            },
             target: requirements.target.clone(),
         },
-        toolchain_id: requirements.toolchain_id.clone(),
-        cache_format_id: requirements.cache_format_id.clone(),
-        abi_id: digest_b3(b"abi"),
-        driver_id: requirements.driver_id.clone(),
+        tools,
+        abi,
+    }
+}
+
+fn test_toolchain_inputs() -> ToolchainInputs {
+    ToolchainInputs {
+        tools: vec!["rust@1.98.1".to_owned()],
+        components: vec!["clippy".to_owned(), "rustfmt".to_owned()],
+        compile_driver: "cargo".to_owned(),
+        test_runner: "cargo_test".to_owned(),
     }
 }

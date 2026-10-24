@@ -3,39 +3,46 @@
 use std::fmt::{Display, Formatter};
 
 use serde::de::Error as DeError;
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::error::HostError;
 use crate::worker::{ResourceBudget, ResourceBudgetConfig};
 
-/// Top-level controller file. Schema 1. Unknown fields fail.
+mod connection;
+mod job_authority;
+mod release_read;
+mod source_policy;
+
+pub use connection::{ConnectionId, RepositoryConnection, ScaleSetSelector};
+pub(crate) use job_authority::{
+    ApprovedJobAuthorityEntry, ApprovedJobAuthorityPolicy, ApprovedWorkflowSource,
+    JobAuthorityLookup, JobAuthorityRole,
+};
+use release_read::{ReleaseReadConfig, validate_release_read};
+pub use source_policy::{PullRequestRule, SourcePolicy, SourcePolicyMode, WorkflowEvent};
+
+/// Top-level controller file. Schema 2 has one shared host budget.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct HostConfig {
-    /// Must be 1.
+    /// Must be 2.
     pub schema: u32,
-    /// Repository binding.
-    pub github: GithubSection,
+    /// Repository bindings that share this host.
+    connections: Vec<RepositoryConnection>,
+    /// Optional reviewed workflow authority. Absence denies job authority lookup.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    job_authority_policies: Vec<ApprovedJobAuthorityPolicy>,
+    /// Optional host-level credential for verified release artifacts.
+    #[serde(default)]
+    release_read: Option<ReleaseReadConfig>,
     /// Capacity.
     pub host: HostLimits,
     /// Selected Docker context.
     pub docker: DockerConfig,
 }
 
-/// GitHub binding. Credentials are a Keychain reference, never a token.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct GithubSection {
-    /// `owner/name`.
-    pub repository: String,
-    /// Scale set name.
-    pub scale_set_name: String,
-    /// Keychain service and account used by every host credential operation.
-    pub credential_ref: KeychainReference,
-}
-
 /// A parsed `keychain:<service>/<account>` reference.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct KeychainReference {
     service: String,
     account: String,
@@ -85,6 +92,15 @@ impl Display for KeychainReference {
     }
 }
 
+impl Serialize for KeychainReference {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
 impl<'de> Deserialize<'de> for KeychainReference {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -98,11 +114,11 @@ impl<'de> Deserialize<'de> for KeychainReference {
 fn valid_keychain_component(value: &str) -> bool {
     !value.is_empty()
         && !value.chars().any(|character| {
-            character.is_whitespace() || character.is_control() || character == '/'
+            character.is_whitespace() || character.is_control() || matches!(character, '/' | '\\')
         })
 }
 
-/// Host limits.
+/// Shared host limits.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct HostLimits {
@@ -114,7 +130,7 @@ pub struct HostLimits {
 }
 
 /// Docker binding.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct DockerConfig {
     /// Context name. Not a provider switch.
@@ -136,19 +152,35 @@ impl HostConfig {
     ///
     /// Returns [`HostError::Config`] for schema, secret fields, or endpoints.
     pub fn parse(text: &str) -> Result<Self, HostError> {
-        let config: Self = toml::from_str(text).map_err(|_| HostError::Config)?;
+        let mut config: Self = toml::from_str(text).map_err(|_| HostError::Config)?;
+        for connection in &mut config.connections {
+            connection.canonicalize()?;
+        }
+        for policy in &mut config.job_authority_policies {
+            policy.canonicalize();
+        }
+        config
+            .job_authority_policies
+            .sort_by(|left, right| left.connection_id().cmp(right.connection_id()));
         config.validate()?;
         Ok(config)
     }
 
-    fn validate(&self) -> Result<(), HostError> {
-        if self.schema != 1 || self.host.max_jobs == 0 {
+    pub(crate) fn validate(&self) -> Result<(), HostError> {
+        if self.schema != 2 || self.host.max_jobs == 0 {
             return Err(HostError::Config);
         }
         self.resource_budget()?
             .pair()
             .docker_limits(self.host.max_jobs)?;
-        validate_github(&self.github)?;
+        validate_connections(&self.connections)?;
+        job_authority::validate_policies(&self.job_authority_policies, &self.connections)?;
+        validate_release_read(
+            self.release_read.as_ref(),
+            self.connections
+                .iter()
+                .map(|connection| &connection.credential_ref),
+        )?;
         validate_docker(&self.docker)
     }
 
@@ -160,24 +192,146 @@ impl HostConfig {
     pub fn resource_budget(&self) -> Result<ResourceBudget, HostError> {
         self.host.resources.validate()
     }
-}
 
-fn validate_github(github: &GithubSection) -> Result<(), HostError> {
-    if repository_ok(&github.repository) && github.scale_set_name == "ubuntu-26.04-scale-set" {
-        Ok(())
-    } else {
-        Err(HostError::Config)
+    /// All repository connections that share this host.
+    #[must_use]
+    pub fn connections(&self) -> &[RepositoryConnection] {
+        &self.connections
     }
-}
 
-fn repository_ok(repository: &str) -> bool {
-    let mut parts = repository.split('/');
-    match (parts.next(), parts.next(), parts.next()) {
-        (Some(owner), Some(name), None) => {
-            !owner.is_empty() && !name.is_empty() && !repository.contains(' ')
+    /// Host-level Keychain reference for release metadata and attestations.
+    #[must_use]
+    pub fn release_read_credential_ref(&self) -> Option<&KeychainReference> {
+        self.release_read
+            .as_ref()
+            .map(ReleaseReadConfig::credential_ref)
+    }
+
+    /// Set the separate host-level release-reader Keychain reference.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Config`] if it reuses a repository credential.
+    pub fn set_release_read_credential_ref(
+        &mut self,
+        credential_ref: KeychainReference,
+    ) -> Result<(), HostError> {
+        let previous = self.release_read.clone();
+        self.release_read = Some(ReleaseReadConfig::new(credential_ref));
+        if let Err(error) = self.validate() {
+            self.release_read = previous;
+            return Err(error);
         }
-        _ => false,
+        Ok(())
     }
+
+    /// Shared host job limit.
+    #[must_use]
+    pub(crate) const fn max_jobs(&self) -> u32 {
+        self.host.max_jobs
+    }
+
+    /// Selected Docker endpoint and platform.
+    #[must_use]
+    pub(crate) const fn docker(&self) -> &DockerConfig {
+        &self.docker
+    }
+
+    /// Find one connection by its stable ID.
+    #[must_use]
+    pub fn connection(&self, id: &ConnectionId) -> Option<&RepositoryConnection> {
+        self.connections
+            .iter()
+            .find(|connection| &connection.connection_id == id)
+    }
+
+    /// Return one policy from a fully validated host configuration.
+    pub(crate) fn validated_job_authority_policy(
+        &self,
+        id: &ConnectionId,
+    ) -> Result<Option<&ApprovedJobAuthorityPolicy>, HostError> {
+        self.validate()?;
+        Ok(self
+            .job_authority_policies
+            .iter()
+            .find(|policy| policy.connection_id() == id))
+    }
+
+    /// Add one connection without changing an existing binding.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Config`] when any host or connection rule fails.
+    pub fn add_connection(
+        &mut self,
+        mut connection: RepositoryConnection,
+    ) -> Result<(), HostError> {
+        self.validate()?;
+        connection.canonicalize()?;
+        let previous_len = self.connections.len();
+        self.connections.push(connection);
+        if let Err(error) = self.validate() {
+            self.connections.truncate(previous_len);
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    /// Serialize the complete, validated host configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Config`] when a config rule fails.
+    pub fn to_toml(&self) -> Result<String, HostError> {
+        self.validate()?;
+        let document = HostToml {
+            schema: self.schema,
+            connections: &self.connections,
+            job_authority_policies: &self.job_authority_policies,
+            release_read: self.release_read.as_ref(),
+            host: HostTomlLimits {
+                max_jobs: self.host.max_jobs,
+                resources: HostTomlResources {
+                    runner_cpu_millicores: self.host.resources.runner_cpu_millicores,
+                    runner_memory_bytes: self.host.resources.runner_memory_bytes,
+                    dind_cpu_millicores: self.host.resources.dind_cpu_millicores,
+                    dind_memory_bytes: self.host.resources.dind_memory_bytes,
+                    operational_memory_reserve_bytes: self
+                        .host
+                        .resources
+                        .operational_memory_reserve_bytes,
+                },
+            },
+            docker: &self.docker,
+        };
+        toml::to_string(&document).map_err(|_| HostError::Config)
+    }
+}
+
+#[derive(Serialize)]
+struct HostToml<'a> {
+    schema: u32,
+    connections: &'a [RepositoryConnection],
+    job_authority_policies: &'a [ApprovedJobAuthorityPolicy],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    release_read: Option<&'a ReleaseReadConfig>,
+    host: HostTomlLimits,
+    docker: &'a DockerConfig,
+}
+
+#[derive(Serialize)]
+struct HostTomlLimits {
+    max_jobs: u32,
+    resources: HostTomlResources,
+}
+
+#[derive(Serialize)]
+struct HostTomlResources {
+    runner_cpu_millicores: u64,
+    runner_memory_bytes: u64,
+    dind_cpu_millicores: u64,
+    dind_memory_bytes: u64,
+    operational_memory_reserve_bytes: u64,
 }
 
 fn validate_docker(docker: &DockerConfig) -> Result<(), HostError> {
@@ -189,6 +343,38 @@ fn validate_docker(docker: &DockerConfig) -> Result<(), HostError> {
     } else {
         Err(HostError::Config)
     }
+}
+
+fn validate_connections(connections: &[RepositoryConnection]) -> Result<(), HostError> {
+    let mut ids = std::collections::HashSet::new();
+    let mut repository_ids = std::collections::HashSet::new();
+    let mut repositories = std::collections::HashSet::new();
+    let mut credential_refs = std::collections::HashSet::new();
+    let mut scale_set_names = std::collections::HashSet::new();
+    for connection in connections {
+        connection.validate()?;
+        if !ids.insert(connection.connection_id.clone())
+            || !repository_ids.insert(connection.repository_id)
+            || !repositories.insert(connection.repository.to_ascii_lowercase())
+            || !credential_refs.insert(connection.credential_ref.clone())
+            || !scale_set_names.insert(connection.scale_set.name().to_owned())
+        {
+            return Err(HostError::Config);
+        }
+    }
+    for connection in connections {
+        if connections.iter().any(|other| {
+            other.connection_id != connection.connection_id
+                && other
+                    .scale_set
+                    .labels()
+                    .iter()
+                    .any(|label| label == connection.scale_set.name())
+        }) {
+            return Err(HostError::Config);
+        }
+    }
+    Ok(())
 }
 
 fn unix_endpoint(endpoint: &str) -> bool {

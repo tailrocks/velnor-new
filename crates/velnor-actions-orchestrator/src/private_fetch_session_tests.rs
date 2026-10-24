@@ -336,7 +336,7 @@ fn rust_session(temp: &Path) -> Session {
         &["processor-shared-rust".to_owned()],
         vec![("MISE_CARGO_HOME".to_owned(), "/runner/cargo".to_owned())],
     )
-    .expect("session")
+    .expect("The private fetch session must be created.")
 }
 
 fn argv_of(command: &IsolatedCommand) -> Vec<String> {
@@ -349,22 +349,27 @@ fn argv_of(command: &IsolatedCommand) -> Vec<String> {
 
 #[test]
 fn cargo_fetch_runs_exactly_the_rust_it_is_given() {
-    let temp = tempfile::tempdir().expect("temp");
+    let temp = tempfile::tempdir().expect("The test directory must exist.");
     let session = rust_session(temp.path());
     let argv = argv_of(
         &session
             .cargo_fetch_command(Path::new("/work/Cargo.toml"), "rust@1.98.1")
-            .expect("command"),
+            .expect("The toolchain command must be created."),
     );
-    let exec = argv.iter().position(|a| a == "exec").expect("exec");
+    let exec = argv
+        .iter()
+        .position(|a| a == "exec")
+        .expect("The command must contain exec.");
     assert_eq!(argv[exec + 1], "rust@1.98.1", "{argv:?}");
 }
 
 #[test]
 fn the_toolchain_check_asks_mise_where_for_the_same_rust_and_carries_no_token() {
-    let temp = tempfile::tempdir().expect("temp");
+    let temp = tempfile::tempdir().expect("The test directory must exist.");
     let session = rust_session(temp.path());
-    let command = session.rust_check_command("rust@1.98.1").expect("command");
+    let command = session
+        .rust_check_command("rust@1.98.1")
+        .expect("The toolchain command must be created.");
     let argv = argv_of(&command);
     assert_eq!(argv[0], "mise");
     let tail: Vec<&str> = argv[argv.len() - 2..].iter().map(String::as_str).collect();
@@ -384,6 +389,6 @@ fn the_toolchain_check_asks_mise_where_for_the_same_rust_and_carries_no_token() 
     assert!(
         env.iter()
             .any(|(k, v)| k == "MISE_CARGO_HOME" && v == "/runner/cargo"),
-        "the check sees the same owned Mise env as the fetch"
+        "The check and fetch must use the same managed Mise environment."
     );
 }

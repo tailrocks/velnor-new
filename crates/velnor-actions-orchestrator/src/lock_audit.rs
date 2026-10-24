@@ -34,6 +34,8 @@ mod names;
 use names::subject_names;
 #[path = "lock_audit_rust.rs"]
 mod rust;
+#[path = "lock_audit_verifiers.rs"]
+mod verifiers;
 use rust::{is_catalogued_jactionlint, is_rust, rust_manifest_coverage};
 #[path = "lock_audit_vectors.rs"]
 mod vectors;
@@ -47,6 +49,7 @@ use prepare_sequence::{
 };
 
 /// Audit outcome: one advisory summary plus fail-closed diagnostics.
+#[derive(Debug)]
 pub(crate) struct LockAuditOutcome {
     /// Advisory coverage summary, when anything is unverified.
     pub recommendation: Option<String>,
@@ -93,6 +96,11 @@ pub(crate) fn audit_prepare_installs(
     audit_prepare_installs_with_catalog(root, ir, label, validator_commands, &ToolCatalog::pinned())
 }
 
+#[cfg(test)]
+fn pinned_rust_spec() -> String {
+    format!("rust@{}", velnor_actions_mise::catalog::RUST_VERSION)
+}
+
 /// Audit emitted install sets against `root/mise.lock` with a resolved [`ToolCatalog`].
 #[cfg(test)]
 pub(crate) fn audit_prepare_installs_with_catalog(
@@ -134,8 +142,10 @@ pub(crate) fn audit_prepare_installs_with_catalog_and_verifiers(
 ) -> LockAuditOutcome {
     let mut blocking = Vec::new();
     let mut subjects: Vec<InstallSubject> = Vec::new();
+    let inline_verifiers = verifiers::build(&catalog.for_emission(), &mut blocking);
     for (id, job) in &ir.jobs {
-        let positions = verifier_positions(id, job, verifiers, &mut blocking);
+        let positions =
+            verifier_positions(id, job, verifiers, inline_verifiers.as_ref(), &mut blocking);
         let mut rust_sequence_reported = false;
         let mut jactionlint_sequence_reported = false;
         for (step_index, step) in job.steps.iter().enumerate() {
@@ -189,6 +199,16 @@ pub(crate) fn audit_prepare_installs_with_catalog_and_verifiers(
             }
         }
     }
+    finish_install_audit(root, label, validator_commands, subjects, blocking)
+}
+
+fn finish_install_audit(
+    root: &Path,
+    label: &str,
+    validator_commands: &[ValidatorCommand],
+    mut subjects: Vec<InstallSubject>,
+    mut blocking: Vec<String>,
+) -> LockAuditOutcome {
     for command in validator_commands {
         audit_validator_command(command, &mut subjects, &mut blocking);
     }

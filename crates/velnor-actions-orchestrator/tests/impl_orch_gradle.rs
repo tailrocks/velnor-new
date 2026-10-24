@@ -153,3 +153,81 @@ fn a_root_that_violates_the_contract_fails_generation_with_finding_codes() -> Te
     }
     Ok(())
 }
+
+pub(crate) fn scale_set_config(config: &str) -> String {
+    let config = config
+        .replace("schema = 1", "schema = 2")
+        .replace("name = \"CI\"", "name = \"CI\"\npolicy = \"consumer-v1\"");
+    format!(
+        "{config}\n[execution]\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\nmode = \"scale-set\"\n\
+[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n\
+[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"java-integration-scale-set\"\nlabels = [\"velnor\", \"java-integration-scale-set\"]\nplatform = \"linux/amd64\"\njob_container_image = \"ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n"
+    )
+}
+
+pub(crate) fn audit_scale_set_jobs(path: &str, yaml: &str) -> TestResult {
+    use velnor_actions_contract::config::ValidatedImageReference;
+    use velnor_actions_contract::{ExecutionMode, ScaleSetSelector};
+    use velnor_actions_workflow_renderer::{RenderedFile, WorkflowRoutingPolicy};
+    let policy = WorkflowRoutingPolicy::configured(
+        ExecutionMode::ScaleSet,
+        ScaleSetSelector::try_new(
+            "java-integration-scale-set",
+            &["velnor".to_owned(), "java-integration-scale-set".to_owned()],
+        )?,
+        Some(ValidatedImageReference::parse(
+            "ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        )?),
+    );
+    velnor_actions_workflow_renderer::workflow_routing::validate_generated_workflow_calls(
+        &[RenderedFile {
+            path: path.to_owned(),
+            bytes: yaml.to_owned(),
+        }],
+        &policy,
+    )?;
+    Ok(())
+}
+
+#[test]
+fn scale_set_mode_routes_gradle_and_control_jobs() -> TestResult {
+    let repo = make_repo(&scale_set_config(CONFIG))?;
+    gradle_root(repo.path())?;
+    let yaml = render(repo.path())?;
+    assert_eq!(yaml, render(repo.path())?);
+    audit_scale_set_jobs(".github/workflows/ci.yml", &yaml)?;
+    for id in [
+        "plan",
+        "required",
+        "gradle-backend-core",
+        "gradle-backend-app",
+    ] {
+        assert!(yaml.contains(&format!("\n  {id}:\n")), "{yaml}");
+    }
+    let facts = velnor_actions_workflow_renderer::extract_workflow_authority(&[
+        velnor_actions_workflow_renderer::RenderedFile {
+            path: ".github/workflows/ci.yml".to_owned(),
+            bytes: yaml.clone(),
+        },
+    ])?;
+    let jobs = &facts[0].jobs;
+    let required = jobs
+        .iter()
+        .find(|job| job.job_key == "required")
+        .ok_or("Required job is absent.")?;
+    for id in ["gradle-backend-core", "gradle-backend-app"] {
+        assert!(required.needs.iter().any(|need| need == id), "{required:?}");
+    }
+    assert_eq!(
+        jobs.iter()
+            .filter(|job| job.job_key.starts_with("gradle-"))
+            .count(),
+        2
+    );
+    assert!(
+        yaml.contains("postgres@sha256:") && yaml.contains("VELNOR_GRADLE_TASKS"),
+        "{yaml}"
+    );
+    assert!(yaml.contains("VELNOR_TOOL_JAVA"), "{yaml}");
+    Ok(())
+}

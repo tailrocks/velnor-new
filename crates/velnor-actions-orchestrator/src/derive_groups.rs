@@ -22,7 +22,7 @@ use velnor_actions_contract::{
 use velnor_actions_mise::{ArchivePlan, NextestArchive, NextestDriver, SortedInventory};
 use velnor_actions_rust::{
     CompileDriver, DeriveInputs, RustExecutionProfile, TaskGroup, TaskKind, VelnorV1TaskOwner,
-    derive_task_groups, derive_workspace_fmt_if_explicit, expand_shards_for_group,
+    derive_task_groups, derive_workspace_fmt_if_explicit_with_features, expand_shards_for_group,
 };
 
 use crate::OrchestratorError;
@@ -118,7 +118,10 @@ pub(crate) fn derive_for_config(
             continue;
         }
         let (features, fallback) = if rust_config.all_features {
-            (package.features.clone(), None)
+            let mut features = package.features.clone();
+            features.sort();
+            features.dedup();
+            (features, None)
         } else {
             resolve_features(package, &rust_config.features, union, &rust_config.name)?
         };
@@ -151,12 +154,13 @@ pub(crate) fn derive_for_config(
         .iter()
         .any(|group| group.kind == TaskKind::Fmt && !group.package_name.is_empty());
     if !per_package_fmt
-        && let Some(fmt) = derive_workspace_fmt_if_explicit(
+        && let Some(fmt) = derive_workspace_fmt_if_explicit_with_features(
             &workspace_manifest(&record.workspace_root),
             profile,
             &rust_config.name,
             &rust_config.target,
             explicit_fmt,
+            rust_config.all_features,
         )?
     {
         groups.push(fmt);
@@ -329,5 +333,8 @@ fn manifest_for_key(key: &str) -> String {
 }
 
 #[cfg(test)]
+#[path = "derive_groups_archive_tests.rs"]
+mod archive_tests;
+#[cfg(test)]
 #[path = "derive_groups_shard_tests.rs"]
-mod tests;
+mod shard_tests;

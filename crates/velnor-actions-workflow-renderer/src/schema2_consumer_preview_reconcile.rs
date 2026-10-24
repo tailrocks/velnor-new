@@ -16,6 +16,7 @@ fn context(spec: &ConsumerReleaseSpec) -> TapInvocationContext {
 /// Rejects missing promotion policy, malformed inventory or unsupported pins.
 pub fn render_release_tap_reconcile(
     spec: &ConsumerReleaseSpec,
+    routing: &crate::workflow_routing::WorkflowRoutingPolicy,
 ) -> Result<RenderedFile, RenderError> {
     spec.policy
         .validate()
@@ -65,10 +66,12 @@ pub fn render_release_tap_reconcile(
         ),
         ("jobs".to_owned(), Yaml::Map(jobs)),
     ]);
+    let path = spec.policy.channel.tap_reconcile_workflow_path();
+    let document = crate::workflow_routing::route_workflow_yaml(path, document, routing)?;
     Ok(RenderedFile {
-        path: spec.policy.channel.tap_reconcile_workflow_path().to_owned(),
+        path: path.to_owned(),
         bytes: crate::render::fallback::render_checked_workflow(
-            spec.policy.channel.tap_reconcile_workflow_path(),
+            path,
             &document,
             &spec.generator_version,
         )?,

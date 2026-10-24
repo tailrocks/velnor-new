@@ -4,14 +4,11 @@ use super::MiseVectors;
 
 /// Classify the `mise` vectors in one token run, in order.
 ///
-/// Each `mise` token classifies through the flags that follow it:
-/// `install` extracts its specs, `exec` skips to the next `mise`
-/// token, and anything else (unknown subcommand, truncated tail)
-/// fails closed — an installer-adjacent vector the audit cannot prove
-/// is an `exec` must block, never pass silently. A bare `install`
-/// without a preceding `mise` (a `cargo install` payload) never
-/// classifies. Specs run until the first shell metacharacter (scripts)
-/// or the end of argv (plain vectors).
+/// Read the flags after each `mise` token.
+/// For `install`, collect its tool specifications. For `exec`, continue to the next `mise` token.
+/// Reject an unknown subcommand or an incomplete command.
+/// Do not classify a bare `install` without a preceding `mise`, such as `cargo install`.
+/// Stop collecting specifications at the first shell metacharacter or the end of the argument list.
 pub(super) fn classify_mise_vectors(tokens: &[&str]) -> MiseVectors {
     for (at, token) in tokens.iter().enumerate() {
         if *token != "mise" {

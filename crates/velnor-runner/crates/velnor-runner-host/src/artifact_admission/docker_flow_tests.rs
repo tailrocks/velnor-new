@@ -16,6 +16,7 @@ use crate::artifact_admission::manifest::{
     ProbeManifest, SOURCE_LABEL,
 };
 use crate::artifact_admission::release::VerifiedRelease;
+use crate::artifact_admission::{github, manifest};
 use crate::error::HostError;
 
 const ENGINE_ID: &str = "engine-docker-29-4";
@@ -93,7 +94,7 @@ impl Drop for TestDaemon {
             && let Err(error) = std::fs::remove_file(&self.path)
             && error.kind() != std::io::ErrorKind::NotFound
         {
-            eprintln!("test Docker socket cleanup failed: {error}");
+            eprintln!("The test Docker socket could not be removed. Error: {error}.");
         }
     }
 }
@@ -108,7 +109,7 @@ async fn recorded_docker_29_4_containerd_and_classic_profiles_use_explicit_platf
         let (result, requests) = run_existing_image(response, PostInspectInfo::Stable).await?;
         assert!(
             result.is_ok(),
-            "inspect failed: {:?}; {requests:?}",
+            "Docker inspection failed. Error: {:?}. Requests: {requests:?}",
             result.as_ref().err()
         );
         let runtime = result?;
@@ -260,6 +261,20 @@ fn recorded_release() -> Result<VerifiedRelease, HostError> {
         authority_sha: manifest.workflow_authority_sha.clone(),
         archive_sha: manifest.archive_sha256.clone(),
         archive: Vec::new(),
+        manifest_bytes: Vec::new(),
+        checksum_bytes: Vec::new(),
+        runner_asset: github::Asset {
+            id: 1,
+            name: manifest::RUNNER_ASSET.to_owned(),
+            size: 1,
+            digest: format!("sha256:{}", "e".repeat(64)),
+        },
+        dind_asset: github::Asset {
+            id: 2,
+            name: manifest::DIND_ASSET.to_owned(),
+            size: 1,
+            digest: format!("sha256:{}", "f".repeat(64)),
+        },
         manifest,
         archive_identity: ArchiveIdentity {
             image_manifest_digest: CONTAINERD_MANIFEST.to_owned(),

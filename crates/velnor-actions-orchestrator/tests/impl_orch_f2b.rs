@@ -2,6 +2,9 @@
 
 use std::collections::BTreeSet;
 
+use serde_json::Value as Json;
+use velnor_actions_contract::Plan;
+
 use velnor_actions_contract::{
     FinalStatus, NotSelectedReason, ObligationDecision, PlannedPlatform, TaskStatus, Trust,
     WorkflowEvent, digest_b3, matrix_id_for_task_group, matrix_key_for_id,
@@ -14,6 +17,18 @@ use velnor_actions_orchestrator::decisions::{
 
 use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
 use crate::impl_orch_plansel::merge_status;
+
+fn successful_job_inventory(plan: &Plan) -> (Vec<String>, Vec<Json>) {
+    let mut ids = vec!["plan".to_owned()];
+    ids.extend(plan.matrix.include.iter().map(|entry| entry.job_id.clone()));
+    ids.sort();
+    ids.dedup();
+    let jobs = ids
+        .iter()
+        .map(|job_id| serde_json::json!({"job_id": job_id, "conclusion": "success"}))
+        .collect();
+    (ids, jobs)
+}
 
 /// Open inputs: eligible for reuse.
 fn open_inputs() -> ObligationInputs {
@@ -176,10 +191,7 @@ fn omission_ledger_explains_every_skip() {
     assert_eq!(ledger[0].task_id, "a-task");
     assert_eq!(ledger[1].task_id, "c-task");
     let everything = BTreeSet::from(all.clone());
-    assert_eq!(
-        omission_ledger(&all, &everything),
-        [] as [velnor_actions_orchestrator::decisions::TaskOmission; 0]
-    );
+    assert_eq!(omission_ledger(&all, &everything), []);
 }
 
 #[test]
@@ -204,7 +216,7 @@ fn dedupe_stage_reports_conflicts() {
     assert_eq!(dupes, ["b"]);
     let (unique, dupes) = dedupe_sorted(&["a".to_owned(), "b".to_owned()]);
     assert_eq!(unique, ["a", "b"]);
-    assert_eq!(dupes, [] as [std::string::String; 0]);
+    assert_eq!(dupes, [] as [String; 0]);
 }
 
 #[test]
@@ -212,7 +224,12 @@ fn sequential_reference_merges_clean() -> TestResult {
     use velnor_actions_orchestrator::schedule::sequential_reference;
     let (_repo, plan) = plan_for_source_change()?;
     let reports = passing_reports(&plan)?;
-    let extra = serde_json::json!({"reference_task_ids": sequential_reference(&plan.task_ids)});
+    let (required_job_ids, required_jobs) = successful_job_inventory(&plan);
+    let extra = serde_json::json!({
+        "reference_task_ids": sequential_reference(&plan.task_ids),
+        "required_job_ids": required_job_ids,
+        "required_jobs": required_jobs,
+    });
     assert_eq!(
         merge_status(&plan, &reports, &[], &extra)?,
         FinalStatus::Passed
@@ -229,8 +246,13 @@ fn not_selected_tasks_fold_to_blocked() -> TestResult {
     first.executed = 0;
     first.not_selected = 1;
     first.validate()?;
+    let (required_job_ids, required_jobs) = successful_job_inventory(&plan);
+    let extra = serde_json::json!({
+        "required_job_ids": required_job_ids,
+        "required_jobs": required_jobs,
+    });
     assert_eq!(
-        merge_status(&plan, &reports, &[], &serde_json::json!({}))?,
+        merge_status(&plan, &reports, &[], &extra)?,
         FinalStatus::Blocked
     );
     Ok(())

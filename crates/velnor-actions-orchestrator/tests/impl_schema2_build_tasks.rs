@@ -11,7 +11,7 @@ use crate::impl_schema2_routing::{job_body, required_file};
 use crate::impl_schema2_verification_tasks::config;
 
 #[test]
-fn native_build_variant_rejects_scale_set_profile_override() -> TestResult {
+fn scale_set_profile_override_rejects_a_darwin_build() -> TestResult {
     let body = format!(
         "{}\n[execution.overrides.\"task-native-desktop\"]\nprofile = \"local\"\nrole = \"verification\"",
         config_with_build("hosted")
@@ -19,7 +19,8 @@ fn native_build_variant_rejects_scale_set_profile_override() -> TestResult {
     let repo = make_repo(&body)?;
     write_native_source_fixture(repo.path())?;
     let preparation = prepare(repo.path())?;
-    let error = render_staged_tree(&preparation).expect_err("native build task is hosted-only");
+    let error = render_staged_tree(&preparation)
+        .expect_err("Scale Set override must reject the Darwin workload");
     assert!(
         error
             .to_string()
@@ -30,8 +31,8 @@ fn native_build_variant_rejects_scale_set_profile_override() -> TestResult {
 }
 
 #[test]
-fn native_build_variant_is_shared_source_bounded_and_required_in_every_mode() -> TestResult {
-    for mode in ["hosted", "scale-set", "both"] {
+fn native_build_variant_stays_hosted_in_every_execution_mode() -> TestResult {
+    for mode in ["hosted", "both", "scale-set"] {
         let body = config_with_build(mode);
         let repo = make_repo(&body)?;
         write_native_source_fixture(repo.path())?;

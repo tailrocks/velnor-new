@@ -19,6 +19,7 @@
 
 use std::collections::BTreeMap;
 
+use velnor_actions_contract::workflow::QualificationCacheLayer;
 use velnor_actions_contract::workflow::cache_family::{
     CacheFamily, SOURCES_KEY_PLAN_EXPR, SOURCES_KEY_STEP_EXPR, SOURCES_RESTORE_KEYS_PLAN_EXPR,
     SOURCES_RESTORE_KEYS_STEP_EXPR, SOURCES_SAVE_CONDITION, TOFU_PROVIDER_CACHE_BASE_EXPR,
@@ -38,6 +39,11 @@ use velnor_actions_contract::{Job, PullRequestCachePolicy, Step, StepKind};
 
 use crate::RenderError;
 
+#[path = "cache_doctor_qualification.rs"]
+mod qualification;
+#[path = "cache_doctor_sources.rs"]
+mod sources;
+use sources::check_sources_isolation;
 #[path = "cache_doctor_stack.rs"]
 mod stack;
 
@@ -51,6 +57,7 @@ pub(crate) const MBX_OBJECTS_MODE_DOCTOR_EXEMPTION: &str = "jdx/mr-boxington-act
 enum Family {
     Runtime(CacheFamily),
     Tools,
+    Qualification(QualificationCacheLayer),
 }
 
 /// One cache-bearing step, classified.
@@ -147,8 +154,9 @@ fn family_for_key(key: &str) -> Option<Family> {
     if crate::cache_p08::is_v2_cache_key_expression(key) {
         return Some(Family::Tools);
     }
-    // A stack family key is only the generated expression; a literal key that
-    // merely shares its prefix would bypass the per-job key step.
+    if let Some(layer) = qualification::layer_for_key(key) {
+        return Some(Family::Qualification(layer));
+    }
     CacheFamily::for_key(key)
         .filter(|family| !STACK_FAMILIES.contains(family))
         .map(Family::Runtime)
@@ -276,6 +284,9 @@ fn check_paths(job: &str, step: &Step, cache: &CacheUse<'_>) -> Result<(), Rende
         (Family::Runtime(CacheFamily::MbxBundle), Some(path)) => {
             path == MBX_BUNDLE_PATH_EXPR && mbx_bundle_restore_keys_ok(step, cache.save)
         }
+        (Family::Qualification(_), Some(path)) => {
+            qualification::action_paths(job, step, path, cache.save)
+        }
         (
             Family::Runtime(
                 family @ (CacheFamily::BunInstall
@@ -286,7 +297,7 @@ fn check_paths(job: &str, step: &Step, cache: &CacheUse<'_>) -> Result<(), Rende
             ),
             Some(path),
         ) => stack::path_ok(family, path) && stack::restore_keys_ok(step, family, cache.save),
-        (Family::Runtime(_), None) => false,
+        (Family::Runtime(_) | Family::Qualification(_), None) => false,
     };
     if ok {
         Ok(())
@@ -354,6 +365,7 @@ fn check_save(job: &str, step: &Step, family: Family) -> Result<(), RenderError>
         ]
         .into_iter()
         .any(|policy| condition == crate::cache_p08::tools_cache_save_condition(policy)),
+        Family::Qualification(_) => qualification::save_gate(job, step, condition),
     };
     if ok {
         Ok(())
@@ -363,28 +375,6 @@ fn check_save(job: &str, step: &Step, family: Family) -> Result<(), RenderError>
             &format!("i7_save_not_trust_gated:{}", step.name),
         ))
     }
-}
-
-/// I3: no other family archives or nests a sources path.
-fn check_sources_isolation(owners: &BTreeMap<String, Family>) -> Result<(), RenderError> {
-    let sources = CacheFamily::Sources.spec().resolved_paths(None);
-    for (path, family) in owners {
-        if *family == Family::Runtime(CacheFamily::Sources) {
-            continue;
-        }
-        let overlaps = sources.iter().any(|source| {
-            path == source
-                || path.starts_with(&format!("{source}/"))
-                || source.starts_with(&format!("{path}/"))
-        });
-        if overlaps {
-            return Err(doctor(
-                "workflow",
-                &format!("i3_sources_path_shared:{path}"),
-            ));
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]

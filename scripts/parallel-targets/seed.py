@@ -198,7 +198,7 @@ def seed(target, lanes):
     if sys.version_info < (3, 11):
         # Safe staging cleanup needs shutil.rmtree(dir_fd=...) (3.11+); this
         # is an optional optimization, so skip rather than crash mid-cleanup.
-        print("Parallel targets: optional seed skipped: Python 3.11 or newer required")
+        print("Parallel targets: optional seed skipped: Use Python 3.11 or later.")
         return
     workspace = pathlib.Path(os.environ["GITHUB_WORKSPACE"])
     require(workspace.is_absolute(), "workspace must be absolute")

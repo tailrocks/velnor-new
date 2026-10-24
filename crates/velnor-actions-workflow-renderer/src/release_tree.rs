@@ -15,6 +15,7 @@ use crate::{
     release_spec::ReleaseTriggers,
     render::RenderedFile,
     steps,
+    workflow_routing::{WorkflowRoutingPolicy, route_workflow_yaml},
     yaml::Yaml,
 };
 
@@ -80,6 +81,19 @@ pub fn render_release_workflow(
     spec: &ReleaseWorkflowSpec,
     ctx: &ReleaseRenderContext,
 ) -> Result<String, RenderError> {
+    render_release_workflow_with_routing(spec, ctx, &WorkflowRoutingPolicy::hosted_only())
+}
+
+/// Render the release workflow with the generator's effective placement policy.
+///
+/// # Errors
+///
+/// Invalid release inputs, unsupported runners, and workflow rendering errors fail.
+pub fn render_release_workflow_with_routing(
+    spec: &ReleaseWorkflowSpec,
+    ctx: &ReleaseRenderContext,
+    routing: &WorkflowRoutingPolicy,
+) -> Result<String, RenderError> {
     ctx.validate()?;
     spec.validate()?;
     for (id, job) in &spec.jobs {
@@ -92,7 +106,7 @@ pub fn render_release_workflow(
         bootstrap: RELEASE_BOOTSTRAP_CONFIG_PATH,
     };
     check_release_jobs(spec, &binding)?;
-    let document = release_document(spec)?;
+    let document = route_workflow_yaml(RELEASE_WORKFLOW_PATH, release_document(spec)?, routing)?;
     let text = crate::render::fallback::render_checked_workflow(
         RELEASE_WORKFLOW_PATH,
         &document,
@@ -259,7 +273,28 @@ pub fn render_release_files(
     config: &ReleasePlzConfig,
     bootstrap: &BootstrapReleasePlzConfig,
 ) -> Result<ReleaseFiles, RenderError> {
-    let workflow = render_release_workflow(spec, ctx)?;
+    render_release_files_with_routing(
+        spec,
+        ctx,
+        config,
+        bootstrap,
+        &WorkflowRoutingPolicy::hosted_only(),
+    )
+}
+
+/// Render release files with the generator's effective placement policy.
+///
+/// # Errors
+///
+/// Invalid release inputs, unsupported runners, and workflow rendering errors fail.
+pub fn render_release_files_with_routing(
+    spec: &ReleaseWorkflowSpec,
+    ctx: &ReleaseRenderContext,
+    config: &ReleasePlzConfig,
+    bootstrap: &BootstrapReleasePlzConfig,
+    routing: &WorkflowRoutingPolicy,
+) -> Result<ReleaseFiles, RenderError> {
+    let workflow = render_release_workflow_with_routing(spec, ctx, routing)?;
     let normal = render_release_plz_config(config, &ctx.generator_version)?;
     let bootstrap_text = render_bootstrap_release_plz_config(bootstrap, &ctx.generator_version)?;
     let files = ReleaseFiles {

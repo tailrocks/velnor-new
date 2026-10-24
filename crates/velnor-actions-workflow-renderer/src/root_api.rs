@@ -2,6 +2,9 @@ pub use crate::artifact_paths::{
     CANDIDATE_OUTPUT_DIR_EXPR, CANDIDATE_STAGE_DIR_EXPR, PRESEED_OUTPUT_DIR_EXPR,
     PRESEED_STAGE_DIR_EXPR,
 };
+
+/// Renderer implementation version (typed Gate-2 renderer).
+pub const RENDERER_VERSION: u32 = 2;
 pub use crate::candidate::{
     VERIFY_MANIFEST_NAME, candidate_artifact_name, candidate_manifest_verify_script,
     candidate_manifest_verify_step, check_release_build,
@@ -43,38 +46,47 @@ pub use crate::render::{
     render_workflow_ir, render_workflow_ir_strict,
 };
 pub use crate::rust_suites::{
-    RustSuitesRenderSpec, build_ci_suite_jobs, render_suites_workflow, render_suites_workflows,
+    RustSuitesRenderSpec, build_ci_suite_jobs, render_suites_workflow,
+    render_suites_workflow_with_helpers, render_suites_workflows,
+    render_suites_workflows_with_routing, render_suites_workflows_with_routing_and_helpers,
 };
 pub use crate::schema2::{
     MbxQualificationPins, MisePinQualificationPins, ProductReleasePins, Schema2WorkflowRequest,
-    render_schema2_workflows,
+    render_consumer_binary_release, render_schema2_workflows,
 };
 pub use crate::setup::{MISE_ACTION_NAME, SETUP_MISE_NAME, mise_setup_step};
 pub use crate::steps::{
-    ACQUIRE_NAME, ASSET_SHA_ENV, ASSET_URL_ENV, CRATE_REPORT_UPLOAD_NAME, CompileDriver,
+    ACQUIRE_NAME, ASSET_SHA_ENV, ASSET_URL_ENV, CACHE_TAR_LAUNCHER_INSTALL_OPERATION,
+    CACHE_TAR_LAUNCHER_PATH_OUTPUT_EXPR, CACHE_TAR_LAUNCHER_SHA256_INPUT, CACHE_TAR_LAUNCHER_USES,
+    CACHE_TAR_SHA256_ENV, CACHE_TAR_VERSION_ENV, CRATE_REPORT_UPLOAD_NAME, CompileDriver,
     DENY_STEP_NAME, FORBIDDEN_TOKENS, INTERNAL_OP_ENV, MACHETE_STEP_NAME,
     MATRIX_REPORT_UPLOAD_NAME, MBX_PREFLIGHT_NAME, MBX_VERSION_CHECK_NAME, MERGE_OPERATION,
-    PLAN_OPERATION, RELEASE_COMMIT_ENV, REQUEST_DIR_PREFIX, REQUEST_FILE_ENV, RUN_KEY_EXPR,
-    STAGED_BINARY_PREFIX, WRITE_PRESEED_MANIFEST_OPERATION, WRITE_REQUEST_OPERATION,
-    acquire_velnor_step, action_step, action_step_with_env, ambient_shell_step,
-    check_cache_step_order, check_mbx_gating, checkout_step, crate_job_report_upload_step,
-    download_suite_archive_step, internal_step, lane_cargo_target_env, matrix_report_upload_step,
-    mbx_steps_for_driver, merge_step, plan_step, scan_for_private_subcommands, shell_step,
-    upload_suite_archive_step, upload_suite_artifact_step, validate_uses, write_request_step,
+    PLAN_OPERATION, PRESEED_HELPER_SHA256_OUTPUT_EXPR, RELEASE_COMMIT_ENV, REQUEST_DIR_PREFIX,
+    REQUEST_FILE_ENV, RUN_KEY_EXPR, STAGED_BINARY_PREFIX, WRITE_PRESEED_MANIFEST_OPERATION,
+    WRITE_REQUEST_OPERATION, acquire_velnor_step, action_step, action_step_with_env,
+    ambient_shell_step, cache_tar_launcher_step, check_cache_step_order, check_mbx_gating,
+    checkout_step, crate_job_report_upload_step, download_suite_archive_step, internal_step,
+    lane_cargo_target_env, matrix_report_upload_step, mbx_steps_for_driver, merge_step, plan_step,
+    scan_for_private_subcommands, shell_step, upload_suite_archive_step,
+    upload_suite_artifact_step, validate_uses, write_request_step,
 };
 pub use crate::tofu_apply::{
     AWS_CREDENTIALS_STEP_ID, AWS_CREDENTIALS_USES, AWS_CREDENTIALS_VERSION,
     TOFU_APPLY_CONCURRENCY_GROUP, TOFU_APPLY_JOB_ID, TOFU_APPLY_TIMEOUT_MINUTES,
     TOFU_APPLY_WORKFLOW_NAME, TofuApplySpec, render_tofu_apply_workflow,
+    render_tofu_apply_workflow_with_routing,
 };
 pub use crate::tree::{render_tree, render_tree_with_claude_mode, render_tree_with_extra};
 pub use crate::verification_jobs::{
-    EvidenceHelperProvenance, MiseTaskSuitePolicy, MiseTaskSuitesRenderSpec,
-    render_mise_task_suites,
+    EvidenceHelperProvenance, INSTALL_VERIFICATION_TOOLS_NAME, MiseTaskSuitePolicy,
+    MiseTaskSuitesRenderSpec, RUN_VERIFICATION_TASK_NAME, VerificationTaskPolicy,
+    build_verification_task_job, render_mise_task_suites,
 };
-pub use crate::verification_jobs::{
-    INSTALL_VERIFICATION_TOOLS_NAME, RUN_VERIFICATION_TASK_NAME, VerificationTaskPolicy,
-    build_verification_task_job,
+pub use crate::workflow_routing::{
+    AuthorityCall, AuthorityConcurrency, AuthorityJob, AuthorityPermissions, AuthorityTrigger,
+    AuthorityWorkflow, WorkflowRoutingPolicy, extract_workflow_authority,
+    validate_generated_workflow_calls, validate_generated_workflow_calls_with_ir,
+    validate_generated_workflow_calls_with_native_preview_ir,
 };
 pub use crate::workflow_size::MAX_WORKFLOW_BYTES;
 pub use crate::yaml::{Yaml, quote_scalar, render_yaml};

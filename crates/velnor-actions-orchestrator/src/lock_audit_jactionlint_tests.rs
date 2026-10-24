@@ -154,3 +154,62 @@ fn duplicate_jactionlint_verifier_calls_are_rejected() {
         outcome.blocking
     );
 }
+
+#[test]
+fn duplicate_jactionlint_calls_across_typed_and_inline_forms_are_rejected() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let spec = format!("jactionlint@{}", velnor_actions_mise::JACTIONLINT_VERSION);
+    let mut workflow = jactionlint_ir(&spec, true);
+    workflow.jobs.get_mut("plan").expect("plan job").steps.push(
+        crate::workflow::workflow_policy::jactionlint_verify_step::verifier_shell_step(
+            &ToolCatalog::pinned(),
+        )
+        .expect("production inline Jactionlint verifier"),
+    );
+
+    let outcome = audit_prepare_installs_with_catalog(
+        dir.path(),
+        &workflow,
+        "ubuntu-26.04",
+        &[],
+        &ToolCatalog::pinned(),
+    );
+    assert!(
+        outcome
+            .blocking
+            .iter()
+            .any(|message| message.starts_with("duplicate_verifier_call:plan:jactionlint")),
+        "typed plus inline Jactionlint calls must count as duplicates: {:?}",
+        outcome.blocking
+    );
+}
+
+#[test]
+fn verifier_reference_prefix_is_rejected_without_role_or_name_claims() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let spec = format!("jactionlint@{}", velnor_actions_mise::JACTIONLINT_VERSION);
+    let mut workflow = jactionlint_ir(&spec, true);
+    let call = &mut workflow.jobs.get_mut("plan").expect("plan job").steps[1];
+    call.name = "Unrelated action label".to_owned();
+    call.role = None;
+    let StepKind::Action { uses, .. } = &mut call.kind else {
+        panic!("jactionlint verifier call is an action");
+    };
+    *uses = "./.github/actions/velnor-verify-jactionlint-near-match".to_owned();
+
+    let outcome = audit_prepare_installs_with_catalog(
+        dir.path(),
+        &workflow,
+        "ubuntu-26.04",
+        &[],
+        &ToolCatalog::pinned(),
+    );
+    assert!(
+        outcome
+            .blocking
+            .iter()
+            .any(|message| message.starts_with("forged_verifier_call:plan:")),
+        "unknown verifier-prefix references must fail even with neutral metadata: {:?}",
+        outcome.blocking
+    );
+}

@@ -112,7 +112,7 @@ fn a_tampered_asset_fails_the_sha256_check_and_extracts_nothing() {
             .path()
             .join(".velnor/deps/verified.json")
             .exists(),
-        "a failed fetch leaves no verified marker"
+        "A failed fetch must leave no verified marker."
     );
 }
 
@@ -277,7 +277,7 @@ fn a_velnor_directory_that_is_a_symlink_is_refused() {
         &["blockchain-explorer"],
         &[SourceKind::ReleaseAssets],
     );
-    // The config loader refuses first; the deps root check is the second wall.
+    // The configuration loader rejects this input before the dependency-directory check.
     assert!(execute(&request, &world.fake).is_err());
     assert!(!outside.path().join("real/deps").exists());
 }

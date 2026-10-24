@@ -12,6 +12,9 @@ use crate::impl_orch_f2a_offline::production_source_of_text;
 
 type AuditResult<T> = Result<T, Box<dyn Error>>;
 
+#[path = "impl_orch_github_evidence_ingress_cli_ast.rs"]
+mod cli;
+
 pub(super) fn validate_runtime_edges(orch_root: &Path, cli_root: &Path) -> AuditResult<()> {
     let api = read_source(orch_root, "api.rs")?;
     let api_path = orch_root.join("api.rs");
@@ -91,74 +94,17 @@ fn call_body_is(function: &syn::ItemFn, path: &[&str]) -> bool {
 
 fn validate_cli_dispatch(cli_root: &Path) -> AuditResult<()> {
     let dispatch_source = read_source(cli_root, "dispatch.rs")?;
+    let internal_run_source = read_source(cli_root, "dispatch_internal_run.rs")?;
     let operation_source = read_source(cli_root, "dispatch/operation.rs")?;
-    validate_cli_sources(&dispatch_source, &operation_source)
+    validate_cli_sources(&dispatch_source, &internal_run_source, &operation_source)
 }
 
 pub(super) fn validate_cli_sources(
     dispatch_source: &str,
+    internal_run_source: &str,
     operation_source: &str,
 ) -> AuditResult<()> {
-    let dispatch = parsed_production(dispatch_source)?;
-    let run_internal = function(&dispatch, "run_internal")?;
-    let dispatch_arms = arms_in(run_internal);
-    for (operation, function_name) in [
-        ("GitHubEvidenceFetch", "run_github_evidence_fetch"),
-        ("GitHubEvidenceImport", "run_github_evidence_import"),
-    ] {
-        if !use_imports_symbol(
-            &dispatch,
-            &["velnor_actions_orchestrator", function_name],
-            function_name,
-        ) {
-            return Err(invalid("evidence CLI API import changed"));
-        }
-        let matching = dispatch_arms
-            .iter()
-            .filter(|arm| pat_path_is(&arm.pat, &["InternalOp", operation]))
-            .collect::<Vec<_>>();
-        if matching.len() != 1 || !dispatch_arm_is(matching[0], operation, function_name) {
-            return Err(invalid("evidence CLI operation arm changed"));
-        }
-        if super::source_identifiers(dispatch_source)?
-            .iter()
-            .filter(|ident| ident.as_str() == function_name)
-            .count()
-            != 2
-        {
-            return Err(invalid("evidence CLI callable has an extra reference"));
-        }
-    }
-    let try_internal = function(&dispatch, "try_internal")?;
-    if !first_local_is_call(try_internal, "request", &["gate_request"], true) {
-        return Err(invalid("evidence CLI call moved outside the internal gate"));
-    }
-
-    let operation = parsed_production(operation_source)?;
-    let from_env = function(&operation, "from_env")?;
-    let operation_arms = arms_in(from_env);
-    for (constant, variant) in [
-        ("GITHUB_EVIDENCE_FETCH_OP", "GitHubEvidenceFetch"),
-        ("GITHUB_EVIDENCE_IMPORT_OP", "GitHubEvidenceImport"),
-    ] {
-        if !use_imports_symbol(&operation, &["super", constant], constant) {
-            return Err(invalid("evidence operation constant import changed"));
-        }
-        let matching = operation_arms
-            .iter()
-            .filter(|arm| operation_arm_is(arm, constant, variant))
-            .count();
-        if matching != 1
-            || super::source_identifiers(operation_source)?
-                .iter()
-                .filter(|ident| ident.as_str() == constant)
-                .count()
-                != 2
-        {
-            return Err(invalid("evidence operation selection changed"));
-        }
-    }
-    Ok(())
+    cli::validate_sources(dispatch_source, internal_run_source, operation_source)
 }
 
 fn validate_collector_gate(orch_root: &Path) -> AuditResult<()> {
@@ -241,7 +187,7 @@ fn dispatch_arm_is(arm: &syn::Arm, operation: &str, function_name: &str) -> bool
     let syn::Expr::Call(outer) = &*arm.body else {
         return false;
     };
-    if !expression_path_is(&outer.func, &["unit_exit"]) || outer.args.len() != 1 {
+    if !expression_path_is(&outer.func, &["finish_internal_result"]) || outer.args.len() != 1 {
         return false;
     }
     let Some(inner) = outer.args.first() else {

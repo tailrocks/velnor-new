@@ -3,7 +3,10 @@ use serde_json::Value;
 
 use crate::error::HostError;
 
-pub(super) fn pair<L: Serialize, R: Serialize>(left: &L, right: &R) -> Result<Vec<u8>, HostError> {
+pub(in crate::launch::resource_probe) fn pair<L: Serialize, R: Serialize>(
+    left: &L,
+    right: &R,
+) -> Result<Vec<u8>, HostError> {
     let left = serde_json::to_value(left).map_err(|_| HostError::Docker)?;
     let right = serde_json::to_value(right).map_err(|_| HostError::Docker)?;
     let mut bytes = Vec::new();
@@ -12,6 +15,15 @@ pub(super) fn pair<L: Serialize, R: Serialize>(left: &L, right: &R) -> Result<Ve
     bytes.push(b',');
     write_value(&right, &mut bytes)?;
     bytes.push(b']');
+    Ok(bytes)
+}
+
+pub(in crate::launch::resource_probe) fn value<T: Serialize>(
+    value: &T,
+) -> Result<Vec<u8>, HostError> {
+    let value = serde_json::to_value(value).map_err(|_| HostError::Docker)?;
+    let mut bytes = Vec::new();
+    write_value(&value, &mut bytes)?;
     Ok(bytes)
 }
 

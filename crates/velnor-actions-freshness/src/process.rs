@@ -50,10 +50,8 @@ mod unix {
 
     const POLL_INTERVAL: Duration = Duration::from_millis(5);
     const MAX_CLEANUP_RESERVE: Duration = Duration::from_millis(100);
-    /// Extra time, past the caller's deadline, to reap a child that was just
-    /// sent SIGKILL. The signal cannot be ignored, so this only matters when
-    /// the host is too loaded for the child to be scheduled inside the short
-    /// cleanup reserve; without it the child is left a zombie.
+    /// Additional time after the caller's deadline to collect a child's exit status after SIGKILL.
+    /// This extension gives a busy host more time to complete that cleanup.
     const KILL_REAP_GRACE: Duration = Duration::from_secs(1);
 
     pub(super) fn run_unix(

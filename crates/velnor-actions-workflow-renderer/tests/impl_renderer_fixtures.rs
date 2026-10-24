@@ -80,6 +80,9 @@ pub(crate) fn fixture_ctx() -> RenderContext {
         report_helper_version: VERSION.to_owned(),
         runs_on: LABEL.to_owned(),
         scale_set_selector: None,
+        scale_set_image_source_sha: None,
+        verified_cache_helpers: std::collections::BTreeMap::new(),
+        require_verified_cache_helper: false,
         staged_binary: STAGED.to_owned(),
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: checkout_pin(),
@@ -170,6 +173,7 @@ pub(crate) fn fixture_ir(jobs: Vec<(String, Job)>) -> WorkflowIr {
             push_branches: vec!["main".to_owned()],
             merge_group: true,
             workflow_dispatch: None,
+            workflow_call: false,
             schedule: None,
         },
         permissions: Permissions::default(),
@@ -183,7 +187,44 @@ pub(crate) fn fixture_ir(jobs: Vec<(String, Job)>) -> WorkflowIr {
 }
 
 pub(crate) fn strict(ir: &WorkflowIr, ctx: &RenderContext) -> Result<String, RenderError> {
-    render_workflow_ir_strict(ir, WorkflowPolicy::ConsumerV1, None, ctx, &mise())
+    let mut ir = ir.clone();
+    attach_cache_helper_fixtures(&mut ir, ctx)?;
+    render_workflow_ir_strict(&ir, WorkflowPolicy::ConsumerV1, None, ctx, &mise())
+}
+
+fn attach_cache_helper_fixtures(
+    ir: &mut WorkflowIr,
+    ctx: &RenderContext,
+) -> Result<(), RenderError> {
+    if ctx.preseed {
+        return Ok(());
+    }
+    for job in ir.jobs.values_mut() {
+        let cache_consumer = job.check_runner.is_some()
+            || !velnor_actions_workflow_renderer::cache_p08::infer_job_tools(job).is_empty();
+        let helper_present = job.steps.iter().any(|step| {
+            matches!(
+                step.role,
+                Some(
+                    velnor_actions_contract::StepRole::AcquireVelnor
+                        | velnor_actions_contract::StepRole::PreseedStage
+                )
+            )
+        });
+        if !cache_consumer || helper_present {
+            continue;
+        }
+        let checkout = job.steps.iter().position(|step| {
+            step.role == Some(velnor_actions_contract::StepRole::Checkout)
+                && matches!(&step.kind,
+                    velnor_actions_contract::StepKind::Action { uses, .. }
+                    if uses == &ctx.checkout_uses)
+        });
+        if let Some(checkout) = checkout {
+            job.steps.insert(checkout + 1, acquire_fixture()?);
+        }
+    }
+    Ok(())
 }
 
 /// Step display names in render order for one job section.

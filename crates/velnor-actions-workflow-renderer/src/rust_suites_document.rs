@@ -3,24 +3,30 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
-    DEFAULT_SUITE_WORKFLOW_SLUG, Job, PermissionLevel, RunsOn, RustSuiteConfig, StepKind,
-    WorkflowDispatchConfig,
+    Job, PermissionLevel, RunsOn, RustSuiteConfig, Step, StepKind, StepRole,
 };
 
 use super::{RustSuitesRenderSpec, build_suite_jobs_for_entry};
+
+#[path = "rust_suites_document_inputs.rs"]
+mod inputs;
 use crate::{
     RenderError,
     document_steps::{non_internal_step_to_yaml, string_map_yaml},
     matrix,
     render::fallback::render_checked_workflow,
     steps,
+    workflow_routing::{WorkflowRoutingPolicy, route_workflow_yaml},
     yaml::Yaml,
 };
+use inputs::{suite_job_condition, triggers_yaml, workflow_display_name};
 
 pub(super) fn render_workflow_for_slug(
     slug: &str,
     entries: &[&RustSuiteConfig],
     spec: &RustSuitesRenderSpec,
+    routing: &WorkflowRoutingPolicy,
+    helper_steps: &BTreeMap<String, Step>,
 ) -> Result<String, RenderError> {
     let mut jobs = BTreeMap::new();
     let mut allow_failure_jobs = BTreeSet::new();
@@ -34,7 +40,7 @@ pub(super) fn render_workflow_for_slug(
             jobs.insert(job_id, job);
         }
     }
-    finalize_suite_workflow_jobs(&mut jobs, spec)?;
+    finalize_suite_workflow_jobs(&mut jobs, spec, helper_steps)?;
     let suite_matrices = matrix::suites::suite_matrices_of(&jobs)?;
     let scrubbed = if suite_matrices.is_empty() {
         jobs
@@ -94,6 +100,7 @@ pub(super) fn render_workflow_for_slug(
     let mut document = Yaml::Map(top);
     matrix::suites::attach_suite_matrices(&mut document, &suite_matrices)?;
     let path = format!(".github/workflows/{slug}.yml");
+    let document = route_workflow_yaml(&path, document, routing)?;
     let text = render_checked_workflow(&path, &document, &spec.generator_version)?;
     steps::scan_for_private_subcommands(&text)?;
     Ok(text)
@@ -102,7 +109,9 @@ pub(super) fn render_workflow_for_slug(
 fn finalize_suite_workflow_jobs(
     jobs: &mut BTreeMap<String, Job>,
     spec: &RustSuitesRenderSpec,
+    helper_steps: &BTreeMap<String, Step>,
 ) -> Result<(), RenderError> {
+    let mut used_helpers = BTreeSet::new();
     let default_target = crate::runs_on::target_for_runner(&spec.default_runs_on);
     for (id, job) in jobs.iter_mut() {
         let target = crate::runs_on::target_for_runner(&job.runs_on).ok_or_else(|| {
@@ -113,167 +122,78 @@ fn finalize_suite_workflow_jobs(
         } else {
             spec.mise.for_target(target)?
         };
-        crate::cache_p08::ensure_tools_cache_v2(
-            id,
-            job,
-            &setup,
-            true,
-            target,
-            &spec.checkout_uses,
-        )?;
+        if let Some(helper) = helper_steps.get(&job.runs_on) {
+            insert_helper_after_checkout(id, job, helper)?;
+            used_helpers.insert(job.runs_on.clone());
+            crate::cache_p08::ensure_tools_cache_v2(
+                id,
+                job,
+                &setup,
+                true,
+                target,
+                &spec.checkout_uses,
+            )?;
+        } else {
+            insert_setup_after_checkout(id, job, &setup)?;
+        }
         crate::cache_p08::check_no_legacy_rust_cache(id, job)?;
         crate::cache_p08::check_mbx_before_fetch(id, job)?;
     }
+    if helper_steps
+        .keys()
+        .any(|label| !used_helpers.contains(label))
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "suite_helper_without_matching_runner".to_owned(),
+        ));
+    }
     crate::cache_p08::elect_cache_writers_with_policy(jobs, spec.pull_request_cache_policy)?;
+    crate::cache_tar_setup::insert_launcher_steps(jobs)?;
     crate::cache_steps::append_bundle_postludes(jobs)?;
     crate::cache_steps::append_workspace_cleanups(jobs)?;
     crate::cache_doctor::check(jobs)
 }
 
-fn workflow_display_name(slug: &str) -> String {
-    if slug == DEFAULT_SUITE_WORKFLOW_SLUG {
-        "Suites".to_owned()
-    } else {
-        format!("Suites ({slug})")
+fn insert_helper_after_checkout(
+    job_id: &str,
+    job: &mut Job,
+    helper: &Step,
+) -> Result<(), RenderError> {
+    if helper.role != Some(StepRole::AcquireVelnor) {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "suite_helper_role_mismatch:{job_id}"
+        )));
     }
-}
-
-fn suite_job_condition(suite: &RustSuiteConfig) -> Option<String> {
-    let name = &suite.id;
-    let dispatch_expr = if suite.has_workflow_dispatch_trigger() {
-        let mut clauses = vec!["github.event_name == 'workflow_dispatch'".to_owned()];
-        if suite.dispatch_inputs.is_empty() {
-            clauses.push(format!(
-                "(inputs.suite == 'all' || inputs.suite == '{name}')"
-            ));
-        } else {
-            for (input_name, values) in &suite.dispatch_inputs {
-                let value_ors: Vec<String> = values
-                    .iter()
-                    .map(|val| format!("inputs.{input_name} == '{val}'"))
-                    .collect();
-                clauses.push(if value_ors.len() == 1 {
-                    value_ors[0].clone()
-                } else {
-                    format!("({})", value_ors.join(" || "))
-                });
-            }
-        }
-        Some(clauses.join(" && "))
-    } else {
-        None
-    };
-    let schedule_expr = if suite.has_schedule_trigger() {
-        let cron_ors: Vec<String> = suite
-            .schedule
-            .iter()
-            .map(|cron| format!("github.event.schedule == '{cron}'"))
-            .collect();
-        let cron_clause = match cron_ors.as_slice() {
-            [] => None,
-            [single] => Some(single.clone()),
-            many => Some(format!("({})", many.join(" || "))),
-        };
-        Some(match cron_clause {
-            Some(clause) => format!("github.event_name == 'schedule' && {clause}"),
-            None => "github.event_name == 'schedule'".to_owned(),
-        })
-    } else {
-        None
-    };
-    match (dispatch_expr, schedule_expr) {
-        (Some(d), Some(s)) => Some(format!("({d}) || ({s})")),
-        (Some(d), None) => Some(d),
-        (None, Some(s)) => Some(s),
-        (None, None) => None,
-    }
-}
-
-fn triggers_yaml(
-    entries: &[&RustSuiteConfig],
-    workflow_dispatch: Option<&WorkflowDispatchConfig>,
-) -> Yaml {
-    let dispatch_suites: Vec<&str> = entries
+    let Some(checkout_at) = job
+        .steps
         .iter()
-        .filter(|suite| suite.has_workflow_dispatch_trigger())
-        .map(|suite| suite.id.as_str())
-        .collect();
-    let needs_auto_suite_input = entries
-        .iter()
-        .any(|suite| suite.has_workflow_dispatch_trigger() && suite.dispatch_inputs.is_empty());
-    let mut crons = BTreeSet::new();
-    for suite in entries {
-        if suite.has_schedule_trigger() {
-            for cron in &suite.schedule {
-                crons.insert(cron.clone());
-            }
-        }
-    }
-    let mut triggers = Vec::new();
-    if !dispatch_suites.is_empty() {
-        triggers.push((
-            "workflow_dispatch".to_owned(),
-            Yaml::Map(vec![(
-                "inputs".to_owned(),
-                dispatch_inputs_yaml(&dispatch_suites, needs_auto_suite_input, workflow_dispatch),
-            )]),
-        ));
-    }
-    if !crons.is_empty() {
-        let schedule_seq: Vec<Yaml> = crons
-            .into_iter()
-            .map(|cron| Yaml::Map(vec![("cron".to_owned(), Yaml::str(cron))]))
-            .collect();
-        triggers.push(("schedule".to_owned(), Yaml::Seq(schedule_seq)));
-    }
-    Yaml::Map(triggers)
+        .position(|step| step.role == Some(StepRole::Checkout))
+    else {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "suite_checkout_missing:{job_id}"
+        )));
+    };
+    job.steps.insert(checkout_at + 1, helper.clone());
+    crate::closure::check_internal_staged(job_id, job, false)
 }
 
-fn dispatch_inputs_yaml(
-    dispatch_suites: &[&str],
-    needs_auto_suite_input: bool,
-    workflow_dispatch: Option<&WorkflowDispatchConfig>,
-) -> Yaml {
-    let mut inputs = Vec::new();
-    if needs_auto_suite_input {
-        let mut options = Vec::with_capacity(dispatch_suites.len() + 1);
-        options.push(Yaml::str("all"));
-        for name in dispatch_suites {
-            options.push(Yaml::str((*name).to_owned()));
-        }
-        let suite_input = Yaml::Map(vec![
-            (
-                "description".to_owned(),
-                Yaml::str("Test suite to run ('all' runs every dispatchable suite)"),
-            ),
-            ("required".to_owned(), Yaml::Bool(false)),
-            ("type".to_owned(), Yaml::str("choice")),
-            ("default".to_owned(), Yaml::str("all")),
-            ("options".to_owned(), Yaml::Seq(options)),
-        ]);
-        inputs.push(("suite".to_owned(), suite_input));
-    }
-    if let Some(dispatch) = workflow_dispatch {
-        for (name, cfg) in &dispatch.inputs {
-            let mut fields = Vec::new();
-            if let Some(description) = &cfg.description {
-                fields.push(("description".to_owned(), Yaml::str(description.clone())));
-            }
-            fields.push(("required".to_owned(), Yaml::Bool(cfg.required)));
-            fields.push(("type".to_owned(), Yaml::str(cfg.kind.as_str().to_owned())));
-            if let Some(default) = &cfg.default {
-                fields.push(("default".to_owned(), Yaml::str(default.clone())));
-            }
-            if !cfg.options.is_empty() {
-                fields.push((
-                    "options".to_owned(),
-                    Yaml::Seq(cfg.options.iter().cloned().map(Yaml::str).collect()),
-                ));
-            }
-            inputs.push((name.clone(), Yaml::Map(fields)));
-        }
-    }
-    Yaml::Map(inputs)
+fn insert_setup_after_checkout(
+    job_id: &str,
+    job: &mut Job,
+    setup: &crate::MiseSetup,
+) -> Result<(), RenderError> {
+    let step = crate::cache_p08::setup_step(setup)?;
+    let Some(checkout_at) = job
+        .steps
+        .iter()
+        .position(|step| step.role == Some(StepRole::Checkout))
+    else {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "suite_checkout_missing:{job_id}"
+        )));
+    };
+    job.steps.insert(checkout_at + 1, step);
+    Ok(())
 }
 
 fn suite_job_to_yaml(

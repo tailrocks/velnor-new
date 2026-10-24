@@ -13,6 +13,30 @@ pub struct RenderCapture {
     pub selected: String,
 }
 
+/// Compare generated workflow documents after parsing their shared YAML form.
+///
+/// # Errors
+///
+/// Returns the parser diagnostic when either workflow document is invalid.
+pub fn workflow_yaml_is_semantically_equal(
+    canonical: &str,
+    selected: &str,
+) -> Result<bool, String> {
+    let canonical_file = crate::tree::RenderedFile {
+        path: ".github/workflows/ci.yml".to_owned(),
+        bytes: canonical.to_owned(),
+    };
+    let selected_file = crate::tree::RenderedFile {
+        path: ".github/workflows/ci.yml".to_owned(),
+        bytes: selected.to_owned(),
+    };
+    let canonical_yaml = crate::workflow_routing::parse_authority_document(&canonical_file)
+        .map_err(|error| error.to_string())?;
+    let selected_yaml = crate::workflow_routing::parse_authority_document(&selected_file)
+        .map_err(|error| error.to_string())?;
+    Ok(canonical_yaml == selected_yaml)
+}
+
 thread_local! {
     static CAPTURE: RefCell<Option<RenderCapture>> = const { RefCell::new(None) };
     static FULL_TREE_CAPTURE: Cell<bool> = const { Cell::new(false) };

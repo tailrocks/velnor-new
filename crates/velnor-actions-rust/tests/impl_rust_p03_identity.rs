@@ -236,6 +236,7 @@ fn identity_paths_preserve_case_unicode_and_reject_bad() -> TestResult {
             .is_ok()
     );
     let hostile = TaskGroup {
+        all_features: false,
         declared_inputs: vec!["../escape".to_owned()],
         ..group.clone()
     };

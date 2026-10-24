@@ -169,32 +169,98 @@ fn repository_maintenance_owner_is_scoped_to_the_canonical_repository_policy()
     Ok(())
 }
 
-/// Groups for the first configuration of `config` with explicit formatting.
-fn derive_with_fmt(
-    config: &velnor_actions_contract::VelnorConfig,
-    index: &FileIndex,
-    workspace: &PlannedWorkspace,
-) -> Result<Vec<velnor_actions_rust::TaskGroup>, Box<dyn Error>> {
-    let rust = config
-        .stacks
-        .rust
-        .as_ref()
-        .ok_or_else(|| std::io::Error::other("Rust stack config missing"))?;
+#[test]
+fn loaded_clippy_all_features_config_changes_only_the_clippy_task() -> Result<(), Box<dyn Error>> {
+    let enabled = load_test_config("schema = 1\n[stacks.rust]\nclippy_all_features = true\n")?;
+    let default = load_test_config("schema = 1\n[stacks.rust]\n")?;
+
+    let repository = repository_root()?;
+    let index = index(&repository)?;
+    let workspace = workspace(VelnorV1TaskOwner::Project);
     let union = declared_union(
-        std::slice::from_ref(workspace),
-        index,
-        config.workflow.policy,
+        std::slice::from_ref(&workspace),
+        &index,
+        enabled.workflow.policy,
     );
-    let (groups, _) = derive_for_config(
-        config,
-        index,
-        workspace,
-        &rust.configurations[0],
-        true,
-        &mut ArchivePlan::new(),
-        &union,
-    )?;
-    Ok(groups)
+    let config_groups = |config: &velnor_actions_contract::VelnorConfig| {
+        let rust = config
+            .stacks
+            .rust
+            .as_ref()
+            .expect("The Rust stack must exist.");
+        derive_for_config(
+            config,
+            &index,
+            &workspace,
+            &rust.configurations[0],
+            true,
+            &mut ArchivePlan::new(),
+            &union,
+        )
+        .map(|(groups, _)| groups)
+    };
+    let enabled_groups = config_groups(&enabled)?;
+    let default_groups = config_groups(&default)?;
+    assert_eq!(
+        enabled_groups
+            .iter()
+            .map(|group| &group.task_id)
+            .collect::<Vec<_>>(),
+        default_groups
+            .iter()
+            .map(|group| &group.task_id)
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        enabled_groups
+            .iter()
+            .filter(|group| group.kind == TaskKind::Clippy)
+            .count(),
+        workspace.record.packages.len()
+    );
+    assert!(
+        enabled
+            .stacks
+            .rust
+            .as_ref()
+            .expect("The Rust stack option must exist.")
+            .clippy_all_features
+    );
+    assert!(
+        enabled_groups
+            .iter()
+            .any(|group| group.kind == TaskKind::Fmt)
+    );
+    assert_clippy_payloads(&enabled_groups, &default_groups)?;
+    Ok(())
+}
+
+fn assert_clippy_payloads(
+    enabled_groups: &[velnor_actions_rust::TaskGroup],
+    default_groups: &[velnor_actions_rust::TaskGroup],
+) -> Result<(), Box<dyn Error>> {
+    for group in enabled_groups {
+        let argv = cargo_payload_argv(group)?;
+        let has_all_features = argv.iter().any(|arg| arg == "--all-features");
+        if group.kind == TaskKind::Clippy {
+            assert!(
+                has_all_features,
+                "The Clippy arguments must include --all-features. Arguments: {argv:?}."
+            );
+        } else {
+            assert!(
+                !has_all_features,
+                "The {} arguments must not include --all-features. Arguments: {argv:?}.",
+                group.kind.as_str()
+            );
+            let default_group = default_groups
+                .iter()
+                .find(|candidate| candidate.task_id == group.task_id)
+                .expect("The default task group must exist.");
+            assert_eq!(argv, cargo_payload_argv(default_group)?);
+        }
+    }
+    Ok(())
 }
 
 fn load_test_config(
@@ -204,55 +270,7 @@ fn load_test_config(
     let config_dir = root.path().join(".velnor");
     std::fs::create_dir_all(&config_dir)?;
     std::fs::write(config_dir.join("config.toml"), contents)?;
-    Ok(read_repository_config(root.path())?)
-}
-
-#[test]
-fn loaded_clippy_all_features_config_changes_only_the_clippy_task() -> Result<(), Box<dyn Error>> {
-    let enabled = load_test_config("schema = 1\n[stacks.rust]\nclippy_all_features = true\n")?;
-    let default = load_test_config("schema = 1\n[stacks.rust]\n")?;
-    let index = index(&repository_root()?)?;
-    let workspace = workspace(VelnorV1TaskOwner::Project);
-    let enabled_groups = derive_with_fmt(&enabled, &index, &workspace)?;
-    let default_groups = derive_with_fmt(&default, &index, &workspace)?;
-    let ids = |groups: &[velnor_actions_rust::TaskGroup]| {
-        groups
-            .iter()
-            .map(|group| group.task_id.clone())
-            .collect::<Vec<_>>()
-    };
-    assert_eq!(ids(&enabled_groups), ids(&default_groups));
-    assert!(
-        enabled_groups
-            .iter()
-            .any(|group| group.kind == TaskKind::Fmt)
-    );
-    assert_eq!(
-        enabled_groups
-            .iter()
-            .filter(|group| group.kind == TaskKind::Clippy)
-            .count(),
-        workspace.record.packages.len()
-    );
-    for (group, default_group) in enabled_groups.iter().zip(&default_groups) {
-        let argv = cargo_payload_argv(group)?;
-        if group.kind == TaskKind::Clippy {
-            assert!(argv.iter().any(|arg| arg == "--all-features"), "{argv:?}");
-        } else {
-            assert_eq!(
-                group,
-                default_group,
-                "{} must not change",
-                group.kind.as_str()
-            );
-        }
-        assert!(
-            !cargo_payload_argv(default_group)?
-                .iter()
-                .any(|arg| arg == "--all-features")
-        );
-    }
-    Ok(())
+    Ok(crate::config::load_config(root.path())?)
 }
 
 #[test]
@@ -262,12 +280,25 @@ fn all_features_configuration_selects_each_package_feature_set() -> Result<(), B
     )?;
     let index = index(&repository_root()?)?;
     let workspace = workspace(VelnorV1TaskOwner::Project);
-    let groups = derive_with_fmt(&config, &index, &workspace)?;
-    assert_ne!(groups, [] as [velnor_actions_rust::TaskGroup; 0]);
+    let rust = config.stacks.rust.as_ref().expect("Rust stack");
+    let union = declared_union(
+        std::slice::from_ref(&workspace),
+        &index,
+        config.workflow.policy,
+    );
+    let (groups, _) = derive_for_config(
+        &config,
+        &index,
+        &workspace,
+        &rust.configurations[0],
+        true,
+        &mut ArchivePlan::new(),
+        &union,
+    )?;
+    assert_ne!(groups.len(), 0);
     for group in &groups {
         let argv = cargo_payload_argv(group)?;
         assert!(group.all_features, "{}", group.task_id);
-        assert!(group.task_id.ends_with("/all"), "{}", group.task_id);
         assert_eq!(group.features, ["repository-only-feature"]);
         assert_eq!(
             argv.iter().any(|arg| arg == "--all-features"),

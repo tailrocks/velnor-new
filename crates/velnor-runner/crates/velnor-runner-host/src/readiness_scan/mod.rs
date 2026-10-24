@@ -1,5 +1,6 @@
 //! Read-only controller readiness. No secret is logged and no worker is started.
 
+use sha2::Digest;
 use std::future::Future;
 use std::io::Read;
 use std::os::unix::fs::OpenOptionsExt;
@@ -20,6 +21,7 @@ pub const READINESS_BUDGET: Duration = Duration::from_secs(4);
 const MAX_CONFIG_BYTES: u64 = 64 * 1024;
 const MAX_JOURNAL_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_JOURNAL_ROWS: usize = 4096;
+const HEX: &[u8; 16] = b"0123456789abcdef";
 
 /// Whether recorded intents still occupy a permit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,7 +36,10 @@ enum JournalFact {
 
 enum ConfigFact {
     Missing,
-    Valid(Box<HostConfig>),
+    Valid {
+        config: Box<HostConfig>,
+        config_sha256: String,
+    },
     Invalid,
 }
 
@@ -67,7 +72,7 @@ async fn assess_with<F>(
     has_credential: F,
 ) -> Readiness
 where
-    F: FnOnce(&KeychainReference) -> bool,
+    F: FnMut(&KeychainReference) -> bool,
 {
     match std::fs::symlink_metadata(state) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -81,19 +86,58 @@ where
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(_) => return Readiness::Degraded,
     }
-    let config = match read_config(state) {
+    let (config, config_sha256) = match read_config(state) {
         ConfigFact::Missing => return Readiness::WaitingForCredentials,
-        ConfigFact::Valid(config) => *config,
+        ConfigFact::Valid {
+            config,
+            config_sha256,
+        } => (*config, config_sha256),
         ConfigFact::Invalid => return Readiness::Degraded,
     };
-    if !has_credential(&config.github.credential_ref) {
+    let mut has_credential = has_credential;
+    let mut missing_credential = false;
+    for connection in config.connections() {
+        if !has_credential(&connection.credential_ref) {
+            eprintln!(
+                "readiness=waiting_for_credentials connection_id={}",
+                connection.connection_id
+            );
+            missing_credential = true;
+        }
+    }
+    match config.release_read_credential_ref() {
+        Some(reference) if !has_credential(reference) => {
+            eprintln!("readiness=waiting_for_credentials credential=release_read");
+            missing_credential = true;
+        }
+        Some(_) => {}
+        None => {
+            eprintln!("readiness=waiting_for_credentials reason=release_read_reference_missing");
+            missing_credential = true;
+        }
+    }
+    if missing_credential {
         return Readiness::WaitingForCredentials;
     }
-    if !engine_up(&config.docker.endpoint, deadline).await {
-        return Readiness::WaitingForEngine;
+    if let Err(reason) = crate::launch::build_pin_status() {
+        eprintln!("readiness=degraded reason=source_pin detail={reason}");
+        return Readiness::Degraded;
     }
+    let Some((engine_id, docker_root_digest)) = engine_identity(&config, deadline).await else {
+        return Readiness::WaitingForEngine;
+    };
     let journal = journal_mark(&state.join("launch.db"), deadline).await;
-    classify_engine_journal(true, journal)
+    match classify_engine_journal(true, journal) {
+        Readiness::Reconciling => crate::controller_readiness_status(
+            state,
+            deadline.saturating_duration_since(tokio::time::Instant::now()),
+            &config_sha256,
+            &engine_id,
+            &docker_root_digest,
+        )
+        .unwrap_or(Readiness::Reconciling),
+        readiness => readiness,
+    }
 }
 
 fn read_config(state: &Path) -> ConfigFact {
@@ -123,12 +167,30 @@ fn read_config(state: &Path) -> ConfigFact {
     {
         return ConfigFact::Invalid;
     }
+    let mut config_sha256 = String::with_capacity(64);
+    for byte in sha2::Sha256::digest(&bytes) {
+        config_sha256.push(char::from(HEX[usize::from(byte >> 4)]));
+        config_sha256.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
     match std::str::from_utf8(&bytes)
         .map_err(|_| ())
         .and_then(|text| HostConfig::parse(text).map_err(|_| ()))
     {
-        Ok(config) => ConfigFact::Valid(Box::new(config)),
+        Ok(config) => ConfigFact::Valid {
+            config: Box::new(config),
+            config_sha256,
+        },
         Err(()) => ConfigFact::Invalid,
+    }
+}
+
+pub(crate) fn controller_config(state: &Path) -> Option<(HostConfig, String)> {
+    match read_config(state) {
+        ConfigFact::Valid {
+            config,
+            config_sha256,
+        } => Some((*config, config_sha256)),
+        ConfigFact::Missing | ConfigFact::Invalid => None,
     }
 }
 
@@ -162,19 +224,30 @@ where
     }
 }
 
-async fn engine_up(endpoint: &str, deadline: tokio::time::Instant) -> bool {
+async fn engine_identity(
+    config: &HostConfig,
+    deadline: tokio::time::Instant,
+) -> Option<(String, String)> {
     if tokio::time::Instant::now() >= deadline {
-        return false;
+        return None;
     }
-    let Ok(docker) = connect_unix(endpoint) else {
-        return false;
+    let Ok(docker) = connect_unix(&config.docker.endpoint) else {
+        return None;
     };
     let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
     let budget = ENGINE_BUDGET.min(remaining);
-    matches!(
-        docker_deadline_after(docker.ping(), budget).await,
-        Ok(Ok(_))
-    )
+    let info = docker_deadline_after(docker.info(), budget)
+        .await
+        .ok()?
+        .ok()?;
+    let engine_id = info.id.as_deref()?.to_owned();
+    let selected = crate::journal::EngineContext {
+        engine_id: engine_id.clone(),
+        endpoint: config.docker.endpoint.clone(),
+        platform: config.docker.platform.clone(),
+    };
+    let selected = crate::launch::SelectedEngineContext::capture(&selected, &info).ok()?;
+    Some((engine_id, selected.docker_root_digest().to_owned()))
 }
 
 async fn journal_mark(path: &Path, deadline: tokio::time::Instant) -> JournalFact {

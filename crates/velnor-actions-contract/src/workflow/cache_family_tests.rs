@@ -164,7 +164,7 @@ fn reference_family_ceilings_fit_the_budget_rule() {
         | CacheFamily::DbtPackages
         | CacheFamily::PythonVenv
         | CacheFamily::AnsibleCollections => 1,
-        // Two OpenTofu roots; the dependency seed plus the suite bundle of one workspace.
+        // Count two OpenTofu roots and the seed and suite bundles of one workspace.
         CacheFamily::TofuProviders | CacheFamily::MbxBundle => 2,
         CacheFamily::BunInstall => 4,
     };

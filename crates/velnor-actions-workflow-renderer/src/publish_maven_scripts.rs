@@ -49,9 +49,8 @@ pub fn upload_script(gh: &str, id: &str) -> String {
     upload_assets_script(gh, &zip_name(id))
 }
 
-/// Visible stand-in for the attestation step when `attest = false`: a workflow
-/// warning carrying the configured reason, never a silent skip. `reason` is
-/// validated clean text (no quotes, `$` or backticks).
+/// Print a workflow warning with the configured reason when `attest = false`.
+/// Text validation rejects quotes, `$`, and backticks in `reason`.
 #[must_use]
 pub fn attest_disabled_script(reason: &str) -> String {
     format!(

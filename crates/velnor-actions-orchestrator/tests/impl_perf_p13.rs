@@ -236,7 +236,7 @@ fn generate_150_crates_schedules_every_member() -> TestResult {
         .filter(|id| id.starts_with("rust-"))
         .cloned()
         .collect();
-    assert_eq!(actual_jobs, expected_jobs, "one crate job per package");
+    assert_eq!(actual_jobs, expected_jobs, "one Rust job for every package");
     let expected_tasks: BTreeSet<_> = prep
         .workflow
         .ir

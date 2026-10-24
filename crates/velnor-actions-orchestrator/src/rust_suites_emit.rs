@@ -1,17 +1,18 @@
 //! Orchestrator validation and emission for declared `[[stacks.rust.suites]]`.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use velnor_actions_actionlint::PinnedActionRef;
 use velnor_actions_actionlint::actions::{MR_BOXINGTON_ACTION_SHA, MR_BOXINGTON_ACTION_VERSION};
-use velnor_actions_contract::{Job, RustSuiteConfig, StepRole, VelnorConfig};
+use velnor_actions_contract::WorkflowPolicy;
+use velnor_actions_contract::{Job, RunsOn, RustSuiteConfig, StepRole, VelnorConfig};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_rust::CompileDriver as RustCompileDriver;
 use velnor_actions_workflow_renderer::rust_suites::{
-    RustSuitesRenderSpec, build_ci_suite_jobs, render_suites_workflows,
+    RustSuitesRenderSpec, build_ci_suite_jobs, render_suites_workflows_with_routing_and_helpers,
 };
-use velnor_actions_workflow_renderer::{CompileDriver, RenderedFile};
+use velnor_actions_workflow_renderer::{CompileDriver, RenderedFile, WorkflowRoutingPolicy};
 
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
@@ -121,6 +122,17 @@ pub(crate) fn build_ci_jobs(
         return Ok((BTreeMap::new(), Vec::new()));
     };
     let mut ci_jobs = build_ci_suite_jobs(&spec)?;
+    if config.workflow.policy == WorkflowPolicy::ConsumerV1 {
+        for job in ci_jobs.values_mut() {
+            let release_label = helper_release_label(&job.runs_on);
+            let acquire = crate::pins::consumer_acquire_step(
+                &release_label,
+                env!("CARGO_PKG_VERSION"),
+                discovery,
+            )?;
+            job.steps.insert(1.min(job.steps.len()), acquire);
+        }
+    }
     replace_ci_suite_verifiers(&mut ci_jobs, catalog)?;
     let mut required_ids = Vec::new();
     for suite in &spec.suites {
@@ -176,6 +188,7 @@ fn replace_ci_suite_verifiers(
 /// Render standalone `.github/workflows/<slug>.yml` suite workflow files.
 pub(crate) fn suite_workflow_files(
     prep: &GenerationPreparation,
+    routing: &WorkflowRoutingPolicy,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
     validate_suites_against_repo(&prep.root, &prep.config, &prep.discovery)?;
     let catalog = &prep.emission_catalog();
@@ -183,7 +196,69 @@ pub(crate) fn suite_workflow_files(
     else {
         return Ok(Vec::new());
     };
-    Ok(render_suites_workflows(&spec)?)
+    let helper_steps = standalone_helper_steps(prep, &spec)?;
+    Ok(render_suites_workflows_with_routing_and_helpers(
+        &spec,
+        routing,
+        &helper_steps,
+    )?)
+}
+
+fn standalone_helper_steps(
+    prep: &GenerationPreparation,
+    spec: &RustSuitesRenderSpec,
+) -> Result<BTreeMap<String, velnor_actions_contract::Step>, OrchestratorError> {
+    let mut labels = BTreeSet::new();
+    for suite in &spec.suites {
+        if suite.has_workflow_dispatch_trigger() || suite.has_schedule_trigger() {
+            labels.insert(
+                suite
+                    .runner_label
+                    .as_deref()
+                    .unwrap_or(&spec.default_runs_on)
+                    .to_owned(),
+            );
+        }
+    }
+    let mut steps = BTreeMap::new();
+    match prep.config.workflow.policy {
+        WorkflowPolicy::ConsumerV1 => {
+            for label in labels {
+                let step = crate::pins::consumer_acquire_step(
+                    &helper_release_label(&label),
+                    env!("CARGO_PKG_VERSION"),
+                    &prep.discovery,
+                )?;
+                steps.insert(label, step);
+            }
+        }
+        WorkflowPolicy::VelnorRepositoryV1 => {
+            if let Some(lock) = crate::validate::verify_velnor_repository_files(&prep.root)? {
+                let staged = format!(
+                    "{}{}",
+                    velnor_actions_workflow_renderer::STAGED_BINARY_PREFIX,
+                    env!("CARGO_PKG_VERSION")
+                );
+                for label in labels {
+                    let step = crate::pins::lock_acquire_step(
+                        &lock,
+                        &helper_release_label(&label),
+                        &staged,
+                    )?;
+                    steps.insert(label, step);
+                }
+            }
+        }
+    }
+    Ok(steps)
+}
+
+pub(crate) fn helper_release_label(runner_label: &str) -> String {
+    if RunsOn::parse(runner_label).is_ok_and(|runs_on| runs_on.is_scale_set()) {
+        "ubuntu-26.04".to_owned()
+    } else {
+        runner_label.to_owned()
+    }
 }
 
 fn build_render_spec(

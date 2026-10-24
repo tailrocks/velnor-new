@@ -155,6 +155,35 @@ fn mise_linux_arm64_archive_uses_official_release_checksum() {
 }
 
 #[test]
+fn mbx_archives_use_official_v1270_release_checksums() {
+    // Official v1.27.0 release metadata and SHA256SUMS agree with downloaded archive bytes.
+    assert_eq!(
+        official(
+            SourceBuildBootstrapTool::Mbx,
+            SourceBuildBootstrapHost::LinuxAmd64
+        )
+        .archive_sha256(),
+        "f530d0870efcf15c845314ffccd049f53eaec9a35e9f42c0dec0e16b3135e31c"
+    );
+    assert_eq!(
+        official(
+            SourceBuildBootstrapTool::Mbx,
+            SourceBuildBootstrapHost::LinuxArm64
+        )
+        .archive_sha256(),
+        "8a1aaf0a495e455d2ea09430c92c59169eef6a29a140c6b21a6d1581fe252f86"
+    );
+    assert_eq!(
+        official(
+            SourceBuildBootstrapTool::Mbx,
+            SourceBuildBootstrapHost::MacosArm64
+        )
+        .archive_sha256(),
+        "b23a6f67c4fe8c5ef5c3f5b7a747de69d5c9ffe4d00c642eb6e835736cd8dc22"
+    );
+}
+
+#[test]
 fn official_rows_match_measured_six_row_catalog() {
     for row in MEASURED_ROWS {
         assert_asset(row);

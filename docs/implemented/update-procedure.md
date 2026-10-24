@@ -254,4 +254,9 @@ files MUST be split, and grandfathering new or existing debt is forbidden.
   ([release-gates.md](release-gates.md)). Refresh rule: protected release
   job only, separate reviewed change.
 - `.velnor/runner.lock`: Scale Set runner identity (`crates/velnor-runner`). Refresh
-  rule: reviewed, binds image digest + runner version + arch + API versions.
+  rule: reviewed, binds image digest + runner version + arch + API versions and
+  GNU tar source package version + exact source-lock SHA-256 + runtime binary
+  SHA-256. GNU tar has no automated upstream freshness probe. To refresh it,
+  verify the Ubuntu source package through signed archive metadata, update the
+  source lock and matching runner-lock pins, then run the locked build and tar
+  semantics tests and rebuild/qualify the runner image.

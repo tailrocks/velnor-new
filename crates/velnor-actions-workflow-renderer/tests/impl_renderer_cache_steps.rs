@@ -153,6 +153,9 @@ fn cache_save_writes_task_artifacts_only() {
     );
 }
 
+#[path = "impl_renderer_cache_steps_runtime_tests.rs"]
+mod runtime_tests;
+
 fn assert_save_gate_and_seed(
     rendered: &velnor_actions_workflow_renderer::render::RenderedWorkflow,
     text: &str,
@@ -205,6 +208,7 @@ fn strict_wires_runtime_qualified_tools_cache_after_setup_and_saves_once()
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
+            acquire_fixture()?,
             scrubbed_shell_step(
                 "Run jactionlint",
                 mise_argv("jactionlint@2.3.0", "jactionlint", &["-color"]),
@@ -229,13 +233,13 @@ fn strict_wires_runtime_qualified_tools_cache_after_setup_and_saves_once()
     assert!(text.contains("id: velnor-cache-clock"));
     assert_eq!(
         names.iter().position(|s| s == "Setup Mise"),
-        Some(2),
-        "clock, checkout, setup, combined runtime identity and seed, then restore: {names:?}"
+        Some(4),
+        "clock, checkout, verified helper, cache-tar adapters, setup, then runtime identity: {names:?}"
     );
     assert_eq!(
         names.iter().position(|s| s == TOOLS_RESTORE_NAME),
-        Some(4),
-        "archive restore follows seed admission: {names:?}"
+        Some(6),
+        "archive restore follows runtime identity: {names:?}"
     );
     assert!(!text.contains("name: Restore Velnor tool seed"), "{text}");
     for need in [

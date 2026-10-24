@@ -143,8 +143,9 @@ fn full_lock_leaves_nothing_unverifiable() -> TestResult {
     let repo = repo_with_lock(Some(&full_lock()))?;
     let prep = prepare(repo.path())?;
     assert_eq!(prep.lock_audit_blocking, [] as [std::string::String; 0]);
-    // `core:rust` records no lock checksum; the generated `Verify Rust
-    // channel manifest` step pins it instead, so no `no_checksums` gap remains.
+    // `core:rust` records no lock checksum. The generated manifest check
+    // compares recorded installed-manifest hashes with the pinned channel manifest.
+    // This provides the audit coverage for the `no_checksums` finding.
     assert!(
         !prep
             .discovery

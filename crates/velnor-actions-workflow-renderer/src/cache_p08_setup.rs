@@ -1,7 +1,7 @@
 //! Insert the typed V2 tools-cache prelude into rendered jobs.
 
 use velnor_actions_contract::workflow::step_identity::is_configured_checkout;
-use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_contract::{Job, RunsOn, Step, StepKind, StepRole};
 
 use crate::{MiseSetup, RenderError, cache_p08, cache_p08::ToolsCacheInputs};
 
@@ -17,7 +17,66 @@ pub(crate) fn ensure_tools_cache_v2(
     job: &mut Job,
     setup: &MiseSetup,
     always: bool,
-    target: &str,
+    options: cache_p08::ToolsCacheRenderOptions<'_>,
+) -> Result<(), RenderError> {
+    setup.validate()?;
+    let setup_indices = job
+        .steps
+        .iter()
+        .enumerate()
+        .filter(|(_, step)| is_setup_step(step))
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+    if setup_indices.len() > 1 {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "duplicate_setup_mise:{job_id}"
+        )));
+    }
+    let needed = always || job.steps.iter().any(step_uses_mise);
+    if !needed && setup_indices.is_empty() {
+        reject_v2_steps(job_id, job)?;
+        return Ok(());
+    }
+    let expected_setup = cache_p08::setup_step(setup)?;
+    let setup_index = if let Some(index) = setup_indices.first().copied() {
+        if !cache_p08::same_step_semantics(&job.steps[index], &expected_setup) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "setup_mise_malformed:{job_id}"
+            )));
+        }
+        move_setup_after_helper(job, index, options.checkout_uses)
+    } else {
+        let at = insert_at(job, options.checkout_uses).min(job.steps.len());
+        job.steps.insert(at, expected_setup);
+        move_setup_after_helper(job, at, options.checkout_uses)
+    };
+    if let Some(first_mise) = first_mise_index(job)
+        && setup_index > first_mise
+    {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "setup_mise_misordered:{job_id}"
+        )));
+    }
+    reject_v2_steps(job_id, job)?;
+    if !checkout_precedes_setup(job, setup_index, options.checkout_uses) {
+        return Ok(());
+    }
+    insert_tools_prelude(
+        job_id,
+        job,
+        setup,
+        options.target,
+        options.scale_set_image_source_sha,
+        setup_index,
+        options.require_verified_helper,
+    )
+}
+
+pub(crate) fn ensure_mise_setup_only(
+    job_id: &str,
+    job: &mut Job,
+    setup: &MiseSetup,
+    always: bool,
     checkout_uses: &str,
 ) -> Result<(), RenderError> {
     setup.validate()?;
@@ -58,11 +117,7 @@ pub(crate) fn ensure_tools_cache_v2(
             "setup_mise_misordered:{job_id}"
         )));
     }
-    reject_v2_steps(job_id, job)?;
-    if !checkout_precedes_setup(job, setup_index, checkout_uses) {
-        return Ok(());
-    }
-    insert_tools_prelude(job_id, job, setup, target, setup_index)
+    reject_v2_steps(job_id, job)
 }
 
 fn insert_tools_prelude(
@@ -70,10 +125,20 @@ fn insert_tools_prelude(
     job: &mut Job,
     setup: &MiseSetup,
     target: &str,
+    scale_set_image_source_sha: Option<&str>,
     setup_index: usize,
+    require_verified_helper: bool,
 ) -> Result<(), RenderError> {
     let specs = cache_p08::infer_job_tools(job);
     if specs.is_empty() {
+        return Ok(());
+    }
+    if !job.steps.iter().any(is_helper_stage) {
+        if require_verified_helper {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "tools_cache_helper_missing:{job_id}"
+            )));
+        }
         return Ok(());
     }
     let rust_version = specs.iter().find_map(|spec| spec.strip_prefix("rust@"));
@@ -104,15 +169,29 @@ fn insert_tools_prelude(
         tool_specs: &specs,
         rustup_toolchain: rust_version,
         rustup_components: &components,
+        scale_set_image_source_sha: RunsOn::parse(&job.runs_on)
+            .is_ok_and(|runs_on| runs_on.is_scale_set())
+            .then_some(scale_set_image_source_sha)
+            .flatten(),
     })?;
     if !payload.runtime_identity_supported() {
         return Ok(());
     }
-    let prelude = payload.runtime_prelude_step()?;
-    let restore = payload.restore_step()?;
-    let after_setup = setup_index + 1;
-    job.steps
-        .splice(after_setup..after_setup, [prelude, restore]);
+    let needs_plan = job
+        .needs
+        .iter()
+        .any(|dependency| dependency == crate::render::PLAN_JOB_ID);
+    let mut prelude = payload.runtime_prelude_step()?;
+    prelude.condition = Some(cache_p08::tools_cache_identity_condition(needs_plan).to_owned());
+    let mut restore = payload.restore_step()?;
+    restore.condition = Some(cache_p08::tools_cache_restore_condition(needs_plan).to_owned());
+    let prelude_at = setup_index.saturating_add(1);
+    if first_mise_index(job).is_some_and(|index| prelude_at > index) {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "tools_cache_helper_after_tool_use:{job_id}"
+        )));
+    }
+    job.steps.splice(prelude_at..prelude_at, [prelude, restore]);
     Ok(())
 }
 
@@ -173,6 +252,13 @@ fn has_v2_cache_authority(step: &Step, job: &Job) -> bool {
         && with.get("path").map(String::as_str) == Some(tools_paths.as_str())
 }
 
+fn is_helper_stage(step: &Step) -> bool {
+    matches!(
+        step.role,
+        Some(StepRole::AcquireVelnor | StepRole::PreseedStage)
+    )
+}
+
 fn step_uses_mise(step: &Step) -> bool {
     let StepKind::Shell { run, .. } = &step.kind else {
         return false;
@@ -198,87 +284,57 @@ fn insert_at(job: &Job, checkout_uses: &str) -> usize {
         .map_or(0, |index| index + 1)
 }
 
-/// Parse the exact pinned components step that populated this tool payload.
-/// # Errors
-pub(crate) fn rust_components(
-    step: &Step,
-    version: &str,
-    target: &str,
-) -> Result<Vec<String>, RenderError> {
-    let StepKind::Shell { run, env } = &step.kind else {
-        return Err(RenderError::BadCommand(
-            "rust_components_not_shell".to_owned(),
-        ));
-    };
-    if env
-        .get("RUSTUP_TOOLCHAIN")
-        .is_some_and(|value| value != version)
-    {
-        return Err(RenderError::BadCommand(
-            "rust_components_toolchain_env_mismatch".to_owned(),
-        ));
-    }
-    let words = crate::cache_p08_detect::detector_words(run);
-    let Some(start) = words
-        .windows(3)
-        .position(|triple| triple == ["rustup", "component", "add"])
+fn move_setup_after_helper(job: &mut Job, setup_index: usize, checkout_uses: &str) -> usize {
+    let Some(checkout_index) = job
+        .steps
+        .iter()
+        .position(|step| is_typed_checkout(step, checkout_uses))
     else {
-        return Err(RenderError::BadCommand(
-            "rust_components_command_missing".to_owned(),
-        ));
+        return setup_index;
     };
-    let payload = &words[start + 3..];
-    if payload.len() < 3 || payload[0] != "--toolchain" {
-        return Err(RenderError::BadCommand(
-            "rust_components_toolchain_missing".to_owned(),
-        ));
-    }
-    let expected = format!("{version}-{target}");
-    if payload[1] != expected {
-        return Err(RenderError::BadCommand(
-            "rust_components_toolchain_mismatch".to_owned(),
-        ));
-    }
-    let mut components = payload[2..].to_vec();
-    components.sort();
-    components.dedup();
-    if components != ["clippy", "rustfmt"] {
-        return Err(RenderError::BadCommand(
-            "rust_components_set_mismatch".to_owned(),
-        ));
-    }
-    Ok(components)
+    let after_checkout = checkout_index + 1;
+    let helper_index = job
+        .steps
+        .iter()
+        .enumerate()
+        .rev()
+        .find(|(index, step)| *index >= after_checkout && is_helper_stage(step))
+        .map(|(index, _)| index);
+    let Some(helper_index) = helper_index.filter(|index| setup_index < *index) else {
+        return setup_index;
+    };
+    let setup = job.steps.remove(setup_index);
+    job.steps.insert(helper_index, setup);
+    helper_index
 }
 
-#[cfg(test)]
-mod tests {
-    use super::rust_components;
-    use crate::steps::ambient_shell_step;
-    use std::collections::BTreeMap;
-
-    #[test]
-    fn parses_the_fixed_rust_components_payload() {
-        let step = ambient_shell_step(
-            "Prepare Rust components",
-            vec![
-                "mise".to_owned(),
-                "exec".to_owned(),
-                "rust@1.98.1".to_owned(),
-                "--".to_owned(),
-                "rustup".to_owned(),
-                "component".to_owned(),
-                "add".to_owned(),
-                "--toolchain".to_owned(),
-                "1.98.1-x86_64-unknown-linux-gnu".to_owned(),
-                "clippy".to_owned(),
-                "rustfmt".to_owned(),
-            ],
-            BTreeMap::from([("RUSTUP_TOOLCHAIN".to_owned(), "1.98.1".to_owned())]),
-        )
-        .expect("fixed step");
-        assert_eq!(
-            rust_components(&step, "1.98.1", "x86_64-unknown-linux-gnu").expect("components"),
-            ["clippy", "rustfmt"]
-        );
+pub(crate) fn move_acquire_after_checkout(job: &mut Job, checkout_uses: &str) {
+    let Some(acquire_at) = job
+        .steps
+        .iter()
+        .position(|step| step.role == Some(StepRole::AcquireVelnor))
+    else {
+        return;
+    };
+    let Some(checkout_at) = job
+        .steps
+        .iter()
+        .position(|step| is_typed_checkout(step, checkout_uses))
+    else {
+        return;
+    };
+    if acquire_at == checkout_at + 1 {
+        return;
     }
+    let acquire = job.steps.remove(acquire_at);
+    let checkout_at = if acquire_at < checkout_at {
+        checkout_at - 1
+    } else {
+        checkout_at
+    };
+    job.steps.insert(checkout_at + 1, acquire);
 }
+
+#[path = "cache_p08_setup_components.rs"]
+mod components;
+pub(crate) use components::rust_components;

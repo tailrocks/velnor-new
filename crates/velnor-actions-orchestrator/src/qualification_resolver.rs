@@ -15,7 +15,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 use velnor_actions_contract::{
-    QualificationCacheAdmission, QualificationPhase, canonical_json_bytes,
+    QualificationCacheAdmission, QualificationPhase, canonical_json_bytes, run_key_for_ci,
 };
 
 use crate::OrchestratorError;
@@ -35,8 +35,26 @@ pub fn resolve_qualification_admission(request_path: &Path) -> Result<(), Orches
     request.validate(&root)?;
     let config = crate::config::load_config(&root)?;
     let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&root, &config)?;
-    let client = api::GitHub::for_repository(&catalog, &request.repository)?;
-    client.validate_current_branch(&request.context.default_branch)?;
+    let client = api::GitHub::for_repository(
+        &catalog,
+        &request.context,
+        config.workflow.verification_branch.as_deref(),
+        &request.head,
+    )?;
+    client.validate_current_branch()?;
+    let run_key = run_key_for_ci(
+        request.context.run_id,
+        u64::from(request.context.run_attempt),
+    );
+    let snapshot = crate::qualification_cache_backend::capture_qualification_cache_before(
+        &root,
+        &request.context,
+    )?;
+    let runner_temp = env::var_os("RUNNER_TEMP")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .ok_or_else(|| internal("missing_runner_temp"))?;
+    crate::qualification_cache_backend::stage_qualification_cache_before(&runner_temp, &snapshot)?;
     let Some(predecessor) = request.context.predecessor else {
         return Ok(());
     };
@@ -54,7 +72,7 @@ pub fn resolve_qualification_admission(request_path: &Path) -> Result<(), Orches
     .map_err(crate::internal::internal_contract)?;
     QualificationCacheAdmission::parse_bounded(&bytes)
         .map_err(crate::internal::internal_contract)?;
-    stage_admission(&bytes)
+    stage_admission(&runner_temp, &run_key, &bytes)
 }
 
 /// Load the staged admission only for phases that require a predecessor.
@@ -64,12 +82,18 @@ pub fn read_qualification_admission(
     runner_temp: &Path,
 ) -> Result<Option<QualificationCacheAdmission>, OrchestratorError> {
     let response = crate::internal::PlanResponse::parse(response_json)?;
-    let expected = response
-        .plan
+    read_qualification_admission_for_plan(&response.plan, runner_temp)
+}
+
+pub(crate) fn read_qualification_admission_for_plan(
+    plan: &velnor_actions_contract::Plan,
+    runner_temp: &Path,
+) -> Result<Option<QualificationCacheAdmission>, OrchestratorError> {
+    let expected = plan
         .qualification
         .as_ref()
         .is_some_and(|context| context.phase.predecessor().is_some());
-    let path = admission_path(runner_temp);
+    let path = admission_path(runner_temp, &plan.run_key);
     if !expected {
         return match std::fs::symlink_metadata(&path) {
             Ok(_) => Err(internal("unexpected_qualification_admission")),
@@ -81,9 +105,12 @@ pub fn read_qualification_admission(
         &path,
         velnor_actions_contract::MAX_QUALIFICATION_RECEIPT_BYTES as u64,
     )?;
-    QualificationCacheAdmission::parse_bounded(text.as_bytes())
-        .map(Some)
-        .map_err(crate::internal::internal_contract)
+    let admission = QualificationCacheAdmission::parse_bounded(text.as_bytes())
+        .map_err(crate::internal::internal_contract)?;
+    admission
+        .validate_for_plan(plan)
+        .map_err(crate::internal::internal_contract)?;
+    Ok(Some(admission))
 }
 
 fn checkout_root() -> Result<PathBuf, OrchestratorError> {
@@ -93,21 +120,26 @@ fn checkout_root() -> Result<PathBuf, OrchestratorError> {
     resolve_root(&cwd)
 }
 
-fn stage_admission(bytes: &[u8]) -> Result<(), OrchestratorError> {
-    let runner_temp = env::var_os("RUNNER_TEMP")
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .ok_or_else(|| internal("missing_runner_temp"))?;
-    let path = admission_path(&runner_temp);
+fn stage_admission(
+    runner_temp: &Path,
+    run_key: &str,
+    bytes: &[u8],
+) -> Result<(), OrchestratorError> {
+    let path = admission_path(runner_temp, run_key);
     let parent = path
         .parent()
         .ok_or_else(|| internal("bad_qualification_admission_path"))?;
-    crate::exclusive_write::create_dir_no_symlink(&runner_temp, parent)?;
+    crate::exclusive_write::create_dir_no_symlink(runner_temp, parent)?;
     crate::exclusive_write::write_exclusive(&path, bytes, "qualification_admission")
 }
 
-fn admission_path(runner_temp: &Path) -> PathBuf {
+fn admission_path(runner_temp: &Path, run_key: &str) -> PathBuf {
     runner_temp
         .join("velnor")
+        .join(run_key)
         .join(QUALIFICATION_ADMISSION_FILENAME)
 }
+
+#[cfg(test)]
+#[path = "qualification_resolver_tests.rs"]
+mod tests;

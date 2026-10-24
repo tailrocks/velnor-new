@@ -6,27 +6,37 @@ mod identity;
 mod receipt;
 mod runtime;
 
+#[cfg(test)]
+pub(crate) use identity::validate_runtime_identity;
+
 pub use directive::{
     QUALIFICATION_CACHE_DIRECTIVES_OUTPUT, QualificationCacheDirective,
-    QualificationCacheLaneDirective, QualificationCacheLayerDirective,
+    QualificationCacheLaneDirective, QualificationCacheLaneLayerDirective,
+    QualificationCacheLayerDirective, QualificationCacheOwnerDirective,
     QualificationCacheRestoreDirective, QualificationCacheRestorePolicy,
     QualificationCacheSavePolicy,
 };
+pub use identity::QualificationCacheOwnerMemberRef;
 pub use identity::{
     BoundQualificationCacheKeys, MAX_QUALIFICATION_CACHE_LANES, QualificationCacheLayer,
-    QualificationCacheRestoreExpectation, QualificationCacheSlot, QualificationRuntimeIdentity,
+    QualificationCacheRestoreExpectation, QualificationCacheSlot,
+    QualificationRuntimeAbiObservation, QualificationRuntimeIdentity,
     QualificationRuntimeIdentityField, QualificationRuntimeIdentityRequirements,
-    QualificationRuntimePlatform,
+    QualificationRuntimeImageDigests, QualificationRuntimeImageIdentity,
+    QualificationRuntimePlatform, QualificationRuntimeScaleSet,
+    QualificationRuntimeToolObservation,
 };
 pub use receipt::{
     MAX_QUALIFICATION_RECEIPT_BYTES, MAX_QUALIFICATION_RECEIPT_DEPTH,
     QUALIFICATION_CACHE_RECEIPT_ARTIFACT, QUALIFICATION_CACHE_RECEIPT_FILENAME,
     QualificationCacheAdmission, QualificationCacheArtifact, QualificationCacheBackendEntry,
-    QualificationCacheBackendObservation, QualificationCacheLaneReceipt,
-    QualificationCacheLayerReceipt, QualificationCacheProducerContext, QualificationCacheReceipt,
-    QualificationCacheReceiptArtifactDocument, QualificationCacheReceiptLink,
-    QualificationCacheRestore, QualificationCacheRestoreResult, QualificationCacheRunMetadata,
-    QualificationCacheSave, QualificationCacheSaveActionResult, QualificationSourceDelta,
+    QualificationCacheBackendObservation, QualificationCacheLaneLayerReceipt,
+    QualificationCacheLaneReceipt, QualificationCacheLayerReceipt, QualificationCacheOwnerReceipt,
+    QualificationCacheProducerContext, QualificationCacheProducerEvidence,
+    QualificationCacheReceipt, QualificationCacheReceiptArtifactDocument,
+    QualificationCacheReceiptLink, QualificationCacheRestore, QualificationCacheRestoreResult,
+    QualificationCacheRunMetadata, QualificationCacheSave, QualificationCacheSaveActionResult,
+    QualificationSourceDelta, qualification_cache_receipt_artifact_name,
 };
 
 #[cfg(test)]

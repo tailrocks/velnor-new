@@ -208,12 +208,18 @@ fn assert_schema_only_consumer_manifest_input(fixture_check: &str) {
 fn assert_dogfood_cargo_warmup(
     qualification_helpers: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let normalized = qualification_helpers
+        .replace("\\\n", " ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
     assert!(
-        qualification_helpers.contains(
-            "mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo fetch --locked"
-        ) || qualification_helpers.contains(
-            r#"mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- cargo fetch --locked"#
-        ),
+normalized.contains(
+            r#"rust_version="$(awk -v key=rust -f "$repo/scripts/toml-tool-pin.awk" "$repo/.velnor/version-policy.toml")""#
+        )
+            && normalized.contains(
+                r#"MISE_AUTO_INSTALL=false MISE_EXEC_AUTO_INSTALL=false CARGO_HOME="$cargo_home" RUSTUP_HOME="$rustup_home" mise --no-config --no-env --no-hooks exec "rust@$rust_version" -- cargo fetch --locked --manifest-path "$manifest";"#
+            ),
         "{qualification_helpers}"
     );
     assert!(

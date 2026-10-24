@@ -18,9 +18,12 @@ pub(super) fn generated_pinned_task_step() -> Step {
         .map(|word| word.into_string().expect("UTF-8 pinned task argv"))
         .collect();
     let toolchain = toolchain_id(&task.toolchain_inputs).expect("toolchain identity");
-    task.task_digest = task_digest_for_execution(&task.task_id, &task.run, &toolchain)
-        .expect("updated task digest");
-    obligation_step(&task, &catalog, &[], None, env!("CARGO_PKG_VERSION"), None)
+    task.task_digest = velnor_actions_contract::TaskBindingDigest::new(
+        task_digest_for_execution(&task.task_id, &task.run, &toolchain)
+            .expect("updated task digest"),
+    )
+    .expect("updated binding digest");
+    obligation_step(&task, &catalog, None, env!("CARGO_PKG_VERSION"), None)
         .expect("generated task step")
 }
 
@@ -41,6 +44,7 @@ pub(super) fn obligation_workflow_ir(checkout_uses: &str, task_step: Step) -> Wo
             push_branches: vec!["main".to_owned()],
             merge_group: true,
             workflow_dispatch: None,
+            workflow_call: false,
             schedule: None,
         },
         permissions: Permissions::default(),
@@ -135,6 +139,9 @@ pub(super) fn renderer_context(
         report_helper_version: generator_version,
         runs_on: "ubuntu-26.04".to_owned(),
         scale_set_selector: None,
+        scale_set_image_source_sha: None,
+        verified_cache_helpers: std::collections::BTreeMap::new(),
+        require_verified_cache_helper: false,
         request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
         checkout_uses,
         validator_commands: Vec::new(),

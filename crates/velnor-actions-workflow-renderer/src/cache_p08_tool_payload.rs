@@ -54,7 +54,7 @@ pub(crate) fn runtime_prelude_action_uses(runs_on: &str) -> Option<&'static str>
 /// Inputs resolved from a job's typed preparation/catalog obligations.
 #[derive(Debug, Clone, Copy)]
 pub struct ToolsCacheInputs<'a> {
-    /// Expanded job's exact hosted label or Scale Set token.
+    /// Expanded job's runner label or Scale Set selector.
     pub runs_on: &'a str,
     /// Rust target selected for this job.
     pub target: &'a str,
@@ -66,6 +66,8 @@ pub struct ToolsCacheInputs<'a> {
     pub rustup_toolchain: Option<&'a str>,
     /// Exact Rust components installed by the job.
     pub rustup_components: &'a [String],
+    /// Validated immutable runner-image source for a Scale Set lane.
+    pub scale_set_image_source_sha: Option<&'a str>,
 }
 
 /// Complete static portion of one exact tools-cache payload.
@@ -79,6 +81,7 @@ pub struct ToolsCachePayload {
     paths: Vec<String>,
     runs_on: String,
     target: String,
+    scale_set_image_source_sha: Option<String>,
 }
 
 impl ToolsCachePayload {
@@ -120,6 +123,7 @@ impl ToolsCachePayload {
             paths,
             runs_on: inputs.runs_on.to_owned(),
             target: inputs.target.to_owned(),
+            scale_set_image_source_sha: inputs.scale_set_image_source_sha.map(str::to_owned),
         })
     }
 
@@ -142,10 +146,11 @@ impl ToolsCachePayload {
         )
     }
 
-    /// Whether this lane has an exact hosted image identity for V2 restores.
+    /// Whether this lane has an exact image identity for V2 restores.
     #[must_use]
     pub fn runtime_identity_supported(&self) -> bool {
-        runtime_identity::is_supported_lane(&self.runs_on, &self.target)
+        let scale_set = RunsOn::parse(&self.runs_on).is_ok_and(|runs_on| runs_on.is_scale_set());
+        runtime_identity::is_supported_lane(&self.runs_on, &self.target) && !scale_set
     }
 
     /// Canonical exact paths archived by both restore and save.
@@ -178,7 +183,7 @@ impl ToolsCachePayload {
                 "bad_tools_cache_runtime_identity".to_owned(),
             ));
         }
-        Ok(format!("mise-tools-v2-{fingerprint}"))
+        Ok(format!("mise-tools-v2-payload-v3-{fingerprint}"))
     }
 
     /// Read-only restore over the payload's key expression and exact paths.
@@ -204,8 +209,22 @@ impl ToolsCachePayload {
 }
 
 fn validate_inputs(inputs: &ToolsCacheInputs<'_>) -> Result<(), RenderError> {
-    RunsOn::parse(inputs.runs_on)
+    let runs_on = RunsOn::parse(inputs.runs_on)
         .map_err(|err| RenderError::BadCommand(format!("bad_tools_cache_lane:{err}")))?;
+    match (runs_on.is_scale_set(), inputs.scale_set_image_source_sha) {
+        (true, Some(source_sha)) if is_sha(source_sha, 40) => {}
+        (true, Some(_)) => {
+            return Err(RenderError::BadCommand(
+                "tools_cache_scale_set_image_source_invalid".to_owned(),
+            ));
+        }
+        (true | false, None) => {}
+        (false, Some(_)) => {
+            return Err(RenderError::BadCommand(
+                "tools_cache_hosted_image_source_unexpected".to_owned(),
+            ));
+        }
+    }
     if !velnor_actions_contract::is_supported_target(inputs.target) {
         return Err(RenderError::BadCommand(format!(
             "bad_tools_cache_target:{}",
@@ -280,6 +299,8 @@ fn identity_preimage(
         "mise-tools-v2".to_owned(),
         inputs.runs_on.to_owned(),
         inputs.target.to_owned(),
+        "scale_set_image_source_sha".to_owned(),
+        inputs.scale_set_image_source_sha.unwrap_or("").to_owned(),
         inputs.mise_setup.uses.clone(),
         inputs.mise_setup.version.clone(),
         inputs.mise_setup.sha256.clone(),

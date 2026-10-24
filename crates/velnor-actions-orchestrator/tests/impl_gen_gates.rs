@@ -10,7 +10,8 @@ use tempfile::TempDir;
 use velnor_actions_orchestrator::{GenerateOptions, generate, plan_internal, prepare};
 
 use crate::impl_common::{
-    TestResult, config_with_branch, fixture_manifest_json, git, make_repo, snapshot,
+    GENERATED_TASK_FILES, TestResult, config_with_branch, fixture_manifest_json, git, make_repo,
+    snapshot,
 };
 
 /// Render `generate` into a fresh preview and read every file's bytes.
@@ -73,14 +74,20 @@ fn cross_checkout_determinism() -> TestResult {
     );
     let left_bytes = preview_bytes(left.path())?;
     let right_bytes = preview_bytes(right.path())?;
+    let expected = GENERATED_TASK_FILES
+        .into_iter()
+        .collect::<std::collections::BTreeSet<_>>();
+    let actual = left_bytes
+        .keys()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
     assert_eq!(
-        left_bytes.keys().len(),
-        15,
-        "generated files: {:?}",
-        left_bytes.keys().collect::<Vec<_>>()
+        actual, expected,
+        "The generated paths must match the expected set."
     );
     for generated in [
         ".github/actions/declared-task-0/action.yml",
+        ".github/actions/velnor-cache-tar-launchers/action.yml",
         ".github/velnor/task-execution-manifest-v1.json",
     ] {
         assert!(left_bytes.contains_key(generated), "generated {generated}");

@@ -1,0 +1,342 @@
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
+use std::time::Instant;
+
+use crate::config::{
+    ConnectionId, KeychainReference, RepositoryConnection, ScaleSetSelector, SourcePolicy,
+    SourcePolicyMode, WorkflowEvent,
+};
+use crate::error::HostError;
+use crate::journal::connection::ConnectionJournal;
+use crate::journal::connection::storage::read_transaction;
+use crate::journal::scale_set_create::{CreatedScaleSetResponse, ScaleSetCreateRequest};
+use crate::journal::{Journal, SourceAuthorizationResult, fixture_provisioning_profile};
+use crate::launch::steps::source::{AuthorizedSourceReceipt, test_receipt};
+use velnor_runner_github::SourceMetadata;
+use velnor_runner_github::workflow_run::{
+    VerifiedJobWorkflowRef, VerifiedWorkflowSource, WorkflowRefKind,
+};
+
+macro_rules! trace_test_stage {
+    ($_label:literal, $stage:expr) => {
+        $stage.await?
+    };
+}
+
+pub(crate) const TEST_ENGINE_ID: &str = "11111111-1111-4111-8111-111111111111";
+
+static NEXT_PHYSICAL_FIXTURE_REQUEST_ID: AtomicI64 = AtomicI64::new(1_000_000);
+
+pub(crate) async fn acquired_physical_fixture_request(
+    scope: &ConnectionJournal,
+) -> Result<crate::journal::AssignmentIdentity, HostError> {
+    use crate::journal::{AssignmentKey, SourceAuthorizationResult};
+
+    let request_id = NEXT_PHYSICAL_FIXTURE_REQUEST_ID.fetch_add(1, Ordering::Relaxed);
+    if request_id <= 0 {
+        return Err(HostError::Journal);
+    }
+    let request = scope
+        .assignment_identity(AssignmentKey::AssignedRequest { request_id })
+        .await?;
+    let repository_id = read_transaction(scope.journal_ref(), async |connection| {
+        let mut rows = connection
+            .query(
+                "SELECT identity FROM connection_scopes WHERE connection_id = ?1 AND retired = 0",
+                [request.connection_id().as_str()],
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        let identity = rows
+            .next()
+            .await
+            .map_err(|_| HostError::Journal)?
+            .ok_or(HostError::Journal)?
+            .get::<String>(0)
+            .map_err(|_| HostError::Journal)?;
+        serde_json::from_str::<serde_json::Value>(&identity)
+            .map_err(|_| HostError::Journal)?
+            .get("repository_id")
+            .and_then(serde_json::Value::as_i64)
+            .filter(|id| *id > 0)
+            .ok_or(HostError::Journal)
+    })
+    .await?;
+    let source = receipt(scope, request_id, request_id + 1, repository_id).await?;
+    let result = scope.record_source_authorization(&request, &source).await?;
+    if result != SourceAuthorizationResult::Recorded {
+        return Err(HostError::Journal);
+    }
+    Ok(request)
+}
+
+pub(crate) fn test_initializer_limits()
+-> Result<crate::worker::storage_initialization::StorageInitializationLimits, HostError> {
+    crate::worker::storage_initialization::StorageInitializationLimits::from_reserved_budget(
+        crate::worker::test_resource_budget()?,
+        100,
+        128 * 1024 * 1024,
+        16,
+    )
+}
+
+pub(crate) async fn storage_initializer_abort_state(
+    scope: &ConnectionJournal,
+    reservation_id: i64,
+) -> Result<String, HostError> {
+    read_transaction(scope.journal_ref(), async |connection| {
+        let mut rows = connection
+            .query(
+                "SELECT abort_state FROM capacity_reservation_storage_initialization WHERE reservation_id = ?1",
+                [reservation_id],
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        let row = rows
+            .next()
+            .await
+            .map_err(|_| HostError::Journal)?
+            .ok_or(HostError::Journal)?;
+        if rows.next().await.map_err(|_| HostError::Journal)?.is_some() {
+            return Err(HostError::Journal);
+        }
+        row.get::<String>(0).map_err(|_| HostError::Journal)
+    })
+    .await
+}
+
+pub(crate) async fn bootstrap_start_state(
+    scope: &ConnectionJournal,
+    reservation_id: i64,
+) -> Result<String, HostError> {
+    read_transaction(scope.journal_ref(), async |connection| {
+        let mut rows = connection
+            .query(
+                "SELECT bootstrap_start_state FROM capacity_reservation_provisioning_state WHERE reservation_id = ?1",
+                [reservation_id],
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        let row = rows
+            .next()
+            .await
+            .map_err(|_| HostError::Journal)?
+            .ok_or(HostError::Journal)?;
+        if rows.next().await.map_err(|_| HostError::Journal)?.is_some() {
+            return Err(HostError::Journal);
+        }
+        row.get::<String>(0).map_err(|_| HostError::Journal)
+    })
+    .await
+}
+
+pub(crate) struct StorageInitializerPhase {
+    pub(crate) result: String,
+    pub(crate) remove: String,
+    pub(crate) abort: String,
+}
+
+pub(crate) async fn storage_initializer_phase(
+    journal: &Journal,
+    reservation_id: i64,
+) -> Result<StorageInitializerPhase, HostError> {
+    read_transaction(journal, async |connection| {
+        let mut rows = connection
+            .query(
+                "SELECT start_state, result_state, remove_state, abort_state FROM capacity_reservation_storage_initialization WHERE reservation_id = ?1",
+                [reservation_id],
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        let row = rows
+            .next()
+            .await
+            .map_err(|_| HostError::Journal)?
+            .ok_or(HostError::Journal)?;
+        let _: String = row.get(0).map_err(|_| HostError::Journal)?;
+        let phase = StorageInitializerPhase {
+            result: row.get::<String>(1).map_err(|_| HostError::Journal)?,
+            remove: row.get::<String>(2).map_err(|_| HostError::Journal)?,
+            abort: row.get::<String>(3).map_err(|_| HostError::Journal)?,
+        };
+        if rows.next().await.map_err(|_| HostError::Journal)?.is_some() {
+            return Err(HostError::Journal);
+        }
+        Ok(phase)
+    })
+    .await
+}
+
+pub(crate) struct Scratch(PathBuf);
+
+impl Scratch {
+    pub(crate) fn new() -> Result<Self, HostError> {
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let id = NEXT.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "velnor-request-journal-{}-{id}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&path).map_err(|_| HostError::Journal)?;
+        Ok(Self(path))
+    }
+
+    pub(crate) fn file(&self) -> PathBuf {
+        self.0.join("journal.db")
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _removed = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+include!("helpers/listener.rs");
+
+pub(crate) fn binding(id: &str, repository_id: i64) -> Result<RepositoryConnection, HostError> {
+    let labels = vec!["velnor".to_owned(), "integration".to_owned()];
+    RepositoryConnection::try_new(
+        ConnectionId::parse(id)?,
+        repository_id,
+        format!("owner-{repository_id}/repo-{repository_id}"),
+        KeychainReference::parse(&format!("keychain:velnor/{id}"))?,
+        ScaleSetSelector::try_new("integration", &labels)?,
+        SourcePolicy::try_new(
+            SourcePolicyMode::Repository,
+            Vec::new(),
+            Vec::new(),
+            vec![WorkflowEvent::Push],
+            Vec::new(),
+        )?,
+    )
+}
+
+pub(crate) async fn created_scope(
+    journal: &Journal,
+    binding: &RepositoryConnection,
+    set_id: i64,
+) -> Result<ConnectionJournal, HostError> {
+    journal
+        .configure_storage_profile(fixture_provisioning_profile())
+        .await?;
+    journal.bind_engine(TEST_ENGINE_ID).await?;
+    let scope = journal.connection_scope(binding).await?;
+    let request = ScaleSetCreateRequest::new(binding, 7)?;
+    let prepared = scope.prepare_scale_set_create(&request).await?;
+    let claim = scope
+        .claim_scale_set_create(&prepared)
+        .await?
+        .ok_or(HostError::Journal)?;
+    let response = CreatedScaleSetResponse::verified(
+        &request,
+        set_id,
+        "integration",
+        binding.scale_set.labels(),
+        true,
+    )?;
+    scope.record_scale_set_created(claim, response).await?;
+    scope
+        .bind_engine_context(TEST_ENGINE_ID, "unix:///var/run/docker.sock", "linux/amd64")
+        .await?;
+    let config = crate::config::HostConfig::test_with_job_authority_policy(binding)?;
+    scope.install_job_authority_policy(&config).await?;
+    Ok(scope)
+}
+
+pub(super) async fn receipt(
+    scope: &ConnectionJournal,
+    request_id: i64,
+    message_id: i64,
+    repository_id: i64,
+) -> Result<AuthorizedSourceReceipt, HostError> {
+    let binding = scope.source_authorization_binding().await?;
+    Ok(test_receipt(
+        &binding,
+        request_id,
+        message_id,
+        source(repository_id, request_id + 1000),
+        SourcePolicyMode::Repository,
+    ))
+}
+
+pub(super) fn source(repository_id: i64, run_id: i64) -> VerifiedWorkflowSource {
+    let workflow_ref = format!(
+        "owner-{repository_id}/repo-{repository_id}/.github/workflows/build.yml@refs/heads/main"
+    );
+    VerifiedWorkflowSource {
+        repository_id,
+        owner_name: format!("owner-{repository_id}"),
+        repository_name: format!("repo-{repository_id}"),
+        workflow_run_id: run_id,
+        event_name: "push".to_owned(),
+        head_branch: Some("main".to_owned()),
+        head_sha: "a".repeat(40),
+        job_workflow_ref: workflow_ref.clone(),
+        job_workflow: VerifiedJobWorkflowRef {
+            full_ref: workflow_ref,
+            owner_name: format!("owner-{repository_id}"),
+            repository_name: format!("repo-{repository_id}"),
+            workflow_path: ".github/workflows/build.yml".to_owned(),
+            reference: "refs/heads/main".to_owned(),
+            kind: WorkflowRefKind::Branch,
+        },
+        workflow_source_sha: None,
+        run_attempt: 1,
+    }
+}
+
+pub(super) fn event_source(repository_id: i64, run_id: i64) -> SourceMetadata {
+    SourceMetadata {
+        owner_name: Some(format!("owner-{repository_id}")),
+        repository_name: Some(format!("repo-{repository_id}")),
+        job_workflow_ref: Some(format!(
+            "owner-{repository_id}/repo-{repository_id}/.github/workflows/build.yml@refs/heads/main"
+        )),
+        workflow_run_id: Some(run_id),
+        event_name: Some("push".to_owned()),
+    }
+}
+
+pub(super) fn runner_name(nonce: char) -> String {
+    format!("v{}", nonce.to_string().repeat(32))
+}
+
+pub(crate) async fn record_acquired(
+    scope: &ConnectionJournal,
+    request_id: i64,
+) -> Result<(), HostError> {
+    let identity = scope
+        .assignment_identity(crate::journal::AssignmentKey::AssignedRequest { request_id })
+        .await?;
+    let source = receipt(scope, request_id, request_id + 100, 101).await?;
+    if scope
+        .record_source_authorization(&identity, &source)
+        .await?
+        != SourceAuthorizationResult::Recorded
+    {
+        return Err(HostError::Journal);
+    }
+    if !scope.claim_request_acquire(&identity).await? {
+        return Err(HostError::Journal);
+    }
+    scope
+        .record_request_acquire(
+            &identity,
+            crate::journal::AssignedAcquireResult::Returned(vec![request_id]),
+        )
+        .await
+}
+
+include!("helpers/physical.rs");
+include!("helpers/cleanup.rs");
+include!("helpers/delivery.rs");
+
+include!("helpers/provisioning_api.rs");
+
+pub(crate) async fn record_cleanup_observer_probe_for_job_facts(
+    scope: &ConnectionJournal,
+    fixture: &JobFactsReaderFixture,
+) -> Result<(), HostError> {
+    record_cleanup_observer_probe(scope, &fixture.provisioned).await
+}

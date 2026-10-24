@@ -296,14 +296,12 @@ revisit.
 
 ## dbt-fusion declarations (HD-4a)
 
-`VELNOR_TOOL_DBT_FUSION` resolves a project's `dbt-fusion` (or
-`aqua:getdbt.com/dbt-fusion`) `[tools]` entry through the same Mise-config
-readers as every other project tool, with the adapter-specific exact grammar
-`X.Y.Z-preview.N` over `[A-Za-z0-9.-]`. The generated resolver defines
-`velnor_exact_fusion` only for jobs that reference it, so every other job's
-resolver text is unchanged. A bare `X.Y.Z`, `latest`, ranges, templates,
-leading zeros and anything that could add a `$GITHUB_ENV` line fail with the
-usual named finding. The `impl_contract_fusion_resolver` test executes the
-generated function over an accept and a hostile-reject corpus. Adopted per the
-split brief; owner may revisit. The adapter side of the grammar is
-`velnor-actions-dbt` (see the [dbt contract](dbt-contract.md)).
+`VELNOR_TOOL_DBT_FUSION` reads the project's `dbt-fusion` or
+`aqua:getdbt.com/dbt-fusion` declaration from `[tools]`. It uses the existing
+Mise configuration readers. The accepted version format is `X.Y.Z-preview.N`,
+with characters from `[A-Za-z0-9.-]`. The resolver includes
+`velnor_exact_fusion` only when a job references this tool. It rejects
+incomplete versions, ranges, templates, leading zeros, and values that could
+add another `$GITHUB_ENV` line. `impl_contract_fusion_resolver` checks accepted
+and unsafe declarations. The owner adopted this rule through the split brief
+and can review it again. `velnor-actions-dbt` implements the adapter check.

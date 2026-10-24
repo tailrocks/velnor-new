@@ -148,10 +148,8 @@ mod tests {
     use super::*;
     use velnor_actions_contract::{Job, JobTimeout, Step, StepKind};
 
-    #[test]
-    fn extracts_job_starting_with_provider_prelude() {
-        let job_id = "tofu-provider-prelude-alpha";
-        let mut job = Job {
+    fn provider_prelude_job() -> Job {
+        Job {
             services: Vec::new(),
             display_name: "tofu provider prelude alpha".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
@@ -194,13 +192,19 @@ mod tests {
                     },
                 },
             ],
-        };
-        let ctx = RenderContext {
+        }
+    }
+
+    fn render_context() -> RenderContext {
+        RenderContext {
             tool_pins: Vec::new(),
             generator_version: "0.1.0".to_owned(),
             report_helper_version: "0.1.0".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
             scale_set_selector: None,
+            scale_set_image_source_sha: None,
+            verified_cache_helpers: std::collections::BTreeMap::new(),
+            require_verified_cache_helper: false,
             staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
             request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
             checkout_uses: "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683".to_owned(),
@@ -211,7 +215,14 @@ mod tests {
             pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
             mise_quiet: true,
             plan_consumer_env: BTreeMap::new(),
-        };
+        }
+    }
+
+    #[test]
+    fn extracts_job_starting_with_provider_prelude() {
+        let job_id = "tofu-provider-prelude-alpha";
+        let mut job = provider_prelude_job();
+        let ctx = render_context();
         let file = extract_job(job_id, &mut job, &ctx)
             .expect("extraction must succeed")
             .expect("obligation file written");

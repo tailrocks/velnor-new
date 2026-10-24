@@ -59,7 +59,7 @@ pub(crate) fn resolve_tool_catalog(
     root: &Path,
     config: &VelnorConfig,
 ) -> Result<ToolCatalog, OrchestratorError> {
-    // First, so the named conflict is the second source itself.
+    // Check this first so the error identifies the second source.
     rust_source::enforce_when_opted_in(root, config)?;
     let toml_tc = read_toolchain_file(root, RUST_TOOLCHAIN_FILE)?;
     let legacy_tc = read_toolchain_file(root, RUST_TOOLCHAIN_LEGACY_FILE)?;

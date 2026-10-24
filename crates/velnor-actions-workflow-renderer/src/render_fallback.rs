@@ -2,7 +2,7 @@
 
 use crate::{
     RenderError, marker, workflow_size,
-    yaml::{Yaml, render_yaml, share_workflow_nodes},
+    yaml::{Yaml, render_yaml, render_yaml_compact, share_workflow_nodes},
 };
 
 /// Render the complete marked document before the caller applies the size guard.
@@ -29,11 +29,17 @@ pub(super) fn render_marked_workflow(
     let transformed = marker::with_marker(generator_version, &render_yaml(&shared))?;
     #[cfg(feature = "test-render-capture")]
     let canonical_capture = canonical.clone();
-    let selected = if transformed.len() < canonical.len() {
+    let mut selected = if transformed.len() < canonical.len() {
         transformed
     } else {
         canonical
     };
+    if selected.len() > workflow_size::MAX_WORKFLOW_BYTES {
+        let compact = marker::with_marker(generator_version, &render_yaml_compact(&shared))?;
+        if compact.len() < selected.len() {
+            selected = compact;
+        }
+    }
     #[cfg(feature = "test-render-capture")]
     if workflow_size::is_workflow_path(path) {
         crate::render::test_render_capture::record(path, canonical_capture, selected.clone());
@@ -50,6 +56,15 @@ pub(crate) fn render_checked_workflow(
     let text = render_marked_workflow(path, document, generator_version)?;
     workflow_size::check_workflow_size(path, &text)?;
     Ok(text)
+}
+
+/// Render with lossless YAML sharing before structural extraction.
+pub(crate) fn render_checked_workflow_before_extraction(
+    path: &str,
+    document: &Yaml,
+    generator_version: &str,
+) -> Result<String, RenderError> {
+    render_checked_workflow(path, document, generator_version)
 }
 
 #[cfg(test)]

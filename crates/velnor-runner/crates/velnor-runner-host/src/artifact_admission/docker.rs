@@ -210,7 +210,7 @@ fn validate_inspect(
     if config != identity.config || manifest.platform != PLATFORM {
         return Err(HostError::Identity);
     }
-    Ok(RuntimeImage { runtime_id, config })
+    Ok(RuntimeImage { runtime_id })
 }
 
 async fn ensure_engine(

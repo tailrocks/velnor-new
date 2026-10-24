@@ -171,7 +171,10 @@ fn tofu_metadata_and_cache_ids_derive() {
     assert_eq!(meta["compile_driver"], serde_json::json!("tofu"));
     assert_eq!(meta["test_runner"], serde_json::json!("none"));
     let catalog = velnor_actions_mise::ToolCatalog::pinned();
-    let toolchain = toolchain_id(&task, &catalog).expect("toolchain");
+    let toolchain_inputs =
+        identities::toolchain_inputs_for(&task, &catalog).expect("toolchain inputs");
+    let toolchain =
+        velnor_actions_contract::cachekey::toolchain_id(&toolchain_inputs).expect("toolchain");
     let ids = cache_ids_for(&task, "ubuntu-24.04", &toolchain, &catalog).expect("cache ids");
     assert_eq!(
         ids.cache_format_id(),

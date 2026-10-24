@@ -28,7 +28,8 @@ fn compiler_spec_versions_flip_the_digest() {
     let built = toolchain_inputs_for(&group, &catalog).expect("rust toolchain inputs");
     assert_eq!(
         toolchain_id(&built).expect("digest"),
-        toolchain_digest_for(&group, &catalog).expect("digest")
+        toolchain_id(&toolchain_inputs_for(&group, &catalog).expect("rust toolchain inputs"))
+            .expect("digest")
     );
     assert!(built.tools.iter().any(|spec| spec.starts_with("rust@")));
     assert_eq!(

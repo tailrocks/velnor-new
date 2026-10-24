@@ -15,9 +15,13 @@ fn exact_preview_versions_parse_and_round_trip() {
     let a = parse_fusion_version("2.0.0-preview.9").expect("a");
     let b = parse_fusion_version("2.0.0-preview.10").expect("b");
     assert!(a < b);
-    let stable = parse_fusion_version("2.0.0").expect("stable");
+    let stable = parse_fusion_version("2.0.0").expect("The stable version must parse.");
     assert!(b < stable);
-    assert!(stable < parse_fusion_version("2.0.1-preview.1").expect("next"));
+    assert!(
+        stable
+            < parse_fusion_version("2.0.1-preview.1")
+                .expect("The next preview version must parse.")
+    );
 }
 
 #[test]

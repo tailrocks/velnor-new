@@ -61,6 +61,14 @@ impl RunnerSpec {
         }
     }
 
+    pub(super) const fn service_host(&self, explicit_container: bool) -> &'static str {
+        if explicit_container || matches!(self.lane, RunnerLane::ScaleSet) {
+            "redis"
+        } else {
+            "127.0.0.1"
+        }
+    }
+
     pub(super) fn push_default_shell(&self, fields: &mut Vec<(String, Yaml)>, has_container: bool) {
         if has_container {
             fields.push(crate::runs_on::run_shell_defaults_field(

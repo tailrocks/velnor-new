@@ -1,10 +1,6 @@
 //! Contract config, manifest, and action override cases.
 use std::collections::BTreeMap;
-use velnor_actions_contract::{
-    ActionPin, ContractError, GeneratorBinary, GeneratorLock, GeneratorValidation, LockedGenerator,
-    MiseBootstrap, ReleaseManifest, SUPPORTED_TARGETS, TargetRecord, WorkflowPolicy,
-    asset_filename,
-};
+use velnor_actions_contract::{ContractError, GeneratorValidation, WorkflowPolicy};
 
 #[test]
 fn config_validation_reports_key_paths() {
@@ -21,12 +17,14 @@ fn config_validation_reports_key_paths() {
         private_sources: None,
         upgrades: None,
         images: Vec::new(),
+        job_authority: Vec::new(),
         publish: velnor_actions_contract::config::PublishConfig::default(),
         schema: 1,
         workflow: WorkflowConfig {
             name: "CI".to_owned(),
             policy: WorkflowPolicy::ConsumerV1,
             default_branch: None,
+            verification_branch: None,
             generator_validation: GeneratorValidation::Bootstrap,
             mise_quiet: true,
             checkout_lfs: false,
@@ -115,27 +113,28 @@ fn config_validation_reports_key_paths() {
     assert!(bad.validate("cfg").is_err());
 }
 
-#[test]
-fn runner_label_uses_exact_catalog_match() {
+fn runner_label_config() -> velnor_actions_contract::VelnorConfig {
     use velnor_actions_contract::config::ActionsConfig;
-    use velnor_actions_contract::config::{LATEST_RUNNER_LABEL, RUNNER_LABEL_CATALOG};
     use velnor_actions_contract::{
-        ContractError, DiscoveryConfig, PullRequestCachePolicy, ResourcesConfig, StacksConfig,
-        TestShardingConfig, VelnorConfig,
+        DiscoveryConfig, PullRequestCachePolicy, ResourcesConfig, StacksConfig, TestShardingConfig,
+        VelnorConfig,
     };
-    let base = || VelnorConfig {
+
+    VelnorConfig {
         checks: Vec::new(),
         qualified_tools: Vec::new(),
         distribution: velnor_actions_contract::config::DistributionConfig::default(),
         private_sources: None,
         upgrades: None,
         images: Vec::new(),
+        job_authority: Vec::new(),
         publish: velnor_actions_contract::config::PublishConfig::default(),
         schema: 1,
         workflow: velnor_actions_contract::WorkflowConfig {
             name: "CI".to_owned(),
             policy: velnor_actions_contract::WorkflowPolicy::ConsumerV1,
             default_branch: None,
+            verification_branch: None,
             generator_validation: velnor_actions_contract::GeneratorValidation::Bootstrap,
             mise_quiet: true,
             checkout_lfs: false,
@@ -170,10 +169,17 @@ fn runner_label_uses_exact_catalog_match() {
         github: velnor_actions_contract::GithubConfig::default(),
         dco: None,
         execution: None,
-    };
+    }
+}
+
+#[test]
+fn runner_label_uses_exact_catalog_match() {
+    use velnor_actions_contract::ContractError;
+    use velnor_actions_contract::config::{LATEST_RUNNER_LABEL, RUNNER_LABEL_CATALOG};
+
     assert!(RUNNER_LABEL_CATALOG.contains(&LATEST_RUNNER_LABEL));
     for label in RUNNER_LABEL_CATALOG {
-        let mut config = base();
+        let mut config = runner_label_config();
         config.workflow.runner_label = Some(label.to_owned());
         assert_eq!(config.validate("cfg"), Ok(()), "label {label}");
     }
@@ -185,7 +191,7 @@ fn runner_label_uses_exact_catalog_match() {
         "",
         " ubuntu-24.04",
     ] {
-        let mut config = base();
+        let mut config = runner_label_config();
         config.workflow.runner_label = Some(label.to_owned());
         let Err(ContractError::Config {
             key_path, problem, ..
@@ -275,78 +281,6 @@ fn actions_overrides_validate_allowlist_and_pin_shape() {
 }
 
 #[test]
-fn manifest_schemas_validate_and_lookup_targets() -> Result<(), ContractError> {
-    let sha = "ab".repeat(32);
-    let manifest = ReleaseManifest {
-        schema: 1,
-        version: "0.1.0".to_owned(),
-        repository: "tailrocks/velnor-new".to_owned(),
-        commit: "ab".repeat(20),
-        targets: SUPPORTED_TARGETS
-            .iter()
-            .map(|target| TargetRecord {
-                target: (*target).to_owned(),
-                artifact: format!(
-                    "https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/{}",
-                    asset_filename("0.1.0", target)
-                ),
-                sha256: sha.clone(),
-            })
-            .collect(),
-    };
-    manifest.validate("release.toml")?;
-    assert!(
-        manifest
-            .record_for_target("x86_64-unknown-linux-gnu")
-            .is_some()
-    );
-    assert!(manifest.record_for_target("other").is_none());
-    let lock = GeneratorLock {
-        schema: 1,
-        generator: LockedGenerator {
-            binary: "velnor-actions".to_owned(),
-            version: "0.1.0".to_owned(),
-            commit: "ab".repeat(20),
-            binaries: vec![GeneratorBinary {
-                target: "x86_64-unknown-linux-gnu".to_owned(),
-                artifact: "https://example.com/velnor-actions-0.1.0".to_owned(),
-                sha256: sha,
-            }],
-        },
-        mise_bootstrap: MiseBootstrap {
-            version: "2025.1.0".to_owned(),
-            artifact: "https://example.com/mise-2025.1.0".to_owned(),
-            sha256: "cd".repeat(32),
-        },
-        actions: vec![ActionPin {
-            name: "actions/checkout".to_owned(),
-            version: "v4.2.2".to_owned(),
-            sha: "ab".repeat(20),
-            reviewed: "2026-01-15".to_owned(),
-        }],
-    };
-    lock.validate("generator.lock")?;
-    assert!(lock.binary_for_target("x86_64-unknown-linux-gnu").is_some());
-    let mut bad = lock.clone();
-    bad.actions[0].sha = "xyz".to_owned();
-    assert!(bad.validate("generator.lock").is_err());
-    for commit in [
-        String::new(),
-        "xyz".to_owned(),
-        "A".repeat(40),
-        "c".repeat(39),
-    ] {
-        let mut bad = lock.clone();
-        bad.generator.commit = commit;
-        let err = bad
-            .validate("generator.lock")
-            .expect_err("lock commit shares manifest strictness");
-        assert!(err.to_string().contains("malformed_commit"), "{err}");
-    }
-    Ok(())
-}
-
-#[test]
 fn removed_rust_custom_tasks_configuration_is_rejected() {
     let stack = velnor_actions_contract::RustStackConfig::default_config();
     let mut value = serde_json::to_value(stack).expect("serialize Rust config");
@@ -395,3 +329,6 @@ fn rust_target_and_features_reject_shell_expressions() {
         assert!(problem.starts_with("bad_feature:"), "got {problem}");
     }
 }
+
+#[path = "impl_contract_manifest_tests.rs"]
+mod manifest_tests;

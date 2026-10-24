@@ -17,7 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
     CRATE_JOB_ID_PREFIX, JobDisposition, MatrixEntry, ObligationDecision, PlanJob, PlanObligation,
-    ProposedTask,
+    ProposedTask, WorkflowEvent,
 };
 
 use crate::OrchestratorError;
@@ -54,17 +54,24 @@ pub(crate) fn unaffected_rust_outcome(task: &ProposedTask) -> ReuseOutcome {
 pub(crate) fn job_needs(
     tasks: &[&ProposedTask],
     owners: &JobOwners<'_>,
+    event: WorkflowEvent,
 ) -> Result<BTreeMap<String, BTreeSet<String>>, OrchestratorError> {
     let mut needs: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for task in tasks {
-        let Some(job) = owners.for_member(task).map_err(internal_contract)? else {
+        let Some(job) = owners
+            .for_member_for_event(task, event)
+            .map_err(internal_contract)?
+        else {
             continue;
         };
         for gate in task.gated_by.iter().chain(&task.depends_on) {
             let Some(member) = owners.runnable_member(gate) else {
                 continue;
             };
-            let Some(owner) = owners.for_member(member).map_err(internal_contract)? else {
+            let Some(owner) = owners
+                .for_member_for_event(member, event)
+                .map_err(internal_contract)?
+            else {
                 continue;
             };
             if owner != job {

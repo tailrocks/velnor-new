@@ -176,7 +176,6 @@ fn poll_chunk<Fd: std::os::fd::AsFd>(
         Err(error) => Err(error.to_string()),
     }
 }
-
 #[cfg(all(test, unix))]
 #[path = "command_stream_tests.rs"]
 mod tests;

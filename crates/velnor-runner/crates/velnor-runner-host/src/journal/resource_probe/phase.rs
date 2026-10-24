@@ -5,7 +5,7 @@ use crate::error::HostError;
 /// Durable external-effect phase for one isolated probe.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ProbePhase {
-    /// Complete projection persisted before any Docker effect.
+    /// Record the full projection before any Docker effect.
     Prepared,
     /// Create is about to be requested.
     CreateRequested,
@@ -21,7 +21,7 @@ pub(crate) enum ProbePhase {
     Waited,
     /// Bounded stdout retrieval is about to be requested.
     LogsRequested,
-    /// A valid record was observed in memory, never stored.
+    /// The controller observed a correct record in memory. The journal did not store it.
     OutputObserved,
     /// Stop is about to be requested during failure cleanup.
     StopRequested,
@@ -36,7 +36,7 @@ pub(crate) enum ProbePhase {
 }
 
 impl ProbePhase {
-    pub(super) fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::Prepared => "prepared",
             Self::CreateRequested => "create_requested",
@@ -55,7 +55,7 @@ impl ProbePhase {
         }
     }
 
-    pub(super) fn parse(value: &str) -> Result<Self, HostError> {
+    pub(in crate::journal) fn parse(value: &str) -> Result<Self, HostError> {
         match value {
             "prepared" => Ok(Self::Prepared),
             "create_requested" => Ok(Self::CreateRequested),

@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use velnor_actions_contract::{RoutingWorkflow, SCALE_SET_NAME, VELNOR_LABEL};
+use velnor_actions_contract::{ExecutionMode, RoutingWorkflow, SCALE_SET_NAME, VELNOR_LABEL};
 
 use super::{
     MbxQualificationPins, MisePinQualificationPins, Schema2WorkflowRequest, monitoring,
@@ -10,10 +10,12 @@ use crate::setup::MiseSetup;
 use crate::yaml::Yaml;
 
 fn request() -> Schema2WorkflowRequest {
+    let scale_set = Schema2WorkflowRequest::canonical_scale_set().expect("valid scale set");
     Schema2WorkflowRequest {
         version: "2.0.0".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
-        scale_set: Schema2WorkflowRequest::canonical_scale_set().expect("valid scale set"),
+        scale_set: scale_set.clone(),
+        routing: crate::workflow_routing::test_policy(ExecutionMode::Both, scale_set),
         workflows: BTreeSet::from([RoutingWorkflow::Qualification]),
         mbx_qualification: Some(MbxQualificationPins {
             mise_setup: MiseSetup {
@@ -48,6 +50,81 @@ fn request() -> Schema2WorkflowRequest {
         }),
         product_release: None,
     }
+}
+
+#[test]
+fn scale_set_mode_emits_only_the_full_ci_verification_wrapper() {
+    let mut request = request();
+    request.routing =
+        crate::workflow_routing::test_policy(ExecutionMode::ScaleSet, request.scale_set.clone());
+    let workflow = render_schema2_workflows(&request)
+        .expect("scale-set wrapper renders without host jobs")
+        .into_iter()
+        .find(|file| file.path == super::QUALIFICATION_WORKFLOW)
+        .expect("qualification wrapper exists");
+    let yaml = workflow.bytes.as_str();
+    assert!(
+        yaml.contains("mode:") && yaml.contains("verification-only"),
+        "{yaml}"
+    );
+    assert!(!yaml.contains("campaign:"), "{yaml}");
+    assert!(!yaml.contains("phase:"), "{yaml}");
+    assert!(!yaml.contains("predecessor_run_id:"), "{yaml}");
+    assert!(!yaml.contains("predecessor_run_attempt:"), "{yaml}");
+    assert!(yaml.contains("uses: ./.github/workflows/ci.yml"), "{yaml}");
+    assert!(yaml.contains("actions: read"), "{yaml}");
+    assert!(yaml.contains("cancel-in-progress: false"), "{yaml}");
+    assert!(
+        !yaml.contains("runs-on:"),
+        "wrapper must not start a runner: {yaml}"
+    );
+    assert!(
+        !yaml.contains("hosted"),
+        "wrapper must expose no hosted mode: {yaml}"
+    );
+    assert!(
+        !yaml.contains("macos"),
+        "wrapper must expose no Darwin job: {yaml}"
+    );
+    assert!(
+        !yaml.contains("mbx-cache-write"),
+        "wrapper must not emit a separate cache writer: {yaml}"
+    );
+}
+
+#[test]
+fn hosted_qualification_keeps_its_both_mode_default() {
+    let workflow = render_schema2_workflows(&request())
+        .expect("hosted qualification renders")
+        .into_iter()
+        .find(|file| file.path == super::QUALIFICATION_WORKFLOW)
+        .expect("qualification file exists");
+    let yaml = workflow.bytes.as_str();
+
+    assert!(yaml.contains("default: both"), "{yaml}");
+    assert!(yaml.contains("verify-hosted:"), "{yaml}");
+    assert!(yaml.contains("verify-scale-set:"), "{yaml}");
+}
+
+#[test]
+fn scale_set_mode_routes_monitoring_controls_to_the_scale_set() {
+    let mut request = request();
+    request.routing =
+        crate::workflow_routing::test_policy(ExecutionMode::ScaleSet, request.scale_set.clone());
+    request.workflows = BTreeSet::from([RoutingWorkflow::Monitoring]);
+    let files = render_schema2_workflows(&request).expect("monitoring renders");
+    let monitoring = files
+        .iter()
+        .find(|file| file.path == super::MONITORING_WORKFLOW)
+        .expect("monitoring file exists");
+    let yaml = monitoring.bytes.as_str();
+    assert!(yaml.contains("runs-on: [velnor, ubuntu-26.04-scale-set]"));
+    assert!(!yaml.contains("runs-on: ubuntu-26.04"));
+    assert_eq!(
+        yaml.matches("runs-on: [velnor, ubuntu-26.04-scale-set]")
+            .count(),
+        2
+    );
 }
 
 fn assert_lane_shells(document: &Yaml, minimum_per_lane: usize) {
@@ -130,6 +207,54 @@ fn qualification_and_monitoring_declare_shell_only_for_typed_scale_set() {
     let request = request();
     assert_lane_shells(&qualification(&request).expect("qualification renders"), 2);
     assert_lane_shells(&monitoring(&request).expect("monitoring renders"), 1);
+}
+
+#[test]
+fn mbx_qualification_uses_the_typed_rust_verifier_in_both_jobs() {
+    let request = request();
+    let pins = request.mbx_qualification.as_ref().expect("MBX pins");
+    let expected = crate::verifier_shell::render_command(
+        velnor_actions_contract::StepRole::VerifyRustManifest,
+        crate::VERIFY_RUST_TOOLCHAIN_STEP,
+        &pins.verify_rust_argv,
+    )
+    .expect("canonical verifier");
+    let document = qualification(&request).expect("qualification workflow");
+    let jobs = map_field(&document, "jobs");
+
+    for job_id in ["mbx-cache-write-hosted", "mbx-cache-read-hosted"] {
+        let steps = match map_field(map_field(jobs, job_id), "steps") {
+            Yaml::Seq(steps) => steps,
+            other => panic!("qualification steps are not a sequence: {other:?}"),
+        };
+        let verifier = steps
+            .iter()
+            .find(|step| map_field(step, "name") == &Yaml::str(crate::VERIFY_RUST_TOOLCHAIN_STEP))
+            .expect("typed Rust verifier step");
+        assert_eq!(verifier, &expected, "{job_id}");
+        let install = step_index(steps, "Install pinned Rust toolchain");
+        let verify = step_index(steps, crate::VERIFY_RUST_TOOLCHAIN_STEP);
+        let expose = step_index(steps, "Put the verified Rust toolchain on PATH");
+        let mbx = step_index(steps, "Restore MBX objects");
+        assert!(
+            install < verify && verify < expose && expose < mbx,
+            "{job_id}"
+        );
+    }
+}
+
+fn map_field<'a>(node: &'a Yaml, key: &str) -> &'a Yaml {
+    let Yaml::Map(fields) = node else {
+        panic!("{key} parent is not a mapping");
+    };
+    &fields.iter().find(|(name, _)| name == key).expect(key).1
+}
+
+fn step_index(steps: &[Yaml], name: &str) -> usize {
+    steps
+        .iter()
+        .position(|step| map_field(step, "name") == &Yaml::str(name))
+        .unwrap_or_else(|| panic!("missing step {name:?}"))
 }
 
 #[test]

@@ -344,7 +344,7 @@ pub(crate) fn cleanup(fixture: &Fixture) {
 }
 
 const PROBE_DATA: &[&str] = &[
-    "https://api.github.com/repos/jdx/mise/releases/latest\tmise.json\t{\"tag_name\": \"v2026.10.14\"}",
+    "https://api.github.com/repos/jdx/mise/releases/latest\tmise.json\t{\"tag_name\": \"v2026.10.15\"}",
     "https://static.rust-lang.org/dist/channel-rust-stable.toml\trust.toml\t[pkg.rust]\nversion = \"1.99.1 (48a229cea 2026-09-01)\"\n",
     "https://api.github.com/repos/jdx/mr-boxington/releases/latest\tmbx.json\t[{\"tag_name\": \"v1.20.0-beta\", \"prerelease\": true}, {\"tag_name\": \"v1.24.1\"}]",
     "https://api.github.com/repos/cli/cli/releases/latest\tgh.json\t{\"tag_name\": \"v2.102.0\"}",

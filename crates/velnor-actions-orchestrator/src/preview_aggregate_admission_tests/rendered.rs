@@ -9,6 +9,7 @@ use velnor_actions_workflow_renderer::{
         ConsumerReleaseSpec, ConsumerStableReleaseSpec, render_consumer_binary_release,
         render_consumer_preview,
     },
+    workflow_routing::WorkflowRoutingPolicy,
 };
 
 impl Fixture {
@@ -16,8 +17,12 @@ impl Fixture {
         let channel = self.proof.request.plan.channel;
         let spec = fixture(channel);
         let rendered = match channel {
-            PackageReleaseChannel::Preview => render_consumer_preview(&spec),
-            PackageReleaseChannel::Stable => render_consumer_binary_release(&spec),
+            PackageReleaseChannel::Preview => {
+                render_consumer_preview(&spec, &WorkflowRoutingPolicy::hosted_only())
+            }
+            PackageReleaseChannel::Stable => {
+                render_consumer_binary_release(&spec, &WorkflowRoutingPolicy::hosted_only())
+            }
         }
         .expect("actual native renderer");
         let start = rendered

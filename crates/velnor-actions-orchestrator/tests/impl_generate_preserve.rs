@@ -167,7 +167,7 @@ fn dispatch_switch_preserves_custom_actions_and_removes_shared_outputs() -> Test
 }
 
 fn dispatch_switch_fixture() -> Result<(TempDir, PathBuf), Box<dyn std::error::Error>> {
-    let config = "schema = 2\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[execution]\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\nmode = \"both\"\n[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"ubuntu-26.04-scale-set\", \"velnor\"]\nplatform = \"linux/amd64\"\n";
+    let config = "schema = 2\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[execution]\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\nmode = \"both\"\n[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"ubuntu-26.04-scale-set\", \"velnor\"]\nplatform = \"linux/amd64\"\njob_container_image = \"ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n";
     let repo = make_repo(config)?;
     let github = repo.path().join(".github");
     fs::create_dir_all(github.join("actions/custom"))?;
@@ -213,6 +213,7 @@ fn assert_hosted_outputs(files: &[String], declared_action: &str, manifest: &str
                 declared_action,
                 ".github/actions/velnor-tool-seed/action.yml",
                 ".github/actions/u26/action.yml",
+                ".github/actions/velnor-cache-tar-launchers/action.yml",
                 ".github/actions/velnor-tools-cache-restore/action.yml",
                 ".github/actions/velnor-tools-prelude-u26/action.yml",
                 ".github/actions/velnor-verify-jactionlint/action.yml",

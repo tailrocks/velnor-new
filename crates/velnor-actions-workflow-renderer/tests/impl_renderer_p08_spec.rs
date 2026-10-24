@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use velnor_actions_contract::{Job, JobTimeout, WorkflowPolicy};
 use velnor_actions_workflow_renderer::cache_p08::infer_job_tools;
-use velnor_actions_workflow_renderer::{render_workflow_ir_strict, shell_step};
+use velnor_actions_workflow_renderer::{checkout_step, render_workflow_ir_strict, shell_step};
 
 use super::impl_renderer_fixtures::*;
 
@@ -26,6 +26,8 @@ fn http_backend_spec_gets_mise_setup_in_generated_workflow() {
         permissions: None,
         environment: None,
         steps: vec![
+            checkout_step(&checkout_pin()).expect("checkout"),
+            acquire_fixture().expect("verified helper"),
             shell_step(
                 "Run cargo-machete",
                 vec![

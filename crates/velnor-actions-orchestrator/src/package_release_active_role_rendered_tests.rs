@@ -13,6 +13,7 @@ use velnor_actions_workflow_renderer::{
         ConsumerReleaseSpec, ConsumerReleaseTapSpec, ConsumerStableReleaseSpec,
         render_consumer_binary_release, render_consumer_preview, render_release_tap_reconcile,
     },
+    workflow_routing::WorkflowRoutingPolicy,
 };
 
 fn fixture(channel: PackageReleaseChannel) -> ConsumerReleaseSpec {
@@ -219,8 +220,12 @@ fn actual_rendered_channel_and_tap_jobs_match_shared_runtime_role_mapping() {
             .resolve("0.6.4".to_owned())
             .expect("resolved fixture");
         let release = match channel {
-            PackageReleaseChannel::Preview => render_consumer_preview(&spec),
-            PackageReleaseChannel::Stable => render_consumer_binary_release(&spec),
+            PackageReleaseChannel::Preview => {
+                render_consumer_preview(&spec, &WorkflowRoutingPolicy::hosted_only())
+            }
+            PackageReleaseChannel::Stable => {
+                render_consumer_binary_release(&spec, &WorkflowRoutingPolicy::hosted_only())
+            }
         }
         .expect("actual native release rendering");
         let mut mapped = 0;
@@ -268,8 +273,8 @@ fn actual_rendered_channel_and_tap_jobs_match_shared_runtime_role_mapping() {
                 }
             }
         }
-        let tap =
-            render_release_tap_reconcile(&spec).expect("actual native continuation rendering");
+        let tap = render_release_tap_reconcile(&spec, &WorkflowRoutingPolicy::hosted_only())
+            .expect("actual native continuation rendering");
         let names = job_names(&tap.bytes);
         assert_eq!(names.len(), 4);
         for (id, name) in names {
@@ -292,8 +297,12 @@ fn channel_renderers_reject_deserialized_invalid_publication_timeout() {
         let mut spec = fixture(channel);
         spec.publication_timeout_minutes = invalid;
         let rendered = match channel {
-            PackageReleaseChannel::Preview => render_consumer_preview(&spec),
-            PackageReleaseChannel::Stable => render_consumer_binary_release(&spec),
+            PackageReleaseChannel::Preview => {
+                render_consumer_preview(&spec, &WorkflowRoutingPolicy::hosted_only())
+            }
+            PackageReleaseChannel::Stable => {
+                render_consumer_binary_release(&spec, &WorkflowRoutingPolicy::hosted_only())
+            }
         };
         assert!(
             rendered.is_err(),

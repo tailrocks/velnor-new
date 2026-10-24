@@ -246,10 +246,14 @@ fn install_step_sets_working_directory_for_nested_workspaces() {
     .expect("driver steps")
     .expect("MBX steps");
     let action = nested[1].clone();
-    assert!(
-        matches!(&nested[5].kind, StepKind::Shell { run, .. }
-            if run[2].contains("cd \"$GITHUB_WORKSPACE/crates/velnor-runner\"")),
-        "the import runs inside the nested workspace"
+    let StepKind::Shell { run, env } = &nested[5].kind else {
+        panic!("The bundle import must use a shell step.");
+    };
+    assert!(run[2].contains("velnor-mbx-bundle.sh") && run[2].ends_with(" import"));
+    assert_eq!(
+        env.get("VELNOR_MBX_BUNDLE_ROOT").map(String::as_str),
+        Some("crates/velnor-runner"),
+        "The shared import helper must run inside the nested workspace."
     );
     let StepKind::Action { with, .. } = action.kind else {
         panic!("restore must be an action");

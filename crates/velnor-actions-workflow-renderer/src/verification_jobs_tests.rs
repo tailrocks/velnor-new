@@ -42,7 +42,7 @@ fn task_job_is_unconditional_cache_off_and_credential_scrubbed() {
     let linux = policy("construct-assets", VerificationRunner::LinuxX64);
     let job = build_verification_task_job(&linux, CHECKOUT).expect("fixed task job");
     assert_eq!(job.runs_on, "ubuntu-26.04");
-    assert_eq!(job.needs.len(), 0);
+    assert_eq!(job.needs, [] as [String; 0]);
     assert!(job.condition.is_none());
     assert_eq!(job.timeout_minutes.minutes(), 5);
     let permissions = job.permissions.expect("job permissions are explicit");
@@ -337,11 +337,12 @@ fn linux_install_step_ceiling_does_not_exclude_its_own_mise_config() {
             provenance: None,
         }),
     }];
-    let job = build_verification_task_job(&task, CHECKOUT).expect("linux tools job");
+    let job =
+        build_verification_task_job(&task, CHECKOUT).expect("The Linux tools job must render.");
     let velnor_actions_contract::StepKind::Shell { run, .. } = &job.steps[2].kind else {
         panic!("install step");
     };
-    let script = run.last().expect("script");
+    let script = run.last().expect("The install script must exist.");
     assert_install_ceiling_is_above_task_root(script);
     assert!(script.contains(r"grep -Eqx 'jq-1\.8\.[0-9]+'"), "{script}");
     assert!(!script.contains("jq-1.8.2"), "{script}");

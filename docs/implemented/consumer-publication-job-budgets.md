@@ -7,7 +7,7 @@ through 333. Configuration validation and both public channel renderer
 entrypoints reject invalid values, including values created through
 deserialization.
 
-Publisher and recovery job limits add the actual caps on their pre-operation
+Publisher and recovery job limits add the caps on their actual pre-operation
 steps, the configured native deadline, and one minute for completion and
 cleanup. Uncapped preparation steps receive the normal five-minute job-step
 default. The existing six-minute `Acquire Velnor` cap is preserved. With the
@@ -40,11 +40,11 @@ They do not shorten the returned custody deadline.
 Each HTTP request retains its 90-second bound. Source phase deadlines, repeated
 verification, privileges and immutable publication rules are unchanged. The
 budget is not part of the signed release policy or receipt, so retained original
-artifacts remain compatible. The outer job budget accounts for declared
-pre-operation step caps and one minute of completion/cleanup headroom. That is a
-bounded lifecycle policy, not a guarantee for arbitrary runner startup or
-GitHub post-job processing; a preparation step that reaches its cap can consume
-the margin available before the native operation starts.
+artifacts remain compatible. The outer job budget includes declared pre-operation
+step caps and one minute of completion and cleanup headroom. A preparation step
+that reaches its cap can still consume time that otherwise would remain before
+the native deadline begins; this is a bounded lifecycle policy, not a guarantee
+for runner startup or GitHub post-job processing.
 
 ## Hosted failure that requires the setting
 

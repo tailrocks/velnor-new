@@ -1,53 +1,45 @@
-# Host `jq` range and install-step Mise ceiling
+# Host `jq` versions and Mise discovery limits
 
-Decision, adopted per the split brief; owner may revisit. Two defects made every
-generated verification job fail on GitHub-hosted `ubuntu-26.04` (found by
-`ChainArgos/infrastructure` running its Delorean policy test as a verification
-task).
+The owner may revisit this decision. Two defects caused generated verification
+jobs to fail on GitHub-hosted `ubuntu-26.04`.
+`ChainArgos/infrastructure` found them in its Delorean policy verification task.
 
-## 1. Host `jq`: accept the 1.8 line, not one patch
+## 1. Accept the jq 1.8 release line
 
-Every typed task script (verification and build tasks) resolves `jq` with
-`command -v jq` and checks `jq --version`, because it parses
-`mise config ls --json` before any tool exists. The guard required exactly
-`jq-1.8.2`; the `ubuntu-26.04` image ships `jq-1.8.1`
-(actions/runner-images `Ubuntu2604-Readme.md`), so the step exited 1 silently.
+Typed verification and build task scripts resolve `jq` with `command -v jq`
+and check `jq --version`. The parser reads `mise config ls --json` before
+trusted tool installation. The previous check required `jq-1.8.2`.
+The `ubuntu-26.04` image supplies `jq-1.8.1`, as recorded in
+`actions/runner-images` `Ubuntu2604-Readme.md`. The step therefore exited
+with status 1 without a diagnostic.
 
-Chosen: the guard accepts `jq-1\.8\.[0-9]+` (`JQ_VERSION_PATTERN` in
-`task_script.rs`). Why not install a pinned, checksummed jq:
+The check now accepts `jq-1\.8\.[0-9]+`, defined by `JQ_VERSION_PATTERN`
+in `task_script.rs`. It rejects other release lines and decorated version strings.
+The fixed filter is `-r '.[].path'`. Its result must match the expected path list.
+This path comparison does not authenticate the jq executable.
 
-- `jq` is not a task tool. It is the parser that runs before the trusted Mise
-  install and before any tool root exists, so installing it would need a second
-  bootstrap with its own provenance chain (`velnor-tool-seed` seeds Mise
-  tools, which cannot be used before the config chain is verified by this very
-  parse).
-- The guard's job is to reject an unknown parser dialect, not to prove
-  provenance: input is Mise's own output, the filter is the fixed
-  `-r '.[].path'`, and the result is compared against an exact expected path
-  list, so a wrong jq can only fail the job, never admit extra configs.
-- Image patch releases move independently of this crate; an exact patch pin
-  re-breaks on every image refresh. The minor line is the contract (CLI and
-  `--version` format), so it stays pinned. Any other line (1.7, 1.9, 2.x) or a
-  decorated version string is rejected.
+jq runs before the trusted Mise tool installation and before a tool root exists.
+Installing jq through `velnor-tool-seed` would require another initial installation
+because the current parser checks the Mise configuration first.
+The image can change its jq patch version independently of this crate.
+The 1.8 release line defines the accepted CLI and version-output format.
 
-Owner review point: if the owner wants provenance for the parser too, add `jq`
-to the task-tool seed and make the guard compare against that install.
+If the owner requires parser provenance, add `jq` to the task-tool seed.
+Then make the check use that installation.
 
-## 2. Install-step ceiling is the parent of `$task_root`
+## 2. Set the Mise limit above the task root
 
-The install step wrote `mise.toml` into `$task_root`, then set
-`MISE_CEILING_PATHS="$task_root"` and verified `mise config ls`. Reproduced
-with mise 2026.10.15 on Linux (bare temp directory, `MISE_CEILING_PATHS` equal
-to the directory): the ceiling directory itself is excluded, so only
-`global.toml` and `system.toml` were listed, the exact path comparison failed,
-and no tools were installed. The same call with the ceiling at the parent lists
-`mise.toml`. (macOS mise does not show the quirk, which is why it went
-unnoticed.) The contract helper `config_ceiling_directory` already documents
-"directory immediately above the config directory"; the install steps now do
-the same: `MISE_CEILING_PATHS="${task_root%/*}"` for verification and build
-install steps, and `$GITHUB_WORKSPACE/..` for the build run step that reads the
-workspace `mise.toml`.
+The install step writes `mise.toml` into `$task_root`.
+Previously, it set `MISE_CEILING_PATHS="$task_root"` before running `mise config ls`.
+A Linux reproduction used Mise 2026.10.15 and an empty temporary directory.
+With the ceiling equal to that directory, Mise excluded the directory's own configuration.
+It listed only `global.toml` and `system.toml`, so the expected-path comparison failed.
+No tools were installed. Setting the ceiling to the parent included `mise.toml`.
+The macOS reproduction did not show this behavior.
 
-Tests: `task_script::tests` (real guard against fake jq 1.7/1.8.x/1.9),
-`verification_jobs_tests` (ceiling and jq pattern in the emitted install
-script), and the orchestrator verification-task generation test.
+The contract helper `config_ceiling_directory` specifies the directory immediately above the configuration directory.
+Verification and build install steps now use `MISE_CEILING_PATHS="${task_root%/*}"`.
+The build run step uses `$GITHUB_WORKSPACE/..` when reading the workspace `mise.toml`.
+
+Tests cover the emitted jq check, accepted versions, Mise limits, and verification-task generation:
+`task_script::tests`, `verification_jobs_tests`, and the orchestrator verification-task generation test.

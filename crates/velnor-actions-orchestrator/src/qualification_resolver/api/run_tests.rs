@@ -45,20 +45,48 @@ fn parses_the_github_run_attempt_id_field() {
 }
 
 #[test]
-fn accepts_plain_or_default_branch_ci_path_only() {
+fn accepts_only_the_authorized_caller_workflow_and_branch() {
     let path = velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
     for accepted in [
         path.to_owned(),
         format!("{path}@main"),
         format!("{path}@refs/heads/main"),
     ] {
-        assert!(workflow_path_matches(&accepted, "main"), "{accepted}");
+        assert!(workflow_path_matches(&accepted, path, "main"), "{accepted}");
     }
     for rejected in [
         ".github/workflows/release.yml".to_owned(),
         format!("{path}@feature/main"),
         format!("{path}@refs/heads/feature"),
     ] {
-        assert!(!workflow_path_matches(&rejected, "main"), "{rejected}");
+        assert!(
+            !workflow_path_matches(&rejected, path, "main"),
+            "{rejected}"
+        );
+    }
+}
+
+#[test]
+fn qualification_wrapper_accepts_only_its_exact_selected_branch() {
+    let path = velnor_actions_contract::workflow::QUALIFICATION_WORKFLOW_PATH;
+    for accepted in [
+        path.to_owned(),
+        format!("{path}@sea/integration"),
+        format!("{path}@refs/heads/sea/integration"),
+    ] {
+        assert!(
+            workflow_path_matches(&accepted, path, "sea/integration"),
+            "{accepted}"
+        );
+    }
+    for rejected in [
+        ".github/workflows/ci.yml".to_owned(),
+        format!("{path}@main"),
+        format!("{path}@refs/heads/main"),
+    ] {
+        assert!(
+            !workflow_path_matches(&rejected, path, "sea/integration"),
+            "{rejected}"
+        );
     }
 }

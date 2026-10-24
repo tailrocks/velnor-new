@@ -100,24 +100,25 @@ fn acquire_step(staged: &str) -> Result<Step, crate::RenderError> {
 }
 
 fn dispatch_plan_job(staged: &str) -> Result<Job, crate::RenderError> {
-    let action = Step {
-        parallel: false,
-        name: "Set up MBX".to_owned(),
-        id: None,
-        role: None,
-        condition: None,
-            kind: StepKind::Action {
-                uses: format!("jdx/mr-boxington-action@{}", "a".repeat(40)),
-                with: BTreeMap::from([("toolchain".to_owned(), "1.98.1".to_owned())]),
-                env: BTreeMap::from([
-                    ("VELNOR_MBX_VERSION".to_owned(), "1.21.1".to_owned()),
-                    (
-                        "ACTIONS_CACHE_MODE".to_owned(),
-                        "${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}".to_owned(),
-                    ),
-                ]),
-            },
-        };
+    let mbx_steps = crate::steps::mbx_steps_for_driver(
+        &format!("jdx/mr-boxington-action@{}", "a".repeat(40)),
+        crate::steps::CompileDriver::Mbx,
+        "1.21.1",
+        "1.89.0",
+        BTreeMap::from([
+            (
+                "MISE_RUSTUP_HOME".to_owned(),
+                "${{ runner.temp }}/velnor/rustup".to_owned(),
+            ),
+            (
+                "MISE_CARGO_HOME".to_owned(),
+                "${{ runner.temp }}/velnor/cargo".to_owned(),
+            ),
+        ]),
+        crate::steps::MbxTransport::InstallOnly,
+        None,
+    )?
+    .expect("The MBX driver did not emit setup that only installs tools.");
     Ok(Job {
         services: Vec::new(),
         display_name: "Velnor Plan".to_owned(),
@@ -128,11 +129,13 @@ fn dispatch_plan_job(staged: &str) -> Result<Job, crate::RenderError> {
         condition: None,
         permissions: None,
         environment: None,
-        steps: vec![
-            crate::steps::checkout_step(&format!("actions/checkout@{}", "c".repeat(40)))?,
-            acquire_step(staged)?,
-            action,
-            Step {
+        steps: {
+            let mut steps = vec![
+                crate::steps::checkout_step(&format!("actions/checkout@{}", "c".repeat(40)))?,
+                acquire_step(staged)?,
+            ];
+            steps.extend(mbx_steps);
+            steps.push(Step {
                 parallel: false,
                 name: "Build".to_owned(),
                 id: None,
@@ -152,9 +155,10 @@ fn dispatch_plan_job(staged: &str) -> Result<Job, crate::RenderError> {
                             .map(|key| (key.to_owned(), String::new())),
                     ),
                 },
-            },
-            crate::steps::plan_step(),
-        ],
+            });
+            steps.push(crate::steps::plan_step());
+            steps
+        },
         cache_mode: None,
     })
 }
@@ -190,6 +194,7 @@ fn dispatch_ir(job: Job) -> WorkflowIr {
                     default: Some("cold".to_owned()),
                 }],
             }),
+            workflow_call: false,
             schedule: None,
         },
         permissions: Permissions::default(),
@@ -209,6 +214,9 @@ fn dispatch_render_context(staged: String) -> RenderContext {
         report_helper_version: "0.1.0".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         scale_set_selector: None,
+        scale_set_image_source_sha: None,
+        verified_cache_helpers: std::collections::BTreeMap::new(),
+        require_verified_cache_helper: false,
         staged_binary: staged,
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: format!("actions/checkout@{}", "c".repeat(40)),
@@ -230,126 +238,5 @@ fn dispatch_mise() -> MiseSetup {
     }
 }
 
-#[test]
-fn generated_dispatch_plan_gates_native_mbx_and_tools_cache_steps() -> Result<(), crate::RenderError>
-{
-    let staged = format!("{STAGED_BINARY_PREFIX}0.1.0");
-    let ir = dispatch_ir(dispatch_plan_job(&staged)?);
-    let context = dispatch_render_context(staged);
-    let jobs = crate::render::finalize_jobs(
-        &ir,
-        WorkflowPolicy::ConsumerV1,
-        None,
-        &context,
-        &dispatch_mise(),
-    )?;
-    let plan = jobs.get(PLAN_JOB_ID).expect("finalized plan job");
-    assert_native_mbx_step(plan);
-    assert_seed_and_mise_steps(plan)?;
-    assert_rendered_dispatch_guard(&ir, &context)?;
-    Ok(())
-}
-
-fn assert_native_mbx_step(plan: &Job) {
-    let mbx = plan
-        .steps
-        .iter()
-        .find(|step| step.name == "Set up MBX")
-        .expect("MBX action");
-    assert!(mbx.condition.as_deref().is_some_and(|condition| {
-        condition.contains("github.event_name != 'workflow_dispatch'")
-    }));
-    let native_mode = match &mbx.kind {
-        StepKind::Action { env, .. } => env.get("ACTIONS_CACHE_MODE").map(String::as_str),
-        _ => None,
-    };
-    assert_eq!(
-        native_mode,
-        Some(
-            "${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}"
-        ),
-        "native object writes remain limited to protected default-branch pushes"
-    );
-}
-
-fn assert_seed_and_mise_steps(plan: &Job) -> Result<(), crate::RenderError> {
-    // V2 carries the tool seed inside the runtime-identity prelude; the
-    // boundary still gates the MBX object step below. The prelude digest is
-    // static and content-bound, so dispatch cannot smuggle a foreign seed.
-    let prelude = plan
-        .steps
-        .iter()
-        .find(|step| step.role == Some(velnor_actions_contract::StepRole::ToolsCacheIdentity))
-        .expect("V2 tools-cache identity prelude");
-    let StepKind::Action { with, .. } = &prelude.kind else {
-        return Err(crate::RenderError::InvalidWorkflow(
-            "tools_cache_prelude_not_action".to_owned(),
-        ));
-    };
-    let digest = with
-        .get(crate::cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT)
-        .map(String::as_str)
-        .unwrap_or_default();
-    assert!(
-        digest.len() == 64
-            && digest.bytes().all(|byte| byte.is_ascii_hexdigit()
-                && (byte.is_ascii_digit() || byte.is_ascii_lowercase())),
-        "prelude binds the exact static runtime digest"
-    );
-    assert!(
-        plan.steps
-            .iter()
-            .all(|step| !step.name.contains("MBX bundle")),
-        "the retired manual transport is absent"
-    );
-    let mise = plan
-        .steps
-        .iter()
-        .find(|step| step.name == crate::setup::SETUP_MISE_NAME)
-        .expect("Mise setup");
-    let StepKind::Action { with, .. } = &mise.kind else {
-        return Err(crate::RenderError::InvalidWorkflow(
-            "setup_mise_not_action".to_owned(),
-        ));
-    };
-    assert_eq!(with.get("cache").map(String::as_str), Some("false"));
-    Ok(())
-}
-
-fn assert_rendered_dispatch_guard(
-    ir: &WorkflowIr,
-    context: &RenderContext,
-) -> Result<(), crate::RenderError> {
-    let rendered = crate::render::render_workflow_ir_strict_shared(
-        ir,
-        WorkflowPolicy::ConsumerV1,
-        None,
-        context,
-        &dispatch_mise(),
-    )?;
-    assert!(
-        rendered
-            .yaml
-            .contains(crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME)
-    );
-    assert!(
-        rendered
-            .yaml
-            .contains("github.event_name != 'workflow_dispatch'")
-    );
-    Ok(())
-}
-
-#[test]
-fn empty_seed_key_exits_before_the_trusted_image_tree_is_inspected() {
-    let script = crate::tool_seed::tool_seed_action_script(crate::tool_seed::SEED_ROOT)
-        .expect("fixed seed script");
-    let disabled = script.find("if [ -z \"$key\" ]").expect("empty key gate");
-    let trust = script
-        .find("trusted_seed_is_trusted")
-        .expect("trusted tree check");
-    assert!(disabled < trust, "empty key must exit before seed access");
-}
-
-#[path = "dispatch_cache_boundary_seed_tests.rs"]
-mod seed_tests;
+#[path = "dispatch_cache_boundary_group_tests.rs"]
+mod group_tests;

@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::VerificationRunner;
 use velnor_actions_contract::targets::ReleaseTarget;
 use velnor_actions_workflow_renderer::{
-    HelperProvenance, MiseSetup, provision_acquire_step,
+    HelperProvenance, MiseSetup, WorkflowRoutingPolicy, provision_acquire_step,
     schema2::{
         ConsumerReleaseSpec, ConsumerStableReleaseSpec, render_consumer_binary_release,
         render_consumer_preview,
@@ -14,8 +14,12 @@ use velnor_actions_workflow_renderer::{
 pub(super) fn request_path(channel: PackageReleaseChannel, operation: &str) -> String {
     let spec = fixture(channel);
     let rendered = match channel {
-        PackageReleaseChannel::Preview => render_consumer_preview(&spec),
-        PackageReleaseChannel::Stable => render_consumer_binary_release(&spec),
+        PackageReleaseChannel::Preview => {
+            render_consumer_preview(&spec, &WorkflowRoutingPolicy::hosted_only())
+        }
+        PackageReleaseChannel::Stable => {
+            render_consumer_binary_release(&spec, &WorkflowRoutingPolicy::hosted_only())
+        }
     }
     .expect("actual native workflow");
     let marker = format!("VELNOR_INTERNAL_OP: {operation}");

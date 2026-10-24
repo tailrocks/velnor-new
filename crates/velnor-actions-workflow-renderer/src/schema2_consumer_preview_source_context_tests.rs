@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn original_run_tuple_is_bound_once_only_at_source_selection_and_finalization() {
     let spec = with_tap();
-    let (_, eligibility) = super::super::source::job(&spec).expect("source job");
+    let (_, eligibility) = super::super::source::job(&spec, false).expect("source job");
     let Yaml::Seq(steps) = field(&eligibility, "steps") else {
         panic!("source steps")
     };
@@ -40,7 +40,7 @@ fn original_run_tuple_is_bound_once_only_at_source_selection_and_finalization() 
         }
     }
 
-    let yaml = render_consumer_preview(&spec).expect("preview").bytes;
+    let yaml = render_preview(&spec).expect("preview").bytes;
     for (name, next) in [
         ("preview-payload", Some("preview-assemble")),
         ("preview-assemble", Some("preview-signer")),

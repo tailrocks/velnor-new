@@ -2,9 +2,13 @@
 
 use std::collections::BTreeMap;
 
+use velnor_actions_contract::ExecutionMode;
 use velnor_actions_contract::WorkflowPolicy;
-use velnor_actions_contract::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
+use velnor_actions_contract::config::{
+    SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL, ValidatedImageReference,
+};
 use velnor_actions_workflow_renderer::shell_step;
+use velnor_actions_workflow_renderer::workflow_routing::WorkflowRoutingPolicy;
 use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
 
 use super::impl_renderer_fixtures::*;
@@ -25,20 +29,37 @@ fn render_mbx_job(scale_set: bool) -> Result<String, RenderError> {
         BTreeMap::new(),
     )?);
     let mut built = job("mbx-job", "MBX job", Vec::new(), steps);
-    if scale_set {
+    let selector = if scale_set {
         let selector = ScaleSetSelector::try_new(
             SCALE_SET_NAME,
             &[VELNOR_LABEL.to_owned(), SCALE_SET_NAME.to_owned()],
         )
         .map_err(|_| RenderError::InvalidWorkflow("bad_scale_set".to_owned()))?;
         built.1.runs_on = selector.token();
+        Some(selector)
+    } else {
+        None
+    };
+    let ir = fixture_ir(vec![built]);
+    if let Some(selector) = selector {
+        let image = ValidatedImageReference::parse(
+            "ghcr.io/tailrocks/velnor-job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        )
+        .map_err(|_| RenderError::InvalidWorkflow("bad_test_image".to_owned()))?;
+        let routing =
+            WorkflowRoutingPolicy::configured(ExecutionMode::Hosted, selector, Some(image));
+        velnor_actions_workflow_renderer::render::render_workflow_ir_strict_shared_with_routing(
+            &ir,
+            WorkflowPolicy::ConsumerV1,
+            None,
+            &fixture_ctx(),
+            &mise(),
+            &routing,
+        )
+        .map(|rendered| rendered.yaml)
+    } else {
+        render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &fixture_ctx())
     }
-    render_workflow_ir(
-        &fixture_ir(vec![built]),
-        WorkflowPolicy::ConsumerV1,
-        None,
-        &fixture_ctx(),
-    )
 }
 
 #[test]

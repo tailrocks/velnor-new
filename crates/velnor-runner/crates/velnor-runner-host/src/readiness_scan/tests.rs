@@ -37,7 +37,7 @@ struct Scratch {
 }
 
 fn sample() -> String {
-    "schema = 1\n[github]\nrepository = \"example/repo\"\nscale_set_name = \"ubuntu-26.04-scale-set\"\ncredential_ref = \"keychain:test/absent\"\n[host]\nmax_jobs = 1\n[host.resources]\nrunner_cpu_millicores = 1000\nrunner_memory_bytes = 2147483648\ndind_cpu_millicores = 3000\ndind_memory_bytes = 6442450944\n[docker]\ncontext = \"test\"\nplatform = \"linux/amd64\"\nendpoint = \"unix:///tmp/velnor-readiness-absent.sock\"\n".to_owned()
+    "schema = 2\n[[connections]]\nconnection_id = \"test\"\nrepository_id = 1\nrepository = \"example/repo\"\ncredential_ref = \"keychain:test/absent\"\n[connections.scale_set]\nname = \"test-scale-set\"\nlabels = [\"velnor\", \"test-scale-set\"]\n[connections.source_policy]\nmode = \"branch_restricted\"\nbranches = [\"main\"]\ntag_prefixes = []\nevents = [\"push\"]\npull_request_rules = []\n[release_read]\ncredential_ref = \"keychain:host/release-read\"\n[host]\nmax_jobs = 1\n[host.resources]\nrunner_cpu_millicores = 1000\nrunner_memory_bytes = 2147483648\ndind_cpu_millicores = 3000\ndind_memory_bytes = 6442450944\noperational_memory_reserve_bytes = 1073741824\n[docker]\ncontext = \"test\"\nplatform = \"linux/amd64\"\nendpoint = \"unix:///tmp/velnor-readiness-absent.sock\"\n".to_owned()
 }
 
 #[test]
@@ -71,22 +71,92 @@ async fn drain_file_reports_draining_without_config() -> Result<(), String> {
 async fn missing_keychain_item_beats_a_dead_socket() -> Result<(), String> {
     let scratch = Scratch::new("cred")?;
     std::fs::write(scratch.path().join("host.toml"), sample()).map_err(|err| err.to_string())?;
-    let mut selected = None;
+    let mut selected = Vec::new();
     let state = assess_with(scratch.path(), deadline(), |reference| {
-        selected = Some((
+        selected.push((
             reference.service().to_owned(),
             reference.account().to_owned(),
         ));
         false
     })
     .await;
-    if selected != Some(("test".to_owned(), "absent".to_owned())) {
-        return Err("readiness ignored host.toml credential_ref".to_owned());
+    if selected
+        != [
+            ("test".to_owned(), "absent".to_owned()),
+            ("host".to_owned(), "release-read".to_owned()),
+        ]
+    {
+        return Err("readiness ignored a configured credential reference".to_owned());
     }
     if state == Readiness::WaitingForCredentials {
         Ok(())
     } else {
         Err(state.as_str().to_owned())
+    }
+}
+
+#[tokio::test]
+async fn readiness_checks_every_connection_credential() -> Result<(), String> {
+    let scratch = Scratch::new("connection-creds")?;
+    let second = "[[connections]]\nconnection_id = \"second\"\nrepository_id = 2\nrepository = \"example/other\"\ncredential_ref = \"keychain:test/second\"\n[connections.scale_set]\nname = \"other-scale-set\"\nlabels = [\"velnor\", \"other-scale-set\"]\n[connections.source_policy]\nmode = \"branch_restricted\"\nbranches = [\"main\"]\ntag_prefixes = []\nevents = [\"push\"]\npull_request_rules = []\n[host]\n";
+    let config = sample().replace("[host]\n", second);
+    std::fs::write(scratch.path().join("host.toml"), config).map_err(|error| error.to_string())?;
+    let mut checks = 0;
+    let state = assess_with(scratch.path(), deadline(), |_| {
+        checks += 1;
+        checks > 1
+    })
+    .await;
+    assert_eq!(checks, 3);
+    assert_eq!(state, Readiness::WaitingForCredentials);
+    Ok(())
+}
+
+#[tokio::test]
+async fn missing_release_reader_reference_holds_readiness() -> Result<(), String> {
+    let scratch = Scratch::new("release-reader-ref")?;
+    let config = sample().replace(
+        "[release_read]\ncredential_ref = \"keychain:host/release-read\"\n",
+        "",
+    );
+    std::fs::write(scratch.path().join("host.toml"), config).map_err(|error| error.to_string())?;
+    let state = assess_with(scratch.path(), deadline(), |_| true).await;
+    assert_eq!(state, Readiness::WaitingForCredentials);
+    Ok(())
+}
+
+#[tokio::test]
+async fn missing_release_reader_item_holds_readiness() -> Result<(), String> {
+    let scratch = Scratch::new("release-reader-item")?;
+    std::fs::write(scratch.path().join("host.toml"), sample())
+        .map_err(|error| error.to_string())?;
+    let mut checked = Vec::new();
+    let state = assess_with(scratch.path(), deadline(), |reference| {
+        checked.push(reference.account().to_owned());
+        reference.account() != "release-read"
+    })
+    .await;
+    assert_eq!(checked, ["absent", "release-read"]);
+    assert_eq!(state, Readiness::WaitingForCredentials);
+    Ok(())
+}
+
+#[tokio::test]
+async fn missing_compiled_source_pin_degrades_configured_controller() -> Result<(), String> {
+    if crate::launch::build_pin_status().is_ok() {
+        return Ok(());
+    }
+    let scratch = Scratch::new("source-pin")?;
+    std::fs::write(scratch.path().join("host.toml"), sample())
+        .map_err(|error| error.to_string())?;
+    let state = assess_with(scratch.path(), deadline(), |_| true).await;
+    if state == Readiness::Degraded {
+        Ok(())
+    } else {
+        Err(format!(
+            "untrusted build source pin produced {}",
+            state.as_str()
+        ))
     }
 }
 

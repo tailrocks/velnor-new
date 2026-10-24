@@ -20,6 +20,12 @@ pub(crate) fn run_public() -> ExitCode {
         Command::Init => run_init(),
         Command::Plan => run_plan(),
         Command::Generate {
+            output_dir,
+            mode,
+            job_image_candidate_only: true,
+            ..
+        } => crate::dispatch_job_image_preview::run(output_dir, mode.as_deref()),
+        Command::Generate {
             output_dir, mode, ..
         } => crate::dispatch_generate::run_generate(output_dir, mode),
         Command::Unmanaged => crate::dispatch_unmanaged::run_unmanaged(),
@@ -42,6 +48,7 @@ pub(crate) fn run_public() -> ExitCode {
             &linux_x64_binary,
             &macos_arm64_binary,
         ),
+        Command::AuthorityInventory => crate::dispatch_job_authority::run(),
     }
 }
 

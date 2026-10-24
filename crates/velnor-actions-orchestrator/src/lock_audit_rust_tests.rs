@@ -15,6 +15,9 @@ use velnor_actions_contract::workflow::RUST_VERIFIER_USES;
 #[path = "lock_audit_jactionlint_tests.rs"]
 mod jactionlint_tests;
 
+#[path = "lock_audit_rust_canonical_tests.rs"]
+mod canonical_tests;
+
 fn step(name: &str, role: Option<StepRole>, run: &[&str]) -> Step {
     Step {
         parallel: false,
@@ -70,6 +73,7 @@ fn ir(verified: bool) -> WorkflowIr {
             push_branches: Vec::new(),
             merge_group: false,
             workflow_dispatch: None,
+            workflow_call: false,
             schedule: None,
         },
         permissions: Permissions::default(),

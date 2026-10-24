@@ -110,6 +110,7 @@ pub(crate) fn validate_workflow_task_jobs(
     jobs: &BTreeMap<String, Job>,
     policies: &[WorkflowTaskPolicy],
     checkout_uses: &str,
+    routing: &crate::workflow_routing::WorkflowRoutingPolicy,
 ) -> Result<Vec<String>, RenderError> {
     let mut previous = None;
     let mut seen = BTreeSet::new();
@@ -141,6 +142,7 @@ pub(crate) fn validate_workflow_task_jobs(
                     jobs,
                     task,
                     checkout_uses,
+                    routing,
                 )?,
             ),
             WorkflowTaskPolicy::Bun(_)

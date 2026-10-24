@@ -1,9 +1,9 @@
 //! The dbt-fusion exact version grammar (HD-4a): `X.Y.Z-preview.N` or the
 //! stable `X.Y.Z`.
 //!
-//! Fusion ships as `<major>.<minor>.<patch>-preview.<n>` and, since 2.0.9, as
-//! plain `<major>.<minor>.<patch>`; `latest`, a range or a template is not an
-//! exact pin. Both forms use the same CDN archive name. Accepted strings are lower-case ASCII
+//! Fusion uses `<major>.<minor>.<patch>-preview.<n>` and, since 2.0.9, `<major>.<minor>.<patch>`.
+//! `latest`, a range, or a template is not an exact pin.
+//! Both forms use the same archive name. Accepted strings are lower-case ASCII
 //! over `[a-z0-9.-]`, so they can be written to the single-line `$GITHUB_ENV`
 //! resolver output without escaping.
 
@@ -53,7 +53,7 @@ pub struct FusionVersion {
 }
 
 impl Ord for FusionVersion {
-    /// A stable release orders after every preview of the same `X.Y.Z`.
+    /// A stable release sorts after every preview of the same `X.Y.Z`.
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         let key = |v: &Self| (v.major, v.minor, v.patch, v.preview.is_none(), v.preview);
         key(self).cmp(&key(other))

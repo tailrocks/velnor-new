@@ -5,6 +5,26 @@ use velnor_actions_contract::FinalStatus;
 use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
 use crate::impl_merge::{merge, merge_request, success_jobs};
 
+/// Complete a request with successful results for every planned matrix job.
+fn complete_matrix_inventory(
+    mut request: serde_json::Value,
+    plan: &velnor_actions_contract::Plan,
+    extra_ids: &[&str],
+) -> serde_json::Value {
+    let mut ids = vec!["plan".to_owned()];
+    ids.extend(plan.matrix.include.iter().map(|entry| entry.job_id.clone()));
+    ids.extend(extra_ids.iter().map(|id| (*id).to_owned()));
+    ids.sort();
+    ids.dedup();
+    let jobs: Vec<serde_json::Value> = ids
+        .iter()
+        .map(|job_id| serde_json::json!({"job_id": job_id, "conclusion": "success"}))
+        .collect();
+    request["required_job_ids"] = serde_json::json!(ids);
+    request["required_jobs"] = serde_json::json!(jobs);
+    request
+}
+
 #[test]
 fn trust_mismatch_fails_closed_with_scope_token() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
@@ -13,7 +33,11 @@ fn trust_mismatch_fails_closed_with_scope_token() -> TestResult {
     let reports_value = serde_json::to_value(&reports)?;
     let mut forged_plan = plan.clone();
     forged_plan.trust = velnor_actions_contract::Trust::Trusted;
-    let request = merge_request(&forged_plan, &matrix, &reports_value, &success_jobs());
+    let request = complete_matrix_inventory(
+        merge_request(&forged_plan, &matrix, &reports_value, &success_jobs()),
+        &plan,
+        &[],
+    );
     let final_report = merge(&request)?;
     assert_eq!(final_report.status, FinalStatus::PlanningFailed);
     assert!(
@@ -23,7 +47,11 @@ fn trust_mismatch_fails_closed_with_scope_token() -> TestResult {
         "plan trust forgery needs a scope token: {:?}",
         final_report.miss_reasons
     );
-    let mut request = merge_request(&plan, &matrix, &reports_value, &success_jobs());
+    let mut request = complete_matrix_inventory(
+        merge_request(&plan, &matrix, &reports_value, &success_jobs()),
+        &plan,
+        &[],
+    );
     let files = request["task_reports"].as_array_mut().ok_or("task files")?;
     files[0]["trust"] = serde_json::json!("trusted");
     let final_report = merge(&request)?;
@@ -50,7 +78,11 @@ fn plan_event_must_match_merge_time_actual_event() -> TestResult {
     forged.event = velnor_actions_contract::WorkflowEvent::Push;
     forged.trust = velnor_actions_contract::Trust::Trusted;
     forged.validate()?;
-    let mut request = merge_request(&forged, &matrix, &reports_value, &success_jobs());
+    let mut request = complete_matrix_inventory(
+        merge_request(&forged, &matrix, &reports_value, &success_jobs()),
+        &plan,
+        &[],
+    );
     request["actual_event"] = serde_json::json!("pull_request");
     let final_report = merge(&request)?;
     assert_eq!(final_report.status, FinalStatus::PlanningFailed);
@@ -62,7 +94,11 @@ fn plan_event_must_match_merge_time_actual_event() -> TestResult {
         final_report.miss_reasons
     );
     // A missing actual event fails closed the same way.
-    let mut request = merge_request(&plan, &matrix, &reports_value, &success_jobs());
+    let mut request = complete_matrix_inventory(
+        merge_request(&plan, &matrix, &reports_value, &success_jobs()),
+        &plan,
+        &[],
+    );
     request
         .as_object_mut()
         .ok_or("request object")?
@@ -77,7 +113,11 @@ fn plan_event_must_match_merge_time_actual_event() -> TestResult {
         final_report.miss_reasons
     );
     // Control: matching actual event passes.
-    let request = merge_request(&plan, &matrix, &reports_value, &success_jobs());
+    let request = complete_matrix_inventory(
+        merge_request(&plan, &matrix, &reports_value, &success_jobs()),
+        &plan,
+        &[],
+    );
     assert_eq!(merge(&request)?.status, FinalStatus::Passed);
     Ok(())
 }
@@ -93,9 +133,11 @@ fn candidate_attestation_must_bind_the_plan_head() -> TestResult {
         {"job_id": "plan", "conclusion": "success"},
     ]);
     let base = || {
-        let mut request = merge_request(&plan, &matrix, &reports_value, &jobs);
-        request["required_job_ids"] = serde_json::json!(["candidate", "plan"]);
-        request
+        complete_matrix_inventory(
+            merge_request(&plan, &matrix, &reports_value, &jobs),
+            &plan,
+            &["candidate"],
+        )
     };
     // Matching attestation passes.
     let mut request = base();
@@ -125,7 +167,11 @@ fn candidate_attestation_must_bind_the_plan_head() -> TestResult {
         final_report.miss_reasons
     );
     // Outside candidate mode a stray attestation is ignored, not judged.
-    let mut request = merge_request(&plan, &matrix, &reports_value, &success_jobs());
+    let mut request = complete_matrix_inventory(
+        merge_request(&plan, &matrix, &reports_value, &success_jobs()),
+        &plan,
+        &[],
+    );
     request["candidate_attestation"] = serde_json::json!({"schema": 1, "commit": "0".repeat(40)});
     assert_eq!(merge(&request)?.status, FinalStatus::Passed);
     Ok(())

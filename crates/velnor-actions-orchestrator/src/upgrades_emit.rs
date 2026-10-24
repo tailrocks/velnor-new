@@ -4,6 +4,7 @@
 //! enables it, and `generate` retires it when the table is removed.
 
 use velnor_actions_mise::PinnedTool;
+use velnor_actions_workflow_renderer::WorkflowRoutingPolicy;
 use velnor_actions_workflow_renderer::render::RenderedFile;
 use velnor_actions_workflow_renderer::upgrades::{UpgradesSpec, render_upgrades_workflow};
 
@@ -26,6 +27,7 @@ pub(crate) fn upgrades_enabled(prep: &GenerationPreparation) -> bool {
 /// Returns render errors for invalid spec scalars or unsupported runners.
 pub(crate) fn upgrades_files(
     prep: &GenerationPreparation,
+    routing: &WorkflowRoutingPolicy,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
     let Some(config) = prep.config.upgrades.as_ref().filter(|u| u.enabled) else {
         return Ok(Vec::new());
@@ -57,5 +59,5 @@ pub(crate) fn upgrades_files(
             &velnor_actions_mise::ToolCatalog::pinned(),
         ),
     };
-    Ok(vec![render_upgrades_workflow(&spec)?])
+    Ok(vec![render_upgrades_workflow(&spec, routing)?])
 }

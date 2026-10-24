@@ -263,6 +263,7 @@ fn mint_observer(tap: &ConsumerReleaseTapSpec) -> Result<Yaml, RenderError> {
                 ),
                 ("owner".to_owned(), Yaml::str(owner)),
                 ("repositories".to_owned(), Yaml::str(repository)),
+                ("permission-checks".to_owned(), Yaml::str("read")),
                 ("permission-administration".to_owned(), Yaml::str("read")),
                 ("skip-token-revoke".to_owned(), Yaml::Bool(false)),
             ]),

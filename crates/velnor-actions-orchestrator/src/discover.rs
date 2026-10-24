@@ -23,12 +23,21 @@ use crate::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 use crate::config::gradle_jobs;
 use crate::discover_index::build_file_index;
 use crate::internal::phase_timing::PlanPhaseTimings;
-use crate::inventory::{qualify_workspaces, run_inventories, run_inventories_with_phase_timings};
+use crate::inventory::{
+    qualify_workspaces, run_inventories_with_all_features,
+    run_inventories_with_phase_timings_and_all_features,
+};
 use crate::recommendations::collect_recommendations;
 #[path = "consumer_manifest.rs"]
 mod consumer_manifest;
 use crate::toolcheck::{ToolInputCheck, check_tool_inputs_with_paths};
 use crate::{discover_tofu::qualify_tofu_step, evidence::profile_for_workspace};
+
+#[path = "discover_manifest_paths.rs"]
+mod manifest_paths;
+#[path = "discover_task_inventories.rs"]
+mod task_inventories;
+pub(crate) use manifest_paths::{workspace_lock, workspace_manifest};
 
 /// One workspace with its inventory, profile, and recommendations.
 #[derive(Debug, Clone)]
@@ -89,9 +98,9 @@ pub struct Discovery {
     pub affected: crate::affected_inputs::AffectedInputs,
     /// Bun workspaces named by `[stacks.bun]`, read from the same index.
     pub(crate) bun: crate::workflow_task_jobs::bun_inventory::BunInventory,
-    /// dbt projects named by `[stacks.dbt]`, analysed from the same index.
+    /// Discovery reads dbt projects from `[stacks.dbt]` through the shared file index.
     pub(crate) dbt: crate::workflow_task_jobs::dbt_inventory::DbtInventory,
-    /// Ansible roots named by `[stacks.ansible]`, analysed from the same index.
+    /// Discovery reads Ansible roots from `[stacks.ansible]` through the shared file index.
     pub(crate) ansible: crate::workflow_task_jobs::ansible_inventory::AnsibleInventory,
 }
 
@@ -118,47 +127,11 @@ pub(crate) fn discover_with_phase_timings(
     discover_inner(root, config, catalog, Some(phases))
 }
 
-type TaskInventories = (
-    crate::workflow_task_jobs::bun_inventory::BunInventory,
-    crate::workflow_task_jobs::dbt_inventory::DbtInventory,
-    crate::workflow_task_jobs::ansible_inventory::AnsibleInventory,
-);
-
-/// Bun member inventory for the configured `[stacks.bun]` (empty without it).
-fn bun_inventory(
-    root: &Path,
-    index: &FileIndex,
-    config: &VelnorConfig,
-) -> Result<crate::workflow_task_jobs::bun_inventory::BunInventory, OrchestratorError> {
-    match &config.stacks.bun {
-        Some(stack) => {
-            crate::workflow_task_jobs::bun_inventory::BunInventory::load(root, index, stack)
-        }
-        None => Ok(crate::workflow_task_jobs::bun_inventory::BunInventory::default()),
-    }
-}
-
-/// The Bun, dbt and Ansible inventories of the configured stacks.
-fn task_inventories(
-    root: &Path,
-    index: &FileIndex,
-    config: &VelnorConfig,
-) -> Result<TaskInventories, OrchestratorError> {
-    use crate::workflow_task_jobs::{
-        ansible_inventory::AnsibleInventory, dbt_inventory::DbtInventory,
-    };
-    Ok((
-        bun_inventory(root, index, config)?,
-        DbtInventory::for_config(root, index, config)?,
-        AnsibleInventory::for_config(root, index, config)?,
-    ))
-}
-
 fn discover_inner(
     root: &Path,
     config: &VelnorConfig,
     catalog: &ToolCatalog,
-    mut phases: Option<&mut PlanPhaseTimings>,
+    phases: Option<&mut PlanPhaseTimings>,
 ) -> Result<Discovery, OrchestratorError> {
     let (index, skipped_non_utf8) = build_file_index(root, &config.discovery.exclude)?;
     let mut candidates = Vec::new();
@@ -179,22 +152,15 @@ fn discover_inner(
         problem: err.to_string(),
     })?;
     let initial = apply_stack_ignores(projects, &config.stacks.ignore);
-    #[expect(
-        clippy::needless_option_as_deref,
-        reason = "the original Option must remain available after this branch"
-    )]
-    let inventory_result = match phases.as_deref_mut() {
-        Some(phases) => run_inventories_with_phase_timings(
-            root,
-            &candidates,
-            index.files(),
-            &mut reads,
-            phases,
-            catalog,
-        ),
-        None => run_inventories(root, &candidates, index.files(), &mut reads, catalog),
-    };
-    let ((outcomes, inventories), tofu_units) = inventory_result?;
+    let ((outcomes, inventories), tofu_units) = run_candidate_inventories(
+        root,
+        &candidates,
+        index.files(),
+        &mut reads,
+        phases,
+        rust_all_features(config),
+        catalog,
+    )?;
     let statuses = check_candidate_outcomes(initial, &outcomes).map_err(|err| {
         OrchestratorError::Detection {
             problem: err.to_string(),
@@ -217,7 +183,7 @@ fn discover_inner(
         collect_recommendations(root, config, &index, &workspaces, &tool_checks, &mut reads);
     let (consumer_manifest_json, consumer_manifest_stand_in) =
         consumer_manifest::for_policy(root, config.workflow.policy)?;
-    let (bun, dbt, ansible) = task_inventories(root, &index, config)?;
+    let (bun, dbt, ansible) = task_inventories::load(root, &index, config)?;
     let gradle_roots = gradle_jobs::analyze_roots(root, &index, config)?;
     Ok(Discovery {
         gradle_roots,
@@ -238,6 +204,45 @@ fn discover_inner(
         bun,
         dbt,
         ansible,
+    })
+}
+
+fn run_candidate_inventories(
+    root: &Path,
+    candidates: &[velnor_actions_contract::StackCandidate],
+    files: &[String],
+    reads: &mut velnor_actions_tofu::FileCache,
+    phases: Option<&mut PlanPhaseTimings>,
+    all_features: bool,
+    catalog: &ToolCatalog,
+) -> Result<
+    (
+        crate::inventory::Inventories,
+        Vec<crate::select_tofu::TofuSelectionUnit>,
+    ),
+    OrchestratorError,
+> {
+    match phases {
+        Some(phases) => run_inventories_with_phase_timings_and_all_features(
+            root,
+            candidates,
+            files,
+            reads,
+            phases,
+            all_features,
+            catalog,
+        ),
+        None => {
+            run_inventories_with_all_features(root, candidates, files, reads, all_features, catalog)
+        }
+    }
+}
+
+fn rust_all_features(config: &VelnorConfig) -> bool {
+    config.stacks.rust.as_ref().is_some_and(|rust| {
+        rust.configurations
+            .iter()
+            .any(|configuration| configuration.all_features)
     })
 }
 
@@ -375,24 +380,6 @@ fn derive_all(
     proposals.extend(crate::select_tofu::derive_tofu(statuses, index.files())?);
     proposals.sort_by(|left, right| left.task_id.cmp(&right.task_id));
     Ok((proposals, fallbacks))
-}
-
-/// Workspace-root manifest path for a workspace root.
-pub(crate) fn workspace_manifest(workspace_root: &str) -> String {
-    if workspace_root.is_empty() {
-        "Cargo.toml".to_owned()
-    } else {
-        format!("{workspace_root}/Cargo.toml")
-    }
-}
-
-/// Workspace-root lockfile path for a workspace root.
-pub(crate) fn workspace_lock(workspace_root: &str) -> String {
-    if workspace_root.is_empty() {
-        "Cargo.lock".to_owned()
-    } else {
-        format!("{workspace_root}/Cargo.lock")
-    }
 }
 
 #[cfg(test)]

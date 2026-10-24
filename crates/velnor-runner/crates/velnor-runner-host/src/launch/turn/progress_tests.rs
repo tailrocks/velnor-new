@@ -1,146 +1,225 @@
-//! Missing-statistics batches ack and continue through the real pump.
+//! Queue progress checks for completion messages without runner statistics.
 
-use std::collections::VecDeque;
+use std::cell::Cell;
 
-use velnor_runner_github::{InnerJob, InnerKind, ParsedBatch, Poll};
+use velnor_runner_github::{InnerJob, InnerKind, ParsedBatch, Poll, QueueSession};
 
-use super::{PollHost, admission, pump};
-use crate::journal::Outcome;
+use super::test_positive_poll_once_with_response;
+use crate::journal::request_lifecycle::tests::{
+    NativeStartedIntakeFixture, native_started_intake_fixture,
+};
 use crate::launch;
-use crate::launch::capacity::Admit;
-use crate::launch::steps;
-use crate::launch_harness::{Mode, Script, absent, ctx, open};
+use crate::launch::turn::{Acknowledgement, Settlement};
+use crate::listen::inert_link_for_offline_test;
 use crate::scale_set::EnsureError;
-use crate::worker::Started;
 
-struct ProgressPolls<'a> {
-    journal: &'a crate::Journal,
-    polls: VecDeque<Poll>,
-    poll_count: usize,
-    script: Script,
-}
+struct SessionReply;
 
-impl PollHost for ProgressPolls<'_> {
-    async fn poll(&mut self, _workers: &mut Vec<Started>) -> Result<bool, EnsureError> {
-        self.poll_count = self.poll_count.saturating_add(1);
-        let Some(polled) = self.polls.pop_front() else {
-            return Ok(true);
-        };
-        let decision = admission(
-            &crate::launch_test_support::Engine::new(),
-            self.journal,
-            2,
-            2,
-            0,
-            &polled,
-        )
-        .await?;
-        let Admit::Ack { stop } = decision else {
-            return Err(EnsureError::Unexpected {
-                status: 0,
-                step: "queue",
-            });
-        };
-        if let Poll::Batch(batch) = &polled {
-            steps::acknowledge(&mut self.script, &ctx(), batch)?;
-        }
-        Ok(stop)
-    }
-
-    #[expect(
-        clippy::unused_async_trait_impl,
-        reason = "the fake runner count is an in-memory value"
-    )]
-    async fn running(&mut self) -> Result<u32, EnsureError> {
-        Ok(0)
+impl velnor_runner_github::Transport for SessionReply {
+    fn exchange(
+        &mut self,
+        request: &velnor_runner_github::SessionRequest,
+    ) -> Result<velnor_runner_github::Exchange, velnor_runner_github::TransportFail> {
+        assert_eq!(request.method, velnor_runner_github::Method::Post);
+        Ok(velnor_runner_github::Exchange {
+            status: 200,
+            body: br#"{"sessionId":"progress-test","messageQueueUrl":"https://queue.example.invalid/","messageQueueAccessToken":"queue-token"}"#.to_vec(),
+        })
     }
 }
 
-#[tokio::test]
-async fn missing_stats_notifications_ack_then_poll_again() -> Result<(), String> {
-    let (scratch, journal) = open("missing-stats-pump").await?;
-    let (row, _) = journal
-        .begin_launch("m95")
-        .await
-        .map_err(|error| error.to_string())?;
-    journal
-        .finish(row, Outcome::Uncertain)
-        .await
-        .map_err(|error| error.to_string())?;
-    assert_eq!(launch::slot::occupied(&journal).await, Ok(1));
-
-    let mut host = ProgressPolls {
-        journal: &journal,
-        polls: VecDeque::from([
-            batch(96, Vec::new()),
-            batch(97, vec![job(InnerKind::Started), job(InnerKind::Completed)]),
-        ]),
-        poll_count: 0,
-        script: Script {
-            calls: Vec::new(),
-            mode: Mode::Ok,
-        },
-    };
-    let mut workers = Vec::new();
-    pump(&mut host, &mut workers, 1)
-        .await
-        .map_err(|error| error.to_string())?;
-
-    assert_eq!(host.poll_count, 3);
-    assert_eq!(host.script.calls, ["ack", "ack"]);
-    assert_eq!(workers.first(), None);
-    assert_eq!(launch::slot::occupied(&journal).await, Ok(1));
-    let rows = journal.rows().await.map_err(|error| error.to_string())?;
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].id, row);
-    assert_eq!(rows[0].subject, "m95");
-    assert_eq!(rows[0].state, crate::IntentState::Uncertain);
-    absent(&scratch.file())
+fn session() -> Result<QueueSession, String> {
+    let mut reply = SessionReply;
+    velnor_runner_github::create_session(&mut reply, 501, "owner", "admin-token")
+        .map_err(|error| error.to_string())
 }
 
-#[tokio::test]
-async fn ack_error_propagates_without_start_or_repoll() -> Result<(), String> {
-    let (scratch, journal) = open("missing-stats-ack-fail").await?;
-    let mut host = ProgressPolls {
-        journal: &journal,
-        polls: VecDeque::from([batch(98, Vec::new())]),
-        poll_count: 0,
-        script: Script {
-            calls: Vec::new(),
-            mode: Mode::AckFail,
-        },
-    };
-    let mut workers = Vec::new();
-    assert_eq!(
-        pump(&mut host, &mut workers, 1).await,
-        Err(EnsureError::Uncertain)
-    );
-    assert_eq!(host.poll_count, 1);
-    assert_eq!(host.script.calls, ["ack"]);
-    assert_eq!(workers.first(), None);
-    assert_eq!(launch::slot::occupied(&journal).await, Ok(0));
-    absent(&scratch.file())
+async fn bind_session(
+    fixture: &NativeStartedIntakeFixture,
+) -> Result<(i64, crate::journal::HeaderAllocation), String> {
+    fixture
+        .journal
+        .bootstrap_header_authority()
+        .await
+        .map_err(|error| error.to_string())?;
+    let prepared = fixture
+        .scope
+        .prepare_session_create("0123456789abcdef0123456789abcdef")
+        .await
+        .map_err(|error| error.to_string())?;
+    let claim = fixture
+        .scope
+        .claim_session_create(prepared.local_nonce())
+        .await
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "The session creation claim is missing.".to_owned())?;
+    let bound = fixture
+        .scope
+        .record_created_session(&claim, "progress-test", 1)
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok((bound.intent_id(), bound.allocation().clone()))
 }
 
-fn batch(message_id: i64, jobs: Vec<InnerJob>) -> Poll {
+fn completion_response(fixture: &NativeStartedIntakeFixture, message_id: i64) -> Poll {
     Poll::Batch(ParsedBatch {
         message_id,
-        raw_body: String::new(),
+        raw_body: serde_json::json!([{
+            "messageType": "JobCompleted",
+            "runnerRequestId": fixture.request_id,
+            "runnerId": fixture.runner.id,
+            "runnerName": fixture.runner.name,
+            "result": "Succeeded",
+            "jobId": "opaque-started-job"
+        }])
+        .to_string(),
         statistics: None,
-        jobs,
+        jobs: vec![InnerJob {
+            kind: InnerKind::Completed,
+            request_id: Some(fixture.request_id),
+            runner_id: Some(fixture.runner.id),
+            runner_name: Some(fixture.runner.name.clone()),
+            result: Some("Succeeded".to_owned()),
+            job_id: Some("opaque-started-job".to_owned()),
+            labels: Vec::new(),
+            fields: Vec::new(),
+            source: fixture.source.clone(),
+        }],
     })
 }
 
-fn job(kind: InnerKind) -> InnerJob {
-    InnerJob {
-        source: velnor_runner_github::SourceMetadata::default(),
-        kind,
-        request_id: None,
-        job_id: None,
-        labels: Vec::new(),
-        runner_id: None,
-        runner_name: None,
-        result: None,
-        fields: Vec::new(),
-    }
+async fn started_fixture() -> Result<NativeStartedIntakeFixture, String> {
+    let fixture = native_started_intake_fixture()
+        .await
+        .map_err(|error| error.to_string())?;
+    fixture
+        .record_started()
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(fixture)
+}
+
+#[test]
+fn missing_stats_completion_ack_allows_the_next_poll() -> Result<(), String> {
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "missing_stats_completion_ack_allows_the_next_poll",
+        || Box::pin(missing_stats_completion_ack_allows_the_next_poll_on_fixture_stack()),
+    )
+}
+
+async fn missing_stats_completion_ack_allows_the_next_poll_on_fixture_stack() -> Result<(), String>
+{
+    let fixture = started_fixture().await?;
+    let (intent_id, allocation) = bind_session(&fixture).await?;
+    let mut session = session()?;
+    let mut link = inert_link_for_offline_test();
+    let acknowledgement_calls = Cell::new(0);
+
+    let outcome = launch::test_positive_poll_once_with_response(
+        launch::PositivePollContext {
+            link: &mut link,
+            set_id: fixture.runner.runner_scale_set_id,
+            session: &mut session,
+            scoped: &fixture.scope,
+            session_intent_id: intent_id,
+            allocation: &allocation,
+            cursor: 0,
+        },
+        launch::TestPollResponse {
+            polled: completion_response(&fixture, 96),
+            path: "https://queue.example.invalid/messages".to_owned(),
+            queue: Some("queue-token".to_owned()),
+        },
+        async |_link, _session, _path, _queue, _polled| {
+            acknowledgement_calls.set(acknowledgement_calls.get() + 1);
+            Ok(())
+        },
+        async |_link, _polled, _queue, _path, _queue_token, _admin_token| {
+            Err(EnsureError::Uncertain)
+        },
+    )
+    .await
+    .map_err(|error| error.to_string())?;
+    assert_eq!(outcome.acknowledgement, Acknowledgement::Acknowledged);
+    assert_eq!(outcome.settlement, Settlement::Settled);
+    assert_eq!(outcome.started_request_ids, [] as [i64; 0]);
+
+    let next_poll = test_positive_poll_once_with_response(
+        launch::PositivePollContext {
+            link: &mut link,
+            set_id: fixture.runner.runner_scale_set_id,
+            session: &mut session,
+            scoped: &fixture.scope,
+            session_intent_id: intent_id,
+            allocation: &allocation,
+            cursor: 0,
+        },
+        launch::TestPollResponse {
+            polled: Poll::Empty,
+            path: "https://queue.example.invalid/messages".to_owned(),
+            queue: Some("queue-token".to_owned()),
+        },
+        async |_link, _session, _path, _queue, _polled| {
+            acknowledgement_calls.set(acknowledgement_calls.get() + 1);
+            Ok(())
+        },
+        async |_link, _polled, _queue, _path, _queue_token, _admin_token| {
+            Err(EnsureError::Uncertain)
+        },
+    )
+    .await
+    .map_err(|error| error.to_string())?;
+    assert_eq!(next_poll.acknowledgement, Acknowledgement::NotRequired);
+    assert_eq!(next_poll.settlement, Settlement::Settled);
+    assert_eq!(acknowledgement_calls.get(), 1);
+    Ok(())
+}
+
+#[test]
+fn acknowledgement_error_propagates_before_admission() -> Result<(), String> {
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "acknowledgement_error_propagates_before_admission",
+        || Box::pin(acknowledgement_error_propagates_before_admission_on_fixture_stack()),
+    )
+}
+
+async fn acknowledgement_error_propagates_before_admission_on_fixture_stack() -> Result<(), String>
+{
+    let fixture = started_fixture().await?;
+    let (intent_id, allocation) = bind_session(&fixture).await?;
+    let mut session = session()?;
+    let mut link = inert_link_for_offline_test();
+    let acknowledgement_calls = Cell::new(0);
+    let admission_calls = Cell::new(0);
+
+    let result = test_positive_poll_once_with_response(
+        launch::PositivePollContext {
+            link: &mut link,
+            set_id: fixture.runner.runner_scale_set_id,
+            session: &mut session,
+            scoped: &fixture.scope,
+            session_intent_id: intent_id,
+            allocation: &allocation,
+            cursor: 0,
+        },
+        launch::TestPollResponse {
+            polled: completion_response(&fixture, 98),
+            path: "https://queue.example.invalid/messages".to_owned(),
+            queue: Some("queue-token".to_owned()),
+        },
+        async |_link, _session, _path, _queue, _polled| {
+            acknowledgement_calls.set(acknowledgement_calls.get() + 1);
+            Err(EnsureError::Uncertain)
+        },
+        async |_link, _polled, _queue, _path, _queue_token, _admin_token| {
+            admission_calls.set(admission_calls.get() + 1);
+            Err(EnsureError::Uncertain)
+        },
+    )
+    .await;
+
+    assert!(matches!(result, Err(EnsureError::Uncertain)));
+    assert_eq!(acknowledgement_calls.get(), 1);
+    assert_eq!(admission_calls.get(), 0);
+    Ok(())
 }

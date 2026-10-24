@@ -100,8 +100,8 @@ pub fn render_verifier_workflow_step(
 ///
 /// # Errors
 ///
-/// Returns [`RenderError`] when the step is not an admitted verifier or its
-/// emitted mapping does not contain a string `run` scalar.
+/// Returns [`RenderError`] when `step` is not a valid typed verifier or its
+/// emitted mapping does not contain a scalar `run` value.
 pub fn verifier_shell_run_scalar(step: &Step) -> Result<String, RenderError> {
     let rendered = verifier_shell_step_to_yaml(step)?;
     let crate::yaml::Yaml::Map(fields) = rendered else {
@@ -136,8 +136,8 @@ pub fn verifier_shell_run_scalar(step: &Step) -> Result<String, RenderError> {
 ///
 /// # Errors
 ///
-/// Returns [`RenderError`] when the step cannot be rendered as a verifier
-/// run scalar.
+/// Returns [`RenderError`] when `step` cannot be rendered as a valid typed
+/// verifier with a scalar `run` value.
 pub fn verifier_shell_argv(step: &Step) -> Result<Vec<String>, RenderError> {
     let run = verifier_shell_run_scalar(step)?;
     Ok(vec![
@@ -247,3 +247,7 @@ fn verifier_composite_document(
 #[cfg(test)]
 #[path = "verifier_composite_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "verifier_composite_main_tests.rs"]
+mod main_tests;

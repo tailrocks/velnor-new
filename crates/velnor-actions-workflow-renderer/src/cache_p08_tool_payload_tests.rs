@@ -22,6 +22,24 @@ fn inputs<'a>(
     rustup_toolchain: Option<&'a str>,
     components: &'a [String],
 ) -> ToolsCacheInputs<'a> {
+    inputs_with_source(
+        runs_on,
+        mise_setup,
+        specs,
+        rustup_toolchain,
+        components,
+        None,
+    )
+}
+
+fn inputs_with_source<'a>(
+    runs_on: &'a str,
+    mise_setup: &'a MiseSetup,
+    specs: &'a [String],
+    rustup_toolchain: Option<&'a str>,
+    components: &'a [String],
+    scale_set_image_source_sha: Option<&'a str>,
+) -> ToolsCacheInputs<'a> {
     ToolsCacheInputs {
         runs_on,
         target: "x86_64-unknown-linux-gnu",
@@ -29,6 +47,7 @@ fn inputs<'a>(
         tool_specs: specs,
         rustup_toolchain,
         rustup_components: components,
+        scale_set_image_source_sha,
     }
 }
 
@@ -65,6 +84,9 @@ fn rendered_condition(step: &Step) -> String {
         report_helper_version: "0.1.0".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         scale_set_selector: None,
+        scale_set_image_source_sha: None,
+        verified_cache_helpers: std::collections::BTreeMap::new(),
+        require_verified_cache_helper: false,
         staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
         request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
         checkout_uses: format!("actions/checkout@{:040x}", 0),
@@ -98,83 +120,29 @@ fn rendered_condition(step: &Step) -> String {
 }
 
 #[test]
-fn payload_paths_and_restore_save_inputs_are_identical() {
-    let payload = sample_payload();
+fn project_tool_versions_and_lock_digest_bind_cache_identity() {
+    let setup = pinned_mise();
+    let specs = vec!["rust@${VELNOR_TOOL_RUST}".to_owned()];
+    let payload = payload(inputs(
+        "ubuntu-26.04",
+        &setup,
+        &specs,
+        Some("${VELNOR_TOOL_RUST}"),
+        &[],
+    ));
     assert_eq!(
-        payload.paths(),
-        [
-            "~/.local/share/mise",
-            "${{ runner.temp }}/velnor/rustup",
-            "${{ runner.temp }}/velnor/cargo/.crates.toml",
-            "${{ runner.temp }}/velnor/cargo/.crates2.json",
-            "${{ runner.temp }}/velnor/cargo/bin",
-        ]
+        payload.identity_input(),
+        format!(
+            "{}-${{VELNOR_TOOL_RUST}}-${{VELNOR_TOOL_RUST_LOCK}}",
+            payload.static_digest()
+        )
     );
-    let restore = payload.restore_step().expect("restore");
-    let save = payload.save_step().expect("save");
-    let restore_with = action_inputs(&restore);
-    let save_with = action_inputs(&save);
-    let StepKind::Action { uses, env, .. } = &restore.kind else {
-        panic!("tools restore wrapper is an action");
-    };
-    assert_eq!(uses, crate::cache_steps::TOOLS_RESTORE_USES);
-    assert_eq!(env.len(), 0);
-    assert_eq!(
-        crate::cache_steps::validate_tools_restore_call(&restore).expect("registered wrapper call"),
-        payload.key_expression()
-    );
-    assert_eq!(restore_with.get("key"), save_with.get("key"));
-    assert_eq!(restore_with.get("key"), Some(&payload.key_expression()));
-    assert_eq!(
-        restore_with.get(crate::cache_steps::TOOLS_SEED_ADMITTED_INPUT),
-        Some(&crate::cache_steps::TOOLS_SEED_ADMITTED_EXPRESSION.to_owned())
-    );
-    assert_eq!(save_with.get("path"), Some(&payload.paths().join("\n")));
 }
 
-#[test]
-fn restore_wrapper_admission_rejects_mutated_calls() {
-    let restore = sample_payload().restore_step().expect("restore");
-    velnor_actions_contract::workflow::step_identity::validate_step_sequence(
-        std::slice::from_ref(&restore),
-        "tools-cache-test",
-    )
-    .expect("fixed wrapper is the tools restore authority");
-    let mut wrong_wrapper = restore.clone();
-    let StepKind::Action { uses, .. } = &mut wrong_wrapper.kind else {
-        panic!("tools restore wrapper is an action");
-    };
-    *uses = "./.github/actions/unregistered-tools-restore".to_owned();
-    assert!(
-        velnor_actions_contract::workflow::step_identity::validate_step_sequence(
-            &[wrong_wrapper],
-            "tools-cache-test",
-        )
-        .is_err()
-    );
-    let mut wrong_key = restore.clone();
-    let StepKind::Action { with, .. } = &mut wrong_key.kind else {
-        panic!("tools restore wrapper is an action");
-    };
-    with.insert("key".to_owned(), "caller-key".to_owned());
-    assert!(crate::cache_steps::validate_tools_restore_call(&wrong_key).is_err());
-    let mut extra_input = restore.clone();
-    let StepKind::Action { with, .. } = &mut extra_input.kind else {
-        panic!("tools restore wrapper is an action");
-    };
-    with.insert("path".to_owned(), "caller-path".to_owned());
-    assert!(crate::cache_steps::validate_tools_restore_call(&extra_input).is_err());
-    let mut conditional = restore.clone();
-    conditional.condition = Some("always()".to_owned());
-    assert!(crate::cache_steps::validate_tools_restore_call(&conditional).is_err());
-    let mut untyped = restore.clone();
-    untyped.role = None;
-    assert!(crate::cache_steps::validate_tools_restore_call(&untyped).is_err());
-    assert_eq!(
-        restore.condition.as_deref(),
-        Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION)
-    );
-}
+#[path = "cache_p08_tool_payload_identity_tests.rs"]
+mod identity_tests;
+#[path = "cache_p08_tool_payload_step_tests.rs"]
+mod step_tests;
 
 #[test]
 fn restore_composite_binds_marker_pin_key_and_paths() {

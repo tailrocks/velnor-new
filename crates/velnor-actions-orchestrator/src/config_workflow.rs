@@ -16,6 +16,8 @@ pub(super) struct PartialWorkflow {
     policy: Option<WorkflowPolicy>,
     /// Default branch override.
     default_branch: Option<String>,
+    /// Optional non-default branch for verification-only runs.
+    verification_branch: Option<String>,
     /// Generator validation mode.
     generator_validation: Option<GeneratorValidation>,
     /// Maximum parallel matrix jobs.
@@ -66,6 +68,7 @@ impl PartialWorkflow {
             name: self.name.unwrap_or_else(|| "CI".to_owned()),
             policy: self.policy.unwrap_or(WorkflowPolicy::ConsumerV1),
             default_branch: self.default_branch,
+            verification_branch: self.verification_branch,
             generator_validation: self
                 .generator_validation
                 .unwrap_or(GeneratorValidation::Bootstrap),

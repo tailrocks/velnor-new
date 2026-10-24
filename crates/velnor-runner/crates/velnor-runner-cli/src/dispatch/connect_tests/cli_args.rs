@@ -1,0 +1,92 @@
+use clap::{Parser, error::ErrorKind};
+
+#[test]
+fn connect_accepts_all_host_resource_limits() {
+    let complete = [
+        "velnor-host",
+        "connect",
+        "--connection-id",
+        "example-repo",
+        "--repo",
+        "example/repo",
+        "--repository-id",
+        "123",
+        "--job-authority-inventory",
+        "inventory.json",
+        "--job-authority-generator-source-sha",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "--job-authority-generator-artifact-sha256",
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "--job-authority-generation",
+        "1",
+        "--scale-set",
+        "ubuntu-26.04-scale-set",
+        "--scale-set-label",
+        "velnor",
+        "--scale-set-label",
+        "ubuntu-26.04-scale-set",
+        "--source-policy-mode",
+        "branch-restricted",
+        "--event",
+        "push",
+        "--branch",
+        "main",
+        "--platform",
+        "linux/amd64",
+        "--runner-cpu-millicores",
+        "1000",
+        "--runner-memory-bytes",
+        "2147483648",
+        "--dind-cpu-millicores",
+        "3000",
+        "--dind-memory-bytes",
+        "6442450944",
+        "--operational-memory-reserve-bytes",
+        "1073741824",
+        "--endpoint",
+        "unix:///Users/example/.orbstack/run/docker.sock",
+    ];
+    assert!(crate::Cli::try_parse_from(complete).is_ok());
+}
+
+#[test]
+fn connect_rejects_missing_runner_memory_limit() {
+    let missing_memory = [
+        "velnor-host",
+        "connect",
+        "--connection-id",
+        "example-repo",
+        "--repo",
+        "example/repo",
+        "--repository-id",
+        "123",
+        "--scale-set",
+        "ubuntu-26.04-scale-set",
+        "--scale-set-label",
+        "velnor",
+        "--scale-set-label",
+        "ubuntu-26.04-scale-set",
+        "--source-policy-mode",
+        "branch-restricted",
+        "--event",
+        "push",
+        "--branch",
+        "main",
+        "--platform",
+        "linux/amd64",
+        "--runner-cpu-millicores",
+        "1000",
+        "--runner-memory-bytes",
+        "2147483648",
+        "--dind-cpu-millicores",
+        "3000",
+        "--operational-memory-reserve-bytes",
+        "1073741824",
+        "--endpoint",
+        "unix:///Users/example/.orbstack/run/docker.sock",
+    ];
+    let error = crate::Cli::try_parse_from(missing_memory)
+        .expect_err("The parser accepted arguments without the required memory limit.");
+    assert_eq!(error.kind(), ErrorKind::MissingRequiredArgument);
+    assert!(error.to_string().contains("--runner-memory-bytes"));
+}

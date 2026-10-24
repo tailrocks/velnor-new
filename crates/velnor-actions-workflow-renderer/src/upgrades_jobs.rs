@@ -375,6 +375,7 @@ fn install_generate_tools(spec: &UpgradesSpec) -> Yaml {
 
 fn verify_jactionlint(spec: &UpgradesSpec) -> Result<Yaml, RenderError> {
     crate::verifier_shell::render_command(
+        velnor_actions_contract::StepRole::VerifyJactionlint,
         "Verify jactionlint",
         &[
             "sh".to_owned(),

@@ -47,19 +47,7 @@ pub(crate) fn check_single_label(
 ) -> Result<(), RenderError> {
     for (id, job) in &ir.jobs {
         if let Some(runner) = &job.check_runner {
-            let scale_set = velnor_actions_contract::RunsOn::parse(&job.runs_on)
-                .is_ok_and(|selector| selector.is_scale_set());
-            let valid_placement = if scale_set {
-                runner.platform == velnor_actions_contract::CheckPlatform::LinuxX64
-                    && runner.executor == velnor_actions_contract::CheckExecutor::Hosted
-                    && job.condition.as_deref()
-                        == Some(
-                            velnor_actions_contract::config::EPHEMERAL_CHECK_ADMISSION_CONDITION,
-                        )
-            } else {
-                runner.label == job.runs_on
-            };
-            if !id.starts_with("check-") || !valid_placement {
+            if !check_runner_is_valid(id, job, runner) {
                 return Err(RenderError::InvalidWorkflow(format!(
                     "check_runner_mismatch:{id}"
                 )));
@@ -83,3 +71,34 @@ pub(crate) fn check_single_label(
     }
     Ok(())
 }
+
+fn check_runner_is_valid(
+    id: &str,
+    job: &velnor_actions_contract::Job,
+    runner: &velnor_actions_contract::CheckRunner,
+) -> bool {
+    if !id.starts_with("check-") {
+        return false;
+    }
+    let scale_set = velnor_actions_contract::RunsOn::parse(&job.runs_on)
+        .is_ok_and(|selector| selector.is_scale_set());
+    if !scale_set {
+        return runner.label == job.runs_on;
+    }
+
+    runner.platform == velnor_actions_contract::CheckPlatform::LinuxX64
+        && runner.executor == velnor_actions_contract::CheckExecutor::Hosted
+        && scale_set_check_admission(job.condition.as_deref())
+}
+
+fn scale_set_check_admission(condition: Option<&str>) -> bool {
+    condition.is_some_and(|condition| {
+        condition == velnor_actions_contract::config::EPHEMERAL_CHECK_ADMISSION_CONDITION
+            || condition
+                == "always() && needs.plan.result == 'success' && ((needs.plan.outputs.qualification_campaign == '' && (github.event_name == 'push' || github.event_name == 'merge_group' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository))) || needs.plan.outputs.qualification_campaign != '')"
+    })
+}
+
+#[cfg(test)]
+#[path = "workflow_policy_tests.rs"]
+mod tests;

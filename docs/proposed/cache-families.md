@@ -81,14 +81,14 @@ output across trust scopes.
   producer is `mbx cache export --group velnor --format directory` and the only
   consumer is `mbx cache import`, which moves the objects into the store and
   removes the restored directory.
-- Compat does not name a job: every reader of a workspace shares the entry,
-  and the key changes only when the lock, toolchain, MBX version or platform
-  changes. The `unit` keeps the dependency seed and suite bundles apart.
-- Units are the key schema of decision 2. `seed` is written only by the
-  non-crate `Dependency seed` job (one per MBX Cargo workspace, protected
-  default-branch pushes only, outside `Required`); crate jobs restore it
-  read-only and never mark a producer, export or save. `suite` is written by
-  the suite job that compiled it.
+- Compat does not name a job. Every reader of a workspace shares the entry.
+  The key changes only when the lock, toolchain, MBX version, or platform changes.
+  The `unit` keeps the dependency seed and suite bundles apart.
+- Units form the key schema of decision 2. Only the `Dependency seed` job writes `seed`.
+  Each MBX Cargo workspace has one such job in addition to its crate jobs.
+  It runs only on protected pushes to the default branch and is outside `Required`.
+  Crate jobs restore `seed` but never mark a producer, export, or save.
+  The suite job writes its own `suite` entry.
 - A restore may fall back to any snapshot of the same compat (the newest
   trusted entry), which `mbx cache import` then reuses object by object.
 - The size check reads the on-disk bytes of the exported directory
@@ -138,13 +138,14 @@ directory into the project's `dbt_packages` before `dbt deps` and back to the
 family directory after it (the install path is a project setting dbt owns, and
 `dbt deps` still runs against the lock every time, so the entry is a
 head start, never trusted content); the Ansible job keeps verified tarballs in
-the family directory and re-downloads any whose SHA-256 no longer matches. The
-cache doctor accepts these steps only in the generated shape (the key
-expression, the spec path, no restore keys on a save, the exact save condition,
-a key step whose env is the default-branch ref plus, in a Bun leg matrix only,
-`VELNOR_FAMILY_WRITER`) and rejects a hand-written step on these families.
+the family directory and re-downloads any whose SHA-256 no longer matches.
+Each family's cache doctor accepts generated key expressions, spec paths,
+trusted-push conditions, and denies restore keys on saves or hand-written
+family steps. For Bun's matrix, it also requires the key step to default to the
+repository's default branch and permits `VELNOR_FAMILY_WRITER` to select only
+the designated leg as the writer.
 
 ## Remaining
 
-`tofu-providers` still saves without a size admission; the same stored-size
-check follows. Its ceiling was re-measured (see the table).
+`tofu-providers` still saves without a size check.
+A stored-size check still needs to be added. See the table for the new ceiling measurement.

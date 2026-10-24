@@ -2,40 +2,48 @@
 //!
 //! JIT is not a field. `start_pair` writes it on stdin and does not store it.
 
+#[cfg(test)]
 use bollard::Docker;
 use bollard::models::ContainerCreateBody;
 use bollard::query_parameters::CreateContainerOptions;
-use bollard::query_parameters::{AttachContainerOptionsBuilder, StartContainerOptions};
-use tokio::io::AsyncWriteExt;
 
+#[cfg(test)]
 use crate::docker_client::docker_deadline;
-use crate::docker_spec::{ContainerPlan, Mount, audit_plan, runner_mounts, runner_plan};
+use crate::docker_spec::{ContainerPlan, audit_plan, runner_mounts, runner_plan};
 use crate::error::HostError;
-use crate::stage::PairStop;
 
+mod names;
 pub(crate) mod resources;
 mod volumes;
+pub(crate) use names::{WorkerContainerRole, WorkerIdentityNames};
+pub(crate) use volumes::WorkerVolumeRole;
 #[cfg(test)]
-pub(crate) use volumes::remove_verified_worker_volume;
 pub(crate) use volumes::{
-    VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeRole, WorkerVolumeVerification,
-    create_named_volumes, remove_worker_volumes, verify_worker_volume,
+    VerifiedWorkerVolume, WorkerVolumeRemoval, remove_verified_worker_volume,
 };
+#[cfg(test)]
+pub(crate) use volumes::{WorkerVolumeVerification, verify_worker_volume};
+pub(crate) mod execution_authorization;
+pub(crate) mod guest_image;
 mod mounts;
 mod projection;
 mod projection_types;
 mod resource_budget;
+pub(crate) mod seccomp;
+pub(crate) mod storage_initialization;
 #[cfg(all(test, unix))]
 mod volumes_tests;
 #[cfg(test)]
 pub(crate) use projection::{dind_create_for_identity, runner_create_for_identity};
 #[cfg(test)]
 pub(crate) use projection::{identity_labels_match, launch_identity_labels_match};
-pub(crate) use resource_budget::DockerResourceLimits;
 pub use resource_budget::ResourceBudget;
 pub(crate) use resource_budget::ResourceBudgetConfig;
 #[cfg(test)]
 pub(crate) use resource_budget::test_resource_budget;
+pub(crate) use resource_budget::{
+    AdmissionReserve, DockerResourceLimits, PROBE_CPU_MILLICORES, PROBE_MEMORY_LIMIT_BYTES,
+};
 #[cfg(test)]
 mod projection_tests;
 
@@ -43,45 +51,31 @@ const PLATFORM: &str = "linux/amd64";
 const DIND_IMAGE: &str = "velnor-dind:29.9.1";
 #[cfg(test)]
 const DIND_ENTRYPOINT: [&str; 1] = ["/usr/local/bin/velnor-dind-entrypoint"];
-const IDENTITY_HEX: &[u8; 16] = b"0123456789abcdef";
-
 pub use projection_types::{BindMount, BollardCreate, CreateProjection, Started};
 
-/// Generate a collision-resistant worker volume base for one journal row.
-pub(crate) fn new_worker_volume() -> Result<String, HostError> {
-    let mut random = [0_u8; 16];
-    getrandom::fill(&mut random).map_err(|_| HostError::Identity)?;
-    let mut name = String::with_capacity(33);
-    name.push('w');
-    for byte in random {
-        push_nibble(&mut name, byte >> 4)?;
-        push_nibble(&mut name, byte & 0x0f)?;
-    }
-    Ok(name)
-}
-
-fn push_nibble(name: &mut String, nibble: u8) -> Result<(), HostError> {
-    let index = usize::from(nibble);
-    let digit = IDENTITY_HEX
-        .get(index)
-        .copied()
-        .ok_or(HostError::Identity)?;
-    name.push(char::from(digit));
-    Ok(())
-}
-
-/// Project an audited runner plan. Stdin carries JIT. The plan does not.
+/// Make a Docker create request only after `audit_plan` gives success.
+/// The caller writes the JIT configuration to stdin.
+/// The plan does not contain it.
 ///
 /// # Errors
 ///
-/// Returns [`HostError::PrivilegedRunner`] or [`HostError::ForbiddenMount`]
-/// from [`audit_plan`], including JIT in env, cmd, or labels.
+/// Gives [`HostError::PrivilegedRunner`] or [`HostError::ForbiddenMount`] when
+/// [`audit_plan`] fails or when `env`, `cmd`, or labels contain JIT.
 pub fn runner_create(
     plan: &ContainerPlan,
     resource_budget: ResourceBudget,
 ) -> Result<CreateProjection, HostError> {
     audit_plan(plan)?;
     if plan.cmd.iter().any(|item| cmd_names_jit(item)) {
+        return Err(HostError::ForbiddenMount);
+    }
+    let private_volume = plan
+        .name
+        .strip_suffix("-runner")
+        .ok_or(HostError::ForbiddenMount)?;
+    let planned_mounts = volumes::mounts_for_runner(private_volume)?;
+    let plan_mounts = volumes::mounts_for_runner_plan(private_volume)?;
+    if plan.mounts != plan_mounts {
         return Err(HostError::ForbiddenMount);
     }
     Ok(CreateProjection {
@@ -94,7 +88,7 @@ pub fn runner_create(
         user: None,
         working_dir: None,
         labels: plan.labels.clone(),
-        mounts: runner_mounts(&plan.mounts)?,
+        mounts: runner_mounts(&planned_mounts)?,
         bind_mounts: Vec::new(),
         privileged: false,
         open_stdin: true,
@@ -105,12 +99,14 @@ pub fn runner_create(
 
 /// Join `spec` to the private `DinD` network namespace.
 ///
-/// Published service ports and Testcontainers then bind on the runner's localhost.
-/// `dind_id` must be one Docker container id. `host` and other modes are rejected.
+/// Published service ports and Testcontainers use the runner's localhost.
+/// `dind_id` must identify one Docker container.
+/// The function sets the network mode to the Docker-in-Docker container.
 ///
 /// # Errors
 ///
-/// Returns [`HostError::ForbiddenMount`] when `dind_id` is not 64 hex digits.
+/// Gives [`HostError::ForbiddenMount`] when `dind_id` is not a 64-character string of hexadecimal digits.
+#[cfg(test)]
 pub(crate) fn join_dind_net(
     mut spec: CreateProjection,
     dind_id: &str,
@@ -122,26 +118,31 @@ pub(crate) fn join_dind_net(
     Ok(spec)
 }
 
+#[cfg(test)]
 fn dind_container_id(id: &str) -> bool {
     id.len() == 64 && id.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
-/// Private `DinD` create. Privilege is not a flag on the runner plan.
+/// Make a privileged Docker-in-Docker container request.
+/// Do not set this privilege on the runner plan.
 ///
-/// Mounts are the runner plan's socket volume at `/run`, the work volume at
-/// the Actions runner's `/home/runner/_work`, and a DinD-only volume at `/var/lib/docker`. The data
-/// volume is not on the runner. The action archive volume is not mounted
-/// here. vfs on the container layer slows later Testcontainers starts.
+/// The runner plan's socket volume is at `/run`.
+/// The shared Home volume is at `/home/runner`.
+/// The shared work volume is at `/home/runner/_work`.
+/// A DinD-only Docker volume is at `/var/lib/docker`.
+/// The runner container does not mount the Docker data volume.
+/// The Docker-in-Docker container does not mount the action archive volume.
+/// The Docker data volume uses storage outside the container layer.
 ///
 /// # Errors
 ///
-/// Returns [`HostError::ForbiddenMount`] when `private_volume` is not one private name.
+/// Gives [`HostError::ForbiddenMount`] when `private_volume` does not name one correct private volume.
 pub fn dind_create(
     private_volume: &str,
     resource_budget: ResourceBudget,
 ) -> Result<CreateProjection, HostError> {
     let runner = runner_plan(private_volume)?;
-    let mounts = dind_mounts_for(private_volume, runner.mounts);
+    let mounts = volumes::mounts_for_dind(private_volume)?;
     let mut labels = vec![
         "velnor.role=dind".to_owned(),
         format!("velnor.volume={private_volume}"),
@@ -167,33 +168,11 @@ pub fn dind_create(
     })
 }
 
-pub(crate) fn dind_mounts(private_volume: &str) -> Result<Vec<Mount>, HostError> {
-    let runner = runner_plan(private_volume)?;
-    Ok(dind_mounts_for(private_volume, runner.mounts))
-}
-
-fn dind_mounts_for(private_volume: &str, mut mounts: Vec<Mount>) -> Vec<Mount> {
-    mounts.push(Mount {
-        source: format!("volume:{private_volume}-docker"),
-        target: "/var/lib/docker".to_owned(),
-    });
-    mounts
-}
-
-/// Stable `DinD` container name used by cleanup and recovery.
-///
-/// This identity helper deliberately does not carry a resource budget; cleanup
-/// must remain independent of the current configuration.
-pub(crate) fn dind_container_name(private_volume: &str) -> Result<String, HostError> {
-    runner_plan(private_volume)?;
-    Ok(format!("{private_volume}-dind"))
-}
-
 /// Bollard config for [`bollard::Docker::create_container`]. No JIT parameter.
 ///
 /// # Errors
 ///
-/// Returns [`HostError::ForbiddenMount`] when the platform is not `linux/amd64`
+/// Gives [`HostError::ForbiddenMount`] when the platform is not `linux/amd64`
 /// or a mount or label cannot be sent.
 pub fn bollard_create(spec: &CreateProjection) -> Result<BollardCreate, HostError> {
     if spec.platform != PLATFORM {
@@ -219,37 +198,6 @@ pub fn bollard_create(spec: &CreateProjection) -> Result<BollardCreate, HostErro
     })
 }
 
-/// Create volumes, start `DinD`, start the runner, then write `jit` on stdin.
-///
-/// Empty `jit` returns before any container create. Failure after a create
-/// removes only ids this call created.
-///
-/// # Errors
-///
-/// Returns [`HostError::EmptyJit`] when `jit` is empty.
-/// Returns [`HostError::ForbiddenMount`] for a rejected volume name.
-/// Returns [`HostError::Docker`] when Docker rejects a call. The error text
-/// does not include `jit`.
-pub async fn start_pair(
-    docker: &Docker,
-    private_volume: &str,
-    resource_budget: ResourceBudget,
-    jit: &[u8],
-) -> Result<Started, HostError> {
-    let partial = Box::pin(crate::stage::start_pair_until(
-        docker,
-        private_volume,
-        resource_budget,
-        jit,
-        PairStop::Jit,
-    ))
-    .await?;
-    Ok(Started {
-        dind_id: partial.dind_id.ok_or(HostError::Docker)?,
-        runner_id: partial.runner_id.ok_or(HostError::Docker)?,
-    })
-}
-
 fn cmd_names_jit(item: &str) -> bool {
     item.to_ascii_lowercase().contains("jit")
 }
@@ -262,6 +210,7 @@ fn none_if_empty(items: &[String]) -> Option<Vec<String>> {
     }
 }
 
+#[cfg(test)]
 pub(crate) async fn worker_id_for_name(
     docker: &Docker,
     name: &str,
@@ -294,49 +243,4 @@ pub(crate) async fn worker_id_for_name(
         }) => Ok(None),
         Err(_) => Err(HostError::Docker),
     }
-}
-
-pub(crate) async fn create_only(
-    docker: &Docker,
-    spec: &CreateProjection,
-) -> Result<String, HostError> {
-    let created = bollard_create(spec)?;
-    let response = docker
-        .create_container(Some(created.options), created.config)
-        .await
-        .map_err(|_| HostError::Docker)?;
-    if response.id.is_empty() {
-        Err(HostError::Docker)
-    } else {
-        Ok(response.id)
-    }
-}
-
-pub(crate) async fn start_id(docker: &Docker, id: &str) -> Result<(), HostError> {
-    docker
-        .start_container(id, None::<StartContainerOptions>)
-        .await
-        .map_err(|_| HostError::Docker)
-}
-
-pub(crate) async fn deliver_jit(docker: &Docker, id: &str, jit: &[u8]) -> Result<(), HostError> {
-    let options = AttachContainerOptionsBuilder::new()
-        .stdin(true)
-        .stream(true)
-        .build();
-    let mut attached = docker
-        .attach_container(id, Some(options))
-        .await
-        .map_err(|_| HostError::Docker)?;
-    attached
-        .input
-        .write_all(jit)
-        .await
-        .map_err(|_| HostError::Docker)?;
-    attached
-        .input
-        .shutdown()
-        .await
-        .map_err(|_| HostError::Docker)?;
-    Ok(())
 }

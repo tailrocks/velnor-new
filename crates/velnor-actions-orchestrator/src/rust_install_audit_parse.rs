@@ -1,5 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+#[path = "rust_install_audit_parse_anchor_names.rs"]
+mod anchor_names;
+
 fn anchor_token(value: &str, marker: char) -> Option<(&str, &str)> {
     let value = value.strip_prefix(marker)?;
     let end = value
@@ -45,11 +48,43 @@ pub(super) struct StepText {
     pub(super) run_scalar: Option<String>,
 }
 
+impl StepText {
+    pub(super) fn field(&self, wanted: &str) -> Option<&str> {
+        self.fields
+            .iter()
+            .find_map(|(key, value)| (key == wanted).then_some(value.as_str()))
+    }
+
+    pub(super) fn uses_value(&self) -> Option<&str> {
+        let raw = self.field("uses")?;
+        let value = raw.split_once(" #").map_or(raw, |(value, _)| value).trim();
+        Some(
+            value
+                .strip_prefix('\'')
+                .and_then(|value| value.strip_suffix('\''))
+                .or_else(|| {
+                    value
+                        .strip_prefix('"')
+                        .and_then(|value| value.strip_suffix('"'))
+                })
+                .unwrap_or(value),
+        )
+    }
+
+    pub(super) fn is_verifier_ref_candidate(&self) -> bool {
+        self.uses_value()
+            .is_some_and(|uses| uses.starts_with("./.github/actions/velnor-verify-"))
+    }
+}
+
 /// Every `steps:` sequence of a rendered file with its owning job (or
 /// `runs` for a composite action), as step texts in order.
 pub(super) fn step_lists(text: &str) -> Vec<(String, Vec<StepText>)> {
     let lines: Vec<&str> = text.lines().collect();
-    let duplicate_anchors = find_duplicate_anchor_names(text);
+    let legacy_anchor_scan = anchor_names::scan(text);
+    let malformed_tag = legacy_anchor_scan.malformed_tag;
+    let mut duplicate_anchors = find_duplicate_anchor_names(text);
+    duplicate_anchors.extend(legacy_anchor_scan.duplicate_names);
     let mut anchors: BTreeMap<String, Option<StepText>> = BTreeMap::new();
     let mut env_anchors: BTreeMap<String, Option<Vec<(String, String)>>> = BTreeMap::new();
     let mut with_anchors: BTreeMap<String, Option<Vec<(String, String)>>> = BTreeMap::new();
@@ -109,11 +144,21 @@ pub(super) fn step_lists(text: &str) -> Vec<(String, Vec<StepText>)> {
         }
         at += 1;
     }
+    if malformed_tag || !duplicate_anchors.is_empty() {
+        for (_, steps) in &mut lists {
+            for step in steps {
+                step.invalid_anchor = true;
+                step.unexpected_nested = true;
+            }
+        }
+    }
     lists
 }
 
 pub(super) fn duplicate_anchor_names(text: &str) -> BTreeSet<String> {
-    find_duplicate_anchor_names(text)
+    let mut duplicate_anchors = find_duplicate_anchor_names(text);
+    duplicate_anchors.extend(anchor_names::scan(text).duplicate_names);
+    duplicate_anchors
 }
 
 /// One step block; `- &sN` records an anchor and `- *sN` resolves one.
@@ -127,21 +172,7 @@ fn step_text(
     sequence_width: usize,
 ) -> StepText {
     let head = sequence_head(block[0]).unwrap_or_default().trim();
-    if let Some((alias, remainder)) = anchor_token(head, '*') {
-        let valid_alias = !alias.is_empty() && remainder.is_empty();
-        let mut step = if valid_alias {
-            anchors
-                .get(alias)
-                .and_then(Option::as_ref)
-                .filter(|_| !duplicate_anchors.contains(alias))
-                .map_or_else(|| missing_anchor(alias), clone_step)
-        } else {
-            missing_anchor(alias)
-        };
-        if block.iter().skip(1).any(|line| !line.trim().is_empty()) {
-            step.unexpected_nested = true;
-            step.invalid_anchor = true;
-        }
+    if let Some(step) = resolve_step_alias(head, block, anchors, duplicate_anchors) {
         return step;
     }
     let layout = step_layout(block, sequence_width);
@@ -177,14 +208,15 @@ fn step_text(
         invalid_anchor: run.invalid_anchor || top_fields_invalid_anchor,
         run_scalar: run.scalar,
     };
-    if let Some((name, _remainder)) = anchor_token(head, '&') {
-        if name.is_empty() {
-            return StepText {
-                unexpected_nested: true,
-                invalid_anchor: true,
-                ..step
-            };
-        }
+    let step_anchor = step_anchor_name(head);
+    if head.starts_with('&') && step_anchor.is_none() {
+        return StepText {
+            unexpected_nested: true,
+            invalid_anchor: true,
+            ..step
+        };
+    }
+    if let Some(name) = step_anchor {
         if duplicate_anchors.contains(name) || anchors.contains_key(name) || anchor_tainted {
             anchors.insert(name.to_owned(), None);
             return StepText {
@@ -196,6 +228,49 @@ fn step_text(
         anchors.insert(name.to_owned(), Some(step.clone()));
     }
     step
+}
+
+fn resolve_step_alias(
+    head: &str,
+    block: &[&str],
+    anchors: &BTreeMap<String, Option<StepText>>,
+    duplicate_anchors: &BTreeSet<String>,
+) -> Option<StepText> {
+    if !head.starts_with('*') {
+        return None;
+    }
+    let parsed_alias = anchor_token(head, '*').map_or("", |(alias, _)| alias);
+    let alias = anchor_names::alias_name_after_asterisk(head).or_else(|| {
+        anchor_token(head, '*').and_then(|(name, remainder)| {
+            (!name.is_empty() && remainder.is_empty()).then_some(name)
+        })
+    });
+    let mut step = if let Some(alias) = alias {
+        anchors
+            .get(alias)
+            .and_then(Option::as_ref)
+            .filter(|_| !duplicate_anchors.contains(alias))
+            .map_or_else(|| missing_anchor(alias), clone_step)
+    } else {
+        missing_anchor(parsed_alias)
+    };
+    if block.iter().skip(1).any(|line| !line.trim().is_empty()) {
+        step.unexpected_nested = true;
+        step.invalid_anchor = true;
+    }
+    Some(step)
+}
+
+fn step_anchor_name(head: &str) -> Option<&str> {
+    if !head.starts_with('&') {
+        return None;
+    }
+    let after_marker = head.strip_prefix('&').unwrap_or_default();
+    anchor_names::anchor_name_after_ampersand(after_marker)
+        .or_else(|| anchor_names::anchor_value_after_ampersand(after_marker).map(|(name, _)| name))
+        .or_else(|| {
+            anchor_token(head, '&').and_then(|(name, _)| (!name.is_empty()).then_some(name))
+        })
 }
 
 fn missing_anchor(alias: &str) -> StepText {
@@ -232,38 +307,39 @@ fn step_fields(
     duplicate_anchors: &BTreeSet<String>,
 ) -> Vec<(String, String)> {
     let mut fields = Vec::new();
+    let mut mapping_value = false;
     for (index, line) in block.iter().enumerate() {
         if run.is_body_line(index) {
             continue;
         }
         let trimmed = step_field_content(index, line, block[0]).trim();
-        let Some((key, value)) = trimmed.split_once(": ") else {
+        let field = trimmed
+            .split_once(": ")
+            .or_else(|| trimmed.strip_suffix(':').map(|key| (key, "")));
+        let Some((key, value)) = field else {
             continue;
         };
-        fields.push((key.to_owned(), value.to_owned()));
         let is_top_field =
             (index == 0 && layout.head_field) || indent(line) == layout.mapping_indent;
-        if key == "with"
-            && is_top_field
-            && let Some(alias) = anchor_name(value, '*')
-            && let Some(Some(aliased_fields)) = with_anchors
-                .get(alias)
-                .filter(|_| !duplicate_anchors.contains(alias))
-        {
-            fields.extend(aliased_fields.iter().cloned());
+        if is_top_field {
+            fields.push((key.to_owned(), value.to_owned()));
+            mapping_value = matches!(key, "env" | "with")
+                && (value.is_empty() || anchor_name(value, '&').is_some());
+            if key == "with"
+                && let Some(alias) = anchor_name(value, '*')
+                && let Some(Some(aliased_fields)) = with_anchors
+                    .get(alias)
+                    .filter(|_| !duplicate_anchors.contains(alias))
+            {
+                fields.extend(aliased_fields.iter().cloned());
+            }
+        } else if mapping_value && indent(line) == layout.mapping_indent + layout.mapping_width {
+            fields.push((key.to_owned(), value.to_owned()));
         }
     }
     fields
 }
 
-impl StepText {
-    pub(super) fn uses_value(&self) -> Option<&str> {
-        self.fields.iter().find_map(|(key, value)| {
-            (key == "uses").then(|| {
-                value
-                    .strip_suffix(" # zizmor: ignore[self-repository]")
-                    .unwrap_or(value)
-            })
-        })
-    }
-}
+#[cfg(test)]
+#[path = "rust_install_audit_parse_tests.rs"]
+mod tests;

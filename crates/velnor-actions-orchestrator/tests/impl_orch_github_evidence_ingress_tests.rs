@@ -241,18 +241,21 @@ fn actual_production_graph_keeps_acquisition_inside_the_trusted_ingress() -> Tes
 fn cli_dispatch_maps_fetch_and_import_to_their_exact_operations() -> TestResult {
     let cli = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../velnor-actions-cli/src");
     let dispatch = fs::read_to_string(cli.join("dispatch.rs"))?;
+    let internal_run = fs::read_to_string(cli.join("dispatch_internal_run.rs"))?;
     let operation = fs::read_to_string(cli.join("dispatch/operation.rs"))?;
-    ast::validate_cli_sources(&dispatch, &operation)?;
-    let swapped = dispatch.replace(
-        "InternalOp::GitHubEvidenceFetch => unit_exit(run_github_evidence_fetch()),",
-        "InternalOp::GitHubEvidenceFetch => unit_exit(run_github_evidence_import()),",
+    ast::validate_cli_sources(&dispatch, &internal_run, &operation)?;
+    let swapped = internal_run.replace(
+        "InternalOp::GitHubEvidenceFetch => finish_internal_result(run_github_evidence_fetch()),",
+        "InternalOp::GitHubEvidenceFetch => finish_internal_result(run_github_evidence_import()),",
     );
-    assert!(ast::validate_cli_sources(&swapped, &operation).is_err());
-    let extra = dispatch.replace(
+    assert_ne!(swapped, internal_run);
+    assert!(ast::validate_cli_sources(&dispatch, &swapped, &operation).is_err());
+    let extra = internal_run.replace(
         "fn run_internal",
         "fn extra() { let _ = run_github_evidence_fetch; }\nfn run_internal",
     );
-    assert!(ast::validate_cli_sources(&extra, &operation).is_err());
+    assert_ne!(extra, internal_run);
+    assert!(ast::validate_cli_sources(&dispatch, &extra, &operation).is_err());
 
     let fetch_selector =
         "Ok(tag) if tag == GITHUB_EVIDENCE_FETCH_OP => InternalOp::GitHubEvidenceFetch,";
@@ -261,21 +264,21 @@ fn cli_dispatch_maps_fetch_and_import_to_their_exact_operations() -> TestResult 
         "Ok(tag) if tag == GITHUB_EVIDENCE_IMPORT_OP => InternalOp::GitHubEvidenceFetch,",
     );
     assert_ne!(wrong_selector, operation);
-    assert!(ast::validate_cli_sources(&dispatch, &wrong_selector).is_err());
+    assert!(ast::validate_cli_sources(&dispatch, &internal_run, &wrong_selector).is_err());
 
     let unguarded_selector = operation.replace(
         fetch_selector,
         "Ok(tag) => InternalOp::GitHubEvidenceFetch,",
     );
     assert_ne!(unguarded_selector, operation);
-    assert!(ast::validate_cli_sources(&dispatch, &unguarded_selector).is_err());
+    assert!(ast::validate_cli_sources(&dispatch, &internal_run, &unguarded_selector).is_err());
 
-    let guarded_dispatch = dispatch.replace(
-        "InternalOp::GitHubEvidenceFetch => unit_exit(run_github_evidence_fetch()),",
-        "InternalOp::GitHubEvidenceFetch if true => unit_exit(run_github_evidence_fetch()),",
+    let guarded_dispatch = internal_run.replace(
+        "InternalOp::GitHubEvidenceFetch => finish_internal_result(run_github_evidence_fetch()),",
+        "InternalOp::GitHubEvidenceFetch if true => finish_internal_result(run_github_evidence_fetch()),",
     );
-    assert_ne!(guarded_dispatch, dispatch);
-    assert!(ast::validate_cli_sources(&guarded_dispatch, &operation).is_err());
+    assert_ne!(guarded_dispatch, internal_run);
+    assert!(ast::validate_cli_sources(&dispatch, &guarded_dispatch, &operation).is_err());
     Ok(())
 }
 

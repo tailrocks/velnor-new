@@ -176,22 +176,17 @@ fn velnor_jobs_carry_trio_only_where_executed() -> TestResult {
         for spec in trio {
             assert!(plan.contains(spec), "plan installs {spec}: {plan}");
         }
-        {
-            let cli = runs
-                .get("rust-velnor-actions-cli")
-                .ok_or("cli job missing")?;
-            for spec in trio {
-                assert!(
-                    cli.contains(spec),
-                    "cli keeps its validator-spawning suite tools: {cli}"
-                );
-            }
-            let demo = runs.get("rust-demo").ok_or("demo job missing")?;
-            for spec in trio {
-                assert!(!demo.contains(spec), "demo must trim {spec}: {demo}");
-            }
-            assert!(demo.contains("rust@"), "demo keeps its driver: {demo}");
+        let cli = runs
+            .get("rust-velnor-actions-cli")
+            .ok_or("CLI package job missing")?;
+        for spec in trio {
+            assert!(cli.contains(spec), "CLI job keeps {spec}: {cli}");
         }
+        let demo = runs.get("rust-demo").ok_or("demo package job missing")?;
+        for spec in trio {
+            assert!(!demo.contains(spec), "demo job omits {spec}: {demo}");
+        }
+        assert!(demo.contains("rust@"), "demo job keeps its driver: {demo}");
         let required = runs.get("required").ok_or("required missing")?;
         assert!(required.contains("gh@"), "required installs gh: {required}");
         for spec in trio {
@@ -318,7 +313,7 @@ fn deny_install_is_audited() -> TestResult {
     without_ambient_identity("deny_install_is_audited", || {
         let repo = velnor_workspace()?;
         let prep = prepare(repo.path())?;
-        assert_eq!(prep.lock_audit_blocking, [] as [std::string::String; 0]);
+        assert_eq!(prep.lock_audit_blocking, [] as [String; 0]);
         let summary = prep
             .discovery
             .recommendations

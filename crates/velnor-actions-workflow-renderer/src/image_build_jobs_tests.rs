@@ -3,7 +3,9 @@ use std::collections::BTreeMap;
 use crate::shell_step;
 
 use velnor_actions_contract::{
-    ImageConfig, ImageDockerfile, ImagePlatform, PermissionLevel, StepKind,
+    ExecutionMode, ImageConfig, ImageDockerfile, ImagePlatform, PermissionLevel, StepKind,
+    config::{CheckExecutor, CheckPlatform, CheckRunner},
+    workflow::CacheMode,
 };
 
 use super::{
@@ -107,7 +109,10 @@ fn build_uses_the_platform_dockerfile_and_leaks_nothing_to_buildkit() {
         "--cache-from",
         "ACTIONS_RUNTIME_TOKEN=",
     ] {
-        assert!(!build.contains(forbidden), "{forbidden}");
+        assert!(
+            !build.contains(forbidden),
+            "The build script contains this forbidden option or value: {forbidden}."
+        );
     }
     for step in &amd.steps {
         if let StepKind::Shell { env, .. } = &step.kind {
@@ -153,7 +158,15 @@ fn builder_is_task_owned_and_named_per_run_attempt_and_job() {
 fn validation_rejects_missing_altered_and_bad_digest_jobs() {
     let policy = policy();
     let mut jobs = BTreeMap::new();
-    assert!(validate_image_build_jobs(&jobs, &policy, CHECKOUT).is_err());
+    assert!(
+        validate_image_build_jobs(
+            &jobs,
+            &policy,
+            CHECKOUT,
+            &crate::workflow_routing::WorkflowRoutingPolicy::hosted_only(),
+        )
+        .is_err()
+    );
     for platform in &policy.image.platforms {
         jobs.insert(
             policy.image.build_job_id(*platform),
@@ -161,18 +174,168 @@ fn validation_rejects_missing_altered_and_bad_digest_jobs() {
         );
     }
     assert_eq!(
-        validate_image_build_jobs(&jobs, &policy, CHECKOUT)
-            .expect("valid")
-            .len(),
+        validate_image_build_jobs(
+            &jobs,
+            &policy,
+            CHECKOUT,
+            &crate::workflow_routing::WorkflowRoutingPolicy::hosted_only(),
+        )
+        .expect("valid")
+        .len(),
         2
     );
     let id = "image-eth-app-arm64";
     jobs.get_mut(id).expect("job").steps.pop();
-    assert!(validate_image_build_jobs(&jobs, &policy, CHECKOUT).is_err());
+    assert!(
+        validate_image_build_jobs(
+            &jobs,
+            &policy,
+            CHECKOUT,
+            &crate::workflow_routing::WorkflowRoutingPolicy::hosted_only(),
+        )
+        .is_err()
+    );
     let mut bad = policy;
     bad.dockerfile_sha256
         .insert(ImagePlatform::LinuxAmd64, "xyz".to_owned());
     assert!(build_image_build_job(&bad, ImagePlatform::LinuxAmd64, CHECKOUT).is_err());
+}
+
+fn amd64_policy() -> ImageBuildPolicy {
+    let mut policy = policy();
+    policy.image.platforms = vec![ImagePlatform::LinuxAmd64];
+    policy.image.dockerfile = ImageDockerfile::PerPlatform(BTreeMap::from([(
+        ImagePlatform::LinuxAmd64,
+        "svc/Dockerfile.amd64".to_owned(),
+    )]));
+    policy
+        .dockerfile_sha256
+        .retain(|platform, _| *platform == ImagePlatform::LinuxAmd64);
+    policy
+}
+
+fn routing(
+    mode: velnor_actions_contract::ExecutionMode,
+) -> crate::workflow_routing::WorkflowRoutingPolicy {
+    let selector = velnor_actions_contract::ScaleSetSelector::try_new(
+        "ubuntu-26.04-scale-set",
+        &["velnor".to_owned(), "ubuntu-26.04-scale-set".to_owned()],
+    )
+    .expect("valid selector");
+    crate::workflow_routing::test_policy(mode, selector)
+}
+
+#[test]
+fn routing_validates_scaled_image_placement_and_preserves_nonplacement_contract() {
+    let policy = amd64_policy();
+    let id = policy.image.build_job_id(ImagePlatform::LinuxAmd64);
+    let mut actual =
+        build_image_build_job(&policy, ImagePlatform::LinuxAmd64, CHECKOUT).expect("job");
+    actual
+        .display_name
+        .push_str(super::super::SCALE_TASK_NAME_SUFFIX);
+    let jobs = BTreeMap::from([(id.clone(), actual)]);
+    validate_image_build_jobs(&jobs, &policy, CHECKOUT, &routing(ExecutionMode::ScaleSet))
+        .expect("amd64 image routes to selected Scale Set");
+
+    let mut altered = jobs.clone();
+    altered
+        .get_mut(&id)
+        .expect("job")
+        .display_name
+        .push_str(" altered");
+    assert!(
+        validate_image_build_jobs(
+            &altered,
+            &policy,
+            CHECKOUT,
+            &routing(ExecutionMode::ScaleSet),
+        )
+        .is_err()
+    );
+
+    let mut cache_writer = jobs.clone();
+    cache_writer.get_mut(&id).expect("job").cache_mode = Some(CacheMode::Write);
+    assert!(
+        validate_image_build_jobs(
+            &cache_writer,
+            &policy,
+            CHECKOUT,
+            &routing(ExecutionMode::ScaleSet),
+        )
+        .is_err()
+    );
+
+    let mut typed_runner = jobs.clone();
+    typed_runner.get_mut(&id).expect("job").check_runner = Some(CheckRunner {
+        label: "ubuntu-26.04".to_owned(),
+        platform: CheckPlatform::LinuxX64,
+        executor: CheckExecutor::Hosted,
+        container: None,
+    });
+    assert!(
+        validate_image_build_jobs(
+            &typed_runner,
+            &policy,
+            CHECKOUT,
+            &routing(ExecutionMode::ScaleSet),
+        )
+        .is_err()
+    );
+
+    let mut wrong_hosted_runner = jobs.clone();
+    wrong_hosted_runner.get_mut(&id).expect("job").runs_on = "ubuntu-24.04".to_owned();
+    assert!(
+        validate_image_build_jobs(
+            &wrong_hosted_runner,
+            &policy,
+            CHECKOUT,
+            &routing(ExecutionMode::ScaleSet),
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn routing_rejects_arm64_scale_set_and_keeps_both_images_hosted() {
+    let mut arm64 = policy();
+    arm64.image.platforms = vec![ImagePlatform::LinuxArm64];
+    arm64.image.dockerfile = ImageDockerfile::PerPlatform(BTreeMap::from([(
+        ImagePlatform::LinuxArm64,
+        "svc/Dockerfile.arm64".to_owned(),
+    )]));
+    arm64
+        .dockerfile_sha256
+        .retain(|platform, _| *platform == ImagePlatform::LinuxArm64);
+    let arm_id = arm64.image.build_job_id(ImagePlatform::LinuxArm64);
+    let arm_jobs = BTreeMap::from([(
+        arm_id,
+        build_image_build_job(&arm64, ImagePlatform::LinuxArm64, CHECKOUT).expect("job"),
+    )]);
+    assert!(
+        validate_image_build_jobs(
+            &arm_jobs,
+            &arm64,
+            CHECKOUT,
+            &routing(ExecutionMode::ScaleSet),
+        )
+        .is_err()
+    );
+
+    let both = policy();
+    let jobs = both
+        .image
+        .platforms
+        .iter()
+        .map(|platform| {
+            (
+                both.image.build_job_id(*platform),
+                build_image_build_job(&both, *platform, CHECKOUT).expect("job"),
+            )
+        })
+        .collect();
+    validate_image_build_jobs(&jobs, &both, CHECKOUT, &routing(ExecutionMode::Both))
+        .expect("Both keeps one hosted image job per platform");
 }
 
 #[test]

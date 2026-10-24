@@ -1,6 +1,7 @@
 # Target platform: linux/amd64. ARM64 is not the baseline.
-# One dockerd per worker. Listens only on unix:///var/run/docker.sock.
-# Do not COPY or mount a host socket. No TCP listener. No prune.
+# One dockerd per worker. Its TCP API binds only to this job's loopback.
+# Keep the private Unix socket for official container actions. No host socket or port publish.
+# No prune.
 # This image does not set privileged. The controller supplies runtime privileges.
 FROM ubuntu:26.04@sha256:42527649dbc4f9197a6073f426f488cbff0e9cc9f2afce32d91c383e4875634a
 
@@ -18,9 +19,7 @@ RUN apt-get update \
         tar \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 999 docker \
-    && mkdir -p /var/lib/docker /run /home/runner/_work \
-    && chown 1000:1000 /home/runner/_work \
-    && chmod 0755 /home/runner/_work \
+    && mkdir -p /var/lib/docker /run \
     && curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/docker.tgz \
         "https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_VERSION}.tgz" \
     && echo "${DOCKER_SHA256}  /tmp/docker.tgz" | sha256sum -c - \
@@ -49,6 +48,9 @@ RUN mkdir -p /etc/docker /usr/local/libexec/velnor /usr/share/doc/velnor-dind \
         '  "data-root": "/var/lib/docker",' \
         '  "iptables": true' \
         '}' > /etc/docker/daemon.json
+
+COPY --from=resource_probe resource-probe /velnor/resource-probe
+RUN chmod 0555 /velnor/resource-probe
 
 # This bounded wrapper adapts the cgroup-v2 block from Moby hack/dind at
 # 8d9e3502aba39127e4d12196dae16d306f76993d. The pinned upstream source SHA-256

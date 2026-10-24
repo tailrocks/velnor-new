@@ -70,7 +70,10 @@ idempotent reconnect; `daemon run` and readiness load the same configured pair.
 No fallback account is consulted. No PAT on argv. No secret in TOML. Ready means
 bounded readiness, not "a process exists".
 
-One active repository connection. A second incompatible connection is rejected.
+One host controller manages separate repository connections.
+All connections share one capacity budget and the selected Docker engine.
+A second connection must use the same host resource settings.
+Each connection keeps separate credentials and Scale Set records.
 A second daemon fails before it opens another session.
 
 `disconnect` drains and deletes only remote resources this controller recorded
@@ -202,20 +205,45 @@ The probe lifecycle is specified in the [controller resource-probe contract](res
 
 `/var/run/docker.sock` inside the runner and inside the private daemon resolves
 to that worker's socket, never the outer engine socket. Named volumes back
-work, temp, actions, tools, and the socket. JIT is delivered on a short-lived
-stdin channel after a durable provision intent. JIT is absent from Docker
+work, temp, actions, tools, and the socket. After a durable provision intent,
+the controller delivers raw JIT on a short-lived stdin or inherited-fd-3
+channel. The entrypoint passes it to the official `Runner.Listener` only in a
+short-lived `ACTIONS_RUNNER_INPUT_JITCONFIG` assignment on `exec`; JIT is not
+an argument. The maximum raw JIT size is 131040 bytes.
+The calculation uses the 131072-byte Linux limit for one exec string on a system with 4-KiB pages.
+This limit includes the environment key, `=`, and the final NUL. Raw JIT is absent from Docker
 `Config.Env`, `Cmd`, labels, image layers, host argv, journal, TOML, launchd
 plist, and evidence archives.
+Controller API credentials never enter the runner.
 
 JIT `workFolder` is `_work`, relative to the official runner root at
 `/home/runner`, so the job work directory resolves to `/home/runner/_work`.
-Mount the same per-worker named work volume there in both containers. The
-runner and DinD images create that path as uid/gid `1000:1000`, mode `0755`,
-before the first empty-volume mount; DinD starts first and Docker initializes
-the volume from its image path. The entrypoint stages JIT only in its
-container-local `/tmp` with mode `0600` and removes the file before starting
-the listener; it must not persist JIT under the named work volume. Checkout,
-tools, and job workspace use the shared writable volume for the runner user.
+The controller creates fresh, nonce-named tmpfs-backed Docker volumes for
+Runner home and Work. It mounts each same volume into both the Runner and DinD
+containers with `NoCopy`; Docker image copy-up is not used to initialize these
+volumes or to prove their contents. Before the pair starts, an owned storage
+initializer applies the required layout, owner, and mode to those exact
+volumes and persists its structured readiness result. The initializer stays
+held while the exact Runner/DinD pair mounts the volumes. The controller
+records and verifies that pair-mounted handoff before releasing and removing
+the initializer and marking storage ready. This proves the resulting owned
+layout, not that the volumes began empty. The entrypoint stages raw JIT in a
+container-local mode-`0600` `/tmp` file and removes it before starting the
+listener. It does not persist raw JIT in the named work volume. The official
+runner treats `jitconfig` as a secret input.
+It removes the environment key from its managed environment while parsing it.
+It may then make its own one-job configuration and credential files under `/home/runner`. Those
+files are within that runner container's JIT credential lifetime and should
+be removed when the container is destroyed. The JIT is not confidential from
+the job it starts: same-UID job processes may examine the listener's initial
+`/proc/1/environ` and runner files accessible to that UID. The runner container
+is a per-job boundary, not a secrecy boundary from its job. The controller's
+API credentials remain controller-only. The synthetic `jit-input-test.sh`
+fixture does a check of the input channel only.
+It does not run the official listener or prove same-job, sibling-container, or host process isolation.
+Host and sibling-container PID isolation remain live verification gates.
+Checkout, tools, and job workspace use the shared writable volume for the
+runner user.
 
 Delete only objects whose immutable id matches the journal. Names are not
 delete authority. Foreign objects survive. A missing delete response is not

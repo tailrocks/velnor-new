@@ -280,7 +280,7 @@ fn generic_report_producer_refuses_named_check_success() {
         canonical_json_bytes(&plan).expect("json"),
     )
     .expect("plan");
-    assert!(write_task_report_to("local", TASK, 0, None, &[], temp.path()).is_err());
+    assert!(write_task_report_to("local", TASK, 0, None, temp.path()).is_err());
 }
 
 #[test]

@@ -16,6 +16,7 @@ use crate::canonical::{canonical_json_bytes, digest_b3};
 use crate::errors::ContractError;
 use crate::ids::{validate_matrix_key, validate_task_id};
 use crate::validate_digest;
+use crate::workflow::TaskBindingDigest;
 use crate::workflow::jobs::{
     TOFU_DISPLAY_PREFIX, TOFU_JOB_ID_PREFIX, is_safe_display_name, validate_job_id,
 };
@@ -27,6 +28,8 @@ pub struct CrateObligation {
     pub task_id: String,
     /// Stack-neutral kind word (e.g. `clippy`).
     pub kind: String,
+    /// Configuration identity for this task, such as `default` or a feature set.
+    pub configuration: String,
     /// Human step name (no IDs, keys, paths, or matrix JSON).
     pub step_name: String,
     /// Task IDs that must pass first (strictly earlier obligations).
@@ -34,14 +37,15 @@ pub struct CrateObligation {
     /// Matrix key locating this obligation's reports.
     pub matrix_key: String,
     /// Task digest binding argv plus toolchain.
-    pub task_digest: String,
+    pub task_digest: TaskBindingDigest,
     /// Exact toolchain identity inputs bound into the task digest.
     pub toolchain_inputs: ToolchainInputs,
     /// Fixed obligation argv.
     pub run: Vec<String>,
 }
 
-/// One crate responsibility: ordered, individually reported obligations (P05-1).
+/// One package configuration's responsibility: ordered, individually
+/// reported obligations (P05-1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CrateJob {
     /// Stable collision-safe job ID.
@@ -54,7 +58,7 @@ pub struct CrateJob {
     pub package_id: String,
     /// Package manifest path.
     pub manifest: String,
-    /// Configuration name.
+    /// Configuration name owning this package job.
     pub configuration: String,
     /// Ordered obligations; gates reference strictly earlier entries.
     pub obligations: Vec<CrateObligation>,
@@ -117,9 +121,11 @@ impl CrateObligation {
     fn validate(&self, job_id: &str) -> Result<(), ContractError> {
         validate_task_id(&self.task_id)?;
         validate_matrix_key(&self.matrix_key)?;
-        validate_digest(&self.task_digest)?;
+        validate_digest(self.task_digest.as_str())?;
         let toolchain_id = toolchain_id(&self.toolchain_inputs)?;
-        if task_digest_for_execution(&self.task_id, &self.run, &toolchain_id)? != self.task_digest {
+        if task_digest_for_execution(&self.task_id, &self.run, &toolchain_id)?
+            != self.task_digest.as_str()
+        {
             return Err(ContractError::identity(
                 "crate_obligation.task_digest",
                 format!("task_digest_mismatch:{job_id}"),
@@ -129,6 +135,19 @@ impl CrateObligation {
             return Err(ContractError::identity(
                 "crate_obligation.kind",
                 format!("empty_kind:{job_id}"),
+            ));
+        }
+        if self.configuration.trim().is_empty() || self.configuration.chars().any(char::is_control)
+        {
+            return Err(ContractError::identity(
+                "crate_obligation.configuration",
+                format!("bad_configuration:{job_id}"),
+            ));
+        }
+        if task_configuration(&self.task_id) != Some(self.configuration.as_str()) {
+            return Err(ContractError::identity(
+                "crate_obligation.configuration",
+                format!("configuration_mismatch:{job_id}"),
             ));
         }
         if self.step_name.trim().is_empty()
@@ -154,6 +173,18 @@ impl CrateObligation {
         }
         Ok(())
     }
+}
+
+fn task_configuration(task_id: &str) -> Option<&str> {
+    if task_id.starts_with("internal/") {
+        return task_id.rsplit('/').next();
+    }
+    if !task_id.starts_with("stack/") {
+        return None;
+    }
+    let base =
+        crate::ids::split_shard_suffix(task_id).map_or(task_id, |(unsharded, _, _)| unsharded);
+    base.rsplit('/').next()
 }
 
 /// Compute the task digest from its stable identity, argv, and toolchain ID.

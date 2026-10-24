@@ -8,17 +8,15 @@ use super::*;
 use std::collections::BTreeSet;
 use velnor_actions_rust::{CompileDriver, TaskKind};
 
-/// The demo crate job keeps clippy and test obligations on one selected driver;
-/// a second crate owns its own job and report artifact.
-fn crate_jobs(driver: CompileDriver) -> (Vec<(String, Job)>, ProposedTask, ProposedTask) {
+/// Both demo obligations use one selected driver and one package job.
+fn two_task_jobs(driver: CompileDriver) -> (Vec<(String, Job)>, ProposedTask, ProposedTask) {
     let mut clippy = group("demo", TaskKind::Clippy, &[]);
     clippy.identity.compile_driver = driver.as_str().to_owned();
     clippy.validate().expect("clippy proposal");
     let mut test = group("demo", TaskKind::Test, &[]);
     test.identity.compile_driver = driver.as_str().to_owned();
     test.validate().expect("test proposal");
-    let mut other = group("nested", TaskKind::Clippy, &[]);
-    other.identity.compile_driver = driver.as_str().to_owned();
+    let other = group("nested", TaskKind::Clippy, &[]);
     let catalog = ToolCatalog::pinned();
     let found = build_crate_jobs(CrateJobInputs {
         label: "ubuntu-26.04",
@@ -117,7 +115,7 @@ fn assert_task_environment(
     env: &BTreeMap<String, String>,
     catalog: &ToolCatalog,
 ) {
-    let mut payload_env: BTreeMap<String, String> =
+    let payload_env: BTreeMap<String, String> =
         velnor_actions_rust::payload_env_for_kind(&task.task_kind)
             .into_iter()
             .map(|(key, value)| {
@@ -127,6 +125,7 @@ fn assert_task_environment(
                 )
             })
             .collect();
+    let mut payload_env = payload_env;
     if let Some(lane) = velnor_actions_rust::concurrent_target_lane(&task.task_kind) {
         payload_env.insert("CARGO_TARGET_DIR".to_owned(), format!("target/{lane}"));
     }
@@ -134,8 +133,7 @@ fn assert_task_environment(
         .expect("validated task environment");
     assert_eq!(env, &expected_env, "exact task environment");
     assert!(
-        !env.contains_key(crate::task_report::TASK_ID_ENV)
-            && !env.contains_key(crate::task_report::DOWNSTREAM_IDS_ENV),
+        !env.contains_key(crate::task_report::TASK_ID_ENV),
         "report authority stays in TaskExecution fields, not environment"
     );
 }
@@ -159,7 +157,7 @@ fn assert_task_execution_matches(task: &ProposedTask, step: &Step, catalog: &Too
             task.task_id, step.kind
         );
     };
-    assert_task_command(task, argv, toolchain_inputs, task_digest, catalog);
+    assert_task_command(task, argv, toolchain_inputs, task_digest.as_str(), catalog);
     assert_task_report_identity(
         task,
         step,
@@ -174,13 +172,13 @@ fn assert_task_execution_matches(task: &ProposedTask, step: &Step, catalog: &Too
 
 #[test]
 fn obligations_wrap_report_capture() {
-    let (jobs, clippy, test) = crate_jobs(CompileDriver::Mbx);
+    let (jobs, clippy, test) = two_task_jobs(CompileDriver::Mbx);
     let catalog = ToolCatalog::pinned();
-    let owner = "rust-demo";
-    let (_, demo) = jobs
+    let demo = &jobs
         .iter()
-        .find(|(id, _)| id == owner)
-        .expect("crate owner");
+        .find(|(id, _)| id == "rust-demo")
+        .expect("crate owner")
+        .1;
     for task in [&clippy, &test] {
         let steps = names(demo);
         assert_eq!(&steps[..2], ["Checkout", "Download plan"], "{steps:?}");
@@ -195,17 +193,17 @@ fn obligations_wrap_report_capture() {
                 )
             })
             .collect();
-        assert_eq!(executions.len(), 2, "both obligations in {owner}");
         let execution = executions
             .iter()
             .find(|step| step.name == name)
-            .expect("named obligation");
-        assert!(execution.parallel, "{name} runs in the parallel group");
+            .expect("task execution");
         assert_task_execution_matches(task, execution, &catalog);
+        assert_eq!(executions.len(), 2, "both obligations use one job");
+        assert!(execution.parallel, "{name} runs in the parallel group");
     }
 }
 
-/// Validate the unique upload for one crate job and all its preceding tasks.
+/// Check the unique upload after every package task.
 fn assert_job_upload(job_id: &str, demo: &Job) -> String {
     let uploads: Vec<_> = demo
         .steps
@@ -257,24 +255,20 @@ fn assert_job_upload(job_id: &str, demo: &Job) -> String {
             )
         })
         .collect();
-    assert!(!tasks.is_empty(), "job owns executed obligations");
+    assert!(!tasks.is_empty(), "job has executed obligations");
     assert!(
         tasks.iter().all(|(at, _)| *at < upload),
-        "uploads close the job: {steps:?}"
+        "upload follows every task: {steps:?}"
     );
     with["name"].clone()
 }
 
 #[test]
 fn obligations_upload_one_artifact_per_job() {
-    let (jobs, _, _) = crate_jobs(CompileDriver::Cargo);
+    let (jobs, _, _) = two_task_jobs(CompileDriver::Cargo);
     let artifacts: BTreeSet<_> = jobs
         .iter()
         .map(|(id, job)| assert_job_upload(id, job))
         .collect();
-    assert_eq!(
-        artifacts.len(),
-        2,
-        "each crate job has a distinct report artifact"
-    );
+    assert_eq!(artifacts.len(), 2, "each crate job has one report artifact");
 }

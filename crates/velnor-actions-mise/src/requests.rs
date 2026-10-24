@@ -18,6 +18,9 @@ use helpers::full_mise_argv;
 #[path = "requests_metadata.rs"]
 mod metadata;
 pub use metadata::{MetadataDiscovery, MetadataQualification};
+#[path = "requests_executable_lookup.rs"]
+mod executable_lookup;
+pub use executable_lookup::{MiseExecutableLookup, MiseExecutableObservation};
 
 /// One payload program run under at least one pinned tool.
 ///

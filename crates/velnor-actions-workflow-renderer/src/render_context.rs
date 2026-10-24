@@ -42,7 +42,6 @@ pub const FINAL_JOB_ID: &str = CONTRACT_REQUIRED_JOB_ID;
 pub const FINAL_DISPLAY_NAME: &str = CONTRACT_REQUIRED_VERDICT_DISPLAY_NAME;
 /// Final gate condition (contract [`CONTRACT_REQUIRED_CONDITION`] alias).
 pub const FINAL_CONDITION: &str = CONTRACT_REQUIRED_CONDITION;
-
 /// Condition attached to report upload steps: they run even when the job
 /// fails or the run is cancelled.
 pub const UPLOAD_STEP_CONDITION: &str = "always()";
@@ -71,8 +70,22 @@ pub struct RenderContext {
     /// Scale Set selected by the validated execution profile, when present.
     /// Typed task steps can use only this exact Linux/amd64 selector.
     pub scale_set_selector: Option<ScaleSetSelector>,
-    /// Digest-verified staged binary under runner temp.
+    /// Expected Velnor source revision used by the verified Scale Set images.
+    /// Hosted lanes do not use this value.
+    pub scale_set_image_source_sha: Option<String>,
+    /// Path to the staged binary under runner temp; its digest is checked against
+    /// trusted source metadata.
     pub staged_binary: String,
+    /// Verified Velnor program steps for each configured runner label.
+    ///
+    /// The release manifest, repository lock, or checked pre-seed artifact
+    /// supplies these steps. Add cache actions only after they are in the job.
+    pub verified_cache_helpers: BTreeMap<String, Vec<velnor_actions_contract::Step>>,
+    /// Set this value to require verified Velnor program steps for each cache job.
+    /// Consumer workflows set it to true because they require a release manifest.
+    /// Source builds can set it to false before a verified program is available.
+    /// If no verified program is available, keep setup steps and do not add cache actions.
+    pub require_verified_cache_helper: bool,
     /// Internal request directory under runner temp.
     pub request_dir: String,
     /// Pinned `actions/checkout` ref for rendered support jobs.
@@ -143,6 +156,20 @@ impl RenderContext {
     pub fn validate(&self) -> Result<(), RenderError> {
         marker::validate_version(&self.generator_version)?;
         marker::validate_version(&self.report_helper_version)?;
+        if self
+            .scale_set_image_source_sha
+            .as_deref()
+            .is_some_and(|value| {
+                value.len() != 40
+                    || !value
+                        .bytes()
+                        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            })
+        {
+            return Err(RenderError::BadCommand(
+                "bad_scale_set_image_source_sha".to_owned(),
+            ));
+        }
         guard::validate_runs_on(&self.runs_on)?;
         guard::validate_staged_binary(&self.staged_binary, &self.report_helper_version)?;
         guard::validate_request_dir(&self.request_dir)?;

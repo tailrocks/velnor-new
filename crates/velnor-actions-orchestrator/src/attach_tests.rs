@@ -33,26 +33,10 @@ fn legacy_task_job() -> Job {
     }
 }
 
-/// Bare IR shell shared by the attach fixtures.
-pub(super) fn bare_ir(jobs: BTreeMap<String, velnor_actions_contract::Job>) -> WorkflowIr {
-    WorkflowIr {
-        name: "CI".to_owned(),
-        triggers: Trigger {
-            pull_request_types: Vec::new(),
-            push_branches: Vec::new(),
-            merge_group: false,
-            workflow_dispatch: None,
-            schedule: None,
-        },
-        permissions: Permissions::default(),
-        concurrency: Concurrency {
-            group: "g".to_owned(),
-            cancel_in_progress: "c".to_owned(),
-        },
-        jobs,
-        cache_mode: None,
-    }
-}
+use support::bare_ir;
+
+#[path = "attach_test_support.rs"]
+mod support;
 
 #[test]
 fn lock_acquire_inserts_digest_verified_stage() {
@@ -199,6 +183,9 @@ fn preseed_attach_plan(catalog: &ToolCatalog) -> WorkflowPlan {
             report_helper_version: "0.1.0".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
             scale_set_selector: None,
+            scale_set_image_source_sha: None,
+            verified_cache_helpers: std::collections::BTreeMap::new(),
+            require_verified_cache_helper: false,
             staged_binary: format!("{STAGED_BINARY_PREFIX}0.1.0"),
             request_dir: REQUEST_DIR.to_owned(),
             checkout_uses: CHECKOUT_USES.to_owned(),
@@ -259,6 +246,22 @@ fn preseed_attach_builds_once_and_sets_mode() {
         )
         .is_err()
     );
+}
+
+#[test]
+fn preseed_rejects_suite_with_a_different_helper_target() {
+    let catalog = ToolCatalog::pinned();
+    let mut plan = preseed_attach_plan(&catalog);
+    let mut suite = legacy_task_job();
+    suite.runs_on = "macos-26".to_owned();
+    plan.ir.jobs.insert("suite-macos".to_owned(), suite);
+
+    let result = attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0", &catalog);
+    assert!(matches!(
+        result,
+        Err(OrchestratorError::Contract { problem })
+            if problem == "mixed_platform_preseed_requires_release_lock:suite-macos"
+    ));
 }
 
 /// Download, verify, then stage exactly once; never rebuild.
@@ -326,6 +329,9 @@ fn preseed_fixture(fetch_roots: &[String]) -> WorkflowPlan {
             report_helper_version: "0.1.0".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
             scale_set_selector: None,
+            scale_set_image_source_sha: None,
+            verified_cache_helpers: std::collections::BTreeMap::new(),
+            require_verified_cache_helper: false,
             staged_binary: format!("{STAGED_BINARY_PREFIX}0.1.0"),
             request_dir: REQUEST_DIR.to_owned(),
             checkout_uses: CHECKOUT_USES.to_owned(),
@@ -354,6 +360,9 @@ fn assert_owned_homes(steps: &[Step], role: velnor_actions_contract::StepRole, n
         assert!(env.contains_key(key), "{name} misses {key}: {env:?}");
     }
 }
+
+#[path = "attach_tests_lock.rs"]
+mod lock_tests;
 
 #[path = "attach_mbx_tests.rs"]
 mod mbx_tests;

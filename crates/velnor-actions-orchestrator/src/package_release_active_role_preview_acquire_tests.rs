@@ -12,7 +12,11 @@ fn rendered_preview_source_acquire_binds_each_matrix_role() {
     let spec = fixture(PackageReleaseChannel::Preview);
     let plan = spec.policy.resolve("0.6.4".to_owned()).expect("plan");
     let pairs = expected_release_payload_pairs(&plan).expect("declared pairs");
-    let rendered = render_consumer_preview(&spec).expect("actual preview renderer");
+    let rendered = render_consumer_preview(
+        &spec,
+        &velnor_actions_workflow_renderer::workflow_routing::WorkflowRoutingPolicy::hosted_only(),
+    )
+    .expect("actual preview renderer");
     let payload_job = job_block(&rendered.bytes, "preview-payload");
     let payload_acquire = operation_blocks(payload_job, "acquire-preview-source-v1")
         .into_iter()

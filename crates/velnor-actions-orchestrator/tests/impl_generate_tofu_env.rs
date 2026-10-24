@@ -83,14 +83,14 @@ fn isolation_pairs_agree_between_author_and_constructor() -> Result<(), String> 
     let authored = velnor_actions_tofu::tofu_isolation_env(
         "/velnor/tofu-data",
         "/velnor/tofu-cli.hcl",
-        "/velnor/tofu-cache",
+        "/velnor/cache/tofu",
     );
     let command = velnor_actions_mise::IsolatedCommand::tofu_exec(
         &["opentofu@1.13.1".to_owned()],
         &[OsString::from("tofu"), OsString::from("version")],
         "/velnor/tofu-data",
         "/velnor/tofu-cli.hcl",
-        "/velnor/tofu-cache",
+        "/velnor/cache/tofu",
     )
     .map_err(|err| err.to_string())?;
     let full = command.full_env();

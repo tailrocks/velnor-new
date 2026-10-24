@@ -50,7 +50,7 @@ pub(crate) struct PartialRustStack {
     run_ignored: Option<String>,
     /// Optional cold parallel-target initialization after the test build.
     seed_parallel_targets: Option<bool>,
-    /// Clippy-only all-features mode; disabled by default.
+    /// Activate all package features for Clippy only; disabled by default.
     clippy_all_features: Option<bool>,
     /// Rust release policy; disabled by default.
     release: Option<RustReleaseConfig>,
@@ -62,7 +62,7 @@ pub(crate) struct PartialRustStack {
     /// Optional exact `X.Y.Z` Rust toolchain channel override.
     #[serde(default)]
     toolchain: Option<String>,
-    /// Opt-in Mise-authoritative Rust version (`"mise"`).
+    /// Select the Mise Rust version with `"mise"`.
     #[serde(default)]
     toolchain_source: Option<velnor_actions_contract::config::RustToolchainSource>,
     /// Per-package options (`[stacks.rust.crates.<package>]`).

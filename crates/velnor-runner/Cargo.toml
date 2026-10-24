@@ -19,10 +19,10 @@ license = "MIT OR Apache-2.0"
 [workspace.dependencies]
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.154" }
-rustix = { version = "=1.1.5", default-features = false, features = ["fs", "std"] }
+rustix = { version = "=1.1.5", default-features = false, features = ["event", "fs", "net", "process", "std"] }
 thiserror = { version = "=2.0.21" }
 clap = { version = "=4.6.7", features = ["derive"] }
-tokio = { version = "=1.53.3", features = ["rt-multi-thread", "macros", "time", "io-util", "sync", "net", "process"] }
+tokio = { version = "=1.53.3", features = ["rt-multi-thread", "macros", "time", "io-util", "sync", "net", "process", "fs"] }
 libc = { version = "=0.2.191" }
 bollard = { version = "=0.21.1", default-features = false, features = ["pipe"] }
 # The journal uses relational SQL without FTS; explicit mimalloc preserves the existing allocator.
@@ -31,6 +31,8 @@ zeroize = { version = "=1.9.1", features = ["derive"] }
 getrandom = { version = "=0.4.3" }
 toml = { version = "=1.1.8" }
 sha2 = { version = "=0.11.1" }
+base64 = { version = "=0.23.1" }
+sha1_smol = { version = "=1.0.1" }
 flate2 = { version = "=1.1.10" }
 
 [workspace.lints.rust]
@@ -65,3 +67,6 @@ allow_attributes = "warn"
 [workspace.lints.rustdoc]
 broken_intra_doc_links = "deny"
 private_intra_doc_links = "deny"
+
+[profile.dev.package.turso_core]
+opt-level = 1

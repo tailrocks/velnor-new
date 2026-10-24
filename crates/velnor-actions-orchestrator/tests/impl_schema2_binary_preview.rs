@@ -286,7 +286,7 @@ fn generator_emits_tap_jobs_from_native_distribution_config() -> TestResult {
     assert!(observer_mint.contains("permission-administration: read"));
     assert!(!observer_mint.contains("permission-contents"));
     assert!(!observer_mint.contains("permission-pull-requests"));
-    assert!(!observer_mint.contains("permission-checks"));
+    assert!(observer_mint.contains("permission-checks: read"));
     assert!(!writer.contains("permission-checks"));
     assert!(!prepare.contains("VELNOR_TAP_PROTECTION_TOKEN"));
     assert!(merge.contains("VELNOR_TAP_COMPLETION_APP_ID"));
@@ -317,17 +317,20 @@ fn privileged_preview_gh_pin_cannot_come_from_consumer_catalog() -> TestResult {
     use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
     let repo = binary_repo(&preview_config(false))?;
-    let mut prep = prepare(repo.path())?;
-    let pinned = ToolCatalog::pinned();
-    prep.catalog = ToolCatalog::new(
-        pinned.version(PinnedTool::Rust),
-        pinned.version(PinnedTool::MrBoxington),
-        "2.0.0",
-        pinned.version(PinnedTool::Jactionlint),
-        pinned.version(PinnedTool::Shellcheck),
-        pinned.version(PinnedTool::Nextest),
-        pinned.version(PinnedTool::Opentofu),
+    let catalog = ToolCatalog::pinned();
+    std::fs::write(
+        repo.path().join("mise.toml"),
+        format!(
+            "[tools]\nrust = '{}'\ngh = '2.0.0'\n[tasks.release-preview]\nrun = 'true'\n",
+            catalog.version(PinnedTool::Rust)
+        ),
     )?;
+    let prep = prepare(repo.path())?;
+    let pinned = ToolCatalog::pinned();
+    assert_eq!(
+        prep.catalog.version(PinnedTool::Gh),
+        pinned.version(PinnedTool::Gh)
+    );
     let tree = render_staged_tree(&prep)?;
     let workflow = tree
         .get(".github/workflows/binary-preview.yml")

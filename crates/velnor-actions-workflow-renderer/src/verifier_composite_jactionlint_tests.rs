@@ -54,6 +54,10 @@ fn jactionlint_composite_uses_the_trusted_shell_and_scrubbed_script() {
     );
     let run = scalar(field(verifier, "run"));
     assert!(
+        run.starts_with("function_env_unset=(); function_env_scan_complete=0;"),
+        "Jactionlint run keeps the function scan, outer env removals, fixed shell, and inner unset: {run}"
+    );
+    assert!(
         run.starts_with(crate::verifier_shell::tests::runtime::VERIFY_RUN_PREFIX),
         "Jactionlint run keeps exact function scan, outer env removals, fixed shell, and inner unset: {run}"
     );

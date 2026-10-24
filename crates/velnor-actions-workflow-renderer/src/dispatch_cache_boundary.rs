@@ -8,10 +8,9 @@ pub(crate) const DISPATCH_DENY: &str = "github.event_name != 'workflow_dispatch'
 
 /// Suppress every cache path until a validated directive controls its use.
 ///
-/// Raw dispatch metadata can deny cache access, but cannot grant it. The
-/// current renderer has no cache producer that admits its selected backend
-/// object against a validated directive before import, so every cache path
-/// stays disabled on workflow dispatch, including downstream jobs.
+/// Raw dispatch metadata cannot grant cache access.
+/// Only qualification cache actions with typed owners and complete directive checks can use the cache.
+/// Workflow dispatch disables all other cache paths.
 pub(crate) fn suppress_unvalidated_cache_access(jobs: &mut BTreeMap<String, Job>) {
     for job in jobs.values_mut() {
         for step in &mut job.steps {
@@ -79,8 +78,17 @@ fn suppress_dispatch(step: &mut Step) {
     if is_push_only_cache_save(step) {
         return;
     }
+    if is_bound_qualification_cache_action(step) {
+        return;
+    }
     if step.role == Some(velnor_actions_contract::StepRole::ToolsCacheRestore)
-        && step.condition.as_deref() == Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION)
+        && matches!(
+            step.condition.as_deref(),
+            Some(
+                crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION
+                    | crate::cache_p08::TOOLS_CACHE_PLAN_RESTORE_CONDITION
+            )
+        )
     {
         return;
     }
@@ -99,6 +107,85 @@ fn suppress_dispatch(step: &mut Step) {
         return;
     }
     step.condition = Some(format!("({prior}) && {DISPATCH_DENY}"));
+}
+
+/// Return true only for cache actions whose typed owner and directive checks match the expected values.
+fn is_bound_qualification_cache_action(step: &Step) -> bool {
+    use velnor_actions_contract::workflow::StepId;
+    use velnor_actions_contract::{StepRole, workflow::QualificationCacheStepStage};
+
+    let Some(StepId::QualificationCache(identity)) = step.id else {
+        return false;
+    };
+    let restore = match (step.role, identity.stage()) {
+        (Some(StepRole::QualificationCacheRestore), QualificationCacheStepStage::Restore) => true,
+        (Some(StepRole::QualificationCacheSave), QualificationCacheStepStage::Save) => false,
+        _ => return false,
+    };
+    let stage_prefix = if restore {
+        "qualification-cache-restore-"
+    } else {
+        "qualification-cache-save-"
+    };
+    let Some(owner_tag) = identity
+        .as_string()
+        .strip_prefix(stage_prefix)
+        .map(str::to_owned)
+    else {
+        return false;
+    };
+    let bind_id = format!("qualification-cache-bind-{owner_tag}");
+    let uses = format!(
+        "{}@{}",
+        if restore {
+            "actions/cache/restore"
+        } else {
+            "actions/cache/save"
+        },
+        velnor_actions_actionlint::actions::CACHE_ACTION_SHA
+    );
+    let mut inputs = BTreeMap::from([
+        (
+            "key".to_owned(),
+            format!(
+                "${{{{ steps.{bind_id}.outputs.{} }}}}",
+                if restore { "restore_key" } else { "save_key" }
+            ),
+        ),
+        (
+            "path".to_owned(),
+            format!(
+                "${{{{ steps.{bind_id}.outputs.{} }}}}",
+                if restore {
+                    "restore_stage_path"
+                } else {
+                    "save_stage_path"
+                }
+            ),
+        ),
+    ]);
+    if restore {
+        inputs.insert("restore-keys".to_owned(), String::new());
+    }
+    let expected_condition = if restore {
+        format!(
+            "needs.plan.outputs.qualification_campaign != '' && steps.{bind_id}.outputs.active == 'true'"
+        )
+    } else {
+        let export_id = format!("qualification-cache-export-{owner_tag}");
+        format!(
+            "needs.plan.outputs.qualification_campaign != '' && steps.{bind_id}.outputs.active == 'true' && steps.{export_id}.outputs.save_requested == 'true' && steps.{bind_id}.outputs.save_key != ''"
+        )
+    };
+    matches!(
+        &step.kind,
+        StepKind::Action { uses: actual_uses, with, env }
+            if actual_uses == &uses
+                && with == &inputs
+                && env.is_empty()
+                && !step.parallel
+                && step.condition.as_deref() == Some(expected_condition.as_str())
+    )
 }
 
 /// Preserve the contract's canonical trust-gated writer gates.

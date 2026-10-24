@@ -11,18 +11,14 @@ use super::p12_harness as harness;
 const INVENTORY: &str = ".velnor/freshness-inventory.json";
 
 #[test]
-fn repository_only_members_declare_the_typed_maintenance_owner() -> Result<(), Box<dyn Error>> {
+fn repository_support_members_use_their_crate_jobs() -> Result<(), Box<dyn Error>> {
     for dir in [
         "crates/velnor-actions-freshness",
         "crates/velnor-archive-guard",
     ] {
         let manifest = super::manifest(dir)?;
         let owner = super::manifest_section(&manifest, "package.metadata.velnor");
-        assert_eq!(
-            owner,
-            ["v1-task-owner = \"repository-maintenance\""],
-            "{dir} must declare the typed repository-only task owner"
-        );
+        assert!(owner.is_empty(), "{dir} must not set a task owner");
     }
     Ok(())
 }
@@ -285,8 +281,8 @@ fn dated_exception_missing_field_fails() -> Result<(), Box<dyn Error>> {
 #[test]
 fn non_object_entries_fail() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-shapes")?;
-    let row = "{\"name\":\"mise\",\"pinned\":\"2026.10.14\",\
-        \"qualified\":\"2026.10.14\",\
+    let row = "{\"name\":\"mise\",\"pinned\":\"2026.10.15\",\
+        \"qualified\":\"2026.10.15\",\
         \"source\":\"https://api.github.com/repos/jdx/mise/releases/latest\",\
         \"status\":\"current\"}";
     harness::mutate(

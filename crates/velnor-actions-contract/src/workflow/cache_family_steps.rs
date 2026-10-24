@@ -1,10 +1,10 @@
 //! Generated step shapes of the stack family caches (Bun, Playwright, dbt, uv, Ansible).
 //!
-//! One `Compute family cache keys` step per job computes trust and every key
-//! of the job's families from its own lock files (the `mbx-bundle` pattern);
-//! each family restores before its producer step and saves right after it, so
-//! a later failing check never starves the cache (cache decision 1). A save
-//! additionally needs its family's size admission to have passed.
+//! One `Compute family cache keys` step computes trust and family keys from the job's lock files.
+//! This follows the `mbx-bundle` pattern.
+//! Each family restores before its producer step and attempts a save immediately after it.
+//! Thus, a later failing check does not prevent the save attempt (cache decision 1).
+//! The family must also pass its size check before the save.
 
 use super::cache_family::CacheFamily;
 
@@ -83,10 +83,12 @@ pub fn family_save_condition(family: CacheFamily) -> String {
     )
 }
 
-/// Opaque per-root locator: the path with separators folded, `root` for the repository root.
-///
-/// Returns `None` for a path that is absolute, empty-segmented, traversing or
-/// outside the slug alphabet, so a locator is always one safe path segment.
+/// Convert a root path into one path segment.
+/// Trim leading and trailing `/` characters for the root aliases.
+/// Return `root` if the trimmed path is empty or `.`.
+/// For other paths, reject an initial `/`, empty segments, and `.` or `..` segments.
+/// Allow only ASCII letters, digits, `/`, `.`, `_`, and `-`.
+/// Replace `/` with `-` to create one path segment.
 #[must_use]
 pub fn root_locator(root: &str) -> Option<String> {
     let path = root.trim_matches('/');

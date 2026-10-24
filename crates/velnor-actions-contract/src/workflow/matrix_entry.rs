@@ -4,6 +4,7 @@ use super::cache_ids::EntryCacheIds;
 use super::execute::{ExecuteTaskIds, ExecuteTaskRef};
 use super::lanes::NamedCheckLaneVariant;
 use super::platform::PlannedPlatform;
+use crate::cachekey::{ToolchainInputs, toolchain_id};
 use crate::canonical::{normalize_posix_path, validate_digest};
 use crate::config::VelnorConfig;
 use crate::errors::ContractError;
@@ -49,6 +50,18 @@ pub struct MatrixEntry {
     /// Cache identity digests recorded in the plan (cache §1).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cache_ids: Option<EntryCacheIds>,
+    /// Exact pinned tools and selected driver inputs for this matrix entry.
+    ///
+    /// Qualification runtime checks compare actual tool observations with
+    /// these pins. Older non-qualification plans may omit them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub toolchain_inputs: Option<ToolchainInputs>,
+    /// Digest of the exact pinned tools and selected driver inputs.
+    ///
+    /// Cacheable entries also carry this value in `cache_ids`. Entries without
+    /// a cache layer still record it so their runtime tool pins remain bound.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub toolchain_id: Option<String>,
     /// Declared task outputs reuse verification covers (cache §3).
     #[serde(default)]
     pub declared_outputs: Vec<String>,
@@ -91,7 +104,7 @@ impl MatrixEntry {
         )
     }
 
-    /// Build a named-check entry bound to one hosted or Scale Set lane.
+    /// Build an entry bound to one hosted or Scale Set lane.
     /// The logical `task_id` stays shared; matrix, report, and artifact IDs
     /// derive from the lane variant and exact emitted job ID.
     /// # Errors
@@ -138,6 +151,8 @@ impl MatrixEntry {
             execute_task_ids,
             input_digest: input_digest.to_owned(),
             cache_ids: None,
+            toolchain_inputs: None,
+            toolchain_id: None,
             declared_outputs: Vec::new(),
             test_run: Vec::new(),
         })
@@ -180,12 +195,63 @@ impl MatrixEntry {
                 ));
             }
         }
+        self.validate_toolchain_binding()?;
         self.planned_platform.validate()?;
         validate_lane_binding(&self.stack_id, &self.job_id, self.lane_variant)?;
         let identity_group = lane_task_group_id(&self.task_id, self.lane_variant)?;
         let expect_id = matrix_id_for_task_group(&self.stack_id, &identity_group)?;
         if expect_id != self.id {
             return Err(ContractError::identity("id", "id_mismatch"));
+        }
+        Ok(())
+    }
+
+    fn validate_toolchain_binding(&self) -> Result<(), ContractError> {
+        match (&self.toolchain_inputs, &self.toolchain_id) {
+            (Some(toolchain_inputs), Some(expected_toolchain_id)) => {
+                let actual_toolchain_id = toolchain_id(toolchain_inputs)?;
+                crate::canonical::validate_digest(expected_toolchain_id)?;
+                if actual_toolchain_id != *expected_toolchain_id {
+                    return Err(ContractError::identity(
+                        "matrix.toolchain_id",
+                        "toolchain_inputs_mismatch",
+                    ));
+                }
+                if self
+                    .cache_ids
+                    .as_ref()
+                    .is_some_and(|cache_ids| cache_ids.toolchain_id() != expected_toolchain_id)
+                {
+                    return Err(ContractError::identity(
+                        "matrix.toolchain_id",
+                        "cache_ids_mismatch",
+                    ));
+                }
+            }
+            (Some(_), None) if self.cache_ids.is_none() => {
+                return Err(ContractError::identity(
+                    "matrix.toolchain_inputs",
+                    "requires_toolchain_id",
+                ));
+            }
+            (Some(toolchain_inputs), None) => {
+                let cache_ids = self.cache_ids.as_ref().ok_or_else(|| {
+                    ContractError::identity("matrix.toolchain_inputs", "requires_toolchain_id")
+                })?;
+                if toolchain_id(toolchain_inputs)? != cache_ids.toolchain_id() {
+                    return Err(ContractError::identity(
+                        "matrix.toolchain_inputs",
+                        "toolchain_id_mismatch",
+                    ));
+                }
+            }
+            (None, Some(_)) => {
+                return Err(ContractError::identity(
+                    "matrix.toolchain_id",
+                    "requires_toolchain_inputs",
+                ));
+            }
+            (None, None) => {}
         }
         Ok(())
     }
@@ -215,17 +281,23 @@ fn validate_lane_binding(
     let Some(variant) = variant else {
         return Ok(());
     };
-    if stack_id != "mise" {
+    let check_lane = stack_id == "mise" && job_id.starts_with("check-");
+    let qualification_crate_lane = match stack_id {
+        "rust" => job_id.starts_with("rust-"),
+        "tofu" => job_id.starts_with("tofu-qualification-"),
+        _ => false,
+    };
+    if !check_lane && !qualification_crate_lane {
         return Err(ContractError::identity(
             "matrix.lane_variant",
-            "lane_variant_requires_named_check",
+            "lane_variant_requires_qualification_executor",
         ));
     }
     let suffix = match variant {
         NamedCheckLaneVariant::Hosted => super::lanes::HOSTED_SUFFIX,
         NamedCheckLaneVariant::ScaleSet => super::lanes::SCALE_SUFFIX,
     };
-    if !job_id.starts_with("check-") || !job_id.ends_with(suffix) {
+    if !job_id.ends_with(suffix) {
         return Err(ContractError::identity(
             "matrix.job_id",
             "lane_job_id_mismatch",

@@ -3,6 +3,7 @@
 use std::error::Error;
 
 use crate::impl_repo_deps::archive_deps::reviewed_archive_dependency;
+use crate::impl_repo_deps::workflow_yaml_deps::reviewed_workflow_yaml_dependency;
 use crate::impl_repo_policy::{MEMBERS, dep_key, dep_lines, dep_referenced, manifest};
 
 #[test]
@@ -51,16 +52,20 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         assert!(!body.contains("tokio"), "{dir} must not use tokio");
         for line in dep_lines(&body) {
             let key = dep_key(line);
-            if key.starts_with("velnor-actions") {
+            if key.starts_with("velnor-actions") || key == "velnor-archive-guard" {
                 continue;
             }
             let archive_decoder = reviewed_archive_dependency(dir, key, line);
+            let workflow_yaml = reviewed_workflow_yaml_dependency(dir, key, line);
             let checked_git_hash = reviewed_git_object_hash_dependency(dir, key, line);
             assert!(
-                allowed.contains(&key) || archive_decoder || checked_git_hash,
+                allowed.contains(&key) || archive_decoder || workflow_yaml || checked_git_hash,
                 "{dir} uses {key}"
             );
-            if let Some(index) = line.find("features").filter(|_| !archive_decoder) {
+            if let Some(index) = line
+                .find("features")
+                .filter(|_| !archive_decoder && !workflow_yaml && !checked_git_hash)
+            {
                 let quoted: Vec<&str> = line[index..].split('"').collect();
                 for feature in quoted.into_iter().skip(1).step_by(2) {
                     assert!(
@@ -105,6 +110,9 @@ fn allowed_feature(dir: &str, key: &str, feature: &str) -> bool {
         || (dir == "crates/velnor-actions-cli"
             && key == "syn"
             && matches!(feature, "full" | "visit"))
+        || (dir == "crates/velnor-actions-mise"
+            && key == "syn"
+            && matches!(feature, "full" | "parsing" | "visit"))
         // F2A scanner tests (dev-deps): syn parse + span lines.
         || (dir == "crates/velnor-actions-orchestrator"
             && ((key == "syn" && matches!(feature, "full" | "parsing" | "printing" | "visit"))

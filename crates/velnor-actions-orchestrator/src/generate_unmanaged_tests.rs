@@ -80,6 +80,24 @@ fn preserved_workflows_and_allowlist_are_exempt() -> TestResult {
 }
 
 #[test]
+fn generated_cache_cleanup_workflow_is_not_reported_as_unmanaged() -> TestResult {
+    let root = TempDir::new()?;
+    write(
+        root.path(),
+        ".github/workflows/cache-cleanup.yml",
+        &format!("{MARKER}name: cleanup\n"),
+    )?;
+    write(root.path(), ".github/workflows/hand.yml", "name: hand\n")?;
+    let preserved = [".github/workflows/hand.yml".to_owned()];
+    assert_eq!(
+        super::list(root.path(), &preserved, &config(&[]))?,
+        Vec::<String>::new(),
+        "The list must exclude generated cleanup and explicitly preserved workflows."
+    );
+    Ok(())
+}
+
+#[test]
 fn absent_github_is_empty_and_symlinked_github_is_refused() -> TestResult {
     let root = TempDir::new()?;
     let none: Vec<String> = Vec::new();

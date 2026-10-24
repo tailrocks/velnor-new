@@ -102,6 +102,20 @@ fn renders_schedule_only_read_only_probe() {
 }
 
 #[test]
+fn scale_set_routes_the_scheduled_linux_probe() {
+    let policy = crate::workflow_routing::test_policy(
+        velnor_actions_contract::ExecutionMode::ScaleSet,
+        crate::schema2::Schema2WorkflowRequest::canonical_scale_set().expect("selector"),
+    );
+    let file = render_freshness_workflow_with_routing(&spec(), &policy).expect("render");
+    assert!(
+        file.bytes
+            .contains("runs-on: [velnor, ubuntu-26.04-scale-set]")
+    );
+    assert!(!file.bytes.contains("runs-on: ubuntu-26.04"));
+}
+
+#[test]
 fn rejects_bad_spec_scalars() {
     let bad_cron = FreshnessSpec {
         schedule: ScheduleTrigger {

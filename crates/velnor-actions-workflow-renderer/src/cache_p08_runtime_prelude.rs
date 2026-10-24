@@ -1,9 +1,9 @@
-//! Fixed hosted composite for V2 runtime identity and exact-key seed import.
+//! Fixed composite for V2 runner identity and exact-key seed import.
 
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::step_identity::TOOLS_CACHE_PRELUDE_USES;
-use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
+use velnor_actions_contract::{RunsOn, Step, StepId, StepKind, StepRole};
 
 use crate::{
     RenderError, cache_p08, marker,
@@ -11,10 +11,11 @@ use crate::{
     yaml::{Yaml, render_yaml},
 };
 
-const ACTIONS: [(&str, &str); 3] = [
+const ACTIONS: [(&str, &str); 4] = [
     ("./.github/actions/u22", TOOLS_CACHE_PRELUDE_USES[0]),
     ("./.github/actions/u24", TOOLS_CACHE_PRELUDE_USES[1]),
     ("./.github/actions/u26", TOOLS_CACHE_PRELUDE_USES[2]),
+    ("./.github/actions/scale-set", TOOLS_CACHE_PRELUDE_USES[3]),
 ];
 
 pub(super) fn action_uses(runs_on: &str) -> Option<&'static str> {
@@ -28,18 +29,31 @@ pub(super) fn step(payload: &super::ToolsCachePayload) -> Result<Step, RenderErr
     let uses = action_uses(&payload.runs_on).ok_or_else(|| {
         RenderError::BadCommand("unsupported_tools_cache_identity_lane".to_owned())
     })?;
+    let mut with = BTreeMap::from([(
+        cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT.to_owned(),
+        payload.identity_input(),
+    )]);
+    if let Some(source_sha) = &payload.scale_set_image_source_sha {
+        with.insert(
+            super::runtime_identity::TOOLS_CACHE_SCALE_SET_IMAGE_SOURCE_SHA_INPUT.to_owned(),
+            source_sha.clone(),
+        );
+    }
+    let is_scale_set = is_scale_set_lane(&payload.runs_on)?;
+    if is_scale_set && payload.scale_set_image_source_sha.is_none() {
+        return Err(RenderError::BadCommand(
+            "tools_cache_scale_set_image_source_missing".to_owned(),
+        ));
+    }
     Ok(Step {
         parallel: false,
         name: cache_p08::TOOLS_CACHE_IDENTITY_NAME.to_owned(),
         id: Some(StepId::ToolsCacheIdentity),
         role: Some(StepRole::ToolsCacheIdentity),
-        condition: None,
+        condition: Some(cache_p08::TOOLS_CACHE_NORMAL_RUN_CONDITION.to_owned()),
         kind: StepKind::Action {
             uses: uses.to_owned(),
-            with: BTreeMap::from([(
-                cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT.to_owned(),
-                payload.identity_input(),
-            )]),
+            with,
             env: BTreeMap::new(),
         },
     })
@@ -52,11 +66,23 @@ pub(super) fn validate_action_call(
     with: &BTreeMap<String, String>,
     env: &BTreeMap<String, String>,
 ) -> Result<(), RenderError> {
+    let is_scale_set = is_scale_set_lane(runs_on)?;
+    let source_sha =
+        with.get(super::runtime_identity::TOOLS_CACHE_SCALE_SET_IMAGE_SOURCE_SHA_INPUT);
     if step.role != Some(StepRole::ToolsCacheIdentity)
+        || !matches!(
+            step.condition.as_deref(),
+            Some(
+                cache_p08::TOOLS_CACHE_NORMAL_RUN_CONDITION
+                    | cache_p08::TOOLS_CACHE_PLAN_RUN_CONDITION
+            )
+        )
         || Some(uses) != action_uses(runs_on)
         || !env.is_empty()
-        || with.len() != 1
+        || with.len() != if is_scale_set { 2 } else { 1 }
         || !with.contains_key(cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT)
+        || (is_scale_set && !source_sha.is_some_and(|value| is_image_source_sha(value)))
+        || (!is_scale_set && source_sha.is_some())
     {
         return Err(RenderError::InvalidWorkflow(
             "malformed_tools_cache_identity_action".to_owned(),
@@ -83,12 +109,12 @@ pub(super) fn action_file(runs_on: &str, version: &str) -> Result<RenderedFile, 
     let inner_seed = seed_step();
     let outputs = output_map();
     let body = Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str("Velnor hosted tools prelude")),
+        ("name".to_owned(), Yaml::str("Velnor tools prelude")),
         (
             "description".to_owned(),
-            Yaml::str("Qualify the hosted image and copy a matching tool seed."),
+            Yaml::str("Check the runner image and copy a matching tool seed."),
         ),
-        ("inputs".to_owned(), input_map()),
+        ("inputs".to_owned(), input_map(runs_on)?),
         ("outputs".to_owned(), outputs),
         (
             "runs".to_owned(),
@@ -113,6 +139,17 @@ fn identity_step(runs_on: &str) -> Result<Yaml, RenderError> {
     let uses = super::runtime_identity::action_uses(runs_on).ok_or_else(|| {
         RenderError::BadCommand("unsupported_tools_cache_identity_lane".to_owned())
     })?;
+    let is_scale_set = is_scale_set_lane(runs_on)?;
+    let mut with = vec![(
+        cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT.to_owned(),
+        Yaml::str("${{ inputs.d }}"),
+    )];
+    if is_scale_set {
+        with.push((
+            super::runtime_identity::TOOLS_CACHE_SCALE_SET_IMAGE_SOURCE_SHA_INPUT.to_owned(),
+            Yaml::str("${{ inputs.scale-set-image-source-sha }}"),
+        ));
+    }
     let entries = vec![
         (
             "name".to_owned(),
@@ -126,13 +163,7 @@ fn identity_step(runs_on: &str) -> Result<Yaml, RenderError> {
             "uses".to_owned(),
             Yaml::annotated(uses, "zizmor: ignore[self-repository]"),
         ),
-        (
-            "with".to_owned(),
-            Yaml::Map(vec![(
-                cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT.to_owned(),
-                Yaml::str("${{ inputs.d }}"),
-            )]),
-        ),
+        ("with".to_owned(), Yaml::Map(with)),
     ];
     Ok(Yaml::Map(entries))
 }
@@ -146,7 +177,7 @@ fn seed_step() -> Yaml {
         ("id".to_owned(), Yaml::str("seed")),
         (
             "if".to_owned(),
-            Yaml::str(cache_p08::TOOLS_CACHE_RESTORE_CONDITION),
+            Yaml::str(cache_p08::TOOLS_CACHE_IDENTITY_CONDITION),
         ),
         (
             "uses".to_owned(),
@@ -165,8 +196,8 @@ fn seed_step() -> Yaml {
     ])
 }
 
-fn input_map() -> Yaml {
-    Yaml::Map(vec![(
+fn input_map(runs_on: &str) -> Result<Yaml, RenderError> {
+    let mut inputs = vec![(
         cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT.to_owned(),
         Yaml::Map(vec![
             (
@@ -175,7 +206,33 @@ fn input_map() -> Yaml {
             ),
             ("required".to_owned(), Yaml::Bool(true)),
         ]),
-    )])
+    )];
+    if is_scale_set_lane(runs_on)? {
+        inputs.push((
+            super::runtime_identity::TOOLS_CACHE_SCALE_SET_IMAGE_SOURCE_SHA_INPUT.to_owned(),
+            Yaml::Map(vec![
+                (
+                    "description".to_owned(),
+                    Yaml::str("Validated immutable runner-image source SHA."),
+                ),
+                ("required".to_owned(), Yaml::Bool(true)),
+            ]),
+        ));
+    }
+    Ok(Yaml::Map(inputs))
+}
+
+fn is_scale_set_lane(runs_on: &str) -> Result<bool, RenderError> {
+    RunsOn::parse(runs_on)
+        .map(|runs_on| runs_on.is_scale_set())
+        .map_err(|error| RenderError::BadCommand(format!("bad_tools_cache_lane:{error}")))
+}
+
+fn is_image_source_sha(value: &str) -> bool {
+    value.len() == 40
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 fn output_map() -> Yaml {

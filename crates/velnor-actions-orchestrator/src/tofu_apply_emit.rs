@@ -2,7 +2,9 @@
 
 use velnor_actions_mise::PinnedTool;
 use velnor_actions_workflow_renderer::render::RenderedFile;
-use velnor_actions_workflow_renderer::{TofuApplySpec, render_tofu_apply_workflow};
+use velnor_actions_workflow_renderer::{
+    TofuApplySpec, WorkflowRoutingPolicy, render_tofu_apply_workflow_with_routing,
+};
 
 use crate::OrchestratorError;
 use crate::pins::resolve_mise_setup;
@@ -21,6 +23,7 @@ pub(crate) fn tofu_apply_enabled(prep: &GenerationPreparation) -> bool {
 /// Returns pin-resolution or workflow-rendering errors.
 pub(crate) fn tofu_apply_files(
     prep: &GenerationPreparation,
+    routing: &WorkflowRoutingPolicy,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
     let Some(config) = prep.config.workflow.tofu_apply.as_ref() else {
         return Ok(Vec::new());
@@ -35,5 +38,7 @@ pub(crate) fn tofu_apply_files(
         opentofu_version: catalog.version(PinnedTool::Opentofu).to_owned(),
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
     };
-    Ok(vec![render_tofu_apply_workflow(&spec)?])
+    Ok(vec![render_tofu_apply_workflow_with_routing(
+        &spec, routing,
+    )?])
 }

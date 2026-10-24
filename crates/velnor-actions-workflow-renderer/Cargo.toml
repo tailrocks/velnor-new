@@ -10,11 +10,13 @@ autotests = false
 test-render-capture = []
 
 [dependencies]
-velnor-actions-actionlint = { version = "=0.1.52", path = "../velnor-actions-actionlint" }
-velnor-actions-contract = { version = "=0.1.52", path = "../velnor-actions-contract" }
+saphyr = { version = "=0.2.2", default-features = false }
+saphyr-parser = { version = "=0.2.2", default-features = false }
+velnor-actions-actionlint = { version = "=0.1.53", path = "../velnor-actions-actionlint" }
+velnor-actions-contract = { version = "=0.1.53", path = "../velnor-actions-contract" }
 
 [dev-dependencies]
-velnor-actions-mise = { version = "=0.1.52", path = "../velnor-actions-mise" }
+velnor-actions-mise = { version = "=0.1.53", path = "../velnor-actions-mise" }
 
 [lints]
 workspace = true

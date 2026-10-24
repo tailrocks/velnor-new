@@ -172,7 +172,9 @@ fn the_gate_stays_generator_owned_and_cannot_be_set_through_env() -> TestResult 
         "[stacks.dbt]\nprojects = [\"warehouse\"]\nenv = { DBT_ALLOW_EXPERIMENTAL_ADAPTERS = \"true\" }\n",
     ))?;
     write_project(repo.path(), true)?;
-    let error = prepare(repo.path()).err().ok_or("env must stay closed")?;
+    let error = prepare(repo.path())
+        .err()
+        .ok_or("The env table must reject the experimental adapter variable.")?;
     assert!(
         error
             .to_string()

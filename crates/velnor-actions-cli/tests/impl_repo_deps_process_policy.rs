@@ -1,168 +1,266 @@
-//! CLI process policy: the CLI binary never reaches `std::process` beyond
-//! `ExitCode`, whatever spelling, import, or namespace alias it uses.
-//!
-//! Text tokens catch tool names and calls written anywhere, macro bodies
-//! included. The Rust syntax pass resolves every `use` tree and path, so
-//! a renamed or regrouped import (`use std::{process as p}`) or a
-//! namespace alias (`use std as s`) cannot hide `std::process::Command`.
-
+use proc_macro2::{TokenStream, TokenTree};
+use syn::Macro;
 use syn::ext::IdentExt;
 use syn::visit::Visit;
 
-/// Text that must not appear anywhere in CLI source.
-const BANNED_TOKENS: &[&str] = &[
-    "process::Command",
-    "Command::new",
-    ".spawn(",
-    ".status()",
-    ".output()",
-    "cargo",
-    // "mise" stays unbanned: repo-policy names a mise-version operation.
-    "mbx",
-    "nextest",
-    "rustup",
-    "\"gh\"",
-    "shell",
-    "Shell",
-    "sh -c",
-];
-
-/// The only `std::process` item the CLI may name.
-const ALLOWED_PROCESS_ITEM: &str = "ExitCode";
-
-/// First violation in one CLI source file, or `None` when it complies.
+/// This check reads Rust syntax. It does not read macro output.
 pub(crate) fn direct_tool_policy_violation(source: &str) -> Option<String> {
-    if let Some(token) = BANNED_TOKENS.iter().find(|token| source.contains(**token)) {
-        return Some((*token).to_owned());
-    }
-    for (index, _) in source.match_indices("std::process::") {
-        let rest = &source[index + "std::process::".len()..];
-        if !rest.starts_with(ALLOWED_PROCESS_ITEM) {
-            return Some(format!("std::process::{rest}"));
-        }
-    }
     let Ok(syntax) = syn::parse_file(source) else {
         return Some("Rust syntax parse failed".to_owned());
     };
-    let mut visitor = ProcessPolicy::default();
+    let mut visitor = ProcessPolicyVisitor::default();
     visitor.visit_file(&syntax);
-    visitor.violation
+    if visitor.violation.is_some() {
+        return visitor.violation;
+    }
+    for token in ["process::Command", "\"gh\"", "shell", "Shell", "sh -c"] {
+        if source.contains(token) {
+            return Some(token.to_owned());
+        }
+    }
+    None
 }
 
 #[derive(Default)]
-struct ProcessPolicy {
+struct ProcessPolicyVisitor {
     violation: Option<String>,
+    command_aliases: Vec<String>,
 }
 
-impl ProcessPolicy {
-    fn reject(&mut self, problem: impl Into<String>) {
+impl ProcessPolicyVisitor {
+    fn reject(&mut self, value: impl Into<String>) {
         if self.violation.is_none() {
-            self.violation = Some(problem.into());
+            self.violation = Some(value.into());
         }
     }
 
-    fn check_use(&mut self, tree: &syn::UseTree, prefix: &mut Vec<String>) {
+    fn check_import(&mut self, tree: &syn::UseTree, prefix: &mut Vec<String>) {
+        if self.violation.is_some() {
+            return;
+        }
         match tree {
             syn::UseTree::Path(path) => {
                 prefix.push(ident_name(&path.ident));
-                self.check_use(&path.tree, prefix);
+                self.check_import(&path.tree, prefix);
                 prefix.pop();
             }
-            syn::UseTree::Name(name) => self.check_use_leaf(prefix, &ident_name(&name.ident)),
+            syn::UseTree::Name(name) => {
+                self.check_import_leaf(prefix, &ident_name(&name.ident), false);
+            }
             syn::UseTree::Rename(rename) => {
-                let target = ident_name(&rename.rename);
-                if is_namespace(&target) {
-                    self.reject(format!("{target} namespace binding"));
+                let source_name = ident_name(&rename.ident);
+                let target_name = ident_name(&rename.rename);
+                if matches!(target_name.as_str(), "std" | "process") {
+                    self.reject(format!("{target_name} namespace binding"));
+                    return;
                 }
-                self.check_use_leaf(prefix, &ident_name(&rename.ident));
+                if prefix.is_empty() && source_name == "std" {
+                    self.reject("std namespace alias");
+                    return;
+                }
+                if prefix.len() == 1 && prefix[0] == "std" && source_name == "self" {
+                    self.reject("std namespace alias");
+                    return;
+                }
+                if is_process_module(prefix) && source_name == "Command" {
+                    self.command_aliases.push(target_name);
+                }
+                self.check_import_leaf(prefix, &source_name, true);
             }
             syn::UseTree::Group(group) => {
                 for item in &group.items {
-                    self.check_use(item, prefix);
+                    self.check_import(item, prefix);
+                    if self.violation.is_some() {
+                        return;
+                    }
                 }
             }
             syn::UseTree::Glob(_) => {
-                if prefix.iter().any(|segment| is_namespace(segment)) {
-                    self.reject(format!("{}::* glob", prefix.join("::")));
+                if is_process_module(prefix) {
+                    self.reject("std::process::*");
+                } else if prefix.len() == 1 && prefix[0] == "std" {
+                    self.reject("std namespace glob");
                 }
             }
         }
     }
 
-    /// One imported item `prefix::leaf` (`leaf` is `self` for the module).
-    fn check_use_leaf(&mut self, prefix: &[String], leaf: &str) {
+    fn check_import_leaf(&mut self, prefix: &[String], name: &str, renamed: bool) {
         let mut path = prefix.to_vec();
-        if leaf != "self" {
-            path.push(leaf.to_owned());
+        if name != "self" {
+            path.push(name.to_owned());
         }
-        match path.as_slice() {
-            [only] if only == "std" => self.reject("std namespace alias"),
-            _ => self.check_segments(&path),
+        if forbidden_process_path(&path) {
+            self.reject("process::Command");
+            return;
+        }
+        if prefix.is_empty() && name == "std" {
+            self.reject("std namespace alias");
+            return;
+        }
+        if prefix.len() == 1 && prefix[0] == "std" && name == "self" {
+            self.reject("std namespace alias");
+            return;
+        }
+        if prefix.len() == 1 && prefix[0] == "std" && name == "process" {
+            self.reject("process::Command");
+            return;
+        }
+        if is_process_module(prefix) && (renamed || !matches!(name, "id" | "ExitCode")) {
+            self.reject("process::Command");
         }
     }
 
-    /// Any `process` segment must open `std::process::ExitCode` (or one of
-    /// its associated items).
-    fn check_segments(&mut self, segments: &[String]) {
-        for (index, segment) in segments.iter().enumerate() {
-            if segment != "process" {
-                continue;
-            }
-            let allowed = index > 0
-                && segments[index - 1] == "std"
-                && segments.get(index + 1).map(String::as_str) == Some(ALLOWED_PROCESS_ITEM);
-            if !allowed {
-                self.reject(segments.join("::"));
-            }
-        }
-    }
-}
-
-impl<'ast> Visit<'ast> for ProcessPolicy {
-    fn visit_item_use(&mut self, item: &'ast syn::ItemUse) {
-        self.check_use(&item.tree, &mut Vec::new());
-    }
-
-    fn visit_item_extern_crate(&mut self, item: &'ast syn::ItemExternCrate) {
-        let bound = item
-            .rename
-            .as_ref()
-            .map_or_else(|| ident_name(&item.ident), |(_, rename)| ident_name(rename));
-        if ident_name(&item.ident) == "std" || is_namespace(&bound) {
-            self.reject(format!("extern crate binding {bound}"));
-        }
-        syn::visit::visit_item_extern_crate(self, item);
-    }
-
-    fn visit_item_mod(&mut self, item: &'ast syn::ItemMod) {
-        let name = ident_name(&item.ident);
-        if is_namespace(&name) {
-            self.reject(format!("{name} module shadows the namespace"));
-        }
-        syn::visit::visit_item_mod(self, item);
-    }
-
-    fn visit_path(&mut self, path: &'ast syn::Path) {
+    fn check_path(&mut self, path: &syn::Path) {
         let segments: Vec<String> = path
             .segments
             .iter()
             .map(|segment| ident_name(&segment.ident))
             .collect();
-        self.check_segments(&segments);
-        syn::visit::visit_path(self, path);
+        self.check_path_segments(&segments);
+    }
+
+    fn check_path_segments(&mut self, segments: &[String]) {
+        if segments.len() >= 2
+            && segments[1] == "new"
+            && self
+                .command_aliases
+                .iter()
+                .any(|alias| alias == &segments[0])
+        {
+            self.violation = Some(format!("{}::new", segments[0]));
+            return;
+        }
+        if self.violation.is_some() {
+            return;
+        }
+        if forbidden_process_path(segments) {
+            self.reject("process::Command");
+            return;
+        }
+        if segments.first().is_some_and(|first| first == "process") {
+            self.reject("process::Command");
+            return;
+        }
+        if segments.len() >= 2 && segments[0] == "std" && segments[1] == "process" {
+            match segments.get(2).map(String::as_str) {
+                Some("id") if segments.len() == 3 => {}
+                Some("ExitCode") => {}
+                Some(_) | None => self.reject("process::Command"),
+            }
+        }
     }
 }
 
-/// `std` and `process` are the namespaces a binding must not rename.
-fn is_namespace(name: &str) -> bool {
-    matches!(name, "std" | "process")
+impl<'ast> Visit<'ast> for ProcessPolicyVisitor {
+    fn visit_item_use(&mut self, item: &'ast syn::ItemUse) {
+        self.check_import(&item.tree, &mut Vec::new());
+        syn::visit::visit_item_use(self, item);
+    }
+
+    fn visit_item_extern_crate(&mut self, item: &'ast syn::ItemExternCrate) {
+        if ident_name(&item.ident) == "std"
+            || item
+                .rename
+                .as_ref()
+                .is_some_and(|(_, rename)| matches!(ident_name(rename).as_str(), "std" | "process"))
+        {
+            self.reject("std namespace binding");
+        }
+        syn::visit::visit_item_extern_crate(self, item);
+    }
+
+    fn visit_item_mod(&mut self, item: &'ast syn::ItemMod) {
+        if matches!(ident_name(&item.ident).as_str(), "std" | "process") {
+            self.reject("std namespace binding");
+        }
+        syn::visit::visit_item_mod(self, item);
+    }
+
+    fn visit_path(&mut self, path: &'ast syn::Path) {
+        self.check_path(path);
+        syn::visit::visit_path(self, path);
+    }
+
+    fn visit_macro(&mut self, mac: &'ast Macro) {
+        syn::visit::visit_macro(self, mac);
+        visit_macro_token_paths(self, &mac.tokens);
+    }
 }
 
-/// Identifier text with any `r#` raw prefix removed.
+fn visit_macro_token_paths(visitor: &mut ProcessPolicyVisitor, tokens: &TokenStream) {
+    let trees: Vec<TokenTree> = tokens.clone().into_iter().collect();
+    let mut index = 0;
+    while index < trees.len() {
+        if let TokenTree::Group(group) = &trees[index] {
+            visit_macro_token_paths(visitor, &group.stream());
+            if visitor.violation.is_some() {
+                return;
+            }
+        }
+        let start = if is_colon_pair(&trees, index) {
+            index + 2
+        } else {
+            index
+        };
+        let Some(TokenTree::Ident(first)) = trees.get(start) else {
+            index += 1;
+            continue;
+        };
+        let mut segments = vec![token_ident_name(first)];
+        let mut cursor = start + 1;
+        while is_colon_pair(&trees, cursor) {
+            let Some(TokenTree::Ident(next)) = trees.get(cursor + 2) else {
+                break;
+            };
+            segments.push(token_ident_name(next));
+            cursor += 3;
+        }
+        visitor.check_path_segments(&segments);
+        if visitor.violation.is_some() {
+            return;
+        }
+        index = cursor;
+    }
+}
+
+fn is_colon_pair(trees: &[TokenTree], index: usize) -> bool {
+    matches!(trees.get(index), Some(TokenTree::Punct(first)) if first.as_char() == ':')
+        && matches!(trees.get(index + 1), Some(TokenTree::Punct(second)) if second.as_char() == ':')
+}
+
+fn token_ident_name(ident: &proc_macro2::Ident) -> String {
+    let name = ident.to_string();
+    name.strip_prefix("r#").unwrap_or(&name).to_owned()
+}
+
 fn ident_name(ident: &syn::Ident) -> String {
     ident.unraw().to_string()
+}
+
+fn is_process_module(path: &[String]) -> bool {
+    path.len() == 2 && path[0] == "std" && path[1] == "process"
 }
 
 #[cfg(test)]
 #[path = "impl_repo_deps_process_policy_tests.rs"]
 mod tests;
+
+fn forbidden_process_path(path: &[String]) -> bool {
+    path.iter().enumerate().any(|(index, segment)| {
+        if segment != "process" {
+            return false;
+        }
+        !(index == 1
+            && path[0] == "std"
+            && match path.get(2).map(String::as_str) {
+                Some("id") => path.len() == 3,
+                Some("ExitCode") => true,
+                _ => false,
+            })
+    })
+}
+
+#[cfg(test)]
+#[path = "impl_repo_deps_process_policy_upstream_tests.rs"]
+mod upstream_tests;

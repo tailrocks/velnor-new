@@ -207,7 +207,6 @@ pub(crate) fn obligation_identity_env(
 pub(crate) fn obligation_step(
     obligation: &CrateObligation,
     catalog: &ToolCatalog,
-    _downstream: &[String],
     matrix_cap: Option<u32>,
     helper_version: &str,
     target_lane: Option<&str>,
@@ -230,7 +229,7 @@ pub(crate) fn obligation_step(
         if !needs_rust {
             return Err(crate::internal::internal("tofu_target_lane"));
         }
-        payload_env.insert(CARGO_TARGET_DIR_ENV.to_owned(), lane.to_owned());
+        payload_env.insert(CARGO_TARGET_DIR_ENV.to_owned(), format!("target/{lane}"));
     }
     let step = if needs_rust {
         let env = task_step_env(catalog, &payload_env, true)?;
@@ -255,7 +254,7 @@ pub(crate) fn obligation_step(
     } else {
         let mut identity = obligation_identity_env(
             &obligation.task_id,
-            &obligation.task_digest,
+            obligation.task_digest.as_str(),
             &matrix_id,
             &obligation.matrix_key,
             matrix_cap,

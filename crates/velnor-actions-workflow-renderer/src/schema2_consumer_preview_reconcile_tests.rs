@@ -1,8 +1,9 @@
 //! Retained promotion has a closed default-branch selection and no publish route.
 use super::*;
+use velnor_actions_contract::{ExecutionMode, ScaleSetSelector, config::ValidatedImageReference};
 #[test]
 fn reconcile_has_only_four_bounded_jobs_and_no_release_mutation_route() {
-    let rendered = render_release_tap_reconcile(&with_tap()).expect("render");
+    let rendered = render_release_tap_reconcile(&with_tap(), &hosted_policy()).expect("render");
     assert_eq!(rendered.path, ".github/workflows/preview-tap-reconcile.yml");
     let text = &rendered.bytes;
     assert!(text.contains("name: Preview tap reconciliation"), "{text}");
@@ -13,7 +14,7 @@ fn reconcile_has_only_four_bounded_jobs_and_no_release_mutation_route() {
     assert!(text.contains("workflow_dispatch:"));
     assert!(text.contains("native-preview-tap-reconcile-${{ github.repository }}"));
     assert!(!text.contains("group: native-preview-${{ github.repository }}"));
-    let original = render_consumer_preview(&with_tap()).expect("publisher");
+    let original = render_consumer_preview(&with_tap(), &hosted_policy()).expect("publisher");
     assert!(
         original
             .bytes
@@ -48,7 +49,7 @@ fn reconcile_has_only_four_bounded_jobs_and_no_release_mutation_route() {
 }
 #[test]
 fn reconcile_selection_and_updater_never_receive_tap_credentials() {
-    let rendered = render_release_tap_reconcile(&with_tap()).expect("render");
+    let rendered = render_release_tap_reconcile(&with_tap(), &hosted_policy()).expect("render");
     let text = &rendered.bytes;
     let selection = job(text, "preview-tap-selection", Some("preview-tap-prepare"));
     assert!(selection.contains("select-release-tap-continuation-v1"));
@@ -71,6 +72,43 @@ fn reconcile_selection_and_updater_never_receive_tap_credentials() {
     assert!(prepare.contains("needs.preview-tap-selection.outputs.eligible == 'true'"));
     assert!(prepare.contains("ref: ${{ needs.preview-tap-selection.outputs.source_sha }}"));
 }
+fn hosted_policy() -> crate::workflow_routing::WorkflowRoutingPolicy {
+    crate::workflow_routing::WorkflowRoutingPolicy::hosted_only()
+}
+
+fn scale_set_policy() -> crate::workflow_routing::WorkflowRoutingPolicy {
+    crate::workflow_routing::WorkflowRoutingPolicy::configured(
+        ExecutionMode::ScaleSet,
+        ScaleSetSelector::try_new(
+            "linux-amd64",
+            &["velnor".to_owned(), "linux-amd64".to_owned()],
+        )
+        .expect("valid selector"),
+        Some(
+            ValidatedImageReference::parse(
+                "ghcr.io/tailrocks/velnor-job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            )
+            .expect("valid immutable test image"),
+        ),
+    )
+}
+
+#[test]
+fn reconcile_routes_every_job_to_the_configured_scale_set() {
+    let rendered = render_release_tap_reconcile(&with_tap(), &scale_set_policy())
+        .expect("render routed reconcile workflow");
+    let text = rendered.bytes;
+    let count = text.matches("runs-on:").count();
+    assert_eq!(count, 4);
+    assert_eq!(
+        text.matches("runs-on: [velnor, linux-amd64]").count(),
+        count
+    );
+    let image = "container:\n      image: ghcr.io/tailrocks/velnor-job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    assert_eq!(text.matches(image).count(), count);
+    assert!(!text.contains("runs-on: ubuntu-26.04"));
+}
+
 #[test]
 fn reconcile_native_operations_bind_original_tuple_from_selection_not_dispatch_inputs() {
     let spec = with_tap();
@@ -99,5 +137,5 @@ fn reconcile_native_operations_bind_original_tuple_from_selection_not_dispatch_i
             .contains("needs.preview-publisher.result == 'success'")
     );
     assert!(crate::yaml::render_yaml(&current[0].1).contains("inputs.original_run_id"));
-    assert!(render_release_tap_reconcile(&fixture()).is_err());
+    assert!(render_release_tap_reconcile(&fixture(), &hosted_policy()).is_err());
 }

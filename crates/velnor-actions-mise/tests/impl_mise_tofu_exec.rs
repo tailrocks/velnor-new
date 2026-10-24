@@ -34,7 +34,7 @@ fn tofu_command() -> Result<IsolatedCommand, String> {
         &fmt_payload(),
         "/velnor/tofu-data",
         "/velnor/tofu-cli.hcl",
-        "/velnor/tofu-cache",
+        "/velnor/cache/tofu",
     )
     .map_err(|err| err.to_string())
 }
@@ -66,7 +66,7 @@ fn tofu_exec_wraps_pinned_opentofu_payload() -> Result<(), String> {
         &exec.payload(),
         "/velnor/tofu-data",
         "/velnor/tofu-cli.hcl",
-        "/velnor/tofu-cache",
+        "/velnor/cache/tofu",
     )
     .map_err(|err| err.to_string())?;
     let argv: Vec<String> = command
@@ -126,7 +126,7 @@ fn tofu_exec_bakes_exact_isolation_env() -> Result<(), String> {
             ),
             (
                 "TF_PLUGIN_CACHE_DIR".to_owned(),
-                "/velnor/tofu-cache".to_owned()
+                "/velnor/cache/tofu".to_owned()
             ),
         ]
     );

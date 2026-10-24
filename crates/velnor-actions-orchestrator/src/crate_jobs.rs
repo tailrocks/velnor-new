@@ -1,31 +1,25 @@
 //! Crate-job construction: one job per crate with parallel check steps.
 //!
-//! Every Rust package/configuration owns exactly one job (a hard decision in
-//! `docs/hard-decisions.md`): checkout, pinned tools, lockful sources and the
-//! MBX target cache are prepared once, the test executables are built once,
-//! and then Format, Clippy, Documentation, test execution and doctests run as
-//! concurrent GitHub steps joined by one `wait-all`. A failed check fails the
-//! job at that join; the always-on report upload still runs afterwards.
-//! Clippy and documentation compile in their own Cargo target lanes, so the
-//! target lock never serializes tests behind them. Same-job data producers
-//! (the Nextest build) are sequential obligations strictly before the
-//! parallel group in the validated [`CrateJob`](velnor_actions_contract::CrateJob).
-//! Gate owners elsewhere become job dependencies; `OpenTofu` keeps one job per root.
+//! Every Rust package/configuration owns one job: checkout, tools, locked sources
+//! and caches are prepared once, then format, lint, tests, docs and doctests run
+//! as ordered or parallel obligations. `OpenTofu` keeps one bounded job per root.
 
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    CrateJob, Job, JobTimeout, ProposedTask, Stack, Step, VelnorConfig, WorkflowPolicy,
-    crate_display_name, tofu_display_name,
+    CrateJob, Job, JobTimeout, ProposedTask, RustCrateConfig, Stack, Step, VelnorConfig,
+    WorkflowPolicy, crate_display_name, tofu_display_name,
 };
-use velnor_actions_mise::{TaskCacheMode, ToolCatalog};
+use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
 #[cfg(test)]
 use {velnor_actions_mise::PinnedTool, velnor_actions_workflow_renderer::render::PLAN_JOB_ID};
 
 use crate::OrchestratorError;
 use crate::config::private_wiring::PrivateWiring;
-use crate::crate_job_ids::{JobOwners, group_is_tofu, group_runnable};
+use crate::crate_job_ids::{
+    JobOwners, group_is_tofu, group_runnable, qualification_job_id_for_member,
+};
 use crate::discover::Discovery;
 use crate::internal::internal;
 
@@ -38,32 +32,42 @@ pub(crate) use inputs::build_crate_jobs_with;
 #[path = "dependency_seed.rs"]
 pub(crate) mod dependency_seed;
 
-#[path = "crate_jobs_stage.rs"]
-mod stage;
-
-#[path = "crate_jobs_gates.rs"]
-mod gates;
-
 #[path = "crate_jobs_build_jobs.rs"]
 mod build_jobs;
-use build_jobs::reject_unknown_crates;
+use build_jobs::{cap_cargo_jobs, disambiguate_rust_job_names, reject_unknown_crates};
 
 #[path = "crate_jobs_steps.rs"]
 mod job_steps;
+
+static NO_CRATE_CONFIGS: BTreeMap<String, RustCrateConfig> = BTreeMap::new();
+
 #[path = "crate_jobs_obligations.rs"]
 mod obligations;
-use job_steps::obligation_steps;
 use obligations::obligations_for;
 #[cfg(test)]
 use obligations::{gates_for, obligation_rank};
+
+#[path = "crate_jobs_render.rs"]
+mod render;
+use render::render_job;
+
+#[path = "crate_jobs_stage.rs"]
+mod stage;
+
+#[path = "crate_jobs_dependencies.rs"]
+mod crate_jobs_dependencies;
+
+#[path = "crate_jobs_qualification_cache.rs"]
+mod qualification_cache;
 
 #[cfg(test)]
 pub(crate) use stage::needs;
 pub(crate) use stage::{is_mbx, is_nextest, is_opentofu, is_rust};
 
 /// Built crate jobs plus their driver selections for MBX gating.
+#[derive(Default)]
 pub(crate) struct CrateBuild {
-    /// Dependency-seed jobs (cache decision 2): never part of `Required`.
+    /// These dependency seed jobs implement cache decision 2 and are not part of `Required`.
     pub(crate) seeds: Vec<(String, Job)>,
     /// `(job_id, job)` pairs in deterministic job-ID order.
     pub(crate) jobs: Vec<(String, Job)>,
@@ -73,11 +77,17 @@ pub(crate) struct CrateBuild {
 
 /// Build crate jobs with the repository's workflow and Rust-stack config.
 /// # Errors
-#[expect(
-    clippy::too_many_arguments,
-    reason = "one call site; the private-source wiring joins the existing inputs"
-)]
 pub(crate) fn build_for_workflow(
+    input: CrateJobInputs<'_>,
+    qualification: bool,
+    private: Option<&PrivateWiring>,
+    seed_timeout: JobTimeout,
+) -> Result<CrateBuild, OrchestratorError> {
+    build_crate_jobs_inner(input, qualification, private, seed_timeout)
+}
+
+/// Make one `ToFu` Qualification executor for each matrix entry that has tasks.
+pub(crate) fn build_qualification_for_workflow(
     config: &VelnorConfig,
     label: &str,
     discovery: &Discovery,
@@ -85,48 +95,63 @@ pub(crate) fn build_for_workflow(
     fetch_roots: &[String],
     acquire: Option<&Step>,
     helper_version: &str,
-    private: Option<&PrivateWiring>,
 ) -> Result<CrateBuild, OrchestratorError> {
-    let no_crates = BTreeMap::new();
+    let inputs = workflow_job_inputs(
+        config,
+        label,
+        discovery,
+        catalog,
+        fetch_roots,
+        acquire,
+        helper_version,
+    )?;
+    build_qualification_crate_jobs(inputs)
+}
+
+/// Shared rendering inputs for grouped and `ToFu` Qualification jobs.
+pub(crate) fn workflow_job_inputs<'a>(
+    config: &'a VelnorConfig,
+    label: &'a str,
+    discovery: &'a Discovery,
+    catalog: &'a ToolCatalog,
+    fetch_roots: &'a [String],
+    acquire: Option<&'a Step>,
+    helper_version: &'a str,
+) -> Result<CrateJobInputs<'a>, OrchestratorError> {
     let crates = config
         .stacks
         .rust
         .as_ref()
-        .map_or(&no_crates, |rust| &rust.crates);
+        .map_or(&NO_CRATE_CONFIGS, |rust| &rust.crates);
     reject_unknown_crates(crates, discovery)?;
-    build_crate_jobs_with_seed_timeout(
-        CrateJobInputs {
-            label,
-            policy: config.workflow.policy,
-            discovery,
-            catalog,
-            fetch_roots,
-            acquire,
-            max_parallel_jobs: config.workflow.max_parallel_jobs,
-            timeout: JobTimeout::new(config.workflow.crate_timeout_minutes)?,
-            helper_version,
-            crates,
-            seed_parallel_targets: config
-                .stacks
-                .rust
-                .as_ref()
-                .is_some_and(|rust| rust.seed_parallel_targets),
-        },
-        private,
-        JobTimeout::new(config.workflow.dependency_seed_timeout_minutes)?,
-    )
+    Ok(CrateJobInputs {
+        label,
+        policy: config.workflow.policy,
+        discovery,
+        catalog,
+        fetch_roots,
+        acquire,
+        max_parallel_jobs: config.workflow.max_parallel_jobs,
+        timeout: JobTimeout::new(config.workflow.crate_timeout_minutes)
+            .map_err(crate::internal::internal_contract)?,
+        helper_version,
+        seed_parallel_targets: config
+            .stacks
+            .rust
+            .as_ref()
+            .is_some_and(|rust| rust.seed_parallel_targets),
+        crates,
+    })
 }
 
-/// Build one ordered IR job for each runnable package/configuration.
+/// Build one ordered IR job per runnable Rust package/configuration or `ToFu` root.
 ///
-/// Tasks without test targets carry no command and stay out; the
-/// package-less workspace Format scope belongs to the plan job, so its
-/// tasks stay out too. Same-job data producers run first; the remaining
-/// obligations keep the Format, Clippy, tests, doctests, docs order (shards
-/// by task ID) and, in Rust jobs, run as one parallel group. Gates naming
-/// other runnable owners become job dependencies. The acquire step stages
-/// the helper every report wrapper invokes; callers without one (pre-seed,
-/// lock attach) provision separately.
+/// One Rust job owns every runnable package task for its configuration.
+/// The plan job owns package-less workspace Format tasks.
+/// Each job runs Build before its parallel checks.
+/// The report step follows the parallel join.
+/// The acquire step stages the helper for each report wrapper.
+/// Callers without that step provision the helper separately.
 ///
 /// # Errors
 ///
@@ -136,82 +161,114 @@ pub(crate) fn build_crate_jobs(input: CrateJobInputs<'_>) -> Result<CrateBuild, 
     build_crate_jobs_with(input, None)
 }
 
+#[cfg(test)]
 fn build_crate_jobs_with_seed_timeout(
     input: CrateJobInputs<'_>,
     private: Option<&PrivateWiring>,
     seed_timeout: JobTimeout,
 ) -> Result<CrateBuild, OrchestratorError> {
-    let CrateJobInputs {
-        discovery,
-        catalog,
-        max_parallel_jobs,
-        ..
-    } = input;
-    let grouped = group_runnable(&discovery.proposals)?;
-    let owners = JobOwners::from_grouped(&discovery.proposals, &grouped);
-    let mut jobs = Vec::with_capacity(grouped.len());
+    build_crate_jobs_inner(input, false, private, seed_timeout)
+}
+
+/// Make one `ToFu` Qualification job for each matrix entry that has tasks.
+///
+/// Rust Qualification obligations use the same package job as normal CI.
+pub(crate) fn build_qualification_crate_jobs(
+    input: CrateJobInputs<'_>,
+) -> Result<CrateBuild, OrchestratorError> {
+    let mut tasks: Vec<&ProposedTask> = input
+        .discovery
+        .proposals
+        .iter()
+        .filter(|task| is_runnable(task) && Stack::from_id(&task.stack_id) == Some(Stack::Tofu))
+        .collect();
+    tasks.sort_by(|left, right| left.task_id.cmp(&right.task_id));
+    reject_unknown_crates(input.crates, input.discovery)?;
+    let grouped = group_runnable(&input.discovery.proposals)?;
+    let owners = JobOwners::from_grouped(&input.discovery.proposals, &grouped);
+    let mut jobs = Vec::with_capacity(tasks.len());
     let mut drivers = BTreeMap::new();
     let mut tofu_ids = Vec::new();
-    let mut seed_workspaces: BTreeMap<String, bool> = BTreeMap::new();
-    for (key, tasks) in &grouped {
-        let first = tasks.first().ok_or_else(|| internal("crate_empty"))?;
-        let job_id = owners
-            .group_id(key)
-            .ok_or_else(|| internal("crate_job_id_missing"))?
-            .clone();
-        let manifest = first.identity.unit_path.clone();
-        let display = if group_is_tofu(tasks) {
-            tofu_display_name(&first.display_name)
-        } else {
-            crate_display_name(&first.display_name, &manifest, &key.configuration)
-        };
-        let use_rust = tasks.iter().any(|task| is_rust(task));
-        let use_mbx = tasks.iter().any(|task| is_mbx(task));
-        let use_nextest = tasks.iter().any(|task| is_nextest(task));
-        let use_opentofu = tasks.iter().any(|task| is_opentofu(task));
-        let driver = if use_mbx {
-            RenderDriver::Mbx
-        } else {
-            RenderDriver::Cargo
-        };
-        let model = CrateJob {
-            job_id: job_id.clone(),
-            display_name: display,
-            package_name: first.display_name.clone(),
-            package_id: key.package_id.clone(),
-            manifest,
-            configuration: key.configuration.clone(),
-            obligations: obligations_for(tasks, catalog)?,
-        };
-        model.validate()?;
-        let needs = gates::external_needs(tasks, &owners, &job_id)?;
-        let job = render_job(
-            &input,
-            &model,
-            use_rust,
-            use_mbx,
-            use_nextest,
-            use_opentofu,
-            needs,
-            private,
+    for task in tasks {
+        let job_id =
+            qualification_job_id_for_member(task).map_err(crate::internal::internal_contract)?;
+        let needs = crate_jobs_dependencies::external_needs(
+            std::slice::from_ref(&task),
+            &owners,
+            &job_id,
+            velnor_actions_contract::WorkflowEvent::Qualification,
         )?;
-        if use_mbx {
-            let root =
-                crate::source_prep::workspace_root_for_manifest(&model.manifest, input.fetch_roots);
-            *seed_workspaces.entry(root.to_owned()).or_default() |= use_nextest;
-        }
+        let (job, driver, use_opentofu) = build_job_for_members(
+            input,
+            &job_id,
+            std::slice::from_ref(&task),
+            needs,
+            true,
+            None,
+        )?;
         drivers.insert(job_id.clone(), driver);
         if use_opentofu {
             tofu_ids.push(job_id.clone());
         }
         jobs.push((job_id, job));
     }
-    stage::stage_tofu_root_jobs(&mut jobs, &tofu_ids, max_parallel_jobs);
+    stage::stage_tofu_root_jobs(&mut jobs, &tofu_ids, input.max_parallel_jobs);
     jobs.sort_by(|left, right| left.0.cmp(&right.0));
-    let workspaces: Vec<_> = seed_workspaces
-        .into_iter()
-        .map(|(root, nextest)| dependency_seed::SeedWorkspace { root, nextest })
-        .collect();
+    if jobs.windows(2).any(|pair| pair[0].0 == pair[1].0) {
+        return Err(internal("qualification_crate_job_id_collision"));
+    }
+    Ok(CrateBuild {
+        seeds: Vec::new(),
+        jobs,
+        drivers,
+    })
+}
+
+fn build_crate_jobs_inner(
+    input: CrateJobInputs<'_>,
+    qualification: bool,
+    private: Option<&PrivateWiring>,
+    seed_timeout: JobTimeout,
+) -> Result<CrateBuild, OrchestratorError> {
+    let grouped = group_runnable(&input.discovery.proposals)?;
+    let owners = JobOwners::from_grouped(&input.discovery.proposals, &grouped);
+    let mut jobs = Vec::with_capacity(grouped.len());
+    let mut drivers = BTreeMap::new();
+    let mut tofu_ids = Vec::new();
+    let mut manifests = BTreeMap::new();
+    let workspaces = dependency_seed::workspaces_for_discovery(input.discovery, input.fetch_roots);
+    for (key, tasks) in &grouped {
+        let job_id = owners
+            .group_id(key)
+            .ok_or_else(|| internal("crate_job_id_missing"))?
+            .clone();
+        let is_tofu = group_is_tofu(tasks);
+        if !is_tofu {
+            manifests.insert(job_id.clone(), tasks[0].identity.unit_path.clone());
+        }
+        let needs = crate_jobs_dependencies::external_needs(
+            tasks,
+            &owners,
+            &job_id,
+            velnor_actions_contract::WorkflowEvent::PullRequest,
+        )?;
+        let (job, driver, use_opentofu) = build_job_for_members(
+            input,
+            &job_id,
+            tasks,
+            needs,
+            qualification && !is_tofu,
+            private,
+        )?;
+        drivers.insert(job_id.clone(), driver);
+        if use_opentofu {
+            tofu_ids.push(job_id.clone());
+        }
+        jobs.push((job_id, job));
+    }
+    stage::stage_tofu_root_jobs(&mut jobs, &tofu_ids, input.max_parallel_jobs);
+    disambiguate_rust_job_names(&mut jobs, &manifests)?;
+    jobs.sort_by(|left, right| left.0.cmp(&right.0));
     let seeds = dependency_seed::seed_jobs(&input, &workspaces, private, seed_timeout)?;
     for (id, _) in &seeds {
         drivers.insert(id.clone(), RenderDriver::Mbx);
@@ -221,6 +278,86 @@ fn build_crate_jobs_with_seed_timeout(
         jobs,
         drivers,
     })
+}
+
+/// Build and validate one crate job from its exact obligation slice.
+fn build_job_for_members(
+    input: CrateJobInputs<'_>,
+    job_id: &str,
+    tasks: &[&ProposedTask],
+    needs: Vec<String>,
+    qualification: bool,
+    private: Option<&PrivateWiring>,
+) -> Result<(Job, RenderDriver, bool), OrchestratorError> {
+    let first = tasks.first().ok_or_else(|| internal("crate_empty"))?;
+    let manifest = first.identity.unit_path.clone();
+    let tofu = group_is_tofu(tasks);
+    let display = if tofu {
+        tofu_display_name(&first.display_name)
+    } else {
+        crate_display_name(&first.display_name, &manifest, &first.configuration)
+    };
+    let use_rust = tasks.iter().any(|task| is_rust(task));
+    let use_mbx = tasks.iter().any(|task| is_mbx(task));
+    let use_nextest = tasks.iter().any(|task| is_nextest(task));
+    let use_opentofu = tasks.iter().any(|task| is_opentofu(task));
+    let driver = if use_mbx {
+        RenderDriver::Mbx
+    } else {
+        RenderDriver::Cargo
+    };
+    let model = CrateJob {
+        job_id: job_id.to_owned(),
+        display_name: display,
+        package_name: first.display_name.clone(),
+        package_id: first.identity.unit_id.clone(),
+        manifest,
+        configuration: first.configuration.clone(),
+        obligations: obligations_for(tasks, input.catalog)?,
+    };
+    model.validate()?;
+    let job = render_job(
+        input.label,
+        input.policy,
+        &model,
+        input.catalog,
+        input.fetch_roots,
+        &crate::tofu_cache::tofu_cache_roots(input.discovery)?,
+        use_rust,
+        use_mbx,
+        use_nextest,
+        use_opentofu,
+        input.acquire,
+        input.max_parallel_jobs,
+        input.helper_version,
+        input.timeout,
+        needs,
+        qualification,
+    )?;
+    let mut job = job;
+    if use_rust && let Some(private) = private {
+        let suite = crate::matrix_step::suite_for_package(&model.package_name);
+        let needs_validators =
+            crate::matrix_step::crate_needs_generate_validators(input.policy, suite);
+        let roots = crate::source_prep::crate_fetch_roots(
+            &model.manifest,
+            input.fetch_roots,
+            input.policy == WorkflowPolicy::VelnorRepositoryV1 && needs_validators,
+        );
+        private.insert_into_job(&mut job, &roots)?;
+    }
+    if let Some(seed) =
+        job_steps::parallel_target_seed_step(&input, &model, use_rust, use_opentofu)?
+        && let Some(index) = job.steps.iter().position(|step| step.parallel)
+    {
+        job.steps.insert(index, seed);
+    }
+    if use_rust && let Some(options) = input.crates.get(&first.display_name) {
+        for step in &mut job.steps {
+            cap_cargo_jobs(step, options.build_jobs);
+        }
+    }
+    Ok((job, driver, use_opentofu))
 }
 
 /// True when the task becomes a crate-job obligation.
@@ -234,150 +371,8 @@ pub(crate) fn is_runnable(task: &ProposedTask) -> bool {
         && Stack::from_id(&task.stack_id) != Some(Stack::Mise)
 }
 
-/// Private-source block (HD-7) plus the Cargo source fetch of one Rust job.
-fn rust_source_steps(
-    input: &CrateJobInputs<'_>,
-    model: &CrateJob,
-    needs_validators: bool,
-    private: Option<&PrivateWiring>,
-) -> Result<Vec<Step>, OrchestratorError> {
-    let scoped_roots = crate::source_prep::crate_fetch_roots(
-        &model.manifest,
-        input.fetch_roots,
-        input.policy == WorkflowPolicy::VelnorRepositoryV1 && needs_validators,
-    );
-    let all_features = model
-        .obligations
-        .iter()
-        .any(|obligation| obligation.run.iter().any(|arg| arg == "--all-features"));
-    let mut steps = match private {
-        Some(private) => private.steps_for_roots(&scoped_roots)?,
-        None => Vec::new(),
-    };
-    steps.extend(crate::source_prep::fetch_steps_for_crate(
-        input.catalog,
-        &scoped_roots,
-        all_features,
-    )?);
-    Ok(steps)
-}
-
-/// Render one validated crate model to its fixed IR job.
-///
-/// P08 order: helper staging, plan download (report identities bind
-/// the plan), restore the exact shared Cargo sources subset, the
-/// per-root provider restore on opentofu roles, then MBX objects,
-/// then probe-and-fetch, then report-wrapped obligations, then one
-/// always-on crate-report upload carrying every entry. Readers never
-/// save. Rust setup (components, restore, fetch) emits only for rust
-/// roles; pure-tofu roles carry the opentofu driver with no Rust
-/// setup, mixed roles the union.
-#[expect(
-    clippy::fn_params_excessive_bools,
-    clippy::too_many_arguments,
-    reason = "one call site threads job scope plus driver selection"
-)]
-fn render_job(
-    input: &CrateJobInputs<'_>,
-    model: &CrateJob,
-    use_rust: bool,
-    use_mbx: bool,
-    use_nextest: bool,
-    use_opentofu: bool,
-    needs: Vec<String>,
-    private: Option<&PrivateWiring>,
-) -> Result<Job, OrchestratorError> {
-    let &CrateJobInputs {
-        label,
-        policy,
-        catalog,
-        fetch_roots,
-        ..
-    } = input;
-    let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
-    steps.extend(input.acquire.cloned());
-    steps.push(crate::matrix_step::download_plan_step()?);
-    let suite: Option<crate::matrix_step::CrateSuite> =
-        crate::matrix_step::suite_for_package(&model.package_name);
-    let needs_validators = crate::matrix_step::crate_needs_generate_validators(policy, suite);
-    if use_rust {
-        steps.push(crate::workflow::verify_restored_rust_step(catalog));
-    }
-    steps.push(crate::matrix_step::prepare_crate_tools_step(
-        catalog,
-        use_rust,
-        use_nextest,
-        crate::matrix_step::prepare_install_opentofu(policy, suite, use_opentofu),
-        needs_validators,
-    )?);
-    let verify = needs_validators.then(|| crate::workflow::verify_jactionlint_step(catalog));
-    steps.extend(verify);
-    if use_rust {
-        steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
-        steps.push(crate::workflow::verify_rust_manifest_step(catalog));
-    }
-    steps.extend(crate::source_cache::restore_step_for_crate(
-        fetch_roots,
-        use_rust,
-    )?);
-    if use_opentofu {
-        let root = crate::tofu_cache::tofu_root_for_obligations(&model.obligations)?;
-        let roots = crate::tofu_cache::tofu_cache_roots(input.discovery)?;
-        steps.extend(crate::tofu_cache::provider_cache_step_for_tofu_root(
-            &root, &roots,
-        )?);
-    }
-    if use_mbx {
-        let root = crate::source_prep::workspace_root_for_manifest(&model.manifest, fetch_roots);
-        let working_dir = (!root.is_empty()).then_some(root);
-        steps.extend(crate::mbx_preflight::steps_for_catalog(
-            catalog,
-            velnor_actions_workflow_renderer::steps::MbxTransport::SeedRead,
-            working_dir,
-        )?);
-    }
-    if use_rust {
-        steps.extend(rust_source_steps(input, model, needs_validators, private)?);
-    }
-    steps.extend(crate::workflow::wire_w1::maybe_task_cache_steps(
-        None,
-        TaskCacheMode::Off,
-        "",
-    )?);
-    steps.extend(obligation_steps(input, model, use_opentofu)?);
-    steps.push(crate::matrix_step::crate_upload_step(&model.job_id)?);
-    Ok(Job {
-        services: Vec::new(),
-        display_name: model.display_name.clone(),
-        runs_on: label.to_owned(),
-        check_runner: None,
-        timeout_minutes: input.timeout,
-        needs,
-        condition: (use_rust && !use_opentofu)
-            .then(|| velnor_actions_workflow_renderer::not_affected_gate(&model.job_id)),
-        permissions: None,
-        environment: None,
-        steps,
-        cache_mode: None,
-    })
-}
-
 #[cfg(test)]
-#[path = "crate_jobs_tests.rs"]
-pub(crate) mod crate_jobs_tests;
-
+#[path = "crate_jobs_test_modules.rs"]
+mod test_modules;
 #[cfg(test)]
-#[path = "crate_jobs_display_tests.rs"]
-mod crate_jobs_display_tests;
-
-#[cfg(test)]
-#[path = "crate_jobs_tofu_cache_tests.rs"]
-mod crate_jobs_tofu_cache_tests;
-
-#[cfg(test)]
-#[path = "crate_jobs_tofu_tests.rs"]
-mod crate_jobs_tofu_tests;
-
-#[cfg(test)]
-#[path = "crate_jobs_upload_tests.rs"]
-mod crate_jobs_upload_tests;
+pub(crate) use test_modules::crate_jobs_tests;

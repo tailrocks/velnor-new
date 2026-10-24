@@ -57,6 +57,7 @@ fn cache_layers_restore_independently() -> Result<(), RenderError> {
         tool_specs: &specs,
         rustup_toolchain: None,
         rustup_components: &[],
+        scale_set_image_source_sha: None,
     })?;
     let identity = payload.runtime_prelude_step()?;
     let tools = payload.restore_step()?;

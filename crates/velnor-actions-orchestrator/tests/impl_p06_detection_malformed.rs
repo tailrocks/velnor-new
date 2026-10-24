@@ -81,9 +81,6 @@ fn valid_section_wrapper_selects_mbx() -> TestResult {
             .command_or_setting
             .contains("wrappers.cargo.command")
     );
-    assert_eq!(
-        workspace.findings,
-        [] as [velnor_actions_rust::ProfileFinding; 0]
-    );
+    assert_eq!(workspace.findings, []);
     Ok(())
 }

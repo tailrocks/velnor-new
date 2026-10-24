@@ -1,0 +1,11 @@
+--- a/gnu/fcntl.in.h
++++ b/gnu/fcntl.in.h
+@@ -264,7 +264,7 @@
+ # if !@HAVE_OPENAT2@
+ _GL_FUNCDECL_SYS (openat2, int,
+                   (int fd, char const *file, struct open_how const *how,
+-                   size_t size),
++                   size_t size)
+                   _GL_ARG_NONNULL ((2, 3)));
+ # endif
+ _GL_CXXALIAS_SYS (openat2, int,

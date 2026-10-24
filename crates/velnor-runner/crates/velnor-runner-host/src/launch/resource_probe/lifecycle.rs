@@ -1,148 +1,91 @@
 //! One bounded probe attempt, including prior-operation recovery.
 
-use std::future::Future;
-use std::time::{Duration, Instant};
-
 use bollard::{Docker, models::SystemInfo};
 use uuid::Uuid;
 
-use crate::docker_client::DOCKER_OPERATION_TIMEOUT;
 use crate::error::HostError;
-use crate::journal::{Journal, ProbePhase, ProbeSeed};
+use crate::journal::{
+    DoctorProbeTicket, Journal, ProbePhase, ProbeRow, ProbeSeed, ResourceProbePurpose,
+};
 
-use super::projection::{DockerRoot, ProbeProjection, VerifiedProbeImage};
+use super::projection::{DockerRoot, ProbeProjection};
 use super::provider::{ImageProvider, VerifiedCandidate};
 use super::sample::Observation;
-use super::{execute, recover};
 
-const PROBE_TIMEOUT: Duration = Duration::from_secs(30);
+#[path = "lifecycle/support.rs"]
+mod support;
+use super::{execute, recover};
+pub(super) use support::{Deadline, bind_info, guest_capacity, info, observation, same_guest};
+use support::{projection, verified_image};
+
+const PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+#[path = "lifecycle/publication_image.rs"]
+mod publication_image;
+pub(super) use publication_image::verify_publication_image_until;
 
 pub(super) async fn collect<P: ImageProvider>(
     docker: &Docker,
     journal: &Journal,
     provider: &P,
 ) -> Result<Option<Observation>, HostError> {
-    let deadline = Deadline::new();
-    let mut active = deadline.within(journal.active_probe()).await??;
-    if let Some(row) = active.as_ref()
-        && row.phase == ProbePhase::Prepared
-    {
-        deadline
-            .within(journal.abort_prepared_probe(&row.operation_id))
-            .await??;
-        active = None;
-    }
-    let before = info(docker, &deadline).await?;
-    if let Some(row) = active.as_ref()
-        && before.id.as_deref() != Some(row.engine_id.as_str())
-    {
-        return Err(HostError::Identity);
-    }
-    let (engine_id, root, cpu_count, memory_total) = bind_info(&before, journal, &deadline).await?;
+    let _operation = super::readiness::lock_operation(journal).await?;
+    collect_for_request(docker, journal, provider, None).await
+}
+
+pub(super) async fn collect_for_doctor<P: ImageProvider>(
+    docker: &Docker,
+    journal: &Journal,
+    provider: &P,
+    ticket: &DoctorProbeTicket,
+) -> Result<Option<Observation>, HostError> {
+    let _operation = super::readiness::lock_operation(journal).await?;
+    collect_for_request(docker, journal, provider, Some(ticket)).await
+}
+
+pub(super) async fn collect_owned_cgroups<P: ImageProvider>(
+    docker: &Docker,
+    journal: &Journal,
+    provider: &P,
+    subjects: &super::owned_cgroups::OwnedCgroupSubjects,
+) -> Result<Option<super::owned_cgroups::VerifiedOwnedCgroups>, HostError> {
+    let _operation = super::readiness::lock_operation(journal).await?;
+    let initial = Deadline::new();
+    let active = initial.within(journal.active_probe()).await??;
+    let before = info(docker, &initial).await?;
+    let (engine_id, root, _, _) = bind_info(&before, journal, &initial).await?;
     if let Some(row) = active {
         Box::pin(recover::active(
-            docker, journal, &before, &root, &deadline, row,
+            docker, journal, &before, &root, &initial, row,
         ))
         .await?;
     }
-    let Some(candidate) = deadline
-        .within(provider.verified_candidate(docker, &engine_id, &before))
-        .await??
+    let Some(candidate) = provider
+        .verified_candidate(docker, journal, &engine_id, &before)
+        .await?
     else {
         return Ok(None);
     };
-    let image = verified_image(candidate)?;
-    let projection = projection(journal, &root, &engine_id, image, &deadline).await?;
-    let output = execute::run(docker, journal, &projection, memory_total, &deadline).await?;
-    let after = info(docker, &deadline).await?;
-    if !same_guest(&after, &engine_id, &root)? {
+    let daemon_architecture = super::provider::daemon_architecture(&before)
+        .ok_or(HostError::Identity)?
+        .to_owned();
+    let deadline = Deadline::new();
+    let selected = info(docker, &deadline).await?;
+    if !same_guest(&selected, &engine_id, &root, &daemon_architecture)? {
         return Err(HostError::Identity);
     }
-    Ok(observation(
-        output,
-        cpu_count,
-        memory_total,
-        engine_id,
-        root.digest().to_owned(),
-    ))
-}
-
-pub(super) fn observation(
-    output: execute::ObservedProbeRecord,
-    cpu_count: u32,
-    memory_total: u64,
-    engine_id: String,
-    root_digest: String,
-) -> Option<Observation> {
-    Observation::new(
-        output.record,
-        cpu_count,
-        memory_total,
-        engine_id,
-        root_digest,
-        output.observed_at,
-    )
-}
-
-fn verified_image(candidate: VerifiedCandidate) -> Result<VerifiedProbeImage, HostError> {
-    VerifiedProbeImage::from_verified_provider(
-        candidate.runtime_id,
-        candidate.platform,
-        candidate.source_revision,
-        candidate.binding_fingerprint,
-        &candidate.config,
-    )
-}
-
-async fn info(docker: &Docker, deadline: &Deadline) -> Result<SystemInfo, HostError> {
-    deadline
-        .docker(docker.info())
-        .await?
-        .map_err(|_| HostError::Docker)
-}
-
-async fn bind_info(
-    info: &SystemInfo,
-    journal: &Journal,
-    deadline: &Deadline,
-) -> Result<(String, DockerRoot, u32, u64), HostError> {
-    let engine_id = info
-        .id
-        .clone()
-        .filter(|id| !id.trim().is_empty())
-        .ok_or(HostError::Identity)?;
-    let bound = deadline.within(journal.engine_id()).await??;
-    let root = DockerRoot::parse(info.docker_root_dir.as_deref().ok_or(HostError::Path)?)?;
-    let cpu_count = u32::try_from(info.ncpu.ok_or(HostError::Docker)?)
-        .ok()
-        .filter(|value| *value > 0)
-        .ok_or(HostError::Docker)?;
-    let memory_total = u64::try_from(info.mem_total.ok_or(HostError::Docker)?)
-        .ok()
-        .filter(|value| *value > 0)
-        .ok_or(HostError::Docker)?;
-    if engine_id != bound {
-        return Err(HostError::Identity);
-    }
-    Ok((engine_id, root, cpu_count, memory_total))
-}
-
-async fn projection(
-    journal: &Journal,
-    root: &DockerRoot,
-    engine_id: &str,
-    image: VerifiedProbeImage,
-    deadline: &Deadline,
-) -> Result<ProbeProjection, HostError> {
     let operation_id = Uuid::new_v4().simple().to_string();
     let instance_id = deadline.within(journal.instance_id()).await??;
-    let root_path = root.path();
-    let projection = ProbeProjection::build(
+    let request_json = subjects.request_json(&operation_id, root.path())?;
+    let request_sha256 = subjects.request_sha256(&operation_id, root.path())?;
+    let image = verified_image(candidate)?;
+    let projection = ProbeProjection::build_owned_cgroups(
         operation_id,
         instance_id.clone(),
-        engine_id.to_owned(),
-        root_path,
+        engine_id.clone(),
+        root.path(),
         image,
+        request_sha256.clone(),
     )?;
     let seed = ProbeSeed {
         operation_id: projection.operation_id.clone(),
@@ -154,63 +97,205 @@ async fn projection(
         image_binding_digest: projection.image.binding_fingerprint().to_owned(),
         operation_name: projection.name.clone(),
         projection_digest: projection.projection_digest.clone(),
+        purpose: ResourceProbePurpose::OwnedCgroups,
+        request_sha256,
     };
-    deadline.within(journal.prepare_probe(seed)).await??;
-    Ok(projection)
+    deadline
+        .within(journal.prepare_owned_cgroups_probe(seed, &request_json))
+        .await??;
+    let (observation, cleanup, probe_host_pid) =
+        execute::run_owned_cgroups(docker, journal, &projection, subjects, &deadline).await?;
+    let after = info(docker, &deadline).await?;
+    if !same_guest(&after, &engine_id, &root, &daemon_architecture)? {
+        return Err(HostError::Identity);
+    }
+    Ok(Some(super::owned_cgroups::VerifiedOwnedCgroups::new(
+        observation,
+        cleanup,
+        probe_host_pid,
+    )))
 }
 
-fn same_guest(info: &SystemInfo, engine_id: &str, root: &DockerRoot) -> Result<bool, HostError> {
-    let current_id = info.id.as_deref().ok_or(HostError::Identity)?;
-    let current_root = DockerRoot::parse(info.docker_root_dir.as_deref().ok_or(HostError::Path)?)?;
-    Ok(current_id == engine_id && current_root.digest() == root.digest())
+pub(super) async fn recover_doctor_request(
+    docker: &Docker,
+    journal: &Journal,
+    ticket: &DoctorProbeTicket,
+) -> Result<(), HostError> {
+    let _operation = super::readiness::lock_operation(journal).await?;
+    let row = journal.begin_doctor_probe_recovery(ticket).await?;
+    let deadline = Deadline::new();
+    let current = info(docker, &deadline).await?;
+    let (engine_id, root, _, _) = bind_info(&current, journal, &deadline).await?;
+    if engine_id != row.engine_id || root.digest() != row.docker_root_digest {
+        return Err(HostError::Identity);
+    }
+    Box::pin(recover::active(
+        docker,
+        journal,
+        &current,
+        &root,
+        &deadline,
+        row.clone(),
+    ))
+    .await?;
+    journal
+        .finish_doctor_probe_request(
+            ticket,
+            &row.operation_id,
+            crate::journal::DoctorProbeOutcome::Stale,
+        )
+        .await
 }
 
-pub(super) struct Deadline {
-    began: Instant,
-    timeout: Duration,
-    docker_timeout: Duration,
+async fn collect_for_request<P: ImageProvider>(
+    docker: &Docker,
+    journal: &Journal,
+    provider: &P,
+    doctor_ticket: Option<&DoctorProbeTicket>,
+) -> Result<Option<Observation>, HostError> {
+    collect_for_request_with_recovery(docker, journal, provider, doctor_ticket, true, None).await
 }
 
-impl Deadline {
-    pub(super) fn new() -> Self {
-        Self {
-            began: Instant::now(),
-            timeout: PROBE_TIMEOUT,
-            docker_timeout: DOCKER_OPERATION_TIMEOUT,
-        }
-    }
+pub(super) async fn collect_for_readiness<P: ImageProvider>(
+    docker: &Docker,
+    journal: &Journal,
+    provider: &P,
+) -> Result<Option<Observation>, HostError> {
+    collect_for_request_with_recovery(docker, journal, provider, None, false, None).await
+}
 
-    #[cfg(test)]
-    pub(super) fn test_with_timeouts(timeout: Duration, docker_timeout: Duration) -> Self {
-        Self {
-            began: Instant::now(),
-            timeout,
-            docker_timeout,
-        }
-    }
+#[cfg(test)]
+pub(super) async fn collect_for_readiness_with_operation_id<P: ImageProvider>(
+    docker: &Docker,
+    journal: &Journal,
+    provider: &P,
+    operation_id: &str,
+) -> Result<Option<Observation>, HostError> {
+    collect_for_request_with_recovery(docker, journal, provider, None, false, Some(operation_id))
+        .await
+}
 
-    pub(super) fn remaining(&self) -> Duration {
-        self.timeout.saturating_sub(self.began.elapsed())
+async fn collect_for_request_with_recovery<P: ImageProvider>(
+    docker: &Docker,
+    journal: &Journal,
+    provider: &P,
+    doctor_ticket: Option<&DoctorProbeTicket>,
+    recover_existing: bool,
+    operation_id: Option<&str>,
+) -> Result<Option<Observation>, HostError> {
+    let preparation_deadline = Deadline::new();
+    let mut active = preparation_deadline
+        .within(journal.active_probe())
+        .await??;
+    if active.is_some() && !recover_existing {
+        return Ok(None);
     }
+    if let Some(row) = active.as_ref()
+        && row.phase == ProbePhase::Prepared
+    {
+        preparation_deadline
+            .within(journal.abort_prepared_probe(&row.operation_id))
+            .await??;
+        active = None;
+    }
+    let before = info(docker, &preparation_deadline).await?;
+    if let Some(row) = active.as_ref()
+        && before.id.as_deref() != Some(row.engine_id.as_str())
+    {
+        return Err(HostError::Identity);
+    }
+    let (engine_id, root, _, _) = bind_info(&before, journal, &preparation_deadline).await?;
+    recover_active_probe(
+        docker,
+        journal,
+        &before,
+        &root,
+        &preparation_deadline,
+        active,
+    )
+    .await?;
+    let Some((candidate, daemon_architecture)) =
+        candidate_for_current_daemon(docker, journal, provider, &engine_id, &before).await?
+    else {
+        return Ok(None);
+    };
+    // Release preparation may take minutes. Start the fresh-sample budget only
+    // after the verified image has been rebound to the selected daemon.
+    let deadline = Deadline::new();
+    let selected = info(docker, &deadline).await?;
+    if !same_guest(&selected, &engine_id, &root, &daemon_architecture)? {
+        return Err(HostError::Identity);
+    }
+    let (cpu_count, memory_total) = guest_capacity(&selected)?;
+    let image_evidence = candidate.startup_evidence().ok_or(HostError::Identity)?;
+    let image = verified_image(candidate)?;
+    let projection = projection(
+        journal,
+        &root,
+        &engine_id,
+        image,
+        &deadline,
+        doctor_ticket,
+        operation_id,
+    )
+    .await?;
+    let output = Box::pin(execute::run(
+        docker,
+        journal,
+        &projection,
+        image_evidence,
+        memory_total,
+        &deadline,
+    ))
+    .await?;
+    let after = info(docker, &deadline).await?;
+    if !same_guest(&after, &engine_id, &root, &daemon_architecture)? {
+        return Err(HostError::Identity);
+    }
+    if guest_capacity(&after)? != (cpu_count, memory_total) {
+        return Err(HostError::Identity);
+    }
+    Ok(observation(
+        output,
+        cpu_count,
+        memory_total,
+        engine_id,
+        root.digest().to_owned(),
+    ))
+}
 
-    pub(super) fn ensure_remaining(&self) -> Result<(), HostError> {
-        (!self.remaining().is_zero())
-            .then_some(())
-            .ok_or(HostError::DockerTimeout)
+async fn recover_active_probe(
+    docker: &Docker,
+    journal: &Journal,
+    before: &SystemInfo,
+    root: &DockerRoot,
+    deadline: &Deadline,
+    active: Option<ProbeRow>,
+) -> Result<(), HostError> {
+    if let Some(row) = active {
+        Box::pin(recover::active(
+            docker, journal, before, root, deadline, row,
+        ))
+        .await?;
     }
+    Ok(())
+}
 
-    pub(super) async fn within<F: Future>(&self, future: F) -> Result<F::Output, HostError> {
-        self.ensure_remaining()?;
-        tokio::time::timeout(self.remaining(), future)
-            .await
-            .map_err(|_| HostError::DockerTimeout)
-    }
-
-    pub(super) async fn docker<F: Future>(&self, future: F) -> Result<F::Output, HostError> {
-        self.ensure_remaining()?;
-        let timeout = self.remaining().min(self.docker_timeout);
-        tokio::time::timeout(timeout, future)
-            .await
-            .map_err(|_| HostError::DockerTimeout)
-    }
+async fn candidate_for_current_daemon<P: ImageProvider>(
+    docker: &Docker,
+    journal: &Journal,
+    provider: &P,
+    engine_id: &str,
+    before: &SystemInfo,
+) -> Result<Option<(VerifiedCandidate, String)>, HostError> {
+    let Some(candidate) = provider
+        .verified_candidate(docker, journal, engine_id, before)
+        .await?
+    else {
+        return Ok(None);
+    };
+    let daemon_architecture = super::provider::daemon_architecture(before)
+        .ok_or(HostError::Identity)?
+        .to_owned();
+    Ok(Some((candidate, daemon_architecture)))
 }

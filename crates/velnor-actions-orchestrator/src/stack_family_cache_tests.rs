@@ -5,22 +5,24 @@ use super::*;
 
 #[test]
 fn each_plan_snapshots_the_lock_that_decides_its_content() {
-    let bun = bun_install("web").expect("bun");
+    let bun = bun_install("web").expect("The Bun cache plan must be valid.");
     assert_eq!(
         bun.snapshot,
         FamilySnapshot::Files(vec!["web/bun.lock".to_owned()])
     );
     assert!(
         bun.compat.contains(&"root=web".to_owned()),
-        "one unit per Bun root"
+        "Each Bun root must have its own cache unit."
     );
     assert_eq!(
-        bun_install("").expect("root").snapshot,
+        bun_install("")
+            .expect("The repository root cache plan must be valid.")
+            .snapshot,
         FamilySnapshot::Files(vec!["bun.lock".to_owned()])
     );
     assert_eq!(
         dbt_packages("analytics/dbt")
-            .expect("dbt")
+            .expect("The dbt cache plan must be valid.")
             .locator
             .as_deref(),
         Some("analytics-dbt")
@@ -46,8 +48,11 @@ fn the_collection_set_is_sorted_so_declaration_order_never_changes_the_key() {
 
 #[test]
 fn prelude_is_a_key_step_then_restores_and_producer_steps_are_size_then_save() {
-    let plans = [bun_install("web").expect("bun"), playwright_browsers()];
-    let prelude = prelude(&plans).expect("prelude");
+    let plans = [
+        bun_install("web").expect("The Bun cache plan must be valid."),
+        playwright_browsers(),
+    ];
+    let prelude = prelude(&plans).expect("The cache preparation steps must render.");
     let roles: Vec<_> = prelude.iter().map(|step| step.role).collect();
     assert_eq!(
         roles,
@@ -57,7 +62,7 @@ fn prelude_is_a_key_step_then_restores_and_producer_steps_are_size_then_save() {
             Some(StepRole::FamilyRestore)
         ]
     );
-    let saves = after_producer(&plans[0]).expect("saves");
+    let saves = after_producer(&plans[0]).expect("The cache size and save steps must render.");
     let roles: Vec<_> = saves.iter().map(|step| step.role).collect();
     assert_eq!(
         roles,

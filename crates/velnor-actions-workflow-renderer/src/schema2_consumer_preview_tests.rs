@@ -1,8 +1,9 @@
 use super::*;
 use crate::{HelperProvenance, provision_acquire_step};
 use velnor_actions_contract::{
-    PACKAGE_RELEASE_POLICY_SCHEMA_V1, PackageReleasePlanProduct,
-    config::RustBinaryReleaseCompanion, package_release::PackageReleasePayloadFormat,
+    ExecutionMode, PACKAGE_RELEASE_POLICY_SCHEMA_V1, PackageReleasePlanProduct, ScaleSetSelector,
+    config::{RustBinaryReleaseCompanion, ValidatedImageReference, VerificationRunner},
+    package_release::PackageReleasePayloadFormat,
 };
 
 #[path = "schema2_consumer_preview_tap_admission_tests.rs"]
@@ -20,6 +21,12 @@ mod payloads;
 mod policies;
 #[path = "schema2_consumer_publication_budget_tests.rs"]
 mod publication_budget;
+#[path = "schema2_consumer_preview_recovery_tests.rs"]
+mod recovery;
+#[path = "schema2_consumer_preview_render_tests.rs"]
+mod render;
+#[path = "schema2_consumer_preview_routing_tests.rs"]
+mod routing;
 #[path = "schema2_consumer_preview_source_tests.rs"]
 mod sources;
 #[path = "schema2_consumer_binary_release_tests.rs"]
@@ -84,6 +91,35 @@ pub(super) fn fixture() -> ConsumerReleaseSpec {
         gh_argv: vec!["gh".to_owned()],
         homebrew_tap: None,
     }
+}
+
+fn hosted_policy() -> crate::workflow_routing::WorkflowRoutingPolicy {
+    crate::workflow_routing::WorkflowRoutingPolicy::hosted_only()
+}
+
+fn render_preview(spec: &ConsumerReleaseSpec) -> Result<RenderedFile, RenderError> {
+    render_consumer_preview(spec, &hosted_policy())
+}
+
+fn scale_set_policy(
+    image: Option<ValidatedImageReference>,
+) -> crate::workflow_routing::WorkflowRoutingPolicy {
+    crate::workflow_routing::WorkflowRoutingPolicy::configured(
+        ExecutionMode::ScaleSet,
+        ScaleSetSelector::try_new(
+            "linux-amd64",
+            &["velnor".to_owned(), "linux-amd64".to_owned()],
+        )
+        .expect("valid selector"),
+        image,
+    )
+}
+
+fn fixture_image() -> ValidatedImageReference {
+    ValidatedImageReference::parse(
+        "ghcr.io/tailrocks/velnor-job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    )
+    .expect("valid immutable test image")
 }
 
 fn assert_production_credentials_are_native_only(spec: &ConsumerReleaseSpec) {
@@ -294,7 +330,7 @@ fn job<'a>(yaml: &'a str, name: &str, next: Option<&str>) -> &'a str {
 #[test]
 fn preview_has_isolated_privileges_and_exact_inventory_attestation() {
     let spec = fixture();
-    let rendered = render_consumer_preview(&spec).expect("preview");
+    let rendered = render_preview(&spec).expect("preview");
     assert_eq!(rendered.path, ".github/workflows/binary-preview.yml");
     let yaml = &rendered.bytes;
     let triggers = &yaml[..yaml.find("jobs:").expect("jobs")];
@@ -343,44 +379,15 @@ fn preview_has_isolated_privileges_and_exact_inventory_attestation() {
 fn preview_rejects_stable_plan_or_invalid_inventory_before_rendering() {
     let mut spec = fixture();
     spec.policy.channel = PackageReleaseChannel::Stable;
-    assert!(render_consumer_preview(&spec).is_err());
+    assert!(render_preview(&spec).is_err());
     spec.policy.channel = PackageReleaseChannel::Preview;
     spec.policy.default_branch = "develop".to_owned();
-    assert!(render_consumer_preview(&spec).is_err());
+    assert!(render_preview(&spec).is_err());
     spec.policy.default_branch = "main".to_owned();
     spec.policy.products[0]
         .targets
         .push("../../escape".to_owned());
-    assert!(render_consumer_preview(&spec).is_err());
-}
-
-#[test]
-fn manual_recovery_has_no_build_or_signing_authority() {
-    let rendered = render_consumer_preview(&fixture()).expect("preview");
-    let yaml = &rendered.bytes;
-    assert!(yaml.contains("original_run_id:"));
-    assert!(yaml.contains("original_run_attempt:"));
-    assert!(yaml.contains("description: Original preview production workflow run ID"));
-    assert!(yaml.contains("description: Original preview production workflow run attempt"));
-    assert!(!yaml.contains("Original push workflow run ID"));
-    assert!(!yaml.contains("Original signer run attempt"));
-    for (name, next) in [
-        ("preview-payload", "preview-assemble"),
-        ("preview-assemble", "preview-signer"),
-        ("preview-signer", "preview-publisher"),
-        ("preview-publisher", "preview-recovery"),
-    ] {
-        assert!(job(yaml, name, Some(next)).contains("github.event_name == 'workflow_run'"));
-    }
-    let recovery = job(yaml, "preview-recovery", None);
-    assert!(recovery.contains("github.event_name == 'workflow_dispatch'"));
-    assert!(recovery.contains("recover-package-release-v1"));
-    assert!(!recovery.contains("actions/checkout"));
-    assert!(!recovery.contains("execute-release-producer-v1"));
-    assert!(!recovery.contains("sign-package-release-v1"));
-    assert!(!recovery.contains("id-token"));
-    assert!(!recovery.contains("attestations: write"));
-    assert!(recovery.contains("${{ secrets.RELEASE_STATUS_READ_TOKEN }}"));
+    assert!(render_preview(&spec).is_err());
 }
 
 #[path = "schema2_consumer_preview_trigger_tests.rs"]

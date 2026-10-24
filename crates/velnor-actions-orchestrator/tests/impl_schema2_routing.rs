@@ -1,5 +1,7 @@
 //! Schema 2 generation on temp fixtures. Do not generate into the repository tree.
 
+use std::fs;
+
 use velnor_actions_orchestrator::{
     ExecutionMode, migrate_config, prepare, render_staged_tree, render_staged_tree_with,
 };
@@ -15,12 +17,18 @@ mod binary_release_tests;
 mod monitoring_fixture;
 #[path = "schema2_named_check_lanes_tests.rs"]
 mod named_check_lanes_tests;
+#[path = "schema2_release_producer_assertions.rs"]
+mod producer_assertions;
 #[path = "schema2_feature_snapshots.rs"]
 mod schema2_feature_snapshots;
 #[path = "schema2_fixture_owner_export.rs"]
 mod schema2_fixture_owner_export;
 #[path = "schema2_product_release_snapshots.rs"]
 mod schema2_product_release_snapshots;
+use producer_assertions::{
+    assert_image_producer as assert_image_producer_contract,
+    assert_macos_producer as assert_macos_producer_contract,
+};
 #[path = "schema2_snapshot_capture.rs"]
 mod schema2_snapshot_capture;
 #[path = "schema2_workflow_snapshot_tests.rs"]
@@ -44,6 +52,44 @@ fn schema1_omits_scale_set_selector() -> TestResult {
     assert!(
         !joined.contains("runs-on: [velnor"),
         "schema 1 emitted a scale-set selector"
+    );
+    Ok(())
+}
+
+#[test]
+fn dependency_seed_uses_scale_set_without_hosted_cache_job() -> TestResult {
+    let config = format!("{}\nmode = \"scale-set\"\n{}", execution_head(), profiles());
+    let repo = make_repo(&config)?;
+    fs::write(
+        repo.path().join("mise.toml"),
+        "wrappers = { cargo = { command = \"mbx\", env = { MBX_CARGO_SHIM_MODE = \"1\" } } }\n",
+    )?;
+
+    let tree = render_staged_tree(&prepare(repo.path())?)?;
+    let ci = required_file(&tree, ".github/workflows/ci.yml")?;
+    let seed = job_body(ci, "dependency-seed")?;
+
+    assert!(seed.contains(SCALE_RUNS), "{seed}");
+    assert!(
+        seed.contains("name: Compile test executables (seed)"),
+        "{seed}"
+    );
+    assert!(seed.contains("name: Compile Clippy lane (seed)"), "{seed}");
+    assert!(
+        seed.contains("name: Compile documentation lane (seed)"),
+        "{seed}"
+    );
+    assert!(
+        !ci.contains("mbx-cache-write-hosted")
+            && !ci.contains("mbx-cache-read-hosted")
+            && !ci.contains("dependency-seed-hosted"),
+        "MBX generation must not add a hosted cache job when the mode is scale-set. Output: {ci}"
+    );
+    assert!(
+        job_ids(ci).iter().all(|id| {
+            !id.starts_with("rust-") || job_body(ci, id).is_ok_and(|body| body.contains(SCALE_RUNS))
+        }),
+        "All Rust jobs must use the configured runner when the mode is scale-set. Output: {ci}"
     );
     Ok(())
 }
@@ -102,11 +148,28 @@ fn both_mode_splits_verification_and_keeps_release_hosted() -> TestResult {
     let tree = render_staged_tree(&prepare(repo.path())?)?;
     let ci = required_file(&tree, ".github/workflows/ci.yml")?;
     let release = required_file(&tree, ".github/workflows/release.yml")?;
+    let rust_ids: Vec<_> = job_ids(ci)
+        .into_iter()
+        .filter(|id| id.starts_with("rust-demo"))
+        .collect();
+    assert_eq!(rust_ids, ["rust-demo__hosted", "rust-demo__local"]);
+    assert!(!tree.files.iter().any(|file| {
+        file.path.starts_with(".github/actions/rust-demo-")
+            && ["-lint/", "-tests/", "-docs/"]
+                .iter()
+                .any(|suffix| file.path.contains(suffix))
+    }));
     assert!(
         tree.files
             .iter()
-            .all(|file| !file.path.starts_with(".github/actions/rust-demo")),
-        "parallel crate jobs are never lane-shared composites"
+            .all(|file| { !file.path.starts_with(".github/actions/rust-demo") })
+    );
+    let shared = required_file(&tree, ".github/actions/declared-task-0/action.yml")?;
+    assert!(shared.contains("shell: bash"), "{shared}");
+    assert!(shared.contains("using: composite"), "{shared}");
+    assert!(
+        tree.get(".github/actions/rust-demo/action.yml").is_none(),
+        "parallel Rust steps stay at workflow job scope"
     );
     assert_both_ci(ci)?;
     assert_hosted_release(release);
@@ -123,7 +186,15 @@ fn dispatch_mode_overrides_configured_mode() -> TestResult {
     let forced_ci = required_file(&forced, ".github/workflows/ci.yml")?;
     assert!(job_ids(hosted_ci).contains(&"rust-demo"), "{hosted_ci}");
     assert!(!hosted_ci.contains("rust-demo__hosted"), "{hosted_ci}");
+    assert!(!hosted_ci.contains("rust-demo__local"), "{hosted_ci}");
+    assert!(!hosted_ci.contains("rust-demo-lint"), "{hosted_ci}");
+    assert!(!hosted_ci.contains("rust-demo-tests"), "{hosted_ci}");
+    assert!(!hosted_ci.contains("rust-demo-docs"), "{hosted_ci}");
     assert_both_ci(forced_ci)?;
+    assert!(
+        forced.get(".github/actions/rust-demo/action.yml").is_none(),
+        "parallel Rust steps stay at workflow job scope"
+    );
     Ok(())
 }
 
@@ -132,29 +203,42 @@ fn assert_both_ci(ci: &str) -> TestResult {
     assert!(ids.contains(&"plan"), "{ids:?}");
     assert!(ids.contains(&"required"), "{ids:?}");
     assert!(!ids.contains(&"rust-demo"), "{ids:?}");
+    let logical = "rust-demo";
+    let hosted_id = format!("{logical}__hosted");
+    let local_id = format!("{logical}__local");
+    assert!(ids.contains(&hosted_id.as_str()), "{ids:?}");
+    assert!(ids.contains(&local_id.as_str()), "{ids:?}");
+    assert!(!ids.contains(&logical), "{ids:?}");
     assert!(!ids.contains(&"plan__hosted"), "{ids:?}");
     assert!(!ids.contains(&"required__local"), "{ids:?}");
     let required = job_body(ci, "required")?;
-    {
-        let logical = "rust-demo";
-        let hosted_id = format!("{logical}__hosted");
-        let local_id = format!("{logical}__local");
-        assert!(ids.contains(&hosted_id.as_str()), "{ids:?}");
-        assert!(ids.contains(&local_id.as_str()), "{ids:?}");
-        assert!(!ids.contains(&logical), "{ids:?}");
-        let hosted = job_body(ci, &hosted_id)?;
-        let local = job_body(ci, &local_id)?;
-        assert!(hosted.contains(HOSTED_RUNS), "{hosted}");
-        assert!(local.contains(SCALE_RUNS), "{local}");
-        assert!(!local.contains(SCALE_REVERSED), "{local}");
-        assert!(!local.contains("runs-on: ubuntu-26.04\n"), "{local}");
-        shell_tests::assert_scale_set_shell_and_same_steps(hosted, local)?;
-        assert!(required.contains(&hosted_id), "{required}");
-        assert!(required.contains(&local_id), "{required}");
+    let hosted = job_body(ci, &hosted_id)?;
+    let local = job_body(ci, &local_id)?;
+    for job in [hosted, local] {
+        assert!(job.contains("./.github/actions/declared-task-0"), "{job}");
+        assert!(job.contains("Wait for parallel checks"), "{job}");
+        assert!(job.contains("wait-all:"), "{job}");
     }
+    assert!(hosted.contains(HOSTED_RUNS), "{hosted}");
+    assert!(local.contains(SCALE_RUNS), "{local}");
+    assert!(!local.contains(SCALE_REVERSED), "{local}");
+    assert!(!local.contains("runs-on: ubuntu-26.04\n"), "{local}");
+    shell_tests::assert_scale_set_shell_and_same_steps(hosted, local)?;
+    assert!(required.contains(&hosted_id), "{required}");
+    assert!(required.contains(&local_id), "{required}");
+    assert!(
+        !ids.iter().any(|id| ["-lint", "-tests", "-docs"]
+            .iter()
+            .any(|suffix| id.contains(suffix))),
+        "{ids:?}"
+    );
     let plan = job_body(ci, "plan")?;
-    assert!(plan.contains(HOSTED_RUNS), "{plan}");
-    assert!(!plan.contains("ubuntu-26.04-scale-set"), "{plan}");
+    let plan_runners = plan
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with("runs-on:"))
+        .collect::<Vec<_>>();
+    assert_eq!(plan_runners, [HOSTED_RUNS], "plan job placement: {plan}");
     Ok(())
 }
 
@@ -270,32 +354,7 @@ fn profiles() -> &'static str {
 }
 
 fn assert_image_producer(body: &str) -> TestResult {
-    assert!(body.contains("docker build --platform linux/amd64"));
-    assert!(body.contains("images/runner/ubuntu-26.04"));
-    assert!(body.contains("images/dind"));
-    assert!(body.contains("{{.Architecture}}"));
-    assert!(body.contains("= amd64"));
-    assert!(body.contains("docker save"));
-    assert!(body.contains("sha256sum"));
-    assert!(
-        body.contains("actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8")
-    );
-    assert!(body.contains("gh release create"));
-    assert!(body.contains("readonly tag_prefix='runner'"));
-    assert!(body.contains("${tag_prefix}-${release_source_sha}"));
-    assert!(body.contains(HOSTED_RUNS));
-    assert_release_permissions(body, "attest-images", "publish-images")?;
-    assert!(!body.contains("echo release"));
-    assert!(body.contains("workflow_call:"));
-    assert!(!body.contains("workflow_dispatch:"));
-    assert!(!body.contains("packages:"));
-    schema2_product_release_snapshots::assert_release_workflow_verifier(
-        body,
-        "Verify Rust channel manifest",
-        "CARGO_REGISTRY_TOKEN",
-        "Install pinned Rust for the resource probe",
-        Some(("GITHUB_TOKEN", "${{ github.token }}")),
-    )?;
+    assert_image_producer_contract(body)?;
     schema2_product_release_snapshots::assert_full_workflow_verifier_environment(
         body,
         &["Verify Rust channel manifest"],
@@ -308,78 +367,15 @@ fn assert_image_producer(body: &str) -> TestResult {
             ("Publish GitHub release", "GH_TOKEN", "${{ github.token }}"),
         ],
     )?;
-    assert!(!body.contains("secrets:"));
-    assert!(!body.contains("pull_request"));
     Ok(())
 }
 
 fn assert_macos_producer(body: &str) -> TestResult {
-    let build = job_body(body, "build-binary")?;
-    assert!(build.contains("runs-on: macos-15"), "{build}");
-    assert!(build.contains("jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e"));
-    assert!(
-        build.contains(&format!(
-            "rust@{}",
-            velnor_actions_mise::catalog::RUST_VERSION
-        )),
-        "{build}"
-    );
-    assert!(
-        build.contains(&format!(
-            "mise --no-config --no-env --no-hooks exec rust@{} mr-boxington@{} -- mbx build --locked --manifest-path crates/velnor-runner/Cargo.toml --release --package velnor-runner-cli --bin velnor-host",
-            velnor_actions_mise::catalog::RUST_VERSION,
-            velnor_actions_mise::catalog::MR_BOXINGTON_VERSION
-        )),
-        "{build}"
-    );
-    assert!(body.contains("Mach-O"));
-    assert!(body.contains("arm64"));
-    assert!(body.contains("shasum -a 256"));
-    assert!(
-        body.contains("actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8")
-    );
-    assert!(body.contains("gh release create"));
-    assert!(body.contains("readonly tag_prefix='binary'"));
-    assert!(body.contains("${tag_prefix}-${release_source_sha}"));
-    assert_release_permissions(body, "attest-binary", "publish-binary")?;
-    assert!(!body.contains("echo release"));
-    assert!(body.contains("workflow_call:"));
-    assert!(!body.contains("workflow_dispatch:"));
-    assert!(!body.contains("packages:"));
-    schema2_product_release_snapshots::assert_release_workflow_verifier(
-        body,
-        "Verify Rust channel manifest",
-        "CARGO_REGISTRY_TOKEN",
-        "Install pinned Rust and MBX",
-        None,
-    )?;
+    assert_macos_producer_contract(body)?;
     schema2_product_release_snapshots::assert_full_workflow_verifier_environment(
         body,
         &["Verify Rust channel manifest"],
         &[("Publish GitHub release", "GH_TOKEN", "${{ github.token }}")],
     )?;
-    Ok(())
-}
-
-fn assert_release_permissions(body: &str, attest: &str, publish: &str) -> TestResult {
-    assert!(body.contains("workflow_call:"), "{body}");
-    assert!(!body.contains("workflow_dispatch:"), "{body}");
-    let attest_body = job_body(body, attest)?;
-    let publish_body = job_body(body, publish)?;
-    assert!(attest_body.contains("id-token: write"), "{attest_body}");
-    assert!(!attest_body.contains("contents: write"), "{attest_body}");
-    assert!(!attest_body.contains("packages:"), "{attest_body}");
-    assert!(publish_body.contains("contents: write"), "{publish_body}");
-    assert!(
-        publish_body.contains("GH_TOKEN: ${{ github.token }}"),
-        "{publish_body}"
-    );
-    assert!(publish_body.contains("actions/checkout@"), "{publish_body}");
-    assert!(
-        publish_body.contains("release_repository='tailrocks/velnor-new'"),
-        "{publish_body}"
-    );
-    assert!(!attest_body.contains("GH_TOKEN"), "{attest_body}");
-    assert!(!publish_body.contains("id-token:"), "{publish_body}");
     Ok(())
 }
