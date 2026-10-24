@@ -8,6 +8,15 @@ pub(super) fn create_fresh_directory(path: &Path) -> Result<(), OrchestratorErro
     fs::create_dir(path).map_err(|_| internal("package_recovery_input_not_fresh"))
 }
 
+pub(super) fn create_owned_input_directory(
+    root: &Path,
+) -> Result<tempfile::TempDir, OrchestratorError> {
+    tempfile::Builder::new()
+        .prefix("release-recovery-input-")
+        .tempdir_in(root)
+        .map_err(|_| internal("package_recovery_input_not_fresh"))
+}
+
 pub(super) fn runner_root() -> Result<PathBuf, OrchestratorError> {
     let runner = PathBuf::from(env_text("RUNNER_TEMP")?);
     if !runner.is_absolute() {
