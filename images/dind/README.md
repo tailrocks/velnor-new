@@ -28,6 +28,11 @@ container actions continue to use the private Unix socket. No host port is
 published. Data root is `/var/lib/docker`. Group
 `docker` is gid `999`. Storage driver is `vfs` because the containerd overlay
 snapshotter returns `EINVAL` when this amd64 daemon runs under emulation.
+The TCP endpoint uses `--tls=false` and has no authentication. Any process in
+the shared worker network namespace, including the job, can fully control this
+worker's Docker daemon and its containers and volumes. Loopback binding limits
+reachability to that namespace; it does not isolate processes inside it. Never
+publish port `2375` or expose the outer Docker socket.
 The Dockerfile does not copy or mount a host socket and the entrypoint does
 not prune.
 
@@ -56,7 +61,7 @@ The image does not set `privileged`. The controller must:
 - Never mount the host or outer engine socket.
 - Share that socket (and the runner work paths) with the matching runner
   container so container actions resolve `/var/run/docker.sock` to this
-  worker only. Set `DOCKER_HOST=tcp://127.0.0.1:2375` in the Runner container
+  worker only. Set `DOCKER_HOST=tcp://localhost:2375` in the Runner container
   and join it to this exact DinD container's network namespace.
 
 The image includes the same static `/velnor/resource-probe` file as the Runner

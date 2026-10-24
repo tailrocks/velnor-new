@@ -218,10 +218,16 @@ Controller API credentials never enter the runner.
 
 JIT `workFolder` is `_work`, relative to the official runner root at
 `/home/runner`, so the job work directory resolves to `/home/runner/_work`.
-Mount the same per-worker named work volume there in both containers. The
-runner and DinD images create that path as uid/gid `1000:1000`, mode `0755`,
-before the first empty-volume mount; DinD starts first and Docker initializes
-the volume from its image path. The entrypoint stages raw JIT in a
+The controller creates fresh, nonce-named tmpfs-backed Docker volumes for
+Runner home and Work. It mounts each same volume into both the Runner and DinD
+containers with `NoCopy`; Docker image copy-up is not used to initialize these
+volumes or to prove their contents. Before the pair starts, an owned storage
+initializer applies the required layout, owner, and mode to those exact
+volumes and persists its structured readiness result. The initializer stays
+held while the exact Runner/DinD pair mounts the volumes. The controller
+records and verifies that pair-mounted handoff before releasing and removing
+the initializer and marking storage ready. This proves the resulting owned
+layout, not that the volumes began empty. The entrypoint stages raw JIT in a
 container-local mode-`0600` `/tmp` file and removes it before starting the
 listener. It does not persist raw JIT in the named work volume. The official
 runner treats `jitconfig` as a secret input.
