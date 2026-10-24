@@ -1,10 +1,4 @@
-use std::{
-    env,
-    ffi::OsStr,
-    fs,
-    path::{Path, PathBuf},
-    time::Duration,
-};
+use std::{env, ffi::OsStr, fs, path::Path, time::Duration};
 
 use anyhow::{Context, Result, anyhow, ensure};
 use testcontainers::{
@@ -24,7 +18,8 @@ const STARTUP_TIMEOUT: Duration = Duration::from_secs(30);
 const REQUEST_GROUP_TIMEOUT: Duration = Duration::from_secs(20);
 const CLEANUP_TIMEOUT: Duration = Duration::from_secs(10);
 const READY_MARKER: &str = "velnor-tls-listening";
-const SERVER_SOURCE: &str = "qualification/testcontainers-tls/server.mjs";
+const SERVER_SOURCE: &[u8] =
+    include_bytes!("../../../../qualification/testcontainers-tls/server.mjs");
 const SERVER_TARGET: &str = "/tmp/velnor-tls-server.mjs";
 const CERT_TARGET: &str = "/tmp/velnor-tls-server.pem";
 const KEY_TARGET: &str = "/tmp/velnor-tls-server-key.pem";
@@ -32,11 +27,9 @@ const KEY_TARGET: &str = "/tmp/velnor-tls-server-key.pem";
 pub async fn run_qualification(certificate_directory: &Path) -> Result<()> {
     validate_docker_environment()?;
     let bundle = certificates::validate_bundle(certificate_directory)?;
-    let server_script = repository_path(SERVER_SOURCE);
-    validate_server_script(&server_script)?;
     let ca_pem = fs::read(&bundle.ca).context("could not read private test CA")?;
     let nonce = make_nonce();
-    let container = start_server(&bundle, &server_script, &nonce).await?;
+    let container = start_server(&bundle, &nonce).await?;
 
     let operation = timeout(
         REQUEST_GROUP_TIMEOUT,
@@ -73,14 +66,13 @@ pub async fn run_qualification(certificate_directory: &Path) -> Result<()> {
 
 async fn start_server(
     bundle: &certificates::BundlePaths,
-    server_script: &Path,
     nonce: &str,
 ) -> Result<testcontainers::ContainerAsync<GenericImage>> {
     GenericImage::new(IMAGE_NAME, IMAGE_DIGEST)
         .with_exposed_port(SERVER_PORT.tcp())
         .with_copy_to(
             CopyTargetOptions::new(SERVER_TARGET).with_mode(0o644),
-            CopyDataSource::File(server_script.to_path_buf()),
+            server_copy_source(),
         )
         .with_copy_to(
             CopyTargetOptions::new(CERT_TARGET).with_mode(0o644),
@@ -124,20 +116,8 @@ fn make_nonce() -> String {
     format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple())
 }
 
-fn repository_path(relative: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../")
-        .join(relative)
-}
-
-fn validate_server_script(path: &Path) -> Result<()> {
-    let metadata = fs::symlink_metadata(path)
-        .with_context(|| format!("shared server script {} is unavailable", path.display()))?;
-    ensure!(
-        metadata.is_file() && !metadata.file_type().is_symlink(),
-        "shared server script must be a regular file"
-    );
-    Ok(())
+fn server_copy_source() -> CopyDataSource {
+    CopyDataSource::Data(SERVER_SOURCE.to_vec())
 }
 
 fn validate_docker_environment() -> Result<()> {
@@ -158,9 +138,32 @@ fn validate_docker_environment() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use testcontainers::{ContainerRequest, GenericImage};
+    use testcontainers::{ContainerRequest, GenericImage, core::CopyDataSource};
 
-    use super::{IMAGE_DIGEST, IMAGE_NAME};
+    use super::{IMAGE_DIGEST, IMAGE_NAME, SERVER_SOURCE};
+
+    #[test]
+    fn embedded_server_source_is_copied_as_data_for_relocated_binaries() -> std::io::Result<()> {
+        let embedded = super::server_copy_source();
+        let source = match embedded {
+            CopyDataSource::Data(source) => source,
+            CopyDataSource::File(_) => Vec::new(),
+        };
+        let shared_source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../qualification/testcontainers-tls/server.mjs");
+        assert_eq!(source.as_slice(), SERVER_SOURCE);
+        assert_eq!(source, std::fs::read(shared_source)?);
+        let has_server_contract = std::str::from_utf8(&source).is_ok_and(|source| {
+            source.contains("server.listen(TLS_PORT, \"0.0.0.0\"")
+                && source.contains("console.log(\"velnor-tls-listening\")")
+                && source.contains("request.url === \"/nonce\"")
+        });
+        assert!(
+            has_server_contract,
+            "embedded server payload must retain the TLS fixture contract"
+        );
+        Ok(())
+    }
 
     #[test]
     fn image_reference_is_the_existing_digest_pinned_job_image() {
