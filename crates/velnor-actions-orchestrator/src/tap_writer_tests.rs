@@ -3,7 +3,7 @@ use super::*;
 
 fn proof_json() -> serde_json::Value {
     serde_json::json!({
-        "schema": "velnor.homebrew-candidate.v3",
+        "schema": "velnor.homebrew-candidate.v4",
         "channel": "preview",
         "disposition": "changed",
         "base_sha": "a".repeat(40),
@@ -12,6 +12,8 @@ fn proof_json() -> serde_json::Value {
         "new_formula_sha256": "c".repeat(64),
         "receipt_digest": format!("b3-{}", "d".repeat(64)),
         "plan_digest": "e".repeat(64),
+        "formula_spec_digest": format!("b3-{}", "1".repeat(64)),
+        "sdk_artifact_digest": "2".repeat(64),
         "tap_config_digest": "f".repeat(64),
         "tap_repository": "owner/tap",
         "source_repository": "owner/source",

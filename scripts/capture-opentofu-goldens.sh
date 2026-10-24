@@ -312,6 +312,12 @@ cleanup_work() {
 }
 trap cleanup_work EXIT
 
+if ! physical_work="$(cd -- "$WORK" && pwd -P)"; then
+  echo "FATAL: could not resolve the private golden workspace path" >&2
+  exit 2
+fi
+WORK="$physical_work"
+
 stage="$WORK/stage"
 mkdir -p "$stage"
 if [ "$MODE" = "check-release" ]; then

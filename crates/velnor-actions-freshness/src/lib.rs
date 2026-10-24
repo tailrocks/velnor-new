@@ -12,6 +12,7 @@ mod members;
 mod patterns;
 mod probe;
 mod process;
+mod release_support;
 mod time;
 mod validation;
 
@@ -38,6 +39,15 @@ pub enum Operation {
         /// Include packages with a library target only.
         libraries_only: bool,
     },
+    /// Select the unique Cargo executable reported for one target manifest.
+    CargoArtifactExecutable {
+        /// JSON-lines file captured from Cargo.
+        messages_path: PathBuf,
+        /// Package manifest expected in compiler-artifact records.
+        manifest_path: PathBuf,
+        /// Cargo binary target name.
+        target_name: String,
+    },
 }
 
 /// Run one repository policy operation under `root`.
@@ -53,6 +63,16 @@ pub fn run(root: &Path, operation: &Operation) -> i32 {
         Operation::WorkspaceMembers { libraries_only } => {
             members::print_workspace_members(root, *libraries_only)
         }
+        Operation::CargoArtifactExecutable {
+            messages_path,
+            manifest_path,
+            target_name,
+        } => release_support::print_cargo_artifact_executable(
+            root,
+            messages_path,
+            manifest_path,
+            target_name,
+        ),
     }
 }
 

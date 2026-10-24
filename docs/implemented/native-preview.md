@@ -82,9 +82,11 @@ Runtime implementations independently validate archive contents, canonical
 receipts, Cosign signatures, GitHub attestations, interrupted tag/draft state,
 and remote asset bytes. Archive admission rejects malformed gzip trailers,
 concatenated streams, trailing tar data, extended headers, unexpected members,
-and unsafe executable modes. The Homebrew preparation and App writer boundaries
-capture tap main, qualify its updater without write credentials, independently
-validate literal formula changes, and reconcile an exact deterministic PR.
+and unsafe executable modes. Homebrew preparation captures tap main; the native
+route derives the selected formula from its typed specification, while the
+source-qualified custom route runs its updater without write credentials.
+Both routes independently validate literal formula changes before the App
+writer boundaries reconcile an exact deterministic PR.
 These implementations include generated Homebrew preparation/writer/merge jobs
 and exact-head feedback/check gates. They still require full integration, actual
 review-completion credentials, and executable-workflow verification.

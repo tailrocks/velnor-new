@@ -23,10 +23,17 @@ use crate::OrchestratorError;
 
 #[path = "package_release_artifacts_archive.rs"]
 mod archive;
+pub(crate) use archive::extract_tar_gz_members;
 #[path = "package_release_artifacts_checksums.rs"]
 mod checksums;
+#[path = "package_release_artifacts_identity.rs"]
+mod identity;
 #[path = "package_release_artifacts_inventory.rs"]
 mod inventory;
+#[path = "package_release_artifacts_public_content.rs"]
+mod public_content;
+use identity::{validate_expected_identity, validate_manifest_identity};
+pub(crate) use public_content::validate_authenticated_release_content;
 pub(crate) mod preview_payload;
 #[cfg(test)]
 #[path = "package_release_artifacts_real_tests.rs"]
@@ -241,44 +248,6 @@ pub(crate) fn verify_package_output(
         version: identity.version.to_owned(),
         artifacts: copied,
     })
-}
-
-fn validate_expected_identity(
-    source_commit: &str,
-    source_ref: &str,
-    version: &str,
-) -> Result<(), OrchestratorError> {
-    if source_commit.len() != 40
-        || !source_commit
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-        || !source_ref.starts_with("refs/heads/")
-        || source_ref.len() > 300
-        || version.is_empty()
-        || version.len() > 128
-        || !version
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'+'))
-    {
-        return Err(invalid("trusted_package_identity_invalid"));
-    }
-    Ok(())
-}
-
-fn validate_manifest_identity(
-    manifest: &PackageOutputManifest,
-    source_commit: &str,
-    source_ref: &str,
-    version: &str,
-) -> Result<(), OrchestratorError> {
-    if manifest.schema != HANDOFF_SCHEMA
-        || manifest.source_commit != source_commit
-        || manifest.source_ref != source_ref
-        || manifest.version != version
-    {
-        return Err(invalid("handoff_source_or_version_mismatch"));
-    }
-    Ok(())
 }
 
 fn expected_files(

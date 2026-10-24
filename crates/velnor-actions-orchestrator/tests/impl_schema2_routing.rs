@@ -293,7 +293,7 @@ fn assert_image_producer(body: &str) -> TestResult {
         body,
         "Verify Rust channel manifest",
         "CARGO_REGISTRY_TOKEN",
-        "Install pinned Rust for the resource probe",
+        "Install pinned resource-probe build and qualification tools",
         Some(("GITHUB_TOKEN", "${{ github.token }}")),
     )?;
     schema2_product_release_snapshots::assert_full_workflow_verifier_environment(
@@ -301,7 +301,7 @@ fn assert_image_producer(body: &str) -> TestResult {
         &["Verify Rust channel manifest"],
         &[
             (
-                "Install pinned Rust for the resource probe",
+                "Install pinned resource-probe build and qualification tools",
                 "GITHUB_TOKEN",
                 "${{ github.token }}",
             ),

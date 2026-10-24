@@ -19,6 +19,7 @@ use velnor_actions_contract::{
 #[serde(deny_unknown_fields)]
 pub(crate) struct CheckExecutionReceipt {
     pub schema: u32,
+    pub executor: CheckExecutionExecutor,
     pub source: String,
     pub run_key: String,
     pub head: String,
@@ -32,6 +33,26 @@ pub(crate) struct CheckExecutionReceipt {
     pub container: Option<container::ContainerReceipt>,
     pub system_tools: Vec<velnor_actions_mise::checks::SystemToolProof>,
     pub qualified_tools: Vec<tools::QualifiedToolReceipt>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native: Option<NativeCheckExecutionReceipt>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum CheckExecutionExecutor {
+    Mise,
+    NativeHomebrew,
+}
+
+/// Typed proof emitted by the SDK-native Homebrew checker.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct NativeCheckExecutionReceipt {
+    pub schema: u32,
+    pub operation: velnor_actions_contract::config::NativeHomebrewOperation,
+    pub identity: crate::internal_plan::native_homebrew_checks::NativeCheckIdentityExtension,
+    pub result_digest: String,
+    pub result: serde_json::Value,
 }
 
 /// Downloaded bytes travel with the receipt; merge never trusts assembly alone.
@@ -52,7 +73,8 @@ pub(crate) fn execution_receipt(
     qualified_tools: Vec<tools::QualifiedToolReceipt>,
 ) -> CheckExecutionReceipt {
     CheckExecutionReceipt {
-        schema: 1,
+        schema: 2,
+        executor: CheckExecutionExecutor::Mise,
         source: "execute-check-v1".into(),
         run_key: plan.run_key.clone(),
         head: plan.head.clone(),
@@ -66,7 +88,51 @@ pub(crate) fn execution_receipt(
         container: None,
         system_tools,
         qualified_tools,
+        native: None,
     }
+}
+
+pub(crate) fn native_execution_receipt(
+    plan: &Plan,
+    entry: &MatrixEntry,
+    result: &crate::homebrew::runtime::NativeCheckResult,
+    result_bytes: &[u8],
+) -> Result<CheckExecutionReceipt, crate::OrchestratorError> {
+    let identity = result.identity.clone();
+    let result_value = serde_json::from_slice(result_bytes)
+        .map_err(|_| crate::internal::internal("native_check_result_invalid"))?;
+    if velnor_actions_contract::canonical_json_bytes(&result)
+        .map_err(crate::internal::internal_contract)?
+        != result_bytes
+    {
+        return Err(crate::internal::internal(
+            "native_check_result_noncanonical",
+        ));
+    }
+    Ok(CheckExecutionReceipt {
+        schema: 2,
+        executor: CheckExecutionExecutor::NativeHomebrew,
+        source: crate::internal_plan::native_homebrew_checks::EXECUTE_OPERATION.to_owned(),
+        run_key: plan.run_key.clone(),
+        head: plan.head.clone(),
+        check_id: identity.check_id.clone(),
+        task_id: entry.task_id.clone(),
+        task_digest: entry.task_digest.clone(),
+        input_digest: entry.input_digest.clone(),
+        matrix_key: entry.matrix_key.clone(),
+        platform: identity.platform,
+        evidence: None,
+        container: None,
+        system_tools: Vec::new(),
+        qualified_tools: Vec::new(),
+        native: Some(NativeCheckExecutionReceipt {
+            schema: 1,
+            operation: identity.operation,
+            identity,
+            result_digest: digest_b3(result_bytes),
+            result: result_value,
+        }),
+    })
 }
 
 /// Read only plan-named receipts and evidence from exact downloaded matrix homes.
@@ -87,7 +153,7 @@ pub(crate) fn read_proofs(
         let Ok(entry) = serde_json::from_value::<MatrixEntry>(value.clone()) else {
             continue;
         };
-        if entry.stack_id != "mise" {
+        if !matches!(entry.stack_id.as_str(), "mise" | "native") {
             continue;
         }
         if !tasks.iter().any(|task| {
@@ -130,7 +196,11 @@ fn read_proof(entry: &MatrixEntry, dir: &Path) -> Result<serde_json::Value, &'st
         Err(error) => return Err(error),
     };
     let execution = parse_strict_json(&text).map_err(|_| "unparsable_check_execution")?;
-    let declaration = declaration_for(entry)?;
+    let declaration = if entry.stack_id == "mise" {
+        declaration_for(entry)?
+    } else {
+        None
+    };
     let evidence = if let Some(declaration) = declaration {
         let home = Path::new(&relative).parent().ok_or("bad_check_path")?;
         let path = home.join("evidence").join(&declaration.path);
@@ -162,15 +232,17 @@ pub(crate) fn validate_proofs(
     plan: &Plan,
     tasks: &[TaskReport],
     proofs: &[serde_json::Value],
+    native_root: Option<&Path>,
 ) -> bool {
     if plan.obligations.iter().any(|ob| {
-        ob.task_id.starts_with("stack/mise/")
+        (ob.task_id.starts_with("stack/mise/") || ob.task_id.starts_with("internal/native-check/"))
             && ob.decision != velnor_actions_contract::ObligationDecision::Execute
     }) {
         return false;
     }
     if tasks.iter().any(|task| {
-        task.task_id.starts_with("stack/mise/")
+        (task.task_id.starts_with("stack/mise/")
+            || task.task_id.starts_with("internal/native-check/"))
             && matches!(task.status, TaskStatus::Reused | TaskStatus::EmptyPartition)
     }) {
         return false;
@@ -181,16 +253,18 @@ pub(crate) fn validate_proofs(
             return false;
         };
         let Some(entry) = plan.matrix.include.iter().find(|entry| {
-            entry.stack_id == "mise" && entry.matrix_key == proof.execution.matrix_key
+            matches!(entry.stack_id.as_str(), "mise" | "native")
+                && entry.matrix_key == proof.execution.matrix_key
         }) else {
             return false;
         };
-        if !seen.insert(entry.matrix_key.as_str()) || !valid_proof(plan, entry, &proof) {
+        if !seen.insert(entry.matrix_key.as_str()) || !valid_proof(plan, entry, &proof, native_root)
+        {
             return false;
         }
     }
     for entry in &plan.matrix.include {
-        if entry.stack_id != "mise" {
+        if !matches!(entry.stack_id.as_str(), "mise" | "native") {
             continue;
         }
         let successful = tasks.iter().any(|task| {
@@ -202,10 +276,14 @@ pub(crate) fn validate_proofs(
             return false;
         }
         if successful {
-            let Ok(declaration) = declaration_for(entry) else {
-                return false;
+            let expected = if entry.stack_id == "native" {
+                Vec::new()
+            } else {
+                let Ok(declaration) = declaration_for(entry) else {
+                    return false;
+                };
+                declaration.map_or_else(Vec::new, |evidence| vec![evidence.path])
             };
-            let expected = declaration.map_or_else(Vec::new, |evidence| vec![evidence.path]);
             if tasks
                 .iter()
                 .any(|task| task.task_id == entry.task_id && task.outputs != expected)
@@ -217,8 +295,16 @@ pub(crate) fn validate_proofs(
     true
 }
 
-fn valid_proof(plan: &Plan, entry: &MatrixEntry, proof: &DownloadedProof) -> bool {
+fn valid_proof(
+    plan: &Plan,
+    entry: &MatrixEntry,
+    proof: &DownloadedProof,
+    native_root: Option<&Path>,
+) -> bool {
     let receipt = &proof.execution;
+    if entry.stack_id == "native" {
+        return valid_native_check_proof(plan, entry, proof, native_root);
+    }
     let Some(check_id) = entry
         .adapter_metadata
         .get("check_id")
@@ -235,7 +321,8 @@ fn valid_proof(plan: &Plan, entry: &MatrixEntry, proof: &DownloadedProof) -> boo
     ) else {
         return false;
     };
-    if receipt.schema != 1
+    if receipt.schema != 2
+        || receipt.executor != CheckExecutionExecutor::Mise
         || receipt.source != "execute-check-v1"
         || receipt.run_key != plan.run_key
         || receipt.head != plan.head
@@ -290,55 +377,7 @@ fn valid_proof(plan: &Plan, entry: &MatrixEntry, proof: &DownloadedProof) -> boo
     }
 }
 
-fn valid_native_proofs(
-    entry: &MatrixEntry,
-    platform: CheckPlatform,
-    proofs: &[velnor_actions_mise::checks::SystemToolProof],
-) -> bool {
-    let Ok(pins) = serde_json::from_value::<Vec<velnor_actions_contract::config::CheckSystemTool>>(
-        entry
-            .adapter_metadata
-            .get("system_tools")
-            .cloned()
-            .unwrap_or_default(),
-    ) else {
-        return false;
-    };
-    velnor_actions_mise::checks::validate_system_tool_proofs(platform, &pins, proofs).is_ok()
-}
+#[path = "check_gate_native.rs"]
+mod native;
 
-fn valid_qualified_proofs(
-    entry: &MatrixEntry,
-    platform: CheckPlatform,
-    receipts: &[tools::QualifiedToolReceipt],
-) -> bool {
-    let Ok(declared) = serde_json::from_value::<Vec<velnor_actions_contract::config::QualifiedTool>>(
-        entry
-            .adapter_metadata
-            .get("qualified_tools")
-            .cloned()
-            .unwrap_or_default(),
-    ) else {
-        return false;
-    };
-    let Ok(specs) = serde_json::from_value::<Vec<String>>(
-        entry
-            .adapter_metadata
-            .get("tool_specs")
-            .cloned()
-            .unwrap_or_default(),
-    ) else {
-        return false;
-    };
-    let Ok(fingerprint) =
-        velnor_actions_mise::checks::DiscoveredCheck::qualification_fingerprint(&declared, &specs)
-    else {
-        return false;
-    };
-    entry
-        .adapter_metadata
-        .get("qualification_digest")
-        .and_then(serde_json::Value::as_str)
-        == Some(fingerprint.as_str())
-        && tools::validate_receipts(platform, &declared, receipts)
-}
+use native::{valid_native_check_proof, valid_native_proofs, valid_qualified_proofs};

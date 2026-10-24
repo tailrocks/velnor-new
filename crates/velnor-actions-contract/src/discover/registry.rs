@@ -19,6 +19,8 @@ pub const DETECTION_SCHEMA: u32 = 1;
 /// Known stacks for closed per-stack dispatch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Stack {
+    /// Closed SDK-owned native checks (`native`).
+    Native,
     /// Explicit repository-owned Mise checks (`mise`).
     Mise,
     /// Rust/Cargo stack (`rust`).
@@ -31,13 +33,14 @@ impl Stack {
     /// Every known stack, in registry (ascending id) order.
     #[must_use]
     pub fn all() -> &'static [Self] {
-        &[Self::Mise, Self::Rust, Self::Tofu]
+        &[Self::Mise, Self::Native, Self::Rust, Self::Tofu]
     }
 
     /// Registered stack id for this stack.
     #[must_use]
     pub const fn id(self) -> &'static str {
         match self {
+            Self::Native => "native",
             Self::Mise => "mise",
             Self::Rust => "rust",
             Self::Tofu => "tofu",
@@ -49,7 +52,7 @@ impl Stack {
     #[must_use]
     pub const fn is_ignorable(self) -> bool {
         match self {
-            Self::Mise => false,
+            Self::Native | Self::Mise => false,
             Self::Rust | Self::Tofu => true,
         }
     }
@@ -84,5 +87,6 @@ mod tests {
         assert_eq!(ids, sorted, "registry runs ascending");
         assert_eq!(Stack::require_known("rust"), Ok(Stack::Rust));
         assert_eq!(Stack::require_known("tofu"), Ok(Stack::Tofu));
+        assert_eq!(Stack::require_known("native"), Ok(Stack::Native));
     }
 }

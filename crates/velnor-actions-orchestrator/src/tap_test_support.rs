@@ -4,9 +4,13 @@ use velnor_actions_contract::{
     PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlan, PackageReleasePlanProduct,
     VerifiedPackageRelease,
     config::{
-        CheckExecutor, CheckPlatform, CheckRunner, ExactHeadReviewCheck, HomebrewTapConfig,
-        HomebrewTapDestination, HomebrewTapDestinations, MiseTaskSource, ReviewAppIdentity,
-        TapMergePolicy, TapUpdateEnvironment, TapUpdaterBinding,
+        ExactHeadReviewCheck, HomebrewTapConfig, HomebrewTapDestination, HomebrewTapDestinations,
+        ReviewAppIdentity, TapMergePolicy, TapUpdateEnvironment,
+    },
+    homebrew_spec::{
+        HOMEBREW_FORMULA_SPEC_SCHEMA_V1, HOMEBREW_FORMULA_TEMPLATE_V1, HomebrewFormulaChannelSpec,
+        HomebrewFormulaReleaseLiterals, HomebrewFormulaSpec, HomebrewHostProductSpec,
+        HomebrewStableSentinel, render_homebrew_formula, validate_homebrew_projection,
     },
     package_release::{
         PACKAGE_RELEASE_EVIDENCE_PROFILE, PACKAGE_RELEASE_SCHEMA_V2, PackageReleaseAsset,
@@ -20,17 +24,18 @@ use velnor_actions_contract::{
 
 pub(crate) struct TapFixture {
     pub(crate) policy: HomebrewTapConfig,
+    pub(crate) spec: HomebrewFormulaSpec,
     pub(crate) plan: PackageReleasePlan,
     pub(crate) release: VerifiedPackageRelease,
     pub(crate) base_formula: Vec<u8>,
     pub(crate) proposed_formula: Vec<u8>,
     pub(crate) formula_path: String,
 }
-
 pub(crate) fn fixture() -> TapFixture {
     let policy = policy();
     let plan = plan();
     let release = release();
+    let spec = spec();
     let formula_path = policy
         .destinations
         .preview
@@ -38,26 +43,42 @@ pub(crate) fn fixture() -> TapFixture {
         .expect("preview")
         .formula
         .clone();
-    let base_formula = formula();
-    let proposed_formula = canonical_formula(&base_formula, &release);
-    assert_eq!(
-        velnor_actions_contract::validate_homebrew_formula_candidate(
-            &velnor_actions_contract::HomebrewFormulaCandidate {
-                source_repository: &plan.repository,
-                plan: &plan,
-                tap_repository: &policy.repository,
-                formula_path: &formula_path,
-                captured_base_sha: &"b".repeat(40),
-                base_bytes: &base_formula,
-                proposed_bytes: &proposed_formula,
-                release: &release,
-            }
-        )
-        .expect("fixture formula validates"),
-        proposed_formula
-    );
+    let projection = validate_homebrew_projection(&spec, &plan).expect("projection");
+    let release_hashes = release
+        .receipt
+        .assets
+        .iter()
+        .filter(|asset| asset.kind == PackageReleaseAssetKind::Payload)
+        .map(|asset| (asset.name.clone(), asset.sha256.clone()))
+        .collect();
+    let release_literals = HomebrewFormulaReleaseLiterals::new(
+        &spec,
+        &projection,
+        release.receipt.source.commit_sha.clone(),
+        release.receipt.version.value.clone(),
+        release.receipt.tag.clone(),
+        release_hashes,
+    )
+    .expect("release literals");
+    let proposed_formula = render_homebrew_formula(&spec, &release_literals).expect("formula");
+    let old_source = "bbbbbbb000000000000000000000000000000000";
+    let old_literals = HomebrewFormulaReleaseLiterals::new(
+        &spec,
+        &projection,
+        old_source.to_owned(),
+        "1.2.3-preview.8+bbbbbbb".to_owned(),
+        format!("preview-{old_source}"),
+        projection
+            .selected_payloads()
+            .iter()
+            .map(|payload| (payload.asset_name().to_owned(), "a".repeat(64)))
+            .collect(),
+    )
+    .expect("old formula literals");
+    let base_formula = render_homebrew_formula(&spec, &old_literals).expect("old formula");
     TapFixture {
         policy,
+        spec,
         plan,
         release,
         base_formula,
@@ -66,10 +87,47 @@ pub(crate) fn fixture() -> TapFixture {
     }
 }
 
+pub(crate) fn spec() -> HomebrewFormulaSpec {
+    HomebrewFormulaSpec {
+        schema: HOMEBREW_FORMULA_SPEC_SCHEMA_V1.to_owned(),
+        template: HOMEBREW_FORMULA_TEMPLATE_V1.to_owned(),
+        description: "Example CLI".to_owned(),
+        homepage: "https://example.com/project".to_owned(),
+        license: "MIT".to_owned(),
+        channels: vec![
+            HomebrewFormulaChannelSpec {
+                channel: PackageReleaseChannel::Preview,
+                formula: "cli-preview".to_owned(),
+                formula_class: "CliPreview".to_owned(),
+                destination: "Formula/cli-preview.rb".to_owned(),
+                conflicts: vec!["cli".to_owned()],
+            },
+            HomebrewFormulaChannelSpec {
+                channel: PackageReleaseChannel::Stable,
+                formula: "cli".to_owned(),
+                formula_class: "Cli".to_owned(),
+                destination: "Formula/cli.rb".to_owned(),
+                conflicts: vec!["cli-preview".to_owned()],
+            },
+        ],
+        host: HomebrewHostProductSpec {
+            product: "cli".to_owned(),
+            targets: vec!["aarch64-apple-darwin".to_owned()],
+            bins: vec!["cli".to_owned()],
+        },
+        auxiliaries: Vec::new(),
+        stable_sentinel: HomebrewStableSentinel {
+            date: "2026-10-24".to_owned(),
+            reason: "Stable release is not active".to_owned(),
+        },
+    }
+}
+
 pub(crate) fn policy() -> HomebrewTapConfig {
     HomebrewTapConfig {
         enabled: true,
         repository: "owner/homebrew-tap".to_owned(),
+        updater: None,
         destinations: HomebrewTapDestinations {
             preview: Some(HomebrewTapDestination {
                 formula: "Formula/cli-preview.rb".to_owned(),
@@ -77,27 +135,6 @@ pub(crate) fn policy() -> HomebrewTapConfig {
             stable: Some(HomebrewTapDestination {
                 formula: "Formula/cli.rb".to_owned(),
             }),
-        },
-        updater: TapUpdaterBinding {
-            task: "package:update-preview".to_owned(),
-            source: MiseTaskSource {
-                mise_config: "mise.toml".to_owned(),
-                working_directory: ".".to_owned(),
-            },
-            runner: CheckRunner {
-                label: "ubuntu-26.04".to_owned(),
-                platform: CheckPlatform::LinuxX64,
-                executor: CheckExecutor::Hosted,
-                container: None,
-            },
-            inputs: vec![
-                "Formula/cli-preview.rb".to_owned(),
-                "Formula/cli.rb".to_owned(),
-                "mise.toml".to_owned(),
-                "scripts/update.sh".to_owned(),
-            ],
-            tools: vec!["jq".to_owned()],
-            timeout_minutes: 5,
         },
         environment: TapUpdateEnvironment::TapUpdate,
         app_id_variable: "TAP_APP_ID".to_owned(),
@@ -271,31 +308,4 @@ fn asset(
         size: 1,
         sha256: "a".repeat(64),
     }
-}
-
-fn formula() -> Vec<u8> {
-    format!(
-        "# source-sha: {}\nclass CliPreview < Formula\n  version \"{}\"\n      url \"https://github.com/owner/source/releases/download/{}/cli-aarch64-apple-darwin.tar.gz\"\n      sha256 \"{}\"\n  def install\n    bin.install \"cli\"\n  end\nend\n",
-        "bbbbbbb000000000000000000000000000000000",
-        "1.2.3-preview.8+bbbbbbb",
-        "preview-bbbbbbb000000000000000000000000000000000",
-        "a".repeat(64),
-    )
-    .into_bytes()
-}
-
-fn canonical_formula(base: &[u8], release: &VerifiedPackageRelease) -> Vec<u8> {
-    let text = std::str::from_utf8(base).expect("formula UTF-8");
-    let archive = &release.receipt.products[0].payloads[0].name;
-    text.replace(
-        "bbbbbbb000000000000000000000000000000000",
-        &release.receipt.source.commit_sha,
-    )
-    .replace("1.2.3-preview.8+bbbbbbb", &release.receipt.version.value)
-    .replace(
-        "preview-bbbbbbb000000000000000000000000000000000",
-        &release.receipt.tag,
-    )
-    .replace("cli-aarch64-apple-darwin.tar.gz", archive)
-    .into_bytes()
 }

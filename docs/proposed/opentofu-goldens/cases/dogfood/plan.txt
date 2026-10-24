@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.52
+Velnor Actions plan 0.1.53
 Repository: <repo>
 
 Detected stacks
@@ -16,7 +16,7 @@ Detected stacks
     - velnor-actions-freshness (crates/velnor-actions-freshness/Cargo.toml) [lib, test]
     - velnor-actions-gradle (crates/velnor-actions-gradle/Cargo.toml) [lib, test]
     - velnor-actions-mise (crates/velnor-actions-mise/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-tofu]
-    - velnor-actions-orchestrator (crates/velnor-actions-orchestrator/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-ansible, velnor-actions-bun, velnor-actions-contract, velnor-actions-dbt, velnor-actions-gradle, velnor-actions-mise, velnor-actions-rust, velnor-actions-tofu, velnor-actions-workflow-renderer]
+    - velnor-actions-orchestrator (crates/velnor-actions-orchestrator/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-ansible, velnor-actions-bun, velnor-actions-contract, velnor-actions-dbt, velnor-actions-gradle, velnor-actions-mise, velnor-actions-rust, velnor-actions-tofu, velnor-actions-workflow-renderer, velnor-archive-guard]
     - velnor-actions-rust (crates/velnor-actions-rust/Cargo.toml) [lib, test; depends on velnor-actions-contract]
     - velnor-actions-tofu (crates/velnor-actions-tofu/Cargo.toml) [lib, test; depends on velnor-actions-contract]
     - velnor-actions-workflow-renderer (crates/velnor-actions-workflow-renderer/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-contract, velnor-actions-mise]
@@ -26,7 +26,7 @@ Detected stacks
     - velnor-runner-cli (crates/velnor-runner/crates/velnor-runner-cli/Cargo.toml) [bin, lib, test; depends on velnor-runner-core, velnor-runner-host]
     - velnor-runner-core (crates/velnor-runner/crates/velnor-runner-core/Cargo.toml) [lib, test]
     - velnor-runner-github (crates/velnor-runner/crates/velnor-runner-github/Cargo.toml) [lib, test; depends on velnor-runner-core]
-    - velnor-runner-host (crates/velnor-runner/crates/velnor-runner-host/Cargo.toml) [example, lib; depends on velnor-runner-core, velnor-runner-github]
+    - velnor-runner-host (crates/velnor-runner/crates/velnor-runner-host/Cargo.toml) [bin, example, lib; depends on velnor-runner-core, velnor-runner-github]
   Profile .: mbx compile driver (declared), cargo_nextest test runner (declared)
   Nextest profile .: ci (.config/nextest.toml)
     evidence .config/nextest.toml:4 [profile.ci] [durable]

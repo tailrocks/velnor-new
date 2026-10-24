@@ -1,7 +1,7 @@
 //! Retained promotion has a closed default-branch selection and no publish route.
 use super::*;
 #[test]
-fn reconcile_has_only_four_bounded_jobs_and_no_release_mutation_route() {
+fn reconcile_has_four_bounded_jobs_with_three_short_jobs_and_no_release_mutation_route() {
     let rendered = render_release_tap_reconcile(&with_tap()).expect("render");
     assert_eq!(rendered.path, ".github/workflows/preview-tap-reconcile.yml");
     let text = &rendered.bytes;
@@ -20,7 +20,12 @@ fn reconcile_has_only_four_bounded_jobs_and_no_release_mutation_route() {
             .contains("group: native-preview-${{ github.repository }}")
     );
 
-    assert_eq!(text.matches("timeout-minutes: 5").count(), 4);
+    assert_eq!(text.matches("timeout-minutes: 5").count(), 3);
+    assert_eq!(text.matches("\n  preview-tap-").count(), 4);
+    assert!(
+        job(text, "preview-tap-prepare", Some("preview-tap-writer"))
+            .contains("timeout-minutes: 15")
+    );
     for id in [
         "preview-tap-selection",
         "preview-tap-prepare",

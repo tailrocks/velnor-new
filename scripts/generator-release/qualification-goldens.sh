@@ -4,6 +4,11 @@
 source "$ROOT/scripts/generator-release/fixture-git.sh"
 
 MAX_CANDIDATE_MANIFEST_BYTES=8388608
+QUALIFICATION_GUARD_BIN="$ROOT/.velnor/archive-guard/bin/velnor-archive-guard"
+QUALIFICATION_GUARD_READY=0
+QUALIFICATION_GUARD_SHA256=''
+QUALIFICATION_GUARD_IDENTITY=''
+QUALIFICATION_GUARD_FINGERPRINT=''
 
 candidate_tree_oid() {
   if ! git -C "$ROOT" diff --quiet --; then
@@ -45,27 +50,74 @@ file_size_bytes() {
 
 json_has_unique_keys() {
   local path="$1"
-  if ! command -v python3 >/dev/null 2>&1; then
-    echo "FATAL: python3 is required to reject duplicate JSON keys" >&2
+  prepare_qualification_guard || return 1
+  verify_qualification_guard || return 1
+  if ! "$QUALIFICATION_GUARD_BIN" qualification-manifest "$path"; then
     return 1
   fi
-  python3 - "$path" <<'PY'
-import json
-import sys
+  verify_qualification_guard
+}
 
-def pairs(seq):
-    seen = set()
-    out = {}
-    for key, value in seq:
-        if key in seen:
-            raise SystemExit(1)
-        seen.add(key)
-        out[key] = value
-    return out
+qualification_guard_identity() {
+  if [[ "$(uname -s)" == Darwin ]]; then
+    stat -f '%d:%i:%l' "$QUALIFICATION_GUARD_BIN"
+  else
+    stat -c '%d:%i:%h' "$QUALIFICATION_GUARD_BIN"
+  fi
+}
 
-with open(sys.argv[1], "rb") as handle:
-    json.load(handle, object_pairs_hook=pairs)
-PY
+prepare_qualification_guard() {
+  local compiled_fingerprint source_fingerprint
+  if [[ "$QUALIFICATION_GUARD_READY" == 1 ]]; then
+    return 0
+  fi
+  if ! bash "$ROOT/scripts/build-owned-archive-guard.sh" >/dev/null; then
+    echo "FATAL: could not provision trusted qualification archive guard" >&2
+    return 1
+  fi
+  if [[ ! -f "$QUALIFICATION_GUARD_BIN" || -L "$QUALIFICATION_GUARD_BIN" \
+    || ! -x "$QUALIFICATION_GUARD_BIN" ]]; then
+    echo "FATAL: trusted qualification archive guard is missing or unsafe" >&2
+    return 1
+  fi
+  if ! compiled_fingerprint="$("$QUALIFICATION_GUARD_BIN" --fingerprint)" \
+    || ! source_fingerprint="$("$QUALIFICATION_GUARD_BIN" source-fingerprint "$ROOT")" \
+    || [[ ! "$compiled_fingerprint" =~ ^[0-9a-f]{64}$ \
+      || "$source_fingerprint" != "$compiled_fingerprint" ]]; then
+    echo "FATAL: trusted qualification archive guard source fingerprint is stale" >&2
+    return 1
+  fi
+  if ! QUALIFICATION_GUARD_SHA256="$(file_sha256 "$QUALIFICATION_GUARD_BIN")" \
+    || ! QUALIFICATION_GUARD_IDENTITY="$(qualification_guard_identity)"; then
+    echo "FATAL: could not bind trusted qualification archive guard identity" >&2
+    return 1
+  fi
+  QUALIFICATION_GUARD_FINGERPRINT="$compiled_fingerprint"
+  QUALIFICATION_GUARD_READY=1
+}
+
+verify_qualification_guard() {
+  local actual_sha identity compiled_fingerprint source_fingerprint
+  if [[ "$QUALIFICATION_GUARD_READY" != 1 \
+    || ! -f "$QUALIFICATION_GUARD_BIN" || -L "$QUALIFICATION_GUARD_BIN" \
+    || ! -x "$QUALIFICATION_GUARD_BIN" ]]; then
+    echo "FATAL: trusted qualification archive guard identity is unavailable" >&2
+    return 1
+  fi
+  if ! actual_sha="$(file_sha256 "$QUALIFICATION_GUARD_BIN")" \
+    || ! identity="$(qualification_guard_identity)" \
+    || [[ "$actual_sha" != "$QUALIFICATION_GUARD_SHA256" \
+      || "$identity" != "$QUALIFICATION_GUARD_IDENTITY" ]]; then
+    echo "FATAL: trusted qualification archive guard changed during candidate execution" >&2
+    return 1
+  fi
+  if ! compiled_fingerprint="$("$QUALIFICATION_GUARD_BIN" --fingerprint)" \
+    || ! source_fingerprint="$("$QUALIFICATION_GUARD_BIN" source-fingerprint "$ROOT")" \
+    || [[ "$compiled_fingerprint" != "$QUALIFICATION_GUARD_FINGERPRINT" \
+      || "$source_fingerprint" != "$QUALIFICATION_GUARD_FINGERPRINT" ]]; then
+    echo "FATAL: trusted qualification archive guard source fingerprint changed" >&2
+    return 1
+  fi
 }
 
 host_target() {
@@ -79,10 +131,22 @@ host_target() {
 
 validate_candidate_manifest() {
   local target version source_sha checkout_sha candidate_sha manifest_sha manifest_file_sha manifest_size
+  local manifest_parent manifest_name physical_manifest_parent
   if [ ! -f "$CANDIDATE_MANIFEST" ] || [ -L "$CANDIDATE_MANIFEST" ]; then
     echo "FATAL: candidate manifest must be a regular non-symlink file: $CANDIDATE_MANIFEST" >&2
     exit 2
   fi
+  manifest_parent="${CANDIDATE_MANIFEST%/*}"
+  manifest_name="${CANDIDATE_MANIFEST##*/}"
+  if [ -z "$manifest_parent" ]; then
+    manifest_parent="/"
+  fi
+  if [ -z "$manifest_name" ] \
+    || ! physical_manifest_parent="$(cd -- "$manifest_parent" 2>/dev/null && pwd -P)"; then
+    echo "FATAL: could not resolve candidate manifest directory: $CANDIDATE_MANIFEST" >&2
+    exit 2
+  fi
+  CANDIDATE_MANIFEST="$physical_manifest_parent/$manifest_name"
   if ! manifest_size="$(file_size_bytes "$CANDIDATE_MANIFEST")" \
     || (( manifest_size > MAX_CANDIDATE_MANIFEST_BYTES )); then
     echo "FATAL: candidate manifest must not exceed $MAX_CANDIDATE_MANIFEST_BYTES bytes" >&2
@@ -124,6 +188,10 @@ validate_candidate_manifest() {
   if ! manifest_sha="$(jq -er '.commit | strings' "$CANDIDATE_MANIFEST" 2>/dev/null)" \
     || [ "$manifest_sha" != "$source_sha" ]; then
     echo "FATAL: candidate manifest source does not match GITHUB_SHA" >&2
+    exit 2
+  fi
+  if ! prepare_qualification_guard; then
+    echo "FATAL: trusted qualification archive guard is unavailable" >&2
     exit 2
   fi
   if ! version="$("$BIN" --version | awk 'NR == 1 && NF == 2 && $1 == "velnor-actions" { print $2; next } { exit 1 } END { if (NR != 1) exit 1 }')"; then
@@ -203,75 +271,13 @@ capture_release_case() {
 
 validate_candidate_output_bindings() {
   local preview="$1"
-  python3 - "$CANDIDATE_MANIFEST" "$preview/.github" <<'PY'
-import json
-import os
-from pathlib import Path
-import re
-import stat
-import sys
-
-def reject(message):
-    print(f"candidate output binding mismatch: {message}", file=sys.stderr)
-    raise SystemExit(1)
-
-try:
-    manifest = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-    root = Path(sys.argv[2])
-    commit = manifest["commit"]
-    targets = {item["artifact"]: (item["target"], item["sha256"])
-               for item in manifest["targets"]}
-except (OSError, UnicodeError, ValueError, KeyError, TypeError) as error:
-    reject(f"cannot read candidate manifest: {error}")
-
-if not isinstance(commit, str) or not root.is_dir() or not targets:
-    reject("candidate manifest or generated workflow tree is incomplete")
-
-field = re.compile(
-    r"^(?P<indent>[ \t]*)(?P<key>VELNOR_ASSET_SHA256|VELNOR_ASSET_URL|"
-    r"VELNOR_RELEASE_COMMIT): (?P<value>\S+)$"
-)
-key = re.compile(r"^[ \t]*VELNOR_(?:ASSET_SHA256|ASSET_URL|RELEASE_COMMIT)\b")
-count = 0
-for base, directories, names in os.walk(root, followlinks=False):
-    directories[:] = sorted(name for name in directories
-                            if not Path(base, name).is_symlink())
-    for name in sorted(names):
-        path = Path(base, name)
-        try:
-            if not stat.S_ISREG(path.lstat().st_mode):
-                continue
-            lines = path.read_text(encoding="utf-8").splitlines()
-        except (OSError, UnicodeError) as error:
-            reject(f"cannot read generated workflow {path}: {error}")
-        index = 0
-        while index < len(lines):
-            if not key.match(lines[index]):
-                index += 1
-                continue
-            matches = [field.fullmatch(line) for line in lines[index:index + 3]]
-            expected = ["VELNOR_ASSET_SHA256", "VELNOR_ASSET_URL", "VELNOR_RELEASE_COMMIT"]
-            if len(matches) != 3 or any(match is None for match in matches):
-                reject(f"incomplete binding in {path}")
-            if [match.group("key") for match in matches] != expected:
-                reject(f"unpaired binding field in {path}")
-            if len({match.group("indent") for match in matches}) != 1:
-                reject(f"binding fields use different scopes in {path}")
-            digest, url, source = (match.group("value") for match in matches)
-            target = targets.get(url)
-            if target is None:
-                reject(f"unknown release URL in {path}")
-            target_name, expected_digest = target
-            if digest != expected_digest:
-                reject(f"wrong digest for target {target_name} in {path}")
-            if source != commit:
-                reject(f"wrong source commit in {path}")
-            count += 1
-            index += 3
-
-if count == 0:
-    reject("no ConsumerV1 download bindings were emitted")
-PY
+  prepare_qualification_guard || return 1
+  verify_qualification_guard || return 1
+  if ! "$QUALIFICATION_GUARD_BIN" qualification-output-bindings \
+    "$CANDIDATE_MANIFEST" "$preview/.github"; then
+    return 1
+  fi
+  verify_qualification_guard
 }
 
 normalize_candidate_digests() {

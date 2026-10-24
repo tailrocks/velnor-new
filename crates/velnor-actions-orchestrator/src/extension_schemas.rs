@@ -8,6 +8,9 @@ use velnor_actions_contract::cachekey::{
     RUST_EXTENSION_SCHEMA, TOFU_EXTENSION_SCHEMA, is_known_stack_extension_schema,
 };
 
+/// Typed input identity for one always-executed native Homebrew check.
+pub(crate) const NATIVE_HOMEBREW_CHECK_IDENTITY_SCHEMA: &str = "homebrew-native-check-identity-v2";
+
 /// Adapter extension schema for one stack ID, if the stack is known.
 ///
 /// Unknown stack IDs map to `None` (unknown), disabling reuse for
@@ -15,6 +18,7 @@ use velnor_actions_contract::cachekey::{
 #[must_use]
 pub fn extension_schema_for_stack(stack_id: &str) -> Option<&'static str> {
     match Stack::from_id(stack_id) {
+        Some(Stack::Native) => Some(NATIVE_HOMEBREW_CHECK_IDENTITY_SCHEMA),
         Some(Stack::Rust) => Some(RUST_EXTENSION_SCHEMA),
         Some(Stack::Tofu) => Some(TOFU_EXTENSION_SCHEMA),
         Some(Stack::Mise) => Some(velnor_actions_contract::NAMED_CHECK_EXTENSION_SCHEMA),

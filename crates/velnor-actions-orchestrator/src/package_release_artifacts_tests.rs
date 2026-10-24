@@ -70,6 +70,52 @@ fn accepts_exact_source_bound_inventory_and_stages_archives_without_extracting()
 }
 
 #[test]
+fn authenticated_content_validator_rejects_tampered_archive_even_when_hashes_match() {
+    use std::{collections::BTreeMap, time::Duration};
+    use velnor_actions_contract::package_release::PackageReleaseAssetKind;
+
+    let plan = crate::homebrew::test_support::plan();
+    let mut receipt = crate::homebrew::test_support::release().receipt;
+    let payload_name = "cli-aarch64-apple-darwin.tar.gz";
+    let tampered_archive = b"not a gzip-compressed tar archive".to_vec();
+    let payload_sha = inventory::hex_lower(&Sha256::digest(&tampered_archive));
+    let sidecar_name = format!("{payload_name}.sha256");
+    let sums = format!("{payload_sha}  {payload_name}\n");
+
+    let payload = receipt
+        .assets
+        .iter_mut()
+        .find(|asset| asset.name == payload_name && asset.kind == PackageReleaseAssetKind::Payload)
+        .expect("payload asset");
+    payload.sha256 = payload_sha.clone();
+    let sidecar = receipt
+        .assets
+        .iter_mut()
+        .find(|asset| asset.name == sidecar_name && asset.kind == PackageReleaseAssetKind::Sha256)
+        .expect("checksum sidecar asset");
+    sidecar.subject_name = Some(payload_name.to_owned());
+
+    let files = BTreeMap::from([
+        (payload_name.to_owned(), tampered_archive),
+        (format!("{payload_name}.sbom.json"), b"{}".to_vec()),
+        (
+            sidecar_name,
+            format!("{payload_sha}  {payload_name}\n").into_bytes(),
+        ),
+        ("SHA256SUMS".to_owned(), sums.into_bytes()),
+    ]);
+    let deadline = velnor_actions_mise::CheckDeadline::after(Duration::from_secs(10))
+        .expect("validation deadline");
+
+    let error = validate_authenticated_release_content(&plan, &receipt, &files, deadline)
+        .expect_err("matching digests do not make a malformed archive valid");
+    assert!(
+        error.to_string().contains("preview_tar_"),
+        "expected the shared archive validator to reject the payload, got {error}"
+    );
+}
+
+#[test]
 fn rejects_raw_executable_disguised_as_declared_tar_gz() {
     let fixture = fixture();
     write_source_files(&fixture, "x86_64", &fixture.version);

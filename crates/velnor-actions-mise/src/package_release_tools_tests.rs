@@ -101,8 +101,11 @@ fn cosign_measured_asset_length_reaches_digest_verification() {
     // Official v3.1.4 Linux amd64 asset is 145,688,404 bytes, exceeding the
     // former unrelated 128 MiB ceiling. Stream without allocating the asset.
     let mut input = std::io::repeat(0).take(145_688_404);
-    let error =
-        verify_cosign_reader(&mut input).expect_err("synthetic bytes are not signed tool bytes");
+    let error = verify_cosign_reader_for(
+        &mut input,
+        cosign_artifact_for("linux", "x86_64").expect("pinned platform"),
+    )
+    .expect_err("synthetic bytes are not signed tool bytes");
     assert!(format!("{error:?}").contains("cosign_sha256_mismatch"));
     assert_eq!(
         input.limit(),
@@ -114,11 +117,27 @@ fn cosign_measured_asset_length_reaches_digest_verification() {
 #[test]
 fn cosign_measured_asset_ceiling_refuses_an_oversized_stream() {
     let mut input = std::io::repeat(0).take(145_688_405);
-    let error = verify_cosign_reader(&mut input).expect_err("oversized by one byte");
+    let error = verify_cosign_reader_for(
+        &mut input,
+        cosign_artifact_for("linux", "x86_64").expect("pinned platform"),
+    )
+    .expect_err("oversized by one byte");
     assert!(format!("{error:?}").contains("cosign_file_too_large"));
     assert_eq!(
         input.limit(),
         0,
         "one excess byte proves the size violation"
     );
+}
+
+#[test]
+fn verification_tool_profiles_are_closed_and_platform_specific() {
+    let arm = cosign_artifact_for("macos", "aarch64").expect("reviewed ARM profile");
+    let intel = cosign_artifact_for("macos", "x86_64").expect("reviewed Intel profile");
+    assert_eq!(arm.name, "cosign-darwin-arm64");
+    assert_eq!(arm.bytes, 99_023_586);
+    assert_eq!(intel.name, "cosign-darwin-amd64");
+    assert_ne!(arm.sha256, intel.sha256);
+    assert!(cosign_artifact_for("windows", "aarch64").is_err());
+    assert!(cosign_artifact_for("macos", "arm64").is_err());
 }

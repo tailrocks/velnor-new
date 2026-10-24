@@ -15,7 +15,7 @@ fn image_family_uses_pinned_musl_build_and_exact_five_file_inventory() -> Result
     let steps = resource_probe_image::build_steps(&pins)?;
     let step_text = render_yaml(&Yaml::Seq(steps));
     for expected in [
-        "Install pinned Rust for the resource probe",
+        "Install pinned resource-probe build and qualification tools",
         "Install pinned Linux musl target",
         "rustup target add --toolchain",
         "x86_64-unknown-linux-musl",
@@ -23,6 +23,11 @@ fn image_family_uses_pinned_musl_build_and_exact_five_file_inventory() -> Result
         "mbx build --locked --manifest-path crates/velnor-runner/Cargo.toml",
         "--package velnor-resource-probe --bin velnor-resource-probe --release --target x86_64-unknown-linux-musl",
         "bash images/resource-probe/build-image.sh",
+        "Qualify native resource-probe producer and shared archive fixtures",
+        "mbx nextest run --locked --manifest-path crates/velnor-runner/Cargo.toml",
+        "--package velnor-runner-host --lib --target x86_64-unknown-linux-gnu",
+        "--bin velnor-resource-probe-release --release --target x86_64-unknown-linux-gnu",
+        "VELNOR_RESOURCE_PROBE_RELEASE_BIN",
     ] {
         assert!(
             step_text.contains(expected),

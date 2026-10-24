@@ -18,6 +18,17 @@ pub(super) fn operation(
     )
     .map_err(|error| RenderError::InvalidWorkflow(error.to_string()))?;
     let mut values = vec![("VELNOR_TAP_POLICY".to_owned(), Yaml::str(policy))];
+    if let Some(formula_spec) = &tap.formula_spec {
+        let formula_spec = String::from_utf8(
+            canonical_json_bytes(formula_spec)
+                .map_err(|error| RenderError::InvalidWorkflow(error.to_string()))?,
+        )
+        .map_err(|error| RenderError::InvalidWorkflow(error.to_string()))?;
+        values.push((
+            "VELNOR_HOMEBREW_FORMULA_SPEC".to_owned(),
+            Yaml::str(formula_spec),
+        ));
+    }
     if matches!(op, "write-homebrew-tap-pr-v1" | "merge-homebrew-tap-pr-v1") {
         values.extend(writer_values(tap, merge));
     }

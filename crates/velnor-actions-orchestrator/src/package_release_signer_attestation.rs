@@ -1,7 +1,7 @@
 //! GitHub artifact-attestation verification bound to exact release subjects.
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     env,
     ffi::{OsStr, OsString},
     time::Duration,
@@ -9,8 +9,7 @@ use std::{
 
 use serde::Deserialize;
 use sha2::Digest;
-use velnor_actions_contract::package_release::PackageReleaseReceipt;
-use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
+use velnor_actions_mise::{CheckDeadline, PinnedTool, PinnedToolExec, ToolCatalog};
 
 use super::{PackageReleaseSigningIdentity, VerifiedSignedPackage};
 use crate::{OrchestratorError, internal::internal};
@@ -24,10 +23,20 @@ const OIDC_ISSUER: &str = "https://token.actions.githubusercontent.com";
 const VERIFY_OUTPUT_LIMIT: usize = 4 * 1024 * 1024;
 const VERIFY_TIMEOUT: Duration = Duration::from_secs(90);
 
+pub(super) struct AttestationCommandIdentity<'a> {
+    pub(super) repository: &'a str,
+    pub(super) workflow_uri: &'a str,
+    pub(super) workflow_sha: &'a str,
+    pub(super) source_sha: &'a str,
+    pub(super) source_ref: &'a str,
+    pub(super) source_token: &'a str,
+}
+
 /// Verify all receipt subjects against the authenticated GitHub run identity.
 pub(super) fn verify_release_attestation(
     signed: &VerifiedSignedPackage,
     expected: &PackageReleaseSigningIdentity,
+    deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     let receipt = signed.receipt();
     let subjects = expected_subjects(receipt)?;
@@ -59,6 +68,7 @@ pub(super) fn verify_release_attestation(
         owner_uri: &owner_uri,
         workflow_uri: &workflow_uri,
         workflow_sha: &expected.workflow_sha,
+        source_sha: &expected.source_sha,
         source_ref: &expected.source_ref,
         run_id: expected.run_id,
         run_attempt: expected.run_attempt,
@@ -69,70 +79,53 @@ pub(super) fn verify_release_attestation(
 
     for (name, digest) in &subjects {
         let path = signed.directory().join(name);
-        let output = verify_one(
-            &path,
-            &expected.repository,
-            &signer_workflow,
-            &expected.workflow_sha,
-            &expected.source_ref,
-            &source_token,
-        )?;
+        let identity = AttestationCommandIdentity {
+            repository: &expected.repository,
+            workflow_uri: &signer_workflow,
+            workflow_sha: &expected.workflow_sha,
+            source_sha: &expected.source_sha,
+            source_ref: &expected.source_ref,
+            source_token: &source_token,
+        };
+        let output = verify_one(&path, &identity, deadline)?;
         validate_output(&output, &subjects, &expectation, name, digest)?;
     }
     Ok(())
 }
 
-fn expected_subjects(
-    receipt: &PackageReleaseReceipt,
-) -> Result<BTreeMap<String, String>, OrchestratorError> {
-    let mut subjects = BTreeMap::new();
-    for asset in &receipt.assets {
-        if matches!(
-            asset.kind,
-            velnor_actions_contract::package_release::PackageReleaseAssetKind::Payload
-                | velnor_actions_contract::package_release::PackageReleaseAssetKind::Companion
-        ) {
-            subjects.insert(asset.name.clone(), asset.sha256.clone());
-        }
-    }
-    let receipt_bytes = receipt
-        .canonical_bytes()
-        .map_err(|_| internal("package_attestation_receipt_encode"))?;
-    subjects.insert("release.json".to_owned(), sha256(&receipt_bytes));
-    let declared = receipt
-        .evidence
-        .attested_subject_names
-        .iter()
-        .cloned()
-        .collect::<BTreeSet<_>>();
-    if subjects.keys().cloned().collect::<BTreeSet<_>>() != declared {
-        return Err(internal("package_attestation_subject_inventory_invalid"));
-    }
-    Ok(subjects)
-}
-
 fn verify_one(
     path: &std::path::Path,
-    repository: &str,
-    workflow_uri: &str,
-    workflow_sha: &str,
-    source_ref: &str,
-    source_token: &str,
+    identity: &AttestationCommandIdentity<'_>,
+    deadline: CheckDeadline,
 ) -> Result<Vec<u8>, OrchestratorError> {
-    let args = vec![
+    verify_one_with_bundle(path, None, identity, deadline)
+}
+
+fn verify_one_with_bundle(
+    path: &std::path::Path,
+    bundle: Option<&std::path::Path>,
+    identity: &AttestationCommandIdentity<'_>,
+    deadline: CheckDeadline,
+) -> Result<Vec<u8>, OrchestratorError> {
+    let mut args = vec![
         OsString::from("attestation"),
         OsString::from("verify"),
         path.as_os_str().to_owned(),
+    ];
+    if let Some(bundle) = bundle {
+        args.extend([OsString::from("--bundle"), bundle.as_os_str().to_owned()]);
+    }
+    args.extend([
         OsString::from("--repo"),
-        OsString::from(repository),
+        OsString::from(identity.repository),
         OsString::from("--signer-workflow"),
-        OsString::from(workflow_uri),
+        OsString::from(identity.workflow_uri),
         OsString::from("--signer-digest"),
-        OsString::from(workflow_sha),
+        OsString::from(identity.workflow_sha),
         OsString::from("--source-digest"),
-        OsString::from(workflow_sha),
+        OsString::from(identity.source_sha),
         OsString::from("--source-ref"),
-        OsString::from(source_ref),
+        OsString::from(identity.source_ref),
         OsString::from("--predicate-type"),
         OsString::from(PREDICATE),
         OsString::from("--cert-oidc-issuer"),
@@ -142,12 +135,16 @@ fn verify_one(
         OsString::from("10"),
         OsString::from("--format"),
         OsString::from("json"),
-    ];
+    ]);
     let exec = PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), args)
         .map_err(|_| internal("package_attestation_gh_unavailable"))?;
+    let timeout = deadline
+        .remaining()
+        .map(|remaining| remaining.min(VERIFY_TIMEOUT))
+        .map_err(|_| internal("package_verification_deadline"))?;
     let output = exec
-        .command_with_github_token(&ToolCatalog::pinned(), source_token)
-        .and_then(|command| command.run_bounded(VERIFY_OUTPUT_LIMIT, VERIFY_TIMEOUT))
+        .command_with_github_token(&ToolCatalog::pinned(), identity.source_token)
+        .and_then(|command| command.run_bounded(VERIFY_OUTPUT_LIMIT, timeout))
         .map_err(|_| internal("package_attestation_verification_failed"))?;
     if !output.success || output.stdout.is_empty() {
         return Err(internal("package_attestation_verification_failed"));
@@ -155,6 +152,8 @@ fn verify_one(
     Ok(output.stdout)
 }
 
+/// Identity fields extracted only after the pinned GitHub CLI verifies one
+/// exact external release-manifest subject.
 fn source_attestation_token() -> Result<String, OrchestratorError> {
     validate_source_attestation_token(env::var("GH_TOKEN").ok(), env::var("VELNOR_TAP_TOKEN").ok())
 }
@@ -225,7 +224,7 @@ struct SlsaGitHubParameters {
 }
 
 #[derive(Debug, Deserialize)]
-struct Subject {
+pub(super) struct Subject {
     name: String,
     digest: BTreeMap<String, String>,
 }
@@ -264,6 +263,7 @@ struct AttestationExpectation<'a> {
     owner_uri: &'a str,
     workflow_uri: &'a str,
     workflow_sha: &'a str,
+    source_sha: &'a str,
     source_ref: &'a str,
     run_id: u64,
     run_attempt: u32,
@@ -321,7 +321,7 @@ fn validate_output(
         || certificate.source_repository_uri != expected.repository_uri
         || certificate.source_repository_owner_uri != expected.owner_uri
         || certificate.source_repository_identifier != expected.repository_id
-        || certificate.source_repository_digest != expected.workflow_sha
+        || certificate.source_repository_digest != expected.source_sha
         || certificate.source_repository_ref != expected.source_ref
         || certificate.build_signer_uri != expected.workflow_uri
         || certificate.build_signer_digest != expected.workflow_sha
@@ -359,3 +359,12 @@ fn sha256(bytes: &[u8]) -> String {
     }
     output
 }
+
+#[path = "package_release_signer_attestation_sdk.rs"]
+mod sdk;
+#[path = "package_release_signer_attestation_subjects.rs"]
+mod subjects;
+#[cfg(test)]
+use sdk::parse_verified_manifest_attestation;
+pub(crate) use sdk::{SdkManifestAttestationExpectation, verify_published_manifest_attestation};
+use subjects::expected_subjects;

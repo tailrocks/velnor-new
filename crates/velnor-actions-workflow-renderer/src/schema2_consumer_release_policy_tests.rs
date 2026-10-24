@@ -86,17 +86,17 @@ fn both_channels_bound_native_work_inside_larger_producer_jobs() {
             }
         }
     }
-    let mut spec = with_tap();
-    spec.homebrew_tap
-        .as_mut()
-        .expect("tap")
-        .policy
-        .updater
-        .timeout_minutes = 6;
-    assert!(
-        render_consumer_preview(&spec).is_err(),
-        "producer authorization does not widen updater"
-    );
+    let spec = with_tap();
+    let rendered = render_consumer_preview(&spec).expect("native tap preparation");
+    let prepare = rendered
+        .bytes
+        .split("  preview-tap-prepare:")
+        .nth(1)
+        .expect("preparation job")
+        .split("  preview-tap-writer:")
+        .next()
+        .expect("preparation body");
+    assert!(prepare.contains("timeout-minutes: 15"));
 }
 
 fn channel_with_tap(channel: PackageReleaseChannel) -> ConsumerReleaseSpec {
@@ -109,10 +109,6 @@ fn channel_with_tap(channel: PackageReleaseChannel) -> ConsumerReleaseSpec {
         Some(velnor_actions_contract::config::HomebrewTapDestination {
             formula: "Formula/scanner.rb".to_owned(),
         });
-    tap.policy
-        .updater
-        .inputs
-        .push("Formula/scanner.rb".to_owned());
     stable.homebrew_tap = Some(tap);
     stable
 }
@@ -133,6 +129,8 @@ fn assert_job_envelopes(yaml: &str, producers: &std::collections::BTreeSet<Strin
                 32
             } else if id.ends_with("-recovery") {
                 22
+            } else if id.ends_with("-tap-prepare") {
+                15
             } else if producers.contains(id) {
                 observed.insert(id.to_owned());
                 minutes + 5

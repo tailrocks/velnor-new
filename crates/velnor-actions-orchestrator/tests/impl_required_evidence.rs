@@ -4,16 +4,18 @@ use crate::impl_common::git_fixture;
 
 use serde_json::json;
 use velnor_actions_contract::{FinalStatus, JobConclusion, ObligationDecision};
-use velnor_actions_orchestrator::{assemble_merge_request, merge_internal};
+use velnor_actions_orchestrator::assemble_merge_request;
 
-use crate::impl_common::{TestResult, make_repo, passing_reports, plan_for_source_change};
+use crate::impl_common::{
+    TestResult, make_repo, merge_fixture, passing_reports, plan_for_source_change,
+};
 use crate::impl_orch_core::{merge, merge_request, success_jobs};
 use crate::impl_orch_plansel::{BUMP, commit, make_ws, plan_at, put};
 
 /// Merge status for one hand-built request value.
 fn status_of(request: &serde_json::Value) -> Result<FinalStatus, Box<dyn std::error::Error>> {
     Ok(
-        serde_json::from_str::<velnor_actions_contract::FinalReport>(&merge_internal(
+        serde_json::from_str::<velnor_actions_contract::FinalReport>(&merge_fixture(
             &request.to_string(),
         )?)?
         .status,
@@ -259,7 +261,7 @@ fn missing_report_file_fails_closed() -> TestResult {
     );
     value["actual_event"] = value["plan"]["event"].clone();
     let report: velnor_actions_contract::FinalReport =
-        serde_json::from_str(&merge_internal(&value.to_string())?)?;
+        serde_json::from_str(&merge_fixture(&value.to_string())?)?;
     assert_eq!(report.status, FinalStatus::PlanningFailed);
     assert!(
         report.miss_reasons.contains(&"source_missing".to_owned()),

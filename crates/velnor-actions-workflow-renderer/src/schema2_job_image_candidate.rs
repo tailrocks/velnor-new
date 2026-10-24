@@ -17,47 +17,10 @@ const RECORD: &str = "job-image-candidate.json";
 const ARTIFACT_NAME: &str = "velnor-job-image-candidate-${{ github.run_attempt }}";
 const PUBLICATION_EVIDENCE: &str =
     "velnor-job-image-publication-evidence-${{ github.run_attempt }}";
-const BUILDX_INSTALL: &str = r#"python3 - "$GITHUB_WORKSPACE/.velnor/runner.lock" "$RUNNER_TEMP/velnor-docker-config/cli-plugins/docker-buildx" <<'PY'
-import hashlib
-import os
-from pathlib import Path
-import re
-import subprocess
-import sys
-import tempfile
-import tomllib
-
-lock = tomllib.loads(Path(sys.argv[1]).read_text())
-version = lock["buildx_version"]
-asset_url = lock["buildx_asset_url"]
-expected_url = f"https://github.com/docker/buildx/releases/download/v{version}/buildx-v{version}.linux-amd64"
-expected_sha256 = lock["buildx_sha256"]
-if asset_url != expected_url or not re.fullmatch(r"[0-9a-f]{64}", expected_sha256):
-    raise SystemExit("The Buildx values in .velnor/runner.lock are incorrect.")
-
-plugin = Path(sys.argv[2])
-plugin.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-plugin.parent.chmod(0o700)
-fd, temporary = tempfile.mkstemp(prefix=".docker-buildx.", dir=plugin.parent)
-os.close(fd)
-try:
-    subprocess.run(
-        ["curl", "--retry", "5", "--retry-delay", "2", "--retry-all-errors",
-         "--fail", "--silent", "--show-error", "--location", "--output", temporary,
-         asset_url],
-        check=True,
-    )
-    with Path(temporary).open("rb") as stream:
-        actual_sha256 = hashlib.file_digest(stream, "sha256").hexdigest()
-    if actual_sha256 != expected_sha256:
-        raise SystemExit("The Buildx checksum is different from the value in .velnor/runner.lock.")
-    os.chmod(temporary, 0o755)
-    os.replace(temporary, plugin)
-    plugin.chmod(0o755)
-finally:
-    if os.path.exists(temporary):
-        os.unlink(temporary)
-PY"#;
+const ATTESTATION_CANDIDATE: &str = "${{ runner.temp }}/privatecandidate";
+const ATTESTATION_RUNTIME_CANDIDATE: &str = "$RUNNER_TEMP/privatecandidate";
+#[path = "schema2_job_image_native.rs"]
+mod native;
 
 /// Render the job image candidate workflow on the hosted runner.
 ///
@@ -79,8 +42,11 @@ pub(super) fn render_candidate_workflow(
 fn render(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
     let hosted = runs_on_yaml(&request.hosted_label)?;
     let artifact_id = "${{ needs.build-image-candidate.outputs.artifact_id }}";
-    let build = build_job(hosted.clone());
-    let attest = attest_job(hosted.clone(), artifact_id);
+    let pins = request.product_release.as_ref().ok_or_else(|| {
+        RenderError::InvalidWorkflow("image_candidate_missing_native_pins".to_owned())
+    })?;
+    let build = build_job(hosted.clone(), pins)?;
+    let attest = attest_job(hosted.clone(), artifact_id, pins)?;
     let publish = publish_job(hosted, artifact_id);
     Ok(Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Job image candidate")),
@@ -115,19 +81,23 @@ fn workflow_concurrency() -> Yaml {
     ])
 }
 
-fn build_job(hosted: Yaml) -> (String, Yaml) {
+fn build_job(
+    hosted: Yaml,
+    pins: &super::ProductReleasePins,
+) -> Result<(String, Yaml), RenderError> {
+    let binary = native::BINARY;
+    let closure = native::CLOSURE;
     let build_command = format!(
-        "DOCKER_CONFIG=\"$RUNNER_TEMP/velnor-docker-config\" python3 images/job/ubuntu-26.04/candidate/candidate.py build --source-commit \"$GITHUB_SHA\" --archive \"$RUNNER_TEMP/{ARCHIVE}\" --record \"$RUNNER_TEMP/{RECORD}\""
+        "\"{binary}\" image-maintenance build-job-candidate --root \"$GITHUB_WORKSPACE\" --source-commit \"$GITHUB_SHA\" --runner-temp \"$RUNNER_TEMP\" --archive-path \"$RUNNER_TEMP/{ARCHIVE}\" --record-path \"$RUNNER_TEMP/{RECORD}\" --source-closure-path \"$RUNNER_TEMP/{closure}\""
     );
-    let steps = vec![
-        checkout_step("Use the source commit selected by GitHub."),
-        run_step(
-            "Install the Buildx plugin from .velnor/runner.lock",
-            BUILDX_INSTALL,
-        ),
+    let mut steps = vec![checkout_step("Use the source commit selected by GitHub.")];
+    steps.extend(native::source_steps(pins)?);
+    steps.extend([
+        run_step("Verify native implementation source closure", &format!("\"{binary}\" image-maintenance check-job-source --root \"$GITHUB_WORKSPACE\" --source-commit \"$GITHUB_SHA\" --source-closure-path \"$RUNNER_TEMP/{closure}\"")),
+        run_step("Install the Buildx plugin from .velnor/runner.lock", &format!("\"{binary}\" image-maintenance install-buildx --root \"$GITHUB_WORKSPACE\" --runner-temp \"$RUNNER_TEMP\"")),
         run_step("Build the job image candidate", &build_command),
         upload_step(),
-    ];
+    ]);
     let fields = vec![
         (
             "name".to_owned(),
@@ -136,7 +106,7 @@ fn build_job(hosted: Yaml) -> (String, Yaml) {
         ("runs-on".to_owned(), hosted),
         (
             "timeout-minutes".to_owned(),
-            Yaml::Int(i64::from(JobTimeout::CANDIDATE.minutes())),
+            Yaml::Int(i64::from(JobTimeout::PRODUCT_COMPILER.minutes())),
         ),
         (
             "permissions".to_owned(),
@@ -152,14 +122,20 @@ fn build_job(hosted: Yaml) -> (String, Yaml) {
         ),
         ("steps".to_owned(), Yaml::Seq(steps)),
     ];
-    ("build-image-candidate".to_owned(), Yaml::Map(fields))
+    Ok(("build-image-candidate".to_owned(), Yaml::Map(fields)))
 }
 
-fn attest_job(hosted: Yaml, artifact_id: &str) -> (String, Yaml) {
-    let archive = format!("candidate/{ARCHIVE}");
-    let record = format!("candidate/{RECORD}");
+fn attest_job(
+    hosted: Yaml,
+    artifact_id: &str,
+    pins: &super::ProductReleasePins,
+) -> Result<(String, Yaml), RenderError> {
+    let archive = format!("{ATTESTATION_RUNTIME_CANDIDATE}/{ARCHIVE}");
+    let record = format!("{ATTESTATION_RUNTIME_CANDIDATE}/{RECORD}");
+    let binary = native::BINARY;
+    let closure = native::CLOSURE;
     let validate = format!(
-        "python3 images/job/ubuntu-26.04/candidate/candidate.py validate --archive \"{archive}\" --record \"{record}\""
+        "\"{binary}\" image-maintenance validate-job-candidate --root \"$GITHUB_WORKSPACE\" --archive-path \"{archive}\" --record-path \"{record}\" --source-closure-path \"{ATTESTATION_RUNTIME_CANDIDATE}/{closure}\""
     );
     let attest = Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Attest all candidate bytes.")),
@@ -168,17 +144,20 @@ fn attest_job(hosted: Yaml, artifact_id: &str) -> (String, Yaml) {
             "with".to_owned(),
             Yaml::Map(vec![(
                 "subject-path".to_owned(),
-                Yaml::str(format!("{archive}\n{record}")),
+                Yaml::str(format!(
+                    "{ATTESTATION_CANDIDATE}/{ARCHIVE}\n{ATTESTATION_CANDIDATE}/{RECORD}\n{ATTESTATION_CANDIDATE}/{closure}"
+                )),
             )]),
         ),
     ]);
-    let steps = vec![
-        checkout_step("Use the source commit selected by GitHub."),
+    let mut steps = vec![checkout_step("Use the source commit selected by GitHub.")];
+    steps.extend(native::source_steps(pins)?);
+    steps.extend([
         artifact_id_check_step(artifact_id),
-        download_step(artifact_id),
+        download_step(artifact_id, ATTESTATION_CANDIDATE),
         run_step("Do a check of source and archive identity", &validate),
         attest,
-    ];
+    ]);
     let fields = vec![
         (
             "name".to_owned(),
@@ -187,7 +166,7 @@ fn attest_job(hosted: Yaml, artifact_id: &str) -> (String, Yaml) {
         ("runs-on".to_owned(), hosted),
         (
             "timeout-minutes".to_owned(),
-            Yaml::Int(i64::from(JobTimeout::CANDIDATE.minutes())),
+            Yaml::Int(i64::from(JobTimeout::PRODUCT_COMPILER.minutes())),
         ),
         (
             "needs".to_owned(),
@@ -205,7 +184,7 @@ fn attest_job(hosted: Yaml, artifact_id: &str) -> (String, Yaml) {
         ),
         ("steps".to_owned(), Yaml::Seq(steps)),
     ];
-    ("attest-image-candidate".to_owned(), Yaml::Map(fields))
+    Ok(("attest-image-candidate".to_owned(), Yaml::Map(fields)))
 }
 
 fn publish_job(hosted: Yaml, artifact_id: &str) -> (String, Yaml) {
@@ -234,7 +213,7 @@ fn publish_job(hosted: Yaml, artifact_id: &str) -> (String, Yaml) {
     let steps = vec![
         checkout_step("Use the source commit selected by GitHub."),
         artifact_id_check_step(artifact_id),
-        download_step(artifact_id),
+        download_step(artifact_id, "candidate"),
         publish_step,
         publication_evidence_upload_step("${{ runner.temp }}/job-image-publication.json"),
     ];
@@ -320,7 +299,8 @@ fn upload_step() -> Yaml {
                 (
                     "path".to_owned(),
                     Yaml::str(format!(
-                        "${{{{ runner.temp }}}}/{ARCHIVE}\n${{{{ runner.temp }}}}/{RECORD}"
+                        "${{{{ runner.temp }}}}/{ARCHIVE}\n${{{{ runner.temp }}}}/{RECORD}\n${{{{ runner.temp }}}}/{}",
+                        native::CLOSURE
                     )),
                 ),
                 ("if-no-files-found".to_owned(), Yaml::str("error")),
@@ -369,7 +349,7 @@ fn artifact_id_check_step(artifact_id: &str) -> Yaml {
     ])
 }
 
-fn download_step(artifact_id: &str) -> Yaml {
+fn download_step(artifact_id: &str, destination: &str) -> Yaml {
     Yaml::Map(vec![
         (
             "name".to_owned(),
@@ -380,7 +360,7 @@ fn download_step(artifact_id: &str) -> Yaml {
             "with".to_owned(),
             Yaml::Map(vec![
                 ("artifact-ids".to_owned(), Yaml::str(artifact_id)),
-                ("path".to_owned(), Yaml::str("candidate")),
+                ("path".to_owned(), Yaml::str(destination)),
             ]),
         ),
     ])

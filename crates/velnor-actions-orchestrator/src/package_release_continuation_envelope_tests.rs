@@ -3,7 +3,7 @@ use serde_json::{Value, json};
 use velnor_actions_contract::package_release::PackageReleaseEvent;
 
 fn fixture() -> (PackageReleasePlan, String, Value) {
-    let fixture = crate::tap_test_support::fixture();
+    let fixture = crate::homebrew::test_support::fixture();
     let mut plan = fixture.plan;
     plan.channel = PackageReleaseChannel::Stable;
     let mut receipt = fixture.release.receipt;
@@ -31,7 +31,7 @@ fn fixture() -> (PackageReleasePlan, String, Value) {
 }
 
 fn preview_fixture() -> (PackageReleasePlan, String, Value, String, u64) {
-    let fixture = crate::tap_test_support::fixture();
+    let fixture = crate::homebrew::test_support::fixture();
     let plan = fixture.plan;
     let receipt = fixture.release.receipt;
     let source_sha = receipt.source.commit_sha.clone();

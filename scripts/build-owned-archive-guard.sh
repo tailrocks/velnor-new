@@ -16,11 +16,13 @@ cache_root="$home_root/.cache"
 build_root="$cache_root/velnor/archive-guard"
 guard_target_root="$build_root/target"
 guard_target=''
+bootstrap_target=''
+bootstrap_guard=''
 build_tmp_root="$build_root/tmp"
 run_tmp=''
 temporary=''
 cargo_home="$build_root/cargo-home"
-mise_data="$home_root/.local/share/mise"
+mise_data="$build_root/mise-data"
 mise_cache="$build_root/mise-cache"
 rustup_home="$build_root/rustup-home"
 
@@ -241,19 +243,14 @@ for path in "$guard_state" "$guard_bin_dir" "$cache_root" "$cache_root/velnor" \
   "$mise_cache" "$rustup_home"; do
   [[ ! -L "$path" ]] || fail "build path is a symlink: $path"
 done
-for path in "$home_root/.local" "$home_root/.local/share"; do
-  [[ ! -L "$path" ]] || fail "Mise path is a symlink: $path"
-done
 mkdir -p -- "$guard_bin_dir" "$guard_target_root" "$build_tmp_root" "$cargo_home" \
   "$mise_data" "$mise_cache" "$rustup_home"
 chmod 700 "$guard_state" "$guard_bin_dir" "$build_root" "$guard_target_root" \
-  "$build_tmp_root" "$cargo_home" "$mise_cache" "$rustup_home"
+  "$build_tmp_root" "$cargo_home" "$mise_data" "$mise_cache" "$rustup_home"
 check_directory "$state_root"
 check_directory "$guard_state"
 check_directory "$guard_bin_dir"
 check_directory "$home_root"
-check_directory "$home_root/.local"
-check_directory "$home_root/.local/share"
 check_directory "$cache_root"
 check_directory "$cache_root/velnor"
 check_directory "$build_root"
@@ -353,7 +350,21 @@ rustc_version="$(run_mise exec rust@1.99.1 -- rustc --version)"
 cargo_version="$(run_mise exec rust@1.99.1 -- cargo --version)"
 [[ "$rustc_version" == 'rustc 1.99.1 '* ]] || fail "unexpected compiler: $rustc_version"
 [[ "$cargo_version" == 'cargo 1.99.1 '* ]] || fail "unexpected Cargo: $cargo_version"
+bootstrap_target="$run_tmp/bootstrap-target"
+mkdir -m 700 -- "$bootstrap_target"
+check_directory "$bootstrap_target"
+guard_target="$bootstrap_target"
+validate_local_cargo_closure
+run_mise exec rust@1.99.1 -- cargo build --release --locked \
+  --manifest-path "$repository/Cargo.toml" \
+  -p velnor-archive-guard --bin velnor-archive-guard
+bootstrap_guard="$bootstrap_target/release/velnor-archive-guard"
+check_directory "$bootstrap_target/release"
+check_cargo_output "$bootstrap_guard"
+ARCHIVE_GUARD_BOOTSTRAP_BIN="$bootstrap_guard"
+export ARCHIVE_GUARD_BOOTSTRAP_BIN
 source_fingerprint="$(archive_guard_source_fingerprint)"
+archive_guard_check_fingerprint "$bootstrap_guard" "$source_fingerprint"
 target_identity="$(archive_guard_target_identity)"
 guard_target="$guard_target_root/$source_fingerprint-$target_identity"
 [[ ! -L "$guard_target" ]] || fail 'archive guard target namespace is a symlink'
@@ -365,7 +376,6 @@ for profile in "$guard_target/debug" "$guard_target/release"; do
     check_directory "$profile"
   fi
 done
-validate_local_cargo_closure
 run_mise exec rust@1.99.1 -- cargo build --release --locked \
   --manifest-path "$repository/Cargo.toml" \
   -p velnor-archive-guard --bin velnor-archive-guard

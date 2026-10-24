@@ -6,6 +6,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[path = "git_tap_capture/homebrew_pinned_source.rs"]
+pub mod homebrew_pinned_source;
+
+pub use homebrew_pinned_source::{PinnedHomebrewSource, materialize_homebrew_pinned_source};
+
 const OUTPUT_LIMIT: usize = 1024 * 1024;
 
 /// A fresh detached checkout of the exact observed `main` commit.
@@ -94,9 +99,10 @@ fn parse_tree(bytes: &[u8]) -> Result<Vec<TapTreeEntry>, MiseError> {
             .and_then(|value| std::str::from_utf8(value).ok())
             .and_then(|value| u32::from_str_radix(value, 8).ok())
             .ok_or_else(|| invalid("tap_tree_mode"))?;
-        if !matches!(mode, 0o100_644 | 0o100_755) || fields.next() != Some(b"blob".as_slice()) {
-            return Err(invalid("tap_tree_nonregular_entry"));
-        }
+        let object_type = fields
+            .next()
+            .and_then(|value| std::str::from_utf8(value).ok())
+            .ok_or_else(|| invalid("tap_tree_record"))?;
         let sha = fields
             .next()
             .and_then(|value| std::str::from_utf8(value).ok())
@@ -108,18 +114,13 @@ fn parse_tree(bytes: &[u8]) -> Result<Vec<TapTreeEntry>, MiseError> {
         let path = std::str::from_utf8(path)
             .map_err(|_| invalid("tap_tree_non_utf8_path"))?
             .to_owned();
-        if !safe_tree_path(&path)
-            || entries
-                .iter()
-                .any(|entry: &TapTreeEntry| entry.path == path)
+        if entries
+            .iter()
+            .any(|entry: &TapTreeEntry| entry.path == path)
         {
             return Err(invalid("tap_tree_path"));
         }
-        entries.push(TapTreeEntry {
-            path,
-            mode,
-            blob_sha: sha.to_owned(),
-        });
+        entries.push(validate_tap_regular_leaf(&path, mode, object_type, sha)?);
     }
     if entries.is_empty() {
         return Err(invalid("tap_tree_empty"));
@@ -128,10 +129,37 @@ fn parse_tree(bytes: &[u8]) -> Result<Vec<TapTreeEntry>, MiseError> {
     Ok(entries)
 }
 
+/// Admit one regular leaf from a captured Git tree or a recursive API tree.
+///
+/// # Errors
+/// Rejects unsafe paths, nonregular modes/types, or malformed blob identities.
+pub fn validate_tap_regular_leaf(
+    path: &str,
+    mode: u32,
+    object_type: &str,
+    blob_sha: &str,
+) -> Result<TapTreeEntry, MiseError> {
+    if !matches!(mode, 0o100_644 | 0o100_755) || object_type != "blob" {
+        return Err(invalid("tap_tree_nonregular_entry"));
+    }
+    if !safe_tree_path(path) {
+        return Err(invalid("tap_tree_path"));
+    }
+    if !is_full_sha(blob_sha) {
+        return Err(invalid("tap_tree_blob_sha"));
+    }
+    Ok(TapTreeEntry {
+        path: path.to_owned(),
+        mode,
+        blob_sha: blob_sha.to_owned(),
+    })
+}
+
 fn safe_tree_path(path: &str) -> bool {
     !path.is_empty()
         && !path.starts_with('/')
         && !path.contains('\\')
+        && !path.chars().any(char::is_control)
         && path
             .split('/')
             .all(|part| !part.is_empty() && part != "." && part != "..")

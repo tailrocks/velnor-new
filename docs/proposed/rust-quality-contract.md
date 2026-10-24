@@ -83,7 +83,9 @@ The `velnor-actions` binary is owned by package `velnor-actions-cli`. Future sta
 
 Both repository-only members are outside the eight-product V1 task graph. The
 CLI private gate consumes freshness at runtime, repository scripts provision
-archive guard, and the orchestrator does not link either helper as a library.
+archive guard, and the orchestrator links only archive guard's bounded, pure
+OCI validation API. Freshness stays outside the product dependency graph;
+archive guard owns no processes, workflow generation, or product tasks.
 The canonical repository's `maintenance-helpers` named Mise check runs their
 package test suites independently of Rust task derivation and the product
 matrix; this repository's VelnorRepositoryV1 configuration makes it required.

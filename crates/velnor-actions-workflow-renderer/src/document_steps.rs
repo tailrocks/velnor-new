@@ -16,6 +16,9 @@ use crate::{
     yaml::Yaml,
 };
 
+#[path = "native_check_execution.rs"]
+mod native_check_execution;
+
 /// True for the final job's plan download (fetch is gated inline below).
 ///
 /// An absent plan artifact (failed plan) must still reach the merge
@@ -209,9 +212,11 @@ pub(crate) fn non_internal_step_to_yaml(
             action_step_to_yaml(job_id, step, uses, with, env, job_env, Some(runs_on))
         }
         StepKind::Shell { run, env } => shell_step_to_yaml(step, run, env, job_env, false, None),
-        StepKind::Internal { .. } | StepKind::TaskExecution { .. } => Err(
-            RenderError::InvalidWorkflow("internal_op_rejected".to_owned()),
-        ),
+        StepKind::Internal { .. }
+        | StepKind::TaskExecution { .. }
+        | StepKind::NativeCheckExecution { .. } => Err(RenderError::InvalidWorkflow(
+            "internal_op_rejected".to_owned(),
+        )),
     }
 }
 
@@ -262,6 +267,9 @@ pub(crate) fn step_to_yaml(
         StepKind::TaskExecution { .. } => Err(RenderError::InvalidWorkflow(
             "unfactored_task_execution".to_owned(),
         )),
+        StepKind::NativeCheckExecution { .. } => {
+            native_check_execution::render(step, step_context.job_env)
+        }
     }
 }
 

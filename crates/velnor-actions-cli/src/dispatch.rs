@@ -187,6 +187,9 @@ fn gate_file_request(op: InternalOp, path: PathBuf) -> Option<InternalRequest> {
         | InternalOp::PreseedManifest
         | InternalOp::RepoPolicy
         | InternalOp::ExecuteCheck
+        | InternalOp::ExecuteNativeHomebrewCheck
+        | InternalOp::QualifyHomebrew
+        | InternalOp::SeedParallelTargets
         | InternalOp::ResolveTaskExecution => {}
     }
     Some(InternalRequest { op, path })
@@ -222,6 +225,15 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
             velnor_actions_orchestrator::acquire_preview_source_from_env(),
         ),
         InternalOp::ExecuteCheck => unit_exit(execute_check().map(|_| ())),
+        InternalOp::SeedParallelTargets => {
+            unit_exit(velnor_actions_orchestrator::seed_parallel_targets_from_env())
+        }
+        InternalOp::QualifyHomebrew => {
+            unit_exit(velnor_actions_orchestrator::execute_homebrew_qualification_from_env())
+        }
+        InternalOp::ExecuteNativeHomebrewCheck => unit_exit(
+            velnor_actions_orchestrator::execute_native_homebrew_check_from_env().map(|_| ()),
+        ),
         InternalOp::StableSourceSelection => preview_production::native(
             velnor_actions_orchestrator::select_stable_release_source_from_env(),
         ),
@@ -360,31 +372,6 @@ fn run_merge_internal(path: &Path) -> ExitCode {
     }
 }
 
-/// Report a private failure without printing the private operation.
-pub(crate) fn fail_internal(problem: &str) -> ExitCode {
-    eprintln!("velnor-actions: internal request failed: {problem}");
-    ExitCode::from(1)
-}
-
-/// Read the working directory, reporting failures as exit 1.
-pub(crate) fn working_dir() -> Option<PathBuf> {
-    match env::current_dir() {
-        Ok(dir) => Some(dir),
-        Err(error) => {
-            eprintln!("velnor-actions: working directory: {error}");
-            None
-        }
-    }
-}
-
-/// Report an orchestrator failure as exit 1.
-pub(crate) fn fail_public(error: &OrchestratorError) -> ExitCode {
-    eprintln!("velnor-actions: {}", single_line(&error.to_string()));
-    ExitCode::from(1)
-}
-
-/// Collapse error values to one log line so untrusted input cannot inject
-/// additional stderr records.
-fn single_line(text: &str) -> String {
-    text.replace(['\n', '\r'], " ")
-}
+#[path = "dispatch/errors.rs"]
+mod errors;
+pub(crate) use errors::{fail_internal, fail_public, working_dir};

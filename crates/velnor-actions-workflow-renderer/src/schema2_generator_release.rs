@@ -45,6 +45,7 @@ pub(super) enum JobRole {
     Build(ReleaseTarget),
     CandidateManifest,
     Qualify(ReleaseTarget),
+    QualifyHomebrew,
     Attest(ReleaseTarget),
     AttestManifest,
     Publish,
@@ -55,6 +56,7 @@ pub(super) fn job_role(id: &str) -> Option<JobRole> {
     match id {
         "verify-release-source" => return Some(JobRole::SourceGate),
         "candidate-manifest" => return Some(JobRole::CandidateManifest),
+        "qualify-homebrew-macos" => return Some(JobRole::QualifyHomebrew),
         "attest-manifest" => return Some(JobRole::AttestManifest),
         "publish-generator" => return Some(JobRole::Publish),
         _ => {}
@@ -288,6 +290,7 @@ fn macos_arm64_jobs(
             pins,
             actions,
         )?,
+        qualification::homebrew_job(pins, actions)?,
         jobs::attest_job(
             "attest-macos",
             "Attest macOS velnor-actions",

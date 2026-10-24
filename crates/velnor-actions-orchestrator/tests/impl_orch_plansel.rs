@@ -1,7 +1,7 @@
 //! Plan-selection acceptance: narrow selection (OW2).
 use crate::impl_common::{
-    TestResult, config_with_branch, fixture_manifest_json, git, git_line, passing_reports,
-    plan_for_source_change,
+    TestResult, config_with_branch, fixture_manifest_json, git, git_line, merge_fixture,
+    passing_reports, plan_for_source_change,
 };
 use crate::impl_merge::task_reports_for;
 use serde_json::Value as Json;
@@ -9,7 +9,7 @@ use std::fs;
 use std::path::Path;
 use tempfile::TempDir;
 use velnor_actions_contract::{FinalStatus, MatrixReport, Plan};
-use velnor_actions_orchestrator::{merge_internal, plan_internal};
+use velnor_actions_orchestrator::plan_internal;
 
 /// Git repo with workspace `members` plus path `deps` as (from, to, table).
 pub(crate) fn make_ws(
@@ -244,7 +244,7 @@ pub(crate) fn merge_status(
         request[key] = value.clone();
     }
     Ok(
-        serde_json::from_str::<velnor_actions_contract::FinalReport>(&merge_internal(
+        serde_json::from_str::<velnor_actions_contract::FinalReport>(&merge_fixture(
             &request.to_string(),
         )?)?
         .status,

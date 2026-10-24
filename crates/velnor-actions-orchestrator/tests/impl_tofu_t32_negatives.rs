@@ -11,11 +11,11 @@ use std::fs;
 use serde_json::json;
 use tempfile::TempDir;
 use velnor_actions_contract::{FinalStatus, MatrixStatus, Plan, TaskStatus};
-use velnor_actions_orchestrator::{
-    OrchestratorError, merge_internal, merge_passed, prepare, publish_final_report,
-};
+use velnor_actions_orchestrator::{OrchestratorError, merge_passed, prepare, publish_final_report};
 
-use super::impl_common::{TestResult, git, install_fixture_release_manifest, passing_reports};
+use super::impl_common::{
+    TestResult, git, install_fixture_release_manifest, merge_fixture, passing_reports,
+};
 use super::impl_orch_core::{merge, merge_request, set_task, success_jobs};
 use super::impl_select::{commit, plan_pr};
 
@@ -195,7 +195,7 @@ fn t32_unformatted_tf_failed_fmt_leg_reds_required() -> TestResult {
         &serde_json::to_value(&reports)?,
         &success_jobs(),
     );
-    let response = merge_internal(&request.to_string())?;
+    let response = merge_fixture(&request.to_string())?;
     assert!(!merge_passed(&response)?, "failed fmt never passes");
     let final_report: velnor_actions_contract::FinalReport = serde_json::from_str(&response)?;
     assert_eq!(final_report.status, FinalStatus::Failed);

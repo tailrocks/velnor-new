@@ -76,10 +76,9 @@ validate_source_tree() {
   check_source_parent_dirs "$relative" false
   check_directory "$full"
   find_status="$(mktemp "${TMPDIR:-/tmp}/archive-guard-find.XXXXXX")"
-  (find "$full" -mindepth 1 -print0; printf '%s\n' "$?" >"$find_status") |
-    while IFS= read -r -d '' entry; do
+  while IFS= read -r -d '' entry; do
       discovered=$((discovered + 1))
-      (( discovered <= 512 )) \
+      (( discovered <= 1024 )) \
         || fail "archive guard source tree entry count exceeded: $relative"
       if [[ -L "$entry" ]]; then
         fail "archive guard source tree contains a symlink: $entry"
@@ -94,7 +93,7 @@ validate_source_tree() {
       else
         fail "archive guard source tree contains a special file: $entry"
       fi
-    done
+  done < <(find "$full" -mindepth 1 -print0; printf '%s\n' "$?" >"$find_status")
   if [[ "$(cat "$find_status")" != 0 ]]; then
     fail "cannot enumerate archive guard source tree: $relative"
   fi
@@ -123,9 +122,11 @@ validate_source_manifest() {
         check_source_size
         ;;
       optional)
+        SOURCE_FILE_SIZE=0
         if check_source_file "$relative" true; then
-          check_source_size
+          :
         fi
+        check_source_size
         ;;
       tree) validate_source_tree "$relative" ;;
       *) fail 'archive guard source manifest kind is unknown' ;;

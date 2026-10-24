@@ -9,6 +9,9 @@ mod isolation_tests;
 #[path = "impl_cli_nested_target.rs"]
 pub(crate) mod nested_target;
 
+#[path = "impl_cli_tool_context.rs"]
+pub(crate) mod tool_context;
+
 use std::error::Error;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};

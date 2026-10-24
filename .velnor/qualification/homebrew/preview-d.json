@@ -1,0 +1,41 @@
+{
+  "schema": "velnor.homebrew-historical-preview.v1",
+  "label": "D",
+  "repository": {"slug": "jackin-project/jackin", "id": 1197700841},
+  "plan_sha256": "5f4dc66b22cbce0f309ea9ab8c93709774a8890f365e0d61277fb2b0b505d9ae",
+  "release": {
+    "id": 422676197,
+    "tag": "preview-5094139b2658e793d36306a34a7a135554c4f7eb",
+    "source_sha": "5094139b2658e793d36306a34a7a135554c4f7eb",
+    "version": "0.6.4-preview.1370+5094139",
+    "commit_count": 1370,
+    "receipt_asset_id": 672027695,
+    "receipt_name": "release.json",
+    "receipt_size": 10056,
+    "receipt_sha256": "3221d5e5b9efc137c88399882239946e1ffa6578b06ed733e791c407ac0c3a2e",
+    "immutable": true,
+    "prerelease": true,
+    "draft": false
+  },
+  "source_ci": {"run_id": 40085098675, "attempt": 1, "conclusion": "success"},
+  "producer": {
+    "run_id": 40086102429,
+    "attempt": 1,
+    "event": "workflow_run",
+    "conclusion": "failure",
+    "authority_sha": "5094139b2658e793d36306a34a7a135554c4f7eb",
+    "workflow_path": ".github/workflows/binary-preview.yml",
+    "workflow_ref": "refs/heads/main",
+    "assemble_job": {"name": "preview-assemble", "id": 120853436092, "conclusion": "success"},
+    "signer_job": {"name": "preview-signer", "id": 120854174043, "conclusion": "success"},
+    "publisher_job": {"name": "Publish authenticated channel release", "id": 120854366949, "conclusion": "success"},
+    "failure_job_id": 120856611080,
+    "failure_scope": "downstream-tap-preparation"
+  },
+  "evidence": {
+    "profile": "signed-sbom-v1",
+    "issuer": "https://token.actions.githubusercontent.com",
+    "predicate": "https://slsa.dev/provenance/v1",
+    "signer_workflow": "jackin-project/jackin/.github/workflows/binary-preview.yml@refs/heads/main"
+  }
+}

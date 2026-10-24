@@ -11,33 +11,32 @@ use std::path::Path;
 use serde::Serialize;
 use velnor_actions_contract::{
     MatrixEntry, NamedCheckLane, PlanObligation, PlannedPlatform, ProposedTask, Stack,
-    StackExtension, canonical_json_bytes, digest_b3,
+    canonical_json_bytes, digest_b3,
 };
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_mise::restore::probe_tool_availability;
-use velnor_actions_rust::extension_for_proposal;
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::internal::{internal, internal_contract};
-use crate::internal_plan::closure::resolve_closure_at_root;
-use crate::internal_plan::identities::{
-    ExtensionBundle, extension_bundle_with_snapshot, platform_id_for_group,
-};
-use crate::internal_plan::snapshot::{
-    ExecutionSnapshot, canonical_digest, platform_target_for_group,
-};
+use crate::internal_plan::identities::platform_id_for_group;
+use crate::internal_plan::snapshot::{ExecutionSnapshot, platform_target_for_group};
 use crate::internal_plan::wire_w2::{self, GroupWire};
 use crate::internal_plan::{
-    IdentityInputs, adapter_metadata, cache_ids_for, evidence_for_group, execute_ids,
-    nextest_config_for, record_task_cache, task_identity_digest, toolchain_id,
+    adapter_metadata, cache_ids_for, evidence_for_group, execute_ids, record_task_cache,
+    toolchain_id,
 };
 use crate::schedule::assign_lanes;
 use crate::select::group_changed;
 
+#[path = "plan_obligation_identity.rs"]
+mod identity;
 #[cfg(test)]
 #[path = "plan_obligation_tests.rs"]
 mod tests;
+#[cfg(test)]
+use identity::extension_for_task;
+use identity::planned_identity;
 
 /// Inputs for planning one obligation.
 pub(crate) struct GroupInputs<'a> {
@@ -98,110 +97,6 @@ pub(crate) fn member_changed(
     changed.is_none_or(|set| group_changed(task, set, keys))
 }
 
-/// Extension bundle plus closure-bound identity digests for one task.
-struct PlannedIdentity {
-    /// Snapshot-indexed bundle with checkout-bound lock/Nextest digests.
-    bundle: ExtensionBundle,
-    /// Whether the stack extension permits reuse.
-    reuse_eligible: bool,
-    /// Canonical digest over the complete input closure.
-    closure_digest: String,
-    /// Input digest with the closure digest bound into the envelope.
-    input_digest: String,
-}
-
-/// Stack-extension envelope plus reuse eligibility for one task.
-///
-/// Closed per-stack dispatch: rust tasks derive through the rust
-/// bridge over the snapshot bundle; tofu tasks derive through the
-/// tofu bridge with a checkout-bound root-lockfile slot. Both feed
-/// the same neutral envelope and gate.
-fn extension_for_task(
-    task: &ProposedTask,
-    root: &Path,
-    bundle: &ExtensionBundle,
-    reads: &mut velnor_actions_tofu::FileCache,
-) -> Result<(StackExtension, bool), OrchestratorError> {
-    let stack = Stack::require_known(&task.stack_id).map_err(internal_contract)?;
-    if stack == Stack::Mise {
-        return Err(internal("named_check_definition_required"));
-    }
-    if stack == Stack::Tofu {
-        let ext = crate::internal_plan::tofu_extension_for(task, root, bundle, reads)
-            .map_err(internal_contract)?;
-        return Ok((ext.to_stack_extension(), ext.reuse_eligible().is_ok()));
-    }
-    let ext = extension_for_proposal(task, &bundle.inputs()).map_err(internal_contract)?;
-    Ok((ext.to_stack_extension(), ext.reuse_eligible().is_ok()))
-}
-
-/// Snapshot bundle plus closure-bound identity digests for one task.
-///
-/// The closure resolves against the checkout and its digest binds into
-/// the identity envelope, so a source edit flips `input_digest` even
-/// when the changed-work hint misses it.
-fn planned_identity(
-    inputs: &GroupInputs<'_>,
-    argv: &[String],
-    toolchain: &str,
-    platform_id: &str,
-    reads: &mut velnor_actions_tofu::FileCache,
-) -> Result<PlannedIdentity, OrchestratorError> {
-    let task = inputs.task;
-    let manifest = task.identity.unit_path.clone();
-    let nextest_config = nextest_config_for(inputs.discovery, task);
-    let bundle = extension_bundle_with_snapshot(
-        inputs.snapshot,
-        inputs.discovery,
-        task,
-        Some(inputs.root),
-        nextest_config.as_deref(),
-    );
-    let (extension, reuse_eligible) = extension_for_task(task, inputs.root, &bundle, reads)?;
-    let closure = if Stack::from_id(&task.stack_id) == Some(Stack::Rust) {
-        inputs
-            .snapshot
-            .resolve_rust_closure(
-                inputs.root,
-                task,
-                nextest_config.as_deref(),
-                bundle.graph_digest(),
-                toolchain,
-                platform_id,
-            )
-            .map_err(internal_contract)?
-    } else {
-        resolve_closure_at_root(
-            inputs.root,
-            task,
-            nextest_config.as_deref(),
-            bundle.graph_digest(),
-            toolchain,
-            platform_id,
-            &mut *reads,
-        )
-        .map_err(internal_contract)?
-    };
-    let closure_digest = canonical_digest(&closure).map_err(internal_contract)?;
-    let input_digest = task_identity_digest(&IdentityInputs {
-        task,
-        argv,
-        toolchain_id: toolchain,
-        platform_id,
-        manifest: &manifest,
-        generator: inputs.wire.generator,
-        extension,
-        closure_digest: &closure_digest,
-    })
-    .map_err(internal_contract)?;
-    Ok(PlannedIdentity {
-        bundle,
-        reuse_eligible,
-        closure_digest,
-        input_digest,
-    })
-}
-
 /// Obligation plus matrix entry for one universe member.
 ///
 /// Identities attach first; changed members execute unconditionally
@@ -211,6 +106,22 @@ pub(crate) fn plan_group(
     reads: &mut velnor_actions_tofu::FileCache,
 ) -> Result<(PlanObligation, Vec<MatrixEntry>), OrchestratorError> {
     let task = inputs.task;
+    if Stack::from_id(&task.stack_id) == Some(Stack::Native) {
+        let check = inputs
+            .discovery
+            .native_checks
+            .iter()
+            .find(|check| task.task_id == format!("internal/native-check/{}", check.id))
+            .ok_or_else(|| internal("native_check_not_configured"))?;
+        return crate::internal_plan::native_homebrew_checks::derive(
+            inputs.root,
+            check,
+            task,
+            inputs.run_key,
+            inputs.wire.generator,
+            inputs.wire.event,
+        );
+    }
     if Stack::from_id(&task.stack_id) == Some(Stack::Mise) {
         let item = crate::internal_plan::named_checks::discovered(inputs.discovery, task)
             .map_err(internal_contract)?;

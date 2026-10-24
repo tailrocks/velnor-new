@@ -10,6 +10,9 @@ pub(super) fn uses_runner_temp_gate(op: InternalOp) -> bool {
     matches!(
         op,
         InternalOp::ResolveTaskExecution
+            | InternalOp::ExecuteNativeHomebrewCheck
+            | InternalOp::QualifyHomebrew
+            | InternalOp::SeedParallelTargets
             | InternalOp::Fetch
             | InternalOp::Report
             | InternalOp::ExecuteCheck
@@ -35,12 +38,17 @@ pub(super) fn gate_runner_temp_operation(op: InternalOp) -> Option<InternalReque
         {
             runner_velnor_dir().map(|path| InternalRequest { op, path })
         }
-        InternalOp::Fetch | InternalOp::Report | InternalOp::ExecuteCheck
+        InternalOp::Fetch
+        | InternalOp::Report
+        | InternalOp::ExecuteCheck
+        | InternalOp::ExecuteNativeHomebrewCheck
+        | InternalOp::QualifyHomebrew
             if env::var("GITHUB_RUN_ID").is_ok_and(|id| !id.is_empty()) =>
         {
             runner_velnor_dir().map(|path| InternalRequest { op, path })
         }
         InternalOp::PrivateFetch
+        | InternalOp::SeedParallelTargets
         | InternalOp::PrivateRevoke
         | InternalOp::BunRegistryInstall
         | InternalOp::GradleRun

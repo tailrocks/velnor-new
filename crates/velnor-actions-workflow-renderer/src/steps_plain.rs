@@ -66,9 +66,9 @@ pub(crate) fn plain_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
         StepKind::TaskExecution { .. } => Err(RenderError::InvalidWorkflow(
             "unfactored_task_execution".to_owned(),
         )),
-        StepKind::Internal { .. } => Err(RenderError::InvalidWorkflow(
-            "internal_op_rejected".to_owned(),
-        )),
+        StepKind::NativeCheckExecution { .. } | StepKind::Internal { .. } => Err(
+            RenderError::InvalidWorkflow("internal_op_rejected".to_owned()),
+        ),
     }
 }
 

@@ -61,6 +61,55 @@ pub(super) struct UpdaterRun<'a> {
     pub(super) release: &'a VerifiedPackageRelease,
 }
 
+pub(super) struct CapturedUpdaterRun<'a> {
+    pub(super) release: &'a VerifiedPackageRelease,
+    pub(super) plan: &'a PackageReleasePlan,
+    pub(super) formula_path: &'a str,
+    pub(super) temp: &'a Path,
+    pub(super) captured: &'a super::CapturedTapMain,
+    pub(super) discovered: &'a DiscoveredCheck,
+    pub(super) deadline: CheckDeadline,
+}
+
+pub(super) fn run_captured_updater(run: &CapturedUpdaterRun<'_>) -> Result<(), OrchestratorError> {
+    let receipt_bytes =
+        canonical_json_bytes(&run.release.receipt).map_err(|_| internal("tap_receipt_encode"))?;
+    if run
+        .release
+        .receipt
+        .canonical_digest()
+        .map_err(|_| internal("tap_receipt_digest"))?
+        != run.release.receipt_digest
+    {
+        return Err(internal("tap_receipt_digest_mismatch"));
+    }
+    let receipt_path = prepare_receipt_handoff(run.temp, &receipt_bytes)?;
+    let plan_path = prepare_plan_handoff(run.temp, run.plan)?;
+    run_updater(&UpdaterRun {
+        root: &run.captured.checkout,
+        temp: run.temp,
+        discovered: run.discovered,
+        deadline: run.deadline,
+        receipt_path: &receipt_path,
+        plan_path: &plan_path,
+        base_sha: &run.captured.commit_sha,
+        formula: run.formula_path,
+        release: run.release,
+    })?;
+    if fs::read(&receipt_path).map_err(|_| internal("tap_receipt_handoff_read"))? != receipt_bytes {
+        return Err(internal("tap_receipt_handoff_changed"));
+    }
+    if fs::read(&plan_path).map_err(|_| internal("tap_plan_handoff_read"))?
+        != run
+            .plan
+            .canonical_bytes()
+            .map_err(|_| internal("tap_plan_handoff_encode"))?
+    {
+        return Err(internal("tap_plan_handoff_changed"));
+    }
+    Ok(())
+}
+
 pub(super) fn run_updater(run: &UpdaterRun<'_>) -> Result<(), OrchestratorError> {
     let UpdaterRun {
         root,

@@ -153,6 +153,7 @@ fn latest_source_ci_rejects_missing_ambiguous_and_foreign_inventory() {
 
 fn required() -> WorkflowJob {
     WorkflowJob {
+        id: 0,
         run_id: 22,
         name: REQUIRED_DISPLAY_NAME.to_owned(),
         head_sha: Some(source().sha.to_owned()),

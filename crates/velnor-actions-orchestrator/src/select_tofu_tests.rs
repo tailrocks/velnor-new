@@ -22,6 +22,7 @@ fn discovery_with(statuses: Vec<DetectionStatus>, units: Vec<TofuSelectionUnit>)
     Discovery {
         gradle_roots: Vec::new(),
         mise_checks: Vec::new(),
+        native_checks: Vec::new(),
         statuses,
         workspaces: Vec::new(),
         proposals: Vec::new(),

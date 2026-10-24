@@ -1,0 +1,13 @@
+Downloaded exact macOS ARM64 release assets into /tmp/velnor-freshness-qual-20261025; no executable or archive was retained in the repository.
+
+Read-only commands completed:
+- gh 2.103.2: --version; release create --help; pr create --help.
+- release-plz 0.4.1: --version; --help; release --help; release-pr --help. No release or release-PR operation was run.
+- alint 0.20.1: --version; validate-config --config .alint.yml; check --config .alint.yml --fail-on-warning.
+- mise-action v5.2.3 dist/index.js: node --check; action source was not executed locally because GitHub Actions runtime behavior is hosted-only.
+
+Help transcripts have trailing whitespace trimmed for the repository's own text policy; command names and option text are unchanged. The uncredentialed GH CLI API probe was intentionally not used; upstream metadata came from the existing authenticated gh client and independent bounded sources.
+
+The captured main CI Plan log had trailing horizontal whitespace removed for the repository's text policy; blank environment values remain blank. `runner-observation.json` records both the normalized log digest and its original digest.
+
+The local update-set regression selection initially passed 13/15 tests; two generated snapshot checks failed because their expected manifest bindings were stale. After correcting those expectations, the exact snapshot and release-manifest checks plus invalid-manifest rejection passed 3/3 in Nextest run `ec347108-e402-4c70-8797-5d2278ecd05b`. The initial and corrected stderr receipts are retained as `update-set-pin-regressions-initial.stderr` and `update-set-pin-regressions-final.stderr`. The broader prior suite was 5,881 passed and 16 failed, so no whole-suite success is claimed. The final six-gate freshness rerun after promotion and hosted/affected-platform proof remain pending.

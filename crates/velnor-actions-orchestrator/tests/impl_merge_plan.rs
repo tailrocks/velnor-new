@@ -1,14 +1,15 @@
 //! Merge plan-shape cases: missing/hollow plans, agreement tokens,
 //! uncovered legs, and coverage revalidation.
 
-use velnor_actions_contract::{FinalStatus, JobDisposition, ObligationDecision, Plan};
-use velnor_actions_orchestrator::merge_internal;
-
 use crate::impl_common::{
-    TestResult, config_with_branch, err_of, git, git_line, make_repo, passing_reports,
-    plan_for_source_change,
+    TestResult, config_with_branch, err_of, git, git_line, make_repo, merge_fixture,
+    passing_reports, plan_for_source_change,
 };
 use crate::impl_merge::{merge, merge_request, success_jobs};
+use velnor_actions_contract::{FinalStatus, JobDisposition, ObligationDecision, Plan};
+
+#[path = "impl_merge_plan_native.rs"]
+mod native;
 
 /// Plan an empty pull-request diff; returns the plan and its skipped jobs.
 pub(crate) fn empty_diff_plan()
@@ -119,7 +120,7 @@ fn empty_diff_skips_every_crate_job() -> TestResult {
 
     // Malformed merge requests stay hard errors, not reports.
     let err = err_of(
-        merge_internal(r#"{"schema":1,"run_key":"local"}"#),
+        merge_fixture(r#"{"schema":1,"run_key":"local"}"#),
         "truncated merge rejected",
     )?;
     assert!(matches!(

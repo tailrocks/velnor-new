@@ -1,0 +1,18 @@
+--- Repository-level -----------------------------------------------------------
+  i  info     oss-security-policy-exists
+              Consider adding a SECURITY.md so vulnerability reporters know
+              where to disclose.
+              docs: https://docs.github.com/en/code-security/getting-started/adding-a-security-policy-to-your-repository
+  i  info     oss-code-of-conduct-exists
+              Consider adding a CODE_OF_CONDUCT.md.
+              docs: https://www.contributor-covenant.org/
+
+--- crates/velnor-runner/crates/velnor-runner-attestation/tests/fixtures/tough/targets/file3.txt
+  i  info     oss-final-newline   fixable
+              file does not end with a newline
+
+Summary (3 violations):
+  i 3 info
+  51 passing * 3 failing * 1 auto-fixable
+
+  -> run `alint fix` to resolve 1 fixable violation.

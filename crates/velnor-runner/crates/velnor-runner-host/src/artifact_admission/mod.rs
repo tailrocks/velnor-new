@@ -50,6 +50,66 @@ pub(crate) struct ArtifactCandidate {
     pub(crate) config: ContainerConfig,
 }
 
+pub(crate) struct ReleaseArchiveIdentity {
+    pub(crate) oci_index_sha256: String,
+    pub(crate) image_manifest_digest: String,
+    pub(crate) config_digest: String,
+}
+
+pub(crate) const RELEASE_ARCHIVE_LIMIT: usize = archive::MAX_RELEASE_ARCHIVE_BYTES;
+pub(crate) const RELEASE_MANIFEST_LIMIT: usize = manifest::MAX_MANIFEST_BYTES;
+
+pub(crate) fn hash_release_bytes(bytes: &[u8]) -> String {
+    hash::lowercase_hex(&hash::sha256(bytes))
+}
+
+pub(crate) fn parse_release_json(bytes: &[u8]) -> Result<serde_json::Value, HostError> {
+    strict_json::parse(bytes)
+}
+
+pub(crate) fn inspect_release_archive(
+    inspect_bytes: &[u8],
+    archive_bytes: &[u8],
+    source_commit: &str,
+) -> Result<ReleaseArchiveIdentity, HostError> {
+    use bollard::models::ImageInspect;
+
+    if inspect_bytes.is_empty() || inspect_bytes.len() > RELEASE_MANIFEST_LIMIT {
+        return Err(HostError::Frame);
+    }
+    let archive_identity = archive::inspect_for_release(archive_bytes, source_commit)?;
+    let inspect_value = strict_json::parse(inspect_bytes)?;
+    let inspections = inspect_value
+        .as_array()
+        .filter(|entries| entries.len() == 1)
+        .ok_or(HostError::Identity)?;
+    let inspection_value = inspections.first().ok_or(HostError::Identity)?;
+    if inspection_value
+        .get("Descriptor")
+        .is_some_and(|descriptor| !descriptor.is_object())
+    {
+        return Err(HostError::Identity);
+    }
+    let inspection: ImageInspect =
+        serde_json::from_value(inspection_value.clone()).map_err(|_| HostError::Identity)?;
+    let probe_manifest = manifest::ProbeManifest {
+        source_commit: source_commit.to_owned(),
+        workflow_authority_sha: source_commit.to_owned(),
+        platform: manifest::PLATFORM.to_owned(),
+        archive_format: manifest::ARCHIVE_FORMAT.to_owned(),
+        oci_index_sha256: archive_identity.oci_index_sha256.clone(),
+        image_manifest_digest: archive_identity.image_manifest_digest.clone(),
+        config_digest: archive_identity.config_digest.clone(),
+        archive_sha256: hash::lowercase_hex(&hash::sha256(archive_bytes)),
+    };
+    docker::validate_inspect(inspection, &probe_manifest, &archive_identity)?;
+    Ok(ReleaseArchiveIdentity {
+        oci_index_sha256: archive_identity.oci_index_sha256,
+        image_manifest_digest: archive_identity.image_manifest_digest,
+        config_digest: archive_identity.config_digest,
+    })
+}
+
 impl<'a> NativeArtifactProvider<'a> {
     pub(crate) fn from_compiled_release_identity(
         pat: &'a str,
@@ -214,6 +274,7 @@ mod tests {
             archive: Vec::new(),
             manifest,
             archive_identity: crate::artifact_admission::archive::ArchiveIdentity {
+                oci_index_sha256: "b".repeat(64),
                 image_manifest_digest: format!("sha256:{}", "c".repeat(64)),
                 image_manifest_media_type: "application/vnd.oci.image.manifest.v1+json".to_owned(),
                 image_manifest_size: 0,

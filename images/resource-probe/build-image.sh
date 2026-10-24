@@ -13,7 +13,9 @@ readonly authority_sha="${VELNOR_WORKFLOW_AUTHORITY_SHA:?missing workflow author
 [[ "${GITHUB_REF:?missing source ref}" == refs/heads/main ]]
 [[ "${GITHUB_SHA:?missing workflow SHA}" == "$source_sha" ]]
 
-python3 -B images/resource-probe/test_write_manifest.py
+readonly release_validator="${VELNOR_RESOURCE_PROBE_RELEASE_BIN:?missing native resource-probe release validator}"
+[[ "$release_validator" == /* && -f "$release_validator" && -x "$release_validator" && ! -L "$release_validator" ]] \
+  || { printf 'native resource-probe release validator must be an absolute executable regular file\n' >&2; exit 1; }
 
 workdir="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/resource-probe-build.XXXXXXXX")"
 readonly workdir
@@ -38,11 +40,11 @@ docker build --platform linux/amd64 --network none --build-arg "SOURCE_SHA=$sour
 chmod 0755 "$smoke_root"
 docker run --rm --pull=never --platform linux/amd64 --network none --read-only --cap-drop=ALL --security-opt no-new-privileges:true --user 65532:65532 --mount "type=bind,source=$smoke_root,target=/velnor/docker-root,readonly" "$image" > "$smoke_output" 2> "$smoke_error"
 test ! -s "$smoke_error"
-python3 images/resource-probe/validate_smoke.py "$smoke_output" "$smoke_root"
+"$release_validator" validate-smoke "$smoke_output" "$smoke_root"
 docker image save --platform linux/amd64 --output "$archive" "$image"
 test -s "$archive"
 docker image load --platform linux/amd64 --input "$archive"
 docker image inspect --platform linux/amd64 "$image" > "$inspect_json"
-python3 images/resource-probe/write_manifest.py "$inspect_json" "$archive" RESOURCE_PROBE_MANIFEST.json
+"$release_validator" write-manifest "$inspect_json" "$archive" RESOURCE_PROBE_MANIFEST.json
 
 printf 'validated linux/amd64 resource probe image %s\n' "$source_sha"

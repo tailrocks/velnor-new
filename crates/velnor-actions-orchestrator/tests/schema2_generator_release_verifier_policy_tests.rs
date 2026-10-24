@@ -2,7 +2,7 @@ use std::error::Error;
 
 use super::{assert_authenticated_binding, assert_exact_empty_verifier_credentials, unquote};
 
-const MISE_INSTALL_STEP: &str = "Install pinned Rust for the resource probe";
+const MISE_INSTALL_STEP: &str = "Install pinned resource-probe build and qualification tools";
 const MISE_INSTALL_TOKEN: &str = "${{ github.token }}";
 const BINARY_WORKFLOW: &str = include_str!("snapshots/product-release-binary.yml");
 

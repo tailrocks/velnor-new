@@ -28,9 +28,10 @@ pub(super) fn verifier_positions(
     for (index, step) in job.steps.iter().enumerate() {
         let action = match &step.kind {
             StepKind::Action { uses, .. } => verifiers.by_uses(uses),
-            StepKind::Shell { .. } | StepKind::TaskExecution { .. } | StepKind::Internal { .. } => {
-                None
-            }
+            StepKind::Shell { .. }
+            | StepKind::TaskExecution { .. }
+            | StepKind::Internal { .. }
+            | StepKind::NativeCheckExecution { .. } => None,
         };
         if let Some(action) = action {
             if !VerifierActionSet::canonical_call(step, action) {

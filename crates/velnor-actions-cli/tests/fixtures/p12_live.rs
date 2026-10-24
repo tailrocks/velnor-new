@@ -235,7 +235,7 @@ fn policy_file_is_complete() -> Result<(), Box<dyn Error>> {
         "shellcheck = \"0.11.0\"",
         "nextest = \"0.9.149\"",
         "opentofu = \"1.13.2\"",
-        "release-plz = \"0.4.0\"",
+        "release-plz = \"0.4.1\"",
         "crane = \"0.22.1\"",
         "bun = \"1.4.4\"",
         "cosign = \"3.1.4\"",

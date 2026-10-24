@@ -7,6 +7,9 @@ use crate::yaml::Yaml;
 use super::super::{Schema2WorkflowRequest, product_release_test_pins};
 use super::{ARTIFACT_NAME, PUBLICATION_EVIDENCE, WORKFLOW_PATH};
 
+#[path = "schema2_job_image_native_tests.rs"]
+mod native_source;
+
 #[test]
 fn image_selection_emits_repeatable_candidate_build_attestation_and_publish() {
     let request = request();
@@ -33,23 +36,28 @@ fn image_selection_emits_repeatable_candidate_build_attestation_and_publish() {
         "attest-image-candidate:",
         "publish-job-image:",
         "needs:",
-        "images/job/ubuntu-26.04/candidate/candidate.py build",
         "--source-commit",
         "GITHUB_SHA",
         "--archive",
         "RUNNER_TEMP/job-image.oci.tar",
         "--record",
         "RUNNER_TEMP/job-image-candidate.json",
+        "image-maintenance check-job-source",
+        "image-maintenance install-buildx",
+        "image-maintenance build-job-candidate",
+        "image-maintenance validate-job-candidate",
+        "job-image-native-source-closure.json",
+        "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+        "-u ACTIONS_ID_TOKEN_REQUEST_URL",
+        "-u ACTIONS_RUNTIME_TOKEN",
+        "-u GITHUB_TOKEN",
+        "-u MISE_GITHUB_TOKEN",
+        "-u GH_TOKEN",
+        "-u GH_HOST",
+        "-u GH_CONFIG_DIR",
+        "target/release/velnor-actions",
         ".velnor/runner.lock",
-        "buildx_version",
-        "buildx_asset_url",
-        "buildx_sha256",
-        "docker-buildx",
-        "hashlib.file_digest",
-        "actual_sha256 != expected_sha256",
-        "plugin.parent.chmod(0o700)",
-        "os.chmod(temporary, 0o755)",
-        "DOCKER_CONFIG",
+        "--runner-temp \\\"$RUNNER_TEMP\\\"",
         "${{ github.sha }}",
         "${{ runner.temp }}/job-image.oci.tar",
         "${{ runner.temp }}/job-image-candidate.json",
@@ -89,7 +97,7 @@ fn build_job_has_no_attestation_or_repository_writer_permissions() {
     let workflow = super::render(&request()).expect("Render the job image candidate workflow.");
     let jobs = field(&workflow, "jobs");
     let build = field(jobs, "build-image-candidate");
-    assert_eq!(field(build, "timeout-minutes"), &Yaml::Int(5));
+    assert_eq!(field(build, "timeout-minutes"), &Yaml::Int(10));
     let permissions = field(build, "permissions");
     assert!(optional_field(permissions, "actions").is_none());
     assert_eq!(field(permissions, "contents"), &Yaml::str("read"));
@@ -98,7 +106,7 @@ fn build_job_has_no_attestation_or_repository_writer_permissions() {
     assert!(optional_field(permissions, "attestations").is_none());
 
     let attest = field(jobs, "attest-image-candidate");
-    assert_eq!(field(attest, "timeout-minutes"), &Yaml::Int(5));
+    assert_eq!(field(attest, "timeout-minutes"), &Yaml::Int(10));
     let permissions = field(attest, "permissions");
     assert_eq!(field(permissions, "attestations"), &Yaml::str("write"));
     assert_eq!(field(permissions, "id-token"), &Yaml::str("write"));
@@ -131,106 +139,74 @@ fn build_job_has_no_attestation_or_repository_writer_permissions() {
 }
 
 #[test]
-fn buildx_installer_uses_the_lock_and_rejects_a_wrong_checksum() {
-    use std::fs;
-    use std::os::unix::fs::PermissionsExt;
-    const PAYLOAD: &str = "buildx-fixture";
-    const SHA256: &str = "21d63ac724e14102a2f8bc4ed01b0394c02bf09d44513ba1ed3b4a9b77362d83";
-    let root = temporary_directory("buildx-installer");
-    let workspace = root.join("workspace");
-    let runner_temp = root.join("runner-temp");
-    let fake_bin = root.join("bin");
-    fs::create_dir_all(workspace.join(".velnor")).expect("The source lock path is not available.");
-    fs::create_dir_all(&fake_bin).expect("The fake command path is not available.");
-    fs::write(workspace.join(".velnor/runner.lock"), lock_text(SHA256))
-        .expect("The source lock file is not available.");
-    let fake_curl = fake_bin.join("curl");
-    fs::write(
-        &fake_curl,
-        format!(
-            "#!/bin/sh\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = --output ]; then\n    shift\n    printf '%s' '{PAYLOAD}' > \"$1\"\n    exit 0\n  fi\n  shift\ndone\nexit 2\n"
-        ),
-    )
-    .expect("Write the curl test fixture.");
-    fs::set_permissions(&fake_curl, fs::Permissions::from_mode(0o755))
-        .expect("Set the curl test fixture mode.");
-
-    let success = run_installer(&workspace, &runner_temp, &fake_bin);
-    assert!(
-        success.status.success(),
-        "{}",
-        String::from_utf8_lossy(&success.stderr)
-    );
-    let plugin = runner_temp.join("velnor-docker-config/cli-plugins/docker-buildx");
-    assert_eq!(
-        fs::read(&plugin).expect("The installed plug-in is not available."),
-        PAYLOAD.as_bytes()
-    );
-    assert_eq!(
-        fs::metadata(&plugin)
-            .expect("The plug-in metadata is not available.")
-            .permissions()
-            .mode()
-            & 0o777,
-        0o755
-    );
-    assert_eq!(
-        fs::metadata(
-            plugin
-                .parent()
-                .expect("The plug-in directory is not available.")
-        )
-        .expect("The plug-in directory metadata is not available.")
-        .permissions()
-        .mode()
-            & 0o777,
-        0o700
-    );
-
-    let wrong_temp = root.join("wrong-runner-temp");
-    fs::write(
-        workspace.join(".velnor/runner.lock"),
-        lock_text(&"0".repeat(64)),
-    )
-    .expect("Write a source checksum with an incorrect value.");
-    let failure = run_installer(&workspace, &wrong_temp, &fake_bin);
-    assert!(!failure.status.success());
-    assert!(
-        String::from_utf8_lossy(&failure.stderr)
-            .contains("The Buildx checksum is different from the value in .velnor/runner.lock.")
-    );
-    assert!(
-        !wrong_temp
-            .join("velnor-docker-config/cli-plugins/docker-buildx")
-            .exists()
-    );
-    fs::remove_dir_all(root).expect("Remove the installer test files.");
-}
-
-#[test]
-fn attestation_download_uses_only_the_uploaded_artifact_id() {
+fn build_job_uses_closed_native_image_maintenance_operations() {
     let workflow = super::render(&request()).expect("Render the job image candidate workflow.");
-    let attest = field(field(&workflow, "jobs"), "attest-image-candidate");
-    let Yaml::Seq(steps) = field(attest, "steps") else {
-        panic!("The attestation steps are necessary.");
+    let build = field(field(&workflow, "jobs"), "build-image-candidate");
+    let Yaml::Seq(steps) = field(build, "steps") else {
+        panic!("The build steps are necessary.");
     };
-    let download = steps
-        .iter()
-        .find(|step| {
-            optional_field(step, "uses") == Some(&Yaml::str(crate::steps::DOWNLOAD_ARTIFACT_USES))
-        })
-        .expect("The artifact download step is not available.");
-    let inputs = field(download, "with");
-    assert_eq!(
-        field(inputs, "artifact-ids"),
-        &Yaml::str("${{ needs.build-image-candidate.outputs.artifact_id }}")
-    );
-    assert!(optional_field(inputs, "name").is_none());
-    assert!(steps.iter().any(|step| {
-        optional_field(step, "name") == Some(&Yaml::str("Examine the uploaded artifact ID"))
-    }));
-}
 
+    let source_build = step_named(steps, "Build exact-source native image maintenance");
+    let source_command = string_field(source_build, "run");
+    for expected in [
+        "trusted_git rev-parse --verify HEAD",
+        "/usr/bin/env -i PATH=/usr/bin:/bin",
+        "--git-dir=\"$GITHUB_WORKSPACE/.git\" --work-tree=\"$GITHUB_WORKSPACE\" -c core.fsmonitor=false",
+        "test \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"",
+        "GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_OPTIONAL_LOCKS=0",
+        "diff --cached --quiet --no-ext-diff --no-textconv",
+        "status --porcelain=v1 --untracked-files=all",
+        "The source checkout is not clean.",
+        "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+        "-u ACTIONS_ID_TOKEN_REQUEST_URL",
+        "-u ACTIONS_RUNTIME_TOKEN",
+        "-u GITHUB_TOKEN",
+        "-u MISE_GITHUB_TOKEN",
+        "-u GH_TOKEN",
+        "-u GH_HOST",
+        "-u GH_CONFIG_DIR",
+        "target/release/velnor-actions",
+        "set -o noclobber",
+        "mktemp -d",
+        "VELNOR_NATIVE_IMAGE_ACTIONS=%s",
+        "chmod 0500",
+    ] {
+        assert!(
+            source_command.contains(expected),
+            "Missing {expected}: {source_command}"
+        );
+    }
+    assert!(!source_command.contains("python"));
+    let pinned_build = crate::commands::join_argv_for_run(&test_pins().build_argv)
+        .expect("The pinned native build command is valid.");
+    assert!(source_command.contains(&pinned_build));
+    let pinned_tools = crate::commands::join_argv_for_run(&test_pins().install_build_tools_argv)
+        .expect("The pinned tool installation command is valid.");
+    assert_eq!(
+        string_field(step_named(steps, "Install pinned Rust and MBX"), "run"),
+        format!("set -eu\n: \"${{GITHUB_TOKEN:?missing workflow token}}\"\n{pinned_tools}")
+    );
+
+    for (name, operation) in [
+        (
+            "Verify native implementation source closure",
+            "check-job-source",
+        ),
+        (
+            "Install the Buildx plugin from .velnor/runner.lock",
+            "install-buildx",
+        ),
+        ("Build the job image candidate", "build-job-candidate"),
+    ] {
+        let command = string_field(step_named(steps, name), "run");
+        assert!(command.contains("$VELNOR_NATIVE_IMAGE_ACTIONS"));
+        assert!(command.contains(&format!("image-maintenance {operation}")));
+        if operation == "install-buildx" {
+            assert!(command.contains("--runner-temp \"$RUNNER_TEMP\""));
+        }
+        assert!(!command.contains("python"));
+    }
+}
 #[test]
 fn publisher_consumes_same_run_artifact_and_keeps_token_out_of_evidence_upload() {
     let workflow = super::render(&request()).expect("Render the job image candidate workflow.");
@@ -244,6 +220,10 @@ fn publisher_consumes_same_run_artifact_and_keeps_token_out_of_evidence_upload()
             optional_field(step, "uses") == Some(&Yaml::str(crate::steps::DOWNLOAD_ARTIFACT_USES))
         })
         .expect("Find the same-run candidate download step.");
+    assert_eq!(
+        field(field(download, "with"), "path"),
+        &Yaml::str("candidate")
+    );
     assert_eq!(
         field(field(download, "with"), "artifact-ids"),
         &Yaml::str("${{ needs.build-image-candidate.outputs.artifact_id }}")
@@ -314,47 +294,22 @@ fn request() -> Schema2WorkflowRequest {
     }
 }
 
-fn lock_text(sha256: &str) -> String {
-    format!(
-        "buildx_version = \"0.38.0\"\nbuildx_asset_url = \"https://github.com/docker/buildx/releases/download/v0.38.0/buildx-v0.38.0.linux-amd64\"\nbuildx_sha256 = \"{sha256}\"\n"
-    )
-}
-
-fn run_installer(
-    workspace: &std::path::Path,
-    runner_temp: &std::path::Path,
-    fake_bin: &std::path::Path,
-) -> std::process::Output {
-    use std::process::Command;
-
-    let path = std::env::join_paths(std::iter::once(fake_bin.to_path_buf()).chain(
-        std::env::split_paths(&std::env::var_os("PATH").expect("PATH is available.")),
-    ))
-    .expect("The test path cannot be joined.");
-    Command::new("bash")
-        .args(["-e", "-o", "pipefail", "-c", super::BUILDX_INSTALL])
-        .env("GITHUB_WORKSPACE", workspace)
-        .env("RUNNER_TEMP", runner_temp)
-        .env("PATH", path)
-        .output()
-        .expect("Run the test installer.")
-}
-
-fn temporary_directory(label: &str) -> std::path::PathBuf {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    std::env::temp_dir().join(format!(
-        "velnor-{label}-{}-{}",
-        std::process::id(),
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("System time is later than the epoch.")
-            .as_nanos()
-    ))
-}
-
 fn test_pins() -> super::super::ProductReleasePins {
     product_release_test_pins::test_pins()
+}
+
+fn step_named<'a>(steps: &'a [Yaml], name: &str) -> &'a Yaml {
+    steps
+        .iter()
+        .find(|step| optional_field(step, "name") == Some(&Yaml::str(name)))
+        .unwrap_or_else(|| panic!("The workflow step is necessary: {name}."))
+}
+
+fn string_field<'a>(value: &'a Yaml, key: &str) -> &'a str {
+    let Yaml::Str(text) = field(value, key) else {
+        panic!("The YAML field {key} must be a string.");
+    };
+    text
 }
 
 fn field<'a>(value: &'a Yaml, key: &str) -> &'a Yaml {

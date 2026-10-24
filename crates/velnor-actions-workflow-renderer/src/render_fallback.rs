@@ -11,10 +11,21 @@ pub(super) fn render_marked_workflow(
     document: &Yaml,
     generator_version: &str,
 ) -> Result<String, RenderError> {
+    render_marked_workflow_with(path, document, generator_version, |path, document| {
+        crate::workflow_timeout::validate(path, document)
+    })
+}
+
+fn render_marked_workflow_with(
+    path: &str,
+    document: &Yaml,
+    generator_version: &str,
+    validate: impl FnOnce(&str, &Yaml) -> Result<(), RenderError>,
+) -> Result<String, RenderError> {
     let mut bound = document.clone();
     crate::project_tool_resolver::bind_workflow(&mut bound)?;
     let document = &bound;
-    crate::workflow_timeout::validate(path, document)?;
+    validate(path, document)?;
     let canonical = marker::with_marker(generator_version, &render_yaml(document))?;
     if !workflow_size::is_workflow_path(path)
         || canonical.len() <= workflow_size::MAX_WORKFLOW_BYTES
@@ -48,6 +59,21 @@ pub(crate) fn render_checked_workflow(
     generator_version: &str,
 ) -> Result<String, RenderError> {
     let text = render_marked_workflow(path, document, generator_version)?;
+    workflow_size::check_workflow_size(path, &text)?;
+    Ok(text)
+}
+
+/// Render the one authenticated Homebrew adoption caller. Generic workflow
+/// rendering keeps its strict local-callee-only default.
+pub(crate) fn render_checked_homebrew_adoption_caller(
+    path: &str,
+    document: &Yaml,
+    generator_version: &str,
+    scope: &crate::workflow_timeout::HomebrewAdoptionCalleeScope,
+) -> Result<String, RenderError> {
+    let text = render_marked_workflow_with(path, document, generator_version, |path, document| {
+        crate::workflow_timeout::validate_homebrew_adoption_caller(path, document, scope)
+    })?;
     workflow_size::check_workflow_size(path, &text)?;
     Ok(text)
 }

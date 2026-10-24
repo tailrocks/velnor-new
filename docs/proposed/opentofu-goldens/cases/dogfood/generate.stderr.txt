@@ -11,6 +11,7 @@ Repository: <repo>
 .github/actions/generator-release-build-macos-intel/action.yml
 .github/actions/generator-release-build-macos/action.yml
 .github/actions/generator-release-publish/action.yml
+.github/actions/generator-release-qualify-homebrew/action.yml
 .github/actions/generator-release-qualify-linux/action.yml
 .github/actions/generator-release-qualify-macos-intel/action.yml
 .github/actions/generator-release-qualify-macos/action.yml
@@ -29,6 +30,7 @@ Repository: <repo>
 .github/workflows/cache-prune.yml
 .github/workflows/ci.yml
 .github/workflows/freshness.yml
+.github/workflows/homebrew-adoption.yml
 .github/workflows/job-image-candidate.yml
 .github/workflows/product-release-binary.yml
 .github/workflows/product-release-generator.yml

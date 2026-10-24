@@ -178,6 +178,9 @@ struct PartialConfig {
     /// Explicit repository-owned Mise checks.
     #[serde(default)]
     checks: Vec<MiseCheck>,
+    /// Fixed SDK-owned checks, separate from repository task execution.
+    #[serde(default)]
+    native_checks: Vec<velnor_actions_contract::config::NativeHomebrewCheck>,
     /// Explicit qualified repository tool closure for named checks.
     #[serde(default)]
     qualified_tools: Vec<QualifiedTool>,
@@ -259,6 +262,7 @@ impl PartialConfig {
             dco: self.dco,
             execution: self.execution,
             checks: self.checks,
+            native_checks: self.native_checks,
             qualified_tools: self.qualified_tools,
             distribution: self.distribution,
             private_sources: self.private_sources,

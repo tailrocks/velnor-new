@@ -287,7 +287,10 @@ fn is_provider_cache_action(step: &Step) -> bool {
 fn action_with(step: &Step) -> Option<&BTreeMap<String, String>> {
     match &step.kind {
         StepKind::Action { with, .. } => Some(with),
-        StepKind::Shell { .. } | StepKind::TaskExecution { .. } | StepKind::Internal { .. } => None,
+        StepKind::Shell { .. }
+        | StepKind::TaskExecution { .. }
+        | StepKind::NativeCheckExecution { .. }
+        | StepKind::Internal { .. } => None,
     }
 }
 
@@ -297,7 +300,7 @@ fn step_env(step: &Step) -> Option<&BTreeMap<String, String>> {
         StepKind::Action { env, .. }
         | StepKind::Shell { env, .. }
         | StepKind::TaskExecution { env, .. } => Some(env),
-        StepKind::Internal { .. } => None,
+        StepKind::NativeCheckExecution { .. } | StepKind::Internal { .. } => None,
     }
 }
 

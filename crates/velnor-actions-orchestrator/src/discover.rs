@@ -50,6 +50,8 @@ pub struct Discovery {
     pub(crate) gradle_roots: Vec<crate::config::gradle_jobs::GradleRoot>,
     /// Explicit repository-owned checks, independent of detected workspaces.
     pub mise_checks: Vec<velnor_actions_mise::DiscoveredCheck>,
+    /// Closed SDK-owned native Homebrew checks.
+    pub native_checks: Vec<velnor_actions_contract::config::NativeHomebrewCheck>,
     /// Per-project selection states.
     pub statuses: Vec<DetectionStatus>,
     /// Selected workspaces with profiles.
@@ -118,40 +120,20 @@ pub(crate) fn discover_with_phase_timings(
     discover_inner(root, config, catalog, Some(phases))
 }
 
-type TaskInventories = (
-    crate::workflow_task_jobs::bun_inventory::BunInventory,
-    crate::workflow_task_jobs::dbt_inventory::DbtInventory,
-    crate::workflow_task_jobs::ansible_inventory::AnsibleInventory,
-);
+#[path = "discovery_inventories.rs"]
+mod task_inventory;
+use task_inventory::task_inventories;
 
-/// Bun member inventory for the configured `[stacks.bun]` (empty without it).
-fn bun_inventory(
-    root: &Path,
-    index: &FileIndex,
-    config: &VelnorConfig,
-) -> Result<crate::workflow_task_jobs::bun_inventory::BunInventory, OrchestratorError> {
-    match &config.stacks.bun {
-        Some(stack) => {
-            crate::workflow_task_jobs::bun_inventory::BunInventory::load(root, index, stack)
-        }
-        None => Ok(crate::workflow_task_jobs::bun_inventory::BunInventory::default()),
+fn detect_candidates(index: &FileIndex) -> Vec<velnor_actions_contract::StackCandidate> {
+    let mut candidates = Vec::new();
+    let mut previous = "";
+    for (stack_id, schema, detect) in DETECTORS {
+        debug_assert!(previous < stack_id, "registry runs ascending");
+        debug_assert_eq!(schema, DETECTION_SCHEMA, "registry schema");
+        previous = stack_id;
+        candidates.extend(detect(index));
     }
-}
-
-/// The Bun, dbt and Ansible inventories of the configured stacks.
-fn task_inventories(
-    root: &Path,
-    index: &FileIndex,
-    config: &VelnorConfig,
-) -> Result<TaskInventories, OrchestratorError> {
-    use crate::workflow_task_jobs::{
-        ansible_inventory::AnsibleInventory, dbt_inventory::DbtInventory,
-    };
-    Ok((
-        bun_inventory(root, index, config)?,
-        DbtInventory::for_config(root, index, config)?,
-        AnsibleInventory::for_config(root, index, config)?,
-    ))
+    candidates
 }
 
 fn discover_inner(
@@ -161,14 +143,7 @@ fn discover_inner(
     mut phases: Option<&mut PlanPhaseTimings>,
 ) -> Result<Discovery, OrchestratorError> {
     let (index, skipped_non_utf8) = build_file_index(root, &config.discovery.exclude)?;
-    let mut candidates = Vec::new();
-    let mut previous = "";
-    for (stack_id, schema, detect) in DETECTORS {
-        debug_assert!(previous < stack_id, "registry runs ascending");
-        debug_assert_eq!(schema, DETECTION_SCHEMA, "registry schema");
-        previous = stack_id;
-        candidates.extend(detect(&index));
-    }
+    let mut candidates = detect_candidates(&index);
     let task_tool_paths = task_tool_paths(config);
     let tool_checks = check_tool_inputs_with_paths(root, &task_tool_paths);
     let mut reads = velnor_actions_tofu::FileCache::new();
@@ -210,7 +185,14 @@ fn discover_inner(
             .map_err(|err| OrchestratorError::Contract {
                 problem: err.to_string(),
             })?;
+    let native_checks = config.native_checks.clone();
     proposals.extend(mise_checks.iter().map(|item| item.proposal.clone()));
+    proposals.extend(
+        native_checks
+            .iter()
+            .map(crate::internal_plan::native_homebrew_checks::proposal)
+            .collect::<Result<Vec<_>, _>>()?,
+    );
     proposals.sort_by(|a, b| a.task_id.cmp(&b.task_id));
     let clippy_memory = clippy_memory_groups(&proposals);
     let recommendations =
@@ -222,6 +204,7 @@ fn discover_inner(
     Ok(Discovery {
         gradle_roots,
         mise_checks,
+        native_checks,
         statuses,
         workspaces,
         proposals,

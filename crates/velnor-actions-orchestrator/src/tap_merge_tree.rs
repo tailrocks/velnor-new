@@ -19,42 +19,56 @@ pub(super) fn verify_formula_delta_at_base(
     base_sha: &str,
     head_sha: &str,
     expected_formula: &[u8],
+    expected_base_formula_sha256: &str,
 ) -> Result<(), OrchestratorError> {
     let base = commit_tree(api, &candidate.policy.repository, base_sha)?;
     let head = commit_tree(api, &candidate.policy.repository, head_sha)?;
     let base_entries = recursive_tree(api, &candidate.policy.repository, &base)?;
     let head_entries = recursive_tree(api, &candidate.policy.repository, &head)?;
-    if base_entries.len() != head_entries.len() {
-        return Err(internal("tap_merge_tree_inventory_changed"));
-    }
     let formula = candidate.formula_path.as_str();
-    for (path, before) in &base_entries {
-        let after = head_entries
-            .get(path)
-            .ok_or_else(|| internal("tap_merge_tree_path_removed"))?;
-        if path == formula {
-            if before.0 != "100644"
-                || after.0 != "100644"
-                || before.1 != "blob"
-                || after.1 != "blob"
-            {
-                return Err(internal("tap_merge_formula_mode_invalid"));
-            }
-        } else if before != after {
-            return Err(internal("tap_merge_unexpected_tree_change"));
-        }
-    }
-    if !base_entries.contains_key(formula) {
-        return Err(internal("tap_merge_formula_missing_at_base"));
-    }
+    validate_inventory_delta(&base_entries, &head_entries, formula)?;
     let base_formula =
         super::observation::contents(api, &candidate.policy.repository, formula, base_sha)?;
+    if super::candidate::sha256(&base_formula) != expected_base_formula_sha256 {
+        return Err(internal("tap_candidate_base_digest_mismatch"));
+    }
     let head_formula =
         super::observation::contents(api, &candidate.policy.repository, formula, head_sha)?;
     if head_formula != expected_formula {
         return Err(internal("tap_merge_formula_head_mismatch"));
     }
     validate_formula_at_base(candidate, base_sha, &base_formula, expected_formula)
+}
+
+fn map_inventory(
+    entries: &BTreeMap<String, (String, String, String)>,
+) -> Vec<crate::homebrew::tree_validation::Entry<'_>> {
+    entries
+        .iter()
+        .map(
+            |(path, (mode, kind, sha))| crate::homebrew::tree_validation::Entry {
+                path,
+                mode,
+                kind,
+                sha,
+            },
+        )
+        .collect()
+}
+
+fn validate_inventory_delta(
+    base: &BTreeMap<String, (String, String, String)>,
+    head: &BTreeMap<String, (String, String, String)>,
+    formula: &str,
+) -> Result<(), OrchestratorError> {
+    let base_inventory = map_inventory(base);
+    let head_inventory = map_inventory(head);
+    crate::homebrew::tree_validation::validate_formula_delta(
+        &base_inventory,
+        &head_inventory,
+        formula,
+        TREE_LIMIT,
+    )
 }
 
 fn commit_tree(
@@ -77,6 +91,13 @@ fn recursive_tree(
     sha: &str,
 ) -> Result<BTreeMap<String, (String, String, String)>, OrchestratorError> {
     let response: Value = api.get(&format!("repos/{repository}/git/trees/{sha}?recursive=1"))?;
+    parse_recursive_tree(&response, sha)
+}
+
+fn parse_recursive_tree(
+    response: &Value,
+    sha: &str,
+) -> Result<BTreeMap<String, (String, String, String)>, OrchestratorError> {
     let entries = response["tree"]
         .as_array()
         .filter(|entries| entries.len() <= TREE_LIMIT)
@@ -85,6 +106,7 @@ fn recursive_tree(
         return Err(internal("tap_merge_tree_truncated"));
     }
     let mut result = BTreeMap::new();
+    let mut inventory = Vec::with_capacity(entries.len());
     for entry in entries {
         let path = entry["path"]
             .as_str()
@@ -103,6 +125,12 @@ fn recursive_tree(
         let object_sha = entry["sha"]
             .as_str()
             .ok_or_else(|| internal("tap_merge_tree_object_missing"))?;
+        inventory.push(crate::homebrew::tree_validation::Entry {
+            path,
+            mode,
+            kind: object_type,
+            sha: object_sha,
+        });
         if !is_lower_hex(object_sha)
             || result
                 .insert(
@@ -118,6 +146,7 @@ fn recursive_tree(
             return Err(internal("tap_merge_tree_duplicate_or_invalid"));
         }
     }
+    crate::homebrew::tree_validation::validate(&inventory, TREE_LIMIT)?;
     Ok(result)
 }
 
@@ -126,4 +155,87 @@ fn is_lower_hex(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use serde_json::json;
+
+    use super::{parse_recursive_tree, validate_inventory_delta};
+
+    #[test]
+    fn recursive_tree_rejects_unchanged_symlink_and_submodule_entries() {
+        for (mode, kind) in [("120000", "blob"), ("160000", "commit")] {
+            let response = json!({
+                "sha": "a".repeat(40),
+                "truncated": false,
+                "tree": [
+                    {"path":"Formula", "mode":"040000", "type":"tree", "sha":"b".repeat(40)},
+                    {"path":"Formula/example.rb", "mode":"100644", "type":"blob", "sha":"c".repeat(40)},
+                    {"path":"vendor", "mode":"040000", "type":"tree", "sha":"d".repeat(40)},
+                    {"path":"vendor/object", "mode":mode, "type":kind, "sha":"e".repeat(40)}
+                ]
+            });
+            assert!(parse_recursive_tree(&response, &"a".repeat(40)).is_err());
+        }
+    }
+
+    #[test]
+    fn formula_delta_allows_nested_ancestor_sha_changes_only() {
+        let inventory = |formula_sha: &str, root_sha: &str, nested_sha: &str, readme_sha: &str| {
+            BTreeMap::from([
+                (
+                    "Formula".to_owned(),
+                    ("040000".to_owned(), "tree".to_owned(), root_sha.to_owned()),
+                ),
+                (
+                    "Formula/nested".to_owned(),
+                    (
+                        "040000".to_owned(),
+                        "tree".to_owned(),
+                        nested_sha.to_owned(),
+                    ),
+                ),
+                (
+                    "Formula/nested/example.rb".to_owned(),
+                    (
+                        "100644".to_owned(),
+                        "blob".to_owned(),
+                        formula_sha.to_owned(),
+                    ),
+                ),
+                (
+                    "README.md".to_owned(),
+                    (
+                        "100644".to_owned(),
+                        "blob".to_owned(),
+                        readme_sha.to_owned(),
+                    ),
+                ),
+            ])
+        };
+        let base = inventory(
+            &"b".repeat(40),
+            &"c".repeat(40),
+            &"d".repeat(40),
+            &"e".repeat(40),
+        );
+        let head = inventory(
+            &"f".repeat(40),
+            &"1".repeat(40),
+            &"2".repeat(40),
+            &"e".repeat(40),
+        );
+        assert!(validate_inventory_delta(&base, &head, "Formula/nested/example.rb").is_ok());
+
+        let unrelated = inventory(
+            &"f".repeat(40),
+            &"1".repeat(40),
+            &"2".repeat(40),
+            &"3".repeat(40),
+        );
+        assert!(validate_inventory_delta(&base, &unrelated, "Formula/nested/example.rb").is_err());
+    }
 }
