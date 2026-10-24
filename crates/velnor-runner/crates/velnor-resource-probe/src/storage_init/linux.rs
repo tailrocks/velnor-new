@@ -11,7 +11,7 @@ use rustix::{
 };
 use std::{
     fs,
-    os::fd::{AsFd, OwnedFd},
+    os::fd::{AsFd, AsRawFd, OwnedFd},
 };
 use velnor_resource_probe::storage_init_contract::METADATA_ROOT_MODE;
 
@@ -302,7 +302,7 @@ mod tests {
 
     impl Drop for TemporaryDirectory {
         fn drop(&mut self) {
-            let _ = fs::remove_dir(&self.0);
+            drop(fs::remove_dir(&self.0));
         }
     }
 
@@ -374,5 +374,3 @@ mod tests {
         assert_eq!(decoded["mode"], u64::from(METADATA_ROOT_MODE));
     }
 }
-
-use std::os::fd::AsRawFd;

@@ -229,12 +229,12 @@ async fn ipc_observation_requests_return_immediately_and_drain_invalidates() -> 
     let config = test_config()?;
     let state = ControlState::new(&config);
     state.set_admission_ready(true);
-    state
-        .record_session_poll(&binding, 17, 23, "session-1")
-        .map_err(|error| error.to_string())?;
     let journal = Journal::open(&state_path.join("launch.db"))
         .await
         .map_err(|error| format!("open: {error}"))?;
+    state
+        .record_session_poll(&binding, 17, 23, "session-1")
+        .map_err(|error| error.to_string())?;
     let request = Request::SessionObservationStart {
         connection_id: binding.connection_id.clone(),
         nonce: NONCE.to_owned(),
