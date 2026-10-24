@@ -5,6 +5,7 @@ fn reconcile_has_only_four_bounded_jobs_and_no_release_mutation_route() {
     let rendered = render_release_tap_reconcile(&with_tap()).expect("render");
     assert_eq!(rendered.path, ".github/workflows/preview-tap-reconcile.yml");
     let text = &rendered.bytes;
+    assert!(text.contains("name: Preview tap reconciliation"), "{text}");
     assert!(
         text.contains("cron: '*/5 * * * *'") || text.contains("cron: \"*/5 * * * *\""),
         "{text}"

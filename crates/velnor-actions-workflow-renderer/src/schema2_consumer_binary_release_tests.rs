@@ -312,6 +312,11 @@ fn stable_tap_reconciliation_is_valid_without_dispatch_inputs() {
 
     let rendered = render_release_tap_reconcile(&spec).expect("stable reconciliation workflow");
     assert_eq!(rendered.path, ".github/workflows/stable-tap-reconcile.yml");
+    assert!(
+        rendered.bytes.contains("name: Stable tap reconciliation"),
+        "{}",
+        rendered.bytes
+    );
     assert!(!rendered.bytes.contains("inputs."), "{}", rendered.bytes);
     assert!(!rendered.bytes.contains("env: {}"), "{}", rendered.bytes);
     assert!(

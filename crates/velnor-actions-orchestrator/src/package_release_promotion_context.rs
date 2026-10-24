@@ -6,20 +6,6 @@ use super::super::{
 use crate::{OrchestratorError, internal::internal};
 use velnor_actions_contract::{PackageReleasePlan, package_release::PackageReleaseChannel};
 
-pub(in crate::package_release_publish) const CONTINUATION_PATH: &str =
-    ".github/workflows/preview-tap-reconcile.yml";
-pub(in crate::package_release_publish) const CONTINUATION_NAME: &str = "Preview tap reconciliation";
-
-fn continuation_identity(channel: PackageReleaseChannel) -> (&'static str, &'static str) {
-    match channel {
-        PackageReleaseChannel::Preview => (CONTINUATION_PATH, CONTINUATION_NAME),
-        PackageReleaseChannel::Stable => (
-            ".github/workflows/stable-tap-reconcile.yml",
-            "Stable tap reconciliation",
-        ),
-    }
-}
-
 #[derive(Clone, Copy)]
 pub(in crate::package_release_publish) enum Purpose {
     PublicationRecovery,
@@ -53,7 +39,7 @@ impl Invocation {
     ) -> bool {
         matches!(self.event.as_str(), "schedule" | "workflow_dispatch")
             && self.workflow_ref
-                == Self::expected_workflow(plan, continuation_identity(plan.channel).0)
+                == Self::expected_workflow(plan, plan.channel.tap_reconcile_workflow_path())
     }
 
     pub(in crate::package_release_publish) fn validate(
@@ -86,8 +72,10 @@ impl Invocation {
         if !self.continuation(plan) {
             return Err(internal("tap_continuation_context"));
         }
-        let (path, name) = continuation_identity(plan.channel);
-        let workflow = api.admitted_workflow(path, name)?;
+        let workflow = api.admitted_workflow(
+            plan.channel.tap_reconcile_workflow_path(),
+            plan.channel.tap_reconcile_workflow_name(),
+        )?;
         let id = super::positive_env("GITHUB_RUN_ID")?;
         let attempt = super::positive_env_u32("GITHUB_RUN_ATTEMPT")?;
         let job = continuation_job_name(plan.channel, &super::env_text("GITHUB_JOB")?)?;

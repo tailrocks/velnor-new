@@ -53,6 +53,24 @@ impl PackageReleaseChannel {
         }
     }
 
+    /// Fixed default-branch continuation workflow filename.
+    #[must_use]
+    pub const fn tap_reconcile_workflow_path(self) -> &'static str {
+        match self {
+            Self::Preview => ".github/workflows/preview-tap-reconcile.yml",
+            Self::Stable => ".github/workflows/stable-tap-reconcile.yml",
+        }
+    }
+
+    /// Canonical display name authenticated for the retained-tap continuation.
+    #[must_use]
+    pub const fn tap_reconcile_workflow_name(self) -> &'static str {
+        match self {
+            Self::Preview => "Preview tap reconciliation",
+            Self::Stable => "Stable tap reconciliation",
+        }
+    }
+
     /// Original producing event required by this release channel.
     #[must_use]
     pub const fn event(self) -> PackageReleaseEvent {

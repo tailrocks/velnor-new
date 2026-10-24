@@ -65,7 +65,10 @@ pub(super) fn render_consumer_binary_release(
         )?);
     }
     let document = Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str("Stable binary release")),
+        (
+            "name".to_owned(),
+            Yaml::str(PackageReleaseChannel::Stable.workflow_name()),
+        ),
         (
             "on".to_owned(),
             Yaml::Map(vec![(
