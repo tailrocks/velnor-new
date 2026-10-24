@@ -9,6 +9,13 @@ mod isolation_tests;
 #[path = "impl_cli_nested_target.rs"]
 pub(crate) mod nested_target;
 
+#[path = "impl_cli_mise_diagnostics.rs"]
+mod mise_diagnostics;
+
+pub(crate) use mise_diagnostics::{
+    MiseDiagnosticContext, mise_failure_diagnostics, mise_path_snapshot,
+};
+
 use std::error::Error;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -77,6 +84,34 @@ pub(crate) fn spawn_isolated(
     command.args(args).current_dir(cwd).env_clear();
     if let Some(path) = std::env::var_os("PATH") {
         command.env("PATH", path);
+    }
+    for (key, value) in env {
+        command.env(key, value);
+    }
+    Ok(command.output()?)
+}
+
+/// Spawn a planning fixture with only PATH and explicit nonsecret tool homes.
+pub(crate) fn spawn_isolated_with_tool_homes(
+    args: &[&str],
+    env: &[(&str, &str)],
+    cwd: &Path,
+) -> Result<Output, Box<dyn Error>> {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-actions"));
+    command.args(args).current_dir(cwd).env_clear();
+    if let Some(path) = std::env::var_os("PATH") {
+        command.env("PATH", path);
+    }
+    for key in [
+        "HOME",
+        "MISE_DATA_DIR",
+        "XDG_DATA_HOME",
+        "MISE_RUSTUP_HOME",
+        "RUSTUP_HOME",
+    ] {
+        if let Some(value) = std::env::var_os(key).filter(|value| !value.is_empty()) {
+            command.env(key, value);
+        }
     }
     for (key, value) in env {
         command.env(key, value);

@@ -7,8 +7,9 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::impl_cli_tmp::{
-    cleanup, code, commit_all, fresh_tempdir, git_init, init_repo, install_consumer_manifest,
-    spawn, write_workspace,
+    MiseDiagnosticContext, cleanup, code, commit_all, fresh_tempdir, git_init, init_repo,
+    install_consumer_manifest, mise_failure_diagnostics, mise_path_snapshot, spawn,
+    write_workspace,
 };
 
 const FULL_SUITES_CONFIG: &str = r#"schema = 1
@@ -100,12 +101,19 @@ fn default_schema1_config_emits_byte_identical_github_tree() -> Result<(), Box<d
     write_workspace(&tmp, 1)?;
     commit_all(&tmp)?;
 
+    let tool_state_before = mise_path_snapshot(&tmp, MiseDiagnosticContext::Inherited);
     let in_place = spawn(&["generate"], &[], &tmp)?;
     assert_eq!(
         code(&in_place),
         0,
-        "stderr: {}",
-        String::from_utf8_lossy(&in_place.stderr)
+        "in-place generate failed (stderr={}):\n{}",
+        String::from_utf8_lossy(&in_place.stderr),
+        mise_failure_diagnostics(
+            &tmp,
+            MiseDiagnosticContext::Inherited,
+            &[],
+            Some(&tool_state_before)
+        )
     );
 
     let claude = tmp.join(".github/CLAUDE.md");
@@ -136,8 +144,14 @@ fn default_schema1_config_emits_byte_identical_github_tree() -> Result<(), Box<d
     assert_eq!(
         code(&gen_preview),
         0,
-        "stderr: {}",
-        String::from_utf8_lossy(&gen_preview.stderr)
+        "preview generate failed (stderr={}):\n{}",
+        String::from_utf8_lossy(&gen_preview.stderr),
+        mise_failure_diagnostics(
+            &tmp,
+            MiseDiagnosticContext::Inherited,
+            &[],
+            Some(&tool_state_before)
+        )
     );
 
     let diff = Command::new("diff")
@@ -266,12 +280,19 @@ fn full_suites_dispatch_symlink_and_preserve_workflows_end_to_end() -> Result<()
     let tmp = fresh_tempdir("suites-e2e-repo")?;
     setup_full_suites_repo(&tmp)?;
 
+    let tool_state_before = mise_path_snapshot(&tmp, MiseDiagnosticContext::Inherited);
     let generated = spawn(&["generate"], &[], &tmp)?;
     assert_eq!(
         code(&generated),
         0,
-        "velnor-actions generate failed:\n{}",
-        String::from_utf8_lossy(&generated.stderr)
+        "in-place generate failed (stderr={}):\n{}",
+        String::from_utf8_lossy(&generated.stderr),
+        mise_failure_diagnostics(
+            &tmp,
+            MiseDiagnosticContext::Inherited,
+            &[],
+            Some(&tool_state_before)
+        )
     );
 
     let claude = tmp.join(".github/CLAUDE.md");
@@ -307,9 +328,15 @@ fn full_suites_dispatch_symlink_and_preserve_workflows_end_to_end() -> Result<()
         .output()?;
     assert!(
         check_out.status.success(),
-        "Check generated files command failed (stdout={}, stderr={})",
+        "preview workflow check failed (stdout={}, stderr={}):\n{}",
         String::from_utf8_lossy(&check_out.stdout),
-        String::from_utf8_lossy(&check_out.stderr)
+        String::from_utf8_lossy(&check_out.stderr),
+        mise_failure_diagnostics(
+            &tmp,
+            MiseDiagnosticContext::Inherited,
+            &[],
+            Some(&tool_state_before)
+        )
     );
 
     cleanup(&tmp);
