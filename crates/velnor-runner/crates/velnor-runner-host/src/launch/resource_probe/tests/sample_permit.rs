@@ -18,17 +18,26 @@ fn doctor_report_uses_selected_guest_values_and_expires_after_thirty_seconds() -
 {
     let budget = test_resource_budget().map_err(|error| error.to_string())?;
     let root_digest = "a".repeat(64);
-    let recent = observation(
-        sample_record(24 * 1024 * 1024 * 1024),
-        budget,
-        "selected-engine",
-        &root_digest,
-        Instant::now(),
-    )?
+    let sample_generation_id = "a".repeat(32);
+    let record = sample_record(24 * 1024 * 1024 * 1024);
+    let inspected_host_pid = record.probe_host_pid;
+    let recent = Observation::test_new(ObservationTestInput {
+        record,
+        cpus: 8,
+        inspected_host_pid,
+        memory_total_bytes: 16 * 1024 * 1024 * 1024,
+        engine_id: "selected-engine".to_owned(),
+        docker_root_digest: root_digest.clone(),
+        sample_generation_id: sample_generation_id.clone(),
+        observed_at: Instant::now(),
+    })
+    .ok_or_else(|| "valid guest record was rejected".to_owned())?
     .doctor_report()
     .ok_or_else(|| "fresh guest metrics were rejected".to_owned())?;
     assert_eq!(recent["load_milli"], 125);
     assert_eq!(recent["cpu_count"], 8);
+    assert_eq!(recent["sample_generation_id"], sample_generation_id);
+    assert_eq!(recent["memory_total_bytes"], 16 * 1024 * 1024 * 1024_u64);
     assert_eq!(
         recent["docker_root_total_bytes"],
         40 * 1024 * 1024 * 1024_u64

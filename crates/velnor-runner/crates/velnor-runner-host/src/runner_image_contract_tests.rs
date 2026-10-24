@@ -197,6 +197,8 @@ fn paired_images_keep_runner_hostname_tcp_and_private_unix_for_actions() {
     assert!(DIND_ENTRYPOINT.contains("--host=tcp://127.0.0.1:2375 --tls=false"));
     assert!(DIND_ENTRYPOINT.contains("ln -sfn docker.sock.real \"$public\""));
     assert!(DIND_START_DOCKERD.contains("--host=tcp://127.0.0.1:2375 --tls=false"));
+    assert!(DIND_README.contains("has no authentication"));
+    assert!(DIND_README.contains("does not isolate processes inside it"));
     assert!(DIND_README.contains("No host port is"));
     assert!(DIND_README.contains("container actions resolve `/var/run/docker.sock`"));
 }
