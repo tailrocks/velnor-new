@@ -12,7 +12,7 @@ use crate::{
     package_publication::{PackagePublicationOutcome, publish_package_release},
     package_release_signer::{
         PackageReleaseSigningIdentity, VerifiedAttestedSignedPackage,
-        verify_attested_signed_package_from_env,
+        verify_attested_signed_package_from_env_with_deadline,
     },
 };
 
@@ -60,6 +60,8 @@ mod run_identity;
 
 #[path = "artifact_zip.rs"]
 pub(crate) mod artifact_zip;
+#[path = "package_release_publish_budget.rs"]
+pub(crate) mod budget;
 #[path = "preview_artifact_transport.rs"]
 mod preview_artifacts;
 #[cfg(test)]
@@ -99,14 +101,12 @@ pub(crate) use recovery::verify_original_for_promotion;
 /// # Errors
 /// Rejects absent credentials, invalid original evidence, stale candidates, and conflicting remote state.
 pub fn publish_package_release_from_env() -> Result<PackagePublicationOutcome, OrchestratorError> {
-    artifact_zip::within_operation(|| {
-        let signed = verify_attested_signed_package_from_env()?;
-        let current_ci = current_ci_from_env()?;
-        let mut backend = GitHubPackagePublisher::new(
-            signed,
-            current_ci,
-            OriginalVerification::RunnerEnvironment,
-        )?;
+    budget::with_env(|deadline| {
+        let mut backend = artifact_zip::within_operation(|| {
+            let signed = verify_attested_signed_package_from_env_with_deadline(deadline)?;
+            let current_ci = current_ci_from_env()?;
+            GitHubPackagePublisher::new(signed, current_ci, OriginalVerification::RunnerEnvironment)
+        })?;
         publish_backend(&mut backend)
     })
 }
@@ -123,7 +123,7 @@ fn publish_backend(
 /// # Errors
 /// Rejects an invalid retained run/artifact, stale candidate, or conflicting remote state.
 pub fn recover_package_release_from_env() -> Result<PackagePublicationOutcome, OrchestratorError> {
-    artifact_zip::within_operation(recovery::recover)
+    budget::with_env(recovery::recover)
 }
 
 #[derive(Clone)]

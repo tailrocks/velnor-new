@@ -28,6 +28,7 @@ pub struct RustBinaryReleaseConfig {
     pub producer: RustBinaryReleaseProducer,
     /// Outer publication-job budget for source admission, publishing, and recovery.
     /// Defaults to five minutes, independently of the producer operation budget.
+    /// Also bounds the native publication transaction and retained signed custody.
     #[serde(default = "default_publication_timeout")]
     pub publication_timeout_minutes: JobTimeout,
     /// Closed explicit product matrix.

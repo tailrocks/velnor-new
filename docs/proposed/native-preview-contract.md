@@ -97,7 +97,11 @@ recovery jobs in both channels. Preview eligibility uses this budget for both
 automatic publication and manual recovery because its two admission phases can
 independently acquire and verify the original signed artifact. Stable eligibility,
 signer and other acquisition/control jobs retain their existing five-minute
-defaults. This setting does not change native operation or API deadlines,
+defaults. For publisher and recovery operations, the same setting supplies one
+absolute native publication deadline, including retained signed-directory custody
+and final readback. It never refreshes per asset. Initial admission retains one
+five-minute aggregate scope; nested archive scopes cannot refresh it. Each HTTP
+request remains bounded to 90 seconds. A shorter enclosing deadline still wins. The setting does not change
 producer budgets, credentials, validation, or publication authority. The example
 explicitly selects 15 minutes; it does not change the default. General crate-job
 policy is independent and is not changed here.
