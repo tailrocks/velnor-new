@@ -21,11 +21,51 @@ fn budget_values(step: &Yaml) -> Vec<&Yaml> {
         .collect()
 }
 
+fn job_timeout(job: &Yaml) -> i64 {
+    let Yaml::Map(fields) = job else {
+        panic!("job mapping")
+    };
+    let (_, Yaml::Int(timeout)) = fields
+        .iter()
+        .find(|(key, _)| key == "timeout-minutes")
+        .expect("job timeout")
+    else {
+        panic!("literal job timeout")
+    };
+    *timeout
+}
+
+fn step_timeouts(job: &Yaml) -> Vec<i64> {
+    let Yaml::Map(fields) = job else {
+        panic!("job mapping")
+    };
+    let Some((_, Yaml::Seq(steps))) = fields.iter().find(|(key, _)| key == "steps") else {
+        panic!("job steps")
+    };
+    steps
+        .iter()
+        .filter_map(|step| {
+            let Yaml::Map(fields) = step else {
+                panic!("step mapping")
+            };
+            fields.iter().find_map(|(key, value)| {
+                if key != "timeout-minutes" {
+                    return None;
+                }
+                let Yaml::Int(minutes) = value else {
+                    panic!("literal step timeout")
+                };
+                Some(*minutes)
+            })
+        })
+        .collect()
+}
+
 #[test]
 fn publication_operations_bind_one_canonical_configured_budget_in_both_channels() {
     for mut spec in [fixture(), stable::stable()] {
         let context = TapInvocationContext::for_channel(spec.policy.channel);
-        for minutes in [5, 1, 15, 360] {
+        for minutes in [5, 1, 15, 333] {
             spec.publication_timeout_minutes = JobTimeout::new(minutes).expect("bounded budget");
             for op in ["publish-package-release-v1", "recover-package-release-v1"] {
                 let step = steps::operation(&spec, op, true, context).expect("publication step");
@@ -37,6 +77,80 @@ fn publication_operations_bind_one_canonical_configured_budget_in_both_channels(
             }
         }
     }
+}
+
+#[test]
+fn publication_jobs_budget_preparation_and_leave_signer_unchanged() {
+    for mut spec in [fixture(), stable::stable()] {
+        spec.publication_timeout_minutes = JobTimeout::new(15).expect("bounded budget");
+        let (_, signer) = super::signer(&spec).expect("signer");
+        assert_eq!(job_timeout(&signer), 5);
+
+        let (publisher_id, publisher) = super::publisher(&spec).expect("publisher");
+        assert!(publisher_id.ends_with("-publisher"));
+        assert_eq!(job_timeout(&publisher), 42);
+        assert_eq!(step_timeouts(&publisher), [5, 5, 6, 5, 5]);
+
+        let (recovery_id, recovery) = super::recovery(&spec).expect("recovery");
+        assert!(recovery_id.ends_with("-recovery"));
+        assert_eq!(job_timeout(&recovery), 32);
+        assert_eq!(step_timeouts(&recovery), [5, 5, 6]);
+    }
+}
+
+#[test]
+fn publisher_budget_tracks_a_changed_preparation_step_cap() {
+    let mut spec = fixture();
+    spec.publication_timeout_minutes = JobTimeout::new(15).expect("bounded budget");
+    let (_, job) = super::publisher(&spec).expect("publisher");
+    let Yaml::Map(mut fields) = job else {
+        panic!("publisher job mapping")
+    };
+    let Some(Yaml::Seq(mut steps)) = fields
+        .iter()
+        .find(|(key, _)| key == "steps")
+        .map(|(_, steps)| steps.clone())
+    else {
+        panic!("publisher job steps")
+    };
+    let Yaml::Map(first_step) = &mut steps[0] else {
+        panic!("setup step mapping")
+    };
+    let Some((_, cap)) = first_step
+        .iter_mut()
+        .find(|(key, _)| key == "timeout-minutes")
+    else {
+        panic!("setup step cap")
+    };
+    *cap = Yaml::Int(6);
+    super::super::publication_budget::apply_preparation_budget(
+        &mut fields,
+        &mut steps[..5],
+        spec.publication_timeout_minutes,
+    )
+    .expect("budget follows rendered caps");
+    assert_eq!(job_timeout(&Yaml::Map(fields)), 43);
+}
+
+#[test]
+fn maximum_publication_runtime_fits_publisher_and_over_limit_is_rejected() {
+    let mut preview = fixture();
+    preview.publication_timeout_minutes = JobTimeout::new(333).expect("maximum runtime");
+    assert!(render_consumer_preview(&preview, &hosted_policy()).is_ok());
+    let (_, preview_publisher) = super::publisher(&preview).expect("preview publisher");
+    assert_eq!(job_timeout(&preview_publisher), 360);
+
+    let mut stable_maximum = stable::stable();
+    stable_maximum.publication_timeout_minutes = JobTimeout::new(333).expect("maximum runtime");
+    assert!(render_consumer_binary_release(&stable_maximum, &hosted_policy()).is_ok());
+    let (_, stable_publisher) = super::publisher(&stable_maximum).expect("stable publisher");
+    assert_eq!(job_timeout(&stable_publisher), 360);
+
+    preview.publication_timeout_minutes = JobTimeout::new(334).expect("representable runtime");
+    assert!(render_consumer_preview(&preview, &hosted_policy()).is_err());
+    let mut stable = stable::stable();
+    stable.publication_timeout_minutes = JobTimeout::new(334).expect("representable runtime");
+    assert!(render_consumer_binary_release(&stable, &hosted_policy()).is_err());
 }
 
 #[test]

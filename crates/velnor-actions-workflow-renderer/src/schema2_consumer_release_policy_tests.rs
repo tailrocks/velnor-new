@@ -176,7 +176,11 @@ fn assert_job_envelopes(yaml: &str, producers: &std::collections::BTreeSet<Strin
         }
         if let Some(timeout) = line.strip_prefix("    timeout-minutes: ") {
             let id = job_id.expect("timeout belongs to a job");
-            let expected = if producers.contains(id) {
+            let expected = if id.ends_with("-publisher") {
+                32
+            } else if id.ends_with("-recovery") {
+                22
+            } else if producers.contains(id) {
                 observed.insert(id.to_owned());
                 minutes + 5
             } else {

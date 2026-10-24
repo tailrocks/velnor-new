@@ -1,11 +1,21 @@
 # Consumer publication budgets
 
 The native `stacks.rust.binary_release.publication_timeout_minutes` setting
-selects a bounded outer job budget and native publication deadline. It defaults
-to five minutes and accepts
-whole minutes from one through 360 through the existing `JobTimeout` contract.
-Configuration validation and both public channel renderer entrypoints reject
-invalid values, including values created through deserialization.
+selects the native publication deadline and continues to bound preview source
+eligibility. It defaults to five minutes and accepts whole minutes from one
+through 333. Configuration validation and both public channel renderer
+entrypoints reject invalid values, including values created through
+deserialization.
+
+Publisher and recovery job limits add the caps on their actual pre-operation
+steps, the configured native deadline, and one minute for completion and
+cleanup. Uncapped preparation steps receive the normal five-minute job-step
+default. The existing six-minute `Acquire Velnor` cap is preserved. With the
+current steps, a 15-minute operation renders a 42-minute publisher and a
+32-minute recovery job. The publisher's 27 minutes of preparation and cleanup
+leave room for the maximum 333-minute operation within GitHub's 360-minute job
+limit. If rendered preparation steps change, generation recomputes their total
+and rejects any combined job budget above that limit.
 
 The setting applies to preview eligibility and to publisher and original-evidence
 recovery jobs in both channels. Preview eligibility authenticates recovery twice,
@@ -30,9 +40,11 @@ They do not shorten the returned custody deadline.
 Each HTTP request retains its 90-second bound. Source phase deadlines, repeated
 verification, privileges and immutable publication rules are unchanged. The
 budget is not part of the signed release policy or receipt, so retained original
-artifacts remain compatible. Job setup and artifact downloads consume outer job
-time before the native deadline starts; the setting does not guarantee that its
-full duration remains available inside the job.
+artifacts remain compatible. The outer job budget includes declared pre-operation
+step caps and one minute of completion and cleanup headroom. A preparation step
+that reaches its cap can still consume time that otherwise would remain before
+the native deadline begins; this is a bounded lifecycle policy, not a guarantee
+for runner startup or GitHub post-job processing.
 
 ## Hosted failure that requires the setting
 

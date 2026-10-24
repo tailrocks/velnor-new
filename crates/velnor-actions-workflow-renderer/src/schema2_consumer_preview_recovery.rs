@@ -1,6 +1,6 @@
 use super::{
     ConsumerReleaseSpec, RenderError, TapInvocationContext, Yaml, acquire, base, finish, needs,
-    operation, permissions, run_step, setup,
+    operation, permissions, publication_budget, run_step, setup,
 };
 use crate::commands::join_argv_for_run;
 use velnor_actions_contract::package_release::PackageReleaseChannel;
@@ -35,17 +35,20 @@ pub(in crate::schema2) fn recovery(
             ("contents", "write"),
         ]),
     ));
-    Ok(finish(
-        &id,
-        fields,
-        vec![
-            setup(&spec.linux_setup),
-            run_step(
-                "Install pinned GitHub CLI",
-                &join_argv_for_run(&spec.install_gh_argv)?,
-            ),
-            acquire(&spec.linux_acquire, &id, "ubuntu-26.04")?,
-            operation(spec, "recover-package-release-v1", true, context)?,
-        ],
-    ))
+    let mut job_steps = vec![
+        setup(&spec.linux_setup),
+        run_step(
+            "Install pinned GitHub CLI",
+            &join_argv_for_run(&spec.install_gh_argv)?,
+        ),
+        acquire(&spec.linux_acquire, &id, "ubuntu-26.04")?,
+        operation(spec, "recover-package-release-v1", true, context)?,
+    ];
+    let preparation_step_count = job_steps.len() - 1;
+    publication_budget::apply_preparation_budget(
+        &mut fields,
+        &mut job_steps[..preparation_step_count],
+        spec.publication_timeout_minutes,
+    )?;
+    Ok(finish(&id, fields, job_steps))
 }

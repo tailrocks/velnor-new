@@ -132,7 +132,8 @@ pub const ACQUIRE_NAME: &str = "Acquire Velnor";
 /// (`--retry-max-time 180` plus one `--max-time 120` attempt plus retry
 /// delays), so a hung download fails the step instead of waiting for the
 /// job timeout during a GitHub outage.
-pub const ACQUIRE_TIMEOUT_MINUTES: i64 = 6;
+pub const ACQUIRE_TIMEOUT_MINUTES: i64 =
+    velnor_actions_contract::config::RELEASE_ACQUIRE_STEP_TIMEOUT_MINUTES as i64;
 /// Run-key expression (`r<run-id>-a<run-attempt>`, workflow-contract §3).
 pub const RUN_KEY_EXPR: &str = "r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}";
 /// Display name of the matrix-report upload step.

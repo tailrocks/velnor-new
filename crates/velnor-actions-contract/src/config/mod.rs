@@ -72,6 +72,8 @@ pub use ansible::{
     ANSIBLE_JOB_PREFIX, AnsibleCheck, AnsibleCollection, AnsibleStackConfig, LintProfile,
 };
 pub use binary_release::{
+    MAX_PUBLICATION_RUNTIME_MINUTES, PUBLICATION_CLEANUP_HEADROOM_MINUTES,
+    PUBLICATION_PREPARATION_STEP_DEFAULT_MINUTES, RELEASE_ACQUIRE_STEP_TIMEOUT_MINUTES,
     RustBinaryPreviewConfig, RustBinaryPreviewVersioning, RustBinaryReleaseArchive,
     RustBinaryReleaseCompanion, RustBinaryReleaseConfig, RustBinaryReleaseEvidence,
     RustBinaryReleaseEvidenceProfile, RustBinaryReleaseProducer, RustBinaryReleaseProduct,
