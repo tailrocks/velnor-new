@@ -5,7 +5,7 @@ use std::path::Path;
 
 use crate::impl_cli_tmp::{
     cleanup, code, commit_all, fresh_tempdir, git_init, head_sha, install_consumer_manifest,
-    spawn_isolated, write_workspace,
+    spawn_isolated, tool_context, write_workspace,
 };
 
 /// Serialized workflow marker selecting dynamic matrix output accounting.
@@ -333,7 +333,7 @@ fn dynamic_matrix_over_job_limit_preserves_response_but_publishes_nothing()
     std::fs::write(&outputs, "seed=1\n")?;
     let runner_temp = repo.join("runner-temp");
     std::fs::create_dir_all(&runner_temp)?;
-    let output = spawn_isolated(
+    let output = tool_context::spawn_isolated_with_tools(
         &[],
         &[
             ("VELNOR_INTERNAL_OP", "plan-v1"),
@@ -347,7 +347,11 @@ fn dynamic_matrix_over_job_limit_preserves_response_but_publishes_nothing()
         &repo,
     )?;
     assert_eq!(code(&output), 1, "stderr: {:?}", output.stderr);
-    assert!(String::from_utf8_lossy(&output.stderr).contains("matrix_jobs_exceeded"));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("matrix_jobs_exceeded"),
+        "expected matrix_jobs_exceeded; child stderr: {stderr}"
+    );
     assert_no_leak(&output);
     let response = std::fs::read_to_string(repo.join("plan-v1-response.json"))?;
     let response: serde_json::Value = serde_json::from_str(&response)?;
