@@ -1,0 +1,55 @@
+{
+  "archive_scope_note": "Exactly the three KEEP_UNINTEGRATED_PROTOTYPE source paths are included; the other original bundle paths are not duplicated. This snapshot is for source custody and review, not compilation.",
+  "artifact_intent": "Exact original source-only preservation; no product module wiring or production integration.",
+  "classification": "KEEP_UNINTEGRATED_PROTOTYPE",
+  "future_integration_requirements": [
+    "Integrate only at an authorized restore/materialization consumer.",
+    "Revalidate fd and stage claim before seek/read; distinguish regular-file data offsets from directories and hardlinks.",
+    "Prove regular-file seek/read roundtrip, range and size overflow/bounds rejection, hardlink/no-offset behavior, root modes/state-digest binding, and stage-mutation rejection.",
+    "Preserve current malformed-transport negative cases."
+  ],
+  "integration_boundary": {
+    "current_behavior": "Current production admission consumes manifest state_digest; transport envelope/header/order/path/parent/link/content/root-digest validation and revalidation remain in the private implementation.",
+    "not_claimed": [
+      "Buildable standalone crate",
+      "Production feature",
+      "Performance improvement",
+      "Removed production extractor or security guard",
+      "Current caller requiring richer return type"
+    ],
+    "not_integrated": "No module wiring, production caller, public API, new allocation or test-only offset plumbing is added by this archive."
+  },
+  "preserved_files": [
+    {
+      "git_blob_oid": "58829658645304f6c5ac0a81c19857c94f6d4670",
+      "git_mode": "100644",
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_payload/transfer_transport_tar_read.rs",
+      "sha256": "37e992cab6e95697d1bd56fd62daa82f0ab5b6a41bd839f66aafe4d7de982219",
+      "size": 10148
+    },
+    {
+      "git_blob_oid": "5dcc317896ee035a67c22cea829367f9b69d89ea",
+      "git_mode": "100644",
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_payload/transfer_transport_tar_read_state.rs",
+      "sha256": "df9ce99bf92713358cbe09edce6f8bda5c546dfa198cf205b3b7cf3e23b6bcab",
+      "size": 13789
+    },
+    {
+      "git_blob_oid": "c1e5cac612f2f8b47d452705217d0ea9af5ab2f6",
+      "git_mode": "100644",
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_payload/tests/normal_tofu_export_tests.rs",
+      "sha256": "94533d8a6244247114f18204b48aa0a4319e9a24db430aa6e0ca49ab7bfdf739",
+      "size": 7163
+    }
+  ],
+  "provenance": {
+    "independent_review_sha256": "be0312d8d9c61f69cf29772b643970960d7d2cc023fc9ea907b56a472d5c7fc1",
+    "main_commit_at_review": "1bd31f8203ecf40d141c331e5195eb422e0904d3",
+    "original_19_source_archive_sha256": "df75dce9d5bc0c547b2d79565ece92a9233be1633b5f94a443142d6bec4db07f",
+    "original_head": "f9fa7829c290cd8b6ca68863686ffd3c02b090cf",
+    "private_candidate_at_review": "6f536a9578b16ef25e2537993685b0a30fc7975c"
+  },
+  "repository": "tailrocks/velnor-new",
+  "schema": "velnor-orchestrator-transport-prototype-preservation-v1",
+  "unique_value": "Validated raw-tar inventory (entry kind/mode/size/digest/link targets/data offsets/root modes) plus a stage-claim-bound provider-byte seek/read oracle. Potential later materializer input; no connected consumer or measured performance benefit is claimed."
+}
