@@ -78,6 +78,49 @@ and does not rely on a Rust reaper to clean up failed or timed-out operations.
 The invoking job must enforce a finite process/job deadline for the Rust path
 as well.
 
+## Future paired SDK qualification
+
+This procedure describes a future paired run; no current workflow establishes
+the required namespace or runs both SDK commands. A local HTTPS self-test is
+not evidence of the paired Docker path.
+
+Use a separately approved Linux runner in the exact network namespace shared
+with its DinD daemon. The SDKs start the existing service image
+`ghcr.io/tailrocks/velnor-job@sha256:b36946574402eb0c79fb6d7a9f7a77195d2ef943c92bc6b0fbc466ff3ea408f9`.
+Build the standalone Rust fixture from its checked-in `Cargo.toml` and
+`Cargo.lock` on that Linux runner through the approved guard, Mise, and MBX
+toolchain, and set `RUST_TLS_FIXTURE_BIN` to that Linux executable. Do not use a
+macOS-built binary. Generate the private certificate bundle on the same Linux
+runner as shown above, and install only the checked-in Node dependencies.
+
+Before running either SDK, require `DOCKER_HOST=tcp://localhost:2375` and
+require `TESTCONTAINERS_HOST_OVERRIDE` and `DOCKER_CONTEXT` to be absent. Then
+run both clients sequentially under one finite outer deadline:
+
+```sh
+set -eu
+: "${RUST_TLS_FIXTURE_BIN:?set the verified Linux fixture executable}"
+: "${certs:?set the private certificate directory}"
+test "$DOCKER_HOST" = "tcp://localhost:2375"
+test -z "${TESTCONTAINERS_HOST_OVERRIDE+x}"
+test -z "${DOCKER_CONTEXT+x}"
+test -x "$RUST_TLS_FIXTURE_BIN"
+timeout --signal=TERM --kill-after=10s 180s bash -c \
+  'set -eu; node qualification/testcontainers/tls.mjs "$2"; "$1" sdk "$2"' \
+  _ "$RUST_TLS_FIXTURE_BIN" "$certs"
+```
+
+Both SDKs must report `localhost` as the mapped host, use the mapped HTTPS
+port, accept the DNS-only `localhost` certificate with normal verification,
+and reject the untrusted CA, wrong DNS name, and IP-address cases. Both
+commands must exit successfully after removing their owned service container.
+Record the source commit and lockfile, executable and image digests, runner and
+DinD namespace identity, command outputs, and cleanup results with the run
+evidence. A timeout or failed start/removal is a failed run; reconcile only
+resources owned by that exact invocation before retrying, never use a broad
+container cleanup. This documentation does not claim that a paired run has
+passed.
+
 For a local HTTPS-only check using the same Rust-generated bundle and Node
 request logic, run:
 
