@@ -30,7 +30,7 @@ fn invocation(event: &str, path: &str) -> Invocation {
 #[test]
 fn continuation_never_grants_publication_recovery_authority() {
     for event in ["schedule", "workflow_dispatch"] {
-        let caller = invocation(event, CONTINUATION_PATH);
+        let caller = invocation(event, plan().channel.tap_reconcile_workflow_path());
         assert!(caller.validate(&plan(), Purpose::TapPromotion).is_ok());
         assert!(
             caller
@@ -49,7 +49,7 @@ fn continuation_never_grants_publication_recovery_authority() {
 fn stable_continuation_uses_only_its_channel_workflow_identity() {
     let stable = stable_plan();
     let stable_path = stable.channel.workflow_path();
-    let caller = invocation("schedule", ".github/workflows/stable-tap-reconcile.yml");
+    let caller = invocation("schedule", stable.channel.tap_reconcile_workflow_path());
     assert!(caller.validate(&stable, Purpose::TapPromotion).is_ok());
     assert!(
         caller
@@ -57,7 +57,7 @@ fn stable_continuation_uses_only_its_channel_workflow_identity() {
             .is_err()
     );
 
-    let wrong_workflow = invocation("schedule", CONTINUATION_PATH);
+    let wrong_workflow = invocation("schedule", plan().channel.tap_reconcile_workflow_path());
     assert!(
         wrong_workflow
             .validate(&stable, Purpose::TapPromotion)
@@ -73,7 +73,7 @@ fn stable_continuation_uses_only_its_channel_workflow_identity() {
 #[test]
 fn continuation_rejects_foreign_branch_workflow_repository_and_source() {
     for field in 0..6 {
-        let mut caller = invocation("schedule", CONTINUATION_PATH);
+        let mut caller = invocation("schedule", plan().channel.tap_reconcile_workflow_path());
         match field {
             0 => caller.repository = "foreign/app".to_owned(),
             1 => caller.source_ref = "refs/heads/other".to_owned(),

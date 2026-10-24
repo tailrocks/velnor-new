@@ -1,6 +1,7 @@
 //! Full native generation validates both channels' tap continuations.
 use super::{binary_repo, tap_enabled_config};
 use crate::impl_common::{TestResult, git};
+use velnor_actions_contract::package_release::PackageReleaseChannel;
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
 
 #[test]
@@ -37,8 +38,15 @@ fn both_tap_reconciliation_workflows_pass_pinned_jactionlint() -> TestResult {
     );
 
     let generated = output.path().join("generated/.github/workflows");
-    for workflow in ["preview-tap-reconcile.yml", "stable-tap-reconcile.yml"] {
+    for (workflow, channel) in [
+        ("preview-tap-reconcile.yml", PackageReleaseChannel::Preview),
+        ("stable-tap-reconcile.yml", PackageReleaseChannel::Stable),
+    ] {
         let yaml = std::fs::read_to_string(generated.join(workflow))?;
+        assert!(
+            yaml.contains(&format!("name: {}", channel.tap_reconcile_workflow_name())),
+            "{workflow}: {yaml}"
+        );
         assert!(!yaml.contains("inputs."), "{workflow}: {yaml}");
         assert!(!yaml.contains("env: {}"), "{workflow}: {yaml}");
         assert!(
@@ -47,9 +55,23 @@ fn both_tap_reconciliation_workflows_pass_pinned_jactionlint() -> TestResult {
         );
     }
     let stable = std::fs::read_to_string(generated.join("binary-release.yml"))?;
+    assert!(
+        stable.contains(&format!(
+            "name: {}",
+            PackageReleaseChannel::Stable.workflow_name()
+        )),
+        "{stable}"
+    );
     assert!(stable.contains("VELNOR_STABLE_OPERATION: ${{ inputs.operation }}"));
     assert!(stable.contains("VELNOR_STABLE_VERSION_PACKAGE: demo"));
     let preview = std::fs::read_to_string(generated.join("binary-preview.yml"))?;
+    assert!(
+        preview.contains(&format!(
+            "name: {}",
+            PackageReleaseChannel::Preview.workflow_name()
+        )),
+        "{preview}"
+    );
     assert!(preview.contains("publish-package-release-v1"));
     assert!(preview.contains("VELNOR_RELEASE_PUBLICATION_TIMEOUT_MINUTES: \"15\""));
     Ok(())

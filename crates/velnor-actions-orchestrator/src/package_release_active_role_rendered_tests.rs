@@ -306,3 +306,6 @@ const MATRIX_ROLE_CHILD: &str = "VELNOR_PREVIEW_MATRIX_ROLE_CHILD";
 
 #[path = "package_release_active_role_preview_acquire_tests.rs"]
 mod preview_acquire_tests;
+
+#[path = "package_release_tap_identity_rendered_tests.rs"]
+mod tap_identity_tests;
