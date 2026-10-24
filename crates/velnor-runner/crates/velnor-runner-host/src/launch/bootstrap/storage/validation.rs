@@ -182,3 +182,14 @@ fn valid_bounded(value: &str, max_bytes: usize) -> bool {
         && value.len() <= max_bytes
         && value.bytes().all(|byte| !byte.is_ascii_control())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::valid_engine_id;
+
+    #[test]
+    fn engine_id_requires_the_daemon_uuid_shape() {
+        assert!(valid_engine_id("bc9058a0-c807-412b-a088-6c1d96ddd462"));
+        assert!(!valid_engine_id("test-engine"));
+    }
+}
