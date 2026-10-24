@@ -30,7 +30,6 @@ pub(super) mod promotion_context;
 use promotion_context::{Invocation, Purpose};
 
 const POLICY_FILE: &str = "package-release-policy.json";
-const INPUT_DIR: &str = "release-recovery-input";
 const SOURCE_SELECTION_INPUT_DIR: &str = "preview-recovery-selection-input";
 const FINALIZATION_INPUT_DIR: &str = "preview-recovery-finalization-input";
 const MAX_PLAN_BYTES: u64 = 1024 * 1024;
@@ -193,8 +192,8 @@ fn verified_original(
         super::release_policy_admission::resolve_policy_at_source(&policy, &artifact_source_sha)?;
     validate_recovery_context(&plan, purpose)?;
 
-    let input = root.join(INPUT_DIR);
-    create_fresh_directory(&input)?;
+    let input_owner = create_owned_input_directory(&root)?;
+    let input = input_owner.path().to_path_buf();
     let receipt = archive::extract_signed_assets(&zip_bytes, &input, &plan)?;
     if !receipt_matches_original(
         receipt.workflow.run_id,
@@ -217,8 +216,8 @@ fn verified_original(
         original_attempt,
         repository_id,
     )?;
-    let signed = crate::package_release_signer::verify_attested_signed_package_with_deadline(
-        &input,
+    let signed = crate::package_release_signer::verify_attested_signed_package_with_owned_tempdir(
+        input_owner,
         &plan,
         &identity,
         custody_deadline,
@@ -368,8 +367,9 @@ use checks::{
 #[path = "package_release_publish_recovery_files.rs"]
 mod recovery_files;
 use recovery_files::{
-    canonical_positive_env, canonical_positive_env_u32, create_fresh_directory, env_path, env_text,
-    positive_env, positive_env_u32, read_regular_bounded, runner_root,
+    canonical_positive_env, canonical_positive_env_u32, create_fresh_directory,
+    create_owned_input_directory, env_path, env_text, positive_env, positive_env_u32,
+    read_regular_bounded, runner_root,
 };
 
 #[path = "package_release_publish_recovery_archive.rs"]

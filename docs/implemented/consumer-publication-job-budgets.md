@@ -83,3 +83,27 @@ source phases through the same preview context. The selector's separate literal
 binding block is removed. This preserves canonical ID validation and independent
 receipt/provenance verification after checkout, without rebuilding, signing,
 relaxing source custody, or borrowing the current recovery caller's identity.
+
+## Retained tap verification input custody
+
+Retained tap reconciliation verifies the original signed artifact during initial
+loading and again immediately before a branch or merge mutation. These calls
+run in the same native process. Recreating a fixed `release-recovery-input`
+directory made the second verification fail with
+`package_recovery_input_not_fresh`, even when every original identity and byte
+remained valid. This was a source-proven path collision, independent of the
+publication timeout and inventory size.
+
+Each retained verification now allocates a distinct private directory under the
+validated runner root. Its temporary-directory owner transfers into the sealed
+byte custody object. Every shared custody reference keeps those exact inputs
+alive; the final reference releases only its owned directory. Failed extraction
+or verification releases the newly allocated input without deleting an earlier
+held directory. Borrowed directory admission and the separate source-selection
+and finalization input rules remain unchanged.
+
+This allocation does not cache or skip original artifact acquisition, policy,
+CI, identity, signature, attestation, published-byte or pre-mutation freshness
+checks. Temporary path names do not become release identity. Tap job and native
+deadlines remain separate from the configurable publication deadline; a live
+Tap promotion is still required qualification.
