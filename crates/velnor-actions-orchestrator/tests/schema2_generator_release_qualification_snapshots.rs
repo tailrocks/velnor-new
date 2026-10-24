@@ -175,13 +175,54 @@ fn assert_candidate_output_binding_validation(
         raw_binding_check < normalization,
         "raw candidate output bindings must be validated before normalization"
     );
+    for handoff in [
+        "VELNOR_REPO_POLICY_ACTION=qualification-output-bindings",
+        "VELNOR_REPO_POLICY_MANIFEST=\"$CANDIDATE_MANIFEST\"",
+        "VELNOR_REPO_POLICY_WORKFLOW_ROOT=\"$preview/.github\"",
+        "VELNOR_REPO_POLICY_ROOT=\"$ROOT\"",
+        "VELNOR_INTERNAL_OP=repo-policy-v1",
+        "\"$BIN\"",
+    ] {
+        assert!(
+            qualification_helpers.contains(handoff),
+            "native output-binding operation is missing {handoff}"
+        );
+    }
+    let validator = include_str!("../../../crates/velnor-actions-freshness/src/release_support.rs");
     assert!(
-        qualification_helpers.contains("target = targets.get(url)")
-            && qualification_helpers.contains("if digest != expected_digest")
-            && qualification_helpers.contains("if source != commit"),
-        "every generated ConsumerV1 binding must match its candidate manifest target, digest, and source"
+        validator.contains("fn validate_qualification_output_bindings(")
+            && validator.contains("by_url.get(url)")
+            && validator.contains("if digest != *expected_digest")
+            && validator.contains("if source != commit"),
+        "native validation must bind each workflow URL, digest, and source commit to the candidate manifest"
     );
+    assert_native_output_binding_test_evidence();
     Ok(())
+}
+
+fn assert_native_output_binding_test_evidence() {
+    let tests =
+        include_str!("../../../crates/velnor-actions-freshness/src/release_support_tests.rs");
+    assert!(
+        tests.contains("qualification_bindings_accept_exact_pairs_and_reject_duplicate_json_keys")
+            && tests.contains(
+                "qualification_bindings_reject_digest_commit_scope_pair_and_unknown_url_faults"
+            ),
+        "native output-binding tests must prove positive pairs, duplicate-key rejection, and invalid binding rejection"
+    );
+    for failure in [
+        "wrong digest for target",
+        "wrong source commit",
+        "unknown release URL",
+        "binding fields use different scopes",
+        "incomplete binding",
+        "cannot read candidate manifest",
+    ] {
+        assert!(
+            tests.contains(failure),
+            "native output-binding tests are missing {failure} coverage"
+        );
+    }
 }
 
 fn assert_schema_only_consumer_manifest_input(fixture_check: &str) {

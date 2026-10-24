@@ -44,6 +44,11 @@ pub(super) fn detected_projects(
                     problem: "mise_checks_are_explicit".to_owned(),
                 });
             }
+            Ok(Stack::Native) => {
+                return Err(OrchestratorError::Detection {
+                    problem: "native_checks_are_explicit".to_owned(),
+                });
+            }
             Err(err) => {
                 return Err(OrchestratorError::Detection {
                     problem: err.to_string(),
@@ -61,6 +66,11 @@ pub(super) fn detected_projects(
             Stack::Mise => {
                 return Err(OrchestratorError::Detection {
                     problem: "mise_checks_are_explicit".to_owned(),
+                });
+            }
+            Stack::Native => {
+                return Err(OrchestratorError::Detection {
+                    problem: "native_checks_are_explicit".to_owned(),
                 });
             }
         }

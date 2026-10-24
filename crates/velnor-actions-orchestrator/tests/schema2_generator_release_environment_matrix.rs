@@ -179,7 +179,7 @@ fn workflow_job_policy(workflow: &str, job: &str) -> JobPolicy {
         ("product-release-images.yml", "build-images") => {
             policy.verifiers.push("Verify Rust channel manifest");
             policy.authenticated.push((
-                "Install pinned Rust for the resource probe",
+                "Install pinned resource-probe build and qualification tools",
                 "GITHUB_TOKEN",
                 "${{ github.token }}",
             ));

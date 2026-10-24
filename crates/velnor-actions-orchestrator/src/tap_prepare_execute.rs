@@ -1,4 +1,4 @@
-//! Fixed runner-temp handoff for the unprivileged tap updater.
+//! Authenticated runner-temp admission for native tap preparation.
 
 use super::{HomebrewTapPreparationProof, OrchestratorError, internal, prepare_homebrew_tap};
 use std::{env, fs, path::PathBuf};
@@ -15,7 +15,7 @@ pub const PREPARE_HOMEBREW_TAP_OP: &str = "prepare-homebrew-tap-v1";
 ///
 /// A preceding source-free admission authenticates the retained signer artifact
 /// against the plan and workflow identity, then exits. This token-free boundary checks
-/// source configuration, captured tap main, task provenance, and formula bytes.
+/// source configuration, captured tap main, canonical policy, and formula bytes.
 /// # Errors
 /// Rejects missing or malformed request context and every preparation failure.
 pub fn prepare_homebrew_tap_from_env() -> Result<HomebrewTapPreparationProof, OrchestratorError> {
@@ -55,11 +55,33 @@ fn prepare_admitted(
         return Err(internal("tap_static_policy_mismatch"));
     }
     let source_repository = crate::release_identity::origin_repository(&workspace)?;
+    let spec = static_formula_policy()?;
+    let source_spec = config
+        .distribution
+        .homebrew_formula
+        .as_ref()
+        .ok_or_else(|| internal("tap_formula_spec_missing"))?;
+    if canonical_json_bytes(source_spec).map_err(|_| internal("tap_formula_spec_encode"))?
+        != canonical_json_bytes(&spec).map_err(|_| internal("tap_formula_spec_encode"))?
+    {
+        return Err(internal("tap_static_formula_spec_mismatch"));
+    }
+    let sdk_artifact_digest = crate::generator::current_exe_sha256()
+        .ok_or_else(|| internal("tap_sdk_artifact_digest_unavailable"))?;
     let release = super::VerifiedPackageRelease {
         receipt_digest,
         receipt,
     };
-    prepare_homebrew_tap(&source_repository, tap, &plan, &release, &root)
+    prepare_homebrew_tap(crate::tap_prepare::TapPreparationInput {
+        source_repository: &source_repository,
+        tap,
+        plan: &plan,
+        release: &release,
+        spec: &spec,
+        sdk_artifact_digest: &sdk_artifact_digest,
+        temp: &root,
+        deadline,
+    })
 }
 
 pub(super) fn static_tap_policy() -> Result<HomebrewTapConfig, OrchestratorError> {
@@ -78,6 +100,26 @@ pub(super) fn static_tap_policy() -> Result<HomebrewTapConfig, OrchestratorError
         return Err(internal("tap_static_policy_disabled"));
     }
     Ok(policy)
+}
+
+pub(super) fn static_formula_policy()
+-> Result<velnor_actions_contract::homebrew_spec::HomebrewFormulaSpec, OrchestratorError> {
+    const LIMIT: usize = 64 * 1024;
+    let raw = env::var("VELNOR_HOMEBREW_FORMULA_SPEC")
+        .map_err(|_| internal("tap_static_formula_spec_missing"))?;
+    if raw.is_empty() || raw.len() > LIMIT {
+        return Err(internal("tap_static_formula_spec_invalid"));
+    }
+    let value = parse_strict_json(&raw).map_err(|_| internal("tap_static_formula_spec_json"))?;
+    let spec: velnor_actions_contract::homebrew_spec::HomebrewFormulaSpec =
+        serde_json::from_value(value).map_err(|_| internal("tap_static_formula_spec_schema"))?;
+    let canonical = spec
+        .canonical_bytes()
+        .map_err(|_| internal("tap_static_formula_spec_invalid"))?;
+    if canonical != raw.as_bytes() {
+        return Err(internal("tap_static_formula_spec_not_canonical"));
+    }
+    Ok(spec)
 }
 
 pub(super) fn absolute_env(key: &str, problem: &str) -> Result<PathBuf, OrchestratorError> {

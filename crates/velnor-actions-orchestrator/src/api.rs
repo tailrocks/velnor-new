@@ -1,5 +1,21 @@
 //! Public orchestrator API re-exports.
 
+/// Seed fixed parallel target lanes through the bounded native filesystem seeder.
+///
+/// # Errors
+/// Rejects malformed environment or unsafe source/destination paths.
+pub fn seed_parallel_targets_from_env() -> Result<(), super::OrchestratorError> {
+    super::parallel_target_seed::seed_parallel_targets_from_env().map(|_| ())
+}
+
+pub use super::homebrew::authoring::{
+    HomebrewAdoptionAuthoringReport, author_homebrew_adoption_cutover,
+    author_homebrew_adoption_seed,
+};
+pub use super::homebrew::source_policy::{
+    check_homebrew_source_policy, export_homebrew_source_policy,
+};
+
 #[path = "github_evidence.rs"]
 mod github_evidence;
 #[path = "github_evidence_http.rs"]
@@ -128,3 +144,14 @@ pub use super::package_release_signer::{SIGN_PACKAGE_RELEASE_OP, sign_package_re
 pub const ORCHESTRATOR_VERSION: u32 = 0;
 
 pub use crate::qualification_candidate::qualify_tools;
+
+pub use super::homebrew::qualification::execute_homebrew_qualification_from_env;
+pub use super::homebrew::runtime::execute_native_homebrew_check_from_env;
+pub(crate) use super::package_release_publish::{release_policy_admission, stable_tag_origin};
+
+pub use super::image_maintenance::{
+    BuildJobCandidateRequest, CheckJobSourceRequest, InstallBuildxRequest,
+    ValidateJobCandidateRequest, build_job_candidate, check_job_source, install_buildx,
+    validate_job_candidate,
+};
+pub use velnor_actions_mise::CheckDeadline;

@@ -25,6 +25,10 @@ pub struct HomebrewTapPreparationProof {
     pub receipt_digest: String,
     /// Canonical digest of the static package release plan.
     pub plan_digest: String,
+    /// Computed digest of the canonical Homebrew formula specification.
+    pub formula_spec_digest: String,
+    /// Authenticated digest of the SDK artifact that prepared this candidate.
+    pub sdk_artifact_digest: String,
     /// Canonical digest of the tap policy used to prepare the candidate.
     pub tap_config_digest: String,
     /// Tap repository slug bound to the captured remote.

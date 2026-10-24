@@ -293,7 +293,7 @@ fn assert_image_producer(body: &str) -> TestResult {
         body,
         "Verify Rust channel manifest",
         "CARGO_REGISTRY_TOKEN",
-        "Install pinned Rust for the resource probe",
+        "Install pinned resource-probe build and qualification tools",
         Some(("GITHUB_TOKEN", "${{ github.token }}")),
     )?;
     schema2_product_release_snapshots::assert_full_workflow_verifier_environment(
@@ -301,7 +301,7 @@ fn assert_image_producer(body: &str) -> TestResult {
         &["Verify Rust channel manifest"],
         &[
             (
-                "Install pinned Rust for the resource probe",
+                "Install pinned resource-probe build and qualification tools",
                 "GITHUB_TOKEN",
                 "${{ github.token }}",
             ),
@@ -316,7 +316,7 @@ fn assert_image_producer(body: &str) -> TestResult {
 fn assert_macos_producer(body: &str) -> TestResult {
     let build = job_body(body, "build-binary")?;
     assert!(build.contains("runs-on: macos-15"), "{build}");
-    assert!(build.contains("jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550"));
+    assert!(build.contains("jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e"));
     assert!(
         build.contains(&format!(
             "rust@{}",

@@ -40,6 +40,7 @@ pub(super) struct AuthenticatedPull {
 
 struct HistoricalFormula {
     base_sha: String,
+    old_formula_sha256: String,
     head_bytes: Vec<u8>,
     proof_digest: String,
 }
@@ -151,6 +152,7 @@ fn authenticate_pull(
         &formula.base_sha,
         &head_sha,
         &formula.head_bytes,
+        &formula.old_formula_sha256,
     )?;
     let runs = check_runs(api, &candidate.policy.repository, &head_sha)?;
     let feedback = capture_feedback(
@@ -210,15 +212,18 @@ fn validate_historical_formula(
         &candidate.formula_path,
         head_sha,
     )?;
-    let historical_proof = reconstruct_historical_proof(
-        &candidate.proof.source_repository,
-        &candidate.policy,
-        &candidate.plan,
-        &candidate.release,
-        &base_sha,
-        &base_formula,
-        &head_formula,
-    )?;
+    let historical_proof =
+        reconstruct_historical_proof(crate::tap_prepare::HistoricalCandidateInput {
+            source_repository: &candidate.proof.source_repository,
+            tap: &candidate.policy,
+            plan: &candidate.plan,
+            release: &candidate.release,
+            spec: &candidate.spec,
+            sdk_artifact_digest: &candidate.sdk_artifact_digest,
+            base_sha: &base_sha,
+            base_formula: &base_formula,
+            proposed_formula: &head_formula,
+        })?;
     let proof_digest = sha256(
         &canonical_json_bytes(&historical_proof)
             .map_err(|_| internal("tap_merge_history_proof_encode"))?,
@@ -238,6 +243,7 @@ fn validate_historical_formula(
     }
     Ok(HistoricalFormula {
         base_sha,
+        old_formula_sha256: historical_proof.old_formula_sha256,
         head_bytes: head_formula,
         proof_digest,
     })
@@ -262,23 +268,9 @@ fn merged_fields(
 }
 
 fn reconstruct_historical_proof(
-    source_repository: &str,
-    policy: &velnor_actions_contract::config::HomebrewTapConfig,
-    plan: &velnor_actions_contract::PackageReleasePlan,
-    release: &velnor_actions_contract::VerifiedPackageRelease,
-    base_sha: &str,
-    base_formula: &[u8],
-    head_formula: &[u8],
+    input: crate::tap_prepare::HistoricalCandidateInput<'_>,
 ) -> Result<crate::tap_prepare::HomebrewTapPreparationProof, OrchestratorError> {
-    crate::tap_prepare::reconstruct_historical_candidate_proof(
-        source_repository,
-        policy,
-        plan,
-        release,
-        base_sha,
-        base_formula,
-        head_formula,
-    )
+    crate::tap_prepare::reconstruct_historical_candidate_proof(input)
 }
 
 fn validate_pull_identity(

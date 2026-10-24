@@ -1,0 +1,3 @@
+/tmp/velnor-freshness-qual-20261025/bin/gh.zip: OK
+/tmp/velnor-freshness-qual-20261025/bin/alint.tar.gz: OK
+be09b48beb7dc1fa436c95c21aae9df393e0cccbce7dd7c114dfbbf0afdd121f  release-plz-0.4.1.crate (downloaded to temporary qualification directory)

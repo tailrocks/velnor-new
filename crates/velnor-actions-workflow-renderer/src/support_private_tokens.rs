@@ -26,6 +26,9 @@ const MINT_INPUTS: [&str; 6] = [
     "skip-token-revoke",
 ];
 
+static EMPTY_ENV: std::sync::LazyLock<BTreeMap<String, String>> =
+    std::sync::LazyLock::new(BTreeMap::new);
+
 /// True for the roles allowed to bind a private-source credential.
 pub(super) fn is_private_binding_role(role: Option<StepRole>) -> bool {
     matches!(
@@ -40,6 +43,7 @@ fn step_env(step: &Step) -> &BTreeMap<String, String> {
         | StepKind::Shell { env, .. }
         | StepKind::TaskExecution { env, .. }
         | StepKind::Internal { env, .. } => env,
+        StepKind::NativeCheckExecution { .. } => &EMPTY_ENV,
     }
 }
 
@@ -50,7 +54,7 @@ fn step_texts(step: &Step) -> Vec<&str> {
         StepKind::Action { with, .. } => texts.extend(with.values().map(String::as_str)),
         StepKind::Shell { run, .. } => texts.extend(run.iter().map(String::as_str)),
         StepKind::TaskExecution { argv, .. } => texts.extend(argv.iter().map(String::as_str)),
-        StepKind::Internal { .. } => {}
+        StepKind::Internal { .. } | StepKind::NativeCheckExecution { .. } => {}
     }
     texts
 }

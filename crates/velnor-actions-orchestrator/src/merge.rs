@@ -267,10 +267,43 @@ fn check_final_inputs(
     check_candidate_binding(plan, request, signals, miss_reasons);
     check_plan_evidence(plan, request, signals, miss_reasons);
     check_execute_inventory(plan, signals, miss_reasons);
-    if !crate::check_evidence::gate::validate_proofs(
+    let has_native = plan
+        .matrix
+        .include
+        .iter()
+        .any(|entry| entry.stack_id == "native");
+    if has_native || std::env::var_os("GITHUB_REPOSITORY").is_some() {
+        match std::env::var_os("GITHUB_WORKSPACE") {
+            Some(root) if !root.is_empty() => {
+                if crate::internal_plan::native_homebrew_checks::validate_required_plan(
+                    std::path::Path::new(&root),
+                    plan,
+                )
+                .is_err()
+                {
+                    signals.planning_failed = true;
+                    miss_reasons.insert("cache_corrupt".to_owned());
+                }
+                if !crate::check_evidence::gate::validate_proofs(
+                    plan,
+                    &request.task_reports,
+                    &request.check_proofs,
+                    Some(std::path::Path::new(&root)),
+                ) {
+                    signals.planning_failed = true;
+                    miss_reasons.insert("cache_corrupt".to_owned());
+                }
+            }
+            _ => {
+                signals.planning_failed = true;
+                miss_reasons.insert("cache_corrupt".to_owned());
+            }
+        }
+    } else if !crate::check_evidence::gate::validate_proofs(
         plan,
         &request.task_reports,
         &request.check_proofs,
+        None,
     ) {
         signals.planning_failed = true;
         miss_reasons.insert("cache_corrupt".to_owned());

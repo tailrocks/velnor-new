@@ -19,7 +19,7 @@ pub(super) fn stable() -> ConsumerReleaseSpec {
             "--no-hooks".to_owned(),
             "exec".to_owned(),
             "rust@1.99.1".to_owned(),
-            "release-plz@0.4.0".to_owned(),
+            "release-plz@0.4.1".to_owned(),
             "--".to_owned(),
             "release-plz".to_owned(),
         ],
@@ -71,12 +71,32 @@ fn publication_timeout_only_extends_preview_admission_and_shared_publish_recover
     assert!(timeout_line(&preview_yaml, "preview-recovery", None).contains("timeout-minutes: 32"));
     for (name, next) in [
         ("preview-signer", Some("preview-publisher")),
-        ("preview-tap-prepare", Some("preview-tap-writer")),
         ("preview-tap-writer", Some("preview-tap-merge")),
         ("preview-tap-merge", None),
     ] {
         assert!(timeout_line(&preview_yaml, name, next).contains("timeout-minutes: 5"));
     }
+    assert!(
+        timeout_line(
+            &preview_yaml,
+            "preview-tap-prepare",
+            Some("preview-tap-writer")
+        )
+        .contains("timeout-minutes: 15")
+    );
+    assert_eq!(
+        timeout_line(
+            &preview_default_yaml,
+            "preview-tap-prepare",
+            Some("preview-tap-writer")
+        ),
+        timeout_line(
+            &preview_yaml,
+            "preview-tap-prepare",
+            Some("preview-tap-writer")
+        ),
+        "tap preparation timeout stays unchanged"
+    );
     for (name, next) in [
         ("preview-payload", Some("preview-assemble")),
         ("preview-assemble", Some("preview-signer")),
@@ -106,10 +126,6 @@ fn publication_timeout_only_extends_stable_shared_publish_recovery_jobs() {
         Some(velnor_actions_contract::config::HomebrewTapDestination {
             formula: "Formula/scanner.rb".to_owned(),
         });
-    tap.policy
-        .updater
-        .inputs
-        .push("Formula/scanner.rb".to_owned());
     stable_default.homebrew_tap = Some(tap.clone());
     let stable_default_yaml = render_consumer_binary_release(&stable_default)
         .expect("default stable")
@@ -145,7 +161,6 @@ fn publication_timeout_only_extends_stable_shared_publish_recovery_jobs() {
         ("stable-eligibility", Some("stable-prepare")),
         ("stable-signer", Some("stable-publisher")),
         ("stable-payload-000", Some("stable-payload-001")),
-        ("stable-tap-prepare", Some("stable-tap-writer")),
         ("stable-tap-writer", Some("stable-tap-merge")),
         ("stable-tap-merge", None),
     ] {
@@ -155,6 +170,27 @@ fn publication_timeout_only_extends_stable_shared_publish_recovery_jobs() {
             "{name} timeout stays unchanged"
         );
     }
+    assert!(
+        timeout_line(
+            &stable_default_yaml,
+            "stable-tap-prepare",
+            Some("stable-tap-writer")
+        )
+        .contains("timeout-minutes: 15")
+    );
+    assert_eq!(
+        timeout_line(
+            &stable_default_yaml,
+            "stable-tap-prepare",
+            Some("stable-tap-writer")
+        ),
+        timeout_line(
+            &stable_yaml,
+            "stable-tap-prepare",
+            Some("stable-tap-writer")
+        ),
+        "tap preparation timeout stays unchanged"
+    );
     assert!(
         timeout_line(&stable_yaml, "stable-eligibility", Some("stable-prepare"))
             .contains("timeout-minutes: 5")
@@ -287,10 +323,6 @@ fn stable_shares_bounded_production_and_channel_specific_tap_destinations() {
     tap.policy.destinations.stable = Some(HomebrewTapDestination {
         formula: "Formula/scanner.rb".to_owned(),
     });
-    tap.policy
-        .updater
-        .inputs
-        .push("Formula/scanner.rb".to_owned());
     spec.homebrew_tap = Some(tap);
     let yaml = render_consumer_binary_release(&spec)
         .expect("stable tap")
@@ -321,10 +353,6 @@ fn stable_tap_reconciliation_is_valid_without_dispatch_inputs() {
     tap.policy.destinations.stable = Some(HomebrewTapDestination {
         formula: "Formula/scanner.rb".to_owned(),
     });
-    tap.policy
-        .updater
-        .inputs
-        .push("Formula/scanner.rb".to_owned());
     spec.homebrew_tap = Some(tap);
 
     let rendered = render_release_tap_reconcile(&spec).expect("stable reconciliation workflow");

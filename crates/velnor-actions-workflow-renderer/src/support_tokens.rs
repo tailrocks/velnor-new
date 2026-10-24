@@ -128,6 +128,7 @@ fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
                 check_env_tokens(id, env, step.role == Some(StepRole::GitHubEvidenceFetch))?;
             }
         }
+        StepKind::NativeCheckExecution { .. } => {}
     }
     if matches!(&step.kind, StepKind::Internal { operation, .. }
         if operation == crate::steps::RESOLVE_QUALIFICATION_OPERATION)

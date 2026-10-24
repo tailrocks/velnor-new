@@ -1,13 +1,20 @@
 //! Deadline-bound subprocess polling without blocking pipe-reader threads.
 #[cfg(unix)]
+use super::process_group::{
+    ObservedStatus, ProcessGroupAnchor, observe_exit, reap_observed, terminate_unanchored,
+};
+#[cfg(unix)]
 use super::stream::Streams;
 use super::{CancelHandle, IsolatedCommand, ProcessOutput};
 use crate::CheckDeadline;
 use crate::error::MiseError;
-#[cfg(unix)]
-use std::os::unix::process::CommandExt;
-use std::process::{Child, Stdio};
 use std::time::{Duration, Instant};
+
+#[cfg(unix)]
+#[path = "command_cancellable_helpers.rs"]
+mod helpers;
+#[cfg(unix)]
+use helpers::{ChildRunContext, finish_child_process, spawn_child};
 
 impl IsolatedCommand {
     pub(crate) const PROCESS_CLEANUP_GRACE: Duration = Duration::from_millis(250);
@@ -47,6 +54,61 @@ impl IsolatedCommand {
         self.run_cancellable_until(cap, deadline, &CancelHandle::new())
     }
 
+    /// Run and return only after the original process group is drained.
+    ///
+    /// The cleanup grace is reserved inside `deadline`; a receipt is produced
+    /// only after the leader was held through group termination, reaped, and
+    /// the original group was observed absent.
+    /// # Errors
+    /// Returns `SpawnFailed` when execution or proof of group drain fails.
+    #[cfg(unix)]
+    pub fn run_quiescent_until(
+        &self,
+        cap: usize,
+        deadline: CheckDeadline,
+    ) -> Result<(ProcessOutput, super::ProcessGroupDrainReceipt), MiseError> {
+        self.run_quiescent_cancellable_until(cap, deadline, &CancelHandle::new())
+    }
+
+    /// Quiescent run with external cancellation under the same deadline.
+    /// # Errors
+    /// Returns `SpawnFailed` when execution, cancellation, or group drain fails.
+    #[cfg(unix)]
+    pub fn run_quiescent_cancellable_until(
+        &self,
+        cap: usize,
+        deadline: CheckDeadline,
+        cancel: &CancelHandle,
+    ) -> Result<(ProcessOutput, super::ProcessGroupDrainReceipt), MiseError> {
+        let remaining = deadline.remaining()?;
+        let work = remaining
+            .checked_sub(Self::PROCESS_CLEANUP_GRACE)
+            .filter(|duration| !duration.is_zero())
+            .ok_or_else(|| {
+                crate::checks::invalid("check_timeout", "insufficient_cleanup_budget")
+            })?;
+        let work_deadline = CheckDeadline::after(work)?;
+        let cleanup_deadline = Instant::now()
+            .checked_add(remaining)
+            .ok_or_else(|| crate::checks::invalid("check_timeout", "deadline_overflow"))?;
+        let mut streams = Streams::memory(cap);
+        let (mut output, receipt) = self.run_streams_with_policy(
+            &mut streams,
+            work_deadline,
+            cancel,
+            super::SPAWN_DEADLINE_MESSAGE,
+            true,
+            Some(cleanup_deadline),
+        )?;
+        output.stdout = streams.into_memory();
+        receipt
+            .map(|proof| (output, proof))
+            .ok_or_else(|| MiseError::SpawnFailed {
+                program: self.program.to_string_lossy().into_owned(),
+                message: "quiescent_drain_receipt_missing".to_owned(),
+            })
+    }
+
     /// Run under an absolute deadline and external cancellation.
     /// # Errors
     /// Returns `SpawnFailed` on spawn, output, deadline, or cancellation failure.
@@ -82,6 +144,20 @@ impl IsolatedCommand {
         cancel: &CancelHandle,
         timeout_message: &str,
     ) -> Result<ProcessOutput, MiseError> {
+        self.run_streams_with_policy(streams, deadline, cancel, timeout_message, false, None)
+            .map(|(output, _)| output)
+    }
+
+    #[cfg(unix)]
+    fn run_streams_with_policy(
+        &self,
+        streams: &mut Streams<'_>,
+        deadline: CheckDeadline,
+        cancel: &CancelHandle,
+        timeout_message: &str,
+        quiescent: bool,
+        reserved_cleanup_deadline: Option<Instant>,
+    ) -> Result<(ProcessOutput, Option<super::ProcessGroupDrainReceipt>), MiseError> {
         let effective = deadline.effective();
         let timeout_message = if effective == deadline {
             timeout_message
@@ -98,40 +174,23 @@ impl IsolatedCommand {
             return Err(fail(super::SPAWN_CANCELLED_MESSAGE));
         }
         deadline.remaining().map_err(|_| fail(timeout_message))?;
-        let mut command = self.command();
-        command.process_group(0);
-        let mut child = command
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|error| fail(&error.to_string()))?;
-        let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
-            let message = cleanup_context("child_pipe_missing", terminate_group(&mut child));
-            return Err(fail(&message));
+        let mut anchor = if quiescent {
+            Some(ProcessGroupAnchor::spawn().map_err(|problem| fail(&problem))?)
+        } else {
+            None
         };
-        if let Err(error) = set_nonblocking(&stdout) {
-            let message = cleanup_context(&error, terminate_group(&mut child));
-            return Err(fail(&message));
-        }
-        if let Err(error) = set_nonblocking(&stderr) {
-            let message = cleanup_context(&error, terminate_group(&mut child));
-            return Err(fail(&message));
-        }
-        match poll_child(
-            &mut child,
-            stdout,
-            stderr,
+        let mut child = spawn_child(self, &mut anchor, reserved_cleanup_deadline)
+            .map_err(|problem| fail(&problem))?;
+        let mut context = ChildRunContext {
+            program: &program,
             streams,
             deadline,
             cancel,
             timeout_message,
-        ) {
-            Ok(output) => Ok(output),
-            Err(problem) => {
-                let message = cleanup_context(&problem, terminate_group(&mut child));
-                Err(fail(&message))
-            }
-        }
+            quiescent,
+            reserved_cleanup_deadline,
+        };
+        finish_child_process(&mut context, &mut child, &mut anchor)
     }
 
     /// Non-Unix named-check targets have no supported process-group cleanup.
@@ -174,136 +233,32 @@ impl IsolatedCommand {
     ) -> Result<ProcessOutput, MiseError> {
         self.run_cancellable(0, Duration::ZERO, &CancelHandle::new())
     }
-}
 
-#[cfg(unix)]
-fn poll_child(
-    child: &mut Child,
-    stdout: std::process::ChildStdout,
-    stderr: std::process::ChildStderr,
-    streams: &mut Streams<'_>,
-    deadline: CheckDeadline,
-    cancel: &CancelHandle,
-    timeout_message: &str,
-) -> Result<ProcessOutput, String> {
-    let mut stdout = Some(stdout);
-    let mut stderr = Some(stderr);
-    let mut err = Vec::with_capacity(streams.stderr_cap.min(64 * 1024));
-    let mut status = None;
-    loop {
-        if cancel.is_cancelled() {
-            return Err(super::SPAWN_CANCELLED_MESSAGE.to_owned());
-        }
-        let Ok(remaining) = deadline.remaining() else {
-            return Err(timeout_message.to_owned());
-        };
-        if remaining.is_zero() {
-            return Err(timeout_message.to_owned());
-        }
-        let progressed = streams.poll_stdout(&mut stdout)?;
-        let progressed = streams.poll_stderr(&mut stderr, &mut err)? || progressed;
-        if cancel.is_cancelled() {
-            return Err(super::SPAWN_CANCELLED_MESSAGE.to_owned());
-        }
-        deadline
-            .remaining()
-            .map_err(|_| timeout_message.to_owned())?;
-        status = child
-            .try_wait()
-            .map_err(|error| error.to_string())?
-            .or(status);
-        if let (Some(status), None, None) = (status, stdout.as_ref(), stderr.as_ref()) {
-            return Ok(ProcessOutput {
-                stdout: Vec::new(),
-                stderr: err,
-                code: status.code(),
-                signal: super::output::signal_of(status),
-                success: status.success(),
-            });
-        }
-        if !progressed {
-            std::thread::sleep(Duration::from_millis(5).min(remaining));
-        }
+    /// Unsupported on targets without Unix process-group proof.
+    /// # Errors
+    /// Returns `SpawnFailed` without starting a process.
+    #[cfg(not(unix))]
+    pub fn run_quiescent_until(
+        &self,
+        _cap: usize,
+        _deadline: CheckDeadline,
+    ) -> Result<(ProcessOutput, super::ProcessGroupDrainReceipt), MiseError> {
+        Err(MiseError::SpawnFailed {
+            program: self.program.to_string_lossy().into_owned(),
+            message: "quiescent_process_groups_require_unix".to_owned(),
+        })
     }
-}
 
-#[cfg(unix)]
-fn set_nonblocking<Fd: std::os::fd::AsFd>(fd: Fd) -> Result<(), String> {
-    let flags = rustix::fs::fcntl_getfl(&fd).map_err(|error| error.to_string())?;
-    rustix::fs::fcntl_setfl(fd, flags | rustix::fs::OFlags::NONBLOCK)
-        .map_err(|error| error.to_string())
-}
-
-#[cfg(unix)]
-fn cleanup_context(primary: &str, cleanup: Result<(), String>) -> String {
-    match cleanup {
-        Ok(()) => primary.to_owned(),
-        Err(problem) => {
-            let mut end = problem.len().min(super::output::MAX_CLEANUP_FAILURE_BYTES);
-            while !problem.is_char_boundary(end) {
-                end -= 1;
-            }
-            format!("{primary};cleanup_failed:{}", &problem[..end])
-        }
-    }
-}
-
-#[cfg(unix)]
-fn terminate_group(child: &mut Child) -> Result<(), String> {
-    let mut failures = Vec::new();
-    match i32::try_from(child.id())
-        .ok()
-        .and_then(rustix::process::Pid::from_raw)
-    {
-        Some(pid) => {
-            match rustix::process::kill_process_group(pid, rustix::process::Signal::KILL) {
-                Ok(()) | Err(rustix::io::Errno::SRCH) => {}
-                Err(error) => failures.push(format!("kill_group:{error}")),
-            }
-        }
-        None => failures.push("kill_group:invalid_child_id".to_owned()),
-    }
-    match child.try_wait() {
-        Ok(Some(_)) => {}
-        Ok(None) => {
-            if let Err(error) = child.kill()
-                && error.kind() != std::io::ErrorKind::InvalidInput
-            {
-                failures.push(format!("kill_child:{error}"));
-            }
-        }
-        Err(error) => {
-            failures.push(format!("check_child:{error}"));
-            if let Err(kill_error) = child.kill()
-                && kill_error.kind() != std::io::ErrorKind::InvalidInput
-            {
-                failures.push(format!("kill_child:{kill_error}"));
-            }
-        }
-    }
-    if let Err(error) = reap_child(child) {
-        failures.push(format!("reap_child:{error}"));
-    }
-    if failures.is_empty() {
-        Ok(())
-    } else {
-        Err(failures.join(","))
-    }
-}
-
-#[cfg(unix)]
-fn reap_child(child: &mut Child) -> Result<(), String> {
-    let deadline = Instant::now()
-        .checked_add(IsolatedCommand::PROCESS_CLEANUP_GRACE)
-        .ok_or_else(|| "cleanup_deadline_overflow".to_owned())?;
-    loop {
-        match child.try_wait() {
-            Ok(Some(_)) => return Ok(()),
-            Ok(None) if Instant::now() < deadline => {
-                std::thread::sleep(Duration::from_millis(5));
-            }
-            Ok(None) => return Err("cleanup_deadline_exhausted".to_owned()),
-            Err(error) => return Err(error.to_string()),
-        }
+    /// Unsupported on targets without Unix process-group proof.
+    /// # Errors
+    /// Returns `SpawnFailed` without starting a process.
+    #[cfg(not(unix))]
+    pub fn run_quiescent_cancellable_until(
+        &self,
+        cap: usize,
+        deadline: CheckDeadline,
+        _cancel: &CancelHandle,
+    ) -> Result<(ProcessOutput, super::ProcessGroupDrainReceipt), MiseError> {
+        self.run_quiescent_until(cap, deadline)
     }
 }

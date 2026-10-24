@@ -98,8 +98,17 @@ fn assert_job_budget(workflow: &str, id: &str, fields: &[&str]) {
         ) | (
             ".github/workflows/product-release-generator.yml",
             "build-linux" | "build-macos" | "build-macos-intel"
+        ) | (
+            ".github/workflows/job-image-candidate.yml",
+            "build-image-candidate" | "attest-image-candidate"
         )
     );
-    let expected = if compiler { 10 } else { 5 };
+    let expected = if compiler {
+        10
+    } else if id == "qualify-homebrew-macos" {
+        30
+    } else {
+        5
+    };
     assert_eq!(minutes, expected, "{workflow}:{id}");
 }

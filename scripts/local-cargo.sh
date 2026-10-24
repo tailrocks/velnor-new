@@ -65,7 +65,51 @@ if [[ "$LOCAL_RUST_PIN" != "$POLICY_RUST_PIN" ]]; then
 fi
 
 physical_path() {
-  python3 -c 'import os, sys; print(os.path.realpath(os.path.abspath(sys.argv[1])))' "$1"
+  local remaining="$1" resolved_path=/ component candidate link_target
+  local hop_count=0 component_count=0
+  [[ -n "$remaining" && "$remaining" != *$'\n'* && "$remaining" != *$'\r'* ]] || return 1
+  case "$remaining" in
+    /*) ;;
+    *) remaining="$PWD/$remaining" ;;
+  esac
+  [[ "$remaining" != *$'\n'* && "$remaining" != *$'\r'* ]] || return 1
+  while [[ -n "$remaining" ]]; do
+    ((component_count += 1))
+    ((component_count <= 512)) || return 1
+    component="${remaining%%/*}"
+    if [[ "$remaining" == */* ]]; then
+      remaining="${remaining#*/}"
+    else
+      remaining=""
+    fi
+    case "$component" in
+      '' | .) continue ;;
+      ..)
+        resolved_path="${resolved_path%/*}"
+        [[ -n "$resolved_path" ]] || resolved_path=/
+        continue
+        ;;
+    esac
+    candidate="${resolved_path%/}/$component"
+    if [[ -L "$candidate" ]]; then
+      ((hop_count += 1))
+      ((hop_count <= 40)) || return 1
+      link_target="$(/usr/bin/readlink "$candidate" && printf '.')" || return 1
+      link_target="${link_target%.}"
+      [[ "$link_target" == *$'\n' ]] || return 1
+      link_target="${link_target%$'\n'}"
+      [[ -n "$link_target" && "$link_target" != *$'\n'* && "$link_target" != *$'\r'* ]] || return 1
+      case "$link_target" in
+        /*) resolved_path=/ ;;
+      esac
+      remaining="$link_target${remaining:+/$remaining}"
+    elif [[ -e "$candidate" && -n "$remaining" && ! -d "$candidate" ]]; then
+      return 1
+    else
+      resolved_path="$candidate"
+    fi
+  done
+  printf '%s\n' "$resolved_path"
 }
 
 path_is_within() {

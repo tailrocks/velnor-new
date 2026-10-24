@@ -52,6 +52,7 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
             "check_runtime.rs",
             "deps_lock.rs",
             "generate_unmanaged.rs",
+            "native_homebrew_check_required.rs",
             "owned_tool_preview.rs",
             "playwright_resolve.rs",
             "prepare.rs",
@@ -60,10 +61,9 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
             "private_fetch.rs",
             "qualification_resolver.rs",
             "routing.rs",
-            "tap_prepare.rs",
             "tap_prepare_execute.rs",
         ],
-        "preparation, execution, preview budget admission, routing, owned preview, qualification admission, captured tap preparation, the private dependency lock, the Playwright browser lock, and the private fetch load configuration at their boundaries"
+        "preparation, execution, native check admission, preview budget admission, routing, owned preview, qualification admission, captured tap preparation, the private dependency lock, the Playwright browser lock, and the private fetch load configuration at their boundaries"
     );
     Ok(())
 }

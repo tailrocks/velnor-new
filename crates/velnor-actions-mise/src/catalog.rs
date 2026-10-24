@@ -82,9 +82,9 @@ pub const RUST_VERSION: &str = "1.99.1";
 /// Selected `mr-boxington` tool (binary on PATH is `mbx`; tag `v1.27.0`).
 /// Source: `https://api.github.com/repos/jdx/mr-boxington/releases/latest`; checked 2026-10-23.
 pub const MR_BOXINGTON_VERSION: &str = "1.27.0";
-/// Qualified GitHub CLI (tag `v2.103.0`).
-/// Source: `https://api.github.com/repos/cli/cli/releases/latest`; checked 2026-10-22.
-pub const GH_VERSION: &str = "2.103.0";
+/// Selected GitHub CLI release candidate (tag `v2.103.2`); qualification remains pending.
+/// Source: `https://api.github.com/repos/cli/cli/releases/latest`; checked 2026-10-24.
+pub const GH_VERSION: &str = "2.103.2";
 pub use velnor_actions_contract::config::jactionlint_verifier::JACTIONLINT_VERSION;
 /// Qualified shellcheck release (tag `v0.11.0`).
 /// Source: `https://api.github.com/repos/koalaman/shellcheck/releases/latest`; checked 2026-09-28.
@@ -113,9 +113,9 @@ pub const OPENTOFU_SHA256_DARWIN_AMD64: &str =
 /// sha256 of `tofu_1.13.2_darwin_arm64.tar.gz` (same `SHA256SUMS`, verified 2026-10-22).
 pub const OPENTOFU_SHA256_DARWIN_ARM64: &str =
     "0d1cdc85f38992055b48e7fb161304a2ddfe2e5ee0ff68ffec9d0349c8bd1b59";
-/// Selected release-plz coordinator release (tag `release-plz-v0.4.0`).
-/// Source: `https://crates.io/api/v1/crates/release-plz`; published 2026-10-23, checked 2026-10-23.
-pub const RELEASE_PLZ_VERSION: &str = "0.4.0";
+/// Selected release-plz coordinator candidate (`0.4.1`); qualification remains pending.
+/// Source: `https://crates.io/api/v1/crates/release-plz`; published 2026-10-24, checked 2026-10-24.
+pub const RELEASE_PLZ_VERSION: &str = "0.4.1";
 /// Qualified `crane` (`google/go-containerregistry` tag `v0.22.1`, published
 /// 2026-09-04): pushes OCI layouts and tags digests in the image publication jobs.
 /// Source: `https://api.github.com/repos/google/go-containerregistry/releases/latest`; checked 2026-10-20.
@@ -144,6 +144,16 @@ pub const COSIGN_LINUX_ARM64_BYTES: usize = 136_437_761;
 /// Source: <https://api.github.com/repos/sigstore/cosign/releases/tags/v3.1.4>; checked 2026-10-23.
 pub const COSIGN_LINUX_ARM64_SHA256: &str =
     "ade83b7aac62e131cacfe96d958948b2150cc9efec46a570a2649b8e27dedad2";
+/// Official v3.1.4 macOS Intel asset length, verified against the release API.
+pub const COSIGN_DARWIN_AMD64_BYTES: usize = 105_951_973;
+/// Release API digest, independently matched to `cosign_checksums.txt` on 2026-10-24.
+pub const COSIGN_DARWIN_AMD64_SHA256: &str =
+    "9d1e4abe2b6be279ed0d2ff706fde1ccd738747c834e3e6d44039c238867334f";
+/// Official v3.1.4 macOS ARM asset length, verified against the release API.
+pub const COSIGN_DARWIN_ARM64_BYTES: usize = 99_023_586;
+/// Release API digest, independently matched to `cosign_checksums.txt` on 2026-10-24.
+pub const COSIGN_DARWIN_ARM64_SHA256: &str =
+    "9f9b8cd557cf2e5b3df3373a00baa005a86b02391e3e06dd0ce37b3a1533d3a4";
 
 // Nextest needs its backend-qualified aqua-registry path: no `nextest`
 // shorthand exists, `github:` tags carry a `cargo-nextest-` prefix, and

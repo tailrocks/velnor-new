@@ -11,6 +11,8 @@ mod job_boundary_tests;
 mod credential_environment_tests;
 #[path = "schema2_generator_release_security_credentials.rs"]
 mod credentials;
+#[path = "schema2_generator_release_security_source.rs"]
+mod source;
 
 pub(super) fn assert_exact_empty_verifier_credentials(
     body: &str,
@@ -204,12 +206,16 @@ fn assert_qualifier_job_inputs(qualifier: &str, target: TargetJobs) -> Result<()
         .ok_or("qualifier first step is missing")?;
     assert!(first_step.contains("shell: bash"), "{first_step}");
     assert!(first_step.contains("run:"), "{first_step}");
-    assert!(first_step.contains("python3"), "{first_step}");
-    assert!(first_step.contains("credential.helper="), "{first_step}");
-    assert!(first_step.contains("GITHUB_SHA"), "{first_step}");
+    assert!(
+        first_step.contains("Fetch exact public qualification source without credentials"),
+        "{first_step}"
+    );
+    let source_run = source::decode_run_script(first_step)?;
+    source::assert_credential_free_exact_source(&source_run);
     assert!(!first_step.contains("uses:"), "{first_step}");
+    assert!(!source_run.contains("python3"), "{source_run}");
     let source_prepare = qualifier
-        .find("Fetch exact public source without an action post hook")
+        .find("Fetch exact public qualification source without credentials")
         .ok_or("missing token-free source preparation")?;
     let composite_call = qualifier
         .find(&format!(

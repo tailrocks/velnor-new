@@ -1,6 +1,61 @@
 //! Strict tests for the pinned `gh attestation verify --format json` boundary.
 
 use super::*;
+
+#[test]
+fn published_sdk_manifest_attestation_binds_reusable_workflow_and_exact_run() {
+    let bytes = include_bytes!("../tests/fixtures/gh-attestation-velnor-0.1.12.json");
+    let parsed: serde_json::Value = serde_json::from_slice(bytes).expect("attestation fixture");
+    let source = "f1b044a606b6bc469f9718644f5c0ed88bf965b6";
+    let digest = "e945a9122ed051cbe918ef3208f7fa6ec2203a5228be4437a680c33a67fc1cbb";
+    let verified = parse_verified_manifest_attestation(
+        bytes,
+        "tailrocks/velnor-new",
+        1_390_620_900,
+        78_806_509,
+        source,
+        digest,
+    )
+    .expect("verified SDK manifest attestation");
+    assert_eq!(verified.source_sha, source);
+    assert_eq!(verified.workflow_sha, source);
+    assert_eq!(verified.run_id, 38_996_259_545);
+    assert_eq!(verified.run_attempt, 1);
+    assert_eq!(verified.event, "workflow_dispatch");
+
+    let mutations = [
+        (
+            "/0/verificationResult/signature/certificate/buildSignerURI",
+            "https://github.com/tailrocks/velnor-new/.github/workflows/other.yml@refs/heads/main"
+                .to_owned(),
+        ),
+        (
+            "/0/verificationResult/statement/predicate/buildDefinition/externalParameters/workflow/path",
+            ".github/workflows/other.yml".to_owned(),
+        ),
+        (
+            "/0/verificationResult/statement/subject/0/digest/sha256",
+            "0".repeat(64),
+        ),
+    ];
+    for (pointer, value) in mutations {
+        let mut changed = parsed.clone();
+        *changed.pointer_mut(pointer).expect("mutation target") = serde_json::Value::String(value);
+        let changed = serde_json::to_vec(&changed).expect("changed fixture");
+        assert!(
+            parse_verified_manifest_attestation(
+                &changed,
+                "tailrocks/velnor-new",
+                1_390_620_900,
+                78_806_509,
+                source,
+                digest,
+            )
+            .is_err(),
+            "mutation at {pointer} must fail closed"
+        );
+    }
+}
 use serde_json::{Value, json};
 
 fn expectations() -> AttestationExpectation<'static> {
@@ -9,6 +64,7 @@ fn expectations() -> AttestationExpectation<'static> {
         owner_uri: "https://github.com/jackin-project",
         workflow_uri: "https://github.com/jackin-project/jackin/.github/workflows/binary-preview.yml@refs/heads/main",
         workflow_sha: "b12e73afd75b944a872e8295d61a15f93f5789a2",
+        source_sha: "a12e73afd75b944a872e8295d61a15f93f5789a2",
         source_ref: "refs/heads/main",
         run_id: 200,
         run_attempt: 2,
@@ -50,7 +106,7 @@ fn output() -> Value {
                 "sourceRepositoryURI": expected.repository_uri,
                 "sourceRepositoryOwnerURI": expected.owner_uri,
                 "sourceRepositoryIdentifier": expected.repository_id,
-                "sourceRepositoryDigest": expected.workflow_sha,
+                "sourceRepositoryDigest": expected.source_sha,
                 "sourceRepositoryRef": expected.source_ref,
                 "buildSignerURI": expected.workflow_uri,
                 "buildSignerDigest": expected.workflow_sha,

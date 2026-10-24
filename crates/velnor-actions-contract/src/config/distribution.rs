@@ -1,6 +1,5 @@
 //! Typed downstream distribution policy.
 
-use super::{CheckRunner, MiseTaskSource, mise::is_valid_mise_task_name};
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -19,13 +18,16 @@ pub struct DistributionConfig {
     /// Optional Homebrew tap update policy.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub homebrew_tap: Option<HomebrewTapConfig>,
+    /// Canonical repository-level formula policy shared by native checks and promotion.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub homebrew_formula: Option<crate::homebrew_spec::HomebrewFormulaSpec>,
 }
 
 impl DistributionConfig {
     /// Whether no distribution destination is declared.
     #[must_use]
     pub const fn is_empty(&self) -> bool {
-        self.homebrew_tap.is_none()
+        self.homebrew_tap.is_none() && self.homebrew_formula.is_none()
     }
 
     /// Validate enabled distribution destinations.
@@ -34,8 +36,39 @@ impl DistributionConfig {
     ///
     /// Returns the first invalid destination contract.
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
+        if let Some(spec) = &self.homebrew_formula {
+            spec.validate().map_err(|_| {
+                ContractError::config(
+                    file,
+                    "distribution.homebrew_formula",
+                    "invalid_homebrew_formula_spec",
+                )
+            })?;
+        }
         if let Some(tap) = &self.homebrew_tap {
             tap.validate(file)?;
+            if tap.enabled {
+                let spec = self.homebrew_formula.as_ref().ok_or_else(|| {
+                    ContractError::config(
+                        file,
+                        "distribution.homebrew_formula",
+                        "enabled_homebrew_tap_requires_formula_spec",
+                    )
+                })?;
+                if spec.channels.len() != tap.destinations.iter().count()
+                    || spec.channels.iter().any(|channel| {
+                        tap.destinations
+                            .get(channel.channel)
+                            .is_none_or(|destination| destination.formula != channel.destination)
+                    })
+                {
+                    return Err(ContractError::config(
+                        file,
+                        "distribution.homebrew_tap.destinations",
+                        "formula_destinations_must_match_homebrew_spec",
+                    ));
+                }
+            }
         }
         Ok(())
     }
@@ -52,8 +85,6 @@ pub struct HomebrewTapConfig {
     pub destinations: HomebrewTapDestinations,
     /// Owner/repository slug, never a URL or arbitrary API destination.
     pub repository: String,
-    /// Source-qualified updater executed without write credentials.
-    pub updater: TapUpdaterBinding,
     /// Protected environment for the isolated App writer and merge boundary.
     pub environment: TapUpdateEnvironment,
     /// Repository/environment variable containing the GitHub App ID.
@@ -66,33 +97,6 @@ pub struct HomebrewTapConfig {
     pub merge: TapMergePolicy,
     /// Trusted App check that must complete against the exact PR head SHA.
     pub review_completion: ExactHeadReviewCheck,
-}
-
-/// Qualified task boundary for generating a formula patch.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct TapUpdaterBinding {
-    /// Repository-owned Mise task, never arbitrary argv.
-    pub task: String,
-    /// Exact Mise configuration and task working directory.
-    pub source: MiseTaskSource,
-    /// Qualified task placement from the existing named-check contract.
-    pub runner: CheckRunner,
-    /// Complete tracked task closure: Mise config/includes, task scripts, and
-    /// task inputs. The runtime resolver must compare its closure with this
-    /// list before invoking the updater; an incomplete declaration fails.
-    pub inputs: Vec<String>,
-    /// Tool IDs resolved only from the captured tap Mise config and lock.
-    /// Runtime qualification must verify the exact pinned declarations there;
-    /// these IDs never resolve through Velnor's own tool catalog.
-    pub tools: Vec<String>,
-    /// Native promotion task runtime, bounded to one through five minutes.
-    #[serde(default = "default_updater_timeout")]
-    pub timeout_minutes: u32,
-}
-
-fn default_updater_timeout() -> u32 {
-    u32::from(crate::workflow::timeout::JobTimeout::DEFAULT.minutes())
 }
 
 /// The only supported write environment name.
@@ -147,24 +151,14 @@ impl HomebrewTapConfig {
     ///
     /// # Errors
     ///
-    /// Returns a config error for unqualified tasks, unsafe paths, malformed
+    /// Returns a config error for unsafe paths, malformed
     /// credential references, or unsupported runtime bounds.
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         let key = "distribution.homebrew_tap";
         if !crate::vcs::is_safe_github_repository(&self.repository) {
             return Err(config_error(file, key, "repository", "bad_repository_slug"));
         }
-        self.updater.validate(file, key)?;
-        if self.updater.runner.executor != super::CheckExecutor::Hosted {
-            return Err(config_error(
-                file,
-                key,
-                "updater.runner.executor",
-                "tap_updater_requires_hosted_runner",
-            ));
-        }
-        self.destinations
-            .validate(file, self.enabled, &self.updater.inputs)?;
+        self.destinations.validate(file, self.enabled)?;
         if !valid_app_id_variable(&self.app_id_variable) {
             return Err(config_error(
                 file,
@@ -196,39 +190,6 @@ impl HomebrewTapConfig {
                 "review_completion",
                 "writer_app_must_not_complete_reviews",
             ));
-        }
-        Ok(())
-    }
-}
-
-impl TapUpdaterBinding {
-    fn validate(&self, file: &str, parent: &str) -> Result<(), ContractError> {
-        let bad = |field, problem| config_error(file, parent, field, problem);
-        if !is_valid_mise_task_name(&self.task) || self.task.len() > 128 {
-            return Err(bad("updater.task", "bad_mise_task"));
-        }
-        if !self.source.validate() {
-            return Err(bad("updater.source", "bad_mise_task_source"));
-        }
-        self.runner
-            .validate(file, &format!("{parent}.updater.runner"))?;
-        if self.inputs.is_empty() || !unique_paths(&self.inputs) {
-            return Err(bad("updater.inputs", "invalid_task_inputs"));
-        }
-        if !self
-            .inputs
-            .iter()
-            .any(|path| path == &self.source.mise_config)
-        {
-            return Err(bad("updater.inputs", "task_source_not_an_input"));
-        }
-        if self.tools.is_empty() || !unique_names(&self.tools) {
-            return Err(bad("updater.tools", "invalid_task_tools"));
-        }
-        if !(1..=u32::from(crate::config::NATIVE_TAP_UPDATER_MAX_TIMEOUT_MINUTES))
-            .contains(&self.timeout_minutes)
-        {
-            return Err(bad("updater.timeout_minutes", "bad_task_timeout"));
         }
         Ok(())
     }
@@ -302,23 +263,6 @@ fn valid_repo_path(value: &str) -> bool {
                 && segment
                     .bytes()
                     .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))
-        })
-}
-
-fn unique_paths(values: &[String]) -> bool {
-    let unique: BTreeSet<&str> = values.iter().map(String::as_str).collect();
-    unique.len() == values.len() && values.iter().all(|value| valid_repo_path(value))
-}
-
-fn unique_names(values: &[String]) -> bool {
-    let unique: BTreeSet<&str> = values.iter().map(String::as_str).collect();
-    unique.len() == values.len()
-        && values.iter().all(|value| {
-            !value.is_empty()
-                && value.len() <= 128
-                && value.bytes().all(|byte| {
-                    byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.' | b'@' | b'+')
-                })
         })
 }
 

@@ -6,21 +6,23 @@ use super::{
 };
 use crate::commands::join_argv_for_run;
 use velnor_actions_contract::JobTimeout;
-use velnor_actions_contract::config::{CheckExecutor, HomebrewTapConfig};
+use velnor_actions_contract::config::HomebrewTapConfig;
 
 #[path = "schema2_consumer_preview_tap_operation.rs"]
 mod native_operation;
 use native_operation::operation;
 
-/// Static downstream policy and official helper placement for the updater.
+/// Static downstream policy and fixed native preparation bootstrap.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsumerReleaseTapSpec {
     /// Closed native promotion policy, never executable workflow data.
     pub policy: HomebrewTapConfig,
-    /// Official helper matching the declared updater platform.
-    pub updater_acquire: Step,
-    /// Velnor-owned Mise bootstrap matching the updater platform.
-    pub updater_setup: MiseSetup,
+    /// Protected source formula policy rendered as data into every promotion role.
+    pub formula_spec: velnor_actions_contract::homebrew_spec::HomebrewFormulaSpec,
+    /// Authenticated SDK bootstrap for the fixed hosted preparation platform.
+    pub preparation_acquire: Step,
+    /// Velnor-owned Mise bootstrap for the fixed hosted preparation platform.
+    pub preparation_setup: MiseSetup,
 }
 
 pub(in crate::schema2) fn jobs(
@@ -31,10 +33,10 @@ pub(in crate::schema2) fn jobs(
     tap.policy
         .validate("workflow")
         .map_err(|error| RenderError::InvalidWorkflow(error.to_string()))?;
-    tap.updater_setup.validate()?;
-    if !tap.policy.enabled || tap.policy.updater.runner.executor != CheckExecutor::Hosted {
+    tap.preparation_setup.validate()?;
+    if !tap.policy.enabled {
         return Err(RenderError::InvalidWorkflow(
-            "tap_updater_requires_hosted_runner".to_owned(),
+            "native_tap_policy_disabled".to_owned(),
         ));
     }
     Ok(vec![
@@ -50,20 +52,20 @@ fn prepare(
     context: TapInvocationContext,
 ) -> Result<(String, Yaml), RenderError> {
     let id = format!("{}-tap-prepare", context.prefix());
-    let runner = &tap.policy.updater.runner.label;
+    let runner = "ubuntu-26.04";
     let mut fields = base(
         "Prepare a literal-only tap update without write credentials",
         Yaml::str(runner),
-        JobTimeout::try_from(tap.policy.updater.timeout_minutes).map_err(RenderError::Contract)?,
+        JobTimeout::try_from(15_u32).map_err(RenderError::Contract)?,
     );
     fields.extend(prepare_bindings(context));
     let mut job_steps = vec![
-        steps::setup(&tap.updater_setup),
+        steps::setup(&tap.preparation_setup),
         run_step(
             "Install pinned GitHub CLI",
             &join_argv_for_run(&spec.install_gh_argv)?,
         ),
-        acquire(&tap.updater_acquire, &id, runner)?,
+        acquire(&tap.preparation_acquire, &id, runner)?,
     ];
     if matches!(
         context,

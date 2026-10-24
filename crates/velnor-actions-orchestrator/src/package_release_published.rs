@@ -9,7 +9,10 @@ use super::{
 use crate::{
     OrchestratorError, internal::internal, package_release_signer::VerifiedAttestedSignedPackage,
 };
-use std::{collections::BTreeSet, env};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    env,
+};
 use velnor_actions_contract::package_release::PackageReleaseChannel;
 
 pub(crate) fn verify_published_release(
@@ -19,6 +22,40 @@ pub(crate) fn verify_published_release(
         PackageReleaseChannel::Preview => verify_immutable_preview_release(signed),
         PackageReleaseChannel::Stable => verify_immutable_stable_release(signed),
     }
+}
+
+pub(super) fn verify_publication_snapshot(
+    signed: &VerifiedAttestedSignedPackage,
+    snapshot: &super::PublicReleaseSnapshot,
+) -> Result<(), OrchestratorError> {
+    let receipt = signed.receipt();
+    let identity = local_identity(signed)?;
+    let expected_body = recovery_body(signed, &identity.receipt_digest)?;
+    let actual_assets = snapshot
+        .assets
+        .iter()
+        .map(|asset| (asset.name.clone(), asset.sha256.clone()))
+        .collect::<BTreeMap<_, _>>();
+    if snapshot.release_id == 0
+        || snapshot.tag != receipt.tag
+        || snapshot.draft
+        || snapshot.prerelease != (receipt.channel == PackageReleaseChannel::Preview)
+        || !snapshot.immutable
+        || snapshot.body != expected_body
+        || snapshot.tag_source_sha != receipt.source.commit_sha
+        || actual_assets != identity.assets
+    {
+        return Err(internal("package_public_publication_predicate_mismatch"));
+    }
+    match receipt.channel {
+        PackageReleaseChannel::Preview => {
+            if snapshot.tag_message.as_deref() != Some(expected_body.as_str()) {
+                return Err(internal("package_public_preview_tag_mismatch"));
+            }
+        }
+        PackageReleaseChannel::Stable => stable_tag_origin::verify_signed_origin(signed)?,
+    }
+    Ok(())
 }
 
 pub(crate) fn verify_immutable_preview_release(

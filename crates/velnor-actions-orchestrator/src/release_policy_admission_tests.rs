@@ -3,7 +3,50 @@ use std::collections::BTreeSet;
 use velnor_actions_contract::{
     PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlan, PackageReleasePlanProduct,
     package_release::{PackageReleaseChannel, PackageReleasePayloadFormat},
+    preview_production::ReleaseProductionContext,
 };
+
+#[test]
+fn historical_admission_projection_hashes_before_strict_parse_and_keeps_config_opaque() {
+    let producer: velnor_actions_contract::config::RustBinaryReleaseProducer =
+        serde_json::from_value(serde_json::json!({})).expect("default producer");
+    let admission = Admission {
+        schema: "velnor.preview-source-admission.v1".to_owned(),
+        policy_sha256: "1".repeat(64),
+        plan_sha256: "2".repeat(64),
+        context: ReleaseProductionContext {
+            repository_id: 1_197_700_841,
+            head_repository_id: 1_197_700_841,
+            source_sha: "41bad147b5ba9db09be99b07248531ce1bd867be".to_owned(),
+            source_ref: "refs/heads/main".to_owned(),
+            workflow_authority_sha: "e737f4b5eb7c1a0d15ba6595fc260407ad178452".to_owned(),
+            run_id: 40_078_964_311,
+            run_attempt: 2,
+            ci_run_id: 40_036_544_370,
+            ci_run_attempt: 1,
+            commit_count: 1362,
+            version: "0.6.4-preview.1362+41bad14".to_owned(),
+        },
+        source_files: Vec::new(),
+        producer,
+        task_config: "this is deliberately not parsed as configuration".to_owned(),
+        task_inputs: Vec::new(),
+        tool_specs: Vec::new(),
+        qualified_tools: Vec::new(),
+        qualification_digest: String::new(),
+    };
+    let bytes = velnor_actions_contract::canonical_json_bytes(&admission).expect("canonical");
+    let digest = sha256(&bytes);
+    let projection =
+        project_public_historical_admission(&bytes, &digest).expect("typed data-only projection");
+    assert_eq!(projection.source_sha, admission.context.source_sha);
+    assert_eq!(
+        projection.workflow_authority_sha,
+        admission.context.workflow_authority_sha
+    );
+    assert_eq!(projection.plan_sha256, admission.plan_sha256);
+    assert!(project_public_historical_admission(&bytes, &"0".repeat(64)).is_err());
+}
 
 fn plan() -> PackageReleasePlan {
     PackageReleasePlan {

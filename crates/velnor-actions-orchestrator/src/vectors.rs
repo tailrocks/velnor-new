@@ -95,6 +95,11 @@ pub(crate) fn task_argv(
                 problem: e.to_string(),
             });
         }
+        Some(Stack::Native) => {
+            return Err(OrchestratorError::Contract {
+                problem: "native_homebrew_check_has_no_mise_argv".to_owned(),
+            });
+        }
         Some(Stack::Rust) => {}
         None => {
             return Err(OrchestratorError::Contract {

@@ -7,7 +7,7 @@ use std::{
 
 use velnor_actions_contract::{
     PackageReleasePlan, canonical_json_bytes, config::HomebrewTapConfig,
-    homebrew_formula::VerifiedPackageRelease,
+    homebrew_formula::VerifiedPackageRelease, homebrew_spec::HomebrewFormulaSpec,
 };
 
 use crate::{
@@ -131,6 +131,8 @@ fn verify_promotion_authority(inputs: &WriterInputs) -> Result<bool, Orchestrato
 struct WriterInputs {
     root: PathBuf,
     policy: HomebrewTapConfig,
+    spec: HomebrewFormulaSpec,
+    sdk_artifact_digest: String,
     plan: PackageReleasePlan,
     release: VerifiedPackageRelease,
     formula_path: String,
@@ -158,9 +160,19 @@ fn load_writer_inputs() -> Result<WriterInputs, OrchestratorError> {
     };
     let root = runner_root()?;
     let policy = super::execute::static_tap_policy()?;
+    let spec = super::execute::static_formula_policy()?;
+    let sdk_artifact_digest = crate::generator::current_exe_sha256()
+        .ok_or_else(|| internal("tap_sdk_artifact_digest_unavailable"))?;
     let formula_path = crate::tap_prepare::formula_path(&policy, plan.channel)?.to_owned();
     let proof = read_candidate_proof(&root)?;
-    validate_proof(&proof, &policy, &plan, &release)?;
+    validate_proof(
+        &proof,
+        &policy,
+        &spec,
+        &sdk_artifact_digest,
+        &plan,
+        &release,
+    )?;
     let candidate_path = root.join(CANDIDATE_DIR).join("formula.rb");
     let proposed = read_regular_limited(&root, &candidate_path, CANDIDATE_LIMIT)?;
     if sha256(&proposed) != proof.new_formula_sha256 {
@@ -178,6 +190,8 @@ fn load_writer_inputs() -> Result<WriterInputs, OrchestratorError> {
     Ok(WriterInputs {
         root,
         policy,
+        spec,
+        sdk_artifact_digest,
         plan,
         release,
         formula_path,
@@ -217,10 +231,12 @@ fn read_candidate_proof(root: &Path) -> Result<HomebrewTapPreparationProof, Orch
 fn validate_proof(
     proof: &HomebrewTapPreparationProof,
     policy: &HomebrewTapConfig,
+    spec: &HomebrewFormulaSpec,
+    sdk_artifact_digest: &str,
     plan: &PackageReleasePlan,
     release: &VerifiedPackageRelease,
 ) -> Result<(), OrchestratorError> {
-    if proof.schema != "velnor.homebrew-candidate.v3"
+    if proof.schema != "velnor.homebrew-candidate.v4"
         || proof.channel != plan.channel
         || proof.candidate_formula != "formula.rb"
         || proof.formula_path != crate::tap_prepare::formula_path(policy, plan.channel)?
@@ -231,6 +247,11 @@ fn validate_proof(
         || proof.receipt_digest != release.receipt_digest
         || proof.plan_digest
             != sha256(&canonical_json_bytes(plan).map_err(|_| internal("tap_plan_encode"))?)
+        || proof.formula_spec_digest
+            != spec
+                .digest()
+                .map_err(|_| internal("tap_formula_spec_digest"))?
+        || proof.sdk_artifact_digest != sdk_artifact_digest
         || proof.tap_config_digest
             != sha256(&canonical_json_bytes(policy).map_err(|_| internal("tap_policy_encode"))?)
         || !is_sha256(&proof.old_formula_sha256)

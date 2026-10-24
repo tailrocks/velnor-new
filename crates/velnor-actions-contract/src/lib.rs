@@ -22,9 +22,12 @@ pub mod formats;
 pub mod freshness;
 pub mod github_evidence_snapshot;
 pub mod graph;
+pub mod homebrew_adoption;
+pub mod homebrew_authority;
 pub mod homebrew_formula;
 pub mod homebrew_merge_gate;
 pub mod homebrew_review_completion;
+pub mod homebrew_spec;
 pub mod ids;
 pub mod manifest;
 pub(crate) mod manifest_checks;
@@ -126,3 +129,6 @@ pub use vcs::VcsInputs;
 pub use workflow_reexports::*;
 
 pub mod review_completion;
+
+mod image_candidate;
+pub use image_candidate::*;

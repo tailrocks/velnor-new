@@ -13,14 +13,14 @@ fn pinned_catalog_matches_qualified_versions() {
     let catalog = ToolCatalog::pinned();
     assert_eq!(catalog.version(PinnedTool::Rust), "1.99.1");
     assert_eq!(catalog.version(PinnedTool::MrBoxington), "1.27.0");
-    assert_eq!(catalog.version(PinnedTool::Gh), "2.103.0");
+    assert_eq!(catalog.version(PinnedTool::Gh), "2.103.2");
     assert_eq!(catalog.version(PinnedTool::Jactionlint), "2.3.0");
     assert_eq!(catalog.version(PinnedTool::Shellcheck), "0.11.0");
     assert_eq!(catalog.version(PinnedTool::Nextest), "0.9.149");
     assert_eq!(catalog.version(PinnedTool::Opentofu), "1.13.2");
     assert_eq!(RUST_VERSION, "1.99.1");
     assert_eq!(MR_BOXINGTON_VERSION, "1.27.0");
-    assert_eq!(GH_VERSION, "2.103.0");
+    assert_eq!(GH_VERSION, "2.103.2");
     assert_eq!(JACTIONLINT_VERSION, "2.3.0");
     assert_eq!(SHELLCHECK_VERSION, "0.11.0");
     assert_eq!(NEXTEST_VERSION, "0.9.149");
@@ -35,7 +35,7 @@ fn tool_specs_use_registry_names() {
         catalog.tool_spec(PinnedTool::MrBoxington),
         "mr-boxington@1.27.0"
     );
-    assert_eq!(catalog.tool_spec(PinnedTool::Gh), "gh@2.103.0");
+    assert_eq!(catalog.tool_spec(PinnedTool::Gh), "gh@2.103.2");
     assert_eq!(
         catalog.tool_spec(PinnedTool::Jactionlint),
         "jactionlint@2.3.0"

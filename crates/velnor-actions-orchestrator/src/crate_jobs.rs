@@ -231,7 +231,10 @@ fn build_crate_jobs_with_seed_timeout(
 pub(crate) fn is_runnable(task: &ProposedTask) -> bool {
     !task.no_targets
         && !task.identity.unit_id.is_empty()
-        && Stack::from_id(&task.stack_id) != Some(Stack::Mise)
+        && !matches!(
+            Stack::from_id(&task.stack_id),
+            Some(Stack::Mise | Stack::Native)
+        )
 }
 
 /// Private-source block (HD-7) plus the Cargo source fetch of one Rust job.

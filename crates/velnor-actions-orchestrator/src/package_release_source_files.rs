@@ -10,11 +10,11 @@ use crate::{OrchestratorError, internal::internal};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::Deserialize;
 use sha1_checked::{Digest as _, Sha1};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::package_release_policy::MAX_CARGO_VERSION_MANIFEST_BYTES as MAX_MANIFEST_BYTES;
 
-pub(super) struct SourceFiles<'a> {
+pub(in crate::package_release_publish) struct SourceFiles<'a> {
     api: &'a GitHubApi,
     root_tree: String,
     trees: BTreeMap<String, Tree>,
@@ -22,7 +22,7 @@ pub(super) struct SourceFiles<'a> {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(super) struct SourceFileEntry {
+pub(in crate::package_release_publish) struct SourceFileEntry {
     pub path: String,
     pub mode: String,
     pub sha: String,
@@ -30,6 +30,11 @@ pub(super) struct SourceFileEntry {
 
 const MAX_SOURCE_TREE_ENTRIES: usize = 100_000;
 const MAX_SOURCE_TREE_JSON_BYTES: usize = 8 * 1024 * 1024;
+type SourceTreeInventory = (
+    Vec<SourceFileEntry>,
+    Vec<SourceFileEntry>,
+    Vec<SourceFileEntry>,
+);
 
 #[derive(Deserialize)]
 struct Commit {
@@ -64,7 +69,10 @@ struct Blob {
 }
 
 impl<'a> SourceFiles<'a> {
-    pub(super) fn new(api: &'a GitHubApi, source_sha: &str) -> Result<Self, OrchestratorError> {
+    pub(in crate::package_release_publish) fn new(
+        api: &'a GitHubApi,
+        source_sha: &str,
+    ) -> Result<Self, OrchestratorError> {
         if !valid_sha(source_sha) {
             return Err(internal("release_version_source_sha"));
         }
@@ -80,8 +88,30 @@ impl<'a> SourceFiles<'a> {
     }
 
     pub(super) fn read(&mut self, path: &str) -> Result<Vec<u8>, OrchestratorError> {
-        let entry = self.regular_entry(path)?;
-        self.blob(&entry.sha)
+        self.read_bounded(path, MAX_MANIFEST_BYTES)
+    }
+
+    pub(in crate::package_release_publish) fn read_bounded(
+        &mut self,
+        path: &str,
+        max_bytes: usize,
+    ) -> Result<Vec<u8>, OrchestratorError> {
+        self.read_bounded_if_present(path, max_bytes)?
+            .ok_or_else(|| internal("release_version_manifest_missing"))
+    }
+
+    pub(in crate::package_release_publish) fn read_bounded_if_present(
+        &mut self,
+        path: &str,
+        max_bytes: usize,
+    ) -> Result<Option<Vec<u8>>, OrchestratorError> {
+        if max_bytes == 0 || max_bytes > MAX_MANIFEST_BYTES {
+            return Err(internal("release_version_manifest_size_bound"));
+        }
+        let Some(entry) = self.regular_entry_if_present(path)? else {
+            return Ok(None);
+        };
+        self.blob(&entry.sha, max_bytes).map(Some)
     }
 
     pub(super) fn identity(&mut self, path: &str) -> Result<SourceFileEntry, OrchestratorError> {
@@ -93,7 +123,27 @@ impl<'a> SourceFiles<'a> {
         })
     }
 
-    pub(super) fn regular_files(&self) -> Result<Vec<SourceFileEntry>, OrchestratorError> {
+    pub(in crate::package_release_publish) fn regular_files(
+        &self,
+    ) -> Result<Vec<SourceFileEntry>, OrchestratorError> {
+        self.complete_inventory().map(|(regular, _, _)| regular)
+    }
+
+    pub(in crate::package_release_publish) fn nonregular_entries(
+        &self,
+    ) -> Result<Vec<SourceFileEntry>, OrchestratorError> {
+        self.complete_inventory()
+            .map(|(_, nonregular, _)| nonregular)
+    }
+
+    pub(in crate::package_release_publish) fn directory_entries(
+        &self,
+    ) -> Result<Vec<SourceFileEntry>, OrchestratorError> {
+        self.complete_inventory()
+            .map(|(_, _, directories)| directories)
+    }
+
+    fn complete_inventory(&self) -> Result<SourceTreeInventory, OrchestratorError> {
         let tree: Tree = self.api.get_json_bounded(
             &self
                 .api
@@ -107,6 +157,9 @@ impl<'a> SourceFiles<'a> {
             return Err(internal("release_source_tree_identity"));
         }
         let mut entries = BTreeMap::new();
+        let mut nonregular = Vec::new();
+        let mut directories = Vec::new();
+        let mut paths = BTreeSet::new();
         for entry in tree.entries {
             if entry.path.is_empty()
                 || entry.path.len() > 1024
@@ -120,31 +173,53 @@ impl<'a> SourceFiles<'a> {
             {
                 return Err(internal("release_source_tree_entry"));
             }
+            if !paths.insert(entry.path.clone()) {
+                return Err(internal("release_source_tree_entry"));
+            }
             if entry.path == ".velnor/config.toml"
                 && (entry.kind != "blob" || !matches!(entry.mode.as_str(), "100644" | "100755"))
             {
                 return Err(internal("release_source_config_not_regular"));
             }
-            if matches!(entry.mode.as_str(), "100644" | "100755")
-                && (entry.kind != "blob"
-                    || entries
-                        .insert(
-                            entry.path.clone(),
-                            SourceFileEntry {
-                                path: entry.path,
-                                mode: entry.mode,
-                                sha: entry.sha,
-                            },
-                        )
-                        .is_some())
-            {
-                return Err(internal("release_source_tree_entry"));
+            if matches!(entry.mode.as_str(), "100644" | "100755") {
+                if entry.kind != "blob" {
+                    return Err(internal("release_source_tree_entry"));
+                }
+                entries.insert(
+                    entry.path.clone(),
+                    SourceFileEntry {
+                        path: entry.path,
+                        mode: entry.mode,
+                        sha: entry.sha,
+                    },
+                );
+            } else if entry.mode == "040000" && entry.kind == "tree" {
+                directories.push(SourceFileEntry {
+                    path: entry.path,
+                    mode: entry.mode,
+                    sha: entry.sha,
+                });
+            } else {
+                nonregular.push(SourceFileEntry {
+                    path: entry.path,
+                    mode: entry.mode,
+                    sha: entry.sha,
+                });
             }
         }
-        Ok(entries.into_values().collect())
+        Ok((entries.into_values().collect(), nonregular, directories))
+    }
+
+    pub(in crate::package_release_publish) fn root_tree_sha(&self) -> &str {
+        &self.root_tree
     }
 
     fn regular_entry(&mut self, path: &str) -> Result<Entry, OrchestratorError> {
+        self.regular_entry_if_present(path)?
+            .ok_or_else(|| internal("release_version_manifest_missing"))
+    }
+
+    fn regular_entry_if_present(&mut self, path: &str) -> Result<Option<Entry>, OrchestratorError> {
         let components: Vec<_> = path.split('/').collect();
         if path.len() > 1024
             || components.len() > 32
@@ -160,22 +235,28 @@ impl<'a> SourceFiles<'a> {
         }
         let mut tree_sha = self.root_tree.clone();
         for (index, component) in components.iter().enumerate() {
-            let entry = self.entry(&tree_sha, component)?;
+            let Some(entry) = self.entry_if_present(&tree_sha, component)? else {
+                return Ok(None);
+            };
             if index + 1 == components.len() {
                 if entry.kind != "blob" || !matches!(entry.mode.as_str(), "100644" | "100755") {
                     return Err(internal("release_version_manifest_not_regular"));
                 }
-                return Ok(entry);
+                return Ok(Some(entry));
             }
             if entry.kind != "tree" || entry.mode != "040000" {
                 return Err(internal("release_version_manifest_parent_not_tree"));
             }
             tree_sha = entry.sha;
         }
-        Err(internal("release_version_manifest_missing"))
+        Ok(None)
     }
 
-    fn entry(&mut self, tree_sha: &str, component: &str) -> Result<Entry, OrchestratorError> {
+    fn entry_if_present(
+        &mut self,
+        tree_sha: &str,
+        component: &str,
+    ) -> Result<Option<Entry>, OrchestratorError> {
         if !self.trees.contains_key(tree_sha) {
             let tree: Tree = self
                 .api
@@ -190,22 +271,25 @@ impl<'a> SourceFiles<'a> {
             .iter()
             .filter(|entry| entry.path == component)
             .collect();
+        if matches.is_empty() {
+            return Ok(None);
+        }
         if matches.len() != 1 || !valid_sha(&matches[0].sha) {
             return Err(internal("release_version_tree_entry"));
         }
-        Ok(matches[0].clone())
+        Ok(Some(matches[0].clone()))
     }
 
-    fn blob(&self, sha: &str) -> Result<Vec<u8>, OrchestratorError> {
+    fn blob(&self, sha: &str, max_bytes: usize) -> Result<Vec<u8>, OrchestratorError> {
         let blob: Blob = self.api.get_json_bounded(
             &self.api.route(&format!("git/blobs/{sha}")),
-            MAX_MANIFEST_BYTES * 2 + 1024,
+            max_bytes * 2 + 1024,
         )?;
         if blob.sha != sha
             || blob.encoding != "base64"
             || blob.size == 0
-            || blob.size > MAX_MANIFEST_BYTES
-            || blob.content.len() > MAX_MANIFEST_BYTES * 2
+            || blob.size > max_bytes
+            || blob.content.len() > max_bytes * 2
         {
             return Err(internal("release_version_blob_identity"));
         }
@@ -222,7 +306,7 @@ impl<'a> SourceFiles<'a> {
     }
 }
 
-pub(super) fn git_blob_sha1(bytes: &[u8]) -> Result<String, OrchestratorError> {
+pub(crate) fn git_blob_sha1(bytes: &[u8]) -> Result<String, OrchestratorError> {
     let mut hasher = Sha1::new();
     hasher.update(format!("blob {}\0", bytes.len()).as_bytes());
     hasher.update(bytes);

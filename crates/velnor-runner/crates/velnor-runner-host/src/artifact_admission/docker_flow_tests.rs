@@ -262,6 +262,7 @@ fn recorded_release() -> Result<VerifiedRelease, HostError> {
         archive: Vec::new(),
         manifest,
         archive_identity: ArchiveIdentity {
+            oci_index_sha256: "b".repeat(64),
             image_manifest_digest: CONTAINERD_MANIFEST.to_owned(),
             image_manifest_media_type: OCI_MANIFEST_MEDIA_TYPE.to_owned(),
             image_manifest_size: 0,

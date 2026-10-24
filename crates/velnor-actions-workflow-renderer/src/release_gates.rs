@@ -16,9 +16,13 @@ use crate::{
     steps,
 };
 
+#[path = "release_gates_step_text.rs"]
+mod step_text;
+use step_text::forbid_substring;
+
 /// Forge-token env key every release-plz step carries.
 ///
-/// release-plz 0.4.0 reads `--git-token` from `GIT_TOKEN`, never from
+/// release-plz 0.4.1 reads `--git-token` from `GIT_TOKEN`, never from
 /// `GITHUB_TOKEN`; every phase (including `--dry-run`) requires it.
 pub const GIT_TOKEN_ENV: &str = "GIT_TOKEN";
 /// Exact secret reference bound to [`GIT_TOKEN_ENV`] (env-only, never argv).
@@ -82,62 +86,11 @@ fn check_job_steps(id: &str, job: &ReleaseJobSpec) -> Result<(), RenderError> {
                     "release_internal_op:{id}"
                 )));
             }
-            StepKind::TaskExecution { .. } => {
+            StepKind::TaskExecution { .. } | StepKind::NativeCheckExecution { .. } => {
                 return Err(RenderError::InvalidWorkflow(format!(
                     "release_declared_task:{id}"
                 )));
             }
-        }
-    }
-    Ok(())
-}
-
-/// All scannable step payload texts (argv, env, action inputs).
-fn payload_texts(step: &Step) -> Vec<&str> {
-    match &step.kind {
-        StepKind::Action { uses, with, env } => std::iter::once(uses.as_str())
-            .chain(with.keys().map(String::as_str))
-            .chain(with.values().map(String::as_str))
-            .chain(env.keys().map(String::as_str))
-            .chain(env.values().map(String::as_str))
-            .collect(),
-        StepKind::Shell { run, env } => run
-            .iter()
-            .map(String::as_str)
-            .chain(env.keys().map(String::as_str))
-            .chain(env.values().map(String::as_str))
-            .collect(),
-        StepKind::Internal { .. } => Vec::new(),
-        StepKind::TaskExecution {
-            argv,
-            env,
-            task_id,
-            task_digest,
-            matrix_id,
-            matrix_key,
-            report_helper_version,
-            ..
-        } => argv
-            .iter()
-            .map(String::as_str)
-            .chain(env.keys().map(String::as_str))
-            .chain(env.values().map(String::as_str))
-            .chain([
-                task_id.as_str(),
-                task_digest.as_str(),
-                matrix_id.as_str(),
-                matrix_key.as_str(),
-                report_helper_version.as_str(),
-            ])
-            .collect(),
-    }
-}
-
-/// Reject one substring in every payload text of a job's steps.
-fn forbid_substring(id: &str, steps: &[Step], needle: &str, code: &str) -> Result<(), RenderError> {
-    for step in steps {
-        if payload_texts(step).iter().any(|text| text.contains(needle)) {
-            return Err(RenderError::InvalidWorkflow(format!("{code}:{id}")));
         }
     }
     Ok(())
@@ -179,6 +132,19 @@ fn forbid_unexpected_secrets(id: &str, steps: &[Step]) -> Result<(), RenderError
                     || env.iter().any(|(key, value)| {
                         value.contains("secrets.") && !is_forge_binding(key, value)
                     })
+                {
+                    return Err(rejected());
+                }
+            }
+            StepKind::NativeCheckExecution {
+                check_id,
+                task_id,
+                sdk_version,
+                ..
+            } => {
+                if [check_id, task_id, sdk_version]
+                    .iter()
+                    .any(|value| value.contains("secrets."))
                 {
                     return Err(rejected());
                 }
@@ -366,7 +332,7 @@ fn check_publish_bootstrap(
                     "release_internal_op:{id}"
                 )));
             }
-            StepKind::TaskExecution { .. } => {
+            StepKind::TaskExecution { .. } | StepKind::NativeCheckExecution { .. } => {
                 return Err(RenderError::InvalidWorkflow(format!(
                     "release_declared_task:{id}"
                 )));

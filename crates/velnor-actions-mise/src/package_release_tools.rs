@@ -15,6 +15,61 @@ pub const COSIGN_COMMAND_OUTPUT_LIMIT: usize = 64 * 1024;
 /// Deadline for fixed Cosign invocations and binary download.
 pub const COSIGN_COMMAND_TIMEOUT: Duration = Duration::from_secs(180);
 
+/// Fixed release asset selected only from the running OS and architecture.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CosignArtifact {
+    /// Official release asset leaf name.
+    pub name: &'static str,
+    /// Exact independently pinned SHA-256.
+    pub sha256: &'static str,
+    /// Exact release asset length.
+    pub bytes: usize,
+}
+
+/// Resolve the fixed verification tool without accepting caller-controlled URLs.
+///
+/// # Errors
+/// Rejects any platform without a reviewed asset pin.
+pub fn cosign_artifact() -> Result<CosignArtifact, MiseError> {
+    cosign_artifact_for(std::env::consts::OS, std::env::consts::ARCH)
+}
+
+fn cosign_artifact_for(os: &str, arch: &str) -> Result<CosignArtifact, MiseError> {
+    use crate::catalog::{
+        COSIGN_DARWIN_AMD64_BYTES, COSIGN_DARWIN_AMD64_SHA256, COSIGN_DARWIN_ARM64_BYTES,
+        COSIGN_DARWIN_ARM64_SHA256, COSIGN_LINUX_AMD64_BYTES, COSIGN_LINUX_ARM64_BYTES,
+        COSIGN_LINUX_ARM64_SHA256,
+    };
+    let (name, sha256, bytes) = match (os, arch) {
+        ("linux", "x86_64") => (
+            "cosign-linux-amd64",
+            COSIGN_LINUX_AMD64_SHA256,
+            COSIGN_LINUX_AMD64_BYTES,
+        ),
+        ("linux", "aarch64") => (
+            "cosign-linux-arm64",
+            COSIGN_LINUX_ARM64_SHA256,
+            COSIGN_LINUX_ARM64_BYTES,
+        ),
+        ("macos", "x86_64") => (
+            "cosign-darwin-amd64",
+            COSIGN_DARWIN_AMD64_SHA256,
+            COSIGN_DARWIN_AMD64_BYTES,
+        ),
+        ("macos", "aarch64") => (
+            "cosign-darwin-arm64",
+            COSIGN_DARWIN_ARM64_SHA256,
+            COSIGN_DARWIN_ARM64_BYTES,
+        ),
+        _ => return Err(invalid("cosign_platform_unsupported")),
+    };
+    Ok(CosignArtifact {
+        name,
+        sha256,
+        bytes,
+    })
+}
+
 /// Validated certificate constraints for a release signer invocation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CosignCertificateIdentity {
@@ -81,9 +136,7 @@ impl PinnedCosign {
     /// # Errors
     /// Rejects unsupported platforms, non-absolute paths, non-UTF-8 paths, or unpinned bytes.
     pub fn from_verified_path(binary: &Path) -> Result<Self, MiseError> {
-        if std::env::consts::OS != "linux" || std::env::consts::ARCH != "x86_64" {
-            return Err(invalid("cosign_platform_unsupported"));
-        }
+        cosign_artifact()?;
         if !binary.is_absolute() {
             return Err(invalid("cosign_path_not_absolute"));
         }
@@ -103,11 +156,10 @@ impl PinnedCosign {
     /// # Errors
     /// Rejects unsupported platforms or command construction failure.
     pub fn download_command() -> Result<IsolatedCommand, MiseError> {
-        if std::env::consts::OS != "linux" || std::env::consts::ARCH != "x86_64" {
-            return Err(invalid("cosign_platform_unsupported"));
-        }
+        let artifact = cosign_artifact()?;
         let url = format!(
-            "https://github.com/sigstore/cosign/releases/download/v{COSIGN_VERSION}/cosign-linux-amd64"
+            "https://github.com/sigstore/cosign/releases/download/v{COSIGN_VERSION}/{}",
+            artifact.name
         );
         let args = vec![
             OsString::from("--disable"),
@@ -123,7 +175,7 @@ impl PinnedCosign {
             OsString::from("--max-time"),
             OsString::from("120"),
             OsString::from("--max-filesize"),
-            OsString::from(COSIGN_MAX_BYTES.to_string()),
+            OsString::from(artifact.bytes.to_string()),
             OsString::from(url),
         ];
         IsolatedCommand::repo_task("/usr/bin/curl", args, &[])
@@ -202,6 +254,13 @@ fn verify_cosign_bytes(path: &Path) -> Result<(), MiseError> {
 }
 
 fn verify_cosign_reader(reader: &mut impl Read) -> Result<(), MiseError> {
+    verify_cosign_reader_for(reader, cosign_artifact()?)
+}
+
+fn verify_cosign_reader_for(
+    reader: &mut impl Read,
+    artifact: CosignArtifact,
+) -> Result<(), MiseError> {
     let mut hasher = Sha256::new();
     let mut buffer = vec![0_u8; 64 * 1024].into_boxed_slice();
     let mut size = 0_u64;
@@ -213,7 +272,7 @@ fn verify_cosign_reader(reader: &mut impl Read) -> Result<(), MiseError> {
             break;
         }
         size = size.saturating_add(count as u64);
-        if size > COSIGN_MAX_BYTES as u64 {
+        if size > artifact.bytes as u64 {
             return Err(invalid("cosign_file_too_large"));
         }
         hasher.update(&buffer[..count]);
@@ -223,7 +282,7 @@ fn verify_cosign_reader(reader: &mut impl Read) -> Result<(), MiseError> {
         digest.push(char::from(b"0123456789abcdef"[usize::from(byte >> 4)]));
         digest.push(char::from(b"0123456789abcdef"[usize::from(byte & 0x0f)]));
     }
-    if digest == COSIGN_LINUX_AMD64_SHA256 {
+    if size == artifact.bytes as u64 && digest == artifact.sha256 {
         Ok(())
     } else {
         Err(invalid("cosign_sha256_mismatch"))

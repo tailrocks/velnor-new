@@ -1,60 +1,104 @@
-use super::snapshot::{SnapshotEntry, sha256, snapshot_tree, validate_formula_only_delta};
-use std::collections::BTreeMap;
+use super::{
+    read_captured_source_locator,
+    snapshot::{Snapshot, snapshot_tree},
+};
+use std::{fs, path::Path};
+use velnor_actions_contract::homebrew_authority::{
+    HOMEBREW_SOURCE_AUTHORITY_LOCATOR_PATH, HOMEBREW_SOURCE_AUTHORITY_LOCATOR_SCHEMA_V1,
+    HOMEBREW_SOURCE_CONFIG_PATH, HOMEBREW_SOURCE_RELEASE_POLICY_PATH,
+    HomebrewSourceAuthorityLocator,
+};
 
-fn entry(bytes: &[u8], mode: u32) -> SnapshotEntry {
-    SnapshotEntry {
-        mode,
-        sha256: sha256(bytes),
-        size: bytes.len() as u64,
-        directory: false,
+fn install_locator(root: &Path, locator: &HomebrewSourceAuthorityLocator) -> Snapshot {
+    let bytes = locator.canonical_bytes().expect("canonical locator");
+    let path = root.join(HOMEBREW_SOURCE_AUTHORITY_LOCATOR_PATH);
+    fs::create_dir_all(path.parent().expect("locator parent")).expect("locator directory");
+    fs::write(path, bytes).expect("locator write");
+    snapshot_tree(root).expect("captured checkout snapshot")
+}
+
+fn locator() -> HomebrewSourceAuthorityLocator {
+    HomebrewSourceAuthorityLocator {
+        schema: HOMEBREW_SOURCE_AUTHORITY_LOCATOR_SCHEMA_V1.to_owned(),
+        repository: "owner/source".to_owned(),
+        repository_id: 41,
+        default_branch: "main".to_owned(),
+        config_path: HOMEBREW_SOURCE_CONFIG_PATH.to_owned(),
+        release_policy_path: HOMEBREW_SOURCE_RELEASE_POLICY_PATH.to_owned(),
     }
 }
 
+fn locator_tree(root: &Path) -> Vec<velnor_actions_mise::TapTreeEntry> {
+    let bytes = fs::read(root.join(HOMEBREW_SOURCE_AUTHORITY_LOCATOR_PATH)).expect("locator");
+    vec![velnor_actions_mise::TapTreeEntry {
+        path: HOMEBREW_SOURCE_AUTHORITY_LOCATOR_PATH.to_owned(),
+        mode: 0o100_644,
+        blob_sha: crate::release_policy_admission::git_blob_sha1(&bytes).expect("blob SHA"),
+    }]
+}
+
 #[test]
-fn formula_bytes_are_the_only_accepted_tree_change() {
-    let before = BTreeMap::from([
-        ("Formula/jackin.rb".to_owned(), entry(b"old formula", 0o644)),
-        ("mise.toml".to_owned(), entry(b"task source", 0o644)),
-        (
-            ".git/HEAD".to_owned(),
-            entry(b"ref: refs/heads/main\n", 0o644),
-        ),
-    ]);
-    let mut after = before.clone();
-    after.insert("Formula/jackin.rb".to_owned(), entry(b"new formula", 0o644));
+fn captured_tap_locator_binds_source_identity_and_allows_empty_distribution_policy() {
+    let root = tempfile::TempDir::new().expect("temp root");
+    fs::create_dir_all(root.path().join(".velnor")).expect("config directory");
+    fs::write(root.path().join(".velnor/config.toml"), "[distribution]\n")
+        .expect("tap config without source formula policy");
+    let locator = locator();
+    let snapshot = install_locator(root.path(), &locator);
+    let tree = locator_tree(root.path());
+    let admitted =
+        read_captured_source_locator(root.path(), &tree, &snapshot, "owner/source", 41, "main")
+            .expect("canonical locator from captured Git blob");
+    assert_eq!(admitted, locator);
+}
+
+#[test]
+fn captured_tap_locator_rejects_wrong_source_slug_or_id() {
+    let root = tempfile::TempDir::new().expect("temp root");
+    let snapshot = install_locator(root.path(), &locator());
+    let tree = locator_tree(root.path());
     assert!(
-        validate_formula_only_delta(&before, &after, "Formula/jackin.rb", b"new formula").is_ok()
+        read_captured_source_locator(root.path(), &tree, &snapshot, "owner/other", 41, "main")
+            .is_err()
+    );
+    assert!(
+        read_captured_source_locator(root.path(), &tree, &snapshot, "owner/source", 42, "main")
+            .is_err()
+    );
+    assert!(
+        read_captured_source_locator(root.path(), &tree, &snapshot, "owner/source", 41, "trunk")
+            .is_err()
     );
 }
 
 #[test]
-fn extra_removed_nonformula_and_git_base_changes_are_rejected() {
-    let before = BTreeMap::from([
-        ("Formula/jackin.rb".to_owned(), entry(b"old", 0o644)),
-        ("mise.toml".to_owned(), entry(b"task", 0o644)),
-        (".git/refs/heads/main".to_owned(), entry(b"base sha", 0o644)),
-    ]);
-    let mut extra = before.clone();
-    extra.insert("Formula/other.rb".to_owned(), entry(b"injected", 0o644));
-    assert!(validate_formula_only_delta(&before, &extra, "Formula/jackin.rb", b"new").is_err());
-    let mut removed = before.clone();
-    removed.remove("mise.toml");
-    assert!(validate_formula_only_delta(&before, &removed, "Formula/jackin.rb", b"new").is_err());
-    let mut changed_base = before.clone();
-    changed_base.insert(
-        ".git/refs/heads/main".to_owned(),
-        entry(b"replacement sha", 0o644),
-    );
+fn captured_tap_locator_rejects_tampered_tree_blob_and_checkout_bytes() {
+    let root = tempfile::TempDir::new().expect("temp root");
+    let snapshot = install_locator(root.path(), &locator());
+    let tree = locator_tree(root.path());
+    let mut wrong_blob = tree.clone();
+    wrong_blob[0].blob_sha = "a".repeat(40);
     assert!(
-        validate_formula_only_delta(&before, &changed_base, "Formula/jackin.rb", b"new").is_err()
+        read_captured_source_locator(
+            root.path(),
+            &wrong_blob,
+            &snapshot,
+            "owner/source",
+            41,
+            "main"
+        )
+        .is_err()
     );
-}
 
-#[test]
-fn executable_mode_change_is_rejected_even_for_the_formula() {
-    let before = BTreeMap::from([("Formula/jackin.rb".to_owned(), entry(b"old", 0o644))]);
-    let after = BTreeMap::from([("Formula/jackin.rb".to_owned(), entry(b"new", 0o755))]);
-    assert!(validate_formula_only_delta(&before, &after, "Formula/jackin.rb", b"new").is_err());
+    fs::write(
+        root.path().join(HOMEBREW_SOURCE_AUTHORITY_LOCATOR_PATH),
+        b"{}",
+    )
+    .expect("tamper checkout locator");
+    assert!(
+        read_captured_source_locator(root.path(), &tree, &snapshot, "owner/source", 41, "main")
+            .is_err()
+    );
 }
 
 #[cfg(unix)]

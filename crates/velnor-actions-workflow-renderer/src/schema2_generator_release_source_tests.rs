@@ -36,19 +36,30 @@ fn fetch_uses_exact_public_commit_without_credentials_or_helpers() -> Result<(),
     let log = scratch.0.join("git-arguments");
     fs::create_dir_all(&workspace)?;
     fs::create_dir_all(&bin)?;
+    let workspace = fs::canonicalize(workspace)?;
     let git = bin.join("git");
     fs::write(
         &git,
-        r#"#!/bin/sh
+        format!(
+            r#"#!/bin/sh
 set -eu
-test -z "${GITHUB_TOKEN:-}"
-test -z "${GH_TOKEN:-}"
-test -z "${ACTIONS_RUNTIME_TOKEN:-}"
-test -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}"
-test -z "${MISE_GITHUB_TOKEN:-}"
-printf '%s\n' "$@" >> "$MOCK_GIT_LOG"
-if [ "$1" = rev-parse ]; then printf '%s\n' "$MOCK_EXPECTED_SHA"; fi
+test -z "${{GITHUB_TOKEN:-}}"
+test -z "${{GH_TOKEN:-}}"
+test -z "${{ACTIONS_RUNTIME_TOKEN:-}}"
+test -z "${{ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}}"
+test -z "${{MISE_GITHUB_TOKEN:-}}"
+test -z "${{GIT_CONFIG_COUNT:-}}"
+test "$GIT_CONFIG_GLOBAL" = /dev/null
+test "$GIT_CONFIG_NOSYSTEM" = 1
+test "$GIT_TERMINAL_PROMPT" = 0
+test "$GIT_ALLOW_PROTOCOL" = https
+printf '%s\n' "$@" >> {}
+for argument in "$@"; do
+  if [ "$argument" = rev-parse ]; then printf '%s\n' '0123456789abcdef0123456789abcdef01234567'; fi
+done
 "#,
+            crate::commands::quote_script_arg(log.to_str().ok_or("non-UTF8 log")?)
+        ),
     )?;
     let mut permissions = fs::metadata(&git)?.permissions();
     permissions.set_mode(0o755);
@@ -58,7 +69,10 @@ if [ "$1" = rev-parse ]; then printf '%s\n' "$MOCK_EXPECTED_SHA"; fi
     let commit = "0123456789abcdef0123456789abcdef01234567";
     let result = Command::new("bash")
         .arg("-c")
-        .arg(QUALIFICATION_SOURCE_PREPARE)
+        .arg(QUALIFICATION_SOURCE_PREPARE.replace(
+            "/usr/bin/git",
+            &crate::commands::quote_script_arg(git.to_str().ok_or("non-UTF8 git")?),
+        ))
         .env("PATH", path)
         .env("GITHUB_WORKSPACE", &workspace)
         .env("GITHUB_REPOSITORY", "tailrocks/velnor-new")
@@ -68,6 +82,7 @@ if [ "$1" = rev-parse ]; then printf '%s\n' "$MOCK_EXPECTED_SHA"; fi
         .env("ACTIONS_RUNTIME_TOKEN", "runtime-token")
         .env("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "oidc-token")
         .env("MISE_GITHUB_TOKEN", "mise-token")
+        .env("GIT_CONFIG_COUNT", "1")
         .env("MOCK_GIT_LOG", &log)
         .env("MOCK_EXPECTED_SHA", commit)
         .output()?;
@@ -82,7 +97,7 @@ if [ "$1" = rev-parse ]; then printf '%s\n' "$MOCK_EXPECTED_SHA"; fi
     assert!(arguments.contains("credential.helper="));
     assert!(arguments.contains("--depth=1"));
     assert!(arguments.contains("--no-tags"));
-    assert!(QUALIFICATION_SOURCE_PREPARE.contains("timeout=60"));
+    assert!(QUALIFICATION_SOURCE_PREPARE.contains("http.lowSpeedTime=60"));
     Ok(())
 }
 
@@ -108,6 +123,7 @@ fn reject_invalid_source_identity_before_running_git() -> Result<(), Box<dyn Err
 fn assert_source_step(step: &Yaml, job_id: &str) -> Result<(), Box<dyn Error>> {
     let source = map_entries(step)?;
     assert_eq!(scalar(map_field(source, "shell")?)?, "bash", "{job_id}");
+    assert_eq!(map_field(source, "timeout-minutes")?, &Yaml::Int(2));
     let source_run = scalar(map_field(source, "run")?)?;
     assert!(
         !has_field(source, "uses"),
@@ -115,17 +131,34 @@ fn assert_source_step(step: &Yaml, job_id: &str) -> Result<(), Box<dyn Error>> {
     );
     assert!(
         source_run.contains("tailrocks/velnor-new")
-            && source_run.contains("https://github.com/{repository}.git")
+            && source_run.contains("https://github.com/tailrocks/velnor-new.git")
             && source_run.contains("GITHUB_REPOSITORY")
             && source_run.contains("GITHUB_SHA")
-            && source_run.contains(r#"r"[0-9a-f]{40}""#)
+            && source_run.contains("^[0-9a-f]{40}$")
             && source_run.contains("--depth=1")
             && source_run.contains("--no-tags")
+            && source_run.contains("/usr/bin/git")
             && source_run
-                .contains("run([\"git\", \"checkout\", \"--quiet\", \"--detach\", \"FETCH_HEAD\"]")
-            && source_run.contains("head != commit"),
+                .contains("/usr/bin/git -c credential.helper= -c core.hooksPath=/dev/null")
+            && source_run.contains("checkout --quiet --detach FETCH_HEAD")
+            && source_run.contains("rev-parse --verify 'HEAD^{commit}'"),
         "{job_id} must validate, fetch, and verify the exact public source commit"
     );
+    for operation in [
+        "init --quiet",
+        "fetch --quiet",
+        "checkout --quiet",
+        "rev-parse --verify",
+    ] {
+        assert!(
+            source_run.lines().any(|line| {
+                line.contains("/usr/bin/env -i")
+                    && line.contains("/usr/bin/git")
+                    && line.contains(operation)
+            }),
+            "{job_id} must execute {operation} with a literal credential-free Git command"
+        );
+    }
     for credential in [
         "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
         "ACTIONS_RUNTIME_TOKEN",
@@ -134,8 +167,7 @@ fn assert_source_step(step: &Yaml, job_id: &str) -> Result<(), Box<dyn Error>> {
         "MISE_GITHUB_TOKEN",
     ] {
         assert!(
-            source_run.contains(&format!("\"{credential}\""))
-                && source_run.contains("environment.pop(name, None)"),
+            source_run.contains("/usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin"),
             "{job_id} must scrub {credential} before fetching source"
         );
     }
@@ -158,12 +190,13 @@ fn assert_qualifier_step(
         expected_action,
         "{job_id}"
     );
+    assert_eq!(steps.len(), 2, "{job_id} source fetch precedes the action");
     for step in steps {
         let fields = map_entries(step)?;
         if let Some((_, uses)) = fields.iter().find(|(key, _)| key == "uses") {
             assert!(
                 !scalar(uses)?.starts_with("actions/checkout@"),
-                "{job_id} must not depend on the default checkout action"
+                "{job_id} keeps the no-checkout permission contract"
             );
         }
     }

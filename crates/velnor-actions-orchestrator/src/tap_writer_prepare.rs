@@ -8,10 +8,7 @@ use super::{
     identity::verify_app_scope,
     internal, persist_result, verify_promotion_authority,
 };
-use velnor_actions_contract::{
-    canonical_json_bytes,
-    homebrew_formula::{HomebrewFormulaCandidate, validate_homebrew_formula_candidate},
-};
+use velnor_actions_contract::canonical_json_bytes;
 
 pub(super) enum WriterPreparation {
     Stale(TapPromotionReceipt),
@@ -38,17 +35,18 @@ pub(super) fn prepare_writer(
     if sha256(&base_tree.bytes) != inputs.proof.old_formula_sha256 {
         return Err(internal("tap_candidate_base_digest_mismatch"));
     }
-    let canonical = validate_homebrew_formula_candidate(&HomebrewFormulaCandidate {
-        source_repository: &inputs.proof.source_repository,
-        plan: &inputs.plan,
-        tap_repository: &inputs.policy.repository,
-        formula_path: &inputs.formula_path,
-        captured_base_sha: &base_sha,
-        base_bytes: &base_tree.bytes,
-        proposed_bytes: &inputs.proposed,
-        release: &inputs.release,
-    })
-    .map_err(|_| internal("tap_writer_formula_rejected"))?;
+    let canonical =
+        crate::tap_prepare::derive_formula_candidate(crate::tap_prepare::FormulaCandidateInput {
+            spec: &inputs.spec,
+            source_repository: &inputs.proof.source_repository,
+            tap_repository: &inputs.policy.repository,
+            formula_path: &inputs.formula_path,
+            base_sha: &base_sha,
+            base_formula: &base_tree.bytes,
+            plan: &inputs.plan,
+            release: &inputs.release,
+        })
+        .map_err(|_| internal("tap_writer_formula_rejected"))?;
     if canonical != inputs.proposed {
         return Err(internal("tap_writer_formula_noncanonical"));
     }

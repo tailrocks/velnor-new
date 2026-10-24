@@ -8,10 +8,8 @@ use std::{
 use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256};
 use velnor_actions_contract::{
-    PackageReleasePlan, VerifiedPackageRelease, canonical_json_bytes,
-    config::HomebrewTapConfig,
-    homebrew_formula::{HomebrewFormulaCandidate, validate_homebrew_formula_candidate},
-    parse_strict_json,
+    PackageReleasePlan, VerifiedPackageRelease, canonical_json_bytes, config::HomebrewTapConfig,
+    homebrew_spec::HomebrewFormulaSpec, parse_strict_json,
 };
 
 use crate::{
@@ -27,6 +25,8 @@ const LIMIT: u64 = 1024 * 1024;
 
 pub(super) struct MergeCandidate {
     pub(super) policy: HomebrewTapConfig,
+    pub(super) spec: HomebrewFormulaSpec,
+    pub(super) sdk_artifact_digest: String,
     pub(super) plan: PackageReleasePlan,
     pub(super) release: VerifiedPackageRelease,
     pub(super) proof: HomebrewTapPreparationProof,
@@ -107,15 +107,29 @@ pub(super) fn load_candidate() -> Result<MergeCandidate, OrchestratorError> {
         .validate(&plan.repository, &plan)
         .map_err(|_| internal("tap_merge_receipt_invalid"))?;
     let policy = crate::tap_prepare::writer_policy_from_env()?;
+    let spec = crate::tap_prepare::formula_policy_from_env()?;
+    let sdk_artifact_digest = crate::generator::current_exe_sha256()
+        .ok_or_else(|| internal("tap_sdk_artifact_digest_unavailable"))?;
     let formula_path = crate::tap_prepare::formula_path(&policy, plan.channel)?.to_owned();
     let root = runner_root()?;
     let proof: HomebrewTapPreparationProof =
         read_canonical_json(&root.join("tap-candidate/candidate.json"))?;
     let formula = read_regular(&root, &root.join("tap-candidate/formula.rb"))?;
     let promotion: TapPromotionReceipt = read_canonical_json(&root.join("tap-pr.json"))?;
-    validate_handoff(&policy, &plan, &release, &proof, &promotion, &formula)?;
+    validate_handoff(&HandoffValidation {
+        policy: &policy,
+        spec: &spec,
+        sdk_artifact_digest: &sdk_artifact_digest,
+        plan: &plan,
+        release: &release,
+        proof: &proof,
+        promotion: &promotion,
+        formula: &formula,
+    })?;
     Ok(MergeCandidate {
         policy,
+        spec,
+        sdk_artifact_digest,
         plan,
         release,
         proof,
@@ -125,14 +139,28 @@ pub(super) fn load_candidate() -> Result<MergeCandidate, OrchestratorError> {
     })
 }
 
-fn validate_handoff(
-    policy: &HomebrewTapConfig,
-    plan: &PackageReleasePlan,
-    release: &VerifiedPackageRelease,
-    proof: &HomebrewTapPreparationProof,
-    promotion: &TapPromotionReceipt,
-    formula: &[u8],
-) -> Result<(), OrchestratorError> {
+struct HandoffValidation<'a> {
+    policy: &'a HomebrewTapConfig,
+    spec: &'a HomebrewFormulaSpec,
+    sdk_artifact_digest: &'a str,
+    plan: &'a PackageReleasePlan,
+    release: &'a VerifiedPackageRelease,
+    proof: &'a HomebrewTapPreparationProof,
+    promotion: &'a TapPromotionReceipt,
+    formula: &'a [u8],
+}
+
+fn validate_handoff(input: &HandoffValidation<'_>) -> Result<(), OrchestratorError> {
+    let HandoffValidation {
+        policy,
+        spec,
+        sdk_artifact_digest,
+        plan,
+        release,
+        proof,
+        promotion,
+        formula,
+    } = input;
     let proof_bytes =
         canonical_json_bytes(proof).map_err(|_| internal("tap_merge_proof_encode"))?;
     let plan_digest = sha256(
@@ -142,7 +170,7 @@ fn validate_handoff(
     );
     let tap_digest =
         sha256(&canonical_json_bytes(policy).map_err(|_| internal("tap_merge_policy_encode"))?);
-    if proof.schema != "velnor.homebrew-candidate.v3"
+    if proof.schema != "velnor.homebrew-candidate.v4"
         || proof.channel != plan.channel
         || proof.formula_path != crate::tap_prepare::formula_path(policy, plan.channel)?
         || proof.candidate_formula != "formula.rb"
@@ -152,6 +180,11 @@ fn validate_handoff(
         || proof.version != release.receipt.version.value
         || proof.receipt_digest != release.receipt_digest
         || proof.plan_digest != plan_digest
+        || proof.formula_spec_digest
+            != spec
+                .digest()
+                .map_err(|_| internal("tap_formula_spec_digest"))?
+        || proof.sdk_artifact_digest != *sdk_artifact_digest
         || proof.tap_config_digest != tap_digest
         || proof.new_formula_sha256 != sha256(formula)
         || promotion.schema != "velnor.homebrew-tap-pr.v2"
@@ -161,6 +194,16 @@ fn validate_handoff(
     {
         return Err(internal("tap_merge_handoff_binding_mismatch"));
     }
+    validate_promotion_outcome(input)
+}
+
+fn validate_promotion_outcome(input: &HandoffValidation<'_>) -> Result<(), OrchestratorError> {
+    let HandoffValidation {
+        proof,
+        promotion,
+        release,
+        ..
+    } = input;
     match &promotion.outcome {
         TapPromotionOutcome::PullRequest {
             pull_request,
@@ -216,17 +259,18 @@ pub(super) fn validate_formula_at_base(
     base_formula: &[u8],
     proposed_formula: &[u8],
 ) -> Result<(), OrchestratorError> {
-    let canonical = validate_homebrew_formula_candidate(&HomebrewFormulaCandidate {
-        source_repository: &candidate.proof.source_repository,
-        plan: &candidate.plan,
-        tap_repository: &candidate.policy.repository,
-        formula_path: &candidate.formula_path,
-        captured_base_sha: base_sha,
-        base_bytes: base_formula,
-        proposed_bytes: proposed_formula,
-        release: &candidate.release,
-    })
-    .map_err(|_| internal("tap_merge_formula_rejected"))?;
+    let canonical =
+        crate::tap_prepare::derive_formula_candidate(crate::tap_prepare::FormulaCandidateInput {
+            spec: &candidate.spec,
+            source_repository: &candidate.proof.source_repository,
+            tap_repository: &candidate.policy.repository,
+            formula_path: &candidate.formula_path,
+            base_sha,
+            base_formula,
+            plan: &candidate.plan,
+            release: &candidate.release,
+        })
+        .map_err(|_| internal("tap_merge_formula_rejected"))?;
     if canonical != proposed_formula {
         return Err(internal("tap_merge_formula_noncanonical"));
     }
@@ -299,7 +343,7 @@ fn read_regular(root: &Path, path: &Path) -> Result<Vec<u8>, OrchestratorError> 
     fs::read(path).map_err(|_| internal("tap_merge_file_read"))
 }
 
-fn sha256(bytes: &[u8]) -> String {
+pub(super) fn sha256(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     Sha256::digest(bytes)
         .iter()

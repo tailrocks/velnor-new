@@ -35,10 +35,6 @@ ignore = []
 compile_driver = "mbx"
 test_runner = "cargo_nextest"
 
-[[stacks.rust.inputs]]
-globs = ["scripts/parallel-targets/**"]
-packages = ["velnor-actions-workflow-renderer"]
-
 # velnor-actions-cli's repository-policy tests read every package's manifest,
 # sources, and tests in both workspaces (MSRV parity with
 # crates/velnor-runner/Cargo.toml, test registration, metadata policy). The
@@ -116,12 +112,12 @@ inputs = [
   "crates/velnor-actions-freshness/src/evidence/freshness.rs",
   "crates/velnor-actions-freshness/src/evidence/freshness/tests.rs",
   "crates/velnor-actions-freshness/src/inventory.rs",
-  "crates/velnor-actions-freshness/src/inventory/tests.rs",
   "crates/velnor-actions-freshness/src/inventory/mirror.rs",
   "crates/velnor-actions-freshness/src/inventory/pins.rs",
   "crates/velnor-actions-freshness/src/inventory/pins_cosign_tests.rs",
   "crates/velnor-actions-freshness/src/inventory/pins_mirrors.rs",
   "crates/velnor-actions-freshness/src/inventory/shape.rs",
+  "crates/velnor-actions-freshness/src/inventory/tests.rs",
   "crates/velnor-actions-freshness/src/lib.rs",
   "crates/velnor-actions-freshness/src/members.rs",
   "crates/velnor-actions-freshness/src/patterns.rs",
@@ -133,6 +129,11 @@ inputs = [
   "crates/velnor-actions-freshness/src/process.rs",
   "crates/velnor-actions-freshness/src/process/capture.rs",
   "crates/velnor-actions-freshness/src/process/tests.rs",
+  "crates/velnor-actions-freshness/src/release_support.rs",
+  "crates/velnor-actions-freshness/src/release_support/cargo_artifact.rs",
+  "crates/velnor-actions-freshness/src/release_support/strict_json.rs",
+  "crates/velnor-actions-freshness/src/release_support/strict_json_tests.rs",
+  "crates/velnor-actions-freshness/src/release_support_tests.rs",
   "crates/velnor-actions-freshness/src/tests.rs",
   "crates/velnor-actions-freshness/src/time.rs",
   "crates/velnor-actions-freshness/src/validation.rs",
@@ -141,22 +142,37 @@ inputs = [
   "crates/velnor-archive-guard/Cargo.toml",
   "crates/velnor-archive-guard/build.rs",
   "crates/velnor-archive-guard/build_support/archive_guard_inputs.rs",
+  "crates/velnor-archive-guard/build_support/archive_guard_inputs_filesystem.rs",
   "crates/velnor-archive-guard/src/bin/velnor_archive_guard.rs",
   "crates/velnor-archive-guard/src/lib.rs",
   "crates/velnor-archive-guard/src/owned_archive_guard/additional_tests.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/candidate_extract.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/candidate_extract/filesystem.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/candidate_extract/parse.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/candidate_extract_tests.rs",
   "crates/velnor-archive-guard/src/owned_archive_guard/mod.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/archive.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/graph.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/graph_support.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/json.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/layer.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/layer_security_tests.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate_tests.rs",
   "crates/velnor-archive-guard/src/owned_archive_guard/pax.rs",
   "crates/velnor-archive-guard/src/owned_archive_guard/profile.rs",
   "crates/velnor-archive-guard/src/owned_archive_guard/stream.rs",
   "crates/velnor-archive-guard/src/owned_archive_guard/tests.rs",
+  "crates/velnor-archive-guard/tests/archive_guard_builder.rs",
   "crates/velnor-archive-guard/tests/archive_guard_cli.rs",
+  "crates/velnor-archive-guard/tests/archive_guard_input_bounds.rs",
+  "mise.toml",
+  "rust-toolchain.toml",
   "scripts/archive-guard-build-namespace.sh",
   "scripts/archive-guard-inputs.txt",
   "scripts/build-owned-archive-guard.sh",
   "scripts/check-owned-archive-guard-sources.sh",
   "scripts/owned_archive_preflight.py",
-  "mise.toml",
-  "rust-toolchain.toml",
 ]
 tools = ["cargo-nextest", "rust"]
 timeout_minutes = 5

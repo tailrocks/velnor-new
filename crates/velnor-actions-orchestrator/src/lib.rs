@@ -6,12 +6,9 @@ mod api;
 mod attach;
 mod binary_preview_emit;
 mod binary_release_emit;
-mod bun_assets_handoff;
-mod stable_release_emit;
-pub(crate) use package_release_publish::release_policy_admission;
-pub(crate) use package_release_publish::stable_tag_origin;
 mod build_task_tools;
 mod build_tasks;
+mod bun_assets_handoff;
 mod cache_keys;
 mod check_evidence;
 mod check_runtime;
@@ -39,7 +36,9 @@ mod generator;
 mod gh_download;
 mod git_paths;
 mod github_authority_read;
+mod homebrew;
 mod image_build_tasks;
+mod image_maintenance;
 mod image_prebuilt;
 mod init;
 mod internal;
@@ -65,8 +64,10 @@ mod owned_tool_preview;
 mod owned_tool_publication;
 mod package_publication;
 mod package_release_artifacts;
+mod package_release_public;
 mod package_release_publish;
 mod package_release_signer;
+mod parallel_target_seed;
 mod pins;
 mod plan;
 mod plan_dispositions;
@@ -111,6 +112,7 @@ mod select_symlinks;
 mod select_tofu;
 mod source_cache;
 mod source_prep;
+mod stable_release_emit;
 mod tap_merge;
 mod tap_prepare;
 mod tap_source_freshness;
@@ -138,9 +140,6 @@ mod workflow_task_jobs;
 #[cfg(all(feature = "test-render-capture", test))]
 #[path = "test_render_capture_harness.rs"]
 mod test_render_capture_harness;
-
-#[cfg(test)]
-pub(crate) mod tap_test_support;
 
 #[cfg(test)]
 #[path = "../../test_support/git_fixture.rs"]

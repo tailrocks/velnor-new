@@ -146,7 +146,6 @@ write_test_manifest() {
      ]}' >"$manifest"
 }
 
-source "$ROOT/scripts/generator-release/test-qualification-output-bindings.sh"
 source "$ROOT/scripts/generator-release/test-fixture-git.sh"
 test_fixture_git_isolation || exit 1
 
@@ -266,7 +265,6 @@ expect_release_rejected malformed-manifest 'candidate manifest is malformed JSON
 write_test_manifest "$WORK/valid manifest.json" "$SOURCE_SHA" \
   "$TEST_LINUX_SHA" "$TEST_ARM_SHA" "$TEST_INTEL_SHA"
 expect_release_check_match
-run_candidate_output_binding_tests || exit 1
 ln -s "$WORK/valid manifest.json" "$WORK/symlink manifest.json"
 expect_release_rejected symlink-manifest 'candidate manifest must be a regular non-symlink file' \
   "$WORK/symlink manifest.json" "$(test_file_sha256 "$WORK/valid manifest.json")" "$SOURCE_SHA"

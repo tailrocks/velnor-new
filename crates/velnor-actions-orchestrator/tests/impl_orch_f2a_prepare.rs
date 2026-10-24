@@ -84,7 +84,8 @@ fn preview_producer_skips_shared_metadata_prepare_after_source_admission() -> Te
 }
 
 fn assert_configuration_admission_boundaries(config_calls: &[String]) {
-    // Preparation discovers repository evidence, execution reloads the
+    // Preparation discovers repository evidence, native checks reload the
+    // source config to enforce their protected inventory, execution reloads the
     // source-bound definition, routing reloads before schema migration,
     // the owned-tool preview reloads at its CLI-gated boundary, qualification
     // admission reloads for the repo-resolved catalog, and tap preparation
@@ -94,6 +95,7 @@ fn assert_configuration_admission_boundaries(config_calls: &[String]) {
     // preparation; Stable retains shared preparation;
     // `deps lock` and the private fetch reload it to resolve and verify the declared private sources;
     // `playwright lock` reloads it to resolve the declared browser archives;
+    // native check admission reloads it to enforce the protected native check inventory;
     // `unmanaged` reads only the `[github]` and preserve policy, with no discovery.
     assert_eq!(config_calls.len(), 13, "{config_calls:?}");
     assert!(
@@ -132,6 +134,7 @@ fn assert_configuration_admission_boundaries(config_calls: &[String]) {
                 || call.starts_with("preview_producer_entry.rs")
                 || call.starts_with("preview_source_admission_finalize.rs")
                 || call.starts_with("check_runtime.rs")
+                || call.starts_with("native_homebrew_check_required.rs")
                 || call.starts_with("routing.rs")
                 || call.starts_with("deps_lock.rs")
                 || call.starts_with("generate_unmanaged.rs")
@@ -139,7 +142,6 @@ fn assert_configuration_admission_boundaries(config_calls: &[String]) {
                 || call.starts_with("owned_tool_preview.rs")
                 || call.starts_with("playwright_resolve.rs")
                 || call.starts_with("qualification_resolver.rs")
-                || call.starts_with("tap_prepare.rs")
                 || call.starts_with("tap_prepare_execute.rs")
         }),
         "{config_calls:?}"

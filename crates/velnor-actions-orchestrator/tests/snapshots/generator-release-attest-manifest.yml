@@ -20,7 +20,7 @@ runs:
   using: composite
   steps:
     - name: Setup Mise
-      uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550
+      uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e
       with:
         version: 2026.10.18
         sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
@@ -30,7 +30,7 @@ runs:
         cache_save: "false"
     - name: Install pinned GitHub CLI
       shell: bash
-      run: mise --no-config --no-env --no-hooks install gh@2.103.0
+      run: mise --no-config --no-env --no-hooks install gh@2.103.2
     - name: Download x86_64-unknown-linux-gnu candidate assets
       uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
       with:
@@ -38,7 +38,7 @@ runs:
         path: linux-assets
     - name: Prevalidate and extract uploaded candidate archive
       shell: bash
-      run: "set -eu\nbash scripts/with-owned-archive-guard.sh -- python3 scripts/generator-release/extract-candidate.py 'linux-assets/generator-linux-assets.tar' 'linux-assets' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.sha256' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.provenance.json'"
+      run: "set -eu\nbash scripts/with-owned-archive-guard.sh -- .velnor/archive-guard/bin/velnor-archive-guard extract-candidate 'linux-assets/generator-linux-assets.tar' 'linux-assets' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.sha256' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.provenance.json'"
     - name: Verify extracted candidate file types and executable mode
       shell: bash
       run: "set -eu\ntest -f linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu\ntest ! -L linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu\ntest -x linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu\ntest -f linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.sha256\ntest ! -L linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.sha256\ntest ! -x linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.sha256\ntest -f linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.provenance.json\ntest ! -L linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.provenance.json\ntest ! -x linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.provenance.json"
@@ -52,7 +52,7 @@ runs:
         path: macos-assets
     - name: Prevalidate and extract uploaded candidate archive
       shell: bash
-      run: "set -eu\nbash scripts/with-owned-archive-guard.sh -- python3 scripts/generator-release/extract-candidate.py 'macos-assets/generator-macos-assets.tar' 'macos-assets' 'velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin' 'velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin.sha256' 'velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin.provenance.json'"
+      run: "set -eu\nbash scripts/with-owned-archive-guard.sh -- .velnor/archive-guard/bin/velnor-archive-guard extract-candidate 'macos-assets/generator-macos-assets.tar' 'macos-assets' 'velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin' 'velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin.sha256' 'velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin.provenance.json'"
     - name: Verify extracted candidate file types and executable mode
       shell: bash
       run: "set -eu\ntest -f macos-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin\ntest ! -L macos-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin\ntest -x macos-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin\ntest -f macos-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin.sha256\ntest ! -L macos-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin.sha256\ntest ! -x macos-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin.sha256\ntest -f macos-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin.provenance.json\ntest ! -L macos-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin.provenance.json\ntest ! -x macos-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin.provenance.json"
@@ -66,7 +66,7 @@ runs:
         path: macos-intel-assets
     - name: Prevalidate and extract uploaded candidate archive
       shell: bash
-      run: "set -eu\nbash scripts/with-owned-archive-guard.sh -- python3 scripts/generator-release/extract-candidate.py 'macos-intel-assets/generator-macos-intel-assets.tar' 'macos-intel-assets' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin.sha256' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin.provenance.json'"
+      run: "set -eu\nbash scripts/with-owned-archive-guard.sh -- .velnor/archive-guard/bin/velnor-archive-guard extract-candidate 'macos-intel-assets/generator-macos-intel-assets.tar' 'macos-intel-assets' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin.sha256' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin.provenance.json'"
     - name: Verify extracted candidate file types and executable mode
       shell: bash
       run: "set -eu\ntest -f macos-intel-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin\ntest ! -L macos-intel-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin\ntest -x macos-intel-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin\ntest -f macos-intel-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin.sha256\ntest ! -L macos-intel-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin.sha256\ntest ! -x macos-intel-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin.sha256\ntest -f macos-intel-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin.provenance.json\ntest ! -L macos-intel-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin.provenance.json\ntest ! -x macos-intel-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin.provenance.json"
@@ -94,7 +94,7 @@ runs:
       env:
         GH_TOKEN: ${{ github.token }}
       shell: bash
-      run: "gh() {\n  (\n    mise --no-config --no-env --no-hooks exec gh@2.103.0 -- gh \"$@\" & _velnor_gh_pid=$!\n    ( sleep 60; kill -TERM \"$_velnor_gh_pid\" 2>/dev/null; sleep 5; kill -KILL \"$_velnor_gh_pid\" 2>/dev/null ) </dev/null >/dev/null 2>&1 & _velnor_gh_watch=$!\n    _velnor_gh_status=0\n    wait \"$_velnor_gh_pid\" || _velnor_gh_status=$?\n    kill -KILL \"$_velnor_gh_watch\" 2>/dev/null || true\n    wait \"$_velnor_gh_watch\" 2>/dev/null || true\n    exit \"$_velnor_gh_status\"\n  ) </dev/null\n}\nexport -f gh\nset -eu\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\nmkdir -p release-attestations\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\nsubject='manifest-assets/release-manifest.json'\ndigest=\"$(if command -v sha256sum >/dev/null 2>&1; then\n  sha256sum \"$subject\" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }'\nelif command -v shasum >/dev/null 2>&1; then\n  shasum -a 256 \"$subject\" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }'\nelse\n  echo 'no SHA-256 utility is available' >&2\n  exit 1\nfi)\"\ntest \"${#digest}\" -eq 64\ncase \"$digest\" in *[!0123456789abcdef]*|'') exit 1 ;; esac\nbundle=\"sha256:${digest}.jsonl\"\ntest ! -e \"$bundle\"\ndownloaded=false\nfor attempt in 1 2 3 4 5; do\n  if gh attestation download \"$subject\" --repo \"$GITHUB_REPOSITORY\" --predicate-type https://slsa.dev/provenance/v1 --limit 10 && test -s \"$bundle\"; then downloaded=true; break; fi\n  if test \"$attempt\" -lt 5; then sleep 3; fi\ndone\ntest \"$downloaded\" = true\ngh attestation verify \"$subject\" --repo \"$GITHUB_REPOSITORY\" --bundle \"$bundle\" --source-digest \"$GITHUB_SHA\" --source-ref refs/heads/main --signer-workflow \"${GITHUB_REPOSITORY}/.github/workflows/product-release-generator.yml\" --signer-digest \"$GITHUB_SHA\" > /dev/null\nmv \"$bundle\" \"release-attestations/release-manifest.json.intoto.jsonl\""
+      run: "gh() {\n  (\n    mise --no-config --no-env --no-hooks exec gh@2.103.2 -- gh \"$@\" & _velnor_gh_pid=$!\n    ( sleep 60; kill -TERM \"$_velnor_gh_pid\" 2>/dev/null; sleep 5; kill -KILL \"$_velnor_gh_pid\" 2>/dev/null ) </dev/null >/dev/null 2>&1 & _velnor_gh_watch=$!\n    _velnor_gh_status=0\n    wait \"$_velnor_gh_pid\" || _velnor_gh_status=$?\n    kill -KILL \"$_velnor_gh_watch\" 2>/dev/null || true\n    wait \"$_velnor_gh_watch\" 2>/dev/null || true\n    exit \"$_velnor_gh_status\"\n  ) </dev/null\n}\nexport -f gh\nset -eu\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\nmkdir -p release-attestations\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\nsubject='manifest-assets/release-manifest.json'\ndigest=\"$(if command -v sha256sum >/dev/null 2>&1; then\n  sha256sum \"$subject\" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }'\nelif command -v shasum >/dev/null 2>&1; then\n  shasum -a 256 \"$subject\" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }'\nelse\n  echo 'no SHA-256 utility is available' >&2\n  exit 1\nfi)\"\ntest \"${#digest}\" -eq 64\ncase \"$digest\" in *[!0123456789abcdef]*|'') exit 1 ;; esac\nbundle=\"sha256:${digest}.jsonl\"\ntest ! -e \"$bundle\"\ndownloaded=false\nfor attempt in 1 2 3 4 5; do\n  if gh attestation download \"$subject\" --repo \"$GITHUB_REPOSITORY\" --predicate-type https://slsa.dev/provenance/v1 --limit 10 && test -s \"$bundle\"; then downloaded=true; break; fi\n  if test \"$attempt\" -lt 5; then sleep 3; fi\ndone\ntest \"$downloaded\" = true\ngh attestation verify \"$subject\" --repo \"$GITHUB_REPOSITORY\" --bundle \"$bundle\" --source-digest \"$GITHUB_SHA\" --source-ref refs/heads/main --signer-workflow \"${GITHUB_REPOSITORY}/.github/workflows/product-release-generator.yml\" --signer-digest \"$GITHUB_SHA\" > /dev/null\nmv \"$bundle\" \"release-attestations/release-manifest.json.intoto.jsonl\""
     - name: Upload verified manifest attestation bundle
       uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
       with:

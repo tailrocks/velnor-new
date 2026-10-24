@@ -125,10 +125,6 @@ fn stable_with_tap() -> ConsumerReleaseSpec {
         Some(velnor_actions_contract::config::HomebrewTapDestination {
             formula: "Formula/scanner.rb".to_owned(),
         });
-    tap.policy
-        .updater
-        .inputs
-        .push("Formula/scanner.rb".to_owned());
     spec.homebrew_tap = Some(tap);
     spec
 }

@@ -68,9 +68,24 @@ pub(crate) fn extra_files(
         return Ok(Vec::new());
     }
     let request = workflow_request(config, execution, catalog, version)?;
-    render_schema2_workflows(&request).map_err(|err| OrchestratorError::Render {
-        problem: err.to_string(),
-    })
+    let mut files =
+        render_schema2_workflows(&request).map_err(|err| OrchestratorError::Render {
+            problem: err.to_string(),
+        })?;
+    if execution
+        .workflows
+        .contains(&RoutingWorkflow::GeneratorRelease)
+    {
+        let pins = crate::product_release_pins::homebrew_adoption_pins()?;
+        files.push(
+            velnor_actions_workflow_renderer::render_homebrew_adoption_callee(version, &pins)
+                .map_err(|err| OrchestratorError::Render {
+                    problem: err.to_string(),
+                })?
+                .file,
+        );
+    }
+    Ok(files)
 }
 
 fn proposed_text(root: &Path) -> Result<String, OrchestratorError> {

@@ -17,11 +17,11 @@ fn spec() -> UpgradesSpec {
         runs_on: "ubuntu-26.04".to_owned(),
         checkout_uses: CHECKOUT.to_owned(),
         mise_setup: MiseSetup {
-            uses: "jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550".to_owned(),
+            uses: "jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e".to_owned(),
             version: "2026.10.18".to_owned(),
             sha256: crate::setup::MISE_BINARY_SHA256_LINUX_X64.to_owned(),
         },
-        gh_version: "2.103.0".to_owned(),
+        gh_version: "2.103.2".to_owned(),
         generator_version: "0.1.0".to_owned(),
         generate_tools: vec![
             "jactionlint@2.3.0".to_owned(),
@@ -241,7 +241,7 @@ fn publish_mints_a_repository_scoped_write_token_and_never_force_pushes() {
     assert!(publish[check..mint].contains("upgrade_patch_unverified"));
     assert!(publish[check..mint].contains("velnor_upgrade_check_patch_applies"));
     assert!(!publish[push..].contains("git apply"), "{publish}");
-    assert!(publish.contains("mise --no-config --no-env --no-hooks install gh@2.103.0"));
+    assert!(publish.contains("mise --no-config --no-env --no-hooks install gh@2.103.2"));
     assert!(
         publish.contains("permissions:\n      contents: read"),
         "{publish}"

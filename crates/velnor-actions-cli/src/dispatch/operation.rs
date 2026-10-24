@@ -16,6 +16,12 @@ use super::{
 /// Private operation selected by the gate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum InternalOp {
+    /// Execute a closed SDK-owned Homebrew check through the common report engine.
+    ExecuteNativeHomebrewCheck,
+    /// Authenticate and install historical binary releases on a hosted Mac.
+    QualifyHomebrew,
+    /// Bounded SDK-owned initialization of independent Cargo target lanes.
+    SeedParallelTargets,
     /// Source-free authenticated selection of the retained tap candidate.
     TapContinuation,
     /// Read-only authenticated review proposal capture.
@@ -100,6 +106,9 @@ pub(super) enum InternalOp {
 
 pub(super) fn from_env() -> Option<InternalOp> {
     Some(match env::var(OP_ENV).as_deref() {
+        Ok("execute-native-homebrew-check-v1") => InternalOp::ExecuteNativeHomebrewCheck,
+        Ok("seed-parallel-targets-v1") => InternalOp::SeedParallelTargets,
+        Ok("qualify-homebrew-v1") => InternalOp::QualifyHomebrew,
         Ok(tag) if tag == SELECT_RELEASE_TAP_CONTINUATION_OP => InternalOp::TapContinuation,
         Ok(tag) if tag == CAPTURE_REVIEW_COMPLETION_OP => InternalOp::CaptureReviewCompletion,
         Ok(tag) if tag == EMIT_REVIEW_COMPLETION_OP => InternalOp::EmitReviewCompletion,

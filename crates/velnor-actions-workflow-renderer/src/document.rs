@@ -287,7 +287,7 @@ fn job_to_yaml(
         StepKind::Shell { env, .. }
         | StepKind::Action { env, .. }
         | StepKind::TaskExecution { env, .. } => !env.is_empty(),
-        StepKind::Internal { .. } => false,
+        StepKind::NativeCheckExecution { .. } | StepKind::Internal { .. } => false,
     });
     let mut job_env = if step_has_env && ctx.workflow_tasks.iter().any(|task| task.owns_job_id(id))
     {

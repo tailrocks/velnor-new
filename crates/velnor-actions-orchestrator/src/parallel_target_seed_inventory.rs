@@ -1,0 +1,331 @@
+use std::{
+    fs::{self, File, FileTimes},
+    io::{Read, Write},
+    os::fd::{AsFd, OwnedFd},
+    os::unix::fs::MetadataExt,
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+};
+
+use rustix::fs::{self as ufs, Dir, FileType, Mode, OFlags};
+
+use super::{
+    READ_CHUNK, SeedLimits,
+    execution::SeedError,
+    filesystem::{fail, open_parent, openat_dir, openat_parts, seed_io_error, statat},
+};
+
+#[derive(Clone, Copy, Debug)]
+pub(super) struct Identity {
+    pub(super) dev: u64,
+    pub(super) ino: u64,
+    pub(super) mode: u32,
+    pub(super) size: u64,
+    pub(super) atime: (i64, i64),
+    pub(super) mtime: (i64, i64),
+    pub(super) ctime: (i64, i64),
+    pub(super) uid: u32,
+    pub(super) gid: u32,
+    pub(super) nlink: u64,
+}
+impl Identity {
+    pub(super) fn from_metadata(m: &fs::Metadata) -> Self {
+        Self {
+            dev: m.dev(),
+            ino: m.ino(),
+            mode: m.mode(),
+            size: m.size(),
+            atime: (m.atime(), m.atime_nsec()),
+            mtime: (m.mtime(), m.mtime_nsec()),
+            ctime: (m.ctime(), m.ctime_nsec()),
+            uid: m.uid(),
+            gid: m.gid(),
+            nlink: m.nlink(),
+        }
+    }
+    pub(super) fn from_stat(s: &rustix::fs::Stat) -> Self {
+        Self {
+            dev: u64::try_from(s.st_dev).unwrap_or_default(),
+            ino: s.st_ino,
+            mode: u32::from(s.st_mode),
+            size: u64::try_from(s.st_size.max(0)).unwrap_or_default(),
+            atime: (s.st_atime, s.st_atime_nsec),
+            mtime: (s.st_mtime, s.st_mtime_nsec),
+            ctime: (s.st_ctime, s.st_ctime_nsec),
+            uid: s.st_uid,
+            gid: s.st_gid,
+            nlink: u64::from(s.st_nlink),
+        }
+    }
+    pub(super) fn same_object(&self, other: &Self) -> bool {
+        self.dev == other.dev && self.ino == other.ino
+    }
+    pub(super) fn matches_stat(&self, other: &rustix::fs::Stat) -> bool {
+        self == &Self::from_stat(other)
+    }
+}
+impl PartialEq for Identity {
+    fn eq(&self, other: &Self) -> bool {
+        self.dev == other.dev
+            && self.ino == other.ino
+            && self.mode == other.mode
+            && self.size == other.size
+            && self.mtime == other.mtime
+            && self.ctime == other.ctime
+            && self.uid == other.uid
+            && self.gid == other.gid
+            && self.nlink == other.nlink
+    }
+}
+impl Eq for Identity {}
+
+pub(super) struct Entry {
+    pub(super) parts: Vec<String>,
+    pub(super) identity: Identity,
+}
+impl Entry {
+    pub(super) fn new(parts: Vec<String>, stat: rustix::fs::Stat) -> Self {
+        Self {
+            parts,
+            identity: Identity::from_stat(&stat),
+        }
+    }
+}
+
+pub(super) struct Snapshot {
+    pub(super) started: Instant,
+    pub(super) limits: SeedLimits,
+    pub(super) entries: Vec<Entry>,
+    pub(super) bytes: u64,
+}
+impl Snapshot {
+    pub(super) fn new(started: Instant, limits: SeedLimits) -> Self {
+        Self {
+            started,
+            limits,
+            entries: Vec::new(),
+            bytes: 0,
+        }
+    }
+    pub(super) fn checkpoint(&self) -> Result<(), SeedError> {
+        if self.started.elapsed() >= self.limits.seconds {
+            Err(SeedError::Skip("elapsed limit"))
+        } else {
+            Ok(())
+        }
+    }
+    pub(super) fn add_bytes(&mut self, bytes: u64) -> Result<(), SeedError> {
+        self.bytes = self
+            .bytes
+            .checked_add(bytes)
+            .ok_or_else(|| fail("byte_budget_overflow"))?;
+        Ok(())
+    }
+    pub(super) fn inventory(
+        &mut self,
+        parent: &OwnedFd,
+        prefix: &mut Vec<String>,
+    ) -> Result<(), SeedError> {
+        self.checkpoint()?;
+        if prefix.len() > 64 {
+            return Err(fail("source_depth_limit"));
+        }
+        if self.entries.len() >= self.limits.entries {
+            return Err(SeedError::Skip("entry limit"));
+        }
+        let mut names = Vec::new();
+        for entry in Dir::read_from(parent).map_err(seed_io_error)? {
+            self.checkpoint()?;
+            let entry = entry.map_err(seed_io_error)?;
+            let name = entry
+                .file_name()
+                .to_str()
+                .map_err(|_| fail("source_name_not_utf8"))?;
+            if name == "." || name == ".." {
+                continue;
+            }
+            if prefix.as_slice() == ["debug"] && name == ".cargo-lock" {
+                continue;
+            }
+            // Bound enumeration before retaining another filename.
+            if self.entries.len().saturating_add(names.len()) >= self.limits.entries {
+                return Err(SeedError::Skip("entry limit"));
+            }
+            names.push(name.to_owned());
+        }
+        names.sort();
+        for name in names {
+            self.checkpoint()?;
+            if prefix.as_slice() == ["debug"] && name == ".cargo-lock" {
+                continue;
+            }
+            let stat = statat(parent, &name).map_err(seed_io_error)?;
+            let ty = FileType::from_raw_mode(stat.st_mode);
+            if ty != FileType::Directory && ty != FileType::RegularFile {
+                return Err(fail("source_symlink_or_special_file"));
+            }
+            prefix.push(name.clone());
+            if self.entries.len() >= self.limits.entries {
+                prefix.pop();
+                return Err(SeedError::Skip("entry limit"));
+            }
+            self.entries.push(Entry::new(prefix.clone(), stat));
+            if ty == FileType::Directory {
+                let child = openat_dir(parent, &name).map_err(seed_io_error)?;
+                let opened = Identity::from_stat(&ufs::fstat(&child).map_err(seed_io_error)?);
+                let entry = self
+                    .entries
+                    .last()
+                    .ok_or_else(|| fail("source_inventory_entry_missing"))?;
+                if opened != entry.identity {
+                    prefix.pop();
+                    return Err(fail("source_directory_changed"));
+                }
+                self.inventory(&child, prefix)?;
+                if Identity::from_stat(&ufs::fstat(&child).map_err(seed_io_error)?) != opened {
+                    prefix.pop();
+                    return Err(fail("source_directory_changed"));
+                }
+            } else {
+                self.add_bytes(u64::try_from(stat.st_size.max(0)).unwrap_or_default())?;
+            }
+            prefix.pop();
+        }
+        Ok(())
+    }
+    pub(super) fn validate_source(&self, root: &OwnedFd) -> Result<(), SeedError> {
+        for entry in &self.entries {
+            self.checkpoint()?;
+            let (parent, name) = open_parent(root, &entry.parts)?;
+            let current = statat(&parent, &name).map_err(seed_io_error)?;
+            if Identity::from_stat(&current) != entry.identity {
+                return Err(fail("source_changed_before_admission"));
+            }
+        }
+        Ok(())
+    }
+    pub(super) fn copy_to(&self, source: &OwnedFd, stage: &OwnedFd) -> Result<(), SeedError> {
+        for entry in &self.entries {
+            self.checkpoint()?;
+            let (src_parent, name) = open_parent(source, &entry.parts)?;
+            if Identity::from_stat(&statat(&src_parent, &name).map_err(seed_io_error)?)
+                != entry.identity
+            {
+                return Err(fail("named_source_changed"));
+            }
+            let dst_parent = openat_parts(stage, &entry.parts[..entry.parts.len() - 1])?;
+            let mode =
+                u16::try_from(entry.identity.mode).map_err(|_| fail("source_file_mode_invalid"))?;
+            let ty = FileType::from_raw_mode(mode);
+            if ty == FileType::Directory {
+                ufs::mkdirat(&dst_parent, &name, Mode::from_raw_mode(0o700))
+                    .map_err(seed_io_error)?;
+            } else {
+                let input = ufs::openat(
+                    &src_parent,
+                    &name,
+                    OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
+                    Mode::empty(),
+                )
+                .map_err(seed_io_error)?;
+                let output = ufs::openat(
+                    &dst_parent,
+                    &name,
+                    OFlags::WRONLY
+                        | OFlags::CREATE
+                        | OFlags::EXCL
+                        | OFlags::NOFOLLOW
+                        | OFlags::CLOEXEC,
+                    Mode::from_raw_mode(0o600),
+                )
+                .map_err(seed_io_error)?;
+                copy_file(self, &input, &output, entry.identity)?;
+            }
+            if Identity::from_stat(&statat(&src_parent, &name).map_err(seed_io_error)?)
+                != entry.identity
+            {
+                return Err(fail("source_changed_during_copy"));
+            }
+        }
+        for entry in self.entries.iter().rev() {
+            let mode =
+                u16::try_from(entry.identity.mode).map_err(|_| fail("source_file_mode_invalid"))?;
+            if FileType::from_raw_mode(mode) != FileType::Directory {
+                continue;
+            }
+            let dir = openat_parts(stage, &entry.parts)?;
+            let mode = u16::try_from(entry.identity.mode & 0o7777)
+                .map_err(|_| fail("source_file_mode_invalid"))?;
+            ufs::fchmod(&dir, Mode::from_raw_mode(mode)).map_err(seed_io_error)?;
+            set_times(&dir, &entry.identity)?;
+        }
+        Ok(())
+    }
+}
+
+fn copy_file(
+    snapshot: &Snapshot,
+    input: &OwnedFd,
+    output: &OwnedFd,
+    expected: Identity,
+) -> Result<(), SeedError> {
+    let mut input = File::from(input.try_clone().map_err(seed_io_error)?);
+    let mut output = File::from(output.try_clone().map_err(seed_io_error)?);
+    if Identity::from_metadata(&input.metadata().map_err(seed_io_error)?) != expected {
+        return Err(fail("source_file_changed"));
+    }
+    let mut copied = 0u64;
+    let mut buffer = vec![0; READ_CHUNK];
+    loop {
+        snapshot.checkpoint()?;
+        let count = input.read(&mut buffer).map_err(seed_io_error)?;
+        if count == 0 {
+            break;
+        }
+        copied = copied
+            .checked_add(count as u64)
+            .ok_or_else(|| fail("byte_budget_overflow"))?;
+        if copied > expected.size {
+            return Err(fail("source_grew_beyond_budget"));
+        }
+        output.write_all(&buffer[..count]).map_err(seed_io_error)?;
+    }
+    if copied != expected.size
+        || Identity::from_metadata(&input.metadata().map_err(seed_io_error)?) != expected
+    {
+        return Err(fail("source_changed_during_copy"));
+    }
+    let out = output.metadata().map_err(seed_io_error)?;
+    if out.nlink() != 1 || (out.dev(), out.ino()) == (expected.dev, expected.ino) {
+        return Err(fail("target_copy_not_independent"));
+    }
+    let mode =
+        u16::try_from(expected.mode & 0o7777).map_err(|_| fail("source_file_mode_invalid"))?;
+    ufs::fchmod(&output, Mode::from_raw_mode(mode)).map_err(seed_io_error)?;
+    set_times(&output, &expected)?;
+    Ok(())
+}
+
+fn set_times(fd: &impl AsFd, identity: &Identity) -> Result<(), SeedError> {
+    let file = File::from(fd.as_fd().try_clone_to_owned().map_err(seed_io_error)?);
+    file.set_times(
+        FileTimes::new()
+            .set_accessed(system_time(identity.atime))
+            .set_modified(system_time(identity.mtime)),
+    )
+    .map_err(seed_io_error)?;
+    Ok(())
+}
+
+fn system_time((seconds, nanos): (i64, i64)) -> SystemTime {
+    let nanoseconds = i128::from(seconds) * 1_000_000_000 + i128::from(nanos);
+    let magnitude = nanoseconds.unsigned_abs();
+    let duration = Duration::new(
+        u64::try_from(magnitude / 1_000_000_000).unwrap_or(u64::MAX),
+        (magnitude % 1_000_000_000) as u32,
+    );
+    if nanoseconds < 0 {
+        UNIX_EPOCH.checked_sub(duration).unwrap_or(UNIX_EPOCH)
+    } else {
+        UNIX_EPOCH.checked_add(duration).unwrap_or(UNIX_EPOCH)
+    }
+}

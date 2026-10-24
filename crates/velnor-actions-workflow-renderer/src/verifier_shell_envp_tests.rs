@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -14,20 +15,6 @@ use super::{
 };
 
 type TestResult = Result<(), Box<dyn Error>>;
-const RAW_EXECVE_HELPER: &str = r#"
-import ctypes, os, sys
-args = sys.argv[1:]
-separator = args.index("--env")
-argv = [os.fsencode(value) for value in args[:separator]]
-envp = [os.fsencode(value) for value in args[separator + 1:]]
-argv_array = (ctypes.c_char_p * (len(argv) + 1))(*argv, None)
-envp_array = (ctypes.c_char_p * (len(envp) + 1))(*envp, None)
-libc = ctypes.CDLL(None, use_errno=True)
-libc.execve.argtypes = [ctypes.c_char_p, ctypes.POINTER(ctypes.c_char_p), ctypes.POINTER(ctypes.c_char_p)]
-libc.execve(argv[0], argv_array, envp_array)
-error = ctypes.get_errno()
-raise OSError(error, os.strerror(error))
-"#;
 
 fn available_bash_paths() -> Result<Vec<PathBuf>, Box<dyn Error>> {
     let candidates = [
@@ -112,29 +99,43 @@ fn emitted_env(root: &Path, step: &Yaml, additions: &[(&str, &str)]) -> BTreeMap
     environment
 }
 
-fn run_with_raw_envp(
+fn run_with_adversarial_environment(
     root: &Path,
     step: &Yaml,
     additions: &[(&str, &str)],
-    bare_entries: &[&str],
 ) -> Result<Output, Box<dyn Error>> {
     fs::write(root.join("run.sh"), str_field(step_entries(step), "run"))?;
     let arguments = emitted_argv(root, step);
     let environment = emitted_env(root, step, additions);
-    let mut command = Command::new("python3");
-    command.args(["-c", RAW_EXECVE_HELPER]);
-    command.args(arguments);
-    command.arg("--env");
-    command.args(
-        environment
-            .iter()
-            .map(|(key, value)| format!("{key}={value}")),
-    );
-    command.args(bare_entries);
+    let executable = arguments.first().ok_or("missing shell executable")?;
+    let mut command = Command::new(executable);
+    command.args(arguments.iter().skip(1));
     command.env_clear();
     command.env("PATH", "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin");
+    for (key, value) in environment {
+        command.env(key, value);
+    }
     command.current_dir(root);
     Ok(command.output()?)
+}
+
+fn scanner_env_mock(root: &Path, sentinels: usize) -> Result<PathBuf, Box<dyn Error>> {
+    let path = root.join("env-scan-mock");
+    // The real environment cannot contain a NUL-delimited entry without '='.
+    // Emit the scanner's byte protocol directly to cover that malformed entry
+    // while keeping process creation safe and interpreter-free.
+    let mut records = String::from("BASH_FUNC_env%%=ignored\\000BASH_FUNC_sh%%=ignored\\000");
+    for _ in 0..sentinels {
+        records.push_str("VELNOR_VERIFIER_ENV_SCAN_COMPLETE\\000");
+    }
+    fs::write(
+        &path,
+        format!("#!/bin/sh\n[ \"$1\" = -0 ] || exit 2\nprintf '{records}'\n"),
+    )?;
+    let mut permissions = fs::metadata(&path)?.permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(&path, permissions)?;
+    Ok(path)
 }
 
 fn hostile_environment(root: &Path, bash_env: &Path, marker: &Path) -> Vec<(&'static str, String)> {
@@ -173,7 +174,7 @@ fn hostile_environment(root: &Path, bash_env: &Path, marker: &Path) -> Vec<(&'st
 }
 
 #[test]
-fn privileged_shell_normalizes_raw_envp_and_removes_hidden_functions() -> TestResult {
+fn privileged_shell_filters_hidden_functions_and_scrubs_hostile_environment() -> TestResult {
     let script = format!(
         r#"test "$PATH" = "{path}"; printf '%s\n' "$PATH" > "$RUNNER_TEMP/observed-path"; command -v sh > "$RUNNER_TEMP/observed-sh"; env > "$RUNNER_TEMP/observed-env"; sh -c 'printf "%s\n" nested-shell-ok > "$RUNNER_TEMP/nested-shell"'; printf '%s\n' verifier-ok"#,
         path = crate::VERIFY_PATH
@@ -190,18 +191,37 @@ fn privileged_shell_normalizes_raw_envp_and_removes_hidden_functions() -> TestRe
             .iter()
             .map(|(key, value)| (*key, value.as_str()))
             .collect::<Vec<_>>();
-        let output = run_with_raw_envp(
-            root.path(),
-            &step,
-            &additions,
-            &["VELNOR_VERIFIER_ENV_SCAN_COMPLETE"],
-        )?;
+        let mock = scanner_env_mock(root.path(), 0)?;
+        let step = replace_run(&step, "/usr/bin/env -0", &format!("{} -0", mock.display()));
+        let output = run_with_adversarial_environment(root.path(), &step, &additions)?;
         assert_verifier_output(root.path(), &marker, output)?;
         let child_env = fs::read_to_string(root.path().join("observed-env"))?;
         assert!(child_env.lines().any(|line| {
             line == "VELNOR_VERIFIER_ENV_SCAN_COMPLETE=VELNOR_VERIFIER_ENV_SCAN_COMPLETE"
         }));
     }
+    Ok(())
+}
+
+#[test]
+fn duplicate_env_scan_completion_stops_before_verifier_body() -> TestResult {
+    let root = Scratch::new()?;
+    let body_marker = root.path().join("body-ran");
+    let step = rendered_probe(
+        StepRole::VerifyRustManifest,
+        r#"printf body > "$RUNNER_TEMP/body-ran""#,
+    );
+    let mock = scanner_env_mock(root.path(), 1)?;
+    let broken = replace_run(&step, "/usr/bin/env -0", &format!("{} -0", mock.display()));
+    let output = run_emitted_step(root.path(), &broken, &[])?;
+    assert!(
+        !output.status.success(),
+        "duplicate scanner sentinel passed"
+    );
+    assert!(
+        !body_marker.exists(),
+        "verifier body ran after duplicate sentinel"
+    );
     Ok(())
 }
 

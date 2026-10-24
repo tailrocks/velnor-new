@@ -16,27 +16,41 @@ local fixtureTrees = List("fixtures/**", "docs/proposed/opentofu-goldens/**")
 steps {
   ["mise"] = Builtins.mise
   ["gitleaks"] = Builtins.gitleaks
-  // `--all`: both workspace roots (root and crates/velnor-runner) are virtual manifests, where a plain
-  // `cargo fmt --manifest-path` fails with "Failed to find targets".
+  // `--all` formats every member of either workspace; the adapter enters the selected manifest's directory
+  // and lets Cargo discover the applicable workspace from there.
   ["cargo_fmt"] = (Builtins.cargo_fmt) {
     exclude = fixtureTrees
-    check { command = "cargo fmt --all --check --manifest-path {{workspace_indicator}}" }
-    check_list_files { command = "cargo fmt --all --check --manifest-path {{workspace_indicator}} -- --files-with-diff" }
+    check { command = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-cargo.sh\" \"$(pwd -P)/{{workspace_indicator}}\" fmt-check" }
+    check_list_files { command = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-cargo.sh\" \"$(pwd -P)/{{workspace_indicator}}\" fmt-files" }
     fix = new Config.CommandSpec {
-      command = "bash scripts/hk-fix-write-guard.sh cargo fmt --all --manifest-path {{workspace_indicator}}"
+      command = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-fix-write-guard.sh\" bash \"$(git rev-parse --show-toplevel)/scripts/hk-cargo.sh\" \"$(pwd -P)/{{workspace_indicator}}\" fmt-fix"
       effect = "write"
     }
   }
-  ["cargo_check"] = (Builtins.cargo_check) { exclude = fixtureTrees }
+  ["cargo_check"] = (Builtins.cargo_check) {
+    exclude = fixtureTrees
+    workspace_indicator = "Cargo.toml"
+    check { command = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-cargo.sh\" \"$(pwd -P)/{{workspace_indicator}}\" check" }
+    fix = new Config.CommandSpec {
+      command = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-fix-write-guard.sh\" bash \"$(git rev-parse --show-toplevel)/scripts/hk-cargo.sh\" \"$(pwd -P)/{{workspace_indicator}}\" check-fix"
+      effect = "write"
+    }
+  }
   ["cargo_clippy"] = (Builtins.cargo_clippy) {
     exclude = fixtureTrees
+    check { command = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-cargo.sh\" \"$(pwd -P)/{{workspace_indicator}}\" clippy" }
     fix = new Config.CommandSpec {
-      command = "bash scripts/hk-fix-write-guard.sh cargo clippy --manifest-path {{workspace_indicator}} --fix --allow-dirty --allow-staged --quiet"
+      command = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-fix-write-guard.sh\" bash \"$(git rev-parse --show-toplevel)/scripts/hk-cargo.sh\" \"$(pwd -P)/{{workspace_indicator}}\" clippy-fix"
       effect = "write"
     }
   }
   // Both deny.toml files (root and crates/velnor-runner) stay; each governs its own workspace.
-  ["cargo_deny"] = (Builtins.cargo_deny) { exclude = fixtureTrees }
+  ["cargo_deny"] = (Builtins.cargo_deny) {
+    exclude = fixtureTrees
+    dir = null
+    workspace_indicator = "Cargo.toml"
+    check { command = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-cargo.sh\" \"$(pwd -P)/{{workspace_indicator}}\" deny" }
+  }
   ["rust-toolchain-mirror"] {
     glob = List("mise.toml", "rust-toolchain.toml")
     check = "sh scripts/check-rust-toolchain-mirror.sh"

@@ -14,7 +14,7 @@ runs:
   using: composite
   steps:
     - name: Setup Mise
-      uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550
+      uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e
       with:
         version: 2026.10.18
         sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
@@ -64,7 +64,7 @@ runs:
         path: linux-assets
     - name: Prevalidate and extract uploaded candidate archive
       shell: bash
-      run: "set -eu\nbash scripts/with-owned-archive-guard.sh -- python3 scripts/generator-release/extract-candidate.py 'linux-assets/generator-linux-assets.tar' 'linux-assets' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.sha256' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.provenance.json'"
+      run: "set -eu\nbash scripts/with-owned-archive-guard.sh -- .velnor/archive-guard/bin/velnor-archive-guard extract-candidate 'linux-assets/generator-linux-assets.tar' 'linux-assets' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.sha256' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.provenance.json'"
     - name: Verify extracted candidate file types and executable mode
       shell: bash
       run: "set -eu\ntest -f linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu\ntest ! -L linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu\ntest -x linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu\ntest -f linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.sha256\ntest ! -L linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.sha256\ntest ! -x linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.sha256\ntest -f linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.provenance.json\ntest ! -L linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.provenance.json\ntest ! -x linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.provenance.json"

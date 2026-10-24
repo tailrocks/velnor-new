@@ -61,7 +61,7 @@ jobs:
           persist-credentials: "false"
           ref: ${{ inputs.source_sha }}
       - name: Setup Mise
-        uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550
+        uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e
         with:
           version: 2026.10.18
           sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
@@ -71,7 +71,7 @@ jobs:
           cache_save: "false"
       - name: Install pinned release gate tools
         shell: bash
-        run: mise --no-config --no-env --no-hooks install gh@2.103.0 jactionlint@2.3.0 shellcheck@0.11.0
+        run: mise --no-config --no-env --no-hooks install gh@2.103.2 jactionlint@2.3.0 shellcheck@0.11.0
       - name: Verify jactionlint
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -95,7 +95,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
-        run: "gh() {\n  (\n    mise --no-config --no-env --no-hooks exec gh@2.103.0 -- gh \"$@\" & _velnor_gh_pid=$!\n    ( sleep 60; kill -TERM \"$_velnor_gh_pid\" 2>/dev/null; sleep 5; kill -KILL \"$_velnor_gh_pid\" 2>/dev/null ) </dev/null >/dev/null 2>&1 & _velnor_gh_watch=$!\n    _velnor_gh_status=0\n    wait \"$_velnor_gh_pid\" || _velnor_gh_status=$?\n    kill -KILL \"$_velnor_gh_watch\" 2>/dev/null || true\n    wait \"$_velnor_gh_watch\" 2>/dev/null || true\n    exit \"$_velnor_gh_status\"\n  ) </dev/null\n}\nexport -f gh\nset -eu\ntest \"$GITHUB_REPOSITORY\" = 'tailrocks/velnor-new'\ntest \"$GITHUB_REF\" = 'refs/heads/main'\ntest \"$GITHUB_EVENT_NAME\" = 'workflow_dispatch'\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nlist_exact_source_ci_runs() {\n  local _velnor_label=\"$1\"\n  shift\n  local _velnor_listing _velnor_delay\n  for _velnor_delay in 3 6 12 24 45 ''; do\n    _velnor_listing=\"$(\"$@\")\" || return 1\n    if ! printf '%s\\n' \"$_velnor_listing\" | jq -e '[.[] | (.workflow_runs // [])[]] | length == 0' >/dev/null 2>&1; then\n      printf '%s\\n' \"$_velnor_listing\"\n      return 0\n    fi\n    [[ -n \"$_velnor_delay\" ]] || break\n    printf '%s: the CI run listing is empty; listing again in %ss\\n' \"$_velnor_label\" \"$_velnor_delay\" >&2\n    sleep \"$_velnor_delay\"\n  done\n  printf '%s: the CI run listing stayed empty after 6 attempts\\n' \"$_velnor_label\" >&2\n  printf '%s\\n' \"$_velnor_listing\"\n}\nruns=\"$(list_exact_source_ci_runs 'verify release source' gh api --paginate --slurp \"repos/tailrocks/velnor-new/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&per_page=100\")\"\nrun=\"$(printf '%s\\n' \"$runs\" | jq -ce --arg sha \"$GITHUB_SHA\" --arg repo 'tailrocks/velnor-new' '[.[] | (.workflow_runs // [])[] | select(.path == \".github/workflows/ci.yml\" and .head_sha == $sha and .head_branch == \"main\" and .head_repository.full_name == $repo and .event == \"push\")] | sort_by([.run_number, .id]) | last // error(\"no exact-source main CI run\")')\"\ntest \"$(printf '%s\\n' \"$run\" | jq -r .status)\" = completed\ntest \"$(printf '%s\\n' \"$run\" | jq -r .conclusion)\" = success\nrun_id=\"$(printf '%s\\n' \"$run\" | jq -r .id)\"\nattempt=\"$(printf '%s\\n' \"$run\" | jq -r .run_attempt)\"\njobs=\"$(gh api --paginate --slurp \"repos/tailrocks/velnor-new/actions/runs/$run_id/attempts/$attempt/jobs?per_page=100\")\"\nprintf '%s\\n' \"$jobs\" | jq -e --arg sha \"$GITHUB_SHA\" '[.[] | (.jobs // [])[] | select(.name == \"Required\")] | length == 1 and .[0].head_sha == $sha and .[0].head_branch == \"main\" and .[0].status == \"completed\" and .[0].conclusion == \"success\"' >/dev/null\ntest \"$(gh api repos/tailrocks/velnor-new/commits/main --jq .sha)\" = \"$GITHUB_SHA\""
+        run: "gh() {\n  (\n    mise --no-config --no-env --no-hooks exec gh@2.103.2 -- gh \"$@\" & _velnor_gh_pid=$!\n    ( sleep 60; kill -TERM \"$_velnor_gh_pid\" 2>/dev/null; sleep 5; kill -KILL \"$_velnor_gh_pid\" 2>/dev/null ) </dev/null >/dev/null 2>&1 & _velnor_gh_watch=$!\n    _velnor_gh_status=0\n    wait \"$_velnor_gh_pid\" || _velnor_gh_status=$?\n    kill -KILL \"$_velnor_gh_watch\" 2>/dev/null || true\n    wait \"$_velnor_gh_watch\" 2>/dev/null || true\n    exit \"$_velnor_gh_status\"\n  ) </dev/null\n}\nexport -f gh\nset -eu\ntest \"$GITHUB_REPOSITORY\" = 'tailrocks/velnor-new'\ntest \"$GITHUB_REF\" = 'refs/heads/main'\ntest \"$GITHUB_EVENT_NAME\" = 'workflow_dispatch'\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nlist_exact_source_ci_runs() {\n  local _velnor_label=\"$1\"\n  shift\n  local _velnor_listing _velnor_delay\n  for _velnor_delay in 3 6 12 24 45 ''; do\n    _velnor_listing=\"$(\"$@\")\" || return 1\n    if ! printf '%s\\n' \"$_velnor_listing\" | jq -e '[.[] | (.workflow_runs // [])[]] | length == 0' >/dev/null 2>&1; then\n      printf '%s\\n' \"$_velnor_listing\"\n      return 0\n    fi\n    [[ -n \"$_velnor_delay\" ]] || break\n    printf '%s: the CI run listing is empty; listing again in %ss\\n' \"$_velnor_label\" \"$_velnor_delay\" >&2\n    sleep \"$_velnor_delay\"\n  done\n  printf '%s: the CI run listing stayed empty after 6 attempts\\n' \"$_velnor_label\" >&2\n  printf '%s\\n' \"$_velnor_listing\"\n}\nruns=\"$(list_exact_source_ci_runs 'verify release source' gh api --paginate --slurp \"repos/tailrocks/velnor-new/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&per_page=100\")\"\nrun=\"$(printf '%s\\n' \"$runs\" | jq -ce --arg sha \"$GITHUB_SHA\" --arg repo 'tailrocks/velnor-new' '[.[] | (.workflow_runs // [])[] | select(.path == \".github/workflows/ci.yml\" and .head_sha == $sha and .head_branch == \"main\" and .head_repository.full_name == $repo and .event == \"push\")] | sort_by([.run_number, .id]) | last // error(\"no exact-source main CI run\")')\"\ntest \"$(printf '%s\\n' \"$run\" | jq -r .status)\" = completed\ntest \"$(printf '%s\\n' \"$run\" | jq -r .conclusion)\" = success\nrun_id=\"$(printf '%s\\n' \"$run\" | jq -r .id)\"\nattempt=\"$(printf '%s\\n' \"$run\" | jq -r .run_attempt)\"\njobs=\"$(gh api --paginate --slurp \"repos/tailrocks/velnor-new/actions/runs/$run_id/attempts/$attempt/jobs?per_page=100\")\"\nprintf '%s\\n' \"$jobs\" | jq -e --arg sha \"$GITHUB_SHA\" '[.[] | (.jobs // [])[] | select(.name == \"Required\")] | length == 1 and .[0].head_sha == $sha and .[0].head_branch == \"main\" and .[0].status == \"completed\" and .[0].conclusion == \"success\"' >/dev/null\ntest \"$(gh api repos/tailrocks/velnor-new/commits/main --jq .sha)\" = \"$GITHUB_SHA\""
       - name: Check release freshness gate
         shell: bash
         run: bash scripts/check-freshness.sh
@@ -103,7 +103,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
-        run: "gh() {\n  (\n    mise --no-config --no-env --no-hooks exec gh@2.103.0 -- gh \"$@\" & _velnor_gh_pid=$!\n    ( sleep 60; kill -TERM \"$_velnor_gh_pid\" 2>/dev/null; sleep 5; kill -KILL \"$_velnor_gh_pid\" 2>/dev/null ) </dev/null >/dev/null 2>&1 & _velnor_gh_watch=$!\n    _velnor_gh_status=0\n    wait \"$_velnor_gh_pid\" || _velnor_gh_status=$?\n    kill -KILL \"$_velnor_gh_watch\" 2>/dev/null || true\n    wait \"$_velnor_gh_watch\" 2>/dev/null || true\n    exit \"$_velnor_gh_status\"\n  ) </dev/null\n}\nexport -f gh\nset -eu\ntest \"$GITHUB_REF\" = \"refs/heads/main\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$(gh api repos/tailrocks/velnor-new/commits/main --jq .sha)\" = \"$GITHUB_SHA\""
+        run: "gh() {\n  (\n    mise --no-config --no-env --no-hooks exec gh@2.103.2 -- gh \"$@\" & _velnor_gh_pid=$!\n    ( sleep 60; kill -TERM \"$_velnor_gh_pid\" 2>/dev/null; sleep 5; kill -KILL \"$_velnor_gh_pid\" 2>/dev/null ) </dev/null >/dev/null 2>&1 & _velnor_gh_watch=$!\n    _velnor_gh_status=0\n    wait \"$_velnor_gh_pid\" || _velnor_gh_status=$?\n    kill -KILL \"$_velnor_gh_watch\" 2>/dev/null || true\n    wait \"$_velnor_gh_watch\" 2>/dev/null || true\n    exit \"$_velnor_gh_status\"\n  ) </dev/null\n}\nexport -f gh\nset -eu\ntest \"$GITHUB_REF\" = \"refs/heads/main\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$(gh api repos/tailrocks/velnor-new/commits/main --jq .sha)\" = \"$GITHUB_SHA\""
   build-linux:
     runs-on: ubuntu-26.04
     timeout-minutes: 10
@@ -147,9 +147,10 @@ jobs:
     env:
       VELNOR_RELEASE_TARGET: x86_64-unknown-linux-gnu
     steps:
-      - name: Fetch exact public source without an action post hook
+      - name: Fetch exact public qualification source without credentials
         shell: bash
-        run: "set -eu\npython3 - \"$GITHUB_WORKSPACE\" \"$GITHUB_REPOSITORY\" \"$GITHUB_SHA\" <<'PY'\nimport os\nimport re\nimport subprocess\nimport sys\n\nworkspace, repository, commit = sys.argv[1:]\nif repository != \"tailrocks/velnor-new\" or re.fullmatch(r\"[0-9a-f]{40}\", commit) is None:\n    raise SystemExit(\"qualification source identity is invalid\")\n\nenvironment = os.environ.copy()\nfor name in tuple(environment):\n    if name.startswith(\"GIT_\") or name in {\n        \"ACTIONS_ID_TOKEN_REQUEST_TOKEN\",\n        \"ACTIONS_ID_TOKEN_REQUEST_URL\",\n        \"ACTIONS_RUNTIME_TOKEN\",\n        \"GITHUB_TOKEN\",\n        \"GH_TOKEN\",\n        \"MISE_GITHUB_TOKEN\",\n    }:\n        environment.pop(name, None)\nenvironment.update(\n    GIT_CONFIG_GLOBAL=os.devnull,\n    GIT_CONFIG_NOSYSTEM=\"1\",\n    GIT_TERMINAL_PROMPT=\"0\",\n)\n\ndef run(command, timeout):\n    subprocess.run(\n        command,\n        cwd=workspace,\n        env=environment,\n        check=True,\n        timeout=timeout,\n    )\n\nrun([\"git\", \"init\", \"--quiet\"], timeout=10)\nrun(\n    [\"git\", \"-c\", \"credential.helper=\", \"fetch\", \"--quiet\", \"--depth=1\", \"--no-tags\",\n     f\"https://github.com/{repository}.git\", commit],\n    timeout=60,\n)\nrun([\"git\", \"checkout\", \"--quiet\", \"--detach\", \"FETCH_HEAD\"], timeout=10)\nhead = subprocess.run(\n    [\"git\", \"rev-parse\", \"HEAD\"],\n    cwd=workspace,\n    env=environment,\n    check=True,\n    capture_output=True,\n    text=True,\n    timeout=5,\n).stdout.strip()\nif head != commit:\n    raise SystemExit(\"qualification source does not match the requested commit\")\nPY"
+        run: "set -euo pipefail\n[[ \"$GITHUB_REPOSITORY\" == tailrocks/velnor-new && \"$GITHUB_SHA\" =~ ^[0-9a-f]{40}$ ]] || {\n  printf '%s\\n' 'qualification source identity is invalid' >&2\n  exit 1\n}\n[[ \"$GITHUB_WORKSPACE\" == /* && -d \"$GITHUB_WORKSPACE\" && ! -L \"$GITHUB_WORKSPACE\" ]]\ncd -- \"$GITHUB_WORKSPACE\"\n[[ \"$(pwd -P)\" == \"$GITHUB_WORKSPACE\" ]]\n# A clean environment prevents inherited Git configuration, helpers, hooks,\n# credentials, and OIDC state from reaching source acquisition.\n/usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 GIT_ALLOW_PROTOCOL=https /usr/bin/git -c credential.helper= -c core.hooksPath=/dev/null -c submodule.recurse=false -c protocol.file.allow=never -c http.lowSpeedLimit=1 -c http.lowSpeedTime=60 init --quiet --template=/dev/null\n/usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 GIT_ALLOW_PROTOCOL=https /usr/bin/git -c credential.helper= -c core.hooksPath=/dev/null -c submodule.recurse=false -c protocol.file.allow=never -c http.lowSpeedLimit=1 -c http.lowSpeedTime=60 fetch --quiet --depth=1 --no-tags --no-recurse-submodules https://github.com/tailrocks/velnor-new.git \"$GITHUB_SHA\"\n/usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 GIT_ALLOW_PROTOCOL=https /usr/bin/git -c credential.helper= -c core.hooksPath=/dev/null -c submodule.recurse=false -c protocol.file.allow=never -c http.lowSpeedLimit=1 -c http.lowSpeedTime=60 checkout --quiet --detach FETCH_HEAD\n[[ \"$(/usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 GIT_ALLOW_PROTOCOL=https /usr/bin/git -c credential.helper= -c core.hooksPath=/dev/null -c submodule.recurse=false -c protocol.file.allow=never -c http.lowSpeedLimit=1 -c http.lowSpeedTime=60 rev-parse --verify 'HEAD^{commit}')\" == \"$GITHUB_SHA\" ]] || {\n  printf '%s\\n' 'qualification source does not match the requested commit' >&2\n  exit 1\n}"
+        timeout-minutes: 2
       - name: Qualify Linux velnor-actions
         uses: ./.github/actions/generator-release-qualify-linux # zizmor: ignore[self-repository]
         with:
@@ -224,11 +225,41 @@ jobs:
     env:
       VELNOR_RELEASE_TARGET: aarch64-apple-darwin
     steps:
-      - name: Fetch exact public source without an action post hook
+      - name: Fetch exact public qualification source without credentials
         shell: bash
-        run: "set -eu\npython3 - \"$GITHUB_WORKSPACE\" \"$GITHUB_REPOSITORY\" \"$GITHUB_SHA\" <<'PY'\nimport os\nimport re\nimport subprocess\nimport sys\n\nworkspace, repository, commit = sys.argv[1:]\nif repository != \"tailrocks/velnor-new\" or re.fullmatch(r\"[0-9a-f]{40}\", commit) is None:\n    raise SystemExit(\"qualification source identity is invalid\")\n\nenvironment = os.environ.copy()\nfor name in tuple(environment):\n    if name.startswith(\"GIT_\") or name in {\n        \"ACTIONS_ID_TOKEN_REQUEST_TOKEN\",\n        \"ACTIONS_ID_TOKEN_REQUEST_URL\",\n        \"ACTIONS_RUNTIME_TOKEN\",\n        \"GITHUB_TOKEN\",\n        \"GH_TOKEN\",\n        \"MISE_GITHUB_TOKEN\",\n    }:\n        environment.pop(name, None)\nenvironment.update(\n    GIT_CONFIG_GLOBAL=os.devnull,\n    GIT_CONFIG_NOSYSTEM=\"1\",\n    GIT_TERMINAL_PROMPT=\"0\",\n)\n\ndef run(command, timeout):\n    subprocess.run(\n        command,\n        cwd=workspace,\n        env=environment,\n        check=True,\n        timeout=timeout,\n    )\n\nrun([\"git\", \"init\", \"--quiet\"], timeout=10)\nrun(\n    [\"git\", \"-c\", \"credential.helper=\", \"fetch\", \"--quiet\", \"--depth=1\", \"--no-tags\",\n     f\"https://github.com/{repository}.git\", commit],\n    timeout=60,\n)\nrun([\"git\", \"checkout\", \"--quiet\", \"--detach\", \"FETCH_HEAD\"], timeout=10)\nhead = subprocess.run(\n    [\"git\", \"rev-parse\", \"HEAD\"],\n    cwd=workspace,\n    env=environment,\n    check=True,\n    capture_output=True,\n    text=True,\n    timeout=5,\n).stdout.strip()\nif head != commit:\n    raise SystemExit(\"qualification source does not match the requested commit\")\nPY"
+        run: "set -euo pipefail\n[[ \"$GITHUB_REPOSITORY\" == tailrocks/velnor-new && \"$GITHUB_SHA\" =~ ^[0-9a-f]{40}$ ]] || {\n  printf '%s\\n' 'qualification source identity is invalid' >&2\n  exit 1\n}\n[[ \"$GITHUB_WORKSPACE\" == /* && -d \"$GITHUB_WORKSPACE\" && ! -L \"$GITHUB_WORKSPACE\" ]]\ncd -- \"$GITHUB_WORKSPACE\"\n[[ \"$(pwd -P)\" == \"$GITHUB_WORKSPACE\" ]]\n# A clean environment prevents inherited Git configuration, helpers, hooks,\n# credentials, and OIDC state from reaching source acquisition.\n/usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 GIT_ALLOW_PROTOCOL=https /usr/bin/git -c credential.helper= -c core.hooksPath=/dev/null -c submodule.recurse=false -c protocol.file.allow=never -c http.lowSpeedLimit=1 -c http.lowSpeedTime=60 init --quiet --template=/dev/null\n/usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 GIT_ALLOW_PROTOCOL=https /usr/bin/git -c credential.helper= -c core.hooksPath=/dev/null -c submodule.recurse=false -c protocol.file.allow=never -c http.lowSpeedLimit=1 -c http.lowSpeedTime=60 fetch --quiet --depth=1 --no-tags --no-recurse-submodules https://github.com/tailrocks/velnor-new.git \"$GITHUB_SHA\"\n/usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 GIT_ALLOW_PROTOCOL=https /usr/bin/git -c credential.helper= -c core.hooksPath=/dev/null -c submodule.recurse=false -c protocol.file.allow=never -c http.lowSpeedLimit=1 -c http.lowSpeedTime=60 checkout --quiet --detach FETCH_HEAD\n[[ \"$(/usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 GIT_ALLOW_PROTOCOL=https /usr/bin/git -c credential.helper= -c core.hooksPath=/dev/null -c submodule.recurse=false -c protocol.file.allow=never -c http.lowSpeedLimit=1 -c http.lowSpeedTime=60 rev-parse --verify 'HEAD^{commit}')\" == \"$GITHUB_SHA\" ]] || {\n  printf '%s\\n' 'qualification source does not match the requested commit' >&2\n  exit 1\n}"
+        timeout-minutes: 2
       - name: Qualify macOS velnor-actions
         uses: ./.github/actions/generator-release-qualify-macos # zizmor: ignore[self-repository]
+        with:
+          artifact_id: ${{ needs.build-macos.outputs.artifact_id }}
+          manifest_artifact_id: ${{ needs.candidate-manifest.outputs.artifact_id }}
+          manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}
+  qualify-homebrew-macos:
+    runs-on: macos-15
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      attestations: read
+    needs:
+      - verify-release-caller
+      - build-macos
+      - candidate-manifest
+    if: inputs.release_action == 'build'
+    env:
+      VELNOR_RELEASE_TARGET: aarch64-apple-darwin
+    steps:
+      - name: Start shared Homebrew qualification budget
+        shell: bash
+        run: "set -eu\nnow=\"$(date +%s)\"\nprintf 'VELNOR_HOME_BUDGET_DEADLINE_EPOCH=%s\\n' \"$((now + 30 * 60))\" >> \"$GITHUB_ENV\""
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: "1"
+          persist-credentials: "false"
+          ref: ${{ inputs.source_sha }}
+      - name: Qualify historical Homebrew releases
+        uses: ./.github/actions/generator-release-qualify-homebrew # zizmor: ignore[self-repository]
         with:
           artifact_id: ${{ needs.build-macos.outputs.artifact_id }}
           manifest_artifact_id: ${{ needs.candidate-manifest.outputs.artifact_id }}
@@ -246,6 +277,7 @@ jobs:
       - verify-release-caller
       - build-macos
       - qualify-macos
+      - qualify-homebrew-macos
     if: inputs.release_action == 'build'
     steps:
       - name: Check out
@@ -301,9 +333,10 @@ jobs:
     env:
       VELNOR_RELEASE_TARGET: x86_64-apple-darwin
     steps:
-      - name: Fetch exact public source without an action post hook
+      - name: Fetch exact public qualification source without credentials
         shell: bash
-        run: "set -eu\npython3 - \"$GITHUB_WORKSPACE\" \"$GITHUB_REPOSITORY\" \"$GITHUB_SHA\" <<'PY'\nimport os\nimport re\nimport subprocess\nimport sys\n\nworkspace, repository, commit = sys.argv[1:]\nif repository != \"tailrocks/velnor-new\" or re.fullmatch(r\"[0-9a-f]{40}\", commit) is None:\n    raise SystemExit(\"qualification source identity is invalid\")\n\nenvironment = os.environ.copy()\nfor name in tuple(environment):\n    if name.startswith(\"GIT_\") or name in {\n        \"ACTIONS_ID_TOKEN_REQUEST_TOKEN\",\n        \"ACTIONS_ID_TOKEN_REQUEST_URL\",\n        \"ACTIONS_RUNTIME_TOKEN\",\n        \"GITHUB_TOKEN\",\n        \"GH_TOKEN\",\n        \"MISE_GITHUB_TOKEN\",\n    }:\n        environment.pop(name, None)\nenvironment.update(\n    GIT_CONFIG_GLOBAL=os.devnull,\n    GIT_CONFIG_NOSYSTEM=\"1\",\n    GIT_TERMINAL_PROMPT=\"0\",\n)\n\ndef run(command, timeout):\n    subprocess.run(\n        command,\n        cwd=workspace,\n        env=environment,\n        check=True,\n        timeout=timeout,\n    )\n\nrun([\"git\", \"init\", \"--quiet\"], timeout=10)\nrun(\n    [\"git\", \"-c\", \"credential.helper=\", \"fetch\", \"--quiet\", \"--depth=1\", \"--no-tags\",\n     f\"https://github.com/{repository}.git\", commit],\n    timeout=60,\n)\nrun([\"git\", \"checkout\", \"--quiet\", \"--detach\", \"FETCH_HEAD\"], timeout=10)\nhead = subprocess.run(\n    [\"git\", \"rev-parse\", \"HEAD\"],\n    cwd=workspace,\n    env=environment,\n    check=True,\n    capture_output=True,\n    text=True,\n    timeout=5,\n).stdout.strip()\nif head != commit:\n    raise SystemExit(\"qualification source does not match the requested commit\")\nPY"
+        run: "set -euo pipefail\n[[ \"$GITHUB_REPOSITORY\" == tailrocks/velnor-new && \"$GITHUB_SHA\" =~ ^[0-9a-f]{40}$ ]] || {\n  printf '%s\\n' 'qualification source identity is invalid' >&2\n  exit 1\n}\n[[ \"$GITHUB_WORKSPACE\" == /* && -d \"$GITHUB_WORKSPACE\" && ! -L \"$GITHUB_WORKSPACE\" ]]\ncd -- \"$GITHUB_WORKSPACE\"\n[[ \"$(pwd -P)\" == \"$GITHUB_WORKSPACE\" ]]\n# A clean environment prevents inherited Git configuration, helpers, hooks,\n# credentials, and OIDC state from reaching source acquisition.\n/usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 GIT_ALLOW_PROTOCOL=https /usr/bin/git -c credential.helper= -c core.hooksPath=/dev/null -c submodule.recurse=false -c protocol.file.allow=never -c http.lowSpeedLimit=1 -c http.lowSpeedTime=60 init --quiet --template=/dev/null\n/usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 GIT_ALLOW_PROTOCOL=https /usr/bin/git -c credential.helper= -c core.hooksPath=/dev/null -c submodule.recurse=false -c protocol.file.allow=never -c http.lowSpeedLimit=1 -c http.lowSpeedTime=60 fetch --quiet --depth=1 --no-tags --no-recurse-submodules https://github.com/tailrocks/velnor-new.git \"$GITHUB_SHA\"\n/usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 GIT_ALLOW_PROTOCOL=https /usr/bin/git -c credential.helper= -c core.hooksPath=/dev/null -c submodule.recurse=false -c protocol.file.allow=never -c http.lowSpeedLimit=1 -c http.lowSpeedTime=60 checkout --quiet --detach FETCH_HEAD\n[[ \"$(/usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 GIT_ALLOW_PROTOCOL=https /usr/bin/git -c credential.helper= -c core.hooksPath=/dev/null -c submodule.recurse=false -c protocol.file.allow=never -c http.lowSpeedLimit=1 -c http.lowSpeedTime=60 rev-parse --verify 'HEAD^{commit}')\" == \"$GITHUB_SHA\" ]] || {\n  printf '%s\\n' 'qualification source does not match the requested commit' >&2\n  exit 1\n}"
+        timeout-minutes: 2
       - name: Qualify macOS x86_64 velnor-actions
         uses: ./.github/actions/generator-release-qualify-macos-intel # zizmor: ignore[self-repository]
         with:
@@ -359,7 +392,7 @@ jobs:
           persist-credentials: "false"
           ref: ${{ inputs.source_sha }}
       - name: Setup Mise
-        uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550
+        uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e
         with:
           version: 2026.10.18
           sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
@@ -374,7 +407,7 @@ jobs:
           path: linux-assets
       - name: Prevalidate and extract uploaded candidate archive
         shell: bash
-        run: "set -eu\nbash scripts/with-owned-archive-guard.sh -- python3 scripts/generator-release/extract-candidate.py 'linux-assets/generator-linux-assets.tar' 'linux-assets' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.sha256' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.provenance.json'"
+        run: "set -eu\nbash scripts/with-owned-archive-guard.sh -- .velnor/archive-guard/bin/velnor-archive-guard extract-candidate 'linux-assets/generator-linux-assets.tar' 'linux-assets' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.sha256' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.provenance.json'"
       - name: Verify extracted candidate file types and executable mode
         shell: bash
         run: "set -eu\ntest -f linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu\ntest ! -L linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu\ntest -x linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu\ntest -f linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.sha256\ntest ! -L linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.sha256\ntest ! -x linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.sha256\ntest -f linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.provenance.json\ntest ! -L linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.provenance.json\ntest ! -x linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.provenance.json"
@@ -388,7 +421,7 @@ jobs:
           path: macos-assets
       - name: Prevalidate and extract uploaded candidate archive
         shell: bash
-        run: "set -eu\nbash scripts/with-owned-archive-guard.sh -- python3 scripts/generator-release/extract-candidate.py 'macos-assets/generator-macos-assets.tar' 'macos-assets' 'velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin' 'velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin.sha256' 'velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin.provenance.json'"
+        run: "set -eu\nbash scripts/with-owned-archive-guard.sh -- .velnor/archive-guard/bin/velnor-archive-guard extract-candidate 'macos-assets/generator-macos-assets.tar' 'macos-assets' 'velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin' 'velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin.sha256' 'velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin.provenance.json'"
       - name: Verify extracted candidate file types and executable mode
         shell: bash
         run: "set -eu\ntest -f macos-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin\ntest ! -L macos-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin\ntest -x macos-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin\ntest -f macos-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin.sha256\ntest ! -L macos-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin.sha256\ntest ! -x macos-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin.sha256\ntest -f macos-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin.provenance.json\ntest ! -L macos-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin.provenance.json\ntest ! -x macos-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-aarch64-apple-darwin.provenance.json"
@@ -402,7 +435,7 @@ jobs:
           path: macos-intel-assets
       - name: Prevalidate and extract uploaded candidate archive
         shell: bash
-        run: "set -eu\nbash scripts/with-owned-archive-guard.sh -- python3 scripts/generator-release/extract-candidate.py 'macos-intel-assets/generator-macos-intel-assets.tar' 'macos-intel-assets' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin.sha256' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin.provenance.json'"
+        run: "set -eu\nbash scripts/with-owned-archive-guard.sh -- .velnor/archive-guard/bin/velnor-archive-guard extract-candidate 'macos-intel-assets/generator-macos-intel-assets.tar' 'macos-intel-assets' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin.sha256' 'velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin.provenance.json'"
       - name: Verify extracted candidate file types and executable mode
         shell: bash
         run: "set -eu\ntest -f macos-intel-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin\ntest ! -L macos-intel-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin\ntest -x macos-intel-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin\ntest -f macos-intel-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin.sha256\ntest ! -L macos-intel-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin.sha256\ntest ! -x macos-intel-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin.sha256\ntest -f macos-intel-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin.provenance.json\ntest ! -L macos-intel-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin.provenance.json\ntest ! -x macos-intel-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-apple-darwin.provenance.json"
@@ -475,11 +508,12 @@ jobs:
       - attest-macos
       - attest-macos-intel
       - attest-manifest
+      - qualify-homebrew-macos
       - candidate-manifest
       - build-linux
       - build-macos
       - build-macos-intel
-    if: always() && inputs.release_action == 'build' && needs.attest-linux.result == 'success' && needs.attest-macos.result == 'success' && needs.attest-macos-intel.result == 'success' && needs.attest-manifest.result == 'success'
+    if: always() && inputs.release_action == 'build' && needs.attest-linux.result == 'success' && needs.attest-macos.result == 'success' && needs.attest-macos-intel.result == 'success' && needs.attest-manifest.result == 'success' && needs.qualify-homebrew-macos.result == 'success'
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

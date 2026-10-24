@@ -30,6 +30,7 @@ mod plist;
 mod readiness;
 mod readiness_scan;
 mod reconcile;
+pub mod resource_probe_release;
 mod scale_set;
 mod stage;
 mod work_owner;

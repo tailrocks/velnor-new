@@ -145,15 +145,27 @@ fn tap_spec(
     else {
         return Ok(None);
     };
-    let runner = &policy.updater.runner;
+    let runner = &velnor_actions_contract::config::CheckRunner {
+        label: "ubuntu-26.04".to_owned(),
+        platform: velnor_actions_contract::config::CheckPlatform::LinuxX64,
+        executor: velnor_actions_contract::config::CheckExecutor::Hosted,
+        container: None,
+    };
+    let formula_spec = prep
+        .config
+        .distribution
+        .homebrew_formula
+        .as_ref()
+        .ok_or_else(|| internal("homebrew_formula_spec_missing"))?;
     Ok(Some(ConsumerReleaseTapSpec {
         policy: policy.clone(),
-        updater_acquire: consumer_acquire_for_runner(
+        formula_spec: formula_spec.clone(),
+        preparation_acquire: consumer_acquire_for_runner(
             runner,
             env!("CARGO_PKG_VERSION"),
             prep.discovery.consumer_manifest_json.as_deref(),
         )?,
-        updater_setup: resolve_mise_setup_for_release_target(
+        preparation_setup: resolve_mise_setup_for_release_target(
             &prep.config,
             runner.platform.release_target(),
         )?,

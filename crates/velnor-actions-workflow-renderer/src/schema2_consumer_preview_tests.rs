@@ -5,6 +5,10 @@ use velnor_actions_contract::{
     config::RustBinaryReleaseCompanion, package_release::PackageReleasePayloadFormat,
 };
 
+#[path = "schema2_consumer_preview_formula_fixture.rs"]
+mod formula_fixture;
+use formula_fixture::formula_spec_fixture;
+
 #[path = "schema2_consumer_preview_tap_admission_tests.rs"]
 mod tap_admission;
 
@@ -48,7 +52,7 @@ pub(super) fn fixture() -> ConsumerReleaseSpec {
             "mise".to_owned(),
             "--no-config".to_owned(),
             "install".to_owned(),
-            "gh@2.103.0".to_owned(),
+            "gh@2.103.2".to_owned(),
         ],
         verify_rust_argv: vec![
             "sh".to_owned(),
@@ -227,14 +231,14 @@ fn setup_fixture() -> MiseSetup {
 
 fn with_tap() -> ConsumerReleaseSpec {
     use velnor_actions_contract::config::{
-        CheckExecutor, CheckPlatform, CheckRunner, ExactHeadReviewCheck, HomebrewTapConfig,
-        HomebrewTapDestination, HomebrewTapDestinations, MiseTaskSource, ReviewAppIdentity,
-        TapMergePolicy, TapUpdateEnvironment, TapUpdaterBinding,
+        ExactHeadReviewCheck, HomebrewTapConfig, HomebrewTapDestination, HomebrewTapDestinations,
+        ReviewAppIdentity, TapMergePolicy, TapUpdateEnvironment,
     };
     let mut spec = fixture();
     spec.homebrew_tap = Some(ConsumerReleaseTapSpec {
-        updater_acquire: spec.linux_acquire.clone(),
-        updater_setup: setup_fixture(),
+        preparation_acquire: spec.linux_acquire.clone(),
+        preparation_setup: setup_fixture(),
+        formula_spec: formula_spec_fixture(),
         policy: HomebrewTapConfig {
             enabled: true,
             repository: "example/homebrew-tap".to_owned(),
@@ -243,25 +247,6 @@ fn with_tap() -> ConsumerReleaseSpec {
                     formula: "Formula/scanner-preview.rb".to_owned(),
                 }),
                 stable: None,
-            },
-            updater: TapUpdaterBinding {
-                task: "package:update-preview".to_owned(),
-                source: MiseTaskSource {
-                    mise_config: "mise.toml".to_owned(),
-                    working_directory: ".".to_owned(),
-                },
-                runner: CheckRunner {
-                    label: "ubuntu-26.04".to_owned(),
-                    platform: CheckPlatform::LinuxX64,
-                    executor: CheckExecutor::Hosted,
-                    container: None,
-                },
-                inputs: vec![
-                    "mise.toml".to_owned(),
-                    "Formula/scanner-preview.rb".to_owned(),
-                ],
-                tools: vec!["python".to_owned()],
-                timeout_minutes: 5,
             },
             environment: TapUpdateEnvironment::TapUpdate,
             app_id_variable: "TAP_APP_ID".to_owned(),

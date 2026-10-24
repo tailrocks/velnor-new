@@ -12,6 +12,9 @@ fn config() -> String {
     tap_enabled_config(true).replace(
         "inputs = [\"mise.toml\", \"Formula/demo-preview.rb\", \"scripts/package-update.sh\"]",
         "inputs = [\"mise.toml\", \"Formula/demo-preview.rb\", \"Formula/demo.rb\", \"scripts/package-update.sh\"]",
+    ).replace(
+        "conflicts = [] }]",
+        "conflicts = [] }, { channel = \"stable\", formula = \"demo\", formula_class = \"Demo\", destination = \"Formula/demo.rb\", conflicts = [] }]",
     ) + "\n[distribution.homebrew_tap.destinations.stable]\nformula = \"Formula/demo.rb\"\n"
 }
 
@@ -25,7 +28,7 @@ fn native_preview_stable_and_reconcile_honor_workflow_checkout_lfs() -> TestResu
                 &format!("[workflow]\ncheckout_lfs = {enabled}\n"),
             )
         });
-        let repo = binary_repo(&config)?;
+        let repo = tap_enabled_repo(&config)?;
         let tree = render_staged_tree(&prepare(repo.path())?)?;
         let mut native = Vec::new();
         for path in NATIVE_WORKFLOWS {

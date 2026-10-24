@@ -1,9 +1,41 @@
 use super::{
     DistributionConfig, ExactHeadReviewCheck, HomebrewTapConfig, HomebrewTapDestination,
     HomebrewTapDestinations, ReviewAppIdentity, TapMergePolicy, TapUpdateEnvironment,
-    TapUpdaterBinding,
 };
-use crate::config::MiseTaskSource;
+use crate::{
+    homebrew_spec::{
+        HOMEBREW_FORMULA_SPEC_SCHEMA_V1, HOMEBREW_FORMULA_TEMPLATE_V1, HomebrewFormulaChannelSpec,
+        HomebrewFormulaSpec, HomebrewHostProductSpec, HomebrewStableSentinel,
+    },
+    package_release::PackageReleaseChannel,
+};
+
+fn formula_spec() -> HomebrewFormulaSpec {
+    HomebrewFormulaSpec {
+        schema: HOMEBREW_FORMULA_SPEC_SCHEMA_V1.to_owned(),
+        template: HOMEBREW_FORMULA_TEMPLATE_V1.to_owned(),
+        description: "Jackin command line tools".to_owned(),
+        homepage: "https://github.com/jackin-project/jackin".to_owned(),
+        license: "MIT".to_owned(),
+        channels: vec![HomebrewFormulaChannelSpec {
+            channel: PackageReleaseChannel::Preview,
+            formula: "jackin-preview".to_owned(),
+            formula_class: "JackinPreview".to_owned(),
+            destination: "Formula/jackin-preview.rb".to_owned(),
+            conflicts: vec!["jackin".to_owned()],
+        }],
+        host: HomebrewHostProductSpec {
+            product: "jackin".to_owned(),
+            targets: vec!["aarch64-apple-darwin".to_owned()],
+            bins: vec!["jackin".to_owned()],
+        },
+        auxiliaries: Vec::new(),
+        stable_sentinel: HomebrewStableSentinel {
+            date: "2026-10-24".to_owned(),
+            reason: "Stable release is not active".to_owned(),
+        },
+    }
+}
 
 pub(super) fn valid() -> HomebrewTapConfig {
     HomebrewTapConfig {
@@ -15,26 +47,6 @@ pub(super) fn valid() -> HomebrewTapConfig {
             stable: None,
         },
         repository: "jackin-project/homebrew-tap".to_owned(),
-        updater: TapUpdaterBinding {
-            task: "package:update-preview".to_owned(),
-            source: MiseTaskSource {
-                mise_config: "mise.toml".to_owned(),
-                working_directory: ".".to_owned(),
-            },
-            runner: crate::config::CheckRunner {
-                label: "ubuntu-26.04".to_owned(),
-                platform: crate::config::CheckPlatform::LinuxX64,
-                executor: crate::config::CheckExecutor::Hosted,
-                container: None,
-            },
-            inputs: vec![
-                "Formula/jackin-preview.rb".to_owned(),
-                "mise.toml".to_owned(),
-                "scripts/package-update.sh".to_owned(),
-            ],
-            tools: vec!["jq".to_owned(), "python".to_owned()],
-            timeout_minutes: 5,
-        },
         environment: TapUpdateEnvironment::TapUpdate,
         app_id_variable: "HOMEBREW_TAP_APP_ID".to_owned(),
         app_private_key_secret: "HOMEBREW_TAP_APP_PRIVATE_KEY".to_owned(),
@@ -76,15 +88,7 @@ fn review_check_name_is_literal_policy_not_a_workflow_expression() {
 }
 
 #[test]
-fn rejects_tap_runner_without_a_native_provisioning_lifecycle() {
-    let mut config = valid();
-    config.updater.runner.executor = crate::config::CheckExecutor::EphemeralSelfHosted;
-    config.updater.runner.label = "tap-updater".to_owned();
-    assert!(config.validate("config.toml").is_err());
-}
-
-#[test]
-fn rejects_unqualified_destination_task_or_credentials() {
+fn rejects_unqualified_destination_or_credentials() {
     let mut config = valid();
     config.repository = "https://github.com/jackin-project/homebrew-tap".to_owned();
     assert!(config.validate("config.toml").is_err());
@@ -97,9 +101,6 @@ fn rejects_unqualified_destination_task_or_credentials() {
         .formula = "Formula/../evil.rb".to_owned();
     assert!(config.validate("config.toml").is_err());
     config = valid();
-    config.updater.task = "package:update-preview --token".to_owned();
-    assert!(config.validate("config.toml").is_err());
-    config = valid();
     config.app_id_variable = "GITHUB_TOKEN".to_owned();
     assert!(config.validate("config.toml").is_err());
     config = valid();
@@ -108,22 +109,6 @@ fn rejects_unqualified_destination_task_or_credentials() {
     config = valid();
     config.enabled = false;
     config.repository = "not-a-repository-url".to_owned();
-    assert!(config.validate("config.toml").is_err());
-}
-
-#[test]
-fn rejects_unqualified_inputs_tools_and_unbounded_task() {
-    let mut config = valid();
-    config.updater.inputs.push("../outside".to_owned());
-    assert!(config.validate("config.toml").is_err());
-    config = valid();
-    config.updater.tools.push("jq".to_owned());
-    assert!(config.validate("config.toml").is_err());
-    config = valid();
-    config.updater.timeout_minutes = 361;
-    assert!(config.validate("config.toml").is_err());
-    config = valid();
-    config.updater.inputs.retain(|path| path != "mise.toml");
     assert!(config.validate("config.toml").is_err());
 }
 
@@ -152,12 +137,8 @@ fn review_completion_requires_named_check_and_trusted_app_id_reference() {
 }
 
 #[test]
-fn closed_contract_rejects_removed_source_and_arbitrary_environment_or_merge() {
-    for (field, value) in [
-        ("source", "manual-preview"),
-        ("environment", "production"),
-        ("merge", "merge-if-green"),
-    ] {
+fn closed_contract_rejects_arbitrary_environment_or_merge() {
+    for (field, value) in [("environment", "production"), ("merge", "merge-if-green")] {
         let mut json = serde_json::to_value(valid()).expect("valid tap fixture");
         json[field] = serde_json::json!(value);
         assert!(
@@ -165,31 +146,6 @@ fn closed_contract_rejects_removed_source_and_arbitrary_environment_or_merge() {
             "{field}"
         );
     }
-}
-
-#[test]
-fn native_timeout_stays_five_minutes_independent_of_general_job_limit() {
-    assert!(crate::workflow::timeout::JobTimeout::new(360).is_ok());
-    for minutes in [1, 5] {
-        let mut value = valid();
-        value.updater.timeout_minutes = minutes;
-        assert!(value.validate("config.toml").is_ok(), "{minutes}");
-    }
-    for minutes in [0, 6, 30, 360, 361, u32::MAX] {
-        let mut value = valid();
-        value.updater.timeout_minutes = minutes;
-        assert!(value.validate("config.toml").is_err(), "{minutes}");
-    }
-}
-
-#[test]
-fn omitted_timeout_uses_the_shared_five_minute_default() {
-    let mut json = serde_json::to_value(valid().updater).expect("serialize");
-    json.as_object_mut()
-        .expect("object")
-        .remove("timeout_minutes");
-    let value: TapUpdaterBinding = serde_json::from_value(json).expect("default timeout");
-    assert_eq!(value.timeout_minutes, 5);
 }
 
 #[test]
@@ -223,7 +179,6 @@ fn signed_channels_select_distinct_declared_formula_authority() {
     config.destinations.stable = Some(HomebrewTapDestination {
         formula: "Formula/jackin.rb".to_owned(),
     });
-    config.updater.inputs.push("Formula/jackin.rb".to_owned());
     assert!(config.validate("config.toml").is_ok());
     assert_eq!(
         config
@@ -251,28 +206,57 @@ fn signed_channels_select_distinct_declared_formula_authority() {
 }
 
 #[test]
-fn both_formula_bases_are_required_inputs_and_channels_are_closed() {
-    let mut config = valid();
-    config.destinations.stable = Some(HomebrewTapDestination {
+fn tap_destinations_must_project_exactly_from_canonical_formula_spec() {
+    let mut distribution = DistributionConfig {
+        homebrew_tap: Some(valid()),
+        homebrew_formula: Some(formula_spec()),
+    };
+    assert!(distribution.validate("config.toml").is_ok());
+    distribution
+        .homebrew_tap
+        .as_mut()
+        .expect("tap")
+        .destinations
+        .preview
+        .as_mut()
+        .expect("preview")
+        .formula = "Formula/other.rb".to_owned();
+    assert!(
+        distribution
+            .validate("config.toml")
+            .expect_err("mismatch")
+            .to_string()
+            .contains("formula_destinations_must_match_homebrew_spec")
+    );
+}
+
+#[test]
+fn enabled_tap_requires_canonical_formula_spec_and_channel_set() {
+    let mut distribution = DistributionConfig {
+        homebrew_tap: Some(valid()),
+        homebrew_formula: None,
+    };
+    assert!(
+        distribution
+            .validate("config.toml")
+            .expect_err("missing spec")
+            .to_string()
+            .contains("enabled_homebrew_tap_requires_formula_spec")
+    );
+    distribution.homebrew_formula = Some(formula_spec());
+    distribution
+        .homebrew_tap
+        .as_mut()
+        .expect("tap")
+        .destinations
+        .stable = Some(HomebrewTapDestination {
         formula: "Formula/jackin.rb".to_owned(),
     });
     assert!(
-        config
+        distribution
             .validate("config.toml")
-            .expect_err("stable base missing")
+            .expect_err("extra channel")
             .to_string()
-            .contains("formula_base_not_an_input")
+            .contains("formula_destinations_must_match_homebrew_spec")
     );
-    config.updater.inputs.push("Formula/jackin.rb".to_owned());
-    assert!(config.validate("config.toml").is_ok());
-    let mut json = serde_json::to_value(&config).expect("tap policy");
-    json["destinations"]["nightly"] = serde_json::json!({"formula":"Formula/nightly.rb"});
-    assert!(serde_json::from_value::<HomebrewTapConfig>(json).is_err());
-    for field in ["source", "formula"] {
-        let mut json = serde_json::to_value(&config).expect("tap policy");
-        json[field] = serde_json::json!("old-preview-only-contract");
-        assert!(serde_json::from_value::<HomebrewTapConfig>(json).is_err());
-    }
-    config.destinations = HomebrewTapDestinations::default();
-    assert!(config.validate("config.toml").is_err());
 }

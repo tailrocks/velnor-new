@@ -3,7 +3,7 @@ const BINARY_WORKFLOW: &str = include_str!("snapshots/product-release-binary.yml
 const RUST_VERIFIER: &[&str] = &["Verify Rust channel manifest"];
 const IMAGE_AUTH: &[(&str, &str, &str)] = &[
     (
-        "Install pinned Rust for the resource probe",
+        "Install pinned resource-probe build and qualification tools",
         "GITHUB_TOKEN",
         "${{ github.token }}",
     ),

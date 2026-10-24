@@ -335,7 +335,7 @@ reviewer_app_id_variable = "CUSTOM_R"
         .expect("completion"),
     );
     assert_eq!(declared_config_variables(&config), ["CUSTOM_C", "CUSTOM_R"]);
-    let mut tap = crate::tap_test_support::policy();
+    let mut tap = crate::homebrew::test_support::policy();
     tap.enabled = false;
     config.distribution.homebrew_tap = Some(tap.clone());
     assert_eq!(declared_config_variables(&config), ["CUSTOM_C", "CUSTOM_R"]);

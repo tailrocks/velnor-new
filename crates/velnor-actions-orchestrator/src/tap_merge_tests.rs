@@ -174,7 +174,7 @@ fn ready_gate_fixture() -> (String, TapMergePolicy, TapMergeObservation) {
 
 #[test]
 fn shared_one_payload_fixture_has_a_valid_canonical_formula_update() {
-    let fixture = crate::tap_test_support::fixture();
+    let fixture = crate::homebrew::test_support::fixture();
     fixture.plan.validate().expect("static plan");
     fixture
         .release
@@ -193,7 +193,7 @@ fn promotion_fixture() -> (String, String, crate::tap_prepare::TapPromotionRecei
     let branch = candidate::expected_branch(&receipt_digest, &base_sha, receipt.channel)
         .expect("deterministic branch");
     let proof = crate::tap_prepare::HomebrewTapPreparationProof {
-        schema: "velnor.homebrew-candidate.v3".to_owned(),
+        schema: "velnor.homebrew-candidate.v4".to_owned(),
         channel: receipt.channel,
         disposition: crate::tap_prepare::TapPreparationDisposition::Changed,
         base_sha: base_sha.clone(),
@@ -202,6 +202,8 @@ fn promotion_fixture() -> (String, String, crate::tap_prepare::TapPromotionRecei
         new_formula_sha256: "d".repeat(64),
         receipt_digest: receipt_digest.clone(),
         plan_digest: "e".repeat(64),
+        formula_spec_digest: format!("b3-{}", "1".repeat(64)),
+        sdk_artifact_digest: "2".repeat(64),
         tap_config_digest: "f".repeat(64),
         tap_repository: "owner/tap".to_owned(),
         source_repository: "owner/source".to_owned(),

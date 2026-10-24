@@ -38,6 +38,12 @@ pub struct ProductReleasePins {
     pub runner_build_argv: Vec<String>,
     /// Exact pinned MBX build argv for the static Linux resource probe.
     pub resource_probe_build_argv: Vec<String>,
+    /// Exact tool installation for native resource-probe producer qualification.
+    pub install_resource_probe_release_tools_argv: Vec<String>,
+    /// Locked native producer build for the hosted GNU/Linux target.
+    pub resource_probe_release_build_argv: Vec<String>,
+    /// Locked native producer and shared archive fixture qualification.
+    pub resource_probe_release_test_argv: Vec<String>,
     /// Exact pinned jactionlint argv over the committed lint file set.
     pub lint_argv: Vec<String>,
     /// `sh -c` argv verifying the installed jactionlint executable digest.
