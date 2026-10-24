@@ -81,7 +81,7 @@ Workflow to generate
     - rust-velnor-runner-github (75 steps)
     - rust-velnor-runner-host (75 steps)
     - 20 Rust package jobs
-      Timeout: 15 minutes per crate job
+      Timeout: 45 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check
       Entries:
         - rust-velnor-actions-actionlint
