@@ -18,6 +18,9 @@ pub(crate) struct HeldDirectory {
     original: fs::Metadata,
     files: BTreeMap<String, HeldFile>,
     deadline: CheckDeadline,
+    // Last so file and directory handles drop before TempDir removes the tree;
+    // shared custody keeps the owner alive through its final Arc.
+    _owner: Option<tempfile::TempDir>,
 }
 
 impl HeldDirectory {
@@ -32,7 +35,34 @@ impl HeldDirectory {
         Ok((verified, closure))
     }
 
+    pub(crate) fn admit_owned<T>(
+        owner: tempfile::TempDir,
+        deadline: CheckDeadline,
+        verify: impl FnOnce() -> Result<T, OrchestratorError>,
+    ) -> Result<(T, Self), OrchestratorError> {
+        let closure = Self::capture_owned(owner, deadline)?;
+        let verified = verify()?;
+        closure.verify()?;
+        Ok((verified, closure))
+    }
+
     pub(crate) fn capture(path: &Path, deadline: CheckDeadline) -> Result<Self, OrchestratorError> {
+        Self::capture_inner(path, deadline, None)
+    }
+
+    pub(crate) fn capture_owned(
+        owner: tempfile::TempDir,
+        deadline: CheckDeadline,
+    ) -> Result<Self, OrchestratorError> {
+        let path = owner.path().to_path_buf();
+        Self::capture_inner(&path, deadline, Some(owner))
+    }
+
+    fn capture_inner(
+        path: &Path,
+        deadline: CheckDeadline,
+        owner: Option<tempfile::TempDir>,
+    ) -> Result<Self, OrchestratorError> {
         let fd = rustix::fs::open(
             path,
             rustix::fs::OFlags::RDONLY
@@ -50,6 +80,7 @@ impl HeldDirectory {
             original,
             files: BTreeMap::new(),
             deadline,
+            _owner: owner,
         };
         held.verify_identity()?;
         for name in held.names()? {

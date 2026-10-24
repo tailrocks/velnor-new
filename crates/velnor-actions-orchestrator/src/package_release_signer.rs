@@ -41,7 +41,9 @@ mod publication;
 mod publication_budget_tests;
 #[path = "package_release_signer_receipt.rs"]
 mod receipt;
+#[cfg(test)]
 use publication::hold_signed_directory_for_publication;
+pub(crate) use publication::verify_attested_signed_package_with_owned_tempdir;
 #[cfg(test)]
 #[path = "package_release_signer_tests.rs"]
 mod tests;
@@ -190,18 +192,12 @@ pub(crate) fn verify_attested_signed_package_with_deadline(
     expected: &PackageReleaseSigningIdentity,
     custody_deadline: velnor_actions_mise::CheckDeadline,
 ) -> Result<VerifiedAttestedSignedPackage, OrchestratorError> {
-    let (signed, closure) =
-        hold_signed_directory_for_publication(directory, custody_deadline, || {
-            let mut signed = verify_signed_package(directory, plan, expected)?;
-            attestation::verify_release_attestation(&signed, expected)?;
-            signed.plan = plan.clone();
-            Ok(signed)
-        })?;
-    Ok(VerifiedAttestedSignedPackage {
-        signed,
-        closure: std::sync::Arc::new(closure),
-        identity: expected.clone(),
-    })
+    publication::verify_attested_signed_package_with_deadline(
+        directory,
+        plan,
+        expected,
+        custody_deadline,
+    )
 }
 
 fn default_verification_deadline() -> Result<velnor_actions_mise::CheckDeadline, OrchestratorError>
