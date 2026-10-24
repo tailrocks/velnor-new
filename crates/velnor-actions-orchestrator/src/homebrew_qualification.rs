@@ -34,6 +34,8 @@ const FORMULA_SPEC: &[u8] =
     include_bytes!("../../../.velnor/qualification/homebrew/formula-spec.json");
 const A_RECORD: &[u8] = include_bytes!("../../../.velnor/qualification/homebrew/preview-a.json");
 const D_RECORD: &[u8] = include_bytes!("../../../.velnor/qualification/homebrew/preview-d.json");
+const A_ADMISSION: &[u8] =
+    include_bytes!("../../../.velnor/qualification/homebrew/preview-a-source-admission.json");
 const PLAN_SHA256: &str = "5f4dc66b22cbce0f309ea9ab8c93709774a8890f365e0d61277fb2b0b505d9ae";
 
 /// Execute the workflow's bounded native operation. The caller authenticates the
@@ -109,7 +111,10 @@ fn verify_historical_pair(
             REPOSITORY_ID,
             current_main.clone(),
         )?
-        .with_historical_admissions(vec![admission(a, plan)?, admission(d, plan)?])?;
+        .with_historical_admissions(vec![
+            admission(a, plan, Some(A_ADMISSION))?,
+            admission(d, plan, None)?,
+        ])?;
     let verified_a = verify(&policy, a, deadline)?;
     let verified_d = verify(&policy, d, deadline)?;
     verify_custody_pair(plan, &verified_a, &verified_d, &current_main)?;

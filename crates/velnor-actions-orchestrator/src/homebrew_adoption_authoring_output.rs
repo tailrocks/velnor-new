@@ -230,7 +230,7 @@ fn open_trusted_parent(_path: &Path) -> Result<rustix::fd::OwnedFd, Orchestrator
 fn validate_parent_directory(stat: &rustix::fs::Stat) -> Result<(), OrchestratorError> {
     use rustix::fs::FileType;
     let owner = stat.st_uid;
-    let mode = u32::from(stat.st_mode);
+    let mode = stat.st_mode;
     let trusted_owner = owner == 0 || owner == crate::filesystem_owner::effective_uid();
     let writable_by_others = mode & 0o022 != 0;
     let protected_sticky_tmp = owner == 0 && mode & 0o1000 != 0;

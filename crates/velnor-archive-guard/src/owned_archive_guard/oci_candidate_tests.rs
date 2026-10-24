@@ -83,6 +83,48 @@ fn raw_archive_scan_rejects_unsafe_member_path_before_tar_parser() {
     assert_eq!(error.to_string(), "archive_path_unsafe");
 }
 
+#[test]
+fn raw_archive_scan_rejects_nonzero_bytes_after_tar_terminator() {
+    let temporary = FixtureDir::new();
+    let path = temporary.path().join("trailing-data.oci.tar");
+    fixture(&path, Mutation::AnnotatedLayer);
+    std::fs::OpenOptions::new()
+        .append(true)
+        .open(&path)
+        .expect("open archive for mutation")
+        .write_all(b"unadmitted trailing payload")
+        .expect("append trailing payload");
+
+    let error = inspect_oci_candidate(&path).expect_err("nonzero trailing data rejected");
+    assert_eq!(error.to_string(), "tar_scan_trailing_data");
+}
+
+#[test]
+fn tar_framing_rejects_missing_or_invalid_second_terminator() {
+    assert_eq!(
+        scan_outer_tar_bytes(&[0; 512])
+            .expect_err("second terminator block required")
+            .to_string(),
+        "tar_scan_terminator_truncated"
+    );
+
+    let mut invalid = vec![0; 512];
+    invalid.extend([1; 512]);
+    assert_eq!(
+        scan_outer_tar_bytes(&invalid)
+            .expect_err("second terminator block must be zero")
+            .to_string(),
+        "tar_scan_terminator_invalid"
+    );
+}
+
+#[test]
+fn tar_framing_accepts_zero_padding_through_eof() {
+    let mut tar = vec![0; 1024];
+    tar.extend([0; 37]);
+    scan_outer_tar_bytes(&tar).expect("zero padding after terminator");
+}
+
 #[derive(Debug, Clone, Copy)]
 enum Mutation {
     AnnotatedLayer,
@@ -174,6 +216,17 @@ fn fixture(path: &Path, mutation: Mutation) -> Digests {
         config: config_digest,
         layer: layer_digest,
     }
+}
+
+fn scan_outer_tar_bytes(bytes: &[u8]) -> super::Result<()> {
+    let temporary = FixtureDir::new();
+    let path = temporary.path().join("framing.tar");
+    std::fs::write(&path, bytes).expect("write tar framing fixture");
+    let mut file = std::fs::File::open(path).expect("open tar framing fixture");
+    super::archive_tar_framing::scan_archive_extensions(
+        &mut file,
+        u64::try_from(bytes.len()).expect("fixture length fits u64"),
+    )
 }
 
 struct FixtureArchive<'a> {

@@ -2,9 +2,11 @@
 
 use super::*;
 use crate::{CheckDeadline, IsolatedCommand, MiseError, command::CancelHandle};
-use rustix::process::{Signal, kill_process_group};
+use rustix::process::{Signal, kill_process, kill_process_group};
 use std::{
     ffi::OsString,
+    os::unix::process::CommandExt,
+    process::{Child, Command, Stdio},
     time::{Duration, Instant},
 };
 
@@ -93,6 +95,57 @@ fn anchor_loss_returns_without_a_drain_receipt() {
 }
 
 #[test]
+fn terminal_unreaped_anchor_kills_group_descendants_before_reaping() {
+    let root = crate::test_temp_dir::TestTempDir::new("terminal-anchor").expect("temporary root");
+    let marker = root.path().join("late-marker");
+    let anchor = ProcessGroupAnchor::spawn().expect("live anchor");
+    let mut target = grouped_task(
+        &format!(
+            "(/bin/sleep 0.25; /usr/bin/touch '{}') >/dev/null 2>&1 & wait",
+            marker.display()
+        ),
+        anchor.pgid(),
+    );
+
+    kill_process(anchor.pid, Signal::KILL).expect("kill anchor only");
+    wait_for_terminal_anchor(&anchor.child);
+    let error = anchor
+        .drain(Some(&mut target), Instant::now() + Duration::from_secs(1))
+        .expect_err("terminal anchor cannot certify group drain");
+    assert_eq!(error, "anchor_not_live");
+    std::thread::sleep(Duration::from_millis(350));
+    assert!(!marker.exists(), "target descendant survived group drain");
+}
+
+#[test]
+fn lost_wait_ownership_never_signals_the_old_process_group() {
+    let root = crate::test_temp_dir::TestTempDir::new("lost-anchor").expect("temporary root");
+    let marker = root.path().join("surviving-marker");
+    let mut anchor = ProcessGroupAnchor::spawn().expect("live anchor");
+    let mut target = grouped_task(
+        &format!(
+            "(/bin/sleep 0.2; /usr/bin/touch '{}') >/dev/null 2>&1 & wait",
+            marker.display()
+        ),
+        anchor.pgid(),
+    );
+
+    kill_process(anchor.pid, Signal::KILL).expect("kill anchor only");
+    anchor
+        .child
+        .wait()
+        .expect("reap anchor outside exclusive waiter");
+    let error = anchor
+        .drain(Some(&mut target), Instant::now() + Duration::from_secs(1))
+        .expect_err("lost wait ownership cannot certify group drain");
+    assert_eq!(error, "anchor_wait_ownership_lost");
+    assert!(
+        marker.exists(),
+        "target proves no old-group signal was sent"
+    );
+}
+
+#[test]
 fn strict_cancellation_and_output_cap_failure_return_errors() {
     let cancel = CancelHandle::new();
     std::thread::scope(|scope| {
@@ -135,4 +188,29 @@ fn anchor_command_clears_the_parent_environment() {
         output.stdout.is_empty(),
         "anchor inherited environment data"
     );
+}
+
+fn grouped_task(script: &str, pgid: i32) -> Child {
+    let mut command = Command::new("/bin/sh");
+    command
+        .arg("-c")
+        .arg(script)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .process_group(pgid);
+    command.spawn().expect("spawn group member")
+}
+
+fn wait_for_terminal_anchor(child: &Child) {
+    for _ in 0..100 {
+        if observe_exit(child)
+            .expect("anchor remains waitable")
+            .is_some()
+        {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    panic!("anchor did not become terminal");
 }

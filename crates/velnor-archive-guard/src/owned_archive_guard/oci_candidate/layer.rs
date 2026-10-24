@@ -139,16 +139,16 @@ fn scan_extensions(file: &mut File, blob: &Blob, gzip: bool, limit: u64) -> Resu
                 .read(&mut header[filled..])
                 .map_err(|_| OciCandidateError("oci_layer_extension_read"))?;
             if count == 0 {
-                return if filled == 0 {
-                    Ok(())
+                return Err(OciCandidateError(if filled == 0 {
+                    "oci_layer_terminator_missing"
                 } else {
-                    Err(OciCandidateError("oci_layer_extension_truncated_header"))
-                };
+                    "oci_layer_extension_truncated_header"
+                }));
             }
             filled += count;
         }
         if header.iter().all(|byte| *byte == 0) {
-            return Ok(());
+            return validate_terminator_and_padding(&mut source);
         }
         let size = tar_size(&header[124..136])?;
         if matches!(header[156], b'x' | b'g' | b'L' | b'K') {
@@ -166,6 +166,36 @@ fn scan_extensions(file: &mut File, blob: &Blob, gzip: bool, limit: u64) -> Resu
             / TAR_BLOCK as u64
             * TAR_BLOCK as u64;
         skip_bytes(&mut source, padded)?;
+    }
+}
+
+fn validate_terminator_and_padding<R: Read>(source: &mut R) -> Result<()> {
+    let mut second = [0_u8; TAR_BLOCK];
+    let mut filled = 0;
+    while filled < second.len() {
+        let count = source
+            .read(&mut second[filled..])
+            .map_err(|_| OciCandidateError("oci_layer_terminator_read"))?;
+        if count == 0 {
+            return Err(OciCandidateError("oci_layer_terminator_truncated"));
+        }
+        filled += count;
+    }
+    if second.iter().any(|byte| *byte != 0) {
+        return Err(OciCandidateError("oci_layer_terminator_invalid"));
+    }
+
+    let mut padding = vec![0_u8; 64 * 1024];
+    loop {
+        let count = source
+            .read(&mut padding)
+            .map_err(|_| OciCandidateError("oci_layer_terminator_read"))?;
+        if count == 0 {
+            return Ok(());
+        }
+        if padding[..count].iter().any(|byte| *byte != 0) {
+            return Err(OciCandidateError("oci_layer_trailing_data"));
+        }
     }
 }
 

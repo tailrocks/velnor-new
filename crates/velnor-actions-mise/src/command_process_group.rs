@@ -24,6 +24,8 @@ pub(super) struct ObservedStatus {
     pub(super) success: bool,
 }
 
+// This value is the sole waiter for its anchor child. NOWAIT leaves a terminal
+// anchor unreaped, reserving its PID until the single group signal is complete.
 pub(super) struct ProcessGroupAnchor {
     child: Child,
     stdin: Option<ChildStdin>,
@@ -60,35 +62,69 @@ impl ProcessGroupAnchor {
         target: Option<&mut Child>,
         deadline: Instant,
     ) -> Result<ProcessGroupDrainReceipt, String> {
-        if observe_exit(&self.child)?.is_some() {
-            self.reap_after_signal_failure(target);
+        let Ok(status) = observe_exit(&self.child) else {
+            self.stdin.take();
+            reap_best_effort(target, deadline);
+            reap_best_effort(Some(&mut self.child), deadline);
+            return Err("anchor_wait_ownership_lost".to_owned());
+        };
+        let anchor_terminal = status.is_some();
+        let signal_result = kill_process_group(self.pid, Signal::KILL);
+        self.stdin.take();
+        if anchor_terminal {
+            reap_bounded(target, &mut self.child, deadline);
+            drop(wait_group_absent(self.pid, deadline));
             return Err("anchor_not_live".to_owned());
         }
-        match kill_process_group(self.pid, Signal::KILL) {
-            Ok(()) => {}
-            Err(rustix::io::Errno::SRCH) => {
-                self.reap_after_signal_failure(target);
-                return Err("anchor_group_missing".to_owned());
-            }
-            Err(error) => {
-                self.reap_after_signal_failure(target);
-                return Err(format!("kill_group:{error}"));
-            }
+        if let Err(error) = signal_result {
+            reap_best_effort(target, deadline);
+            reap_best_effort(Some(&mut self.child), deadline);
+            return Err(if error == rustix::io::Errno::SRCH {
+                "anchor_group_missing".to_owned()
+            } else {
+                format!("kill_group:{error}")
+            });
         }
-        self.stdin.take();
         let target_result = target.map(|child| reap_until(child, deadline));
         let anchor_result = reap_until(&mut self.child, deadline);
         let gone = wait_group_absent(self.pid, deadline);
-        target_result
-            .transpose()
-            .map_err(|error| format!("target_reap:{error}"))?;
-        anchor_result.map_err(|error| format!("anchor_reap:{error}"))?;
-        gone?;
+        finish_drain(target_result, anchor_result, gone)?;
         Ok(ProcessGroupDrainReceipt::new())
     }
+}
 
-    fn reap_after_signal_failure(&mut self, _target: Option<&mut Child>) {
-        self.stdin.take();
+fn finish_drain(
+    target_result: Option<Result<ExitStatus, String>>,
+    anchor_result: Result<ExitStatus, String>,
+    gone: Result<(), String>,
+) -> Result<(), String> {
+    target_result
+        .transpose()
+        .map_err(|error| format!("target_reap:{error}"))?;
+    anchor_result.map_err(|error| format!("anchor_reap:{error}"))?;
+    gone
+}
+
+fn reap_bounded(target: Option<&mut Child>, anchor: &mut Child, deadline: Instant) {
+    if let Some(target) = target {
+        drop(reap_until(target, deadline));
+    }
+    drop(reap_until(anchor, deadline));
+}
+
+fn reap_best_effort(target: Option<&mut Child>, deadline: Instant) {
+    if let Some(target) = target {
+        reap_best_effort_child(target, deadline);
+    }
+}
+
+fn reap_best_effort_child(child: &mut Child, deadline: Instant) {
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) | Err(_) => return,
+            Ok(None) if Instant::now() >= deadline => return,
+            Ok(None) => thread::sleep(Duration::from_millis(5)),
+        }
     }
 }
 

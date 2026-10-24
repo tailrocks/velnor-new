@@ -103,10 +103,11 @@ pub(crate) fn verify_protected_formula_bytes(
     release_plan.channel = channel;
     let projection = validate_homebrew_projection(authority.spec(), &release_plan)
         .map_err(|_| internal("native_check_formula_projection"))?;
+    let protected_base = read_protected_formula(authority, channel, deadline)?;
     let parsed = parse_generated_formula(authority.spec(), &projection, bytes)
         .map_err(|_| internal("native_check_formula_invalid"))?;
     if channel == PackageReleaseChannel::Stable && parsed.is_disabled_stable_sentinel() {
-        verify_stable_sentinel(authority, &projection, bytes)?;
+        verify_stable_sentinel_transition(authority.spec(), &projection, bytes, &protected_base)?;
         return Ok((None, bytes.to_vec()));
     }
     let source_sha = formula_source_sha(channel, authority, &parsed)?;
@@ -114,7 +115,7 @@ pub(crate) fn verify_protected_formula_bytes(
     if parsed.source_sha() != Some(source_sha.as_str()) || parsed.tag() != Some(tag.as_str()) {
         return Err(internal("native_check_formula_selector_mismatch"));
     }
-    verify_formula_release(
+    let (receipt_digest, release) = verify_formula_release(
         authority,
         release_plan,
         channel,
@@ -122,18 +123,85 @@ pub(crate) fn verify_protected_formula_bytes(
         (tag, source_sha),
         bytes,
         deadline,
+    )?;
+    validate_formula_upgrade_history(authority, channel, &protected_base, bytes, &release)?;
+    Ok((Some(receipt_digest), bytes.to_vec()))
+}
+
+fn read_protected_formula(
+    authority: &crate::homebrew::authority::VerifiedHomebrewAuthority,
+    channel: PackageReleaseChannel,
+    deadline: CheckDeadline,
+) -> Result<Vec<u8>, OrchestratorError> {
+    let formula = authority
+        .spec()
+        .channels
+        .iter()
+        .find(|formula| formula.channel == channel)
+        .ok_or_else(|| internal("native_check_formula_channel_missing"))?;
+    authority.protected_tap_file(&formula.destination, 1024 * 1024, deadline)
+}
+
+fn validate_formula_upgrade_history(
+    authority: &crate::homebrew::authority::VerifiedHomebrewAuthority,
+    channel: PackageReleaseChannel,
+    protected_base: &[u8],
+    candidate: &[u8],
+    release: &velnor_actions_contract::homebrew_formula::VerifiedPackageRelease,
+) -> Result<(), OrchestratorError> {
+    let formula = authority
+        .spec()
+        .channels
+        .iter()
+        .find(|formula| formula.channel == channel)
+        .ok_or_else(|| internal("native_check_formula_channel_missing"))?;
+    let mut plan = authority.plan().clone();
+    plan.channel = channel;
+    validate_candidate_upgrade(
+        crate::tap_prepare::FormulaCandidateInput {
+            spec: authority.spec(),
+            source_repository: &authority.plan().repository,
+            tap_repository: &authority.tap().repository,
+            formula_path: &formula.destination,
+            base_sha: authority.tap_base_sha(),
+            base_formula: protected_base,
+            plan: &plan,
+            release,
+        },
+        candidate,
     )
-    .map(|digest| (Some(digest), bytes.to_vec()))
+}
+
+fn validate_candidate_upgrade(
+    input: crate::tap_prepare::FormulaCandidateInput<'_>,
+    candidate: &[u8],
+) -> Result<(), OrchestratorError> {
+    let canonical = crate::tap_prepare::derive_formula_candidate(input)
+        .map_err(|_| internal("native_check_formula_upgrade_history"))?;
+    if canonical != candidate {
+        return Err(internal("native_check_formula_upgrade_history"));
+    }
+    Ok(())
+}
+
+fn verify_stable_sentinel_transition(
+    spec: &velnor_actions_contract::homebrew_spec::HomebrewFormulaSpec,
+    projection: &velnor_actions_contract::homebrew_spec::ValidatedHomebrewProjection,
+    candidate: &[u8],
+    protected_base: &[u8],
+) -> Result<(), OrchestratorError> {
+    verify_stable_sentinel(spec, projection, candidate)?;
+    verify_stable_sentinel(spec, projection, protected_base)
 }
 
 fn verify_stable_sentinel(
-    authority: &crate::homebrew::authority::VerifiedHomebrewAuthority,
+    spec: &velnor_actions_contract::homebrew_spec::HomebrewFormulaSpec,
     projection: &velnor_actions_contract::homebrew_spec::ValidatedHomebrewProjection,
     bytes: &[u8],
 ) -> Result<(), OrchestratorError> {
-    let sentinel = HomebrewFormulaReleaseLiterals::stable_sentinel(authority.spec(), projection)
+    let sentinel = HomebrewFormulaReleaseLiterals::stable_sentinel(spec, projection)
         .map_err(|_| internal("native_check_stable_sentinel"))?;
-    if render_homebrew_formula(authority.spec(), &sentinel)
+    if render_homebrew_formula(spec, &sentinel)
         .map_err(|_| internal("native_check_formula_render"))?
         != bytes
     {
@@ -178,7 +246,13 @@ fn verify_formula_release(
     selector: (String, String),
     bytes: &[u8],
     deadline: CheckDeadline,
-) -> Result<String, OrchestratorError> {
+) -> Result<
+    (
+        String,
+        velnor_actions_contract::homebrew_formula::VerifiedPackageRelease,
+    ),
+    OrchestratorError,
+> {
     let (tag, source_sha) = selector;
     let policy =
         crate::package_release_public::PackageReleasePublicPolicy::from_trusted_source_authority(
@@ -199,9 +273,17 @@ fn verify_formula_release(
     {
         return Err(internal("native_check_formula_release_mismatch"));
     }
-    Ok(digest_b3(&release.receipt().canonical_bytes().map_err(
-        |_| internal("native_check_release_receipt_encode"),
-    )?))
+    let receipt = release.receipt().clone();
+    let receipt_digest = digest_b3(
+        &receipt
+            .canonical_bytes()
+            .map_err(|_| internal("native_check_release_receipt_encode"))?,
+    );
+    let verified = velnor_actions_contract::homebrew_formula::VerifiedPackageRelease {
+        receipt_digest: receipt_digest.clone(),
+        receipt,
+    };
+    Ok((receipt_digest, verified))
 }
 
 fn formula_release_literals(
@@ -229,3 +311,7 @@ fn formula_release_literals(
     )
     .map_err(|_| internal("native_check_formula_literals"))
 }
+
+#[cfg(test)]
+#[path = "formula_tests.rs"]
+mod tests;

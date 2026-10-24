@@ -9,6 +9,26 @@ use velnor_actions_contract::{
 
 const SOURCE_SHA: &str = "a12e73afd75b944a872e8295d61a15f93f5789a2";
 const AUTHORITY_SHA: &str = "b12e73afd75b944a872e8295d61a15f93f5789a2";
+const HISTORICAL_ADMISSION: &[u8] =
+    include_bytes!("../../../.velnor/qualification/homebrew/preview-a-source-admission.json");
+
+fn historical_recovery_input() -> HistoricalPackageReleaseRecoveryInput {
+    HistoricalPackageReleaseRecoveryInput {
+        original_publisher_job_id: 120_711_604_532,
+        run_id: 40_078_964_311,
+        run_attempt: 2,
+        authority_sha: "e737f4b5eb7c1a0d15ba6595fc260407ad178452".to_owned(),
+        recovery_job_id: 120_831_039_984,
+        artifact_id: 12_554_588_221,
+        artifact_name: "velnor-preview-source-r40078964311-a2".to_owned(),
+        admission_size: 34_639,
+        admission_sha256: "73eacadf794d40c16e39e6693d09741ce9146cefc867d135f4a1fee023daa972"
+            .to_owned(),
+        policy_sha256: "37545d865186a6ab25755809d434a991659a4c98ae8119e7a07e50822c08933b"
+            .to_owned(),
+        admission_bytes: HISTORICAL_ADMISSION.to_vec(),
+    }
+}
 
 fn plan() -> PackageReleasePlan {
     PackageReleasePlan {
@@ -298,23 +318,9 @@ fn historical_a_recovery_requires_its_exact_protected_recovery_pin() {
         plan_sha,
     )
     .expect("A release pin");
-    let recovery = HistoricalPackageReleaseRecovery::new_from_protected_policy(
-        HistoricalPackageReleaseRecoveryInput {
-            original_publisher_job_id: 120_711_604_532,
-            run_id: 40_078_964_311,
-            run_attempt: 2,
-            authority_sha: "e737f4b5eb7c1a0d15ba6595fc260407ad178452".to_owned(),
-            recovery_job_id: 120_831_039_984,
-            artifact_id: 12_554_588_221,
-            artifact_name: "velnor-preview-source-r40078964311-a2".to_owned(),
-            admission_size: 34_639,
-            admission_sha256: "73eacadf794d40c16e39e6693d09741ce9146cefc867d135f4a1fee023daa972"
-                .to_owned(),
-            policy_sha256: "37545d865186a6ab25755809d434a991659a4c98ae8119e7a07e50822c08933b"
-                .to_owned(),
-        },
-    )
-    .expect("recovery identity syntax");
+    let recovery =
+        HistoricalPackageReleaseRecovery::new_from_protected_policy(historical_recovery_input())
+            .expect("recovery identity and retained bytes");
     let admitted = admission
         .with_recovery_admission(recovery.clone())
         .expect("exact A recovery evidence");
@@ -323,22 +329,20 @@ fn historical_a_recovery_requires_its_exact_protected_recovery_pin() {
     assert!(
         HistoricalPackageReleaseRecovery::new_from_protected_policy(
             HistoricalPackageReleaseRecoveryInput {
-                original_publisher_job_id: 120_711_604_532,
-                run_id: 40_078_964_311,
                 run_attempt: 0,
-                authority_sha: "e737f4b5eb7c1a0d15ba6595fc260407ad178452".to_owned(),
-                recovery_job_id: 120_831_039_984,
-                artifact_id: 12_554_588_221,
-                artifact_name: "velnor-preview-source-r40078964311-a2".to_owned(),
-                admission_size: 34_639,
-                admission_sha256:
-                    "73eacadf794d40c16e39e6693d09741ce9146cefc867d135f4a1fee023daa972".to_owned(),
-                policy_sha256: "37545d865186a6ab25755809d434a991659a4c98ae8119e7a07e50822c08933b"
-                    .to_owned(),
-            },
+                ..historical_recovery_input()
+            }
         )
         .is_err()
     );
+
+    let mut changed_bytes = historical_recovery_input();
+    changed_bytes.admission_bytes[0] ^= 1;
+    assert!(HistoricalPackageReleaseRecovery::new_from_protected_policy(changed_bytes).is_err());
+
+    let mut wrong_size = historical_recovery_input();
+    wrong_size.admission_size += 1;
+    assert!(HistoricalPackageReleaseRecovery::new_from_protected_policy(wrong_size).is_err());
 }
 
 #[test]

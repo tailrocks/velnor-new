@@ -110,6 +110,64 @@ fn extension_scan_rejects_truncated_headers_and_bodies() {
 }
 
 #[test]
+fn extension_scan_rejects_nonzero_data_after_tar_terminator() {
+    for compressed in [false, true] {
+        let mut tar = tar_archive(&[]);
+        tar.extend_from_slice(b"unadmitted layer payload");
+        let bytes = if compressed { gzip(&tar) } else { tar };
+        let (mut file, blob) = store(&bytes);
+        assert_eq!(
+            scan_extensions(
+                file.as_file_mut(),
+                &blob,
+                compressed,
+                MAX_OCI_CANDIDATE_UNCOMPRESSED_BYTES,
+            )
+            .expect_err("nonzero data after terminator rejected")
+            .to_string(),
+            "oci_layer_trailing_data",
+            "compressed={compressed}"
+        );
+    }
+}
+
+#[test]
+fn extension_scan_rejects_nonzero_second_gzip_member_after_terminator() {
+    let mut compressed = gzip(&tar_archive(&[]));
+    compressed.extend_from_slice(&gzip(b"unadmitted second member"));
+    let (mut file, blob) = store(&compressed);
+    assert_eq!(
+        scan_extensions(
+            file.as_file_mut(),
+            &blob,
+            true,
+            MAX_OCI_CANDIDATE_UNCOMPRESSED_BYTES,
+        )
+        .expect_err("nonzero second gzip member rejected")
+        .to_string(),
+        "oci_layer_trailing_data"
+    );
+}
+
+#[test]
+fn extension_scan_rejects_truncated_second_terminator_block() {
+    let tar = tar_archive(&[]);
+    let truncated = &tar[..tar.len() - TAR_BLOCK];
+    let (mut file, blob) = store(truncated);
+    assert_eq!(
+        scan_extensions(
+            file.as_file_mut(),
+            &blob,
+            false,
+            MAX_OCI_CANDIDATE_UNCOMPRESSED_BYTES,
+        )
+        .expect_err("second terminator block required")
+        .to_string(),
+        "oci_layer_terminator_truncated"
+    );
+}
+
+#[test]
 fn inspect_layer_rejects_duplicate_paths_after_normalization() {
     let tar = tar_archive(&[("nested/./item", b"a", b'0'), ("nested/item", b"b", b'0')]);
     let (mut file, blob) = store(&tar);

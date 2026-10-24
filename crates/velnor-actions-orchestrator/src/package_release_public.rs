@@ -16,6 +16,9 @@ use crate::{
 };
 
 #[cfg(test)]
+#[path = "package_release_public_historical_tests.rs"]
+mod historical_tests;
+#[cfg(test)]
 #[path = "package_release_public_tests.rs"]
 mod tests;
 
@@ -50,6 +53,7 @@ pub(crate) struct HistoricalPackageReleaseRecovery {
     pub(super) admission_size: u64,
     pub(super) admission_sha256: String,
     pub(super) policy_sha256: String,
+    pub(super) admission_bytes: Vec<u8>,
 }
 
 /// Protected-policy fields for a separately verified historical recovery run.
@@ -65,6 +69,7 @@ pub(crate) struct HistoricalPackageReleaseRecoveryInput {
     pub(crate) admission_size: u64,
     pub(crate) admission_sha256: String,
     pub(crate) policy_sha256: String,
+    pub(crate) admission_bytes: Vec<u8>,
 }
 
 impl HistoricalPackageReleaseRecovery {
@@ -84,7 +89,9 @@ impl HistoricalPackageReleaseRecovery {
                 )
             || input.admission_size == 0
             || input.admission_size > 16 * 1024 * 1024
+            || u64::try_from(input.admission_bytes.len()).ok() != Some(input.admission_size)
             || !is_sha256(&input.admission_sha256)
+            || sha256(&input.admission_bytes) != input.admission_sha256
             || !is_sha256(&input.policy_sha256)
         {
             return Err(internal("package_public_historical_recovery_invalid"));
@@ -100,6 +107,7 @@ impl HistoricalPackageReleaseRecovery {
             admission_size: input.admission_size,
             admission_sha256: input.admission_sha256,
             policy_sha256: input.policy_sha256,
+            admission_bytes: input.admission_bytes,
         })
     }
 }
@@ -158,6 +166,8 @@ impl HistoricalPackageReleaseAdmission {
                     recovery.run_id, recovery.run_attempt
                 )
             || !is_sha256(&recovery.admission_sha256)
+            || u64::try_from(recovery.admission_bytes.len()).ok() != Some(recovery.admission_size)
+            || sha256(&recovery.admission_bytes) != recovery.admission_sha256
             || !is_sha256(&recovery.policy_sha256)
         {
             return Err(internal("package_public_historical_recovery_invalid"));

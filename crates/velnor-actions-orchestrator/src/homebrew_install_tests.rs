@@ -78,7 +78,7 @@ fn receipt_accepts_null_relocation_inventory_but_rejects_invalid_inventory() {
 
 #[test]
 fn keg_inventory_rejects_extra_files_and_links() {
-    let root = tempfile::tempdir_in("/private/tmp").expect("private keg fixture");
+    let root = physical_tempdir();
     let keg = root.path();
     std::fs::create_dir(keg.join(".brew")).expect("brew metadata directory");
     std::fs::create_dir(keg.join("bin")).expect("bin directory");
@@ -267,7 +267,7 @@ fn install_evidence_deserialization_rejects_unknown_fields() {
 
 #[test]
 fn candidate_formula_write_is_exclusive_and_symlink_safe() {
-    let temp = tempfile::tempdir_in("/private/tmp").expect("private temp directory");
+    let temp = physical_tempdir();
     let formula = b"class ExamplePreview < Formula\nend\n";
     let digest = sha256(formula);
     let deadline =
@@ -311,4 +311,11 @@ fn candidate_formula_write_is_exclusive_and_symlink_safe() {
         std::fs::read(&target).expect("target remains"),
         b"untouched"
     );
+}
+
+fn physical_tempdir() -> tempfile::TempDir {
+    let root = std::env::temp_dir()
+        .canonicalize()
+        .expect("physical system temp directory");
+    tempfile::tempdir_in(root).expect("private temporary fixture")
 }

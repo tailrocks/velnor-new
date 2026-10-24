@@ -120,7 +120,62 @@ fn source_closure_binds_exact_native_implementation_paths() {
         parse_image_candidate_source_closure(&bytes).expect("parse closure"),
         closure
     );
-    let mut incomplete = closure;
-    incomplete.inputs.remove("Cargo.lock");
-    assert!(validate_image_candidate_source_closure(&incomplete).is_err());
+    for path in NATIVE_IMAGE_CANDIDATE_INPUTS {
+        let mut incomplete = closure.clone();
+        incomplete.inputs.remove(path);
+        assert!(
+            validate_image_candidate_source_closure(&incomplete).is_err(),
+            "{path}"
+        );
+    }
+    let mut extra = closure;
+    extra
+        .inputs
+        .insert("unreviewed.rs".to_owned(), "c".repeat(64));
+    assert!(validate_image_candidate_source_closure(&extra).is_err());
+}
+
+#[test]
+fn source_closure_covers_shared_command_runtime_modules() {
+    for (directory, source) in [
+        (
+            "crates/velnor-actions-mise/src",
+            include_str!("../../velnor-actions-mise/src/command.rs"),
+        ),
+        (
+            "crates/velnor-actions-mise/src",
+            include_str!("../../velnor-actions-mise/src/command_cancellable.rs"),
+        ),
+        (
+            "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate",
+            include_str!("../../velnor-archive-guard/src/owned_archive_guard/oci_candidate.rs"),
+        ),
+    ] {
+        let lines = source.lines().collect::<Vec<_>>();
+        for pair in lines.windows(2) {
+            if pair[0] == "#[cfg(test)]" {
+                continue;
+            }
+            let explicit = pair[1]
+                .strip_prefix("#[path = \"")
+                .and_then(|value| value.strip_suffix("\"]"))
+                .map(str::to_owned);
+            let implicit = (!pair[0].starts_with("#[path = "))
+                .then(|| {
+                    pair[1]
+                        .strip_prefix("mod ")
+                        .and_then(|value| value.strip_suffix(';'))
+                })
+                .flatten()
+                .map(|module| format!("{module}.rs"));
+            let Some(module) = explicit.or(implicit) else {
+                continue;
+            };
+            let path = format!("{directory}/{module}");
+            assert!(
+                NATIVE_IMAGE_CANDIDATE_INPUTS.contains(&path.as_str()),
+                "missing runtime module: {path}"
+            );
+        }
+    }
 }

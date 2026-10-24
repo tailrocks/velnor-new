@@ -120,12 +120,15 @@ pub(super) struct Evidence {
 pub(super) fn admission(
     record: &HistoricalRecord,
     plan: &velnor_actions_contract::PackageReleasePlan,
+    durable_admission: Option<&[u8]>,
 ) -> Result<crate::package_release_public::HistoricalPackageReleaseAdmission, OrchestratorError> {
     let mut admission = crate::package_release_public::HistoricalPackageReleaseAdmission::new_from_protected_policy(
         plan, record.release.source_sha.clone(), record.release.tag.clone(), record.release.id,
         record.release.receipt_asset_id, record.release.receipt_sha256.clone(), record.plan_sha256.clone(),
     )?;
     if let Some(recovery) = &record.recovery {
+        let admission_bytes = durable_admission
+            .ok_or_else(|| crate::internal::internal("homebrew_qualification_admission_missing"))?;
         let artifact = &recovery.source_admission_artifact;
         let recovery = crate::package_release_public::HistoricalPackageReleaseRecovery::new_from_protected_policy(
             crate::package_release_public::HistoricalPackageReleaseRecoveryInput {
@@ -139,9 +142,14 @@ pub(super) fn admission(
                 admission_size: artifact.size,
                 admission_sha256: artifact.sha256.clone(),
                 policy_sha256: artifact.policy_sha256.clone(),
+                admission_bytes: admission_bytes.to_vec(),
             },
         )?;
         admission = admission.with_recovery_admission(recovery)?;
+    } else if durable_admission.is_some() {
+        return Err(crate::internal::internal(
+            "homebrew_qualification_admission_unexpected",
+        ));
     }
     Ok(admission)
 }

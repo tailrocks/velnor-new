@@ -67,6 +67,52 @@ fn native_check_timeouts_follow_closed_operation_budgets() {
 }
 
 #[test]
+fn native_install_requires_hosted_macos_arm_but_other_operations_keep_platform_support() {
+    use crate::config::CheckPlatform;
+
+    let unsupported = [
+        (CheckPlatform::LinuxX64, "ubuntu-26.04"),
+        (CheckPlatform::MacosX64, "macos-15-intel"),
+    ];
+    for (platform, label) in unsupported {
+        let mut install = check(NativeHomebrewOperation::Install);
+        install.runner.platform = platform;
+        install.runner.label = label.to_owned();
+        let error = install
+            .validate("config.toml", "native_checks[0]")
+            .expect_err("native Homebrew install is ARM macOS only");
+        assert!(
+            error
+                .to_string()
+                .contains("native_homebrew_install_requires_macos_arm64"),
+            "{platform:?}: {error}"
+        );
+
+        for operation in [
+            NativeHomebrewOperation::TapTree,
+            NativeHomebrewOperation::FormulaContract,
+            NativeHomebrewOperation::AdoptionContract,
+        ] {
+            let mut declaration = check(operation);
+            declaration.runner.platform = platform;
+            declaration.runner.label = label.to_owned();
+            assert!(
+                declaration
+                    .validate("config.toml", "native_checks[0]")
+                    .is_ok(),
+                "{operation:?} must retain {platform:?} support"
+            );
+        }
+    }
+    assert!(
+        check(NativeHomebrewOperation::Install)
+            .validate("config.toml", "native_checks[0]")
+            .is_ok(),
+        "native Homebrew install accepts hosted Apple ARM"
+    );
+}
+
+#[test]
 fn omitted_native_timeout_uses_five_minute_closed_default() {
     let mut value =
         serde_json::to_value(check(NativeHomebrewOperation::TapTree)).expect("serialize check");

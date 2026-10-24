@@ -119,6 +119,9 @@ fn historical_recovery_requires_exact_cancelled_original_publisher_job() {
 
 #[test]
 fn historical_recovery_run_must_skip_every_rebuild_job() {
+    let admission_bytes =
+        include_bytes!("../../../.velnor/qualification/homebrew/preview-a-source-admission.json")
+            .to_vec();
     let recovery =
         crate::package_release_public::HistoricalPackageReleaseRecovery::new_from_protected_policy(
             crate::package_release_public::HistoricalPackageReleaseRecoveryInput {
@@ -129,9 +132,11 @@ fn historical_recovery_run_must_skip_every_rebuild_job() {
                 recovery_job_id: 11,
                 artifact_id: 12,
                 artifact_name: "velnor-preview-source-r22-a2".to_owned(),
-                admission_size: 100,
-                admission_sha256: "c".repeat(64),
+                admission_size: 34_639,
+                admission_sha256:
+                    "73eacadf794d40c16e39e6693d09741ce9146cefc867d135f4a1fee023daa972".to_owned(),
                 policy_sha256: "d".repeat(64),
+                admission_bytes,
             },
         )
         .expect("valid pinned recovery identity");

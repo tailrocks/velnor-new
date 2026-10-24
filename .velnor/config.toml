@@ -153,6 +153,7 @@ inputs = [
   "crates/velnor-archive-guard/src/owned_archive_guard/mod.rs",
   "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate.rs",
   "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/archive.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/archive_tar_framing.rs",
   "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/graph.rs",
   "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/graph_support.rs",
   "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/json.rs",

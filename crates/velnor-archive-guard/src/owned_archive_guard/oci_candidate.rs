@@ -1,6 +1,7 @@
 //! Bounded inspection of the uncompressed OCI archive emitted by Buildx.
 
 mod archive;
+mod archive_tar_framing;
 mod graph;
 mod json;
 mod layer;

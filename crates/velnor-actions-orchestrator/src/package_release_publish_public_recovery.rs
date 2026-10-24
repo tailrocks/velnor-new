@@ -119,103 +119,15 @@ fn read_recovery_projection(
     crate::package_release_publish::release_policy_admission::PublicHistoricalAdmissionProjection,
     OrchestratorError,
 > {
-    let zip = read_verified_recovery_archive(context)?;
-    let recovery = context.recovery;
-    let staging =
-        tempfile::tempdir().map_err(|_| internal("package_public_historical_recovery_staging"))?;
-    let entry = crate::package_release_publish::artifact_zip::ExpectedZipEntry {
-        name: "preview-source-admission.json".to_owned(),
-        size: Some(recovery.admission_size),
-        sha256: Some(recovery.admission_sha256.clone()),
-        max_bytes: 16 * 1024 * 1024,
-        unix_permissions: Some(0o644),
-    };
-    context
-        .deadline
-        .scope(|| {
-            crate::package_release_publish::artifact_zip::extract_in_scope(
-                &zip,
-                staging.path(),
-                &[entry],
-            )
-        })
-        .map_err(|_| internal("package_public_verification_deadline"))??;
-    let admission = crate::retrieve_reports::staged_reads::read_staged_bytes(
-        &staging.path().join("preview-source-admission.json"),
-        16 * 1024 * 1024,
-    )
-    .map_err(|_| internal("package_public_historical_recovery_admission_read"))?;
-    crate::package_release_publish::release_policy_admission::project_public_historical_admission(
-        &admission,
-        &recovery.admission_sha256,
-    )
-}
-
-fn read_verified_recovery_archive(
-    context: &RecoveryAdmissionContext<'_>,
-) -> Result<Vec<u8>, OrchestratorError> {
-    let recovery = context.recovery;
-    let artifact_matches = context
-        .api
-        .workflow_artifacts(recovery.run_id)?
-        .into_iter()
-        .filter(|artifact| {
-            artifact.id == recovery.artifact_id || artifact.name == recovery.artifact_name
-        })
-        .collect::<Vec<_>>();
-    if artifact_matches.len() != 1 {
-        return Err(internal(
-            "package_public_historical_recovery_artifact_duplicate",
-        ));
-    }
-    let artifact = &artifact_matches[0];
-    validate_recovery_artifact(artifact, context)?;
     context
         .deadline
         .remaining()
         .map_err(|_| internal("package_public_verification_deadline"))?;
-    let zip = context.api.download_artifact_archive_bounded(
-        recovery.artifact_id,
-        usize::try_from(artifact.size_in_bytes)
-            .map_err(|_| internal("package_public_historical_recovery_artifact_size"))?,
-    )?;
-    if zip.len() as u64 != artifact.size_in_bytes
-        || artifact
-            .digest
-            .as_ref()
-            .is_some_and(|digest| digest != &format!("sha256:{}", sha256(&zip)))
-    {
-        return Err(internal(
-            "package_public_historical_recovery_artifact_digest",
-        ));
-    }
-    Ok(zip)
-}
-
-fn validate_recovery_artifact(
-    artifact: &github::WorkflowArtifact,
-    context: &RecoveryAdmissionContext<'_>,
-) -> Result<(), OrchestratorError> {
     let recovery = context.recovery;
-    let artifact_run = artifact
-        .workflow_run
-        .as_ref()
-        .ok_or_else(|| internal("package_public_historical_recovery_artifact_run"))?;
-    if artifact.id != recovery.artifact_id
-        || artifact.name != recovery.artifact_name
-        || artifact.expired
-        || artifact.size_in_bytes == 0
-        || artifact.size_in_bytes > 32 * 1024 * 1024
-        || artifact_run.id != recovery.run_id
-        || artifact_run.repository_id != context.repository_id
-        || artifact_run.head_sha != recovery.authority_sha
-        || artifact_run.head_branch != context.default_branch
-    {
-        return Err(internal(
-            "package_public_historical_recovery_artifact_mismatch",
-        ));
-    }
-    Ok(())
+    crate::package_release_publish::release_policy_admission::project_public_historical_admission(
+        &recovery.admission_bytes,
+        &recovery.admission_sha256,
+    )
 }
 
 pub(super) fn verify_public_recovery_jobs(

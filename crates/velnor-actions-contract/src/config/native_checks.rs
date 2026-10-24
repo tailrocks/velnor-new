@@ -2,7 +2,7 @@
 
 use crate::{
     ContractError,
-    config::{CheckExecutor, CheckRunner},
+    config::{CheckExecutor, CheckPlatform, CheckRunner},
     package_release::PackageReleaseChannel,
     workflow::timeout::JobTimeout,
 };
@@ -85,6 +85,14 @@ impl NativeHomebrewCheck {
             return Err(bad(
                 "runner.executor",
                 "native_homebrew_requires_hosted_runner",
+            ));
+        }
+        if self.operation == NativeHomebrewOperation::Install
+            && self.runner.platform != CheckPlatform::MacosArm64
+        {
+            return Err(bad(
+                "runner.platform",
+                "native_homebrew_install_requires_macos_arm64",
             ));
         }
         let (minimum, maximum) = match self.operation {

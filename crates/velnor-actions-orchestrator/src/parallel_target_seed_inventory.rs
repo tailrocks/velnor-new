@@ -44,7 +44,7 @@ impl Identity {
     }
     pub(super) fn from_stat(s: &rustix::fs::Stat) -> Self {
         Self {
-            dev: u64::try_from(s.st_dev).unwrap_or_default(),
+            dev: widen_u64(s.st_dev),
             ino: s.st_ino,
             mode: widen_mode(s.st_mode),
             size: u64::try_from(s.st_size.max(0)).unwrap_or_default(),
@@ -53,7 +53,7 @@ impl Identity {
             ctime: (s.st_ctime, i128::from(s.st_ctime_nsec)),
             uid: s.st_uid,
             gid: s.st_gid,
-            nlink: u64::from(s.st_nlink),
+            nlink: widen_u64(s.st_nlink),
         }
     }
     pub(super) fn same_object(&self, other: &Self) -> bool {
@@ -342,6 +342,13 @@ where
     Mode: Into<u32>,
 {
     mode.into()
+}
+
+fn widen_u64<Value>(value: Value) -> u64
+where
+    Value: TryInto<u64>,
+{
+    value.try_into().unwrap_or_default()
 }
 
 pub(super) fn checked_raw_mode<Mode>(mode: u32) -> Result<Mode, SeedError>
