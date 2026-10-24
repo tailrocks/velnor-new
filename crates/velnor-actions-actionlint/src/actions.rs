@@ -76,16 +76,18 @@ pub const AWS_CREDENTIALS_ACTION_VERSION: &str = "v6.3.0";
 /// Full commit SHA for [`AWS_CREDENTIALS_ACTION_VERSION`].
 pub const AWS_CREDENTIALS_ACTION_SHA: &str = "e1253824e5c10ff9df46874f81ed3ec929e19cfd";
 
-/// Selected `asamarts/alint` release candidate; hosted qualification remains pending.
+/// Selected `asamarts/alint` v0.20.1 release candidate; hosted qualification
+/// remains pending. Its action manifest retains the inputs used here:
+/// `version`, `path`, `config`, `format`, and `fail-on-warning`.
 /// Source: `https://api.github.com/repos/asamarts/alint/releases/tags/v0.20.1`.
 pub const ALINT_ACTION_VERSION: &str = "v0.20.1";
 /// Full commit SHA for [`ALINT_ACTION_VERSION`] from its immutable tag ref.
 pub const ALINT_ACTION_SHA: &str = "265d9fdc720bb8f59d00b87e33e4149869f77327";
 
-/// Selected `jdx/mise-action` release candidate; hosted qualification remains pending.
-///
-/// v5.2.3 changes config hashing to follow Mise's current and parent directories.
-/// Velnor disables this action's cache. Source:
+/// Selected `jdx/mise-action` v5.2.3 release candidate; hosted qualification
+/// remains pending. Its manifest retains the explicit version and SHA inputs
+/// used here. Velnor disables the action cache, so the release's expanded
+/// config-hash search does not affect generated jobs. Source:
 /// `https://api.github.com/repos/jdx/mise-action/releases/tags/v5.2.3`.
 pub const MISE_ACTION_VERSION: &str = "v5.2.3";
 /// Full commit SHA for [`MISE_ACTION_VERSION`] from its immutable tag ref.

@@ -20,9 +20,9 @@ pub(super) struct Identity {
     pub(super) ino: u64,
     pub(super) mode: u32,
     pub(super) size: u64,
-    pub(super) atime: (i64, i64),
-    pub(super) mtime: (i64, i64),
-    pub(super) ctime: (i64, i64),
+    pub(super) atime: (i64, i128),
+    pub(super) mtime: (i64, i128),
+    pub(super) ctime: (i64, i128),
     pub(super) uid: u32,
     pub(super) gid: u32,
     pub(super) nlink: u64,
@@ -34,9 +34,9 @@ impl Identity {
             ino: m.ino(),
             mode: m.mode(),
             size: m.size(),
-            atime: (m.atime(), m.atime_nsec()),
-            mtime: (m.mtime(), m.mtime_nsec()),
-            ctime: (m.ctime(), m.ctime_nsec()),
+            atime: (m.atime(), i128::from(m.atime_nsec())),
+            mtime: (m.mtime(), i128::from(m.mtime_nsec())),
+            ctime: (m.ctime(), i128::from(m.ctime_nsec())),
             uid: m.uid(),
             gid: m.gid(),
             nlink: m.nlink(),
@@ -46,11 +46,11 @@ impl Identity {
         Self {
             dev: u64::try_from(s.st_dev).unwrap_or_default(),
             ino: s.st_ino,
-            mode: u32::from(s.st_mode),
+            mode: widen_mode(s.st_mode),
             size: u64::try_from(s.st_size.max(0)).unwrap_or_default(),
-            atime: (s.st_atime, s.st_atime_nsec),
-            mtime: (s.st_mtime, s.st_mtime_nsec),
-            ctime: (s.st_ctime, s.st_ctime_nsec),
+            atime: (s.st_atime, i128::from(s.st_atime_nsec)),
+            mtime: (s.st_mtime, i128::from(s.st_mtime_nsec)),
+            ctime: (s.st_ctime, i128::from(s.st_ctime_nsec)),
             uid: s.st_uid,
             gid: s.st_gid,
             nlink: u64::from(s.st_nlink),
@@ -213,8 +213,7 @@ impl Snapshot {
                 return Err(fail("named_source_changed"));
             }
             let dst_parent = openat_parts(stage, &entry.parts[..entry.parts.len() - 1])?;
-            let mode =
-                u16::try_from(entry.identity.mode).map_err(|_| fail("source_file_mode_invalid"))?;
+            let mode = checked_raw_mode::<rustix::fs::RawMode>(entry.identity.mode)?;
             let ty = FileType::from_raw_mode(mode);
             if ty == FileType::Directory {
                 ufs::mkdirat(&dst_parent, &name, Mode::from_raw_mode(0o700))
@@ -247,14 +246,12 @@ impl Snapshot {
             }
         }
         for entry in self.entries.iter().rev() {
-            let mode =
-                u16::try_from(entry.identity.mode).map_err(|_| fail("source_file_mode_invalid"))?;
+            let mode = checked_raw_mode::<rustix::fs::RawMode>(entry.identity.mode)?;
             if FileType::from_raw_mode(mode) != FileType::Directory {
                 continue;
             }
             let dir = openat_parts(stage, &entry.parts)?;
-            let mode = u16::try_from(entry.identity.mode & 0o7777)
-                .map_err(|_| fail("source_file_mode_invalid"))?;
+            let mode = checked_raw_mode::<rustix::fs::RawMode>(entry.identity.mode & 0o7777)?;
             ufs::fchmod(&dir, Mode::from_raw_mode(mode)).map_err(seed_io_error)?;
             set_times(&dir, &entry.identity)?;
         }
@@ -298,8 +295,7 @@ fn copy_file(
     if out.nlink() != 1 || (out.dev(), out.ino()) == (expected.dev, expected.ino) {
         return Err(fail("target_copy_not_independent"));
     }
-    let mode =
-        u16::try_from(expected.mode & 0o7777).map_err(|_| fail("source_file_mode_invalid"))?;
+    let mode = checked_raw_mode::<rustix::fs::RawMode>(expected.mode & 0o7777)?;
     ufs::fchmod(&output, Mode::from_raw_mode(mode)).map_err(seed_io_error)?;
     set_times(&output, &expected)?;
     Ok(())
@@ -307,25 +303,51 @@ fn copy_file(
 
 fn set_times(fd: &impl AsFd, identity: &Identity) -> Result<(), SeedError> {
     let file = File::from(fd.as_fd().try_clone_to_owned().map_err(seed_io_error)?);
+    let accessed = system_time(identity.atime)?;
+    let modified = system_time(identity.mtime)?;
     file.set_times(
         FileTimes::new()
-            .set_accessed(system_time(identity.atime))
-            .set_modified(system_time(identity.mtime)),
+            .set_accessed(accessed)
+            .set_modified(modified),
     )
     .map_err(seed_io_error)?;
     Ok(())
 }
 
-fn system_time((seconds, nanos): (i64, i64)) -> SystemTime {
-    let nanoseconds = i128::from(seconds) * 1_000_000_000 + i128::from(nanos);
-    let magnitude = nanoseconds.unsigned_abs();
-    let duration = Duration::new(
-        u64::try_from(magnitude / 1_000_000_000).unwrap_or(u64::MAX),
-        (magnitude % 1_000_000_000) as u32,
-    );
-    if nanoseconds < 0 {
-        UNIX_EPOCH.checked_sub(duration).unwrap_or(UNIX_EPOCH)
-    } else {
-        UNIX_EPOCH.checked_add(duration).unwrap_or(UNIX_EPOCH)
+pub(super) fn system_time((seconds, nanos): (i64, i128)) -> Result<SystemTime, SeedError> {
+    const NANOS_PER_SECOND: i128 = 1_000_000_000;
+    if !(0..NANOS_PER_SECOND).contains(&nanos) {
+        return Err(fail("source_timestamp_invalid"));
     }
+    let nanoseconds = i128::from(seconds) * NANOS_PER_SECOND + nanos;
+    let magnitude = nanoseconds.unsigned_abs();
+    let seconds = u64::try_from(magnitude / 1_000_000_000)
+        .map_err(|_| fail("source_timestamp_out_of_range"))?;
+    let nanos = u32::try_from(magnitude % 1_000_000_000)
+        .map_err(|_| fail("source_timestamp_out_of_range"))?;
+    let duration = Duration::new(seconds, nanos);
+    if nanoseconds < 0 {
+        UNIX_EPOCH
+            .checked_sub(duration)
+            .ok_or_else(|| fail("source_timestamp_out_of_range"))
+    } else {
+        UNIX_EPOCH
+            .checked_add(duration)
+            .ok_or_else(|| fail("source_timestamp_out_of_range"))
+    }
+}
+
+fn widen_mode<Mode>(mode: Mode) -> u32
+where
+    Mode: Into<u32>,
+{
+    mode.into()
+}
+
+pub(super) fn checked_raw_mode<Mode>(mode: u32) -> Result<Mode, SeedError>
+where
+    Mode: TryFrom<u32>,
+{
+    mode.try_into()
+        .map_err(|_| fail("source_file_mode_invalid"))
 }

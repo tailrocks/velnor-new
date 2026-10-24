@@ -1,8 +1,9 @@
 //! Closed release-upload host and literal binary request arguments.
 //!
 //! GitHub's upload endpoint is uploads.github.com, not the REST API host.
-//! Pinned gh 2.103.2 uses absolute URLs unchanged and normalizes this GitHub
-//! subdomain to github.com for `GH_TOKEN` selection; no remote URL is accepted.
+//! Pinned gh 2.103.2 retains the inspected absolute-URL API transport and
+//! github.com subdomain token selection; no remote URL is accepted. The bounded
+//! 2.103.0-to-2.103.2 source comparison is recorded in freshness evidence.
 
 use super::{GitHubApi, OrchestratorError, internal};
 use std::{ffi::OsString, path::Path};

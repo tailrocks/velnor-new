@@ -260,6 +260,53 @@ fn source_mutation_after_inventory_is_rejected() {
 }
 
 #[test]
+fn metadata_and_stat_keep_platform_timestamp_values_losslessly() {
+    let tree = Tree::new();
+    let target = open_dir_path(&tree.target()).expect("target fd");
+    for relative in ["debug", "debug/deps/sample.rlib"] {
+        let metadata = fs::metadata(tree.target().join(relative)).expect("metadata");
+        let stat = statat(&target, relative).expect("stat");
+        let from_metadata = Identity::from_metadata(&metadata);
+        let from_stat = Identity::from_stat(&stat);
+        assert_eq!(from_metadata, from_stat);
+        assert_eq!(
+            from_metadata.atime,
+            (metadata.atime(), i128::from(metadata.atime_nsec()))
+        );
+        assert_eq!(
+            from_stat.atime,
+            (stat.st_atime, i128::from(stat.st_atime_nsec))
+        );
+    }
+}
+
+#[test]
+fn raw_mode_conversion_accepts_platform_width_and_rejects_narrowing() {
+    assert_eq!(
+        super::inventory::checked_raw_mode::<u16>(0o750).expect("mode"),
+        0o750
+    );
+    assert!(super::inventory::checked_raw_mode::<u16>(u32::MAX).is_err());
+    assert_eq!(
+        super::inventory::checked_raw_mode::<u32>(u32::MAX).expect("wide mode"),
+        u32::MAX
+    );
+}
+
+#[test]
+fn timestamp_conversion_preserves_pre_epoch_time_and_rejects_invalid_nanos() {
+    let expected = UNIX_EPOCH
+        .checked_sub(Duration::from_nanos(1))
+        .expect("representable timestamp");
+    assert_eq!(
+        super::inventory::system_time((-1, 999_999_999)).expect("pre-epoch time"),
+        expected
+    );
+    assert!(super::inventory::system_time((0, -1)).is_err());
+    assert!(super::inventory::system_time((0, 1_000_000_000)).is_err());
+}
+
+#[test]
 fn inventory_stops_retaining_names_at_the_configured_entry_limit() {
     let tree = Tree::new();
     let debug_path = tree.target().join("debug");
