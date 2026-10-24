@@ -230,7 +230,7 @@ fn policy_file_is_complete() -> Result<(), Box<dyn Error>> {
         "mise = \"2026.10.18\"",
         "rust = \"1.99.1\"",
         "mr-boxington = \"1.27.0\"",
-        "gh = \"2.103.0\"",
+        "gh = \"2.103.2\"",
         "jactionlint = \"2.3.0\"",
         "shellcheck = \"0.11.0\"",
         "nextest = \"0.9.149\"",

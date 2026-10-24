@@ -88,13 +88,13 @@ jobs:
     run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p $RUNNER_TEMP/velnor/bin && cp $RUNNER_TEMP/velnor/preseed/velnor-actions $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.53 && chmod +x $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.53 && sha256sum $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.53 | awk '\\''NF == 2 && length($1) == 64 && $1 !~ /[^0-9a-f]/ { printf \"helper-sha256=%s\\n\", $1; valid=1 } END { if (!valid) exit 1 }'\\'' >> \"$GITHUB_OUTPUT\"'"
    -
     name: Run Alint
-    uses: asamarts/alint@10d1c0a2bafd0bd316dbad9fe63ea5e1e3761c71
+    uses: asamarts/alint@265d9fdc720bb8f59d00b87e33e4149869f77327
     with:
      config: .alint.yml
      fail-on-warning: "true"
      format: github
      path: .
-     version: v0.20.0
+     version: v0.20.1
  cargo-deny:
   name: Cargo Deny
   runs-on: ubuntu-26.04
@@ -121,7 +121,7 @@ jobs:
      helper-sha256: ${{ steps.preseed-stage.outputs.helper-sha256 }}
    - &s7
     name: Setup Mise
-    uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550
+    uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e
     with:
      cache: "false"
      cache_save: "false"
@@ -135,7 +135,7 @@ jobs:
     if: github.event_name != 'workflow_dispatch'
     uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
     with:
-     d: f032157675036f735a9cb7e41f496aed3c83be2cef0b89b682e37d26ad4b5534
+     d: 5b142844d6502f91d01b23f55bac22aba5b0957dedd3fcc5cde220f0ca170745
    - &s8
     name: Restore Mise tools
     id: tools-restore
@@ -196,7 +196,7 @@ jobs:
     if: github.event_name != 'workflow_dispatch'
     uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
     with:
-     d: 2b685c111acf17134d52d110c79f0fb5113ee0453cb803d15e2d3c1e82001f73
+     d: dd070a9b925695daf529125f53764d416af375add42b3968352eb317fbba97dc
    - *s8
    -
     name: Prepare pinned tools
@@ -314,7 +314,7 @@ jobs:
     if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
     uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
     with:
-     d: b82b9b42713d312645a571fc8a58812259e1420ca61edb0f40ad926a2cf5eaa5-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
+     d: 72fd52c7a52ee9355caeea23a6c537d8de64734808ae60d628145d0b37e04334-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
    - &s18
     name: Restore Mise tools
     id: tools-restore
@@ -576,7 +576,7 @@ jobs:
     if: github.event_name != 'workflow_dispatch'
     uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
     with:
-     d: 3e7d3d34f568bb39f2514dfb87f4440b5f3d300d7ebc4feba09254ea328b9884-${{ env.VELNOR_TOOL_JACTIONLINT }}-${{ env.VELNOR_TOOL_JACTIONLINT_LOCK }}-${{ env.VELNOR_TOOL_SHELLCHECK }}-${{ env.VELNOR_TOOL_SHELLCHECK_LOCK }}
+     d: 88172dc77e8974b10f91d218cf16182a83ad786d365c9f16a777ab93d9609a88-${{ env.VELNOR_TOOL_JACTIONLINT }}-${{ env.VELNOR_TOOL_JACTIONLINT_LOCK }}-${{ env.VELNOR_TOOL_SHELLCHECK }}-${{ env.VELNOR_TOOL_SHELLCHECK_LOCK }}
    - *s8
    -
     name: Prepare pinned tools
@@ -627,7 +627,7 @@ jobs:
    -
     name: Prepare pinned tools
     env: *m18
-    run: "mise --no-config --no-env --no-hooks install 'rust@'\"${VELNOR_TOOL_RUST}\" 'jactionlint@'\"${VELNOR_TOOL_JACTIONLINT}\" 'shellcheck@'\"${VELNOR_TOOL_SHELLCHECK}\" 'aqua:nextest-rs/nextest/cargo-nextest@'\"${VELNOR_TOOL_NEXTEST}\" gh@2.103.0"
+    run: "mise --no-config --no-env --no-hooks install 'rust@'\"${VELNOR_TOOL_RUST}\" 'jactionlint@'\"${VELNOR_TOOL_JACTIONLINT}\" 'shellcheck@'\"${VELNOR_TOOL_SHELLCHECK}\" 'aqua:nextest-rs/nextest/cargo-nextest@'\"${VELNOR_TOOL_NEXTEST}\" gh@2.103.2"
    - *s41
    - *s22
    -
@@ -776,7 +776,7 @@ jobs:
    -
     name: Prepare pinned tools
     env: *m18
-    run: mise --no-config --no-env --no-hooks install gh@2.103.0
+    run: mise --no-config --no-env --no-hooks install gh@2.103.2
    -
     name: Download plan
     continue-on-error: true
@@ -1725,7 +1725,7 @@ jobs:
     if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
     uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
     with:
-     d: 8975c4b999b43cf54a3a8c86ef3d7d1a51a863ddc5070227dc0bbd818bf94e14-${{ env.VELNOR_TOOL_JACTIONLINT }}-${{ env.VELNOR_TOOL_JACTIONLINT_LOCK }}-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}-${{ env.VELNOR_TOOL_SHELLCHECK }}-${{ env.VELNOR_TOOL_SHELLCHECK_LOCK }}
+     d: 9a69324e359452025edaa81952163f55a355af29e093a13700e3b3895ed67b21-${{ env.VELNOR_TOOL_JACTIONLINT }}-${{ env.VELNOR_TOOL_JACTIONLINT_LOCK }}-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}-${{ env.VELNOR_TOOL_SHELLCHECK }}-${{ env.VELNOR_TOOL_SHELLCHECK_LOCK }}
    - *s18
    - *s13
    - *s19
@@ -3133,7 +3133,7 @@ jobs:
     if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
     uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
     with:
-     d: 86968fb13cb21ac66c943c6955df470a633ca8fda928f1554164ea950a25b8d2-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_OPENTOFU }}-${{ env.VELNOR_TOOL_OPENTOFU_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
+     d: 621ef95871f7d8c23e3230bc8098728be3ef06ed3b3258eb69543c2555da459c-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_OPENTOFU }}-${{ env.VELNOR_TOOL_OPENTOFU_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
    - *s18
    - *s13
    - *s19

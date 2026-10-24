@@ -13,7 +13,7 @@ const PINS: [(&str, &str); 4] = [
     ("rust", "1.99.1"),
     ("jactionlint", "2.3.0"),
     ("shellcheck", "0.11.0"),
-    ("gh", "2.103.0"),
+    ("gh", "2.103.2"),
 ];
 
 /// v3 lock entry; `platforms` selects checksummed platforms (`rust` takes none).
@@ -130,7 +130,7 @@ fn missing_lock_advises_and_generates() -> TestResult {
         !summary.contains("jactionlint@"),
         "jactionlint is verified by its catalog executable digest, not mise.lock: {summary}"
     );
-    for tool in ["shellcheck@0.11.0", "gh@2.103.0"] {
+    for tool in ["shellcheck@0.11.0", "gh@2.103.2"] {
         assert!(summary.contains(tool), "{summary}");
     }
     let plan = preview_generate(&repo)?;

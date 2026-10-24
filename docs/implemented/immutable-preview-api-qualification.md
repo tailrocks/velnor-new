@@ -25,15 +25,15 @@ commits do not replace each other in one global pending slot, and running
 publication is not cancelled. Exact-source CI and `A <= B <= H` ancestry gates
 admit historical releases; only current protected-main A can promote Homebrew.
 
-The source above matches the current Velnor GitHub CLI 2.103.0 pin at commit
+The source above records the 2026-10-22 Velnor GitHub CLI 2.103.0 baseline at commit
 `7948e8056e45ac3c729b829e0eafe2d0797a95c6`. The fetched source has SHA-256
 `301e98fdab7932f43ce2ca74edaeef17d888885bf99ce1ce495e431bb4b5b666`.
 A live read-only query of Jackin’s existing `preview` release returned
 `databaseId = 328385904` and `isDraft = false`; it did not mutate that release.
 
-## GitHub CLI 2.103.0 source qualification
+## GitHub CLI 2.103.0 source qualification (historical 2026-10-22 baseline)
 
-The current Velnor source baseline pins GitHub CLI 2.103.0 at commit
+The 2026-10-22 Velnor source baseline pinned GitHub CLI 2.103.0 at commit
 `7948e8056e45ac3c729b829e0eafe2d0797a95c6`; this baseline is not yet in a
 public SDK release. The fetched tag and commit sources matched.
 [`fetch.go` at v2.103.0](https://github.com/cli/cli/blob/7948e8056e45ac3c729b829e0eafe2d0797a95c6/pkg/cmd/release/shared/fetch.go)
@@ -54,6 +54,34 @@ GraphQL request or header semantics. This is source-only compatibility evidence,
 not hosted runtime qualification. Evidence files and comparison
 notes are retained under
 `/Users/donbeave/Projects/release-evidence-20261022/jackin-immutable-preview/gh2103-qualification/`.
+
+## GitHub CLI 2.103.2 bounded source comparison (2026-10-24)
+
+Velnor's current reviewed GitHub CLI pin is 2.103.2 at verified commit
+`4f2cfe92e3499f8581bf39db77e0a1431fa7b55c`. The bounded comparison from the
+2026-10-22 baseline commit `7948e8056e45ac3c729b829e0eafe2d0797a95c6` covers
+11 commits and 32 changed files. It changes no `pkg/cmd/api/*`,
+`pkg/cmd/release/*`, or `pkg/cmd/factory/*` path. At both immutable refs,
+`pkg/cmd/api/api.go` is byte-identical (SHA-256
+`5c416146a1dbd87b2a57d63bd597b0a1191c05c3657132349d99c22b6db05a3c`),
+`pkg/cmd/api/http.go` is byte-identical (SHA-256
+`9e4256cdd216bb763c519e6eb04453b6558ea8cb3464ce8bfd96a9b6826406b6`), and
+`pkg/cmd/release/upload/upload.go` is byte-identical at 4,100 bytes (SHA-256
+`8a276af9cba13142c6481b68f82f245b489137fe11a2281108d0849b0d41e15e`). The
+release-create path is also identical (SHA-256
+`d18e9145ef9ebf06457773f1a3befe30777a30e4645d82b4d741616e6cdea257`). The
+full compare and raw-source hashes are retained in the 2026-10-24 freshness
+evidence record and its private source addendum.
+
+The inspected `gh api` HTTP implementation therefore retains its absolute-URL
+handling. Velnor's release publisher uses `gh api` with a validated absolute
+`uploads.github.com` URL and passes the GitHub token through the child
+environment; it does not call `gh release upload` or the issue/PR attachment
+command. Both CLI tags still pin `github.com/cli/go-gh/v2` v2.17.0, whose
+inspected client normalizes the uploads subdomain for GitHub token selection.
+This supports the specific API transport and absolute release-asset request
+path inspected here. It is not a claim of general CLI semantic equivalence,
+a live upload qualification, or hosted runtime qualification.
 
 ## Workflow-run source and authority observation
 

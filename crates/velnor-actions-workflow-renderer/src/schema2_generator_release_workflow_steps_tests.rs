@@ -140,9 +140,9 @@ fn typed_gh_function_shadows_incompatible_cli_and_exports_to_script() -> Result<
         "used the incompatible system gh"
     );
     let invocation = fs::read_to_string(mise_log)?;
-    assert!(invocation.contains("--no-config --no-env --no-hooks exec gh@2.103.0 -- gh api test"));
+    assert!(invocation.contains("--no-config --no-env --no-hooks exec gh@2.103.2 -- gh api test"));
     assert!(
-        invocation.contains("--no-config --no-env --no-hooks exec gh@2.103.0 -- gh api nested")
+        invocation.contains("--no-config --no-env --no-hooks exec gh@2.103.2 -- gh api nested")
     );
     assert!(
         !timeout_called.exists(),
@@ -307,7 +307,7 @@ fn pinned_gh_argv() -> Vec<String> {
         "--no-env",
         "--no-hooks",
         "exec",
-        "gh@2.103.0",
+        "gh@2.103.2",
         "--",
         "gh",
     ]

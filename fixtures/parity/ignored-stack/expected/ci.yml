@@ -65,7 +65,7 @@ jobs:
         with:
           helper-sha256: b4fb9ca81c8fa15be0ea62b071ba2ea44e8049c044c69577d819d75f3c1f8688
       - name: Setup Mise
-        uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550
+        uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e
         with:
           cache: "false"
           cache_save: "false"
@@ -78,7 +78,7 @@ jobs:
         if: github.event_name != 'workflow_dispatch'
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 2c8a71ba2c8110d0cf2fa53374dee347cc0ff483b2d2cfccc140acfc7a72dce9
+          d: c83cb9f8814a921fc64647a9e6d1db24df92d98c87c3c0b772b30c4fff496ee3
       - name: Restore Mise tools
         id: tools-restore
         if: github.event_name != 'workflow_dispatch' && steps.v2.outputs.enabled == 'true'
@@ -157,7 +157,7 @@ jobs:
         with:
           helper-sha256: b4fb9ca81c8fa15be0ea62b071ba2ea44e8049c044c69577d819d75f3c1f8688
       - name: Setup Mise
-        uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550
+        uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e
         with:
           cache: "false"
           cache_save: "false"
@@ -170,7 +170,7 @@ jobs:
         if: github.event_name != 'workflow_dispatch'
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 597726e5e58f04a495ca429bd3d80b3b7e3c70709d7bb8263effb4bcc99bef12
+          d: b09bade10236696f3b515a7425019bb92ea4ea2b9be4cf130dd7e57f51ba8e1e
       - name: Restore Mise tools
         id: tools-restore
         if: github.event_name != 'workflow_dispatch' && steps.v2.outputs.enabled == 'true'
@@ -261,7 +261,7 @@ jobs:
     if: ${{ !cancelled() }}
     steps:
       - name: Setup Mise
-        uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550
+        uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e
         with:
           cache: "false"
           cache_save: "false"
@@ -276,7 +276,7 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install gh@2.103.0
+        run: mise --no-config --no-env --no-hooks install gh@2.103.2
       - name: Download plan
         continue-on-error: true
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333

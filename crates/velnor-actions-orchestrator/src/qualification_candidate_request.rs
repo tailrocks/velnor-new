@@ -82,7 +82,7 @@ fn validate(request: &Request) -> Result<(), OrchestratorError> {
 fn validate_tool(tool: &Tool, platform: CheckPlatform) -> Result<(), OrchestratorError> {
     let supported = match &tool.recipe.backend {
         QualifiedToolBackend::Core { tool } => matches!(tool.as_str(), "rust" | "zig" | "python"),
-        QualifiedToolBackend::Aqua { package } => package == "rust-cross/cargo-zigbuild",
+        QualifiedToolBackend::Aqua { .. } => true,
         QualifiedToolBackend::Cargo { .. } => false,
     };
     if !supported

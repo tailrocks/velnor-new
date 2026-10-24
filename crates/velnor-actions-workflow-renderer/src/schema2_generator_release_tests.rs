@@ -10,7 +10,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const REPOSITORY: &str = "tailrocks/velnor-new";
 const SOURCE_SHA: &str = "0123456789abcdef0123456789abcdef01234567";
-const PINNED_MISE_ARGUMENTS: &str = "--no-config --no-env --no-hooks exec gh@2.103.0 --";
+const PINNED_MISE_ARGUMENTS: &str = "--no-config --no-env --no-hooks exec gh@2.103.2 --";
 
 #[test]
 fn release_assets_are_bound_to_the_compiled_package_version() {

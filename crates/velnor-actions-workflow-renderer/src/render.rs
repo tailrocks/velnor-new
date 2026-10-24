@@ -47,7 +47,7 @@ mod cache_helper_support;
 use self::cache_helper_support::insert_verified_cache_helper;
 
 /// Pinned Alint binary release tag for the step's `version:` input.
-pub const ALINT_BINARY_VERSION: &str = "v0.20.0";
+pub const ALINT_BINARY_VERSION: &str = "v0.20.1";
 
 #[path = "render_context.rs"]
 mod context;
