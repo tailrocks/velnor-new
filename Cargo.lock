@@ -1010,6 +1010,7 @@ dependencies = [
  "sha2",
  "syn",
  "velnor-actions-freshness",
+ "velnor-actions-mise",
  "velnor-actions-orchestrator",
 ]
 

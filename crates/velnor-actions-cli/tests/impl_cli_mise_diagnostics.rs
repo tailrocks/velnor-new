@@ -1,12 +1,11 @@
 //! Bounded, failure-only context for CI tool-discovery regressions.
 
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 const TOOL_ENV_KEYS: [&str; 11] = crate::impl_cli_tmp::tool_context::TOOL_ENV;
-const INHERITED_MISE_SELECTOR_KEYS: [&str; 4] = [
+pub(super) const INHERITED_MISE_SELECTOR_KEYS: [&str; 4] = [
     "MISE_CONFIG_DIR",
     "MISE_CONFIG_FILE",
     "MISE_ENV",
@@ -26,35 +25,6 @@ const TOOL_PATH_KEYS: [&str; 12] = [
     "XDG_DATA_HOME",
     "XDG_CACHE_HOME",
 ];
-const VERIFY_CREDENTIAL_KEYS: [&str; 9] = [
-    "MISE_GITHUB_TOKEN",
-    "GITHUB_TOKEN",
-    "GH_TOKEN",
-    "ACTIONS_RUNTIME_TOKEN",
-    "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
-    "ACTIONS_ID_TOKEN_REQUEST_URL",
-    "CARGO_REGISTRY_TOKEN",
-    "NPM_TOKEN",
-    "NODE_AUTH_TOKEN",
-];
-const VERIFY_ENDPOINT_KEYS: [&str; 2] = ["GH_HOST", "GH_CONFIG_DIR"];
-const VERIFY_FETCH_REDIRECT_KEYS: [&str; 4] = [
-    "GIT_ASKPASS",
-    "SSH_ASKPASS",
-    "GIT_CONFIG",
-    "BUN_CONFIG_REGISTRY",
-];
-const ISOLATION_ENV: [(&str, &str); 4] = [
-    ("MISE_NO_CONFIG", "1"),
-    ("MISE_NO_ENV", "1"),
-    ("MISE_NO_HOOKS", "1"),
-    ("MISE_LOCKFILE", "0"),
-];
-const NO_AUTO_INSTALL_ENV: [(&str, &str); 2] = [
-    ("MISE_AUTO_INSTALL", "false"),
-    ("MISE_EXEC_AUTO_INSTALL", "false"),
-];
-
 #[derive(Clone, Copy)]
 pub(crate) enum MiseDiagnosticContext {
     PathOnly,
@@ -141,7 +111,15 @@ pub(crate) fn mise_failure_diagnostics(
         );
     }
     report.push_str(&mise_path_snapshot(cwd, context));
-    append_mise_executable(&mut report);
+    let parent: Vec<_> = std::env::vars_os().collect();
+    let environment =
+        super::bounded_diagnostics::selected_environment(context, explicit_env, &parent);
+    append_mise_executable(
+        &mut report,
+        environment
+            .get(OsStr::new("PATH"))
+            .map(std::ffi::OsString::as_os_str),
+    );
     append_mise_query(&mut report, cwd, context, explicit_env, &["--version"]);
     append_mise_query(
         &mut report,
@@ -157,6 +135,7 @@ pub(crate) fn mise_failure_diagnostics(
             "rust",
         ],
     );
+    append_rustup_components(&mut report, cwd, context, explicit_env);
     report
 }
 
@@ -222,8 +201,8 @@ fn append_path_metadata(report: &mut String, label: &str, path: &Path) {
     }
 }
 
-fn append_mise_executable(report: &mut String) {
-    let Some(path) = std::env::var_os("PATH") else {
+fn append_mise_executable(report: &mut String, path: Option<&OsStr>) {
+    let Some(path) = path else {
         push_line(report, format_args!("mise-executable=<PATH unset>"));
         return;
     };
@@ -251,77 +230,93 @@ fn append_mise_query(
     explicit_env: &[(&str, &str)],
     args: &[&str],
 ) {
-    let mut command = Command::new("mise");
-    command.args(args).current_dir(cwd);
-    if matches!(context, MiseDiagnosticContext::Inherited) {
-        strip_verify_parent(&mut command);
-    } else {
-        command.env_clear();
-        let mut child_env = std::env::var_os("PATH")
-            .map(|path| vec![(OsString::from("PATH"), path)])
-            .unwrap_or_default();
-        if matches!(context, MiseDiagnosticContext::PathAndToolHomes) {
-            child_env.extend(
-                TOOL_ENV_KEYS
-                    .into_iter()
-                    .filter_map(|key| parent_value(key).map(|value| (OsString::from(key), value))),
-            );
-        }
-        command.envs(child_env);
-    }
-    command.envs(
-        explicit_env
-            .iter()
-            .map(|(key, value)| (OsString::from(key), OsString::from(value)))
-            .chain(ISOLATION_ENV.map(|(key, value)| (OsString::from(key), OsString::from(value))))
-            .chain(
-                NO_AUTO_INSTALL_ENV
-                    .map(|(key, value)| (OsString::from(key), OsString::from(value))),
-            ),
-    );
-    match command.output() {
+    let parent: Vec<_> = std::env::vars_os().collect();
+    let environment =
+        super::bounded_diagnostics::selected_environment(context, explicit_env, &parent);
+    let args: Vec<_> = args.iter().map(OsString::from).collect();
+    match super::bounded_diagnostics::run_probe(OsStr::new("mise"), &args, cwd, &environment) {
         Ok(output) => {
             push_line(
                 report,
-                format_args!("mise {args:?} exit={:?}", output.status.code()),
-            );
-            push_line(
-                report,
                 format_args!(
-                    "mise stdout={}",
-                    bounded_text(&String::from_utf8_lossy(&output.stdout))
-                ),
-            );
-            push_line(
-                report,
-                format_args!(
-                    "mise stderr={}",
-                    bounded_text(&String::from_utf8_lossy(&output.stderr))
+                    "mise {args:?} result={}",
+                    super::bounded_diagnostics::command_summary(&output)
                 ),
             );
         }
         Err(error) => {
-            push_line(report, format_args!("mise {args:?} spawn_error={error}"));
+            push_line(
+                report,
+                format_args!("mise {args:?} bounded_probe_error={error}"),
+            );
         }
     }
 }
 
-fn strip_verify_parent(command: &mut Command) {
-    for (key, _) in std::env::vars_os() {
-        let name = key.to_string_lossy();
-        let credential = VERIFY_CREDENTIAL_KEYS.contains(&name.as_ref())
-            || name.starts_with("CARGO_REGISTRIES_")
-            || name.ends_with("_TOKEN");
-        let endpoint = VERIFY_ENDPOINT_KEYS.contains(&name.as_ref());
-        let fetch_redirect = VERIFY_FETCH_REDIRECT_KEYS.contains(&name.as_ref())
-            || name.starts_with("GIT_CONFIG_")
-            || name.starts_with("NPM_CONFIG_")
-            || name.starts_with("npm_config_");
-        let ambient_tool_state =
-            name.starts_with("TF_") || name.starts_with("TOFU_") || name.starts_with("CHECKPOINT_");
-        if credential || endpoint || fetch_redirect || ambient_tool_state {
-            command.env_remove(key);
+fn append_rustup_components(
+    report: &mut String,
+    cwd: &Path,
+    context: MiseDiagnosticContext,
+    explicit_env: &[(&str, &str)],
+) {
+    let parent: Vec<_> = std::env::vars_os().collect();
+    let environment =
+        super::bounded_diagnostics::selected_environment(context, explicit_env, &parent);
+    let rustup_home = environment
+        .get(OsStr::new("RUSTUP_HOME"))
+        .map(PathBuf::from)
+        .or_else(|| {
+            environment
+                .get(OsStr::new("HOME"))
+                .map(|home| PathBuf::from(home).join(".rustup"))
+        });
+    let mise_rustup_home = environment.get(OsStr::new("MISE_RUSTUP_HOME"));
+    push_line(
+        report,
+        format_args!(
+            "direct rustup uses RUSTUP_HOME={} (or HOME/.rustup); MISE_RUSTUP_HOME={} is not interpreted by rustup",
+            rustup_home
+                .as_ref()
+                .map_or_else(|| "<unset>".to_owned(), |path| path.display().to_string()),
+            mise_rustup_home.map_or_else(
+                || "<unset>".to_owned(),
+                |path| path.to_string_lossy().into_owned()
+            ),
+        ),
+    );
+    let Some(rustup) = super::bounded_diagnostics::rustup_path(&environment) else {
+        push_line(
+            report,
+            format_args!("rustup component inventory=<no selected Rust 1.99.1 install path>"),
+        );
+        return;
+    };
+    let rustup = PathBuf::from(rustup);
+    append_path_metadata(report, "direct-rustup-executable", &rustup);
+    let actual_rustup = match rustup.canonicalize() {
+        Ok(path) => path,
+        Err(error) => {
+            push_line(
+                report,
+                format_args!("rustup component inventory path_error={error}"),
+            );
+            return;
         }
+    };
+    let args = ["component", "list", "--installed", "--toolchain", "1.99.1"].map(OsString::from);
+    match super::bounded_diagnostics::run_probe(actual_rustup.as_os_str(), &args, cwd, &environment)
+    {
+        Ok(output) => push_line(
+            report,
+            format_args!(
+                "rustup component inventory: {}",
+                super::bounded_diagnostics::command_summary(&output)
+            ),
+        ),
+        Err(error) => push_line(
+            report,
+            format_args!("rustup component inventory bounded_probe_error={error}"),
+        ),
     }
 }
 
@@ -375,12 +370,4 @@ fn effective_key_name(context: MiseDiagnosticContext, key: &str) -> String {
             format!("effective_{key}")
         }
     }
-}
-
-fn bounded_text(text: &str) -> &str {
-    let mut end = text.len().min(4096);
-    while !text.is_char_boundary(end) {
-        end -= 1;
-    }
-    &text[..end]
 }

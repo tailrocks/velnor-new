@@ -12,6 +12,9 @@ pub(crate) mod nested_target;
 #[path = "impl_cli_mise_diagnostics.rs"]
 mod mise_diagnostics;
 
+#[path = "impl_cli_bounded_diagnostics.rs"]
+mod bounded_diagnostics;
+
 #[path = "impl_cli_tool_context.rs"]
 pub(crate) mod tool_context;
 

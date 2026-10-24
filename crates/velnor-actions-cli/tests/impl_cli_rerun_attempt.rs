@@ -11,7 +11,7 @@ use std::error::Error;
 use std::path::Path;
 
 use crate::impl_cli_parity_golden::checkout;
-use crate::impl_cli_tmp::{cleanup, code, spawn_isolated};
+use crate::impl_cli_tmp::{cleanup, code, spawn_isolated, tool_context};
 
 /// Plan an empty pull-request diff as attempt 1 and stage its artifacts.
 fn stage_attempt_one_plan(
@@ -35,7 +35,7 @@ fn stage_attempt_one_plan(
     )?;
     let github_output = internal.join("github-output.txt");
     std::fs::write(&github_output, "")?;
-    let output = spawn_isolated(
+    let output = tool_context::spawn_isolated_with_tools(
         &[],
         &[
             ("VELNOR_INTERNAL_OP", "plan-v1"),
@@ -53,8 +53,9 @@ fn stage_attempt_one_plan(
     )?;
     if code(&output) != 0 {
         return Err(format!(
-            "plan-v1 failed: {}",
-            String::from_utf8_lossy(&output.stderr)
+            "plan-v1 failed: {}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+            tool_context::diagnostic()
         )
         .into());
     }

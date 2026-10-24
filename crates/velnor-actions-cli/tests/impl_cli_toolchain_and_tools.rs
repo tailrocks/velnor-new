@@ -11,6 +11,13 @@ use crate::impl_cli_tmp::{
     write_workspace,
 };
 
+#[cfg(unix)]
+use crate::impl_cli_tmp::{MiseDiagnosticContext, mise_failure_diagnostics, tool_context};
+
+#[cfg(unix)]
+#[path = "impl_cli_toolchain_fixture.rs"]
+mod toolchain_fixture;
+
 const NEXTEST_CONFIG: &str = r"[profile.ci]
 fail-fast = false
 
@@ -308,6 +315,7 @@ fn conflicting_or_non_exact_toolchain_file_fails_closed() -> Result<(), Box<dyn 
 }
 
 #[test]
+#[cfg(unix)]
 fn tools_table_overrides_versions_across_generated_workflows() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("tc-tools-overrides")?;
     let extra_root = r#"
@@ -320,13 +328,23 @@ gh = "2.103.0"
     let cfg = config_with_suites("", extra_root);
     setup_repo(&tmp, &cfg)?;
     commit_all(&tmp)?;
+    let mise_bin = toolchain_fixture::installed_rust_mise_fixture(&tmp)?;
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    let fixture_path = std::env::join_paths(
+        std::iter::once(mise_bin.as_os_str().to_owned())
+            .chain(std::env::split_paths(&path).map(std::path::PathBuf::into_os_string)),
+    )?;
+    let fixture_path = fixture_path.to_str().ok_or("non-UTF-8 fixture PATH")?;
+    let child_env = [("PATH", fixture_path)];
 
-    let plan_out = spawn(&["plan"], &[], &tmp)?;
+    let plan_out = spawn(&["plan"], &child_env, &tmp)?;
     assert_eq!(
         code(&plan_out),
         0,
-        "plan stderr: {}",
-        String::from_utf8_lossy(&plan_out.stderr)
+        "plan stderr: {}\n{}\n{}",
+        String::from_utf8_lossy(&plan_out.stderr),
+        tool_context::diagnostic(),
+        mise_failure_diagnostics(&tmp, MiseDiagnosticContext::Inherited, &child_env, None)
     );
     let plan_stdout = String::from_utf8_lossy(&plan_out.stdout);
     assert!(
@@ -334,18 +352,21 @@ gh = "2.103.0"
         "plan output must report overridden jactionlint version:\n{plan_stdout}"
     );
 
-    let gen_out = spawn(&["generate"], &[], &tmp)?;
+    let gen_out = spawn(&["generate"], &child_env, &tmp)?;
     assert_eq!(
         code(&gen_out),
         0,
-        "generate stderr: {}",
-        String::from_utf8_lossy(&gen_out.stderr)
+        "generate stderr: {}\n{}\n{}",
+        String::from_utf8_lossy(&gen_out.stderr),
+        tool_context::diagnostic(),
+        mise_failure_diagnostics(&tmp, MiseDiagnosticContext::Inherited, &child_env, None)
     );
 
     let ci_yaml = fs::read_to_string(tmp.join(".github/workflows/ci.yml"))?;
     let suites_yaml = fs::read_to_string(tmp.join(".github/workflows/suites.yml"))?;
 
     for needle in [
+        "rust@1.99.1",
         "aqua:nextest-rs/nextest/cargo-nextest@0.9.150",
         "jactionlint@2.3.1",
         "shellcheck@0.11.1",
@@ -356,6 +377,10 @@ gh = "2.103.0"
             "missing {needle:?} in ci.yml:\n{ci_yaml}"
         );
     }
+    assert!(
+        suites_yaml.contains("rust@1.99.1"),
+        "missing default Rust pin in suites.yml:\n{suites_yaml}"
+    );
     assert!(
         suites_yaml.contains("aqua:nextest-rs/nextest/cargo-nextest@0.9.150"),
         "missing overridden cargo-nextest in suites.yml:\n{suites_yaml}"
