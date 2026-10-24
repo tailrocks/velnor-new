@@ -333,3 +333,10 @@ include!("helpers/cleanup.rs");
 include!("helpers/delivery.rs");
 
 include!("helpers/provisioning_api.rs");
+
+pub(crate) async fn record_cleanup_observer_probe_for_job_facts(
+    scope: &ConnectionJournal,
+    fixture: &JobFactsReaderFixture,
+) -> Result<(), HostError> {
+    record_cleanup_observer_probe(scope, &fixture.provisioned).await
+}

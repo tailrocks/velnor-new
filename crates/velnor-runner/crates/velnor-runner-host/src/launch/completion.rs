@@ -5,7 +5,9 @@ mod diagnostics;
 mod journal_ref;
 mod reaper;
 
-pub(in crate::launch) use cleanup::remove_owned_resources_for_retirement;
+pub(in crate::launch) use cleanup::{
+    remove_owned_resources_for_jit_conflict, remove_owned_resources_for_retirement,
+};
 
 #[cfg(test)]
 pub(crate) use cleanup::reconcile_for_test;

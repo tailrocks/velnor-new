@@ -27,6 +27,14 @@ pub(super) async fn validate_objects(
     conn: &turso::Connection,
     claim_guard: &str,
 ) -> Result<(), HostError> {
+    validate_objects_with_view(conn, claim_guard, ddl::TERMINAL_PROOFS_VIEW).await
+}
+
+pub(super) async fn validate_objects_with_view(
+    conn: &turso::Connection,
+    claim_guard: &str,
+    terminal_view: &str,
+) -> Result<(), HostError> {
     let mut expected = Vec::new();
     expected.extend(
         ddl::TABLE_NAMES
@@ -39,11 +47,7 @@ pub(super) async fn validate_objects(
             ])
             .map(|(name, sql)| ("table", name, sql)),
     );
-    expected.push((
-        "view",
-        "physical_attempt_terminal_proofs",
-        ddl::TERMINAL_PROOFS_VIEW,
-    ));
+    expected.push(("view", "physical_attempt_terminal_proofs", terminal_view));
     expected.push(("trigger", trigger_name(claim_guard), claim_guard));
     expected.extend(
         INSERT_GUARDS

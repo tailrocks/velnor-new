@@ -83,6 +83,18 @@ pub(super) async fn validate_v37(conn: &turso::Connection) -> Result<(), HostErr
     validation::validate_rows(conn).await
 }
 
+pub(super) async fn validate_v40(conn: &turso::Connection) -> Result<(), HostError> {
+    let claim_guard = guards::claim_insert_guard_v37()?;
+    validation::validate_objects_with_view(
+        conn,
+        &claim_guard,
+        super::jit_conflict_settlement::terminal_view_sql(),
+    )
+    .await?;
+    validation::validate_revision_triggers(conn).await?;
+    validation::validate_rows(conn).await
+}
+
 pub(super) fn claim_insert_guard_v37() -> Result<String, HostError> {
     guards::claim_insert_guard_v37()
 }

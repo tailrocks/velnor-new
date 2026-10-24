@@ -269,9 +269,42 @@ pub(in crate::journal) async fn release_ready(
         && delivery_state == "not_requested";
     let storage_ready =
         !initializer_unsettled && (no_storage_effect || (storage_cleaned && metadata_settled));
-    let jit_ready = matches!(jit_state.as_str(), "not_requested" | "cleaned");
+    let conflict_jit_ready = if jit_state == "uncertain" {
+        jit_conflict_release_ready(connection, reservation_id).await?
+    } else {
+        false
+    };
+    let jit_ready = matches!(jit_state.as_str(), "not_requested" | "cleaned") || conflict_jit_ready;
     let network_ready = network::release_ready(connection, reservation_id).await?;
     Ok(storage_ready && jit_ready && network_ready)
+}
+
+async fn jit_conflict_release_ready(
+    connection: &turso::Connection,
+    reservation_id: i64,
+) -> Result<bool, HostError> {
+    let mut rows = connection
+        .query(
+            "SELECT EXISTS(SELECT 1 FROM physical_attempt_jit_conflict_settlements settlement JOIN physical_attempt_jit_conflict_recovery_claims claim ON claim.reservation_id=settlement.reservation_id AND claim.claim_generation=settlement.claim_generation JOIN physical_attempt_current current ON current.lineage_id=settlement.lineage_id AND current.generation=settlement.generation AND current.reservation_id=settlement.reservation_id JOIN physical_attempts attempt ON attempt.lineage_id=current.lineage_id AND attempt.generation=current.generation AND attempt.reservation_id=current.reservation_id AND attempt.intent_id=current.intent_id JOIN physical_attempt_jit_conflict_recovery_progress local ON local.reservation_id=claim.reservation_id AND local.claim_generation=claim.claim_generation AND local.phase_index=1 AND local.phase='local_absent' JOIN physical_attempt_jit_conflict_recovery_progress remote ON remote.reservation_id=claim.reservation_id AND remote.claim_generation=claim.claim_generation AND remote.phase_index=4 AND remote.phase='remote_absent' JOIN capacity_reservation_metadata_settlements metadata ON metadata.reservation_id=settlement.reservation_id AND metadata.generation=settlement.metadata_generation JOIN capacity_reservations reservation ON reservation.id=claim.reservation_id JOIN connection_intents intent ON intent.id=claim.intent_id AND intent.connection_id=claim.connection_id JOIN connection_runner_jits jit ON jit.intent_id=claim.intent_id AND jit.connection_id=claim.connection_id JOIN capacity_reservation_provisioning_state state ON state.reservation_id=claim.reservation_id JOIN capacity_reservation_networks network ON network.reservation_id=claim.reservation_id AND network.connection_id=claim.connection_id AND network.operation_id=claim.intent_id WHERE settlement.reservation_id=?1 AND settlement.proof_digest=settlement.settlement_digest AND settlement.remote_runner_id IS remote.runner_id AND settlement.remote_runner_name=remote.runner_name AND settlement.remote_scale_set_id=remote.runner_scale_set_id AND claim.claim_generation=(SELECT MAX(latest.claim_generation) FROM physical_attempt_jit_conflict_recovery_claims latest WHERE latest.reservation_id=claim.reservation_id) AND claim.lease_until>unixepoch() AND attempt.physical_nonce=claim.physical_nonce AND attempt.connection_id=claim.connection_id AND attempt.scale_set_id=claim.scale_set_id AND attempt.witness_request_id=claim.witness_request_id AND attempt.binding_digest=claim.binding_digest AND attempt.source_digest=claim.source_digest AND (attempt.acquire_response_digest IS NULL OR attempt.acquire_response_digest=claim.acquire_response_digest) AND attempt.engine_id=claim.engine_id AND attempt.docker_root_digest=claim.docker_root_digest AND reservation.state='uncertain' AND reservation.remote_cleanup_proven=1 AND reservation.local_cleanup_proven=1 AND intent.state='uncertain' AND intent.launch_phase='jit_uncertain' AND intent.cleanup_proven=0 AND intent.jit_requested=1 AND intent.runner_name=claim.requested_name AND jit.state='uncertain' AND jit.runner_id IS NULL AND jit.runner_name IS NULL AND jit.requested_name=claim.requested_name AND jit.scale_set_id=claim.scale_set_id AND jit.witness_request_id=claim.witness_request_id AND state.resources_bound=1 AND state.storage_cleanup_proven=1 AND state.jit_state='uncertain' AND metadata.outcome='settled' AND length(local.evidence_sha256)=64 AND length(remote.evidence_sha256)=64 AND network.create_state='created' AND network.remove_state='removed' AND NOT EXISTS(SELECT 1 FROM connection_completion_inbox inbox WHERE inbox.connection_id=claim.connection_id AND inbox.scale_set_id=claim.scale_set_id) AND NOT EXISTS(SELECT 1 FROM connection_request_authorizations auth WHERE auth.connection_id=claim.connection_id AND auth.scale_set_id=claim.scale_set_id AND ((auth.started_event_digest IS NOT NULL AND auth.started_runner_name=claim.requested_name) OR (auth.completed_event_digest IS NOT NULL AND auth.completed_runner_name=claim.requested_name))))",
+            [reservation_id],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let ready = rows
+        .next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?
+        .get::<i64>(0)
+        .map_err(|_| HostError::Journal)?;
+    if rows.next().await.map_err(|_| HostError::Journal)?.is_some() {
+        return Err(HostError::Journal);
+    }
+    match ready {
+        0 => Ok(false),
+        1 => Ok(true),
+        _ => Err(HostError::Journal),
+    }
 }
 
 pub(super) struct HoldContext {

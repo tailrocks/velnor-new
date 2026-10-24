@@ -58,6 +58,7 @@ async fn v38_migration_preserves_historical_uncertain_jit_charge() -> Result<(),
 }
 
 async fn downgrade_receipt_schema_to_v38(database_path: &std::path::Path) -> Result<(), HostError> {
+    super::super::jit_conflict_settlement::downgrade_current_database_to_v39(database_path).await?;
     let database = turso::Builder::new_local(database_path.to_str().ok_or(HostError::Path)?)
         .build()
         .await
@@ -68,6 +69,7 @@ async fn downgrade_receipt_schema_to_v38(database_path: &std::path::Path) -> Res
         .execute("PRAGMA user_version=38", ())
         .await
         .map_err(|_| HostError::Journal)?;
+    super::super::legacy_validation::validate_persisted_schema_v38(&connection).await?;
     drop(connection);
     drop(database);
     Ok(())

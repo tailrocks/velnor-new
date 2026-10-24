@@ -1,6 +1,5 @@
 //! Database records for one capacity reservation and its `AcquireJobs` permission.
 
-use crate::config::ApprovedJobAuthorityPolicy;
 use crate::error::HostError;
 use crate::journal::connection::AssignmentIdentity;
 use crate::journal::connection::storage::in_transaction;
@@ -8,6 +7,7 @@ use crate::journal::connection::storage::in_transaction;
 use crate::journal::request_lifecycle::RequestAcquireState;
 use crate::launch::StartPermit;
 
+mod successor;
 mod verification;
 use verification::{actual_request_matches_link, physical_nonce, reservation_intent_id};
 
@@ -51,108 +51,6 @@ pub(crate) enum PhysicalSuccessorReservationResult {
 }
 
 impl ConnectionJournal {
-    /// This method checks whether a terminal physical attempt for an acquired request allows a replacement.
-    pub(crate) async fn acquired_successor_ready(
-        &self,
-        request: &AssignmentIdentity,
-        policy_generation: u64,
-        policy_digest: &str,
-    ) -> Result<bool, HostError> {
-        if request.request_id().is_none() {
-            return Err(HostError::Identity);
-        }
-        if request.connection_id() != self.connection_id()
-            || policy_generation == 0
-            || policy_digest.len() != 64
-            || !policy_digest.bytes().all(|byte| byte.is_ascii_hexdigit())
-        {
-            return Err(HostError::Identity);
-        }
-        let generation = i64::try_from(policy_generation).map_err(|_| HostError::Identity)?;
-        let policy_digest = policy_digest.to_owned();
-        in_transaction(self.journal_ref(), async |connection| {
-            self.validate_scope(connection).await?;
-            successor_authorized(connection, self, request, generation, &policy_digest).await
-        })
-        .await
-    }
-
-    /// This method reserves fresh physical capacity for an acquired request without calling `AcquireJobs` again.
-    pub(crate) async fn try_reserve_successor_for_acquired_request(
-        &self,
-        physical: ReservationRequest<'_>,
-        permit: StartPermit,
-        admission: StorageProvisioningAdmission,
-        request: &AssignmentIdentity,
-        policy: &ApprovedJobAuthorityPolicy,
-        assigned_total: u32,
-    ) -> Result<PhysicalSuccessorReservationResult, HostError> {
-        let nonce = physical_nonce(physical.assignment.key())?.to_owned();
-        let request_id = request.request_id().ok_or(HostError::Identity)?;
-        let policy_generation = policy.generation();
-        let policy_digest = policy.policy_sha256();
-        if request.connection_id() != self.connection_id()
-            || physical.assignment.connection_id() != self.connection_id()
-            || request.scale_set_id() != physical.assignment.scale_set_id()
-            || request_id <= 0
-            || policy_generation == 0
-            || assigned_total == 0
-            || policy_digest.len() != 64
-            || !policy_digest.bytes().all(|byte| byte.is_ascii_hexdigit())
-        {
-            return Err(HostError::Identity);
-        }
-        let generation = i64::try_from(policy_generation).map_err(|_| HostError::Identity)?;
-        let policy_digest = policy_digest.to_owned();
-        in_transaction(self.journal_ref(), async move |connection| {
-            self.validate_scope(connection).await?;
-            if !successor_authorized(connection, self, request, generation, &policy_digest).await? {
-                return Err(HostError::Journal);
-            }
-            if !successor_population_shortfall(
-                connection,
-                self.connection_id().as_str(),
-                request.scale_set_id(),
-                assigned_total,
-            )
-            .await?
-            {
-                return Ok(PhysicalSuccessorReservationResult::AtCapacity);
-            }
-            let mut permit = Some(permit);
-            let reserved =
-                reserve_in_transaction(connection, self, physical, &mut permit, &admission).await?;
-            let reservation_id = match reserved {
-                ReservationResult::Reserved { reservation_id } => reservation_id,
-                ReservationResult::AtCapacity => {
-                    return Ok(PhysicalSuccessorReservationResult::AtCapacity);
-                }
-                #[cfg(test)]
-                ReservationResult::Resumed { reservation_id } => {
-                    reservation_intent_id(connection, reservation_id).await?;
-                    return Ok(PhysicalSuccessorReservationResult::ReconcileRequired);
-                }
-                ReservationResult::ReconcileRequired { reservation_id }
-                | ReservationResult::Released { reservation_id } => {
-                    reservation_intent_id(connection, reservation_id).await?;
-                    return Ok(PhysicalSuccessorReservationResult::ReconcileRequired);
-                }
-            };
-            let intent_id = reservation_intent_id(connection, reservation_id).await?;
-            super::super::physical_attempt::record_in_transaction(
-                connection,
-                self,
-                reservation_id,
-                intent_id,
-                request_id,
-                &nonce,
-            )
-            .await?;
-            Ok(PhysicalSuccessorReservationResult::Reserved { reservation_id })
-        })
-        .await
-    }
-
     /// Record one runner capacity reservation and its `AcquireJobs` permission in one database transaction.
     pub(crate) async fn try_reserve_and_claim_request_acquire(
         &self,
@@ -253,62 +151,6 @@ async fn request_reconcile_required(
         #[cfg(test)]
         intent_id,
     })
-}
-
-async fn successor_population_shortfall(
-    connection: &turso::Connection,
-    connection_id: &str,
-    scale_set_id: i64,
-    assigned_total: u32,
-) -> Result<bool, HostError> {
-    let mut rows = connection
-        .query(
-            "SELECT COUNT(*) FROM physical_attempt_current AS current JOIN physical_attempts AS attempt ON attempt.lineage_id = current.lineage_id AND attempt.generation = current.generation AND attempt.reservation_id = current.reservation_id JOIN capacity_reservations AS reservation ON reservation.id = current.reservation_id WHERE attempt.connection_id = ?1 AND attempt.scale_set_id = ?2 AND reservation.state != 'released'",
-            (connection_id, scale_set_id),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    let count: i64 = rows
-        .next()
-        .await
-        .map_err(|_| HostError::Journal)?
-        .ok_or(HostError::Journal)?
-        .get(0)
-        .map_err(|_| HostError::Journal)?;
-    if rows.next().await.map_err(|_| HostError::Journal)?.is_some() {
-        return Err(HostError::Journal);
-    }
-    Ok(count >= 0
-        && u64::try_from(count).map_err(|_| HostError::Journal)? < u64::from(assigned_total))
-}
-
-async fn successor_authorized(
-    connection: &turso::Connection,
-    scope: &ConnectionJournal,
-    request: &AssignmentIdentity,
-    policy_generation: i64,
-    policy_digest: &str,
-) -> Result<bool, HostError> {
-    let request_id = request.request_id().ok_or(HostError::Identity)?;
-    let mut rows = connection
-        .query(
-            "SELECT 1 FROM connection_request_authorizations AS auth JOIN connection_active_job_authority AS active ON active.connection_id = auth.connection_id JOIN connection_job_authority_policies AS policy ON policy.connection_id = active.connection_id AND policy.generation = active.generation AND policy.policy_digest = active.policy_digest WHERE auth.connection_id = ?1 AND auth.scale_set_id = ?2 AND auth.request_id = ?3 AND auth.binding_digest = ?4 AND auth.acquire_state = 'acquired' AND auth.started_event_digest IS NULL AND auth.completed_event_digest IS NULL AND active.generation = ?5 AND active.policy_digest = ?6 AND policy.binding_digest = ?4 AND (EXISTS (SELECT 1 FROM physical_attempts AS prior JOIN physical_attempt_terminal_proofs AS outcome ON outcome.lineage_id = prior.lineage_id AND outcome.generation = prior.generation AND outcome.reservation_id = prior.reservation_id WHERE prior.connection_id = auth.connection_id AND prior.scale_set_id = auth.scale_set_id AND prior.witness_request_id = auth.request_id AND outcome.outcome IN ('pre_jit_capacity_available', 'normal_completion', 'post_jit_retired')) OR EXISTS (SELECT 1 FROM physical_attempt_current AS current JOIN physical_attempts AS serving ON serving.lineage_id = current.lineage_id AND serving.generation = current.generation AND serving.reservation_id = current.reservation_id JOIN connection_intents AS intent ON intent.id = serving.intent_id JOIN connection_runner_jits AS jit ON jit.intent_id = intent.id AND jit.connection_id = intent.connection_id WHERE serving.connection_id = ?1 AND serving.scale_set_id = ?2 AND serving.witness_request_id = ?3 AND intent.runner_request_id IS NOT NULL AND intent.runner_request_id != ?3 AND jit.state IN ('started', 'completed', 'cleaned')))",
-            (
-                scope.connection_id().as_str(),
-                request.scale_set_id(),
-                request_id,
-                scope.binding_digest(),
-                policy_generation,
-                policy_digest,
-            ),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    let authorized = rows.next().await.map_err(|_| HostError::Journal)?.is_some();
-    if rows.next().await.map_err(|_| HostError::Journal)?.is_some() {
-        return Err(HostError::Journal);
-    }
-    Ok(authorized)
 }
 
 async fn existing_request_link(

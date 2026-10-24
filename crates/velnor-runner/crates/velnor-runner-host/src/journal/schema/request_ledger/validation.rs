@@ -3,6 +3,7 @@
 use crate::error::HostError;
 
 mod rows;
+mod v40;
 
 use super::super::read_table_columns;
 
@@ -19,6 +20,10 @@ pub(super) async fn validate_bootstrap(conn: &turso::Connection) -> Result<(), H
 
 pub(super) async fn validate_v10(conn: &turso::Connection) -> Result<(), HostError> {
     validate_schema(conn, true, ValidationPhase::VersionTenMigration).await
+}
+
+pub(super) async fn validate_v40(conn: &turso::Connection) -> Result<(), HostError> {
+    v40::validate(conn).await
 }
 
 #[derive(Clone, Copy)]

@@ -7,7 +7,9 @@ use bollard::{
 
 use crate::{
     error::HostError,
-    journal::{ConnectionJournal, PostJitRetirementClaim, StorageCleanupIdentity},
+    journal::{
+        ConnectionJournal, JitConflictRecoveryClaim, PostJitRetirementClaim, StorageCleanupIdentity,
+    },
     launch::{SelectedEngineContext, bootstrap::PendingStorageCleanupWitness},
     worker::{WorkerContainerRole, WorkerIdentityNames},
 };
@@ -25,7 +27,7 @@ pub(in crate::launch) async fn remove_owned_resources_for_retirement(
     let context = DeletionContext {
         docker,
         scope,
-        claim,
+        authority: DeletionAuthority::Retirement(claim),
         engine,
         identity,
     };
@@ -34,10 +36,35 @@ pub(in crate::launch) async fn remove_owned_resources_for_retirement(
     Box::pin(remove_volumes(&context)).await
 }
 
+pub(in crate::launch) async fn remove_owned_resources_for_jit_conflict(
+    docker: &Docker,
+    scope: &ConnectionJournal,
+    claim: &JitConflictRecoveryClaim,
+    engine: &SelectedEngineContext,
+    pending: &PendingStorageCleanupWitness,
+) -> Result<(), HostError> {
+    let identity = pending.identity();
+    let context = DeletionContext {
+        docker,
+        scope,
+        authority: DeletionAuthority::Conflict(claim),
+        engine,
+        identity,
+    };
+    context.authorize().await?;
+    Box::pin(remove_containers(&context)).await?;
+    Box::pin(remove_volumes(&context)).await
+}
+
+enum DeletionAuthority<'a> {
+    Retirement(&'a PostJitRetirementClaim),
+    Conflict(&'a JitConflictRecoveryClaim),
+}
+
 struct DeletionContext<'a> {
     docker: &'a Docker,
     scope: &'a ConnectionJournal,
-    claim: &'a PostJitRetirementClaim,
+    authority: DeletionAuthority<'a>,
     engine: &'a SelectedEngineContext,
     identity: &'a StorageCleanupIdentity,
 }
@@ -49,13 +76,29 @@ impl DeletionContext<'_> {
         {
             return Err(HostError::Ownership);
         }
-        self.scope
-            .validate_retirement_claim_for_cleanup(self.claim, self.identity)
-            .await?;
+        self.validate_authority().await?;
         verify_engine(self.docker, self.engine, self.identity).await?;
-        self.scope
-            .validate_retirement_claim_for_cleanup(self.claim, self.identity)
-            .await
+        self.validate_authority().await
+    }
+
+    async fn validate_authority(&self) -> Result<(), HostError> {
+        match &self.authority {
+            DeletionAuthority::Retirement(claim) => {
+                self.scope
+                    .validate_retirement_claim_for_cleanup(claim, self.identity)
+                    .await
+            }
+            DeletionAuthority::Conflict(claim) => {
+                if claim.reservation_id() != self.identity.reservation_id()
+                    || claim.intent_id() != self.identity.operation_id()
+                    || claim.engine_id() != self.identity.engine_id()
+                    || claim.docker_root_digest() != self.identity.docker_root_digest()
+                {
+                    return Err(HostError::Identity);
+                }
+                self.scope.validate_jit_conflict_claim(claim).await
+            }
+        }
     }
 
     async fn operation<T, F>(&self, effect: F) -> Result<T, HostError>

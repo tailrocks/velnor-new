@@ -3,7 +3,9 @@ use std::time::{Duration, Instant};
 use bollard::Docker;
 
 use crate::error::HostError;
-use crate::journal::{ConnectionJournal, PostJitRetirementClaim, StorageNetworkRemovalClaim};
+use crate::journal::{
+    ConnectionJournal, JitConflictRecoveryClaim, PostJitRetirementClaim, StorageNetworkRemovalClaim,
+};
 use crate::launch::SelectedEngineContext;
 
 use super::{
@@ -27,7 +29,15 @@ pub(crate) async fn remove_owned_network(
         return Err(HostError::Journal);
     };
     let deadline = Instant::now() + NETWORK_TIMEOUT;
-    let result = remove_claimed(docker, journal, engine, &claim, None, deadline).await;
+    let result = remove_claimed(
+        docker,
+        journal,
+        engine,
+        &claim,
+        RemovalAuthority::None,
+        deadline,
+    )
+    .await;
     match result {
         Ok(proof) => journal.record_storage_network_removed(&claim, &proof).await,
         Err(error) => {
@@ -66,7 +76,15 @@ pub(crate) async fn remove_owned_network_for_retirement(
             .ok_or(HostError::Journal)?,
     };
     let deadline = Instant::now() + NETWORK_TIMEOUT;
-    let result = remove_claimed(docker, journal, engine, &claim, Some(retirement), deadline).await;
+    let result = remove_claimed(
+        docker,
+        journal,
+        engine,
+        &claim,
+        RemovalAuthority::Retirement(retirement),
+        deadline,
+    )
+    .await;
     match result {
         Ok(proof) => {
             journal
@@ -84,12 +102,72 @@ pub(crate) async fn remove_owned_network_for_retirement(
     }
 }
 
+/// Remove one recorded network while a JIT-conflict claim authorizes cleanup.
+pub(crate) async fn remove_owned_network_for_jit_conflict(
+    docker: &Docker,
+    journal: &ConnectionJournal,
+    engine: &SelectedEngineContext,
+    reservation_id: i64,
+    recovery: &JitConflictRecoveryClaim,
+) -> Result<(), HostError> {
+    if recovery.reservation_id() != reservation_id
+        || recovery.engine_id() != engine.engine_id()
+        || recovery.docker_root_digest() != engine.docker_root_digest()
+    {
+        return Err(HostError::Identity);
+    }
+    journal.validate_jit_conflict_claim(recovery).await?;
+    let claim = match journal
+        .claim_storage_network_removal(reservation_id)
+        .await?
+    {
+        Some(claim) => claim,
+        None => journal
+            .recover_storage_network_removal(reservation_id)
+            .await?
+            .ok_or(HostError::Journal)?,
+    };
+    let deadline = Instant::now() + NETWORK_TIMEOUT;
+    let result = remove_claimed(
+        docker,
+        journal,
+        engine,
+        &claim,
+        RemovalAuthority::Conflict(recovery),
+        deadline,
+    )
+    .await;
+    match result {
+        Ok(proof) => {
+            journal.validate_jit_conflict_claim(recovery).await?;
+            journal
+                .record_storage_network_removed(&claim, &proof)
+                .await?;
+            journal.validate_jit_conflict_claim(recovery).await
+        }
+        Err(error) => {
+            let _marked = tokio::time::timeout(
+                REQUEST_TIMEOUT,
+                journal.mark_storage_network_removal_uncertain(&claim),
+            )
+            .await;
+            Err(error)
+        }
+    }
+}
+
+enum RemovalAuthority<'a> {
+    None,
+    Retirement(&'a PostJitRetirementClaim),
+    Conflict(&'a JitConflictRecoveryClaim),
+}
+
 async fn remove_claimed(
     docker: &Docker,
     journal: &ConnectionJournal,
     engine: &SelectedEngineContext,
     claim: &StorageNetworkRemovalClaim,
-    retirement: Option<&PostJitRetirementClaim>,
+    authority: RemovalAuthority<'_>,
     deadline: Instant,
 ) -> Result<VerifiedStorageNetworkRemoved, HostError> {
     if claim.engine_id() != engine.engine_id()
@@ -97,14 +175,14 @@ async fn remove_claimed(
     {
         return Err(HostError::Identity);
     }
-    verify_removal_context(docker, journal, engine, claim, retirement, deadline).await?;
+    verify_removal_context(docker, journal, engine, claim, &authority, deadline).await?;
     let target_id = resolve_target_id(docker, claim, deadline).await?;
     remove_and_verify_target(
         docker,
         journal,
         engine,
         claim,
-        retirement,
+        &authority,
         target_id.as_deref(),
         deadline,
     )
@@ -127,10 +205,10 @@ async fn verify_removal_context(
     journal: &ConnectionJournal,
     engine: &SelectedEngineContext,
     claim: &StorageNetworkRemovalClaim,
-    retirement: Option<&PostJitRetirementClaim>,
+    authority: &RemovalAuthority<'_>,
     deadline: Instant,
 ) -> Result<(), HostError> {
-    validate_retirement(journal, retirement).await?;
+    validate_authority(journal, authority).await?;
     verify_engine(
         docker,
         engine,
@@ -139,7 +217,7 @@ async fn verify_removal_context(
         deadline,
     )
     .await?;
-    validate_retirement(journal, retirement).await?;
+    validate_authority(journal, authority).await?;
     Ok(())
 }
 
@@ -191,12 +269,12 @@ async fn remove_and_verify_target(
     journal: &ConnectionJournal,
     engine: &SelectedEngineContext,
     claim: &StorageNetworkRemovalClaim,
-    retirement: Option<&PostJitRetirementClaim>,
+    authority: &RemovalAuthority<'_>,
     target_id: Option<&str>,
     deadline: Instant,
 ) -> Result<(), HostError> {
     if let Some(target_id) = target_id {
-        validate_retirement(journal, retirement).await?;
+        validate_authority(journal, authority).await?;
         verify_engine(
             docker,
             engine,
@@ -205,12 +283,12 @@ async fn remove_and_verify_target(
             deadline,
         )
         .await?;
-        validate_retirement(journal, retirement).await?;
+        validate_authority(journal, authority).await?;
         request(deadline, docker.remove_network(target_id))
             .await?
             .map_err(|_| HostError::Docker)?;
     }
-    validate_retirement(journal, retirement).await?;
+    validate_authority(journal, authority).await?;
     verify_engine(
         docker,
         engine,
@@ -219,7 +297,7 @@ async fn remove_and_verify_target(
         deadline,
     )
     .await?;
-    validate_retirement(journal, retirement).await?;
+    validate_authority(journal, authority).await?;
     if let Some(known_id) = claim.network_id().or(target_id)
         && inspect_network(docker, known_id, deadline).await?.is_some()
     {
@@ -234,14 +312,20 @@ async fn remove_and_verify_target(
     Ok(())
 }
 
-async fn validate_retirement(
+async fn validate_authority(
     journal: &ConnectionJournal,
-    retirement: Option<&PostJitRetirementClaim>,
+    authority: &RemovalAuthority<'_>,
 ) -> Result<(), HostError> {
-    if let Some(retirement) = retirement {
-        journal
-            .validate_post_jit_retirement_claim(retirement)
-            .await?;
+    match authority {
+        RemovalAuthority::None => {}
+        RemovalAuthority::Retirement(retirement) => {
+            journal
+                .validate_post_jit_retirement_claim(retirement)
+                .await?;
+        }
+        RemovalAuthority::Conflict(recovery) => {
+            journal.validate_jit_conflict_claim(recovery).await?;
+        }
     }
     Ok(())
 }

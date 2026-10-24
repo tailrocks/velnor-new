@@ -21,6 +21,10 @@ pub(super) async fn insert_claim(
         .await
         .map_err(|_| HostError::Journal)?
         .ok_or(HostError::Journal)?;
+    if rows.next().await.map_err(|_| HostError::Journal)?.is_some() {
+        return Err(HostError::Journal);
+    }
+    drop(rows);
     let (
         operation_id,
         scale_set_id,
@@ -29,7 +33,7 @@ pub(super) async fn insert_claim(
         profile_generation_id,
         profile_digest,
         binding_digest,
-    ) = decode_claimable_reservation(&mut rows, &row, seed).await?;
+    ) = decode_claimable_reservation(connection, &row, seed, reservation_id).await?;
     let profile = super::super::storage_budget::current_profile(connection)
         .await?
         .ok_or(HostError::Journal)?;
@@ -113,9 +117,10 @@ async fn next_settlement_generation(
 type ClaimableReservationRow = (i64, i64, String, String, String, String, String);
 
 async fn decode_claimable_reservation(
-    rows: &mut turso::Rows,
+    connection: &turso::Connection,
     row: &turso::Row,
     seed: &ProbeSeed,
+    reservation_id: i64,
 ) -> Result<ClaimableReservationRow, HostError> {
     let operation_id = row.get::<i64>(0).map_err(|_| HostError::Journal)?;
     let scale_set_id = row.get::<i64>(1).map_err(|_| HostError::Journal)?;
@@ -135,14 +140,22 @@ async fn decode_claimable_reservation(
     let binding_digest = row.get::<String>(15).map_err(|_| HostError::Journal)?;
     let cleanup_binding_digest = row.get::<String>(16).map_err(|_| HostError::Journal)?;
     let current_profile_generation = row.get::<String>(17).map_err(|_| HostError::Journal)?;
-    if rows.next().await.map_err(|_| HostError::Journal)?.is_some()
-        || reservation_state == "released"
+    let conflict_ready = if jit_state == "uncertain" {
+        crate::journal::connection::reservation::conflict_recovery_metadata_claim_ready(
+            connection,
+            reservation_id,
+        )
+        .await?
+    } else {
+        false
+    };
+    if reservation_state == "released"
         || remote_cleanup != 1
         || local_cleanup != 1
         || intent_kind != "launch"
         || resources_bound != 1
         || storage_cleanup != 1
-        || !matches!(jit_state.as_str(), "not_requested" | "cleaned")
+        || (!matches!(jit_state.as_str(), "not_requested" | "cleaned") && !conflict_ready)
         || binding_digest != cleanup_binding_digest
         || current_profile_generation != profile_generation_id
         || profile_engine != held_engine

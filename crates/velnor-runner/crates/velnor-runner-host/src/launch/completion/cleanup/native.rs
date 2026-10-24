@@ -193,5 +193,7 @@ async fn remove_owned_containers(
 
 #[path = "native/docker.rs"]
 mod docker;
-pub(in crate::launch) use docker::remove_owned_resources_for_retirement;
 use docker::{remove_container, remove_network, remove_owned_volumes};
+pub(in crate::launch) use docker::{
+    remove_owned_resources_for_jit_conflict, remove_owned_resources_for_retirement,
+};

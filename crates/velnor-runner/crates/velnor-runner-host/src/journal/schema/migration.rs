@@ -115,7 +115,7 @@ pub(super) async fn from_version_sixteen(conn: &turso::Connection) -> Result<(),
     conn.execute("PRAGMA user_version = 17", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    super::validate_persisted_schema_v17(conn).await?;
+    super::legacy_validation::validate_persisted_schema_v17(conn).await?;
     Ok(())
 }
 

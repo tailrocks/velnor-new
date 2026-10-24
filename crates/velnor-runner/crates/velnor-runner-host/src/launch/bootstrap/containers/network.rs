@@ -20,6 +20,7 @@ mod remove;
 
 pub(crate) use create::create_owned_network;
 pub(crate) use remove::remove_owned_network;
+pub(crate) use remove::remove_owned_network_for_jit_conflict;
 pub(crate) use remove::remove_owned_network_for_retirement;
 
 /// Inspected identity of one private network created for a reservation.

@@ -6,8 +6,10 @@ use crate::error::HostError;
 
 mod jit;
 mod retired_completion;
+mod v40;
 
 pub(super) use jit::{validate_jit_rows, validate_legacy_jit_rows};
+pub(super) use v40::validate_jit_rows_v40;
 
 pub(super) async fn validate_auth_rows(conn: &turso::Connection) -> Result<(), HostError> {
     let mut rows = conn

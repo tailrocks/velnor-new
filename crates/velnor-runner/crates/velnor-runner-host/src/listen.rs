@@ -140,6 +140,12 @@ impl Link {
         self.admin.expose_token()
     }
 
+    /// Authenticated Scale Set admin origin, independent of the mutable queue base.
+    #[must_use]
+    pub(crate) fn admin_origin(&self) -> &str {
+        self.admin.expose_url()
+    }
+
     /// Current service origin.
     #[must_use]
     pub(crate) fn base(&self) -> &str {

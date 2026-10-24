@@ -10,6 +10,8 @@ use super::{PositivePollContext, acquired::start_acquired, pre_jit, successor};
 use crate::host_controller::AssignedPopulationAction;
 use crate::host_controller::loop_driver::state::PreparedConnection;
 
+#[path = "assigned_population/jit_conflict.rs"]
+mod jit_conflict;
 #[cfg(test)]
 #[path = "assigned_population/missing_statistics.rs"]
 mod missing_statistics;
@@ -34,6 +36,9 @@ pub(super) async fn reconcile(
     context: &PositivePollContext<'_>,
 ) -> Result<(), HostError> {
     retirement::reconcile(prepared, context).await;
+    if jit_conflict::reconcile(prepared, context).await? {
+        return Ok(());
+    }
     Box::pin(pre_jit::reconcile(prepared, context)).await?;
     let Some(assigned_total) = prepared.assigned_total else {
         return Ok(());

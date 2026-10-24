@@ -4,7 +4,10 @@ mod storage_object;
 #[cfg(test)]
 #[path = "containers/test_support.rs"]
 mod test_support;
-pub(crate) use network::{remove_owned_network, remove_owned_network_for_retirement};
+pub(crate) use network::{
+    remove_owned_network, remove_owned_network_for_jit_conflict,
+    remove_owned_network_for_retirement,
+};
 #[cfg(test)]
 pub(crate) use test_support::{
     test_bootstrap_mount_handoff, test_bootstrap_start_receipt, test_created_bootstrap_container,

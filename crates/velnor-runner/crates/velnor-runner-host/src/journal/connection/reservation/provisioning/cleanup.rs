@@ -286,6 +286,14 @@ async fn settle_if_fully_cleaned(
     if post_jit_retirement_claim_exists(connection, reservation_id).await? {
         return Ok(());
     }
+    if crate::journal::connection::reservation::has_conflict_recovery_claim(
+        connection,
+        reservation_id,
+    )
+    .await?
+    {
+        return Ok(());
+    }
     let mut rows = connection
         .query(
             "SELECT remote_cleanup_proven, local_cleanup_proven, state FROM capacity_reservations WHERE id = ?1 AND connection_id = ?2",

@@ -1,5 +1,6 @@
 //! Connection-scoped journal records and shared host reservations.
 
+pub(crate) use reservation::JitConflictRecoveryClaim;
 #[cfg(test)]
 pub(crate) use reservation::ReservationSnapshot;
 pub(crate) use reservation::{

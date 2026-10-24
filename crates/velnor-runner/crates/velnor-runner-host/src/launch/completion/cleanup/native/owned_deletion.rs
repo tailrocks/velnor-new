@@ -24,7 +24,9 @@ mod identity;
 mod retirement;
 #[path = "owned_deletion/runner_logs.rs"]
 mod runner_logs;
-pub(in crate::launch) use retirement::remove_owned_resources_for_retirement;
+pub(in crate::launch) use retirement::{
+    remove_owned_resources_for_jit_conflict, remove_owned_resources_for_retirement,
+};
 
 const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 

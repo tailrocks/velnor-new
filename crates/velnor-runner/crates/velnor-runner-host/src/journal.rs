@@ -49,6 +49,7 @@ pub(crate) use completion::{
     CleanupClaim, CompletedLaunch, CompletionIdentity, MAX_COMPLETION_BODY_BYTES,
     MAX_COMPLETION_INBOX_SCAN,
 };
+pub(crate) use connection::JitConflictRecoveryClaim;
 pub(crate) use connection::JobFactsPublicationClaim;
 pub(crate) use connection::ListenerDeliveryClaim;
 pub(crate) use connection::NativeCompletionReservation;

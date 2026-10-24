@@ -19,8 +19,8 @@ pub(crate) use containers::{
     BootstrapContainerRole, BootstrapPairInput, BootstrapStartReceipt, PendingBootstrapPair,
     StartedBootstrapPair, VerifiedBootstrapContainerCreated, VerifiedBootstrapMountHandoff,
     VerifiedCreatedStorageObject, VerifiedStorageNetworkCreated, VerifiedStorageNetworkRemoved,
-    create_owned_network, remove_owned_network, remove_owned_network_for_retirement,
-    start_bootstrap_pair,
+    create_owned_network, remove_owned_network, remove_owned_network_for_jit_conflict,
+    remove_owned_network_for_retirement, start_bootstrap_pair,
 };
 pub(crate) use delivery::ListenerDeliveryReceipt;
 #[cfg(test)]

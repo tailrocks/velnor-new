@@ -36,6 +36,20 @@ pub(super) fn normalize(sql: &str) -> String {
     normalize_operator_spacing(&normalized)
 }
 
+/// Normalize only the identifier quotes the pinned v40 schema formatter adds
+/// for these two source-owned table aliases. Keep the legacy normalizer above
+/// unchanged because versions 0–39 use its exact behavior.
+#[path = "sql_normalization/v40_aliases.rs"]
+mod v40_aliases;
+
+pub(super) fn normalize_v40_guard_aliases(sql: &str) -> String {
+    let normalized = normalize(sql);
+    if has_sql_comment(sql) {
+        return normalized;
+    }
+    v40_aliases::canonicalize(&normalized)
+}
+
 fn has_sql_comment(sql: &str) -> bool {
     let bytes = sql.as_bytes();
     let mut quote = None;
@@ -202,120 +216,5 @@ fn is_sql_punctuation(character: char) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::normalize;
-
-    #[test]
-    fn preserves_quoted_text_and_word_boundaries() {
-        assert_ne!(
-            normalize("CHECK(state='ready_held')"),
-            normalize("CHECK(state='ready_ held')")
-        );
-        assert_ne!(
-            normalize("CHECK(path='source-proof/inbox')"),
-            normalize("CHECK(path='source-proof/in box')")
-        );
-        assert_ne!(
-            normalize("CHECK(state='ready_held')"),
-            normalize("CHECK(state='readyheld')")
-        );
-        assert_eq!(
-            normalize("CREATE TABLE IF NOT EXISTS x (a TEXT)"),
-            normalize("CREATE TABLE x ( a TEXT )")
-        );
-        assert_eq!(
-            normalize("SELECT alpha  \n\t beta"),
-            normalize("SELECT alpha beta")
-        );
-        assert_ne!(
-            normalize("SELECT 'alpha  beta'"),
-            normalize("SELECT 'alpha beta'")
-        );
-        assert_eq!(normalize("SELECT 'alpha  beta'"), "select 'alpha  beta'");
-        assert_ne!(
-            normalize("CREATE TABLE x (a TEXT CHECK(a = 'ready'))"),
-            normalize("CREATE TABLE x (a TEXT)")
-        );
-        let unicode = "SELECT 'é ẞ', \"münchen\"";
-        let normalized_unicode = normalize(unicode);
-        assert_eq!(normalized_unicode, "select 'é ẞ',\"münchen\"");
-        assert_eq!(normalize(&normalized_unicode), normalized_unicode);
-        assert_eq!(
-            normalize("SELECT 'a''é', \"a\"\"é\""),
-            "select 'a''é',\"a\"\"é\""
-        );
-    }
-
-    #[test]
-    fn unique_index_if_not_exists_normalizes_without_weakening_predicates() {
-        assert_eq!(
-            normalize(
-                "CREATE UNIQUE INDEX IF NOT EXISTS runner_id ON runners(connection_id, runner_id) WHERE runner_id IS NOT NULL"
-            ),
-            normalize(
-                "CREATE UNIQUE INDEX runner_id ON runners(connection_id, runner_id) WHERE runner_id IS NOT NULL"
-            )
-        );
-        assert_ne!(
-            normalize(
-                "CREATE UNIQUE INDEX IF NOT EXISTS runner_id ON runners(connection_id, runner_id) WHERE runner_id IS NOT NULL"
-            ),
-            normalize(
-                "CREATE UNIQUE INDEX IF NOT EXISTS runner_id ON runners(connection_id, runner_id) WHERE runner_id IS NOT NULL AND state != 'cleaned'"
-            )
-        );
-    }
-
-    #[tokio::test]
-    async fn operator_spacing_keeps_sql_tokens_and_comment_boundaries_distinct() {
-        assert_eq!(normalize("SELECT a=b"), normalize("SELECT a = b"));
-        assert_eq!(
-            normalize("CHECK(a='x'||'y')"),
-            normalize("CHECK(a = 'x' || 'y')")
-        );
-        assert_eq!(
-            normalize("CHECK(a=\"x\"+1)"),
-            normalize("CHECK(a = \"x\" + 1)")
-        );
-        assert_ne!(
-            normalize("CREATE TABLE x(a INTEGER CHECK(a - -1 >0));"),
-            normalize("CREATE TABLE x(a INTEGER CHECK(a--1 >0\n));")
-        );
-        assert_ne!(normalize("SELECT a==b"), normalize("SELECT a= =b"));
-        assert_ne!(
-            normalize("SELECT a/* comment */b"),
-            normalize("SELECT a / * comment */b")
-        );
-        assert_ne!(normalize("SELECT 'a=b'"), normalize("SELECT 'a = b'"));
-
-        let database = turso::Builder::new_local(":memory:")
-            .build()
-            .await
-            .expect("build local SQLite database");
-        let connection = database.connect().expect("open local connection");
-        connection
-            .execute(
-                "CREATE TABLE spaced_check (value INTEGER CHECK(value - -1 > 0))",
-                (),
-            )
-            .await
-            .expect("create arithmetic check");
-        connection
-            .execute(
-                "CREATE TABLE commented_check (value INTEGER CHECK(value--1 > 0\n))",
-                (),
-            )
-            .await
-            .expect("create line-comment check");
-        assert!(
-            connection
-                .execute("INSERT INTO spaced_check VALUES (-1)", ())
-                .await
-                .is_err()
-        );
-        connection
-            .execute("INSERT INTO commented_check VALUES (-1)", ())
-            .await
-            .expect("comment removes the apparent check expression");
-    }
-}
+#[path = "sql_normalization/tests.rs"]
+mod tests;

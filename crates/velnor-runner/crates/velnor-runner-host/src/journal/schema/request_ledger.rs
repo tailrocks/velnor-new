@@ -92,3 +92,7 @@ async fn jit_table_sql(conn: &turso::Connection) -> Result<String, HostError> {
 pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> {
     validation::validate(conn).await
 }
+
+pub(super) async fn validate_v40(conn: &turso::Connection) -> Result<(), HostError> {
+    validation::validate_v40(conn).await
+}

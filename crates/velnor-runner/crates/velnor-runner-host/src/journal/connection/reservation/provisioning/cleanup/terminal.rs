@@ -10,6 +10,14 @@ pub(super) async fn settle_reservation(
     intent_id: i64,
     reservation_id: i64,
 ) -> Result<(), HostError> {
+    if crate::journal::connection::reservation::has_conflict_recovery_claim(
+        connection,
+        reservation_id,
+    )
+    .await?
+    {
+        return Err(HostError::Identity);
+    }
     if post_jit::settle_if_claimed(connection, connection_id, intent_id, reservation_id).await? {
         return Ok(());
     }

@@ -19,13 +19,16 @@ mod gate;
 mod inspect;
 #[cfg(all(test, unix))]
 pub(crate) mod inspect_tests;
+pub(crate) mod jit_conflict;
 mod name_taken;
 mod resource_probe;
 pub(crate) mod retirement;
 pub(crate) mod scoped_runtime;
 
 pub(crate) use admission_gate::lock_connection;
-pub(in crate::launch) use completion::remove_owned_resources_for_retirement;
+pub(in crate::launch) use completion::{
+    remove_owned_resources_for_jit_conflict, remove_owned_resources_for_retirement,
+};
 #[cfg(test)]
 pub(crate) use drive::authorize_positive_offer_with;
 #[cfg(test)]

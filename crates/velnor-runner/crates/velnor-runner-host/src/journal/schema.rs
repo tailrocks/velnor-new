@@ -17,6 +17,7 @@ mod execution_authorization;
 mod execution_publication;
 mod image_import;
 mod jit_conflict_recovery;
+mod jit_conflict_settlement;
 mod migration;
 mod physical_attempts;
 #[cfg(test)]
@@ -35,6 +36,12 @@ mod post_jit_effect_fences_tests;
 mod post_jit_retirement;
 mod pr_source_transition;
 mod pre_jit_cleanup;
+
+pub(in crate::journal) async fn validate_jit_conflict_progress_proofs(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
+    jit_conflict_settlement::validate_persisted_proofs(conn).await
+}
 #[cfg(test)]
 pub(in crate::journal) mod provisioning;
 #[cfg(not(test))]
@@ -57,7 +64,7 @@ mod storage_root_backing;
 mod v30_migration_tests;
 mod validation;
 
-pub(super) const JOURNAL_VERSION: i64 = 39;
+pub(super) const JOURNAL_VERSION: i64 = 40;
 use current_columns::CURRENT_COLUMNS;
 pub(super) use validation::validate_persisted_schema_v35;
 
@@ -85,35 +92,40 @@ pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError>
 async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError> {
     let version = journal_version(conn).await?;
     if version == JOURNAL_VERSION {
-        // Repair only the exact v26 attachment/path contracts before
-        // provisioning validation requires the current v27 definitions.
-        execution_authorization::bootstrap(conn).await?;
-        storage_root_backing::upgrade_v27(conn).await?;
-        validate_persisted_schema_v19(conn).await?;
-        migration::ensure_completion_objects(conn).await?;
-        crate::journal_schema::bootstrap(conn).await?;
-        crate::journal_schema::install_revision_triggers(conn).await?;
-        storage_initialization::bootstrap(conn).await?;
-        crate::journal_schema::install_v20_revision_triggers(conn).await?;
-        storage_network::bootstrap(conn).await?;
-        storage_initialization::upgrade_v22(conn).await?;
-        storage_root_backing::upgrade_v27(conn).await?;
-        storage_root_backing::upgrade_v30(conn).await?;
-        storage_root_backing::bootstrap(conn).await?;
-        execution_authorization::bootstrap(conn).await?;
-        execution_publication::bootstrap(conn).await?;
-        execution_publication::upgrade_v25(conn).await?;
-        execution_publication::upgrade_v30(conn).await?;
-        storage_root_backing::upgrade_v31(conn).await?;
-        storage_handoff::bootstrap(conn).await?;
-        cleanup_observer_witness::bootstrap(conn).await?;
-        post_jit_retirement::validate_v37(conn).await?;
-        post_jit_effect_fences::validate(conn).await?;
-        pr_source_transition::validate(conn).await?;
+        Box::pin(bootstrap_current_schema(conn)).await?;
     } else {
         driver::migrate_to_current(conn, version).await?;
     }
     validate_persisted_schema(conn).await
+}
+
+async fn bootstrap_current_schema(conn: &turso::Connection) -> Result<(), HostError> {
+    // Repair only the exact v26 attachment/path contracts before
+    // provisioning validation requires the current v27 definitions.
+    execution_authorization::bootstrap(conn).await?;
+    storage_root_backing::upgrade_v27(conn).await?;
+    legacy_validation::validate_persisted_schema_v19_current40(conn).await?;
+    migration::ensure_completion_objects(conn).await?;
+    crate::journal_schema::bootstrap(conn).await?;
+    crate::journal_schema::install_revision_triggers(conn).await?;
+    storage_initialization::bootstrap(conn).await?;
+    crate::journal_schema::install_v20_revision_triggers(conn).await?;
+    storage_network::bootstrap(conn).await?;
+    storage_initialization::upgrade_v22(conn).await?;
+    storage_root_backing::upgrade_v27(conn).await?;
+    storage_root_backing::upgrade_v30(conn).await?;
+    storage_root_backing::bootstrap(conn).await?;
+    execution_authorization::bootstrap(conn).await?;
+    execution_publication::bootstrap(conn).await?;
+    execution_publication::upgrade_v25(conn).await?;
+    execution_publication::upgrade_v30(conn).await?;
+    storage_root_backing::upgrade_v31(conn).await?;
+    storage_handoff::bootstrap(conn).await?;
+    cleanup_observer_witness::bootstrap(conn).await?;
+    post_jit_retirement::validate_v40(conn).await?;
+    post_jit_effect_fences::validate(conn).await?;
+    pr_source_transition::validate(conn).await?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -125,140 +137,18 @@ mod migration_driver_tests;
 pub(crate) mod historical_fixture;
 
 async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostError> {
-    validate_persisted_schema_v39(conn).await
+    validate_persisted_schema_v40(conn).await
 }
 
-pub(super) async fn validate_persisted_schema_v39(
-    conn: &turso::Connection,
-) -> Result<(), HostError> {
-    validate_persisted_schema_v38(conn).await?;
-    jit_conflict_recovery::validate(conn).await
-}
-
-pub(super) async fn validate_persisted_schema_v36(
-    conn: &turso::Connection,
-) -> Result<(), HostError> {
-    validate_persisted_schema_v35(conn).await?;
-    post_jit_effect_fences::validate(conn).await
-}
-
-pub(super) async fn validate_persisted_schema_v37(
-    conn: &turso::Connection,
-) -> Result<(), HostError> {
-    validate_persisted_schema_v32_core(conn).await?;
-    storage_network::validate_v33(conn).await?;
-    physical_attempts::validate_v35(conn).await?;
-    post_jit_effect_fences::validate(conn).await?;
-    post_jit_retirement::validate_v37(conn).await
-}
-
-pub(super) async fn validate_persisted_schema_v38(
-    conn: &turso::Connection,
-) -> Result<(), HostError> {
-    validate_persisted_schema_v37(conn).await?;
-    pr_source_transition::validate(conn).await?;
-    crate::journal::pr_source_transition::validate_persisted_rows(conn).await
-}
-
-pub(super) async fn validate_persisted_schema_v33(
-    conn: &turso::Connection,
-) -> Result<(), HostError> {
-    validate_persisted_schema_v32_core(conn).await?;
-    storage_network::validate_v33(conn).await?;
-    physical_attempts::validate_v33(conn).await
-}
-
-pub(super) async fn validate_persisted_schema_v34(
-    conn: &turso::Connection,
-) -> Result<(), HostError> {
-    validate_persisted_schema_v32_core(conn).await?;
-    storage_network::validate_v33(conn).await?;
-    physical_attempts::validate(conn).await
-}
-
-pub(super) async fn validate_persisted_schema_v32(
-    conn: &turso::Connection,
-) -> Result<(), HostError> {
-    storage_network::validate(conn).await?;
-    validate_persisted_schema_v32_core(conn).await
-}
-
-async fn validate_persisted_schema_v32_core(conn: &turso::Connection) -> Result<(), HostError> {
-    validate_persisted_schema_v27_core(conn).await?;
-    storage_root_backing::validate(conn).await?;
-    execution_publication::validate_v30(conn).await?;
-    cleanup_observer_witness::validate_current(conn).await?;
-    pre_jit_cleanup::validate(conn).await
-}
-
-pub(super) async fn validate_persisted_schema_v27(
-    conn: &turso::Connection,
-) -> Result<(), HostError> {
-    validate_persisted_schema_v27_core(conn).await?;
-    storage_network::validate(conn).await?;
-    storage_root_backing::validate_v27(conn).await
-}
-
-async fn validate_persisted_schema_v27_core(conn: &turso::Connection) -> Result<(), HostError> {
-    validate_persisted_schema_v20(conn).await?;
-    storage_initialization::validate_v22(conn).await?;
-    execution_authorization::validate(conn).await?;
-    execution_publication::validate(conn).await?;
-    execution_publication::validate_v27(conn).await?;
-    storage_handoff::validate(conn).await?;
-    Ok(())
-}
-
-pub(super) async fn validate_persisted_schema_v20(
-    conn: &turso::Connection,
-) -> Result<(), HostError> {
-    validate_persisted_schema_v19(conn).await?;
-    storage_initialization::validate(conn).await?;
-    crate::journal_schema::validate_v20_revision_triggers(conn).await?;
-    Ok(())
-}
-
-pub(super) async fn validate_persisted_schema_v19(
-    conn: &turso::Connection,
-) -> Result<(), HostError> {
-    validate_persisted_schema_v17(conn).await?;
-    doctor_probe::validate(conn).await?;
-    request_reservations::validate(conn).await
-}
-
-async fn validate_persisted_schema_v17(conn: &turso::Connection) -> Result<(), HostError> {
-    let validations = [
-        ("current", validate_current_schema(conn).await),
-        (
-            "connection",
-            connection::validate_connection_schema(conn).await,
-        ),
-        ("remote", remote::validate(conn).await),
-        ("image_import", image_import::validate(conn).await),
-        ("scale_set_create", scale_set_create::validate(conn).await),
-        (
-            "source_authorization",
-            source_authorization::validate(conn).await,
-        ),
-        ("request_ledger", request_ledger::validate(conn).await),
-        (
-            "probe_lease",
-            crate::journal_schema::validate_probe_lease(conn).await,
-        ),
-        (
-            "capacity_header",
-            crate::journal::capacity_header::validate_connection(conn).await,
-        ),
-        ("provisioning", provisioning::validate(conn).await),
-        ("session", session::validate(conn).await),
-        ("session_refresh", session_refresh::validate(conn).await),
-        ("storage_budget", storage_budget::validate(conn).await),
-    ];
-    for (_, result) in validations {
-        result?;
-    }
-    Ok(())
-}
+mod legacy_validation;
+pub(super) use legacy_validation::{
+    validate_persisted_schema_v19, validate_persisted_schema_v20, validate_persisted_schema_v27,
+    validate_persisted_schema_v32, validate_persisted_schema_v33, validate_persisted_schema_v34,
+    validate_persisted_schema_v36, validate_persisted_schema_v37, validate_persisted_schema_v38,
+    validate_persisted_schema_v39,
+};
+mod validation_v40;
+pub(super) use validation_v40::validate_persisted_schema_v40;
 
 async fn journal_version(conn: &turso::Connection) -> Result<i64, HostError> {
     let mut rows = conn

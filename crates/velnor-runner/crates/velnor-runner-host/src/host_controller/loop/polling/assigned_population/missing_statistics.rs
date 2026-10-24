@@ -64,7 +64,7 @@ async fn missing_statistics_poll_case(initial_assigned_total: Option<i64>) -> Re
         .map_err(show_error)?;
     prepared.assigned_total = initial_assigned_total;
     let admissions = AtomicUsize::new(0);
-    let outcome = poll_without_statistics(&fixture.scope, &mut prepared, &admissions).await?;
+    let outcome = poll_statistics(&fixture.scope, &mut prepared, &admissions, None, 92_001).await?;
     assert_eq!(outcome.assigned_total, None);
     assert_eq!(admissions.load(Ordering::Relaxed), 0);
     prepared.record_assigned_total(outcome.assigned_total);
@@ -96,10 +96,12 @@ async fn missing_statistics_poll_case(initial_assigned_total: Option<i64>) -> Re
     Ok(())
 }
 
-async fn poll_without_statistics(
+pub(super) async fn poll_statistics(
     scope: &ConnectionJournal,
     prepared: &mut PreparedConnection,
     admissions: &AtomicUsize,
+    assigned_total: Option<i64>,
+    message_id: i64,
 ) -> Result<crate::launch::PositivePollOutcome, String> {
     let allocation = scope
         .session_header_allocation(prepared.session_intent)
@@ -126,9 +128,19 @@ async fn poll_without_statistics(
         },
         crate::launch::TestPollResponse {
             polled: velnor_runner_github::Poll::Batch(velnor_runner_github::ParsedBatch {
-                message_id: 92_001,
+                message_id,
                 raw_body: String::new(),
-                statistics: None,
+                statistics: assigned_total.map(|total_assigned_jobs| {
+                    velnor_runner_github::Statistics {
+                        total_available_jobs: 0,
+                        total_acquired_jobs: 1,
+                        total_assigned_jobs,
+                        total_running_jobs: 0,
+                        total_registered_runners: 0,
+                        total_busy_runners: 0,
+                        total_idle_runners: 0,
+                    }
+                }),
                 jobs: Vec::new(),
             }),
             path: "https://queue.example.invalid/messages".to_owned(),
@@ -144,7 +156,7 @@ async fn poll_without_statistics(
     .map_err(show_error)
 }
 
-async fn prepared_connection(
+pub(super) async fn prepared_connection(
     scope: &ConnectionJournal,
     binding: &crate::config::RepositoryConnection,
     images: &VerifiedWorkerImages,
@@ -188,7 +200,7 @@ async fn prepared_connection(
     })
 }
 
-async fn selected_engine(
+pub(super) async fn selected_engine(
     scope: &ConnectionJournal,
     reservation_id: i64,
 ) -> Result<(VerifiedWorkerImages, SelectedEngineContext), HostError> {

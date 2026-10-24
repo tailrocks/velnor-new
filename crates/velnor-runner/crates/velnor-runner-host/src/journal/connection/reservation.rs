@@ -2,12 +2,18 @@
 
 mod admission;
 mod enumerate;
+pub(in crate::journal) mod jit_conflict;
 mod lifecycle;
 mod limits;
 mod physical_attempt;
 pub(in crate::journal) mod post_jit_retirement;
 mod provisioning;
 
+pub(crate) use jit_conflict::JitConflictRecoveryClaim;
+pub(in crate::journal::connection::reservation) use jit_conflict::{
+    conflict_recovery_metadata_claim_ready, has_conflict_recovery_claim,
+    record_conflict_metadata_settlement,
+};
 pub(crate) use post_jit_retirement::{
     PostJitRetirementCandidate, PostJitRetirementClaim, PreparedRetirementRemoteAbsence,
 };
@@ -243,4 +249,10 @@ pub(in crate::journal) async fn resources_bound(
     intent_id: i64,
 ) -> Result<bool, crate::error::HostError> {
     provisioning::resources_bound(connection, connection_id, intent_id).await
+}
+
+pub(in crate::journal) async fn validate_jit_conflict_settlement_digests(
+    connection: &turso::Connection,
+) -> Result<(), crate::error::HostError> {
+    jit_conflict::validate_conflict_settlement_digests(connection).await
 }

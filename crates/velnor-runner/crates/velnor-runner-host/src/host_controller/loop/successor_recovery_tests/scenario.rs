@@ -19,7 +19,7 @@ struct FailedAttempt {
 pub(super) async fn max_jobs_one_successor() -> Result<(), String> {
     let attempt = FailedAttempt::start().await?;
     attempt.release_failed_attempt().await?;
-    attempt.recover_controller_demand().await?;
+    Box::pin(attempt.recover_controller_demand()).await?;
     Box::pin(attempt.finish_and_check()).await
 }
 
@@ -123,8 +123,7 @@ impl FailedAttempt {
             session,
             github_pat: crate::listen::Secret::new("test-token"),
         });
-        self.reconcile_successor(&mut prepared, &config, &state)
-            .await
+        Box::pin(self.reconcile_successor(&mut prepared, &config, &state)).await
     }
 
     async fn reconcile_successor(
