@@ -8,7 +8,7 @@ use sha2::{Digest, Sha256};
 use crate::session::execute;
 use crate::{Method, RunnerReference, SessionError, SessionRequest, Transport, WireError};
 
-use super::{lookup_runner_with_receipt, remove_runner_exchange};
+use super::{observe_runner_by_name, remove_runner_exchange};
 
 const HEX: &[u8; 16] = b"0123456789abcdef";
 
@@ -224,7 +224,7 @@ where
     T: Transport + ?Sized,
 {
     validate_identity(expected)?;
-    let (found, lookup) = lookup_runner_with_receipt(transport, &expected.name, admin_token)?;
+    let (found, lookup) = observe_runner_by_name(transport, &expected.name, admin_token)?;
     let Some(found) = found else {
         return Ok(RunnerAbsenceReceipt {
             runner: expected.clone(),
@@ -252,8 +252,7 @@ where
         Err(_) => (false, false),
     };
 
-    let (remaining, confirmation) =
-        lookup_runner_with_receipt(transport, &expected.name, admin_token)?;
+    let (remaining, confirmation) = observe_runner_by_name(transport, &expected.name, admin_token)?;
     if let Some(remaining) = remaining {
         if same_identity(&remaining, expected) {
             return Err(SessionError::Uncertain);

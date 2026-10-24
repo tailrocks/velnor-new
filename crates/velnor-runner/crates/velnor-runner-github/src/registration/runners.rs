@@ -34,7 +34,18 @@ where
     decode_runner_page(&exchange.body, runner_name).map(|(runner, _, _)| runner)
 }
 
-pub(super) fn lookup_runner_with_receipt<T>(
+/// Observe one runner by its exact name and return metadata for the response.
+///
+/// A returned runner and its Scale Set ID are observation data, not authority
+/// to remove or otherwise act on that runner. Callers must validate the exact
+/// Scale Set scope against their own claim before authorizing an action. Only a
+/// valid HTTP 200 response with `count: 0` and an empty `value` means absence.
+///
+/// # Errors
+///
+/// Returns [`SessionError::Uncertain`] on timeout or reset. Every non-200
+/// status is an error. Multiple or malformed results are rejected.
+pub fn observe_runner_by_name<T>(
     transport: &mut T,
     runner_name: &str,
     admin_token: &str,
