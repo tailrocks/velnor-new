@@ -2,7 +2,7 @@
 
 use velnor_actions_contract::{FinalStatus, MatrixReport, Plan};
 
-use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
+use crate::impl_common::{TestResult, merge_fixture, passing_reports, plan_for_source_change};
 use crate::impl_gates_shard::sharded_case;
 
 /// Full final report for one merge request (status plus miss tokens).
@@ -30,9 +30,7 @@ pub(crate) fn merge_report_with(
     for (key, value) in extra.as_object().ok_or("not an object")? {
         request[key] = value.clone();
     }
-    Ok(serde_json::from_str(
-        &velnor_actions_orchestrator::merge_internal(&request.to_string())?,
-    )?)
+    Ok(serde_json::from_str(&merge_fixture(&request.to_string())?)?)
 }
 
 #[test]

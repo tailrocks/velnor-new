@@ -16,11 +16,14 @@ use velnor_actions_orchestrator::{
     GenerationPreparation, OrchestratorError, finalized_jobs, plan_internal, plan_text,
 };
 
+#[path = "impl_common_merge.rs"]
+mod merge;
 #[path = "impl_common_mise.rs"]
 mod mise;
 #[path = "impl_common_path.rs"]
 mod path;
 
+pub(crate) use merge::merge_fixture;
 pub(crate) use mise::write_fixture_mise;
 pub(crate) use path::test_path_with_sbin;
 

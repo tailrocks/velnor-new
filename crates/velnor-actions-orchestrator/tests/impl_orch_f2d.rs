@@ -4,11 +4,11 @@ use std::collections::BTreeSet;
 
 use serde_json::Value as Json;
 use velnor_actions_contract::{FinalStatus, Plan};
-use velnor_actions_orchestrator::{merge_internal, plan_internal};
+use velnor_actions_orchestrator::plan_internal;
 
 use crate::impl_common::{
     TestResult, config_with_branch, git, install_fixture_release_manifest, make_repo,
-    passing_reports, plan_for_source_change,
+    merge_fixture, passing_reports, plan_for_source_change,
 };
 use crate::impl_orch_plansel::{
     BUMP, commit, has, make_ws, merge_status, plan_at, plan_change, put,
@@ -138,7 +138,7 @@ fn merge_without_reports_is_not_run() -> TestResult {
     assert!(!plan.matrix.include.is_empty());
     let request = serde_json::json!({"schema": 1, "run_key": "local", "actual_event": "pull_request", "plan": plan, "matrix": plan.matrix, "matrix_reports": [], "required_job_ids": ["plan"], "required_jobs": [{"job_id": "plan", "conclusion": "success"}]});
     let final_report: velnor_actions_contract::FinalReport =
-        serde_json::from_str(&merge_internal(&request.to_string())?)?;
+        serde_json::from_str(&merge_fixture(&request.to_string())?)?;
     assert_eq!(final_report.status, FinalStatus::NotRun);
     assert_eq!(
         final_report.counts.not_run as usize,
@@ -168,7 +168,7 @@ fn undetected_stacks_plan_no_work() -> TestResult {
     assert!(plan.packages.is_empty());
     let jobs = serde_json::json!([{"job_id": "plan", "conclusion": "success"}, {"job_id": "jactionlint", "conclusion": "success"}]);
     let merge = serde_json::json!({"schema": 1, "run_key": "local", "actual_event": "push", "plan": plan, "matrix": plan.matrix, "matrix_reports": [], "required_job_ids": ["plan", "jactionlint"], "required_jobs": jobs});
-    let merged = merge_internal(&merge.to_string())?;
+    let merged = merge_fixture(&merge.to_string())?;
     let final_report: velnor_actions_contract::FinalReport = serde_json::from_str(&merged)?;
     assert_eq!(final_report.status, FinalStatus::NoWork);
     assert!(

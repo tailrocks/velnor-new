@@ -127,8 +127,11 @@ fn native_homebrew_requests_round_trip_through_existing_plan_and_merge_parsers()
         None,
     )
     .expect("assemble merge request");
-    let report = crate::merge::merge_internal(&merge_request)
-        .expect("existing merge parser accepts assembled request");
+    let report = crate::merge::merge_internal_with_context(
+        &merge_request,
+        &crate::merge::MergeContext::detached(),
+    )
+    .expect("existing merge parser accepts assembled request");
     serde_json::from_str::<velnor_actions_contract::FinalReport>(&report)
         .expect("merge response is a final report");
 }

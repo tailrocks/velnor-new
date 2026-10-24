@@ -44,7 +44,7 @@ pub(crate) fn proposal(
         task_id,
         stack_id: Stack::Native.id().to_owned(),
         component_id: check.id.clone(),
-        task_kind: "native-check".to_owned(),
+        task_kind: "native_check".to_owned(),
         configuration: check.operation.as_str().to_owned(),
         depends_on: Vec::new(),
         gated_by: Vec::new(),
@@ -120,6 +120,7 @@ fn validate_task_binding(
 ) -> Result<(), crate::OrchestratorError> {
     if task.stack_id != Stack::Native.id()
         || task.task_id != format!("internal/native-check/{}", check.id)
+        || task.task_kind != "native_check"
         || task.configuration != check.operation.as_str()
     {
         return Err(crate::internal::internal("native_check_task_mismatch"));
@@ -319,3 +320,7 @@ fn require_formula_policy(
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "native_homebrew_check_plan_tests.rs"]
+mod tests;

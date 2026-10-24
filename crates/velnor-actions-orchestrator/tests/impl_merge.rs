@@ -1,19 +1,15 @@
 //! Merge gate cases: round-trip, precedence, no-work (tamper: `impl_merge_tamper`).
 
+use crate::impl_common::{TestResult, merge_fixture, passing_reports, plan_for_source_change};
 use velnor_actions_contract::{
     FinalReport, FinalStatus, MatrixReport, MatrixStatus, Plan, TaskReport, TaskStatus,
 };
-use velnor_actions_orchestrator::merge_internal;
-
-use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
 
 /// Merge one request and parse the final report.
 pub(crate) fn merge(
     request: &serde_json::Value,
 ) -> Result<FinalReport, Box<dyn std::error::Error>> {
-    Ok(serde_json::from_str(&merge_internal(
-        &request.to_string(),
-    )?)?)
+    Ok(serde_json::from_str(&merge_fixture(&request.to_string())?)?)
 }
 
 /// Canonical merge request for a plan with report/job overrides.
