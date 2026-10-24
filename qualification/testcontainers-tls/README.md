@@ -31,11 +31,15 @@ string. The local HTTPS self-test does not use or require these Docker settings.
 
 The SDK path requires an explicitly prepared runner that shares the DinD
 daemon's network namespace. Being on the same Docker bridge is insufficient
-for a mapped service port to be reachable as `localhost`. The current
-qualification job does not establish this namespace, so it cannot yet be
-claimed as paired SDK proof. Once such a runner is separately provided, install
-only the checked-in Node dependencies, create an empty private output
-directory, and run the Rust certificate command before the Node script:
+for a mapped service port to be reachable as `localhost`. The generated
+`qualification.yml` supports two explicit modes: `paired-sdk-build` runs only
+the hosted artifact builder; `paired-sdk-tls` runs both checked-in SDK
+commands directly in the selected paired Runner, without a default job
+container. The runtime mode does not create that Runner or establish its
+source, image, ownership, or namespace provenance; those remain separately
+evidenced prerequisites. Install only the checked-in Node dependencies,
+create an empty private output directory, and run the Rust certificate
+command before the Node script:
 
 ```sh
 set -e
@@ -45,18 +49,20 @@ trap 'rm -rf -- "$scratch"' EXIT
 chmod 0700 "$scratch"
 mkdir "$scratch/certs"
 chmod 0700 "$scratch/certs"
-/Users/donbeave/.local/bin/rust-build-guard \
-  -- mise exec -- cargo run --locked \
-  --manifest-path fixtures/qualification/testcontainers-rust/Cargo.toml \
-  -- certs "$scratch/certs"
+(
+  cd fixtures/qualification/testcontainers-rust
+  /Users/donbeave/.local/bin/rust-build-guard \
+    -- mise exec -- cargo run --locked -- certs "$scratch/certs"
+)
 node qualification/testcontainers/tls.mjs "$scratch/certs"
 ```
 
-The Rust command is a local preparation step. The SDK qualification only
-counts as paired proof when it runs inside the digest-pinned `velnor-job`
-container in the same DinD network namespace that owns the mapped port. A run
-from the host shell can check the HTTPS fixture but cannot establish that
-namespace contract.
+The Rust command is a local preparation step. Runtime qualification counts as
+paired proof only when both SDK clients run in the separately qualified Runner
+sharing the exact DinD network namespace. The pinned `velnor-job` image below
+is the HTTPS service image each SDK starts, not a required client job
+container. A local HTTPS-only self-test cannot establish that namespace
+contract.
 
 The pinned Testcontainers SDK bounds its wait-strategy phase through
 `withStartupTimeout` and each HTTPS request through a five-second timer. Its
@@ -78,11 +84,12 @@ and does not rely on a Rust reaper to clean up failed or timed-out operations.
 The invoking job must enforce a finite process/job deadline for the Rust path
 as well.
 
-## Future paired SDK qualification
+## Paired SDK qualification prerequisites
 
-This procedure describes a future paired run; no current workflow establishes
-the required namespace or runs both SDK commands. A local HTTPS self-test is
-not evidence of the paired Docker path.
+The runtime mode supplies command wiring, not qualification evidence. Source
+generation or a successful `paired-sdk-build` run does not establish paired
+SDK success. The local HTTPS self-test is not evidence of the paired Docker
+path.
 
 Use a separately approved Linux runner in the exact network namespace shared
 with its DinD daemon. The SDKs start the existing service image
