@@ -115,6 +115,19 @@ fn assert_job_budget(workflow: &str, id: &str, fields: &[&str]) {
             "build-linux" | "build-macos" | "build-macos-intel"
         )
     );
-    let expected = if compiler { 10 } else { 5 };
+    let paired_sdk = matches!(
+        (workflow, id),
+        (
+            ".github/workflows/qualification.yml",
+            "paired-sdk-build" | "paired-sdk-tls"
+        )
+    );
+    let expected = if compiler {
+        10
+    } else if paired_sdk {
+        30
+    } else {
+        5
+    };
     assert_eq!(minutes, expected, "{workflow}:{id}");
 }

@@ -63,12 +63,9 @@ pub(super) fn render_all(
     )?);
     extra.extend(crate::tofu_apply_emit::tofu_apply_files(prep, &routing)?);
     extra.extend(review_completion_workflow_emit::files(prep, &routing)?);
-    extra.extend(crate::routing::extra_files(
-        &prep.config,
-        &prep.emission_catalog(),
-        version,
-        &routing,
-    )?);
+    let (schema2_files, final_routing) =
+        crate::routing::extra_files(&prep.config, &prep.emission_catalog(), version, &routing)?;
+    extra.extend(schema2_files);
     extra.extend(crate::rust_suites_emit::suite_workflow_files(
         prep, &routing,
     )?);
@@ -100,9 +97,9 @@ pub(super) fn render_all(
         .as_ref()
         .is_some_and(|rust| rust.binary_release.preview.enabled)
     {
-        validate_generated_workflow_calls_with_native_preview_ir(&tree.files, &routing, &ir)?;
+        validate_generated_workflow_calls_with_native_preview_ir(&tree.files, &final_routing, &ir)?;
     } else {
-        validate_final_routing(&tree.files, &routing, &ir)?;
+        validate_final_routing(&tree.files, &final_routing, &ir)?;
     }
     Ok(tree)
 }

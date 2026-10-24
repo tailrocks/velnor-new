@@ -2,8 +2,9 @@ use std::{error::Error, fs, time::SystemTime};
 
 use velnor_actions_contract::config::ValidatedImageReference;
 use velnor_actions_contract::{ExecutionMode, RoutingWorkflow};
+use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
-use crate::routing::workflow_routing_policy;
+use crate::routing::{workflow_request, workflow_routing_policy};
 use velnor_actions_workflow_renderer::WorkflowRoutingPolicy;
 
 fn config() -> Result<velnor_actions_contract::VelnorConfig, Box<dyn Error>> {
@@ -84,5 +85,29 @@ fn selector_policy_carries_the_validated_scale_set_image_pin() -> Result<(), Box
         policy,
         WorkflowRoutingPolicy::configured(ExecutionMode::Hosted, selector, Some(image))
     );
+    Ok(())
+}
+
+#[test]
+fn qualification_request_resolves_product_pins_for_the_paired_sdk_jobs()
+-> Result<(), Box<dyn Error>> {
+    let mut config = config()?;
+    let execution = config.execution.as_mut().expect("execution config");
+    execution.workflows.insert(RoutingWorkflow::Qualification);
+    let execution = execution.clone();
+    let catalog = ToolCatalog::pinned();
+    let routing = workflow_routing_policy(&config, None)?;
+
+    let request = workflow_request(&config, &execution, &catalog, "0.1.0", &routing)?;
+    let pins = request
+        .product_release
+        .as_ref()
+        .expect("hosted qualification resolves its production pins");
+    assert_eq!(pins.rust_version, catalog.version(PinnedTool::Rust));
+    assert_eq!(
+        pins.mr_boxington_version,
+        catalog.version(PinnedTool::MrBoxington)
+    );
+    assert_eq!(pins.qualify_mbx_action_steps.len(), 3);
     Ok(())
 }

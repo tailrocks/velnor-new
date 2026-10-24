@@ -10,6 +10,7 @@ use velnor_actions_contract::{
 use crate::RenderError;
 use crate::render::RenderedFile;
 use crate::setup::MiseSetup;
+use crate::workflow_routing::paired_sdk;
 use crate::workflow_routing::{WorkflowRoutingPolicy, route_workflow_yaml};
 use crate::yaml::Yaml;
 
@@ -52,6 +53,10 @@ mod mbx_qualification;
 mod mise_pin_qualification;
 pub(super) use basic_workflows::with_if;
 use basic_workflows::{monitoring, qualification};
+#[path = "schema2_paired_sdk_qualification.rs"]
+mod paired_sdk_qualification;
+#[path = "schema2_paired_sdk_steps.rs"]
+mod paired_sdk_steps;
 #[path = "schema2_product_release.rs"]
 mod product_release;
 #[path = "schema2_product_release_family.rs"]
@@ -92,6 +97,10 @@ mod runner_shell_tests;
 #[cfg(test)]
 #[path = "schema2_resource_probe_image_tests.rs"]
 mod resource_probe_image_tests;
+
+#[cfg(test)]
+#[path = "schema2_paired_sdk_tests.rs"]
+mod paired_sdk_tests;
 
 #[cfg(test)]
 #[path = "schema2_product_release_test_pins.rs"]
@@ -166,14 +175,47 @@ impl Schema2WorkflowRequest {
 pub fn render_schema2_workflows(
     request: &Schema2WorkflowRequest,
 ) -> Result<Vec<RenderedFile>, RenderError> {
+    render_schema2_workflows_with_verified_routing(request).map(|(files, _)| files)
+}
+
+/// Render every requested workflow and return the immutable routing policy
+/// bound to any paired SDK qualification workflow in the rendered files.
+///
+/// The existing [`render_schema2_workflows`] API remains the file-only
+/// convenience wrapper. Orchestrators that perform a later inventory pass
+/// must retain and use this returned policy.
+///
+/// # Errors
+///
+/// Illegal selectors, missing qualification inputs, or workflow rendering
+/// and routing errors fail.
+pub fn render_schema2_workflows_with_verified_routing(
+    request: &Schema2WorkflowRequest,
+) -> Result<(Vec<RenderedFile>, WorkflowRoutingPolicy), RenderError> {
     RunnerSpec::hosted(&request.hosted_label)?;
     let mut files = Vec::new();
+    let mut final_routing = request.routing.clone();
     if request.workflows.contains(&RoutingWorkflow::Qualification) {
-        files.push(file(
-            QUALIFICATION_WORKFLOW,
-            &request.version,
-            &route_workflow(request, QUALIFICATION_WORKFLOW, qualification(request)?)?,
-        )?);
+        let workflow = qualification(request)?;
+        let (workflow, source) = paired_sdk_qualification::append(workflow, request)?;
+        if let Some(source) = source {
+            let (routed, routed_source) = paired_sdk::route_qualification(
+                QUALIFICATION_WORKFLOW,
+                workflow,
+                &request.version,
+                &request.routing,
+                &source,
+            )?;
+            let rendered = file(QUALIFICATION_WORKFLOW, &request.version, &routed)?;
+            final_routing = paired_sdk::bind_policy(&request.routing, routed_source, &rendered)?;
+            files.push(rendered);
+        } else {
+            files.push(file(
+                QUALIFICATION_WORKFLOW,
+                &request.version,
+                &route_workflow(request, QUALIFICATION_WORKFLOW, workflow)?,
+            )?);
+        }
     }
     if let Some(generated) = product_release::render(request)? {
         files.push(file(
@@ -201,7 +243,7 @@ pub fn render_schema2_workflows(
             &route_workflow(request, MONITORING_WORKFLOW, monitoring(request)?)?,
         )?);
     }
-    Ok(files)
+    Ok((files, final_routing))
 }
 
 fn route_workflow(

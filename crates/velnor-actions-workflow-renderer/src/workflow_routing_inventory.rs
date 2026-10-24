@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use super::inventory_values::{mapping_get, scalar_text, to_routing_yaml, untagged};
 use crate::{RenderError, RenderedFile};
 use saphyr::Yaml;
 
@@ -28,6 +29,7 @@ pub(super) fn validate_final_workflow_inventory(
     typed_jobs: Option<&BTreeMap<String, velnor_actions_contract::Job>>,
     native_context: Option<super::native_preview::Context>,
 ) -> Result<(), RenderError> {
+    super::paired_sdk::validate_snapshot(files, policy)?;
     let mut workflows = BTreeMap::new();
     let mut native_preview_found = false;
     for file in files.iter().filter(|file| is_workflow_path(&file.path)) {
@@ -113,6 +115,7 @@ fn inspect_workflow_job(
             "workflow_job_field_not_scalar:{path}:{job_id}"
         )));
     }
+    super::paired_sdk::validate_job_location(path, job_id, policy)?;
     let runs_on = mapping_get(job, "runs-on");
     let container_value = mapping_get(job, "container");
     if let Some(uses) = mapping_get(job, "uses") {
@@ -159,6 +162,16 @@ fn inspect_workflow_job(
         policy,
         path,
         job_id,
+    )? {
+        return Ok(None);
+    }
+    if super::paired_sdk::is_containerless_tls_consumer(
+        path,
+        job_id,
+        fields,
+        runs_on,
+        container_value,
+        policy,
     )? {
         return Ok(None);
     }
@@ -334,50 +347,6 @@ fn validate_runner_choice(
         RunnerChoice::Unresolved => Err(invalid(format!(
             "workflow_runner_unresolved:{path}:{job_id}"
         ))),
-    }
-}
-
-fn to_routing_yaml(value: &Yaml<'_>) -> Option<crate::yaml::Yaml> {
-    use crate::yaml::Yaml as RoutingYaml;
-    match untagged(value) {
-        Yaml::Value(_) | Yaml::Representation(..) => {
-            if let Some(text) = value.as_str() {
-                Some(RoutingYaml::str(text))
-            } else if let Some(boolean) = value.as_bool() {
-                Some(RoutingYaml::Bool(boolean))
-            } else {
-                value.as_integer().map(RoutingYaml::Int)
-            }
-        }
-        Yaml::Sequence(values) => values
-            .iter()
-            .map(to_routing_yaml)
-            .collect::<Option<Vec<_>>>()
-            .map(RoutingYaml::Seq),
-        Yaml::Mapping(entries) => entries
-            .iter()
-            .map(|(key, value)| Some((scalar_text(key)?.to_owned(), to_routing_yaml(value)?)))
-            .collect::<Option<Vec<_>>>()
-            .map(RoutingYaml::Map),
-        _ => None,
-    }
-}
-
-fn scalar_text<'a>(value: &'a Yaml<'_>) -> Option<&'a str> {
-    untagged(value).as_str()
-}
-
-fn mapping_get<'a, 'input>(value: &'a Yaml<'input>, key: &str) -> Option<&'a Yaml<'input>> {
-    untagged(value)
-        .as_mapping()?
-        .iter()
-        .find_map(|(name, value)| (scalar_text(name) == Some(key)).then_some(value))
-}
-
-fn untagged<'a, 'input>(value: &'a Yaml<'input>) -> &'a Yaml<'input> {
-    match value {
-        Yaml::Tagged(_, inner) => untagged(inner),
-        _ => value,
     }
 }
 

@@ -9,7 +9,6 @@ use velnor_actions_contract::config::LATEST_RUNNER_LABEL;
 use velnor_actions_contract::{ExecutionConfig, ExecutionMode, RoutingWorkflow, VelnorConfig};
 use velnor_actions_workflow_renderer::{
     MbxQualificationPins, RenderedFile, Schema2WorkflowRequest, WorkflowRoutingPolicy,
-    render_schema2_workflows,
 };
 
 use crate::OrchestratorError;
@@ -59,18 +58,21 @@ pub(crate) fn extra_files(
     catalog: &velnor_actions_mise::ToolCatalog,
     version: &str,
     routing: &WorkflowRoutingPolicy,
-) -> Result<Vec<RenderedFile>, OrchestratorError> {
+) -> Result<(Vec<RenderedFile>, WorkflowRoutingPolicy), OrchestratorError> {
     if config.schema != VelnorConfig::SCHEMA_V2 {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), routing.clone()));
     }
     let Some(execution) = &config.execution else {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), routing.clone()));
     };
     if execution.workflows.is_empty() {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), routing.clone()));
     }
     let request = workflow_request(config, execution, catalog, version, routing)?;
-    render_schema2_workflows(&request).map_err(|err| OrchestratorError::Render {
+    velnor_actions_workflow_renderer::schema2::render_schema2_workflows_with_verified_routing(
+        &request,
+    )
+    .map_err(|err| OrchestratorError::Render {
         problem: err.to_string(),
     })
 }
@@ -200,7 +202,12 @@ fn workflow_request(
     ]
     .iter()
     .any(|workflow| execution.workflows.contains(workflow));
-    let product_release = product_release_requested
+    let product_pins_requested = product_release_requested
+        || (execution
+            .workflows
+            .contains(&RoutingWorkflow::Qualification)
+            && !routing.is_scale_set());
+    let product_release = product_pins_requested
         .then(|| crate::product_release_pins::resolve(config, catalog))
         .transpose()?;
     Ok(Schema2WorkflowRequest {

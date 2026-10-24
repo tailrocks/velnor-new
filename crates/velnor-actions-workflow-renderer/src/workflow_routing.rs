@@ -17,8 +17,12 @@ mod authority;
 mod calls;
 #[path = "workflow_routing_container.rs"]
 mod container;
+#[path = "workflow_routing_entrypoints.rs"]
+mod entrypoints;
 #[path = "workflow_routing_inventory.rs"]
 mod inventory;
+#[path = "workflow_routing_inventory_values.rs"]
+mod inventory_values;
 #[path = "workflow_routing_labels.rs"]
 mod labels;
 #[path = "workflow_routing_matrix.rs"]
@@ -27,6 +31,8 @@ mod matrix;
 mod native_preview;
 #[path = "workflow_routing_native_tasks.rs"]
 mod native_tasks;
+#[path = "workflow_routing_paired_sdk.rs"]
+pub(crate) mod paired_sdk;
 #[path = "workflow_routing_parse.rs"]
 mod parse;
 #[path = "workflow_routing_runner.rs"]
@@ -36,6 +42,9 @@ mod typed_jobs;
 pub use authority::{
     AuthorityCall, AuthorityConcurrency, AuthorityJob, AuthorityPermissions, AuthorityTrigger,
     AuthorityWorkflow, extract_workflow_authority,
+};
+pub(crate) use entrypoints::{
+    route_native_preview_workflow_yaml, route_workflow_yaml, route_workflow_yaml_for_jobs,
 };
 use native_tasks::NativeHostedTask;
 pub(crate) use typed_jobs::route_jobs;
@@ -53,6 +62,7 @@ pub struct WorkflowRoutingPolicy {
     selector: Option<ScaleSetSelector>,
     job_container_image: Option<ValidatedImageReference>,
     native_hosted_tasks: BTreeMap<String, native_tasks::NativeHostedTask>,
+    paired_sdk: Option<paired_sdk::BoundQualification>,
 }
 
 impl WorkflowRoutingPolicy {
@@ -64,6 +74,7 @@ impl WorkflowRoutingPolicy {
             selector: None,
             job_container_image: None,
             native_hosted_tasks: BTreeMap::new(),
+            paired_sdk: None,
         }
     }
 
@@ -79,6 +90,7 @@ impl WorkflowRoutingPolicy {
             selector: Some(selector),
             job_container_image,
             native_hosted_tasks: BTreeMap::new(),
+            paired_sdk: None,
         }
     }
 
@@ -135,44 +147,18 @@ pub(crate) fn test_policy(
     WorkflowRoutingPolicy::configured(mode, selector, Some(image))
 }
 
-/// Use the selected policy for one typed workflow document.
-pub(crate) fn route_workflow_yaml(
-    path: &str,
-    workflow: Yaml,
-    policy: &WorkflowRoutingPolicy,
-) -> Result<Yaml, RenderError> {
-    route_workflow_yaml_inner(path, workflow, policy, None, None)
-}
-
-pub(crate) fn route_workflow_yaml_for_jobs(
-    path: &str,
-    workflow: Yaml,
-    policy: &WorkflowRoutingPolicy,
-    typed_jobs: &std::collections::BTreeMap<String, velnor_actions_contract::Job>,
-) -> Result<Yaml, RenderError> {
-    route_workflow_yaml_inner(path, workflow, policy, Some(typed_jobs), None)
-}
-
-pub(crate) fn route_native_preview_workflow_yaml(
-    path: &str,
-    workflow: Yaml,
-    policy: &WorkflowRoutingPolicy,
-) -> Result<Yaml, RenderError> {
-    route_workflow_yaml_inner(path, workflow, policy, None, Some(native_preview::Context))
-}
-
-fn route_workflow_yaml_inner(
+fn route_workflow_yaml_inner_with_paired_source(
     path: &str,
     mut workflow: Yaml,
     policy: &WorkflowRoutingPolicy,
     typed_jobs: Option<&std::collections::BTreeMap<String, velnor_actions_contract::Job>>,
     native_context: Option<native_preview::Context>,
+    paired_source: Option<&paired_sdk::QualificationSource>,
 ) -> Result<Yaml, RenderError> {
     workflow = aliases::materialize(&workflow)?;
     if native_context.is_some() {
         native_preview::validate_emitted_workflow(path, &workflow, policy)?;
     }
-    let selector = policy.selector();
     let workflow_shell = container::workflow_run_shell(&workflow, path)?;
     let Yaml::Map(document) = &mut workflow else {
         return Err(invalid(format!("workflow_document_not_map:{path}")));
@@ -181,54 +167,23 @@ fn route_workflow_yaml_inner(
     let Some((_, Yaml::Map(jobs))) = document.iter_mut().find(|(key, _)| key == "jobs") else {
         return Err(invalid(format!("workflow_jobs_missing:{path}")));
     };
+    paired_sdk::validate_source_presence(path, jobs, paired_source)?;
+    if let Some(source) = paired_source {
+        source.validate_source(path, jobs)?;
+    }
+    let routing_context = entrypoints::WorkflowJobRoutingContext {
+        path,
+        policy,
+        typed_jobs,
+        native_context,
+        paired_source,
+        workflow_shell: workflow_shell.as_deref(),
+    };
     for (job_id, job) in jobs {
-        let Yaml::Map(fields) = job else {
-            return Err(invalid(format!("workflow_job_not_map:{path}:{job_id}")));
-        };
-        labels::reject_duplicate_keys(fields, path, job_id)?;
-        let uses =
-            fields
-                .iter()
-                .find(|(key, _)| key == "uses")
-                .and_then(|(_, value)| match value {
-                    Yaml::Str(text) | Yaml::Quoted(text) => Some(text.clone()),
-                    Yaml::Annotated { value, .. } => Some(value.clone()),
-                    _ => None,
-                });
-        let runs_on_index = fields.iter().position(|(key, _)| key == "runs-on");
-        if let Some(uses) = uses {
-            typed_jobs::reject_native_hosted_reusable_call(policy, path, job_id)?;
-            if runs_on_index.is_some() || fields.iter().any(|(key, _)| key == "container") {
-                return Err(invalid(format!(
-                    "reusable_workflow_job_has_runner_fields:{path}:{job_id}"
-                )));
-            }
-            if selector.is_some() && !labels::is_local_reusable_workflow(&uses) {
-                return Err(invalid(format!(
-                    "unsupported_external_reusable_workflow:{path}:{job_id}:{uses}"
-                )));
-            }
-            continue;
-        }
-        let typed_job = typed_jobs.and_then(|jobs| jobs.get(job_id));
-        let routed = route_runner_fields(
-            fields,
-            runs_on_index,
-            path,
-            job_id,
-            policy,
-            typed_job,
-            native_context,
-        )?;
-        if routed && policy.has_container_policy() {
-            container::ensure_job_container(
-                fields,
-                policy.image(),
-                workflow_shell.as_deref(),
-                path,
-                job_id,
-            )?;
-        }
+        entrypoints::route_workflow_job(job_id, job, &routing_context)?;
+    }
+    if let Some(source) = paired_source {
+        source.validate_routed(path, &workflow, policy)?;
     }
     Ok(workflow)
 }
