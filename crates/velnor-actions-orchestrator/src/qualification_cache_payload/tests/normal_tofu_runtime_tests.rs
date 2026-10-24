@@ -331,3 +331,6 @@ fn export_binds_existing_provider_bytes_and_rewrites_only_the_claimed_stage() {
             .any(|window| window == b"prior restore payload")
     );
 }
+
+#[path = "normal_tofu_runtime_offset_oracle_tests.rs"]
+mod offset_oracle_tests;
