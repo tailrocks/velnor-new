@@ -41,7 +41,7 @@ fn install_carries_specs_only() -> Result<(), String> {
     for spec in [
         "rust@1.99.1",
         "mr-boxington@1.27.0",
-        "gh@2.103.0",
+        "gh@2.103.2",
         "jactionlint@2.3.0",
         "shellcheck@0.11.0",
         "aqua:nextest-rs/nextest/cargo-nextest@0.9.149",

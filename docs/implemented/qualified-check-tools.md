@@ -21,11 +21,18 @@ The closed request has `schema_version = 1`, one supported `platform`, bounded
 entry contains a hash-free `recipe` and an ordered `archives` list of absolute
 local `path`, exact recipe `url`, and independently measured lowercase
 `sha256`. Archive URLs and order must exactly match the recipe's primary then
-dependency archives. Only the explicitly supported Rust, Zig, Python, and
-prebuilt `rust-cross/cargo-zigbuild` families are admitted; source builds and
-dependency compilation are rejected. Unknown fields, symlinks, special files,
-ambiguous payload roots, malformed archive metadata, and tool output that does
-not match the declared probes fail closed.
+dependency archives. Core tools remain explicitly limited to Rust, Zig, and
+Python. Prebuilt Aqua recipes are admitted when the shared package,
+release-source, platform, layout, probe, and dependency validators accept
+them. Source builds and dependency artifacts are rejected. Unknown fields,
+symlinks, special files, ambiguous payload roots, malformed archive metadata,
+and tool output that does not match the declared probes fail closed.
+The Cargo backend is not admitted by this authoring request.
+
+The generic Aqua authoring path covers package/version examples such as
+`jdx/jactionlint` 2.3.0, `koalaman/shellcheck` 0.11.0, and
+`jdx/mr-boxington` 1.27.0. These examples describe authoring scope; they are
+not measured or live-qualified pins.
 
 The output is a versioned authoring candidate containing the request digest,
 dependency execution order, measured complete `qualified_tools`, observed

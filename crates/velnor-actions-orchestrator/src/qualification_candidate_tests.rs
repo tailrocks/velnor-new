@@ -240,3 +240,6 @@ mod admission;
 mod real;
 #[path = "qualification_candidate_rust_tests.rs"]
 mod rust_components;
+
+#[path = "qualification_candidate_aqua_tests.rs"]
+mod aqua;
