@@ -85,7 +85,7 @@ async fn v34_upgrade_rolls_back_the_new_schema_with_the_outer_transaction() -> R
     );
     super::physical_attempts::validate_v35(&connection).await?;
     super::post_jit_effect_fences::validate(&connection).await?;
-    super::post_jit_retirement::validate_v37(&connection).await
+    super::post_jit_retirement::validate_v40(&connection).await
 }
 
 #[tokio::test]
@@ -113,6 +113,7 @@ async fn v35_open_rejects_a_changed_terminal_proof_view() -> Result<(), HostErro
 }
 
 pub(super) async fn downgrade_to_v34(connection: &turso::Connection) -> Result<(), HostError> {
+    super::jit_conflict_settlement::downgrade_connection_to_v39(connection).await?;
     super::jit_conflict_recovery::remove_receipt_schema_for_migration_test(connection).await?;
     for trigger in [
         "post_jit_jit_claim_fence",
@@ -247,7 +248,7 @@ async fn v33_outcome_guard_migrates_without_changing_attempt_rows() -> Result<()
     );
     super::physical_attempts::validate_v35(&connection).await?;
     super::post_jit_effect_fences::validate(&connection).await?;
-    super::post_jit_retirement::validate_v37(&connection).await?;
+    super::post_jit_retirement::validate_v40(&connection).await?;
     let mut rows = connection
         .query(
             "SELECT attempt.lineage_id, attempt.generation, attempt.reservation_id, attempt.intent_id, attempt.physical_nonce FROM physical_attempt_current AS current JOIN physical_attempts AS attempt ON attempt.lineage_id = current.lineage_id AND attempt.generation = current.generation AND attempt.reservation_id = current.reservation_id AND attempt.intent_id = current.intent_id WHERE current.reservation_id = ?1",
@@ -287,7 +288,7 @@ async fn v33_outcome_guard_migrates_without_changing_attempt_rows() -> Result<()
     );
     super::physical_attempts::validate_v35(&connection).await?;
     super::post_jit_effect_fences::validate(&connection).await?;
-    super::post_jit_retirement::validate_v37(&connection).await
+    super::post_jit_retirement::validate_v40(&connection).await
 }
 
 #[tokio::test]

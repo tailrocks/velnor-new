@@ -12,7 +12,9 @@ mod validation;
 mod tests;
 
 #[cfg(test)]
-pub(in crate::journal::schema) use tests::downgrade_current_database_to_v39;
+pub(in crate::journal::schema) use tests::{
+    downgrade_connection_to_v39, downgrade_current_database_to_v39,
+};
 
 pub(super) async fn migrate_v39_to_v40(conn: &turso::Connection) -> Result<(), HostError> {
     migration::migrate_v39_to_v40(conn).await

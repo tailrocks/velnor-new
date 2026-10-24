@@ -120,7 +120,7 @@ async fn acquired_witness_digest_accepts_null_attempt_creation_snapshot() -> Res
         .ok_or(HostError::Journal)?;
     let claim_response: String = row.get(0).map_err(|_| HostError::Journal)?;
     assert_eq!(claim_response, response_digest);
-    super::validate_v37(&connection).await?;
+    super::validate_v40(&connection).await?;
     Ok(())
 }
 

@@ -244,6 +244,20 @@ async fn null_runner_absence_settlement_survives_v40_reopen_inner() -> Result<()
 pub(in crate::journal::schema) async fn downgrade_current_database_to_v39(
     path: &std::path::Path,
 ) -> Result<(), HostError> {
+    let database = turso::Builder::new_local(path.to_str().ok_or(HostError::Path)?)
+        .build()
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let connection = database.connect().map_err(|_| HostError::Journal)?;
+    downgrade_connection_to_v39(&connection).await?;
+    drop(connection);
+    drop(database);
+    Ok(())
+}
+
+pub(in crate::journal::schema) async fn downgrade_connection_to_v39(
+    connection: &turso::Connection,
+) -> Result<(), HostError> {
     // Reuse real v39 definitions so retained charge data crosses the production migration.
     let old = super::v39_fixture().await?;
     let old_connection = old.connection();
@@ -255,18 +269,19 @@ pub(in crate::journal::schema) async fn downgrade_current_database_to_v39(
         super::object_sql(old_connection, "view", "physical_attempt_terminal_proofs").await?;
     let indexes = super::attached_sql(old_connection, "index", "connection_runner_jits").await?;
     let triggers = super::attached_sql(old_connection, "trigger", "connection_runner_jits").await?;
-    let database = turso::Builder::new_local(path.to_str().ok_or(HostError::Path)?)
-        .build()
-        .await
-        .map_err(|_| HostError::Journal)?;
-    let connection = database.connect().map_err(|_| HostError::Journal)?;
+    for table in super::super::table_names() {
+        let count = scalar(connection, &format!("SELECT COUNT(*) FROM {table}")).await?;
+        if count != 0 {
+            return Err(HostError::Journal);
+        }
+    }
     for (kind, name, _) in super::super::schema_objects() {
         if kind == "trigger" {
-            super::drop_downgrade_object(&connection, "TRIGGER", name).await?;
+            super::drop_downgrade_object(connection, "TRIGGER", name).await?;
         }
     }
     super::drop_downgrade_object(
-        &connection,
+        connection,
         "TRIGGER",
         "metadata_settlement_claim_insert_guard",
     )
@@ -274,19 +289,19 @@ pub(in crate::journal::schema) async fn downgrade_current_database_to_v39(
     for table in super::super::table_names() {
         for suffix in ["insert", "update", "delete"] {
             let name = format!("{table}_revision_{suffix}");
-            super::drop_downgrade_object(&connection, "TRIGGER", &name).await?;
+            super::drop_downgrade_object(connection, "TRIGGER", &name).await?;
         }
     }
     let legacy_external_trigger_sql =
-        super::suspend_external_jit_triggers_for_downgrade(old_connection, &connection).await?;
+        super::suspend_external_jit_triggers_for_downgrade(old_connection, connection).await?;
     let legacy_terminal_view_trigger_sql =
-        super::suspend_terminal_view_triggers_for_downgrade(old_connection, &connection).await?;
+        super::suspend_terminal_view_triggers_for_downgrade(old_connection, connection).await?;
     let _old_scratch = old.close();
-    super::drop_downgrade_object(&connection, "VIEW", "physical_attempt_terminal_proofs").await?;
+    super::drop_downgrade_object(connection, "VIEW", "physical_attempt_terminal_proofs").await?;
     for table in super::super::table_names().iter().rev() {
-        super::drop_downgrade_object(&connection, "TABLE", table).await?;
+        super::drop_downgrade_object(connection, "TABLE", table).await?;
     }
-    super::replace_jit_table_for_downgrade(&connection, &table_sql).await?;
+    super::replace_jit_table_for_downgrade(connection, &table_sql).await?;
     for sql in indexes.into_iter().chain(triggers) {
         connection
             .execute(&sql, ())
@@ -297,8 +312,8 @@ pub(in crate::journal::schema) async fn downgrade_current_database_to_v39(
         .execute(&view_sql, ())
         .await
         .map_err(|_| HostError::Journal)?;
-    super::restore_terminal_view_triggers(&connection, &legacy_terminal_view_trigger_sql).await?;
-    super::restore_external_jit_triggers(&connection, &legacy_external_trigger_sql).await?;
+    super::restore_terminal_view_triggers(connection, &legacy_terminal_view_trigger_sql).await?;
+    super::restore_external_jit_triggers(connection, &legacy_external_trigger_sql).await?;
     connection
         .execute(legacy_metadata_guard, ())
         .await
@@ -307,7 +322,7 @@ pub(in crate::journal::schema) async fn downgrade_current_database_to_v39(
         .execute("PRAGMA user_version=39", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    super::super::super::legacy_validation::validate_persisted_schema_v39(&connection).await?;
+    super::super::super::legacy_validation::validate_persisted_schema_v39(connection).await?;
     Ok(())
 }
 
