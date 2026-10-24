@@ -91,20 +91,31 @@ one, five and thirty-minute operations therefore receive six, ten and thirty-fiv
 minute job limits. This bounded allowance covers setup, evidence retention and
 job cleanup; it is not a guarantee that every setup or cold build fits. Updater budgets remain one
 through five minutes. `publication_timeout_minutes` defaults to five and accepts
-whole minutes from one through 360, without clamping. It selects the outer job
-budget for preview source eligibility and for publisher and original-evidence
-recovery jobs in both channels. Preview eligibility uses this budget for both
-automatic publication and manual recovery because its two admission phases can
-independently acquire and verify the original signed artifact. Stable eligibility,
-signer and other acquisition/control jobs retain their existing five-minute
-defaults. For publisher and recovery operations, the same setting supplies one
-absolute native publication deadline, including retained signed-directory custody
-and final readback. It never refreshes per asset. Initial admission retains one
-five-minute aggregate scope; nested archive scopes cannot refresh it. Each HTTP
-request remains bounded to 90 seconds. A shorter enclosing deadline still wins. The setting does not change
-producer budgets, credentials, validation, or publication authority. The example
-explicitly selects 15 minutes; it does not change the default. General crate-job
-policy is independent and is not changed here.
+whole minutes from one through 333, without clamping. It remains the native
+publication deadline and continues to bound preview source eligibility. Preview
+eligibility uses this value for both automatic publication and manual recovery
+because its two admission phases can independently acquire and verify the
+original signed artifact. Stable eligibility, signer and other acquisition/control
+jobs retain their existing five-minute defaults.
+
+Publisher and original-evidence recovery job limits add the caps on their actual
+pre-operation steps, the configured native deadline, and one minute for completion
+and cleanup. An uncapped preparation step receives the normal five-minute step
+default, while the existing six-minute `Acquire Velnor` cap is preserved. With
+the current steps, a 15-minute operation receives a 42-minute publisher job and
+a 32-minute recovery job; their defaults are 32 and 22 minutes. The maximum
+333-minute operation fits the publisher's 360-minute job limit with the current
+preparation caps. Rendering recomputes the total from the actual steps and rejects
+a combined budget above 360 minutes if those steps or caps change.
+
+The native operation still uses one absolute deadline, including retained
+signed-directory custody and final readback. It never refreshes per asset.
+Initial admission retains one five-minute aggregate scope; nested archive scopes
+cannot refresh it. Each HTTP request remains bounded to 90 seconds. A shorter
+enclosing deadline still wins. The setting does not change producer budgets,
+credentials, validation, or publication authority. The example explicitly selects
+15 minutes; it does not change the default. General crate-job policy is
+independent and is not changed here.
 
 ## Source and version authority
 
