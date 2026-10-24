@@ -9,7 +9,7 @@ use bollard::models::{
 };
 use bollard::query_parameters::CreateContainerOptions;
 
-const RUNNER_DOCKER_HOST_ENV: &str = "DOCKER_HOST=tcp://127.0.0.1:2375";
+const RUNNER_DOCKER_HOST_ENV: &str = "DOCKER_HOST=tcp://localhost:2375";
 const RUNNER_CAPABILITIES: [&str; 14] = [
     "CHOWN",
     "DAC_OVERRIDE",

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 readonly EXPECTED_INFO='vfs|/var/lib/docker'
-readonly PRIVATE_ENDPOINT='tcp://127.0.0.1:2375'
+readonly PRIVATE_ENDPOINT='tcp://localhost:2375'
 readonly INFO_FORMAT='{{.Driver}}|{{.DockerRootDir}}'
 readonly MAX_OVERALL_SECONDS=30
 readonly MAX_PROBE_SECONDS=2
@@ -72,7 +72,7 @@ if [[ "${1:-}" == "--probe-loop" ]]; then
 fi
 
 [[ "$#" -ge 1 && "$#" -le 3 ]] \
-  || usage_error "usage: wait-docker-api.sh tcp://127.0.0.1:2375 [overall-seconds] [probe-seconds]"
+  || usage_error "usage: wait-docker-api.sh tcp://localhost:2375 [overall-seconds] [probe-seconds]"
 endpoint="$1"
 overall="${2:-$MAX_OVERALL_SECONDS}"
 probe="${3:-$MAX_PROBE_SECONDS}"

@@ -119,7 +119,7 @@ async fn verified_immutable_image_ids_and_metadata_reach_bootstrap_docker_config
     {
         return Err("Bootstrap did not use the verified runtime image IDs.".to_owned());
     }
-    if runner["Env"] != serde_json::json!(["DOCKER_HOST=tcp://127.0.0.1:2375"]) {
+    if runner["Env"] != serde_json::json!(["DOCKER_HOST=tcp://localhost:2375"]) {
         return Err("The Runner create request did not pin the private DinD endpoint.".to_owned());
     }
     let runner_mounts = runner["HostConfig"]["Mounts"]

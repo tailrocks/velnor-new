@@ -114,13 +114,20 @@ The Runner keeps its container root read-only, receives the same 14 ordinary
 capabilities Docker grants by default, and uses a pinned seccomp profile that
 blocks mount and namespace changes. Job writes go to its private Home and Work
 volumes, `/run` socket volume, and charged `/tmp` and `/dev/shm` tmpfs mounts.
-The controller sets `DOCKER_HOST=tcp://127.0.0.1:2375` and joins this Runner
+The controller sets `DOCKER_HOST=tcp://localhost:2375` and joins this Runner
 to its paired DinD container's network namespace. The DinD daemon listens only
 on that namespace's loopback and the private Unix socket. No host port is
-published. `/.dockerenv` remains present; Testcontainers uses the fixed
-`DOCKER_HOST`, verifies HTTPS certificates normally, and receives the returned
-published port on `localhost`. Container actions continue to use the private
-Unix socket mounted at `/var/run/docker.sock`. The image does not override Cargo's job count. Workflows may set
+published. `/.dockerenv` remains present; the Runner receives the exact
+`DOCKER_HOST=tcp://localhost:2375` endpoint so SDKs resolve the paired daemon
+through the shared namespace's loopback name. Testcontainers receives the
+returned published port on `localhost` and
+verifies HTTPS certificates normally. This is intended DNS compatibility; it
+is not yet qualified with both pinned SDK versions. DNS-only TLS and IPv6
+behavior remain unverified.
+The currently pinned Runner image rejects the new endpoint, so do not roll out
+this controller setting until a compatible image is built and qualified.
+Container actions continue to use the private Unix socket
+mounted at `/var/run/docker.sock`. The image does not override Cargo's job count. Workflows may set
 `CARGO_BUILD_JOBS` or pass Cargo's `-j` option according to their own resource
 budget; the runner does not infer compile parallelism from host `nproc`.
 

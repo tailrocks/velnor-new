@@ -9,7 +9,7 @@ work="${root}/_work"
 listener="${root}/bin/Runner.Listener"
 entrypoint_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 home_initializer="/usr/local/libexec/velnor/runner-home.py"
-docker_host='tcp://127.0.0.1:2375'
+docker_host='tcp://localhost:2375'
 # Use the conservative 4-KiB-page Linux MAX_ARG_STRLEN of 131072 bytes. An env
 # entry includes its name, '=', and NUL, so reserve those bytes from the JIT.
 jit_env_name='ACTIONS_RUNNER_INPUT_JITCONFIG'

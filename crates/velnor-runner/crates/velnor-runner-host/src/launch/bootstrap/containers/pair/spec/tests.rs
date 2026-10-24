@@ -330,7 +330,7 @@ fn assert_pair_process_settings(runner: &PairCreate, dind: &PairCreate) {
     assert_eq!(dind.config.tty, Some(false));
     assert_eq!(
         runner.config.env.as_deref(),
-        Some(["DOCKER_HOST=tcp://127.0.0.1:2375".to_owned()].as_slice())
+        Some(["DOCKER_HOST=tcp://localhost:2375".to_owned()].as_slice())
     );
     assert!(dind.config.env.as_ref().is_none_or(Vec::is_empty));
 }

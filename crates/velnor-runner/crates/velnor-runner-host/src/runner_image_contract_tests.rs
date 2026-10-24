@@ -181,17 +181,19 @@ fn dind_publishes_only_a_ready_daemon_without_pulling_workload_images() {
 }
 
 #[test]
-fn paired_images_keep_loopback_tcp_for_runner_and_private_unix_for_actions() {
-    assert!(RUNNER_ENTRYPOINT.contains("docker_host='tcp://127.0.0.1:2375'"));
+fn paired_images_keep_runner_hostname_tcp_and_private_unix_for_actions() {
+    assert!(RUNNER_ENTRYPOINT.contains("docker_host='tcp://localhost:2375'"));
     assert!(RUNNER_ENTRYPOINT.contains("unset DOCKER_CONTEXT"));
     assert!(
         RUNNER_ENTRYPOINT.contains("\"${entrypoint_dir}/velnor-wait-docker-api\" \"$docker_host\"")
     );
     assert!(!RUNNER_ENTRYPOINT.contains("clear-dockerenv"));
-    assert!(RUNNER_WAIT_DOCKER_API.contains("PRIVATE_ENDPOINT='tcp://127.0.0.1:2375'"));
+    assert!(RUNNER_WAIT_DOCKER_API.contains("PRIVATE_ENDPOINT='tcp://localhost:2375'"));
     assert!(RUNNER_WAIT_DOCKER_API.contains("-u DOCKER_HOST -u DOCKER_CONTEXT"));
     assert!(RUNNER_README.contains("`/.dockerenv` remains present"));
     assert!(RUNNER_README.contains("verifies HTTPS certificates normally"));
+    assert!(RUNNER_README.contains("not yet qualified with both pinned SDK versions"));
+    assert!(RUNNER_README.contains("currently pinned Runner image"));
     assert!(DIND_ENTRYPOINT.contains("--host=tcp://127.0.0.1:2375 --tls=false"));
     assert!(DIND_ENTRYPOINT.contains("ln -sfn docker.sock.real \"$public\""));
     assert!(DIND_START_DOCKERD.contains("--host=tcp://127.0.0.1:2375 --tls=false"));
