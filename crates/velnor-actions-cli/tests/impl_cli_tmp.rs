@@ -60,14 +60,16 @@ pub(crate) fn spawn(
     for (key, value) in env {
         command.env(key, value);
     }
-    command.output().map_err(|error| {
+    let output = command.output().map_err(|error| -> Box<dyn Error> {
         format!(
             "could not spawn {binary:?} with cwd {} (exists={}): {error}",
             cwd.display(),
             cwd.exists()
         )
         .into()
-    })
+    })?;
+    tool_context::report_missing_pin(&output, cwd);
+    Ok(output)
 }
 
 /// Spawn with a scrubbed environment: only `PATH` plus explicit vars survive.

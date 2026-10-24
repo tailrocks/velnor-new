@@ -43,7 +43,22 @@ pub(crate) fn spawn_isolated_with_tools(
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-actions"));
     command.args(args).current_dir(cwd).env_clear();
     command.envs(selected);
-    Ok(command.output()?)
+    let output = command.output()?;
+    report_missing_pin(&output, cwd);
+    Ok(output)
+}
+
+/// Preserve child output and report host paths when a live pin check fails.
+pub(crate) fn report_missing_pin(output: &Output, cwd: &Path) {
+    if !output.status.success()
+        && String::from_utf8_lossy(&output.stderr).contains("missing_tool_pin")
+    {
+        eprintln!(
+            "CLI missing-tool failure in {}; parent {}",
+            cwd.display(),
+            diagnostic(),
+        );
+    }
 }
 
 /// Capture real, non-secret environment and installed-tool paths for failures.

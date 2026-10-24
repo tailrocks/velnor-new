@@ -1,3 +1,6 @@
+use super::stable::{
+    stable_head_formula_is_activated, stable_install_required, stable_or_preview_install_check,
+};
 use super::{
     actual_native_checks, require_native_authority, route_required_admission,
     validate_required_matrix_entry,
@@ -159,4 +162,94 @@ fn missing_protected_native_matrix_entry_fails_the_required_validator() {
         timeout_minutes: 5,
     };
     assert!(validate_required_matrix_entry(&BTreeMap::new(), &required).is_err());
+}
+
+fn stable_formula_fixture() -> (
+    velnor_actions_contract::homebrew_spec::HomebrewFormulaSpec,
+    velnor_actions_contract::PackageReleasePlan,
+) {
+    let spec = serde_json::from_slice(include_bytes!(
+        "../../../.velnor/qualification/homebrew/formula-spec.json"
+    ))
+    .expect("typed protected formula spec");
+    let mut plan = velnor_actions_contract::parse_package_release_plan(include_bytes!(
+        "../../../.velnor/qualification/homebrew/preview-plan.json"
+    ))
+    .expect("typed protected package plan");
+    plan.channel = velnor_actions_contract::package_release::PackageReleaseChannel::Stable;
+    (spec, plan)
+}
+
+fn active_stable_formula(
+    spec: &velnor_actions_contract::homebrew_spec::HomebrewFormulaSpec,
+    plan: &velnor_actions_contract::PackageReleasePlan,
+) -> Vec<u8> {
+    use velnor_actions_contract::homebrew_spec::{
+        HomebrewFormulaReleaseLiterals, render_homebrew_formula, validate_homebrew_projection,
+    };
+    let projection = validate_homebrew_projection(spec, plan).expect("stable projection");
+    let digests = projection
+        .selected_payloads()
+        .iter()
+        .map(|payload| (payload.asset_name().to_owned(), "c".repeat(64)))
+        .collect();
+    let literals = HomebrewFormulaReleaseLiterals::new(
+        spec,
+        &projection,
+        "b12e73afd75b944a872e8295d61a15f93f5789a2".to_owned(),
+        "0.6.4".to_owned(),
+        "v0.6.4".to_owned(),
+        digests,
+    )
+    .expect("active stable formula literals");
+    render_homebrew_formula(spec, &literals).expect("canonical active stable formula")
+}
+
+#[test]
+fn stable_head_activation_requires_the_arm_install_check() {
+    use velnor_actions_contract::homebrew_spec::{
+        HomebrewFormulaReleaseLiterals, render_homebrew_formula, validate_homebrew_projection,
+    };
+    use velnor_actions_contract::package_release::PackageReleaseChannel;
+
+    let (spec, plan) = stable_formula_fixture();
+    let projection = validate_homebrew_projection(&spec, &plan).expect("stable projection");
+    let sentinel = HomebrewFormulaReleaseLiterals::stable_sentinel(&spec, &projection)
+        .expect("disabled stable sentinel");
+    let sentinel_bytes = render_homebrew_formula(&spec, &sentinel).expect("sentinel formula");
+    let active_bytes = active_stable_formula(&spec, &plan);
+
+    let base_active = stable_head_formula_is_activated(&spec, &plan, Some(&sentinel_bytes))
+        .expect("sentinel base is inactive");
+    let same_head_active = stable_head_formula_is_activated(&spec, &plan, Some(&sentinel_bytes))
+        .expect("sentinel head is inactive");
+    assert!(!stable_install_required(base_active, same_head_active));
+
+    let head_active = stable_head_formula_is_activated(&spec, &plan, Some(&active_bytes))
+        .expect("active authenticated head formula");
+    assert!(stable_install_required(base_active, head_active));
+    assert!(stable_install_required(head_active, same_head_active));
+    let required = stable_or_preview_install_check(PackageReleaseChannel::Stable);
+    assert_eq!(required.id, "install_stable");
+    assert_eq!(required.timeout_minutes, 30);
+    assert_eq!(required.runner.label, "macos-15");
+    assert_eq!(required.runner.platform, CheckPlatform::MacosArm64);
+    assert!(validate_required_matrix_entry(&BTreeMap::new(), &required).is_err());
+    let actual = BTreeMap::from([(
+        "install_stable".to_owned(),
+        (
+            "install".to_owned(),
+            Some("stable".to_owned()),
+            "macos_arm64".to_owned(),
+            "macos-15".to_owned(),
+        ),
+    )]);
+    validate_required_matrix_entry(&actual, &required).expect("matching stable install matrix");
+}
+
+#[test]
+fn malformed_or_missing_authenticated_stable_head_formula_fails_closed() {
+    let (spec, plan) = stable_formula_fixture();
+    assert!(stable_head_formula_is_activated(&spec, &plan, None).is_err());
+    assert!(stable_head_formula_is_activated(&spec, &plan, Some(b"not a formula\n")).is_err());
 }

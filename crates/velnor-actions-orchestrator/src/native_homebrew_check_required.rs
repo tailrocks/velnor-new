@@ -5,6 +5,12 @@ use super::{
 };
 use super::{inventory::protected_stable_is_activated, seed::derive_seed_transition};
 use crate::{OrchestratorError, internal::internal};
+use stable::{
+    protected_stable_head_is_activated, stable_install_required, stable_or_preview_install_check,
+};
+
+#[path = "native_homebrew_check_required_stable.rs"]
+mod stable;
 
 pub(crate) fn validate_required_plan(
     root: &Path,
@@ -268,23 +274,20 @@ pub(crate) fn required_native_homebrew_checks(
             },
             timeout_minutes: 5,
         });
-        let activated = (channel == PackageReleaseChannel::Preview
-            && release.is_some_and(|config| config.preview.enabled))
-            || (channel == PackageReleaseChannel::Stable
-                && protected_stable_is_activated(authority, cutover, deadline)?);
+        let activated = match channel {
+            PackageReleaseChannel::Preview => release.is_some_and(|config| config.preview.enabled),
+            PackageReleaseChannel::Stable => {
+                let base_active = protected_stable_is_activated(authority, cutover, deadline)?;
+                let head_active = if authority.tap_head_sha() == authority.tap_base_sha() {
+                    base_active
+                } else {
+                    protected_stable_head_is_activated(authority, deadline)?
+                };
+                stable_install_required(base_active, head_active)
+            }
+        };
         if activated {
-            checks.push(NativeHomebrewCheck {
-                id: format!("install_{channel_name}"),
-                operation: NativeHomebrewOperation::Install,
-                formula_channel: Some(channel),
-                runner: CheckRunner {
-                    label: "macos-15".to_owned(),
-                    platform: CheckPlatform::MacosArm64,
-                    executor: CheckExecutor::Hosted,
-                    container: None,
-                },
-                timeout_minutes: 30,
-            });
+            checks.push(stable_or_preview_install_check(channel));
         }
     }
     Ok(checks)

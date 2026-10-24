@@ -61,6 +61,12 @@ pub(crate) use sdk::{
     verify_public_sdk_release_producer,
 };
 
+#[path = "package_release_publish_merge_group.rs"]
+mod merge_group;
+pub(crate) use merge_group::{
+    MergeGroupFacts, MergeGroupSelection, verify_public_merge_group_context,
+};
+
 #[path = "package_release_run_identity.rs"]
 mod run_identity;
 
