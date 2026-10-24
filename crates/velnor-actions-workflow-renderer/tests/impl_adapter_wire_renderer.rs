@@ -21,16 +21,43 @@ use super::impl_renderer_fixtures::{fixture_ctx, fixture_ir, job, mise_argv, scr
 fn toolchain_homes_merge_and_validate() {
     assert_eq!(
         TOOLCHAIN_HOME_KEYS,
-        ["MISE_RUSTUP_HOME", "MISE_CARGO_HOME", "RUSTUP_TOOLCHAIN"]
+        [
+            "MISE_RUSTUP_HOME",
+            "MISE_CARGO_HOME",
+            "RUSTUP_TOOLCHAIN",
+            "RUSTUP_HOME",
+            "CARGO_HOME",
+        ]
     );
     let base = BTreeMap::from([("MATRIX_KEY".to_owned(), "m".to_owned())]);
     let merged = with_toolchain_homes(&base, "/r/rustup", "/r/cargo", "1.98.1");
     assert_eq!(merged.get("MATRIX_KEY").map(String::as_str), Some("m"));
     assert_eq!(check_toolchain_homes(&merged), Ok(()));
+    assert_eq!(
+        merged.get("RUSTUP_HOME").map(String::as_str),
+        Some("/r/rustup")
+    );
+    assert_eq!(
+        merged.get("CARGO_HOME").map(String::as_str),
+        Some("/r/cargo")
+    );
     assert!(check_toolchain_homes(&base).is_err());
     let mut blank = merged.clone();
     blank.insert("RUSTUP_TOOLCHAIN".to_owned(), String::new());
     assert!(check_toolchain_homes(&blank).is_err());
+    for key in ["RUSTUP_HOME", "CARGO_HOME"] {
+        let mut missing_direct = merged.clone();
+        missing_direct.remove(key);
+        assert!(check_toolchain_homes(&missing_direct).is_err(), "{key}");
+
+        let mut conflicting = merged.clone();
+        conflicting.insert(key.to_owned(), "/different/home".to_owned());
+        assert!(check_toolchain_homes(&conflicting).is_err(), "{key}");
+
+        let mut blank_direct = merged.clone();
+        blank_direct.insert(key.to_owned(), String::new());
+        assert!(check_toolchain_homes(&blank_direct).is_err(), "{key}");
+    }
 }
 
 #[test]

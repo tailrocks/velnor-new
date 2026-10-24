@@ -9,8 +9,15 @@ mod isolation_tests;
 #[path = "impl_cli_nested_target.rs"]
 pub(crate) mod nested_target;
 
+#[path = "impl_cli_mise_diagnostics.rs"]
+mod mise_diagnostics;
+
 #[path = "impl_cli_tool_context.rs"]
 pub(crate) mod tool_context;
+
+pub(crate) use mise_diagnostics::{
+    MiseDiagnosticContext, mise_failure_diagnostics, mise_path_snapshot,
+};
 
 use std::error::Error;
 use std::fmt::Write as _;
@@ -68,7 +75,7 @@ pub(crate) fn spawn(
         )
         .into()
     })?;
-    tool_context::report_missing_pin(&output, cwd);
+    tool_context::report_missing_pin(&output, cwd, MiseDiagnosticContext::Inherited);
     Ok(output)
 }
 

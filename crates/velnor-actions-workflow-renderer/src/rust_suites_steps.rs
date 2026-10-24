@@ -16,20 +16,16 @@ fn nextest_tool_spec(version: &str) -> String {
 }
 
 pub(super) fn base_suite_env(spec: &RustSuitesRenderSpec) -> BTreeMap<String, String> {
-    let mut env = BTreeMap::from([
-        (
-            "MISE_RUSTUP_HOME".to_owned(),
-            "${{ runner.temp }}/velnor/rustup".to_owned(),
-        ),
-        (
-            "MISE_CARGO_HOME".to_owned(),
-            "${{ runner.temp }}/velnor/cargo".to_owned(),
-        ),
-    ]);
-    if spec.export_rustup_toolchain {
-        env.insert("RUSTUP_TOOLCHAIN".to_owned(), spec.rust_version.clone());
-    }
-    env
+    crate::toolchain_env::with_toolchain_homes(
+        &BTreeMap::new(),
+        "${{ runner.temp }}/velnor/rustup",
+        "${{ runner.temp }}/velnor/cargo",
+        if spec.export_rustup_toolchain {
+            &spec.rust_version
+        } else {
+            ""
+        },
+    )
 }
 
 pub(super) fn compile_driver_steps(spec: &RustSuitesRenderSpec) -> Result<Vec<Step>, RenderError> {
@@ -299,4 +295,53 @@ pub(super) fn append_suite_artifact_uploads(
         )?);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::base_suite_env;
+    use crate::{CompileDriver, MiseSetup, rust_suites::RustSuitesRenderSpec};
+    use velnor_actions_contract::PullRequestCachePolicy;
+
+    fn spec(export_rustup_toolchain: bool) -> RustSuitesRenderSpec {
+        RustSuitesRenderSpec {
+            suites: Vec::new(),
+            workflow_dispatch: None,
+            default_runs_on: "ubuntu-24.04".to_owned(),
+            checkout_uses: crate::steps::CHECKOUT_USES.to_owned(),
+            generator_version: "0.1.0".to_owned(),
+            mise: MiseSetup {
+                uses: format!("jdx/mise-action@{}", "a".repeat(40)),
+                version: "2026.10.18".to_owned(),
+                sha256: "b".repeat(64),
+            },
+            rust_version: "1.95.0".to_owned(),
+            cargo_nextest_version: "0.9.133".to_owned(),
+            compile_driver: CompileDriver::Cargo,
+            mbx_action: None,
+            pull_request_cache_policy: PullRequestCachePolicy::ReadOnly,
+            verify_restored_rust_argv: Vec::new(),
+            verify_rust_argv: Vec::new(),
+            export_rustup_toolchain,
+        }
+    }
+
+    #[test]
+    fn suite_homes_include_matching_direct_and_mise_aliases() {
+        let env = base_suite_env(&spec(true));
+        assert_eq!(env.get("MISE_RUSTUP_HOME"), env.get("RUSTUP_HOME"));
+        assert_eq!(env.get("MISE_CARGO_HOME"), env.get("CARGO_HOME"));
+        assert_eq!(
+            env.get("RUSTUP_TOOLCHAIN").map(String::as_str),
+            Some("1.95.0")
+        );
+    }
+
+    #[test]
+    fn suite_without_exported_toolchain_still_has_both_home_pairs() {
+        let env = base_suite_env(&spec(false));
+        assert_eq!(env.get("MISE_RUSTUP_HOME"), env.get("RUSTUP_HOME"));
+        assert_eq!(env.get("MISE_CARGO_HOME"), env.get("CARGO_HOME"));
+        assert!(!env.contains_key("RUSTUP_TOOLCHAIN"));
+    }
 }

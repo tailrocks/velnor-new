@@ -39,6 +39,14 @@ pub(crate) fn mbx_tool_env(rust_toolchain: &str) -> BTreeMap<String, String> {
             "MISE_CARGO_HOME".to_owned(),
             "${{ runner.temp }}/velnor/cargo".to_owned(),
         ),
+        (
+            "RUSTUP_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/rustup".to_owned(),
+        ),
+        (
+            "CARGO_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/cargo".to_owned(),
+        ),
         ("RUSTUP_TOOLCHAIN".to_owned(), rust_toolchain.to_owned()),
     ])
 }

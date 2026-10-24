@@ -4,8 +4,9 @@ use std::error::Error;
 use std::path::Path;
 
 use crate::impl_cli_tmp::{
-    cleanup, code, commit_all, fresh_tempdir, git_init, head_sha, install_consumer_manifest,
-    spawn_isolated, tool_context, write_workspace,
+    MiseDiagnosticContext, cleanup, code, commit_all, fresh_tempdir, git_init, head_sha,
+    install_consumer_manifest, mise_failure_diagnostics, spawn_isolated, tool_context,
+    write_workspace,
 };
 
 /// Serialized workflow marker selecting dynamic matrix output accounting.
@@ -333,24 +334,30 @@ fn dynamic_matrix_over_job_limit_preserves_response_but_publishes_nothing()
     std::fs::write(&outputs, "seed=1\n")?;
     let runner_temp = repo.join("runner-temp");
     std::fs::create_dir_all(&runner_temp)?;
-    let output = tool_context::spawn_isolated_with_tools(
-        &[],
-        &[
-            ("VELNOR_INTERNAL_OP", "plan-v1"),
-            ("VELNOR_REQUEST_FILE", request.to_str().unwrap_or("/")),
-            ("GITHUB_RUN_ID", "7"),
-            ("GITHUB_RUN_ATTEMPT", "2"),
-            ("GITHUB_OUTPUT", outputs.to_str().unwrap_or("/")),
-            ("RUNNER_TEMP", runner_temp.to_str().unwrap_or("/")),
-            (PLAN_MATRIX_OUTPUT_MODE_ENV, DYNAMIC_MATRIX_OUTPUT_MODE),
-        ],
-        &repo,
-    )?;
+    let isolated_env = [
+        ("VELNOR_INTERNAL_OP", "plan-v1"),
+        ("VELNOR_REQUEST_FILE", request.to_str().unwrap_or("/")),
+        ("GITHUB_RUN_ID", "7"),
+        ("GITHUB_RUN_ATTEMPT", "2"),
+        ("GITHUB_OUTPUT", outputs.to_str().unwrap_or("/")),
+        ("RUNNER_TEMP", runner_temp.to_str().unwrap_or("/")),
+        (PLAN_MATRIX_OUTPUT_MODE_ENV, DYNAMIC_MATRIX_OUTPUT_MODE),
+    ];
+    let output = tool_context::spawn_isolated_with_tools(&[], &isolated_env, &repo)?;
     assert_eq!(code(&output), 1, "stderr: {:?}", output.stderr);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("matrix_jobs_exceeded"),
-        "expected matrix_jobs_exceeded; child stderr: {stderr}"
+        "expected matrix_jobs_exceeded; actual stderr:\n{stderr}\n\
+         isolated path-only comparison tool state:\n{}\n\
+         isolated child tool state with explicit tool homes:\n{}",
+        mise_failure_diagnostics(&repo, MiseDiagnosticContext::PathOnly, &isolated_env, None),
+        mise_failure_diagnostics(
+            &repo,
+            MiseDiagnosticContext::PathAndToolHomes,
+            &isolated_env,
+            None
+        )
     );
     assert_no_leak(&output);
     let response = std::fs::read_to_string(repo.join("plan-v1-response.json"))?;

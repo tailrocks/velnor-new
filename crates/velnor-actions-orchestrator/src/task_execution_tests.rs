@@ -81,6 +81,11 @@ fn resolver_emits_the_bound_record_without_altering_plan_data() {
         resolved_env["MISE_CARGO_HOME"],
         format!("{runner_temp}/velnor/cargo")
     );
+    assert_eq!(
+        resolved_env["RUSTUP_HOME"],
+        resolved_env["MISE_RUSTUP_HOME"]
+    );
+    assert_eq!(resolved_env["CARGO_HOME"], resolved_env["MISE_CARGO_HOME"]);
     assert_eq!(resolved_env["RUSTDOCFLAGS"], "-D warnings");
     assert_eq!(
         record.execution_digest,
