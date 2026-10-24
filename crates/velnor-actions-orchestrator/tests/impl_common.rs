@@ -12,28 +12,25 @@ use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 use velnor_actions_contract::{MatrixReport, Plan};
 use velnor_actions_orchestrator::{
-    GenerationPreparation, MergeContext, OrchestratorError, finalized_jobs,
-    merge_internal_with_context, plan_internal, plan_text,
+    GenerationPreparation, OrchestratorError, finalized_jobs, plan_internal, plan_text,
 };
 
 #[path = "impl_common_environment.rs"]
 mod environment;
+#[path = "impl_common_merge.rs"]
+mod merge;
 #[path = "impl_common_mise.rs"]
 mod mise;
 #[path = "impl_common_path.rs"]
 mod path;
 
 pub(crate) use environment::{with_event_payload, without_ambient_identity};
+pub(crate) use merge::merge_fixture;
 pub(crate) use mise::write_fixture_mise;
 pub(crate) use path::test_path_with_sbin;
 
 /// Test error shortcut.
 pub(crate) type TestResult = Result<(), Box<dyn std::error::Error>>;
-
-/// Merge a synthetic integration fixture without ambient repository identity.
-pub(crate) fn merge_fixture(request_json: &str) -> Result<String, OrchestratorError> {
-    merge_internal_with_context(request_json, &MergeContext::detached())
-}
 
 /// Plan text over the same finalized jobs `generate` writes.
 ///

@@ -92,6 +92,8 @@ pub(crate) struct MergeRequest {
 /// verdict with closed failure tokens. A missing plan still yields a
 /// verdict instead of an error. Consumes the emitted plan only and never
 /// rediscovers repository state.
+/// Native workspace admission additionally validates protected repository policy;
+/// the no-rediscovery property applies to ordinary report aggregation.
 ///
 /// # Errors
 ///
@@ -101,11 +103,13 @@ pub fn merge_internal(request_json: &str) -> Result<String, OrchestratorError> {
     merge_internal_with_context(request_json, &MergeContext::capture_ambient())
 }
 
-/// Merge using explicit trusted runner context rather than ambient process variables.
+/// Merge using explicit trusted workspace-admission context rather than ambient process variables.
 ///
 /// Detached callers can evaluate non-native synthetic requests without inheriting
 /// unrelated GitHub workspace environment. Native plans still require an explicit
 /// repository workspace and are rejected when detached.
+/// The context selects workspace admission and its path; native authority still
+/// derives repository and event identity from the runner environment.
 ///
 /// # Errors
 /// Returns [`OrchestratorError::Internal`] for malformed requests and response encoding failures.
