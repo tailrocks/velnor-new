@@ -76,25 +76,21 @@ pub const AWS_CREDENTIALS_ACTION_VERSION: &str = "v6.3.0";
 /// Full commit SHA for [`AWS_CREDENTIALS_ACTION_VERSION`].
 pub const AWS_CREDENTIALS_ACTION_SHA: &str = "e1253824e5c10ff9df46874f81ed3ec929e19cfd";
 
-/// Selected `asamarts/alint` release; candidate binary passed local checks
-/// 2026-10-22. Full hosted qualification remains part of the reviewed update.
-/// Source: `https://api.github.com/repos/asamarts/alint/releases/tags/v0.20.0`.
-pub const ALINT_ACTION_VERSION: &str = "v0.20.0";
+/// Selected `asamarts/alint` release. Its v0.20.1 action manifest retains
+/// the inputs used here: `version`, `path`, `config`, `format`, and
+/// `fail-on-warning`. Qualification of this pin update is recorded separately.
+/// Source: `https://api.github.com/repos/asamarts/alint/releases/tags/v0.20.1`.
+pub const ALINT_ACTION_VERSION: &str = "v0.20.1";
 /// Full commit SHA for [`ALINT_ACTION_VERSION`] from its immutable tag ref.
-pub const ALINT_ACTION_SHA: &str = "10d1c0a2bafd0bd316dbad9fe63ea5e1e3761c71";
+pub const ALINT_ACTION_SHA: &str = "265d9fdc720bb8f59d00b87e33e4149869f77327";
 
-/// Selected `jdx/mise-action` candidate; the updated action is checked by CI.
-///
-/// v5.2.2 retains every input Velnor uses and hashes `conf.d/*.toml` config
-/// fragments in the cache key. Velnor disables the cache, so this change does
-/// not affect generated jobs. The action rejects a missing signed packslip
-/// for Mise releases from 2026.9.3 onward. Monorepo behavior activates only
-/// for Mise configs declaring `monorepo.config_roots`; ours do not.
-/// Explicit version and SHA inputs remain supported. Source:
-/// `https://api.github.com/repos/jdx/mise-action/releases/tags/v5.2.2`.
-pub const MISE_ACTION_VERSION: &str = "v5.2.2";
+/// Selected `jdx/mise-action` release. The v5.2.3 manifest retains the
+/// explicit version and SHA inputs used here. Velnor disables the action cache,
+/// so the release's cache-key search change does not affect generated jobs.
+/// Source: `https://api.github.com/repos/jdx/mise-action/releases/tags/v5.2.3`.
+pub const MISE_ACTION_VERSION: &str = "v5.2.3";
 /// Full commit SHA for [`MISE_ACTION_VERSION`] from its immutable tag ref.
-pub const MISE_ACTION_SHA: &str = "8418fedb1110381a0d3ba51a7a415d7c1b884550";
+pub const MISE_ACTION_SHA: &str = "82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e";
 /// Qualified `actions/checkout` release.
 /// Source: `https://api.github.com/repos/actions/checkout/releases/latest`; checked 2026-09-28.
 pub const CHECKOUT_ACTION_VERSION: &str = "v7.0.1";

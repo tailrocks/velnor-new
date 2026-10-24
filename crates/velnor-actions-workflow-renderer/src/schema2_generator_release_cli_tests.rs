@@ -28,7 +28,7 @@ pub(super) fn install_mock_mise(root: &Path) -> Result<(), Box<dyn Error>> {
     let path = root.join("mock-bin/mise");
     fs::write(
         &path,
-        "#!/bin/sh\nset -eu\nprintf '%s\\n' \"$*\" >> \"$MISE_CALLS\"\n[ \"$1 $2 $3 $4 $5 $6 $7\" = '--no-config --no-env --no-hooks exec gh@2.103.0 -- gh' ] || exit 70\nshift 7\ntest -x \"$MOCK_GH\"\nexec \"$MOCK_GH\" \"$@\"\n",
+        "#!/bin/sh\nset -eu\nprintf '%s\\n' \"$*\" >> \"$MISE_CALLS\"\n[ \"$1 $2 $3 $4 $5 $6 $7\" = '--no-config --no-env --no-hooks exec gh@2.103.2 -- gh' ] || exit 70\nshift 7\ntest -x \"$MOCK_GH\"\nexec \"$MOCK_GH\" \"$@\"\n",
     )?;
     let mut permissions = fs::metadata(&path)?.permissions();
     permissions.set_mode(0o755);

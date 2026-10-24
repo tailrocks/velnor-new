@@ -281,7 +281,7 @@ fn rq53_limits_discipline_no_baseline() -> Result<(), Box<dyn Error>> {
 fn alint_pin_is_full_sha_and_zizmor_config_is_gone() -> Result<(), Box<dyn Error>> {
     let yaml = read(".github/workflows/ci.yml")?;
     assert!(
-        yaml.contains("uses: asamarts/alint@10d1c0a2bafd0bd316dbad9fe63ea5e1e3761c71"),
+        yaml.contains("uses: asamarts/alint@265d9fdc720bb8f59d00b87e33e4149869f77327"),
         "full-SHA alint pin must exist"
     );
     assert!(

@@ -82,9 +82,9 @@ pub const RUST_VERSION: &str = "1.99.1";
 /// Selected `mr-boxington` tool (binary on PATH is `mbx`; tag `v1.27.0`).
 /// Source: `https://api.github.com/repos/jdx/mr-boxington/releases/latest`; checked 2026-10-23.
 pub const MR_BOXINGTON_VERSION: &str = "1.27.0";
-/// Qualified GitHub CLI (tag `v2.103.0`).
-/// Source: `https://api.github.com/repos/cli/cli/releases/latest`; checked 2026-10-22.
-pub const GH_VERSION: &str = "2.103.0";
+/// Qualified GitHub CLI (tag `v2.103.2`).
+/// Source: `https://api.github.com/repos/cli/cli/releases/latest`; checked 2026-10-24.
+pub const GH_VERSION: &str = "2.103.2";
 pub use velnor_actions_contract::config::jactionlint_verifier::JACTIONLINT_VERSION;
 /// Qualified shellcheck release (tag `v0.11.0`).
 /// Source: `https://api.github.com/repos/koalaman/shellcheck/releases/latest`; checked 2026-09-28.
