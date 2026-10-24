@@ -5,27 +5,26 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const TOOL_HOME_KEYS: [&str; 5] = [
-    "HOME",
-    "MISE_DATA_DIR",
-    "XDG_DATA_HOME",
-    "MISE_RUSTUP_HOME",
-    "RUSTUP_HOME",
-];
-const INHERITED_MISE_SELECTOR_KEYS: [&str; 7] = [
-    "MISE_INSTALLS_DIR",
+const TOOL_ENV_KEYS: [&str; 11] = crate::impl_cli_tmp::tool_context::TOOL_ENV;
+const INHERITED_MISE_SELECTOR_KEYS: [&str; 4] = [
     "MISE_CONFIG_DIR",
     "MISE_CONFIG_FILE",
     "MISE_ENV",
     "MISE_TRUSTED_CONFIG_PATHS",
-    "MISE_CARGO_HOME",
-    "RUSTUP_TOOLCHAIN",
 ];
-const INHERITED_MISE_PATH_KEYS: [&str; 4] = [
+const TOOL_PATH_KEYS: [&str; 12] = [
+    "HOME",
+    "MISE_DATA_DIR",
     "MISE_INSTALLS_DIR",
+    "MISE_CACHE_DIR",
+    "MISE_CARGO_HOME",
     "MISE_CONFIG_DIR",
     "MISE_CONFIG_FILE",
-    "MISE_CARGO_HOME",
+    "MISE_RUSTUP_HOME",
+    "CARGO_HOME",
+    "RUSTUP_HOME",
+    "XDG_DATA_HOME",
+    "XDG_CACHE_HOME",
 ];
 const VERIFY_CREDENTIAL_KEYS: [&str; 9] = [
     "MISE_GITHUB_TOKEN",
@@ -70,7 +69,7 @@ pub(crate) fn mise_path_snapshot(cwd: &Path, context: MiseDiagnosticContext) -> 
         &mut report,
         format_args!("cwd={} context={}", cwd.display(), context_name(context)),
     );
-    for key in TOOL_HOME_KEYS {
+    for key in TOOL_ENV_KEYS {
         let value = match context {
             MiseDiagnosticContext::PathAndToolHomes | MiseDiagnosticContext::Inherited => {
                 parent_value(key)
@@ -94,6 +93,11 @@ pub(crate) fn mise_path_snapshot(cwd: &Path, context: MiseDiagnosticContext) -> 
                 ),
             );
         }
+        if TOOL_PATH_KEYS.contains(&key)
+            && let Some(path) = value.as_deref()
+        {
+            append_path_metadata(&mut report, key, Path::new(path));
+        }
     }
     if matches!(context, MiseDiagnosticContext::Inherited) {
         for key in INHERITED_MISE_SELECTOR_KEYS {
@@ -102,11 +106,6 @@ pub(crate) fn mise_path_snapshot(cwd: &Path, context: MiseDiagnosticContext) -> 
                 &mut report,
                 format_args!("effective_{key}={}", display_value(value.as_deref())),
             );
-            if INHERITED_MISE_PATH_KEYS.contains(&key)
-                && let Some(path) = value.as_deref()
-            {
-                append_path_metadata(&mut report, key, Path::new(path));
-            }
         }
     }
     append_fixture_config_metadata(&mut report, cwd);
@@ -123,16 +122,6 @@ pub(crate) fn mise_path_snapshot(cwd: &Path, context: MiseDiagnosticContext) -> 
         && let Some(path) = parent_data_dir()
     {
         append_data_dir_metadata(&mut report, "parent-mise", &path);
-    }
-    for key in ["MISE_RUSTUP_HOME", "RUSTUP_HOME"] {
-        if let Some(path) = match context {
-            MiseDiagnosticContext::PathAndToolHomes | MiseDiagnosticContext::Inherited => {
-                parent_value(key).map(PathBuf::from)
-            }
-            MiseDiagnosticContext::PathOnly => None,
-        } {
-            append_path_metadata(&mut report, key, &path);
-        }
     }
     report
 }
@@ -273,7 +262,7 @@ fn append_mise_query(
             .unwrap_or_default();
         if matches!(context, MiseDiagnosticContext::PathAndToolHomes) {
             child_env.extend(
-                TOOL_HOME_KEYS
+                TOOL_ENV_KEYS
                     .into_iter()
                     .filter_map(|key| parent_value(key).map(|value| (OsString::from(key), value))),
             );

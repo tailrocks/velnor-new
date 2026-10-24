@@ -5,8 +5,8 @@ use std::path::Path;
 
 use crate::impl_cli_tmp::{
     MiseDiagnosticContext, cleanup, code, commit_all, fresh_tempdir, git_init, head_sha,
-    install_consumer_manifest, mise_failure_diagnostics, spawn_isolated,
-    spawn_isolated_with_tool_homes, write_workspace,
+    install_consumer_manifest, mise_failure_diagnostics, spawn_isolated, tool_context,
+    write_workspace,
 };
 
 /// Serialized workflow marker selecting dynamic matrix output accounting.
@@ -343,7 +343,7 @@ fn dynamic_matrix_over_job_limit_preserves_response_but_publishes_nothing()
         ("RUNNER_TEMP", runner_temp.to_str().unwrap_or("/")),
         (PLAN_MATRIX_OUTPUT_MODE_ENV, DYNAMIC_MATRIX_OUTPUT_MODE),
     ];
-    let output = spawn_isolated_with_tool_homes(&[], &isolated_env, &repo)?;
+    let output = tool_context::spawn_isolated_with_tools(&[], &isolated_env, &repo)?;
     assert_eq!(code(&output), 1, "stderr: {:?}", output.stderr);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(

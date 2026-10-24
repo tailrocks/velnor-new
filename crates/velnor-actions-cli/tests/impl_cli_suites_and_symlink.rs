@@ -8,7 +8,7 @@ use std::process::Command;
 
 use crate::impl_cli_tmp::{
     MiseDiagnosticContext, cleanup, code, commit_all, fresh_tempdir, git_init, init_repo,
-    install_consumer_manifest, mise_failure_diagnostics, mise_path_snapshot, spawn,
+    install_consumer_manifest, mise_failure_diagnostics, mise_path_snapshot, spawn, tool_context,
     write_workspace,
 };
 
@@ -102,11 +102,13 @@ fn default_schema1_config_emits_byte_identical_github_tree() -> Result<(), Box<d
     commit_all(&tmp)?;
 
     let tool_state_before = mise_path_snapshot(&tmp, MiseDiagnosticContext::Inherited);
+    let before_first = tool_context::diagnostic();
     let in_place = spawn(&["generate"], &[], &tmp)?;
+    let after_first = tool_context::diagnostic();
     assert_eq!(
         code(&in_place),
         0,
-        "in-place generate failed (stderr={}):\n{}",
+        "in-place generate failed (stderr={})\n{before_first}\n{after_first}\n{}",
         String::from_utf8_lossy(&in_place.stderr),
         mise_failure_diagnostics(
             &tmp,
@@ -141,10 +143,11 @@ fn default_schema1_config_emits_byte_identical_github_tree() -> Result<(), Box<d
     let preview = outer.join("preview");
     let preview_str = preview.to_str().ok_or("non-utf8 preview path")?;
     let gen_preview = spawn(&["generate", "--output-dir", preview_str], &[], &tmp)?;
+    let on_preview_result = tool_context::diagnostic();
     assert_eq!(
         code(&gen_preview),
         0,
-        "preview generate failed (stderr={}):\n{}",
+        "preview generate failed (stderr={})\n{before_first}\n{after_first}\n{on_preview_result}\n{}",
         String::from_utf8_lossy(&gen_preview.stderr),
         mise_failure_diagnostics(
             &tmp,
@@ -281,11 +284,13 @@ fn full_suites_dispatch_symlink_and_preserve_workflows_end_to_end() -> Result<()
     setup_full_suites_repo(&tmp)?;
 
     let tool_state_before = mise_path_snapshot(&tmp, MiseDiagnosticContext::Inherited);
+    let before_first = tool_context::diagnostic();
     let generated = spawn(&["generate"], &[], &tmp)?;
+    let after_first = tool_context::diagnostic();
     assert_eq!(
         code(&generated),
         0,
-        "in-place generate failed (stderr={}):\n{}",
+        "in-place generate failed (stderr={})\n{before_first}\n{after_first}\n{}",
         String::from_utf8_lossy(&generated.stderr),
         mise_failure_diagnostics(
             &tmp,
@@ -326,9 +331,10 @@ fn full_suites_dispatch_symlink_and_preserve_workflows_end_to_end() -> Result<()
         .args(["-c", &check_script])
         .current_dir(&tmp)
         .output()?;
+    let on_preview_result = tool_context::diagnostic();
     assert!(
         check_out.status.success(),
-        "preview workflow check failed (stdout={}, stderr={}):\n{}",
+        "preview workflow check failed (stdout={}, stderr={})\n{before_first}\n{after_first}\n{on_preview_result}\n{}",
         String::from_utf8_lossy(&check_out.stdout),
         String::from_utf8_lossy(&check_out.stderr),
         mise_failure_diagnostics(
