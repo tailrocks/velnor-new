@@ -7,10 +7,9 @@ use qualification_order::assert_grouped_qualification_steps;
 #[test]
 fn groups_obligations_into_one_ordered_job_per_crate() {
     let clippy = group("demo", TaskKind::Clippy, &[]);
-    let clippy_id = clippy.task_id.clone();
-    let test = group("demo", TaskKind::Test, &[clippy_id.as_str()]);
-    let doctest = group("demo", TaskKind::Doctest, &[clippy_id.as_str()]);
-    let doc = group("demo", TaskKind::Doc, &[clippy_id.as_str()]);
+    let test = group("demo", TaskKind::Test, &[]);
+    let doctest = group("demo", TaskKind::Doctest, &[]);
+    let doc = group("demo", TaskKind::Doc, &[]);
     let other = group("nested", TaskKind::Clippy, &[]);
     let found = build_crate_jobs(CrateJobInputs {
         label: "ubuntu-26.04",
@@ -65,6 +64,34 @@ fn groups_obligations_into_one_ordered_job_per_crate() {
 }
 
 #[test]
+fn parallel_crate_members_reject_gates_between_each_other() {
+    let clippy = group("demo", TaskKind::Clippy, &[]);
+    let clippy_id = clippy.task_id.clone();
+    let test = group("demo", TaskKind::Test, &[clippy_id.as_str()]);
+    let result = build_crate_jobs(CrateJobInputs {
+        label: "ubuntu-26.04",
+        policy: WorkflowPolicy::ConsumerV1,
+        discovery: &discovery(vec![test, clippy]),
+        catalog: &ToolCatalog::pinned(),
+        fetch_roots: &[],
+        acquire: None,
+        max_parallel_jobs: 2,
+        timeout: velnor_actions_contract::JobTimeout::CRATE,
+        helper_version: env!("CARGO_PKG_VERSION"),
+        seed_parallel_targets: false,
+        crates: &std::collections::BTreeMap::new(),
+    });
+    assert!(
+        matches!(
+            result,
+            Err(OrchestratorError::Internal { problem })
+                if problem == "crate_parallel_member_gate"
+        ),
+        "parallel crate members must fail with crate_parallel_member_gate"
+    );
+}
+
+#[test]
 fn duplicate_rust_display_names_include_manifest_context() {
     let mut first = group("alpha", TaskKind::Clippy, &[]);
     first.display_name = "shared".to_owned();
@@ -97,7 +124,7 @@ fn duplicate_rust_display_names_include_manifest_context() {
 }
 
 #[test]
-fn rust_qualification_reuses_one_job_for_all_configurations_and_tasks() {
+fn rust_qualification_groups_jobs_by_package_and_configuration() {
     let clippy = group("demo", TaskKind::Clippy, &[]);
     let mut test = group("demo", TaskKind::Test, &[clippy.task_id.as_str()]);
     test.task_id = test.task_id.replace("/default", "/all-features");
@@ -143,20 +170,38 @@ fn rust_qualification_reuses_one_job_for_all_configurations_and_tasks() {
     })
     .expect("qualification jobs");
 
-    assert_eq!(normal.jobs.len(), 1);
+    assert_eq!(normal.jobs.len(), 2);
     assert_eq!(normal.jobs[0].0, "rust-demo");
+    assert_eq!(normal.jobs[1].0, "rust-demo-all-features");
     assert!(
-        normal.jobs[0].1.steps.iter().all(
-            |step| step.name != crate::qualification_source_evidence::SOURCE_EVIDENCE_STEP_NAME
-        )
+        normal.jobs[1]
+            .1
+            .needs
+            .iter()
+            .any(|need| need == "rust-demo")
     );
+    assert!(normal.jobs.iter().all(|(_, job)| {
+        job.steps.iter().all(|step| {
+            step.name != crate::qualification_source_evidence::SOURCE_EVIDENCE_STEP_NAME
+        })
+    }));
     assert!(
         qualification.jobs.is_empty(),
         "Rust has no duplicate executor jobs"
     );
-    assert_eq!(qualified.jobs.len(), 1);
+    assert_eq!(qualified.jobs.len(), 2);
     assert_eq!(qualified.jobs[0].0, "rust-demo");
-    assert_grouped_qualification_steps(&qualified.jobs[0].1);
+    assert_eq!(qualified.jobs[1].0, "rust-demo-all-features");
+    assert!(
+        qualified.jobs[1]
+            .1
+            .needs
+            .iter()
+            .any(|need| need == "rust-demo")
+    );
+    for (_, job) in &qualified.jobs {
+        assert_grouped_qualification_steps(job, 1);
+    }
 }
 
 #[test]

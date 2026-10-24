@@ -45,3 +45,7 @@ pub(super) fn rust_manifest_coverage(subject: &InstallSubject, blocking: &mut Ve
 #[cfg(test)]
 #[path = "lock_audit_rust_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "lock_audit_main_rust_tests.rs"]
+mod main_tests;

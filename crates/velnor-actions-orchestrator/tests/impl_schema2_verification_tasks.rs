@@ -28,7 +28,7 @@ fn generated_verification_jobs_accept_the_hosted_image_jq_line() -> TestResult {
 
 #[test]
 fn verification_tasks_follow_eligible_lanes_and_stay_required() -> TestResult {
-    for mode in ["hosted", "both"] {
+    for mode in ["hosted", "both", "scale-set"] {
         let repo = make_repo(&config(mode))?;
         write_verification_task_config(repo.path())?;
         let tree = render_staged_tree(&prepare(repo.path())?)?;
@@ -49,10 +49,7 @@ fn verification_tasks_follow_eligible_lanes_and_stay_required() -> TestResult {
                 && macos.contains(r#"case \"$path\" in \"$workspace_root/native/mise.toml\""#),
             "{mode}: exact nested config is hashed and admitted: {macos}"
         );
-        assert!(
-            actionlint.contains("runs-on: ubuntu-26.04"),
-            "{mode}: {actionlint}"
-        );
+        assert_jactionlint_execution_mode(mode, actionlint);
         assert!(
             !workflow.contains("  actionlint__hosted:"),
             "{mode}: {workflow}"
@@ -96,24 +93,54 @@ fn verification_tasks_follow_eligible_lanes_and_stay_required() -> TestResult {
                 assert!(required.contains("- task-linux-lint__local"), "{required}");
                 assert!(!workflow.contains("  task-linux-lint:"));
             }
+            "scale-set" => {
+                let scale = job_body(workflow, "task-linux-lint")?;
+                assert!(scale.contains(SCALE_RUNS), "{scale}");
+                assert!(required.contains("- task-linux-lint"), "{required}");
+                assert!(!workflow.contains("  task-linux-lint__hosted:"));
+                assert!(!workflow.contains("  task-linux-lint__local:"));
+            }
             _ => unreachable!(),
         }
     }
     Ok(())
 }
 
+fn assert_jactionlint_execution_mode(mode: &str, actionlint: &str) {
+    match mode {
+        "hosted" | "both" => assert!(
+            actionlint.contains("runs-on: ubuntu-26.04"),
+            "{mode}: {actionlint}"
+        ),
+        "scale-set" => {
+            assert!(actionlint.contains(SCALE_RUNS), "{mode}: {actionlint}");
+            assert!(
+                actionlint.contains(
+                    "container:\n      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                ),
+                "{mode}: configured job container is retained: {actionlint}"
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
 #[test]
-fn scale_set_mode_rejects_a_darwin_verification_task() -> TestResult {
+fn scale_set_mode_keeps_declared_darwin_verification_task_hosted() -> TestResult {
     let repo = make_repo(&config("scale-set"))?;
     write_verification_task_config(repo.path())?;
     let prep = prepare(repo.path())?;
-    let error = render_staged_tree(&prep).expect_err("Scale Set mode cannot run the macOS task");
+    let tree = render_staged_tree(&prep)?;
+    let workflow = required_file(&tree, ".github/workflows/ci.yml")?;
+    let required = job_body(workflow, "required")?;
+    let native = job_body(workflow, "task-native-format")?;
     assert!(
-        error
-            .to_string()
-            .contains("unsupported_darwin_workload:task-native-format:macos-15"),
-        "{error}"
+        native.contains("runs-on: macos-15"),
+        "declared native verification stays on its exact hosted runner: {native}"
     );
+    assert!(required.contains("- task-native-format"), "{required}");
+    assert!(!workflow.contains("task-native-format__hosted"));
+    assert!(!workflow.contains("task-native-format__local"));
     Ok(())
 }
 
@@ -121,7 +148,7 @@ fn scale_set_mode_rejects_a_darwin_verification_task() -> TestResult {
 fn macos_task_scale_set_override_is_rejected_explicitly() -> TestResult {
     let config = format!(
         "{}\n[execution.overrides.\"task-native-format\"]\nprofile = \"local\"\nrole = \"verification\"",
-        config("hosted").replace("mode = \"hosted\"\n", "")
+        config("hosted")
     );
     let repo = make_repo(&config)?;
     write_verification_task_config(repo.path())?;
@@ -130,7 +157,7 @@ fn macos_task_scale_set_override_is_rejected_explicitly() -> TestResult {
     assert!(
         error
             .to_string()
-            .contains("unsupported_darwin_workload:task-native-format:macos-15"),
+            .contains("workflow_task_hosted_only_scale_set_override"),
         "{error}"
     );
     Ok(())

@@ -29,6 +29,46 @@ mod tampered_channel;
 use pair_assertions::{assert_bound_identity, assert_jit_persistence, verify_native_pair_requests};
 
 #[test]
+fn unknown_completion_is_quarantined_until_source_authorization_then_replayed() -> Result<(), String>
+{
+    run_native_quarantine_composition(mixed_offer_with_unverified_completion()?, 128)
+}
+
+fn mixed_offer_with_unverified_completion() -> Result<Poll, String> {
+    let body = serde_json::json!([
+        {
+            "messageType": "JobAvailable",
+            "runnerRequestId": REQUEST_ID,
+            "jobId": bootstrap_start::NATIVE_COMPOSITION_JOB_ID,
+            "ownerName": "owner",
+            "repositoryName": "repository",
+            "jobWorkflowRef": "owner/repository/.github/workflows/build.yml@refs/heads/main",
+            "workflowRunId": 900,
+            "eventName": "push"
+        },
+        {
+            "messageType": "JobCompleted",
+            "runnerRequestId": ACTUAL_STARTED_REQUEST_ID,
+            "jobId": bootstrap_start::NATIVE_COMPOSITION_JOB_ID,
+            "result": "Succeeded",
+            "ownerName": "owner",
+            "repositoryName": "repository",
+            "jobWorkflowRef": "owner/repository/.github/workflows/build.yml@refs/heads/main",
+            "workflowRunId": 900,
+            "eventName": "push"
+        }
+    ])
+    .to_string();
+    let envelope = serde_json::json!({
+        "messageId": 128,
+        "messageType": "RunnerScaleSetJobMessages",
+        "body": body
+    })
+    .to_string();
+    velnor_runner_github::parse_poll(200, &envelope).map_err(|error| error.to_string())
+}
+
+#[test]
 fn acquired_request_reaches_measured_storage_bound() -> Result<(), String> {
     const PRODUCTION_CALLER_STACK_BYTES: usize = 8 * 1024 * 1024;
     std::thread::Builder::new()
@@ -51,10 +91,6 @@ async fn acquired_request_reaches_measured_storage_bound_inner() -> Result<(), S
     Box::pin(continue_native_composition(setup, None)).await
 }
 
-#[expect(
-    dead_code,
-    reason = "Retains the native quarantine, backlog, reopen, and replay test entry point."
-)]
 pub(crate) fn run_native_quarantine_composition(
     polled: Poll,
     backlog_rows: usize,
@@ -72,6 +108,7 @@ pub(crate) fn run_native_quarantine_composition(
                 let setup = Box::pin(bootstrap_start::open_composition_with_poll(
                     &polled,
                     backlog_rows,
+                    false,
                 ))
                 .await?;
                 Box::pin(continue_native_composition(

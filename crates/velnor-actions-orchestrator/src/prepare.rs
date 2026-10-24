@@ -134,13 +134,18 @@ fn prepare_inner(
             catalog: &emission,
         },
     )?;
+    let verifier_actions = crate::workflow::verifier_actions::VerifierActionSet::build(
+        &emission,
+        env!("CARGO_PKG_VERSION"),
+    )?;
     let runner_image = runner_image_evidence();
-    let audit = crate::lock_audit::audit_prepare_installs_with_catalog(
+    let audit = crate::lock_audit::audit_prepare_installs_with_catalog_and_verifiers(
         &canonical,
         &workflow.ir,
         &runner_label,
         &workflow.context.validator_commands,
         &catalog,
+        &verifier_actions,
     );
     discovery.recommendations.extend(audit.recommendation);
     discovery

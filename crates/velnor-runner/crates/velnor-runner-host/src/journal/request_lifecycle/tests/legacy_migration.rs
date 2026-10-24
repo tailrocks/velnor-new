@@ -5,6 +5,9 @@ use std::path::Path;
 use crate::launch_harness::Scratch;
 use crate::{IntentState, Journal, Outcome};
 
+#[path = "legacy_migration/partial_resources.rs"]
+mod partial_resources;
+
 async fn seed_legacy_journal(path: &Path) -> Result<(), String> {
     let path = path
         .to_str()
@@ -55,6 +58,57 @@ async fn legacy_ambiguous_launch_rows_are_quarantined_before_restart() -> Result
         .await
         .map_err(|error| error.to_string())?;
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
+    assert_legacy_rows_quarantined(&rows)?;
+    assert_eq!(
+        journal
+            .capacity_rows(3)
+            .await
+            .map_err(|error| error.to_string())?
+            .len(),
+        3
+    );
+
+    let binding =
+        crate::journal::request_lifecycle::tests::helpers::binding("legacy-quarantine", 101)
+            .map_err(|error| error.to_string())?;
+    assert!(matches!(
+        journal.connection_scope(&binding).await,
+        Err(crate::error::HostError::Journal)
+    ));
+    drop(journal);
+    assert_eq!(
+        connection_scope_count(&path, binding.connection_id.as_str()).await?,
+        0
+    );
+
+    let reopened = Journal::open(&path)
+        .await
+        .map_err(|error| error.to_string())?;
+    let reopened_rows = reopened.rows().await.map_err(|error| error.to_string())?;
+    for (subject, expected) in [
+        ("m96", IntentState::Uncertain),
+        ("m98", IntentState::Uncertain),
+        ("m99", IntentState::Pending),
+    ] {
+        let row = reopened_rows
+            .iter()
+            .find(|row| row.subject == subject)
+            .ok_or_else(|| format!("legacy launch {subject} disappeared after reopen"))?;
+        assert_eq!(row.state, expected);
+        assert!(!row.cleanup_proven);
+    }
+    assert_eq!(
+        reopened
+            .capacity_rows(3)
+            .await
+            .map_err(|error| error.to_string())?
+            .len(),
+        3
+    );
+    Ok(())
+}
+
+fn assert_legacy_rows_quarantined(rows: &[crate::reconcile::IntentRow]) -> Result<(), String> {
     for (subject, expected) in [
         ("m96", IntentState::Uncertain),
         ("m98", IntentState::Uncertain),
@@ -79,22 +133,37 @@ async fn legacy_ambiguous_launch_rows_are_quarantined_before_restart() -> Result
         .ok_or_else(|| "unrelated row disappeared".to_owned())?;
     assert_eq!(unrelated.state, IntentState::Failed);
     assert!(unrelated.cleanup_proven);
-
     assert_eq!(
         rows.iter()
             .filter(|row| ["m96", "m98", "m99"].contains(&row.subject.as_str()))
             .count(),
         3
     );
-    assert_eq!(
-        journal
-            .capacity_rows(3)
-            .await
-            .map_err(|error| error.to_string())?
-            .len(),
-        3
-    );
     Ok(())
+}
+
+async fn connection_scope_count(path: &Path, connection_id: &str) -> Result<i64, String> {
+    let path = path
+        .to_str()
+        .ok_or_else(|| "legacy journal path is not UTF-8".to_owned())?;
+    let db = turso::Builder::new_local(path)
+        .build()
+        .await
+        .map_err(|error| error.to_string())?;
+    let connection = db.connect().map_err(|error| error.to_string())?;
+    let mut rows = connection
+        .query(
+            "SELECT COUNT(*) FROM connection_scopes WHERE connection_id = ?1",
+            [connection_id],
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    rows.next()
+        .await
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "connection scope query did not return a row".to_owned())?
+        .get::<i64>(0)
+        .map_err(|error| error.to_string())
 }
 
 #[tokio::test]

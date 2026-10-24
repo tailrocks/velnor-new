@@ -12,9 +12,9 @@ use crate::impl_schema2_verification_tasks::config;
 
 #[test]
 fn scale_set_profile_override_rejects_a_darwin_build() -> TestResult {
-    let hosted_default = config_with_build("hosted").replace("mode = \"hosted\"\n", "");
     let body = format!(
-        "{hosted_default}\n[execution.overrides.\"task-native-desktop\"]\nprofile = \"local\"\nrole = \"verification\""
+        "{}\n[execution.overrides.\"task-native-desktop\"]\nprofile = \"local\"\nrole = \"verification\"",
+        config_with_build("hosted")
     );
     let repo = make_repo(&body)?;
     write_native_source_fixture(repo.path())?;
@@ -24,15 +24,15 @@ fn scale_set_profile_override_rejects_a_darwin_build() -> TestResult {
     assert!(
         error
             .to_string()
-            .contains("unsupported_darwin_workload:task-native-desktop:macos-26"),
+            .contains("workflow_task_hosted_only_scale_set_override"),
         "{error}"
     );
     Ok(())
 }
 
 #[test]
-fn native_build_variant_stays_hosted_or_fails_closed_in_scale_set_mode() -> TestResult {
-    for mode in ["hosted", "both"] {
+fn native_build_variant_stays_hosted_in_every_execution_mode() -> TestResult {
+    for mode in ["hosted", "both", "scale-set"] {
         let body = config_with_build(mode);
         let repo = make_repo(&body)?;
         write_native_source_fixture(repo.path())?;
@@ -47,20 +47,6 @@ fn native_build_variant_stays_hosted_or_fails_closed_in_scale_set_mode() -> Test
         assert_native_job_selected_tools(mode, native);
         assert_required_job_includes_native(mode, workflow, required);
     }
-
-    let body = config_with_build("scale-set");
-    let repo = make_repo(&body)?;
-    write_native_source_fixture(repo.path())?;
-    let preparation = prepare(repo.path())?;
-    assert_selected_mise_projection(&preparation)?;
-    let error =
-        render_staged_tree(&preparation).expect_err("Scale Set mode must reject the Darwin job");
-    assert!(
-        error
-            .to_string()
-            .contains("unsupported_darwin_workload:task-native-desktop:macos-26"),
-        "{error}"
-    );
     Ok(())
 }
 
@@ -86,7 +72,7 @@ fn assert_native_job_prefix(mode: &str, native: &str) {
     );
     assert!(
         native.contains("Verify locked MBX Rust route")
-            && native.contains("installs/mr-boxington/1.26.0/"),
+            && native.contains("installs/mr-boxington/1.27.0/"),
         "{mode}: {native}"
     );
     assert!(
@@ -274,7 +260,7 @@ version = "0.9.140"
 version = "0.30.1"
 matching_regex = '^boltffi-(darwin-aarch64|darwin-x86_64|linux-aarch64(-musl)?|linux-x86_64(-musl)?|windows-arm64|windows-x86_64)\.(tar\.gz|zip)$'
 [tools."mr-boxington"]
-version = "1.26.0"
+version = "1.27.0"
 [tools."rust"]
 version = "1.99.1"
 components = "clippy,rustfmt"
@@ -300,7 +286,7 @@ min_version = "2026.10.7"
 [tools]
 "aqua:nextest-rs/nextest/cargo-nextest" = "0.9.140"
 "github:boltffi/boltffi" = { version = "0.30.1", matching_regex = '^boltffi-(darwin-aarch64|darwin-x86_64|linux-aarch64(-musl)?|linux-x86_64(-musl)?|windows-arm64|windows-x86_64)\.(tar\.gz|zip)$' }
-"mr-boxington" = "1.26.0"
+"mr-boxington" = "1.27.0"
 rust = { version = "1.99.1", components = ["clippy", "rustfmt"], targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"], mr_boxington = true }
 swiftlint = { version = "0.65.1", os = ["macos"] }
 xcodegen = "2.46.0"
@@ -370,7 +356,7 @@ lockfile_version = 3
 [tools]
 "aqua:nextest-rs/nextest/cargo-nextest" = [{ version = "0.9.140", backend = "aqua:nextest-rs/nextest/cargo-nextest", specifiers = ["0.9.140"], "platforms.macos-arm64" = { url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.140/cargo-nextest-0.9.140-universal-apple-darwin.tar.gz", checksum = "sha256:58e0a722f9444078fab447783f322acf15a2a771ba785b3fbbe8bacda31c3df9" } }]
 "github:boltffi/boltffi" = [{ version = "0.30.1", backend = "github:boltffi/boltffi", specifiers = ["0.30.1"], options = { matching_regex = '^boltffi-(darwin-aarch64|darwin-x86_64|linux-aarch64(-musl)?|linux-x86_64(-musl)?|windows-arm64|windows-x86_64)\.(tar\.gz|zip)$' }, "platforms.macos-arm64" = { url = "https://github.com/boltffi/boltffi/releases/download/v0.30.1/boltffi-darwin-aarch64.tar.gz", checksum = "sha256:ce3a47b5c398cbb9c327098a612b431f30db15d353d62cee4e4637540fa8321a" } }]
-"mr-boxington" = [{ version = "1.26.0", backend = "packslip:github.com/jdx/mr-boxington", specifiers = ["1.26.0"], "platforms.macos-arm64" = { url = "https://github.com/jdx/mr-boxington/releases/download/v1.26.0/mbx-aarch64-apple-darwin.tar.gz", checksum = "sha256:e548b5758498cf822a180b6328597e6aded8fe9bb3046cd918399172ae30dde2", signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml" } }]
+"mr-boxington" = [{ version = "1.27.0", backend = "packslip:github.com/jdx/mr-boxington", specifiers = ["1.27.0"], "platforms.macos-arm64" = { url = "https://github.com/jdx/mr-boxington/releases/download/v1.27.0/mbx-aarch64-apple-darwin.tar.gz", checksum = "sha256:e548b5758498cf822a180b6328597e6aded8fe9bb3046cd918399172ae30dde2", signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml" } }]
 rust = [{ version = "1.99.1", backend = "core:rust", specifiers = ["1.99.1"], options = { components = "clippy,rustfmt", targets = "aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu" } }]
 swiftlint = [{ version = "0.65.1", backend = "aqua:realm/SwiftLint", specifiers = ["0.65.1"], "platforms.macos-arm64" = { url = "https://github.com/realm/SwiftLint/releases/download/0.65.1/portable_swiftlint.zip", checksum = "sha256:c1e429b0599cf1b516f369a2d9ec04eaf0e436f3c12b637df8851fa52ff694d0" } }]
 xcodegen = [{ version = "2.46.0", backend = "aqua:yonaskolb/XcodeGen", specifiers = ["2.46.0"], "platforms.macos-arm64" = { url = "https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip", checksum = "sha256:4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806" } }]

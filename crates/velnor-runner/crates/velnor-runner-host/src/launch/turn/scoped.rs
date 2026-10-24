@@ -37,6 +37,8 @@ pub(crate) struct ScopedPollOutcome {
     pub(crate) session_delete_candidate: bool,
     /// Request IDs with a durable native `JobStarted` record.
     pub(crate) started_request_ids: Vec<i64>,
+    /// Sanitized counters from this response only.
+    pub(crate) observation: crate::launch::steady::PollObservation,
 }
 
 /// Borrowed inputs for one exact scoped queue poll.
@@ -323,6 +325,7 @@ where
         wake_cleanup: decision.wake_cleanup,
         session_delete_candidate: decision.session_delete_candidate,
         started_request_ids: decision.started_request_ids,
+        observation: super::super::steady::poll_observation(polled),
     })
 }
 

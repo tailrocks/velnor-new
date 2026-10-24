@@ -14,15 +14,20 @@ use crate::daemon_lock::DaemonLock;
 use crate::error::HostError;
 use crate::journal::Journal;
 
-use super::wire::{Request, Response, SOCKET_NAME, Target};
+use super::wire::{
+    ConnectionCensusReply, Request, Response, SOCKET_NAME, SessionObservationReply,
+    SetupReceiptReply, SetupReceiptStatus, Target,
+};
 use transport::{
-    private_state_directory, read_request, remove_owned_socket, remove_stale_socket, trusted_peer,
-    write_response,
+    marker_exists, private_state_directory, read_request, remove_owned_socket, remove_stale_socket,
+    trusted_peer, write_response,
 };
 #[path = "server/requests.rs"]
 mod requests;
 mod state;
-pub(crate) use state::{ControlState, ControllerReadinessProof, SessionPollReceipt};
+pub(crate) use state::{
+    ControlState, ControllerReadinessProof, SessionPollReceipt, SetupReceiptInput,
+};
 #[path = "server/transport.rs"]
 mod transport;
 pub(super) use transport::{read_drain_token, valid_token};
@@ -143,6 +148,9 @@ fn serve(
                         value: None,
                         doctor_probe: None,
                         readiness: None,
+                        session_observation: None,
+                        setup_receipt: None,
+                        connection_census: None,
                     });
                     if let Err(error) = write_response(&mut stream, response) {
                         eprintln!("host control response failed: {error}");
@@ -203,6 +211,161 @@ fn target_marker(state: &Path, target: &Target) -> PathBuf {
         Target::Connection { connection_id, .. } => {
             state.join("connection-drain").join(connection_id.as_str())
         }
+    }
+}
+
+pub(super) fn session_observation_start(
+    state: &ControlState,
+    state_path: &Path,
+    connection_id: &str,
+    nonce: &str,
+    timeout_ms: u64,
+    engine_id: &str,
+    docker_root_digest: &str,
+) -> Result<Response, HostError> {
+    if observation_blocked(state, state_path, connection_id)? {
+        state.invalidate_session_observation(connection_id)?;
+        return Ok(observation_response(SessionObservationReply::stale()));
+    }
+    let timeout = std::time::Duration::from_millis(timeout_ms);
+    let reply = state.start_session_observation(
+        connection_id,
+        nonce,
+        timeout,
+        engine_id,
+        docker_root_digest,
+    )?;
+    Ok(observation_response(reply))
+}
+
+pub(super) fn session_observation_status(
+    state: &ControlState,
+    state_path: &Path,
+    connection_id: &str,
+    nonce: &str,
+    engine_id: &str,
+    docker_root_digest: &str,
+) -> Result<Response, HostError> {
+    if observation_blocked(state, state_path, connection_id)? {
+        state.invalidate_session_observation(connection_id)?;
+        return Ok(observation_response(SessionObservationReply::stale()));
+    }
+    let reply =
+        state.session_observation_status(connection_id, nonce, engine_id, docker_root_digest)?;
+    Ok(observation_response(reply))
+}
+
+pub(super) fn setup_receipt_status(
+    state: &ControlState,
+    state_path: &Path,
+    connection_id: &str,
+    engine_id: &str,
+    docker_root_digest: &str,
+) -> Result<Response, HostError> {
+    if observation_blocked(state, state_path, connection_id)? {
+        state.invalidate_session_observation(connection_id)?;
+        return Ok(setup_receipt_response(SetupReceiptReply {
+            status: SetupReceiptStatus::Stale,
+            setup: None,
+        }));
+    }
+    Ok(setup_receipt_response(state.setup_receipt_status(
+        connection_id,
+        engine_id,
+        docker_root_digest,
+    )?))
+}
+
+pub(super) fn connection_census_start(
+    state: &ControlState,
+    state_path: &Path,
+    connection_id: &str,
+    nonce: &str,
+    timeout_ms: u64,
+    engine_id: &str,
+    docker_root_digest: &str,
+) -> Result<Response, HostError> {
+    if observation_blocked(state, state_path, connection_id)? {
+        state.invalidate_session_observation(connection_id)?;
+        return Ok(census_response(ConnectionCensusReply {
+            setup_status: SetupReceiptStatus::Stale,
+            setup: None,
+            observation: SessionObservationReply::stale(),
+        }));
+    }
+    Ok(census_response(state.start_connection_census(
+        connection_id,
+        nonce,
+        std::time::Duration::from_millis(timeout_ms),
+        engine_id,
+        docker_root_digest,
+    )?))
+}
+
+pub(super) fn connection_census_status(
+    state: &ControlState,
+    state_path: &Path,
+    connection_id: &str,
+    nonce: &str,
+    engine_id: &str,
+    docker_root_digest: &str,
+) -> Result<Response, HostError> {
+    if observation_blocked(state, state_path, connection_id)? {
+        state.invalidate_session_observation(connection_id)?;
+        return Ok(census_response(ConnectionCensusReply {
+            setup_status: SetupReceiptStatus::Stale,
+            setup: None,
+            observation: SessionObservationReply::stale(),
+        }));
+    }
+    Ok(census_response(state.connection_census_status(
+        connection_id,
+        nonce,
+        engine_id,
+        docker_root_digest,
+    )?))
+}
+
+pub(super) fn observation_blocked(
+    state: &ControlState,
+    state_path: &Path,
+    connection_id: &str,
+) -> Result<bool, HostError> {
+    Ok(!state.admission_ready()
+        || marker_exists(&state_path.join("drain"))?
+        || marker_exists(&state_path.join("connection-drain").join(connection_id))?)
+}
+
+pub(super) fn observation_response(reply: SessionObservationReply) -> Response {
+    Response {
+        value: None,
+        doctor_probe: None,
+        readiness: None,
+        session_observation: Some(reply),
+        setup_receipt: None,
+        connection_census: None,
+    }
+}
+
+pub(super) fn setup_receipt_response(reply: SetupReceiptReply) -> Response {
+    Response {
+        value: None,
+        doctor_probe: None,
+        readiness: None,
+        session_observation: None,
+        setup_receipt: Some(reply),
+        connection_census: None,
+    }
+}
+
+pub(super) fn census_response(reply: ConnectionCensusReply) -> Response {
+    Response {
+        value: None,
+        doctor_probe: None,
+        readiness: None,
+        session_observation: None,
+        setup_receipt: None,
+        connection_census: Some(reply),
     }
 }
 

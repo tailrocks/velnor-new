@@ -41,8 +41,9 @@ pub(crate) use workflow_policy::jactionlint_verify_step::{
 };
 pub(crate) use workflow_policy::prepare_rust_components_step;
 pub(crate) use workflow_policy::rust_manifest_step::{
-    NOT_CATALOGUED_CODE, ToolchainPhase, VERIFY_RUST_MANIFEST_STEP, toolchain_script,
-    verify_restored_rust_step, verify_rust_argv, verify_rust_manifest_step, verify_rust_owned_argv,
+    NOT_CATALOGUED_CODE, ToolchainPhase, VERIFY_RESTORED_RUST_STEP, VERIFY_RUST_MANIFEST_STEP,
+    toolchain_script, verify_restored_rust_step, verify_rust_argv, verify_rust_manifest_step,
+    verify_rust_owned_argv,
 };
 
 pub(crate) use crate::workflow_jobs::LINT_JOB_ID;
@@ -218,8 +219,9 @@ fn insert_gate_jobs(
 
 /// Insert deferred format-report steps immediately after `Plan`.
 ///
-/// The plan exists only after the planner runs; these steps stay anchored
-/// immediately after it so their reports remain in the plan artifact.
+/// The plan exists only after the planner runs; the publish closure
+/// later lands between `Plan` and these steps, so the plan artifact
+/// carries plan and matrix only, never the format entry's reports.
 /// Without a `plan-v1` anchor the steps close the job.
 fn insert_format_report_steps(plan: &mut Job, reports: Vec<Step>) {
     if reports.is_empty() {

@@ -70,6 +70,84 @@ pub(super) async fn handle(
             )
             .await
         }
+        request @ (Request::SessionObservationStart { .. }
+        | Request::SessionObservationStatus { .. }
+        | Request::ConnectionSetupStatus { .. }
+        | Request::ConnectionCensusStart { .. }
+        | Request::ConnectionCensusStatus { .. }) => handle_connection_receipt_request(
+            state,
+            state_path,
+            request,
+            engine_id,
+            docker_root_digest,
+        ),
+    }
+}
+
+fn handle_connection_receipt_request(
+    state: &ControlState,
+    state_path: &Path,
+    request: Request,
+    engine_id: &str,
+    docker_root_digest: &str,
+) -> Result<Response, HostError> {
+    match request {
+        Request::SessionObservationStart {
+            connection_id,
+            nonce,
+            timeout_ms,
+        } => super::session_observation_start(
+            state,
+            state_path,
+            connection_id.as_str(),
+            &nonce,
+            timeout_ms,
+            engine_id,
+            docker_root_digest,
+        ),
+        Request::SessionObservationStatus {
+            connection_id,
+            nonce,
+        } => super::session_observation_status(
+            state,
+            state_path,
+            connection_id.as_str(),
+            &nonce,
+            engine_id,
+            docker_root_digest,
+        ),
+        Request::ConnectionSetupStatus { connection_id } => super::setup_receipt_status(
+            state,
+            state_path,
+            connection_id.as_str(),
+            engine_id,
+            docker_root_digest,
+        ),
+        Request::ConnectionCensusStart {
+            connection_id,
+            nonce,
+            timeout_ms,
+        } => super::connection_census_start(
+            state,
+            state_path,
+            connection_id.as_str(),
+            &nonce,
+            timeout_ms,
+            engine_id,
+            docker_root_digest,
+        ),
+        Request::ConnectionCensusStatus {
+            connection_id,
+            nonce,
+        } => super::connection_census_status(
+            state,
+            state_path,
+            connection_id.as_str(),
+            &nonce,
+            engine_id,
+            docker_root_digest,
+        ),
+        _ => Err(HostError::Lock),
     }
 }
 
@@ -235,6 +313,9 @@ fn boolean_response(value: bool) -> Response {
         value: Some(value),
         doctor_probe: None,
         readiness: None,
+        session_observation: None,
+        setup_receipt: None,
+        connection_census: None,
     }
 }
 
@@ -246,6 +327,9 @@ fn probe_response(
         value: None,
         doctor_probe: Some(reply),
         readiness,
+        session_observation: None,
+        setup_receipt: None,
+        connection_census: None,
     }
 }
 
@@ -298,5 +382,8 @@ fn readiness_response(readiness: crate::readiness::Readiness) -> Response {
         value: None,
         doctor_probe: None,
         readiness: Some(readiness),
+        session_observation: None,
+        setup_receipt: None,
+        connection_census: None,
     }
 }

@@ -106,6 +106,26 @@ pub(crate) use gate::{gate_line, reconcile_gate};
 pub(crate) use resource_probe::prepare_worker_images;
 pub(crate) use verified_images::{VerifiedImageIdentity, VerifiedWorkerImages};
 
+#[cfg(test)]
+pub(crate) fn fake_runtime_filesystem_instance_digest(engine_id: &str) -> String {
+    let sample_generation = format!("{:032x}", u32::from(b'a'));
+    let permit =
+        resource_probe::StartPermit::test_fixture_with_engine_id(&sample_generation, engine_id);
+    resource_probe::filesystem_instance_digest(&resource_probe::FilesystemInstanceDigestInput {
+        engine_id: permit.engine_id(),
+        docker_root_digest: permit.docker_root_digest(),
+        guest_boot_id: b"12345678-1234-1234-1234-123456789abc",
+        mount_source: b"/dev/vdb",
+        filesystem_type_name: b"btrfs",
+        filesystem_type_magic: 0x9123_683e,
+        mount_device_major: 0,
+        mount_device_minor: 38,
+        statx_device_major: 0,
+        statx_device_minor: 41,
+        filesystem_id: 17,
+    })
+}
+
 pub(crate) async fn startup_storage_profile(
     docker: &bollard::Docker,
     journal: &Journal,

@@ -10,7 +10,7 @@ use velnor_actions_contract::{
     CrateJob, Job, JobTimeout, ProposedTask, RustCrateConfig, Stack, Step, VelnorConfig,
     WorkflowPolicy, crate_display_name, tofu_display_name,
 };
-use velnor_actions_mise::{TaskCacheMode, ToolCatalog};
+use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
 #[cfg(test)]
 use {velnor_actions_mise::PinnedTool, velnor_actions_workflow_renderer::render::PLAN_JOB_ID};
@@ -144,9 +144,9 @@ pub(crate) fn workflow_job_inputs<'a>(
     })
 }
 
-/// Build one ordered IR job per runnable crate from discovery proposals.
+/// Build one ordered IR job per runnable Rust package/configuration or `ToFu` root.
 ///
-/// One job owns every runnable Rust package task.
+/// One Rust job owns every runnable package task for its configuration.
 /// The plan job owns package-less workspace Format tasks.
 /// Each job runs Build before its parallel checks.
 /// The report step follows the parallel join.
@@ -312,6 +312,7 @@ fn build_job_for_members(
         package_name: first.display_name.clone(),
         package_id: first.identity.unit_id.clone(),
         manifest,
+        configuration: first.configuration.clone(),
         obligations: obligations_for(tasks, input.catalog)?,
     };
     model.validate()?;

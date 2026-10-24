@@ -27,7 +27,7 @@ type TestResult = Result<(), Box<dyn Error>>;
 fn sample_mise() -> MiseSetup {
     MiseSetup {
         uses: format!("jdx/mise-action@{}", "b".repeat(40)),
-        version: "2026.10.17".to_owned(),
+        version: "2026.10.18".to_owned(),
         sha256: MISE_BINARY_SHA256_LINUX_X64.to_owned(),
     }
 }
@@ -49,12 +49,12 @@ fn sample_spec(suites: Vec<RustSuiteConfig>) -> RustSuitesRenderSpec {
         verify_restored_rust_argv: vec![
             "sh".to_owned(),
             "-c".to_owned(),
-            "echo restored".to_owned(),
+            crate::toolchain_env::with_credential_unset_script("echo restored"),
         ],
         verify_rust_argv: vec![
             "sh".to_owned(),
             "-c".to_owned(),
-            "echo verify-rust".to_owned(),
+            crate::toolchain_env::with_credential_unset_script("echo verify-rust"),
         ],
     }
 }

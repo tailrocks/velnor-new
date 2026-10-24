@@ -35,7 +35,7 @@ async fn validate_schema(
 ) -> Result<(), HostError> {
     validate_auth_table(conn).await?;
     validate_jit_table(conn, version_ten).await?;
-    validate_indexes(conn).await?;
+    validate_indexes(conn, !matches!(phase, ValidationPhase::VersionTenMigration)).await?;
     rows::validate_auth_rows(conn).await?;
     match phase {
         ValidationPhase::LegacyBootstrap | ValidationPhase::VersionTenMigration => {
@@ -166,7 +166,18 @@ async fn table_sql(conn: &turso::Connection, table: &str) -> Result<String, Host
         .map_err(|_| HostError::Journal)
 }
 
-async fn validate_indexes(conn: &turso::Connection) -> Result<(), HostError> {
+async fn validate_indexes(
+    conn: &turso::Connection,
+    validate_partial_sql: bool,
+) -> Result<(), HostError> {
+    validate_index_catalog(conn).await?;
+    if validate_partial_sql {
+        validate_partial_index_sql(conn).await?;
+    }
+    Ok(())
+}
+
+async fn validate_index_catalog(conn: &turso::Connection) -> Result<(), HostError> {
     for (table, name, unique, columns) in [
         (
             AUTH_TABLE,
@@ -234,6 +245,53 @@ async fn validate_indexes(conn: &turso::Connection) -> Result<(), HostError> {
         if !found
             || index_columns(conn, name).await?
                 != columns.into_iter().map(str::to_owned).collect::<Vec<_>>()
+        {
+            return Err(HostError::Journal);
+        }
+    }
+    Ok(())
+}
+
+async fn validate_partial_index_sql(conn: &turso::Connection) -> Result<(), HostError> {
+    for (name, expected) in [
+        (
+            "connection_runner_jit_id",
+            "CREATE UNIQUE INDEX connection_runner_jit_id ON connection_runner_jits(connection_id, scale_set_id, runner_id) WHERE runner_id IS NOT NULL",
+        ),
+        (
+            "connection_runner_jit_name",
+            "CREATE UNIQUE INDEX connection_runner_jit_name ON connection_runner_jits(connection_id, scale_set_id, runner_name) WHERE runner_name IS NOT NULL AND state != 'cleaned'",
+        ),
+        (
+            "connection_runner_jit_witness",
+            "CREATE UNIQUE INDEX connection_runner_jit_witness ON connection_runner_jits(connection_id, scale_set_id, witness_request_id) WHERE state != 'cleaned'",
+        ),
+        (
+            "connection_runner_jit_started_request",
+            "CREATE UNIQUE INDEX connection_runner_jit_started_request ON connection_runner_jits(connection_id, scale_set_id, started_request_id) WHERE started_request_id IS NOT NULL",
+        ),
+        (
+            "connection_runner_jit_completed_request",
+            "CREATE UNIQUE INDEX connection_runner_jit_completed_request ON connection_runner_jits(connection_id, scale_set_id, completed_request_id) WHERE completed_request_id IS NOT NULL",
+        ),
+    ] {
+        let mut rows = conn
+            .query(
+                "SELECT sql FROM sqlite_schema WHERE type='index' AND name=?1",
+                (name,),
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        let actual: String = rows
+            .next()
+            .await
+            .map_err(|_| HostError::Journal)?
+            .ok_or(HostError::Journal)?
+            .get(0)
+            .map_err(|_| HostError::Journal)?;
+        if rows.next().await.map_err(|_| HostError::Journal)?.is_some()
+            || super::super::sql_normalization::normalize(&actual)
+                != super::super::sql_normalization::normalize(expected)
         {
             return Err(HostError::Journal);
         }

@@ -7,12 +7,16 @@ use std::path::Path;
 use std::process::{Command, Output};
 
 use sha2::{Digest, Sha256};
+use velnor_actions_contract::{StepKind, StepRole};
 use velnor_actions_mise::{
     JACTIONLINT_VERSION, PinnedTool, ToolCatalog, jactionlint_executable_sha256,
 };
 use velnor_actions_workflow_renderer::VERIFY_PATH;
 
-use super::{NOT_CATALOGUED_CODE, VERIFY_JACTIONLINT_STEP, script, verify_jactionlint_step};
+use super::{
+    NOT_CATALOGUED_CODE, VERIFY_JACTIONLINT_STEP, script, verifier_shell_step,
+    verify_jactionlint_step,
+};
 
 const FAKE_BYTES: &[u8] = b"fake jactionlint executable\n";
 
@@ -349,21 +353,31 @@ fn a_project_version_without_a_digest_keeps_mise_verification() -> Result<(), Bo
 }
 
 #[test]
-fn the_step_is_a_scrubbed_shell_step_with_every_catalogued_digest() -> Result<(), Box<dyn Error>> {
-    let step = verify_jactionlint_step(&ToolCatalog::pinned())?;
-    assert_eq!(step.name, VERIFY_JACTIONLINT_STEP);
-    assert_eq!(
-        step.role,
-        Some(velnor_actions_contract::StepRole::VerifyJactionlint)
-    );
-    let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
-        return Err("jactionlint verifier must remain a shell step".into());
+fn typed_action_and_inline_step_keep_the_canonical_jactionlint_script() -> Result<(), Box<dyn Error>>
+{
+    let catalog = ToolCatalog::pinned();
+    let action = verify_jactionlint_step(&catalog);
+    assert_eq!(action.name, VERIFY_JACTIONLINT_STEP);
+    assert_eq!(action.role, Some(StepRole::VerifyJactionlint));
+    assert!(matches!(
+        action.kind,
+        StepKind::Action { uses, ref with, ref env }
+            if uses == velnor_actions_contract::workflow::JACTIONLINT_VERIFIER_USES
+                && with.is_empty()
+                && env.is_empty()
+    ));
+
+    let inline = verifier_shell_step(&catalog)?;
+    assert_eq!(inline.name, VERIFY_JACTIONLINT_STEP);
+    assert_eq!(inline.role, Some(StepRole::VerifyJactionlint));
+    let StepKind::Shell { env, .. } = &inline.kind else {
+        return Err("inline verifier must remain a shell step".into());
     };
     assert_eq!(
         env,
         &velnor_actions_workflow_renderer::toolchain_env::credential_scrub()
     );
-    let text = script(&ToolCatalog::pinned());
+    let text = script(&catalog);
     for row in velnor_actions_mise::JACTIONLINT_DIGESTS {
         assert!(text.contains(row.executable_sha256), "{}", row.platform);
     }

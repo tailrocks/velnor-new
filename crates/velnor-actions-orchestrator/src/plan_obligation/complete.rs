@@ -43,7 +43,10 @@ pub(super) fn complete_group(
         .recorded_input_digest
         .clone()
         .unwrap_or_else(|| completion.input_digest.to_owned());
-    let Some(job_id) = inputs.job_owners.for_member(task, inputs.wire.event)? else {
+    let Some(job_id) = inputs
+        .job_owners
+        .for_member_for_event(task, inputs.wire.event)?
+    else {
         return Err(internal("crate_job_id_missing"));
     };
     let obligation = PlanObligation {
@@ -70,7 +73,7 @@ pub(super) fn complete_group(
         .map_err(|err| internal(&err.to_string()))?;
     let job_id = inputs
         .job_owners
-        .for_member(task, inputs.wire.event)
+        .for_member_for_event(task, inputs.wire.event)
         .map_err(internal_contract)?
         .ok_or_else(|| internal("crate_job_id_missing"))?;
     let lanes = inputs

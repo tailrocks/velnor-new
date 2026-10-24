@@ -3,7 +3,16 @@ use super::{NativeStartedIntakeFixture, helpers};
 /// Build the durable state required for a native Started message.
 pub(crate) async fn native_started_intake_fixture()
 -> Result<NativeStartedIntakeFixture, crate::error::HostError> {
-    Box::pin(native_started_intake_fixture_with_filesystem_digest(None)).await
+    Box::pin(NativeStartedIntakeFixture::with_identity(
+        "native-started-intake",
+        101,
+        501,
+        101,
+        1_501,
+        701,
+        'a',
+    ))
+    .await
 }
 
 pub(crate) async fn native_started_intake_fixture_with_filesystem_digest(
@@ -17,12 +26,15 @@ pub(crate) async fn native_started_intake_fixture_with_filesystem_digest(
 
     let scratch = helpers::Scratch::new()?;
     let (journal, scope, binding) =
-        native_started_fixture_scope(&scratch, SET_ID, REPOSITORY_ID).await?;
+        native_started_fixture_scope(&scratch, "native-started-intake", SET_ID, REPOSITORY_ID)
+            .await?;
     let (initialized, runner, channel) = prepare_native_started_fixture(
         &scope,
         &binding,
         REQUEST_ID,
         SET_ID,
+        701,
+        'a',
         filesystem_instance_digest.as_deref(),
     )
     .await?;
@@ -47,8 +59,114 @@ pub(crate) async fn native_started_intake_fixture_with_filesystem_digest(
     })
 }
 
+impl NativeStartedIntakeFixture {
+    /// Return the filesystem identity sampled by the shared fake cleanup runtime.
+    pub(crate) fn fake_runtime_filesystem_instance_digest() -> String {
+        crate::launch::fake_runtime_filesystem_instance_digest(helpers::TEST_ENGINE_ID)
+    }
+
+    /// Build another independently persisted identity on the same test engine.
+    pub(crate) async fn with_identity(
+        connection_name: &str,
+        repository_id: i64,
+        set_id: i64,
+        request_id: i64,
+        message_id: i64,
+        runner_id: i64,
+        nonce: char,
+    ) -> Result<Self, crate::error::HostError> {
+        Self::with_identity_and_digest(
+            connection_name,
+            repository_id,
+            set_id,
+            request_id,
+            message_id,
+            runner_id,
+            nonce,
+            None,
+        )
+        .await
+    }
+
+    /// Build an independent identity with the exact filesystem sampled at runtime.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "fixture identity fields and persisted runtime digest stay explicit"
+    )]
+    pub(crate) async fn with_identity_and_filesystem_digest(
+        connection_name: &str,
+        repository_id: i64,
+        set_id: i64,
+        request_id: i64,
+        message_id: i64,
+        runner_id: i64,
+        nonce: char,
+        filesystem_instance_digest: String,
+    ) -> Result<Self, crate::error::HostError> {
+        Self::with_identity_and_digest(
+            connection_name,
+            repository_id,
+            set_id,
+            request_id,
+            message_id,
+            runner_id,
+            nonce,
+            Some(filesystem_instance_digest),
+        )
+        .await
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "fixture identity fields and optional persisted runtime digest stay explicit"
+    )]
+    async fn with_identity_and_digest(
+        connection_name: &str,
+        repository_id: i64,
+        set_id: i64,
+        request_id: i64,
+        message_id: i64,
+        runner_id: i64,
+        nonce: char,
+        filesystem_instance_digest: Option<String>,
+    ) -> Result<Self, crate::error::HostError> {
+        let scratch = helpers::Scratch::new()?;
+        let (journal, scope, binding) =
+            native_started_fixture_scope(&scratch, connection_name, set_id, repository_id).await?;
+        let (initialized, runner, channel) = prepare_native_started_fixture(
+            &scope,
+            &binding,
+            request_id,
+            set_id,
+            runner_id,
+            nonce,
+            filesystem_instance_digest.as_deref(),
+        )
+        .await?;
+        let source = helpers::event_source(repository_id, request_id + 1_000);
+        let database_path = scratch.file();
+        Ok(Self {
+            _scratch: scratch,
+            database_path,
+            journal,
+            scope,
+            request_id,
+            message_id,
+            intent_id: initialized.intent_id,
+            reservation_id: initialized.reservation_id,
+            provisioned: initialized.provisioned.clone(),
+            assignment: initialized.assignment,
+            reservation_assignment: initialized.provisioned.assignment.clone(),
+            runner,
+            source,
+            channel,
+        })
+    }
+}
+
 async fn native_started_fixture_scope(
     scratch: &helpers::Scratch,
+    connection_name: &str,
     set_id: i64,
     repository_id: i64,
 ) -> Result<
@@ -75,7 +193,7 @@ async fn native_started_fixture_scope(
             },
         )
         .await?;
-    let binding = helpers::binding("native-started-intake", repository_id)?;
+    let binding = helpers::binding(connection_name, repository_id)?;
     let scope = helpers::created_scope(&journal, &binding, set_id).await?;
     Ok((journal, scope, binding))
 }
@@ -85,6 +203,8 @@ async fn prepare_native_started_fixture(
     binding: &crate::config::RepositoryConnection,
     request_id: i64,
     set_id: i64,
+    runner_id: i64,
+    nonce: char,
     filesystem_instance_digest: Option<&str>,
 ) -> Result<
     (
@@ -94,12 +214,18 @@ async fn prepare_native_started_fixture(
     ),
     crate::error::HostError,
 > {
-    let initialized =
-        initialize_native_started_request(scope, request_id, filesystem_instance_digest).await?;
+    let initialized = initialize_native_started_request(
+        scope,
+        request_id,
+        nonce,
+        binding.repository_id,
+        filesystem_instance_digest,
+    )
+    .await?;
     validate_initialized_reader_fixture(scope, &initialized).await?;
     let runner = velnor_runner_github::RunnerReference {
-        id: 701,
-        name: helpers::runner_name('a'),
+        id: runner_id,
+        name: helpers::runner_name(nonce),
         runner_scale_set_id: set_id,
     };
     prepare_native_started_job(
@@ -163,6 +289,8 @@ async fn validate_initialized_reader_fixture(
 async fn initialize_native_started_request(
     scope: &crate::journal::ConnectionJournal,
     request_id: i64,
+    nonce: char,
+    repository_id: i64,
     filesystem_instance_digest: Option<&str>,
 ) -> Result<helpers::JobFactsReaderFixture, crate::error::HostError> {
     match filesystem_instance_digest {
@@ -170,15 +298,22 @@ async fn initialize_native_started_request(
             helpers::provision_acquired_request_with_initialization_and_filesystem_digest(
                 scope,
                 request_id,
-                'a',
-                'a',
+                nonce,
+                nonce,
                 digest.to_owned(),
             )
             .await
         }
         None => {
-            helpers::provision_acquired_request_with_initialization(scope, request_id, 'a', 'a')
-                .await
+            helpers::provision_acquired_request_with_engine(
+                scope,
+                request_id,
+                nonce,
+                nonce,
+                repository_id,
+                helpers::TEST_ENGINE_ID,
+            )
+            .await
         }
     }
 }

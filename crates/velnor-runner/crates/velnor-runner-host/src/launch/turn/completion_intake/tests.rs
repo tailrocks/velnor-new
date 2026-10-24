@@ -57,6 +57,131 @@ fn late_lifecycle_ack_failure_replays_after_journal_reopen() -> Result<(), HostE
     on_large_test_stack(late_lifecycle_ack_failure_replays_after_journal_reopen_inner())
 }
 
+#[test]
+fn scoped_intake_rejects_invalid_batch_bounds_before_ack_or_inbox_write() -> Result<(), HostError> {
+    on_large_test_stack(
+        scoped_intake_rejects_invalid_batch_bounds_before_ack_or_inbox_write_inner(),
+    )
+}
+
+async fn scoped_intake_rejects_invalid_batch_bounds_before_ack_or_inbox_write_inner()
+-> Result<(), HostError> {
+    let fixture = crate::journal::request_lifecycle::tests::native_started_intake_fixture().await?;
+    let completed = || {
+        event_from(
+            fixture.request_id,
+            &fixture.runner,
+            &fixture.source,
+            InnerKind::Completed,
+        )
+    };
+    let valid_body = r#"[{"messageType":"JobCompleted"}]"#;
+    let mut invalid_message = lifecycle_batch(&fixture);
+    let Poll::Batch(batch) = &mut invalid_message else {
+        return Err(HostError::Journal);
+    };
+    batch.message_id = -1;
+    batch.raw_body = valid_body.to_owned();
+    batch.jobs = vec![completed()];
+    assert_rejected_without_ack_or_inbox(&fixture, &invalid_message).await?;
+
+    let oversized_body = "x".repeat(crate::journal::MAX_COMPLETION_BODY_BYTES + 1);
+    let oversized = Poll::Batch(ParsedBatch {
+        message_id: 9_203,
+        raw_body: oversized_body,
+        statistics: None,
+        jobs: vec![completed()],
+    });
+    assert_rejected_without_ack_or_inbox(&fixture, &oversized).await?;
+
+    let excessive_jobs = Poll::Batch(ParsedBatch {
+        message_id: 9_204,
+        raw_body: "[]".to_owned(),
+        statistics: None,
+        jobs: std::iter::repeat_with(completed)
+            .take(velnor_runner_github::MAX_POLL_MESSAGES + 1)
+            .collect(),
+    });
+    assert_rejected_without_ack_or_inbox(&fixture, &excessive_jobs).await
+}
+
+#[test]
+fn duplicate_active_completion_replay_keeps_one_cleanup_row() -> Result<(), HostError> {
+    on_large_test_stack(duplicate_active_completion_replay_keeps_one_cleanup_row_inner())
+}
+
+async fn duplicate_active_completion_replay_keeps_one_cleanup_row_inner() -> Result<(), HostError> {
+    let fixture = crate::journal::request_lifecycle::tests::native_started_intake_fixture().await?;
+    let poll = lifecycle_batch(&fixture);
+    let first = intake_and_ack_if_only_scoped(
+        &fixture.scope,
+        fixture.runner.runner_scale_set_id,
+        &poll,
+        || async { Ok::<(), EnsureError>(()) },
+    )
+    .await
+    .map_err(|_| HostError::Journal)?;
+    assert!(first.completion_only);
+    assert!(first.wake_cleanup);
+    assert_eq!(
+        fixture
+            .scope
+            .due_completed_launches(i64::MAX, 10)
+            .await?
+            .len(),
+        1
+    );
+
+    let replay = intake_and_ack_if_only_scoped(
+        &fixture.scope,
+        fixture.runner.runner_scale_set_id,
+        &poll,
+        || async { Ok::<(), EnsureError>(()) },
+    )
+    .await
+    .map_err(|_| HostError::Journal)?;
+    assert!(replay.completion_only);
+    assert!(replay.wake_cleanup);
+    assert_eq!(
+        fixture
+            .scope
+            .due_completed_launches(i64::MAX, 10)
+            .await?
+            .len(),
+        1
+    );
+    Ok(())
+}
+
+async fn assert_rejected_without_ack_or_inbox(
+    fixture: &NativeStartedIntakeFixture,
+    poll: &Poll,
+) -> Result<(), HostError> {
+    let acknowledged = AtomicBool::new(false);
+    assert!(
+        intake_and_ack_if_only_scoped(
+            &fixture.scope,
+            fixture.runner.runner_scale_set_id,
+            poll,
+            || async {
+                acknowledged.store(true, Ordering::SeqCst);
+                Ok::<(), EnsureError>(())
+            },
+        )
+        .await
+        .is_err()
+    );
+    assert!(!acknowledged.load(Ordering::SeqCst));
+    assert_eq!(
+        fixture
+            .scope
+            .pending_completion_inbox(i64::MAX, crate::journal::MAX_COMPLETION_INBOX_SCAN)
+            .await?,
+        [] as [crate::journal::ConnectionCompletionInboxEntry; 0]
+    );
+    Ok(())
+}
+
 async fn late_lifecycle_ack_failure_replays_after_journal_reopen_inner() -> Result<(), HostError> {
     let fixture = late_events::claimed_native_fixture().await?;
     let poll = lifecycle_batch(&fixture);

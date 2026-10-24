@@ -1,11 +1,14 @@
 //! Integration tests for `[[stacks.rust.suites]]`, `[workflow.dispatch]`,
 //! `preserve_workflows`, and `[agents] claude_md = "symlink"`.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
 
 use tempfile::TempDir;
+use velnor_actions_contract::Job;
+use velnor_actions_contract::workflow::{RUST_VERIFIER_USES, StepKind, StepRole};
 use velnor_actions_orchestrator::{
     GenerateOptions, finalized_jobs, generate, prepare, render_staged_tree,
 };
@@ -141,6 +144,42 @@ schedule = ["0 3 * * *"]
 filter_input = "test_filter"
 "#;
 
+fn assert_ci_suite_verifiers_are_actions(jobs: &BTreeMap<String, Job>) -> TestResult {
+    let mut verifier_count = 0;
+    for (job_id, job) in jobs.iter().filter(|(id, _)| id.starts_with("suite-")) {
+        let mut job_verifier_count = 0;
+        for step in job
+            .steps
+            .iter()
+            .filter(|step| step.role == Some(StepRole::VerifyRustManifest))
+        {
+            let StepKind::Action { uses, with, env } = &step.kind else {
+                return Err(
+                    format!("suite verifier remained inline in {job_id}: {}", step.name).into(),
+                );
+            };
+            if !RUST_VERIFIER_USES.contains(&uses.as_str()) || !with.is_empty() || !env.is_empty() {
+                return Err(format!(
+                    "suite verifier call is not canonical in {job_id}: {}",
+                    step.name
+                )
+                .into());
+            }
+            job_verifier_count += 1;
+        }
+        assert!(
+            job_verifier_count > 0,
+            "suite job has no typed verifier calls: {job_id}"
+        );
+        verifier_count += job_verifier_count;
+    }
+    assert!(
+        verifier_count >= 3,
+        "expected restored and installed suite verifiers"
+    );
+    Ok(())
+}
+
 #[test]
 fn rust_suites_render_ci_jobs_and_standalone_suites_workflow() -> TestResult {
     let repo = make_repo(SUITES_RENDER_CONFIG)?;
@@ -154,6 +193,7 @@ fn rust_suites_render_ci_jobs_and_standalone_suites_workflow() -> TestResult {
     assert!(jobs.contains_key("suite-build-e2e"));
     assert!(jobs.contains_key("suite-e2e"));
     assert!(jobs.contains_key("suite-pr-probe"));
+    assert_ci_suite_verifiers_are_actions(&jobs)?;
     let required = jobs.get("required").ok_or("missing required job")?;
     assert!(required.needs.contains(&"suite-build-e2e".to_owned()));
     assert!(required.needs.contains(&"suite-e2e".to_owned()));
@@ -178,6 +218,9 @@ fn rust_suites_render_ci_jobs_and_standalone_suites_workflow() -> TestResult {
     let suites_yaml = tree
         .get(".github/workflows/suites.yml")
         .ok_or("missing suites.yml")?;
+    assert!(suites_yaml.contains("Verify restored Rust toolchain"));
+    assert!(suites_yaml.contains("Verify Rust channel manifest"));
+    assert!(!suites_yaml.contains("uses: ./.github/actions/velnor-verify-"));
     assert!(suites_yaml.contains("workflow_dispatch:"));
     assert!(suites_yaml.contains("schedule:"));
     assert!(suites_yaml.contains("github.event.schedule == '0 3 * * *'"));

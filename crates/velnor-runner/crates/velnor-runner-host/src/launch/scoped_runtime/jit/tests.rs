@@ -48,6 +48,32 @@ impl Lane for ConflictTransport {
     }
 }
 
+struct StatusTransport {
+    status: u16,
+    calls: Arc<AtomicUsize>,
+}
+
+impl Transport for StatusTransport {
+    fn exchange(&mut self, request: &SessionRequest) -> Result<Exchange, TransportFail> {
+        assert_eq!(request.method, Method::Post);
+        assert!(request.path.ends_with("/generatejitconfig"));
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        Ok(Exchange {
+            status: self.status,
+            body: Vec::new(),
+        })
+    }
+}
+
+impl Lane for StatusTransport {
+    fn on_admin(&mut self) -> Result<(), EnsureError> {
+        Ok(())
+    }
+    fn on_queue(&mut self) -> Result<(), EnsureError> {
+        Ok(())
+    }
+}
+
 #[tokio::test]
 async fn jit_conflict_keeps_resources_charged_and_never_replays() -> Result<(), HostError> {
     use crate::journal::Journal;
@@ -88,6 +114,74 @@ async fn jit_conflict_keeps_resources_charged_and_never_replays() -> Result<(), 
     drop(journal);
     assert_reopened_conflict_stays_uncertain(&scratch, &repository, physical.reservation_id)
         .await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn non_409_jit_conflict_errors_do_not_record_conflict_receipts() -> Result<(), HostError> {
+    use crate::journal::Journal;
+    use crate::journal::request_lifecycle::tests::helpers::{
+        Scratch, binding, created_scope, provision_acquired_request_with_initialization,
+    };
+
+    for (repository_name, request_id, status) in [
+        ("jit-non-conflict", 71, 403),
+        ("jit-malformed-success", 72, 200),
+    ] {
+        let scratch = Scratch::new()?;
+        let journal = Journal::open(&scratch.file()).await?;
+        journal
+            .configure_capacity(CapacityLimits {
+                jobs: 1,
+                cpu_millicores: 2_000,
+                memory_bytes: 25_769_803_776,
+            })
+            .await?;
+        let repository = binding(repository_name, 101)?;
+        let scope = created_scope(&journal, &repository, SET_ID).await?;
+        let physical =
+            provision_acquired_request_with_initialization(&scope, request_id, 'c', 'c').await?;
+        let runner_name = format!("v{}", "c".repeat(32));
+        let (policy_generation, policy_digest) = scope.test_active_authority_identity().await?;
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut transport = StatusTransport {
+            status,
+            calls: calls.clone(),
+        };
+        let result = super::request_and_bind(
+            &mut transport,
+            "test-admin-token",
+            &scope,
+            super::JitRequestIdentity {
+                intent_id: physical.intent_id,
+                reservation_id: physical.reservation_id,
+                request_id,
+                runner_name: &runner_name,
+                scale_set_id: SET_ID,
+                policy_generation,
+                policy_digest: &policy_digest,
+            },
+        )
+        .await;
+        if status == 403 {
+            assert!(matches!(result, Err(EnsureError::Forbidden)));
+        } else {
+            assert!(result.is_err());
+        }
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            scope
+                .test_jit_conflict_receipt_count(physical.intent_id)
+                .await?,
+            0
+        );
+        let rows = scope.physical_runner_reservations().await?;
+        let row = rows
+            .iter()
+            .find(|row| row.reservation_id == physical.reservation_id)
+            .ok_or(HostError::Journal)?;
+        assert_eq!(row.reservation.state, ReservationState::Uncertain);
+    }
     Ok(())
 }
 
@@ -132,6 +226,13 @@ async fn assert_initial_conflict(
     assert_eq!(row.runner, None);
     assert_eq!(row.witness_request_id, Some(70));
     assert_eq!(row.launch_phase, Some(LaunchPhase::JitUncertain));
+    assert_eq!(
+        attempt
+            .scope
+            .test_jit_conflict_receipt_count(attempt.intent_id)
+            .await?,
+        1
+    );
     assert_eq!(calls.load(Ordering::SeqCst), 1);
     assert!(
         attempt

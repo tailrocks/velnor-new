@@ -11,6 +11,7 @@ pub(super) struct WorkflowEntry {
     pub(super) path: String,
     pub(super) supports_workflow_call: bool,
     pub(super) calls: Vec<ReusableCall>,
+    pub(super) job_ids: BTreeSet<String>,
 }
 
 #[derive(Debug)]
@@ -56,7 +57,7 @@ pub(super) fn validate_final_workflow_inventory(
     if native_context.is_some() && !native_preview_found {
         return Err(invalid("native_preview_workflow_missing".to_owned()));
     }
-    calls::validate_reusable_calls(&workflows)
+    super::native_tasks::validate_completed_inventory(&workflows, policy)
 }
 
 fn inspect_workflow(
@@ -92,6 +93,7 @@ fn inspect_workflow(
         path: path.to_owned(),
         supports_workflow_call,
         calls,
+        job_ids,
     })
 }
 
@@ -114,6 +116,7 @@ fn inspect_workflow_job(
     let runs_on = mapping_get(job, "runs-on");
     let container_value = mapping_get(job, "container");
     if let Some(uses) = mapping_get(job, "uses") {
+        super::typed_jobs::reject_native_hosted_reusable_call(policy, path, job_id)?;
         return inspect_reusable_call(path, job_id, uses, runs_on, container_value, policy);
     }
     let Some(runs_on) = runs_on else {
@@ -134,6 +137,20 @@ fn inspect_workflow_job(
         return Ok(None);
     }
     let typed_job = typed_jobs.and_then(|jobs| jobs.get(job_id));
+    let has_strategy = fields
+        .keys()
+        .any(|key| scalar_text(key) == Some("strategy"));
+    let native_fields = super::typed_jobs::NativeTaskRenderedFields::new(
+        path,
+        job_id,
+        scalar_text(runs_on),
+        mapping_get(job, "if").and_then(scalar_text),
+        container_value.is_some(),
+        has_strategy,
+    );
+    if super::typed_jobs::accept_native_hosted_task(native_fields, typed_job, policy)? {
+        return Ok(None);
+    }
     if super::typed_jobs::accept_typed_native_check(
         scalar_text(runs_on),
         mapping_get(job, "if").and_then(scalar_text),

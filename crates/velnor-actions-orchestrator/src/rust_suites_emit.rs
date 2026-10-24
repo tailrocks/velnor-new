@@ -6,7 +6,7 @@ use std::path::Path;
 use velnor_actions_actionlint::PinnedActionRef;
 use velnor_actions_actionlint::actions::{MR_BOXINGTON_ACTION_SHA, MR_BOXINGTON_ACTION_VERSION};
 use velnor_actions_contract::WorkflowPolicy;
-use velnor_actions_contract::{Job, RunsOn, RustSuiteConfig, VelnorConfig};
+use velnor_actions_contract::{Job, RunsOn, RustSuiteConfig, StepRole, VelnorConfig};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_rust::CompileDriver as RustCompileDriver;
 use velnor_actions_workflow_renderer::rust_suites::{
@@ -133,6 +133,7 @@ pub(crate) fn build_ci_jobs(
             job.steps.insert(1.min(job.steps.len()), acquire);
         }
     }
+    replace_ci_suite_verifiers(&mut ci_jobs, catalog)?;
     let mut required_ids = Vec::new();
     for suite in &spec.suites {
         if suite.has_pr_or_push_trigger() && suite.required {
@@ -147,6 +148,41 @@ pub(crate) fn build_ci_jobs(
         }
     }
     Ok((ci_jobs, required_ids))
+}
+
+/// Replace only the canonical inline verifier steps in CI suite jobs with
+/// their generated local composite-action calls. Standalone suite workflows
+/// keep the inline form because they are rendered by a separate path.
+fn replace_ci_suite_verifiers(
+    jobs: &mut BTreeMap<String, Job>,
+    catalog: &ToolCatalog,
+) -> Result<(), OrchestratorError> {
+    let restored_shell = crate::workflow::workflow_policy::rust_manifest_step::verifier_shell_step(
+        catalog,
+        crate::workflow::ToolchainPhase::Restored,
+    )?;
+    let installed_shell =
+        crate::workflow::workflow_policy::rust_manifest_step::verifier_shell_step(
+            catalog,
+            crate::workflow::ToolchainPhase::Installed,
+        )?;
+    let restored_action = crate::workflow::verify_restored_rust_step(catalog);
+    let installed_action = crate::workflow::verify_rust_manifest_step(catalog);
+
+    for (job_id, job) in jobs {
+        for step in &mut job.steps {
+            if *step == restored_shell {
+                *step = restored_action.clone();
+            } else if *step == installed_shell {
+                *step = installed_action.clone();
+            } else if step.role == Some(StepRole::VerifyRustManifest) {
+                return Err(OrchestratorError::Contract {
+                    problem: format!("rust_suite_verifier_not_canonical:{job_id}:{}", step.name),
+                });
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Render standalone `.github/workflows/<slug>.yml` suite workflow files.
@@ -288,3 +324,7 @@ fn build_render_spec(
         ),
     }))
 }
+
+#[cfg(test)]
+#[path = "rust_suites_emit_tests.rs"]
+mod tests;

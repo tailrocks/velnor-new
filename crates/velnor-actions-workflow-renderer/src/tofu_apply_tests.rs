@@ -37,7 +37,7 @@ fn spec() -> TofuApplySpec {
         checkout_uses: CHECKOUT.to_owned(),
         mise_setup: MiseSetup {
             uses: MISE.to_owned(),
-            version: "2026.10.17".to_owned(),
+            version: "2026.10.18".to_owned(),
             sha256: crate::setup::MISE_BINARY_SHA256_LINUX_X64.to_owned(),
         },
         opentofu_version: "1.13.2".to_owned(),
@@ -77,10 +77,15 @@ fn renders_only_protected_main_push_and_scoped_apply_capabilities() {
 #[test]
 fn output_matches_generator_golden_snapshot() {
     let file = render_tofu_apply_workflow(&spec()).expect("render");
+    let path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/goldens/tofu-apply.yml");
+    if std::env::var("VELNOR_UPDATE_GOLDENS").is_ok_and(|value| value == "1") {
+        std::fs::write(&path, &file.bytes).expect("write golden");
+    }
     assert_eq!(
         file.bytes,
-        include_str!("../tests/goldens/tofu-apply.yml"),
-        "byte-exact generated workflow golden"
+        std::fs::read_to_string(&path).expect("golden"),
+        "byte-exact generated workflow golden (VELNOR_UPDATE_GOLDENS=1 refreshes it)"
     );
 }
 

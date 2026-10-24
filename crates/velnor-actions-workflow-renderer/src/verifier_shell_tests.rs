@@ -78,11 +78,46 @@ fn verifier_shell_requires_canonical_role_and_unset_prefix() {
 }
 
 #[test]
-fn rust_verifier_role_survives_name_changes_and_composite_rendering() {
+fn raw_typed_verifier_rejects_duplicate_credential_prelude() {
     let unset = crate::toolchain_env::credential_unset_prelude();
+    let raw_verifier_step = |script: String| velnor_actions_contract::Step {
+        parallel: false,
+        name: "Neutral verifier".to_owned(),
+        id: None,
+        role: Some(StepRole::VerifyRustManifest),
+        condition: None,
+        kind: StepKind::Shell {
+            run: vec!["sh".to_owned(), "-c".to_owned(), script],
+            env: crate::toolchain_env::credential_scrub(),
+        },
+    };
+
+    let canonical = raw_verifier_step(format!("{unset} true"));
+    let StepKind::Shell { run, env } = &canonical.kind else {
+        panic!("canonical verifier shell step");
+    };
+    assert!(
+        render_typed_step(&canonical, run, env, &BTreeMap::new(), false)
+            .expect("one canonical prelude is accepted")
+            .is_some()
+    );
+
+    let duplicate = raw_verifier_step(format!("{unset} {unset} true"));
+    let StepKind::Shell { run, env } = &duplicate.kind else {
+        panic!("duplicate-prelude verifier shell step");
+    };
+    assert!(matches!(
+        render_typed_step(&duplicate, run, env, &BTreeMap::new(), false),
+        Err(crate::RenderError::InvalidWorkflow(message))
+            if message == "verifier_shell_script_duplicate_credential_prelude"
+    ));
+}
+
+#[test]
+fn rust_verifier_role_survives_name_changes_and_composite_rendering() {
     let mut step = crate::steps::shell_step(
         "Renamed verifier",
-        vec!["sh".to_owned(), "-c".to_owned(), format!("{unset} true")],
+        vec!["sh".to_owned(), "-c".to_owned(), "true".to_owned()],
         BTreeMap::new(),
     )
     .expect("step");
@@ -110,7 +145,7 @@ fn rust_verifier_role_survives_name_changes_and_composite_rendering() {
 
     let mut composite = crate::steps::composite_shell_step(
         "Renamed composite verifier",
-        vec!["sh".to_owned(), "-c".to_owned(), format!("{unset} true")],
+        vec!["sh".to_owned(), "-c".to_owned(), "true".to_owned()],
         BTreeMap::from([("TOOLS_DIGEST".to_owned(), "${{ inputs.digest }}".to_owned())]),
     )
     .expect("composite step");
@@ -131,7 +166,7 @@ fn rust_verifier_role_survives_name_changes_and_composite_rendering() {
     assert!(
         crate::steps::composite_shell_step(
             "Invalid composite verifier",
-            vec!["sh".to_owned(), "-c".to_owned(), format!("{unset} true")],
+            vec!["sh".to_owned(), "-c".to_owned(), "true".to_owned()],
             BTreeMap::from([("VALUE".to_owned(), "${{ inputs.value }}".to_owned())]),
         )
         .is_err()

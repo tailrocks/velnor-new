@@ -134,6 +134,11 @@ fn prepare_workflow(
     verifiers.lower_workflow_calls(&mut ir, &prep.workflow.context.workflow_tasks)?;
     let mut render_context = prep.workflow.context.clone();
     render_context.scale_set_selector = scale_set_selector_for_dispatch(&prep.config, dispatch)?;
+    let routing = routing.with_verified_workflow_tasks(
+        &ir,
+        &render_context.workflow_tasks,
+        &render_context.checkout_uses,
+    )?;
     let mut lint_input = prep.workflow.lint_config.clone();
     lint_input.runner_labels = super::runner_labels::collect(
         &prep.config,

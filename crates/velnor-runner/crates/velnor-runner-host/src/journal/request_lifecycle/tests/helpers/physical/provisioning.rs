@@ -49,6 +49,22 @@ fn fixture_resource_id(reservation_id: i64, role: &str) -> String {
     digest.update(reservation_id.to_be_bytes());
     digest.update((role.len() as u64).to_be_bytes());
     digest.update(role.as_bytes());
+    fixture_resource_id_hex(digest)
+}
+
+// Independent journals can intentionally reuse reservation IDs on one engine.
+fn fixture_physical_resource_id(reservation_id: i64, nonce: &str, role: &str) -> String {
+    let mut digest = Sha256::new();
+    digest.update(b"velnor-test-physical-resource-id-v1\0");
+    digest.update(reservation_id.to_be_bytes());
+    digest.update((nonce.len() as u64).to_be_bytes());
+    digest.update(nonce.as_bytes());
+    digest.update((role.len() as u64).to_be_bytes());
+    digest.update(role.as_bytes());
+    fixture_resource_id_hex(digest)
+}
+
+fn fixture_resource_id_hex(digest: Sha256) -> String {
     let mut encoded = String::with_capacity(64);
     for byte in digest.finalize() {
         encoded.push(char::from(b"0123456789abcdef"[usize::from(byte >> 4)]));

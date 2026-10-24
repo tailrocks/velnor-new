@@ -185,10 +185,22 @@ where
         Ok(result) => result,
         Err(error) => {
             let failure = crate::listen::map_listen(error);
-            scoped
-                .mark_runner_jit_uncertain(claim)
-                .await
-                .map_err(|_| EnsureError::Uncertain)?;
+            if matches!(failure, EnsureError::Conflict) {
+                scoped
+                    .mark_runner_jit_conflict_received(
+                        claim,
+                        request.reservation_id,
+                        request.policy_generation,
+                        request.policy_digest,
+                    )
+                    .await
+                    .map_err(|_| EnsureError::Uncertain)?;
+            } else {
+                scoped
+                    .mark_runner_jit_uncertain(claim)
+                    .await
+                    .map_err(|_| EnsureError::Uncertain)?;
+            }
             return Err(failure);
         }
     };

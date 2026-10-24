@@ -24,6 +24,8 @@ mod mountinfo;
 mod pressure;
 mod record;
 mod sample;
+/// Storage initialization mode requirements shared by the host and guest.
+pub mod storage_init_contract;
 mod units;
 pub mod worker_binding;
 

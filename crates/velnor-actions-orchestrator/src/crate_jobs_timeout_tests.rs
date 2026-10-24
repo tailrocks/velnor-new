@@ -7,9 +7,8 @@ use super::*;
 #[test]
 fn configured_timeout_reaches_one_job_for_each_rust_package() {
     let clippy = group("demo", TaskKind::Clippy, &[]);
-    let clippy_id = clippy.task_id.clone();
-    let test = group("demo", TaskKind::Test, &[clippy_id.as_str()]);
-    let doc = group("demo", TaskKind::Doc, &[clippy_id.as_str()]);
+    let test = group("demo", TaskKind::Test, &[]);
+    let doc = group("nested", TaskKind::Doc, &[]);
     let found = build_crate_jobs(CrateJobInputs {
         label: "ubuntu-26.04",
         policy: WorkflowPolicy::ConsumerV1,
@@ -24,7 +23,7 @@ fn configured_timeout_reaches_one_job_for_each_rust_package() {
         crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");
-    assert_eq!(found.jobs.len(), 1);
+    assert_eq!(found.jobs.len(), 2);
     for (id, job) in &found.jobs {
         assert_eq!(job.timeout_minutes.minutes(), 30, "{id}");
     }

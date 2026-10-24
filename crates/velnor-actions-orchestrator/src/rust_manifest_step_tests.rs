@@ -4,10 +4,14 @@ use velnor_actions_contract::{StepKind, StepRole};
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_mise::catalog::{RUST_CHANNEL_MANIFESTS, RUST_VERSION};
 
-use super::{NOT_CATALOGUED_CODE, VERIFY_RUST_MANIFEST_STEP, verify_rust_manifest_step};
+use super::{
+    NOT_CATALOGUED_CODE, ToolchainPhase, VERIFY_RUST_MANIFEST_STEP, verifier_shell_step,
+    verify_rust_manifest_step,
+};
+use velnor_actions_contract::workflow::RUST_VERIFIER_USES;
 
 fn run_text(catalog: &ToolCatalog) -> (String, std::collections::BTreeMap<String, String>) {
-    let step = verify_rust_manifest_step(catalog).expect("step");
+    let step = verifier_shell_step(catalog, ToolchainPhase::Installed).expect("step");
     assert_eq!(step.name, VERIFY_RUST_MANIFEST_STEP);
     assert_eq!(step.role, Some(StepRole::VerifyRustManifest));
     let StepKind::Shell { run, env } = step.kind else {
@@ -54,7 +58,13 @@ fn the_step_carries_every_catalogued_digest_and_fails_closed_otherwise() {
 
 #[test]
 fn the_restored_step_discards_the_cached_rustup_and_tolerates_an_empty_cache() {
-    let step = super::verify_restored_rust_step(&ToolCatalog::pinned()).expect("step");
+    let call = super::verify_restored_rust_step(&ToolCatalog::pinned());
+    assert!(matches!(
+        call.kind,
+        StepKind::Action { uses, ref with, ref env }
+            if uses == RUST_VERIFIER_USES[0] && with.is_empty() && env.is_empty()
+    ));
+    let step = verifier_shell_step(&ToolCatalog::pinned(), ToolchainPhase::Restored).expect("body");
     assert_eq!(step.name, super::VERIFY_RESTORED_RUST_STEP);
     let StepKind::Shell { run, env } = step.kind else {
         panic!("shell step");
@@ -82,6 +92,18 @@ fn the_step_is_credential_free_and_reads_the_owned_rustup_home() {
     );
     assert_eq!(env.get("GITHUB_TOKEN").map(String::as_str), Some(""));
     assert!(run.contains("unset"), "credential unset prelude: {run}");
+}
+
+#[test]
+fn installed_call_is_the_fixed_empty_input_action_with_its_typed_role() {
+    let call = verify_rust_manifest_step(&ToolCatalog::pinned());
+    assert_eq!(call.name, VERIFY_RUST_MANIFEST_STEP);
+    assert_eq!(call.role, Some(StepRole::VerifyRustManifest));
+    assert!(matches!(
+        call.kind,
+        StepKind::Action { uses, ref with, ref env }
+            if uses == RUST_VERIFIER_USES[1] && with.is_empty() && env.is_empty()
+    ));
 }
 
 #[test]

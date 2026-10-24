@@ -181,6 +181,42 @@ impl ConnectionJournal {
         .await
     }
 
+    /// Record a definite 409 together with the existing charged uncertain state.
+    /// The transaction is idempotent only for the exact same physical claim and authority.
+    pub(crate) async fn mark_runner_jit_conflict_received(
+        &self,
+        claim: RunnerJitClaim,
+        reservation_id: i64,
+        policy_generation: u64,
+        policy_digest: &str,
+    ) -> Result<(), HostError> {
+        validate_jit_claim(self, &claim)?;
+        if reservation_id <= 0
+            || policy_generation == 0
+            || policy_digest.len() != 64
+            || !policy_digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+        {
+            return Err(HostError::Identity);
+        }
+        let identity = JitConflictReceiptIdentity {
+            claim: &claim,
+            reservation_id,
+            authority_generation: i64::try_from(policy_generation)
+                .map_err(|_| HostError::Identity)?,
+            authority_digest: policy_digest,
+        };
+        in_transaction(self.journal_ref(), async |connection| {
+            self.validate_scope(connection).await?;
+            if jit_conflict_receipt_matches(connection, &identity).await? {
+                return Ok(());
+            }
+            insert_jit_conflict_receipt(connection, &identity).await?;
+            mark_jit_conflict_uncertain(connection, &identity).await?;
+            Ok(())
+        })
+        .await
+    }
+
     /// Keep an interrupted JIT operation claim and its capacity reservation unavailable for replay.
     pub(crate) async fn mark_runner_jit_uncertain(
         &self,
@@ -229,6 +265,116 @@ impl ConnectionJournal {
             Ok(())
         })
         .await
+    }
+}
+
+struct JitConflictReceiptIdentity<'a> {
+    claim: &'a RunnerJitClaim,
+    reservation_id: i64,
+    authority_generation: i64,
+    authority_digest: &'a str,
+}
+
+async fn jit_conflict_receipt_matches(
+    connection: &turso::Connection,
+    identity: &JitConflictReceiptIdentity<'_>,
+) -> Result<bool, HostError> {
+    let mut rows = connection
+        .query(
+            "SELECT reservation_id, connection_id, scale_set_id, witness_request_id, requested_name, authority_generation, authority_digest, response_status FROM physical_attempt_jit_conflict_receipts WHERE intent_id=?1",
+            [identity.claim.intent_id],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
+        return Ok(false);
+    };
+    let same = row.get::<i64>(0).map_err(|_| HostError::Journal)? == identity.reservation_id
+        && row
+            .get::<String>(1)
+            .map_err(|_| HostError::Journal)?
+            .as_str()
+            == identity.claim.connection_id.as_str()
+        && row.get::<i64>(2).map_err(|_| HostError::Journal)? == identity.claim.scale_set_id
+        && row.get::<i64>(3).map_err(|_| HostError::Journal)? == identity.claim.witness_request_id
+        && row
+            .get::<String>(4)
+            .map_err(|_| HostError::Journal)?
+            .as_str()
+            == identity.claim.requested_name.as_str()
+        && row.get::<i64>(5).map_err(|_| HostError::Journal)? == identity.authority_generation
+        && row
+            .get::<String>(6)
+            .map_err(|_| HostError::Journal)?
+            .as_str()
+            == identity.authority_digest
+        && row.get::<i64>(7).map_err(|_| HostError::Journal)? == 409;
+    if !same || rows.next().await.map_err(|_| HostError::Journal)?.is_some() {
+        return Err(HostError::Journal);
+    }
+    Ok(true)
+}
+
+async fn insert_jit_conflict_receipt(
+    connection: &turso::Connection,
+    identity: &JitConflictReceiptIdentity<'_>,
+) -> Result<(), HostError> {
+    let claim = identity.claim;
+    let inserted = connection
+        .execute(
+            "INSERT INTO physical_attempt_jit_conflict_receipts (lineage_id, generation, reservation_id, intent_id, connection_id, scale_set_id, witness_request_id, binding_digest, source_digest, acquire_response_digest, authority_generation, authority_digest, engine_id, docker_root_digest, requested_name, response_status, created_at) SELECT current.lineage_id, current.generation, attempt.reservation_id, attempt.intent_id, attempt.connection_id, attempt.scale_set_id, attempt.witness_request_id, attempt.binding_digest, attempt.source_digest, auth.acquire_response_digest, active.generation, active.policy_digest, attempt.engine_id, attempt.docker_root_digest, jit.requested_name, 409, unixepoch() FROM physical_attempt_current current JOIN physical_attempts attempt ON attempt.lineage_id=current.lineage_id AND attempt.generation=current.generation AND attempt.reservation_id=current.reservation_id AND attempt.intent_id=current.intent_id JOIN connection_runner_jits jit ON jit.intent_id=attempt.intent_id AND jit.connection_id=attempt.connection_id JOIN connection_request_authorizations auth ON auth.connection_id=attempt.connection_id AND auth.scale_set_id=attempt.scale_set_id AND auth.request_id=attempt.witness_request_id JOIN connection_active_job_authority active ON active.connection_id=attempt.connection_id WHERE current.intent_id=?1 AND current.reservation_id=?2 AND attempt.connection_id=?3 AND attempt.scale_set_id=?4 AND attempt.witness_request_id=?5 AND jit.requested_name=?6 AND auth.acquire_state='acquired' AND auth.acquire_response_digest IS NOT NULL AND active.generation=?7 AND active.policy_digest=?8",
+            (claim.intent_id, identity.reservation_id, claim.connection_id.as_str(), claim.scale_set_id, claim.witness_request_id, claim.requested_name.as_str(), identity.authority_generation, identity.authority_digest),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    if inserted == 1 {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
+    }
+}
+
+async fn mark_jit_conflict_uncertain(
+    connection: &turso::Connection,
+    identity: &JitConflictReceiptIdentity<'_>,
+) -> Result<(), HostError> {
+    let claim = identity.claim;
+    let jit_changed = connection
+        .execute(
+            "UPDATE connection_runner_jits SET state='uncertain' WHERE intent_id=?1 AND connection_id=?2 AND scale_set_id=?3 AND witness_request_id=?4 AND requested_name=?5 AND state='claimed' AND runner_id IS NULL AND runner_name IS NULL",
+            (claim.intent_id, claim.connection_id.as_str(), claim.scale_set_id, claim.witness_request_id, claim.requested_name.as_str()),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let provisioning_changed = connection
+        .execute(
+            "UPDATE capacity_reservation_provisioning_state SET jit_state='uncertain' WHERE reservation_id=?1 AND jit_state='requested' AND resources_bound=1",
+            [identity.reservation_id],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let reservation_changed = connection
+        .execute(
+            "UPDATE capacity_reservations SET state='uncertain' WHERE id=?1 AND intent_id=?2 AND connection_id=?3 AND state='reserved' AND remote_cleanup_proven=0 AND local_cleanup_proven=0",
+            (identity.reservation_id, claim.intent_id, claim.connection_id.as_str()),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let intent_changed = connection
+        .execute(
+            "UPDATE connection_intents SET state='uncertain', launch_phase='jit_uncertain' WHERE id=?1 AND connection_id=?2 AND scale_set_id=?3 AND kind='launch' AND cleanup_proven=0 AND jit_requested=1 AND state='pending' AND github_runner_id IS NULL AND launch_phase='jit_requested'",
+            (claim.intent_id, claim.connection_id.as_str(), claim.scale_set_id),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    if jit_changed == 1
+        && provisioning_changed == 1
+        && reservation_changed == 1
+        && intent_changed == 1
+    {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
     }
 }
 

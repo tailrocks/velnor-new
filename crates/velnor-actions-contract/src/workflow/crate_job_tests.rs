@@ -55,6 +55,7 @@ fn job(job_id: &str, display_name: &str) -> CrateJob {
         package_name: String::new(),
         package_id: String::new(),
         manifest: String::new(),
+        configuration: "default".to_owned(),
         obligations: vec![obligation()],
     }
 }

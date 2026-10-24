@@ -6,6 +6,36 @@ use velnor_actions_contract::{
 use super::{WorkflowRoutingPolicy, invalid, labels};
 use crate::RenderError;
 
+#[derive(Clone, Copy)]
+pub(super) struct NativeTaskRenderedFields<'a> {
+    path: &'a str,
+    job_id: &'a str,
+    runs_on: Option<&'a str>,
+    condition: Option<&'a str>,
+    has_container: bool,
+    has_strategy: bool,
+}
+
+impl<'a> NativeTaskRenderedFields<'a> {
+    pub(super) fn new(
+        path: &'a str,
+        job_id: &'a str,
+        runs_on: Option<&'a str>,
+        condition: Option<&'a str>,
+        has_container: bool,
+        has_strategy: bool,
+    ) -> Self {
+        Self {
+            path,
+            job_id,
+            runs_on,
+            condition,
+            has_container,
+            has_strategy,
+        }
+    }
+}
+
 /// Apply the selected runner placement after policy jobs have been merged.
 ///
 /// Keeping this on the typed job map covers support jobs added after the
@@ -16,6 +46,14 @@ pub(crate) fn route_jobs(
 ) -> Result<(), RenderError> {
     let selector = policy.selector();
     for (job_id, job) in jobs {
+        if let Some(native_task) = policy.native_hosted_task(job_id) {
+            if job.runs_on != native_task.runner_label || job.check_runner.is_some() {
+                return Err(invalid(format!(
+                    "native_hosted_task_typed_job_invalid:.github/workflows/ci.yml:{job_id}"
+                )));
+            }
+            continue;
+        }
         let parsed = RunsOn::parse(&job.runs_on).map_err(|_| {
             invalid(format!(
                 "unsupported_runs_on_for_linux_amd64_scale_set:.github/workflows/ci.yml:{job_id}:{}",
@@ -79,6 +117,51 @@ pub(crate) fn route_jobs(
                 )?;
             }
         }
+    }
+    Ok(())
+}
+
+pub(super) fn accept_native_hosted_task(
+    fields: NativeTaskRenderedFields<'_>,
+    typed_job: Option<&Job>,
+    policy: &WorkflowRoutingPolicy,
+) -> Result<bool, RenderError> {
+    let Some(proof) = policy.native_hosted_task(fields.job_id) else {
+        return Ok(false);
+    };
+    let Some(job) = typed_job else {
+        return Err(invalid(format!(
+            "native_hosted_task_typed_job_missing:{}:{}",
+            fields.path, fields.job_id
+        )));
+    };
+    if fields.path != ".github/workflows/ci.yml"
+        || proof.source_job.runs_on() != proof.runner_label
+        || job.runs_on != proof.runner_label
+        || job.check_runner.is_some()
+        || fields.runs_on != Some(proof.runner_label.as_str())
+        || fields.condition != proof.source_job.condition()
+        || fields.condition != job.condition.as_deref()
+        || fields.has_container
+        || fields.has_strategy
+    {
+        return Err(invalid(format!(
+            "native_hosted_task_rendered_job_invalid:{}:{}",
+            fields.path, fields.job_id
+        )));
+    }
+    Ok(true)
+}
+
+pub(super) fn reject_native_hosted_reusable_call(
+    policy: &WorkflowRoutingPolicy,
+    path: &str,
+    job_id: &str,
+) -> Result<(), RenderError> {
+    if policy.native_hosted_task(job_id).is_some() {
+        return Err(invalid(format!(
+            "native_hosted_task_cannot_be_reusable:{path}:{job_id}"
+        )));
     }
     Ok(())
 }

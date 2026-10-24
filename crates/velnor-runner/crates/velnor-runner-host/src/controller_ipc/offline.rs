@@ -17,6 +17,16 @@ use super::wire::{Request, SOCKET_NAME, Target};
 const MAX_CONFIG_BYTES: u64 = 1_048_576;
 
 pub(super) fn call(state: &Path, request: &Request) -> Result<bool, HostError> {
+    if matches!(
+        request,
+        Request::SessionObservationStart { .. }
+            | Request::SessionObservationStatus { .. }
+            | Request::ConnectionSetupStatus { .. }
+            | Request::ConnectionCensusStart { .. }
+            | Request::ConnectionCensusStatus { .. }
+    ) {
+        return Err(HostError::Lock);
+    }
     let _daemon = DaemonLock::try_acquire(&state.join("daemon.lock"))?;
     let _admission = DaemonLock::try_acquire(&state.join("admission.lock"))?;
     let result = with_journal(state, request)?;
@@ -73,6 +83,11 @@ fn with_journal(state: &Path, request: &Request) -> Result<bool, HostError> {
         }
         Request::DoctorProbeStart { .. }
         | Request::DoctorProbeStatus { .. }
+        | Request::SessionObservationStart { .. }
+        | Request::SessionObservationStatus { .. }
+        | Request::ConnectionSetupStatus { .. }
+        | Request::ConnectionCensusStart { .. }
+        | Request::ConnectionCensusStatus { .. }
         | Request::ControllerReadiness { .. } => {
             return Err(HostError::Lock);
         }
@@ -162,6 +177,11 @@ fn request_token(request: &Request) -> &str {
         | Request::Detached { token, .. } => token,
         Request::DoctorProbeStart { .. }
         | Request::DoctorProbeStatus { .. }
+        | Request::SessionObservationStart { .. }
+        | Request::SessionObservationStatus { .. }
+        | Request::ConnectionSetupStatus { .. }
+        | Request::ConnectionCensusStart { .. }
+        | Request::ConnectionCensusStatus { .. }
         | Request::ControllerReadiness { .. } => "",
     }
 }
@@ -181,6 +201,11 @@ fn marker_path(state: &Path, request: &Request) -> std::path::PathBuf {
             .join(binding.connection_id.as_str()),
         Request::DoctorProbeStart { .. }
         | Request::DoctorProbeStatus { .. }
+        | Request::SessionObservationStart { .. }
+        | Request::SessionObservationStatus { .. }
+        | Request::ConnectionSetupStatus { .. }
+        | Request::ConnectionCensusStart { .. }
+        | Request::ConnectionCensusStatus { .. }
         | Request::ControllerReadiness { .. } => state.join(SOCKET_NAME),
     }
 }
@@ -200,6 +225,7 @@ fn marker_exists(path: &Path) -> Result<bool, HostError> {
 #[cfg(test)]
 mod tests {
     use super::call;
+    use crate::config::ConnectionId;
     use crate::controller_ipc::wire::{Request, Target};
     use std::fs;
     use std::path::PathBuf;
@@ -223,6 +249,46 @@ mod tests {
             return Err("missing journal was treated as drain proof".to_owned());
         }
         fs::remove_dir_all(state).map_err(|error| error.to_string())
+    }
+
+    #[test]
+    fn cached_setup_and_census_cannot_bypass_controller_offline() {
+        let state = test_state();
+        let connection_id = ConnectionId::parse("owner").expect("valid connection ID");
+        let requests = [
+            Request::SessionObservationStart {
+                connection_id: connection_id.clone(),
+                nonce: "a".repeat(32),
+                timeout_ms: 1_000,
+            },
+            Request::SessionObservationStatus {
+                connection_id: connection_id.clone(),
+                nonce: "a".repeat(32),
+            },
+            Request::ConnectionSetupStatus {
+                connection_id: connection_id.clone(),
+            },
+            Request::ConnectionCensusStart {
+                connection_id: connection_id.clone(),
+                nonce: "b".repeat(32),
+                timeout_ms: 1_000,
+            },
+            Request::ConnectionCensusStatus {
+                connection_id,
+                nonce: "b".repeat(32),
+            },
+        ];
+
+        for request in requests {
+            assert!(matches!(
+                call(&state, &request),
+                Err(crate::error::HostError::Lock)
+            ));
+            assert!(
+                !state.exists(),
+                "offline observation touched controller state"
+            );
+        }
     }
 
     fn test_state() -> PathBuf {

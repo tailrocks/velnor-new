@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-tar_bin="${TAR_BIN:-tar}"
+tar_bin="${TAR_BIN:-/usr/bin/tar.gnu}"
 if ! "$tar_bin" --version | sed -n '1p' | grep -q '^tar (GNU tar) '; then
   echo "GNU tar is required." >&2
   exit 1

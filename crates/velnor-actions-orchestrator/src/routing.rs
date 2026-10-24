@@ -239,3 +239,6 @@ pub(crate) fn job_image_candidate_file(
 #[cfg(test)]
 #[path = "routing_tests.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "routing_verifier_boundary_tests.rs"]
+mod verifier_boundary_tests;

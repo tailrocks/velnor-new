@@ -52,7 +52,7 @@ listener from `/home/runner` after it makes sure the copied files are correct.
 The Runner seed and a 512 MiB allowance must fit within the 2 GiB Runner home volume
 limit. The allowance is for Runner configuration and diagnostics.
 
-`/usr/bin/tar` is GNU tar 1.35. The build does a check of Ubuntu's signed source
+`/usr/bin/tar.gnu` is the byte-verified GNU tar 1.35 executable. The build does a check of Ubuntu's signed source
 index, source files, all 28 Ubuntu patches, and one local GNUlib declaration
 patch. The build does a check of the package and executable hashes. The source
 lock is `gnu-tar-source.lock.json`. The build sets
@@ -60,18 +60,38 @@ lock is `gnu-tar-source.lock.json`. The build sets
 build instructions do not prove atomic behavior for a concurrent directory
 rename that uses `openat2`.
 
+The image registers a local diversion from the `/usr/bin/tar` package path to
+`/usr/bin/tar.ubuntu` before installing the guard, so later `dpkg` updates do
+not replace the guarded frontdoor. Job commands that resolve `tar` through
+`/usr/bin/tar` use the Velnor guard, which preflights archive member names and
+selected symlink paths before calling the same pinned GNU executable. The guard
+clears `TAR_OPTIONS` before classifying or delegating any command. Without `-P`,
+it passes the original arguments to GNU tar, which applies its native absolute
+and parent-traversal path rules. With `-P`, the guard preflights selected
+symlink paths, targets, and ancestors, including the relative external-cache
+symlink exception. Relative archive (`-f`) and member-list (`-T`) paths are
+resolved from the command's starting directory; each relative `-C` is resolved
+from the preceding extraction directory. Guarded `-P` extraction rejects
+directory changes after member selection and unsupported selector or
+transformation options rather than delegating an ambiguous request. It uses
+GNU tar for the actual listing, extraction, PAX metadata, hardlinks, and
+decompression.
+`/usr/bin/tar.gnu` is the explicit native GNU bypass for image-owned trusted
+archive operations and native behavior tests.
+
 PAX stores paths and metadata that do not fit the old tar format. The cache
 tests use the pinned Linux `actions/cache` save and restore commands for gzip.
 The tests use the same action's save, list, and restore commands for zstd
 without long mode.
-Other tests include GNU tar zstd long mode, PAX paths, and long manifests. GNU
-tar uses its documented path rules. Without `-P`, GNU tar rejects member names
-with parent path components and strips a leading slash from absolute names.
-GNU tar blocks extraction through archive and pre-existing symlinks. With `-P`,
-GNU tar keeps absolute and parent paths.
-Use `-P` only with trusted archives. This image does not use the old Velnor list of accepted cache paths or rules
-that remove partial files after an error. GNU tar does not take
-an archive snapshot. It can leave extracted files after an error.
+Other tests include GNU tar zstd long mode, PAX paths, and long manifests. Native
+GNU tar uses its documented path rules. Without `-P`, GNU tar rejects member
+names with parent path components and strips a leading slash from absolute
+names. GNU tar blocks extraction through archive and pre-existing symlinks.
+With `-P`, GNU tar keeps absolute and parent paths; the guarded entrypoint
+preserves the prior selected-symlink boundary before those paths reach GNU tar.
+Use `-P` only with trusted archives. The guard does not snapshot an archive or
+promise transactional rollback. GNU tar can leave extracted files after an
+error.
 
 `zstd` is installed so cache archives match hosted runners.
 `git-lfs` is installed so `git lfs` is on `PATH`.

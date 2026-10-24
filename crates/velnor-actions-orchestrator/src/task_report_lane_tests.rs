@@ -40,6 +40,67 @@ fn task_report_uses_the_exact_physical_job_lane() {
     );
 }
 
+#[test]
+fn upstream_skip_reports_stay_in_the_executing_lane() {
+    let plan = paired_lane_plan(super::super::task_report_parallel_tests::order_fixture(
+        true,
+    ));
+    let temp = staged_run(&plan, "local");
+    assert_eq!(
+        write_task_report_for_job(
+            "local",
+            "stack/rust/demo/build/default",
+            1,
+            None,
+            "rust-demo__hosted",
+            temp.path(),
+        )
+        .expect("hosted build failure reports hosted skipped checks"),
+        5
+    );
+    for task_id in [CLIPPY, TEST] {
+        let hosted = plan
+            .matrix
+            .include
+            .iter()
+            .find(|entry| entry.task_id == task_id && entry.job_id == "rust-demo__hosted")
+            .expect("hosted downstream entry");
+        let local = plan
+            .matrix
+            .include
+            .iter()
+            .find(|entry| entry.task_id == task_id && entry.job_id == "rust-demo__local")
+            .expect("Scale Set downstream entry");
+        let digest = plan
+            .obligations
+            .iter()
+            .find(|obligation| obligation.task_id == task_id)
+            .expect("downstream obligation")
+            .task_digest
+            .as_str();
+        let hosted_report_id =
+            velnor_actions_contract::task_report_id_for_task("local", &hosted.matrix_key, digest)
+                .expect("hosted report ID");
+        let (task, _) = read_entry(&temp, "local", &hosted.matrix_key, &hosted_report_id);
+        assert_eq!(
+            task.status,
+            velnor_actions_contract::TaskStatus::NotSelected
+        );
+        assert_eq!(
+            task.not_selected_reason,
+            Some(velnor_actions_contract::NotSelectedReason::UpstreamFailed)
+        );
+        assert!(
+            !temp
+                .path()
+                .join("velnor/local")
+                .join(&local.matrix_key)
+                .exists(),
+            "downstream report does not cross to the paired lane"
+        );
+    }
+}
+
 fn paired_lane_plan(mut plan: Plan) -> Plan {
     let mut paired = Vec::new();
     for entry in &plan.matrix.include {

@@ -14,9 +14,7 @@
 
 use std::collections::BTreeSet;
 
-use velnor_actions_contract::config::project_tool_refs::{
-    PROJECT_TOOLS_STEP_NAME, project_tool_ref_names, project_tool_refs_to_expressions,
-};
+use velnor_actions_contract::config::project_tool_refs::PROJECT_TOOLS_STEP_NAME;
 use velnor_actions_contract::config::project_tool_resolver::project_tool_resolver_script;
 
 use crate::{RenderError, setup::MISE_ACTION_NAME, yaml::Yaml};
@@ -25,16 +23,24 @@ use crate::{RenderError, setup::MISE_ACTION_NAME, yaml::Yaml};
 mod quote;
 use quote::quote_run_refs;
 
-/// Quote project-tool references in shell text using the resolver's
-/// canonical rules.
+#[path = "project_tool_resolver_tree.rs"]
+mod tree;
+use tree::{names, rewrite_mappings, scalar};
+#[path = "project_tool_resolver_verifier.rs"]
+mod verifier;
+
+/// Apply the canonical shell quoting used when a `run:` scalar references a
+/// project-declared tool version.
 ///
-/// This lets generated verifier templates use the same scalar transformation
-/// as rendered workflows without duplicating shell-quoting logic.
+/// Generator-side audits use this same transformation when comparing the
+/// typed pre-render verifier body with the emitted workflow scalar. Keeping
+/// the operation here prevents audits from accepting a looser, separately
+/// implemented approximation.
 ///
 /// # Errors
 ///
-/// Returns [`RenderError::InvalidWorkflow`] when shell quoting is unbalanced or
-/// the reference occurs in a command substitution whose syntax is ambiguous.
+/// Returns [`RenderError::InvalidWorkflow`] when the run text has malformed
+/// shell quoting around a project tool reference.
 pub fn quote_project_tool_run_refs(text: &str) -> Result<String, RenderError> {
     quote_run_refs(text)
 }
@@ -72,6 +78,13 @@ pub(crate) fn bind_workflow(document: &mut Yaml) -> Result<(), RenderError> {
 }
 
 fn bind_job(id: &str, job: &mut Yaml) -> Result<(), RenderError> {
+    // A verifier action's variable use is represented by the caller's
+    // canonical pinned-tool preparation step. Do not infer a project binding
+    // from the local action path alone: pinned/private workflows may use the
+    // same verifier action without any project-declared version reference.
+    // When the caller does carry a dynamic reference, the ordinary resolver
+    // contract below still requires checkout and the canonical Setup Mise
+    // prerequisite before the preparation and verifier steps.
     let referenced = names(job);
     if referenced.is_empty() {
         return Ok(());
@@ -83,7 +96,9 @@ fn bind_job(id: &str, job: &mut Yaml) -> Result<(), RenderError> {
     for (key, value) in fields.iter_mut() {
         match key.as_str() {
             "steps" => {}
-            "env" => export_rustup = take_job_rustup(id, value)?,
+            "env" => {
+                export_rustup = take_job_rustup(id, value)?;
+            }
             _ if !names(value).is_empty() => return Err(invalid(&format!("{id}:{key}"))),
             _ => {}
         }
@@ -116,18 +131,36 @@ fn bind_job(id: &str, job: &mut Yaml) -> Result<(), RenderError> {
         return Err(invalid(&format!("{id}:no_mise_setup")));
     };
     let prerequisites = setup.max(checkout);
+    let verifier_positions = steps
+        .iter()
+        .enumerate()
+        .filter_map(|(index, step)| verifier::verifier_action_ref(step).map(|_| index))
+        .collect::<Vec<_>>();
+    let insertion = prerequisites + 1;
+    if verifier_positions
+        .iter()
+        .any(|position| *position < insertion)
+    {
+        return Err(invalid(&format!("{id}:verifier_before_project_resolver")));
+    }
     export_rustup |= hoist_early_rustup(id, &mut steps[..=prerequisites])?;
-    let already_bound = resolver_at(id, steps, prerequisites + 1)?;
+    let resolver = resolver_step(&referenced, export_rustup, false)?;
+    let already_bound = resolver_at(id, steps, insertion, &resolver)?;
+    if already_bound
+        && let Some(resolver) = steps.iter().position(is_resolver_step)
+        && verifier_positions
+            .iter()
+            .any(|position| *position < resolver)
+    {
+        return Err(invalid(&format!("{id}:verifier_before_project_resolver")));
+    }
     for step in steps.iter_mut() {
         rewrite_mappings(step, false)?;
     }
     if already_bound {
         return Ok(());
     }
-    steps.insert(
-        prerequisites + 1,
-        resolver_step(&referenced, export_rustup, false)?,
-    );
+    steps.insert(insertion, resolver);
     Ok(())
 }
 
@@ -158,7 +191,12 @@ fn hoist_early_rustup(id: &str, steps: &mut [Yaml]) -> Result<bool, RenderError>
     Ok(export_rustup)
 }
 
-fn resolver_at(id: &str, steps: &[Yaml], insertion: usize) -> Result<bool, RenderError> {
+fn resolver_at(
+    id: &str,
+    steps: &[Yaml],
+    insertion: usize,
+    expected: &Yaml,
+) -> Result<bool, RenderError> {
     let positions = steps
         .iter()
         .enumerate()
@@ -170,6 +208,9 @@ fn resolver_at(id: &str, steps: &[Yaml], insertion: usize) -> Result<bool, Rende
     }
     if positions != [insertion] {
         return Err(invalid(&format!("{id}:resolver_prerequisite_order")));
+    }
+    if steps.get(insertion) != Some(expected) {
+        return Err(invalid(&format!("{id}:resolver_step_tampered")));
     }
     Ok(true)
 }
@@ -268,92 +309,6 @@ fn uses_starts_with(step: &Yaml, prefix: &str) -> bool {
     fields.iter().any(|(key, value)| {
         key == "uses" && scalar(value).is_some_and(|uses| uses.starts_with(prefix))
     })
-}
-
-/// Rewrite every non-`run` scalar to the expression form and quote every
-/// `run` reference as one shell word ([`quote_run_refs`]).
-fn rewrite_mappings(node: &mut Yaml, in_run: bool) -> Result<(), RenderError> {
-    let rewrite = |text: &mut String| -> Result<(), RenderError> {
-        *text = if in_run {
-            quote_run_refs(text)?
-        } else {
-            project_tool_refs_to_expressions(text)
-        };
-        Ok(())
-    };
-    match node {
-        Yaml::Str(text) | Yaml::Quoted(text) => rewrite(text)?,
-        Yaml::Annotated { value, .. } | Yaml::AnchoredScalar { value, .. } => rewrite(value)?,
-        Yaml::Flow(items) => {
-            for item in items {
-                rewrite(item)?;
-            }
-        }
-        Yaml::FlowMap(pairs) => {
-            for (_, value) in pairs {
-                rewrite(value)?;
-            }
-        }
-        Yaml::Seq(items) => {
-            for item in items {
-                rewrite_mappings(item, in_run)?;
-            }
-        }
-        Yaml::Map(pairs) | Yaml::AnchoredMap { entries: pairs, .. } => {
-            for (key, value) in pairs {
-                rewrite_mappings(value, key == "run")?;
-            }
-        }
-        Yaml::Null | Yaml::Bool(_) | Yaml::Int(_) | Yaml::Alias(_) => {}
-    }
-    Ok(())
-}
-
-/// Project reference names anywhere under `node`.
-fn names(node: &Yaml) -> BTreeSet<String> {
-    let mut out = BTreeSet::new();
-    collect(node, &mut out);
-    out
-}
-
-fn add(out: &mut BTreeSet<String>, text: &str) {
-    out.extend(project_tool_ref_names(text).into_iter().map(str::to_owned));
-}
-
-fn collect(node: &Yaml, out: &mut BTreeSet<String>) {
-    match node {
-        Yaml::Str(text) | Yaml::Quoted(text) => add(out, text),
-        Yaml::Annotated { value, .. } | Yaml::AnchoredScalar { value, .. } => add(out, value),
-        Yaml::Flow(items) => {
-            for item in items {
-                add(out, item);
-            }
-        }
-        Yaml::FlowMap(pairs) => {
-            for (_, value) in pairs {
-                add(out, value);
-            }
-        }
-        Yaml::Seq(items) => {
-            for item in items {
-                collect(item, out);
-            }
-        }
-        Yaml::Map(pairs) | Yaml::AnchoredMap { entries: pairs, .. } => {
-            for (_, value) in pairs {
-                collect(value, out);
-            }
-        }
-        Yaml::Null | Yaml::Bool(_) | Yaml::Int(_) | Yaml::Alias(_) => {}
-    }
-}
-
-fn scalar(node: &Yaml) -> Option<&str> {
-    match node {
-        Yaml::Str(text) | Yaml::Quoted(text) => Some(text),
-        Yaml::Annotated { value, .. } | Yaml::AnchoredScalar { value, .. } => Some(value),
-        _ => None,
-    }
 }
 
 pub(super) fn invalid(context: &str) -> RenderError {

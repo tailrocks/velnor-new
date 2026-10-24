@@ -30,15 +30,15 @@ pub struct MiseSetup {
     pub sha256: String,
 }
 
-/// Official raw Linux x64 binary SHA-256 for Mise 2026.10.17.
+/// Official raw Linux x64 binary SHA-256 for Mise 2026.10.18.
 pub const MISE_BINARY_SHA256_LINUX_X64: &str =
-    "fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a";
-/// Official raw macOS ARM64 binary SHA-256 for Mise 2026.10.17.
+    "e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942";
+/// Official raw macOS ARM64 binary SHA-256 for Mise 2026.10.18.
 pub const MISE_BINARY_SHA256_MACOS_ARM64: &str =
-    "9e27709db5eb1e900d83149418d3067309f2a5004d4994d94246ab658ba4a3ce";
-/// Official raw macOS x86-64 binary SHA-256 for Mise 2026.10.17.
+    "d40e2fcd96fed7c70b04af282c36534d87d0318bef89c16fa00c9f98e55ade88";
+/// Official raw macOS x86-64 binary SHA-256 for Mise 2026.10.18.
 pub const MISE_BINARY_SHA256_MACOS_X64: &str =
-    "dac5d6db5e315d8e4f096c6ead9279d342e09fdcb5c373d0df5c7dcce8195746";
+    "72e1ced3bac89d0e0aa28b04bd22f8941c111d3b20c74a77bfb6a9486f25f7d3";
 
 impl MiseSetup {
     /// Resolve a compiled binary pin for one job's target.
@@ -46,7 +46,7 @@ impl MiseSetup {
     /// Unsupported targets or versions have no qualified artifact.
     pub fn for_target(&self, target: &str) -> Result<Self, RenderError> {
         self.validate()?;
-        if self.version != "2026.10.17" {
+        if self.version != "2026.10.18" {
             return Err(RenderError::BadCommand(format!(
                 "mise_setup_unqualified_version:{}",
                 self.version
@@ -120,7 +120,7 @@ pub fn mise_setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {
     Ok(step)
 }
 
-/// True for catalog version spellings (`2026.10.17`); never `latest`.
+/// True for catalog version spellings (`2026.10.18`); never `latest`.
 fn is_catalog_version(value: &str) -> bool {
     !value.is_empty()
         && value != "latest"

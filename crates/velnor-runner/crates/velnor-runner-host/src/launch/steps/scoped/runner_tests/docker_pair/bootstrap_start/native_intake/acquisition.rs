@@ -51,6 +51,7 @@ pub(in crate::launch::steps::scoped::runner::tests::docker_pair) async fn author
 pub(in crate::launch::steps::scoped::runner::tests::docker_pair) async fn open_composition_with_poll(
     poll: &velnor_runner_github::Poll,
     backlog_rows: usize,
+    expected_initial_wake: bool,
 ) -> Result<super::CompositionSetup, String> {
     let fixture = Fixture::open_with_engine("native-intake-composition", ENGINE_ID).await?;
     configure_capacity(&fixture).await?;
@@ -80,6 +81,7 @@ pub(in crate::launch::steps::scoped::runner::tests::docker_pair) async fn open_c
         permit,
         &engine,
         poll,
+        expected_initial_wake,
     ))
     .await?;
     let guest_image =
@@ -109,6 +111,7 @@ async fn acquire_through_positive_poll(
     permit: crate::launch::StartPermit,
     engine: &crate::launch::SelectedEngineContext,
     polled: &velnor_runner_github::Poll,
+    expected_initial_wake: bool,
 ) -> Result<crate::launch::steps::ScopedProvisioningOutcome, String> {
     let mut link = crate::listen::inert_link_for_offline_test();
     let mut session =
@@ -161,13 +164,13 @@ async fn acquire_through_positive_poll(
     )
     .await
     .map_err(|error| format!("The shared positive-poll admission failed: {error}"))?;
-    acquired_request_from_positive_poll(&lane, outcome, polled)
+    acquired_request_from_positive_poll(&lane, outcome, expected_initial_wake)
 }
 
 fn acquired_request_from_positive_poll(
     lane: &FakeLane,
     outcome: crate::launch::PositivePollOutcome,
-    polled: &velnor_runner_github::Poll,
+    expected_initial_wake: bool,
 ) -> Result<crate::launch::steps::ScopedProvisioningOutcome, String> {
     if lane.paths.len() != 1 || !lane.paths[0].ends_with("/acquirejobs") {
         return Err(format!("Unexpected native Acquire paths: {:?}", lane.paths));
@@ -179,15 +182,7 @@ fn acquired_request_from_positive_poll(
             "The positive poll did not settle and acknowledge the acquired request.".to_owned(),
         );
     }
-    let cleanup_wake_expected = matches!(
-        polled,
-        velnor_runner_github::Poll::Batch(batch)
-            if batch.jobs.iter().any(|job| matches!(
-                job.kind,
-                velnor_runner_github::InnerKind::Completed
-            ))
-    );
-    if outcome.wake_cleanup != cleanup_wake_expected || !outcome.started_request_ids.is_empty() {
+    if outcome.wake_cleanup != expected_initial_wake || !outcome.started_request_ids.is_empty() {
         return Err(
             "The poll lifecycle outcome did not match its messages before admission.".to_owned(),
         );

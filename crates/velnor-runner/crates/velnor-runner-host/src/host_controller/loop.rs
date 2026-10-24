@@ -41,7 +41,8 @@ pub(crate) use transitions::{TransitionEffects, apply_config_transition, retire_
 
 /// Run the shared controller without acquiring `daemon.lock`.
 ///
-/// The caller keeps the daemon lock for this function's full run.
+/// The caller keeps the daemon lock for this function's full run. Only one
+/// controller run may use the same held lock handle at a time.
 ///
 /// # Errors
 ///
@@ -51,6 +52,7 @@ pub fn run_host_blocking(
     state: &Path,
     daemon_lock: &DaemonLock,
 ) -> Result<(), ListenFault> {
+    let _controller_run = daemon_lock.begin_controller_run()?;
     let state_root = std::fs::canonicalize(state).map_err(|_| HostError::Path)?;
     if !state_root.is_dir() {
         return Err(HostError::Path.into());

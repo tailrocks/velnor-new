@@ -27,6 +27,7 @@ pub(crate) struct VerifierAction {
 #[derive(Debug, Clone)]
 pub(crate) struct InlineVerifierTemplate {
     pub(crate) top_fields: Vec<(String, String)>,
+    #[cfg(test)]
     pub(crate) run_scalar: String,
     pub(crate) shell: Option<&'static str>,
     pub(crate) env: BTreeMap<String, String>,
@@ -60,6 +61,7 @@ impl InlineVerifierTemplate {
             .collect::<Result<Vec<_>, OrchestratorError>>()?;
         Ok(Self {
             top_fields,
+            #[cfg(test)]
             run_scalar: rendered::scalar_field(&fields, "run")?,
             shell: rendered::shell(&fields)?,
             env: rendered::env(&fields)?,
@@ -107,6 +109,10 @@ pub(crate) struct VerifierSteps {
 }
 
 impl VerifierSteps {
+    pub(crate) fn is_restored_rust_inline(&self, step: &Step) -> bool {
+        matches_canonical_shell_step(step, &self.restored_rust)
+    }
+
     pub(crate) fn is_installed_rust_inline(&self, step: &Step) -> bool {
         [
             &self.installed_rust,
@@ -204,7 +210,6 @@ impl VerifierActionSet {
             .find(|action| action.uses == uses)
     }
 
-    #[cfg(test)]
     pub(crate) fn canonical_call(step: &Step, action: &VerifierAction) -> bool {
         step.role == Some(action.role)
             && step.id.is_none()
@@ -248,20 +253,37 @@ fn matches_canonical_shell_step(step: &Step, expected: &Step) -> bool {
 }
 
 pub(crate) fn verifier_steps(catalog: &ToolCatalog) -> Result<VerifierSteps, OrchestratorError> {
-    let restored_rust = crate::workflow::verify_restored_rust_step(catalog)?;
-    let installed_rust = crate::workflow::verify_rust_manifest_step(catalog)?;
-    let jactionlint = crate::workflow::verify_jactionlint_step(catalog)?;
-    let default_home_rust = rust_verifier_shell_step(
-        crate::workflow::VERIFY_RUST_MANIFEST_STEP,
-        crate::workflow::verify_rust_argv(catalog),
-        BTreeMap::new(),
+    let restored_rust = crate::workflow::workflow_policy::rust_manifest_step::verifier_shell_step(
+        catalog,
+        crate::workflow::ToolchainPhase::Restored,
     )?;
-    let producer_home_rust = rust_verifier_shell_step(
-        crate::workflow::VERIFY_RUST_MANIFEST_STEP,
-        crate::workflow::verify_rust_argv(catalog),
-        producer_cargo_env(catalog)?,
+    let installed_rust = crate::workflow::workflow_policy::rust_manifest_step::verifier_shell_step(
+        catalog,
+        crate::workflow::ToolchainPhase::Installed,
     )?;
-    let inline_jactionlint = jactionlint.clone();
+    let jactionlint =
+        crate::workflow::workflow_policy::jactionlint_verify_step::verifier_shell_step(catalog)?;
+    let default_home_rust =
+        velnor_actions_workflow_renderer::verifier_composite::verifier_shell_step(
+            StepRole::VerifyRustManifest,
+            crate::workflow::VERIFY_RUST_MANIFEST_STEP,
+            crate::workflow::verify_rust_argv(catalog),
+            BTreeMap::new(),
+        )?;
+    let producer_home_rust =
+        velnor_actions_workflow_renderer::verifier_composite::verifier_shell_step(
+            StepRole::VerifyRustManifest,
+            crate::workflow::VERIFY_RUST_MANIFEST_STEP,
+            crate::workflow::verify_rust_argv(catalog),
+            producer_cargo_env(catalog)?,
+        )?;
+    let inline_jactionlint =
+        velnor_actions_workflow_renderer::verifier_composite::verifier_shell_step(
+            StepRole::VerifyJactionlint,
+            crate::workflow::VERIFY_JACTIONLINT_STEP,
+            crate::workflow::jactionlint_verify_argv(catalog),
+            BTreeMap::new(),
+        )?;
     Ok(VerifierSteps {
         restored_rust,
         installed_rust,
@@ -270,16 +292,6 @@ pub(crate) fn verifier_steps(catalog: &ToolCatalog) -> Result<VerifierSteps, Orc
         producer_home_rust,
         inline_jactionlint,
     })
-}
-
-fn rust_verifier_shell_step(
-    name: &str,
-    argv: Vec<String>,
-    env: BTreeMap<String, String>,
-) -> Result<Step, OrchestratorError> {
-    let mut step = velnor_actions_workflow_renderer::steps::shell_step(name, argv, env)?;
-    step.role = Some(StepRole::VerifyRustManifest);
-    Ok(step)
 }
 
 fn inline_templates(steps: &VerifierSteps) -> Result<InlineVerifierTemplates, OrchestratorError> {

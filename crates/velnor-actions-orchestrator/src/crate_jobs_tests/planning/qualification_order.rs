@@ -1,8 +1,12 @@
 use velnor_actions_contract::workflow::{Job, StepRole};
 
-pub(super) fn assert_grouped_qualification_steps(job: &Job) {
+pub(super) fn assert_grouped_qualification_steps(job: &Job, expected_task_count: usize) {
+    assert!(
+        job.condition.is_none(),
+        "qualification jobs are not skipped by the normal workflow's change gate"
+    );
     assert_setup_and_identity_order(job);
-    assert_task_gate_and_position(job);
+    assert_task_gate_and_position(job, expected_task_count);
 }
 
 fn positions(job: &Job, predicate: fn(StepRole) -> bool) -> Vec<usize> {
@@ -72,7 +76,7 @@ fn assert_setup_and_identity_order(job: &Job) {
     );
 }
 
-fn assert_task_gate_and_position(job: &Job) {
+fn assert_task_gate_and_position(job: &Job, expected_task_count: usize) {
     let execution_steps: Vec<_> = job
         .steps
         .iter()
@@ -85,8 +89,8 @@ fn assert_task_gate_and_position(job: &Job) {
         .collect();
     assert_eq!(
         execution_steps.len(),
-        2,
-        "both task obligations stay in one job"
+        expected_task_count,
+        "the job owns only its configuration's task obligations"
     );
 
     assert!(
@@ -130,16 +134,27 @@ fn qualified_multi_configuration_plan_renders_with_task_authority_intact() {
     let mut workflow = build_qualified_fixture(root.path(), &config);
     attach_fixture_lock(&mut workflow);
 
-    let job = workflow
+    let default_job = workflow
         .ir
         .jobs
         .get("rust-demo")
-        .expect("grouped crate job");
-    assert_grouped_qualification_steps(job);
+        .expect("default-config crate job");
+    let all_features_job = workflow
+        .ir
+        .jobs
+        .get("rust-demo-all-features")
+        .expect("all-features crate job");
+    assert_grouped_qualification_steps(default_job, 2);
+    assert_grouped_qualification_steps(all_features_job, 1);
     assert_eq!(
-        task_execution_count(job),
+        task_execution_count(default_job),
         2,
-        "default and all-features tasks share one crate job"
+        "default-config tasks remain together in their package job"
+    );
+    assert_eq!(
+        task_execution_count(all_features_job),
+        1,
+        "all-features task belongs to its own config job"
     );
     let nested_job = workflow
         .ir
@@ -147,7 +162,7 @@ fn qualified_multi_configuration_plan_renders_with_task_authority_intact() {
         .get("rust-nested")
         .expect("second crate job");
     assert_setup_and_identity_order(nested_job);
-    for job in [job, nested_job] {
+    for job in [default_job, all_features_job, nested_job] {
         let last_identity = positions(job, |role| {
             role == StepRole::QualificationCacheRuntimeIdentityAfterImport
         })
@@ -171,8 +186,11 @@ fn qualified_multi_configuration_plan_renders_with_task_authority_intact() {
                 .iter()
                 .all(|(index, step)| *index > last_identity && step.condition.is_none())
         );
-        assert!(tasks.iter().any(|(_, step)| step.parallel));
     }
+    assert!(
+        default_job.steps.iter().any(|step| step.parallel),
+        "same-config checks retain parallel execution"
+    );
     velnor_actions_workflow_renderer::render::render_workflow_ir(
         &workflow.ir,
         WorkflowPolicy::VelnorRepositoryV1,
@@ -227,12 +245,13 @@ fn build_qualified_fixture(
 
     let mut clippy = super::super::group("demo", TaskKind::Clippy, &[]);
     clippy.identity.compile_driver = CompileDriver::Mbx.as_str().to_owned();
+    let doc = super::super::group("demo", TaskKind::Doc, &[]);
     let mut test = super::super::group("demo", TaskKind::Test, &[]);
     test.identity.compile_driver = CompileDriver::Mbx.as_str().to_owned();
     test.task_id = test.task_id.replace("/default", "/all-features");
     test.configuration = "all-features".to_owned();
     let nested = super::super::group("nested", TaskKind::Clippy, &[]);
-    let found = super::super::discovery(vec![clippy, test, nested]);
+    let found = super::super::discovery(vec![clippy, doc, test, nested]);
     crate::workflow::build_workflow(root, config, "main", "ubuntu-26.04", &found, &[])
         .expect("full qualified workflow plan")
 }

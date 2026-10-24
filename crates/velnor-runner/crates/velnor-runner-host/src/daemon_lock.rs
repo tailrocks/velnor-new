@@ -4,11 +4,14 @@ use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::error::HostError;
 use serde::{Deserialize, Serialize};
 
+#[path = "daemon_lock/controller_run.rs"]
+mod controller_run;
 #[path = "daemon_lock_filesystem.rs"]
 mod filesystem;
 #[path = "daemon_lock_identity.rs"]
@@ -28,6 +31,7 @@ pub struct DaemonLock {
     file: File,
     device: u64,
     inode: u64,
+    controller_running: AtomicBool,
 }
 
 impl DaemonLock {
@@ -47,6 +51,7 @@ impl DaemonLock {
                 file,
                 device: metadata.dev(),
                 inode: metadata.ino(),
+                controller_running: AtomicBool::new(false),
             })
         }
         #[cfg(not(unix))]

@@ -85,6 +85,7 @@ mod impl_orch_gate;
 mod impl_orch_gen;
 mod impl_orch_gen2;
 mod impl_orch_gen_lfs;
+mod impl_orch_gen_qualification;
 #[path = "impl_orch_github_evidence_ingress.rs"]
 mod impl_orch_github_evidence_ingress;
 mod impl_orch_gradle;

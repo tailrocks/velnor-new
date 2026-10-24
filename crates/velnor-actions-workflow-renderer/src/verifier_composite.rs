@@ -141,6 +141,8 @@ pub fn verifier_shell_run_scalar(step: &Step) -> Result<String, RenderError> {
 pub fn verifier_shell_argv(step: &Step) -> Result<Vec<String>, RenderError> {
     let run = verifier_shell_run_scalar(step)?;
     Ok(vec![
+        "/usr/bin/env".to_owned(),
+        format!("PATH={}", crate::VERIFY_PATH),
         "/bin/bash".to_owned(),
         "--noprofile".to_owned(),
         "--norc".to_owned(),
@@ -245,3 +247,7 @@ fn verifier_composite_document(
 #[cfg(test)]
 #[path = "verifier_composite_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "verifier_composite_main_tests.rs"]
+mod main_tests;

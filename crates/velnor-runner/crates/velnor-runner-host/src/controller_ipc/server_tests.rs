@@ -12,6 +12,10 @@ const TOKEN: &str = "0123456789abcdef0123456789abcdef";
 mod doctor_report_tests;
 #[path = "server/readiness_tests.rs"]
 mod readiness_tests;
+#[path = "server/session_observation_tests.rs"]
+mod session_observation_tests;
+#[path = "server/setup_receipt_tests.rs"]
+mod setup_receipt_tests;
 
 #[tokio::test]
 async fn detached_is_provable_while_the_host_is_draining() -> Result<(), String> {

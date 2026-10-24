@@ -167,6 +167,7 @@ async fn prepared_connection(
         binding: binding.clone(),
         scope: scope.clone(),
         set_id,
+        setup: crate::host_controller::loop_driver::state::PreparedSetup::test(binding, set_id),
         session_intent: bound.intent_id(),
         assigned_total: Some(1),
         poll_cursor: 0,

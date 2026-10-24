@@ -2,6 +2,7 @@ use bollard::models::MountType;
 
 use super::{request_result, specification as spec};
 use crate::{HostError, worker::test_resource_budget};
+use velnor_resource_probe::storage_init_contract::METADATA_ROOT_MODE;
 
 const VALID: &str = r#"{"schema":2,"operation_id":"op-7","home":{"target":"/velnor/init/home","mount_id":31,"parent_mount_id":1,"device_major":0,"device_minor":48,"inode":61,"uid":1000,"gid":1000,"mode":493},"work":{"target":"/velnor/init/work","mount_id":32,"parent_mount_id":1,"device_major":0,"device_minor":48,"inode":62,"uid":1000,"gid":1000,"mode":493},"metadata":{"target":"/velnor/init/metadata","mount_id":33,"parent_mount_id":1,"device_major":0,"device_minor":48,"inode":63,"uid":0,"gid":0,"mode":365},"runtime_identity":{"target":"/velnor/init/metadata/runtime-identity","mount_id":33,"parent_mount_id":33,"device_major":0,"device_minor":48,"inode":64,"uid":0,"gid":0,"mode":365},"job_facts":{"target":"/velnor/init/metadata/job-facts","mount_id":33,"parent_mount_id":33,"device_major":0,"device_minor":48,"inode":65,"uid":0,"gid":0,"mode":365},"source_proof":{"target":"/velnor/init/metadata/source-proof","mount_id":33,"parent_mount_id":33,"device_major":0,"device_minor":48,"inode":66,"uid":0,"gid":0,"mode":493},"control":{"target":"/velnor/init/metadata/source-proof/control","mount_id":33,"parent_mount_id":33,"device_major":0,"device_minor":48,"inode":67,"uid":0,"gid":0,"mode":365},"inbox":{"target":"/velnor/init/home/source-proof/inbox","mount_id":31,"parent_mount_id":31,"device_major":0,"device_minor":48,"inode":68,"uid":1000,"gid":1000,"mode":448}}"#;
 
@@ -11,6 +12,21 @@ fn output(record: &str) -> Vec<u8> {
 
 fn observed(record: &str) -> Result<request_result::ObservedStorageInitialization, HostError> {
     request_result::parse_ready("op-7", &output(record))
+}
+
+fn with_metadata_root_mode(mode: u32) -> String {
+    let metadata_start = VALID.find("\"metadata\":").expect("metadata record exists");
+    let old_mode = "\"mode\":365";
+    let mode_start = VALID[metadata_start..]
+        .find(old_mode)
+        .expect("metadata mode exists")
+        + metadata_start;
+    let mut record = VALID.to_owned();
+    record.replace_range(
+        mode_start..mode_start + old_mode.len(),
+        &format!("\"mode\":{mode}"),
+    );
+    record
 }
 
 fn limits() -> Result<spec::StorageInitializationLimits, HostError> {
@@ -34,6 +50,8 @@ fn accepts_the_utility_success_record() -> Result<(), HostError> {
     assert_eq!(result.work().device(), (0, 48));
     assert_eq!(result.home().inode(), 61);
     assert_eq!(result.metadata().mount_id(), 33);
+    assert_eq!(METADATA_ROOT_MODE, 0o555);
+    assert_eq!(result.metadata().mode(), METADATA_ROOT_MODE);
     assert_eq!(result.runtime_identity().owner(), (0, 0));
     assert_eq!(result.runtime_identity().mode(), 0o555);
     assert_eq!(
@@ -116,6 +134,11 @@ fn rejects_wrong_targets_owner_group_and_mode() {
     ] {
         assert!(observed(&VALID.replacen(from, to, 1)).is_err());
     }
+}
+
+#[test]
+fn rejects_writable_metadata_root() {
+    assert!(observed(&with_metadata_root_mode(0o755)).is_err());
 }
 
 #[test]

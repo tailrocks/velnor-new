@@ -32,6 +32,11 @@ pub(crate) const TASK_ID_ENV: &str = "VELNOR_TASK_ID";
 pub(crate) const EXIT_CODE_ENV: &str = "VELNOR_EXIT_CODE";
 /// Env key carrying the wrapper-captured start time (unix millis).
 pub(crate) const START_MS_ENV: &str = "VELNOR_START_MS";
+/// Env key carrying an optional safe subset of skipped downstream task IDs.
+pub(crate) const DOWNSTREAM_TASK_IDS_ENV: &str = "VELNOR_DOWNSTREAM_TASK_IDS";
+
+#[path = "task_report_order.rs"]
+mod task_report_order;
 
 /// Write reports for the executed obligation.
 ///
@@ -75,15 +80,17 @@ pub fn write_task_report() -> Result<usize, OrchestratorError> {
             Path::new(&runner_temp),
         );
     }
+    let downstream = env::var(DOWNSTREAM_TASK_IDS_ENV).ok();
     let start_ms = env::var(START_MS_ENV)
         .ok()
         .and_then(|raw| parse_start_ms(&raw));
-    write_task_report_for_job(
+    write_task_report_for_job_with_downstream(
         &run_key,
         &task_id,
         exit_code,
         start_ms,
         &job_id,
+        downstream.as_deref(),
         Path::new(&runner_temp),
     )
 }
@@ -124,12 +131,34 @@ pub(crate) fn write_task_report_to(
 }
 
 /// Write one report for the exact GitHub job that executed the task.
+#[cfg(test)]
 pub(crate) fn write_task_report_for_job(
     run_key: &str,
     task_id: &str,
     exit_code: i32,
     start_ms: Option<u64>,
     job_id: &str,
+    runner_temp: &Path,
+) -> Result<usize, OrchestratorError> {
+    write_task_report_for_job_with_downstream(
+        run_key,
+        task_id,
+        exit_code,
+        start_ms,
+        job_id,
+        None,
+        runner_temp,
+    )
+}
+
+/// Write the exact job's outcome and safe downstream skip reports.
+pub(crate) fn write_task_report_for_job_with_downstream(
+    run_key: &str,
+    task_id: &str,
+    exit_code: i32,
+    start_ms: Option<u64>,
+    job_id: &str,
+    downstream_raw: Option<&str>,
     runner_temp: &Path,
 ) -> Result<usize, OrchestratorError> {
     validate_run_key(run_key).map_err(internal_contract)?;
@@ -146,7 +175,39 @@ pub(crate) fn write_task_report_for_job(
         .map_err(internal_contract)?;
     let matrix = single_task_aggregate(&plan, entry, &task).map_err(internal_contract)?;
     write_entry_reports(runner_temp, &plan, entry, &task, &matrix)?;
-    Ok(1)
+    if exit_code == 0 {
+        return Ok(1);
+    }
+    let derived = task_report_order::derive_downstream(&plan, task_id, job_id);
+    let requested = parse_downstream(downstream_raw);
+    let downstream = if requested.is_empty() {
+        derived
+    } else {
+        if requested.iter().any(|id| !derived.contains(id)) {
+            return Err(internal("downstream_not_skipped"));
+        }
+        requested
+    };
+    let skipped = crate::noop_report::write_skip_reports_for_job(
+        &plan,
+        task_id,
+        job_id,
+        &downstream,
+        runner_temp,
+    )?;
+    Ok(1 + skipped)
+}
+
+/// Split downstream IDs on commas, trim whitespace, and preserve first occurrences.
+fn parse_downstream(raw: Option<&str>) -> Vec<String> {
+    let mut seen = std::collections::BTreeSet::new();
+    let mut ids = Vec::new();
+    for id in raw.unwrap_or_default().split(',').map(str::trim) {
+        if !id.is_empty() && seen.insert(id) {
+            ids.push(id.to_owned());
+        }
+    }
+    ids
 }
 
 /// Load and validate the downloaded plan, bound to this run key.

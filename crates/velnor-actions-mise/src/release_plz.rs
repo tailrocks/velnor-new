@@ -1,7 +1,7 @@
 //! Pinned release-plz coordinator: fixed argv for the release-pr/release phases.
 //!
-//! Pin: CLI `0.3.174` (crates.io `max_stable_version` plus tag
-//! `release-plz-v0.3.174`, published 2026-10-21; rechecked 2026-10-22).
+//! Pin: CLI `0.4.0` (crates.io sparse-index `max_stable_version` plus tag
+//! `release-plz-v0.4.0`, published 2026-10-23; rechecked 2026-10-23).
 //! Cksum: [`crate::catalog::release_plz::RELEASE_PLZ_CKSUM`]. Install: mise `release-plz` shorthand via
 //! the aqua backend to the prebuilt GitHub tarball (isolated probe passed);
 //! `cargo:release-plz` fallback compiles the cksum-pinned `.crate`. The prebuilt
@@ -26,9 +26,9 @@ use crate::command::IsolatedCommand;
 use crate::error::MiseError;
 use crate::requests::PinnedToolExec;
 
-/// Full crates.io sha256 cksum of `release-plz 0.3.174` (API plus downloaded crate agree).
+/// Full crates.io sparse-index sha256 checksum of `release-plz 0.4.0`.
 pub const RELEASE_PLZ_CKSUM: &str =
-    "a0742b43fe270de052d0bb5a1cd5db966ca854dd9d1d311669ed87848cd75d07";
+    "dd854677aeb762bc0291da39d8479cf6006084a20fef3ac244d0a5b80ef6105f";
 
 /// Registry token env var that must be absent for trusted publishing.
 pub const REGISTRY_TOKEN_ENV: &str = "CARGO_REGISTRY_TOKEN";

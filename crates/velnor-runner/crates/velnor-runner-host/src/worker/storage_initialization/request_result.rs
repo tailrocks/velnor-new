@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::error::HostError;
+use velnor_resource_probe::storage_init_contract::METADATA_ROOT_MODE;
 
 const INPUT_LIMIT: usize = 256;
 const OUTPUT_LIMIT: usize = 2_048;
@@ -220,7 +221,11 @@ pub(crate) fn parse_ready(
     }
     validate_mount_root(&record.home, HOME_TARGET, (1000, 1000, 0o755))?;
     validate_mount_root(&record.work, WORK_TARGET, (1000, 1000, 0o755))?;
-    validate_mount_root(&record.metadata, METADATA_TARGET, (0, 0, 0o555))?;
+    validate_mount_root(
+        &record.metadata,
+        METADATA_TARGET,
+        (0, 0, METADATA_ROOT_MODE),
+    )?;
     validate_child(
         &record.runtime_identity,
         RUNTIME_IDENTITY_TARGET,

@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 
 use crate::config::RepositoryConnection;
 use crate::error::HostError;
+use crate::launch::steady::PollObservation;
 
 use super::ControlState;
 
@@ -24,10 +25,12 @@ pub(super) struct PendingSessionPoll {
     scale_set_id: i64,
     session_intent_id: i64,
     session_id: String,
-    deadline: Instant,
+    sequence: u64,
+    pub(super) deadline: Instant,
 }
 
 impl ControlState {
+    #[cfg(test)]
     pub(crate) fn record_session_poll(
         &self,
         binding: &RepositoryConnection,
@@ -35,6 +38,27 @@ impl ControlState {
         session_intent_id: i64,
         session_id: &str,
     ) -> Result<(), HostError> {
+        self.record_session_poll_observation(
+            binding,
+            scale_set_id,
+            session_intent_id,
+            session_id,
+            None,
+        )
+    }
+
+    pub(crate) fn record_session_poll_observation(
+        &self,
+        binding: &RepositoryConnection,
+        scale_set_id: i64,
+        session_intent_id: i64,
+        session_id: &str,
+        observation: Option<PollObservation>,
+    ) -> Result<(), HostError> {
+        let mut coordinator = self
+            .session_observation
+            .lock()
+            .map_err(|_| HostError::Journal)?;
         if scale_set_id <= 0 || session_intent_id <= 0 || session_id.trim().is_empty() {
             return Err(HostError::Identity);
         }
@@ -58,7 +82,7 @@ impl ControlState {
             connection_id.clone(),
             SessionPollReceipt {
                 connection_id: connection_id.clone(),
-                binding_sha256,
+                binding_sha256: binding_sha256.clone(),
                 scale_set_id,
                 session_intent_id,
                 session_id: session_id.to_owned(),
@@ -66,10 +90,20 @@ impl ControlState {
                 observed_at: Instant::now(),
             },
         );
-        self.pending_polls
+        let pending = self
+            .pending_polls
             .write()
             .map_err(|_| HostError::Journal)?
             .remove(&connection_id);
+        coordinator.finish_poll(super::session_observation::PollCompletion {
+            connection_id: &connection_id,
+            poll_sequence: pending.map(|attempt| attempt.sequence),
+            binding_sha256: &binding_sha256,
+            scale_set_id,
+            session_intent_id,
+            session_id,
+            poll: observation,
+        });
         self.readiness
             .write()
             .map_err(|_| HostError::Journal)?
@@ -85,6 +119,10 @@ impl ControlState {
         session_id: &str,
         deadline: Instant,
     ) -> Result<(), HostError> {
+        let mut coordinator = self
+            .session_observation
+            .lock()
+            .map_err(|_| HostError::Journal)?;
         let now = Instant::now();
         if scale_set_id <= 0
             || session_intent_id <= 0
@@ -105,6 +143,7 @@ impl ControlState {
         {
             return Err(HostError::Ownership);
         }
+        let sequence = coordinator.begin_poll()?;
         pending.insert(
             connection_id,
             PendingSessionPoll {
@@ -112,6 +151,7 @@ impl ControlState {
                 scale_set_id,
                 session_intent_id,
                 session_id: session_id.to_owned(),
+                sequence,
                 deadline,
             },
         );
@@ -145,6 +185,12 @@ impl ControlState {
     }
 
     pub(crate) fn invalidate_session_poll(&self, connection_id: &str) -> Result<(), HostError> {
+        let mut coordinator = self
+            .session_observation
+            .lock()
+            .map_err(|_| HostError::Journal)?;
+        coordinator.invalidate_connection(connection_id);
+        let setup_removed = coordinator.setup_receipts.remove(connection_id).is_some();
         let removed = self
             .session_polls
             .write()
@@ -154,7 +200,7 @@ impl ControlState {
             .write()
             .map_err(|_| HostError::Journal)?
             .remove(connection_id);
-        if removed.is_some() {
+        if removed.is_some() || setup_removed {
             self.clear_readiness()?;
         }
         Ok(())
@@ -167,6 +213,10 @@ impl ControlState {
         session_intent_id: i64,
         session_id: &str,
     ) -> Result<(), HostError> {
+        let mut coordinator = self
+            .session_observation
+            .lock()
+            .map_err(|_| HostError::Journal)?;
         let binding_sha256 = binding_sha256(binding)?;
         let mut polls = self.session_polls.write().map_err(|_| HostError::Journal)?;
         let connection_id = binding.connection_id.as_str();
@@ -176,6 +226,8 @@ impl ControlState {
                 || receipt.session_intent_id != session_intent_id
                 || receipt.session_id != session_id
         }) {
+            coordinator.invalidate_connection(connection_id);
+            coordinator.setup_receipts.remove(connection_id);
             polls.remove(connection_id);
             self.pending_polls
                 .write()
@@ -186,7 +238,14 @@ impl ControlState {
         Ok(())
     }
 
+    #[cfg(test)]
     pub(crate) fn invalidate_session_polls(&self) -> Result<(), HostError> {
+        let mut coordinator = self
+            .session_observation
+            .lock()
+            .map_err(|_| HostError::Journal)?;
+        coordinator.invalidate_all();
+        coordinator.setup_receipts.clear();
         self.session_polls
             .write()
             .map_err(|_| HostError::Journal)?
@@ -265,7 +324,7 @@ impl SessionPollReceipt {
     }
 }
 
-fn binding_sha256(binding: &RepositoryConnection) -> Result<String, HostError> {
+pub(super) fn binding_sha256(binding: &RepositoryConnection) -> Result<String, HostError> {
     use sha2::Digest;
 
     let bytes = serde_json::to_vec(binding).map_err(|_| HostError::Identity)?;

@@ -12,7 +12,10 @@ use crate::{
     launch::{ReleaseReadSecret, SelectedEngineContext, VerifiedWorkerImages},
 };
 
-use super::{setup, state::PreparedConnection};
+use super::{
+    setup,
+    state::{PreparedConnection, setup_receipt_inputs},
+};
 
 pub(crate) trait TransitionEffects {
     async fn configure_shared_budget(&mut self, config: &HostConfig) -> Result<(), HostError>;
@@ -46,6 +49,29 @@ pub(crate) async fn apply_config_transition<E: TransitionEffects>(
         .filter(|binding| next.connection(&binding.connection_id).is_none())
         .cloned()
         .collect())
+}
+
+pub(super) async fn apply_config(
+    current: &mut HostConfig,
+    pending_retirements: &mut Vec<RepositoryConnection>,
+    next: HostConfig,
+    effects: &mut JournalEffects<'_>,
+) -> bool {
+    if let Err(error) = ReleaseReadSecret::load(&next) {
+        eprintln!("host controller release-reader reload held: {error}");
+        return false;
+    }
+    match apply_config_transition(current, &next, effects).await {
+        Ok(removed) => {
+            *current = next;
+            pending_retirements.extend(removed);
+            true
+        }
+        Err(error) => {
+            eprintln!("host controller config transition held: {error}");
+            false
+        }
+    }
 }
 
 pub(crate) async fn retire_pending<E: TransitionEffects>(
@@ -133,7 +159,14 @@ impl TransitionEffects for JournalEffects<'_> {
     }
 
     fn publish_config(&mut self, config: &HostConfig) -> Result<(), HostError> {
-        self.control_state.replace_config(config)
+        let receipts = setup_receipt_inputs(
+            self.connection_sessions,
+            config,
+            self.selected_engine.engine_id(),
+            self.selected_engine.docker_root_digest(),
+        )?;
+        self.control_state
+            .replace_config_with_setup(config, receipts)
     }
 
     async fn retire_removed(&mut self, binding: &RepositoryConnection) -> Result<bool, HostError> {

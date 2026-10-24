@@ -168,7 +168,7 @@ fn catalog_pins_ignore_project_selectors() -> Result<(), String> {
     assert_eq!(first.argv(&pinned()), second.argv(&pinned()));
     assert_eq!(
         catalog.tool_spec(PinnedTool::MrBoxington),
-        "mr-boxington@1.26.0",
+        "mr-boxington@1.27.0",
         "the action-owned MBX pin remains exact in the catalog"
     );
     assert!(

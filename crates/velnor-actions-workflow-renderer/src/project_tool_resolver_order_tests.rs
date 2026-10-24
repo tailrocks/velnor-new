@@ -1,6 +1,9 @@
 use super::{SETUP, bind_workflow, step, workflow};
 use crate::yaml::{Yaml, render_yaml};
 
+#[path = "project_tool_resolver_verifier_order_tests.rs"]
+mod verifier_tests;
+
 #[test]
 fn resolver_follows_both_checkout_and_mise_and_binding_remains_idempotent() {
     for setup_first in [false, true] {

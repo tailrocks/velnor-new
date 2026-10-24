@@ -330,3 +330,12 @@ pub(super) async fn from_version_thirty_seven(conn: &turso::Connection) -> Resul
         .map_err(|_| HostError::Journal)?;
     super::validate_persisted_schema_v38(conn).await
 }
+
+pub(super) async fn from_version_thirty_eight(conn: &turso::Connection) -> Result<(), HostError> {
+    super::validate_persisted_schema_v38(conn).await?;
+    super::jit_conflict_recovery::bootstrap(conn).await?;
+    conn.execute("PRAGMA user_version = 39", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    super::validate_persisted_schema_v39(conn).await
+}

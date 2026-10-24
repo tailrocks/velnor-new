@@ -10,7 +10,7 @@
 
 use std::path::Path;
 
-use velnor_actions_contract::{NotSelectedReason, validate_run_key};
+use velnor_actions_contract::{NotSelectedReason, Plan, validate_run_key};
 
 use crate::task_report::{entry_and_digest_for_job, single_task_aggregate, write_entry_reports};
 
@@ -149,6 +149,52 @@ pub(crate) fn write_noop_report_for_job(
     let matrix = single_task_aggregate(&plan, entry, &task).map_err(internal_contract)?;
     write_entry_reports(runner_temp, &plan, entry, &task, &matrix)?;
     Ok(1)
+}
+
+/// Write plan-bound skip reports only within the failed task's exact job.
+///
+/// Resolve and build every selected report before the first downstream write.
+///
+/// # Errors
+///
+/// Returns [`OrchestratorError::Internal`] for self, duplicate, or unbound
+/// downstream IDs and [`OrchestratorError::Io`] for unwritable report paths.
+pub(crate) fn write_skip_reports_for_job(
+    plan: &Plan,
+    failed_task_id: &str,
+    job_id: &str,
+    downstream: &[String],
+    runner_temp: &Path,
+) -> Result<usize, OrchestratorError> {
+    let mut seen = std::collections::BTreeSet::new();
+    let mut reports = Vec::with_capacity(downstream.len());
+    for downstream_id in downstream {
+        if downstream_id == failed_task_id {
+            return Err(internal("downstream_self"));
+        }
+        if !seen.insert(downstream_id.as_str()) {
+            return Err(internal("downstream_duplicate"));
+        }
+        let (entry, digest) = entry_and_digest_for_job(plan, downstream_id, job_id)?;
+        let task = not_selected_report(&NotSelectedInputs {
+            run_key: &plan.run_key,
+            event: plan.event,
+            trust: plan.trust,
+            matrix_id: &entry.id,
+            planned_platform: &entry.planned_platform,
+            matrix_key: &entry.matrix_key,
+            task_id: downstream_id,
+            task_digest: digest,
+            reason: NotSelectedReason::UpstreamFailed,
+        })
+        .map_err(internal_contract)?;
+        let matrix = single_task_aggregate(plan, entry, &task).map_err(internal_contract)?;
+        reports.push((entry, task, matrix));
+    }
+    for (entry, task, matrix) in &reports {
+        write_entry_reports(runner_temp, plan, entry, task, matrix)?;
+    }
+    Ok(reports.len())
 }
 
 #[cfg(test)]

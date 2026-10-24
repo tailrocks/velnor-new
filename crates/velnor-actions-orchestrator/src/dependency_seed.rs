@@ -123,7 +123,7 @@ fn seed_job(
     let catalog = input.catalog;
     crate::source_prep::validate_root(&workspace.root)?;
     let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
-    steps.push(crate::workflow::verify_restored_rust_step(catalog)?);
+    steps.push(crate::workflow::verify_restored_rust_step(catalog));
     steps.push(crate::matrix_step::prepare_crate_tools_step(
         catalog,
         true,
@@ -132,7 +132,7 @@ fn seed_job(
         false,
     )?);
     steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
-    steps.push(crate::workflow::verify_rust_manifest_step(catalog)?);
+    steps.push(crate::workflow::verify_rust_manifest_step(catalog));
     steps.extend(crate::source_cache::restore_step_for_crate(
         input.fetch_roots,
         true,

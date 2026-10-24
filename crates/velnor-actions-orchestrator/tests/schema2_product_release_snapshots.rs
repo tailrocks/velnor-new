@@ -26,12 +26,26 @@ pub(super) fn assert_release_workflow_verifier(
     install_step_name: &str,
     install_token: Option<(&str, &str)>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    security_snapshots::assert_release_workflow_verifier(workflow, step_name, globally_scoped_key)?;
     verifier_snapshots::assert_release_workflow_verifier(
         workflow,
         step_name,
         globally_scoped_key,
         install_step_name,
         install_token,
+    )?;
+    Ok(())
+}
+
+pub(super) fn assert_full_workflow_verifier_environment(
+    workflow: &str,
+    verifier_steps: &[&str],
+    authenticated_bindings: &[(&str, &str, &str)],
+) -> Result<(), Box<dyn std::error::Error>> {
+    verifier_snapshots::assert_exact_empty_verifier_credentials_with_bindings(
+        workflow,
+        verifier_steps,
+        authenticated_bindings,
     )
 }
 

@@ -61,5 +61,9 @@ pub(crate) async fn test_scoped_intake(
 mod progress_tests;
 
 #[cfg(test)]
+#[path = "turn/poll_observation_tests.rs"]
+mod poll_observation_tests;
+
+#[cfg(test)]
 #[path = "turn/scoped_poll_tests.rs"]
 pub(super) mod scoped_poll_tests;

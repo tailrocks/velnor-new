@@ -19,7 +19,7 @@
 use std::io::Read;
 use std::path::Path;
 
-use velnor_actions_contract::{ReleaseTarget, Step, StepKind, StepRole, WorkflowIr};
+use velnor_actions_contract::{ReleaseTarget, StepRole, WorkflowIr};
 use velnor_actions_mise::toolfiles::lockfile::{
     InstallCoverage, InstallSubject, audit_install_coverage, mise_platform_for_target,
     parse_mise_lockfile, subject_for_install_spec,
@@ -28,6 +28,7 @@ use velnor_actions_mise::{MISE_LOCK_FILE, ToolCatalog};
 use velnor_actions_workflow_renderer::render::ValidatorCommand;
 
 use crate::verify::validator_install_pin;
+use crate::workflow::verifier_actions::VerifierActionSet;
 #[path = "lock_audit_names.rs"]
 mod names;
 use names::subject_names;
@@ -39,6 +40,13 @@ use rust::{is_catalogued_jactionlint, is_rust, rust_manifest_coverage};
 #[path = "lock_audit_vectors.rs"]
 mod vectors;
 use vectors::classify_mise_vectors;
+
+#[path = "lock_audit_prepare.rs"]
+mod prepare_sequence;
+use prepare_sequence::{
+    audit_validator_command, bare_install, jactionlint_verifier_sequence_valid, prepare_specs,
+    rust_verifier_sequence_valid, verifier_positions,
+};
 
 /// Audit outcome: one advisory summary plus fail-closed diagnostics.
 #[derive(Debug)]
@@ -88,7 +96,13 @@ pub(crate) fn audit_prepare_installs(
     audit_prepare_installs_with_catalog(root, ir, label, validator_commands, &ToolCatalog::pinned())
 }
 
+#[cfg(test)]
+fn pinned_rust_spec() -> String {
+    format!("rust@{}", velnor_actions_mise::catalog::RUST_VERSION)
+}
+
 /// Audit emitted install sets against `root/mise.lock` with a resolved [`ToolCatalog`].
+#[cfg(test)]
 pub(crate) fn audit_prepare_installs_with_catalog(
     root: &Path,
     ir: &WorkflowIr,
@@ -96,19 +110,45 @@ pub(crate) fn audit_prepare_installs_with_catalog(
     validator_commands: &[ValidatorCommand],
     catalog: &ToolCatalog,
 ) -> LockAuditOutcome {
+    let verifiers =
+        match VerifierActionSet::build(&catalog.for_emission(), env!("CARGO_PKG_VERSION")) {
+            Ok(verifiers) => verifiers,
+            Err(error) => {
+                return LockAuditOutcome {
+                    recommendation: None,
+                    blocking: vec![format!("verifier_action_templates_invalid:{error}")],
+                };
+            }
+        };
+    audit_prepare_installs_with_catalog_and_verifiers(
+        root,
+        ir,
+        label,
+        validator_commands,
+        catalog,
+        &verifiers,
+    )
+}
+
+/// Audit installs against the resolved catalog and the exact verifier action
+/// templates that generation will emit.
+pub(crate) fn audit_prepare_installs_with_catalog_and_verifiers(
+    root: &Path,
+    ir: &WorkflowIr,
+    label: &str,
+    validator_commands: &[ValidatorCommand],
+    catalog: &ToolCatalog,
+    verifiers: &VerifierActionSet,
+) -> LockAuditOutcome {
     let mut blocking = Vec::new();
     let mut subjects: Vec<InstallSubject> = Vec::new();
     let inline_verifiers = verifiers::build(&catalog.for_emission(), &mut blocking);
     for (id, job) in &ir.jobs {
-        let manifest_verified = job
-            .steps
-            .iter()
-            .any(|step| verifiers::installed_rust(step, inline_verifiers.as_ref()));
-        let jactionlint_verified = job
-            .steps
-            .iter()
-            .any(|step| verifiers::jactionlint(step, inline_verifiers.as_ref()));
-        for step in &job.steps {
+        let positions =
+            verifier_positions(id, job, verifiers, inline_verifiers.as_ref(), &mut blocking);
+        let mut rust_sequence_reported = false;
+        let mut jactionlint_sequence_reported = false;
+        for (step_index, step) in job.steps.iter().enumerate() {
             if step.role != Some(StepRole::PreparePinnedTools) {
                 continue;
             }
@@ -124,20 +164,51 @@ pub(crate) fn audit_prepare_installs_with_catalog(
                 // audit the concrete versions the project declares.
                 let spec = catalog.materialize(&spec);
                 match subject_for_install_spec(&spec, catalog) {
-                    Some(subject) if manifest_verified && is_rust(&subject) => {
-                        rust_manifest_coverage(&subject, &mut blocking);
+                    Some(subject) if is_rust(&subject) => {
+                        if rust_verifier_sequence_valid(job, &positions, Some(step_index)) {
+                            rust_manifest_coverage(&subject, &mut blocking);
+                        } else {
+                            if !rust_sequence_reported {
+                                blocking.push(format!(
+                                    "rust_verifier_sequence_invalid:{id}:expected restored immediately before prepare and installed after toolchain setup"
+                                ));
+                                rust_sequence_reported = true;
+                            }
+                            subjects.push(subject);
+                        }
                     }
                     // `Verify jactionlint` checks the installed executable
                     // against the catalog digest table, so a catalogued
                     // version needs no `mise.lock` row to be verified.
-                    Some(subject)
-                        if jactionlint_verified && is_catalogued_jactionlint(&subject) => {}
+                    Some(subject) if is_catalogued_jactionlint(&subject) => {
+                        if jactionlint_verifier_sequence_valid(&positions, Some(step_index)) {
+                            // The exact digest verifier follows the install.
+                        } else {
+                            if !jactionlint_sequence_reported {
+                                blocking.push(format!(
+                                    "jactionlint_verifier_sequence_invalid:{id}:expected immediately after prepare pinned tools"
+                                ));
+                                jactionlint_sequence_reported = true;
+                            }
+                            subjects.push(subject);
+                        }
+                    }
                     Some(subject) => subjects.push(subject),
                     None => blocking.push(format!("unauditable_install_spec:{spec}")),
                 }
             }
         }
     }
+    finish_install_audit(root, label, validator_commands, subjects, blocking)
+}
+
+fn finish_install_audit(
+    root: &Path,
+    label: &str,
+    validator_commands: &[ValidatorCommand],
+    mut subjects: Vec<InstallSubject>,
+    mut blocking: Vec<String>,
+) -> LockAuditOutcome {
     for command in validator_commands {
         audit_validator_command(command, &mut subjects, &mut blocking);
     }
@@ -163,72 +234,6 @@ pub(crate) fn audit_prepare_installs_with_catalog(
     };
     let lock_text = capped_read(&root.join(MISE_LOCK_FILE), MISE_LOCK_FILE, &mut blocking);
     audit_against_lock(lock_text.as_deref(), &subjects, &platform, blocking)
-}
-
-/// Bare-install diagnostic: zero specs means versions would come from
-/// `mise.toml`, so silence would be a fail-open.
-fn bare_install(id: &str) -> String {
-    format!(
-        "bare_install_step:{id} installs zero specs (versions would come from mise.toml); emit explicit specs"
-    )
-}
-
-/// Specs from a Prepare step's plain argv; a Prepare step always
-/// installs, so a missing or unclassifiable vector blocks as a
-/// generator bug.
-fn prepare_specs(id: &str, step: &Step, blocking: &mut Vec<String>) -> Option<Vec<String>> {
-    let StepKind::Shell { run, .. } = &step.kind else {
-        blocking.push(format!("unauditable_prepare_argv:{id}:not_a_shell_step"));
-        return None;
-    };
-    let tokens: Vec<&str> = run.iter().map(String::as_str).collect();
-    match classify_mise_vectors(&tokens) {
-        MiseVectors::Install(specs) => Some(specs),
-        MiseVectors::NotInstall => {
-            blocking.push(format!("unauditable_prepare_argv:{id}:no_install"));
-            None
-        }
-        MiseVectors::Unclassifiable(detail) => {
-            blocking.push(format!("unauditable_prepare_argv:{id}:{detail}"));
-            None
-        }
-    }
-}
-
-/// Audit one validator command's install contribution.
-///
-/// Isolated `exec` vectors contribute nothing; install specs resolve
-/// through the validator pin only (a catalog spec here blocks as
-/// misplaced instead of auditing through the wrong pin set), and an
-/// unclassifiable `mise` vector blocks instead of passing silently.
-fn audit_validator_command(
-    command: &ValidatorCommand,
-    subjects: &mut Vec<InstallSubject>,
-    blocking: &mut Vec<String>,
-) {
-    for argv in [&command.prepare_argv, &command.argv] {
-        match validator_argv_specs(argv) {
-            CommandInstalls::NotInstall => {}
-            CommandInstalls::Unclassifiable(detail) => {
-                blocking.push(format!(
-                    "unauditable_validator_argv:{}:{detail}",
-                    command.name
-                ));
-            }
-            CommandInstalls::Specs(specs) => {
-                if specs.is_empty() {
-                    blocking.push(bare_install(&command.name));
-                    continue;
-                }
-                for spec in specs {
-                    match validator_subject(&spec) {
-                        Some(subject) => subjects.push(subject),
-                        None => blocking.push(format!("unauditable_install_spec:{spec}")),
-                    }
-                }
-            }
-        }
-    }
 }
 
 /// Install contribution of one validator command.

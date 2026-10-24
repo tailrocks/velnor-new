@@ -73,12 +73,12 @@ fn verify_env() -> BTreeMap<String, String> {
 
 /// Right after the tools cache restore: no restored Rust byte runs unchecked.
 pub(super) fn restored_rust_step(spec: &RustSuitesRenderSpec) -> Result<Step, RenderError> {
-    let mut step = steps::shell_step(
+    let step = crate::verifier_composite::verifier_shell_step(
+        velnor_actions_contract::StepRole::VerifyRustManifest,
         "Verify restored Rust toolchain",
         spec.verify_restored_rust_argv.clone(),
         verify_env(),
     )?;
-    step.role = Some(velnor_actions_contract::StepRole::VerifyRustManifest);
     Ok(step)
 }
 
@@ -86,12 +86,12 @@ pub(super) fn restored_rust_step(spec: &RustSuitesRenderSpec) -> Result<Step, Re
 pub(super) fn install_suite_tools_steps(
     spec: &RustSuitesRenderSpec,
 ) -> Result<Vec<Step>, RenderError> {
-    let mut verify = steps::shell_step(
+    let verify = crate::verifier_composite::verifier_shell_step(
+        velnor_actions_contract::StepRole::VerifyRustManifest,
         crate::VERIFY_RUST_TOOLCHAIN_STEP,
         spec.verify_rust_argv.clone(),
         verify_env(),
     )?;
-    verify.role = Some(velnor_actions_contract::StepRole::VerifyRustManifest);
     Ok(vec![install_suite_tools_step(spec)?, verify])
 }
 

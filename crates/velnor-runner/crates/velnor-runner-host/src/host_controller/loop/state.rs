@@ -12,10 +12,11 @@ mod cleanup;
 #[path = "state/cursor.rs"]
 mod cursor;
 use bollard::Docker;
-use velnor_runner_github::QueueSession;
+use velnor_runner_github::{QueueSession, RunnerGroup};
 
 use crate::{
     config::{HostConfig, RepositoryConnection},
+    controller_ipc::SetupReceiptInput,
     error::HostError,
     journal::{ConnectionJournal, Journal},
     launch::{
@@ -26,6 +27,7 @@ use crate::{
         },
     },
     listen::{Link, Secret},
+    scale_set::EnsuredSet,
     worker::guest_image::GuestImageFile,
 };
 
@@ -33,6 +35,7 @@ pub(super) struct PreparedConnection {
     pub(super) binding: RepositoryConnection,
     pub(super) scope: ConnectionJournal,
     pub(super) set_id: i64,
+    pub(super) setup: PreparedSetup,
     pub(super) session_intent: i64,
     /// Assigned job count for this `QueueSession`.
     pub(super) assigned_total: Option<i64>,
@@ -58,6 +61,34 @@ pub(super) struct PreparedConnection {
     pub(super) unkeyed_acquired_recovery: Vec<PendingAcquiredRecovery>,
 }
 
+pub(super) struct PreparedSetup {
+    pub(super) set: EnsuredSet,
+    pub(super) groups: Vec<RunnerGroup>,
+    pub(super) captured_at_unix_ms: u64,
+}
+
+#[cfg(test)]
+impl PreparedSetup {
+    pub(super) fn test(binding: &RepositoryConnection, set_id: i64) -> Self {
+        Self {
+            set: EnsuredSet {
+                id: set_id,
+                ownership: crate::connect::SetOwnership::Adopted,
+                name: binding.scale_set.name().to_owned(),
+                runner_group_id: 1,
+                disable_update: false,
+                labels: binding.scale_set.labels().to_vec(),
+            },
+            groups: vec![RunnerGroup {
+                id: 1,
+                name: "test-group".to_owned(),
+                is_default: true,
+            }],
+            captured_at_unix_ms: 1_700_000_000_000,
+        }
+    }
+}
+
 pub(super) fn session_assigned_total(
     statistics: Option<&velnor_runner_github::Statistics>,
 ) -> Option<i64> {
@@ -80,6 +111,42 @@ impl PreparedConnection {
             || !self.pending_acquired_recovery.is_empty()
             || !self.unkeyed_acquired_recovery.is_empty()
     }
+
+    pub(super) fn setup_receipt_input(
+        &self,
+        engine_id: &str,
+        docker_root_digest: &str,
+    ) -> Result<SetupReceiptInput, HostError> {
+        let credentials = self.credentials.as_ref().ok_or(HostError::Keychain)?;
+        Ok(SetupReceiptInput {
+            binding: self.binding.clone(),
+            set: self.setup.set.clone(),
+            groups: self.setup.groups.clone(),
+            captured_at_unix_ms: self.setup.captured_at_unix_ms,
+            session_intent_id: self.session_intent,
+            session_id: credentials.session.session_id.clone(),
+            engine_id: engine_id.to_owned(),
+            docker_root_digest: docker_root_digest.to_owned(),
+        })
+    }
+}
+
+pub(super) fn setup_receipt_inputs(
+    connections: &[PreparedConnection],
+    config: &HostConfig,
+    engine_id: &str,
+    docker_root_digest: &str,
+) -> Result<Vec<SetupReceiptInput>, HostError> {
+    let mut inputs = Vec::new();
+    for connection in connections {
+        if config
+            .connection(&connection.binding.connection_id)
+            .is_some_and(|binding| connection.is_for(binding))
+        {
+            inputs.push(connection.setup_receipt_input(engine_id, docker_root_digest)?);
+        }
+    }
+    Ok(inputs)
 }
 
 pub(super) struct SessionCredentials {

@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Step, StepKind, StepRole};
+use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::render::RenderedFile;
 
@@ -124,7 +124,10 @@ fn generated_calls_use_role_and_ref_authority_not_display_labels() {
         });
     });
     assert_typed_call_rejected(&verifiers.installed_rust, |step| {
-        step.id = Some(velnor_actions_contract::StepId::CacheKeys);
+        step.id = Some(StepId::CacheKeys);
+    });
+    assert_typed_call_rejected(&verifiers.installed_rust, |step| {
+        step.id = Some(StepId::Plan);
     });
     assert_typed_call_rejected(&verifiers.installed_rust, |step| {
         step.condition = Some("always()".to_owned());

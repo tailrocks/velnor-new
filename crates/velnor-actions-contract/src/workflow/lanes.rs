@@ -11,6 +11,8 @@ pub use super::named_check_lanes::{
     NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, NAMED_CHECK_LANES_ENV, NamedCheckLane,
     NamedCheckLaneVariant, named_check_lanes, qualification_job_lanes,
 };
+#[path = "lanes_hosted_tasks.rs"]
+mod hosted_tasks;
 use crate::config::{
     CheckExecutor, CheckPlatform, EPHEMERAL_CHECK_ADMISSION_CONDITION, ExecutionConfig,
     ExecutionMode, ExecutionRole, RUNNER_LABEL_CATALOG, RunnerPlatform, RunsOn, VelnorConfig,
@@ -231,6 +233,24 @@ pub(super) fn placement_for_source(
         } else {
             (false, job_supports_scale_set(job_id, job, config)?)
         };
+    if !is_image_job
+        && let Some(runner) = hosted_tasks::declared_hosted_macos_task_runner(config, job_id)
+    {
+        if execution
+            .overrides
+            .get(override_id)
+            .is_some_and(|over| over.profile == execution.scale_set_profile)
+        {
+            return Err(ContractError::config(
+                "config.toml",
+                format!("execution.overrides.{override_id}.profile"),
+                "workflow_task_hosted_only_scale_set_override",
+            ));
+        }
+        if job.runs_on == runner {
+            return Ok(Placement::HostedOnly);
+        }
+    }
     if let Some(mode) = dispatch.or(execution.mode) {
         return Ok(match mode {
             ExecutionMode::Hosted => Placement::HostedOnly,

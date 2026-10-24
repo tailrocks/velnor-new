@@ -53,6 +53,7 @@ pub(super) fn bind_project_environment(
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn scalar_field(
     fields: &[(String, Yaml)],
     key: &str,

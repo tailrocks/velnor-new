@@ -112,11 +112,12 @@ async fn poll_connection_inner(
             .as_ref()
             .map(|credentials| credentials.session.session_id.as_str())
             .ok_or(HostError::Keychain)?;
-        context.control_state.record_session_poll(
+        context.control_state.record_session_poll_observation(
             &prepared.binding,
             prepared.set_id,
             prepared.session_intent,
             session_id,
+            Some(outcome.observation),
         )?;
         true
     } else {

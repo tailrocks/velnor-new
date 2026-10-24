@@ -255,15 +255,11 @@ fn assert_gnu_tar_build() {
 fn assert_runner_payload_end_state() {
     for obsolete_path in [
         "busybox tar",
-        "dpkg-divert",
         "tar-shim.sh",
         "tar-absolute.sh",
         "tar-extract.sh",
         "tar-extract-plan.sh",
         "tar-dir-meta.pl",
-        "tar-member.pl",
-        "tar-member-rewrite.pl",
-        "tar-member-stream.pl",
         "tar-pax.pl",
     ] {
         assert!(
@@ -271,9 +267,79 @@ fn assert_runner_payload_end_state() {
             "obsolete tar path remains: {obsolete_path}"
         );
     }
+    assert_guarded_tar_frontdoor();
     assert!(RUNNER_README.contains("Runner.Listener and its"));
     assert!(RUNNER_README.contains("embedded Node 24 runtime are not patched."));
     assert!(!RUNNER_DOCKERFILE.contains("externals/node24"));
+}
+
+fn assert_guarded_tar_frontdoor() {
+    const TAR_SHA256: &str = "035ec786cea68c6da6065e8c8d78e9b08aed5bbd168dee4e52da4a56417ba4c6";
+    let backend_checksum = format!("echo '{TAR_SHA256}  /usr/bin/tar.gnu' | sha256sum -c -");
+
+    assert!(RUNNER_DOCKERFILE.contains(
+        "RUN dpkg-divert --local --rename --divert /usr/bin/tar.ubuntu --add /usr/bin/tar"
+    ));
+    assert!(
+        RUNNER_DOCKERFILE
+            .contains("&& dpkg-divert --list /usr/bin/tar | grep -F /usr/bin/tar.ubuntu")
+    );
+    assert!(RUNNER_DOCKERFILE.contains("&& test -x /usr/bin/tar.ubuntu"));
+    assert!(RUNNER_DOCKERFILE.contains("&& test ! -e /usr/bin/tar"));
+
+    assert!(
+        RUNNER_DOCKERFILE.contains("COPY --from=gnu-tar-build /out/usr/bin/tar /usr/bin/tar.gnu")
+    );
+    assert!(RUNNER_DOCKERFILE.contains(backend_checksum.as_str()));
+    assert!(
+        RUNNER_DOCKERFILE.contains("&& /usr/bin/tar.gnu --version | grep -F 'tar (GNU tar) 1.35'")
+    );
+    assert!(RUNNER_DOCKERFILE.contains("COPY tar-guard.sh /usr/local/bin/velnor-tar"));
+    assert!(RUNNER_DOCKERFILE.contains(
+        "COPY tar-guard-preflight.sh tar-member.pl tar-member-stream.pl tar-member-rewrite.pl /usr/local/libexec/velnor/"
+    ));
+    assert!(RUNNER_DOCKERFILE.contains(
+        "&& chmod 0555 /usr/local/bin/velnor-tar /usr/local/libexec/velnor/tar-guard-preflight.sh"
+    ));
+    assert!(RUNNER_DOCKERFILE.contains(
+        "&& chmod 0444 /usr/local/libexec/velnor/tar-member.pl /usr/local/libexec/velnor/tar-member-stream.pl /usr/local/libexec/velnor/tar-member-rewrite.pl"
+    ));
+    assert!(RUNNER_DOCKERFILE.contains("&& ln -s /usr/local/bin/velnor-tar /usr/bin/tar"));
+    assert!(
+        RUNNER_DOCKERFILE
+            .contains("&& test \"$(readlink /usr/bin/tar)\" = /usr/local/bin/velnor-tar")
+    );
+
+    let backend_copy = RUNNER_DOCKERFILE
+        .find("COPY --from=gnu-tar-build /out/usr/bin/tar /usr/bin/tar.gnu")
+        .expect("Pinned GNU tar backend is installed at its native path");
+    let backend_verify = RUNNER_DOCKERFILE
+        .find(backend_checksum.as_str())
+        .expect("Pinned GNU tar backend is verified before frontdoor setup");
+    let wrapper_copy = RUNNER_DOCKERFILE
+        .find("COPY tar-guard.sh /usr/local/bin/velnor-tar")
+        .expect("Guard wrapper is installed before frontdoor activation");
+    let preflight_copy = RUNNER_DOCKERFILE
+        .find("COPY tar-guard-preflight.sh tar-member.pl tar-member-stream.pl tar-member-rewrite.pl /usr/local/libexec/velnor/")
+        .expect("Guard preflight and member readers are installed");
+    let frontdoor_link = RUNNER_DOCKERFILE
+        .find("&& ln -s /usr/local/bin/velnor-tar /usr/bin/tar")
+        .expect("Conventional tar frontdoor resolves to the guard");
+    let native_suites = RUNNER_DOCKERFILE
+        .find("TAR_BIN=/usr/bin/tar.gnu \"$test_file\" || exit")
+        .expect("Native tar suites exercise the pinned backend directly");
+    let guard_suite = RUNNER_DOCKERFILE
+        .find("&& /tmp/velnor-gnu-tar-tests/tar-guard-test.sh")
+        .expect("Guard behavior suite runs after native tar suites");
+    assert!(
+        backend_copy < backend_verify
+            && backend_verify < frontdoor_link
+            && wrapper_copy < frontdoor_link
+            && preflight_copy < frontdoor_link
+            && frontdoor_link < native_suites
+            && native_suites < guard_suite,
+        "pinned backend, guarded frontdoor, and tar suites are out of order"
+    );
 }
 
 pub(super) fn assert_dind_artifact_matches_lock(lock: &toml::Value) -> Result<(), String> {

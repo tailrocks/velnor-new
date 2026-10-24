@@ -189,6 +189,100 @@ async fn uncertain_scoped_acquire_keeps_charge_and_sends_no_replay() -> Result<(
     Ok(())
 }
 
+#[tokio::test]
+async fn malformed_foreign_and_server_acquire_responses_stay_uncertain_after_reopen()
+-> Result<(), String> {
+    for (label, status, body) in [
+        ("malformed-200", 200, "not-json"),
+        ("foreign-id-200", 200, r#"{"count":1,"value":[42]}"#),
+        ("server-500", 500, "{}"),
+    ] {
+        Box::pin(assert_uncertain_response_survives_reopen(
+            label, status, body,
+        ))
+        .await?;
+    }
+    Ok(())
+}
+
+async fn assert_uncertain_response_survives_reopen(
+    label: &str,
+    status: u16,
+    body: &str,
+) -> Result<(), String> {
+    let fixture = Fixture::open(label).await?;
+    prepare_capacity(&fixture).await?;
+    fixture
+        .journal
+        .configure_storage_profile(fixture_provisioning_profile())
+        .await
+        .map_err(|error| error.to_string())?;
+    let state = ActiveHostState::new(&fixture.binding)?;
+    let initial_drive = drive(&fixture, &state.path);
+    let permit =
+        StartPermit::test_fixture_with_available_memory(&"e".repeat(32), 32 * 1024 * 1024 * 1024);
+    let expected = selected_engine(&test_images(permit.docker_root_digest()))?;
+    let poll = crate::launch_harness::available(&[REQUEST_ID]);
+    let mut lane = FakeLane::new([Ok(exchange(status, body))]);
+
+    let result =
+        crate::launch::steps::acquire_scoped(&mut lane, &initial_drive, &poll, permit, &expected)
+            .await;
+    assert!(
+        matches!(&result, Err(EnsureError::Uncertain)),
+        "{label}: {:?}",
+        result.as_ref().err()
+    );
+    assert_eq!(lane.methods, [Method::Post], "{label}");
+    assert_eq!(lane.paths.len(), 1, "{label}");
+    assert!(lane.paths[0].ends_with("/acquirejobs"), "{label}");
+    assert_uncertain_charge(&fixture).await?;
+
+    drop(initial_drive);
+    let fixture = fixture.reopen().await?;
+    assert_uncertain_charge(&fixture).await?;
+    let replay_drive = drive(&fixture, &state.path);
+    let replay_permit =
+        StartPermit::test_fixture_with_available_memory(&"f".repeat(32), 32 * 1024 * 1024 * 1024);
+    let mut replay_lane = FakeLane::new([Ok(exchange(200, r#"{"count":1,"value":[41]}"#))]);
+    let replay = crate::launch::steps::acquire_scoped(
+        &mut replay_lane,
+        &replay_drive,
+        &poll,
+        replay_permit,
+        &expected,
+    )
+    .await;
+    assert!(
+        matches!(&replay, Err(EnsureError::Uncertain)),
+        "{label}: {:?}",
+        replay.as_ref().err()
+    );
+    assert!(replay_lane.methods.is_empty(), "{label}");
+    assert!(replay_lane.paths.is_empty(), "{label}");
+    assert_uncertain_charge(&fixture).await
+}
+
+async fn assert_uncertain_charge(fixture: &Fixture) -> Result<(), String> {
+    assert_eq!(
+        fixture
+            .scope
+            .request_acquire_state(&fixture.request)
+            .await
+            .map_err(|error| error.to_string())?,
+        Some(RequestAcquireState::Uncertain)
+    );
+    assert_eq!(
+        fixture
+            .journal
+            .occupied_reservation_count()
+            .await
+            .map_err(|error| error.to_string())?,
+        1
+    );
+    Ok(())
+}
+
 pub(super) async fn prepare_capacity(fixture: &Fixture) -> Result<(), String> {
     fixture
         .journal

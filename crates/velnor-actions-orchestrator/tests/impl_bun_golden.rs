@@ -8,8 +8,9 @@
 //! release bump never churns the golden.
 //!
 //! `bun-workspace` declares no suite. It is the proof that repositories which
-//! do not opt into suites, sharding or the newer Bun keys keep byte-identical
-//! output: every change after it must leave it unchanged.
+//! do not opt into suites, sharding or the newer Bun keys retain a stable
+//! generated-workflow contract; deliberate generator changes update this
+//! fixture, and later changes must preserve the reviewed output.
 //!
 //! `bun-workspace-suites` opts in (a sanitized copy of the `ChainArgos/platform`
 //! configuration): it changes only when a suite feature changes on purpose.

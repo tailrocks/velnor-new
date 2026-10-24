@@ -19,7 +19,7 @@ fn spec() -> FreshnessSpec {
         verify_rust_argv: vec![
             "sh".to_owned(),
             "-c".to_owned(),
-            "echo verify-rust".to_owned(),
+            crate::toolchain_env::with_credential_unset_script("echo verify-rust"),
         ],
         generator_version: "0.1.0".to_owned(),
     }
@@ -148,7 +148,7 @@ fn rejects_bad_spec_scalars() {
             verify_rust_argv: vec![
                 "sh".to_owned(),
                 "-c".to_owned(),
-                "echo verify-rust".to_owned(),
+                crate::toolchain_env::with_credential_unset_script("echo verify-rust"),
             ],
             ..spec()
         };
@@ -189,3 +189,6 @@ fn rejects_internal_steps_fail_closed() {
     let err = crate::steps_plain::plain_step_to_yaml(&internal).expect_err("rejected");
     assert!(err.to_string().contains("internal_op_rejected"), "{err}");
 }
+
+#[path = "freshness_verifier_envelope_tests.rs"]
+mod verifier_envelope;

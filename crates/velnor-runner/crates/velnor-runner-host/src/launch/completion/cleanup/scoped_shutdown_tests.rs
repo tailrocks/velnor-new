@@ -17,6 +17,9 @@ use crate::launch::completion::diagnostics::DiagnosticsRoot;
 use crate::launch::completion::journal_ref::CompletionJournal;
 use crate::listen::Secret;
 
+#[path = "scoped_shutdown_tests/effect_window.rs"]
+mod effect_window;
+
 async fn completed_fixture() -> Result<NativeStartedIntakeFixture, HostError> {
     let fixture = native_started_intake_fixture().await?;
     assert_eq!(

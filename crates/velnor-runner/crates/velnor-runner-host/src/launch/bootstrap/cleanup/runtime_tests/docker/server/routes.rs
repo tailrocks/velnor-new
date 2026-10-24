@@ -2,6 +2,31 @@ use super::*;
 use http::Request;
 use tar::{Builder, EntryType, Header};
 
+impl super::super::StatefulDocker {
+    pub(crate) async fn fail_container_delete_once(&self, reference: &str) {
+        self.state.lock().await.container_delete_failure_once = Some(reference.to_owned());
+    }
+
+    pub(crate) async fn container_delete_attempts(&self) -> Vec<(String, u16)> {
+        self.state.lock().await.container_delete_attempts.clone()
+    }
+
+    pub(crate) async fn volume_delete_attempts(&self) -> Vec<(String, u16)> {
+        self.state.lock().await.volume_delete_attempts.clone()
+    }
+
+    pub(crate) async fn expose_owned_volumes(&self, connection_id: &str) {
+        let mut state = self.state.lock().await;
+        state.owned_connection_id = Some(connection_id.to_owned());
+        state.owned_volumes = state
+            .identity
+            .volumes()
+            .iter()
+            .map(|(_, name)| name.clone())
+            .collect();
+    }
+}
+
 pub(super) async fn route(
     request: &Request,
     state: &Arc<Mutex<ServerState>>,
@@ -34,20 +59,7 @@ pub(super) async fn route(
         return Ok(response);
     }
     if path.contains("/containers/") && path.ends_with("/stop") && request.method == "POST" {
-        let reference = path
-            .split("/containers/")
-            .nth(1)
-            .unwrap_or_default()
-            .split('/')
-            .next()
-            .unwrap_or_default();
-        if reference == state.identity.runner_container_id()
-            || reference == state.identity.dind_container_id()
-        {
-            state.stopped_owned_containers.insert(reference.to_owned());
-            return Ok((204, Vec::new()));
-        }
-        return Ok((404, message()));
+        return Ok(route_container_stop(path, &mut state));
     }
     if path.contains("/containers/") && path.ends_with("/logs") {
         return capacity_logs(&state);
@@ -56,25 +68,95 @@ pub(super) async fn route(
         return container_response(path, &state);
     }
     if path.contains("/containers/") && request.method == "DELETE" {
-        if path.contains(state.identity.runner_container_id())
-            || path.contains(state.identity.dind_container_id())
-        {
-            effects.container_deletes.fetch_add(1, Ordering::Relaxed);
-            if state.owned_containers_present {
-                let id = if path.contains(state.identity.runner_container_id()) {
-                    state.identity.runner_container_id().to_owned()
-                } else {
-                    state.identity.dind_container_id().to_owned()
-                };
-                state.removed_owned_containers.insert(id);
-            }
-        }
-        if let Some(probe) = state.probe.as_mut() {
-            probe.phase = ProbePhase::Removed;
-        }
-        return Ok((204, Vec::new()));
+        return Ok(route_container_delete(path, &mut state, effects));
     }
     Ok((404, message()))
+}
+
+fn route_container_stop(path: &str, state: &mut ServerState) -> (u16, Vec<u8>) {
+    let reference = path
+        .split("/containers/")
+        .nth(1)
+        .unwrap_or_default()
+        .split('/')
+        .next()
+        .unwrap_or_default();
+    if reference == state.identity.runner_container_id()
+        || reference == state.identity.dind_container_id()
+    {
+        state.stopped_owned_containers.insert(reference.to_owned());
+        return (204, Vec::new());
+    }
+    (404, message())
+}
+
+fn route_container_delete(
+    path: &str,
+    state: &mut ServerState,
+    effects: &EffectCounts,
+) -> (u16, Vec<u8>) {
+    let reference = path
+        .split("/containers/")
+        .nth(1)
+        .unwrap_or_default()
+        .split('/')
+        .next()
+        .unwrap_or_default();
+    let failed_once = state.container_delete_failure_once.as_deref() == Some(reference);
+    let primary_id = [
+        state.identity.runner_container_id(),
+        state.identity.dind_container_id(),
+    ]
+    .into_iter()
+    .find(|id| *id == reference)
+    .map(str::to_owned);
+    let secondary_id = state
+        .secondary_owned_identity
+        .as_ref()
+        .and_then(|(_, identity)| {
+            [identity.runner_container_id(), identity.dind_container_id()]
+                .into_iter()
+                .find(|id| *id == reference)
+                .map(str::to_owned)
+        });
+    if primary_id.is_none() && secondary_id.is_none() {
+        let current_probe = state
+            .probe
+            .as_ref()
+            .is_some_and(|probe| probe.id.as_str() == reference);
+        if current_probe {
+            if failed_once {
+                state.container_delete_failure_once = None;
+            } else if let Some(probe) = state.probe.as_mut() {
+                probe.phase = ProbePhase::Removed;
+            }
+            let status = if failed_once { 500 } else { 204 };
+            state
+                .container_delete_attempts
+                .push((reference.to_owned(), status));
+            return (status, if failed_once { message() } else { Vec::new() });
+        }
+        state
+            .container_delete_attempts
+            .push((reference.to_owned(), 404));
+        return (404, message());
+    }
+    effects.container_deletes.fetch_add(1, Ordering::Relaxed);
+    if !failed_once {
+        if let Some(id) = primary_id.filter(|_| state.owned_containers_present) {
+            state.removed_owned_containers.insert(id);
+        } else if let Some(id) = secondary_id {
+            state.removed_secondary_resources.insert(id);
+        }
+    }
+    if failed_once {
+        state.container_delete_failure_once = None;
+    }
+    let status = if failed_once { 500 } else { 204 };
+    state
+        .container_delete_attempts
+        .push((reference.to_owned(), status));
+    (status, if failed_once { message() } else { Vec::new() })
 }
 
 fn route_probe_lifecycle(path: &str, state: &mut ServerState) -> Option<(u16, Vec<u8>)> {
@@ -99,47 +181,35 @@ fn route_volume(
     state: &mut ServerState,
 ) -> Result<(u16, Vec<u8>), HostError> {
     let name = path.rsplit('/').next().unwrap_or_default();
-    if method == "GET" && state.owned_volumes.contains(name) {
-        return volume_response(name, state);
+    if method == "GET" {
+        if state.volume_deleted_before_inspection_failure.as_deref() == Some(name) {
+            state.volume_inspection_failure_observed = true;
+            return Ok((500, message()));
+        }
+        if let Some(response) = super::owned::volume_response(name, state)? {
+            return Ok(response);
+        }
     }
     if method == "DELETE" && state.owned_volumes.contains(name) {
         if state.volume_delete_failure.as_deref() == Some(name) {
+            state.volume_delete_attempts.push((name.to_owned(), 500));
             return Ok((500, message()));
         }
         state.owned_volumes.remove(name);
+        if state.volume_inspection_failure_after_delete.as_deref() == Some(name) {
+            state.volume_deleted_before_inspection_failure = Some(name.to_owned());
+        }
+        state.volume_delete_attempts.push((name.to_owned(), 204));
         return Ok((204, Vec::new()));
     }
+    if method == "DELETE" && super::owned::remove_secondary_volume(name, state) {
+        state.volume_delete_attempts.push((name.to_owned(), 204));
+        return Ok((204, Vec::new()));
+    }
+    if method == "DELETE" {
+        state.volume_delete_attempts.push((name.to_owned(), 404));
+    }
     Ok((404, message()))
-}
-
-fn volume_response(name: &str, state: &ServerState) -> Result<(u16, Vec<u8>), HostError> {
-    let (role, _) = state
-        .identity
-        .volumes()
-        .iter()
-        .find(|(_, candidate)| candidate == name)
-        .ok_or(HostError::Ownership)?;
-    let connection_id = state
-        .owned_connection_id
-        .as_deref()
-        .ok_or(HostError::Ownership)?;
-    let body = serde_json::json!({
-        "Name": name,
-        "Driver": "local",
-        "Mountpoint": format!("/var/lib/docker/volumes/{name}/_data"),
-        "Options": {},
-        "Scope": "local",
-        "Labels": {
-            "velnor.connection": connection_id,
-            "velnor.reservation": state.identity.reservation_id().to_string(),
-            "velnor.operation": state.identity.operation_id().to_string(),
-            "velnor.role": role.as_str()
-        }
-    });
-    Ok((
-        200,
-        serde_json::to_vec(&body).map_err(|_| HostError::Frame)?,
-    ))
 }
 
 fn create_runner_log_exec(

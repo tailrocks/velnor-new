@@ -85,11 +85,13 @@ pub(super) fn source_steps(spec: &ConsumerReleaseSpec, id: &str) -> Result<Vec<Y
     let runner = spec.producer_runner.runs_on();
     crate::toolchain_env::check_toolchain_homes(&spec.producer_cargo_env)?;
     crate::toolchain_env::reject_denied_step_keys(&spec.producer_cargo_env)?;
-    let verify_rust = crate::verifier_shell::render_command(
+    let verify_step = crate::verifier_composite::verifier_shell_step(
         velnor_actions_contract::StepRole::VerifyRustManifest,
         crate::VERIFY_RUST_TOOLCHAIN_STEP,
-        &spec.verify_rust_argv,
+        spec.verify_rust_argv.clone(),
+        BTreeMap::new(),
     )?;
+    let verify_yaml = crate::document_steps::verifier_shell_step_to_yaml(&verify_step)?;
     let mut producer_steps = vec![
         checkout,
         run_step(
@@ -100,7 +102,7 @@ pub(super) fn source_steps(spec: &ConsumerReleaseSpec, id: &str) -> Result<Vec<Y
             "Install pinned Cargo metadata toolchain",
             &join_argv_for_run(&spec.install_rust_argv)?,
         ),
-        verify_rust,
+        verify_yaml,
     ];
     for step in &spec.producer_source_prep {
         let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
@@ -129,27 +131,20 @@ pub(super) fn bind_stage(
     pair: Option<&ReleasePayloadPair>,
     preview_matrix: bool,
 ) -> Result<(), RenderError> {
-    let env = if preview_matrix {
-        vec![
-            ("VELNOR_RELEASE_STAGE", "payload"),
-            ("VELNOR_RELEASE_PRODUCT_ID", "${{ matrix.product_id }}"),
-            ("VELNOR_RELEASE_TARGET", "${{ matrix.target }}"),
-        ]
-    } else if let Some(pair) = pair {
-        vec![
-            ("VELNOR_RELEASE_STAGE", "payload"),
-            ("VELNOR_RELEASE_PRODUCT_ID", pair.product_id.as_str()),
-            ("VELNOR_RELEASE_TARGET", pair.target.as_str()),
-        ]
+    if preview_matrix || pair.is_some() {
+        operation_env(operation, &[("VELNOR_RELEASE_STAGE", "payload")])?;
+        bind_payload_pair(operation, pair, preview_matrix)?;
     } else if spec.policy.channel == PackageReleaseChannel::Preview {
-        vec![("VELNOR_RELEASE_STAGE", "assemble")]
+        operation_env(operation, &[("VELNOR_RELEASE_STAGE", "assemble")])?;
     } else {
-        vec![
-            ("VELNOR_RELEASE_STAGE", "assemble"),
-            ("VELNOR_RELEASE_NEEDS_JSON", "${{ toJSON(needs) }}"),
-        ]
-    };
-    operation_env(operation, &env)?;
+        operation_env(
+            operation,
+            &[
+                ("VELNOR_RELEASE_STAGE", "assemble"),
+                ("VELNOR_RELEASE_NEEDS_JSON", "${{ toJSON(needs) }}"),
+            ],
+        )?;
+    }
     if spec.policy.channel
         == velnor_actions_contract::package_release::PackageReleaseChannel::Stable
     {
@@ -181,5 +176,30 @@ pub(super) fn bind_stage(
             )],
         )?;
     }
+    Ok(())
+}
+
+/// Bind only the matrix/literal payload identity, without downstream admission digests.
+pub(super) fn bind_payload_pair(
+    operation: &mut Yaml,
+    pair: Option<&ReleasePayloadPair>,
+    preview_matrix: bool,
+) -> Result<(), RenderError> {
+    let env = if preview_matrix {
+        vec![
+            ("VELNOR_RELEASE_PRODUCT_ID", "${{ matrix.product_id }}"),
+            ("VELNOR_RELEASE_TARGET", "${{ matrix.target }}"),
+        ]
+    } else if let Some(pair) = pair {
+        vec![
+            ("VELNOR_RELEASE_PRODUCT_ID", pair.product_id.as_str()),
+            ("VELNOR_RELEASE_TARGET", pair.target.as_str()),
+        ]
+    } else {
+        return Err(RenderError::InvalidWorkflow(
+            "preview_payload_pair_missing".to_owned(),
+        ));
+    };
+    operation_env(operation, &env)?;
     Ok(())
 }

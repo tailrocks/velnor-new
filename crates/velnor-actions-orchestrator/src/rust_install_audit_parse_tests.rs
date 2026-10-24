@@ -319,5 +319,5 @@ fn compact_and_standard_inline_verifiers_keep_environment_and_shell_exact() {
 #[path = "rust_install_audit_parse_anchor_tests.rs"]
 mod anchor_tests;
 
-#[path = "rust_install_audit_parse_alias_tests.rs"]
+#[path = "rust_install_audit_parse_legacy_alias_tests.rs"]
 mod alias_tests;

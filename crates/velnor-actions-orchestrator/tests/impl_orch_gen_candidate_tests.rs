@@ -1,5 +1,26 @@
 use super::*;
 
+use velnor_actions_orchestrator::render_staged_tree;
+
+fn lock_text() -> Result<String, Box<dyn std::error::Error>> {
+    use std::fmt::Write as _;
+    let version = env!("CARGO_PKG_VERSION");
+    let mut bins = String::new();
+    for target in velnor_actions_contract::SUPPORTED_TARGETS {
+        write!(
+            bins,
+            "[[generator.binaries]]\ntarget = \"{target}\"\nartifact = \"https://example.invalid/r/{target}\"\nsha256 = \"{}\"\n",
+            "a".repeat(64)
+        )?;
+    }
+    Ok(format!(
+        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"{mise_version}\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
+        "e".repeat(40),
+        "b".repeat(64),
+        mise_version = velnor_actions_mise::MISE_VERSION,
+    ))
+}
+
 #[test]
 fn orch_gen_candidate_qualify_is_artifact_only() -> TestResult {
     without_ambient_identity("orch_gen_candidate_qualify_is_artifact_only", || {

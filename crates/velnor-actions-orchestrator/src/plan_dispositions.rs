@@ -58,7 +58,10 @@ pub(crate) fn job_needs(
 ) -> Result<BTreeMap<String, BTreeSet<String>>, OrchestratorError> {
     let mut needs: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for task in tasks {
-        let Some(job) = owners.for_member(task, event).map_err(internal_contract)? else {
+        let Some(job) = owners
+            .for_member_for_event(task, event)
+            .map_err(internal_contract)?
+        else {
             continue;
         };
         for gate in task.gated_by.iter().chain(&task.depends_on) {
@@ -66,7 +69,7 @@ pub(crate) fn job_needs(
                 continue;
             };
             let Some(owner) = owners
-                .for_member(member, event)
+                .for_member_for_event(member, event)
                 .map_err(internal_contract)?
             else {
                 continue;

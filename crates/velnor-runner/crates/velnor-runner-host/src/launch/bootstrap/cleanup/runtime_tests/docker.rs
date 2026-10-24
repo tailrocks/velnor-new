@@ -126,6 +126,38 @@ impl StatefulDocker {
         Ok(())
     }
 
+    pub(crate) async fn fail_owned_volume_inspection_after_delete(
+        &self,
+        connection_id: &str,
+    ) -> Result<(), HostError> {
+        let mut state = self.state.lock().await;
+        state.owned_connection_id = Some(connection_id.to_owned());
+        state.owned_volumes = state
+            .identity
+            .volumes()
+            .iter()
+            .map(|(_, name)| name.clone())
+            .collect();
+        state.volume_inspection_failure_after_delete = state
+            .identity
+            .volumes()
+            .iter()
+            .find(|(role, _)| *role == crate::journal::StorageRole::RunnerHome)
+            .map(|(_, name)| name.clone());
+        Ok(())
+    }
+
+    pub(crate) async fn post_delete_volume_inspection_failure_was_observed(&self) -> bool {
+        let state = self.state.lock().await;
+        state
+            .volume_inspection_failure_after_delete
+            .as_deref()
+            .is_some_and(|target| {
+                state.volume_deleted_before_inspection_failure.as_deref() == Some(target)
+            })
+            && state.volume_inspection_failure_observed
+    }
+
     pub(crate) fn request_count(&self) -> u64 {
         self.request_count.load(Ordering::Relaxed)
     }
@@ -138,6 +170,25 @@ impl StatefulDocker {
             volume_deletes: self.effects.volume_deletes.load(Ordering::Relaxed),
             network_deletes: self.effects.network_deletes.load(Ordering::Relaxed),
         }
+    }
+
+    pub(crate) async fn reject_owned_volume_connection_label(&self, connection_id: &str) {
+        let mut state = self.state.lock().await;
+        state.owned_connection_id = Some(connection_id.to_owned());
+        state.owned_volumes = state
+            .identity
+            .volumes()
+            .iter()
+            .map(|(_, name)| name.clone())
+            .collect();
+        state.volume_connection_mismatch = OwnedContainerMismatch::ForeignVolumeConnection;
+    }
+
+    pub(crate) async fn set_capacity_values(&self, first: u64, after_first: u64, total: u64) {
+        let mut state = self.state.lock().await;
+        state.capacity_first = first;
+        state.capacity_after_first = after_first;
+        state.capacity_total = total;
     }
 }
 
@@ -179,10 +230,19 @@ struct ServerState {
     owned_connection_id: Option<String>,
     owned_mismatch: OwnedContainerMismatch,
     owned_containers_present: bool,
+    secondary_owned_identity: Option<(String, StorageCleanupIdentity)>,
+    removed_secondary_resources: HashSet<String>,
     removed_owned_containers: HashSet<String>,
     stopped_owned_containers: HashSet<String>,
+    container_delete_failure_once: Option<String>,
+    container_delete_attempts: Vec<(String, u16)>,
+    volume_delete_attempts: Vec<(String, u16)>,
     owned_volumes: HashSet<String>,
+    volume_connection_mismatch: OwnedContainerMismatch,
     volume_delete_failure: Option<String>,
+    volume_inspection_failure_after_delete: Option<String>,
+    volume_deleted_before_inspection_failure: Option<String>,
+    volume_inspection_failure_observed: bool,
     exec_counter: u8,
     exec_state: Option<ExecState>,
     empty_runner_logs: bool,
@@ -199,6 +259,7 @@ struct ExecState {
 pub(crate) enum OwnedContainerMismatch {
     #[default]
     None,
+    ForeignVolumeConnection,
     Id,
     Name,
     Reservation,
@@ -233,10 +294,19 @@ impl ServerState {
             owned_connection_id: None,
             owned_mismatch: OwnedContainerMismatch::None,
             owned_containers_present: false,
+            secondary_owned_identity: None,
+            removed_secondary_resources: HashSet::new(),
             removed_owned_containers: HashSet::new(),
             stopped_owned_containers: HashSet::new(),
+            container_delete_failure_once: None,
+            container_delete_attempts: Vec::new(),
+            volume_delete_attempts: Vec::new(),
             owned_volumes: HashSet::new(),
+            volume_connection_mismatch: OwnedContainerMismatch::None,
             volume_delete_failure: None,
+            volume_inspection_failure_after_delete: None,
+            volume_deleted_before_inspection_failure: None,
+            volume_inspection_failure_observed: false,
             exec_counter: 0,
             exec_state: None,
             empty_runner_logs: false,

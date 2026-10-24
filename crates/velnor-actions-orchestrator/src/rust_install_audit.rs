@@ -18,7 +18,7 @@ use crate::workflow::verifier_actions::{
 
 #[path = "rust_install_audit_parse.rs"]
 mod parse;
-use parse::{StepText, step_lists};
+use parse::{StepText, duplicate_anchor_names, step_lists};
 
 /// Text that installs or changes a Rust toolchain.
 const INSTALLS: [&str; 9] = [
@@ -82,12 +82,29 @@ pub(crate) fn audit_with_verifiers(
     verifiers: &VerifierActionSet,
 ) -> Result<(), OrchestratorError> {
     check_verifier_files(files, verifiers)?;
+    let validated_verifier_paths = verifiers
+        .files()
+        .into_iter()
+        .map(|file| file.path)
+        .collect::<std::collections::BTreeSet<_>>();
     for file in files {
         let yaml = std::path::Path::new(&file.path)
             .extension()
             .is_some_and(|ext| ext.eq_ignore_ascii_case("yml") || ext.eq_ignore_ascii_case("yaml"));
         if !(file.path.starts_with(".github/") && yaml) {
             continue;
+        }
+        // These definitions were byte-validated above. Their internal steps
+        // are not workflow call sites and must not be audited as such.
+        if validated_verifier_paths.contains(&file.path) {
+            continue;
+        }
+        if let Some(anchor) = duplicate_anchor_names(&file.bytes).iter().next() {
+            return Err(unverified(
+                &file.path,
+                anchor,
+                "invalid YAML anchor declaration or alias (duplicate YAML anchor in document)",
+            ));
         }
         for (owner, steps) in step_lists(&file.bytes) {
             let path = format!("{}:{owner}", file.path);
@@ -96,7 +113,10 @@ pub(crate) fn audit_with_verifiers(
                     return Err(unverified(
                         &path,
                         &step.name,
-                        "invalid YAML anchor declaration or alias",
+                        concat!(
+                            "invalid YAML anchor declaration or alias (",
+                            "unresolved or malformed YAML anchor)"
+                        ),
                     ));
                 }
                 if !is_verifier_step_valid(step, verifiers) {
@@ -200,12 +220,9 @@ fn canonical_inline_shape(step: &StepText, template: &InlineVerifierTemplate) ->
     {
         return false;
     }
-    let Some(shell) = template.shell else {
+    if template.shell.is_none() {
         return false;
-    };
-    let Some(actual_name) = step.field("name") else {
-        return false;
-    };
+    }
     if step.name.trim().is_empty() {
         return false;
     }
@@ -219,19 +236,27 @@ fn canonical_inline_shape(step: &StepText, template: &InlineVerifierTemplate) ->
     let Some((_, name)) = expected_top.iter_mut().find(|(key, _)| key == "name") else {
         return false;
     };
-    actual_name.clone_into(name);
+    *name = quote_scalar(&step.name);
+    let actual_env_count = step
+        .top_fields
+        .iter()
+        .filter(|(key, _)| key == "env")
+        .count();
+    let expected_env_count = template
+        .top_fields
+        .iter()
+        .filter(|(key, _)| key == "env")
+        .count();
+    if actual_env_count != expected_env_count {
+        return false;
+    }
     let actual_top = step
-        .fields
+        .top_fields
         .iter()
         .filter(|(key, _)| key != "env")
         .cloned()
         .collect::<Vec<_>>();
-    let expected_shell = quote_scalar(shell);
-    if actual_top != expected_top
-        || step.field("shell") != Some(expected_shell.as_str())
-        || step.field("run") != Some(template.run_scalar.as_str())
-        || step.field("env").is_none()
-    {
+    if actual_top != expected_top {
         return false;
     }
 
@@ -247,12 +272,13 @@ fn canonical_inline_shape(step: &StepText, template: &InlineVerifierTemplate) ->
 
 fn canonical_action_call(step: &StepText, action: &VerifierAction) -> bool {
     !step.unexpected_nested
+        && step.top_fields.len() == 2
         && step.fields.len() == 2
-        && step.fields[0].0 == "name"
+        && step.top_fields[0].0 == "name"
         && !step.name.trim().is_empty()
-        && step.fields[0].1 == quote_scalar(&step.name)
-        && step.fields[1].0 == "uses"
-        && step.fields[1].1 == format!("{} # zizmor: ignore[self-repository]", action.uses)
+        && step.top_fields[0].1 == quote_scalar(&step.name)
+        && step.top_fields[1].0 == "uses"
+        && step.top_fields[1].1 == format!("{} # zizmor: ignore[self-repository]", action.uses)
 }
 
 fn unverified(path: &str, step: &str, why: &str) -> OrchestratorError {

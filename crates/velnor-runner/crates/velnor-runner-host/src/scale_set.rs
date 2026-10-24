@@ -47,6 +47,8 @@ pub struct EnsuredSet {
 pub(crate) struct ConnectionSetup {
     /// Verified Scale Set identity and ownership.
     pub(crate) set: EnsuredSet,
+    /// Ordered Runner Groups returned by the same setup read.
+    pub(crate) groups: Vec<RunnerGroup>,
     /// Admin link minted for the same verified repository scope.
     pub(crate) link: Link,
     /// Journal view validated from the exact configured binding.
@@ -190,7 +192,12 @@ pub(crate) async fn ensure_connection_scale_set(
         (_, _) => return Err(EnsureError::Uncertain),
     };
     let link = link_from_admin(transport.inner, admin, binding, &scope)?;
-    Ok(ConnectionSetup { set, link, scoped })
+    Ok(ConnectionSetup {
+        set,
+        groups,
+        link,
+        scoped,
+    })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

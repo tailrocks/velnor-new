@@ -340,6 +340,10 @@ fn unquote_run(value: &str) -> Result<String, Box<dyn Error>> {
 mod tests;
 
 #[cfg(test)]
+#[path = "schema2_generator_release_family_workflow_tests.rs"]
+mod family_workflow_tests;
+
+#[cfg(test)]
 #[path = "schema2_generator_release_verifier_policy_tests.rs"]
 mod policy;
 

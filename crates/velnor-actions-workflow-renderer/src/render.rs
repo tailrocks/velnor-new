@@ -159,9 +159,14 @@ pub fn finalize_jobs(
     mise: &MiseSetup,
     routing: &crate::workflow_routing::WorkflowRoutingPolicy,
 ) -> Result<BTreeMap<String, Job>, RenderError> {
+    let routing = (*routing).clone().with_verified_workflow_tasks(
+        ir,
+        &ctx.workflow_tasks,
+        &ctx.checkout_uses,
+    )?;
     mise.validate()?;
-    let mut jobs = merged_jobs(ir, policy, support, ctx, routing)?;
-    crate::workflow_routing::route_jobs(&mut jobs, routing)?;
+    let mut jobs = merged_jobs(ir, policy, support, ctx, &routing)?;
+    crate::workflow_routing::route_jobs(&mut jobs, &routing)?;
     for (id, job) in &mut jobs {
         let bootstrap_plan = ctx.preseed && id == PLAN_JOB_ID;
         if bootstrap_plan {
@@ -225,7 +230,7 @@ pub fn finalize_jobs(
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
-    crate::workflow_routing::route_jobs(&mut jobs, routing)?;
+    crate::workflow_routing::route_jobs(&mut jobs, &routing)?;
     crate::dispatch_cache_boundary::suppress_unvalidated_cache_access(&mut jobs);
     crate::cache_tar_setup::insert_launcher_steps(&mut jobs)?;
     apply_affected_job_gates(&mut jobs)?;
@@ -313,6 +318,11 @@ fn render_merged_with_routing(
     ctx: &RenderContext,
     routing: &crate::workflow_routing::WorkflowRoutingPolicy,
 ) -> Result<RenderedWorkflow, RenderError> {
+    let routing = (*routing).clone().with_verified_workflow_tasks(
+        ir,
+        &ctx.workflow_tasks,
+        &ctx.checkout_uses,
+    )?;
     let matrix = matrix::task_matrix_of(jobs)?;
     let caps = matrix::crate_job_caps(jobs)?;
     let suite_matrices = (
@@ -346,7 +356,7 @@ fn render_merged_with_routing(
         suite_matrices: &suite_matrices,
         allow_step_aliases: false,
     };
-    match emit::emit_shared(ir, &shared, &jobs, ctx, &first_emit, routing) {
+    match emit::emit_shared(ir, &shared, &jobs, ctx, &first_emit, &routing) {
         Ok(workflow) => Ok(workflow),
         Err(error) if emit::workflow_file_too_large(&error) => {
             let extracted =
@@ -355,7 +365,7 @@ fn render_merged_with_routing(
                 allow_step_aliases: true,
                 ..first_emit
             };
-            match emit::emit_shared(ir, &shared, &jobs, ctx, &retry_emit, routing) {
+            match emit::emit_shared(ir, &shared, &jobs, ctx, &retry_emit, &routing) {
                 Ok(workflow) => Ok(workflow),
                 Err(second_error) if emit::workflow_file_too_large(&second_error) => {
                     let shared_ids = shared.calls.keys().cloned().collect();
@@ -368,7 +378,7 @@ fn render_merged_with_routing(
                         return Err(if extracted == 0 { error } else { second_error });
                     }
                     shared.files.extend(cache_files);
-                    emit::emit_shared(ir, &shared, &jobs, ctx, &retry_emit, routing)
+                    emit::emit_shared(ir, &shared, &jobs, ctx, &retry_emit, &routing)
                 }
                 Err(second_error) => Err(second_error),
             }

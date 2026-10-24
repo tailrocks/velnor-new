@@ -127,12 +127,12 @@ pub fn render_freshness_workflow_with_routing(
         ],
         BTreeMap::new(),
     )?;
-    let mut verify_rust = shell_step(
+    let verify_rust = crate::verifier_composite::verifier_shell_step(
+        velnor_actions_contract::StepRole::VerifyRustManifest,
         crate::VERIFY_RUST_TOOLCHAIN_STEP,
         spec.verify_rust_argv.clone(),
         BTreeMap::new(),
     )?;
-    verify_rust.role = Some(StepRole::VerifyRustManifest);
     let probe = shell_step(
         "Check upstream freshness",
         vec![

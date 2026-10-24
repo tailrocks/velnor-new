@@ -24,7 +24,7 @@ pub(super) fn external_needs(
                 continue;
             };
             let owner = owners
-                .for_member(member, event)?
+                .for_member_for_event(member, event)?
                 .ok_or_else(|| internal("crate_gate_owner_missing"))?;
             if owner != current_job {
                 needs.insert(owner);

@@ -253,18 +253,22 @@ fn canonical_verifier_step_requires_one_full_credential_prelude() {
     assert_eq!(env.get("GITHUB_TOKEN").map(String::as_str), Some(""));
 
     let argv = verifier_shell_argv(&canonical).expect("trusted fixed-shell argv");
+    let expected_prefix = [
+        "/usr/bin/env".to_owned(),
+        format!("PATH={}", crate::VERIFY_PATH),
+        "/bin/bash".to_owned(),
+        "--noprofile".to_owned(),
+        "--norc".to_owned(),
+        "-p".to_owned(),
+        "-e".to_owned(),
+        "-o".to_owned(),
+        "pipefail".to_owned(),
+        "-c".to_owned(),
+    ];
     assert_eq!(
-        &argv[..8],
-        [
-            "/bin/bash",
-            "--noprofile",
-            "--norc",
-            "-p",
-            "-e",
-            "-o",
-            "pipefail",
-            "-c",
-        ]
+        &argv[..expected_prefix.len()],
+        expected_prefix.as_slice(),
+        "standalone argv binds trusted PATH before privileged Bash"
     );
     let run = verifier_shell_run_scalar(&canonical).expect("actual rendered run scalar");
     assert_eq!(argv.last(), Some(&run));

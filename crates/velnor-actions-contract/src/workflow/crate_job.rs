@@ -44,7 +44,8 @@ pub struct CrateObligation {
     pub run: Vec<String>,
 }
 
-/// One crate responsibility: ordered, individually reported obligations (P05-1).
+/// One package configuration's responsibility: ordered, individually
+/// reported obligations (P05-1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CrateJob {
     /// Stable collision-safe job ID.
@@ -57,6 +58,8 @@ pub struct CrateJob {
     pub package_id: String,
     /// Package manifest path.
     pub manifest: String,
+    /// Configuration name owning this package job.
+    pub configuration: String,
     /// Ordered obligations; gates reference strictly earlier entries.
     pub obligations: Vec<CrateObligation>,
 }

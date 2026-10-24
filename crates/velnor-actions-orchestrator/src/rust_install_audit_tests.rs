@@ -244,3 +244,24 @@ mod verifier_tests;
 
 #[path = "rust_install_audit_resolver_tests.rs"]
 mod resolver_tests;
+
+#[path = "rust_install_audit_parse_layout_tests.rs"]
+mod parse_layout_tests;
+
+#[path = "rust_install_audit_parse_env_alias_tests.rs"]
+mod parse_env_alias_tests;
+
+#[path = "rust_install_audit_parse_alias_tests.rs"]
+mod parse_alias_tests;
+
+#[path = "rust_install_audit_parse_anchor_token_tests.rs"]
+mod parse_anchor_token_tests;
+
+#[path = "rust_install_audit_parse_with_alias_tests.rs"]
+mod parse_with_alias_tests;
+
+#[path = "rust_install_audit_parse_with_map_tests.rs"]
+mod parse_with_map_tests;
+
+#[path = "rust_install_audit_jactionlint_call_tests.rs"]
+mod jactionlint_call_tests;

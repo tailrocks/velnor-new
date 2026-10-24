@@ -77,6 +77,8 @@ pub(crate) struct PositivePollOutcome<A = PositiveAdmission> {
     pub(crate) acknowledgement: Acknowledgement,
     /// Durable poll-attempt settlement status.
     pub(crate) settlement: Settlement,
+    /// Sanitized counters from this response only.
+    pub(crate) observation: crate::launch::steady::PollObservation,
 }
 
 /// Cursor action after the controller records the response outcome.

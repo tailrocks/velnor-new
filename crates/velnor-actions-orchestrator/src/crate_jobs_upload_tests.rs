@@ -13,8 +13,7 @@ fn two_task_jobs(driver: CompileDriver) -> (Vec<(String, Job)>, ProposedTask, Pr
     let mut clippy = group("demo", TaskKind::Clippy, &[]);
     clippy.identity.compile_driver = driver.as_str().to_owned();
     clippy.validate().expect("clippy proposal");
-    let clippy_id = clippy.task_id.clone();
-    let mut test = group("demo", TaskKind::Test, &[clippy_id.as_str()]);
+    let mut test = group("demo", TaskKind::Test, &[]);
     test.identity.compile_driver = driver.as_str().to_owned();
     test.validate().expect("test proposal");
     let other = group("nested", TaskKind::Clippy, &[]);

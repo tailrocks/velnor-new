@@ -14,11 +14,18 @@ use crate::error::HostError;
 
 mod doctor_result;
 mod readiness;
+mod session_observation;
+mod setup_receipt;
 mod transport;
 
 use transport::call_socket_response_with_timeout;
 
 pub use readiness::controller_readiness_status;
+pub use session_observation::wait_for_session_observation;
+pub use session_observation::{ConnectionCensus, wait_for_connection_census};
+pub use session_observation::{SessionObservation, SessionObservationStatistics};
+pub use setup_receipt::wait_for_connection_setup_receipt;
+pub use setup_receipt::{ConnectionSetupReceipt, RunnerGroupReceipt, SelectedSetReceipt};
 
 const RETRY: Duration = Duration::from_millis(100);
 const CALL_TIMEOUT: Duration = Duration::from_secs(5);
@@ -225,7 +232,12 @@ fn marker_for(state: &Path, request: &Request) -> std::path::PathBuf {
             .join(binding.connection_id.as_str()),
         Request::DoctorProbeStart { .. }
         | Request::DoctorProbeStatus { .. }
-        | Request::ControllerReadiness { .. } => state.join(SOCKET_NAME),
+        | Request::ControllerReadiness { .. }
+        | Request::SessionObservationStart { .. }
+        | Request::SessionObservationStatus { .. }
+        | Request::ConnectionSetupStatus { .. }
+        | Request::ConnectionCensusStart { .. }
+        | Request::ConnectionCensusStatus { .. } => state.join(SOCKET_NAME),
     }
 }
 
@@ -238,6 +250,11 @@ fn call(state: &Path, request: &Request) -> Result<bool, HostError> {
         Request::DoctorProbeStart { .. }
             | Request::DoctorProbeStatus { .. }
             | Request::ControllerReadiness { .. }
+            | Request::SessionObservationStart { .. }
+            | Request::SessionObservationStatus { .. }
+            | Request::ConnectionSetupStatus { .. }
+            | Request::ConnectionCensusStart { .. }
+            | Request::ConnectionCensusStatus { .. }
     ) {
         return Err(HostError::Lock);
     }
@@ -329,7 +346,23 @@ fn valid_request(request: &Request) -> bool {
                 && engine_id.len() <= 128
                 && valid_digest(docker_root_digest)
         }
+        Request::SessionObservationStart {
+            nonce, timeout_ms, ..
+        }
+        | Request::ConnectionCensusStart {
+            nonce, timeout_ms, ..
+        } => valid_nonce(nonce) && (1..=30_000).contains(timeout_ms),
+        Request::SessionObservationStatus { nonce, .. }
+        | Request::ConnectionCensusStatus { nonce, .. } => valid_nonce(nonce),
+        Request::ConnectionSetupStatus { .. } => true,
     }
+}
+
+fn valid_nonce(value: &str) -> bool {
+    value.len() == 32
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 fn valid_digest(value: &str) -> bool {

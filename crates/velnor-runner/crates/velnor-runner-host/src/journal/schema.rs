@@ -16,6 +16,7 @@ mod driver;
 mod execution_authorization;
 mod execution_publication;
 mod image_import;
+mod jit_conflict_recovery;
 mod migration;
 mod physical_attempts;
 #[cfg(test)]
@@ -56,7 +57,7 @@ mod storage_root_backing;
 mod v30_migration_tests;
 mod validation;
 
-pub(super) const JOURNAL_VERSION: i64 = 38;
+pub(super) const JOURNAL_VERSION: i64 = 39;
 use current_columns::CURRENT_COLUMNS;
 pub(super) use validation::validate_persisted_schema_v35;
 
@@ -124,7 +125,14 @@ mod migration_driver_tests;
 pub(crate) mod historical_fixture;
 
 async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostError> {
-    validate_persisted_schema_v38(conn).await
+    validate_persisted_schema_v39(conn).await
+}
+
+pub(super) async fn validate_persisted_schema_v39(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
+    validate_persisted_schema_v38(conn).await?;
+    jit_conflict_recovery::validate(conn).await
 }
 
 pub(super) async fn validate_persisted_schema_v36(

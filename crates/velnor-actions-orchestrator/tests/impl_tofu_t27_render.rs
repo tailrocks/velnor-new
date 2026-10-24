@@ -15,7 +15,6 @@ use serde_json::json;
 use tempfile::TempDir;
 use velnor_actions_contract::{FinalStatus, Plan};
 use velnor_actions_orchestrator::{finalized_jobs, plan_internal, prepare, render_staged_tree};
-use velnor_actions_workflow_renderer::RenderedTree;
 use velnor_actions_workflow_renderer::WORKFLOW_PATH;
 
 use super::impl_common::{
@@ -52,11 +51,6 @@ fn config_with_extra(roots: &str, extra: &str) -> String {
     format!(
         "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.tofu]\nroots = [{roots}]\n{extra}\n"
     )
-}
-
-/// Staged `ci.yml` text `generate` would write for one repo root.
-fn staged_tree(root: &Path) -> Result<RenderedTree, Box<dyn std::error::Error>> {
-    Ok(render_staged_tree(&prepare(root)?)?)
 }
 
 /// Plan the pull request ending at `head` over a two-commit tofu repo.
@@ -97,7 +91,7 @@ fn tofu_config_rejects_raw_yaml_keys() -> TestResult {
     Ok(())
 }
 
-/// Tofu legs keep the default shell; only the pinned linter verifier is hardened.
+/// Tofu steps keep default shells while the pinned verifier action stays fixed.
 #[test]
 fn tofu_rendered_steps_keep_default_shell_outside_the_linter_verifier() -> TestResult {
     let config = config_with_extra("\"stacks/a\", \"stacks/b\"", "");
@@ -108,11 +102,10 @@ fn tofu_rendered_steps_keep_default_shell_outside_the_linter_verifier() -> TestR
             ("stacks/b/main.tf", "variable \"b\" {}\n"),
         ],
     )?;
-    let tree = staged_tree(dir.path())?;
-    let yaml = tree
-        .get(WORKFLOW_PATH)
-        .ok_or("missing workflow in staged tree")?;
-    assert_jactionlint_verifier_shells(&tree, yaml)?;
+    let prep = prepare(dir.path())?;
+    let tree = render_staged_tree(&prep)?;
+    let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
+    assert_jactionlint_verifier_calls(&prep, &tree, yaml)?;
     let mut tofu_runs = 0;
     for line in yaml.lines() {
         if line.contains("-chdir stacks/") {
@@ -272,80 +265,10 @@ fn tofu_provider_save_shares_job_budget_without_weakening_elected_custody() -> T
         with.get("path").map(String::as_str),
         Some(TOFU_PROVIDERS_PATH_OUTPUT_EXPR)
     );
-    let tree = staged_tree(dir.path())?;
-    assert_provider_save_budget(&tree)
+    let tree = render_staged_tree(&prep)?;
+    assert_provider_save_budget(&prep, &tree)
 }
 
-/// Inspect the actual provider job and its action/guard/reporter ordering.
-fn assert_provider_save_budget(tree: &RenderedTree) -> TestResult {
-    let yaml = tree
-        .get(WORKFLOW_PATH)
-        .ok_or("missing workflow in staged tree")?;
-    let body = yaml
-        .split("  tofu-stacks-a:\n")
-        .nth(1)
-        .ok_or("rendered tofu job")?;
-    let body = body
-        .lines()
-        .take_while(|line| !line.starts_with("  ") || line.starts_with("   "))
-        .collect::<Vec<_>>()
-        .join("\n");
-    let admission = yaml
-        .find("id: velnor-optional-providers-save-budget")
-        .ok_or("provider admission")?;
-    let save = yaml
-        .find("id: velnor-optional-providers-save\n")
-        .ok_or("provider save")?;
-    let reporter = yaml
-        .find("steps.velnor-optional-providers-save.outcome == 'failure'")
-        .ok_or("provider reporter")?;
-    assert!(admission < save && save < reporter);
-    let save_start = yaml[..save]
-        .rfind("name: Save Tofu providers")
-        .ok_or("provider action start")?;
-    let save_body = &yaml[save_start..reporter];
-    for required in [
-        "timeout-minutes: 1",
-        "continue-on-error: true",
-        "steps.velnor-optional-providers-save-budget.outputs.admitted",
-    ] {
-        assert!(
-            save_body.contains(required),
-            "missing provider bound: {required}"
-        );
-    }
-    assert!(body.contains("Record optional cache budget"));
-    assert_jactionlint_verifier_shells(tree, yaml)?;
-    Ok(())
-}
-
-fn assert_jactionlint_verifier_shells(tree: &RenderedTree, yaml: &str) -> TestResult {
-    let action_calls = yaml
-        .matches("uses: ./.github/actions/velnor-verify-jactionlint")
-        .count();
-    let verifier_steps = yaml.matches("- name: Verify jactionlint").count();
-    let action_definitions = tree
-        .get(".github/actions/velnor-verify-jactionlint/action.yml")
-        .ok_or("generated jactionlint verifier action missing")?;
-    assert!(verifier_steps > 0, "jactionlint verifier step: {yaml}");
-    assert_eq!(
-        action_calls, verifier_steps,
-        "one typed verifier call per step: {yaml}"
-    );
-    assert!(
-        yaml.lines()
-            .all(|line| !line.trim_start().starts_with("shell:")),
-        "ordinary workflow steps keep the default shell: {yaml}"
-    );
-    assert!(
-        action_definitions.lines().any(|line| {
-            line.trim()
-                == format!(
-                    "shell: {}",
-                    velnor_actions_workflow_renderer::VERIFY_VERIFIER_SHELL
-                )
-        }),
-        "canonical jactionlint action retains the fixed verifier shell"
-    );
-    Ok(())
-}
+#[path = "impl_tofu_t27_render_verifier.rs"]
+mod verifier;
+use verifier::{assert_jactionlint_verifier_calls, assert_provider_save_budget};

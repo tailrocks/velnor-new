@@ -173,15 +173,32 @@ RUN chown root:root /velnor/job-start-hook /usr/local/bin/velnor-job-start-hook 
     && git lfs version \
     && echo '035ec786cea68c6da6065e8c8d78e9b08aed5bbd168dee4e52da4a56417ba4c6  /usr/bin/tar' | sha256sum -c -
 
+# Keep the verified GNU implementation at a deliberate native-bypass path.
+# Dpkg will divert future package updates away from the guarded frontdoor.
+RUN dpkg-divert --local --rename --divert /usr/bin/tar.ubuntu --add /usr/bin/tar
+COPY --from=gnu-tar-build /out/usr/bin/tar /usr/bin/tar.gnu
+COPY tar-guard.sh /usr/local/bin/velnor-tar
+COPY tar-guard-preflight.sh tar-member.pl tar-member-stream.pl tar-member-rewrite.pl /usr/local/libexec/velnor/
+RUN echo '035ec786cea68c6da6065e8c8d78e9b08aed5bbd168dee4e52da4a56417ba4c6  /usr/bin/tar.gnu' | sha256sum -c - \
+    && /usr/bin/tar.gnu --version | grep -F 'tar (GNU tar) 1.35' \
+    && chmod 0555 /usr/local/bin/velnor-tar /usr/local/libexec/velnor/tar-guard-preflight.sh \
+    && chmod 0444 /usr/local/libexec/velnor/tar-member.pl /usr/local/libexec/velnor/tar-member-stream.pl /usr/local/libexec/velnor/tar-member-rewrite.pl \
+    && test -x /usr/bin/tar.ubuntu \
+    && dpkg-divert --list /usr/bin/tar | grep -F /usr/bin/tar.ubuntu \
+    && test ! -e /usr/bin/tar \
+    && ln -s /usr/local/bin/velnor-tar /usr/bin/tar \
+    && test "$(readlink /usr/bin/tar)" = /usr/local/bin/velnor-tar
+
 COPY --from=resource_probe resource-probe /velnor/resource-probe
 COPY --from=storage_init storage-init /velnor/storage-init
 RUN chmod 0555 /velnor/resource-probe /velnor/storage-init \
     && test "$(stat -c %a /velnor/storage-init)" = 555 \
     && test -x /velnor/storage-init
 
-COPY tar-semantics-test.sh tar-semantics-planned-test.sh tar-absolute-test.sh tar-absolute-test-extended.sh /tmp/velnor-gnu-tar-tests/
+COPY tar-semantics-test.sh tar-semantics-planned-test.sh tar-absolute-test.sh tar-absolute-test-extended.sh tar-guard-test.sh /tmp/velnor-gnu-tar-tests/
 RUN chmod 0755 /tmp/velnor-gnu-tar-tests/*.sh \
-    && for test_file in /tmp/velnor-gnu-tar-tests/*.sh; do "$test_file" || exit; done \
+    && for test_file in /tmp/velnor-gnu-tar-tests/tar-semantics-test.sh /tmp/velnor-gnu-tar-tests/tar-semantics-planned-test.sh /tmp/velnor-gnu-tar-tests/tar-absolute-test.sh /tmp/velnor-gnu-tar-tests/tar-absolute-test-extended.sh; do TAR_BIN=/usr/bin/tar.gnu "$test_file" || exit; done \
+    && /tmp/velnor-gnu-tar-tests/tar-guard-test.sh \
     && rm -rf /tmp/velnor-gnu-tar-tests
 
 COPY runner-home.py runner-home-test.py /tmp/velnor-runner-home-tests/
@@ -193,7 +210,7 @@ RUN python3 /tmp/velnor-runner-home-tests/runner-home-test.py \
 RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/node.tar.gz \
         "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz" \
     && echo "${NODE_SHA256}  /tmp/node.tar.gz" | sha256sum -c - \
-    && /usr/bin/tar -xzf /tmp/node.tar.gz --strip-components=1 -C /usr/local \
+    && /usr/bin/tar.gnu -xzf /tmp/node.tar.gz --strip-components=1 -C /usr/local \
     && rm -f /tmp/node.tar.gz \
     && test "$(node --version)" = "v${NODE_VERSION}" \
     && test "$(node -e 'console.log("js-action-ok")')" = js-action-ok

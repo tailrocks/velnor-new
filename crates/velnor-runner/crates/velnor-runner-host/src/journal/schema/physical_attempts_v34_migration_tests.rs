@@ -113,6 +113,7 @@ async fn v35_open_rejects_a_changed_terminal_proof_view() -> Result<(), HostErro
 }
 
 pub(super) async fn downgrade_to_v34(connection: &turso::Connection) -> Result<(), HostError> {
+    super::jit_conflict_recovery::remove_receipt_schema_for_migration_test(connection).await?;
     for trigger in [
         "post_jit_jit_claim_fence",
         "post_jit_runner_start_fence",

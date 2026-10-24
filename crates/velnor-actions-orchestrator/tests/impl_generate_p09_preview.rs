@@ -231,6 +231,11 @@ fn concurrent_generate_lock_refused() -> TestResult {
         .map(String::as_str)
         .collect::<std::collections::BTreeSet<_>>();
     assert_eq!(
+        report.files_written.len(),
+        expected.len(),
+        "generation must report each expected file exactly once."
+    );
+    assert_eq!(
         actual, expected,
         "Removing the lock must permit generation of the expected task files."
     );

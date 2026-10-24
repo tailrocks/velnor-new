@@ -69,8 +69,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
-          version: 2026.10.17
+          sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
+          version: 2026.10.18
       - name: Resolve project tool versions
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -92,14 +92,14 @@ jobs:
         if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 8944a7706fb51003b95c4a9def1f24f27914a6b6cebfc309acd97c74e4fcbc5c-${{ env.VELNOR_TOOL_BUN }}-${{ env.VELNOR_TOOL_BUN_LOCK }}
+          d: bf379adcbfc36084d4e4e18b6713a92d5ab20dfeefc2c6f59ac131c2cf6bc2f5-${{ env.VELNOR_TOOL_BUN }}-${{ env.VELNOR_TOOL_BUN_LOCK }}
       - name: Restore Mise tools
         id: tools-restore
         if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == '' && steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-payload-v3-${{steps.v2.outputs.identity}}
-          mise-sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          mise-sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
         env:
           PATH: ${{ steps.cache-tar-launchers.outputs.path }}
@@ -252,8 +252,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
-          version: 2026.10.17
+          sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
+          version: 2026.10.18
       - name: Resolve project tool versions
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -275,14 +275,14 @@ jobs:
         if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 8944a7706fb51003b95c4a9def1f24f27914a6b6cebfc309acd97c74e4fcbc5c-${{ env.VELNOR_TOOL_BUN }}-${{ env.VELNOR_TOOL_BUN_LOCK }}
+          d: bf379adcbfc36084d4e4e18b6713a92d5ab20dfeefc2c6f59ac131c2cf6bc2f5-${{ env.VELNOR_TOOL_BUN }}-${{ env.VELNOR_TOOL_BUN_LOCK }}
       - name: Restore Mise tools
         id: tools-restore
         if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == '' && steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-payload-v3-${{steps.v2.outputs.identity}}
-          mise-sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          mise-sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
         env:
           PATH: ${{ steps.cache-tar-launchers.outputs.path }}
@@ -432,8 +432,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
-          version: 2026.10.17
+          sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
+          version: 2026.10.18
       - name: Resolve project tool versions
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -455,14 +455,14 @@ jobs:
         if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 8944a7706fb51003b95c4a9def1f24f27914a6b6cebfc309acd97c74e4fcbc5c-${{ env.VELNOR_TOOL_BUN }}-${{ env.VELNOR_TOOL_BUN_LOCK }}
+          d: bf379adcbfc36084d4e4e18b6713a92d5ab20dfeefc2c6f59ac131c2cf6bc2f5-${{ env.VELNOR_TOOL_BUN }}-${{ env.VELNOR_TOOL_BUN_LOCK }}
       - name: Restore Mise tools
         id: tools-restore
         if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == '' && steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-payload-v3-${{steps.v2.outputs.identity}}
-          mise-sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          mise-sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
         env:
           PATH: ${{ steps.cache-tar-launchers.outputs.path }}
@@ -660,8 +660,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
-          version: 2026.10.17
+          sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
+          version: 2026.10.18
       - name: Resolve project tool versions
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -683,14 +683,14 @@ jobs:
         if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 8944a7706fb51003b95c4a9def1f24f27914a6b6cebfc309acd97c74e4fcbc5c-${{ env.VELNOR_TOOL_BUN }}-${{ env.VELNOR_TOOL_BUN_LOCK }}
+          d: bf379adcbfc36084d4e4e18b6713a92d5ab20dfeefc2c6f59ac131c2cf6bc2f5-${{ env.VELNOR_TOOL_BUN }}-${{ env.VELNOR_TOOL_BUN_LOCK }}
       - name: Restore Mise tools
         id: tools-restore
         if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == '' && steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-payload-v3-${{steps.v2.outputs.identity}}
-          mise-sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          mise-sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
         env:
           PATH: ${{ steps.cache-tar-launchers.outputs.path }}
@@ -824,8 +824,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
-          version: 2026.10.17
+          sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
+          version: 2026.10.18
       - name: Resolve project tool versions
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -847,14 +847,14 @@ jobs:
         if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 8944a7706fb51003b95c4a9def1f24f27914a6b6cebfc309acd97c74e4fcbc5c-${{ env.VELNOR_TOOL_BUN }}-${{ env.VELNOR_TOOL_BUN_LOCK }}
+          d: bf379adcbfc36084d4e4e18b6713a92d5ab20dfeefc2c6f59ac131c2cf6bc2f5-${{ env.VELNOR_TOOL_BUN }}-${{ env.VELNOR_TOOL_BUN_LOCK }}
       - name: Restore Mise tools
         id: tools-restore
         if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == '' && steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-payload-v3-${{steps.v2.outputs.identity}}
-          mise-sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          mise-sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
         env:
           PATH: ${{ steps.cache-tar-launchers.outputs.path }}
@@ -963,21 +963,21 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
-          version: 2026.10.17
+          sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
+          version: 2026.10.18
       - name: V2 identity
         id: v2
         if: github.event_name != 'workflow_dispatch'
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: cd8e97c2420b6be9a3f666f9b892c8a73cca33f33b319abeafc5e77a3f96e310
+          d: 2c8a71ba2c8110d0cf2fa53374dee347cc0ff483b2d2cfccc140acfc7a72dce9
       - name: Restore Mise tools
         id: tools-restore
         if: github.event_name != 'workflow_dispatch' && steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-payload-v3-${{steps.v2.outputs.identity}}
-          mise-sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          mise-sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
         env:
           PATH: ${{ steps.cache-tar-launchers.outputs.path }}
@@ -1035,21 +1035,21 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
-          version: 2026.10.17
+          sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
+          version: 2026.10.18
       - name: V2 identity
         id: v2
         if: github.event_name != 'workflow_dispatch'
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: cd8e97c2420b6be9a3f666f9b892c8a73cca33f33b319abeafc5e77a3f96e310
+          d: 2c8a71ba2c8110d0cf2fa53374dee347cc0ff483b2d2cfccc140acfc7a72dce9
       - name: Restore Mise tools
         id: tools-restore
         if: github.event_name != 'workflow_dispatch' && steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-payload-v3-${{steps.v2.outputs.identity}}
-          mise-sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          mise-sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
         env:
           PATH: ${{ steps.cache-tar-launchers.outputs.path }}
@@ -1149,8 +1149,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
-          version: 2026.10.17
+          sha256: e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942
+          version: 2026.10.18
       - name: Acquire Velnor
         timeout-minutes: 6
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-<version>\"&&mkdir -p \"${d%/*}\"&&s=\"/opt/velnor/seed/generator/${d##*/}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|sha256sum -c -;then cp \"$s\" \"$d\";else curl -fsSL --connect-timeout 15 --max-time 120 --retry 5 --retry-all-errors --retry-max-time 180 --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|sha256sum -c -;fi&&chmod +x \"$d\"'"

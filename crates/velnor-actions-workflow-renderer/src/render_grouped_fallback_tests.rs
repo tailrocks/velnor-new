@@ -36,7 +36,7 @@ fn context() -> RenderContext {
     }
 }
 
-fn workflow() -> WorkflowIr {
+fn workflow(jobs: BTreeMap<String, Job>) -> WorkflowIr {
     WorkflowIr {
         name: "CI".to_owned(),
         triggers: Trigger {
@@ -52,7 +52,7 @@ fn workflow() -> WorkflowIr {
             group: CONCURRENCY_GROUP.to_owned(),
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
         },
-        jobs: BTreeMap::new(),
+        jobs,
         cache_mode: None,
     }
 }
@@ -122,7 +122,7 @@ fn grouped_jobs() -> BTreeMap<String, Job> {
 fn large_grouped_job_uses_yaml_sharing_without_obligation_actions() -> Result<(), RenderError> {
     let jobs = grouped_jobs();
     let rendered = render_merged_with_routing(
-        &workflow(),
+        &workflow(jobs.clone()),
         &jobs,
         &context(),
         &crate::workflow_routing::WorkflowRoutingPolicy::hosted_only(),
@@ -146,13 +146,13 @@ fn large_grouped_job_uses_yaml_sharing_without_obligation_actions() -> Result<()
 fn large_grouped_job_rendering_is_byte_stable() -> Result<(), RenderError> {
     let jobs = grouped_jobs();
     let first = render_merged_with_routing(
-        &workflow(),
+        &workflow(jobs.clone()),
         &jobs,
         &context(),
         &crate::workflow_routing::WorkflowRoutingPolicy::hosted_only(),
     )?;
     let second = render_merged_with_routing(
-        &workflow(),
+        &workflow(jobs.clone()),
         &jobs,
         &context(),
         &crate::workflow_routing::WorkflowRoutingPolicy::hosted_only(),

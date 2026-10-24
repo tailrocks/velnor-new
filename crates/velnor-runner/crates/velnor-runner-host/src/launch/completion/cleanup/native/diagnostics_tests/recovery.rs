@@ -4,6 +4,10 @@ use super::*;
 
 #[path = "recovery/capture_limits.rs"]
 mod capture_limits;
+#[path = "recovery/ownership_retry.rs"]
+mod ownership_retry;
+#[path = "recovery/readiness_cleanup.rs"]
+mod readiness_cleanup;
 
 #[test]
 fn missing_runner_trace_is_persisted_as_unavailable_and_blocks_deletion() -> Result<(), String> {
@@ -321,4 +325,23 @@ async fn native_home_volume_delete_failure_case() -> Result<(), HostError> {
             .storage_cleanup_proven()
     );
     Ok(())
+}
+
+#[test]
+fn native_home_volume_post_delete_inspection_failure_keeps_capacity_charged() -> Result<(), String>
+{
+    run_serialized_diagnostic_test(
+        "native_home_volume_post_delete_inspection_failure_keeps_capacity_charged",
+        || {
+            Box::pin(async {
+                Box::pin(native_home_volume_post_delete_inspection_failure_case())
+                    .await
+                    .map_err(|error| error.to_string())
+            })
+        },
+    )
+}
+
+async fn native_home_volume_post_delete_inspection_failure_case() -> Result<(), HostError> {
+    Box::pin(ownership_retry::native_home_volume_post_delete_inspection_failure_case()).await
 }

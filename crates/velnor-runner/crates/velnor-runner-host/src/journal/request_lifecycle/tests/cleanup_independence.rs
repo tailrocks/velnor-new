@@ -8,6 +8,9 @@ use crate::error::HostError;
 use crate::journal::{CapacityLimits, ConnectionJournal, Journal, ReservationState};
 use velnor_runner_github::RunnerReference;
 
+#[path = "cleanup_independence/pair_reopen.rs"]
+mod pair_reopen;
+
 const JOB_MEMORY: u64 = 8_589_934_592;
 const TWO_JOB_MEMORY: u64 = 51_539_607_552;
 

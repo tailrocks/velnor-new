@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use tempfile::TempDir;
 use velnor_actions_orchestrator::{
     GenerateOptions, GenerateReport, GenerationPreparation, OrchestratorError, ToolSnapshot,
-    finalized_jobs, generate, plan_text_checked, prepare, render_staged_tree,
+    finalized_jobs, generate, plan_text_checked, prepare,
 };
 
 #[path = "impl_orch_gen_support.rs"]
@@ -36,33 +36,13 @@ fn preview_into(
 }
 
 /// Fixture accepted by the Velnor-repository identity check (local origin).
-fn make_velnor_repo(config: &str) -> Result<TempDir, Box<dyn std::error::Error>> {
+pub(super) fn make_velnor_repo(config: &str) -> Result<TempDir, Box<dyn std::error::Error>> {
     let repo = make_repo(config)?;
     let git_config = repo.path().join(".git/config");
     let mut text = fs::read_to_string(&git_config)?;
     text.push_str("[remote \"origin\"]\n\turl = https://github.com/tailrocks/velnor-new.git\n");
     fs::write(&git_config, text)?;
     Ok(repo)
-}
-
-/// Three-target generator lock accepted by the provenance seed gate.
-fn lock_text() -> Result<String, Box<dyn std::error::Error>> {
-    use std::fmt::Write as _;
-    let version = env!("CARGO_PKG_VERSION");
-    let mut bins = String::new();
-    for target in velnor_actions_contract::SUPPORTED_TARGETS {
-        write!(
-            bins,
-            "[[generator.binaries]]\ntarget = \"{target}\"\nartifact = \"https://example.invalid/r/{target}\"\nsha256 = \"{}\"\n",
-            "a".repeat(64)
-        )?;
-    }
-    Ok(format!(
-        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"{mise_version}\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
-        "e".repeat(40),
-        "b".repeat(64),
-        mise_version = velnor_actions_mise::MISE_VERSION,
-    ))
 }
 
 #[test]

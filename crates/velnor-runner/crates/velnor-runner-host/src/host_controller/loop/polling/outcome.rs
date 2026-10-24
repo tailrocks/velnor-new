@@ -14,6 +14,7 @@ pub(crate) struct ControllerPollOutcome {
     pub(crate) acquired: Option<crate::launch::steps::AcquiredProvisioning>,
     pub(crate) positive_poll_settled: bool,
     pub(crate) poll_kind: PollKind,
+    pub(crate) observation: crate::launch::steady::PollObservation,
 }
 
 impl ControllerPollOutcome {
@@ -27,6 +28,7 @@ impl ControllerPollOutcome {
             acquired: None,
             positive_poll_settled: false,
             poll_kind: PollKind::ZeroHeader,
+            observation: outcome.observation,
         }
     }
 
@@ -58,6 +60,7 @@ impl ControllerPollOutcome {
             },
             positive_poll_settled,
             poll_kind: PollKind::Positive,
+            observation: outcome.observation,
         }
     }
 }

@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::super::state::PreparedConnection;
+use super::super::state::{PreparedConnection, PreparedSetup};
 
 pub(super) struct ControllerState(PathBuf);
 
@@ -116,6 +116,7 @@ fn prepared_state(
         binding: binding.clone(),
         scope: failure.scope().clone(),
         set_id,
+        setup: PreparedSetup::test(binding, set_id),
         session_intent: intent_id,
         assigned_total: None,
         poll_cursor: 0,

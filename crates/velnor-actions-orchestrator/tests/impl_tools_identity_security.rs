@@ -39,7 +39,7 @@ impl Drop for Scratch {
     }
 }
 
-fn generated_resolvers(tree: &RenderedTree) -> Vec<(String, ResolverStep)> {
+pub(super) fn generated_resolvers(tree: &RenderedTree) -> Vec<(String, ResolverStep)> {
     tree.files
         .iter()
         .flat_map(|file| {
@@ -251,7 +251,7 @@ fn assert_audit(root: &Path, selected: &Path) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn assert_step_envelope(
+pub(super) fn assert_step_envelope(
     tree: &RenderedTree,
     path: &str,
     step: &ResolverStep,

@@ -77,6 +77,11 @@ pub(crate) fn render_typed_step(
             "verifier_credential_prelude_missing".to_owned(),
         ));
     };
+    if script.starts_with(&expected_prefix) {
+        return Err(RenderError::InvalidWorkflow(
+            "verifier_shell_script_duplicate_credential_prelude".to_owned(),
+        ));
+    }
 
     render_script(
         &step.name,
@@ -99,32 +104,12 @@ pub(crate) fn render_command(
     name: &str,
     argv: &[String],
 ) -> Result<Yaml, RenderError> {
-    if role == StepRole::VerifyRustManifest {
-        let prelude = format!("{} ", crate::toolchain_env::credential_unset_prelude());
-        if argv
-            .get(2)
-            .is_some_and(|script| script.starts_with(&prelude))
-        {
-            return Err(RenderError::InvalidWorkflow(
-                "verifier_shell_script_duplicate_credential_prelude".to_owned(),
-            ));
-        }
-    }
-    let step = match role {
-        StepRole::VerifyRustManifest => {
-            let mut step = crate::steps::shell_step(name, argv.to_owned(), BTreeMap::new())?;
-            step.role = Some(role);
-            step
-        }
-        StepRole::VerifyJactionlint => {
-            crate::steps::jactionlint_verifier_step(name, argv.to_owned(), BTreeMap::new())?
-        }
-        _ => {
-            return Err(RenderError::InvalidWorkflow(
-                "nonverifier_role_for_verifier_step".to_owned(),
-            ));
-        }
-    };
+    let step = crate::verifier_composite::verifier_shell_step(
+        role,
+        name,
+        argv.to_owned(),
+        BTreeMap::new(),
+    )?;
     let StepKind::Shell { run, env } = &step.kind else {
         return Err(RenderError::InvalidWorkflow(
             "verifier_composite_requires_shell_step".to_owned(),

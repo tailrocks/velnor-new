@@ -1,9 +1,11 @@
 //! Shared placement policy for every generated workflow document.
 
-use velnor_actions_contract::config::ValidatedImageReference;
-use velnor_actions_contract::{ExecutionMode, ScaleSetSelector};
+use std::collections::BTreeMap;
 
-use crate::{RenderError, RenderedFile, yaml::Yaml};
+use velnor_actions_contract::config::ValidatedImageReference;
+use velnor_actions_contract::{ExecutionMode, ScaleSetSelector, WorkflowIr};
+
+use crate::{RenderError, RenderedFile, verification_jobs::WorkflowTaskPolicy, yaml::Yaml};
 
 const MAX_MATRIX_COMBINATIONS: usize = 256;
 
@@ -23,6 +25,8 @@ mod labels;
 mod matrix;
 #[path = "workflow_routing_native_preview.rs"]
 mod native_preview;
+#[path = "workflow_routing_native_tasks.rs"]
+mod native_tasks;
 #[path = "workflow_routing_parse.rs"]
 mod parse;
 #[path = "workflow_routing_runner.rs"]
@@ -33,6 +37,7 @@ pub use authority::{
     AuthorityCall, AuthorityConcurrency, AuthorityJob, AuthorityPermissions, AuthorityTrigger,
     AuthorityWorkflow, extract_workflow_authority,
 };
+use native_tasks::NativeHostedTask;
 pub(crate) use typed_jobs::route_jobs;
 
 pub(crate) fn parse_authority_document(
@@ -47,6 +52,7 @@ pub struct WorkflowRoutingPolicy {
     mode: ExecutionMode,
     selector: Option<ScaleSetSelector>,
     job_container_image: Option<ValidatedImageReference>,
+    native_hosted_tasks: BTreeMap<String, native_tasks::NativeHostedTask>,
 }
 
 impl WorkflowRoutingPolicy {
@@ -57,6 +63,7 @@ impl WorkflowRoutingPolicy {
             mode: ExecutionMode::Hosted,
             selector: None,
             job_container_image: None,
+            native_hosted_tasks: BTreeMap::new(),
         }
     }
 
@@ -71,6 +78,7 @@ impl WorkflowRoutingPolicy {
             mode,
             selector: Some(selector),
             job_container_image,
+            native_hosted_tasks: BTreeMap::new(),
         }
     }
 
@@ -90,6 +98,28 @@ impl WorkflowRoutingPolicy {
 
     fn has_container_policy(&self) -> bool {
         self.selector.is_some()
+    }
+
+    fn bind_native_hosted_tasks(
+        &mut self,
+        workflow: &WorkflowIr,
+        tasks: &[WorkflowTaskPolicy],
+        checkout_uses: &str,
+    ) -> Result<(), RenderError> {
+        native_tasks::bind_native_hosted_tasks(
+            &mut self.native_hosted_tasks,
+            workflow,
+            tasks,
+            checkout_uses,
+        )
+    }
+
+    fn native_hosted_task(&self, job_id: &str) -> Option<&NativeHostedTask> {
+        self.native_hosted_tasks.get(job_id)
+    }
+
+    fn validate_native_task_source(&self, workflow: &WorkflowIr) -> Result<(), RenderError> {
+        native_tasks::validate_native_task_source(self, workflow)
     }
 }
 
@@ -167,6 +197,7 @@ fn route_workflow_yaml_inner(
                 });
         let runs_on_index = fields.iter().position(|(key, _)| key == "runs-on");
         if let Some(uses) = uses {
+            typed_jobs::reject_native_hosted_reusable_call(policy, path, job_id)?;
             if runs_on_index.is_some() || fields.iter().any(|(key, _)| key == "container") {
                 return Err(invalid(format!(
                     "reusable_workflow_job_has_runner_fields:{path}:{job_id}"
@@ -216,6 +247,21 @@ fn route_runner_fields(
             "workflow_job_runs_on_missing:{path}:{job_id}"
         )));
     };
+    let has_strategy = fields.iter().any(|(key, _)| key == "strategy");
+    let native_fields = typed_jobs::NativeTaskRenderedFields::new(
+        path,
+        job_id,
+        yaml_scalar(&fields[runs_on_index].1),
+        fields
+            .iter()
+            .find(|(key, _)| key == "if")
+            .and_then(|(_, value)| yaml_scalar(value)),
+        fields.iter().any(|(key, _)| key == "container"),
+        has_strategy,
+    );
+    if typed_jobs::accept_native_hosted_task(native_fields, typed_job, policy)? {
+        return Ok(false);
+    }
     if let Some(context) = native_context
         && let Some(routed) =
             native_preview::route_runner(context, fields, runs_on_index, path, job_id, policy)?
@@ -273,13 +319,19 @@ pub fn validate_generated_workflow_calls(
     files: &[RenderedFile],
     policy: &WorkflowRoutingPolicy,
 ) -> Result<(), RenderError> {
+    if !policy.native_hosted_tasks.is_empty() {
+        return Err(invalid(
+            "native_hosted_tasks_require_typed_workflow".to_owned(),
+        ));
+    }
     inventory::validate_final_workflow_inventory(files, policy, None, None)
 }
 
 /// Examine final files against the typed workflow used to render them.
 ///
-/// Typed native checks need this workflow intermediate representation to prove their runner contract.
-/// The public file-only audit rejects those checks because it has no such proof.
+/// Typed native checks and declared macOS task jobs need this workflow intermediate representation
+/// to prove their runner contract. The public file-only audit rejects those jobs because it has no
+/// typed source proof.
 ///
 /// # Errors
 ///
@@ -293,6 +345,7 @@ pub fn validate_generated_workflow_calls_with_ir(
     workflow
         .validate()
         .map_err(|error| invalid(format!("typed_workflow_invalid:{error}")))?;
+    policy.validate_native_task_source(workflow)?;
     inventory::validate_final_workflow_inventory(files, policy, Some(&workflow.jobs), None)
 }
 
@@ -312,6 +365,7 @@ pub fn validate_generated_workflow_calls_with_native_preview_ir(
     workflow
         .validate()
         .map_err(|error| invalid(format!("typed_workflow_invalid:{error}")))?;
+    policy.validate_native_task_source(workflow)?;
     inventory::validate_final_workflow_inventory(
         files,
         policy,

@@ -87,7 +87,12 @@ pub(super) fn test_pins() -> ProductReleasePins {
         ],
         gh_argv: exec_argv(&[PinnedTool::Gh], "gh", &[], &catalog),
         rust_version: catalog.version(PinnedTool::Rust).to_owned(),
-        verify_rust_argv: ["sh", "-c", "echo verify-rust"].map(str::to_owned).to_vec(),
+        verify_rust_argv: [
+            "sh".to_owned(),
+            "-c".to_owned(),
+            crate::toolchain_env::with_credential_unset_script("echo verify-rust"),
+        ]
+        .to_vec(),
         mr_boxington_version: catalog.version(PinnedTool::MrBoxington).to_owned(),
     }
 }

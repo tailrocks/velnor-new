@@ -13,6 +13,7 @@ use std::{
     fs,
     os::fd::{AsFd, OwnedFd},
 };
+use velnor_resource_probe::storage_init_contract::METADATA_ROOT_MODE;
 
 const HOME: &str = "/velnor/init/home";
 const WORK: &str = "/velnor/init/work";
@@ -51,7 +52,7 @@ pub(super) fn initialize(operation_id: String) -> Result<ResultRecord, &'static 
     let job_facts = create_child_directory(&metadata, "job-facts", JOB_FACTS)?;
     let source_proof = create_child_directory(&metadata, "source-proof", SOURCE_PROOF)?;
     let control = create_child_directory(&source_proof, "control", CONTROL)?;
-    set_directory_owner(&metadata, 0, 0, 0o755)?;
+    let metadata_record = finalize_metadata_root(&metadata, 0, 0)?;
     set_directory_owner(&home_source_proof, 0, 0, 0o755)?;
     set_directory_owner(&inbox, 1000, 1000, 0o700)?;
     set_directory_owner(&runtime_identity, 0, 0, 0o555)?;
@@ -63,7 +64,7 @@ pub(super) fn initialize(operation_id: String) -> Result<ResultRecord, &'static 
         operation_id,
         home: verify_result(&home, 1000, 1000, 0o755)?,
         work: verify_result(&work, 1000, 1000, 0o755)?,
-        metadata: verify_result(&metadata, 0, 0, 0o755)?,
+        metadata: metadata_record,
         runtime_identity: verify_result(&runtime_identity, 0, 0, 0o555)?,
         job_facts: verify_result(&job_facts, 0, 0, 0o555)?,
         source_proof: verify_result(&source_proof, 0, 0, 0o755)?,
@@ -137,6 +138,15 @@ fn set_directory_owner(
     )
     .map_err(|_| "target_chown")?;
     fchmod(&directory.descriptor, Mode::from_raw_mode(mode)).map_err(|_| "target_chmod")
+}
+
+fn finalize_metadata_root(
+    directory: &OpenDirectory,
+    uid: u32,
+    gid: u32,
+) -> Result<DirectoryRecord, &'static str> {
+    set_directory_owner(directory, uid, gid, METADATA_ROOT_MODE)?;
+    verify_result(directory, uid, gid, METADATA_ROOT_MODE)
 }
 
 fn open_directory(path: &'static str) -> Result<OpenDirectory, &'static str> {
@@ -260,6 +270,109 @@ fn verify_result(
         gid: status.st_gid,
         mode,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        METADATA, METADATA_ROOT_MODE, MountIdentity, OpenDirectory, finalize_metadata_root,
+    };
+    use rustix::fs::{AtFlags, Mode, OFlags, StatxFlags, fstat, open, statx};
+    use std::{
+        fs,
+        path::PathBuf,
+        sync::atomic::{AtomicU64, Ordering},
+    };
+
+    static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
+
+    struct TemporaryDirectory(PathBuf);
+
+    impl TemporaryDirectory {
+        fn new() -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "velnor-storage-init-{}-{}",
+                std::process::id(),
+                NEXT_DIRECTORY.fetch_add(1, Ordering::Relaxed)
+            ));
+            fs::create_dir(&path).expect("create temporary directory");
+            Self(path)
+        }
+    }
+
+    impl Drop for TemporaryDirectory {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir(&self.0);
+        }
+    }
+
+    #[test]
+    fn metadata_root_finalization_serializes_the_observed_read_only_mode() {
+        assert_eq!(METADATA_ROOT_MODE, 0o555);
+
+        let temporary = TemporaryDirectory::new();
+        let path = temporary.0.to_str().expect("temporary path is UTF-8");
+        let descriptor = open(
+            path,
+            OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+            Mode::empty(),
+        )
+        .expect("open temporary directory");
+        let parent_path = temporary
+            .0
+            .parent()
+            .expect("temporary directory has a parent")
+            .to_str()
+            .expect("temporary parent path is UTF-8");
+        let parent = open(
+            parent_path,
+            OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+            Mode::empty(),
+        )
+        .expect("open temporary parent");
+        let directory_stat = statx(
+            &descriptor,
+            "",
+            AtFlags::EMPTY_PATH | AtFlags::SYMLINK_NOFOLLOW,
+            StatxFlags::BASIC_STATS | StatxFlags::MNT_ID,
+        )
+        .expect("stat temporary directory");
+        let parent_stat = statx(
+            &parent,
+            "",
+            AtFlags::EMPTY_PATH | AtFlags::SYMLINK_NOFOLLOW,
+            StatxFlags::BASIC_STATS | StatxFlags::MNT_ID,
+        )
+        .expect("stat temporary parent");
+        let status = fstat(&descriptor).expect("read temporary directory owner");
+        let directory = OpenDirectory {
+            descriptor,
+            target: METADATA,
+            identity: MountIdentity {
+                mount_id: directory_stat.stx_mnt_id,
+                parent_mount_id: parent_stat.stx_mnt_id,
+                device_major: directory_stat.stx_dev_major,
+                device_minor: directory_stat.stx_dev_minor,
+                inode: directory_stat.stx_ino,
+            },
+        };
+
+        let record = finalize_metadata_root(&directory, status.st_uid, status.st_gid)
+            .expect("finalize metadata directory");
+        assert_eq!(record.mode, METADATA_ROOT_MODE);
+        assert_eq!(
+            fstat(&directory.descriptor)
+                .expect("read finalized mode")
+                .st_mode
+                & 0o7777,
+            0o555
+        );
+
+        let encoded = serde_json::to_vec(&record).expect("serialize producer record");
+        let decoded: serde_json::Value =
+            serde_json::from_slice(&encoded).expect("decode producer record");
+        assert_eq!(decoded["mode"], u64::from(METADATA_ROOT_MODE));
+    }
 }
 
 use std::os::fd::AsRawFd;

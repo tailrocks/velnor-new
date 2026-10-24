@@ -134,6 +134,10 @@ pub(super) fn execute_emitted_verifier(
     fs::write(&script_path, run).expect("write emitted run body");
     let output_dir = root.join(format!("{}-out", name.replace(' ', "-")));
     let supported_rust = velnor_actions_mise::RUST_VERSION;
+    assert_eq!(
+        supported_rust, "1.99.1",
+        "the execution fixture follows the pinned supported Rust version"
+    );
     let output = Command::new("/bin/bash")
         .args(["--noprofile", "--norc", "-p", "-e", "-o", "pipefail"])
         .arg(script_path)

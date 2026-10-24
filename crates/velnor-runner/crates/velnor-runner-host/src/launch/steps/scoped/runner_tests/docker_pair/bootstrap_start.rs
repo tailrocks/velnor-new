@@ -317,7 +317,7 @@ pub(super) use native_intake::authorize_actual_started_request;
 
 pub(super) async fn open_composition() -> Result<CompositionSetup, String> {
     let poll = crate::launch_harness::available(&[REQUEST_ID]);
-    Box::pin(open_composition_with_poll(&poll, 0)).await
+    Box::pin(open_composition_with_poll(&poll, 0, false)).await
 }
 
 async fn verify_retained_charge(

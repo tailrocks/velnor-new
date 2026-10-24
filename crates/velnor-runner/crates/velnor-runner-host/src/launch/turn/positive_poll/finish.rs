@@ -303,6 +303,7 @@ pub(super) fn make_outcome<A>(
         admission,
         acknowledgement,
         settlement,
+        observation: crate::launch::steady::poll_observation(polled),
     }
 }
 

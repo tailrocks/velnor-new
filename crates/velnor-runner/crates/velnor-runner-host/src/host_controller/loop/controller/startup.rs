@@ -16,6 +16,16 @@ use crate::{
 };
 
 use super::super::setup;
+pub(in crate::host_controller::loop_driver) async fn run_controller(
+    current: HostConfig,
+    state: &Path,
+    daemon_lock: &DaemonLock,
+    release_read_secret: ReleaseReadSecret,
+) -> Result<(), ListenFault> {
+    let controller =
+        super::ControllerLoop::initialize(current, state, daemon_lock, release_read_secret).await?;
+    Box::pin(controller.run()).await
+}
 
 pub(super) struct StartupInputs<'a> {
     pub(super) current: &'a HostConfig,

@@ -13,6 +13,7 @@ mod correlation;
 mod disk_capacity;
 mod event_source;
 pub(crate) mod helpers;
+mod jit_conflict_receipt;
 #[path = "tests/native_started_fixture.rs"]
 mod native_started_fixture;
 pub(crate) use burst_fixture::add_twelve_completed_burst_rows;

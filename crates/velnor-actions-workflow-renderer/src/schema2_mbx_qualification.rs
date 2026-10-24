@@ -64,11 +64,13 @@ pub(super) fn jobs(
     }
     validate_exact_version(&request.mbx_version, "mbx")?;
     validate_exact_version(&request.rust_version, "rust")?;
-    let verify_rust = crate::verifier_shell::render_command(
+    let verify_rust_step = crate::verifier_composite::verifier_shell_step(
         velnor_actions_contract::StepRole::VerifyRustManifest,
         crate::VERIFY_RUST_TOOLCHAIN_STEP,
-        &request.verify_rust_argv,
+        request.verify_rust_argv.clone(),
+        std::collections::BTreeMap::default(),
     )?;
+    let verify_rust = crate::document_steps::verifier_shell_step_to_yaml(&verify_rust_step)?;
 
     Ok(vec![
         job(request, hosted, true, &verify_rust),

@@ -6,7 +6,67 @@
 
 use std::time::{Duration, Instant};
 
-use velnor_runner_github::Poll;
+use serde::{Deserialize, Serialize};
+use velnor_runner_github::{InnerKind, Poll};
+
+/// Safe counts from one successfully decoded poll response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case", deny_unknown_fields)]
+pub(crate) enum PollObservation {
+    Complete {
+        available_events: u32,
+        statistics: Option<PollStatistics>,
+    },
+    Unavailable,
+}
+
+/// The seven scalar counters returned by the Scale Set poll endpoint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct PollStatistics {
+    pub(crate) available_jobs: i64,
+    pub(crate) acquired_jobs: i64,
+    pub(crate) assigned_jobs: i64,
+    pub(crate) running_jobs: i64,
+    pub(crate) registered_runners: i64,
+    pub(crate) busy_runners: i64,
+    pub(crate) idle_runners: i64,
+}
+
+/// Project a poll into event counts and counters without retaining native data.
+pub(crate) fn poll_observation(polled: &Poll) -> PollObservation {
+    match polled {
+        Poll::Empty => PollObservation::Complete {
+            available_events: 0,
+            statistics: None,
+        },
+        Poll::Batch(batch) => batch_observation(batch),
+        Poll::Quarantined(_) => PollObservation::Unavailable,
+    }
+}
+
+fn batch_observation(batch: &velnor_runner_github::ParsedBatch) -> PollObservation {
+    let available_events = batch
+        .jobs
+        .iter()
+        .filter(|job| job.kind == InnerKind::Available)
+        .count();
+    let Ok(available_events) = u32::try_from(available_events) else {
+        return PollObservation::Unavailable;
+    };
+    PollObservation::Complete {
+        available_events,
+        statistics: batch.statistics.as_ref().map(|stats| PollStatistics {
+            available_jobs: stats.total_available_jobs,
+            acquired_jobs: stats.total_acquired_jobs,
+            assigned_jobs: stats.total_assigned_jobs,
+            running_jobs: stats.total_running_jobs,
+            registered_runners: stats.total_registered_runners,
+            busy_runners: stats.total_busy_runners,
+            idle_runners: stats.total_idle_runners,
+        }),
+    }
+}
 
 /// Delay before the skipped head is read again.
 pub(crate) const RETRY: Duration = Duration::from_secs(5);

@@ -1,6 +1,7 @@
-use super::{
-    CrateJob, Job, JobTimeout, OrchestratorError, Step, TaskCacheMode, ToolCatalog, WorkflowPolicy,
-};
+use std::collections::BTreeSet;
+
+use super::{CrateJob, Job, JobTimeout, OrchestratorError, Step, ToolCatalog, WorkflowPolicy};
+use velnor_actions_mise::TaskCacheMode;
 use velnor_actions_workflow_renderer::steps::MbxTransport;
 
 #[expect(
@@ -33,7 +34,7 @@ pub(super) fn render_job(
         crate::matrix_step::suite_for_package(&model.package_name);
     let needs_validators = crate::matrix_step::crate_needs_generate_validators(policy, suite);
     if use_rust {
-        steps.push(crate::workflow::verify_restored_rust_step(catalog)?);
+        steps.push(crate::workflow::verify_restored_rust_step(catalog));
     }
     steps.push(crate::matrix_step::prepare_crate_tools_step(
         catalog,
@@ -42,11 +43,12 @@ pub(super) fn render_job(
         crate::matrix_step::prepare_install_opentofu(policy, suite, use_opentofu),
         needs_validators,
     )?);
-    let verify = needs_validators.then(|| crate::workflow::verify_jactionlint_step(catalog));
-    steps.extend(verify.transpose()?);
+    if needs_validators {
+        steps.push(crate::workflow::verify_jactionlint_step(catalog));
+    }
     if use_rust {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
-        steps.push(crate::workflow::verify_rust_manifest_step(catalog)?);
+        steps.push(crate::workflow::verify_rust_manifest_step(catalog));
     }
     if qualification {
         steps.extend(crate::crate_jobs::qualification_cache::owner_binding_steps(
@@ -97,7 +99,8 @@ pub(super) fn render_job(
         check_runner: None,
         timeout_minutes: timeout,
         needs,
-        condition: None,
+        condition: (!qualification && use_rust && !use_opentofu)
+            .then(|| velnor_actions_workflow_renderer::not_affected_gate(&model.job_id)),
         permissions: None,
         environment: None,
         steps,
@@ -167,13 +170,39 @@ fn render_obligation_steps(
     max_parallel_jobs: u32,
     helper_version: &str,
 ) -> Result<Vec<Step>, OrchestratorError> {
+    let sequential = |obligation: &velnor_actions_contract::CrateObligation| {
+        velnor_actions_rust::runs_before_parallel_checks(&obligation.kind)
+    };
+    let concurrent = !use_opentofu
+        && model
+            .obligations
+            .iter()
+            .filter(|obligation| !sequential(obligation))
+            .count()
+            >= 2;
+    let parallel_members: BTreeSet<&str> = model
+        .obligations
+        .iter()
+        .filter(|obligation| concurrent && !sequential(obligation))
+        .map(|obligation| obligation.task_id.as_str())
+        .collect();
     let mut steps = Vec::with_capacity(model.obligations.len());
     for (index, obligation) in model.obligations.iter().enumerate() {
+        let parallel = parallel_members.contains(obligation.task_id.as_str());
+        if !parallel && steps.iter().any(|step: &Step| step.parallel) {
+            return Err(crate::internal::internal("crate_parallel_group_split"));
+        }
+        if parallel
+            && obligation
+                .gated_by
+                .iter()
+                .any(|gate| parallel_members.contains(gate.as_str()))
+        {
+            return Err(crate::internal::internal("crate_parallel_member_gate"));
+        }
         // The first obligation declares the root job's concurrency cap;
         // the renderer turns the marker into `strategy.max-parallel`.
         let cap = (index == 0 && use_opentofu).then_some(max_parallel_jobs);
-        let parallel =
-            !use_opentofu && !velnor_actions_rust::runs_before_parallel_checks(&obligation.kind);
         let target_lane = parallel
             .then(|| velnor_actions_rust::concurrent_target_lane(&obligation.kind))
             .flatten();

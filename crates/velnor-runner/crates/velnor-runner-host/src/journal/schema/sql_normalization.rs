@@ -141,6 +141,7 @@ fn normalize_create_prefix(sql: &str) -> String {
     for prefix in [
         ("create table if not exists ", "create table "),
         ("create index if not exists ", "create index "),
+        ("create unique index if not exists ", "create unique index "),
         ("create trigger if not exists ", "create trigger "),
     ] {
         if let Some(rest) = sql.strip_prefix(prefix.0) {
@@ -242,6 +243,26 @@ mod tests {
         assert_eq!(
             normalize("SELECT 'a''é', \"a\"\"é\""),
             "select 'a''é',\"a\"\"é\""
+        );
+    }
+
+    #[test]
+    fn unique_index_if_not_exists_normalizes_without_weakening_predicates() {
+        assert_eq!(
+            normalize(
+                "CREATE UNIQUE INDEX IF NOT EXISTS runner_id ON runners(connection_id, runner_id) WHERE runner_id IS NOT NULL"
+            ),
+            normalize(
+                "CREATE UNIQUE INDEX runner_id ON runners(connection_id, runner_id) WHERE runner_id IS NOT NULL"
+            )
+        );
+        assert_ne!(
+            normalize(
+                "CREATE UNIQUE INDEX IF NOT EXISTS runner_id ON runners(connection_id, runner_id) WHERE runner_id IS NOT NULL"
+            ),
+            normalize(
+                "CREATE UNIQUE INDEX IF NOT EXISTS runner_id ON runners(connection_id, runner_id) WHERE runner_id IS NOT NULL AND state != 'cleaned'"
+            )
         );
     }
 

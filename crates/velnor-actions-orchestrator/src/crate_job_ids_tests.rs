@@ -32,7 +32,7 @@ fn task(package: &str, kind: TaskKind, configuration: &str) -> ProposedTask {
 }
 
 #[test]
-fn every_rust_configuration_and_task_has_one_package_owner() {
+fn every_rust_configuration_and_task_has_one_package_configuration_owner() {
     let tasks: Vec<_> = vec![
         task("demo", TaskKind::Fmt, "default"),
         task("demo", TaskKind::Clippy, "default"),
@@ -40,16 +40,34 @@ fn every_rust_configuration_and_task_has_one_package_owner() {
         task("demo", TaskKind::Doc, "host"),
     ];
     let groups = group_runnable(&tasks).expect("groups");
-    assert_eq!(groups.len(), 1);
+    assert_eq!(groups.len(), 2);
     assert_eq!(
-        groups.values().next().expect("one group").len(),
-        tasks.len()
+        groups[&CrateGroupKey {
+            package_id: "demo 0.1.0".to_owned(),
+            configuration: "default".to_owned(),
+            stack: Stack::Rust,
+        }]
+            .len(),
+        2
     );
-    for task in &tasks {
+    assert_eq!(
+        groups[&CrateGroupKey {
+            package_id: "demo 0.1.0".to_owned(),
+            configuration: "host".to_owned(),
+            stack: Stack::Rust,
+        }]
+            .len(),
+        2
+    );
+    for (task, expected) in
+        tasks
+            .iter()
+            .zip(["rust-demo", "rust-demo", "rust-demo-host", "rust-demo-host"])
+    {
         assert_eq!(
             job_id_for_member(&tasks, task, WorkflowEvent::PullRequest)
                 .expect("valid owner lookup"),
-            Some("rust-demo".to_owned())
+            Some(expected.to_owned())
         );
     }
 }

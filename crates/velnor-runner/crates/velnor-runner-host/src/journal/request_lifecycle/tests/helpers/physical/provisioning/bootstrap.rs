@@ -1,4 +1,4 @@
-use super::{fixture_resource_id, ProvisioningFixture};
+use super::{ProvisioningFixture, fixture_physical_resource_id};
 use crate::error::HostError;
 use crate::journal::StorageProvisioningPlan;
 use crate::worker::WorkerIdentityNames;
@@ -11,8 +11,8 @@ impl ProvisioningFixture<'_> {
         use crate::launch::bootstrap::{BootstrapContainerRole, test_created_bootstrap_container};
         use crate::worker::WorkerContainerRole;
 
-        let runner_id = fixture_resource_id(self.reservation_id, "runner");
-        let dind_id = fixture_resource_id(self.reservation_id, "dind");
+        let runner_id = fixture_physical_resource_id(self.reservation_id, &self.nonce, "runner");
+        let dind_id = fixture_physical_resource_id(self.reservation_id, &self.nonce, "dind");
         let mut storage_plan = None;
         for (role, container_role, id) in [
             (

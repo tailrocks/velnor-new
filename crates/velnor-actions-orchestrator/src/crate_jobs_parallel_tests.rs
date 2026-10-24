@@ -64,8 +64,8 @@ fn one_job_per_crate_builds_first_then_runs_checks_in_parallel() {
     let single = names(jobs["rust-nested"]);
     assert!(single.contains(&"Clippy"));
     assert!(
-        jobs["rust-nested"].steps.iter().any(|step| step.parallel),
-        "the check uses native parallel execution"
+        jobs["rust-nested"].steps.iter().all(|step| !step.parallel),
+        "a lone check remains sequential"
     );
 }
 

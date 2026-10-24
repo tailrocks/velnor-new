@@ -20,7 +20,8 @@ use crate::{
 use super::{
     connection_poll::{ConnectionPollContext, poll_active_connections},
     setup,
-    transitions::{JournalEffects, apply_config_transition, retire_pending},
+    state::setup_receipt_inputs,
+    transitions::{JournalEffects, apply_config, retire_pending},
 };
 #[path = "controller/doctor.rs"]
 mod doctor;
@@ -29,31 +30,22 @@ mod readiness;
 #[path = "controller/startup.rs"]
 mod startup;
 
+pub(super) use startup::run_controller;
+
 use doctor::DoctorProbeWorker;
 
 const CONFIG_RELOAD_PAUSE: Duration = Duration::from_secs(2);
 const STORAGE_PROFILE_RETRY: Duration = Duration::from_secs(30);
 
-pub(super) async fn run_controller(
-    current: HostConfig,
-    state: &Path,
-    daemon_lock: &DaemonLock,
-    release_read_secret: ReleaseReadSecret,
-) -> Result<(), ListenFault> {
-    let controller =
-        ControllerLoop::initialize(current, state, daemon_lock, release_read_secret).await?;
-    Box::pin(controller.run()).await
+pub(super) struct ControllerBase {
+    pub(super) state: PathBuf,
+    pub(super) docker: bollard::Docker,
+    pub(super) selected_engine: SelectedEngineContext,
+    pub(super) journal: Journal,
+    pub(super) lineage: EngineLineageGuard,
 }
 
-struct ControllerBase {
-    state: PathBuf,
-    docker: bollard::Docker,
-    selected_engine: SelectedEngineContext,
-    journal: Journal,
-    lineage: EngineLineageGuard,
-}
-
-async fn open_controller_base(
+pub(super) async fn open_controller_base(
     current: &HostConfig,
     state: &Path,
     daemon_lock: &DaemonLock,
@@ -169,6 +161,12 @@ impl<'a> ControllerLoop<'a> {
             selected_engine.engine_id().to_owned(),
             selected_engine.docker_root_digest().to_owned(),
         )?;
+        control_state.replace_setup_receipts(setup_receipt_inputs(
+            &connection_sessions,
+            &current,
+            selected_engine.engine_id(),
+            selected_engine.docker_root_digest(),
+        )?)?;
         control_state.set_admission_ready(startup.admission_ready);
         let readiness_worker = readiness::ReadinessWorker::start(
             state.clone(),
@@ -308,9 +306,23 @@ impl<'a> ControllerLoop<'a> {
             .await
             {
                 Ok(prepared) => {
-                    if let Err(error) = self.control_state.invalidate_session_polls() {
+                    let setup_receipts = match setup_receipt_inputs(
+                        &prepared,
+                        &self.current,
+                        self.selected_engine.engine_id(),
+                        self.selected_engine.docker_root_digest(),
+                    ) {
+                        Ok(receipts) => receipts,
+                        Err(error) => {
+                            eprintln!(
+                                "The controller could not prepare connection setup receipts. Error: {error}."
+                            );
+                            return;
+                        }
+                    };
+                    if let Err(error) = self.control_state.replace_setup_receipts(setup_receipts) {
                         eprintln!(
-                            "The controller could not invalidate session poll receipts. Error: {error}."
+                            "The controller could not replace connection setup receipts. Error: {error}."
                         );
                         return;
                     }
@@ -352,6 +364,22 @@ impl<'a> ControllerLoop<'a> {
         };
         match self.journal.configure_storage_profile(profile).await {
             Ok(()) => {
+                let receipts = match setup_receipt_inputs(
+                    &self.connection_sessions,
+                    &self.current,
+                    self.selected_engine.engine_id(),
+                    self.selected_engine.docker_root_digest(),
+                ) {
+                    Ok(receipts) => receipts,
+                    Err(error) => {
+                        eprintln!("host controller setup receipt refresh held: {error}");
+                        return;
+                    }
+                };
+                if let Err(error) = self.control_state.replace_setup_receipts(receipts) {
+                    eprintln!("host controller setup receipt refresh held: {error}");
+                    return;
+                }
                 self.admission_ready = true;
                 self.control_state.set_admission_ready(true);
             }
@@ -359,29 +387,6 @@ impl<'a> ControllerLoop<'a> {
                 self.control_state.set_admission_ready(false);
                 eprintln!("The controller could not store the storage profile. Error: {error}.");
             }
-        }
-    }
-}
-
-async fn apply_config(
-    current: &mut HostConfig,
-    pending_retirements: &mut Vec<crate::config::RepositoryConnection>,
-    next: HostConfig,
-    effects: &mut JournalEffects<'_>,
-) -> bool {
-    if let Err(error) = ReleaseReadSecret::load(&next) {
-        eprintln!("host controller release-reader reload held: {error}");
-        return false;
-    }
-    match apply_config_transition(current, &next, effects).await {
-        Ok(removed) => {
-            *current = next;
-            pending_retirements.extend(removed);
-            true
-        }
-        Err(error) => {
-            eprintln!("host controller config transition held: {error}");
-            false
         }
     }
 }

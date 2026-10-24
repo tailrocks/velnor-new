@@ -35,7 +35,7 @@ fn every_schema2_family_renders_only_bounded_executable_jobs() {
             verify_rust_argv: vec![
                 "sh".to_owned(),
                 "-c".to_owned(),
-                "echo verify-rust".to_owned(),
+                crate::toolchain_env::with_credential_unset_script("echo verify-rust"),
             ],
         }),
         mise_pin_qualification: Some(MisePinQualificationPins {

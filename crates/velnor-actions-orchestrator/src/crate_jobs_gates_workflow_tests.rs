@@ -240,7 +240,7 @@ fn assert_task_owners(
         assert_eq!(
             emitted.get(&task.task_id),
             owners
-                .for_member(task, velnor_actions_contract::WorkflowEvent::PullRequest)
+                .for_member_for_event(task, velnor_actions_contract::WorkflowEvent::PullRequest)
                 .expect("owner")
                 .as_ref(),
             "plan and emitted execution must have the same sole owner"
@@ -300,6 +300,10 @@ fn complete_workflow_seed_barrier_preserves_required_and_reports() {
         );
         assert_eq!(rendered.matches("background: true").count(), 3);
         assert_eq!(rendered.matches("wait-all:").count(), 1);
+        assert_eq!(
+            workflow.ir.jobs["rust-demo"].condition, None,
+            "the repository policy keeps shared qualification-capable Rust jobs ungated"
+        );
         assert_seed_job_dispositions(&workflow.ir.jobs);
         if enabled {
             let steps = &mut workflow.ir.jobs.get_mut("rust-demo").expect("owner").steps;
@@ -319,13 +323,15 @@ fn complete_workflow_seed_barrier_preserves_required_and_reports() {
 
 /// Whole-job selection remains the only skip path when seeding is enabled.
 fn assert_seed_job_dispositions(jobs: &BTreeMap<String, velnor_actions_contract::Job>) {
+    let id = "rust-demo";
+    assert!(jobs["required"].needs.iter().any(|need| need == id));
+    assert_seed_task_dispositions(&jobs[id]);
+}
+
+fn assert_seed_task_dispositions(job: &velnor_actions_contract::Job) {
     use velnor_actions_contract::{JobDisposition, PlanJob, StepKind};
     let id = "rust-demo";
-    // The orchestrator IR remains policy-neutral here. The rendered workflow
-    // above proves that finalization adds the plan gate in either seed mode.
-    assert!(jobs[id].condition.is_none());
-    assert!(jobs["required"].needs.iter().any(|need| need == id));
-    for step in &jobs[id].steps {
+    for step in &job.steps {
         if matches!(step.kind, StepKind::TaskExecution { .. }) {
             assert!(
                 step.condition.is_none(),
@@ -372,3 +378,6 @@ fn assert_seed_job_dispositions(jobs: &BTreeMap<String, velnor_actions_contract:
 
 #[path = "crate_jobs_optional_seed_tests.rs"]
 mod optional_seed_tests;
+
+#[path = "crate_jobs_consumer_gate_tests.rs"]
+mod consumer_gate_tests;
