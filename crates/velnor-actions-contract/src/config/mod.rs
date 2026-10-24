@@ -62,14 +62,15 @@ mod workflow_lint;
 mod workflow_task;
 mod workflow_timeouts;
 
-pub(crate) use binary_release::validate_static_release_inventory;
-
 pub use actions::{ActionPinOverride, ActionsConfig, OVERRIDABLE_ACTIONS};
 pub use agents::{AgentsConfig, ClaudeMdMode};
 pub use ansible::{
     ANSIBLE_JOB_PREFIX, AnsibleCheck, AnsibleCollection, AnsibleStackConfig, LintProfile,
 };
+pub(crate) use binary_release::validate_static_release_inventory;
 pub use binary_release::{
+    MAX_PUBLICATION_RUNTIME_MINUTES, PUBLICATION_CLEANUP_HEADROOM_MINUTES,
+    PUBLICATION_PREPARATION_STEP_DEFAULT_MINUTES, RELEASE_ACQUIRE_STEP_TIMEOUT_MINUTES,
     RustBinaryPreviewConfig, RustBinaryPreviewVersioning, RustBinaryReleaseArchive,
     RustBinaryReleaseCompanion, RustBinaryReleaseConfig, RustBinaryReleaseEvidence,
     RustBinaryReleaseEvidenceProfile, RustBinaryReleaseProducer, RustBinaryReleaseProduct,
