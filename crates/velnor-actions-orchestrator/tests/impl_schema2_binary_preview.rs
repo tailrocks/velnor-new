@@ -3,6 +3,9 @@ use super::{ENABLED, binary_repo};
 use crate::impl_common::{TestResult, git};
 use velnor_actions_orchestrator::{export_homebrew_source_policy, prepare, render_staged_tree};
 
+#[path = "impl_schema2_binary_preview_custom.rs"]
+mod custom_route;
+
 fn preview_config(stable: bool) -> String {
     let stable_config = if stable {
         ENABLED.to_owned()

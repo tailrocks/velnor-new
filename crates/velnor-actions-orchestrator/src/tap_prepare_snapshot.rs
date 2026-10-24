@@ -120,6 +120,39 @@ pub(crate) fn validate_tree_snapshot(
     Ok(())
 }
 
+pub(crate) fn validate_formula_only_delta(
+    before: &Snapshot,
+    after: &Snapshot,
+    formula: &str,
+    proposed: &[u8],
+) -> Result<(), OrchestratorError> {
+    if before.len() != after.len() || proposed.is_empty() || proposed.len() as u64 > FORMULA_LIMIT {
+        return Err(internal("tap_updater_changed_tree_shape"));
+    }
+    for (path, old) in before {
+        let new = after
+            .get(path)
+            .ok_or_else(|| internal("tap_updater_removed_path"))?;
+        if old.directory != new.directory || old.mode != new.mode {
+            return Err(internal("tap_updater_changed_path_or_mode"));
+        }
+        if path == formula {
+            if old.directory || new.directory || new.size != proposed.len() as u64 {
+                return Err(internal("tap_updater_formula_not_regular"));
+            }
+            if new.sha256 != sha256(proposed) {
+                return Err(internal("tap_updater_formula_read_race"));
+            }
+        } else if old != new {
+            return Err(internal("tap_updater_changed_non_formula_path"));
+        }
+    }
+    if !before.contains_key(formula) {
+        return Err(internal("tap_formula_absent_at_base"));
+    }
+    Ok(())
+}
+
 pub(crate) fn read_formula(root: &Path, path: &str) -> Result<Vec<u8>, OrchestratorError> {
     if !safe_relative_path(path) {
         return Err(internal("tap_formula_path_invalid"));

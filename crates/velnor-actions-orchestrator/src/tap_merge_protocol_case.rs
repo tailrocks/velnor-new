@@ -39,7 +39,7 @@ pub(super) fn completed_case() -> (
             tap: &fixture.policy,
             plan: &fixture.plan,
             release: &fixture.release,
-            spec: &fixture.spec,
+            spec: Some(&fixture.spec),
             sdk_artifact_digest: &"9".repeat(64),
             base_sha: &base,
             base_formula: &fixture.base_formula,
@@ -80,7 +80,7 @@ fn completed_candidate(
     let formula_path = fixture.formula_path.clone();
     MergeCandidate {
         policy: fixture.policy,
-        spec: fixture.spec,
+        spec: Some(fixture.spec),
         sdk_artifact_digest: "9".repeat(64),
         plan: fixture.plan,
         release: fixture.release,
@@ -120,7 +120,7 @@ fn current_proof(
         new_formula_sha256: formula_sha,
         receipt_digest: fixture.release.receipt_digest.clone(),
         plan_digest: sha256(&fixture.plan.canonical_bytes().expect("plan bytes")),
-        formula_spec_digest: fixture.spec.digest().expect("spec digest"),
+        formula_spec_digest: Some(fixture.spec.digest().expect("spec digest")),
         sdk_artifact_digest: "9".repeat(64),
         tap_config_digest: sha256(&canonical_json_bytes(&fixture.policy).expect("policy bytes")),
         tap_repository: fixture.policy.repository.clone(),

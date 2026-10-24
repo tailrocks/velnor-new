@@ -56,15 +56,14 @@ fn prepare_admitted(
     }
     let source_repository = crate::release_identity::origin_repository(&workspace)?;
     let spec = static_formula_policy()?;
-    let source_spec = config
-        .distribution
-        .homebrew_formula
-        .as_ref()
-        .ok_or_else(|| internal("tap_formula_spec_missing"))?;
-    if canonical_json_bytes(source_spec).map_err(|_| internal("tap_formula_spec_encode"))?
-        != canonical_json_bytes(&spec).map_err(|_| internal("tap_formula_spec_encode"))?
-    {
-        return Err(internal("tap_static_formula_spec_mismatch"));
+    match (config.distribution.homebrew_formula.as_ref(), spec.as_ref()) {
+        (Some(source_spec), Some(spec))
+            if canonical_json_bytes(source_spec)
+                .map_err(|_| internal("tap_formula_spec_encode"))?
+                == canonical_json_bytes(spec)
+                    .map_err(|_| internal("tap_formula_spec_encode"))? => {}
+        (None, None) => {}
+        _ => return Err(internal("tap_static_formula_spec_mismatch")),
     }
     let sdk_artifact_digest = crate::generator::current_exe_sha256()
         .ok_or_else(|| internal("tap_sdk_artifact_digest_unavailable"))?;
@@ -77,7 +76,7 @@ fn prepare_admitted(
         tap,
         plan: &plan,
         release: &release,
-        spec: &spec,
+        spec: spec.as_ref(),
         sdk_artifact_digest: &sdk_artifact_digest,
         temp: &root,
         deadline,
@@ -103,10 +102,15 @@ pub(super) fn static_tap_policy() -> Result<HomebrewTapConfig, OrchestratorError
 }
 
 pub(super) fn static_formula_policy()
--> Result<velnor_actions_contract::homebrew_spec::HomebrewFormulaSpec, OrchestratorError> {
+-> Result<Option<velnor_actions_contract::homebrew_spec::HomebrewFormulaSpec>, OrchestratorError> {
     const LIMIT: usize = 64 * 1024;
-    let raw = env::var("VELNOR_HOMEBREW_FORMULA_SPEC")
-        .map_err(|_| internal("tap_static_formula_spec_missing"))?;
+    let raw = match env::var("VELNOR_HOMEBREW_FORMULA_SPEC") {
+        Ok(raw) => raw,
+        Err(env::VarError::NotPresent) => return Ok(None),
+        Err(env::VarError::NotUnicode(_)) => {
+            return Err(internal("tap_static_formula_spec_invalid"));
+        }
+    };
     if raw.is_empty() || raw.len() > LIMIT {
         return Err(internal("tap_static_formula_spec_invalid"));
     }
@@ -119,7 +123,7 @@ pub(super) fn static_formula_policy()
     if canonical != raw.as_bytes() {
         return Err(internal("tap_static_formula_spec_not_canonical"));
     }
-    Ok(spec)
+    Ok(Some(spec))
 }
 
 pub(super) fn absolute_env(key: &str, problem: &str) -> Result<PathBuf, OrchestratorError> {

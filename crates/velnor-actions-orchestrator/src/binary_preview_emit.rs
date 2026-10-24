@@ -145,21 +145,23 @@ fn tap_spec(
     else {
         return Ok(None);
     };
-    let runner = &velnor_actions_contract::config::CheckRunner {
+    let native_runner = velnor_actions_contract::config::CheckRunner {
         label: "ubuntu-26.04".to_owned(),
         platform: velnor_actions_contract::config::CheckPlatform::LinuxX64,
         executor: velnor_actions_contract::config::CheckExecutor::Hosted,
         container: None,
     };
-    let formula_spec = prep
-        .config
-        .distribution
-        .homebrew_formula
+    let runner = policy
+        .updater
         .as_ref()
-        .ok_or_else(|| internal("homebrew_formula_spec_missing"))?;
+        .map_or(&native_runner, |updater| &updater.runner);
+    let formula_spec = prep.config.distribution.homebrew_formula.as_ref();
+    if policy.updater.is_none() != formula_spec.is_some() {
+        return Err(internal("homebrew_tap_formula_route_mismatch"));
+    }
     Ok(Some(ConsumerReleaseTapSpec {
         policy: policy.clone(),
-        formula_spec: formula_spec.clone(),
+        formula_spec: formula_spec.cloned(),
         preparation_acquire: consumer_acquire_for_runner(
             runner,
             env!("CARGO_PKG_VERSION"),

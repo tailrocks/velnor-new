@@ -67,7 +67,7 @@ fn fixture(channel: PackageReleaseChannel) -> ConsumerReleaseSpec {
         gh_argv: vec!["gh".to_owned()],
         homebrew_tap: Some(ConsumerReleaseTapSpec {
             policy: tap_policy(),
-            formula_spec: crate::homebrew::test_support::spec(),
+            formula_spec: Some(crate::homebrew::test_support::spec()),
             preparation_acquire: acquire,
             preparation_setup: setup,
         }),

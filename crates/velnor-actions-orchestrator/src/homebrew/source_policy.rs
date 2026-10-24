@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use velnor_actions_contract::{
-    homebrew_authority::HOMEBREW_SOURCE_RELEASE_POLICY_PATH,
+    config::HomebrewTapConfig, homebrew_authority::HOMEBREW_SOURCE_RELEASE_POLICY_PATH,
     package_release::PackageReleaseChannel, parse_package_release_policy,
 };
 
@@ -41,6 +41,14 @@ pub fn check_homebrew_source_policy(root: &Path) -> Result<(), OrchestratorError
     let prep = prepare(root)?;
     require_enabled_tap(&prep)?;
     check_preparation(&prep)
+}
+
+/// Whether generated source-policy enforcement applies to the selected tap route.
+///
+/// Native formula generation requires the committed source policy. A captured,
+/// source-qualified custom updater retains its original compatibility contract.
+pub(crate) fn requires_native_generation_policy(tap: Option<&HomebrewTapConfig>) -> bool {
+    tap.is_some_and(|tap| tap.enabled && tap.updater.is_none())
 }
 
 /// Enforce this policy only for repositories that enable a Homebrew tap.
@@ -139,6 +147,32 @@ mod tests {
         }
         .canonical_bytes()
         .expect("valid fixture policy")
+    }
+
+    #[test]
+    fn only_native_generation_requires_the_new_committed_source_policy() {
+        let native = crate::homebrew::test_support::policy();
+        assert!(super::requires_native_generation_policy(Some(&native)));
+
+        let mut custom = native;
+        custom.updater = Some(velnor_actions_contract::config::TapUpdaterBinding {
+            task: "tap:update".to_owned(),
+            source: velnor_actions_contract::config::MiseTaskSource {
+                mise_config: "mise.toml".to_owned(),
+                working_directory: ".".to_owned(),
+            },
+            runner: velnor_actions_contract::config::CheckRunner {
+                label: "ubuntu-26.04".to_owned(),
+                platform: velnor_actions_contract::config::CheckPlatform::LinuxX64,
+                executor: velnor_actions_contract::config::CheckExecutor::Hosted,
+                container: None,
+            },
+            inputs: vec!["mise.toml".to_owned(), "Formula/cli-preview.rb".to_owned()],
+            tools: vec!["ruby".to_owned()],
+            timeout_minutes: 5,
+        });
+        assert!(!super::requires_native_generation_policy(Some(&custom)));
+        assert!(!super::requires_native_generation_policy(None));
     }
 
     #[test]

@@ -48,7 +48,7 @@ fn historical_formula_proof_uses_its_own_head_and_base_bytes() {
     );
     assert_eq!(
         current_proof.formula_spec_digest,
-        fixture.spec.digest().expect("spec digest")
+        Some(fixture.spec.digest().expect("spec digest"))
     );
     assert_eq!(current_proof.sdk_artifact_digest, sdk_artifact_digest);
     assert_ne!(
@@ -84,7 +84,7 @@ fn reconstruct(
         tap: &fixture.policy,
         plan: &fixture.plan,
         release: &fixture.release,
-        spec: &fixture.spec,
+        spec: Some(&fixture.spec),
         sdk_artifact_digest,
         base_sha,
         base_formula,

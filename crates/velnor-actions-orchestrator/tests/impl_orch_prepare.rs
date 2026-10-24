@@ -62,6 +62,7 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
             "qualification_resolver.rs",
             "routing.rs",
             "tap_prepare_execute.rs",
+            "tap_prepare_routes.rs",
         ],
         "preparation, execution, native check admission, preview budget admission, routing, owned preview, qualification admission, captured tap preparation, the private dependency lock, the Playwright browser lock, and the private fetch load configuration at their boundaries"
     );

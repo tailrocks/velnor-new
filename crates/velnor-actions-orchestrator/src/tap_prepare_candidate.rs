@@ -43,7 +43,7 @@ pub(super) struct CandidateIdentity<'a> {
     pub(super) source_repository: &'a str,
     pub(super) tap: &'a HomebrewTapConfig,
     pub(super) release: &'a VerifiedPackageRelease,
-    pub(super) spec: &'a HomebrewFormulaSpec,
+    pub(super) spec: Option<&'a HomebrewFormulaSpec>,
     pub(super) sdk_artifact_digest: &'a str,
     pub(super) base_sha: &'a str,
     pub(super) old_sha: &'a str,
@@ -56,12 +56,14 @@ pub(super) struct CandidateIdentity<'a> {
 /// Authenticated inputs required to render one canonical formula candidate.
 #[derive(Clone, Copy)]
 pub(crate) struct FormulaCandidateInput<'a> {
-    pub(crate) spec: &'a HomebrewFormulaSpec,
+    pub(crate) spec: Option<&'a HomebrewFormulaSpec>,
     pub(crate) source_repository: &'a str,
     pub(crate) tap_repository: &'a str,
     pub(crate) formula_path: &'a str,
     pub(crate) base_sha: &'a str,
     pub(crate) base_formula: &'a [u8],
+    /// Candidate bytes are supplied only for the source-qualified custom route.
+    pub(crate) proposed_formula: Option<&'a [u8]>,
     pub(crate) plan: &'a PackageReleasePlan,
     pub(crate) release: &'a VerifiedPackageRelease,
 }
@@ -73,7 +75,7 @@ pub(crate) struct HistoricalCandidateInput<'a> {
     pub(crate) tap: &'a HomebrewTapConfig,
     pub(crate) plan: &'a PackageReleasePlan,
     pub(crate) release: &'a VerifiedPackageRelease,
-    pub(crate) spec: &'a HomebrewFormulaSpec,
+    pub(crate) spec: Option<&'a HomebrewFormulaSpec>,
     pub(crate) sdk_artifact_digest: &'a str,
     pub(crate) base_sha: &'a str,
     pub(crate) base_formula: &'a [u8],
@@ -142,15 +144,19 @@ fn staging_path(temp: &Path) -> PathBuf {
 pub(crate) fn derive_native_formula_candidate(
     input: FormulaCandidateInput<'_>,
 ) -> Result<Vec<u8>, OrchestratorError> {
+    let spec = input
+        .spec
+        .ok_or_else(|| internal("tap_native_formula_spec_missing"))?;
     let FormulaCandidateInput {
-        spec,
         source_repository,
         tap_repository,
         formula_path,
         base_sha,
         base_formula,
+        proposed_formula: _,
         plan,
         release,
+        spec: _,
     } = input;
     release
         .validate(source_repository, plan)
@@ -219,6 +225,28 @@ pub(crate) fn derive_native_formula_candidate(
     Ok(independently_validated)
 }
 
+pub(crate) fn derive_formula_candidate(
+    input: FormulaCandidateInput<'_>,
+) -> Result<Vec<u8>, OrchestratorError> {
+    if input.spec.is_some() {
+        return derive_native_formula_candidate(input);
+    }
+    let proposed_formula = input
+        .proposed_formula
+        .ok_or_else(|| internal("tap_custom_formula_candidate_missing"))?;
+    validate_homebrew_formula_candidate(&HomebrewFormulaCandidate {
+        source_repository: input.source_repository,
+        plan: input.plan,
+        tap_repository: input.tap_repository,
+        formula_path: input.formula_path,
+        captured_base_sha: input.base_sha,
+        base_bytes: input.base_formula,
+        proposed_bytes: proposed_formula,
+        release: input.release,
+    })
+    .map_err(|_| internal("tap_formula_literal_or_monotonicity_rejected"))
+}
+
 /// Reconstruct the original changed proof from trusted release and formula inputs.
 /// This supports historical PR authentication when fresh tap main is already current.
 pub(crate) fn reconstruct_historical_candidate_proof(
@@ -236,13 +264,14 @@ pub(crate) fn reconstruct_historical_candidate_proof(
         proposed_formula,
     } = input;
     let formula_path = super::formula_path(tap, plan.channel)?;
-    let canonical = derive_native_formula_candidate(FormulaCandidateInput {
+    let canonical = derive_formula_candidate(FormulaCandidateInput {
         spec,
         source_repository,
         tap_repository: &tap.repository,
         formula_path,
         base_sha,
         base_formula,
+        proposed_formula: Some(proposed_formula),
         plan,
         release,
     })
@@ -295,8 +324,11 @@ fn candidate_proof(
         receipt_digest: release.receipt_digest.clone(),
         plan_digest: sha256(&canonical_json_bytes(plan).map_err(|_| internal("tap_plan_encode"))?),
         formula_spec_digest: spec
-            .digest()
-            .map_err(|_| internal("tap_formula_spec_digest"))?,
+            .map(|spec| {
+                spec.digest()
+                    .map_err(|_| internal("tap_formula_spec_digest"))
+            })
+            .transpose()?,
         sdk_artifact_digest: (*sdk_artifact_digest).to_owned(),
         tap_config_digest: sha256(
             &canonical_json_bytes(tap).map_err(|_| internal("tap_policy_encode"))?,

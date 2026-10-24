@@ -9,12 +9,11 @@ use std::fs;
 use serde_json::json;
 use tempfile::TempDir;
 use velnor_actions_contract::{FinalStatus, JobConclusion, Plan};
-use velnor_actions_orchestrator::{
-    assemble_merge_request, finalized_jobs, merge_internal, plan_internal, prepare,
-};
+use velnor_actions_orchestrator::{assemble_merge_request, finalized_jobs, plan_internal, prepare};
 
 use super::impl_common::{
-    TestResult, git, git_line, install_fixture_release_manifest, passing_reports, plan_for,
+    TestResult, git, git_line, install_fixture_release_manifest, merge_fixture, passing_reports,
+    plan_for,
 };
 use super::impl_orch_core::{merge, merge_request, success_jobs};
 
@@ -294,7 +293,7 @@ fn missing_tofu_report_fails_required_closed() -> TestResult {
     );
     value["actual_event"] = value["plan"]["event"].clone();
     let report: velnor_actions_contract::FinalReport =
-        serde_json::from_str(&merge_internal(&value.to_string())?)?;
+        serde_json::from_str(&merge_fixture(&value.to_string())?)?;
     assert_eq!(report.status, FinalStatus::PlanningFailed);
     assert!(
         report.miss_reasons.contains(&"source_missing".to_owned()),

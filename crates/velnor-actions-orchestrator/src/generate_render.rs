@@ -17,7 +17,11 @@ pub(super) fn render_all(
     prep: &GenerationPreparation,
     dispatch: Option<ExecutionMode>,
 ) -> Result<RenderedTree, OrchestratorError> {
-    crate::homebrew::source_policy::check_preparation(prep)?;
+    if crate::homebrew::source_policy::requires_native_generation_policy(
+        prep.config.distribution.homebrew_tap.as_ref(),
+    ) {
+        crate::homebrew::source_policy::check_preparation(prep)?;
+    }
     let version = env!("CARGO_PKG_VERSION");
     let mise = resolve_mise_setup(&prep.config, &prep.runner_label)?;
     let ir = expand_workflow(&prep.workflow.ir, &prep.config, dispatch).map_err(|err| {

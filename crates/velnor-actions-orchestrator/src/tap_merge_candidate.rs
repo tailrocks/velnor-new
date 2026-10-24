@@ -25,7 +25,7 @@ const LIMIT: u64 = 1024 * 1024;
 
 pub(super) struct MergeCandidate {
     pub(super) policy: HomebrewTapConfig,
-    pub(super) spec: HomebrewFormulaSpec,
+    pub(super) spec: Option<HomebrewFormulaSpec>,
     pub(super) sdk_artifact_digest: String,
     pub(super) plan: PackageReleasePlan,
     pub(super) release: VerifiedPackageRelease,
@@ -118,7 +118,7 @@ pub(super) fn load_candidate() -> Result<MergeCandidate, OrchestratorError> {
     let promotion: TapPromotionReceipt = read_canonical_json(&root.join("tap-pr.json"))?;
     validate_handoff(&HandoffValidation {
         policy: &policy,
-        spec: &spec,
+        spec: spec.as_ref(),
         sdk_artifact_digest: &sdk_artifact_digest,
         plan: &plan,
         release: &release,
@@ -141,7 +141,7 @@ pub(super) fn load_candidate() -> Result<MergeCandidate, OrchestratorError> {
 
 struct HandoffValidation<'a> {
     policy: &'a HomebrewTapConfig,
-    spec: &'a HomebrewFormulaSpec,
+    spec: Option<&'a HomebrewFormulaSpec>,
     sdk_artifact_digest: &'a str,
     plan: &'a PackageReleasePlan,
     release: &'a VerifiedPackageRelease,
@@ -170,6 +170,12 @@ fn validate_handoff(input: &HandoffValidation<'_>) -> Result<(), OrchestratorErr
     );
     let tap_digest =
         sha256(&canonical_json_bytes(policy).map_err(|_| internal("tap_merge_policy_encode"))?);
+    let formula_spec_digest = spec
+        .map(|spec| {
+            spec.digest()
+                .map_err(|_| internal("tap_formula_spec_digest"))
+        })
+        .transpose()?;
     if proof.schema != "velnor.homebrew-candidate.v4"
         || proof.channel != plan.channel
         || proof.formula_path != crate::tap_prepare::formula_path(policy, plan.channel)?
@@ -180,10 +186,7 @@ fn validate_handoff(input: &HandoffValidation<'_>) -> Result<(), OrchestratorErr
         || proof.version != release.receipt.version.value
         || proof.receipt_digest != release.receipt_digest
         || proof.plan_digest != plan_digest
-        || proof.formula_spec_digest
-            != spec
-                .digest()
-                .map_err(|_| internal("tap_formula_spec_digest"))?
+        || proof.formula_spec_digest != formula_spec_digest
         || proof.sdk_artifact_digest != *sdk_artifact_digest
         || proof.tap_config_digest != tap_digest
         || proof.new_formula_sha256 != sha256(formula)
@@ -261,12 +264,13 @@ pub(super) fn validate_formula_at_base(
 ) -> Result<(), OrchestratorError> {
     let canonical =
         crate::tap_prepare::derive_formula_candidate(crate::tap_prepare::FormulaCandidateInput {
-            spec: &candidate.spec,
+            spec: candidate.spec.as_ref(),
             source_repository: &candidate.proof.source_repository,
             tap_repository: &candidate.policy.repository,
             formula_path: &candidate.formula_path,
             base_sha,
             base_formula,
+            proposed_formula: Some(proposed_formula),
             plan: &candidate.plan,
             release: &candidate.release,
         })

@@ -2,9 +2,9 @@
 
 use serde_json::json;
 use velnor_actions_contract::FinalStatus;
-use velnor_actions_orchestrator::{assemble_merge_request, merge_internal};
+use velnor_actions_orchestrator::assemble_merge_request;
 
-use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
+use crate::impl_common::{TestResult, merge_fixture, passing_reports, plan_for_source_change};
 use crate::impl_merge::task_reports_for;
 
 /// Staged run directory with `plan.json` plus `matrix.json` written.
@@ -56,7 +56,7 @@ fn merge_staged(
             .collect(),
     );
     value["actual_event"] = value["plan"]["event"].clone();
-    Ok(serde_json::from_str(&merge_internal(&value.to_string())?)?)
+    Ok(serde_json::from_str(&merge_fixture(&value.to_string())?)?)
 }
 
 /// Assert one `planning_failed` verdict carrying the corruption token.

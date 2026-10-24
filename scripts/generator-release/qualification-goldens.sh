@@ -45,11 +45,11 @@ file_size_bytes() {
 
 json_has_unique_keys() {
   local path="$1"
-  VELNOR_REPO_POLICY_ACTION=qualification-manifest \
-    VELNOR_REPO_POLICY_MANIFEST="$path" \
-    VELNOR_REPO_POLICY_ROOT="$ROOT" \
-    VELNOR_INTERNAL_OP=repo-policy-v1 \
-    "$BIN"
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "FATAL: python3 is required to reject duplicate JSON keys" >&2
+    return 1
+  fi
+  python3 "$ROOT/scripts/generator-release/qualification-checker.py" manifest "$path"
 }
 
 host_target() {
@@ -187,12 +187,12 @@ capture_release_case() {
 
 validate_candidate_output_bindings() {
   local preview="$1"
-  VELNOR_REPO_POLICY_ACTION=qualification-output-bindings \
-    VELNOR_REPO_POLICY_MANIFEST="$CANDIDATE_MANIFEST" \
-    VELNOR_REPO_POLICY_WORKFLOW_ROOT="$preview/.github" \
-    VELNOR_REPO_POLICY_ROOT="$ROOT" \
-    VELNOR_INTERNAL_OP=repo-policy-v1 \
-    "$BIN"
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "FATAL: python3 is required to validate candidate output bindings" >&2
+    return 1
+  fi
+  python3 "$ROOT/scripts/generator-release/qualification-checker.py" \
+    output-bindings "$CANDIDATE_MANIFEST" "$preview/.github"
 }
 
 normalize_candidate_digests() {

@@ -127,6 +127,7 @@ pub(crate) fn policy() -> HomebrewTapConfig {
     HomebrewTapConfig {
         enabled: true,
         repository: "owner/homebrew-tap".to_owned(),
+        updater: None,
         destinations: HomebrewTapDestinations {
             preview: Some(HomebrewTapDestination {
                 formula: "Formula/cli-preview.rb".to_owned(),

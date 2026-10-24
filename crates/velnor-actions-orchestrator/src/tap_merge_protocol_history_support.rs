@@ -20,7 +20,7 @@ pub(super) fn add_closed_prior_pr(
             tap: &candidate.policy,
             plan: &candidate.plan,
             release: &candidate.release,
-            spec: &candidate.spec,
+            spec: candidate.spec.as_ref(),
             sdk_artifact_digest: &candidate.sdk_artifact_digest,
             base_sha: &original_base,
             base_formula: &formula.base_formula,

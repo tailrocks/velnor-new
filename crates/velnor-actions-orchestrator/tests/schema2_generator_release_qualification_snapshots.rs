@@ -1,5 +1,8 @@
 use super::action_snapshots::{Actions, action};
 
+#[path = "schema2_generator_release_qualification_snapshots/output_bindings.rs"]
+mod output_bindings;
+
 pub(super) fn assert_candidate_qualification(
     workflow: &str,
     actions: &Actions,
@@ -161,33 +164,7 @@ fn assert_release_fixture_generation_requirements() -> Result<(), Box<dyn std::e
 fn assert_candidate_output_binding_validation(
     qualification_helpers: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let release_case = qualification_helpers
-        .find("capture_release_case()")
-        .ok_or("release candidate case capture must exist")?;
-    let capture_window = &qualification_helpers[release_case..];
-    let raw_binding_check = capture_window
-        .find("validate_candidate_output_bindings")
-        .ok_or("raw candidate output bindings must be validated")?;
-    let normalization = capture_window
-        .find("normalize_candidate_digests")
-        .ok_or("candidate output normalization must exist")?;
-    assert!(
-        raw_binding_check < normalization,
-        "raw candidate output bindings must be validated before normalization"
-    );
-    for handoff in [
-        "VELNOR_REPO_POLICY_ACTION=qualification-output-bindings",
-        "VELNOR_REPO_POLICY_MANIFEST=\"$CANDIDATE_MANIFEST\"",
-        "VELNOR_REPO_POLICY_WORKFLOW_ROOT=\"$preview/.github\"",
-        "VELNOR_REPO_POLICY_ROOT=\"$ROOT\"",
-        "VELNOR_INTERNAL_OP=repo-policy-v1",
-        "\"$BIN\"",
-    ] {
-        assert!(
-            qualification_helpers.contains(handoff),
-            "native output-binding operation is missing {handoff}"
-        );
-    }
+    output_bindings::assert_qualification_pipeline(qualification_helpers)?;
     let validator = include_str!("../../../crates/velnor-actions-freshness/src/release_support.rs");
     assert!(
         validator.contains("fn validate_qualification_output_bindings(")

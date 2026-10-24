@@ -131,7 +131,7 @@ fn verify_promotion_authority(inputs: &WriterInputs) -> Result<bool, Orchestrato
 struct WriterInputs {
     root: PathBuf,
     policy: HomebrewTapConfig,
-    spec: HomebrewFormulaSpec,
+    spec: Option<HomebrewFormulaSpec>,
     sdk_artifact_digest: String,
     plan: PackageReleasePlan,
     release: VerifiedPackageRelease,
@@ -168,7 +168,7 @@ fn load_writer_inputs() -> Result<WriterInputs, OrchestratorError> {
     validate_proof(
         &proof,
         &policy,
-        &spec,
+        spec.as_ref(),
         &sdk_artifact_digest,
         &plan,
         &release,
@@ -231,11 +231,17 @@ fn read_candidate_proof(root: &Path) -> Result<HomebrewTapPreparationProof, Orch
 fn validate_proof(
     proof: &HomebrewTapPreparationProof,
     policy: &HomebrewTapConfig,
-    spec: &HomebrewFormulaSpec,
+    spec: Option<&HomebrewFormulaSpec>,
     sdk_artifact_digest: &str,
     plan: &PackageReleasePlan,
     release: &VerifiedPackageRelease,
 ) -> Result<(), OrchestratorError> {
+    let formula_spec_digest = spec
+        .map(|spec| {
+            spec.digest()
+                .map_err(|_| internal("tap_formula_spec_digest"))
+        })
+        .transpose()?;
     if proof.schema != "velnor.homebrew-candidate.v4"
         || proof.channel != plan.channel
         || proof.candidate_formula != "formula.rb"
@@ -247,10 +253,7 @@ fn validate_proof(
         || proof.receipt_digest != release.receipt_digest
         || proof.plan_digest
             != sha256(&canonical_json_bytes(plan).map_err(|_| internal("tap_plan_encode"))?)
-        || proof.formula_spec_digest
-            != spec
-                .digest()
-                .map_err(|_| internal("tap_formula_spec_digest"))?
+        || proof.formula_spec_digest != formula_spec_digest
         || proof.sdk_artifact_digest != sdk_artifact_digest
         || proof.tap_config_digest
             != sha256(&canonical_json_bytes(policy).map_err(|_| internal("tap_policy_encode"))?)

@@ -101,7 +101,8 @@ OCI validator. Required native fixture qualification precedes producer execution
 **Source Homebrew policy export (2026-10-24).** The source repository commits the
 canonical release-policy projection used by protected tap verification. Native
 export reuses the preview release-policy serializer and source preparation;
-ordinary generation rejects a missing or stale policy. Export does not invoke
-generation, and generation does not write outside its managed `.github` tree.
-Adopters replace the legacy updater declaration with their native formula spec
-before adopting this SDK version.
+native-route generation rejects a missing or stale policy. Export does not
+invoke generation, and generation does not write outside its managed `.github`
+tree. Adopters may retain their source-qualified updater route without a native
+formula spec, or select the native route by using the typed formula spec and
+omitting the updater; the two routes cannot be combined.

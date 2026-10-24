@@ -80,7 +80,7 @@ fn open_receipt_inputs(mutate_title: bool) -> (WriterInputs, BotIdentity) {
         new_formula_sha256: formula_sha,
         receipt_digest: fixture.release.receipt_digest.clone(),
         plan_digest: sha256(&canonical_json_bytes(&fixture.plan).expect("plan JSON")),
-        formula_spec_digest: fixture.spec.digest().expect("spec digest"),
+        formula_spec_digest: Some(fixture.spec.digest().expect("spec digest")),
         sdk_artifact_digest: "9".repeat(64),
         tap_config_digest: sha256(&canonical_json_bytes(&fixture.policy).expect("policy JSON")),
         tap_repository: fixture.policy.repository.clone(),
@@ -92,7 +92,7 @@ fn open_receipt_inputs(mutate_title: bool) -> (WriterInputs, BotIdentity) {
     let inputs = WriterInputs {
         root: std::path::PathBuf::from("/tmp/unused-writer-test"),
         policy: fixture.policy,
-        spec: fixture.spec,
+        spec: Some(fixture.spec),
         sdk_artifact_digest: "9".repeat(64),
         plan: fixture.plan,
         release: fixture.release,

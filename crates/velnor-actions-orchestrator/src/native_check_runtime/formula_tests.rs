@@ -16,12 +16,13 @@ fn protected_preview_formula_must_not_be_newer_than_candidate() {
     let protected_base = preview_formula(&fixture, &projection, 10, "ccccccc");
     let result = validate_candidate_upgrade(
         FormulaCandidateInput {
-            spec: &fixture.spec,
+            spec: Some(&fixture.spec),
             source_repository: "owner/source",
             tap_repository: "owner/homebrew-tap",
             formula_path: &fixture.formula_path,
             base_sha: "1111111111111111111111111111111111111111",
             base_formula: &protected_base,
+            proposed_formula: None,
             plan: &fixture.plan,
             release: &fixture.release,
         },
@@ -38,12 +39,13 @@ fn protected_preview_formula_accepts_exact_retry() {
     let fixture = tap_test_support::fixture();
     let result = validate_candidate_upgrade(
         FormulaCandidateInput {
-            spec: &fixture.spec,
+            spec: Some(&fixture.spec),
             source_repository: "owner/source",
             tap_repository: "owner/homebrew-tap",
             formula_path: &fixture.formula_path,
             base_sha: "1111111111111111111111111111111111111111",
             base_formula: &fixture.proposed_formula,
+            proposed_formula: None,
             plan: &fixture.plan,
             release: &fixture.release,
         },
@@ -118,12 +120,13 @@ fn disabled_stable_formula_can_activate_at_first_stable_release() {
     assert!(
         validate_candidate_upgrade(
             FormulaCandidateInput {
-                spec: &fixture.spec,
+                spec: Some(&fixture.spec),
                 source_repository: "owner/source",
                 tap_repository: "owner/homebrew-tap",
                 formula_path: "Formula/cli.rb",
                 base_sha: "1111111111111111111111111111111111111111",
                 base_formula: &sentinel_bytes,
+                proposed_formula: None,
                 plan: &stable_plan,
                 release: &release,
             },

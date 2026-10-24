@@ -27,6 +27,16 @@ fn native_seed_request_is_sequential_and_uses_only_closed_environment() {
 }
 
 #[test]
+fn native_seed_request_canonicalizes_distinct_lane_order() {
+    let canonical = seed_parallel_targets_step("target", &["velnor-clippy", "velnor-doc"])
+        .expect("canonical lane order");
+    let reversed = seed_parallel_targets_step("target", &["velnor-doc", "velnor-clippy"])
+        .expect("reverse lane order");
+
+    assert_eq!(reversed, canonical);
+}
+
+#[test]
 fn native_seed_request_rejects_paths_lanes_and_shell_injection() {
     for target in [
         "/target",
@@ -45,7 +55,6 @@ fn native_seed_request_rejects_paths_lanes_and_shell_injection() {
     for lanes in [
         vec![],
         vec!["velnor-clippy", "velnor-clippy"],
-        vec!["velnor-doc", "velnor-clippy"],
         vec!["../doc"],
         vec!["velnor-doc;id"],
     ] {

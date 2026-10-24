@@ -88,8 +88,9 @@ fn assert_configuration_admission_boundaries(config_calls: &[String]) {
     // source config to enforce their protected inventory, execution reloads the
     // source-bound definition, routing reloads before schema migration,
     // the owned-tool preview reloads at its CLI-gated boundary, qualification
-    // admission reloads for the repo-resolved catalog, and tap preparation
-    // reloads the captured tap's own config before using its updater task;
+    // admission reloads for the repo-resolved catalog, and both tap routing
+    // and execution reload the captured tap's own config before using its
+    // updater task;
     // preview finalization reloads A's config to derive the admitted policy;
     // producer execution validates that same A config and bypasses shared
     // preparation; Stable retains shared preparation;
@@ -97,7 +98,7 @@ fn assert_configuration_admission_boundaries(config_calls: &[String]) {
     // `playwright lock` reloads it to resolve the declared browser archives;
     // native check admission reloads it to enforce the protected native check inventory;
     // `unmanaged` reads only the `[github]` and preserve policy, with no discovery.
-    assert_eq!(config_calls.len(), 13, "{config_calls:?}");
+    assert_eq!(config_calls.len(), 14, "{config_calls:?}");
     assert!(
         config_calls
             .iter()
@@ -129,6 +130,12 @@ fn assert_configuration_admission_boundaries(config_calls: &[String]) {
         "{config_calls:?}"
     );
     assert!(
+        config_calls
+            .iter()
+            .any(|call| call.starts_with("tap_prepare_routes.rs")),
+        "{config_calls:?}"
+    );
+    assert!(
         config_calls.iter().all(|call| {
             call.starts_with("prepare.rs")
                 || call.starts_with("preview_producer_entry.rs")
@@ -143,6 +150,7 @@ fn assert_configuration_admission_boundaries(config_calls: &[String]) {
                 || call.starts_with("playwright_resolve.rs")
                 || call.starts_with("qualification_resolver.rs")
                 || call.starts_with("tap_prepare_execute.rs")
+                || call.starts_with("tap_prepare_routes.rs")
         }),
         "{config_calls:?}"
     );

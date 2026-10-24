@@ -215,7 +215,7 @@ fn authenticate_historical_candidate(
             tap: &inputs.policy,
             plan: &inputs.plan,
             release: &inputs.release,
-            spec: &inputs.spec,
+            spec: inputs.spec.as_ref(),
             sdk_artifact_digest: &inputs.sdk_artifact_digest,
             base_sha,
             base_formula: &old_formula,

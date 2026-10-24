@@ -1,5 +1,6 @@
 //! Typed downstream distribution policy.
 
+use super::CheckExecutor;
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -8,8 +9,11 @@ use std::collections::BTreeSet;
 mod destinations;
 #[path = "distribution_protection_observer.rs"]
 mod protection_observer;
+#[path = "distribution_updater.rs"]
+mod updater;
 pub use destinations::{HomebrewTapDestination, HomebrewTapDestinations};
 pub use protection_observer::HomebrewTapProtectionObserver;
+pub use updater::TapUpdaterBinding;
 
 /// Optional distribution destinations outside `[stacks.rust]`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -47,26 +51,48 @@ impl DistributionConfig {
         }
         if let Some(tap) = &self.homebrew_tap {
             tap.validate(file)?;
+            if tap.updater.is_some() && self.homebrew_formula.is_some() {
+                return Err(ContractError::config(
+                    file,
+                    "distribution.homebrew_tap.updater",
+                    "custom_updater_and_native_formula_spec_are_ambiguous",
+                ));
+            }
             if tap.enabled {
-                let spec = self.homebrew_formula.as_ref().ok_or_else(|| {
-                    ContractError::config(
-                        file,
-                        "distribution.homebrew_formula",
-                        "enabled_homebrew_tap_requires_formula_spec",
-                    )
-                })?;
-                if spec.channels.len() != tap.destinations.iter().count()
-                    || spec.channels.iter().any(|channel| {
-                        tap.destinations
-                            .get(channel.channel)
-                            .is_none_or(|destination| destination.formula != channel.destination)
-                    })
-                {
-                    return Err(ContractError::config(
-                        file,
-                        "distribution.homebrew_tap.destinations",
-                        "formula_destinations_must_match_homebrew_spec",
-                    ));
+                match (tap.updater.as_ref(), self.homebrew_formula.as_ref()) {
+                    (Some(_), None) => {}
+                    (None, Some(spec)) => {
+                        if spec.channels.len() != tap.destinations.iter().count()
+                            || spec.channels.iter().any(|channel| {
+                                tap.destinations
+                                    .get(channel.channel)
+                                    .is_none_or(|destination| {
+                                        destination.formula != channel.destination
+                                    })
+                            })
+                        {
+                            return Err(ContractError::config(
+                                file,
+                                "distribution.homebrew_tap.destinations",
+                                "formula_destinations_must_match_homebrew_spec",
+                            ));
+                        }
+                    }
+                    (Some(_), Some(_)) | (None, None) => {
+                        return Err(ContractError::config(
+                            file,
+                            if tap.updater.is_some() {
+                                "distribution.homebrew_tap.updater"
+                            } else {
+                                "distribution.homebrew_formula"
+                            },
+                            if tap.updater.is_some() {
+                                "custom_updater_and_native_formula_spec_are_ambiguous"
+                            } else {
+                                "enabled_homebrew_tap_requires_native_spec_or_custom_updater"
+                            },
+                        ));
+                    }
                 }
             }
         }
@@ -85,6 +111,10 @@ pub struct HomebrewTapConfig {
     pub destinations: HomebrewTapDestinations,
     /// Owner/repository slug, never a URL or arbitrary API destination.
     pub repository: String,
+    /// Optional source-qualified updater. When absent, the SDK renders the
+    /// canonical native formula from the typed formula specification.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updater: Option<TapUpdaterBinding>,
     /// Protected environment for the isolated App writer and merge boundary.
     pub environment: TapUpdateEnvironment,
     /// Repository/environment variable containing the GitHub App ID.
@@ -158,7 +188,24 @@ impl HomebrewTapConfig {
         if !crate::vcs::is_safe_github_repository(&self.repository) {
             return Err(config_error(file, key, "repository", "bad_repository_slug"));
         }
-        self.destinations.validate(file, self.enabled)?;
+        if let Some(updater) = &self.updater {
+            updater.validate(file, key)?;
+            if updater.runner.executor != CheckExecutor::Hosted {
+                return Err(config_error(
+                    file,
+                    key,
+                    "updater.runner.executor",
+                    "tap_updater_requires_hosted_runner",
+                ));
+            }
+        }
+        self.destinations.validate(
+            file,
+            self.enabled,
+            self.updater
+                .as_ref()
+                .map(|updater| updater.inputs.as_slice()),
+        )?;
         if !valid_app_id_variable(&self.app_id_variable) {
             return Err(config_error(
                 file,

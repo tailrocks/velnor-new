@@ -17,8 +17,9 @@ use native_operation::operation;
 pub struct ConsumerReleaseTapSpec {
     /// Closed native promotion policy, never executable workflow data.
     pub policy: HomebrewTapConfig,
-    /// Protected source formula policy rendered as data into every promotion role.
-    pub formula_spec: velnor_actions_contract::homebrew_spec::HomebrewFormulaSpec,
+    /// Protected source formula policy for the native route; absent for a
+    /// qualified custom updater.
+    pub formula_spec: Option<velnor_actions_contract::homebrew_spec::HomebrewFormulaSpec>,
     /// Authenticated SDK bootstrap for the fixed hosted preparation platform.
     pub preparation_acquire: Step,
     /// Velnor-owned Mise bootstrap for the fixed hosted preparation platform.
@@ -39,6 +40,11 @@ pub(in crate::schema2) fn jobs(
             "native_tap_policy_disabled".to_owned(),
         ));
     }
+    if tap.policy.updater.is_some() == tap.formula_spec.is_some() {
+        return Err(RenderError::InvalidWorkflow(
+            "homebrew_tap_formula_route_mismatch".to_owned(),
+        ));
+    }
     Ok(vec![
         prepare(spec, tap, context)?,
         writer(spec, tap, false, context)?,
@@ -52,11 +58,17 @@ fn prepare(
     context: TapInvocationContext,
 ) -> Result<(String, Yaml), RenderError> {
     let id = format!("{}-tap-prepare", context.prefix());
-    let runner = "ubuntu-26.04";
+    let (runner, timeout_minutes) = tap
+        .policy
+        .updater
+        .as_ref()
+        .map_or(("ubuntu-26.04", 15), |updater| {
+            (updater.runner.label.as_str(), updater.timeout_minutes)
+        });
     let mut fields = base(
         "Prepare a literal-only tap update without write credentials",
         Yaml::str(runner),
-        JobTimeout::try_from(15_u32).map_err(RenderError::Contract)?,
+        JobTimeout::try_from(timeout_minutes).map_err(RenderError::Contract)?,
     );
     fields.extend(prepare_bindings(context));
     let mut job_steps = vec![

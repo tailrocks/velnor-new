@@ -238,10 +238,11 @@ fn with_tap() -> ConsumerReleaseSpec {
     spec.homebrew_tap = Some(ConsumerReleaseTapSpec {
         preparation_acquire: spec.linux_acquire.clone(),
         preparation_setup: setup_fixture(),
-        formula_spec: formula_spec_fixture(),
+        formula_spec: Some(formula_spec_fixture()),
         policy: HomebrewTapConfig {
             enabled: true,
             repository: "example/homebrew-tap".to_owned(),
+            updater: None,
             destinations: HomebrewTapDestinations {
                 preview: Some(HomebrewTapDestination {
                     formula: "Formula/scanner-preview.rb".to_owned(),

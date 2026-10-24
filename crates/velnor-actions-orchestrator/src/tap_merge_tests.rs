@@ -202,7 +202,7 @@ fn promotion_fixture() -> (String, String, crate::tap_prepare::TapPromotionRecei
         new_formula_sha256: "d".repeat(64),
         receipt_digest: receipt_digest.clone(),
         plan_digest: "e".repeat(64),
-        formula_spec_digest: format!("b3-{}", "1".repeat(64)),
+        formula_spec_digest: Some(format!("b3-{}", "1".repeat(64))),
         sdk_artifact_digest: "2".repeat(64),
         tap_config_digest: "f".repeat(64),
         tap_repository: "owner/tap".to_owned(),

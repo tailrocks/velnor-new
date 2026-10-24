@@ -43,7 +43,12 @@ impl HomebrewTapDestinations {
         .filter_map(|(channel, destination)| destination.map(|value| (channel, value)))
     }
 
-    pub(super) fn validate(&self, file: &str, enabled: bool) -> Result<(), ContractError> {
+    pub(super) fn validate(
+        &self,
+        file: &str,
+        enabled: bool,
+        updater_inputs: Option<&[String]>,
+    ) -> Result<(), ContractError> {
         let key = "distribution.homebrew_tap.destinations";
         if enabled && self.preview.is_none() && self.stable.is_none() {
             return Err(config_error(
@@ -56,6 +61,14 @@ impl HomebrewTapDestinations {
         for (_, destination) in self.iter() {
             if !valid_formula_path(&destination.formula) {
                 return Err(config_error(file, key, "formula", "bad_formula_path"));
+            }
+            if updater_inputs.is_some_and(|inputs| !inputs.contains(&destination.formula)) {
+                return Err(config_error(
+                    file,
+                    key,
+                    "formula",
+                    "formula_base_not_an_input",
+                ));
             }
         }
         if let (Some(preview), Some(stable)) = (&self.preview, &self.stable)

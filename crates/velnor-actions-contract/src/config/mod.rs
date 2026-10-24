@@ -95,7 +95,7 @@ pub use discovery::DiscoveryConfig;
 pub use distribution::{
     DistributionConfig, ExactHeadReviewCheck, HomebrewTapConfig, HomebrewTapDestination,
     HomebrewTapDestinations, HomebrewTapProtectionObserver, ReviewAppIdentity, TapMergePolicy,
-    TapUpdateEnvironment,
+    TapUpdateEnvironment, TapUpdaterBinding,
 };
 pub use dockerfile::{DockerfileFacts, DockerfileProblem, analyze_dockerfile, is_digest_pinned};
 pub use execution::{
@@ -266,3 +266,6 @@ mod unit_tests;
 mod review_completion;
 pub(crate) use distribution::valid_review_check_name;
 pub use review_completion::{ReviewCompletionConfig, ReviewCompletionProvider};
+
+/// Tap updater execution remains independently bounded to five minutes.
+pub(crate) const NATIVE_TAP_UPDATER_MAX_TIMEOUT_MINUTES: u16 = 5;

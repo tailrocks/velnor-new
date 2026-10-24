@@ -159,12 +159,13 @@ fn validate_formula_upgrade_history(
     plan.channel = channel;
     validate_candidate_upgrade(
         crate::tap_prepare::FormulaCandidateInput {
-            spec: authority.spec(),
+            spec: Some(authority.spec()),
             source_repository: &authority.plan().repository,
             tap_repository: &authority.tap().repository,
             formula_path: &formula.destination,
             base_sha: authority.tap_base_sha(),
             base_formula: protected_base,
+            proposed_formula: None,
             plan: &plan,
             release,
         },

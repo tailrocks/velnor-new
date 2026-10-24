@@ -15,14 +15,17 @@ const LANES: [&str; 2] = ["velnor-clippy", "velnor-doc"];
 
 /// Render the closed native seed request for a workspace target root.
 ///
-/// The staged SDK binary receives a relative target directory and a sorted,
-/// closed lane set through environment only. The renderer emits no script,
-/// argv, or user command for the operation.
+/// The staged SDK binary receives a relative target directory and a canonical,
+/// closed lane set through environment only. Input lane order does not affect
+/// the rendered operation. The renderer emits no script, argv, or user command
+/// for the operation.
 ///
 /// # Errors
-/// Returns `BadCommand` for an unsafe target path, empty, duplicate, unsorted,
-/// or unsupported lane list.
+/// Returns `BadCommand` for an unsafe target path, empty, duplicate, or
+/// unsupported lane list.
 pub fn seed_parallel_targets_step(target: &str, lanes: &[&str]) -> Result<Step, RenderError> {
+    let mut canonical_lanes = lanes.to_vec();
+    canonical_lanes.sort_unstable();
     let parts: Vec<&str> = target.split('/').collect();
     if parts.last() != Some(&"target")
         || target.starts_with('/')
@@ -33,9 +36,9 @@ pub fn seed_parallel_targets_step(target: &str, lanes: &[&str]) -> Result<Step, 
                     .bytes()
                     .all(|byte| byte.is_ascii_alphanumeric() || b"_.-".contains(&byte))
         })
-        || lanes.is_empty()
-        || !lanes.windows(2).all(|pair| pair[0] < pair[1])
-        || lanes.iter().any(|lane| !LANES.contains(lane))
+        || canonical_lanes.is_empty()
+        || canonical_lanes.windows(2).any(|pair| pair[0] == pair[1])
+        || canonical_lanes.iter().any(|lane| !LANES.contains(lane))
     {
         return Err(RenderError::BadCommand(
             "parallel_target_seed_arguments".to_owned(),
@@ -51,7 +54,7 @@ pub fn seed_parallel_targets_step(target: &str, lanes: &[&str]) -> Result<Step, 
             operation: SEED_PARALLEL_TARGETS_OPERATION.to_owned(),
             env: BTreeMap::from([
                 (TARGET_ROOT_ENV.to_owned(), target.to_owned()),
-                (TARGET_LANES_ENV.to_owned(), lanes.join(",")),
+                (TARGET_LANES_ENV.to_owned(), canonical_lanes.join(",")),
             ]),
         },
     })

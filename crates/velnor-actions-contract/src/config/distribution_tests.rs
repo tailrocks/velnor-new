@@ -1,8 +1,10 @@
 use super::{
     DistributionConfig, ExactHeadReviewCheck, HomebrewTapConfig, HomebrewTapDestination,
     HomebrewTapDestinations, ReviewAppIdentity, TapMergePolicy, TapUpdateEnvironment,
+    TapUpdaterBinding,
 };
 use crate::{
+    config::{CheckExecutor, CheckPlatform, CheckRunner, MiseTaskSource},
     homebrew_spec::{
         HOMEBREW_FORMULA_SPEC_SCHEMA_V1, HOMEBREW_FORMULA_TEMPLATE_V1, HomebrewFormulaChannelSpec,
         HomebrewFormulaSpec, HomebrewHostProductSpec, HomebrewStableSentinel,
@@ -47,6 +49,7 @@ pub(super) fn valid() -> HomebrewTapConfig {
             stable: None,
         },
         repository: "jackin-project/homebrew-tap".to_owned(),
+        updater: None,
         environment: TapUpdateEnvironment::TapUpdate,
         app_id_variable: "HOMEBREW_TAP_APP_ID".to_owned(),
         app_private_key_secret: "HOMEBREW_TAP_APP_PRIVATE_KEY".to_owned(),
@@ -62,6 +65,28 @@ pub(super) fn valid() -> HomebrewTapConfig {
                 app_id_variable: "BOT_A_APP_ID".to_owned(),
             }],
         },
+    }
+}
+
+fn updater_binding() -> TapUpdaterBinding {
+    TapUpdaterBinding {
+        task: "tap:update".to_owned(),
+        source: MiseTaskSource {
+            mise_config: "mise.toml".to_owned(),
+            working_directory: ".".to_owned(),
+        },
+        runner: CheckRunner {
+            label: "ubuntu-26.04".to_owned(),
+            platform: CheckPlatform::LinuxX64,
+            executor: CheckExecutor::Hosted,
+            container: None,
+        },
+        inputs: vec![
+            "mise.toml".to_owned(),
+            "Formula/jackin-preview.rb".to_owned(),
+        ],
+        tools: vec!["ruby".to_owned()],
+        timeout_minutes: 5,
     }
 }
 
@@ -231,7 +256,7 @@ fn tap_destinations_must_project_exactly_from_canonical_formula_spec() {
 }
 
 #[test]
-fn enabled_tap_requires_canonical_formula_spec_and_channel_set() {
+fn enabled_tap_requires_one_unambiguous_formula_route() {
     let mut distribution = DistributionConfig {
         homebrew_tap: Some(valid()),
         homebrew_formula: None,
@@ -241,7 +266,7 @@ fn enabled_tap_requires_canonical_formula_spec_and_channel_set() {
             .validate("config.toml")
             .expect_err("missing spec")
             .to_string()
-            .contains("enabled_homebrew_tap_requires_formula_spec")
+            .contains("enabled_homebrew_tap_requires_native_spec_or_custom_updater")
     );
     distribution.homebrew_formula = Some(formula_spec());
     distribution
@@ -259,4 +284,79 @@ fn enabled_tap_requires_canonical_formula_spec_and_channel_set() {
             .to_string()
             .contains("formula_destinations_must_match_homebrew_spec")
     );
+
+    let mut custom = valid();
+    custom.updater = Some(updater_binding());
+    let mut custom_distribution = DistributionConfig {
+        homebrew_tap: Some(custom.clone()),
+        homebrew_formula: None,
+    };
+    assert!(custom_distribution.validate("config.toml").is_ok());
+    custom_distribution.homebrew_formula = Some(formula_spec());
+    assert!(
+        custom_distribution
+            .validate("config.toml")
+            .expect_err("custom and native routes cannot be combined")
+            .to_string()
+            .contains("custom_updater_and_native_formula_spec_are_ambiguous")
+    );
+}
+
+#[test]
+fn custom_updater_requires_formula_base_input_and_bounded_timeout() {
+    let mut custom = valid();
+    custom.updater = Some(updater_binding());
+    let mut distribution = DistributionConfig {
+        homebrew_tap: Some(custom),
+        homebrew_formula: None,
+    };
+    distribution
+        .homebrew_tap
+        .as_mut()
+        .expect("tap")
+        .updater
+        .as_mut()
+        .expect("updater")
+        .inputs
+        .remove(1);
+    assert!(
+        distribution
+            .validate("config.toml")
+            .expect_err("formula base must be an input")
+            .to_string()
+            .contains("formula_base_not_an_input")
+    );
+
+    let mut custom = valid();
+    custom.updater = Some(updater_binding());
+    custom.updater.as_mut().expect("updater").timeout_minutes = 6;
+    assert!(
+        custom
+            .validate("config.toml")
+            .expect_err("timeout above five minutes")
+            .to_string()
+            .contains("bad_task_timeout")
+    );
+}
+
+#[test]
+fn custom_updater_preserves_default_timeout_and_versioned_tool_ids() {
+    let mut value = serde_json::to_value(updater_binding()).expect("updater JSON");
+    let object = value.as_object_mut().expect("updater object");
+    object.remove("timeout_minutes");
+    object.insert(
+        "tools".to_owned(),
+        serde_json::json!(["ruby@3.4.1", "openssl+portable"]),
+    );
+    let updater: TapUpdaterBinding =
+        serde_json::from_value(value).expect("legacy updater configuration");
+
+    assert_eq!(updater.timeout_minutes, 5);
+    let mut custom = valid();
+    custom.updater = Some(updater);
+    let distribution = DistributionConfig {
+        homebrew_tap: Some(custom),
+        homebrew_formula: None,
+    };
+    assert!(distribution.validate("config.toml").is_ok());
 }

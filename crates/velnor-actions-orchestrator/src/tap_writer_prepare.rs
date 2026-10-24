@@ -37,12 +37,13 @@ pub(super) fn prepare_writer(
     }
     let canonical =
         crate::tap_prepare::derive_formula_candidate(crate::tap_prepare::FormulaCandidateInput {
-            spec: &inputs.spec,
+            spec: inputs.spec.as_ref(),
             source_repository: &inputs.proof.source_repository,
             tap_repository: &inputs.policy.repository,
             formula_path: &inputs.formula_path,
             base_sha: &base_sha,
             base_formula: &base_tree.bytes,
+            proposed_formula: Some(&inputs.proposed),
             plan: &inputs.plan,
             release: &inputs.release,
         })

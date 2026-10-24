@@ -1,19 +1,36 @@
 use super::{
-    read_captured_source_locator,
+    routes::read_captured_source_locator,
     snapshot::{Snapshot, snapshot_tree},
 };
-use std::{fs, path::Path};
+use std::{fs, path::Path, thread, time::Duration};
 use velnor_actions_contract::homebrew_authority::{
     HOMEBREW_SOURCE_AUTHORITY_LOCATOR_PATH, HOMEBREW_SOURCE_AUTHORITY_LOCATOR_SCHEMA_V1,
     HOMEBREW_SOURCE_CONFIG_PATH, HOMEBREW_SOURCE_RELEASE_POLICY_PATH,
     HomebrewSourceAuthorityLocator,
 };
+use velnor_actions_mise::CheckDeadline;
+
+#[test]
+fn custom_updater_deadline_cannot_refresh_the_callers_remaining_budget() {
+    let caller = CheckDeadline::after(Duration::from_millis(50)).expect("caller deadline");
+    let updater = CheckDeadline::after(Duration::from_secs(2)).expect("updater deadline");
+    let result = super::scope_operation_deadlines(caller, updater, || {
+        thread::sleep(Duration::from_millis(80));
+        Ok(())
+    });
+    assert!(result.is_err());
+}
 
 fn install_locator(root: &Path, locator: &HomebrewSourceAuthorityLocator) -> Snapshot {
     let bytes = locator.canonical_bytes().expect("canonical locator");
     let path = root.join(HOMEBREW_SOURCE_AUTHORITY_LOCATOR_PATH);
     fs::create_dir_all(path.parent().expect("locator parent")).expect("locator directory");
-    fs::write(path, bytes).expect("locator write");
+    fs::write(&path, bytes).expect("locator write");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).expect("locator Git mode");
+    }
     snapshot_tree(root).expect("captured checkout snapshot")
 }
 
