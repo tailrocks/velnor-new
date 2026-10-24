@@ -35,6 +35,16 @@ pub(super) fn environment(
         },
     );
     push(&mut env, "VELNOR_INTERNAL_OP", op);
+    if matches!(
+        op,
+        "publish-package-release-v1" | "recover-package-release-v1"
+    ) {
+        push(
+            &mut env,
+            "VELNOR_RELEASE_PUBLICATION_TIMEOUT_MINUTES",
+            spec.publication_timeout_minutes.minutes().to_string(),
+        );
+    }
     push(
         &mut env,
         "VELNOR_REQUEST_FILE",

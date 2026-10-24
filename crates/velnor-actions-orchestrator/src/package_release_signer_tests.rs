@@ -123,6 +123,7 @@ fn stable_identity_keeps_dispatch_and_permanent_version_tag() {
         ("1.2.3".to_owned(), "v1.2.3".to_owned(), None, None)
     );
 }
+
 #[test]
 fn stable_signer_requires_exact_authenticated_production_context() {
     use velnor_actions_contract::preview_production::ReleaseProductionContext;

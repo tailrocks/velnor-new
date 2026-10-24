@@ -15,6 +15,7 @@ use crate::{
         verify_attested_signed_package,
     },
 };
+use velnor_actions_mise::CheckDeadline;
 
 use super::{
     GitHubPackagePublisher, OriginalVerification, current_ci_from_env,
@@ -50,10 +51,14 @@ impl PreviewRecoveryVerificationStage {
     }
 }
 
-pub(super) fn recover() -> Result<super::PackagePublicationOutcome, OrchestratorError> {
-    let (signed, mode) = verified_original(Purpose::PublicationRecovery)?;
-    let current_ci = current_ci_from_env()?;
-    let mut backend = GitHubPackagePublisher::new(signed, current_ci, mode)?;
+pub(super) fn recover(
+    publication_deadline: CheckDeadline,
+) -> Result<super::PackagePublicationOutcome, OrchestratorError> {
+    let mut backend = super::artifact_zip::within_operation(|| {
+        let (signed, mode) = verified_original(Purpose::PublicationRecovery, publication_deadline)?;
+        let current_ci = current_ci_from_env()?;
+        GitHubPackagePublisher::new(signed, current_ci, mode)
+    })?;
     publish_backend(&mut backend)
 }
 
@@ -61,7 +66,14 @@ pub(super) fn recover() -> Result<super::PackagePublicationOutcome, Orchestrator
 pub(crate) fn verify_original_for_promotion()
 -> Result<VerifiedAttestedSignedPackage, OrchestratorError> {
     super::artifact_zip::within_operation(|| {
-        let (signed, _) = verified_original(Purpose::TapPromotion)?;
+        let deadline = CheckDeadline::from_start_with_cleanup_reserve(
+            std::time::Instant::now(),
+            std::time::Duration::from_secs(
+                u64::from(velnor_actions_contract::workflow::JobTimeout::DEFAULT_MINUTES) * 60,
+            ),
+        )
+        .map_err(|_| internal("package_verification_deadline"))?;
+        let (signed, _) = verified_original(Purpose::TapPromotion, deadline)?;
         if Invocation::from_env()?.continuation(signed.plan()) {
             super::continuation::verify_published_selection(&signed)?;
         }
@@ -156,6 +168,7 @@ pub(in crate::package_release_publish) fn verify_preview_original_for_source_sel
 
 fn verified_original(
     purpose: Purpose,
+    custody_deadline: CheckDeadline,
 ) -> Result<(VerifiedAttestedSignedPackage, OriginalVerification), OrchestratorError> {
     let root = runner_root()?;
     let policy = recovery_policy(&root)?;
@@ -204,7 +217,12 @@ fn verified_original(
         original_attempt,
         repository_id,
     )?;
-    let signed = verify_attested_signed_package(&input, &plan, &identity)?;
+    let signed = crate::package_release_signer::verify_attested_signed_package_with_deadline(
+        &input,
+        &plan,
+        &identity,
+        custody_deadline,
+    )?;
     let mode = OriginalVerification::RetainedRun {
         directory: Box::new(input),
         plan: Box::new(plan),

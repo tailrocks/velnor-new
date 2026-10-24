@@ -53,6 +53,7 @@ pub struct ConsumerReleaseSpec {
     /// Native operation time limit; producer jobs add fixed lifecycle headroom.
     pub producer_timeout_minutes: u16,
     /// Outer budget for source admission, publishing, and recovery jobs.
+    /// Also bounds native publication and its retained signed-directory custody.
     pub publication_timeout_minutes: JobTimeout,
     /// Verified helper acquisition for Linux policy/signing/publication jobs.
     pub linux_acquire: Step,

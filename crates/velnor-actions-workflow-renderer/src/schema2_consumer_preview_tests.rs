@@ -18,6 +18,8 @@ mod reconcile_tests;
 mod payloads;
 #[path = "schema2_consumer_release_policy_tests.rs"]
 mod policies;
+#[path = "schema2_consumer_publication_budget_tests.rs"]
+mod publication_budget;
 #[path = "schema2_consumer_preview_source_tests.rs"]
 mod sources;
 #[path = "schema2_consumer_binary_release_tests.rs"]

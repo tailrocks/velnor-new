@@ -117,6 +117,19 @@ additional cancellation grace. Scoped native deadlines do not preempt arbitrary
 blocking kernel operations or propagate implicitly to new threads. See the
 [pinned runner-source reference](../proposed/github-actions-reference.md).
 
+Consumer preview eligibility and preview/stable publisher and recovery jobs use
+`[stacks.rust.binary_release] publication_timeout_minutes` (default `5`, bounded
+`1..=360`). Publisher and recovery native operations also receive this literal
+budget. One absolute clock covers the full transaction and retained signed
+custody; neither upload iterations nor readback refresh it. Separate admission
+and archive subscopes stay at five minutes, individual HTTP requests stay at 90
+seconds, and a shorter enclosing deadline still wins. The value does not change
+signed release policy, producer or signer budgets, or publication authority.
+Setup and downloads already consume outer job time, so the entire native budget
+is not guaranteed to remain available. See
+[consumer publication budgets](consumer-publication-job-budgets.md) for the
+hosted failures and recovery-identity qualification.
+
 The canceled Jackin run 39133387860 spent 73 minutes 21 seconds inside an opaque
 native operation after 45 seconds of bootstrap. Its captured output did not
 identify the internal stage. A prior partially cached six-payload diagnostic
