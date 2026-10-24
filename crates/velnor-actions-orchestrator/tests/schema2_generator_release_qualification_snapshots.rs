@@ -175,54 +175,37 @@ fn assert_candidate_output_binding_validation(
         raw_binding_check < normalization,
         "raw candidate output bindings must be validated before normalization"
     );
+    let checker = capture_window
+        .find("validate_candidate_output_bindings()")
+        .ok_or("trusted output-binding checker must be defined")?;
+    let normalization = capture_window
+        .find("normalize_candidate_digests()")
+        .ok_or("candidate output normalization must be defined")?;
+    let checker_source = &capture_window[checker..normalization];
     for handoff in [
-        "VELNOR_REPO_POLICY_ACTION=qualification-output-bindings",
-        "VELNOR_REPO_POLICY_MANIFEST=\"$CANDIDATE_MANIFEST\"",
-        "VELNOR_REPO_POLICY_WORKFLOW_ROOT=\"$preview/.github\"",
-        "VELNOR_REPO_POLICY_ROOT=\"$ROOT\"",
-        "VELNOR_INTERNAL_OP=repo-policy-v1",
-        "\"$BIN\"",
+        "prepare_qualification_guard || return 1",
+        "verify_qualification_guard || return 1",
+        "\"$QUALIFICATION_GUARD_BIN\" qualification-output-bindings",
+        "\"$CANDIDATE_MANIFEST\" \"$preview/.github\"",
     ] {
         assert!(
-            qualification_helpers.contains(handoff),
-            "native output-binding operation is missing {handoff}"
+            checker_source.contains(handoff),
+            "trusted output-binding checker is missing {handoff}"
         );
     }
-    let validator = include_str!("../../../crates/velnor-actions-freshness/src/release_support.rs");
     assert!(
-        validator.contains("fn validate_qualification_output_bindings(")
-            && validator.contains("by_url.get(url)")
-            && validator.contains("if digest != *expected_digest")
-            && validator.contains("if source != commit"),
-        "native validation must bind each workflow URL, digest, and source commit to the candidate manifest"
+        !checker_source.contains("$BIN")
+            && !checker_source.contains("VELNOR_REPO_POLICY_ACTION")
+            && !checker_source.contains("VELNOR_INTERNAL_OP"),
+        "candidate CLI must not be asked to validate its own output bindings"
     );
-    assert_native_output_binding_test_evidence();
+    let guard_api = include_str!("../../../crates/velnor-archive-guard/src/lib.rs");
+    assert!(
+        guard_api.contains("validate_qualification_manifest")
+            && guard_api.contains("validate_qualification_output_bindings"),
+        "trusted archive guard must own and expose candidate manifest and output-binding validation"
+    );
     Ok(())
-}
-
-fn assert_native_output_binding_test_evidence() {
-    let tests =
-        include_str!("../../../crates/velnor-actions-freshness/src/release_support_tests.rs");
-    assert!(
-        tests.contains("qualification_bindings_accept_exact_pairs_and_reject_duplicate_json_keys")
-            && tests.contains(
-                "qualification_bindings_reject_digest_commit_scope_pair_and_unknown_url_faults"
-            ),
-        "native output-binding tests must prove positive pairs, duplicate-key rejection, and invalid binding rejection"
-    );
-    for failure in [
-        "wrong digest for target",
-        "wrong source commit",
-        "unknown release URL",
-        "binding fields use different scopes",
-        "incomplete binding",
-        "cannot read candidate manifest",
-    ] {
-        assert!(
-            tests.contains(failure),
-            "native output-binding tests are missing {failure} coverage"
-        );
-    }
 }
 
 fn assert_schema_only_consumer_manifest_input(fixture_check: &str) {

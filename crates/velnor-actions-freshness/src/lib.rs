@@ -48,18 +48,6 @@ pub enum Operation {
         /// Cargo binary target name.
         target_name: String,
     },
-    /// Verify generated workflow asset bindings against a strict release manifest.
-    QualificationOutputBindings {
-        /// Candidate release manifest JSON.
-        manifest_path: PathBuf,
-        /// Generated `.github` workflow tree.
-        workflow_root: PathBuf,
-    },
-    /// Strictly parse a candidate release manifest before candidate execution.
-    QualificationManifest {
-        /// Candidate release manifest JSON.
-        manifest_path: PathBuf,
-    },
 }
 
 /// Run one repository policy operation under `root`.
@@ -85,15 +73,6 @@ pub fn run(root: &Path, operation: &Operation) -> i32 {
             manifest_path,
             target_name,
         ),
-        Operation::QualificationOutputBindings {
-            manifest_path,
-            workflow_root,
-        } => {
-            release_support::print_qualification_output_bindings(root, manifest_path, workflow_root)
-        }
-        Operation::QualificationManifest { manifest_path } => {
-            release_support::print_qualification_manifest(root, manifest_path)
-        }
     }
 }
 

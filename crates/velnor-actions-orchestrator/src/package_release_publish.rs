@@ -83,6 +83,10 @@ pub(crate) use public_read::{
     read_public_pull_request, read_public_release_snapshot, read_public_repository_identity,
 };
 
+#[path = "package_release_publish_public_repository.rs"]
+mod public_repository;
+pub(crate) use public_repository::{PublicRepositorySnapshot, read_public_repository_snapshot};
+
 #[path = "package_release_publish_public_recovery.rs"]
 mod public_recovery;
 

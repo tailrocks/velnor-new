@@ -38,13 +38,25 @@ pub(crate) fn build_check_jobs(
     }
     for check in &discovery.native_checks {
         let id = format!("check-{}", check.id);
-        jobs.push((id.clone(), native_check_job(check, &id)?));
+        let acquire = match policy {
+            WorkflowPolicy::ConsumerV1 => Some(crate::pins::consumer_acquire_for_runner(
+                &check.runner,
+                env!("CARGO_PKG_VERSION"),
+                discovery.consumer_manifest_json.as_deref(),
+            )?),
+            WorkflowPolicy::VelnorRepositoryV1 => None,
+        };
+        jobs.push((id.clone(), native_check_job(check, &id, acquire)?));
     }
     jobs.sort_by(|left, right| left.0.cmp(&right.0));
     Ok(jobs)
 }
 
-fn native_check_job(check: &NativeHomebrewCheck, job_id: &str) -> Result<Job, OrchestratorError> {
+fn native_check_job(
+    check: &NativeHomebrewCheck,
+    job_id: &str,
+    acquire: Option<Step>,
+) -> Result<Job, OrchestratorError> {
     let task_id = format!("internal/native-check/{}", check.id);
     let step = Step {
         name: "Execute native Homebrew check".to_owned(),
@@ -60,6 +72,7 @@ fn native_check_job(check: &NativeHomebrewCheck, job_id: &str) -> Result<Job, Or
         },
     };
     let mut steps = vec![crate::workflow::wire_w1::checkout_step_full()?];
+    steps.extend(acquire);
     steps.push(crate::matrix_step::download_plan_step()?);
     steps.push(step);
     let mut upload = crate::matrix_step::crate_upload_step(job_id)?;
@@ -153,3 +166,7 @@ mod tests;
 #[cfg(test)]
 #[path = "check_jobs_maintenance_tests.rs"]
 mod maintenance_tests;
+
+#[cfg(test)]
+#[path = "check_jobs_native_tests.rs"]
+mod native_tests;

@@ -22,8 +22,6 @@ pub(crate) fn gate_root() -> Option<PathBuf> {
             | "workspace-members"
             | "library-members"
             | "artifact-executable"
-            | "qualification-output-bindings"
-            | "qualification-manifest"
     ) {
         return None;
     }
@@ -64,13 +62,6 @@ fn operation_from_environment() -> Result<Operation, String> {
             messages_path: required_path("VELNOR_REPO_POLICY_MESSAGES")?,
             manifest_path: required_path("VELNOR_REPO_POLICY_MANIFEST")?,
             target_name: required_text("VELNOR_REPO_POLICY_TARGET")?,
-        }),
-        Ok("qualification-output-bindings") => Ok(Operation::QualificationOutputBindings {
-            manifest_path: required_path("VELNOR_REPO_POLICY_MANIFEST")?,
-            workflow_root: required_path("VELNOR_REPO_POLICY_WORKFLOW_ROOT")?,
-        }),
-        Ok("qualification-manifest") => Ok(Operation::QualificationManifest {
-            manifest_path: required_path("VELNOR_REPO_POLICY_MANIFEST")?,
         }),
         _ => Err("invalid repository-policy action".to_owned()),
     }

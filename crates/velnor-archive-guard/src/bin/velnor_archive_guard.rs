@@ -1,6 +1,7 @@
 //! Run the trusted bounded tar preflight on standard input.
 
 use std::env;
+use std::ffi::OsString;
 use std::io;
 use std::process::ExitCode;
 
@@ -51,6 +52,9 @@ fn run() -> Result<(), String> {
         println!("{fingerprint}");
         return Ok(());
     }
+    if let Some(result) = qualification_mode(&mode, &mut arguments) {
+        return result;
+    }
     if mode == "extract-candidate" {
         let archive = arguments
             .next()
@@ -86,4 +90,38 @@ fn run() -> Result<(), String> {
         return Err("unexpected archive guard argument".to_owned());
     }
     owned_archive_guard::validate(io::stdin().lock(), &mode)
+}
+
+fn qualification_mode(
+    mode: &str,
+    arguments: &mut impl Iterator<Item = OsString>,
+) -> Option<Result<(), String>> {
+    let result = match mode {
+        "qualification-manifest" => {
+            let Some(path) = arguments.next() else {
+                return Some(Err("candidate manifest path is required".into()));
+            };
+            if arguments.next().is_some() {
+                return Some(Err("unexpected archive guard argument".into()));
+            }
+            owned_archive_guard::validate_qualification_manifest(std::path::Path::new(&path))
+        }
+        "qualification-output-bindings" => {
+            let Some(manifest) = arguments.next() else {
+                return Some(Err("candidate manifest path is required".into()));
+            };
+            let Some(root) = arguments.next() else {
+                return Some(Err("generated workflow root is required".into()));
+            };
+            if arguments.next().is_some() {
+                return Some(Err("unexpected archive guard argument".into()));
+            }
+            owned_archive_guard::validate_qualification_output_bindings(
+                std::path::Path::new(&manifest),
+                std::path::Path::new(&root),
+            )
+        }
+        _ => return None,
+    };
+    Some(result)
 }

@@ -386,3 +386,6 @@ fn gzip(bytes: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
 
 #[path = "archive_guard_input_bounds.rs"]
 mod input_bounds;
+
+#[path = "archive_guard_qualification_cli.rs"]
+mod qualification_cli;
