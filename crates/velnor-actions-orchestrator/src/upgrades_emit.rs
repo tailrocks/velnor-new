@@ -59,3 +59,7 @@ pub(crate) fn upgrades_files(
     };
     Ok(vec![render_upgrades_workflow(&spec)?])
 }
+
+#[cfg(test)]
+#[path = "upgrades_emit_tests.rs"]
+mod verifier_output_tests;
