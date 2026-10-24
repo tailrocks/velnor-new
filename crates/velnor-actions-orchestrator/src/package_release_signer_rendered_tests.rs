@@ -31,11 +31,22 @@ pub(super) fn request_path(channel: PackageReleaseChannel, operation: &str) -> S
         .map(|(i, _)| i)
         .collect();
     assert_eq!(positions.len(), 1, "unique actual operation env");
-    let line = lines[positions[0] + 1].trim();
-    let value = line
-        .strip_prefix("VELNOR_REQUEST_FILE: ")
-        .expect("same operation request");
-    value.trim_matches('"').to_owned()
+    let env_indent = lines[positions[0]].len() - lines[positions[0]].trim_start_matches(' ').len();
+    let env_end = lines
+        .iter()
+        .enumerate()
+        .skip(positions[0] + 1)
+        .find(|(_, line)| {
+            !line.trim().is_empty() && line.len() - line.trim_start_matches(' ').len() < env_indent
+        })
+        .map_or(lines.len(), |(index, _)| index);
+    let request_values: Vec<_> = lines[positions[0] + 1..env_end]
+        .iter()
+        .filter(|line| line.len() - line.trim_start_matches(' ').len() == env_indent)
+        .filter_map(|line| line.trim().strip_prefix("VELNOR_REQUEST_FILE: "))
+        .collect();
+    assert_eq!(request_values.len(), 1, "one request for same operation");
+    request_values[0].trim_matches('"').to_owned()
 }
 
 fn fixture(channel: PackageReleaseChannel) -> ConsumerReleaseSpec {
@@ -54,6 +65,7 @@ fn fixture(channel: PackageReleaseChannel) -> ConsumerReleaseSpec {
         policy: tests::policy(channel),
         producer_runner: VerificationRunner::Macos26Arm64,
         producer_timeout_minutes: 20,
+        publication_timeout_minutes: velnor_actions_contract::JobTimeout::DEFAULT,
         linux_acquire: acquire.clone(),
         producer_acquire: acquire,
         producer_acquire_by_target: producer_acquires(channel, "0.1.33"),

@@ -376,3 +376,6 @@ fn native_binary_generation_rejects_noncanonical_ci_names_before_discovery() -> 
 mod lfs;
 #[path = "impl_schema2_binary_preview_lint.rs"]
 mod lint;
+
+#[path = "impl_schema2_binary_preview_stable_tap_reconcile.rs"]
+mod stable_tap_reconcile;

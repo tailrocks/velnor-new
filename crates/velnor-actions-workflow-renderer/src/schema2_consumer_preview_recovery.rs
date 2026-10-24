@@ -3,7 +3,7 @@ use super::{
     operation, permissions, run_step, setup,
 };
 use crate::commands::join_argv_for_run;
-use velnor_actions_contract::{JobTimeout, package_release::PackageReleaseChannel};
+use velnor_actions_contract::package_release::PackageReleaseChannel;
 
 pub(in crate::schema2) fn recovery(
     spec: &ConsumerReleaseSpec,
@@ -16,7 +16,7 @@ pub(in crate::schema2) fn recovery(
     let mut fields = base(
         "Recover the original signed release without rebuilding",
         Yaml::str("ubuntu-26.04"),
-        JobTimeout::DEFAULT,
+        spec.publication_timeout_minutes,
     );
     fields.push((
         "if".to_owned(),

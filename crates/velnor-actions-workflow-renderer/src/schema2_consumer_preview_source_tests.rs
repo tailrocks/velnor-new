@@ -1,6 +1,9 @@
 use super::*;
 use velnor_actions_contract::StepKind;
 
+#[path = "schema2_consumer_preview_source_context_tests.rs"]
+mod context_tests;
+
 fn field<'a>(node: &'a Yaml, key: &str) -> &'a Yaml {
     let Yaml::Map(fields) = node else {
         panic!("mapping")

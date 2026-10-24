@@ -52,6 +52,9 @@ pub struct ConsumerReleaseSpec {
     pub producer_runner: VerificationRunner,
     /// Native operation time limit; producer jobs add fixed lifecycle headroom.
     pub producer_timeout_minutes: u16,
+    /// Outer budget for source admission, publishing, and recovery jobs.
+    /// Also bounds native publication and its retained signed-directory custody.
+    pub publication_timeout_minutes: JobTimeout,
     /// Verified helper acquisition for Linux policy/signing/publication jobs.
     pub linux_acquire: Step,
     /// Verified helper acquisition for the declared producer platform.
@@ -96,6 +99,9 @@ pub fn render_consumer_preview(
         .map_err(|error| RenderError::InvalidWorkflow(error.to_string()))?;
     spec.linux_setup.validate()?;
     spec.producer_setup.validate()?;
+    spec.publication_timeout_minutes
+        .validate()
+        .map_err(RenderError::Contract)?;
     if spec.policy.channel != PackageReleaseChannel::Preview
         || spec.policy.default_branch != "main"
         || !(1..=velnor_actions_contract::config::RustBinaryReleaseProducer::MAX_TIMEOUT_MINUTES)
@@ -230,7 +236,7 @@ pub(super) fn publisher(spec: &ConsumerReleaseSpec) -> Result<(String, Yaml), Re
     let mut fields = base(
         "Publish authenticated channel release",
         Yaml::str("ubuntu-26.04"),
-        JobTimeout::DEFAULT,
+        spec.publication_timeout_minutes,
     );
     fields.push(("if".to_owned(), Yaml::str(context.production_if())));
     fields.push((

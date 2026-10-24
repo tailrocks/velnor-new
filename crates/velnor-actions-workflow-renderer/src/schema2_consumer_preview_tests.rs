@@ -19,6 +19,8 @@ mod reconcile_tests;
 mod payloads;
 #[path = "schema2_consumer_release_policy_tests.rs"]
 mod policies;
+#[path = "schema2_consumer_publication_budget_tests.rs"]
+mod publication_budget;
 #[path = "schema2_consumer_preview_recovery_tests.rs"]
 mod recovery;
 #[path = "schema2_consumer_preview_render_tests.rs"]
@@ -42,6 +44,7 @@ pub(super) fn fixture() -> ConsumerReleaseSpec {
         policy: policy_fixture(),
         producer_runner: VerificationRunner::Macos26Arm64,
         producer_timeout_minutes: 5,
+        publication_timeout_minutes: velnor_actions_contract::JobTimeout::DEFAULT,
         linux_acquire: acquire.clone(),
         producer_acquire: acquire,
         producer_acquire_by_target: producer_acquire_targets(),

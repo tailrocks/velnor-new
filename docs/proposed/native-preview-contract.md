@@ -9,7 +9,7 @@ remain the foundation. No parallel release system or compatibility parser exists
 ## Shared configuration and public types
 
 `RustBinaryReleaseConfig` owns `manifest_path`, `version_package`, `version_env`,
-`producer`, `products`, `companions` and `evidence` once. `version_package` selects
+`producer`, `publication_timeout_minutes`, `products`, `companions` and `evidence` once. `version_package` selects
 one discovered Cargo package among the declared products as the base-version
 authority. Both channels consume
 the same complete product/target/bin and companion inventory. There is no old
@@ -21,6 +21,7 @@ Unknown fields are rejected. All channel combinations default to disabled.
 manifest_path = "Cargo.toml"
 version_package = "jackin"
 version_env = "JACKIN_VERSION_OVERRIDE"
+publication_timeout_minutes = 15
 
 [stacks.rust.binary_release.preview]
 enabled = true
@@ -89,8 +90,21 @@ job adds a fixed five-minute lifecycle allowance outside that operation budget:
 one, five and thirty-minute operations therefore receive six, ten and thirty-five
 minute job limits. This bounded allowance covers setup, evidence retention and
 job cleanup; it is not a guarantee that every setup or cold build fits. Updater budgets remain one
-through five minutes. Signer, publisher, acquisition and control jobs remain
-five minutes. General crate-job policy is independent and is not changed here.
+through five minutes. `publication_timeout_minutes` defaults to five and accepts
+whole minutes from one through 360, without clamping. It selects the outer job
+budget for preview source eligibility and for publisher and original-evidence
+recovery jobs in both channels. Preview eligibility uses this budget for both
+automatic publication and manual recovery because its two admission phases can
+independently acquire and verify the original signed artifact. Stable eligibility,
+signer and other acquisition/control jobs retain their existing five-minute
+defaults. For publisher and recovery operations, the same setting supplies one
+absolute native publication deadline, including retained signed-directory custody
+and final readback. It never refreshes per asset. Initial admission retains one
+five-minute aggregate scope; nested archive scopes cannot refresh it. Each HTTP
+request remains bounded to 90 seconds. A shorter enclosing deadline still wins. The setting does not change
+producer budgets, credentials, validation, or publication authority. The example
+explicitly selects 15 minutes; it does not change the default. General crate-job
+policy is independent and is not changed here.
 
 ## Source and version authority
 
@@ -116,6 +130,12 @@ policy come from A. B supplies workflow custody and trusted bootstrap tools;
 source-controlled tools are only admitted through A's declared qualification.
 The resulting canonical admission record binds A's policy, plan, task closure,
 tool declarations and execution tuple before any declared task runs.
+
+For manual recovery, both source-selection and finalization operations receive
+the same original producer run ID and attempt from the closed native operation
+bindings. Each phase independently authenticates that retained signed candidate.
+The original producer identity is distinct from the source CI run and the
+current recovery caller; neither can substitute for it after checkout.
 
 The producer executes the admitted A task, while the active run, workflow,
 signer certificate, run attempt and job authority are bound to B. The signed

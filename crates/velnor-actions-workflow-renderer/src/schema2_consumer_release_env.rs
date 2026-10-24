@@ -35,6 +35,16 @@ pub(super) fn environment(
         },
     );
     push(&mut env, "VELNOR_INTERNAL_OP", op);
+    if matches!(
+        op,
+        "publish-package-release-v1" | "recover-package-release-v1"
+    ) {
+        push(
+            &mut env,
+            "VELNOR_RELEASE_PUBLICATION_TIMEOUT_MINUTES",
+            spec.publication_timeout_minutes.minutes().to_string(),
+        );
+    }
     push(
         &mut env,
         "VELNOR_REQUEST_FILE",
@@ -84,7 +94,9 @@ fn release_context_bindings(
     channel_bindings(env, spec, op, context)?;
     if matches!(
         op,
-        "recover-package-release-v1"
+        "select-preview-source-v1"
+            | "finalize-preview-source-v1"
+            | "recover-package-release-v1"
             | "admit-homebrew-tap-v1"
             | "prepare-homebrew-tap-v1"
             | "write-homebrew-tap-pr-v1"
@@ -166,7 +178,9 @@ fn channel_bindings(
         }
     }
     if spec.policy.channel == PackageReleaseChannel::Stable {
-        push(env, "VELNOR_STABLE_OPERATION", "${{ inputs.operation }}");
+        if !matches!(context, TapInvocationContext::StableReconcile) {
+            push(env, "VELNOR_STABLE_OPERATION", "${{ inputs.operation }}");
+        }
         let stable = spec
             .stable
             .as_ref()

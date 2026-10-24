@@ -34,8 +34,16 @@ use subjects::append_attestation_subject_paths;
 mod attestation;
 #[path = "package_release_signer_cosign.rs"]
 mod cosign;
+#[path = "package_release_signer_publication.rs"]
+mod publication;
+#[cfg(test)]
+#[path = "package_release_signer_publication_budget_tests.rs"]
+mod publication_budget_tests;
 #[path = "package_release_signer_receipt.rs"]
 mod receipt;
+#[cfg(test)]
+use publication::hold_signed_directory_for_publication;
+pub(crate) use publication::verify_attested_signed_package_with_owned_tempdir;
 #[cfg(test)]
 #[path = "package_release_signer_tests.rs"]
 mod tests;
@@ -137,6 +145,13 @@ pub fn sign_package_release_from_env() -> Result<(), OrchestratorError> {
 /// Verify retained signer bytes and GitHub's exact run attestation before publication.
 pub(crate) fn verify_attested_signed_package_from_env()
 -> Result<VerifiedAttestedSignedPackage, OrchestratorError> {
+    let deadline = default_verification_deadline()?;
+    verify_attested_signed_package_from_env_with_deadline(deadline)
+}
+
+pub(crate) fn verify_attested_signed_package_from_env_with_deadline(
+    custody_deadline: velnor_actions_mise::CheckDeadline,
+) -> Result<VerifiedAttestedSignedPackage, OrchestratorError> {
     match request::verification_route()? {
         request::VerificationRoute::Retained => {
             crate::package_release_publish::verify_original_for_promotion()
@@ -147,11 +162,11 @@ pub(crate) fn verify_attested_signed_package_from_env()
             let expected = runtime::published_identity_from_env(&plan)?;
             let input = root.join(PUBLISH_INPUT_DIR);
             require_private_directory(&input)?;
-            verify_attested_signed_package(&input, &plan, &expected)
+            verify_attested_signed_package_with_deadline(&input, &plan, &expected, custody_deadline)
         }
         request::VerificationRoute::Admitted => {
             let (plan, expected, input) = publisher_context_from_env(None)?;
-            verify_attested_signed_package(&input, &plan, &expected)
+            verify_attested_signed_package_with_deadline(&input, &plan, &expected, custody_deadline)
         }
     }
 }
@@ -163,22 +178,34 @@ pub(crate) fn verify_attested_signed_package(
     plan: &PackageReleasePlan,
     expected: &PackageReleaseSigningIdentity,
 ) -> Result<VerifiedAttestedSignedPackage, OrchestratorError> {
-    let deadline = velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(
+    verify_attested_signed_package_with_deadline(
+        directory,
+        plan,
+        expected,
+        default_verification_deadline()?,
+    )
+}
+
+pub(crate) fn verify_attested_signed_package_with_deadline(
+    directory: &Path,
+    plan: &PackageReleasePlan,
+    expected: &PackageReleaseSigningIdentity,
+    custody_deadline: velnor_actions_mise::CheckDeadline,
+) -> Result<VerifiedAttestedSignedPackage, OrchestratorError> {
+    publication::verify_attested_signed_package_with_deadline(
+        directory,
+        plan,
+        expected,
+        custody_deadline,
+    )
+}
+
+fn default_verification_deadline() -> Result<velnor_actions_mise::CheckDeadline, OrchestratorError>
+{
+    velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(
         u64::from(velnor_actions_contract::workflow::JobTimeout::DEFAULT_MINUTES) * 60,
     ))
-    .map_err(|_| internal("package_verification_deadline"))?;
-    let (signed, closure) =
-        crate::filesystem_owner::held_directory::HeldDirectory::admit(directory, deadline, || {
-            let mut signed = verify_signed_package(directory, plan, expected)?;
-            attestation::verify_release_attestation(&signed, expected)?;
-            signed.plan = plan.clone();
-            Ok(signed)
-        })?;
-    Ok(VerifiedAttestedSignedPackage {
-        signed,
-        closure: std::sync::Arc::new(closure),
-        identity: expected.clone(),
-    })
+    .map_err(|_| internal("package_verification_deadline"))
 }
 
 pub(crate) fn require_retained_identity(

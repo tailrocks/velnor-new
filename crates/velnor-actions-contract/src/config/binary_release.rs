@@ -1,5 +1,6 @@
 //! Shared native release inventory with closed rolling and stable policies.
 
+use crate::workflow::JobTimeout;
 use serde::{Deserialize, Serialize};
 
 #[path = "binary_release_preview.rs"]
@@ -25,6 +26,11 @@ pub struct RustBinaryReleaseConfig {
     /// Qualified credential-free producer shared by both channels.
     #[serde(default)]
     pub producer: RustBinaryReleaseProducer,
+    /// Outer publication-job budget for source admission, publishing, and recovery.
+    /// Defaults to five minutes, independently of the producer operation budget.
+    /// Also bounds the native publication transaction and retained signed custody.
+    #[serde(default = "default_publication_timeout")]
+    pub publication_timeout_minutes: JobTimeout,
     /// Closed explicit product matrix.
     #[serde(default)]
     pub products: Vec<RustBinaryReleaseProduct>,
@@ -56,6 +62,9 @@ pub struct RustBinaryStableConfig {
 fn default_manifest_path() -> String {
     "Cargo.toml".to_owned()
 }
+fn default_publication_timeout() -> JobTimeout {
+    JobTimeout::DEFAULT
+}
 fn default_stable_environment() -> String {
     "release".to_owned()
 }
@@ -76,6 +85,7 @@ impl Default for RustBinaryReleaseConfig {
             version_package: String::new(),
             version_env: String::new(),
             producer: RustBinaryReleaseProducer::default(),
+            publication_timeout_minutes: default_publication_timeout(),
             products: Vec::new(),
             companions: Vec::new(),
             evidence: RustBinaryReleaseEvidence::default(),

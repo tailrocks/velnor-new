@@ -15,6 +15,7 @@ use crate::{
         verify_attested_signed_package,
     },
 };
+use velnor_actions_mise::CheckDeadline;
 
 use super::{
     GitHubPackagePublisher, OriginalVerification, current_ci_from_env,
@@ -29,7 +30,6 @@ pub(super) mod promotion_context;
 use promotion_context::{Invocation, Purpose};
 
 const POLICY_FILE: &str = "package-release-policy.json";
-const INPUT_DIR: &str = "release-recovery-input";
 const SOURCE_SELECTION_INPUT_DIR: &str = "preview-recovery-selection-input";
 const FINALIZATION_INPUT_DIR: &str = "preview-recovery-finalization-input";
 const MAX_PLAN_BYTES: u64 = 1024 * 1024;
@@ -50,10 +50,14 @@ impl PreviewRecoveryVerificationStage {
     }
 }
 
-pub(super) fn recover() -> Result<super::PackagePublicationOutcome, OrchestratorError> {
-    let (signed, mode) = verified_original(Purpose::PublicationRecovery)?;
-    let current_ci = current_ci_from_env()?;
-    let mut backend = GitHubPackagePublisher::new(signed, current_ci, mode)?;
+pub(super) fn recover(
+    publication_deadline: CheckDeadline,
+) -> Result<super::PackagePublicationOutcome, OrchestratorError> {
+    let mut backend = super::artifact_zip::within_operation(|| {
+        let (signed, mode) = verified_original(Purpose::PublicationRecovery, publication_deadline)?;
+        let current_ci = current_ci_from_env()?;
+        GitHubPackagePublisher::new(signed, current_ci, mode)
+    })?;
     publish_backend(&mut backend)
 }
 
@@ -61,7 +65,14 @@ pub(super) fn recover() -> Result<super::PackagePublicationOutcome, Orchestrator
 pub(crate) fn verify_original_for_promotion()
 -> Result<VerifiedAttestedSignedPackage, OrchestratorError> {
     super::artifact_zip::within_operation(|| {
-        let (signed, _) = verified_original(Purpose::TapPromotion)?;
+        let deadline = CheckDeadline::from_start_with_cleanup_reserve(
+            std::time::Instant::now(),
+            std::time::Duration::from_secs(
+                u64::from(velnor_actions_contract::workflow::JobTimeout::DEFAULT_MINUTES) * 60,
+            ),
+        )
+        .map_err(|_| internal("package_verification_deadline"))?;
+        let (signed, _) = verified_original(Purpose::TapPromotion, deadline)?;
         if Invocation::from_env()?.continuation(signed.plan()) {
             super::continuation::verify_published_selection(&signed)?;
         }
@@ -156,6 +167,7 @@ pub(in crate::package_release_publish) fn verify_preview_original_for_source_sel
 
 fn verified_original(
     purpose: Purpose,
+    custody_deadline: CheckDeadline,
 ) -> Result<(VerifiedAttestedSignedPackage, OriginalVerification), OrchestratorError> {
     let root = runner_root()?;
     let policy = recovery_policy(&root)?;
@@ -180,8 +192,8 @@ fn verified_original(
         super::release_policy_admission::resolve_policy_at_source(&policy, &artifact_source_sha)?;
     validate_recovery_context(&plan, purpose)?;
 
-    let input = root.join(INPUT_DIR);
-    create_fresh_directory(&input)?;
+    let input_owner = create_owned_input_directory(&root)?;
+    let input = input_owner.path().to_path_buf();
     let receipt = archive::extract_signed_assets(&zip_bytes, &input, &plan)?;
     if !receipt_matches_original(
         receipt.workflow.run_id,
@@ -204,7 +216,12 @@ fn verified_original(
         original_attempt,
         repository_id,
     )?;
-    let signed = verify_attested_signed_package(&input, &plan, &identity)?;
+    let signed = crate::package_release_signer::verify_attested_signed_package_with_owned_tempdir(
+        input_owner,
+        &plan,
+        &identity,
+        custody_deadline,
+    )?;
     let mode = OriginalVerification::RetainedRun {
         directory: Box::new(input),
         plan: Box::new(plan),
@@ -350,8 +367,9 @@ use checks::{
 #[path = "package_release_publish_recovery_files.rs"]
 mod recovery_files;
 use recovery_files::{
-    canonical_positive_env, canonical_positive_env_u32, create_fresh_directory, env_path, env_text,
-    positive_env, positive_env_u32, read_regular_bounded, runner_root,
+    canonical_positive_env, canonical_positive_env_u32, create_fresh_directory,
+    create_owned_input_directory, env_path, env_text, positive_env, positive_env_u32,
+    read_regular_bounded, runner_root,
 };
 
 #[path = "package_release_publish_recovery_archive.rs"]

@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 use crate::error::MiseError;
 
-use super::{EnvPolicy, IsolatedCommand};
+use super::{EnvPolicy, IsolatedCommand, is_safe_credential_value};
 
 /// Credential keys the private-fetch policy keeps (HD-7).
 ///
@@ -151,11 +151,7 @@ impl IsolatedCommand {
             extra_env.push((OsString::from(key), OsString::from(value)));
         }
         if let Some((kind, value)) = credential {
-            if value.is_empty()
-                || !value
-                    .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))
-            {
+            if !is_safe_credential_value(value) {
                 return Err(invalid(kind.env_key(), "credential_rejected"));
             }
             extra_env.push((OsString::from(kind.env_key()), OsString::from(value)));

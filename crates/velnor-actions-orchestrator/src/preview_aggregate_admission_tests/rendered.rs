@@ -95,6 +95,7 @@ fn fixture(channel: PackageReleaseChannel) -> ConsumerReleaseSpec {
         policy: policy(channel),
         producer_runner: VerificationRunner::Macos26Arm64,
         producer_timeout_minutes: 20,
+        publication_timeout_minutes: velnor_actions_contract::JobTimeout::DEFAULT,
         linux_acquire: acquire.clone(),
         producer_acquire: acquire,
         producer_acquire_by_target: producer_acquires(channel, "0.1.33"),

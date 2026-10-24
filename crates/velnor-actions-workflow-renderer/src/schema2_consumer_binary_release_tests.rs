@@ -1,13 +1,14 @@
 //! Stable uses the same product matrix and isolated custody as per-source preview.
-use super::{fixture, job};
+use super::{fixture, job, with_tap};
+use crate::schema2::{
+    ConsumerReleaseSpec, ConsumerStableReleaseSpec, render_consumer_binary_release,
+    render_release_tap_reconcile,
+};
+use velnor_actions_contract::package_release::PackageReleaseChannel;
 
 fn hosted_policy() -> crate::workflow_routing::WorkflowRoutingPolicy {
     crate::workflow_routing::WorkflowRoutingPolicy::hosted_only()
 }
-use crate::schema2::{
-    ConsumerReleaseSpec, ConsumerStableReleaseSpec, render_consumer_binary_release,
-};
-use velnor_actions_contract::package_release::PackageReleaseChannel;
 
 fn field<'a>(node: &'a crate::yaml::Yaml, name: &str) -> &'a crate::yaml::Yaml {
     let crate::yaml::Yaml::Map(fields) = node else {
@@ -15,7 +16,6 @@ fn field<'a>(node: &'a crate::yaml::Yaml, name: &str) -> &'a crate::yaml::Yaml {
     };
     &fields.iter().find(|(key, _)| key == name).expect(name).1
 }
-
 pub(super) fn stable() -> ConsumerReleaseSpec {
     let mut spec = fixture();
     spec.policy.channel = PackageReleaseChannel::Stable;
@@ -37,6 +37,10 @@ pub(super) fn stable() -> ConsumerReleaseSpec {
     });
     spec
 }
+
+#[path = "schema2_consumer_binary_release_budget_tests.rs"]
+mod publication_timeout;
+
 #[test]
 fn stable_manual_graph_retains_complete_inventory_and_separates_custody() {
     let rendered =
@@ -261,4 +265,50 @@ fn scale_set_rejects_the_native_macos_binary_build_job() {
         ),
         "{error}"
     );
+}
+
+#[test]
+fn stable_tap_reconciliation_is_valid_without_dispatch_inputs() {
+    use velnor_actions_contract::config::HomebrewTapDestination;
+
+    let mut spec = stable();
+    let mut tap = super::with_tap().homebrew_tap.expect("tap policy");
+    tap.policy.destinations.stable = Some(HomebrewTapDestination {
+        formula: "Formula/scanner.rb".to_owned(),
+    });
+    tap.policy
+        .updater
+        .inputs
+        .push("Formula/scanner.rb".to_owned());
+    spec.homebrew_tap = Some(tap);
+
+    let rendered = render_release_tap_reconcile(&spec, &hosted_policy())
+        .expect("stable reconciliation workflow");
+    assert_eq!(rendered.path, ".github/workflows/stable-tap-reconcile.yml");
+    assert!(
+        rendered.bytes.contains("name: Stable tap reconciliation"),
+        "{}",
+        rendered.bytes
+    );
+    assert!(!rendered.bytes.contains("inputs."), "{}", rendered.bytes);
+    assert!(!rendered.bytes.contains("env: {}"), "{}", rendered.bytes);
+    assert!(
+        rendered
+            .bytes
+            .contains("VELNOR_STABLE_VERSION_PACKAGE: scanner")
+    );
+    assert!(!rendered.bytes.contains("VELNOR_STABLE_OPERATION:"));
+    for operation in [
+        "admit-homebrew-tap-v1",
+        "prepare-homebrew-tap-v1",
+        "write-homebrew-tap-pr-v1",
+        "merge-homebrew-tap-pr-v1",
+    ] {
+        assert!(rendered.bytes.contains(operation), "missing {operation}");
+    }
+
+    let stable_release = render_consumer_binary_release(&spec, &hosted_policy())
+        .expect("stable publisher")
+        .bytes;
+    assert!(stable_release.contains("VELNOR_STABLE_OPERATION: ${{ inputs.operation }}"));
 }

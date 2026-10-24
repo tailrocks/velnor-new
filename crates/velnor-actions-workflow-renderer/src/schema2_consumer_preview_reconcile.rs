@@ -5,13 +5,6 @@ use super::{
 };
 use crate::commands::join_argv_for_run;
 use velnor_actions_contract::{JobTimeout, package_release::PackageReleaseChannel};
-/// Fixed default-branch continuation workflow filename.
-fn path(spec: &ConsumerReleaseSpec) -> &'static str {
-    match spec.policy.channel {
-        PackageReleaseChannel::Preview => ".github/workflows/preview-tap-reconcile.yml",
-        PackageReleaseChannel::Stable => ".github/workflows/stable-tap-reconcile.yml",
-    }
-}
 fn context(spec: &ConsumerReleaseSpec) -> TapInvocationContext {
     match spec.policy.channel {
         PackageReleaseChannel::Preview => TapInvocationContext::Reconcile,
@@ -42,7 +35,7 @@ pub fn render_release_tap_reconcile(
     let document = Yaml::Map(vec![
         (
             "name".to_owned(),
-            Yaml::str(format!("{} tap reconciliation", context(spec).prefix())),
+            Yaml::str(spec.policy.channel.tap_reconcile_workflow_name()),
         ),
         (
             "on".to_owned(),
@@ -73,7 +66,7 @@ pub fn render_release_tap_reconcile(
         ),
         ("jobs".to_owned(), Yaml::Map(jobs)),
     ]);
-    let path = path(spec);
+    let path = spec.policy.channel.tap_reconcile_workflow_path();
     let document = crate::workflow_routing::route_workflow_yaml(path, document, routing)?;
     Ok(RenderedFile {
         path: path.to_owned(),

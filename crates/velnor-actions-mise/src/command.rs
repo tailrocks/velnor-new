@@ -7,6 +7,8 @@ mod cancellable;
 pub(crate) use bounded_file_filter::command_for_file_filter;
 #[path = "check_command.rs"]
 mod check;
+#[path = "command_credential.rs"]
+mod credential;
 #[path = "command_env.rs"]
 mod env;
 #[path = "command_git.rs"]
@@ -28,6 +30,7 @@ mod stream;
 #[path = "command_tofu.rs"]
 mod tofu;
 pub use check::resolve_program as resolve_check_program;
+pub use credential::is_safe_credential_value;
 pub use private_fetch::{
     CREDENTIAL_ALLOWLIST_PRIVATE_FETCH, FETCH_REDIRECT_ENV_KEYS, PrivateFetchCredential,
     is_fetch_redirect_key,
@@ -207,23 +210,6 @@ impl IsolatedCommand {
             }
             self.extra_env.push(pair.clone());
         }
-        Ok(self)
-    }
-
-    pub(crate) fn with_github_token(mut self, token: &str) -> Result<Self, MiseError> {
-        if token.is_empty()
-            || !token
-                .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
-        {
-            return Err(MiseError::InvalidStepInput {
-                field: "GH_TOKEN".to_owned(),
-                value: "credential_rejected".to_owned(),
-            });
-        }
-        self.extra_env
-            .push((OsString::from("GH_TOKEN"), OsString::from(token)));
-        self.policy = EnvPolicy::GitHubToken;
         Ok(self)
     }
 

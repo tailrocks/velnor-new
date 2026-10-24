@@ -57,6 +57,7 @@ const EXPECTED_MODULES: &[&str] = &[
     "command.rs",
     "command_bounded_file_filter.rs",
     "command_cancellable.rs",
+    "command_credential.rs",
     "command_env.rs",
     "command_git.rs",
     "command_output.rs",

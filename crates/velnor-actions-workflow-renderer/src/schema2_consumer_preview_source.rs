@@ -9,8 +9,6 @@ use crate::{
     commands::join_argv_for_run,
     schema2::features::{base, finish, run_step},
 };
-use velnor_actions_contract::JobTimeout;
-
 const SOURCE_ADMISSION_PATH: &str = "${{ runner.temp }}/velnor/preview-source-admission.json";
 
 pub(super) fn job(
@@ -20,7 +18,7 @@ pub(super) fn job(
     let mut fields = base(
         "Select authenticated main source for preview",
         Yaml::str("ubuntu-26.04"),
-        JobTimeout::DEFAULT,
+        spec.publication_timeout_minutes,
     );
     fields.push((
         "if".to_owned(),
@@ -95,19 +93,6 @@ fn source_select_step(spec: &ConsumerReleaseSpec) -> Result<Yaml, RenderError> {
         "select-preview-source-v1",
         true,
         TapInvocationContext::Preview,
-    )?;
-    operation_env(
-        &mut step,
-        &[
-            (
-                "VELNOR_RELEASE_ORIGINAL_RUN_ID",
-                "${{ inputs.original_run_id }}",
-            ),
-            (
-                "VELNOR_RELEASE_ORIGINAL_RUN_ATTEMPT",
-                "${{ inputs.original_run_attempt }}",
-            ),
-        ],
     )?;
     set_id(&mut step, "source-select");
     Ok(step)
