@@ -27,23 +27,71 @@ pub(crate) fn validate_required_plan(
     )? {
         return validate_seed_required_plan(plan, &seed);
     }
+    route_required_admission(
+        plan,
+        || {
+            crate::homebrew::authority::protected_locator_absent_on_default_branch(
+                &repository,
+                deadline,
+            )
+        },
+        || validate_full_required_plan(root, &repository, plan, pull_request, deadline),
+    )
+}
+
+fn route_required_admission(
+    plan: &velnor_actions_contract::Plan,
+    prove_locator_absent: impl FnOnce() -> Result<bool, OrchestratorError>,
+    full_admission: impl FnOnce() -> Result<(), OrchestratorError>,
+) -> Result<(), OrchestratorError> {
+    if !has_native_matrix_entry(&plan.matrix.include) && prove_locator_absent()? {
+        return Ok(());
+    }
+    full_admission()
+}
+
+fn validate_full_required_plan(
+    root: &Path,
+    repository: &str,
+    plan: &velnor_actions_contract::Plan,
+    pull_request: Option<u64>,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
     let authority = crate::homebrew::authority::probe_protected_homebrew_authority(
         root,
-        &repository,
+        repository,
         plan.event,
         pull_request,
         &plan.head,
         deadline,
     )?;
-    let actual = actual_native_checks(plan);
+    let actual = actual_native_checks(&plan.matrix.include);
     let Some(authority) = authority else {
-        if !actual.is_empty() {
-            return Err(internal("native_checks_without_protected_authority"));
-        }
+        require_native_authority(&plan.matrix.include)?;
         return Ok(());
     };
     validate_source_required_plan(root, &authority, &actual, deadline)
 }
+
+fn has_native_matrix_entry(entries: &[velnor_actions_contract::MatrixEntry]) -> bool {
+    entries
+        .iter()
+        .any(|entry| entry.stack_id == Stack::Native.id())
+}
+
+fn require_native_authority(
+    entries: &[velnor_actions_contract::MatrixEntry],
+) -> Result<(), OrchestratorError> {
+    if has_native_matrix_entry(entries) {
+        Err(internal("native_checks_without_protected_authority"))
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+#[path = "native_homebrew_check_required_applicability_tests.rs"]
+mod applicability_tests;
 
 fn validate_seed_required_plan(
     plan: &velnor_actions_contract::Plan,
@@ -77,10 +125,9 @@ fn validate_seed_required_plan(
 type ActualNativeCheck = (String, Option<String>, String, String);
 
 fn actual_native_checks(
-    plan: &velnor_actions_contract::Plan,
+    entries: &[velnor_actions_contract::MatrixEntry],
 ) -> BTreeMap<String, ActualNativeCheck> {
-    plan.matrix
-        .include
+    entries
         .iter()
         .filter(|entry| entry.stack_id == Stack::Native.id())
         .filter_map(|entry| {

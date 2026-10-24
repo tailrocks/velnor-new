@@ -165,41 +165,35 @@ fn assert_candidate_output_binding_validation(
     qualification_helpers: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     output_bindings::assert_qualification_pipeline(qualification_helpers)?;
-    let validator = include_str!("../../../crates/velnor-actions-freshness/src/release_support.rs");
-    assert!(
-        validator.contains("fn validate_qualification_output_bindings(")
-            && validator.contains("by_url.get(url)")
-            && validator.contains("if digest != *expected_digest")
-            && validator.contains("if source != commit"),
-        "native validation must bind each workflow URL, digest, and source commit to the candidate manifest"
-    );
-    assert_native_output_binding_test_evidence();
-    Ok(())
-}
-
-fn assert_native_output_binding_test_evidence() {
-    let tests =
-        include_str!("../../../crates/velnor-actions-freshness/src/release_support_tests.rs");
-    assert!(
-        tests.contains("qualification_bindings_accept_exact_pairs_and_reject_duplicate_json_keys")
-            && tests.contains(
-                "qualification_bindings_reject_digest_commit_scope_pair_and_unknown_url_faults"
-            ),
-        "native output-binding tests must prove positive pairs, duplicate-key rejection, and invalid binding rejection"
-    );
-    for failure in [
-        "wrong digest for target",
-        "wrong source commit",
-        "unknown release URL",
-        "binding fields use different scopes",
-        "incomplete binding",
-        "cannot read candidate manifest",
+    let release_case = qualification_helpers
+        .find("capture_release_case()")
+        .ok_or("release candidate case capture must exist")?;
+    let capture_window = &qualification_helpers[release_case..];
+    let checker = capture_window
+        .find("validate_candidate_output_bindings()")
+        .ok_or("trusted output-binding checker must be defined")?;
+    let normalization = capture_window
+        .find("normalize_candidate_digests()")
+        .ok_or("candidate output normalization must be defined")?;
+    let checker_source = &capture_window[checker..normalization];
+    for handoff in [
+        "prepare_qualification_guard || return 1",
+        "verify_qualification_guard || return 1",
+        "\"$QUALIFICATION_GUARD_BIN\" qualification-output-bindings",
+        "\"$CANDIDATE_MANIFEST\" \"$preview/.github\"",
     ] {
         assert!(
-            tests.contains(failure),
-            "native output-binding tests are missing {failure} coverage"
+            checker_source.contains(handoff),
+            "trusted output-binding checker is missing {handoff}"
         );
     }
+    assert!(
+        !checker_source.contains("$BIN")
+            && !checker_source.contains("VELNOR_REPO_POLICY_ACTION")
+            && !checker_source.contains("VELNOR_INTERNAL_OP"),
+        "candidate CLI must not be asked to validate its own output bindings"
+    );
+    Ok(())
 }
 
 fn assert_schema_only_consumer_manifest_input(fixture_check: &str) {

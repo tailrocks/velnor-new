@@ -10,10 +10,14 @@ mod candidate_extract;
 mod pax;
 #[path = "profile.rs"]
 mod profile;
+#[path = "qualification.rs"]
+mod qualification;
 #[path = "stream.rs"]
 mod stream;
+mod strict_json;
 use pax::{check_header as check_pax_header, parse as parse_pax};
 use profile::{ArchiveEncoding, Profile, profile};
+pub use qualification::{validate_qualification_manifest, validate_qualification_output_bindings};
 use stream::{drain_zero_tail, read_exact, read_metadata, skip_padded};
 
 const BLOCK_SIZE: usize = 512;

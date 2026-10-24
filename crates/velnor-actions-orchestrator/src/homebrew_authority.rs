@@ -21,6 +21,8 @@ mod context;
 #[path = "homebrew_authority/source.rs"]
 mod source;
 use source::{SourceProjection, load_source_projection};
+#[path = "homebrew_authority/applicability.rs"]
+mod applicability;
 
 const SOURCE_DOCUMENT_LIMIT: usize =
     velnor_actions_contract::package_release_policy::MAX_CARGO_VERSION_MANIFEST_BYTES;
@@ -225,6 +227,47 @@ pub(crate) fn probe_protected_homebrew_authority(
         tap_head_sha: authenticated_head.clone(),
         locator_blob_sha,
     }))
+}
+
+/// Prove that the exact current default-branch tree has no Homebrew authority locator.
+/// Any unavailable or changing repository state is an error, never an absence result.
+pub(crate) fn protected_locator_absent_on_default_branch(
+    repository: &str,
+    deadline: CheckDeadline,
+) -> Result<bool, OrchestratorError> {
+    let before =
+        crate::package_release_publish::read_public_repository_snapshot(repository, deadline)?;
+    let before_tip = crate::package_release_publish::read_public_branch_tip(
+        repository,
+        before.id,
+        &before.default_branch,
+        deadline,
+    )?;
+    let locator = crate::package_release_publish::try_read_protected_source_file(
+        repository,
+        before.id,
+        &before.default_branch,
+        &before_tip,
+        HOMEBREW_SOURCE_AUTHORITY_LOCATOR_PATH,
+        MAX_HOMEBREW_SOURCE_AUTHORITY_LOCATOR_BYTES,
+        deadline,
+    )?;
+    let after_tip = crate::package_release_publish::read_public_branch_tip(
+        repository,
+        before.id,
+        &before.default_branch,
+        deadline,
+    )?;
+    let after =
+        crate::package_release_publish::read_public_repository_snapshot(repository, deadline)?;
+    applicability::confirm_locator_absence(
+        repository,
+        &before,
+        &before_tip,
+        locator.as_deref(),
+        &after,
+        &after_tip,
+    )
 }
 
 fn read_git_value(

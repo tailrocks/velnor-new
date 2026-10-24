@@ -2,10 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use super::{
-    cargo_artifact_executable, validate_qualification_manifest,
-    validate_qualification_output_bindings,
-};
+use super::cargo_artifact_executable;
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(0);
 
@@ -32,7 +29,6 @@ impl Scratch {
         self.0.join(name)
     }
 }
-
 impl Drop for Scratch {
     fn drop(&mut self) {
         let _cleanup_result = fs::remove_dir_all(&self.0);
@@ -104,58 +100,4 @@ fn cargo_artifact_selection_rejects_missing_and_ambiguous_records() {
             .expect_err("duplicate artifact rejected")
             .contains("found 2")
     );
-}
-
-fn write_manifest(path: &Path) {
-    fs::write(
-        path,
-        r#"{"schema":1,"version":"0.1.52","repository":"tailrocks/velnor-new","commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","targets":[{"target":"x86_64-unknown-linux-gnu","artifact":"https://github.com/tailrocks/velnor-new/releases/download/v0.1.52/velnor-actions-0.1.52-x86_64-unknown-linux-gnu","sha256":"1111111111111111111111111111111111111111111111111111111111111111"},{"target":"aarch64-apple-darwin","artifact":"https://github.com/tailrocks/velnor-new/releases/download/v0.1.52/velnor-actions-0.1.52-aarch64-apple-darwin","sha256":"2222222222222222222222222222222222222222222222222222222222222222"},{"target":"x86_64-apple-darwin","artifact":"https://github.com/tailrocks/velnor-new/releases/download/v0.1.52/velnor-actions-0.1.52-x86_64-apple-darwin","sha256":"3333333333333333333333333333333333333333333333333333333333333333"}]}"#,
-    )
-    .expect("write manifest");
-}
-
-fn valid_workflow() -> &'static str {
-    "      VELNOR_ASSET_SHA256: 1111111111111111111111111111111111111111111111111111111111111111\n      VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.52/velnor-actions-0.1.52-x86_64-unknown-linux-gnu\n      VELNOR_RELEASE_COMMIT: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
-}
-
-#[test]
-fn qualification_bindings_accept_exact_pairs_and_reject_duplicate_json_keys() {
-    let scratch = Scratch::new();
-    let manifest = scratch.path("manifest.json");
-    write_manifest(&manifest);
-    assert!(validate_qualification_manifest(&manifest).is_ok());
-    let workflows = scratch.path(".github");
-    fs::create_dir(&workflows).expect("create workflow directory");
-    fs::write(workflows.join("ci.yml"), valid_workflow()).expect("write workflow");
-    assert!(validate_qualification_output_bindings(&manifest, &workflows).is_ok());
-
-    fs::write(&manifest, r#"{"commit":"a","commit":"b","targets":[]}"#)
-        .expect("write duplicate-key manifest");
-    assert!(
-        validate_qualification_output_bindings(&manifest, &workflows)
-            .expect_err("duplicate JSON key rejected")
-            .contains("cannot read candidate manifest")
-    );
-}
-
-#[test]
-fn qualification_bindings_reject_digest_commit_scope_pair_and_unknown_url_faults() {
-    let scratch = Scratch::new();
-    let manifest = scratch.path("manifest.json");
-    write_manifest(&manifest);
-    let workflows = scratch.path(".github");
-    fs::create_dir(&workflows).expect("create workflow directory");
-    let original = valid_workflow();
-    let cases = [
-        ("wrong digest", original.replace("1111111111111111111111111111111111111111111111111111111111111111", "4444444444444444444444444444444444444444444444444444444444444444"), "wrong digest for target"),
-        ("wrong commit", original.replace("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"), "wrong source commit"),
-        ("wrong URL", original.replace("https://github.com/tailrocks/velnor-new/releases/download/v0.1.52/velnor-actions-0.1.52-x86_64-unknown-linux-gnu", "https://example.invalid/unknown"), "unknown release URL"),
-        ("scope mismatch", original.replace("      VELNOR_ASSET_URL", "    VELNOR_ASSET_URL"), "binding fields use different scopes"),
-        ("missing field", original.lines().filter(|line| !line.contains("VELNOR_RELEASE_COMMIT")).collect::<Vec<_>>().join("\n"), "incomplete binding"),
-    ];
-    for (name, contents, expected) in cases {
-        fs::write(workflows.join("ci.yml"), contents).expect("write fault fixture");
-        let error = validate_qualification_output_bindings(&manifest, &workflows).expect_err(name);
-        assert!(error.contains(expected), "{name}: {error}");
-    }
 }

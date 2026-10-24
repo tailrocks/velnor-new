@@ -15,55 +15,62 @@ if [ "${1-}" != "generate" ]; then
   exec "$VELNOR_TEST_REAL_CLI_BIN" "$@"
 fi
 "$VELNOR_TEST_REAL_CLI_BIN" "$@" || exit $?
-python3 - "$3/.github/workflows/ci.yml" "$VELNOR_TEST_OUTPUT_FAULT" \
-  "$VELNOR_TEST_BAD_DIGEST" <<'PY'
-from pathlib import Path
-import json
-import re
-import sys
-
-path = Path(sys.argv[1])
-fault = sys.argv[2]
-bad_digest = sys.argv[3]
-lines = path.read_text(encoding="utf-8").splitlines()
-field = re.compile(r"^(?P<indent>[ \t]*)(?P<key>VELNOR_ASSET_SHA256|VELNOR_ASSET_URL|VELNOR_RELEASE_COMMIT): (?P<value>\S+)$")
-starts = [index for index, line in enumerate(lines)
-          if field.fullmatch(line) and field.fullmatch(line).group("key") == "VELNOR_ASSET_SHA256"]
-if len(starts) < 2:
-    raise SystemExit("fault fixture needs at least two bindings to retain valid neighbors")
-index = starts[0]
-match = [field.fullmatch(line) for line in lines[index:index + 3]]
-if len(match) != 3 or any(item is None for item in match):
-    raise SystemExit("generated workflow did not contain a complete first binding")
-if [item.group("key") for item in match] != [
-    "VELNOR_ASSET_SHA256", "VELNOR_ASSET_URL", "VELNOR_RELEASE_COMMIT"
-]:
-    raise SystemExit("generated workflow fields were not adjacent in the expected order")
-
-if fault in ("wrong-digest", "both"):
-    lines[index] = match[0].group("indent") + "VELNOR_ASSET_SHA256: " + bad_digest
-if fault in ("wrong-commit", "both"):
-    lines[index + 2] = match[2].group("indent") + "VELNOR_RELEASE_COMMIT: " + ("b" * 40)
-if fault == "missing-digest":
-    del lines[index]
-if fault == "missing-url":
-    del lines[index + 1]
-if fault == "missing-commit":
-    del lines[index + 2]
-if fault == "wrong-url":
-    lines[index + 1] = match[1].group("indent") + "VELNOR_ASSET_URL: https://example.invalid/wrong-release-target"
-if fault == "wrong-target":
-    manifest = json.loads((Path.cwd() / ".velnor/release-manifest.json").read_text())
-    current_digest = match[0].group("value")
-    alternatives = [item for item in manifest["targets"]
-                    if item["artifact"] != match[1].group("value")
-                    and item["sha256"] != current_digest]
-    if not alternatives:
-        raise SystemExit("no distinct manifest target is available for the wrong-target case")
-    lines[index + 1] = match[1].group("indent") + "VELNOR_ASSET_URL: " + alternatives[0]["artifact"]
-
-path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-PY
+workflow="$3/.github/workflows/ci.yml"
+wrong_url=''
+if [ "$VELNOR_TEST_OUTPUT_FAULT" = wrong-target ]; then
+  first_binding="$(awk '
+    /^[ \t]*VELNOR_ASSET_SHA256: [^[:space:]]+$/ && digest == "" { digest=$2 }
+    /^[ \t]*VELNOR_ASSET_URL: [^[:space:]]+$/ && url == "" { url=$2 }
+    END { if (digest != "" && url != "") print digest "|" url }
+  ' "$workflow")" || exit 1
+  current_digest=${first_binding%%|*}
+  current_url=${first_binding#*|}
+  wrong_url="$(jq -er --arg current_url "$current_url" --arg current_digest "$current_digest" '
+    [.targets[] | select(.artifact != $current_url and .sha256 != $current_digest)][0].artifact
+      // error("no distinct manifest target is available for the wrong-target case")
+  ' .velnor/release-manifest.json)" || exit 1
+fi
+awk -v fault="$VELNOR_TEST_OUTPUT_FAULT" -v bad_digest="$VELNOR_TEST_BAD_DIGEST" \
+  -v wrong_url="$wrong_url" '
+  function field(line, expected,    body, separator, key, value, indent) {
+    if (line !~ /^[ \t]*(VELNOR_ASSET_SHA256|VELNOR_ASSET_URL|VELNOR_RELEASE_COMMIT): [^[:space:]]+$/) return 0
+    indent=line
+    sub(/[^ \t].*$/, "", indent)
+    body=substr(line, length(indent) + 1)
+    separator=index(body, ": ")
+    key=substr(body, 1, separator - 1)
+    value=substr(body, separator + 2)
+    if (key != expected) return 0
+    keys[++found]=key
+    indents[found]=indent
+    values[found]=value
+    return 1
+  }
+  { lines[NR]=$0 }
+  END {
+    for (i=1; i<=NR; i++) {
+      if (lines[i] ~ /^[ \t]*VELNOR_ASSET_SHA256: [^[:space:]]+$/) starts[++count]=i
+    }
+    if (count < 2) { print "fault fixture needs at least two bindings to retain valid neighbors" > "/dev/stderr"; exit 1 }
+    start=starts[1]
+    found=0
+    if (!field(lines[start], "VELNOR_ASSET_SHA256") ||
+        !field(lines[start+1], "VELNOR_ASSET_URL") ||
+        !field(lines[start+2], "VELNOR_RELEASE_COMMIT")) {
+      print "generated workflow fields were not adjacent in the expected order" > "/dev/stderr"; exit 1
+    }
+    if (fault == "wrong-digest" || fault == "both") lines[start]=indents[1] "VELNOR_ASSET_SHA256: " bad_digest
+    if (fault == "wrong-commit" || fault == "both") lines[start+2]=indents[3] "VELNOR_RELEASE_COMMIT: " sprintf("%040d", 0)
+    if (fault == "wrong-commit" || fault == "both") sub(/0+$/, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", lines[start+2])
+    if (fault == "missing-digest") skip[start]=1
+    if (fault == "missing-url") skip[start+1]=1
+    if (fault == "missing-commit") skip[start+2]=1
+    if (fault == "wrong-url") lines[start+1]=indents[2] "VELNOR_ASSET_URL: https://example.invalid/wrong-release-target"
+    if (fault == "wrong-target") lines[start+1]=indents[2] "VELNOR_ASSET_URL: " wrong_url
+    for (i=1; i<=NR; i++) if (!skip[i]) print lines[i]
+  }
+' "$workflow" >"$workflow.mutated" || exit 1
+mv "$workflow.mutated" "$workflow" || exit 1
 WRAPPER
   chmod u+x "$wrapper"
 }

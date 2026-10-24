@@ -22,7 +22,7 @@ build_tmp_root="$build_root/tmp"
 run_tmp=''
 temporary=''
 cargo_home="$build_root/cargo-home"
-mise_data="$home_root/.local/share/mise"
+mise_data="$build_root/mise-data"
 mise_cache="$build_root/mise-cache"
 rustup_home="$build_root/rustup-home"
 
@@ -243,19 +243,14 @@ for path in "$guard_state" "$guard_bin_dir" "$cache_root" "$cache_root/velnor" \
   "$mise_cache" "$rustup_home"; do
   [[ ! -L "$path" ]] || fail "build path is a symlink: $path"
 done
-for path in "$home_root/.local" "$home_root/.local/share"; do
-  [[ ! -L "$path" ]] || fail "Mise path is a symlink: $path"
-done
 mkdir -p -- "$guard_bin_dir" "$guard_target_root" "$build_tmp_root" "$cargo_home" \
   "$mise_data" "$mise_cache" "$rustup_home"
 chmod 700 "$guard_state" "$guard_bin_dir" "$build_root" "$guard_target_root" \
-  "$build_tmp_root" "$cargo_home" "$mise_cache" "$rustup_home"
+  "$build_tmp_root" "$cargo_home" "$mise_data" "$mise_cache" "$rustup_home"
 check_directory "$state_root"
 check_directory "$guard_state"
 check_directory "$guard_bin_dir"
 check_directory "$home_root"
-check_directory "$home_root/.local"
-check_directory "$home_root/.local/share"
 check_directory "$cache_root"
 check_directory "$cache_root/velnor"
 check_directory "$build_root"

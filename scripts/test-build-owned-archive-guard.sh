@@ -60,6 +60,21 @@ cat >"$tool_bin/mise" <<'FAKE_MISE'
 set -euo pipefail
 
 tool_state="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+private_root="$(cd -- "${HOME:?}" && pwd -P)/.cache/velnor/archive-guard"
+for variable in MISE_DATA_DIR MISE_CACHE_DIR MISE_CARGO_HOME CARGO_HOME RUSTUP_HOME; do
+  value="${!variable:-}"
+  [[ "$value" == "$private_root/"* ]] \
+    || { printf '%s escaped the private build namespace\n' "$variable" >&2; exit 98; }
+  printf '%s=%s\n' "$variable" "$value" >>"$tool_state/mise-environments"
+done
+for variable in CARGO_TARGET_DIR TMPDIR; do
+  value="${!variable:-}"
+  if [[ -n "$value" ]]; then
+    [[ "$value" == "$private_root/"* ]] \
+      || { printf '%s escaped the private build namespace\n' "$variable" >&2; exit 98; }
+    printf '%s=%s\n' "$variable" "$value" >>"$tool_state/mise-environments"
+  fi
+done
 while [[ "${1:-}" == --* ]]; do shift; done
 command_name="${1:-}"
 [[ -n "$command_name" ]] || exit 2
@@ -197,4 +212,11 @@ target_changed="$(sed -n '6p' "$targets_file")"
   || { printf 'Cargo target namespace is not keyed by the verified source fingerprint\n' >&2; exit 1; }
 [[ ! -e "$tool_bin/python-invocations" ]] \
   || { printf 'archive guard invoked a Python interpreter\n' >&2; exit 1; }
+[[ -s "$tool_bin/mise-environments" ]] \
+  || { printf 'Mise environment isolation was not checked\n' >&2; exit 1; }
+expected_private_root="$(cd -- "$case_home" && pwd -P)/.cache/velnor/archive-guard"
+while IFS='=' read -r variable value; do
+  [[ "$value" == "$expected_private_root/"* ]] \
+    || { printf 'Mise environment escaped private namespace: %s\n' "$variable" >&2; exit 1; }
+done <"$tool_bin/mise-environments"
 printf 'archive guard target and native bootstrap regression passed\n'
