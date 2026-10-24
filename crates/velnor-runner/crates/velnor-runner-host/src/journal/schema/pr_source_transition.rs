@@ -112,6 +112,7 @@ mod tests {
         let path = scratch.file();
         let journal = Journal::open(&path).await?;
         let connection = journal.connection().await?;
+        super::super::jit_conflict_settlement::downgrade_connection_to_v39(&connection).await?;
         super::super::jit_conflict_recovery::remove_receipt_schema_for_migration_test(&connection)
             .await?;
         for statement in [
@@ -140,7 +141,7 @@ mod tests {
             .map_err(|_| HostError::Journal)?;
 
         super::super::driver::migrate_to_current(&connection, 37).await?;
-        super::super::validate_persisted_schema_v39(&connection).await?;
+        super::super::validate_persisted_schema_v40(&connection).await?;
         let mut rows = connection
             .query("PRAGMA user_version", ())
             .await

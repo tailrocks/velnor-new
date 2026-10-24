@@ -12,7 +12,9 @@ mod tamper;
 pub(super) use fixtures::{
     LocalAbsenceFixture, local_absence_fixture, settle_empty_remote_case, verified_empty_lookup,
 };
-pub(in crate::journal::schema) use migration::downgrade_current_database_to_v39;
+pub(in crate::journal::schema) use migration::{
+    downgrade_connection_to_v39, downgrade_current_database_to_v39,
+};
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};

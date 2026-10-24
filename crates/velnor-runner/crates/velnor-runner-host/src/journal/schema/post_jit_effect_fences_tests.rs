@@ -17,6 +17,7 @@ async fn v35_migration_installs_fences_atomically_and_reopens() -> Result<(), Ho
     let fixture = native_started_intake_fixture().await?;
     let path = fixture.database_path.clone();
     let connection = fixture.journal.connection().await?;
+    super::jit_conflict_settlement::downgrade_connection_to_v39(&connection).await?;
     super::jit_conflict_recovery::remove_receipt_schema_for_migration_test(&connection).await?;
     drop_fences(&connection).await?;
     install_v36_retirement_guard(&connection).await?;
@@ -51,7 +52,7 @@ async fn v35_migration_installs_fences_atomically_and_reopens() -> Result<(), Ho
         super::JOURNAL_VERSION
     );
     super::post_jit_effect_fences::validate(&connection).await?;
-    super::post_jit_retirement::validate_v37(&connection).await?;
+    super::post_jit_retirement::validate_v40(&connection).await?;
     drop(connection);
     drop(migrated);
 
@@ -62,7 +63,7 @@ async fn v35_migration_installs_fences_atomically_and_reopens() -> Result<(), Ho
         super::JOURNAL_VERSION
     );
     super::post_jit_effect_fences::validate(&connection).await?;
-    super::post_jit_retirement::validate_v37(&connection).await
+    super::post_jit_retirement::validate_v40(&connection).await
 }
 
 #[tokio::test]
