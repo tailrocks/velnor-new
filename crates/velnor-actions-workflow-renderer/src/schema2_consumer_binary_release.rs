@@ -43,6 +43,11 @@ pub(super) fn render_consumer_binary_release(
     spec.publication_timeout_minutes
         .validate()
         .map_err(RenderError::Contract)?;
+    if spec.publication_timeout_minutes.minutes()
+        > velnor_actions_contract::config::MAX_PUBLICATION_RUNTIME_MINUTES
+    {
+        return Err(invalid("publication_budget_exceeds_job_limit"));
+    }
     validate_coordinator(stable, spec)?;
     spec.linux_setup.validate()?;
     spec.producer_setup.validate()?;

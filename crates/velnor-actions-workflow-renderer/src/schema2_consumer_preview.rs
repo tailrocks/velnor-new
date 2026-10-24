@@ -26,6 +26,8 @@ pub use reconcile::render_release_tap_reconcile;
 mod preview_trigger;
 #[path = "schema2_consumer_preview_production.rs"]
 pub(super) mod production;
+#[path = "schema2_consumer_publication_budget.rs"]
+mod publication_budget;
 #[path = "schema2_consumer_preview_source.rs"]
 mod source;
 #[path = "schema2_consumer_preview_steps.rs"]
@@ -52,8 +54,8 @@ pub struct ConsumerReleaseSpec {
     pub producer_runner: VerificationRunner,
     /// Native operation time limit; producer jobs add fixed lifecycle headroom.
     pub producer_timeout_minutes: u16,
-    /// Outer budget for source admission, publishing, and recovery jobs.
-    /// Also bounds native publication and its retained signed-directory custody.
+    /// Configured native publication deadline and preview eligibility job limit.
+    /// Publisher and recovery jobs add preparation-step caps and cleanup headroom.
     pub publication_timeout_minutes: JobTimeout,
     /// Verified helper acquisition for Linux policy/signing/publication jobs.
     pub linux_acquire: Step,
@@ -99,6 +101,13 @@ pub fn render_consumer_preview(spec: &ConsumerReleaseSpec) -> Result<RenderedFil
     spec.publication_timeout_minutes
         .validate()
         .map_err(RenderError::Contract)?;
+    if spec.publication_timeout_minutes.minutes()
+        > velnor_actions_contract::config::MAX_PUBLICATION_RUNTIME_MINUTES
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "publication_budget_exceeds_job_limit".to_owned(),
+        ));
+    }
     if spec.policy.channel != PackageReleaseChannel::Preview
         || spec.policy.default_branch != "main"
         || !(1..=velnor_actions_contract::config::RustBinaryReleaseProducer::MAX_TIMEOUT_MINUTES)
@@ -260,6 +269,12 @@ pub(super) fn publisher(spec: &ConsumerReleaseSpec) -> Result<(String, Yaml), Re
         )?,
     ];
     job_steps.insert(3, policy_admission(spec)?);
+    let preparation_step_count = job_steps.len() - 1;
+    publication_budget::apply_preparation_budget(
+        &mut fields,
+        &mut job_steps[..preparation_step_count],
+        spec.publication_timeout_minutes,
+    )?;
     finish_policy_job(&id, fields, job_steps)
 }
 
@@ -291,19 +306,22 @@ pub(super) fn recovery(spec: &ConsumerReleaseSpec) -> Result<(String, Yaml), Ren
             ("contents", "write"),
         ]),
     ));
-    Ok(finish(
-        &id,
-        fields,
-        vec![
-            setup(&spec.linux_setup),
-            run_step(
-                "Install pinned GitHub CLI",
-                &join_argv_for_run(&spec.install_gh_argv)?,
-            ),
-            acquire(&spec.linux_acquire, &id, "ubuntu-26.04")?,
-            operation(spec, "recover-package-release-v1", true, context)?,
-        ],
-    ))
+    let mut job_steps = vec![
+        setup(&spec.linux_setup),
+        run_step(
+            "Install pinned GitHub CLI",
+            &join_argv_for_run(&spec.install_gh_argv)?,
+        ),
+        acquire(&spec.linux_acquire, &id, "ubuntu-26.04")?,
+        operation(spec, "recover-package-release-v1", true, context)?,
+    ];
+    let preparation_step_count = job_steps.len() - 1;
+    publication_budget::apply_preparation_budget(
+        &mut fields,
+        &mut job_steps[..preparation_step_count],
+        spec.publication_timeout_minutes,
+    )?;
+    Ok(finish(&id, fields, job_steps))
 }
 
 #[cfg(test)]

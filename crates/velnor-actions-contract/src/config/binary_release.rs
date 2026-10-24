@@ -5,9 +5,15 @@ use serde::{Deserialize, Serialize};
 
 #[path = "binary_release_preview.rs"]
 mod preview;
+#[path = "binary_release_publication_budget.rs"]
+mod publication_budget;
 #[path = "binary_release_validation.rs"]
 mod validation;
 pub use preview::*;
+pub use publication_budget::{
+    MAX_PUBLICATION_RUNTIME_MINUTES, PUBLICATION_CLEANUP_HEADROOM_MINUTES,
+    PUBLICATION_PREPARATION_STEP_DEFAULT_MINUTES, RELEASE_ACQUIRE_STEP_TIMEOUT_MINUTES,
+};
 pub(crate) use validation::validate_static_release_inventory;
 
 /// Shared inventory and qualified producer for both native release channels.
@@ -26,9 +32,9 @@ pub struct RustBinaryReleaseConfig {
     /// Qualified credential-free producer shared by both channels.
     #[serde(default)]
     pub producer: RustBinaryReleaseProducer,
-    /// Outer publication-job budget for source admission, publishing, and recovery.
-    /// Defaults to five minutes, independently of the producer operation budget.
-    /// Also bounds the native publication transaction and retained signed custody.
+    /// Configured native publication deadline; defaults independently of producer budgets.
+    /// Publisher and recovery jobs add preparation-step caps and cleanup headroom.
+    /// Preview source eligibility continues to use this value as its outer job limit.
     #[serde(default = "default_publication_timeout")]
     pub publication_timeout_minutes: JobTimeout,
     /// Closed explicit product matrix.

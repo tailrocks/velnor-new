@@ -44,22 +44,31 @@ fn publication_timeout_only_extends_preview_admission_and_shared_publish_recover
     for (name, next) in [
         ("preview-eligibility", Some("preview-payload")),
         ("preview-signer", Some("preview-publisher")),
-        ("preview-publisher", None),
-        ("preview-recovery", None),
     ] {
         assert!(timeout_line(&preview_default_yaml, name, next).contains("timeout-minutes: 5"));
     }
+    assert!(
+        timeout_line(&preview_default_yaml, "preview-publisher", None)
+            .contains("timeout-minutes: 32")
+    );
+    assert!(
+        timeout_line(&preview_default_yaml, "preview-recovery", None)
+            .contains("timeout-minutes: 22")
+    );
 
     let mut preview = preview_default.clone();
     preview.publication_timeout_minutes = JobTimeout::new(15).expect("bounded timeout");
     let preview_yaml = render_consumer_preview(&preview).expect("preview").bytes;
-    for (name, next) in [
-        ("preview-eligibility", Some("preview-payload")),
-        ("preview-publisher", None),
-        ("preview-recovery", None),
-    ] {
-        assert!(timeout_line(&preview_yaml, name, next).contains("timeout-minutes: 15"));
-    }
+    assert!(
+        timeout_line(
+            &preview_yaml,
+            "preview-eligibility",
+            Some("preview-payload")
+        )
+        .contains("timeout-minutes: 15")
+    );
+    assert!(timeout_line(&preview_yaml, "preview-publisher", None).contains("timeout-minutes: 42"));
+    assert!(timeout_line(&preview_yaml, "preview-recovery", None).contains("timeout-minutes: 32"));
     for (name, next) in [
         ("preview-signer", Some("preview-publisher")),
         ("preview-tap-prepare", Some("preview-tap-writer")),
@@ -108,22 +117,30 @@ fn publication_timeout_only_extends_stable_shared_publish_recovery_jobs() {
     for (name, next) in [
         ("stable-eligibility", Some("stable-prepare")),
         ("stable-signer", Some("stable-publisher")),
-        ("stable-publisher", Some("stable-recovery")),
-        ("stable-recovery", None),
     ] {
         assert!(timeout_line(&stable_default_yaml, name, next).contains("timeout-minutes: 5"));
     }
+    assert!(
+        timeout_line(
+            &stable_default_yaml,
+            "stable-publisher",
+            Some("stable-recovery")
+        )
+        .contains("timeout-minutes: 32")
+    );
+    assert!(
+        timeout_line(&stable_default_yaml, "stable-recovery", None).contains("timeout-minutes: 22")
+    );
     let mut stable = stable_default;
     stable.publication_timeout_minutes = JobTimeout::new(15).expect("bounded timeout");
     let stable_yaml = render_consumer_binary_release(&stable)
         .expect("stable")
         .bytes;
-    for (name, next) in [
-        ("stable-publisher", Some("stable-recovery")),
-        ("stable-recovery", None),
-    ] {
-        assert!(timeout_line(&stable_yaml, name, next).contains("timeout-minutes: 15"));
-    }
+    assert!(
+        timeout_line(&stable_yaml, "stable-publisher", Some("stable-recovery"))
+            .contains("timeout-minutes: 42")
+    );
+    assert!(timeout_line(&stable_yaml, "stable-recovery", None).contains("timeout-minutes: 32"));
     for (name, next) in [
         ("stable-eligibility", Some("stable-prepare")),
         ("stable-signer", Some("stable-publisher")),

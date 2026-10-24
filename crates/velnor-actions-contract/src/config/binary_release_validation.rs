@@ -70,6 +70,13 @@ impl RustBinaryReleaseConfig {
             file,
             "stacks.rust.binary_release.publication_timeout_minutes",
         )?;
+        if self.publication_timeout_minutes.minutes() > super::MAX_PUBLICATION_RUNTIME_MINUTES {
+            return Err(config_error(
+                file,
+                "stacks.rust.binary_release.publication_timeout_minutes",
+                "publication_budget_exceeds_job_limit",
+            ));
+        }
         self.validate_channels(file)?;
         self.producer.validate(file, required)?;
         inventory::validate_inventory(file, self)?;

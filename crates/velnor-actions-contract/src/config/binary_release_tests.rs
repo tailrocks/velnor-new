@@ -68,7 +68,7 @@ fn publication_timeout_defaults_to_five_and_accepts_bounded_explicit_values() {
     let omitted = serde_json::from_value::<RustBinaryReleaseConfig>(omitted)
         .expect("default publication timeout");
     assert_eq!(omitted.publication_timeout_minutes.minutes(), 5);
-    for minutes in [1, 5, 15, 360] {
+    for minutes in [1, 5, 15, 333] {
         let mut configured = value.clone();
         configured["publication_timeout_minutes"] = serde_json::json!(minutes);
         let config = serde_json::from_value::<RustBinaryReleaseConfig>(configured)
@@ -81,7 +81,7 @@ fn publication_timeout_defaults_to_five_and_accepts_bounded_explicit_values() {
 #[test]
 fn publication_timeout_rechecks_serde_bypassed_values_and_rejects_bad_shapes() {
     let value = serde_json::to_value(enabled_preview()).expect("release config");
-    for minutes in [0, 361] {
+    for minutes in [0, 334, 360, 361] {
         let mut configured = value.clone();
         configured["publication_timeout_minutes"] = serde_json::json!(minutes);
         let config = serde_json::from_value::<RustBinaryReleaseConfig>(configured)
