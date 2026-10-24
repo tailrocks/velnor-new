@@ -82,13 +82,16 @@ pub(in crate::schema2) fn setup(setup: &MiseSetup) -> Yaml {
 }
 
 pub(in crate::schema2) fn script(name: &str, id: &str, run: &str, env: &[(&str, &str)]) -> Yaml {
-    Yaml::Map(vec![
+    let mut fields = vec![
         ("name".to_owned(), Yaml::str(name)),
         ("id".to_owned(), Yaml::str(id)),
         ("shell".to_owned(), Yaml::str("bash")),
-        ("env".to_owned(), permissions(env)),
-        ("run".to_owned(), Yaml::str(run)),
-    ])
+    ];
+    if !env.is_empty() {
+        fields.push(("env".to_owned(), permissions(env)));
+    }
+    fields.push(("run".to_owned(), Yaml::str(run)));
+    Yaml::Map(fields)
 }
 
 pub(in crate::schema2) fn checkout(spec: &ConsumerReleaseSpec, source_ref: &str) -> Yaml {
@@ -168,10 +171,13 @@ pub(in crate::schema2) fn operation(
     );
     let run = source_operation_script(op, run);
     let mut step = script("Execute native release operation", "release", &run, &[]);
-    if let Yaml::Map(fields) = &mut step
-        && let Some((_, env)) = fields.iter_mut().find(|(key, _)| key == "env")
-    {
-        *env = environment;
+    if let Yaml::Map(fields) = &mut step {
+        let Some(run_index) = fields.iter().position(|(key, _)| key == "run") else {
+            return Err(RenderError::InvalidWorkflow(
+                "operation_run_step_missing".to_owned(),
+            ));
+        };
+        fields.insert(run_index, ("env".to_owned(), environment));
     }
     Ok(step)
 }
