@@ -178,7 +178,9 @@ fn channel_bindings(
         }
     }
     if spec.policy.channel == PackageReleaseChannel::Stable {
-        push(env, "VELNOR_STABLE_OPERATION", "${{ inputs.operation }}");
+        if !matches!(context, TapInvocationContext::StableReconcile) {
+            push(env, "VELNOR_STABLE_OPERATION", "${{ inputs.operation }}");
+        }
         let stable = spec
             .stable
             .as_ref()

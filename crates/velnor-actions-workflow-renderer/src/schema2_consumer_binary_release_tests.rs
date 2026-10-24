@@ -294,3 +294,43 @@ fn stable_shares_bounded_production_and_channel_specific_tap_destinations() {
     spec.stable.as_mut().expect("stable").release_plz_argv[0] = "bash".to_owned();
     assert!(render_consumer_binary_release(&spec).is_err());
 }
+
+#[test]
+fn stable_tap_reconciliation_is_valid_without_dispatch_inputs() {
+    use velnor_actions_contract::config::HomebrewTapDestination;
+
+    let mut spec = stable();
+    let mut tap = super::with_tap().homebrew_tap.expect("tap policy");
+    tap.policy.destinations.stable = Some(HomebrewTapDestination {
+        formula: "Formula/scanner.rb".to_owned(),
+    });
+    tap.policy
+        .updater
+        .inputs
+        .push("Formula/scanner.rb".to_owned());
+    spec.homebrew_tap = Some(tap);
+
+    let rendered = render_release_tap_reconcile(&spec).expect("stable reconciliation workflow");
+    assert_eq!(rendered.path, ".github/workflows/stable-tap-reconcile.yml");
+    assert!(!rendered.bytes.contains("inputs."), "{}", rendered.bytes);
+    assert!(!rendered.bytes.contains("env: {}"), "{}", rendered.bytes);
+    assert!(
+        rendered
+            .bytes
+            .contains("VELNOR_STABLE_VERSION_PACKAGE: scanner")
+    );
+    assert!(!rendered.bytes.contains("VELNOR_STABLE_OPERATION:"));
+    for operation in [
+        "admit-homebrew-tap-v1",
+        "prepare-homebrew-tap-v1",
+        "write-homebrew-tap-pr-v1",
+        "merge-homebrew-tap-pr-v1",
+    ] {
+        assert!(rendered.bytes.contains(operation), "missing {operation}");
+    }
+
+    let stable_release = render_consumer_binary_release(&spec)
+        .expect("stable publisher")
+        .bytes;
+    assert!(stable_release.contains("VELNOR_STABLE_OPERATION: ${{ inputs.operation }}"));
+}

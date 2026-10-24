@@ -10,11 +10,11 @@ autotests = false
 test-render-capture = []
 
 [dependencies]
-velnor-actions-actionlint = { version = "=0.1.49", path = "../velnor-actions-actionlint" }
-velnor-actions-contract = { version = "=0.1.49", path = "../velnor-actions-contract" }
+velnor-actions-actionlint = { version = "=0.1.50", path = "../velnor-actions-actionlint" }
+velnor-actions-contract = { version = "=0.1.50", path = "../velnor-actions-contract" }
 
 [dev-dependencies]
-velnor-actions-mise = { version = "=0.1.49", path = "../velnor-actions-mise" }
+velnor-actions-mise = { version = "=0.1.50", path = "../velnor-actions-mise" }
 
 [lints]
 workspace = true
