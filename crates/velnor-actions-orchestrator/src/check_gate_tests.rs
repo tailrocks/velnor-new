@@ -4,6 +4,7 @@ use super::{
     single_task_aggregate, terminal_task_report, write_entry_reports, write_task_report_to,
 };
 use crate::check_evidence::{gate::execution_receipt, verify_evidence};
+use crate::{MergeContext, merge_internal_with_context};
 use std::collections::BTreeMap;
 use std::fs;
 use velnor_actions_contract::config::{
@@ -171,7 +172,10 @@ fn assembled(temp: &tempfile::TempDir) -> String {
     .expect("assemble")
 }
 fn verdict(request: &str) -> FinalReport {
-    serde_json::from_str(&crate::merge_internal(request).expect("merge")).expect("final report")
+    serde_json::from_str(
+        &merge_internal_with_context(request, &MergeContext::detached()).expect("merge"),
+    )
+    .expect("final report")
 }
 fn artifact(temp: &tempfile::TempDir, plan: &Plan, name: &str) -> std::path::PathBuf {
     let entry = &plan.matrix.include[0];
@@ -185,6 +189,26 @@ fn artifact(temp: &tempfile::TempDir, plan: &Plan, name: &str) -> std::path::Pat
 fn genuine_receipt_and_scenario_bytes_pass_assembled_final_gate() {
     let (temp, _) = staged(true);
     assert_eq!(verdict(&assembled(&temp)).status, FinalStatus::Passed);
+}
+
+#[test]
+fn detached_merge_passes_plain_request_but_required_workspace_rejects_wrong_root() {
+    let (temp, _) = staged(true);
+    let request = assembled(&temp);
+    let detached: FinalReport = serde_json::from_str(
+        &merge_internal_with_context(&request, &MergeContext::detached()).expect("detached merge"),
+    )
+    .expect("detached final report");
+    let required_workspace: FinalReport = serde_json::from_str(
+        &merge_internal_with_context(
+            &request,
+            &MergeContext::required_workspace(Some(temp.path().to_path_buf())),
+        )
+        .expect("workspace merge"),
+    )
+    .expect("workspace final report");
+    assert_eq!(detached.status, FinalStatus::Passed);
+    assert_eq!(required_workspace.status, FinalStatus::PlanningFailed);
 }
 #[test]
 fn missing_qualified_observation_transport_fails_final_gate() {

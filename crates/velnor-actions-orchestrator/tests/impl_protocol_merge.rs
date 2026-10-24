@@ -5,12 +5,12 @@ use std::fs;
 use tempfile::TempDir;
 use velnor_actions_contract::canonical_json_str;
 use velnor_actions_orchestrator::{
-    assemble_merge_request, merge_internal, merge_passed, plan_internal, publish_plan_files,
+    assemble_merge_request, merge_passed, plan_internal, publish_plan_files,
 };
 
 use crate::impl_common::{
-    TestResult, config_with_branch, err_of, git, git_line, make_repo, passing_reports,
-    plan_for_source_change,
+    TestResult, config_with_branch, err_of, git, git_line, make_repo, merge_fixture,
+    passing_reports, plan_for_source_change,
 };
 use crate::impl_merge::task_reports_for;
 
@@ -70,7 +70,7 @@ fn merge_assembled_request_roundtrips_to_passed() -> TestResult {
     value["assembly_errors"] = serde_json::json!([]);
     value["actual_event"] = value["plan"]["event"].clone();
     let final_report: velnor_actions_contract::FinalReport =
-        serde_json::from_str(&merge_internal(&value.to_string())?)?;
+        serde_json::from_str(&merge_fixture(&value.to_string())?)?;
     assert_eq!(
         final_report.status,
         velnor_actions_contract::FinalStatus::Passed
@@ -91,7 +91,7 @@ fn merge_assembly_nulls_missing_plan_to_planning_failed() -> TestResult {
         "gaps recorded: {request}"
     );
     let final_report: velnor_actions_contract::FinalReport =
-        serde_json::from_str(&merge_internal(&request)?)?;
+        serde_json::from_str(&merge_fixture(&request)?)?;
     final_report.validate()?;
     assert_eq!(
         final_report.status,

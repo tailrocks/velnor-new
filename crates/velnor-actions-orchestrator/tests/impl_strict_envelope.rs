@@ -1,8 +1,8 @@
 //! Request-envelope strictness: `plan-v1`/`merge-v1` reject duplicate keys.
 
-use velnor_actions_orchestrator::{merge_internal, plan_internal};
+use velnor_actions_orchestrator::plan_internal;
 
-use crate::impl_common::{TestResult, err_of};
+use crate::impl_common::{TestResult, err_of, merge_fixture};
 
 #[test]
 fn plan_envelope_rejects_duplicate_keys() -> TestResult {
@@ -37,23 +37,23 @@ fn plan_envelope_rejects_duplicate_keys() -> TestResult {
 #[test]
 fn merge_envelope_rejects_duplicate_keys() -> TestResult {
     let dup = r#"{"schema":1,"run_key":"local","matrix_reports":[],"required_job_ids":[],"required_jobs":[],"schema":1}"#;
-    let err = err_of(merge_internal(dup), "dup merge envelope")?;
+    let err = err_of(merge_fixture(dup), "dup merge envelope")?;
     assert!(
         err.to_string().contains("duplicate_key:schema"),
         "got {err}"
     );
     let nested = r#"{"schema":1,"run_key":"local","matrix_reports":[],"required_job_ids":[],"required_jobs":[],"plan":{"run_key":"local","run_key":"other"}}"#;
-    let err = err_of(merge_internal(nested), "nested dup merge envelope")?;
+    let err = err_of(merge_fixture(nested), "nested dup merge envelope")?;
     assert!(
         err.to_string().contains("duplicate_key:run_key"),
         "got {err}"
     );
-    let err = err_of(merge_internal(r#"{"schema":1}"#), "short merge")?;
+    let err = err_of(merge_fixture(r#"{"schema":1}"#), "short merge")?;
     assert!(
         err.to_string().contains("malformed_request"),
         "typed decode still enforced: {err}"
     );
-    let merged = merge_internal(
+    let merged = merge_fixture(
         r#"{"schema":1,"run_key":"local","matrix_reports":[],"required_job_ids":[],"required_jobs":[]}"#,
     )?;
     assert!(
