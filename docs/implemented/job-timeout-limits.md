@@ -119,14 +119,18 @@ blocking kernel operations or propagate implicitly to new threads. See the
 
 Consumer preview eligibility and preview/stable publisher and recovery jobs use
 `[stacks.rust.binary_release] publication_timeout_minutes` (default `5`, bounded
-`1..=360`). Publisher and recovery native operations also receive this literal
+`1..=333`). The general `JobTimeout` contract remains `1..=360`; this stricter
+limit leaves room for the publisher's declared preparation-step caps and one
+minute of cleanup headroom. Publisher and recovery job timeouts sum their actual
+pre-operation step caps, the configured native deadline, and that headroom.
+Publisher and recovery native operations also receive the configured literal
 budget. One absolute clock covers the full transaction and retained signed
 custody; neither upload iterations nor readback refresh it. Separate admission
 and archive subscopes stay at five minutes, individual HTTP requests stay at 90
 seconds, and a shorter enclosing deadline still wins. The value does not change
 signed release policy, producer or signer budgets, or publication authority.
-Setup and downloads already consume outer job time, so the entire native budget
-is not guaranteed to remain available. See
+A preparation step can consume time that otherwise remained before the native
+deadline starts; see
 [consumer publication budgets](consumer-publication-job-budgets.md) for the
 hosted failures and recovery-identity qualification.
 
