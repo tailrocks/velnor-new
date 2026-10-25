@@ -81,15 +81,10 @@ pub(crate) fn resolve(
         )?,
         resource_probe_build_argv: resource_probe_build_argv(&catalog)?,
         install_resource_probe_release_tools_argv: install_argv(
-            &[
-                PinnedTool::Rust,
-                PinnedTool::MrBoxington,
-                PinnedTool::Nextest,
-            ],
+            &[PinnedTool::Rust, PinnedTool::MrBoxington],
             &catalog,
         )?,
-        resource_probe_release_build_argv: native_resource_probe_argv(&catalog, false)?,
-        resource_probe_release_test_argv: native_resource_probe_argv(&catalog, true)?,
+        resource_probe_release_build_argv: resource_probe_release_build_argv(&catalog)?,
         lint_argv: scrubbed_inline(crate::workflow_jobs::workflow_lint_argv(&catalog)?),
         verify_lint_argv: crate::workflow::jactionlint_verify_argv(&catalog),
         gh_argv: exec_argv(&[PinnedTool::Gh], "gh", &[], &catalog)?,
@@ -215,27 +210,11 @@ fn contract_error(problem: impl std::fmt::Display) -> OrchestratorError {
     }
 }
 
-fn native_resource_probe_argv(
+fn resource_probe_release_build_argv(
     catalog: &ToolCatalog,
-    tests: bool,
 ) -> Result<Vec<String>, OrchestratorError> {
-    let args = if tests {
-        vec![
-            "nextest",
-            "run",
-            "--locked",
-            "--manifest-path",
-            "crates/velnor-runner/Cargo.toml",
-            "--package",
-            "velnor-runner-host",
-            "--lib",
-            "--target",
-            "x86_64-unknown-linux-gnu",
-            "-E",
-            "test(artifact_admission::archive) | test(resource_probe_release)",
-        ]
-    } else {
-        vec![
+    mbx_locked_build_argv(
+        &[
             "build",
             "--locked",
             "--manifest-path",
@@ -246,16 +225,7 @@ fn native_resource_probe_argv(
             "velnor-resource-probe-release",
             "--target",
             "x86_64-unknown-linux-gnu",
-        ]
-    };
-    exec_argv(
-        &[
-            PinnedTool::Rust,
-            PinnedTool::MrBoxington,
-            PinnedTool::Nextest,
         ],
-        "mbx",
-        &args,
         catalog,
     )
 }

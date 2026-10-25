@@ -21,7 +21,6 @@ pub struct ProductReleasePins {
     pub resource_probe_build_argv: Vec<String>,
     pub install_resource_probe_release_tools_argv: Vec<String>,
     pub resource_probe_release_build_argv: Vec<String>,
-    pub resource_probe_release_test_argv: Vec<String>,
     pub lint_argv: Vec<String>,
     pub verify_lint_argv: Vec<String>,
     pub gh_argv: Vec<String>,

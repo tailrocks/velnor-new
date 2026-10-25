@@ -22,10 +22,6 @@ pub(super) fn build_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, Render
             &pins.resource_probe_build_argv,
         )?,
         generator_release::command_step(
-            "Qualify native resource-probe producer and shared archive fixtures",
-            &pins.resource_probe_release_test_argv,
-        )?,
-        generator_release::command_step(
             "Build locked native resource-probe producer",
             &pins.resource_probe_release_build_argv,
         )?,

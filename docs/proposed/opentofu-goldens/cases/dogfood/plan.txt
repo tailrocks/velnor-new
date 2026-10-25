@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.54
+Velnor Actions plan 0.1.55
 Repository: <repo>
 
 Detected stacks
@@ -7,25 +7,25 @@ Detected stacks
     evidence: mise-tool:opentofu
   Mise check maintenance-helpers: test-maintenance-helpers (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
   Workspace crates: 20
-    - velnor-actions-actionlint (crates/velnor-actions-actionlint/Cargo.toml) [lib, test; depends on velnor-actions-contract]
-    - velnor-actions-ansible (crates/velnor-actions-ansible/Cargo.toml) [lib, test; depends on velnor-actions-contract]
-    - velnor-actions-bun (crates/velnor-actions-bun/Cargo.toml) [lib, test; depends on velnor-actions-contract]
-    - velnor-actions-cli (crates/velnor-actions-cli/Cargo.toml) [bin, test; depends on velnor-actions-freshness, velnor-actions-orchestrator]
-    - velnor-actions-contract (crates/velnor-actions-contract/Cargo.toml) [lib, test]
-    - velnor-actions-dbt (crates/velnor-actions-dbt/Cargo.toml) [lib, test; depends on velnor-actions-contract]
-    - velnor-actions-freshness (crates/velnor-actions-freshness/Cargo.toml) [lib, test]
-    - velnor-actions-gradle (crates/velnor-actions-gradle/Cargo.toml) [lib, test]
-    - velnor-actions-mise (crates/velnor-actions-mise/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-tofu]
+    - velnor-actions-actionlint (crates/velnor-actions-actionlint/Cargo.toml) [lib; depends on velnor-actions-contract]
+    - velnor-actions-ansible (crates/velnor-actions-ansible/Cargo.toml) [lib; depends on velnor-actions-contract]
+    - velnor-actions-bun (crates/velnor-actions-bun/Cargo.toml) [lib; depends on velnor-actions-contract]
+    - velnor-actions-cli (crates/velnor-actions-cli/Cargo.toml) [bin; depends on velnor-actions-freshness, velnor-actions-orchestrator]
+    - velnor-actions-contract (crates/velnor-actions-contract/Cargo.toml) [lib]
+    - velnor-actions-dbt (crates/velnor-actions-dbt/Cargo.toml) [lib; depends on velnor-actions-contract]
+    - velnor-actions-freshness (crates/velnor-actions-freshness/Cargo.toml) [lib]
+    - velnor-actions-gradle (crates/velnor-actions-gradle/Cargo.toml) [lib]
+    - velnor-actions-mise (crates/velnor-actions-mise/Cargo.toml) [lib; depends on velnor-actions-contract, velnor-actions-tofu]
     - velnor-actions-orchestrator (crates/velnor-actions-orchestrator/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-ansible, velnor-actions-bun, velnor-actions-contract, velnor-actions-dbt, velnor-actions-gradle, velnor-actions-mise, velnor-actions-rust, velnor-actions-tofu, velnor-actions-workflow-renderer, velnor-archive-guard]
-    - velnor-actions-rust (crates/velnor-actions-rust/Cargo.toml) [lib, test; depends on velnor-actions-contract]
-    - velnor-actions-tofu (crates/velnor-actions-tofu/Cargo.toml) [lib, test; depends on velnor-actions-contract]
-    - velnor-actions-workflow-renderer (crates/velnor-actions-workflow-renderer/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-contract, velnor-actions-mise]
-    - velnor-archive-guard (crates/velnor-archive-guard/Cargo.toml) [bin, lib, test]
+    - velnor-actions-rust (crates/velnor-actions-rust/Cargo.toml) [lib; depends on velnor-actions-contract]
+    - velnor-actions-tofu (crates/velnor-actions-tofu/Cargo.toml) [lib; depends on velnor-actions-contract]
+    - velnor-actions-workflow-renderer (crates/velnor-actions-workflow-renderer/Cargo.toml) [lib; depends on velnor-actions-actionlint, velnor-actions-contract, velnor-actions-mise]
+    - velnor-archive-guard (crates/velnor-archive-guard/Cargo.toml) [bin, lib]
     - velnor-resource-probe (crates/velnor-runner/crates/velnor-resource-probe/Cargo.toml) [bin, lib]
-    - velnor-runner-attestation (crates/velnor-runner/crates/velnor-runner-attestation/Cargo.toml) [bin, test]
-    - velnor-runner-cli (crates/velnor-runner/crates/velnor-runner-cli/Cargo.toml) [bin, lib, test; depends on velnor-runner-core, velnor-runner-host]
-    - velnor-runner-core (crates/velnor-runner/crates/velnor-runner-core/Cargo.toml) [lib, test]
-    - velnor-runner-github (crates/velnor-runner/crates/velnor-runner-github/Cargo.toml) [lib, test; depends on velnor-runner-core]
+    - velnor-runner-attestation (crates/velnor-runner/crates/velnor-runner-attestation/Cargo.toml) [bin]
+    - velnor-runner-cli (crates/velnor-runner/crates/velnor-runner-cli/Cargo.toml) [bin, lib; depends on velnor-runner-core, velnor-runner-host]
+    - velnor-runner-core (crates/velnor-runner/crates/velnor-runner-core/Cargo.toml) [lib]
+    - velnor-runner-github (crates/velnor-runner/crates/velnor-runner-github/Cargo.toml) [lib; depends on velnor-runner-core]
     - velnor-runner-host (crates/velnor-runner/crates/velnor-runner-host/Cargo.toml) [bin, example, lib; depends on velnor-runner-core, velnor-runner-github]
   Profile .: mbx compile driver (declared), cargo_nextest test runner (declared)
   Nextest profile .: ci (.config/nextest.toml)
@@ -37,7 +37,7 @@ Detected stacks
   Nextest profile crates/velnor-runner: ci (crates/velnor-runner/.config/nextest.toml)
     evidence .config/nextest.toml:4 [profile.ci] [durable]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
-    evidence crates/velnor-runner/.config/nextest.toml:3 [profile.ci] [durable]
+    evidence crates/velnor-runner/.config/nextest.toml:1 [profile.ci] [durable]
     evidence mise.toml:16 ], mr_boxington = true } [durable]
     evidence mise.toml:40 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
 
@@ -60,24 +60,24 @@ Workflow to generate
     - plan (28 steps)
     - required (14 steps)
     - required-gate (1 steps)
-    - rust-velnor-actions-actionlint (29 steps)
-    - rust-velnor-actions-ansible (28 steps)
-    - rust-velnor-actions-bun (28 steps)
-    - rust-velnor-actions-cli (30 steps)
-    - rust-velnor-actions-contract (28 steps)
-    - rust-velnor-actions-dbt (28 steps)
-    - rust-velnor-actions-gradle (28 steps)
-    - rust-velnor-actions-mise (29 steps)
+    - rust-velnor-actions-actionlint (28 steps)
+    - rust-velnor-actions-ansible (27 steps)
+    - rust-velnor-actions-bun (27 steps)
+    - rust-velnor-actions-cli (29 steps)
+    - rust-velnor-actions-contract (27 steps)
+    - rust-velnor-actions-dbt (27 steps)
+    - rust-velnor-actions-gradle (27 steps)
+    - rust-velnor-actions-mise (28 steps)
     - rust-velnor-actions-orchestrator (30 steps)
-    - rust-velnor-actions-rust (28 steps)
-    - rust-velnor-actions-tofu (28 steps)
-    - rust-velnor-actions-workflow-renderer (28 steps)
-    - rust-velnor-resource-probe (28 steps)
-    - rust-velnor-runner-attestation (27 steps)
-    - rust-velnor-runner-cli (28 steps)
-    - rust-velnor-runner-core (28 steps)
-    - rust-velnor-runner-github (28 steps)
-    - rust-velnor-runner-host (28 steps)
+    - rust-velnor-actions-rust (27 steps)
+    - rust-velnor-actions-tofu (27 steps)
+    - rust-velnor-actions-workflow-renderer (27 steps)
+    - rust-velnor-resource-probe (27 steps)
+    - rust-velnor-runner-attestation (26 steps)
+    - rust-velnor-runner-cli (27 steps)
+    - rust-velnor-runner-core (27 steps)
+    - rust-velnor-runner-github (27 steps)
+    - rust-velnor-runner-host (27 steps)
     - 18 Rust crate jobs
       Timeout: 15 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check
@@ -106,48 +106,40 @@ Workflow to generate
         - stack/rust/crates/velnor-actions-actionlint/doc/default
         - stack/rust/crates/velnor-actions-actionlint/doctest/default
         - stack/rust/crates/velnor-actions-actionlint/fmt/default
-        - stack/rust/crates/velnor-actions-actionlint/nextest/default
         - stack/rust/crates/velnor-actions-ansible/build/default
         - stack/rust/crates/velnor-actions-ansible/clippy/default
         - stack/rust/crates/velnor-actions-ansible/doc/default
         - stack/rust/crates/velnor-actions-ansible/doctest/default
         - stack/rust/crates/velnor-actions-ansible/fmt/default
-        - stack/rust/crates/velnor-actions-ansible/nextest/default
         - stack/rust/crates/velnor-actions-bun/build/default
         - stack/rust/crates/velnor-actions-bun/clippy/default
         - stack/rust/crates/velnor-actions-bun/doc/default
         - stack/rust/crates/velnor-actions-bun/doctest/default
         - stack/rust/crates/velnor-actions-bun/fmt/default
-        - stack/rust/crates/velnor-actions-bun/nextest/default
         - stack/rust/crates/velnor-actions-cli/build/default
         - stack/rust/crates/velnor-actions-cli/clippy/default
         - stack/rust/crates/velnor-actions-cli/doc/default
         - stack/rust/crates/velnor-actions-cli/fmt/default
-        - stack/rust/crates/velnor-actions-cli/nextest/default
         - stack/rust/crates/velnor-actions-contract/build/default
         - stack/rust/crates/velnor-actions-contract/clippy/default
         - stack/rust/crates/velnor-actions-contract/doc/default
         - stack/rust/crates/velnor-actions-contract/doctest/default
         - stack/rust/crates/velnor-actions-contract/fmt/default
-        - stack/rust/crates/velnor-actions-contract/nextest/default
         - stack/rust/crates/velnor-actions-dbt/build/default
         - stack/rust/crates/velnor-actions-dbt/clippy/default
         - stack/rust/crates/velnor-actions-dbt/doc/default
         - stack/rust/crates/velnor-actions-dbt/doctest/default
         - stack/rust/crates/velnor-actions-dbt/fmt/default
-        - stack/rust/crates/velnor-actions-dbt/nextest/default
         - stack/rust/crates/velnor-actions-gradle/build/default
         - stack/rust/crates/velnor-actions-gradle/clippy/default
         - stack/rust/crates/velnor-actions-gradle/doc/default
         - stack/rust/crates/velnor-actions-gradle/doctest/default
         - stack/rust/crates/velnor-actions-gradle/fmt/default
-        - stack/rust/crates/velnor-actions-gradle/nextest/default
         - stack/rust/crates/velnor-actions-mise/build/default
         - stack/rust/crates/velnor-actions-mise/clippy/default
         - stack/rust/crates/velnor-actions-mise/doc/default
         - stack/rust/crates/velnor-actions-mise/doctest/default
         - stack/rust/crates/velnor-actions-mise/fmt/default
-        - stack/rust/crates/velnor-actions-mise/nextest/default
         - stack/rust/crates/velnor-actions-orchestrator/build/default
         - stack/rust/crates/velnor-actions-orchestrator/clippy/default
         - stack/rust/crates/velnor-actions-orchestrator/doc/default
@@ -159,56 +151,47 @@ Workflow to generate
         - stack/rust/crates/velnor-actions-rust/doc/default
         - stack/rust/crates/velnor-actions-rust/doctest/default
         - stack/rust/crates/velnor-actions-rust/fmt/default
-        - stack/rust/crates/velnor-actions-rust/nextest/default
         - stack/rust/crates/velnor-actions-tofu/build/default
         - stack/rust/crates/velnor-actions-tofu/clippy/default
         - stack/rust/crates/velnor-actions-tofu/doc/default
         - stack/rust/crates/velnor-actions-tofu/doctest/default
         - stack/rust/crates/velnor-actions-tofu/fmt/default
-        - stack/rust/crates/velnor-actions-tofu/nextest/default
         - stack/rust/crates/velnor-actions-workflow-renderer/build/default
         - stack/rust/crates/velnor-actions-workflow-renderer/clippy/default
         - stack/rust/crates/velnor-actions-workflow-renderer/doc/default
         - stack/rust/crates/velnor-actions-workflow-renderer/doctest/default
         - stack/rust/crates/velnor-actions-workflow-renderer/fmt/default
-        - stack/rust/crates/velnor-actions-workflow-renderer/nextest/default
         - stack/rust/crates/velnor-runner/crates/velnor-resource-probe/build/default
         - stack/rust/crates/velnor-runner/crates/velnor-resource-probe/clippy/default
         - stack/rust/crates/velnor-runner/crates/velnor-resource-probe/doc/default
         - stack/rust/crates/velnor-runner/crates/velnor-resource-probe/doctest/default
         - stack/rust/crates/velnor-runner/crates/velnor-resource-probe/fmt/default
-        - stack/rust/crates/velnor-runner/crates/velnor-resource-probe/nextest/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/build/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/clippy/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/doc/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/fmt/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/nextest/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/build/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/clippy/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/doc/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/doctest/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/fmt/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/nextest/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-core/build/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-core/clippy/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-core/doc/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-core/doctest/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-core/fmt/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-core/nextest/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-github/build/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-github/clippy/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-github/doc/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-github/doctest/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-github/fmt/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-github/nextest/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/build/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/clippy/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/doc/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/doctest/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/fmt/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-host/nextest/default
   Parallel: 18 execution jobs; dependencies preserved; no matrix fan-out
-  Critical path: stack/rust/crates/velnor-actions-actionlint/build/default -> stack/rust/crates/velnor-actions-actionlint/nextest/default (2 tasks)
+  Critical path: stack/rust/crates/velnor-actions-orchestrator/build/default -> stack/rust/crates/velnor-actions-orchestrator/nextest/default (2 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources, MBX compilation objects
   Jactionlint: 2.3.0 pinned, profile default
@@ -221,8 +204,25 @@ Workflow to generate
     - asamarts/alint@265d9fdc720bb8f59d00b87e33e4149869f77327
     - jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e
     - jdx/mr-boxington-action@47ce49b32025d93a7a2f4570815afaa2b7092240
+  Ineligible: stack/rust/crates/velnor-actions-actionlint/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-actions-ansible/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-actions-bun/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-actions-cli/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-actions-cli/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-actions-contract/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-actions-dbt/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-actions-gradle/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-actions-mise/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-actions-rust/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-actions-tofu/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-actions-workflow-renderer/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-runner/crates/velnor-resource-probe/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-cli/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-core/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-github/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-host/nextest/default has no test targets; no test command emitted
   Pull-request execution narrows crate obligations through its event-time affected-work plan.
 
 Required-check migration
