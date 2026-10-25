@@ -15,7 +15,7 @@ pub(super) async fn migrate_v39_to_v40(conn: &turso::Connection) -> Result<(), H
     conn.execute("PRAGMA user_version=40", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    super::super::validate_persisted_schema(conn).await?;
+    super::super::validate_persisted_schema_v40(conn).await?;
     Ok(())
 }
 

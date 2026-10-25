@@ -138,7 +138,7 @@ async fn create_burst_scope(
     Ok(scope)
 }
 
-async fn provision_burst_request(
+pub(crate) async fn provision_burst_request(
     scope: &ConnectionJournal,
     request_id: i64,
     nonce: char,
@@ -213,6 +213,31 @@ async fn provision_burst_request(
         },
     )
     .await
+}
+
+pub(crate) async fn provision_burst_ready_candidate(
+    scope: &ConnectionJournal,
+    binding: &RepositoryConnection,
+    request_id: i64,
+    nonce: char,
+    runner_id: i64,
+    scale_set_id: i64,
+) -> Result<(helpers::JobFactsReaderFixture, RunnerReference), HostError> {
+    let initialized = provision_burst_request(scope, request_id, nonce).await?;
+    let runner = RunnerReference {
+        id: runner_id,
+        name: helpers::runner_name(nonce),
+        runner_scale_set_id: scale_set_id,
+    };
+    helpers::finish_initialized_listener_delivery(
+        scope,
+        binding,
+        &initialized,
+        &runner,
+        request_id,
+    )
+    .await?;
+    Ok((initialized, runner))
 }
 
 fn burst_admission(

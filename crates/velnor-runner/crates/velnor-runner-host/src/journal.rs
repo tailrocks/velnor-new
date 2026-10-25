@@ -56,6 +56,10 @@ pub(crate) use connection::NativeCompletionReservation;
 pub(crate) use connection::PreJitCleanupSettlementResult;
 pub(crate) use connection::TerminalReplayBinding;
 pub(crate) use connection::{
+    LocalWorkerExitDisposition, LocalWorkerExitKind, LocalWorkerExitObservation,
+    LocalWorkerHealthCandidate,
+};
+pub(crate) use connection::{
     PhysicalRunnerJitState, PhysicalRunnerOwnership, PhysicalRunnerReservation,
     ReadinessCapacityUsage, ReservationState,
 };

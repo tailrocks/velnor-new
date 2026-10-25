@@ -17,6 +17,7 @@ use crate::{
     launch_blocking::ListenFault,
 };
 
+use super::supervision::LocalWorkerHealthSupervisor;
 use super::{
     connection_poll::{ConnectionPollContext, poll_active_connections},
     setup,
@@ -29,6 +30,8 @@ mod doctor;
 mod readiness;
 #[path = "controller/startup.rs"]
 mod startup;
+#[path = "controller/worker_health.rs"]
+mod worker_health;
 
 pub(super) use startup::run_controller;
 
@@ -98,6 +101,7 @@ struct ControllerLoop<'a> {
     control_state: crate::controller_ipc::ControlState,
     connection_sessions: Vec<super::state::PreparedConnection>,
     pending_retirements: Vec<crate::config::RepositoryConnection>,
+    local_worker_health: LocalWorkerHealthSupervisor,
     doctor_worker: Option<DoctorProbeWorker>,
     _readiness_worker: readiness::ReadinessWorker,
     doctor_attempted_request_id: Option<i64>,
@@ -190,6 +194,7 @@ impl<'a> ControllerLoop<'a> {
             control_state,
             connection_sessions,
             pending_retirements,
+            local_worker_health: LocalWorkerHealthSupervisor::default(),
             doctor_worker: None,
             _readiness_worker: readiness_worker,
             doctor_attempted_request_id: None,
@@ -207,6 +212,7 @@ impl<'a> ControllerLoop<'a> {
             self.start_doctor_probe().await;
             self.refresh_storage_profile().await;
             self.refresh_config_and_retire().await?;
+            self.supervise_local_workers().await;
             Box::pin(self.poll_connections()).await;
         }
     }

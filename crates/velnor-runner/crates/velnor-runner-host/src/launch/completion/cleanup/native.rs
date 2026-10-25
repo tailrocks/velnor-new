@@ -5,6 +5,10 @@
 mod tests;
 
 #[cfg(test)]
+#[path = "native/worker_health_tests.rs"]
+mod worker_health_tests;
+
+#[cfg(test)]
 #[path = "native/diagnostics_tests.rs"]
 mod diagnostics_tests;
 

@@ -63,8 +63,9 @@ mod storage_root_backing;
 #[path = "schema/execution_publication/v30_migration_tests.rs"]
 mod v30_migration_tests;
 mod validation;
+mod worker_health;
 
-pub(super) const JOURNAL_VERSION: i64 = 40;
+pub(super) const JOURNAL_VERSION: i64 = 41;
 use current_columns::CURRENT_COLUMNS;
 pub(super) use validation::validate_persisted_schema_v35;
 
@@ -137,7 +138,7 @@ mod migration_driver_tests;
 pub(crate) mod historical_fixture;
 
 async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostError> {
-    validate_persisted_schema_v40(conn).await
+    validate_persisted_schema_v41(conn).await
 }
 
 mod legacy_validation;
@@ -149,6 +150,11 @@ pub(super) use legacy_validation::{
 };
 mod validation_v40;
 pub(super) use validation_v40::validate_persisted_schema_v40;
+
+async fn validate_persisted_schema_v41(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_persisted_schema_v40(conn).await?;
+    worker_health::validate(conn).await
+}
 
 async fn journal_version(conn: &turso::Connection) -> Result<i64, HostError> {
     let mut rows = conn

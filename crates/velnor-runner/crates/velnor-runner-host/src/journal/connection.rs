@@ -4,6 +4,10 @@ pub(crate) use reservation::JitConflictRecoveryClaim;
 #[cfg(test)]
 pub(crate) use reservation::ReservationSnapshot;
 pub(crate) use reservation::{
+    LocalWorkerExitDisposition, LocalWorkerExitKind, LocalWorkerExitObservation,
+    LocalWorkerHealthCandidate,
+};
+pub(crate) use reservation::{
     PhysicalRunnerJitState, PhysicalRunnerOwnership, PhysicalRunnerReservation,
     ReadinessCapacityUsage, ReservationState,
 };

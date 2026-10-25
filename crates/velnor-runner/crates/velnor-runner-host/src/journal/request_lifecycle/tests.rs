@@ -17,6 +17,7 @@ mod jit_conflict_receipt;
 #[path = "tests/native_started_fixture.rs"]
 mod native_started_fixture;
 pub(crate) use burst_fixture::add_twelve_completed_burst_rows;
+pub(crate) use burst_fixture::provision_burst_ready_candidate;
 pub(crate) use native_started_fixture::{
     native_started_intake_fixture, native_started_intake_fixture_with_filesystem_digest,
 };

@@ -62,6 +62,7 @@ fn migration_step(conn: &turso::Connection, version: i64) -> Result<MigrationSte
         37 => Box::pin(super::migration::from_version_thirty_seven(conn)),
         38 => Box::pin(super::migration::from_version_thirty_eight(conn)),
         39 => Box::pin(super::jit_conflict_settlement::migrate_v39_to_v40(conn)),
+        40 => Box::pin(super::worker_health::migrate_v40_to_v41(conn)),
         _ => return Err(HostError::Journal),
     };
     Ok(step)
@@ -69,7 +70,7 @@ fn migration_step(conn: &turso::Connection, version: i64) -> Result<MigrationSte
 
 pub(super) const fn expected_next_version(version: i64) -> Option<i64> {
     match version {
-        0..=8 | 10..=39 => Some(version + 1),
+        0..=8 | 10..=40 => Some(version + 1),
         9 => Some(11),
         _ => None,
     }

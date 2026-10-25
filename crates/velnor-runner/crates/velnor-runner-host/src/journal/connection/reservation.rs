@@ -8,6 +8,49 @@ mod limits;
 mod physical_attempt;
 pub(in crate::journal) mod post_jit_retirement;
 mod provisioning;
+mod worker_health;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LocalWorkerHealthCandidate {
+    connection_id: String,
+    scale_set_id: i64,
+    assignment: crate::journal::connection::AssignmentIdentity,
+    lineage_id: i64,
+    generation: i64,
+    reservation_id: i64,
+    intent_id: i64,
+    witness_request_id: i64,
+    physical_nonce: String,
+    binding_digest: String,
+    engine_id: String,
+    docker_root_digest: String,
+    runner_container_id: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LocalWorkerExitDisposition {
+    Recorded,
+    AlreadyRecorded,
+    IgnoredStale,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LocalWorkerExitKind {
+    Exited { exit_code: i32 },
+    Missing,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LocalWorkerExitObservation {
+    lineage_id: i64,
+    generation: i64,
+    reservation_id: i64,
+    intent_id: i64,
+    scale_set_id: i64,
+    runner_container_id: String,
+    kind: LocalWorkerExitKind,
+    observed_at_unix_ms: u64,
+}
 
 pub(crate) use jit_conflict::JitConflictRecoveryClaim;
 pub(in crate::journal::connection::reservation) use jit_conflict::{

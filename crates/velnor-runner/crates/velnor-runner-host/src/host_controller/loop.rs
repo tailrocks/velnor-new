@@ -21,6 +21,8 @@ mod state;
 #[cfg(test)]
 #[path = "loop/successor_recovery_tests.rs"]
 mod successor_recovery_tests;
+#[path = "loop/supervision.rs"]
+mod supervision;
 #[path = "loop/transitions.rs"]
 mod transitions;
 
@@ -36,6 +38,8 @@ pub(crate) use polling::PollKind;
 pub(crate) use setup::connection_pat;
 #[cfg(test)]
 pub(crate) use setup::{requested_header_capacity, requested_header_capacity_after};
+#[cfg(test)]
+pub(crate) use supervision::{LocalWorkerHealthSupervisor, supervise_local_worker_health};
 #[cfg(test)]
 pub(crate) use transitions::{TransitionEffects, apply_config_transition, retire_pending};
 

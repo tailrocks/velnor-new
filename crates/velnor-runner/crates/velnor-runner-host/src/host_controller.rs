@@ -13,8 +13,12 @@ mod retirement;
 #[path = "host_controller/retirement_tests.rs"]
 mod retirement_tests;
 
+#[cfg(test)]
+pub(crate) use loop_driver::LocalWorkerHealthSupervisor;
 pub(crate) use loop_driver::connection_pat;
 pub use loop_driver::run_host_blocking;
+#[cfg(test)]
+pub(crate) use loop_driver::supervise_local_worker_health;
 
 #[cfg(test)]
 #[path = "host_controller/tests.rs"]
