@@ -27,18 +27,21 @@ pub(super) fn read_archive(bytes: &[u8]) -> Result<BTreeMap<String, Vec<u8>>, Ho
         let entry = entry.map_err(|_| HostError::Identity)?;
         let path = entry.path().map_err(|_| HostError::Identity)?;
         let name = path.to_str().ok_or(HostError::Identity)?.to_owned();
-        if !names.insert(name.clone()) {
-            return Err(HostError::Identity);
-        }
         let kind = entry.header().entry_type();
         if kind.is_dir() {
-            if !matches!(name.as_str(), "blobs" | "blobs/sha256") || entry.size() != 0 {
+            let canonical_name = match name.as_str() {
+                "blobs" | "blobs/" => "blobs",
+                "blobs/sha256" | "blobs/sha256/" => "blobs/sha256",
+                _ => return Err(HostError::Identity),
+            };
+            if entry.size() != 0 || !names.insert(canonical_name.to_owned()) {
                 return Err(HostError::Identity);
             }
-            directories.insert(name);
+            directories.insert(canonical_name.to_owned());
             continue;
         }
-        if !kind.is_file()
+        if !names.insert(name.clone())
+            || !kind.is_file()
             || entry.size() > u64::try_from(MAX_MEMBER_BYTES).map_err(|_| HostError::Frame)?
             || !valid_file_path(&name)
         {

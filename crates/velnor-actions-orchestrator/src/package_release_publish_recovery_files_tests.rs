@@ -146,6 +146,55 @@ fn failed_owned_admission_removes_only_its_input_directory() {
 
 #[cfg(unix)]
 #[test]
+fn owned_input_canonicalizes_symlinked_ancestor_but_keeps_real_runner_leaf() {
+    let runner_root = tempfile::tempdir().expect("runner temp root");
+    let physical = runner_root.path().join("physical");
+    fs::create_dir(&physical).expect("physical ancestor");
+    let real_root_leaf = physical.join("velnor");
+    fs::create_dir(&real_root_leaf).expect("real runner root leaf");
+    let alias = runner_root.path().join("alias");
+    std::os::unix::fs::symlink(&physical, &alias).expect("ancestor symlink");
+    let aliased_root = alias.join("velnor");
+    assert!(
+        fs::symlink_metadata(&aliased_root)
+            .expect("real leaf through symlinked ancestor")
+            .is_dir()
+    );
+
+    let owner = create_owned_input_directory(&aliased_root).expect("owned recovery input");
+    assert!(
+        owner
+            .path()
+            .starts_with(real_root_leaf.canonicalize().expect("physical leaf"))
+    );
+    fs::write(owner.path().join("release.json"), b"verified receipt").expect("receipt");
+    let path = owner.path().to_path_buf();
+    let held = HeldDirectory::capture_owned(owner, deadline()).expect("held recovery input");
+    assert_eq!(
+        held.read_file("release.json", 64).expect("held receipt"),
+        b"verified receipt"
+    );
+    drop(held);
+    assert!(!path.exists(), "owned recovery input cleanup preserved");
+}
+
+#[cfg(unix)]
+#[test]
+fn runner_root_still_rejects_symlinked_velnor_leaf() {
+    let runner = tempfile::tempdir().expect("runner temp root");
+    let actual = runner.path().join("actual");
+    fs::create_dir(&actual).expect("actual root");
+    std::os::unix::fs::symlink(&actual, runner.path().join("velnor")).expect("root symlink");
+
+    assert!(matches!(
+        super::runner_root_at(runner.path()),
+        Err(crate::OrchestratorError::Internal { problem })
+            if problem == "package_recovery_root_invalid"
+    ));
+}
+
+#[cfg(unix)]
+#[test]
 fn owned_input_creation_does_not_follow_a_preexisting_symlink() {
     let runner_root = tempfile::tempdir().expect("runner temp root");
     let target = runner_root.path().join("retained-data");
