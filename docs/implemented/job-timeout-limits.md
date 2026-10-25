@@ -50,8 +50,10 @@ The three official generator compiler jobs (Linux, macOS ARM64, and macOS Intel)
 and the official `velnor-host` binary compiler job use ten minutes. The runner-image
 `build-images` job uses its dedicated thirty-minute bound for tool setup,
 two Docker builds, the source-bound resource-probe build and tests, artifact upload,
-and job cleanup. Eligibility, ordinary candidate qualification, signing, manifest,
-and publication jobs retain five minutes. Historical Homebrew A/D qualification
+and job cleanup. The three SDK platform qualification jobs use a separate
+ten-minute bound for pinned setup and complete generation fixtures. Eligibility,
+other candidate qualification, signing, manifest, and publication jobs retain
+five minutes. Historical Homebrew A/D qualification
 retains its separate thirty-minute bound; configurable consumer budgets are
 unchanged.
 In [run 39471133008](https://github.com/tailrocks/velnor-new/actions/runs/39471133008),
@@ -71,10 +73,24 @@ used the ten-minute compiler budget. Its `build-images` job spent 3 minutes 29
 seconds on both Docker builds, then installed and qualified the native producer.
 The producer build started 6 minutes 20 seconds into the job and was still running
 when check `121103166333` reported that the ten-minute execution limit was exceeded.
-The dedicated thirty-minute image allowance responds to both measured timeouts;
-thirty-minute hosted completion remains unmeasured. Signing and publication
-descendants retain their existing budgets and authority checks, and the complete
-producer run must still succeed before its SDK release can be adopted.
+The dedicated thirty-minute image allowance responds to both measured timeouts.
+In [run 40176575960](https://github.com/tailrocks/velnor-new/actions/runs/40176575960),
+the image job completed successfully with the internal validator in its debug
+profile: native qualification took 89 seconds, the validator build took seven
+seconds, and image smoke and manifest validation took eight seconds. The image
+release was attested and published. This proves that combined implementation on
+that run; it does not isolate the effect of the larger timeout alone. Signing
+and publication descendants retain their existing budgets and authority checks,
+and the complete producer run must still succeed before its SDK release can be
+adopted.
+
+The same run's Intel SDK qualification job `121120426427` exceeded its five-minute
+limit. Setup and source-owned archive preparation consumed most of the budget;
+fixture checks began after four minutes and 42 seconds, and cancellation
+interrupted the remaining checks. Raw artifact transport removes the SDK archive
+bootstrap, while the dedicated ten-minute qualification bound retains all
+fixtures and allows bounded cold setup. Completion under that new bound remains
+unmeasured. The failed producer did not authorize SDK publication.
 
 ```toml
 [workflow]

@@ -6,7 +6,8 @@ use std::error::Error;
 use velnor_actions_contract::ReleaseTarget;
 
 #[test]
-fn each_archive_consumer_has_target_pinned_mise_before_extraction() -> Result<(), Box<dyn Error>> {
+fn each_candidate_consumer_has_target_pinned_mise_before_validation() -> Result<(), Box<dyn Error>>
+{
     let mut pins = super::test_pins();
     pins.linux_x86_64_setup = mise_setup('a', "2026.10.4", 'b');
     pins.macos_arm64_setup = mise_setup('c', "2026.9.19", 'd');
@@ -57,7 +58,7 @@ fn assert_candidate_manifest_setup(
     let steps = super::sequence(super::map_field(super::map_entries(candidate)?, "steps")?)?;
     assert!(steps.len() > 2);
     assert_setup_step(&steps[1], setup, "candidate-manifest")?;
-    assert_guard_runs_after_step(steps, 1, "candidate-manifest");
+    assert_validation_runs_after_step(steps, 1, "candidate-manifest");
     Ok(())
 }
 
@@ -73,7 +74,7 @@ fn assert_qualifier_setup(
     assert_eq!(steps.len(), 2, "{job_id} must fetch source, then qualify");
     super::assert_source_step(&steps[0], job_id)?;
     super::assert_qualifier_step(&steps[1], steps, action, job_id)?;
-    assert_action_extracts_guard(&release.actions, action, setup, job_id)?;
+    assert_action_validates_raw_candidate(&release.actions, action, setup, job_id)?;
     assert_eq!(
         super::map_entries(super::map_field(super::map_entries(job)?, "permissions",)?)?.len(),
         0,
@@ -123,30 +124,30 @@ fn assert_setup_step(step: &Yaml, setup: &MiseSetup, job_id: &str) -> Result<(),
     Ok(())
 }
 
-fn assert_guard_runs_after_step(steps: &[Yaml], setup_index: usize, job_id: &str) {
-    let guard_indices = steps
+fn assert_validation_runs_after_step(steps: &[Yaml], setup_index: usize, job_id: &str) {
+    let validation_indices = steps
         .iter()
         .enumerate()
         .filter_map(|(index, step)| {
             let fields = super::map_entries(step).ok()?;
-            let run = super::map_field(fields, "run").ok()?;
-            super::scalar(run)
+            let name = super::map_field(fields, "name").ok()?;
+            super::scalar(name)
                 .ok()?
-                .contains("with-owned-archive-guard.sh")
+                .eq("Validate exact downloaded candidate files")
                 .then_some(index)
         })
         .collect::<Vec<_>>();
     assert!(
-        !guard_indices.is_empty(),
-        "{job_id} has no guarded archive consumer"
+        !validation_indices.is_empty(),
+        "{job_id} has no complete raw candidate validation"
     );
     assert!(
-        guard_indices.iter().all(|index| *index > setup_index),
-        "{job_id} must provision pinned Mise before the archive guard"
+        validation_indices.iter().all(|index| *index > setup_index),
+        "{job_id} must provision pinned Mise before candidate validation"
     );
 }
 
-fn assert_action_extracts_guard(
+fn assert_action_validates_raw_candidate(
     actions: &[(String, Yaml)],
     action: &str,
     setup: &MiseSetup,
@@ -164,16 +165,16 @@ fn assert_action_extracts_guard(
         setup,
         job_id,
     )?;
-    assert_guard_runs_after_step(steps, 0, job_id);
+    assert_validation_runs_after_step(steps, 0, job_id);
     assert!(
-        steps.iter().any(|step| {
+        !steps.iter().any(|step| {
             super::map_entries(step)
                 .ok()
                 .and_then(|fields| super::map_field(fields, "run").ok())
                 .and_then(|run| super::scalar(run).ok())
                 .is_some_and(|run| run.contains("with-owned-archive-guard.sh"))
         }),
-        "{job_id} action must use the owned archive guard"
+        "{job_id} raw transport must not bootstrap an archive extractor"
     );
     Ok(())
 }

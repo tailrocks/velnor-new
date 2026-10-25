@@ -18,7 +18,6 @@ pub(super) struct ProductAsset {
     pub binary: &'static str,
     pub sidecar: &'static str,
     pub provenance: &'static str,
-    pub archive: &'static str,
     pub workflow_artifact: &'static str,
     pub directory: &'static str,
     pub build_job: &'static str,
@@ -47,7 +46,6 @@ pub(super) const LINUX: ProductAsset = ProductAsset {
         env!("CARGO_PKG_VERSION"),
         "-x86_64-unknown-linux-gnu.provenance.json"
     ),
-    archive: "generator-linux-assets.tar",
     workflow_artifact: "generator-linux-assets",
     directory: "linux-assets",
     build_job: "build-linux",
@@ -76,7 +74,6 @@ pub(super) const MACOS_ARM64: ProductAsset = ProductAsset {
         env!("CARGO_PKG_VERSION"),
         "-aarch64-apple-darwin.provenance.json"
     ),
-    archive: "generator-macos-assets.tar",
     workflow_artifact: "generator-macos-assets",
     directory: "macos-assets",
     build_job: "build-macos",
@@ -105,7 +102,6 @@ pub(super) const MACOS_X86_64: ProductAsset = ProductAsset {
         env!("CARGO_PKG_VERSION"),
         "-x86_64-apple-darwin.provenance.json"
     ),
-    archive: "generator-macos-intel-assets.tar",
     workflow_artifact: "generator-macos-intel-assets",
     directory: "macos-intel-assets",
     build_job: "build-macos-intel",
@@ -122,7 +118,7 @@ pub(super) const ASSETS: [ProductAsset; 3] = [LINUX, MACOS_ARM64, MACOS_X86_64];
 ///
 /// `build_host` selects the Mise setup for the runner executing the build.
 /// The Intel asset cross-compiles on the ARM host; `product` still names
-/// the emitted binary, the provenance target, and the archives.
+/// the emitted binary, the provenance target, and its artifact files.
 pub(super) fn build_steps(
     product: ProductAsset,
     build_host: ReleaseTarget,
@@ -166,10 +162,6 @@ pub(super) fn build_steps(
         workflow_steps::bash_step(
             "Record candidate provenance",
             &candidate_provenance_script(product, pins),
-        ),
-        workflow_steps::bash_step(
-            "Package candidate preserving executable mode",
-            &archive_script(product),
         ),
     ]);
     Ok(steps)
@@ -225,16 +217,14 @@ fn candidate_provenance_script(
     )
 }
 
-fn archive_script(product: ProductAsset) -> String {
-    format!(
-        "set -eu\ntar -cf {} {} {} {}\ntest -s {}",
-        product.archive, product.binary, product.sidecar, product.provenance, product.archive
-    )
-}
-
 /// Download the exact immutable artifact produced by one build job.
 pub(super) fn download_build_steps(asset: ProductAsset, name: &str) -> Vec<Yaml> {
     download_build_steps_for_id(asset, name, "${{ inputs.artifact_id }}")
+}
+
+/// Return the complete raw artifact payload in its upload order.
+pub(super) fn artifact_upload_paths(product: ProductAsset) -> [&'static str; 3] {
+    [product.binary, product.sidecar, product.provenance]
 }
 
 /// Download one immutable build artifact selected by the producer's ID.
@@ -253,43 +243,18 @@ fn download_steps_with(asset: ProductAsset, download: Yaml) -> Vec<Yaml> {
     vec![
         download,
         workflow_steps::bash_step(
-            "Prevalidate and extract uploaded candidate archive",
-            &archive::extraction_script(
+            "Validate exact downloaded candidate files",
+            &archive::raw_artifact_validation_script(
                 asset.directory,
-                asset.archive,
                 asset.binary,
                 asset.sidecar,
                 asset.provenance,
-            ),
-        ),
-        workflow_steps::bash_step(
-            "Verify extracted candidate file types and executable mode",
-            &format!(
-                "set -eu\ntest -f {}/{}\ntest ! -L {}/{}\ntest -x {}/{}\ntest -f {}/{}\ntest ! -L {}/{}\ntest ! -x {}/{}\ntest -f {}/{}\ntest ! -L {}/{}\ntest ! -x {}/{}",
-                asset.directory,
-                asset.binary,
-                asset.directory,
-                asset.binary,
-                asset.directory,
-                asset.binary,
-                asset.directory,
-                asset.sidecar,
-                asset.directory,
-                asset.sidecar,
-                asset.directory,
-                asset.sidecar,
-                asset.directory,
-                asset.provenance,
-                asset.directory,
-                asset.provenance,
-                asset.directory,
-                asset.provenance
             ),
         ),
     ]
 }
 
-/// Verify source, target, digest, and exact toolchain recorded in the candidate archive.
+/// Verify source, target, digest, and exact toolchain recorded in candidate provenance.
 pub(super) fn verify_provenance_script(
     asset: ProductAsset,
     pins: &crate::schema2::ProductReleasePins,
@@ -299,6 +264,21 @@ pub(super) fn verify_provenance_script(
         asset.directory,
         &pins.rust_version,
         &pins.mr_boxington_version,
+    )
+}
+
+/// Verify provenance against the toolchain authenticated by the authority job.
+pub(super) fn verify_authority_provenance_script(asset: ProductAsset) -> String {
+    let digest = archive::sidecar_digest_command(
+        &format!("{}/{}", asset.directory, asset.sidecar),
+        asset.binary,
+    );
+    format!(
+        "set -eu\n: \"${{VELNOR_RELEASE_RUST_VERSION:?missing authenticated Rust version}}\"\n: \"${{VELNOR_RELEASE_MR_BOXINGTON_VERSION:?missing authenticated MBX version}}\"\nsemver='^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$'\n[[ $VELNOR_RELEASE_RUST_VERSION =~ $semver ]] || exit 1\n[[ $VELNOR_RELEASE_MR_BOXINGTON_VERSION =~ $semver ]] || exit 1\ndigest=\"$({digest})\"\njq -e --arg version \"{VERSION}\" --arg repository \"$GITHUB_REPOSITORY\" --arg commit \"$GITHUB_SHA\" --arg target \"{}\" --arg asset \"{}\" --arg sha256 \"$digest\" --arg rust \"$VELNOR_RELEASE_RUST_VERSION\" --arg mr_boxington \"$VELNOR_RELEASE_MR_BOXINGTON_VERSION\" '.schema == 1 and .version == $version and .repository == $repository and .commit == $commit and .target == $target and .asset == $asset and .sha256 == $sha256 and .toolchain.rust == $rust and .toolchain[\"mr-boxington\"] == $mr_boxington' {}/{} > /dev/null",
+        asset.target.triple(),
+        asset.binary,
+        asset.directory,
+        asset.provenance
     )
 }
 
@@ -324,7 +304,7 @@ fn verify_provenance_in_directory(
 /// Check candidate identity and deterministic generation on the uploaded bytes.
 pub(super) fn qualification_script(binary: &str, directory: &str) -> String {
     format!(
-        "set -eu\nunset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN GH_HOST GH_CONFIG_DIR\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$(./{directory}/{binary} --version)\" = \"velnor-actions {VERSION}\"\nscripts/capture-opentofu-goldens.sh check-release \"$GITHUB_WORKSPACE/{directory}/{binary}\" \"$GITHUB_WORKSPACE/manifest-assets/release-manifest.json\" \"$VELNOR_RELEASE_MANIFEST_SHA256\""
+        "set -eu\nunset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN GH_HOST GH_CONFIG_DIR\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nchmod 0500 \"./{directory}/{binary}\"\ntest \"$(./{directory}/{binary} --version)\" = \"velnor-actions {VERSION}\"\nscripts/capture-opentofu-goldens.sh check-release \"$GITHUB_WORKSPACE/{directory}/{binary}\" \"$GITHUB_WORKSPACE/manifest-assets/release-manifest.json\" \"$VELNOR_RELEASE_MANIFEST_SHA256\""
     )
 }
 

@@ -80,7 +80,10 @@ pub(super) fn assert_intel_cross_build(
 /// GH-hosted macOS runners ship neither `timeout` nor `gtimeout`, so the
 /// emitted `gh()` wrapper bounds each call with a pure-bash watchdog: TERM
 /// at 60 s, KILL 5 s later, and the command's own exit status otherwise.
-pub(super) fn assert_portable_gh_watchdog(actions: &Actions) {
+pub(super) fn assert_portable_gh_watchdog(
+    generator: &str,
+    actions: &Actions,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut checked = 0;
     for (name, body) in actions {
         if !["gh api ", "gh release ", "gh attestation "]
@@ -108,7 +111,44 @@ pub(super) fn assert_portable_gh_watchdog(actions: &Actions) {
             );
         }
     }
+    for id in [
+        "attest-linux",
+        "attest-macos",
+        "attest-macos-intel",
+        "attest-manifest",
+        "publish-generator",
+    ] {
+        let job = super::super::job_body(generator, id)?;
+        if ["gh api ", "gh release ", "gh attestation "]
+            .iter()
+            .any(|needle| job.contains(needle))
+        {
+            checked += 1;
+            assert_portable_watchdog(id, job);
+        }
+    }
     assert!(checked > 0, "no GitHub-CLI-bearing action to check");
+    Ok(())
+}
+
+fn assert_portable_watchdog(name: &str, body: &str) {
+    assert!(
+        !body.contains("timeout --signal"),
+        "{name} invokes GNU timeout, which macOS runners lack: {body}"
+    );
+    for marker in [
+        "( sleep 60; kill -TERM",
+        "sleep 5; kill -KILL",
+        "</dev/null >/dev/null 2>&1 & _velnor_gh_watch=$!",
+        r#"wait \"$_velnor_gh_pid\" || _velnor_gh_status=$?"#,
+        r#"exit \"$_velnor_gh_status\""#,
+        ") </dev/null",
+    ] {
+        assert!(
+            body.contains(marker),
+            "{name} lost watchdog marker {marker}: {body}"
+        );
+    }
 }
 
 /// Every qualify action installs the exact tools `generate` validates with.
@@ -137,8 +177,8 @@ pub(super) fn assert_qualify_install_tools(
             .find("Install pinned qualification tools")
             .ok_or("missing pinned qualification tools install")?;
         let download = body
-            .find("Download built asset archive")
-            .ok_or("missing built asset archive download")?;
+            .find("Download built asset files")
+            .ok_or("missing raw built asset download")?;
         let verify = body
             .find("Verify jactionlint")
             .ok_or("missing jactionlint executable verification")?;

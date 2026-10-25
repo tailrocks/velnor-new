@@ -1,6 +1,7 @@
 //! Isolated Mise and GitHub CLI dispatch tests for generated release scripts.
 
-use super::{Failure, PINNED_MISE_ARGUMENTS, Scratch, install_mock_gh, manifest};
+use super::test_helpers::{install_mock_gh, path_with_mock_gh};
+use super::{Failure, PINNED_MISE_ARGUMENTS, Scratch, manifest};
 use std::error::Error;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -133,7 +134,7 @@ fn attestation_verification_uses_only_the_pinned_mock_cli() -> Result<(), Box<dy
         .arg("-c")
         .arg(script)
         .current_dir(&scratch.0)
-        .env("PATH", super::path_with_mock_gh(&scratch.0)?)
+        .env("PATH", path_with_mock_gh(&scratch.0)?)
         .env("GITHUB_REPOSITORY", super::REPOSITORY)
         .env("GITHUB_SHA", super::SOURCE_SHA)
         .env("GITHUB_WORKFLOW_SHA", super::SOURCE_SHA)

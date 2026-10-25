@@ -1,5 +1,6 @@
 use super::{
-    ASSETS, LINUX, MACOS_ARM64, MACOS_X86_64, ProductAsset, VERSION, build_steps, ci_check_script,
+    ASSETS, LINUX, MACOS_ARM64, MACOS_X86_64, ProductAsset, VERSION, artifact_upload_paths,
+    build_steps, ci_check_script, download_build_steps_for_id,
 };
 
 use crate::yaml::Yaml;
@@ -34,6 +35,29 @@ fn every_release_asset_matches_the_workspace_version() {
             asset.provenance,
             format!("{}.provenance.json", asset.binary)
         );
+    }
+}
+
+#[test]
+fn build_artifact_upload_is_the_exact_three_raw_files() {
+    for product in ASSETS {
+        assert_eq!(
+            artifact_upload_paths(product),
+            [product.binary, product.sidecar, product.provenance]
+        );
+        let steps =
+            download_build_steps_for_id(product, "Download candidate", "${{ inputs.artifact_id }}");
+        assert_eq!(steps.len(), 2);
+        let Yaml::Str(run) = field(&steps[1], "run").expect("validation command") else {
+            panic!("validation command must be text");
+        };
+        assert!(run.contains("-eq 3"));
+        assert!(run.contains("268435456"));
+        assert!(run.contains("-links 1"));
+        assert!(run.contains("test ! -x"));
+        assert!(!run.contains("tar "));
+        assert!(!run.contains("python"));
+        assert!(!run.contains("ruby"));
     }
 }
 

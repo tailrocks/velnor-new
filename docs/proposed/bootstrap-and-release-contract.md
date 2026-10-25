@@ -76,11 +76,17 @@ product-release workflow family also builds and qualifies exact target
 artifacts, assembles a same-run manifest, verifies source-bound
 attestations, and publishes generator assets only through its protected
 `generator-release` environment.
+The source-bootstrap distinction does not exempt privileged SDK jobs from hard
+decision 8. Target attesters, the manifest attester, and the publisher are
+source-free: they consume the same immutable raw candidate artifact IDs and
+validated source-side version outputs without checking out or executing
+repository code. See [SDK source-free publication](../implemented/sdk-source-free-publication.md).
 Consumer generation still does not verify release signatures or
 attestations. The generator release workflow implements same-run candidate
 qualification, manifest-byte comparison, and source/workflow-bound asset and
-manifest attestation verification; a successful hosted three-target run has
-not yet supplied runtime proof. The external release and seed procedure below
+manifest attestation verification. Every new release implementation still needs
+a successful complete hosted producer before consumer adoption. The external
+release and seed procedure below
 remains in force.
 
 The release manager MUST follow this exact process for every

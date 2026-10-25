@@ -36,7 +36,9 @@ fn scratch() -> Result<Scratch, Box<dyn Error>> {
 fn manifest_bundle_uses_the_created_and_attested_file() {
     let create = manifest_script("1.99.1", "1.26.0");
     let fetch = manifest_attestation_bundle_script();
-    assert!(create.contains("create-release-manifest.sh"));
+    assert!(create.contains("bash -s -- '"));
+    assert!(create.contains("VELNOR_CREATE_RELEASE_MANIFEST"));
+    assert!(!create.contains("scripts/generator-release/"));
     assert!(
         fetch.contains("subject='manifest-assets/release-manifest.json'"),
         "{fetch}"

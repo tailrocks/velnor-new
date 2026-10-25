@@ -119,6 +119,24 @@ fn production_host_build_uses_pinned_mbx_for_only_the_nested_host_binary() {
     assert!(!pins.install_runner_build_tools_argv.contains(&mbx));
 }
 
+#[test]
+fn release_authority_carries_manual_emission_gh_reference_and_preserves_catalog_fallback() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let config = crate::config::load_config(&root).expect("repository release configuration");
+    let fallback = ToolCatalog::pinned();
+    let declared = fallback
+        .clone()
+        .with_project_tool(PinnedTool::Gh, "9.87.6")
+        .expect("exact test GH release")
+        .for_emission();
+
+    let declared_pins = super::resolve(&config, &declared).expect("declared release pins");
+    assert_eq!(declared_pins.gh_version, "${VELNOR_TOOL_GH}");
+    let fallback_pins = super::resolve(&config, &fallback).expect("fallback release pins");
+    assert_eq!(fallback_pins.gh_version, fallback.version(PinnedTool::Gh));
+    assert_ne!(fallback_pins.gh_version, "9.87.6");
+}
+
 fn assert_runner_build_argv(argv: &[String], rust: &str, mbx: &str) {
     assert_eq!(
         strings(argv),

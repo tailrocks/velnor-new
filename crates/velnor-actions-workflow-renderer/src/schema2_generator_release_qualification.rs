@@ -47,7 +47,7 @@ pub(super) fn job(
     ];
     action_steps.extend(assets::download_build_steps(
         job.product,
-        "Download built asset archive",
+        "Download built asset files",
     ));
     action_steps.push(workflow_steps::download_step_by_id(
         "Download canonical same-run candidate manifest",
@@ -100,7 +100,7 @@ pub(super) fn job(
     )?;
     let mut fields = with_permissions(
         workflow_steps::with_needs(
-            base(job.name, job.runs_on, JobTimeout::DEFAULT),
+            base(job.name, job.runs_on, JobTimeout::PRODUCT_QUALIFICATION),
             &[job.build_job, "candidate-manifest"],
         ),
         workflow_steps::qualification_permissions(),

@@ -3,11 +3,7 @@ use velnor_actions_workflow_renderer::RenderedTree;
 
 pub(super) type Actions = BTreeMap<&'static str, String>;
 
-const ACTION_SNAPSHOTS: [(&str, &str); 11] = [
-    (
-        "generator-release-attest-manifest",
-        include_str!("snapshots/generator-release-attest-manifest.yml"),
-    ),
+const ACTION_SNAPSHOTS: [(&str, &str); 7] = [
     (
         "generator-release-build-linux",
         include_str!("snapshots/generator-release-build-linux.yml"),
@@ -21,36 +17,25 @@ const ACTION_SNAPSHOTS: [(&str, &str); 11] = [
         include_str!("snapshots/generator-release-build-macos-intel.yml"),
     ),
     (
-        "generator-release-attest-linux",
-        include_str!("snapshots/generator-release-attest-linux.yml"),
-    ),
-    (
         "generator-release-qualify-linux",
         include_str!("snapshots/generator-release-qualify-linux.yml"),
-    ),
-    (
-        "generator-release-attest-macos",
-        include_str!("snapshots/generator-release-attest-macos.yml"),
     ),
     (
         "generator-release-qualify-macos",
         include_str!("snapshots/generator-release-qualify-macos.yml"),
     ),
     (
-        "generator-release-attest-macos-intel",
-        include_str!("snapshots/generator-release-attest-macos-intel.yml"),
-    ),
-    (
         "generator-release-qualify-macos-intel",
         include_str!("snapshots/generator-release-qualify-macos-intel.yml"),
     ),
     (
-        "generator-release-publish",
-        include_str!("snapshots/generator-release-publish.yml"),
+        "generator-release-qualify-homebrew",
+        include_str!("snapshots/generator-release-qualify-homebrew.yml"),
     ),
 ];
 
 pub(super) fn rendered_actions(tree: &RenderedTree) -> Result<Actions, Box<dyn std::error::Error>> {
+    assert_action_inventory(tree);
     let mut actions = Actions::new();
     for (name, snapshot) in ACTION_SNAPSHOTS {
         let path = action_path(name);
@@ -69,6 +54,7 @@ pub(super) fn committed_actions_matching_tree(
     root: &std::path::Path,
     tree: &RenderedTree,
 ) -> Result<Actions, Box<dyn std::error::Error>> {
+    assert_action_inventory(tree);
     let mut actions = Actions::new();
     for (name, _) in ACTION_SNAPSHOTS {
         let relative = action_path(name);
@@ -86,6 +72,41 @@ pub(super) fn committed_actions_matching_tree(
         actions.insert(name, body);
     }
     Ok(actions)
+}
+
+fn assert_action_inventory(tree: &RenderedTree) {
+    let mut actual = tree
+        .files
+        .iter()
+        .filter(|file| {
+            file.path.starts_with(".github/actions/generator-release-")
+                && file.path.ends_with("/action.yml")
+        })
+        .map(|file| file.path.as_str())
+        .collect::<Vec<_>>();
+    actual.sort_unstable();
+    let mut expected = ACTION_SNAPSHOTS
+        .iter()
+        .map(|(name, _)| format!(".github/actions/{name}/action.yml"))
+        .collect::<Vec<_>>();
+    for retired in [
+        "generator-release-attest-linux",
+        "generator-release-attest-macos",
+        "generator-release-attest-macos-intel",
+        "generator-release-attest-manifest",
+        "generator-release-publish",
+    ] {
+        assert!(
+            !actual.contains(&format!(".github/actions/{retired}/action.yml").as_str()),
+            "retired privileged action must not be generated: {retired}"
+        );
+    }
+    expected.sort_unstable();
+    let expected = expected.iter().map(String::as_str).collect::<Vec<_>>();
+    assert_eq!(
+        actual, expected,
+        "only the seven real build and qualification composites are emitted"
+    );
 }
 
 fn action_path(name: &str) -> String {
