@@ -4,6 +4,8 @@ use super::*;
 
 #[path = "recovery/capture_limits.rs"]
 mod capture_limits;
+#[path = "recovery/lifecycle.rs"]
+mod lifecycle;
 #[path = "recovery/ownership_retry.rs"]
 mod ownership_retry;
 #[path = "recovery/readiness_cleanup.rs"]
