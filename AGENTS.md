@@ -1,25 +1,24 @@
 # Rules
 
-- **Hard decisions: read [`docs/hard-decisions.md`](docs/hard-decisions.md) first.** Never silently change a hard decision; changing one requires the human owner's explicit approval.
-- Official GitHub Actions sources of truth:
-  - [actions/runner](https://github.com/actions/runner)
-  - [actions/scaleset](https://github.com/actions/scaleset)
-  - [actions/runner-images](https://github.com/actions/runner-images)
-  Always check the original source code for compatibility and make it clear in reference doc files (`docs/proposed/github-actions-reference.md`). Never guess protocol contracts or operational semantics.
-- No legacy code. Finish every migration: remove old paths completely—no compatibility shims, aliases, or deprecation periods. Breaking changes are preferred.
+Shared working agreement: keep this section byte-identical across projects. Project-specific rules live under `## This project` below.
+
+- No legacy code. Finish every migration: remove old paths completely — no compatibility shims, aliases, or deprecation periods. Breaking changes are preferred.
 - Research project: unsafe, breaking changes expected, never production-ready. Break things when needed; deliver fast.
-- Requirements and adopted contracts: read `docs/reviews/pr-1.md`, `docs/reviews/pr-1-adoption.md`, and `docs/reviews/pr-1-disposition.md`. Specifications live in `docs/proposed/*` (OpenTofu: `docs/proposed/opentofu-contract.md`), and procedures live in `docs/implemented/*`. Pins and exceptions: `.velnor/version-policy.toml` and `.velnor/freshness-inventory.json`.
-- Cache design: read `docs/proposed/cache-decisions.md` (owner-adopted decisions, 10 GB budget, success and failure cases) and `docs/proposed/cache-contract.md` before touching cache keys, families, saves, or pruning.
-- Quality and proof invariants: enforced by CI and compiler gates; read `docs/proposed/rust-quality-contract.md` for quality contracts.
-- Work principles:
-  - Judge by correctness, consistency, and goal fit. Never defer a known-wrong state for ROI, cost, effort, or edge-case claims.
-  - Stop only when a change is proven impossible with available tools or model. When uncertain, inspect, test, and measure first.
-  - Before fixing a bug, identify why the architecture permitted it and whether relatives hide nearby. Prefer structural fixes removing enabling conditions; symptom patches must name deferred root causes.
-  - Delegate first: use subagents for parallel research, implementation, review, and verification. Resolve ambiguity autonomously from evidence and docs.
-- Commits and review integrity:
-  - Commit meaningful, verified changes frequently; push regularly. Prefer one working branch.
-  - Before every PR merge, read all reviews, comments, replies, and unresolved or outdated threads. Verify findings with independent subagents against code, tests, docs, and recorded decisions.
-  - Accepted feedback: fix, verify, commit, push, and reply on GitHub with fixing commit URL before resolving. Rejected feedback: reply with evidence and rationale before resolving. Re-fetch feedback at final head SHA; merge only with zero unaddressed feedback and all required checks passing.
-  - Keep agent instructions lean. Put explanations, plans, and progress in documentation, not here.
-- Verification gates: always verify from the repo root before committing or merging. Always run tests with `cargo nextest`; never use `cargo test`. Read `docs/implemented/repo-verification.md` for the exact required commands, purposes, and usage details.
 - No comments in code. Code is the source of truth; a comment creates ambiguity about what is right, code or comment. Keep a comment only when functionality requires it: SPDX license headers for REUSE compliance, clap `#[command]`/`#[arg]` help text and similar string literals consumed by tools, parser directives such as Dockerfile `# syntax=`, and machine-generated files that the repo's own generators verify byte-identical. Never keep explanatory, TODO, or SAFETY comments; when code seems to need explanation, rewrite the code instead.
+- Judge correctness, consistency, and project fit. Never defer a known-wrong state for ROI, cost, effort, or edge cases.
+- Stop only when the required change is proven impossible with the available tools or model. When uncertain, inspect, test, and measure first.
+- Before fixing a bug, identify why the architecture permitted it and whether the same structure permits related bugs. Prefer fixes that remove the enabling condition; use a symptom-layer patch only when the root fix is proven infeasible or belongs in a separate change, and name the deferred root cause.
+- Delegate first: use subagents for parallel research, implementation, review, and independent verification. Resolve ambiguity autonomously from evidence and project docs.
+- Commit verified changes frequently; push regularly. Prefer one branch; add another only for safe isolation.
+- Before every PR merge, read all reviews, comments, replies, and unresolved or outdated threads. Use independent subagents to verify findings against code, tests, docs, and recorded decisions.
+- For accepted feedback: fix, verify, commit, push, and reply with the fixing commit URL before resolving. For rejected feedback: reply with evidence and rationale before resolving. Re-fetch feedback at the final head SHA. Merge only with zero unaddressed feedback and all required checks and approvals satisfied. Only explicit, PR-specific human authorization permits ignoring identified feedback.
+- Keep instructions lean; explanations, plans, and progress belong in documentation, not here.
+
+## This project (velnor-new)
+
+- Hard decisions: read [`docs/hard-decisions.md`](docs/hard-decisions.md) first. Never silently change a hard decision; changing one requires the human owner's explicit approval.
+- Sources of truth for GitHub Actions: [actions/runner](https://github.com/actions/runner), [actions/scaleset](https://github.com/actions/scaleset), [actions/runner-images](https://github.com/actions/runner-images). Check the original source for compatibility and record it in [`docs/proposed/github-actions-reference.md`](docs/proposed/github-actions-reference.md). Never guess protocol contracts or operational semantics.
+- Requirements and adopted contracts: read `docs/reviews/pr-1.md`, `docs/reviews/pr-1-adoption.md`, and `docs/reviews/pr-1-disposition.md`. Specifications live in `docs/proposed/*` (OpenTofu: `docs/proposed/opentofu-contract.md`); procedures live in `docs/implemented/*`. Pins and exceptions: `.velnor/version-policy.toml` and `.velnor/freshness-inventory.json`.
+- Cache: read `docs/proposed/cache-decisions.md` and `docs/proposed/cache-contract.md` before touching cache keys, families, saves, or pruning.
+- Quality: enforced by CI and compiler gates; see `docs/proposed/rust-quality-contract.md`.
+- Verification gates: verify from the repo root before committing or merging. Run tests with `cargo nextest`, never `cargo test`. Exact commands, purposes, and usage: `docs/implemented/repo-verification.md`.
