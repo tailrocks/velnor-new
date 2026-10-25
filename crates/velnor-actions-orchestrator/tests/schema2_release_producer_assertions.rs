@@ -119,7 +119,7 @@ fn assert_runner_image_build_source() -> TestResult {
     )?;
     let runner_compile = required_position(
         RUNNER_IMAGE_BUILD,
-        "mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo build",
+        "mise --no-config --no-env --no-hooks exec \"rust@$project_rust_version\" -- cargo build",
         "runner helper compile step is present",
     )?;
     assert!(source_check < runner_compile);
