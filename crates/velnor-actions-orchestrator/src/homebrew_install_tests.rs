@@ -18,7 +18,9 @@ use velnor_actions_mise::CheckDeadline;
 
 #[test]
 fn receipt_binds_exact_formula_source_version_and_stable_spec() {
-    let path = Path::new("/private/runner/staging/example-preview.rb");
+    let path = Path::new(
+        "/opt/homebrew/Library/Taps/velnor/homebrew-native-install/Formula/example-preview.rb",
+    );
     let install_started = epoch_seconds().expect("current time");
     let receipt = serde_json::json!({
         "time": install_started,
@@ -28,7 +30,8 @@ fn receipt_binds_exact_formula_source_version_and_stable_spec() {
         "changed_files": ["bin/example", "INSTALL_RECEIPT.json"],
         "source": {
             "path": path,
-            "tap": null,
+            "tap": "velnor/native-install",
+            "tap_git_head": null,
             "spec": "stable",
             "versions": { "stable": "1.2.3-preview.0123456789ab" }
         }
@@ -45,11 +48,49 @@ fn receipt_binds_exact_formula_source_version_and_stable_spec() {
         )
         .is_err()
     );
+    let mut wrong_tap = receipt.clone();
+    wrong_tap["source"]["tap"] = serde_json::json!("velnor/untrusted");
+    assert!(
+        validate_receipt(
+            &serde_json::to_vec(&wrong_tap).expect("wrong tap receipt"),
+            path,
+            "1.2.3-preview.0123456789ab",
+            install_started,
+        )
+        .is_err()
+    );
+    let mut nonnull_git_head = receipt.clone();
+    nonnull_git_head["source"]["tap_git_head"] = serde_json::json!("abc123");
+    assert!(
+        validate_receipt(
+            &serde_json::to_vec(&nonnull_git_head).expect("non-null tap git head"),
+            path,
+            "1.2.3-preview.0123456789ab",
+            install_started,
+        )
+        .is_err()
+    );
+    let mut missing_git_head = receipt.clone();
+    missing_git_head["source"]
+        .as_object_mut()
+        .expect("source object")
+        .remove("tap_git_head");
+    assert!(
+        validate_receipt(
+            &serde_json::to_vec(&missing_git_head).expect("missing tap git head"),
+            path,
+            "1.2.3-preview.0123456789ab",
+            install_started,
+        )
+        .is_err()
+    );
 }
 
 #[test]
 fn receipt_accepts_null_relocation_inventory_but_rejects_invalid_inventory() {
-    let path = Path::new("/private/runner/staging/example-preview.rb");
+    let path = Path::new(
+        "/opt/homebrew/Library/Taps/velnor/homebrew-native-install/Formula/example-preview.rb",
+    );
     let install_started = epoch_seconds().expect("current time");
     let mut receipt = serde_json::json!({
         "time": install_started,
@@ -59,7 +100,8 @@ fn receipt_accepts_null_relocation_inventory_but_rejects_invalid_inventory() {
         "changed_files": null,
         "source": {
             "path": path,
-            "tap": null,
+            "tap": "velnor/native-install",
+            "tap_git_head": null,
             "spec": "stable",
             "versions": { "stable": "1.2.3-preview.0123456789ab" }
         }

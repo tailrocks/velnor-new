@@ -7,7 +7,9 @@ use std::{
 
 use velnor_actions_mise::IsolatedCommand;
 
-use crate::{OrchestratorError, internal::internal};
+use crate::{
+    OrchestratorError, homebrew::install::HOMEBREW_CANDIDATE_FORMULAE, internal::internal,
+};
 
 /// One fixed Homebrew operation; callers cannot supply executable, argv, or env.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,6 +31,8 @@ pub(crate) enum HomebrewCommand {
     Cellar,
     /// Install one exact candidate formula file.
     InstallCandidate { recipe: PathBuf },
+    /// Trust only one formula in the fixed private candidate tap.
+    TrustFormula { formula: String },
     /// Upgrade an already installed, verified formula to one exact candidate.
     UpgradeCandidate { recipe: PathBuf },
     /// Run the installed keg's archived recipe test.
@@ -48,6 +52,7 @@ impl HomebrewCommand {
             Self::Prefix => "prefix",
             Self::Cellar => "cellar",
             Self::InstallCandidate { .. } => "install-candidate",
+            Self::TrustFormula { .. } => "trust-formula",
             Self::UpgradeCandidate { .. } => "upgrade-candidate",
             Self::TestArchived { .. } => "test-archived",
             Self::InstalledBinaryVersion { .. } => "installed-binary-version",
@@ -103,7 +108,7 @@ pub(crate) fn homebrew_command(
             HOMEBREW_EXECUTABLE
         }
         HomebrewCommand::InstallCandidate { recipe } => {
-            validate_formula_path(&recipe)?;
+            validate_candidate_formula_path(&recipe)?;
             args.extend([
                 "install".into(),
                 "--formula".into(),
@@ -111,8 +116,13 @@ pub(crate) fn homebrew_command(
             ]);
             HOMEBREW_EXECUTABLE
         }
+        HomebrewCommand::TrustFormula { formula } => {
+            validate_candidate_formula(&formula)?;
+            args.extend(["trust".into(), "--formula".into(), formula.into()]);
+            HOMEBREW_EXECUTABLE
+        }
         HomebrewCommand::UpgradeCandidate { recipe } => {
-            validate_formula_path(&recipe)?;
+            validate_candidate_formula_path(&recipe)?;
             args.extend([
                 "upgrade".into(),
                 "--formula".into(),
@@ -238,6 +248,36 @@ fn validate_formula_path(path: &Path) -> Result<(), OrchestratorError> {
         return Err(internal("homebrew_command_recipe_extension"));
     }
     Ok(())
+}
+
+fn validate_candidate_formula_path(path: &Path) -> Result<(), OrchestratorError> {
+    validate_formula_path(path)?;
+    let formula = path.file_stem().and_then(OsStr::to_str).unwrap_or_default();
+    if path.parent() != Some(Path::new(HOMEBREW_CANDIDATE_FORMULAE))
+        || !valid_candidate_formula_name(formula)
+    {
+        return Err(internal("homebrew_command_candidate_formula_path"));
+    }
+    Ok(())
+}
+
+fn validate_candidate_formula(formula: &str) -> Result<(), OrchestratorError> {
+    let Some(name) = formula.strip_prefix("velnor/native-install/") else {
+        return Err(internal("homebrew_command_candidate_formula"));
+    };
+    if !valid_candidate_formula_name(name) {
+        return Err(internal("homebrew_command_candidate_formula"));
+    }
+    Ok(())
+}
+
+pub(super) fn valid_candidate_formula_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 64
+        && name.as_bytes()[0].is_ascii_lowercase()
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
 }
 
 fn validate_absolute_path(path: &Path, field: &'static str) -> Result<(), OrchestratorError> {
