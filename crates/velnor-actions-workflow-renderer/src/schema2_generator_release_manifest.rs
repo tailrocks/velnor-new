@@ -8,7 +8,6 @@ use velnor_actions_contract::RELEASE_MANIFEST_FILENAME;
 use super::super::features::{base, finish};
 use super::ProductReleasePins;
 use super::assets::{self, ASSETS, REPOSITORY, VERSION};
-use super::jobs;
 use super::workflow_steps::{self, with_needs, with_permissions};
 
 /// Published versioned release manifest.
@@ -27,29 +26,20 @@ pub(super) const ATTESTATION_DIR: &str = "release-attestations";
 /// Verify product sidecars and build exact versioned asset URLs from their digests.
 fn manifest_script(rust_version: &str, mr_boxington_version: &str) -> String {
     format!(
-        "bash scripts/generator-release/create-release-manifest.sh '{VERSION}' '{REPOSITORY}' '{rust_version}' '{mr_boxington_version}'"
+        "bash -s -- '{VERSION}' '{REPOSITORY}' {rust_version} {mr_boxington_version} <<'VELNOR_CREATE_RELEASE_MANIFEST'\n{}\nVELNOR_CREATE_RELEASE_MANIFEST",
+        include_str!("../../../scripts/generator-release/create-release-manifest.sh")
     )
 }
 
 /// Revalidate and attest the exact same-run candidate manifest.
-pub(super) fn job(
-    hosted: Yaml,
-    pins: &ProductReleasePins,
-    actions: &mut Vec<(String, Yaml)>,
-) -> Result<(String, Yaml), RenderError> {
+pub(super) fn job(hosted: Yaml, pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
     let mut steps = vec![workflow_steps::mise_step(
         pins.setup_for(velnor_actions_contract::ReleaseTarget::LinuxX86_64),
     )?];
-    steps.push(workflow_steps::install_gh_step(&pins.install_gh_argv)?);
-    steps.extend(product_download_steps(pins));
-    steps.extend(candidate_manifest_steps(pins)?);
-    let call = jobs::local_action_with_inputs(
-        "generator-release-attest-manifest",
-        "Attest generator release manifest",
-        steps,
-        manifest_action_inputs(),
-        actions,
-    )?;
+    steps.push(super::jobs::authority_gh_validation_step());
+    steps.push(super::jobs::authority_gh_install_step()?);
+    steps.extend(product_download_steps());
+    steps.extend(candidate_manifest_steps()?);
     let needs = [
         "candidate-manifest",
         "build-linux",
@@ -77,38 +67,58 @@ pub(super) fn job(
         &needs,
     );
     fields.retain(|(key, _)| key != "name");
-    Ok(finish(
-        "attest-manifest",
-        fields,
-        vec![workflow_steps::checkout_step(), call],
-    ))
+    fields.push((
+        "env".to_owned(),
+        Yaml::Map(vec![
+            (
+                "VELNOR_RELEASE_RUST_VERSION".to_owned(),
+                Yaml::str("${{ needs.candidate-manifest.outputs.rust_version }}"),
+            ),
+            (
+                "VELNOR_RELEASE_MR_BOXINGTON_VERSION".to_owned(),
+                Yaml::str("${{ needs.candidate-manifest.outputs.mr_boxington_version }}"),
+            ),
+            (
+                "VELNOR_RELEASE_GH_VERSION".to_owned(),
+                Yaml::str("${{ needs.candidate-manifest.outputs.gh_version }}"),
+            ),
+        ]),
+    ));
+    Ok(finish("attest-manifest", fields, steps))
 }
 
-fn product_download_steps(pins: &ProductReleasePins) -> Vec<Yaml> {
+fn product_download_steps() -> Vec<Yaml> {
     let mut steps = Vec::new();
     for asset in ASSETS {
-        let artifact_id = format!(
-            "${{{{ inputs.{}_artifact_id }}}}",
-            jobs::artifact_input(asset.target)
-        );
+        let artifact_id = format!("${{{{ needs.{}.outputs.artifact_id }}}}", asset.build_job);
         steps.extend(assets::download_build_steps_for_id(
             asset,
             &format!("Download {} candidate assets", asset.target.triple()),
             &artifact_id,
         ));
-        steps.push(workflow_steps::bash_step(
+        steps.push(workflow_steps::bash_step_with_env(
             "Verify source-bound candidate provenance",
-            &assets::verify_provenance_script(asset, pins),
+            &assets::verify_authority_provenance_script(asset),
+            vec![
+                (
+                    "VELNOR_RELEASE_RUST_VERSION",
+                    "${{ needs.candidate-manifest.outputs.rust_version }}",
+                ),
+                (
+                    "VELNOR_RELEASE_MR_BOXINGTON_VERSION",
+                    "${{ needs.candidate-manifest.outputs.mr_boxington_version }}",
+                ),
+            ],
         ));
     }
     steps
 }
 
-fn candidate_manifest_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, RenderError> {
+fn candidate_manifest_steps() -> Result<Vec<Yaml>, RenderError> {
     let mut steps = Vec::new();
     steps.push(workflow_steps::download_step_by_id(
         "Download exact canonical candidate manifest",
-        "${{ inputs.manifest_artifact_id }}",
+        "${{ needs.candidate-manifest.outputs.artifact_id }}",
         DIR,
     ));
     steps.push(workflow_steps::bash_step_with_env(
@@ -116,20 +126,20 @@ fn candidate_manifest_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, Rend
         &manifest_digest_check_script(),
         vec![(
             "VELNOR_RELEASE_MANIFEST_SHA256",
-            "${{ inputs.manifest_sha256 }}",
+            "${{ needs.candidate-manifest.outputs.manifest_sha256 }}",
         )],
     ));
     let bundle_path = manifest_attestation_bundle_path();
     steps.extend([
         workflow_steps::bash_step(
             "Rebuild and compare the canonical candidate manifest",
-            &publication_verify_script(pins),
+            &publication_verify_source_free_script(),
         ),
         workflow_steps::attest_step(&candidate_path()),
         workflow_steps::bash_step_with_token(
             "Fetch and verify manifest attestation bundle",
             &manifest_attestation_bundle_script(),
-            &pins.gh_argv,
+            &super::jobs::authority_gh_argv(),
         )?,
         workflow_steps::upload_step(
             "Upload verified manifest attestation bundle",
@@ -140,42 +150,26 @@ fn candidate_manifest_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, Rend
     Ok(steps)
 }
 
-fn manifest_action_inputs() -> Vec<(&'static str, &'static str, &'static str)> {
-    vec![
-        (
-            "linux_artifact_id",
-            "Artifact ID from the Linux x86_64 build job",
-            "${{ needs.build-linux.outputs.artifact_id }}",
-        ),
-        (
-            "macos_arm64_artifact_id",
-            "Artifact ID from the macOS arm64 build job",
-            "${{ needs.build-macos.outputs.artifact_id }}",
-        ),
-        (
-            "macos_x86_64_artifact_id",
-            "Artifact ID from the macOS x86_64 build job",
-            "${{ needs.build-macos-intel.outputs.artifact_id }}",
-        ),
-        (
-            "manifest_artifact_id",
-            "Artifact ID of the canonical same-run manifest",
-            "${{ needs.candidate-manifest.outputs.artifact_id }}",
-        ),
-        (
-            "manifest_sha256",
-            "SHA-256 of the canonical same-run manifest bytes",
-            "${{ needs.candidate-manifest.outputs.manifest_sha256 }}",
-        ),
-    ]
-}
-
 /// Rebuild the expected manifest from verified downloaded binaries and records.
 pub(super) fn publication_verify_script(pins: &ProductReleasePins) -> String {
     let candidate_path = candidate_path();
     format!(
         "{}\ncmp {FILE} {candidate_path}",
-        manifest_script(&pins.rust_version, &pins.mr_boxington_version)
+        manifest_script(
+            &format!("'{}'", pins.rust_version),
+            &format!("'{}'", pins.mr_boxington_version),
+        )
+    )
+}
+
+pub(super) fn publication_verify_source_free_script() -> String {
+    let candidate_path = candidate_path();
+    format!(
+        "{}\ncmp {FILE} {candidate_path}",
+        manifest_script(
+            "\"$VELNOR_RELEASE_RUST_VERSION\"",
+            "\"$VELNOR_RELEASE_MR_BOXINGTON_VERSION\"",
+        )
     )
 }
 
@@ -193,8 +187,8 @@ pub(super) fn manifest_digest_check_script() -> String {
 }
 
 /// Assemble release verification and creation in one parent shell.
-pub(super) fn publish_script(pins: &ProductReleasePins) -> String {
-    publish::publish_script(pins)
+pub(super) fn publish_script() -> String {
+    publish::publish_script()
 }
 
 pub(super) fn acceptance_artifact_name() -> String {

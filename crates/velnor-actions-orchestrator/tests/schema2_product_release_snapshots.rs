@@ -4,8 +4,12 @@ use velnor_actions_workflow_renderer::RenderedTree;
 
 #[path = "schema2_generator_release_action_snapshots.rs"]
 mod action_snapshots;
+#[path = "schema2_generator_release_attester_boundary_snapshots.rs"]
+mod attester_boundary_snapshots;
 #[path = "schema2_generator_release_cross_snapshots.rs"]
 mod cross_snapshots;
+#[path = "schema2_generator_release_manifest_snapshots.rs"]
+mod manifest_snapshots;
 #[path = "schema2_generator_release_mise_install_snapshots.rs"]
 mod mise_install_snapshots;
 #[path = "schema2_generator_release_publication_snapshots.rs"]
@@ -176,14 +180,14 @@ fn assert_product(
         actions,
         project_tool_resolver,
     )?;
-    publication_snapshots::assert_asset_catalog(&action_text(actions));
-    publication_snapshots::assert_pinned_gh_policy(actions);
-    cross_snapshots::assert_portable_gh_watchdog(actions);
+    publication_snapshots::assert_asset_catalog(&all);
+    publication_snapshots::assert_pinned_gh_policy(generator, actions)?;
+    cross_snapshots::assert_portable_gh_watchdog(generator, actions)?;
     publication_snapshots::assert_target_builds(generator, actions)?;
     mise_install_snapshots::assert_build_mise_token_scope(generator, actions)?;
     cross_snapshots::assert_qualify_install_tools(actions)?;
-    publication_snapshots::assert_manifest_job(generator, actions)?;
-    publication_snapshots::assert_publish_job(generator, actions)?;
+    manifest_snapshots::assert_manifest_job(generator)?;
+    publication_snapshots::assert_publish_job(generator)?;
     Ok(())
 }
 
@@ -313,18 +317,24 @@ fn assert_checkouts(
     );
     for id in [
         "build-linux",
-        "attest-linux",
-        "attest-macos",
-        "attest-macos-intel",
         "build-macos",
         "build-macos-intel",
         "candidate-manifest",
-        "attest-manifest",
-        "publish-generator",
     ] {
         let job = super::job_body(generator, id)?;
         assert_eq!(job.matches("actions/checkout@").count(), 1, "{id}: {job}");
         assert!(job.contains("ref: ${{ inputs.source_sha }}"), "{id}: {job}");
+    }
+    for id in [
+        "attest-linux",
+        "attest-macos",
+        "attest-macos-intel",
+        "attest-manifest",
+        "publish-generator",
+    ] {
+        let job = super::job_body(generator, id)?;
+        assert!(!job.contains("actions/checkout@"), "{id}: {job}");
+        assert!(!job.contains("uses: ./.github/actions/"), "{id}: {job}");
     }
     for id in ["qualify-linux", "qualify-macos", "qualify-macos-intel"] {
         let job = super::job_body(generator, id)?;

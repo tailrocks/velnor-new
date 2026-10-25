@@ -8,6 +8,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[path = "schema2_generator_release_test_helpers.rs"]
+mod test_helpers;
+
 const REPOSITORY: &str = "tailrocks/velnor-new";
 const SOURCE_SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 const PINNED_MISE_ARGUMENTS: &str = "--no-config --no-env --no-hooks exec gh@2.103.2 --";
@@ -134,9 +137,9 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
     fs::write(scratch.0.join("draft-release.json"), draft_json)?;
     let published_json = release_json(&scratch.0, case, false)?;
     fs::write(scratch.0.join("published-release.json"), published_json)?;
-    install_mock_gh(&scratch.0)?;
+    test_helpers::install_mock_gh(&scratch.0)?;
     let script = scratch.0.join("publish.sh");
-    fs::write(&script, manifest::publish_script(&test_pins()))?;
+    fs::write(&script, manifest::publish_script())?;
     let gh_function = super::workflow_steps::gh_function(&test_pins().gh_argv)?;
     let output = run_publish_command(&scratch.0, case, &script, &gh_function)?;
     eprintln!(
@@ -230,7 +233,7 @@ fn run_publish_command(
         .arg("-c")
         .arg(format!("{gh_function}\n{}", fs::read_to_string(script)?))
         .current_dir(root)
-        .env("PATH", path_with_mock_gh(root)?)
+        .env("PATH", test_helpers::path_with_mock_gh(root)?)
         .env("GITHUB_REPOSITORY", REPOSITORY)
         .env("GITHUB_SHA", SOURCE_SHA)
         .env("GITHUB_WORKFLOW_SHA", SOURCE_SHA)
@@ -242,8 +245,13 @@ fn run_publish_command(
             "tailrocks/velnor-new/.github/workflows/product-release.yml@refs/heads/main",
         )
         .env("GITHUB_EVENT_NAME", "workflow_dispatch")
+        .env("VELNOR_RELEASE_RUST_VERSION", test_pins().rust_version)
+        .env(
+            "VELNOR_RELEASE_MR_BOXINGTON_VERSION",
+            test_pins().mr_boxington_version,
+        )
         .env("GITHUB_OUTPUT", root.join("eligibility-output"))
-        .env("GH_PREFLIGHT", preflight_mode(case))
+        .env("GH_PREFLIGHT", test_helpers::preflight_mode(case))
         .env("GH_CASE", format!("{case:?}"))
         .env("GH_DRAFT_JSON", root.join("draft-release.json"))
         .env("GH_RELEASE_JSON", root.join("published-release.json"))
@@ -277,28 +285,7 @@ fn assert_publish_result(
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    let create_is_expected = matches!(
-        case,
-        Failure::None
-            | Failure::WrongDraftReleaseId
-            | Failure::WrongDraftRepository
-            | Failure::WrongDraftApiPath
-            | Failure::WrongDraftTag
-            | Failure::WrongDraftSource
-            | Failure::WrongDraftDigest
-            | Failure::WrongDraftSize
-            | Failure::WrongDraftInventory
-            | Failure::UnknownDraftAsset
-            | Failure::WrongDraftAssetName
-            | Failure::WrongDraftAssetState
-            | Failure::UntaggedDraftUrls
-            | Failure::ChangedReleaseId
-            | Failure::WrongPublishedDigest
-            | Failure::WrongPublishedAssetUrl
-            | Failure::WrongPublishedUrl
-            | Failure::MutablePublished
-            | Failure::TagMovedBeforePublish
-    );
+    let create_is_expected = test_helpers::expects_draft_creation(case);
     if create_is_expected {
         publisher_receipt_tests::assert_draft_creation(root, case, output)?;
         if should_succeed {
@@ -315,7 +302,7 @@ fn assert_publish_result(
             assert!(!root.join("release-accepted").exists());
         }
     } else {
-        assert_no_release_created(root);
+        test_helpers::assert_no_release_created(root);
     }
     if case == Failure::TagMovedBeforePublish {
         assert_eq!(
@@ -329,7 +316,7 @@ fn assert_publish_result(
         );
         assert!(!root.join("release-accepted").exists());
     }
-    if is_draft_validation_failure(case) {
+    if test_helpers::is_draft_validation_failure(case) {
         assert_eq!(
             output.status.code(),
             Some(1),
@@ -343,44 +330,6 @@ fn assert_publish_result(
         );
     }
     Ok(())
-}
-
-fn is_draft_validation_failure(case: Failure) -> bool {
-    matches!(
-        case,
-        Failure::WrongDraftReleaseId
-            | Failure::WrongDraftRepository
-            | Failure::WrongDraftApiPath
-            | Failure::WrongDraftTag
-            | Failure::WrongDraftSource
-            | Failure::WrongDraftDigest
-            | Failure::WrongDraftSize
-            | Failure::WrongDraftInventory
-            | Failure::UnknownDraftAsset
-            | Failure::WrongDraftAssetName
-            | Failure::WrongDraftAssetState
-    )
-}
-
-fn install_mock_gh(root: &Path) -> Result<(), Box<dyn Error>> {
-    fake_commands::install_mock_gh(root)
-}
-
-fn path_with_mock_gh(root: &Path) -> Result<std::ffi::OsString, Box<dyn Error>> {
-    Ok(with_required_tool_path(&[root.join("mock-bin")])?)
-}
-
-fn preflight_mode(case: Failure) -> &'static str {
-    match case {
-        Failure::UnauthorizedTag => "401",
-        Failure::ForbiddenTag => "403",
-        Failure::TransientTag => "transient",
-        _ => "404",
-    }
-}
-
-fn assert_no_release_created(root: &Path) {
-    assert!(!root.join("created-tag").exists());
 }
 
 #[path = "schema2_generator_release_cli_tests.rs"]

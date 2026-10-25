@@ -45,6 +45,14 @@ pub(super) fn job(
                 pins.mr_boxington_version
             ),
         ),
+        workflow_steps::bash_step_with_id(
+            "authority_toolchain",
+            "Export verified release toolchain authority",
+            &format!(
+                "set -eu\nrust='{}'\nmbx='{}'\ngh='{}'\nexact_semver='^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$'\n[[ \"$rust\" =~ $exact_semver && \"$mbx\" =~ $exact_semver && \"$gh\" =~ $exact_semver ]] || exit 1\nprintf 'rust_version=%s\\nmr_boxington_version=%s\\ngh_version=%s\\n' \"$rust\" \"$mbx\" \"$gh\" >> \"$GITHUB_OUTPUT\"",
+                pins.rust_version, pins.mr_boxington_version, pins.gh_version
+            ),
+        ),
         workflow_steps::bash_step(
             "Stage canonical candidate manifest",
             &format!(
@@ -77,25 +85,38 @@ pub(super) fn job(
     );
     fields.retain(|(key, _)| key != "name");
     fields = workflow_steps::with_needs(fields, &NEEDS);
-    fields.push((
-        "outputs".to_owned(),
-        Yaml::Map(vec![
-            (
-                "artifact_id".to_owned(),
-                Yaml::str("${{ steps.upload.outputs.artifact-id }}"),
-            ),
-            (
-                "manifest_sha256".to_owned(),
-                Yaml::str("${{ steps.manifest_digest.outputs.manifest_sha256 }}"),
-            ),
-        ]),
-    ));
+    fields.push(("outputs".to_owned(), candidate_outputs()));
     let mut workflow = vec![
         workflow_steps::checkout_step(),
         workflow_steps::mise_step(pins.setup_for(ReleaseTarget::LinuxX86_64))?,
     ];
     workflow.extend(steps);
     Ok(finish("candidate-manifest", fields, workflow))
+}
+
+fn candidate_outputs() -> Yaml {
+    Yaml::Map(vec![
+        (
+            "artifact_id".to_owned(),
+            Yaml::str("${{ steps.upload.outputs.artifact-id }}"),
+        ),
+        (
+            "manifest_sha256".to_owned(),
+            Yaml::str("${{ steps.manifest_digest.outputs.manifest_sha256 }}"),
+        ),
+        (
+            "rust_version".to_owned(),
+            Yaml::str("${{ steps.authority_toolchain.outputs.rust_version }}"),
+        ),
+        (
+            "mr_boxington_version".to_owned(),
+            Yaml::str("${{ steps.authority_toolchain.outputs.mr_boxington_version }}"),
+        ),
+        (
+            "gh_version".to_owned(),
+            Yaml::str("${{ steps.authority_toolchain.outputs.gh_version }}"),
+        ),
+    ])
 }
 
 fn manifest_digest_script() -> String {

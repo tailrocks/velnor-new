@@ -35,9 +35,8 @@ struct TargetJobs {
     build: &'static str,
     build_action: &'static str,
     qualify: &'static str,
-    attest: &'static str,
     qualifier_action: &'static str,
-    attester_action: &'static str,
+    attest: &'static str,
 }
 
 pub(super) fn assert_isolated_candidate_execution(
@@ -48,6 +47,7 @@ pub(super) fn assert_isolated_candidate_execution(
 ) -> Result<(), Box<dyn Error>> {
     environment_matrix::assert_action_environment_matrix(actions, project_tool_resolver)?;
     environment_matrix::assert_workflow_environment_matrix(workflows, project_tool_resolver)?;
+    assert_privileged_jobs_are_source_free(generator_workflow)?;
     for target in [
         TargetJobs {
             target: "linux",
@@ -56,7 +56,6 @@ pub(super) fn assert_isolated_candidate_execution(
             qualify: "qualify-linux",
             attest: "attest-linux",
             qualifier_action: "generator-release-qualify-linux",
-            attester_action: "generator-release-attest-linux",
         },
         TargetJobs {
             target: "macos",
@@ -65,7 +64,6 @@ pub(super) fn assert_isolated_candidate_execution(
             qualify: "qualify-macos",
             attest: "attest-macos",
             qualifier_action: "generator-release-qualify-macos",
-            attester_action: "generator-release-attest-macos",
         },
         TargetJobs {
             target: "macos-intel",
@@ -74,7 +72,6 @@ pub(super) fn assert_isolated_candidate_execution(
             qualify: "qualify-macos-intel",
             attest: "attest-macos-intel",
             qualifier_action: "generator-release-qualify-macos-intel",
-            attester_action: "generator-release-attest-macos-intel",
         },
     ] {
         assert_target_boundary(generator_workflow, actions, target, project_tool_resolver)?;
@@ -108,7 +105,66 @@ fn assert_target_boundary(
         "${{ github.token }}",
     )?;
     assert_qualifier_boundary(workflow, actions, target, project_tool_resolver)?;
-    assert_attester_boundary(workflow, actions, target)
+    super::attester_boundary_snapshots::assert_attester_boundary(
+        workflow,
+        target.attest,
+        target.build,
+        target.qualify,
+    )
+}
+
+fn assert_privileged_jobs_are_source_free(workflow: &str) -> Result<(), Box<dyn Error>> {
+    for id in [
+        "attest-linux",
+        "attest-macos",
+        "attest-macos-intel",
+        "attest-manifest",
+        "publish-generator",
+    ] {
+        let job = super::super::job_body(workflow, id)?;
+        for forbidden in [
+            "actions/checkout@",
+            "uses: ./.github/actions/",
+            "scripts/",
+            "cargo ",
+            "rustc ",
+            "mbx build",
+            "git rev-parse HEAD",
+            "--version",
+            "./linux-assets/",
+            "./macos-assets/",
+            "./macos-intel-assets/",
+            "./target/",
+            "Resolve project tool versions",
+            "VELNOR_TOOL_",
+        ] {
+            assert!(!job.contains(forbidden), "{id} contains {forbidden}: {job}");
+        }
+        assert!(job.contains("candidate-manifest"), "{id}: {job}");
+        assert!(
+            job.contains(
+                "VELNOR_RELEASE_GH_VERSION: ${{ needs.candidate-manifest.outputs.gh_version }}"
+            ),
+            "{id} must bind authenticated GH authority: {job}"
+        );
+        assert!(
+            job.contains("Validate source-bound GitHub CLI version"),
+            "{id}: {job}"
+        );
+        assert!(
+            job.contains(
+                r#"mise --no-config --no-env --no-hooks install 'gh@'\"$VELNOR_RELEASE_GH_VERSION\""#
+            ),
+            "{id}: {job}"
+        );
+        assert!(job.contains(r#"mise --no-config --no-env --no-hooks exec 'gh@'\"$VELNOR_RELEASE_GH_VERSION\" -- gh"#), "{id}: {job}");
+        assert!(
+            job.find("Validate source-bound GitHub CLI version")
+                < job.find("Install source-bound GitHub CLI"),
+            "{id} must validate GH before install"
+        );
+    }
+    Ok(())
 }
 
 fn assert_build_artifact_outputs(workflow: &str, build: &str) -> Result<(), Box<dyn Error>> {
@@ -120,6 +176,27 @@ fn assert_build_artifact_outputs(workflow: &str, build: &str) -> Result<(), Box<
     assert!(!build_job.contains("artifact_digest:"), "{build_job}");
     assert!(build_job.contains("id: upload\n"), "{build_job}");
     assert!(build_job.contains("artifact-id"), "{build_job}");
+    let target = match build {
+        "build-linux" => "x86_64-unknown-linux-gnu",
+        "build-macos" => "aarch64-apple-darwin",
+        "build-macos-intel" => "x86_64-apple-darwin",
+        _ => return Err(format!("unknown product build job: {build}").into()),
+    };
+    let binary = format!("velnor-actions-{}-{target}", env!("CARGO_PKG_VERSION"));
+    for asset in [
+        binary.clone(),
+        format!("{binary}.sha256"),
+        format!("{binary}.provenance.json"),
+    ] {
+        assert!(
+            build_job.contains(&asset),
+            "{build} omits raw asset {asset}: {build_job}"
+        );
+    }
+    assert!(
+        !build_job.contains(".tar"),
+        "{build} must upload raw files: {build_job}"
+    );
     Ok(())
 }
 
@@ -273,72 +350,6 @@ fn assert_qualifier_action_boundary(qualifier_body: &str) -> Result<(), Box<dyn 
     assert!(
         !qualifier_body[candidate..].contains("- name:"),
         "{qualifier_body}"
-    );
-    Ok(())
-}
-
-fn assert_attester_boundary(
-    workflow: &str,
-    actions: &Actions,
-    target: TargetJobs,
-) -> Result<(), Box<dyn Error>> {
-    let attester = super::super::job_body(workflow, target.attest)?;
-    assert!(
-        attester.contains(&format!("- {}\n", target.build)),
-        "{attester}"
-    );
-    assert!(
-        attester.contains(&format!("- {}\n", target.qualify)),
-        "{attester}"
-    );
-    assert!(
-        attester.contains(&format!(
-            "artifact_id: ${{{{ needs.{}.outputs.artifact_id }}}}",
-            target.build
-        )),
-        "{attester}"
-    );
-    assert!(attester.contains("id-token: write"), "{attester}");
-    assert_job_action(workflow, target.attest, target.attester_action)?;
-    let attester_body = action(actions, target.attester_action)?;
-    assert_action_input(attester_body);
-    assert!(
-        attester_body.contains("artifact-ids: ${{ inputs.artifact_id }}"),
-        "{attester_body}"
-    );
-    assert!(!attester_body.contains("${{ needs."), "{attester_body}");
-    assert!(
-        attester_body.contains("Verify candidate provenance record"),
-        "{attester_body}"
-    );
-    assert!(
-        attester_body.contains("Verify downloaded checksum sidecar"),
-        "{attester_body}"
-    );
-    assert!(
-        attester_body.contains("Attest built artifacts"),
-        "{attester_body}"
-    );
-    assert!(
-        attester_body.contains("Fetch and verify candidate attestation bundles"),
-        "{attester_body}"
-    );
-    assert!(
-        attester_body.contains("Upload verified candidate attestation bundles"),
-        "{attester_body}"
-    );
-    assert!(
-        !attester_body.contains("Qualify downloaded candidate"),
-        "{attester_body}"
-    );
-    assert!(!attester_body.contains("--version"), "{attester_body}");
-    assert!(
-        !attester_body.contains("capture-opentofu-goldens.sh"),
-        "{attester_body}"
-    );
-    assert!(
-        !attester_body.contains(&format!("needs.{}.outputs", target.qualify)),
-        "{attester_body}"
     );
     Ok(())
 }

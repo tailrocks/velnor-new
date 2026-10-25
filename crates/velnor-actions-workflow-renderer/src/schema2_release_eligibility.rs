@@ -108,7 +108,7 @@ pub(super) fn script(pins: &ProductReleasePins) -> Result<String, RenderError> {
     let gh_function = generator_release::gh_function(pins)?;
     Ok(format!(
         "set -euo pipefail\n\n{gh_function}\n\n{}\n\nrelease_eligibility\nexit 0\n",
-        render_function()
+        render_function(true)
     ))
 }
 
@@ -119,10 +119,16 @@ pub(super) fn script(pins: &ProductReleasePins) -> Result<String, RenderError> {
 /// and no call: redefining `gh` mid-script is what `ShellCheck` reports as
 /// SC2218, and it is never needed.
 pub(super) fn publisher_definition() -> String {
-    render_function()
+    render_function(true)
 }
 
-fn render_function() -> String {
+/// Source-free publisher variant. Inputs remain bound to GitHub event and
+/// protected API state; only the local checkout assertion is omitted.
+pub(super) fn publisher_definition_source_free() -> String {
+    render_function(false)
+}
+
+fn render_function(require_checkout: bool) -> String {
     ELIGIBILITY_FUNCTION
         .replace("@REPOSITORY@", REPOSITORY)
         .replace("@WORKFLOW_PATH@", WORKFLOW_PATH)
@@ -131,6 +137,14 @@ fn render_function() -> String {
         .replace("@LATEST_RUN_JQ@", LATEST_RUN_JQ)
         .replace("@REQUIRED_JOB_JQ@", REQUIRED_JOB_JQ)
         .replace("@CI_RUN_LISTING_FUNCTION@", &ci_run_lookup::bash_function())
+        .replace(
+            "@CHECKOUT_ASSERTION@",
+            if require_checkout {
+                "local checkout_sha\ncheckout_sha=\"$(git rev-parse HEAD)\" || fail 'cannot read checked-out source SHA'\n[[ \"$checkout_sha\" == \"$source_sha\" ]] || fail 'checked-out source SHA differs'"
+            } else {
+                ""
+            },
+        )
 }
 
 const ELIGIBILITY_FUNCTION: &str = r#"release_eligibility() {
@@ -159,9 +173,7 @@ esac
 is_sha "$source_sha" || fail 'source SHA is malformed'
 is_sha "$authority_sha" || fail 'workflow authority SHA is malformed'
 [[ "$source_sha" == "$authority_sha" ]] || fail 'workflow authority and source differ'
-local checkout_sha
-checkout_sha="$(git rev-parse HEAD)" || fail 'cannot read checked-out source SHA'
-[[ "$checkout_sha" == "$source_sha" ]] || fail 'checked-out source SHA differs'
+@CHECKOUT_ASSERTION@
 [[ -n "${GH_TOKEN-}" ]] || fail 'read-only GitHub token is missing'
 [[ -n "${GITHUB_OUTPUT-}" ]] || fail 'workflow output path is missing'
 

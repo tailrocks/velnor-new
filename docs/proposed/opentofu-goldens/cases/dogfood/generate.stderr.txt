@@ -3,14 +3,9 @@ Repository: <repo>
 .github/AGENTS.md
 .github/CLAUDE.md
 .github/actions/declared-task-0/action.yml
-.github/actions/generator-release-attest-linux/action.yml
-.github/actions/generator-release-attest-macos-intel/action.yml
-.github/actions/generator-release-attest-macos/action.yml
-.github/actions/generator-release-attest-manifest/action.yml
 .github/actions/generator-release-build-linux/action.yml
 .github/actions/generator-release-build-macos-intel/action.yml
 .github/actions/generator-release-build-macos/action.yml
-.github/actions/generator-release-publish/action.yml
 .github/actions/generator-release-qualify-homebrew/action.yml
 .github/actions/generator-release-qualify-linux/action.yml
 .github/actions/generator-release-qualify-macos-intel/action.yml

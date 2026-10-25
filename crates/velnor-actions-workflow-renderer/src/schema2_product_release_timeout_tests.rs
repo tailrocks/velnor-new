@@ -50,7 +50,12 @@ fn compiler_image_and_homebrew_jobs_get_their_bounded_budgets() -> Result<(), Bo
     for (job, timeout) in observed {
         let expected = if job == "build-images" || job == "qualify-homebrew-macos" {
             30
-        } else if compiler_jobs.contains(&job) {
+        } else if compiler_jobs.contains(&job)
+            || matches!(
+                job.as_str(),
+                "qualify-linux" | "qualify-macos" | "qualify-macos-intel"
+            )
+        {
             10
         } else {
             5

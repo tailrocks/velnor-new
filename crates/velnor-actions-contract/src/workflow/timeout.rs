@@ -47,6 +47,8 @@ impl JobTimeout {
     pub const PUBLISH: Self = Self::DEFAULT;
     /// Native product compiler jobs need a bounded cold-build allowance.
     pub const PRODUCT_COMPILER: Self = Self(10);
+    /// SDK platform qualification includes pinned setup and complete fixture checks.
+    pub const PRODUCT_QUALIFICATION: Self = Self(10);
     /// The runner-image release job includes two Docker builds and a source-bound image build.
     pub const PRODUCT_IMAGE_BUILD: Self = Self(30);
 

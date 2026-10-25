@@ -132,7 +132,14 @@ fn assert_job_budget(workflow: &str, id: &str, fields: &[&str]) {
             "build-images"
         )
     ) || id == "qualify-homebrew-macos";
-    let expected = if compiler {
+    let sdk_qualification = matches!(
+        (workflow, id),
+        (
+            ".github/workflows/product-release-generator.yml",
+            "qualify-linux" | "qualify-macos" | "qualify-macos-intel"
+        )
+    );
+    let expected = if compiler || sdk_qualification {
         10
     } else if paired_sdk || extended_budget {
         30

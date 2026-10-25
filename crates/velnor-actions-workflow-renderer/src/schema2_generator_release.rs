@@ -202,8 +202,8 @@ pub(super) fn generator_release(
         &mut actions,
     )?);
     jobs.push(candidate_manifest::job(hosted.clone(), pins)?);
-    jobs.push(manifest::job(hosted.clone(), pins, &mut actions)?);
-    jobs.push(jobs::publish_job(hosted, pins, &mut actions)?);
+    jobs.push(manifest::job(hosted.clone(), pins)?);
+    jobs.push(jobs::publish_job(hosted, pins)?);
     Ok(GeneratorRelease {
         workflow: document(jobs),
         actions,
@@ -249,11 +249,9 @@ fn linux_jobs(
         jobs::attest_job(
             "attest-linux",
             "Attest Linux velnor-actions",
-            "generator-release-attest-linux",
             hosted,
             assets::LINUX,
             pins,
-            actions,
         )?,
     ])
 }
@@ -298,11 +296,9 @@ fn macos_arm64_jobs(
         jobs::attest_job(
             "attest-macos",
             "Attest macOS velnor-actions",
-            "generator-release-attest-macos",
             macos,
             assets::MACOS_ARM64,
             pins,
-            actions,
         )?,
     ])
 }
@@ -347,11 +343,9 @@ fn macos_x86_64_jobs(
         jobs::attest_job(
             "attest-macos-intel",
             "Attest macOS x86_64 velnor-actions",
-            "generator-release-attest-macos-intel",
             native_runs_on,
             assets::MACOS_X86_64,
             pins,
-            actions,
         )?,
     ])
 }
@@ -385,6 +379,9 @@ fn document(jobs: Vec<(String, Yaml)>) -> Yaml {
 #[path = "../../test_support/required_tool_path.rs"]
 mod required_tool_path;
 
+#[cfg(test)]
+#[path = "schema2_generator_release_authority_tests.rs"]
+mod authority_tests;
 #[cfg(test)]
 #[path = "schema2_generator_release_tests.rs"]
 mod tests;

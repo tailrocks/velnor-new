@@ -6,7 +6,7 @@ use std::fs;
 use std::path::Path;
 use velnor_actions_workflow_renderer::RenderedTree;
 
-const SNAPSHOTS: [(&str, &str, &str); 16] = [
+const SNAPSHOTS: [(&str, &str, &str); 12] = [
     (
         ".github/workflows/qualification.yml",
         "qualification-schema2-fixture.yml",
@@ -33,11 +33,6 @@ const SNAPSHOTS: [(&str, &str, &str); 16] = [
         include_str!("snapshots/product-release-generator.yml"),
     ),
     (
-        ".github/actions/generator-release-attest-manifest/action.yml",
-        "generator-release-attest-manifest.yml",
-        include_str!("snapshots/generator-release-attest-manifest.yml"),
-    ),
-    (
         ".github/actions/generator-release-build-linux/action.yml",
         "generator-release-build-linux.yml",
         include_str!("snapshots/generator-release-build-linux.yml"),
@@ -53,19 +48,9 @@ const SNAPSHOTS: [(&str, &str, &str); 16] = [
         include_str!("snapshots/generator-release-build-macos-intel.yml"),
     ),
     (
-        ".github/actions/generator-release-attest-linux/action.yml",
-        "generator-release-attest-linux.yml",
-        include_str!("snapshots/generator-release-attest-linux.yml"),
-    ),
-    (
         ".github/actions/generator-release-qualify-linux/action.yml",
         "generator-release-qualify-linux.yml",
         include_str!("snapshots/generator-release-qualify-linux.yml"),
-    ),
-    (
-        ".github/actions/generator-release-attest-macos/action.yml",
-        "generator-release-attest-macos.yml",
-        include_str!("snapshots/generator-release-attest-macos.yml"),
     ),
     (
         ".github/actions/generator-release-qualify-macos/action.yml",
@@ -73,19 +58,14 @@ const SNAPSHOTS: [(&str, &str, &str); 16] = [
         include_str!("snapshots/generator-release-qualify-macos.yml"),
     ),
     (
-        ".github/actions/generator-release-attest-macos-intel/action.yml",
-        "generator-release-attest-macos-intel.yml",
-        include_str!("snapshots/generator-release-attest-macos-intel.yml"),
-    ),
-    (
         ".github/actions/generator-release-qualify-macos-intel/action.yml",
         "generator-release-qualify-macos-intel.yml",
         include_str!("snapshots/generator-release-qualify-macos-intel.yml"),
     ),
     (
-        ".github/actions/generator-release-publish/action.yml",
-        "generator-release-publish.yml",
-        include_str!("snapshots/generator-release-publish.yml"),
+        ".github/actions/generator-release-qualify-homebrew/action.yml",
+        "generator-release-qualify-homebrew.yml",
+        include_str!("snapshots/generator-release-qualify-homebrew.yml"),
     ),
 ];
 

@@ -8,15 +8,12 @@ use rustix::fs::{self as unix_fs, Mode, OFlags};
 use sha2::{Digest, Sha256};
 use velnor_actions_mise::CheckDeadline;
 
-use super::{
-    CAPTURE_LIMIT, ElfFacts, HOMEBREW_EXECUTABLE, HomebrewInstallEvidence, HomebrewInstallRequest,
-    KegState, Snapshot,
-};
-use crate::{
-    OrchestratorError,
-    homebrew::command::{HomebrewCommand, homebrew_command},
-    internal::internal,
-};
+#[path = "homebrew_install_command_failure.rs"]
+mod command_failure;
+pub(in crate::homebrew::install) use command_failure::run_command;
+
+use super::{ElfFacts, HomebrewInstallEvidence, HomebrewInstallRequest, KegState, Snapshot};
+use crate::{OrchestratorError, homebrew::command::HomebrewCommand, internal::internal};
 
 pub(super) fn run_brew_text(
     operation: HomebrewCommand,
@@ -35,23 +32,6 @@ pub(super) fn run_brew(
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     run_command(operation, home, temp, deadline).map(|_| ())
-}
-
-pub(super) fn run_command(
-    operation: HomebrewCommand,
-    home: &Path,
-    temp: &Path,
-    deadline: CheckDeadline,
-) -> Result<velnor_actions_mise::ProcessOutput, OrchestratorError> {
-    let output = homebrew_command(operation, home, temp)
-        .map_err(|_| invalid("homebrew_command_rejected"))?
-        .run_quiescent_until(CAPTURE_LIMIT, deadline)
-        .map_err(|_| invalid("homebrew_command_failed"))?;
-    let (output, _drained) = output;
-    output
-        .require_success(HOMEBREW_EXECUTABLE)
-        .map_err(|_| invalid("homebrew_command_failed"))?;
-    Ok(output)
 }
 
 pub(super) fn trusted_owned_directory(path: &Path) -> Result<PathBuf, OrchestratorError> {

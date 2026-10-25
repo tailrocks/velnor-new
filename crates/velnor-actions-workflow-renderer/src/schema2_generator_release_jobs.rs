@@ -47,7 +47,7 @@ pub(super) fn build_job(
                 "upload",
                 product.upload_name,
                 product.workflow_artifact,
-                &[product.archive],
+                &assets::artifact_upload_paths(product),
             ),
         ],
     ))
@@ -56,21 +56,23 @@ pub(super) fn build_job(
 pub(super) fn attest_job(
     id: &str,
     name: &str,
-    action: &str,
     runs_on: Yaml,
     product: assets::ProductAsset,
     pins: &ProductReleasePins,
-    actions: &mut Vec<(String, Yaml)>,
 ) -> Result<(String, Yaml), RenderError> {
     let files = [product.binary, product.sidecar, product.provenance];
-    let downloads = assets::download_build_steps(product, "Download built asset archive");
+    let artifact_id = format!("${{{{ needs.{}.outputs.artifact_id }}}}", product.build_job);
+    let downloads =
+        assets::download_build_steps_for_id(product, "Download built asset files", &artifact_id);
     let mut action_steps = vec![workflow_steps::mise_step(pins.setup_for(product.target))?];
-    action_steps.push(workflow_steps::install_gh_step(&pins.install_gh_argv)?);
+    action_steps.push(authority_gh_validation_step());
+    action_steps.push(authority_gh_install_step()?);
     action_steps.extend(downloads);
     action_steps.extend([
-        workflow_steps::bash_step(
+        workflow_steps::bash_step_with_env(
             "Verify candidate provenance record",
-            &assets::verify_provenance_script(product, pins),
+            &assets::verify_authority_provenance_script(product),
+            authority_toolchain_env(),
         ),
         workflow_steps::bash_step(
             "Verify downloaded checksum sidecar",
@@ -87,7 +89,7 @@ pub(super) fn attest_job(
         workflow_steps::bash_step_with_token(
             "Fetch and verify candidate attestation bundles",
             &manifest::asset_attestation_bundle_script(product),
-            &pins.gh_argv,
+            &authority_gh_argv(),
         )?,
         workflow_steps::upload_step(
             "Upload verified candidate attestation bundles",
@@ -95,15 +97,6 @@ pub(super) fn attest_job(
             &bundle_path_refs,
         ),
     ]);
-    let call = local_action_with_input(
-        action,
-        name,
-        action_steps,
-        "artifact_id",
-        "Artifact ID from this target's build job",
-        &format!("${{{{ needs.{}.outputs.artifact_id }}}}", product.build_job),
-        actions,
-    )?;
     let mut fields = workflow_steps::with_needs(
         workflow_steps::with_permissions(
             base(name, runs_on, JobTimeout::DEFAULT),
@@ -112,34 +105,32 @@ pub(super) fn attest_job(
         &if product.target == ReleaseTarget::MacosArm64 {
             vec![
                 product.build_job,
+                "candidate-manifest",
                 product.qualify_job,
                 "qualify-homebrew-macos",
             ]
         } else {
-            vec![product.build_job, product.qualify_job]
+            vec![product.build_job, "candidate-manifest", product.qualify_job]
         },
     );
     fields.retain(|(key, _)| key != "name");
-    Ok(finish(
-        id,
-        fields,
-        vec![workflow_steps::checkout_step(), call],
-    ))
+    fields.push((
+        "env".to_owned(),
+        Yaml::Map(
+            authority_toolchain_env()
+                .into_iter()
+                .map(|(key, value)| (key.to_owned(), Yaml::str(value)))
+                .collect(),
+        ),
+    ));
+    Ok(finish(id, fields, action_steps))
 }
 
 pub(super) fn publish_job(
     hosted: Yaml,
     pins: &ProductReleasePins,
-    actions: &mut Vec<(String, Yaml)>,
 ) -> Result<(String, Yaml), RenderError> {
     let steps = publish_steps(pins)?;
-    let call = local_action_with_inputs(
-        "generator-release-publish",
-        "Publish generator release",
-        steps,
-        publish_action_inputs(),
-        actions,
-    )?;
     let mut fields = workflow_steps::with_needs(
         workflow_steps::with_permissions(
             base("Publish velnor-actions", hosted, JobTimeout::DEFAULT),
@@ -162,64 +153,101 @@ pub(super) fn publish_job(
         "environment".to_owned(),
         Yaml::Map(vec![("name".to_owned(), Yaml::str("generator-release"))]),
     ));
+    fields.push((
+        "env".to_owned(),
+        Yaml::Map(
+            authority_toolchain_env()
+                .into_iter()
+                .map(|(key, value)| (key.to_owned(), Yaml::str(value)))
+                .collect(),
+        ),
+    ));
     let acceptance_paths = manifest::acceptance_artifact_paths();
     let acceptance_path_refs = acceptance_paths.to_vec();
     let acceptance_name = manifest::acceptance_artifact_name();
     Ok(finish(
         "publish-generator",
         fields,
-        vec![
-            workflow_steps::checkout_step(),
-            call,
-            workflow_steps::upload_step(
+        steps
+            .into_iter()
+            .chain([workflow_steps::upload_step(
                 "Upload verified immutable release acceptance",
                 &acceptance_name,
                 &acceptance_path_refs,
-            ),
-        ],
+            )])
+            .collect(),
     ))
 }
 
-fn publish_action_inputs() -> Vec<(&'static str, &'static str, &'static str)> {
+fn authority_toolchain_env() -> Vec<(&'static str, &'static str)> {
     vec![
         (
-            "linux_artifact_id",
-            "Artifact ID from the Linux x86_64 build job",
-            "${{ needs.build-linux.outputs.artifact_id }}",
+            "VELNOR_RELEASE_RUST_VERSION",
+            "${{ needs.candidate-manifest.outputs.rust_version }}",
         ),
         (
-            "macos_arm64_artifact_id",
-            "Artifact ID from the macOS arm64 build job",
-            "${{ needs.build-macos.outputs.artifact_id }}",
+            "VELNOR_RELEASE_MR_BOXINGTON_VERSION",
+            "${{ needs.candidate-manifest.outputs.mr_boxington_version }}",
         ),
         (
-            "macos_x86_64_artifact_id",
-            "Artifact ID from the macOS x86_64 build job",
-            "${{ needs.build-macos-intel.outputs.artifact_id }}",
-        ),
-        (
-            "manifest_artifact_id",
-            "Artifact ID of the canonical same-run manifest",
-            "${{ needs.candidate-manifest.outputs.artifact_id }}",
-        ),
-        (
-            "manifest_sha256",
-            "SHA-256 of the canonical same-run manifest bytes",
-            "${{ needs.candidate-manifest.outputs.manifest_sha256 }}",
+            "VELNOR_RELEASE_GH_VERSION",
+            "${{ needs.candidate-manifest.outputs.gh_version }}",
         ),
     ]
+}
+
+pub(super) fn authority_gh_argv() -> Vec<String> {
+    [
+        "mise",
+        "--no-config",
+        "--no-env",
+        "--no-hooks",
+        "exec",
+        "gh@$VELNOR_RELEASE_GH_VERSION",
+        "--",
+        "gh",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect()
+}
+
+pub(super) fn authority_gh_install_argv() -> Vec<String> {
+    [
+        "mise",
+        "--no-config",
+        "--no-env",
+        "--no-hooks",
+        "install",
+        "gh@$VELNOR_RELEASE_GH_VERSION",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect()
+}
+
+pub(super) fn authority_gh_install_step() -> Result<Yaml, RenderError> {
+    workflow_steps::command_step(
+        "Install source-bound GitHub CLI",
+        &authority_gh_install_argv(),
+    )
+}
+
+pub(super) fn authority_gh_validation_step() -> Yaml {
+    workflow_steps::bash_step(
+        "Validate source-bound GitHub CLI version",
+        "set -eu\nexact_semver='^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$'\n[[ \"${VELNOR_RELEASE_GH_VERSION:-}\" =~ $exact_semver ]] || exit 1",
+    )
 }
 
 fn publish_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, RenderError> {
     let mut steps = vec![workflow_steps::mise_step(
         pins.setup_for(ReleaseTarget::LinuxX86_64),
     )?];
-    steps.push(workflow_steps::install_gh_step(&pins.install_gh_argv)?);
+    steps.push(authority_gh_validation_step());
+    steps.push(authority_gh_install_step()?);
     for asset in assets::ASSETS {
-        let artifact_id = format!(
-            "${{{{ inputs.{}_artifact_id }}}}",
-            artifact_input(asset.target)
-        );
+        let artifact_id = format!("${{{{ needs.{}.outputs.artifact_id }}}}", asset.build_job);
         steps.extend(assets::download_build_steps_for_id(
             asset,
             "Download exact release build artifact",
@@ -228,7 +256,7 @@ fn publish_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, RenderError> {
     }
     steps.push(workflow_steps::download_step_by_id(
         "Download canonical same-run release manifest",
-        "${{ inputs.manifest_artifact_id }}",
+        "${{ needs.candidate-manifest.outputs.artifact_id }}",
         manifest::DIR,
     ));
     steps.push(workflow_steps::bash_step_with_env(
@@ -236,7 +264,7 @@ fn publish_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, RenderError> {
         &manifest::manifest_digest_check_script(),
         vec![(
             "VELNOR_RELEASE_MANIFEST_SHA256",
-            "${{ inputs.manifest_sha256 }}",
+            "${{ needs.candidate-manifest.outputs.manifest_sha256 }}",
         )],
     ));
     for artifact in [
@@ -254,11 +282,11 @@ fn publish_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, RenderError> {
     steps.push(workflow_steps::bash_step_with_token(
         "Fetch and verify signed release attestations",
         &manifest::attestation_bundle_script(),
-        &pins.gh_argv,
+        &authority_gh_argv(),
     )?);
     steps.push(workflow_steps::publish_step(
-        &manifest::publish_script(pins),
-        &pins.gh_argv,
+        &manifest::publish_script(),
+        &authority_gh_argv(),
     )?);
     Ok(steps)
 }
@@ -272,24 +300,6 @@ pub(super) fn local_action(
     let action = composite_yaml(name, steps)?;
     actions.push((format!(".github/actions/{logical}/action.yml"), action));
     shared_call_named(&format!("./.github/actions/{logical}"), name)
-}
-
-pub(super) fn local_action_with_input(
-    logical: &str,
-    name: &str,
-    steps: Vec<Yaml>,
-    input_name: &str,
-    input_description: &str,
-    input_value: &str,
-    actions: &mut Vec<(String, Yaml)>,
-) -> Result<Yaml, RenderError> {
-    local_action_with_inputs(
-        logical,
-        name,
-        steps,
-        vec![(input_name, input_description, input_value)],
-        actions,
-    )
 }
 
 pub(super) fn local_action_with_inputs(
@@ -321,12 +331,4 @@ pub(super) fn local_action_with_inputs(
             .map(|(input_name, _, value)| (input_name.to_owned(), Yaml::str(value)))
             .collect(),
     )
-}
-
-pub(super) fn artifact_input(target: ReleaseTarget) -> &'static str {
-    match target {
-        ReleaseTarget::LinuxX86_64 => "linux",
-        ReleaseTarget::MacosArm64 => "macos_arm64",
-        ReleaseTarget::MacosX86_64 => "macos_x86_64",
-    }
 }
