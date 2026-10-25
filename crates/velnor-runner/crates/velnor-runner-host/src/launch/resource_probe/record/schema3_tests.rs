@@ -63,7 +63,7 @@ fn schema_five_record_contains_the_mount_root_source_cpu_and_pid_witness() {
     assert_eq!(record.probe_host_pid, record.probe_namespace_pid);
 
     let value = serde_json::to_value(&record).unwrap_or_default();
-    assert_eq!(value.as_object().map(|object| object.len()), Some(35));
+    assert_eq!(value.as_object().map(serde_json::Map::len), Some(35));
     for required in [
         "probe_cgroup_cpuset_cpus_count",
         "cpu_ancestor_limits",

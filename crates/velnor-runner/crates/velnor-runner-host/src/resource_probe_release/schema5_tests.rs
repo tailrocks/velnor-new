@@ -131,11 +131,10 @@ fn validates_schema5_at_the_exact_wire_size_limit() -> Result<(), HostError> {
 }
 
 #[test]
-fn schema5_entry_rejects_schema1_without_fallback() -> Result<(), HostError> {
+fn schema5_entry_rejects_schema1_without_fallback() {
     let schema1 = b"{\"schema_version\":1,\"docker_root_free_bytes\":4,\"docker_root_total_bytes\":8,\"memory_available_bytes\":2,\"load_milli\":3,\"memory_psi_some_avg10_bps\":10000}\n";
     assert!(ProbeRecord::parse_schema5(schema1).is_none());
     assert_eq!(validate_bytes(schema1), Err(HostError::Identity));
-    Ok(())
 }
 
 #[test]
