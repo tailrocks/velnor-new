@@ -45,7 +45,7 @@ pub use tool::PinnedTool;
 pub mod project;
 use versions::tool_source;
 
-pub const MISE_VERSION: &str = "2026.10.18";
+pub const MISE_VERSION: &str = "2026.10.19";
 pub const RUST_VERSION: &str = "1.99.1";
 pub const MR_BOXINGTON_VERSION: &str = "1.27.0";
 pub const GH_VERSION: &str = "2.103.2";

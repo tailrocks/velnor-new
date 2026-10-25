@@ -1,7 +1,3 @@
-// Owner hk standard (mise + mbx + hk): the identical base, plus the builtins this repository's stacks need (Rust with
-// a nested runner workspace, Markdown, OpenTofu, GitHub Actions). Top-level `steps` feed the `check`, `fix` and
-// `pre-commit` hooks; `pre-push` and `security-audit` are custom hooks. Install with `hk install --mise`; run
-// `hk run security-audit` manually or on a schedule.
 amends "package://github.com/jdx/hk/releases/download/v2.8.0/hk@2.8.0#/Config.pkl"
 import "package://github.com/jdx/hk/releases/download/v2.8.0/hk@2.8.0#/Builtins.pkl"
 import "package://github.com/jdx/hk/releases/download/v2.8.0/hk@2.8.0#/Config.pkl"
@@ -9,56 +5,71 @@ import "package://github.com/jdx/hk/releases/download/v2.8.0/hk@2.8.0#/Config.pk
 jobs = 2
 fail_fast = false
 
-// fixtures/ holds deliberately broken or foreign test projects (malformed Cargo.toml, invalid .tf, hostile configs);
-// docs/proposed/opentofu-goldens/ holds generated golden trees. Neither is source that the stack builtins own.
 local fixtureTrees = List("fixtures/**", "docs/proposed/opentofu-goldens/**")
 
 steps {
   ["mise"] = Builtins.mise
   ["gitleaks"] = Builtins.gitleaks
-  // `--all` formats every member of either workspace; the adapter enters the selected manifest's directory
-  // and lets Cargo discover the applicable workspace from there.
   ["cargo_fmt"] = (Builtins.cargo_fmt) {
     exclude = fixtureTrees
-    check { command = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-cargo.sh\" \"$(pwd -P)/{{workspace_indicator}}\" fmt-check" }
-    check_list_files { command = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-cargo.sh\" \"$(pwd -P)/{{workspace_indicator}}\" fmt-files" }
-    fix = new Config.CommandSpec {
-      command = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-fix-write-guard.sh\" bash \"$(git rev-parse --show-toplevel)/scripts/hk-cargo.sh\" \"$(pwd -P)/{{workspace_indicator}}\" fmt-fix"
-      effect = "write"
+    workspace_indicator = "Cargo.toml"
+    dir = "{{workspace}}"
+    prefix = List("rust-build-guard", "--", "mise", "exec", "--")
+    check = (Builtins.cargo_fmt.check as Config.CommandSpec) {
+      command = new Config.Command {
+        argv = List("cargo", "fmt", "--all", "--check")
+      }
+    }
+    check_list_files = (Builtins.cargo_fmt.check_list_files as Config.CommandSpec) {
+      command = new Config.Command {
+        argv = List("cargo", "fmt", "--all", "--check", "--", "--files-with-diff")
+      }
+    }
+    fix = (Builtins.cargo_fmt.fix as Config.CommandSpec) {
+      command = new Config.Command {
+        argv = List("cargo", "fmt", "--all")
+      }
     }
   }
   ["cargo_check"] = (Builtins.cargo_check) {
     exclude = fixtureTrees
     workspace_indicator = "Cargo.toml"
-    check { command = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-cargo.sh\" \"$(pwd -P)/{{workspace_indicator}}\" check" }
-    fix = new Config.CommandSpec {
-      command = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-fix-write-guard.sh\" bash \"$(git rev-parse --show-toplevel)/scripts/hk-cargo.sh\" \"$(pwd -P)/{{workspace_indicator}}\" check-fix"
-      effect = "write"
+    dir = "{{workspace}}"
+    prefix = List("rust-build-guard", "--", "mise", "exec", "--")
+    check = (Builtins.cargo_check.check as Config.CommandSpec) {
+      command = new Config.Command {
+        argv = List("cargo", "check", "--locked", "--quiet")
+      }
+    }
+    fix = (Builtins.cargo_check.fix as Config.CommandSpec) {
+      command = new Config.Command {
+        argv = List("cargo", "fix", "--locked", "--allow-dirty", "--allow-staged", "--quiet")
+      }
     }
   }
   ["cargo_clippy"] = (Builtins.cargo_clippy) {
     exclude = fixtureTrees
-    check { command = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-cargo.sh\" \"$(pwd -P)/{{workspace_indicator}}\" clippy" }
-    fix = new Config.CommandSpec {
-      command = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-fix-write-guard.sh\" bash \"$(git rev-parse --show-toplevel)/scripts/hk-cargo.sh\" \"$(pwd -P)/{{workspace_indicator}}\" clippy-fix"
-      effect = "write"
+    workspace_indicator = "Cargo.toml"
+    dir = "{{workspace}}"
+    prefix = List("rust-build-guard", "--", "mise", "exec", "--")
+    check = (Builtins.cargo_clippy.check as Config.CommandSpec) {
+      command = new Config.Command {
+        argv = List("cargo", "clippy", "--locked", "--quiet")
+      }
+    }
+    fix = (Builtins.cargo_clippy.fix as Config.CommandSpec) {
+      command = new Config.Command {
+        argv = List("cargo", "clippy", "--fix", "--allow-dirty", "--allow-staged", "--locked", "--quiet")
+      }
     }
   }
-  // Both deny.toml files (root and crates/velnor-runner) stay; each governs its own workspace.
-  ["cargo_deny"] = (Builtins.cargo_deny) {
-    exclude = fixtureTrees
-    dir = null
-    workspace_indicator = "Cargo.toml"
-    check { command = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-cargo.sh\" \"$(pwd -P)/{{workspace_indicator}}\" deny" }
-  }
+  ["cargo_deny"] = (Builtins.cargo_deny) { exclude = fixtureTrees }
   ["rust-toolchain-mirror"] {
     glob = List("mise.toml", "rust-toolchain.toml")
     check = "sh scripts/check-rust-toolchain-mirror.sh"
   }
   ["rumdl"] = (Builtins.rumdl) { exclude = fixtureTrees }
   ["tofu"] = (Builtins.tofu) { exclude = List("fixtures/**", "docs/**") }
-  // Native jactionlint (hard decision 10, docs/proposed/workflow-lint-contract.md "Local runs"): check-only, because
-  // .github/ is generated; the same flags as CI, reading the generated .github/jactionlint.yaml.
   ["jactionlint"] = (Builtins.jactionlint) {
     fix = null
     check_diff = null
@@ -80,8 +91,6 @@ hooks {
       ["betterleaks-history"] { check = "betterleaks git . --redact" }
     }
   }
-  // Full history, all findings redacted. .kingfisher-baseline.yml holds reviewed placeholder/test-fixture findings with
-  // written reasons; betterleaks and gitleaks read .betterleaksignore / .gitleaksignore.
   ["security-audit"] {
     steps {
       ["kingfisher-history"] { check = "kingfisher scan . --git-history full --confidence low --no-validate --redact --no-update-check --baseline-file .kingfisher-baseline.yml" }

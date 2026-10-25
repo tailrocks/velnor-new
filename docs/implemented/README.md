@@ -101,6 +101,8 @@ current on every change to the process they describe.
 
 ## Evidence companions
 
+- [Freshness evidence — 2026-10-25](freshness-evidence-2026-10-25.md) — authenticated tool/action captures, upstream probes, and runner observation.
+- [Mise 2026.10.19 qualification](mise-2026-10-19-qualification.md) — authenticated release assets, binary hashes, and host qualification status.
 - [Requirements-to-evidence map](requirements-evidence.md) (every
   MUST/MUST NOT + acceptance criterion → owning crate, files, tests, gate)
 - [Generator publication qualification](generator-publication-qualification.md)

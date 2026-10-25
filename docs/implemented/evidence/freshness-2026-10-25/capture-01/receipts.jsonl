@@ -1,0 +1,232 @@
+{
+  "subject": "mise",
+  "source": "https://api.github.com/repos/jdx/mise/releases/latest",
+  "latest": "v2026.10.19",
+  "checked_at": "2026-10-25T19:09:13Z",
+  "sha256": "69fbc1f59c10b09dd65643f11149b91127919d0da20a4f06d172147f24276baf",
+  "bytes": 100781
+}
+{
+  "subject": "rust",
+  "source": "https://static.rust-lang.org/dist/channel-rust-stable.toml",
+  "latest": "1.99.1 (58cf8f9c3 2026-10-13)",
+  "checked_at": "2026-10-25T19:09:13Z",
+  "sha256": "131880574a2de9d40db0a035774169281b0fd55a1e94752b0c8f0e9a4c75421a",
+  "bytes": 131072
+}
+{
+  "subject": "mr-boxington",
+  "source": "https://api.github.com/repos/jdx/mr-boxington/releases/latest",
+  "latest": "v1.27.0",
+  "checked_at": "2026-10-25T19:09:13Z",
+  "sha256": "679efb7cbfc3b0cca9aac4e8e86c33895c26a13560a34eefb8450cc15ed302c6",
+  "bytes": 31397
+}
+{
+  "subject": "gh",
+  "source": "https://api.github.com/repos/cli/cli/releases/latest",
+  "latest": "v2.103.2",
+  "checked_at": "2026-10-25T19:09:14Z",
+  "sha256": "25aeaa058cd5164ea0d59e7b09ae9d88af92b9f594ecc2d51b10630cf942613e",
+  "bytes": 39323
+}
+{
+  "subject": "jactionlint",
+  "source": "https://api.github.com/repos/jdx/jactionlint/releases/latest",
+  "latest": "v2.3.0",
+  "checked_at": "2026-10-25T19:09:15Z",
+  "sha256": "4e09488a7e5ae63d403cb04158b85f19378db6efb12eb306da496fcdd53f365d",
+  "bytes": 25546
+}
+{
+  "subject": "shellcheck",
+  "source": "https://api.github.com/repos/koalaman/shellcheck/releases/latest",
+  "latest": "v0.11.0",
+  "checked_at": "2026-10-25T19:09:15Z",
+  "sha256": "f4af5345a3f321e0598dcbea91f1109ad76c5150fcfb4285999a0184f7e1bfb3",
+  "bytes": 24736
+}
+{
+  "subject": "mise",
+  "source": "https://api.github.com/repos/jdx/mise/releases/latest",
+  "latest": "v2026.10.19",
+  "checked_at": "2026-10-25T19:10:18Z",
+  "sha256": "32b38152e27687331781a21e4dbbb05211aa05db4df8ebdde06e2df838822d1b",
+  "bytes": 100781
+}
+{
+  "subject": "rust",
+  "source": "https://static.rust-lang.org/dist/channel-rust-stable.toml",
+  "latest": "1.99.1 (58cf8f9c3 2026-10-13)",
+  "checked_at": "2026-10-25T19:10:19Z",
+  "sha256": "131880574a2de9d40db0a035774169281b0fd55a1e94752b0c8f0e9a4c75421a",
+  "bytes": 131072
+}
+{
+  "subject": "mr-boxington",
+  "source": "https://api.github.com/repos/jdx/mr-boxington/releases/latest",
+  "latest": "v1.27.0",
+  "checked_at": "2026-10-25T19:10:19Z",
+  "sha256": "0fd20d4451840b0cb8031bbe9b4492ff984614906fe092b232e3dc92f97f9281",
+  "bytes": 31397
+}
+{
+  "subject": "gh",
+  "source": "https://api.github.com/repos/cli/cli/releases/latest",
+  "latest": "v2.103.2",
+  "checked_at": "2026-10-25T19:10:20Z",
+  "sha256": "e61d3e07ad85727e8c1ac5f8ce087791bfe200ab5f2ff7123821673685e1e2b3",
+  "bytes": 39323
+}
+{
+  "subject": "jactionlint",
+  "source": "https://api.github.com/repos/jdx/jactionlint/releases/latest",
+  "latest": "v2.3.0",
+  "checked_at": "2026-10-25T19:10:20Z",
+  "sha256": "4e09488a7e5ae63d403cb04158b85f19378db6efb12eb306da496fcdd53f365d",
+  "bytes": 25546
+}
+{
+  "subject": "shellcheck",
+  "source": "https://api.github.com/repos/koalaman/shellcheck/releases/latest",
+  "latest": "v0.11.0",
+  "checked_at": "2026-10-25T19:10:21Z",
+  "sha256": "41f3251b1692806624a15da3918fadd6ecff002df38febce6d3303ed174525e4",
+  "bytes": 24736
+}
+{
+  "subject": "opentofu",
+  "source": "https://api.github.com/repos/opentofu/opentofu/releases/latest",
+  "latest": "v1.13.2",
+  "checked_at": "2026-10-25T19:10:21Z",
+  "sha256": "70467f6dda5a8dfe8ee6780d36fbdee25b5759e09c65c1a2c2872ba0736b0b39",
+  "bytes": 289210
+}
+{
+  "subject": "crane",
+  "source": "https://api.github.com/repos/google/go-containerregistry/releases/latest",
+  "latest": "v0.22.1",
+  "checked_at": "2026-10-25T19:10:22Z",
+  "sha256": "998e7350923331f10eaf3aa8e658bceea906b59e7c52ae10af4d8d286f4f5f7d",
+  "bytes": 30525
+}
+{
+  "subject": "bun",
+  "source": "https://api.github.com/repos/oven-sh/bun/releases/latest",
+  "latest": "bun-v1.4.4",
+  "checked_at": "2026-10-25T19:10:23Z",
+  "sha256": "205b32d0b3e760dc2b360acfc0197552f197c2630d21825a72a29c9bec465bd6",
+  "bytes": 62695
+}
+{
+  "subject": "cosign",
+  "source": "https://api.github.com/repos/sigstore/cosign/releases/latest",
+  "latest": "v3.1.4",
+  "checked_at": "2026-10-25T19:10:23Z",
+  "sha256": "c44ccf8222a7a9a8ec9de8f22e6b886166b66239f5ac22d1c264f3ca7137fa82",
+  "bytes": 133940
+}
+{
+  "subject": "actions/attest",
+  "source": "https://api.github.com/repos/actions/attest/releases/latest",
+  "latest": "v4.2.2",
+  "checked_at": "2026-10-25T19:10:24Z",
+  "sha256": "34ca5c40511edbd0ab78811f74eeb58026bd72362647986592f9a0097cef6840",
+  "bytes": 2120
+}
+{
+  "subject": "actions/attest-build-provenance",
+  "source": "https://api.github.com/repos/actions/attest-build-provenance/releases/latest",
+  "latest": "v4.2.2",
+  "checked_at": "2026-10-25T19:10:24Z",
+  "sha256": "6c8a2cddbabf63c4034ee023330703fa0da67d976f3d18cd741cafcf4edea923",
+  "bytes": 2414
+}
+{
+  "subject": "actions/cache/restore",
+  "source": "https://api.github.com/repos/actions/cache/releases/latest",
+  "latest": "v6.1.0",
+  "checked_at": "2026-10-25T19:10:25Z",
+  "sha256": "fab1cd173714779bcd8cf67c96c3a29f04323b5a5389ad404afcd17abfb36e53",
+  "bytes": 2171
+}
+{
+  "subject": "actions/cache/save",
+  "source": "https://api.github.com/repos/actions/cache/releases/latest",
+  "latest": "v6.1.0",
+  "checked_at": "2026-10-25T19:10:25Z",
+  "sha256": "fab1cd173714779bcd8cf67c96c3a29f04323b5a5389ad404afcd17abfb36e53",
+  "bytes": 2171
+}
+{
+  "subject": "actions/checkout",
+  "source": "https://api.github.com/repos/actions/checkout/releases/latest",
+  "latest": "v7.0.1",
+  "checked_at": "2026-10-25T19:10:26Z",
+  "sha256": "8c81e64dda90d1f337e87d30fab6804b818d155630587358ebaa531b27f2d659",
+  "bytes": 2372
+}
+{
+  "subject": "actions/create-github-app-token",
+  "source": "https://api.github.com/repos/actions/create-github-app-token/releases/latest",
+  "latest": "v3.3.0",
+  "checked_at": "2026-10-25T19:10:26Z",
+  "sha256": "60b29c1da192509a18d12e3e57efd22a6c5554da68ed7434d3d244675667253b",
+  "bytes": 3089
+}
+{
+  "subject": "actions/download-artifact",
+  "source": "https://api.github.com/repos/actions/download-artifact/releases/latest",
+  "latest": "v8.0.2",
+  "checked_at": "2026-10-25T19:10:27Z",
+  "sha256": "5b670503b60f455daaf7a3ad99622f6b408e490747fd6deb79402e0e3585673c",
+  "bytes": 2457
+}
+{
+  "subject": "actions/github-script",
+  "source": "https://api.github.com/repos/actions/github-script/releases/latest",
+  "latest": "v9.0.0",
+  "checked_at": "2026-10-25T19:10:27Z",
+  "sha256": "ece1bb204fd8c668ab3f71e3e77fa201cbd41f670095f9f4d91a7219b8397417",
+  "bytes": 4189
+}
+{
+  "subject": "actions/upload-artifact",
+  "source": "https://api.github.com/repos/actions/upload-artifact/releases/latest",
+  "latest": "v7.0.2",
+  "checked_at": "2026-10-25T19:10:28Z",
+  "sha256": "1cd4b7da146610d5396bc37b83b7bf1ed46e0bbedfec232cd330e9d238baa05a",
+  "bytes": 2376
+}
+{
+  "subject": "asamarts/alint",
+  "source": "https://api.github.com/repos/asamarts/alint/releases/latest",
+  "latest": "v0.20.1",
+  "checked_at": "2026-10-25T19:10:29Z",
+  "sha256": "3ede9556b29cb4fb0cb51ab659a36c1eb975ee0f71500bfaf6d308e87e368611",
+  "bytes": 28124
+}
+{
+  "subject": "aws-actions/configure-aws-credentials",
+  "source": "https://api.github.com/repos/aws-actions/configure-aws-credentials/releases/latest",
+  "latest": "v6.3.0",
+  "checked_at": "2026-10-25T19:10:30Z",
+  "sha256": "161850ffcd42ba5f7f6fd1a11172d788093d760eafa3794872a71165460db92f",
+  "bytes": 2303
+}
+{
+  "subject": "jdx/mise-action",
+  "source": "https://api.github.com/repos/jdx/mise-action/releases/latest",
+  "latest": "v5.2.3",
+  "checked_at": "2026-10-25T19:10:30Z",
+  "sha256": "c2d0476578fab57bf93be87cd933b6928e6da7dcb95e9eb7a8e8900737c1171b",
+  "bytes": 3646
+}
+{
+  "subject": "jdx/mr-boxington-action",
+  "source": "https://api.github.com/repos/jdx/mr-boxington-action/releases",
+  "latest": "v1.7.2",
+  "checked_at": "2026-10-25T19:10:31Z",
+  "sha256": "dff84a16c4d9bcd9a13016ad5297a51372087ac12384f338d42334e96478ba0a",
+  "bytes": 3976
+}
