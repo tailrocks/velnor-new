@@ -1,7 +1,7 @@
 //! Curl transport tests use only local fixtures.
 
 use std::fs;
-use std::io::{Read, Write};
+use std::io::{ErrorKind, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::thread::{self, JoinHandle};
@@ -14,6 +14,9 @@ use super::https::{
     run_curl_in_home, trace_lines,
 };
 use crate::error::HostError;
+
+#[path = "https_retry_fixture_tests.rs"]
+mod retry_fixture_tests;
 
 #[test]
 fn https_base_rejects_plain_http() {
@@ -230,9 +233,14 @@ struct RetryFixture {
 
 impl RetryFixture {
     fn start() -> std::io::Result<Self> {
+        Self::start_with_first_accept_timeout(Duration::from_secs(30))
+    }
+
+    fn start_with_first_accept_timeout(first_accept_timeout: Duration) -> std::io::Result<Self> {
         let listener = TcpListener::bind("127.0.0.1:0")?;
+        listener.set_nonblocking(true)?;
         let address = listener.local_addr()?;
-        let requests = thread::spawn(move || serve_retry_fixture(&listener));
+        let requests = thread::spawn(move || serve_retry_fixture(&listener, first_accept_timeout));
         Ok(Self { address, requests })
     }
 
@@ -243,14 +251,21 @@ impl RetryFixture {
     }
 }
 
-fn serve_retry_fixture(listener: &TcpListener) -> std::io::Result<usize> {
-    let (mut first, _) = listener.accept()?;
+fn serve_retry_fixture(
+    listener: &TcpListener,
+    first_accept_timeout: Duration,
+) -> std::io::Result<usize> {
+    let first_deadline = Instant::now() + first_accept_timeout;
+    let (mut first, _) = accept_before_deadline(listener, first_deadline)?;
     read_headers(&mut first)?;
     respond(&mut first, 503)?;
-    listener.set_nonblocking(true)?;
 
     let deadline = Instant::now() + Duration::from_millis(750);
     loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Ok(1);
+        }
         match listener.accept() {
             Ok((mut retry, _)) => {
                 read_headers(&mut retry)?;
@@ -258,10 +273,7 @@ fn serve_retry_fixture(listener: &TcpListener) -> std::io::Result<usize> {
                 return Ok(2);
             }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                if Instant::now() >= deadline {
-                    return Ok(1);
-                }
-                thread::sleep(Duration::from_millis(5));
+                thread::sleep(Duration::from_millis(5).min(remaining));
             }
             Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
             Err(error) => return Err(error),
@@ -270,17 +282,69 @@ fn serve_retry_fixture(listener: &TcpListener) -> std::io::Result<usize> {
 }
 
 fn read_headers(stream: &mut TcpStream) -> std::io::Result<()> {
-    stream.set_read_timeout(Some(Duration::from_secs(2)))?;
-    let mut bytes = Vec::new();
-    let mut chunk = [0; 1024];
-    while !bytes.windows(4).any(|window| window == b"\r\n\r\n") {
-        let count = stream.read(&mut chunk)?;
-        if count == 0 {
-            break;
+    retry_fixture_tests::read_headers_until(stream, Duration::from_secs(2))
+}
+
+fn accept_before_deadline(
+    listener: &TcpListener,
+    deadline: Instant,
+) -> std::io::Result<(TcpStream, std::net::SocketAddr)> {
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "retry fixture did not receive its first request before the deadline",
+            ));
         }
-        bytes.extend_from_slice(&chunk[..count]);
-        if bytes.len() > 16 * 1024 {
-            return Err(std::io::Error::other("request headers exceeded bound"));
+        match listener.accept() {
+            Ok(connection) => return Ok(connection),
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                thread::sleep(Duration::from_millis(5).min(remaining));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+fn deadline_error(message: &'static str) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::TimedOut, message)
+}
+
+fn is_socket_timeout(error: &std::io::Error) -> bool {
+    matches!(error.kind(), ErrorKind::TimedOut | ErrorKind::WouldBlock)
+}
+
+fn write_before_deadline(
+    stream: &mut TcpStream,
+    bytes: &[u8],
+    deadline: Instant,
+) -> std::io::Result<()> {
+    let mut written = 0;
+    while written < bytes.len() {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Err(deadline_error(
+                "fixture response exceeded its write deadline",
+            ));
+        }
+        stream.set_write_timeout(Some(remaining))?;
+        match stream.write(&bytes[written..]) {
+            Ok(0) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::WriteZero,
+                    "failed to write fixture response",
+                ));
+            }
+            Ok(count) => written += count,
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
+        }
+        if Instant::now() >= deadline {
+            return Err(deadline_error(
+                "fixture response exceeded its write deadline",
+            ));
         }
     }
     Ok(())
@@ -292,9 +356,12 @@ fn respond(stream: &mut TcpStream, status: u16) -> std::io::Result<()> {
     } else {
         "Conflict"
     };
-    write!(
+    let response =
+        format!("HTTP/1.1 {status} {reason}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+    write_before_deadline(
         stream,
-        "HTTP/1.1 {status} {reason}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        response.as_bytes(),
+        Instant::now() + Duration::from_secs(2),
     )
 }
 
