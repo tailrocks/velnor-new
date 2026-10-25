@@ -34,6 +34,29 @@ fn stdout(output: &std::process::Output) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
+#[cfg(unix)]
+fn generate_with_installed_rust_fixture(
+    args: &[&str],
+    repo: &Path,
+) -> Result<std::process::Output, Box<dyn Error>> {
+    let fixture = crate::impl_cli_toolchain_and_tools::installed_rust_mise_fixture(repo)?;
+    let inherited_path = std::env::var_os("PATH").unwrap_or_default();
+    let path = std::env::join_paths(
+        std::iter::once(fixture.into_os_string())
+            .chain(std::env::split_paths(&inherited_path).map(std::path::PathBuf::into_os_string)),
+    )?;
+    let path = path.to_str().ok_or("non-UTF-8 fixture PATH")?;
+    spawn(args, &[("PATH", path)], repo)
+}
+
+#[cfg(not(unix))]
+fn generate_with_installed_rust_fixture(
+    args: &[&str],
+    repo: &Path,
+) -> Result<std::process::Output, Box<dyn Error>> {
+    spawn(args, &[], repo)
+}
+
 #[test]
 fn default_policy_preserves_stray_files_silently() -> Result<(), Box<dyn Error>> {
     let repo = repo_with_github_table("unmanaged-default", "")?;
@@ -41,7 +64,8 @@ fn default_policy_preserves_stray_files_silently() -> Result<(), Box<dyn Error>>
     let outer = fresh_tempdir("unmanaged-default-preview")?;
     let preview = outer.join("p");
     let preview = preview.to_str().ok_or("non-utf8 path")?;
-    let generated = spawn(&["generate", "--output-dir", preview], &[], &repo)?;
+    let generated =
+        generate_with_installed_rust_fixture(&["generate", "--output-dir", preview], &repo)?;
     assert_eq!(code(&generated), 0, "{}", stderr(&generated));
     assert!(!stderr(&generated).contains("unmanaged_github"));
     let listed = spawn(&["unmanaged"], &[], &repo)?;
@@ -56,7 +80,7 @@ fn default_policy_preserves_stray_files_silently() -> Result<(), Box<dyn Error>>
 fn warn_prints_notice_and_succeeds() -> Result<(), Box<dyn Error>> {
     let repo = repo_with_github_table("unmanaged-warn", "\n[github]\nunmanaged = \"warn\"\n")?;
     stray(&repo)?;
-    let generated = spawn(&["generate"], &[], &repo)?;
+    let generated = generate_with_installed_rust_fixture(&["generate"], &repo)?;
     assert_eq!(code(&generated), 0, "{}", stderr(&generated));
     assert!(
         stderr(&generated)
@@ -95,7 +119,7 @@ fn deny_accepts_generated_output_and_allowlisted_paths() -> Result<(), Box<dyn E
     let repo = repo_with_github_table("unmanaged-allow", table)?;
     stray(&repo)?;
     for _ in 0..2 {
-        let generated = spawn(&["generate"], &[], &repo)?;
+        let generated = generate_with_installed_rust_fixture(&["generate"], &repo)?;
         assert_eq!(code(&generated), 0, "{}", stderr(&generated));
     }
     let listed = spawn(&["unmanaged"], &[], &repo)?;

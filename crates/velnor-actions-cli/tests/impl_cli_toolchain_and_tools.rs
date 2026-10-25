@@ -18,6 +18,15 @@ use crate::impl_cli_tmp::{MiseDiagnosticContext, mise_failure_diagnostics, tool_
 #[path = "impl_cli_toolchain_fixture.rs"]
 mod toolchain_fixture;
 
+/// Resolve the installed-Rust fixture for sibling CLI tests that generate
+/// workflows without changing their real CLI execution path.
+#[cfg(unix)]
+pub(super) fn installed_rust_mise_fixture(
+    root: &Path,
+) -> Result<std::path::PathBuf, Box<dyn Error>> {
+    toolchain_fixture::installed_rust_mise_fixture(root)
+}
+
 const NEXTEST_CONFIG: &str = r"[profile.ci]
 fail-fast = false
 
