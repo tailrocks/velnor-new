@@ -15,8 +15,8 @@ use super::support::{
     snapshot, verify_trusted_path,
 };
 use super::{
-    ElfFacts, FILE_LIMIT, FORMULA_LIMIT, HOMEBREW_VERSION, HomebrewInstallFile,
-    HomebrewInstallRequest, HomebrewInstalledFileEvidence, KegState,
+    ElfFacts, FILE_LIMIT, FORMULA_LIMIT, HOMEBREW_CANDIDATE_TAP, HOMEBREW_VERSION,
+    HomebrewInstallFile, HomebrewInstallRequest, HomebrewInstalledFileEvidence, KegState,
 };
 use crate::{OrchestratorError, homebrew::command::HomebrewCommand};
 
@@ -268,7 +268,13 @@ pub(super) fn validate_receipt(
         .get("spec")
         .and_then(serde_json::Value::as_str)
         .ok_or_else(|| invalid("install_receipt_source_spec_missing"))?;
-    let source_tap_is_standalone = source.get("tap").is_some_and(serde_json::Value::is_null);
+    let source_tap = source
+        .get("tap")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| invalid("install_receipt_source_tap_missing"))?;
+    let source_tap_git_head_is_null = source
+        .get("tap_git_head")
+        .is_some_and(serde_json::Value::is_null);
     let source_versions = source
         .get("versions")
         .and_then(serde_json::Value::as_object)
@@ -298,7 +304,8 @@ pub(super) fn validate_receipt(
     // The exact inventory is independently walked and byte-verified below.
     let now = epoch_seconds()?;
     if Path::new(source_path) != candidate_recipe
-        || !source_tap_is_standalone
+        || source_tap != HOMEBREW_CANDIDATE_TAP
+        || !source_tap_git_head_is_null
         || source_spec != "stable"
         || stable_version != version
         || brew_version != HOMEBREW_VERSION.trim_start_matches("Homebrew ")

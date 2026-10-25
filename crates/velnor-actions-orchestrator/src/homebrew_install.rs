@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::homebrew_spec::{
     HomebrewAuxiliaryTest, HomebrewFormulaReleaseLiterals, HomebrewFormulaSpec,
-    ValidatedHomebrewProjection,
+    HomebrewInstalledMode, ValidatedHomebrewProjection,
 };
 use velnor_actions_mise::CheckDeadline;
 
@@ -25,6 +25,8 @@ mod inventory;
 mod request;
 #[path = "homebrew_install_support.rs"]
 mod support;
+#[path = "homebrew_install_tap.rs"]
+mod tap;
 pub(crate) use coordinator::upgrade_homebrew_candidate;
 pub(crate) use fresh::{install_homebrew_candidate, install_homebrew_candidate_with_custody};
 pub(crate) use support::elf_facts_from_bytes;
@@ -36,6 +38,14 @@ pub(crate) const HOMEBREW_VERSION: &str = "Homebrew 7.0.10-84-g7a056ff";
 /// Fixed Homebrew prefix for the initial hosted ARM Mac profile.
 pub(crate) const HOMEBREW_PREFIX: &str = "/opt/homebrew";
 const HOMEBREW_CELLAR: &str = "/opt/homebrew/Cellar";
+/// Qualified Homebrew Cleaner normalizes installed host executables to `0555`,
+/// preserving execute access and removing owner write permission from `0755`.
+pub(crate) const HOMEBREW_HOST_INSTALLED_MODE: u32 = 0o555;
+/// Stable local tap identity used for candidate formula receipts.
+pub(super) const HOMEBREW_CANDIDATE_TAP: &str = "velnor/native-install";
+/// Physical formula directory consumed by the pinned Homebrew binary.
+pub(super) const HOMEBREW_CANDIDATE_FORMULAE: &str =
+    "/opt/homebrew/Library/Taps/velnor/homebrew-native-install/Formula";
 const CAPTURE_LIMIT: usize = 8 * 1024 * 1024;
 const FORMULA_LIMIT: usize = 1024 * 1024;
 const FILE_LIMIT: u64 = 512 * 1024 * 1024;
@@ -69,6 +79,14 @@ pub(crate) struct ElfFacts {
     pub(crate) endian: u8,
     /// ELF machine identifier.
     pub(crate) machine: u16,
+}
+
+/// Stable payload mode for non-host auxiliary files in `libexec`.
+pub(crate) const fn auxiliary_installed_mode(mode: HomebrewInstalledMode) -> u32 {
+    match mode {
+        HomebrewInstalledMode::Data => 0o644,
+        HomebrewInstalledMode::Executable => 0o755,
+    }
 }
 
 /// Caller-owned paths used only for this isolated hosted install.

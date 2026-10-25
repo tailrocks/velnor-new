@@ -8,9 +8,7 @@ pub(crate) fn expected_install_files(
     platform: CheckPlatform,
 ) -> Result<Vec<NativeExpectedInstallFile>, crate::OrchestratorError> {
     use crate::internal::internal;
-    use velnor_actions_contract::homebrew_spec::{
-        HomebrewAuxiliaryTest, HomebrewInstalledMode, HomebrewPayloadRole,
-    };
+    use velnor_actions_contract::homebrew_spec::{HomebrewAuxiliaryTest, HomebrewPayloadRole};
 
     if platform != CheckPlatform::MacosArm64 {
         return Err(internal("native_homebrew_install_platform_unqualified"));
@@ -33,7 +31,7 @@ pub(crate) fn expected_install_files(
                     asset: selected.asset_name().to_owned(),
                     member: member.clone(),
                     destination: PathBuf::from("bin").join(member),
-                    mode: 0o755,
+                    mode: crate::homebrew::install::HOMEBREW_HOST_INSTALLED_MODE,
                     test: HomebrewAuxiliaryTest::None,
                     elf: None,
                 }
@@ -45,10 +43,7 @@ pub(crate) fn expected_install_files(
                     .flat_map(|item| item.files.iter())
                     .find(|file| file.target == selected.target() && file.member == *member)
                     .ok_or_else(|| internal("native_check_auxiliary_member_unmapped"))?;
-                let mode = match file.mode {
-                    HomebrewInstalledMode::Data => 0o644,
-                    HomebrewInstalledMode::Executable => 0o755,
-                };
+                let mode = crate::homebrew::install::auxiliary_installed_mode(file.mode);
                 NativeExpectedInstallFile {
                     asset: selected.asset_name().to_owned(),
                     member: member.clone(),

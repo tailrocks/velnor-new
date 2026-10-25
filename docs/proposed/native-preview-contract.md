@@ -394,7 +394,7 @@ pending newer source release. Pending checks/review stay pending for a later
 bounded invocation; no long polling, asynchronous replacement-head merge or
 provider-completion waiver is introduced.
 
-Exact-head evidence and protection details remain in
-[native-homebrew-merge-contract.md](native-homebrew-merge-contract.md).
-The [channel acceptance matrix](native-release-channel-acceptance.md) defines
-observable proof before release and consumer activation.
+See [merge admission](native-homebrew-merge-contract.md) for exact-head evidence
+and protection; [candidate installation](../implemented/homebrew-candidate-install.md)
+for qualified private Tap and preserved A/D recipe custody; and the
+[channel acceptance matrix](native-release-channel-acceptance.md) for release and consumer proof.

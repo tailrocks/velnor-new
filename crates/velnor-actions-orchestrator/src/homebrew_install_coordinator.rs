@@ -8,7 +8,7 @@ use super::support::{
 };
 use super::{
     HOMEBREW_CELLAR, HOMEBREW_PREFIX, HOMEBREW_VERSION, HomebrewInstallEvidence,
-    HomebrewInstallRequest, HomebrewInstalledKegCustody, KegState,
+    HomebrewInstallRequest, HomebrewInstalledKegCustody, KegState, tap::TapFormula,
 };
 use crate::{
     OrchestratorError, filesystem_owner::held_file::HeldFile, homebrew::command::HomebrewCommand,
@@ -20,7 +20,7 @@ pub(crate) fn upgrade_homebrew_candidate(
     prior: &HomebrewInstalledKegCustody,
 ) -> Result<HomebrewInstallEvidence, OrchestratorError> {
     let context = prepare_upgrade(request, prior_request, prior)?;
-    let upgraded = install_and_test_upgrade(request, prior, &context)?;
+    let upgraded = install_and_test_upgrade(request, prior_request, prior, &context)?;
     verify_prior_after_upgrade(request, prior_request, prior, &context, &upgraded)?;
     let mut evidence = evidence_from_state(
         &context.formula,
@@ -40,10 +40,12 @@ struct UpgradeContext {
     home: PathBuf,
     temp: PathBuf,
     prior_candidate: HeldFile,
+    prior_tap_formula: TapFormula,
 }
 
 struct UpgradedCandidate {
-    formula_path: PathBuf,
+    tap_formula: TapFormula,
+    canonical_formula: HeldFile,
     keg: PathBuf,
     install_started: u64,
     brew_version: String,
@@ -93,10 +95,16 @@ fn prepare_upgrade(
         request.deadline,
     )?;
     prior_candidate.verify(request.deadline)?;
+    let prior_tap_formula = TapFormula::capture_existing(
+        &formula,
+        prior_request.formula_bytes,
+        prior_request.formula_sha256,
+        request.deadline,
+    )?;
     let prior_before = inspect_keg(
         prior_request,
         &prior.keg,
-        &prior_request.paths.staging.join(format!("{formula}.rb")),
+        &prior_tap_formula.path,
         prior.state.install_time,
     )?;
     if prior_before != prior.state {
@@ -107,34 +115,17 @@ fn prepare_upgrade(
         home,
         temp,
         prior_candidate,
+        prior_tap_formula,
     })
 }
 
 fn install_and_test_upgrade(
     request: &HomebrewInstallRequest<'_>,
+    prior_request: &HomebrewInstallRequest<'_>,
     prior: &HomebrewInstalledKegCustody,
     context: &UpgradeContext,
 ) -> Result<UpgradedCandidate, OrchestratorError> {
-    let formula_path = request
-        .paths
-        .staging
-        .join(format!("{}.rb", context.formula));
-    let staging = trusted_owned_directory(&request.paths.staging)?;
-    if !formula_path.starts_with(&staging) {
-        return Err(invalid("formula_outside_staging"));
-    }
-    write_formula_file(
-        &formula_path,
-        request.formula_bytes,
-        request.formula_sha256,
-        request.deadline,
-    )?;
-    let candidate_formula = HeldFile::new(
-        &formula_path,
-        request.formula_sha256,
-        request.formula_bytes.len() as u64,
-        request.deadline,
-    )?;
+    let candidate_formula = stage_upgrade_formula(request, &context.formula)?;
     let identity = verified_brew_identity(&context.home, &context.temp, request.deadline)?;
     let new_keg = Path::new(HOMEBREW_CELLAR)
         .join(&context.formula)
@@ -142,17 +133,32 @@ fn install_and_test_upgrade(
     if new_keg == prior.keg || path_exists(&new_keg)? {
         return Err(invalid("candidate_keg_already_exists"));
     }
+    let tap_formula = context.prior_tap_formula.replace(
+        request.formula_bytes,
+        request.formula_sha256,
+        prior_request.formula_bytes,
+        request.deadline,
+    )?;
+    run_brew(
+        HomebrewCommand::TrustFormula {
+            formula: super::tap::formula_reference(&context.formula)?,
+        },
+        &context.home,
+        &context.temp,
+        request.deadline,
+    )?;
+    tap_formula.verify(request.deadline)?;
     let install_started = epoch_seconds()?;
     run_brew(
         HomebrewCommand::UpgradeCandidate {
-            recipe: formula_path.clone(),
+            recipe: tap_formula.path.clone(),
         },
         &context.home,
         &context.temp,
         request.deadline,
     )?;
     candidate_formula.verify(request.deadline)?;
-    let after = inspect_keg(request, &new_keg, &formula_path, install_started)?;
+    let after = inspect_keg(request, &new_keg, &tap_formula.path, install_started)?;
     let d_recipe = new_keg
         .join(".brew")
         .join(format!("{}.rb", context.formula));
@@ -169,13 +175,15 @@ fn install_and_test_upgrade(
         request.deadline,
     )?;
     candidate_formula.verify(request.deadline)?;
+    tap_formula.verify(request.deadline)?;
     d_archived.verify(request.deadline)?;
-    let d_after_test = inspect_keg(request, &new_keg, &formula_path, install_started)?;
+    let d_after_test = inspect_keg(request, &new_keg, &tap_formula.path, install_started)?;
     if after != d_after_test {
         return Err(invalid("upgraded_keg_changed_during_test"));
     }
     Ok(UpgradedCandidate {
-        formula_path,
+        tap_formula,
+        canonical_formula: candidate_formula,
         keg: new_keg,
         install_started,
         brew_version: identity.version,
@@ -183,6 +191,29 @@ fn install_and_test_upgrade(
         cellar: identity.cellar,
         state: d_after_test,
     })
+}
+
+fn stage_upgrade_formula(
+    request: &HomebrewInstallRequest<'_>,
+    formula: &str,
+) -> Result<HeldFile, OrchestratorError> {
+    let formula_path = request.paths.staging.join(format!("{formula}.rb"));
+    let staging = trusted_owned_directory(&request.paths.staging)?;
+    if !formula_path.starts_with(&staging) {
+        return Err(invalid("formula_outside_staging"));
+    }
+    write_formula_file(
+        &formula_path,
+        request.formula_bytes,
+        request.formula_sha256,
+        request.deadline,
+    )?;
+    HeldFile::new(
+        &formula_path,
+        request.formula_sha256,
+        request.formula_bytes.len() as u64,
+        request.deadline,
+    )
 }
 
 fn verified_brew_identity(
@@ -237,10 +268,7 @@ fn verify_prior_after_upgrade(
     let prior_after = inspect_keg(
         prior_request,
         &prior.keg,
-        &prior_request
-            .paths
-            .staging
-            .join(format!("{}.rb", context.formula)),
+        &context.prior_tap_formula.path,
         prior.state.install_time,
     )?;
     if prior_after != prior.state
@@ -252,11 +280,14 @@ fn verify_prior_after_upgrade(
     let d_after_prior_test = inspect_keg(
         request,
         &upgraded.keg,
-        &upgraded.formula_path,
+        &upgraded.tap_formula.path,
         upgraded.install_started,
     )?;
     if d_after_prior_test != upgraded.state {
         return Err(invalid("upgraded_keg_changed_during_prior_test"));
     }
+    upgraded.tap_formula.verify(request.deadline)?;
+    upgraded.canonical_formula.verify(request.deadline)?;
+    context.prior_candidate.verify(request.deadline)?;
     Ok(())
 }
