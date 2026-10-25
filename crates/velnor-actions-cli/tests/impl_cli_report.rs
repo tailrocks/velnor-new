@@ -5,6 +5,7 @@ use std::path::Path;
 
 use crate::impl_cli_tmp::{
     add_crate_pair, cleanup, fresh_tempdir, ignore_rust, init_repo, plan_stdout,
+    plan_stdout_with_installed_rust_mise_fixture,
 };
 
 /// Build an initialized repo with the `apple`/`zebra` crate pair.
@@ -86,7 +87,7 @@ fn without_repository(text: &str) -> String {
 #[test]
 fn plan_lists_sections_without_yaml_or_json() -> Result<(), Box<dyn Error>> {
     let tmp = pair_repo("report-sections")?;
-    let stdout = plan_stdout(&tmp)?;
+    let stdout = plan_stdout_with_installed_rust_mise_fixture(&tmp)?;
     for section in [
         "Detected stacks",
         "Workflow to generate",
@@ -103,7 +104,10 @@ fn plan_lists_sections_without_yaml_or_json() -> Result<(), Box<dyn Error>> {
 #[test]
 fn plan_prints_no_machine_or_volatile_content() -> Result<(), Box<dyn Error>> {
     let tmp = pair_repo("report-clean")?;
-    assert_absent(&without_repository(&plan_stdout(&tmp)?), &FORBIDDEN);
+    assert_absent(
+        &without_repository(&plan_stdout_with_installed_rust_mise_fixture(&tmp)?),
+        &FORBIDDEN,
+    );
     let empty = fresh_tempdir("report-clean-empty")?;
     init_repo(&empty)?;
     assert_absent(&without_repository(&plan_stdout(&empty)?), &FORBIDDEN);
@@ -119,7 +123,7 @@ fn plan_prints_no_machine_or_volatile_content() -> Result<(), Box<dyn Error>> {
 #[test]
 fn plan_lists_full_field_set() -> Result<(), Box<dyn Error>> {
     let tmp = pair_repo("report-fields")?;
-    let stdout = plan_stdout(&tmp)?;
+    let stdout = plan_stdout_with_installed_rust_mise_fixture(&tmp)?;
     for field in [
         "Detected stacks",
         "Repository:",
@@ -179,7 +183,7 @@ fn ignored_plan_keeps_ignore_reasons() -> Result<(), Box<dyn Error>> {
 #[test]
 fn crates_list_in_stable_package_path_order() -> Result<(), Box<dyn Error>> {
     let tmp = pair_repo("report-order")?;
-    let first = plan_stdout(&tmp)?;
+    let first = plan_stdout_with_installed_rust_mise_fixture(&tmp)?;
     let apple = first
         .find("- apple (apple/Cargo.toml)")
         .ok_or("apple line")?;
@@ -187,7 +191,11 @@ fn crates_list_in_stable_package_path_order() -> Result<(), Box<dyn Error>> {
         .find("- zebra (zebra/Cargo.toml)")
         .ok_or("zebra line")?;
     assert!(apple < zebra, "crates out of order:\n{first}");
-    assert_eq!(plan_stdout(&tmp)?, first, "plan not deterministic");
+    assert_eq!(
+        plan_stdout_with_installed_rust_mise_fixture(&tmp)?,
+        first,
+        "plan not deterministic"
+    );
     cleanup(&tmp);
     Ok(())
 }
@@ -195,7 +203,7 @@ fn crates_list_in_stable_package_path_order() -> Result<(), Box<dyn Error>> {
 #[test]
 fn plan_explains_pr_narrowing() -> Result<(), Box<dyn Error>> {
     let tmp = pair_repo("report-narrow")?;
-    let stdout = plan_stdout(&tmp)?;
+    let stdout = plan_stdout_with_installed_rust_mise_fixture(&tmp)?;
     assert!(
         stdout.contains(
             "Pull-request execution narrows crate obligations through its event-time affected-work plan."
@@ -209,7 +217,10 @@ fn plan_explains_pr_narrowing() -> Result<(), Box<dyn Error>> {
 #[test]
 fn plan_claims_no_hits_coverage_or_selections() -> Result<(), Box<dyn Error>> {
     let tmp = pair_repo("report-noclaim")?;
-    assert_absent(&plan_stdout(&tmp)?, &NO_CLAIMS);
+    assert_absent(
+        &plan_stdout_with_installed_rust_mise_fixture(&tmp)?,
+        &NO_CLAIMS,
+    );
     cleanup(&tmp);
     Ok(())
 }
@@ -229,9 +240,9 @@ fn empty_repo_reports_no_work_and_final_check() -> Result<(), Box<dyn Error>> {
 #[test]
 fn plan_values_come_from_validated_config() -> Result<(), Box<dyn Error>> {
     let tmp = pair_repo("report-values")?;
-    assert!(plan_stdout(&tmp)?.contains("Push branch: main"));
+    assert!(plan_stdout_with_installed_rust_mise_fixture(&tmp)?.contains("Push branch: main"));
     rewrite_branch(&tmp, "trunk")?;
-    let stdout = plan_stdout(&tmp)?;
+    let stdout = plan_stdout_with_installed_rust_mise_fixture(&tmp)?;
     assert!(stdout.contains("Push branch: trunk"), "{stdout}");
     assert!(!stdout.contains("Push branch: main"), "{stdout}");
     ignore_rust(&tmp)?;

@@ -8,8 +8,8 @@ use std::process::Command;
 
 use crate::impl_cli_tmp::{
     MiseDiagnosticContext, cleanup, code, commit_all, fresh_tempdir, git_init, init_repo,
-    install_consumer_manifest, mise_failure_diagnostics, mise_path_snapshot, spawn, tool_context,
-    write_workspace,
+    install_consumer_manifest, mise_failure_diagnostics, mise_path_snapshot,
+    spawn_with_installed_rust_mise_fixture, tool_context, write_workspace,
 };
 
 const FULL_SUITES_CONFIG: &str = r#"schema = 1
@@ -103,7 +103,7 @@ fn default_schema1_config_emits_byte_identical_github_tree() -> Result<(), Box<d
 
     let tool_state_before = mise_path_snapshot(&tmp, MiseDiagnosticContext::Inherited);
     let before_first = tool_context::diagnostic();
-    let in_place = spawn(&["generate"], &[], &tmp)?;
+    let in_place = spawn_with_installed_rust_mise_fixture(&["generate"], &[], &tmp)?;
     let after_first = tool_context::diagnostic();
     assert_eq!(
         code(&in_place),
@@ -142,7 +142,11 @@ fn default_schema1_config_emits_byte_identical_github_tree() -> Result<(), Box<d
     let outer = fresh_tempdir("suites-default-preview")?;
     let preview = outer.join("preview");
     let preview_str = preview.to_str().ok_or("non-utf8 preview path")?;
-    let gen_preview = spawn(&["generate", "--output-dir", preview_str], &[], &tmp)?;
+    let gen_preview = spawn_with_installed_rust_mise_fixture(
+        &["generate", "--output-dir", preview_str],
+        &[],
+        &tmp,
+    )?;
     let on_preview_result = tool_context::diagnostic();
     assert_eq!(
         code(&gen_preview),
@@ -285,7 +289,7 @@ fn full_suites_dispatch_symlink_and_preserve_workflows_end_to_end() -> Result<()
 
     let tool_state_before = mise_path_snapshot(&tmp, MiseDiagnosticContext::Inherited);
     let before_first = tool_context::diagnostic();
-    let generated = spawn(&["generate"], &[], &tmp)?;
+    let generated = spawn_with_installed_rust_mise_fixture(&["generate"], &[], &tmp)?;
     let after_first = tool_context::diagnostic();
     assert_eq!(
         code(&generated),

@@ -21,6 +21,10 @@ mod bounded_diagnostics;
 #[path = "impl_cli_tool_context.rs"]
 pub(crate) mod tool_context;
 
+#[cfg(unix)]
+#[path = "impl_cli_toolchain_fixture.rs"]
+mod installed_rust_fixture;
+
 pub(crate) use mise_diagnostics::{
     MiseDiagnosticContext, mise_failure_diagnostics, mise_path_snapshot,
 };
@@ -83,6 +87,57 @@ pub(crate) fn spawn(
     })?;
     tool_context::report_missing_pin(&output, cwd, MiseDiagnosticContext::Inherited, env);
     Ok(output)
+}
+
+/// Run a positive Rust-workspace CLI case with only Rust inventory made
+/// deterministic; metadata and pinned validator invocations remain real.
+pub(crate) fn spawn_with_installed_rust_mise_fixture(
+    args: &[&str],
+    env: &[(&str, &str)],
+    cwd: &Path,
+) -> Result<Output, Box<dyn Error>> {
+    if env.iter().any(|(key, _)| *key == "PATH") {
+        return Err("installed-Rust fixture owns the scoped PATH override".into());
+    }
+
+    #[cfg(unix)]
+    {
+        let fixture_root = fresh_tempdir("cli-installed-rust-mise")?;
+        let result = (|| {
+            let fixture = installed_rust_fixture::installed_rust_mise_fixture(&fixture_root)?;
+            let inherited_path = std::env::var_os("PATH").unwrap_or_default();
+            let path = std::env::join_paths(
+                std::iter::once(fixture.into_os_string())
+                    .chain(std::env::split_paths(&inherited_path).map(PathBuf::into_os_string)),
+            )?;
+            let path = path.to_str().ok_or("non-UTF-8 fixture PATH")?;
+            let mut child_env = env.to_vec();
+            child_env.push(("PATH", path));
+            spawn(args, &child_env, cwd)
+        })();
+        cleanup(&fixture_root);
+        result
+    }
+
+    #[cfg(not(unix))]
+    {
+        spawn(args, env, cwd)
+    }
+}
+
+/// Spawn a case whose caller has explicitly selected whether Rust discovery
+/// is part of the expected behavior.
+pub(crate) fn spawn_for_rust_workspace(
+    has_rust: bool,
+    args: &[&str],
+    env: &[(&str, &str)],
+    cwd: &Path,
+) -> Result<Output, Box<dyn Error>> {
+    if has_rust {
+        spawn_with_installed_rust_mise_fixture(args, env, cwd)
+    } else {
+        spawn(args, env, cwd)
+    }
 }
 
 /// Spawn with a scrubbed environment: only `PATH` plus explicit vars survive.
@@ -295,7 +350,22 @@ pub(crate) fn write_workspace(repo: &Path, members: usize) -> Result<(), Box<dyn
 
 /// Run `plan`, requiring exit 0 and empty stderr; return stdout text.
 pub(crate) fn plan_stdout(repo: &Path) -> Result<String, Box<dyn Error>> {
-    let plan = spawn(&["plan"], &[], repo)?;
+    plan_stdout_with_runner(&["plan"], repo, false)
+}
+
+/// Run a known Rust-workspace `plan` with deterministic installed-pin state.
+pub(crate) fn plan_stdout_with_installed_rust_mise_fixture(
+    repo: &Path,
+) -> Result<String, Box<dyn Error>> {
+    plan_stdout_with_runner(&["plan"], repo, true)
+}
+
+fn plan_stdout_with_runner(
+    args: &[&str],
+    repo: &Path,
+    has_rust: bool,
+) -> Result<String, Box<dyn Error>> {
+    let plan = spawn_for_rust_workspace(has_rust, args, &[], repo)?;
     if code(&plan) != 0 {
         return Err(format!("plan failed: {:?}", plan.stderr).into());
     }

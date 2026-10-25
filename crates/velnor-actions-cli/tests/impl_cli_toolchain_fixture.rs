@@ -42,19 +42,33 @@ case "$1" in
     [ "$#" -ge 5 ] || exit 97
     case "$2" in
       rust@1.99.1)
-        [ "$#" -eq 10 ] || exit 98
+        [ "$#" -eq 10 ] || [ "$#" -eq 12 ] || exit 98
         [ "$3" = -- ] || exit 99
         shift 3
-        [ "$#" -eq 7 ] || exit 100
         [ "$1" = cargo ] || exit 101
         [ "$2" = metadata ] || exit 102
         [ "$3" = --format-version ] || exit 103
         [ "$4" = 1 ] || exit 104
-        [ "$5" = --no-deps ] || exit 105
-        [ "$6" = --manifest-path ] || exit 106
-        case "$7" in
-          /*/Cargo.toml) [ -f "$7" ] || exit 107 ;;
-          *) exit 107 ;;
+        case "$#" in
+          7)
+            [ "$5" = --no-deps ] || exit 105
+            [ "$6" = --manifest-path ] || exit 106
+            case "$7" in
+              /*/Cargo.toml) [ -f "$7" ] || exit 107 ;;
+              *) exit 107 ;;
+            esac
+            ;;
+          9)
+            [ "$5" = --locked ] || exit 108
+            [ "$6" = --offline ] || exit 109
+            [ "$7" = --all-features ] || exit 110
+            [ "$8" = --manifest-path ] || exit 111
+            case "$9" in
+              /*/Cargo.toml) [ -f "$9" ] || exit 112 ;;
+              *) exit 112 ;;
+            esac
+            ;;
+          *) exit 113 ;;
         esac
         exec "$@"
         ;;
