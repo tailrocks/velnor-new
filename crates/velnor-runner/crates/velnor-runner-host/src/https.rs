@@ -1,5 +1,3 @@
-//! HTTPS through `curl`. Credentials travel on stdin, never on argv.
-
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
@@ -11,7 +9,6 @@ use velnor_runner_github::{Exchange, Method, SessionRequest, Transport, Transpor
 
 use crate::error::HostError;
 
-/// One Actions or GitHub API origin. The path on each call is relative.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpsTransport {
     base: String,
@@ -19,11 +16,6 @@ pub struct HttpsTransport {
 }
 
 impl HttpsTransport {
-    /// `base` must be `https://` with no quotes or whitespace.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Endpoint`] when `base` is not a usable origin.
     pub fn new(base: &str) -> Result<Self, HostError> {
         Ok(Self {
             base: checked_base(base)?,
@@ -31,28 +23,6 @@ impl HttpsTransport {
         })
     }
 
-    /// Clone this origin with a short deadline for background cleanup requests.
-    #[must_use]
-    #[cfg(test)]
-    pub(crate) fn cleanup_client(&self) -> Self {
-        Self {
-            base: self.base.clone(),
-            max_time_seconds: 5,
-        }
-    }
-
-    /// Maximum curl operation time in seconds.
-    #[must_use]
-    #[cfg(test)]
-    pub(crate) const fn timeout_seconds(&self) -> u64 {
-        self.max_time_seconds
-    }
-
-    /// Replace the origin after the admin exchange returns the service URL.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Endpoint`] when `base` is not a usable origin.
     pub fn set_base(&mut self, base: &str) -> Result<(), HostError> {
         self.base = checked_base(base)?;
         Ok(())

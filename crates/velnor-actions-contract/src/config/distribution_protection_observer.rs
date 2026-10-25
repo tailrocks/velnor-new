@@ -1,15 +1,12 @@
-//! Mandatory least-privilege protection observer binding for native tap merge.
 use super::{HomebrewTapConfig, config_error, valid_app_id_variable, valid_secret_name};
 use crate::ContractError;
 use serde::{Deserialize, Serialize};
 
-/// Dedicated App whose tap-scoped token may only observe branch protection.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct HomebrewTapProtectionObserver {
-    /// Variable containing the separate protection observer App ID.
     pub app_id_variable: String,
-    /// Secret containing that App's private key, never the writer's key.
+
     pub app_private_key_secret: String,
 }
 

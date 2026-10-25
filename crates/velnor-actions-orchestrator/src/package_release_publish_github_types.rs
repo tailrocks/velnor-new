@@ -1,5 +1,3 @@
-//! Strictly typed responses used by the fixed GitHub API adapter.
-
 use serde::Deserialize;
 
 #[derive(Deserialize)]

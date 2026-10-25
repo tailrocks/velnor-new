@@ -1,27 +1,11 @@
-//! Fixed shell text for the npm publication jobs (hard decision 8).
-//!
-//! Constant templates filled only with values the contract validated
-//! (artifact id, scoped member name, repo-relative paths) and one shell
-//! fragment the orchestrator builds from the pinned Bun. The build proves
-//! determinism by packing twice; the publish job executes no repository code
-//! and no package manager: it assembles the registry document with `jq` and
-//! sends it with `curl`, so a lifecycle script can never run beside the token.
-
-/// Directory (under runner temp) the tarball and its checksum travel in.
 pub const NPM_DIR: &str = "$RUNNER_TEMP/npm";
-/// Registry origin every publish request goes to.
 pub const NPM_REGISTRY: &str = "https://npm.pkg.github.com";
 
-/// Tarball file stem (`scope-name`) of a scoped package name.
 #[must_use]
 pub fn tarball_stem(member: &str) -> String {
     member.trim_start_matches('@').replace('/', "-")
 }
 
-/// Pack twice, require identical bytes, select and check the member's tarball.
-///
-/// `run_pack` is the shell fragment running the repository's pack script
-/// under the pinned Bun; `tarballs` is the repo-relative output directory.
 #[must_use]
 pub fn pack_script(run_pack: &str, tarballs: &str, member: &str) -> String {
     let stem = tarball_stem(member);
@@ -41,7 +25,6 @@ pub fn pack_script(run_pack: &str, tarballs: &str, member: &str) -> String {
     )
 }
 
-/// Re-verify the checksum sidecar against the downloaded tarball.
 #[must_use]
 pub fn verify_script(member: &str) -> String {
     let stem = tarball_stem(member);
@@ -52,9 +35,6 @@ pub fn verify_script(member: &str) -> String {
     )
 }
 
-/// Assemble the npm publish document and `PUT` it with the job token.
-///
-/// Immutable: GitHub Packages refuses an existing version, which fails the job.
 #[must_use]
 pub fn publish_script(member: &str) -> String {
     let stem = tarball_stem(member);
@@ -78,7 +58,6 @@ pub fn publish_script(member: &str) -> String {
     )
 }
 
-/// Registry route of a scoped name: `@scope%2Fname`.
 #[must_use]
 pub fn route_of(member: &str) -> String {
     member.replacen('/', "%2F", 1)

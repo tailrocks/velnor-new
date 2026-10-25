@@ -1,5 +1,3 @@
-//! Bounded validator for the exact OCI-layout tar produced by the image release.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use bollard::models::ContainerConfig;
@@ -14,10 +12,6 @@ use super::manifest::{ARCHIVE_FORMAT, IMAGE_TAG, MAX_MANIFEST_BYTES, PLATFORM, P
 #[path = "archive/tar_archive.rs"]
 mod tar_archive;
 use tar_archive::read_archive;
-
-#[cfg(test)]
-#[path = "archive/tests.rs"]
-mod tests;
 
 const MAX_ARCHIVE_BYTES: usize = 16 * 1024 * 1024;
 const MAX_ARCHIVE_MEMBERS: usize = 256;

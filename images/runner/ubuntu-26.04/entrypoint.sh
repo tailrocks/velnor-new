@@ -1,5 +1,4 @@
 #!/bin/bash
-# linux/amd64. One JIT payload from fd 3, or stdin. Not printed. Not exported.
 set +o xtrace
 set +o allexport
 set -euo pipefail
@@ -8,7 +7,6 @@ root="/home/runner"
 work="${root}/_work"
 listener="${root}/bin/Runner.Listener"
 entrypoint_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-# Stay under Linux MAX_ARG_STRLEN so --jitconfig fits in one argv slot.
 max=131071
 
 if [[ ! -x "$listener" ]]; then
@@ -27,7 +25,6 @@ if { : <&3; } 2>/dev/null && [[ ! -t 3 ]]; then
   read_fd=3
 fi
 
-# 33*4096 is past max, so an oversized body is rejected instead of passed on.
 dd if="/dev/fd/${read_fd}" of="$jit_file" bs=4096 count=33 status=none
 chmod 0600 "$jit_file"
 
@@ -50,11 +47,7 @@ if [[ -z "$payload" ]]; then
 fi
 
 cd "$root"
-# Shell variable only. No export. Image ENV/ARG/labels never carry this.
-# DinD links the public socket after dockerd is ready. Wait before the listener.
 /usr/local/bin/wait-docker-sock
 /usr/local/bin/clear-dockerenv
-# A present socket is not a serving API. Refuse to start on a stalled daemon.
-# (/var/run/docker.sock and /run/docker.sock are the same file.)
 "${entrypoint_dir}/velnor-wait-docker-api" "unix:///var/run/docker.sock"
 exec "$listener" run --jitconfig "$payload"

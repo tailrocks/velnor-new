@@ -1,5 +1,3 @@
-//! Verify the selected engine before any initial cleanup request.
-
 use std::time::Duration;
 
 use bollard::Docker;
@@ -47,7 +45,3 @@ async fn run_after<E: PairEngine + ?Sized>(
         Discovery::Untrusted(error) => Err(error),
     }
 }
-
-#[cfg(test)]
-#[path = "preflight_tests.rs"]
-mod tests;

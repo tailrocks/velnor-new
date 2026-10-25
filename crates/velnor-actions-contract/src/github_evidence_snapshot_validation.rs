@@ -1,5 +1,3 @@
-//! Structural validation for the closed evidence snapshot index.
-
 #[path = "github_evidence_snapshot_temporal.rs"]
 mod temporal;
 
@@ -8,7 +6,6 @@ mod artifacts;
 
 pub(super) use artifacts::validate_artifacts;
 
-/// Closed status values accepted for one captured GitHub Actions run attempt.
 #[must_use]
 pub fn is_valid_github_evidence_status(value: &str) -> bool {
     matches!(
@@ -17,7 +14,6 @@ pub fn is_valid_github_evidence_status(value: &str) -> bool {
     )
 }
 
-/// Closed conclusion values accepted for one captured GitHub Actions run attempt.
 #[must_use]
 pub fn is_valid_github_evidence_conclusion(value: Option<&str>) -> bool {
     value.is_none_or(|value| {

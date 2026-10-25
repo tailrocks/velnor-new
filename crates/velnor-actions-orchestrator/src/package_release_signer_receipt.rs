@@ -1,5 +1,3 @@
-//! Receipt construction from trusted plan/runtime facts and verified bytes.
-
 use velnor_actions_contract::{
     PackageReleasePlan,
     package_release::{

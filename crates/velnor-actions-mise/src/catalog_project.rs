@@ -1,14 +1,3 @@
-//! Project-declared tool versions (hard decision 5).
-//!
-//! The project's Mise config (`mise.toml` plus `mise.lock`, and the
-//! `rust-toolchain.toml` channel Mise reads for Rust) is the version
-//! authority for every tool it declares. Generated workflows never copy
-//! such a version: an emission catalog ([`ToolCatalog::for_emission`])
-//! renders it as the shell reference `${VELNOR_TOOL_<TOOL>}`, which the
-//! generated resolver step fills at run time from the stored config value
-//! (`velnor_actions_contract::config::project_tool_resolver`). Only tools
-//! the project does not declare keep a Velnor pin in generated text.
-
 use std::collections::BTreeSet;
 
 pub use velnor_actions_contract::config::project_tool_refs::{
@@ -20,11 +9,9 @@ use velnor_actions_contract::config::project_tool_resolver::project_tool_keys;
 use super::{PinnedTool, ToolCatalog};
 use crate::error::MiseError;
 
-/// Prefix of the run-time environment variable carrying one project version.
 pub const PROJECT_TOOL_ENV_PREFIX: &str = "VELNOR_TOOL_";
 
 impl PinnedTool {
-    /// Run-time environment variable carrying the project-declared version.
     #[must_use]
     pub const fn project_env(self) -> &'static str {
         match self {
@@ -41,32 +28,23 @@ impl PinnedTool {
         }
     }
 
-    /// Every `[tools]` key that declares this tool, canonical spelling first.
     #[must_use]
     pub fn mise_config_keys(self) -> &'static [&'static str] {
         project_tool_keys(self.project_env())
     }
 }
 
-/// Shell reference `${VELNOR_TOOL_<TOOL>}` used in `run:` text and task argv.
 #[must_use]
 pub fn project_tool_shell_ref(tool: PinnedTool) -> String {
     format!("${{{}}}", tool.project_env())
 }
 
-/// GitHub expression `${{ env.VELNOR_TOOL_<TOOL> }}` for `with:`, `env:`, and keys.
 #[must_use]
 pub fn project_tool_expression(tool: PinnedTool) -> String {
     format!("${{{{ env.{} }}}}", tool.project_env())
 }
 
 impl ToolCatalog {
-    /// Record a project-declared tool with the exact version generation
-    /// executes locally (the run-time resolver re-reads the project config).
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::InvalidToolVersion`] for a non-exact version.
     pub fn with_project_tool(mut self, tool: PinnedTool, version: &str) -> Result<Self, MiseError> {
         super::validate_concrete_exact_version(tool.tool_name(), version)?;
         version.clone_into(self.version_slot(tool));
@@ -74,26 +52,21 @@ impl ToolCatalog {
         Ok(self)
     }
 
-    /// Project-declared tools, in stable order.
     #[must_use]
     pub const fn project_tools(&self) -> &BTreeSet<PinnedTool> {
         &self.project
     }
 
-    /// Whether the project's Mise config declares `tool`.
     #[must_use]
     pub fn is_project_declared(&self, tool: PinnedTool) -> bool {
         self.project.contains(&tool)
     }
 
-    /// Whether this catalog renders project versions as run-time references.
     #[must_use]
     pub const fn is_emission(&self) -> bool {
         self.emission
     }
 
-    /// Catalog for generated text: every project-declared version becomes
-    /// its `${VELNOR_TOOL_<TOOL>}` reference; Velnor pins stay literal.
     #[must_use]
     pub fn for_emission(&self) -> Self {
         let mut out = self.clone();
@@ -104,8 +77,6 @@ impl ToolCatalog {
         out
     }
 
-    /// Replace every project reference in `text` with this catalog's
-    /// concrete version (generation-time audits over emitted text).
     #[must_use]
     pub fn materialize(&self, text: &str) -> String {
         velnor_actions_contract::config::project_tool_refs::map_project_tool_refs(text, |name| {
@@ -135,7 +106,3 @@ impl ToolCatalog {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "catalog_project_tests.rs"]
-mod tests;

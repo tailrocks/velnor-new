@@ -1,15 +1,7 @@
-//! Scalar checks shared by the release, lock, and candidate manifests.
-//!
-//! Split from `manifest.rs` at the file-size gate: every manifest
-//! validates the same shapes (schema, semver, targets, URLs, digests,
-//! commits, dates) through these helpers, so strictness cannot drift
-//! between the manifest path and the lock path (F3).
-
 use crate::errors::ContractError;
 
 pub(crate) use crate::ids::is_lower_hex;
 
-/// Check a document schema version.
 pub(crate) fn check_schema(schema: u32) -> Result<(), ContractError> {
     if schema != 1 {
         return Err(ContractError::UnsupportedSchema {
@@ -21,7 +13,6 @@ pub(crate) fn check_schema(schema: u32) -> Result<(), ContractError> {
     Ok(())
 }
 
-/// Check exact `X.Y.Z` numeric semver.
 pub(crate) fn check_semver(version: &str, file: &str, key: &str) -> Result<(), ContractError> {
     let parts: Vec<&str> = version.split('.').collect();
     let valid = parts.len() == 3
@@ -35,7 +26,6 @@ pub(crate) fn check_semver(version: &str, file: &str, key: &str) -> Result<(), C
     }
 }
 
-/// Check target-triple shape.
 pub(crate) fn check_target(target: &str, file: &str, key: &str) -> Result<(), ContractError> {
     let valid = !target.is_empty()
         && target.contains('-')
@@ -49,7 +39,6 @@ pub(crate) fn check_target(target: &str, file: &str, key: &str) -> Result<(), Co
     }
 }
 
-/// Check an immutable `https://` asset URL (no floating segments).
 pub(crate) fn check_immutable_url(url: &str, file: &str, key: &str) -> Result<(), ContractError> {
     let Some(rest) = url.strip_prefix("https://") else {
         return Err(ContractError::config(file, key, "mutable_or_malformed_url"));
@@ -64,7 +53,6 @@ pub(crate) fn check_immutable_url(url: &str, file: &str, key: &str) -> Result<()
     }
 }
 
-/// Check a SHA-256 hex digest.
 pub(crate) fn check_sha256(sha: &str, file: &str, key: &str) -> Result<(), ContractError> {
     if crate::ids::is_lower_hex_len(sha, 64) {
         Ok(())
@@ -73,8 +61,6 @@ pub(crate) fn check_sha256(sha: &str, file: &str, key: &str) -> Result<(), Contr
     }
 }
 
-/// Check a 40-char lowercase-hex source commit (F3: one predicate for the
-/// release manifest, the generator lock, and the candidate manifest).
 pub(crate) fn check_commit(commit: &str, file: &str, key: &str) -> Result<(), ContractError> {
     if crate::ids::is_lower_hex_len(commit, 40) {
         Ok(())
@@ -83,7 +69,6 @@ pub(crate) fn check_commit(commit: &str, file: &str, key: &str) -> Result<(), Co
     }
 }
 
-/// Check a `YYYY-MM-DD` review date (range-checked, not calendar-exact).
 pub(crate) fn is_review_date(text: &str) -> bool {
     let parts: Vec<&str> = text.split('-').collect();
     if parts.len() != 3

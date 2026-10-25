@@ -1,13 +1,3 @@
-//! Tofu roots + evidence step (T09/T10): configured candidates, plan notes.
-//!
-//! Configured roots qualify against the checkout (grammar, canonical
-//! containment, effective config) and emit one candidate each for the
-//! conversion arms. Without a table, filename plus E4 content
-//! evidence classifies to a plan advisory (never a silent claim,
-//! never an auto-detection); dialect conflict is a hard error.
-//! `stacks.ignore = ["tofu"]` suppresses emission, advisories, and
-//! conflict: ignoring is the explicit choice to skip the stack.
-
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -21,20 +11,11 @@ use crate::config::CONFIG_REL;
 use crate::safe_read::read_repo_file_cached;
 use crate::toolcheck::{TOOL_INPUT_PATHS, ToolInputCheck};
 
-/// Tofu step output: configured candidates plus an optional plan note.
 pub(crate) struct TofuStep {
-    /// One candidate per configured root (empty when ignored/absent).
     pub candidates: Vec<StackCandidate>,
-    /// Plan note (ignored marker or table-less advisory).
     pub note: Option<TofuNote>,
 }
 
-/// Qualify configured roots or classify table-less evidence.
-///
-/// # Errors
-///
-/// Returns config errors for bad roots, and a detection error for
-/// dialect conflict.
 pub(crate) fn qualify_tofu_step(
     root: &Path,
     config: &VelnorConfig,
@@ -71,11 +52,6 @@ pub(crate) fn qualify_tofu_step(
     })
 }
 
-/// Qualify configured roots; ignored stacks validate but emit nothing.
-///
-/// Live stacks additionally prove every provider root carries a
-/// committed lock: readonly init would fail the root in CI, so
-/// planning fails here with the manual remediation instead.
 fn qualify_configured(
     root: &Path,
     tofu: &velnor_actions_contract::TofuStackConfig,
@@ -97,7 +73,6 @@ fn qualify_configured(
     })
 }
 
-/// Map root qualification failures back to key-path config errors.
 fn map_roots_error(err: ContractError) -> OrchestratorError {
     match err {
         ContractError::Config {
@@ -115,10 +90,6 @@ fn map_roots_error(err: ContractError) -> OrchestratorError {
     }
 }
 
-/// Bounded text of effective config files for E4 content signals.
-///
-/// Capped in count and bytes; unreadable entries contribute no
-/// signals (no table, no claim).
 fn config_contents(
     root: &Path,
     index: &FileIndex,
@@ -138,12 +109,6 @@ fn config_contents(
     contents
 }
 
-/// Diagnostic recommendation lines for configured tofu roots.
-///
-/// Lock findings (missing/stale/corrupt) plus `required_version`
-/// exclusion against the Mise `opentofu` pin surface as validated
-/// finding lines; anything unvalidated stays out. Ignored stacks
-/// and table-less repos contribute nothing.
 pub(crate) fn tofu_diagnostic_lines(
     root: &Path,
     config: &VelnorConfig,
@@ -183,7 +148,6 @@ pub(crate) fn tofu_diagnostic_lines(
     lines
 }
 
-/// Flattened `mise.toml` values (empty when missing or malformed).
 fn mise_toml_values(tool_checks: &[ToolInputCheck]) -> BTreeMap<String, String> {
     tool_checks
         .iter()

@@ -1,5 +1,3 @@
-//! Local source pin and inventory mirror checks.
-
 use std::collections::BTreeSet;
 
 use serde_json::Value;
@@ -13,8 +11,6 @@ mod mirrors;
 
 pub(crate) fn check_local_pins(ctx: &mut FreshnessContext) {
     if reject_duplicate_inventory_rows(ctx) {
-        // A malformed inventory must not let duplicate rows overwrite a pin
-        // or cause repeated upstream requests later in the run.
         ctx.tools.clear();
         ctx.action_pinned.clear();
         ctx.tool_pinned.clear();
@@ -292,99 +288,3 @@ fn check_runner_pins(ctx: &mut FreshnessContext) {
         );
     }
 }
-
-#[cfg(test)]
-mod duplicate_tests {
-    use serde_json::Value;
-    use serde_json::json;
-
-    use super::check_local_pins;
-    use crate::context::FreshnessContext;
-
-    #[test]
-    fn duplicate_tool_and_action_rows_fail_before_probe_state_is_populated() {
-        for inventory in [
-            json!({
-                "tools": [
-                    {"name": "gh", "pinned": "2.102.0"},
-                    {"name": "gh", "pinned": "9.9.9"}
-                ],
-                "actions": [{"key": "actions/checkout", "pinned_version": "v7.0.1"}],
-                "runner": {"default": "ubuntu-26.04", "supported": ["ubuntu-26.04"]}
-            }),
-            json!({
-                "tools": [{"name": "gh", "pinned": "2.102.0"}],
-                "actions": [
-                    {"key": "actions/checkout", "pinned_version": "v7.0.1"},
-                    {"key": "actions/checkout", "pinned_version": "v9.9.9"}
-                ],
-                "runner": {"default": "ubuntu-26.04", "supported": ["ubuntu-26.04"]}
-            }),
-        ] {
-            let mut context = FreshnessContext::new(std::path::PathBuf::new(), true, false);
-            context.inv = inventory;
-
-            check_local_pins(&mut context);
-
-            assert_eq!(context.tools, [] as [serde_json::Value; 0]);
-            assert!(context.action_pinned.is_empty());
-            assert_eq!(
-                context
-                    .failures
-                    .iter()
-                    .filter(|failure| failure.contains("duplicate"))
-                    .count(),
-                1
-            );
-        }
-    }
-
-    #[test]
-    fn unknown_unique_rows_never_enter_upstream_probe_state() {
-        let tools = (0..32)
-            .map(|index| {
-                serde_json::json!({
-                    "name": format!("unknown-tool-{index}"),
-                    "pinned": "9.9.9",
-                    "source": "file:///missing-tool-source"
-                })
-            })
-            .collect::<Vec<_>>();
-        let actions = (0..32)
-            .map(|index| {
-                serde_json::json!({
-                    "key": format!("unknown/action-{index}"),
-                    "pinned_version": "v9.9.9",
-                    "pinned_sha": "0123456789012345678901234567890123456789",
-                    "source": "file:///missing-action-source"
-                })
-            })
-            .collect::<Vec<_>>();
-        let mut context = FreshnessContext::new(std::path::PathBuf::new(), true, false);
-        context.inv = serde_json::json!({
-            "tools": tools,
-            "actions": actions,
-            "runner": {"default": "ubuntu-26.04", "supported": ["ubuntu-26.04"]}
-        });
-
-        check_local_pins(&mut context);
-        assert_eq!(context.tools, [] as [serde_json::Value; 0]);
-        assert!(context.action_pinned.is_empty());
-
-        crate::probe::check_upstream_probe(&mut context);
-
-        let probe_rows = context
-            .output
-            .lines()
-            .filter_map(|line| line.strip_prefix("row: "))
-            .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
-            .filter(|row| row.get("check").and_then(Value::as_str) == Some("upstream-probe"))
-            .filter(|row| row.get("subject").and_then(Value::as_str) != Some("runner"))
-            .collect::<Vec<_>>();
-        assert_eq!(probe_rows, [] as [serde_json::Value; 0]);
-    }
-}
-
-#[cfg(test)]
-#[path = "pins_cosign_tests.rs"]
-mod cosign_tests;

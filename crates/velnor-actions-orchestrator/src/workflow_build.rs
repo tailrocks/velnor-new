@@ -1,5 +1,3 @@
-//! Ordered phases for constructing one workflow plan.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::StepSyntax;
@@ -23,7 +21,6 @@ use super::{
     lint_config_input, support_workflow, wire_w1, workflow_context, workflow_ir,
 };
 
-/// Inputs used to prepare the workflow's plan, task, and support jobs.
 pub(crate) struct WorkflowBuildInput<'a> {
     pub(crate) root: &'a std::path::Path,
     pub(crate) config: &'a VelnorConfig,
@@ -32,8 +29,6 @@ pub(crate) struct WorkflowBuildInput<'a> {
     pub(crate) discovery: &'a Discovery,
     pub(crate) fetch_roots: &'a [String],
     pub(crate) consumer_release_version: &'a str,
-    /// Repo-resolved catalog shared with the rest of the preparation;
-    /// workflow building never re-resolves or falls back to compile pins.
     pub(crate) catalog: &'a ToolCatalog,
 }
 
@@ -214,7 +209,6 @@ fn build_workflow_jobs(
     for (id, job) in built.jobs {
         jobs.insert(id, job);
     }
-    // Seeds run no checks and are never required (cache decision 2).
     for (id, job) in built.seeds {
         jobs.insert(id, job);
     }

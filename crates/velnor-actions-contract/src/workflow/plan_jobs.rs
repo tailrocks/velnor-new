@@ -1,18 +1,3 @@
-//! Per-job plan dispositions (hard decision 4).
-//!
-//! Every generated job that owns obligations carries exactly one
-//! disposition. A `not_affected` job is skipped as a whole job by its
-//! generated job-level gate; `Required` passes it only as skipped. The
-//! pairing with obligations and matrix entries is closed: a `not_affected`
-//! job owns at least one obligation, only `not_affected` ones, and no matrix
-//! entry; a `run` job owns no `not_affected` obligation and at least one
-//! matrix entry; every obligation and entry names a planned job, and every
-//! planned job owns an obligation or an entry (a paired named-check lane
-//! owns only entries; a container image build job, id prefix `image-`, owns
-//! neither, and is planned by image selection alone). Only affected-selection events may carry
-//! `not_affected` work: a full-run event (push, merge group,
-//! qualification) never skips anything.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
@@ -22,33 +7,22 @@ use crate::config::{ANSIBLE_JOB_PREFIX, BUN_JOB_PREFIX, DBT_JOB_PREFIX, IMAGE_JO
 use crate::errors::ContractError;
 use crate::graph::check_sorted_by;
 
-/// One generated job's plan disposition.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PlanJob {
-    /// Generated job ID.
     pub job_id: String,
-    /// Whether the job runs.
+
     pub disposition: JobDisposition,
 }
 
-/// Whether one generated job runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum JobDisposition {
-    /// The job runs and must succeed with a report for every obligation.
     Run,
-    /// The job is skipped; every obligation it owns is `not_affected`.
+
     NotAffected,
 }
 
-/// True when `event` selects only affected work (hard decision 4).
-///
-/// Pull requests, fork pull requests included, and local pre-push runs
-/// test what they affect. Pushes, merge groups, and dispatched
-/// qualification runs test everything: the merge queue and the default
-/// branch are the full backstop. Exhaustive on purpose: a new event must
-/// choose here, and plan validation plus `Required` both enforce it.
 #[must_use]
 pub const fn selects_affected_work(event: WorkflowEvent) -> bool {
     match event {
@@ -57,7 +31,6 @@ pub const fn selects_affected_work(event: WorkflowEvent) -> bool {
     }
 }
 
-/// True when the plan skips any job or obligation.
 #[must_use]
 pub fn plan_skips_work(plan: &Plan) -> bool {
     plan.jobs
@@ -69,14 +42,6 @@ pub fn plan_skips_work(plan: &Plan) -> bool {
             .any(|obligation| obligation.decision == ObligationDecision::NotAffected)
 }
 
-/// Validate job dispositions against obligations and matrix entries.
-///
-/// # Errors
-///
-/// Returns an identity error for any `not_affected` work on a full-run
-/// event, unsorted or duplicate jobs, an
-/// obligation naming an unplanned job, a job without obligations, or any
-/// disposition that disagrees with its obligations or matrix entries.
 pub(crate) fn validate_plan_jobs(plan: &Plan) -> Result<(), ContractError> {
     if !selects_affected_work(plan.event) && plan_skips_work(plan) {
         return Err(ContractError::identity(

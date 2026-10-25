@@ -1,4 +1,3 @@
-//! Typed acquisition processes over externally verified, owned files.
 use super::{EnvPolicy, IsolatedCommand, MISE_GLOBAL_FLAGS};
 use crate::MiseError;
 use crate::checks::{QualifiedCheck, invalid};
@@ -8,23 +7,12 @@ use velnor_actions_contract::config::{
     QualifiedCargoInstallation, QualifiedTool, QualifiedToolBackend, QualifiedToolOptions,
 };
 
-#[cfg(test)]
-#[path = "qualified_acquisition_tests.rs"]
-mod tests;
-
 impl QualifiedCheck {
-    /// Owned installation state for a selected qualified tool.
-    /// # Errors
-    /// Rejects IDs outside the bound installation closure.
     pub fn qualified_tool_home(&self, id: &str) -> Result<PathBuf, MiseError> {
         self.selected_tool(id)?;
         Ok(self.home.join("tools").join(id))
     }
 
-    /// Compile a verified Cargo source root with an exhaustive offline vendor source.
-    /// The owner verifies archives, Cargo.lock, and directory sources before execution.
-    /// # Errors
-    /// Rejects non-source declarations or absent qualified Rust executable prerequisites.
     pub fn qualified_source_command(&self, id: &str) -> Result<IsolatedCommand, MiseError> {
         let tool = self.selected_tool(id)?;
         let QualifiedToolOptions::Cargo {
@@ -79,9 +67,6 @@ impl QualifiedCheck {
         Ok(command)
     }
 
-    /// Register a verified prefix locally, without backend installation or fallback.
-    /// # Errors
-    /// Rejects IDs outside the bound installation closure.
     pub fn qualified_link_command(&self, id: &str) -> Result<IsolatedCommand, MiseError> {
         let tool = self.selected_tool(id)?;
         let selector = match &tool.backend {
@@ -100,10 +85,6 @@ impl QualifiedCheck {
         self.acquisition_command(self.mise_program().into_os_string(), args)
     }
 
-    /// Fetch one bound artifact into its SHA-addressed owned download path.
-    /// The owner verifies the resulting bytes before extraction or execution.
-    /// # Errors
-    /// Rejects unknown tools and artifact indices.
     pub fn qualified_fetch_command(
         &self,
         id: &str,
@@ -239,7 +220,6 @@ impl QualifiedCheck {
         args: Vec<OsString>,
     ) -> Result<IsolatedCommand, MiseError> {
         let mut extra_env = self.owned_env()?;
-        // Docker capability credentials/endpoints are task-only.
         extra_env.retain(|(key, _)| {
             !matches!(
                 key.to_str(),

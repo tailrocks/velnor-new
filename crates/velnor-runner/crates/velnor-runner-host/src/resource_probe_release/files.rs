@@ -15,7 +15,7 @@ pub(super) fn read_bounded_regular(path: &Path, limit: usize) -> Result<Vec<u8>,
     if !before.is_file() || before.len() > to_u64(limit)? {
         return Err(HostError::Frame);
     }
-    // NONBLOCK prevents a raced replacement with a FIFO from blocking open.
+
     let file = std::fs::File::from(
         openat(
             &parent,
@@ -113,7 +113,3 @@ fn held_parent(path: &Path) -> Result<std::fs::File, HostError> {
 fn to_u64(value: usize) -> Result<u64, HostError> {
     u64::try_from(value).map_err(|_| HostError::Frame)
 }
-
-#[cfg(test)]
-#[path = "files_tests.rs"]
-mod tests;

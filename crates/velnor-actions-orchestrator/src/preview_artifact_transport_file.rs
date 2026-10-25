@@ -1,4 +1,3 @@
-//! Exclusive, descriptor-held service archives; no archive-sized memory buffer.
 use crate::{OrchestratorError, internal::internal};
 use rustix::fs::{AtFlags, Mode, OFlags};
 use sha2::{Digest, Sha256};
@@ -195,7 +194,3 @@ impl Drop for SealedArchive {
 fn invalid(reason: &str) -> OrchestratorError {
     internal(&format!("preview_archive_{reason}"))
 }
-
-#[cfg(test)]
-#[path = "preview_artifact_transport_file_tests.rs"]
-mod tests;

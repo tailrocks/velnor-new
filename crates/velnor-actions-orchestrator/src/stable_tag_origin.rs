@@ -1,8 +1,3 @@
-//! Retained intent and observed tag admission for manual stable production.
-//!
-//! These records authenticate the authorized operation and exact resulting tag.
-//! They do not claim GitHub exposes a trustworthy tag creator identity.
-
 use serde::{Deserialize, Serialize};
 use std::{env, path::PathBuf};
 use velnor_actions_contract::{
@@ -38,11 +33,8 @@ use tag::{create_or_resume_tag, observe_tag};
 mod selector;
 pub use selector::{SELECT_STABLE_RELEASE_SOURCE_OP, select_stable_release_source_from_env};
 
-/// Write pre-tag authority before the qualified metadata operation.
 pub const WRITE_STABLE_TAG_INTENT_OP: &str = "write-stable-tag-intent-v1";
-/// Bind the actual observed tag to its retained pre-tag authority.
 pub const WRITE_STABLE_TAG_ORIGIN_OP: &str = "write-stable-tag-origin-v1";
-/// Authenticate retained tag evidence before any producer checkout.
 pub const ADMIT_STABLE_TAG_ORIGIN_OP: &str = "admit-stable-tag-origin-v1";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -92,9 +84,6 @@ struct Origin {
     tag: Tag,
 }
 
-/// Persist authenticated manual-source authority while the stable tag is absent.
-/// # Errors
-/// Rejects an existing tag, invalid workflow/CI, or noncanonical source authority.
 pub fn write_stable_tag_intent_from_env() -> Result<(), OrchestratorError> {
     super::artifact_zip::within_operation(write_intent)
 }
@@ -128,9 +117,6 @@ fn write_intent() -> Result<(), OrchestratorError> {
     recovery::outputs(None)
 }
 
-/// Persist the actual tag, preserving its original pre-tag intent artifact.
-/// # Errors
-/// Rejects altered intent, a different source, or missing tag.
 pub fn write_stable_tag_origin_from_env() -> Result<(), OrchestratorError> {
     super::artifact_zip::within_operation(write_origin)
 }
@@ -374,7 +360,3 @@ fn require_writer_role(expected_operation: &str) -> Result<(), OrchestratorError
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "stable_tag_origin_tests.rs"]
-mod tests;

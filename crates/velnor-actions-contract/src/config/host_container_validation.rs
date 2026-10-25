@@ -1,4 +1,3 @@
-//! Admission for explicitly qualified installed container profiles.
 use super::{CheckExecutor, CheckPlatform};
 use super::{HostContainerProfile, HostOrbStackSdk};
 use crate::errors::ContractError;

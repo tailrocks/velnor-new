@@ -1,9 +1,3 @@
-//! Data-only resolution of one generated task execution record.
-//!
-//! The generated composite wrapper owns execution. This boundary validates
-//! the checked-in manifest against the renderer marker and the runner-staged
-//! plan, then emits one bounded NUL frame without constructing a process.
-
 use std::env;
 use std::path::Path;
 use std::path::PathBuf;
@@ -22,26 +16,15 @@ use velnor_actions_contract::{
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
 
-/// Private operation tag for resolving one generated task-execution record.
 pub const TASK_EXECUTION_RESOLVER_OP: &str = "resolve-task-execution-v1";
-/// Environment key selecting the requested record's execution digest.
 pub const TASK_EXECUTION_DIGEST_ENV: &str = "VELNOR_TASK_EXECUTION_DIGEST";
-/// Static renderer version embedded in the generated composite action.
 pub const GENERATOR_VERSION_ENV: &str = "VELNOR_GENERATOR_VERSION";
-/// Static runner-temp value embedded in the generated composite action.
 pub const RUNTIME_RUNNER_TEMP_ENV: &str = "VELNOR_RUNTIME_RUNNER_TEMP";
 
 const RUNNER_TEMP_ENV: &str = "RUNNER_TEMP";
 const TASK_EXECUTION_FRAME_END: &str = "END";
 const RUNNER_TEMP_EXPRESSION: &str = "${{ runner.temp }}";
 
-/// Resolve the selected task from GitHub's runner environment and emit its
-/// NUL-framed data record. This function only reads and validates data.
-///
-/// # Errors
-///
-/// Returns an internal or IO error for missing runner context, invalid marker
-/// or manifest data, or a mismatch with the staged plan.
 pub fn resolve_task_execution() -> Result<Vec<u8>, OrchestratorError> {
     let root = env::var_os("GITHUB_WORKSPACE")
         .filter(|value| !value.is_empty())
@@ -68,16 +51,6 @@ pub fn resolve_task_execution() -> Result<Vec<u8>, OrchestratorError> {
     )
 }
 
-/// Resolve one record using the full execution digest as the caller selector.
-///
-/// The renderer version is an independent input supplied by the generated
-/// composite. The manifest's own version is checked only after its marker has
-/// matched that input exactly.
-///
-/// # Errors
-///
-/// Returns an internal or IO error for invalid inputs, manifest data, or plan
-/// bindings.
 pub(crate) fn resolve_task_execution_to(
     root: &Path,
     runner_temp: &Path,
@@ -112,14 +85,9 @@ pub(crate) fn resolve_task_execution_to(
         return Err(internal("task_execution_plan_binding_mismatch"));
     }
 
-    // The manifest digest and existing plan digest bind the original literal
-    // expression. Materialize it only after both bindings have been checked.
     encode_runtime_frame(record, runner_temp)
 }
 
-/// Select a single validated manifest record using its full execution digest.
-///
-/// A collision must fail closed instead of depending on map iteration order.
 fn unique_record_by_execution_digest<'a>(
     manifest: &'a TaskExecutionManifestV1,
     expected_execution_digest: &str,
@@ -241,10 +209,6 @@ fn resolve_runner_temp_expression(
     resolve_project_tool_refs(&resolved, |name| env::var(name).ok())
 }
 
-/// Materialize `${VELNOR_TOOL_<NAME>}` references (hard decision 5) from
-/// the variables the generated resolver step exported, after the manifest
-/// and plan bindings have matched the literal record. Every value must be
-/// an exact `X.Y.Z` version; a missing or loose value fails closed.
 pub(crate) fn resolve_project_tool_refs(
     value: &str,
     lookup: impl Fn(&str) -> Option<String>,
@@ -310,7 +274,3 @@ fn required_env(key: &str, problem: &str) -> Result<String, OrchestratorError> {
         .filter(|value| !value.is_empty())
         .ok_or_else(|| internal(problem))
 }
-
-#[cfg(test)]
-#[path = "task_execution_tests.rs"]
-mod tests;

@@ -1,5 +1,3 @@
-//! Ordered, bounded expansion for the workflow-only sharing projection.
-
 use crate::{
     RenderError,
     yaml::{AnchorName, Yaml, quote_scalar, render_yaml},

@@ -4,10 +4,6 @@ use super::{
     is_sha256, ruby_assignment, ruby_cpu_predicate, ruby_platform_open, ruby_quote,
 };
 
-/// Render the single fixed standalone Homebrew formula template.
-///
-/// # Errors
-/// Returns an error for invalid policy, inconsistent release literals, or oversized output.
 pub fn render_homebrew_formula(
     spec: &HomebrewFormulaSpec,
     literals: &HomebrewFormulaReleaseLiterals,

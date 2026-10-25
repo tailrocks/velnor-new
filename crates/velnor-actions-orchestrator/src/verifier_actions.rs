@@ -1,5 +1,3 @@
-//! Canonical definitions and typed call sites for pure verifier composites.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::{RUST_VERIFIER_USES, Step, StepKind, StepRole};
@@ -19,7 +17,6 @@ pub(crate) struct VerifierAction {
     pub(crate) file: RenderedFile,
 }
 
-/// One supported direct-shell verifier shape retained for release workflows.
 #[derive(Debug, Clone)]
 pub(crate) struct InlineVerifierTemplate {
     pub(crate) top_fields: Vec<(String, String)>,
@@ -64,9 +61,6 @@ impl InlineVerifierTemplate {
     }
 }
 
-/// Environment carried by the standalone preview producer's Rust source-prep
-/// job. Keep this shared with source preparation so its inline verifier audit
-/// expects exactly the resolved Mise/Cargo/Rustup context the renderer emits.
 pub(crate) fn producer_cargo_env(
     catalog: &ToolCatalog,
 ) -> Result<BTreeMap<String, String>, OrchestratorError> {
@@ -81,7 +75,6 @@ pub(crate) fn producer_cargo_env(
     Ok(env)
 }
 
-/// One immutable set of the three verifier definitions emitted for a catalog.
 #[derive(Debug, Clone)]
 pub(crate) struct VerifierActionSet {
     pub(crate) restored_rust: VerifierAction,
@@ -108,12 +101,6 @@ struct InlineVerifierTemplates {
 }
 
 impl VerifierActionSet {
-    /// Build action definitions from the same canonical scrubbed shell steps
-    /// that the pre-extraction workflow used.
-    ///
-    /// # Errors
-    ///
-    /// Returns a contract/render error when a canonical step is invalid.
     pub(crate) fn build(
         catalog: &ToolCatalog,
         generator_version: &str,
@@ -222,11 +209,6 @@ fn inline_templates(steps: &VerifierSteps) -> Result<InlineVerifierTemplates, Or
         &steps.producer_home_rust,
         &["RUSTUP_HOME", "CARGO_HOME"],
     )?;
-    // The workflow renderer binds project tool references in step env to
-    // `${{ env.* }}` after constructing the canonical Step. The audit
-    // template models that final emitted YAML mapping at the same boundary;
-    // keep the Step input itself in shell form for normal validation and
-    // source-preparation reuse.
     let mut inline_rust_templates = BTreeMap::new();
     inline_rust_templates.insert(
         crate::workflow::VERIFY_RESTORED_RUST_STEP,

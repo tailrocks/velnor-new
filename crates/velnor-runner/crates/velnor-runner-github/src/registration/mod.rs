@@ -1,6 +1,3 @@
-//! Create and adopt checks. `disableUpdate` is a registration invariant.
-//! HTTP registration calls live beside those checks and inject [`crate::Transport`].
-
 mod admin;
 mod groups;
 mod runners;
@@ -26,10 +23,8 @@ use crate::refresh::{RefreshGate, classify_status};
 use crate::session::reject;
 use crate::{SessionError, WireError};
 
-/// Pascal-case setting object required by the pinned client.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RunnerSetting {
-    /// Must be true on create and on every re-read.
     #[serde(rename = "disableUpdate")]
     pub disable_update: bool,
 }
@@ -41,12 +36,6 @@ struct CreateBody<'a> {
     runner_setting: RunnerSetting,
 }
 
-/// JSON body for create. Always sets `disableUpdate` to true.
-///
-/// # Errors
-///
-/// Returns [`WireError::RegistrationRejected`] for an empty name and
-/// [`WireError::Encode`] if serialization fails.
 pub fn create_body(name: &str) -> Result<String, WireError> {
     if name.is_empty() {
         return Err(WireError::RegistrationRejected);
@@ -60,17 +49,14 @@ pub fn create_body(name: &str) -> Result<String, WireError> {
     serde_json::to_string(&body).map_err(|_| WireError::Encode)
 }
 
-/// One label on a create. An empty `label_type` becomes `System` on the wire.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[must_use]
 pub struct CreateLabel {
-    /// Label name.
     pub name: String,
-    /// Service `type`. Empty means `System`.
+
     pub label_type: String,
 }
 
-/// Product labels in wire order. Never the hosted `ubuntu-26.04` label.
 pub fn product_create_labels() -> [CreateLabel; 2] {
     [
         CreateLabel {
@@ -84,14 +70,6 @@ pub fn product_create_labels() -> [CreateLabel; 2] {
     ]
 }
 
-/// Create JSON for the product set: both product labels and `disableUpdate`.
-///
-/// This is not [`create_body`], which omits labels.
-///
-/// # Errors
-///
-/// Returns [`WireError::RegistrationRejected`] for an empty name and
-/// [`WireError::Encode`] if serialization fails.
 pub fn http_create_body(name: &str) -> Result<String, WireError> {
     if name.is_empty() {
         return Err(WireError::RegistrationRejected);
@@ -99,37 +77,27 @@ pub fn http_create_body(name: &str) -> Result<String, WireError> {
     outgoing_json(name, &product_create_labels(), 0)
 }
 
-/// Label object returned by the service.
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct Label {
-    /// Label name.
     pub name: String,
-    /// Service `type`. Empty when the payload omits it.
+
     #[serde(default, rename = "type")]
     pub label_type: String,
 }
 
-/// Re-read view. Unknown extra fields are ignored so the service can add them.
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct ScaleSetView {
-    /// Positive scale-set id.
     pub id: i64,
-    /// Scale-set name.
+
     pub name: String,
-    /// Returned labels.
+
     #[serde(default)]
     pub labels: Vec<Label>,
-    /// Update policy. Create requests use Pascal-case. The service reads it back camel-case.
+
     #[serde(rename = "runnerSetting", alias = "RunnerSetting")]
     pub runner_setting: RunnerSetting,
 }
 
-/// Refuse a set whose updates are enabled, whose id is not positive, or whose
-/// labels include the hosted `ubuntu-26.04` label.
-///
-/// # Errors
-///
-/// Returns [`WireError::RegistrationRejected`] when an invariant fails.
 pub fn accept_scale_set(view: &ScaleSetView, expected_name: &str) -> Result<(), WireError> {
     if view.id <= 0 || view.name != expected_name || !view.runner_setting.disable_update {
         return Err(WireError::RegistrationRejected);

@@ -1,5 +1,3 @@
-//! Read-only immutable-release status request with its distinct credential.
-
 use std::{
     env,
     ffi::{OsStr, OsString},

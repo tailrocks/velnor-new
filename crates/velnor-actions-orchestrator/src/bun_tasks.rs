@@ -1,5 +1,3 @@
-//! Resolve `[stacks.bun]` into one job policy per workspace member.
-
 use std::path::Path;
 
 use velnor_actions_bun::{
@@ -22,20 +20,13 @@ use crate::config::CONFIG_REL;
 use crate::config::private_wiring::PrivateWiring;
 use crate::discover::Discovery;
 
-/// Every Bun job policy: one per member job and one per declared suite.
 #[derive(Debug, Default)]
 pub(crate) struct BunPolicies {
-    /// Member jobs, sorted by job id; a member whose suites claim every
-    /// script has none.
     pub(crate) members: Vec<BunMemberPolicy>,
-    /// Suite jobs, sorted by job id.
     pub(crate) suites: Vec<BunSuitePolicy>,
-    /// One assets job per member whose suites need pinned release assets.
     pub(crate) assets: Vec<BunAssetsPolicy>,
 }
 
-/// Policies for every member and suite. `catalog` is the emission
-/// catalog; the packageManager agreement check re-reads the concrete pin.
 pub(crate) fn policies(
     root: &Path,
     config: &VelnorConfig,
@@ -98,8 +89,6 @@ pub(crate) fn policies(
     Ok(out)
 }
 
-/// The member's job (unless its suites claim every script), its suite jobs
-/// and, when they need pinned release assets, its assets job.
 fn push_member(
     out: &mut BunPolicies,
     ctx: &MemberCtx<'_>,
@@ -144,8 +133,6 @@ fn push_member(
     Ok(())
 }
 
-/// The member's assets job and the hand-off its suites run instead of the
-/// App-token block: suites never copy the secret (HD-7).
 fn assets_job(
     member: &Member,
     acquire: Option<&Step>,
@@ -169,7 +156,6 @@ fn assets_job(
     ))
 }
 
-/// Everything one member's jobs share.
 struct MemberCtx<'a> {
     catalog: &'a ToolCatalog,
     workspace: &'a velnor_actions_bun::Workspace,
@@ -205,8 +191,6 @@ impl<'a> MemberCtx<'a> {
     }
 }
 
-/// One declared suite's job, with its leg matrix and report job when it
-/// shards Playwright.
 fn suite_policy(
     ctx: &MemberCtx<'_>,
     suite_id: &str,
@@ -258,8 +242,6 @@ fn suite_policy(
     })
 }
 
-/// The configured minutes, or the next less specific bound (hard decision 2:
-/// validated, never clamped).
 fn resolve_timeout(minutes: Option<u32>, fallback: u16) -> Result<JobTimeout, OrchestratorError> {
     let minutes = minutes
         .map_or(Ok(fallback), u16::try_from)
@@ -267,7 +249,6 @@ fn resolve_timeout(minutes: Option<u32>, fallback: u16) -> Result<JobTimeout, Or
     Ok(JobTimeout::new(minutes)?)
 }
 
-/// The Playwright install step of one member, checked against both locks.
 fn playwright_step(
     workspace: &velnor_actions_bun::Workspace,
     member: &Member,

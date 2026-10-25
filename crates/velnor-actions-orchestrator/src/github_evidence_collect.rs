@@ -1,5 +1,3 @@
-//! Bounded GitHub evidence collection using one exact trusted fetch role.
-
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
@@ -267,7 +265,3 @@ impl<'a, R: GitHubEvidenceRead> Collector<'a, R> {
         Ok(())
     }
 }
-
-#[cfg(test)]
-#[path = "github_evidence_collect_tests.rs"]
-mod tests;

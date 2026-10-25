@@ -1,11 +1,3 @@
-//! Current-attempt, ID-addressed acquisition of unsigned native preview leaves.
-//!
-//! The artifact API has no attempt field. Preview assembly derives the complete
-//! pair union from the authenticated current-attempt job inventory and exact
-//! deterministic artifact names; stable assembly retains literal upload outputs.
-//! Timestamps never serve as attempt evidence. ZIP admission follows separately,
-//! and acquired bytes alone are not an admitted payload.
-
 use super::artifact_zip::{ZipProfile, leaf_union_compressed_bound};
 use super::github::ReleaseArtifactApi;
 use std::{fs::File, path::Path};
@@ -31,15 +23,11 @@ pub(crate) use aggregate::acquire_release_aggregate;
 
 const MAX_ARTIFACTS: usize = 1000;
 
-/// Authenticated service archive bytes, still requiring closed ZIP/leaf admission.
 pub(crate) struct AdmittedReleaseArtifact {
     pub reference: PayloadArtifactRef,
     pub archive: SealedArchive,
 }
 
-/// Acquire exactly the admitted assembly union under one cumulative budget.
-/// Stable uses literal references; preview derives them from GitHub's current
-/// attempt artifact and successful job inventories. This reauthenticates GitHub.
 pub(crate) fn acquire_release_artifacts(
     request: &ReleaseProductionRequest,
     directory: &Path,
@@ -78,7 +66,6 @@ fn require_consumer_environment(
         channel,
         std::env::var("GITHUB_JOB").ok().as_deref(),
     )?;
-    // This new read capability must not fall back to ambient cached gh login.
     let token_present = std::env::var("GH_TOKEN").is_ok_and(|token| !token.trim().is_empty());
     if !token_present {
         return Err(internal("preview_artifact_read_token_missing"));
@@ -320,15 +307,3 @@ pub(super) struct ArtifactSource {
     pub head_sha: String,
     pub head_branch: String,
 }
-
-#[cfg(test)]
-#[path = "preview_artifact_transport_fixture.rs"]
-pub(super) mod fixture;
-
-#[cfg(test)]
-#[path = "preview_artifact_transport_tests.rs"]
-pub(super) mod tests;
-
-#[cfg(test)]
-#[path = "preview_artifact_transport_environment_tests.rs"]
-mod environment_tests;

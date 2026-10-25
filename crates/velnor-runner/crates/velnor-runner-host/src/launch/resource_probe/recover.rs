@@ -1,5 +1,3 @@
-//! Restart cleanup: reuse no sample and delete only one exact owned container.
-
 use bollard::{Docker, models::SystemInfo};
 
 use crate::error::HostError;

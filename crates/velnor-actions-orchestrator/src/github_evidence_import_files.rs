@@ -1,5 +1,3 @@
-//! Exact file-set, streaming digest, and atomic local-input staging checks.
-
 use std::collections::BTreeSet;
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
@@ -46,17 +44,6 @@ pub(super) fn check_deadline(deadline: CheckDeadline) -> Result<(), Orchestrator
 fn document_byte_limit() -> Result<usize, OrchestratorError> {
     usize::try_from(MAX_GITHUB_EVIDENCE_DOCUMENT_BYTES)
         .map_err(|_| internal("github_evidence_document_bound"))
-}
-
-#[cfg(test)]
-pub(super) fn verify_bundle(
-    root: &Path,
-    snapshot: &GitHubEvidenceSnapshotV1,
-    deadline: CheckDeadline,
-) -> Result<(), OrchestratorError> {
-    let expected = expected_bundle_files(snapshot, deadline)?;
-    let directories = allowed_directory_prefixes(&expected, deadline)?;
-    verify_bundle_with_inventory(root, snapshot, &expected, &directories, deadline)
 }
 
 fn verify_bundle_with_inventory(
@@ -184,17 +171,6 @@ pub(super) fn stage_bundle(
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     stage_bundle_inner(root, workspace, snapshot, deadline, || {})
-}
-
-#[cfg(test)]
-pub(super) fn stage_bundle_with_after_create_for_test(
-    root: &Path,
-    workspace: &Path,
-    snapshot: &GitHubEvidenceSnapshotV1,
-    deadline: CheckDeadline,
-    after_create: impl FnOnce(),
-) -> Result<(), OrchestratorError> {
-    stage_bundle_inner(root, workspace, snapshot, deadline, after_create)
 }
 
 fn stage_bundle_inner(

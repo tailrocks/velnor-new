@@ -1,1 +1,0 @@
-pub const LATEST_RUNNER_LABEL: &str = "ubuntu-26.04";

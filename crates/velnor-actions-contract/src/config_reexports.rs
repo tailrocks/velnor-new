@@ -1,5 +1,3 @@
-//! Crate-root re-exports for the configuration contract surface.
-
 pub use crate::config::{
     AgentsConfig, BuildTask, BuildTaskRunner, BuildTaskXcodeCapability, CheckEvidence,
     CheckExecutor, CheckPlatform, CheckRunner, CheckSystemTool, CheckSystemToolKind, ClaudeMdMode,

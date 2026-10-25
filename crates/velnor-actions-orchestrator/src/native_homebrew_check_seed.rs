@@ -255,7 +255,6 @@ pub(crate) fn seed_pull_context_matches(
         && pull.head_sha == expected_head
 }
 
-/// Revalidate exact seed bytes and API custody for planning, execution, and Required.
 pub(crate) fn validate_seed_transition(
     root: &Path,
     repository: &str,

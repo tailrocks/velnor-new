@@ -1,5 +1,3 @@
-//! Get and create `_apis/runtime/runnerscalesets`. No capacity header.
-
 use std::fmt;
 
 use serde::Deserialize;
@@ -10,17 +8,15 @@ use crate::{Method, SessionError, SessionRequest, Transport, WireError, scale_se
 
 use super::{CreateLabel, ScaleSetView, accept_scale_set_labels, other_status, outgoing_json};
 
-/// Get-by-name inputs. `Debug` hides `admin_token`.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[must_use]
 pub struct ScaleSetByName<'a> {
-    /// `runnerGroupId` query value.
     pub runner_group_id: i64,
-    /// Expected scale-set name.
+
     pub name: &'a str,
-    /// Expected labels in the configured selector.
+
     pub expected_labels: &'a [String],
-    /// Actions admin bearer.
+
     pub admin_token: &'a str,
 }
 
@@ -36,17 +32,15 @@ impl fmt::Debug for ScaleSetByName<'_> {
     }
 }
 
-/// Get-by-id inputs. `Debug` hides `admin_token`.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[must_use]
 pub struct ScaleSetById<'a> {
-    /// Scale-set id placed on the path.
     pub scale_set_id: i64,
-    /// Name [`accept_scale_set`](crate::accept_scale_set) must see.
+
     pub name: &'a str,
-    /// Expected labels in the configured selector.
+
     pub expected_labels: &'a [String],
-    /// Actions admin bearer.
+
     pub admin_token: &'a str,
 }
 
@@ -62,17 +56,15 @@ impl fmt::Debug for ScaleSetById<'_> {
     }
 }
 
-/// Create inputs. `Debug` hides `admin_token`.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[must_use]
 pub struct ScaleSetCreate<'a> {
-    /// Scale-set name.
     pub name: &'a str,
-    /// `runnerGroupId`. Zero is omitted, matching Go `omitempty`.
+
     pub runner_group_id: i64,
-    /// Labels before default types. Empty gets one `System` label named `name`.
+
     pub labels: &'a [CreateLabel],
-    /// Actions admin bearer.
+
     pub admin_token: &'a str,
 }
 
@@ -88,30 +80,14 @@ impl fmt::Debug for ScaleSetCreate<'_> {
     }
 }
 
-/// Get-by-name outcome. `count == 0` is not an error.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[must_use]
 pub enum ScaleSetFound {
-    /// The service returned `count` 0. The caller may create.
     NotFound,
-    /// One set passed [`accept_scale_set`](crate::accept_scale_set).
+
     Found(ScaleSetView),
 }
 
-/// `GET` the collection filtered by group and name.
-///
-/// The query is sorted like Go `url.Values.Encode` and always includes
-/// `api-version=6.0-preview`. Unreserved bytes stay as written, so
-/// `ubuntu-26.04-scale-set` is not percent-encoded. Space becomes `+`.
-/// Other bytes become uppercase `%XX`. No `X-ScaleSetMaxCapacity` header.
-/// `count` must equal `value.len()`. This call does not refresh.
-///
-/// # Errors
-///
-/// Returns [`WireError::RegistrationRejected`] for an empty admin token, for
-/// `count > 1`, or when [`accept_scale_set`](crate::accept_scale_set) fails.
-/// A count that does not match `value` is [`WireError::Malformed`].
-/// Any status other than 200 is the pinned status class.
 pub fn get_runner_scale_set<T>(
     transport: &mut T,
     call: &ScaleSetByName<'_>,
@@ -133,13 +109,6 @@ where
     decode_page(&exchange.body, call.name, call.expected_labels)
 }
 
-/// `GET .../runnerscalesets/{id}?api-version=6.0-preview`, then adopt checks.
-///
-/// # Errors
-///
-/// Returns [`WireError::RegistrationRejected`] for an empty admin token or a
-/// failed adopt check. A non-200 status is the pinned status class.
-/// A body that is not one scale set is [`WireError::Malformed`].
 pub fn get_runner_scale_set_by_id<T>(
     transport: &mut T,
     call: &ScaleSetById<'_>,
@@ -161,16 +130,6 @@ where
     decode_one(&exchange.body, call.name, call.expected_labels)
 }
 
-/// `POST` a scale set. Empty labels become one `System` label named `name`
-/// before the call, matching `ensureLabels`. Empty label types become `System`.
-/// Product callers pass [`product_create_labels`](crate::product_create_labels).
-///
-/// # Errors
-///
-/// Returns [`WireError::RegistrationRejected`] for an empty admin token, or
-/// when the name and the labels are both empty. Any status other than 200 is
-/// [`WireError::UnexpectedStatus`]. The 200 body must pass
-/// The returned name and labels must match the request.
 pub fn create_runner_scale_set<T>(
     transport: &mut T,
     call: &ScaleSetCreate<'_>,

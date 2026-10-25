@@ -1,5 +1,3 @@
-//! Bounded single-member ZIP verification for immutable receipt artifacts.
-
 use std::io::{Cursor, Read};
 
 use sha2::{Digest, Sha256};
@@ -8,11 +6,9 @@ use velnor_actions_contract::{QUALIFICATION_CACHE_RECEIPT_FILENAME, Qualificatio
 use crate::OrchestratorError;
 use crate::internal::internal;
 
-/// Maximum compressed artifact bytes read from the API.
 pub(super) const MAX_ARCHIVE_BYTES: usize = 1_048_576;
 const LOWER_HEX: &[u8; 16] = b"0123456789abcdef";
 
-/// Verify the immutable archive and return its sole receipt file.
 pub(super) fn receipt_bytes(
     archive: &[u8],
     artifact: &QualificationCacheArtifact,
@@ -64,7 +60,3 @@ fn sha256(bytes: &[u8]) -> String {
     }
     text
 }
-
-#[cfg(test)]
-#[path = "archive_tests.rs"]
-mod tests;

@@ -1,13 +1,5 @@
-//! JSON with comments and trailing commas (`bun.lock`, `tsconfig.json`).
-
 use crate::BunError;
 
-/// Plain JSON text equivalent to `text`: comments and trailing commas are
-/// removed outside string literals; every other byte is preserved.
-///
-/// # Errors
-///
-/// Returns `jsonc_unterminated` for an unterminated string or block comment.
 pub fn to_json(text: &str) -> Result<String, BunError> {
     let stripped = strip_comments(text)?;
     Ok(drop_trailing_commas(&stripped))
@@ -84,7 +76,6 @@ fn drop_trailing_commas(text: &str) -> String {
             in_string = true;
             out.push(ch);
         } else if ch == ',' && closes_next(&chars[index + 1..]) {
-            // Trailing comma: omitted.
         } else {
             out.push(ch);
         }

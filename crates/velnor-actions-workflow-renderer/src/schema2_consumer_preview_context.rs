@@ -1,4 +1,3 @@
-//! Closed channel and source bindings for release production and continuation.
 #[derive(Clone, Copy)]
 pub(in crate::schema2) enum TapInvocationContext {
     Preview,

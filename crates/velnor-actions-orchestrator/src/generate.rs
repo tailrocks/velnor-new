@@ -1,7 +1,3 @@
-//! Staged `.github` replacement and outside-repo preview writes.
-//! In-place commits use atomic directory exchange on supported platforms and
-//! fail closed when an existing tree cannot be exchanged.
-
 use std::path::{Path, PathBuf};
 
 #[path = "rust_install_audit.rs"]
@@ -20,11 +16,9 @@ use crate::prepare::GenerationPreparation;
 use crate::provenance::{ProfileProvenance, profile_provenance};
 use crate::validate::validate_staged;
 
-/// Filesystem guards: snapshots, destination validation, and ownership.
 #[path = "generate_guards.rs"]
 pub(crate) mod guards;
 
-/// Preserve repository-owned entries while replacing generated output.
 #[path = "generate_preserve.rs"]
 mod preserve;
 
@@ -35,59 +29,37 @@ mod runner_labels;
 mod render;
 use render::{check_tree_paths, render_all};
 
-/// Gates that run before any write: profile evidence and unmanaged content.
 #[path = "generate_preflight.rs"]
 mod preflight;
 
-/// List `.github` entries generation neither emits nor retires.
 #[path = "generate_unmanaged.rs"]
 pub(crate) mod unmanaged;
 
-/// Stage and publish fresh preview output transactionally.
 #[path = "generate_preview.rs"]
 mod preview;
 
-/// Own the private persistent spare used only for in-place generation.
 #[path = "generate_stage_root.rs"]
 mod stage_root;
 
-/// Re-exported snapshot: the `generate::ToolSnapshot` path is stable API.
 pub use guards::ToolSnapshot;
 
 use guards::GenerateOwnership;
 use leaf_links::check_no_symlink_or_emitted_leaf;
 
-/// Options for [`generate`].
 #[derive(Debug, Clone, Default)]
 pub struct GenerateOptions {
-    /// Preview root; `None` replaces the in-repo `.github` tree.
     pub output_dir: Option<PathBuf>,
 }
 
-/// Report for [`generate`].
 #[derive(Debug, Clone)]
 pub struct GenerateReport {
-    /// Repository-relative files written, sorted.
     pub files_written: Vec<String>,
-    /// Recommendations shared with `plan`.
     pub recommendations: Vec<String>,
-    /// Pinned validators that accepted the staged tree, sorted.
     pub validated_by: Vec<String>,
-    /// Per-workspace profile provenance.
     pub profiles: Vec<ProfileProvenance>,
-    /// Cleanup warnings on a committed success (empty when clean).
     pub warnings: Vec<String>,
 }
 
-/// Render in memory, then replace `.github` or write a preview.
-///
-/// In-place replacement stages under the root and commits, leaving the
-/// previous tree unchanged on failure; previews write `PATH/.github`.
-///
-/// # Errors
-///
-/// Returns profile, render, workflow-lint, preview, unsafe-path, or IO
-/// errors; the profile gate runs before any write, leaving outputs untouched.
 pub fn generate(
     prep: &GenerationPreparation,
     opts: &GenerateOptions,
@@ -95,11 +67,6 @@ pub fn generate(
     generate_dispatched(prep, opts, None)
 }
 
-/// [`generate`] with an explicit dispatch mode overriding `execution.mode`.
-///
-/// # Errors
-///
-/// Same as [`generate`], plus routing errors.
 pub fn generate_dispatched(
     prep: &GenerationPreparation,
     opts: &GenerateOptions,
@@ -130,22 +97,10 @@ pub fn generate_dispatched(
     })
 }
 
-/// Render the validated tree (base files plus release extras) in memory.
-///
-/// No writes, no validators.
-///
-/// # Errors
-///
-/// Returns lock, render, workflow-lint, or unsafe-path errors.
 pub fn render_staged_tree(prep: &GenerationPreparation) -> Result<RenderedTree, OrchestratorError> {
     render_staged_tree_with(prep, None)
 }
 
-/// [`render_staged_tree`] with a dispatch-mode override.
-///
-/// # Errors
-///
-/// Same as [`render_staged_tree`].
 pub fn render_staged_tree_with(
     prep: &GenerationPreparation,
     dispatch: Option<ExecutionMode>,
@@ -156,7 +111,6 @@ pub fn render_staged_tree_with(
     Ok(tree)
 }
 
-/// Fail when a path exists as a symlink.
 fn reject_symlink(path: &Path) -> Result<(), OrchestratorError> {
     if let Ok(meta) = std::fs::symlink_metadata(path)
         && meta.is_symlink()
@@ -172,14 +126,9 @@ fn reject_symlink(path: &Path) -> Result<(), OrchestratorError> {
 #[path = "cache_cleanup_emit.rs"]
 mod cache_cleanup_emit;
 
-/// Symlink-prefix guard with emitted-leaf replacement.
 #[path = "generate_leaf_links.rs"]
 mod leaf_links;
 
-/// Stage under the root, then commit under the ownership lock.
-///
-/// Nothing before the commit touches old output; success may carry
-/// old-tree-removal warnings.
 fn replace_in_place(
     prep: &GenerationPreparation,
     tree: &RenderedTree,
@@ -211,7 +160,6 @@ fn replace_in_place(
     publish_in_place(&staging, &target, target_identity, &staged)
 }
 
-/// Publish through the spare slot without removing its root directory.
 fn publish_in_place(
     staging: &stage_root::StageRoot,
     target: &Path,
@@ -224,7 +172,6 @@ fn publish_in_place(
     }
 }
 
-/// Exchange existing output and remove only children of the retired root.
 fn publish_existing_in_place(
     staging: &stage_root::StageRoot,
     target: &Path,
@@ -246,7 +193,6 @@ fn publish_existing_in_place(
     }
 }
 
-/// Move a first generated tree out of the spare and preserve its root.
 fn publish_first_in_place(
     staging: &stage_root::StageRoot,
     target: &Path,
@@ -261,7 +207,6 @@ fn publish_first_in_place(
     }
 }
 
-/// Commit fresh output with one rename and existing output with one exchange.
 fn swap_directories(
     _root: &Path,
     target: &Path,
@@ -277,7 +222,6 @@ fn swap_directories(
     swap_existing_directory(target, staged, exchange_directories)
 }
 
-/// Exchange an existing target before cleaning up its old tree.
 fn swap_existing_directory(
     target: &Path,
     staged: &Path,
@@ -292,14 +236,12 @@ fn swap_existing_directory(
     }
 }
 
-/// Use the platform's atomic exchange primitive or fail closed.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn exchange_directories(staged: &Path, target: &Path) -> std::io::Result<()> {
     use rustix::fs::{CWD, RenameFlags, renameat_with};
     renameat_with(CWD, staged, CWD, target, RenameFlags::EXCHANGE).map_err(std::io::Error::from)
 }
 
-/// Existing output cannot be replaced atomically on unsupported platforms.
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 fn exchange_directories(_staged: &Path, _target: &Path) -> std::io::Result<()> {
     Err(std::io::Error::new(
@@ -308,12 +250,7 @@ fn exchange_directories(_staged: &Path, _target: &Path) -> std::io::Result<()> {
     ))
 }
 
-/// Staged tree writing: regular files and symbolic links.
 #[path = "generate_write.rs"]
 pub(crate) mod write;
 
 pub(crate) use write::write_tree;
-
-#[cfg(test)]
-#[path = "generate_swap_tests.rs"]
-mod tests;

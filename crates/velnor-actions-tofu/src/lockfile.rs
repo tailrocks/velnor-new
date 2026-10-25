@@ -1,13 +1,3 @@
-//! Root lockfile slot, lockfile inspection, and lock snapshots.
-//!
-//! The root lock (`.terraform.lock.hcl`, root-level per contract S10)
-//! binds into identity and closure over the [`DigestSlot`] vocabulary:
-//! content, proven absence, or explicit ignorance — absence and
-//! ignorance never collapse. `fmt` never reads the lock, so its slot
-//! is always the kind exclusion. Inspection is pure over bytes the
-//! caller supplies; snapshots bracket plan and generation to prove
-//! the read-only contract (no lock or workdir mutation).
-
 use std::path::Path;
 
 use velnor_actions_contract::{ContractError, Finding, digest_b3};
@@ -18,26 +8,15 @@ use crate::kinds::TofuTaskKind;
 use crate::parser::{MAX_DIAGNOSTIC_CHARS, parse_native};
 use crate::task_identity::DigestSlot;
 
-/// Stable code for an unparseable committed lockfile.
 pub const LOCKFILE_CORRUPT: &str = "tofu_lockfile_corrupt";
-/// Stable code for provider blocks without `hashes`.
 pub const LOCKFILE_UNPINNED_HASHES: &str = "tofu_lockfile_unpinned_hashes";
 
-/// `hashes` entry count of one top-level `provider` block.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProviderHashCount {
-    /// First label (provider address; empty when unlabeled).
     pub address: String,
-    /// Entries in the `hashes` array (0 when missing or not an array).
     pub hashes: usize,
 }
 
-/// Count the `hashes` entries of one native `provider` block.
-///
-/// Counts array entries without walking them (no budget impact):
-/// only emptiness is structural; entry shapes stay tofu's runtime
-/// concern. Called from the structural walk for every top-level
-/// `provider` block.
 pub(crate) fn provider_hash_count(block: &hcl::Block) -> ProviderHashCount {
     let address = block
         .labels()
@@ -54,11 +33,6 @@ pub(crate) fn provider_hash_count(block: &hcl::Block) -> ProviderHashCount {
     ProviderHashCount { address, hashes }
 }
 
-/// Lockfile slot at `root`: content, proven absence, or unknown.
-///
-/// `unit_path` is the unit evidence path (`.` or the root
-/// directory). There is no walk-up for tofu: every root binds only
-/// its own lockfile.
 #[must_use]
 pub fn lock_digest_at_root(root: &Path, unit_path: &str, reads: &mut FileCache) -> DigestSlot {
     let relative = lock_relative(unit_path);
@@ -71,12 +45,6 @@ pub fn lock_digest_at_root(root: &Path, unit_path: &str, reads: &mut FileCache) 
     }
 }
 
-/// Lockfile slot for one task kind: the kind exclusion for `fmt`.
-///
-/// `fmt` never reads the lock (S2); every other kind binds the root
-/// slot. Identity resolves through the root slot; closure keeps its
-/// own unit-relative probe with the identical exclusion spelling
-/// (its evidence strings stay byte-stable).
 #[must_use]
 pub fn lock_slot_for_kind(
     root: &Path,
@@ -90,7 +58,6 @@ pub fn lock_slot_for_kind(
     lock_digest_at_root(root, unit_path, reads)
 }
 
-/// Repo-relative lockfile path for one unit evidence path.
 pub(crate) fn lock_relative(unit_path: &str) -> String {
     if unit_path == "." || unit_path.is_empty() {
         LOCKFILE_NAME.to_owned()
@@ -99,35 +66,18 @@ pub(crate) fn lock_relative(unit_path: &str) -> String {
     }
 }
 
-/// Extracted lockfile selection: pinned provider addresses.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LockfileSpec {
-    /// Provider addresses from `provider` blocks, sorted unique.
     pub providers: Vec<String>,
 }
 
-/// Outcome of one lockfile inspection.
 #[derive(Debug, Clone)]
 pub struct LockfileInspection {
-    /// Inspected repository-relative file.
     pub file: String,
-    /// Extracted selection (`None` when missing or corrupt).
     pub spec: Option<LockfileSpec>,
-    /// Findings with manual guidance; empty when neutral or valid.
     pub findings: Vec<Finding>,
 }
 
-/// Inspect supplied lockfile bytes (`None` when missing).
-///
-/// Read-only: a corrupt lock becomes a finding with manual
-/// remediation, never an error and never a repair. Provider blocks
-/// without `hashes` become an unpinned finding the same way. Missing
-/// and empty locks carry no claim (absence is a slot state; an empty
-/// lock is neutral and ignored).
-///
-/// # Errors
-///
-/// Returns [`ContractError`] unless `path` names a lockfile.
 pub fn inspect_lockfile(
     path: &str,
     content: Option<&str>,
@@ -184,7 +134,6 @@ pub fn inspect_lockfile(
     }
 }
 
-/// Sorted unique provider addresses of one parsed lockfile.
 fn provider_addresses(model: &crate::parser::FileModel) -> Vec<String> {
     let mut providers: Vec<String> = model
         .blocks
@@ -198,7 +147,6 @@ fn provider_addresses(model: &crate::parser::FileModel) -> Vec<String> {
     providers
 }
 
-/// Unpinned-hashes finding naming the providers without them (capped).
 fn unpinned_hashes_finding(path: &str, providers: &[String]) -> Finding {
     let observed: String = providers
         .join(",")
@@ -221,7 +169,6 @@ fn unpinned_hashes_finding(path: &str, providers: &[String]) -> Finding {
     }
 }
 
-/// Corrupt-lock finding: manual regeneration, never a repair.
 pub(crate) fn corrupt_lockfile_finding(path: &str, problem: &str) -> Finding {
     Finding {
         code: LOCKFILE_CORRUPT.to_owned(),
@@ -237,28 +184,14 @@ pub(crate) fn corrupt_lockfile_finding(path: &str, problem: &str) -> Finding {
     }
 }
 
-/// Byte snapshot of root lockfiles plus workdir presence.
-///
-/// Captured before planning or generation and verified after, so a
-/// lockfile write or a `.terraform` workdir appearing mid-run fails
-/// closed (contract §4.5: no lock mutation, no init during
-/// discovery).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TofuLockSnapshot {
-    /// One entry per root lock: bytes, or `None` when absent.
     locks: Vec<(String, Option<Vec<u8>>)>,
-    /// One entry per root workdir: presence of `.terraform`.
     workdirs: Vec<(String, bool)>,
-    /// Locks present but unreadable: never merged with missing.
     unreadable: Vec<String>,
 }
 
 impl TofuLockSnapshot {
-    /// Capture the lock bytes and workdir presence for `roots`.
-    ///
-    /// `roots` are normalized configured roots (`""` for the
-    /// repository root). Symlinked locks refuse without reading and
-    /// count as unreadable, like the cached-read path.
     #[must_use]
     pub fn capture(root: &Path, roots: &[String]) -> Self {
         let mut unreadable = Vec::new();
@@ -303,14 +236,6 @@ impl TofuLockSnapshot {
         }
     }
 
-    /// Fail when any lock or workdir differs from the captured bytes.
-    ///
-    /// Unreadable locks fail closed: the no-write proof needs
-    /// contents, so absence and inaccessibility never merge.
-    ///
-    /// # Errors
-    ///
-    /// Returns the first drifted lock or workdir reason.
     pub fn verify(&self, root: &Path) -> Result<(), String> {
         let roots: Vec<String> = self.locks.iter().map(|(lock, _)| lock_dir(lock)).collect();
         let fresh = Self::capture(root, &roots);
@@ -333,7 +258,6 @@ impl TofuLockSnapshot {
     }
 }
 
-/// Normalized root backing one captured lock path.
 fn lock_dir(lock: &str) -> String {
     lock.strip_suffix(&format!("/{LOCKFILE_NAME}"))
         .map_or_else(String::new, str::to_owned)

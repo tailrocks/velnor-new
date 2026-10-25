@@ -1,5 +1,3 @@
-//! Claim-fenced worker-volume verification, deletion, and absence proof.
-
 use bollard::Docker;
 
 use super::{Context, EffectBudget, Failure, run_effect};

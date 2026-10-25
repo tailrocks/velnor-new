@@ -1,12 +1,9 @@
-//! Durable launch rows own capacity until their cleanup proof commits.
-
 use crate::IntentState;
 use crate::journal::Journal;
 use crate::reconcile::IntentRow;
 use crate::scale_set::EnsureError;
 use crate::stage::PairEngine;
 
-/// SQL predicate matching [`holds`] for bounded capacity reads.
 pub(crate) const HOLDS_ROWS_SQL: &str = concat!(
     "kind = 'launch' AND cleanup_proven = 0 AND ",
     "(state != 'failed' OR docker_id IS NOT NULL OR dind_id IS NOT NULL ",
@@ -29,11 +26,6 @@ pub(super) async fn occupied(journal: &Journal) -> Result<u32, EnsureError> {
     occupied_except(journal, None).await
 }
 
-/// Occupied permits, excluding one idless uncertain subject.
-///
-/// That subject is the redelivered `m{message_id}r{request_id}`. Its empty row
-/// must not block its own mint at admission. A docker id, a dind id, or a
-/// worker volume still holds the permit.
 pub(super) async fn occupied_except(
     journal: &Journal,
     except: Option<&str>,
@@ -53,9 +45,7 @@ fn idless_self(row: &IntentRow, except: Option<&str>) -> bool {
     let Some(subject) = except else {
         return false;
     };
-    // An attempted acquire or JIT may have applied its effect. That row keeps
-    // its reservation even without worker ids; only a never-attempted empty
-    // row is safe to except for its own redelivered mint.
+
     row.subject == subject && idless_unattempted(row)
 }
 
@@ -85,7 +75,6 @@ pub(super) async fn running_count<E: PairEngine + ?Sized>(
     Ok(count)
 }
 
-/// Recover and clean exact worker resources after the runner exits.
 pub(super) async fn release_exited<E: PairEngine + ?Sized>(
     journal: &Journal,
     engine: &E,
@@ -105,9 +94,7 @@ async fn release_row<E: PairEngine + ?Sized>(
     if !holds(row) {
         return Ok(());
     }
-    // Pending and uncertain rows can represent an acquire or JIT request that
-    // reached GitHub before the process stopped. Local Docker absence cannot
-    // settle that remote effect, so keep both its reservation and owned files.
+
     if matches!(row.state, IntentState::Pending | IntentState::Uncertain) {
         return Ok(());
     }
@@ -231,10 +218,6 @@ async fn delete_owned<E: PairEngine + ?Sized>(
     }
 }
 
-/// Keep exited workers occupied until a durable completion path proves cleanup.
-///
-/// Local container exit does not prove the official runner is absent. The
-/// completion reconciler owns container and volume removal after that proof.
 pub(super) fn holds(row: &IntentRow) -> bool {
     row.kind == "launch"
         && !row.cleanup_proven

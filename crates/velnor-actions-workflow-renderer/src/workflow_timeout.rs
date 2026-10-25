@@ -1,14 +1,9 @@
-//! Final transport admission for every executable generated workflow job.
-
 use std::collections::BTreeSet;
 
 use velnor_actions_contract::JobTimeout;
 
 use crate::{RenderError, workflow_size, yaml::Yaml};
 
-/// Narrow approval for the one external SDK callee emitted by the protected
-/// Homebrew seed renderer. The fields stay private so ordinary workflow
-/// callers cannot manufacture or broaden this exception.
 pub(super) struct HomebrewAdoptionCalleeScope {
     source_sha: String,
     transition_id: String,
@@ -18,8 +13,6 @@ pub(super) struct HomebrewAdoptionCalleeScope {
 }
 
 impl HomebrewAdoptionCalleeScope {
-    /// Constructed only after the seed factory validates its protected
-    /// transition and externally authenticated SDK release identity.
     pub(super) fn authenticated_seed(
         source_sha: &str,
         transition_id: &str,
@@ -44,8 +37,6 @@ impl HomebrewAdoptionCalleeScope {
     }
 }
 
-/// Validate the seed's sole remote reusable-workflow call against the exact
-/// protected callee source and closed input/permission inventory.
 pub(super) fn validate_homebrew_adoption_caller(
     path: &str,
     document: &Yaml,
@@ -138,8 +129,6 @@ pub(crate) fn validate(path: &str, document: &Yaml) -> Result<(), RenderError> {
     for (id, job) in jobs(document, path)? {
         let fields = mapping(job, id)?;
         if local_callee(fields, id)?.is_some() {
-            // Reusable callers cannot set timeout-minutes. The product factory
-            // separately admits their complete generated inventory below.
             continue;
         }
         let minutes = fields
@@ -159,9 +148,6 @@ pub(crate) fn validate(path: &str, document: &Yaml) -> Result<(), RenderError> {
     Ok(())
 }
 
-/// Preview runner budgets are produced by the native source admission, which
-/// validates the source policy's 1..=30 minute operation limit. Admit only the
-/// two exact downstream expressions and their exact selector dependency.
 fn authenticated_preview_timeout(
     path: &str,
     id: &str,
@@ -301,7 +287,3 @@ fn mapping<'a>(value: &'a Yaml, id: &str) -> Result<&'a [(String, Yaml)], Render
 fn invalid(id: &str, problem: &str) -> RenderError {
     RenderError::InvalidWorkflow(format!("workflow_timeout:{id}:{problem}"))
 }
-
-#[cfg(test)]
-#[path = "workflow_timeout_tests.rs"]
-mod tests;

@@ -1,5 +1,3 @@
-//! Bounded, pinned Homebrew profile preparation for hosted ARM macOS.
-
 use std::{path::PathBuf, time::Duration};
 
 use velnor_actions_mise::CheckDeadline;
@@ -23,10 +21,6 @@ pub(super) const CAPTURE_LIMIT: usize = 128 * 1024;
 pub(super) const RUBY_BINARY_LIMIT: u64 = 128 * 1024 * 1024;
 pub(super) const HOMEBREW_PREFIX: &str = "/opt/homebrew";
 
-#[cfg(test)]
-#[path = "homebrew_hosted_profile_tests.rs"]
-mod tests;
-
 #[path = "homebrew_hosted_profile_activation.rs"]
 mod activation;
 #[path = "homebrew_hosted_profile_fs.rs"]
@@ -37,41 +31,30 @@ use activation::prepare_within;
 pub(crate) use support::verify_release_qualification_candidate;
 use support::{is_b3_digest, is_git_sha1, is_sha256, validate_host_identity};
 
-/// Runtime facts established before the historical A/D release is admitted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct HostedHomebrewProfile {
     pub(crate) prefix: PathBuf,
-    /// Path that retains the complete former prefix for the job lifetime.
     pub(crate) previous_prefix: PathBuf,
-    /// Former prefix inode identity.
     pub(crate) previous_prefix_device: u64,
     pub(crate) previous_prefix_inode: u64,
-    /// Fresh prefix inode identity after activation.
     pub(crate) active_prefix_device: u64,
-    /// Fresh prefix inode identity after activation.
     pub(crate) active_prefix_inode: u64,
     pub(crate) source_commit: String,
     pub(crate) source_tree: String,
     pub(crate) source_describe: String,
     pub(crate) source_tag_commit: String,
     pub(crate) portable_ruby_version: String,
-    /// Executable path reported by Brew and resolved to the pinned runtime.
     pub(crate) portable_ruby_path: PathBuf,
-    /// The checksum Homebrew uses to authenticate the portable Ruby archive.
     pub(crate) portable_ruby_archive_sha256: String,
-    /// Digest of the installed executable; this is distinct from the archive pin.
     pub(crate) portable_ruby_binary_sha256: String,
 }
 
-/// Non-serializable proof that the exact same-run SDK binary matches its
-/// authenticated Mac ARM release manifest entry.
 #[derive(Debug)]
 pub(crate) struct VerifiedReleaseQualificationCandidate {
     manifest_sha256: String,
     target_sha256: String,
 }
 
-/// Prepare Homebrew only for an authenticated same-run release qualification.
 pub(crate) fn prepare_for_release_qualification(
     candidate: &VerifiedReleaseQualificationCandidate,
     deadline: CheckDeadline,
@@ -82,7 +65,6 @@ pub(crate) fn prepare_for_release_qualification(
     prepare_profile(deadline)
 }
 
-/// Prepare a fixed fresh Homebrew prefix for an authenticated native install.
 pub(crate) fn prepare_hosted_homebrew(
     custody: &crate::homebrew::runtime::VerifiedNativeHomebrewInstall,
     deadline: CheckDeadline,

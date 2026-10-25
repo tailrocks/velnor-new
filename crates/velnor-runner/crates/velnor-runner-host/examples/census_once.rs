@@ -1,5 +1,3 @@
-//! Print scale-set session statistics. No token, no queue URL, no poll.
-
 use std::process::{Command, ExitCode};
 
 use velnor_runner_host::{product_runner_groups, session_census};

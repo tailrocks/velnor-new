@@ -1,5 +1,3 @@
-//! Durable tap PR receipt persistence.
-
 use std::path::Path;
 
 use velnor_actions_contract::canonical_json_bytes;

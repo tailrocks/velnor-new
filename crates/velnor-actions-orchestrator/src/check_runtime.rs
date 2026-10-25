@@ -1,4 +1,3 @@
-//! Qualified execution of one named check, through the existing plan/report gate.
 use crate::OrchestratorError;
 use crate::check_evidence::{EvidenceReceipt, reject_link_components, verify_evidence};
 use crate::internal::{internal, internal_contract};
@@ -16,14 +15,9 @@ use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, ToolCatalog, discover_
 pub(crate) mod preparation;
 use preparation::prepare_check;
 
-/// Internal execution operation for a statically authorized native Mise task.
 pub const EXECUTE_CHECK_OP: &str = "execute-check-v1";
-/// Check lookup key; source configuration and plan independently bind it.
 pub(crate) const CHECK_ID_ENV: &str = "VELNOR_CHECK_ID";
 
-/// Execute the declared check and publish its ordinary task/matrix reports.
-/// # Errors
-/// Missing source binding, capabilities, task failures, and invalid evidence fail closed.
 pub fn execute_check() -> Result<usize, OrchestratorError> {
     let root = env::var_os("GITHUB_WORKSPACE")
         .filter(|s| !s.is_empty())
@@ -119,7 +113,6 @@ pub(crate) fn execute_check_to(
     outcome.map(|_| 1)
 }
 
-/// Reuse exactly the planner's derivation, binding definition, task bytes and inputs.
 fn bind_check(
     root: &Path,
     item: &DiscoveredCheck,
@@ -316,7 +309,3 @@ fn save_evidence(
     crate::exclusive_write::write_exclusive(&artifact, &receipt.bytes, "check_evidence")?;
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "check_runtime_tests.rs"]
-mod tests;

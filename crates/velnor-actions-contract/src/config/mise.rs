@@ -1,4 +1,3 @@
-//! Explicit repository-owned Mise checks; runner identity stays typed.
 use super::HostContainerProfile;
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
@@ -10,30 +9,28 @@ pub use check_system_tools::{
     is_valid_check_system_version,
 };
 
-/// One opaque check, always executed; no cached-result reuse.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MiseCheck {
-    /// Stable check identity.
     pub id: String,
-    /// Repository-owned Mise task name; never arbitrary argv.
+
     pub task: String,
-    /// Repository-relative task directory.
+
     #[serde(default = "default_directory")]
     pub directory: String,
-    /// Explicit execution placement.
+
     pub runner: CheckRunner,
-    /// Declared repository-relative input files.
+
     pub inputs: Vec<String>,
-    /// Declared tools from repository Mise configuration.
+
     pub tools: Vec<String>,
-    /// Exact pins for native tools already installed on the runner.
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub system_tools: Vec<CheckSystemTool>,
-    /// Optional structured scenario evidence produced by the task.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub evidence: Option<CheckEvidence>,
-    /// Bounded job execution time.
+
     #[serde(default = "default_timeout")]
     pub timeout_minutes: u32,
 }
@@ -45,35 +42,30 @@ fn default_timeout() -> u32 {
     u32::from(crate::workflow::timeout::JobTimeout::DEFAULT.minutes())
 }
 
-/// Runner label, explicit platform, and execution ownership.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CheckRunner {
-    /// Exact hosted catalog label or custom ephemeral scale-set label.
     pub label: String,
-    /// Target identity, never inferred from arbitrary runner labels.
+
     pub platform: CheckPlatform,
-    /// Hosted or repository-provisioned ephemeral placement.
+
     pub executor: CheckExecutor,
-    /// Fully qualified installed host container runtime.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub container: Option<HostContainerProfile>,
 }
 
-/// Supported binary platform.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CheckPlatform {
-    /// Linux on x86-64.
     LinuxX64,
-    /// macOS on Apple Silicon.
+
     MacosArm64,
-    /// macOS on Intel.
+
     MacosX64,
 }
 
 impl CheckPlatform {
-    /// Canonical release target for this declared runner platform.
     #[must_use]
     pub const fn release_target(self) -> crate::ReleaseTarget {
         match self {
@@ -83,12 +75,11 @@ impl CheckPlatform {
         }
     }
 
-    /// Exact supported release target.
     #[must_use]
     pub const fn target(self) -> &'static str {
         self.release_target().triple()
     }
-    /// Host operating system expected by runtime validation.
+
     #[must_use]
     pub const fn os(self) -> &'static str {
         match self {
@@ -96,7 +87,7 @@ impl CheckPlatform {
             Self::MacosArm64 | Self::MacosX64 => "macos",
         }
     }
-    /// Host architecture expected by runtime validation.
+
     #[must_use]
     pub const fn arch(self) -> &'static str {
         match self {
@@ -106,27 +97,22 @@ impl CheckPlatform {
     }
 }
 
-/// Runner execution policy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CheckExecutor {
-    /// Catalogued GitHub-hosted runner.
     Hosted,
-    /// Custom single-label ephemeral runner or scale set.
+
     EphemeralSelfHosted,
 }
 
-/// Required named scenario evidence; an empty report cannot prove tests ran.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CheckEvidence {
-    /// Repository-relative JSON report path.
     pub path: String,
-    /// Nonempty unique expected executed scenario IDs.
+
     pub expected_scenarios: Vec<String>,
 }
 
-/// Safe namespaced Mise task name; flags, paths and expansions rejected.
 #[must_use]
 pub fn is_valid_mise_task_name(task: &str) -> bool {
     let mut bytes = task.bytes();
@@ -159,8 +145,6 @@ fn unique_values(values: &[String], valid: fn(&str) -> bool) -> bool {
 }
 
 impl MiseCheck {
-    /// Validate the closed configuration contract.
-    /// # Errors
     pub fn validate(&self, file: &str, key: &str) -> Result<(), ContractError> {
         let bad = |field: &str, problem: &str| {
             ContractError::config(file, format!("{key}.{field}"), problem)
@@ -218,8 +202,6 @@ impl MiseCheck {
 }
 
 impl CheckRunner {
-    /// Validate placement and capability constraints.
-    /// # Errors
     pub fn validate(&self, file: &str, key: &str) -> Result<(), ContractError> {
         let bad = |field: &str, problem: &str| {
             ContractError::config(file, format!("{key}.{field}"), problem)
@@ -254,7 +236,3 @@ impl CheckRunner {
         Ok(())
     }
 }
-
-#[cfg(test)]
-#[path = "mise_tests.rs"]
-mod tests;

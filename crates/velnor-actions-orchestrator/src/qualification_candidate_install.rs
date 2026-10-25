@@ -1,4 +1,3 @@
-//! Verified local archives become the same bounded installation as the runtime.
 use super::{OrchestratorError, acquisition, checkpoint, internal, io, request};
 use std::path::{Path, PathBuf};
 use velnor_actions_contract::config::{
@@ -143,7 +142,6 @@ pub(super) fn prefix(work: &Path, tool: &QualifiedTool) -> PathBuf {
     work.join("tools").join(&tool.id).join("prefix")
 }
 
-/// A fixed version probe is executable code and cannot authorize final-byte drift.
 pub(super) fn verify_unchanged(
     tools: &[QualifiedTool],
     work: &Path,

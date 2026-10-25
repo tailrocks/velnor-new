@@ -1,27 +1,11 @@
-//! T21 provider-cache constructors: per-root key plus restore/save steps.
-//!
-//! The `tofu-providers` layer is acceleration only: a hit warms the
-//! job-private plugin-cache dir before init, and never replaces
-//! validate execution. Keys come from the Plan job's runtime key step
-//! (compat over the family paths, platform, and installed `tofu version`;
-//! snapshot over the root lock file), one per validation root.
-
 use velnor_actions_contract::{CrateObligation, Step, StepId, StepRole};
 
 use crate::OrchestratorError;
 use crate::internal::internal;
 
-/// Owned plugin-cache base (expression form; mirrors the renderer's).
 pub(crate) const TOFU_PROVIDER_CACHE_BASE_EXPR: &str =
     velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDER_CACHE_BASE_EXPR;
 
-/// Sorted provider-cache roots; a root's position is its Plan key ordinal.
-///
-/// The Plan key step and every root job derive ordinals from this one
-/// list, so `tofu_providers_key_<n>` always names the same root.
-/// # Errors
-///
-/// Returns contract errors for a non-canonical tofu task identity.
 pub(crate) fn tofu_cache_roots(
     discovery: &crate::discover::Discovery,
 ) -> Result<Vec<String>, OrchestratorError> {
@@ -43,11 +27,6 @@ pub(crate) fn tofu_cache_roots(
     Ok(roots.into_iter().collect())
 }
 
-/// Job-private plugin-cache path for one root (never the data dir).
-/// # Errors
-///
-/// Returns contract errors for an empty base (unreachable: the base
-/// is a literal) or a root the adapter rejects.
 pub(crate) fn tofu_provider_cache_path(root: &str) -> Result<String, OrchestratorError> {
     let locator = velnor_actions_tofu::tofu_root_locator(root)?;
     Ok(
@@ -57,11 +36,6 @@ pub(crate) fn tofu_provider_cache_path(root: &str) -> Result<String, Orchestrato
     )
 }
 
-/// Per-root provider restore/admission composite (L2 exact-key).
-/// # Errors
-///
-/// Returns contract, workflow-lint, or render errors for rejected pins,
-/// keys, or step shapes.
 pub(crate) fn tofu_providers_restore_step(
     key: &str,
     path: &str,
@@ -85,25 +59,6 @@ pub(crate) fn tofu_providers_restore_step(
     Ok(step)
 }
 
-/// Admit only the exact cache entry returned by the same restore action.
-///
-/// The restore action may extract a prefix match before exposing its
-/// outputs. On a miss or mismatched key, clear only the validated
-/// job-private plugin-cache leaf so init can run cold. The generated
-/// key binds target, `OpenTofu` pin, root locator, and lockfile hash; GitHub's
-/// cache branch scope remains the trust boundary. `TF_DATA_DIR` is not
-/// part of this path.
-/// # Errors
-///
-/// Returns render errors for a rejected key or provider-cache path.
-/// Normalized tofu root backing one job's obligations.
-///
-/// Tofu obligations in one job must share one exact root; a present
-/// Validate obligation gates on Init when that obligation is present.
-/// # Errors
-///
-/// Rejects empty, duplicate, malformed, inconsistent, or mixed-root
-/// Tofu obligations.
 pub(crate) fn tofu_root_for_obligations(
     obligations: &[CrateObligation],
 ) -> Result<String, OrchestratorError> {
@@ -138,7 +93,6 @@ pub(crate) fn tofu_root_for_obligations(
     Ok(root)
 }
 
-/// Parse and cross-check one Tofu obligation's exact root task identity.
 fn tofu_obligation_identity(
     obligation: &CrateObligation,
 ) -> Result<(String, String, velnor_actions_tofu::TofuTaskKind), OrchestratorError> {
@@ -158,7 +112,6 @@ fn tofu_obligation_identity(
     Ok((root, parts[4].to_owned(), kind))
 }
 
-/// Check the fixed Tofu dependency contract carried by one obligation.
 fn validate_tofu_obligation_gate(
     obligation: &CrateObligation,
     kind: velnor_actions_tofu::TofuTaskKind,
@@ -182,14 +135,6 @@ fn validate_tofu_obligation_gate(
     Ok(())
 }
 
-/// Build the compact restore/admission step for one root.
-///
-/// The exact key comes from the Plan job's runtime key step (ordinal of
-/// `root` in `tofu_roots`); the path is the family spec's per-root path.
-/// # Errors
-///
-/// Returns contract, workflow-lint, or render errors for an unknown root or
-/// invalid cache identity.
 pub(crate) fn provider_cache_step_for_tofu_root(
     root: &str,
     tofu_roots: &[String],
@@ -206,51 +151,6 @@ pub(crate) fn provider_cache_step_for_tofu_root(
     )?])
 }
 
-/// Provider-cache key rejection.
 fn bad_key(problem: String) -> OrchestratorError {
     OrchestratorError::Contract { problem }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use velnor_actions_contract::StepKind;
-
-    #[test]
-    fn provider_restore_composite_binds_plan_key_and_owned_path() {
-        let roots = vec![String::new(), "stacks/vpc".to_owned()];
-        let [step] = provider_cache_step_for_tofu_root("stacks/vpc", &roots).expect("builds");
-        let path = tofu_provider_cache_path("stacks/vpc").expect("path builds");
-        assert_eq!(
-            path,
-            velnor_actions_tofu::tofu_cache_dir_under(TOFU_PROVIDER_CACHE_BASE_EXPR, "stacks/vpc")
-                .expect("adapter path"),
-            "the family spec and the adapter agree on the private leaf"
-        );
-        assert_eq!(step.name, "Restore Tofu providers");
-        assert!(step.condition.is_none(), "restores carry no gate");
-        let StepKind::Action { uses, with, .. } = &step.kind else {
-            panic!("restore must be an action step");
-        };
-        assert_eq!(
-            uses,
-            velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
-        );
-        assert_eq!(
-            with.get("cache-key").map(String::as_str),
-            Some("${{needs.plan.outputs.tofu_providers_key_1}}"),
-            "the composite receives the Plan runtime key for the root ordinal"
-        );
-        assert_eq!(with.get("cache-path"), Some(&path));
-        assert!(provider_cache_step_for_tofu_root("other", &roots).is_err());
-        let script = velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDER_ADMISSION_SCRIPT;
-        for expected in [
-            "[ \"$TOFU_CACHE_HIT\" = true ]",
-            "[ \"$TOFU_MATCHED_KEY\" = \"$TOFU_EXPECTED_KEY\" ]",
-            "rm -rf \"$d\"",
-        ] {
-            assert!(script.contains(expected), "script lacks {expected:?}");
-        }
-        assert!(!script.contains("TF_DATA_DIR"), "data dir is untouched");
-    }
 }

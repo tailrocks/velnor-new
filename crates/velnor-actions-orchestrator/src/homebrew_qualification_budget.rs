@@ -1,5 +1,3 @@
-//! Shared absolute workflow budget for native Homebrew qualification.
-
 use crate::{OrchestratorError, internal::internal};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use velnor_actions_mise::CheckDeadline;

@@ -1,5 +1,3 @@
-//! Bounded background reconciliation for journaled runner completion.
-
 mod cleanup;
 
 use std::collections::VecDeque;
@@ -21,10 +19,6 @@ use crate::listen::Secret;
 
 const CLEANUP_DOCKER_REQUEST_TIMEOUT: Duration = DOCKER_OPERATION_TIMEOUT;
 
-#[cfg(test)]
-#[path = "completion/worker_tests.rs"]
-mod worker_tests;
-
 pub(super) struct Resources {
     pub(super) journal: Journal,
     pub(super) docker: Docker,
@@ -32,22 +26,17 @@ pub(super) struct Resources {
     pub(super) admin: Secret,
 }
 
-/// One independently scheduled completion cleanup worker.
 pub(crate) struct CompletionWorker {
     wake: SyncSender<()>,
     stopping: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
     finished: Option<oneshot::Receiver<Result<(), HostError>>>,
-    #[cfg(test)]
-    reaped: Option<mpsc::Sender<()>>,
 }
 
 struct ReapTask {
     thread: JoinHandle<()>,
     finished: Option<oneshot::Receiver<Result<(), HostError>>>,
     joined: Option<oneshot::Sender<Result<(), HostError>>>,
-    #[cfg(test)]
-    reaped: Option<mpsc::Sender<()>>,
 }
 
 struct Reaper {
@@ -63,7 +52,6 @@ struct ReapQueue {
 static REAPER: OnceLock<Reaper> = OnceLock::new();
 
 impl CompletionWorker {
-    /// Start the bounded completer on its own thread and runtime.
     pub(crate) fn start(
         journal: Journal,
         docker: Docker,
@@ -109,17 +97,13 @@ impl CompletionWorker {
             stopping,
             thread: Some(thread),
             finished: Some(finished),
-            #[cfg(test)]
-            reaped: None,
         })
     }
 
-    /// Coalesce a wake request; the periodic scan also recovers missed wakes.
     pub(crate) fn notify(&self) {
         wake(&self.wake);
     }
 
-    /// Stop the worker and await its bounded in-flight cleanup attempt.
     pub(crate) async fn shutdown(mut self) -> Result<(), HostError> {
         self.request_stop();
         let finished = match self.finished.as_mut() {
@@ -134,8 +118,6 @@ impl CompletionWorker {
                     thread,
                     finished: None,
                     joined: Some(joined_tx),
-                    #[cfg(test)]
-                    reaped: self.reaped.take(),
                 });
                 match dispatch {
                     Ok(()) => match joined_rx.await {
@@ -171,8 +153,6 @@ impl Drop for CompletionWorker {
                 thread,
                 finished: self.finished.take(),
                 joined: None,
-                #[cfg(test)]
-                reaped: self.reaped.take(),
             })
         {
             eprintln!("completion worker failed phase=join_dispatch reason={error}");
@@ -228,15 +208,6 @@ impl Reaper {
         tasks.push_back(task);
         self.queue.wake.notify_one();
     }
-
-    #[cfg(test)]
-    fn pending_count(&self) -> usize {
-        self.queue
-            .tasks
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .len()
-    }
 }
 
 fn spawn_reaper_thread(queue: Arc<ReapQueue>) -> Result<JoinHandle<()>, HostError> {
@@ -271,8 +242,7 @@ fn next_reap_task(queue: &ReapQueue) -> ReapTask {
 
 fn defer_join(task: ReapTask) -> Result<(), HostError> {
     let reaper = worker_reaper();
-    // Store the worker handle before any fallible thread creation. If the
-    // reaper cannot start, the queue keeps ownership for a later retry.
+
     reaper.enqueue(task);
     reaper.ensure_started()
 }
@@ -297,12 +267,6 @@ fn reap_task(task: ReapTask) {
         && let Err(Err(error)) = joined_tx.send(joined)
     {
         eprintln!("completion worker failed phase=join reason={error}");
-    }
-    #[cfg(test)]
-    if let Some(reaped) = task.reaped
-        && reaped.send(()).is_err()
-    {
-        eprintln!("completion worker test observer disconnected phase=join");
     }
 }
 

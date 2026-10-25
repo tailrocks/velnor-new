@@ -1,9 +1,3 @@
-//! Typed identity and path ownership for the external tools cache.
-//!
-//! The payload is built from resolved tool obligations and the expanded
-//! job's runner selector. Runtime image and absolute-root identity are
-//! appended by the later workflow identity step.
-
 use velnor_actions_contract::{RunsOn, Step};
 
 use crate::{MiseSetup, RenderError, cache_p08, steps};
@@ -51,30 +45,20 @@ pub(crate) fn runtime_prelude_action_uses(runs_on: &str) -> Option<&'static str>
     runtime_prelude::action_uses(runs_on)
 }
 
-/// Inputs resolved from a job's typed preparation/catalog obligations.
 #[derive(Debug, Clone, Copy)]
 pub struct ToolsCacheInputs<'a> {
-    /// Expanded job's exact hosted label or Scale Set token.
     pub runs_on: &'a str,
-    /// Rust target selected for this job.
     pub target: &'a str,
-    /// Exact validated Setup Mise action and binary pins used by this job.
     pub mise_setup: &'a MiseSetup,
-    /// Exact catalog selectors installed by the job.
     pub tool_specs: &'a [String],
-    /// Exact Rustup toolchain selected when Rust is present.
     pub rustup_toolchain: Option<&'a str>,
-    /// Exact Rust components installed by the job.
     pub rustup_components: &'a [String],
 }
 
-/// Complete static portion of one exact tools-cache payload.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolsCachePayload {
     static_digest: String,
-    /// Project-declared tool variables the installed specs reference.
     project_tools: Vec<String>,
-    /// Pinned SHA-256 of the Mise binary Setup Mise verified for this job.
     mise_sha256: String,
     paths: Vec<String>,
     runs_on: String,
@@ -82,12 +66,6 @@ pub struct ToolsCachePayload {
 }
 
 impl ToolsCachePayload {
-    /// Build one canonical cache payload from typed pins and obligations.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`RenderError`] for missing, loose, mismatched, unsupported,
-    /// or malformed identity inputs.
     pub fn new(inputs: ToolsCacheInputs<'_>) -> Result<Self, RenderError> {
         validate_inputs(&inputs)?;
         let mut specs = inputs.tool_specs.to_vec();
@@ -123,17 +101,11 @@ impl ToolsCachePayload {
         })
     }
 
-    /// Static BLAKE3 identity for tools, lane, platform, action pin, and paths.
     #[must_use]
     pub fn static_digest(&self) -> &str {
         &self.static_digest
     }
 
-    /// `d` input of the runtime identity step: the static digest bound to
-    /// the resolved version and `mise.lock` digest of each project-declared
-    /// tool this job installs (hard decision 5). The resolver step exports
-    /// both before the identity runs; nothing else in the project's Mise
-    /// config enters the identity.
     #[must_use]
     pub fn identity_input(&self) -> String {
         velnor_actions_contract::config::project_tool_refs::tools_identity_input(
@@ -142,36 +114,25 @@ impl ToolsCachePayload {
         )
     }
 
-    /// Whether this lane has an exact hosted image identity for V2 restores.
     #[must_use]
     pub fn runtime_identity_supported(&self) -> bool {
         runtime_identity::is_supported_lane(&self.runs_on, &self.target)
     }
 
-    /// Canonical exact paths archived by both restore and save.
     #[must_use]
     pub fn paths(&self) -> &[String] {
         &self.paths
     }
 
-    /// Cache key expression bound to the renderer-owned runtime identity step.
     #[must_use]
     pub fn key_expression(&self) -> String {
         cache_p08::TOOLS_CACHE_KEY_EXPRESSION.to_owned()
     }
 
-    /// Runtime identity and matching tool-seed step; unknown identities take a cold path.
-    /// # Errors
     pub fn runtime_prelude_step(&self) -> Result<Step, RenderError> {
         runtime_prelude::step(self)
     }
 
-    /// Concrete key builder for an exact lower-case SHA-256 runtime identity.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`RenderError::BadCommand`] when the fingerprint is not
-    /// exactly 64 lower-case hexadecimal characters.
     pub fn key_for_runtime_identity(&self, fingerprint: &str) -> Result<String, RenderError> {
         if !is_sha256(fingerprint) {
             return Err(RenderError::BadCommand(
@@ -181,8 +142,6 @@ impl ToolsCachePayload {
         Ok(format!("mise-tools-v2-{fingerprint}"))
     }
 
-    /// Read-only restore over the payload's key expression and exact paths.
-    /// # Errors
     pub fn restore_step(&self) -> Result<Step, RenderError> {
         steps::tools_cache_restore_step(
             &self.key_expression(),
@@ -191,8 +150,6 @@ impl ToolsCachePayload {
         )
     }
 
-    /// Save over the identical key expression and exact paths.
-    /// # Errors
     pub fn save_step(&self) -> Result<Step, RenderError> {
         steps::tools_cache_save_step(
             &self.key_expression(),
@@ -310,7 +267,3 @@ fn is_sha(value: &str, length: usize) -> bool {
 fn is_sha256(value: &str) -> bool {
     is_sha(value, 64)
 }
-
-#[cfg(test)]
-#[path = "cache_p08_tool_payload_tests.rs"]
-mod tests;

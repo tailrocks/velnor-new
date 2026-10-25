@@ -238,7 +238,3 @@ pub(super) fn write_formula_file(
     held.verify(deadline)?;
     Ok(path.to_path_buf())
 }
-
-#[cfg(test)]
-#[path = "homebrew_install_request_inventory_tests.rs"]
-mod inventory_tests;

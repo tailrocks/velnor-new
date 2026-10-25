@@ -1,12 +1,3 @@
-//! Release step-content gates: authority separation and argv safety.
-//!
-//! Permissions prove the grant; these gates prove the steps honor it: the
-//! forge token only as the exact `GIT_TOKEN` env binding (plus the single
-//! bootstrap registry binding), no token material on the OIDC path,
-//! policy-plus-source checkouts with role-exact credentials, full history
-//! everywhere release-plz reads git, explicit config binding, and no
-//! verification bypasses or dispatch-input interpolation.
-
 use velnor_actions_contract::{Step, StepKind};
 
 use crate::{
@@ -20,28 +11,15 @@ use crate::{
 mod step_text;
 use step_text::forbid_substring;
 
-/// Forge-token env key every release-plz step carries.
-///
-/// release-plz 0.4.1 reads `--git-token` from `GIT_TOKEN`, never from
-/// `GITHUB_TOKEN`; every phase (including `--dry-run`) requires it.
 pub const GIT_TOKEN_ENV: &str = "GIT_TOKEN";
-/// Exact secret reference bound to [`GIT_TOKEN_ENV`] (env-only, never argv).
 pub const GIT_TOKEN_REF: &str = "${{ secrets.GITHUB_TOKEN }}";
 
-/// Explicit config paths the publish argv must reference.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ReleaseConfigBinding<'a> {
-    /// Generated effective config path (OIDC publish binds this).
     pub effective: &'a str,
-    /// Generated bootstrap-only config path (bootstrap publish binds this).
     pub bootstrap: &'a str,
 }
 
-/// Validate every step plus the role authority boundary.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] for invalid steps or boundary violations.
 pub fn check_release_jobs(
     spec: &ReleaseWorkflowSpec,
     binding: &ReleaseConfigBinding<'_>,
@@ -66,7 +44,6 @@ pub fn check_release_jobs(
     Ok(())
 }
 
-/// Validate every step payload (pinned actions, fixed argv/env).
 fn check_job_steps(id: &str, job: &ReleaseJobSpec) -> Result<(), RenderError> {
     for step in &job.steps {
         match &step.kind {
@@ -96,16 +73,10 @@ fn check_job_steps(id: &str, job: &ReleaseJobSpec) -> Result<(), RenderError> {
     Ok(())
 }
 
-/// True for the exact allowed forge-token env binding.
 fn is_forge_binding(key: &str, value: &str) -> bool {
     key == GIT_TOKEN_ENV && value == GIT_TOKEN_REF
 }
 
-/// Reject secret handles outside the exact forge-token env binding.
-///
-/// Argv and action inputs carry no secrets anywhere; env values may only
-/// be the exact [`GIT_TOKEN_ENV`]/[`GIT_TOKEN_REF`] pair (the bootstrap
-/// registry binding is checked separately by its own role gate).
 fn forbid_unexpected_secrets(id: &str, steps: &[Step]) -> Result<(), RenderError> {
     let rejected = || RenderError::InvalidWorkflow(format!("secret_outside_bootstrap:{id}"));
     for step in steps {
@@ -154,11 +125,6 @@ fn forbid_unexpected_secrets(id: &str, steps: &[Step]) -> Result<(), RenderError
     Ok(())
 }
 
-/// Require the forge-token binding on every release-plz step.
-///
-/// release-plz fails without `--git-token` (env `GIT_TOKEN`) in every
-/// phase, so a step invoking it without the exact binding fails closed
-/// here instead of at runtime.
 fn require_forge_binding(id: &str, steps: &[Step]) -> Result<(), RenderError> {
     for step in steps {
         if let StepKind::Shell { run, env } = &step.kind
@@ -173,7 +139,6 @@ fn require_forge_binding(id: &str, steps: &[Step]) -> Result<(), RenderError> {
     Ok(())
 }
 
-/// Reject registry-token handles outside the bootstrap env binding.
 fn forbid_registry_token(id: &str, steps: &[Step]) -> Result<(), RenderError> {
     forbid_substring(
         id,
@@ -183,13 +148,11 @@ fn forbid_registry_token(id: &str, steps: &[Step]) -> Result<(), RenderError> {
     )
 }
 
-/// Reject event-input interpolation in steps (inputs live in `if:` only).
 fn forbid_inputs_interpolation(id: &str, steps: &[Step]) -> Result<(), RenderError> {
     forbid_substring(id, steps, "github.event", "dispatch_input_in_steps")?;
     forbid_substring(id, steps, "inputs.", "dispatch_input_in_steps")
 }
 
-/// Preparation: GitHub authority only, no registry token or secrets.
 fn check_preparation(id: &str, job: &ReleaseJobSpec, sha: &str) -> Result<(), RenderError> {
     forbid_unexpected_secrets(id, &job.steps)?;
     forbid_registry_token(id, &job.steps)?;
@@ -197,7 +160,6 @@ fn check_preparation(id: &str, job: &ReleaseJobSpec, sha: &str) -> Result<(), Re
     check_checkout_shape(id, &job.steps, job.role, sha)
 }
 
-/// Preflight: read-only validation over the exact approved source.
 fn check_preflight(id: &str, job: &ReleaseJobSpec, sha: &str) -> Result<(), RenderError> {
     forbid_unexpected_secrets(id, &job.steps)?;
     forbid_registry_token(id, &job.steps)?;
@@ -206,7 +168,6 @@ fn check_preflight(id: &str, job: &ReleaseJobSpec, sha: &str) -> Result<(), Rend
     require_exact_checkout(id, &job.steps, sha)
 }
 
-/// True when argv carries an adjacent `--config <path>` pair.
 fn has_config_binding(steps: &[Step], path: &str) -> bool {
     steps.iter().any(|step| {
         if let StepKind::Shell { run, .. } = &step.kind {
@@ -218,7 +179,6 @@ fn has_config_binding(steps: &[Step], path: &str) -> bool {
     })
 }
 
-/// Require the explicit generated-config argument on publish argv.
 fn require_config_binding(id: &str, steps: &[Step], path: &str) -> Result<(), RenderError> {
     if has_config_binding(steps, path) {
         Ok(())
@@ -229,10 +189,8 @@ fn require_config_binding(id: &str, steps: &[Step], path: &str) -> Result<(), Re
     }
 }
 
-/// Argv fragments that would bypass Cargo verification.
 const VERIFY_BYPASS_TOKENS: &[&str] = &["allow-dirty", "allow_dirty", "no-verify", "no_verify"];
 
-/// Reject Cargo verification bypasses on publish argv.
 fn forbid_verify_bypass(id: &str, steps: &[Step]) -> Result<(), RenderError> {
     for step in steps {
         if let StepKind::Shell { run, .. } = &step.kind {
@@ -248,7 +206,6 @@ fn forbid_verify_bypass(id: &str, steps: &[Step]) -> Result<(), RenderError> {
     Ok(())
 }
 
-/// Shared publish gates: exact source, explicit config, verified Cargo.
 fn check_publish_common(
     id: &str,
     job: &ReleaseJobSpec,
@@ -262,7 +219,6 @@ fn check_publish_common(
     forbid_verify_bypass(id, &job.steps)
 }
 
-/// OIDC publish: no token material anywhere, no silent token fallback.
 fn check_publish_oidc(
     id: &str,
     job: &ReleaseJobSpec,
@@ -274,7 +230,6 @@ fn check_publish_oidc(
     forbid_registry_token(id, &job.steps)
 }
 
-/// True for an exact `${{ secrets.NAME }}` reference.
 fn is_secret_ref(value: &str) -> bool {
     value
         .strip_prefix("${{ secrets.")
@@ -287,9 +242,6 @@ fn is_secret_ref(value: &str) -> bool {
         })
 }
 
-/// Bootstrap publish: exactly one registry binding plus the forge binding.
-///
-/// Both bindings are env-only, never argv; any other secret handle fails.
 fn check_publish_bootstrap(
     id: &str,
     job: &ReleaseJobSpec,
@@ -348,7 +300,6 @@ fn check_publish_bootstrap(
     }
 }
 
-/// Reconciliation: independent read-only checks, no push credentials.
 fn check_reconcile(id: &str, job: &ReleaseJobSpec, sha: &str) -> Result<(), RenderError> {
     forbid_unexpected_secrets(id, &job.steps)?;
     forbid_registry_token(id, &job.steps)?;

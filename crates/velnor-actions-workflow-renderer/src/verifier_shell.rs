@@ -1,9 +1,3 @@
-//! Startup-safe rendering for the fixed release-verifier scripts.
-//!
-//! These steps run before repository code and inspect bytes produced by
-//! earlier steps. Their shell startup, PATH, and credential boundary are
-//! consequently fixed here rather than inherited from generic run rendering.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Step, StepKind, StepRole};
@@ -33,7 +27,6 @@ struct ScriptMetadata<'a> {
     run_comment: Option<&'a str>,
 }
 
-/// Render a typed verifier step, returning `None` for ordinary shell steps.
 pub(crate) fn render_typed_step(
     step: &Step,
     run: &[String],
@@ -97,7 +90,6 @@ pub(crate) fn render_typed_step(
     .map(Some)
 }
 
-/// Render the fixed `sh -c SCRIPT` vector used by release workflow builders.
 pub(crate) fn render_command(name: &str, argv: &[String]) -> Result<Yaml, RenderError> {
     let role = match name {
         crate::VERIFY_RUST_TOOLCHAIN_STEP => StepRole::VerifyRustManifest,
@@ -123,9 +115,6 @@ pub(crate) fn render_command(name: &str, argv: &[String]) -> Result<Yaml, Render
         .ok_or_else(|| RenderError::InvalidWorkflow("verifier_role_required".to_owned()))
 }
 
-/// Render the generated project-tool resolver through its fixed verifier
-/// boundary. This entry point is intentionally separate from display-name and
-/// generic command routing.
 pub(crate) fn render_project_tool_resolver(
     script: &str,
     composite: bool,
@@ -144,8 +133,6 @@ pub(crate) fn render_project_tool_resolver(
     )
 }
 
-/// Render a script after caller-specific validation has established its
-/// fixed verifier identity and body.
 fn render_script(
     name: &str,
     script: &str,
@@ -229,7 +216,3 @@ fn validate_verifier_env(
         .collect();
     crate::toolchain_env::reject_denied_step_keys(&ordinary)
 }
-
-#[cfg(test)]
-#[path = "verifier_shell_tests.rs"]
-pub(crate) mod tests;

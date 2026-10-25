@@ -1,5 +1,3 @@
-//! Pure validation of the fixed release and attestation API response shapes.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Deserialize;

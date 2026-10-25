@@ -1,5 +1,3 @@
-//! Lock-against-manifest verification (split from `lock`: size gate).
-
 use velnor_actions_contract::{GeneratorLock, ReleaseManifest, ReleaseTarget};
 
 use super::{
@@ -7,11 +5,6 @@ use super::{
     lock::{LockError, mismatch},
 };
 
-/// Verify lock against manifest: same version, same source commit,
-/// equal URL+SHA per target.
-///
-/// Also pins the lock's Mise bootstrap record to the compiled [`MISE_VERSION`].
-/// # Errors
 pub fn verify_lock_against_manifest(
     lock: &GeneratorLock,
     manifest: &ReleaseManifest,

@@ -1,8 +1,5 @@
-//! Immutable identity for one durable worker launch.
-
 use crate::error::HostError;
 
-/// Docker and seed ownership for one launch.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LaunchIdentity {
     instance_id: String,
@@ -13,11 +10,6 @@ pub struct LaunchIdentity {
 }
 
 impl LaunchIdentity {
-    /// Build a validated identity for journal-backed or focused staged work.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Journal`] when an identity field is invalid.
     pub fn new(
         instance_id: &str,
         intent_id: i64,
@@ -40,31 +32,26 @@ impl LaunchIdentity {
         })
     }
 
-    /// Stable journal instance identity.
     #[must_use]
     pub fn instance_id(&self) -> &str {
         &self.instance_id
     }
 
-    /// Stable unique identity for this launch.
     #[must_use]
     pub fn launch_id(&self) -> &str {
         &self.launch_id
     }
 
-    /// Journal row that owns this launch.
     #[must_use]
     pub fn intent_id(&self) -> i64 {
         self.intent_id
     }
 
-    /// Docker engine identity bound by the journal.
     #[must_use]
     pub fn engine_id(&self) -> &str {
         &self.engine_id
     }
 
-    /// Private volume name derived from this launch identity.
     #[must_use]
     pub fn private_volume(&self) -> &str {
         &self.private_volume

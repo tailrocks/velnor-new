@@ -1,4 +1,3 @@
-//! Bounded JSON reads shared by release transport and exact-source metadata.
 use super::{GitHubApi, JSON_LIMIT, RepositoryResponse};
 use crate::{OrchestratorError, internal::internal};
 
@@ -62,12 +61,7 @@ impl GitHubApi {
         limit: usize,
     ) -> Result<T, OrchestratorError> {
         let limit = limit.min(MAX_API_JSON_BYTES);
-        #[cfg(test)]
-        if let Some(fixture) = &self.fixture {
-            let bytes = serde_json::to_vec(&fixture.read(route)?)
-                .map_err(|_| internal("package_publish_api_json"))?;
-            return decode_json_bounded(&bytes, limit);
-        }
+
         let bytes = self.request(crate::github_authority_read::arguments(route)?, limit)?;
         decode_json_bounded(&bytes, limit)
     }

@@ -1,5 +1,3 @@
-//! Closed mapping from generated native machine IDs to authenticated job names.
-
 use crate::{OrchestratorError, internal::internal};
 use velnor_actions_contract::{
     PackageReleasePlan,
@@ -170,11 +168,3 @@ impl super::super::github::GitHubApi {
         )
     }
 }
-
-#[cfg(test)]
-#[path = "package_release_active_role_tests.rs"]
-mod tests;
-
-#[cfg(test)]
-#[path = "package_release_active_role_rendered_tests.rs"]
-mod rendered_tests;

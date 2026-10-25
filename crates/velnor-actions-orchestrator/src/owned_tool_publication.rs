@@ -1,5 +1,3 @@
-//! Generator-only source approval and source candidate workflow assembly.
-
 use std::path::Path;
 
 use velnor_actions_contract::{WorkflowPolicy, parse_strict_json};
@@ -16,7 +14,6 @@ use velnor_actions_workflow_renderer::owned_tool_publication::{
 
 use crate::{OrchestratorError, prepare::GenerationPreparation, workflow::CHECKOUT_USES};
 
-/// Reviewed generator-only staging authority. Consumers do not read this file.
 pub(crate) const SOURCE_APPROVAL_PATH: &str = ".velnor/owned-tool-sources.json";
 
 pub(crate) fn files(prep: &GenerationPreparation) -> Result<Vec<RenderedFile>, OrchestratorError> {

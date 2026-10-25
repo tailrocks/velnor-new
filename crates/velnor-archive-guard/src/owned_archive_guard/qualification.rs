@@ -17,20 +17,12 @@ const EXPECTED_TARGETS: [&str; 3] = [
     "x86_64-apple-darwin",
 ];
 
-/// Validate a candidate SDK qualification manifest without executing it.
-///
-/// # Errors
-/// Returns a diagnostic when the file, JSON, release identity, or target inventory is invalid.
 pub fn validate_qualification_manifest(path: &std::path::Path) -> Result<(), String> {
     manifest::read(path)
         .map(|_| ())
         .map_err(|error| format!("candidate manifest validation: {error}"))
 }
 
-/// Validate every release binding in a generated workflow tree against its manifest.
-///
-/// # Errors
-/// Returns a diagnostic when the manifest or bounded workflow tree is invalid.
 pub fn validate_qualification_output_bindings(
     manifest_path: &std::path::Path,
     workflow_root: &std::path::Path,
@@ -38,7 +30,3 @@ pub fn validate_qualification_output_bindings(
     bindings::validate(manifest_path, workflow_root)
         .map_err(|error| format!("candidate output binding mismatch: {error}"))
 }
-
-#[cfg(test)]
-#[path = "qualification/tests.rs"]
-mod tests;

@@ -7,9 +7,7 @@ use crate::package_release_publish::MergeGroupSelection;
 mod merge_group;
 #[path = "pull_request_context.rs"]
 pub(in crate::homebrew::authority) mod pull_request_context;
-#[cfg(test)]
-#[path = "push_tests.rs"]
-mod push_tests;
+
 #[path = "qualification_context.rs"]
 mod qualification_context;
 

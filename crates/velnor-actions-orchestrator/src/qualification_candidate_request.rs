@@ -1,4 +1,3 @@
-//! Strict offline authoring request, independent of installed-byte evidence.
 use super::{OrchestratorError, internal};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;

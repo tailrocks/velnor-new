@@ -1,5 +1,3 @@
-//! Bounded private metadata files for source-free tag authorization.
-
 use crate::{OrchestratorError, internal::internal};
 use std::os::unix::fs::{DirBuilderExt as _, OpenOptionsExt as _, PermissionsExt as _};
 use std::{fs, io::Write as _, path::Path};

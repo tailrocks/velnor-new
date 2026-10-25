@@ -1,9 +1,3 @@
-//! Wrapper verification gates (stack contract §2.3).
-//!
-//! Gates 1-3 are static: they read `gradle/wrapper/gradle-wrapper.properties`
-//! and the bytes of `gradle-wrapper.jar`. Gate 4 (execution through
-//! `./gradlew`) belongs to the job renderer.
-
 use std::collections::BTreeMap;
 use std::fmt;
 
@@ -11,41 +5,35 @@ use sha2::{Digest, Sha256};
 
 use crate::catalog::{self, GradleRelease};
 
-/// Repository-relative location of the wrapper properties under a root.
 pub const PROPERTIES_PATH: &str = "gradle/wrapper/gradle-wrapper.properties";
-/// Repository-relative location of the wrapper jar under a root.
+
 pub const JAR_PATH: &str = "gradle/wrapper/gradle-wrapper.jar";
 
 const URL_PREFIX: &str = "https://services.gradle.org/distributions/gradle-";
 
-/// Distribution flavour named by the URL.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Flavour {
-    /// `-bin.zip`
     Bin,
-    /// `-all.zip`
+
     All,
 }
 
-/// A named wrapper failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WrapperFinding {
-    /// `gradle-wrapper.properties` is missing or has no `distributionUrl`.
     PropertiesMissing,
-    /// The URL is not an official release distribution (host, snapshot, path).
+
     DistributionUrlUntrusted,
-    /// `distributionSha256Sum` is absent.
+
     DistributionChecksumMissing,
-    /// `distributionSha256Sum` differs from the official catalog digest.
+
     DistributionChecksumMismatch,
-    /// The release is not in the catalog, so no digest can be proven.
+
     DistributionUncataloged,
-    /// The jar digest is not an official wrapper-jar digest.
+
     WrapperJarUnverified,
 }
 
 impl WrapperFinding {
-    /// Stable machine-readable code.
     #[must_use]
     pub const fn code(&self) -> &'static str {
         match self {
@@ -65,18 +53,15 @@ impl fmt::Display for WrapperFinding {
     }
 }
 
-/// Verified wrapper facts.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerifiedWrapper {
-    /// Gradle version from the URL.
     pub version: String,
-    /// Distribution flavour.
+
     pub flavour: Flavour,
-    /// The catalog row that proved the digests.
+
     pub release: &'static GradleRelease,
 }
 
-/// Parse `key=value` Java properties (comments, `\:` and `\=` escapes).
 #[must_use]
 pub fn parse_properties(text: &str) -> BTreeMap<String, String> {
     let mut map = BTreeMap::new();
@@ -93,7 +78,6 @@ pub fn parse_properties(text: &str) -> BTreeMap<String, String> {
     map
 }
 
-/// Version and flavour of an official release distribution URL.
 #[must_use]
 pub fn parse_distribution_url(url: &str) -> Option<(String, Flavour)> {
     let rest = url.strip_prefix(URL_PREFIX)?;
@@ -107,7 +91,6 @@ pub fn parse_distribution_url(url: &str) -> Option<(String, Flavour)> {
         .map(|version| (version, flavour))
 }
 
-/// SHA-256 of bytes as lower-case hex.
 #[must_use]
 pub fn sha256_hex(bytes: &[u8]) -> String {
     Sha256::digest(bytes)
@@ -119,10 +102,6 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
         })
 }
 
-/// Run gates 1-3 over the properties text and the jar bytes.
-///
-/// # Errors
-/// The first failing gate, in the order of the contract.
 pub fn verify(properties: Option<&str>, jar: &[u8]) -> Result<VerifiedWrapper, WrapperFinding> {
     let props = parse_properties(properties.ok_or(WrapperFinding::PropertiesMissing)?);
     let url = props

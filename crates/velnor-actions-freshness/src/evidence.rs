@@ -1,5 +1,3 @@
-//! Recorded freshness evidence, bounded exceptions, and advisory policy.
-
 mod advisories;
 mod exceptions;
 mod freshness;

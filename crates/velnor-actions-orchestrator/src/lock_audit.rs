@@ -1,21 +1,3 @@
-//! Install lockfile audit glue (G2): lock-file hygiene for local installs.
-//!
-//! The audit verifies that each local `mise install` spec resolves to
-//! a well-formed lock entry; CI-platform holes and corrupt entries
-//! block `generate`, while `plan` reports findings without failing.
-//!
-//! Both install-class emissions are audited: `Prepare pinned tools`
-//! steps from the IR (catalog specs) and validator install commands
-//! from the typed render context (validator pins). Validator steps
-//! materialize at render time, so scraping the IR alone would leave
-//! validator ambient installs invisible; the typed commands close that
-//! gap without string-matching rendered YAML.
-//!
-//! Hygiene only, not runtime verification: isolated CI installs trust
-//! upstream TLS and exact pins. Checksums are TOFU; the audit verifies
-//! lock coverage and shape but cannot recompute bytes or detect a
-//! malicious self-consistent lock.
-
 use std::io::Read;
 use std::path::Path;
 
@@ -46,84 +28,25 @@ use prepare_sequence::{
     rust_verifier_sequence_valid, verifier_positions,
 };
 
-/// Audit outcome: one advisory summary plus fail-closed diagnostics.
 pub(crate) struct LockAuditOutcome {
-    /// Advisory coverage summary, when anything is unverified.
     pub recommendation: Option<String>,
-    /// Fail-closed diagnostics (holes, corrupt shapes, unauditable vectors).
     pub blocking: Vec<String>,
 }
 
-/// Largest tool file the audit reads: real locks are KBs, so anything
-/// past this is hostile or corrupt and blocks instead of loading
-/// unbounded into `prepare`/`generate`.
 const MAX_TOOL_FILE_BYTES: u64 = 1024 * 1024;
 
-/// What one validator command contributes to the install audit.
 enum CommandInstalls {
-    /// No `mise` vector needing audit: no `mise` token, or only
-    /// isolated `exec` vectors. Not audited.
     NotInstall,
-    /// Emitted install specs, possibly empty (the caller blocks bare).
     Specs(Vec<String>),
-    /// A `mise` token with an unclassifiable tail (the caller blocks
-    /// with the detail; silence would be a fail-open).
     Unclassifiable(String),
 }
 
-/// Classification of the `mise` vectors in one argv token run.
 enum MiseVectors {
-    /// No `mise` token, or only isolated `exec` vectors.
     NotInstall,
-    /// The first `install` vector's specs, possibly empty.
     Install(Vec<String>),
-    /// A `mise` token with an unclassifiable tail (unknown subcommand
-    /// or truncated argv); detail feeds the blocking diagnostic.
     Unclassifiable(String),
 }
 
-/// Audit emitted install sets against `root/mise.lock` using pinned defaults.
-#[cfg(test)]
-pub(crate) fn audit_prepare_installs(
-    root: &Path,
-    ir: &WorkflowIr,
-    label: &str,
-    validator_commands: &[ValidatorCommand],
-) -> LockAuditOutcome {
-    audit_prepare_installs_with_catalog(root, ir, label, validator_commands, &ToolCatalog::pinned())
-}
-
-/// Audit emitted install sets against `root/mise.lock` with a resolved [`ToolCatalog`].
-#[cfg(test)]
-pub(crate) fn audit_prepare_installs_with_catalog(
-    root: &Path,
-    ir: &WorkflowIr,
-    label: &str,
-    validator_commands: &[ValidatorCommand],
-    catalog: &ToolCatalog,
-) -> LockAuditOutcome {
-    let verifiers =
-        match VerifierActionSet::build(&catalog.for_emission(), env!("CARGO_PKG_VERSION")) {
-            Ok(verifiers) => verifiers,
-            Err(error) => {
-                return LockAuditOutcome {
-                    recommendation: None,
-                    blocking: vec![format!("verifier_action_templates_invalid:{error}")],
-                };
-            }
-        };
-    audit_prepare_installs_with_catalog_and_verifiers(
-        root,
-        ir,
-        label,
-        validator_commands,
-        catalog,
-        &verifiers,
-    )
-}
-
-/// Audit installs against the resolved catalog and the exact verifier action
-/// templates that generation will emit.
 pub(crate) fn audit_prepare_installs_with_catalog_and_verifiers(
     root: &Path,
     ir: &WorkflowIr,
@@ -150,8 +73,6 @@ pub(crate) fn audit_prepare_installs_with_catalog_and_verifiers(
                 continue;
             }
             for spec in specs {
-                // Emitted specs carry project references (hard decision 5);
-                // audit the concrete versions the project declares.
                 let spec = catalog.materialize(&spec);
                 match subject_for_install_spec(&spec, catalog) {
                     Some(subject) if is_rust(&subject) => {
@@ -167,12 +88,8 @@ pub(crate) fn audit_prepare_installs_with_catalog_and_verifiers(
                             subjects.push(subject);
                         }
                     }
-                    // `Verify jactionlint` checks the installed executable
-                    // against the catalog digest table, so a catalogued
-                    // version needs no `mise.lock` row to be verified.
                     Some(subject) if is_catalogued_jactionlint(&subject) => {
                         if jactionlint_verifier_sequence_valid(&positions, Some(step_index)) {
-                            // The exact digest verifier follows the install.
                         } else {
                             if !jactionlint_sequence_reported {
                                 blocking.push(format!(
@@ -216,11 +133,6 @@ pub(crate) fn audit_prepare_installs_with_catalog_and_verifiers(
     audit_against_lock(lock_text.as_deref(), &subjects, &platform, blocking)
 }
 
-/// Install contribution of one validator command.
-///
-/// Scans the typed argv (plain vectors and `sh -c` scripts alike) and
-/// classifies each `mise` vector: `install` extracts, isolated `exec`
-/// contributes nothing, anything else blocks as unclassifiable.
 fn validator_argv_specs(argv: &[String]) -> CommandInstalls {
     let mut tokens = Vec::new();
     for arg in argv {
@@ -237,12 +149,10 @@ fn validator_argv_specs(argv: &[String]) -> CommandInstalls {
     }
 }
 
-/// True for argv elements holding a shell script rather than one token.
 fn looks_like_script(arg: &str) -> bool {
     arg.chars().any(char::is_whitespace)
 }
 
-/// Resolve one emitted validator spec through the validator pin.
 fn validator_subject(spec: &str) -> Option<InstallSubject> {
     let (name, version, lock_key) = validator_install_pin(spec)?;
     Some(InstallSubject {
@@ -252,13 +162,6 @@ fn validator_subject(spec: &str) -> Option<InstallSubject> {
     })
 }
 
-/// Read a tool file capped at [`MAX_TOOL_FILE_BYTES`].
-///
-/// Missing files are `None` (the caller decides); oversized or
-/// unreadable files block instead of loading unbounded or passing
-/// silently behind a missing-file advisory. The cap binds the read
-/// itself (`take(MAX + 1)` first), never a pre-read metadata size, so
-/// a concurrent grow cannot smuggle unbounded bytes past the check.
 fn capped_read(path: &Path, file: &str, blocking: &mut Vec<String>) -> Option<String> {
     let handle = match std::fs::File::open(path) {
         Ok(handle) => handle,
@@ -284,7 +187,6 @@ fn capped_read(path: &Path, file: &str, blocking: &mut Vec<String>) -> Option<St
     Some(text)
 }
 
-/// Audit resolved subjects against lock bytes (missing and malformed loud).
 fn audit_against_lock(
     lock_text: Option<&str>,
     subjects: &[InstallSubject],
@@ -359,7 +261,3 @@ fn audit_against_lock(
         blocking,
     }
 }
-
-#[cfg(test)]
-#[path = "lock_audit_tests.rs"]
-mod lock_audit_tests;

@@ -1,30 +1,13 @@
-//! Pinned `gh` runner for exact Actions-artifact downloads.
-//!
-//! Callers build fixed argv (exact names, explicit `--repo`); this module
-//! only runs it under the pinned catalog and bounds the captured stdout.
-
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
 
-/// Maximum accepted `gh` stdout bytes for one download call.
-///
-/// Download receipts are kilobytes; one megabyte fails closed on runaway
-/// output instead of buffering megabytes no caller needs. (The spawn
-/// layer caps pipes at 8 MiB; this is the tighter call-site bound.)
 const MAX_GH_STDOUT_BYTES: usize = 1 << 20;
 
-/// Pinned `gh` invocation over caller-fixed argv.
 pub(crate) struct GhDownload;
 
 impl GhDownload {
-    /// Run fixed `gh` args under the pinned catalog in `root`.
-    ///
-    /// # Errors
-    ///
-    /// Returns `gh_download_failed` for any spawn, exit, size, or
-    /// decoding failure.
     pub(crate) fn run(
         catalog: &ToolCatalog,
         root: &Path,

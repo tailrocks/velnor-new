@@ -1,17 +1,7 @@
-//! Launch occupancy counts for capacity checks.
-
 use crate::error::HostError;
 use crate::journal::Journal;
 
 impl Journal {
-    /// Count all launch reservations that lack proven cleanup.
-    ///
-    /// Pending, uncertain, stopped, and ID-less rows remain occupied. A worker
-    /// exit or queue acknowledgement does not release this count.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Journal`] when the count cannot be read.
     pub async fn occupied_launches(&self) -> Result<u32, HostError> {
         let conn = self.connection().await?;
         let mut rows = conn

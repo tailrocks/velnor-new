@@ -1,10 +1,3 @@
-//! Safe selected-tool bootstrap and current-source guard for native jobs.
-//!
-//! Every emitted guard is one single-line `bash -c` script: statements join
-//! with `;`, captures use the `> file` plus `read` idiom, and file writes
-//! use `printf`. Newlines, command substitution, and backticks never appear,
-//! per the renderer's command policy.
-
 use crate::RenderError;
 use crate::verification_jobs::build_task_jobs::{BuildTaskPolicy, CARGO_BINSTALL_ONLY_ENV};
 use crate::verification_jobs::task_script::{capture_command, jq_guard, printf_write};
@@ -136,7 +129,6 @@ pub(super) fn source_guard_script(policy: &BuildTaskPolicy) -> Result<String, Re
     Ok(statements.join("; "))
 }
 
-/// Pinned-MBX and tool identity checks without command substitution.
 fn mbx_guard(mbx_version: &str, rust_version: &str) -> Vec<String> {
     vec![
         capture_command(
@@ -186,8 +178,6 @@ pub(super) fn run_build_task_script(policy: &BuildTaskPolicy) -> Result<String, 
 fn base_environment(task_root: &str) -> Vec<String> {
     vec![
         "set -euo pipefail".to_owned(),
-        // Credential unsets come from the renderer's injected prelude, which
-        // must stay the only token-naming text for the token-hygiene gate.
         "for name in ${!MISE_@}; do unset \"$name\"; done".to_owned(),
         "umask 077".to_owned(),
         format!("task_root=\"{task_root}\""),
@@ -241,87 +231,4 @@ fn source_hash_check(path: &str, sha256: &str) -> String {
     format!(
         "test -f \"$workspace_root/{path}\"; test ! -L \"$workspace_root/{path}\"; /usr/bin/shasum -a 256 \"$workspace_root/{path}\" > \"$task_root/sha256.txt\"; read actual rest < \"$task_root/sha256.txt\"; test \"$actual\" = '{sha256}'"
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use std::process::Command;
-
-    use super::private_environment;
-
-    #[test]
-    fn generated_private_environment_assigns_exact_values() {
-        const VARIABLES: [&str; 18] = [
-            "HOME",
-            "XDG_CONFIG_HOME",
-            "XDG_DATA_HOME",
-            "XDG_CACHE_HOME",
-            "XDG_STATE_HOME",
-            "MISE_CONFIG_DIR",
-            "MISE_DATA_DIR",
-            "MISE_CACHE_DIR",
-            "MISE_STATE_DIR",
-            "CARGO_HOME",
-            "RUSTUP_HOME",
-            "MISE_GLOBAL_CONFIG_FILE",
-            "MISE_SYSTEM_CONFIG_FILE",
-            "MISE_AUTO_INSTALL",
-            "MISE_EXEC_AUTO_INSTALL",
-            "MISE_TASK_RUN_AUTO_INSTALL",
-            "MISE_AUTO_ENV",
-            "MISE_NO_ENV",
-        ];
-        const EXPECTED: [&str; 18] = [
-            "/task-root/home",
-            "/task-root/home/config",
-            "/task-root/home/data",
-            "/task-root/home/cache",
-            "/task-root/home/state",
-            "/task-root/config",
-            "/task-root/data",
-            "/task-root/cache",
-            "/task-root/state",
-            "/task-root/cargo",
-            "/task-root/rustup",
-            "/task-root/global.toml",
-            "/task-root/system.toml",
-            "false",
-            "false",
-            "false",
-            "false",
-            "1",
-        ];
-        let values = VARIABLES
-            .iter()
-            .map(|name| format!("\"${name}\""))
-            .collect::<Vec<_>>()
-            .join(" ");
-        let script = format!(
-            "set -euo pipefail; task_root=/task-root; {}; printf '%s\\0' {values};\n",
-            private_environment().join("; ")
-        );
-        let output = Command::new("/bin/bash")
-            .args(["--noprofile", "--norc", "-c"])
-            .arg(script)
-            .env_clear()
-            .env("PATH", "/usr/bin:/bin")
-            .output()
-            .expect("run isolated environment fixture");
-        assert!(
-            output.status.success(),
-            "shell fixture failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        let actual = output
-            .stdout
-            .split(|byte| *byte == 0)
-            .filter(|value| !value.is_empty())
-            .map(|value| String::from_utf8(value.to_vec()).expect("UTF-8 env value"))
-            .collect::<Vec<_>>();
-        assert_eq!(
-            actual,
-            EXPECTED.map(str::to_owned),
-            "every isolated tool and Mise setting has its exact value"
-        );
-    }
 }

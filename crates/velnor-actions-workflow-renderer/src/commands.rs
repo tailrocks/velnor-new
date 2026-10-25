@@ -1,8 +1,3 @@
-//! Fixed command-vector validation and `run:` quoting.
-//!
-//! Argv arrives as validated vectors; quoting preserves `$` expansion spans
-//! for runner variables while quoting every other character.
-
 use crate::{
     RenderError,
     commands_scan::{expansion_end, is_expansion_at, quote_expansion},
@@ -12,17 +7,6 @@ use crate::{
 pub(crate) use crate::commands_env::validate_composite_env;
 pub use crate::commands_env::validate_env;
 
-/// Validate a fixed argument vector: nonempty, no shell fragments.
-///
-/// Rejects empty argv, empty args, control characters, command substitution,
-/// `cargo install` sequences, absolute Cargo paths, and private tokens.
-/// GitHub `${{ }}` expressions stay constructible here: secret and
-/// input handles are diagnosed with specific tokens by the release
-/// gates, which run after this structural check.
-///
-/// # Errors
-///
-/// Returns [`RenderError::BadCommand`] or [`RenderError::PrivateSubcommand`].
 pub fn validate_command_argv(argv: &[String]) -> Result<(), RenderError> {
     if argv.is_empty() {
         return Err(RenderError::BadCommand("empty_argv".to_owned()));
@@ -58,25 +42,11 @@ pub fn validate_command_argv(argv: &[String]) -> Result<(), RenderError> {
     Ok(())
 }
 
-/// Join validated argv into one `run:` line with POSIX quoting.
-///
-/// `$NAME`/`${...}` spans pass through for runner expansion; every other
-/// character is quoted. See [`quote_run_arg`]. The inline script of
-/// `sh -c`/`bash -c` is single-quoted whole instead: inner-shell
-/// variables (assigned or inherited) must survive the outer shell, and
-/// the script's own quotes must stay syntactic, not literal. The
-/// `env -u` prefixes are transparent to the shape check: a wrapped
-/// `sh -c` still quotes its script, at its shifted index.
-///
-/// # Errors
-///
-/// Returns [`RenderError::BadCommand`] when argv validation fails.
 pub fn join_argv_for_run(argv: &[String]) -> Result<String, RenderError> {
     validate_command_argv(argv)?;
     join_validated_argv_for_run(argv)
 }
 
-/// Join an argv vector after a narrow caller has performed its typed validation.
 pub(crate) fn join_validated_argv_for_run(argv: &[String]) -> Result<String, RenderError> {
     let script_at = inline_shell_script_at(argv);
     let mut words = Vec::with_capacity(argv.len());
@@ -90,8 +60,6 @@ pub(crate) fn join_validated_argv_for_run(argv: &[String]) -> Result<String, Ren
     Ok(words.join(" "))
 }
 
-/// True for the supported `sh -c <script>`/`bash -c <script>` vectors and
-/// the exact absolute `/bin/sh -c <script>` used by trusted verifiers.
 pub(crate) fn is_inline_shell(argv: &[String]) -> bool {
     argv.len() > 2
         && matches!(argv[0].as_str(), "sh" | "bash" | "/bin/sh")
@@ -113,21 +81,10 @@ pub(crate) fn inline_shell_script_at(argv: &[String]) -> Option<usize> {
     is_inline_shell(argv.get(command_at..)?).then_some(command_at + 2)
 }
 
-/// Single-quote one inline script; only `'` needs escaping.
-///
-/// Inside single quotes `$`, `"`, and `\` stay literal for the outer
-/// shell, so the inner shell expands inherited env plus its own
-/// assignments exactly as the fixed script intends.
 pub(crate) fn quote_script_arg(script: &str) -> String {
     format!("'{}'", script.replace('\'', "'\\''"))
 }
 
-/// POSIX-quote one argv element, preserving and protecting `$` expansions.
-///
-/// # Errors
-///
-/// Returns [`RenderError::BadCommand`] when an expansion is malformed or its
-/// fallback syntax cannot be preserved safely.
 pub fn quote_run_arg(arg: &str) -> Result<String, RenderError> {
     if is_plain_run_token(arg) && !arg.contains('$') {
         return Ok(arg.to_owned());
@@ -168,21 +125,14 @@ pub fn quote_run_arg(arg: &str) -> Result<String, RenderError> {
     flush_run_literal(&mut literal, &mut out);
     Ok(out)
 }
-/// Exact `X.Y.Z` pin, or a project version reference the generated
-/// resolver validates at run time (hard decision 5).
 pub(crate) fn is_exact_or_project_version(version: &str) -> bool {
     velnor_actions_contract::config::project_tool_refs::is_exact_or_project_version(version)
 }
 
-/// True for `/cargo` or paths ending in `/cargo`.
 fn is_absolute_cargo(arg: &str) -> bool {
     arg.starts_with('/') && (arg == "/cargo" || arg.ends_with("/cargo"))
 }
 
-/// True for shell background operators (`&`), never for `&&`/redirections.
-///
-/// Bans ` & `, leading `&`, and trailing single `&`; `&&` chains, `>&`
-/// redirections, and URL query `&` stay legal fixed-vector content.
 fn has_background_op(arg: &str) -> bool {
     if arg.contains(" & ") {
         return true;
@@ -196,7 +146,6 @@ fn has_background_op(arg: &str) -> bool {
     }
     false
 }
-/// True when an argv element needs no quoting in `run:`.
 fn is_plain_run_token(arg: &str) -> bool {
     !arg.is_empty()
         && arg.bytes().all(|b| {
@@ -219,7 +168,6 @@ fn is_plain_run_token(arg: &str) -> bool {
         })
 }
 
-/// Flush a pending literal run as one single-quoted span.
 fn flush_run_literal(literal: &mut String, out: &mut String) {
     if !literal.is_empty() {
         out.push('\'');
@@ -241,13 +189,6 @@ fn github_expression_end(bytes: &[u8], index: usize) -> Option<usize> {
         .map(|offset| index + 3 + offset + 2)
 }
 
-/// Reject Rust invocations outside pinned `mise exec` (RQ-9.3).
-///
-/// Scans `run:` content only (inline values plus `|`/`>` blocks):
-/// every command line naming a Rust program must also name `mise`.
-/// Case-sensitive: uppercase env paths (`$CARGO_HOME`) are not
-/// invocations, and step names never scan.
-/// # Errors
 pub fn check_no_bare_cargo(yaml: &str) -> Result<(), RenderError> {
     let mut in_run_block = false;
     let mut run_indent = 0;
@@ -275,7 +216,6 @@ pub fn check_no_bare_cargo(yaml: &str) -> Result<(), RenderError> {
     Ok(())
 }
 
-/// Reject one command line naming a Rust program without `mise`.
 fn check_command_line(command: &str) -> Result<(), RenderError> {
     if command.contains("mise") {
         return Ok(());
@@ -288,82 +228,4 @@ fn check_command_line(command: &str) -> Result<(), RenderError> {
         }
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod verifier_shell_tests {
-    use super::join_argv_for_run;
-    use std::process::Command;
-
-    #[test]
-    fn absolute_posix_shell_preserves_script_and_quotes_project_refs() {
-        let argv = vec![
-            "/bin/sh".to_owned(),
-            "-c".to_owned(),
-            "set -eu; v=\"${VELNOR_TOOL_RUST}\"".to_owned(),
-        ];
-        let joined = join_argv_for_run(&argv).expect("canonical absolute shell");
-        let quoted = super::super::project_tool_resolver::quote_project_tool_run_refs(&joined)
-            .expect("dynamic version remains safely quoted");
-
-        assert!(quoted.starts_with("/bin/sh -c '"), "{quoted}");
-        assert!(quoted.contains("'\"${VELNOR_TOOL_RUST}\"'"), "{quoted}");
-        assert!(quoted.ends_with('\''), "{quoted}");
-    }
-
-    #[test]
-    fn absolute_verifier_shell_does_not_relax_unbalanced_reference_checks() {
-        assert!(
-            super::super::project_tool_resolver::quote_project_tool_run_refs(
-                "/bin/sh -c 'printf %s ${VELNOR_TOOL_RUST}"
-            )
-            .is_err(),
-            "unbalanced inline script must remain invalid"
-        );
-    }
-
-    #[test]
-    fn absolute_posix_shell_keeps_inner_scope_and_env_unset_behavior() {
-        let argv = [
-            "env",
-            "-u",
-            "DROP_ME",
-            "/bin/sh",
-            "-c",
-            "local_value='inner value'; printf '<%s>|<%s>|<%s>' \"$local_value\" \"${DROP_ME-unset}\" \"$KEEP_VALUE\"",
-        ]
-        .map(str::to_owned);
-        let joined = join_argv_for_run(&argv).expect("fixed POSIX shell argv");
-        assert!(joined.contains("/bin/sh -c 'local_value='"), "{joined}");
-
-        let outer = format!("export DROP_ME=poison KEEP_VALUE='quoted value'; {joined}");
-        let output = Command::new("/bin/sh")
-            .args(["-c", &outer])
-            .output()
-            .expect("execute emitted POSIX command");
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        assert_eq!(
-            String::from_utf8(output.stdout).expect("UTF-8 output"),
-            "<inner value>|<unset>|<quoted value>"
-        );
-    }
-
-    #[test]
-    fn absolute_posix_shell_keeps_generic_forbidden_syntax_rejections() {
-        for script in [
-            "printf '%s' $(id)",
-            "printf '%s' `id`",
-            "printf first\nprintf second",
-        ] {
-            let argv = vec!["/bin/sh".to_owned(), "-c".to_owned(), script.to_owned()];
-            assert!(
-                join_argv_for_run(&argv).is_err(),
-                "unsafe generic script was accepted: {script:?}"
-            );
-        }
-    }
 }

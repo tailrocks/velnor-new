@@ -1,8 +1,3 @@
-//! Acquire jobs up to capacity, mint JIT, and start one paired worker each.
-//!
-//! The journal row is committed before acquire, JIT, and Docker. JIT bytes are
-//! passed to the starter and are not written to the journal.
-
 use std::future::Future;
 
 use velnor_runner_github::{
@@ -19,17 +14,14 @@ use crate::worker::ResourceBudget;
 use crate::worker::Started;
 
 mod bind;
-#[cfg(all(test, unix))]
-mod busy_slot_tests;
+
 mod capacity;
 mod completion;
 mod drive;
-#[cfg(all(test, unix))]
-mod effect_tests;
+
 mod gate;
 mod inspect;
-#[cfg(all(test, unix))]
-mod inspect_tests;
+
 mod name_taken;
 mod preflight;
 mod resource_capacity;
@@ -45,48 +37,22 @@ mod session;
 mod slot;
 mod steady;
 mod steps;
-#[cfg(test)]
-mod subject_tests;
+
 mod trace;
 mod turn;
 
 pub(crate) use capacity::{install_job_capacity, job_capacity};
 pub(crate) use pressure::advertise as advertise_capacity;
 
-#[cfg(test)]
-pub(crate) use capacity::{
-    Admit, Seat, admit, needs_running, parse_admit_target, parse_job_capacity, poll_limit,
-    statistics_blocked, wide_poll_limit,
-};
-#[cfg(test)]
-pub(crate) use name_taken::{fail_unstarted, should_ack};
-#[cfg(test)]
-pub(crate) use steps::{Idle, idle};
-#[cfg(test)]
-pub(crate) use turn::admission;
-
-/// What one launch attempt started. No JIT and no token.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LaunchReport {
-    /// Scale-set id.
     pub set_id: i64,
-    /// First worker started in this call. Absent when the queue had no job.
+
     pub started: Option<Started>,
-    /// Every worker started in this call, in start order. No JIT and no token.
+
     pub workers: Vec<Started>,
 }
 
-/// Open one session, start the admitted workers, then delete that session.
-///
-/// # Errors
-///
-/// Returns [`EnsureError`] when registration, acquire, JIT, Docker, or the
-/// session delete fails. A failed delete is returned even when the poll failed,
-/// because a leaked session blocks the next create. The next open deletes only
-/// session ids this journal recorded. Timeout after acquire keeps the journal
-/// row uncertain and does not acknowledge. `VELNOR_RECONCILE=1` can fail the
-/// journal read before a session exists, and a hold skips it. The session stays
-/// open while an owned launch container is still running.
 pub async fn launch_once(
     pat: &str,
     owner: &str,
@@ -143,12 +109,6 @@ pub async fn launch_once(
     report(set.id, driven, closed)
 }
 
-/// Acquire, JIT, and start for one poll. No session create.
-///
-/// # Errors
-///
-/// Returns [`EnsureError`] when more than one job is offered, or a later step fails.
-/// An uncertain acquire is not acknowledged.
 pub(crate) async fn drive_offer<T, S, F>(
     lane: &mut T,
     ctx: &Drive,

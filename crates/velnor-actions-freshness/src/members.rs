@@ -1,5 +1,3 @@
-//! Bounded Cargo package listing for the local verification script.
-
 use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
@@ -11,7 +9,6 @@ use crate::process::run_bounded;
 const METADATA_CAP: usize = 512 * 1024;
 const METADATA_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// Print sorted Cargo package names through the existing private CLI operation.
 pub(crate) fn print_workspace_members(root: &Path, libraries_only: bool) -> i32 {
     match cargo_members(root, libraries_only) {
         Ok(members) => {

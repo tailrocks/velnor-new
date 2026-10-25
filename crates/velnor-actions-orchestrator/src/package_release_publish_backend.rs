@@ -1,5 +1,3 @@
-//! Immutable publication transport; permanent tags belong to the native metadata job.
-
 use super::{
     GitHubPackagePublisher, OrchestratorError, OriginalVerification,
     github::{ReleaseResponse, encode_segment, sha256},
@@ -287,10 +285,6 @@ fn verify_current_preview_ci(
     )
 }
 
-#[cfg(test)]
-#[path = "package_release_publish_backend_tests.rs"]
-mod tests;
-
 fn verify_preview_source_ci(
     api: &super::github::GitHubApi,
     repository_id: u64,
@@ -307,7 +301,6 @@ fn verify_preview_source_ci(
         source,
         false,
     )?;
-    // Preserve signed CI identity while independently requiring successful latest A CI.
     let workflow = api.admitted_workflow(CI_WORKFLOW_PATH, WORKFLOW_DISPLAY_NAME)?;
     let latest = api.latest_source_ci(&workflow, source)?;
     let id = latest

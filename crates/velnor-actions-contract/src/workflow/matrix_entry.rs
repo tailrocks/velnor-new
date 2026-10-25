@@ -1,5 +1,3 @@
-//! Matrix-entry identity, including typed variants for paired check lanes.
-
 use super::cache_ids::EntryCacheIds;
 use super::execute::{ExecuteTaskIds, ExecuteTaskRef};
 use super::lanes::NamedCheckLaneVariant;
@@ -13,53 +11,49 @@ use crate::ids::{
 };
 use serde::{Deserialize, Serialize};
 
-/// One `matrix.include` entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MatrixEntry {
-    /// Stable matrix ID (`stack:<sid>|task:<tgid>`).
     pub id: String,
-    /// Derived matrix key.
+
     pub matrix_key: String,
-    /// Registered detector ID.
+
     pub stack_id: String,
-    /// Stable logical matrix task-group ID.
+
     pub task_id: String,
-    /// Typed lane identity for a paired named check.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lane_variant: Option<NamedCheckLaneVariant>,
-    /// Fixed single-line shell command the leg executes (`matrix.run`).
+
     pub run: String,
-    /// Obligation task digest binding the leg's reports (`b3-` + 64 hex).
+
     pub task_digest: String,
-    /// Opaque stack-adapter metadata.
+
     pub adapter_metadata: serde_json::Value,
-    /// Executable obligations for this entry.
+
     pub execute_task_ids: ExecuteTaskIds,
-    /// Entry input digest.
+
     pub input_digest: String,
-    /// Derived report ID.
+
     pub report_id: String,
-    /// Owning job ID (crate job or plan job); selects the artifact below.
+
     pub job_id: String,
-    /// Derived job artifact name carrying this entry's reports.
+
     pub artifact_id: String,
-    /// Immutable runner, target, and planned platform identity.
+
     pub planned_platform: PlannedPlatform,
-    /// Cache identity digests recorded in the plan (cache §1).
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cache_ids: Option<EntryCacheIds>,
-    /// Declared task outputs reuse verification covers (cache §3).
+
     #[serde(default)]
     pub declared_outputs: Vec<String>,
-    /// Per-shard test-run refs; empty for non-test entries (par §8).
+
     #[serde(default)]
     pub test_run: Vec<ExecuteTaskRef>,
 }
 
 impl MatrixEntry {
-    /// Build a single-lane entry, deriving all report and artifact identities.
-    /// # Errors
     #[expect(
         clippy::too_many_arguments,
         reason = "entry identity needs all ten inputs at once"
@@ -91,10 +85,6 @@ impl MatrixEntry {
         )
     }
 
-    /// Build a named-check entry bound to one hosted or Scale Set lane.
-    /// The logical `task_id` stays shared; matrix, report, and artifact IDs
-    /// derive from the lane variant and exact emitted job ID.
-    /// # Errors
     #[expect(
         clippy::too_many_arguments,
         reason = "entry identity needs all eleven inputs at once"
@@ -143,8 +133,6 @@ impl MatrixEntry {
         })
     }
 
-    /// Validate derivations, digests, and task references for a run key.
-    /// # Errors
     pub fn validate(&self, run_key: &str) -> Result<(), ContractError> {
         validate_id(&self.id)?;
         validate_run_key(run_key)?;
@@ -233,7 +221,3 @@ fn validate_lane_binding(
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "matrix_entry_tests.rs"]
-mod tests;

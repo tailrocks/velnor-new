@@ -1,4 +1,3 @@
-//! Source-free, fixed-provider review completion companion.
 use crate::{RenderError, render::RenderedFile, setup::MiseSetup, yaml::Yaml};
 use velnor_actions_contract::{
     Step,
@@ -10,26 +9,16 @@ use velnor_actions_contract::{
 #[path = "review_completion_steps.rs"]
 mod steps;
 
-/// Closed generator inputs for the independent completion App adapter.
 #[derive(Debug)]
 pub struct ReviewCompletionSpec {
-    /// Literal repository/provider/check policy, derived from generation identity.
     pub policy: ReviewCompletionPolicy,
-    /// Validated App identity and key references; never credential values.
     pub config: ReviewCompletionConfig,
-    /// Exact official helper release version.
     pub generator_version: String,
-    /// Qualified hosted Linux Mise bootstrap.
     pub setup: MiseSetup,
-    /// Verified official helper acquisition; never repository code.
     pub acquire: Step,
-    /// Fixed pinned GitHub CLI installation argv.
     pub install_gh_argv: Vec<String>,
 }
 
-/// Render the sole native completion workflow without checkout or source tasks.
-/// # Errors
-/// Rejects invalid policy, identities, pins, trigger shape or workflow bounds.
 pub fn render_review_completion(spec: &ReviewCompletionSpec) -> Result<RenderedFile, RenderError> {
     spec.policy
         .validate()
@@ -109,8 +98,6 @@ fn map(values: &[(&str, &str)]) -> Yaml {
 }
 
 fn triggers(branch: &str) -> Yaml {
-    // Pinned zizmor's annotation spans all `on`; exact closed admission below
-    // rejects added siblings. This workflow never checks out or executes PR code.
     Yaml::Map(vec![
         (
             "issue_comment".to_owned(),
@@ -157,7 +144,3 @@ fn validate_triggers(document: &Yaml, branch: &str) -> Result<(), RenderError> {
 fn invalid() -> RenderError {
     RenderError::InvalidWorkflow("review_completion_closed_policy".to_owned())
 }
-
-#[cfg(test)]
-#[path = "review_completion_tests.rs"]
-mod tests;

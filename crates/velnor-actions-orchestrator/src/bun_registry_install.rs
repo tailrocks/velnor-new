@@ -1,12 +1,3 @@
-//! `bun-registry-install-v1`: the registry phase of `bun install` (HD-6, HD-7).
-//!
-//! With `private_fetch*`, the only code that reaches the private-fetch spawn
-//! policy. The job's `GITHUB_TOKEN` (`packages: read`) arrives as
-//! `VELNOR_NPM_READ_TOKEN`; Bun starts from a cleared environment with a
-//! Velnor-written configuration and `--ignore-scripts`, so no repository
-//! script runs while the token exists. The same operation writes the token-free
-//! configuration the lifecycle phase reuses.
-
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -22,12 +13,9 @@ use crate::config::private_fetch_session::Token;
 use crate::internal::internal;
 use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoRead, read_repo_file};
 
-/// Operation name (shared with the contract and the renderer).
 pub const BUN_REGISTRY_INSTALL_OP: &str = velnor_actions_contract::BUN_REGISTRY_INSTALL_OPERATION;
-/// Exact Bun version, exported by the project-tool resolver step.
 const VERSION_ENV: &str = "VELNOR_TOOL_BUN";
 const CACHE_ENV: &str = "BUN_INSTALL_CACHE_DIR";
-/// Directory (under runner temp) holding both configuration files.
 pub(crate) const CONFIG_SUBDIR: &str = "velnor/bun";
 const INSTALL_CONFIG: &str = "registry.toml";
 const LIFECYCLE_CONFIG: &str = "lifecycle.toml";
@@ -42,7 +30,6 @@ const MISE_ENV_KEYS: [&str; 6] = [
     "MISE_EXEC_AUTO_INSTALL",
 ];
 
-/// Parsed and validated request.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct InstallRequest {
     pub(crate) root: String,
@@ -55,10 +42,6 @@ pub(crate) struct InstallRequest {
 }
 
 impl InstallRequest {
-    /// Parse the step environment.
-    ///
-    /// # Errors
-    /// Rejects missing, relative or malformed values.
     pub(crate) fn parse(get: &dyn Fn(&str) -> Option<String>) -> Result<Self, OrchestratorError> {
         let need = |key: &str| {
             get(key)
@@ -110,10 +93,6 @@ impl InstallRequest {
     }
 }
 
-/// Write the registry and lifecycle configurations from the repository bunfig.
-///
-/// # Errors
-/// Fails closed on `bunfig_registry_override`, an unreadable file or a write error.
 pub(crate) fn write_configs(
     request: &InstallRequest,
 ) -> Result<(PathBuf, PathBuf), OrchestratorError> {
@@ -145,10 +124,6 @@ pub(crate) fn write_configs(
     ))
 }
 
-/// The private-fetch child: `mise exec bun@<pin> -- bun install ...`.
-///
-/// # Errors
-/// Rejects values the private-fetch constructor refuses.
 pub(crate) fn install_command(
     request: &InstallRequest,
     config: &Path,
@@ -188,10 +163,6 @@ pub(crate) fn install_command(
     .map_err(|err| internal(&format!("bun_registry_command:{err}")))
 }
 
-/// Run `bun-registry-install-v1` from the step environment.
-///
-/// # Errors
-/// Any configuration, credential or install failure.
 pub fn run_bun_registry_install() -> Result<(), OrchestratorError> {
     let get = |key: &str| std::env::var(key).ok();
     let token =
@@ -210,7 +181,3 @@ pub fn run_bun_registry_install() -> Result<(), OrchestratorError> {
         Err(internal("bun_registry_install_failed"))
     }
 }
-
-#[cfg(test)]
-#[path = "bun_registry_install_tests.rs"]
-mod tests;

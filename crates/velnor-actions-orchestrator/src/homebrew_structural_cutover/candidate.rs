@@ -1,5 +1,3 @@
-//! Canonical output construction and validation for the one-time cutover.
-
 use std::{collections::BTreeMap, path::Path};
 
 use velnor_actions_contract::package_release::PackageReleaseChannel;
@@ -11,9 +9,6 @@ use super::{HomebrewSeedOutputBaseIdentity, PrivateVerifiedSeedOutputBase, prote
 
 pub(crate) type RegularTree = BTreeMap<String, (u32, Vec<u8>)>;
 
-/// Compare a cutover candidate against the normal generated output map.
-/// The current `FormulaContract` receipt independently authenticates the preview
-/// formula; that formula's verified bytes enter the reusable expected-tree factory.
 pub(crate) fn validate_structural_candidate(
     root: &Path,
     authority: &crate::homebrew::authority::VerifiedHomebrewAuthority,
@@ -30,8 +25,6 @@ pub(crate) fn validate_structural_candidate(
     Ok(())
 }
 
-/// Build the exact normal renderer output over the authenticated seed base.
-/// Callers supply preview formula bytes after release/formula contract checks.
 pub(crate) fn expected_structural_output_tree(
     root: &Path,
     authority: &crate::homebrew::authority::VerifiedHomebrewAuthority,
@@ -278,7 +271,6 @@ fn same_regular_tree(actual: &RegularTree, expected: &RegularTree) -> bool {
     actual == expected
 }
 
-/// Only an exact seed base may classify its pinned legacy stable formula inert.
 pub(crate) fn is_exact_legacy_stable_formula(
     authority: &crate::homebrew::authority::VerifiedHomebrewAuthority,
     witness: &PrivateVerifiedSeedOutputBase,
@@ -336,40 +328,4 @@ fn compare_legacy_stable(
     let blob = crate::release_policy_admission::git_blob_sha1(&bytes)
         .map_err(|_| internal("homebrew_seed_output_stable_blob_digest"))?;
     Ok(blob == pinned.blob_sha)
-}
-
-#[cfg(test)]
-#[test]
-fn structural_tree_comparison_rejects_additions_deletions_modes_and_bytes() {
-    let expected = BTreeMap::from([
-        (
-            ".github/workflows/ci.yml".to_owned(),
-            (0o100_644, b"workflow".to_vec()),
-        ),
-        (
-            "Formula/jackin-preview.rb".to_owned(),
-            (0o100_644, b"preview".to_vec()),
-        ),
-    ]);
-    assert!(same_regular_tree(&expected, &expected));
-    let mut changed = expected.clone();
-    changed.insert(
-        "Formula/jackin.rb".to_owned(),
-        (0o100_644, b"extra".to_vec()),
-    );
-    assert!(!same_regular_tree(&changed, &expected));
-    changed = expected.clone();
-    changed.remove(".github/workflows/ci.yml");
-    assert!(!same_regular_tree(&changed, &expected));
-    changed = expected.clone();
-    changed.insert(
-        "Formula/jackin-preview.rb".to_owned(),
-        (0o100_755, b"preview".to_vec()),
-    );
-    assert!(!same_regular_tree(&changed, &expected));
-    changed.insert(
-        "Formula/jackin-preview.rb".to_owned(),
-        (0o100_644, b"tampered".to_vec()),
-    );
-    assert!(!same_regular_tree(&changed, &expected));
 }

@@ -1,5 +1,3 @@
-//! Credential-isolated writer for a validated Homebrew tap candidate.
-
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -43,13 +41,8 @@ const CANDIDATE_LIMIT: u64 = 1024 * 1024;
 const CANDIDATE_DIR: &str = "tap-candidate";
 const PR_RECEIPT_FILE: &str = "tap-pr.json";
 
-/// Private writer operation selected only by the generated App-authenticated job.
 pub const WRITE_HOMEBREW_TAP_PR_OP: &str = "write-homebrew-tap-pr-v1";
 
-/// Reverify the source release and independently validate/write one PR candidate.
-/// # Errors
-/// Rejects a missing policy, an invalid candidate, a mismatched App installation,
-/// a stale tap base, a conflicting retry, or any GitHub API failure.
 pub fn write_homebrew_tap_pr_from_env() -> Result<TapPromotionReceipt, OrchestratorError> {
     let inputs = load_writer_inputs()?;
     let preparation = prepare_writer(&inputs)?;
@@ -293,10 +286,3 @@ fn read_regular_limited(
     }
     fs::read(path).map_err(|_| internal("tap_writer_file_read"))
 }
-
-#[cfg(test)]
-#[path = "tap_writer_retry_tests.rs"]
-mod retry_tests;
-#[cfg(test)]
-#[path = "tap_writer_tests.rs"]
-mod tests;

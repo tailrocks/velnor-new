@@ -1,4 +1,3 @@
-//! Separately authenticated, tap-scoped classic protection reads; no write API.
 use super::{
     candidate::MergeCandidate,
     github::TapMergeGitHub,
@@ -131,22 +130,3 @@ pub(super) fn validate_distinct_tokens(
     }
     Ok(())
 }
-
-// Existing scripted protection fixtures exercise composition without minting a
-// live App token. Production cannot use its writer transport as an observer.
-#[cfg(test)]
-impl ClassicProtectionReader for TapMergeGitHub {
-    fn classic_protection(
-        &self,
-        repository: &str,
-        encoded_branch: &str,
-    ) -> Result<Option<Value>, OrchestratorError> {
-        self.get_optional(&format!(
-            "repos/{repository}/branches/{encoded_branch}/protection"
-        ))
-    }
-}
-
-#[cfg(test)]
-#[path = "tap_merge_protection_observer_tests.rs"]
-mod tests;

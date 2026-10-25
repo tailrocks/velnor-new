@@ -1,13 +1,3 @@
-//! The one job that fetches a member's private release assets for its suites
-//! (`bun-<slug>--assets`, HD-7).
-//!
-//! Copying the App-token block into every suite job (and every matrix leg)
-//! would put the secret in N jobs. Instead this job alone runs the staged
-//! helper, mint, fetch and revoke, indexes the verified `.velnor/deps` tree
-//! file by file, and uploads it as a one-day artifact of this run. Suite jobs
-//! download it, check every file against the index and every archive digest
-//! the lock pins against `verified.json`, and hold no credential.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Job, JobTimeout, Step, StepRole};
@@ -17,19 +7,13 @@ use crate::verification_jobs::bun_member_jobs::{
 };
 use crate::{RenderError, steps};
 
-/// Job id suffix of a member's assets job.
 pub const BUN_ASSETS_SUFFIX: &str = "--assets";
 
-/// The assets job of one member.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BunAssetsPolicy {
-    /// Member `package.json` name (display).
     pub member: String,
-    /// Generated job id (`bun-<slug>--assets`).
     pub id: String,
-    /// Job timeout (the member job's).
     pub timeout: JobTimeout,
-    /// Steps after checkout: helper, mint, fetch, revoke, index, upload.
     pub steps: Vec<Step>,
 }
 
@@ -54,11 +38,6 @@ impl BunAssetsPolicy {
     }
 }
 
-/// Build the assets job.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] for an invalid policy.
 pub fn build_bun_assets_job(
     policy: &BunAssetsPolicy,
     checkout_uses: &str,
@@ -81,13 +60,6 @@ pub fn build_bun_assets_job(
     })
 }
 
-/// Reconstruct the assets job. It never joins Required itself: its suites
-/// need it, so a failed fetch skips them and Required fails closed
-/// (`planned_job_skipped`).
-///
-/// # Errors
-///
-/// Returns [`RenderError`] naming the first mismatch.
 pub(crate) fn validate_bun_assets_job(
     jobs: &BTreeMap<String, Job>,
     policy: &BunAssetsPolicy,

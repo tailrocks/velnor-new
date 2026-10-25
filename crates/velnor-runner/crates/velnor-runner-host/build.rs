@@ -1,5 +1,7 @@
-//! Bind validated release source and helper identities into the host crate.
-
+#![allow(
+    missing_docs,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
 use std::env;
 use std::fs;
 use std::path::PathBuf;

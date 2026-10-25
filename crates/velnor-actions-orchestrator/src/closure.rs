@@ -1,23 +1,7 @@
-//! Complete first-party input closures with explicit unknowns.
-//! Declared via `#[path]` from `internal_plan.rs`; unknown inputs forbid reuse and coverage.
-//!
-//! Resolution dispatches per stack to the owning adapter; the closure
-//! model itself lives in the contract crate.
 use std::path::Path;
-#[cfg(test)]
-pub(crate) use velnor_actions_contract::ClosureBuilder;
+
 use velnor_actions_contract::{ContractError, ProposedTask, Stack, TaskInputClosure};
 
-/// Resolve one proposed task's closure against the checkout at `root`.
-///
-/// Closed per-stack dispatch: each adapter resolves its own tasks.
-/// Callers pass validated proposals, so unknown stacks and kind
-/// spellings fail closed here instead of resolving silently.
-///
-/// # Errors
-///
-/// Returns [`ContractError`] for unregistered stacks and unknown
-/// task-kind spellings.
 pub(crate) fn resolve_closure_at_root(
     root: &Path,
     task: &ProposedTask,

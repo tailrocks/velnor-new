@@ -1,5 +1,3 @@
-//! Immutable release provenance for consumer-side helper acquisition.
-
 use velnor_actions_contract::{
     RELEASE_MANIFEST_FILENAME, ReleaseManifest, ReleaseTarget, check_release_artifact,
 };
@@ -7,7 +5,6 @@ use velnor_actions_workflow_renderer::EvidenceHelperProvenance;
 
 use crate::{OrchestratorError, discover::Discovery};
 
-/// Validated release provenance for the fixed evidence helper steps.
 pub(crate) fn consumer_evidence_helper(
     label: &str,
     version: &str,
@@ -50,8 +47,6 @@ pub(super) fn validated_consumer_manifest(
             .ok_or_else(|| OrchestratorError::Contract {
                 problem: format!("manifest_missing_target:{}", target.triple()),
             })?;
-    // Defense in depth: re-bind the consumed record's URL even though
-    // `validate` already bound every record (X1).
     check_release_artifact(
         &record.artifact,
         &manifest.version,

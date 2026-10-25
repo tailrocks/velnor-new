@@ -1,5 +1,3 @@
-//! Exact workflow fields and whole-step sharing, preserving global prior anchors.
-
 use super::{next_name, validation};
 use crate::{
     RenderError,
@@ -52,7 +50,6 @@ pub(super) fn share(
         }
         let signature = signature(value, &anchors)?;
         if let Some(name) = named.get(&signature) {
-            // Removing a prior declaration would orphan its later uses.
             if !has_declaration(value) {
                 *value = Yaml::Alias(name.clone());
             }
@@ -182,7 +179,6 @@ fn has_declaration(value: &Yaml) -> bool {
     }
 }
 
-/// Admit only bodies accepted by the staged normalizer's matching anchor kind.
 fn shareable(value: &Yaml, mode: Mode) -> bool {
     let Yaml::Map(entries) = value else {
         return false;
@@ -225,9 +221,6 @@ fn shareable(value: &Yaml, mode: Mode) -> bool {
             }) {
                 return false;
             }
-            // Nested quoted scalar keys (e.g. ON) are preserved verbatim and
-            // accepted in a whole-step body; whitespace-containing keys and
-            // nested sequences are outside the normalizer's line grammar.
             render_yaml(value).lines().all(|line| {
                 let content = line.trim();
                 content.is_empty()

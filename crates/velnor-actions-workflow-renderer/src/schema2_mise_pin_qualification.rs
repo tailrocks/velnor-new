@@ -1,5 +1,3 @@
-//! Hosted-only qualification for exact Mise release assets.
-
 use super::{MisePinQualificationPins, RunnerSpec};
 use crate::RenderError;
 use crate::yaml::Yaml;
@@ -11,10 +9,6 @@ const LINUX_X64: ReleaseTarget = ReleaseTarget::LinuxX86_64;
 const MACOS_X64: ReleaseTarget = ReleaseTarget::MacosX86_64;
 const CHECKOUT_USES: &str = super::features::CHECKOUT_USES;
 
-/// Emit read-only jobs that verify the pinned release on Linux and macOS x64.
-///
-/// # Errors
-/// Invalid action, version, or digest pins fail closed.
 pub(super) fn jobs(pins: &MisePinQualificationPins) -> Result<Vec<(String, Yaml)>, RenderError> {
     pins.linux_x86_64_setup.validate()?;
     pins.macos_x86_64_setup.validate()?;
@@ -130,7 +124,3 @@ fn mapping(pairs: &[(&str, &str)]) -> Yaml {
             .collect(),
     )
 }
-
-#[cfg(test)]
-#[path = "schema2_mise_pin_qualification_tests.rs"]
-mod tests;

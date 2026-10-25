@@ -1,11 +1,3 @@
-//! Publication job assembly: authority gate plus one build, attest and
-//! publish chain per release-asset bundle.
-//!
-//! The authority job reads GitHub metadata only and checks out nothing.
-//! Bundle jobs need it, so an unauthorized tag runs no bundle job. Only
-//! the build job checks out code, and it holds read-only authority; the
-//! attest and publish jobs work from the uploaded artifact alone.
-
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 
@@ -39,69 +31,42 @@ pub(crate) mod image_steps;
 #[path = "publish_provenance_steps.rs"]
 mod provenance_steps;
 
-/// Tag authority job id; every bundle job needs it.
 pub(crate) const AUTHORITY_JOB: &str = "publish-authority";
-/// Step id whose outputs carry the parsed tag.
 const TAG_STEP: &str = "tag";
-/// Token binding for GitHub API reads and release uploads.
 const TOKEN_ENV: (&str, &str) = ("GH_TOKEN", "${{ secrets.GITHUB_TOKEN }}");
 
-/// Where one bundle's version is checked.
 pub(crate) enum VersionCheck {
-    /// Inline literal baked into the workflow.
     Inline(String),
-    /// Manifest read from the tagged commit.
     Manifest(VersionSource, String),
 }
 
-/// One bundle plus its resolved version check.
 pub(crate) struct BundlePlan<'a> {
-    /// Declared bundle.
     pub(crate) bundle: &'a PublishBundle,
-    /// Version check applied by the authority job.
     pub(crate) check: VersionCheck,
 }
 
-/// Shared assembly inputs.
 pub(crate) struct Inputs<'a> {
-    /// Exact `owner/repo`.
     pub(crate) repository: &'a str,
-    /// Default branch the tag must descend from.
     pub(crate) branch: &'a str,
-    /// Literal runner label.
     pub(crate) label: &'a str,
-    /// Protected environment for asset upload.
     pub(crate) environment: &'a str,
-    /// Declared provenance store for every tag-driven artifact.
     pub(crate) provenance: PublishProvenance,
-    /// Pinned Mise setup step inputs.
     pub(crate) mise: &'a MiseSetup,
-    /// Pinned tool catalog.
     pub(crate) catalog: &'a ToolCatalog,
-    /// Resolved bundles, sorted by id.
     pub(crate) bundles: &'a [BundlePlan<'a>],
-    /// Resolved npm entries, sorted by id.
     pub(crate) npm: &'a [NpmPlan<'a>],
-    /// Resolved Maven bundle entries, sorted by id.
     pub(crate) maven: &'a [MavenPlan<'a>],
-    /// Manifest for the `git-tag` release job; `None` without that mode.
     pub(crate) git_tag_manifest: Option<&'a str>,
-    /// Declared container images, sorted by id.
     pub(crate) images: &'a [ImageConfig],
-    /// Images a release tag promotes, with their resolved version checks.
     pub(crate) promotions: &'a [PromotionPlan<'a>],
 }
 
-/// One promotable image plus its resolved version check.
 pub(crate) struct PromotionPlan<'a> {
-    /// Declared image (carries a supported `version_file`).
     pub(crate) image: &'a ImageConfig,
-    /// Version check applied by the authority job.
     pub(crate) check: VersionCheck,
 }
 
 impl Inputs<'_> {
-    /// Every artifact a release tag may name, bundles first, with its check.
     fn tag_artifacts(&self) -> Vec<(&str, &VersionCheck)> {
         self.bundles
             .iter()
@@ -125,11 +90,6 @@ impl Inputs<'_> {
     }
 }
 
-/// Assemble the authority job and every bundle chain.
-///
-/// # Errors
-///
-/// Returns render or contract errors for invalid steps or argv.
 pub(crate) fn assemble_jobs(
     inputs: &Inputs<'_>,
 ) -> Result<BTreeMap<String, PublishJobSpec>, OrchestratorError> {
@@ -177,12 +137,6 @@ pub(crate) fn assemble_jobs(
     Ok(jobs)
 }
 
-/// The build, attest and publish chain of every tag-driven artifact kind.
-///
-/// The attest job id is the same in both provenance modes; its role and
-/// steps follow `[publish] provenance`. With a Sigstore bundle, npm gains a
-/// `npm-provenance-<id>` job that records the bundle in the tag's release
-/// before the package is pushed.
 fn insert_tag_chains(
     inputs: &Inputs<'_>,
     gh: &str,
@@ -236,7 +190,6 @@ fn insert_tag_chains(
     Ok(())
 }
 
-/// `gh` shell function body through the pinned Mise tool.
 pub(crate) fn gh_function(catalog: &ToolCatalog) -> Result<String, OrchestratorError> {
     let exec =
         PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), Vec::new()).map_err(|err| {
@@ -249,12 +202,10 @@ pub(crate) fn gh_function(catalog: &ToolCatalog) -> Result<String, OrchestratorE
     Ok(script::gh_function(&prefix))
 }
 
-/// Plain step without an id.
 pub(crate) fn plain(step: Step) -> PublishStep {
     PublishStep { id: None, step }
 }
 
-/// `sh -c` step running a fixed script with optional token binding.
 pub(crate) fn script_step(
     name: &str,
     body: String,
@@ -272,13 +223,11 @@ pub(crate) fn script_step(
     )?)
 }
 
-/// Only-for-this-bundle step condition on the parsed tag.
 fn when_artifact(mut step: Step, id: &str) -> Step {
     step.condition = Some(format!("steps.{TAG_STEP}.outputs.artifact == '{id}'"));
     step
 }
 
-/// Authority: tag grammar, annotation, ancestry, `Required`, versions.
 fn authority_job(inputs: &Inputs<'_>, gh: &str) -> Result<PublishJobSpec, OrchestratorError> {
     let artifacts = inputs.tag_artifacts();
     let ids: Vec<&str> = artifacts.iter().map(|(id, _)| *id).collect();
@@ -348,7 +297,6 @@ fn authority_job(inputs: &Inputs<'_>, gh: &str) -> Result<PublishJobSpec, Orches
     })
 }
 
-/// Common job shell for the three bundle roles.
 pub(crate) fn bundle_job(
     inputs: &Inputs<'_>,
     role: PublishRole,

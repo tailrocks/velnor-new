@@ -1,4 +1,3 @@
-//! Strict upstream URL admission for the supported backend families.
 use super::recipe_validation::safe_name;
 use crate::config::{
     CheckPlatform, QualifiedCargoInstallation, QualifiedToolBackend, QualifiedToolOptions,

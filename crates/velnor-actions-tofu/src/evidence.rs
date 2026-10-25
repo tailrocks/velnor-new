@@ -1,11 +1,3 @@
-//! Dialect evidence: STRONG / WEAK / CONFLICT classification.
-//!
-//! Filename and toolname signals (E1–E3) classify without content;
-//! E4 content signals (`required_version` + legacy CLI refs, and
-//! terraform-only version constraints) need bounded file text via
-//! [`classify_with_contents`]. `.terraform/` working dirs are shared
-//! by both dialects, so they never count as markers.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::content::signals_for;
@@ -13,68 +5,39 @@ use crate::effective::{Dialect, config_shape, effective_set};
 use crate::modules::{ModuleSource, SourceClass, classify_literal, resolve_local_target};
 use crate::parser::{parse_json, parse_native};
 
-/// Mise tool selecting `OpenTofu` (STRONG E3).
 pub const MISE_OPENTOFU_TOOL: &str = "opentofu";
-/// Mise tool selecting Terraform (CONFLICT marker).
 pub const MISE_TERRAFORM_TOOL: &str = "terraform";
-/// Terraform CLI config directory marker (any depth).
 const TERRAFORM_D_SEGMENT: &str = ".terraform.d";
-/// Sightings kept per signal class before a `more:` overflow entry.
 const MAX_SIGHTINGS: usize = 8;
 
-/// Classified dialect evidence.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EvidenceLevel {
-    /// No tofu evidence (terraform markers alone land here too).
     None,
-    /// `.tf`/`.tf.json` only: ambiguous, never silently claimed.
     Weak,
-    /// Tofu intent: native spellings or the Mise opentofu tool.
     Strong,
-    /// Terraform markers alongside STRONG evidence: hard error.
     Conflict,
 }
 
-/// Classified evidence plus advisory root inference.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Evidence {
-    /// Evidence level.
     pub level: EvidenceLevel,
-    /// Stable `class:detail` signals, capped with `more:` overflow.
     pub signals: Vec<String>,
-    /// Advisory inferred roots (config spellings, `.` for the root).
-    ///
-    /// Set only when exactly one non-module directory holds
-    /// effective config (local module targets parsed from contents
-    /// never infer; malformed contents infer nothing).
     pub inferred: Vec<String>,
 }
 
-/// Plan-visible tofu note.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TofuNote {
-    /// Stack suppressed via `stacks.ignore`.
     Ignored,
-    /// Table-less evidence advisory (never a detection claim).
     Advisory(Advisory),
 }
 
-/// Table-less evidence advisory for plan output.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Advisory {
-    /// True for STRONG, false for WEAK.
     pub strong: bool,
-    /// Evidence signals.
     pub signals: Vec<String>,
-    /// Advisory inferred roots (empty unless unambiguous).
     pub inferred: Vec<String>,
 }
 
-/// True when flattened mise.toml values select `tool`.
-///
-/// Matches `tools.<tool>` and `tools.<tool>.<attr>` keys (scalar and
-/// table tool forms). Lock entries are not consulted: lock internals
-/// belong to the Mise adapter (a later task owns that API).
 #[must_use]
 pub fn mise_tool_selected(values: &BTreeMap<String, String>, tool: &str) -> bool {
     let exact = format!("tools.{tool}");
@@ -84,22 +47,11 @@ pub fn mise_tool_selected(values: &BTreeMap<String, String>, tool: &str) -> bool
         .any(|key| key == &exact || key.starts_with(&nested))
 }
 
-/// Classify repo-wide evidence from index files plus mise selections.
-///
-/// Filename/toolname signals only; content stays unread. The caller
-/// handles the explicit-table (E1) path separately; this classifies
-/// the table-less case only.
 #[must_use]
 pub fn classify(files: &[String], mise_values: &BTreeMap<String, String>) -> Evidence {
     classify_with_contents(files, &BTreeMap::new(), mise_values)
 }
 
-/// Classify with E4 content signals from bounded `contents` text.
-///
-/// `contents` maps repo-relative config paths to bounded text;
-/// malformed entries contribute no signals (no table, no claim).
-/// `required_version` TOGETHER with a legacy ref is STRONG;
-/// terraform-only pins are markers (CONFLICT when STRONG holds).
 #[must_use]
 pub fn classify_with_contents(
     files: &[String],
@@ -157,7 +109,6 @@ pub fn classify_with_contents(
     } else if strong {
         EvidenceLevel::Strong
     } else if markers {
-        // Markers without STRONG: terraform's territory, not tofu's.
         EvidenceLevel::None
     } else if !legacy.is_empty() {
         EvidenceLevel::Weak
@@ -186,7 +137,6 @@ pub fn classify_with_contents(
     }
 }
 
-/// Plan note for displayable levels; CONFLICT errors, `None` stays silent.
 #[must_use]
 pub fn plan_note(evidence: &Evidence) -> Option<TofuNote> {
     match evidence.level {
@@ -204,7 +154,6 @@ pub fn plan_note(evidence: &Evidence) -> Option<TofuNote> {
     }
 }
 
-/// Push capped `class:detail` sightings plus a `more:` overflow entry.
 fn push_sightings(signals: &mut Vec<String>, class: &str, paths: &[String]) {
     for path in paths.iter().take(MAX_SIGHTINGS) {
         signals.push(format!("{class}:{path}"));
@@ -214,11 +163,6 @@ fn push_sightings(signals: &mut Vec<String>, class: &str, paths: &[String]) {
     }
 }
 
-/// Advisory roots: the single non-module effective-config dir, if any.
-///
-/// Local module targets parsed from `contents` never infer: only a
-/// lone surviving caller dir advises. Malformed contents or escaping
-/// sources abandon inference (no table, no claim).
 fn infer_roots(files: &[String], contents: &BTreeMap<String, String>) -> Vec<String> {
     let survivors = effective_set(files);
     let dirs: BTreeSet<&str> = survivors
@@ -240,7 +184,6 @@ fn infer_roots(files: &[String], contents: &BTreeMap<String, String>) -> Vec<Str
     Vec::new()
 }
 
-/// Local module targets across `contents`; `None` abandons inference.
 fn module_targets(contents: &BTreeMap<String, String>) -> Option<BTreeSet<String>> {
     let mut targets = BTreeSet::new();
     for (path, text) in contents {

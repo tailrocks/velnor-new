@@ -1,18 +1,3 @@
-//! Closed required-evidence inventory for `merge-v1` (P01).
-//!
-//! The finalized workflow declares its required validators through the
-//! `needs` channel (see `merge_request`); the plan declares its matrix
-//! legs and obligation dispositions. Merge proves the full expected set
-//! exists instead of judging supplied evidence alone: validator
-//! conclusions must cover the declared inventory exactly (the candidate
-//! job's conclusion is its qualification evidence when candidate mode
-//! gates), and every non-execute disposition must carry verifiable
-//! proof. Empty or partial evidence is `planning_failed`, never success.
-//!
-//! Diagnostics use the contract's closed `miss_reason` tokens only, so
-//! every diagnostic report validates. Assembly details stay in the
-//! request; the verdict maps each failure class to its token.
-
 use std::collections::BTreeSet;
 
 use velnor_actions_contract::{
@@ -23,10 +8,6 @@ use super::MergeRequest;
 use crate::cover::Signals;
 use crate::internal::internal_contract;
 
-/// Enforce the closed inventory: jobs and obligation proofs.
-///
-/// Assembly failures recorded in the request fail here too, so a
-/// diagnostic verdict always explains the failed evidence class.
 pub(crate) fn check_required_evidence(
     plan: &Plan,
     request: &MergeRequest,
@@ -41,7 +22,6 @@ pub(crate) fn check_required_evidence(
     }
 }
 
-/// Exact-set validator conclusions; an empty inventory never passes.
 fn check_job_inventory(
     request: &MergeRequest,
     signals: &mut Signals,
@@ -78,12 +58,6 @@ fn check_job_inventory(
     }
 }
 
-/// Every non-execute disposition carries verifiable proof.
-///
-/// Task-cache reuse has no restore-proof channel yet (P04), so any
-/// reuse decision fails closed here. The match stays
-/// exhaustive so a future decision variant fails to compile here
-/// instead of slipping through unchecked.
 fn check_obligation_proofs(
     plan: &Plan,
     signals: &mut Signals,
@@ -100,10 +74,6 @@ fn check_obligation_proofs(
     }
 }
 
-/// Reported validator outcomes: observed results plus `missing` markers.
-///
-/// The final report mirrors the declared inventory exactly so consumers
-/// see which validators never reported, not just the failures.
 pub(crate) fn reported_job_results(request: &MergeRequest) -> Vec<RequiredJobResult> {
     let mut reported = request.required_jobs.clone();
     for id in &request.required_job_ids {
@@ -118,10 +88,6 @@ pub(crate) fn reported_job_results(request: &MergeRequest) -> Vec<RequiredJobRes
     reported
 }
 
-/// Diagnostic verdict when no usable plan exists (P01).
-///
-/// Missing, unparsable, and mismatched plans all land here with the
-/// mapped failure tokens instead of dying without a report.
 pub(crate) fn diagnostic_without_plan(
     request: &MergeRequest,
     tokens: BTreeSet<String>,
@@ -135,11 +101,6 @@ pub(crate) fn diagnostic_without_plan(
     Ok(report)
 }
 
-/// Map assembly failure details to closed verdict tokens.
-///
-/// Missing channel declarations are `no_entry`; missing evidence files
-/// are `source_missing`; every other assembly failure corrupts the
-/// evidence set. Unknown details fail closed as corrupt, never silent.
 fn assembly_tokens(errors: &[String]) -> BTreeSet<String> {
     errors
         .iter()

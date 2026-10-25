@@ -1,73 +1,58 @@
-//! Typed errors for jactionlint configuration and action-schema validation.
-
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use velnor_actions_contract::ContractError;
 
-/// Errors for jactionlint config rendering, capability gates, pinned action
-/// refs, overrides, and action inputs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ActionlintError {
-    /// Generator version for the config header is missing or unsafe.
     InvalidGeneratorVersion {
-        /// Machine-readable problem code plus detail.
         problem: String,
     },
-    /// A `config-variables` entry is not a valid variable name.
+
     InvalidConfigVariable {
-        /// Rejected variable name.
         name: String,
     },
-    /// A `uses:` value names an action outside the pinned allowlist.
+
     UnknownAction {
-        /// Rejected `uses:` value.
         uses: String,
     },
-    /// A `uses:` value has a malformed pin (non-SHA ref, bad comment).
+
     InvalidPin {
-        /// Rejected `uses:` value.
         uses: String,
-        /// Machine-readable problem code plus detail.
+
         problem: String,
     },
-    /// A per-project pin override failed allowlist/catalog validation.
+
     OverrideRejected {
-        /// Override key (`owner/repo[/path]`).
         action: String,
-        /// Machine-readable problem code plus detail.
+
         problem: String,
     },
-    /// An action input is not in the action's allowlisted schema.
+
     UnknownActionInput {
-        /// Action key (`owner/repo[/path]`).
         action: String,
-        /// Rejected input name.
+
         input: String,
     },
-    /// A required action input is missing.
+
     MissingActionInput {
-        /// Action key (`owner/repo[/path]`).
         action: String,
-        /// Missing input name.
+
         input: String,
     },
-    /// An action input value is empty or multi-line.
+
     InvalidActionInput {
-        /// Action key (`owner/repo[/path]`).
         action: String,
-        /// Input name.
+
         input: String,
-        /// Machine-readable problem code plus detail.
+
         problem: String,
     },
-    /// Requested workflow syntax is not qualified for the pinned jactionlint.
+
     UnsupportedSyntax {
-        /// Requested syntax identifier.
         syntax: &'static str,
     },
-    /// A runner label could break the generated YAML block.
+
     InvalidRunnerLabel {
-        /// Rejected label (empty when unset).
         label: String,
     },
 }
@@ -108,7 +93,6 @@ impl Display for ActionlintError {
 impl std::error::Error for ActionlintError {}
 
 impl ActionlintError {
-    /// Config-file problem code for the contract error mapping.
     fn config_problem(&self) -> String {
         self.to_string()
     }

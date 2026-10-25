@@ -1,48 +1,20 @@
-//! Bounded HCL/JSON structural facade over `hcl-rs` + `serde_json` (S8).
-//!
-//! `hcl-rs` offers no byte/alloc/count caps (`from_reader` reads
-//! unbounded), so every bound here is facade-owned: callers cap bytes
-//! before calling (never `from_reader` on an untrusted stream), and
-//! the facade budgets walked nodes plus nesting depth. Malformed
-//! input yields a typed [`ParseError`], never an empty model. No
-//! expression evaluation happens: only block shapes, `required_version`
-//! literals, and string-literal scans cross the facade.
-
 use std::fmt;
 
 use crate::modules::{ModuleDecl, source_from_native};
 
-/// Maximum bytes of one parsed file.
 pub const MAX_FILE_BYTES: u64 = 1_048_576;
-/// Maximum files analyzed for one unit.
 pub const MAX_FILES_PER_UNIT: usize = 1024;
-/// Maximum structural nodes walked per file.
 pub const MAX_NODES: usize = 50_000;
-/// Maximum nesting depth walked per file.
 pub const MAX_DEPTH: usize = 64;
-/// Maximum `required_version` literals kept per file.
 pub const MAX_VERSIONS_PER_FILE: usize = 64;
-/// Maximum characters kept in one diagnostic.
 pub const MAX_DIAGNOSTIC_CHARS: usize = 160;
 
-/// Typed structural parse failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParseError {
-    /// Input exceeds [`MAX_FILE_BYTES`].
-    TooLarge {
-        /// Observed byte length.
-        bytes: u64,
-    },
-    /// Parser rejected the input (single-line, capped message).
-    Syntax {
-        /// First line of the parser message, capped.
-        message: String,
-    },
-    /// Nesting exceeds [`MAX_DEPTH`].
+    TooLarge { bytes: u64 },
+    Syntax { message: String },
     TooDeep,
-    /// Walked nodes exceed [`MAX_NODES`].
     TooManyNodes,
-    /// JSON root is not an object.
     NotObject,
 }
 
@@ -60,37 +32,21 @@ impl fmt::Display for ParseError {
 
 impl std::error::Error for ParseError {}
 
-/// One top-level block identity.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlockModel {
-    /// Block type (`variable`, `resource`, ...).
     pub kind: String,
-    /// Block labels in order.
     pub labels: Vec<String>,
 }
 
-/// Structural model of one config file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileModel {
-    /// Top-level blocks in file order.
     pub blocks: Vec<BlockModel>,
-    /// `required_version` string literals in encounter order.
     pub required_versions: Vec<String>,
-    /// Whether any string literal carries a legacy `terraform` token.
     pub has_legacy_ref: bool,
-    /// Top-level `module` declarations with parsed sources, in file order.
     pub modules: Vec<ModuleDecl>,
-    /// Top-level `provider` hash counts, in file order (native only:
-    /// lockfiles are HCL, so the JSON walk leaves this empty).
     pub provider_hash_counts: Vec<crate::lockfile::ProviderHashCount>,
 }
 
-/// Parse one native (`.tf`/`.tofu`) file structurally.
-///
-/// # Errors
-///
-/// Returns [`ParseError`] for oversize, syntactically invalid, or
-/// over-budget input.
 pub fn parse_native(text: &str) -> Result<FileModel, ParseError> {
     check_size(text)?;
     let body = hcl::parse(text).map_err(|err| ParseError::Syntax {
@@ -101,12 +57,6 @@ pub fn parse_native(text: &str) -> Result<FileModel, ParseError> {
     Ok(walk.finish())
 }
 
-/// Parse one JSON (`.tf.json`/`.tofu.json`) file structurally.
-///
-/// # Errors
-///
-/// Returns [`ParseError`] for oversize, syntactically invalid,
-/// non-object-root, or over-budget input.
 pub fn parse_json(text: &str) -> Result<FileModel, ParseError> {
     check_size(text)?;
     let value: serde_json::Value =
@@ -119,7 +69,6 @@ pub fn parse_json(text: &str) -> Result<FileModel, ParseError> {
     Ok(walk.finish())
 }
 
-/// Reject input over the byte cap.
 fn check_size(text: &str) -> Result<(), ParseError> {
     let bytes = u64::try_from(text.len()).unwrap_or(u64::MAX);
     if bytes > MAX_FILE_BYTES {
@@ -128,7 +77,6 @@ fn check_size(text: &str) -> Result<(), ParseError> {
     Ok(())
 }
 
-/// First line of `text`, capped to [`MAX_DIAGNOSTIC_CHARS`].
 fn single_line(text: &str) -> String {
     text.lines()
         .next()
@@ -138,14 +86,6 @@ fn single_line(text: &str) -> String {
         .collect()
 }
 
-/// True when `text` carries a legacy `terraform` token.
-///
-/// The token must stand alone: neither side may be ASCII
-/// alphanumeric, `_`, `.`, or `-`. That admits CLI invocations
-/// (`terraform plan`) while excluding shared-registry hosts
-/// (`registry.terraform.io`), native identifiers
-/// (`terraform.workspace` never reaches here: only string literals
-/// are scanned), and suffixed names (`terraform_data`).
 #[must_use]
 pub fn has_legacy_ref_text(text: &str) -> bool {
     let bytes = text.as_bytes();
@@ -162,16 +102,10 @@ pub fn has_legacy_ref_text(text: &str) -> bool {
     false
 }
 
-/// True when the optional neighbor byte continues a token.
 fn is_token_char(byte: Option<&u8>) -> bool {
     byte.is_some_and(|next| next.is_ascii_alphanumeric() || matches!(next, b'_' | b'.' | b'-'))
 }
 
-/// Strip `${...}` interpolations and `%{...}` directives from template text.
-///
-/// Brace nesting is honored; an unbalanced opener strips to the end.
-/// Only literal spans survive, so identifier references inside
-/// interpolations never scan as legacy refs.
 #[must_use]
 pub fn strip_template_spans(text: &str) -> String {
     let bytes = text.as_bytes();
@@ -194,7 +128,6 @@ pub fn strip_template_spans(text: &str) -> String {
     kept
 }
 
-/// Index just past the span opened before `index` (nesting-aware).
 fn skip_span(bytes: &[u8], mut index: usize) -> usize {
     let mut depth = 1;
     while index < bytes.len() && depth > 0 {
@@ -208,24 +141,16 @@ fn skip_span(bytes: &[u8], mut index: usize) -> usize {
     index
 }
 
-/// Budgeted structural walk shared by both dialects.
 pub(crate) struct Walk {
-    /// Nodes charged so far.
     nodes: usize,
-    /// Blocks collected.
     pub(crate) blocks: Vec<BlockModel>,
-    /// Module declarations collected.
     pub(crate) modules: Vec<ModuleDecl>,
-    /// Version literals collected.
     versions: Vec<String>,
-    /// Legacy token observed.
     legacy: bool,
-    /// Provider hash counts collected (native walk only).
     provider_hashes: Vec<crate::lockfile::ProviderHashCount>,
 }
 
 impl Walk {
-    /// Empty walk.
     fn new() -> Self {
         Self {
             nodes: 0,
@@ -237,7 +162,6 @@ impl Walk {
         }
     }
 
-    /// Finished model.
     fn finish(self) -> FileModel {
         FileModel {
             blocks: self.blocks,
@@ -256,21 +180,18 @@ impl Walk {
         Ok(())
     }
 
-    /// Record one string literal for the legacy scan.
     pub(crate) fn literal(&mut self, text: &str) {
         if !self.legacy && has_legacy_ref_text(&strip_template_spans(text)) {
             self.legacy = true;
         }
     }
 
-    /// Record one `required_version` literal, capped.
     pub(crate) fn version(&mut self, text: &str) {
         if self.versions.len() < MAX_VERSIONS_PER_FILE {
             self.versions.push(text.to_owned());
         }
     }
 
-    /// Walk one HCL body; `top` marks the file top level.
     fn body(&mut self, body: &hcl::Body, depth: usize, top: bool) -> Result<(), ParseError> {
         if depth > MAX_DEPTH {
             return Err(ParseError::TooDeep);
@@ -312,7 +233,6 @@ impl Walk {
         Ok(())
     }
 
-    /// Collect `required_version` string literals from one `terraform` block.
     fn terraform_block(&mut self, block: &hcl::Block) {
         for attribute in block.body().attributes() {
             if attribute.key.as_str() == "required_version"
@@ -323,7 +243,6 @@ impl Walk {
         }
     }
 
-    /// Walk one HCL expression for string literals.
     fn expression(&mut self, expr: &hcl::Expression, depth: usize) -> Result<(), ParseError> {
         if depth > MAX_DEPTH {
             return Err(ParseError::TooDeep);
@@ -376,7 +295,6 @@ impl Walk {
         Ok(())
     }
 
-    /// Walk one JSON object root (implemented in `parser_json`).
     fn json_root(
         &mut self,
         root: &serde_json::Map<String, serde_json::Value>,

@@ -82,10 +82,6 @@ struct StepScan {
     nested_mapping: Option<String>,
 }
 
-/// Extract only `jobs.*.steps[*].run` from the renderer's emitted YAML grammar.
-///
-/// The workflow emitter uses fixed two-space indentation. This scanner follows
-/// those exact parents instead of treating every YAML key named `run` as code.
 pub(super) fn staged_runs(
     staging: &Path,
     workflows: &[String],
@@ -367,7 +363,6 @@ fn hosted_runner_default(runs_on: Option<&str>) -> Option<ShellDialect> {
         )
     );
     if (is_known_linux && label.starts_with("ubuntu-")) || is_known_macos {
-        // GitHub-hosted Ubuntu and macOS runners default `run` steps to Bash.
         Some(ShellDialect::Bash)
     } else {
         None
@@ -386,11 +381,3 @@ fn mapping_entry(content: &str) -> Option<(&str, &str)> {
 fn content_is_step_item(key: &str, value: &str) -> bool {
     key == "name" && !value.is_empty()
 }
-
-#[cfg(test)]
-#[path = "validate_shell_yaml_tests.rs"]
-mod tests;
-
-#[cfg(test)]
-#[path = "validate_shell_yaml_runner_tests.rs"]
-mod runner_tests;

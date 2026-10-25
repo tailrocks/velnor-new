@@ -1,64 +1,30 @@
-//! Read-only `mise.lock` hygiene audit (G2).
-//!
-//! Verifies the committed lock is complete and well-formed for local `mise install`:
-//! every emitted install spec must resolve to a lock entry, and a verifiable entry
-//! with a CI-platform hole or corrupt checksum blocks generation.
-//! CI installs run `--no-config` isolated; lock checksums are TOFU hygiene only.
-//! Core backends (`rust`) emit no platform checksums (`NoChecksums` is advisory).
-
 use std::collections::BTreeMap;
 
 use crate::catalog::{PinnedTool, ToolCatalog};
 
-/// One locked tool: pinned version plus per-platform checksums.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LockEntry {
-    /// Locked version string.
     pub version: String,
-    /// Mise platform (`linux-x64`) to raw `checksum` value.
     pub checksums: BTreeMap<String, String>,
 }
 
-/// Parsed `mise.lock`: config tool key to locked entry.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MiseLockfile {
-    /// Locked entries keyed by config tool key.
     pub tools: BTreeMap<String, LockEntry>,
-    /// All `[[tools.<key>]]` blocks per tool key in declaration order.
     pub entries: BTreeMap<String, Vec<LockEntry>>,
 }
 
-/// Verification coverage of one installed tool.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InstallCoverage {
-    /// Locked version matches the pin with a well-formed CI checksum.
     Verified,
-    /// Locked version differs from the pin (stale lock, advisory).
-    VersionDrift {
-        /// Version the lock pins.
-        locked: String,
-    },
-    /// No lock entry under any key for this tool (advisory).
+    VersionDrift { locked: String },
     MissingEntry,
-    /// Pin-matching entry carries no checksums at all (core backends
-    /// like `rust` emit none; legacy formats neither — advisory).
     NoChecksums,
-    /// Pin-matching entry checksums other platforms but not the CI
-    /// platform (blocking: regenerate with `mise lock`).
-    MissingPlatform {
-        /// Platforms the entry does cover, sorted.
-        locked_platforms: Vec<String>,
-    },
-    /// Pin-matching CI checksum is malformed (blocking: mise fails
-    /// the install unconditionally, so generation must fail first).
-    CorruptChecksum {
-        /// Observed checksum value.
-        observed: String,
-    },
+    MissingPlatform { locked_platforms: Vec<String> },
+    CorruptChecksum { observed: String },
 }
 
 impl InstallCoverage {
-    /// True for the fail-closed variants (platform hole, corrupt shape).
     #[must_use]
     pub fn is_blocking(&self) -> bool {
         matches!(
@@ -68,7 +34,6 @@ impl InstallCoverage {
     }
 }
 
-/// Mise platform for a Rust target triple, when mise names it.
 #[must_use]
 pub fn mise_platform_for_target(triple: &str) -> Option<&'static str> {
     match triple {
@@ -79,12 +44,6 @@ pub fn mise_platform_for_target(triple: &str) -> Option<&'static str> {
     }
 }
 
-/// Parse `mise.lock` v3 bytes into locked entries.
-///
-/// Strict lines, lenient tables: structural garbage fails the whole
-/// parse (advisory — mise itself warns and proceeds unverified), while
-/// unknown tables and keys are ignored for forward compatibility.
-/// # Errors
 pub fn parse_mise_lockfile(text: &str) -> Result<MiseLockfile, String> {
     let mut lock = MiseLockfile::default();
     let mut tool: Option<String> = None;
@@ -166,27 +125,18 @@ pub fn parse_mise_lockfile(text: &str) -> Result<MiseLockfile, String> {
     Ok(lock)
 }
 
-/// One parsed section header.
 enum Header {
-    /// `[[tools.<key>]]` entry.
     Tool(String),
-    /// `[tools.<key>."platforms.<platform>"]` checksums.
     Platform(String, String),
-    /// `[tools.<key>.options]` metadata scoped to the current tool entry.
     ToolOptions(String),
-    /// Anything else (ignored for forward compatibility).
     Other,
 }
 
-/// Parsed value shape for one lock setting.
 enum SettingValue {
-    /// Quoted strings are the only valid values for modeled lock fields.
     Quoted(String),
-    /// Supported non-string TOML scalar/array values are ignored on extension keys.
     Other,
 }
 
-/// Parse a `[`/`[[` header line.
 fn parse_header(code: &str, index: usize) -> Result<Option<Header>, String> {
     if !code.starts_with('[') {
         return Ok(None);
@@ -224,7 +174,6 @@ fn parse_header(code: &str, index: usize) -> Result<Option<Header>, String> {
     )))
 }
 
-/// Strip one pair of double quotes, if present.
 fn unquote(key: &str, index: usize) -> Result<String, String> {
     if !key.starts_with('"') {
         if key.is_empty() {
@@ -238,7 +187,6 @@ fn unquote(key: &str, index: usize) -> Result<String, String> {
     Err(line_problem(index, "unterminated_key"))
 }
 
-/// Split one supported TOML setting while preserving its value shape.
 fn split_setting(code: &str, index: usize) -> Result<(&str, SettingValue), String> {
     let (key, value) = code
         .split_once('=')
@@ -268,7 +216,6 @@ fn split_setting(code: &str, index: usize) -> Result<(&str, SettingValue), Strin
     }
 }
 
-/// Require a string value for a modeled field such as `version` or `checksum`.
 fn expect_quoted_string(value: SettingValue, index: usize) -> Result<String, String> {
     match value {
         SettingValue::Quoted(value) => Ok(value),
@@ -276,13 +223,10 @@ fn expect_quoted_string(value: SettingValue, index: usize) -> Result<String, Str
     }
 }
 
-/// `line N: problem` detail with one-based line numbers.
 fn line_problem(index: usize, problem: &str) -> String {
     format!("line {}: {problem}", index.saturating_add(1))
 }
 
-/// Lock keys a catalog tool may appear under: the registry name plus
-/// the backend-qualified spec prefix (Nextest's aqua path).
 fn lock_keys_for(tool: PinnedTool, catalog: &ToolCatalog) -> Vec<String> {
     let mut keys = vec![tool.tool_name().to_owned()];
     let spec = catalog.tool_spec(tool);
@@ -294,19 +238,13 @@ fn lock_keys_for(tool: PinnedTool, catalog: &ToolCatalog) -> Vec<String> {
     keys
 }
 
-/// One emitted install to audit: display name, expected pin version,
-/// and the exact lock key the emitted spec addresses.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InstallSubject {
-    /// `tool@pin` display name for findings.
     pub display: String,
-    /// Pin version the lock entry must carry.
     pub expected_version: String,
-    /// Lock key the emitted spec addresses.
     pub lock_key: String,
 }
 
-/// Resolve an emitted install spec (`key@version`) to its audit subject.
 #[must_use]
 pub fn subject_for_install_spec(spec: &str, catalog: &ToolCatalog) -> Option<InstallSubject> {
     let (key, version) = spec.split_once('@')?;
@@ -328,19 +266,16 @@ pub fn subject_for_install_spec(spec: &str, catalog: &ToolCatalog) -> Option<Ins
     })
 }
 
-/// True for a checksum shape mise can enforce (`scheme:hex`).
 fn is_enforceable_checksum(value: &str) -> bool {
     value
         .split_once(':')
         .is_some_and(|(scheme, hex)| !scheme.is_empty() && !hex.is_empty() && is_hex(hex))
 }
 
-/// True for nonempty hex in either case (mise accepts uppercase).
 fn is_hex(text: &str) -> bool {
     !text.is_empty() && text.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
-/// Audit emitted installs against the parsed lock for one platform.
 #[must_use]
 pub fn audit_install_coverage(
     lock: &MiseLockfile,
@@ -353,7 +288,6 @@ pub fn audit_install_coverage(
         .collect()
 }
 
-/// Coverage of one install: entry match, version match, CI checksum shape.
 fn coverage_for_subject(
     lock: &MiseLockfile,
     subject: &InstallSubject,

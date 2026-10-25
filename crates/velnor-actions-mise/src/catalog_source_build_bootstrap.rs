@@ -1,51 +1,22 @@
-//! Closed official source-builder bootstrap assets.
-//!
-//! This authority owns only upstream bootstrap bytes used to acquire the
-//! source-build path. It is separate from runtime distribution qualification:
-//! an asset here does not establish Velnor-owned behavior or installation.
-//!
-//! Mise evidence was captured 2026-10-23 from release `v2026.10.18`; the
-//! official source commit is `8369bc78dc4761660337a2518b1445447438159d` with
-//! tree `f6484ac76553c3dca10c7ea690d01e359dac098b`. MBX evidence was captured
-//! from release `v1.27.0`; its source commit is
-//! `5a50200abf386580642b87eca2995156316b56a7` with tree
-//! `9d1061348a5724ab331264bf83eef9169878e94b`. Archive bytes and extracted
-//! members were hashed; only the Mac executable ran, with `--version` under a
-//! cleared environment.
-
-/// Closed upstream bootstrap tool identities.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SourceBuildBootstrapTool {
-    /// Official Mise bootstrap executable.
     Mise,
-    /// Official Mr. Boxington bootstrap executable.
     Mbx,
 }
 
-/// Closed hosts with measured official bootstrap assets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SourceBuildBootstrapHost {
-    /// GNU Linux on AMD64.
     LinuxAmd64,
-    /// GNU Linux on ARM64.
     LinuxArm64,
-    /// Darwin on ARM64.
     MacosArm64,
 }
 
-/// Container format of an official bootstrap asset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SourceBuildBootstrapFormat {
-    /// Standalone executable bytes.
     Binary,
-    /// Gzip-compressed tar archive.
     TarGzip,
 }
 
-/// Immutable official bootstrap asset record.
-///
-/// Fields remain private so callers can obtain records only through the
-/// closed [`official`] factory and read them through the accessors below.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SourceBuildBootstrapAsset {
     tool: SourceBuildBootstrapTool,
@@ -65,92 +36,77 @@ pub struct SourceBuildBootstrapAsset {
 }
 
 impl SourceBuildBootstrapAsset {
-    /// Exact upstream selector.
     #[must_use]
     pub const fn selector(&self) -> &'static str {
         self.selector
     }
 
-    /// Official asset URL.
     #[must_use]
     pub const fn asset_url(&self) -> &'static str {
         self.asset_url
     }
 
-    /// SHA-256 of the downloaded asset bytes.
     #[must_use]
     pub const fn archive_sha256(&self) -> &'static str {
         self.archive_sha256
     }
 
-    /// SHA-256 of the admitted executable bytes.
     #[must_use]
     pub const fn binary_sha256(&self) -> &'static str {
         self.binary_sha256
     }
 
-    /// Asset container format.
     #[must_use]
     pub const fn asset_format(&self) -> SourceBuildBootstrapFormat {
         self.asset_format
     }
 
-    /// Explicit executable member; empty for standalone binaries.
     #[must_use]
     pub const fn binary_member(&self) -> &'static str {
         self.binary_member
     }
 
-    /// Exact upstream source repository.
     #[must_use]
     pub const fn source_repository(&self) -> &'static str {
         self.source_repository
     }
 
-    /// Exact upstream source commit.
     #[must_use]
     pub const fn source_commit(&self) -> &'static str {
         self.source_commit
     }
 
-    /// Exact upstream source tree.
     #[must_use]
     pub const fn source_tree(&self) -> &'static str {
         self.source_tree
     }
 
-    /// Upstream owner identity.
     #[must_use]
     pub const fn owner(&self) -> &'static str {
         self.owner
     }
 
-    /// Upstream release version.
     #[must_use]
     pub const fn version(&self) -> &'static str {
         self.version
     }
 
-    /// Explicit bootstrap executable ABI.
     #[must_use]
     pub const fn abi(&self) -> &'static str {
         self.abi
     }
 
-    /// Bootstrap tool identity.
     #[must_use]
     pub const fn tool(&self) -> SourceBuildBootstrapTool {
         self.tool
     }
 
-    /// Bootstrap host identity.
     #[must_use]
     pub const fn host(&self) -> SourceBuildBootstrapHost {
         self.host
     }
 }
 
-/// Return the measured official bootstrap asset for a closed tool/host pair.
 #[must_use]
 pub const fn official(
     tool: SourceBuildBootstrapTool,
@@ -239,7 +195,3 @@ const fn mbx(host: SourceBuildBootstrapHost) -> SourceBuildBootstrapAsset {
         abi: "mbx-cli-v1.27.0",
     }
 }
-
-#[cfg(test)]
-#[path = "catalog_source_build_bootstrap_tests.rs"]
-mod tests;

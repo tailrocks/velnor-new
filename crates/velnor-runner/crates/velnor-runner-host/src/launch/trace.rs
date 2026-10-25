@@ -1,5 +1,3 @@
-//! Stderr lines for `VELNOR_HTTPS_TRACE`. No tokens and no JIT.
-
 use velnor_runner_github::{InnerKind, Poll, QueueSession};
 
 pub(super) fn session(session: &QueueSession) {

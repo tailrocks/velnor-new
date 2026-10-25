@@ -1,5 +1,3 @@
-//! Source-qualified Homebrew formula updater binding.
-
 use super::{config_error, valid_repo_path};
 use crate::{
     ContractError,
@@ -8,21 +6,19 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
-/// A repository-owned Mise task allowed to update a tap formula.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TapUpdaterBinding {
-    /// Repository-owned Mise task; never arbitrary argv.
     pub task: String,
-    /// Exact Mise configuration and task working directory.
+
     pub source: MiseTaskSource,
-    /// Qualified task placement from the existing named-check contract.
+
     pub runner: CheckRunner,
-    /// Complete tracked task closure: Mise config/includes, scripts, and inputs.
+
     pub inputs: Vec<String>,
-    /// Tool IDs resolved only from the captured tap Mise config and lock.
+
     pub tools: Vec<String>,
-    /// Native promotion task runtime, bounded to one through five minutes.
+
     #[serde(default = "default_updater_timeout")]
     pub timeout_minutes: u32,
 }
@@ -32,7 +28,6 @@ fn default_updater_timeout() -> u32 {
 }
 
 impl TapUpdaterBinding {
-    /// Validate task identity, source closure, tool names, and runtime bound.
     pub(super) fn validate(&self, file: &str, parent: &str) -> Result<(), ContractError> {
         let bad = |field, problem| config_error(file, parent, field, problem);
         if !is_valid_mise_task_name(&self.task) || self.task.len() > 128 {

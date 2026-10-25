@@ -1,5 +1,3 @@
-//! Caller and reusable-workflow YAML for the product-release DAG.
-
 use crate::yaml::Yaml;
 use velnor_actions_contract::JobTimeout;
 

@@ -1,12 +1,3 @@
-//! Private-source credential binding gate (HD-7).
-//!
-//! The App installation token and the npm registry read token may be bound
-//! only in the Velnor-owned fetch and revoke steps; the only other place a
-//! secret may be named is the mint step's `private-key` input. Everything
-//! else fails closed as `credential_binding_outside_private_fetch`.
-//!
-//! Declared from `support_tokens.rs` (`#[path]`, no `lib.rs` edit).
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
@@ -16,7 +7,6 @@ use velnor_actions_contract::{
 
 use crate::{RenderError, toolchain_env::STEP_PRIVATE_FETCH_ALLOWLIST};
 
-/// Mint inputs the generator may emit; anything else is a shape error.
 const MINT_INPUTS: [&str; 6] = [
     "client-id",
     "private-key",
@@ -29,7 +19,6 @@ const MINT_INPUTS: [&str; 6] = [
 static EMPTY_ENV: std::sync::LazyLock<BTreeMap<String, String>> =
     std::sync::LazyLock::new(BTreeMap::new);
 
-/// True for the roles allowed to bind a private-source credential.
 pub(super) fn is_private_binding_role(role: Option<StepRole>) -> bool {
     matches!(
         role,
@@ -47,7 +36,6 @@ fn step_env(step: &Step) -> &BTreeMap<String, String> {
     }
 }
 
-/// Every text a step could carry a token expression in.
 fn step_texts(step: &Step) -> Vec<&str> {
     let mut texts: Vec<&str> = step_env(step).values().map(String::as_str).collect();
     match &step.kind {
@@ -59,8 +47,6 @@ fn step_texts(step: &Step) -> Vec<&str> {
     texts
 }
 
-/// Reject a private-source binding outside its two steps, and require the
-/// exact binding inside them.
 pub(super) fn check_private_binding(id: &str, step: &Step) -> Result<(), RenderError> {
     let outside = |name: &str| {
         RenderError::InvalidWorkflow(format!(
@@ -103,7 +89,6 @@ pub(super) fn check_private_binding(id: &str, step: &Step) -> Result<(), RenderE
     Ok(())
 }
 
-/// Validate the mint step's exact input shape.
 fn check_mint(id: &str, step: &Step) -> Result<(), RenderError> {
     let shape =
         |detail: &str| RenderError::InvalidWorkflow(format!("private_mint_shape:{id}:{detail}"));
@@ -145,7 +130,6 @@ fn check_mint(id: &str, step: &Step) -> Result<(), RenderError> {
     Ok(())
 }
 
-/// True for exactly `${{ <context>.NAME }}` with an upper-case identifier.
 fn is_expression(value: &str, context: &str) -> bool {
     value
         .strip_prefix("${{ ")

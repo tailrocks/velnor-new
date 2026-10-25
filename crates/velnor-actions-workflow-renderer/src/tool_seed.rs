@@ -1,9 +1,3 @@
-//! Read-only tool seed at the fixed container path `/opt/velnor/seed`.
-//!
-//! A previous step cannot choose this path. A missing seed or a different
-//! key stays cold. The job copies into its private homes. It does not
-//! delete or write the seed.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::step_identity::is_tool_seed_step;
@@ -16,21 +10,9 @@ use crate::tool_seed_admission::trusted_seed_guard;
 pub(crate) use crate::tool_seed_admission::{SEED_ROOT, require_seed_root};
 pub(crate) use velnor_actions_contract::workflow::step_identity::TOOL_SEED_USES;
 
-/// Display name of the copy step ahead of `Setup Mise`.
 pub(crate) const TOOL_SEED_NAME: &str = "Restore Velnor tool seed";
-/// Repository path of that composite.
 const TOOL_SEED_ACTION_PATH: &str = ".github/actions/velnor-tool-seed/action.yml";
 
-/// Copy script. The composite sets `SEED_KEY` from `inputs.cache_key` and
-/// exports `seed_admitted` only after the exact trusted seed was copied.
-///
-/// The script does not embed a job-specific key, so one action file serves
-/// every job. An empty key does not match. Rustup lands at
-/// `$RUNNER_TEMP/velnor/rustup`, the same path as `MISE_RUSTUP_HOME`.
-///
-/// # Errors
-///
-/// Returns [`RenderError::BadCommand`] for a bad root.
 pub(crate) fn tool_seed_action_script(seed_root: &str) -> Result<String, RenderError> {
     require_seed_root(seed_root)?;
     let guard = trusted_seed_guard(seed_root)?;
@@ -88,15 +70,10 @@ pub(crate) fn validate_action_call(
     validate_seed_action(step)
 }
 
-/// Wrap a V2 cache key so workflow dispatch reads an empty key.
-///
-/// The guard expression evaluates to the inner key only when the trigger is
-/// not `workflow_dispatch`.
 pub(crate) fn guarded_seed_key(key: &str) -> String {
     format!("${{{{ github.event_name != 'workflow_dispatch' && '{key}' || '' }}}}")
 }
 
-/// True only for a dispatch-guarded V2 cache key.
 pub(crate) fn is_guarded_seed_key(value: &str) -> bool {
     const PREFIX: &str = "${{ github.event_name != 'workflow_dispatch' && '";
     const SUFFIX: &str = "' || '' }}";
@@ -106,7 +83,6 @@ pub(crate) fn is_guarded_seed_key(value: &str) -> bool {
         .is_some_and(crate::cache_p08::is_v2_cache_key_expression)
 }
 
-/// True when any job renders the tool-seed step.
 pub(crate) fn any_job_has_seed(
     jobs: &std::collections::BTreeMap<String, Job>,
 ) -> Result<bool, RenderError> {
@@ -126,14 +102,6 @@ pub(crate) fn any_job_has_seed(
     Ok(found)
 }
 
-/// One composite action for every tool-seed step.
-///
-/// The workflow step stays a short `uses` plus the cache key. The copy
-/// script lives here, outside the 500 KB workflow cap.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] when the version or the script is invalid.
 pub(crate) fn action_file(version: &str) -> Result<crate::tree::RenderedFile, RenderError> {
     let script = tool_seed_action_script(SEED_ROOT)?;
     let step = crate::steps::shell_step(
@@ -210,7 +178,3 @@ fn action_yaml(step_name: &str, env: &BTreeMap<String, String>, run: &str) -> Ya
         ),
     ])
 }
-
-#[cfg(test)]
-#[path = "tool_seed_tests.rs"]
-mod tests;

@@ -1,5 +1,3 @@
-//! Strict path and argument checks used by workflow validation.
-
 pub(super) fn valid_json_path(value: &str) -> bool {
     !value.is_empty()
         && std::path::Path::new(value)

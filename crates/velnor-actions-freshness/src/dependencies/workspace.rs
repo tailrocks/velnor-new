@@ -1,5 +1,3 @@
-//! Cargo workspace discovery and declared dependency parsing.
-
 use std::collections::{BTreeSet, VecDeque};
 
 use std::path::{Path, PathBuf};

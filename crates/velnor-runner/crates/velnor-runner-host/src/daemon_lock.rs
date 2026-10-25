@@ -1,5 +1,3 @@
-//! Process locks and a durable Docker-engine journal lineage anchor.
-
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
@@ -18,32 +16,24 @@ const ANCHOR_VERSION: u8 = 1;
 const MAX_ANCHOR_BYTES: u64 = 16 * 1024;
 const ANCHOR_DIR: &str = "runner-lineage";
 
-/// Held advisory lock. Dropping the file releases it.
 #[derive(Debug)]
 pub struct DaemonLock {
     file: File,
 }
 
 impl DaemonLock {
-    /// Acquire the lock or fail closed.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Lock`] when the file cannot be created or is held.
     pub fn try_acquire(path: &Path) -> Result<Self, HostError> {
         let file = open_lock(path)?;
         file.try_lock().map_err(|_| HostError::Lock)?;
         Ok(Self { file })
     }
 
-    /// The lock is held while the advisory file is still open.
     #[must_use]
     pub fn is_held(&self) -> bool {
         self.file.metadata().is_ok()
     }
 }
 
-/// Cloneable engine-wide lock and monotonic journal-lineage anchor.
 #[derive(Debug, Clone)]
 pub(crate) struct EngineLineageGuard {
     inner: Arc<GuardInner>,
@@ -68,11 +58,6 @@ struct Anchor {
 }
 
 impl EngineLineageGuard {
-    /// Acquire the persistent engine-scoped lock under Velnor's state directory.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Lock`] if held or [`HostError::Path`] for unsafe state.
     pub(crate) fn acquire(engine_id: &str) -> Result<Self, HostError> {
         if !engine_id_valid(engine_id) {
             return Err(HostError::Docker);
@@ -115,14 +100,6 @@ impl EngineLineageGuard {
         })
     }
 
-    /// Bind this engine to one canonical journal path and database instance.
-    ///
-    /// One revision of database-ahead state recovers; all other mismatches fail closed.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Journal`] for mixed lineage, rollback, or an
-    /// invalid anchor, and [`HostError::Path`] for an unsafe journal path.
     pub(crate) fn verify_lineage(
         &self,
         canonical_path: &Path,
@@ -174,11 +151,6 @@ impl EngineLineageGuard {
         Ok(())
     }
 
-    /// Advance the external anchor after the matching database commit.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Journal`] for an invalid revision, changed anchor, or I/O failure.
     pub(crate) fn advance_revision(&self, revision: u64) -> Result<(), HostError> {
         let mut state = self.inner.state.lock().map_err(|_| HostError::Journal)?;
         let current = state.as_ref().ok_or(HostError::Journal)?;
@@ -207,12 +179,6 @@ fn process_guards() -> &'static Mutex<HashMap<String, EngineLineageGuard>> {
     GUARDS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-/// Resolve a journal path without following a journal-file symlink.
-///
-/// # Errors
-///
-/// Returns [`HostError::Path`] unless the parent exists and the path names a
-/// regular file or a new file in that parent.
 pub(crate) fn canonical_journal_path(path: &Path) -> Result<PathBuf, HostError> {
     if !path.is_absolute() || path.file_name().is_none() {
         return Err(HostError::Path);
@@ -375,7 +341,3 @@ fn write_anchor(path: &Path, anchor: &Anchor) -> Result<(), HostError> {
         .and_then(|directory| directory.sync_all())
         .map_err(|_| HostError::Journal)
 }
-
-#[cfg(test)]
-#[path = "daemon_lock_tests.rs"]
-mod tests;

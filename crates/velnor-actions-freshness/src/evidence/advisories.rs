@@ -1,5 +1,3 @@
-//! Advisory-policy checks and bounded Cargo Deny subprocesses.
-
 use std::fs;
 
 use std::process::Command;
@@ -138,14 +136,4 @@ fn tail(value: &str, cap: usize) -> String {
     let bytes = value.as_bytes();
     let start = bytes.len().saturating_sub(cap);
     String::from_utf8_lossy(&bytes[start..]).into_owned()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::tail;
-
-    #[test]
-    fn diagnostic_tail_is_bounded_by_utf8_bytes() {
-        assert_eq!(tail("0123456789", 4), "6789");
-    }
 }

@@ -1,11 +1,3 @@
-//! Hosted image and macOS binary release workflows.
-//!
-//! `id-token` covers the whole job, so attest and GitHub-release upload are
-//! different jobs. The attest job never receives `contents: write` or
-//! `packages: write`. Checksums are `sha256sum` / `shasum` of the bytes just
-//! built. Dispatch has no inputs, so a caller cannot supply a shell fragment
-//! or a checksum.
-
 use crate::RenderError;
 use crate::commands::join_argv_for_run;
 use crate::runs_on::runs_on_yaml;
@@ -17,9 +9,7 @@ use super::features::{CHECKOUT_USES, base, finish, identified_publish_step, run_
 use super::{Schema2WorkflowRequest, generator_release, product_release_family};
 use velnor_actions_contract::ReleaseTarget;
 
-/// GitHub-hosted macOS label. The binary is native; it is not built on Ubuntu.
 const MACOS_RUNS_ON: &str = "macos-15";
-/// `actions/attest-build-provenance` tag `v4.2.2` (commit, not a floating tag).
 const ASSET_DIR: &str = "assets";
 const CHECKSUMS: &str = "SHA256SUMS";
 const RUNNER_TAR: &str = "velnor-runner-linux-amd64.tar";
@@ -65,11 +55,6 @@ const BINARY_SUM: &str = "\
 set -eu
 shasum -a 256 velnor-host > SHA256SUMS";
 
-/// Image release: build both linux/amd64 images, attest, then upload assets.
-///
-/// # Errors
-///
-/// An illegal hosted label fails.
 pub(super) fn image_release(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
     let pins = request
         .product_release
@@ -126,11 +111,6 @@ pub(super) fn image_release(request: &Schema2WorkflowRequest) -> Result<Yaml, Re
     ))
 }
 
-/// macOS binary release. Every job uses `macos-15`, never the Ubuntu label.
-///
-/// # Errors
-///
-/// An illegal macOS label fails.
 pub(super) fn macos_binary_release(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
     let pins = request
         .product_release
@@ -333,12 +313,10 @@ fn with_needs(mut fields: Vec<(String, Yaml)>, needs: &str) -> Vec<(String, Yaml
     fields
 }
 
-/// Build uploads a workflow artifact. That needs `actions: write`, not contents write.
 fn build_permissions() -> Yaml {
     perm(&[("actions", "write"), ("contents", "read")])
 }
 
-/// Attest job: `id-token`, no `contents: write`. Not a registry upload.
 fn attest_permissions() -> Yaml {
     perm(&[
         ("actions", "read"),
@@ -349,7 +327,6 @@ fn attest_permissions() -> Yaml {
     ])
 }
 
-/// Only the release-upload job may write repository contents.
 fn publish_permissions() -> Yaml {
     perm(&[("actions", "read"), ("contents", "write")])
 }

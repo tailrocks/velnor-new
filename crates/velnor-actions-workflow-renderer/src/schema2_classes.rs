@@ -1,8 +1,3 @@
-//! Qualification classes that each dispatch as their own `inputs.mode`.
-//! They are not part of `features`. Outputs and cache keep one scale-set
-//! job; the hosted job `needs` it. `ports` runs two scale-set jobs with no
-//! `needs` so both can hold the same logical port.
-
 use super::RunnerSpec;
 use super::features::{
     checkout_step, finish, gated, lane_base_with_container, local_action_step, redis_service,
@@ -49,7 +44,6 @@ struct Extras {
     outputs: Option<Yaml>,
 }
 
-/// One mode per class. `features` does not select these jobs.
 pub(super) fn class_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     let mut jobs = action_classes(hosted, scale);
     jobs.extend(state_classes(hosted, scale));
@@ -363,7 +357,6 @@ fn docker_steps() -> Vec<Yaml> {
 }
 
 fn container_steps() -> Vec<Yaml> {
-    // Alpine has no bash. The probe must open the service DNS name.
     vec![steps::shell_step("Service DNS", "sh", REDIS_DNS)]
 }
 
@@ -372,12 +365,10 @@ fn mask_steps() -> Vec<Yaml> {
 }
 
 fn oidc_steps() -> Vec<Yaml> {
-    // Presence only. Do not print the request URL or a token.
     vec![run_step("Require OIDC request URL", CHECK_OIDC)]
 }
 
 fn post_fail_steps() -> Vec<Yaml> {
-    // No `if: always()`: main.js must fail the job. The action post still runs.
     vec![
         checkout_step(),
         local_action_step("Main fails post runs", POST_FAIL_ACTION),

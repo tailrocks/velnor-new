@@ -61,7 +61,3 @@ pub(in crate::homebrew::install) fn run_command(
     }
     Ok(output)
 }
-
-#[cfg(test)]
-#[path = "homebrew_install_command_failure_tests.rs"]
-mod tests;

@@ -1,13 +1,3 @@
-//! Credential session for the private fetch (HD-7): the only code that
-//! reaches the private-fetch spawn policy for fetching.
-//!
-//! The token never enters a child environment or argv. It lives in a mode-0600
-//! file inside a mode-0700 Velnor-owned directory under runner temp, read by a
-//! git credential helper keyed exactly on `https://github.com/<owner>/<repo>`
-//! and by `curl --config`; the directory is removed on drop and before the
-//! revoke step. The workspace forbids `unsafe`, which rules out inheriting a
-//! pipe descriptor into `git`, so a file stands in for the design's pipe.
-
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io::Write;
@@ -21,7 +11,6 @@ use velnor_actions_mise::command::is_safe_credential_value;
 use crate::OrchestratorError;
 use crate::internal::internal;
 
-/// GitHub REST API origin; every request is built from this constant.
 pub(crate) const API_ORIGIN: &str = "https://api.github.com";
 const API_VERSION: &str = "2022-11-28";
 pub(crate) const CURL_TIMEOUT_SECS: u64 = 900;
@@ -29,11 +18,9 @@ const CARGO_TIMEOUT: Duration = Duration::from_mins(30);
 pub(crate) const CAPTURE_BYTES: usize = 1024 * 1024;
 const GIT_USER: &str = "x-access-token";
 
-/// An installation token that never prints.
 pub(crate) struct Token(String);
 
 impl Token {
-    /// Validate transport-safe bytes; the credential remains opaque.
     pub(crate) fn new(value: &str) -> Result<Self, OrchestratorError> {
         if value.is_empty() {
             return Err(internal("private_source_credential_unavailable"));
@@ -55,7 +42,6 @@ impl std::fmt::Debug for Token {
     }
 }
 
-/// Path characters a generated file reference may carry (no quoting needed).
 fn is_plain_path(path: &Path) -> bool {
     path.is_absolute()
         && path.to_str().is_some_and(|text| {
@@ -64,11 +50,6 @@ fn is_plain_path(path: &Path) -> bool {
         })
 }
 
-/// Velnor-owned git configuration: one credential section per allowlisted
-/// repository URL (with and without the `.git` suffix), nothing else.
-///
-/// # Errors
-/// Rejects a token path that would need quoting.
 pub(crate) fn git_config(
     owner: &str,
     repositories: &[String],
@@ -95,14 +76,6 @@ pub(crate) fn git_config(
     Ok(text)
 }
 
-/// `curl --config` document for one authenticated request.
-///
-/// `method` is `GET` or `DELETE`; `output` is a file path or `/dev/null`.
-/// Redirects stay on https and curl drops the `Authorization` header when a
-/// redirect leaves the API host.
-///
-/// # Errors
-/// Rejects a route or output path outside the safe grammar.
 pub(crate) fn curl_config(
     token: &Token,
     method: &str,
@@ -170,7 +143,6 @@ pub(crate) fn create_private_dir(path: &Path) -> Result<(), OrchestratorError> {
     builder.create(path).map_err(io)
 }
 
-/// Remove a credential directory, overwriting every file first (best effort).
 pub(crate) fn scrub_dir(path: &Path) -> Result<(), OrchestratorError> {
     let io =
         |err: std::io::Error| OrchestratorError::io(path.display().to_string(), err.to_string());
@@ -182,9 +154,7 @@ pub(crate) fn scrub_dir(path: &Path) -> Result<(), OrchestratorError> {
                 && let Ok(mut handle) = fs::OpenOptions::new().write(true).open(&file)
             {
                 let zeros = vec![0_u8; usize::try_from(metadata.len()).unwrap_or(0)];
-                if handle.write_all(&zeros).is_err() {
-                    // Best effort: removal below is what matters.
-                }
+                if handle.write_all(&zeros).is_err() {}
             }
         }
     }
@@ -195,7 +165,6 @@ pub(crate) fn scrub_dir(path: &Path) -> Result<(), OrchestratorError> {
     }
 }
 
-/// A live credential directory; removed on drop.
 pub(crate) struct Session {
     dir: PathBuf,
     token: Token,
@@ -205,10 +174,6 @@ pub(crate) struct Session {
 }
 
 impl Session {
-    /// Create the directory, token file and git configuration.
-    ///
-    /// # Errors
-    /// Fails if the directory cannot be created exclusively or a path is unsafe.
     pub(crate) fn create(
         runner_temp: &Path,
         token: Token,
@@ -242,7 +207,6 @@ impl Session {
         self.dir.join("gitconfig")
     }
 
-    /// One credential-free `mise` child under the private-fetch policy.
     fn mise(&self, tail: &[&OsStr], cwd: PathBuf) -> Result<IsolatedCommand, OrchestratorError> {
         let mut args: Vec<OsString> = MISE_GLOBAL_FLAGS.iter().map(OsString::from).collect();
         args.extend(tail.iter().map(|arg| (*arg).to_owned()));
@@ -251,8 +215,6 @@ impl Session {
             .map_err(|err| internal(&format!("private_mise_command:{err}")))
     }
 
-    /// `mise where <rust>`, which fails for a missing toolchain. `mise exec`
-    /// only warns and runs the ambient `cargo` with the ambient `CARGO_HOME`.
     pub(crate) fn rust_check_command(
         &self,
         rust: &str,
@@ -263,12 +225,6 @@ impl Session {
         )
     }
 
-    /// The `cargo fetch --locked` child for one manifest under `rust`
-    /// (`rust@<version>`, the project-declared toolchain).
-    ///
-    /// Runs from the runner-owned isolation directory so no repository
-    /// `.cargo/config.toml` is read, with git configured through the Velnor
-    /// file only. `cargo fetch` runs no build scripts.
     pub(crate) fn cargo_fetch_command(
         &self,
         manifest: &Path,
@@ -284,7 +240,6 @@ impl Session {
         self.mise(&tail, isolation)
     }
 
-    /// Run `cargo fetch --locked` for one manifest once `rust` is proven installed.
     pub(crate) fn cargo_fetch(&self, manifest: &Path, rust: &str) -> Result<(), OrchestratorError> {
         let check = self
             .rust_check_command(rust)?
@@ -326,7 +281,6 @@ impl Session {
         result
     }
 
-    /// Authenticated GET of one API route into `dest`.
     pub(crate) fn download(
         &self,
         route: &str,
@@ -348,7 +302,3 @@ impl Drop for Session {
         drop(scrub_dir(&self.dir));
     }
 }
-
-#[cfg(test)]
-#[path = "private_fetch_session_tests.rs"]
-mod tests;

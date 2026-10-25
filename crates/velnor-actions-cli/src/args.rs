@@ -1,5 +1,3 @@
-//! Clap command tree for `velnor-actions`.
-
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
@@ -110,7 +108,6 @@ pub(crate) enum Command {
 }
 
 impl Command {
-    /// True when `generate` requests only the owned-tool candidate preview.
     pub(crate) fn is_owned_preview(&self) -> bool {
         matches!(
             self,

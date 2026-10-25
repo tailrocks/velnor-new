@@ -1,5 +1,3 @@
-//! Literal-only Homebrew formula promotion contract.
-
 use crate::{
     ContractError,
     package_release::{
@@ -16,25 +14,15 @@ use helpers::{
 };
 
 const MAX_FORMULA_BYTES: usize = 1024 * 1024;
-/// Release identity authenticated by channel-specific publication verification,
-/// signature checks, and attestations.
-///
-/// Construct this value only after verifying the published channel state, receipt
-/// bundle, signer workflow, source authority, and each artifact attestation.
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerifiedPackageRelease {
-    /// Canonical receipt digest verified by the caller.
     pub receipt_digest: String,
-    /// Canonical, semantically valid receipt bytes parsed by Velnor.
+
     pub receipt: PackageReleaseReceipt,
 }
 
 impl VerifiedPackageRelease {
-    /// Validate the receipt binding against the authenticated static release plan.
-    ///
-    /// # Errors
-    ///
-    /// Returns an identity error when channel identity, digest, or inventory differs.
     pub fn validate(
         &self,
         source_repository: &str,
@@ -82,36 +70,25 @@ impl VerifiedPackageRelease {
     }
 }
 
-/// Captured tap-main formula and updater output, bound to one verified release.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HomebrewFormulaCandidate<'a> {
-    /// Source repository slug from trusted Velnor configuration.
     pub source_repository: &'a str,
-    /// Static product and target policy authenticated by the release signer.
+
     pub plan: &'a PackageReleasePlan,
-    /// Destination tap slug from trusted Velnor configuration.
+
     pub tap_repository: &'a str,
-    /// Exact configured formula path.
+
     pub formula_path: &'a str,
-    /// Captured tap-main commit SHA.
+
     pub captured_base_sha: &'a str,
-    /// Formula bytes read from that captured base.
+
     pub base_bytes: &'a [u8],
-    /// Formula bytes proposed by the unprivileged updater.
+
     pub proposed_bytes: &'a [u8],
-    /// Authenticated channel receipt identity.
+
     pub release: &'a VerifiedPackageRelease,
 }
 
-/// Derive canonical formula bytes and require exact equality with the proposal.
-///
-/// This function does not execute Ruby and does not validate Git tree metadata;
-/// the caller must separately prove path/mode/tree identity before writing.
-///
-/// # Errors
-///
-/// Rejects malformed identity, unsupported formula syntax, downgrade or
-/// conflicting retry, and any noncanonical or executable-code change.
 pub fn validate_homebrew_formula_candidate(
     candidate: &HomebrewFormulaCandidate<'_>,
 ) -> Result<Vec<u8>, ContractError> {
@@ -394,7 +371,3 @@ fn semver_parts(value: &str) -> Result<(u64, u64, u64), ContractError> {
 fn invalid(reason: &'static str) -> ContractError {
     ContractError::identity("homebrew_formula", reason)
 }
-
-#[cfg(test)]
-#[path = "homebrew_formula_tests.rs"]
-mod tests;

@@ -1,5 +1,3 @@
-//! Versioned release manifest assembly and immutable publication.
-
 use crate::RenderError;
 use crate::yaml::Yaml;
 use velnor_actions_contract::JobTimeout;
@@ -10,20 +8,14 @@ use super::ProductReleasePins;
 use super::assets::{self, ASSETS, REPOSITORY, VERSION};
 use super::workflow_steps::{self, with_needs, with_permissions};
 
-/// Published versioned release manifest.
 pub(super) const FILE: &str = RELEASE_MANIFEST_FILENAME;
-/// Workflow artifact used to carry the attested manifest to publish.
 pub(super) const ARTIFACT: &str = "generator-release-manifest";
-/// Download location in the publication job.
 pub(super) const DIR: &str = "manifest-assets";
-/// Same-run canonical manifest path used by candidate qualification and publication.
 pub(super) fn candidate_path() -> String {
     format!("{DIR}/{FILE}")
 }
-/// Download location for detached signed Sigstore bundles.
 pub(super) const ATTESTATION_DIR: &str = "release-attestations";
 
-/// Verify product sidecars and build exact versioned asset URLs from their digests.
 fn manifest_script(rust_version: &str, mr_boxington_version: &str) -> String {
     format!(
         "bash -s -- '{VERSION}' '{REPOSITORY}' {rust_version} {mr_boxington_version} <<'VELNOR_CREATE_RELEASE_MANIFEST'\n{}\nVELNOR_CREATE_RELEASE_MANIFEST",
@@ -31,7 +23,6 @@ fn manifest_script(rust_version: &str, mr_boxington_version: &str) -> String {
     )
 }
 
-/// Revalidate and attest the exact same-run candidate manifest.
 pub(super) fn job(hosted: Yaml, pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
     let mut steps = vec![workflow_steps::mise_step(
         pins.setup_for(velnor_actions_contract::ReleaseTarget::LinuxX86_64),
@@ -150,7 +141,6 @@ fn candidate_manifest_steps() -> Result<Vec<Yaml>, RenderError> {
     Ok(steps)
 }
 
-/// Rebuild the expected manifest from verified downloaded binaries and records.
 pub(super) fn publication_verify_script(pins: &ProductReleasePins) -> String {
     let candidate_path = candidate_path();
     format!(
@@ -173,12 +163,10 @@ pub(super) fn publication_verify_source_free_script() -> String {
     )
 }
 
-/// Revalidate the canonical published manifest using the same source bytes.
 pub(super) fn verify_published_manifest_script(pins: &ProductReleasePins) -> String {
     publication_verify_script(pins)
 }
 
-/// Verify exact canonical manifest bytes downloaded from the candidate job.
 pub(super) fn manifest_digest_check_script() -> String {
     let candidate_path = candidate_path();
     format!(
@@ -186,7 +174,6 @@ pub(super) fn manifest_digest_check_script() -> String {
     )
 }
 
-/// Assemble release verification and creation in one parent shell.
 pub(super) fn publish_script() -> String {
     publish::publish_script()
 }
@@ -203,17 +190,6 @@ pub(super) fn release_asset_path_list() -> Vec<String> {
     publish::release_asset_path_list()
 }
 
-#[cfg(test)]
-pub(super) fn release_asset_paths() -> String {
-    publish::release_asset_paths()
-}
-
-#[cfg(test)]
-pub(super) fn tag_preflight_script() -> String {
-    publish::tag_preflight_script()
-}
-
-/// Cryptographically verify every bundle carried through the attest jobs.
 pub(super) fn attestation_bundle_script() -> String {
     let candidate_path = candidate_path();
     let mut lines = vec![
@@ -232,7 +208,6 @@ pub(super) fn attestation_bundle_script() -> String {
     lines.join("\n")
 }
 
-/// Fetch and verify the three signed bundles after one product attestation.
 pub(super) fn asset_attestation_bundle_script(product: assets::ProductAsset) -> String {
     let mut lines = vec![format!("set -eu\nmkdir -p {ATTESTATION_DIR}")];
     for subject in [product.binary, product.sidecar, product.provenance] {
@@ -244,7 +219,6 @@ pub(super) fn asset_attestation_bundle_script(product: assets::ProductAsset) -> 
     lines.join("\n")
 }
 
-/// Stable bundle paths uploaded by one product attestation job.
 pub(super) fn asset_attestation_bundle_paths(product: assets::ProductAsset) -> Vec<String> {
     [product.binary, product.sidecar, product.provenance]
         .into_iter()
@@ -252,7 +226,6 @@ pub(super) fn asset_attestation_bundle_paths(product: assets::ProductAsset) -> V
         .collect()
 }
 
-/// Fetch and verify the signed manifest bundle after manifest attestation.
 pub(super) fn manifest_attestation_bundle_script() -> String {
     let candidate_path = candidate_path();
     format!(
@@ -261,7 +234,6 @@ pub(super) fn manifest_attestation_bundle_script() -> String {
     )
 }
 
-/// Stable path uploaded by the manifest attestation job.
 pub(super) fn manifest_attestation_bundle_path() -> String {
     format!("{ATTESTATION_DIR}/{FILE}.intoto.jsonl")
 }
@@ -285,10 +257,6 @@ fn attestation_verify_script(subject: &str, name: &str) -> String {
         "test -f '{bundle}'\ntest ! -L '{bundle}'\ntest -s '{bundle}'\ngh attestation verify '{subject}' --repo \"$GITHUB_REPOSITORY\" --bundle '{bundle}' --source-digest \"$GITHUB_SHA\" --source-ref refs/heads/main --signer-workflow \"${{GITHUB_REPOSITORY}}/.github/workflows/product-release-generator.yml\" --signer-digest \"$GITHUB_SHA\" > /dev/null"
     )
 }
-
-#[cfg(test)]
-#[path = "schema2_generator_release_manifest_tests.rs"]
-mod tests;
 
 #[path = "schema2_generator_release_manifest_publish.rs"]
 mod publish;

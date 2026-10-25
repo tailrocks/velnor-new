@@ -1,4 +1,3 @@
-//! Bounded readonly probe identity admission; output is data, never shell code.
 use crate::config::{
     CheckPlatform, MAX_CHECK_QUALIFIED_PROBE_EXPECTED_BYTES, QualifiedToolBackend,
     QualifiedToolExecutableRecipe, QualifiedToolProbe,

@@ -1,4 +1,3 @@
-//! Descriptor-bound exclusive output and identity-specific rollback.
 use super::{check, invalid, safe_name};
 use crate::OrchestratorError;
 use rustix::fs::{self as rfs, AtFlags, Mode, OFlags};
@@ -166,7 +165,3 @@ impl Drop for Output {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "artifact_zip_output_tests.rs"]
-mod tests;

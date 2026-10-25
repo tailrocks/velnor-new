@@ -1,5 +1,3 @@
-//! Extract verifier template fields from the canonical typed renderer.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::Step;

@@ -1,5 +1,3 @@
-//! Session driver. Callers inject [`Transport`]. This module does not open a socket.
-
 mod acknowledge;
 mod close;
 mod config;

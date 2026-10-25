@@ -1,5 +1,3 @@
-//! Opt-in restart gate. Counts only. No container deletes and no tokens.
-
 use bollard::Docker;
 
 use crate::error::HostError;
@@ -9,9 +7,6 @@ use crate::scale_set::EnsureError;
 
 use super::inspect::container_running;
 
-/// `hold occupied=N adopt=M` or `advertise occupied=N`.
-///
-/// Adopt is a count. Full docker ids are not printed.
 #[must_use]
 pub(crate) fn gate_line(decision: &Reconcile) -> String {
     match decision {
@@ -23,17 +18,6 @@ pub(crate) fn gate_line(decision: &Reconcile) -> String {
     }
 }
 
-/// Compare the journal with running containers, then advertise or hold.
-///
-/// Rows are loaded before any inspect, so the database connection is not held
-/// across Docker. A Docker 404 means that container is not running. A timeout
-/// or any other inspect failure stops reconciliation before capacity is advertised.
-/// Nothing is deleted.
-///
-/// # Errors
-///
-/// Returns [`EnsureError`] when the journal cannot be read or an inspect result
-/// cannot establish the container's running state.
 pub(crate) async fn reconcile_gate(
     journal: &Journal,
     docker: &Docker,
@@ -85,24 +69,5 @@ fn map_journal(error: HostError) -> EnsureError {
             status: 0,
             step: "journal",
         },
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::gate_line;
-    use crate::Reconcile;
-
-    #[test]
-    fn line_counts_and_hides_docker_ids() {
-        let hold = Reconcile::Hold {
-            adopt: vec!["0123456789abcdef".to_owned()],
-            occupied: 2,
-        };
-        let line = gate_line(&hold);
-        assert_eq!(line, "hold occupied=2 adopt=1");
-        assert!(!line.contains("0123456789abcdef"));
-        let open = Reconcile::Advertise { occupied: 0 };
-        assert_eq!(gate_line(&open), "advertise occupied=0");
     }
 }

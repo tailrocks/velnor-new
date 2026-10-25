@@ -1,7 +1,3 @@
-//! Token-hygiene gate for rendered jobs (split from `support`).
-//!
-//! Declared from `support.rs` (`#[path]`, no `lib.rs` edit).
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Job, Step, StepKind, StepRole};
@@ -15,21 +11,6 @@ use crate::{
 #[path = "support_private_tokens.rs"]
 mod private;
 
-/// Token hygiene scopes `${{ github.token }}` to fixed SDK/API operations.
-///
-/// Parallelism §5: the planning process receives the token only as
-/// `GH_TOKEN`, never printed or inherited by task execution; before any
-/// repository task starts, credential variables are stripped from the
-/// child environment. The final job's report fetch needs the same
-/// read-only token for exact `gh` artifact downloads. Enforced here
-/// against the full nine-key credential set (single source:
-/// [`crate::toolchain_env::STEP_CREDENTIAL_DENYLIST`], never a local
-/// copy): any nonempty credential fails everywhere, `GH_TOKEN` carries
-/// the exact `${{ github.token }}` value only in plan/final jobs or a typed
-/// native-check dispatch,
-/// empty values are the explicit scrub overlay stopping ambient
-/// inheritance, and no `run:` content or action input may name a token
-/// (nothing prints or forwards one).
 pub(crate) fn check_token_hygiene(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
     for (id, job) in jobs {
         for step in &job.steps {
@@ -39,12 +20,6 @@ pub(crate) fn check_token_hygiene(jobs: &BTreeMap<String, Job>) -> Result<(), Re
     Ok(())
 }
 
-/// True when a typed step role carries ambient-auth permission.
-///
-/// The config-selected verification steps join the pinned offline
-/// analyzers: they execute no repository code and cold-install their
-/// tools, so they run ambient like deny, machete and jactionlint
-/// (scrubbing broke `ubi:` installs with API 401s, CI run 36815180228).
 fn is_ambient_auth_role(role: Option<StepRole>) -> bool {
     matches!(
         role,
@@ -64,16 +39,10 @@ fn is_ambient_auth_role(role: Option<StepRole>) -> bool {
     )
 }
 
-/// Reject credential leaks in one step's env, argv, and action inputs.
-///
-/// Active leaks report before missing protection: a step that prints a
-/// token fails on the print even when it also lacks the scrub overlay.
 fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
     private::check_private_binding(id, step)?;
     check_github_evidence_binding(id, step)?;
     if step.role == Some(StepRole::PrivateTokenMint) {
-        // The mint step names the App secret by design; its exact shape was
-        // validated above and it carries no other input or env.
         return Ok(());
     }
     match &step.kind {
@@ -99,10 +68,6 @@ fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
                     )));
                 }
             }
-            // The typed task composite owns credential removal inside its
-            // shell. The task env is deliberately credential-free and is
-            // validated here; caller env inheritance cannot scrub runner
-            // credentials before the action starts.
         }
         StepKind::Action { with, env, .. } => {
             for value in with.values() {
@@ -149,15 +114,6 @@ fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
     Ok(())
 }
 
-/// Reject nonempty credentials everywhere; scope `GH_TOKEN` to fixed operations.
-///
-/// Empty values on denylisted keys are the explicit scrub overlay (see
-/// [`crate::toolchain_env::credential_scrub`]) and pass; anything else
-/// on those keys is a leak. `MISE_GITHUB_TOKEN` contains `GITHUB_TOKEN`
-/// as a substring, so it needs no separate `names_token` arm.
-/// True for the one scoped token binding: `GH_TOKEN` carrying exactly
-/// `${{ github.token }}` in the plan or final job. Native-check tokens are
-/// introduced only from the typed `NativeCheckExecution` renderer.
 fn is_scoped_gh_token(id: &str, env: &BTreeMap<String, String>) -> bool {
     (id == PLAN_JOB_ID || id == FINAL_JOB_ID)
         && env
@@ -165,7 +121,6 @@ fn is_scoped_gh_token(id: &str, env: &BTreeMap<String, String>) -> bool {
             .is_some_and(|value| value == "${{ github.token }}")
 }
 
-/// Validate the job identity that receives the renderer-derived native token.
 fn validate_native_check_token_scope(
     job_id: &str,
     check_id: &str,
@@ -205,8 +160,6 @@ fn check_env_tokens(
     use crate::toolchain_env::is_denied_credential_key;
     for (key, value) in env {
         if STEP_PRIVATE_FETCH_ALLOWLIST.contains(&key.as_str()) {
-            // Bound only in private-fetch steps; `check_private_binding`
-            // already pinned the exact expression, or rejected the step.
             continue;
         }
         if is_denied_credential_key(key) {
@@ -300,12 +253,6 @@ fn valid_evidence_spec_suite_id(value: &str) -> Option<String> {
     Some(spec.collector_suite_id)
 }
 
-/// Require the full scrub overlay on every shell step outside the
-/// ambient-auth allowlist.
-///
-/// Presence checks alone let an empty env pass and keep scrub opt-in
-/// per constructor; this gate inverts the default to opt-out: scrubbed
-/// or explicitly allowlisted, nothing else renders.
 fn check_scrub_coverage(
     id: &str,
     name: &str,
@@ -329,25 +276,10 @@ fn check_scrub_coverage(
     }
 }
 
-/// Argv with the `env -u` credential-unset prefix stripped for scanning.
-///
-/// The wrapper mentions token names to REMOVE them; scanning it would
-/// flag the protection as exfil. Only exact fixed-var pairs strip:
-/// anything else (including `-u` with a non-fixed name) still scans,
-/// and the payload after the prefix always scans.
 fn strip_unset_argv(run: &[String]) -> &[String] {
     &run[crate::toolchain_env::unset_prefix_len(run)..]
 }
 
-/// Script with the exact credential-unset prelude stripped for scanning.
-///
-/// The first prelude occurrence forming a shell command unit strips:
-/// at the start or after a separator (`&&`, `;`, newline, `{`, `(`),
-/// followed by a separator or the end. Only the exact fixed text
-/// strips, and only once: a script merely starting with `unset`,
-/// quoting the prelude (an `echo` of token names is still exfil),
-/// embedding token names elsewhere, or doubling the prelude
-/// (caller/render drift) still scans whole and trips fail-closed.
 fn strip_unset_prelude(script: &str) -> String {
     use crate::toolchain_env::credential_unset_prelude;
     let prelude = credential_unset_prelude();
@@ -362,11 +294,6 @@ fn strip_unset_prelude(script: &str) -> String {
     script.to_owned()
 }
 
-/// True when a prelude occurrence sits in command position.
-///
-/// The left edge must be the script start or follow a separator; the
-/// right edge must be the end or lead a separator. A quoted or
-/// suffixed occurrence (an `echo` of the text) is not a command.
 fn is_prelude_command_unit(before: &str, after: &str) -> bool {
     const LEFT: [&str; 6] = ["&& ", "; ", "{ ", "\n", "( ", "("];
     const RIGHT: [char; 8] = [' ', ';', '&', '\n', '|', ')', '}', '\t'];
@@ -374,14 +301,6 @@ fn is_prelude_command_unit(before: &str, after: &str) -> bool {
         && (after.is_empty() || after.starts_with(RIGHT))
 }
 
-/// True when text names a token handle (never printed or forwarded).
-///
-/// The `*_TOKEN` arm subsumes every `*_TOKEN` denylisted name plus npm
-/// and per-registry variants; the remaining arms cover the URL-shaped
-/// OIDC handle, registry prefixes without a token suffix, and the
-/// expression handles (`github.token`, secrets). The `secrets.` match
-/// is case-insensitive and prefix-wide (X2): any casing or secret name
-/// fails closed, not just `GITHUB_TOKEN`.
 fn names_token(text: &str) -> bool {
     text.contains("_TOKEN")
         || text.contains("ACTIONS_ID_TOKEN_REQUEST_URL")

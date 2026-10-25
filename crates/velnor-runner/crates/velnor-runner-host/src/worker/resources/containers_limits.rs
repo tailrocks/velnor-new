@@ -1,4 +1,4 @@
-//! Resource checks for exact Docker container reconciliation.
+
 
 use bollard::models::HostConfig;
 

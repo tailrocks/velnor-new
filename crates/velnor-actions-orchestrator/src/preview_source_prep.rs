@@ -1,5 +1,3 @@
-//! Credential-free P08 preparation for preview runtime's offline discovery.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::Step;
@@ -15,7 +13,3 @@ pub(super) fn for_roots(
     let steps = crate::source_prep::fetch_steps_for_preview(catalog, roots, &env)?;
     Ok((steps, env))
 }
-
-#[cfg(test)]
-#[path = "preview_source_prep_tests.rs"]
-mod tests;

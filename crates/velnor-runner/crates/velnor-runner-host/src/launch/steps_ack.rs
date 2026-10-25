@@ -1,4 +1,4 @@
-//! Queue acknowledgement follows a bound worker pair.
+
 
 use velnor_runner_github::{Ack, AckScope, RefreshGate, ack};
 

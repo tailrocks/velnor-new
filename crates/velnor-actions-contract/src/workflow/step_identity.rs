@@ -1,5 +1,3 @@
-//! Typed workflow step identity and semantic role.
-
 use super::step::{Step, StepKind};
 pub(super) use super::step_payloads::valid_tools_cache_identity;
 use super::step_payloads::{valid_checkout_payload, valid_mise_setup, valid_tool_seed_payload};
@@ -15,27 +13,25 @@ use payload::{
 };
 pub use payload::{is_configured_checkout, is_tool_seed_step};
 
-/// Fixed local action path used for exact provider-cache admission.
 pub const TOFU_PROVIDER_ADMISSION_USES: &str = "./.github/actions/tofu-provider-admission";
-/// Fixed local action path for the exact-key host tool seed.
+
 pub const TOOL_SEED_USES: &str = "./.github/actions/velnor-tool-seed";
-/// Fixed local action path for the exact V2 tools-cache restore wrapper.
+
 pub const TOOLS_CACHE_RESTORE_USES: &str = "./.github/actions/velnor-tools-cache-restore";
-/// Fixed generated V2 identity-and-seed composites, one per hosted Ubuntu lane.
+
 pub const TOOLS_CACHE_PRELUDE_USES: [&str; 3] = [
     "./.github/actions/velnor-tools-prelude-u22",
     "./.github/actions/velnor-tools-prelude-u24",
     "./.github/actions/velnor-tools-prelude-u26",
 ];
-/// Fixed local actions for the cache-restored and installed Rust verifiers.
+
 pub const RUST_VERIFIER_USES: [&str; 2] = [
     "./.github/actions/velnor-verify-restored-rust",
     "./.github/actions/velnor-verify-rust-manifest",
 ];
-/// Fixed local action path for the generated jactionlint executable verifier.
+
 pub const JACTIONLINT_VERIFIER_USES: &str = "./.github/actions/velnor-verify-jactionlint";
 
-/// Return the required semantic role for one exact generated verifier action.
 pub(super) fn verifier_action_role(uses: &str) -> Option<StepRole> {
     if RUST_VERIFIER_USES.contains(&uses) {
         Some(StepRole::VerifyRustManifest)
@@ -45,15 +41,15 @@ pub(super) fn verifier_action_role(uses: &str) -> Option<StepRole> {
         None
     }
 }
-/// Static tool digest input for the runtime-qualified tools identity action.
+
 pub const TOOLS_CACHE_IDENTITY_DIGEST_INPUT: &str = "d";
-/// Expression path for the job-private `OpenTofu` plugin cache.
+
 pub const TOFU_PROVIDER_CACHE_BASE_EXPR: &str = super::cache_family::TOFU_PROVIDER_CACHE_BASE_EXPR;
-/// Composite output expression for the exact configured provider key.
+
 pub const TOFU_PROVIDERS_KEY_OUTPUT_EXPR: &str = "${{ steps.tofu-providers.outputs.cache-key }}";
-/// Composite output expression for the owned provider-cache path.
+
 pub const TOFU_PROVIDERS_PATH_OUTPUT_EXPR: &str = "${{ steps.tofu-providers.outputs.cache-path }}";
-/// Run MBX workspace cleanup only after the exact-version/store guard passed.
+
 pub const MBX_WORKSPACE_CLEAN_CONDITION: &str = "always() && steps.mbx-ready.outcome == 'success'";
 pub use super::step_private::{
     BUN_ASSETS_EXPORT_OPERATION, BUN_ASSETS_IMPORT_OPERATION, BUN_ASSETS_PREPARE_OPERATION,
@@ -65,146 +61,144 @@ pub use super::step_private::{
 };
 
 pub use super::step_id::StepId;
-/// Semantic step role used for workflow composition and validation.
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum StepRole {
-    /// Checkout whose credentials are disabled.
     Checkout,
-    /// Copy from the trusted, exact-key host tool seed.
+
     ToolSeed,
-    /// Install the exact catalog tools used by later steps.
+
     PreparePinnedTools,
-    /// Install the pinned Rust components used by task work.
+
     PrepareRustComponents,
-    /// Verify the pinned Rust channel manifest and installed component hashes.
+
     VerifyRustManifest,
-    /// Verify the installed jactionlint executable against Velnor's digest pin.
+
     VerifyJactionlint,
-    /// Pinned Mise action that owns its built-in tools cache.
+
     MiseSetup,
-    /// Authenticated cargo-deny analyzer bootstrap.
+
     CargoDeny,
-    /// Authenticated cargo-machete analyzer bootstrap.
+
     CargoMachete,
-    /// Workflow lint analyzer (jactionlint).
+
     Jactionlint,
-    /// Authenticated markdownlint analyzer bootstrap.
+
     Markdownlint,
-    /// Authenticated strict-JSON check bootstrap.
+
     StrictJson,
-    /// Authenticated frontmatter-ID check bootstrap.
+
     FrontmatterId,
-    /// Authenticated link-check analyzer bootstrap.
+
     LinkCheck,
-    /// Authenticated native-validators probe bootstrap.
+
     NativeValidators,
-    /// Planner producing the plan outputs.
+
     PlanProducer,
-    /// Digest-verified Velnor executable acquisition.
+
     AcquireVelnor,
-    /// Pre-seed copy of the helper into runner-temp staging.
+
     PreseedStage,
-    /// Download of the plan artifact for final merging.
+
     DownloadPlan,
-    /// Generated-tree freshness check.
+
     CheckGenerated,
-    /// Upload of the planner report artifact.
+
     PublishPlan,
-    /// Upload of one matrix task report.
+
     MatrixReportUpload,
-    /// Download of a candidate attestation artifact.
+
     AttestationDownload,
-    /// Fetch of exact matrix report artifacts.
+
     FetchReports,
-    /// Upload of the final merged report.
+
     PublishFinal,
-    /// `OpenTofu`/Rust plan formatting step.
+
     PlanFormat,
-    /// Per-crate minimum-supported-Rust-version qualification.
+
     MsrvQualification,
-    /// One elected tools-cache writer.
+
     ToolsCacheSave,
-    /// Runtime identity action that gates the V2 tools-cache layer.
+
     ToolsCacheIdentity,
-    /// Read-only restore wrapper for the V2 tools-cache payload.
+
     ToolsCacheRestore,
-    /// Restore of the shared Cargo registry and git sources snapshot.
+
     CargoSourcesRestore,
-    /// Single elected writer for the shared Cargo sources snapshot.
+
     CargoSourcesSave,
-    /// Fetch probe used to populate the Cargo source snapshot on a miss.
+
     CargoSourcesFetch,
-    /// Generated runtime cache trust and family key computation.
+
     CacheKeys,
-    /// One elected `OpenTofu` provider-cache writer.
+
     TofuProvidersSave,
-    /// `OpenTofu` provider-cache restore/admission composite before provider use.
+
     TofuProvidersRestore,
-    /// `OpenTofu` init/validate shell that consumes the admitted plugin cache.
+
     TofuProviderUse,
-    /// Pre-seed build of the candidate helper.
+
     PreseedBuild,
-    /// Pre-seed manifest creation.
+
     PreseedManifest,
-    /// Verification of the freshly built pre-seed candidate.
+
     PreseedVerifyBuild,
-    /// Pre-seed candidate artifact upload.
+
     PreseedUpload,
-    /// Pre-seed candidate artifact download.
+
     PreseedDownload,
-    /// Pre-seed manifest verification.
+
     PreseedVerifyManifest,
-    /// Native MBX action owns hosted and local object-cache lifecycle.
+
     MbxCache,
-    /// Exact MBX binary and object-store verification after the native action.
+
     MbxVersionCheck,
-    /// Exact MBX and Rust toolchain preflight.
+
     MbxPreflight,
-    /// Final workspace-target cleanup after the MBX bundle save.
+
     MbxWorkspaceCleanup,
-    /// Trust, compatibility and snapshot key of the opaque MBX bundle.
+
     MbxBundleKey,
-    /// Restore of the opaque MBX bundle directory (`actions/cache/restore`).
+
     MbxBundleRestore,
-    /// `mbx cache import` of the restored bundle; a failed import is discarded.
+
     MbxBundleImport,
-    /// Marker written once the family's producer (the compile) succeeded.
+
     MbxProducerMark,
-    /// One dependency-seed lane compile through `mbx`; the seed job's producer.
+
     MbxSeedBuild,
-    /// `mbx cache export --format directory` gated on the producer marker.
+
     MbxBundleExport,
-    /// Trusted-only `actions/cache/save` of the exported bundle directory.
+
     MbxBundleSave,
-    /// Runtime trust and keys of the stack family caches (Bun, dbt, Ansible).
+
     FamilyKeys,
-    /// Read-only restore of one stack family cache.
+
     FamilyRestore,
-    /// On-disk size admission of one stack family cache against its ceiling.
+
     FamilySizeCheck,
-    /// Trusted-only `actions/cache/save` of one stack family cache.
+
     FamilySave,
-    /// Mint of the read-only App installation token for private sources (HD-7).
+
     PrivateTokenMint,
-    /// Velnor-owned private-source fetch; with the revoke, the only credential binding (HD-7).
+
     PrivateFetch,
-    /// Revocation of the private-source token, run `always()` (HD-7).
+
     PrivateRevoke,
-    /// Registry phase of `bun install`; the only step binding the job token.
+
     BunRegistryInstall,
-    /// Credential-free private asset archive handoff.
+
     BunAssetsHandoff,
-    /// Hash-verified Playwright browser install; holds no credential.
+
     PlaywrightInstall,
-    /// Trusted fixed-route Actions evidence acquisition; token held only here.
+
     GitHubEvidenceFetch,
-    /// Credential-free verification and import of the same-run snapshot.
+
     GitHubEvidenceImport,
 }
 
 impl StepRole {
-    /// Check role-specific payload kind and identity.
     pub(crate) fn validate(self, kind: &StepKind, job: &str) -> Result<(), ContractError> {
         if self.matches_payload(kind) {
             Ok(())
@@ -216,7 +210,6 @@ impl StepRole {
         }
     }
 
-    /// Match one role against its fixed kind and payload family.
     fn matches_payload(self, kind: &StepKind) -> bool {
         match self {
             Self::Checkout => valid_checkout_payload(kind),
@@ -300,7 +293,6 @@ impl StepRole {
         }
     }
 
-    /// Output identity required for a role that publishes step outputs.
     pub(crate) const fn required_id(self) -> Option<StepId> {
         match self {
             Self::PlanProducer => Some(StepId::Plan),
@@ -318,7 +310,6 @@ impl StepRole {
         }
     }
 
-    /// Role required for a typed step output identity.
     pub(crate) const fn for_id(id: StepId) -> Self {
         match id {
             StepId::Plan => Self::PlanProducer,
@@ -343,33 +334,16 @@ impl StepRole {
     }
 }
 
-/// Validate one serialized step scope, including role payloads and unique output IDs.
-///
-/// Workflow jobs and composite actions use separate output-ID scopes, so renderers
-/// call this after internal expansion for each final serialized sequence.
-/// # Errors
-///
-/// Returns a contract error for an invalid role/payload or duplicate step ID.
 pub fn validate_step_sequence(steps: &[Step], scope: &str) -> Result<(), ContractError> {
     validate_step_identities(steps, scope)?;
     super::step_mbx_lifecycle::validate_mbx_cleanup_sequence(steps, scope)?;
     super::step_protocol::validate_tofu_provider_sequence(steps, scope)
 }
 
-/// Validate IDs and role payloads in a partial serialized scope.
-///
-/// Use this for a composite body or an expanded workflow scope assembled
-/// from only the steps serialized at that level. Call
-/// [`validate_step_sequence`] on the full source sequence to enforce any
-/// cross-step provider-cache protocol before factoring.
-/// # Errors
-///
-/// Returns a contract error for an invalid role/payload or duplicate output ID.
 pub fn validate_step_identity_scope(steps: &[Step], scope: &str) -> Result<(), ContractError> {
     validate_step_identities(steps, scope)
 }
 
-/// Validate each step and require unique IDs within one serialized scope.
 fn validate_step_identities(steps: &[Step], scope: &str) -> Result<(), ContractError> {
     let mut ids = BTreeSet::new();
     for step in steps {
@@ -385,7 +359,3 @@ fn validate_step_identities(steps: &[Step], scope: &str) -> Result<(), ContractE
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "step_identity_verifier_tests.rs"]
-mod rust_verifier_role_tests;

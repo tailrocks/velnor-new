@@ -1,39 +1,26 @@
-//! `packages.yml` / `package-lock.yml` policy.
-//!
-//! `dbt deps` is the only network step a dbt job runs, so every dependency
-//! must be pinned by the checked-in lock: a hub package by exact version, a Git
-//! package by a 40-hex revision. `local:` packages live in the repository and
-//! need no lock entry but must stay inside the project directory. Tarball
-//! packages are refused.
-
 use std::collections::BTreeMap;
 
 use crate::DbtError;
 use crate::paths::stays_inside;
 use crate::yaml::top_entries;
 
-/// Where a package comes from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PackageSource {
-    /// dbt Hub package `org/name`.
     Hub(String),
-    /// Git package (URL).
+
     Git(String),
-    /// Repository-local directory.
+
     Local(String),
 }
 
-/// One manifest or lock entry.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Package {
-    /// Origin of the package.
     pub source: PackageSource,
-    /// Pin recorded for it: hub `version` or Git `revision`, when present.
+
     pub pin: Option<String>,
 }
 
 impl Package {
-    /// Stable identity used in findings and for lock matching.
     #[must_use]
     pub fn id(&self) -> &str {
         match &self.source {
@@ -69,12 +56,6 @@ fn to_package(entry: &BTreeMap<String, String>) -> Result<Package, DbtError> {
     Err(DbtError::new("dbt_package_source_unsupported", kind))
 }
 
-/// Parse `packages.yml` or `package-lock.yml` (both are a `packages:` list).
-///
-/// # Errors
-///
-/// `dbt_packages_unparsed` for a line outside the supported subset and
-/// `dbt_package_source_unsupported` for tarball or unknown sources.
 pub fn parse_packages(text: &str) -> Result<Vec<Package>, DbtError> {
     let entries = top_entries(text, "packages")
         .map_err(|line| DbtError::new("dbt_packages_unparsed", &line))?
@@ -93,10 +74,6 @@ fn is_exact_hub_version(text: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'+'))
 }
 
-/// Check the manifest against the lock; every finding is returned, sorted.
-///
-/// `manifest` is `packages.yml`, `lock` is `package-lock.yml` (`None` when the
-/// file is absent). No manifest means nothing to lock.
 #[must_use]
 pub fn verify_lock(manifest: &[Package], lock: Option<&[Package]>) -> Vec<DbtError> {
     let mut findings = Vec::new();

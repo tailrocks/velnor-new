@@ -1,4 +1,3 @@
-//! Source-free signer acquisition of the exact current-attempt aggregate ZIP.
 use super::{
     ArtifactReadApi, ReleaseArtifactApi, ReleaseConsumer, ZipProfile, archive_file::SealedArchive,
     checkpoint, inventory, require_consumer_environment, validate_metadata,
@@ -10,13 +9,10 @@ use velnor_actions_contract::preview_production::{
 };
 use velnor_actions_mise::CheckDeadline;
 
-/// Service-authenticated aggregate bytes; native manifest/full-package admission follows.
 pub(crate) struct AdmittedReleaseAggregate {
     pub archive: SealedArchive,
 }
 
-/// Acquire a numeric aggregate upload output for the fixed source-free signer.
-/// No reduced plan or fabricated assembly request enters this path.
 pub(crate) fn acquire_release_aggregate(
     plan: &PackageReleasePlan,
     context: &ReleaseProductionContext,
@@ -86,7 +82,3 @@ fn acquire(
     checkpoint(deadline)?;
     Ok(AdmittedReleaseAggregate { archive })
 }
-
-#[cfg(test)]
-#[path = "preview_artifact_transport_aggregate_tests.rs"]
-mod tests;

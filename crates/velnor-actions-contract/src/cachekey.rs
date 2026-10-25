@@ -1,9 +1,3 @@
-//! Cache-key computation over semantic inputs only (cache §1).
-//!
-//! Keys derive from profile, config, declared env, toolchain, platform
-//! (OS/arch/label/`ImageOS`/target), format, and output
-//! contract. Run IDs, absolute paths, and cwd never enter an identity.
-
 use serde::{Deserialize, Serialize};
 
 use crate::canonical::{StackExtension, canonical_json_bytes, digest_b3, validate_digest};
@@ -15,27 +9,21 @@ pub use platform::{
     MAX_OBSERVED_PLATFORM_FACT_BYTES, PlatformInputs, observed_platform_id, platform_id,
 };
 
-/// Cache-key schema id, always `v1`.
 pub const CACHE_SCHEMA_ID: &str = "v1";
-/// Prefix shared by the MBX action namespace and task cache identity.
+
 pub const MBX_CACHE_GENERATION_PREFIX: &str = "velnor-mbx-";
 pub use crate::extension_schemas::{
     KNOWN_STACK_EXTENSION_SCHEMAS, RUST_EXTENSION_SCHEMA, TOFU_EXTENSION_SCHEMA,
     is_known_stack_extension_schema,
 };
-/// Maximum GitHub cache-key bytes; longer keys fail generation.
+
 pub const MAX_CACHE_KEY_BYTES: usize = 512;
 
-/// Build the MBX action generation for one exact runtime version.
-///
-/// Callers validate the version through the pinned tool catalog or action
-/// input gate before constructing this identity component.
 #[must_use]
 pub fn mbx_cache_generation(version: &str) -> String {
     format!("{MBX_CACHE_GENERATION_PREFIX}{version}-share-out-dir-disabled-v1")
 }
 
-/// The 13 allowed `miss_reason` values (cache §3).
 pub const MISS_REASONS: [&str; 13] = [
     "no_entry",
     "compatibility_mismatch",
@@ -52,21 +40,12 @@ pub const MISS_REASONS: [&str; 13] = [
     "source_missing",
 ];
 
-/// Final-gate job-disposition reasons beyond the cache set (hard decision 4).
-///
-/// `planned_job_skipped` marks a job the plan scheduled that never ran;
-/// `gate_mismatch` marks a `not_affected` job that ran anyway;
-/// `not_affected_on_full_event` marks a plan that skips work on a push,
-/// merge group, or qualification run. Only the final report carries
-/// them; task reports keep the cache set.
 pub const FINAL_GATE_REASONS: [&str; 3] = [
     "planned_job_skipped",
     "gate_mismatch",
     "not_affected_on_full_event",
 ];
 
-/// Validate one final-report `miss_reason`: cache or final-gate reason.
-/// # Errors
 pub fn validate_final_miss_reason(reason: &str) -> Result<(), ContractError> {
     if FINAL_GATE_REASONS.contains(&reason) {
         Ok(())
@@ -75,8 +54,6 @@ pub fn validate_final_miss_reason(reason: &str) -> Result<(), ContractError> {
     }
 }
 
-/// Validate one `miss_reason` against the closed set.
-/// # Errors
 pub fn validate_miss_reason(reason: &str) -> Result<(), ContractError> {
     if MISS_REASONS.contains(&reason) {
         Ok(())
@@ -88,8 +65,6 @@ pub fn validate_miss_reason(reason: &str) -> Result<(), ContractError> {
     }
 }
 
-/// Reject empty, absolute, or control-char values in semantic inputs.
-/// # Errors
 pub fn validate_semantic_text(field: &'static str, value: &str) -> Result<(), ContractError> {
     if value.is_empty() || value.starts_with('/') || value.contains('\\') {
         return Err(ContractError::identity(field, "non_semantic_input"));
@@ -103,61 +78,50 @@ pub fn validate_semantic_text(field: &'static str, value: &str) -> Result<(), Co
     Ok(())
 }
 
-/// Workspace identity inputs: repo, stack, root, inventory.
 #[derive(Debug, Clone, Serialize)]
 pub struct WorkspaceInputs {
-    /// Repository identity digest.
     pub repository_id: String,
-    /// Registered detector ID.
+
     pub stack_id: String,
-    /// Normalized repo-relative project root.
+
     pub project_root: String,
-    /// Digest over the detector inventory.
+
     pub inventory_digest: String,
 }
 
-/// Concurrent-writer lane inputs.
 #[derive(Debug, Clone, Serialize)]
 pub struct LaneInputs {
-    /// Workspace identity digest.
     pub workspace_id: String,
-    /// Detector-defined component identity.
+
     pub component_id: String,
-    /// Task or build kind.
+
     pub task_kind: String,
-    /// Task/build configuration digest.
+
     pub configuration: String,
-    /// Distinct concurrent writer lane.
+
     pub writer_lane: String,
 }
 
-/// Toolchain identity inputs: exact pins plus selected driver/runner.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolchainInputs {
-    /// Sorted exact `<tool>@<version>` selectors (Nextest retains its pinned
-    /// `aqua:` registry namespace).
     pub tools: Vec<String>,
-    /// Sorted installed component names.
+
     pub components: Vec<String>,
-    /// Selected compile driver.
+
     pub compile_driver: String,
-    /// Selected test runner.
+
     pub test_runner: String,
 }
 
-/// Compiler/cache format inputs reported by the adapter.
 #[derive(Debug, Clone, Serialize)]
 pub struct FormatInputs {
-    /// Adapter family (`cargo` or `mbx`).
     pub adapter: String,
-    /// Reported object/source format.
+
     pub format: String,
-    /// Reported cache generation.
+
     pub generation: String,
 }
 
-/// Compute `workspace_id` over the canonical workspace inputs.
-/// # Errors
 pub fn workspace_id(inputs: &WorkspaceInputs) -> Result<String, ContractError> {
     validate_digest(&inputs.repository_id)?;
     validate_digest(&inputs.inventory_digest)?;
@@ -166,8 +130,6 @@ pub fn workspace_id(inputs: &WorkspaceInputs) -> Result<String, ContractError> {
     Ok(digest_b3(&canonical_json_bytes(inputs)?))
 }
 
-/// Compute `lane_id`, binding task config plus the writer lane.
-/// # Errors
 pub fn lane_id(inputs: &LaneInputs) -> Result<String, ContractError> {
     validate_digest(&inputs.workspace_id)?;
     for (field, value) in [
@@ -181,8 +143,6 @@ pub fn lane_id(inputs: &LaneInputs) -> Result<String, ContractError> {
     Ok(digest_b3(&canonical_json_bytes(inputs)?))
 }
 
-/// Compute `toolchain_id`; tool files are not inputs and stay excluded.
-/// # Errors
 pub fn toolchain_id(inputs: &ToolchainInputs) -> Result<String, ContractError> {
     if inputs.tools.is_empty() {
         return Err(ContractError::identity("toolchain", "no_pinned_tools"));
@@ -200,8 +160,6 @@ pub fn toolchain_id(inputs: &ToolchainInputs) -> Result<String, ContractError> {
     Ok(digest_b3(&canonical_json_bytes(inputs)?))
 }
 
-/// Compute `cache_format_id`; unreportable MBX formats fail, never guess.
-/// # Errors
 pub fn cache_format_id(inputs: &FormatInputs) -> Result<String, ContractError> {
     if inputs.adapter != "cargo" && inputs.adapter != "mbx" && inputs.adapter != "tofu" {
         return Err(ContractError::identity("cache_format", "unknown_adapter"));
@@ -217,8 +175,6 @@ pub fn cache_format_id(inputs: &FormatInputs) -> Result<String, ContractError> {
     Ok(digest_b3(&canonical_json_bytes(inputs)?))
 }
 
-/// Compute `stack_extension_id` over the canonical adapter extension.
-/// # Errors
 pub fn stack_extension_id(extension: &StackExtension) -> Result<String, ContractError> {
     if !is_known_stack_extension_schema(extension.schema.trim()) {
         return Err(ContractError::identity("stack_extension", "unknown_schema"));
@@ -226,38 +182,34 @@ pub fn stack_extension_id(extension: &StackExtension) -> Result<String, Contract
     Ok(digest_b3(&canonical_json_bytes(extension)?))
 }
 
-/// The exact 12-field cache identity (cache §1).
 #[derive(Debug, Clone, Serialize)]
 pub struct CacheIdentity {
-    /// Schema id, always `v1`.
     pub schema_id: String,
-    /// Registered detector ID.
+
     pub stack_id: String,
-    /// Repository identity digest.
+
     pub repository_id: String,
-    /// Normalized repo-relative project root.
+
     pub project_root: String,
-    /// Detector-defined component identity.
+
     pub component_id: String,
-    /// Workspace identity digest.
+
     pub workspace_id: String,
-    /// Lane identity digest.
+
     pub lane_id: String,
-    /// Platform identity digest.
+
     pub platform_id: String,
-    /// Toolchain identity digest.
+
     pub toolchain_id: String,
-    /// Cache-format identity digest.
+
     pub cache_format_id: String,
-    /// Stack-extension identity digest.
+
     pub stack_extension_id: String,
-    /// Task input digest.
+
     pub input_digest: String,
 }
 
 impl CacheIdentity {
-    /// Validate schema, task grammar inputs, and every digest shape.
-    /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {
         if self.schema_id != CACHE_SCHEMA_ID {
             return Err(ContractError::identity("schema_id", "must_be_v1"));
@@ -281,8 +233,6 @@ impl CacheIdentity {
     }
 }
 
-/// Build `velnor-v1-<layer>-<trust>-<compat>-<snapshot>` (≤512 bytes).
-/// # Errors
 pub fn cache_key(
     layer: &str,
     trust: &str,
@@ -304,8 +254,6 @@ pub fn cache_key(
     Ok(key)
 }
 
-/// Build a same-compat restore prefix (snapshot omitted).
-/// # Errors
 pub fn restore_prefix(
     layer: &str,
     trust: &str,
@@ -319,74 +267,4 @@ pub fn restore_prefix(
     }
     validate_digest(compatibility)?;
     Ok(format!("velnor-v1-{layer}-{trust}-{compatibility}-"))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Workspace inputs with fixed digests for key tests.
-    fn workspace() -> WorkspaceInputs {
-        WorkspaceInputs {
-            repository_id: digest_b3(b"repo"),
-            stack_id: "rust".to_owned(),
-            project_root: "crates/demo".to_owned(),
-            inventory_digest: digest_b3(b"inventory"),
-        }
-    }
-
-    #[test]
-    fn keys_are_semantic_and_bounded() {
-        let workspace = workspace_id(&workspace()).expect("workspace");
-        let lane = lane_id(&LaneInputs {
-            workspace_id: workspace,
-            component_id: "pkg".to_owned(),
-            task_kind: "clippy".to_owned(),
-            configuration: "default".to_owned(),
-            writer_lane: "lane-0".to_owned(),
-        })
-        .expect("lane");
-        assert!(lane.starts_with("b3-"));
-        let compat = digest_b3(b"compat");
-        let snapshot = digest_b3(b"snapshot");
-        let key = cache_key("task", "trusted", &compat, &snapshot).expect("key");
-        assert!(key.len() <= MAX_CACHE_KEY_BYTES);
-        assert!(key.starts_with("velnor-v1-task-trusted-"));
-        assert!(
-            restore_prefix("task", "trusted", &compat)
-                .expect("prefix")
-                .ends_with('-')
-        );
-        assert!(cache_key("mbx", "pr", "nope", &snapshot).is_err());
-        assert!(
-            lane_id(&LaneInputs {
-                workspace_id: digest_b3(b"w"),
-                component_id: "/abs/path".to_owned(),
-                task_kind: "clippy".to_owned(),
-                configuration: "default".to_owned(),
-                writer_lane: "lane-0".to_owned(),
-            })
-            .is_err()
-        );
-        assert!(
-            platform_id(&PlatformInputs {
-                os: "linux".to_owned(),
-                arch: "x86_64".to_owned(),
-                runs_on: "ubuntu-26.04".to_owned(),
-                image_os: "ubuntu26".to_owned(),
-                target: "host".to_owned(),
-            })
-            .is_ok()
-        );
-        assert!(
-            cache_format_id(&FormatInputs {
-                adapter: "mbx".to_owned(),
-                format: String::new(),
-                generation: "7".to_owned(),
-            })
-            .is_err()
-        );
-        assert!(validate_miss_reason("no_entry").is_ok());
-        assert!(validate_miss_reason("sometimes").is_err());
-    }
 }

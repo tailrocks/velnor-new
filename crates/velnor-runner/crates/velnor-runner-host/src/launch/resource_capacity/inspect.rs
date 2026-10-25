@@ -1,5 +1,3 @@
-//! Exact bounded Docker accounting for journal-owned worker pairs.
-
 use bollard::Docker;
 use bollard::errors::Error as DockerError;
 use bollard::models::{ContainerInspectResponse, HostConfig};

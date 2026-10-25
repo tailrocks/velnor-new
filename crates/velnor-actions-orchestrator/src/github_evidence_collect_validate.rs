@@ -1,5 +1,3 @@
-//! Identity, temporal-window, and path validation for captured API rows.
-
 use super::Invocation;
 use super::api::{EvidenceResult, WorkflowAttemptDetail, WorkflowRunResponse};
 use crate::internal::internal;

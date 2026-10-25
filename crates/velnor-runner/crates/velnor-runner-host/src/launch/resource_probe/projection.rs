@@ -1,5 +1,3 @@
-//! Narrow Docker projection for the controller-owned guest probe.
-
 use std::fmt;
 
 use bollard::models::{
@@ -22,7 +20,6 @@ const PATH_ENV: &str = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/
 const SOURCE_LABEL: &str = "org.opencontainers.image.revision";
 const DIGEST_DOMAIN: &[u8] = b"velnor-resource-probe-root-v1\0";
 
-/// Daemon-specific immutable image reference returned by the future verifier.
 pub(super) struct VerifiedProbeImage {
     runtime_id: String,
     platform: String,
@@ -43,7 +40,6 @@ impl fmt::Debug for VerifiedProbeImage {
 }
 
 impl VerifiedProbeImage {
-    /// Accept only the opaque immutable identity produced by the verifier.
     pub(super) fn from_verified_provider(
         runtime_id: String,
         platform: String,
@@ -97,22 +93,8 @@ impl VerifiedProbeImage {
     pub(super) fn binding_fingerprint(&self) -> &str {
         &self.binding_fingerprint
     }
-
-    #[cfg(test)]
-    pub(super) fn test_fixture() -> Self {
-        let id = format!("sha256:{}", "a".repeat(64));
-        let revision = "b".repeat(40);
-        let fingerprint = "c".repeat(64);
-        Self {
-            runtime_id: id,
-            platform: PROBE_PLATFORM.to_owned(),
-            source_revision: revision,
-            binding_fingerprint: fingerprint,
-        }
-    }
 }
 
-/// Canonical guest path, intentionally redacted from diagnostics.
 pub(super) struct DockerRoot {
     path: String,
     digest: String,
@@ -128,7 +110,6 @@ impl fmt::Debug for DockerRoot {
 }
 
 impl DockerRoot {
-    /// Reject noncanonical, relative, control-bearing, and root paths.
     pub(super) fn parse(path: &str) -> Result<Self, HostError> {
         if !canonical_absolute_nonroot(path) {
             return Err(HostError::Path);
@@ -152,7 +133,6 @@ impl DockerRoot {
     }
 }
 
-/// Complete create request. Its fields are inspected again before cleanup.
 pub(super) struct ProbeProjection {
     pub(super) name: String,
     pub(super) operation_id: String,
@@ -181,7 +161,6 @@ impl fmt::Debug for ProbeProjection {
 }
 
 impl ProbeProjection {
-    /// Construct the fixed private projection from verified daemon and image inputs.
     pub(super) fn build(
         operation_id: String,
         instance_id: String,
@@ -285,14 +264,6 @@ fn projection_digest(
     config: &ContainerCreateBody,
 ) -> Result<String, HostError> {
     canonical::pair(options, config).map(|bytes| digest_text(&bytes))
-}
-
-#[cfg(test)]
-pub(super) fn test_projection_digest(
-    options: &CreateContainerOptions,
-    config: &ContainerCreateBody,
-) -> Result<String, HostError> {
-    projection_digest(options, config)
 }
 
 fn canonical_absolute_nonroot(path: &str) -> bool {

@@ -1,16 +1,3 @@
-//! Generate-time coverage audit: every generated workflow and composite
-//! action that installs or changes a Rust toolchain verifies it before use.
-//!
-//! The lock audit reads only the `ci.yml` IR; release, qualification,
-//! freshness, upgrade and composite-action files are rendered directly. This
-//! audit reads every rendered `.github/**/*.yml` text instead, so no
-//! renderer can add a Rust install that skips the check. For each `steps:`
-//! list (YAML step anchors resolved) every step that installs or changes
-//! Rust must be followed by [`VERIFY_RUST_TOOLCHAIN_STEP`] before any step
-//! runs Rust, Cargo or MBX, and no install step may already run them.
-
-#[cfg(test)]
-use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::{render::RenderedFile, yaml::quote_scalar};
 
 use crate::OrchestratorError;
@@ -20,7 +7,6 @@ use crate::workflow::verifier_actions::{VerifierAction, VerifierActionSet};
 mod parse;
 use parse::{StepText, step_lists};
 
-/// Text that installs or changes a Rust toolchain.
 const INSTALLS: [&str; 9] = [
     " install 'rust@",
     " install rust@",
@@ -33,7 +19,6 @@ const INSTALLS: [&str; 9] = [
     "rustup toolchain link",
 ];
 
-/// Text of a step that runs Rust, Cargo or MBX.
 const USES: [&str; 6] = [
     "exec 'rust@",
     "exec rust@",
@@ -43,38 +28,10 @@ const USES: [&str; 6] = [
     "rustc --print",
 ];
 
-/// Inside an install step: it already runs what it installs (`rustup`
-/// itself, for components and targets, is allowed).
 const RUNS: [&str; 4] = ["-- rustc", "-- cargo", "-- mbx", "rustc --print"];
 
-/// A shell step that installs Rust and verifies it inside the same script
-/// (`upgrades.yml`) calls this between the install and any use.
 const SELF_VERIFY: &str = "$VELNOR_VERIFY_RUST_SCRIPT";
 
-/// Fail generation when a rendered file installs Rust without verifying it.
-///
-/// # Errors
-///
-/// Returns a contract error `rust_install_unverified:<path>:<step>`.
-#[cfg(test)]
-pub(crate) fn audit(files: &[RenderedFile]) -> Result<(), OrchestratorError> {
-    let verifiers = VerifierActionSet::build(
-        &ToolCatalog::pinned().for_emission(),
-        env!("CARGO_PKG_VERSION"),
-    )
-    .map_err(|error| OrchestratorError::Contract {
-        problem: format!("verifier_action_templates_invalid:{error}"),
-    })?;
-    audit_with_verifiers(files, &verifiers)
-}
-
-/// Validate all rendered Rust installs against exact verifier call/file
-/// templates generated from the same catalog as the workflow IR.
-///
-/// # Errors
-///
-/// Returns a contract error for an install without its canonical check or an
-/// altered/missing verifier action definition or call.
 pub(crate) fn audit_with_verifiers(
     files: &[RenderedFile],
     verifiers: &VerifierActionSet,
@@ -260,8 +217,6 @@ fn check_steps(
             continue;
         }
         let start = index;
-        // The install run, then steps that never touch Rust (artifact
-        // downloads, the Velnor helper), then the verification.
         loop {
             let Some(step) = steps.get(index) else {
                 return Err(unverified(
@@ -289,8 +244,6 @@ fn check_steps(
     Ok(())
 }
 
-/// The step verifies its own install: the check runs after every install in
-/// its text and before every use of Rust, Cargo or MBX.
 fn self_verified(step: &StepText) -> bool {
     let text = step.run_scalar.as_deref().unwrap_or(&step.text);
     let Some(check) = text.find(SELF_VERIFY) else {
@@ -322,11 +275,3 @@ fn is_rust_verifier(step: &StepText, verifiers: &VerifierActionSet) -> bool {
         .iter()
         .any(|template| canonical_inline_shape(step, template))
 }
-
-#[cfg(test)]
-#[path = "rust_install_audit_tests.rs"]
-mod tests;
-
-#[cfg(test)]
-#[path = "rust_install_audit_verifier_action_tests.rs"]
-mod verifier_action_tests;

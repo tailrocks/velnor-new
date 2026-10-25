@@ -1,5 +1,3 @@
-//! Protected hosted-run lookup and bounded qualification-receipt admission.
-
 #[path = "qualification_resolver/api.rs"]
 mod api;
 #[path = "qualification_resolver/archive.rs"]
@@ -22,13 +20,9 @@ use crate::OrchestratorError;
 use crate::internal::internal;
 use crate::root::resolve_root;
 
-/// Runner-temp staged plan-admission filename.
 pub const QUALIFICATION_ADMISSION_FILENAME: &str = "qualification-cache-admission.json";
-/// Private CLI operation tag for the plan-time receipt lookup.
 pub const QUALIFICATION_RESOLVER_OP: &str = "resolve-qualification-v1";
 
-/// Resolve and stage immutable predecessor evidence before planning.
-/// # Errors
 pub fn resolve_qualification_admission(request_path: &Path) -> Result<(), OrchestratorError> {
     let request = request::read_request(request_path)?;
     let root = checkout_root()?;
@@ -57,8 +51,6 @@ pub fn resolve_qualification_admission(request_path: &Path) -> Result<(), Orches
     stage_admission(&bytes)
 }
 
-/// Load the staged admission only for phases that require a predecessor.
-/// # Errors
 pub fn read_qualification_admission(
     response_json: &str,
     runner_temp: &Path,

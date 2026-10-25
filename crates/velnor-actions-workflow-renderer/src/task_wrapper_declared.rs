@@ -78,9 +78,6 @@ pub(super) fn declared_task_call(
     }
 }
 
-/// Task manifests currently carry only the exact GitHub expression
-/// `${{ runner.temp }}`. The data-only resolver materializes that value after
-/// checking the manifest and plan; other expressions fail before serialization.
 fn validate_runtime_expression(value: &str) -> Result<(), RenderError> {
     let mut rest = value;
     while let Some(start) = rest.find("${{") {

@@ -1,19 +1,11 @@
-//! Collection pins: `[[stacks.ansible.collections]]` against `requirements.yaml`.
-//!
-//! Velnor fetches the exact tarball from Ansible Galaxy, verifies the declared
-//! SHA-256 and installs it offline, so the config pins are the single source
-//! of truth and `requirements.yaml` must list exactly the same set.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::config::AnsibleCollection;
 
 use crate::AnsibleError;
 
-/// The only host collection tarballs may come from.
 pub const GALAXY_HOST: &str = "galaxy.ansible.com";
 
-/// Admitted tarball URL of one collection.
 #[must_use]
 pub fn collection_url(collection: &AnsibleCollection) -> String {
     let (namespace, name) = collection
@@ -26,12 +18,6 @@ pub fn collection_url(collection: &AnsibleCollection) -> String {
     )
 }
 
-/// `name -> version` pairs from the `collections:` list of `requirements.yaml`.
-///
-/// # Errors
-///
-/// `ansible_requirements_unparsed:<line>` for a line outside the supported
-/// subset, `ansible_collection_unversioned:<name>` when `version` is missing.
 pub fn parse_requirements_yaml(text: &str) -> Result<BTreeMap<String, String>, AnsibleError> {
     let mut found = BTreeMap::new();
     let mut in_list = false;
@@ -84,10 +70,6 @@ pub fn parse_requirements_yaml(text: &str) -> Result<BTreeMap<String, String>, A
     Ok(found)
 }
 
-/// Compare the declared pins with `requirements.yaml`: both directions.
-///
-/// Findings, sorted: `ansible_collections_mismatch:<name>` for a collection
-/// listed on one side only or with different versions.
 #[must_use]
 pub fn verify_collections(
     declared: &[AnsibleCollection],

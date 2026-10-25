@@ -1,5 +1,3 @@
-//! Package-release and distribution contracts exported by the public crate root.
-
 pub use crate::homebrew_formula::{
     HomebrewFormulaCandidate, VerifiedPackageRelease, validate_homebrew_formula_candidate,
 };

@@ -1,20 +1,7 @@
-//! Release checkout gates: policy-plus-source shape and credentials.
-//!
-//! Policy checkouts (no `path`) track the event commit and carry no `ref`
-//! pin; source checkouts (fixed `path`) pin the approved SHA. Every
-//! checkout fetches full history, and only checkouts that must push
-//! (preparation's policy checkout, publishers' source checkouts) persist
-//! credentials.
-
 use velnor_actions_contract::{Step, StepKind};
 
 use crate::{RenderError, release_jobs::ReleaseRole, release_tree::RELEASE_SOURCE_DIR};
 
-/// Expected `persist-credentials` for one checkout kind.
-///
-/// Only checkouts that must push carry credentials: preparation pushes
-/// the release-pr branch, publishers push tags. Everything else stays
-/// credential-free.
 fn expected_persist(role: ReleaseRole, sourced: bool) -> &'static str {
     let pushes = (!sourced && role == ReleaseRole::Preparation)
         || (sourced
@@ -25,18 +12,6 @@ fn expected_persist(role: ReleaseRole, sourced: bool) -> &'static str {
     if pushes { "true" } else { "false" }
 }
 
-/// Validate the shape of every release checkout step.
-///
-/// Policy checkouts track the event commit (release-pr requires a
-/// branch, and a pinned policy would desync the workflow from its
-/// configs); source checkouts pin the approved SHA under the fixed
-/// path. Every checkout fetches full history: release-plz needs tags
-/// plus history for selection and changelogs.
-///
-/// # Errors
-///
-/// Returns [`RenderError::InvalidWorkflow`] for wrong credentials,
-/// shallow history, pinned policies, stray paths, or rebound refs.
 pub fn check_checkout_shape(
     id: &str,
     steps: &[Step],
@@ -89,7 +64,6 @@ pub fn check_checkout_shape(
     Ok(())
 }
 
-/// True when a source checkout pins `path` plus `ref` to the approved source.
 fn has_exact_checkout(steps: &[Step], sha: &str) -> bool {
     steps.iter().any(|step| {
         matches!(&step.kind, StepKind::Action { uses, with, .. }
@@ -99,12 +73,6 @@ fn has_exact_checkout(steps: &[Step], sha: &str) -> bool {
     })
 }
 
-/// Require an exact-source checkout (no fallback to unverified checkouts).
-///
-/// # Errors
-///
-/// Returns [`RenderError::InvalidWorkflow`] when no checkout pins the
-/// approved source path plus SHA.
 pub fn require_exact_checkout(id: &str, steps: &[Step], sha: &str) -> Result<(), RenderError> {
     if has_exact_checkout(steps, sha) {
         Ok(())

@@ -1,15 +1,3 @@
-//! Release job assembly: pinned coordinator argv plus the role set.
-//!
-//! Every release-plz invocation runs through pinned Mise tools
-//! (`rust` plus `release-plz`, exact versions from the compiled
-//! catalog) with an explicit `--config` binding plus the `GIT_TOKEN`
-//! forge binding; no argv is invented here — shapes come from the Mise
-//! release-plz builders. Jobs read configs from the policy checkout
-//! (event commit) while preflight and publishers run release-plz
-//! against the exact-source checkout. OIDC mode assembles four jobs;
-//! bootstrap-token mode adds the fifth publish job carrying the single
-//! registry-token binding.
-
 use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
@@ -29,70 +17,36 @@ use crate::OrchestratorError;
 use crate::release_checkouts::{forge_env, policy_checkout, source_checkout, source_manifest};
 use crate::utf8::strings_of;
 
-/// Bootstrap token: env key plus its only secret binding.
 const BOOTSTRAP_TOKEN_ENV: &str = "CARGO_REGISTRY_TOKEN";
-/// Bootstrap token secret reference (env-only, never argv).
 const BOOTSTRAP_SECRET_REF: &str = "${{ secrets.CARGO_REGISTRY_TOKEN }}";
 
-/// Release-plz invocation kind per job.
 pub(crate) enum Phase {
-    /// `release-pr`: preparation only, never publishes.
     PreparePr,
-    /// `release`: the publish jobs.
     Publish,
-    /// `release --dry-run`: validation without upload.
     DryRun,
 }
 
-/// Shared job inputs.
 pub(crate) struct JobInputs<'a> {
-    /// Validated release section.
     pub(crate) release: &'a RustReleaseConfig,
-    /// Exact publish gate condition.
     pub(crate) gate: String,
-    /// Approved source SHA every source checkout pins.
     pub(crate) sha: &'a str,
-    /// `--registry` value; `None` keeps Cargo’s implicit default implicit.
-    /// An explicit alternative registry retains its selected name.
     pub(crate) registry: Option<&'a str>,
-    /// Literal runner label.
     pub(crate) label: &'a str,
-    /// Pinned Mise setup step inputs.
     pub(crate) mise: &'a MiseSetup,
-    /// Pinned tool catalog for coordinator argv.
     pub(crate) catalog: &'a ToolCatalog,
 }
 
-/// One job's assembled head (checkouts plus setup) and bindings.
 struct JobParts<'a> {
-    /// Credential-free policy checkout (config reads only).
     policy: Step,
-    /// Credentialed policy checkout (preparation pushes its branch).
     policy_push: Step,
-    /// Credential-free exact-source checkout (dry-run validation).
     source: Step,
-    /// Credentialed exact-source checkout (publishers push tags).
     source_push: Step,
-    /// Pinned Mise setup step.
     setup: Step,
-    /// Literal runner label.
     label: &'a str,
-    /// Exact publish gate condition.
     gate: &'a str,
-    /// Protected publishing environment.
     environment: &'a str,
 }
 
-/// Assemble the four (OIDC) or five (bootstrap) release jobs.
-///
-/// Preparation runs `release-pr` on the policy checkout, preflight
-/// dry-runs the publish config against the exact source, each publish
-/// job releases its own generated config from the exact source, and
-/// reconcile dry-runs the normal config against the policy tree.
-///
-/// # Errors
-///
-/// Returns render or contract errors for invalid steps or argv.
 pub(crate) fn assemble_jobs(
     inputs: &JobInputs<'_>,
 ) -> Result<BTreeMap<String, ReleaseJobSpec>, OrchestratorError> {
@@ -175,11 +129,6 @@ pub(crate) fn assemble_jobs(
     Ok(jobs)
 }
 
-/// Fixed coordinator argv through pinned Mise tools.
-///
-/// # Errors
-///
-/// Returns contract errors when argv construction or UTF-8 fails.
 pub(crate) fn phase_argv(
     phase: &Phase,
     config: &str,
@@ -213,7 +162,6 @@ pub(crate) fn phase_argv(
     strings_of(exec.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
-/// Bind `--registry` on a `release-pr` request unless it is the default.
 fn pr_registry(
     request: ReleasePrRequest,
     registry: Option<&str>,
@@ -224,7 +172,6 @@ fn pr_registry(
     }
 }
 
-/// Bind `--registry` on a `release` request unless it is the default.
 fn plz_registry(
     request: PlzRelease,
     registry: Option<&str>,
@@ -235,7 +182,6 @@ fn plz_registry(
     }
 }
 
-/// Map a Mise builder failure onto the contract error channel.
 #[expect(clippy::needless_pass_by_value, reason = "map_err passes owned errors")]
 fn map_mise(err: velnor_actions_mise::MiseError) -> OrchestratorError {
     OrchestratorError::Contract {
@@ -243,7 +189,6 @@ fn map_mise(err: velnor_actions_mise::MiseError) -> OrchestratorError {
     }
 }
 
-/// Preparation: branch checkout, no gate, GitHub authority only.
 fn preparation_job(
     parts: &JobParts<'_>,
     argv: Vec<String>,
@@ -266,7 +211,6 @@ fn preparation_job(
     })
 }
 
-/// Preflight: dry-run validation against the exact source.
 fn preflight_job(
     parts: &JobParts<'_>,
     argv: Vec<String>,
@@ -289,7 +233,6 @@ fn preflight_job(
     })
 }
 
-/// OIDC publish: gated, environment-pinned, zero registry-token material.
 fn publish_job(
     parts: &JobParts<'_>,
     argv: Vec<String>,
@@ -312,7 +255,6 @@ fn publish_job(
     })
 }
 
-/// Bootstrap publish: gated, environment-pinned, one token binding.
 fn bootstrap_job(
     parts: &JobParts<'_>,
     argv: Vec<String>,
@@ -340,7 +282,6 @@ fn bootstrap_job(
     })
 }
 
-/// Reconcile: independent revalidation after every publisher.
 fn reconcile_job(
     parts: &JobParts<'_>,
     argv: Vec<String>,

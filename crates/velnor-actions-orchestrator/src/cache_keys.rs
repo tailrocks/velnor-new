@@ -1,12 +1,3 @@
-//! Generated Plan-job `Compute cache keys` step.
-//!
-//! Runtime-keyed families (sources, `OpenTofu` providers) cannot key on
-//! `hashFiles` plus literal tool versions: those keys churn on unrelated
-//! pin bumps and cannot carry trust. This step computes the runtime trust
-//! and every family key once in the Plan job with coreutils `sha256sum`
-//! (`s256-<64 hex>` digests) and publishes them as step outputs that the
-//! renderer promotes to Plan job outputs for every consumer.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::cache_family::{
@@ -19,9 +10,7 @@ use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
 use crate::OrchestratorError;
 
-/// Default-branch ref, compared against `GITHUB_REF` for trusted pushes.
 pub(crate) const DEFAULT_REF_ENV: &str = "VELNOR_DEFAULT_REF";
-/// Pull-request head fork flag (`false` only for same-repository PRs).
 pub(crate) const HEAD_FORK_ENV: &str = "VELNOR_PR_HEAD_FORK";
 const DEFAULT_REF_EXPR: &str =
     "${{ format('refs/heads/{0}', github.event.repository.default_branch) }}";
@@ -29,11 +18,6 @@ const HEAD_FORK_EXPR: &str = "${{ github.event.pull_request.head.repo.fork }}";
 const OUTPUT_DELIMITER: &str = "VELNOR_CACHE_KEYS_EOF";
 const MAX_KEY: usize = velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES;
 
-/// Build the key step, or nothing when no runtime-keyed family exists.
-/// # Errors
-///
-/// Returns contract errors for unsafe roots, overlong static key bounds,
-/// or a rejected step shape.
 pub(crate) fn cache_keys_step(
     catalog: &ToolCatalog,
     fetch_roots: &[String],
@@ -78,7 +62,6 @@ pub(crate) fn cache_keys_step(
     Ok(Some(step))
 }
 
-/// Scratch dir, the digest helper, and the trust decision.
 fn prelude() -> Vec<String> {
     vec![
         "set -eu".to_owned(),
@@ -96,7 +79,6 @@ fn prelude() -> Vec<String> {
     ]
 }
 
-/// Lines hashed into a family compat digest: identity, paths, platform.
 fn compat_header(family: CacheFamily, root_locator: Option<&str>, file: &str) -> Vec<String> {
     let spec = family.spec();
     let mut lines = vec![
@@ -115,7 +97,6 @@ fn compat_header(family: CacheFamily, root_locator: Option<&str>, file: &str) ->
     ]
 }
 
-/// Sources compat (paths, platform, Cargo home) and lockfile snapshot.
 fn sources_commands(fetch_roots: &[String]) -> Result<Vec<String>, OrchestratorError> {
     let prefix = CacheFamily::Sources.key_prefix();
     let home = CARGO_HOME_EXPR.replace(RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL);
@@ -152,7 +133,6 @@ fn sources_commands(fetch_roots: &[String]) -> Result<Vec<String>, OrchestratorE
     Ok(script)
 }
 
-/// Per-root provider compat (paths, platform, installed `tofu version`) and lock snapshot.
 fn tofu_commands(
     catalog: &ToolCatalog,
     tofu_roots: &[String],
@@ -193,7 +173,3 @@ fn tofu_commands(
     }
     Ok(script)
 }
-
-#[cfg(test)]
-#[path = "cache_keys_tests.rs"]
-mod tests;

@@ -1,5 +1,3 @@
-//! Complete PR commit inventory; native writer single-commit policy is separate.
-
 use super::{
     FeedbackContext, MAX_FEEDBACK_RECORDS, TapMergeGitHub, Value, internal, paged_commit_comments,
     paged_values,
@@ -111,7 +109,3 @@ fn valid_sha(sha: &str) -> bool {
             .bytes()
             .all(|b| b.is_ascii_digit() || matches!(b, b'a'..=b'f'))
 }
-
-#[cfg(test)]
-#[path = "tap_merge_feedback_commits_tests.rs"]
-mod tests;

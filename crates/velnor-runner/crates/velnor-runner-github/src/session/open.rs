@@ -1,5 +1,3 @@
-//! Create and refresh a message session. HTTP 409 does not delete the other one.
-
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
@@ -13,24 +11,20 @@ use super::error::{SessionError, reject};
 use super::request::{Exchange, Method, SessionRequest, Transport};
 use super::retry::{API_QUERY, execute, fresh_gate, json_content};
 
-/// Session the service created. The queue token is not in [`Debug`].
 pub struct QueueSession {
-    /// Service session id.
     pub session_id: String,
-    /// Message queue path or URL. Poll uses this path.
+
     pub message_queue_url: String,
     statistics: Option<Statistics>,
     token: String,
 }
 
 impl QueueSession {
-    /// Borrow the queue token for the `Authorization` header only.
     #[must_use]
     pub fn token(&self) -> &str {
         &self.token
     }
 
-    /// Counts from the create or refresh body. Absent when the service omitted them.
     #[must_use]
     pub fn statistics(&self) -> Option<&Statistics> {
         self.statistics.as_ref()
@@ -55,13 +49,6 @@ impl Drop for QueueSession {
     }
 }
 
-/// `POST .../sessions`. One attempt. HTTP 401 is not a refresh loop.
-///
-/// # Errors
-///
-/// Returns [`WireError::RegistrationRejected`] for an empty owner,
-/// [`SessionError::Conflict`] on HTTP 409, and [`SessionError::Wire`] when
-/// the body is not a session.
 pub fn create_session<T>(
     transport: &mut T,
     scale_set_id: i64,
@@ -85,11 +72,6 @@ where
     finish(&exchange)
 }
 
-/// `PATCH .../sessions/{id}`. Does not delete a conflicting session.
-///
-/// # Errors
-///
-/// Same failures as [`create_session`], plus an empty session id.
 pub fn refresh_session<T>(
     transport: &mut T,
     scale_set_id: i64,
@@ -112,14 +94,6 @@ where
     finish(&exchange)
 }
 
-/// PATCH only while `held` is still the expired snapshot.
-///
-/// A different session id or queue token means another refresh already won.
-/// The transport is not called.
-///
-/// # Errors
-///
-/// Same failures as [`refresh_session`] when the snapshot still matches.
 pub fn refresh_if_current<T>(
     transport: &mut T,
     scale_set_id: i64,

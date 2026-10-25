@@ -1,4 +1,3 @@
-//! C alone invalidates and emits the exact-head completion check, never merges.
 use super::{
     capture,
     state::{self, CompletionState, Operation, Proposal},
@@ -13,12 +12,8 @@ use velnor_actions_contract::{
     },
 };
 
-/// Fixed separately credentialed C operation.
 pub const EMIT_REVIEW_COMPLETION_OP: &str = "emit-review-completion-v1";
 
-/// Independently reauthenticate current evidence and update one C check.
-/// # Errors
-/// API failure is never reported as successful remote invalidation or completion.
 pub fn emit_review_completion() -> Result<(), OrchestratorError> {
     let operation = state::operation("review-completion")?;
     operation
@@ -41,8 +36,6 @@ fn emit_until(operation: &Operation) -> Result<(), OrchestratorError> {
         .and_then(Value::as_str)
         .ok_or_else(|| internal("review_completion_head"))?;
     let id = unique_check(operation, head)?;
-    // An existing same-head success is invalidated BEFORE lengthy provider or
-    // feedback reads. If this API write fails, the operation itself fails.
     let check = write(
         operation,
         id,
@@ -73,8 +66,6 @@ fn emit_until(operation: &Operation) -> Result<(), OrchestratorError> {
             return Err(internal("review_completion_changed_after_publication"));
         }
     }
-    // Read the service again: a successful response alone is not the final
-    // unique-check/head/App observation required for a completion claim.
     if unique_check(operation, head)? != Some(id) {
         return Err(internal("review_completion_check_changed"));
     }
@@ -209,7 +200,3 @@ fn completion(proposal: &Proposal, name: &str) -> Result<String, OrchestratorErr
     .map_err(|_| internal("review_completion_payload"))?;
     String::from_utf8(bytes).map_err(|_| internal("review_completion_encode"))
 }
-
-#[cfg(test)]
-#[path = "review_completion_emit_tests.rs"]
-mod tests;

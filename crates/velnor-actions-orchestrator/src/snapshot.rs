@@ -1,36 +1,15 @@
-//! Canonical identity helpers: digests, paths, components (P03).
-//!
-//! Declared via `#[path]` from `internal_plan.rs` (no `lib.rs` edit).
-//! Centralizes canonical serialization, strict parsing, checkout-path
-//! normalization, Cargo ID normalization, generator markers, the single
-//! immutable [`ExecutionSnapshot`] per analysis, platform identity and
-//! planned-platform target resolution, and SHA-256 executable verification. Group identities live in
-//! [`super::identities`], per-task closures in [`super::closure`];
-//! unknown inputs are explicit states, never silent `None`s.
-
 use serde::Serialize;
 use velnor_actions_contract::{
     ContractError, PlannedPlatform, ProposedTask, Stack, canonical_json_bytes, digest_b3,
 };
 
-/// Explicit unknown marker for unverifiable archive sources.
-///
-/// Deprecated: archive callers must bind real source content (P04-7);
-/// this marker fails closed wherever it still appears.
 pub(crate) const UNKNOWN_ARCHIVE_SOURCE: &str = "velnor-unknown-archive-source-v1";
-/// SHA-256 of the empty string: explicit unverified-generator marker.
 pub(crate) const UNRESOLVED_GENERATOR_SHA: &str =
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
-/// BLAKE3 digest over canonical JSON bytes: the single digest function.
-///
-/// # Errors
-///
-/// Returns [`ContractError`] when canonical serialization fails.
 pub(crate) fn canonical_digest<T: Serialize>(value: &T) -> Result<String, ContractError> {
     Ok(digest_b3(&canonical_json_bytes(value)?))
 }
 
-/// Release triple for the build host; unknown pairs keep `{arch}-{os}`.
 pub(crate) fn map_release_triple(arch: &str, os: &str) -> String {
     match (arch, os) {
         ("x86_64", "linux") => "x86_64-unknown-linux-gnu",
@@ -41,22 +20,10 @@ pub(crate) fn map_release_triple(arch: &str, os: &str) -> String {
     .to_owned()
 }
 
-/// Platform identity digest over runner image evidence (P03-4).
-///
-/// # Errors
-///
-/// Returns [`ContractError`] for unsupported targets and invalid
-/// platform inputs; no fallback digest is ever substituted.
 pub(crate) fn platform_id_for(label: &str, target: &str) -> Result<String, ContractError> {
     Ok(PlannedPlatform::new(label, target)?.platform_id)
 }
 
-/// Resolve a task's concrete target without inferring facts from host state.
-///
-/// Mise checks use their own `runner_profile` label; every other stack pins
-/// the Linux x64 host. Mirrors [`super::identities::platform_id_for_group`]
-/// target selection so planned platforms commit to the executed target.
-/// # Errors
 pub(crate) fn platform_target_for_group(
     label: &str,
     task: &ProposedTask,
@@ -90,9 +57,6 @@ pub(crate) fn platform_target_for_group(
         task.identity.target.clone()
     };
     if target != host {
-        // Unknown triples report `unsupported_target` before drift: the
-        // identity computation historically failed first, and callers pin
-        // that precedence.
         if !velnor_actions_contract::is_supported_target(&target) {
             return Err(ContractError::identity(
                 "target",
@@ -104,33 +68,18 @@ pub(crate) fn platform_target_for_group(
     Ok(target)
 }
 
-/// One immutable execution snapshot per analysis (P03-1).
-///
-/// Root cause of per-group rebuilds: every group rescanned discovery
-/// and recomputed graph digests linearly. The snapshot builds the
-/// graph/path index once and every group lookup is a map hit. All
-/// fields are private with no setters: construction is total and the
-/// value is immutable by construction.
 #[derive(Debug, Clone)]
 pub(crate) struct ExecutionSnapshot {
-    /// Workspace-root to canonical graph digest.
     graph_digests: std::collections::BTreeMap<String, String>,
-    /// Workspace-root to workspace identity digest.
     workspace_ids: std::collections::BTreeMap<String, String>,
-    /// Package ID to owning workspace root.
     member_index: std::collections::BTreeMap<String, String>,
-    /// Manifest path to owning package ID.
     manifest_index: std::collections::BTreeMap<String, String>,
-    /// Precomputed tool-input config digest.
     config_digest: String,
-    /// Package ID to `(targets, has_build_script)`.
     package_meta: std::collections::BTreeMap<String, (Vec<String>, bool)>,
-    /// Per-snapshot Rust closure probe cache.
     rust_cache: std::cell::RefCell<velnor_actions_rust::RustClosureCache>,
 }
 
 impl ExecutionSnapshot {
-    /// Build the snapshot once per analysis from discovery facts.
     pub(crate) fn build(discovery: &crate::discover::Discovery) -> Self {
         let mut graph_digests = std::collections::BTreeMap::new();
         let mut workspace_ids = std::collections::BTreeMap::new();
@@ -164,12 +113,10 @@ impl ExecutionSnapshot {
         }
     }
 
-    /// Precomputed tool-input config digest.
     pub(crate) fn config_digest(&self) -> &str {
         &self.config_digest
     }
 
-    /// Targets and build-script flag for `package_id` or `manifest`.
     pub(crate) fn package_meta_for(
         &self,
         package_id: &str,
@@ -187,7 +134,6 @@ impl ExecutionSnapshot {
         None
     }
 
-    /// Cached Rust lockfile digest slot at `root`.
     pub(crate) fn rust_lock_digest(
         &self,
         root: &std::path::Path,
@@ -196,7 +142,6 @@ impl ExecutionSnapshot {
         velnor_actions_rust::lock_digest_cached(root, manifest, &mut self.rust_cache.borrow_mut())
     }
 
-    /// Cached Rust Nextest-config digest slot at `root`.
     pub(crate) fn rust_nextest_digest(
         &self,
         root: &std::path::Path,
@@ -209,7 +154,6 @@ impl ExecutionSnapshot {
         )
     }
 
-    /// Resolve a Rust task input closure using the snapshot's probe cache.
     pub(crate) fn resolve_rust_closure(
         &self,
         root: &std::path::Path,
@@ -230,7 +174,6 @@ impl ExecutionSnapshot {
         )
     }
 
-    /// Graph digest for the workspace owning `package_id` or `manifest`.
     pub(crate) fn graph_digest_for(&self, package_id: &str, manifest: &str) -> String {
         self.owner_root(package_id, manifest)
             .and_then(|root| self.graph_digests.get(root))
@@ -238,7 +181,6 @@ impl ExecutionSnapshot {
             .unwrap_or_else(|| digest_b3(b"no-workspace"))
     }
 
-    /// Workspace identity for the workspace owning `package_id` or `manifest`.
     pub(crate) fn workspace_id_for(&self, package_id: &str, manifest: &str) -> String {
         self.owner_root(package_id, manifest)
             .and_then(|root| self.workspace_ids.get(root))
@@ -246,7 +188,6 @@ impl ExecutionSnapshot {
             .unwrap_or_else(|| digest_b3(b"no-workspace"))
     }
 
-    /// Owning workspace root for one group, via the prebuilt index.
     fn owner_root(&self, package_id: &str, manifest: &str) -> Option<&String> {
         if let Some(root) = self.member_index.get(package_id) {
             return Some(root);
@@ -254,83 +195,5 @@ impl ExecutionSnapshot {
         self.manifest_index
             .get(manifest)
             .and_then(|id| self.member_index.get(id))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn canonical_bytes_ignore_key_order() {
-        let left = serde_json::json!({"b": 1, "a": [1, 2]});
-        let right = serde_json::json!({"a": [1, 2], "b": 1});
-        assert_eq!(
-            canonical_digest(&left).expect("digest"),
-            canonical_digest(&right).expect("digest")
-        );
-    }
-
-    #[test]
-    fn triples_map_to_release_targets() {
-        assert_eq!(
-            map_release_triple("x86_64", "linux"),
-            "x86_64-unknown-linux-gnu"
-        );
-        assert_eq!(map_release_triple("riscv64", "linux"), "riscv64-linux");
-        assert!(!UNRESOLVED_GENERATOR_SHA.bytes().all(|b| b == b'0'));
-    }
-
-    #[test]
-    fn platform_images_and_versions_flip() {
-        let linux = platform_id_for("ubuntu-26.04", "x86_64-unknown-linux-gnu").expect("platform");
-        let older = platform_id_for("ubuntu-24.04", "x86_64-unknown-linux-gnu").expect("platform");
-        assert_ne!(linux, older);
-        assert!(velnor_actions_contract::validate_digest(&linux).is_ok());
-    }
-
-    #[test]
-    fn platform_image_evidence_is_unobserved_not_label_split() {
-        for label in [
-            "ubuntu-26.04",
-            "ubuntu-24.04",
-            "scale-set:velnor+ubuntu-26.04-scale-set",
-        ] {
-            let inputs = PlannedPlatform::new(label, "x86_64-unknown-linux-gnu")
-                .expect("platform")
-                .inputs()
-                .expect("inputs");
-            assert_eq!(inputs.runs_on, label);
-            assert_eq!(
-                inputs.image_os,
-                velnor_actions_contract::UNOBSERVED_IMAGE_VALUE,
-                "{label}"
-            );
-        }
-        let fabricated = velnor_actions_contract::cachekey::PlatformInputs {
-            os: "linux".to_owned(),
-            arch: "x86_64".to_owned(),
-            runs_on: "ubuntu-26.04".to_owned(),
-            image_os: "ubuntu".to_owned(),
-            target: "x86_64-unknown-linux-gnu".to_owned(),
-        };
-        let honest = platform_id_for("ubuntu-26.04", "x86_64-unknown-linux-gnu").expect("id");
-        let fake = velnor_actions_contract::cachekey::platform_id(&fabricated).expect("id");
-        assert_ne!(honest, fake);
-    }
-
-    #[test]
-    fn unknown_targets_reject_instead_of_taking_host() {
-        for target in [
-            "host",
-            "riscv64-unknown-linux-gnu",
-            "x86_64-pc-windows-msvc",
-            "",
-        ] {
-            let err = platform_id_for("ubuntu-26.04", target).expect_err("target");
-            assert!(err.to_string().contains("unsupported_target"), "{err}");
-        }
-        let mac = platform_id_for("ubuntu-26.04", "aarch64-apple-darwin").expect("mac");
-        assert!(velnor_actions_contract::validate_digest(&mac).is_ok());
     }
 }

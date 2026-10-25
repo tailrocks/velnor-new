@@ -1,5 +1,3 @@
-//! Exact same-engine inspection predicates for probe execution and cleanup.
-
 use bollard::{
     Docker,
     errors::Error as DockerError,
@@ -125,7 +123,6 @@ fn normalize_docker_defaults(actual: &mut bollard::models::ContainerConfig, id: 
         return false;
     }
     if actual.network_disabled.is_none() {
-        // Engine 29 omits this inspect field; host_matches still requires NetworkMode=none.
         actual.network_disabled = Some(true);
     }
     if actual.exposed_ports.as_ref().is_some_and(Vec::is_empty) {

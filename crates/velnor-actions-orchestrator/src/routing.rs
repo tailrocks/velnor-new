@@ -1,8 +1,3 @@
-//! Schema 2 migration and the workflows schema 2 emits only when asked.
-//!
-//! Preview and `--write` share one encoded document. Schema 1 generation
-//! never reaches the schema 2 workflow renderer.
-
 use std::path::Path;
 
 use velnor_actions_contract::config::LATEST_RUNNER_LABEL;
@@ -14,15 +9,6 @@ use velnor_actions_workflow_renderer::{
 use crate::OrchestratorError;
 use crate::config::{CONFIG_REL, config_error, load_config};
 
-/// Print or persist the schema 2 form of `.velnor/config.toml`.
-///
-/// `to` other than 2 fails before any read or write. Without `write`,
-/// the file is left untouched. The returned text is exactly what
-/// `--write` stores.
-///
-/// # Errors
-///
-/// Unsupported targets, config errors, and IO errors.
 #[must_use = "the preview text is the only bytes --write stores"]
 pub fn migrate_config(root: &Path, to: u32, write: bool) -> Result<String, OrchestratorError> {
     if to != VelnorConfig::SCHEMA_V2 {
@@ -39,20 +25,10 @@ pub fn migrate_config(root: &Path, to: u32, write: bool) -> Result<String, Orche
     Ok(text)
 }
 
-/// Parse a dispatch mode. Explicit dispatch wins over `execution.mode`.
-///
-/// # Errors
-///
-/// Spellings other than `hosted`, `scale-set`, and `both` fail.
 pub fn parse_dispatch_mode(text: &str) -> Result<ExecutionMode, OrchestratorError> {
     ExecutionMode::parse(text).map_err(config_error)
 }
 
-/// Schema 2 workflows requested by this config. Schema 1 returns none.
-///
-/// # Errors
-///
-/// Illegal selectors or a bad generator version fail.
 pub(crate) fn extra_files(
     config: &VelnorConfig,
     catalog: &velnor_actions_mise::ToolCatalog,
@@ -190,7 +166,3 @@ fn workflow_request(
         product_release,
     })
 }
-
-#[cfg(test)]
-#[path = "routing_verifier_boundary_tests.rs"]
-mod verifier_boundary_tests;

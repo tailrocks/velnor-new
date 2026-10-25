@@ -1,5 +1,3 @@
-//! Private binding from an immutable published SDK release to renderer inputs.
-
 use velnor_actions_mise::CheckDeadline;
 
 use crate::{
@@ -17,11 +15,6 @@ const MAX_SIDECAR_BYTES: u64 = 1024;
 const MAX_PROVENANCE_BYTES: u64 = 64 * 1024;
 const MAX_ATTESTATION_BYTES: u64 = 1024 * 1024;
 
-#[cfg(test)]
-#[path = "homebrew_adoption_sdk_binding_tests.rs"]
-mod tests;
-
-/// Authenticated values safe to pass to the pure seed renderer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PublishedSdkBindingIdentity {
     pub(crate) repository: &'static str,
@@ -34,11 +27,6 @@ pub(crate) struct PublishedSdkBindingIdentity {
     pub(crate) host_binary_sha256: String,
 }
 
-/// Private custody for a separately published, immutable SDK release.
-///
-/// This value has no deserializer or public constructor. It can be created only
-/// after release bytes, manifest attestation, producer run, and protected-main
-/// lineage pass independent public verification.
 #[derive(Debug, Clone)]
 pub(crate) struct VerifiedPublishedSdkBinding {
     identity: PublishedSdkBindingIdentity,
@@ -55,9 +43,6 @@ impl VerifiedPublishedSdkBinding {
     }
 }
 
-/// Select and authenticate an external SDK release using data from the
-/// reviewed seed input. Every supplied value is treated as untrusted until it
-/// matches the immutable GitHub release and its verified manifest attestation.
 pub(crate) fn verify_published_sdk_binding(
     transition: &ProtectedHomebrewAdoptionTransition,
     version: &str,

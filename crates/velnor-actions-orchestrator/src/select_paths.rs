@@ -1,5 +1,3 @@
-//! Git-owned path inspection helpers shared by change selection.
-
 use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::path::Path;
@@ -9,7 +7,6 @@ use velnor_actions_mise::GitRequest;
 use crate::git_paths::split_nul_paths;
 use crate::validators::{validate_diff_rev, validate_select_diff_args};
 
-/// Staged (`--cached`) or unstaged names, NUL-delimited like committed diffs.
 pub(super) fn tree_diff_names(root: &Path, cached: bool) -> Result<BTreeSet<String>, String> {
     let mut args = vec![OsString::from("--name-only")];
     if cached {
@@ -28,7 +25,6 @@ pub(super) fn tree_diff_names(root: &Path, cached: bool) -> Result<BTreeSet<Stri
     split_nul_paths(&output.stdout)
 }
 
-/// Resolve `HEAD` to a validated SHA for local comparison.
 pub(super) fn head_sha(root: &Path) -> Result<String, String> {
     let output = GitRequest::rev_parse(vec![OsString::from("HEAD")])
         .run_in(root)
@@ -45,7 +41,6 @@ pub(super) fn head_sha(root: &Path) -> Result<String, String> {
     Ok(sha)
 }
 
-/// Untracked non-ignored paths; callers broaden if the query fails.
 pub(super) fn untracked_files(root: &Path) -> Result<BTreeSet<String>, String> {
     let args = ["--others", "--exclude-standard", "-z"]
         .iter()
@@ -60,8 +55,6 @@ pub(super) fn untracked_files(root: &Path) -> Result<BTreeSet<String>, String> {
     split_nul_paths(&output.stdout)
 }
 
-/// Other tool files (nested Mise configs) produce findings only and never
-/// select or broaden.
 pub(super) fn is_advisory_toolfile(path: &str) -> bool {
     path == ".mise.toml" || velnor_actions_rust::is_known_toolfile(path)
 }

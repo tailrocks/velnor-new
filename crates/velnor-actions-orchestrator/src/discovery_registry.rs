@@ -1,10 +1,8 @@
-//! Closed detector dispatch; explicit checks bypass detector inventories.
 use crate::OrchestratorError;
 use velnor_actions_contract::{
     DETECTION_SCHEMA, DetectedProject, DetectorEntry, Stack, StackCandidate,
 };
 
-/// Detector registry (stack id, record schema, implementation), ascending.
 pub(super) const DETECTORS: [DetectorEntry; 2] = [
     (
         Stack::Rust.id(),
@@ -18,7 +16,6 @@ pub(super) const DETECTORS: [DetectorEntry; 2] = [
     ),
 ];
 
-/// Convert neutral candidates to detected projects via closed dispatch.
 pub(super) fn detected_projects(
     candidates: &[StackCandidate],
 ) -> Result<Vec<DetectedProject>, OrchestratorError> {
@@ -78,7 +75,6 @@ pub(super) fn detected_projects(
     Ok(projects)
 }
 
-/// Registered detectors as (stack ID, record schema), ascending.
 pub(crate) fn detector_entries() -> Vec<(&'static str, u32)> {
     DETECTORS
         .iter()

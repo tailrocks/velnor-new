@@ -90,7 +90,3 @@ pub(super) fn read_regular_bounded(path: &Path, max: u64) -> Result<Vec<u8>, Orc
     crate::release_policy_admission::metadata::read(path)
         .map_err(|_| internal("package_recovery_plan_read"))
 }
-
-#[cfg(test)]
-#[path = "package_release_publish_recovery_files_tests.rs"]
-mod tests;

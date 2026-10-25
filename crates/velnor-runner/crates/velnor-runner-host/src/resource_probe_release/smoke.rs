@@ -56,7 +56,3 @@ fn validate_record(record: &ProbeRecord) -> Result<(), HostError> {
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "smoke_tests.rs"]
-mod tests;

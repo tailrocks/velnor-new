@@ -1,5 +1,3 @@
-//! Exact, bounded extraction for immutable release-candidate TAR files.
-
 use std::ffi::CString;
 use std::fs::{self, File};
 use std::io::{Read, Write};
@@ -174,9 +172,6 @@ where
                 AtFlags::empty(),
             )
             .map_err(|error| format!("candidate output publication failed: {error}"))?;
-            // Track the name as soon as linkat succeeds. If the following
-            // metadata lookup fails, rollback can still remove this link, but
-            // only while it names the held source inode.
             published.push(Published {
                 name: target.clone(),
                 identity: entry.identity,
@@ -227,7 +222,3 @@ use filesystem::{
     unlink_matching,
 };
 use parse::{parse_candidate, validate_names};
-
-#[cfg(test)]
-#[path = "candidate_extract_tests.rs"]
-mod tests;

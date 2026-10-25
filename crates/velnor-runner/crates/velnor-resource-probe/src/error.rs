@@ -1,18 +1,16 @@
 use std::fmt::{self, Display, Formatter};
 use std::io;
 
-/// A fixed measurement or output error that never includes sampled file contents.
 #[derive(Debug)]
 pub enum ProbeError {
-    /// A required fixed-path measurement could not be read.
     Read(&'static str, io::Error),
-    /// Required input did not match the protocol's bounded numeric grammar.
+
     Invalid(&'static str),
-    /// A checked conversion or multiplication exceeded the output type.
+
     Overflow(&'static str),
-    /// A fixed procfs input exceeded its explicit byte cap.
+
     InputTooLarge(&'static str),
-    /// The serialized record exceeded the stdout protocol cap.
+
     OutputTooLarge,
 }
 

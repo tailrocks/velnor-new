@@ -1,4 +1,3 @@
-//! Manual stable release workflow emission from the shared native inventory.
 use crate::{OrchestratorError, prepare::GenerationPreparation};
 use std::{fs, path::Path};
 use velnor_actions_contract::config::RustBinaryReleaseConfig;

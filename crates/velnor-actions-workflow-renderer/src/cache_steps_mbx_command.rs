@@ -1,5 +1,3 @@
-//! Narrow recognition of actual MBX command positions in rendered steps.
-
 use velnor_actions_contract::{Step, StepKind, StepRole};
 
 const MISE_PREFIX: [&str; 5] = ["mise", "--no-config", "--no-env", "--no-hooks", "exec"];
@@ -30,7 +28,6 @@ impl ShellToken {
     }
 }
 
-/// True when one supported Mise command selects MBX outside the native action.
 pub(super) fn has_external_mbx_selector(step: &Step) -> bool {
     match &step.kind {
         StepKind::Shell { run, .. } => {
@@ -68,7 +65,6 @@ fn selector_words(run: &[String]) -> Option<Vec<ShellToken>> {
     }
 }
 
-/// Split supported shell words and unquoted operators without erasing token identity.
 fn shell_words(script: &str) -> Option<Vec<ShellToken>> {
     let mut words = Vec::new();
     let mut current = String::new();
@@ -160,8 +156,6 @@ fn has_mbx_selector_in_command(words: &[ShellToken], start: usize) -> bool {
     !install.is_empty() || !exec.is_empty()
 }
 
-/// MBX selectors of one `mise` command, split by their surface: pinned
-/// bootstrap `install` specs first, `exec` tool selectors second.
 fn mbx_selectors_in_command(words: &[ShellToken], start: usize) -> (Vec<String>, Vec<String>) {
     let none = (Vec::new(), Vec::new());
     let prefix_matches = words
@@ -201,12 +195,6 @@ fn mbx_selectors_in_command(words: &[ShellToken], start: usize) -> (Vec<String>,
     }
 }
 
-/// MBX selectors of one rendered step, split by their mise surface.
-///
-/// Install selectors name pinned bootstrap installs; exec selectors name
-/// tool selection. Both stay empty for non-shell steps and for shell the
-/// token split cannot prove safe, which [`has_external_mbx_selector`]
-/// already reports as forbidden.
 pub(super) fn mbx_selector_surfaces(step: &Step) -> (Vec<String>, Vec<String>) {
     let StepKind::Shell { run, .. } = &step.kind else {
         return (Vec::new(), Vec::new());

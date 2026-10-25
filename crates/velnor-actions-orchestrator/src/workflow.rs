@@ -1,6 +1,3 @@
-//! Workflow-IR, render-context, and jactionlint config-input construction.
-
-//! W1 emission wiring lives in the child module below.
 #[path = "wire_w1.rs"]
 pub(crate) mod wire_w1;
 #[path = "workflow_build.rs"]
@@ -49,7 +46,6 @@ pub(crate) use workflow_policy::rust_manifest_step::{
 
 pub(crate) use crate::workflow_jobs::LINT_JOB_ID;
 
-/// Resolve the scale-set selector for the mode that will actually be rendered.
 pub(crate) fn scale_set_selector_for_dispatch(
     config: &VelnorConfig,
     dispatch: Option<ExecutionMode>,
@@ -57,36 +53,20 @@ pub(crate) fn scale_set_selector_for_dispatch(
     workflow_context::scale_set_selector(config, dispatch)
 }
 
-/// Pinned `actions/checkout` ref (cli-contract section 4 sample pin).
 pub const CHECKOUT_USES: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 
-/// Default literal runner label when the config omits the override.
 pub const DEFAULT_RUNNER_LABEL: &str = "ubuntu-26.04";
 
-/// Fixed request directory rendered for internal plan/merge steps.
-///
-/// GitHub-expression spelling: shell `$VAR` never expands in the `env:`
-/// position that carries this path.
 pub(crate) const REQUEST_DIR: &str = "${{ runner.temp }}/velnor/request";
 
-/// Complete renderer input derived from one discovery.
 #[derive(Debug, Clone)]
 pub struct WorkflowPlan {
-    /// Stack-neutral workflow IR.
     pub ir: WorkflowIr,
-    /// Support jobs: policy validators plus config-selected verification.
     pub support: Option<VelnorSupportWorkflow>,
-    /// Validated renderer scalars.
     pub context: RenderContext,
-    /// `.github/jactionlint.yaml` input (labels completed at render time).
     pub lint_config: JactionlintConfigInput,
 }
 
-/// Build the plan job with its deferred format steps attached.
-///
-/// # Errors
-///
-/// Returns tool-request or step-construction errors.
 fn build_plan_job(
     label: &str,
     acquire: Option<Step>,
@@ -106,32 +86,6 @@ fn build_plan_job(
         wire_w1::workspace_format_report_steps(discovery)?,
     );
     Ok(plan)
-}
-
-/// Build renderer input from config, branch, label, and discovery.
-///
-/// # Errors
-///
-/// Returns contract, render-context, or tool-request errors.
-#[cfg(test)]
-pub(super) fn build_workflow(
-    root: &std::path::Path,
-    config: &VelnorConfig,
-    branch: &str,
-    label: &str,
-    discovery: &Discovery,
-    fetch_roots: &[String],
-) -> Result<WorkflowPlan, OrchestratorError> {
-    build_workflow_for_consumer_release(&WorkflowBuildInput {
-        root,
-        config,
-        branch,
-        label,
-        discovery,
-        fetch_roots,
-        consumer_release_version: env!("CARGO_PKG_VERSION"),
-        catalog: &ToolCatalog::pinned(),
-    })
 }
 
 fn workflow_ir(
@@ -193,11 +147,6 @@ fn support_workflow(
     Some(support)
 }
 
-/// Insert the lint and final-gate jobs.
-///
-/// # Errors
-///
-/// Returns contract, render-context, or tool-request errors.
 fn insert_gate_jobs(
     jobs: &mut BTreeMap<String, Job>,
     label: &str,
@@ -213,12 +162,6 @@ fn insert_gate_jobs(
     Ok(())
 }
 
-/// Insert deferred format-report steps immediately after `Plan`.
-///
-/// The plan exists only after the planner runs; the publish closure
-/// later lands between `Plan` and these steps, so the plan artifact
-/// carries plan and matrix only, never the format entry's reports.
-/// Without a `plan-v1` anchor the steps close the job.
 fn insert_format_report_steps(plan: &mut Job, reports: Vec<Step>) {
     if reports.is_empty() {
         return;
@@ -233,11 +176,6 @@ fn insert_format_report_steps(plan: &mut Job, reports: Vec<Step>) {
     plan.steps.splice(at..at, reports);
 }
 
-/// Insert the workspace `Format` step immediately before `Plan`.
-///
-/// Mirrors the renderer plan-format anchoring at this stage: the
-/// freshness and publish closures do not exist yet, so the `plan-v1`
-/// step is the anchor; without it the step closes the job.
 fn insert_format_step(plan: &mut Job, format: Step) {
     let at = plan
         .steps
@@ -249,10 +187,6 @@ fn insert_format_step(plan: &mut Job, format: Step) {
     plan.steps.insert(at, format);
 }
 
-/// jactionlint config input: the configured profile and declared variables.
-///
-/// Runner labels are completed when the tree renders, from the scale-set
-/// selector and the hosted labels the generated jobs use.
 pub(super) fn lint_config_input(config: &VelnorConfig, version: &str) -> JactionlintConfigInput {
     JactionlintConfigInput::new(version)
         .with_profile(config.workflow.lint.profile)

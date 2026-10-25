@@ -1,14 +1,8 @@
-//! Generator-only source infrastructure preview, never a tool runner/publisher.
-
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{SourceQualificationTrigger, preview_owned_tool_candidates};
 
-/// Dispatch a `Generate` command already known to request the owned preview.
-///
-/// `run_public` routes here only when `owned_tool_candidates_only` is set,
-/// so any other variant is unreachable; it exits 2 like a usage error.
 pub(super) fn run_owned_command(command: crate::args::Command) -> ExitCode {
     let crate::args::Command::Generate {
         output_dir,

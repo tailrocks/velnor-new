@@ -1,4 +1,3 @@
-//! Channel-bound retained signed and tap evidence, with exact attestation subjects.
 use super::{ConsumerReleaseSpec, PackageReleasePolicy, Yaml};
 use crate::steps::{ATTEST_BUILD_PROVENANCE_USES, DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
 #[derive(Clone, Copy)]

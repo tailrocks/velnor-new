@@ -146,7 +146,6 @@ impl Snapshot {
             if prefix.as_slice() == ["debug"] && name == ".cargo-lock" {
                 continue;
             }
-            // Bound enumeration before retaining another filename.
             if self.entries.len().saturating_add(names.len()) >= self.limits.entries {
                 return Err(SeedError::Skip("entry limit"));
             }

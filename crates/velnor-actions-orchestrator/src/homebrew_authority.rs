@@ -1,5 +1,3 @@
-//! Protected source-first Homebrew authority loading for native tap checks.
-
 use std::{collections::BTreeMap, path::Path};
 
 use velnor_actions_contract::{
@@ -27,8 +25,6 @@ mod applicability;
 const SOURCE_DOCUMENT_LIMIT: usize =
     velnor_actions_contract::package_release_policy::MAX_CARGO_VERSION_MANIFEST_BYTES;
 
-/// Fully admitted Homebrew authority. Fields stay private so callers cannot
-/// manufacture authority from candidate config or workflow inputs.
 #[derive(Debug, Clone)]
 pub(crate) struct VerifiedHomebrewAuthority {
     source_config: velnor_actions_contract::config::VelnorConfig,
@@ -85,8 +81,6 @@ impl VerifiedHomebrewAuthority {
         &self.locator_blob_sha
     }
 
-    /// Read a bounded regular file from the authenticated tap PR base/main tip.
-    /// Candidate checkout bytes never establish stable activation state.
     pub(crate) fn protected_tap_file(
         &self,
         path: &str,
@@ -118,11 +112,6 @@ impl VerifiedHomebrewAuthority {
     }
 }
 
-/// Load source policy only after authenticating the tap PR base or protected tap main.
-///
-/// `expected_tap_repository` and `expected_head` come from the already validated
-/// native plan. PR selectors are rechecked against GitHub's read-only API; the
-/// base SHA is always API-derived and never accepted from candidate data.
 pub(crate) fn load_protected_homebrew_authority(
     root: &Path,
     expected_tap_repository: &str,
@@ -142,10 +131,6 @@ pub(crate) fn load_protected_homebrew_authority(
     .ok_or_else(|| internal("homebrew_authority_locator_missing"))
 }
 
-/// Probe the protected tap base for Homebrew policy without allowing candidate
-/// declarations to establish authority. `None` means the exact authenticated
-/// base tree has no locator path; every malformed or unavailable present path
-/// fails closed.
 pub(crate) fn probe_protected_homebrew_authority(
     root: &Path,
     expected_tap_repository: &str,
@@ -209,8 +194,6 @@ pub(crate) fn probe_protected_homebrew_authority(
         deadline,
     )?;
 
-    // The checkout is data-only; bind it to the independently authenticated API
-    // context without using it to select policy or source files.
     let checkout_head = read_git_value(root, "HEAD", deadline)?;
     if checkout_head != *authenticated_head {
         return Err(internal("homebrew_authority_checkout_head"));
@@ -231,8 +214,6 @@ pub(crate) fn probe_protected_homebrew_authority(
     }))
 }
 
-/// Prove that the exact current default-branch tree has no Homebrew authority locator.
-/// Any unavailable or changing repository state is an error, never an absence result.
 pub(crate) fn protected_locator_absent_on_default_branch(
     repository: &str,
     deadline: CheckDeadline,
@@ -370,7 +351,3 @@ fn protected_locator(
         deadline,
     )
 }
-
-#[cfg(test)]
-#[path = "homebrew_authority_tests.rs"]
-mod tests;

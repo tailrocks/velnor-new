@@ -1,13 +1,3 @@
-//! Read-only `mise.toml`/`mise.lock` inspection owned by the Mise adapter.
-//!
-//! Pure over bytes the orchestrator supplies: this module never reads,
-//! writes, or stats the filesystem. Findings always name the supplying
-//! file; missing or malformed files yield findings plus manual
-//! recommendations, never repairs (tooling-input §1-§3). Reported tool
-//! selectors are observations only and never become catalog pins.
-//!
-//! Install-verification audit lives in [`lockfile`] (declared here so
-//! `lib.rs` stays untouched).
 #[path = "toolfiles_config_tools.rs"]
 mod config_tools;
 #[path = "mise_lockfile.rs"]
@@ -19,70 +9,47 @@ use std::fmt;
 use crate::catalog::{PinnedTool, validate_exact_version};
 use crate::wrappers::parse_cargo_wrapper;
 
-/// Tool-file name owned by the Mise adapter.
 pub const MISE_TOML_FILE: &str = "mise.toml";
-/// Hidden tool-file name mise also loads; scanned like the plain one.
 pub const DOT_MISE_TOML_FILE: &str = ".mise.toml";
-/// Lock-file name owned by the Mise adapter.
 pub const MISE_LOCK_FILE: &str = "mise.lock";
 
-/// File symbols routed to the Mise stack (quality §1).
 pub const OWNED_SYMBOLS: &[&str] = &["mise.toml", ".mise.toml", "mise.lock", ".mise.lock"];
 
-/// Tool files owned by sibling adapters; recognized but never inspected here.
 pub const FOREIGN_TOOL_FILES: &[&str] = &["rust-toolchain.toml", "Cargo.toml", "Cargo.lock"];
 
-/// Env-symbol prefix owned by the Mise adapter.
 pub const MISE_ENV_PREFIX: &str = "MISE_";
 
-/// Stable code for a missing recommended tool input (tooling-input §1).
 pub const MISSING_RECOMMENDED_INPUT: &str = "missing_recommended_input";
 
-/// Stable code for a malformed optional tool file (tooling-input §2).
 pub const TOOLING_INPUT_INVALID: &str = "tooling_input_invalid";
 
-/// One named tool-file blob offered for inspection.
 #[derive(Debug, Clone, Copy)]
 pub struct ToolFile<'a> {
-    /// Repository-relative path the content was read from.
     pub path: &'a str,
-    /// File content.
     pub content: &'a str,
 }
 
-/// Structured tool-input finding with a manual recommendation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolFinding {
-    /// Stable finding code.
     pub code: String,
-    /// Repository-relative file that supplied the finding.
     pub file: String,
-    /// Observed value or problem detail, when any.
     pub observed: Option<String>,
-    /// Concrete manual action; Velnor never executes it.
     pub recommendation: String,
 }
 
-/// Extracted `[tools]` selections (reported values only, never pins).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MiseSpec {
-    /// Tool name to declared selector, sorted by name.
     pub tools: BTreeMap<String, String>,
 }
 
-/// Outcome of one owned tool-file inspection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MiseInspection {
-    /// Inspected repository-relative file.
     pub file: String,
-    /// Extracted selection (`None` when missing or malformed).
     pub spec: Option<MiseSpec>,
-    /// Findings plus manual recommendations; empty when well-formed.
     pub findings: Vec<ToolFinding>,
 }
 
 impl MiseInspection {
-    /// Inspection for a missing tool file: finding, no spec, no failure.
     fn missing(path: &str) -> Self {
         Self {
             file: path.to_owned(),
@@ -98,7 +65,6 @@ impl MiseInspection {
         }
     }
 
-    /// Inspection for a malformed tool file: finding, no spec, no failure.
     fn invalid(path: &str, problem: &str) -> Self {
         Self {
             file: path.to_owned(),
@@ -114,7 +80,6 @@ impl MiseInspection {
         }
     }
 
-    /// Inspection for a readable tool file; selectors stay observations.
     fn present(path: &str, spec: MiseSpec) -> Self {
         Self {
             file: path.to_owned(),
@@ -124,14 +89,9 @@ impl MiseInspection {
     }
 }
 
-/// Tool-file inspection failure (ownership only; content issues are findings).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolInspectError {
-    /// Path belongs to another adapter or to no adapter.
-    NotOwned {
-        /// Rejected path.
-        path: String,
-    },
+    NotOwned { path: String },
 }
 
 impl fmt::Display for ToolInspectError {
@@ -143,11 +103,6 @@ impl fmt::Display for ToolInspectError {
 
 impl std::error::Error for ToolInspectError {}
 
-/// Route a path to its owning stack id by file name, if any.
-///
-/// The Mise stack owns its tool and lock files; Cargo manifests, locks,
-/// and `rust-toolchain.toml` route to the Rust stack while every other
-/// symbol routes nowhere.
 #[must_use]
 pub fn stack_for_symbol(path: &str) -> Option<&'static str> {
     let name = file_name(path);
@@ -160,32 +115,20 @@ pub fn stack_for_symbol(path: &str) -> Option<&'static str> {
     }
 }
 
-/// Whether `path` names a file this adapter may inspect.
 #[must_use]
 pub fn is_owned_mise_file(path: &str) -> bool {
     OWNED_SYMBOLS.contains(&file_name(path))
 }
 
-/// Whether `name` is a Mise-owned env symbol (`MISE_*`).
 #[must_use]
 pub fn is_mise_env_symbol(name: &str) -> bool {
     name.starts_with(MISE_ENV_PREFIX)
 }
 
-/// Final path segment of a repository-relative path.
 fn file_name(path: &str) -> &str {
     path.rsplit('/').next().unwrap_or(path)
 }
 
-/// Inspect supplied Mise tool-file bytes (`None` when missing).
-///
-/// Read-only: content issues become findings with manual recommendations,
-/// never errors and never writes.
-///
-/// # Errors
-///
-/// Returns [`ToolInspectError::NotOwned`] unless `path` names an owned
-/// tool file.
 pub fn inspect_mise_file(
     path: &str,
     content: Option<&str>,
@@ -204,36 +147,14 @@ pub fn inspect_mise_file(
     }
 }
 
-/// Reconciliation of the Cargo wrapper against the local tool pin.
-///
-/// Mise's native `rust = { ..., mr_boxington = true }` option or a
-/// `wrappers.cargo.command = "mbx"` wrapper requires the `mbx` binary;
-/// clean checkouts resolve it from the `[tools]` exact pin in this same
-/// file, never from a global install (P07-9).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MbxWrapperStatus {
-    /// No MBX wrapper: no pin required.
     NoMbxWrapper,
-    /// MBX wrapper with an exact local `mr-boxington` pin.
-    Pinned {
-        /// Exact pinned version selecting the `mbx` binary.
-        version: String,
-    },
-    /// MBX wrapper without a local `mr-boxington` pin.
+    Pinned { version: String },
     MissingPin,
-    /// Malformed wrapper or tool table, or a non-exact pin selector.
-    Invalid {
-        /// Machine-readable problem detail.
-        problem: String,
-    },
+    Invalid { problem: String },
 }
 
-/// Reconcile one `mise.toml` text: wrapper-required MBX versus local pin.
-///
-/// Returns [`MbxWrapperStatus::NoMbxWrapper`] when neither the native
-/// `[tools] rust` `mr_boxington = true` option nor a structural MBX
-/// wrapper exists. Either needs an exact `mr-boxington` pin in `[tools]`;
-/// anything else fails closed.
 #[must_use]
 pub fn mbx_wrapper_pin_status(content: &str) -> MbxWrapperStatus {
     let wrapper = match parse_cargo_wrapper(content) {
@@ -278,8 +199,6 @@ pub fn mbx_wrapper_pin_status(content: &str) -> MbxWrapperStatus {
     }
 }
 
-/// Whether `[tools] rust` structurally sets `mr_boxington = true` (Mise's
-/// native cargo-through-MBX option; inline-table or section spelling).
 fn rust_option_selects_mbx(content: &str) -> bool {
     crate::toml_scan::parse_toml(content).is_ok_and(|doc| {
         doc.find(&["tools", "rust", "mr_boxington"])
@@ -288,10 +207,6 @@ fn rust_option_selects_mbx(content: &str) -> bool {
     })
 }
 
-/// Tool versions recorded in `mise.lock` bytes (TOOL-2.7).
-///
-/// Comparison input for lock-vs-toml conflict checks: malformed content
-/// yields an empty map while [`inspect_mise_file`] reports the finding.
 #[must_use]
 pub fn lock_tool_versions(content: &str) -> BTreeMap<String, String> {
     match inspect_mise_file(MISE_LOCK_FILE, Some(content)) {
@@ -300,10 +215,6 @@ pub fn lock_tool_versions(content: &str) -> BTreeMap<String, String> {
     }
 }
 
-/// Read the tool selections of one owned file in that file's own grammar.
-///
-/// A lock records `[[tools.<key>]]` entries ([`lockfile`]); a config file
-/// declares scalar or table tool choices ([`config_tools`]).
 fn parse_tools(path: &str, content: &str) -> Result<MiseSpec, String> {
     if is_lock_file(path) {
         let lock = lockfile::parse_mise_lockfile(content)?;
@@ -318,7 +229,6 @@ fn parse_tools(path: &str, content: &str) -> Result<MiseSpec, String> {
     config_tools::parse_config_tools(content).map(|tools| MiseSpec { tools })
 }
 
-/// Whether `path` names a Mise lock file rather than a config file.
 fn is_lock_file(path: &str) -> bool {
     let name = file_name(path);
     name == MISE_LOCK_FILE || name.strip_prefix('.') == Some(MISE_LOCK_FILE)

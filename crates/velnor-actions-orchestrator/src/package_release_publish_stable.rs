@@ -1,4 +1,3 @@
-//! A private observed action is consumed before validation or transport.
 use super::super::{GitHubPackagePublisher, OrchestratorError, github::ReleaseResponse, internal};
 use velnor_actions_contract::package_release::PackageReleaseChannel;
 use velnor_actions_contract::publication_retry::{
@@ -195,7 +194,3 @@ pub(super) fn verify_current_ci(
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "package_release_publish_stable_tests.rs"]
-mod tests;

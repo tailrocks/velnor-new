@@ -1,5 +1,3 @@
-//! One current-process probe attempt; samples are returned only after cleanup.
-
 use std::time::Instant;
 
 use bollard::Docker;

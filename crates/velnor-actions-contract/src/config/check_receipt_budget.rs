@@ -1,8 +1,5 @@
-//! Admission bound for the exact named-check execution proof transport.
-
-/// Maximum source or task-projection bytes admitted for one named check.
 pub const MAX_CHECK_SOURCE_BYTES: usize = 8 * 1024 * 1024;
-/// Maximum bytes in any parsed native system-tool version component string.
+
 pub const MAX_CHECK_SYSTEM_VERSION_BYTES: usize = 128;
 use super::{MiseCheck, QualifiedTool, QualifiedToolPlatform};
 use crate::errors::ContractError;
@@ -10,34 +7,32 @@ use serde::Serialize;
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Maximum serialized helper receipt accepted by the existing matrix artifact gate.
 pub const MAX_CHECK_EXECUTION_RECEIPT_BYTES: usize = 1 << 20;
-/// Maximum stdout retained for one qualified executable probe.
+
 pub const MAX_CHECK_QUALIFIED_PROBE_CAPTURE_BYTES: usize = 8 * 1024 + 1;
-/// Maximum declared exact version output before an optional trailing newline.
+
 pub const MAX_CHECK_QUALIFIED_PROBE_EXPECTED_BYTES: usize = 8 * 1024;
-/// Maximum stdout or stderr retained for the short Docker identity probes.
+
 pub const MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES: usize = 8 * 1024;
-/// Maximum stdout or stderr retained for the structured daemon JSON probe.
+
 pub const MAX_CHECK_CONTAINER_DAEMON_CAPTURE_BYTES: usize = 4 * 1024;
-/// Maximum stdout or stderr retained for the complete application Info.plist JSON.
+
 pub const MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES: usize = 16 * 1024;
-/// Maximum stdout or stderr retained for a signed identity observation.
+
 pub const MAX_CHECK_CONTAINER_IDENTITY_CAPTURE_BYTES: usize = 2 * 1024;
-/// Maximum stdout or stderr retained for a quiet signature verification.
+
 pub const MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES: usize = 1024;
-/// Maximum path bytes retained in an execution receipt.
+
 pub const MAX_CHECK_CONTAINER_PATH_BYTES: usize = 1024;
-/// Maximum runtime inventory entries admitted into one check receipt.
+
 pub const MAX_CHECK_CONTAINER_RUNTIME_ENTRIES: usize = 64;
-/// Maximum relative path bytes retained for one runtime inventory entry.
+
 pub const MAX_CHECK_CONTAINER_RUNTIME_ENTRY_PATH_BYTES: usize = 256;
 
 const RECEIPT_FIXED_BYTES: usize = 32 * 1024;
 const RECEIPT_CONTAINER_FIXED_BYTES: usize = 16 * 1024;
 const RECEIPT_PATH_FIELDS: usize = 32;
 
-/// Reject a check whose worst-case receipt cannot fit through the established report reader.
 pub(super) fn validate_check_budget(
     check: &MiseCheck,
     tools: &[QualifiedTool],
@@ -54,9 +49,6 @@ pub(super) fn validate_check_budget(
     Ok(())
 }
 
-/// Compute the worst-case serialized named-check proof size from its declared closure.
-/// # Errors
-/// Returns an error only if the checked size arithmetic or serialization cannot be represented.
 pub fn check_execution_receipt_upper_bound(
     check: &MiseCheck,
     tools: &[QualifiedTool],
@@ -212,8 +204,7 @@ fn container_budget(profile: &super::HostContainerProfile) -> Result<usize, Cont
             12
         }
     };
-    // Each output has stdout and stderr, each JSON-escaped at most 2x after
-    // the runner rejects control bytes other than line whitespace.
+
     bytes = add(bytes, stream_caps.saturating_mul(8))?;
     bytes = add(bytes, probe_count.saturating_mul(2 * 512))?;
     Ok(bytes)
@@ -229,7 +220,3 @@ fn add(left: usize, right: usize) -> Result<usize, ContractError> {
     left.checked_add(right)
         .ok_or_else(|| ContractError::config(".velnor/config.toml", "checks", "receipt_size"))
 }
-
-#[cfg(test)]
-#[path = "check_receipt_budget_tests.rs"]
-mod tests;

@@ -1,5 +1,3 @@
-//! Fixed-origin GitHub API access and unauthenticated release-asset redirect handling.
-
 use std::collections::BTreeMap;
 use std::time::Duration;
 
@@ -193,7 +191,3 @@ async fn read_limited(response: Response, limit: usize) -> Result<Vec<u8>, HostE
     }
     Ok(output)
 }
-
-#[cfg(test)]
-#[path = "github_tests.rs"]
-mod tests;

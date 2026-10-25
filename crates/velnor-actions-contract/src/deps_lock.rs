@@ -1,9 +1,3 @@
-//! `.velnor/deps.lock`: pinned private release assets, Maven bundles and git trees.
-//!
-//! Written only by `velnor-actions deps lock` (mirrors `cargo update`); read by
-//! plan, generate and fetch. A moved tag fails the pinned commit check and the
-//! SHA-256 check. See `docs/proposed/private-sources-contract.md`.
-
 use crate::config::{
     PrivateSourcesConfig, is_valid_asset_name, is_valid_extract_to, is_valid_source_id,
     is_valid_source_tag, split_repository,
@@ -12,58 +6,51 @@ use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Lock schema version.
 pub const DEPS_LOCK_SCHEMA: u32 = 1;
 
-/// Parsed `.velnor/deps.lock`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DepsLock {
-    /// Lock schema; must equal [`DEPS_LOCK_SCHEMA`].
     pub schema: u32,
-    /// Pinned Maven bundles.
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub maven_bundles: Vec<LockedAsset>,
-    /// Pinned plain release assets.
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub release_assets: Vec<LockedAsset>,
-    /// Pinned git trees.
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub git_trees: Vec<LockedGitTree>,
 }
 
-/// One pinned release asset.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LockedAsset {
-    /// Source identifier from the config declaration.
     pub id: String,
-    /// Producer repository as `Owner/name`.
+
     pub repository: String,
-    /// Release tag.
+
     pub tag: String,
-    /// Commit the tag resolved to at lock time.
+
     pub commit: String,
-    /// Release asset file name.
+
     pub asset: String,
-    /// Lowercase SHA-256 of the asset.
+
     pub sha256: String,
-    /// Extraction directory (plain assets only).
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extract_to: Option<String>,
 }
 
-/// One pinned git tree.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LockedGitTree {
-    /// Source identifier from the config declaration.
     pub id: String,
-    /// Producer repository as `Owner/name`.
+
     pub repository: String,
-    /// Git tag.
+
     pub tag: String,
-    /// Commit the tag resolved to at lock time.
+
     pub commit: String,
 }
 
@@ -75,7 +62,6 @@ fn is_lower_hex(value: &str, len: usize) -> bool {
 }
 
 impl DepsLock {
-    /// Every locked repository, sorted and de-duplicated.
     #[must_use]
     pub fn repositories(&self) -> BTreeSet<&str> {
         self.maven_bundles
@@ -86,15 +72,11 @@ impl DepsLock {
             .collect()
     }
 
-    /// Whether the lock pins nothing.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.maven_bundles.is_empty() && self.release_assets.is_empty() && self.git_trees.is_empty()
     }
 
-    /// Validate shape only (no config comparison).
-    /// # Errors
-    /// Names the lock path, key path and a machine-readable problem.
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         if self.schema != DEPS_LOCK_SCHEMA {
             return Err(ContractError::UnsupportedSchema {
@@ -156,12 +138,6 @@ impl DepsLock {
         Ok(())
     }
 
-    /// Require the lock to pin exactly what the config declares (freshness).
-    ///
-    /// Every declaration needs one lock entry with the same id, repository,
-    /// tag, asset and extraction directory, and the lock holds nothing else.
-    /// # Errors
-    /// Reports the first drift as `deps_lock_drift:<id>` or `deps_lock_extra:<id>`.
     pub fn check_matches(
         &self,
         config: &PrivateSourcesConfig,
@@ -217,11 +193,6 @@ impl DepsLock {
     }
 }
 
-/// Parse one Cargo lock `source` value into its private `Owner/name`.
-///
-/// Only `git+https://github.com/<owner>/<repo>[.git][?...][#sha]` sources under
-/// `owner` qualify; every other source (registry, other host, other owner,
-/// userinfo, ports) returns `None` and so receives no credential.
 #[must_use]
 pub fn cargo_git_source_repository(source: &str, owner: &str) -> Option<String> {
     let rest = source.strip_prefix("git+https://github.com/")?;
@@ -232,10 +203,6 @@ pub fn cargo_git_source_repository(source: &str, owner: &str) -> Option<String> 
         .then(|| format!("{found_owner}/{name}"))
 }
 
-/// Token allowlist: Cargo git sources under `owner` plus every locked repository.
-///
-/// Returns bare repository names (the `repositories:` input of the App-token
-/// action takes names under `owner`), sorted and de-duplicated.
 #[must_use]
 pub fn token_repository_allowlist<'a>(
     owner: &str,

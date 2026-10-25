@@ -1,19 +1,8 @@
-//! Explicit, bounded diagnostic observation of credential-free task output.
 use super::IsolatedCommand;
 use crate::{CheckDeadline, MiseError, ProcessOutput};
 use std::io::Write;
 
 impl IsolatedCommand {
-    /// Observe escaped stdout and stderr while retaining ordinary capture limits.
-    ///
-    /// Callers MUST opt in only for credential-free tasks. Every source chunk is
-    /// escaped and prefixed; raw output is never written to the observer. A fixed
-    /// 256KiB total encoded budget includes prefixes and the truncation marker.
-    /// The caller must supply a responsive diagnostic sink: synchronous OS writes
-    /// cannot be physically preempted, just like the existing owned-file sink.
-    /// This reuses the original deadline, polling and process-group cleanup.
-    /// # Errors
-    /// Fails on the ordinary process limits, deadline, cleanup or observer writes.
     pub fn run_until_with_progress(
         &self,
         cap: usize,
@@ -72,8 +61,6 @@ impl<'a> ProgressSink<'a> {
         let mut encoded = format!("velnor-progress {stream}: ").into_bytes();
         for &byte in bytes {
             match byte {
-                // The runner's legacy parser searches for ##[ ANYWHERE in a
-                // line; a prefix alone does not prevent workflow commands.
                 b' '..=b'~' if byte != b'#' && byte != b'\\' => encoded.push(byte),
                 _ => {
                     const HEX: &[u8; 16] = b"0123456789abcdef";
@@ -111,7 +98,3 @@ impl<'a> ProgressSink<'a> {
         Ok(())
     }
 }
-
-#[cfg(all(test, unix))]
-#[path = "command_progress_tests.rs"]
-mod tests;

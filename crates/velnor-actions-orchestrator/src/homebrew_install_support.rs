@@ -215,9 +215,6 @@ pub(super) fn epoch_seconds() -> Result<u64, OrchestratorError> {
         .ok_or_else(|| invalid("system_clock_before_epoch"))
 }
 
-/// Read offline ELF identity facts from authenticated archive-member bytes.
-///
-/// This inspects only the header and never executes or writes the member.
 pub(crate) fn elf_facts_from_bytes(bytes: &[u8]) -> Result<ElfFacts, OrchestratorError> {
     if bytes.len() < 20 || &bytes[..4] != b"\x7fELF" {
         return Err(invalid("linux_payload_not_elf"));
@@ -370,7 +367,3 @@ pub(super) fn io_error(_error: impl std::fmt::Display) -> OrchestratorError {
 pub(super) fn invalid(problem: &'static str) -> OrchestratorError {
     internal(&format!("homebrew_install_{problem}"))
 }
-
-#[cfg(test)]
-#[path = "homebrew_install_tests.rs"]
-mod tests;

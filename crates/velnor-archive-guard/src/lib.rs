@@ -1,5 +1,11 @@
-//! Bounded native preflight for tar inputs consumed by repository tooling.
-
+#![allow(
+    clippy::missing_errors_doc,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
+#![allow(
+    missing_docs,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
 pub mod owned_archive_guard;
 pub use owned_archive_guard::{
     validate_qualification_manifest, validate_qualification_output_bindings,
@@ -8,10 +14,6 @@ pub use owned_archive_guard::{
 #[path = "../build_support/archive_guard_inputs.rs"]
 mod archive_guard_inputs;
 
-/// Compute the checkout source fingerprint using the build-script algorithm.
-///
-/// # Errors
-/// Returns an error when source admission, file identity, or input bounds fail.
 pub fn source_fingerprint(root: &std::path::Path) -> Result<String, String> {
     archive_guard_inputs::fingerprint(root)
         .map(|(fingerprint, _)| fingerprint)

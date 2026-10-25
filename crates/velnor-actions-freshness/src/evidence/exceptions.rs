@@ -1,5 +1,3 @@
-//! Expiring exceptions and temporary holds.
-
 use serde_json::Value;
 
 use toml::Value as TomlValue;

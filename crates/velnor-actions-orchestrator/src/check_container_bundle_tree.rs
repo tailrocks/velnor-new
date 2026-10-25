@@ -17,8 +17,7 @@ const READ_CHUNK: usize = 64 * 1024;
 
 #[path = "check_container_bundle_tree_write.rs"]
 mod write;
-#[cfg(test)]
-pub(super) use write::populate;
+
 pub(super) use write::{create_destination, populate_until, set_directory_mode, verify_owned_root};
 
 pub(super) struct Entry {
@@ -39,11 +38,6 @@ pub(super) enum Kind {
 struct Walk {
     entries: Vec<Entry>,
     bytes: u64,
-}
-
-#[cfg(test)]
-pub(super) fn collect_tree(root: &Path) -> Result<Vec<Entry>, OrchestratorError> {
-    collect_tree_until(root, None)
 }
 
 pub(super) fn collect_tree_until(
@@ -194,11 +188,6 @@ fn read_regular(
         length,
         bytes,
     })
-}
-
-#[cfg(test)]
-pub(super) fn tree_digest(entries: &[Entry]) -> Result<String, OrchestratorError> {
-    tree_digest_until(entries, None)
 }
 
 pub(super) fn tree_digest_until(

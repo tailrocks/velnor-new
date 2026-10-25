@@ -1,16 +1,3 @@
-//! Generated-tree assembly: marker-checked files in sorted path order.
-//!
-//! [`render_tree`] builds the exact base files (`jactionlint.yaml`, `ci.yml`,
-//! `AGENTS.md`, and a `CLAUDE.md` regular-file pointer at `AGENTS.md`);
-//! [`render_tree_with_extra`] adds the validated release family. Rendering
-//! the workflow bytes stays in [`crate::render`]; this module assembles and
-//! validates the generated tree.
-//!
-//! `CLAUDE.md` is a regular file, never a symlink: plugin installers reject
-//! packages that contain symlink entries, so generated trees must not emit
-//! any. Its single `@AGENTS.md` import line resolves the same instructions
-//! without symlink resolution.
-
 use velnor_actions_contract::{
     AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_POINTER_BODY, ClaudeMdMode,
 };
@@ -19,38 +6,25 @@ use crate::agents_md;
 use crate::render::{JACTIONLINT_PATH, WORKFLOW_PATH};
 use crate::{RenderError, guard, marker, steps};
 
-/// One rendered file: repository-relative path plus bytes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedFile {
-    /// Repository-relative output path.
     pub path: String,
-    /// Complete file bytes including the marker.
     pub bytes: String,
 }
 
-/// One rendered symbolic link: repository-relative link path plus target.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedSymlink {
-    /// Repository-relative symlink path.
     pub path: String,
-    /// Relative target path.
     pub target: String,
 }
 
-/// The generated files and symlinks, sorted by path: the base files
-/// (jactionlint config, CI workflow, AGENTS.md, and the CLAUDE.md pointer file)
-/// with release disabled, plus the release family when release rendering is
-/// enabled.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedTree {
-    /// Generated files in sorted path order.
     pub files: Vec<RenderedFile>,
-    /// Generated symbolic links in sorted path order.
     pub symlinks: Vec<RenderedSymlink>,
 }
 
 impl RenderedTree {
-    /// Fetch file bytes by repository-relative path.
     #[must_use]
     pub fn get(&self, path: &str) -> Option<&str> {
         self.files
@@ -59,7 +33,6 @@ impl RenderedTree {
             .map(|file| file.bytes.as_str())
     }
 
-    /// Fetch symlink target by repository-relative path.
     #[must_use]
     pub fn get_symlink(&self, path: &str) -> Option<&str> {
         self.symlinks
@@ -68,19 +41,16 @@ impl RenderedTree {
             .map(|link| link.target.as_str())
     }
 
-    /// Total count of all generated items (files plus symlinks).
     #[must_use]
     pub fn len(&self) -> usize {
         self.files.len() + self.symlinks.len()
     }
 
-    /// Whether the tree contains no files and no symlinks.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.files.is_empty() && self.symlinks.is_empty()
     }
 
-    /// Sorted repository-relative paths of all files and symlinks.
     #[must_use]
     pub fn paths(&self) -> Vec<String> {
         let mut paths: Vec<String> = self
@@ -94,12 +64,6 @@ impl RenderedTree {
     }
 }
 
-/// Assemble the exact base tree from rendered workflow bytes plus the
-/// workflow-lint adapter's bytes (passed through, marker-checked).
-///
-/// # Errors
-///
-/// Returns [`RenderError`] for marker, token, or path failures.
 pub fn render_tree(
     workflow_bytes: &str,
     lint_config_bytes: &str,
@@ -108,15 +72,6 @@ pub fn render_tree(
     render_tree_with_extra(workflow_bytes, lint_config_bytes, &[], version)
 }
 
-/// Assemble the generated tree: base files plus validated extras.
-///
-/// Extras (the release family) pass the same marker, token, and path
-/// gates; base-path collisions and duplicate paths fail closed. Files are
-/// sorted by path, so an empty `extra` renders exactly [`render_tree`].
-///
-/// # Errors
-///
-/// Returns [`RenderError`] for marker, token, path, or collision failures.
 pub fn render_tree_with_extra(
     workflow_bytes: &str,
     lint_config_bytes: &str,
@@ -132,11 +87,6 @@ pub fn render_tree_with_extra(
     )
 }
 
-/// Assemble the generated tree with an explicit `CLAUDE.md` emission mode.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] for marker, token, path, or collision failures.
 pub fn render_tree_with_claude_mode(
     workflow_bytes: &str,
     lint_config_bytes: &str,

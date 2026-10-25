@@ -1,5 +1,3 @@
-//! Bounded Docker calls used only by the controller probe projection.
-
 use futures_util::StreamExt;
 
 use bollard::Docker;

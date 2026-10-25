@@ -16,31 +16,18 @@ use velnor_actions_contract::config::{
 use velnor_actions_contract::graph::{CachePolicy, ResourceClass, ResourceDemand};
 use velnor_actions_contract::propose::{IdentityInputs, ProposedTask};
 
-/// A static check obligation and its source-bound task projection.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DiscoveredCheck {
-    /// Validated root configuration row.
     pub check: MiseCheck,
-    /// Neutral planned obligation; opaque checks never reuse results.
     pub proposal: ProposedTask,
-    /// Repository inputs including the complete native task source.
     pub config_inputs: Vec<String>,
-    /// Original task table bytes, with native dependency relationships.
     pub task_config: String,
-    /// Exact selectors from the explicitly qualified installation closure.
     pub tool_specs: Vec<String>,
-    /// Explicit qualified installation closure in prerequisite order.
     pub qualified_tools: Vec<QualifiedTool>,
-    /// Canonical full declaration, option, dependency and source fingerprint.
     pub qualification_digest: String,
-    /// Full original config bytes: rechecked before runtime projection.
     pub config_source: String,
 }
 
-/// Inspect named task definitions without invoking Mise or consumer code.
-/// Unsupported includes/file tasks/templated discovery fail explicitly.
-/// # Errors
-/// Rejects missing tasks, unsupported task semantics, and escaped inputs.
 pub fn discover_checks(
     root: &Path,
     checks: &[MiseCheck],
@@ -52,9 +39,6 @@ pub fn discover_checks(
         .collect()
 }
 
-/// Discover checks while consuming the caller's shared execution deadline.
-/// # Errors
-/// Rejects expired deadlines and the same invalid task/source states as `discover_checks`.
 pub fn discover_checks_until(
     root: &Path,
     checks: &[MiseCheck],
@@ -67,14 +51,6 @@ pub fn discover_checks_until(
         .collect()
 }
 
-/// Discover a preview producer from its explicitly configured native task source.
-///
-/// The producer shares named-check source parsing, task projection, and qualified
-/// tool closure resolution. It is a task binding only; it emits no CI check or
-/// evidence report.
-/// # Errors
-/// Rejects unsafe source paths, unsupported task syntax, missing tasks, and
-/// incomplete qualified-tool closure.
 pub fn discover_preview_producer(
     root: &Path,
     producer: &RustBinaryReleaseProducer,
@@ -336,9 +312,6 @@ fn propose_check(
 }
 
 impl DiscoveredCheck {
-    /// Shared canonical fingerprint over full declarations and exact selected specs.
-    /// # Errors
-    /// Serialization failures reject the qualification identity.
     pub fn qualification_fingerprint(
         tools: &[QualifiedTool],
         specs: &[String],
@@ -346,9 +319,6 @@ impl DiscoveredCheck {
         qualified::fingerprint(tools, specs)
     }
 
-    /// Refuse altered declarations, selectors or proposal qualification bindings.
-    /// # Errors
-    /// Every discovered qualification field must retain its exact canonical identity.
     pub fn verify_qualification_identity(&self) -> Result<(), MiseError> {
         let digest = Self::qualification_fingerprint(&self.qualified_tools, &self.tool_specs)?;
         let expected_flag = format!("qualified_tools:{digest}");
@@ -369,9 +339,6 @@ impl DiscoveredCheck {
         }
         Ok(())
     }
-    /// Source-free typed singleton config for one resolved installation record.
-    /// # Errors
-    /// Unknown IDs or invalid declaration slots fail before config construction.
     pub fn qualified_tool_config(&self, id: &str) -> Result<String, MiseError> {
         let tool = self
             .qualified_tools
@@ -380,7 +347,6 @@ impl DiscoveredCheck {
             .ok_or_else(|| invalid("qualified_tool_projection", "unselected_tool_id"))?;
         projection::config_for(tool)
     }
-    /// Exact selected Rust channel, including explicit repository qualification.
     #[must_use]
     pub fn selected_rust_version(&self) -> Option<&str> {
         self.tool_specs

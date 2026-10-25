@@ -1,5 +1,3 @@
-//! Configured Bun, dbt, and Ansible inventory coordination.
-
 use crate::OrchestratorError;
 use std::path::Path;
 use velnor_actions_contract::{FileIndex, VelnorConfig};
@@ -10,7 +8,6 @@ pub(super) type TaskInventories = (
     crate::workflow_task_jobs::ansible_inventory::AnsibleInventory,
 );
 
-/// Bun member inventory for the configured `[stacks.bun]` (empty without it).
 fn bun_inventory(
     root: &Path,
     index: &FileIndex,
@@ -24,7 +21,6 @@ fn bun_inventory(
     }
 }
 
-/// The Bun, dbt and Ansible inventories of the configured stacks.
 pub(super) fn task_inventories(
     root: &Path,
     index: &FileIndex,

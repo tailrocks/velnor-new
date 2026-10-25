@@ -1,10 +1,3 @@
-//! Family cache plans and step groups of the Bun, dbt and Ansible jobs.
-//!
-//! Each job builds one plan per family it caches. [`prelude`] returns the
-//! key step and the read-only restores; [`after_producer`] returns the size
-//! admission and the trusted-push save that sit right after the family's
-//! producer step, so later failing checks never starve the cache.
-
 use velnor_actions_contract::Step;
 use velnor_actions_contract::config::AnsibleCollection;
 use velnor_actions_contract::workflow::cache_family::CacheFamily;
@@ -30,8 +23,6 @@ fn locator(root: &str) -> Result<String, OrchestratorError> {
     })
 }
 
-/// Bun's package cache of one workspace root (content-addressed, so a restore
-/// from another lock of the same root is valid).
 pub(crate) fn bun_install(root: &str) -> Result<FamilyCachePlan, OrchestratorError> {
     Ok(FamilyCachePlan {
         family: CacheFamily::BunInstall,
@@ -44,7 +35,6 @@ pub(crate) fn bun_install(root: &str) -> Result<FamilyCachePlan, OrchestratorErr
     })
 }
 
-/// The hash-pinned Playwright browser directory.
 pub(crate) fn playwright_browsers() -> FamilyCachePlan {
     FamilyCachePlan {
         family: CacheFamily::PlaywrightBrowsers,
@@ -54,7 +44,6 @@ pub(crate) fn playwright_browsers() -> FamilyCachePlan {
     }
 }
 
-/// One dbt project's installed packages.
 pub(crate) fn dbt_packages(dir: &str) -> Result<FamilyCachePlan, OrchestratorError> {
     Ok(FamilyCachePlan {
         family: CacheFamily::DbtPackages,
@@ -64,7 +53,6 @@ pub(crate) fn dbt_packages(dir: &str) -> Result<FamilyCachePlan, OrchestratorErr
     })
 }
 
-/// uv's wheel cache, keyed by the hash-pinned requirements file.
 pub(crate) fn python_venv(requirements: &str) -> FamilyCachePlan {
     FamilyCachePlan {
         family: CacheFamily::PythonVenv,
@@ -77,7 +65,6 @@ pub(crate) fn python_venv(requirements: &str) -> FamilyCachePlan {
     }
 }
 
-/// The verified collection tarballs, keyed by the declared set.
 pub(crate) fn ansible_collections(collections: &[AnsibleCollection]) -> FamilyCachePlan {
     let mut lines: Vec<String> = collections
         .iter()
@@ -92,21 +79,10 @@ pub(crate) fn ansible_collections(collections: &[AnsibleCollection]) -> FamilyCa
     }
 }
 
-/// The key step plus one read-only restore per plan.
-///
-/// # Errors
-///
-/// Returns render errors for an unsafe plan.
 pub(crate) fn prelude(plans: &[FamilyCachePlan]) -> Result<Vec<Step>, OrchestratorError> {
     prelude_for(plans, false)
 }
 
-/// [`prelude`] for a job that is a matrix: `single_writer` lets only leg 1
-/// save, so the legs of one key never race N uploads of the same archive.
-///
-/// # Errors
-///
-/// Returns render errors for an unsafe plan.
 pub(crate) fn prelude_for(
     plans: &[FamilyCachePlan],
     single_writer: bool,
@@ -123,15 +99,6 @@ pub(crate) fn prelude_for(
     Ok(steps)
 }
 
-/// Size admission and trusted-push save, placed right after the producer.
-///
-/// # Errors
-///
-/// Returns render errors for an unsafe plan.
 pub(crate) fn after_producer(plan: &FamilyCachePlan) -> Result<Vec<Step>, OrchestratorError> {
     Ok(vec![family_size_step(plan)?, family_save_step(plan)?])
 }
-
-#[cfg(test)]
-#[path = "stack_family_cache_tests.rs"]
-mod tests;

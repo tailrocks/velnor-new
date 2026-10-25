@@ -1,5 +1,3 @@
-//! Inventory shape checks: top-level keys, array types, schema and cadence.
-
 use serde_json::Value;
 
 use crate::context::FreshnessContext;

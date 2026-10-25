@@ -1,11 +1,3 @@
-//! Bun workspace member jobs (`bun-<slug>`, hard decision 6).
-//!
-//! One job per member: checkout without credentials, the orchestrator's
-//! install and script steps, nothing else. The job holds `contents: read`;
-//! `packages: read` appears only when a Velnor-owned registry-phase step is
-//! present, and the credential binding gate already confines
-//! `${{ github.token }}` to that step's role.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
@@ -14,24 +6,17 @@ use velnor_actions_contract::{
 
 use crate::{RenderError, steps};
 
-/// Hosted runner the Bun jobs use (the Ubuntu x86-64 image the tools cache is qualified for).
 pub const BUN_RUNNER: &str = "ubuntu-26.04";
 
-/// One resolved workspace member.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BunMemberPolicy {
-    /// Member `package.json` name (display).
     pub name: String,
-    /// Generated job id (`bun-<slug>`).
     pub id: String,
-    /// Job timeout.
     pub timeout: JobTimeout,
-    /// Steps after checkout, built by the orchestrator in execution order.
     pub steps: Vec<Step>,
 }
 
 impl BunMemberPolicy {
-    /// True when a step runs the registry phase (the only `packages: read` consumer).
     #[must_use]
     pub fn reads_registry(&self) -> bool {
         reads_registry(&self.steps)
@@ -42,11 +27,6 @@ impl BunMemberPolicy {
     }
 }
 
-/// Step invariants every Bun job shares (member and suite jobs alike).
-///
-/// # Errors
-///
-/// Returns [`RenderError`] naming the first broken invariant and the job.
 pub(crate) fn validate_bun_steps(id: &str, steps: &[Step]) -> Result<(), RenderError> {
     let invalid = |code: &str| RenderError::InvalidWorkflow(format!("{code}:{id}"));
     if !id.starts_with(velnor_actions_contract::config::BUN_JOB_PREFIX) {
@@ -70,7 +50,6 @@ pub(crate) fn validate_bun_steps(id: &str, steps: &[Step]) -> Result<(), RenderE
             if env.contains_key(crate::matrix::bun::BUN_LEGS_ENV)
                 || env.contains_key(crate::matrix::bun::BUN_MAX_PARALLEL_ENV))
         {
-            // Only the renderer writes the leg marker, from a typed matrix.
             return Err(invalid("bun_matrix_marker_preset"));
         }
         if matches!(step.kind, StepKind::Action { .. })
@@ -102,9 +81,6 @@ pub(crate) fn validate_bun_steps(id: &str, steps: &[Step]) -> Result<(), RenderE
     Ok(())
 }
 
-/// The App-token block is all or nothing: one mint, fetch and revoke in
-/// that order, adjacent, ahead of every step that runs repository code, so
-/// the token is revoked before any install or script (HD-7).
 fn validate_private_block(
     steps: &[Step],
     invalid: &dyn Fn(&str) -> RenderError,
@@ -140,18 +116,14 @@ fn validate_private_block(
     Ok(())
 }
 
-/// The registry phase: the one step bound to the npm read token.
 fn is_registry_phase(step: &Step) -> bool {
     step.role == Some(StepRole::BunRegistryInstall)
 }
 
-/// True when a step runs the registry phase (the only `packages: read` consumer).
 pub(crate) fn reads_registry(steps: &[Step]) -> bool {
     steps.iter().any(is_registry_phase)
 }
 
-/// Permissions of every Bun job: `contents: read`, plus `packages: read` only
-/// with the registry phase.
 pub(crate) fn bun_permissions(steps: &[Step]) -> Permissions {
     Permissions {
         contents: PermissionLevel::Read,
@@ -166,11 +138,6 @@ pub(crate) fn bun_permissions(steps: &[Step]) -> Permissions {
     }
 }
 
-/// Build the job for one member.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] for an invalid policy or timeout.
 pub fn build_bun_member_job(
     policy: &BunMemberPolicy,
     checkout_uses: &str,
@@ -193,11 +160,6 @@ pub fn build_bun_member_job(
     })
 }
 
-/// Reconstruct the member's job and reject an altered, missing or split one.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] naming the first mismatch.
 pub(crate) fn validate_bun_member_job(
     jobs: &BTreeMap<String, Job>,
     policy: &BunMemberPolicy,
@@ -217,7 +179,6 @@ pub(crate) fn validate_bun_member_job(
     Ok(ids.into_iter().cloned().collect())
 }
 
-/// True when two Bun jobs agree on every field the generator controls.
 pub(crate) fn same_bun_job(actual: &Job, expected: &Job) -> bool {
     actual.display_name == expected.display_name
         && actual.runs_on == expected.runs_on

@@ -1,4 +1,3 @@
-//! Cargo.lock identity and exhaustive crates.io archive admission.
 use crate::OrchestratorError;
 use crate::internal::internal;
 use serde::Deserialize;

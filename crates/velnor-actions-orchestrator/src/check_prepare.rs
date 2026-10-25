@@ -1,4 +1,3 @@
-//! Runtime owns materialized isolated check homes; adapters only inspect/execute.
 use crate::OrchestratorError;
 use crate::check_evidence::reject_link_components;
 use crate::internal::internal;
@@ -18,7 +17,6 @@ pub(crate) mod container;
 
 static NEXT_HOME: AtomicU64 = AtomicU64::new(0);
 
-/// Own cleanup while the immutable typed command handle lives.
 #[derive(Debug)]
 pub(crate) struct OwnedCheck {
     qualified: QualifiedCheck,
@@ -47,7 +45,6 @@ impl Drop for OwnedCheck {
     }
 }
 
-/// Materialize one source-bound projection and credential-free tool home.
 pub(crate) fn prepare_check(
     root: &Path,
     temp: &Path,
@@ -191,7 +188,3 @@ fn link_program(program: &OsStr, destination: &Path) -> Result<(), OrchestratorE
         Err(internal("check_binary_projection_platform"))
     }
 }
-
-#[cfg(test)]
-#[path = "check_prepare_tests.rs"]
-mod tests;

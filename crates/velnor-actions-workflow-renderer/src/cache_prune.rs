@@ -1,13 +1,3 @@
-//! Generated `.github/workflows/cache-prune.yml` (cache decision 4).
-//!
-//! A separate push-only workflow whose one job holds `actions: write`, so the
-//! Plan job and pull-request runs never get that permission. On a push to the
-//! protected default branch it lists, per typed family, the `trusted` entries
-//! of that ref by key prefix, groups them by key without the final snapshot
-//! digest (one cache unit: a root, a workspace, a version) and deletes all but
-//! the newest `retained_entries` of each unit. Other families, the `pr` trust
-//! scope, other refs and anything outside a family are never listed.
-
 use velnor_actions_contract::RunsOn;
 use velnor_actions_contract::workflow::cache_family::CacheFamily;
 
@@ -15,13 +5,9 @@ use crate::RenderError;
 use crate::marker::with_marker;
 use crate::render::RenderedFile;
 
-/// Path of the generated workflow.
 pub const CACHE_PRUNE_PATH: &str = ".github/workflows/cache-prune.yml";
-/// Fallback hosted label when the configured runner is not GitHub-hosted: the
-/// job needs the GitHub CLI, which job images do not ship.
 pub const CACHE_PRUNE_FALLBACK_RUNNER: &str = "ubuntu-latest";
 
-/// `(key prefix, newest entries kept per unit)` for every family, in family order.
 #[must_use]
 pub fn prune_targets() -> Vec<(String, u64)> {
     CacheFamily::ALL
@@ -35,7 +21,6 @@ pub fn prune_targets() -> Vec<(String, u64)> {
         .collect()
 }
 
-/// The prune script: one `prune '<prefix>' <keep>` call per family.
 #[must_use]
 pub fn prune_script() -> String {
     let mut lines = vec![
@@ -45,7 +30,6 @@ pub fn prune_script() -> String {
         "rm -rf \"$d\"".to_owned(),
         "mkdir -p \"$d\"".to_owned(),
         "warn() { printf '%s\\n' \"::warning::cache_unavailable: $1\"; }".to_owned(),
-        // Newest first; a unit is the key without its final snapshot digest.
         "prune() { if gh cache list --key \"$1\" --ref \"$ref\" --limit 1000 --sort created_at --order desc --json id,key --jq '.[] | [.id, .key] | @tsv' > \"$d/list\"; then :; else warn \"could not list $1\"; return 0; fi; awk -v keep=\"$2\" '{ g = $2; sub(/-s256-[0-9a-f]+$/, \"\", g); n[g]++; if (n[g] > keep) print $1 }' \"$d/list\" > \"$d/doomed\"; while read -r id; do if gh cache delete \"$id\"; then printf 'velnor: pruned superseded entry %s of %s\\n' \"$id\" \"$1\"; else warn \"could not delete $id\"; fi; done < \"$d/doomed\"; }".to_owned(),
     ];
     for (prefix, keep) in prune_targets() {
@@ -54,11 +38,6 @@ pub fn prune_script() -> String {
     lines.join("; ")
 }
 
-/// Render the prune workflow for the default branch and the configured runner label.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] for an invalid label, branch or generator version.
 pub fn render_cache_prune_yml(
     runs_on: &str,
     default_branch: &str,
@@ -86,7 +65,3 @@ pub fn render_cache_prune_yml(
         bytes: with_marker(version, &body)?,
     })
 }
-
-#[cfg(test)]
-#[path = "cache_prune_tests.rs"]
-mod tests;

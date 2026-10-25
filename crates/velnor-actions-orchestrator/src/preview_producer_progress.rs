@@ -1,4 +1,3 @@
-//! Closed, credential-free producer phase markers; no source-controlled text.
 use std::time::Instant;
 
 #[derive(Clone, Copy)]

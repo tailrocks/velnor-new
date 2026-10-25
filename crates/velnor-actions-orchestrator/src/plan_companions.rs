@@ -1,4 +1,3 @@
-//! Optional generated companion file ownership in deterministic plan order.
 use super::{GenerationPreparation, push};
 use velnor_actions_contract::config::ReleaseRegistry;
 use velnor_actions_contract::{FRESHNESS_WORKFLOW_PATH, TOFU_APPLY_WORKFLOW_PATH};
@@ -42,10 +41,6 @@ pub(super) fn file_lines(out: &mut String, prep: &GenerationPreparation) {
     }
 }
 
-/// Release-owned tree paths, exactly what `generate` emits when enabled.
-///
-/// The checked plan entrypoint surfaces config errors from its discarded
-/// render pass first, so an error here means nothing is emitted.
 fn release_file_lines(out: &mut String, prep: &GenerationPreparation) {
     let enabled = crate::release_emit::enabled_release(prep)
         .ok()
@@ -58,7 +53,6 @@ fn release_file_lines(out: &mut String, prep: &GenerationPreparation) {
     }
 }
 
-/// Publication workflow path, exactly when `generate` emits it.
 fn publish_file_lines(out: &mut String, prep: &GenerationPreparation) {
     let git_tag = crate::release_emit::git_tag_release(prep)
         .ok()
@@ -78,7 +72,6 @@ fn publish_file_lines(out: &mut String, prep: &GenerationPreparation) {
     }
 }
 
-/// Freshness and upgrade workflow paths, exactly when `generate` emits them.
 fn freshness_file_lines(out: &mut String, prep: &GenerationPreparation) {
     if crate::freshness_emit::freshness_enabled(prep) {
         push(out, &format!("  {FRESHNESS_WORKFLOW_PATH}"));
@@ -94,18 +87,12 @@ fn freshness_file_lines(out: &mut String, prep: &GenerationPreparation) {
     }
 }
 
-/// Protected apply workflow path, exactly when the closed config enables it.
 fn tofu_apply_file_lines(out: &mut String, prep: &GenerationPreparation) {
     if crate::tofu_apply_emit::tofu_apply_enabled(prep) {
         push(out, &format!("  {TOFU_APPLY_WORKFLOW_PATH}"));
     }
 }
 
-/// Owned-tool candidate workflow, exactly when `generate` emits it.
-///
-/// The checked entrypoint already rendered the staged tree (owned-tool
-/// files included) before this infallible section runs, so an error
-/// here means nothing is emitted.
 fn owned_tool_file_lines(out: &mut String, prep: &GenerationPreparation) {
     if let Ok(files) = crate::owned_tool_publication::files(prep) {
         for file in files {

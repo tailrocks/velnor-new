@@ -1,11 +1,7 @@
-//! Generated composite for the fixed V2 tools-cache restore payload.
-
 use velnor_actions_contract::{Step, StepKind, StepRole};
 
 use crate::{RenderError, marker, steps, tree::RenderedFile, yaml::Yaml};
 
-/// Validate the only call shape accepted for the fixed restore composite.
-/// # Errors
 pub(crate) fn validate_call(step: &Step) -> Result<&str, RenderError> {
     let StepKind::Action { uses, with, env } = &step.kind else {
         return Err(RenderError::InvalidWorkflow(
@@ -35,7 +31,6 @@ pub(crate) fn validate_call(step: &Step) -> Result<&str, RenderError> {
     Ok(key)
 }
 
-/// Exact lower-case SHA-256 of a pinned Mise binary.
 pub(super) fn is_mise_sha256(value: &str) -> bool {
     value.len() == 64
         && value
@@ -43,20 +38,6 @@ pub(super) fn is_mise_sha256(value: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
-/// Keep only an exact cache hit or a validated seed on an empty-cache miss.
-///
-/// Setup Mise runs before this restore (the resolver step needs its binary
-/// before the identity exists), and the archive owns its binary directory
-/// `~/.local/share/mise/bin`. A miss therefore sweeps every other entry of
-/// the Mise root, and both paths then re-verify that binary against the
-/// job's pinned digest, so no restored or seeded Mise binary runs unchecked.
-///
-/// Setup Mise has already put the restored `bin/` and `shims/` on `PATH`
-/// ahead of the system directories, so the script first resets `PATH` to
-/// [`crate::VERIFY_PATH`] (and the step's shell is [`crate::VERIFY_SHELL`]),
-/// and `bin/` may hold nothing but what Setup Mise writes there: the binary
-/// and its plain `mise-version` record.
-/// Semicolons keep this valid after `quote_run_line_env_paths` joins words with spaces.
 const TOOLS_CACHE_ADMISSION_SCRIPT: &str = r#"set -eu;
 PATH=/usr/bin:/bin:/usr/sbin:/sbin;
 export PATH;
@@ -164,11 +145,8 @@ fn admission_step() -> Yaml {
     ])
 }
 
-/// Re-verify every restored Mise install against its pinned archive; a
-/// mismatch is discarded so `Prepare pinned tools` reinstalls it.
 const INSTALLS_VERIFY_SCRIPT: &str = include_str!("cache_steps_tools_installs_verify.sh");
 
-/// Display name of the composite's install re-verification step.
 pub(crate) const INSTALLS_VERIFY_NAME: &str = "Re-verify restored Mise installs";
 
 fn installs_verify_step(tool_pins: &[String]) -> Result<Yaml, RenderError> {
@@ -280,8 +258,6 @@ fn action_body(tool_pins: &[String]) -> Result<Yaml, RenderError> {
     ]))
 }
 
-/// Build the pinned restore action with its renderer-owned archive paths.
-/// # Errors
 pub(crate) fn action_file(
     version: &str,
     tool_pins: &[String],
@@ -297,59 +273,3 @@ pub(crate) fn action_file(
         bytes,
     })
 }
-
-/// Decode the escapes `quote_double` emits, single-pass like YAML.
-#[cfg(test)]
-fn unescape_double_quoted_scalar(raw: &str) -> String {
-    let mut out = String::with_capacity(raw.len());
-    let mut chars = raw.chars();
-    while let Some(ch) = chars.next() {
-        if ch != '\\' {
-            out.push(ch);
-            continue;
-        }
-        match chars.next() {
-            Some('"') => out.push('"'),
-            Some('n') => out.push('\n'),
-            Some('r') => out.push('\r'),
-            Some('t') => out.push('\t'),
-            Some('\\') | None => out.push('\\'),
-            Some(other) => {
-                out.push('\\');
-                out.push(other);
-            }
-        }
-    }
-    out
-}
-
-/// Parse the quoted `run:` scalar the way Actions does, then `bash -n` it.
-#[cfg(test)]
-pub(crate) fn assert_rendered_admission_parses(bytes: &str) {
-    let raw = bytes
-        .split("run: \"")
-        .nth(1)
-        .and_then(|rest| rest.split("\"\n").next())
-        .expect("admission run scalar");
-    let script = unescape_double_quoted_scalar(raw);
-    let file = std::env::temp_dir().join("velnor-tools-admission-bash-n.sh");
-    std::fs::write(&file, &script).expect("admission script");
-    let status = std::process::Command::new("bash")
-        .arg("-n")
-        .arg(&file)
-        .status()
-        .expect("bash -n");
-    assert!(status.success(), "{script}");
-}
-
-#[cfg(test)]
-#[path = "cache_steps_tools_restore_tests.rs"]
-mod tests;
-
-#[cfg(test)]
-#[path = "cache_steps_tools_installs_verify_tests.rs"]
-mod installs_verify_tests;
-
-#[cfg(test)]
-#[path = "cache_steps_tools_restore_path_tests.rs"]
-mod path_tests;

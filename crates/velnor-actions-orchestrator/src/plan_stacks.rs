@@ -1,5 +1,3 @@
-//! Plan `Detected stacks` section: crates, profiles, and evidence.
-
 use std::collections::BTreeSet;
 
 use velnor_actions_contract::DetectionStatus;
@@ -8,7 +6,6 @@ use crate::discover::{PlannedWorkspace, local_dep_names};
 use crate::plan::push;
 use crate::prepare::GenerationPreparation;
 
-/// Detected stacks, crates, profiles, and evidence.
 pub(crate) fn stacks_section(out: &mut String, prep: &GenerationPreparation) {
     push(out, "Detected stacks");
     let ignored = prep
@@ -80,7 +77,6 @@ pub(crate) fn stacks_section(out: &mut String, prep: &GenerationPreparation) {
     }
 }
 
-/// Tofu plan note: ignore marker or table-less evidence advisory.
 fn tofu_lines(out: &mut String, note: &velnor_actions_tofu::TofuNote) {
     match note {
         velnor_actions_tofu::TofuNote::Ignored => {
@@ -111,7 +107,6 @@ fn tofu_lines(out: &mut String, note: &velnor_actions_tofu::TofuNote) {
     }
 }
 
-/// Per-workspace profile provenance: drivers, sources, evidence, findings.
 fn profile_lines(out: &mut String, workspace: &PlannedWorkspace) {
     let root = if workspace.record.workspace_root.is_empty() {
         "."
@@ -171,7 +166,6 @@ fn profile_lines(out: &mut String, workspace: &PlannedWorkspace) {
     }
 }
 
-/// Crates sorted by name then manifest with kind and dependency detail.
 fn sorted_crates(prep: &GenerationPreparation) -> Vec<(String, String, String)> {
     let mut crates = Vec::new();
     for workspace in &prep.discovery.workspaces {

@@ -1,5 +1,3 @@
-//! Fixed plan-request reader and source-binding checks.
-
 use std::env;
 use std::path::{Path, PathBuf};
 

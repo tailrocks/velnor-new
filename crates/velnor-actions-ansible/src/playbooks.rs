@@ -1,9 +1,5 @@
-//! Top-level playbook discovery for `ansible-playbook --syntax-check`.
-
 use crate::paths::is_under;
 
-/// True when `text` is a playbook: a YAML list whose first item is a play
-/// (`hosts:`) or an `import_playbook`.
 #[must_use]
 pub fn is_playbook(text: &str) -> bool {
     let mut lines = text
@@ -25,8 +21,6 @@ pub fn is_playbook(text: &str) -> bool {
     is_play(item) || lines.take_while(|l| l.starts_with(' ')).any(is_play)
 }
 
-/// Sorted top-level playbooks under `root`: `(path, text)` pairs of `.yml`
-/// and `.yaml` files directly in `root` whose text is a playbook.
 #[must_use]
 pub fn top_level_playbooks(root: &str, files: &[(&str, &str)]) -> Vec<String> {
     let root = if root == "." { "" } else { root };

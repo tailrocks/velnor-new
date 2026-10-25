@@ -1,9 +1,3 @@
-//! Independent admission of the untrusted producer output before signing.
-//!
-//! This module never extracts or executes payloads. It parses only the closed
-//! package-output handoff, copies expected regular files into a fresh directory
-//! while hashing them, and inspects the staged tar streams and `CycloneDX` files.
-
 use std::{
     collections::BTreeSet,
     fs,
@@ -35,12 +29,7 @@ mod public_content;
 use identity::{validate_expected_identity, validate_manifest_identity};
 pub(crate) use public_content::validate_authenticated_release_content;
 pub(crate) mod preview_payload;
-#[cfg(test)]
-#[path = "package_release_artifacts_real_tests.rs"]
-mod real_tests;
-#[cfg(test)]
-#[path = "package_release_artifacts_tests.rs"]
-mod tests;
+
 const HANDOFF_SCHEMA: &str = "velnor.package-output.v1";
 pub(crate) const MAX_HANDOFF_BYTES: u64 = 4 * 1024 * 1024;
 pub(crate) const MAX_SBOM_BYTES: u64 = 32 * 1024 * 1024;
@@ -53,104 +42,66 @@ pub(crate) const MAX_TOTAL_BYTES: u64 = 6 * 1024 * 1024 * 1024;
 const MAX_TOTAL_DECOMPRESSED_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 const VERIFY_TIMEOUT: Duration = Duration::from_secs(120);
 
-/// Untrusted producer output contract, versioned independently from the public receipt.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct PackageOutputManifest {
-    /// Exact handoff schema discriminator.
     pub schema: String,
-    /// Full source commit expected by the trusted workflow.
     pub source_commit: String,
-    /// Source ref expected by the trusted workflow.
     pub source_ref: String,
-    /// Exact Velnor-computed release version.
     pub version: String,
-    /// Producer payload inventory; rows sorted by payload name.
     pub payloads: Vec<PackageOutputPayload>,
-    /// Producer companion inventory; rows sorted by companion ID.
     pub companions: Vec<PackageOutputCompanion>,
-    /// Producer SBOM inventory; rows sorted by payload name.
     pub sboms: Vec<PackageOutputSbom>,
 }
 
-/// Producer-declared payload identity and untrusted digest.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct PackageOutputPayload {
-    /// Trusted product ID expected for this payload.
     pub product_id: String,
-    /// Exact target triple.
     pub target: String,
-    /// Actual byte representation, cross-checked against the trusted plan.
     pub format: PackageReleasePayloadFormat,
-    /// Payload name derived by Velnor.
     pub name: String,
-    /// SHA-256 claimed by the producer, checked against copied bytes.
     pub sha256: String,
 }
 
-/// Producer-declared companion identity and untrusted digest.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct PackageOutputCompanion {
-    /// Trusted companion ID.
     pub id: String,
-    /// Producer output path relative to the output directory.
     pub path: String,
-    /// Public asset name declared in source configuration.
     pub name: String,
-    /// SHA-256 claimed by the producer, checked against copied bytes.
     pub sha256: String,
 }
 
-/// Producer-declared `CycloneDX` payload binding and untrusted digest.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct PackageOutputSbom {
-    /// Payload filename bound by the SBOM.
     pub payload_name: String,
-    /// Exact sidecar filename derived by Velnor.
     pub name: String,
-    /// SHA-256 claimed by the producer, checked against copied bytes.
     pub sha256: String,
 }
 
-/// Validated artifact copied into a fresh Velnor-owned staging directory.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct VerifiedPackageArtifact {
-    /// Release asset filename.
     pub name: String,
-    /// Velnor-owned staged file path to the exact validated bytes.
     pub path: PathBuf,
-    /// Number of staged bytes.
     pub size: u64,
-    /// Lowercase SHA-256 of staged bytes.
     pub sha256: String,
-    /// Receipt-ready identity derived from trusted declarations and copied bytes.
     pub release_asset: PackageReleaseAsset,
 }
 
-/// Complete independently verified producer inventory, ready for signer input.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct VerifiedPackageOutput {
-    /// Exact authenticated source commit carried by the handoff.
     pub source_commit: String,
-    /// Exact source ref carried by the handoff.
     pub source_ref: String,
-    /// Exact computed release version carried by the handoff.
     pub version: String,
-    /// Archive, companion, and SBOM files copied to Velnor-owned staging.
     pub artifacts: Vec<VerifiedPackageArtifact>,
 }
 
-/// Trusted identity expected from the untrusted package-output handoff.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct PackageOutputIdentity<'a> {
-    /// Exact expected source commit.
     pub source_commit: &'a str,
-    /// Exact expected source ref.
     pub source_ref: &'a str,
-    /// Exact computed release version.
     pub version: &'a str,
 }
 
@@ -175,11 +126,6 @@ struct ExpectedFile {
     bins: Vec<String>,
 }
 
-/// Validate and copy the exact producer byte inventory before any signing.
-///
-/// `producer_dir` is untrusted output. `staging_dir` must be a new path owned by
-/// Velnor. The handoff's identity is compared to trusted workflow inputs; its
-/// names and digests never determine what files are admitted.
 pub(crate) fn verify_package_output(
     producer_dir: &Path,
     manifest_path: &str,

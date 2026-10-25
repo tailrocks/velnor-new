@@ -1,9 +1,11 @@
-//! dbt-fusion stack adapter: version grammar, project model, package lock
-//! policy, profile hygiene, artifact admission and affected-project claims.
-//!
-//! This crate only reads text the orchestrator hands it; it launches no
-//! process, touches no file and renders no workflow text.
-
+#![allow(
+    clippy::missing_errors_doc,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
+#![allow(
+    missing_docs,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
 pub mod error;
 pub mod packages;
 pub mod paths;
@@ -22,13 +24,12 @@ pub use select::affected_projects;
 pub use tools::{FUSION_HOST, FusionPlatform, check_mise_lock, fusion_url};
 pub use version::{FusionVersion, VersionError, parse_fusion_version};
 
-/// Stable identifier of the dbt stack.
 pub const STACK_ID: &str = "dbt";
-/// File that marks a dbt project root.
+
 pub const PROJECT_FILE: &str = "dbt_project.yml";
-/// Package manifest next to the project file.
+
 pub const PACKAGES_FILE: &str = "packages.yml";
-/// Resolved package lock next to the manifest.
+
 pub const PACKAGE_LOCK_FILE: &str = "package-lock.yml";
-/// Connection profile file.
+
 pub const PROFILES_FILE: &str = "profiles.yml";

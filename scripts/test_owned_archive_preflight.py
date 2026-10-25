@@ -32,7 +32,7 @@ def checkout(root):
         if kind == "optional":
             continue
         if relative == "scripts/owned_archive_preflight.py":
-            # The script under test: keep the valid copy installed above.
+
             continue
         if kind == "tree":
             path.mkdir(parents=True, exist_ok=True)

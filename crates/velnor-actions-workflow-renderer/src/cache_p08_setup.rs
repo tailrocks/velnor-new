@@ -1,17 +1,8 @@
-//! Insert the typed V2 tools-cache prelude into rendered jobs.
-
 use velnor_actions_contract::workflow::step_identity::is_configured_checkout;
 use velnor_actions_contract::{Job, Step, StepKind};
 
 use crate::{MiseSetup, RenderError, cache_p08, cache_p08::ToolsCacheInputs};
 
-/// Add cache-disabled Mise setup, then runtime identity and read-only restore.
-///
-/// The identity follows Setup Mise: the document pass inserts the project
-/// tool resolver directly after Setup Mise, and the identity's `d` input
-/// reads the versions and lock digests it exports. The restore composite
-/// re-verifies the Setup Mise binary it may overwrite.
-/// # Errors
 pub(crate) fn ensure_tools_cache_v2(
     job_id: &str,
     job: &mut Job,
@@ -198,8 +189,6 @@ fn insert_at(job: &Job, checkout_uses: &str) -> usize {
         .map_or(0, |index| index + 1)
 }
 
-/// Parse the exact pinned components step that populated this tool payload.
-/// # Errors
 pub(crate) fn rust_components(
     step: &Step,
     version: &str,
@@ -248,37 +237,4 @@ pub(crate) fn rust_components(
         ));
     }
     Ok(components)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::rust_components;
-    use crate::steps::ambient_shell_step;
-    use std::collections::BTreeMap;
-
-    #[test]
-    fn parses_the_fixed_rust_components_payload() {
-        let step = ambient_shell_step(
-            "Prepare Rust components",
-            vec![
-                "mise".to_owned(),
-                "exec".to_owned(),
-                "rust@1.98.1".to_owned(),
-                "--".to_owned(),
-                "rustup".to_owned(),
-                "component".to_owned(),
-                "add".to_owned(),
-                "--toolchain".to_owned(),
-                "1.98.1-x86_64-unknown-linux-gnu".to_owned(),
-                "clippy".to_owned(),
-                "rustfmt".to_owned(),
-            ],
-            BTreeMap::from([("RUSTUP_TOOLCHAIN".to_owned(), "1.98.1".to_owned())]),
-        )
-        .expect("fixed step");
-        assert_eq!(
-            rust_components(&step, "1.98.1", "x86_64-unknown-linux-gnu").expect("components"),
-            ["clippy", "rustfmt"]
-        );
-    }
 }

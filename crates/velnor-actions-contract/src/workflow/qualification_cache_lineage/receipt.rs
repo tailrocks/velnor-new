@@ -1,5 +1,3 @@
-//! Bounded cache receipt model and validation.
-
 mod admission;
 mod completed;
 mod errors;

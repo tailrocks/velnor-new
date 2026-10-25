@@ -1,12 +1,3 @@
-//! Tofu closure inputs for modules (M2) and auto varfiles (H2).
-//!
-//! The `modules` input binds local-module source spellings to
-//! resolved canonical targets and their effective content digests;
-//! findings, escapes, missing targets, and cycles resolve to
-//! Unknown with a typed reason. The `varfiles` input binds
-//! committed auto-loaded varfiles per unit. `fmt` excludes both
-//! (it resolves no modules and binds tfvars via `source_tree`).
-
 use std::path::Path;
 
 use velnor_actions_contract::{Provenance, digest_b3};
@@ -21,10 +12,8 @@ use crate::modules::{
     canonicalize_side, check_acyclic, identities_digest, resolve_local_target, resolve_refs,
 };
 
-/// One module identity record: `(file, name, source, target, content)`.
 type IdentityRecord = (String, String, String, String, String);
 
-/// Module source/content identity (M2), or Unknown with a typed reason.
 pub(crate) fn modules_provenance(
     root: &Path,
     unit: &str,
@@ -113,7 +102,6 @@ pub(crate) fn modules_provenance(
     }
 }
 
-/// Identity records for every reference, in reference order.
 fn identity_records(
     canonical_root: &Path,
     refs: &[ModuleRef],
@@ -126,7 +114,6 @@ fn identity_records(
     Ok(records)
 }
 
-/// H2 auto-loaded varfiles identity, or proven absence.
 pub(crate) fn varfiles_provenance(
     root: &Path,
     unit: &str,
@@ -169,7 +156,6 @@ pub(crate) fn varfiles_provenance(
     }
 }
 
-/// Parse module references from the unit's effective configs.
 fn unit_module_refs(
     root: &Path,
     wanted: &[String],
@@ -193,7 +179,6 @@ fn unit_module_refs(
     Ok(refs)
 }
 
-/// Canonicalize resolved edges against the canonical checkout root.
 fn canonical_edges(
     canonical_root: &Path,
     edges: &[ModuleEdge],
@@ -209,7 +194,6 @@ fn canonical_edges(
     Ok(canonical)
 }
 
-/// Unknown reason naming the first sorted finding (identity recorded).
 fn finding_reason(finding: &ModuleFinding) -> String {
     let class = match finding.class {
         SourceClass::Dynamic => "dynamic_source",
@@ -223,10 +207,6 @@ fn finding_reason(finding: &ModuleFinding) -> String {
     )
 }
 
-/// One identity record: `(file, name, source, canonical target, content)`.
-///
-/// Findings returned Unknown before this point, so only local
-/// literals arrive; anything else errors (unreachable in practice).
 fn identity_record(
     canonical_root: &Path,
     reference: &ModuleRef,
@@ -254,7 +234,6 @@ fn identity_record(
     ))
 }
 
-/// Digest the effective config content of one canonical target dir.
 fn digest_target(
     canonical_root: &Path,
     target: &str,
@@ -293,7 +272,6 @@ fn digest_target(
     Ok(files_digest(&files))
 }
 
-/// Map a target-walk failure to a typed module error.
 fn walk_error(target: &str, reason: &str) -> ModuleError {
     if let Some(count) = reason
         .strip_prefix("too_many_files:")

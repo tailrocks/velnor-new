@@ -1,8 +1,5 @@
-//! POSIX shell expansion spans used while quoting typed argv.
-
 use crate::RenderError;
 
-/// True when `bytes[index] == b'$'` starts a POSIX variable expansion.
 pub(crate) fn is_expansion_at(bytes: &[u8], index: usize) -> bool {
     match bytes.get(index + 1) {
         Some(b'{') => bytes.get(index + 2) != Some(&b'{'),
@@ -14,7 +11,6 @@ pub(crate) fn is_expansion_at(bytes: &[u8], index: usize) -> bool {
     }
 }
 
-/// Return the byte after the complete expansion, or `None` for malformed input.
 pub(crate) fn expansion_end(bytes: &[u8], index: usize) -> Option<usize> {
     if bytes.get(index + 1) != Some(&b'{') {
         let next = *bytes.get(index + 1)?;
@@ -62,7 +58,6 @@ pub(crate) fn expansion_end(bytes: &[u8], index: usize) -> Option<usize> {
     None
 }
 
-/// Quote an expansion as one shell word and translate its fallback syntax.
 pub(crate) fn quote_expansion(expansion: &str) -> Result<String, RenderError> {
     quote_expansion_at_depth(expansion, 0)
 }

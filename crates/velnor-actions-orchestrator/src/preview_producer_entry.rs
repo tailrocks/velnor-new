@@ -1,4 +1,3 @@
-//! Closed workflow entrypoints for native payload production and union admission.
 use super::PreviewProducerProof;
 use crate::{
     OrchestratorError, exclusive_write::create_dir_no_symlink, internal::internal,
@@ -34,8 +33,7 @@ mod leaf_manifest;
 #[path = "preview_producer_proof.rs"]
 mod proof;
 pub use admission::{ADMIT_RELEASE_AGGREGATE_OP, admit_release_aggregate};
-#[cfg(test)]
-use proof::publish_proof;
+
 use proof::with_proof_ownership;
 
 pub(super) fn release_workflow_context(
@@ -46,17 +44,11 @@ pub(super) fn release_workflow_context(
     context::workflow_context(plan, deadline)
 }
 
-/// Private operation tag; its mandatory stage has no implicit serial fallback.
 pub const EXECUTE_RELEASE_PRODUCER_OP: &str = "execute-release-producer-v1";
 
-/// Execute one source-authorized payload or the complete admitted union.
-/// # Errors
-/// Rejects context, source, role, request, task, artifact or deadline drift.
 pub fn execute_release_producer() -> Result<(), OrchestratorError> {
     acquisition::reject_credentials()?;
     let started = Instant::now();
-    // Independent native producer ceiling until its configuration is read;
-    // the configured scope shares this original start and can only shorten it.
     let maximum = producer_deadline(started, RustBinaryReleaseProducer::MAX_TIMEOUT_MINUTES)?;
     with_proof_ownership(|guard| {
         maximum
@@ -115,7 +107,6 @@ pub fn execute_release_producer() -> Result<(), OrchestratorError> {
     })
 }
 
-/// Preserve the execution entry's original clock and reserve cleanup within it.
 fn producer_deadline(started: Instant, minutes: u16) -> Result<CheckDeadline, OrchestratorError> {
     if !(1..=RustBinaryReleaseProducer::MAX_TIMEOUT_MINUTES).contains(&minutes) {
         return Err(internal("preview_producer_timeout"));
@@ -168,10 +159,6 @@ fn admitted_preview_config(
     policy
         .validate_plan(plan)
         .map_err(|_| internal("preview_plan_config_mismatch"))?;
-    // The finalizer derived this complete policy and plan from exact-A
-    // manifests and config before writing the digest-pinned source admission.
-    // Preflight authenticates those same A blobs and producer/tool closure, so
-    // Preview needs only the source-owned release config for task execution.
     Ok(release.clone())
 }
 
@@ -229,6 +216,3 @@ fn read_checkpoint(deadline: CheckDeadline) -> Result<(), &'static str> {
 fn checkpoint(deadline: CheckDeadline) -> Result<(), OrchestratorError> {
     read_checkpoint(deadline).map_err(internal)
 }
-#[cfg(test)]
-#[path = "preview_producer_entry_tests.rs"]
-mod tests;

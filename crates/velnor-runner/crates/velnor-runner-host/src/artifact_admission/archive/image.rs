@@ -1,5 +1,3 @@
-//! Validated OCI image descriptors, config profile, and provenance referrer.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use bollard::models::ContainerConfig;

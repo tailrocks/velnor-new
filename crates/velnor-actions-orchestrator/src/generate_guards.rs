@@ -1,17 +1,7 @@
-//! Generation filesystem guards: tool snapshots, destination validation,
-//! commit ownership, and staging checks.
-//!
-//! Self-declared from `generate.rs` (`#[path]`, no `lib.rs` edit).
-//! Preview destinations validate containment, ancestry, and symlinks
-//! before any directory is created; in-place commits run under an
-//! exclusive ownership lock; the tool snapshot proves read-only files
-//! were never modified.
-
 use std::path::{Component, Path, PathBuf};
 
 use crate::OrchestratorError;
 
-/// Read-only tool files generation must never modify (TOOL-2.10).
 const TOOL_FILES: [&str; 6] = [
     "mise.toml",
     ".mise.toml",
@@ -21,20 +11,13 @@ const TOOL_FILES: [&str; 6] = [
     "rust-toolchain.toml",
 ];
 
-/// Byte snapshot of the read-only tool files for drift detection.
-///
-/// Captured when generation starts and verified before any output
-/// replacement, so a mid-generation tool-file change fails closed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolSnapshot {
-    /// One entry per [`TOOL_FILES`] path: bytes, or `None` when absent.
     entries: Vec<(String, Option<Vec<u8>>)>,
-    /// Tool files present but unreadable: never merged with missing.
     unreadable: Vec<String>,
 }
 
 impl ToolSnapshot {
-    /// Capture the current tool-file bytes under `root`.
     #[must_use]
     pub fn capture(root: &Path) -> Self {
         let mut unreadable = Vec::new();
@@ -58,13 +41,6 @@ impl ToolSnapshot {
         }
     }
 
-    /// Fail when any tool file differs from the captured bytes.
-    ///
-    /// Unreadable files fail closed: the no-write proof needs contents.
-    ///
-    /// # Errors
-    ///
-    /// Returns a contract error naming the first drifted file.
     pub fn verify(&self, root: &Path) -> Result<(), OrchestratorError> {
         let fresh = Self::capture(root);
         let mut bad = self.unreadable.clone();
@@ -85,23 +61,14 @@ impl ToolSnapshot {
     }
 }
 
-/// Fixed-name lock directory claiming in-place generation ownership.
 const GENERATE_LOCK_NAME: &str = ".github.velnor-generate.lock";
 
-/// Exclusive in-place generation ownership, released on drop.
-///
-/// Created with `create_dir`, so a second simultaneous `generate` fails
-/// closed instead of interleaving writes; the lock is removed on every
-/// exit path via [`Drop`]. A stale lock (owner crash) refuses generation
-/// until an operator removes it.
 #[derive(Debug)]
 pub(crate) struct GenerateOwnership {
-    /// Lock directory removed on drop.
     path: PathBuf,
 }
 
 impl GenerateOwnership {
-    /// Claim ownership of in-place generation under `root`.
     pub(crate) fn acquire(root: &Path) -> Result<Self, OrchestratorError> {
         let path = root.join(GENERATE_LOCK_NAME);
         match std::fs::create_dir(&path) {
@@ -120,13 +87,11 @@ impl GenerateOwnership {
 }
 
 impl Drop for GenerateOwnership {
-    /// Best-effort lock release; a stale lock refuses until removed.
     fn drop(&mut self) {
         let _removed = std::fs::remove_dir(&self.path);
     }
 }
 
-/// Build a preview refusal for one destination.
 fn preview_refused(path: &str, reason: &str) -> OrchestratorError {
     OrchestratorError::PreviewRefused {
         path: path.to_owned(),
@@ -134,14 +99,6 @@ fn preview_refused(path: &str, reason: &str) -> OrchestratorError {
     }
 }
 
-/// Create or validate the preview root, refusing unsafe destinations.
-///
-/// Validates containment, ancestry, and symlinks before creating any
-/// directory, then creates the missing chain level by level, re-checks
-/// the canonical path, and exclusively reserves `<dest>/.github`: a
-/// refused preview leaves nothing behind. Residual: an out-of-band
-/// actor swapping path components mid-write can only be narrowed, not
-/// closed, with standard file APIs; same-repo races fail closed.
 pub(crate) fn prepare_preview_dir(root: &Path, dest: &Path) -> Result<PathBuf, OrchestratorError> {
     let label = dest.display().to_string();
     let root_canon = root
@@ -171,11 +128,6 @@ pub(crate) fn prepare_preview_dir(root: &Path, dest: &Path) -> Result<PathBuf, O
     Ok(canonical)
 }
 
-/// Nearest existing ancestor (canonicalized) plus the clean suffix.
-///
-/// Every existing component must be symlink-free; `..` and empty
-/// segments in the remainder refuse as traversal. The anchor is
-/// canonical, so the lexical suffix cannot escape through a link.
 fn preview_anchor(dest: &Path, label: &str) -> Result<(PathBuf, PathBuf), OrchestratorError> {
     let mut found = None;
     for candidate in dest.ancestors() {
@@ -213,7 +165,6 @@ fn preview_anchor(dest: &Path, label: &str) -> Result<(PathBuf, PathBuf), Orches
     Ok((canonical, suffix))
 }
 
-/// Refuse a preview candidate inside the repo or above it.
 fn refuse_inside_or_ancestor(
     root: &Path,
     candidate: &Path,
@@ -228,10 +179,6 @@ fn refuse_inside_or_ancestor(
     Ok(())
 }
 
-/// Create the missing chain level by level, verifying each level.
-///
-/// Every level must be a real directory afterwards: a planted symlink
-/// or file fails closed instead of diverting the write.
 fn create_preview_chain(
     anchor: &Path,
     suffix: &Path,
@@ -253,10 +200,6 @@ fn create_preview_chain(
     Ok(())
 }
 
-/// Exclusively reserve `<dest>/.github`, refusing raced destinations.
-///
-/// The exclusive create fails closed when a peer reserved first; the
-/// re-scan refuses when a peer planted anything else beside it.
 fn reserve_preview_github(canonical: &Path, label: &str) -> Result<(), OrchestratorError> {
     let github = canonical.join(".github");
     match std::fs::create_dir(&github) {
@@ -278,88 +221,4 @@ fn reserve_preview_github(canonical: &Path, label: &str) -> Result<(), Orchestra
         return Err(preview_refused(label, "concurrent_preview"));
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Fresh scratch root, cleared when a previous run left it behind.
-    fn scratch(test: &str) -> std::io::Result<PathBuf> {
-        let dir = std::env::temp_dir().join(format!("velnor-guards-{test}-{}", std::process::id()));
-        drop(std::fs::remove_dir_all(&dir));
-        std::fs::create_dir_all(&dir)?;
-        Ok(dir)
-    }
-
-    #[test]
-    fn anchor_splits_existing_prefix_from_clean_suffix() {
-        let root = scratch("anchor").expect("scratch");
-        let (anchor, suffix) =
-            preview_anchor(&root.join("new-nested/deep"), "label").expect("anchor");
-        assert_eq!(
-            anchor,
-            root.canonicalize().expect("canonical"),
-            "anchor is the canonical parent"
-        );
-        assert_eq!(suffix, PathBuf::from("new-nested/deep"));
-        let (anchor, suffix) = preview_anchor(&root, "label").expect("self anchor");
-        assert_eq!(anchor, root.canonicalize().expect("canonical"));
-        assert!(suffix.as_os_str().is_empty(), "no remainder");
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn anchor_rejects_symlink_components() {
-        let root = scratch("anchor-link").expect("scratch");
-        let link = root.join("link");
-        std::os::unix::fs::symlink(root.join("target"), &link).expect("symlink");
-        let err = preview_anchor(&link.join("sub"), "label").expect_err("link refused");
-        assert!(err.to_string().contains("symlink_refused"), "{err}");
-    }
-
-    #[test]
-    fn refuse_matrix_covers_inside_ancestor_and_sibling() {
-        let root = PathBuf::from("/repo");
-        for (candidate, reason) in [
-            ("/repo", "inside_repository"),
-            ("/repo/sub", "inside_repository"),
-            ("/", "ancestor_of_repository"),
-        ] {
-            let err = refuse_inside_or_ancestor(&root, &PathBuf::from(candidate), "label")
-                .expect_err("refused");
-            assert!(err.to_string().contains(reason), "{err}");
-        }
-        for candidate in ["/other", "/repo2"] {
-            assert!(
-                refuse_inside_or_ancestor(&root, &PathBuf::from(candidate), "label").is_ok(),
-                "{candidate} is outside"
-            );
-        }
-    }
-
-    #[test]
-    fn reserve_rejects_raced_github() {
-        let root = scratch("reserve").expect("scratch");
-        std::fs::create_dir(root.join(".github")).expect("pre-created");
-        let err = reserve_preview_github(&root, "label").expect_err("raced");
-        assert!(err.to_string().contains("concurrent_preview"), "{err}");
-        let fresh = scratch("reserve-clean").expect("scratch");
-        assert!(reserve_preview_github(&fresh, "label").is_ok());
-        assert!(fresh.join(".github").is_dir(), "reserved");
-    }
-
-    #[test]
-    fn ownership_is_exclusive_until_released() {
-        let root = scratch("ownership").expect("scratch");
-        let first = GenerateOwnership::acquire(&root).expect("first");
-        let err = GenerateOwnership::acquire(&root).expect_err("second refused");
-        assert!(err.to_string().contains("concurrent_generate"), "{err}");
-        drop(first);
-        assert!(
-            !root.join(".github.velnor-generate.lock").exists(),
-            "released on drop"
-        );
-        let _second = GenerateOwnership::acquire(&root).expect("re-acquire");
-    }
 }

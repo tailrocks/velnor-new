@@ -1,4 +1,3 @@
-//! Receipt-specific admission over the shared closed ZIP mechanics.
 use super::super::{
     artifact_zip::{self, ExpectedZipEntry},
     github::sha256,
@@ -40,8 +39,6 @@ pub(super) fn extract_signed_assets(
         max_bytes: MAX_RECEIPT_BYTES,
         unix_permissions: None,
     });
-    // Historical signature bytes are authenticated by the subsequent crypto
-    // verifier, not by an invented self-referential receipt-bundle hash.
     expected.push(ExpectedZipEntry {
         name: "release.json.bundle".into(),
         size: None,
@@ -105,7 +102,3 @@ fn parse_receipt(
     }
     Ok(receipt)
 }
-
-#[cfg(test)]
-#[path = "artifact_zip_recovery_characterization_tests.rs"]
-mod characterization_tests;

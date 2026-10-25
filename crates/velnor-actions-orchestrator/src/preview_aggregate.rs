@@ -1,4 +1,3 @@
-//! Authenticate the full leaf union before unprivileged source assembly.
 use crate::filesystem_owner::held_file::HeldFile;
 
 use super::{
@@ -78,10 +77,6 @@ pub(super) fn acquire(
     complete_acquisition(admitted, request, completed_request, deadline)
 }
 
-/// Seal the exact request returned by the authenticated artifact inventory.
-/// This is shared by the production acquisition path and its composed test.
-/// # Errors
-/// Rejects caller drift, incomplete inventory identity, or changed retained files.
 pub(super) fn complete_acquisition(
     mut admitted: AdmittedLeaves,
     original: &ReleaseProductionRequest,

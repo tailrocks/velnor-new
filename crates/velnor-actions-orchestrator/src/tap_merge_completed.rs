@@ -1,5 +1,3 @@
-//! Read-only verification for a release already merged into the tap.
-
 use serde_json::Value;
 use velnor_actions_contract::homebrew_merge_gate::{
     TapCompletedMainObservation, TapCompletedPromotionObservation, TapServerMergeProtection,
@@ -16,9 +14,6 @@ use super::{
     protection::{ProtectionAuthority, exact_required_checks, resolve_protection},
 };
 
-/// Authenticate an already merged receipt without performing a write.
-/// # Errors
-/// Rejects any mismatch in the merged PR, checks, formula, ancestry, or review history.
 pub(super) fn verify_already_promoted(
     candidate: &MergeCandidate,
     authority: &MergeAuthority,

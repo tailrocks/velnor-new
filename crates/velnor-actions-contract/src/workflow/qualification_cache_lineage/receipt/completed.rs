@@ -1,5 +1,3 @@
-//! Validation for the current producer receipt before upload.
-
 use crate::canonical::canonical_json_bytes;
 use crate::errors::ContractError;
 use crate::workflow::plan::Plan;
@@ -16,8 +14,6 @@ use super::types::{
 use super::validation::{validate_lanes, validate_receipt_shape};
 
 impl QualificationCacheReceiptArtifactDocument {
-    /// Validate and serialize one bounded immutable producer artifact.
-    /// # Errors
     pub fn to_bounded_json(
         &self,
         plan: &Plan,
@@ -32,8 +28,6 @@ impl QualificationCacheReceiptArtifactDocument {
         Ok(bytes)
     }
 
-    /// Validate completed producer evidence before the collector uploads it.
-    /// # Errors
     pub fn validate_for_plan(
         &self,
         plan: &Plan,

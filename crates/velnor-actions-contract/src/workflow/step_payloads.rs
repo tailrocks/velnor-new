@@ -1,11 +1,8 @@
-//! Fixed payload shapes of the Mise setup and tool-seed roles.
-
 use super::step::StepKind;
 use super::step_identity::{
     TOOL_SEED_USES, TOOLS_CACHE_IDENTITY_DIGEST_INPUT, TOOLS_CACHE_PRELUDE_USES,
 };
 
-/// Validate the typed Mise setup payload shape shared by render paths.
 pub(super) fn valid_mise_setup(kind: &StepKind) -> bool {
     matches!(kind, StepKind::Action { uses, with, .. }
         if uses.starts_with("jdx/mise-action@")
@@ -17,7 +14,6 @@ pub(super) fn valid_mise_setup(kind: &StepKind) -> bool {
             && with.get("cache_save").is_some_and(|value| value == "false" || value == "true"))
 }
 
-/// Require the fixed local seed action and its one explicit cache identity.
 pub(super) fn valid_tool_seed_payload(kind: &StepKind) -> bool {
     matches!(kind, StepKind::Action { uses, with, env }
         if uses == TOOL_SEED_USES
@@ -26,7 +22,6 @@ pub(super) fn valid_tool_seed_payload(kind: &StepKind) -> bool {
             && env.is_empty())
 }
 
-/// Require the fixed generated hosted identity composite and digest.
 pub(super) fn valid_tools_cache_identity(kind: &StepKind) -> bool {
     matches!(kind, StepKind::Action { uses, with, env }
         if TOOLS_CACHE_PRELUDE_USES.contains(&uses.as_str())
@@ -37,14 +32,12 @@ pub(super) fn valid_tools_cache_identity(kind: &StepKind) -> bool {
             && env.is_empty())
 }
 
-/// Require the standard credential-free checkout action payload.
 pub(super) fn valid_checkout_payload(kind: &StepKind) -> bool {
     matches!(kind, StepKind::Action { uses, with, .. }
         if uses.starts_with("actions/checkout@")
             && with.get("persist-credentials").is_some_and(|value| value == "false"))
 }
 
-/// Require the simple generated checkout shape used before host-seed reads.
 pub(super) fn valid_configured_checkout_payload(kind: &StepKind) -> bool {
     matches!(kind, StepKind::Action { with, env, .. }
         if valid_checkout_payload(kind)

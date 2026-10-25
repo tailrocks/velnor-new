@@ -1,5 +1,3 @@
-//! Resolve `[[publish.maven]]` entries against the Gradle stack and the work tree.
-
 use velnor_actions_contract::JobTimeout;
 use velnor_actions_contract::ServiceContainer;
 use velnor_actions_contract::config::gradle::GradleService;
@@ -22,13 +20,6 @@ fn failure(index: usize, field: &str, problem: &str) -> OrchestratorError {
     )
 }
 
-/// Resolve one entry: the Gradle root, its literal version and the build steps.
-///
-/// # Errors
-///
-/// Fails closed when the root is not a `[stacks.gradle]` root, its
-/// `gradle.properties` carries no literal `version=X.Y.Z`, or the private
-/// source block cannot be rendered.
 pub(crate) fn resolve<'a>(
     prep: &GenerationPreparation,
     private: Option<&PrivateWiring>,
@@ -117,8 +108,6 @@ pub(crate) fn resolve<'a>(
     })
 }
 
-/// Same provisioning the root's CI jobs use: a postgres service when any
-/// project of this root declares it under `[stacks.gradle.projects]`.
 fn root_services(
     prep: &GenerationPreparation,
     gradle: &velnor_actions_contract::config::gradle::GradleStackConfig,

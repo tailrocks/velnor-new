@@ -1,5 +1,3 @@
-//! Fail-closed validation for `[[stacks.rust.suites]]`, `[workflow.dispatch]`, and `preserve_workflows`.
-
 #[path = "rust_suites_validate_rules.rs"]
 mod rules;
 
@@ -24,8 +22,6 @@ fn cfg_err(file: &str, key: impl Into<String>, problem: impl Into<String>) -> Co
     ContractError::config(file, key, problem)
 }
 
-/// Validate a task-suite artifact with one path pattern and shared retention bounds.
-/// Task suites have no shards, so artifact-name templates are not permitted.
 pub(crate) fn validate_task_suite_artifact(
     artifact: &RustSuiteArtifact,
     file: &str,
@@ -49,11 +45,6 @@ pub(crate) fn validate_task_suite_artifact(
     Ok(())
 }
 
-/// Validate all declared Rust suites (`stacks.rust.suites`).
-///
-/// # Errors
-///
-/// Returns [`ContractError::Config`] naming the offending suite field on any invalid input.
 pub fn validate_rust_suites(suites: &[RustSuiteConfig], file: &str) -> Result<(), ContractError> {
     let mut seen_ids = BTreeSet::new();
     let mut cancel_by_slug: BTreeMap<&str, bool> = BTreeMap::new();
@@ -88,12 +79,6 @@ pub fn validate_rust_suites(suites: &[RustSuiteConfig], file: &str) -> Result<()
     Ok(())
 }
 
-/// Cross-validate `stacks.rust.suites` dispatch bindings against `workflow.dispatch`.
-///
-/// # Errors
-///
-/// Returns [`ContractError::Config`] when a suite references an undeclared dispatch
-/// input or an option value not present in a `choice` input's `options`.
 pub fn validate_suites_with_dispatch(
     suites: &[RustSuiteConfig],
     dispatch: &WorkflowDispatchConfig,
@@ -150,11 +135,6 @@ pub fn validate_suites_with_dispatch(
 }
 
 impl WorkflowDispatchConfig {
-    /// Validate `[workflow.dispatch]` inputs.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ContractError::Config`] on invalid input names, options, or defaults.
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         for (name, input) in &self.inputs {
             if !is_valid_dispatch_input_name(name) {
@@ -177,11 +157,6 @@ impl WorkflowDispatchConfig {
     }
 }
 
-/// Validate `workflow.preserve_workflows` entries.
-///
-/// # Errors
-///
-/// Returns [`ContractError::Config`] for duplicates, malformed paths, or generator-owned files.
 pub fn validate_preserve_workflows(entries: &[String], file: &str) -> Result<(), ContractError> {
     let mut seen = BTreeSet::new();
     for entry in entries {

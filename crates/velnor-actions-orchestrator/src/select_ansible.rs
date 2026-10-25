@@ -1,11 +1,3 @@
-//! Affected selection for Ansible root jobs (hard decision 3).
-//!
-//! Ansible jobs own no Rust obligations. A root job is planned from its
-//! directory, the hash-pinned requirements file and the inventory (the files
-//! every root reads). Doubt selects the job: an unknown change set, a
-//! global-config path (`ChangeEvidence::paths` is `None`) and a full-run event
-//! never skip a root.
-
 use std::collections::BTreeSet;
 
 use velnor_actions_ansible::affected_roots;
@@ -16,7 +8,6 @@ use velnor_actions_contract::{
 use super::ChangeEvidence;
 use crate::discover::Discovery;
 
-/// Plan dispositions for every Ansible root job, in root order.
 pub(crate) fn dispositions(
     config: &VelnorConfig,
     discovery: &Discovery,

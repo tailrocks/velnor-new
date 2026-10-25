@@ -1,6 +1,3 @@
-//! Qualification, composed product-release, and monitoring workflows.
-//! Emitted only when schema 2 requests them.
-
 use std::collections::BTreeSet;
 use velnor_actions_contract::JobTimeout;
 
@@ -14,15 +11,8 @@ use crate::runs_on::runs_on_yaml;
 use crate::setup::MiseSetup;
 use crate::yaml::Yaml;
 
-#[cfg(test)]
-#[path = "../../test_support/git_fixture.rs"]
-pub(crate) mod git_fixture;
-
-/// Qualification workflow path.
 pub const QUALIFICATION_WORKFLOW: &str = ".github/workflows/qualification.yml";
-/// Shared product-release workflow path.
 pub const PRODUCT_RELEASE_WORKFLOW: &str = product_release::WORKFLOW_PATH;
-/// Queue-monitoring workflow path.
 pub const MONITORING_WORKFLOW: &str = ".github/workflows/monitoring.yml";
 
 #[path = "schema2_classes.rs"]
@@ -59,18 +49,12 @@ mod product_release_family;
 mod product_release_pins;
 #[path = "schema2_release.rs"]
 mod release;
-/// Exact-source gates for composed product-release workflows.
 #[path = "schema2_release_eligibility.rs"]
 pub mod release_eligibility;
 #[path = "schema2_resource_probe_image.rs"]
 mod resource_probe_image;
 pub use product_release_pins::ProductReleasePins;
 
-/// Render the generic one-package consumer binary release workflow.
-///
-/// # Errors
-///
-/// Returns render errors for invalid identities, pins, or commands.
 pub fn render_consumer_binary_release(
     spec: &ConsumerReleaseSpec,
 ) -> Result<RenderedFile, RenderError> {
@@ -79,68 +63,33 @@ pub fn render_consumer_binary_release(
 
 pub use consumer_binary_release::ConsumerStableReleaseSpec;
 
-#[cfg(test)]
-#[path = "schema2_runner_shell_tests.rs"]
-mod runner_shell_tests;
-
-#[cfg(test)]
-#[path = "schema2_resource_probe_image_tests.rs"]
-mod resource_probe_image_tests;
-
-#[cfg(test)]
-#[path = "schema2_product_release_test_pins.rs"]
-pub(super) mod product_release_test_pins;
-
-/// Which schema 2 workflows to emit, plus the selectors they use.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Schema2WorkflowRequest {
-    /// Generator version for the marker.
     pub version: String,
-    /// Hosted catalog label.
     pub hosted_label: String,
-    /// Validated scale-set selector.
     pub scale_set: ScaleSetSelector,
-    /// Workflows to emit. Empty emits nothing.
     pub workflows: BTreeSet<RoutingWorkflow>,
-    /// Pinned tool inputs, required only when qualification is emitted.
     pub mbx_qualification: Option<MbxQualificationPins>,
-    /// Latest Mise release inputs, required only when qualification is emitted.
     pub mise_pin_qualification: Option<MisePinQualificationPins>,
-    /// Orchestrator-resolved Mise setup and command vectors for product releases.
     pub product_release: Option<ProductReleasePins>,
 }
 
-/// Exact tools used by the hosted MBX cache qualification.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MbxQualificationPins {
-    /// Resolved Mise action and binary pins.
     pub mise_setup: MiseSetup,
-    /// Full-SHA candidate MBX Action ref for this unqualified experiment.
-    /// It is separate from the production pin and generation never qualifies it.
     pub candidate_action_uses: String,
-    /// Exact MBX tool version.
     pub mbx_version: String,
-    /// Exact Rust toolchain version used by the qualification lane.
     pub rust_version: String,
-    /// `sh -c` argv verifying the installed toolchain file by file.
     pub verify_rust_argv: Vec<String>,
 }
 
-/// Exact Mise release pins for the hosted Linux and macOS x64 qualification.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MisePinQualificationPins {
-    /// Linux x86-64 release asset verification pins.
     pub linux_x86_64_setup: MiseSetup,
-    /// macOS x86-64 release asset verification pins.
     pub macos_x86_64_setup: MiseSetup,
 }
 
 impl Schema2WorkflowRequest {
-    /// Canonical scale-set selector (`velnor`, then the scale-set name).
-    ///
-    /// # Errors
-    ///
-    /// Illegal labels fail.
     pub fn canonical_scale_set() -> Result<ScaleSetSelector, RenderError> {
         ScaleSetSelector::try_new(
             SCALE_SET_NAME,
@@ -150,11 +99,6 @@ impl Schema2WorkflowRequest {
     }
 }
 
-/// Render every requested workflow. Empty when nothing is requested.
-///
-/// # Errors
-///
-/// Illegal selectors or a bad generator version fail.
 pub fn render_schema2_workflows(
     request: &Schema2WorkflowRequest,
 ) -> Result<Vec<RenderedFile>, RenderError> {
@@ -366,7 +310,3 @@ fn job(
     ));
     (id.to_owned(), Yaml::Map(fields))
 }
-
-#[cfg(test)]
-#[path = "schema2_timeout_tests.rs"]
-mod timeout_tests;

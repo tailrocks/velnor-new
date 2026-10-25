@@ -1,9 +1,3 @@
-//! Tofu spawn constructor: pinned `mise exec` plus baked isolation env.
-//!
-//! Declared from `command.rs` (`#[path]`, no `lib.rs` edit). The
-//! constructor bakes the reserved `TF_*` isolation pairs directly,
-//! since `with_env` (reserved-key fail-loud) can never carry them.
-
 use std::ffi::OsString;
 
 use crate::error::MiseError;
@@ -15,25 +9,6 @@ use super::{
 };
 
 impl super::IsolatedCommand {
-    /// Build `mise <globals> exec <specs> -- <payload>` with baked tofu isolation.
-    ///
-    /// H1 allowlist constructor: the automation pair plus the isolated
-    /// data/config/cache paths arrive baked, since the reserved-key
-    /// rule rejects them as caller extras. Verify policy plus the
-    /// install-disable pair, exactly like [`Self::mise_exec`]:
-    /// explicit `opentofu@exact` specs carry the version
-    /// and a missing tool fails as a preparation error. Ambient
-    /// `TF_*`/`TOFU_*`/`CHECKPOINT_*` never reach the child (spawn
-    /// strip); the baked values apply after it. Exits, signals, and
-    /// timeouts flow through the shared typed result plus
-    /// [`MiseError`] vocabulary; nonzero stays data via the opt-in
-    /// `require_success`, never an automatic failure.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::EmptyCommand`] for an empty payload and
-    /// [`MiseError::InvalidStepInput`] for an empty data dir, config
-    /// file, or plugin-cache dir.
     pub fn tofu_exec(
         tool_specs: &[String],
         payload: &[OsString],

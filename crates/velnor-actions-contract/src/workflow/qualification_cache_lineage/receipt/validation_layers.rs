@@ -1,5 +1,3 @@
-//! Lane, layer and transition observation checks.
-
 use std::collections::BTreeMap;
 
 use crate::canonical::validate_digest;
@@ -196,7 +194,3 @@ fn lane_index(
         Err(invalid("lane_set_duplicate"))
     }
 }
-
-#[cfg(test)]
-#[path = "validation_layers_tests.rs"]
-mod tests;

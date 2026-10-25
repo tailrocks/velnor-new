@@ -1,5 +1,3 @@
-//! Draft and publish one verified release through a stable release ID.
-
 use super::assets::{ASSETS, REPOSITORY, VERSION};
 use super::{ATTESTATION_DIR, DIR, FILE};
 
@@ -7,7 +5,6 @@ const ACCEPTED_DIRECTORY: &str = "release-accepted";
 pub(super) const ACCEPTED_MANIFEST: &str = "release-accepted/release-manifest.json";
 pub(super) const ACCEPTANCE_RECEIPT: &str = "release-accepted/release-acceptance.json";
 
-/// Publish the exact qualified inventory, then emit receipt inputs after immutability.
 pub(super) fn publish_script() -> String {
     let paths = release_asset_path_list();
     let upload = paths
@@ -48,7 +45,6 @@ pub(super) fn publish_script() -> String {
     .join("\n")
 }
 
-/// Require confirmed 404 responses for both immutable tag and release lookups.
 pub(super) fn tag_preflight_script() -> String {
     format!(
         "bash -s -- '{VERSION}' '{REPOSITORY}' <<'VELNOR_PREFLIGHT_RELEASE_TAG'\n{}\nVELNOR_PREFLIGHT_RELEASE_TAG",
@@ -56,7 +52,6 @@ pub(super) fn tag_preflight_script() -> String {
     )
 }
 
-/// Resolve a release ID once; all later release reads use that immutable ID.
 fn release_id_script() -> String {
     "release_view=\"$(gh release view \"$tag\" --repo \"$GITHUB_REPOSITORY\" --json databaseId,tagName,isDraft)\"\nrelease_id=\"$(jq -er --arg tag \"$tag\" '.databaseId as $id | select(.tagName == $tag and .isDraft == true and ($id | type == \"number\" and floor == . and . > 0)) | .databaseId' <<<\"$release_view\")\"\n[[ \"$release_id\" =~ ^[1-9][0-9]*$ ]]".to_owned()
 }
@@ -103,7 +98,6 @@ fn verify_release_script(
     )
 }
 
-/// Verify immutable release metadata, source tag, URLs, sizes, and all asset digests.
 pub(super) fn published_release_verify_script() -> String {
     [
         "published_release_response=\"$release_tmp/published-release.json\"".to_owned(),
@@ -143,12 +137,6 @@ fn acceptance_receipt_script() -> String {
     format!(
         "[[ \"$GITHUB_RUN_ID\" =~ ^[0-9]+$ && \"$GITHUB_RUN_ATTEMPT\" =~ ^[0-9]+$ ]]\nif [[ -e '{ACCEPTED_DIRECTORY}' || -L '{ACCEPTED_DIRECTORY}' ]]; then echo 'release acceptance directory already exists' >&2; exit 1; fi\nmkdir -m 700 '{ACCEPTED_DIRECTORY}'\ncp -- '{DIR}/{FILE}' '{ACCEPTED_MANIFEST}'\ncmp -- '{DIR}/{FILE}' '{ACCEPTED_MANIFEST}'\nmanifest_sha256=\"$(sha256sum '{ACCEPTED_MANIFEST}' | awk 'NR == 1 {{ print $1; next }} {{ exit 1 }} END {{ if (NR != 1) exit 1 }}')\"\nmanifest_size=\"$(wc -c < '{ACCEPTED_MANIFEST}')\"\nmanifest_size=\"${{manifest_size//[[:space:]]/}}\"\njq -n --arg repository \"$GITHUB_REPOSITORY\" --arg version '{VERSION}' --arg source_commit \"$GITHUB_SHA\" --arg workflow_authority_sha \"$GITHUB_WORKFLOW_SHA\" --arg run_id \"$GITHUB_RUN_ID\" --arg run_attempt \"$GITHUB_RUN_ATTEMPT\" --arg tag \"$tag\" --argjson release_id \"$release_id\" --arg manifest_name '{FILE}' --arg manifest_sha256 \"$manifest_sha256\" --argjson manifest_size \"$manifest_size\" --slurpfile release \"$published_release_response\" '{{schema:1,repository:$repository,version:$version,source_commit:$source_commit,workflow_authority_sha:$workflow_authority_sha,run_id:$run_id,run_attempt:$run_attempt,tag:$tag,release_id:$release_id,immutable:true,manifest:{{name:$manifest_name,sha256:$manifest_sha256,size:$manifest_size}},assets:($release[0].assets|map({{name:.name,url:.browser_download_url,digest:.digest,size:.size}})|sort_by(.name))}}' > '{ACCEPTANCE_RECEIPT}'\ntest -s '{ACCEPTANCE_RECEIPT}'\njq -e --arg repository \"$GITHUB_REPOSITORY\" --arg source \"$GITHUB_SHA\" --argjson release_id \"$release_id\" --argjson expected \"$expected_release_asset_names\" --arg manifest_sha256 \"$manifest_sha256\" '.schema == 1 and .repository == $repository and .source_commit == $source and .release_id == $release_id and .immutable == true and .manifest.sha256 == $manifest_sha256 and (.assets | length) == ($expected | length)' '{ACCEPTANCE_RECEIPT}' > /dev/null"
     )
-}
-
-/// Release assets published in stable target order, followed by the manifest and bundles.
-#[cfg(test)]
-pub(super) fn release_asset_paths() -> String {
-    release_asset_path_list().join(" ")
 }
 
 pub(super) fn acceptance_artifact_name() -> String {

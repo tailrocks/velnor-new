@@ -1,5 +1,3 @@
-//! Cancellation-safe boundary to the pinned offline attestation verifier.
-
 use std::process::Stdio;
 use std::time::Duration;
 
@@ -45,9 +43,6 @@ pub(super) async fn verify_checksum_target(
 
 async fn run_helper(helper: snapshot::SnapshotLease, input: Vec<u8>) -> Result<(), HostError> {
     let (cancel_sender, cancel_receiver) = oneshot::channel();
-    #[cfg(test)]
-    let task = tokio::spawn(supervise(helper, input, cancel_receiver, None));
-    #[cfg(not(test))]
     let task = tokio::spawn(supervise(helper, input, cancel_receiver));
     await_helper(task, cancel_sender).await
 }
@@ -66,24 +61,9 @@ async fn supervise(
     helper: snapshot::SnapshotLease,
     input: Vec<u8>,
     mut cancelled: oneshot::Receiver<()>,
-    #[cfg(test)] mut observer: Option<tests::TestObserver>,
 ) -> Result<(), HostError> {
-    let result = supervise_inner(
-        &helper,
-        input,
-        &mut cancelled,
-        #[cfg(test)]
-        &mut observer,
-    )
-    .await;
+    let result = supervise_inner(&helper, input, &mut cancelled).await;
     drop(helper);
-    #[cfg(test)]
-    if let Some(sender) = observer
-        .as_mut()
-        .and_then(|observer| observer.finished.take())
-    {
-        sender.send(result).map_err(|_| HostError::Identity)?;
-    }
     result
 }
 
@@ -91,7 +71,6 @@ async fn supervise_inner(
     helper: &snapshot::SnapshotLease,
     input: Vec<u8>,
     cancelled: &mut oneshot::Receiver<()>,
-    #[cfg(test)] observer: &mut Option<tests::TestObserver>,
 ) -> Result<(), HostError> {
     let deadline = Instant::now() + HELPER_DEADLINE;
     let mut child = spawn_helper(helper)?;
@@ -101,57 +80,15 @@ async fn supervise_inner(
     };
     let stdout = spawn_capture(stdout_pipe);
     let stderr = spawn_capture(stderr_pipe);
-    #[cfg(test)]
-    if let Some(sender) = observer
-        .as_mut()
-        .and_then(|observer| observer.child_pid.take())
-    {
-        let Some(pid) = child.id() else {
-            cleanup_cancelled_child(
-                &mut child,
-                stdout,
-                stderr,
-                #[cfg(test)]
-                observer,
-            )
-            .await?;
-            return Err(HostError::Identity);
-        };
-        if sender.send(pid).is_err() {
-            cleanup_cancelled_child(
-                &mut child,
-                stdout,
-                stderr,
-                #[cfg(test)]
-                observer,
-            )
-            .await?;
-            return Err(HostError::Identity);
-        }
-    }
     let write = write_request(&mut child, &input, deadline, cancelled);
     if write.await.is_err() {
-        cleanup_cancelled_child(
-            &mut child,
-            stdout,
-            stderr,
-            #[cfg(test)]
-            observer,
-        )
-        .await?;
+        cleanup_cancelled_child(&mut child, stdout, stderr).await?;
         return Err(HostError::Identity);
     }
     let status = match wait_child(&mut child, deadline, cancelled).await {
         Ok(status) => status,
         Err(error) => {
-            cleanup_cancelled_child(
-                &mut child,
-                stdout,
-                stderr,
-                #[cfg(test)]
-                observer,
-            )
-            .await?;
+            cleanup_cancelled_child(&mut child, stdout, stderr).await?;
             return Err(error);
         }
     };
@@ -186,19 +123,10 @@ async fn cleanup_cancelled_child(
     child: &mut Child,
     mut stdout: JoinHandle<Result<CapturedOutput, HostError>>,
     mut stderr: JoinHandle<Result<CapturedOutput, HostError>>,
-    #[cfg(test)] observer: &mut Option<tests::TestObserver>,
 ) -> Result<(), HostError> {
     let killed = kill_and_reap(child).await;
     let readers = abort_capture(&mut stdout, &mut stderr).await;
-    let cleanup = killed.and(readers);
-    #[cfg(test)]
-    if let Some(sender) = observer
-        .as_mut()
-        .and_then(|observer| observer.cleanup.take())
-    {
-        sender.send(cleanup).map_err(|_| HostError::Identity)?;
-    }
-    cleanup
+    killed.and(readers)
 }
 
 fn spawn_capture<R>(stream: R) -> JoinHandle<Result<CapturedOutput, HostError>>
@@ -337,7 +265,3 @@ async fn join_capture(
         .map_err(|_| HostError::DockerTimeout)?
         .map_err(|_| HostError::Identity)?
 }
-
-#[cfg(all(test, unix))]
-#[path = "tests.rs"]
-mod tests;

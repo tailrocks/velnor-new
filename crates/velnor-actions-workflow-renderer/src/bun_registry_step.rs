@@ -1,11 +1,3 @@
-//! The Bun registry phase step (HD-6, HD-7): `bun install --ignore-scripts`
-//! with the job token's `packages: read`, run by the staged Velnor binary.
-//!
-//! The step is an internal operation, not a shell: the operation starts Bun
-//! from a cleared environment under the private-fetch policy with a
-//! Velnor-written configuration, and is the only step that may bind
-//! `${{ github.token }}` (as `VELNOR_NPM_READ_TOKEN`).
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
@@ -15,26 +7,14 @@ use velnor_actions_contract::{
 
 use crate::RenderError;
 
-/// Display name of the registry-phase step.
 pub const BUN_REGISTRY_STEP_NAME: &str = "Install dependencies (registry phase)";
-/// Env key naming the workspace root (`.` is the repository root).
 pub const BUN_ROOT_ENV: &str = "VELNOR_BUN_ROOT";
-/// Env key listing the npm scopes mapped to the GitHub registry.
 pub const BUN_SCOPES_ENV: &str = "VELNOR_BUN_SCOPES";
 
 fn bad(detail: &str) -> RenderError {
     RenderError::BadCommand(format!("bun_registry:{detail}"))
 }
 
-/// Build the registry-phase step for one workspace root.
-///
-/// `toolchain_env` is the owned Mise isolation and cache env the install
-/// needs; it must carry no credential key.
-///
-/// # Errors
-///
-/// Returns [`RenderError::BadCommand`] for an empty scope list, a malformed
-/// scope or root, or a credential key in `toolchain_env`.
 pub fn bun_registry_step(
     root: &str,
     scopes: &[String],

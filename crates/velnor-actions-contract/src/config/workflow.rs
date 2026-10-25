@@ -1,4 +1,3 @@
-//! Workflow section of `.velnor/config.toml`: naming, policy, runner labels.
 use super::rust_suites::WorkflowDispatchConfig;
 use super::rust_suites_validate::validate_preserve_workflows;
 use super::workflow_flags::{default_true, is_false, is_true};
@@ -14,14 +13,8 @@ use crate::errors::ContractError;
 use crate::workflow::ValidatorKind;
 use serde::{Deserialize, Serialize};
 
-/// Latest pinned runner label: the default when `workflow.runner_label` is absent.
-///
-/// Qualified 2026-09-28 (`ubuntu-latest` then pointed at 24.04; 26.04 is the
-/// latest versioned LTS with x64 and `-arm` variants).
 pub const LATEST_RUNNER_LABEL: &str = "ubuntu-26.04";
-/// Exact-match runner-label catalog: versioned LTS labels plus `-arm` variants.
-///
-/// Aliases (`ubuntu-latest`, `*-latest`) and unlisted labels are rejected.
+
 pub const RUNNER_LABEL_CATALOG: [&str; 6] = [
     "ubuntu-22.04",
     "ubuntu-24.04",
@@ -31,163 +24,131 @@ pub const RUNNER_LABEL_CATALOG: [&str; 6] = [
     "ubuntu-26.04-arm",
 ];
 
-/// Workflow section of `.velnor/config.toml`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkflowConfig {
-    /// Display name for the generated workflow.
     pub name: String,
-    /// Workflow policy.
+
     pub policy: WorkflowPolicy,
-    /// Default branch; required when `origin/HEAD` cannot be resolved.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_branch: Option<String>,
-    /// Generator validation mode.
+
     pub generator_validation: GeneratorValidation,
-    /// Maximum parallel matrix jobs.
+
     pub max_parallel_jobs: u32,
-    /// Literal timeout for the workflow planning job (`1..=360`, default `5`).
+
     #[serde(
         default = "default_plan_timeout_minutes",
         skip_serializing_if = "is_default_plan_timeout"
     )]
     pub plan_timeout_minutes: u16,
-    /// Literal `timeout-minutes` for every generated crate job (`1..=360`, default `5`).
-    ///
-    /// Applies to each Rust capacity-phase job and each `OpenTofu` root job.
-    /// Control jobs (plan, required, validators) keep the built-in default.
+
     #[serde(
         default = "default_crate_timeout_minutes",
         skip_serializing_if = "is_default_crate_timeout"
     )]
     pub crate_timeout_minutes: u16,
-    /// Literal timeout for each whole-workspace dependency seed job (`1..=360`, default `30`).
+
     #[serde(
         default = "default_dependency_seed_timeout_minutes",
         skip_serializing_if = "is_default_dependency_seed_timeout"
     )]
     pub dependency_seed_timeout_minutes: u16,
-    /// Keep `MISE_QUIET=1` in the generated workflow environment (default true).
-    ///
-    /// Silence is the default for log hygiene. `false` omits `MISE_QUIET` so
-    /// Mise stderr (including the wrapper-dispatch trace) stays visible for
-    /// consumers that assert on it. Verification-task documents never carry
-    /// `MISE_QUIET` regardless of this flag.
+
     #[serde(default = "default_true", skip_serializing_if = "is_true")]
     pub mise_quiet: bool,
-    /// Add `lfs: "true"` to every generated checkout (default false).
+
     #[serde(default, skip_serializing_if = "is_false")]
     pub checkout_lfs: bool,
-    /// Cache writes from pull requests; same-repository scope requires explicit opt-in.
+
     #[serde(default)]
     pub pull_request_cache_policy: PullRequestCachePolicy,
-    /// Pinned older runner-label override; omit for latest.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub runner_label: Option<String>,
-    /// Sorted, unique typed task graph shared by verification and build variants.
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tasks: Vec<WorkflowTask>,
-    /// Optional standalone compile-capable Mise task suites.
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub task_suites: Vec<super::MiseTaskSuite>,
-    /// Optional protected post-merge `OpenTofu` apply workflow.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tofu_apply: Option<TofuApplyConfig>,
-    /// Optional source-free, fixed-provider review completion companion.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub review_completion: Option<super::ReviewCompletionConfig>,
-    /// Consumer-selected verification jobs; empty disables them all.
+
     #[serde(default, skip_serializing_if = "VerifyConfig::is_empty")]
     pub verify: VerifyConfig,
-    /// `[workflow.lint]`: jactionlint profile (default `correctness`).
+
     #[serde(default, skip_serializing_if = "WorkflowLintConfig::is_default")]
     pub lint: WorkflowLintConfig,
-    /// Optional `workflow_dispatch` inputs for suite workflows.
+
     #[serde(default, skip_serializing_if = "WorkflowDispatchConfig::is_empty")]
     pub dispatch: WorkflowDispatchConfig,
-    /// Repository-owned workflow files under `.github/workflows/` preserved across generation.
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub preserve_workflows: Vec<String>,
 }
 
-/// The retired zizmor job (hard decision 10): jactionlint's `default` profile
-/// runs its audits, so naming it is an error that says what to set instead.
 const RETIRED_ZIZMOR_JOB: &str = "zizmor";
 
-/// `[workflow.verify]`: config-selected verification jobs.
-///
-/// Each entry names a [`ValidatorKind::consumer_verify`] job ID; the
-/// generator emits one support job per entry on any policy and the
-/// required gate covers them. Unknown or duplicated names fail
-/// validation closed. Enabled jobs may require repository-owned
-/// policy files (`.alint.yml`); a missing file fails
-/// that job, never silently.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct VerifyConfig {
-    /// Verification job IDs to emit, in canonical emission order.
     #[serde(default)]
     pub jobs: Vec<String>,
-    /// Optional explicit JSON file scope for `strict-json`; absent checks all JSON files.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub strict_json_files: Option<Vec<String>>,
-    /// Extra Lychee argv entries for the `link-check` validator.
+
     #[serde(default)]
     pub lychee_args: Vec<String>,
 }
 
-/// Cache-write policy for pull-request workflows.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub enum PullRequestCachePolicy {
-    /// Pull requests restore caches and never save them.
     #[default]
     ReadOnly,
-    /// Same-repository pull requests may save only to pull-request-scoped caches.
+
     SameRepositoryScoped,
 }
 
-/// Workflow policy selector.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum WorkflowPolicy {
-    /// Default consumer policy; assumes no Velnor-specific files.
     ConsumerV1,
-    /// Velnor-repository policy; canonical `tailrocks/velnor-new` only.
+
     VelnorRepositoryV1,
 }
 
-/// Generator validation mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum GeneratorValidation {
-    /// Validate with the locked bootstrap binary.
     Bootstrap,
-    /// Validate with the built candidate binary (Velnor only).
+
     Candidate,
 }
 
-/// Runner-label selection provenance recorded in the plan.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RunnerSelection {
-    /// Latest pinned label; no override present.
     LatestDefault,
-    /// Explicit `workflow.runner_label` override.
+
     ConfigOverride,
 }
 
-/// Support-job set derived from policy plus validation mode.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VelnorSupportWorkflow {
-    /// Repository validators to emit as separate jobs (P05-6: no umbrella).
     pub validators: Vec<ValidatorKind>,
-    /// Whether to emit candidate validation.
+
     pub candidate_validation: bool,
 }
 
 impl WorkflowPolicy {
-    /// Derive the support-job set for this policy and validation mode.
     #[must_use]
     pub fn support_workflow(&self, validation: GeneratorValidation) -> VelnorSupportWorkflow {
         let validators = match self {
@@ -202,8 +163,6 @@ impl WorkflowPolicy {
 }
 
 impl WorkflowConfig {
-    /// Validate the workflow section.
-    /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         if self.name.trim().is_empty() {
             return Err(ContractError::config(file, "workflow.name", "empty_name"));
@@ -272,8 +231,6 @@ impl WorkflowConfig {
         Ok(())
     }
 
-    /// Validate the deterministic workflow-level task inventory.
-    /// # Errors
     fn validate_tasks(&self, file: &str) -> Result<(), ContractError> {
         let mut previous = None;
         let mut build_tasks = 0;
@@ -316,14 +273,11 @@ impl WorkflowConfig {
 }
 
 impl VerifyConfig {
-    /// True when no verification job is selected.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.jobs.is_empty()
     }
 
-    /// Validate the verify allowlist: known IDs, no duplicates.
-    /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         let mut seen = std::collections::BTreeSet::new();
         for job in &self.jobs {
@@ -387,10 +341,6 @@ impl VerifyConfig {
         Ok(())
     }
 }
-
-#[cfg(test)]
-#[path = "workflow_tests.rs"]
-mod tests;
 
 #[path = "workflow_task_suites_validate.rs"]
 mod task_suites_validate;

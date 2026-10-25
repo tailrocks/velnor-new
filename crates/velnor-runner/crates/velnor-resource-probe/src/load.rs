@@ -1,6 +1,5 @@
 use crate::{ProbeError, units::decimal_milli_ceil};
 
-/// Parse standard five-field `/proc/loadavg` and return the one-minute load.
 pub(crate) fn one_minute_milli(input: &[u8]) -> Result<u64, ProbeError> {
     let text = std::str::from_utf8(input).map_err(|_| ProbeError::Invalid("loadavg_utf8"))?;
     let fields = text.split_ascii_whitespace().collect::<Vec<_>>();

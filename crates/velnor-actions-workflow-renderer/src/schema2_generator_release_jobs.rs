@@ -1,5 +1,3 @@
-//! Build, qualify, attest, and publish workflow jobs.
-
 use crate::RenderError;
 use crate::composite::{
     composite_yaml, composite_yaml_with_inputs, shared_call_named, shared_call_named_with_inputs,
@@ -29,9 +27,6 @@ pub(super) fn build_job(
     fields = workflow_steps::with_needs(fields, &["verify-release-source"]);
     fields.push((
         "outputs".to_owned(),
-        // Qualifiers and attesters download by immutable artifact ID, and
-        // the download action checks the artifact digest itself; a digest
-        // output would have no reader.
         Yaml::Map(vec![(
             "artifact_id".to_owned(),
             Yaml::str("${{ steps.upload.outputs.artifact-id }}"),

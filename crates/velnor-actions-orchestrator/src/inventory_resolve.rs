@@ -1,5 +1,3 @@
-//! Locked/offline qualification plus the resolved graph it yields.
-
 use std::path::Path;
 
 use velnor_actions_mise::{MetadataQualification, ToolCatalog};
@@ -10,21 +8,12 @@ use crate::OrchestratorError;
 use crate::discover::{PlannedWorkspace, workspace_lock, workspace_manifest};
 use crate::generate::ToolSnapshot;
 
-/// Full-resolve graph of one planned workspace, when one exists.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct WorkspaceResolve {
-    /// Repository-relative workspace root; empty for the repository root.
     pub(crate) workspace_root: String,
-    /// Parsed resolve, or the reason none exists (lockless, parse failure).
     pub(crate) graph: Result<velnor_actions_rust::ResolvedGraph, String>,
 }
 
-/// Complete graph of a lockless workspace, when its path edges are complete.
-///
-/// Without a lockfile there is no resolve to walk. A workspace whose
-/// packages declare only path dependencies needs none: its path edges are
-/// every edge. Any registry or git dependency could reach a patched local
-/// crate, so such a workspace has no graph and selection fails closed.
 fn lockless_graph(record: &WorkspaceRecord) -> Result<velnor_actions_rust::ResolvedGraph, String> {
     if record.has_external_dependencies {
         return Err("lockless_workspace".to_owned());
@@ -48,22 +37,12 @@ fn lockless_graph(record: &WorkspaceRecord) -> Result<velnor_actions_rust::Resol
     })
 }
 
-/// Qualify locked/offline resolution where a lockfile pins deps.
-///
-/// Each qualified document is also parsed into the resolved package graph
-/// affected-work selection walks. A lockless workspace or an unparsable
-/// document records why it has no graph; selection then fails closed.
-/// A tool snapshot brackets the runs, failing closed on tool drift.
-/// # Errors
-/// Returns `preparation_incomplete` when a lockfile cannot be qualified.
 pub(crate) fn qualify_workspaces(
     root: &Path,
     workspaces: &[PlannedWorkspace],
     catalog: &ToolCatalog,
 ) -> Result<Vec<WorkspaceResolve>, OrchestratorError> {
     let tools = ToolSnapshot::capture(root);
-    // Only rust workspaces qualify lockful metadata; an empty list never
-    // spawns, so it must not require the pin.
     if !workspaces.is_empty() {
         require_rust_pin(catalog)?;
     }

@@ -1,5 +1,3 @@
-//! Docker-engine and journal-instance identity validation.
-
 use sha2::{Digest, Sha256};
 
 pub(crate) fn engine_key(engine_id: &str) -> String {

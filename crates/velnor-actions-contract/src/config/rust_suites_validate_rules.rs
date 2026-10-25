@@ -1,5 +1,3 @@
-//! Lexical and structural validation helpers for Rust suites and dispatch inputs.
-
 use std::collections::BTreeSet;
 
 use crate::errors::ContractError;

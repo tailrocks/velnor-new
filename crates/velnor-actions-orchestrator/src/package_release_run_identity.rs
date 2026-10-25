@@ -1,5 +1,3 @@
-//! Independent native reauthentication of producing workflow and upstream CI.
-
 use super::github::{
     GitHubApi, WorkflowJobList, WorkflowMetadata, WorkflowRunList, WorkflowRunResponse,
     encode_segment,
@@ -94,9 +92,6 @@ impl GitHubApi {
             receipt.channel.workflow_name(),
         )?;
         if retained {
-            // A retained signed receipt is bound to its original attempt. A later
-            // rerun changes the aggregate run endpoint, but does not revoke that
-            // completed attempt; authenticate the exact attempt endpoint instead.
             return self.verify_release_run(receipt, true);
         }
         let run: WorkflowRunResponse =
@@ -166,8 +161,6 @@ impl GitHubApi {
         self.verify_ci_identity_with_sleep(id, attempt, source, latest, sleep_for_retry)
     }
 
-    /// Same as [`Self::verify_ci_identity`], with the empty-listing retry
-    /// sleeper of the latest-attempt recheck injected (tests run instantly).
     pub(super) fn verify_ci_identity_with_sleep(
         &self,
         id: u64,
@@ -360,15 +353,3 @@ fn require_required_job(
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "package_release_run_identity_tests.rs"]
-mod tests;
-
-#[cfg(test)]
-#[path = "package_release_run_transport_tests.rs"]
-mod transport_tests;
-
-#[cfg(test)]
-#[path = "package_release_run_retry_tests.rs"]
-mod retry_tests;

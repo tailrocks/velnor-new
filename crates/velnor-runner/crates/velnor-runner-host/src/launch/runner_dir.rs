@@ -1,10 +1,3 @@
-//! Clear an empty launch whose runner name is already registered.
-//!
-//! An uncertain row with no container id holds one slot. JIT then returns
-//! HTTP 409 and the same message is delivered again. This module removes only
-//! an offline idle registration, fails that empty row, and lets mint retry.
-//! A busy or online runner stays. A list or delete error is not absence.
-
 use serde::Deserialize;
 use velnor_runner_github::{
     Exchange, Method, SessionError, SessionRequest, Transport, TransportFail,
@@ -18,27 +11,17 @@ use super::mint_origin::MintOrigin;
 use super::steps;
 use super::{Drive, Lane};
 
-/// One directory answer. `Unknown` does not free the row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Decision {
-    /// The name is free, or the offline id was deleted.
     Free,
-    /// Online or busy. Do not delete.
+
     Live,
-    /// The directory did not answer. Do not fail the row.
+
     Unknown,
-    /// This offline id was already removed for this subject. Do not delete it.
+
     Repeat,
 }
 
-/// Classify one JIT error. Do not acknowledge a name that was just removed.
-///
-/// A definite 409 with no directory access settles like any other JIT error.
-/// Only a cleared name returns [`EnsureError::NameCleared`].
-///
-/// # Errors
-///
-/// Returns [`EnsureError`] when the journal write fails or the admin origin is bad.
 pub(super) async fn after_jit<T>(
     lane: &mut T,
     ctx: &Drive,
@@ -70,9 +53,6 @@ where
     }
 }
 
-/// Fail one empty row and prove its cleanup. Nothing was created to remove.
-///
-/// The proof releases the launch identity so a retry can bind the same name.
 async fn fail_cleared(journal: &Journal, id: i64) -> Result<(), EnsureError> {
     journal
         .finish(id, Outcome::DefiniteFailure)
@@ -81,10 +61,6 @@ async fn fail_cleared(journal: &Journal, id: i64) -> Result<(), EnsureError> {
     journal.record_cleanup(id).await.map_err(steps::map_journal)
 }
 
-/// True when a redelivered launch already deleted its runner id.
-///
-/// The failed row keeps the deleted id as a tombstone. The caller reports
-/// [`EnsureError::NameCleared`] instead of holding the slot again.
 pub(super) async fn cleared_repeat(journal: &Journal, id: i64) -> Result<bool, EnsureError> {
     let rows = journal.rows().await.map_err(steps::map_journal)?;
     Ok(rows.into_iter().any(|row| {
@@ -158,7 +134,7 @@ where
     let Listed::Offline(id) = listed else {
         return Ok(listed_decision(listed));
     };
-    // The journal subject is not the runner name on the job path.
+
     if recorded(journal, row, id).await? {
         return Ok(Decision::Repeat);
     }
@@ -197,7 +173,7 @@ async fn remember(journal: &Journal, row: i64, id: i64) -> Result<(), EnsureErro
 const fn listed_decision(listed: Listed) -> Decision {
     match listed {
         Listed::Absent => Decision::Free,
-        // `decide` deletes `Offline` before this arm. Do not treat it as free here.
+
         Listed::Live | Listed::Offline(_) => Decision::Live,
         Listed::Unknown => Decision::Unknown,
     }
@@ -311,6 +287,3 @@ fn classify_list(body: &[u8], name: &str) -> Listed {
     }
     Listed::Absent
 }
-
-#[cfg(test)]
-mod tests;

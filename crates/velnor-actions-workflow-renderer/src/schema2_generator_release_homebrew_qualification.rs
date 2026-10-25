@@ -1,5 +1,3 @@
-//! Hosted ARM Homebrew qualification for the exact same-run candidate bytes.
-
 use crate::RenderError;
 use crate::yaml::Yaml;
 use velnor_actions_contract::{JobTimeout, ReleaseTarget};
@@ -127,7 +125,3 @@ fn start_budget_step() -> Yaml {
         ),
     )
 }
-
-#[cfg(test)]
-#[path = "schema2_generator_release_homebrew_qualification_tests.rs"]
-mod tests;

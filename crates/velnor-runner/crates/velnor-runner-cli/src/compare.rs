@@ -1,8 +1,3 @@
-//! Directory comparison for `velnor-host compare`.
-//!
-//! Core evidence types have no `Deserialize` impl. This parser accepts one
-//! exact field set per object and builds those types by hand.
-
 use std::collections::BTreeSet;
 use std::path::Path;
 use std::process::ExitCode;
@@ -19,13 +14,6 @@ pub(crate) enum Fail {
     Checker(EvidenceError),
 }
 
-/// Compare `expected.json`, `observed.json`, and `census.json` in `path`.
-///
-/// Success prints `PROVEN lanes=<n>` and returns success. A missing directory,
-/// unreadable file, or unrecognized JSON field prints `NOT_PROVEN` and returns
-/// a failure code with no stderr. [`velnor_runner_core::verify_complete_results`]
-/// errors print `NOT_PROVEN` and the [`velnor_runner_core::EvidenceError`] on
-/// stderr only.
 #[must_use]
 pub(crate) fn compare_dir(path: &Path) -> ExitCode {
     match prove(path) {

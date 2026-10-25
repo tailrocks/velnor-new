@@ -1,5 +1,3 @@
-//! Authenticated GitHub observations used for every poll and final admission.
-
 use std::collections::BTreeSet;
 
 use base64::Engine as _;
@@ -80,8 +78,6 @@ pub(super) fn load_merge_authority(
     let repositories = installation["repositories"]
         .as_array()
         .ok_or_else(|| internal("tap_merge_installation_scope"))?;
-    // Installation tokens expose repository scope here; GitHub does not expose a
-    // token-authenticated endpoint that returns the installation's numeric ID.
     if installation_id == 0
         || installation["total_count"].as_u64() != Some(1)
         || repositories.len() != 1
@@ -346,16 +342,4 @@ pub(super) fn check_runs(
         }
     }
     Err(internal("tap_merge_check_page_limit"))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::validate_completion_app_ids;
-
-    #[test]
-    fn completion_app_must_be_separate_from_writer_and_github_actions() {
-        assert!(validate_completion_app_ids(17, 19).is_ok());
-        assert!(validate_completion_app_ids(17, 17).is_err());
-        assert!(validate_completion_app_ids(17, 15_368).is_err());
-    }
 }

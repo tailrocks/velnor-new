@@ -1,5 +1,3 @@
-//! Emit a merged workflow, including the one oversized-`ci.yml` retry.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{Job, WorkflowIr};

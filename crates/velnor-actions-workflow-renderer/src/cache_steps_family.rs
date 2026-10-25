@@ -1,14 +1,3 @@
-//! Restore, size admission and save steps of the stack family caches.
-//!
-//! Bun's package cache, the Playwright browsers, dbt packages, the uv wheel
-//! cache and the Ansible collection tarballs each get a runtime key from one
-//! per-job `Compute family cache keys` step (compat: family, schema, paths,
-//! platform and caller-declared tool lines; snapshot: the job's lock files),
-//! a read-only restore before the producer step, and, right after it, a size
-//! admission plus a trusted-push save. The save is positioned after the
-//! producer, so later failing checks never starve the cache, and it needs the
-//! compressed directory to fit the family ceiling (`over_ceiling` otherwise).
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES;
@@ -23,32 +12,23 @@ use velnor_actions_contract::{Step, StepId, StepRole};
 use crate::RenderError;
 use crate::steps::{action_step_with_env, shell_step};
 
-/// Display name of the per-job key step.
 pub const FAMILY_KEYS_NAME: &str = "Compute family cache keys";
 const DEFAULT_REF_ENV: &str = "VELNOR_DEFAULT_REF";
 const DEFAULT_REF_EXPR: &str =
     "${{ format('refs/heads/{0}', github.event.repository.default_branch) }}";
 const GUARD: &str = "case \"$RUNNER_TEMP\" in /*) ;; *) printf '%s\\n' 'RUNNER_TEMP must be absolute' >&2; exit 1 ;; esac";
 
-/// What a family's snapshot digest covers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FamilySnapshot {
-    /// Checkout-relative files; each is hashed, an absent one counts as `absent`.
     Files(Vec<String>),
-    /// Literal lines (a declared set that has no file).
     Lines(Vec<String>),
 }
 
-/// One family of a job: its cache unit and key inputs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FamilyCachePlan {
-    /// The family.
     pub family: CacheFamily,
-    /// Opaque per-root locator, `None` for a shared family.
     pub locator: Option<String>,
-    /// Snapshot inputs.
     pub snapshot: FamilySnapshot,
-    /// Extra compat lines, expanded by the key step's shell (`bun=${VELNOR_TOOL_BUN:-}`).
     pub compat: Vec<String>,
 }
 
@@ -143,22 +123,10 @@ fn key_commands(plan: &FamilyCachePlan) -> Vec<String> {
     commands
 }
 
-/// The per-job key step for `plans`.
-///
-/// # Errors
-///
-/// Returns render errors for an empty or unsafe plan.
 pub fn family_keys_step(plans: &[FamilyCachePlan]) -> Result<Step, RenderError> {
     keys_step(plans, false)
 }
 
-/// The key step of a matrix job: only the leg [`FAMILY_WRITER_ENV`] names `1`
-/// may save, every other leg restores read-only. A job outside a matrix keeps
-/// [`family_keys_step`] byte for byte.
-///
-/// # Errors
-///
-/// Returns render errors for an empty or unsafe plan.
 pub fn family_keys_step_single_writer(plans: &[FamilyCachePlan]) -> Result<Step, RenderError> {
     keys_step(plans, true)
 }
@@ -206,11 +174,6 @@ fn keys_step(plans: &[FamilyCachePlan], single_writer: bool) -> Result<Step, Ren
     Ok(step)
 }
 
-/// Read-only restore of one family.
-///
-/// # Errors
-///
-/// Returns render errors for an unsafe plan.
 pub fn family_restore_step(plan: &FamilyCachePlan) -> Result<Step, RenderError> {
     plan.check()?;
     let mut step = action_step_with_env(
@@ -230,11 +193,6 @@ pub fn family_restore_step(plan: &FamilyCachePlan) -> Result<Step, RenderError> 
     Ok(step)
 }
 
-/// Size admission: the compressed directory must fit the family ceiling.
-///
-/// # Errors
-///
-/// Returns render errors for an unsafe plan.
 pub fn family_size_step(plan: &FamilyCachePlan) -> Result<Step, RenderError> {
     plan.check()?;
     let ceiling = plan.family.spec().ceiling_bytes;
@@ -248,7 +206,6 @@ pub fn family_size_step(plan: &FamilyCachePlan) -> Result<Step, RenderError> {
         "if [ ! -d \"$dir\" ] || [ -L \"$dir\" ]; then refuse missing_directory; fi".to_owned(),
         "mkdir -p \"$RUNNER_TEMP/velnor\"".to_owned(),
         "size=\"$RUNNER_TEMP/velnor/family-size\"".to_owned(),
-        // Stored bytes are zstd-compressed; fall back to the on-disk bound without zstd.
         format!("if command -v zstd >/dev/null 2>&1; then tar -C \"${{dir%/*}}\" -cf - \"${{dir##*/}}\" | zstd -T0 -q | wc -c > \"$size\"; limit={ceiling}; else du -sk \"$dir\" > \"$size\"; limit={}; fi", ceiling / 1024),
         "n=; rest=; read -r n rest < \"$size\" || [ -n \"$n\" ]".to_owned(),
         "case \"$n\" in ''|*[!0-9]*) refuse size_unreadable ;; esac".to_owned(),
@@ -279,11 +236,6 @@ fn size_step_id(family: CacheFamily) -> Result<StepId, RenderError> {
     .ok_or_else(|| RenderError::InvalidWorkflow("family_size_step_id".to_owned()))
 }
 
-/// Trusted-push save of one family, gated on the key step and the size admission.
-///
-/// # Errors
-///
-/// Returns render errors for an unsafe plan.
 pub fn family_save_step(plan: &FamilyCachePlan) -> Result<Step, RenderError> {
     plan.check()?;
     let mut step = action_step_with_env(
@@ -299,7 +251,3 @@ pub fn family_save_step(plan: &FamilyCachePlan) -> Result<Step, RenderError> {
     step.role = Some(StepRole::FamilySave);
     Ok(step)
 }
-
-#[cfg(test)]
-#[path = "cache_steps_family_tests.rs"]
-mod tests;

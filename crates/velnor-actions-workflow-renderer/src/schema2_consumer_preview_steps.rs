@@ -1,9 +1,6 @@
-//! Closed preview workflow steps; no source code executes in privileged jobs.
-
 use super::{ConsumerReleaseSpec, MiseSetup, PackageReleasePolicy, RenderError, Yaml};
 use crate::steps::CHECKOUT_USES;
 
-// runner.temp expressions are supported at step env scope, never job env scope.
 pub(in crate::schema2) fn with_producer_homes(
     step: &mut Yaml,
     homes: &std::collections::BTreeMap<String, String>,
@@ -141,7 +138,6 @@ pub(in crate::schema2) fn operation(
     context: super::TapInvocationContext,
 ) -> Result<Yaml, RenderError> {
     let environment = native_env::environment(spec, op, authenticated, context)?;
-    // JSON is an environment value, never interpolated into the command source.
     let materialize = if matches!(
         op,
         "sign-package-release-v1"
@@ -160,7 +156,6 @@ pub(in crate::schema2) fn operation(
                 | "admit-release-aggregate-v1"
                 | "publish-package-release-v1"
         )) {
-        // The preceding native admission already created and validated this file.
         ""
     } else {
         "(set -C; printf '%s' \"$VELNOR_RELEASE_POLICY\" > \"$VELNOR_REQUEST_FILE\")\n"
@@ -187,8 +182,6 @@ fn source_operation_script(op: &str, run: String) -> String {
         op,
         "execute-release-producer-v1" | "prepare-homebrew-tap-v1"
     ) {
-        // Source preparation may have written runner environment files. Remove
-        // credentials before the native source executor itself is spawned.
         crate::toolchain_env::with_credential_unset_script(&format!(
             "unset VELNOR_RELEASE_STATUS_TOKEN; {run}"
         ))

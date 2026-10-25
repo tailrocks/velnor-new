@@ -1,5 +1,3 @@
-//! Unprivileged tap preparation and independently authenticated PR write/merge jobs.
-
 use super::{
     ConsumerReleaseSpec, MiseSetup, RenderError, Step, TapInvocationContext, Yaml, acquire, base,
     finish, run_step, steps,
@@ -12,17 +10,11 @@ use velnor_actions_contract::config::HomebrewTapConfig;
 mod native_operation;
 use native_operation::operation;
 
-/// Static downstream policy and fixed native preparation bootstrap.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsumerReleaseTapSpec {
-    /// Closed native promotion policy, never executable workflow data.
     pub policy: HomebrewTapConfig,
-    /// Protected source formula policy for the native route; absent for a
-    /// qualified custom updater.
     pub formula_spec: Option<velnor_actions_contract::homebrew_spec::HomebrewFormulaSpec>,
-    /// Authenticated SDK bootstrap for the fixed hosted preparation platform.
     pub preparation_acquire: Step,
-    /// Velnor-owned Mise bootstrap for the fixed hosted preparation platform.
     pub preparation_setup: MiseSetup,
 }
 

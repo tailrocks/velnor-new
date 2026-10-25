@@ -1,18 +1,11 @@
-//! Rust checkout probes: files, lockfile, configs, package walks.
-//!
-//! Lenient probes skip unreadable entries; strict probes fail closed.
-//! Paths stay repository-relative; symlinks never resolve.
-
 use std::path::Path;
 
 use velnor_actions_contract::{Provenance, digest_b3};
 
 use crate::identity::normalize_identity_path;
 
-/// Schema-definition extensions collected for compiling kinds.
 pub(crate) const SCHEMA_EXTS: [&str; 3] = ["proto", "graphql", "avsc"];
 
-/// Provenance of one file: content digest, proven absence, or unknown.
 pub(crate) fn probe_file(root: &Path, path: &str) -> Provenance {
     let Ok(normalized) = normalize_identity_path(path) else {
         return Provenance::Unknown {
@@ -32,7 +25,6 @@ pub(crate) fn probe_file(root: &Path, path: &str) -> Provenance {
     }
 }
 
-/// Decisive probes win; absence and guards fall through to the next probe.
 macro_rules! triage {
     ($root:expr, $candidate:expr) => {
         match probe_file($root, $candidate) {
@@ -43,7 +35,6 @@ macro_rules! triage {
     };
 }
 
-/// Lockfile provenance, walking up from the manifest like Cargo does.
 pub(crate) fn probe_lockfile(root: &Path, manifest: &str) -> Provenance {
     let mut dir = package_dir(manifest).to_owned();
     let mut probed = Vec::new();
@@ -66,7 +57,6 @@ pub(crate) fn probe_lockfile(root: &Path, manifest: &str) -> Provenance {
     }
 }
 
-/// Nextest-config provenance: profile path plus the conventional path.
 pub(crate) fn probe_nextest_config(root: &Path, profile_config: Option<&str>) -> Provenance {
     const CONVENTIONAL: &str = ".config/nextest.toml";
     if let Some(configured) = profile_config {
@@ -87,7 +77,6 @@ pub(crate) fn probe_nextest_config(root: &Path, profile_config: Option<&str>) ->
     }
 }
 
-/// Cargo-config provenance: manifest dir plus the repository root.
 pub(crate) fn probe_cargo_config(root: &Path, manifest: &str) -> Provenance {
     let dir = package_dir(manifest);
     let mut candidates = Vec::new();
@@ -103,7 +92,6 @@ pub(crate) fn probe_cargo_config(root: &Path, manifest: &str) -> Provenance {
     }
 }
 
-/// Declared-extra provenance: missing means unknown, never absent.
 pub(crate) fn probe_declared(root: &Path, path: &str) -> Provenance {
     match probe_file(root, path) {
         Provenance::AbsentProven { evidence } => Provenance::Unknown {
@@ -113,12 +101,10 @@ pub(crate) fn probe_declared(root: &Path, path: &str) -> Provenance {
     }
 }
 
-/// Directory of a manifest path; empty for the repository root.
 fn package_dir(manifest: &str) -> &str {
     manifest.rsplit_once('/').map_or("", |(dir, _)| dir)
 }
 
-/// Package `*.rs` files as sorted `(path, digest)` pairs (strict).
 pub(crate) fn source_tree_files(
     root: &Path,
     manifest: &str,
@@ -134,7 +120,6 @@ pub(crate) fn source_tree_files(
     )
 }
 
-/// Package files accepted by `keep` as sorted pairs (lenient class walk).
 pub(crate) fn walk_package_files(
     root: &Path,
     manifest: &str,
@@ -143,8 +128,6 @@ pub(crate) fn walk_package_files(
     walk_full(root, manifest, keep, 500, "too_many_class_files", false)
 }
 
-/// Walk the package dir skipping `target`/`.git`, collecting `(path, digest)`
-/// pairs accepted by `keep`. Strict fails on symlinks/unreadable entries; lenient skips.
 fn walk_full(
     root: &Path,
     manifest: &str,
@@ -217,7 +200,6 @@ fn walk_full(
     Ok(files)
 }
 
-/// Whether `path` carries the `want` extension (ASCII case-insensitive).
 pub(crate) fn ext_is(path: &str, want: &str) -> bool {
     Path::new(path)
         .extension()

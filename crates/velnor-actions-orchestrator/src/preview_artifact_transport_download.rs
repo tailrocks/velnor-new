@@ -1,10 +1,8 @@
-//! Pinned, deadline-bound preview archive download to a caller-owned descriptor.
 use super::{API_TIMEOUT, API_VERSION, GitHubApi, JSON_LIMIT};
 use crate::{OrchestratorError, internal::internal};
 use std::ffi::{OsStr, OsString};
 use velnor_actions_mise::{PinnedTool, PinnedToolExec};
 impl GitHubApi {
-    /// Preview-only streaming download; existing bounded response callers retain their limits.
     pub(super) fn request_to_file(
         &self,
         route: String,
@@ -12,10 +10,6 @@ impl GitHubApi {
         size: u64,
         deadline: velnor_actions_mise::CheckDeadline,
     ) -> Result<(), OrchestratorError> {
-        #[cfg(test)]
-        if self.fixture.is_some() {
-            return Err(internal("unexpected_fixture_transport_request"));
-        }
         let args = vec![
             OsString::from("api"),
             OsString::from("-H"),

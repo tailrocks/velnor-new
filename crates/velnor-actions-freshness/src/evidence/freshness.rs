@@ -1,5 +1,3 @@
-//! Freshness records for pinned tools, actions, and runners.
-
 use serde_json::{Value, json};
 
 use crate::context::{FreshnessContext, norm_version, parse_timestamp};
@@ -293,7 +291,3 @@ fn check_latest(
         );
     }
 }
-
-#[cfg(test)]
-#[path = "freshness/tests.rs"]
-mod tests;

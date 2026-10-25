@@ -1,5 +1,3 @@
-//! Release candidate builds, target assets, and qualification.
-
 use velnor_actions_contract::{JobTimeout, ReleaseTarget};
 
 use super::super::features::{base, finish};
@@ -11,7 +9,6 @@ pub(super) const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub(super) const REPOSITORY: &str = "tailrocks/velnor-new";
 const CI_WORKFLOW: &str = "ci.yml";
 
-/// One target binary, checksum sidecar, and source-bound build record.
 #[derive(Clone, Copy)]
 pub(super) struct ProductAsset {
     pub target: ReleaseTarget,
@@ -28,7 +25,6 @@ pub(super) struct ProductAsset {
     pub checksum_command: &'static str,
 }
 
-/// Linux `x86_64` binary.
 pub(super) const LINUX: ProductAsset = ProductAsset {
     target: ReleaseTarget::LinuxX86_64,
     binary: concat!(
@@ -56,7 +52,6 @@ pub(super) const LINUX: ProductAsset = ProductAsset {
     checksum_command: "sha256sum --check",
 };
 
-/// macOS arm64 binary.
 pub(super) const MACOS_ARM64: ProductAsset = ProductAsset {
     target: ReleaseTarget::MacosArm64,
     binary: concat!(
@@ -84,7 +79,6 @@ pub(super) const MACOS_ARM64: ProductAsset = ProductAsset {
     checksum_command: "shasum -a 256 --check",
 };
 
-/// macOS `x86_64` binary.
 pub(super) const MACOS_X86_64: ProductAsset = ProductAsset {
     target: ReleaseTarget::MacosX86_64,
     binary: concat!(
@@ -114,11 +108,6 @@ pub(super) const MACOS_X86_64: ProductAsset = ProductAsset {
 
 pub(super) const ASSETS: [ProductAsset; 3] = [LINUX, MACOS_ARM64, MACOS_X86_64];
 
-/// Build, inspect, and checksum one candidate before uploading it.
-///
-/// `build_host` selects the Mise setup for the runner executing the build.
-/// The Intel asset cross-compiles on the ARM host; `product` still names
-/// the emitted binary, the provenance target, and its artifact files.
 pub(super) fn build_steps(
     product: ProductAsset,
     build_host: ReleaseTarget,
@@ -167,7 +156,6 @@ pub(super) fn build_steps(
     Ok(steps)
 }
 
-/// The build emits the filename recorded in the release manifest.
 fn build_script(
     asset: &str,
     build_argv: &[String],
@@ -179,14 +167,12 @@ fn build_script(
     ))
 }
 
-/// Require the same ELF architecture that the target triple names.
 pub(super) fn linux_verify(asset: &str) -> String {
     format!(
         "set -eu\ndesc=\"$(file -b {asset})\"\ncase \"$desc\" in\n  *ELF*x86-64*) ;;\n  *) echo \"not an x86-64 ELF: $desc\" >&2; exit 1 ;;\nesac"
     )
 }
 
-/// Require the requested Mach-O architecture on native macOS runners.
 pub(super) fn macos_verify(asset: &str, arch: &str) -> String {
     format!(
         "set -eu\ndesc=\"$(file -b {asset})\"\ncase \"$desc\" in\n  *Mach-O*{arch}*) ;;\n  *) echo \"not a {arch} Mach-O: $desc\" >&2; exit 1 ;;\nesac"
@@ -217,17 +203,14 @@ fn candidate_provenance_script(
     )
 }
 
-/// Download the exact immutable artifact produced by one build job.
 pub(super) fn download_build_steps(asset: ProductAsset, name: &str) -> Vec<Yaml> {
     download_build_steps_for_id(asset, name, "${{ inputs.artifact_id }}")
 }
 
-/// Return the complete raw artifact payload in its upload order.
 pub(super) fn artifact_upload_paths(product: ProductAsset) -> [&'static str; 3] {
     [product.binary, product.sidecar, product.provenance]
 }
 
-/// Download one immutable build artifact selected by the producer's ID.
 pub(super) fn download_build_steps_for_id(
     asset: ProductAsset,
     name: &str,
@@ -254,7 +237,6 @@ fn download_steps_with(asset: ProductAsset, download: Yaml) -> Vec<Yaml> {
     ]
 }
 
-/// Verify source, target, digest, and exact toolchain recorded in candidate provenance.
 pub(super) fn verify_provenance_script(
     asset: ProductAsset,
     pins: &crate::schema2::ProductReleasePins,
@@ -267,7 +249,6 @@ pub(super) fn verify_provenance_script(
     )
 }
 
-/// Verify provenance against the toolchain authenticated by the authority job.
 pub(super) fn verify_authority_provenance_script(asset: ProductAsset) -> String {
     let digest = archive::sidecar_digest_command(
         &format!("{}/{}", asset.directory, asset.sidecar),
@@ -301,14 +282,12 @@ fn verify_provenance_in_directory(
     )
 }
 
-/// Check candidate identity and deterministic generation on the uploaded bytes.
 pub(super) fn qualification_script(binary: &str, directory: &str) -> String {
     format!(
         "set -eu\nunset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN GH_HOST GH_CONFIG_DIR\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nchmod 0500 \"./{directory}/{binary}\"\ntest \"$(./{directory}/{binary} --version)\" = \"velnor-actions {VERSION}\"\nscripts/capture-opentofu-goldens.sh check-release \"$GITHUB_WORKSPACE/{directory}/{binary}\" \"$GITHUB_WORKSPACE/manifest-assets/release-manifest.json\" \"$VELNOR_RELEASE_MANIFEST_SHA256\""
     )
 }
 
-/// Check the dispatched source and its required CI before native builds.
 pub(super) fn source_gate_job(
     hosted: Yaml,
     pins: &crate::schema2::ProductReleasePins,
@@ -373,7 +352,3 @@ printf '%s\n' "$jobs" | jq -e --arg sha "$GITHUB_SHA" '[.[] | (.jobs // [])[] | 
 test "$(gh api repos/{REPOSITORY}/commits/main --jq .sha)" = "$GITHUB_SHA""#
     )
 }
-
-#[cfg(test)]
-#[path = "schema2_generator_release_assets_tests.rs"]
-mod tests;

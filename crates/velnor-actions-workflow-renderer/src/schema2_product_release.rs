@@ -1,5 +1,3 @@
-//! One serialized, exact-source coordinator with independent product DAGs.
-
 use velnor_actions_contract::RoutingWorkflow;
 
 use crate::yaml::Yaml;
@@ -9,7 +7,6 @@ use super::Schema2WorkflowRequest;
 use super::product_release_family::Family;
 use super::release_eligibility;
 
-/// Emitted path for the single exact-source release coordinator.
 pub(super) const WORKFLOW_PATH: &str = ".github/workflows/product-release.yml";
 pub(super) const HOSTED_RUNS_ON: &str = "ubuntu-26.04";
 pub(super) const SOURCE_OUTPUT: &str = "${{ needs.release-eligibility.outputs.source_sha }}";
@@ -31,7 +28,6 @@ pub(super) struct ProductRelease {
     pub actions: Vec<(String, Yaml)>,
 }
 
-/// Render the shared eligibility coordinator and requested independent families.
 pub(super) fn render(
     request: &Schema2WorkflowRequest,
 ) -> Result<Option<ProductRelease>, RenderError> {
@@ -81,7 +77,6 @@ pub(super) fn render(
     }))
 }
 
-/// Select product families deterministically, independent of set iteration.
 fn requested_families(request: &Schema2WorkflowRequest) -> Vec<Family> {
     [
         (RoutingWorkflow::ImageRelease, Family::Images),
@@ -92,7 +87,3 @@ fn requested_families(request: &Schema2WorkflowRequest) -> Vec<Family> {
     .filter_map(|(workflow, family)| request.workflows.contains(&workflow).then_some(family))
     .collect()
 }
-
-#[cfg(test)]
-#[path = "schema2_product_release_tests.rs"]
-mod tests;

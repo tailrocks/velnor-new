@@ -1,5 +1,3 @@
-//! Native MBX object-cache action setup and Rust toolchain preflight.
-
 use std::collections::BTreeMap;
 
 use super::{CompileDriver, MBX_ACTION_NAME};
@@ -8,16 +6,8 @@ use crate::steps::{action_owned_mbx_shell_step, action_step_with_env, shell_step
 use velnor_actions_contract::workflow::MBX_WORKSPACE_CLEAN_CONDITION;
 use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 
-/// Display name for the strict Rust check before the action installs MBX.
 pub const MBX_PREFLIGHT_NAME: &str = "Verify Rust before MBX action";
 
-/// Rust preflight, install-only native action, exact PATH version check and
-/// the opaque bundle key, restore and import; Cargo yields none.
-///
-/// The action installs the exact MBX release itself (`backend: local`); the
-/// bundle steps own the GitHub transport. The preceding preflight validates
-/// only the selected Rustup toolchain and exports its owned path.
-/// # Errors
 pub fn mbx_steps_for_driver(
     uses: &str,
     driver: CompileDriver,
@@ -59,21 +49,15 @@ pub fn mbx_steps_for_driver(
     }
 }
 
-/// How compiled MBX state reaches a job.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MbxTransport {
-    /// Install MBX only: release and product jobs never restore or save compiled caches.
     InstallOnly,
-    /// Restore the dependency-seed bundle read-only (crate jobs never write it).
     SeedRead,
-    /// The dependency-seed job: restore, and export plus save after its producer.
     SeedWrite,
-    /// A declared Rust suite job: its own bundle (other compile inputs), written by the job.
     SuiteBundle,
 }
 
 impl MbxTransport {
-    /// Compatibility unit hashed into the bundle key; `None` for install-only jobs.
     pub(crate) const fn unit(self) -> Option<&'static str> {
         match self {
             Self::InstallOnly => None,
@@ -83,26 +67,17 @@ impl MbxTransport {
     }
 }
 
-/// Display name of the install-only native MBX action.
 pub const MBX_RESTORE_NAME: &str = "Set up MBX";
-/// Display name for the exact MBX binary placed on PATH by its native action.
 pub const MBX_VERSION_CHECK_NAME: &str = "Verify native MBX version";
-/// Shell-local absolute path to the executable installed by the pinned action.
 pub(crate) use crate::action_mbx_shell::{ACTION_MBX_BIN, RESOLVE_ACTION_MBX_BIN};
-/// Keep automatic collection from evicting uncommitted active-run results.
 pub(crate) const MBX_GC_AUTO_ENV: &str = "MBX_GC_AUTO";
-/// Defer collection until the native action has committed and exported the job group.
 pub(crate) const MBX_GC_AUTO_VALUE: &str = "0";
-/// Disable shared `OUT_DIR` stabilization in each independently mounted store.
 pub(crate) const MBX_SHARE_OUT_DIR_ENV: &str = "MBX_SHARE_OUT_DIR";
 pub(crate) const MBX_SHARE_OUT_DIR_VALUE: &str = "0";
-/// Disable MBX C/C++ compiler wrapper in target-cache mode.
 pub(crate) const MBX_CC_ENV: &str = "MBX_CC";
 pub(crate) const MBX_CC_VALUE: &str = "0";
-/// Disable MBX build-script execution wrapper in target-cache mode.
 pub(crate) const MBX_BUILD_SCRIPT_EXECUTION_ENV: &str = "MBX_BUILD_SCRIPT_EXECUTION";
 pub(crate) const MBX_BUILD_SCRIPT_EXECUTION_VALUE: &str = "0";
-/// Stable logical store path; runner namespaces provide physical job isolation.
 pub(crate) const MBX_CACHE_DIR_ENV: &str = "MBX_CACHE_DIR";
 pub(crate) const MBX_CACHE_DIR_VALUE: &str = "${{ runner.temp }}/velnor/mbx";
 
@@ -111,11 +86,6 @@ mod rustc_identity;
 #[path = "cache_steps_mbx_scripts.rs"]
 mod scripts;
 use self::scripts::{mbx_disk_sample_commands, mbx_disk_sample_function};
-/// Reconstruct the only preflight authorized for the selected MBX action.
-///
-/// The action environment is the source of truth for the toolchain setup;
-/// the cache write gate belongs only to the action and is removed before
-/// constructing the shell step.
 pub(super) fn canonical_mbx_preflight_step(
     mbx_version: &str,
     rust_toolchain: &str,
@@ -248,7 +218,6 @@ pub(crate) fn mbx_version_check_step(
     Ok(step)
 }
 
-/// Build the final workspace cleanup from the exact native action inputs.
 pub(crate) fn mbx_workspace_clean_step_for_action(action: &Step) -> Result<Step, RenderError> {
     if action.role != Some(StepRole::MbxCache) {
         return Err(RenderError::InvalidWorkflow(

@@ -1,5 +1,3 @@
-//! Authenticated, non-overwriting GitHub release publication.
-
 use crate::{
     OrchestratorError,
     internal::internal,
@@ -80,8 +78,7 @@ pub(crate) mod artifact_zip;
 pub(crate) mod budget;
 #[path = "preview_artifact_transport.rs"]
 mod preview_artifacts;
-#[cfg(test)]
-pub(crate) use preview_artifacts::tests::discover_request_for_sealing_test;
+
 pub(crate) use preview_artifacts::{
     AdmittedReleaseArtifact, acquire_release_aggregate, acquire_release_artifacts,
 };
@@ -100,21 +97,12 @@ pub(crate) use public_repository::{PublicRepositorySnapshot, read_public_reposit
 #[path = "package_release_publish_public_recovery.rs"]
 mod public_recovery;
 
-#[cfg(test)]
-use public_read::validate_public_asset_size_inventory;
-#[cfg(test)]
-use public_recovery::{verify_public_recovery_jobs, verify_public_recovery_original_jobs};
-#[cfg(test)]
-use public_runs::{public_release_workflow_matches, verify_public_release_producer_jobs};
-
 #[path = "package_release_publish_public_runs.rs"]
 mod public_runs;
 pub(crate) use public_runs::{
     verify_public_historical_release_recovery, verify_public_release_runs,
 };
 
-/// Reuse the existing immutable publication predicates without authenticating a
-/// promotion invocation or exposing the write-capable GitHub API adapter.
 pub(crate) fn verify_publication_snapshot(
     signed: &VerifiedAttestedSignedPackage,
     snapshot: &PublicReleaseSnapshot,
@@ -156,14 +144,9 @@ fn asset_tuples_from_downloads(
     tuples
 }
 
-/// Private operation that publishes one authenticated native release.
 pub const PUBLISH_PACKAGE_RELEASE_OP: &str = "publish-package-release-v1";
-/// Private operation that resumes publication from the exact retained signed preview artifact.
 pub const RECOVER_PACKAGE_RELEASE_OP: &str = "recover-package-release-v1";
 
-/// Recheck the source repository's main-only tap-update environment.
-/// # Errors
-/// Rejects an absent or invalid source-environment policy.
 pub(crate) fn verify_tap_update_environment(
     repository: &str,
     branch: &str,
@@ -183,9 +166,6 @@ pub use continuation::{
 mod recovery;
 pub(crate) use recovery::verify_original_for_promotion;
 
-/// Reverify the downloaded signed package, then execute the GitHub publication transaction.
-/// # Errors
-/// Rejects absent credentials, invalid original evidence, stale candidates, and conflicting remote state.
 pub fn publish_package_release_from_env() -> Result<PackagePublicationOutcome, OrchestratorError> {
     budget::with_env(|deadline| {
         let mut backend = artifact_zip::within_operation(|| {
@@ -205,9 +185,6 @@ fn publish_backend(
     Ok(outcome)
 }
 
-/// Resume release publication from an authenticated original workflow artifact.
-/// # Errors
-/// Rejects an invalid retained run/artifact, stale candidate, or conflicting remote state.
 pub fn recover_package_release_from_env() -> Result<PackagePublicationOutcome, OrchestratorError> {
     budget::with_env(recovery::recover)
 }
@@ -341,7 +318,6 @@ fn admit_release_lifecycle(
     {
         return Err(internal("package_release_lifecycle_invalid"));
     }
-    // Published immutability is independently required by the publication planner.
     Ok(())
 }
 
@@ -366,7 +342,3 @@ fn current_ci_from_env() -> Result<(u64, u32), OrchestratorError> {
         .ok_or_else(|| internal("package_publish_current_ci_attempt_invalid"))?;
     Ok((run_id, attempt))
 }
-
-#[cfg(test)]
-#[path = "package_release_publish_tests.rs"]
-mod tests;

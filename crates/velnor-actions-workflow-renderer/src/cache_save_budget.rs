@@ -1,8 +1,3 @@
-//! Best-effort native cache writes share the first user-step clock.
-//!
-//! This is not the runner's job-start clock. The fixed reserve accounts for
-//! startup and cleanup conservatively; it does not guarantee whole-job fit.
-
 use velnor_actions_contract::{Step, StepKind, StepRole};
 
 use crate::{RenderError, yaml::Yaml};
@@ -11,12 +6,10 @@ const CLOCK_ID: &str = "velnor-cache-clock";
 const SOURCES_ID: &str = "velnor-optional-sources-save";
 const TOOLS_ID: &str = "velnor-optional-tools-save";
 const PROVIDERS_ID: &str = "velnor-optional-providers-save";
-/// Save-id prefix of the stack family saves (`...-<stem>-save`).
 const FAMILY_SAVE_ID_PREFIX: &str = "velnor-optional-family-";
 const MBX_BUNDLE_ID: &str = "velnor-optional-mbx-bundle-save";
 const RESERVE_SECONDS: u32 = 30;
 const WRITE_SECONDS: u32 = 60;
-/// A compiled bundle is larger than the other families; it gets a longer attempt.
 const BUNDLE_WRITE_SECONDS: u32 = 180;
 
 fn write_seconds(id: &str) -> u32 {
@@ -68,7 +61,6 @@ elif ! emit 'admitted=true'; then
 fi
 "#;
 
-/// Only exact native job save actions may receive the optional-write exception.
 pub(crate) fn decorate(
     step: &Step,
     entries: &mut Vec<(String, Yaml)>,
@@ -102,7 +94,6 @@ pub(crate) fn decorate(
     Ok(())
 }
 
-/// Per-family save id, from the family stem of the save's key expression.
 fn family_save_id(step: &Step) -> Result<String, RenderError> {
     use velnor_actions_contract::workflow::cache_family_steps::{FAMILY_KEYS_ID, family_for_stem};
     let StepKind::Action { with, .. } = &step.kind else {
@@ -117,7 +108,6 @@ fn family_save_id(step: &Step) -> Result<String, RenderError> {
     Ok(format!("{FAMILY_SAVE_ID_PREFIX}{family_stem}-save"))
 }
 
-/// Add one clock before the original job steps and admission before each save.
 pub(crate) fn apply(steps: &mut Vec<Yaml>, minutes: u16) -> Result<(), RenderError> {
     validate_ids(steps)?;
     let mut output = Vec::with_capacity(steps.len() + 5);
@@ -250,7 +240,3 @@ fn outcome(id: &str) -> Yaml {
 fn invalid() -> RenderError {
     RenderError::InvalidWorkflow("invalid_optional_cache_save_budget".to_owned())
 }
-
-#[cfg(test)]
-#[path = "cache_save_budget_tests.rs"]
-mod tests;

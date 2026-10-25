@@ -1,5 +1,3 @@
-//! Fresh read-only native qualification jobs; no source builds or signing.
-
 use crate::{Yaml, steps};
 use velnor_actions_contract::JobTimeout;
 

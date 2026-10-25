@@ -1,5 +1,3 @@
-//! Selected native tool resolution against source-bound Mise rows.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::BuildTask;
@@ -9,7 +7,6 @@ use crate::OrchestratorError;
 use crate::native_tool_input::NativeMiseConfig;
 use crate::native_tool_lock::{NativeLockedTool, NativeMiseLock};
 
-/// (`version`, `options`, `extra_args`) selected for a tool.
 pub(crate) type ToolVersionSelection = (String, BTreeMap<String, String>, Vec<String>);
 
 const BOLTFFI_KEY: &str = "github:boltffi/boltffi";

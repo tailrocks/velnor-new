@@ -1,6 +1,3 @@
-//! Acquire scale-set jobs up to capacity and start one official worker each.
-//! The PAT comes from `gh auth token` and is not printed. JIT is not printed.
-
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 

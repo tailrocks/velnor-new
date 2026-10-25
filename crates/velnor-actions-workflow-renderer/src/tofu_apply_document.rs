@@ -1,5 +1,3 @@
-//! Document assembly for the protected `OpenTofu` apply workflow.
-
 use crate::RenderError;
 use crate::setup::mise_setup_step;
 use crate::steps_plain::plain_step_to_yaml;
@@ -14,7 +12,6 @@ use crate::tofu_apply_steps::{
 };
 use crate::yaml::Yaml;
 
-/// Build the ordered, least-privilege steps for the apply job.
 fn apply_steps(spec: &TofuApplySpec) -> Result<Vec<Yaml>, RenderError> {
     let config = &spec.config;
     let checkout = checkout_yaml(&spec.checkout_uses)?;
@@ -59,7 +56,6 @@ fn apply_steps(spec: &TofuApplySpec) -> Result<Vec<Yaml>, RenderError> {
     ])
 }
 
-/// Build the single privileged job with credentials scoped to apply steps.
 fn apply_job(spec: &TofuApplySpec, steps: Vec<Yaml>) -> Yaml {
     let config = &spec.config;
     Yaml::Map(vec![
@@ -113,7 +109,6 @@ fn apply_job(spec: &TofuApplySpec, steps: Vec<Yaml>) -> Yaml {
     ])
 }
 
-/// Wrap the apply job in the protected-default-branch workflow document.
 fn workflow_document(spec: &TofuApplySpec, job: Yaml) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(TOFU_APPLY_WORKFLOW_NAME)),
@@ -145,7 +140,6 @@ fn workflow_document(spec: &TofuApplySpec, job: Yaml) -> Yaml {
     ])
 }
 
-/// Build the single job with credentials scoped only to the steps that need them.
 pub(super) fn tofu_apply_document(spec: &TofuApplySpec) -> Result<Yaml, RenderError> {
     let steps = apply_steps(spec)?;
     let job = apply_job(spec, steps);

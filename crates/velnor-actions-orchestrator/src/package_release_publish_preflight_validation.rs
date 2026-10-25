@@ -1,15 +1,8 @@
-//! Validation of GitHub branch and deployment environment settings.
-
 use serde_json::Value;
 use std::collections::BTreeSet;
 
 use super::STABLE_ENVIRONMENT;
 use velnor_actions_contract::is_valid_branch_name;
-
-#[cfg(test)]
-pub(super) fn validate_effective_main_rules(value: &Value) -> Result<(), ()> {
-    MainProtectionFacts::from_rules(value)?.complete()
-}
 
 pub(super) fn validate_main_protection_sources(
     rules: &Value,
@@ -278,8 +271,6 @@ pub(super) fn validate_environment_settings(
     if settings.get("name").and_then(Value::as_str) != Some(expected_name) {
         return Err(());
     }
-    // GitHub reports a configured deployment branch policy as one `branch_policy`
-    // protection rule. Any other rule (reviewers, wait timer, custom gate) rejects.
     let rules = settings
         .get("protection_rules")
         .and_then(Value::as_array)

@@ -1,5 +1,3 @@
-//! Source-built native SDK entrypoint for image candidate build and attestation.
-
 use super::super::{ProductReleasePins, generator_release};
 use crate::{RenderError, commands::join_argv_for_run, yaml::Yaml};
 use velnor_actions_contract::ReleaseTarget;

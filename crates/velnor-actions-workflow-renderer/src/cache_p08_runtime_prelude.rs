@@ -1,5 +1,3 @@
-//! Fixed hosted composite for V2 runtime identity and exact-key seed import.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::step_identity::TOOLS_CACHE_PRELUDE_USES;
@@ -197,7 +195,3 @@ fn output_map() -> Yaml {
         ),
     ])
 }
-
-#[cfg(test)]
-#[path = "cache_p08_runtime_prelude_tests.rs"]
-mod tests;

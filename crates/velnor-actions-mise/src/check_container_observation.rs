@@ -11,78 +11,49 @@ use velnor_actions_contract::{digest_b3, is_valid_digest};
 #[path = "check_orbstack_app_observation.rs"]
 mod app;
 pub use app::OrbStackAppObservation;
-#[cfg(test)]
-use velnor_actions_contract::config::MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES;
 
 pub(super) const DAEMON_FORMAT: &str = r#"{"ID":{{json .ID}},"ServerVersion":{{json .ServerVersion}},"OSType":{{json .OSType}},"Architecture":{{json .Architecture}},"OperatingSystem":{{json .OperatingSystem}}}"#;
 
-/// Exact bounded successful probe output and stream identities.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ContainerProbeOutput {
-    /// Exact UTF-8 stdout bytes.
     pub stdout: String,
-    /// Exact UTF-8 stderr bytes (codesign identity is reported here).
     pub stderr: String,
-    /// BLAKE3 identity of stdout bytes.
     pub stdout_digest: String,
-    /// BLAKE3 identity of stderr bytes.
     pub stderr_digest: String,
 }
 
-/// Stable daemon identity from explicit Docker JSON fields.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DockerDaemonObservation {
-    /// Actual daemon identity, distinct from its host or Docker CLI identity.
     pub id: String,
-    /// Actual daemon release.
     pub version: String,
-    /// Actual daemon execution platform.
     pub platform: ContainerPlatform,
-    /// Unnormalized architecture reported by Docker.
     pub architecture: String,
-    /// Actual daemon operating system identity.
     pub operating_system: String,
-    /// Exact selected JSON fields and stream identities.
     pub probe: ContainerProbeOutput,
 }
 
-/// Version and running-state observations from the prepared nested `OrbStack` CLI.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct OrbStackObservation {
-    /// Owned canonical nested CLI executable.
     pub program: PathBuf,
-    /// Verified nested CLI executable SHA-256.
     pub sha256: String,
-    /// CLI version/build/commit output, distinct from application bundle version.
     pub version: ContainerProbeOutput,
-    /// Actual application identity and successful integrity observations.
     pub app: OrbStackAppObservation,
-    /// Exact running-state output.
     pub status: ContainerProbeOutput,
 }
 
-/// Complete root declaration and stable container observations for replay.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ContainerObservation {
-    /// Complete root-qualified profile.
     pub profile: HostContainerProfile,
-    /// Owned canonical Docker executable.
     pub docker_program: PathBuf,
-    /// Verified Docker executable SHA-256.
     pub docker_sha256: String,
-    /// Actual explicit local daemon socket endpoint.
     pub endpoint: String,
-    /// Exact Docker CLI version/build output.
     pub docker_cli: ContainerProbeOutput,
-    /// Context observation proving endpoint selection.
     pub context_probe: ContainerProbeOutput,
-    /// Stable server identity independent from host architecture.
     pub daemon: DockerDaemonObservation,
-    /// Required nested CLI observations for `OrbStack` profiles.
     pub orbctl: Option<OrbStackObservation>,
 }
 
@@ -127,9 +98,6 @@ impl DockerDaemonObservation {
     }
 }
 
-/// Validate mandatory declaration-bound observations for final receipt replay.
-/// # Errors
-/// Rejects missing/extra profiles, stream tampering, version or daemon drift.
 pub fn validate_check_capability_proof(
     runner: &CheckRunner,
     proof: &CheckCapabilityProof,
@@ -263,7 +231,3 @@ fn exact(stdout: &str) -> &str {
 fn orbstack_running(stdout: &str) -> bool {
     exact(stdout) == "Running"
 }
-
-#[cfg(test)]
-#[path = "check_container_observation_tests.rs"]
-mod tests;

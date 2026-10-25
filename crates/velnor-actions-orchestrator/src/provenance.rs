@@ -1,42 +1,25 @@
-//! Per-workspace profile provenance recorded in the generate report.
-
 use crate::prepare::GenerationPreparation;
 
-/// One evidence sighting recorded in the report.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EvidenceProvenance {
-    /// Repository-relative evidence path.
     pub path: String,
-    /// One-based line number.
     pub line: u32,
-    /// Matched setting or command text.
     pub command_or_setting: String,
-    /// Durability (`durable` or `transient`).
     pub strength: String,
 }
 
-/// Per-workspace profile provenance recorded in the report.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProfileProvenance {
-    /// Workspace root; empty for the repository root.
     pub workspace_root: String,
-    /// Selected compile driver.
     pub compile_driver: String,
-    /// Driver provenance (`declared` or `detected`).
     pub driver_source: String,
-    /// Selected test runner.
     pub test_runner: String,
-    /// Runner provenance (`declared` or `detected`).
     pub runner_source: String,
-    /// Selected Nextest profile (`ci` or `default`).
     pub nextest_profile: String,
-    /// Nearest consumed `.config/nextest.toml`, when any exists.
     pub nextest_config: Option<String>,
-    /// Evidence backing the selection, sorted.
     pub evidence: Vec<EvidenceProvenance>,
 }
 
-/// Per-workspace profile provenance for the report.
 pub(crate) fn profile_provenance(prep: &GenerationPreparation) -> Vec<ProfileProvenance> {
     prep.discovery
         .workspaces

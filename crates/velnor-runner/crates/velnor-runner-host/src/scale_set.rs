@@ -1,5 +1,3 @@
-//! Get or create `ubuntu-26.04-scale-set` with the shipped registration client.
-
 use velnor_runner_github::{
     AdminConnectionCall, Exchange, RegistrationScope, RegistrationTokenCall, RunnerGroup,
     ScaleSetByName, ScaleSetCreate, ScaleSetFound, SessionError, SessionRequest, Transport,
@@ -14,67 +12,47 @@ const SET_NAME: &str = "ubuntu-26.04-scale-set";
 const GITHUB_API: &str = "https://api.github.com";
 const DEFAULT_GROUP: i64 = 1;
 
-/// Identifiers safe to print. No token and no service URL.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnsuredSet {
-    /// Positive scale-set id.
     pub id: i64,
-    /// Scale-set name.
+
     pub name: String,
-    /// Registration invariant.
+
     pub disable_update: bool,
-    /// Label names in service order.
+
     pub labels: Vec<String>,
 }
 
-/// Failure that does not include a credential or a response body.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum EnsureError {
-    /// The endpoint was not `https`.
     #[error("bad endpoint")]
     Endpoint,
-    /// The service rejected the registration invariant.
+
     #[error("registration rejected")]
     Rejected,
-    /// HTTP 403.
+
     #[error("forbidden")]
     Forbidden,
-    /// The body did not match the pinned DTO.
+
     #[error("malformed message")]
     Malformed,
-    /// Timeout or reset. The create may have happened.
+
     #[error("effect uncertain")]
     Uncertain,
-    /// Another session holds the set.
+
     #[error("session conflict")]
     Conflict,
-    /// The offline runner name was removed. Mint again. Do not acknowledge yet.
+
     #[error("runner name cleared")]
     NameCleared,
-    /// This offline runner id was already removed. Do not delete it again.
-    /// Do not acknowledge, and do not keep a slot.
+
     #[error("runner name unchanged")]
     NameSteady,
-    /// A finished status was not the one the call expects.
+
     #[error("unexpected status {status} at {step}")]
-    Unexpected {
-        /// HTTP status. Zero means the transport failed before a status.
-        status: u16,
-        /// Which registration call failed.
-        step: &'static str,
-    },
+    Unexpected { status: u16, step: &'static str },
 }
 
-/// Mint an admin connection, then get or create the product scale set.
-///
-/// `pat` is the caller credential. It is not written and not returned.
-/// Runner group `1` is the repository default. A missing set is created with
-/// `disableUpdate` and the product labels.
-///
-/// # Errors
-///
-/// Returns [`EnsureError`] when the endpoint, token, or scale set is refused.
-/// An empty `pat`, owner, or repo fails before any transport call.
 pub fn ensure_product_scale_set(
     pat: &str,
     owner: &str,
@@ -120,11 +98,6 @@ pub fn ensure_product_scale_set(
     })
 }
 
-/// Runner groups visible to this repository's Actions connection.
-///
-/// # Errors
-///
-/// Returns [`EnsureError`] when the endpoint, token, or group list is refused.
 pub fn product_runner_groups(
     pat: &str,
     owner: &str,

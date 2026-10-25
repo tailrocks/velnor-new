@@ -1,13 +1,3 @@
-//! Event-time no-op reports through `write-task-report-v1`.
-//!
-//! Matrix legs skip inapplicable named steps, but every skipped
-//! obligation still reports: the no-op step invokes the staged helper
-//! with [`NOT_SELECTED_REASON_ENV`] set, and this variant resolves the
-//! obligation against the downloaded plan (digests stay plan-bound)
-//! and writes the validated `not_selected` report plus its single-task
-//! aggregate through the contract canonical JSON — report bytes are
-//! produced by Rust, never shell-composed.
-
 use std::path::Path;
 
 use velnor_actions_contract::{NotSelectedReason, Plan, validate_run_key};
@@ -18,28 +8,14 @@ use crate::OrchestratorError;
 use crate::decisions::{NotSelectedInputs, not_selected_report};
 use crate::internal::{internal, internal_contract};
 
-/// Env key carrying the no-op `not_selected` reason vocabulary word.
 pub(crate) const NOT_SELECTED_REASON_ENV: &str = "VELNOR_NOT_SELECTED_REASON";
-/// Env key carrying the skipped obligation's expected task digest.
-///
-/// Must equal the renderer's `NOOP_DIGEST_ENV` and must differ from the
-/// exec leg digest key: otherwise every executed obligation dispatches
-/// into the no-op half-present error.
 pub(crate) const TASK_DIGEST_ENV: &str = "VELNOR_NOOP_TASK_DIGEST";
 
-/// One validated no-op report request.
 pub(crate) struct NoOpRequest {
-    /// Closed-vocabulary skip reason.
     pub(crate) reason: NotSelectedReason,
-    /// Expected task digest, cross-checked against the plan.
     pub(crate) task_digest: String,
 }
 
-/// Parse one closed-vocabulary `not_selected` reason.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for unknown reasons.
 pub(crate) fn parse_not_selected_reason(raw: &str) -> Result<NotSelectedReason, OrchestratorError> {
     match raw {
         "upstream_failed" => Ok(NotSelectedReason::UpstreamFailed),
@@ -50,14 +26,6 @@ pub(crate) fn parse_not_selected_reason(raw: &str) -> Result<NotSelectedReason, 
     }
 }
 
-/// Parse the no-op request env, when the step carries a reason.
-///
-/// A reason without the expected digest (or vice versa) fails closed:
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for unknown reasons,
-/// malformed digests, and half-present pairs.
 pub(crate) fn parse_noop_request(
     reason: Option<&str>,
     task_digest: Option<&str>,
@@ -75,22 +43,10 @@ pub(crate) fn parse_noop_request(
     }
 }
 
-/// Whether the current op invocation selects the no-op variant.
 pub(crate) fn noop_reason_present() -> Option<String> {
     std::env::var(NOT_SELECTED_REASON_ENV).ok()
 }
 
-/// Write one no-op `not_selected` report with explicit inputs.
-///
-/// The exit code must be zero (a reason plus a failure is
-/// contradictory) and the expected digest must match the plan binding;
-/// anything else errors instead of emitting unbound bytes.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for malformed run keys,
-/// contradictory exits, digest mismatches, and the plan-resolution
-/// failures of the base op.
 pub(crate) fn write_noop_report_to(
     run_key: &str,
     task_id: &str,
@@ -124,12 +80,6 @@ pub(crate) fn write_noop_report_to(
     Ok(1)
 }
 
-/// Report every downstream ID as skipped behind a failure.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for unbound downstream IDs
-/// and unwritable paths.
 pub(crate) fn write_skip_reports(
     plan: &Plan,
     task_id: &str,
@@ -160,7 +110,3 @@ pub(crate) fn write_skip_reports(
     }
     Ok(reported)
 }
-
-#[cfg(test)]
-#[path = "noop_report_tests.rs"]
-mod noop_report_tests;

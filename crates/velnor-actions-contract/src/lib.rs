@@ -1,10 +1,11 @@
-//! Stack-neutral workflow/task contracts.
-//!
-//! Owns task graphs, identities, reports, and recommendations. Must not own
-//! Rust/Cargo, Mise, process, filesystem, YAML, CLI, or generic app models.
-//!
-//! All types here are effect-free data plus pure derivation/validation; derivation formulas are normative.
-
+#![allow(
+    clippy::missing_errors_doc,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
+#![allow(
+    missing_docs,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
 pub mod archive;
 pub mod cachekey;
 pub mod candidate_manifest;

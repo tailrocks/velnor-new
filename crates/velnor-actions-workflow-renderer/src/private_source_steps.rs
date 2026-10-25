@@ -1,11 +1,3 @@
-//! Mint, fetch and revoke steps for private cross-repository sources (HD-7).
-//!
-//! The three steps form one block ahead of every repository-controlled step:
-//! the token is minted for an exact repository allowlist, used only by the
-//! Velnor-owned fetch step, and revoked `always()` before repository code
-//! runs. Nothing here executes a shell; the fetch and revoke steps are
-//! internal operations of the digest-verified staged binary.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
@@ -15,42 +7,25 @@ use velnor_actions_contract::{
 
 use crate::{RenderError, steps::CREATE_GITHUB_APP_TOKEN_USES};
 
-/// Display name of the mint step.
 pub const PRIVATE_MINT_NAME: &str = "Mint read-only token for private sources";
-/// Display name of the fetch step.
 pub const PRIVATE_FETCH_NAME: &str = "Fetch private sources";
-/// Display name of the revoke step.
 pub const PRIVATE_REVOKE_NAME: &str = "Revoke private-source token";
-/// Env key listing the minted repository allowlist for the fetch step.
 pub const PRIVATE_REPOSITORIES_ENV: &str = "VELNOR_PRIVATE_REPOSITORIES";
-/// Env key naming the owner of the allowlisted repositories.
 pub const PRIVATE_OWNER_ENV: &str = "VELNOR_PRIVATE_OWNER";
-/// Env key listing the source kinds the fetch step retrieves.
 pub const PRIVATE_SOURCES_ENV: &str = "VELNOR_PRIVATE_SOURCES";
-/// Env key listing the Cargo workspace roots the fetch step covers (`.` is the repository root).
 pub const PRIVATE_ROOTS_ENV: &str = "VELNOR_PRIVATE_FETCH_ROOTS";
-/// Source kinds a fetch step may name, in canonical order.
 pub const PRIVATE_SOURCE_KINDS: [&str; 4] =
     ["cargo", "git-trees", "maven-bundles", "release-assets"];
-/// Condition of the revoke step: runs after any outcome once a token exists.
 pub const PRIVATE_REVOKE_CONDITION: &str = "always() && steps.deps-token.outcome == 'success'";
 
-/// Everything the three steps are rendered from.
 #[derive(Debug, Clone, Copy)]
 pub struct PrivateSourcesSpec<'a> {
-    /// Owner of every allowlisted repository.
     pub owner: &'a str,
-    /// Organization variable naming the App client id.
     pub app_id_variable: &'a str,
-    /// Organization secret naming the App private key.
     pub app_private_key_secret: &'a str,
-    /// Sorted, de-duplicated repository names under `owner`; never empty.
     pub repositories: &'a [String],
-    /// Source kinds to fetch: a sorted, de-duplicated subset of [`PRIVATE_SOURCE_KINDS`].
     pub kinds: &'a [&'a str],
-    /// Cargo workspace roots the fetch covers (`.` is the repository root).
     pub roots: &'a [String],
-    /// Owned toolchain env the fetch's Cargo run needs (Mise isolation, tool homes).
     pub toolchain_env: &'a BTreeMap<String, String>,
 }
 
@@ -114,7 +89,6 @@ impl PrivateSourcesSpec<'_> {
     }
 }
 
-/// True for `.` or a normalized relative directory of safe segments.
 fn is_root(value: &str) -> bool {
     value == "."
         || (!value.is_empty()
@@ -128,12 +102,6 @@ fn is_root(value: &str) -> bool {
             }))
 }
 
-/// The mint, fetch and revoke steps, in execution order.
-///
-/// # Errors
-///
-/// Returns [`RenderError::BadCommand`] for a malformed owner, handle, or an
-/// empty, unsorted or malformed repository list.
 pub fn private_source_steps(spec: &PrivateSourcesSpec<'_>) -> Result<[Step; 3], RenderError> {
     spec.validate()?;
     let mint = Step {

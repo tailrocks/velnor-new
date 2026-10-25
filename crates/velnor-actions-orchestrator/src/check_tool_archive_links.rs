@@ -24,7 +24,6 @@ pub(super) fn discard_entry<R: Read>(
     }
 }
 
-/// A link held until every regular file and directory has been staged.
 #[derive(Debug)]
 pub(super) struct PendingLink {
     pub(super) path: PathBuf,

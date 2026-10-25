@@ -1,38 +1,12 @@
-//! P08 Cargo source subset, single writer, and restore-before-fetch order.
-//!
-//! Sources live at the Cargo home actually used (`MISE_CARGO_HOME`,
-//! `${{ runner.temp }}/velnor/cargo`), never the ambient `~/.cargo`.
-//! Only source trees are archived: `registry/index/`, `registry/cache/`,
-//! and `git/db/`. Cargo-installed binaries and their `.crates*` manifests
-//! belong to the V2 tools layer. Extracted `registry/src/` is omitted
-//! (re-extracted from cache; avoids cache/src duplication). Credentials
-//! (`credentials*`, token-bearing configs) are never archived.
-//!
-//! One race-safe trusted writer (the plan job) seeds the shared immutable
-//! snapshot; crate jobs restore read-only and never save the same key.
-//! Seven jobs racing to save one immutable key is rejected by construction.
-
 use crate::error::MiseError;
 use velnor_actions_contract::StepRole;
 
-/// Sufficient Cargo-home subset (relative to the owned home), owned by the
-/// typed sources family spec.
 pub use velnor_actions_contract::workflow::cache_family::SOURCE_SUBSET;
 
-/// Role allowed to save the shared sources snapshot.
 pub const TRUSTED_WRITER_ROLE: &str = "plan";
 
-/// Never-archive markers: state, plans, and credential-bearing names
-/// must never enter a cache archive (T22).
-///
-/// The renderer mirrors this list exactly (`cache_steps`); the
-/// orchestrator pins both equal by test, like the credential
-/// denylists. Scope is name markers only: other secret-shaped names
-/// (secret/token/secrets substrings) stay archivable — accepted V1
-/// under-inclusion (B12), contained by the fixed archive subset.
 pub const NEVER_ARCHIVE_MARKERS: [&str; 3] = ["credentials", ".tfstate", ".tfplan"];
 
-/// True when `path` names state, plans, or credentials.
 #[must_use]
 pub fn is_never_archive_path(path: &str) -> bool {
     NEVER_ARCHIVE_MARKERS
@@ -40,23 +14,12 @@ pub fn is_never_archive_path(path: &str) -> bool {
         .any(|marker| path.contains(marker))
 }
 
-/// Fetch decision after a restore attempt.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FetchDecision {
-    /// All locked sources present: skip online fetch, run offline.
     OfflineSkip,
-    /// Cold/incomplete cache: fetch via the explicit path, record miss.
-    ExplicitFetch {
-        /// Closed miss reason (`no_entry`, `source_missing`, ...).
-        miss_reason: &'static str,
-    },
+    ExplicitFetch { miss_reason: &'static str },
 }
 
-/// Source-subset archive paths under one Cargo home expression.
-///
-/// # Errors
-///
-/// Returns [`MiseError::InvalidStepInput`] for a blank home.
 pub fn sources_cache_paths(cargo_home: &str) -> Result<Vec<String>, MiseError> {
     if cargo_home.trim().is_empty() {
         return Err(MiseError::InvalidStepInput {
@@ -70,12 +33,6 @@ pub fn sources_cache_paths(cargo_home: &str) -> Result<Vec<String>, MiseError> {
         .collect())
 }
 
-/// Validate subset paths: under the owned home, no credentials, no escapes.
-///
-/// # Errors
-///
-/// Returns [`MiseError::InvalidStepInput`] for absolute escapes,
-/// credentials, `registry/src`, or paths outside `cargo_home`.
 pub fn validate_sources_subset(paths: &[String], cargo_home: &str) -> Result<(), MiseError> {
     for path in paths {
         if path.contains("..") || is_never_archive_path(path) {
@@ -98,7 +55,6 @@ pub fn validate_sources_subset(paths: &[String], cargo_home: &str) -> Result<(),
     Ok(())
 }
 
-/// Shared rejection for a bad sources path.
 fn reject(path: &str) -> MiseError {
     MiseError::InvalidStepInput {
         field: "sources_path".to_owned(),
@@ -106,17 +62,11 @@ fn reject(path: &str) -> MiseError {
     }
 }
 
-/// True only for the single trusted writer role.
 #[must_use]
 pub fn is_trusted_writer(role: &str) -> bool {
     role == TRUSTED_WRITER_ROLE
 }
 
-/// Decide offline-skip vs explicit fetch from a completeness probe.
-///
-/// # Errors
-///
-/// Returns [`MiseError::InvalidStepInput`] for an unknown reason.
 pub fn fetch_decision(
     sources_complete: bool,
     miss_reason: &'static str,
@@ -136,14 +86,6 @@ pub fn fetch_decision(
     Ok(FetchDecision::ExplicitFetch { miss_reason })
 }
 
-/// Check that named steps precede every fetch step when both are present.
-///
-/// `roles` is the job's typed semantic sequence. Every source fetch must
-/// follow a sources restore and, on MBX jobs, the MBX objects restore.
-///
-/// # Errors
-///
-/// Returns [`MiseError::CacheNotEligible`] when fetch precedes restore.
 pub fn check_restore_before_fetch(
     roles: &[Option<StepRole>],
     has_mbx: bool,
@@ -177,14 +119,6 @@ pub fn check_restore_before_fetch(
     Ok(())
 }
 
-/// Check that named steps precede every fetch step when both are present.
-///
-/// `names` is the job's step-name sequence. `required` carries caller-owned
-/// setup and restore names; this generic checker does not know their meaning.
-///
-/// # Errors
-///
-/// Returns [`MiseError::CacheNotEligible`] when fetch precedes a required step.
 pub fn check_steps_before_fetch(names: &[String], required: &[&str]) -> Result<(), MiseError> {
     let at = |want: &str| names.iter().position(|name| name == want);
     let fetch = at("Fetch Cargo sources").or_else(|| {

@@ -1,8 +1,3 @@
-//! V2 tools-cache identity and the shared Cargo source-cache contract.
-//!
-//! Tool archives use typed pins and runtime-qualified paths. Cargo
-//! sources remain an independent cache layer; MBX owns compiler objects.
-
 use velnor_actions_contract::{Job, Step, StepKind};
 
 use crate::{MiseSetup, RenderError, setup};
@@ -21,30 +16,20 @@ mod setup_pipeline;
 
 pub use crate::cache_elect::{elect_cache_writers, elect_cache_writers_with_policy};
 
-/// Display name of the shared sources restore step.
 pub const RESTORE_SOURCES_NAME: &str = "Restore Cargo sources";
-/// Display name of the shared sources save step.
 pub const SAVE_SOURCES_NAME: &str = "Save Cargo sources";
-/// Display name of the runtime identity step gating the tools cache.
 pub const TOOLS_CACHE_IDENTITY_NAME: &str = "V2 identity";
-/// Step output owner used by both V2 restore and save expressions.
 pub const TOOLS_CACHE_IDENTITY_STEP_ID: &str = "v2";
-/// Canonical key expression; the output hashes both static tools and runtime identity.
 pub(crate) const TOOLS_CACHE_KEY_EXPRESSION: &str = "mise-tools-v2-${{steps.v2.outputs.identity}}";
-/// Composite-action input carrying the V2 static tools digest.
 pub(crate) const TOOLS_CACHE_IDENTITY_DIGEST_INPUT: &str =
     velnor_actions_contract::workflow::step_identity::TOOLS_CACHE_IDENTITY_DIGEST_INPUT;
-/// Cache restore is unavailable unless runtime roots/image were qualified.
 pub const TOOLS_CACHE_RESTORE_CONDITION: &str = "steps.v2.outputs.enabled == 'true'";
-/// Cache writes require an eligible producer under `policy` and qualified identity.
 pub(crate) fn tools_cache_save_condition(
     policy: velnor_actions_contract::PullRequestCachePolicy,
 ) -> String {
     save_policy::condition(policy)
 }
 
-/// Insert pinned Mise setup and a V2 tools-cache restore into one job.
-/// # Errors
 pub(crate) fn ensure_tools_cache_v2(
     job_id: &str,
     job: &mut Job,
@@ -56,8 +41,6 @@ pub(crate) fn ensure_tools_cache_v2(
     setup_pipeline::ensure_tools_cache_v2(job_id, job, setup, always, target, checkout_uses)
 }
 
-/// Reject the retired broad `rust-cache` archive in generated jobs.
-/// # Errors
 pub fn check_no_legacy_rust_cache(job_id: &str, job: &Job) -> Result<(), RenderError> {
     if job.steps.iter().any(|step| {
         matches!(&step.kind, StepKind::Action { uses, .. } if uses.starts_with("Swatinem/rust-cache@"))
@@ -69,8 +52,6 @@ pub fn check_no_legacy_rust_cache(job_id: &str, job: &Job) -> Result<(), RenderE
     Ok(())
 }
 
-/// Require MBX object restore before every Cargo source fetch step.
-/// # Errors
 pub fn check_mbx_before_fetch(job_id: &str, job: &Job) -> Result<(), RenderError> {
     let at = |role| job.steps.iter().position(|step| step.role == Some(role));
     let mbx = at(velnor_actions_contract::StepRole::MbxCache);
@@ -88,7 +69,6 @@ pub fn check_mbx_before_fetch(job_id: &str, job: &Job) -> Result<(), RenderError
     Ok(())
 }
 
-/// Union exact Mise selectors from each shell step's fixed argv.
 #[must_use]
 pub fn infer_job_tools(job: &Job) -> Vec<String> {
     let mut specs = std::collections::BTreeSet::new();
@@ -114,7 +94,6 @@ pub fn infer_job_tools(job: &Job) -> Vec<String> {
     specs.into_iter().collect()
 }
 
-/// True for catalog version spellings (`2026.10.13`); never `latest`.
 pub(crate) fn is_catalog_version(value: &str) -> bool {
     if velnor_actions_contract::config::project_tool_refs::is_project_tool_ref(value) {
         return true;
@@ -129,7 +108,6 @@ pub(crate) fn is_catalog_version(value: &str) -> bool {
         && !value.contains("${{")
 }
 
-/// True for `<tool>@<version>` selectors supported by the tool cache.
 pub(crate) fn is_tool_spec(value: &str) -> bool {
     let Some((tool, version)) = value.split_once('@') else {
         return false;
@@ -151,12 +129,10 @@ pub(crate) fn is_tool_spec(value: &str) -> bool {
                 .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_' | b'+')))
 }
 
-/// Detect the current pinned Setup Mise shape, with cache delegated to V2.
 pub(crate) fn setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {
     setup::mise_setup_step(setup)
 }
 
-/// Compare semantic step fields while leaving the display-only name mutable.
 pub(crate) fn same_step_semantics(left: &Step, right: &Step) -> bool {
     left.id == right.id
         && left.role == right.role
@@ -164,12 +140,10 @@ pub(crate) fn same_step_semantics(left: &Step, right: &Step) -> bool {
         && left.kind == right.kind
 }
 
-/// True only for the canonical typed V2 cache-key expression.
 pub(crate) fn is_v2_cache_key_expression(value: &str) -> bool {
     value == TOOLS_CACHE_KEY_EXPRESSION
 }
 
-/// Validate the component-install payload against the resolved toolchain.
 pub(crate) fn rust_components(
     step: &Step,
     version: &str,

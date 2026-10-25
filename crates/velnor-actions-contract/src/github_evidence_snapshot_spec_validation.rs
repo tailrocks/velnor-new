@@ -1,12 +1,8 @@
-//! Validation of generator-resolved immutable collector specifications.
-
 use super::{
     GITHUB_EVIDENCE_SNAPSHOT_SCHEMA, GitHubEvidenceFetchSpecV1, GitHubEvidenceWorkflowSourceRefV1,
 };
 
 impl GitHubEvidenceFetchSpecV1 {
-    /// Parse strict canonical JSON into a validated generated request.
-    /// # Errors
     pub fn parse_canonical_json(text: &str) -> Result<Self, String> {
         let value = crate::strict_json::parse_strict_json(text)
             .map_err(|_| "github_evidence_fetch_spec_json".to_owned())?;
@@ -22,8 +18,6 @@ impl GitHubEvidenceFetchSpecV1 {
         Ok(spec)
     }
 
-    /// Validate the fully resolved closed request before serialization/use.
-    /// # Errors
     pub fn validate(&self) -> Result<(), String> {
         validate_header(self)?;
         validate_workflow_sources(self)?;

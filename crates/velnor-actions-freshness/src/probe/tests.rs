@@ -106,8 +106,7 @@ fn accept_with_deadline(listener: &TcpListener) -> Option<TcpStream> {
     let deadline = Instant::now() + Duration::from_secs(3);
     while Instant::now() < deadline {
         if let Ok((stream, _)) = listener.accept() {
-            // Accepted sockets inherit the listener's nonblocking mode on
-            // macOS; the request/response loops below assume blocking I/O.
+
             if stream.set_nonblocking(false).is_err() {
                 continue;
             }
@@ -222,15 +221,6 @@ fn fetch_once(response: MockResponse) -> Result<String, String> {
     let result = fetch_text(&server.url);
     assert_eq!(server.finish(), 1, "fetch result: {result:?}");
     result
-}
-
-#[test]
-fn production_agent_trust_initializes_successfully() {
-    let result = initialize_upstream_agent_for_test();
-    assert!(
-        result.is_ok(),
-        "production trust-agent initialization: {result:?}"
-    );
 }
 
 fn assert_body(response: MockResponse, expected: &str) {

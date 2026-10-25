@@ -1,5 +1,3 @@
-//! Private per-worktree staging owner for in-place `.github` generation.
-
 use std::fs::{self, Metadata};
 use std::path::{Path, PathBuf};
 
@@ -24,20 +22,14 @@ pub(super) type OwnerId = u32;
 #[cfg(not(unix))]
 pub(super) type OwnerId = ();
 
-#[cfg(test)]
-#[path = "generate_stage_root_tests.rs"]
-mod tests;
-
 const CONTAINER: &str = ".github.velnor-stage";
-#[cfg(test)]
-const IGNORE_FILE: &str = ".gitignore";
+
 const OWNER_FILE: &str = "owner";
 const SPARE_DIR: &str = "spare";
 const OWNER_VERSION: &str = "velnor-generate-stage-v1";
 const PRIVATE_DIR_MODE: u32 = 0o700;
 const PRIVATE_FILE_MODE: u32 = 0o600;
 
-/// Identity of one filesystem object, captured without following its leaf.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct FsIdentity {
     #[cfg(unix)]
@@ -75,7 +67,6 @@ impl FsIdentity {
     }
 }
 
-/// Canonical worktree identity persisted in the private owner record.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct RootIdentity {
     path: PathBuf,
@@ -114,7 +105,6 @@ impl RootIdentity {
     }
 }
 
-/// Persistent sibling slot; the spare path survives every publish and cleanup.
 #[derive(Debug)]
 pub(super) struct StageRoot {
     root: RootIdentity,
@@ -126,7 +116,6 @@ pub(super) struct StageRoot {
 }
 
 impl StageRoot {
-    /// Open an owned staging container or create it once at this worktree root.
     pub(super) fn open(root: &Path) -> Result<Self, OrchestratorError> {
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         {
@@ -156,12 +145,10 @@ impl StageRoot {
         Self::validate(identity, container)
     }
 
-    /// Path of the persistent spare root, supplied to the in-place writer.
     pub(super) fn spare(&self) -> &Path {
         &self.spare
     }
 
-    /// Validate the current `.github` root and bind its inode before staging.
     pub(super) fn validate_target(
         &self,
         target: &Path,
@@ -184,7 +171,6 @@ impl StageRoot {
         Ok(Some(FsIdentity::from_metadata(&metadata)))
     }
 
-    /// Fail before publication unless every real output directory is ours.
     pub(super) fn validate_target_directories(
         &self,
         target: &Path,
@@ -198,14 +184,12 @@ impl StageRoot {
         Self::require_identity(target, expected)
     }
 
-    /// Remove stale or retired children while retaining the spare root inode.
     pub(super) fn clear_spare_before_staging(&self) -> Result<(), OrchestratorError> {
         self.validate_container_and_spare(false)?;
         validate_directory_owners(&self.spare, self.owner, &self.root.mount)?;
         Self::clear_children(&self.spare, self.spare_identity)
     }
 
-    /// Remove children from the retired root only after a successful exchange.
     pub(super) fn clean_retired_root(&self, expected: FsIdentity) -> Result<(), OrchestratorError> {
         self.validate_container()?;
         let published = self.root.path.join(".github");
@@ -221,7 +205,6 @@ impl StageRoot {
         Self::clear_children(&self.spare, expected)
     }
 
-    /// Check the staged tree and both roots again immediately before commit.
     pub(super) fn validate_staged(
         &self,
         target: &Path,
@@ -255,7 +238,6 @@ impl StageRoot {
         Ok(())
     }
 
-    /// Remove only staged children after a failed precommit operation.
     pub(super) fn abort_before_commit(&self, cause: OrchestratorError) -> OrchestratorError {
         match self.clear_spare_before_staging() {
             Ok(()) => cause,

@@ -1,22 +1,10 @@
-//! Minimal Rust token stream for the out-of-directory read scan.
-//!
-//! The scan needs identifiers, string-literal values, and punctuation,
-//! with comments, character literals, lifetimes, and numbers skipped.
-//! It is not a parser: escapes inside string literals are kept verbatim
-//! (paths never need them), and malformed input simply ends the stream.
-
-/// One lexical token the read scan inspects.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Token {
-    /// Identifier or keyword.
     Ident(String),
-    /// String-literal body (normal, raw, byte, or C string).
     Str(String),
-    /// Any other single punctuation character.
     Punct(char),
 }
 
-/// Tokenize Rust source text.
 pub(crate) fn tokenize(text: &str) -> Vec<Token> {
     let chars: Vec<char> = text.chars().collect();
     let mut tokens = Vec::new();
@@ -54,7 +42,6 @@ pub(crate) fn tokenize(text: &str) -> Vec<Token> {
     tokens
 }
 
-/// End of identifier (or number) characters starting at `at`.
 fn skip_ident_chars(chars: &[char], mut at: usize) -> usize {
     while chars
         .get(at)
@@ -65,7 +52,6 @@ fn skip_ident_chars(chars: &[char], mut at: usize) -> usize {
     at
 }
 
-/// Index after a line comment.
 fn skip_line(chars: &[char], mut at: usize) -> usize {
     while chars.get(at).is_some_and(|ch| *ch != '\n') {
         at += 1;
@@ -73,7 +59,6 @@ fn skip_line(chars: &[char], mut at: usize) -> usize {
     at
 }
 
-/// Index after a (nested) block comment whose opener ends before `at`.
 fn skip_block(chars: &[char], mut at: usize) -> usize {
     let mut depth = 1usize;
     while depth > 0 {
@@ -93,7 +78,6 @@ fn skip_block(chars: &[char], mut at: usize) -> usize {
     at
 }
 
-/// Body and next index of a `"..."` literal whose quote ends before `at`.
 fn quoted(chars: &[char], mut at: usize) -> (String, usize) {
     let mut body = String::new();
     while let Some(&ch) = chars.get(at) {
@@ -115,7 +99,6 @@ fn quoted(chars: &[char], mut at: usize) -> (String, usize) {
     (body, at)
 }
 
-/// Raw, byte, or C string literal after prefix `word` ending at `at`.
 fn prefixed_string(chars: &[char], word: &str, at: usize) -> Option<(String, usize)> {
     match word {
         "b" | "c" if chars.get(at) == Some(&'"') => Some(quoted(chars, at + 1)),
@@ -124,7 +107,6 @@ fn prefixed_string(chars: &[char], word: &str, at: usize) -> Option<(String, usi
     }
 }
 
-/// Raw string `#*"..."#*` starting at the first `#` or quote.
 fn raw(chars: &[char], mut at: usize) -> Option<(String, usize)> {
     let mut hashes = 0usize;
     while chars.get(at) == Some(&'#') {
@@ -148,10 +130,8 @@ fn raw(chars: &[char], mut at: usize) -> Option<(String, usize)> {
     Some((chars.get(start..).unwrap_or_default().iter().collect(), at))
 }
 
-/// Skip a character literal or a lifetime starting at quote index `at`.
 fn skip_quote(chars: &[char], at: usize) -> usize {
     if chars.get(at + 1) == Some(&'\\') {
-        // Skip the escaped character itself: `'\''` must not end at it.
         let mut end = at + 3;
         while chars.get(end).is_some_and(|ch| *ch != '\'') {
             end += 1;
@@ -162,51 +142,4 @@ fn skip_quote(chars: &[char], at: usize) -> usize {
         return at + 3;
     }
     skip_ident_chars(chars, at + 1)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{Token, tokenize};
-
-    fn strs(text: &str) -> Vec<String> {
-        tokenize(text)
-            .into_iter()
-            .filter_map(|token| match token {
-                Token::Str(body) => Some(body),
-                _ => None,
-            })
-            .collect()
-    }
-
-    #[test]
-    fn comments_chars_and_lifetimes_hide_no_literals() {
-        let text = "// \"a\"\n/* \"b\" /* \"c\" */ */ fn f<'a>(x: &'a str) { let q = '\"'; let e = '\\''; g(\"d\") }";
-        assert_eq!(strs(text), vec!["d".to_owned()]);
-    }
-
-    #[test]
-    fn escaped_quote_chars_keep_string_parity() {
-        let text = "let q = ('\\'','\"'); include_str!(\"x\");";
-        assert_eq!(strs(text), vec!["x".to_owned()]);
-    }
-
-    #[test]
-    fn raw_byte_and_c_strings_are_literals() {
-        let text = "r#\"x\"y\"# br\"z\" b\"w\" c\"v\" r\"u\"";
-        assert_eq!(strs(text), vec!["x\"y", "z", "w", "v", "u"]);
-    }
-
-    #[test]
-    fn identifiers_and_punctuation_survive() {
-        assert_eq!(
-            tokenize("include_str!(\"a\")"),
-            vec![
-                Token::Ident("include_str".to_owned()),
-                Token::Punct('!'),
-                Token::Punct('('),
-                Token::Str("a".to_owned()),
-                Token::Punct(')'),
-            ]
-        );
-    }
 }

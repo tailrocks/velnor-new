@@ -1,4 +1,3 @@
-//! Closed native Xcode and Swift output parsers.
 use super::invalid;
 use super::strict_text;
 use crate::MiseError;
@@ -7,9 +6,6 @@ use velnor_actions_contract::config::{
     CheckPlatform, CheckSystemToolKind, MAX_CHECK_CONTAINER_PATH_BYTES,
 };
 
-/// Parse the closed native version output grammar without executing anything.
-/// # Errors
-/// Rejects non-UTF8, diagnostics, incomplete identities and extra output.
 pub fn parse_system_tool_version(
     kind: CheckSystemToolKind,
     stdout: &[u8],

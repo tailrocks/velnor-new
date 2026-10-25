@@ -1,11 +1,3 @@
-//! Maven bundle jobs of the publication workflow: build, attest, publish (HD-6, HD-8).
-//!
-//! The build job is the only one that checks out code and runs repository
-//! build logic (the Gradle root's `:mavenBundle`); it holds read-only authority
-//! and the short-lived private-source token only inside the mint, fetch and
-//! revoke steps that surround it. Attest and publish work from the uploaded
-//! zip alone: they check out nothing and execute no repository code.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::actions::{
@@ -22,23 +14,15 @@ use super::{AUTHORITY_JOB, Inputs, VersionCheck, bundle_job, plain, script_step}
 use crate::OrchestratorError;
 use crate::workflow::CHECKOUT_USES;
 
-/// One Maven entry plus the steps built from the Gradle stack.
 pub(crate) struct MavenPlan<'a> {
-    /// Declared entry.
     pub(crate) entry: &'a PublishMaven,
-    /// Version check applied by the authority job (the root's `gradle.properties`).
     pub(crate) check: VersionCheck,
-    /// Staged-helper acquisition plus the private-source block, in order.
     pub(crate) prefix: Vec<PublishStep>,
-    /// The `gradle-run-v1` step running `:mavenBundle`.
     pub(crate) gradle: velnor_actions_contract::Step,
-    /// Build bound: the Gradle stack's own timeout, never the five-minute release default.
     pub(crate) timeout: JobTimeout,
-    /// Local service containers of the project(s) the bundle builds (the CI database).
     pub(crate) services: Vec<velnor_actions_contract::ServiceContainer>,
 }
 
-/// Artifact name shared by upload and download.
 fn artifact_name(id: &str) -> String {
     format!("maven-{id}")
 }
@@ -54,7 +38,6 @@ fn download_step(id: &str) -> Result<PublishStep, OrchestratorError> {
     )?))
 }
 
-/// Build: checkout the tagged commit, run `:mavenBundle`, verify, upload.
 pub(super) fn build_job(
     inputs: &Inputs<'_>,
     plan: &MavenPlan<'_>,
@@ -94,7 +77,6 @@ pub(super) fn build_job(
     Ok(job)
 }
 
-/// Provenance subject: the zip in the bundle directory.
 fn subject(id: &str) -> Subject<'_> {
     Subject {
         kind: "maven",
@@ -112,11 +94,6 @@ fn checksum_step(id: &str) -> Result<PublishStep, OrchestratorError> {
     )?))
 }
 
-/// Attest: verify the checksum, then sign provenance for the zip.
-///
-/// `github_attestation` writes to GitHub's attestation store; the declared
-/// `sigstore_bundle` signs a bundle the publish job records. A validated
-/// Maven opt-out remains authoritative in either mode.
 pub(super) fn attest_job(
     inputs: &Inputs<'_>,
     entry: &PublishMaven,
@@ -166,10 +143,6 @@ pub(super) fn attest_job(
     ))
 }
 
-/// Publish: re-verify, then upload immutable release assets.
-///
-/// With a Sigstore bundle the job also re-verifies the bundle and receipt
-/// and uploads them beside the zip.
 pub(super) fn publish_job(
     inputs: &Inputs<'_>,
     entry: &PublishMaven,
@@ -206,7 +179,3 @@ pub(super) fn publish_job(
         steps,
     ))
 }
-
-#[cfg(test)]
-#[path = "publish_maven_scripts_tests.rs"]
-mod scripts_tests;

@@ -1,5 +1,3 @@
-//! Public command dispatch and user-facing error formatting.
-
 use std::process::ExitCode;
 
 use clap::Parser;
@@ -8,9 +6,6 @@ use velnor_actions_orchestrator::{init_config, plan_text_checked, prepare, resol
 use super::{fail_public, owned_publication, working_dir};
 use crate::args::{Cli, Command};
 
-/// Parse Clap arguments and dispatch one public command.
-///
-/// Clap owns `--help`, `--version`, and usage errors (exit 2).
 pub(crate) fn run_public() -> ExitCode {
     let command = Cli::parse().command;
     if command.is_owned_preview() {
@@ -47,7 +42,6 @@ pub(crate) fn run_public() -> ExitCode {
     }
 }
 
-/// Dispatch `init`: resolve the root, then create the config file.
 fn run_init() -> ExitCode {
     let Some(cwd) = working_dir() else {
         return ExitCode::from(1);
@@ -64,11 +58,6 @@ fn run_init() -> ExitCode {
     }
 }
 
-/// Dispatch `plan`: report (recommendations included) to stdout only.
-///
-/// Contract §5 routes findings to stderr in one sentence, but §5's own
-/// example shows `Recommendations` inside the stdout report and §7 assigns
-/// the report to stdout; the example plus §7 govern, so stderr stays empty.
 fn run_plan() -> ExitCode {
     let Some(cwd) = working_dir() else {
         return ExitCode::from(1);

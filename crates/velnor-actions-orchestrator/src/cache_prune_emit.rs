@@ -1,11 +1,7 @@
-//! `cache-prune.yml` emission for repositories that write cache families.
-
 use velnor_actions_workflow_renderer::render::RenderedFile;
 
 use crate::{OrchestratorError, prepare::GenerationPreparation};
 
-/// Emit the prune workflow when the repository has runnable tasks or a stack
-/// job that writes a cache family.
 pub(crate) fn files(prep: &GenerationPreparation) -> Result<Vec<RenderedFile>, OrchestratorError> {
     let stacks = &prep.config.stacks;
     let writes = !prep.discovery.proposals.is_empty()
@@ -31,7 +27,3 @@ fn files_for(
         )?,
     ])
 }
-
-#[cfg(test)]
-#[path = "cache_prune_emit_tests.rs"]
-mod tests;

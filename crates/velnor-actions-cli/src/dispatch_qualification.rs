@@ -1,5 +1,3 @@
-//! Private dispatch boundary for hosted qualification predecessor resolution.
-
 use std::env;
 use std::path::Path;
 use std::process::ExitCode;

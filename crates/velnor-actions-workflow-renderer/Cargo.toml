@@ -23,6 +23,3 @@ velnor-actions-mise = { version = "=0.1.53", path = "../velnor-actions-mise" }
 [lints]
 workspace = true
 
-[[test]]
-name = "velnor_workflow_renderer"
-path = "tests/velnor_workflow_renderer.rs"

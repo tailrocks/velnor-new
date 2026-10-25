@@ -1,13 +1,5 @@
-//! A deliberately tiny reader for the YAML subset dbt control files use.
-//!
-//! It understands top-level `key: scalar` lines, flow lists (`["a", "b"]`),
-//! block lists (`- item`) under a top-level key, and one level of list-of-map
-//! entries (`- key: value` followed by deeper `key: value` lines). Anything it
-//! cannot classify is reported, never guessed.
-
 use std::collections::BTreeMap;
 
-/// Strip a trailing comment that starts a token (` #`) outside quotes.
 fn strip_comment(line: &str) -> &str {
     let mut quote: Option<char> = None;
     let mut prev_space = true;
@@ -23,7 +15,6 @@ fn strip_comment(line: &str) -> &str {
     line
 }
 
-/// Unquote one scalar.
 #[must_use]
 pub fn scalar(raw: &str) -> String {
     let raw = raw.trim();
@@ -35,7 +26,6 @@ pub fn scalar(raw: &str) -> String {
     raw.to_owned()
 }
 
-/// Items of a flow list `[a, "b"]`, or `None` when `raw` is not one.
 #[must_use]
 pub fn flow_list(raw: &str) -> Option<Vec<String>> {
     let inner = raw.trim().strip_prefix('[')?.strip_suffix(']')?;
@@ -48,7 +38,6 @@ pub fn flow_list(raw: &str) -> Option<Vec<String>> {
     )
 }
 
-/// Logical lines: `(indent, text)` with comments and blank lines removed.
 fn lines(text: &str) -> Vec<(usize, String)> {
     text.lines()
         .filter_map(|line| {
@@ -70,7 +59,6 @@ fn split_pair(text: &str) -> Option<(String, String)> {
     Some((scalar(key), value.trim().to_owned()))
 }
 
-/// Top-level scalar keys of a document (`key: value` at indent 0, value non-empty).
 #[must_use]
 pub fn top_scalars(text: &str) -> BTreeMap<String, String> {
     lines(text)
@@ -82,7 +70,6 @@ pub fn top_scalars(text: &str) -> BTreeMap<String, String> {
         .collect()
 }
 
-/// Items of a top-level list key (flow or block form of plain scalars).
 #[must_use]
 pub fn top_list(text: &str, key: &str) -> Option<Vec<String>> {
     let all = lines(text);
@@ -104,14 +91,6 @@ pub fn top_list(text: &str, key: &str) -> Option<Vec<String>> {
     Some(items)
 }
 
-/// Entries of a top-level list-of-maps key: each entry is its `key: value` pairs.
-///
-/// `Err` carries the offending line when a line under the key is neither a
-/// `- key: value` entry start nor a deeper `key: value` continuation.
-///
-/// # Errors
-///
-/// The first unclassifiable line.
 pub fn top_entries(text: &str, key: &str) -> Result<Option<Vec<BTreeMap<String, String>>>, String> {
     let all = lines(text);
     let Some(position) = all

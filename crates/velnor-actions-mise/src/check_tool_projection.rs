@@ -1,4 +1,3 @@
-//! Pure typed native tool configuration; acquisition authorization remains separate.
 use super::{invalid, qualified};
 use crate::MiseError;
 use std::fmt::Write;

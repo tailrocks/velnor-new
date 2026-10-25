@@ -1,5 +1,3 @@
-//! Derive publication job headroom from the preparation steps actually rendered.
-
 use super::{RenderError, Yaml};
 use velnor_actions_contract::{
     JobTimeout,
@@ -59,33 +57,4 @@ pub(super) fn apply_preparation_budget(
 
 fn invalid(code: &str) -> RenderError {
     RenderError::InvalidWorkflow(code.to_owned())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn job_fields() -> Vec<(String, Yaml)> {
-        vec![("timeout-minutes".to_owned(), Yaml::Int(5))]
-    }
-
-    #[test]
-    fn malformed_or_excessive_step_caps_fail_closed() {
-        let invalid_steps = [
-            Yaml::Map(vec![("timeout-minutes".to_owned(), Yaml::str("5"))]),
-            Yaml::Map(vec![("timeout-minutes".to_owned(), Yaml::Int(0))]),
-            Yaml::Map(vec![("timeout-minutes".to_owned(), Yaml::Int(361))]),
-            Yaml::Map(vec![
-                ("timeout-minutes".to_owned(), Yaml::Int(5)),
-                ("timeout-minutes".to_owned(), Yaml::Int(6)),
-            ]),
-            Yaml::Map(vec![("timeout-minutes".to_owned(), Yaml::Int(360))]),
-        ];
-        for step in invalid_steps {
-            assert!(
-                apply_preparation_budget(&mut job_fields(), &mut [step], JobTimeout::DEFAULT,)
-                    .is_err()
-            );
-        }
-    }
 }

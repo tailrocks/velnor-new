@@ -1,5 +1,3 @@
-//! Closed private preview operation dispatch; admission executes no source.
-
 use std::process::ExitCode;
 use velnor_actions_orchestrator::{admit_release_aggregate, execute_release_producer};
 
@@ -20,7 +18,6 @@ pub(super) fn native(
     }
 }
 
-/// Append only the canonical native digest; no credential is handed to source.
 pub(super) fn acquire() -> ExitCode {
     use std::io::Write;
     let digest = match velnor_actions_orchestrator::acquire_release_leaves() {

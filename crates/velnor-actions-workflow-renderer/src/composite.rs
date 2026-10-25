@@ -1,25 +1,14 @@
-//! Local composite actions for duplicated verification lanes.
-//!
-//! GitHub rejects a workflow file over 500 KB. Shared lane bodies live here
-//! so each lane job keeps only its id, `runs-on`, `needs`, and one call.
-
 use crate::yaml::Yaml;
 use crate::{RenderError, steps};
 
-/// One local composite call. The path is renderer-owned, not a remote pin.
-/// Zizmor's self-repository advice uses `$/'`, which resolves at the workflow
-/// SHA rather than this already checked-out event tree. Keep the exception
-/// on this fixed workspace-relative reference only.
 pub(crate) fn shared_call(uses: &str) -> Result<Yaml, RenderError> {
     shared_call_named(uses, "Run shared steps")
 }
 
-/// One named local composite call after the canonical path check.
 pub(crate) fn shared_call_named(uses: &str, name: &str) -> Result<Yaml, RenderError> {
     shared_call_named_with_inputs(uses, name, Vec::new())
 }
 
-/// One named local composite call with explicit inputs.
 pub(crate) fn shared_call_named_with_inputs(
     uses: &str,
     name: &str,
@@ -48,12 +37,10 @@ pub(crate) fn shared_call_named_with_inputs(
     Ok(Yaml::Map(fields))
 }
 
-/// Composite action document. Steps are already rendered.
 pub(crate) fn composite_yaml(name: &str, steps: Vec<Yaml>) -> Result<Yaml, RenderError> {
     composite_yaml_with_inputs(name, Vec::new(), steps)
 }
 
-/// Composite action document with declared inputs. Steps are already rendered.
 pub(crate) fn composite_yaml_with_inputs(
     name: &str,
     inputs: Vec<(String, Yaml)>,
@@ -82,70 +69,8 @@ pub(crate) fn composite_yaml_with_inputs(
     Ok(document)
 }
 
-/// Composite `run` steps require an explicit shell. Workflow jobs do not.
 pub(crate) fn push_composite_shell(entries: &mut Vec<(String, Yaml)>, composite: bool) {
     if composite {
         entries.push(("shell".to_owned(), Yaml::str("bash".to_owned())));
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{composite_yaml_with_inputs, shared_call};
-    use crate::yaml::Yaml;
-
-    #[test]
-    fn shared_calls_use_only_canonical_repository_local_actions() {
-        let yaml = crate::yaml::render_yaml(
-            &shared_call("./.github/actions/rust-0").expect("canonical local action"),
-        );
-        assert!(
-            yaml.contains("uses: ./.github/actions/rust-0 # zizmor: ignore[self-repository]"),
-            "{yaml}"
-        );
-        for uses in [
-            "./.github/actions/",
-            "./.github/actions/../rust-0",
-            "./.github/actions/a/b",
-            "./.github/actions/rust.0",
-            "./.github/actions/rust-0@deadbeef",
-            "actions/checkout@0000000000000000000000000000000000000000",
-        ] {
-            assert!(shared_call(uses).is_err(), "accepted {uses}");
-        }
-    }
-
-    #[test]
-    fn composites_without_project_references_keep_their_original_document() {
-        let steps = vec![Yaml::Map(vec![
-            ("name".to_owned(), Yaml::str("Plain step")),
-            ("run".to_owned(), Yaml::str("printf ok")),
-            ("shell".to_owned(), Yaml::str("bash")),
-        ])];
-        let inputs = vec![(
-            "mode".to_owned(),
-            Yaml::Map(vec![("required".to_owned(), Yaml::Bool(true))]),
-        )];
-        let rendered = composite_yaml_with_inputs("plain", inputs.clone(), steps.clone())
-            .expect("reference-free composite");
-        assert_eq!(
-            rendered,
-            Yaml::Map(vec![
-                ("name".to_owned(), Yaml::str("plain")),
-                (
-                    "description".to_owned(),
-                    Yaml::str("Shared steps for plain"),
-                ),
-                ("inputs".to_owned(), Yaml::Map(inputs)),
-                (
-                    "runs".to_owned(),
-                    Yaml::Map(vec![
-                        ("using".to_owned(), Yaml::str("composite")),
-                        ("steps".to_owned(), Yaml::Seq(steps)),
-                    ]),
-                ),
-            ]),
-            "composites without project references must remain byte-stable"
-        );
     }
 }

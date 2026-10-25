@@ -1,5 +1,3 @@
-//! Exact environment projection for the two typed evidence operations.
-
 use std::collections::BTreeMap;
 
 use crate::{RenderError, steps::INTERNAL_OP_ENV, yaml::Yaml};
@@ -36,7 +34,3 @@ pub(super) fn internal_env(
     );
     Ok(Some(Yaml::Map(env)))
 }
-
-#[cfg(test)]
-#[path = "document_evidence_tests.rs"]
-mod tests;

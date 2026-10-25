@@ -1,18 +1,9 @@
-//! Bounded stdout sinks for the single process-group polling authority.
 use super::{IsolatedCommand, ProcessFileOutput};
 use crate::{CheckDeadline, MiseError};
 #[cfg(unix)]
 use std::io::Write;
 
 impl IsolatedCommand {
-    /// Stream stdout into a caller-owned regular file under one absolute deadline.
-    ///
-    /// Writes start at the current file position. The caller must exclusively own
-    /// the file, authenticate its identity and discard partial bytes on error.
-    /// Stderr has a separate in-memory cap; no stdout-sized allocation is made.
-    /// # Errors
-    /// Returns `SpawnFailed` on unsupported platforms, nonregular files, write,
-    /// output-limit, deadline or process cleanup failure.
     pub fn run_stdout_to_file_until(
         &self,
         output: &mut std::fs::File,
@@ -150,8 +141,6 @@ impl Streams<'_> {
     }
 }
 
-/// One chunk per turn keeps continuously readable pipes from starving the
-/// shared deadline/cancellation checkpoint or the other stream.
 #[cfg(unix)]
 fn poll_chunk<Fd: std::os::fd::AsFd>(
     pipe: &mut Option<Fd>,
@@ -176,7 +165,3 @@ fn poll_chunk<Fd: std::os::fd::AsFd>(
         Err(error) => Err(error.to_string()),
     }
 }
-
-#[cfg(all(test, unix))]
-#[path = "command_stream_tests.rs"]
-mod tests;

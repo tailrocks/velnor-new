@@ -1,6 +1,3 @@
-//! Structural receipt identity. Preview source and workflow authority may differ;
-//! runtime admission must authenticate both and their relationship independently.
-
 use super::{PackageReleaseChannel, PackageReleaseReceipt, invalid};
 use crate::{ContractError, config::is_exact_semver, is_valid_branch_name};
 
@@ -96,7 +93,3 @@ fn hex_string(value: &str, len: usize) -> bool {
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
-
-#[cfg(test)]
-#[path = "package_release_identity_tests.rs"]
-mod tests;

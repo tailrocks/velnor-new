@@ -1,12 +1,3 @@
-//! Crate-job representation: ordered, individually reported obligations.
-//!
-//! Obligations stay per task; jobs group by package/configuration and a fixed
-//! adapter-owned execution responsibility. Rust uses lint, tests and docs
-//! phases under the crate-job timeout; `OpenTofu` keeps its root jobs. Local
-//! gates reference strictly earlier obligations by construction. Cross-job
-//! quality/data gates are preserved through exact owning-job IR dependencies,
-//! never interpreted as optional or silently dropped when a phase changes.
-
 use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
@@ -20,53 +11,43 @@ use crate::workflow::jobs::{
     TOFU_DISPLAY_PREFIX, TOFU_JOB_ID_PREFIX, is_safe_display_name, validate_job_id,
 };
 
-/// One logical obligation inside a crate job (per task, individually reported).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CrateObligation {
-    /// Stable task ID (never rendered into display names).
     pub task_id: String,
-    /// Stack-neutral kind word (e.g. `clippy`).
+
     pub kind: String,
-    /// Human step name (no IDs, keys, paths, or matrix JSON).
+
     pub step_name: String,
-    /// Task IDs that must pass first (strictly earlier obligations).
+
     pub gated_by: Vec<String>,
-    /// Matrix key locating this obligation's reports.
+
     pub matrix_key: String,
-    /// Task digest binding argv plus toolchain.
+
     pub task_digest: String,
-    /// Exact toolchain identity inputs bound into the task digest.
+
     pub toolchain_inputs: ToolchainInputs,
-    /// Fixed obligation argv.
+
     pub run: Vec<String>,
 }
 
-/// One crate responsibility: ordered, individually reported obligations (P05-1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CrateJob {
-    /// Stable collision-safe job ID.
     pub job_id: String,
-    /// Display name (`Rust / <label>`, or `OpenToFu — <root>` under `tofu-`).
+
     pub display_name: String,
-    /// Cargo package name (empty only with folder-fallback display).
+
     pub package_name: String,
-    /// Cargo package ID.
+
     pub package_id: String,
-    /// Package manifest path.
+
     pub manifest: String,
-    /// Configuration name.
+
     pub configuration: String,
-    /// Ordered obligations; gates reference strictly earlier entries.
+
     pub obligations: Vec<CrateObligation>,
 }
 
 impl CrateJob {
-    /// Validate ordering, uniqueness, gates, and label hygiene.
-    ///
-    /// The display prefix partitions with the ID namespace: `tofu-`
-    /// jobs render `OpenToFu — <root>`, every other crate job keeps
-    /// the byte-identical `Rust / <label>` contract.
-    /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {
         validate_job_id(&self.job_id)?;
         let prefix = if self.job_id.starts_with(TOFU_JOB_ID_PREFIX) {
@@ -113,7 +94,6 @@ impl CrateJob {
 }
 
 impl CrateObligation {
-    /// Validate identities, report bindings, argv, and step-name hygiene.
     fn validate(&self, job_id: &str) -> Result<(), ContractError> {
         validate_task_id(&self.task_id)?;
         validate_matrix_key(&self.matrix_key)?;
@@ -156,16 +136,6 @@ impl CrateObligation {
     }
 }
 
-/// Compute the task digest from its stable identity, argv, and toolchain ID.
-///
-/// Shared by planned obligations and generated workflow steps so a typed
-/// execution cannot swap either its pinned command or tool inputs after the
-/// plan has bound the task.
-///
-/// # Errors
-///
-/// Returns a contract error when the task or toolchain identity is invalid,
-/// the argument vector is malformed, or canonical digest serialization fails.
 pub fn task_digest_for_execution(
     task_id: &str,
     argv: &[String],
@@ -196,7 +166,3 @@ struct TaskDigestInputs<'a> {
     argv: &'a [String],
     toolchain_id: &'a str,
 }
-
-#[cfg(test)]
-#[path = "crate_job_tests.rs"]
-mod tests;

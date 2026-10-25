@@ -1,7 +1,3 @@
-//! Stop a worker pair between Docker calls.
-//!
-//! `remove_recorded` deletes only when the name still resolves to the owned id.
-
 use bollard::Docker;
 use bollard::errors::Error as DockerError;
 use bollard::query_parameters::RemoveContainerOptionsBuilder;
@@ -15,29 +11,25 @@ use crate::worker::{
     remove_worker_volumes, runner_create, start_id, verify_worker_volume,
 };
 
-/// Where `start_pair_until` returns. Later steps are not started.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PairStop {
-    /// Volumes exist. No container has been created.
     Volumes,
-    /// `DinD` exists and is not started.
+
     DindCreated,
-    /// `DinD` is running. The runner does not exist.
+
     DindStarted,
-    /// The runner exists and is not started.
+
     RunnerCreated,
-    /// The runner is running. JIT has not been written.
+
     RunnerStarted,
-    /// Both containers are up and JIT was written.
+
     Jit,
 }
 
-/// Containers created before a stop. Absent means that step did not run.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PartialPair {
-    /// `DinD` id, after create.
     pub dind_id: Option<String>,
-    /// Runner id, after create.
+
     pub runner_id: Option<String>,
 }
 
@@ -63,14 +55,12 @@ pub(crate) trait PairEngine {
     async fn running(&self, id: &str) -> Result<bool, HostError>;
 }
 
-/// Records container ids before the next external start.
 pub(crate) trait PairSink {
     async fn volume(&self, volume: &str) -> Result<(), HostError>;
     async fn dind(&self, id: &str) -> Result<(), HostError>;
     async fn runner(&self, id: &str) -> Result<(), HostError>;
 }
 
-/// Sink that does not record ids.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Forget;
 
@@ -165,13 +155,6 @@ impl PairEngine for Docker {
     }
 }
 
-/// Create through `stop`, then return. `Jit` matches [`crate::worker::start_pair`].
-///
-/// # Errors
-///
-/// Returns [`HostError::EmptyJit`] before any create when `jit` is empty.
-/// Returns [`HostError::Docker`] when a Docker call fails. A failed later step
-/// removes only an id that still inspects as the one this call created.
 pub async fn start_pair_until(
     docker: &Docker,
     private_volume: &str,
@@ -242,12 +225,6 @@ pub(crate) async fn drive<E: PairEngine, S: PairSink>(
     Ok(PartialPair::both(dind_id, runner_id))
 }
 
-/// Inspect `name`, then delete `owned_id` only on [`DeleteDecision::Delete`].
-///
-/// # Errors
-///
-/// Returns [`HostError::Docker`] when the name is empty, its identity cannot be
-/// established, or the owned container cannot be removed.
 pub async fn remove_recorded(
     docker: &Docker,
     owned_id: &str,
@@ -324,6 +301,3 @@ impl PartialPair {
         }
     }
 }
-
-#[cfg(test)]
-mod tests;

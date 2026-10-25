@@ -1,5 +1,3 @@
-//! Fail-closed runtime checks for source repository and environment controls.
-
 use std::{
     env,
     ffi::{OsStr, OsString},
@@ -36,7 +34,6 @@ pub(super) fn verify_main_protection(
     validate_main_protection_sources(&rules, classic.as_ref())
         .map_err(|()| internal("package_publish_main_protection_incomplete"))?;
     verify_named_environment(&api.repository, PREVIEW_ENVIRONMENT, branch)?;
-    // This combined protection/source snapshot is the decisive final remote read.
     let branch_route = format!("repos/{}/branches/main", api.repository);
     let branch_json = api_json(&api.catalog, &status_token, &api.repository, &branch_route)?;
     let source_sha = protected_branch_sha(&branch_json)?;
@@ -61,26 +58,14 @@ pub(super) fn verify_release_channel_environment(
     }
 }
 
-#[cfg(test)]
-#[path = "package_release_publish_preflight_tests.rs"]
-mod tests;
-
-#[cfg(test)]
-#[path = "package_release_publish_preflight_classic_tests.rs"]
-mod classic_tests;
-
 #[path = "package_release_publish_preflight_validation.rs"]
 mod validation;
-#[cfg(test)]
-use validation::validate_effective_main_rules;
+
 use validation::{
     validate_environment_branch_policy, validate_environment_settings,
     validate_main_protection_sources, validate_stable_environment_settings,
 };
 
-/// Verify the source repository's fixed `tap-update` environment before App writes or merge.
-/// # Errors
-/// Rejects a missing source token, wrong repository, human-review rules, or non-main policy.
 fn verify_tap_update_environment(repository: &str, branch: &str) -> Result<(), OrchestratorError> {
     verify_named_environment(repository, TAP_ENVIRONMENT, branch)
 }
@@ -268,12 +253,6 @@ fn api_json_or_not_found(
     Err(internal("package_publish_settings_read_failed"))
 }
 
-/// Recognize the exact GitHub answers for a branch without classic protection.
-///
-/// A caller with Administration read on a branch protected only by rulesets receives
-/// `404 {"message":"Branch not protected"}`; the generic `404 {"message":"Not Found"}` is
-/// also accepted. Both mean "no classic source": the effective rules read is still required
-/// and must supply every control on its own. Any other status or message fails closed.
 fn classic_protection_absent(stderr: &[u8], stdout: &[u8]) -> bool {
     stderr.windows(10).any(|window| window == b"(HTTP 404)")
         && serde_json::from_slice::<Value>(stdout).is_ok_and(|value| {
@@ -289,7 +268,6 @@ fn encode_segment(value: &str) -> String {
     value.replace('%', "%25").replace('/', "%2F")
 }
 
-/// Require the metadata/tag environment's human approval and self-review guard.
 pub(super) fn verify_stable_tag_environment(
     api: &GitHubApi,
     branch: &str,

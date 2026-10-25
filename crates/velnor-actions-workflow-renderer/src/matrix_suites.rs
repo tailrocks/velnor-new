@@ -1,5 +1,3 @@
-//! Suite matrix strategy emission for sharded Rust suite jobs.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{Job, StepKind};
@@ -7,27 +5,18 @@ use velnor_actions_contract::{Job, StepKind};
 use super::{insert_job_key, matrix_invalid};
 use crate::{RenderError, yaml::Yaml};
 
-/// Suite matrix marker: total shard count (`2..=64`).
 pub(crate) const SUITE_SHARDS_ENV: &str = "VELNOR_SUITE_SHARDS";
-/// Suite matrix marker: optional `strategy.max-parallel` cap (`1..=shards`).
 pub(crate) const SUITE_MAX_PARALLEL_ENV: &str = "VELNOR_SUITE_MAX_PARALLEL";
-/// Suite matrix marker: `strategy.fail-fast` boolean (`"true"` or `"false"`).
 pub(crate) const SUITE_FAIL_FAST_ENV: &str = "VELNOR_SUITE_FAIL_FAST";
-/// Suite job marker: `continue-on-error: true` when `"true"`.
 pub(crate) const SUITE_ALLOW_FAILURE_ENV: &str = "VELNOR_SUITE_ALLOW_FAILURE";
 
-/// Static shard matrix configuration for a sharded suite runner job.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SuiteMatrix {
-    /// Number of shards (`1..=shards`).
     pub(crate) shards: u32,
-    /// Optional `strategy.max-parallel` cap.
     pub(crate) max_parallel: Option<u32>,
-    /// Whether `strategy.fail-fast` is enabled.
     pub(crate) fail_fast: bool,
 }
 
-/// True when a job carries the sharded suite matrix marker.
 pub(crate) fn has_suite_matrix(job: &Job) -> bool {
     job.steps.iter().any(|step| {
         matches!(
@@ -40,7 +29,6 @@ pub(crate) fn has_suite_matrix(job: &Job) -> bool {
     })
 }
 
-/// Extract suite job IDs carrying the `VELNOR_SUITE_ALLOW_FAILURE` marker.
 pub(crate) fn suite_allow_failure_jobs_of(jobs: &BTreeMap<String, Job>) -> BTreeSet<String> {
     jobs.iter()
         .filter(|(_, job)| {
@@ -56,7 +44,6 @@ pub(crate) fn suite_allow_failure_jobs_of(jobs: &BTreeMap<String, Job>) -> BTree
         .collect()
 }
 
-/// Extract validated [`SuiteMatrix`] definitions from marked suite jobs.
 pub(crate) fn suite_matrices_of(
     jobs: &BTreeMap<String, Job>,
 ) -> Result<BTreeMap<String, SuiteMatrix>, RenderError> {
@@ -109,16 +96,6 @@ pub(crate) fn suite_matrices_of(
     Ok(matrices)
 }
 
-/// Attach `strategy:` blocks for jobs carrying a static [`SuiteMatrix`].
-///
-/// Inserts `strategy.fail-fast`, optional `strategy.max-parallel`, and
-/// `strategy.matrix.shard: [1..=shards]` directly before each suite job's
-/// `steps` entry.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] when the serialized document is missing its
-/// top-level `jobs` map or a referenced suite job entry.
 pub(crate) fn attach_suite_matrices(
     document: &mut Yaml,
     suite_matrices: &BTreeMap<String, SuiteMatrix>,
@@ -153,7 +130,6 @@ pub(crate) fn attach_suite_matrices(
     Ok(())
 }
 
-/// Attach `continue-on-error: true` at the job level for `allow_failure` suite jobs.
 pub(crate) fn attach_suite_allow_failure(
     document: &mut Yaml,
     allow_failure_jobs: &BTreeSet<String>,

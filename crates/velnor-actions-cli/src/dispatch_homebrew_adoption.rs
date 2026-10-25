@@ -1,5 +1,3 @@
-//! Thin public CLI adapter for native Homebrew adoption authoring.
-
 use std::{path::Path, process::ExitCode};
 
 use crate::args::HomebrewCommand;

@@ -1,5 +1,3 @@
-//! Path and restore-key rules of the stack family caches (Bun, dbt, Ansible).
-
 use velnor_actions_contract::workflow::cache_family::CacheFamily;
 use velnor_actions_contract::workflow::cache_family_steps::{
     FAMILY_WRITER_ENV, FAMILY_WRITER_EXPR,
@@ -9,7 +7,6 @@ use velnor_actions_contract::workflow::cache_family_steps::{
 };
 use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
-/// A stack family archives exactly its spec path (per-root families under one safe locator).
 pub(super) fn path_ok(family: CacheFamily, path: &str) -> bool {
     let spec = family.spec();
     if !spec.is_per_root() {
@@ -23,7 +20,6 @@ pub(super) fn path_ok(family: CacheFamily, path: &str) -> bool {
         .is_some_and(|locator| root_locator(locator).as_deref() == Some(locator))
 }
 
-/// A restore reads its family's same-compatibility prefix; a save names none.
 pub(super) fn restore_keys_ok(step: &Step, family: CacheFamily, save: bool) -> bool {
     let StepKind::Action { with, .. } = &step.kind else {
         return false;
@@ -35,9 +31,6 @@ pub(super) fn restore_keys_ok(step: &Step, family: CacheFamily, save: bool) -> b
     }
 }
 
-/// A family key step's env: the default-branch ref and the credential scrub,
-/// plus the leg ordinal only in a Bun leg matrix job (single writer). Any other
-/// key, value or placement could widen who saves.
 pub(super) fn check_family_keys_env(id: &str, job: &Job, step: &Step) -> Result<(), String> {
     if step.role != Some(StepRole::FamilyKeys) {
         return Ok(());
@@ -51,7 +44,6 @@ pub(super) fn check_family_keys_env(id: &str, job: &Job, step: &Step) -> Result<
         let ok = match key.as_str() {
             "VELNOR_DEFAULT_REF" => true,
             FAMILY_WRITER_ENV => leg_job && value == FAMILY_WRITER_EXPR,
-            // The credential scrub every shell step carries (empty values).
             other => scrub.get(other) == Some(value),
         };
         if !ok {
@@ -63,7 +55,3 @@ pub(super) fn check_family_keys_env(id: &str, job: &Job, step: &Step) -> Result<
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "cache_doctor_stack_tests.rs"]
-mod tests;

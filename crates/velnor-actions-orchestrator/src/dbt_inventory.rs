@@ -1,11 +1,3 @@
-//! Read the dbt projects `[stacks.dbt]` names from the checked-out repository.
-//!
-//! One pass over the file index yields every analysed project and the exact
-//! `dbt-fusion` version the project's Mise config declares. Generation (jobs)
-//! and planning (selection) both start here. Any adapter finding fails
-//! generation with its machine-readable code: a job is never emitted for a
-//! project that violates the stack contract.
-
 use std::collections::BTreeSet;
 use std::path::Path;
 
@@ -20,18 +12,14 @@ use super::stack_support::{declared_version, read_lock, read_text};
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
 
-/// `[tools]` keys that declare dbt-fusion (the resolver reads the same set).
 const FUSION_KEYS: [&str; 2] = ["dbt-fusion", "aqua:getdbt.com/dbt-fusion"];
 
-/// Every configured dbt project plus the declared Fusion version.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct DbtInventory {
-    /// Projects in configuration order.
     pub(crate) projects: Vec<Project>,
 }
 
 impl DbtInventory {
-    /// Repository-relative project directories, in configuration order.
     pub(crate) fn dirs(&self) -> Vec<String> {
         self.projects
             .iter()
@@ -39,11 +27,6 @@ impl DbtInventory {
             .collect()
     }
 
-    /// The inventory of the configured `[stacks.dbt]` (empty without it).
-    ///
-    /// # Errors
-    ///
-    /// The errors of [`Self::load`].
     pub(crate) fn for_config(
         root: &Path,
         index: &FileIndex,
@@ -55,12 +38,6 @@ impl DbtInventory {
         }
     }
 
-    /// Load and cross-check everything `config` names.
-    ///
-    /// # Errors
-    ///
-    /// Fails closed with `dbt_stack_findings:` followed by every adapter code,
-    /// or with a typed configuration error.
     pub(crate) fn load(
         root: &Path,
         index: &FileIndex,
@@ -123,14 +100,12 @@ fn analyze(root: &Path, dir: &str) -> Result<(Option<Project>, Vec<String>), Orc
     ))
 }
 
-/// The one Fusion version every Mise config declares, or an error.
 fn fusion_version(root: &Path, index: &FileIndex) -> Result<FusionVersion, OrchestratorError> {
     let text = declared_version(root, index, &FUSION_KEYS, "stacks.dbt")?
         .ok_or_else(|| config_error("stacks.dbt", "dbt_fusion_not_declared"))?;
     parse_fusion_version(&text).map_err(|error| config_error("stacks.dbt", error.code()))
 }
 
-/// Findings of the repository `mise.lock` for the declared Fusion version.
 fn lock_findings(root: &Path, version: FusionVersion) -> Result<Vec<String>, OrchestratorError> {
     Ok(match read_lock(root)? {
         Some(text) => check_mise_lock(&text, version)

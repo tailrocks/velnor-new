@@ -1,12 +1,3 @@
-//! Root diagnostics: lock, version, and init-stderr findings.
-//!
-//! Planning-time diagnostics over root inputs, reported as
-//! [`Finding`] values with manual guidance. Content issues never
-//! become errors and never trigger repairs: a corrupt lock stays on
-//! disk, a missing lock stays missing, and a version skew stays a
-//! recommendation until a human acts. Unreadable or malformed inputs
-//! abstain (no claim) because sibling passes own those failures.
-
 use std::path::Path;
 
 use velnor_actions_contract::{ContractError, Finding};
@@ -21,35 +12,20 @@ use crate::parser::{FileModel, MAX_DIAGNOSTIC_CHARS};
 use crate::task_identity::DigestSlot;
 use crate::version::{admits_version, toolchain_triple};
 
-/// Stable code for a provider root without committed pins.
 pub const LOCKFILE_MISSING: &str = "tofu_lockfile_missing";
-/// Stable code for lock entries no config requires.
 pub const LOCKFILE_STALE: &str = "tofu_lockfile_stale";
-/// Stable code for a `required_version` excluding the toolchain.
 pub const REQUIRED_VERSION_EXCLUDES_TOOLCHAIN: &str = "tofu_required_version_excludes_toolchain";
-/// Stable code for the S4 readonly-init stderr marker.
 pub const PROVIDER_DEPENDENCY_CHANGES: &str = "tofu_provider_dependency_changes";
 
-/// S4 stderr marker: readonly init exit 1 names changed dependencies.
 const PROVIDER_CHANGES_MARKER: &str = "Provider dependency changes detected";
-/// Cap on version claims kept per root.
 const MAX_CLAIMS_PER_ROOT: usize = 1024;
 
-/// One `required_version` literal with its supplying file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RequiredVersionClaim {
-    /// Repo-relative config path carrying the constraint.
     pub path: String,
-    /// Raw constraint text.
     pub constraint: String,
 }
 
-/// Lockfile findings for one root: missing, stale, or corrupt.
-///
-/// Reads the root lock plus the root's effective configs. An
-/// unreadable lock stays silent (its slot already blocks reuse);
-/// malformed configs abstain (units own that failure); a neutral
-/// lock on a provider-free root stays silent.
 #[must_use]
 pub fn lockfile_findings_for_root(
     root: &Path,
@@ -89,16 +65,6 @@ pub fn lockfile_findings_for_root(
     findings
 }
 
-/// Fail when a provider root lacks a committed lock.
-///
-/// Provider roots validate against the committed lock, so a missing
-/// or unreadable lock fails planning with the manual remediation:
-/// readonly init would fail it in CI otherwise. Provider-free roots
-/// pass; malformed configs abstain (units own that failure).
-///
-/// # Errors
-///
-/// Returns a `stacks.tofu.roots` config error naming the lock.
 pub fn require_committed_provider_lock(
     file: &str,
     root: &Path,
@@ -130,10 +96,6 @@ pub fn require_committed_provider_lock(
     }
 }
 
-/// `required_version` claims across one root's effective configs.
-///
-/// Malformed files contribute no claims (no table, no claim); an
-/// unreadable root yields no claims.
 #[must_use]
 pub fn required_versions_for_root(
     root: &Path,
@@ -161,11 +123,6 @@ pub fn required_versions_for_root(
     claims
 }
 
-/// Findings for claims excluding the `toolchain` triple text.
-///
-/// An unparseable toolchain abstains (no toolchain claim, no
-/// finding); unparseable constraints abstain per the admit pipeline.
-/// Findings sort by path for deterministic reports.
 #[must_use]
 pub fn version_compat_findings(claims: &[RequiredVersionClaim], toolchain: &str) -> Vec<Finding> {
     let Some(triple) = toolchain_triple(toolchain) else {
@@ -185,11 +142,6 @@ pub fn version_compat_findings(claims: &[RequiredVersionClaim], toolchain: &str)
     findings
 }
 
-/// S4 remediation for one readonly-init stderr (exit code gated).
-///
-/// Exit 1 carrying `Provider dependency changes detected` maps to a
-/// manual-remediation finding; anything else maps to nothing. The
-/// finding names the lock path the human repair touches.
 #[must_use]
 pub fn remediation_for_init_stderr(
     lock_path: &str,
@@ -215,12 +167,6 @@ pub fn remediation_for_init_stderr(
     })
 }
 
-/// `(needs_providers, provably_bare)` across the root's configs.
-///
-/// `needs` requires a `resource`, `data`, or `provider` block;
-/// `bare` additionally forbids `terraform` and `module` blocks
-/// (hidden requirements abstain both ways). `None` abstains on any
-/// unreadable or malformed config.
 fn root_shape(root: &Path, unit_path: &str, reads: &mut FileCache) -> Option<(bool, bool)> {
     let paths = effective_paths(root, unit_path, &mut *reads)?;
     let mut needs = false;
@@ -243,7 +189,6 @@ fn root_shape(root: &Path, unit_path: &str, reads: &mut FileCache) -> Option<(bo
     Some((needs, bare))
 }
 
-/// Effective config paths of one unit, or `None` when unreadable.
 fn effective_paths(root: &Path, unit_path: &str, reads: &mut FileCache) -> Option<Vec<String>> {
     let unit = if unit_path == "." { "" } else { unit_path };
     let collected = reads.unit_files(root, unit).ok()?;
@@ -259,12 +204,10 @@ fn effective_paths(root: &Path, unit_path: &str, reads: &mut FileCache) -> Optio
     Some(effective_set(&configs))
 }
 
-/// Parsed model of one config path, or `None` when unusable.
 fn parse_model(root: &Path, path: &str, reads: &mut FileCache) -> Option<FileModel> {
     reads.model_for(root, path).ok().flatten()
 }
 
-/// Missing-lock finding: commit pins manually, never auto-created.
 fn missing_finding(lock: &str) -> Finding {
     Finding {
         code: LOCKFILE_MISSING.to_owned(),
@@ -282,7 +225,6 @@ fn missing_finding(lock: &str) -> Finding {
     }
 }
 
-/// Stale-lock finding naming the unrequired entries (capped).
 fn stale_finding(lock: &str, providers: &[String]) -> Finding {
     let observed: String = providers
         .join(",")
@@ -305,7 +247,6 @@ fn stale_finding(lock: &str, providers: &[String]) -> Finding {
     }
 }
 
-/// Version-exclusion finding: align the constraint with the toolchain.
 fn excludes_finding(claim: &RequiredVersionClaim, toolchain: &str) -> Finding {
     Finding {
         code: REQUIRED_VERSION_EXCLUDES_TOOLCHAIN.to_owned(),

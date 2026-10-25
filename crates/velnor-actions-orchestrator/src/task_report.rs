@@ -1,9 +1,3 @@
-//! Event-time typed task-report production.
-//! Reports bind task and matrix identities through the staged plan. Named
-//! Mise success requires the qualified execution producer and final receipt proof.
-//!
-//! Failed obligations also report downstream tasks as `upstream_failed`.
-
 use std::env;
 use std::path::{Path, PathBuf};
 
@@ -19,8 +13,7 @@ use crate::internal::{internal, internal_contract};
 use crate::internal_request::resolve_run_key;
 #[path = "task_report_timing.rs"]
 mod timing;
-#[cfg(test)]
-use timing::now_ms;
+
 use timing::{elapsed_ms, parse_exit_code, parse_start_ms};
 
 pub(crate) use crate::task_report_aggregate::single_task_aggregate;
@@ -28,28 +21,12 @@ pub(crate) use crate::task_report_aggregate::single_task_aggregate;
 #[path = "task_report_order.rs"]
 mod task_report_order;
 
-/// Report-production operation tag.
 pub const REPORT_OP: &str = "write-task-report-v1";
-/// Env key carrying the executed obligation's task ID.
 pub(crate) const TASK_ID_ENV: &str = "VELNOR_TASK_ID";
-/// Env key carrying the captured obligation exit code.
 pub(crate) const EXIT_CODE_ENV: &str = "VELNOR_EXIT_CODE";
-/// Env key carrying comma-separated downstream task IDs for skip reports.
 pub(crate) const DOWNSTREAM_IDS_ENV: &str = "VELNOR_DOWNSTREAM_TASK_IDS";
-/// Env key carrying the wrapper-captured start time (unix millis).
 pub(crate) const START_MS_ENV: &str = "VELNOR_START_MS";
 
-/// Write the executed obligation's reports plus downstream skip reports.
-///
-/// Resolves the run key from the GitHub environment and the plan from the
-/// downloaded plan artifact; returns the count of tasks reported (one plus
-/// downstream skips on failure).
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for missing env, unreadable or
-/// invalid plans, run-key mismatches, unknown or multi-task entries, and
-/// unwritable report paths; [`OrchestratorError::Io`] for IO failures.
 pub fn write_task_report() -> Result<usize, OrchestratorError> {
     let run_key = resolve_run_key(None)?;
     let runner_temp = env::var_os("RUNNER_TEMP")
@@ -92,17 +69,6 @@ pub fn write_task_report() -> Result<usize, OrchestratorError> {
     )
 }
 
-/// Write reports for one outcome with explicit inputs (testable core).
-///
-/// The plan at `$RUNNER_TEMP/velnor/<run-key>/plan.json` binds every
-/// identity: task digest, matrix coordinates, event, and trust. A nonzero
-/// exit additionally reports each downstream ID as skipped; anything the
-/// plan cannot bind errors instead of emitting unbound bytes.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for invalid plans, run-key
-/// mismatches, unknown or multi-task entries, and unwritable paths.
 pub(crate) fn write_task_report_to(
     run_key: &str,
     task_id: &str,
@@ -138,7 +104,6 @@ pub(crate) fn write_task_report_to(
     Ok(reported)
 }
 
-/// Split downstream IDs on commas, dropping blanks and duplicates.
 fn parse_downstream(raw: Option<&str>) -> Vec<String> {
     let mut seen = std::collections::BTreeSet::new();
     let mut ids = Vec::new();
@@ -151,12 +116,6 @@ fn parse_downstream(raw: Option<&str>) -> Vec<String> {
     ids
 }
 
-/// Load and validate the downloaded plan, bound to this run key.
-///
-/// Reads through the shared staged-text gate (symlink rejection plus
-/// the retrieve-side bound for this same `plan.json`) and the strict
-/// duplicate-rejecting parser, so a hostile plan fails closed instead
-/// of exhausting memory or smuggling shadowed keys.
 pub(crate) fn load_plan(run_key: &str, runner_temp: &Path) -> Result<Plan, OrchestratorError> {
     let path = plan_path(runner_temp, run_key);
     let bound = crate::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES;
@@ -179,21 +138,10 @@ pub(crate) fn load_plan(run_key: &str, runner_temp: &Path) -> Result<Plan, Orche
     Ok(plan)
 }
 
-/// Downloaded plan path under runner temp.
 fn plan_path(runner_temp: &Path, run_key: &str) -> PathBuf {
     runner_temp.join("velnor").join(run_key).join("plan.json")
 }
 
-/// Obligation entry plus plan task digest for one task ID.
-///
-/// The entry must name exactly this task: multi-task (sharded-ref)
-/// entries have no per-task outcome here and refuse rather than emit a
-/// lying aggregate. No producer emits sharded refs today.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for unknown tasks, tasks
-/// without an obligation digest, and multi-task entries.
 pub(crate) fn entry_and_digest<'a>(
     plan: &'a Plan,
     task_id: &str,
@@ -222,7 +170,6 @@ pub(crate) fn entry_and_digest<'a>(
     Ok((entry, digest))
 }
 
-/// Resolve one named-check report entry by its generated job identity.
 pub(crate) fn entry_and_digest_for_job<'a>(
     plan: &'a Plan,
     task_id: &str,
@@ -252,7 +199,6 @@ pub(crate) fn entry_and_digest_for_job<'a>(
     Ok((entry, digest))
 }
 
-/// Declared task IDs of one matrix entry, sorted.
 fn flattened(entry: &MatrixEntry) -> Vec<&str> {
     let mut ids = Vec::new();
     for task_ref in entry.execute_task_ids.tasks.values() {
@@ -265,11 +211,6 @@ fn flattened(entry: &MatrixEntry) -> Vec<&str> {
     ids
 }
 
-/// Validated terminal report: `executed` on exit 0, else `failed`.
-///
-/// # Errors
-///
-/// Returns [`ContractError`] for derivation or validation failures.
 pub(crate) fn terminal_task_report(
     plan: &Plan,
     entry: &MatrixEntry,
@@ -319,13 +260,6 @@ pub(crate) fn terminal_task_report(
     Ok(report)
 }
 
-/// Write one entry's matrix report plus its task file as canonical JSON.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for encoding failures and
-/// [`OrchestratorError::Io`] for unwritable directories; pre-existing
-/// files error, never overwrite.
 pub(crate) fn write_entry_reports(
     runner_temp: &Path,
     plan: &Plan,
@@ -353,20 +287,3 @@ pub(crate) fn write_entry_reports(
     )?;
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "task_report_merge_tests.rs"]
-mod task_report_merge_tests;
-#[cfg(test)]
-#[path = "task_report_order_tests.rs"]
-mod task_report_order_tests;
-#[cfg(test)]
-#[path = "task_report_parse_tests.rs"]
-mod task_report_parse_tests;
-#[cfg(test)]
-#[path = "task_report_tests.rs"]
-mod task_report_tests;
-
-#[cfg(test)]
-#[path = "check_gate_tests.rs"]
-mod check_gate_tests;

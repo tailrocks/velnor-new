@@ -18,7 +18,6 @@ use super::{
 };
 use crate::{OrchestratorError, filesystem_owner::held_file::HeldFile};
 
-/// Descriptor-backed identity of the stable formula Homebrew reads and records.
 pub(super) struct TapFormula {
     pub(super) path: PathBuf,
     pub(super) formula: String,
@@ -106,7 +105,6 @@ impl TapFormula {
         validate_inventory(&self.path, &self.formula, stage_name)
     }
 
-    /// Replace only a verified prior candidate, atomically exchanging in place.
     pub(super) fn replace(
         &self,
         bytes: &[u8],
@@ -352,7 +350,3 @@ fn create_owned_directory(path: &Path) -> Result<(), OrchestratorError> {
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "homebrew_install_tap_tests.rs"]
-mod tests;

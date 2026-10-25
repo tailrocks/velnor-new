@@ -1,5 +1,3 @@
-//! Create and start one runner after journaling its launch intent.
-
 use std::future::Future;
 
 use velnor_runner_github::{EncodedJit, SessionError, Transport, jit, jit_request};
@@ -14,19 +12,17 @@ use super::super::mint_origin::MintOrigin;
 use super::super::{Drive, Lane};
 use super::{acknowledge, hold, map_journal, mark_done};
 
-/// Inputs for the JIT and worker effects after intent was recorded.
 pub(super) struct Request<'a> {
-    /// Current session tokens and scale-set identity.
     pub(super) ctx: &'a Drive,
-    /// Queue batch to acknowledge after the worker starts, if any.
+
     pub(super) batch: Option<&'a velnor_runner_github::ParsedBatch>,
-    /// Durable launch journal.
+
     pub(super) journal: &'a Journal,
-    /// Existing intent row identifier.
+
     pub(super) id: i64,
-    /// Runner name submitted to the JIT endpoint.
+
     pub(super) name: &'a str,
-    /// Whether `AcquireJobs` already accepted this offered job.
+
     pub(super) origin: MintOrigin,
 }
 

@@ -1,5 +1,3 @@
-//! Installation scope and authenticated bot identity checks.
-
 use super::github::{
     AppResponse, InstallationRepositoriesResponse, RepositoryResponse, UserResponse,
 };

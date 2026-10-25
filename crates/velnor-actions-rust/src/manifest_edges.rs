@@ -1,17 +1,5 @@
-//! Base-manifest edge extraction: path dependencies from TOML text.
-//!
-//! The orchestrator supplies base-revision manifest bytes (git plumbing
-//! stays there); Cargo table/section/path grammar is interpreted here.
-//! Edges resolve to head package IDs so removed or renamed edges still
-//! select their head consumers.
-
 use super::metadata_edges::{DepKind, LocalEdge};
 
-/// Path edges of one base manifest, resolved to head package IDs.
-///
-/// # Errors
-///
-/// Returns the TOML parse failure for malformed manifest text.
 pub fn manifest_edges(
     text: &str,
     from: &str,
@@ -40,7 +28,6 @@ pub fn manifest_edges(
     Ok(edges)
 }
 
-/// Dependency tables with their edge kinds.
 fn sections() -> [(&'static str, DepKind); 3] {
     [
         ("dependencies", DepKind::Normal),
@@ -49,7 +36,6 @@ fn sections() -> [(&'static str, DepKind); 3] {
     ]
 }
 
-/// Path-dep edges of one dependency table.
 fn dep_edges(
     deps: &toml::Table,
     from: &str,
@@ -89,7 +75,6 @@ fn dep_edges(
     edges
 }
 
-/// Join a manifest directory with a dep path, resolving `.` and `..`.
 fn join_dir(dir: &str, path: &str) -> String {
     let mut parts: Vec<&str> = dir.split('/').filter(|seg| !seg.is_empty()).collect();
     for seg in path.split('/') {

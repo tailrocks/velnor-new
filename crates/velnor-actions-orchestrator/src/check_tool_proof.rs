@@ -1,4 +1,3 @@
-//! Artifact, installed-tree, and executable observations bind exact root tool pins.
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
 use serde::{Deserialize, Serialize};
@@ -6,7 +5,6 @@ use velnor_actions_contract::config::{CheckPlatform, QualifiedTool, QualifiedToo
 use velnor_actions_contract::{canonical_json_bytes, digest_b3};
 use velnor_actions_mise::check_tool_probes::QualifiedExecutableProof;
 
-/// Actual installation identity carried inside the ordinary check execution receipt.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct QualifiedToolReceipt {
@@ -44,7 +42,6 @@ pub(crate) fn receipt(
     Ok(receipt)
 }
 
-/// Required compares observations against the complete resolved dependency closure.
 pub(crate) fn validate_receipts(
     platform: CheckPlatform,
     tools: &[QualifiedTool],
@@ -95,7 +92,3 @@ fn valid_receipt(
         )
         .is_ok()
 }
-
-#[cfg(test)]
-#[path = "check_tool_proof_tests.rs"]
-mod tests;

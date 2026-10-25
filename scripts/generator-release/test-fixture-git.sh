@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Causal fixture authority regression, including Git's native config hooks.
 source "$ROOT/scripts/generator-release/fixture-git.sh"
 
 test_fixture_git_isolation() (
@@ -9,7 +8,6 @@ test_fixture_git_isolation() (
   export VELNOR_FIXTURE_POISON_MARKER="$marker"
   command git config --file "$config" hook.fixture-poison.event pre-commit
   command git config --file "$config" hook.fixture-poison.command 'printf poisoned >> "$VELNOR_FIXTURE_POISON_MARKER"; exit 73'
-  # Both file config and command-scope config must be absent in scratch Git.
   export GIT_CONFIG_GLOBAL="$config" GIT_CONFIG_SYSTEM="$config"
   export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=hook.fixture-poison.event
   export GIT_CONFIG_VALUE_0=pre-commit GIT_CONFIG_KEY_1=hook.fixture-poison.command

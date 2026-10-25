@@ -1,6 +1,4 @@
 #!/bin/bash
-# DinD publishes /run/docker.sock after its private daemon is ready.
-# The listener must not accept a job before that socket exists.
 set -euo pipefail
 
 sock="${WAIT_DOCKER_SOCK:-/run/docker.sock}"

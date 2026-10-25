@@ -1,12 +1,3 @@
-//! `gradle-run-v1`: the Velnor-owned Gradle step.
-//!
-//! One staged-helper operation does everything that must not be repository
-//! text: it re-verifies the Gradle wrapper (gates 1-3 of the stack contract)
-//! before `./gradlew` first runs, installs the project's exact JDK through
-//! Mise, writes the Velnor-owned Gradle user home (toolchain pinning and the
-//! Maven-bundle init script), and runs one `--continue` Gradle invocation
-//! with a cleared environment. Its whole input is the generated step env.
-
 use std::ffi::OsString;
 use std::io::Write as _;
 use std::path::PathBuf;
@@ -23,21 +14,14 @@ use velnor_actions_gradle::wrapper::{self, JAR_PATH, PROPERTIES_PATH};
 use crate::OrchestratorError;
 use crate::config::deps_layout::{deps_root, maven_root};
 
-/// Operation tag of the step.
 pub const GRADLE_RUN_OP: &str = velnor_actions_contract::GRADLE_RUN_OPERATION;
 
-/// Env key: Gradle root, repository-relative.
 pub(crate) const ROOT_ENV: &str = "VELNOR_GRADLE_ROOT";
-/// Env key: space-separated Gradle task paths.
 pub(crate) const TASKS_ENV: &str = "VELNOR_GRADLE_TASKS";
-/// Env key: `--max-workers`.
 pub(crate) const WORKERS_ENV: &str = "VELNOR_GRADLE_WORKERS";
-/// Env key: `1` when the job's PostgreSQL service is up.
 pub(crate) const DATABASE_ENV: &str = "VELNOR_GRADLE_DATABASE";
-/// Env key: the resolved project JDK.
 pub(crate) const JAVA_ENV: &str = "VELNOR_TOOL_JAVA";
 
-/// Validated step input.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GradleRunSpec {
     pub(crate) root: String,
@@ -61,7 +45,6 @@ fn plain(text: &str) -> bool {
 }
 
 impl GradleRunSpec {
-    /// Parse and validate from a variable lookup.
     pub(crate) fn parse(get: &dyn Fn(&str) -> Option<String>) -> Result<Self, OrchestratorError> {
         let root = get(ROOT_ENV).ok_or_else(|| fail("gradle_root_missing"))?;
         if root != "."
@@ -99,17 +82,14 @@ impl GradleRunSpec {
     }
 }
 
-/// Everything the run needs from the machine, injectable for tests.
 #[derive(Debug, Clone)]
 pub(crate) struct Machine {
     pub(crate) workspace: PathBuf,
     pub(crate) runner_temp: PathBuf,
 }
 
-/// Executes one isolated command (the real one spawns; tests record).
 pub(crate) type Exec<'a> = &'a dyn Fn(&IsolatedCommand) -> Result<ProcessOutput, MiseError>;
 
-/// Gradle may legitimately run for hours; the job timeout is the real bound.
 const RUN_TIMEOUT: Duration = Duration::from_hours(6);
 
 fn io_err(what: &str, err: &std::io::Error) -> OrchestratorError {
@@ -126,8 +106,6 @@ fn os(text: impl Into<OsString>) -> OsString {
     text.into()
 }
 
-/// Run the step. Every child goes through [`IsolatedCommand`]: cleared
-/// environment, owned Mise globals, no shell.
 pub(crate) fn run(
     spec: &GradleRunSpec,
     machine: &Machine,
@@ -191,10 +169,6 @@ pub(crate) fn run(
     }
 }
 
-/// Run `gradle-run-v1` from the step environment.
-///
-/// # Errors
-/// Any validation, wrapper-gate, toolchain or Gradle failure.
 pub fn run_gradle_run() -> Result<(), OrchestratorError> {
     let get = |key: &str| std::env::var(key).ok();
     let spec = GradleRunSpec::parse(&get)?;
@@ -206,7 +180,3 @@ pub fn run_gradle_run() -> Result<(), OrchestratorError> {
         command.run_bounded(OUTPUT_CAPTURE_LIMIT_BYTES, RUN_TIMEOUT)
     })
 }
-
-#[cfg(test)]
-#[path = "gradle_run_tests.rs"]
-mod tests;

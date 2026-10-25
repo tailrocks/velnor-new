@@ -1,12 +1,3 @@
-//! Read the Ansible roots `[stacks.ansible]` names from the checked-out repository.
-//!
-//! One pass over the file index yields every analysed root: its sorted
-//! top-level playbooks and the digest of its `ansible.cfg`. Every adapter
-//! finding fails generation with its machine-readable code, so a job is never
-//! emitted for a root that violates the stack contract (vault files, an
-//! unhashed or disagreeing Python lock, unpinned collections, unsafe
-//! `ansible.cfg` keys, a `mise.lock` without checksums for uv and Python).
-
 use std::path::Path;
 
 use velnor_actions_ansible::locked::{PYTHON, UV};
@@ -24,24 +15,17 @@ use crate::config::CONFIG_REL;
 use crate::generator::sha256_hex;
 use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoBytes, read_repo_bytes};
 
-/// `ansible.cfg` of a root.
 pub(crate) const CFG_NAME: &str = "ansible.cfg";
-/// Collection pins of a root.
 pub(crate) const REQUIREMENTS_NAME: &str = "requirements.yaml";
 
-/// One analysed root.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AnsibleRoot {
-    /// Repository-relative directory (`.` for the repository root).
     pub(crate) dir: String,
-    /// Sorted top-level playbooks, repository-relative.
     pub(crate) playbooks: Vec<String>,
-    /// SHA-256 of the root's `ansible.cfg`.
     pub(crate) cfg_sha256: String,
 }
 
 impl AnsibleRoot {
-    /// Generated job id (`ansible-<slug>`).
     pub(crate) fn job_id(&self) -> String {
         format!(
             "{}{}",
@@ -50,18 +34,14 @@ impl AnsibleRoot {
         )
     }
 
-    /// Display name (`Ansible / <dir>`).
     pub(crate) fn job_name(&self) -> String {
         format!("Ansible / {}", self.dir)
     }
 }
 
-/// Every configured Ansible root.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct AnsibleInventory {
-    /// Roots in configuration order.
     pub(crate) roots: Vec<AnsibleRoot>,
-    /// Files every root job reads: the Python requirements and the inventory.
     pub(crate) shared: Vec<String>,
 }
 
@@ -74,11 +54,6 @@ fn join(dir: &str, name: &str) -> String {
 }
 
 impl AnsibleInventory {
-    /// The inventory of the configured `[stacks.ansible]` (empty without it).
-    ///
-    /// # Errors
-    ///
-    /// Fails closed with `ansible_stack_findings:` followed by every code.
     pub(crate) fn for_config(
         root: &Path,
         index: &FileIndex,
@@ -128,7 +103,6 @@ impl AnsibleInventory {
     }
 }
 
-/// Python lock, Mise declarations and `mise.lock` rows shared by every root.
 fn tool_findings(
     root: &Path,
     index: &FileIndex,
@@ -191,7 +165,6 @@ fn tool_findings(
     Ok(findings)
 }
 
-/// Text files below `dir`, `(path, text)`; non-UTF-8 and oversize files are skipped.
 fn root_files(root: &Path, index: &FileIndex, dir: &str) -> Vec<(String, String)> {
     let mut out = Vec::new();
     for file in index

@@ -1,5 +1,3 @@
-//! Structural validation for the canonical package-release receipt.
-
 use std::collections::BTreeSet;
 
 use crate::{

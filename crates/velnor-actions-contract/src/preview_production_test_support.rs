@@ -1,5 +1,3 @@
-//! Independent six-pair request fixtures, not a reduced package plan.
-
 use super::*;
 use crate::package_release::{PackageReleaseChannel, PackageReleasePayloadFormat};
 use crate::{PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlanProduct};

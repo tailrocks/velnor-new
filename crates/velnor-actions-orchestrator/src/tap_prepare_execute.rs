@@ -1,5 +1,3 @@
-//! Authenticated runner-temp admission for native tap preparation.
-
 use super::{HomebrewTapPreparationProof, OrchestratorError, internal, prepare_homebrew_tap};
 use std::{env, fs, path::PathBuf};
 use velnor_actions_contract::{canonical_json_bytes, config::HomebrewTapConfig, parse_strict_json};
@@ -8,16 +6,8 @@ use velnor_actions_contract::{canonical_json_bytes, config::HomebrewTapConfig, p
 mod admission;
 pub use admission::{ADMIT_HOMEBREW_TAP_OP, admit_homebrew_tap_from_env};
 
-/// Private CLI operation selecting native Homebrew tap preparation.
 pub const PREPARE_HOMEBREW_TAP_OP: &str = "prepare-homebrew-tap-v1";
 
-/// Execute tap preparation from the fixed, upstream-verified receipt handoff.
-///
-/// A preceding source-free admission authenticates the retained signer artifact
-/// against the plan and workflow identity, then exits. This token-free boundary checks
-/// source configuration, captured tap main, canonical policy, and formula bytes.
-/// # Errors
-/// Rejects missing or malformed request context and every preparation failure.
 pub fn prepare_homebrew_tap_from_env() -> Result<HomebrewTapPreparationProof, OrchestratorError> {
     admission::reject_credentials()?;
     let deadline = admission::deadline()?;

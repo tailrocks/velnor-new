@@ -1,4 +1,3 @@
-//! Source-free stable selection: fresh dispatch or authenticated original-run rerun.
 use super::shared::acquire;
 use super::{ConsumerReleaseSpec, RenderError, Yaml, steps};
 use crate::{

@@ -1,5 +1,3 @@
-//! Variant-dispatched workflow-task policies and job insertion.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Job, Step, VelnorConfig};
@@ -45,7 +43,6 @@ pub(crate) mod stack_family_cache;
 #[path = "stack_support.rs"]
 pub(crate) mod stack_support;
 
-/// Resolve every declared task variant into one sorted policy inventory.
 pub(crate) fn policies(
     root: &std::path::Path,
     config: &VelnorConfig,
@@ -114,7 +111,6 @@ pub(crate) fn policies(
     Ok(workflow_tasks)
 }
 
-/// Insert task jobs from the single validated variant-dispatched inventory.
 pub(crate) fn insert_jobs(
     jobs: &mut BTreeMap<String, Job>,
     tasks: &[WorkflowTaskPolicy],

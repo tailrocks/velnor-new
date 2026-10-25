@@ -1,4 +1,3 @@
-//! Channel-derived task identity; source admission remains a separate authority.
 use crate::{OrchestratorError, internal::internal};
 use velnor_actions_contract::{
     PackageReleasePlan, package_release::PackageReleaseChannel, preview_identity::PreviewIdentity,

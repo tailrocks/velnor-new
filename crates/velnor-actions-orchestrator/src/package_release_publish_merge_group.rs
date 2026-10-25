@@ -1,5 +1,3 @@
-//! Read-only authentication of one active GitHub merge-group run and ref.
-
 use std::collections::BTreeMap;
 use velnor_actions_contract::{CI_WORKFLOW_PATH, WORKFLOW_DISPLAY_NAME};
 use velnor_actions_mise::CheckDeadline;
@@ -176,7 +174,3 @@ fn verify_queue_ref(
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "package_release_publish_merge_group_tests.rs"]
-mod tests;

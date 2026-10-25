@@ -1,5 +1,3 @@
-//! Canonical journal file identity checks.
-
 use std::fs::{self, File, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

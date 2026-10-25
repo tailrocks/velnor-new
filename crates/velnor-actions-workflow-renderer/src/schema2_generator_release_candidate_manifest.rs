@@ -1,5 +1,3 @@
-//! Same-run candidate manifest produced before native qualification.
-
 use crate::yaml::Yaml;
 use velnor_actions_contract::JobTimeout;
 
@@ -15,7 +13,6 @@ const NEEDS: [&str; 4] = [
     "build-macos-intel",
 ];
 
-/// Build and upload the canonical manifest consumed by qualification and attestation.
 pub(super) fn job(
     hosted: Yaml,
     pins: &ProductReleasePins,

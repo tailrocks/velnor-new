@@ -1,40 +1,20 @@
-//! Fixed shell and jq text for the publication workflow.
-//!
-//! Lives with the renderer because it is generated-workflow content, not
-//! orchestrator behavior: nothing here runs at generation time.
-//!
-//! Every script is a constant template filled only with values the
-//! contract already validated (artifact ids, repo-relative paths, a branch
-//! name, a repository slug), so no config text can introduce shell
-//! syntax. GitHub API reads go through the pinned `gh` function; the jq
-//! programs end in `error(...)`, which makes `gh api --jq` exit non-zero.
-
 use velnor_actions_contract::config::VersionSource;
 
-/// Maven bundle publication scripts (hard decision 8).
 #[path = "publish_maven_scripts.rs"]
 pub mod maven;
-/// npm publication scripts (hard decision 8).
 #[path = "publish_npm_scripts.rs"]
 pub mod npm;
-/// Declared Sigstore-bundle provenance scripts (`[publish] provenance`).
 #[path = "publish_provenance_scripts.rs"]
 pub mod provenance;
 
-/// Pattern a strict `X.Y.Z` version must match (POSIX ERE, whole line).
 const SEMVER_ERE: &str = r"(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*)){2}";
-/// Pattern an artifact id must match (POSIX ERE, whole line).
 const ID_ERE: &str = "[a-z][a-z0-9]*(-[a-z0-9]+)*";
 
-/// Define the `gh` shell function through the pinned Mise tool.
-///
-/// `prefix` is the Mise argv up to and including `gh`.
 #[must_use]
 pub fn gh_function(prefix: &[String]) -> String {
     format!("gh() {{ {} \"$@\"; }}", prefix.join(" "))
 }
 
-/// Parse the pushed tag, require an exact declared artifact, write outputs.
 #[must_use]
 pub fn parse_tag_script(repository: &str, artifacts: &[&str]) -> String {
     let declared = artifacts.join("|");
@@ -48,7 +28,6 @@ pub fn parse_tag_script(repository: &str, artifacts: &[&str]) -> String {
     )
 }
 
-/// Require an annotated tag whose object points at the pushed commit.
 #[must_use]
 pub fn annotated_tag_script(gh: &str) -> String {
     format!(
@@ -60,7 +39,6 @@ pub fn annotated_tag_script(gh: &str) -> String {
     )
 }
 
-/// Require the tagged commit to be reachable from the default branch.
 #[must_use]
 pub fn ancestry_script(gh: &str, branch: &str) -> String {
     format!(
@@ -70,7 +48,6 @@ pub fn ancestry_script(gh: &str, branch: &str) -> String {
     )
 }
 
-/// Require a successful `Required` check run, from GitHub Actions, at the commit.
 #[must_use]
 pub fn required_script(gh: &str) -> String {
     format!(
@@ -80,7 +57,6 @@ pub fn required_script(gh: &str) -> String {
     )
 }
 
-/// Require the manifest at the tagged commit to carry the tag's version.
 #[must_use]
 pub fn manifest_script(gh: &str, source: VersionSource, path: &str) -> String {
     let program = manifest_program(source);
@@ -90,16 +66,11 @@ pub fn manifest_script(gh: &str, source: VersionSource, path: &str) -> String {
     )
 }
 
-/// Require the tag version to equal an inline config literal.
 #[must_use]
 pub fn inline_version_script(version: &str) -> String {
     format!("set -eu; [ \"${{GITHUB_REF_NAME##*-v}}\" = '{version}' ]")
 }
 
-/// jq program reading the version from a contents-API document.
-///
-/// Mirrors `VersionSource::read` line for line, then compares the result
-/// with `env.VELNOR_TAG_VERSION`; every miss ends in `error(...)`.
 #[must_use]
 pub fn manifest_program(source: VersionSource) -> String {
     let compare = r#"if . == env.VELNOR_TAG_VERSION then empty else error("version_mismatch") end"#;
@@ -117,11 +88,6 @@ pub fn manifest_program(source: VersionSource) -> String {
     format!("{found} | {compare}")
 }
 
-/// Build a deterministic gzip tarball and its SHA-256 sidecar.
-///
-/// Sorted entries, zero mtime, root ownership, normalized modes, no gzip
-/// name or timestamp: identical inputs give identical bytes. Symlinks and
-/// missing paths fail the build.
 #[must_use]
 pub fn pack_script(id: &str, paths: &[String]) -> String {
     let list = paths.join(" ");
@@ -135,15 +101,11 @@ pub fn pack_script(id: &str, paths: &[String]) -> String {
     )
 }
 
-/// Re-verify the checksum sidecar against the downloaded tarball.
 #[must_use]
 pub fn verify_checksum_script(id: &str) -> String {
     verify_sidecar_script(&format!("{id}-$ver.tar.gz"))
 }
 
-/// Re-verify `file`'s `.sha256` sidecar; the directory holds exactly the two files.
-///
-/// `file` may use the shell variable `$ver` (the tag's version).
 #[must_use]
 pub fn verify_sidecar_script(file: &str) -> String {
     format!(
@@ -152,28 +114,17 @@ pub fn verify_sidecar_script(file: &str) -> String {
     )
 }
 
-/// Upload the bundle as immutable assets of the tag's GitHub release.
 #[must_use]
 pub fn upload_script(gh: &str, id: &str) -> String {
     upload_assets_script(gh, &format!("{id}-$ver.tar.gz"))
 }
 
-/// Upload `file` and its `.sha256` from the bundle directory as immutable
-/// assets of the tag's GitHub release.
 #[must_use]
 pub fn upload_assets_script(gh: &str, file: &str) -> String {
     let names = [file.to_owned(), format!("{file}.sha256")];
     upload_files_script(gh, "$RUNNER_TEMP/bundle", &names, "Release asset bundle")
 }
 
-/// Upload `names` from `dir` as immutable assets of the tag's GitHub release.
-///
-/// A release that already holds an asset is never overwritten: the existing
-/// asset is downloaded and compared by sha256, an identical one is skipped
-/// and a different one fails the job. A missing release is created with
-/// every file at once (`--verify-tag`), so an immutable release is complete
-/// when it appears. `dir` is a fixed runner-temp directory, `names` are
-/// validated file names that may use `$ver`, and `notes` is fixed text.
 #[must_use]
 pub fn upload_files_script(gh: &str, dir: &str, names: &[String], notes: &str) -> String {
     let quoted: Vec<String> = names.iter().map(|name| format!("\"{name}\"")).collect();
@@ -204,7 +155,6 @@ pub fn upload_files_script(gh: &str, dir: &str, names: &[String], notes: &str) -
     )
 }
 
-/// Require a push of the default branch in the generation-time repository.
 #[must_use]
 pub fn branch_push_script(repository: &str, branch: &str) -> String {
     format!(
@@ -213,13 +163,6 @@ pub fn branch_push_script(repository: &str, branch: &str) -> String {
     )
 }
 
-/// Poll the newest `Required` check run at the commit until it settles.
-///
-/// The default-branch push starts CI and this workflow together, so the
-/// verdict may not exist yet: pending (absent or incomplete) sleeps and
-/// retries, a settled non-success fails at once, and exhausting the budget
-/// fails closed. `attempts` and `pause_seconds` are literals chosen by the
-/// caller; the job timeout must exceed their product.
 #[must_use]
 pub fn required_wait_script(gh: &str, attempts: u16, pause_seconds: u16) -> String {
     let rounds: Vec<String> = (1..=attempts).map(|n| n.to_string()).collect();

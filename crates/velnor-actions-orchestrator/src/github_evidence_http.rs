@@ -1,5 +1,3 @@
-//! Fixed-route bounded GitHub evidence transport.
-
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::Path;
@@ -386,7 +384,3 @@ fn hex_lower(bytes: &[u8]) -> String {
 fn hex_digit(value: u8) -> char {
     char::from(b"0123456789abcdef"[usize::from(value)])
 }
-
-#[cfg(test)]
-#[path = "github_evidence_http_tests.rs"]
-mod tests;

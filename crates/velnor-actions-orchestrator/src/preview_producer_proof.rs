@@ -1,5 +1,3 @@
-//! Proof ownership survives every enclosing operation deadline check.
-
 use super::checkpoint;
 use crate::{OrchestratorError, internal::internal};
 use std::{
@@ -11,7 +9,6 @@ use velnor_actions_mise::CheckDeadline;
 
 #[derive(Default)]
 pub(super) struct ProofGuard {
-    // Retaining the handle also prevents inode reuse while cleanup is armed.
     created: Option<(PathBuf, fs::File)>,
 }
 
@@ -55,7 +52,6 @@ pub(super) fn with_proof_ownership(
         guard.cleanup()?;
         return Err(error);
     }
-    // Only the entrypoint's fully checked outer operation may disarm cleanup.
     guard.created = None;
     Ok(())
 }

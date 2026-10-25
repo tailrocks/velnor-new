@@ -1,12 +1,6 @@
 use super::PackageReleaseReceipt;
 use crate::ContractError;
 
-/// Parse, validate, and require byte-for-byte canonical v2 JSON.
-///
-/// # Errors
-///
-/// Rejects oversized, invalid UTF-8, duplicate-key, unknown-field, malformed,
-/// noncanonical, or semantically invalid receipts.
 pub fn parse_package_release_receipt(bytes: &[u8]) -> Result<PackageReleaseReceipt, ContractError> {
     let value = crate::strict_json::parse_strict_json_bytes(
         bytes,

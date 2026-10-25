@@ -1,75 +1,43 @@
-//! Supplementary release facts absent from the retained metadata graph.
-//!
-//! Parses the same authoritative `cargo metadata` document for `publish`
-//! state, dependency requirements, sources, and registry restrictions.
-//! Package identity still comes from [`WorkspaceRecord`](crate::metadata::WorkspaceRecord);
-//! the publication graph cross-checks every resolved path edge against it.
-
 use std::collections::BTreeMap;
 
 use crate::metadata::MetadataError;
 use crate::metadata_edges::DepKind;
 use crate::release_error::ReleaseError;
 
-/// Declared `publish` state of one package.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PublishSetting {
-    /// No restriction (the default registry).
     Open,
-    /// Restricted to the named registries (sorted, deduped).
     Registries(Vec<String>),
-    /// `publish = false`.
     Forbidden,
 }
 
-/// Provenance of one dependency declaration.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DepSource {
-    /// Registry dependency (default or `registry+` source).
     Registry,
-    /// Git dependency (`git+` source).
     Git,
-    /// Local path dependency.
     Path,
-    /// Any other source value (rejected at graph time).
     Other(String),
 }
 
-/// One dependency declaration with packaging-relevant facts.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DepFact {
-    /// Cargo package id of the dependent.
     pub from: String,
-    /// Dependency name as resolved to the real package.
     pub name: String,
-    /// Version requirement text.
     pub req: String,
-    /// Dependency kind.
     pub kind: DepKind,
-    /// Whether the edge is optional.
     pub optional: bool,
-    /// Target filter when target-specific.
     pub target: Option<String>,
-    /// Explicit registry restriction, if any.
     pub registry: Option<String>,
-    /// Dependency provenance.
     pub source: DepSource,
-    /// Resolved package id for path dependencies.
     pub to: Option<String>,
 }
 
-/// Supplementary facts keyed by Cargo package id.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReleaseFacts {
-    /// `publish` state per package id.
     pub publish: BTreeMap<String, PublishSetting>,
-    /// Dependency declarations per package id.
     pub deps: BTreeMap<String, Vec<DepFact>>,
 }
 
-/// Whether `name` is a safe package name (conservative Cargo subset).
-///
-/// Non-empty, ASCII alphabetic start, then ASCII alphanumeric, `-`, `_`.
 #[must_use]
 pub(crate) fn validate_package_name(name: &str) -> bool {
     let mut chars = name.chars();
@@ -80,7 +48,6 @@ pub(crate) fn validate_package_name(name: &str) -> bool {
         && chars.all(|char| char.is_ascii_alphanumeric() || char == '-' || char == '_')
 }
 
-/// Whether `path` is a safe repository-relative manifest path.
 #[must_use]
 pub(crate) fn validate_manifest_path(path: &str) -> bool {
     if path.is_empty() || path.starts_with('/') || path.contains('\\') {
@@ -100,7 +67,6 @@ pub(crate) fn validate_manifest_path(path: &str) -> bool {
     last == "Cargo.toml"
 }
 
-/// Whether `name` is a safe registry name.
 #[must_use]
 pub(crate) fn validate_registry_name(name: &str) -> bool {
     let mut chars = name.chars();
@@ -112,14 +78,12 @@ pub(crate) fn validate_registry_name(name: &str) -> bool {
             .all(|char| char.is_ascii_alphanumeric() || char == '-' || char == '_' || char == '.')
 }
 
-/// Raw `cargo metadata` document (only release facts retained).
 #[derive(Debug, serde::Deserialize)]
 struct RawReleaseMetadata {
     #[serde(default)]
     packages: Vec<RawReleasePackage>,
 }
 
-/// Raw package entry (only release facts retained).
 #[derive(Debug, serde::Deserialize)]
 struct RawReleasePackage {
     name: String,
@@ -131,7 +95,6 @@ struct RawReleasePackage {
     dependencies: Vec<RawReleaseDep>,
 }
 
-/// Raw dependency entry (only release facts retained).
 #[derive(Debug, serde::Deserialize)]
 struct RawReleaseDep {
     name: String,
@@ -153,12 +116,6 @@ struct RawReleaseDep {
     path: Option<String>,
 }
 
-/// Parse supplementary release facts from authoritative metadata JSON.
-///
-/// # Errors
-///
-/// Returns [`ReleaseError`] on malformed documents, bad registry names,
-/// unknown dependency kinds, or unresolvable path values.
 pub(crate) fn parse_release_facts(
     json: &str,
     manifest_hint: &str,
@@ -185,7 +142,6 @@ pub(crate) fn parse_release_facts(
     Ok(ReleaseFacts { publish, deps })
 }
 
-/// Map one package's `publish` value to its setting.
 fn publish_setting(package: &RawReleasePackage) -> Result<PublishSetting, ReleaseError> {
     match &package.publish {
         None => Ok(PublishSetting::Open),
@@ -207,7 +163,6 @@ fn publish_setting(package: &RawReleasePackage) -> Result<PublishSetting, Releas
     }
 }
 
-/// Map each package manifest directory to its package id.
 fn manifest_dirs(packages: &[RawReleasePackage]) -> BTreeMap<String, String> {
     let mut dirs = BTreeMap::new();
     for package in packages {
@@ -221,7 +176,6 @@ fn manifest_dirs(packages: &[RawReleasePackage]) -> BTreeMap<String, String> {
     dirs
 }
 
-/// Convert one dependency declaration to its packaging facts.
 fn convert_dep(
     package: &RawReleasePackage,
     dependency: &RawReleaseDep,
@@ -265,7 +219,6 @@ fn convert_dep(
     })
 }
 
-/// Classify dependency provenance from path and source values.
 fn classify_source(dependency: &RawReleaseDep) -> DepSource {
     if dependency.path.is_some() {
         return DepSource::Path;
@@ -279,7 +232,6 @@ fn classify_source(dependency: &RawReleaseDep) -> DepSource {
     }
 }
 
-/// Resolve one path dependency value to its target package id.
 fn resolve_dep_path(
     package: &RawReleasePackage,
     dep: &str,
@@ -299,7 +251,6 @@ fn resolve_dep_path(
         })
 }
 
-/// Map a raw dependency kind (`null` means normal).
 fn dep_kind(raw: Option<&str>, hint: &str) -> Result<DepKind, MetadataError> {
     match raw {
         None => Ok(DepKind::Normal),
@@ -312,7 +263,6 @@ fn dep_kind(raw: Option<&str>, hint: &str) -> Result<DepKind, MetadataError> {
     }
 }
 
-/// Map a raw target filter (`null` or string).
 fn dep_target(
     raw: Option<&serde_json::Value>,
     hint: &str,

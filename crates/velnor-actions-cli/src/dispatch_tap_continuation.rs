@@ -1,4 +1,3 @@
-//! Private read-only selector for bounded tap reconciliation.
 use std::{
     env, fs,
     io::Write,

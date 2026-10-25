@@ -81,7 +81,7 @@ def gh(endpoint, env, limit, paginate=False):
                 raise ValueError("GitHub response size bound exceeded")
             code = process.wait()
             if code:
-                # Authenticated diagnostics are retained internally, never echoed with tokens.
+
                 errors.seek(0)
                 raise subprocess.CalledProcessError(code, argv, data, errors.read(4096))
     return data

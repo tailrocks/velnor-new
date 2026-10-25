@@ -1,5 +1,3 @@
-//! Staged tree writing: regular files and symbolic links.
-
 use std::io::Write;
 use std::path::Path;
 
@@ -7,11 +5,6 @@ use velnor_actions_workflow_renderer::render::RenderedTree;
 
 use crate::OrchestratorError;
 
-/// Write every rendered file and symbolic link under `github_dir`.
-///
-/// Parents are created and verified against symlinks before use; leaves are
-/// created exclusively, so overwrites and swapped links refuse instead of
-/// diverting writes.
 pub(crate) fn write_tree(github_dir: &Path, tree: &RenderedTree) -> Result<(), OrchestratorError> {
     for file in &tree.files {
         let rel = file.path.strip_prefix(".github/").unwrap_or(&file.path);
@@ -53,7 +46,6 @@ pub(crate) fn write_tree(github_dir: &Path, tree: &RenderedTree) -> Result<(), O
     Ok(())
 }
 
-/// Verify ancestor directory chain contains no symlinks.
 fn ensure_parent_dirs_safe(github_dir: &Path, dest: &Path) -> Result<(), OrchestratorError> {
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent)
@@ -79,7 +71,6 @@ fn ensure_parent_dirs_safe(github_dir: &Path, dest: &Path) -> Result<(), Orchest
     Ok(())
 }
 
-/// Create a symbolic link from `target` to `dest`.
 fn create_symlink(target: &str, dest: &Path) -> Result<(), OrchestratorError> {
     #[cfg(unix)]
     {

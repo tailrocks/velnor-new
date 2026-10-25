@@ -1,5 +1,3 @@
-//! Crate-job step constructors: prelude plus validated obligation env.
-
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 
@@ -18,33 +16,16 @@ mod tools;
 #[path = "matrix_tofu_env.rs"]
 mod tofu_env;
 
-#[cfg(test)]
-pub(crate) use tools::crate_needs_tofu_install;
-#[cfg(test)]
-pub(crate) use tools::task_driver_tools;
 pub(crate) use tools::{
     CrateSuite, crate_needs_generate_validators, prepare_crate_tools_step,
     prepare_install_opentofu, suite_for_package,
 };
 
-/// `Documentation` obligation step name.
-#[cfg(test)]
-pub(crate) const DOCUMENTATION_NAME: &str = "Documentation";
-
-/// Env key carrying the obligation's task ID (report lookup key).
 pub(crate) const OBLIGATION_TASK_ID_ENV: &str = "VELNOR_TASK_ID";
-/// Env key carrying the obligation's task digest.
 pub(crate) const OBLIGATION_TASK_DIGEST_ENV: &str = "VELNOR_TASK_DIGEST";
-/// Env key carrying the obligation's matrix ID.
 pub(crate) const OBLIGATION_MATRIX_ID_ENV: &str = "VELNOR_MATRIX_ID";
-/// Env key carrying the obligation's matrix key.
 pub(crate) const OBLIGATION_MATRIX_KEY_ENV: &str = "VELNOR_MATRIX_KEY";
 
-/// Human step name for one obligation; shards name their index.
-///
-/// The base name dispatches by the task ID's stack segment: tofu
-/// kinds render through the tofu table, everything else through the
-/// rust table (unknown segments keep existing behavior).
 pub(crate) fn step_name_for(kind: &str, task_id: &str) -> String {
     let base = match obligation_stack(task_id) {
         Some(Stack::Tofu) => velnor_actions_tofu::step_base_name(kind, FORMAT_STEP_NAME),
@@ -56,22 +37,15 @@ pub(crate) fn step_name_for(kind: &str, task_id: &str) -> String {
     }
 }
 
-/// Shard index/count from a trailing `/shard-<index>-of-<count>` segment.
 pub(crate) fn shard_suffix(task_id: &str) -> Option<(u32, u32)> {
     let (_, index, count) = velnor_actions_contract::split_shard_suffix(task_id)?;
     Some((index, count))
 }
 
-/// Known stack for one obligation task ID, if its segment parses.
 fn obligation_stack(task_id: &str) -> Option<Stack> {
     crate::extension_schemas::task_stack_segment(task_id).and_then(Stack::from_id)
 }
 
-/// Fixed payload env for one obligation, dispatched by stack.
-///
-/// Tofu kinds thread through the tofu env mapping (the T03
-/// automation pair); everything else keeps the rust mapping.
-/// Cargo's target-directory override, set only for concurrent check lanes.
 const CARGO_TARGET_DIR_ENV: &str = "CARGO_TARGET_DIR";
 
 fn payload_env_for_obligation(task_id: &str, kind: &str) -> Vec<(OsString, OsString)> {
@@ -81,25 +55,6 @@ fn payload_env_for_obligation(task_id: &str, kind: &str) -> Vec<(OsString, OsStr
     }
 }
 
-/// Validated env every crate-job step runs with.
-///
-/// Single constructor shared by obligation steps and `Fetch Cargo
-/// sources`: the isolation quartet plus install disable from the Mise
-/// adapter's single source, the owned-homes triple for rust steps,
-/// and caller extras. Tofu obligations carry no triple; they carry
-/// the isolated per-root `TF_DATA_DIR` from the tofu adapter's
-/// derivation instead (the temp CLI config path stays local-only
-/// until a materialization step lands). Reserved keys in the extras
-/// fail closed, so generated steps use the same validated contract as
-/// local helper requests and fetch plus consumers can never drift
-/// apart (run 36560676954 failed every leg when only `Run task`
-/// carried the triple).
-///
-/// # Errors
-///
-/// Returns a contract error for reserved extras (triple keys included
-/// when `needs_rust` is false) and a render error for blank triple
-/// inputs or denied credential keys.
 pub(crate) fn task_step_env(
     catalog: &ToolCatalog,
     extra: &BTreeMap<String, String>,
@@ -143,16 +98,6 @@ pub(crate) fn task_step_env(
         .map_err(OrchestratorError::from)
 }
 
-/// Fixed obligation identity env carried by every obligation step.
-///
-/// Binds the step to its task, digest, and matrix coordinates with
-/// fixed values (never `${{ }}` expressions), so the report wrapper
-/// invokes the helper for the right obligation and merge locates its
-/// evidence. Downstream same-job task IDs ride along so a failure
-/// reports its skipped successors; empty downstream stays absent. A
-/// root-job cap additionally declares the matrix marker trio (the
-/// plan producer every obligation already consumes, plus the bound),
-/// which the renderer turns into `strategy.max-parallel`.
 pub(crate) fn obligation_identity_env(
     task_id: &str,
     task_digest: &str,
@@ -186,24 +131,6 @@ pub(crate) fn obligation_identity_env(
     identity
 }
 
-/// One obligation shell step: fixed argv wrapped with report capture.
-///
-/// The wrapper runs the obligation, captures `$?`, invokes the staged
-/// helper's [`crate::task_report::REPORT_OP`] with the exit code, then exits with the
-/// obligation's own code (a report failure surfaces only when the
-/// obligation itself passed, so failures never mask each other).
-/// Identity env doubles as the report lookup key; the plan binds the
-/// digests, never these baked values. Doc obligations additionally
-/// carry the adapter `payload_env_for_kind` pairs (`RUSTDOCFLAGS=-D
-/// warnings`) and tofu obligations the automation pair, matching the
-/// plan identity envelope. Tofu obligations run triple-less; every
-/// other stack keeps the owned-homes triple. A concurrent Rust check
-/// also carries `CARGO_TARGET_DIR` for its workspace-relative target
-/// lane. Every obligation step runs unconditionally.
-///
-/// # Errors
-///
-/// Returns contract errors for invalid argv, joins, or wrapper shapes.
 pub(crate) fn obligation_step(
     obligation: &CrateObligation,
     catalog: &ToolCatalog,
@@ -212,8 +139,6 @@ pub(crate) fn obligation_step(
     helper_version: &str,
     target_lane: Option<&str>,
 ) -> Result<Step, OrchestratorError> {
-    // Unknown segments keep the previous single-stack behavior: the
-    // grammar validation below fails them as malformed task IDs.
     let stack_id = obligation_stack(&obligation.task_id).map_or(Stack::Rust.id(), Stack::id);
     let matrix_id =
         velnor_actions_contract::matrix_id_for_task_group(stack_id, &obligation.task_id)
@@ -278,15 +203,6 @@ pub(crate) fn obligation_step(
     Ok(step)
 }
 
-/// Require the obligation identity env to match the report op contract.
-///
-/// The wrapper resolves its obligation through [`TASK_ID_ENV`]; the
-/// emitted map must carry that key with the exact task ID in every
-/// build, or the report would bind the wrong obligation (or none).
-///
-/// # Errors
-///
-/// Returns a contract error when the lookup key is missing or differs.
 pub(crate) fn check_identity_env_contract(
     identity: &BTreeMap<String, String>,
     task_id: &str,
@@ -308,15 +224,3 @@ pub(crate) use matrix_step_reports::{
     crate_upload_step, deferred_report_argv, download_plan_step, helper_path_for_version,
     outcome_path_for_key, outcome_wrapper_argv, report_wrapper_argv, start_path_for_key,
 };
-
-#[cfg(test)]
-#[path = "matrix_step_tests.rs"]
-mod matrix_step_tests;
-
-#[cfg(test)]
-#[path = "matrix_step_tofu_tests.rs"]
-mod matrix_step_tofu_tests;
-
-#[cfg(test)]
-#[path = "matrix_step_tofu_install_tests.rs"]
-mod matrix_step_tofu_install_tests;

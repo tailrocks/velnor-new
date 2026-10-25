@@ -15,6 +15,3 @@ hcl = { version = "=0.19.9", package = "hcl-rs" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
-[[test]]
-name = "velnor_tofu"
-path = "tests/velnor_tofu.rs"

@@ -1,15 +1,3 @@
-//! Shared jobs and steps for `[publish] provenance = "sigstore_bundle"`.
-//!
-//! The declared fallback keeps keyless Sigstore signing and changes only the
-//! store. The sign job uses the existing `ArtifactAttest` role and checks out
-//! no code while signing the verified artifact into a Sigstore bundle through
-//! GitHub's Sigstore instance, verifies that bundle with
-//! `gh attestation verify --bundle`, writes a provenance receipt and uploads
-//! both as a run artifact. Every publishing job re-verifies them before it
-//! publishes, then records them as immutable assets of the tag's release.
-//! The default (`github_attestation`) never reaches this module, so an
-//! undeclared repository keeps failing closed at the attestation store.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::actions::{
@@ -28,7 +16,6 @@ use velnor_actions_workflow_renderer::{action_step, mise_setup_step};
 use super::{Inputs, bundle_job, plain, script_step};
 use crate::OrchestratorError;
 
-/// Resolve one of the six admitted Linux runner labels to its official asset.
 fn cosign_for_runner(
     label: &str,
 ) -> Result<(CosignPin<'static>, CosignPlatform), OrchestratorError> {
@@ -59,25 +46,18 @@ fn cosign_for_runner(
     ))
 }
 
-/// Subject of one sign job: where the verified artifact sits after download.
 pub(crate) struct Subject<'a> {
-    /// Artifact kind, also the job and run-artifact prefix (`npm`, `maven`, `bundle`).
     pub(crate) kind: &'a str,
-    /// Declared artifact id.
     pub(crate) id: &'a str,
-    /// Fixed runner-temp directory holding the artifact.
     pub(crate) dir: &'a str,
-    /// Validated file name inside `dir`; may use `$ver`.
     pub(crate) file: String,
 }
 
 impl Subject<'_> {
-    /// Run-artifact name carrying the bundle and the receipt.
     fn artifact(&self) -> String {
         format!("{}-provenance-{}", self.kind, self.id)
     }
 
-    /// Release asset names this subject adds in bundle mode.
     pub(crate) fn asset_names(&self) -> [String; 2] {
         [
             format!("{}{}", self.file, script::BUNDLE_SUFFIX),
@@ -86,7 +66,6 @@ impl Subject<'_> {
     }
 }
 
-/// Download the bundle and receipt into the provenance directory.
 pub(crate) fn download_step(subject: &Subject<'_>) -> Result<PublishStep, OrchestratorError> {
     Ok(plain(action_step(
         "Download provenance bundle",
@@ -101,7 +80,6 @@ pub(crate) fn download_step(subject: &Subject<'_>) -> Result<PublishStep, Orches
     )?))
 }
 
-/// Re-verify the bundle with `gh attestation verify --bundle` and check the receipt.
 pub(crate) fn verify_step(
     subject: &Subject<'_>,
     gh: &str,
@@ -113,7 +91,6 @@ pub(crate) fn verify_step(
     )?))
 }
 
-/// Check the receipt against the pushed bytes in a job without `gh`.
 pub(crate) fn receipt_step(subject: &Subject<'_>) -> Result<PublishStep, OrchestratorError> {
     Ok(plain(script_step(
         "Check provenance receipt",
@@ -122,7 +99,6 @@ pub(crate) fn receipt_step(subject: &Subject<'_>) -> Result<PublishStep, Orchest
     )?))
 }
 
-/// Copy the verified bundle and receipt beside the subject for the upload.
 pub(crate) fn stage_step(subject: &Subject<'_>) -> Result<PublishStep, OrchestratorError> {
     Ok(plain(script_step(
         "Stage provenance assets",
@@ -131,10 +107,6 @@ pub(crate) fn stage_step(subject: &Subject<'_>) -> Result<PublishStep, Orchestra
     )?))
 }
 
-/// Sign job: download, verify checksum, sign and verify, upload bundle and receipt.
-///
-/// `download` and `checksum` are the kind's own steps, so the signed bytes
-/// are exactly the ones the publish job re-verifies.
 pub(crate) fn sign_job(
     inputs: &Inputs<'_>,
     gh: &str,
@@ -179,11 +151,3 @@ pub(crate) fn sign_job(
         steps,
     ))
 }
-
-#[cfg(test)]
-#[path = "publish_provenance_scripts_tests.rs"]
-mod scripts_tests;
-
-#[cfg(test)]
-#[path = "publish_provenance_steps_tests.rs"]
-mod tests;

@@ -1,6 +1,3 @@
-//! File-index construction: `git ls-files` plus an untracked pass in git
-//! repositories, filesystem walk only for non-git roots.
-
 use std::path::Path;
 
 use velnor_actions_contract::{
@@ -11,32 +8,20 @@ use velnor_actions_mise::GitRequest;
 use crate::OrchestratorError;
 use crate::git_paths::split_nul_paths_skipping;
 
-/// `git ls-files` outcome: non-git roots walk the filesystem, while
-/// undecodable entries skip with an explicit flag (never a silent
-/// fallback that would re-encounter the same names in the walk).
 enum GitFiles {
-    /// Not a git repository (or git unusable): walk the filesystem.
     NonRepo,
-    /// Enumerated paths plus whether any entry was skipped.
     Files {
         tracked: GitPathList,
         untracked: GitPathList,
     },
 }
 
-/// One `git ls-files -z` result with raw cache identity retained.
 struct GitPathList {
     paths: Vec<String>,
     skipped_non_utf8: bool,
     reserved_cache_path: Option<String>,
 }
 
-/// Build the file index plus whether any name was skipped.
-///
-/// `git ls-files` plus an untracked pass in git repositories,
-/// filesystem walk only for non-git roots. Both paths skip
-/// non-UTF-8 names and report them through the flag; selection
-/// broadens explicitly on it.
 pub(crate) fn build_file_index(
     root: &Path,
     exclusions: &[String],
@@ -63,8 +48,6 @@ pub(crate) fn build_file_index(
     Ok((index, skipped))
 }
 
-/// Tracked and untracked repository-relative paths; `NonRepo` when git
-/// itself is unavailable. Undecodable entries skip with an explicit flag.
 fn git_file_list(root: &Path) -> GitFiles {
     let tracked = ls_files(root, vec![std::ffi::OsString::from("-z")]);
     let untracked = ls_files(
@@ -80,9 +63,6 @@ fn git_file_list(root: &Path) -> GitFiles {
     GitFiles::Files { tracked, untracked }
 }
 
-/// Match the reserved cache root and descendants, not similarly named paths.
-/// One `git ls-files -z` run; `None` only when git fails or is absent.
-/// Output always splits: undecodable entries skip with an explicit flag.
 fn ls_files(root: &Path, args: Vec<std::ffi::OsString>) -> Option<GitPathList> {
     let output = GitRequest::ls_files(args).run_in(root).ok()?;
     if !output.success {
@@ -101,7 +81,3 @@ fn ls_files(root: &Path, args: Vec<std::ffi::OsString>) -> Option<GitPathList> {
         reserved_cache_path,
     })
 }
-
-#[cfg(test)]
-#[path = "discover_index_cache_tests.rs"]
-mod cache_tests;

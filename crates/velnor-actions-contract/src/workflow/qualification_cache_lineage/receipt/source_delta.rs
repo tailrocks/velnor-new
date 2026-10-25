@@ -1,5 +1,3 @@
-//! Source-delta and bounded input parsing helpers.
-
 use super::errors::invalid;
 use super::types::QualificationSourceDelta;
 use crate::canonical::{canonical_json_bytes, digest_b3, validate_digest};

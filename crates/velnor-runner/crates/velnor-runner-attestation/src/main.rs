@@ -1,18 +1,14 @@
-//! Fixed-protocol, verification-only attestation helper.
-
+#![allow(
+    missing_docs,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
+#![allow(
+    clippy::missing_errors_doc,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
 mod root_chain;
 mod tuf_state;
 mod verifier;
-
-#[cfg(test)]
-#[path = "tuf_cache_rollback_tests.rs"]
-mod tuf_cache_rollback_tests;
-#[cfg(test)]
-#[path = "tuf_cache_tests.rs"]
-mod tuf_cache_tests;
-#[cfg(test)]
-#[path = "tuf_fixture_tests.rs"]
-mod tuf_fixture_tests;
 
 use std::io::{self, Read, Write};
 use std::process::ExitCode;

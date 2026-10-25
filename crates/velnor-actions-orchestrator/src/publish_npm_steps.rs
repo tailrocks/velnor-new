@@ -1,11 +1,3 @@
-//! npm jobs of the publication workflow: build, attest, publish (HD-6, HD-8).
-//!
-//! The build job is the only one that checks out code and runs repository
-//! scripts (the declared pack script, twice); it holds read-only authority.
-//! Attest and publish work from the uploaded tarball alone. The publish job
-//! holds `packages: write` in the protected environment, checks out nothing and
-//! runs neither a package manager nor a lifecycle script.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::actions::{
@@ -21,17 +13,11 @@ use super::{AUTHORITY_JOB, Inputs, bundle_job, plain, script_step};
 use crate::OrchestratorError;
 use crate::workflow::CHECKOUT_USES;
 
-/// One npm entry plus the shell fragments built from the pinned Bun.
 pub(crate) struct NpmPlan<'a> {
-    /// Declared entry.
     pub(crate) entry: &'a PublishNpm,
-    /// Version check applied by the authority job (the member's `package.json`).
     pub(crate) check: super::VersionCheck,
-    /// `bun install --frozen-lockfile` for the workspace root.
     pub(crate) install: String,
-    /// `bun run <pack_script>` at the workspace root.
     pub(crate) pack: String,
-    /// Pinned-Bun preparation step.
     pub(crate) prepare: velnor_actions_contract::Step,
 }
 
@@ -50,7 +36,6 @@ fn download_step(id: &str) -> Result<PublishStep, OrchestratorError> {
     )?))
 }
 
-/// Build: checkout the tagged commit, install, pack twice, check, upload.
 pub(super) fn build_job(
     inputs: &Inputs<'_>,
     plan: &NpmPlan<'_>,
@@ -91,7 +76,6 @@ pub(super) fn build_job(
     Ok(job)
 }
 
-/// Provenance subject: the member's tarball in the npm directory.
 fn subject(entry: &PublishNpm) -> Subject<'_> {
     Subject {
         kind: "npm",
@@ -109,10 +93,6 @@ fn checksum_step(entry: &PublishNpm) -> Result<PublishStep, OrchestratorError> {
     )?))
 }
 
-/// Attest: verify the checksum, then sign provenance for the tarball.
-///
-/// `github_attestation` writes to GitHub's attestation store; the declared
-/// `sigstore_bundle` signs a bundle that `npm-provenance-<id>` records.
 pub(super) fn attest_job(
     inputs: &Inputs<'_>,
     entry: &PublishNpm,
@@ -147,10 +127,6 @@ pub(super) fn attest_job(
     ))
 }
 
-/// Record (Sigstore bundle only): re-verify the bundle, then upload the
-/// tarball, its checksum, the bundle and the receipt as immutable assets of
-/// the tag's release. GitHub Packages holds no extra files, so the release
-/// is where the provenance lives; the push needs this job.
 pub(super) fn provenance_job(
     inputs: &Inputs<'_>,
     entry: &PublishNpm,
@@ -187,10 +163,6 @@ pub(super) fn provenance_job(
     ))
 }
 
-/// Publish: re-verify, then `PUT` the package document with the job token.
-///
-/// With a Sigstore bundle it needs `npm-provenance-<id>` and binds the
-/// pushed bytes to the recorded receipt first.
 pub(super) fn publish_job(
     inputs: &Inputs<'_>,
     entry: &PublishNpm,

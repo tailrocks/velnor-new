@@ -1,4 +1,3 @@
-//! Fixed capture/mint/emit credential placement; no task or arbitrary argv seam.
 use super::{RenderError, ReviewCompletionSpec, Yaml, map};
 use std::collections::BTreeMap;
 

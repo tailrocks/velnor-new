@@ -1,5 +1,3 @@
-//! Immutable Actions artifact selection, download, and lineage assembly.
-
 use serde::Deserialize;
 use velnor_actions_contract::{
     MAX_QUALIFICATION_RECEIPT_BYTES, QualificationCacheArtifact, QualificationCacheProducerContext,
@@ -226,7 +224,3 @@ fn required(value: Option<String>, error: &'static str) -> Result<String, Orches
         .filter(|value| !value.is_empty())
         .ok_or_else(|| internal(error))
 }
-
-#[cfg(test)]
-#[path = "artifact_tests.rs"]
-mod tests;

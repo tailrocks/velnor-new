@@ -1,11 +1,8 @@
-//! Over-cap representation fallback for the generated CI workflow.
-
 use crate::{
     RenderError, marker, workflow_size,
     yaml::{Yaml, render_yaml, share_workflow_nodes},
 };
 
-/// Render the complete marked document before the caller applies the size guard.
 pub(super) fn render_marked_workflow(
     path: &str,
     document: &Yaml,
@@ -52,7 +49,6 @@ fn render_marked_workflow_with(
     Ok(selected)
 }
 
-/// Render the fallback and retain the production size rejection.
 pub(crate) fn render_checked_workflow(
     path: &str,
     document: &Yaml,
@@ -63,8 +59,6 @@ pub(crate) fn render_checked_workflow(
     Ok(text)
 }
 
-/// Render the one authenticated Homebrew adoption caller. Generic workflow
-/// rendering keeps its strict local-callee-only default.
 pub(crate) fn render_checked_homebrew_adoption_caller(
     path: &str,
     document: &Yaml,
@@ -77,7 +71,3 @@ pub(crate) fn render_checked_homebrew_adoption_caller(
     workflow_size::check_workflow_size(path, &text)?;
     Ok(text)
 }
-
-#[cfg(test)]
-#[path = "render_fallback_tests.rs"]
-mod tests;

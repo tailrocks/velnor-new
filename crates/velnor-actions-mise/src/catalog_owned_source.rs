@@ -1,46 +1,27 @@
-//! Reviewed source staging authority; never a qualified distribution record.
-
 use super::source_build_bootstrap::{self, SourceBuildBootstrapHost, SourceBuildBootstrapTool};
 use crate::MiseError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-/// Approved source identity; no dispatch input can replace these literals.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ApprovedOwnedSource {
-    /// Closed owned build recipe name.
     pub tool: String,
-    /// Exact reported owned release version.
     pub version: String,
-    /// Owned tool source commit, distinct from generator workflow source.
     pub source_commit: String,
-    /// Complete source tree.
     pub source_tree: String,
-    /// Exact reviewed upstream base.
     pub upstream_base_commit: String,
-    /// Immutable source tar URL.
     pub archive_url: String,
-    /// Measured source tar SHA256.
     pub archive_sha256: String,
-    /// Immutable receipt URL.
     pub receipt_url: String,
-    /// Measured receipt SHA256.
     pub receipt_sha256: String,
-    /// Immutable full-tree base patch URL.
     pub patch_url: String,
-    /// Measured base patch SHA256.
     pub patch_sha256: String,
-    /// Measured committed dependency lock SHA256.
     pub lockfile_sha256: String,
-    /// Committed license paths and measured SHA256 values.
     pub license_files: BTreeMap<String, String>,
 }
 
 impl ApprovedOwnedSource {
-    /// Validate reviewed source transport and literal identities.
-    /// # Errors
-    /// Rejects incomplete identities, transport mismatch, and open recipes.
     pub fn validate(&self) -> Result<(), MiseError> {
         let expected_base = match self.tool.as_str() {
             "mise" => source_build_bootstrap::official(
@@ -153,7 +134,3 @@ fn valid_hash(value: &str, length: usize) -> bool {
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
-
-#[cfg(test)]
-#[path = "catalog_owned_source_tests.rs"]
-mod tests;

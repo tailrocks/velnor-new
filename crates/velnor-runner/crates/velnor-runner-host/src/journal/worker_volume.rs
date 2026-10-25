@@ -1,18 +1,7 @@
-//! Durable worker volume identity, stored before the first Docker mutation.
-
 use super::{Journal, token_rejected, transaction};
 use crate::error::HostError;
 
 impl Journal {
-    /// Record the worker volume base before creating any worker volume or container.
-    ///
-    /// A row can bind the same base again during a replay, but cannot be rebound
-    /// to another worker's resources.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Journal`] when the row is missing, invalid, or already
-    /// belongs to another worker volume.
     pub async fn bind_worker_volume(&self, id: i64, volume: &str) -> Result<(), HostError> {
         if token_rejected(volume) {
             return Err(HostError::Journal);

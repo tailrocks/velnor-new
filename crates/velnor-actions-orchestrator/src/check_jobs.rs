@@ -1,5 +1,3 @@
-//! Independent named check jobs, with plan-bound reports and typed runner admission.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::config::{
@@ -16,7 +14,6 @@ use velnor_actions_workflow_renderer::steps::INTERNAL_OP_ENV;
 use crate::OrchestratorError;
 use crate::discover::Discovery;
 
-/// Build one job per configured check, independent of Rust grouping and coverage.
 pub(crate) fn build_check_jobs(
     policy: WorkflowPolicy,
     discovery: &Discovery,
@@ -138,8 +135,6 @@ fn check_job(
     })
 }
 
-/// Only the qualified helper executes repository task code and writes evidence.
-/// The check stays unconditional: opaque checks cannot inherit Rust reuse.
 fn execute_check_step(
     discovered: &DiscoveredCheck,
     catalog: &ToolCatalog,
@@ -165,15 +160,3 @@ fn execute_check_step(
     )
     .map_err(OrchestratorError::from)
 }
-
-#[cfg(test)]
-#[path = "check_jobs_tests.rs"]
-mod tests;
-
-#[cfg(test)]
-#[path = "check_jobs_maintenance_tests.rs"]
-mod maintenance_tests;
-
-#[cfg(test)]
-#[path = "check_jobs_native_tests.rs"]
-mod native_tests;

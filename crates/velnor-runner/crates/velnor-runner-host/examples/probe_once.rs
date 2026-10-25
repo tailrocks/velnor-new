@@ -1,6 +1,3 @@
-//! Poll `ubuntu-26.04-scale-set` once, then delete the session.
-//! The PAT comes from `gh auth token` and is not printed.
-
 use std::process::{Command, ExitCode};
 
 use velnor_runner_host::probe_once;

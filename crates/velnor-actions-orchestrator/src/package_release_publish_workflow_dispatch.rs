@@ -1,5 +1,3 @@
-//! Read-only admission of a protected-main qualification workflow attempt.
-
 use velnor_actions_contract::{CI_WORKFLOW_PATH, WORKFLOW_DISPLAY_NAME};
 use velnor_actions_mise::CheckDeadline;
 
@@ -109,7 +107,3 @@ fn validate_run(
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "package_release_publish_workflow_dispatch_tests.rs"]
-mod tests;

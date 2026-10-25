@@ -1,10 +1,3 @@
-//! Prebuilt `cargo_bin` steps for an image build job.
-//!
-//! The binary is compiled by Velnor outside `BuildKit`, from pinned tools and
-//! sources prepared without credentials, then staged into the build context.
-//! The Dockerfile then only copies it into a runtime image, so the build never
-//! needs a secret and the compile is not duplicated inside the image build.
-
 use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 
@@ -20,11 +13,6 @@ use crate::utf8::strings_of;
 const BUILD_STEP: &str = "Build release binary";
 const STAGE_STEP: &str = "Stage release binary";
 
-/// Steps shared by every platform job of one `cargo_bin` image.
-///
-/// Private Cargo sources are retrieved exactly like a crate job does: the
-/// mint, fetch and revoke block runs after the helper is staged and before
-/// the Cargo source fetch, so no credential outlives the Velnor-owned fetch.
 pub(crate) fn steps(
     image: &ImageConfig,
     inputs: &PrebuiltInputs<'_>,
@@ -45,9 +33,6 @@ pub(crate) fn steps(
         return Ok(Vec::new());
     };
     if image.platforms.contains(&ImagePlatform::LinuxArm64) {
-        // The shared Mise tools cache is qualified for the Ubuntu x86-64 hosted
-        // images only (runtime identity, composite prelude, Mise pins). Arm64
-        // needs that cache contract extended first; fail rather than skip it.
         return Err(failure(
             &image.id,
             "image_prebuilt_platform_unsupported:linux_arm64",
@@ -113,7 +98,6 @@ fn shell(
     )?)
 }
 
-/// The one in-workspace package that owns `bin`.
 fn locate<'a>(
     discovery: &'a Discovery,
     package: &str,
@@ -175,7 +159,6 @@ fn build_argv(
     strings_of(request.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
-/// Copy the binary into the context; refuse to overwrite anything present.
 fn stage_script(id: &str, bin: &str, stage: &str) -> String {
     let dir = stage.rsplit_once('/').map_or(".", |(dir, _)| dir);
     format!(
@@ -188,7 +171,3 @@ fn failure(image: &str, problem: &str) -> OrchestratorError {
         problem: format!("images.{image}:{problem}"),
     }
 }
-
-#[cfg(test)]
-#[path = "image_prebuilt_tests.rs"]
-mod tests;

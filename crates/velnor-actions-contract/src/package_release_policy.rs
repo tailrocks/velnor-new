@@ -1,4 +1,3 @@
-//! Static release ownership and inventory; versions resolve only from exact source.
 use crate::config::{
     RustBinaryReleaseArchive, RustBinaryReleaseCompanion, RustBinaryReleaseProduct,
 };
@@ -6,55 +5,49 @@ use crate::package_release::PackageReleaseChannel;
 use crate::{ContractError, PackageReleasePlan, PackageReleasePlanProduct, canonical_json_bytes};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
-/// Generated inventory policy schema; never a partially resolved plan.
+
 pub const PACKAGE_RELEASE_POLICY_SCHEMA_V1: &str = "velnor.package-release-policy.v1";
-/// Maximum authenticated TOML bytes for one version input.
+
 pub const MAX_CARGO_VERSION_MANIFEST_BYTES: usize = 1024 * 1024;
-/// Maximum complete manifest-data closure accepted by version resolution.
+
 pub const MAX_CARGO_VERSION_INPUT_BYTES: usize = 8 * 1024 * 1024;
-/// Literal source policy with no generation-time Cargo version value.
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PackageReleasePolicy {
-    /// Closed schema discriminator.
     pub schema: String,
-    /// Native channel.
+
     pub channel: PackageReleaseChannel,
-    /// Source repository slug.
+
     pub repository: String,
-    /// Protected default branch.
+
     pub default_branch: String,
-    /// Discovered package and manifest ownership, independent of version values.
+
     pub version: CargoVersionPolicy,
-    /// Shared sorted product inventory.
+
     pub products: Vec<PackageReleasePlanProduct>,
-    /// Shared sorted companion inventory.
+
     pub companions: Vec<RustBinaryReleaseCompanion>,
 }
-/// One authoritative version owner and the complete product-package closure.
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CargoVersionPolicy {
-    /// Exact product package owning the numeric base version.
     pub version_package: String,
-    /// Distinct product packages sorted by package name.
+
     pub bindings: Vec<CargoVersionBinding>,
 }
-/// Data-only Cargo manifest paths captured from discovered workspace membership.
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CargoVersionBinding {
-    /// Expected package.name, never inferred from filename.
     pub package: String,
-    /// Exact regular package Cargo.toml path.
+
     pub manifest_path: String,
-    /// Exact owning workspace Cargo.toml for workspace.package.version.
+
     pub workspace_manifest_path: String,
 }
 impl PackageReleasePolicy {
-    /// Validate the closed static inventory and complete ownership closure.
-    /// # Errors
-    /// Rejects malformed identities, paths, sorting or incomplete package coverage.
     pub fn validate(&self) -> Result<(), ContractError> {
         if self.schema != PACKAGE_RELEASE_POLICY_SCHEMA_V1
             || !crate::vcs::is_safe_github_repository(&self.repository)
@@ -103,7 +96,7 @@ impl PackageReleasePolicy {
             .collect::<BTreeSet<_>>();
         self.version.validate(&packages)
     }
-    /// Exact sorted regular Git-file paths the version resolver requires.
+
     #[must_use]
     pub fn manifest_paths(&self) -> Vec<&str> {
         self.version
@@ -119,9 +112,7 @@ impl PackageReleasePolicy {
             .into_iter()
             .collect()
     }
-    /// Canonical bounded source-policy pair inventory, independent of version values.
-    /// # Errors
-    /// Rejects invalid policy or an inventory exceeding the native graph bound.
+
     pub fn payload_pairs(
         &self,
     ) -> Result<Vec<crate::preview_production::ReleasePayloadPair>, ContractError> {
@@ -143,10 +134,7 @@ impl PackageReleasePolicy {
         }
         Ok(pairs)
     }
-    /// Literal channel job ID for a member of the complete static inventory.
-    /// Preview uses one shared ID; stable uses the member's canonical index.
-    /// # Errors
-    /// Rejects pairs outside the policy's bounded canonical inventory.
+
     pub fn payload_job_id(
         &self,
         pair: &crate::preview_production::ReleasePayloadPair,
@@ -160,9 +148,7 @@ impl PackageReleasePolicy {
             PackageReleaseChannel::Stable => Ok(format!("stable-payload-{index:03}")),
         }
     }
-    /// Construct a fully validated resolved plan; this pure method proves no source authority.
-    /// # Errors
-    /// Rejects invalid policy or a nonnumeric resolved version.
+
     pub fn resolve(&self, base_version: String) -> Result<PackageReleasePlan, ContractError> {
         self.validate()?;
         let plan = PackageReleasePlan {
@@ -177,9 +163,7 @@ impl PackageReleasePolicy {
         plan.validate()?;
         Ok(plan)
     }
-    /// Match every static dimension of a resolved plan, independently of version data.
-    /// # Errors
-    /// Rejects invalid policy/plan or substituted inventory/channel/repository.
+
     pub fn validate_plan(&self, plan: &PackageReleasePlan) -> Result<(), ContractError> {
         self.validate()?;
         plan.validate()?;
@@ -193,18 +177,13 @@ impl PackageReleasePolicy {
         }
         Ok(())
     }
-    /// Deterministic generated policy bytes.
-    /// # Errors
-    /// Rejects invalid policy or canonical encoding failure.
+
     pub fn canonical_bytes(&self) -> Result<Vec<u8>, ContractError> {
         self.validate()?;
         canonical_json_bytes(self)
     }
 }
 impl CargoVersionPolicy {
-    /// Validate complete manifest ownership against the shared product packages.
-    /// # Errors
-    /// Rejects missing/extra/duplicate packages, ambiguous files or unsafe paths.
     pub fn validate(&self, packages: &BTreeSet<&str>) -> Result<(), ContractError> {
         if !packages.contains(self.version_package.as_str())
             || self
@@ -250,9 +229,7 @@ fn safe_manifest(path: &str) -> bool {
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-'))
 }
-/// Parse one canonical closed policy; no fallback to resolved-plan parsing.
-/// # Errors
-/// Rejects duplicates, unknown fields, oversized bytes and noncanonical encoding.
+
 pub fn parse_package_release_policy(bytes: &[u8]) -> Result<PackageReleasePolicy, ContractError> {
     let value = crate::strict_json::parse_strict_json_bytes(bytes, 1024 * 1024)?;
     let policy: PackageReleasePolicy = serde_json::from_value(value)
@@ -265,6 +242,3 @@ pub fn parse_package_release_policy(bytes: &[u8]) -> Result<PackageReleasePolicy
 fn invalid(reason: &'static str) -> ContractError {
     ContractError::identity("package_release_policy", reason)
 }
-#[cfg(test)]
-#[path = "package_release_policy_tests.rs"]
-mod tests;

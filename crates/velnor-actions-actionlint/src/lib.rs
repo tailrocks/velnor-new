@@ -1,14 +1,11 @@
-//! Workflow-lint adapter: pinned jactionlint config, capabilities and
-//! argument vectors, plus the pinned action refs and their schemas.
-//!
-//! Owns generated `.github/jactionlint.yaml` bytes, the pinned jactionlint
-//! capability flags and lint argv, pinned action refs with override/input
-//! validation, and lint-tool pins. Pure
-//! data plus validation: never spawns processes, never reads the
-//! filesystem; Mise executes tools while the orchestrator invokes this
-//! crate for config and validation. The crate keeps its historical
-//! `actionlint` name; jactionlint is the only workflow linter.
-
+#![allow(
+    clippy::missing_errors_doc,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
+#![allow(
+    missing_docs,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
 pub mod actions;
 pub mod capabilities;
 pub mod config;
@@ -49,5 +46,4 @@ pub use tools::{
     ShellcheckToolchain, WorkflowLintTools, workflow_lint_script,
 };
 
-/// Stable identifier for the workflow-lint tool metadata.
 pub const TOOL_ID: &str = "jactionlint";

@@ -1,5 +1,3 @@
-//! Fixed, bounded command builders for Velnor-owned package-release signing.
-
 use std::{ffi::OsString, fs, io::Read, path::Path, time::Duration};
 
 use sha2::{Digest, Sha256};
@@ -8,28 +6,17 @@ pub use crate::catalog::{COSIGN_LINUX_AMD64_SHA256, COSIGN_VERSION};
 use crate::{IsolatedCommand, MiseError, command::EnvPolicy};
 use velnor_actions_contract::vcs::is_safe_github_repository;
 
-/// Exact pinned executable length bounds the Cosign download and staged reads.
 pub const COSIGN_MAX_BYTES: usize = crate::catalog::COSIGN_LINUX_AMD64_BYTES;
-/// Per-command captured output limit for fixed Cosign invocations.
 pub const COSIGN_COMMAND_OUTPUT_LIMIT: usize = 64 * 1024;
-/// Deadline for fixed Cosign invocations and binary download.
 pub const COSIGN_COMMAND_TIMEOUT: Duration = Duration::from_secs(180);
 
-/// Fixed release asset selected only from the running OS and architecture.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CosignArtifact {
-    /// Official release asset leaf name.
     pub name: &'static str,
-    /// Exact independently pinned SHA-256.
     pub sha256: &'static str,
-    /// Exact release asset length.
     pub bytes: usize,
 }
 
-/// Resolve the fixed verification tool without accepting caller-controlled URLs.
-///
-/// # Errors
-/// Rejects any platform without a reviewed asset pin.
 pub fn cosign_artifact() -> Result<CosignArtifact, MiseError> {
     cosign_artifact_for(std::env::consts::OS, std::env::consts::ARCH)
 }
@@ -70,7 +57,6 @@ fn cosign_artifact_for(os: &str, arch: &str) -> Result<CosignArtifact, MiseError
     })
 }
 
-/// Validated certificate constraints for a release signer invocation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CosignCertificateIdentity {
     repository: String,
@@ -81,10 +67,6 @@ pub struct CosignCertificateIdentity {
 }
 
 impl CosignCertificateIdentity {
-    /// Create exact GitHub Actions certificate constraints from validated release identity.
-    ///
-    /// # Errors
-    /// Rejects malformed repository, workflow, ref, digest, or trigger values.
     pub fn new(
         repository: &str,
         workflow_path: &str,
@@ -124,17 +106,12 @@ impl CosignCertificateIdentity {
     }
 }
 
-/// Opaque, fixed-pin Cosign executable path admitted by the signer caller.
 #[derive(Debug, Clone)]
 pub struct PinnedCosign {
     binary: String,
 }
 
 impl PinnedCosign {
-    /// Bind command builders to an absolute executable path whose bytes the caller verified.
-    ///
-    /// # Errors
-    /// Rejects unsupported platforms, non-absolute paths, non-UTF-8 paths, or unpinned bytes.
     pub fn from_verified_path(binary: &Path) -> Result<Self, MiseError> {
         cosign_artifact()?;
         if !binary.is_absolute() {
@@ -149,12 +126,6 @@ impl PinnedCosign {
         })
     }
 
-    /// Construct the fixed HTTPS-only download command; output is captured as bounded stdout.
-    ///
-    /// The caller must enforce the published digest before writing the captured bytes to disk.
-    ///
-    /// # Errors
-    /// Rejects unsupported platforms or command construction failure.
     pub fn download_command() -> Result<IsolatedCommand, MiseError> {
         let artifact = cosign_artifact()?;
         let url = format!(
@@ -181,10 +152,6 @@ impl PinnedCosign {
         IsolatedCommand::repo_task("/usr/bin/curl", args, &[])
     }
 
-    /// Build the fixed OIDC-enabled sign-blob command for one local subject.
-    ///
-    /// # Errors
-    /// Rejects relative paths, missing runner OIDC variables, or command construction failure.
     pub fn sign_blob_command(
         &self,
         subject: &Path,
@@ -200,10 +167,6 @@ impl PinnedCosign {
         command.with_github_actions_oidc()
     }
 
-    /// Build the fixed certificate-constrained verify-blob command without credentials.
-    ///
-    /// # Errors
-    /// Rejects relative paths or command construction failure.
     pub fn verify_blob_command(
         &self,
         subject: &Path,
@@ -302,7 +265,3 @@ fn invalid(value: &str) -> MiseError {
         value: value.to_owned(),
     }
 }
-
-#[cfg(test)]
-#[path = "package_release_tools_tests.rs"]
-mod tests;

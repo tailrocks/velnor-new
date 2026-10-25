@@ -21,7 +21,6 @@ pub(crate) fn install_homebrew_candidate(
     install_homebrew_candidate_with_custody(request).map(|(evidence, _)| evidence)
 }
 
-/// Install a fresh candidate while retaining descriptor-backed keg identity.
 pub(crate) fn install_homebrew_candidate_with_custody(
     request: &HomebrewInstallRequest<'_>,
 ) -> Result<(HomebrewInstallEvidence, HomebrewInstalledKegCustody), OrchestratorError> {

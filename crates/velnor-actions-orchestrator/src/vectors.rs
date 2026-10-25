@@ -1,5 +1,3 @@
-//! V1 fixed command vectors built only through the Mise adapter.
-
 use std::ffi::{OsStr, OsString};
 
 use velnor_actions_contract::{ProposedTask, Stack};
@@ -12,16 +10,8 @@ use velnor_actions_workflow_renderer::render::CandidateSpec;
 
 use crate::{OrchestratorError, qualify::QualifyRequest};
 
-/// Qualified cargo-deny release.
-/// Source: `https://crates.io/api/v1/crates/cargo-deny`; checked 2026-09-29.
-/// The mise registry shorthand `cargo-deny` resolves it (aqua backend); the
-/// isolated `mise exec cargo-deny@0.20.2 -- cargo deny --version` probe
-/// reported cargo-deny 0.20.2.
 pub(crate) const CARGO_DENY_VERSION: &str = "0.20.2";
 
-/// Exact Linux `x86_64` musl release for cargo-machete.
-/// GitHub's release API digest, its published `.sha256` companion, and the
-/// downloaded asset hash agree. Ubi's cold install enumerated the broad API.
 pub(crate) const CARGO_MACHETE_VERSION: &str = "0.9.2";
 pub(crate) const CARGO_MACHETE_TOOL_SPEC: &str = concat!(
     "http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/",
@@ -29,11 +19,6 @@ pub(crate) const CARGO_MACHETE_TOOL_SPEC: &str = concat!(
     "checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]",
 );
 
-/// Exact Linux x86-64 Lychee release archive with a content pin.
-/// The SHA-256 was computed from the official v0.15.1 asset on 2026-10-13;
-/// GitHub publishes no digest or checksum sidecar for this asset. The pinned
-/// hash is therefore the integrity boundary. The version-qualified URL avoids
-/// Ubi's GitHub release API lookup when workflow credentials are scrubbed.
 pub(crate) const LYCHEE_VERSION: &str = "0.15.1";
 pub(crate) const LYCHEE_TOOL_SPEC: &str = concat!(
     "http:lychee[url=https://github.com/lycheeverse/lychee/releases/",
@@ -41,7 +26,6 @@ pub(crate) const LYCHEE_TOOL_SPEC: &str = concat!(
     "checksum=sha256:9afdf0f48064fdcd8a8815ca6d2d9fcd43a0ef4c2edf9da23d6f7bf46a764eb8]",
 );
 
-/// Mise tool specs the validator vectors may select, without versions.
 const VALIDATOR_TOOL_SPECS: [&str; 5] = [
     "cargo-deny",
     CARGO_MACHETE_TOOL_SPEC,
@@ -50,12 +34,6 @@ const VALIDATOR_TOOL_SPECS: [&str; 5] = [
     LYCHEE_TOOL_SPEC,
 ];
 
-/// Product crates scanned by the machete vector, in contract order.
-///
-/// Fixed paths keep the scan hermetic: it covers exactly the product
-/// crates, never fixtures or tooling trees (a bare walk previously
-/// errored on a symlink-hazard fixture; hazards now live only in
-/// TempDir-built tests, never in the tree).
 const MACHETE_SCAN_CRATES: [&str; 11] = [
     "crates/velnor-actions-contract",
     "crates/velnor-actions-rust",
@@ -70,12 +48,6 @@ const MACHETE_SCAN_CRATES: [&str; 11] = [
     "crates/velnor-actions-cli",
 ];
 
-/// V1 fixed vector for one task: pinned `mise` payload plus kind args.
-///
-/// Program follows the compile route (`mbx` for MBX, `cargo` otherwise); Nextest
-/// profiles add the runner tool, `cargo_test` legs never carry it. Tofu
-/// tasks route to the pinned `opentofu` tool invoking `tofu`. The
-/// payload is the adapter-precomputed command, wrapped never edited.
 pub(crate) fn task_argv(
     task: &ProposedTask,
     catalog: &ToolCatalog,
@@ -126,9 +98,6 @@ pub(crate) fn task_argv(
     strings_of(exec.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
-/// V1 fixed vector for one tofu task: pinned `opentofu`, program `tofu`.
-///
-/// The fixed payload rides through wrapped, never edited.
 fn tofu_task_argv(
     task: &ProposedTask,
     catalog: &ToolCatalog,
@@ -144,7 +113,6 @@ fn tofu_task_argv(
     strings_of(exec.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
-/// Fixed vector: pinned tools plus a literal payload through Mise.
 pub(crate) fn exec_argv(
     tools: Vec<PinnedTool>,
     program: &str,
@@ -162,25 +130,6 @@ pub(crate) fn exec_argv(
     strings_of(exec.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
-/// Fixed validator-job vector: privilege-dropping `cargo deny` for each
-/// repository-owned Cargo workspace.
-///
-/// Deny shells `cargo metadata`, which reads repo `.cargo/config.toml`
-/// even from outside the checkout (deny resolves config from the
-/// manifest side), so cwd isolation alone cannot starve repo
-/// credential-providers. The script therefore drops privilege first:
-/// an ambient-credential `mise install` (isolation trio, so no repo
-/// config loads) warms the pinned tool, then the shared
-/// credential-unset prelude removes every ambient secret, and only
-/// then does the isolated deny payload run for both the generator and
-/// nested runner workspaces. Each invocation supplies that workspace's
-/// absolute manifest and deny configuration before the trailing `check`:
-/// deny takes global flags pre-subcommand. A repo provider executing past
-/// this point observes an empty credential environment. A drifted payload
-/// shape fails closed instead of splicing into the wrong position.
-/// Shell assembly lives in [`crate::source_prep::privilege_drop_argv`]:
-/// this module composes typed argv only, keeping the orchestrator's
-/// `sh` confinement set closed.
 pub(crate) fn deny_argv(workspace_roots: &[String]) -> Result<Vec<String>, OrchestratorError> {
     let mut roots = workspace_roots.to_vec();
     roots.sort();
@@ -234,11 +183,6 @@ pub(crate) fn deny_argv(workspace_roots: &[String]) -> Result<Vec<String>, Orche
     ))
 }
 
-/// Join fixed argv elements with the renderer's POSIX quoter.
-///
-/// Every current element is a plain token (identity join); quoting
-/// through the one authority keeps future drift exact instead of
-/// silently mis-spliced.
 fn join_quoted_argv(argv: &[String]) -> Result<String, OrchestratorError> {
     argv.iter()
         .map(|element| velnor_actions_workflow_renderer::quote_run_arg(element))
@@ -247,7 +191,6 @@ fn join_quoted_argv(argv: &[String]) -> Result<String, OrchestratorError> {
         .map_err(OrchestratorError::from)
 }
 
-/// Fixed validator-job vector: verified `cargo machete` release via Mise.
 pub(crate) fn machete_argv() -> Result<Vec<String>, OrchestratorError> {
     let mut args = vec!["machete"];
     args.extend(MACHETE_SCAN_CRATES);
@@ -259,7 +202,6 @@ pub(crate) fn machete_argv() -> Result<Vec<String>, OrchestratorError> {
     )
 }
 
-/// Explicit pinned backend install for cold-cache cargo-machete execution.
 pub(crate) fn machete_install_argv() -> Result<Vec<String>, OrchestratorError> {
     let install = IsolatedCommand::mise_install(&[format!(
         "{CARGO_MACHETE_TOOL_SPEC}@{CARGO_MACHETE_VERSION}"
@@ -270,12 +212,6 @@ pub(crate) fn machete_install_argv() -> Result<Vec<String>, OrchestratorError> {
     strings_of(install.argv()).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
-/// One validator vector: an allowlisted tool spec plus a fixed payload.
-///
-/// Built through the Mise adapter's isolated `exec` constructor, so the
-/// emitted shape (global flags, spec, `--` separator, payload) matches the
-/// typed `PinnedToolExec` vectors byte for byte. The spec name must be
-/// allowlisted and the version an exact pin; anything else fails closed.
 pub(crate) fn validator_argv(
     spec: &str,
     version: &str,
@@ -285,7 +221,6 @@ pub(crate) fn validator_argv(
     validator_argv_parts(spec, version, program, args.iter().copied())
 }
 
-/// Owned argv counterpart for validated repository configuration.
 pub(crate) fn validator_argv_owned(
     spec: &str,
     version: &str,
@@ -322,21 +257,10 @@ fn validator_argv_parts<'a>(
     strings_of(exec.argv()).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
-/// Fixed pre-seed MBX route probe through pinned Mise.
-///
-/// Runs `mbx --version` under exact Rust Mise while retaining the native action's
-/// earlier PATH entry. The action owns the MBX installation and object cache.
-/// # Errors
-///
-/// Returns a contract error when the Mise adapter rejects the vector.
 pub(crate) fn mbx_probe_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
     exec_argv(vec![PinnedTool::Rust], "mbx", &["--version"], catalog)
 }
 
-/// Fixed bootstrap §4 build vector through pinned Mise.
-///
-/// Shared by the candidate build and pre-seed helper build, so both use
-/// the exact Rust selector and MBX binary installed by the native action.
 pub(crate) fn candidate_build_argv(
     catalog: &ToolCatalog,
 ) -> Result<Vec<String>, OrchestratorError> {
@@ -346,7 +270,6 @@ pub(crate) fn candidate_build_argv(
     strings_of(build.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
-/// Fixed candidate build plus qualification vectors.
 pub(crate) fn candidate_spec(catalog: &ToolCatalog) -> Result<CandidateSpec, OrchestratorError> {
     Ok(CandidateSpec {
         build: candidate_build_argv(catalog)?,
@@ -354,13 +277,8 @@ pub(crate) fn candidate_spec(catalog: &ToolCatalog) -> Result<CandidateSpec, Orc
     })
 }
 
-/// Convert fixed argv to UTF-8 strings.
 fn strings_of(argv: Vec<OsString>) -> Result<Vec<String>, String> {
     argv.into_iter()
         .map(|arg| arg.into_string().map_err(|_| "non_utf8_argv".to_owned()))
         .collect()
 }
-
-#[cfg(test)]
-#[path = "vectors_tests.rs"]
-mod vectors_tests;

@@ -1,32 +1,20 @@
-//! dbt-fusion artifact admission.
-//!
-//! Only `https://public.cdn.getdbt.com/fs/cli/fs-v<version>-<triple>.tar.gz`
-//! is admitted, for the declared exact version and the three platforms Mise
-//! locks. The checksum must come from the project's `mise.lock`; a lock row
-//! without one is a finding, never a skipped check.
-
 use crate::DbtError;
 use crate::version::FusionVersion;
 
-/// The only host dbt-fusion archives may come from.
 pub const FUSION_HOST: &str = "public.cdn.getdbt.com";
 
-/// Platforms with a published Fusion archive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FusionPlatform {
-    /// Linux x86-64 (`linux-x64`).
     LinuxX64,
-    /// Linux arm64 (`linux-arm64`).
+
     LinuxArm64,
-    /// macOS arm64 (`macos-arm64`).
+
     MacosArm64,
 }
 
 impl FusionPlatform {
-    /// Every admitted platform.
     pub const ALL: [Self; 3] = [Self::LinuxX64, Self::LinuxArm64, Self::MacosArm64];
 
-    /// Mise platform key.
     #[must_use]
     pub const fn mise_key(self) -> &'static str {
         match self {
@@ -45,7 +33,6 @@ impl FusionPlatform {
     }
 }
 
-/// The admitted archive URL of `version` for `platform`.
 #[must_use]
 pub fn fusion_url(version: FusionVersion, platform: FusionPlatform) -> String {
     format!(
@@ -54,10 +41,6 @@ pub fn fusion_url(version: FusionVersion, platform: FusionPlatform) -> String {
     )
 }
 
-/// Check the `dbt-fusion` rows of a `mise.lock` against the declared version.
-///
-/// For each platform the row must exist, its `url` must equal [`fusion_url`],
-/// and it must carry a `checksum`. Findings are sorted.
 #[must_use]
 pub fn check_mise_lock(lock_text: &str, version: FusionVersion) -> Vec<DbtError> {
     let Ok(lock) = lock_text.parse::<toml::Table>() else {

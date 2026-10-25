@@ -1,37 +1,33 @@
-//! Closed set of durable resource-probe operation phases.
-
 use crate::error::HostError;
 
-/// Durable external-effect phase for one isolated probe.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ProbePhase {
-    /// Complete projection persisted before any Docker effect.
     Prepared,
-    /// Create is about to be requested.
+
     CreateRequested,
-    /// Exact returned container ID was committed.
+
     ContainerCreated,
-    /// Start is about to be requested.
+
     StartRequested,
-    /// Start returned successfully.
+
     Started,
-    /// Wait is about to be requested.
+
     WaitRequested,
-    /// Successful exit was observed for the current process attempt.
+
     Waited,
-    /// Bounded stdout retrieval is about to be requested.
+
     LogsRequested,
-    /// A valid record was observed in memory, never stored.
+
     OutputObserved,
-    /// Stop is about to be requested during failure cleanup.
+
     StopRequested,
-    /// Remove is about to be requested.
+
     RemoveRequested,
-    /// Exact same-engine inspection proved the ID absent.
+
     Removed,
-    /// `Prepared` was safely aborted before Docker effects.
+
     Aborted,
-    /// Ownership or state was ambiguous; this blocks future probes.
+
     Quarantined,
 }
 

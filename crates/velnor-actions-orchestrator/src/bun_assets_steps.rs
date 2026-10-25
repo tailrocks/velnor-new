@@ -1,5 +1,3 @@
-//! Credential-free archive export and suite/report handoff for Bun assets.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Step, StepKind, StepRole};
@@ -13,8 +11,6 @@ use crate::bun_assets_handoff::{
     ASSET_ID_ENV, ASSET_PINS_ENV, BUN_ASSETS_EXPORT_OP, BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP,
 };
 
-/// Export the verified private-fetch tree as one mode- and symlink-aware bundle,
-/// then upload it without GitHub's zip wrapper.
 pub(crate) fn assets_tail(
     member_job_id: &str,
     pins: &[String],
@@ -30,8 +26,6 @@ pub(crate) fn assets_tail(
     ])
 }
 
-/// Reset workspace assets and runner-temp staging before download, then import
-/// through the bounded archive reader and check the marker against lock pins.
 pub(crate) fn suite_handoff(
     member_job_id: &str,
     pins: &[String],

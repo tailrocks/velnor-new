@@ -1,13 +1,3 @@
-//! Steps of one Ansible root job.
-//!
-//! `Install uv` and `Install Python` (checksum-verified archives from
-//! `mise.lock`), `Create Python environment` (`uv pip install --require-hashes
-//! --no-deps --no-build` from the hash-pinned requirements), `Verify
-//! ansible.cfg`, `Install Ansible collections` (declared SHA-256, offline
-//! install), then the syntax and lint checks as background steps joined by the
-//! renderer's `wait-all`. `ANSIBLE_CONFIG`, `ANSIBLE_HOME` and the collections
-//! path are job-owned, and no step carries a credential or a vault password.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_ansible::collection_url;
@@ -21,9 +11,7 @@ use super::stack_support::{LockedArchive, bash, quote};
 use crate::OrchestratorError;
 use crate::workflow_task_jobs::stack_family_cache;
 
-/// Job-owned working directory at run time.
 const WORK: &str = "$RUNNER_TEMP/velnor/ansible";
-/// The `ansible-collections` family directory (verified tarballs).
 const COLLECTIONS_DIR: &str = "$RUNNER_TEMP/velnor/ansible-collections";
 const UV_URL_CHECK: &str = "want=\"https://github.com/astral-sh/uv/releases/download/${VELNOR_TOOL_UV}/uv-x86_64-unknown-linux-gnu.tar.gz\"; \
 if [ \"${url:-}\" != \"$want\" ]; then echo 'velnor: the mise.lock uv url is not the admitted archive' >&2; exit 1; fi";
@@ -33,7 +21,6 @@ case \"$stamp\" in ''|*[!0-9]*) echo 'velnor: the mise.lock python url is not th
 want=\"${prefix}${stamp}/cpython-${VELNOR_TOOL_PYTHON}+${stamp}-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz\"; \
 if [ \"${url:-}\" != \"$want\" ]; then echo 'velnor: the mise.lock python url is not the admitted archive' >&2; exit 1; fi";
 
-/// Shell that points `ANSIBLE_CONFIG` at the root's verified in-place `ansible.cfg`.
 fn export_config(root: &AnsibleRoot) -> String {
     let rel = if root.dir == "." {
         CFG_NAME.to_owned()
@@ -46,7 +33,6 @@ fn export_config(root: &AnsibleRoot) -> String {
     )
 }
 
-/// The step environment: Velnor isolation plus the job-owned Ansible and uv homes.
 fn step_env(catalog: &ToolCatalog) -> Result<BTreeMap<String, String>, OrchestratorError> {
     let owned = |leaf: &str| format!("${{{{ runner.temp }}}}/velnor/{leaf}");
     let extra = BTreeMap::from([
@@ -123,9 +109,6 @@ fn collections_step(
     catalog: &ToolCatalog,
     root: &AnsibleRoot,
 ) -> Result<Step, OrchestratorError> {
-    // The verified tarballs live in the family cache directory: a restored one
-    // is kept only when it still matches the declared SHA-256, otherwise it is
-    // downloaded again; either way it is verified before the offline install.
     let download = |collection: &AnsibleCollection| {
         let file = collection_file(collection);
         format!(
@@ -202,7 +185,6 @@ printf '%s\\n' '---' 'profile: {profile}' 'offline: true' > \"$a/ansible-lint.ym
     Ok(step)
 }
 
-/// Every step after the Mise setup, in execution order.
 pub(crate) fn root_steps(
     config: &AnsibleStackConfig,
     root: &AnsibleRoot,

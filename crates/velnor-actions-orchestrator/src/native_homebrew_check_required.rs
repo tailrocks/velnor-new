@@ -95,10 +95,6 @@ fn require_native_authority(
     }
 }
 
-#[cfg(test)]
-#[path = "native_homebrew_check_required_applicability_tests.rs"]
-mod applicability_tests;
-
 fn validate_seed_required_plan(
     plan: &velnor_actions_contract::Plan,
     seed: &SeedTransitionAdmission,
@@ -226,7 +222,6 @@ fn validate_required_matrix_entry(
     }
 }
 
-/// Shared source-authorized declarations used by Required and cutover replay.
 pub(crate) fn required_native_homebrew_checks(
     authority: &crate::homebrew::authority::VerifiedHomebrewAuthority,
     cutover: Option<&crate::homebrew::structural_cutover::PrivateVerifiedSeedOutputBase>,

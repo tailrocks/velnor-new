@@ -1,17 +1,13 @@
-//! Single-flight refresh. HTTP 403 is not retried.
-
 use std::sync::Mutex;
 
 use crate::error::WireError;
 
-/// How many 401 refreshes have started.
 #[derive(Debug)]
 pub struct RefreshGate {
     started: Mutex<u32>,
 }
 
 impl RefreshGate {
-    /// No refresh has run.
     #[must_use]
     pub const fn new() -> Self {
         Self {
@@ -19,11 +15,6 @@ impl RefreshGate {
         }
     }
 
-    /// Count of refreshes started.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`WireError::Poisoned`] if the mutex is poisoned.
     pub fn started(&self) -> Result<u32, WireError> {
         self.started
             .lock()
@@ -38,27 +29,19 @@ impl Default for RefreshGate {
     }
 }
 
-/// Classification of a pinned status code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StatusClass {
-    /// HTTP 200.
     Ok,
-    /// HTTP 202. Empty poll, not an error, not an ack.
+
     EmptyPoll,
-    /// HTTP 204 ack.
+
     Acked,
-    /// HTTP 409. Do not delete the other session.
+
     SessionConflict,
-    /// HTTP 401. One refresh is allowed.
+
     RefreshOnce,
 }
 
-/// Classify a status. A second 401 fails. 403 fails without consuming a retry loop.
-///
-/// # Errors
-///
-/// Returns [`WireError::RefreshExhausted`], [`WireError::Forbidden`],
-/// [`WireError::UnexpectedStatus`], or [`WireError::Poisoned`].
 pub fn classify_status(status: u16, gate: &RefreshGate) -> Result<StatusClass, WireError> {
     match status {
         200 => Ok(StatusClass::Ok),

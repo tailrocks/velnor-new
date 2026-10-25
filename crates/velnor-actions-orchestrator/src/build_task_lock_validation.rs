@@ -1,5 +1,3 @@
-//! Strict validation of root and task-local native Mise lock rows.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::is_valid_build_tool_key;
@@ -19,8 +17,6 @@ pub(super) fn validate_lock_shape(lock: &NativeMiseLock) -> Result<(), Orchestra
     Ok(())
 }
 
-/// A task-local lock may narrow the root lock, but it cannot introduce or
-/// alter any artifact row. Its raw source digest remains separately bound.
 pub(super) fn validate_source_lock_subset(
     source: &NativeMiseLock,
     root: &NativeMiseLock,
@@ -120,9 +116,6 @@ pub(super) fn source_task_tool_requests(
     Ok(requests)
 }
 
-/// Bind every task-local selector to the root config and lock. A separate
-/// task lock must contain exactly the local requests from its source config;
-/// root-provided tool rows remain in the root lock.
 pub(super) fn validate_source_task_lock_requests(
     requests: &BTreeSet<(String, String)>,
     source_lock: Option<&NativeMiseLock>,

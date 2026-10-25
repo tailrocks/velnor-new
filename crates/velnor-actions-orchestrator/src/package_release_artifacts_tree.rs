@@ -1,12 +1,9 @@
-//! Exact regular-file tree admission for untrusted producer directories.
-
 use std::{collections::BTreeSet, fs, path::Path};
 
 use super::super::{MAX_FILE_COUNT, MAX_PATH_BYTES};
 use super::{ExpectedFile, invalid};
 use crate::OrchestratorError;
 
-/// Reject any missing, additional, linked, or non-regular producer output.
 pub(crate) fn validate_source_tree(
     root: &Path,
     expected: &[ExpectedFile],

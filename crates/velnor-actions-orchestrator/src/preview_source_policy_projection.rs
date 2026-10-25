@@ -1,5 +1,3 @@
-//! Project immutable preview policy from authenticated source A Git blobs.
-
 use crate::{OrchestratorError, internal::internal};
 use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract::{
@@ -15,9 +13,6 @@ use super::{resolve_policy_at_source, source_files::SourceFiles};
 
 const MAX_SOURCE_MANIFEST_BYTES: usize = 8 * 1024 * 1024;
 
-/// Resolve the preview policy and plan from immutable Git tree/blob data at A.
-/// # Errors
-/// Rejects an invalid source tree, config, workspace, inventory, or version.
 pub(in crate::package_release_publish) fn read_preview_policy_at_source(
     api: &GitHubApi,
     source_sha: &str,

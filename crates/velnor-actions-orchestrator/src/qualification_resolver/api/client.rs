@@ -1,5 +1,3 @@
-//! Repository-scoped pinned `gh api` requests.
-
 use std::ffi::{OsStr, OsString};
 use std::time::Duration;
 

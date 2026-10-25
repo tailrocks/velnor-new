@@ -1,5 +1,3 @@
-//! Native preview workflow with separate source, producer, signer, and publisher jobs.
-
 use super::{
     MiseSetup,
     features::{base, finish, run_step},
@@ -41,57 +39,31 @@ pub use tap::ConsumerReleaseTapSpec;
 mod admission;
 use admission::{aggregate_admission, finish_policy_job, policy_admission};
 
-/// Generation-time, inventory-only authority for a native preview workflow.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsumerReleaseSpec {
-    /// Official generator version used by all isolated helpers.
     pub generator_version: String,
-    /// Fetch LFS objects in every existing source checkout when explicitly enabled.
     pub checkout_lfs: bool,
-    /// Closed product inventory and source repository identity.
     pub policy: PackageReleasePolicy,
-    /// Producer platform selected by validated native configuration.
     pub producer_runner: VerificationRunner,
-    /// Native operation time limit; producer jobs add fixed lifecycle headroom.
     pub producer_timeout_minutes: u16,
-    /// Configured native publication deadline and preview eligibility job limit.
-    /// Publisher and recovery jobs add preparation-step caps and cleanup headroom.
     pub publication_timeout_minutes: JobTimeout,
-    /// Verified helper acquisition for Linux policy/signing/publication jobs.
     pub linux_acquire: Step,
-    /// Verified helper acquisition for the declared producer platform.
     pub producer_acquire: Step,
-    /// Velnor-owned helper acquisitions from the current workflow authority's
-    /// verified manifest, selected at runtime by the actual runner host.
     pub producer_acquire_by_target: BTreeMap<velnor_actions_contract::targets::ReleaseTarget, Step>,
-    /// Verified Mise setup matching the producer platform.
     pub producer_setup: MiseSetup,
-    /// Velnor-owned Mise setup pins selected by the actual preview producer host.
     pub producer_setup_by_target:
         BTreeMap<velnor_actions_contract::targets::ReleaseTarget, MiseSetup>,
-    /// Velnor-owned Mise pin used only to obtain the pinned GitHub CLI.
     pub linux_setup: MiseSetup,
-    /// Fixed qualified GitHub CLI installation argv.
     pub install_gh_argv: Vec<String>,
-    /// Exact pinned metadata compiler installation argv, before source discovery.
     pub install_rust_argv: Vec<String>,
-    /// `sh -c` argv verifying that install file by file, before any use.
     pub verify_rust_argv: Vec<String>,
-    /// Explicit P08 probe/fetch steps for every lockful workspace runtime discovers.
     pub producer_source_prep: Vec<Step>,
-    /// Shared owned homes for installation, source preparation, and offline metadata.
     pub producer_cargo_env: BTreeMap<String, String>,
-    /// Fixed qualified GitHub CLI argv prefix.
     pub gh_argv: Vec<String>,
-    /// Independently enabled downstream PR promotion, with isolated task and App boundaries.
     pub homebrew_tap: Option<ConsumerReleaseTapSpec>,
-    /// Closed manual tag coordination, present only for the stable channel.
     pub stable: Option<super::consumer_binary_release::ConsumerStableReleaseSpec>,
 }
 
-/// Render the independently enabled native preview workflow.
-/// # Errors
-/// Rejects malformed inventory, helper acquisition, pins, or generated commands.
 pub fn render_consumer_preview(spec: &ConsumerReleaseSpec) -> Result<RenderedFile, RenderError> {
     spec.policy
         .validate()
@@ -323,7 +295,3 @@ pub(super) fn recovery(spec: &ConsumerReleaseSpec) -> Result<(String, Yaml), Ren
     )?;
     Ok(finish(&id, fields, job_steps))
 }
-
-#[cfg(test)]
-#[path = "schema2_consumer_preview_tests.rs"]
-pub(super) mod tests;

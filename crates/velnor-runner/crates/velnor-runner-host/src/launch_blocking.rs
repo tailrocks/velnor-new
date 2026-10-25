@@ -1,5 +1,3 @@
-//! Current-thread `launch_once`. The capacity override stays on this thread.
-
 use std::path::Path;
 
 use crate::daemon_lock::{EngineLineageGuard, canonical_journal_path};
@@ -10,26 +8,15 @@ use crate::launch::{self, LaunchReport};
 use crate::scale_set::EnsureError;
 use crate::worker::ResourceBudget;
 
-/// `launch_once` failed, or the local socket or journal did.
 #[derive(Debug, thiserror::Error)]
 pub enum ListenFault {
-    /// Docker, journal, or runtime setup failed. No token.
     #[error(transparent)]
     Host(#[from] HostError),
-    /// Registration, acquire, or session failed. No token.
+
     #[error(transparent)]
     Ensure(#[from] EnsureError),
 }
 
-/// Open one session on a current-thread runtime.
-///
-/// `max_jobs` is installed on this thread before the runtime polls, so
-/// `job_capacity` sees the host file instead of only `VELNOR_MAX_JOBS`.
-///
-/// # Errors
-///
-/// Returns [`ListenFault`] when the runtime, socket, journal, or launch fails.
-/// The display text is the inner error and does not include `pat`.
 pub fn launch_blocking(
     pat: &str,
     owner: &str,

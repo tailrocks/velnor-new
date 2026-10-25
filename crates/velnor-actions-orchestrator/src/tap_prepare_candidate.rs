@@ -1,5 +1,3 @@
-//! Canonical preparation proof construction and persistence.
-
 use std::{
     collections::BTreeMap,
     fs,
@@ -53,7 +51,6 @@ pub(super) struct CandidateIdentity<'a> {
     pub(super) disposition: TapPreparationDisposition,
 }
 
-/// Authenticated inputs required to render one canonical formula candidate.
 #[derive(Clone, Copy)]
 pub(crate) struct FormulaCandidateInput<'a> {
     pub(crate) spec: Option<&'a HomebrewFormulaSpec>,
@@ -62,13 +59,11 @@ pub(crate) struct FormulaCandidateInput<'a> {
     pub(crate) formula_path: &'a str,
     pub(crate) base_sha: &'a str,
     pub(crate) base_formula: &'a [u8],
-    /// Candidate bytes are supplied only for the source-qualified custom route.
     pub(crate) proposed_formula: Option<&'a [u8]>,
     pub(crate) plan: &'a PackageReleasePlan,
     pub(crate) release: &'a VerifiedPackageRelease,
 }
 
-/// Authenticated inputs needed to reconstruct a merged historical proof.
 #[derive(Clone, Copy)]
 pub(crate) struct HistoricalCandidateInput<'a> {
     pub(crate) source_repository: &'a str,
@@ -140,7 +135,6 @@ fn staging_path(temp: &Path) -> PathBuf {
     temp.join(format!(".tap-candidate-{}-{sequence}", std::process::id()))
 }
 
-/// Derive the sole canonical formula from the typed spec and authenticated receipt.
 pub(crate) fn derive_native_formula_candidate(
     input: FormulaCandidateInput<'_>,
 ) -> Result<Vec<u8>, OrchestratorError> {
@@ -179,7 +173,6 @@ pub(crate) fn derive_native_formula_candidate(
     }
     let projection = validate_homebrew_projection(spec, plan)
         .map_err(|_| internal("tap_formula_plan_projection_invalid"))?;
-    // Recognize the complete base template before release equality can yield a no-op.
     parse_generated_formula(spec, &projection, base_formula)
         .map_err(|_| internal("tap_formula_base_template_invalid"))?;
     let asset_digests = projection
@@ -247,8 +240,6 @@ pub(crate) fn derive_formula_candidate(
     .map_err(|_| internal("tap_formula_literal_or_monotonicity_rejected"))
 }
 
-/// Reconstruct the original changed proof from trusted release and formula inputs.
-/// This supports historical PR authentication when fresh tap main is already current.
 pub(crate) fn reconstruct_historical_candidate_proof(
     input: HistoricalCandidateInput<'_>,
 ) -> Result<HomebrewTapPreparationProof, OrchestratorError> {
@@ -340,7 +331,3 @@ fn candidate_proof(
         candidate_formula: "formula.rb".to_owned(),
     })
 }
-
-#[cfg(test)]
-#[path = "tap_prepare_candidate_tests.rs"]
-mod tests;

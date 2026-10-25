@@ -1,4 +1,3 @@
-//! Readonly qualified executable probes; the orchestrator hashes installed bytes.
 use crate::{CheckDeadline, IsolatedCommand, MiseError};
 use serde::{Deserialize, Serialize};
 use std::ffi::OsString;
@@ -9,61 +8,36 @@ use velnor_actions_contract::config::{
 };
 use velnor_actions_contract::{digest_b3, is_valid_digest};
 
-/// Actual executable identity computed from installed bytes by the runtime.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct QualifiedExecutableObservation {
-    /// Declared command name, never a caller-selected executable argument.
     pub name: String,
-    /// Canonical executable path inside the owned installation closure.
     pub path: PathBuf,
-    /// SHA-256 independently computed over those executable bytes.
     pub sha256: String,
 }
 
-/// Owned runtime homes and an explicitly selected compiler installation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QualifiedProbeHomes {
-    /// Canonical job-private root.
     pub home: PathBuf,
-    /// Owned projections of qualified dependency executables.
     pub bin_dir: PathBuf,
-    /// Owned Cargo cache and configuration home.
     pub cargo_home: PathBuf,
-    /// Owned Rust distribution-management home.
     pub rust_home: PathBuf,
-    /// Exact owned compiler prefix, never a downloadable version selector.
     pub compiler_toolchain: Option<PathBuf>,
 }
 
-/// Receipt of one fixed, bounded executable probe.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct QualifiedExecutableProof {
-    /// Root qualified-tool identity.
     pub tool_id: String,
-    /// Exact declared tool release.
     pub tool_version: String,
-    /// Explicit observed execution platform.
     pub platform: CheckPlatform,
-    /// Complete declared executable and readonly probe.
     pub declared: QualifiedToolExecutable,
-    /// Runtime byte identity checked before executing the probe.
     pub observed: QualifiedExecutableObservation,
-    /// Complete bounded version stdout, retained for receipt validation.
     pub stdout: String,
-    /// Digest of the exact stdout bytes.
     pub stdout_digest: String,
-    /// Digest of the exact stderr bytes.
     pub stderr_digest: String,
 }
 
-/// Execute an exact declared version probe without consumer config or credentials.
-///
-/// The runtime must hash installed bytes itself before supplying `observed`.
-/// No hashing subprocess, installation, shell, or configurable argv is used here.
-/// # Errors
-/// Rejects declaration/hash/path/version/platform drift or failed bounded probes.
 pub fn verify_qualified_executable(
     tool: &QualifiedTool,
     platform: CheckPlatform,
@@ -120,9 +94,6 @@ pub fn verify_qualified_executable(
     })
 }
 
-/// Validate ordered executable receipts against their complete root declarations.
-/// # Errors
-/// Rejects missing, extra, reordered, altered, or semantically drifting receipts.
 pub fn validate_executable_proofs(
     tool: &QualifiedTool,
     platform: CheckPlatform,
@@ -280,8 +251,6 @@ fn validate_output(
         | QualifiedToolProbe::RustcVerbose { expected } => expected,
     };
     if matches!(probe, QualifiedToolProbe::RustfmtVersion { .. }) {
-        // Shared tool admission already binds this component to its compiler.
-        // Unlike ordinary version probes, no additional stdout lines are valid.
         let actual = stdout
             .strip_suffix("\r\n")
             .or_else(|| stdout.strip_suffix('\n'))

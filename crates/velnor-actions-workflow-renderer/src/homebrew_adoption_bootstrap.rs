@@ -1,5 +1,3 @@
-//! Fixed SDK-release bootstrap shared by all adoption workflow jobs.
-
 use std::collections::BTreeMap;
 
 use crate::yaml::Yaml;

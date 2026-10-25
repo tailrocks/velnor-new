@@ -1,22 +1,3 @@
-//! Resolve effective [`ToolCatalog`] from repository toolchain files and `.velnor/config.toml`.
-//!
-//! Enforces fail-closed agreement across `rust-toolchain.toml`, legacy
-//! `rust-toolchain`, `[stacks.rust] toolchain`, and `[tools]`, omitting
-//! `RUSTUP_TOOLCHAIN` from step environments when a repository toolchain
-//! file is present so rustup honors the repository file directly.
-//!
-//! Every catalog tool the project's Mise config declares (plus Rust from a
-//! toolchain file) takes the project's version and is recorded as
-//! project-declared (hard decision 5, [`crate::tool_catalog_project`]);
-//! `.velnor/config.toml` pins apply only to undeclared tools and must agree
-//! with a declaration otherwise.
-//!
-//! The repository `mise.toml` rust record's `mr_boxington` option is read
-//! too: when it selects mise's exec-time cargo→MBX wrapper, the resolved
-//! catalog carries the repository's `mr-boxington` pin so the pinned-tool
-//! preflight installs it (missing installs fall back to the action-owned
-//! PATH `mbx`, which may be a different version).
-
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -40,26 +21,12 @@ use crate::project_tool_sources::{read_nested_toolchains, read_project_sources};
 use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoRead, read_repo_file};
 use crate::tool_catalog_project::{PinInputs, apply_declarations, contract, project_declarations};
 
-/// Toolchain-file Rust channel: `(file, raw channel, exact version)`.
 type ToolchainFile = (&'static str, String, String);
 
-/// Resolve the effective [`ToolCatalog`] for a repository root and parsed [`VelnorConfig`].
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Config`] when a repository toolchain file has
-/// an invalid or non-`X.Y.Z` channel, when `rust-toolchain.toml` and
-/// `rust-toolchain` disagree, or when a repository toolchain file conflicts
-/// with `[stacks.rust] toolchain` or `[tools] rust`. A repository `mise.toml`
-/// rust record with `mr_boxington = true` additionally requires an exact
-/// `[tools] mr-boxington` record; a missing or inexact record, or a record
-/// pin disagreeing with a `.velnor/config.toml [tools] mr-boxington`
-/// override, fails closed.
 pub(crate) fn resolve_tool_catalog(
     root: &Path,
     config: &VelnorConfig,
 ) -> Result<ToolCatalog, OrchestratorError> {
-    // First, so the named conflict is the second source itself.
     rust_source::enforce_when_opted_in(root, config)?;
     let toml_tc = read_toolchain_file(root, RUST_TOOLCHAIN_FILE)?;
     let legacy_tc = read_toolchain_file(root, RUST_TOOLCHAIN_LEGACY_FILE)?;
@@ -95,7 +62,6 @@ pub(crate) fn resolve_tool_catalog(
         ));
     }
     let export_rustup_toolchain = file_tc.is_none();
-    // Every declaration source is read (and must parse) before any is used.
     let sources = read_project_sources(root)?;
     let repo_mise = read_repo_mise_tools(root)?;
     let rust_mr_boxington = repo_mise.as_ref().is_some_and(|tools| {
@@ -108,8 +74,6 @@ pub(crate) fn resolve_tool_catalog(
         resolve_wrapped_mr_boxington_pin(repo_mise.as_ref(), config.tools.get("mr-boxington"))?;
     }
     let declared = project_declarations(&sources)?;
-    // A nested channel that differs from the root keeps its own code; the
-    // mirror then compares every toolchain file key by key.
     reject_divergent_nested_toolchains(root, declared.get(&PinnedTool::Rust))?;
     rust_mirror::check_toolchain_mirror(root)?;
     let pins = PinInputs {
@@ -140,13 +104,6 @@ pub(crate) fn resolve_tool_catalog(
     )
 }
 
-/// Fail generation for a sub-workspace toolchain file that differs from the
-/// root declaration.
-///
-/// The generated resolver reads root sources only, and rustup honors a
-/// toolchain file in the directory a command runs from, so a divergent
-/// nested file would build with a toolchain the workflow never resolved.
-/// Nested files that declare the root version are inert and accepted.
 fn reject_divergent_nested_toolchains(
     root: &Path,
     root_rust: Option<&String>,
@@ -170,23 +127,11 @@ fn reject_divergent_nested_toolchains(
     Ok(())
 }
 
-/// Repository-root `mise.toml` tool records the catalog must agree with.
 struct RepoMiseTools {
-    /// Repository-relative file the records were read from.
     file: &'static str,
-    /// Every `[tools]` record by key.
     tools: BTreeMap<String, NativeToolSelector>,
 }
 
-/// Read the repository-root Mise tool records (`mise.toml`, then `.mise.toml`).
-///
-/// Recorded decision — first file wins for the `mr_boxington` wrapper
-/// option: mise merges every config file it loads, but the wrapper option
-/// is read from the first spelling only (the same precedence the
-/// profile-evidence reader in `evidence.rs::tool_config_input` applies).
-/// Versions are different: [`read_project_sources`] reads every location
-/// and requires all declarations to agree. A file that does not parse is an
-/// error here as well; it never reads as "no records".
 fn read_repo_mise_tools(root: &Path) -> Result<Option<RepoMiseTools>, OrchestratorError> {
     for file in [MISE_TOML_FILE, DOT_MISE_TOML_FILE] {
         let RepoRead::Text(text) = read_repo_file(root, file, MAX_REPO_FILE_BYTES)? else {
@@ -214,20 +159,6 @@ fn read_repo_mise_tools(root: &Path) -> Result<Option<RepoMiseTools>, Orchestrat
     Ok(None)
 }
 
-/// Resolve the mise-managed `mr-boxington` pin the preflight must install.
-///
-/// With the repository rust record's `mr_boxington = true`, mise's
-/// exec-time wrapper dispatches cargo through the mise-managed
-/// `mr-boxington` tool at the repository's own pin, so that pin is
-/// mandatory: an exact, os-unfiltered `X.Y.Z` `[tools] mr-boxington`
-/// record must exist in the same file (mise itself rejects the config
-/// otherwise). An os-restricted record would install on the repository's
-/// listed systems only, so the fleet's preflight could not rely on it.
-/// A `.velnor/config.toml [tools] mr-boxington` override names the same
-/// tool; the repository record governs the exec-time dispatch, so the
-/// override must match it exactly — agreement means the shared pin wins,
-/// disagreement is ambiguous (the preflight would install one pin while
-/// the wrapper dispatches the other) and fails closed naming both.
 fn resolve_wrapped_mr_boxington_pin(
     repo_mise: Option<&RepoMiseTools>,
     config_override: Option<&str>,
@@ -271,8 +202,6 @@ fn resolve_wrapped_mr_boxington_pin(
     Ok(pin.to_owned())
 }
 
-/// Fail-closed error for a rust record opting into the wrapper without a
-/// repository `mr-boxington` record to dispatch through.
 fn missing_mr_boxington_record(file: &str) -> OrchestratorError {
     OrchestratorError::config(
         file,
@@ -303,18 +232,8 @@ fn read_toolchain_file(
     Ok(Some((rel, raw_channel, version)))
 }
 
-/// `rust-toolchain.toml` mirrors the `mise.toml` rust entry (owner layout).
 #[path = "tool_catalog_rust_mirror.rs"]
 pub(crate) mod rust_mirror;
 
-/// Opt-in `[stacks.rust] toolchain_source = "mise"` enforcement.
 #[path = "tool_catalog_rust_source.rs"]
 pub(crate) mod rust_source;
-
-#[cfg(test)]
-#[path = "tool_catalog_resolve_tests.rs"]
-mod tests;
-
-#[cfg(test)]
-#[path = "tool_catalog_sources_tests.rs"]
-mod sources_tests;

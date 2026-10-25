@@ -1,11 +1,3 @@
-//! Affected selection for dbt project jobs (hard decision 3).
-//!
-//! dbt jobs own no Rust obligations. A project job is planned from its
-//! directory alone: `analyze_project` refuses every read outside it, so the
-//! directory is the complete input set. Doubt selects the job: an unknown
-//! change set or a global-config path (`ChangeEvidence::paths` is `None`)
-//! and a non-affected-work event never skip a project.
-
 use std::collections::BTreeSet;
 
 use velnor_actions_contract::{
@@ -16,7 +8,6 @@ use velnor_actions_dbt::{affected_projects, job_id};
 use super::ChangeEvidence;
 use crate::discover::Discovery;
 
-/// Plan dispositions for every dbt project job, in project order.
 pub(crate) fn dispositions(
     config: &VelnorConfig,
     discovery: &Discovery,

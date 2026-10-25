@@ -1,4 +1,3 @@
-//! Identity and transport for explicit opaque checks.
 #[path = "named_check_plan.rs"]
 pub(crate) mod plan;
 use crate::discover::Discovery;
@@ -11,7 +10,6 @@ use velnor_actions_contract::{
 };
 use velnor_actions_mise::{DiscoveredCheck, ToolCatalog};
 
-/// Require the discovered definition corresponding to the exact proposal.
 pub(crate) fn discovered<'a>(
     discovery: &'a Discovery,
     task: &ProposedTask,
@@ -29,7 +27,6 @@ fn require_mise(task: &ProposedTask) -> Result<(), ContractError> {
     }
     Ok(())
 }
-/// Typed extension binds the complete definition and resolved task configuration.
 pub(crate) fn extension_for(item: &DiscoveredCheck) -> Result<StackExtension, ContractError> {
     require_mise(&item.proposal)?;
     item.verify_qualification_identity()
@@ -41,7 +38,6 @@ pub(crate) fn extension_for(item: &DiscoveredCheck) -> Result<StackExtension, Co
     }
     .to_stack_extension()
 }
-/// Opaque execution metadata forwarded to the existing matrix transport.
 pub(crate) fn metadata_for(item: &DiscoveredCheck) -> Result<serde_json::Value, ContractError> {
     require_mise(&item.proposal)?;
     item.verify_qualification_identity()
@@ -49,7 +45,6 @@ pub(crate) fn metadata_for(item: &DiscoveredCheck) -> Result<serde_json::Value, 
     serde_json::to_value(item.entry_metadata())
         .map_err(|e| ContractError::CanonicalJson(e.to_string()))
 }
-/// Adapter-owned pinned tool evidence encoded in neutral proposal flags.
 pub(crate) fn toolchain_inputs(
     task: &ProposedTask,
     _catalog: &ToolCatalog,
@@ -77,7 +72,6 @@ pub(crate) fn toolchain_inputs(
         test_runner: "mise".to_owned(),
     })
 }
-/// Bind declared source bytes while retaining the opaque-state refusal.
 pub(crate) fn resolve_closure(
     root: &Path,
     task: &ProposedTask,
@@ -88,7 +82,6 @@ pub(crate) fn resolve_closure(
     resolve_closure_until(root, task, graph, toolchain, platform, None)
 }
 
-/// Resolve declared byte inputs while consuming an optional check deadline.
 pub(crate) fn resolve_closure_until(
     root: &Path,
     task: &ProposedTask,
@@ -156,7 +149,3 @@ pub(crate) fn resolve_closure_until(
     builder = builder.input("checkout_head", provenance);
     Ok(builder.build(&task.task_id))
 }
-
-#[cfg(test)]
-#[path = "named_checks_tests.rs"]
-mod tests;

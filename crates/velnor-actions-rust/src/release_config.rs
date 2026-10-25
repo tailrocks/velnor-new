@@ -1,12 +1,3 @@
-//! Effective release-plz configuration emission.
-//!
-//! Normal emission pins the safe routine policy: workspace `release = false`
-//! with an explicit `[[package]]` allowlist, verification on, registry
-//! publication. A separate bootstrap-only constructor flips `release_always`
-//! for first-publication dispatch; routine config must never carry it.
-//! Version groups use the native `version_group` key: changed members take
-//! the highest next version while unchanged members stay (no lockstep).
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::release_error::ReleaseError;
@@ -14,82 +5,51 @@ use crate::release_facts::validate_registry_name;
 use crate::release_select::ReleaseSelection;
 use crate::release_semver::parse_version;
 
-/// Default package-qualified tag pattern.
 pub const DEFAULT_TAG_PATTERN: &str = "{{ package }}-v{{ version }}";
 
-/// Emission inputs.
 #[derive(Debug, Clone)]
 pub struct EmitOptions<'a> {
-    /// Explicit tag pattern (must hold both placeholders).
     pub tag_pattern: &'a str,
-    /// Native version groups applied to member entries.
     pub groups: &'a [VersionGroup],
 }
 
-/// One native release-plz version group.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VersionGroup {
-    /// Group name.
     pub name: String,
-    /// Member package names.
     pub members: Vec<String>,
 }
 
-/// One pre-existing tag record.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExistingTag {
-    /// Tag name.
     pub tag: String,
-    /// Peeled commit SHA the tag points at.
     pub sha: String,
 }
 
-/// Tag-collision classification inputs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TagState {
-    /// Tag the release would create.
     pub expected_tag: String,
-    /// Tags already present.
     pub existing: Vec<ExistingTag>,
-    /// Independently verified release-source SHA.
     pub source_sha: String,
-    /// Whether the registry already holds the version.
     pub registry_has_version: bool,
 }
 
-/// Distinct typed tag outcomes (never conflate collision with success).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TagOutcome {
-    /// Expected tag absent and registry lacks the version.
     ReadyToPublish,
-    /// Expected tag points at the verified source and registry agrees.
     AlreadyReleased {
-        /// Tag name.
         tag: String,
-        /// Tag target SHA.
         sha: String,
     },
-    /// Registry holds the version but the expected tag is missing.
     MetadataRepairNeeded {
-        /// Missing tag name.
         tag: String,
     },
-    /// Expected tag conflicts (wrong source, or present while absent).
     TagCollision {
-        /// Expected tag name.
         expected: String,
-        /// SHA the conflicting tag points at.
         found: String,
-        /// Verified release-source SHA.
         source: String,
     },
 }
 
-/// Emit the normal effective release-plz configuration.
-///
-/// # Errors
-///
-/// Returns [`ReleaseError`] on an empty set, bad tag pattern, or bad groups.
 pub fn emit_release_plz_config(
     selection: &ReleaseSelection,
     options: &EmitOptions<'_>,
@@ -97,14 +57,6 @@ pub fn emit_release_plz_config(
     render_config(selection, options, false)
 }
 
-/// Emit the bootstrap-only configuration (`release_always = true`).
-///
-/// First-publication dispatch only; routine emission must use
-/// [`emit_release_plz_config`].
-///
-/// # Errors
-///
-/// Returns [`ReleaseError`] on an empty set, bad tag pattern, or bad groups.
 pub fn emit_bootstrap_config(
     selection: &ReleaseSelection,
     options: &EmitOptions<'_>,
@@ -112,7 +64,6 @@ pub fn emit_bootstrap_config(
     render_config(selection, options, true)
 }
 
-/// Render either flavor of the effective configuration.
 fn render_config(
     selection: &ReleaseSelection,
     options: &EmitOptions<'_>,
@@ -148,12 +99,10 @@ fn render_config(
     Ok(out)
 }
 
-/// Render a TOML boolean.
 fn render_bool(value: bool) -> &'static str {
     if value { "true" } else { "false" }
 }
 
-/// Check the tag pattern holds both placeholders and no control bytes.
 fn check_tag_pattern(pattern: &str) -> Result<(), ReleaseError> {
     let ok = pattern.contains("{{ package }}")
         && pattern.contains("{{ version }}")
@@ -167,7 +116,6 @@ fn check_tag_pattern(pattern: &str) -> Result<(), ReleaseError> {
     }
 }
 
-/// Check groups against `known` names, returning the member-to-group map.
 fn check_groups<'a>(
     groups: &'a [VersionGroup],
     known: &BTreeSet<&str>,
@@ -204,16 +152,6 @@ fn check_groups<'a>(
     Ok(grouped)
 }
 
-/// Resolve grouped versions: changed members take the highest planned next
-/// version, unchanged members keep their current version (no lockstep).
-///
-/// `current` holds member versions, `planned` holds release-plz next
-/// versions, and `changed` names members with changes. Returns resolved
-/// versions for grouped members only.
-///
-/// # Errors
-///
-/// Returns [`ReleaseError`] on bad groups or unparsable input versions.
 pub fn resolve_version_groups(
     groups: &[VersionGroup],
     current: &BTreeMap<String, String>,
@@ -229,7 +167,6 @@ pub fn resolve_version_groups(
     Ok(resolved)
 }
 
-/// Resolve one group into `resolved`.
 fn resolve_group(
     group: &VersionGroup,
     current: &BTreeMap<String, String>,
@@ -290,7 +227,6 @@ fn resolve_group(
     Ok(())
 }
 
-/// Classify expected-tag versus existing-tag and registry state.
 #[must_use]
 pub fn classify_tag(state: &TagState) -> TagOutcome {
     let found = state
@@ -324,15 +260,11 @@ pub fn classify_tag(state: &TagState) -> TagOutcome {
     }
 }
 
-/// Append a formatted escape without an intermediate allocation.
-///
-/// `String` writes are infallible; the default maps the unrepresentable error.
 fn append_escape(out: &mut String, args: std::fmt::Arguments<'_>) {
     use std::fmt::Write as _;
     write!(out, "{args}").unwrap_or_default();
 }
 
-/// Append `text` as a TOML basic string.
 fn toml_string(text: &str, out: &mut String) {
     out.push('"');
     for char in text.chars() {

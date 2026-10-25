@@ -1,4 +1,3 @@
-//! Stack selection and per-stack options.
 use super::ansible::AnsibleStackConfig;
 use super::binary_release::RustBinaryReleaseConfig;
 use super::bun::BunStackConfig;
@@ -15,117 +14,95 @@ use crate::ids::is_component_byte;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Stack selection and per-stack options.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StacksConfig {
-    /// Sorted, duplicate-free exact registered stack IDs to ignore.
     #[serde(default)]
     pub ignore: Vec<String>,
-    /// Rust stack options.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rust: Option<RustStackConfig>,
-    /// Tofu stack options; absent means no tofu validation roots.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tofu: Option<TofuStackConfig>,
-    /// Bun stack options; absent means no Bun workspaces (hard decision 6).
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bun: Option<BunStackConfig>,
-    /// Gradle stack options; absent means no Gradle jobs.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gradle: Option<GradleStackConfig>,
-    /// dbt-fusion stack options; absent means no dbt projects.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dbt: Option<DbtStackConfig>,
-    /// Ansible stack options; absent means no Ansible roots.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ansible: Option<AnsibleStackConfig>,
 }
 
-/// Declared compile driver (`[stacks.rust] compile_driver`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DeclaredCompileDriver {
-    /// Plain Cargo compilation.
     Cargo,
-    /// MBX compilation.
+
     Mbx,
 }
 
-/// Declared test runner (`[stacks.rust] test_runner`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DeclaredTestRunner {
-    /// Plain `cargo test`.
     CargoTest,
-    /// Nextest execution.
+
     CargoNextest,
 }
 
-/// Rust stack options.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RustStackConfig {
-    /// Rust task configuration variants.
     #[serde(default = "default_configurations")]
     pub configurations: Vec<RustConfiguration>,
-    /// Optional exact `major.minor.patch` Rust toolchain override (`[stacks.rust] toolchain`).
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub toolchain: Option<String>,
-    /// Opt-in Mise-authoritative Rust version (`[stacks.rust] toolchain_source`);
-    /// absent keeps hard decision 4's agreement rule only.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub toolchain_source: Option<super::RustToolchainSource>,
-    /// Sticky declared compile driver; conflicts with durable evidence fail closed.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub compile_driver: Option<DeclaredCompileDriver>,
-    /// Sticky declared test runner; conflicts with durable evidence fail closed.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub test_runner: Option<DeclaredTestRunner>,
-    /// Ignored test execution mode ("all", "only", "ignored-only", "default").
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run_ignored: Option<String>,
-    /// Initialize missing parallel check targets from the completed test build.
-    /// Existing target lanes are preserved; disabled by default.
+
     #[serde(default, skip_serializing_if = "is_false")]
     pub seed_parallel_targets: bool,
-    /// Activate every package feature for Clippy only (`--all-features`);
-    /// test, build, and documentation tasks keep their configured features.
+
     #[serde(default, skip_serializing_if = "is_false")]
     pub clippy_all_features: bool,
-    /// Rust release policy (`[stacks.rust.release]`); disabled by default.
+
     #[serde(default)]
     pub release: RustReleaseConfig,
-    /// Single-package binary release policy; disabled by default.
+
     #[serde(default)]
     pub binary_release: RustBinaryReleaseConfig,
-    /// Named Nextest suites (`[[stacks.rust.suites]]`).
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub suites: Vec<RustSuiteConfig>,
-    /// Per-package options (`[stacks.rust.crates.<package>]`), keyed by Cargo package name.
+
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub crates: BTreeMap<String, RustCrateConfig>,
-    /// Declared inputs outside each package's own directory
-    /// (`[[stacks.rust.inputs]]`), consumed by affected-work selection.
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub inputs: Vec<RustInputRule>,
 }
 
-/// Largest accepted per-crate `build_jobs`.
 pub const MAX_CRATE_BUILD_JOBS: u32 = 64;
 
-/// Per-package Rust options (`[stacks.rust.crates.<package>]`).
-///
-/// `build_jobs` caps Cargo's parallel compiler processes
-/// (`CARGO_BUILD_JOBS`) for every Cargo step of that package's crate job:
-/// the test-executable build and each parallel check. It bounds peak memory
-/// for crates whose rustc processes are large (a lib and its unit-test
-/// harness compiled together can need several GiB each). It never exceeds
-/// `resources.compiler_process_budget`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RustCrateConfig {
-    /// Cargo compiler process cap for this package's crate job.
     pub build_jobs: u32,
 }
 
@@ -137,7 +114,6 @@ fn is_false(value: &bool) -> bool {
     !value
 }
 
-/// Documented default: one `default` configuration variant list.
 fn default_configurations() -> Vec<RustConfiguration> {
     vec![RustConfiguration {
         name: "default".to_owned(),
@@ -147,29 +123,20 @@ fn default_configurations() -> Vec<RustConfiguration> {
     }]
 }
 
-/// One Rust task configuration variant.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RustConfiguration {
-    /// Configuration name.
     pub name: String,
-    /// Cargo features for this variant.
+
     #[serde(default)]
     pub features: Vec<String>,
-    /// Activate every feature each package declares (`--all-features`).
-    /// Conflicts with a `features` list other than empty or `["default"]`.
+
     #[serde(default, skip_serializing_if = "is_false")]
     pub all_features: bool,
-    /// Target triple or `host`.
+
     pub target: String,
 }
 
-/// True for a render-safe Rust target: `host` or a lowercase triple over
-/// `[a-z0-9_.+-]` that never starts with `-`.
-///
-/// Targets flow into `--target` argv and quoted `run:` lines; the
-/// allowlist admits nothing the shell or `${{ }}` could evaluate, and
-/// flag-shaped values fail closed at config load.
 #[must_use]
 pub fn is_valid_rust_target(target: &str) -> bool {
     if target == "host" {
@@ -182,11 +149,6 @@ pub fn is_valid_rust_target(target: &str) -> bool {
             .all(|b| matches!(b, b'a'..=b'z' | b'0'..=b'9' | b'_' | b'.' | b'+' | b'-'))
 }
 
-/// True for a render-safe Cargo feature name.
-///
-/// Admits Cargo feature syntax (names plus `dep:`, weak `?`, and `/`
-/// qualifiers) and nothing the shell or `${{ }}` could evaluate.
-/// Unknown names still fail closed later against declared features.
 #[must_use]
 pub fn is_valid_feature_name(feature: &str) -> bool {
     !feature.is_empty()
@@ -196,8 +158,6 @@ pub fn is_valid_feature_name(feature: &str) -> bool {
 }
 
 impl RustStackConfig {
-    /// Documented default: one `default` configuration, no declarations,
-    /// release disabled.
     #[must_use]
     pub fn default_config() -> Self {
         Self {
@@ -219,8 +179,6 @@ impl RustStackConfig {
 }
 
 impl StacksConfig {
-    /// Validate ignore list and Rust configurations.
-    /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         let mut sorted = self.ignore.clone();
         sorted.sort();
@@ -274,8 +232,6 @@ impl StacksConfig {
 }
 
 impl RustStackConfig {
-    /// Validate Rust configurations (unique nonempty names) and declared suites.
-    /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         if let Some(ref tc) = self.toolchain
             && (tc.trim() != tc || tc.is_empty() || !super::tools::is_exact_semver(tc))
@@ -357,7 +313,6 @@ impl RustStackConfig {
         self.validate_crates(file)
     }
 
-    /// Validate per-package options: package-name grammar and `build_jobs` range.
     fn validate_crates(&self, file: &str) -> Result<(), ContractError> {
         for (package, options) in &self.crates {
             let path = format!("stacks.rust.crates.{package}");
@@ -383,7 +338,3 @@ impl RustStackConfig {
         Ok(())
     }
 }
-
-#[cfg(test)]
-#[path = "stacks_tests.rs"]
-mod tests;

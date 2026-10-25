@@ -18,7 +18,7 @@ from owned_tool_source import (BUILD, HOSTS, PREFIX, admit, build_bootstrap_desc
 
 
 def environment(directory):
-    # A subprocess allowlist removes GitHub/OIDC, cache, cloud and service secrets.
+
     result = {key: os.environ[key] for key in ("PATH", "SYSTEMROOT", "COMSPEC",
               "SSL_CERT_FILE", "SSL_CERT_DIR", "LANG", "LC_ALL") if key in os.environ}
     result.update(HOME=str(directory / "home"), CARGO_HOME=str(directory / "cargo"),

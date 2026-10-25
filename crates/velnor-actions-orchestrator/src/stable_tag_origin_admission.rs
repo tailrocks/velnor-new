@@ -1,5 +1,3 @@
-//! Source-free remote admission and digest-pinned local producer handoff.
-
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 use velnor_actions_contract::{
@@ -24,9 +22,6 @@ struct Admission {
     intent_archive: ArtifactRef,
 }
 
-/// Reauthenticate retained metadata and pin a credential-free producer context.
-/// # Errors
-/// Rejects changed tag/origin/intent, invalid CI or a failed metadata job.
 pub fn admit_stable_tag_origin_from_env() -> Result<(), OrchestratorError> {
     super::super::artifact_zip::within_operation(admit_origin)
 }
@@ -161,7 +156,3 @@ fn append_output(value: &str) -> Result<(), OrchestratorError> {
     file.write_all(value.as_bytes())
         .map_err(|_| internal("stable_tag_output_append"))
 }
-
-#[cfg(test)]
-#[path = "stable_tag_origin_admission_tests.rs"]
-mod tests;

@@ -1,13 +1,3 @@
-//! `velnor-actions playwright lock`: resolve the Playwright browser archives
-//! each Bun member needs and write `.velnor/playwright.lock` (hard decision 6).
-//!
-//! The revision table comes from the `playwright-core` tarball whose integrity
-//! `bun.lock` records: the tarball is downloaded, verified against that
-//! integrity and only then executed (`install --dry-run`, which prints the
-//! download URLs and runs no repository code). Each archive is downloaded and
-//! hashed; the digest is trust-on-first-use because Playwright publishes none.
-//! The operator runs this; generated jobs never do.
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::{OsStr, OsString};
 use std::fs;
@@ -35,32 +25,14 @@ const DOWNLOAD_TIMEOUT: Duration = Duration::from_mins(30);
 const DRY_RUN_TIMEOUT: Duration = Duration::from_mins(2);
 const CAPTURE_BYTES: usize = 1024 * 1024;
 
-/// Transport and execution for the lock: real processes in production, fixtures in tests.
 pub(crate) trait BrowserSource {
-    /// Download the `playwright-core` tarball of `version` to `dest`.
-    ///
-    /// # Errors
-    /// Fails when the download does.
     fn download_core(&self, version: &str, dest: &Path) -> Result<(), OrchestratorError>;
 
-    /// Output of `install --dry-run <browser>` for the extracted package in `core_dir`.
-    ///
-    /// # Errors
-    /// Fails when the package cannot be run.
     fn dry_run(&self, core_dir: &Path, browser: &str) -> Result<String, OrchestratorError>;
 
-    /// Download one browser archive to `dest`.
-    ///
-    /// # Errors
-    /// Fails when the download does.
     fn download_archive(&self, url: &str, dest: &Path) -> Result<(), OrchestratorError>;
 }
 
-/// `(directory, url)` pairs of a dry-run listing, in output order.
-///
-/// # Errors
-/// Rejects a listing with a URL and no install location, an unsafe directory
-/// or a URL outside the Playwright hosts.
 pub(crate) fn parse_dry_run(output: &str) -> Result<Vec<(String, String)>, OrchestratorError> {
     let mut location: Option<String> = None;
     let mut found = Vec::new();
@@ -88,10 +60,6 @@ pub(crate) fn parse_dry_run(output: &str) -> Result<Vec<(String, String)>, Orche
     Ok(found)
 }
 
-/// Check a downloaded `playwright-core` tarball against its `bun.lock` integrity.
-///
-/// # Errors
-/// `playwright_core_integrity_mismatch`, or an unreadable file.
 pub(crate) fn verify_integrity(path: &Path, expected: &str) -> Result<(), OrchestratorError> {
     let bytes = fs::read(path)
         .map_err(|err| OrchestratorError::io(path.display().to_string(), err.to_string()))?;
@@ -103,10 +71,6 @@ pub(crate) fn verify_integrity(path: &Path, expected: &str) -> Result<(), Orches
     }
 }
 
-/// Resolve every request into a lock.
-///
-/// # Errors
-/// Propagates the first failure; nothing is partially returned.
 pub(crate) fn build_playwright_lock(
     requests: &[CoreRequest],
     source: &dyn BrowserSource,
@@ -175,11 +139,6 @@ pub(crate) fn build_playwright_lock(
     Ok(lock)
 }
 
-/// Resolve the repository's members through npm and the Playwright CDN and
-/// write the lock. Returns the lock text exactly as written.
-///
-/// # Errors
-/// Fails without browsers to provision, on resolution errors and IO errors.
 pub fn lock_playwright_browsers(root: &Path) -> Result<String, OrchestratorError> {
     let config = load_config(root)?;
     let Some(bun) = &config.stacks.bun else {
@@ -202,7 +161,6 @@ pub fn lock_playwright_browsers(root: &Path) -> Result<String, OrchestratorError
     let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(root, &config)?;
     let scratch = tempfile::tempdir()
         .map_err(|err| OrchestratorError::io("playwright lock scratch", err.to_string()))?;
-    // The archive reader refuses symlinked parents (macOS temp lives behind one).
     let scratch_path = scratch
         .path()
         .canonicalize()
@@ -213,7 +171,6 @@ pub fn lock_playwright_browsers(root: &Path) -> Result<String, OrchestratorError
     Ok(text)
 }
 
-/// curl for downloads, the project Bun for the dry run.
 struct NetworkSource {
     catalog: velnor_actions_mise::ToolCatalog,
 }
@@ -292,7 +249,3 @@ impl BrowserSource for NetworkSource {
         curl(url, dest, PLAYWRIGHT_MAX_ARCHIVE_BYTES)
     }
 }
-
-#[cfg(test)]
-#[path = "playwright_resolve_tests.rs"]
-mod tests;

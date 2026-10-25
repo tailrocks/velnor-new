@@ -1,41 +1,20 @@
-//! Canonical Jactionlint release facts and verifier script.
-//!
-//! The contract crate owns these immutable facts so leaf adapters can produce
-//! and validate the same verifier without depending on the Mise adapter.
-
 use super::selected_mise::BIND_SELECTED_MISE_FUNCTION;
 
-/// Qualified Jactionlint release (`jdx/jactionlint` tag `v2.3.0`, stable,
-/// published 2026-10-21). Install: Mise registry name `jactionlint`
-/// (backend `github:jdx/jactionlint`), which checks the release-API digest
-/// and the GitHub artifact attestation. Provenance was verified at this bump
-/// (2026-10-22), never at generate time: `cosign verify-blob-attestation`
-/// on `packslip.sigstore.json` (`--type https://packslip.dev/release/v1`,
-/// identity `https://github.com/jdx/jactionlint/.github/workflows/release.yaml@refs/tags/v2.3.0`,
-/// issuer `https://token.actions.githubusercontent.com`) and
-/// `gh attestation verify -R jdx/jactionlint --signer-workflow jdx/jactionlint/.github/workflows/release.yaml`
-/// both passed for the linux amd64, linux arm64, darwin arm64 and darwin
-/// amd64 archives.
-/// Per-platform digests: [`JACTIONLINT_DIGESTS`].
-/// Source: `https://api.github.com/repos/jdx/jactionlint/releases/latest`; checked 2026-10-22.
 pub const JACTIONLINT_VERSION: &str = "2.3.0";
 
-/// One measured `jactionlint` release asset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct JactionlintDigest {
-    /// Exact jactionlint version.
     pub version: &'static str,
-    /// Mise platform (`linux-x64`, `linux-arm64`, `macos-arm64`, `macos-x64`).
+
     pub platform: &'static str,
-    /// Upstream release asset name.
+
     pub asset: &'static str,
-    /// SHA-256 of the release archive.
+
     pub archive_sha256: &'static str,
-    /// SHA-256 of the `jactionlint` executable inside the archive.
+
     pub executable_sha256: &'static str,
 }
 
-/// Measured digests, sorted by version then platform.
 pub const JACTIONLINT_DIGESTS: &[JactionlintDigest] = &[
     JactionlintDigest {
         version: "2.3.0",
@@ -73,22 +52,16 @@ fn row(version: &str, platform: &str) -> Option<&'static JactionlintDigest> {
         .find(|row| row.version == version && row.platform == platform)
 }
 
-/// Pinned archive SHA-256 for one exact version on one Mise platform.
 #[must_use]
 pub fn jactionlint_archive_sha256(version: &str, platform: &str) -> Option<&'static str> {
     row(version, platform).map(|row| row.archive_sha256)
 }
 
-/// Pinned executable SHA-256 for one exact version on one Mise platform.
 #[must_use]
 pub fn jactionlint_executable_sha256(version: &str, platform: &str) -> Option<&'static str> {
     row(version, platform).map(|row| row.executable_sha256)
 }
 
-/// Build the exact POSIX Jactionlint verification script for one version.
-///
-/// The caller supplies the fixed system PATH used by the renderer. Project
-/// references stay symbolic; literal versions are validated by the renderer.
 #[must_use]
 pub fn jactionlint_verifier_script(version: &str, verify_path: &str) -> String {
     let cases = JACTIONLINT_DIGESTS

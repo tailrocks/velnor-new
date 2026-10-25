@@ -1,10 +1,3 @@
-//! Read the Bun workspaces `[stacks.bun]` names from the checked-out repository.
-//!
-//! One pass over the file index and the lock/manifest texts yields every
-//! workspace, its members and the static outside-read evidence. Generation
-//! (jobs) and planning (selection) both start here, so they cannot disagree
-//! about what a member is.
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
@@ -20,26 +13,19 @@ use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
 use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoRead, read_repo_file};
 
-/// One configured root: its resolved workspace and repository `bunfig.toml`.
 #[derive(Debug, Clone)]
 pub(crate) struct BunRoot {
-    /// Members, sorted by name.
     pub(crate) workspace: Workspace,
-    /// Repository `bunfig.toml` text, when present.
     pub(crate) bunfig: Option<String>,
 }
 
-/// Every configured Bun workspace plus per-member outside reads.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct BunInventory {
-    /// Roots in configuration order.
     pub(crate) roots: Vec<BunRoot>,
-    /// Outside reads per member name (empty vectors are omitted).
     pub(crate) reads: BTreeMap<String, Vec<String>>,
 }
 
 impl BunInventory {
-    /// Every workspace, in configuration order.
     pub(crate) fn workspaces(&self) -> Vec<Workspace> {
         self.roots
             .iter()
@@ -47,12 +33,6 @@ impl BunInventory {
             .collect()
     }
 
-    /// Load and cross-check everything `config` names.
-    ///
-    /// # Errors
-    ///
-    /// Fails closed with the adapter's machine-readable code, prefixed by
-    /// `stacks.bun`, for any lockfile, manifest or configuration problem.
     pub(crate) fn load(
         root: &Path,
         index: &FileIndex,
@@ -72,15 +52,6 @@ impl BunInventory {
         Ok(inventory)
     }
 
-    /// Load the workspaces `config` names without a repository file index.
-    ///
-    /// For commands that read the locks and manifests only (`playwright lock`);
-    /// the foreign-lockfile scan and the outside-read evidence need the index
-    /// and run when the workflow is generated.
-    ///
-    /// # Errors
-    ///
-    /// The same adapter codes as [`Self::load`], without the index checks.
     pub(crate) fn load_unindexed(
         root: &Path,
         config: &BunStackConfig,
@@ -149,7 +120,6 @@ fn load_root(root: &Path, index: Option<&FileIndex>, prefix: &str) -> Result<Bun
     Ok(BunRoot { workspace, bunfig })
 }
 
-/// `file` relative to `prefix` when it is a direct child (no further `/`).
 fn direct_child<'a>(file: &'a str, prefix: &str) -> Option<&'a str> {
     let rel = if prefix.is_empty() {
         file
@@ -171,7 +141,6 @@ fn required(root: &Path, rel: &str) -> Result<String, BunError> {
     read(root, rel)?.ok_or_else(|| BunError::new("bun_file_missing", rel))
 }
 
-/// Config files of each member whose reads can leave its directory.
 fn root_reads(
     root: &Path,
     index: &FileIndex,

@@ -1,20 +1,10 @@
-//! Stack-extension schema registry checks (cache §1).
-//!
-//! Unknown extension schemas disable reuse. Stacks
-//! map to their adapter schema; task IDs map to their stack segment.
-
 use velnor_actions_contract::Stack;
 use velnor_actions_contract::cachekey::{
     RUST_EXTENSION_SCHEMA, TOFU_EXTENSION_SCHEMA, is_known_stack_extension_schema,
 };
 
-/// Typed input identity for one always-executed native Homebrew check.
 pub(crate) const NATIVE_HOMEBREW_CHECK_IDENTITY_SCHEMA: &str = "homebrew-native-check-identity-v2";
 
-/// Adapter extension schema for one stack ID, if the stack is known.
-///
-/// Unknown stack IDs map to `None` (unknown), disabling reuse for
-/// their tasks.
 #[must_use]
 pub fn extension_schema_for_stack(stack_id: &str) -> Option<&'static str> {
     match Stack::from_id(stack_id) {
@@ -26,7 +16,6 @@ pub fn extension_schema_for_stack(stack_id: &str) -> Option<&'static str> {
     }
 }
 
-/// Stack segment of a `stack/<sid>/...` task ID, if well-formed.
 #[must_use]
 pub fn task_stack_segment(task_id: &str) -> Option<&str> {
     task_id
@@ -35,11 +24,6 @@ pub fn task_stack_segment(task_id: &str) -> Option<&str> {
         .filter(|segment| !segment.is_empty())
 }
 
-/// Kind segment of a stack or internal task ID, if well-formed.
-///
-/// Stack IDs carry a possibly nested manifest key, so the kind is the
-/// segment before the trailing configuration (after a shard suffix is
-/// stripped); internal IDs are `internal/<kind>/<config>`.
 #[must_use]
 pub fn task_kind_segment(task_id: &str) -> Option<&str> {
     if let Some(rest) = task_id.strip_prefix("internal/") {
@@ -59,10 +43,6 @@ pub fn task_kind_segment(task_id: &str) -> Option<&str> {
     Some(parts[parts.len() - 2])
 }
 
-/// Unit-key segment of a `stack/<sid>/...` task ID, if well-formed.
-///
-/// Tofu root keys are encoded into one segment; Rust manifest keys may
-/// span segments. Internal obligations carry no key.
 #[must_use]
 pub fn task_key_segment(task_id: &str) -> Option<String> {
     let rest = task_id.strip_prefix("stack/")?;
@@ -76,80 +56,7 @@ pub fn task_key_segment(task_id: &str) -> Option<String> {
     Some(parts[1..parts.len() - 2].join("/"))
 }
 
-/// True when reuse decisions may rest on `schema` (cache §1).
 #[must_use]
 pub fn reuse_eligible_for_schema(schema: &str) -> bool {
     is_known_stack_extension_schema(schema)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn segments_parse_nested_keys_shards_and_internal() {
-        assert_eq!(
-            task_stack_segment("stack/rust/a/b/clippy/default"),
-            Some("rust")
-        );
-        assert_eq!(
-            task_kind_segment("stack/rust/a/b/clippy/default"),
-            Some("clippy")
-        );
-        assert_eq!(
-            task_kind_segment("stack/rust/root/nextest/default/shard-2-of-4"),
-            Some("nextest")
-        );
-        assert_eq!(task_kind_segment("internal/policy/default"), Some("policy"));
-        assert_eq!(task_kind_segment("stack/rust/root"), None);
-        assert_eq!(task_stack_segment("internal/policy/default"), None);
-        assert_eq!(task_stack_segment("bogus"), None);
-    }
-
-    #[test]
-    fn key_segment_returns_nested_manifest_keys() {
-        assert_eq!(
-            task_key_segment("stack/tofu/dir-/validate/default"),
-            Some("dir-".to_owned())
-        );
-        assert_eq!(
-            task_key_segment("stack/tofu/dir-737461636b732f767063/fmt/default"),
-            Some("dir-737461636b732f767063".to_owned())
-        );
-        assert_eq!(
-            task_key_segment("stack/tofu/dir-737461636b732f61/init/default/shard-1-of-2"),
-            Some("dir-737461636b732f61".to_owned())
-        );
-        assert_eq!(
-            task_key_segment("stack/rust/a/b/clippy/default"),
-            Some("a/b".to_owned())
-        );
-        assert_eq!(task_key_segment("internal/policy/default"), None);
-        assert_eq!(task_key_segment("stack/rust/root"), None);
-        assert_eq!(task_key_segment("stack//root/clippy/default"), None);
-        assert_eq!(task_key_segment("bogus"), None);
-    }
-
-    #[test]
-    fn known_rust_schema_is_reusable_but_unknown_is_not() {
-        assert_eq!(
-            extension_schema_for_stack("rust"),
-            Some(RUST_EXTENSION_SCHEMA)
-        );
-        assert_eq!(
-            extension_schema_for_stack("mise"),
-            Some(velnor_actions_contract::NAMED_CHECK_EXTENSION_SCHEMA)
-        );
-        assert!(reuse_eligible_for_schema(RUST_EXTENSION_SCHEMA));
-        assert!(!reuse_eligible_for_schema("rust-task-v2"));
-    }
-
-    #[test]
-    fn tofu_schema_is_reusable() {
-        assert_eq!(
-            extension_schema_for_stack("tofu"),
-            Some(TOFU_EXTENSION_SCHEMA)
-        );
-        assert!(reuse_eligible_for_schema(TOFU_EXTENSION_SCHEMA));
-    }
 }

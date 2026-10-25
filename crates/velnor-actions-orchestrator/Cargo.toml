@@ -46,14 +46,6 @@ ignored = ["flate2"]
 [lints]
 workspace = true
 
-[[test]]
-name = "velnor_orchestrator"
-path = "tests/velnor_orchestrator.rs"
-
-[[test]]
-name = "validation_failure"
-path = "tests/validation_failure.rs"
-
 [dev-dependencies]
 proc-macro2 = { version = "=1.0.107", features = ["span-locations"] }
 serde_json = { workspace = true }

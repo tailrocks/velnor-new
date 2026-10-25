@@ -1,5 +1,3 @@
-//! Release-asset bundle jobs of the publication workflow: build, attest, publish.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::actions::{
@@ -15,12 +13,10 @@ use super::{AUTHORITY_JOB, Inputs, bundle_job, plain, script_step};
 use crate::OrchestratorError;
 use crate::workflow::CHECKOUT_USES;
 
-/// Artifact name shared by upload and download.
 fn artifact_name(id: &str) -> String {
     format!("bundle-{id}")
 }
 
-/// Download step restoring the bundle directory.
 fn download_step(id: &str) -> Result<PublishStep, OrchestratorError> {
     Ok(plain(action_step(
         "Download bundle",
@@ -32,7 +28,6 @@ fn download_step(id: &str) -> Result<PublishStep, OrchestratorError> {
     )?))
 }
 
-/// Build: checkout the tagged commit, pack deterministically, upload.
 pub(super) fn build_job(
     inputs: &Inputs<'_>,
     bundle: &PublishBundle,
@@ -68,7 +63,6 @@ pub(super) fn build_job(
     Ok(job)
 }
 
-/// Provenance subject: the tarball in the bundle directory.
 fn subject(id: &str) -> Subject<'_> {
     Subject {
         kind: "bundle",
@@ -86,10 +80,6 @@ fn checksum_step(id: &str) -> Result<PublishStep, OrchestratorError> {
     )?))
 }
 
-/// Attest: verify the checksum, then sign provenance for the tarball.
-///
-/// `github_attestation` writes to GitHub's attestation store; the declared
-/// `sigstore_bundle` signs a bundle the publish job records.
 pub(super) fn attest_job(
     inputs: &Inputs<'_>,
     id: &str,
@@ -123,10 +113,6 @@ pub(super) fn attest_job(
     ))
 }
 
-/// Publish: re-verify, then upload immutable release assets.
-///
-/// With a Sigstore bundle the job also re-verifies the bundle and receipt
-/// and uploads them beside the tarball.
 pub(super) fn publish_job(
     inputs: &Inputs<'_>,
     id: &str,

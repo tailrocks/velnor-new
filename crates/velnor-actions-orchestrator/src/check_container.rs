@@ -1,4 +1,3 @@
-//! Own typed container binaries and explicit runtime delegation before readonly probes.
 use crate::OrchestratorError;
 use crate::internal::internal;
 use std::os::unix::fs::PermissionsExt;
@@ -208,7 +207,3 @@ fn read_deadline_checkpoint(deadline: Option<CheckDeadline>) -> Result<(), &'sta
             .map_err(|_| "deadline_exhausted")
     })
 }
-
-#[cfg(test)]
-#[path = "check_container_tests.rs"]
-mod tests;

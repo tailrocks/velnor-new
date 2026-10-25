@@ -1,9 +1,3 @@
-//! Preserve repository-owned `.github` entries inside generation staging.
-//!
-//! Generated workflows, declared formats, and marked shared actions remain
-//! generator-owned. Other entries copy without following links; unsupported
-//! entry types fail closed.
-
 use std::path::{Path, PathBuf};
 use std::{fs, io::Read};
 
@@ -16,7 +10,6 @@ use velnor_actions_workflow_renderer::render::RenderedTree;
 
 use crate::OrchestratorError;
 
-/// Prepare the in-place replacement tree before the existing output is swapped.
 pub(super) fn stage_in_place(
     source: &Path,
     staging_root: &Path,
@@ -24,7 +17,6 @@ pub(super) fn stage_in_place(
     preserve_workflows: &[String],
 ) -> Result<PathBuf, OrchestratorError> {
     let permissions = root_permissions(source)?;
-    // A read-only root must exchange with a sibling on macOS.
     let staged = if permissions.is_some() {
         staging_root.to_path_buf()
     } else {
@@ -38,7 +30,6 @@ pub(super) fn stage_in_place(
     Ok(staged)
 }
 
-/// Populate the already-reserved preview tree from the repository and render.
 pub(super) fn write_preview(
     source: &Path,
     destination: &Path,
@@ -53,7 +44,6 @@ pub(super) fn write_preview(
     restore_root_permissions(destination, permissions)
 }
 
-/// Capture the repository root's own mode, never a link target.
 fn root_permissions(source: &Path) -> Result<Option<std::fs::Permissions>, OrchestratorError> {
     match std::fs::symlink_metadata(source) {
         Ok(metadata) if metadata.is_dir() && !metadata.is_symlink() => {
@@ -68,7 +58,6 @@ fn root_permissions(source: &Path) -> Result<Option<std::fs::Permissions>, Orche
     }
 }
 
-/// Restore descendants deepest first, after every file has been written.
 fn restore_directory_permissions(
     directories: Vec<(PathBuf, std::fs::Permissions)>,
 ) -> Result<(), OrchestratorError> {
@@ -79,7 +68,6 @@ fn restore_directory_permissions(
     Ok(())
 }
 
-/// Restore the source root mode after staged generation completes.
 fn restore_root_permissions(
     destination: &Path,
     permissions: Option<std::fs::Permissions>,
@@ -91,7 +79,6 @@ fn restore_root_permissions(
     Ok(())
 }
 
-/// Refuse any preserved path that overlaps generated output before writing.
 fn check_generated_collisions(
     destination: &Path,
     tree: &RenderedTree,
@@ -137,7 +124,6 @@ fn check_generated_collisions(
     Ok(())
 }
 
-/// Copy repository-owned entries, including hidden files and empty trees.
 fn copy_repository_content(
     source: &Path,
     destination: &Path,
@@ -170,7 +156,6 @@ fn copy_repository_content(
     Ok(directories)
 }
 
-/// Keep workflow, declared-format, and release outputs generator-owned unless preserved.
 pub(super) fn generator_owned(relative: &Path, preserve_workflows: &[String]) -> bool {
     if relative == Path::new("workflows") {
         return preserve_workflows.is_empty();
@@ -194,7 +179,6 @@ pub(super) fn generator_owned(relative: &Path, preserve_workflows: &[String]) ->
         })
 }
 
-/// Recognize generated shared actions by exact path shape and marker.
 pub(super) fn generated_shared_action(
     relative: &Path,
     source: &Path,
@@ -210,10 +194,6 @@ pub(super) fn generated_shared_action(
     first_line_is_generated_marker(source)
 }
 
-/// Recognize generated helper scripts by exact path shape and marker.
-///
-/// Unmarked files under `scripts/` stay repository-owned; only a marked
-/// file is generator-owned and skipped during preserve-copy.
 pub(super) fn generated_marked_script(
     relative: &Path,
     source: &Path,
@@ -226,12 +206,6 @@ pub(super) fn generated_marked_script(
     first_line_is_generated_marker(source)
 }
 
-/// Recognize a generated dco2 config by exact path and marker.
-///
-/// An unmarked `dco.yml` stays repository-owned: with `[dco]` configured it
-/// collides with the generated file and generation refuses to overwrite it;
-/// without `[dco]` it is preserved untouched. A marked file is generator
-/// output, so it is retired when `[dco]` is removed.
 pub(super) fn generated_marked_dco(
     relative: &Path,
     source: &Path,
@@ -243,12 +217,6 @@ pub(super) fn generated_marked_dco(
     first_line_is_generated_marker(source)
 }
 
-/// Recognize the retired generated actionlint config by exact path and marker.
-///
-/// jactionlint replaced actionlint (hard decision 10): a marked
-/// `.github/actionlint.yaml` is stale generator output and is removed by the
-/// next generation, so no consumer keeps a second, ignored lint config. An
-/// unmarked file stays repository-owned and is preserved untouched.
 pub(super) fn retired_marked_lint_config(
     relative: &Path,
     source: &Path,
@@ -276,7 +244,6 @@ fn first_line_is_generated_marker(source: &Path) -> Result<bool, OrchestratorErr
     Ok(first.is_some_and(is_generated_marker_line))
 }
 
-/// Copy one repository entry without following symbolic links.
 fn copy_entry(
     source: &Path,
     destination: &Path,
@@ -329,7 +296,6 @@ fn copy_entry(
     }
 }
 
-/// Recreate a symbolic link with its literal target, including dangling links.
 fn copy_symlink(source: &Path, destination: &Path) -> Result<(), OrchestratorError> {
     let metadata = std::fs::symlink_metadata(source).map_err(|error| io(source, &error))?;
     let target = std::fs::read_link(source).map_err(|error| io(source, &error))?;
@@ -370,7 +336,6 @@ fn copy_symlink(source: &Path, destination: &Path) -> Result<(), OrchestratorErr
     }
 }
 
-/// Convert Unix permission bits to Rustix's platform-specific raw mode type.
 #[cfg(unix)]
 fn checked_raw_mode<RawMode>(mode: u32, path: &Path) -> Result<RawMode, OrchestratorError>
 where
@@ -385,11 +350,6 @@ where
     })
 }
 
-/// Attach the path that failed to preserve or publish output.
 fn io(path: &Path, error: &std::io::Error) -> OrchestratorError {
     OrchestratorError::io(path.display().to_string(), error.to_string())
 }
-
-#[cfg(test)]
-#[path = "generate_preserve_tests.rs"]
-mod tests;

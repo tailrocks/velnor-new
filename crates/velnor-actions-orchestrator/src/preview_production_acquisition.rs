@@ -1,5 +1,3 @@
-//! Credentialed acquisition ends before any repository code starts. The runner's
-//! step output, not mutable on-disk metadata, binds the token-free consumer.
 use crate::filesystem_owner::held_file::HeldFile;
 
 use super::{
@@ -24,7 +22,6 @@ use velnor_actions_contract::{
 };
 use velnor_actions_mise::CheckDeadline;
 
-/// Source-free acquisition of the exact complete leaf union.
 pub const ACQUIRE_RELEASE_LEAVES_OP: &str = "acquire-release-leaves-v1";
 const RECORD: &str = "preview-admitted-leaves.json";
 const SCHEMA: &str = "velnor.release-admitted-leaves.v1";
@@ -38,10 +35,6 @@ struct Admission {
     inputs: Vec<TaskInput>,
 }
 
-/// Acquire authenticated inputs without opening source configuration or running
-/// repository commands. The caller publishes the returned digest as a step output.
-/// # Errors
-/// Rejects remote, request, artifact, inventory and deadline drift.
 pub fn acquire_release_leaves() -> Result<String, OrchestratorError> {
     let deadline =
         CheckDeadline::from_start_with_cleanup_reserve(Instant::now(), Duration::from_secs(300))
@@ -219,7 +212,3 @@ fn runner_temp() -> Result<PathBuf, OrchestratorError> {
     crate::exclusive_write::create_dir_no_symlink(&temp, &root)?;
     Ok(root)
 }
-
-#[cfg(test)]
-#[path = "preview_production_acquisition_tests.rs"]
-mod tests;

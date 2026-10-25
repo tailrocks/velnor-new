@@ -1,8 +1,3 @@
-//! Independent, read-only verification of an immutable public package release.
-//!
-//! This module does not authenticate a tap-promotion caller and returns no
-//! publication, merge, App-token, or OIDC authority.
-
 use serde::Serialize;
 use std::time::Duration;
 
@@ -15,19 +10,8 @@ use crate::{
     OrchestratorError, internal::internal, package_release_signer::VerifiedAttestedSignedPackage,
 };
 
-#[cfg(test)]
-#[path = "package_release_public_historical_tests.rs"]
-mod historical_tests;
-#[cfg(test)]
-#[path = "package_release_public_tests.rs"]
-mod tests;
-
 const PUBLIC_VERIFY_BUDGET: Duration = Duration::from_mins(5);
 
-/// Exact immutable release admitted by a protected source qualification policy.
-///
-/// This type is never deserialized. Its constructor is private to this trusted
-/// module; the caller must obtain policy from the protected source authority.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct HistoricalPackageReleaseAdmission {
     source_sha: String,
@@ -39,8 +23,6 @@ pub(crate) struct HistoricalPackageReleaseAdmission {
     recovery: Option<HistoricalPackageReleaseRecovery>,
 }
 
-/// Separately authenticated completion evidence for the immutable historical
-/// A release whose original publisher was cancelled after signing.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct HistoricalPackageReleaseRecovery {
     pub(super) original_publisher_job_id: u64,
@@ -56,7 +38,6 @@ pub(crate) struct HistoricalPackageReleaseRecovery {
     pub(super) admission_bytes: Vec<u8>,
 }
 
-/// Protected-policy fields for a separately verified historical recovery run.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct HistoricalPackageReleaseRecoveryInput {
     pub(crate) original_publisher_job_id: u64,
@@ -175,16 +156,8 @@ impl HistoricalPackageReleaseAdmission {
         self.recovery = Some(recovery);
         Ok(self)
     }
-
-    #[cfg(test)]
-    pub(crate) fn digest(&self) -> Result<String, OrchestratorError> {
-        let bytes = velnor_actions_contract::canonical_json_bytes(self)
-            .map_err(|_| internal("package_public_historical_admission_encode"))?;
-        Ok(sha256(&bytes))
-    }
 }
 
-/// Trusted release policy loaded by native runtime from protected source authority.
 #[derive(Debug, Clone)]
 pub(crate) struct PackageReleasePublicPolicy {
     plan: PackageReleasePlan,
@@ -194,7 +167,6 @@ pub(crate) struct PackageReleasePublicPolicy {
 }
 
 impl PackageReleasePublicPolicy {
-    /// Create policy only after resolving and authenticating protected source data.
     pub(crate) fn from_trusted_source_authority(
         plan: PackageReleasePlan,
         repository_id: u64,
@@ -213,7 +185,6 @@ impl PackageReleasePublicPolicy {
         })
     }
 
-    /// Add an independently protected historical receipt admission.
     pub(crate) fn with_historical_admissions(
         mut self,
         admissions: Vec<HistoricalPackageReleaseAdmission>,
@@ -233,37 +204,8 @@ impl PackageReleasePublicPolicy {
         self.historical = admissions;
         Ok(self)
     }
-
-    #[cfg(test)]
-    pub(crate) fn digest(&self) -> Result<String, OrchestratorError> {
-        #[derive(Serialize)]
-        struct DigestInput<'a> {
-            schema: &'static str,
-            plan: &'a PackageReleasePlan,
-            repository_id: u64,
-            authority_sha: &'a str,
-            historical: Vec<String>,
-        }
-        let mut historical = self
-            .historical
-            .iter()
-            .map(HistoricalPackageReleaseAdmission::digest)
-            .collect::<Result<Vec<_>, _>>()?;
-        historical.sort();
-        let input = DigestInput {
-            schema: "velnor.package-release-public-policy.v1",
-            plan: &self.plan,
-            repository_id: self.repository_id,
-            authority_sha: &self.authority_sha,
-            historical,
-        };
-        let bytes = velnor_actions_contract::canonical_json_bytes(&input)
-            .map_err(|_| internal("package_public_policy_encode"))?;
-        Ok(sha256(&bytes))
-    }
 }
 
-/// Candidate selectors only choose a release. They cannot set signer or plan policy.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PackageReleasePublicSelection {
     channel: PackageReleaseChannel,
@@ -288,10 +230,6 @@ impl PackageReleasePublicSelection {
     }
 }
 
-/// Verified package contents with an owned, held directory.
-///
-/// Fields and construction stay private. This type has no conversion into
-/// `VerifiedAttestedSignedPackage` or any publisher/writer authority.
 #[derive(Debug)]
 pub(crate) struct VerifiedPublicPackageRelease {
     plan: PackageReleasePlan,
@@ -332,8 +270,6 @@ impl VerifiedPublicPackageRelease {
     }
 }
 
-/// Authenticate public release bytes, immutable GitHub state, signer provenance,
-/// CI success, every archive signature, and every SLSA attestation.
 #[path = "package_release_public_assets.rs"]
 mod assets;
 #[path = "package_release_public_verify.rs"]

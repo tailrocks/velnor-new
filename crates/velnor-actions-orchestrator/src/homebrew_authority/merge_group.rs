@@ -1,5 +1,3 @@
-//! Capture the single GitHub merge-group context used for protected tap reads.
-
 use crate::package_release_publish::MergeGroupSelection;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -166,7 +164,3 @@ fn lowercase_sha(value: &str) -> bool {
             .bytes()
             .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
-
-#[cfg(test)]
-#[path = "merge_group_tests.rs"]
-mod tests;

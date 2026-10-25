@@ -109,7 +109,6 @@ fn visit_entry(
             )?;
         }
         FileType::RegularFile => read_tree_file(directory, path, name, metadata, state)?,
-        // Symlinks and special files are not part of the generated source tree.
         _ => {}
     }
     Ok(())

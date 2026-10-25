@@ -1,11 +1,3 @@
-//! Rust `git-tag` release jobs of the publication workflow.
-//!
-//! A default-branch authority job waits for the `Required` verdict, then the
-//! release job runs the pinned release-plz to create tags and GitHub
-//! releases. It holds `contents: write` and `pull-requests: read` (release-plz
-//! lists the pull requests of the released commit): no registry token, no
-//! `id-token`, no pull-request write authority.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::JobTimeout;
@@ -21,14 +13,10 @@ use crate::publish_steps::{Inputs, bundle_job, plain, script_step};
 use crate::release_checkouts::{forge_env, policy_checkout};
 use crate::release_steps::{Phase, phase_argv};
 
-/// Default-branch authority job id; every default-branch publication job needs it.
 pub(crate) const BRANCH_AUTHORITY_JOB: &str = "publish-branch-authority";
-/// Tag release job id.
 const TAG_RELEASE_JOB: &str = "rust-tag-release";
-/// Polls of the `Required` verdict and the pause between them.
 const REQUIRED_POLLS: (u16, u16) = (60, 30);
 
-/// The Rust tag release job, keyed by id.
 pub(crate) fn release_jobs(
     inputs: &Inputs<'_>,
     manifest: &str,
@@ -39,12 +27,10 @@ pub(crate) fn release_jobs(
     )]))
 }
 
-/// Condition selecting the authority job that matches the pushed ref type.
 pub(crate) fn event_kind(kind: &str) -> String {
     format!("github.ref_type == '{kind}'")
 }
 
-/// Branch authority: a default-branch push whose `Required` check is green.
 pub(crate) fn branch_authority_job(
     inputs: &Inputs<'_>,
     gh: &str,
@@ -63,7 +49,6 @@ pub(crate) fn branch_authority_job(
             true,
         )?),
     ];
-    // Budget: every poll plus its pause, and a margin for setup.
     let minutes = u32::from(polls) * u32::from(pause) / 60 + 5;
     Ok(PublishJobSpec {
         role: PublishRole::BranchAuthority,
@@ -80,7 +65,6 @@ pub(crate) fn branch_authority_job(
     })
 }
 
-/// Tag release: pinned release-plz creates tags and GitHub releases only.
 fn tag_release_job(
     inputs: &Inputs<'_>,
     manifest: &str,

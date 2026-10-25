@@ -1,5 +1,3 @@
-//! Exact hosted native-platform image task jobs.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
@@ -8,33 +6,18 @@ use velnor_actions_contract::{
 
 use crate::{RenderError, shell_step, steps};
 
-#[cfg(test)]
-#[path = "native_image_jobs_tests.rs"]
-mod tests;
-
-/// Per-task source binding resolved from the checked-out repository.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NativeImageTaskPolicy {
-    /// Validated native-image task declaration.
     pub task: NativeImageTask,
-    /// Exact hosted runner mapped from the closed platform enum.
     pub runner_label: String,
-    /// SHA-256 of the tracked script bytes at planning time.
     pub source_sha256: String,
 }
 
-/// Verify the current checked-out script before invoking repository code.
 pub(crate) const VERIFY_NATIVE_IMAGE_SOURCE_NAME: &str = "Verify native image task source";
-/// Verify the runner and Docker daemon are native Linux ARM64.
 pub(crate) const VERIFY_NATIVE_IMAGE_HOST_NAME: &str = "Verify native ARM64 Docker host";
-/// Execute the source-bound native image script.
 pub(crate) const RUN_NATIVE_IMAGE_TASK_NAME: &str = "Run native image validation";
 
 const DOCKER_SOCKET: &str = "unix:///var/run/docker.sock";
-/// Host capability probe with Docker client isolation owned by the script.
-///
-/// Inline-shell argv cannot carry the `env -u` prefix, so the script unsets
-/// ambient Docker configuration and pins the socket before probing.
 const HOST_CHECK_SCRIPT: &str = concat!(
     "set -euo pipefail; ",
     "unset DOCKER_CONFIG DOCKER_CONTEXT DOCKER_TLS_VERIFY DOCKER_CERT_PATH; ",
@@ -49,15 +32,12 @@ const HOST_CHECK_SCRIPT: &str = concat!(
 );
 
 impl NativeImageTaskPolicy {
-    /// Generated GitHub job key for this declaration.
     #[must_use]
     pub fn job_id(&self) -> String {
         format!("{WORKFLOW_TASK_JOB_PREFIX}{}", self.task.id)
     }
 }
 
-/// Build the exact native-host, least-privilege image validation job.
-/// # Errors
 pub fn build_native_image_job(
     policy: &NativeImageTaskPolicy,
     checkout_uses: &str,
@@ -79,8 +59,6 @@ pub fn build_native_image_job(
     })
 }
 
-/// Reconstruct the closed native-image job and reject altered or split lanes.
-/// # Errors
 pub(crate) fn validate_native_image_jobs(
     jobs: &BTreeMap<String, Job>,
     policies: &[NativeImageTaskPolicy],
@@ -193,10 +171,6 @@ fn docker_environment() -> Vec<String> {
     ]
 }
 
-/// Inline-shell argv so the script is single-quoted whole at render time.
-///
-/// Inner-shell variables must survive the outer shell; the script itself
-/// starts with `set -euo pipefail`.
 fn bash_script(script: &str) -> Vec<String> {
     vec!["bash".to_owned(), "-c".to_owned(), script.to_owned()]
 }

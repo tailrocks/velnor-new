@@ -1,5 +1,3 @@
-//! Change sets for affected selection: committed diffs and the local tree.
-
 use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::path::Path;
@@ -11,14 +9,6 @@ use super::tool_sources;
 use crate::git_paths::split_nul_paths;
 use crate::validators::{validate_diff_rev, validate_select_diff_args};
 
-/// Files changed between base and head via the allowlisted `diff` verb.
-///
-/// Validation gates the untrusted range (flag-injection defense); `-z` is
-/// our own trusted constant added after, so output is NUL-delimited with
-/// no C-quoting or trimming. Rename detection stays off: the output is a
-/// set of possibly-affected paths, and a collapsed R100 rename would drop
-/// the old path's owner from selection. Same convention as
-/// `tree_diff_names` and `added_files`.
 fn changed_files(root: &Path, base: &str, head: &str) -> Result<BTreeSet<String>, String> {
     validate_diff_rev(base, "bad_base")?;
     validate_diff_rev(head, "bad_head")?;
@@ -39,11 +29,6 @@ fn changed_files(root: &Path, base: &str, head: &str) -> Result<BTreeSet<String>
     split_nul_paths(&output.stdout)
 }
 
-/// Committed change set minus advisory tool files, or `None` to broaden.
-///
-/// Git failures, non-ignored untracked files, and modified tracked files
-/// broaden with a recorded warning; the flag reports whether tool files were filtered, for the
-/// findings-only warning when nothing else changed.
 pub(super) fn change_sets(
     root: &Path,
     base: &str,
@@ -86,8 +71,6 @@ pub(super) fn change_sets(
         warnings.push("untracked_files:all_changed".to_owned());
         return None;
     }
-    // The tree under test must be the committed head: a modified tracked
-    // file is a change the commit diff cannot see.
     if dirty.iter().any(|path| !is_advisory_toolfile(path)) {
         warnings.push("dirty_worktree:all_changed".to_owned());
         return None;
@@ -99,10 +82,6 @@ pub(super) fn change_sets(
     Some((changed, toolfiles))
 }
 
-/// Working-tree change set minus advisory tool files, or `None` to broaden.
-///
-/// Staged plus unstaged diffs plus untracked files form the local union;
-/// git failures broaden with a recorded warning.
 pub(super) fn local_change_set(
     root: &Path,
     base: &str,

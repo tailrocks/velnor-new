@@ -1,21 +1,9 @@
-//! Adapter-grammar project tools (HD-4a): the JDK and dbt-fusion resolver functions.
-
 use std::collections::BTreeSet;
 
-/// Variable of the JDK declaration, whose grammar is the adapter-specific
-/// HD-4a form instead of exact `X.Y.Z`.
 pub const JAVA_TOOL_VARIABLE: &str = "VELNOR_TOOL_JAVA";
 
-/// Variable of the dbt-fusion declaration, whose grammar is the adapter-specific
-/// HD-4a form `X.Y.Z-preview.N` or stable `X.Y.Z`.
 pub const DBT_FUSION_TOOL_VARIABLE: &str = "VELNOR_TOOL_DBT_FUSION";
 
-/// Exact-grammar checker of the JDK declaration (HD-4a), appended only for jobs that reference the JDK.
-///
-/// `velnor_exact_java` accepts exactly
-/// `<vendor>-<X.Y.Z[.N]*>[+<build>[.<n>]*][.LTS]` (three or more numeric parts,
-/// as Oracle `GraalVM` `25.0.4.1.1`) over `[A-Za-z0-9.+-]`, so the
-/// single-line `$GITHUB_ENV` write cannot be injected.
 const JAVA_FUNCTIONS: &str = r#"velnor_exact_java() {
   v=$2
   case "$v" in
@@ -42,10 +30,6 @@ const JAVA_FUNCTIONS: &str = r#"velnor_exact_java() {
 }
 "#;
 
-/// dbt-fusion checker (HD-4a), appended only for jobs that reference it.
-///
-/// `velnor_exact_fusion` accepts exactly `X.Y.Z-preview.N` or the stable `X.Y.Z` over `[A-Za-z0-9.-]`,
-/// so the single-line `$GITHUB_ENV` write cannot be injected.
 const FUSION_FUNCTIONS: &str = r#"velnor_exact_fusion() {
   v=$2
   case "$v" in
@@ -64,8 +48,6 @@ const FUSION_FUNCTIONS: &str = r#"velnor_exact_fusion() {
 }
 "#;
 
-/// Shared per-tool loop for adapter-grammar tools: reads every matching
-/// `[tools]` row, applies the checker and writes one `$GITHUB_ENV` line.
 const GRAMMAR_TOOL_TEMPLATE: &str = r#"velnor_tool_@KIND@() {
   name=$1
   shift
@@ -90,13 +72,11 @@ const GRAMMAR_TOOL_TEMPLATE: &str = r#"velnor_tool_@KIND@() {
 }
 "#;
 
-/// Tool variables resolved under an adapter grammar: `(variable, kind, checker)`.
 pub const GRAMMAR_TOOLS: [(&str, &str, &str); 2] = [
     (JAVA_TOOL_VARIABLE, "java", "velnor_exact_java"),
     (DBT_FUSION_TOOL_VARIABLE, "fusion", "velnor_exact_fusion"),
 ];
 
-/// Append the checker and loop of every adapter-grammar tool the job references.
 pub(super) fn push_grammar_functions(script: &mut String, tools: &BTreeSet<&str>) {
     for (variable, kind, checker) in GRAMMAR_TOOLS {
         if !tools.contains(variable) {

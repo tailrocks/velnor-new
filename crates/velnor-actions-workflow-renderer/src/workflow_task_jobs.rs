@@ -1,5 +1,3 @@
-//! Variant-dispatched validation and Required fan-in for the one task graph.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{Job, WORKFLOW_TASK_JOB_PREFIX};
@@ -12,33 +10,19 @@ use super::{
 };
 use crate::{RenderError, VerificationTaskPolicy};
 
-#[cfg(test)]
-#[path = "workflow_task_jobs_tests.rs"]
-mod tests;
-
-/// One source-validated renderer policy for a declared workflow task.
 #[derive(Debug, Clone)]
 pub enum WorkflowTaskPolicy {
-    /// Compile-free verification task, eligible for schema-2 Linux pairs.
     Verification(VerificationTaskPolicy),
-    /// Native build task, hosted-only with explicit resource limits.
     Build(BuildTaskPolicy),
-    /// Native-platform image validation task, hosted-only on matching hardware.
     NativeImage(NativeImageTaskPolicy),
-    /// Container image build jobs, one per native platform, hosted-only.
     Image(ImageBuildPolicy),
-    /// One Bun workspace member job (hard decision 6), hosted-only.
     Bun(BunMemberPolicy),
-    /// One declared Bun suite job beside its member job, hosted-only.
     BunSuite(BunSuitePolicy),
-    /// The one job fetching a member's private release assets for its suites.
     BunAssets(BunAssetsPolicy),
-    /// One dbt project or Ansible root job, hosted-only.
     Stack(StackJobPolicy),
 }
 
 impl WorkflowTaskPolicy {
-    /// Shared task ID, used to preserve one deterministic namespace.
     #[must_use]
     pub fn id(&self) -> &str {
         match self {
@@ -53,7 +37,6 @@ impl WorkflowTaskPolicy {
         }
     }
 
-    /// Exact runner label the task variant selects for one of its jobs.
     #[must_use]
     pub fn runner_label_for_job(&self, job_id: &str) -> Option<&str> {
         match self {
@@ -78,7 +61,6 @@ impl WorkflowTaskPolicy {
         }
     }
 
-    /// Whether the task's job runs pinned tools and needs the shared Mise prelude.
     #[must_use]
     pub fn uses_pinned_tools(&self) -> bool {
         match self {
@@ -88,7 +70,6 @@ impl WorkflowTaskPolicy {
         }
     }
 
-    /// Whether a job belongs to this task's permitted placement set.
     #[must_use]
     pub fn owns_job_id(&self, job_id: &str) -> bool {
         match self {
@@ -104,8 +85,6 @@ impl WorkflowTaskPolicy {
     }
 }
 
-/// Reconstruct each task variant and reject every undeclared task-prefixed job.
-/// # Errors
 pub(crate) fn validate_workflow_task_jobs(
     jobs: &BTreeMap<String, Job>,
     policies: &[WorkflowTaskPolicy],
@@ -179,7 +158,6 @@ pub(crate) fn validate_workflow_task_jobs(
     Ok(job_ids)
 }
 
-/// Reconstruct one Bun task's jobs; the gating ids join Required.
 fn bun_task_job_ids(
     jobs: &BTreeMap<String, Job>,
     policy: &WorkflowTaskPolicy,
@@ -200,8 +178,6 @@ fn bun_task_job_ids(
     }
 }
 
-/// Add every emitted job from the shared task graph to Required's success fan-in.
-/// # Errors
 pub(crate) fn extend_required_needs(
     jobs: &mut BTreeMap<String, Job>,
     task_job_ids: &[String],

@@ -1,5 +1,4 @@
 #!/bin/bash
-# The helper removes only /.dockerenv. A missing file is success.
 set -euo pipefail
 root="$(cd "$(dirname "$0")" && pwd)"
 dir="$(mktemp -d)"

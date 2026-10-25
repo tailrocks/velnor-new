@@ -1,5 +1,3 @@
-//! Product, companion, and closed release asset inventory validation.
-
 use super::{
     RustBinaryReleaseCompanion, RustBinaryReleaseConfig, RustBinaryReleaseProduct, config_error,
     unique, valid_asset_name, valid_identifier, valid_repo_path,
@@ -32,11 +30,6 @@ pub(super) fn validate_inventory(
     validate_static_release_inventory(file, &config.products, &config.companions, Some(manifest))
 }
 
-/// Validate literal release inventory without requiring any producer task policy.
-///
-/// Static workflow plans contain only products and companions. Their
-/// independent schema gate must enforce the same closed inventory rules as
-/// source configuration while remaining unable to carry executable tasks.
 pub(crate) fn validate_static_release_inventory(
     file: &str,
     products: &[RustBinaryReleaseProduct],
@@ -56,11 +49,11 @@ pub(crate) fn validate_static_release_inventory(
         .iter()
         .map(|product| product.targets.len())
         .fold(0usize, usize::saturating_add);
-    // Each archive contributes four assets; companions contribute two each.
+
     let receipt_assets = archives
         .saturating_mul(4)
         .saturating_add(companions.len().saturating_mul(2))
-        .saturating_add(1); // SHA256SUMS
+        .saturating_add(1);
     if product_count > MAX_PACKAGE_RELEASE_PRODUCTS
         || archives > MAX_PACKAGE_RELEASE_ARCHIVES
         || receipt_assets > MAX_PACKAGE_RELEASE_ASSETS

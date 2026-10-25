@@ -1,5 +1,3 @@
-//! Candidate execution on an isolated, read-only qualification runner.
-
 use crate::RenderError;
 use crate::yaml::Yaml;
 use velnor_actions_contract::JobTimeout;
@@ -12,7 +10,6 @@ use super::{ProductReleasePins, assets, jobs, manifest};
 #[path = "schema2_generator_release_homebrew_qualification.rs"]
 mod homebrew;
 
-/// Render the bounded historical A/D Homebrew qualification job.
 pub(super) fn homebrew_job(
     pins: &ProductReleasePins,
     actions: &mut Vec<(String, Yaml)>,
@@ -30,7 +27,6 @@ pub(super) struct QualificationJob<'a> {
     pub source_step: &'a Yaml,
 }
 
-/// Qualify a build artifact in a job that has no write or attestation permissions.
 pub(super) fn job(
     job: QualificationJob<'_>,
     pins: &ProductReleasePins,

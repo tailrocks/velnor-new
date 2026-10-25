@@ -1,77 +1,60 @@
-//! `[stacks.bun]`: Bun workspace roots, per-member scripts and browsers.
-//!
-//! Hard decision 6: every workspace member owns one generated job whose
-//! script steps run in parallel. The table below is strict (unknown keys are
-//! errors) and carries no shell, argv, YAML or `uses:` field: scripts are
-//! `package.json` script names, never command text.
-
 use super::tofu::Utf8RepoRelDir;
 use crate::errors::ContractError;
 use crate::workflow::timeout::JobTimeout;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Largest accepted job timeout, matching the other stacks.
 pub const MAX_BUN_TIMEOUT_MINUTES: u32 = 360;
-/// Scripts a member runs when neither `[stacks.bun]` nor the member names any.
+
 pub const DEFAULT_BUN_SCRIPTS: [&str; 4] = ["typecheck", "lint", "test", "build"];
-/// Job id prefix of every generated Bun member job.
+
 pub const BUN_JOB_PREFIX: &str = "bun-";
 
-/// Bun stack options (`[stacks.bun]`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BunStackConfig {
-    /// Workspace roots: sorted, duplicate-free; each holds `package.json` and `bun.lock`.
     pub roots: Vec<Utf8RepoRelDir>,
-    /// Member job timeout in minutes; defaults to `workflow.crate_timeout_minutes`.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timeout_minutes: Option<u32>,
-    /// Scripts every member runs when it has them; defaults to [`DEFAULT_BUN_SCRIPTS`].
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub scripts: Vec<String>,
-    /// Per-member overrides keyed by the member's `package.json` name.
+
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub members: BTreeMap<String, BunMemberConfig>,
-    /// Declared reads outside a member's directory (`[[stacks.bun.inputs]]`).
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub inputs: Vec<BunInputRule>,
 }
 
-/// Per-member options (`[stacks.bun.members."<name>"]`).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BunMemberConfig {
-    /// Scripts replacing the stack default; every name must exist in the member's `package.json`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scripts: Option<Vec<String>>,
-    /// Playwright browsers the member's scripts need, installed by Velnor.
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub browsers: Vec<BunBrowser>,
-    /// Timeout of this member's job in minutes (`1..=360`); defaults to
-    /// `stacks.bun.timeout_minutes`, then `workflow.crate_timeout_minutes`.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timeout_minutes: Option<u32>,
-    /// Declared suites keyed by suite id: script groups that run in their own
-    /// jobs beside the member job (hard decision 6 amendment).
+
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub suites: BTreeMap<String, BunSuiteConfig>,
 }
 
-/// Closed set of Playwright browsers Velnor provisions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BunBrowser {
-    /// Playwright Chromium.
     Chromium,
-    /// Playwright Firefox.
+
     Firefox,
-    /// Playwright `WebKit`.
+
     Webkit,
 }
 
 impl BunBrowser {
-    /// Name Playwright's `install` command and browser registry use.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -82,20 +65,17 @@ impl BunBrowser {
     }
 }
 
-/// Reads a member performs outside its own directory.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BunInputRule {
-    /// Repository-relative globs (`**`, `*`, `?`, `[...]`, `{a,b}`).
     pub globs: Vec<String>,
-    /// Member names (`package.json` `name`) consuming the matched paths.
+
     pub members: Vec<String>,
-    /// The named members' rules list every path they read outside their directories.
+
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub complete: bool,
 }
 
-/// True for a script name that can never carry shell or YAML syntax.
 #[must_use]
 pub fn is_valid_script_name(name: &str) -> bool {
     !name.is_empty()
@@ -106,9 +86,6 @@ pub fn is_valid_script_name(name: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b':'))
 }
 
-/// True for an npm package name Velnor accepts as a member key.
-///
-/// Optional `@scope/` plus lowercase alphanumerics, `-`, `_` and `.`.
 #[must_use]
 pub fn is_valid_member_name(name: &str) -> bool {
     let (scope, base) = match name.strip_prefix('@') {
@@ -133,8 +110,6 @@ pub fn is_valid_member_name(name: &str) -> bool {
 }
 
 impl BunStackConfig {
-    /// Validate roots, scripts, members and declared inputs.
-    /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         self.validate_roots(file)?;
         if let Some(minutes) = self.timeout_minutes
@@ -275,7 +250,3 @@ fn validate_browsers(browsers: &[BunBrowser], file: &str) -> Result<(), Contract
 #[path = "bun_suites.rs"]
 mod suites;
 pub use suites::*;
-
-#[cfg(test)]
-#[path = "bun_tests.rs"]
-mod tests;

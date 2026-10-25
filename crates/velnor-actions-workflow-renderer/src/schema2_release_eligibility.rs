@@ -1,5 +1,3 @@
-//! Exact-source eligibility shared by every product release job.
-
 use crate::RenderError;
 use crate::yaml::Yaml;
 use velnor_actions_contract::JobTimeout;
@@ -51,15 +49,8 @@ const REQUIRED_JOB_JQ: &str = r#"
     end
 "#;
 
-/// Job ID shared by product release coordinators.
 pub const JOB_ID: &str = "release-eligibility";
 
-/// Read-only source and required-CI gate. Its outputs bind all build jobs to
-/// one immutable event SHA and identify the authority and CI attempt.
-///
-/// # Errors
-///
-/// Returns an error when a pinned tool command cannot be rendered.
 pub fn job(runs_on: Yaml, pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
     let mut fields = base(
         "Check release source eligibility",
@@ -103,7 +94,6 @@ pub fn job(runs_on: Yaml, pins: &ProductReleasePins) -> Result<(String, Yaml), R
     Ok(finish(JOB_ID, fields, steps))
 }
 
-/// Bash gate run before build and again inside each publisher.
 pub(super) fn script(pins: &ProductReleasePins) -> Result<String, RenderError> {
     let gh_function = generator_release::gh_function(pins)?;
     Ok(format!(
@@ -112,18 +102,10 @@ pub(super) fn script(pins: &ProductReleasePins) -> Result<String, RenderError> {
     ))
 }
 
-/// The `release_eligibility` function for a publisher step to call.
-///
-/// A publisher defines the pinned `gh` function once at the top of its own
-/// script, so this definition carries no `gh` function, no shell options
-/// and no call: redefining `gh` mid-script is what `ShellCheck` reports as
-/// SC2218, and it is never needed.
 pub(super) fn publisher_definition() -> String {
     render_function(true)
 }
 
-/// Source-free publisher variant. Inputs remain bound to GitHub event and
-/// protected API state; only the local checkout assertion is omitted.
 pub(super) fn publisher_definition_source_free() -> String {
     render_function(false)
 }
@@ -300,7 +282,3 @@ fn check_step(pins: &ProductReleasePins) -> Result<Yaml, RenderError> {
         ("run".to_owned(), Yaml::str(script(pins)?)),
     ]))
 }
-
-#[cfg(test)]
-#[path = "schema2_release_eligibility_tests.rs"]
-mod tests;

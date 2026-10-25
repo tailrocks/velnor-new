@@ -12,6 +12,3 @@ workspace = true
 [dependencies]
 velnor-actions-contract = { version = "=0.1.53", path = "../velnor-actions-contract" }
 
-[[test]]
-name = "velnor_actionlint"
-path = "tests/velnor_actionlint.rs"

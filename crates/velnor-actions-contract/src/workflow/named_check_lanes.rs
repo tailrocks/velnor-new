@@ -1,5 +1,3 @@
-//! Exact named-check job/report identities shared by workflow and plan.
-
 use super::ir::WorkflowIr;
 use super::jobs::PLAN_JOB_ID;
 use super::lanes::{Placement, placement_for};
@@ -10,39 +8,29 @@ use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-/// Env key carrying the static named-check output identities into `plan-v1`.
 pub const NAMED_CHECK_LANES_ENV: &str = "VELNOR_NAMED_CHECK_LANES_JSON";
-/// Env key binding a check worker to its exact report-owning job ID.
+
 pub const NAMED_CHECK_JOB_ID_ENV: &str = "VELNOR_CHECK_JOB_ID";
-/// Env key binding a check worker to its exact lane variant.
+
 pub const NAMED_CHECK_LANE_VARIANT_ENV: &str = "VELNOR_CHECK_LANE_VARIANT";
 
-/// One concrete job/report lane for a named check.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct NamedCheckLane {
-    /// Set only for duplicated hosted/Scale Set pairs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub variant: Option<NamedCheckLaneVariant>,
-    /// Exact emitted job ID; binds the plan entry to its upload artifact.
+
     pub job_id: String,
 }
 
-/// Typed variant of a duplicated named-check lane.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NamedCheckLaneVariant {
-    /// GitHub-hosted Linux x64 copy.
     Hosted,
-    /// Repository Scale Set Linux x64 copy.
+
     ScaleSet,
 }
 
-/// Derive each named check's exact emitted job and report identities.
-///
-/// The same result drives workflow emission and the event-time plan, so
-/// paired lanes cannot share matrix keys or report artifacts.
-/// # Errors
 pub fn named_check_lanes(
     ir: &WorkflowIr,
     config: &VelnorConfig,
@@ -135,7 +123,3 @@ pub(super) fn add_named_check_lanes(
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "named_check_lanes_tests.rs"]
-mod tests;

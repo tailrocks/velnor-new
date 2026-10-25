@@ -1,6 +1,3 @@
-//! Event-time `merge-v1` JSON entrypoint (schema 1).
-
-// Inventory and plan checks live beside the merge so `lib.rs` stays untouched.
 #[path = "merge_checks.rs"]
 pub(crate) mod merge_checks;
 #[path = "merge_lenient.rs"]
@@ -34,85 +31,42 @@ use crate::internal::{SCHEMA, check_schema, internal_contract};
 mod context;
 pub use context::MergeContext;
 
-/// `merge-v1` request: plan, matrix bytes, reports, and jobs.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct MergeRequest {
-    /// Request schema; must be 1.
     schema: u32,
-    /// Run key.
     pub(crate) run_key: String,
-    /// Merge-time triggering event captured at assembly; the plan's
-    /// stamped event must match it exactly (a forged plan claiming a
-    /// stronger event fails closed instead of inheriting its stamp).
     #[serde(default)]
     actual_event: Option<WorkflowEvent>,
-    /// Qualification provenance recaptured from the actual merge runner.
     #[serde(default)]
     actual_qualification: Option<QualificationDispatch>,
-    /// Head-bound candidate attestation; required in candidate mode.
     #[serde(default)]
     candidate_attestation: Option<CandidateAttestation>,
-    /// Validated plan; absent when the plan artifact never landed.
     #[serde(default)]
     plan: Option<Plan>,
-    /// `matrix.json` content; must agree with the plan matrix.
     #[serde(default)]
     matrix: Option<PlanMatrix>,
-    /// Matrix reports to aggregate.
     pub(crate) matrix_reports: Vec<MatrixReport>,
-    /// Per-task report files backing every aggregate entry.
     #[serde(default)]
     pub(crate) task_reports: Vec<TaskReport>,
-    /// Named-check receipt plus exact downloaded scenario bytes.
     #[serde(default)]
     pub(crate) check_proofs: Vec<serde_json::Value>,
-    /// Declared validator inventory from the workflow `needs` channel.
     pub(crate) required_job_ids: Vec<String>,
-    /// Observed validator conclusions covering the inventory exactly.
     pub(crate) required_jobs: Vec<RequiredJobResult>,
-    /// Assembly failure details; every entry fails the verdict.
     #[serde(default)]
     pub(crate) assembly_errors: Vec<String>,
-    /// Shard proofs for partitioned test entries.
     #[serde(default)]
     shard_proofs: Vec<ShardProof>,
-    /// Configured resource limits revalidated here.
     #[serde(default)]
     limits: Option<ResourceLimits>,
-    /// Sequential-reference obligation set.
     #[serde(default)]
     reference_task_ids: Option<Vec<String>>,
 }
 
-/// Aggregate matrix reports into the final gate report (schema-1 JSON).
-///
-/// Only the request envelope (JSON shape, schema, run key) fails
-/// outright; every evidence failure yields a diagnostic `planning_failed`
-/// verdict with closed failure tokens. A missing plan still yields a
-/// verdict instead of an error. Consumes the emitted plan only and never
-/// rediscovers repository state.
-/// Native workspace admission additionally validates protected repository policy;
-/// the no-rediscovery property applies to ordinary report aggregation.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for malformed requests and
-/// response-encoding failures.
 pub fn merge_internal(request_json: &str) -> Result<String, OrchestratorError> {
     merge_internal_with_context(request_json, &MergeContext::capture_ambient())
 }
 
-/// Merge using explicit trusted workspace-admission context rather than ambient process variables.
-///
-/// Detached callers can evaluate non-native synthetic requests without inheriting
-/// unrelated GitHub workspace environment. Native plans still require an explicit
-/// repository workspace and are rejected when detached.
-/// The context selects workspace admission and its path; native authority still
-/// derives repository and event identity from the runner environment.
-///
-/// # Errors
-/// Returns [`OrchestratorError::Internal`] for malformed requests and response encoding failures.
 pub fn merge_internal_with_context(
     request_json: &str,
     context: &MergeContext,
@@ -146,18 +100,12 @@ pub fn merge_internal_with_context(
     encode_report(&final_report)
 }
 
-/// Encode one final report as JSON.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for encoding failures.
 fn encode_report(report: &FinalReport) -> Result<String, OrchestratorError> {
     serde_json::to_string(report).map_err(|err| OrchestratorError::Internal {
         problem: format!("response_encode:{err}"),
     })
 }
 
-/// Diagnostic verdict for corrupt evidence; `None` when usable.
 fn evidence_diagnostic(request: &MergeRequest) -> Result<Option<FinalReport>, OrchestratorError> {
     let Some(token) = evidence_failure(request) else {
         return Ok(None);
@@ -165,10 +113,6 @@ fn evidence_diagnostic(request: &MergeRequest) -> Result<Option<FinalReport>, Or
     diagnostic_without_plan(request, BTreeSet::from([token])).map(Some)
 }
 
-/// First evidence failure token, if any.
-///
-/// Shape failures corrupt the set; wrong-run evidence mistrusts scope.
-/// `None` means the evidence is usable, not that it passes.
 fn evidence_failure(request: &MergeRequest) -> Option<String> {
     let jobs_ok = request
         .required_jobs
@@ -192,7 +136,6 @@ fn evidence_failure(request: &MergeRequest) -> Option<String> {
     None
 }
 
-/// Aggregate one final report from validated plan plus reports.
 fn build_final(
     request: &MergeRequest,
     plan: &Plan,
@@ -275,7 +218,6 @@ fn build_final(
     })
 }
 
-/// Validate final-fold inputs before collecting obligation evidence.
 fn check_final_inputs(
     request: &MergeRequest,
     plan: &Plan,
@@ -331,7 +273,6 @@ fn check_final_inputs(
     Ok(())
 }
 
-/// Whether merge must validate the request against an available repository.
 pub(super) fn workspace_validation_required(plan: &Plan, context: &MergeContext) -> bool {
     context.repository_present()
         || plan
@@ -341,14 +282,6 @@ pub(super) fn workspace_validation_required(plan: &Plan, context: &MergeContext)
             .any(|entry| entry.stack_id == "native")
 }
 
-/// Check 5: precedence over collected signals, then pass or no-work.
-///
-/// Documented precedence: `planning_failed` beats `failed` beats
-/// `cancelled` beats `blocked` beats `not_run`; an obligation-free
-/// plan is `no_work`, otherwise every signal clear is `passed`.
-/// Blocked (`not_selected`) stays distinct from missing evidence:
-/// collapsing it into `not_run` would hide a decided outcome behind
-/// an evidence gap.
 fn decide(signals: &Signals, plan: &Plan) -> FinalStatus {
     if signals.planning_failed {
         FinalStatus::PlanningFailed
@@ -367,7 +300,6 @@ fn decide(signals: &Signals, plan: &Plan) -> FinalStatus {
     }
 }
 
-/// Obligations carrying one non-execute decision.
 fn decision_count(plan: &Plan, decision: ObligationDecision) -> u32 {
     let count = plan
         .obligations

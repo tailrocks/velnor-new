@@ -1,9 +1,3 @@
-//! Docker host-config projection for a [`CreateProjection`](super::CreateProjection).
-//!
-//! Split from `worker.rs` by the 400-line repo-size gate. Volume mounts,
-//! the single controller-owned action-archive bind, and label encoding live
-//! here; no JIT flows through these helpers.
-
 use std::collections::HashMap;
 use std::path::Path;
 

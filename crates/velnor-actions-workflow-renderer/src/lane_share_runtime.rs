@@ -1,13 +1,5 @@
-//! Runner-specific V2 tools-cache steps kept outside shared lane actions.
-
 use velnor_actions_contract::{RunsOn, Step, StepKind, StepRole};
 
-/// Peel typed runtime identity, seed, and restore steps before lane sharing.
-///
-/// The identity binds versions the resolver exports after Setup Mise, so
-/// a non-empty prelude must directly follow the job's one Setup Mise step,
-/// which leaves the shared body with the prelude: `(prelude, common)` puts
-/// Setup Mise first in `prelude`. An empty prelude keeps Setup Mise common.
 pub(super) fn peel_tools_cache_prelude(
     steps: &[Step],
     runs_on: &str,
@@ -33,8 +25,6 @@ pub(super) fn peel_tools_cache_prelude(
     Some((lane, common.to_vec()))
 }
 
-/// Split Setup Mise off a lane without a V2 prelude when its paired lane
-/// keeps one, so both lanes render Setup Mise before their lane steps.
 pub(super) fn peel_setup(steps: Vec<Step>) -> Option<(Step, Vec<Step>)> {
     let mut steps = steps.into_iter();
     let setup = steps.next()?;
@@ -56,7 +46,6 @@ fn valid_tools_cache_prelude(steps: &[Step], runs_on: &str) -> bool {
     }
 }
 
-/// The V2 steps of a peeled lane prelude, without its leading Setup Mise.
 fn tools_steps(steps: &[Step]) -> &[Step] {
     match steps.split_first() {
         Some((setup, rest)) if setup.role == Some(StepRole::MiseSetup) => rest,
@@ -85,7 +74,6 @@ fn valid_restore(step: &Step) -> bool {
     crate::cache_steps::validate_tools_restore_call(step).is_ok()
 }
 
-/// Ensure the lane-specific preludes have the same action and key structure.
 pub(super) fn same_tools_cache_prelude_shape(
     hosted: &[Step],
     local: &[Step],

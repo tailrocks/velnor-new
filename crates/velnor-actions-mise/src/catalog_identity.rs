@@ -1,8 +1,3 @@
-//! Pinned identity records (ver §2) plus the trusted gate over them.
-//!
-//! Declared via `#[path]` from `catalog.rs` (400-line budget); the child
-//! module keeps the private catalog field access.
-
 use velnor_actions_contract::ToolIdentity;
 
 use super::{
@@ -12,7 +7,6 @@ use super::{
 use crate::error::MiseError;
 
 impl ToolCatalog {
-    /// Pinned identity record for one tool (ver §2).
     #[must_use]
     pub fn tool_identity(&self, tool: PinnedTool) -> ToolIdentity {
         ToolIdentity {
@@ -24,7 +18,6 @@ impl ToolCatalog {
         }
     }
 
-    /// Qualified artifact digest for one tool, or the placeholder.
     fn tool_digest(&self, tool: PinnedTool) -> &str {
         if tool == PinnedTool::Opentofu && self.version(tool) == OPENTOFU_VERSION {
             OPENTOFU_SHA256_LINUX_AMD64
@@ -36,11 +29,6 @@ impl ToolCatalog {
         }
     }
 
-    /// Trusted gate over every catalog identity record.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::Contract`] for the first invalid identity.
     pub fn validate_identities(&self) -> Result<(), MiseError> {
         for tool in PinnedTool::ALL {
             self.tool_identity(tool)

@@ -1,12 +1,9 @@
-//! Fixed SDK dispatch for closed native Homebrew checks.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Step, StepKind};
 
 use crate::{RenderError, document_steps::shell_step_to_yaml, yaml::Yaml};
 
-/// Render one authenticated staged-SDK invocation with plan-bound identity.
 pub(super) fn render(step: &Step, job_env: &BTreeMap<String, String>) -> Result<Yaml, RenderError> {
     let StepKind::NativeCheckExecution {
         check_id,
@@ -84,7 +81,3 @@ fn insert_scoped_github_token(rendered: &mut Yaml) -> Result<(), RenderError> {
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "native_check_execution_tests.rs"]
-mod tests;

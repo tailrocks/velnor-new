@@ -1,6 +1,3 @@
-//! Qualification modes outside the first class set. Each dispatches on its
-//! own `inputs.mode` and is not selected by `features`.
-
 use super::super::features::{
     CHECKOUT_USES, checkout_step, finish, gated, lane_base, redis_service, run_step,
 };
@@ -20,7 +17,6 @@ const SUBMODULE_PROOF: &str = "git rev-parse HEAD > \"$RUNNER_TEMP/g4-head\" && 
 const PORT_HOLD: &str = "docker run -d --name g4-hold -p 8080:80 alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold";
 const PRESSURE_RUN: &str = "echo pressure-start && sleep 150 && echo pressure-ok";
 
-/// Compose, bind, cancel-service, testcontainers, submodule, ports, and pressure.
 pub(super) fn jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     let mut out = paired(hosted, scale);
     out.extend(testcontainers_jobs(hosted, scale));
@@ -31,8 +27,6 @@ pub(super) fn jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml
     out
 }
 
-/// Holds a GitHub Actions secret in the step environment. The run script
-/// checks that it is non-empty and does not print it.
 fn secret_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     both(
         "secret",

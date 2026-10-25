@@ -1,29 +1,23 @@
-//! Canonical runner-platform identity inputs and derivation.
-
 use serde::{Deserialize, Serialize};
 
 use crate::cachekey::validate_semantic_text;
 use crate::canonical::{canonical_json_bytes, digest_b3};
 use crate::errors::ContractError;
 
-/// Platform identity inputs, including runner image metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PlatformInputs {
-    /// Operating system name.
     pub os: String,
-    /// CPU architecture.
+
     pub arch: String,
-    /// Exact literal `runs-on` label.
+
     pub runs_on: String,
-    /// Runner `ImageOS` value; `unknown` when unobserved.
+
     pub image_os: String,
-    /// Execution target (`host` or triple).
+
     pub target: String,
 }
 
-/// Compute `platform_id` over OS/arch/label/`ImageOS`/target.
-/// # Errors
 pub fn platform_id(inputs: &PlatformInputs) -> Result<String, ContractError> {
     for (field, value) in [
         ("os", inputs.os.as_str()),

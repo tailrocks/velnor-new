@@ -1,5 +1,3 @@
-//! Ordered lookup helpers for bounded receipt chains.
-
 use crate::errors::ContractError;
 use crate::workflow::QualificationPhase;
 

@@ -1,5 +1,3 @@
-//! Durable completion-message intake before queue acknowledgement.
-
 use std::future::Future;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -127,7 +125,6 @@ pub(super) async fn record_completed(
     Ok(())
 }
 
-/// Retry a bounded prefix of quarantined bodies without network or cleanup effects.
 pub(super) async fn retry_quarantined(journal: &Journal) -> Result<bool, EnsureError> {
     let now = unix_seconds().ok_or_else(completion_error)?;
     let due = journal

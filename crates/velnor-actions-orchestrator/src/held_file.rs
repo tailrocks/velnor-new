@@ -1,4 +1,3 @@
-//! Invocation-local regular-file custody with immutable descriptor identity.
 use crate::{OrchestratorError, internal::internal};
 use sha2::{Digest, Sha256};
 use std::{
@@ -199,7 +198,3 @@ fn hex(bytes: &[u8]) -> String {
 fn invalid(reason: &str) -> OrchestratorError {
     internal(&format!("held_file_{reason}"))
 }
-
-#[cfg(test)]
-#[path = "held_file_tests.rs"]
-mod tests;

@@ -1,5 +1,3 @@
-//! Closed asset inventory and subject-binding validation.
-
 use std::collections::BTreeMap;
 
 use super::super::{

@@ -1,6 +1,5 @@
 use crate::ProbeError;
 
-/// Convert `statvfs` block counts to bytes and reject impossible capacity data.
 pub(crate) fn docker_root_bytes(
     total_blocks: u64,
     available_blocks: u64,

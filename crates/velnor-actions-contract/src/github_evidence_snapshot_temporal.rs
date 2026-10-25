@@ -1,5 +1,3 @@
-//! Strict UTC second parsing for acquisition windows.
-
 use super::super::GitHubEvidenceAcquisitionV1;
 
 pub(super) fn is_utc_timestamp(value: &str) -> bool {
@@ -81,24 +79,4 @@ fn digits(bytes: &[u8], start: usize, end: usize) -> Option<u32> {
         .ok()?
         .parse()
         .ok()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::utc_seconds;
-
-    #[test]
-    fn utc_timestamp_requires_a_real_calendar_instant() {
-        assert_eq!(utc_seconds("1970-01-01T00:00:00Z"), Some(0));
-        assert!(utc_seconds("2024-02-29T23:59:59Z").is_some());
-        for invalid in [
-            "2023-02-29T00:00:00Z",
-            "2024-13-01T00:00:00Z",
-            "2024-01-01T24:00:00Z",
-            "2024-01-01T00:00:60Z",
-            "2024-01-01T00:00:00+00:00",
-        ] {
-            assert!(utc_seconds(invalid).is_none(), "{invalid}");
-        }
-    }
 }

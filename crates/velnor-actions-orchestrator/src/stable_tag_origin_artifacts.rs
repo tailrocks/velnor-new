@@ -1,5 +1,3 @@
-//! Exact-ID, exact-digest retained stable metadata artifact admission.
-
 use std::collections::BTreeMap;
 use velnor_actions_contract::parse_strict_json;
 

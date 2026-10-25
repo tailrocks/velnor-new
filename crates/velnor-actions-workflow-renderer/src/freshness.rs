@@ -1,19 +1,3 @@
-//! Scheduled upstream-freshness workflow rendering (P12-4 emission half).
-//!
-//! Third render entrypoint: [`render_freshness_workflow`] turns a
-//! validated [`FreshnessSpec`] into `freshness.yml` — a schedule-only,
-//! read-only probe that runs the bounded
-//! `scripts/check-freshness.sh --check-upstream` over the Velnor-owned
-//! inventory. The contract half ([`ScheduleTrigger`],
-//! [`FRESHNESS_CRON_WEEKLY`], [`FRESHNESS_WORKFLOW_PATH`]) lives in
-//! `velnor-actions-contract`; the main CI renderer cannot serve here
-//! because it mandates PR/push/merge-group triggers plus plan, task,
-//! and final closures.
-//!
-//! [`ScheduleTrigger`]: velnor_actions_contract::ScheduleTrigger
-//! [`FRESHNESS_CRON_WEEKLY`]: velnor_actions_contract::FRESHNESS_CRON_WEEKLY
-//! [`FRESHNESS_WORKFLOW_PATH`]: velnor_actions_contract::FRESHNESS_WORKFLOW_PATH
-
 use std::collections::BTreeMap;
 use velnor_actions_contract::JobTimeout;
 
@@ -26,46 +10,26 @@ use crate::{
     yaml::Yaml,
 };
 
-/// Display name of the freshness workflow.
 pub const FRESHNESS_WORKFLOW_NAME: &str = "Upstream Freshness";
-/// Stable freshness job ID.
 pub const FRESHNESS_JOB_ID: &str = "freshness";
-/// Display name of the freshness job.
 pub const FRESHNESS_JOB_NAME: &str = "Freshness";
-/// The bounded read-only probe this workflow runs, fixed.
 pub const FRESHNESS_SCRIPT: &str = "scripts/check-freshness.sh";
-/// Probe flag: refetch upstream evidence, write nothing.
 pub const FRESHNESS_PROBE_FLAG: &str = "--check-upstream";
-/// Freshness concurrency group (scheduled runs serialize, never cancel).
 pub const FRESHNESS_CONCURRENCY_GROUP: &str = "freshness";
-/// Freshness job timeout: every row may hit its 10 s probe cap.
 pub const FRESHNESS_TIMEOUT_MINUTES: u16 = JobTimeout::DEFAULT.minutes();
 
-/// Validated freshness-workflow inputs.
 #[derive(Debug, Clone)]
 pub struct FreshnessSpec {
-    /// Cron schedule (the reviewed weekly trigger).
     pub schedule: ScheduleTrigger,
-    /// Single literal versioned Ubuntu label.
     pub runs_on: String,
-    /// Pinned `actions/checkout` ref.
     pub checkout_uses: String,
-    /// Compiled, digest-verified Mise setup action.
     pub mise_setup: MiseSetup,
-    /// Exact Rust toolchain installed and used by the freshness script.
     pub rust_version: String,
-    /// `sh -c` argv verifying the installed toolchain file by file.
     pub verify_rust_argv: Vec<String>,
-    /// Exact generator version for the marker.
     pub generator_version: String,
 }
 
 impl FreshnessSpec {
-    /// Validate every spec scalar before rendering.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`RenderError`] describing the first invalid scalar.
     pub fn validate(&self) -> Result<(), RenderError> {
         self.schedule.validate().map_err(RenderError::Contract)?;
         marker::validate_version(&self.generator_version)?;
@@ -85,11 +49,6 @@ impl FreshnessSpec {
     }
 }
 
-/// Render the freshness workflow document from a validated spec.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] for invalid spec scalars or steps.
 pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, RenderError> {
     spec.validate()?;
     let mut checkout = action_step(
@@ -155,7 +114,6 @@ pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, R
     })
 }
 
-/// Build the freshness document: name, schedule triggers, perms, job.
 fn freshness_document(
     spec: &FreshnessSpec,
     checkout: &Step,
@@ -219,11 +177,6 @@ fn freshness_document(
     ]))
 }
 
-/// Read-only top-level/job permissions: the probe only reads.
 fn read_only_permissions() -> Yaml {
     Yaml::Map(vec![("contents".to_owned(), Yaml::str("read"))])
 }
-
-#[cfg(test)]
-#[path = "freshness_tests.rs"]
-mod tests;

@@ -1,24 +1,10 @@
-//! Fixed shell text for the Maven bundle publication jobs (hard decision 8).
-//!
-//! The root's own `:mavenBundle` task writes `<id>-<version>-maven.zip` and a
-//! `.sha256` under its `build/maven-bundle/`. The build job re-verifies both,
-//! checks that the zip is one `repository/` tree whose POMs all sit at the
-//! tag's version, and moves exactly those two files into the shared bundle
-//! directory. Attest and publish work from that directory alone and execute no
-//! repository code. Templates are filled only with values the contract
-//! validated (artifact id, repo-relative output directory).
-
 use super::{upload_assets_script, verify_sidecar_script};
 
-/// Zip file name for artifact `id`; `$ver` is the tag's version shell variable.
 #[must_use]
 pub fn zip_name(id: &str) -> String {
     format!("{id}-$ver-maven.zip")
 }
 
-/// Verify the built bundle and move it, with its checksum, into the bundle directory.
-///
-/// `output_dir` is the repository-relative `build/maven-bundle` of the Gradle root.
 #[must_use]
 pub fn collect_script(id: &str, output_dir: &str) -> String {
     let name = zip_name(id);
@@ -37,21 +23,16 @@ pub fn collect_script(id: &str, output_dir: &str) -> String {
     )
 }
 
-/// Re-verify the checksum sidecar against the downloaded zip.
 #[must_use]
 pub fn verify_script(id: &str) -> String {
     verify_sidecar_script(&zip_name(id))
 }
 
-/// Upload the zip and checksum as immutable assets of the tag's GitHub release.
 #[must_use]
 pub fn upload_script(gh: &str, id: &str) -> String {
     upload_assets_script(gh, &zip_name(id))
 }
 
-/// Visible stand-in for the attestation step when `attest = false`: a workflow
-/// warning carrying the configured reason, never a silent skip. `reason` is
-/// validated clean text (no quotes, `$` or backticks).
 #[must_use]
 pub fn attest_disabled_script(reason: &str) -> String {
     format!(

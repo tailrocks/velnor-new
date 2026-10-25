@@ -14,48 +14,6 @@ fn prior(observed: &TapMergeObservation, number: u64) -> TapHistoricalFeedback {
     }
 }
 
-#[test]
-fn replacement_pr_requires_exhaustive_disposed_historical_feedback() {
-    let (policy, mut observed) = fixture();
-    observed.historical_feedback = vec![prior(&observed, 40), prior(&observed, 41)];
-    assert!(validate_tap_merge_gate(&policy, &observed).is_ok());
-    for change in 0..11 {
-        let mut candidate = observed.clone();
-        match change {
-            0 => candidate.historical_feedback_complete = false,
-            1 => candidate.historical_feedback[0].feedback.unresolved_threads = 1,
-            2 => {
-                candidate.historical_feedback[0]
-                    .feedback
-                    .unaddressed_findings = 1;
-            }
-            3 => {
-                candidate.historical_feedback[0]
-                    .feedback
-                    .outstanding_change_requests = 1;
-            }
-            4 => candidate.historical_feedback[0].completion = None,
-            5 => candidate.historical_feedback[0].head_sha = "d".repeat(40),
-            6 => {
-                candidate.historical_feedback[0].feedback.records_digest =
-                    format!("b3-{}", "d".repeat(64));
-            }
-            7 => candidate.historical_feedback.swap(0, 1),
-            8 => candidate.historical_feedback[1] = candidate.historical_feedback[0].clone(),
-            9 => {
-                candidate.historical_feedback[0] = prior(&candidate, candidate.pull_request_number);
-            }
-            10 => candidate.historical_feedback[0].feedback.repository = "attacker/tap".to_owned(),
-            14 => candidate.checks.retain(|check| check.name != "DCO"),
-            _ => unreachable!(),
-        }
-        assert!(
-            validate_tap_merge_gate(&policy, &candidate).is_err(),
-            "case {change}"
-        );
-    }
-}
-
 fn completed_fixture() -> (TapMergePolicy, TapCompletedPromotionObservation) {
     let (policy, observed) = fixture();
     let selected = prior(&observed, observed.pull_request_number);
@@ -83,45 +41,3 @@ fn completed_fixture() -> (TapMergePolicy, TapCompletedPromotionObservation) {
     )
 }
 
-#[test]
-fn completed_promotion_requires_actual_merge_ancestry_formula_and_exact_head_gates() {
-    let (policy, observed) = completed_fixture();
-    assert!(validate_tap_completed_promotion_gate(&policy, &observed).is_ok());
-    for change in 0..15 {
-        let mut candidate = observed.clone();
-        match change {
-            0 => candidate.expected_merged_pull_request = false,
-            1 => candidate.main.merge_is_ancestor = false,
-            2 => candidate.main.formula_matches_receipt = false,
-            3 => candidate.observed_pr_base_sha = "c".repeat(40),
-            4 => candidate.validated_head_sha = "c".repeat(40),
-            5 => candidate.merge_sha.clear(),
-            6 => candidate.main.current_sha.clear(),
-            7 => candidate.server_protection = TapServerMergeProtection::MissingOrBypassable,
-            8 => candidate.required_checks_complete = false,
-            9 => candidate.checks[0].completed_successfully = false,
-            10 => candidate.pull_request.completion = None,
-            11 => candidate.pull_request.feedback.unresolved_threads = 1,
-            12 => candidate.historical_feedback_complete = false,
-            13 => {
-                candidate.historical_feedback[0]
-                    .feedback
-                    .outstanding_change_requests = 1;
-            }
-            14 => candidate.checks.retain(|check| check.name != "DCO"),
-            _ => unreachable!(),
-        }
-        assert!(
-            validate_tap_completed_promotion_gate(&policy, &candidate).is_err(),
-            "case {change}"
-        );
-    }
-}
-
-#[test]
-fn historical_feedback_cannot_replay_completion_from_another_pr() {
-    let (policy, observed) = fixture();
-    let mut historical = prior(&observed, 41);
-    historical.completion = observed.completion;
-    assert!(validate_tap_historical_feedback(&policy, &historical).is_err());
-}

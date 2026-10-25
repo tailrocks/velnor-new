@@ -29,7 +29,6 @@ pub(super) fn alias_site(
         && key == "env";
     let step_mapping = is_step(path) && line.indent == 8 && matches!(key, "env" | "with");
     if !job_env && !step_mapping {
-        // Preserve the existing rejection class outside the new closed sites.
         return Ok(None);
     }
     Ok(Some((Kind::Mapping, value.to_owned())))
@@ -93,8 +92,6 @@ pub(super) fn validate_body(
         if line.indent != base {
             continue;
         }
-        // The emitted grammar uses simple scalar keys. Reject quoted-key
-        // aliases and alternate spellings instead of guessing YAML key types.
         if !key
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))

@@ -1,21 +1,11 @@
-//! `requirements.txt` policy: `uv pip install --require-hashes --no-deps`.
-//!
-//! Every requirement is `name==version` with at least one
-//! `--hash=sha256:<64 hex>`; with `--no-deps` the file must also list the full
-//! transitive closure, which `uv pip compile --generate-hashes` produces.
-//! Options, URLs, VCS references, editables and includes are refused: they
-//! would let the file steer the installer.
-
 use crate::{AnsibleError, CORE_DISTRIBUTION};
 
-/// One hash-pinned requirement.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Requirement {
-    /// Normalized (lower-case, `_`/`.` folded to `-`) distribution name.
     pub name: String,
-    /// Exact version after `==`.
+
     pub version: String,
-    /// Lower-case hex SHA-256 digests.
+
     pub hashes: Vec<String>,
 }
 
@@ -48,7 +38,6 @@ fn is_version(text: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'+' | b'!' | b'-' | b'_'))
 }
 
-/// Logical requirement lines: backslash continuations joined, comments removed.
 fn logical_lines(text: &str) -> Vec<String> {
     let mut lines = Vec::new();
     let mut current = String::new();
@@ -79,13 +68,6 @@ fn logical_lines(text: &str) -> Vec<String> {
     lines
 }
 
-/// Parse a fully pinned requirements file.
-///
-/// # Errors
-///
-/// Every finding, sorted: `python_requirement_option_forbidden`,
-/// `python_requirement_unpinned:<name>`, `python_requirements_unhashed:<name>`,
-/// `python_requirement_hash_malformed:<name>`, `python_requirement_duplicate:<name>`.
 pub fn parse_requirements(text: &str) -> Result<Vec<Requirement>, Vec<AnsibleError>> {
     let mut parsed: Vec<Requirement> = Vec::new();
     let mut findings = Vec::new();
@@ -148,12 +130,6 @@ pub fn parse_requirements(text: &str) -> Result<Vec<Requirement>, Vec<AnsibleErr
     }
 }
 
-/// The locked `ansible-core` must be the version Mise declares (decision 4).
-///
-/// # Errors
-///
-/// `python_requirement_missing:ansible-core` when absent and
-/// `conflicting_project_tool_versions:ansible-core` on disagreement.
 pub fn check_core_agreement(
     requirements: &[Requirement],
     mise_ansible_core: &str,
@@ -161,12 +137,6 @@ pub fn check_core_agreement(
     check_agreement(requirements, CORE_DISTRIBUTION, mise_ansible_core)
 }
 
-/// The locked `distribution` must be the version Mise declares (decision 4).
-///
-/// # Errors
-///
-/// `python_requirement_missing:<distribution>` when absent and
-/// `conflicting_project_tool_versions:<distribution>` on disagreement.
 pub fn check_agreement(
     requirements: &[Requirement],
     distribution: &str,

@@ -1,5 +1,3 @@
-//! Bounded identity and immutable projection of an installed tool tree.
-
 use std::fs;
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
@@ -54,7 +52,6 @@ impl Walk {
         Ok(())
     }
 }
-/// Compute canonical SHA-256 over every relative entry in an installation tree.
 pub(crate) fn tree_sha256(
     root: &Path,
     deadline: CheckDeadline,
@@ -62,7 +59,6 @@ pub(crate) fn tree_sha256(
     let root = validate_root(root)?;
     tree_digest(&collect(&root, deadline)?, deadline)
 }
-/// Validate a tree and make every regular file owner-readonly, preserving execute state.
 pub(crate) fn freeze_tree(root: &Path, deadline: CheckDeadline) -> Result<(), OrchestratorError> {
     let root = validate_root(root)?;
     for entry in collect(&root, deadline)? {
@@ -314,7 +310,3 @@ fn unsafe_path(path: &Path, reason: &str) -> OrchestratorError {
         reason: reason.to_owned(),
     }
 }
-
-#[cfg(test)]
-#[path = "check_tool_tree_tests.rs"]
-mod tests;

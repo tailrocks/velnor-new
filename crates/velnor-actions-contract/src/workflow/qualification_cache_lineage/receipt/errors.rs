@@ -1,5 +1,3 @@
-//! Bounded receipt errors, digests and parser guards.
-
 use crate::canonical::{canonical_json_bytes, digest_b3};
 use crate::errors::ContractError;
 use crate::workflow::QualificationRunRef;

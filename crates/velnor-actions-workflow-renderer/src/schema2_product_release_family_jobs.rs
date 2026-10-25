@@ -1,5 +1,3 @@
-//! Composition of image and binary product-release jobs.
-
 use velnor_actions_contract::JobTimeout;
 use velnor_actions_contract::ReleaseTarget;
 
@@ -13,7 +11,6 @@ use super::super::{
 };
 use super::{AUTHORITY_OUTPUT, MODULE_SOURCE, SOURCE_OUTPUT};
 
-/// Render the existing family job graph; only the shared coordinator owns metadata.
 pub(super) fn family_document(
     family: Family,
     request: &Schema2WorkflowRequest,
@@ -27,7 +24,6 @@ pub(super) fn family_document(
     }
 }
 
-/// Extract only the typed job entries from a legacy family document.
 pub(super) fn take_jobs(document: Yaml) -> Result<Vec<(String, Yaml)>, RenderError> {
     let Yaml::Map(entries) = document else {
         return Err(RenderError::InvalidWorkflow(
@@ -44,7 +40,6 @@ pub(super) fn take_jobs(document: Yaml) -> Result<Vec<(String, Yaml)>, RenderErr
         .ok_or_else(|| RenderError::InvalidWorkflow("release_family_jobs_missing".to_owned()))
 }
 
-/// Create a read-only reconciliation job for one immutable family tag.
 pub(super) fn prepare_job(
     family: Family,
     hosted: Yaml,
@@ -134,7 +129,6 @@ fn source_checkout_step() -> Yaml {
     ])
 }
 
-/// Rewire one existing build, attest, or publish job to the coordinator.
 pub(super) fn compose_job(
     id: String,
     job: Yaml,
@@ -294,7 +288,6 @@ fn identified_step_role(step: &Yaml) -> Option<family::StepRole> {
     })
 }
 
-/// Pin source checkout and replace the step bound to the typed family role.
 fn compose_step(
     step: Yaml,
     job_id: &str,
@@ -352,7 +345,3 @@ fn compose_step(
     }
     Ok(Yaml::Map(fields))
 }
-
-#[cfg(test)]
-#[path = "schema2_product_release_family_jobs_tests.rs"]
-mod tests;

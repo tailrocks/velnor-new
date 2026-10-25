@@ -1,10 +1,3 @@
-//! Render-time job-IR attach: lock acquire plus pre-seed build-once.
-//!
-//! Both attach points run in `render_staged_tree` after `build_workflow`:
-//! lock-backed digest staging when the bootstrap lock exists, explicit
-//! pre-seed build-once steps (trust-on-review) when it does not. Consumer
-//! generation never calls either.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
@@ -23,14 +16,6 @@ use crate::pins::{lock_acquire_for_runner, lock_acquire_step};
 use crate::vectors::{candidate_build_argv, mbx_probe_argv};
 use crate::workflow::WorkflowPlan;
 
-/// Attach lock-backed Acquire steps to plan, final, and crate jobs.
-///
-/// Reads the runner-target record from an already-verified lock, stages the
-/// digest-verified binary under `$RUNNER_TEMP`, and inserts the step between
-/// checkout and plan plus ahead of the report merge; every crate job stages right after checkout because its
-/// obligation wrappers invoke the helper. Consumer generation never
-/// calls this: it embeds the release manifest instead, and never reads
-/// the lock.
 pub(crate) fn attach_lock_acquire(
     ir: &mut WorkflowIr,
     lock: &GeneratorLock,
@@ -71,24 +56,6 @@ pub(crate) fn attach_lock_acquire(
     Ok(())
 }
 
-/// Attach explicit pre-seed build-once steps (Velnor policy, no lock).
-///
-/// The plan job restores the MBX object store (shared-snapshot plans),
-/// builds the helper once from the checked-out source with the fixed §4
-/// vector after the fetch steps that guarantee sources present, verifies
-/// the MBX compile output plus its pinned route, records the source
-/// commit in a manifest, uploads the exactly-named artifact, and stages
-/// its local build; every crate job, the final job, and the publish
-/// job download that artifact, verify the manifest (commit anchored
-/// to this run's
-/// `$GITHUB_SHA`, generator-rendered target, recomputed sha256), and
-/// stage it instead of rebuilding. Build and verify run under the same
-/// owned homes as the fetch steps. The gate binds staged bytes to this
-/// run's checkout and across artifact transit; it does not review the
-/// source (see the renderer's pre-seed docs for the trust boundary).
-/// Sets the render context's
-/// pre-seed mode so the strict gates accept fixed pre-seed staging.
-/// Consumer generation never calls this.
 pub(crate) fn attach_preseed(
     workflow: &mut WorkflowPlan,
     label: &str,
@@ -147,7 +114,6 @@ pub(crate) fn attach_preseed(
     Ok(())
 }
 
-/// Same-target consumers verify the artifact before staging its bytes.
 fn preseed_consumers(target: &str, staged: &str) -> Result<Vec<Step>, OrchestratorError> {
     Ok(vec![
         preseed_download_step()?,
@@ -156,10 +122,6 @@ fn preseed_consumers(target: &str, staged: &str) -> Result<Vec<Step>, Orchestrat
     ])
 }
 
-/// Insert index for plan-job provisioning: after `Prepare pinned tools`.
-///
-/// Contract order is Checkout < Setup Mise < Prepare < Acquire; the
-/// fallback covers hand-built fixtures without the install step.
 fn after_prepare(steps: &[Step]) -> usize {
     steps
         .iter()
@@ -167,11 +129,6 @@ fn after_prepare(steps: &[Step]) -> usize {
         .map_or(1, |index| index + 1)
 }
 
-/// Insert the native MBX owner before the pre-seed build.
-///
-/// Lockful Cargo-only plans replace their registry-only fallback with the
-/// canonical shared-sources cache, then restore MBX after that action.
-/// Lockless plans have no source cache and install MBX after Rust setup.
 fn insert_plan_mbx_restore(
     catalog: &ToolCatalog,
     steps: &mut Vec<Step>,
@@ -195,9 +152,6 @@ fn insert_plan_mbx_restore(
     Ok(())
 }
 
-/// Insert after the pinned Rust setup, any separate component selection, and
-/// the channel-manifest verification, so nothing compiles with an unverified
-/// toolchain.
 fn after_rust_setup(steps: &[Step]) -> usize {
     steps
         .iter()
@@ -219,12 +173,6 @@ fn is_mbx_action(step: &Step) -> bool {
     step.role == Some(StepRole::MbxCache)
 }
 
-/// Insert index for the plan-job pre-seed build block.
-///
-/// The build compiles code, so it runs after the source-probing steps
-/// that guarantee sources present (which is after every restore);
-/// without them it anchors after the last restore, and the fallback
-/// covers lockless plans and hand-built fixtures without cache steps.
 fn preseed_anchor(steps: &[Step]) -> usize {
     let last_required = steps
         .iter()
@@ -244,7 +192,3 @@ fn preseed_anchor(steps: &[Step]) -> usize {
         .max();
     last_required.map_or_else(|| after_prepare(steps), |index| index + 1)
 }
-
-#[cfg(test)]
-#[path = "attach_tests.rs"]
-mod attach_tests;

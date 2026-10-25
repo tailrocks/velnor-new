@@ -1,10 +1,3 @@
-//! Steps of one Bun member job (hard decision 6).
-//!
-//! `Prepare pinned tools` (Bun), `Verify Bun workspace`, the install, then
-//! one background step per script joined by the renderer's `wait-all`.
-//! Every Bun invocation runs under `mise exec` with the isolation env, so the
-//! repository cannot select another Bun, and no step carries a credential.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_bun::{Member, velnor_bunfig};
@@ -24,68 +17,40 @@ use crate::config::playwright_install::BROWSERS_SUBDIR;
 use crate::utf8::{strings_of, strings_of_env};
 use crate::workflow_task_jobs::stack_family_cache;
 
-/// Cache directory of Bun's package cache (`BUN_INSTALL_CACHE_DIR`).
 const CACHE_DIR: &str = "${{ runner.temp }}/velnor/bun-cache";
-/// Where the Velnor-written install configuration lives at run time.
 const CONFIG_DIR: &str = "$RUNNER_TEMP/velnor/bun";
 const VERIFY_NAME: &str = "Verify Bun workspace";
 const INSTALL_NAME: &str = "Install dependencies";
 const LIFECYCLE_NAME: &str = "Install dependencies (lifecycle phase)";
 
-/// Inputs shared by every step of one member.
 pub(crate) struct MemberInputs<'a> {
-    /// Emission catalog: Bun renders as `${VELNOR_TOOL_BUN}`.
     pub(crate) catalog: &'a ToolCatalog,
-    /// Workspace root, repository-relative (`""` for the root).
     pub(crate) root: &'a str,
-    /// The member.
     pub(crate) member: &'a Member,
-    /// Scripts to run, in order.
     pub(crate) scripts: &'a [String],
-    /// Repository `bunfig.toml` text.
     pub(crate) bunfig: Option<&'a str>,
-    /// Private npm scopes (sorted); non-empty selects the two-phase install.
     pub(crate) scopes: &'a [String],
-    /// Staged helper step the registry phase needs (consumer policy).
     pub(crate) acquire: Option<&'a Step>,
-    /// Mint, fetch and revoke steps for pinned private release assets (HD-7);
-    /// empty when the member consumes none. They run before every other step.
     pub(crate) private: &'a [Step],
-    /// Download and check of the assets job's verified `.velnor/deps` tree,
-    /// in place of `private` for a suite job (never both).
     pub(crate) handoff: &'a [Step],
-    /// Hash-verified Playwright browser install, when the member declares browsers.
     pub(crate) playwright: Option<&'a Step>,
-    /// Matrix leg arguments, when the job is a sharded Playwright suite.
     pub(crate) leg: Option<&'a LegArgs>,
 }
 
-/// Which flags a sharded suite's leg appends to its one Playwright script,
-/// and where its artifacts go.
 #[derive(Debug, Clone)]
 pub(crate) struct LegArgs {
-    /// Legs pass `--project=$VELNOR_PW_PROJECT`.
     pub(crate) projects: bool,
-    /// Legs pass `--shard=$VELNOR_PW_SHARD`.
     pub(crate) sharded: bool,
-    /// Legs pass `--fail-on-flaky-tests`.
     pub(crate) fail_on_flaky: bool,
-    /// The suite job id, which names every leg artifact.
     pub(crate) job_id: String,
-    /// Retention of a failed leg's `test-results`.
     pub(crate) results_retention_days: u16,
 }
 
-/// Leg env: the project of this leg (`matrix.project`).
 pub(crate) const PW_PROJECT_ENV: &str = "VELNOR_PW_PROJECT";
-/// Leg env: `<shard>/<total>` of this leg.
 pub(crate) const PW_SHARD_ENV: &str = "VELNOR_PW_SHARD";
-/// Playwright's blob reporter output file; Velnor fixes one path per leg.
 pub(crate) const PW_BLOB_FILE_ENV: &str = "PLAYWRIGHT_BLOB_OUTPUT_FILE";
-/// Directory of every leg blob, under the runner's temp directory.
 pub(crate) const PW_BLOB_DIR: &str = "velnor/pw-blob";
 
-/// Every step after checkout, in execution order.
 pub(crate) fn member_steps(input: &MemberInputs<'_>) -> Result<Vec<Step>, OrchestratorError> {
     let staged = !input.scopes.is_empty()
         || !input.private.is_empty()
@@ -168,7 +133,6 @@ pub(crate) fn bash(script: &str) -> Vec<String> {
     vec!["bash".to_owned(), "-c".to_owned(), script.to_owned()]
 }
 
-/// Single-quote `text` for the shell; project tool references stay expandable.
 fn quote(text: &str) -> String {
     if text.contains("${VELNOR_TOOL_") {
         format!("\"{text}\"")
@@ -177,7 +141,6 @@ fn quote(text: &str) -> String {
     }
 }
 
-/// `mise exec bun@<pin> -- bun <args>` as shell words.
 pub(crate) fn bun_words(
     catalog: &ToolCatalog,
     args: &[String],
@@ -244,8 +207,6 @@ printf '%s\\n' {lines} > \"$cfg\"; {install}"
     )?)
 }
 
-/// Token-free second phase: rebuild `node_modules` from the warm cache so the
-/// trusted lifecycle scripts run, with the config the registry phase wrote.
 pub(crate) fn lifecycle_step(input: &MemberInputs<'_>) -> Result<Step, OrchestratorError> {
     let root = quote(&dir_arg(input.root));
     let install = bun_words(
@@ -271,7 +232,6 @@ pub(crate) fn lifecycle_step(input: &MemberInputs<'_>) -> Result<Step, Orchestra
     )?)
 }
 
-/// Environment that points Playwright at the Velnor-installed browsers only.
 fn browser_env(input: &MemberInputs<'_>) -> Result<BTreeMap<String, String>, OrchestratorError> {
     let mut env = step_env(input.catalog)?;
     if input.playwright.is_some() {
@@ -301,7 +261,6 @@ fn script_step(input: &MemberInputs<'_>, script: &str) -> Result<Step, Orchestra
     ];
     let mut env = browser_env(input)?;
     if let Some(leg) = input.leg {
-        // Matrix values reach the shell only through env, never the run text.
         if leg.projects {
             args.push("@PW_PROJECT@".to_owned());
             env.insert(
@@ -334,7 +293,6 @@ fn script_step(input: &MemberInputs<'_>, script: &str) -> Result<Step, Orchestra
     Ok(shell_step(&step_name(script), bash(&body), env)?)
 }
 
-/// Display name of a script step.
 pub(crate) fn step_name(script: &str) -> String {
     match script {
         "typecheck" => "Typecheck".to_owned(),

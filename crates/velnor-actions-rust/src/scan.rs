@@ -1,14 +1,7 @@
-//! Textual evidence scanners shared by profile detection.
-//!
-//! Matches are command tokens outside comments; generated output is filtered
-//! by the caller before these scanners run.
-
-/// Whether `ch` continues a word token.
 fn is_word_char(ch: char) -> bool {
     ch.is_ascii_alphanumeric() || ch == '_'
 }
 
-/// Truncate `line` at the first `#` starting a comment.
 pub(crate) fn strip_comment(line: &str) -> &str {
     let mut start = 0;
     while let Some(pos) = line[start..].find('#') {
@@ -26,7 +19,6 @@ pub(crate) fn strip_comment(line: &str) -> &str {
     line
 }
 
-/// Byte offset of `word` with non-word edges, if present.
 pub(crate) fn find_word(line: &str, word: &str) -> Option<usize> {
     let mut start = 0;
     while let Some(pos) = line[start..].find(word) {
@@ -47,13 +39,11 @@ pub(crate) fn find_word(line: &str, word: &str) -> Option<usize> {
     None
 }
 
-/// Whether `text` starts with `word` followed by a non-word edge.
 pub(crate) fn starts_with_word(text: &str, word: &str) -> bool {
     text.strip_prefix(word)
         .is_some_and(|rest| rest.chars().next().is_none_or(|ch| !is_word_char(ch)))
 }
 
-/// Whether `line` invokes command `name` (pins and action slugs excluded).
 pub(crate) fn has_command(line: &str, name: &str) -> bool {
     let mut search = line;
     let mut offset = 0;
@@ -70,7 +60,6 @@ pub(crate) fn has_command(line: &str, name: &str) -> bool {
     false
 }
 
-/// Whether the edges around a match denote an invocation, not a pin or slug.
 fn invocation_edges(before: &str, after: &str) -> bool {
     if after.starts_with('@') {
         return false;
@@ -81,7 +70,6 @@ fn invocation_edges(before: &str, after: &str) -> bool {
     !before.ends_with('/')
 }
 
-/// Whether `first` is immediately followed by `second` as the next word.
 pub(crate) fn has_adjacent(line: &str, first: &str, second: &str) -> bool {
     let mut search = line;
     while let Some(pos) = find_word(search, first) {
@@ -94,7 +82,6 @@ pub(crate) fn has_adjacent(line: &str, first: &str, second: &str) -> bool {
     false
 }
 
-/// Whether `line` sets `name` to word `value` (comment-free input).
 pub(crate) fn has_setting(line: &str, name: &str, value: &str) -> bool {
     let mut search = line;
     while let Some(pos) = find_word(search, name) {
@@ -110,7 +97,6 @@ pub(crate) fn has_setting(line: &str, name: &str, value: &str) -> bool {
     false
 }
 
-/// Trimmed evidence snippet capped at 160 characters.
 pub(crate) fn snippet(line: &str) -> String {
     const MAX: usize = 160;
     let trimmed = line.trim();
@@ -121,7 +107,6 @@ pub(crate) fn snippet(line: &str) -> String {
     }
 }
 
-/// One-based line number saturating on absurd input.
 pub(crate) fn line_no(index: usize) -> u32 {
     u32::try_from(index.saturating_add(1)).unwrap_or(u32::MAX)
 }

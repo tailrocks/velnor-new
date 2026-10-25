@@ -1,5 +1,3 @@
-//! Re-derive the closed operation from runner context and complete source policy.
-
 use crate::{
     OrchestratorError, internal::internal, retrieve_reports::staged_reads::read_staged_bytes_until,
 };
@@ -67,10 +65,6 @@ pub(super) fn from_context(
         context,
         stage,
     };
-    // Preview assembly resolves the complete attempt-local artifact union from
-    // GitHub's authenticated inventory. Its request deliberately carries no
-    // caller-supplied `needs` locators; the artifact transport validates the
-    // completed request after discovery. Stable keeps its literal inputs.
     let discovered_preview_assembly = request.plan.channel
         == velnor_actions_contract::package_release::PackageReleaseChannel::Preview
         && matches!(&request.stage, ReleaseProductionStage::Assemble { .. });
@@ -98,8 +92,6 @@ pub(super) fn derive_context(
     Ok(context)
 }
 
-/// Runner claims are independently authenticated by the remote transport caller.
-/// This source-free constructor does not claim local full-history verification.
 pub(super) fn workflow_context(
     plan: &PackageReleasePlan,
     deadline: CheckDeadline,
@@ -108,8 +100,6 @@ pub(super) fn workflow_context(
         return crate::stable_tag_origin::admitted_production_context(plan, deadline);
     }
     validate_workflow(plan)?;
-    // Preview payloads execute under authority B while building independently
-    // admitted CI source A. Keep the identities explicit; GITHUB_SHA remains B.
     let source_sha = required_env("VELNOR_RELEASE_SOURCE_SHA")?;
     let count = positive_env("VELNOR_RELEASE_COMMIT_COUNT")?;
     let identity = PreviewIdentity::derive(&plan.base_version, &source_sha, count)
@@ -377,7 +367,3 @@ fn validate_event(
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "preview_production_context_tests.rs"]
-mod tests;

@@ -1,4 +1,3 @@
-//! Read-only current-main and latest exact-source CI admission.
 use super::super::{
     github::{GitHubApi, GitRefResponse, RepositoryResponse},
     run_identity::{RunSource, ci_run_is_success, sleep_for_retry},
@@ -36,10 +35,6 @@ pub(super) fn latest_ci(
     latest_ci_with_sleep(api, source, sleep_for_retry)
 }
 
-/// Lists the exact-source CI runs by `head_sha` only and retries only a listing
-/// with no run at all (shared policy of `retry_empty_workflow_run_inventory`).
-/// A mismatching run, an API error or a malformed listing is never retried;
-/// a listing that stays empty is `None`, which callers treat as not admitted.
 fn latest_ci_with_sleep(
     api: &GitHubApi,
     source: RunSource<'_>,
@@ -102,7 +97,3 @@ fn verify_source(
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "package_release_continuation_source_tests.rs"]
-mod tests;

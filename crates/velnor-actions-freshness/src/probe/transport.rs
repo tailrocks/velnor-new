@@ -1,5 +1,3 @@
-//! Bounded HTTP and local-file transport for scheduled freshness probes.
-
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::Path;
@@ -245,11 +243,6 @@ fn upstream_agent() -> Result<&'static ureq::Agent, String> {
         .get_or_init(build_upstream_agent)
         .as_ref()
         .map_err(Clone::clone)
-}
-
-#[cfg(test)]
-pub(super) fn initialize_upstream_agent_for_test() -> Result<(), String> {
-    upstream_agent().map(|_| ())
 }
 
 fn build_upstream_agent() -> Result<ureq::Agent, String> {

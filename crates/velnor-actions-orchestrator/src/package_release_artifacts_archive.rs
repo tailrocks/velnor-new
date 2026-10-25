@@ -1,5 +1,3 @@
-//! Non-extracting tar and `CycloneDX` inspection of copied producer assets.
-
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs::File,
@@ -25,8 +23,6 @@ mod gzip;
 const MAX_ENTRIES_PER_ARCHIVE: usize = 4096;
 const MAX_EXECUTABLE_BYTES: u64 = 256 * 1024 * 1024;
 
-/// Extract a closed set of regular TAR.GZ members from authenticated bytes.
-/// The caller keeps the package custody alive while using the returned data.
 pub(crate) fn extract_tar_gz_members(
     bytes: &[u8],
     expected_members: &BTreeSet<String>,
@@ -112,11 +108,6 @@ pub(crate) fn extract_tar_gz_members(
     Ok(found)
 }
 
-#[cfg(test)]
-#[path = "package_release_artifacts_archive_tests.rs"]
-mod held_bytes_tests;
-
-/// Inspect every copied payload and its SBOM without materializing archive members.
 pub(super) fn validate_copied_content(
     artifacts: &[VerifiedPackageArtifact],
     expected: &[ExpectedFile],

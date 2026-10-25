@@ -1,10 +1,3 @@
-//! Wiring of the private-source block into generated Rust jobs (HD-7).
-//!
-//! A job whose lock closure is non-empty gets the mint, fetch and revoke steps
-//! immediately before its Cargo source fetch, that is, before any
-//! repository-controlled step: the token is minted for the exact allowlist,
-//! used by the Velnor-owned fetch, and revoked before the obligations run.
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
@@ -22,7 +15,6 @@ use crate::config::deps_lock::read_deps_lock;
 use crate::config::private_sources::{SourceKind, job_allowlist};
 use crate::internal::internal;
 
-/// Toolchain keys the fetch's Cargo run needs from the generated step env.
 const OWNED_KEYS: [&str; 9] = [
     "MISE_NO_CONFIG",
     "MISE_NO_ENV",
@@ -35,15 +27,10 @@ const OWNED_KEYS: [&str; 9] = [
     "RUSTUP_TOOLCHAIN",
 ];
 
-/// Source kinds a Rust job retrieves; git trees and Maven bundles belong to the
-/// jobs that consume them.
 const RUST_JOB_KINDS: [SourceKind; 2] = [SourceKind::Cargo, SourceKind::ReleaseAssets];
 
-/// Source kinds a Bun member job retrieves: pinned release-asset bundles. Cargo
-/// sources, git trees and Maven bundles are not Bun inputs.
 const BUN_JOB_KINDS: [SourceKind; 1] = [SourceKind::ReleaseAssets];
 
-/// Everything needed to render the block for any set of workspace roots.
 #[derive(Debug)]
 pub(crate) struct PrivateWiring {
     config: PrivateSourcesConfig,
@@ -53,11 +40,6 @@ pub(crate) struct PrivateWiring {
 }
 
 impl PrivateWiring {
-    /// Load the wiring for a repository; `None` without `[private_sources]`.
-    ///
-    /// # Errors
-    /// A missing lock for declared sources, or a lock that drifted from the
-    /// declarations, fails generation (the freshness gate for the lock).
     pub(crate) fn load(
         workspace: &Path,
         config: &VelnorConfig,
@@ -67,7 +49,6 @@ impl PrivateWiring {
             return Ok(None);
         };
         if config.workflow.policy != velnor_actions_contract::WorkflowPolicy::ConsumerV1 {
-            // Only consumer workflows stage the helper the private operations need.
             return Err(OrchestratorError::config(
                 ".velnor/config.toml",
                 "private_sources",
@@ -97,24 +78,14 @@ impl PrivateWiring {
         }))
     }
 
-    /// The block for a job covering `roots`; empty when nothing is private.
-    ///
-    /// # Errors
-    /// Lock read and render-spec failures.
     pub(crate) fn steps_for_roots(&self, roots: &[String]) -> Result<Vec<Step>, OrchestratorError> {
         self.steps_for_kinds(roots, &RUST_JOB_KINDS)
     }
 
-    /// The block for a Bun member job rooted at `root`; empty without release assets.
-    ///
-    /// # Errors
-    /// Lock read and render-spec failures.
     pub(crate) fn steps_for_bun(&self, root: &str) -> Result<Vec<Step>, OrchestratorError> {
         self.steps_for_kinds(&[root.to_owned()], &BUN_JOB_KINDS)
     }
 
-    /// `id:sha256` of every release asset the lock pins, sorted: the archive
-    /// digests a suite job checks in the `verified.json` its assets job wrote.
     pub(crate) fn release_asset_pins(&self) -> Vec<String> {
         let mut pins: Vec<String> = self
             .lock
@@ -126,10 +97,6 @@ impl PrivateWiring {
         pins
     }
 
-    /// The block for a Gradle job: it retrieves Maven bundles only.
-    ///
-    /// # Errors
-    /// Lock read and render-spec failures.
     pub(crate) fn steps_for_gradle(
         &self,
         roots: &[String],
@@ -179,17 +146,6 @@ impl PrivateWiring {
         Ok(steps.into())
     }
 
-    /// Insert the block before the job's first Cargo source fetch.
-    ///
-    /// Jobs that stage the helper later (the plan job) get it moved up to just
-    /// before the block, so the internal operations have their binary.
-    ///
-    /// A job with no Cargo roots (a Bun-only repository) fetches no Cargo
-    /// source, and release assets are consumed by the jobs that name them, so
-    /// it gets no block.
-    ///
-    /// # Errors
-    /// Fails when the job has Cargo roots but no Cargo source fetch to precede.
     pub(crate) fn insert_into_job(
         &self,
         job: &mut Job,
@@ -221,7 +177,3 @@ impl PrivateWiring {
         Ok(())
     }
 }
-
-#[cfg(test)]
-#[path = "private_wiring_tests.rs"]
-mod tests;

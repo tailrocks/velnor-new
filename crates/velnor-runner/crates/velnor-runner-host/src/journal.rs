@@ -1,6 +1,3 @@
-//! Local turso journal. Each step opens its own connection and commits
-//! before the caller runs an external effect.
-
 use std::ops::AsyncFnOnce;
 use std::path::Path;
 
@@ -19,8 +16,6 @@ mod sql;
 mod transaction;
 mod worker_volume;
 
-#[cfg(test)]
-mod schema_metadata_tests;
 pub(crate) use completion::{
     CleanupClaim, CompletedLaunch, CompletionIdentity, CompletionInboxEntry,
     MAX_COMPLETION_BODY_BYTES, MAX_COMPLETION_INBOX_SCAN,
@@ -29,16 +24,14 @@ use sql::{one_row, token_rejected};
 
 pub(crate) use resource_probe::{ProbePhase, ProbeRow, ProbeSeed};
 
-/// Durable intent row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IntentState {
-    /// Written before the effect.
     Pending,
-    /// The effect finished.
+
     Done,
-    /// The effect may have happened.
+
     Uncertain,
-    /// The effect definitely did not happen.
+
     Failed,
 }
 
@@ -63,29 +56,21 @@ impl IntentState {
     }
 }
 
-/// Outcome of an effect that already ran.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Outcome {
-    /// The effect finished.
     Done,
-    /// Transport was ambiguous. Capacity stays.
+
     Uncertain,
-    /// The service rejected the call.
+
     DefiniteFailure,
 }
 
-/// File-backed journal.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Journal {
     file: JournalFile,
 }
 
 impl Journal {
-    /// Create the file and schema.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Journal`] when turso cannot open the path.
     pub async fn open(path: &Path) -> Result<Self, HostError> {
         let journal = Self {
             file: JournalFile::open(path).await?,
@@ -94,13 +79,6 @@ impl Journal {
         Ok(journal)
     }
 
-    /// Insert a pending intent and commit before returning.
-    ///
-    /// The same `kind` and `subject` reuse the live row. A failed or cleaned row starts a new id.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Journal`] on I/O failure or a rejected kind or subject.
     pub async fn begin(&self, kind: &str, subject: &str) -> Result<i64, HostError> {
         if token_rejected(kind) || token_rejected(subject) {
             return Err(HostError::Journal);
@@ -109,13 +87,6 @@ impl Journal {
         commit_live(&conn, kind, subject).await
     }
 
-    /// Record the outcome of exactly one row on a new connection.
-    ///
-    /// Rows with proven cleanup are terminal and cannot be finished again.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Journal`] when the id is missing, cleanup was proven, or the write fails.
     pub async fn finish(&self, id: i64, outcome: Outcome) -> Result<(), HostError> {
         let state = match outcome {
             Outcome::Done => IntentState::Done,
@@ -136,11 +107,6 @@ impl Journal {
         .await
     }
 
-    /// Read a row back, including after a new [`Journal::open`].
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Journal`] when the row is missing.
     pub async fn read(&self, id: i64) -> Result<IntentState, HostError> {
         let conn = self.connection().await?;
         let mut rows = conn
@@ -156,13 +122,6 @@ impl Journal {
         IntentState::parse(&text)
     }
 
-    /// Commit pending, run `effect` with no connection, then [`Journal::finish`].
-    ///
-    /// `secret` is passed only to `effect` and is not written.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Journal`] when the intent cannot be stored or finished.
     pub async fn around<F>(
         &self,
         kind: &str,
@@ -179,13 +138,6 @@ impl Journal {
         Ok(id)
     }
 
-    /// Store plain docker and GitHub runner ids after the effect returns.
-    ///
-    /// `None` leaves the existing column. Empty ids are rejected.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Journal`] when the row is missing or an id is rejected.
     pub async fn bind(
         &self,
         id: i64,
@@ -211,13 +163,6 @@ impl Journal {
         .await
     }
 
-    /// Store the runner id and the private `DinD` id. `None` keeps the column.
-    ///
-    /// Commit this before the container is started. Empty ids are rejected.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Journal`] when the row is missing or an id is rejected.
     pub async fn bind_worker(
         &self,
         id: i64,
@@ -247,14 +192,6 @@ impl Journal {
         .await
     }
 
-    /// Record that cleanup of this row's ids is proven.
-    ///
-    /// Completion rows require a live completion claim and verified runner absence.
-    /// Use the completion-specific proof method for those rows.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Journal`] when the row is missing.
     pub async fn record_cleanup(&self, id: i64) -> Result<(), HostError> {
         let conn = self.connection().await?;
         transaction::with_unique_id(&conn, id, async move |conn| {

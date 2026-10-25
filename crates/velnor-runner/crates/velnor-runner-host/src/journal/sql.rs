@@ -1,5 +1,3 @@
-//! Small shared SQL guards for the journal subtree.
-
 use crate::error::HostError;
 
 pub(super) fn one_row(changed: u64) -> Result<(), HostError> {

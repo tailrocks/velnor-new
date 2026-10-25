@@ -1,5 +1,3 @@
-//! Plan-derived cache permissions consumed by cache-layer producers.
-
 use crate::errors::ContractError;
 use crate::workflow::QualificationPhase;
 use crate::workflow::plan::Plan;
@@ -18,15 +16,9 @@ pub use super::directive_types::{
     QualificationCacheSavePolicy,
 };
 
-/// Output name for canonical phase/lane/layer cache directives.
 pub const QUALIFICATION_CACHE_DIRECTIVES_OUTPUT: &str = "qualification_cache_directives";
 
 impl QualificationCacheDirective {
-    /// Build directives from a fully validated plan and admitted lineage.
-    ///
-    /// Non-qualification plans return None. Cold and Control reject any
-    /// predecessor admission; lineage phases reject a missing one.
-    /// # Errors
     pub fn for_plan(
         plan: &Plan,
         admission: Option<&QualificationCacheAdmission>,
@@ -76,7 +68,6 @@ impl QualificationCacheDirective {
         }))
     }
 
-    /// Find one lane/layer instruction without interpreting phase names.
     #[must_use]
     pub fn layer(
         &self,
@@ -91,12 +82,6 @@ impl QualificationCacheDirective {
             .find(|record| record.layer == layer)
     }
 
-    /// Rebuild this serialized directive from its plan and admission, then bind runtime identity.
-    ///
-    /// The serialized fields alone never authorize cache access. Any field
-    /// that differs from the plan-derived directive is rejected before keys
-    /// are returned.
-    /// # Errors
     pub fn bind_runtime(
         &self,
         plan: &Plan,

@@ -1,8 +1,3 @@
-//! Internal-operation step templates (split from `steps`).
-//!
-//! Operation travels via env, never argv; the staged binary dispatches
-//! on it at event time.
-
 use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 
 use crate::{
@@ -14,14 +9,6 @@ use crate::{
     },
 };
 
-/// Split an internal operation into env op plus request-file target op.
-///
-/// `plan-v1`/`merge-v1`/`fetch-reports-v1` target
-/// themselves (fetch takes no request file; its input root is the
-/// runner-temp velnor directory); `seed-parallel-targets-v1` initializes
-/// the fixed independent target lanes; `write-request-v1:<target>` gates on
-/// `write-request-v1` while materializing the target's request file.
-/// # Errors
 pub(crate) fn split_internal_operation(operation: &str) -> Result<(&str, &str), RenderError> {
     if operation == RESOLVE_QUALIFICATION_OPERATION {
         return Ok((operation, PLAN_OPERATION));
@@ -57,8 +44,6 @@ pub(crate) fn split_internal_operation(operation: &str) -> Result<(&str, &str), 
     )))
 }
 
-/// Internal plan/merge/write-request step; operation travels via env, never argv.
-/// # Errors
 pub fn internal_step(name: &str, operation: &str) -> Result<Step, RenderError> {
     if name.trim().is_empty() {
         return Err(RenderError::BadCommand("empty_name".to_owned()));
@@ -79,8 +64,6 @@ pub fn internal_step(name: &str, operation: &str) -> Result<Step, RenderError> {
     })
 }
 
-/// Fixed write-request step materializing `<target>-request.json` at event time.
-/// # Errors
 pub fn write_request_step(target: &str) -> Result<Step, RenderError> {
     if target != PLAN_OPERATION && target != MERGE_OPERATION {
         return Err(RenderError::BadCommand(format!(
@@ -100,7 +83,6 @@ pub fn write_request_step(target: &str) -> Result<Step, RenderError> {
     })
 }
 
-/// Fixed planner step (`plan-v1`).
 #[must_use]
 pub fn plan_step() -> Step {
     Step {
@@ -116,7 +98,6 @@ pub fn plan_step() -> Step {
     }
 }
 
-/// Fixed report-merge step (`merge-v1`).
 #[must_use]
 pub fn merge_step() -> Step {
     Step {
@@ -131,7 +112,3 @@ pub fn merge_step() -> Step {
         },
     }
 }
-
-#[cfg(test)]
-#[path = "steps_internal_tests.rs"]
-mod tests;

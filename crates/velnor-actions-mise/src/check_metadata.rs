@@ -1,38 +1,24 @@
-//! Adapter metadata with one sealed opaque execution policy.
 use super::DiscoveredCheck;
 use serde::ser::SerializeMap;
 
-/// Adapter-owned metadata; orchestrators serialize this projection verbatim.
 #[derive(Debug, serde::Serialize)]
 pub struct CheckEntryMetadata<'a> {
-    /// Stable configured obligation.
     pub check_id: &'a str,
-    /// Native Mise task name.
     pub task: &'a str,
-    /// Repository-relative working directory.
     pub directory: &'a str,
-    /// Explicit typed placement and complete host container profile.
     pub runner: &'a velnor_actions_contract::config::CheckRunner,
-    /// Explicit qualified tool IDs.
     pub tools: &'a [String],
-    /// Full explicit qualified installation closure; adapter-owned transport.
     pub qualified_tools: &'a [velnor_actions_contract::config::QualifiedTool],
-    /// Canonical declarations, options, dependencies and source qualification digest.
     pub qualification_digest: &'a str,
-    /// Exact selected backend selectors participating in the fingerprint.
     pub tool_specs: &'a [String],
-    /// Exact observed native system-tool versions and builds.
     pub system_tools: &'a [velnor_actions_contract::config::CheckSystemTool],
-    /// Required machine-readable evidence contract.
     pub evidence: &'a Option<velnor_actions_contract::config::CheckEvidence>,
-    /// Process deadline in minutes.
     pub timeout_minutes: u32,
     #[serde(flatten)]
     policy: OpaqueExecutionPolicy,
 }
 
 impl DiscoveredCheck {
-    /// Stable metadata contract owned by this adapter.
     #[must_use]
     pub fn entry_metadata(&self) -> CheckEntryMetadata<'_> {
         CheckEntryMetadata {
@@ -52,7 +38,6 @@ impl DiscoveredCheck {
     }
 }
 
-/// This adapter supports exactly one policy: opaque execution without reuse.
 #[derive(Debug)]
 struct OpaqueExecutionPolicy;
 

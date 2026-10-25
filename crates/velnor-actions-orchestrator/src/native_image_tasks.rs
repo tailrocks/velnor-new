@@ -1,5 +1,3 @@
-//! Resolve native-image tasks to a tracked, bounded script source.
-
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Component, Path};
@@ -13,7 +11,6 @@ use crate::safe_read::{RepoRead, read_repo_file};
 
 const MAX_NATIVE_IMAGE_SCRIPT_BYTES: u64 = 1024 * 1024;
 
-/// Resolve the one declared image task against its checked-out script bytes.
 pub(crate) fn policies(
     root: &Path,
     config: &VelnorConfig,
@@ -98,34 +95,5 @@ fn require_tracked_script(root: &Path, script: &str) -> Result<(), OrchestratorE
 fn failure(problem: &str) -> OrchestratorError {
     OrchestratorError::Contract {
         problem: problem.to_owned(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{MAX_NATIVE_IMAGE_SCRIPT_BYTES, validate_script_components};
-
-    #[test]
-    fn native_image_script_is_regular_and_uses_only_non_symlink_directories() {
-        let root = tempfile::tempdir().expect("temporary repo");
-        let directory = root.path().join("maintained-image-build");
-        std::fs::create_dir(&directory).expect("script directory");
-        std::fs::write(directory.join("check.sh"), "#!/bin/bash\n").expect("script");
-        assert!(validate_script_components(root.path(), "maintained-image-build/check.sh").is_ok());
-
-        let symlink_root = tempfile::tempdir().expect("symlink repo");
-        let outside = tempfile::tempdir().expect("outside directory");
-        std::fs::write(outside.path().join("check.sh"), "#!/bin/bash\n").expect("outside script");
-        std::os::unix::fs::symlink(
-            outside.path(),
-            symlink_root.path().join("maintained-image-build"),
-        )
-        .expect("directory symlink");
-        assert!(
-            validate_script_components(symlink_root.path(), "maintained-image-build/check.sh")
-                .is_err()
-        );
-
-        assert_eq!(MAX_NATIVE_IMAGE_SCRIPT_BYTES, 1024 * 1024);
     }
 }

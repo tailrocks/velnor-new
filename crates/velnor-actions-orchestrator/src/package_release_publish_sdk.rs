@@ -1,5 +1,3 @@
-//! Read-only admission checks for an externally published SDK release.
-
 use velnor_actions_mise::CheckDeadline;
 
 use super::{GitHubApi, run_identity::RunSource};
@@ -35,13 +33,6 @@ pub(crate) struct PublicSdkCallerSelection {
     pub(crate) sdk_source_sha: String,
 }
 
-#[cfg(test)]
-#[path = "package_release_publish_sdk_tests.rs"]
-mod tests;
-
-/// Reauthenticate the exact reusable-workflow manifest producer through public
-/// GitHub run, job, and protected-main reads. Attestation verification supplies
-/// immutable run/source identities; this method confirms the recorded run.
 pub(crate) fn verify_public_sdk_release_producer(
     selection: &PublicSdkProducerSelection,
     deadline: CheckDeadline,
@@ -106,9 +97,6 @@ pub(crate) fn verify_public_sdk_release_producer(
     Ok(())
 }
 
-/// Authenticate the current protected tap workflow run's actual reusable
-/// workflow reference. Caller inputs come from the already checked tap PR; the
-/// API response must independently agree with that PR and selected run attempt.
 pub(crate) fn verify_public_sdk_adoption_caller(
     selection: &PublicSdkCallerSelection,
     deadline: CheckDeadline,

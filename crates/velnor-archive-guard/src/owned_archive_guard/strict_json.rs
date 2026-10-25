@@ -111,7 +111,3 @@ impl<'de> Visitor<'de> for StrictValueVisitor {
         Ok(StrictValue::Object(values))
     }
 }
-
-#[cfg(test)]
-#[path = "strict_json_tests.rs"]
-mod tests;

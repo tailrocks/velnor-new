@@ -2,11 +2,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::ContractError;
 
-/// Current wire schema consumed by the manual job-image publisher.
 pub const IMAGE_CANDIDATE_SCHEMA: &str = "velnor.job-image-candidate.v1";
-/// Maximum serialized candidate record size.
+
 pub const IMAGE_CANDIDATE_MAX_RECORD_BYTES: usize = 1024 * 1024;
-/// Existing declared build inputs retained for the v1 manual-publisher contract.
+
 pub const IMAGE_CANDIDATE_SOURCE_INPUTS: [&str; 5] = [
     ".velnor/runner.lock",
     "images/job/ubuntu-26.04/Dockerfile",
@@ -15,113 +14,97 @@ pub const IMAGE_CANDIDATE_SOURCE_INPUTS: [&str; 5] = [
     "images/job/ubuntu-26.04/candidate/candidate.py",
 ];
 
-/// Exact source commit, ref and declared input digests for one image candidate.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ImageCandidateSource {
-    /// Full lowercase Git commit.
     pub commit: String,
-    /// GitHub ref used for the build.
+
     #[serde(rename = "ref")]
     pub source_ref: String,
-    /// Existing v1 input-path to SHA-256 map.
+
     pub inputs: BTreeMap<String, String>,
 }
 
-/// Authenticated GitHub Actions workflow identity captured by the builder.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ImageCandidateWorkflow {
-    /// `owner/repository` slug.
     pub repository: String,
-    /// Stable numeric GitHub repository ID.
+
     pub repository_id: u64,
-    /// GitHub event name.
+
     pub event: String,
-    /// Workflow path and ref.
+
     pub workflow_ref: String,
-    /// Workflow definition commit.
+
     pub authority_commit: String,
-    /// GitHub Actions run ID.
+
     pub run_id: u64,
-    /// GitHub Actions run attempt.
+
     pub run_attempt: u64,
 }
 
-/// Buildx settings recorded for the candidate.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ImageCandidateBuild {
-    /// Exact Buildx version string.
     pub builder: String,
-    /// Exact OCI platform.
+
     pub platform: String,
-    /// Build arguments; currently required to be empty.
+
     pub arguments: Vec<String>,
-    /// Exporter kind.
+
     pub exporter: String,
-    /// `BuildKit` provenance mode.
+
     pub provenance: String,
-    /// Layer compression mode.
+
     pub compression: String,
-    /// Whether compression is forced for every layer.
+
     pub force_compression: bool,
 }
 
-/// Candidate archive byte identity.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ImageCandidateArchive {
-    /// Lowercase archive SHA-256 hex digest.
     pub sha256: String,
-    /// Archive byte length.
+
     pub size_bytes: u64,
 }
 
-/// OCI graph identity derived from the exported archive.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ImageCandidateOci {
-    /// SHA-256 of `index.json` bytes.
     pub archive_index_digest: String,
-    /// Length of `index.json`.
+
     pub archive_index_size_bytes: u64,
-    /// Selected platform manifest digest.
+
     pub platform_manifest_digest: String,
-    /// Selected platform manifest length.
+
     pub platform_manifest_size_bytes: u64,
-    /// Image configuration digest.
+
     pub image_configuration_digest: String,
-    /// Image configuration length.
+
     pub image_configuration_size_bytes: u64,
-    /// Ordered layer descriptor digests.
+
     pub layer_digests: Vec<String>,
 }
 
-/// Candidate record shared with the existing manual publisher.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ImageCandidateRecord {
-    /// Versioned record schema.
     pub schema: String,
-    /// Source identity and declared input digests.
+
     pub source: ImageCandidateSource,
-    /// Workflow identity.
+
     pub workflow: ImageCandidateWorkflow,
-    /// Candidate platform.
+
     pub platform: String,
-    /// Buildx settings.
+
     pub build: ImageCandidateBuild,
-    /// OCI archive identity.
+
     pub archive: ImageCandidateArchive,
-    /// Selected OCI graph identity.
+
     pub oci: ImageCandidateOci,
 }
 
-/// Parse, bound, and validate the strict v1 candidate record.
-///
-/// # Errors
-/// Rejects invalid JSON, duplicate keys, unknown fields, or noncanonical identity facts.
 pub fn parse_image_candidate_record(bytes: &[u8]) -> Result<ImageCandidateRecord, ContractError> {
     let value =
         crate::strict_json::parse_strict_json_bytes(bytes, IMAGE_CANDIDATE_MAX_RECORD_BYTES)?;
@@ -131,10 +114,6 @@ pub fn parse_image_candidate_record(bytes: &[u8]) -> Result<ImageCandidateRecord
     Ok(record)
 }
 
-/// Validate every v1 field without performing filesystem or workflow reads.
-///
-/// # Errors
-/// Rejects any field or cross-field identity that differs from the closed v1 policy.
 pub fn validate_image_candidate_record(record: &ImageCandidateRecord) -> Result<(), ContractError> {
     if record.schema != IMAGE_CANDIDATE_SCHEMA || record.platform != "linux/amd64" {
         return Err(invalid("schema_or_platform"));
@@ -146,10 +125,6 @@ pub fn validate_image_candidate_record(record: &ImageCandidateRecord) -> Result<
     validate_oci(&record.oci)
 }
 
-/// Serialize the valid v1 record with sorted keys and the publisher's final LF.
-///
-/// # Errors
-/// Rejects invalid records or canonical JSON serialization failures.
 pub fn serialize_image_candidate_record(
     record: &ImageCandidateRecord,
 ) -> Result<Vec<u8>, ContractError> {

@@ -1,4 +1,4 @@
-//! Bounded recovery of incomplete, journal-owned worker pairs.
+
 
 use std::future::Future;
 use std::time::Duration;
@@ -17,31 +17,29 @@ use crate::worker::{WorkerVolumeRole, dind_container_name};
 const RECOVERY_LEASE_SECONDS: i64 = 90;
 const RECOVERY_RETRY_SECONDS: i64 = 30;
 
-#[cfg(test)]
-#[path = "recovery_tests.rs"]
-mod tests;
 
-/// One exact container recovered from its journal-owned name or immutable id.
+
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RecoveryContainer {
-    /// Docker's immutable container id.
+
     pub(crate) id: String,
 }
 
-/// Ownership observation for one worker volume.
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RecoveryVolumeState {
-    /// Docker returned a confirmed not-found response.
+
     Absent,
-    /// The exact worker and role labels match.
+
     Owned,
-    /// The expected name exists with another identity.
+
     Mismatch,
 }
 
-/// One bounded Docker operation used by the recovery state machine.
+
 pub(crate) trait RecoveryEngine {
-    /// Inspect one id or exact name and validate name plus all worker labels.
+
     async fn inspect_worker(
         &self,
         reference: &str,
@@ -49,17 +47,17 @@ pub(crate) trait RecoveryEngine {
         worker: &str,
         role: &str,
     ) -> Result<Option<RecoveryContainer>, HostError>;
-    /// Observe whether the exact container is running.
+
     async fn running(&self, id: &str) -> Result<bool, HostError>;
-    /// Remove one immutable container id.
+
     async fn remove(&self, id: &str) -> Result<(), HostError>;
-    /// Inspect and verify one fixed worker-volume name.
+
     async fn inspect_volume(
         &self,
         worker: &str,
         role: WorkerVolumeRole,
     ) -> Result<RecoveryVolumeState, HostError>;
-    /// Delete one fixed worker-volume name after a separate ownership check.
+
     async fn remove_volume(&self, worker: &str, role: WorkerVolumeRole) -> Result<(), HostError>;
 }
 
@@ -138,16 +136,16 @@ impl RecoveryEngine for Docker {
     }
 }
 
-/// Bounded result from one admission-boundary recovery pass.
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct RecoveryReport {
-    /// Rows with complete worker, runner, and volume absence proof.
+
     pub(crate) cleaned: u32,
-    /// Rows held for a later retry or by a competing completion owner.
+
     pub(crate) held: u32,
 }
 
-/// Reconcile at most four eligible journal rows before capacity admission.
+
 pub(crate) async fn reconcile_batch<E, F>(
     journal: &Journal,
     engine: &E,

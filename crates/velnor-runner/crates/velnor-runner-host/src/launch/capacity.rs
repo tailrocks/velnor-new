@@ -1,8 +1,3 @@
-//! How many workers one session may start.
-//!
-//! `VELNOR_MAX_JOBS` is total capacity, not free slots. The poll header uses it.
-//! `VELNOR_ADMIT_TARGET`, when higher, is how many starts this session keeps polling for.
-
 use std::cell::Cell;
 
 use super::steps::Idle;
@@ -13,54 +8,40 @@ const POLL_MAX_MULTI: usize = 24;
 const POLL_WIDE_DEFAULT: usize = 90;
 const POLL_WIDE_MAX: usize = 120;
 
-/// What `poll_and_drive` does with one poll.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Admit {
-    /// Start one worker. `stop` ends the session after that start.
-    Start {
-        /// Leave the session after this start.
-        stop: bool,
-    },
-    /// Poll again. No start and no acknowledgement.
+    Start { stop: bool },
+
     Stay,
-    /// End the session. No start and no acknowledgement.
+
     Stop,
-    /// Delete this batch. This does not free a running slot.
-    Ack {
-        /// Leave the session after the acknowledgement.
-        stop: bool,
-    },
-    /// Running count is at capacity. The launch stays unacquired.
+
+    Ack { stop: bool },
+
     Hold,
-    /// Two ids, or another message that must stay on the queue. No start.
+
     Error,
 }
 
-/// Inputs for [`admit`]. Counts are for this call, not free slots.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Seat {
-    /// Clamped job capacity for this session.
     pub(crate) capacity: u32,
-    /// Starts this session should reach. Equals capacity unless admission is widened.
+
     pub(crate) target: u32,
-    /// Workers this call already started. An exited start does not keep the slot.
+
     pub(crate) started: u32,
-    /// Launch rows that still hold a permit. Unresolved rows count. History does not.
+
     pub(crate) occupied: u32,
-    /// Running runner containers.
+
     pub(crate) running: u32,
-    /// `statistics.totalAssignedJobs` for this poll. Zero when the poll has none.
+
     pub(crate) assigned: u32,
-    /// Classified poll.
+
     pub(crate) idle: Idle,
-    /// Start or completion notices only. A full slot can acknowledge them.
+
     pub(crate) progress: bool,
 }
 
-/// Decide one poll. A free slot starts the next job. Historical `started` does not.
-///
-/// An uncovered assignment is not acknowledged. One full slot holds that offer.
-/// It does not hide another free slot.
 #[must_use]
 pub(crate) const fn admit(seat: Seat) -> Admit {
     match seat.idle {
@@ -113,7 +94,6 @@ const fn admit_scale(seat: Seat) -> Admit {
 }
 
 const fn scale_covered(seat: Seat) -> bool {
-    // Only a running container covers `totalAssignedJobs`. An exited start does not.
     seat.running >= seat.assigned
 }
 
@@ -137,13 +117,11 @@ const fn limit(seat: Seat) -> u32 {
     }
 }
 
-/// Launch and scale always read Docker. A full `started` count must not hide a free slot.
 #[must_use]
 pub(crate) const fn needs_running(idle: Idle) -> bool {
     matches!(idle, Idle::Launch | Idle::Scale)
 }
 
-/// True when session statistics must not mint another pair.
 #[must_use]
 pub(crate) fn statistics_blocked(
     occupied: u32,
@@ -161,7 +139,6 @@ thread_local! {
     static JOB_CAPACITY_OVERRIDE: Cell<Option<u32>> = const { Cell::new(None) };
 }
 
-/// Restores the prior thread-local capacity when dropped.
 #[must_use]
 pub(crate) struct CapacityGuard {
     previous: Option<u32>,
@@ -173,9 +150,6 @@ impl Drop for CapacityGuard {
     }
 }
 
-/// Prefer `max_jobs` from the host file over `VELNOR_MAX_JOBS` on this thread.
-///
-/// Zero becomes 1. The value is not clamped to a fixed maximum.
 pub(crate) fn install_job_capacity(max_jobs: u32) -> CapacityGuard {
     let stored = if max_jobs == 0 { 1 } else { max_jobs };
     let previous = JOB_CAPACITY_OVERRIDE.with(|slot| {
@@ -186,9 +160,6 @@ pub(crate) fn install_job_capacity(max_jobs: u32) -> CapacityGuard {
     CapacityGuard { previous }
 }
 
-/// Installed host capacity, else `VELNOR_MAX_JOBS`.
-///
-/// Unset, empty, zero, or unparsable env is 1. There is no fixed upper clamp.
 #[must_use]
 pub(crate) fn job_capacity() -> u32 {
     if let Some(value) = JOB_CAPACITY_OVERRIDE.with(Cell::get) {
@@ -197,7 +168,6 @@ pub(crate) fn job_capacity() -> u32 {
     parse_job_capacity(std::env::var("VELNOR_MAX_JOBS").ok().as_deref())
 }
 
-/// Parser used by [`job_capacity`].
 #[must_use]
 pub(crate) fn parse_job_capacity(text: Option<&str>) -> u32 {
     let Some(text) = text.map(str::trim).filter(|value| !value.is_empty()) else {
@@ -209,7 +179,6 @@ pub(crate) fn parse_job_capacity(text: Option<&str>) -> u32 {
     }
 }
 
-/// `VELNOR_ADMIT_TARGET`. Unset, empty, unparsable, or below `capacity` is `capacity`.
 #[must_use]
 pub(crate) fn admit_target(capacity: u32) -> u32 {
     parse_admit_target(
@@ -218,7 +187,6 @@ pub(crate) fn admit_target(capacity: u32) -> u32 {
     )
 }
 
-/// Parser used by [`admit_target`].
 #[must_use]
 pub(crate) fn parse_admit_target(capacity: u32, raw: Option<&str>) -> u32 {
     let Some(text) = raw.map(str::trim).filter(|value| !value.is_empty()) else {
@@ -230,7 +198,6 @@ pub(crate) fn parse_admit_target(capacity: u32, raw: Option<&str>) -> u32 {
     if parsed < capacity { capacity } else { parsed }
 }
 
-/// `VELNOR_LAUNCH_POLLS` for `capacity`. Unset or unparsable is 8.
 #[must_use]
 pub(super) fn poll_bound(capacity: u32) -> usize {
     poll_limit(
@@ -239,14 +206,11 @@ pub(super) fn poll_bound(capacity: u32) -> usize {
     )
 }
 
-/// `VELNOR_LAUNCH_POLLS` when the admission target exceeds capacity.
-/// Unset or unparsable is 90. Clamped to 1..=120.
 #[must_use]
 pub(super) fn poll_bound_wide() -> usize {
     wide_poll_limit(std::env::var("VELNOR_LAUNCH_POLLS").ok().as_deref())
 }
 
-/// Clamp the widened poll bound. Unset or unparsable is 90.
 #[must_use]
 pub(crate) fn wide_poll_limit(raw: Option<&str>) -> usize {
     let Some(text) = raw else {
@@ -258,7 +222,6 @@ pub(crate) fn wide_poll_limit(raw: Option<&str>) -> usize {
     bound.clamp(1, POLL_WIDE_MAX)
 }
 
-/// Clamp a poll bound. Capacity 1 uses 1..=8. Above that, 1..=24.
 #[must_use]
 pub(crate) fn poll_limit(capacity: u32, raw: Option<&str>) -> usize {
     let max = if capacity > 1 {

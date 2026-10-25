@@ -1,5 +1,3 @@
-//! Canonical bounded predecessor-admission wire envelope.
-
 use serde::Serialize;
 use velnor_actions_contract::QualificationSourceDelta;
 

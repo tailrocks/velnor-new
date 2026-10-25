@@ -1,5 +1,3 @@
-//! ZIP directory admission and special-entry rejection.
-
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
@@ -114,9 +112,6 @@ fn admit_possible_directories(
             || le_u32(&end[12..16]) == u32::MAX
             || le_u32(&end[16..20]) == u32::MAX;
         if zip64 && try_admit_zip64_directory(source, eocd, end, markers, deadline)? {
-            // A valid ZIP64 locator commits the pinned reader to its ZIP64 path,
-            // including when no matching end record is found. It does not fall
-            // back to the ZIP32 fields for this candidate.
             continue;
         }
         if !zip32_directory_can_be_selected(eocd, end, &markers.central) {

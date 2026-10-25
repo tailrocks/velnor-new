@@ -16,12 +16,6 @@ const MEMINFO_LIMIT: usize = 16 * 1024;
 const LOADAVG_LIMIT: usize = 256;
 const PRESSURE_LIMIT: usize = 4096;
 
-/// Read the fixed, bounded measurement sources into one versioned record.
-///
-/// # Errors
-///
-/// Returns an error when any mandatory measurement is missing, malformed, too
-/// large, or outside the output range.
 pub fn sample() -> Result<ProbeRecord, ProbeError> {
     let root =
         statvfs(DOCKER_ROOT).map_err(|error| ProbeError::Read("docker_root", error.into()))?;

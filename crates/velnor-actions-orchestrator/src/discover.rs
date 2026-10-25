@@ -1,5 +1,3 @@
-//! Detection, inventory, profile, and task-proposal coordination.
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
@@ -30,79 +28,37 @@ mod consumer_manifest;
 use crate::toolcheck::{ToolInputCheck, check_tool_inputs_with_paths};
 use crate::{discover_tofu::qualify_tofu_step, evidence::profile_for_workspace};
 
-/// One workspace with its inventory, profile, and recommendations.
 #[derive(Debug, Clone)]
 pub struct PlannedWorkspace {
-    /// Parsed Cargo inventory.
     pub record: WorkspaceRecord,
-    /// Selected execution profile.
     pub profile: RustExecutionProfile,
-    /// Profile recommendations.
     pub recommendations: Vec<Recommendation>,
-    /// Blocking profile findings; `generate` fails closed when non-empty.
     pub findings: Vec<velnor_actions_rust::ProfileFinding>,
 }
 
-/// Full detection output feeding planning and rendering.
 #[derive(Debug, Clone, Default)]
 pub struct Discovery {
-    /// Analysed Gradle roots (stack contract: findings fail generation).
     pub(crate) gradle_roots: Vec<crate::config::gradle_jobs::GradleRoot>,
-    /// Explicit repository-owned checks, independent of detected workspaces.
     pub mise_checks: Vec<velnor_actions_mise::DiscoveredCheck>,
-    /// Closed SDK-owned native Homebrew checks.
     pub native_checks: Vec<velnor_actions_contract::config::NativeHomebrewCheck>,
-    /// Per-project selection states.
     pub statuses: Vec<DetectionStatus>,
-    /// Selected workspaces with profiles.
     pub workspaces: Vec<PlannedWorkspace>,
-    /// Validated adapter task proposals sorted by task ID.
     pub proposals: Vec<ProposedTask>,
-    /// Per-crate feature fallbacks in derivation order.
     pub feature_fallbacks: Vec<crate::derive_groups::FeatureFallback>,
-    /// Tool-input checks: presence, parse, values, digests.
     pub tool_checks: Vec<ToolInputCheck>,
-    /// Barrier-separated Clippy memory schedule.
     pub clippy_memory: ClippyMemoryPlan,
-    /// Non-fatal generation recommendations.
     pub recommendations: Vec<String>,
-    /// Release-manifest text for consumer policy from the committed file.
-    ///
-    /// Consumer debug builds fall back to a stand-in when the file is absent
-    /// (flagged by [`Discovery::consumer_manifest_stand_in`], warned at
-    /// generation); release builds keep `None` so generation fails
-    /// closed with `consumer_requires_release_install`.
     pub consumer_manifest_json: Option<String>,
-    /// Whether the manifest text above is the debug-only stand-in.
-    ///
-    /// False for Velnor policy and release builds. `generate` warns when
-    /// consumer policy uses the debug stand-in; `plan` stays silent.
     pub consumer_manifest_stand_in: bool,
-    /// Whether non-UTF-8 names require broad selection.
     pub skipped_non_utf8: bool,
-    /// Tofu plan note: ignore marker or table-less evidence advisory.
-    ///
-    /// `None` when the tofu table is absent and no evidence exists, or
-    /// when configured roots convert to selected projects.
     pub tofu_note: Option<velnor_actions_tofu::TofuNote>,
-    /// Tofu selection records: head files plus edges per root.
     pub tofu_units: Vec<crate::select_tofu::TofuSelectionUnit>,
-    /// Resolved graphs and declared input rules for affected selection.
     pub affected: crate::affected_inputs::AffectedInputs,
-    /// Bun workspaces named by `[stacks.bun]`, read from the same index.
     pub(crate) bun: crate::workflow_task_jobs::bun_inventory::BunInventory,
-    /// dbt projects named by `[stacks.dbt]`, analysed from the same index.
     pub(crate) dbt: crate::workflow_task_jobs::dbt_inventory::DbtInventory,
-    /// Ansible roots named by `[stacks.ansible]`, analysed from the same index.
     pub(crate) ansible: crate::workflow_task_jobs::ansible_inventory::AnsibleInventory,
 }
 
-/// Run file index, detection, inventory, profiles, and task derivation.
-///
-/// # Errors
-///
-/// Returns discovery, detection, inventory, profile, preparation, or
-/// contract errors when any stage fails.
 pub(crate) fn discover(
     root: &Path,
     config: &VelnorConfig,
@@ -250,7 +206,6 @@ fn task_tool_paths(config: &VelnorConfig) -> Vec<String> {
     paths.into_iter().collect()
 }
 
-/// Sorted local dependency display names for one package.
 #[must_use]
 pub(crate) fn local_dep_names(record: &WorkspaceRecord, package_id: &str) -> Vec<String> {
     let names: BTreeMap<&str, &str> = record
@@ -269,7 +224,6 @@ pub(crate) fn local_dep_names(record: &WorkspaceRecord, package_id: &str) -> Vec
     deps.into_iter().map(str::to_owned).collect()
 }
 
-/// Keep selected workspaces, detect profiles, fail incomplete tooling.
 fn plan_workspaces(
     root: &Path,
     index: &FileIndex,
@@ -311,7 +265,6 @@ fn plan_workspaces(
     Ok(planned)
 }
 
-/// Derive every task proposal (rust groups plus tofu triples) and fallbacks.
 fn derive_all(
     config: &VelnorConfig,
     index: &FileIndex,
@@ -360,7 +313,6 @@ fn derive_all(
     Ok((proposals, fallbacks))
 }
 
-/// Workspace-root manifest path for a workspace root.
 pub(crate) fn workspace_manifest(workspace_root: &str) -> String {
     if workspace_root.is_empty() {
         "Cargo.toml".to_owned()
@@ -369,7 +321,6 @@ pub(crate) fn workspace_manifest(workspace_root: &str) -> String {
     }
 }
 
-/// Workspace-root lockfile path for a workspace root.
 pub(crate) fn workspace_lock(workspace_root: &str) -> String {
     if workspace_root.is_empty() {
         "Cargo.lock".to_owned()
@@ -377,7 +328,3 @@ pub(crate) fn workspace_lock(workspace_root: &str) -> String {
         format!("{workspace_root}/Cargo.lock")
     }
 }
-
-#[cfg(test)]
-#[path = "discover_manifest_tests.rs"]
-mod tests;

@@ -1,5 +1,11 @@
-//! Validates resource-probe smoke output and produces its release manifest.
-
+#![allow(
+    missing_docs,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
+#![allow(
+    clippy::missing_errors_doc,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
 use std::path::PathBuf;
 
 use velnor_runner_host::{HostError, resource_probe_release};

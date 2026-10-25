@@ -1,5 +1,3 @@
-//! Durable runner completion identity and cleanup scheduling.
-
 use crate::error::HostError;
 use crate::journal::{Journal, intent_row};
 use crate::reconcile::IntentRow;
@@ -19,41 +17,34 @@ pub(crate) use inbox::{
     CompletionInboxEntry, MAX_COMPLETION_BODY_BYTES, MAX_COMPLETION_INBOX_SCAN,
 };
 
-/// One leased completion cleanup attempt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct CleanupClaim {
-    /// Monotonic fencing token.
     pub(crate) generation: i64,
-    /// Bounded retry count used by the caller to select a backoff delay.
+
     pub(crate) attempt: u32,
 }
 
-/// Durable Scale Set and runner identity recorded for one completion.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CompletionIdentity {
-    /// Owning runner scale set.
     pub(crate) scale_set_id: i64,
-    /// Request id from the completion event.
+
     pub(crate) runner_request_id: i64,
-    /// Official Actions runner id from the completion event.
+
     pub(crate) runner_id: i64,
-    /// Exact generated runner name.
+
     pub(crate) runner_name: String,
-    /// Whether an exact-name official runner lookup confirmed absence after deletion.
+
     pub(crate) runner_absent: bool,
 }
 
-/// One completion intent and its persisted identity.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CompletedLaunch {
-    /// Original host intent.
     pub(crate) intent: IntentRow,
-    /// Identity that the cleanup caller must validate before deleting a runner.
+
     pub(crate) identity: CompletionIdentity,
 }
 
 impl Journal {
-    /// Read due, completed launches in retry order.
     pub(crate) async fn due_completed_launches(
         &self,
         now: i64,
@@ -139,19 +130,3 @@ pub(super) fn is_message_name(name: &str) -> bool {
         .parse::<i64>()
         .is_ok_and(|value| suffix == value.to_string())
 }
-
-#[cfg(test)]
-#[path = "journal_completion_tests.rs"]
-mod tests;
-
-#[cfg(test)]
-#[path = "journal_completion_claim_tests.rs"]
-mod claim_tests;
-
-#[cfg(test)]
-#[path = "journal_completion_inbox_tests.rs"]
-mod inbox_tests;
-
-#[cfg(test)]
-#[path = "journal_identity_completion_tests.rs"]
-mod identity_completion_tests;

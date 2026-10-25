@@ -1,12 +1,5 @@
-//! Exclusion-glob validation and matching for the file index.
-
 use super::index::IndexError;
 
-/// Validate one exclusion glob (relative, no traversal, well-formed).
-///
-/// # Errors
-///
-/// Rejects bad patterns with [`IndexError::MalformedPattern`].
 pub fn validate_pattern(pattern: &str) -> Result<(), IndexError> {
     let malformed = pattern.is_empty()
         || pattern.starts_with('/')
@@ -19,12 +12,10 @@ pub fn validate_pattern(pattern: &str) -> Result<(), IndexError> {
     Ok(())
 }
 
-/// Bytes allowed in exclusion globs.
 fn is_glob_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || b"/.-_*?[]{}!+@".contains(&byte)
 }
 
-/// Whether `path` or an ancestor directory matches any pattern.
 #[must_use]
 pub fn is_excluded(path: &str, patterns: &[&str]) -> bool {
     patterns
@@ -32,7 +23,6 @@ pub fn is_excluded(path: &str, patterns: &[&str]) -> bool {
         .any(|pattern| matches_path_or_ancestor(pattern, path))
 }
 
-/// Match `path` plus each ancestor prefix against one pattern.
 fn matches_path_or_ancestor(pattern: &str, path: &str) -> bool {
     if matches_glob(pattern, path) {
         return true;
@@ -47,7 +37,6 @@ fn matches_path_or_ancestor(pattern: &str, path: &str) -> bool {
     false
 }
 
-/// Match a repository-relative path against one glob (`**`, `*`, `?`, `[...]`, `{a,b}`).
 #[must_use]
 pub fn matches_glob(pattern: &str, path: &str) -> bool {
     let segments: Vec<&str> = path.split('/').collect();
@@ -56,7 +45,6 @@ pub fn matches_glob(pattern: &str, path: &str) -> bool {
         .any(|expanded| match_segments(&expanded.split('/').collect::<Vec<_>>(), &segments))
 }
 
-/// Expand the first top-level `{a,b}` group; without braces returns `pattern`.
 fn expand_braces(pattern: &str) -> Vec<String> {
     let Some(open) = pattern.find('{') else {
         return vec![pattern.to_owned()];
@@ -78,7 +66,6 @@ fn expand_braces(pattern: &str) -> Vec<String> {
     out
 }
 
-/// Match pattern segments against path segments; `**` spans segments.
 fn match_segments(pattern: &[&str], path: &[&str]) -> bool {
     match pattern.split_first() {
         None => path.is_empty(),
@@ -91,7 +78,6 @@ fn match_segments(pattern: &[&str], path: &[&str]) -> bool {
     }
 }
 
-/// Match one segment with `*`, `?`, and `[...]` classes.
 fn match_segment(pattern: &str, name: &str) -> bool {
     match_chars(
         &pattern.chars().collect::<Vec<_>>(),
@@ -99,7 +85,6 @@ fn match_segment(pattern: &str, name: &str) -> bool {
     )
 }
 
-/// Match character patterns against character text.
 fn match_chars(pattern: &[char], text: &[char]) -> bool {
     match pattern.split_first() {
         None => text.is_empty(),
@@ -114,7 +99,6 @@ fn match_chars(pattern: &[char], text: &[char]) -> bool {
     }
 }
 
-/// Match a leading `[...]` class against the first text character.
 fn match_class(pattern: &[char], text: &[char]) -> bool {
     let Some(head) = text.first() else {
         return false;
@@ -134,7 +118,6 @@ fn match_class(pattern: &[char], text: &[char]) -> bool {
     (class_hit(items, *head) != negated) && match_chars(rest, &text[1..])
 }
 
-/// Whether `target` is listed by class `items`, honoring `a-z` ranges.
 fn class_hit(items: &[char], target: char) -> bool {
     let mut index = 0;
     while index < items.len() {

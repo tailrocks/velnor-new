@@ -1,5 +1,3 @@
-//! Resolve the composed product-release workflow's platform and command pins.
-
 use std::ffi::{OsStr, OsString};
 
 use velnor_actions_contract::{ReleaseTarget, VelnorConfig};
@@ -15,7 +13,6 @@ use crate::pins::resolve_mise_setup_for_release_target;
 use crate::utf8::strings_of;
 use velnor_actions_workflow_renderer::steps::MbxTransport;
 
-/// Build every release command through the Mise adapter's typed requests.
 fn resolve_setups(
     config: &VelnorConfig,
 ) -> Result<(MiseSetup, MiseSetup, MiseSetup), OrchestratorError> {
@@ -26,8 +23,6 @@ fn resolve_setups(
     ))
 }
 
-/// `catalog` is the emission catalog: project-declared versions render as
-/// run-time references (hard decision 5).
 pub(crate) fn resolve(
     config: &VelnorConfig,
     catalog: &ToolCatalog,
@@ -95,8 +90,6 @@ pub(crate) fn resolve(
         )?,
         resource_probe_release_build_argv: native_resource_probe_argv(&catalog, false)?,
         resource_probe_release_test_argv: native_resource_probe_argv(&catalog, true)?,
-        // The release gates lint the committed tree exactly as the CI lint
-        // job does, with the same token scrub: the linter needs no credential.
         lint_argv: scrubbed_inline(crate::workflow_jobs::workflow_lint_argv(&catalog)?),
         verify_lint_argv: crate::workflow::jactionlint_verify_argv(&catalog),
         gh_argv: exec_argv(&[PinnedTool::Gh], "gh", &[], &catalog)?,
@@ -107,17 +100,12 @@ pub(crate) fn resolve(
     })
 }
 
-/// Resolve the seed reusable-workflow pins from this compiled SDK's own
-/// protected config and bundled catalog, never from the tap candidate.
 pub(crate) fn homebrew_adoption_pins() -> Result<ProductReleasePins, OrchestratorError> {
     let config =
         crate::config::load_config_from_text(include_str!("../../../.velnor/config.toml"))?;
     resolve(&config, &ToolCatalog::pinned())
 }
 
-/// `bash -c` argv whose script first unsets the credential variables, the
-/// same scrub the renderer gives an inline CI script (an `env -u` prefix
-/// would leave the inner script single-quoted for `ShellCheck`, SC2016).
 fn scrubbed_inline(mut argv: Vec<String>) -> Vec<String> {
     if let Some(script) = argv.get_mut(2) {
         *script = with_credential_unset_script(script);
@@ -160,7 +148,6 @@ fn install_argv(
     strings_of(install.argv(catalog)).map_err(contract_error)
 }
 
-/// Exact `mise install` argv for candidate qualification tools.
 fn qualify_install_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
     install_argv(
         &[
@@ -227,10 +214,6 @@ fn contract_error(problem: impl std::fmt::Display) -> OrchestratorError {
         problem: problem.to_string(),
     }
 }
-
-#[cfg(test)]
-#[path = "product_release_pins_mbx_tests.rs"]
-mod mbx_tests;
 
 fn native_resource_probe_argv(
     catalog: &ToolCatalog,

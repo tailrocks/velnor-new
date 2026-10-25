@@ -1,10 +1,7 @@
-//! Quoted string and multiline string tokenization for [`Parser`].
-
 use crate::toml_parser::Parser;
 use crate::toml_scan::{TomlDiagnostic, TomlValue};
 
 impl Parser {
-    /// Parse a quoted string value: single-line or multi-line (basic or literal).
     pub(crate) fn parse_string(&mut self) -> Result<TomlValue, TomlDiagnostic> {
         let Some(quote) = self.peek() else {
             return Err(self.fail("expected_value"));
@@ -16,7 +13,6 @@ impl Parser {
         }
     }
 
-    /// Parse single-line quoted text; triple-quoted strings are rejected explicitly.
     pub(crate) fn parse_quoted_text(&mut self) -> Result<String, TomlDiagnostic> {
         let Some(quote) = self.bump() else {
             return Err(self.fail("expected_value"));
@@ -45,7 +41,6 @@ impl Parser {
         }
     }
 
-    /// Parse a triple-quoted multi-line string (basic `"""` or literal `'''`).
     fn parse_multiline_string(&mut self, quote: char) -> Result<String, TomlDiagnostic> {
         self.consume_triple_quote();
         self.trim_opening_newline();
@@ -92,14 +87,12 @@ impl Parser {
         }
     }
 
-    /// Consume the 3 opening delimiter quotes.
     fn consume_triple_quote(&mut self) {
         self.bump();
         self.bump();
         self.bump();
     }
 
-    /// Trim an immediate opening newline (`\n` or `\r\n`).
     fn trim_opening_newline(&mut self) {
         if self.peek() == Some('\r') && self.peek_at(1) == Some('\n') {
             self.bump();
@@ -109,7 +102,6 @@ impl Parser {
         }
     }
 
-    /// Handle quotes inside or at the end of a multi-line string.
     fn consume_closing_quotes(
         &mut self,
         quote: char,
@@ -151,7 +143,6 @@ impl Parser {
         }
     }
 
-    /// Count consecutive occurrences of `quote` starting at the cursor.
     fn consecutive_quotes(&self, quote: char) -> usize {
         let mut count = 0;
         while self.peek_at(count) == Some(quote) {
@@ -160,7 +151,6 @@ impl Parser {
         count
     }
 
-    /// Whether the backslash is followed by optional spaces then a newline.
     fn is_line_continuation(&self) -> bool {
         let mut offset = 0;
         while matches!(self.peek_at(offset), Some(' ' | '\t')) {
@@ -172,7 +162,6 @@ impl Parser {
         )
     }
 
-    /// Skip horizontal spaces, newline, and all subsequent whitespace.
     fn trim_line_continuation(&mut self) {
         while matches!(self.peek(), Some(' ' | '\t')) {
             self.bump();
@@ -195,7 +184,6 @@ impl Parser {
         }
     }
 
-    /// Parse one basic-string escape after the backslash.
     fn parse_escape(&mut self) -> Result<String, TomlDiagnostic> {
         match self.bump() {
             Some('b') => Ok("\u{0008}".to_owned()),
@@ -211,7 +199,6 @@ impl Parser {
         }
     }
 
-    /// Parse a fixed-width `\u`/`\U` escape into one character.
     fn parse_unicode(&mut self, width: usize) -> Result<String, TomlDiagnostic> {
         let mut digits = String::with_capacity(width);
         for _ in 0..width {

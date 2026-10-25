@@ -1,18 +1,10 @@
-//! Rust detector: `Cargo.toml` candidates, registry order, ignore-after.
-//!
-//! Detectors observe the post-exclusion index; stack ignores apply after
-//! detection completes and never suppress malformed-manifest errors.
-
 use velnor_actions_contract::{DetectedProject, FileIndex, StackCandidate, VelnorConfig};
 
-/// One discovered `Cargo.toml` manifest (post-exclusion).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CargoCandidate {
-    /// Repository-relative POSIX path of the manifest.
     pub manifest: String,
 }
 
-/// Discover every `Cargo.toml` marker exactly once, in sorted order.
 #[must_use]
 pub fn discover_candidates(index: &FileIndex) -> Vec<CargoCandidate> {
     index
@@ -25,12 +17,10 @@ pub fn discover_candidates(index: &FileIndex) -> Vec<CargoCandidate> {
         .collect()
 }
 
-/// Whether `path` is a `Cargo.toml` marker.
 fn is_manifest(path: &str) -> bool {
     path == "Cargo.toml" || path.ends_with("/Cargo.toml")
 }
 
-/// Directory holding `manifest`; empty for the repository root.
 #[must_use]
 pub fn project_root_for_manifest(manifest: &str) -> String {
     manifest
@@ -38,7 +28,6 @@ pub fn project_root_for_manifest(manifest: &str) -> String {
         .map_or_else(String::new, |(dir, _)| dir.to_owned())
 }
 
-/// Discover stack candidates: the rust detector entry.
 #[must_use]
 pub fn discover_stack_candidates(index: &FileIndex) -> Vec<StackCandidate> {
     debug_assert!(
@@ -54,10 +43,6 @@ pub fn discover_stack_candidates(index: &FileIndex) -> Vec<StackCandidate> {
         .collect()
 }
 
-/// Lift rust unit candidates to detector records in stable order.
-///
-/// The caller partitions candidates by stack; every candidate here is
-/// the rust detector's own output.
 #[must_use]
 pub fn detected_projects_for_units(candidates: &[StackCandidate]) -> Vec<DetectedProject> {
     candidates
@@ -70,10 +55,6 @@ pub fn detected_projects_for_units(candidates: &[StackCandidate]) -> Vec<Detecte
         .collect()
 }
 
-/// Manifest path for a manifest key.
-///
-/// Single owner of the key mapping: the root key names the root
-/// manifest, every other key its own directory manifest.
 #[must_use]
 pub fn manifest_for_key(key: &str) -> String {
     if key == "root" {
@@ -83,7 +64,6 @@ pub fn manifest_for_key(key: &str) -> String {
     }
 }
 
-/// Manifest path for a rust unit root directory.
 #[must_use]
 pub fn manifest_for_unit_root(unit_root: &str) -> String {
     if unit_root.is_empty() {

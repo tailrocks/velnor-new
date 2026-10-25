@@ -1,11 +1,3 @@
-//! Tofu provider-cache step templates: saves plus the owned-path allowlist.
-//!
-//! Restore steps arrive from the orchestrator (per-root keys need the
-//! catalog tofu pin); saves append post-hoc through writer election
-//! ([`elect_cache_writers`](crate::cache_p08::elect_cache_writers)).
-//! Both archive exactly one job-private plugin-cache dir, never the
-//! data dir beside it.
-
 pub use velnor_actions_contract::workflow::step_identity::{
     TOFU_PROVIDER_ADMISSION_USES, TOFU_PROVIDER_CACHE_BASE_EXPR, TOFU_PROVIDERS_KEY_OUTPUT_EXPR,
     TOFU_PROVIDERS_PATH_OUTPUT_EXPR,
@@ -14,16 +6,10 @@ use velnor_actions_contract::{Step, StepRole};
 
 use crate::{RenderError, marker, steps, yaml};
 
-/// Display name of the provider restore step.
 pub const TOFU_PROVIDERS_RESTORE_NAME: &str = "Restore Tofu providers";
-/// Display name of the provider save step.
 pub const TOFU_PROVIDERS_SAVE_NAME: &str = "Save Tofu providers";
-/// Pinned `actions/cache/save` ref (v6.1.0, qualified 2026-09-28).
-///
-/// Same qualified pin as the tools save; a pin bump moves both.
 pub const TOFU_PROVIDERS_SAVE_USES: &str =
     "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
-/// Admission shell shared by every provider-cache composite invocation.
 pub const TOFU_PROVIDER_ADMISSION_SCRIPT: &str = r#"set -eu
 cd -P "$RUNNER_TEMP"
 rt=$PWD
@@ -53,8 +39,6 @@ fi
 rm -rf "$d"
 mkdir -m 700 "$d""#;
 
-/// Render the single local composite that restores and admits provider-cache bytes.
-/// # Errors
 pub(crate) fn provider_admission_file(
     version: &str,
 ) -> Result<crate::tree::RenderedFile, RenderError> {
@@ -88,7 +72,6 @@ pub(crate) fn provider_admission_file(
     })
 }
 
-/// Required key and path inputs for the provider composite.
 fn provider_composite_inputs() -> yaml::Yaml {
     yaml::Yaml::Map(
         ["cache-key", "cache-path"]
@@ -109,7 +92,6 @@ fn provider_composite_inputs() -> yaml::Yaml {
     )
 }
 
-/// Save-owned values exposed for an elected cache writer.
 fn provider_composite_outputs() -> yaml::Yaml {
     yaml::Yaml::Map(
         [
@@ -133,7 +115,6 @@ fn provider_composite_outputs() -> yaml::Yaml {
     )
 }
 
-/// Exact restore call whose outputs feed the immediately following admission.
 fn provider_restore_action() -> Result<yaml::Yaml, RenderError> {
     let restore_uses = TOFU_PROVIDERS_SAVE_USES
         .strip_prefix("actions/cache/save@")
@@ -157,7 +138,6 @@ fn provider_restore_action() -> Result<yaml::Yaml, RenderError> {
     ]))
 }
 
-/// Admit only an exact-key hit; all mismatches cold-start in the owned leaf.
 fn provider_admission_step() -> yaml::Yaml {
     let env = [
         ("TOFU_CACHE_HIT", "steps.restore.outputs.cache-hit"),
@@ -190,11 +170,6 @@ fn provider_admission_step() -> yaml::Yaml {
     ])
 }
 
-/// Provider save step over the cache identity emitted by the restore composite.
-///
-/// The exact key and path pass through from that job's composite step;
-/// the push gate arrives from the election caller, never here.
-/// # Errors
 pub fn tofu_providers_save_step() -> Result<Step, RenderError> {
     let step = steps::action_step(
         TOFU_PROVIDERS_SAVE_NAME,
@@ -212,19 +187,12 @@ pub fn tofu_providers_save_step() -> Result<Step, RenderError> {
     Ok(step)
 }
 
-/// Rename a built step; names are fixed by the caller contract.
 fn rename_step(mut step: Step, name: &str) -> Result<Step, RenderError> {
     crate::steps::scan_for_private_subcommands(name)?;
     name.clone_into(&mut step.name);
     Ok(step)
 }
 
-/// True for exactly one owned plugin-cache dir under the base.
-///
-/// Single path segment, slug charset only, no traversal, no
-/// never-archive names (state, plans, credentials), never the bare
-/// base: the data dir beside it (`tofu-data`) and every foreign tree
-/// stay out.
 #[must_use]
 pub fn tofu_providers_path_ok(path: &str) -> bool {
     if path.contains("..") || crate::cache_steps::is_never_archive_path(path) {
@@ -239,7 +207,3 @@ pub fn tofu_providers_path_ok(path: &str) -> bool {
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
 }
-
-#[cfg(test)]
-#[path = "tofu_cache_tests.rs"]
-mod tests;

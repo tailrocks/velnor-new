@@ -26,9 +26,6 @@ pub(crate) struct VerifiedManifestAttestation {
     pub(crate) event: String,
 }
 
-/// Verify the SDK's published manifest attestation using explicit immutable
-/// expectations. This is separate from package-receipt attestation validation:
-/// the SDK manifest is the sole subject and its producer is a reusable workflow.
 pub(crate) fn verify_published_manifest_attestation(
     path: &std::path::Path,
     bundle_path: &std::path::Path,

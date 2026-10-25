@@ -1,5 +1,3 @@
-//! Data-only authoring for the normal generated cutover tree.
-
 use std::{collections::BTreeMap, path::Path};
 
 use velnor_actions_contract::{WorkflowEvent, package_release::PackageReleaseChannel};

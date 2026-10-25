@@ -1,11 +1,3 @@
-//! Tofu input closures: complete first-party inputs, explicit unknowns.
-//!
-//! Unknown inputs forbid reuse and coverage. The kind selects the
-//! source class: `fmt` binds the independent fmt scope, `init` and
-//! `validate` bind the effective load set plus the lockfile. Walks
-//! are bounded, skip hidden directories, and treat any symlink as
-//! unknown (fail-closed until H5 containment lands in T11).
-
 use std::path::{Path, PathBuf};
 
 use velnor_actions_contract::{
@@ -21,16 +13,6 @@ use crate::fmt_scope::is_fmt_file;
 use crate::kinds::TofuTaskKind;
 use crate::parser::MAX_FILES_PER_UNIT;
 
-/// Resolve one proposed task's closure against the checkout at `root`.
-///
-/// Reads adapter facts from the proposal (unit path, kind,
-/// configuration, drivers, declared inputs); filesystem probes bind
-/// content, proven absence, or explicit unknowns.
-///
-/// # Errors
-///
-/// Returns [`ContractError`] for task-kind spellings outside the
-/// three tofu kinds and for malformed unit paths.
 pub fn resolve_closure_at_root(
     root: &Path,
     task: &ProposedTask,
@@ -72,7 +54,6 @@ pub fn resolve_closure_at_root(
         .build(&task.task_id))
 }
 
-/// Source-tree provenance: fmt scope for `fmt`, effective set otherwise.
 fn source_tree_provenance(
     root: &Path,
     unit: &str,
@@ -130,7 +111,6 @@ fn source_tree_provenance(
     }
 }
 
-/// Lockfile provenance: content, proven absence, or kind exclusion.
 fn lockfile_provenance(
     root: &Path,
     unit: &str,
@@ -150,7 +130,6 @@ fn lockfile_provenance(
     probe_path(root, &relative, reads)
 }
 
-/// Provenance of one repo-relative path: digest, absence, or unknown.
 fn probe_path(root: &Path, relative: &str, reads: &mut FileCache) -> Provenance {
     let Ok(normalized) = normalize_posix_path(relative) else {
         return Provenance::Unknown {
@@ -170,7 +149,6 @@ fn probe_path(root: &Path, relative: &str, reads: &mut FileCache) -> Provenance 
     }
 }
 
-/// VCS provenance: unknown with undeclared reads, proven absent without.
 fn vcs_provenance(undeclared_reads: bool) -> Provenance {
     if undeclared_reads {
         Provenance::Unknown {
@@ -183,7 +161,6 @@ fn vcs_provenance(undeclared_reads: bool) -> Provenance {
     }
 }
 
-/// Digest over sorted `(path, digest)` file pairs.
 pub(crate) fn files_digest(files: &[(String, String)]) -> String {
     let pairs: Vec<(&str, &str)> = files
         .iter()
@@ -193,10 +170,6 @@ pub(crate) fn files_digest(files: &[(String, String)]) -> String {
         .map_or_else(|_| digest_b3(b"files_error"), |bytes| digest_b3(&bytes))
 }
 
-/// Repo-relative files under `unit`, skipping hidden directories.
-///
-/// Symlinks, non-UTF-8 names, unreadable entries, and over-cap
-/// selections fail the walk (the caller reports unknown).
 pub(crate) fn collect_unit_files(root: &Path, unit: &str) -> Result<Vec<String>, String> {
     let mut base: PathBuf = root.to_path_buf();
     if !unit.is_empty() {

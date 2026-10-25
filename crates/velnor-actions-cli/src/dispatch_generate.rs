@@ -1,5 +1,3 @@
-//! Public workflow-generation command handling.
-
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -12,7 +10,6 @@ use crate::dispatch::{fail_public, working_dir};
 #[path = "dispatch_generate_warnings.rs"]
 mod warning_format;
 
-/// Dispatch `generate`: files written and recommendations go to stderr.
 pub(crate) fn run_generate(output_dir: Option<PathBuf>, mode: Option<String>) -> ExitCode {
     let Some(cwd) = working_dir() else {
         return ExitCode::from(1);
@@ -59,7 +56,6 @@ pub(crate) fn run_generate(output_dir: Option<PathBuf>, mode: Option<String>) ->
     }
 }
 
-/// Absolute preview path for the stderr report; canonical when possible.
 fn absolute_preview(cwd: &Path, dir: &Path) -> PathBuf {
     let joined = if dir.is_absolute() {
         dir.to_path_buf()

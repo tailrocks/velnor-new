@@ -1,4 +1,3 @@
-//! Crate-root re-exports for the workflow contract surface.
 pub use crate::workflow::qualification_cache_lineage::*;
 pub use crate::workflow::{
     ALLOWED_WORKFLOW_EVENTS, BUN_ASSETS_EXPORT_OPERATION, BUN_ASSETS_IMPORT_OPERATION,

@@ -1,5 +1,3 @@
-//! One bounded probe attempt, including prior-operation recovery.
-
 use std::future::Future;
 use std::time::{Duration, Instant};
 
@@ -177,15 +175,6 @@ impl Deadline {
             began: Instant::now(),
             timeout: PROBE_TIMEOUT,
             docker_timeout: DOCKER_OPERATION_TIMEOUT,
-        }
-    }
-
-    #[cfg(test)]
-    pub(super) fn test_with_timeouts(timeout: Duration, docker_timeout: Duration) -> Self {
-        Self {
-            began: Instant::now(),
-            timeout,
-            docker_timeout,
         }
     }
 

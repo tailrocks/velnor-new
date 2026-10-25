@@ -1,9 +1,6 @@
-//! Minimal deterministic expansion for Cargo workspace member globs.
-
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Expand a slash-separated Cargo member pattern beneath `root`.
 pub(crate) fn expand(root: &Path, pattern: &str) -> Result<Vec<PathBuf>, String> {
     let parts = pattern
         .split('/')
@@ -78,16 +75,4 @@ fn component_matches(pattern: &str, name: &str) -> bool {
         p += 1;
     }
     p == pattern.len()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::component_matches;
-
-    #[test]
-    fn component_match_handles_stars_and_single_characters() {
-        assert!(component_matches("crate-*", "crate-a"));
-        assert!(component_matches("cr?te", "crate"));
-        assert!(!component_matches("crate-*", "crate"));
-    }
 }

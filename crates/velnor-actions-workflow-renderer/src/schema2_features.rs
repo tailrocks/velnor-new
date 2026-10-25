@@ -1,10 +1,3 @@
-//! Feature and expected-negative jobs inside qualification.
-//! `inputs.mode` selects them. The default `both` keeps the echo lanes.
-//! The negative jobs must fail in GitHub. They are not a separate workflow
-//! file, because `workflow_dispatch` only sees files on the default branch.
-//! One class per dispatch (`js`, `services`, `artifacts`, `buildx`) is one
-//! run. `features` still selects every class.
-
 use super::{RunnerSpec, with_if};
 use crate::yaml::Yaml;
 use velnor_actions_contract::JobTimeout;
@@ -15,18 +8,14 @@ const ARTIFACTS: &str = "inputs.mode == 'features' || inputs.mode == 'artifacts'
 const BUILDX: &str = "inputs.mode == 'features' || inputs.mode == 'buildx'";
 const NEGATIVE: &str = "inputs.mode == 'negative'";
 
-/// Pinned `actions/checkout` used by qualification jobs.
 pub(super) const CHECKOUT_USES: &str = crate::steps::CHECKOUT_USES;
 const UPLOAD_USES: &str = crate::steps::UPLOAD_ARTIFACT_USES;
 const REDIS_OPTIONS: &str =
     "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12";
-/// Host-style steps reach a published service port on localhost.
-/// The service DNS name is only on the Docker network of a `container:` job.
 const PROBE_LOCAL: &str =
     "timeout 20 bash -c 'until echo >/dev/tcp/127.0.0.1/6379; do sleep 1; done'";
 const BUILDX_RUN: &str = "docker buildx version && printf 'FROM scratch\\n' > Dockerfile && docker buildx build --progress=plain -t velnor-g4:probe .";
 
-/// Feature jobs. `features` runs every class. A class name runs that class.
 pub(super) fn feature_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     vec![
         gated(
@@ -78,7 +67,6 @@ pub(super) fn feature_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(Stri
     ]
 }
 
-/// Jobs that run only when `inputs.mode` is `negative`. They must fail in GitHub.
 pub(super) fn negative_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     vec![
         gated(
@@ -100,7 +88,6 @@ pub(super) fn negative_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(Str
     ]
 }
 
-/// Insert `if` at map index 1, matching the qualification document style.
 pub(super) fn gated(job: (String, Yaml), when: &str) -> (String, Yaml) {
     with_if(job, when)
 }
@@ -155,7 +142,6 @@ fn fail_job(id: &str, name: &str, runs_on: &RunnerSpec) -> (String, Yaml) {
     )
 }
 
-/// Shared preamble for typed qualification lanes.
 pub(super) fn lane_base(
     name: &str,
     runner: &RunnerSpec,
@@ -164,7 +150,6 @@ pub(super) fn lane_base(
     lane_base_with_container(name, runner, timeout, false)
 }
 
-/// Shared preamble for a typed lane whose job executes in a container.
 pub(super) fn lane_base_with_container(
     name: &str,
     runner: &RunnerSpec,
@@ -176,7 +161,6 @@ pub(super) fn lane_base_with_container(
     fields
 }
 
-/// Shared preamble for hosted product-release families.
 pub(super) fn base(name: &str, runs_on: Yaml, timeout: JobTimeout) -> Vec<(String, Yaml)> {
     base_fields(name, runs_on, timeout)
 }
@@ -192,7 +176,6 @@ fn base_fields(name: &str, runs_on: Yaml, timeout: JobTimeout) -> Vec<(String, Y
     ]
 }
 
-/// Append steps and return one job entry.
 pub(super) fn finish(
     id: &str,
     mut fields: Vec<(String, Yaml)>,
@@ -202,7 +185,6 @@ pub(super) fn finish(
     (id.to_owned(), Yaml::Map(fields))
 }
 
-/// Redis 7 with the shared health options and published port 6379.
 pub(super) fn redis_service() -> Yaml {
     Yaml::Map(vec![(
         "redis".to_owned(),
@@ -229,7 +211,6 @@ fn artifact_permissions() -> Yaml {
     ])
 }
 
-/// One `run` step.
 pub(super) fn run_step(name: &str, run: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
@@ -237,7 +218,6 @@ pub(super) fn run_step(name: &str, run: &str) -> Yaml {
     ])
 }
 
-/// Release-family publisher carrying a stable role ID through composition.
 pub(super) fn identified_publish_step(id: &str, run: &str) -> Yaml {
     let fields = vec![
         ("name".to_owned(), Yaml::str("Publish GitHub release")),
@@ -254,8 +234,6 @@ pub(super) fn identified_publish_step(id: &str, run: &str) -> Yaml {
     Yaml::Map(fields)
 }
 
-/// Local `./` action, reached after a checkout step. The zizmor
-/// `self-repository` ignore stays on this line.
 pub(super) fn local_action_step(name: &str, uses: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
@@ -266,7 +244,6 @@ pub(super) fn local_action_step(name: &str, uses: &str) -> Yaml {
     ])
 }
 
-/// Checkout with credentials disabled. Qualification must not persist a token.
 pub(super) fn checkout_step() -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Check out")),

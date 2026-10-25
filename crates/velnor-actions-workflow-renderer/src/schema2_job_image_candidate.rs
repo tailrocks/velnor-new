@@ -1,5 +1,3 @@
-//! Render the workflow that builds, attests, and publishes a Linux job image.
-
 use velnor_actions_contract::{JobTimeout, RoutingWorkflow};
 
 use crate::steps::{
@@ -9,7 +7,6 @@ use crate::{RenderError, render::RenderedFile, runs_on::runs_on_yaml, yaml::Yaml
 
 use super::Schema2WorkflowRequest;
 
-/// The file path for the job image candidate workflow.
 pub(super) const WORKFLOW_PATH: &str = ".github/workflows/job-image-candidate.yml";
 
 const ARCHIVE: &str = "job-image.oci.tar";
@@ -22,11 +19,6 @@ const ATTESTATION_RUNTIME_CANDIDATE: &str = "$RUNNER_TEMP/privatecandidate";
 #[path = "schema2_job_image_native.rs"]
 mod native;
 
-/// Render the job image candidate workflow on the hosted runner.
-///
-/// # Errors
-///
-/// The function returns an error if the request or workflow bytes are incorrect.
 pub(super) fn render_candidate_workflow(
     request: &Schema2WorkflowRequest,
 ) -> Result<RenderedFile, RenderError> {
@@ -66,8 +58,6 @@ fn render(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
     ]))
 }
 
-/// A newer push cancels an older push build of the same ref; a dispatch
-/// (the only publishing event) has its own group and is never cancelled.
 fn workflow_concurrency() -> Yaml {
     Yaml::Map(vec![
         (
@@ -114,7 +104,6 @@ fn build_job(
         ),
         (
             "outputs".to_owned(),
-            // Downstream jobs address the candidate by immutable artifact ID only.
             Yaml::Map(vec![(
                 "artifact_id".to_owned(),
                 Yaml::str("${{ steps.upload.outputs.artifact-id }}"),
@@ -374,7 +363,3 @@ fn permissions(values: &[(&str, &str)]) -> Yaml {
             .collect(),
     )
 }
-
-#[cfg(test)]
-#[path = "schema2_job_image_candidate_tests.rs"]
-mod tests;

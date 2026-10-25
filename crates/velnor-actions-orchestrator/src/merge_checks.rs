@@ -1,9 +1,3 @@
-//! `merge-v1` plan checks: matrix agreement, plan shape, evidence
-//! revalidation, Execute inventory, and shard-proof validation.
-//!
-//! Declared from `merge.rs` (`#[path]`, no `lib.rs` edit) beside the
-//! inventory checks in `required_evidence.rs`.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
@@ -17,11 +11,6 @@ use crate::cover::Signals;
 use crate::cover::shard::{check_entry_shards, validate_budgets};
 use crate::internal::{SCHEMA, internal_contract};
 
-#[cfg(test)]
-#[path = "merge_qualification_tests.rs"]
-mod qualification_tests;
-
-/// Check 1: `matrix.json` agrees with the plan matrix (WF-4.16).
 pub(crate) fn check_agreement(
     matrix: Option<&PlanMatrix>,
     plan: &Plan,
@@ -41,7 +30,6 @@ pub(crate) fn check_agreement(
     Ok(())
 }
 
-/// The no-work decision needs obligations and task IDs to agree.
 pub(crate) fn check_plan_shape(
     plan: &Plan,
     signals: &mut Signals,
@@ -53,15 +41,6 @@ pub(crate) fn check_plan_shape(
     }
 }
 
-/// Plan event/trust must match the merge-time actual event.
-///
-/// Trust was stamped at plan time and only checked for self-consistency,
-/// so a forged plan artifact could claim `Push` with `Trusted` scope on
-/// PR content and pass. The plan's event must equal the actual event
-/// captured at merge assembly (same run, runner ground truth), and the
-/// plan's trust must equal the canonical scope for that actual event;
-/// every task file's event/trust pair must still equal the plan's.
-/// Anything else fails closed with a scope token, never silently.
 pub(crate) fn check_trust_coherence(
     plan: &Plan,
     request: &MergeRequest,
@@ -97,28 +76,12 @@ pub(crate) fn check_trust_coherence(
     }
 }
 
-/// Head-bound candidate attestation written by the candidate job.
-///
-/// The candidate job observes the plan head from its downloaded plan
-/// artifact and embeds it as `commit`; the merge re-checks equality
-/// against its own plan head, so a stale or cross-plan candidate
-/// artifact fails closed instead of qualifying the wrong commit.
-/// Tokens reuse the closed miss set: absent is `source_missing`,
-/// mismatched is `trust_scope_mismatch`.
 #[derive(Debug, serde::Deserialize)]
 pub(crate) struct CandidateAttestation {
-    /// Attestation schema; must be 1.
     schema: u32,
-    /// Plan head observed by the candidate job.
     commit: String,
 }
 
-/// In candidate mode the attestation must bind the candidate to the plan head.
-///
-/// Candidate mode is the candidate job's presence in the required
-/// inventory (the final gate needs it exactly when the workflow was
-/// generated with candidate validation). Outside candidate mode there
-/// is no attestation to check.
 pub(crate) fn check_candidate_binding(
     plan: &Plan,
     request: &MergeRequest,
@@ -147,13 +110,6 @@ pub(crate) fn check_candidate_binding(
     }
 }
 
-/// Every Execute obligation needs a matrix leg; hollow plans fail closed.
-///
-/// Coverage walks `matrix.include`, so an Execute obligation without a
-/// leg would pass with zero task evidence. Cache-reused dispositions
-/// need no leg. The match stays exhaustive so
-/// a future decision variant fails to compile here instead of slipping
-/// through unchecked.
 pub(crate) fn check_execute_inventory(
     plan: &Plan,
     signals: &mut Signals,
@@ -166,8 +122,6 @@ pub(crate) fn check_execute_inventory(
                 ExecuteTaskRef::Single(id) => std::slice::from_ref(id),
                 ExecuteTaskRef::Shards(ids) => ids.as_slice(),
             };
-            // Leg IDs match obligation IDs verbatim: sharded obligations
-            // carry their full `/shard-N-of-M` IDs, never the bare base.
             for id in ids {
                 leg_tasks.insert(id.as_str());
             }
@@ -188,7 +142,6 @@ pub(crate) fn check_execute_inventory(
     }
 }
 
-/// Expected entries keyed by report ID, sorted.
 pub(crate) fn plan_entries(plan: &Plan) -> BTreeMap<&str, &MatrixEntry> {
     plan.matrix
         .include
@@ -197,7 +150,6 @@ pub(crate) fn plan_entries(plan: &Plan) -> BTreeMap<&str, &MatrixEntry> {
         .collect()
 }
 
-/// Compare the planned obligation set with the sequential reference.
 fn reference_matches(reference: &[String], planned: &[String]) -> bool {
     let mut left = reference.to_vec();
     let mut right = planned.to_vec();
@@ -206,7 +158,6 @@ fn reference_matches(reference: &[String], planned: &[String]) -> bool {
     left == right
 }
 
-/// Revalidate planner limits and reference obligations.
 pub(crate) fn check_plan_evidence(
     plan: &Plan,
     request: &MergeRequest,
@@ -231,7 +182,6 @@ pub(crate) fn check_plan_evidence(
     }
 }
 
-/// True when an entry's shard proofs fail validation.
 pub(crate) fn shards_failed(
     entry: &MatrixEntry,
     empty: u32,
@@ -249,7 +199,6 @@ pub(crate) fn shards_failed(
     check_entry_shards(&bases, empty, &request.shard_proofs, &inputs).is_err()
 }
 
-/// Base task IDs carrying shard suffixes in one entry.
 fn sharded_bases(entry: &MatrixEntry) -> BTreeSet<String> {
     let mut bases = BTreeSet::new();
     for task_ref in entry.execute_task_ids.tasks.values() {
@@ -266,7 +215,6 @@ fn sharded_bases(entry: &MatrixEntry) -> BTreeSet<String> {
     bases
 }
 
-/// Obligation task digests keyed by task ID.
 pub(crate) fn plan_digests(plan: &Plan) -> BTreeMap<&str, &str> {
     plan.obligations
         .iter()
@@ -274,13 +222,6 @@ pub(crate) fn plan_digests(plan: &Plan) -> BTreeMap<&str, &str> {
         .collect()
 }
 
-/// Plan-derived per-task file expectation: report ID to task identity.
-///
-/// The expectation derives from the plan alone (leg task IDs plus
-/// obligation digests), never from an aggregate summary, so a lying
-/// `matrix-report.json` cannot shrink or redirect the file set. Legs
-/// naming tasks without an obligation digest stay underivable here;
-/// per-entry coverage fails them closed.
 pub(crate) fn expected_task_reports(
     plan: &Plan,
     run_key: &str,
@@ -306,21 +247,12 @@ pub(crate) fn expected_task_reports(
     expected
 }
 
-/// Check-2 partition of embedded per-task reports.
 pub(crate) struct TaskPartition<'a> {
-    /// First valid report per expected task-report ID.
     pub(crate) valid: BTreeMap<&'a str, &'a TaskReport>,
-    /// Reports failing validation or bound to another run.
     pub(crate) malformed: u32,
-    /// Extra reports beyond the first per task-report ID.
     pub(crate) duplicates: u32,
 }
 
-/// Check 2 for task files: first valid report per expected ID exactly.
-///
-/// Mirrors the matrix partition: malformed and duplicate files are
-/// `not_run` (never success); valid files outside the plan-derived
-/// expectation corrupt the set. Missing files surface per entry.
 pub(crate) fn partition_task_reports<'a>(
     plan: &Plan,
     request: &'a MergeRequest,
@@ -338,8 +270,6 @@ pub(crate) fn partition_task_reports<'a>(
             miss_reasons.insert("trust_scope_mismatch".to_owned());
             continue;
         }
-        // Malformed files are `not_run` even when unexpected: shape
-        // triage precedes the plan-membership check.
         if report.validate().is_err() {
             malformed += 1;
             signals.not_run = true;

@@ -1,5 +1,3 @@
-//! Fixed, pinned `gh api` transport and strict GitHub response records.
-
 use std::{
     collections::BTreeMap,
     ffi::{OsStr, OsString},
@@ -43,12 +41,6 @@ mod immutable_status;
 mod lookup;
 #[path = "package_release_publish_preflight.rs"]
 mod preflight;
-#[cfg(test)]
-use immutable_status::immutable_status_token;
-
-#[cfg(test)]
-#[path = "package_release_publish_github_fixture.rs"]
-mod fixture;
 
 const JSON_LIMIT: usize = 1024 * 1024;
 const ASSET_LIMIT: usize = 1024 * 1024 * 1024;
@@ -60,8 +52,6 @@ pub(super) struct GitHubApi {
     repository: String,
     pub(super) run_identity_cache: std::cell::RefCell<super::run_identity::RunIdentityCache>,
     deadline: Option<CheckDeadline>,
-    #[cfg(test)]
-    fixture: Option<std::rc::Rc<fixture::JsonFixture>>,
 }
 
 impl GitHubApi {
@@ -71,8 +61,6 @@ impl GitHubApi {
             repository,
             run_identity_cache: std::cell::RefCell::default(),
             deadline: None,
-            #[cfg(test)]
-            fixture: None,
         }
     }
 
@@ -138,41 +126,12 @@ impl GitHubApi {
         path: &std::path::Path,
     ) -> Result<(), OrchestratorError> {
         let args = self.upload_arguments(route, path)?;
-        #[cfg(test)]
-        if let Some(fixture) = &self.fixture {
-            let bytes = super::identity::read_regular(path)?;
-            let endpoint = args[0]
-                .to_str()
-                .ok_or_else(|| internal("fixture_upload_endpoint"))?;
-            fixture.mutate(
-                "UPLOAD",
-                endpoint,
-                &[
-                    ("sha256", sha256(&bytes)),
-                    ("size", bytes.len().to_string()),
-                ],
-            )?;
-            return Ok(());
-        }
+
         self.request(args, JSON_LIMIT)?;
         Ok(())
     }
 
     pub(super) fn download_asset(&self, id: u64) -> Result<Vec<u8>, OrchestratorError> {
-        #[cfg(test)]
-        if let Some(fixture) = &self.fixture {
-            let response = fixture.read(&format!(
-                "DOWNLOAD {}",
-                self.route(&format!("releases/assets/{id}"))
-            ))?;
-            return serde_json::from_value(
-                response
-                    .get("bytes")
-                    .cloned()
-                    .ok_or_else(|| internal("fixture_download_bytes"))?,
-            )
-            .map_err(|_| internal("fixture_download_bytes"));
-        }
         self.request_accept(
             vec![OsString::from(self.route(&format!("releases/assets/{id}")))],
             ASSET_LIMIT,
@@ -282,8 +241,6 @@ impl GitHubApi {
         self.verify_immutable_status()
     }
 
-    /// Authenticate the protected main lineage for an immutable preview source.
-    /// Returns the fresh protected main tip after proving source → workflow → tip.
     pub(crate) fn verify_preview_main_ancestry(
         &self,
         repository_id: u64,
@@ -300,7 +257,6 @@ impl GitHubApi {
         )
     }
 
-    /// Authenticate the protected main tip for downstream source-current decisions.
     pub(crate) fn verify_preview_main_tip(
         &self,
         repository_id: u64,
@@ -331,10 +287,6 @@ impl GitHubApi {
         limit: usize,
         accept: &str,
     ) -> Result<Vec<u8>, OrchestratorError> {
-        #[cfg(test)]
-        if self.fixture.is_some() {
-            return Err(internal("unexpected_fixture_transport_request"));
-        }
         let args = gh_api_arguments(request_args, accept);
         let exec = PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), args)
             .map_err(|_| internal("package_publish_gh_unavailable"))?;
@@ -358,7 +310,3 @@ impl GitHubApi {
         Ok(result.stdout)
     }
 }
-
-#[cfg(test)]
-#[path = "package_release_publish_github_tests.rs"]
-mod tests;

@@ -1,15 +1,9 @@
-//! Closed cache-only job role; only validated dependency seeds may be optional.
 use super::{Job, PermissionLevel, Permissions, StepRole};
 use crate::ContractError;
 
-/// Only protected pushes to the repository's default branch write seed bundles.
 pub const DEPENDENCY_SEED_JOB_CONDITION: &str = "github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true";
 
 impl Job {
-    /// Whether this job carries the typed dependency-seed build role.
-    ///
-    /// Workflow validation must succeed before this classification grants any
-    /// optional-failure behavior; mixed execution or report roles are rejected.
     #[must_use]
     pub fn is_dependency_seed(&self) -> bool {
         self.steps

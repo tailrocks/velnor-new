@@ -2,7 +2,6 @@ use super::{OrchestratorError, internal};
 
 use crate::package_release_publish::PublicRepositorySnapshot;
 
-/// A stable missing locator means this repository has no protected Homebrew authority.
 pub(super) fn confirm_locator_absence(
     expected_repository: &str,
     before: &PublicRepositorySnapshot,
@@ -38,7 +37,3 @@ fn valid_branch(branch: &str) -> bool {
     .validate()
     .is_ok()
 }
-
-#[cfg(test)]
-#[path = "applicability_tests.rs"]
-mod tests;

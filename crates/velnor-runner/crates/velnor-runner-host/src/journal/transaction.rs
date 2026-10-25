@@ -1,5 +1,3 @@
-//! Transactions for mutations keyed by durable row identity.
-
 use std::ops::AsyncFnOnce;
 
 use crate::error::HostError;

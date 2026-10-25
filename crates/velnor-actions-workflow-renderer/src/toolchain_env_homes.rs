@@ -4,7 +4,6 @@ use crate::RenderError;
 
 use super::{reject_denied_step_keys, reject_denied_tf_keys, reject_privileged_task_keys};
 
-/// Toolchain-home env keys carried by every Cargo step.
 pub const TOOLCHAIN_HOME_KEYS: [&str; 5] = [
     "MISE_RUSTUP_HOME",
     "MISE_CARGO_HOME",
@@ -13,8 +12,6 @@ pub const TOOLCHAIN_HOME_KEYS: [&str; 5] = [
     "CARGO_HOME",
 ];
 
-/// Merge matching Mise and direct toolchain homes into a step env map.
-/// A non-empty `toolchain` also adds `RUSTUP_TOOLCHAIN`.
 #[must_use]
 pub fn with_toolchain_homes(
     env: &BTreeMap<String, String>,
@@ -33,8 +30,6 @@ pub fn with_toolchain_homes(
     merged
 }
 
-/// Require matching non-empty Mise and direct homes and an optional non-empty toolchain.
-/// # Errors
 pub fn check_toolchain_homes(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
     for key in [
         TOOLCHAIN_HOME_KEYS[0],
@@ -70,13 +65,6 @@ pub fn check_toolchain_homes(env: &BTreeMap<String, String>) -> Result<(), Rende
     Ok(())
 }
 
-/// Merge the triple over untrusted project-task declarations, refusing all privileged keys.
-///
-/// Same contract as [`checked_task_env`], plus isolation-key and
-/// TF-family denial: a hostile project task cannot re-enable
-/// hooks/config, steer `IaC` tool behavior, or smuggle credentials
-/// through its declared env.
-/// # Errors
 pub fn checked_project_task_env(
     base: &BTreeMap<String, String>,
     rustup_home: &str,
@@ -88,12 +76,6 @@ pub fn checked_project_task_env(
     checked_task_env(base, rustup_home, cargo_home, toolchain)
 }
 
-/// Merge the triple over a validated base, refusing blanks and credentials.
-///
-/// The base carries the caller's policy pairs plus step extras; blank
-/// triple inputs and denied credential keys anywhere in the merged map
-/// fail closed before any step renders.
-/// # Errors
 pub fn checked_task_env(
     base: &BTreeMap<String, String>,
     rustup_home: &str,

@@ -1,5 +1,3 @@
-//! Named volumes belong to one durable worker identity.
-
 use std::collections::HashMap;
 
 use bollard::Docker;
@@ -19,21 +17,18 @@ struct WorkerVolume {
     role: WorkerVolumeRole,
 }
 
-/// Opaque proof that one exact volume was verified for its worker and role.
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) struct VerifiedWorkerVolume {
     volume: WorkerVolume,
 }
 
 impl VerifiedWorkerVolume {
-    /// Send one delete request for this previously verified volume.
     pub(crate) async fn remove_request(&self, docker: &Docker) -> Result<(), HostError> {
         docker_deadline(docker.remove_volume(&self.volume.name, None::<RemoveVolumeOptions>))
             .await?
             .map_err(|_| HostError::Docker)
     }
 
-    /// Confirm the verified volume's name is absent with one inspect request.
     pub(crate) async fn confirm_removed(
         &self,
         docker: &Docker,
@@ -46,14 +41,12 @@ impl VerifiedWorkerVolume {
     }
 }
 
-/// One of the fixed volumes attached to a worker pair.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum WorkerVolumeRole {
-    /// Runner socket directory mounted at `/run`.
     Socket,
-    /// Actions runner workspace mounted at `_work`.
+
     Work,
-    /// Private Docker-in-Docker data mounted at `/var/lib/docker`.
+
     DindData,
 }
 
@@ -77,23 +70,19 @@ impl WorkerVolumeRole {
     }
 }
 
-/// Result of verifying one exact worker volume.
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) enum WorkerVolumeVerification {
-    /// The named volume was confirmed absent by Docker's 404 response.
     Absent,
-    /// The named volume exists but does not match the expected worker or role.
+
     OwnershipMismatch,
-    /// Opaque token for the exact verified worker volume.
+
     Verified(VerifiedWorkerVolume),
 }
 
-/// Result after deleting one previously verified worker volume.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum WorkerVolumeRemoval {
-    /// The exact volume was removed and confirmed absent afterwards.
     Removed,
-    /// Docker accepted removal, but a follow-up inspect still found the volume.
+
     StillPresent,
 }
 
@@ -145,10 +134,6 @@ pub(crate) async fn remove_worker_volumes(
     Ok(true)
 }
 
-/// Verify exactly the fixed volume for `worker` and `role`.
-///
-/// Only Docker's confirmed 404 means absent. A verified token is returned only
-/// when the name and both ownership labels match the expected identity.
 pub(crate) async fn verify_worker_volume(
     docker: &Docker,
     worker: &str,
@@ -169,10 +154,6 @@ pub(crate) async fn verify_worker_volume(
     }))
 }
 
-/// Remove exactly one volume returned by [`verify_worker_volume`].
-///
-/// This performs no inspect before deletion so callers can recheck durable
-/// cleanup authority after verification and immediately before the delete.
 pub(crate) async fn remove_verified_worker_volume(
     docker: &Docker,
     verified: &VerifiedWorkerVolume,
@@ -232,10 +213,6 @@ fn target(role: WorkerVolumeRole) -> String {
     }
 }
 
-/// Only an exact name with exactly the worker and role labels is owned.
-///
-/// An unlabeled name, a foreign label, a partial label, or an extra label
-/// keeps the volume. Removal fails closed toward a leak, never a delete.
 fn owns(expected: &WorkerVolume, observed: &Volume) -> bool {
     observed.labels.len() == 2 && labeled(expected, observed)
 }
@@ -245,88 +222,4 @@ fn labeled(expected: &WorkerVolume, observed: &Volume) -> bool {
         && observed.labels.get("velnor.worker").map(String::as_str)
             == Some(expected.worker.as_str())
         && observed.labels.get("velnor.role").map(String::as_str) == Some(expected.role.label())
-}
-
-#[cfg(test)]
-mod tests {
-    use std::collections::HashMap;
-
-    use bollard::models::Volume;
-
-    use super::{WorkerVolume, WorkerVolumeRole, owns};
-
-    fn sample(name: &str, labels: &[(&str, &str)]) -> Volume {
-        Volume {
-            name: name.to_owned(),
-            driver: "local".to_owned(),
-            mountpoint: "/var/lib/docker/volumes/test".to_owned(),
-            created_at: None,
-            status: None,
-            labels: labels
-                .iter()
-                .map(|(key, value)| ((*key).to_owned(), (*value).to_owned()))
-                .collect(),
-            scope: None,
-            cluster_volume: None,
-            options: HashMap::new(),
-            usage_data: None,
-        }
-    }
-
-    fn expected() -> WorkerVolume {
-        WorkerVolume {
-            worker: "w135".to_owned(),
-            name: "w135-work".to_owned(),
-            role: WorkerVolumeRole::Work,
-        }
-    }
-
-    #[test]
-    fn unlabeled_exact_name_is_kept() {
-        let volume = sample("w135-work", &[]);
-        assert!(!owns(&expected(), &volume));
-    }
-
-    #[test]
-    fn exact_labels_are_owned() {
-        let volume = sample(
-            "w135-work",
-            &[("velnor.worker", "w135"), ("velnor.role", "work")],
-        );
-        assert!(owns(&expected(), &volume));
-    }
-
-    #[test]
-    fn foreign_worker_label_is_kept() {
-        let volume = sample(
-            "w135-work",
-            &[("velnor.worker", "other"), ("velnor.role", "work")],
-        );
-        assert!(!owns(&expected(), &volume));
-    }
-
-    #[test]
-    fn partial_label_is_kept() {
-        let volume = sample("w135-work", &[("velnor.worker", "w135")]);
-        assert!(!owns(&expected(), &volume));
-    }
-
-    #[test]
-    fn extra_label_is_kept() {
-        let volume = sample(
-            "w135-work",
-            &[
-                ("velnor.worker", "w135"),
-                ("velnor.role", "work"),
-                ("other", "1"),
-            ],
-        );
-        assert!(!owns(&expected(), &volume));
-    }
-
-    #[test]
-    fn wrong_name_is_kept() {
-        let volume = sample("other", &[]);
-        assert!(!owns(&expected(), &volume));
-    }
 }

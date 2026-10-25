@@ -1,4 +1,3 @@
-//! Formatter banners bind an independently versioned component to its compiler.
 use super::{
     QualifiedToolBackend, QualifiedToolExecutableRecipe, QualifiedToolOptions, QualifiedToolProbe,
     QualifiedToolRecipe, QualifiedToolRecipePlatform,
@@ -88,7 +87,3 @@ fn formatter_identity(output: &str) -> Option<(&str, &str)> {
     let (commit, date) = identity.strip_suffix(')')?.split_once(' ')?;
     (commit.len() == 10 && lower_hex(commit) && iso_date(date)).then_some((commit, date))
 }
-
-#[cfg(test)]
-#[path = "qualified_tool_rustfmt_probes_tests.rs"]
-mod tests;

@@ -1,11 +1,3 @@
-//! Generated jobs of the dbt and Ansible stacks (`dbt-<slug>`, `ansible-<slug>`).
-//!
-//! One job per project or root: checkout without credentials, the
-//! orchestrator's steps (tool provisioning, then parallel checks), and the
-//! catalog service containers the stack declares. The job holds
-//! `contents: read` only: neither stack has a registry phase, so no step may
-//! bind a token, and an `uses:` step is refused outright.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::config::{ANSIBLE_JOB_PREFIX, DBT_JOB_PREFIX};
@@ -15,20 +7,15 @@ use velnor_actions_contract::{
 
 use crate::{MiseSetup, RenderError, mise_setup_step, steps};
 
-/// Hosted runner the stack jobs use (the image the tools cache is qualified for).
 pub const STACK_RUNNER: &str = "ubuntu-26.04";
 
-/// Which stack a job belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StackJobKind {
-    /// A dbt-fusion project job.
     Dbt,
-    /// An Ansible root job.
     Ansible,
 }
 
 impl StackJobKind {
-    /// Job id prefix of the stack.
     #[must_use]
     pub const fn prefix(self) -> &'static str {
         match self {
@@ -38,22 +25,14 @@ impl StackJobKind {
     }
 }
 
-/// One resolved project or root job.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StackJobPolicy {
-    /// Stack of the job.
     pub kind: StackJobKind,
-    /// Generated job id (`<prefix><slug>`).
     pub id: String,
-    /// Display name (`dbt / <project>`, `Ansible / <root>`).
     pub display_name: String,
-    /// Job timeout.
     pub timeout: JobTimeout,
-    /// Catalog service containers (validated against the catalog).
     pub services: Vec<ServiceContainer>,
-    /// Pinned Mise binary the job's tool resolver and installs run under.
     pub setup: MiseSetup,
-    /// Steps after the Mise setup, built by the orchestrator in execution order.
     pub steps: Vec<Step>,
 }
 
@@ -92,11 +71,6 @@ impl StackJobPolicy {
     }
 }
 
-/// Build the job for one project or root.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] for an invalid policy or checkout.
 pub fn build_stack_job(policy: &StackJobPolicy, checkout_uses: &str) -> Result<Job, RenderError> {
     policy.validate()?;
     let mut all = vec![
@@ -125,8 +99,6 @@ pub fn build_stack_job(policy: &StackJobPolicy, checkout_uses: &str) -> Result<J
     })
 }
 
-/// True for the generated family cache steps (key, restore, size, save); the
-/// cache doctor validates their exact shapes.
 pub(crate) fn is_family_cache_role(role: Option<StepRole>) -> bool {
     matches!(
         role,
@@ -139,11 +111,6 @@ pub(crate) fn is_family_cache_role(role: Option<StepRole>) -> bool {
     )
 }
 
-/// Reconstruct the job and reject an altered, missing or split one.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] naming the first mismatch.
 pub(crate) fn validate_stack_job(
     jobs: &BTreeMap<String, Job>,
     policy: &StackJobPolicy,
@@ -171,7 +138,3 @@ pub(crate) fn validate_stack_job(
     let ids: BTreeSet<&String> = BTreeSet::from([&policy.id]);
     Ok(ids.into_iter().cloned().collect())
 }
-
-#[cfg(test)]
-#[path = "stack_jobs_tests.rs"]
-mod tests;

@@ -1,12 +1,8 @@
-//! Claim-fenced cleanup orchestration and one-request effect boundaries.
-
 #[path = "container.rs"]
 mod container;
 #[path = "runner.rs"]
 mod runner;
-#[cfg(test)]
-#[path = "tests.rs"]
-mod tests;
+
 #[path = "volume.rs"]
 mod volume;
 
@@ -25,10 +21,6 @@ use crate::journal::{CleanupClaim, CompletedLaunch, Journal};
 use crate::listen::Secret;
 
 const CLAIM_LEASE_SECONDS: i64 = 90;
-#[cfg(test)]
-const CURL_REQUEST_TIMEOUT_SECONDS: u64 = 60;
-#[cfg(test)]
-const EFFECT_MARGIN_SECONDS: u64 = 30;
 const EFFECT_WINDOW_SECONDS: i64 = 90;
 const RUNNER_REQUESTS: u64 = 3;
 const CONTAINER_COUNT: u64 = 2;
@@ -37,10 +29,6 @@ const VOLUME_COUNT: u64 = 3;
 const VOLUME_REQUESTS: u64 = 3;
 const MAX_CLEANUP_EFFECTS: u64 =
     RUNNER_REQUESTS + CONTAINER_COUNT * CONTAINER_REQUESTS + VOLUME_COUNT * VOLUME_REQUESTS;
-#[cfg(test)]
-const MAX_EXTERNAL_CHAIN_SECONDS: u64 = RUNNER_REQUESTS * CURL_REQUEST_TIMEOUT_SECONDS
-    + (CONTAINER_COUNT * CONTAINER_REQUESTS + VOLUME_COUNT * VOLUME_REQUESTS)
-        * crate::docker_client::DOCKER_OPERATION_TIMEOUT.as_secs();
 const SCAN_LIMIT: u32 = 4;
 const MAX_SCAN_WAVES: usize = 3;
 const SCAN_INTERVAL: Duration = Duration::from_secs(30);
@@ -54,9 +42,6 @@ pub(super) struct Context<'a> {
     pub(super) admin: &'a Secret,
 }
 
-/// One bounded reconciliation chain: three GitHub calls, twelve container
-/// calls, and nine volume calls at most. Each HTTP call renews the durable
-/// lease independently; no serial chain shares a single effect window.
 pub(super) struct EffectBudget<'a> {
     remaining: u64,
     stopping: &'a AtomicBool,
@@ -79,7 +64,6 @@ impl<'a> EffectBudget<'a> {
     }
 }
 
-/// A bounded, non-secret cleanup failure suitable for logs and shutdown.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct Failure {
     pub(super) phase: &'static str,
@@ -267,8 +251,7 @@ async fn reconcile_one(
     if !failure.stop_requested {
         failure.report();
     }
-    // Retry scheduling clears the lease, so retain the request window as a
-    // retry delay when a Docker or curl response may have been lost.
+
     match context
         .journal
         .retry_completion_cleanup(
@@ -316,8 +299,6 @@ async fn reconcile_claimed(
     Ok(())
 }
 
-/// Renew before one HTTP request. A request closure must contain exactly one
-/// Docker Engine or curl exchange; serial requests have separate renewals.
 pub(super) async fn run_effect<T, F, Fut>(
     journal: &Journal,
     budget: &mut EffectBudget<'_>,

@@ -6,17 +6,6 @@ use super::{
     valid_package_name,
 };
 
-/// Project selected release products from exact-source manifest bytes.
-///
-/// The `manifests` key set must exactly match the workspace closure returned
-/// by [`release_workspace_manifest_paths`]. Each key must identify a regular
-/// Cargo.toml in the authenticated source inventory. Only configured release
-/// products are represented in the returned record; this is not a complete
-/// Cargo dependency graph.
-///
-/// # Errors
-/// Rejects incomplete or extra manifest input, ambiguous package names,
-/// invalid workspace inheritance, unavailable binaries, and unsafe paths.
 pub fn project_release_workspace(
     config: &RustBinaryReleaseConfig,
     manifests: &BTreeMap<String, Vec<u8>>,

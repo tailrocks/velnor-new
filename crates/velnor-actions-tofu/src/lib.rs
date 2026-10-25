@@ -1,16 +1,11 @@
-//! `OpenTofu` stack adapter: registration, roots, and dialect evidence.
-//!
-//! T09 owns strict minimal `[stacks.tofu]` roots plus STRONG / WEAK /
-//! CONFLICT evidence. T10 adds the bounded structural parser (S8),
-//! file families, effective precedence, independent fmt scope (S2),
-//! and E4 content signals, and converts configured roots to detector
-//! records, inventories, toolchain inputs, and closures. T11 adds
-//! local-module edges (S6), H5 canonicalization, M2 identity, and
-//! calling-root selection over the base/head union. T12 adds native
-//! task proposals (kinds, IDs, identities, edges). T13 adds the fixed
-//! per-kind payload argv plus env. This crate launches no processes,
-//! builds no tool invocations, and renders no workflow text.
-
+#![allow(
+    clippy::missing_errors_doc,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
+#![allow(
+    missing_docs,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
 pub mod argv;
 pub mod closure;
 pub mod closure_inputs;
@@ -97,5 +92,4 @@ pub use version::{
     OPENTOFU_FLOOR, admits_opentofu, admits_version, is_terraform_only, toolchain_triple,
 };
 
-/// Stable identifier for the `OpenTofu` stack.
 pub const STACK_ID: &str = "tofu";

@@ -1,5 +1,3 @@
-//! Candidate Mise release pins used only by the hosted `mise-pin` mode.
-
 use super::{OrchestratorError, mise_action_uses};
 use velnor_actions_contract::{ReleaseTarget, VelnorConfig};
 use velnor_actions_workflow_renderer::{MisePinQualificationPins, MiseSetup};
@@ -10,7 +8,6 @@ const MACOS_X64_SHA256: &str = "72e1ced3bac89d0e0aa28b04bd22f8941c111d3b20c74a77
 const LINUX_X64_RUNNER: &str = "ubuntu-26.04";
 const MACOS_X64_RUNNER: &str = "macos-15-intel";
 
-/// Resolve the unqualified 2026.10.18 release pins for both x64 hosts.
 pub(crate) fn resolve(
     config: &VelnorConfig,
 ) -> Result<MisePinQualificationPins, OrchestratorError> {

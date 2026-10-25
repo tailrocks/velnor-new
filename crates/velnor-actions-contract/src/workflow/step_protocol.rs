@@ -1,5 +1,3 @@
-//! Cross-step provider-cache ownership and ordering contracts.
-
 use std::collections::BTreeMap;
 
 use super::{
@@ -27,7 +25,6 @@ struct ProviderBinding<'a> {
     restore_index: usize,
 }
 
-/// Validate the exact provider restore/admission, use, and save sequence.
 pub(super) fn validate_tofu_provider_sequence(
     steps: &[Step],
     scope: &str,
@@ -41,7 +38,6 @@ pub(super) fn validate_tofu_provider_sequence(
     validate_provider_save(steps, &roles, &binding, scope)
 }
 
-/// Find protocol steps and reject untyped provider-cache payloads.
 fn classify_protocol_steps(steps: &[Step], scope: &str) -> Result<ProtocolSteps, ContractError> {
     let mut roles = ProtocolSteps::default();
     for (index, step) in steps.iter().enumerate() {
@@ -68,13 +64,11 @@ fn classify_protocol_steps(steps: &[Step], scope: &str) -> Result<ProtocolSteps,
 }
 
 impl ProtocolSteps {
-    /// True when any typed provider-cache step participates in the job.
     fn present(&self) -> bool {
         !self.restores.is_empty() || !self.consumers.is_empty() || !self.saves.is_empty()
     }
 }
 
-/// Bind one unconditional restore/admission composite to its output owner.
 fn validate_restore_admission<'a>(
     steps: &'a [Step],
     roles: &ProtocolSteps,
@@ -108,7 +102,6 @@ fn validate_restore_admission<'a>(
     })
 }
 
-/// Ensure every provider-cache consumer is ordered after admission and owns the path.
 fn validate_provider_consumers(
     steps: &[Step],
     consumers: &[usize],
@@ -133,7 +126,6 @@ fn validate_provider_consumers(
     Ok(())
 }
 
-/// Verify the single optional elected save shares the restore's key and path.
 fn validate_provider_save(
     steps: &[Step],
     roles: &ProtocolSteps,
@@ -176,13 +168,11 @@ fn validate_provider_save(
     Ok(())
 }
 
-/// Reference one output of the exact typed composite that admitted the cache.
 fn output_reference(step: &Step, output: &str) -> Option<String> {
     let id = step.id?;
     Some(format!("${{{{ steps.{}.outputs.{output} }}}}", id.as_str()))
 }
 
-/// Validate one provider restore payload before cross-step binding.
 pub(crate) fn valid_provider_restore(kind: &StepKind) -> bool {
     let StepKind::Action { uses, with, env } = kind else {
         return false;
@@ -200,7 +190,6 @@ pub(crate) fn valid_provider_restore(kind: &StepKind) -> bool {
         && valid_provider_cache_key(key)
 }
 
-/// Validate one provider save payload before cross-step binding.
 pub(crate) fn valid_provider_save(kind: &StepKind) -> bool {
     let StepKind::Action { uses, with, env } = kind else {
         return false;
@@ -218,7 +207,6 @@ pub(crate) fn valid_provider_save(kind: &StepKind) -> bool {
         && path == TOFU_PROVIDERS_PATH_OUTPUT_EXPR
 }
 
-/// Validate a shell step that consumes the admitted provider cache.
 pub(crate) fn valid_provider_use(kind: &StepKind) -> bool {
     let StepKind::Shell { env, .. } = kind else {
         return false;
@@ -232,7 +220,6 @@ pub(crate) fn valid_provider_use(kind: &StepKind) -> bool {
         })
 }
 
-/// Validate one canonical provider-cache path and return its private leaf.
 fn provider_path_slug(path: &str) -> Option<&str> {
     let slug = path.strip_prefix(&format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/"))?;
     (!slug.is_empty()
@@ -242,10 +229,6 @@ fn provider_path_slug(path: &str) -> Option<&str> {
     .then_some(slug)
 }
 
-/// Require the key to be the Plan job's runtime provider key for one root.
-///
-/// The Plan key step binds the family schema, this root's owned path, the
-/// platform, the installed `tofu version`, and the root lock file.
 fn valid_provider_cache_key(key: &str) -> bool {
     key.strip_prefix("${{needs.plan.outputs.")
         .and_then(|rest| rest.strip_suffix("}}"))
@@ -254,14 +237,12 @@ fn valid_provider_cache_key(key: &str) -> bool {
         })
 }
 
-/// True for an action or shell step with provider environment bindings.
 fn has_provider_env(step: &Step) -> bool {
     step_env(step).is_some_and(|env| {
         env.contains_key("TF_PLUGIN_CACHE_DIR") || env.contains_key("TF_DATA_DIR")
     })
 }
 
-/// True for an untyped cache action that addresses the provider layer.
 fn is_provider_cache_action(step: &Step) -> bool {
     if step.id == Some(StepId::TofuProviders) {
         return true;
@@ -283,7 +264,6 @@ fn is_provider_cache_action(step: &Step) -> bool {
                 .is_some_and(|path| path.contains(TOFU_PROVIDER_CACHE_BASE_EXPR)))
 }
 
-/// Return the input map for a typed cache action step.
 fn action_with(step: &Step) -> Option<&BTreeMap<String, String>> {
     match &step.kind {
         StepKind::Action { with, .. } => Some(with),
@@ -294,7 +274,6 @@ fn action_with(step: &Step) -> Option<&BTreeMap<String, String>> {
     }
 }
 
-/// Return the explicit environment map for a shell or action step.
 fn step_env(step: &Step) -> Option<&BTreeMap<String, String>> {
     match &step.kind {
         StepKind::Action { env, .. }
@@ -304,7 +283,6 @@ fn step_env(step: &Step) -> Option<&BTreeMap<String, String>> {
     }
 }
 
-/// Build a stable contract diagnostic scoped to one serialized job.
 fn invalid(scope: &str, problem: &str) -> ContractError {
     ContractError::identity(
         "job.steps.tofu_provider_cache",
@@ -312,7 +290,6 @@ fn invalid(scope: &str, problem: &str) -> ContractError {
     )
 }
 
-/// The Playwright browser install is an internal operation of the staged binary.
 pub(crate) fn valid_playwright_install(kind: &StepKind) -> bool {
     matches!(kind, StepKind::Internal { operation, .. }
         if operation == crate::config::playwright_lock::PLAYWRIGHT_INSTALL_OPERATION)

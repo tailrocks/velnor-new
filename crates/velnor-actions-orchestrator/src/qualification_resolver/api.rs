@@ -1,5 +1,3 @@
-//! Pinned read-only GitHub metadata and artifact lookup.
-
 #[path = "api/artifact.rs"]
 mod artifact;
 #[path = "api/client.rs"]

@@ -1,5 +1,3 @@
-//! One-request GitHub reconciliation steps for a completed runner.
-
 use velnor_runner_github::{RunnerReference, get_runner_by_name, remove_runner};
 
 use super::{Context, EffectBudget, Failure, run_effect};

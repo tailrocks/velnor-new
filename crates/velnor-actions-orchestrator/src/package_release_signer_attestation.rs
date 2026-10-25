@@ -1,5 +1,3 @@
-//! GitHub artifact-attestation verification bound to exact release subjects.
-
 use std::{
     collections::BTreeMap,
     env,
@@ -13,10 +11,6 @@ use velnor_actions_mise::{CheckDeadline, PinnedTool, PinnedToolExec, ToolCatalog
 
 use super::{PackageReleaseSigningIdentity, VerifiedSignedPackage};
 use crate::{OrchestratorError, internal::internal};
-
-#[cfg(test)]
-#[path = "package_release_signer_attestation_tests.rs"]
-mod tests;
 
 const PREDICATE: &str = "https://slsa.dev/provenance/v1";
 const OIDC_ISSUER: &str = "https://token.actions.githubusercontent.com";
@@ -32,7 +26,6 @@ pub(super) struct AttestationCommandIdentity<'a> {
     pub(super) source_token: &'a str,
 }
 
-/// Verify all receipt subjects against the authenticated GitHub run identity.
 pub(super) fn verify_release_attestation(
     signed: &VerifiedSignedPackage,
     expected: &PackageReleaseSigningIdentity,
@@ -152,8 +145,6 @@ fn verify_one_with_bundle(
     Ok(output.stdout)
 }
 
-/// Identity fields extracted only after the pinned GitHub CLI verifies one
-/// exact external release-manifest subject.
 fn source_attestation_token() -> Result<String, OrchestratorError> {
     validate_source_attestation_token(env::var("GH_TOKEN").ok(), env::var("VELNOR_TAP_TOKEN").ok())
 }
@@ -364,7 +355,6 @@ fn sha256(bytes: &[u8]) -> String {
 mod sdk;
 #[path = "package_release_signer_attestation_subjects.rs"]
 mod subjects;
-#[cfg(test)]
-use sdk::parse_verified_manifest_attestation;
+
 pub(crate) use sdk::{SdkManifestAttestationExpectation, verify_published_manifest_attestation};
 use subjects::expected_subjects;

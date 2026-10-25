@@ -1,35 +1,13 @@
-//! Per-key cache writer election.
-//!
-//! Exactly one saver per V2 runtime-qualified key, elected after every
-//! restore is inserted. Split from `cache_p08` (size gate).
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Job, PullRequestCachePolicy, Step, StepKind, StepRole};
 
 use crate::RenderError;
 
-/// Validate both cache families, then append every elected save atomically.
-///
-/// Exactly one job per key receives a push-gated save. The plan job wins
-/// when it shares the key; otherwise the lowest job ID is deterministic.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] when a restore or existing save is malformed,
-/// when a save is orphaned or belongs to a non-elected job, or when a
-/// winner's save step cannot be built.
 pub fn elect_cache_writers(jobs: &mut BTreeMap<String, Job>) -> Result<(), RenderError> {
     elect_cache_writers_with_policy(jobs, PullRequestCachePolicy::ReadOnly)
 }
 
-/// Validate both cache families under `policy`, then append every elected save atomically.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] when a restore or existing save is malformed,
-/// when a save is orphaned or belongs to a non-elected job, or when a
-/// winner's save step cannot be built.
 pub fn elect_cache_writers_with_policy(
     jobs: &mut BTreeMap<String, Job>,
     policy: PullRequestCachePolicy,
@@ -48,7 +26,6 @@ pub fn elect_cache_writers_with_policy(
     Ok(())
 }
 
-/// Construct, but do not append, validated V2 tools saves.
 fn plan_tools_saves(
     jobs: &BTreeMap<String, Job>,
     policy: PullRequestCachePolicy,
@@ -121,14 +98,12 @@ fn plan_tools_saves(
     Ok(planned)
 }
 
-/// True when a job carries one typed V2 tools restore or identity step.
 fn has_tools_restore(job: &Job) -> bool {
     job.steps
         .iter()
         .any(|step| step.role == Some(StepRole::ToolsCacheRestore))
 }
 
-/// True when a job carries a typed V2 tools save.
 fn has_tools_save(job: &Job) -> bool {
     job.steps
         .iter()
@@ -168,19 +143,6 @@ fn validate_existing_tools_save(
     Ok(())
 }
 
-/// Construct, but do not append, validated `OpenTofu` provider saves.
-///
-/// Every `OpenTofu` job restores its own root key read-only; exactly one
-/// job per key gets a trusted-only `Save Tofu providers` step over
-/// that key. Keys are per-root so the winner is usually the sole
-/// owner; a shared key (one root under another configuration) goes
-/// to the lowest job ID, so the election stays deterministic across
-/// renders. The plan job never restores providers, so it never wins.
-/// Reruns add no second save to a job that already carries one.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] when any restore or existing save is malformed.
 fn plan_provider_saves(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Step)>, RenderError> {
     let mut by_key: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut path_for: BTreeMap<String, String> = BTreeMap::new();
@@ -229,7 +191,6 @@ fn plan_provider_saves(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Step
             }
         }
     }
-    // A typed provider save without a restore has no elected owner.
     for (id, job) in jobs {
         if has_provider_save(job) && provider_restore_entry(job).is_none() {
             return Err(RenderError::InvalidWorkflow(format!(
@@ -240,11 +201,6 @@ fn plan_provider_saves(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Step
     Ok(planned)
 }
 
-/// This job's provider-restore `(key, path)`, when it restores one.
-///
-/// Structural match only: the restore action plus exactly one owned
-/// plugin-cache path. Names stay out: a display rename must never
-/// move an election.
 fn provider_restore_entry(job: &Job) -> Option<(String, String)> {
     job.steps.iter().find_map(|step| {
         if step.role != Some(StepRole::TofuProvidersRestore) {
@@ -270,12 +226,6 @@ fn provider_restore_entry(job: &Job) -> Option<(String, String)> {
     })
 }
 
-/// Validate an existing push-gated provider save against its restore.
-///
-/// Mirrors `Save Cargo sources`: the trusted save gate keeps PR runs
-/// read-only, and the step archives the exact entry the restore
-/// reads, so a push-seeded entry warms every later restore of the
-/// key. Jobs that already carry the save keep exactly one.
 fn validate_provider_save(job: &Job, key: &str, path: &str) -> Result<(), RenderError> {
     if provider_restore_entry(job)
         .as_ref()
@@ -320,14 +270,12 @@ fn validate_provider_save(job: &Job, key: &str, path: &str) -> Result<(), Render
     Ok(())
 }
 
-/// True when one job already carries a typed provider save.
 fn has_provider_save(job: &Job) -> bool {
     job.steps
         .iter()
         .any(|step| step.role == Some(StepRole::TofuProvidersSave))
 }
 
-/// This job's V2 tools `(key, static digest)` after identity validation.
 fn tools_restore_identity(id: &str, job: &Job) -> Result<Option<(String, String)>, RenderError> {
     let restores = job
         .steps

@@ -1,5 +1,3 @@
-//! Literal payload jobs and complete-union assembly without signing authority.
-
 use super::{
     ConsumerReleaseSpec, JobTimeout, PackageReleaseChannel, RenderError, Yaml, acquire, base,
     finish, join_argv_for_run, operation, permissions, run_step, setup,
@@ -71,8 +69,6 @@ fn producer(
     dependencies: &[String],
     preview_matrix: bool,
 ) -> Result<(String, Yaml), RenderError> {
-    // Assembly is an authenticated service jobs API witness and keeps its closed
-    // name. Payload display names describe the pair without changing machine IDs.
     let name = if preview_matrix {
         "Build ${{ matrix.product_id }} / ${{ matrix.target }}".to_owned()
     } else {
@@ -156,9 +152,6 @@ fn producer_steps(
     steps.extend(support::source_steps(spec, id)?);
     let (mut operation, public_plan) =
         production_operation(spec, "execute-release-producer-v1", false)?;
-    // The public full plan is identical for every production owner. Keeping it
-    // at job scope lets existing workflow mapping sharing represent it once,
-    // without changing the literal stage/pair or per-operation source bindings.
     support::bind_stage(&mut operation, spec, pair, preview_matrix)?;
     steps.push(operation);
     steps.push(upload(pair, preview_matrix));
@@ -255,8 +248,6 @@ fn set_id(step: &mut Yaml, id: &str) {
     }
 }
 
-/// Every native production operation inherits the identical public job plan.
-/// Credentials and admission outputs stay in their existing step-local boundary.
 fn production_operation(
     spec: &ConsumerReleaseSpec,
     op: &str,

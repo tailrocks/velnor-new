@@ -1,5 +1,3 @@
-//! Strict UTC timestamp validation for authenticated historical merge metadata.
-
 pub(super) fn valid_timestamp(value: &str) -> bool {
     let Some((date, clock)) = value.split_once('T') else {
         return false;

@@ -1,5 +1,3 @@
-//! Invocation-local immutable workflow and completed-attempt evidence.
-
 use super::{RunSource, WorkflowMetadata};
 use crate::{OrchestratorError, internal::internal};
 use std::collections::{BTreeMap, BTreeSet};

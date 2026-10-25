@@ -4,11 +4,6 @@ use velnor_actions_contract::PlanPackage;
 
 use crate::discover::Discovery;
 
-/// Complete package inventory with selection flags.
-///
-/// Rust rows enumerate workspace packages; tofu rows enumerate
-/// selected tofu projects by root key, so an untouched root stays
-/// distinguishable (`not_affected`) instead of vanishing.
 pub(crate) fn plan_packages(discovery: &Discovery, selected: &BTreeSet<&str>) -> Vec<PlanPackage> {
     let mut packages = Vec::new();
     for workspace in &discovery.workspaces {
@@ -48,7 +43,6 @@ pub(crate) fn plan_packages(discovery: &Discovery, selected: &BTreeSet<&str>) ->
     packages
 }
 
-/// One inventory row: selection flag plus sorted task IDs.
 fn package_row(
     package_id: &str,
     name: &str,
@@ -78,7 +72,6 @@ fn package_row(
     }
 }
 
-/// Tofu inventory rows: one per selected project, keyed by root key.
 fn tofu_packages(discovery: &Discovery, selected: &BTreeSet<&str>) -> Vec<PlanPackage> {
     let mut roots = crate::select_tofu::tofu_selected_roots(&discovery.statuses);
     roots.dedup();

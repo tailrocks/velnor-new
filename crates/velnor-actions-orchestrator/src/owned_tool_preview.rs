@@ -1,5 +1,3 @@
-//! Pure source candidate workflow preview, independent of main-CI installation.
-
 use std::path::Path;
 
 use velnor_actions_contract::WorkflowPolicy;
@@ -11,14 +9,6 @@ use crate::{
     prepare::check_velnor_identity, resolve_root,
 };
 
-/// Stage only the reviewed generator infrastructure workflow outside the repo.
-///
-/// This is typed source generation, not hosted qualification or publication.
-/// No project discovery, Cargo planning, installation, candidate execution, or
-/// mutable in-repository `.github` replacement occurs through this entrypoint.
-/// # Errors
-/// Requires canonical generator identity, approved source records, and an empty
-/// external preview destination; unsafe sources or destinations fail closed.
 pub fn preview_owned_tool_candidates(
     root: &Path,
     destination: &Path,

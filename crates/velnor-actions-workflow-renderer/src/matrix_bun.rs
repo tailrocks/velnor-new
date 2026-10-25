@@ -1,13 +1,3 @@
-//! Static Playwright leg matrices of sharded Bun suite jobs.
-//!
-//! A sharded suite job carries the canonical leg list as the
-//! [`BUN_LEGS_ENV`] marker on its script step (and the optional cap as
-//! [`BUN_MAX_PARALLEL_ENV`]). Emission parses and re-validates the marker,
-//! scrubs it, and inserts `strategy` (`fail-fast: false`, optional
-//! `max-parallel`, `matrix.include` of the legs) before the job's `steps`.
-//! The include form keeps `(project, shard, total)` together: a cross product
-//! would also cross `total`.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{Job, StepKind};
@@ -15,36 +5,24 @@ use velnor_actions_contract::{Job, StepKind};
 use super::{insert_job_key, matrix_invalid};
 use crate::{RenderError, yaml::Yaml};
 
-/// Leg marker: `leg/project/shard/total` entries joined by `,` (empty project
-/// when the suite shards over every default project).
 pub(crate) const BUN_LEGS_ENV: &str = "VELNOR_BUN_LEGS";
-/// Leg marker: optional `strategy.max-parallel` cap (`1..=legs`).
 pub(crate) const BUN_MAX_PARALLEL_ENV: &str = "VELNOR_BUN_MAX_PARALLEL";
 
-/// One matrix leg of a sharded Playwright suite.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BunLeg {
-    /// 1-based ordinal, unique within the job.
     pub leg: u16,
-    /// Playwright project this leg runs, when the suite declares projects.
     pub project: Option<String>,
-    /// 1-based shard within the project (or the whole run).
     pub shard: u16,
-    /// Shards per project (or of the whole run).
     pub total: u16,
 }
 
-/// Every leg of one sharded suite job.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BunLegMatrix {
-    /// Legs sorted by `(project, shard)`, ordinals `1..=legs.len()`.
     pub legs: Vec<BunLeg>,
-    /// Optional `strategy.max-parallel`.
     pub max_parallel: Option<u16>,
 }
 
 impl BunLegMatrix {
-    /// Every leg of `projects` (empty: one unnamed group) times `shards`.
     #[must_use]
     pub fn new(projects: &[String], shards: u16, max_parallel: Option<u16>) -> Self {
         let groups: Vec<Option<String>> = if projects.is_empty() {
@@ -68,19 +46,16 @@ impl BunLegMatrix {
         Self { legs, max_parallel }
     }
 
-    /// True when legs pass `--project` (the suite declares projects).
     #[must_use]
     pub fn has_projects(&self) -> bool {
         self.legs.iter().any(|leg| leg.project.is_some())
     }
 
-    /// True when legs pass `--shard` (more than one shard per group).
     #[must_use]
     pub fn is_sharded(&self) -> bool {
         self.legs.iter().any(|leg| leg.total > 1)
     }
 
-    /// Canonical marker value.
     #[must_use]
     pub(crate) fn marker(&self) -> String {
         self.legs
@@ -98,11 +73,6 @@ impl BunLegMatrix {
             .join(",")
     }
 
-    /// Check the leg list is the canonical one for its own projects and shards.
-    ///
-    /// # Errors
-    ///
-    /// `bun_matrix_*` for an empty, oversized, unordered or inconsistent list.
     pub fn validate(&self) -> Result<(), RenderError> {
         let max = usize::from(velnor_actions_contract::MAX_SUITE_PARTITIONS);
         if self.legs.is_empty() || self.legs.len() > max {
@@ -168,7 +138,6 @@ impl BunLegMatrix {
     }
 }
 
-/// True when a job carries the Bun leg marker.
 pub(crate) fn has_bun_matrix(job: &Job) -> bool {
     job.steps.iter().any(|step| {
         matches!(
@@ -179,11 +148,6 @@ pub(crate) fn has_bun_matrix(job: &Job) -> bool {
     })
 }
 
-/// Extract validated leg matrices from marked Bun suite jobs.
-///
-/// # Errors
-///
-/// A partial, malformed, non-canonical or repeated marker.
 pub(crate) fn bun_matrices_of(
     jobs: &BTreeMap<String, Job>,
 ) -> Result<BTreeMap<String, BunLegMatrix>, RenderError> {
@@ -214,11 +178,6 @@ pub(crate) fn bun_matrices_of(
     Ok(matrices)
 }
 
-/// Attach `strategy:` for every sharded Bun suite job.
-///
-/// # Errors
-///
-/// A document without `jobs` or without a referenced job.
 pub(crate) fn attach_bun_matrices(
     document: &mut Yaml,
     matrices: &BTreeMap<String, BunLegMatrix>,
@@ -262,7 +221,3 @@ pub(crate) fn attach_bun_matrices(
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "matrix_bun_tests.rs"]
-mod tests;

@@ -1,29 +1,3 @@
-//! Fail-safe signals that force a package to count as changed (hard decision 4).
-//!
-//! Selection narrows a pull request to the packages whose claimed paths
-//! changed. That is sound only while every package reads nothing outside
-//! the paths it claims. Until in-job read verification exists, two static
-//! signals mark a package whose reads are not bounded:
-//!
-//! - **Build script.** A package with a `build.rs` may read anything
-//!   (`build_script`).
-//! - **Out-of-directory source reads.** A tracked `.rs` file owned by the
-//!   package reads a path the package does not claim, found by
-//!   [`scan_source`](crate::select_reads_scan::scan_source). A resolved
-//!   read is covered when the package claims the exact target (its own
-//!   directory, a scoped config, its workspace root, a declared
-//!   `[[stacks.rust.inputs]]` rule, or a tracked symlink), or when no
-//!   package claims it at all: a change there is unowned and already
-//!   selects everything. An unbounded
-//!   read (`CARGO_MANIFEST_DIR` plus `..`, a computed include) is covered only
-//!   once a `[[stacks.rust.inputs]]` rule naming the package sets
-//!   `complete = true`: the owner's statement that its declared inputs list
-//!   every read, which Velnor cannot verify statically. A read outside the repository can never change with a
-//!   pull request and is ignored.
-//!
-//! A forced package seeds the reverse closure like a changed one, so its
-//! dependents run as well.
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::path::Path;
@@ -35,15 +9,8 @@ use crate::git_paths::split_nul_paths;
 use crate::select_affected::Ownership;
 use crate::select_reads_scan::{ReadTarget, SourceRead, scan_source};
 
-/// Forced package IDs, each with its first uncovered reason.
 pub(crate) type Forced = BTreeMap<String, String>;
 
-/// Every package whose reads selection cannot bound.
-///
-/// # Errors
-///
-/// Returns a problem token when the index cannot be listed; the caller
-/// broadens.
 pub(crate) fn forced_packages(
     root: &Path,
     discovery: &Discovery,
@@ -68,7 +35,6 @@ pub(crate) fn forced_packages(
     Ok(forced)
 }
 
-/// Stable `undeclared_reads:<package>:<reason>` warnings, one per package.
 pub(crate) fn forced_warnings(ownership: &Ownership<'_>, forced: &Forced) -> Vec<String> {
     let mut warnings: Vec<String> = forced
         .iter()
@@ -78,17 +44,10 @@ pub(crate) fn forced_warnings(ownership: &Ownership<'_>, forced: &Forced) -> Vec
     warnings
 }
 
-/// IDs of a forced map.
 pub(crate) fn forced_ids(forced: &Forced) -> BTreeSet<String> {
     forced.keys().cloned().collect()
 }
 
-/// True when package `id` claims what `target` reads.
-///
-/// An unclaimed target is covered only when nothing claimable lies at or
-/// below it: a change to an unowned file already runs everything, but a
-/// read of a directory (the repository root, `crates/`) reaches every
-/// package beneath it.
 fn covered(ownership: &Ownership<'_>, id: &str, target: &ReadTarget) -> bool {
     match target {
         ReadTarget::Path(path) => {
@@ -100,7 +59,6 @@ fn covered(ownership: &Ownership<'_>, id: &str, target: &ReadTarget) -> bool {
     }
 }
 
-/// Warning reason for one uncovered read.
 fn reason(read: &SourceRead) -> String {
     match &read.target {
         ReadTarget::Path(path) => format!("{}:reads:{path}", read.file),
@@ -109,14 +67,6 @@ fn reason(read: &SourceRead) -> String {
     }
 }
 
-/// Every read each package's compiled sources perform.
-///
-/// A package compiles the tracked `.rs` files it owns plus every tracked
-/// file they pull in through `#[path]` or `include!` (shared test support,
-/// `.rs.in` fragments, another package's module), transitively, whoever
-/// owns it and whatever its extension; included files resolve
-/// `CARGO_MANIFEST_DIR` against the including package. Anchor and escape
-/// signals combine over all of a package's files.
 fn source_reads(
     root: &Path,
     ownership: &Ownership<'_>,
@@ -146,7 +96,6 @@ fn source_reads(
     Ok(reads)
 }
 
-/// Reads of one package: its owned files plus every file they compile in.
 fn package_reads(
     root: &Path,
     tracked: &BTreeSet<String>,
@@ -159,8 +108,6 @@ fn package_reads(
     let mut anchor: Option<String> = None;
     let mut escapes = false;
     while let Some(file) = queue.pop() {
-        // A tracked file missing from the worktree or not UTF-8 cannot
-        // compile; the dirty-worktree and Cargo checks own those cases.
         let Ok(text) = std::fs::read_to_string(root.join(&file)) else {
             continue;
         };
@@ -191,7 +138,6 @@ fn package_reads(
     reads
 }
 
-/// True for a Rust source path (`.rs`, any case).
 fn is_rust_source(file: &str) -> bool {
     Path::new(file)
         .extension()

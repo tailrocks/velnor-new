@@ -1,5 +1,3 @@
-//! Private repository-maintenance operations behind the existing CLI binary.
-
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -11,7 +9,6 @@ const ROOT_ENV: &str = "VELNOR_REPO_POLICY_ROOT";
 const UPSTREAM_ENV: &str = "VELNOR_REPO_POLICY_CHECK_UPSTREAM";
 const ADVISORIES_ENV: &str = "VELNOR_REPO_POLICY_WITH_ADVISORIES";
 
-/// Accept only the private action allowlist and a repository root directory.
 pub(crate) fn gate_root() -> Option<PathBuf> {
     let action = env::var(ACTION_ENV).ok()?;
     if !matches!(
@@ -34,7 +31,6 @@ pub(crate) fn gate_root() -> Option<PathBuf> {
     Some(root)
 }
 
-/// Run the allowlisted repository-maintenance operation selected by environment.
 pub(crate) fn run(root: &Path) -> ExitCode {
     let operation = match operation_from_environment() {
         Ok(operation) => operation,

@@ -1,4 +1,3 @@
-//! Deadline-bound subprocess polling without blocking pipe-reader threads.
 #[cfg(unix)]
 use super::process_group::{
     ObservedStatus, ProcessGroupAnchor, observe_exit, reap_observed, terminate_unanchored,
@@ -19,13 +18,6 @@ use helpers::{ChildRunContext, finish_child_process, spawn_child};
 impl IsolatedCommand {
     pub(crate) const PROCESS_CLEANUP_GRACE: Duration = Duration::from_millis(250);
 
-    /// Spawn the child under explicit bounds plus external cancellation.
-    ///
-    /// The child starts in a dedicated process group. Both pipes use nonblocking
-    /// reads in this thread, so a descendant that inherits a pipe cannot block
-    /// cleanup; timeout or cancellation kills the full process group.
-    /// # Errors
-    /// Returns `SpawnFailed` on spawn, output, timeout, or cancellation failure.
     #[cfg(unix)]
     pub fn run_cancellable(
         &self,
@@ -42,9 +34,6 @@ impl IsolatedCommand {
         self.run_cancellable_until_message(cap, deadline, cancel, &timeout_message)
     }
 
-    /// Run under an already-started absolute deadline.
-    /// # Errors
-    /// Returns `SpawnFailed` on spawn, output, deadline, or cancellation failure.
     #[cfg(unix)]
     pub fn run_until(
         &self,
@@ -54,13 +43,6 @@ impl IsolatedCommand {
         self.run_cancellable_until(cap, deadline, &CancelHandle::new())
     }
 
-    /// Run and return only after the original process group is drained.
-    ///
-    /// The cleanup grace is reserved inside `deadline`; a receipt is produced
-    /// only after the leader was held through group termination, reaped, and
-    /// the original group was observed absent.
-    /// # Errors
-    /// Returns `SpawnFailed` when execution or proof of group drain fails.
     #[cfg(unix)]
     pub fn run_quiescent_until(
         &self,
@@ -70,9 +52,6 @@ impl IsolatedCommand {
         self.run_quiescent_cancellable_until(cap, deadline, &CancelHandle::new())
     }
 
-    /// Quiescent run with external cancellation under the same deadline.
-    /// # Errors
-    /// Returns `SpawnFailed` when execution, cancellation, or group drain fails.
     #[cfg(unix)]
     pub fn run_quiescent_cancellable_until(
         &self,
@@ -109,9 +88,6 @@ impl IsolatedCommand {
             })
     }
 
-    /// Run under an absolute deadline and external cancellation.
-    /// # Errors
-    /// Returns `SpawnFailed` on spawn, output, deadline, or cancellation failure.
     #[cfg(unix)]
     pub fn run_cancellable_until(
         &self,
@@ -193,9 +169,6 @@ impl IsolatedCommand {
         finish_child_process(&mut context, &mut child, &mut anchor)
     }
 
-    /// Non-Unix named-check targets have no supported process-group cleanup.
-    /// # Errors
-    /// Returns `SpawnFailed` without starting a process.
     #[cfg(not(unix))]
     pub fn run_cancellable(
         &self,
@@ -209,9 +182,6 @@ impl IsolatedCommand {
         })
     }
 
-    /// Run under an already-started absolute deadline.
-    /// # Errors
-    /// Returns `SpawnFailed` without starting a process.
     #[cfg(not(unix))]
     pub fn run_until(
         &self,
@@ -221,9 +191,6 @@ impl IsolatedCommand {
         self.run_cancellable(0, Duration::ZERO, &CancelHandle::new())
     }
 
-    /// Run under an absolute deadline and external cancellation.
-    /// # Errors
-    /// Returns `SpawnFailed` without starting a process.
     #[cfg(not(unix))]
     pub fn run_cancellable_until(
         &self,
@@ -234,9 +201,6 @@ impl IsolatedCommand {
         self.run_cancellable(0, Duration::ZERO, &CancelHandle::new())
     }
 
-    /// Unsupported on targets without Unix process-group proof.
-    /// # Errors
-    /// Returns `SpawnFailed` without starting a process.
     #[cfg(not(unix))]
     pub fn run_quiescent_until(
         &self,
@@ -249,9 +213,6 @@ impl IsolatedCommand {
         })
     }
 
-    /// Unsupported on targets without Unix process-group proof.
-    /// # Errors
-    /// Returns `SpawnFailed` without starting a process.
     #[cfg(not(unix))]
     pub fn run_quiescent_cancellable_until(
         &self,

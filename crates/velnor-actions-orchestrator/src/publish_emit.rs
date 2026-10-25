@@ -1,12 +1,3 @@
-//! Publication emission: `[[publish.bundles]]`, `[[images]]` and the Rust
-//! `git-tag` release to `publish.yml`.
-//!
-//! The file exists only under `consumer-v1` with at least one declared
-//! bundle or image. Generation reads each version manifest and checks
-//! its paths against the work tree, so a stale declaration fails at
-//! generation time; the generated authority job repeats the version
-//! check against the tagged commit at run time.
-
 use std::path::Path;
 
 use velnor_actions_contract::config::{
@@ -34,19 +25,9 @@ mod maven_emit;
 #[path = "publish_npm_emit.rs"]
 mod npm_emit;
 
-/// Publication workflow display name.
 const PUBLISH_WORKFLOW_NAME: &str = "Velnor Publish";
-/// Protected environment guarding asset upload when none is configured.
 const DEFAULT_ENVIRONMENT: &str = "release";
 
-/// Render `publish.yml` (and the `git-tag` release-plz config), or nothing.
-///
-/// # Errors
-///
-/// Returns config errors for a non-consumer policy, unreadable or
-/// non-literal version manifests, missing or symlinked bundle paths and
-/// private git sources not pinned to a tag; identity errors for an
-/// unresolvable origin; render errors for invalid assembled specs.
 pub(crate) fn publish_files(
     prep: &GenerationPreparation,
     mise: &MiseSetup,
@@ -131,7 +112,6 @@ pub(crate) fn publish_files(
     Ok(files)
 }
 
-/// Tag-driven artifacts and images publish only under the consumer policy.
 fn require_consumer_policy(prep: &GenerationPreparation) -> Result<(), OrchestratorError> {
     let publish = &prep.config.publish;
     let key = if !publish.bundles.is_empty() {
@@ -155,10 +135,6 @@ fn require_consumer_policy(prep: &GenerationPreparation) -> Result<(), Orchestra
     ))
 }
 
-/// Select the `git-tag` packages and render their release-plz config.
-///
-/// Also enforces the pin rule: a git source on the repository owner's own
-/// GitHub organization must be pinned to a `tag`.
 fn git_tag_config(
     prep: &GenerationPreparation,
     release: &RustReleaseConfig,
@@ -209,7 +185,6 @@ fn git_tag_config(
     })
 }
 
-/// Resolve one bundle: check its paths and read its version source.
 fn resolve_bundle<'a>(
     root: &Path,
     index: usize,
@@ -250,7 +225,6 @@ fn resolve_bundle<'a>(
     Ok(BundlePlan { bundle, check })
 }
 
-/// Read the manifest version source once, so a stale declaration fails at generation.
 fn manifest_check(
     root: &Path,
     key: &str,
@@ -274,7 +248,6 @@ fn manifest_check(
     Ok(VersionCheck::Manifest(source, path.to_owned()))
 }
 
-/// Resolve the promotable images: those declaring a `version_file`.
 fn resolve_promotions<'a>(
     root: &Path,
     images: &'a [ImageConfig],
@@ -300,10 +273,6 @@ fn resolve_promotions<'a>(
     Ok(plans)
 }
 
-/// Reject a tag-namespace id shared by two artifacts.
-///
-/// Bundles, promotable images and released Rust packages all mint tags
-/// `<id>-v<X.Y.Z>`, so a shared name would let one tag mean two artifacts.
 fn check_tag_collisions(prep: &GenerationPreparation) -> Result<(), OrchestratorError> {
     let release: Option<&RustReleaseConfig> = prep
         .config

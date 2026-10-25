@@ -1,5 +1,3 @@
-//! Reauthenticate the signed release and fixed tap preparation handoff.
-
 use std::{
     env, fs,
     path::{Path, PathBuf},

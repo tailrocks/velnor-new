@@ -1,5 +1,3 @@
-//! Admission for private operations that derive their path from runner temp.
-
 use std::env;
 use std::path::{Path, PathBuf};
 
@@ -75,11 +73,6 @@ pub(super) fn gate_runner_temp_operation(op: InternalOp) -> Option<InternalReque
     }
 }
 
-/// Runner-temp velnor directory for file-less private operations.
-///
-/// `None` when `RUNNER_TEMP` is unset or empty; shared by the fetch,
-/// report, and preseed-manifest gate branches so the scoping rule has
-/// one definition.
 fn runner_velnor_dir() -> Option<PathBuf> {
     env::var_os(RUNNER_TEMP_ENV)
         .filter(|value| !value.is_empty())

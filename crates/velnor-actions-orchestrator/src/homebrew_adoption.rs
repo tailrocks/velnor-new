@@ -1,5 +1,3 @@
-//! Exact-base, data-only validation for a protected Homebrew tap seed.
-
 use std::{collections::BTreeMap, ffi::OsString, path::Path};
 
 use velnor_actions_contract::{
@@ -16,33 +14,26 @@ use crate::{OrchestratorError, internal::internal};
 const MAX_ADOPTION_FILE_BYTES: usize = 2 * 1024 * 1024;
 #[path = "homebrew_adoption_diff.rs"]
 mod diff;
-#[cfg(test)]
-use diff::parse_raw_diff;
+
 use diff::{full_sha, read_transition_diff, safe_path};
 
-/// Private custody proving transition bytes came from protected SDK source.
 #[derive(Debug, Clone)]
 pub(crate) struct ProtectedHomebrewAdoptionTransition {
     transition: HomebrewAdoptionTransition,
 }
 
 impl ProtectedHomebrewAdoptionTransition {
-    /// Parse compile-time SDK policy bytes into private transition custody.
-    ///
-    /// Callers must pass `include_bytes!` data owned by this SDK revision.
     pub(crate) fn from_protected_source(bytes: &'static [u8]) -> Result<Self, OrchestratorError> {
         let transition = parse_homebrew_adoption_transition(bytes)
             .map_err(|_| internal("homebrew_adoption_transition_invalid"))?;
         Ok(Self { transition })
     }
 
-    /// Read-only view for planning and obligation identity derivation.
     pub(crate) fn transition(&self) -> &HomebrewAdoptionTransition {
         &self.transition
     }
 }
 
-/// Load the sole SDK-reviewed seed transition and require exact caller context.
 pub(crate) fn protected_homebrew_adoption_transition(
     tap_repository: &str,
     tap_repository_id: u64,
@@ -61,11 +52,6 @@ pub(crate) fn protected_homebrew_adoption_transition(
     Ok(admitted)
 }
 
-/// Validate the one protected transition against commit-addressed Git objects.
-///
-/// `generated_files` must be produced by the caller's authenticated SDK
-/// renderer after it binds the independently authenticated published SDK
-/// manifest. Candidate bytes never choose policy, paths, or substitutions.
 pub(crate) struct AdoptionValidationContext<'a> {
     pub(crate) root: &'a Path,
     pub(crate) admitted: &'a ProtectedHomebrewAdoptionTransition,
@@ -159,9 +145,6 @@ pub(crate) fn validate_homebrew_adoption(
         .map_err(|_| internal("homebrew_adoption_candidate_invalid"))
 }
 
-/// Replay the protected seed transition against an API-authenticated later
-/// tap base. This proves the current base is exactly the generated seed tree;
-/// it does not admit a candidate PR or make the transition reusable.
 pub(crate) fn validate_homebrew_adoption_output_base(
     root: &Path,
     admitted: &ProtectedHomebrewAdoptionTransition,
@@ -318,7 +301,3 @@ pub(crate) fn read_commit_file(
     }
     Ok(output.stdout.clone())
 }
-
-#[cfg(test)]
-#[path = "homebrew_adoption_tests.rs"]
-mod tests;

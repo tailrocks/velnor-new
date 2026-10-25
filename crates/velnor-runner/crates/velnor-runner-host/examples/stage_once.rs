@@ -1,6 +1,3 @@
-//! Stop one worker pair on the local Docker engine, or remove one recorded id.
-//! Dummy JIT bytes are not printed.
-
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 

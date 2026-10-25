@@ -1,5 +1,3 @@
-//! Trusted evidence-fetch and local-snapshot handoff workflow rendering.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
@@ -82,11 +80,6 @@ pub(super) fn evidence_collector_condition(suite: &MiseTaskSuite, default_branch
         .join(" || ")
 }
 
-/// Release-backed helper provenance for the fixed evidence-fetch and import steps.
-///
-/// The fields are private so callers cannot inject an arbitrary step into the
-/// token-bearing fetch job. The constructor verifies the complete manifest
-/// contract and binds the runner target to its immutable release asset.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EvidenceHelperProvenance {
     version: String,
@@ -97,8 +90,6 @@ pub struct EvidenceHelperProvenance {
 }
 
 impl EvidenceHelperProvenance {
-    /// Build evidence-helper provenance from a validated immutable release manifest.
-    /// # Errors
     pub fn from_release_manifest(
         manifest: &ReleaseManifest,
         runner_label: &str,
@@ -244,7 +235,6 @@ pub(super) fn job_step_to_yaml(
 }
 
 fn policy_generator_version(_policy: &MiseTaskSuitePolicy) -> &'static str {
-    // The helper path is emitted from the immutable generator package version.
     env!("CARGO_PKG_VERSION")
 }
 

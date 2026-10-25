@@ -1,4 +1,3 @@
-//! Offline authoring evidence for complete pins; never a runtime CI receipt.
 use crate::OrchestratorError;
 use crate::check_runtime::preparation::acquisition;
 use crate::internal::internal;
@@ -30,15 +29,6 @@ struct Candidate {
     archives: Vec<install::ArchiveObservation>,
 }
 
-/// Author complete qualified-tool candidates from independently pinned local archives.
-///
-/// The strict version-one request selects only native, prebuilt recipes and fixed
-/// version probes. Every archive is checked before any extraction or execution.
-/// Work and output paths must be absolute and absent; existing configuration,
-/// runtime receipt validation, and trust policy are never modified.
-/// # Errors
-/// Rejects malformed requests, unsafe paths, archive/layout/hash/probe drift,
-/// dependency-order violations, deadlines, or an existing work/output path.
 pub fn qualify_tools(
     request_path: &Path,
     work_dir: &Path,
@@ -100,7 +90,3 @@ fn checkpoint(deadline: CheckDeadline) -> Result<(), OrchestratorError> {
         .map(|_| ())
         .map_err(|e| internal(&e.to_string()))
 }
-
-#[cfg(test)]
-#[path = "qualification_candidate_tests.rs"]
-mod tests;

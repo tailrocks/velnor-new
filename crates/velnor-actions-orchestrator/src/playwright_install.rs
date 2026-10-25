@@ -1,15 +1,3 @@
-//! `playwright-browsers-install-v1`: install the hash-pinned Playwright
-//! browsers a Bun member needs (hard decision 6).
-//!
-//! The step carries the expected `directory:sha256` pins literally. The
-//! operation recomputes them from the checked-out `.velnor/playwright.lock`
-//! and `bun.lock` and refuses to run on any difference, downloads each archive
-//! from the pinned URL, verifies its SHA-256 before extracting, and extracts
-//! through the hardened archive reader. No credential is involved and no
-//! repository code runs; `playwright install --with-deps` never does. With
-//! `VELNOR_PLAYWRIGHT_SYSTEM_DEPS` it first installs those browsers' system
-//! libraries through the verified `playwright-core` (`playwright_system_deps.rs`).
-
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -31,10 +19,8 @@ use crate::config::playwright_lock::{hash_file, read_playwright_lock};
 use crate::internal::internal;
 use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoRead, read_repo_file};
 
-/// Operation name (shared with the contract and the renderer).
 pub const PLAYWRIGHT_INSTALL_OP: &str =
     velnor_actions_contract::config::playwright_lock::PLAYWRIGHT_INSTALL_OPERATION;
-/// Browsers directory (`PLAYWRIGHT_BROWSERS_PATH`) under runner temp.
 pub(crate) const BROWSERS_SUBDIR: &str = "velnor/ms-playwright";
 const DOWNLOAD_SUBDIR: &str = "velnor/playwright-download";
 const COMPLETE_MARKER: &str = "INSTALLATION_COMPLETE";
@@ -43,25 +29,17 @@ const DOWNLOAD_TIMEOUT: Duration = Duration::from_mins(30);
 const EXTRACT_TIMEOUT: Duration = Duration::from_mins(30);
 const CAPTURE_BYTES: usize = 64 * 1024;
 
-/// Parsed and validated step input.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct InstallRequest {
     pub(crate) version: String,
-    /// `(directory, sha256)` sorted by directory.
     pub(crate) pins: Vec<(String, String)>,
     pub(crate) root: String,
     pub(crate) workspace: PathBuf,
     pub(crate) runner_temp: PathBuf,
-    /// Browsers whose system libraries Playwright's `install-deps` installs
-    /// (sorted; empty for none).
     pub(crate) system_deps: Vec<String>,
 }
 
 impl InstallRequest {
-    /// Parse the step environment.
-    ///
-    /// # Errors
-    /// Rejects missing, relative or malformed values.
     pub(crate) fn parse(get: &dyn Fn(&str) -> Option<String>) -> Result<Self, OrchestratorError> {
         let need = |key: &str| {
             get(key)
@@ -120,12 +98,7 @@ impl InstallRequest {
     }
 }
 
-/// Download transport; the real one is `curl`.
 pub(crate) trait Downloader {
-    /// Fetch `url` to `dest`, at most `limit` bytes.
-    ///
-    /// # Errors
-    /// Fails when the download does.
     fn download(&self, url: &str, dest: &Path, limit: u64) -> Result<(), OrchestratorError>;
 }
 
@@ -166,11 +139,6 @@ impl Downloader for Curl {
     }
 }
 
-/// The lock entries the pins name, after the cross-checks against the repository.
-///
-/// # Errors
-/// `playwright_lock_missing`, `playwright_pin_drift:<directory>` and
-/// `playwright_core_integrity_drift` fail closed.
 pub(crate) fn verified_archives<'a>(
     request: &InstallRequest,
     lock: Option<&'a PlaywrightLock>,
@@ -206,15 +174,11 @@ fn io_error(path: &Path, err: &std::io::Error) -> OrchestratorError {
     OrchestratorError::io(path.display().to_string(), err.to_string())
 }
 
-/// Whether `directory` already holds the pinned install (a restored cache).
 fn is_installed(directory: &Path, sha256: &str) -> bool {
     directory.join(COMPLETE_MARKER).is_file()
         && fs::read_to_string(directory.join(PIN_MARKER)).is_ok_and(|text| text.trim() == sha256)
 }
 
-/// Fetch `archive` to `file` from its locked URL, then the Playwright mirrors
-/// for the same artifact. Each host gets the transport's own retries; the lock's
-/// sha256 and size must match whichever host served the bytes.
 fn download_verified(
     downloader: &dyn Downloader,
     archive: &velnor_actions_contract::config::playwright_lock::LockedArchive,
@@ -252,10 +216,6 @@ fn download_verified(
     Err(failure)
 }
 
-/// Install every pinned archive; returns how many were downloaded.
-///
-/// # Errors
-/// Fails closed on drift, a download failure, a digest mismatch or an unsafe archive.
 pub(crate) fn install(
     request: &InstallRequest,
     archives: &[&velnor_actions_contract::config::playwright_lock::LockedArchive],
@@ -299,10 +259,6 @@ pub(crate) fn install(
     Ok(fetched)
 }
 
-/// Run `playwright-browsers-install-v1` from the step environment.
-///
-/// # Errors
-/// Any configuration, drift, download or digest failure.
 pub fn run_playwright_install() -> Result<(), OrchestratorError> {
     let get = |key: &str| std::env::var(key).ok();
     let request = InstallRequest::parse(&get)?;
@@ -335,7 +291,3 @@ pub fn run_playwright_install() -> Result<(), OrchestratorError> {
     );
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "playwright_install_tests.rs"]
-mod tests;

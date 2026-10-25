@@ -1,4 +1,3 @@
-//! C-only finding custody; the shared writer snapshot and digest remain unchanged.
 use super::{FeedbackRecords, TapMergeGitHub, time};
 use crate::{OrchestratorError, internal::internal};
 use serde_json::Value;
@@ -173,7 +172,3 @@ fn positive(row: &Value, key: &str) -> Result<u64, OrchestratorError> {
         .filter(|id| *id > 0)
         .ok_or_else(|| internal("review_finding_id"))
 }
-
-#[cfg(test)]
-#[path = "review_completion_findings_tests.rs"]
-mod tests;

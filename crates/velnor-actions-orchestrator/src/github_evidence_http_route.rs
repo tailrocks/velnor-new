@@ -1,5 +1,3 @@
-//! Closed route identities for GitHub Actions evidence reads.
-
 use super::{GitHubRepository, hex_digit};
 
 #[derive(Debug, Clone, PartialEq, Eq)]

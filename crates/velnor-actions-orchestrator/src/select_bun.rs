@@ -1,12 +1,3 @@
-//! Affected selection for Bun member jobs (hard decision 3).
-//!
-//! Bun jobs own no Rust obligations. A member is planned from what it reads:
-//! its directory, the files its workspace shares, its `workspace:` dependents
-//! and the inputs `[[stacks.bun.inputs]]` declares. Doubt selects the member:
-//! an unknown change set, a global-config path, or reads outside its
-//! directory that no complete declaration covers. Full-run events never skip
-//! a member.
-
 use std::collections::BTreeSet;
 
 use velnor_actions_bun::{
@@ -21,7 +12,6 @@ use velnor_actions_workflow_renderer::verification_jobs::BUN_ASSETS_SUFFIX;
 use super::ChangeEvidence;
 use crate::discover::Discovery;
 
-/// Plan dispositions for every Bun member and suite job, in member-name order.
 pub(crate) fn dispositions(
     config: &VelnorConfig,
     discovery: &Discovery,
@@ -56,16 +46,12 @@ pub(crate) fn dispositions(
         } else {
             JobDisposition::NotAffected
         };
-        // Generation already proved the configuration; a member job omitted
-        // because its suites claim every script has no disposition.
         if !matches!(member_job_scripts(member, bun), Ok(None)) {
             jobs.push(PlanJob {
                 job_id: job_id(member),
                 disposition,
             });
         }
-        // Every suite job, gating or not, carries its member's disposition,
-        // so a `not_affected` member's suites are skipped and pass.
         let suites: Vec<&String> = bun
             .members
             .get(&member.name)
@@ -78,7 +64,6 @@ pub(crate) fn dispositions(
                 disposition,
             });
         }
-        // So does the assets job that fetches pinned release assets for them.
         if !suites.is_empty() && has_release_assets {
             jobs.push(PlanJob {
                 job_id: format!("{}{BUN_ASSETS_SUFFIX}", job_id(member)),

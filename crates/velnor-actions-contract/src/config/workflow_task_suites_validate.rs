@@ -1,5 +1,3 @@
-//! Validation for the workflow task-suite inventory.
-
 use super::{ContractError, WorkflowConfig};
 
 pub(super) fn validate(workflow: &WorkflowConfig, file: &str) -> Result<(), ContractError> {

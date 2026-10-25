@@ -1,9 +1,3 @@
-//! `[stacks]` partial configuration: per-stack tables plus load tests.
-//!
-//! Split from the loader (`config.rs`) under the size gate: stack
-//! partials and their materialization live here with the
-//! stack-focused load tests.
-
 use serde::Deserialize;
 use velnor_actions_contract::config::{
     AnsibleStackConfig, BunStackConfig, DbtStackConfig, RustBinaryReleaseConfig, RustReleaseConfig,
@@ -16,73 +10,49 @@ use velnor_actions_contract::{
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
 
-/// Stacks section with every value optional.
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct PartialStacks {
-    /// Stack IDs to ignore.
     #[serde(default)]
     ignore: Vec<String>,
-    /// Rust stack options.
     rust: Option<PartialRustStack>,
-    /// Tofu stack options.
     tofu: Option<PartialTofuStack>,
-    /// Bun stack options (strict: `roots` is required).
     bun: Option<BunStackConfig>,
     gradle: Option<velnor_actions_contract::config::gradle::GradleStackConfig>,
-    /// dbt stack options (strict: `projects` is required).
     dbt: Option<DbtStackConfig>,
-    /// Ansible stack options (strict: `roots` is required).
     ansible: Option<AnsibleStackConfig>,
 }
 
-/// Rust stack section with every value optional.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct PartialRustStack {
-    /// Rust task configuration variants.
     configurations: Option<Vec<RustConfiguration>>,
-    /// Sticky declared compile driver.
     compile_driver: Option<DeclaredCompileDriver>,
-    /// Sticky declared test runner.
     test_runner: Option<DeclaredTestRunner>,
-    /// Ignored test execution mode.
     run_ignored: Option<String>,
-    /// Optional cold parallel-target initialization after the test build.
     seed_parallel_targets: Option<bool>,
-    /// Clippy-only all-features mode; disabled by default.
     clippy_all_features: Option<bool>,
-    /// Rust release policy; disabled by default.
     release: Option<RustReleaseConfig>,
-    /// Single-package binary release policy; disabled by default.
     binary_release: Option<RustBinaryReleaseConfig>,
-    /// Named Nextest suites (`[[stacks.rust.suites]]`).
     #[serde(default)]
     suites: Vec<velnor_actions_contract::RustSuiteConfig>,
-    /// Optional exact `X.Y.Z` Rust toolchain channel override.
     #[serde(default)]
     toolchain: Option<String>,
-    /// Opt-in Mise-authoritative Rust version (`"mise"`).
     #[serde(default)]
     toolchain_source: Option<velnor_actions_contract::config::RustToolchainSource>,
-    /// Per-package options (`[stacks.rust.crates.<package>]`).
     #[serde(default)]
     crates: std::collections::BTreeMap<String, velnor_actions_contract::RustCrateConfig>,
-    /// Declared inputs outside package directories (`[[stacks.rust.inputs]]`).
     #[serde(default)]
     inputs: Vec<velnor_actions_contract::RustInputRule>,
 }
 
-/// Tofu stack section: `roots` required when the table is present.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct PartialTofuStack {
-    /// Tofu validation roots; `.` names the repository root.
     roots: Option<Vec<String>>,
 }
 
 impl PartialStacks {
-    /// Fill stacks defaults; a tofu table requires `roots`.
     pub(crate) fn materialize(self) -> Result<StacksConfig, OrchestratorError> {
         let rust = self.rust.map(|stack| {
             let defaults = RustStackConfig::default_config();
@@ -128,11 +98,3 @@ impl PartialStacks {
         })
     }
 }
-
-#[cfg(test)]
-#[path = "config_stacks_tests.rs"]
-mod tests;
-
-#[cfg(test)]
-#[path = "config_stacks_adapter_tests.rs"]
-mod adapter_tests;

@@ -1,4 +1,3 @@
-//! Deadline checks for compressed archive reads.
 use std::io::{self, Read, Seek, SeekFrom};
 
 use flate2::read::GzDecoder;

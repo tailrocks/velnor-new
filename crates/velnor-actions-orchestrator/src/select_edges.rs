@@ -1,5 +1,3 @@
-//! Base/head dependency-graph edges for affected-work selection.
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::path::Path;
@@ -16,27 +14,12 @@ use crate::schedule::resource_exclusions;
 use crate::select_affected::manifest_dir;
 use crate::validators::{validate_diff_rev, validate_select_diff_args, validate_select_show_args};
 
-/// Max base manifests fetched; beyond this, broaden instead of reading.
 const MAX_BASE_MANIFEST_BATCH: usize = 512;
 
-/// Head paths added since base: manifests absent at base, skipped by batch.
-///
-/// Rename detection stays off so every head path missing at base reports as
-/// added; the committed change set uses the same no-rename convention.
-/// Validation gates the untrusted range (flag-injection defense); `-z` is
-/// our own trusted constant added after, so output is NUL-delimited with
-/// no C-quoting or trimming, like `changed_files`. Only validated manifests
-/// are ever matched against this set (non-ASCII names fail manifest-key
-/// validation at obligation time, before selection), so byte-exactness is
-/// enforced by construction and proven by the shared splitter unit tests.
 pub(crate) fn added_files(root: &Path, base: &str, head: &str) -> Result<BTreeSet<String>, String> {
     filtered_files(root, base, head, "A")
 }
 
-/// Head paths deleted since base: present at base, absent at head.
-///
-/// Same no-rename convention and validation as [`added_files`]; the
-/// tofu base graph reads base texts of deleted config files.
 pub(crate) fn deleted_files(
     root: &Path,
     base: &str,
@@ -45,7 +28,6 @@ pub(crate) fn deleted_files(
     filtered_files(root, base, head, "D")
 }
 
-/// Paths under one `--diff-filter` between base and head, NUL-delimited.
 fn filtered_files(
     root: &Path,
     base: &str,
@@ -73,10 +55,6 @@ fn filtered_files(
     split_nul_paths(&output.stdout)
 }
 
-/// Head local-path edges from discovery records, as neutral pairs.
-///
-/// Converted at the rust boundary via [`local_edge_pairs`]; selection
-/// never sees adapter edge types.
 pub(crate) fn head_edges(discovery: &Discovery) -> Vec<(String, String)> {
     let mut edges = Vec::new();
     for workspace in &discovery.workspaces {
@@ -85,13 +63,6 @@ pub(crate) fn head_edges(discovery: &Discovery) -> Vec<(String, String)> {
     edges
 }
 
-/// Base local-path edges from base-revision manifests, in head-id space.
-///
-/// Every wanted manifest is read at `base` with one `git show` each; path
-/// dependencies resolve to the head package owning the target directory, so
-/// removed or renamed edges still select their head consumers. Manifests
-/// added since base are new and contribute nothing; over-cap sets and
-/// fetch or parse failures are errors that broaden via the caller.
 pub(crate) fn base_edges(
     root: &Path,
     base: &str,
@@ -130,12 +101,6 @@ pub(crate) fn base_edges(
     Ok(local_edge_pairs(&edges))
 }
 
-/// Base contents of every wanted manifest via one `git show` each.
-///
-/// One batched `git show` cannot delimit blobs: git shows a repeated
-/// separator object only once, so per-manifest reads keep boundaries exact.
-/// Added (new) manifests never reach here. Shared with the tofu base
-/// graph, which passes config paths instead of manifests.
 pub(crate) fn base_manifests(
     root: &Path,
     base: &str,
@@ -157,12 +122,6 @@ pub(crate) fn base_manifests(
     Ok(out)
 }
 
-/// Validated plan graph: nodes per task plus sorted unique edges (PAR-3.1/3.2).
-///
-/// Data edges follow `depends_on`, gate edges follow `gated_by`, report
-/// edges bind shard legs to their base task, and resource exclusions come
-/// from the lane assignment. Endpoints outside the selection are dropped:
-/// plan edges must name planned obligations.
 pub(crate) fn plan_task_graph(
     selected: &[&ProposedTask],
     lanes: &BTreeMap<String, u32>,
@@ -196,12 +155,6 @@ pub(crate) fn plan_task_graph(
     Ok(graph.edges)
 }
 
-/// One graph node for one selected task.
-///
-/// The orchestrator computes only `input_digest`/`lane_id`; every
-/// other field moves from the validated proposal through the single
-/// [`into_task_node`](ProposedTask::into_task_node) completion, never
-/// recomputed (edge lists sort defensively first, as before).
 fn task_node(
     task: &ProposedTask,
     lanes: &BTreeMap<String, u32>,
@@ -219,7 +172,6 @@ fn task_node(
     )
 }
 
-/// Push one edge when both endpoints are planned and distinct.
 fn push_edge(
     edges: &mut Vec<TaskEdge>,
     ids: &BTreeSet<&str>,
@@ -236,7 +188,6 @@ fn push_edge(
     }
 }
 
-/// Resource-exclusion edges for lane-sharing pairs (PAR-7.2).
 fn exclusion_edges(
     selected: &[&ProposedTask],
     lanes: &BTreeMap<String, u32>,
@@ -260,7 +211,6 @@ fn exclusion_edges(
     }
 }
 
-/// Sort edges by (`from`, `to`, kind) and drop duplicates.
 fn sort_dedupe_edges(edges: &mut Vec<TaskEdge>) {
     edges.sort_by(|left, right| {
         (left.from.as_str(), left.to.as_str(), edge_rank(left.kind)).cmp(&(
@@ -274,7 +224,6 @@ fn sort_dedupe_edges(edges: &mut Vec<TaskEdge>) {
     });
 }
 
-/// Kind rank mirroring the contract's deterministic edge order.
 fn edge_rank(kind: EdgeKind) -> u8 {
     match kind {
         EdgeKind::Data => 0,

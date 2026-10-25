@@ -1,5 +1,3 @@
-//! Exact protected-base seed authoring.
-
 use std::{collections::BTreeMap, path::Path};
 
 use velnor_actions_contract::homebrew_adoption::HomebrewAdoptionTransition;

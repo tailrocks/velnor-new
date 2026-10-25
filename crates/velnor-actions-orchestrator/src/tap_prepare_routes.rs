@@ -1,5 +1,3 @@
-//! Route-specific checks for native formulas and source-qualified updater tasks.
-
 use std::{fs, path::Path};
 
 use velnor_actions_contract::{

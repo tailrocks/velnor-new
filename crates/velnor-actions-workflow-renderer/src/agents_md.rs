@@ -1,5 +1,3 @@
-//! Generated `.github/AGENTS.md` rendering.
-
 use velnor_actions_contract::AGENTS_MD_PATH;
 
 use crate::RenderError;
@@ -41,11 +39,6 @@ When issues, bugs, limitations, or enhancements are observed in generated GitHub
 - In case of conflict, stricter safety, correctness, and verification standards take precedence.
 ";
 
-/// Render the default `.github/AGENTS.md` file with the versioned marker.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] if the version is invalid.
 pub fn render_agents_md(version: &str) -> Result<RenderedFile, RenderError> {
     let bytes = with_marker(version, AGENTS_MD_BODY)?;
     Ok(RenderedFile {

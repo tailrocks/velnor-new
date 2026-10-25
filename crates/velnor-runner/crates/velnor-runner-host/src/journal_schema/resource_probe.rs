@@ -1,5 +1,3 @@
-//! Additive schema for controller-owned resource-probe operations.
-
 use turso::Connection;
 
 use crate::error::HostError;

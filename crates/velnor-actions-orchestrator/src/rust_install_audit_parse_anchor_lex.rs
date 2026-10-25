@@ -151,7 +151,6 @@ impl FlowState {
         clean
     }
 
-    // YAML quote and collection indicators are structural only at node starts.
     fn consume_node_character(&mut self, value: &str, index: usize, character: char) {
         if let Some(active) = self.quote {
             if active == '"' && character == '\\' && !self.escaped {
@@ -170,8 +169,6 @@ impl FlowState {
             self.escaped = false;
             return;
         }
-        // Consume whitespace and verbatim-tag terminators, but process flow
-        // indicators that end ordinary anchors and tags as punctuation.
         if self.end_property_at(character) || self.property.is_some() {
             return;
         }
@@ -250,7 +247,6 @@ pub(super) fn flow_separator_positions(value: &str, separator: char) -> Vec<usiz
     let mut positions = Vec::new();
     for (index, character) in value.char_indices() {
         let depth = state.collections.len();
-        // Release a delimited property before deciding whether this is a separator.
         let consumed_delimiter = state.end_property_at(character);
         let can_delimit = state.can_delimit();
         if can_delimit
@@ -367,8 +363,6 @@ pub(super) fn poison_partial_flow_anchors(value: &str, counts: &mut BTreeMap<Str
 
 pub(super) fn tag_property_end(value: &str) -> usize {
     if value.starts_with('<') {
-        // Preserve flow punctuation inside valid URIs, but expose a following
-        // node property if a malformed URI has no closing `>`.
         return value.find('>').map_or_else(
             || value.find(char::is_whitespace).unwrap_or(value.len()),
             |index| index + 1,

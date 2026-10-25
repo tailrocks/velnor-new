@@ -1,9 +1,3 @@
-//! Rust input closures: complete first-party inputs, explicit unknowns.
-//!
-//! Unknown inputs forbid reuse and coverage. The kind-gated classes,
-//! Cargo filenames, and Rust source extensions here are Rust-domain
-//! rules; the orchestrator dispatches per stack to this resolver.
-
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -18,7 +12,6 @@ use super::closure_probes::{
 use crate::task_identity::DigestSlot;
 use crate::tasks::TaskKind;
 
-/// Per-analysis cache of Rust checkout probes to avoid repeated directory walks and file hashing.
 #[derive(Debug, Clone, Default)]
 pub struct RustClosureCache {
     source_trees: BTreeMap<String, Provenance>,
@@ -30,23 +23,12 @@ pub struct RustClosureCache {
 }
 
 impl RustClosureCache {
-    /// Create an empty probe cache for one analysis pass.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 }
 
-/// Resolve one proposed task's closure against the checkout at `root`.
-///
-/// Reads adapter facts from the proposal (unit path, features, target,
-/// configuration, drivers, kind, declared inputs); filesystem probes
-/// bind content, proven absence, or explicit unknowns.
-///
-/// # Errors
-///
-/// Returns [`ContractError`] for task-kind spellings outside the seven
-/// known kinds.
 pub fn resolve_closure_at_root(
     root: &Path,
     task: &ProposedTask,
@@ -67,12 +49,6 @@ pub fn resolve_closure_at_root(
     )
 }
 
-/// Resolve one proposed task's closure using a shared [`RustClosureCache`].
-///
-/// # Errors
-///
-/// Returns [`ContractError`] for task-kind spellings outside the seven
-/// known kinds.
 pub fn resolve_closure_at_root_cached(
     root: &Path,
     task: &ProposedTask,
@@ -138,10 +114,6 @@ pub fn resolve_closure_at_root_cached(
     Ok(closure.build(&task.task_id))
 }
 
-/// Digest slot of a [`Provenance`], preserving absence distinctly.
-///
-/// Externally guarded inputs have no producer today; if one ever
-/// appears it maps to unknown (fail-closed: unverified by us).
 fn digest_slot(provenance: Provenance) -> DigestSlot {
     match provenance {
         Provenance::Known { digest } => DigestSlot::Known(digest),
@@ -153,13 +125,11 @@ fn digest_slot(provenance: Provenance) -> DigestSlot {
     }
 }
 
-/// Lockfile slot at `root`: content, proven absence, or unknown.
 #[must_use]
 pub fn lock_digest_at_root(root: &Path, manifest: &str) -> DigestSlot {
     digest_slot(probe_lockfile(root, manifest))
 }
 
-/// Cached lockfile slot at `root`.
 #[must_use]
 pub fn lock_digest_cached(root: &Path, manifest: &str, cache: &mut RustClosureCache) -> DigestSlot {
     let prov = cache
@@ -170,13 +140,11 @@ pub fn lock_digest_cached(root: &Path, manifest: &str, cache: &mut RustClosureCa
     digest_slot(prov)
 }
 
-/// Nextest-config slot at `root`: content, proven absence, or unknown.
 #[must_use]
 pub fn nextest_digest_at_root(root: &Path, profile_config: Option<&str>) -> DigestSlot {
     digest_slot(probe_nextest_config(root, profile_config))
 }
 
-/// Cached Nextest-config slot at `root`.
 #[must_use]
 pub fn nextest_digest_cached(
     root: &Path,
@@ -191,7 +159,6 @@ pub fn nextest_digest_cached(
     digest_slot(prov)
 }
 
-/// VCS provenance: unknown with undeclared reads, proven absent without.
 fn vcs_provenance(undeclared_reads: bool) -> Provenance {
     if undeclared_reads {
         Provenance::Unknown {
@@ -204,9 +171,6 @@ fn vcs_provenance(undeclared_reads: bool) -> Provenance {
     }
 }
 
-/// Source-tree provenance: digest over package `*.rs` plus the manifest.
-///
-/// A source edit flips the closure digest; an empty tree is unknown.
 fn source_tree_provenance(root: &Path, manifest: &str) -> Provenance {
     let mut files = match source_tree_files(root, manifest) {
         Ok(files) => files,
@@ -228,7 +192,6 @@ fn source_tree_provenance(root: &Path, manifest: &str) -> Provenance {
     }
 }
 
-/// Normalized manifest path plus bytes for the source-tree digest.
 fn read_manifest_bytes(root: &Path, manifest: &str) -> Result<(String, Vec<u8>), String> {
     let normalized =
         crate::identity::normalize_identity_path(manifest).map_err(|err| err.to_string())?;
@@ -236,7 +199,6 @@ fn read_manifest_bytes(root: &Path, manifest: &str) -> Result<(String, Vec<u8>),
     Ok((normalized, bytes))
 }
 
-/// Digest over sorted `(path, digest)` file pairs.
 fn files_digest(files: &[(String, String)]) -> String {
     let pairs: Vec<(&str, &str)> = files
         .iter()
@@ -245,14 +207,12 @@ fn files_digest(files: &[(String, String)]) -> String {
     canonical_digest(&pairs).unwrap_or_else(|_| digest_b3(b"files_error"))
 }
 
-/// BLAKE3 digest over canonical JSON bytes.
 fn canonical_digest<T: serde::Serialize>(value: &T) -> Result<String, ContractError> {
     Ok(digest_b3(&velnor_actions_contract::canonical_json_bytes(
         value,
     )?))
 }
 
-/// Conventional input class with kind-gated collection.
 #[derive(Clone, Copy)]
 enum Class {
     Docs,
@@ -261,7 +221,6 @@ enum Class {
 }
 
 impl Class {
-    /// Exclusion evidence when `kind` never consumes this class.
     fn excluded(self, kind: TaskKind) -> Option<&'static str> {
         match self {
             Self::Docs if !matches!(kind, TaskKind::Doc | TaskKind::Doctest) => {
@@ -277,7 +236,6 @@ impl Class {
         }
     }
 
-    /// True for paths this class collects.
     fn keep(self, path: &str) -> bool {
         match self {
             Self::Docs => {
@@ -299,7 +257,6 @@ impl Class {
     }
 }
 
-/// Class provenance: exclusion for non-consuming kinds, else cached digest or absence.
 fn class_provenance_cached(
     root: &Path,
     kind: TaskKind,

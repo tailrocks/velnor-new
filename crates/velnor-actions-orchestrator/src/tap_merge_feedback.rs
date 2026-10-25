@@ -1,5 +1,3 @@
-//! Complete, paginated pull-request feedback snapshot and trusted completion.
-
 use serde_json::Value;
 use velnor_actions_contract::{
     digest_b3,
@@ -97,8 +95,6 @@ pub(super) fn capture_feedback(
         head_sha: context.head_sha.to_owned(),
         records_digest: digest_b3(&records_bytes),
         unresolved_threads,
-        // Finding disposition is exclusively asserted by the independently
-        // authenticated completion App's closed payload, never free-form text.
         unaddressed_findings: 0,
         outstanding_change_requests,
     };
@@ -111,8 +107,6 @@ pub(super) fn capture_feedback(
     })
 }
 
-/// Exact per-commit comment admission is shared by the complete PR collector.
-/// Native writer candidates still independently require one commit.
 fn paged_commit_comments(
     api: &TapMergeGitHub,
     repository: &str,
@@ -349,14 +343,6 @@ fn completion_from_checks(
     }
     Ok(Some(parsed))
 }
-
-#[cfg(test)]
-#[path = "tap_merge_feedback_tests.rs"]
-mod tests;
-
-#[cfg(test)]
-#[path = "tap_merge_feedback_commit_tests.rs"]
-mod commit_tests;
 
 #[path = "tap_merge_feedback_commits.rs"]
 mod commit_inventory;

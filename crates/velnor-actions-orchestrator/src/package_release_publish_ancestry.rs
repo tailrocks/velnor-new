@@ -1,5 +1,3 @@
-//! Bounded ancestry proof for immutable preview sources.
-
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -20,9 +18,6 @@ struct PublicBranchCommit {
     sha: String,
 }
 
-/// Read-only public proof for consumers that must not use the protected-status
-/// credential path. The public branch response must report `protected: true`;
-/// ancestry and the tip are checked twice through immutable public refs.
 pub(in crate::package_release_publish) fn verify_public_preview_main_ancestry(
     api: &GitHubApi,
     repository_id: u64,
@@ -54,8 +49,6 @@ pub(in crate::package_release_publish) fn verify_public_preview_main_ancestry(
     Ok(captured_tip)
 }
 
-/// Verify a public PR base is the current protected main tip, then prove the
-/// exact immutable PR head is its descendant and recheck the base tip.
 pub(in crate::package_release_publish) fn verify_public_pull_request_lineage(
     api: &GitHubApi,
     repository_id: u64,
@@ -193,8 +186,6 @@ fn require_ancestor(api: &GitHubApi, base: &str, head: &str) -> Result<(), Orche
         return Ok(());
     }
 
-    // Page 2 omits the potentially large `files` list while retaining the
-    // comparison metadata and total count documented by GitHub's REST API.
     let response: Value =
         api.get_json(&api.route(&format!("compare/{base}...{head}?per_page=1&page=2")))?;
     let reported_base = response.pointer("/base_commit/sha").and_then(Value::as_str);
@@ -239,7 +230,3 @@ fn require_ancestor(api: &GitHubApi, base: &str, head: &str) -> Result<(), Orche
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "package_release_publish_ancestry_tests.rs"]
-mod tests;

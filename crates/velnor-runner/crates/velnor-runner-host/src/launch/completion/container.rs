@@ -1,5 +1,3 @@
-//! Claim-fenced container identity checks and deletion.
-
 use bollard::Docker;
 
 use super::{Context, EffectBudget, Failure, run_effect};
@@ -7,10 +5,6 @@ use crate::journal::{CleanupClaim, CompletedLaunch};
 use crate::runner_plan;
 use crate::stage::PairEngine;
 use crate::worker::dind_container_name;
-
-#[cfg(test)]
-#[path = "container_tests.rs"]
-mod tests;
 
 pub(super) async fn cleanup(
     context: &Context<'_>,

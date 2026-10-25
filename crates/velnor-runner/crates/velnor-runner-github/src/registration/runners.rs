@@ -1,18 +1,9 @@
-//! Runner lookup and removal through the pinned distributed-task API.
-
 use serde::Deserialize;
 
 use crate::paths::{RUNNER_ENDPOINT, query_escape, runner_path};
 use crate::session::{API_QUERY, bearer, execute, json_content, user_agent};
 use crate::{Method, RunnerReference, SessionError, SessionRequest, Transport, WireError};
 
-/// Find one runner by its exact name. Only a valid HTTP 200 response with
-/// `count: 0` and an empty `value` means absence.
-///
-/// # Errors
-///
-/// Returns [`SessionError::Uncertain`] on timeout or reset. Every non-200
-/// status is an error. Multiple or malformed results are rejected.
 pub fn get_runner_by_name<T>(
     transport: &mut T,
     runner_name: &str,
@@ -41,12 +32,6 @@ where
     decode_runner_page(&exchange.body, runner_name)
 }
 
-/// Remove a runner by its positive service id. HTTP 204 is the only success.
-///
-/// # Errors
-///
-/// Returns [`SessionError::Uncertain`] on timeout or reset. Every status other
-/// than 204 is an error.
 pub fn remove_runner<T>(
     transport: &mut T,
     runner_id: i64,

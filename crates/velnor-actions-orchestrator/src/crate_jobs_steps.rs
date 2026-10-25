@@ -1,16 +1,8 @@
-//! Sequential test-build barrier and independent parallel check target lanes.
-
 use super::{CrateJobInputs, build_jobs::cap_cargo_jobs};
 use crate::{OrchestratorError, internal::internal};
 use std::collections::BTreeSet;
 use velnor_actions_contract::{CrateJob, CrateObligation, Step};
 
-/// Report-wrapped obligation steps in validated order.
-///
-/// In a Rust job every obligation except the sequential producers (the
-/// Nextest build) is a member of one parallel group, when at least two
-/// exist. No member may gate on another member. Clippy and documentation
-/// members compile in their own target lane below the workspace target.
 pub(super) fn obligation_steps(
     input: &CrateJobInputs<'_>,
     model: &CrateJob,
@@ -61,8 +53,6 @@ pub(super) fn obligation_steps(
             .iter()
             .map(|later| later.task_id.clone())
             .collect();
-        // The first obligation declares the root job's concurrency cap;
-        // the renderer turns the marker into `strategy.max-parallel`.
         let cap = (index == 0 && use_opentofu).then_some(input.max_parallel_jobs);
         let mut step = crate::matrix_step::obligation_step(
             obligation,
@@ -81,7 +71,6 @@ pub(super) fn obligation_steps(
     Ok(steps)
 }
 
-/// Workspace-relative Cargo target lane directory for one concurrent check.
 fn lane_target_dir(workspace_root: &str, lane: &str) -> String {
     if workspace_root.is_empty() {
         format!("target/{lane}")
@@ -90,7 +79,6 @@ fn lane_target_dir(workspace_root: &str, lane: &str) -> String {
     }
 }
 
-/// Seed only real concurrent Cargo lanes after a declared build producer.
 fn seed_step(
     input: &CrateJobInputs<'_>,
     model: &CrateJob,

@@ -5,11 +5,6 @@ use velnor_actions_contract::config::NativeHomebrewOperation;
 
 use super::{OPERATION_ENV, execute_native_homebrew_check_to};
 
-/// Execute one plan-bound native Homebrew check and emit its ordinary reports.
-///
-/// # Errors
-/// Missing or mismatched plan/configuration, failed validation, and unsafe
-/// report paths fail closed.
 pub fn execute_native_homebrew_check_from_env() -> Result<usize, OrchestratorError> {
     let root = env::var_os("GITHUB_WORKSPACE")
         .filter(|value| !value.is_empty())

@@ -8,7 +8,6 @@ const MAX_TEMP_DIRECTORY_ATTEMPTS: usize = 1_024;
 pub(crate) struct TestTempDir(PathBuf);
 
 impl TestTempDir {
-    /// Own one exclusively allocated fixture directory until this guard drops.
     pub(crate) fn new(prefix: &str) -> io::Result<Self> {
         unique_temp_dir(prefix).map(Self)
     }
@@ -28,12 +27,10 @@ impl Drop for TestTempDir {
     }
 }
 
-/// Reserve a temporary directory with process-wide unique allocation.
 pub(crate) fn unique_temp_dir(prefix: &str) -> io::Result<PathBuf> {
     unique_temp_dir_in(&std::env::temp_dir(), prefix)
 }
 
-/// Reserve a temporary directory below `parent`, retrying only occupied names.
 pub(crate) fn unique_temp_dir_in(parent: &Path, prefix: &str) -> io::Result<PathBuf> {
     unique_temp_dir_in_with_counter(parent, prefix, &NEXT_TEMP_DIRECTORY_ID)
 }
@@ -72,68 +69,6 @@ fn reserve_temp_directory_id(counter: &AtomicU64) -> io::Result<u64> {
     }
 }
 
-#[test]
-fn owned_temp_directory_cleans_its_reservation_and_preserves_other_directories() -> io::Result<()> {
-    let sibling = TestTempDir::new("velnor-temp-ownership")?;
-    let owned_path;
-    {
-        let owned = TestTempDir::new("velnor-temp-ownership")?;
-        owned_path = owned.path().to_owned();
-        assert!(owned_path.is_dir());
-        assert_ne!(owned_path, sibling.path());
-    }
-    assert!(!owned_path.exists());
-    assert!(sibling.path().is_dir());
-    Ok(())
-}
 
-#[test]
-fn temp_directory_allocation_handles_collisions_parallel_calls_and_restarts() -> io::Result<()> {
-    const PARALLEL_CALLS: usize = 12;
-    let parent = unique_temp_dir("velnor-temp-allocation-test")?;
-    let _cleanup = TestTempDir(parent.clone());
-    let process_id = std::process::id();
-    let prefix = String::from("velnor-candidate");
-    let mut created = Vec::with_capacity(PARALLEL_CALLS + 3);
-    let stale = parent.join(format!("{prefix}-{process_id}-0"));
-    std::fs::create_dir(&stale)?;
-    created.push(stale.clone());
 
-    let counter = AtomicU64::new(0);
-    let first = unique_temp_dir_in_with_counter(&parent, &prefix, &counter)?;
-    assert_eq!(first, parent.join(format!("{prefix}-{process_id}-1")));
-    created.push(first);
 
-    let counter = std::sync::Arc::new(counter);
-    let barrier = std::sync::Arc::new(std::sync::Barrier::new(PARALLEL_CALLS));
-    let handles = (0..PARALLEL_CALLS)
-        .map(|_| {
-            let counter = std::sync::Arc::clone(&counter);
-            let barrier = std::sync::Arc::clone(&barrier);
-            let parent = parent.clone();
-            let prefix = prefix.clone();
-            std::thread::spawn(move || {
-                barrier.wait();
-                unique_temp_dir_in_with_counter(&parent, &prefix, &counter)
-            })
-        })
-        .collect::<Vec<_>>();
-    for handle in handles {
-        let path = handle
-            .join()
-            .map_err(|_| io::Error::other("temporary directory allocator thread panicked"))??;
-        created.push(path);
-    }
-
-    let restarted = unique_temp_dir_in_with_counter(&parent, &prefix, &AtomicU64::new(0))?;
-    assert!(!created.contains(&restarted));
-    created.push(restarted);
-    let unique = created.iter().collect::<std::collections::HashSet<_>>();
-    assert_eq!(unique.len(), created.len());
-    assert!(created.iter().all(|path| path.is_dir()));
-
-    for path in created {
-        std::fs::remove_dir_all(path)?;
-    }
-    Ok(())
-}

@@ -1,9 +1,3 @@
-//! Stack-neutral discovery: file index plus detection records.
-//!
-//! One bounded repository file index feeds every detector; detection
-//! records, selection, and the detector registry contract live here.
-//! Marker recognition and unit interpretation stay in stack adapters.
-
 mod cache_admission;
 mod glob;
 mod index;

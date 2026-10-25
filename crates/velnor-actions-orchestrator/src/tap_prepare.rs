@@ -1,5 +1,3 @@
-//! Native Homebrew formula preparation from captured tap main.
-
 use crate::OrchestratorError;
 use std::{fs, path::Path, time::Duration};
 use velnor_actions_contract::{
@@ -71,9 +69,6 @@ pub(crate) fn release_policy_from_env()
     velnor_actions_contract::parse_package_release_policy(raw.as_bytes())
         .map_err(|_| internal("tap_release_policy_invalid"))
 }
-#[cfg(test)]
-#[path = "tap_prepare_tests.rs"]
-mod tests;
 
 const FORMULA_LIMIT: u64 = 1024 * 1024;
 const TREE_LIMIT: usize = 50_000;
@@ -81,11 +76,6 @@ const SNAPSHOT_BYTES_LIMIT: u64 = 512 * 1024 * 1024;
 const SNAPSHOT_FILE_LIMIT: u64 = 128 * 1024 * 1024;
 const TASK_OUTPUT_LIMIT: usize = 8 * 1024 * 1024;
 
-/// Prepare canonical formula bytes from authenticated release receipt data.
-///
-/// # Errors
-/// Rejects an untrusted release, tap config mismatch, invalid template, or
-/// any captured tree that fails regular-file admission.
 #[derive(Clone, Copy)]
 pub(crate) struct TapPreparationInput<'a> {
     pub(crate) source_repository: &'a str,

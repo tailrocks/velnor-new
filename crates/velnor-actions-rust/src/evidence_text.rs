@@ -1,11 +1,3 @@
-//! Line-local text evidence scanning for settings and invocations.
-//!
-//! Covers the `mr_boxington` tool setting, `rustc-wrapper` Cargo config,
-//! and driver/runner command mentions in tasks, scripts, and workflows.
-//! Structurally resolved inputs (Mise wrappers, Nextest config) build
-//! sightings in [`crate::evidence`] instead; this module never guesses
-//! structure beyond one comment-stripped line.
-
 use crate::evidence::{
     Evidence, EvidenceFile, EvidenceStrength, is_generated_output, strength_for,
 };
@@ -13,7 +5,6 @@ use crate::scan::{
     has_adjacent, has_command, has_setting, line_no, snippet, starts_with_word, strip_comment,
 };
 
-/// Scan tool-config content for the Rust `mr_boxington` setting.
 pub(crate) fn scan_tool_config(file: &EvidenceFile<'_>) -> Vec<Evidence> {
     if is_generated_output(file.content) {
         return Vec::new();
@@ -29,12 +20,6 @@ pub(crate) fn scan_tool_config(file: &EvidenceFile<'_>) -> Vec<Evidence> {
     out
 }
 
-/// Whether tool-config bytes select the MBX cargo wrapper line-locally.
-///
-/// One question, one owner: this is the exact predicate
-/// `scan_tool_config` turns into driver evidence, so a reader that
-/// cannot parse the file as TOML (and the P06 detector reading the same
-/// bytes) can never disagree about whether the wrapper is selected.
 #[must_use]
 pub fn tool_config_selects_mbx(content: &str) -> bool {
     if is_generated_output(content) {
@@ -46,7 +31,6 @@ pub fn tool_config_selects_mbx(content: &str) -> bool {
         .any(|code| has_setting(code, "mr_boxington", "true"))
 }
 
-/// Scan Cargo config content for `rustc-wrapper` naming MBX.
 pub(crate) fn scan_cargo_config(file: &EvidenceFile<'_>) -> Vec<Evidence> {
     if is_generated_output(file.content) {
         return Vec::new();
@@ -72,11 +56,6 @@ fn mentions_mbx(code: &str) -> bool {
     has_command(code, "mbx") || code.contains("boxington")
 }
 
-/// Scan task, script, or workflow text for driver and runner invocations.
-///
-/// Callers pass [`EvidenceStrength::Durable`] for executable tasks and
-/// scripts, [`EvidenceStrength::Transient`] for hand-written workflows;
-/// `.github`-rooted files are transient either way.
 pub(crate) fn scan_command_text(
     file: &EvidenceFile<'_>,
     base: EvidenceStrength,

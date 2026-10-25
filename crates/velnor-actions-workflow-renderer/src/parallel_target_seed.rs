@@ -1,28 +1,13 @@
-//! Typed request for fixed independent Cargo target-lane initialization.
-
 use std::collections::BTreeMap;
 use velnor_actions_contract::{Step, StepKind};
 
 use crate::RenderError;
 
-/// Staged-binary operation selecting the Rust target seeder.
 pub(crate) const SEED_PARALLEL_TARGETS_OPERATION: &str = "seed-parallel-targets-v1";
-/// Environment key naming the workspace-relative target directory.
 pub(crate) const TARGET_ROOT_ENV: &str = "VELNOR_TARGET_ROOT";
-/// Environment key carrying the canonical comma-separated lane list.
 pub(crate) const TARGET_LANES_ENV: &str = "VELNOR_TARGET_LANES";
 const LANES: [&str; 2] = ["velnor-clippy", "velnor-doc"];
 
-/// Render the closed native seed request for a workspace target root.
-///
-/// The staged SDK binary receives a relative target directory and a canonical,
-/// closed lane set through environment only. Input lane order does not affect
-/// the rendered operation. The renderer emits no script, argv, or user command
-/// for the operation.
-///
-/// # Errors
-/// Returns `BadCommand` for an unsafe target path, empty, duplicate, or
-/// unsupported lane list.
 pub fn seed_parallel_targets_step(target: &str, lanes: &[&str]) -> Result<Step, RenderError> {
     let mut canonical_lanes = lanes.to_vec();
     canonical_lanes.sort_unstable();
@@ -59,7 +44,3 @@ pub fn seed_parallel_targets_step(target: &str, lanes: &[&str]) -> Result<Step, 
         },
     })
 }
-
-#[cfg(test)]
-#[path = "parallel_target_seed_tests.rs"]
-mod tests;

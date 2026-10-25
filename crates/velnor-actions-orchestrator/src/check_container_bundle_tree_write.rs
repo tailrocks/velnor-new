@@ -1,5 +1,3 @@
-//! Deadline-aware creation of the admitted immutable SDK tree.
-
 use super::{Entry, Kind};
 use crate::OrchestratorError;
 use crate::internal::internal;
@@ -8,14 +6,6 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use velnor_actions_mise::CheckDeadline;
-
-#[cfg(test)]
-pub(in crate::check_runtime::preparation::container::bundle) fn populate(
-    destination: &Path,
-    entries: &[Entry],
-) -> Result<(), OrchestratorError> {
-    populate_until(destination, entries, None)
-}
 
 pub(in crate::check_runtime::preparation::container::bundle) fn populate_until(
     destination: &Path,

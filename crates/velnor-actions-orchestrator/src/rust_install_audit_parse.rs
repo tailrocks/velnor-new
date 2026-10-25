@@ -32,7 +32,6 @@ use mappings::{StepTopFields, step_top_fields};
 mod anchors;
 use anchors::duplicate_anchor_names as find_duplicate_anchor_names;
 
-/// One step: its name and full text.
 #[derive(Clone)]
 pub(super) struct StepText {
     pub(super) name: String,
@@ -45,8 +44,6 @@ pub(super) struct StepText {
     pub(super) run_scalar: Option<String>,
 }
 
-/// Every `steps:` sequence of a rendered file with its owning job (or
-/// `runs` for a composite action), as step texts in order.
 pub(super) fn step_lists(text: &str) -> Vec<(String, Vec<StepText>)> {
     let lines: Vec<&str> = text.lines().collect();
     let duplicate_anchors = find_duplicate_anchor_names(text);
@@ -116,7 +113,6 @@ pub(super) fn duplicate_anchor_names(text: &str) -> BTreeSet<String> {
     find_duplicate_anchor_names(text)
 }
 
-/// One step block; `- &sN` records an anchor and `- *sN` resolves one.
 fn step_text(
     block: &[&str],
     anchors: &mut BTreeMap<String, Option<StepText>>,

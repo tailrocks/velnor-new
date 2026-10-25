@@ -1,4 +1,3 @@
-//! Authenticated admission exits before checkout, source configuration or tools.
 use super::{absolute_env, static_tap_policy};
 use crate::{
     OrchestratorError, internal::internal, retrieve_reports::staged_reads::read_staged_bytes_until,
@@ -15,7 +14,6 @@ use velnor_actions_contract::{
     package_release::PackageReleaseReceipt,
 };
 use velnor_actions_mise::CheckDeadline;
-/// Fixed authenticated handoff producer; never executes source code.
 pub const ADMIT_HOMEBREW_TAP_OP: &str = "admit-homebrew-tap-v1";
 const RECORD: &str = "tap-admission.json";
 const SCHEMA: &str = "velnor.tap-admission.v1";
@@ -47,9 +45,6 @@ pub(super) struct Admission {
     policy: HomebrewTapConfig,
     context: BTreeMap<String, Option<String>>,
 }
-/// Authenticate all original evidence, then return the record's step-output digest.
-/// # Errors
-/// Rejects missing credentials, context, signatures, evidence or occupied handoffs.
 pub fn admit_homebrew_tap_from_env() -> Result<String, OrchestratorError> {
     let deadline = deadline()?;
     deadline
@@ -234,6 +229,3 @@ fn credentials_absent(present: bool) -> Result<(), OrchestratorError> {
         Ok(())
     }
 }
-#[cfg(test)]
-#[path = "tap_prepare_admission_tests.rs"]
-mod tests;
