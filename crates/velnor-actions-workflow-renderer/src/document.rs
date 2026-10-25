@@ -7,10 +7,10 @@ use std::collections::{BTreeMap, BTreeSet};
 mod job_options;
 #[path = "document_job_workflow_entry.rs"]
 mod job_workflow_entry;
-#[cfg(feature = "test-render-capture")]
-pub(crate) use job_workflow_entry::render_job_workflow_relocations_for_capture;
 #[cfg(test)]
 pub(crate) use job_workflow_entry::render_job_workflow_relocations;
+#[cfg(feature = "test-render-capture")]
+pub(crate) use job_workflow_entry::render_job_workflow_relocations_for_capture;
 pub(crate) use job_workflow_entry::render_job_workflow_relocations_with_routing;
 #[path = "document/job_workflow.rs"]
 mod job_workflow;

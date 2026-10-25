@@ -5,11 +5,11 @@ use super::{RenderError, invalid};
 
 #[derive(Clone, Debug)]
 pub(crate) struct CaptureRunnerMetadata {
-    #[cfg(any(test, feature = "test-render-capture"))]
+    #[cfg(feature = "test-render-capture")]
     pub(crate) runner_class: &'static str,
-    #[cfg(any(test, feature = "test-render-capture"))]
+    #[cfg(feature = "test-render-capture")]
     pub(crate) configured_runner: String,
-    #[cfg(any(test, feature = "test-render-capture"))]
+    #[cfg(feature = "test-render-capture")]
     pub(crate) final_runner_labels: Vec<String>,
 }
 
@@ -33,25 +33,25 @@ pub(crate) fn capture_runner_metadata(
             return Err(invalid(source_id, "hosted_lane_is_not_linux_x64"));
         }
         Ok(CaptureRunnerMetadata {
-            #[cfg(any(test, feature = "test-render-capture"))]
+            #[cfg(feature = "test-render-capture")]
             runner_class: "hosted-linux-x64",
-            #[cfg(any(test, feature = "test-render-capture"))]
+            #[cfg(feature = "test-render-capture")]
             configured_runner: source.runs_on.clone(),
-            #[cfg(any(test, feature = "test-render-capture"))]
+            #[cfg(feature = "test-render-capture")]
             final_runner_labels: vec![label],
         })
     } else if source_id.ends_with(SCALE_SUFFIX) {
         let RunsOn::ScaleSet(selector) = runner else {
             return Err(invalid(source_id, "scale_lane_is_not_configured_scale_set"));
         };
-        #[cfg(not(any(test, feature = "test-render-capture")))]
-        let _ = selector.labels();
+        #[cfg(not(feature = "test-render-capture"))]
+        let _labels = selector.labels();
         Ok(CaptureRunnerMetadata {
-            #[cfg(any(test, feature = "test-render-capture"))]
+            #[cfg(feature = "test-render-capture")]
             runner_class: "configured-scale-set-linux-x64",
-            #[cfg(any(test, feature = "test-render-capture"))]
+            #[cfg(feature = "test-render-capture")]
             configured_runner: source.runs_on.clone(),
-            #[cfg(any(test, feature = "test-render-capture"))]
+            #[cfg(feature = "test-render-capture")]
             final_runner_labels: selector.labels().to_vec(),
         })
     } else {

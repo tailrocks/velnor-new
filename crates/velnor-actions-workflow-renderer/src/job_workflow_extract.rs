@@ -16,7 +16,7 @@ pub(crate) use expression::caller_condition_for_selection;
 use expression::{rewrite_condition, rewrite_expressions};
 #[cfg(any(test, feature = "test-render-capture"))]
 pub(crate) use expression::{test_condition_has_unbound_needs, test_expression_has_unbound_needs};
-#[cfg(any(test, feature = "test-render-capture"))]
+#[cfg(feature = "test-render-capture")]
 pub(crate) use runner::{CaptureRunnerMetadata, capture_runner_metadata};
 pub(crate) use selection::{JobWorkflowSelection, pair_is_relocatable};
 use velnor_actions_contract::{CacheMode, HostContainerProfile, Job, Step, StepKind};
