@@ -71,7 +71,7 @@ pub(super) fn render(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderErr
                 "build-images",
                 "Build runner images",
                 hosted.clone(),
-                JobTimeout::PRODUCT_COMPILER,
+                JobTimeout::PRODUCT_IMAGE_BUILD,
                 build_steps,
                 "Upload image assets",
                 &files,

@@ -107,16 +107,30 @@ fn production_host_build_uses_pinned_mbx_for_only_the_nested_host_binary() {
     let catalog = ToolCatalog::pinned();
     let rust = format!("rust@{}", catalog.version(PinnedTool::Rust));
     let mbx = format!("mr-boxington@{}", catalog.version(PinnedTool::MrBoxington));
+    let nextest = catalog.tool_spec(PinnedTool::Nextest);
+    assert_runner_build_argv(&pins.runner_build_argv, &rust, &mbx);
+    assert_probe_build_argv(&pins.resource_probe_build_argv, &rust, &mbx);
+    assert_release_probe_build_argv(
+        &pins.resource_probe_release_build_argv,
+        &rust,
+        &mbx,
+        &nextest,
+    );
+    assert!(pins.install_build_tools_argv.contains(&mbx));
+    assert!(!pins.install_runner_build_tools_argv.contains(&mbx));
+}
+
+fn assert_runner_build_argv(argv: &[String], rust: &str, mbx: &str) {
     assert_eq!(
-        strings(&pins.runner_build_argv),
+        strings(argv),
         [
             "mise",
             "--no-config",
             "--no-env",
             "--no-hooks",
             "exec",
-            rust.as_str(),
-            mbx.as_str(),
+            rust,
+            mbx,
             "--",
             "mbx",
             "build",
@@ -130,18 +144,19 @@ fn production_host_build_uses_pinned_mbx_for_only_the_nested_host_binary() {
             "velnor-host",
         ]
     );
-    assert!(pins.install_build_tools_argv.contains(&mbx));
-    assert!(!pins.install_runner_build_tools_argv.contains(&mbx));
+}
+
+fn assert_probe_build_argv(argv: &[String], rust: &str, mbx: &str) {
     assert_eq!(
-        strings(&pins.resource_probe_build_argv),
+        strings(argv),
         [
             "mise",
             "--no-config",
             "--no-env",
             "--no-hooks",
             "exec",
-            rust.as_str(),
-            mbx.as_str(),
+            rust,
+            mbx,
             "--",
             "mbx",
             "build",
@@ -191,6 +206,34 @@ fn production_attestation_helper_build_uses_the_same_pinned_mbx_inputs() {
             "velnor-runner-attestation",
             "--bin",
             "velnor-runner-attestation-helper",
+        ]
+    );
+}
+
+fn assert_release_probe_build_argv(argv: &[String], rust: &str, mbx: &str, nextest: &str) {
+    assert_eq!(
+        strings(argv),
+        [
+            "mise",
+            "--no-config",
+            "--no-env",
+            "--no-hooks",
+            "exec",
+            rust,
+            mbx,
+            nextest,
+            "--",
+            "mbx",
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/velnor-runner/Cargo.toml",
+            "--package",
+            "velnor-runner-host",
+            "--bin",
+            "velnor-resource-probe-release",
+            "--target",
+            "x86_64-unknown-linux-gnu",
         ]
     );
 }

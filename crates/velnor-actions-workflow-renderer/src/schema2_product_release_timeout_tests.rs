@@ -8,8 +8,7 @@ use crate::yaml::Yaml;
 use super::product;
 
 #[test]
-fn compiler_and_homebrew_qualification_jobs_get_their_bounded_budgets() -> Result<(), Box<dyn Error>>
-{
+fn compiler_image_and_homebrew_jobs_get_their_bounded_budgets() -> Result<(), Box<dyn Error>> {
     let product = product(&[
         RoutingWorkflow::ImageRelease,
         RoutingWorkflow::MacosBinaryRelease,
@@ -24,7 +23,6 @@ fn compiler_and_homebrew_qualification_jobs_get_their_bounded_budgets() -> Resul
     );
     let observed = audit_workflows(&workflows).expect("generated timeout contract");
     let compiler_jobs = BTreeSet::from([
-        "build-images".to_owned(),
         "build-linux".to_owned(),
         "build-macos".to_owned(),
         "build-macos-intel".to_owned(),
@@ -41,14 +39,19 @@ fn compiler_and_homebrew_qualification_jobs_get_their_bounded_budgets() -> Resul
             .iter()
             .filter(|(job, _)| compiler_jobs.contains(job))
             .count(),
-        5,
-        "exactly five compiler jobs must receive the larger budget"
+        4,
+        "four compiler jobs must receive the ten-minute budget"
+    );
+    assert_eq!(
+        observed.iter().find(|(job, _)| job == "build-images"),
+        Some(&("build-images".to_owned(), 30)),
+        "the dedicated image budget applies only to build-images"
     );
     for (job, timeout) in observed {
-        let expected = if compiler_jobs.contains(&job) {
-            10
-        } else if job == "qualify-homebrew-macos" {
+        let expected = if job == "build-images" || job == "qualify-homebrew-macos" {
             30
+        } else if compiler_jobs.contains(&job) {
+            10
         } else {
             5
         };

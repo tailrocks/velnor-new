@@ -297,7 +297,6 @@ fn native_resource_probe_argv(catalog: &ToolCatalog, tests: bool) -> Vec<String>
             "velnor-runner-host",
             "--bin",
             "velnor-resource-probe-release",
-            "--release",
             "--target",
             "x86_64-unknown-linux-gnu",
         ]

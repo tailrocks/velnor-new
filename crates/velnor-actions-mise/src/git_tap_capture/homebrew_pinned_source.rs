@@ -17,6 +17,15 @@ const TAG_COMMIT: &str = "8f10429b56be28a25032b87463fffc95e556b5bc";
 const SOURCE_TREE: &str = "e8a495cf3247a4af10093b5460e074d27d47999f";
 const SOURCE_DESCRIBE: &str = "7.0.10-84-g7a056ff";
 const SOURCE_DISTANCE: &str = "84";
+const SOURCE_DESCRIBE_ARGS: [&str; 7] = [
+    "describe",
+    "--tags",
+    "--match",
+    "7.0.10",
+    "--long",
+    "--abbrev=7",
+    "HEAD",
+];
 const COMMAND_LIMIT: Duration = Duration::from_secs(120);
 const OUTPUT_LIMIT: usize = 128 * 1024;
 const GIT: &str = "/usr/bin/git";
@@ -170,11 +179,7 @@ fn verify_materialized_source(
         deadline,
     )?;
     let tree = value(staging, ["rev-parse", "--verify", "HEAD^{tree}"], deadline)?;
-    let describe = value(
-        staging,
-        ["describe", "--tags", "--match", "7.0.10", "--long", "HEAD"],
-        deadline,
-    )?;
+    let describe = value(staging, SOURCE_DESCRIBE_ARGS, deadline)?;
     let distance = value(
         staging,
         [
@@ -342,6 +347,15 @@ mod tests {
         assert_eq!(TAG_COMMIT.len(), 40);
         assert_eq!(SOURCE_TREE.len(), 40);
         assert_eq!(SOURCE_DESCRIBE, "7.0.10-84-g7a056ff");
+        assert!(SOURCE_DESCRIBE_ARGS.contains(&"--abbrev=7"));
+        let (_, hash) = SOURCE_DESCRIBE
+            .rsplit_once("-g")
+            .expect("pinned describe result has a git hash suffix");
+        assert_eq!(
+            hash.len(),
+            7,
+            "Homebrew source policy uses seven hash chars"
+        );
         assert_eq!(SOURCE_DISTANCE, "84");
         assert_ne!(SOURCE_COMMIT, TAG_COMMIT);
         assert_eq!(GIT, "/usr/bin/git");

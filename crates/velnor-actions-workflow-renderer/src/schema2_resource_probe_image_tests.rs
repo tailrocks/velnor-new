@@ -11,10 +11,24 @@ use crate::yaml::{Yaml, render_yaml};
 const IMAGE_BUILD_SCRIPT: &str =
     include_str!("../../../images/resource-probe/build-runner-images.sh");
 const PROBE_BUILD_SCRIPT: &str = include_str!("../../../images/resource-probe/build-image.sh");
+const EXPECTED_ASSETS: [&str; 5] = [
+    "velnor-runner-linux-amd64.tar",
+    "velnor-dind-linux-amd64.tar",
+    "velnor-resource-probe-linux-amd64.tar",
+    "RESOURCE_PROBE_MANIFEST.json",
+    "SHA256SUMS",
+];
 
 #[test]
 fn image_family_uses_pinned_musl_build_and_exact_five_file_inventory() -> Result<(), Box<dyn Error>>
 {
+    assert_resource_probe_build_steps()?;
+    assert_image_asset_inventory()?;
+    assert_rendered_image_workflow()?;
+    Ok(())
+}
+
+fn assert_resource_probe_build_steps() -> Result<(), Box<dyn Error>> {
     let pins = test_pins();
     let steps = resource_probe_image::build_steps(&pins)?;
     let step_text = render_yaml(&Yaml::Seq(steps));
@@ -30,7 +44,8 @@ fn image_family_uses_pinned_musl_build_and_exact_five_file_inventory() -> Result
         "Qualify native resource-probe producer and shared archive fixtures",
         "mbx nextest run --locked --manifest-path crates/velnor-runner/Cargo.toml",
         "--package velnor-runner-host --lib --target x86_64-unknown-linux-gnu",
-        "--bin velnor-resource-probe-release --release --target x86_64-unknown-linux-gnu",
+        "--bin velnor-resource-probe-release --target x86_64-unknown-linux-gnu",
+        "producer_target/x86_64-unknown-linux-gnu/debug/velnor-resource-probe-release",
         "VELNOR_RESOURCE_PROBE_RELEASE_BIN",
     ] {
         assert!(
@@ -38,26 +53,31 @@ fn image_family_uses_pinned_musl_build_and_exact_five_file_inventory() -> Result
             "missing {expected}: {step_text}"
         );
     }
+    assert!(
+        !step_text.contains(
+            "--bin velnor-resource-probe-release --release --target x86_64-unknown-linux-gnu"
+        ),
+        "internal GNU validator must use its debug profile"
+    );
+    Ok(())
+}
 
-    let expected_assets = [
-        "velnor-runner-linux-amd64.tar",
-        "velnor-dind-linux-amd64.tar",
-        "velnor-resource-probe-linux-amd64.tar",
-        "RESOURCE_PROBE_MANIFEST.json",
-        "SHA256SUMS",
-    ];
+fn assert_image_asset_inventory() -> Result<(), Box<dyn Error>> {
     let pins = test_pins();
     let prepare = product_release_family::prepare_script(Family::Images, &pins)?;
     let publish = product_release_family::publish_script(Family::Images, &pins)?;
-    for asset in expected_assets {
+    for asset in EXPECTED_ASSETS {
         assert!(prepare.contains(asset), "prepare omits {asset}");
         assert!(publish.contains(asset), "publish omits {asset}");
     }
     assert_eq!(
         product_release_family::Family::Images.asset_names(),
-        expected_assets.map(str::to_owned)
+        EXPECTED_ASSETS.map(str::to_owned)
     );
+    Ok(())
+}
 
+fn assert_rendered_image_workflow() -> Result<(), Box<dyn Error>> {
     let scale_set = Schema2WorkflowRequest::canonical_scale_set()?;
     let request = Schema2WorkflowRequest {
         version: "2.0.0".to_owned(),
@@ -76,7 +96,7 @@ fn image_family_uses_pinned_musl_build_and_exact_five_file_inventory() -> Result
         .find(|(path, _)| path == Family::Images.workflow_path())
         .ok_or("image family workflow is missing")?;
     let rendered = render_yaml(&workflow.1);
-    for asset in expected_assets {
+    for asset in EXPECTED_ASSETS {
         assert!(rendered.contains(asset), "image workflow omits {asset}");
     }
     assert_image_save_preserves_validated_probe(&rendered);
@@ -95,7 +115,7 @@ fn image_family_uses_pinned_musl_build_and_exact_five_file_inventory() -> Result
         .lines()
         .map(|line| line.strip_prefix("assets/").unwrap_or("invalid"))
         .collect::<Vec<_>>();
-    assert_eq!(attested_assets, expected_assets.to_vec());
+    assert_eq!(attested_assets, EXPECTED_ASSETS.to_vec());
     Ok(())
 }
 

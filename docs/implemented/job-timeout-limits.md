@@ -2,7 +2,8 @@
 
 Every concrete generated GitHub Actions job has an explicit literal timeout of
 one through 360 minutes. Five is the general default. Official product compiler
-jobs have an explicit ten-minute budget. 360 is
+jobs have an explicit ten-minute budget. The runner-image build job has its own
+thirty-minute budget. 360 is
 GitHub's per-job execution limit on hosted runners
 ([Actions limits](https://docs.github.com/en/actions/reference/limits)).
 Configuration that requests zero or more than 360 is rejected for general crate
@@ -45,13 +46,14 @@ protected-push-only and outside Required, and cancelled or partial producers
 still cannot save. Native publication still requires a successful exact-source
 CI run.
 
-The three official generator compiler jobs (Linux, macOS ARM64, and macOS Intel),
-the official `velnor-host` binary compiler job, and the runner-image `build-images`
-job use ten minutes. This bound covers checkout, tool setup, compilation, artifact
-upload, and job cleanup. Eligibility, ordinary candidate qualification, signing,
-manifest, and publication jobs retain five minutes. Historical Homebrew A/D
-qualification retains its separate thirty-minute bound; configurable consumer
-budgets are unchanged.
+The three official generator compiler jobs (Linux, macOS ARM64, and macOS Intel)
+and the official `velnor-host` binary compiler job use ten minutes. The runner-image
+`build-images` job uses its dedicated thirty-minute bound for tool setup,
+two Docker builds, the source-bound resource-probe build and tests, artifact upload,
+and job cleanup. Eligibility, ordinary candidate qualification, signing, manifest,
+and publication jobs retain five minutes. Historical Homebrew A/D qualification
+retains its separate thirty-minute bound; configurable consumer budgets are
+unchanged.
 In [run 39471133008](https://github.com/tailrocks/velnor-new/actions/runs/39471133008),
 macOS ARM64 compilation finished successfully in 4 minutes 35 seconds and its
 artifact uploaded, but the complete job exceeded five minutes during cleanup.
@@ -64,9 +66,14 @@ In [run 40159263908](https://github.com/tailrocks/velnor-new/actions/runs/401592
 both runner-image Docker builds and the resource-probe tests succeeded, but the
 locked resource-probe producer build reached the five-minute job limit. Check
 run `121068068300` explicitly reports that maximum execution time was exceeded.
-The image build now shares the bounded product compiler allowance. Its signing
-and publication descendants retain their existing budgets and authority checks.
-Ten minutes is completion headroom, not hosted completion proof; the complete
+The next [run 40171356786](https://github.com/tailrocks/velnor-new/actions/runs/40171356786)
+used the ten-minute compiler budget. Its `build-images` job spent 3 minutes 29
+seconds on both Docker builds, then installed and qualified the native producer.
+The producer build started 6 minutes 20 seconds into the job and was still running
+when check `121103166333` reported that the ten-minute execution limit was exceeded.
+The dedicated thirty-minute image allowance responds to both measured timeouts;
+thirty-minute hosted completion remains unmeasured. Signing and publication
+descendants retain their existing budgets and authority checks, and the complete
 producer run must still succeed before its SDK release can be adopted.
 
 ```toml

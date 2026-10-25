@@ -47,6 +47,8 @@ impl JobTimeout {
     pub const PUBLISH: Self = Self::DEFAULT;
     /// Native product compiler jobs need a bounded cold-build allowance.
     pub const PRODUCT_COMPILER: Self = Self(10);
+    /// The runner-image release job includes two Docker builds and a source-bound image build.
+    pub const PRODUCT_IMAGE_BUILD: Self = Self(30);
 
     /// Validate minutes without narrowing wider configuration fields.
     #[must_use]
@@ -170,6 +172,13 @@ mod tests {
         assert_eq!(JobTimeout::DEFAULT.minutes(), 5);
         assert_eq!(JobTimeout::DEFAULT_MINUTES, 5);
         assert_eq!(JobTimeout::MAX_MINUTES, 360);
+    }
+
+    #[test]
+    fn product_image_budget_is_distinct_from_compiler_budget() {
+        assert_eq!(JobTimeout::PRODUCT_COMPILER.minutes(), 10);
+        assert_eq!(JobTimeout::PRODUCT_IMAGE_BUILD.minutes(), 30);
+        assert!(JobTimeout::PRODUCT_IMAGE_BUILD.validate().is_ok());
     }
 
     #[test]

@@ -108,9 +108,6 @@ fn assert_job_budget(workflow: &str, id: &str, fields: &[&str]) {
     let compiler = matches!(
         (workflow, id),
         (
-            ".github/workflows/product-release-images.yml",
-            "build-images"
-        ) | (
             ".github/workflows/product-release-binary.yml",
             "build-binary"
         ) | (
@@ -128,9 +125,16 @@ fn assert_job_budget(workflow: &str, id: &str, fields: &[&str]) {
             "paired-sdk-build" | "paired-sdk-tls"
         )
     );
+    let extended_budget = matches!(
+        (workflow, id),
+        (
+            ".github/workflows/product-release-images.yml",
+            "build-images"
+        )
+    ) || id == "qualify-homebrew-macos";
     let expected = if compiler {
         10
-    } else if paired_sdk || id == "qualify-homebrew-macos" {
+    } else if paired_sdk || extended_budget {
         30
     } else {
         5
