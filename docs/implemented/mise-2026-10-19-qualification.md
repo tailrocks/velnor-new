@@ -26,9 +26,12 @@ Linux ARM64 executable is recorded for source-build bootstrap only; it is
 not added as a hosted check platform.
 
 On 2026-10-26, the qualified macOS ARM64 binary passed the local `mise
---version` and `mise config get` checks. Linux and Intel macOS runtime
-qualification remains a hosted requirement; asset authentication alone does
-not claim those runtimes passed.
+--version` and `mise config get` checks. Hosted qualification
+[40235179783](https://github.com/tailrocks/velnor-new/actions/runs/40235179783)
+passed at source `51647beaa022513bf41976f6b068b1ec4a033126`. Linux x64 job
+`121295108359` and macOS x64 job `121295108257` each checked out that source,
+ran Mise 2026.10.19, and verified the executable against the platform digest
+above. This proves the `mise-pin` mode; other qualification modes were skipped.
 
 ## Integrated repository verification
 
@@ -50,4 +53,17 @@ rejected invalid nested Rust, and preserved the staged tree
 for its temporary copy of the repository Mise configuration and offline
 controls; it does not use fake Cargo or guard tools.
 
-Hosted Linux and Intel macOS runtime qualification remains pending.
+Comparison with the concurrent Jackin hook work identified a separate admission
+regression: native HK discovers manifests with an existence check, while the
+former adapter rejected symlink manifests and physical paths outside the
+repository before running tools. The Cargo builtins now share a small admission
+prefix that preserves this boundary without dispatching Cargo operations or
+rejecting successful formatter writes. The same real-HK fixture accepts a
+symlink manifest without this prefix
+(`/tmp/pr391-native-hk-admission-red-physical.log`) and rejects it explicitly
+with the prefix (`/tmp/pr391-native-hk-admission-green-physical.log`). Both
+workspace sources and the staged tree remain unchanged during the rejection.
+This is manifest admission, not a sandbox for trusted executable HK config.
+
+Hosted Linux and Intel macOS runtime qualification passed for the source
+identified above. Later source revisions require their own qualification run.

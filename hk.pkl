@@ -14,53 +14,39 @@ steps {
     exclude = fixtureTrees
     workspace_indicator = "Cargo.toml"
     dir = "{{workspace}}"
-    prefix = List("rust-build-guard", "--", "mise", "exec", "--")
+    prefix = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-workspace-admission\" \"$(pwd -P)/Cargo.toml\" -- mise exec --"
     check = (Builtins.cargo_fmt.check as Config.CommandSpec) {
-      command = new Config.Command {
-        argv = List("cargo", "fmt", "--all", "--check")
-      }
+      command = "cargo fmt --all --check"
     }
     check_list_files = (Builtins.cargo_fmt.check_list_files as Config.CommandSpec) {
-      command = new Config.Command {
-        argv = List("cargo", "fmt", "--all", "--check", "--", "--files-with-diff")
-      }
+      command = "cargo fmt --all --check -- --files-with-diff"
     }
     fix = (Builtins.cargo_fmt.fix as Config.CommandSpec) {
-      command = new Config.Command {
-        argv = List("cargo", "fmt", "--all")
-      }
+      command = "cargo fmt --all"
     }
   }
   ["cargo_check"] = (Builtins.cargo_check) {
     exclude = fixtureTrees
     workspace_indicator = "Cargo.toml"
     dir = "{{workspace}}"
-    prefix = List("rust-build-guard", "--", "mise", "exec", "--")
+    prefix = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-workspace-admission\" \"$(pwd -P)/Cargo.toml\" -- mise exec --"
     check = (Builtins.cargo_check.check as Config.CommandSpec) {
-      command = new Config.Command {
-        argv = List("cargo", "check", "--locked", "--quiet")
-      }
+      command = "cargo check --locked --quiet"
     }
     fix = (Builtins.cargo_check.fix as Config.CommandSpec) {
-      command = new Config.Command {
-        argv = List("cargo", "fix", "--locked", "--allow-dirty", "--allow-staged", "--quiet")
-      }
+      command = "cargo fix --locked --allow-dirty --allow-staged --quiet"
     }
   }
   ["cargo_clippy"] = (Builtins.cargo_clippy) {
     exclude = fixtureTrees
     workspace_indicator = "Cargo.toml"
     dir = "{{workspace}}"
-    prefix = List("rust-build-guard", "--", "mise", "exec", "--")
+    prefix = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-workspace-admission\" \"$(pwd -P)/Cargo.toml\" -- mise exec --"
     check = (Builtins.cargo_clippy.check as Config.CommandSpec) {
-      command = new Config.Command {
-        argv = List("cargo", "clippy", "--locked", "--quiet")
-      }
+      command = "cargo clippy --locked --quiet"
     }
     fix = (Builtins.cargo_clippy.fix as Config.CommandSpec) {
-      command = new Config.Command {
-        argv = List("cargo", "clippy", "--fix", "--allow-dirty", "--allow-staged", "--locked", "--quiet")
-      }
+      command = "cargo clippy --fix --allow-dirty --allow-staged --locked --quiet"
     }
   }
   ["cargo_deny"] = (Builtins.cargo_deny) { exclude = fixtureTrees }

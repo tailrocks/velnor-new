@@ -15,6 +15,7 @@ export CARGO_NET_OFFLINE=true MISE_AUTO_INSTALL=false MISE_EXEC_AUTO_INSTALL=fal
 export MISE_OFFLINE=true HK_PKL_OFFLINE=true
 
 tmp_root=$(mktemp -d "${TMPDIR:-/tmp}/hk native fmt.XXXXXX")
+tmp_root=$(cd "$tmp_root" && pwd -P)
 trap 'rm -rf "$tmp_root"' EXIT
 fixture="$tmp_root/repository with spaces"
 mkdir -p "$fixture/crates/root member/src" \
@@ -91,6 +92,24 @@ if ! grep -Eq 'error: (expected|unexpected|unclosed|mismatched|failed to parse|t
 fi
 cmp -s "$root_source" "$tmp_root/root-formatted.rs"
 cmp -s "$nested_source" "$tmp_root/nested-invalid.rs"
+[[ "$(git -C "$fixture" write-tree)" == "$staged_tree" ]]
+
+cp "$tmp_root/root-formatted.rs" "$root_source"
+cp "$tmp_root/nested-formatted.rs" "$nested_source"
+nested_manifest="$fixture/crates/velnor-runner/runner member/Cargo.toml"
+mv "$nested_manifest" "$tmp_root/nested-member-Cargo.toml"
+ln -s "$tmp_root/nested-member-Cargo.toml" "$nested_manifest"
+if "$hk_bin" --cd "$fixture" check --all --step cargo_fmt --no-progress >"$tmp_root/symlink-manifest.log" 2>&1; then
+  printf '%s\n' 'hk accepted a symlink workspace manifest.' >&2
+  exit 1
+fi
+if ! grep -Fq "hk-workspace-admission: expected a regular Cargo.toml inside this repository: $nested_manifest" "$tmp_root/symlink-manifest.log"; then
+  cat "$tmp_root/symlink-manifest.log" >&2
+  printf '%s\n' 'hk did not reject the symlink workspace manifest at admission.' >&2
+  exit 1
+fi
+cmp -s "$root_source" "$tmp_root/root-formatted.rs"
+cmp -s "$nested_source" "$tmp_root/nested-formatted.rs"
 [[ "$(git -C "$fixture" write-tree)" == "$staged_tree" ]]
 
 printf '%s\n' 'native hk fmt behavior passed'
