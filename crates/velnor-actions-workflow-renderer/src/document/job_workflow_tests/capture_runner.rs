@@ -12,6 +12,9 @@ use crate::{
     yaml::Yaml,
 };
 
+#[path = "capture_runner_routed_container.rs"]
+mod routed_container;
+
 #[test]
 fn existing_prototype_caller_is_accepted_only_as_its_exact_source_snapshot() {
     let job = source_job();

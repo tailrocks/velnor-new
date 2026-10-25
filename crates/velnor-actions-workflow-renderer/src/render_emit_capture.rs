@@ -14,7 +14,8 @@ use metrics::measure_parent_candidate;
 use crate::{
     RenderError, document,
     lane_share::{LaneShare, job_workflow_extract},
-    render::{RenderContext, test_render_capture},
+    render::{RenderContext, WORKFLOW_PATH, test_render_capture},
+    workflow_routing::{WorkflowRoutingPolicy, parse_authority_document},
     yaml::Yaml,
 };
 
@@ -22,6 +23,11 @@ type PreparedCaptureJobs = (
     BTreeMap<String, job_workflow_extract::PreparedJob>,
     BTreeMap<String, job_workflow_extract::CaptureRunnerMetadata>,
 );
+
+struct CaptureChildMetadata<'a> {
+    source_ids: &'a BTreeSet<String>,
+    runner_metadata: &'a BTreeMap<String, job_workflow_extract::CaptureRunnerMetadata>,
+}
 
 pub(super) fn begin_source_job_workflow_attempt() {
     test_render_capture::begin_source_job_workflow_attempt();
@@ -33,12 +39,14 @@ pub(super) fn observe_source_job_workflows(
     ctx: &RenderContext,
     parent: &Yaml,
     mbx_jobs: &BTreeSet<String>,
+    routing: &WorkflowRoutingPolicy,
 ) {
     let Some(source_ids) = test_render_capture::source_job_workflow_ids() else {
         return;
     };
-    let result = capture_source_job_workflows(ir, jobs, ctx, parent, mbx_jobs, &source_ids)
-        .map_err(|error| error.to_string());
+    let result =
+        capture_source_job_workflows(ir, jobs, ctx, parent, mbx_jobs, routing, &source_ids)
+            .map_err(|error| error.to_string());
     test_render_capture::record_source_job_workflow_capture(result);
 }
 
@@ -48,18 +56,23 @@ fn capture_source_job_workflows(
     ctx: &RenderContext,
     parent: &Yaml,
     mbx_jobs: &BTreeSet<String>,
+    routing: &WorkflowRoutingPolicy,
     source_ids: &BTreeSet<String>,
 ) -> Result<test_render_capture::SourceJobWorkflowCapture, RenderError> {
     job_workflow_extract::validate_capture_source_ids(source_ids)?;
     let (prepared, runner_metadata) = prepare_capture_jobs(jobs, source_ids)?;
+    let child_metadata = CaptureChildMetadata {
+        source_ids,
+        runner_metadata: &runner_metadata,
+    };
     let relocations = render_capture_children(
         ir,
         &prepared,
         ctx,
         parent,
         mbx_jobs,
-        source_ids,
-        &runner_metadata,
+        routing,
+        &child_metadata,
     )?;
     measure_source_job_capture(parent, ctx, source_ids, &relocations, &runner_metadata)
 }
@@ -88,20 +101,28 @@ fn render_capture_children(
     ctx: &RenderContext,
     parent: &Yaml,
     mbx_jobs: &BTreeSet<String>,
-    source_ids: &BTreeSet<String>,
-    runner_metadata: &BTreeMap<String, job_workflow_extract::CaptureRunnerMetadata>,
+    routing: &WorkflowRoutingPolicy,
+    metadata: &CaptureChildMetadata<'_>,
 ) -> Result<Vec<job_workflow_extract::JobWorkflowRelocation>, RenderError> {
+    let CaptureChildMetadata {
+        source_ids,
+        runner_metadata,
+    } = metadata;
     let mut relocations = Vec::with_capacity(prepared.len());
     for (source_id, prepared_job) in prepared {
         let single_job = BTreeMap::from([(source_id.clone(), prepared_job.clone())]);
         let shared = empty_lane_share(single_job);
-        let mut child = document::render_job_workflow_relocations(ir, &shared, ctx, mbx_jobs)
-            .map_err(|error| invalid_capture(source_id, &format!("child_lowering:{error}")))?;
+        let mut child = document::render_job_workflow_relocations_for_capture(
+            ir, &shared, ctx, mbx_jobs, routing,
+        )
+        .map_err(|error| invalid_capture(source_id, &format!("child_lowering:{error}")))?;
         relocations.append(&mut child);
     }
     if relocations.len() != source_ids.len() {
         return Err(invalid_capture("capture", "source_child_count_mismatch"));
     }
+    let parent_file = render_parent_capture(parent, ctx)?;
+    let parent_document = parse_authority_document(&parent_file)?;
     for relocation in &relocations {
         let source_id = &relocation.prepared.source_id;
         job_workflow_extract::validate_finalized_runner(
@@ -113,9 +134,10 @@ fn render_capture_children(
         let runner = runner_metadata.get(source_id).ok_or_else(|| {
             invalid_capture(&relocation.prepared.source_id, "runner_metadata_missing")
         })?;
-        job_workflow_extract::validate_rendered_child_runner(
+        document::validate_routed_child_projection(
             &relocation.expected_callee_file,
             &relocation.prepared.source_id,
+            &parent_document,
             &runner.final_runner_labels,
         )?;
         if job_workflow_extract::rendered_child_has_unbound_needs(&relocation.expected_callee_file)?
@@ -127,6 +149,20 @@ fn render_capture_children(
         }
     }
     Ok(relocations)
+}
+
+fn render_parent_capture(
+    parent: &Yaml,
+    ctx: &RenderContext,
+) -> Result<crate::tree::RenderedFile, RenderError> {
+    Ok(crate::tree::RenderedFile {
+        path: WORKFLOW_PATH.to_owned(),
+        bytes: crate::render::fallback::render_marked_workflow(
+            WORKFLOW_PATH,
+            parent,
+            &ctx.generator_version,
+        )?,
+    })
 }
 
 fn measure_source_job_capture(

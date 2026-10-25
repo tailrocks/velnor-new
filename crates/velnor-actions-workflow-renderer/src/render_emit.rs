@@ -59,7 +59,7 @@ pub(crate) fn emit_shared(
     document = route_workflow_yaml_for_jobs(WORKFLOW_PATH, document, routing, jobs)?;
     #[cfg(feature = "test-render-capture")]
     // Inspect the final configured lane labels without changing the render result.
-    capture::observe_source_job_workflows(ir, jobs, ctx, &document, &mbx_jobs);
+    capture::observe_source_job_workflows(ir, jobs, ctx, &document, &mbx_jobs, routing);
 
     let text = if settings.allow_step_aliases {
         fallback::render_checked_workflow(WORKFLOW_PATH, &document, &ctx.generator_version)?

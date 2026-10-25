@@ -35,11 +35,8 @@ pub(crate) fn validate_finalized_runner(
 ) -> Result<CaptureRunnerMetadata, RenderError> {
     let metadata = capture_runner_metadata(source_id, source)?;
     let fields = parent_job_fields(parent, source_id)?;
-    if field(fields, "container").is_some() || field(fields, "strategy").is_some() {
-        return Err(invalid(
-            source_id,
-            "capture_runner_has_container_matrix_or_call",
-        ));
+    if field(fields, "strategy").is_some() {
+        return Err(invalid(source_id, "capture_runner_has_matrix_or_call"));
     }
     if field(fields, "uses").is_some() {
         let actual_caller = crate::yaml::Yaml::Map(fields.to_vec());
@@ -91,13 +88,10 @@ pub(crate) fn validate_rendered_child_runner(
     if child.as_mapping().is_none() {
         return Err(invalid(source_id, "capture_child_job_not_map"));
     }
-    if parsed_field(child, "container").is_some()
-        || parsed_field(child, "strategy").is_some()
-        || parsed_field(child, "uses").is_some()
-    {
+    if parsed_field(child, "strategy").is_some() || parsed_field(child, "uses").is_some() {
         return Err(invalid(
             source_id,
-            "capture_child_runner_has_container_or_matrix",
+            "capture_child_runner_has_matrix_or_call",
         ));
     }
     let runs_on = parsed_field(child, "runs-on")

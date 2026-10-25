@@ -135,6 +135,20 @@ pub(crate) fn render_job_workflow_relocations(
         .collect()
 }
 
+#[cfg(feature = "test-render-capture")]
+pub(crate) use job_workflow::validate_routed_child_projection;
+
+#[cfg(feature = "test-render-capture")]
+pub(crate) fn render_job_workflow_relocations_for_capture(
+    ir: &WorkflowIr,
+    shared: &LaneShare,
+    ctx: &RenderContext,
+    mbx_jobs: &BTreeSet<String>,
+    routing: &crate::workflow_routing::WorkflowRoutingPolicy,
+) -> Result<Vec<crate::lane_share::job_workflow_extract::JobWorkflowRelocation>, RenderError> {
+    job_workflow::relocations_for_capture(ir, shared, ctx, mbx_jobs, routing)
+}
+
 /// Report download is limited to the least-privilege `read` grant.
 fn grants_exact_actions_read(level: PermissionLevel) -> bool {
     level == PermissionLevel::Read

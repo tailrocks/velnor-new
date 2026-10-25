@@ -101,6 +101,135 @@ pub(super) fn relocation(
     })
 }
 
+#[cfg(feature = "test-render-capture")]
+pub(super) fn relocations_for_capture(
+    ir: &WorkflowIr,
+    shared: &crate::lane_share::LaneShare,
+    ctx: &RenderContext,
+    mbx_jobs: &BTreeSet<String>,
+    routing: &crate::workflow_routing::WorkflowRoutingPolicy,
+) -> Result<Vec<JobWorkflowRelocation>, RenderError> {
+    let workflow_env =
+        crate::document_env::workflow_env(!ctx.workflow_tasks.is_empty(), ctx.mise_quiet);
+    shared
+        .job_workflows
+        .values()
+        .map(|prepared| relocation_for_capture(prepared, ir, ctx, mbx_jobs, &workflow_env, routing))
+        .collect()
+}
+
+#[cfg(feature = "test-render-capture")]
+fn relocation_for_capture(
+    prepared: &PreparedJob,
+    ir: &WorkflowIr,
+    ctx: &RenderContext,
+    mbx_jobs: &BTreeSet<String>,
+    workflow_env: &BTreeMap<String, String>,
+    routing: &crate::workflow_routing::WorkflowRoutingPolicy,
+) -> Result<JobWorkflowRelocation, RenderError> {
+    prepared.validate_source()?;
+    let document = callee_yaml(prepared, ir, ctx, mbx_jobs, workflow_env)?;
+    let typed_jobs = BTreeMap::from([(prepared.source_id.clone(), prepared.child_job.clone())]);
+    let routed = crate::workflow_routing::route_workflow_yaml_for_jobs(
+        &prepared.callee_path,
+        document,
+        routing,
+        &typed_jobs,
+    )?;
+    let expected_callee_file = RenderedFile {
+        path: prepared.callee_path.clone(),
+        bytes: crate::render::fallback::render_checked_workflow(
+            &prepared.callee_path,
+            &routed,
+            &ctx.generator_version,
+        )?,
+    };
+    steps::scan_for_private_subcommands(&expected_callee_file.bytes)?;
+    crate::guard::validate_tree_path(&expected_callee_file.path)?;
+    Ok(JobWorkflowRelocation {
+        prepared: prepared.clone(),
+        expected_caller: caller_yaml(prepared)?,
+        expected_callee_file,
+    })
+}
+
+#[cfg(feature = "test-render-capture")]
+pub(crate) fn validate_routed_child_projection(
+    file: &RenderedFile,
+    source_id: &str,
+    parent_document: &saphyr::Yaml<'_>,
+    expected_labels: &[String],
+) -> Result<(), RenderError> {
+    crate::lane_share::job_workflow_extract::validate_rendered_child_runner(
+        file,
+        source_id,
+        expected_labels,
+    )?;
+    if source_id == crate::lane_share::job_workflow_extract::PROTOTYPE_JOB_ID {
+        return Ok(());
+    }
+    let child_document = crate::workflow_routing::parse_authority_document(file)?;
+    let parent_job = parsed_job(parent_document, source_id, false)?;
+    let child_job = parsed_job(&child_document, source_id, true)?;
+    for name in ["runs-on", "defaults", "container"] {
+        if parsed_field(parent_job, name) != parsed_field(child_job, name) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "source_job_workflow_capture:{source_id}:execution_projection_mismatch:{name}"
+            )));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(feature = "test-render-capture")]
+fn parsed_job<'node, 'input>(
+    document: &'node saphyr::Yaml<'input>,
+    source_id: &str,
+    require_single: bool,
+) -> Result<&'node saphyr::Yaml<'input>, RenderError> {
+    let jobs = parsed_field(document, "jobs").ok_or_else(|| {
+        RenderError::InvalidWorkflow(format!(
+            "source_job_workflow_capture:{source_id}:jobs_missing"
+        ))
+    })?;
+    let jobs = jobs.as_mapping().ok_or_else(|| {
+        RenderError::InvalidWorkflow(format!(
+            "source_job_workflow_capture:{source_id}:jobs_not_map"
+        ))
+    })?;
+    if require_single && jobs.len() != 1 {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "source_job_workflow_capture:{source_id}:child_job_count_mismatch"
+        )));
+    }
+    let mut matches = jobs
+        .iter()
+        .filter(|(job_id, _)| job_id.as_str() == Some(source_id));
+    let job = matches.next().map(|(_, job)| job).ok_or_else(|| {
+        RenderError::InvalidWorkflow(format!(
+            "source_job_workflow_capture:{source_id}:job_missing"
+        ))
+    })?;
+    if matches.next().is_some() || job.as_mapping().is_none() {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "source_job_workflow_capture:{source_id}:job_shape_invalid"
+        )));
+    }
+    Ok(job)
+}
+
+#[cfg(feature = "test-render-capture")]
+fn parsed_field<'node, 'input>(
+    value: &'node saphyr::Yaml<'input>,
+    name: &str,
+) -> Option<&'node saphyr::Yaml<'input>> {
+    value
+        .as_mapping()?
+        .iter()
+        .find(|(key, _)| key.as_str() == Some(name))
+        .map(|(_, value)| value)
+}
+
 fn callee_yaml(
     prepared: &PreparedJob,
     ir: &WorkflowIr,
