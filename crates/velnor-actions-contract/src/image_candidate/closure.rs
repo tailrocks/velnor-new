@@ -6,7 +6,7 @@ use crate::ContractError;
 pub const IMAGE_NATIVE_CLOSURE_SCHEMA: &str = "velnor.job-image-native-source-closure.v1";
 
 /// Exact tracked source inputs that implement candidate construction and validation.
-pub const NATIVE_IMAGE_CANDIDATE_INPUTS: [&str; 76] = [
+pub const NATIVE_IMAGE_CANDIDATE_INPUTS: [&str; 78] = [
     "Cargo.lock",
     "Cargo.toml",
     "crates/velnor-actions-cli/src/args.rs",
@@ -32,12 +32,14 @@ pub const NATIVE_IMAGE_CANDIDATE_INPUTS: [&str; 76] = [
     "crates/velnor-actions-mise/src/check_deadline.rs",
     "crates/velnor-actions-mise/src/checks.rs",
     "crates/velnor-actions-mise/src/command.rs",
+    "crates/velnor-actions-mise/src/command_bounded_file_filter.rs",
     "crates/velnor-actions-mise/src/command_cancellable.rs",
     "crates/velnor-actions-mise/src/command_cancellable_helpers.rs",
     "crates/velnor-actions-mise/src/command_credential.rs",
     "crates/velnor-actions-mise/src/command_env.rs",
     "crates/velnor-actions-mise/src/command_git.rs",
     "crates/velnor-actions-mise/src/command_output.rs",
+    "crates/velnor-actions-mise/src/command_parent_env.rs",
     "crates/velnor-actions-mise/src/command_private_fetch.rs",
     "crates/velnor-actions-mise/src/command_process_group.rs",
     "crates/velnor-actions-mise/src/command_progress.rs",
