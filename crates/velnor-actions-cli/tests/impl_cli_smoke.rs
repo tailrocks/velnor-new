@@ -5,6 +5,7 @@ use std::error::Error;
 use crate::impl_cli_tmp::git_fixture;
 use crate::impl_cli_tmp::{
     add_crate_pair, cleanup, code, fresh_tempdir, git_init, init_repo, pin_branch, spawn,
+    spawn_with_installed_rust_mise_fixture,
 };
 
 #[test]
@@ -278,7 +279,7 @@ fn preview_prints_absolute_paths_and_files() -> Result<(), Box<dyn Error>> {
     add_crate_pair(&tmp)?;
     let outer = fresh_tempdir("smoke-abs-preview")?;
     let preview = outer.join("preview");
-    let output = spawn(
+    let output = spawn_with_installed_rust_mise_fixture(
         &["generate", "--output-dir", preview.to_str().unwrap_or("/")],
         &[],
         &tmp,
@@ -319,7 +320,7 @@ fn previews_use_unique_tmp_dirs_without_collision() -> Result<(), Box<dyn Error>
     let first = outer.join("first");
     let second = outer.join("second");
     for preview in [&first, &second] {
-        let output = spawn(
+        let output = spawn_with_installed_rust_mise_fixture(
             &["generate", "--output-dir", preview.to_str().unwrap_or("/")],
             &[],
             &tmp,

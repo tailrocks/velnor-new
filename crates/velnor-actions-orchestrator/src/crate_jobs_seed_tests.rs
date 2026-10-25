@@ -87,13 +87,18 @@ fn seed_barrier_uses_exact_scoped_lanes_and_never_invents_a_producer() {
         .iter()
         .find(|step| step.name == "Seed independent parallel targets")
         .expect("seed");
-    let velnor_actions_contract::StepKind::Shell { run, .. } = &step.kind else {
-        panic!("shell barrier")
+    let velnor_actions_contract::StepKind::Internal { operation, env } = &step.kind else {
+        panic!("internal seed operation")
     };
-    assert!(
-        run.last()
-            .expect("script")
-            .ends_with("crates/work/target velnor-clippy velnor-doc")
+    assert_eq!(operation, "seed-parallel-targets-v1");
+    assert_eq!(env.len(), 2);
+    assert_eq!(
+        env.get("VELNOR_TARGET_ROOT").map(String::as_str),
+        Some("crates/work/target")
+    );
+    assert_eq!(
+        env.get("VELNOR_TARGET_LANES").map(String::as_str),
+        Some("velnor-clippy,velnor-doc")
     );
     for kinds in [
         vec![TaskKind::Clippy, TaskKind::Doc],

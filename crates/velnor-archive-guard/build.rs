@@ -3,10 +3,16 @@
 #[path = "build_support/archive_guard_inputs.rs"]
 mod archive_guard_inputs;
 use std::error::Error;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let manifest = std::env::var_os("CARGO_MANIFEST_DIR")
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
+        .ok_or("Cargo did not provide CARGO_MANIFEST_DIR")?;
+    if !manifest.is_absolute() {
+        return Err("Cargo provided a non-absolute CARGO_MANIFEST_DIR".into());
+    }
     let root = manifest
         .parent()
         .and_then(Path::parent)

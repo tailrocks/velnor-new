@@ -271,10 +271,16 @@ fn assert_rendered_permissions(yaml: &str, plan_auth: bool) -> TestResult {
                     "plan".to_owned(),
                     "Resolve qualification predecessor".to_owned(),
                 ),
+                ("plan".to_owned(), "Plan".to_owned()),
                 expected_required.clone(),
+                ("required".to_owned(), "Merge reports".to_owned()),
             ]
         } else {
-            vec![expected_required.clone()]
+            vec![
+                ("plan".to_owned(), "Plan".to_owned()),
+                expected_required.clone(),
+                ("required".to_owned(), "Merge reports".to_owned()),
+            ]
         }
     );
     assert_eq!(

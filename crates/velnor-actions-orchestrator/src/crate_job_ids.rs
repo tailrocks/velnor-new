@@ -91,7 +91,10 @@ impl<'a> JobOwners<'a> {
         if member.no_targets {
             return Ok(None);
         }
-        if Stack::require_known(&member.stack_id)? == Stack::Mise {
+        if matches!(
+            Stack::require_known(&member.stack_id)?,
+            Stack::Mise | Stack::Native
+        ) {
             return Ok(Some(format!("check-{}", member.identity.unit_id)));
         }
         if member.identity.unit_id.is_empty() {

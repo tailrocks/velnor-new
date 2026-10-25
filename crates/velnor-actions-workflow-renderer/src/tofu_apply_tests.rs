@@ -8,7 +8,7 @@ use velnor_actions_contract::{
 };
 
 const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
-const MISE: &str = "jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550";
+const MISE: &str = "jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e";
 
 fn spec() -> TofuApplySpec {
     TofuApplySpec {

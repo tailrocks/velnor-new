@@ -6,8 +6,8 @@ use super::gitops::{
 use super::helpers::{branch_name, sha256};
 use super::{BotIdentity, TapGitHubApi};
 use crate::{
+    homebrew::test_support as tap_test_support,
     tap_prepare::{TapPreparationDisposition, reconstruct_historical_candidate_proof},
-    tap_test_support,
 };
 use velnor_actions_contract::canonical_json_bytes;
 
@@ -16,16 +16,19 @@ fn accepted_pr_create_with_lost_response_reconciles_without_a_second_post() {
     let fixture = tap_test_support::fixture();
     let base_sha = "b".repeat(40);
     let head_sha = "c".repeat(40);
-    let proof = reconstruct_historical_candidate_proof(
-        &fixture.plan.repository,
-        &fixture.policy,
-        &fixture.plan,
-        &fixture.release,
-        &base_sha,
-        &fixture.base_formula,
-        &fixture.proposed_formula,
-    )
-    .expect("validated candidate proof");
+    let proof =
+        reconstruct_historical_candidate_proof(crate::tap_prepare::HistoricalCandidateInput {
+            source_repository: &fixture.plan.repository,
+            tap: &fixture.policy,
+            plan: &fixture.plan,
+            release: &fixture.release,
+            spec: Some(&fixture.spec),
+            sdk_artifact_digest: &"9".repeat(64),
+            base_sha: &base_sha,
+            base_formula: &fixture.base_formula,
+            proposed_formula: &fixture.proposed_formula,
+        })
+        .expect("validated candidate proof");
     let proof_digest = sha256(&canonical_json_bytes(&proof).expect("proof JSON"));
     assert_eq!(proof.disposition, TapPreparationDisposition::Changed);
     let branch = branch_name(
@@ -92,16 +95,19 @@ fn source_advance_after_pr_creation_returns_typed_skip_without_another_write() {
     let fixture = tap_test_support::fixture();
     let base_sha = "b".repeat(40);
     let head_sha = "c".repeat(40);
-    let proof = reconstruct_historical_candidate_proof(
-        &fixture.plan.repository,
-        &fixture.policy,
-        &fixture.plan,
-        &fixture.release,
-        &base_sha,
-        &fixture.base_formula,
-        &fixture.proposed_formula,
-    )
-    .expect("validated candidate proof");
+    let proof =
+        reconstruct_historical_candidate_proof(crate::tap_prepare::HistoricalCandidateInput {
+            source_repository: &fixture.plan.repository,
+            tap: &fixture.policy,
+            plan: &fixture.plan,
+            release: &fixture.release,
+            spec: Some(&fixture.spec),
+            sdk_artifact_digest: &"9".repeat(64),
+            base_sha: &base_sha,
+            base_formula: &fixture.base_formula,
+            proposed_formula: &fixture.proposed_formula,
+        })
+        .expect("validated candidate proof");
     let proof_digest = sha256(&canonical_json_bytes(&proof).expect("proof JSON"));
     let branch = branch_name(
         &fixture.release.receipt_digest,
@@ -162,16 +168,19 @@ fn source_advance_after_pr_creation_returns_typed_skip_without_another_write() {
 fn source_advance_after_blob_write_returns_typed_skip_before_next_mutation() {
     let fixture = tap_test_support::fixture();
     let base_sha = "b".repeat(40);
-    let proof = reconstruct_historical_candidate_proof(
-        &fixture.plan.repository,
-        &fixture.policy,
-        &fixture.plan,
-        &fixture.release,
-        &base_sha,
-        &fixture.base_formula,
-        &fixture.proposed_formula,
-    )
-    .expect("validated candidate proof");
+    let proof =
+        reconstruct_historical_candidate_proof(crate::tap_prepare::HistoricalCandidateInput {
+            source_repository: &fixture.plan.repository,
+            tap: &fixture.policy,
+            plan: &fixture.plan,
+            release: &fixture.release,
+            spec: Some(&fixture.spec),
+            sdk_artifact_digest: &"9".repeat(64),
+            base_sha: &base_sha,
+            base_formula: &fixture.base_formula,
+            proposed_formula: &fixture.proposed_formula,
+        })
+        .expect("validated candidate proof");
     let branch = branch_name(
         &fixture.release.receipt_digest,
         &base_sha,

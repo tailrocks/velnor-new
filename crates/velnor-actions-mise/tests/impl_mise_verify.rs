@@ -209,6 +209,8 @@ fn verify_commands_match_probes_and_env() -> Result<(), String> {
         ("MISE_RUSTUP_HOME", "/velnor/rustup"),
         ("MISE_CARGO_HOME", "/velnor/cargo"),
         ("RUSTUP_TOOLCHAIN", "1.99.1"),
+        ("RUSTUP_HOME", "/velnor/rustup"),
+        ("CARGO_HOME", "/velnor/cargo"),
     ] {
         assert!(
             env.iter()
@@ -216,7 +218,7 @@ fn verify_commands_match_probes_and_env() -> Result<(), String> {
             "missing {key}={value}: {env:?}"
         );
     }
-    assert_eq!(env.len(), 9, "exact step env, no drift: {env:?}");
+    assert_eq!(env.len(), 11, "exact step env, no drift: {env:?}");
     Ok(())
 }
 

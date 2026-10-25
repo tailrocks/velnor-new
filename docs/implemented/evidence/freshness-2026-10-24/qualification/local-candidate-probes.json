@@ -1,0 +1,72 @@
+{
+  "schema": 1,
+  "observed_at": "2026-10-24T18:12:32Z",
+  "host": "macos-arm64",
+  "scope": "exact local candidate binary and action-source probes; not full update-set qualification",
+  "hosted_qualification_claimed": false,
+  "candidates": [
+    {
+      "subject": "gh",
+      "version": "2.103.2",
+      "source": "https://github.com/cli/cli/releases/tag/v2.103.2",
+      "asset": "gh_2.103.2_macOS_arm64.zip",
+      "asset_size": 14105241,
+      "asset_sha256": "5416000f5d17580a187339e0c4068a01ca5c87f7d4fe6ca64933696f967bc418",
+      "binary_size": 38914832,
+      "binary_sha256": "5e4470bb57bf1e7cb5063be940d5dffc5be3e1899d6bf7fe1ff15372f7f4cc29",
+      "verification": "archive digest matched GitHub release API metadata and release checksum file",
+      "commands": ["gh --version", "gh release create --help", "gh pr create --help"],
+      "all_commands_exit_zero": true,
+      "read_only_authenticated_api_smoke": "not run; isolated GH_CONFIG_DIR intentionally had no credential and gh requires auth"
+    },
+    {
+      "subject": "release-plz",
+      "version": "0.4.1",
+      "source": "https://github.com/release-plz/release-plz/releases/tag/release-plz-v0.4.1",
+      "tag_commit": "109fb5301a69d4325aa6751aa664fc91ae1fbac7",
+      "asset": "release-plz-aarch64-apple-darwin.tar.gz",
+      "asset_size": 16045702,
+      "asset_sha256": "070da77afd6f19eaac6d89c7b1fc16468a26c7a995b992baa0b87bb17d5bcb50",
+      "binary_size": 43015280,
+      "binary_sha256": "1c85b2e3f09187545079e08809baf734f8f9369cecd8c0fba611796e8f1747fb",
+      "crate_version_checksum": "be09b48beb7dc1fa436c95c21aae9df393e0cccbce7dd7c114dfbbf0afdd121f",
+      "crate_download_sha256_matches_crates_io": true,
+      "commands": ["release-plz --version", "release-plz --help", "release-plz release --help", "release-plz release-pr --help"],
+      "all_commands_exit_zero": true,
+      "mutating_or_building_commands_run": false
+    },
+    {
+      "subject": "asamarts/alint",
+      "version": "v0.20.1",
+      "tag_commit": "265d9fdc720bb8f59d00b87e33e4149869f77327",
+      "source": "https://github.com/asamarts/alint/releases/tag/v0.20.1",
+      "asset": "alint-v0.20.1-aarch64-apple-darwin.tar.gz",
+      "asset_size": 7342455,
+      "asset_sha256": "575da9ea1563b4872d0a5ec019d7a3b02653c2373d21a868312fef9638e767de",
+      "binary_size": 16075968,
+      "binary_sha256": "1bd60da817af501deffbf9b9bdd7acfbf5c67e8ba8791ce0135a72f233a73026",
+      "verification": "archive digest matched GitHub release API metadata and published SHA256 asset",
+      "version_check": "alint 0.20.1 (265d9fdc720b, built 2026-10-23)",
+      "repository_commands": ["alint validate-config --config .alint.yml", "alint check --config .alint.yml --fail-on-warning"],
+      "both_repository_commands_exit_zero": true,
+      "check_findings": "3 informational results; no warnings or errors"
+    },
+    {
+      "subject": "jdx/mise-action",
+      "version": "v5.2.3",
+      "tag_commit": "82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e",
+      "previous_version": "v5.2.2",
+      "previous_commit": "8418fedb1110381a0d3ba51a7a415d7c1b884550",
+      "source_files": {
+        "action.yml": "002c2e618a9c85bf930eb44139fa07663383391e",
+        "dist/index.js": "8ed5c42de2194513b47bf379a276f66efbbb9685",
+        "package.json": "5eed25bdf945b472fb7fc44ccdbb1ec36374421b"
+      },
+      "source_verification": "each raw file matched the blob SHA in the immutable commit tree",
+      "node_syntax_check_exit_zero": true,
+      "review": "independent compatibility/security review approved exact update; cache-key discovery change is compatible with Velnor's cache-disabled action inputs",
+      "hosted_action_execution": false
+    }
+  ],
+  "full_update_set_gates": "pending root-owned workspace, workflow, fixture, and affected-platform qualification; inventory qualified fields intentionally remain unchanged"
+}

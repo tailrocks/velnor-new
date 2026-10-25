@@ -60,6 +60,39 @@ pub(crate) struct WorkflowRunResponse {
     pub head_repository: Option<RunRepository>,
 }
 #[derive(Clone, Deserialize)]
+pub(crate) struct ReferencedWorkflow {
+    pub path: String,
+    pub sha: String,
+}
+#[derive(Clone, Deserialize)]
+pub(crate) struct WorkflowRunWithReferences {
+    #[serde(flatten)]
+    pub run: WorkflowRunResponse,
+    #[serde(default)]
+    pub referenced_workflows: Vec<ReferencedWorkflow>,
+    #[serde(default)]
+    pub pull_requests: Vec<WorkflowRunPullRequest>,
+}
+#[derive(Clone, Deserialize)]
+pub(crate) struct WorkflowRunPullRequest {
+    pub number: u64,
+    pub head: WorkflowRunPullRequestBranch,
+    pub base: WorkflowRunPullRequestBranch,
+}
+#[derive(Clone, Deserialize)]
+pub(crate) struct WorkflowRunPullRequestBranch {
+    pub sha: String,
+    #[serde(rename = "ref")]
+    pub ref_name: String,
+    pub repo: Option<WorkflowRunPullRequestRepository>,
+}
+#[derive(Clone, Deserialize)]
+pub(crate) struct WorkflowRunPullRequestRepository {
+    pub id: u64,
+    pub name: String,
+    pub url: String,
+}
+#[derive(Clone, Deserialize)]
 pub(crate) struct RunRepository {
     pub id: u64,
     #[serde(default)]
@@ -84,6 +117,8 @@ pub(crate) struct WorkflowJobList {
 }
 #[derive(Clone, Deserialize)]
 pub(crate) struct WorkflowJob {
+    #[serde(default)]
+    pub id: u64,
     pub run_id: u64,
     pub name: String,
     pub head_sha: Option<String>,

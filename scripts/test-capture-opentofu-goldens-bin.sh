@@ -3,6 +3,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/scripts/generator-release/qualification-goldens.sh"
 SCRIPT="$ROOT/scripts/capture-opentofu-goldens.sh"
 GOLDEN_DIR="$ROOT/docs/proposed/opentofu-goldens"
 CLI_ARG="${1:-}"
@@ -40,6 +41,7 @@ STUB_BIN="$WORK/stub bin"
 MARKER="$WORK/cargo-invoked"
 ORIGINAL_PATH="$PATH"
 mkdir -p "$STUB_BIN" "$WORK/tmp workspace"
+ln -s "$WORK/tmp workspace" "$WORK/tmp symlink"
 # Only `cargo build` is the collector's implicit debug build. `plan` runs
 # `cargo metadata` through the real toolchain; poisoning that call makes
 # the spaced-path check fail before it can prove the collector skipped build.
@@ -92,7 +94,10 @@ golden_fingerprint() {
 
 BEFORE="$(golden_fingerprint)" || exit 2
 SOURCE_SHA="$(git -C "$ROOT" rev-parse HEAD)" || exit 2
+prepare_qualification_guard || exit 2
+verify_qualification_guard || exit 2
 CLI_VERSION="$("$CLI_BIN" --version | awk 'NR == 1 && NF == 2 && $1 == "velnor-actions" { print $2; next } { exit 1 } END { if (NR != 1) exit 1 }')" || exit 2
+verify_qualification_guard || exit 2
 if command -v sha256sum >/dev/null 2>&1; then
   CLI_SHA="$(sha256sum "$CLI_BIN" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')" || exit 2
 else
@@ -146,17 +151,18 @@ write_test_manifest() {
      ]}' >"$manifest"
 }
 
-source "$ROOT/scripts/generator-release/test-qualification-output-bindings.sh"
 source "$ROOT/scripts/generator-release/test-fixture-git.sh"
 test_fixture_git_isolation || exit 1
+source "$ROOT/scripts/generator-release/test-qualification-output-bindings.sh"
 
 expect_release_check_match() {
   local status=0 log="$WORK/release-check.log" after
-  GITHUB_SHA="$SOURCE_SHA" GITHUB_REPOSITORY=tailrocks/velnor-new \
+  local manifest="${1:-$WORK/valid manifest.json}"
+  TMPDIR="$WORK/tmp symlink" GITHUB_SHA="$SOURCE_SHA" GITHUB_REPOSITORY=tailrocks/velnor-new \
     PATH="$STUB_BIN:$ORIGINAL_PATH" VELNOR_TEST_CARGO_MARKER="$MARKER" \
     VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
-    "$SCRIPT" check-release "$CLI_BIN" "$WORK/valid manifest.json" \
-      "$(test_file_sha256 "$WORK/valid manifest.json")" >"$log" 2>&1 || status=$?
+    "$SCRIPT" check-release "$CLI_BIN" "$manifest" \
+      "$(test_file_sha256 "$manifest")" >"$log" 2>&1 || status=$?
   if [ "$status" -ne 0 ] || ! grep -Fq 'ALL RELEASE FIXTURE GOLDENS AND DOGFOOD PARITY MATCH' "$log"; then
     cat "$log" >&2
     echo "FAIL: valid candidate did not match release fixture goldens (exit $status)" >&2
@@ -265,8 +271,13 @@ expect_release_rejected malformed-manifest 'candidate manifest is malformed JSON
 
 write_test_manifest "$WORK/valid manifest.json" "$SOURCE_SHA" \
   "$TEST_LINUX_SHA" "$TEST_ARM_SHA" "$TEST_INTEL_SHA"
-expect_release_check_match
-run_candidate_output_binding_tests || exit 1
+cp "$WORK/valid manifest.json" "$WORK/tmp workspace/valid manifest.json"
+if [ "${VELNOR_TEST_QUALIFICATION_OUTPUT_ONLY:-0}" = 1 ]; then
+  run_candidate_output_binding_tests || exit $?
+  exit 0
+fi
+expect_release_check_match "$WORK/tmp symlink/valid manifest.json"
+run_candidate_output_binding_tests || exit $?
 ln -s "$WORK/valid manifest.json" "$WORK/symlink manifest.json"
 expect_release_rejected symlink-manifest 'candidate manifest must be a regular non-symlink file' \
   "$WORK/symlink manifest.json" "$(test_file_sha256 "$WORK/valid manifest.json")" "$SOURCE_SHA"

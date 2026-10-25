@@ -1,6 +1,6 @@
 //! Read-only reconciliation of a formula already promoted by an earlier run.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::Deserialize;
@@ -209,15 +209,18 @@ fn authenticate_historical_candidate(
     if old_formula == proposed {
         return Err(internal("tap_historical_formula_not_changed"));
     }
-    let proof = reconstruct_historical_candidate_proof(
-        &inputs.proof.source_repository,
-        &inputs.policy,
-        &inputs.plan,
-        &inputs.release,
-        base_sha,
-        &old_formula,
-        &proposed,
-    )?;
+    let proof =
+        reconstruct_historical_candidate_proof(crate::tap_prepare::HistoricalCandidateInput {
+            source_repository: &inputs.proof.source_repository,
+            tap: &inputs.policy,
+            plan: &inputs.plan,
+            release: &inputs.release,
+            spec: inputs.spec.as_ref(),
+            sdk_artifact_digest: &inputs.sdk_artifact_digest,
+            base_sha,
+            base_formula: &old_formula,
+            proposed_formula: &proposed,
+        })?;
     let proof_digest =
         sha256(&canonical_json_bytes(&proof).map_err(|_| internal("tap_historical_proof_encode"))?);
     if proof_digest != proof_digest_from_body(pull)?
@@ -295,7 +298,22 @@ fn read_tree(api: &TapGitHubApi, sha: &str) -> Result<GithubTree, OrchestratorEr
     if tree.sha != sha || tree.truncated {
         return Err(internal("tap_historical_tree_invalid"));
     }
+    validate_tree_inventory(&tree)?;
     Ok(tree)
+}
+
+fn validate_tree_inventory(tree: &GithubTree) -> Result<(), OrchestratorError> {
+    let entries = tree
+        .tree
+        .iter()
+        .map(|entry| crate::homebrew::tree_validation::Entry {
+            path: &entry.path,
+            mode: &entry.mode,
+            kind: &entry.object_type,
+            sha: &entry.sha,
+        })
+        .collect::<Vec<_>>();
+    crate::homebrew::tree_validation::validate(&entries, 100_000)
 }
 
 fn validate_single_formula_delta(
@@ -303,52 +321,32 @@ fn validate_single_formula_delta(
     base: &GithubTree,
     head: &GithubTree,
 ) -> Result<(), OrchestratorError> {
-    let base_entries = indexed_tree(base)?;
-    let head_entries = indexed_tree(head)?;
-    if base_entries
-        .get(formula)
-        .is_none_or(|entry| entry.mode != "100644" || entry.object_type != "blob")
-        || head_entries
-            .get(formula)
-            .is_none_or(|entry| entry.mode != "100644" || entry.object_type != "blob")
-    {
-        return Err(internal("tap_historical_formula_mode_invalid"));
-    }
-    let mut base_without_formula = base_entries;
-    let mut head_without_formula = head_entries;
-    base_without_formula.remove(formula);
-    head_without_formula.remove(formula);
-    if base_without_formula != head_without_formula {
-        return Err(internal("tap_historical_tree_delta_invalid"));
-    }
-    Ok(())
-}
-
-fn indexed_tree(tree: &GithubTree) -> Result<BTreeMap<&str, TreeIdentity<'_>>, OrchestratorError> {
-    let mut indexed = BTreeMap::new();
-    for entry in &tree.tree {
-        if indexed
-            .insert(
-                entry.path.as_str(),
-                TreeIdentity {
-                    mode: &entry.mode,
-                    object_type: &entry.object_type,
-                    sha: &entry.sha,
-                },
-            )
-            .is_some()
-        {
-            return Err(internal("tap_historical_tree_duplicate_path"));
-        }
-    }
-    Ok(indexed)
-}
-
-#[derive(PartialEq, Eq)]
-struct TreeIdentity<'a> {
-    mode: &'a str,
-    object_type: &'a str,
-    sha: &'a str,
+    let base_entries = base
+        .tree
+        .iter()
+        .map(|entry| crate::homebrew::tree_validation::Entry {
+            path: &entry.path,
+            mode: &entry.mode,
+            kind: &entry.object_type,
+            sha: &entry.sha,
+        })
+        .collect::<Vec<_>>();
+    let head_entries = head
+        .tree
+        .iter()
+        .map(|entry| crate::homebrew::tree_validation::Entry {
+            path: &entry.path,
+            mode: &entry.mode,
+            kind: &entry.object_type,
+            sha: &entry.sha,
+        })
+        .collect::<Vec<_>>();
+    crate::homebrew::tree_validation::validate_formula_delta(
+        &base_entries,
+        &head_entries,
+        formula,
+        100_000,
+    )
 }
 
 fn read_formula_blob(

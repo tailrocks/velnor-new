@@ -301,6 +301,12 @@ pub(crate) fn toolchain_inputs_for(
 ) -> Result<ToolchainInputs, ContractError> {
     match Stack::require_known(&task.stack_id)? {
         Stack::Mise => return super::named_checks::toolchain_inputs(task, catalog),
+        Stack::Native => {
+            return Err(ContractError::identity(
+                "native_check",
+                "native_toolchain_requires_plan_derivation",
+            ));
+        }
         Stack::Rust => {}
         Stack::Tofu => {
             let specs = catalog.tool_specs(&[PinnedTool::Opentofu]);

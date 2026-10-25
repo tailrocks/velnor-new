@@ -94,6 +94,17 @@ pub enum StepKind {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         matrix_max_parallel: Option<u32>,
     },
+    /// Closed native Homebrew check through the authenticated SDK binary.
+    NativeCheckExecution {
+        /// Configured native check identifier.
+        check_id: String,
+        /// Closed operation; never caller-supplied argv.
+        operation: crate::config::NativeHomebrewOperation,
+        /// Fixed task lookup identity; digest and matrix key are resolved from the downloaded plan.
+        task_id: String,
+        /// Authenticated SDK release version selecting the staged binary.
+        sdk_version: String,
+    },
     /// Fixed internal planner/aggregation step.
     Internal {
         /// Internal operation name.
@@ -129,19 +140,7 @@ impl Step {
                 format!("task_execution_authority_mismatch:{job}"),
             ));
         }
-        // Concurrent members publish no outputs (none are visible before the
-        // join), own no typed role such as a cache save, and never run an
-        // internal planner operation.
-        if self.parallel
-            && (self.id.is_some()
-                || self.role.is_some()
-                || matches!(&self.kind, StepKind::Internal { .. }))
-        {
-            return Err(ContractError::identity(
-                "step.parallel",
-                format!("parallel_step_authority:{job}"),
-            ));
-        }
+        self.validate_execution_authority(job)?;
         if let StepKind::Action { uses, .. } = &self.kind
             && let Some(expected) = verifier_action_role(uses)
             && self.role != Some(expected)
@@ -186,6 +185,33 @@ impl Step {
         }
         validate_id_kind(self.id, &self.kind, job)?;
         validate_kind(&self.kind, job)
+    }
+    fn validate_execution_authority(&self, job: &str) -> Result<(), ContractError> {
+        if matches!(&self.kind, StepKind::NativeCheckExecution { .. })
+            && (self.id.is_some()
+                || self.role.is_some()
+                || self.condition.is_some()
+                || self.parallel)
+        {
+            return Err(ContractError::identity(
+                "step.native_check",
+                format!("native_check_authority_mismatch:{job}"),
+            ));
+        }
+        // Concurrent members publish no outputs (none are visible before the
+        // join), own no typed role such as a cache save, and never run an
+        // internal planner operation.
+        if self.parallel
+            && (self.id.is_some()
+                || self.role.is_some()
+                || matches!(&self.kind, StepKind::Internal { .. }))
+        {
+            return Err(ContractError::identity(
+                "step.parallel",
+                format!("parallel_step_authority:{job}"),
+            ));
+        }
+        Ok(())
     }
 }
 /// Require an output id to belong to its typed payload kind.
@@ -273,6 +299,14 @@ fn validate_kind(kind: &StepKind, job: &str) -> Result<(), ContractError> {
             matrix_max_parallel: *matrix_max_parallel,
             job,
         })?,
+        StepKind::NativeCheckExecution {
+            check_id,
+            task_id,
+            sdk_version,
+            ..
+        } => {
+            validate_native_check_kind(check_id, task_id, sdk_version)?;
+        }
         StepKind::Internal { operation, env } => {
             if operation.trim().is_empty() {
                 return Err(ContractError::identity(
@@ -287,6 +321,37 @@ fn validate_kind(kind: &StepKind, job: &str) -> Result<(), ContractError> {
                 ));
             }
         }
+    }
+    Ok(())
+}
+
+fn validate_native_check_kind(
+    check_id: &str,
+    task_id: &str,
+    sdk_version: &str,
+) -> Result<(), ContractError> {
+    if check_id.is_empty()
+        || check_id.len() > 128
+        || !check_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+    {
+        return Err(ContractError::identity(
+            "step.native_check",
+            "invalid_check_id",
+        ));
+    }
+    crate::ids::validate_task_id(task_id)
+        .map_err(|_| ContractError::identity("step.native_check", "invalid_task_id"))?;
+    if sdk_version.is_empty()
+        || sdk_version
+            .bytes()
+            .any(|byte| !(byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'+')))
+    {
+        return Err(ContractError::identity(
+            "step.native_check",
+            "invalid_sdk_version",
+        ));
     }
     Ok(())
 }

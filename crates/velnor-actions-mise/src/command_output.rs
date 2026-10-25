@@ -96,6 +96,22 @@ pub struct ProcessOutput {
     pub success: bool,
 }
 
+/// Proof that the exact child process group for one strict run was drained.
+///
+/// This value can only be returned by `run_quiescent_until` after the leader
+/// was reaped and the original process group was observed absent.
+#[derive(Debug)]
+#[must_use]
+pub struct ProcessGroupDrainReceipt {
+    _private: (),
+}
+
+impl ProcessGroupDrainReceipt {
+    pub(crate) fn new() -> Self {
+        Self { _private: () }
+    }
+}
+
 /// Child result whose standard output was streamed to a caller-owned file.
 ///
 /// The caller owns file admission, identity checks and removal on any failure.
@@ -161,16 +177,4 @@ pub(crate) fn redact_argv_for_debug(argv: &[std::ffi::OsString]) -> Vec<String> 
         }
     }
     out
-}
-
-pub(crate) fn signal_of(status: std::process::ExitStatus) -> Option<i32> {
-    #[cfg(unix)]
-    {
-        std::os::unix::process::ExitStatusExt::signal(&status)
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = status;
-        None
-    }
 }

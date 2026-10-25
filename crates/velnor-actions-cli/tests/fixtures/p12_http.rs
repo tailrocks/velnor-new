@@ -3,33 +3,20 @@
 use std::error::Error;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
 use super::p12_harness as harness;
+use flate2::Compression;
+use flate2::write::GzEncoder;
 
 const RESPONSE_CAP: usize = 512 * 1024;
 
 fn gzip_bytes(input: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
-    let mut child = Command::new("python3")
-        .arg("-c")
-        .arg("import gzip,sys;sys.stdout.buffer.write(gzip.compress(sys.stdin.buffer.read(),mtime=0))")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()?;
-    let mut stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| std::io::Error::other("gzip stdin unavailable"))?;
-    stdin.write_all(input)?;
-    drop(stdin);
-    let output = child.wait_with_output()?;
-    if !output.status.success() {
-        return Err(std::io::Error::other("gzip fixture generation failed").into());
-    }
-    Ok(output.stdout)
+    let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+    encoder.write_all(input)?;
+    Ok(encoder.finish()?)
 }
 
 fn rewrite_probe_sources(fixture: &harness::Fixture, base_url: &str) -> Result<(), Box<dyn Error>> {

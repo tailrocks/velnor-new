@@ -272,7 +272,7 @@ pub(crate) fn broadening_for_path(path: &str) -> Option<SelectionBroadening> {
                     return Some(class);
                 }
             }
-            Stack::Tofu | Stack::Mise => {}
+            Stack::Tofu | Stack::Mise | Stack::Native => {}
         }
     }
     None

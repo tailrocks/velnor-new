@@ -76,6 +76,7 @@ fn run_inventories_inner(
             Ok(Stack::Rust) => rust_manifests.push(manifest.clone()),
             Ok(Stack::Tofu) => tofu_units.push(candidate.unit_root.as_str()),
             Ok(Stack::Mise) => return Err(explicit_check_candidate_error()),
+            Ok(Stack::Native) => return Err(explicit_native_check_candidate_error()),
             Err(err) => {
                 return Err(OrchestratorError::Detection {
                     problem: err.to_string(),
@@ -123,6 +124,7 @@ fn run_inventories_inner(
                 );
             }
             Ok(Stack::Mise) => return Err(explicit_check_candidate_error()),
+            Ok(Stack::Native) => return Err(explicit_native_check_candidate_error()),
             Err(err) => {
                 return Err(OrchestratorError::Detection {
                     problem: err.to_string(),
@@ -141,6 +143,7 @@ fn manifest_for_candidate(candidate: &StackCandidate) -> Result<String, Orchestr
             &candidate.unit_root,
         )),
         Ok(Stack::Mise) => Err(explicit_check_candidate_error()),
+        Ok(Stack::Native) => Err(explicit_native_check_candidate_error()),
         Err(err) => Err(OrchestratorError::Detection {
             problem: err.to_string(),
         }),
@@ -151,6 +154,12 @@ fn manifest_for_candidate(candidate: &StackCandidate) -> Result<String, Orchestr
 fn explicit_check_candidate_error() -> OrchestratorError {
     OrchestratorError::Detection {
         problem: "mise_checks_are_explicit".to_owned(),
+    }
+}
+
+fn explicit_native_check_candidate_error() -> OrchestratorError {
+    OrchestratorError::Detection {
+        problem: "native_checks_are_explicit".to_owned(),
     }
 }
 
@@ -311,9 +320,16 @@ pub(crate) fn require_rust_pin(catalog: &ToolCatalog) -> Result<(), Orchestrator
             problem: err.to_string(),
         })?;
     presence
-        .run(catalog)
-        .map_err(|err| OrchestratorError::Inventory {
-            problem: err.to_string(),
+        .run_with_observation(catalog)
+        .map_err(|failure| OrchestratorError::Inventory {
+            problem: match failure.observation {
+                Some(observation) => format!(
+                    "{}; mise_ls_observation={}",
+                    failure.error,
+                    observation.to_json_line()
+                ),
+                None => failure.error.to_string(),
+            },
         })
 }
 

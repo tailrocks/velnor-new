@@ -1,0 +1,61 @@
+{
+  "schema": "velnor.homebrew-historical-preview.v1",
+  "label": "A",
+  "repository": {"slug": "jackin-project/jackin", "id": 1197700841},
+  "plan_sha256": "5f4dc66b22cbce0f309ea9ab8c93709774a8890f365e0d61277fb2b0b505d9ae",
+  "release": {
+    "id": 422399645,
+    "tag": "preview-41bad147b5ba9db09be99b07248531ce1bd867be",
+    "source_sha": "41bad147b5ba9db09be99b07248531ce1bd867be",
+    "version": "0.6.4-preview.1362+41bad14",
+    "commit_count": 1362,
+    "receipt_asset_id": 670727432,
+    "receipt_name": "release.json",
+    "receipt_size": 10056,
+    "receipt_sha256": "ec38a14cdbb4f282e9dc79707c31a99b0e2068394e3ddec7f42eb8283620df80",
+    "immutable": true,
+    "prerelease": true,
+    "draft": false
+  },
+  "source_ci": {"run_id": 40036544370, "attempt": 1, "conclusion": "success"},
+  "producer": {
+    "run_id": 40038086236,
+    "attempt": 1,
+    "event": "workflow_run",
+    "conclusion": "cancelled",
+    "authority_sha": "41bad147b5ba9db09be99b07248531ce1bd867be",
+    "workflow_path": ".github/workflows/binary-preview.yml",
+    "workflow_ref": "refs/heads/main",
+    "assemble_job": {"name": "preview-assemble", "id": 120709855637, "conclusion": "success"},
+    "signer_job": {"name": "preview-signer", "id": 120710985043, "conclusion": "success"},
+    "publisher_job": {"name": "Publish authenticated channel release", "id": 120711604532, "conclusion": "cancelled"}
+  },
+  "recovery": {
+    "run_id": 40078964311,
+    "attempt": 2,
+    "event": "workflow_dispatch",
+    "conclusion": "failure",
+    "authority_sha": "e737f4b5eb7c1a0d15ba6595fc260407ad178452",
+    "workflow_path": ".github/workflows/binary-preview.yml",
+    "workflow_ref": "refs/heads/main",
+    "job": {"name": "Recover the original signed release without rebuilding", "id": 120831039984, "conclusion": "success"},
+    "source_admission_artifact": {
+      "id": 12554588221,
+      "name": "velnor-preview-source-r40078964311-a2",
+      "size": 34639,
+      "entry": "preview-source-admission.json",
+      "sha256": "73eacadf794d40c16e39e6693d09741ce9146cefc867d135f4a1fee023daa972",
+      "policy_sha256": "37545d865186a6ab25755809d434a991659a4c98ae8119e7a07e50822c08933b",
+      "source_sha": "41bad147b5ba9db09be99b07248531ce1bd867be",
+      "source_ci": {"run_id": 40036544370, "attempt": 1},
+      "commit_count": 1362,
+      "version": "0.6.4-preview.1362+41bad14"
+    }
+  },
+  "evidence": {
+    "profile": "signed-sbom-v1",
+    "issuer": "https://token.actions.githubusercontent.com",
+    "predicate": "https://slsa.dev/provenance/v1",
+    "signer_workflow": "jackin-project/jackin/.github/workflows/binary-preview.yml@refs/heads/main"
+  }
+}

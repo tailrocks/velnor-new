@@ -54,7 +54,10 @@ pub(crate) struct PlanJobToolNeeds {
     pub(crate) all_features: bool,
     pub(crate) nextest: bool,
     pub(crate) opentofu: bool,
+    /// Install the pinned GitHub CLI used by authenticated workflow steps.
     pub(crate) gh: bool,
+    /// Resolve the Velnor-specific qualification predecessor on dispatch.
+    pub(crate) resolve_qualification_predecessor: bool,
 }
 
 /// Always-on workflow-lint job ID, emitted for both policies.
@@ -115,7 +118,7 @@ pub(crate) fn plan_job(
     steps.extend(source_steps);
     steps.extend(acquire);
     steps.push(request_step(PLAN_OPERATION)?);
-    if needs.gh {
+    if needs.resolve_qualification_predecessor {
         let mut resolve = velnor_actions_workflow_renderer::steps::internal_step(
             "Resolve qualification predecessor",
             RESOLVE_QUALIFICATION_OPERATION,
@@ -234,7 +237,7 @@ pub(crate) fn final_job(
     let mut needs = vec![PLAN_JOB_ID.to_owned()];
     needs.extend(crate_job_ids.iter().cloned());
     needs.push(LINT_JOB_ID.to_owned());
-    let mut steps = Vec::new();
+    let mut steps = vec![checkout_history_action()?];
     steps.extend(acquire);
     steps.push(prepare_pinned_tools_step(
         catalog,
@@ -297,7 +300,7 @@ fn plan_tools(needs: PlanJobToolNeeds) -> Vec<PinnedTool> {
 /// # Errors
 ///
 /// Returns a contract error when the Mise adapter rejects the request.
-fn prepare_pinned_tools_step(
+pub(crate) fn prepare_pinned_tools_step(
     catalog: &ToolCatalog,
     tools: Vec<PinnedTool>,
     rust_homes: bool,

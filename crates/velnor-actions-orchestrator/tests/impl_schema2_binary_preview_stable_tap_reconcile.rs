@@ -1,6 +1,6 @@
 //! Full native generation validates both channels' tap continuations.
-use super::{binary_repo, tap_enabled_config};
-use crate::impl_common::{TestResult, git};
+use super::{tap_enabled_config, tap_enabled_repo};
+use crate::impl_common::TestResult;
 use velnor_actions_contract::package_release::PackageReleaseChannel;
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
 
@@ -16,11 +16,16 @@ fn both_tap_reconciliation_workflows_pass_pinned_jactionlint() -> TestResult {
             "inputs = [\"mise.toml\", \"Formula/demo-preview.rb\", \"Formula/demo.rb\", \"scripts/package-update.sh\"]",
         )
         .replace(
-            "[distribution.homebrew_tap.updater]",
-            "[distribution.homebrew_tap.destinations.stable]\nformula = \"Formula/demo.rb\"\n[distribution.homebrew_tap.updater]",
+            "[distribution.homebrew_tap.review_completion]",
+            "[distribution.homebrew_tap.destinations.stable]\nformula = \"Formula/demo.rb\"\n[distribution.homebrew_tap.review_completion]",
+        )
+        .replace(
+            "conflicts = [] }]",
+            "conflicts = [] }, { channel = \"stable\", formula = \"demo\", formula_class = \"Demo\", destination = \"Formula/demo.rb\", conflicts = [] }]",
         );
-    let repo = binary_repo(&config)?;
-    git(&["add", "mise.toml"], repo.path())?;
+    assert!(config.contains("[distribution.homebrew_tap.destinations.stable]"));
+    assert!(config.contains("channel = \"stable\", formula = \"demo\""));
+    let repo = tap_enabled_repo(&config)?;
     let prepared = prepare(repo.path())?;
     let output = tempfile::tempdir()?;
     let report = generate(

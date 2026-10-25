@@ -295,6 +295,7 @@ fn empty_discovery() -> crate::discover::Discovery {
     crate::discover::Discovery {
         gradle_roots: Vec::new(),
         mise_checks: Vec::new(),
+        native_checks: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
         proposals: Vec::new(),

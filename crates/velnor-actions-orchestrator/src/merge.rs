@@ -30,6 +30,10 @@ use crate::cover::shard::{ResourceLimits, ShardProof};
 use crate::cover::{CoverSinks, Fold, Signals, cover_entry, partition_reports};
 use crate::internal::{SCHEMA, check_schema, internal_contract};
 
+#[path = "merge_context.rs"]
+mod context;
+pub use context::MergeContext;
+
 /// `merge-v1` request: plan, matrix bytes, reports, and jobs.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -88,12 +92,31 @@ pub(crate) struct MergeRequest {
 /// verdict with closed failure tokens. A missing plan still yields a
 /// verdict instead of an error. Consumes the emitted plan only and never
 /// rediscovers repository state.
+/// Native workspace admission additionally validates protected repository policy;
+/// the no-rediscovery property applies to ordinary report aggregation.
 ///
 /// # Errors
 ///
 /// Returns [`OrchestratorError::Internal`] for malformed requests and
 /// response-encoding failures.
 pub fn merge_internal(request_json: &str) -> Result<String, OrchestratorError> {
+    merge_internal_with_context(request_json, &MergeContext::capture_ambient())
+}
+
+/// Merge using explicit trusted workspace-admission context rather than ambient process variables.
+///
+/// Detached callers can evaluate non-native synthetic requests without inheriting
+/// unrelated GitHub workspace environment. Native plans still require an explicit
+/// repository workspace and are rejected when detached.
+/// The context selects workspace admission and its path; native authority still
+/// derives repository and event identity from the runner environment.
+///
+/// # Errors
+/// Returns [`OrchestratorError::Internal`] for malformed requests and response encoding failures.
+pub fn merge_internal_with_context(
+    request_json: &str,
+    context: &MergeContext,
+) -> Result<String, OrchestratorError> {
     let envelope = parse_strict_json(request_json).map_err(internal_contract)?;
     let mut request: MergeRequest = match serde_json::from_value(envelope.clone()) {
         Ok(request) => request,
@@ -118,7 +141,7 @@ pub fn merge_internal(request_json: &str) -> Result<String, OrchestratorError> {
         }
         return encode_report(&diagnostic_without_plan(&request, tokens)?);
     };
-    let final_report = build_final(&request, plan)?;
+    let final_report = build_final(&request, plan, context)?;
     final_report.validate().map_err(internal_contract)?;
     encode_report(&final_report)
 }
@@ -170,10 +193,14 @@ fn evidence_failure(request: &MergeRequest) -> Option<String> {
 }
 
 /// Aggregate one final report from validated plan plus reports.
-fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, OrchestratorError> {
+fn build_final(
+    request: &MergeRequest,
+    plan: &Plan,
+    context: &MergeContext,
+) -> Result<FinalReport, OrchestratorError> {
     let mut signals = Signals::default();
     let mut miss_reasons = BTreeSet::new();
-    check_final_inputs(request, plan, &mut signals, &mut miss_reasons)?;
+    check_final_inputs(request, plan, context, &mut signals, &mut miss_reasons)?;
     let entries = plan_entries(plan);
     let obligations = plan_digests(plan);
     let partition = partition_reports(request, &entries, &mut signals, &mut miss_reasons);
@@ -252,6 +279,7 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
 fn check_final_inputs(
     request: &MergeRequest,
     plan: &Plan,
+    context: &MergeContext,
     signals: &mut Signals,
     miss_reasons: &mut BTreeSet<String>,
 ) -> Result<(), OrchestratorError> {
@@ -267,15 +295,50 @@ fn check_final_inputs(
     check_candidate_binding(plan, request, signals, miss_reasons);
     check_plan_evidence(plan, request, signals, miss_reasons);
     check_execute_inventory(plan, signals, miss_reasons);
-    if !crate::check_evidence::gate::validate_proofs(
+    if workspace_validation_required(plan, context) {
+        match context.workspace() {
+            Some(root) if !root.as_os_str().is_empty() => {
+                if crate::internal_plan::native_homebrew_checks::validate_required_plan(root, plan)
+                    .is_err()
+                {
+                    signals.planning_failed = true;
+                    miss_reasons.insert("cache_corrupt".to_owned());
+                }
+                if !crate::check_evidence::gate::validate_proofs(
+                    plan,
+                    &request.task_reports,
+                    &request.check_proofs,
+                    Some(root),
+                ) {
+                    signals.planning_failed = true;
+                    miss_reasons.insert("cache_corrupt".to_owned());
+                }
+            }
+            _ => {
+                signals.planning_failed = true;
+                miss_reasons.insert("cache_corrupt".to_owned());
+            }
+        }
+    } else if !crate::check_evidence::gate::validate_proofs(
         plan,
         &request.task_reports,
         &request.check_proofs,
+        None,
     ) {
         signals.planning_failed = true;
         miss_reasons.insert("cache_corrupt".to_owned());
     }
     Ok(())
+}
+
+/// Whether merge must validate the request against an available repository.
+pub(super) fn workspace_validation_required(plan: &Plan, context: &MergeContext) -> bool {
+    context.repository_present()
+        || plan
+            .matrix
+            .include
+            .iter()
+            .any(|entry| entry.stack_id == "native")
 }
 
 /// Check 5: precedence over collected signals, then pass or no-work.

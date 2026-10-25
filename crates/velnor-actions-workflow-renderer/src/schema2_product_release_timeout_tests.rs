@@ -8,7 +8,8 @@ use crate::yaml::Yaml;
 use super::product;
 
 #[test]
-fn product_compiler_jobs_get_ten_minutes_and_other_jobs_keep_five() -> Result<(), Box<dyn Error>> {
+fn compiler_and_homebrew_qualification_jobs_get_their_bounded_budgets() -> Result<(), Box<dyn Error>>
+{
     let product = product(&[
         RoutingWorkflow::ImageRelease,
         RoutingWorkflow::MacosBinaryRelease,
@@ -43,7 +44,13 @@ fn product_compiler_jobs_get_ten_minutes_and_other_jobs_keep_five() -> Result<()
         "exactly four compiler jobs must receive the larger budget"
     );
     for (job, timeout) in observed {
-        let expected = if compiler_jobs.contains(&job) { 10 } else { 5 };
+        let expected = if compiler_jobs.contains(&job) {
+            10
+        } else if job == "qualify-homebrew-macos" {
+            30
+        } else {
+            5
+        };
         assert_eq!(timeout, expected, "unexpected timeout for {job}");
     }
     Ok(())

@@ -1,7 +1,10 @@
 //! Native preview generation keeps stable authorization independent.
 use super::{ENABLED, binary_repo};
 use crate::impl_common::{TestResult, git};
-use velnor_actions_orchestrator::{prepare, render_staged_tree};
+use velnor_actions_orchestrator::{export_homebrew_source_policy, prepare, render_staged_tree};
+
+#[path = "impl_schema2_binary_preview_custom.rs"]
+mod custom_route;
 
 fn preview_config(stable: bool) -> String {
     let stable_config = if stable {
@@ -36,19 +39,33 @@ protection_observer = { app_id_variable = "TAP_PROTECTION_APP_ID", app_private_k
 merge = "squash-after-gates"
 [distribution.homebrew_tap.destinations.preview]
 formula = "Formula/demo-preview.rb"
-[distribution.homebrew_tap.updater]
-task = "package:update-preview"
-source = { mise_config = "mise.toml", working_directory = "." }
-runner = { label = "ubuntu-26.04", platform = "linux_x64", executor = "hosted" }
-inputs = ["mise.toml", "Formula/demo-preview.rb", "scripts/package-update.sh"]
-tools = ["jq", "python"]
-timeout_minutes = 5
 [distribution.homebrew_tap.review_completion]
 check_name = "Review completion"
 app_id_variable = "REVIEW_COMPLETION_APP_ID"
 expected_reviewers = [{ app_id_variable = "SECURITY_REVIEW_APP_ID" }]
+[distribution.homebrew_formula]
+schema = "velnor.homebrew-formula-spec.v1"
+template = "velnor-homebrew-standalone-v1"
+description = "Demo command line tool"
+homepage = "https://example.com/demo"
+license = "Apache-2.0"
+channels = [{ channel = "preview", formula = "demo-preview", formula_class = "DemoPreview", destination = "Formula/demo-preview.rb", conflicts = [] }]
+host = { product = "demo", targets = ["aarch64-apple-darwin", "x86_64-unknown-linux-gnu"], bins = ["demo"] }
+auxiliaries = []
+stable_sentinel = { date = "2026-10-24", reason = "Stable release is not active" }
 "#
     )
+}
+
+fn tap_enabled_repo(config: &str) -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
+    let repo = binary_repo(config)?;
+    let source_policy = repo.path().join(".velnor/homebrew-release-policy.json");
+    export_homebrew_source_policy(repo.path(), &source_policy)?;
+    git(
+        &["add", ".velnor/homebrew-release-policy.json"],
+        repo.path(),
+    )?;
+    Ok(repo)
 }
 
 #[test]
@@ -237,15 +254,7 @@ fn preview_rejects_a_branch_that_cannot_pass_its_fixed_environment_policy() -> T
 
 #[test]
 fn generator_emits_tap_jobs_from_native_distribution_config() -> TestResult {
-    let repo = binary_repo(&tap_enabled_config(false))?;
-    std::fs::write(
-        repo.path().join("mise.toml"),
-        format!(
-            "[tools]\nrust = '{}'\n[tasks.release-preview]\nrun = 'true'\n",
-            velnor_actions_mise::RUST_VERSION
-        ),
-    )?;
-    git(&["add", "mise.toml"], repo.path())?;
+    let repo = tap_enabled_repo(&tap_enabled_config(false))?;
     let tree = render_staged_tree(&prepare(repo.path())?)?;
     let workflow = tree
         .get(".github/workflows/binary-preview.yml")
@@ -264,6 +273,9 @@ fn generator_emits_tap_jobs_from_native_distribution_config() -> TestResult {
     let merge = job(workflow, "preview-tap-merge", None)?;
 
     assert!(prepare.contains("prepare-homebrew-tap-v1"));
+    assert!(prepare.contains("VELNOR_HOMEBREW_FORMULA_SPEC"));
+    assert!(!workflow.contains("package-update"));
+    assert!(!workflow.contains("python"));
     assert!(!prepare.contains("environment: tap-update"));
     assert!(!prepare.contains("${{ secrets.TAP_APP_PRIVATE_KEY }}"));
     assert!(!prepare.contains("contents: write"));

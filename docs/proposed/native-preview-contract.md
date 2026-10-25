@@ -325,13 +325,22 @@ rule GitHub reports for their custom deployment branch policy.
 
 ## Native Homebrew destinations and continuation
 
-`HomebrewTapConfig` retains one repository, updater and shared W/O/C/R policy.
-It removes the old singleton `source` and `formula` fields and the
-`HomebrewTapSource` enum. `HomebrewTapDestinations` has only optional `preview`
-and `stable` entries, each a `HomebrewTapDestination { formula }`. At least one
-is configured when enabled; each references an enabled native channel. Formula
-paths must be distinct, safe regular files and present in the captured updater
-input closure. There is no fallback to a preview formula for stable receipts.
+The tap supports two exclusive formula-preparation routes. The native route
+uses `distribution.homebrew_formula` and no updater; it derives the formula
+from the typed specification and requires the committed source-release policy
+during generation. The custom route keeps a source-qualified updater and no
+native formula specification; it remains available to existing adopters and
+does not require that native source-policy file. Both routes keep one tap
+repository and the shared W/O/C/R policy. Configuring both routes, or neither
+on an enabled tap, is rejected.
+
+`HomebrewTapConfig` removes the old singleton `source` and `formula` fields and
+the `HomebrewTapSource` enum. `HomebrewTapDestinations` has only optional
+`preview` and `stable` entries, each a `HomebrewTapDestination { formula }`. At
+least one is configured when enabled; each references an enabled channel.
+Formula paths must be distinct and safe. On the custom route, each destination
+must also be present in the captured updater input closure. There is no fallback
+to a preview formula for stable receipts.
 
 ```toml
 [distribution.homebrew_tap]
@@ -341,7 +350,7 @@ environment = "tap-update"
 app_id_variable = "HOMEBREW_TAP_APP_ID"
 app_private_key_secret = "HOMEBREW_TAP_APP_PRIVATE_KEY"
 merge = "squash-after-gates"
-# Existing qualified updater and distinct O/C/R bindings remain mandatory.
+# This example selects the native route; omit `updater` and use the typed spec below.
 
 [distribution.homebrew_tap.destinations.preview]
 formula = "Formula/jackin-preview.rb"
@@ -350,14 +359,22 @@ formula = "Formula/jackin-preview.rb"
 formula = "Formula/jackin.rb"
 ```
 
+The custom route instead retains its qualified `updater` binding, including
+task source, runner, bounded timeout, tool list, and complete input closure,
+and omits `[distribution.homebrew_formula]`. Its destination formula must be
+inside that closure. This keeps older source-qualified updater configurations
+valid while preventing an ambiguous native/custom combination.
+
 The signed receipt's channel alone selects the destination and channel-distinct
 deterministic PR branch. Capture tap main and the selected formula, run the
-qualified updater, and independently derive exact canonical metadata-only bytes
-without evaluating Ruby. Every other byte and path, mode, alias, dependency,
-install/test statement and executable expression remains unchanged. A stable
-formula that needs new executable installation logic requires an explicitly
-reviewed ordinary source change before unattended metadata promotion is enabled.
-No optional Cask is smuggled into a one-formula patch.
+qualified updater on the custom route, and independently validate exact release
+literals and monotonicity without evaluating Ruby. On the native route, derive
+the canonical metadata-only formula from the typed specification. Both routes
+preserve every other byte and path, mode, alias, dependency, install/test
+statement, and executable expression. A stable formula that needs new
+executable installation logic requires an explicitly reviewed ordinary source
+change before unattended metadata promotion is enabled. No optional Cask is
+smuggled into a one-formula patch.
 
 Both channels retain exact-head Required/DCO, complete feedback dispositions,
 independent C/R completion, source/receipt reauthentication and server-enforced

@@ -14,7 +14,7 @@ use velnor_actions_workflow_renderer::{
 
 pub(crate) const VERSION: &str = "0.1.0";
 pub(crate) const LABEL: &str = "ubuntu-26.04";
-pub(crate) const MISE_USES: &str = "jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550";
+pub(crate) const MISE_USES: &str = "jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e";
 pub(crate) const MISE_VERSION: &str = velnor_actions_mise::MISE_VERSION;
 pub(crate) const MISE_SHA256: &str =
     velnor_actions_workflow_renderer::setup::MISE_BINARY_SHA256_LINUX_X64;
@@ -37,6 +37,14 @@ pub(crate) fn mbx_tool_env(rust_toolchain: &str) -> BTreeMap<String, String> {
         ),
         (
             "MISE_CARGO_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/cargo".to_owned(),
+        ),
+        (
+            "RUSTUP_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/rustup".to_owned(),
+        ),
+        (
+            "CARGO_HOME".to_owned(),
             "${{ runner.temp }}/velnor/cargo".to_owned(),
         ),
         ("RUSTUP_TOOLCHAIN".to_owned(), rust_toolchain.to_owned()),

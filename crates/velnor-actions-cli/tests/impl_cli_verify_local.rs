@@ -73,13 +73,7 @@ fn verify_local_entrypoint_lists_exact_stages() -> Result<(), Box<dyn Error>> {
     let script = entrypoint_text()?;
     assert_eq!(
         inline_stages(&script),
-        [
-            "toolchain",
-            "generated-selector",
-            "generated-tree",
-            "fixtures",
-            "integration",
-        ],
+        ["toolchain", "generated-tree", "fixtures", "integration",],
         "exact inline stage inventory"
     );
     assert_eq!(
@@ -92,6 +86,7 @@ fn verify_local_entrypoint_lists_exact_stages() -> Result<(), Box<dyn Error>> {
             "runner-doctest",
             "runner-deny",
             "repo-policy",
+            "generated-selector",
             "clippy-$safe",
             "test-$safe",
             "doctest-$safe",

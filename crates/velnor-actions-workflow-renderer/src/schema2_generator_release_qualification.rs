@@ -9,6 +9,17 @@ use super::assets::ProductAsset;
 use super::workflow_steps::{self, with_permissions};
 use super::{ProductReleasePins, assets, jobs, manifest};
 
+#[path = "schema2_generator_release_homebrew_qualification.rs"]
+mod homebrew;
+
+/// Render the bounded historical A/D Homebrew qualification job.
+pub(super) fn homebrew_job(
+    pins: &ProductReleasePins,
+    actions: &mut Vec<(String, Yaml)>,
+) -> Result<(String, Yaml), RenderError> {
+    homebrew::job(pins, actions)
+}
+
 pub(super) struct QualificationJob<'a> {
     pub id: &'a str,
     pub name: &'a str,

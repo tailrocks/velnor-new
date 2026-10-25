@@ -1,11 +1,5 @@
 //! Authenticated, non-overwriting GitHub release publication.
 
-use std::env;
-use velnor_actions_contract::{
-    package_release::{PackageReleaseChannel, PackageReleaseReceipt},
-    publication_retry::{PublicationIdentity, PublicationState},
-};
-
 use crate::{
     OrchestratorError,
     internal::internal,
@@ -14,6 +8,11 @@ use crate::{
         PackageReleaseSigningIdentity, VerifiedAttestedSignedPackage,
         verify_attested_signed_package_from_env_with_deadline,
     },
+};
+use std::env;
+use velnor_actions_contract::{
+    package_release::{PackageReleaseChannel, PackageReleaseReceipt},
+    publication_retry::{PublicationIdentity, PublicationState},
 };
 
 #[path = "release_policy_admission.rs"]
@@ -32,17 +31,14 @@ pub use stable_tag_origin::{
 mod published;
 pub(crate) use published::verify_published_release;
 
-/// Authenticate the protected source main tip for downstream promotion decisions.
-pub(crate) fn verify_preview_main_tip(
-    repository: &str,
-    repository_id: u64,
-    branch: &str,
-) -> Result<String, OrchestratorError> {
-    if !velnor_actions_contract::vcs::is_safe_github_repository(repository) {
-        return Err(internal("package_publish_preview_tip_repository_invalid"));
-    }
-    github::GitHubApi::new(repository.to_owned()).verify_preview_main_tip(repository_id, branch)
-}
+#[path = "package_release_publish_source.rs"]
+mod source;
+pub(crate) use source::{
+    ProtectedSourceTreeIdentity, read_protected_adoption_seed_base_tree_identity,
+    read_protected_source_file, read_protected_source_tree_identity,
+    try_read_protected_source_file, verify_preview_main_tip, verify_public_protected_main_lineage,
+    verify_public_pull_request_lineage,
+};
 
 #[path = "package_release_publish_backend.rs"]
 mod backend;
@@ -53,7 +49,27 @@ use identity::{draft_receipt_digest, local_identity, recovery_body};
 
 #[path = "package_release_publish_github.rs"]
 mod github;
-use github::{GitHubApi, ReleaseResponse, TagObservation};
+use github::{
+    GitHubApi, ReleaseAssetResponse, ReleaseResponse, TagObservation, WorkflowMetadata,
+    WorkflowRunResponse, sha256,
+};
+
+#[path = "package_release_publish_sdk.rs"]
+mod sdk;
+pub(crate) use sdk::{
+    PublicSdkCallerSelection, PublicSdkProducerSelection, verify_public_sdk_adoption_caller,
+    verify_public_sdk_release_producer,
+};
+
+#[path = "package_release_publish_merge_group.rs"]
+mod merge_group;
+pub(crate) use merge_group::{
+    MergeGroupFacts, MergeGroupSelection, verify_public_merge_group_context,
+};
+
+#[path = "package_release_publish_workflow_dispatch.rs"]
+mod workflow_dispatch;
+pub(crate) use workflow_dispatch::{QualificationRunSelection, verify_public_qualification_run};
 
 #[path = "package_release_run_identity.rs"]
 mod run_identity;
@@ -69,6 +85,76 @@ pub(crate) use preview_artifacts::tests::discover_request_for_sealing_test;
 pub(crate) use preview_artifacts::{
     AdmittedReleaseArtifact, acquire_release_aggregate, acquire_release_artifacts,
 };
+
+#[path = "package_release_publish_public_read.rs"]
+mod public_read;
+pub(crate) use public_read::{
+    PublicPullRequestSnapshot, PublicReleaseAsset, PublicReleaseSnapshot, read_public_branch_tip,
+    read_public_pull_request, read_public_release_snapshot, read_public_repository_identity,
+};
+
+#[path = "package_release_publish_public_repository.rs"]
+mod public_repository;
+pub(crate) use public_repository::{PublicRepositorySnapshot, read_public_repository_snapshot};
+
+#[path = "package_release_publish_public_recovery.rs"]
+mod public_recovery;
+
+#[cfg(test)]
+use public_read::validate_public_asset_size_inventory;
+#[cfg(test)]
+use public_recovery::{verify_public_recovery_jobs, verify_public_recovery_original_jobs};
+#[cfg(test)]
+use public_runs::{public_release_workflow_matches, verify_public_release_producer_jobs};
+
+#[path = "package_release_publish_public_runs.rs"]
+mod public_runs;
+pub(crate) use public_runs::{
+    verify_public_historical_release_recovery, verify_public_release_runs,
+};
+
+/// Reuse the existing immutable publication predicates without authenticating a
+/// promotion invocation or exposing the write-capable GitHub API adapter.
+pub(crate) fn verify_publication_snapshot(
+    signed: &VerifiedAttestedSignedPackage,
+    snapshot: &PublicReleaseSnapshot,
+) -> Result<(), OrchestratorError> {
+    published::verify_publication_snapshot(signed, snapshot)
+}
+
+fn asset_tuples(assets: &[ReleaseAssetResponse]) -> Vec<(u64, String, u64, Option<String>)> {
+    let mut tuples = assets
+        .iter()
+        .map(|asset| {
+            (
+                asset.id,
+                asset.name.clone(),
+                asset.size,
+                asset.digest.clone(),
+            )
+        })
+        .collect::<Vec<_>>();
+    tuples.sort();
+    tuples
+}
+
+fn asset_tuples_from_downloads(
+    assets: &[PublicReleaseAsset],
+) -> Vec<(u64, String, u64, Option<String>)> {
+    let mut tuples = assets
+        .iter()
+        .map(|asset| {
+            (
+                asset.id,
+                asset.name.clone(),
+                asset.size,
+                asset.api_digest.clone(),
+            )
+        })
+        .collect::<Vec<_>>();
+    tuples.sort();
+    tuples
+}
 
 /// Private operation that publishes one authenticated native release.
 pub const PUBLISH_PACKAGE_RELEASE_OP: &str = "publish-package-release-v1";

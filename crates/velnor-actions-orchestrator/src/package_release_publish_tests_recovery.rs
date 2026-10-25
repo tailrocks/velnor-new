@@ -1,0 +1,260 @@
+use super::super::*;
+use super::super::{
+    github::sha256,
+    github::{
+        GITHUB_ACTIONS_BOT_ID, ReleaseAuthor, RunRepository, WorkflowMetadata, WorkflowRunResponse,
+    },
+    identity::{MAX_RECOVERY_BODY_BYTES, make_recovery_body},
+    run_identity::RunSource,
+};
+
+#[test]
+fn recovery_envelope_binds_exact_receipt_and_signature_bundle() {
+    let receipt = br#"{"run_id":17}"#;
+    let bundle = br#"{"signature":"signed"}"#;
+    let digest = sha256(receipt);
+    let expected = make_recovery_body(receipt, bundle, &digest).expect("bounded envelope");
+    let author = ReleaseAuthor {
+        login: Some("github-actions[bot]".to_owned()),
+        id: Some(GITHUB_ACTIONS_BOT_ID),
+    };
+    assert_eq!(
+        draft_receipt_digest(Some(&expected), Some(&author), &expected, &digest,).as_deref(),
+        Some(digest.as_str())
+    );
+    let replayed_identical_candidate =
+        make_recovery_body(receipt, bundle, &digest).expect("identical original envelope");
+    assert_eq!(replayed_identical_candidate, expected);
+
+    let changed_receipt = br#"{"run_id":18}"#;
+    let changed_digest = sha256(changed_receipt);
+    let other_attempt = make_recovery_body(changed_receipt, bundle, &changed_digest)
+        .expect("other signed attempt envelope");
+    assert_ne!(
+        draft_receipt_digest(Some(&other_attempt), Some(&author), &expected, &digest,).as_deref(),
+        Some(digest.as_str())
+    );
+    assert_ne!(
+        draft_receipt_digest(Some("malformed"), Some(&author), &expected, &digest).as_deref(),
+        Some(digest.as_str())
+    );
+    assert_eq!(
+        draft_receipt_digest(Some(&expected), None, &expected, &digest),
+        None
+    );
+    let forged_author = ReleaseAuthor {
+        login: Some("untrusted".to_owned()),
+        id: Some(1),
+    };
+    assert_ne!(
+        draft_receipt_digest(Some(&expected), Some(&forged_author), &expected, &digest,).as_deref(),
+        Some(digest.as_str())
+    );
+}
+
+#[test]
+fn recovery_envelope_size_is_checked_before_any_remote_write() {
+    let huge = vec![b'x'; MAX_RECOVERY_BODY_BYTES];
+    let digest = sha256(&huge);
+    assert!(make_recovery_body(&huge, b"bundle", &digest).is_err());
+}
+
+#[test]
+fn same_source_new_preview_attempt_cannot_resume_another_signed_envelope() {
+    use std::collections::{BTreeMap, BTreeSet};
+    use velnor_actions_contract::publication_retry::{
+        PublicationAction, PublicationIdentity, PublicationState, publication_action,
+    };
+
+    let source_sha = "a".repeat(40);
+    let assets = BTreeMap::from([("release.json".to_owned(), "c".repeat(64))]);
+    let attempt_a = PublicationIdentity {
+        source_sha: source_sha.clone(),
+        receipt_digest: "b".repeat(64),
+        assets: assets.clone(),
+    };
+    let attempt_b = PublicationIdentity {
+        source_sha: source_sha.clone(),
+        receipt_digest: "d".repeat(64),
+        assets: assets.clone(),
+    };
+    let retained_tag = PublicationState::TagOnly {
+        source_sha,
+        original_receipt_digest: Some(attempt_a.receipt_digest.clone()),
+    };
+    let available = BTreeSet::from(["release.json".to_owned()]);
+
+    assert_eq!(
+        publication_action(&attempt_b, &retained_tag, true, &available),
+        PublicationAction::Reject(
+            velnor_actions_contract::publication_retry::PublicationRejection::ConflictingIdentity
+        )
+    );
+    assert_eq!(
+        publication_action(&attempt_a, &retained_tag, true, &available),
+        PublicationAction::CreateDraft,
+        "recovery retains original A bytes and envelope"
+    );
+}
+
+#[test]
+fn publisher_ci_gate_binds_exact_run_and_attempt() {
+    let run = WorkflowRunResponse {
+        id: Some(22),
+        run_attempt: Some(3),
+        path: Some(velnor_actions_contract::CI_WORKFLOW_PATH.to_owned()),
+        name: Some(velnor_actions_contract::WORKFLOW_DISPLAY_NAME.to_owned()),
+        workflow_id: Some(7),
+        run_number: Some(12),
+        head_repository: Some(RunRepository {
+            id: 9,
+            full_name: Some("example/app".to_owned()),
+        }),
+        head_sha: Some("a".repeat(40)),
+        head_branch: Some("main".to_owned()),
+        event: Some("push".to_owned()),
+        status: Some("completed".to_owned()),
+        conclusion: Some("success".to_owned()),
+        repository: Some(RunRepository {
+            id: 9,
+            full_name: Some("example/app".to_owned()),
+        }),
+    };
+    let workflow = WorkflowMetadata {
+        state: "active".to_owned(),
+        id: 7,
+        path: velnor_actions_contract::CI_WORKFLOW_PATH.to_owned(),
+        name: velnor_actions_contract::WORKFLOW_DISPLAY_NAME.to_owned(),
+    };
+    let sha = "a".repeat(40);
+    let source = RunSource {
+        repository_id: 9,
+        sha: &sha,
+        branch: "main",
+    };
+    assert!(run_identity::ci_run_is_success(
+        &run, 22, 3, source, &workflow
+    ));
+    assert!(!run_identity::ci_run_is_success(
+        &run, 22, 2, source, &workflow
+    ));
+    assert!(!run_identity::ci_run_is_success(
+        &run, 21, 3, source, &workflow
+    ));
+}
+
+#[test]
+fn public_release_producer_identity_uses_workflow_authority_sha_not_source_sha() {
+    let source_sha = "a".repeat(40);
+    let authority_sha = "b".repeat(40);
+    let workflow = WorkflowMetadata {
+        state: "active".to_owned(),
+        id: 7,
+        path: ".github/workflows/binary-preview.yml".to_owned(),
+        name: "Rust binary preview".to_owned(),
+    };
+    let run = WorkflowRunResponse {
+        id: Some(22),
+        run_attempt: Some(3),
+        path: Some(workflow.path.clone()),
+        name: Some(workflow.name.clone()),
+        workflow_id: Some(7),
+        run_number: Some(12),
+        head_repository: Some(RunRepository {
+            id: 9,
+            full_name: Some("example/app".to_owned()),
+        }),
+        head_sha: Some(authority_sha.clone()),
+        head_branch: Some("main".to_owned()),
+        event: Some("workflow_run".to_owned()),
+        status: Some("completed".to_owned()),
+        conclusion: Some("failure".to_owned()),
+        repository: Some(RunRepository {
+            id: 9,
+            full_name: Some("example/app".to_owned()),
+        }),
+    };
+    assert!(public_release_workflow_matches(
+        &run,
+        &workflow,
+        22,
+        3,
+        RunSource {
+            repository_id: 9,
+            sha: &authority_sha,
+            branch: "main",
+        },
+        "workflow_run",
+    ));
+    let mut wrong_source_head = run.clone();
+    wrong_source_head.head_sha = Some(source_sha);
+    assert!(!public_release_workflow_matches(
+        &wrong_source_head,
+        &workflow,
+        22,
+        3,
+        RunSource {
+            repository_id: 9,
+            sha: &authority_sha,
+            branch: "main",
+        },
+        "workflow_run",
+    ));
+    assert_eq!(run.conclusion.as_deref(), Some("failure"));
+}
+
+#[test]
+fn historical_a_and_d_public_producer_attempts_use_full_observed_identity() {
+    let workflow = WorkflowMetadata {
+        state: "active".to_owned(),
+        id: 388_393_922,
+        path: ".github/workflows/binary-preview.yml".to_owned(),
+        name: "Rust binary preview".to_owned(),
+    };
+    for (id, sha, conclusion) in [
+        (
+            40_038_086_236,
+            "41bad147b5ba9db09be99b07248531ce1bd867be",
+            "cancelled",
+        ),
+        (
+            40_086_102_429,
+            "5094139b2658e793d36306a34a7a135554c4f7eb",
+            "failure",
+        ),
+    ] {
+        let run = WorkflowRunResponse {
+            id: Some(id),
+            run_attempt: Some(1),
+            path: Some(workflow.path.clone()),
+            name: Some(workflow.name.clone()),
+            workflow_id: Some(workflow.id),
+            run_number: Some(1),
+            head_repository: Some(RunRepository {
+                id: 1_197_700_841,
+                full_name: Some("jackin-project/jackin".to_owned()),
+            }),
+            head_sha: Some(sha.to_owned()),
+            head_branch: Some("main".to_owned()),
+            event: Some("workflow_run".to_owned()),
+            status: Some("completed".to_owned()),
+            conclusion: Some(conclusion.to_owned()),
+            repository: Some(RunRepository {
+                id: 1_197_700_841,
+                full_name: Some("jackin-project/jackin".to_owned()),
+            }),
+        };
+        assert!(public_release_workflow_matches(
+            &run,
+            &workflow,
+            id,
+            1,
+            RunSource {
+                repository_id: 1_197_700_841,
+                sha,
+                branch: "main",
+            },
+            "workflow_run",
+        ));
+    }
+}

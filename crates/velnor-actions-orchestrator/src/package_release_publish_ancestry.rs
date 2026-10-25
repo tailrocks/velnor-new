@@ -1,11 +1,100 @@
 //! Bounded ancestry proof for immutable preview sources.
 
+use serde::Deserialize;
 use serde_json::Value;
 
 use super::{GitHubApi, is_lowercase_git_sha};
 use crate::{OrchestratorError, internal::internal};
 
 const MAX_COMPARE_COMMITS: u64 = 1_000_000;
+
+#[derive(Deserialize)]
+struct PublicBranch {
+    name: String,
+    protected: bool,
+    commit: PublicBranchCommit,
+}
+
+#[derive(Deserialize)]
+struct PublicBranchCommit {
+    sha: String,
+}
+
+/// Read-only public proof for consumers that must not use the protected-status
+/// credential path. The public branch response must report `protected: true`;
+/// ancestry and the tip are checked twice through immutable public refs.
+pub(in crate::package_release_publish) fn verify_public_preview_main_ancestry(
+    api: &GitHubApi,
+    repository_id: u64,
+    branch: &str,
+    source_sha: &str,
+    workflow_authority_sha: &str,
+) -> Result<String, OrchestratorError> {
+    if repository_id == 0
+        || branch != "main"
+        || !is_lowercase_git_sha(source_sha)
+        || !is_lowercase_git_sha(workflow_authority_sha)
+    {
+        return Err(internal("package_public_preview_ancestry_input_invalid"));
+    }
+    api.verify_preview_repository_identity(repository_id, branch)?;
+    let captured_tip = public_protected_tip(api, branch)?;
+    for sha in [source_sha, workflow_authority_sha, captured_tip.as_str()] {
+        let commit: Value = api.get_json(&api.route(&format!("commits/{sha}")))?;
+        if commit.get("sha").and_then(Value::as_str) != Some(sha) {
+            return Err(internal("package_public_preview_commit_mismatch"));
+        }
+    }
+    require_ancestor(api, source_sha, workflow_authority_sha)?;
+    require_ancestor(api, workflow_authority_sha, &captured_tip)?;
+    let observed_tip = public_protected_tip(api, branch)?;
+    if observed_tip != captured_tip {
+        return Err(internal("package_public_preview_tip_changed"));
+    }
+    Ok(captured_tip)
+}
+
+/// Verify a public PR base is the current protected main tip, then prove the
+/// exact immutable PR head is its descendant and recheck the base tip.
+pub(in crate::package_release_publish) fn verify_public_pull_request_lineage(
+    api: &GitHubApi,
+    repository_id: u64,
+    branch: &str,
+    base_sha: &str,
+    head_sha: &str,
+) -> Result<(), OrchestratorError> {
+    if repository_id == 0
+        || branch != "main"
+        || !is_lowercase_git_sha(base_sha)
+        || !is_lowercase_git_sha(head_sha)
+    {
+        return Err(internal("package_public_pr_ancestry_input_invalid"));
+    }
+    api.verify_preview_repository_identity(repository_id, branch)?;
+    let captured_tip = public_protected_tip(api, branch)?;
+    if captured_tip != base_sha {
+        return Err(internal("package_public_pr_base_not_current"));
+    }
+    let head: Value = api.get_json(&api.route(&format!("commits/{head_sha}")))?;
+    if head.get("sha").and_then(Value::as_str) != Some(head_sha) {
+        return Err(internal("package_public_pr_head_mismatch"));
+    }
+    require_ancestor(api, base_sha, head_sha)?;
+    if public_protected_tip(api, branch)? != captured_tip {
+        return Err(internal("package_public_pr_base_changed"));
+    }
+    Ok(())
+}
+
+fn public_protected_tip(api: &GitHubApi, branch: &str) -> Result<String, OrchestratorError> {
+    let route = api.route(&format!("branches/{}", super::encode_segment(branch)));
+    let response: PublicBranch = api.get_json(&route)?;
+    if response.name != branch || !response.protected || !is_lowercase_git_sha(&response.commit.sha)
+    {
+        return Err(internal("package_public_main_not_protected"));
+    }
+    Ok(response.commit.sha)
+}
 
 pub(super) fn verify_preview_main_tip(
     api: &GitHubApi,

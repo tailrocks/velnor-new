@@ -10,7 +10,7 @@ pub(super) fn verify_attested_signed_package_with_deadline(
 ) -> Result<super::VerifiedAttestedSignedPackage, OrchestratorError> {
     let (signed, closure) =
         hold_signed_directory_for_publication(directory, custody_deadline, || {
-            verify_signed_and_attestation(directory, plan, expected)
+            verify_signed_and_attestation(directory, plan, expected, custody_deadline)
         })?;
     Ok(super::VerifiedAttestedSignedPackage {
         signed,
@@ -25,10 +25,26 @@ pub(crate) fn verify_attested_signed_package_with_owned_tempdir(
     expected: &super::PackageReleaseSigningIdentity,
     custody_deadline: velnor_actions_mise::CheckDeadline,
 ) -> Result<super::VerifiedAttestedSignedPackage, OrchestratorError> {
+    verify_attested_signed_package_with_owned_tempdir_and_deadlines(
+        owner,
+        plan,
+        expected,
+        custody_deadline,
+        custody_deadline,
+    )
+}
+
+pub(crate) fn verify_attested_signed_package_with_owned_tempdir_and_deadlines(
+    owner: tempfile::TempDir,
+    plan: &velnor_actions_contract::PackageReleasePlan,
+    expected: &super::PackageReleaseSigningIdentity,
+    verification_deadline: velnor_actions_mise::CheckDeadline,
+    custody_deadline: velnor_actions_mise::CheckDeadline,
+) -> Result<super::VerifiedAttestedSignedPackage, OrchestratorError> {
     let directory = owner.path().to_path_buf();
     let (signed, closure) =
         hold_owned_signed_directory_for_publication(owner, custody_deadline, || {
-            verify_signed_and_attestation(&directory, plan, expected)
+            verify_signed_and_attestation(&directory, plan, expected, verification_deadline)
         })?;
     Ok(super::VerifiedAttestedSignedPackage {
         signed,
@@ -41,9 +57,11 @@ fn verify_signed_and_attestation(
     directory: &Path,
     plan: &velnor_actions_contract::PackageReleasePlan,
     expected: &super::PackageReleaseSigningIdentity,
+    deadline: velnor_actions_mise::CheckDeadline,
 ) -> Result<super::VerifiedSignedPackage, OrchestratorError> {
-    let mut signed = super::verify_signed_package(directory, plan, expected)?;
-    super::attestation::verify_release_attestation(&signed, expected)?;
+    let mut signed =
+        super::verify_signed_package_with_deadline(directory, plan, expected, deadline)?;
+    super::attestation::verify_release_attestation(&signed, expected, deadline)?;
     signed.plan = plan.clone();
     Ok(signed)
 }

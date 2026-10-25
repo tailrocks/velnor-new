@@ -6,6 +6,131 @@ use velnor_actions_contract::JobTimeout;
 
 use crate::{RenderError, workflow_size, yaml::Yaml};
 
+/// Narrow approval for the one external SDK callee emitted by the protected
+/// Homebrew seed renderer. The fields stay private so ordinary workflow
+/// callers cannot manufacture or broaden this exception.
+pub(super) struct HomebrewAdoptionCalleeScope {
+    source_sha: String,
+    transition_id: String,
+    sdk_version: String,
+    manifest_sha256: String,
+    callee_sha256: String,
+}
+
+impl HomebrewAdoptionCalleeScope {
+    /// Constructed only after the seed factory validates its protected
+    /// transition and externally authenticated SDK release identity.
+    pub(super) fn authenticated_seed(
+        source_sha: &str,
+        transition_id: &str,
+        sdk_version: &str,
+        manifest_sha256: &str,
+        callee_sha256: &str,
+    ) -> Self {
+        Self {
+            source_sha: source_sha.to_owned(),
+            transition_id: transition_id.to_owned(),
+            sdk_version: sdk_version.to_owned(),
+            manifest_sha256: manifest_sha256.to_owned(),
+            callee_sha256: callee_sha256.to_owned(),
+        }
+    }
+
+    fn callee_ref(&self) -> String {
+        format!(
+            "tailrocks/velnor-new/.github/workflows/homebrew-adoption.yml@{}",
+            self.source_sha
+        )
+    }
+}
+
+/// Validate the seed's sole remote reusable-workflow call against the exact
+/// protected callee source and closed input/permission inventory.
+pub(super) fn validate_homebrew_adoption_caller(
+    path: &str,
+    document: &Yaml,
+    scope: &HomebrewAdoptionCalleeScope,
+) -> Result<(), RenderError> {
+    if path != ".github/workflows/ci.yml" || !lower_hex(&scope.callee_sha256, 64) {
+        return Err(invalid(path, "seed_caller_path"));
+    }
+    let top = mapping(document, path)?;
+    if top.len() != 4
+        || !top
+            .iter()
+            .any(|(key, value)| key == "name" && value == &Yaml::str("CI"))
+        || !top
+            .iter()
+            .any(|(key, value)| key == "on" && *value == pull_request_only())
+        || !top
+            .iter()
+            .any(|(key, value)| key == "permissions" && *value == caller_permissions())
+    {
+        return Err(invalid(path, "seed_caller_inventory"));
+    }
+    let jobs = jobs(document, path)?;
+    if jobs.len() != 1 || jobs[0].0 != "homebrew-adoption" {
+        return Err(invalid(path, "seed_caller_jobs"));
+    }
+    let job = mapping(&jobs[0].1, "homebrew-adoption")?;
+    let expected_with = Yaml::Map(vec![
+        (
+            "transition_id".to_owned(),
+            Yaml::str(scope.transition_id.clone()),
+        ),
+        (
+            "sdk_version".to_owned(),
+            Yaml::str(scope.sdk_version.clone()),
+        ),
+        (
+            "sdk_source_sha".to_owned(),
+            Yaml::str(scope.source_sha.clone()),
+        ),
+        (
+            "sdk_manifest_sha256".to_owned(),
+            Yaml::str(scope.manifest_sha256.clone()),
+        ),
+    ]);
+    let expected_job_permissions = Yaml::Map(vec![
+        ("contents".to_owned(), Yaml::str("read")),
+        ("actions".to_owned(), Yaml::str("read")),
+        ("attestations".to_owned(), Yaml::str("read")),
+    ]);
+    if job.len() != 3
+        || !job
+            .iter()
+            .any(|(key, value)| key == "uses" && value == &Yaml::str(scope.callee_ref()))
+        || !job
+            .iter()
+            .any(|(key, value)| key == "with" && value == &expected_with)
+        || !job
+            .iter()
+            .any(|(key, value)| key == "permissions" && value == &expected_job_permissions)
+    {
+        return Err(invalid("homebrew-adoption", "seed_callee_scope"));
+    }
+    Ok(())
+}
+
+fn lower_hex(value: &str, length: usize) -> bool {
+    value.len() == length
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
+}
+
+fn pull_request_only() -> Yaml {
+    Yaml::Map(vec![("pull_request".to_owned(), Yaml::Null)])
+}
+
+fn caller_permissions() -> Yaml {
+    Yaml::Map(vec![
+        ("contents".to_owned(), Yaml::str("read")),
+        ("actions".to_owned(), Yaml::str("read")),
+        ("attestations".to_owned(), Yaml::str("read")),
+    ])
+}
+
 pub(crate) fn validate(path: &str, document: &Yaml) -> Result<(), RenderError> {
     if !workflow_size::is_workflow_path(path) {
         return Ok(());

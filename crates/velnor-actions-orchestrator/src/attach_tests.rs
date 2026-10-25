@@ -117,6 +117,7 @@ fn lock_acquire_inserts_digest_verified_stage() {
         names,
         [
             "Acquire Velnor",
+            "Checkout",
             "Prepare pinned tools",
             "Write request",
             "Merge reports"

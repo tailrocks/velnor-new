@@ -8,6 +8,8 @@ mod dispatch;
 mod dispatch_config;
 mod dispatch_deps;
 mod dispatch_generate;
+mod dispatch_homebrew_adoption;
+mod dispatch_image_maintenance;
 mod dispatch_local_release;
 mod dispatch_qualification;
 mod dispatch_qualify_tools;

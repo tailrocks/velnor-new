@@ -1,5 +1,53 @@
 //! Cross-policy admission and source-channel acceptance conditions.
 use super::*;
+use crate::ContractError;
+use crate::{
+    homebrew_spec::{
+        HOMEBREW_FORMULA_SPEC_SCHEMA_V1, HOMEBREW_FORMULA_TEMPLATE_V1, HomebrewFormulaChannelSpec,
+        HomebrewFormulaSpec, HomebrewHostProductSpec, HomebrewStableSentinel,
+    },
+    package_release::PackageReleaseChannel,
+};
+
+fn formula_spec(preview: bool, stable: bool) -> HomebrewFormulaSpec {
+    let mut channels = Vec::new();
+    if preview {
+        channels.push(HomebrewFormulaChannelSpec {
+            channel: PackageReleaseChannel::Preview,
+            formula: "jackin-preview".to_owned(),
+            formula_class: "JackinPreview".to_owned(),
+            destination: "Formula/jackin-preview.rb".to_owned(),
+            conflicts: vec!["jackin".to_owned()],
+        });
+    }
+    if stable {
+        channels.push(HomebrewFormulaChannelSpec {
+            channel: PackageReleaseChannel::Stable,
+            formula: "jackin".to_owned(),
+            formula_class: "Jackin".to_owned(),
+            destination: "Formula/jackin.rb".to_owned(),
+            conflicts: vec!["jackin-preview".to_owned()],
+        });
+    }
+    HomebrewFormulaSpec {
+        schema: HOMEBREW_FORMULA_SPEC_SCHEMA_V1.to_owned(),
+        template: HOMEBREW_FORMULA_TEMPLATE_V1.to_owned(),
+        description: "Jackin command line tools".to_owned(),
+        homepage: "https://github.com/jackin-project/jackin".to_owned(),
+        license: "MIT".to_owned(),
+        channels,
+        host: HomebrewHostProductSpec {
+            product: "jackin".to_owned(),
+            targets: vec!["aarch64-apple-darwin".to_owned()],
+            bins: vec!["jackin".to_owned()],
+        },
+        auxiliaries: Vec::new(),
+        stable_sentinel: HomebrewStableSentinel {
+            date: "2026-10-24".to_owned(),
+            reason: "Stable release is not active".to_owned(),
+        },
+    }
+}
 
 fn config(stable: bool, preview: bool) -> VelnorConfig {
     let mut config: VelnorConfig = serde_json::from_value(serde_json::json!({
@@ -86,6 +134,7 @@ fn distribution_requires_enabled_preview_even_when_stable_enabled() {
     for stable in [false, true] {
         let mut config = config(stable, false);
         config.distribution.homebrew_tap = Some(super::distribution::valid_tap());
+        config.distribution.homebrew_formula = Some(formula_spec(true, false));
         assert!(
             config
                 .validate("config.toml")
@@ -108,6 +157,7 @@ fn distribution_requires_enabled_preview_even_when_stable_enabled() {
 fn distribution_admits_enabled_preview_and_can_be_independently_disabled() {
     let mut config = config(false, true);
     config.distribution.homebrew_tap = Some(super::distribution::valid_tap());
+    config.distribution.homebrew_formula = Some(formula_spec(true, false));
     assert!(config.validate("config.toml").is_ok());
     config
         .distribution
@@ -237,8 +287,8 @@ fn stable_destination_requires_stable_and_never_borrows_preview_authority() {
     tap.destinations.stable = Some(HomebrewTapDestination {
         formula: "Formula/jackin.rb".to_owned(),
     });
-    tap.updater.inputs.push("Formula/jackin.rb".to_owned());
     value.distribution.homebrew_tap = Some(tap);
+    value.distribution.homebrew_formula = Some(formula_spec(false, true));
     assert!(
         value
             .validate("config.toml")

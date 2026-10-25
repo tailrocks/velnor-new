@@ -95,6 +95,31 @@ fn symlinks_gitlinks_and_duplicate_entries_never_read_blob_data() {
 }
 
 #[test]
+fn verified_missing_path_is_distinguished_from_invalid_tree() {
+    let (api, fixture) = GitHubApi::with_fixture(
+        "example/app",
+        vec![
+            (
+                route(&format!("git/commits/{}", "a".repeat(40))),
+                json!({"sha":"a".repeat(40),"tree":{"sha":"b".repeat(40)}}),
+            ),
+            (
+                route(&format!("git/trees/{}", "b".repeat(40))),
+                json!({"sha":"b".repeat(40),"truncated":false,"tree":[]}),
+            ),
+        ],
+    );
+    let mut reader = SourceFiles::new(&api, &"a".repeat(40)).expect("source");
+    assert_eq!(
+        reader
+            .read_bounded_if_present(".velnor/policy.json", 1024)
+            .expect("tree read"),
+        None
+    );
+    fixture.assert_drained();
+}
+
+#[test]
 fn wrong_tree_or_truncated_inventory_fails_before_blob_download() {
     for field in ["sha", "truncated"] {
         let mut responses = prefix(&entry("100644", "blob"));

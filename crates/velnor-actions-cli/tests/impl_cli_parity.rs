@@ -5,7 +5,8 @@ use std::error::Error;
 use std::path::{Path, PathBuf};
 
 use crate::impl_cli_tmp::{
-    add_crate_pair, cleanup, code, fresh_tempdir, ignore_rust, init_repo, plan_stdout, spawn,
+    add_crate_pair, cleanup, code, fresh_tempdir, ignore_rust, init_repo, plan_stdout,
+    plan_stdout_with_installed_rust_mise_fixture, spawn, spawn_with_installed_rust_mise_fixture,
 };
 
 const FOUNDATION_QUALIFICATION_WORKFLOW: &str = ".github/workflows/foundation-qualification.yml";
@@ -164,7 +165,7 @@ fn plan_job_ids_match_generated_workflow() -> Result<(), Box<dyn Error>> {
         !config_before.to_ascii_lowercase().contains("foundation"),
         "ordinary canonical config must not require Foundation settings:\n{config_before}"
     );
-    let stdout = plan_stdout(&tmp)?;
+    let stdout = plan_stdout_with_installed_rust_mise_fixture(&tmp)?;
     assert!(
         !stdout.contains(FOUNDATION_QUALIFICATION_WORKFLOW),
         "plan registers the retired workflow:\n{stdout}"
@@ -177,7 +178,7 @@ fn plan_job_ids_match_generated_workflow() -> Result<(), Box<dyn Error>> {
     assert!(!planned.is_empty(), "no jobs in plan:\n{stdout}");
     let outer = fresh_tempdir("parity-preview")?;
     let preview = outer.join("preview");
-    let output = spawn(
+    let output = spawn_with_installed_rust_mise_fixture(
         &["generate", "--output-dir", preview.to_str().unwrap_or("/")],
         &[],
         &tmp,
@@ -219,7 +220,7 @@ fn plan_reports_full_configured_crates_in_agreement_with_yaml() -> Result<(), Bo
     let tmp = fresh_tempdir("parity-matrix")?;
     init_repo(&tmp)?;
     add_crate_pair(&tmp)?;
-    let stdout = plan_stdout(&tmp)?;
+    let stdout = plan_stdout_with_installed_rust_mise_fixture(&tmp)?;
     // PAR-10.1 cli half: the full configured count (never narrowed here),
     // the per-obligation kind chain, and the event-time narrowing explanation.
     let count = crate_count(&stdout)?;
@@ -234,10 +235,14 @@ fn plan_reports_full_configured_crates_in_agreement_with_yaml() -> Result<(), Bo
         ),
         "{stdout}"
     );
-    assert_eq!(plan_stdout(&tmp)?, stdout, "crate print not deterministic");
+    assert_eq!(
+        plan_stdout_with_installed_rust_mise_fixture(&tmp)?,
+        stdout,
+        "crate print not deterministic"
+    );
     let outer = fresh_tempdir("parity-matrix-preview")?;
     let preview = outer.join("preview");
-    let output = spawn(
+    let output = spawn_with_installed_rust_mise_fixture(
         &["generate", "--output-dir", preview.to_str().unwrap_or("/")],
         &[],
         &tmp,
@@ -287,7 +292,7 @@ fn plan_queries_no_caches_and_exposes_no_plan_json() -> Result<(), Box<dyn Error
     add_crate_pair(&tmp)?;
     let before = snapshot(&tmp)?;
     assert!(!before.is_empty());
-    let stdout = plan_stdout(&tmp)?;
+    let stdout = plan_stdout_with_installed_rust_mise_fixture(&tmp)?;
     // PAR-10.2: inventory only — no cache query materializes files, and no
     // internal plan.json/matrix artifact is written or named.
     assert_eq!(snapshot(&tmp)?, before, "plan modified the repo");
@@ -317,7 +322,7 @@ fn plan_writes_nothing_and_exposes_no_plan_json() -> Result<(), Box<dyn Error>> 
     add_crate_pair(&tmp)?;
     let before = snapshot(&tmp)?;
     assert!(!before.is_empty());
-    let stdout = plan_stdout(&tmp)?;
+    let stdout = plan_stdout_with_installed_rust_mise_fixture(&tmp)?;
     assert_eq!(snapshot(&tmp)?, before, "plan modified the repo");
     assert!(
         !stdout.contains("plan.json"),

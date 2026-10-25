@@ -36,6 +36,8 @@ mod expressions;
 mod final_steps;
 pub mod freshness;
 pub mod guard;
+mod homebrew_adoption_seed;
+mod homebrew_adoption_workflow;
 pub mod image_publish_scripts;
 mod lane_share;
 mod lane_share_sections;

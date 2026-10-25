@@ -165,7 +165,7 @@ fn is_image_missing(error: &bollard::errors::Error) -> bool {
     )
 }
 
-fn validate_inspect(
+pub(super) fn validate_inspect(
     inspect: ImageInspect,
     manifest: &ProbeManifest,
     identity: &ArchiveIdentity,

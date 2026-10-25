@@ -15,7 +15,22 @@ pub(crate) fn mock_trust_commands(script: &str, root: &Path) -> String {
         "findmnt",
         "#!/bin/sh\n[ \"${SEED_TEST_FINDMNT_FAIL:-0}\" = 1 ] && exit 23\nprintf '%s\\n' \"${SEED_TEST_MOUNTS-}\"\n",
     );
-    let find = executable(&bin, "find", FIND_MOCK);
+    let too_many = root.join("find-too-many-records.bin");
+    let repeated_path = root.join("virtual-seed").to_string_lossy().into_owned();
+    let record = format!("{repeated_path}\0");
+    let mut records = Vec::with_capacity(100_001 * record.len());
+    for _ in 0..100_001 {
+        records.extend_from_slice(record.as_bytes());
+    }
+    fs::write(&too_many, records).expect("write oversized find fixture");
+    let find = executable(
+        &bin,
+        "find",
+        &FIND_MOCK.replace(
+            "__TOO_MANY_RECORDS_FIXTURE__",
+            too_many.to_str().expect("fixture path"),
+        ),
+    );
     script
         .replace("/usr/bin/findmnt", findmnt.to_str().expect("findmnt path"))
         .replace("/usr/bin/find", find.to_str().expect("find path"))
@@ -46,7 +61,7 @@ case "$mode" in
         exit 0
         ;;
     tree-too-many)
-        python3 -c 'import sys; sys.stdout.buffer.write((sys.argv[1].encode() + b"\0") * 100001)' "$1"
+        cat "__TOO_MANY_RECORDS_FIXTURE__"
         exit 0
         ;;
 esac

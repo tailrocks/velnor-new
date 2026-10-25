@@ -48,9 +48,10 @@ and runs as a separate GitHub Actions job.
 The workspace also contains `velnor-actions-freshness` and
 `velnor-archive-guard` as repository-only maintenance members. Both are
 outside the eight-product V1 graph and do not enter V1 Rust task derivation.
-The orchestrator does not link either helper as a library. Only the CLI's
-private maintenance gate consumes
-freshness at runtime; repository scripts provision the archive guard. Under
+Only the CLI's private maintenance gate consumes freshness at runtime.
+The orchestrator links archive guard solely for bounded, pure OCI archive
+validation; archive guard creates no processes, workflows, or product tasks.
+Repository scripts also provision its standalone security utility. Under
 `VelnorRepositoryV1`, the existing named-Mise-check contract emits one
 independent `maintenance-helpers` Required check for both packages' Rust test
 suites. That repository-quality check stays outside the product crate matrix;

@@ -2,6 +2,35 @@
 
 use super::*;
 
+fn with_custom_tap() -> ConsumerReleaseSpec {
+    use velnor_actions_contract::config::{
+        CheckExecutor, CheckPlatform, CheckRunner, MiseTaskSource, TapUpdaterBinding,
+    };
+    let mut spec = super::with_tap();
+    let tap = spec.homebrew_tap.as_mut().expect("tap");
+    tap.formula_spec = None;
+    tap.policy.updater = Some(TapUpdaterBinding {
+        task: "tap:update".to_owned(),
+        source: MiseTaskSource {
+            mise_config: "mise.toml".to_owned(),
+            working_directory: ".".to_owned(),
+        },
+        runner: CheckRunner {
+            label: "ubuntu-24.04".to_owned(),
+            platform: CheckPlatform::LinuxX64,
+            executor: CheckExecutor::Hosted,
+            container: None,
+        },
+        inputs: vec![
+            "mise.toml".to_owned(),
+            "Formula/scanner-preview.rb".to_owned(),
+        ],
+        tools: vec!["ruby".to_owned()],
+        timeout_minutes: 4,
+    });
+    spec
+}
+
 #[test]
 fn tap_jobs_separate_unprivileged_preparation_and_scoped_app_authority() {
     let rendered = render_consumer_preview(&with_tap()).expect("tap workflow");
@@ -70,16 +99,25 @@ fn credential_references_cannot_become_privileged_environment_keys() {
 }
 
 #[test]
-fn tap_updater_rejects_self_hosted_execution_without_native_provisioning() {
-    let mut spec = with_tap();
-    let runner = &mut spec
-        .homebrew_tap
-        .as_mut()
-        .expect("tap")
-        .policy
-        .updater
-        .runner;
-    runner.executor = velnor_actions_contract::config::CheckExecutor::EphemeralSelfHosted;
-    runner.label = "tap-updater".to_owned();
-    assert!(render_consumer_preview(&spec).is_err());
+fn custom_tap_preparation_keeps_its_declared_runner_timeout_and_no_native_spec() {
+    let yaml = render_consumer_preview(&with_custom_tap())
+        .expect("custom preparation")
+        .bytes;
+    let prepare = job(&yaml, "preview-tap-prepare", Some("preview-tap-writer"));
+    assert!(prepare.contains("runs-on: ubuntu-24.04"));
+    assert!(prepare.contains("timeout-minutes: 4"));
+    assert!(prepare.contains("prepare-homebrew-tap-v1"));
+    assert!(!prepare.contains("VELNOR_HOMEBREW_FORMULA_SPEC"));
+}
+
+#[test]
+fn native_tap_preparation_has_fixed_hosted_execution() {
+    let yaml = render_consumer_preview(&with_tap())
+        .expect("native preparation")
+        .bytes;
+    let prepare = job(&yaml, "preview-tap-prepare", Some("preview-tap-writer"));
+    assert!(prepare.contains("runs-on: ubuntu-26.04"));
+    assert!(prepare.contains("prepare-homebrew-tap-v1"));
+    assert!(prepare.contains("VELNOR_HOMEBREW_FORMULA_SPEC"));
+    assert!(!prepare.contains("package:update-preview"));
 }

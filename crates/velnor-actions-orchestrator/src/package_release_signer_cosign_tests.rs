@@ -17,7 +17,11 @@ fn temporary_path(label: &str) -> PathBuf {
 
 #[test]
 fn cosign_admission_rejects_wrong_digest() {
-    assert!(!valid_cosign_bytes(b"not the pinned Cosign binary"));
+    assert!(!valid_cosign_bytes(
+        b"not the pinned Cosign binary",
+        &"0".repeat(64),
+        b"not the pinned Cosign binary".len(),
+    ));
 }
 
 #[test]

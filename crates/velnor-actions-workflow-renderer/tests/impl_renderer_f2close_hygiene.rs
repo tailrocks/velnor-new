@@ -4,8 +4,8 @@ use velnor_actions_contract::{GeneratorValidation, WorkflowPolicy};
 use velnor_actions_workflow_renderer::cache_p08::{ToolsCacheInputs, ToolsCachePayload};
 use velnor_actions_workflow_renderer::steps::{TOOLS_RESTORE_ACTION_USES, cache_action_step};
 use velnor_actions_workflow_renderer::{
-    ALINT_BINARY_VERSION, PUBLISH_PLAN_NAME, RenderError, merge_step, render_workflow_ir,
-    shell_step,
+    ALINT_BINARY_VERSION, PUBLISH_PLAN_NAME, RenderError, merge_step, quote_run_arg, quote_scalar,
+    render_workflow_ir, shell_step,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -147,17 +147,22 @@ fn consumer_render_carries_no_repo_files_or_secrets() -> Result<(), RenderError>
         None,
         &fixture_ctx(),
     )?;
-    for absent in [
-        ".alint.yml",
-        "deny.toml",
-        "secrets.",
-        "github.token",
-        "pull_request_target",
-    ] {
+    for absent in [".alint.yml", "deny.toml", "secrets.", "pull_request_target"] {
         assert!(!text.contains(absent), "forbidden {absent}:\n{text}");
     }
-    // Scrub overlay keys render by construction, but only ever empty.
-    for key in ["GH_TOKEN", "GITHUB_TOKEN", "ACTIONS_RUNTIME_TOKEN"] {
+    assert_only_plan_step_token(&text, STAGED)?;
+    let remaining = text
+        .lines()
+        .filter(|line| line.trim() != "GH_TOKEN: ${{ github.token }}")
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        !remaining.contains("github.token"),
+        "token expression outside the admitted Plan binding:\n{remaining}"
+    );
+    // Scrub overlay keys render by construction, except the typed Plan
+    // operation's single read-only credential binding.
+    for key in ["GITHUB_TOKEN", "ACTIONS_RUNTIME_TOKEN"] {
         let mut seen = 0_u32;
         for line in text.lines() {
             let Some(rest) = line.trim_start().strip_prefix(key) else {
@@ -168,6 +173,75 @@ fn consumer_render_carries_no_repo_files_or_secrets() -> Result<(), RenderError>
             seen += 1;
         }
         assert!(seen > 0, "missing scrub {key}:\n{text}");
+    }
+    Ok(())
+}
+
+fn assert_only_plan_step_token(text: &str, staged_binary: &str) -> Result<(), RenderError> {
+    let mut in_plan_job = false;
+    let mut step_lines = Vec::new();
+    let mut scoped_tokens = 0_u32;
+    let mut nonempty_tokens = 0_u32;
+
+    for line in text.lines() {
+        if line.starts_with("  ") && !line.starts_with("    ") {
+            check_plan_step_token(&step_lines, staged_binary, &mut scoped_tokens)?;
+            step_lines.clear();
+            in_plan_job = line.trim() == "plan:";
+        } else if in_plan_job && line.trim_start().starts_with("- name: ") {
+            check_plan_step_token(&step_lines, staged_binary, &mut scoped_tokens)?;
+            step_lines.clear();
+            step_lines.push(line.to_owned());
+            continue;
+        }
+        if line.trim_start().starts_with("GH_TOKEN:") {
+            let value = line
+                .trim_start()
+                .strip_prefix("GH_TOKEN:")
+                .unwrap_or_default()
+                .trim();
+            if value != "\"\"" {
+                nonempty_tokens += 1;
+            }
+        }
+        if in_plan_job {
+            step_lines.push(line.to_owned());
+        }
+    }
+    check_plan_step_token(&step_lines, staged_binary, &mut scoped_tokens)?;
+    assert_eq!(nonempty_tokens, 1, "unexpected GH_TOKEN binding:\n{text}");
+    assert_eq!(
+        scoped_tokens, 1,
+        "token must belong to Plan's plan-v1 step:\n{text}"
+    );
+    Ok(())
+}
+
+fn check_plan_step_token(
+    lines: &[String],
+    staged_binary: &str,
+    scoped_tokens: &mut u32,
+) -> Result<(), RenderError> {
+    let operation = lines
+        .iter()
+        .any(|line| line.trim() == "VELNOR_INTERNAL_OP: plan-v1");
+    let plan_step = lines.iter().any(|line| line.trim() == "- name: Plan");
+    let command = quote_run_arg(staged_binary)?;
+    let expected_run = format!("run: {}", quote_scalar(&command));
+    let staged_sdk_invocation = lines
+        .iter()
+        .any(|line| line.trim() == expected_run.as_str());
+    for line in lines {
+        if line.trim_start().starts_with("GH_TOKEN:") {
+            assert!(
+                plan_step
+                    && operation
+                    && staged_sdk_invocation
+                    && line.trim() == "GH_TOKEN: ${{ github.token }}",
+                "GH_TOKEN is only allowed on the Plan plan-v1 step: {lines:#?}"
+            );
+            *scoped_tokens += 1;
+        }
     }
     Ok(())
 }

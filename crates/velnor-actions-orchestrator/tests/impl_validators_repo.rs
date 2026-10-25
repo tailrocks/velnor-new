@@ -71,31 +71,10 @@ fn fixture_config_sample(sample: &str) -> Result<String, Box<dyn std::error::Err
         "inputs".into(),
         toml::Value::Array(vec![toml::Value::String("mise.toml".into())]),
     );
-    // Keep only the declared Rust inputs whose packages the one-crate
-    // fixture carries (the native-helper rule); the others name live
-    // packages it lacks.
-    if let Some(inputs) = table
-        .get_mut("stacks")
-        .and_then(|stacks| stacks.get_mut("rust"))
-        .and_then(|rust| rust.get_mut("inputs"))
-        .and_then(toml::Value::as_array_mut)
-    {
-        inputs.retain(|rule| {
-            rule.get("packages")
-                .and_then(toml::Value::as_array)
-                .is_some_and(|packages| {
-                    packages
-                        .iter()
-                        .all(|name| name.as_str() == Some("velnor-actions-workflow-renderer"))
-                })
-        });
-    }
     Ok(toml::to_string(&table)?)
 }
 
-/// Git fixture carrying the live sample plus the Velnor identity.
-/// Its minimal package is the real declared native-helper input owner, so
-/// copying the live config never creates a knowingly unknown package rule.
+/// Git fixture carrying the live sample plus its declared CLI input owner.
 fn make_sample_repo(sample: &str, mise: &str) -> Result<TempDir, Box<dyn std::error::Error>> {
     let dir = TempDir::new()?;
     let root = dir.path();
@@ -121,10 +100,15 @@ fn make_sample_repo(sample: &str, mise: &str) -> Result<TempDir, Box<dyn std::er
     )?;
     fs::write(
         root.join("Cargo.toml"),
-        "[package]\nname = \"velnor-actions-workflow-renderer\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        "[workspace]\nmembers = [\"crates/velnor-actions-cli\"]\nresolver = \"3\"\n",
     )?;
-    fs::create_dir_all(root.join("src"))?;
-    fs::write(root.join("src/lib.rs"), "pub fn f() {}\n")?;
+    let cli = root.join("crates/velnor-actions-cli");
+    fs::create_dir_all(cli.join("src"))?;
+    fs::write(
+        cli.join("Cargo.toml"),
+        "[package]\nname = \"velnor-actions-cli\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )?;
+    fs::write(cli.join("src/main.rs"), "fn main() {}\n")?;
     git(&["add", "-A"], root)?;
     git(&["commit", "-m", "fixture"], root)?;
     git(
@@ -159,18 +143,27 @@ fn repo_config_sample_parses_through_prepare() -> TestResult {
         let rule = rust
             .inputs
             .iter()
-            .find(|rule| rule.globs == ["scripts/parallel-targets/**"])
-            .ok_or("live helper input rule disappeared during typed admission")?;
-        assert_eq!(rule.packages, ["velnor-actions-workflow-renderer"]);
+            .find(|rule| rule.packages == ["velnor-actions-cli"])
+            .ok_or("live CLI repository input rule disappeared during typed admission")?;
+        assert_eq!(
+            rule.globs,
+            [
+                "crates/velnor-actions-*/**",
+                "crates/velnor-archive-guard/**",
+                "crates/velnor-runner/Cargo.toml",
+                "crates/velnor-runner/crates/*/**",
+            ]
+        );
+        assert!(rule.complete, "CLI repository inputs remain complete");
         assert!(
             prep.discovery
                 .workspaces
                 .iter()
                 .flat_map(|workspace| &workspace.record.packages)
-                .any(|package| package.name == rule.packages[0]
+                .any(|package| package.name == "velnor-actions-cli"
                     && package.in_workspace
                     && !package.external),
-            "the sample fixture must contain its declared native input owner"
+            "the sample fixture must contain the declared CLI input owner"
         );
         let execution = prep
             .config

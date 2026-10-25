@@ -3,26 +3,118 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs::File,
-    io::{BufReader, Read},
+    io::{BufReader, Cursor, Read},
     path::Path,
     time::Instant,
 };
 
 use flate2::bufread::GzDecoder;
-use serde_json::Value;
 use tar::EntryType;
-use velnor_actions_contract::parse_strict_json;
 
 use super::{
     ArtifactKind, ExpectedFile, MAX_TOTAL_DECOMPRESSED_BYTES, VerifiedPackageArtifact, invalid,
 };
 use crate::OrchestratorError;
+#[path = "package_release_artifacts_content.rs"]
+mod content;
+use content::{check_deadline, inspect_optional_identity_envelope, inspect_sbom};
 
 #[path = "package_release_artifacts_gzip.rs"]
 mod gzip;
 
 const MAX_ENTRIES_PER_ARCHIVE: usize = 4096;
 const MAX_EXECUTABLE_BYTES: u64 = 256 * 1024 * 1024;
+
+/// Extract a closed set of regular TAR.GZ members from authenticated bytes.
+/// The caller keeps the package custody alive while using the returned data.
+pub(crate) fn extract_tar_gz_members(
+    bytes: &[u8],
+    expected_members: &BTreeSet<String>,
+    started: Instant,
+) -> Result<BTreeMap<String, Vec<u8>>, OrchestratorError> {
+    if expected_members.is_empty()
+        || bytes.is_empty()
+        || bytes.len() as u64 > super::MAX_PAYLOAD_BYTES
+    {
+        return Err(invalid("preview_tar_extract_input_invalid"));
+    }
+    let compressed = Cursor::new(bytes);
+    let gzip_reader = GzDecoder::new(compressed);
+    let mut archive = tar::Archive::new(gzip_reader);
+    archive.set_preserve_permissions(false);
+    let entries = archive
+        .entries()
+        .map_err(|_| invalid("preview_tar_gzip_invalid"))?
+        .raw(true);
+    let mut found = BTreeMap::new();
+    let mut decompressed_total = 0u64;
+    for entry in entries {
+        check_deadline(started)?;
+        if found.len() >= MAX_ENTRIES_PER_ARCHIVE {
+            return Err(invalid("preview_tar_entry_limit"));
+        }
+        let entry = entry.map_err(|_| invalid("preview_tar_entry_invalid"))?;
+        if entry.header().entry_type() != EntryType::Regular {
+            return Err(invalid("preview_tar_non_regular_entry"));
+        }
+        let raw_path = entry.path_bytes();
+        let name = std::str::from_utf8(raw_path.as_ref())
+            .map_err(|_| invalid("preview_tar_path_not_utf8"))?;
+        if name.is_empty()
+            || name.len() > 255
+            || name.contains('/')
+            || name.contains('\\')
+            || name == "."
+            || name == ".."
+            || !expected_members.contains(name)
+            || found.contains_key(name)
+        {
+            return Err(invalid("preview_tar_member_inventory_invalid"));
+        }
+        let name = name.to_owned();
+        let size = entry
+            .header()
+            .size()
+            .map_err(|_| invalid("preview_tar_size_invalid"))?;
+        if size == 0 || size > MAX_EXECUTABLE_BYTES {
+            return Err(invalid("preview_tar_member_size_invalid"));
+        }
+        let size_usize =
+            usize::try_from(size).map_err(|_| invalid("preview_tar_member_size_invalid"))?;
+        let mut member = Vec::with_capacity(size_usize);
+        entry
+            .take(size.saturating_add(1))
+            .read_to_end(&mut member)
+            .map_err(|_| invalid("preview_tar_member_read_failed"))?;
+        if member.len() as u64 != size {
+            return Err(invalid("preview_tar_member_size_mismatch"));
+        }
+        decompressed_total = decompressed_total.saturating_add(size);
+        if decompressed_total > MAX_TOTAL_DECOMPRESSED_BYTES {
+            return Err(invalid("preview_tar_decompression_limit"));
+        }
+        found.insert(name, member);
+    }
+    let mut tar_reader = archive.into_inner();
+    gzip::drain_tar_terminator(&mut tar_reader, &mut decompressed_total, started)?;
+    let mut compressed = tar_reader.into_inner();
+    let mut trailing = [0u8; 1];
+    if compressed
+        .read(&mut trailing)
+        .map_err(|_| invalid("preview_gzip_trailing_read_failed"))?
+        != 0
+    {
+        return Err(invalid("preview_gzip_trailing_bytes"));
+    }
+    if found.keys().cloned().collect::<BTreeSet<_>>() != *expected_members {
+        return Err(invalid("preview_tar_member_inventory_mismatch"));
+    }
+    Ok(found)
+}
+
+#[cfg(test)]
+#[path = "package_release_artifacts_archive_tests.rs"]
+mod held_bytes_tests;
 
 /// Inspect every copied payload and its SBOM without materializing archive members.
 pub(super) fn validate_copied_content(
@@ -217,97 +309,6 @@ fn inspect_entry<R: Read>(
     }
     if read_total != size || !binary::is_expected_executable(&prefix, target) {
         return Err(invalid("preview_tar_executable_format_mismatch"));
-    }
-    Ok(())
-}
-
-fn inspect_sbom(
-    path: &Path,
-    archive_name: &str,
-    archive_sha256: &str,
-    started: Instant,
-) -> Result<(), OrchestratorError> {
-    let bytes = super::inventory::read_limited(path, super::MAX_SBOM_BYTES, started)?;
-    let text = std::str::from_utf8(&bytes).map_err(|_| invalid("preview_sbom_not_utf8"))?;
-    let document = parse_strict_json(text).map_err(|_| invalid("preview_sbom_invalid_json"))?;
-    let root = document
-        .as_object()
-        .ok_or_else(|| invalid("preview_sbom_root_invalid"))?;
-    if root.get("bomFormat").and_then(Value::as_str) != Some("CycloneDX") {
-        return Err(invalid("preview_sbom_format_invalid"));
-    }
-    let metadata = root
-        .get("metadata")
-        .and_then(Value::as_object)
-        .ok_or_else(|| invalid("preview_sbom_metadata_invalid"))?;
-    let component = metadata
-        .get("component")
-        .and_then(Value::as_object)
-        .ok_or_else(|| invalid("preview_sbom_component_invalid"))?;
-    if component.get("type").and_then(Value::as_str) != Some("file")
-        || component.get("name").and_then(Value::as_str) != Some(archive_name)
-    {
-        return Err(invalid("preview_sbom_archive_name_mismatch"));
-    }
-    let hashes = component
-        .get("hashes")
-        .and_then(Value::as_array)
-        .ok_or_else(|| invalid("preview_sbom_hashes_missing"))?;
-    let matches = hashes
-        .iter()
-        .filter(|hash| {
-            hash.get("alg").and_then(Value::as_str) == Some("SHA-256")
-                && hash.get("content").and_then(Value::as_str) == Some(archive_sha256)
-        })
-        .count();
-    if matches != 1 || hashes.len() != 1 {
-        return Err(invalid("preview_sbom_archive_digest_mismatch"));
-    }
-    Ok(())
-}
-
-fn inspect_optional_identity_envelope(
-    path: &Path,
-    source_commit: &str,
-    source_ref: &str,
-    version: &str,
-    started: Instant,
-) -> Result<(), OrchestratorError> {
-    if path.extension().and_then(|extension| extension.to_str()) != Some("json") {
-        return Ok(());
-    }
-    let metadata = std::fs::metadata(path)
-        .map_err(|error| OrchestratorError::io(path.display().to_string(), error.to_string()))?;
-    if metadata.len() > super::MAX_SBOM_BYTES {
-        return Ok(());
-    }
-    let bytes = super::inventory::read_limited(path, super::MAX_SBOM_BYTES, started)?;
-    let text = std::str::from_utf8(&bytes).map_err(|_| invalid("companion_json_not_utf8"))?;
-    let Ok(value) = parse_strict_json(text) else {
-        return Err(invalid("companion_json_invalid"));
-    };
-    let Some(object) = value.as_object() else {
-        return Ok(());
-    };
-    for (field, expected) in [
-        ("source_commit", source_commit),
-        ("source_ref", source_ref),
-        ("version", version),
-    ] {
-        if let Some(value) = object.get(field)
-            && value.as_str() != Some(expected)
-        {
-            return Err(invalid("companion_identity_mismatch"));
-        }
-    }
-    Ok(())
-}
-
-fn check_deadline(started: Instant) -> Result<(), OrchestratorError> {
-    if velnor_actions_mise::CheckDeadline::check_scope().is_err()
-        || started.elapsed() > super::VERIFY_TIMEOUT
-    {
-        return Err(invalid("package_output_verification_timeout"));
     }
     Ok(())
 }

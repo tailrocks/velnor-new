@@ -1,6 +1,6 @@
 use super::super::{candidate::MergeCandidate, observation::MergeAuthority};
 use super::response_helpers::{content, content_route, opinions, pull, put, sha256, tree};
-use crate::tap_test_support;
+use crate::homebrew::test_support as tap_test_support;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use velnor_actions_contract::canonical_json_bytes;
@@ -15,13 +15,17 @@ pub(super) fn add_closed_prior_pr(
     let advanced_base = "d".repeat(40);
     let formula = tap_test_support::fixture();
     let proof = crate::tap_prepare::reconstruct_historical_candidate_proof(
-        &candidate.plan.repository,
-        &candidate.policy,
-        &candidate.plan,
-        &candidate.release,
-        &original_base,
-        &formula.base_formula,
-        &candidate.formula,
+        crate::tap_prepare::HistoricalCandidateInput {
+            source_repository: &candidate.plan.repository,
+            tap: &candidate.policy,
+            plan: &candidate.plan,
+            release: &candidate.release,
+            spec: candidate.spec.as_ref(),
+            sdk_artifact_digest: &candidate.sdk_artifact_digest,
+            base_sha: &original_base,
+            base_formula: &formula.base_formula,
+            proposed_formula: &candidate.formula,
+        },
     )
     .expect("old formula candidate proof");
     let proof_digest = sha256(&canonical_json_bytes(&proof).expect("old proof bytes"));

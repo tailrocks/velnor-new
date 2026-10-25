@@ -1,0 +1,17 @@
+rust build guard: warning: free space is below 2200000000000 bytes (2084547682304 bytes); run the cleanup steps in ~/.agents/DISK_POLICY.md until 2500000000000 bytes are free, then stop
+rust build guard: allowed; checked 1 filesystem(s)
+   Compiling velnor-archive-guard v0.1.53 (/Users/donbeave/Projects/velnor-native-homebrew-20261024/crates/velnor-archive-guard)
+   Compiling velnor-actions-orchestrator v0.1.53 (/Users/donbeave/Projects/velnor-native-homebrew-20261024/crates/velnor-actions-orchestrator)
+   Compiling velnor-actions-cli v0.1.53 (/Users/donbeave/Projects/velnor-native-homebrew-20261024/crates/velnor-actions-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.35s
+info: using target runner `mbx-test-runner aarch64-apple-darwin` defined by environment variable `CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER`
+────────────
+ Nextest run ID ec347108-e402-4c70-8797-5d2278ecd05b with nextest profile: default
+    Starting 3 tests across 31 binaries (5898 tests skipped)
+        PASS [   0.399s] (1/3) velnor-actions-orchestrator::velnor_orchestrator impl_schema2_routing::schema2_workflow_snapshot_tests::schema2_workflows_match_expected_bytes
+        PASS [   1.469s] (2/3) velnor-actions-orchestrator::velnor_orchestrator impl_schema2_routing::schema2_workflow_snapshot_tests::committed_release_files_match_schema2_bytes
+        PASS [  27.726s] (3/3) velnor-actions-cli::velnor_cli impl_cli_release_manifest::check_release_rejects_invalid_candidate_manifests
+────────────
+     Summary [  27.728s] 3 tests run: 3 passed, 5898 skipped
+mbx[cache]: 7 hits, 0 misses, 7 not looked up, 7 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: 20.1 TiB logical of old files removed while you were busy compiling other things.

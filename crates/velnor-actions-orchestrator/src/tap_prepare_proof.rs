@@ -25,6 +25,11 @@ pub struct HomebrewTapPreparationProof {
     pub receipt_digest: String,
     /// Canonical digest of the static package release plan.
     pub plan_digest: String,
+    /// Native formula specification digest; absent for a qualified custom updater.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub formula_spec_digest: Option<String>,
+    /// Authenticated digest of the SDK artifact that prepared this candidate.
+    pub sdk_artifact_digest: String,
     /// Canonical digest of the tap policy used to prepare the candidate.
     pub tap_config_digest: String,
     /// Tap repository slug bound to the captured remote.

@@ -26,6 +26,7 @@ fn two_package_discovery() -> Discovery {
     Discovery {
         gradle_roots: Vec::new(),
         mise_checks: Vec::new(),
+        native_checks: Vec::new(),
         statuses: Vec::new(),
         feature_fallbacks: Vec::new(),
         workspaces: vec![PlannedWorkspace {
@@ -326,16 +327,16 @@ fn skipped_index_names_broaden_with_explicit_tag() {
 }
 
 #[test]
-fn native_parallel_target_helper_changes_select_the_declared_renderer_owner() {
+fn native_parallel_target_changes_select_the_orchestrator_owner() {
     let config: toml::Value = toml::from_str(include_str!("../../../.velnor/config.toml"))
         .expect("native repository configuration");
     let rust: velnor_actions_contract::RustStackConfig = config["stacks"]["rust"]
         .clone()
         .try_into()
         .expect("typed native Rust input declarations");
-    let owner = "velnor-actions-workflow-renderer";
+    let owner = "velnor-actions-orchestrator";
     let mut discovery = discovery_with(&[
-        (owner, "crates/velnor-actions-workflow-renderer/Cargo.toml"),
+        (owner, "crates/velnor-actions-orchestrator/Cargo.toml"),
         ("velnor-actions-cli", "crates/velnor-actions-cli/Cargo.toml"),
         ("unrelated", "crates/unrelated/Cargo.toml"),
     ]);
@@ -344,8 +345,8 @@ fn native_parallel_target_helper_changes_select_the_declared_renderer_owner() {
             .expect("configured input packages resolve");
     let ownership = Ownership::new(&discovery);
     for file in [
-        "scripts/parallel-targets/seed.py",
-        "scripts/parallel-targets/test_seed.py",
+        "crates/velnor-actions-orchestrator/src/parallel_target_seed.rs",
+        "crates/velnor-actions-orchestrator/src/parallel_target_seed_tests.rs",
     ] {
         let changed = set(&[file]);
         assert!(
@@ -354,7 +355,7 @@ fn native_parallel_target_helper_changes_select_the_declared_renderer_owner() {
         );
         assert_eq!(
             affected_packages(&ownership, &changed, &BTreeSet::new(), &[]),
-            set(&[owner])
+            set(&[owner, "velnor-actions-cli"])
         );
     }
     assert!(

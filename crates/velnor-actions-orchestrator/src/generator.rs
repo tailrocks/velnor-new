@@ -15,7 +15,6 @@ use crate::internal::phase_timing::PlanPhaseTimings;
 /// digest can never equal a 64-hex release pin. Recording the real
 /// SHA-256 makes executable-against-release comparison structural;
 /// provenance matches this value against the manifest pin exactly.
-#[cfg(test)]
 pub(crate) fn current_exe_sha256() -> Option<String> {
     current_exe_sha256_with_phase_timings(None)
 }

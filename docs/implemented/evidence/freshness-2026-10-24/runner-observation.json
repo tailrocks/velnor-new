@@ -1,0 +1,25 @@
+{
+  "observed_at": "2026-10-24T18:04:39Z",
+  "documentation": {
+    "url": "https://docs.github.com/en/actions/reference/runners/github-hosted-runners",
+    "sha256": "6a8c282dce844e254a8d4c86dbce5b9339fc232abd6069a131032a53d9935074",
+    "supported_labels": [
+      "ubuntu-26.04",
+      "ubuntu-24.04",
+      "ubuntu-22.04"
+    ]
+  },
+  "successful_ci": {
+    "run_id": "40074797039",
+    "url": "https://github.com/tailrocks/velnor-new/actions/runs/40074797039",
+    "head_sha": "1bd31f8203ecf40d141c331e5195eb422e0904d3",
+    "plan_job_id": "120815744494",
+    "plan_url": "https://github.com/tailrocks/velnor-new/actions/runs/40074797039/job/120815744494",
+    "plan_log_sha256": "2337e9045f70a7cfbc10727ebbdd1709ba0b824eb03ada7387db276b52adb7a5",
+    "runner_label": "ubuntu-26.04",
+    "image_version": "20261012.163.1",
+    "image_release": "ubuntu26/20261012.163",
+    "pre_normalization_plan_log_sha256": "56f7831b211a28fe316fc3eb36b8317b6417372261def70d739b743a98ca2d8e",
+    "plan_log_normalization": "trailing horizontal whitespace removed; blank environment values remain blank"
+  }
+}

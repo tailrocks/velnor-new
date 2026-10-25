@@ -19,7 +19,7 @@ struct BuildArgv {
     resource_probe: Vec<String>,
 }
 
-pub(super) fn test_pins() -> ProductReleasePins {
+pub(crate) fn test_pins() -> ProductReleasePins {
     let catalog = ToolCatalog::pinned();
     let setup = MiseSetup {
         uses: format!("jdx/mise-action@{}", "a".repeat(40)),
@@ -31,6 +31,7 @@ pub(super) fn test_pins() -> ProductReleasePins {
     let install_resource_probe_target_argv = resource_probe_target_argv(&catalog);
     let install_intel_target_argv = intel_target_argv(&catalog);
     let build = build_argv(&catalog);
+    let lint_argv = lint_argv(&catalog);
     ProductReleasePins {
         linux_x86_64_setup: setup.clone(),
         macos_arm64_setup: setup.clone(),
@@ -61,21 +62,17 @@ pub(super) fn test_pins() -> ProductReleasePins {
         install_resource_probe_target_argv,
         runner_build_argv: build.runner,
         resource_probe_build_argv: build.resource_probe,
-        lint_argv: vec![
-            "bash".to_owned(),
-            "-c".to_owned(),
-            crate::toolchain_env::with_credential_unset_script(
-                &velnor_actions_actionlint::workflow_lint_script(
-                    &exec_argv(
-                        &[PinnedTool::Jactionlint, PinnedTool::Shellcheck],
-                        "jactionlint",
-                        &[],
-                        &catalog,
-                    )
-                    .join(" "),
-                ),
-            ),
-        ],
+        install_resource_probe_release_tools_argv: install_argv(
+            &[
+                PinnedTool::Rust,
+                PinnedTool::MrBoxington,
+                PinnedTool::Nextest,
+            ],
+            &catalog,
+        ),
+        resource_probe_release_build_argv: native_resource_probe_argv(&catalog, false),
+        resource_probe_release_test_argv: native_resource_probe_argv(&catalog, true),
+        lint_argv,
         verify_lint_argv: vec![
             "sh".to_owned(),
             "-c".to_owned(),
@@ -95,6 +92,24 @@ pub(super) fn test_pins() -> ProductReleasePins {
     }
 }
 
+fn lint_argv(catalog: &ToolCatalog) -> Vec<String> {
+    vec![
+        "bash".to_owned(),
+        "-c".to_owned(),
+        crate::toolchain_env::with_credential_unset_script(
+            &velnor_actions_actionlint::workflow_lint_script(
+                &exec_argv(
+                    &[PinnedTool::Jactionlint, PinnedTool::Shellcheck],
+                    "jactionlint",
+                    &[],
+                    catalog,
+                )
+                .join(" "),
+            ),
+        ),
+    ]
+}
+
 fn qualification_mbx_action_steps(catalog: &ToolCatalog) -> [Step; 3] {
     let homes = ToolHomes::runner_temp();
     let mut env = ISOLATION_ENV
@@ -110,6 +125,8 @@ fn qualification_mbx_action_steps(catalog: &ToolCatalog) -> [Step; 3] {
         MISE_CARGO_HOME_ENV.to_owned(),
         homes.cargo_home().to_owned(),
     );
+    env.insert("RUSTUP_HOME".to_owned(), homes.rustup_home().to_owned());
+    env.insert("CARGO_HOME".to_owned(), homes.cargo_home().to_owned());
     env.insert(RUSTUP_TOOLCHAIN_ENV.to_owned(), catalog.rustup_toolchain());
     mbx_steps_for_driver(
         &format!("jdx/mr-boxington-action@{}", "a".repeat(40)),
@@ -235,4 +252,47 @@ fn target_argv(host: ReleaseTarget, target: &str, catalog: &ToolCatalog) -> Vec<
         .into_iter()
         .map(|arg| arg.into_string().expect("Mise argv is UTF-8"))
         .collect()
+}
+
+fn native_resource_probe_argv(catalog: &ToolCatalog, tests: bool) -> Vec<String> {
+    let args = if tests {
+        vec![
+            "nextest",
+            "run",
+            "--locked",
+            "--manifest-path",
+            "crates/velnor-runner/Cargo.toml",
+            "--package",
+            "velnor-runner-host",
+            "--lib",
+            "--target",
+            "x86_64-unknown-linux-gnu",
+            "-E",
+            "test(artifact_admission::archive) | test(resource_probe_release)",
+        ]
+    } else {
+        vec![
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/velnor-runner/Cargo.toml",
+            "--package",
+            "velnor-runner-host",
+            "--bin",
+            "velnor-resource-probe-release",
+            "--release",
+            "--target",
+            "x86_64-unknown-linux-gnu",
+        ]
+    };
+    exec_argv(
+        &[
+            PinnedTool::Rust,
+            PinnedTool::MrBoxington,
+            PinnedTool::Nextest,
+        ],
+        "mbx",
+        &args,
+        catalog,
+    )
 }

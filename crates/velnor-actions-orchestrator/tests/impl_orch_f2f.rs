@@ -19,6 +19,7 @@ fn expected_internal(dir: &str) -> Vec<&str> {
         | "crates/velnor-actions-freshness"
         | "crates/velnor-actions-gradle" => vec![],
         "crates/velnor-actions-orchestrator" => vec![
+            "velnor-archive-guard",
             "velnor-actions-actionlint",
             "velnor-actions-ansible",
             "velnor-actions-bun",
@@ -84,7 +85,7 @@ fn crate_boundaries_match_architecture_dependency_direction() -> TestResult {
         let Some(name) = id_to_name.get(id) else {
             continue;
         };
-        if !name.starts_with("velnor-actions-") {
+        if !name.starts_with("velnor-") {
             continue;
         }
         let mut deps = BTreeSet::new();
@@ -101,7 +102,7 @@ fn crate_boundaries_match_architecture_dependency_direction() -> TestResult {
                 continue;
             }
             if let Some(dep_name) = id_to_name.get(pkg)
-                && dep_name.starts_with("velnor-actions-")
+                && dep_name.starts_with("velnor-")
             {
                 deps.insert(dep_name.clone());
             }

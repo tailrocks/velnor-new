@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.52
+Velnor Actions plan 0.1.53
 Repository: <repo>
 
 Detected stacks
@@ -17,7 +17,7 @@ Workflow to generate
   Jobs:
     - jactionlint (8 steps)
     - plan (18 steps)
-    - required (8 steps)
+    - required (12 steps)
     - required-gate (1 steps)
     - rust-a (20 steps)
     - rust-lib (19 steps)

@@ -1,0 +1,1 @@
+NOT RUN: the isolated GH_CONFIG_DIR intentionally had no credentials; gh requires authentication for API calls even when the target release is public. The binary version and command help checks passed. Upstream release metadata was independently fetched using the existing authenticated gh client.

