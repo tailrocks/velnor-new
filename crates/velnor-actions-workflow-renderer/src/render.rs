@@ -4,7 +4,7 @@
 //! and candidate-planning invariants. Strict rendering also mandates Mise,
 //! staged helpers, and the plan anchor; legacy preserves the prior contract.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{Job, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy};
 
@@ -21,7 +21,10 @@ mod output;
 
 #[path = "render_routing.rs"]
 mod routing;
-pub use self::routing::render_workflow_ir_strict_shared_with_routing;
+pub use self::routing::{
+    render_workflow_ir_strict_shared_with_routing,
+    render_workflow_ir_strict_shared_with_routing_and_job_workflows,
+};
 
 #[path = "render_fallback.rs"]
 pub(crate) mod fallback;
@@ -51,6 +54,18 @@ use self::cache_helper_support::insert_verified_cache_helper;
 
 /// Pinned Alint binary release tag for the step's `version:` input.
 pub const ALINT_BINARY_VERSION: &str = "v0.20.1";
+
+/// Whether a source-derived hosted/local lane pair is supported by the job-workflow lowerer.
+#[doc(hidden)]
+#[must_use]
+pub fn job_workflow_pair_is_relocatable(
+    hosted_id: &str,
+    hosted: &Job,
+    local_id: &str,
+    local: &Job,
+) -> bool {
+    crate::lane_share::job_workflow_extract::pair_is_relocatable(hosted_id, hosted, local_id, local)
+}
 
 #[path = "render_context.rs"]
 mod context;
@@ -344,5 +359,15 @@ fn render_merged_with_routing(
     ctx: &RenderContext,
     routing: &crate::workflow_routing::WorkflowRoutingPolicy,
 ) -> Result<RenderedWorkflow, RenderError> {
-    output::render_merged_with_routing(ir, jobs, ctx, routing)
+    render_merged_with_routing_and_job_workflows(ir, jobs, ctx, routing, None)
+}
+
+fn render_merged_with_routing_and_job_workflows(
+    ir: &WorkflowIr,
+    jobs: &BTreeMap<String, Job>,
+    ctx: &RenderContext,
+    routing: &crate::workflow_routing::WorkflowRoutingPolicy,
+    job_workflow_ids: Option<&BTreeSet<String>>,
+) -> Result<RenderedWorkflow, RenderError> {
+    output::render_merged_with_routing(ir, jobs, ctx, routing, job_workflow_ids)
 }

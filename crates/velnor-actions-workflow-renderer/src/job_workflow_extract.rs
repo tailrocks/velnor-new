@@ -1,16 +1,24 @@
-//! Private lowering prototype for one typed source job into a local reusable workflow.
+//! Private lowering for typed source jobs into local reusable workflows.
 //!
 //! The caller keeps the original job identity, dependency list, and admission
 //! condition. The callee keeps the same inner job id and exact body, with only
 //! closed plan-input references substituted and parent-owned fields removed.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 #[path = "job_workflow_extract_expression.rs"]
 mod expression;
+#[path = "job_workflow_extract_runner.rs"]
+mod runner;
+#[path = "job_workflow_extract_selection.rs"]
+mod selection;
+pub(crate) use expression::caller_condition_for_selection;
 use expression::{rewrite_condition, rewrite_expressions};
 #[cfg(any(test, feature = "test-render-capture"))]
 pub(crate) use expression::{test_condition_has_unbound_needs, test_expression_has_unbound_needs};
+#[cfg(any(test, feature = "test-render-capture"))]
+pub(crate) use runner::{CaptureRunnerMetadata, capture_runner_metadata};
+pub(crate) use selection::{JobWorkflowSelection, pair_is_relocatable};
 use velnor_actions_contract::{CacheMode, HostContainerProfile, Job, Step, StepKind};
 
 use crate::RenderError;
@@ -18,11 +26,12 @@ use crate::RenderError;
 #[cfg(feature = "test-render-capture")]
 #[path = "job_workflow_extract_capture.rs"]
 mod capture;
+#[cfg(all(test, feature = "test-render-capture"))]
+pub(crate) use capture::validate_finalized_runner;
 #[cfg(feature = "test-render-capture")]
 pub(crate) use capture::{
-    CaptureRunnerMetadata, capture_runner_metadata, prepare_job_for_capture,
-    rendered_child_has_unbound_needs, validate_capture_source_ids, validate_finalized_runner,
-    validate_rendered_child_runner,
+    prepare_job_for_capture, rendered_child_has_unbound_needs, validate_capture_source_ids,
+    validate_finalized_caller, validate_rendered_child_runner,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -78,6 +87,7 @@ pub(crate) struct PreparedJob {
     pub(crate) callee_path: String,
     pub(crate) source_job: Job,
     pub(crate) child_job: Job,
+    pub(crate) selection: JobWorkflowSelection,
 }
 
 /// Trusted source snapshot and its exact rendered reusable-workflow outputs.
@@ -93,20 +103,22 @@ pub(crate) struct JobWorkflowRelocation {
 /// The condition is intentionally absent from the child: GitHub evaluates the
 /// original admission predicate on the reusable-workflow call in the parent.
 pub(crate) fn prepare_job(source_id: &str, source: &Job) -> Result<PreparedJob, RenderError> {
-    prepare_job_inner(source_id, source, None)
+    prepare_job_inner(source_id, source, JobWorkflowSelection::legacy_prototype())
 }
 
 pub(super) fn prepare_job_inner(
     source_id: &str,
     source: &Job,
-    allowlisted_ids: Option<&BTreeSet<String>>,
+    selection: JobWorkflowSelection,
 ) -> Result<PreparedJob, RenderError> {
-    if allowlisted_ids.is_none() && source_id != PROTOTYPE_JOB_ID {
+    let allowlisted_ids = selection.ids();
+    if selection.is_legacy_prototype() && source_id != PROTOTYPE_JOB_ID {
         return Err(invalid(source_id, "outside_single_job_prototype"));
     }
     if allowlisted_ids.is_some_and(|ids| !ids.contains(source_id)) {
         return Err(invalid(source_id, "source_id_not_in_typed_rust_allowlist"));
     }
+    selection.validate_caller_condition(source_id, source.condition.as_deref())?;
     if source.needs.len() != 1 || source.needs.first().is_none_or(|need| need != "plan") {
         return Err(invalid(source_id, "source_dependencies_not_exactly_plan"));
     }
@@ -127,22 +139,15 @@ pub(super) fn prepare_job_inner(
         callee_path,
         source_job: source.clone(),
         child_job,
+        selection,
     })
 }
 
 impl PreparedJob {
     /// Re-derive the child from its trusted source snapshot before relocation.
     pub(crate) fn validate_source(&self) -> Result<(), RenderError> {
-        #[cfg(feature = "test-render-capture")]
-        let expected = if self.source_id == PROTOTYPE_JOB_ID {
-            prepare_job(&self.source_id, &self.source_job)?
-        } else if let Some(ids) = crate::render::test_render_capture::source_job_workflow_ids() {
-            prepare_job_for_capture(&self.source_id, &self.source_job, &ids)?
-        } else {
-            prepare_job(&self.source_id, &self.source_job)?
-        };
-        #[cfg(not(feature = "test-render-capture"))]
-        let expected = prepare_job(&self.source_id, &self.source_job)?;
+        let expected =
+            prepare_job_inner(&self.source_id, &self.source_job, self.selection.clone())?;
         if expected.callee_path != self.callee_path
             || !jobs_equal(&expected.child_job, &self.child_job)
         {

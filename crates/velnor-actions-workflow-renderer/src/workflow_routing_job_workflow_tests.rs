@@ -1,12 +1,16 @@
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use velnor_actions_contract::{CacheMode, Job, JobTimeout, PermissionLevel, Permissions};
 use velnor_actions_contract::{Step, StepKind};
 
-use super::validate_relocated_job_workflows;
+use super::{validate_relocated_job_workflows, validate_relocated_job_workflows_with_selection};
 use crate::{
     RenderedFile,
-    lane_share::job_workflow_extract::{JobWorkflowRelocation, PROTOTYPE_JOB_ID, prepare_job},
+    lane_share::job_workflow_extract::{
+        JobWorkflowRelocation, JobWorkflowSelection, PROTOTYPE_JOB_ID, PROTOTYPE_LOCAL_JOB_ID,
+        prepare_job,
+    },
     yaml::Yaml,
 };
 
@@ -271,6 +275,60 @@ fn rejects_duplicate_relocation_ids_and_duplicate_parent_callers() {
         &relocation,
         &duplicate_parent,
         std::slice::from_ref(&relocation.expected_callee_file),
+    ));
+}
+
+#[test]
+fn validates_explicit_relocation_inventory_including_empty_selection() {
+    let empty_selection = BTreeSet::new();
+    assert!(
+        validate_relocated_job_workflows_with_selection(
+            &Yaml::Map(Vec::new()),
+            &[],
+            &empty_selection,
+            &[],
+        )
+        .is_ok()
+    );
+
+    let selected = BTreeSet::from([
+        PROTOTYPE_JOB_ID.to_owned(),
+        PROTOTYPE_LOCAL_JOB_ID.to_owned(),
+    ]);
+    let mut hosted = relocation();
+    hosted.prepared.selection = JobWorkflowSelection::explicit(&selected);
+    assert!(
+        validate_relocated_job_workflows_with_selection(
+            &parent(&hosted),
+            std::slice::from_ref(&hosted.expected_callee_file),
+            &selected,
+            std::slice::from_ref(&hosted),
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn rejects_mixed_legacy_and_explicit_relocation_selections() {
+    let hosted = relocation();
+    let selected = BTreeSet::from([
+        PROTOTYPE_JOB_ID.to_owned(),
+        PROTOTYPE_LOCAL_JOB_ID.to_owned(),
+    ]);
+    let mut local = hosted.clone();
+    local.prepared.source_id = PROTOTYPE_LOCAL_JOB_ID.to_owned();
+    local.prepared.selection = JobWorkflowSelection::explicit(&selected);
+
+    let result = validate_relocated_job_workflows_with_selection(
+        &Yaml::Map(Vec::new()),
+        &[],
+        &selected,
+        &[hosted, local],
+    );
+    assert!(matches!(
+        result,
+        Err(crate::RenderError::InvalidWorkflow(problem))
+            if problem == "job_workflow_selection_state_mismatch"
     ));
 }
 

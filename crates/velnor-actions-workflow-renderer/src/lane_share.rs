@@ -1,29 +1,30 @@
 //! One composite action per duplicated verification lane.
 //!
-//! GitHub will not start a workflow file larger than 500 KB. Inlining both
-//! lane step lists crosses that limit, so the steps live in one action and
-//! each lane job keeps its own id, `runs-on`, and `needs`.
+//! GitHub's 500 KB cap drives shared actions that keep lane ids, runners, and
+//! dependencies; Both can move typed Rust lane pairs into same-id reusable callees.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
 use velnor_actions_contract::{Job, Step};
 
-use crate::RenderError;
-use crate::render::RenderContext;
-use crate::tree::RenderedFile;
+use crate::{RenderError, render::RenderContext, tree::RenderedFile};
 
 #[path = "lane_share_checkout.rs"]
 mod checkout;
+#[cfg(test)]
+#[path = "lane_share_entry.rs"]
+mod entry;
 #[path = "lane_share_job_workflow.rs"]
 mod job_workflow;
+#[cfg(test)]
+pub(crate) use entry::share_lanes;
 #[path = "job_workflow_extract.rs"]
 pub(crate) mod job_workflow_extract;
 #[path = "lane_share_provider_restore.rs"]
 mod provider_restore;
 #[path = "lane_share_runtime.rs"]
 mod runtime;
-use checkout::peel_checkout;
 
 /// CI workflow plus composite actions for duplicated lanes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,7 +40,7 @@ pub struct RenderedWorkflow {
 pub(crate) struct LaneShare {
     /// Same jobs, with shared lanes keeping their headers and elected saves.
     pub jobs: BTreeMap<String, Job>,
-    /// Source-derived reusable-workflow body for the one approved CLI prototype.
+    /// Source-derived reusable-workflow bodies for selected typed lane jobs.
     pub job_workflows: BTreeMap<String, job_workflow_extract::PreparedJob>,
     /// Job id to local `uses` path.
     pub calls: BTreeMap<String, String>,
@@ -79,9 +80,10 @@ struct SharedLaneParts {
 /// fails closed. The one typed hosted check admission condition may differ;
 /// lane identities, report uploads, and elected cache saves remain in their
 /// owning jobs. An unsafe logical id fails closed.
-pub(crate) fn share_lanes(
+pub(crate) fn share_lanes_with_selection(
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
+    job_workflow_ids: Option<&BTreeSet<String>>,
 ) -> Result<LaneShare, RenderError> {
     let mut calls = BTreeMap::new();
     let mut checkouts = BTreeMap::new();
@@ -150,7 +152,7 @@ pub(crate) fn share_lanes(
     crate::lane_share_sections::factor_provider_preludes(&mut preludes, &mut files, ctx)?;
     let shared = LaneShare {
         jobs: next,
-        job_workflows: job_workflow::prepare(jobs)?,
+        job_workflows: job_workflow::prepare(jobs, job_workflow_ids)?,
         calls,
         checkouts,
         env_steps,
@@ -234,8 +236,8 @@ fn split_pair(
     {
         return None;
     }
-    let (hosted_checkout, hosted_steps) = peel_checkout(&hosted.steps, checkout_uses)?;
-    let (local_checkout, local_steps) = peel_checkout(&local.steps, checkout_uses)?;
+    let (hosted_checkout, hosted_steps) = checkout::peel_checkout(&hosted.steps, checkout_uses)?;
+    let (local_checkout, local_steps) = checkout::peel_checkout(&local.steps, checkout_uses)?;
     if hosted_checkout != local_checkout {
         return None;
     }

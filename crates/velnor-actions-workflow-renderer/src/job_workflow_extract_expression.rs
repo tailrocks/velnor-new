@@ -15,6 +15,26 @@ pub(crate) fn test_condition_has_unbound_needs(value: &str) -> Result<bool, Rend
     Ok(rewritten != value)
 }
 
+pub(crate) fn caller_condition_for_selection(
+    job_id: &str,
+    condition: Option<&str>,
+) -> Result<String, RenderError> {
+    let Some(condition) = condition else {
+        return Ok("!cancelled() && success()".to_owned());
+    };
+    let status = status_functions(condition, job_id)?;
+    if status.has_always_failure_or_cancelled() {
+        return Ok(condition.to_owned());
+    }
+    if status.has_success() {
+        return Err(invalid(
+            job_id,
+            "success_only_caller_condition_not_relocatable",
+        ));
+    }
+    guarded_condition(job_id, condition)
+}
+
 pub(super) fn rewrite_condition(
     job_id: &str,
     field: &str,
@@ -79,6 +99,154 @@ fn expression_end(value: &str, start: usize) -> Option<usize> {
         index += 1;
     }
     None
+}
+
+#[derive(Default)]
+struct StatusFunctions(u8);
+
+impl StatusFunctions {
+    const SUCCESS: u8 = 1 << 0;
+    const ALWAYS: u8 = 1 << 1;
+    const FAILURE: u8 = 1 << 2;
+    const CANCELLED: u8 = 1 << 3;
+
+    fn insert(&mut self, function: StatusFunction) {
+        self.0 |= match function {
+            StatusFunction::Success => Self::SUCCESS,
+            StatusFunction::Always => Self::ALWAYS,
+            StatusFunction::Failure => Self::FAILURE,
+            StatusFunction::Cancelled => Self::CANCELLED,
+        };
+    }
+
+    fn has_always_failure_or_cancelled(&self) -> bool {
+        self.0 & (Self::ALWAYS | Self::FAILURE | Self::CANCELLED) != 0
+    }
+
+    fn has_success(&self) -> bool {
+        self.0 & Self::SUCCESS != 0
+    }
+}
+
+fn status_functions(value: &str, job_id: &str) -> Result<StatusFunctions, RenderError> {
+    let expression = if value.trim_start().starts_with("${{") {
+        let trimmed = value.trim();
+        let Some(end) = expression_end(trimmed, 3) else {
+            return Err(invalid(job_id, "unterminated_caller_condition"));
+        };
+        if !trimmed[end + 2..].trim().is_empty() {
+            return Err(invalid(job_id, "unsupported_wrapped_caller_condition"));
+        }
+        &trimmed[3..end]
+    } else {
+        value
+    };
+    let mut status = StatusFunctions::default();
+    let mut index = 0;
+    let mut quote = None;
+    while index < expression.len() {
+        let Some(character) = expression[index..].chars().next() else {
+            return Err(invalid(job_id, "invalid_caller_condition_index"));
+        };
+        if let Some(active_quote) = quote {
+            if character == active_quote {
+                let doubled_single_quote = active_quote == '\''
+                    && expression[index + character.len_utf8()..].starts_with('\'');
+                if doubled_single_quote {
+                    index += character.len_utf8() + 1;
+                    continue;
+                }
+                quote = None;
+            } else if active_quote == '"' && character == '\\' {
+                index += character.len_utf8();
+                if let Some(escaped_character) = expression[index..].chars().next() {
+                    index += escaped_character.len_utf8();
+                }
+                continue;
+            }
+            index += character.len_utf8();
+            continue;
+        }
+        if character == '\'' || character == '"' {
+            quote = Some(character);
+            index += character.len_utf8();
+            continue;
+        }
+        if let Some((function, end)) = status_function_at(expression, index) {
+            status.insert(function);
+            index = end;
+            continue;
+        }
+        index += character.len_utf8();
+    }
+    if quote.is_some() {
+        return Err(invalid(job_id, "unterminated_caller_condition_literal"));
+    }
+    Ok(status)
+}
+
+#[derive(Clone, Copy)]
+enum StatusFunction {
+    Success,
+    Always,
+    Failure,
+    Cancelled,
+}
+
+fn status_function_at(expression: &str, index: usize) -> Option<(StatusFunction, usize)> {
+    let previous = expression[..index].chars().next_back();
+    if previous.is_some_and(is_identifier_character)
+        || expression[..index]
+            .chars()
+            .rev()
+            .find(|character| !character.is_whitespace())
+            == Some('.')
+    {
+        return None;
+    }
+    [
+        ("success", StatusFunction::Success),
+        ("always", StatusFunction::Always),
+        ("failure", StatusFunction::Failure),
+        ("cancelled", StatusFunction::Cancelled),
+    ]
+    .into_iter()
+    .find_map(|(name, function)| {
+        let end = index + name.len();
+        let candidate = expression.get(index..end)?;
+        if !candidate.eq_ignore_ascii_case(name)
+            || expression[end..]
+                .chars()
+                .next()
+                .is_some_and(is_identifier_character)
+        {
+            return None;
+        }
+        let open = skip_whitespace(expression, end);
+        expression[open..]
+            .starts_with('(')
+            .then_some((function, open + 1))
+    })
+}
+
+fn guarded_condition(job_id: &str, condition: &str) -> Result<String, RenderError> {
+    let trimmed = condition.trim();
+    if trimmed.is_empty() {
+        return Err(invalid(job_id, "empty_caller_condition_not_relocatable"));
+    }
+    if trimmed.starts_with("${{") {
+        let Some(end) = expression_end(trimmed, 3) else {
+            return Err(invalid(job_id, "unterminated_caller_condition"));
+        };
+        if !trimmed[end + 2..].trim().is_empty() {
+            return Err(invalid(job_id, "unsupported_wrapped_caller_condition"));
+        }
+        return Ok(format!(
+            "${{{{ !cancelled() && success() && ({}) }}}}",
+            &trimmed[3..end]
+        ));
+    }
+    Ok(format!("!cancelled() && success() && ({condition})"))
 }
 
 fn rewrite_expression_body(

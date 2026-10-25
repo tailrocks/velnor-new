@@ -77,11 +77,12 @@ pub(super) fn rendered_fixture() -> RenderedFixture {
     let parent_bytes =
         fallback::render_checked_workflow(WORKFLOW_PATH, &parent, &context.generator_version)
             .expect("the normal checked workflow serializer emits ci.yml");
-    let relocations = crate::document::render_job_workflow_relocations(
+    let relocations = crate::document::render_job_workflow_relocations_with_routing(
         &workflow,
         &shared,
         &context,
         &BTreeSet::new(),
+        &policy,
     )
     .expect("the normal child serializer emits the source-derived callee");
 

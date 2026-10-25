@@ -23,6 +23,7 @@ pub(crate) struct EmitSettings<'a> {
         BTreeMap<String, matrix::bun::BunLegMatrix>,
     ),
     pub(crate) allow_step_aliases: bool,
+    pub(crate) job_workflow_ids: Option<&'a BTreeSet<String>>,
 }
 
 pub(crate) fn workflow_file_too_large(error: &RenderError) -> bool {
@@ -79,7 +80,9 @@ pub(crate) fn emit_shared(
         &ctx.report_helper_version,
         &ctx.tool_pins,
     )?;
-    let relocations = document::render_job_workflow_relocations(ir, shared, ctx, &mbx_jobs)?;
+    let relocations = document::render_job_workflow_relocations_with_routing(
+        ir, shared, ctx, &mbx_jobs, routing,
+    )?;
     for relocation in &relocations {
         if shared_files
             .iter()
@@ -92,11 +95,20 @@ pub(crate) fn emit_shared(
         }
         shared_files.push(relocation.expected_callee_file.clone());
     }
-    crate::workflow_routing::validate_relocated_job_workflows(
-        &document,
-        &shared_files,
-        &relocations,
-    )?;
+    if let Some(selected_source_ids) = settings.job_workflow_ids {
+        crate::workflow_routing::validate_relocated_job_workflows_with_selection(
+            &document,
+            &shared_files,
+            selected_source_ids,
+            &relocations,
+        )?;
+    } else {
+        crate::workflow_routing::validate_relocated_job_workflows(
+            &document,
+            &shared_files,
+            &relocations,
+        )?;
+    }
     if crate::tool_seed::any_job_has_seed(jobs)? {
         return Err(RenderError::InvalidWorkflow(
             "tool_seed_requires_tools_prelude".to_owned(),

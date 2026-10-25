@@ -6,7 +6,8 @@ use crate::render::test_render_capture::{
 };
 use crate::{
     lane_share::job_workflow_extract::{
-        PROTOTYPE_JOB_ID, validate_finalized_runner, validate_rendered_child_runner,
+        PROTOTYPE_JOB_ID, validate_finalized_caller, validate_finalized_runner,
+        validate_rendered_child_runner,
     },
     workflow_routing::{WorkflowRoutingPolicy, route_workflow_yaml_for_jobs},
     yaml::Yaml,
@@ -64,6 +65,41 @@ fn existing_prototype_caller_is_accepted_only_as_its_exact_source_snapshot() {
             &relocation.expected_caller,
         )
         .is_err()
+    );
+}
+
+#[test]
+fn selected_source_caller_is_accepted_only_as_its_exact_source_snapshot() {
+    let source_id = "rust-velnor-actions-actionlint__hosted";
+    let source = super::source_job();
+    let allowlist = BTreeSet::from([
+        source_id.to_owned(),
+        "rust-velnor-actions-actionlint__local".to_owned(),
+    ]);
+    let prepared = crate::lane_share::job_workflow_extract::prepare_job_for_capture(
+        source_id, &source, &allowlist,
+    )
+    .expect("selected source lowers from its exact owner ID");
+    let expected_caller = super::super::caller_yaml(&prepared)
+        .expect("the expected caller derives from the source snapshot");
+    let parent = Yaml::Map(vec![(
+        "jobs".to_owned(),
+        Yaml::Map(vec![(source_id.to_owned(), expected_caller.clone())]),
+    )]);
+
+    validate_finalized_caller(source_id, &source, &parent, &expected_caller)
+        .expect("a selected source's exact reusable caller is accepted");
+
+    let mut unexpected_parent = parent;
+    replace_job_field(
+        &mut unexpected_parent,
+        source_id,
+        "uses",
+        Yaml::str("./.github/workflows/unexpected.yml"),
+    );
+    assert!(
+        validate_finalized_caller(source_id, &source, &unexpected_parent, &expected_caller)
+            .is_err()
     );
 }
 

@@ -145,6 +145,18 @@ fn prepare_workflow(
         &render_context.workflow_tasks,
         &render_context.checkout_uses,
     )?;
+    let job_workflow_ids = routing
+        .is_both()
+        .then(|| {
+            crate::crate_job_ids::typed_rust_lane_job_ids_for_jobs(
+                &prep.discovery.proposals,
+                &ir.jobs,
+            )
+            .map_err(|err| OrchestratorError::Contract {
+                problem: err.to_string(),
+            })
+        })
+        .transpose()?;
     let mut lint_input = prep.workflow.lint_config.clone();
     lint_input.runner_labels = super::runner_labels::collect(
         &prep.config,
@@ -152,13 +164,14 @@ fn prepare_workflow(
         render_context.scale_set_selector.as_ref(),
     );
     let rendered =
-        velnor_actions_workflow_renderer::render::render_workflow_ir_strict_shared_with_routing(
+        velnor_actions_workflow_renderer::render::render_workflow_ir_strict_shared_with_routing_and_job_workflows(
             &ir,
             prep.config.workflow.policy,
             prep.workflow.support.as_ref(),
             &render_context,
             mise,
             &routing,
+            job_workflow_ids.as_ref(),
         )?;
     let lint_config = rehead_lint_config_marker(&render_jactionlint_yaml(&lint_input)?, version)?;
     Ok(WorkflowPreparation {

@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{Job, WorkflowIr};
 
@@ -10,6 +10,7 @@ pub(super) fn render_merged_with_routing(
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
     routing: &crate::workflow_routing::WorkflowRoutingPolicy,
+    job_workflow_ids: Option<&BTreeSet<String>>,
 ) -> Result<RenderedWorkflow, RenderError> {
     let routing = (*routing).clone().with_verified_workflow_tasks(
         ir,
@@ -41,13 +42,14 @@ pub(super) fn render_merged_with_routing(
         &ctx.workflow_tasks,
         ctx.scale_set_selector.as_ref(),
     )?;
-    let mut shared = crate::lane_share::share_lanes(&jobs, ctx)?;
+    let mut shared = crate::lane_share::share_lanes_with_selection(&jobs, ctx, job_workflow_ids)?;
     shared.files.extend(task_files);
     let first_emit = emit::EmitSettings {
         matrix: matrix.as_ref(),
         caps: &caps,
         suite_matrices: &suite_matrices,
         allow_step_aliases: false,
+        job_workflow_ids,
     };
     match emit::emit_shared(ir, &shared, &jobs, ctx, &first_emit, &routing) {
         Ok(workflow) => Ok(workflow),

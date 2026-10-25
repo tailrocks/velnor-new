@@ -7,6 +7,10 @@ use std::collections::BTreeSet;
 
 use serde::Serialize;
 
+#[path = "test_render_capture_graph.rs"]
+mod graph;
+pub use graph::WorkflowCallGraphSummary;
+
 /// Canonical and selected marked YAML captured at the render boundary.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RenderCapture {
@@ -112,6 +116,20 @@ pub fn workflow_yaml_is_semantically_equal(
     let selected_yaml = crate::workflow_routing::parse_authority_document(&selected_file)
         .map_err(|error| error.to_string())?;
     Ok(canonical_yaml == selected_yaml)
+}
+
+/// Summarize the complete reusable-workflow graph in a successfully rendered tree.
+///
+/// This diagnostic API is available only with the private capture feature and
+/// does not participate in production rendering or validation.
+///
+/// # Errors
+///
+/// Returns an error if a workflow is malformed or the local call graph is invalid.
+pub fn summarize_workflow_call_graph(
+    files: &[crate::tree::RenderedFile],
+) -> Result<WorkflowCallGraphSummary, String> {
+    graph::summarize(files)
 }
 
 thread_local! {

@@ -27,7 +27,7 @@ pub(super) fn measure_parent_candidate(
 ) -> Result<ParentMetrics, RenderError> {
     let caller_parent = replace_parent_callers(parent, relocations)?;
     validate_parent_replacement_scope(parent, &caller_parent, source_ids)?;
-    validate_candidate_relocations(&caller_parent, relocations)?;
+    validate_candidate_relocations(&caller_parent, source_ids, relocations)?;
     let original = render_parent(parent, ctx)?;
     let diagnostic = render_parent(&caller_parent, ctx)?;
     let bytes_saved = checked_size_delta(original.len(), diagnostic.len())?;
@@ -58,15 +58,17 @@ pub(super) fn measure_parent_candidate(
 
 fn validate_candidate_relocations(
     caller_parent: &Yaml,
+    source_ids: &BTreeSet<String>,
     relocations: &[job_workflow_extract::JobWorkflowRelocation],
 ) -> Result<(), RenderError> {
     let child_files = relocations
         .iter()
         .map(|relocation| relocation.expected_callee_file.clone())
         .collect::<Vec<_>>();
-    crate::workflow_routing::validate_relocated_job_workflows(
+    crate::workflow_routing::validate_relocated_job_workflows_with_selection(
         caller_parent,
         &child_files,
+        source_ids,
         relocations,
     )
 }

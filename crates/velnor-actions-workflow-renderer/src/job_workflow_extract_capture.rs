@@ -2,10 +2,14 @@
 
 use std::collections::BTreeSet;
 
+use velnor_actions_contract::Job;
 use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
-use velnor_actions_contract::{Job, RunnerPlatform, RunsOn, runner_platform};
 
-use super::{PreparedJob, RenderError, invalid};
+use super::{
+    PreparedJob, RenderError, invalid,
+    runner::{CaptureRunnerMetadata, capture_runner_metadata},
+    selection::JobWorkflowSelection,
+};
 
 pub(crate) fn prepare_job_for_capture(
     source_id: &str,
@@ -17,21 +21,38 @@ pub(crate) fn prepare_job_for_capture(
         return Err(invalid(source_id, "source_id_not_in_typed_rust_allowlist"));
     }
     capture_runner_metadata(source_id, source)?;
-    super::prepare_job_inner(source_id, source, Some(allowlisted_ids))
+    super::prepare_job_inner(
+        source_id,
+        source,
+        JobWorkflowSelection::explicit(allowlisted_ids),
+    )
 }
 
-#[derive(Clone, Debug)]
-pub(crate) struct CaptureRunnerMetadata {
-    pub(crate) runner_class: &'static str,
-    pub(crate) configured_runner: String,
-    pub(crate) final_runner_labels: Vec<String>,
-}
-
+#[cfg(test)]
 pub(crate) fn validate_finalized_runner(
     source_id: &str,
     source: &Job,
     parent: &crate::yaml::Yaml,
     expected_caller: &crate::yaml::Yaml,
+) -> Result<CaptureRunnerMetadata, RenderError> {
+    validate_finalized_source(source_id, source, parent, expected_caller, false)
+}
+
+pub(crate) fn validate_finalized_caller(
+    source_id: &str,
+    source: &Job,
+    parent: &crate::yaml::Yaml,
+    expected_caller: &crate::yaml::Yaml,
+) -> Result<CaptureRunnerMetadata, RenderError> {
+    validate_finalized_source(source_id, source, parent, expected_caller, true)
+}
+
+fn validate_finalized_source(
+    source_id: &str,
+    source: &Job,
+    parent: &crate::yaml::Yaml,
+    expected_caller: &crate::yaml::Yaml,
+    require_caller: bool,
 ) -> Result<CaptureRunnerMetadata, RenderError> {
     let metadata = capture_runner_metadata(source_id, source)?;
     let fields = parent_job_fields(parent, source_id)?;
@@ -40,13 +61,16 @@ pub(crate) fn validate_finalized_runner(
     }
     if field(fields, "uses").is_some() {
         let actual_caller = crate::yaml::Yaml::Map(fields.to_vec());
-        if source_id != super::PROTOTYPE_JOB_ID || &actual_caller != expected_caller {
+        if &actual_caller != expected_caller {
             return Err(invalid(
                 source_id,
                 "capture_runner_has_unexpected_workflow_call",
             ));
         }
         return Ok(metadata);
+    }
+    if require_caller {
+        return Err(invalid(source_id, "capture_final_workflow_call_missing"));
     }
     let runs_on = field(fields, "runs-on")
         .ok_or_else(|| invalid(source_id, "capture_final_runs_on_missing"))?;
@@ -111,44 +135,6 @@ pub(crate) fn validate_rendered_child_runner(
         return Err(invalid(source_id, "capture_child_runner_metadata_mismatch"));
     }
     Ok(())
-}
-
-pub(crate) fn capture_runner_metadata(
-    source_id: &str,
-    source: &Job,
-) -> Result<CaptureRunnerMetadata, RenderError> {
-    if source.check_runner.is_some() || !source.services.is_empty() {
-        return Err(invalid(
-            source_id,
-            "typed_rust_job_has_native_or_service_metadata",
-        ));
-    }
-    let runner = RunsOn::parse(&source.runs_on)
-        .map_err(|_| invalid(source_id, "typed_rust_runner_selector_invalid"))?;
-    if source_id.ends_with(HOSTED_SUFFIX) {
-        let RunsOn::Hosted(label) = runner else {
-            return Err(invalid(source_id, "hosted_lane_is_not_hosted_runner"));
-        };
-        if runner_platform(&label) != Some(RunnerPlatform::LinuxAmd64) {
-            return Err(invalid(source_id, "hosted_lane_is_not_linux_x64"));
-        }
-        Ok(CaptureRunnerMetadata {
-            runner_class: "hosted-linux-x64",
-            configured_runner: source.runs_on.clone(),
-            final_runner_labels: vec![label],
-        })
-    } else if source_id.ends_with(SCALE_SUFFIX) {
-        let RunsOn::ScaleSet(selector) = runner else {
-            return Err(invalid(source_id, "scale_lane_is_not_configured_scale_set"));
-        };
-        Ok(CaptureRunnerMetadata {
-            runner_class: "configured-scale-set-linux-x64",
-            configured_runner: source.runs_on.clone(),
-            final_runner_labels: selector.labels().to_vec(),
-        })
-    } else {
-        Err(invalid(source_id, "typed_rust_runner_lane_suffix_missing"))
-    }
 }
 
 fn parent_job_fields<'a>(

@@ -68,9 +68,12 @@ pub(super) fn caller_yaml(prepared: &PreparedJob) -> Result<Yaml, RenderError> {
             Yaml::Seq(source.needs.iter().cloned().map(Yaml::str).collect()),
         ));
     }
-    if let Some(condition) = &source.condition {
-        steps::scan_for_private_subcommands(condition)?;
-        fields.push(("if".to_owned(), Yaml::str(condition.clone())));
+    let condition = prepared
+        .selection
+        .caller_condition(&prepared.source_id, source.condition.as_deref())?;
+    if let Some(condition) = condition {
+        steps::scan_for_private_subcommands(&condition)?;
+        fields.push(("if".to_owned(), Yaml::str(condition)));
     }
     Ok(Yaml::Map(fields))
 }
@@ -81,66 +84,26 @@ pub(super) fn relocation(
     ctx: &RenderContext,
     mbx_jobs: &BTreeSet<String>,
     workflow_env: &BTreeMap<String, String>,
+    routing: &crate::workflow_routing::WorkflowRoutingPolicy,
 ) -> Result<JobWorkflowRelocation, RenderError> {
     prepared.validate_source()?;
     let document = callee_yaml(prepared, ir, ctx, mbx_jobs, workflow_env)?;
+    let document = if prepared.selection.is_explicit() {
+        let typed_jobs = BTreeMap::from([(prepared.source_id.clone(), prepared.child_job.clone())]);
+        crate::workflow_routing::route_workflow_yaml_for_jobs(
+            &prepared.callee_path,
+            document,
+            routing,
+            &typed_jobs,
+        )?
+    } else {
+        document
+    };
     let expected_callee_file = RenderedFile {
         path: prepared.callee_path.clone(),
         bytes: crate::render::fallback::render_checked_workflow(
             &prepared.callee_path,
             &document,
-            &ctx.generator_version,
-        )?,
-    };
-    steps::scan_for_private_subcommands(&expected_callee_file.bytes)?;
-    crate::guard::validate_tree_path(&expected_callee_file.path)?;
-    Ok(JobWorkflowRelocation {
-        prepared: prepared.clone(),
-        expected_caller: caller_yaml(prepared)?,
-        expected_callee_file,
-    })
-}
-
-#[cfg(feature = "test-render-capture")]
-pub(super) fn relocations_for_capture(
-    ir: &WorkflowIr,
-    shared: &crate::lane_share::LaneShare,
-    ctx: &RenderContext,
-    mbx_jobs: &BTreeSet<String>,
-    routing: &crate::workflow_routing::WorkflowRoutingPolicy,
-) -> Result<Vec<JobWorkflowRelocation>, RenderError> {
-    let workflow_env =
-        crate::document_env::workflow_env(!ctx.workflow_tasks.is_empty(), ctx.mise_quiet);
-    shared
-        .job_workflows
-        .values()
-        .map(|prepared| relocation_for_capture(prepared, ir, ctx, mbx_jobs, &workflow_env, routing))
-        .collect()
-}
-
-#[cfg(feature = "test-render-capture")]
-fn relocation_for_capture(
-    prepared: &PreparedJob,
-    ir: &WorkflowIr,
-    ctx: &RenderContext,
-    mbx_jobs: &BTreeSet<String>,
-    workflow_env: &BTreeMap<String, String>,
-    routing: &crate::workflow_routing::WorkflowRoutingPolicy,
-) -> Result<JobWorkflowRelocation, RenderError> {
-    prepared.validate_source()?;
-    let document = callee_yaml(prepared, ir, ctx, mbx_jobs, workflow_env)?;
-    let typed_jobs = BTreeMap::from([(prepared.source_id.clone(), prepared.child_job.clone())]);
-    let routed = crate::workflow_routing::route_workflow_yaml_for_jobs(
-        &prepared.callee_path,
-        document,
-        routing,
-        &typed_jobs,
-    )?;
-    let expected_callee_file = RenderedFile {
-        path: prepared.callee_path.clone(),
-        bytes: crate::render::fallback::render_checked_workflow(
-            &prepared.callee_path,
-            &routed,
             &ctx.generator_version,
         )?,
     };
@@ -165,11 +128,11 @@ pub(crate) fn validate_routed_child_projection(
         source_id,
         expected_labels,
     )?;
-    if source_id == crate::lane_share::job_workflow_extract::PROTOTYPE_JOB_ID {
+    let parent_job = parsed_job(parent_document, source_id, false)?;
+    if parsed_field(parent_job, "uses").is_some() {
         return Ok(());
     }
     let child_document = crate::workflow_routing::parse_authority_document(file)?;
-    let parent_job = parsed_job(parent_document, source_id, false)?;
     let child_job = parsed_job(&child_document, source_id, true)?;
     for name in ["runs-on", "defaults", "container"] {
         if parsed_field(parent_job, name) != parsed_field(child_job, name) {

@@ -2,7 +2,10 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Job, JobTimeout, ServiceContainer, Step, StepKind, StepRole};
 
-use super::{CALLER_INPUT_TYPE, CALLER_INPUTS, PROTOTYPE_JOB_ID, prepare_job};
+use super::{CALLER_INPUT_TYPE, CALLER_INPUTS, PROTOTYPE_JOB_ID, pair_is_relocatable, prepare_job};
+
+#[path = "job_workflow_extract_tests/caller_condition.rs"]
+mod caller_condition;
 
 fn source_job(steps: Vec<Step>) -> Job {
     Job {
@@ -141,6 +144,26 @@ fn source_bound_projection_rejects_changed_child_body() {
     run[0].push_str(" && changed");
 
     assert!(prepared.validate_source().is_err());
+}
+
+#[test]
+fn pair_lowerability_uses_the_production_source_preparation_rules() {
+    let hosted_id = "rust-velnor-actions-cli__hosted";
+    let local_id = "rust-velnor-actions-cli__local";
+    let hosted = source_job(vec![shell_step()]);
+    let mut local = source_job(vec![shell_step()]);
+    local.runs_on = "scale-set:velnor+ubuntu-26.04-scale-set".to_owned();
+
+    assert!(pair_is_relocatable(hosted_id, &hosted, local_id, &local));
+    assert!(!pair_is_relocatable(
+        hosted_id,
+        &hosted,
+        "rust-velnor-actions-tofu__local",
+        &local,
+    ));
+
+    local.needs.push("rust-dependency-seed__hosted".to_owned());
+    assert!(!pair_is_relocatable(hosted_id, &hosted, local_id, &local));
 }
 
 #[test]

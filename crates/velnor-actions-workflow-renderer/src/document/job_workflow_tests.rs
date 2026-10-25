@@ -19,6 +19,8 @@ use crate::{
 
 #[path = "job_workflow_tests/call_schema.rs"]
 mod call_schema;
+#[path = "job_workflow_tests/caller_status_guard.rs"]
+mod caller_status_guard;
 #[cfg(feature = "test-render-capture")]
 #[path = "job_workflow_tests/capture_runner.rs"]
 mod capture_runner;
@@ -26,6 +28,8 @@ mod capture_runner;
 mod fixture;
 #[path = "job_workflow_tests/identity_condition.rs"]
 mod identity_condition;
+#[path = "job_workflow_tests/unbound_needs.rs"]
+mod unbound_needs;
 
 fn source_job() -> Job {
     Job {
@@ -55,7 +59,6 @@ fn source_job() -> Job {
         }],
     }
 }
-
 fn context() -> RenderContext {
     RenderContext {
         tool_pins: Vec::new(),
@@ -244,13 +247,18 @@ fn assert_parent_and_required_dependencies(fixture: &fixture::RenderedFixture) {
         .condition
         .as_deref()
         .expect("the typed source job carries its affected-job predicate");
+    let caller_condition = crate::lane_share::job_workflow_extract::caller_condition_for_selection(
+        PROTOTYPE_JOB_ID,
+        Some(source_condition),
+    )
+    .expect("the explicit caller condition preserves the default success gate");
     let Yaml::Map(caller_fields) = parent_caller else {
         panic!("the hosted job is a reusable-workflow caller");
     };
     assert!(
-        caller_fields.iter().any(|(name, value)| {
-            name == "if" && value == &Yaml::str(source_condition.to_owned())
-        })
+        caller_fields
+            .iter()
+            .any(|(name, value)| { name == "if" && value == &Yaml::str(caller_condition.clone()) })
     );
     let required = workflow_job(&fixture.parent, crate::render::FINAL_JOB_ID);
     assert!(job_needs(required).contains(&PROTOTYPE_JOB_ID));
@@ -373,7 +381,7 @@ fn yaml_has_unbound_needs(value: &saphyr::Yaml<'_>) -> bool {
     if let Some(mapping) = value.as_mapping() {
         return mapping.iter().any(|(key, child)| {
             let condition = key.as_str() == Some("if");
-            yaml_value_has_unbound_needs(child, condition)
+            unbound_needs::value_has_unbound_needs(child, condition)
         });
     }
     if let Some(sequence) = value.as_sequence() {
@@ -383,14 +391,4 @@ fn yaml_has_unbound_needs(value: &saphyr::Yaml<'_>) -> bool {
         crate::lane_share::job_workflow_extract::test_expression_has_unbound_needs(text)
             .expect("serialized expression is well formed")
     })
-}
-
-fn yaml_value_has_unbound_needs(value: &saphyr::Yaml<'_>, condition: bool) -> bool {
-    if condition {
-        return value.as_str().is_some_and(|text| {
-            crate::lane_share::job_workflow_extract::test_condition_has_unbound_needs(text)
-                .expect("serialized condition is well formed")
-        });
-    }
-    yaml_has_unbound_needs(value)
 }

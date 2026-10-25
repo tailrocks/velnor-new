@@ -174,6 +174,7 @@ fn write_capture_outcome(
         (Some(tree), None) => {
             crate::validate::validate_staged(&tree)?;
             assert!(tree.get(".github/workflows/ci.yml").is_some());
+            write_full_workflow_graph(output, &tree)?;
             std::fs::write(output.join("capture-status.txt"), "validated\n")?;
         }
         (None, Some(error)) => {
@@ -191,6 +192,15 @@ fn write_capture_outcome(
         }
         _ => return Err("render capture outcome is inconsistent".into()),
     }
+    Ok(())
+}
+
+fn write_full_workflow_graph(output: &Path, tree: &RenderedTree) -> Result<(), Box<dyn Error>> {
+    let graph = test_render_capture::summarize_workflow_call_graph(&tree.files)
+        .map_err(std::io::Error::other)?;
+    let mut bytes = serde_json::to_vec_pretty(&graph)?;
+    bytes.push(b'\n');
+    std::fs::write(output.join("workflow-call-graph.json"), bytes)?;
     Ok(())
 }
 

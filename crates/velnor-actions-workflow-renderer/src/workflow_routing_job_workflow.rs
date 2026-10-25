@@ -18,6 +18,32 @@ pub(super) fn validate_relocated_job_workflows(
     shared_files: &[RenderedFile],
     relocations: &[JobWorkflowRelocation],
 ) -> Result<(), RenderError> {
+    validate_relocated_job_workflows_inner(parent_yaml, shared_files, None, relocations)
+}
+
+pub(super) fn validate_relocated_job_workflows_with_selection(
+    parent_yaml: &Yaml,
+    shared_files: &[RenderedFile],
+    selected_source_ids: &BTreeSet<String>,
+    relocations: &[JobWorkflowRelocation],
+) -> Result<(), RenderError> {
+    validate_relocated_job_workflows_inner(
+        parent_yaml,
+        shared_files,
+        Some(selected_source_ids),
+        relocations,
+    )
+}
+
+fn validate_relocated_job_workflows_inner(
+    parent_yaml: &Yaml,
+    shared_files: &[RenderedFile],
+    selected_source_ids: Option<&BTreeSet<String>>,
+    relocations: &[JobWorkflowRelocation],
+) -> Result<(), RenderError> {
+    if let Some(selected_source_ids) = selected_source_ids {
+        validate_selection_inventory(selected_source_ids, relocations)?;
+    }
     if relocations.is_empty() {
         return Ok(());
     }
@@ -38,6 +64,27 @@ pub(super) fn validate_relocated_job_workflows(
         crate::guard::validate_tree_path(&prepared.callee_path)?;
         validate_caller(parent_jobs, relocation)?;
         validate_callee(shared_files, relocation)?;
+    }
+    Ok(())
+}
+
+fn validate_selection_inventory(
+    selected_source_ids: &BTreeSet<String>,
+    relocations: &[JobWorkflowRelocation],
+) -> Result<(), RenderError> {
+    let caller_ids = relocations
+        .iter()
+        .map(|relocation| relocation.prepared.source_id.clone())
+        .collect::<BTreeSet<_>>();
+    if caller_ids.len() != relocations.len() || &caller_ids != selected_source_ids {
+        return Err(invalid(
+            "job_workflow_selection_inventory_mismatch".to_owned(),
+        ));
+    }
+    for relocation in relocations {
+        if relocation.prepared.selection.ids() != Some(selected_source_ids) {
+            return Err(invalid("job_workflow_selection_state_mismatch".to_owned()));
+        }
     }
     Ok(())
 }
@@ -76,7 +123,7 @@ fn validate_caller(
             prepared.source_id
         )));
     };
-    let expected = source_caller_yaml(prepared);
+    let expected = source_caller_yaml(prepared)?;
     if relocation.expected_caller != expected || actual != &expected {
         return Err(invalid(format!(
             "job_workflow_parent_caller_mismatch:{}",
@@ -86,7 +133,9 @@ fn validate_caller(
     Ok(())
 }
 
-fn source_caller_yaml(prepared: &crate::lane_share::job_workflow_extract::PreparedJob) -> Yaml {
+fn source_caller_yaml(
+    prepared: &crate::lane_share::job_workflow_extract::PreparedJob,
+) -> Result<Yaml, RenderError> {
     let source = &prepared.source_job;
     let inputs = CALLER_INPUTS
         .iter()
@@ -112,10 +161,13 @@ fn source_caller_yaml(prepared: &crate::lane_share::job_workflow_extract::Prepar
             Yaml::Seq(source.needs.iter().cloned().map(Yaml::str).collect()),
         ));
     }
-    if let Some(condition) = &source.condition {
-        fields.push(("if".to_owned(), Yaml::str(condition.clone())));
+    let condition = prepared
+        .selection
+        .caller_condition(&prepared.source_id, source.condition.as_deref())?;
+    if let Some(condition) = condition {
+        fields.push(("if".to_owned(), Yaml::str(condition)));
     }
-    Yaml::Map(fields)
+    Ok(Yaml::Map(fields))
 }
 
 fn permissions_yaml(permissions: &Permissions) -> Yaml {

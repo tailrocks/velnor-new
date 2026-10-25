@@ -12,6 +12,10 @@ use velnor_actions_contract::{
 use velnor_actions_rust::TaskKind;
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 
+#[path = "crate_job_ids_typed_lanes.rs"]
+mod typed_lanes;
+pub(crate) use typed_lanes::typed_rust_lane_job_ids_for_jobs;
+
 /// One stack's package/configuration execution owner.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct CrateGroupKey {

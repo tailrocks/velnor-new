@@ -1,6 +1,6 @@
 //! Shared placement policy for every generated workflow document.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::config::ValidatedImageReference;
 use velnor_actions_contract::{ExecutionMode, ScaleSetSelector, WorkflowIr};
@@ -79,6 +79,20 @@ pub(crate) fn validate_relocated_job_workflows(
     job_workflow::validate_relocated_job_workflows(parent_yaml, shared_files, relocations)
 }
 
+pub(crate) fn validate_relocated_job_workflows_with_selection(
+    parent_yaml: &Yaml,
+    shared_files: &[RenderedFile],
+    selected_source_ids: &BTreeSet<String>,
+    relocations: &[crate::lane_share::job_workflow_extract::JobWorkflowRelocation],
+) -> Result<(), RenderError> {
+    job_workflow::validate_relocated_job_workflows_with_selection(
+        parent_yaml,
+        shared_files,
+        selected_source_ids,
+        relocations,
+    )
+}
+
 /// Effective placement policy for a generated workflow document.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowRoutingPolicy {
@@ -122,6 +136,12 @@ impl WorkflowRoutingPolicy {
     #[must_use]
     pub const fn is_scale_set(&self) -> bool {
         matches!(self.mode, ExecutionMode::ScaleSet)
+    }
+
+    /// True when both hosted and Scale Set job lanes are selected.
+    #[must_use]
+    pub const fn is_both(&self) -> bool {
+        matches!(self.mode, ExecutionMode::Both)
     }
 
     fn selector(&self) -> Option<&ScaleSetSelector> {

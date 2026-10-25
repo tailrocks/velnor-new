@@ -5,6 +5,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 mod job_options;
+#[path = "document_job_workflow_entry.rs"]
+mod job_workflow_entry;
+#[cfg(feature = "test-render-capture")]
+pub(crate) use job_workflow_entry::render_job_workflow_relocations_for_capture;
+#[cfg(test)]
+pub(crate) use job_workflow_entry::render_job_workflow_relocations;
+pub(crate) use job_workflow_entry::render_job_workflow_relocations_with_routing;
 #[path = "document/job_workflow.rs"]
 mod job_workflow;
 
@@ -119,35 +126,8 @@ pub(crate) fn workflow_to_yaml(
     Ok(Yaml::Map(top))
 }
 
-/// Render the source-bound reusable-workflow snapshots for generated child jobs.
-pub(crate) fn render_job_workflow_relocations(
-    ir: &WorkflowIr,
-    shared: &LaneShare,
-    ctx: &RenderContext,
-    mbx_jobs: &BTreeSet<String>,
-) -> Result<Vec<crate::lane_share::job_workflow_extract::JobWorkflowRelocation>, RenderError> {
-    let workflow_env =
-        crate::document_env::workflow_env(!ctx.workflow_tasks.is_empty(), ctx.mise_quiet);
-    shared
-        .job_workflows
-        .values()
-        .map(|prepared| job_workflow::relocation(prepared, ir, ctx, mbx_jobs, &workflow_env))
-        .collect()
-}
-
 #[cfg(feature = "test-render-capture")]
 pub(crate) use job_workflow::validate_routed_child_projection;
-
-#[cfg(feature = "test-render-capture")]
-pub(crate) fn render_job_workflow_relocations_for_capture(
-    ir: &WorkflowIr,
-    shared: &LaneShare,
-    ctx: &RenderContext,
-    mbx_jobs: &BTreeSet<String>,
-    routing: &crate::workflow_routing::WorkflowRoutingPolicy,
-) -> Result<Vec<crate::lane_share::job_workflow_extract::JobWorkflowRelocation>, RenderError> {
-    job_workflow::relocations_for_capture(ir, shared, ctx, mbx_jobs, routing)
-}
 
 /// Report download is limited to the least-privilege `read` grant.
 fn grants_exact_actions_read(level: PermissionLevel) -> bool {

@@ -125,7 +125,7 @@ fn render_capture_children(
     let parent_document = parse_authority_document(&parent_file)?;
     for relocation in &relocations {
         let source_id = &relocation.prepared.source_id;
-        job_workflow_extract::validate_finalized_runner(
+        job_workflow_extract::validate_finalized_caller(
             source_id,
             &relocation.prepared.source_job,
             parent,
