@@ -8,6 +8,19 @@ All changes must pass the full repository verification suite from the repo root 
 > **Test Runner Enforcement**: Always run tests with `cargo nextest`; never use `cargo test`.
 > Nextest executes tests in isolated worker processes with parallel scheduling and structured telemetry.
 
+## Current owner-approved test reset
+
+PR #391 clears the previous test suites so they can be rebuilt integration-first.
+During this transition, generated CI marks empty Cargo test targets `test = false`
+and omits their unit/integration test steps. The repository-owned
+`test-maintenance-helpers` task uses `--no-tests warn`. A full-workspace or
+nested-workspace Nextest run also needs `--no-tests warn` while the workspace
+has no tests. This mode only accepts an empty discovery; it still runs every
+discovered test. It does not enforce the per-package test requirement during a
+partial rebuild. Restore per-package `--no-tests fail` checks as replacement
+suites are added, and restore fail-on-empty for `test-maintenance-helpers` when
+its suites return. V1 has no permanent empty-suite exception.
+
 ---
 
 ## The Verification Suite
@@ -20,15 +33,17 @@ do not include it.
 If the workspace `target` is a symlink into an MBX-managed cache, direct Cargo
 commands do not hold an MBX cache lease. Use a separately owned absolute
 `CARGO_TARGET_DIR` for the entire verification run so automatic cache collection
-cannot remove active test binaries. After Nextest builds the CLI, set
-`VELNOR_ACTIONS_BIN="$CARGO_TARGET_DIR/debug/velnor-actions"` for the freshness
-script. Preserve the managed symlink and global cache settings. Bounded build/test
-parallelism is permitted; it must not omit any required test or gate.
+cannot remove active test binaries. During the reset, Nextest has no test target
+to build the CLI. Leave `VELNOR_ACTIONS_BIN` unset so the freshness script uses
+its pinned-Mise `cargo run` fallback, or set it to an already built executable
+such as `$CARGO_TARGET_DIR/debug/velnor-actions`. Preserve the managed symlink
+and global cache settings. Bounded build/test parallelism is permitted; it must
+not omit any required test or gate.
 
 ```bash
 cargo fmt --all -- --check
 cargo clippy --locked --workspace --all-targets -- -D warnings
-cargo nextest run --locked --workspace
+cargo nextest run --locked --workspace --no-tests warn
 alint validate-config && alint check --fail-on-warning
 cargo deny check
 bash scripts/check-freshness.sh
@@ -53,13 +68,13 @@ bash scripts/check-freshness.sh
   - `--all-targets`: Ensures tests and benchmarks meet the same lint standards as product crates.
   - `-D warnings`: Prevents warning accumulation.
 
-### 3. Test Suite Execution: `cargo nextest run --locked --workspace`
+### 3. Test Suite Execution: `cargo nextest run --locked --workspace --no-tests warn`
 
-- **Purpose**: Runs all unit, integration, and property tests across all workspace crates.
+- **Purpose**: Runs all discovered unit, integration, and property tests across all workspace crates. `--no-tests warn` permits the intentional empty suite during the reset above.
 - **Strict Prohibition**: **Never use `cargo test`**. `cargo test` is forbidden because it lacks process isolation, nextest profile management, and retry handling.
 - **Focused Execution**:
-  - Run specific package: `cargo nextest run --locked -p <package_name>`
-  - Run specific test: `cargo nextest run --locked -p <package_name> -E 'test(<test_filter>)'`
+  - Run a package that may still be empty during the reset: `cargo nextest run --locked -p <package_name> --no-tests warn`
+  - Run a specific test and fail if the filter selects none: `cargo nextest run --locked -p <package_name> -E 'test(<test_filter>)' --no-tests fail`
 
 ### 4. Repository Structure & Agent Instructions: `alint validate-config && alint check --fail-on-warning`
 
@@ -85,6 +100,6 @@ The runner controller and supervisor live in the nested virtual workspace `crate
 ```bash
 cargo fmt --manifest-path crates/velnor-runner/Cargo.toml --all -- --check
 cargo clippy --manifest-path crates/velnor-runner/Cargo.toml --locked --all-targets -- -D warnings
-cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked
+cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --no-tests warn
 cargo deny --manifest-path crates/velnor-runner/Cargo.toml check
 ```
