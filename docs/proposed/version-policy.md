@@ -151,20 +151,22 @@ pin for the workflow, composite action and Dependabot linter (checked
 `[tools]` key and the CI install spec share one spelling; the
 `github:jdx/jactionlint` and `packslip:github.com/jdx/jactionlint` keys
 declare the same tool. Mise checks the release-API digest and the GitHub
-artifact attestation on every install. Velnor's own control is the
-per-platform table in `crates/velnor-actions-mise/src/catalog_jactionlint_digests.rs`:
+artifact attestation on every install. Velnor's own control is the per-platform
+[`JACTIONLINT_DIGESTS` table](../../crates/velnor-actions-contract/src/config/jactionlint_verifier.rs#L18):
 the archive and extracted-executable SHA-256 for `linux-x64`, `linux-arm64`,
 `macos-arm64` and `macos-x64` (every runner platform Velnor's own jobs use),
-measured when the version is bumped. Provenance is checked
-at bump time, never at generate time: `cosign verify-blob-attestation` on the
-release `packslip.sigstore.json` (type `https://packslip.dev/release/v1`,
-identity `release.yaml@refs/tags/v<version>`, issuer
-`https://token.actions.githubusercontent.com`) and
-`gh attestation verify --signer-workflow jdx/jactionlint/.github/workflows/release.yaml`
+measured when the version is bumped. Provenance is checked at bump time, never
+at generate time: `cosign verify-blob-attestation` on the release
+`packslip.sigstore.json` (type `https://packslip.dev/release/v1`, identity
+`https://github.com/jdx/jactionlint/.github/workflows/release.yaml@refs/tags/v<version>`,
+issuer `https://token.actions.githubusercontent.com`) and
+`gh attestation verify -R jdx/jactionlint --signer-workflow jdx/jactionlint/.github/workflows/release.yaml`
 must both pass for every table platform, and the evidence is recorded in the
-`JACTIONLINT_VERSION` doc comment. A bump without new table rows fails the
-catalog tests. A project that declares `jactionlint` in its Mise config uses
-its own version (hard decision 4).
+[jactionlint release provenance record](../implemented/jactionlint.md#pinned-release-provenance).
+The generated verifier fails on a runner when the catalogued version has no
+digest row for that runner's platform; this does not replace the bump-time
+review of all platform rows. A project that declares `jactionlint` in its Mise
+config uses its own version (hard decision 4).
 
 The only per-project pin override is `[actions.overrides]` in
 `.velnor/config.toml`. Each ordinary value contains an exact 40-hex commit SHA
