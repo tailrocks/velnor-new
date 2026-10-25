@@ -279,5 +279,5 @@ fn write_output(name: &str, value: &str) -> ExitCode {
 }
 
 #[cfg(test)]
-#[path = "dispatch_cache_owner_evidence_tests.rs"]
+#[path = "../tests/dispatch_cache_owner_evidence_tests.rs"]
 mod tests;

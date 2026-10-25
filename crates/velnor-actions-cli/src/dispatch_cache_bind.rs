@@ -215,7 +215,7 @@ where
 }
 
 #[cfg(test)]
-#[path = "dispatch_cache_bind_tests.rs"]
+#[path = "../tests/dispatch_cache_bind_tests.rs"]
 mod tests;
 
 fn optional<E>(get: &mut E, name: &str) -> Option<String>

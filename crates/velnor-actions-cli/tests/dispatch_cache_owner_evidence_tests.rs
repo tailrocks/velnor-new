@@ -81,7 +81,7 @@ fn save_facts_reject_backend_observation_states_and_inconsistent_actions() {
 
 #[test]
 fn raw_worker_output_has_no_backend_or_admission_fields() {
-    let source = include_str!("dispatch_cache_owner_evidence.rs");
+    let source = include_str!("../src/dispatch_cache_owner_evidence.rs");
     assert!(!source.contains("backend_admitted"));
     assert!(!source.contains("backend_status"));
     assert!(!source.contains("CENSUS_PREFIX"));

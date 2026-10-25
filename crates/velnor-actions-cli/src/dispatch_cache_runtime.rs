@@ -112,7 +112,7 @@ fn read_runtime_phase(
 }
 
 #[cfg(test)]
-#[path = "dispatch_cache_runtime_tests.rs"]
+#[path = "../tests/dispatch_cache_runtime_tests.rs"]
 mod tests;
 
 fn decimal_env(name: &str) -> Result<u64, &'static str> {
