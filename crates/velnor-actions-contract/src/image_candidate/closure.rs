@@ -4,7 +4,7 @@ use crate::ContractError;
 
 pub const IMAGE_NATIVE_CLOSURE_SCHEMA: &str = "velnor.job-image-native-source-closure.v1";
 
-pub const NATIVE_IMAGE_CANDIDATE_INPUTS: [&str; 76] = [
+pub const NATIVE_IMAGE_CANDIDATE_INPUTS: [&str; 75] = [
     "Cargo.lock",
     "Cargo.toml",
     "crates/velnor-actions-cli/src/args.rs",
@@ -74,7 +74,6 @@ pub const NATIVE_IMAGE_CANDIDATE_INPUTS: [&str; 76] = [
     "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/layer.rs",
     "crates/velnor-archive-guard/src/owned_archive_guard/strict_json.rs",
     "crates/velnor-actions-workflow-renderer/src/schema2_job_image_candidate.rs",
-    "crates/velnor-actions-workflow-renderer/src/schema2_job_image_candidate_tests.rs",
     "crates/velnor-actions-workflow-renderer/src/schema2_job_image_native.rs",
     ".velnor/runner.lock",
     "images/job/ubuntu-26.04/Dockerfile",
