@@ -8,9 +8,14 @@ use crate::{
     RenderError, RenderedFile,
     lane_share::job_workflow_extract::{
         CALLER_INPUT_REQUIRED, CALLER_INPUT_TYPE, CALLER_INPUTS, JobWorkflowRelocation,
+        source_bound_caller_inputs,
     },
     yaml::Yaml,
 };
+
+#[cfg(test)]
+#[path = "workflow_routing_job_workflow_binding_tests.rs"]
+mod binding_tests;
 
 /// Validate generated callers and callees against typed, source-derived snapshots.
 pub(super) fn validate_relocated_job_workflows(
@@ -137,8 +142,8 @@ fn source_caller_yaml(
     prepared: &crate::lane_share::job_workflow_extract::PreparedJob,
 ) -> Result<Yaml, RenderError> {
     let source = &prepared.source_job;
-    let inputs = CALLER_INPUTS
-        .iter()
+    let inputs = source_bound_caller_inputs(source)
+        .into_iter()
         .map(|input| (input.name.to_owned(), Yaml::str(input.expression)))
         .collect();
     let mut fields = vec![

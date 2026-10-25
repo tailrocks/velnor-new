@@ -8,6 +8,8 @@ use std::collections::BTreeMap;
 
 #[path = "job_workflow_extract_expression.rs"]
 mod expression;
+#[path = "job_workflow_extract_input_bindings.rs"]
+mod input_bindings;
 #[path = "job_workflow_extract_runner.rs"]
 mod runner;
 #[path = "job_workflow_extract_selection.rs"]
@@ -16,6 +18,11 @@ pub(crate) use expression::caller_condition_for_selection;
 use expression::{rewrite_condition, rewrite_expressions};
 #[cfg(any(test, feature = "test-render-capture"))]
 pub(crate) use expression::{test_condition_has_unbound_needs, test_expression_has_unbound_needs};
+#[cfg(test)]
+pub(crate) use input_bindings::CallerInput;
+pub(crate) use input_bindings::{
+    CALLER_INPUT_REQUIRED, CALLER_INPUT_TYPE, CALLER_INPUTS, source_bound_caller_inputs,
+};
 #[cfg(feature = "test-render-capture")]
 pub(crate) use runner::{CaptureRunnerMetadata, capture_runner_metadata};
 pub(crate) use selection::{JobWorkflowSelection, pair_is_relocatable};
@@ -34,39 +41,8 @@ pub(crate) use capture::{
     validate_finalized_caller, validate_rendered_child_runner,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct CallerInput {
-    pub(crate) name: &'static str,
-    pub(crate) expression: &'static str,
-}
-
-pub(crate) const CALLER_INPUT_TYPE: &str = "string";
-pub(crate) const CALLER_INPUT_REQUIRED: bool = true;
 pub(crate) const PROTOTYPE_JOB_ID: &str = "rust-velnor-actions-cli__hosted";
 pub(crate) const PROTOTYPE_LOCAL_JOB_ID: &str = "rust-velnor-actions-cli__local";
-
-pub(crate) const CALLER_INPUTS: [CallerInput; 5] = [
-    CallerInput {
-        name: "plan_result",
-        expression: "${{ needs.plan.result }}",
-    },
-    CallerInput {
-        name: "qualification_campaign",
-        expression: "${{ needs.plan.outputs.qualification_campaign }}",
-    },
-    CallerInput {
-        name: "run_key_attempt",
-        expression: "${{ needs.plan.outputs.plan_attempt || github.run_attempt }}",
-    },
-    CallerInput {
-        name: "sources_key",
-        expression: "${{ needs.plan.outputs.sources_key }}",
-    },
-    CallerInput {
-        name: "sources_restore_keys",
-        expression: "${{ needs.plan.outputs.sources_restore_keys }}",
-    },
-];
 
 const STEP_REFERENCE_BINDINGS: [(&str, &str); 4] = [
     ("needs.plan.result", "inputs.plan_result"),

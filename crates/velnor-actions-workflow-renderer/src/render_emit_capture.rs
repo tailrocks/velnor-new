@@ -318,13 +318,14 @@ fn capture_record(
     let (group_id, lane) = source_group_lane(source_id)?;
     let child = &relocation.expected_callee_file;
     let digest = Sha256::digest(child.bytes.as_bytes());
-    let caller_inputs = job_workflow_extract::CALLER_INPUTS
-        .iter()
-        .map(|input| test_render_capture::SourceJobWorkflowInput {
-            name: input.name.to_owned(),
-            expression: input.expression.to_owned(),
-        })
-        .collect();
+    let caller_inputs =
+        job_workflow_extract::source_bound_caller_inputs(&relocation.prepared.source_job)
+            .into_iter()
+            .map(|input| test_render_capture::SourceJobWorkflowInput {
+                name: input.name.to_owned(),
+                expression: input.expression.to_owned(),
+            })
+            .collect();
     Ok(test_render_capture::SourceJobWorkflowRecord {
         source_id: source_id.clone(),
         group_id,

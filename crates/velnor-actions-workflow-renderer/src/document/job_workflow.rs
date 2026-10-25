@@ -5,7 +5,8 @@ use velnor_actions_contract::{Step, WorkflowIr};
 use crate::{
     RenderError,
     lane_share::job_workflow_extract::{
-        CALLER_INPUT_REQUIRED, CALLER_INPUT_TYPE, CALLER_INPUTS, JobWorkflowRelocation, PreparedJob,
+        CALLER_INPUT_REQUIRED, CALLER_INPUT_TYPE, CALLER_INPUTS, JobWorkflowRelocation,
+        PreparedJob, source_bound_caller_inputs,
     },
     render::RenderContext,
     steps,
@@ -40,8 +41,8 @@ pub(super) fn caller_yaml(prepared: &PreparedJob) -> Result<Yaml, RenderError> {
     prepared.validate_source()?;
     let source = &prepared.source_job;
     steps::scan_for_private_subcommands(&source.display_name)?;
-    let inputs = CALLER_INPUTS
-        .iter()
+    let inputs = source_bound_caller_inputs(source)
+        .into_iter()
         .map(|input| {
             steps::scan_for_private_subcommands(input.expression)?;
             Ok((input.name.to_owned(), Yaml::str(input.expression)))

@@ -9,7 +9,7 @@ use crate::{
     RenderedFile,
     lane_share::job_workflow_extract::{
         JobWorkflowRelocation, JobWorkflowSelection, PROTOTYPE_JOB_ID, PROTOTYPE_LOCAL_JOB_ID,
-        prepare_job,
+        prepare_job, source_bound_caller_inputs,
     },
     yaml::Yaml,
 };
@@ -46,7 +46,7 @@ fn relocation() -> JobWorkflowRelocation {
     };
     let prepared = prepare_job(PROTOTYPE_JOB_ID, &source_job).expect("valid source job");
     JobWorkflowRelocation {
-        expected_caller: caller_yaml(),
+        expected_caller: caller_yaml(&source_job),
         expected_callee_file: RenderedFile {
             path: prepared.callee_path.clone(),
             bytes: callee_bytes(PROTOTYPE_JOB_ID),
@@ -55,7 +55,7 @@ fn relocation() -> JobWorkflowRelocation {
     }
 }
 
-fn caller_yaml() -> Yaml {
+fn caller_yaml(source_job: &Job) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Rust CLI hosted")),
         (
@@ -66,28 +66,12 @@ fn caller_yaml() -> Yaml {
         ),
         (
             "with".to_owned(),
-            Yaml::Map(vec![
-                (
-                    "plan_result".to_owned(),
-                    Yaml::str("${{ needs.plan.result }}"),
-                ),
-                (
-                    "qualification_campaign".to_owned(),
-                    Yaml::str("${{ needs.plan.outputs.qualification_campaign }}"),
-                ),
-                (
-                    "run_key_attempt".to_owned(),
-                    Yaml::str("${{ needs.plan.outputs.plan_attempt || github.run_attempt }}"),
-                ),
-                (
-                    "sources_key".to_owned(),
-                    Yaml::str("${{ needs.plan.outputs.sources_key }}"),
-                ),
-                (
-                    "sources_restore_keys".to_owned(),
-                    Yaml::str("${{ needs.plan.outputs.sources_restore_keys }}"),
-                ),
-            ]),
+            Yaml::Map(
+                source_bound_caller_inputs(source_job)
+                    .into_iter()
+                    .map(|input| (input.name.to_owned(), Yaml::str(input.expression)))
+                    .collect(),
+            ),
         ),
         (
             "permissions".to_owned(),

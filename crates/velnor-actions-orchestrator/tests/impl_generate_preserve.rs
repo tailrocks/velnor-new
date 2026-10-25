@@ -100,8 +100,8 @@ fn dispatch_switch_preserves_custom_actions_and_removes_shared_outputs() -> Test
 
     let prep = prepare(root)?;
     let both_tree = render_staged_tree_with(&prep, Some(ExecutionMode::Both))?;
-    // Composite actions cannot declare background steps, so both lanes keep
-    // their parallel crate-job bodies literal instead of a shared action.
+    // Composite actions cannot declare background steps, so Both keeps each
+    // parallel crate-job body in its own reusable workflow.
     assert!(
         both_tree
             .files
@@ -112,10 +112,7 @@ fn dispatch_switch_preserves_custom_actions_and_removes_shared_outputs() -> Test
     let workflow = both_tree
         .get(".github/workflows/ci.yml")
         .ok_or("both workflow")?;
-    for lane in ["rust-demo__hosted:", "rust-demo__local:"] {
-        assert!(workflow.contains(lane), "Both renders lane job {lane}");
-    }
-    assert!(workflow.contains("background: true") && workflow.contains("wait-all:"));
+    assert_both_parallel_jobs(workflow, |path| both_tree.get(path))?;
     let both = generate_dispatched(
         &prep,
         &GenerateOptions::default(),
@@ -163,6 +160,45 @@ fn dispatch_switch_preserves_custom_actions_and_removes_shared_outputs() -> Test
     assert!(!github.join("actions/rust-demo/action.yml").exists());
     assert!(!github.join("actions/retired").exists());
     assert_custom_actions_preserved(&github)?;
+    Ok(())
+}
+
+fn assert_workflow_job_uses(workflow: &str, source_id: &str, callee_path: &str) -> TestResult {
+    let header = format!("  {source_id}:\n");
+    let caller = workflow
+        .split_once(&header)
+        .map(|(_, caller)| caller)
+        .ok_or("Both caller job missing")?;
+    let mut caller_fields = caller.lines();
+    assert!(
+        caller_fields
+            .next()
+            .is_some_and(|field| field.starts_with("    name: ")),
+        "Both caller name field missing for {source_id}"
+    );
+    let expected_uses = format!("    uses: ./{callee_path}");
+    assert_eq!(
+        caller_fields.next(),
+        Some(expected_uses.as_str()),
+        "Both caller target for {source_id}"
+    );
+    Ok(())
+}
+
+fn assert_both_parallel_jobs<'a>(
+    workflow: &str,
+    mut get_file: impl FnMut(&str) -> Option<&'a str>,
+) -> TestResult {
+    for lane in ["hosted", "local"] {
+        let source_id = format!("rust-demo__{lane}");
+        let callee_path = format!(".github/workflows/ci-rust-{source_id}.yml");
+        assert_workflow_job_uses(workflow, &source_id, &callee_path)?;
+        let child = get_file(&callee_path).ok_or("Both reusable Rust job")?;
+        assert!(
+            child.contains("background: true") && child.contains("wait-all:"),
+            "Both child retains parallel checks: {callee_path}"
+        );
+    }
     Ok(())
 }
 
