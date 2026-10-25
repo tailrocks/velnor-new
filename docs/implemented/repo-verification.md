@@ -11,8 +11,8 @@ All changes must pass the full repository verification suite from the repo root 
 ## Current owner-approved test reset
 
 PR #391 clears the previous test suites so they can be rebuilt integration-first.
-During this transition, generated CI marks empty Cargo test targets `test = false`
-and omits their unit/integration test steps. The repository-owned
+During this transition, Cargo manifests mark empty test targets `test = false`,
+and generated CI omits their unit/integration test steps. The repository-owned
 `test-maintenance-helpers` task uses `--no-tests warn`. A full-workspace or
 nested-workspace Nextest run also needs `--no-tests warn` while the workspace
 has no tests. This mode only accepts an empty discovery; it still runs every
