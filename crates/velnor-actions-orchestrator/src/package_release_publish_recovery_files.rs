@@ -11,14 +11,16 @@ pub(super) fn create_fresh_directory(path: &Path) -> Result<(), OrchestratorErro
 pub(super) fn create_owned_input_directory(
     root: &Path,
 ) -> Result<tempfile::TempDir, OrchestratorError> {
-    tempfile::Builder::new()
-        .prefix("release-recovery-input-")
-        .tempdir_in(root)
+    crate::filesystem_owner::owned_tempdir::private_tempdir_in(root, "release-recovery-input-")
         .map_err(|_| internal("package_recovery_input_not_fresh"))
 }
 
 pub(super) fn runner_root() -> Result<PathBuf, OrchestratorError> {
     let runner = PathBuf::from(env_text("RUNNER_TEMP")?);
+    runner_root_at(&runner)
+}
+
+fn runner_root_at(runner: &Path) -> Result<PathBuf, OrchestratorError> {
     if !runner.is_absolute() {
         return Err(internal("package_recovery_runner_temp_invalid"));
     }
