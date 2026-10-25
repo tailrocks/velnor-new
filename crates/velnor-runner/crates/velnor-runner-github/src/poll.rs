@@ -5,6 +5,9 @@ use serde_json::Value;
 
 use crate::error::WireError;
 
+mod statistics_wire;
+pub use statistics_wire::Statistics;
+
 /// Local byte bound for one Scale Set poll body.
 pub const MAX_POLL_BODY_BYTES: usize = 256 * 1024;
 /// Maximum message count accepted from one Scale Set poll.
@@ -137,34 +140,6 @@ fn non_empty(value: Option<&str>) -> Option<&str> {
     value.filter(|text| !text.trim().is_empty())
 }
 
-/// `statistics` object from the pinned Go struct.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Statistics {
-    /// Jobs waiting.
-    pub total_available_jobs: i64,
-    /// Jobs acquired.
-    pub total_acquired_jobs: i64,
-    /// Population authority. Not the length of this batch.
-    pub total_assigned_jobs: i64,
-    /// Jobs running.
-    pub total_running_jobs: i64,
-    /// Registered runners.
-    pub total_registered_runners: i64,
-    /// Busy runners.
-    pub total_busy_runners: i64,
-    /// Idle runners.
-    pub total_idle_runners: i64,
-}
-
-impl Statistics {
-    /// Assigned population. Do not add the batch length to this.
-    #[must_use]
-    pub const fn assigned_population(&self) -> i64 {
-        self.total_assigned_jobs
-    }
-}
-
 #[derive(Debug, Deserialize)]
 struct Envelope {
     #[serde(rename = "messageId")]
@@ -173,7 +148,7 @@ struct Envelope {
     message_type: String,
     body: Option<String>,
     #[serde(default)]
-    statistics: Option<Statistics>,
+    statistics: Option<statistics_wire::StatisticsWire>,
 }
 
 /// Decode a poll. HTTP 202 ignores the body. A bounded malformed inner body
@@ -211,7 +186,10 @@ fn parse_envelope(body: &str) -> Result<Poll, WireError> {
         Ok(jobs) => Ok(Poll::Batch(ParsedBatch {
             message_id: envelope.message_id,
             raw_body,
-            statistics: envelope.statistics,
+            statistics: envelope
+                .statistics
+                .as_ref()
+                .and_then(statistics_wire::to_statistics),
             jobs,
         })),
         Err(_error) => Ok(Poll::Quarantined(QuarantinedBatch {
