@@ -125,7 +125,11 @@ fn validate_action_step(
     } else if uses == crate::tool_seed::TOOL_SEED_USES {
         crate::tool_seed::validate_action_call(step, uses, with, env)?;
     } else if uses == crate::cache_steps::TOOLS_RESTORE_USES {
-        crate::cache_steps::validate_tools_restore_call(step)?;
+        if relocated_child {
+            crate::cache_steps::validate_tools_restore_call_for_relocated_child(step)?;
+        } else {
+            crate::cache_steps::validate_tools_restore_call(step)?;
+        }
     } else {
         steps::validate_uses(uses)?;
     }
@@ -133,7 +137,8 @@ fn validate_action_step(
         crate::expressions::check_with_key(key)?;
         if crate::action_ref::is_qualification_cache_composite(uses)
             && key == "qualification_campaign"
-            && value == "${{ needs.plan.outputs.qualification_campaign }}"
+            && (value == "${{ needs.plan.outputs.qualification_campaign }}"
+                || (relocated_child && value == "${{ inputs.qualification_campaign }}"))
         {
             // Contract identity validation checks this exact input on the typed call.
         } else if composite {
@@ -169,3 +174,7 @@ pub(super) fn cache_action_env(
     }
     Ok(rendered)
 }
+
+#[cfg(test)]
+#[path = "document_steps_action_relocated_tests.rs"]
+mod relocated_tests;

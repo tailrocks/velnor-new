@@ -42,6 +42,7 @@ pub const TOOLS_CACHE_NORMAL_RUN_CONDITION: &str =
     "needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''";
 pub(crate) const TOOLS_CACHE_RELOCATED_RUN_CONDITION: &str =
     "inputs.plan_result == 'success' && inputs.qualification_campaign == ''";
+pub(crate) const TOOLS_CACHE_RELOCATED_RESTORE_CONDITION: &str = "inputs.plan_result == 'success' && inputs.qualification_campaign == '' && steps.v2.outputs.enabled == 'true'";
 /// Jobs that do not need the plan job cannot read its outputs.
 pub const TOOLS_CACHE_PLAN_RUN_CONDITION: &str = "github.event_name != 'workflow_dispatch'";
 /// A tool seed may run only after its runtime identity action succeeds.

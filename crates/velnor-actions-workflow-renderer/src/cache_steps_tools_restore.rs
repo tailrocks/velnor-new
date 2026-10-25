@@ -7,6 +7,16 @@ use crate::{RenderError, marker, steps, tree::RenderedFile, yaml::Yaml};
 /// Validate the only call shape accepted for the fixed restore composite.
 /// # Errors
 pub(crate) fn validate_call(step: &Step) -> Result<&str, RenderError> {
+    validate_call_in_scope(step, false)
+}
+
+/// Validate the fixed restore composite inside a source-derived child workflow.
+/// # Errors
+pub(crate) fn validate_call_for_relocated_child(step: &Step) -> Result<&str, RenderError> {
+    validate_call_in_scope(step, true)
+}
+
+fn validate_call_in_scope(step: &Step, relocated_child: bool) -> Result<&str, RenderError> {
     let StepKind::Action { uses, with, env } = &step.kind else {
         return Err(RenderError::InvalidWorkflow(
             "tools_cache_restore_shape".to_owned(),
@@ -26,13 +36,15 @@ pub(crate) fn validate_call(step: &Step) -> Result<&str, RenderError> {
             .is_some_and(|sha| is_mise_sha256(sha))
         || seed_admitted.map(String::as_str) != Some(super::TOOLS_SEED_ADMITTED_EXPRESSION)
         || !crate::cache_p08::is_v2_cache_key_expression(key)
-        || !matches!(
+        || !(matches!(
             step.condition.as_deref(),
             Some(
                 crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION
                     | crate::cache_p08::TOOLS_CACHE_PLAN_RESTORE_CONDITION
             )
-        )
+        ) || (relocated_child
+            && step.condition.as_deref()
+                == Some(crate::cache_p08::TOOLS_CACHE_RELOCATED_RESTORE_CONDITION)))
     {
         return Err(RenderError::InvalidWorkflow(
             "tools_cache_restore_shape".to_owned(),

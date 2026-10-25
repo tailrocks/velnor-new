@@ -69,6 +69,38 @@ fn restore_call_requires_the_exact_prelude_output_input() {
     assert!(super::super::validate_call(&missing).is_err());
 }
 
+#[test]
+fn relocated_restore_accepts_only_the_exact_plan_input_condition() {
+    let mut relocated = restore_step();
+    relocated.condition =
+        Some(crate::cache_p08::TOOLS_CACHE_RELOCATED_RESTORE_CONDITION.to_owned());
+    assert!(super::super::validate_call(&relocated).is_err());
+    assert_eq!(
+        super::super::validate_call_for_relocated_child(&relocated)
+            .expect("exact relocated restore condition is accepted"),
+        crate::cache_p08::TOOLS_CACHE_KEY_EXPRESSION
+    );
+
+    let mut event = restore_step();
+    event.condition = Some(crate::cache_p08::TOOLS_CACHE_PLAN_RESTORE_CONDITION.to_owned());
+    assert!(super::super::validate_call_for_relocated_child(&event).is_ok());
+
+    for condition in [
+        "inputs.plan_result == 'failure' && inputs.qualification_campaign == '' && steps.v2.outputs.enabled == 'true'",
+        "inputs.plan_result == 'success' && inputs.qualification_campaign != '' && steps.v2.outputs.enabled == 'true'",
+        "inputs.plan_result == 'success' && inputs.qualification_campaign == '' && steps.v2.outputs.enabled == 'false'",
+        "inputs.plan_result == 'success' && inputs.qualification_campaign == '' && steps.v2.outputs.enabled == 'true' && always()",
+        "inputs.plan_result == 'success' && inputs.qualification_campaign == ''",
+    ] {
+        let mut malformed = restore_step();
+        malformed.condition = Some(condition.to_owned());
+        assert!(
+            super::super::validate_call_for_relocated_child(&malformed).is_err(),
+            "accepted malformed restore condition: {condition}"
+        );
+    }
+}
+
 fn restore_step() -> velnor_actions_contract::Step {
     crate::cache_steps::tools_cache_restore_step(
         crate::cache_p08::TOOLS_CACHE_KEY_EXPRESSION,

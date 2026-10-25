@@ -49,6 +49,10 @@ pub(crate) fn validate_restore_call(step: &Step) -> Result<&str, RenderError> {
     restore_action::validate_call(step)
 }
 
+pub(crate) fn validate_restore_call_for_relocated_child(step: &Step) -> Result<&str, RenderError> {
+    restore_action::validate_call_for_relocated_child(step)
+}
+
 /// V2 tools restore through the fixed composite, which re-verifies the
 /// Setup Mise binary against `mise_sha256` after the restore.
 /// # Errors

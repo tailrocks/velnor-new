@@ -11,6 +11,15 @@ fn relocated_child_serializes_only_the_exact_plan_input_condition_alias() -> Res
 {
     let mut job = source_job();
     job.steps.insert(0, identity_step("ubuntu-26.04", None)?);
+    job.steps.insert(
+        1,
+        crate::cache_steps::tools_cache_restore_step(
+            crate::cache_p08::TOOLS_CACHE_KEY_EXPRESSION,
+            &"a".repeat(64),
+            Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION.to_owned()),
+        )?,
+    );
+    job.steps.push(qualification_prepare_step());
     let workflow = workflow(job.clone());
     let shared = lane_share(job);
     let relocations =
@@ -22,10 +31,36 @@ fn relocated_child_serializes_only_the_exact_plan_input_condition_alias() -> Res
         child
             .contains("if: inputs.plan_result == 'success' && inputs.qualification_campaign == ''")
     );
+    assert!(child.contains(
+        "if: inputs.plan_result == 'success' && inputs.qualification_campaign == '' && steps.v2.outputs.enabled == 'true'"
+    ));
+    assert!(child.contains("qualification_campaign: ${{ inputs.qualification_campaign }}"));
+    assert!(!child.contains("needs.plan.outputs.qualification_campaign"));
     assert!(!child.contains(
         "if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''"
     ));
     Ok(())
+}
+
+fn qualification_prepare_step() -> Step {
+    Step {
+        name: "Prepare qualification cache".to_owned(),
+        id: None,
+        role: None,
+        condition: None,
+        parallel: false,
+        kind: velnor_actions_contract::StepKind::Action {
+            uses: format!(
+                "./.github/actions/qualification-cache-prepare-{}",
+                crate::lane_share::job_workflow_extract::PROTOTYPE_JOB_ID
+            ),
+            with: std::collections::BTreeMap::from([(
+                "qualification_campaign".to_owned(),
+                "${{ needs.plan.outputs.qualification_campaign }}".to_owned(),
+            )]),
+            env: std::collections::BTreeMap::new(),
+        },
+    }
 }
 
 #[test]

@@ -85,6 +85,12 @@ pub(crate) fn validate_tools_restore_call(step: &Step) -> Result<&str, RenderErr
     tools::validate_restore_call(step)
 }
 
+pub(crate) fn validate_tools_restore_call_for_relocated_child(
+    step: &Step,
+) -> Result<&str, RenderError> {
+    tools::validate_restore_call_for_relocated_child(step)
+}
+
 /// Pinned mr-boxington action name (objects mode).
 pub const MBX_ACTION_NAME: &str = "jdx/mr-boxington-action";
 /// Cache restore/save action names.
