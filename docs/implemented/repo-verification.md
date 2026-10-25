@@ -2,7 +2,7 @@
 
 ## Overview
 
-All changes must pass the full repository verification suite from the repo root before commit and PR merge.
+Run narrow, change-relevant checks as work proceeds. Before completion, run the full verification scope relevant to the change from the repo root; PR merge gates remain those required by CI.
 
 > [!IMPORTANT]
 > **Test Runner Enforcement**: Always run tests with `cargo nextest`; never use `cargo test`.
@@ -10,25 +10,35 @@ All changes must pass the full repository verification suite from the repo root 
 
 ## Current owner-approved test reset
 
-PR #391 clears the previous test suites so they can be rebuilt integration-first.
-During this transition, Cargo manifests mark empty test targets `test = false`,
-and generated CI omits their unit/integration test steps. The repository-owned
-`test-maintenance-helpers` task uses `--no-tests warn`. A full-workspace or
-nested-workspace Nextest run also needs `--no-tests warn` while the workspace
-has no tests. This mode only accepts an empty discovery; it still runs every
-discovered test. It does not enforce the per-package test requirement during a
-partial rebuild. Restore per-package `--no-tests fail` checks as replacement
-suites are added, and restore fail-on-empty for `test-maintenance-helpers` when
-its suites return. V1 has no permanent empty-suite exception.
+PR #391 clears the previous unit, integration, and doctest suites so they can
+be rebuilt integration-first. During this transition, Cargo manifests disable
+empty targets with `test = false`, and generated CI omits their unit/integration
+test steps. Where `autotests = false` or a target is disabled, restoring a test
+file alone does not make Cargo discover or execute it: register or enable the
+Cargo target, confirm the generated task plan selects it, and check execution
+evidence to confirm that it ran.
+
+The repository-owned `test-maintenance-helpers` task uses `--no-tests warn`. A
+full-workspace or nested-workspace Nextest run also uses `--no-tests warn`
+while the workspace has no tests. This accepts an empty discovery; it does not
+prove that a required suite ran or enforce its completion criteria. The task
+generator currently uses `--no-tests warn` for hash-partitioned selections so
+an individual empty shard is allowed; that behavior does not prove complete
+suite coverage. As suites return, generated verification must enforce
+fail-on-empty at each declared required-suite scope, while intentional filtered
+or partitioned subruns may allow an empty selection only when the generated
+plan selects the complete suite and execution evidence confirms its tasks ran.
+V1 has no permanent empty-suite exception.
 
 ---
 
 ## The Verification Suite
 
-Run all six root-workspace checks sequentially from the workspace root. The
-nested runner is a separate Cargo workspace and needs its own formatting,
-lint, test, and dependency checks; root `cargo --workspace` and root formatting
-do not include it.
+Use these six root-workspace checks for full verification; for each change,
+run the narrow checks that exercise it and complete the full relevant
+verification scope before finishing. The nested runner is a separate Cargo
+workspace and needs its own formatting, lint, test, and dependency checks; root
+`cargo --workspace` and root formatting do not include it.
 
 If the workspace `target` is a symlink into an MBX-managed cache, direct Cargo
 commands do not hold an MBX cache lease. Use a separately owned absolute
