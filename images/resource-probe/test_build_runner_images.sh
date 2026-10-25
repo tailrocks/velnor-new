@@ -32,6 +32,10 @@ cp "$repo_root/images/runner/ubuntu-26.04/job-started-hook.sh" \
 cat > "$sandbox/.velnor/runner.lock" <<'TOML'
 runner_version = "2.338.0"
 TOML
+cat > "$sandbox/mise.toml" <<'TOML'
+[tools]
+rust = { version = "1.99.1" }
+TOML
 
 printf 'resource probe source %s\n' "$source_revision" > "$binary_dir/velnor-resource-probe"
 
@@ -208,11 +212,25 @@ if ! run_script; then
 fi
 [[ "$(wc -l < "$MISE_LOG" | tr -d '[:space:]')" -eq 1 ]]
 grep -Fq 'cargo build' "$MISE_LOG"
+grep -Fq 'rust@1.99.1' "$MISE_LOG"
 grep -Fq -- '--bin velnor-storage-init' "$MISE_LOG"
 grep -Fq -- '--bin velnor-job-start-hook' "$MISE_LOG"
 [[ "$(wc -l < "$DOCKER_LOG" | tr -d '[:space:]')" -gt 2 ]]
 
 rm "$MISE_LOG" "$DOCKER_LOG" "$GIT_LOG" "$TOOL_LOG"
+cat > "$sandbox/mise.toml" <<'TOML'
+[tools]
+rust = { version = "1.99.2" }
+TOML
+if ! run_script; then
+  printf 'default image build did not follow the project Rust version bump\n' >&2
+  exit 1
+fi
+[[ "$(wc -l < "$MISE_LOG" | tr -d '[:space:]')" -eq 1 ]]
+grep -Fq 'rust@1.99.2' "$MISE_LOG"
+! grep -Fq 'rust@1.99.1' "$MISE_LOG"
+
+rm "$MISE_LOG" "$DOCKER_LOG" "$GIT_LOG" "$TOOL_LOG" "$sandbox/mise.toml"
 if ! run_script --prebuilt-binaries; then
   printf 'prebuilt image build script mode failed under stubs\n' >&2
   exit 1
