@@ -5,16 +5,6 @@ Shared working agreement: keep this section byte-identical across projects. Proj
 - No legacy code. Finish every migration: remove old paths completely — no compatibility shims, aliases, or deprecation periods. Breaking changes are preferred.
 - Research project: unsafe, breaking changes expected, never production-ready. Break things when needed; deliver fast.
 - Verification gates: verify from the repo root before committing or merging. Run tests with cargo nextest, never cargo test.
-- Tests are not forbidden. You must write tests wherever these rules require them.
-- Never write a test without a reviewed plan first. The plan must state which required behavior it proves, which real positive and negative scenarios it covers, and why existing tests cannot cover them.
-- Write tests only to prove required functionality works and keeps working. Forbid tests written for coverage numbers or KPIs.
-- Test functional/integration-first through public APIs. Exercise observable behavior with real cases and real scenarios, never internals.
-- Never mock owned code. Mocks and fakes are permitted only at unowned I/O boundaries.
-- A red test must mean something is clearly broken, or an expected change under analysis. Never let a test go red over a reshaped abstraction or a bad mock; design every test so its report is trusted without questioning the doubles.
-- Prefer fewer high-signal tests with real fault-catching power over many low-signal tests. Forbid judging a suite by count, coverage %, or speed.
-- When an issue escapes, forbid appending one more test. Analyze why current tests missed it, spawn an architect subagent to rethink coverage conceptually, then write or refactor the test the analysis designs.
-- Every kept test must be observed to fail on broken code and pass on fixed code; reject tests never seen red. Every kept test must be hermetic and deterministic, must pass independent subagent verification before it is kept, and flakes must be quarantined, never tolerated.
-- Run narrow per change and the full relevant suite before done.
 - No comments in code. Code is the source of truth; a comment creates ambiguity about what is right, code or comment. Keep a comment only when functionality requires it: SPDX license headers for REUSE compliance, clap `#[command]`/`#[arg]` help text and similar string literals consumed by tools, parser directives such as Dockerfile `# syntax=`, and machine-generated files that the repo's own generators verify byte-identical. Never keep explanatory, TODO, or SAFETY comments; when code seems to need explanation, rewrite the code instead.
 - Judge correctness, consistency, and project fit. Never defer a known-wrong state for ROI, cost, effort, or edge cases.
 - Stop only when the required change is proven impossible with the available tools or model. When uncertain, inspect, test, and measure first.
@@ -24,11 +14,13 @@ Shared working agreement: keep this section byte-identical across projects. Proj
 - Before every PR merge, read all reviews, comments, replies, and unresolved or outdated threads. Use independent subagents to verify findings against code, tests, docs, and recorded decisions.
 - For accepted feedback: fix, verify, commit, push, and reply with the fixing commit URL before resolving. For rejected feedback: reply with evidence and rationale before resolving. Re-fetch feedback at the final head SHA. Merge only with zero unaddressed feedback and all required checks and approvals satisfied. Only explicit, PR-specific human authorization permits ignoring identified feedback.
 - Keep instructions lean; explanations, plans, and progress belong in documentation, not here.
-- Testing proves real behavior, never a coverage percentage. Coverage is a gap-finding signal, not a KPI; a passing suite must mean the product works, not that lines executed.
-- No test without a reviewed plan first. State what real functionality each test proves, including positive and negative scenarios; fewer tests with real coverage beat millions of brittle unit tests.
-- A red test must mean clearly broken, never abstraction churn. Prefer integration and functional tests over mocked hypotheticals; if a one-line change breaks a hundred mock expectations, consolidate toward real coverage.
-- Every new test must be seen failing for the right reason before it passes; an unobserved red proves nothing.
-- When an issue escapes, analyze why the current tests missed it before writing anything. Spawn an architect subagent to rethink the coverage conceptually, then design the test or refactor current tests to cover the gap. Never append a narrow regression test as the first move.
+- Tests are not forbidden. Write them only where these rules require them: to prove required functionality works and keeps working.
+- Never write a test without a reviewed plan first: state what behavior it proves, which positive and negative scenarios it covers, and why existing tests cannot cover it.
+- Prefer fewer high-signal tests over many narrow ones. Never write a test for coverage numbers or KPIs, and never judge a suite by count or coverage %.
+- Test functional/integration-first through public APIs with real cases, never internals; never mock owned code (fakes only at unowned I/O); if a small change breaks many mocks, consolidate toward real coverage instead of repairing them.
+- A red test must mean something is clearly broken or an expected change under analysis, never a reshaped abstraction or bad mock; prove each test fails on broken code and passes on fixed code, keep it hermetic and deterministic, and quarantine flakes.
+- When an issue escapes, do not just append a test; analyze why current tests missed it and rethink coverage conceptually (seek independent review for significant escapes) before writing or refactoring the test.
+- Run narrow tests per change and the full relevant suite before done; keep the loop fast enough to run every time.
 
 ## This project (velnor-new)
 
