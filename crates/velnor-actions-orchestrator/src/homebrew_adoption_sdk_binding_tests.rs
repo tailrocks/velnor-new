@@ -1,6 +1,47 @@
 use super::assets::{sdk_asset_size_limits, target_binary_digests, validate_manifest_identity};
-use super::{SDK_REPOSITORY, compare_stable_versions};
+use super::{MAX_CALLEE_BYTES, SDK_REPOSITORY, SDK_REPOSITORY_ID, compare_stable_versions};
+use std::time::Duration;
 use velnor_actions_contract::{ReleaseManifest, ReleaseTarget};
+use velnor_actions_mise::CheckDeadline;
+
+#[test]
+fn published_callee_reader_limit_passes_production_selection_validation() {
+    assert_eq!(
+        MAX_CALLEE_BYTES,
+        velnor_actions_contract::package_release_policy::MAX_CARGO_VERSION_MANIFEST_BYTES
+    );
+    let source_sha = "a".repeat(40);
+    let expired = CheckDeadline::after(Duration::ZERO).expect("expired deadline");
+    let error = crate::package_release_publish::read_protected_source_file(
+        SDK_REPOSITORY,
+        SDK_REPOSITORY_ID,
+        "main",
+        &source_sha,
+        ".github/workflows/homebrew-adoption.yml",
+        MAX_CALLEE_BYTES,
+        expired,
+    )
+    .expect_err("the valid callee limit reaches the deadline before any network request");
+    assert_eq!(
+        error.to_string(),
+        "internal: package_public_verification_deadline"
+    );
+
+    let error = crate::package_release_publish::read_protected_source_file(
+        SDK_REPOSITORY,
+        SDK_REPOSITORY_ID,
+        "main",
+        &source_sha,
+        ".github/workflows/homebrew-adoption.yml",
+        MAX_CALLEE_BYTES + 1,
+        expired,
+    )
+    .expect_err("the production reader must reject a caller limit above its ceiling");
+    assert_eq!(
+        error.to_string(),
+        "internal: package_public_source_file_selection_invalid"
+    );
+}
 
 #[test]
 fn sdk_binding_accepts_only_manifest_source_and_release_tag_agreement() {

@@ -2,10 +2,52 @@ use super::output;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
+    time::Duration,
 };
 use velnor_actions_contract::homebrew_adoption::HomebrewAdoptionFileIdentity;
+use velnor_actions_mise::CheckDeadline;
 
 use super::seed::{self, BaseTreeEntry};
+
+#[test]
+fn seed_agents_reader_uses_the_protected_source_file_ceiling() {
+    assert_eq!(seed::MAX_SDK_MANIFEST_BYTES, 8 * 1024 * 1024);
+    assert_eq!(
+        seed::MAX_TAP_AGENTS_BYTES,
+        velnor_actions_contract::package_release_policy::MAX_CARGO_VERSION_MANIFEST_BYTES
+    );
+    let transition = seed::load_transition("jackin-homebrew-seed-921858f1").expect("transition");
+    let deadline = CheckDeadline::after(Duration::ZERO).expect("expired deadline");
+    let error = crate::package_release_publish::read_protected_source_file(
+        &transition.tap_repository,
+        transition.tap_repository_id,
+        "main",
+        &transition.base_sha,
+        &transition.claude_source_path,
+        seed::MAX_TAP_AGENTS_BYTES,
+        deadline,
+    )
+    .expect_err("the valid AGENTS limit reaches the deadline before any network request");
+    assert_eq!(
+        error.to_string(),
+        "internal: package_public_verification_deadline"
+    );
+
+    let error = crate::package_release_publish::read_protected_source_file(
+        &transition.tap_repository,
+        transition.tap_repository_id,
+        "main",
+        &transition.base_sha,
+        &transition.claude_source_path,
+        seed::MAX_TAP_AGENTS_BYTES + 1,
+        deadline,
+    )
+    .expect_err("the production reader must reject limits above its ceiling");
+    assert_eq!(
+        error.to_string(),
+        "internal: package_public_source_file_selection_invalid"
+    );
+}
 
 #[test]
 fn output_is_data_only_exclusive_and_has_exact_deletion_manifest() {
