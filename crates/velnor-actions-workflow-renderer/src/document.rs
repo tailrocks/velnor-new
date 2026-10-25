@@ -5,6 +5,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 mod job_options;
+#[path = "document/job_workflow.rs"]
+mod job_workflow;
 
 use crate::{
     RenderError,
@@ -45,6 +47,7 @@ pub(crate) fn workflow_to_yaml(
         || shared.calls.keys().ne(shared.preludes.keys())
         || shared.calls.keys().ne(shared.postludes.keys())
         || shared.calls.keys().any(|id| !jobs.contains_key(id))
+        || shared.job_workflows.keys().any(|id| !jobs.contains_key(id))
     {
         return Err(RenderError::InvalidWorkflow(
             "shared_lane_checkout_map_mismatch".to_owned(),
@@ -56,11 +59,19 @@ pub(crate) fn workflow_to_yaml(
         crate::document_env::workflow_env(!ctx.workflow_tasks.is_empty(), ctx.mise_quiet);
     let mut rendered_jobs = Vec::with_capacity(jobs.len());
     for (id, job) in jobs {
-        let call = shared.calls.get(id).map(String::as_str);
-        let actions_read =
-            grants_exact_actions_read(job.permissions.as_ref().unwrap_or(&ir.permissions).actions);
-        rendered_jobs.push((
-            id.clone(),
+        let rendered = if let Some(prepared) = shared.job_workflows.get(id) {
+            prepared.validate_source()?;
+            if !job_workflow::source_metadata_matches(prepared, job) {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "job_workflow_extract:source_metadata_mismatch:{id}"
+                )));
+            }
+            job_workflow::caller_yaml(prepared)?
+        } else {
+            let call = shared.calls.get(id).map(String::as_str);
+            let actions_read = grants_exact_actions_read(
+                job.permissions.as_ref().unwrap_or(&ir.permissions).actions,
+            );
             job_to_yaml(
                 id,
                 job,
@@ -74,8 +85,9 @@ pub(crate) fn workflow_to_yaml(
                     actions_read,
                     workflow_env: &workflow_env,
                 },
-            )?,
-        ));
+            )?
+        };
+        rendered_jobs.push((id.clone(), rendered));
     }
     let mut top = vec![
         ("name".to_owned(), Yaml::str(ir.name.clone())),
@@ -104,6 +116,22 @@ pub(crate) fn workflow_to_yaml(
         ("jobs".to_owned(), Yaml::Map(rendered_jobs)),
     ]);
     Ok(Yaml::Map(top))
+}
+
+/// Render the source-bound reusable-workflow snapshots for generated child jobs.
+pub(crate) fn render_job_workflow_relocations(
+    ir: &WorkflowIr,
+    shared: &LaneShare,
+    ctx: &RenderContext,
+    mbx_jobs: &BTreeSet<String>,
+) -> Result<Vec<crate::lane_share::job_workflow_extract::JobWorkflowRelocation>, RenderError> {
+    let workflow_env =
+        crate::document_env::workflow_env(!ctx.workflow_tasks.is_empty(), ctx.mise_quiet);
+    shared
+        .job_workflows
+        .values()
+        .map(|prepared| job_workflow::relocation(prepared, ir, ctx, mbx_jobs, &workflow_env))
+        .collect()
 }
 
 /// Report download is limited to the least-privilege `read` grant.

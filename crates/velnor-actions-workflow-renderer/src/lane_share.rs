@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
-use velnor_actions_contract::{Job, Step, StepRole};
+use velnor_actions_contract::{Job, Step};
 
 use crate::RenderError;
 use crate::render::RenderContext;
@@ -15,6 +15,12 @@ use crate::tree::RenderedFile;
 
 #[path = "lane_share_checkout.rs"]
 mod checkout;
+#[path = "lane_share_job_workflow.rs"]
+mod job_workflow;
+#[path = "job_workflow_extract.rs"]
+pub(crate) mod job_workflow_extract;
+#[path = "lane_share_provider_restore.rs"]
+mod provider_restore;
 #[path = "lane_share_runtime.rs"]
 mod runtime;
 use checkout::peel_checkout;
@@ -33,6 +39,8 @@ pub struct RenderedWorkflow {
 pub(crate) struct LaneShare {
     /// Same jobs, with shared lanes keeping their headers and elected saves.
     pub jobs: BTreeMap<String, Job>,
+    /// Source-derived reusable-workflow body for the one approved CLI prototype.
+    pub job_workflows: BTreeMap<String, job_workflow_extract::PreparedJob>,
     /// Job id to local `uses` path.
     pub calls: BTreeMap<String, String>,
     /// Job id to the original checkout step rendered before each shared call.
@@ -84,11 +92,7 @@ pub(crate) fn share_lanes(
     let mut files = Vec::new();
     let mut next = jobs.clone();
     let mut env_steps = BTreeMap::new();
-    if next.values().any(|job| {
-        job.steps
-            .iter()
-            .any(|step| step.role == Some(StepRole::TofuProvidersRestore))
-    }) {
+    if provider_restore::has_tofu_provider_restore(&next) {
         files.push(crate::tofu_cache::provider_admission_file(
             &ctx.generator_version,
         )?);
@@ -146,6 +150,7 @@ pub(crate) fn share_lanes(
     crate::lane_share_sections::factor_provider_preludes(&mut preludes, &mut files, ctx)?;
     let shared = LaneShare {
         jobs: next,
+        job_workflows: job_workflow::prepare(jobs)?,
         calls,
         checkouts,
         env_steps,

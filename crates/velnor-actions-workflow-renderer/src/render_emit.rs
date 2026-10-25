@@ -60,13 +60,31 @@ pub(crate) fn emit_shared(
         )?
     };
     steps::scan_for_private_subcommands(&text)?;
-    let shared_files = crate::render_cache_files::with_runtime_identity_and_cache_tar_files(
+    let mut shared_files = crate::render_cache_files::with_runtime_identity_and_cache_tar_files(
         shared.files.clone(),
         jobs,
         &ctx.generator_version,
         &ctx.staged_binary,
         &ctx.report_helper_version,
         &ctx.tool_pins,
+    )?;
+    let relocations = document::render_job_workflow_relocations(ir, shared, ctx, &mbx_jobs)?;
+    for relocation in &relocations {
+        if shared_files
+            .iter()
+            .any(|file| file.path == relocation.expected_callee_file.path)
+        {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "job_workflow_extract:duplicate_callee_path:{}",
+                relocation.expected_callee_file.path
+            )));
+        }
+        shared_files.push(relocation.expected_callee_file.clone());
+    }
+    crate::workflow_routing::validate_relocated_job_workflows(
+        &document,
+        &shared_files,
+        &relocations,
     )?;
     if crate::tool_seed::any_job_has_seed(jobs)? {
         return Err(RenderError::InvalidWorkflow(

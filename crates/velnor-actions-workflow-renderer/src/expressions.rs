@@ -11,6 +11,8 @@ use crate::RenderError;
 
 #[path = "expressions_qualification_cache.rs"]
 mod qualification_cache;
+#[path = "expressions_workflow_call.rs"]
+mod workflow_call;
 
 fn is_family_key_output(inner: &str) -> bool {
     use velnor_actions_contract::workflow::cache_family_steps::{FAMILY_KEYS_ID, family_for_stem};
@@ -337,6 +339,9 @@ pub(crate) fn check_with_action_value(
     key: &str,
     value: &str,
 ) -> Result<(), RenderError> {
+    if workflow_call::is_cache_input(uses, key, value) {
+        return Ok(());
+    }
     if uses.starts_with("actions/checkout@") && key == "ref" && value == "${{ github.sha }}" {
         return Ok(());
     }

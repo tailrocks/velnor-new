@@ -32,6 +32,67 @@ fn event_sha_is_allowed_only_for_checkout_ref() {
 }
 
 #[test]
+fn extracted_cache_call_inputs_require_the_exact_pinned_action_and_key() {
+    let restore = format!(
+        "actions/cache/restore@{}",
+        velnor_actions_actionlint::actions::CACHE_ACTION_SHA
+    );
+    let save = format!(
+        "actions/cache/save@{}",
+        velnor_actions_actionlint::actions::CACHE_ACTION_SHA
+    );
+    assert!(check_with_action_value(&restore, "key", "${{ inputs.sources_key }}").is_ok());
+    assert!(check_with_action_value(&restore, "key", "${{inputs.sources_key}}").is_ok());
+    assert!(check_with_action_value(&save, "key", "${{ inputs.sources_key }}").is_ok());
+    assert!(
+        check_with_action_value(
+            &restore,
+            "restore-keys",
+            "${{ inputs.sources_restore_keys }}"
+        )
+        .is_ok()
+    );
+    assert!(
+        check_with_action_value(&restore, "restore-keys", "${{inputs.sources_restore_keys}}")
+            .is_ok()
+    );
+    assert!(
+        check_with_action_value(&restore, "key", "${{ needs.plan.outputs.sources_key }}").is_ok()
+    );
+
+    for (uses, key, value) in [
+        (
+            restore.as_str(),
+            "restore-keys",
+            "${{ inputs.sources_key }}",
+        ),
+        (
+            save.as_str(),
+            "restore-keys",
+            "${{ inputs.sources_restore_keys }}",
+        ),
+        (restore.as_str(), "key", "${{ inputs.unknown }}"),
+        (restore.as_str(), "key", "prefix-${{ inputs.sources_key }}"),
+        (
+            "actions/cache/restore@0000000000000000000000000000000000000000",
+            "key",
+            "${{ inputs.sources_key }}",
+        ),
+        (
+            "actions/upload-artifact@0000000000000000000000000000000000000000",
+            "key",
+            "${{ inputs.sources_key }}",
+        ),
+    ] {
+        assert!(
+            check_with_action_value(uses, key, value).is_err(),
+            "{uses} {key}: {value}"
+        );
+    }
+    assert!(check_with_value("key", "${{ inputs.sources_key }}").is_err());
+}
+
+#[test]
 fn qualification_cache_runtime_paths_accept_only_their_typed_step_output() {
     assert!(check_env_value(
             "VELNOR_QUALIFICATION_CACHE_ROOTS_FILE",

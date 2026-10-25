@@ -23,6 +23,8 @@ mod entrypoints;
 mod inventory;
 #[path = "workflow_routing_inventory_values.rs"]
 mod inventory_values;
+#[path = "workflow_routing_job_workflow.rs"]
+mod job_workflow;
 #[path = "workflow_routing_labels.rs"]
 mod labels;
 #[path = "workflow_routing_matrix.rs"]
@@ -67,6 +69,14 @@ pub(crate) fn parse_authority_document(
     file: &RenderedFile,
 ) -> Result<saphyr::Yaml<'_>, RenderError> {
     parse::parse_final_workflow(file)
+}
+
+pub(crate) fn validate_relocated_job_workflows(
+    parent_yaml: &Yaml,
+    shared_files: &[RenderedFile],
+    relocations: &[crate::lane_share::job_workflow_extract::JobWorkflowRelocation],
+) -> Result<(), RenderError> {
+    job_workflow::validate_relocated_job_workflows(parent_yaml, shared_files, relocations)
 }
 
 /// Effective placement policy for a generated workflow document.
