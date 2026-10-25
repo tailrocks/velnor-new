@@ -45,6 +45,8 @@ pub(crate) struct PublicPullRequestSnapshot {
     pub(crate) head_repository_id: u64,
     pub(crate) head_ref: String,
     pub(crate) head_sha: String,
+    /// GitHub's API-admitted merge commit, when the PR has one.
+    pub(crate) merge_commit_sha: Option<String>,
 }
 
 /// Resolve a public repository's immutable numeric identity from its exact slug.
@@ -96,10 +98,12 @@ pub(crate) fn read_public_pull_request(
     };
     if response.number != number
         || base_repository.id != repository_id
+        || head_repository.id == 0
         || base_repository.full_name != repository
         || !velnor_actions_contract::vcs::is_safe_github_repository(&head_repository.full_name)
         || !github::is_lowercase_git_sha(&base.sha)
         || !github::is_lowercase_git_sha(&head.sha)
+        || !valid_merge_commit_sha(response.merge_commit_sha.as_deref())
         || base.reference.is_empty()
         || head.reference.is_empty()
         || base.reference.bytes().any(|byte| byte.is_ascii_control())
@@ -122,11 +126,16 @@ pub(crate) fn read_public_pull_request(
         head_repository_id: head_repository.id,
         head_ref: head.reference,
         head_sha: head.sha,
+        merge_commit_sha: response.merge_commit_sha,
     };
     if !valid_head_reference(&snapshot.head_ref) {
         return Err(internal("package_public_pull_request_identity_mismatch"));
     }
     Ok(snapshot)
+}
+
+fn valid_merge_commit_sha(sha: Option<&str>) -> bool {
+    sha.is_none_or(github::is_lowercase_git_sha)
 }
 
 fn valid_head_reference(reference: &str) -> bool {
@@ -187,6 +196,8 @@ struct PublicPullRequestResponse {
     state: String,
     draft: bool,
     merged_at: Option<String>,
+    #[serde(default)]
+    merge_commit_sha: Option<String>,
     base: PublicPullRequestRef,
     head: PublicPullRequestRef,
 }
@@ -368,3 +379,7 @@ pub(super) fn validate_public_asset_size_inventory(
     }
     Ok(total)
 }
+
+#[cfg(test)]
+#[path = "package_release_publish_public_read_tests.rs"]
+mod tests;

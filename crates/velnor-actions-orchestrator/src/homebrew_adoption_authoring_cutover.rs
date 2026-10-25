@@ -158,20 +158,14 @@ fn authenticated_preview_formula(
     authority: &crate::homebrew::authority::VerifiedHomebrewAuthority,
     deadline: CheckDeadline,
 ) -> Result<Vec<u8>, OrchestratorError> {
-    let channel = authority
+    let _channel = authority
         .spec()
         .channels
         .iter()
         .find(|channel| channel.channel == PackageReleaseChannel::Preview)
         .ok_or_else(|| internal("homebrew_adoption_preview_channel_missing"))?;
-    let bytes = authority.protected_tap_file(&channel.destination, 1024 * 1024, deadline)?;
-    crate::homebrew::runtime::verify_protected_formula_bytes(
-        authority,
-        PackageReleaseChannel::Preview,
-        &bytes,
-        deadline,
-    )
-    .map(|(_, formula)| formula)
+    crate::homebrew::runtime::render_current_preview_formula(authority, deadline)
+        .map(|(_, formula)| formula)
 }
 
 fn diff_tree(

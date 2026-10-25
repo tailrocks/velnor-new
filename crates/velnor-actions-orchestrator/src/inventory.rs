@@ -320,9 +320,16 @@ pub(crate) fn require_rust_pin(catalog: &ToolCatalog) -> Result<(), Orchestrator
             problem: err.to_string(),
         })?;
     presence
-        .run(catalog)
-        .map_err(|err| OrchestratorError::Inventory {
-            problem: err.to_string(),
+        .run_with_observation(catalog)
+        .map_err(|failure| OrchestratorError::Inventory {
+            problem: match failure.observation {
+                Some(observation) => format!(
+                    "{}; mise_ls_observation={}",
+                    failure.error,
+                    observation.to_json_line()
+                ),
+                None => failure.error.to_string(),
+            },
         })
 }
 

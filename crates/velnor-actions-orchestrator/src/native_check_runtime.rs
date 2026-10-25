@@ -141,7 +141,7 @@ mod formula;
 mod install;
 
 pub(crate) use execute::execute_native_homebrew_check_to;
-pub(crate) use formula::{verify_formula, verify_protected_formula_bytes};
+pub(crate) use formula::{render_current_preview_formula, verify_formula};
 
 #[path = "native_check_runtime/entry.rs"]
 mod entry;

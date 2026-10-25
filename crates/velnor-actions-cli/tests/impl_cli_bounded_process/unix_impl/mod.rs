@@ -1,5 +1,5 @@
 use super::{BoundedOutput, BoundedProcessError, CLEANUP_RESERVE, POLL_INTERVAL, READ_CHUNK};
-use group::GroupAnchor;
+use group::{GroupAnchor, ProcessState, observe_process};
 use rustix::fs::{OFlags, fcntl_getfl, fcntl_setfl};
 use rustix::io::{Errno, read};
 use rustix::process::Pid;
@@ -114,7 +114,7 @@ pub(super) fn run_bounded(
             StopCause::TimedOut,
         ));
     }
-    if let Err(error) = group.ensure_alive() {
+    if let Err(error) = group.ensure_alive(run_deadline) {
         return Err(stop_anchor_with_failure(&mut group, deadline, error));
     }
 
@@ -135,7 +135,7 @@ pub(super) fn run_bounded(
     };
     let pid = Pid::from_child(&child);
     let mut capture = Capture::new(&mut child, cap);
-    if let Err(error) = group.ensure_alive() {
+    if let Err(error) = group.ensure_alive(run_deadline) {
         capture.close_pipes();
         return Err(stop_target_with_failure(
             &mut group, &mut child, pid, None, deadline, error,
@@ -195,7 +195,7 @@ fn wait_for_target(
                 StopCause::TimedOut,
             ));
         }
-        if let Err(error) = group.ensure_alive() {
+        if let Err(error) = group.ensure_alive(run_deadline) {
             return Err(stop_target_with_failure(
                 group,
                 child,
@@ -205,9 +205,11 @@ fn wait_for_target(
                 error,
             ));
         }
-        match leader_exited(pid) {
-            Ok(true) => return finish_success(group, child, pid, capture, deadline),
-            Ok(false) => {}
+        match observe_process(pid, run_deadline) {
+            Ok(ProcessState::Exited) => {
+                return finish_success(group, child, pid, capture, deadline);
+            }
+            Ok(ProcessState::Running) => {}
             Err(error) => {
                 return Err(stop_target_with_cause(
                     group,
@@ -333,17 +335,6 @@ fn drain_pipe<Fd: AsFd>(
         }
     }
     Ok(())
-}
-
-fn leader_exited(pid: Pid) -> io::Result<bool> {
-    let options = rustix::process::WaitIdOptions::EXITED
-        | rustix::process::WaitIdOptions::NOHANG
-        | rustix::process::WaitIdOptions::NOWAIT;
-    match rustix::process::waitid(rustix::process::WaitId::Pid(pid), options) {
-        Ok(status) => Ok(status.is_some()),
-        Err(Errno::INTR) => Ok(false),
-        Err(error) => Err(io::Error::from(error)),
-    }
 }
 
 pub(super) fn timeout_error() -> io::Error {

@@ -24,6 +24,7 @@ temporary=''
 cargo_home="$build_root/cargo-home"
 mise_data="$build_root/mise-data"
 mise_cache="$build_root/mise-cache"
+mise_state="$build_root/mise-state"
 rustup_home="$build_root/rustup-home"
 
 fail() {
@@ -240,13 +241,14 @@ if [[ -L "$state_root" ]]; then
 fi
 for path in "$guard_state" "$guard_bin_dir" "$cache_root" "$cache_root/velnor" \
   "$build_root" "$guard_target_root" "$build_tmp_root" "$cargo_home" "$mise_data" \
-  "$mise_cache" "$rustup_home"; do
+  "$mise_cache" "$mise_state" "$rustup_home"; do
   [[ ! -L "$path" ]] || fail "build path is a symlink: $path"
 done
 mkdir -p -- "$guard_bin_dir" "$guard_target_root" "$build_tmp_root" "$cargo_home" \
-  "$mise_data" "$mise_cache" "$rustup_home"
+  "$mise_data" "$mise_cache" "$mise_state" "$rustup_home"
 chmod 700 "$guard_state" "$guard_bin_dir" "$build_root" "$guard_target_root" \
-  "$build_tmp_root" "$cargo_home" "$mise_data" "$mise_cache" "$rustup_home"
+  "$build_tmp_root" "$cargo_home" "$mise_data" "$mise_cache" "$mise_state" \
+  "$rustup_home"
 check_directory "$state_root"
 check_directory "$guard_state"
 check_directory "$guard_bin_dir"
@@ -259,6 +261,7 @@ check_directory "$build_tmp_root"
 check_directory "$cargo_home"
 check_directory "$mise_data"
 check_directory "$mise_cache"
+check_directory "$mise_state"
 check_directory "$rustup_home"
 for config in "$cargo_home/config" "$cargo_home/config.toml"; do
   if [[ -L "$config" || -e "$config" ]]; then
@@ -276,6 +279,7 @@ run_mise() {
     PATH="$(dirname -- "$mise_bin"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
     MISE_DATA_DIR="$mise_data" \
     MISE_CACHE_DIR="$mise_cache" \
+    MISE_STATE_DIR="$mise_state" \
     MISE_CARGO_HOME="$cargo_home" \
     CARGO_HOME="$cargo_home" \
     CARGO_TARGET_DIR="$guard_target" \

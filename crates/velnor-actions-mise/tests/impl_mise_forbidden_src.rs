@@ -249,6 +249,11 @@ fn check_file(path: &Path, violations: &mut Vec<String>) -> Result<(), String> {
             if name == "command_stream_tests.rs" && matches!(*token, "create_new" | "fs::write") {
                 continue;
             }
+            // Presence observations retain the data-only Mise `symlinked_to`
+            // response field; this exception never admits filesystem APIs.
+            if *token == "symlink" && allow_presence_symlink_field(&name, &code) {
+                continue;
+            }
             if code.contains(token) {
                 violations.push(format!("{at}: forbidden `{token}` in `{code}`"));
             }
@@ -278,6 +283,24 @@ fn check_file(path: &Path, violations: &mut Vec<String>) -> Result<(), String> {
     Ok(())
 }
 
+fn allow_presence_symlink_field(name: &str, code: &str) -> bool {
+    let code = code.trim();
+    match name {
+        "requests_presence.rs" => matches!(
+            code,
+            "symlinked_to: Option<String>," | "symlinked_to: value" | ".get(\"symlinked_to\")"
+        ),
+        "requests_presence_tests.rs" => {
+            code.starts_with("r#\"[{")
+                && code.contains("\"symlinked_to\":\"")
+                && code.ends_with("\"#,")
+                || code == "\"symlinked_to\": \"y\".repeat(600),"
+                || code == "row.symlinked_to.as_deref(),"
+        }
+        _ => false,
+    }
+}
+
 #[test]
 fn diagnostic_write_admission_is_exactly_one_borrowed_sink_expression() -> Result<(), String> {
     let root = crate::test_temp_dir::TestTempDir::new("mise-diagnostic-policy")
@@ -297,6 +320,47 @@ fn diagnostic_write_admission_is_exactly_one_borrowed_sink_expression() -> Resul
             ".write_all(bytes)\nstd::fs::write(path, bytes)\n",
             false,
         ),
+    ] {
+        let path = root.path().join(name);
+        std::fs::write(&path, source).map_err(|error| error.to_string())?;
+        let mut violations = Vec::new();
+        check_file(&path, &mut violations)?;
+        assert_eq!(
+            violations.is_empty(),
+            admitted,
+            "{name}: {source:?}: {violations:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn presence_symlink_field_exception_is_data_only_and_exact() -> Result<(), String> {
+    let root = crate::test_temp_dir::TestTempDir::new("mise-presence-symlink-policy")
+        .map_err(|error| error.to_string())?;
+    for (name, source, admitted) in [
+        (
+            "requests_presence.rs",
+            "symlinked_to: Option<String>,\n",
+            true,
+        ),
+        ("requests_presence.rs", "symlinked_to: value\n", true),
+        (
+            "requests_presence_tests.rs",
+            "r#\"[{\"symlinked_to\":\"/mise/shims/rust\"}]\"#,\n",
+            true,
+        ),
+        (
+            "requests_presence_tests.rs",
+            "std::os::unix::fs::symlink(source, destination)\n",
+            false,
+        ),
+        (
+            "requests_presence_tests.rs",
+            "row.symlinked_to.as_deref(); std::fs::remove_file(path)\n",
+            false,
+        ),
+        ("other.rs", "symlinked_to: Option<String>,\n", false),
     ] {
         let path = root.path().join(name);
         std::fs::write(&path, source).map_err(|error| error.to_string())?;

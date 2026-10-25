@@ -160,6 +160,7 @@ fn seed_admission_rejects_wrong_repository_base_or_head_context() {
         head_repository_id: 1_200_197_694,
         head_ref: "preview-seed".to_owned(),
         head_sha: head.clone(),
+        merge_commit_sha: None,
     };
     let admitted = |pull: &crate::package_release_publish::PublicPullRequestSnapshot,
                     repository_id: u64,

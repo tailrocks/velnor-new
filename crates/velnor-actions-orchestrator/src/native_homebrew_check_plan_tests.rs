@@ -60,13 +60,18 @@ fn native_identity(check: &NativeHomebrewCheck) -> NativeCheckIdentityExtension 
     }
 }
 
-fn valid_plan(generator: &PlanGenerator, obligation: PlanObligation, entry: MatrixEntry) -> Plan {
+fn valid_plan(
+    generator: &PlanGenerator,
+    obligation: PlanObligation,
+    entry: MatrixEntry,
+    head: &str,
+) -> Plan {
     Plan {
         schema: Plan::SCHEMA,
         run_key: "local".to_owned(),
         plan_id: plan_id_for_run("local").expect("plan ID"),
         base: None,
-        head: "1".repeat(40),
+        head: head.to_owned(),
         event: WorkflowEvent::PullRequest,
         qualification: None,
         runner: PlanRunner {
@@ -127,7 +132,7 @@ fn native_proposals_derive_valid_execute_maps_for_every_operation() {
         assert_eq!(obligation.task_id, task.task_id);
         assert_eq!(obligation.decision, ObligationDecision::Execute);
 
-        let plan = valid_plan(&generator, obligation, entry.clone());
+        let plan = valid_plan(&generator, obligation, entry.clone(), &"1".repeat(40));
         plan.validate().expect("native obligation and plan");
         let wire = serde_json::to_vec(&plan).expect("serialize plan wire");
         serde_json::from_slice::<Plan>(&wire)
@@ -135,6 +140,36 @@ fn native_proposals_derive_valid_execute_maps_for_every_operation() {
             .validate()
             .expect("validate decoded plan wire");
     }
+}
+
+#[test]
+fn native_plan_head_and_checkout_identity_head_round_trip_independently() {
+    let generator = PlanGenerator {
+        version: "0.1.53".to_owned(),
+        target: "aarch64-apple-darwin".to_owned(),
+        sha256: "a".repeat(64),
+    };
+    let plan_head = "1".repeat(40);
+    let checkout_head = "2".repeat(40);
+    let check = native_check(NativeHomebrewOperation::TapTree);
+    let task = proposal(&check).expect("native proposal");
+    let mut identity = native_identity(&check);
+    identity.head.clone_from(&checkout_head);
+    let (obligation, mut entries) =
+        derive_plan_envelopes(&check, &task, "local", &generator, &identity)
+            .expect("derive native envelopes");
+    let entry = entries.pop().expect("one native entry");
+    let plan = valid_plan(&generator, obligation, entry, &plan_head);
+
+    plan.validate()
+        .expect("plan binds request head and checkout identity");
+    let bytes = serde_json::to_vec(&plan).expect("serialize plan");
+    let decoded: Plan = serde_json::from_slice(&bytes).expect("deserialize plan");
+    decoded.validate().expect("validate round-tripped plan");
+    assert_eq!(decoded.head, plan_head);
+    assert_ne!(decoded.head, checkout_head);
+    let entry = decoded.matrix.include.first().expect("native entry");
+    assert_eq!(entry.adapter_metadata["identity"]["head"], checkout_head);
 }
 
 #[test]
@@ -150,7 +185,7 @@ fn native_task_kind_mutation_is_rejected() {
         sha256: "a".repeat(64),
     };
     assert!(
-        derive_plan_envelopes(&check, &task, "local", &generator, &native_identity(&check),)
+        derive_plan_envelopes(&check, &task, "local", &generator, &native_identity(&check))
             .is_err()
     );
 }
