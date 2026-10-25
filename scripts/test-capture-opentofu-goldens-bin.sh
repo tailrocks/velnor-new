@@ -270,6 +270,43 @@ source "$ROOT/scripts/generator-release/test-fixture-git.sh"
 test_fixture_git_isolation || exit 1
 source "$ROOT/scripts/generator-release/test-qualification-output-bindings.sh"
 
+test_candidate_stderr_diagnostic() {
+  local source="$WORK/candidate stderr source.txt"
+  local rendered="$WORK/candidate stderr diagnostic.txt"
+  {
+    printf 'safe line\n::error::candidate text\n##[error]candidate text\n##[add-mask::secret]\nescape\033[31mred\033[0m\rline\n'
+    awk 'BEGIN { for (i = 0; i < 20000; i++) printf "x" }'
+  } >"$source"
+  emit_candidate_stderr "$source" 2>"$rendered"
+  if [ "$(wc -c <"$rendered" | tr -d '[:space:]')" -gt 16384 ] \
+    || ! grep -Fq '[candidate stderr] safe line' "$rendered" \
+    || ! grep -Fq '[candidate stderr] ::error::candidate text' "$rendered" \
+    || ! grep -Fq '[candidate stderr] # #[error]candidate text' "$rendered" \
+    || ! grep -Fq '[candidate stderr] # #[add-mask::secret]' "$rendered" \
+    || grep -Fq '##[' "$rendered" \
+    || ! grep -Fq '[candidate stderr] escape[31mred[0mline' "$rendered" \
+    || grep -Fq $'\033' "$rendered" || grep -Fq $'\r' "$rendered"; then
+    cat "$rendered" >&2
+    echo 'FAIL: candidate stderr diagnostic was not bounded and sanitized' >&2
+    exit 1
+  fi
+  if ! LC_ALL=C awk '
+      !/^\[candidate stderr\] / { exit 1 }
+      END { if (NR == 0) exit 1 }
+    ' "$rendered"; then
+    cat "$rendered" >&2
+    echo 'FAIL: candidate stderr diagnostic contains an unprefixed line' >&2
+    exit 1
+  fi
+  if LC_ALL=C tr -d '\n' <"$rendered" | LC_ALL=C grep '[[:cntrl:]]' >/dev/null; then
+    echo 'FAIL: candidate stderr diagnostic retained terminal control bytes' >&2
+    exit 1
+  fi
+  echo 'passed bounded, prefixed, sanitized candidate stderr diagnostic'
+}
+
+test_candidate_stderr_diagnostic
+
 expect_release_check_match() {
   local status=0 log="$WORK/release-check.log" after
   local manifest="${1:-$WORK/valid manifest.json}"

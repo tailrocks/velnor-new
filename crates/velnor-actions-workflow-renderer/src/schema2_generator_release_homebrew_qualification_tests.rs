@@ -65,3 +65,108 @@ fn hosted_homebrew_job_is_read_only_bounded_and_scoped_to_exact_candidate_artifa
     assert!(!action_yaml.contains("homebrew-qualify"));
     assert!(action_yaml.contains("velnor-actions-"));
 }
+
+#[test]
+fn qualification_uses_pinned_rust_and_lint_tools_before_candidate_steps() {
+    let pins = crate::schema2::product_release_test_pins::test_pins();
+    let mut actions = Vec::new();
+    job(&pins, &mut actions).expect("render Homebrew qualification");
+    let action = &actions[0].1;
+    let action_yaml = render_yaml(action);
+    let candidate_download = action_yaml
+        .find("Download exact ARM candidate artifact")
+        .expect("candidate download is rendered");
+
+    let expected_steps = [
+        (
+            "Install pinned qualification tools",
+            super::workflow_steps::command_step(
+                "Install pinned qualification tools",
+                &pins.install_qualify_tools_argv,
+            )
+            .expect("render pinned qualification tool install"),
+        ),
+        (
+            crate::VERIFY_RUST_TOOLCHAIN_STEP,
+            super::workflow_steps::verify_rust_step(&pins).expect("render Rust verification"),
+        ),
+        (
+            "Verify jactionlint",
+            super::workflow_steps::verifier_command_step(
+                velnor_actions_contract::StepRole::VerifyJactionlint,
+                "Verify jactionlint",
+                &pins.verify_lint_argv,
+            )
+            .expect("render jactionlint verification"),
+        ),
+        (
+            "Install pinned GitHub CLI",
+            super::workflow_steps::install_gh_step(&pins.install_gh_argv)
+                .expect("render pinned GitHub CLI install"),
+        ),
+    ];
+    for (name, expected) in expected_steps {
+        let step = named_step(action, name);
+        assert_eq!(step, &expected, "step must use the ordinary pinned command");
+        let Yaml::Map(fields) = step else {
+            panic!("{name} is a step mapping");
+        };
+        assert_credentials_scrubbed(fields, name);
+        let position = action_yaml
+            .find(name)
+            .unwrap_or_else(|| panic!("missing step {name}"));
+        assert!(
+            position < candidate_download,
+            "{name} must precede candidate access"
+        );
+    }
+    assert_eq!(
+        action_yaml.matches("GH_TOKEN: ${{ github.token }}").count(),
+        1
+    );
+}
+
+fn assert_credentials_scrubbed(fields: &[(String, Yaml)], name: &str) {
+    let Some(Yaml::Map(env)) = fields
+        .iter()
+        .find_map(|(key, value)| (key == "env").then_some(value))
+    else {
+        return;
+    };
+    for key in crate::toolchain_env::STEP_CREDENTIAL_DENYLIST {
+        if let Some((_, value)) = env.iter().find(|(env_key, _)| env_key == key) {
+            assert_eq!(value, &Yaml::str(""), "{name} must scrub {key}");
+        }
+    }
+}
+
+fn named_step<'a>(action: &'a Yaml, name: &str) -> &'a Yaml {
+    let Yaml::Map(action_fields) = action else {
+        panic!("composite action is a mapping");
+    };
+    let Yaml::Map(runs) = action_fields
+        .iter()
+        .find_map(|(key, value)| (key == "runs").then_some(value))
+        .expect("runs field")
+    else {
+        panic!("runs is a mapping");
+    };
+    let Yaml::Seq(steps) = runs
+        .iter()
+        .find_map(|(key, value)| (key == "steps").then_some(value))
+        .expect("steps field")
+    else {
+        panic!("steps is a sequence");
+    };
+    steps
+        .iter()
+        .find(|step| {
+            let Yaml::Map(fields) = step else {
+                return false;
+            };
+            fields
+                .iter()
+                .any(|(key, value)| key == "name" && value == &Yaml::str(name))
+        })
+        .unwrap_or_else(|| panic!("step {name} is rendered"))
+}

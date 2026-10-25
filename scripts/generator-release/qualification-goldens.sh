@@ -297,7 +297,11 @@ capture_release_case() {
   local case="$1" repo="$2" out="$3" preview="$3/preview"
   mkdir -p "$out" "$preview"
   (cd "$repo" && "$BIN" generate --output-dir "$preview" >"$out/stdout.txt" 2>"$out/stderr.txt") \
-    || { echo "FATAL: release candidate generate failed for $case"; exit 2; }
+    || {
+      emit_candidate_stderr "$out/stderr.txt"
+      echo "FATAL: release candidate generate failed for $case"
+      exit 2
+    }
   if [ ! -d "$preview/.github" ]; then
     echo "FATAL: release candidate emitted no workflows for $case"
     exit 2
@@ -311,6 +315,37 @@ capture_release_case() {
     exit 2
   fi
   hash_tree "$preview" "$out/tree.sha256"
+}
+
+emit_candidate_stderr() {
+  local path="$1"
+  if [ ! -f "$path" ] || [ -L "$path" ]; then
+    echo '[candidate stderr] unavailable: captured stderr is not a regular file' >&2
+    return 0
+  fi
+  if [ ! -s "$path" ]; then
+    echo '[candidate stderr] empty' >&2
+    return 0
+  fi
+  echo '[candidate stderr] sanitized output follows (maximum 16384 bytes)' >&2
+  LC_ALL=C dd if="$path" bs=16384 count=1 2>/dev/null \
+    | LC_ALL=C tr -d '\000-\011\013-\037\177' \
+    | LC_ALL=C awk '
+      BEGIN { remaining = 16256; prefix = "[candidate stderr] " }
+      {
+        line = $0
+        gsub(/##\[/, "# #[", line)
+        line = prefix line
+        if (length(line) >= remaining) {
+          printf "%s", substr(line, 1, remaining)
+          exit
+        }
+        print line
+        remaining -= length(line) + 1
+        if (remaining <= 0) exit
+      }
+    ' >&2 || true
+  return 0
 }
 
 validate_candidate_output_bindings() {

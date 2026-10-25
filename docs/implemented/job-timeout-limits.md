@@ -45,11 +45,13 @@ protected-push-only and outside Required, and cancelled or partial producers
 still cannot save. Native publication still requires a successful exact-source
 CI run.
 
-The three official generator compiler jobs (Linux, macOS ARM64, and macOS Intel)
-and the official `velnor-host` binary compiler job use ten minutes. This bound
-covers checkout, tool setup, compilation, artifact upload, and job cleanup.
-Their eligibility, qualification, signing, manifest, and publication jobs retain
-five minutes; runner-image jobs and configurable consumer budgets are unchanged.
+The three official generator compiler jobs (Linux, macOS ARM64, and macOS Intel),
+the official `velnor-host` binary compiler job, and the runner-image `build-images`
+job use ten minutes. This bound covers checkout, tool setup, compilation, artifact
+upload, and job cleanup. Eligibility, ordinary candidate qualification, signing,
+manifest, and publication jobs retain five minutes. Historical Homebrew A/D
+qualification retains its separate thirty-minute bound; configurable consumer
+budgets are unchanged.
 In [run 39471133008](https://github.com/tailrocks/velnor-new/actions/runs/39471133008),
 macOS ARM64 compilation finished successfully in 4 minutes 35 seconds and its
 artifact uploaded, but the complete job exceeded five minutes during cleanup.
@@ -57,6 +59,15 @@ Local MBX objects were not uploaded to a remote cache, so a warm retry was not
 established. The compiler budget provides bounded setup and completion margin;
 it does not make a cancelled build eligible for publication or change required
 checks, evidence, retries, permissions, or protected approval.
+
+In [run 40159263908](https://github.com/tailrocks/velnor-new/actions/runs/40159263908),
+both runner-image Docker builds and the resource-probe tests succeeded, but the
+locked resource-probe producer build reached the five-minute job limit. Check
+run `121068068300` explicitly reports that maximum execution time was exceeded.
+The image build now shares the bounded product compiler allowance. Its signing
+and publication descendants retain their existing budgets and authority checks.
+Ten minutes is completion headroom, not hosted completion proof; the complete
+producer run must still succeed before its SDK release can be adopted.
 
 ```toml
 [workflow]
