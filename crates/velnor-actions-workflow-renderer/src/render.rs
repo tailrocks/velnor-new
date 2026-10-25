@@ -185,7 +185,13 @@ pub fn finalize_jobs(
         }
         if !bootstrap_plan {
             insert_verified_cache_helper(id, job, ctx)?;
-            if ctx.preseed && id == FINAL_JOB_ID {
+            if ctx.preseed
+                && id == FINAL_JOB_ID
+                && job
+                    .steps
+                    .iter()
+                    .any(|step| step.role == Some(velnor_actions_contract::StepRole::Checkout))
+            {
                 crate::cache_tar_setup::move_preseed_consumer_after_checkout(
                     id,
                     job,

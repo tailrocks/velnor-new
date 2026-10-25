@@ -114,6 +114,14 @@ fn dispatch_plan_job(staged: &str) -> Result<Job, crate::RenderError> {
                 "MISE_CARGO_HOME".to_owned(),
                 "${{ runner.temp }}/velnor/cargo".to_owned(),
             ),
+            (
+                "RUSTUP_HOME".to_owned(),
+                "${{ runner.temp }}/velnor/rustup".to_owned(),
+            ),
+            (
+                "CARGO_HOME".to_owned(),
+                "${{ runner.temp }}/velnor/cargo".to_owned(),
+            ),
         ]),
         crate::steps::MbxTransport::InstallOnly,
         None,
