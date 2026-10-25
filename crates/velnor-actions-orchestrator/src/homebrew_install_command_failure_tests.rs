@@ -28,6 +28,12 @@ fn all_closed_operations_have_fixed_diagnostic_labels() {
             "install-candidate",
         ),
         (
+            HomebrewCommand::TrustFormula {
+                formula: "velnor/native-install/example-preview".to_owned(),
+            },
+            "trust-formula",
+        ),
+        (
             HomebrewCommand::UpgradeCandidate {
                 recipe: PathBuf::from("/secret/formula.rb"),
             },

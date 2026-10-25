@@ -6,7 +6,7 @@ fn commands_have_closed_program_argv_and_environment() {
     let temp = Path::new("/private/runner/tmp");
     let install = homebrew_command(
         HomebrewCommand::InstallCandidate {
-            recipe: PathBuf::from("/private/runner/staging/example-preview.rb"),
+            recipe: PathBuf::from("/opt/homebrew/Library/Taps/velnor/homebrew-native-install/Formula/example-preview.rb"),
         },
         home,
         temp,
@@ -18,12 +18,14 @@ fn commands_have_closed_program_argv_and_environment() {
             OsString::from(HOMEBREW_EXECUTABLE),
             OsString::from("install"),
             OsString::from("--formula"),
-            OsString::from("/private/runner/staging/example-preview.rb"),
+            OsString::from(
+                "/opt/homebrew/Library/Taps/velnor/homebrew-native-install/Formula/example-preview.rb"
+            ),
         ]
     );
     let upgrade = homebrew_command(
         HomebrewCommand::UpgradeCandidate {
-            recipe: PathBuf::from("/private/runner/staging/example-preview-d.rb"),
+            recipe: PathBuf::from("/opt/homebrew/Library/Taps/velnor/homebrew-native-install/Formula/example-preview.rb"),
         },
         home,
         temp,
@@ -36,7 +38,9 @@ fn commands_have_closed_program_argv_and_environment() {
             OsString::from("upgrade"),
             OsString::from("--formula"),
             OsString::from("--no-ask"),
-            OsString::from("/private/runner/staging/example-preview-d.rb"),
+            OsString::from(
+                "/opt/homebrew/Library/Taps/velnor/homebrew-native-install/Formula/example-preview.rb"
+            ),
         ]
     );
     let test = homebrew_command(
@@ -74,6 +78,71 @@ fn commands_have_closed_program_argv_and_environment() {
     assert!(debug.contains("/private/runner/tmp"));
     assert!(debug.contains("HOMEBREW_FORCE_VENDOR_RUBY"));
     assert!(debug.contains("HOMEBREW_GIT_PATH"));
+}
+
+#[test]
+fn formula_trust_is_exactly_scoped_to_the_candidate_tap() {
+    let home = Path::new("/private/runner/home");
+    let temp = Path::new("/private/runner/tmp");
+    let command = homebrew_command(
+        HomebrewCommand::TrustFormula {
+            formula: "velnor/native-install/example-preview".to_owned(),
+        },
+        home,
+        temp,
+    )
+    .expect("fixed formula trust command");
+    assert_eq!(
+        command.argv(),
+        [
+            OsString::from(HOMEBREW_EXECUTABLE),
+            OsString::from("trust"),
+            OsString::from("--formula"),
+            OsString::from("velnor/native-install/example-preview"),
+        ]
+    );
+    for formula in [
+        "velnor/other/example",
+        "velnor/native-install/../formula",
+        "velnor/native-install/Example",
+        "velnor/native-install/1formula",
+    ] {
+        assert!(
+            homebrew_command(
+                HomebrewCommand::TrustFormula {
+                    formula: formula.to_owned()
+                },
+                home,
+                temp
+            )
+            .is_err()
+        );
+    }
+    let long_formula = format!("velnor/native-install/{}", "a".repeat(65));
+    assert!(
+        homebrew_command(
+            HomebrewCommand::TrustFormula {
+                formula: long_formula
+            },
+            home,
+            temp
+        )
+        .is_err()
+    );
+    let accepted = homebrew_command(
+        HomebrewCommand::TrustFormula {
+            formula: "velnor/native-install/jackin--preview-".to_owned(),
+        },
+        home,
+        temp,
+    )
+    .expect("formula syntax matches contract policy");
+    assert!(
+        accepted
+            .argv()
+            .last()
+            .is_some_and(|arg| arg == "velnor/native-install/jackin--preview-")
+    );
 }
 
 #[test]

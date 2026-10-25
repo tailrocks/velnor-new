@@ -9,7 +9,7 @@ use super::support::{
 };
 use super::{
     HOMEBREW_CELLAR, HOMEBREW_PREFIX, HOMEBREW_VERSION, HomebrewInstallEvidence,
-    HomebrewInstallRequest, HomebrewInstalledKegCustody, KegState,
+    HomebrewInstallRequest, HomebrewInstalledKegCustody, KegState, tap::TapFormula,
 };
 use crate::{
     OrchestratorError, filesystem_owner::held_file::HeldFile, homebrew::command::HomebrewCommand,
@@ -34,8 +34,8 @@ struct CandidateInstall {
     formula: String,
     home: PathBuf,
     temp: PathBuf,
-    formula_path: PathBuf,
     candidate_formula: HeldFile,
+    tap_formula: TapFormula,
     brew_version: String,
     prefix: String,
     cellar: String,
@@ -64,7 +64,6 @@ fn prepare_candidate_install(
     if !formula_path.starts_with(&staging) {
         return Err(invalid("formula_outside_staging"));
     }
-
     let brew_version = run_brew_text(HomebrewCommand::Version, &home, &temp, request.deadline)?;
     if brew_version.lines().next() != Some(HOMEBREW_VERSION) {
         return Err(invalid("unqualified_homebrew_version"));
@@ -86,12 +85,18 @@ fn prepare_candidate_install(
     if path_exists(&rack)? || path_exists(&opt)? {
         return Err(invalid("formula_already_installed"));
     }
+    let tap_formula = TapFormula::create_fresh(
+        &formula_name,
+        request.formula_bytes,
+        request.formula_sha256,
+        request.deadline,
+    )?;
     Ok(CandidateInstall {
         formula: formula_name,
         home,
         temp,
-        formula_path,
         candidate_formula,
+        tap_formula,
         brew_version,
         prefix,
         cellar,
@@ -105,8 +110,17 @@ fn install_and_test_fresh_keg(
     let rack = Path::new(HOMEBREW_CELLAR).join(&prepared.formula);
     let install_started = epoch_seconds()?;
     run_brew(
+        HomebrewCommand::TrustFormula {
+            formula: super::tap::formula_reference(&prepared.formula)?,
+        },
+        &prepared.home,
+        &prepared.temp,
+        request.deadline,
+    )?;
+    prepared.tap_formula.verify(request.deadline)?;
+    run_brew(
         HomebrewCommand::InstallCandidate {
-            recipe: prepared.formula_path.clone(),
+            recipe: prepared.tap_formula.path.clone(),
         },
         &prepared.home,
         &prepared.temp,
@@ -116,7 +130,7 @@ fn install_and_test_fresh_keg(
 
     let keg = rack.join(request.literals.version());
     verify_trusted_path(&keg, true)?;
-    let before = inspect_keg(request, &keg, &prepared.formula_path, install_started)?;
+    let before = inspect_keg(request, &keg, &prepared.tap_formula.path, install_started)?;
     let recipe = keg.join(".brew").join(format!("{}.rb", prepared.formula));
     let archived_recipe = HeldFile::new(
         &recipe,
@@ -131,8 +145,9 @@ fn install_and_test_fresh_keg(
         request.deadline,
     )?;
     prepared.candidate_formula.verify(request.deadline)?;
+    prepared.tap_formula.verify(request.deadline)?;
     archived_recipe.verify(request.deadline)?;
-    let after = inspect_keg(request, &keg, &prepared.formula_path, install_started)?;
+    let after = inspect_keg(request, &keg, &prepared.tap_formula.path, install_started)?;
     if before != after {
         return Err(invalid("installed_keg_changed_during_test"));
     }
@@ -146,6 +161,8 @@ fn finish_fresh_install(
     keg: PathBuf,
     state: KegState,
 ) -> Result<(HomebrewInstallEvidence, HomebrewInstalledKegCustody), OrchestratorError> {
+    prepared.tap_formula.verify(request.deadline)?;
+    prepared.candidate_formula.verify(request.deadline)?;
     let mut evidence = evidence_from_state(
         &prepared.formula,
         request,

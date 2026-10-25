@@ -25,6 +25,8 @@ mod inventory;
 mod request;
 #[path = "homebrew_install_support.rs"]
 mod support;
+#[path = "homebrew_install_tap.rs"]
+mod tap;
 pub(crate) use coordinator::upgrade_homebrew_candidate;
 pub(crate) use fresh::{install_homebrew_candidate, install_homebrew_candidate_with_custody};
 pub(crate) use support::elf_facts_from_bytes;
@@ -36,6 +38,11 @@ pub(crate) const HOMEBREW_VERSION: &str = "Homebrew 7.0.10-84-g7a056ff";
 /// Fixed Homebrew prefix for the initial hosted ARM Mac profile.
 pub(crate) const HOMEBREW_PREFIX: &str = "/opt/homebrew";
 const HOMEBREW_CELLAR: &str = "/opt/homebrew/Cellar";
+/// Stable local tap identity used for candidate formula receipts.
+pub(super) const HOMEBREW_CANDIDATE_TAP: &str = "velnor/native-install";
+/// Physical formula directory consumed by the pinned Homebrew binary.
+pub(super) const HOMEBREW_CANDIDATE_FORMULAE: &str =
+    "/opt/homebrew/Library/Taps/velnor/homebrew-native-install/Formula";
 const CAPTURE_LIMIT: usize = 8 * 1024 * 1024;
 const FORMULA_LIMIT: usize = 1024 * 1024;
 const FILE_LIMIT: u64 = 512 * 1024 * 1024;
