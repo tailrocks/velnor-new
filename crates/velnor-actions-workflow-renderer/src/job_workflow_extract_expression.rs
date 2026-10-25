@@ -3,6 +3,18 @@
 use super::{STEP_REFERENCE_BINDINGS, invalid};
 use crate::RenderError;
 
+#[cfg(any(test, feature = "test-render-capture"))]
+pub(crate) fn test_expression_has_unbound_needs(value: &str) -> Result<bool, RenderError> {
+    Ok(rewrite_expressions(value, "rendered-child", "value")? != value)
+}
+
+#[cfg(any(test, feature = "test-render-capture"))]
+pub(crate) fn test_condition_has_unbound_needs(value: &str) -> Result<bool, RenderError> {
+    let mut rewritten = value.to_owned();
+    rewrite_condition("rendered-child", "if", &mut rewritten)?;
+    Ok(rewritten != value)
+}
+
 pub(super) fn rewrite_condition(
     job_id: &str,
     field: &str,

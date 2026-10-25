@@ -10,6 +10,10 @@ use crate::{
     workflow_routing::{WorkflowRoutingPolicy, route_workflow_yaml_for_jobs},
 };
 
+#[cfg(feature = "test-render-capture")]
+#[path = "render_emit_capture.rs"]
+mod capture;
+
 pub(crate) struct EmitSettings<'a> {
     pub(crate) matrix: Option<&'a (MatrixSource, u32)>,
     pub(crate) caps: &'a BTreeMap<String, u32>,
@@ -37,6 +41,9 @@ pub(crate) fn emit_shared(
     settings: &EmitSettings<'_>,
     routing: &WorkflowRoutingPolicy,
 ) -> Result<RenderedWorkflow, RenderError> {
+    #[cfg(feature = "test-render-capture")]
+    capture::begin_source_job_workflow_attempt();
+
     let mbx_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(jobs);
     let mut document = document::workflow_to_yaml(ir, shared, ctx, &mbx_jobs)?;
     let cache_outputs = crate::cache_plan_outputs::consumed(jobs)?;
@@ -50,6 +57,10 @@ pub(crate) fn emit_shared(
     matrix::suites::attach_suite_matrices(&mut document, &settings.suite_matrices.0)?;
     matrix::bun::attach_bun_matrices(&mut document, &settings.suite_matrices.2)?;
     document = route_workflow_yaml_for_jobs(WORKFLOW_PATH, document, routing, jobs)?;
+    #[cfg(feature = "test-render-capture")]
+    // Inspect the final configured lane labels without changing the render result.
+    capture::observe_source_job_workflows(ir, jobs, ctx, &document, &mbx_jobs);
+
     let text = if settings.allow_step_aliases {
         fallback::render_checked_workflow(WORKFLOW_PATH, &document, &ctx.generator_version)?
     } else {

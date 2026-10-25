@@ -19,6 +19,9 @@ use crate::{
 
 #[path = "job_workflow_tests/call_schema.rs"]
 mod call_schema;
+#[cfg(feature = "test-render-capture")]
+#[path = "job_workflow_tests/capture_runner.rs"]
+mod capture_runner;
 #[path = "job_workflow_tests/fixture.rs"]
 mod fixture;
 

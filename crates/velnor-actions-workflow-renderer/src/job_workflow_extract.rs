@@ -4,14 +4,25 @@
 //! condition. The callee keeps the same inner job id and exact body, with only
 //! closed plan-input references substituted and parent-owned fields removed.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[path = "job_workflow_extract_expression.rs"]
 mod expression;
 use expression::{rewrite_condition, rewrite_expressions};
+pub(crate) use expression::{test_condition_has_unbound_needs, test_expression_has_unbound_needs};
 use velnor_actions_contract::{CacheMode, HostContainerProfile, Job, Step, StepKind};
 
 use crate::RenderError;
+
+#[cfg(feature = "test-render-capture")]
+#[path = "job_workflow_extract_capture.rs"]
+mod capture;
+#[cfg(feature = "test-render-capture")]
+pub(crate) use capture::{
+    CaptureRunnerMetadata, capture_runner_metadata, prepare_job_for_capture,
+    rendered_child_has_unbound_needs, validate_capture_source_ids, validate_finalized_runner,
+    validate_rendered_child_runner,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct CallerInput {
@@ -60,18 +71,6 @@ const STEP_REFERENCE_BINDINGS: [(&str, &str); 4] = [
     ),
 ];
 
-#[cfg(test)]
-pub(crate) fn test_expression_has_unbound_needs(value: &str) -> Result<bool, RenderError> {
-    Ok(rewrite_expressions(value, "rendered-child", "value")? != value)
-}
-
-#[cfg(test)]
-pub(crate) fn test_condition_has_unbound_needs(value: &str) -> Result<bool, RenderError> {
-    let mut rewritten = value.to_owned();
-    rewrite_condition("rendered-child", "if", &mut rewritten)?;
-    Ok(rewritten != value)
-}
-
 #[derive(Clone, Debug)]
 pub(crate) struct PreparedJob {
     pub(crate) source_id: String,
@@ -93,8 +92,19 @@ pub(crate) struct JobWorkflowRelocation {
 /// The condition is intentionally absent from the child: GitHub evaluates the
 /// original admission predicate on the reusable-workflow call in the parent.
 pub(crate) fn prepare_job(source_id: &str, source: &Job) -> Result<PreparedJob, RenderError> {
-    if source_id != PROTOTYPE_JOB_ID {
+    prepare_job_inner(source_id, source, None)
+}
+
+pub(super) fn prepare_job_inner(
+    source_id: &str,
+    source: &Job,
+    allowlisted_ids: Option<&BTreeSet<String>>,
+) -> Result<PreparedJob, RenderError> {
+    if allowlisted_ids.is_none() && source_id != PROTOTYPE_JOB_ID {
         return Err(invalid(source_id, "outside_single_job_prototype"));
+    }
+    if allowlisted_ids.is_some_and(|ids| !ids.contains(source_id)) {
+        return Err(invalid(source_id, "source_id_not_in_typed_rust_allowlist"));
     }
     if source.needs.len() != 1 || source.needs.first().is_none_or(|need| need != "plan") {
         return Err(invalid(source_id, "source_dependencies_not_exactly_plan"));
@@ -122,6 +132,15 @@ pub(crate) fn prepare_job(source_id: &str, source: &Job) -> Result<PreparedJob, 
 impl PreparedJob {
     /// Re-derive the child from its trusted source snapshot before relocation.
     pub(crate) fn validate_source(&self) -> Result<(), RenderError> {
+        #[cfg(feature = "test-render-capture")]
+        let expected = if self.source_id == PROTOTYPE_JOB_ID {
+            prepare_job(&self.source_id, &self.source_job)?
+        } else if let Some(ids) = crate::render::test_render_capture::source_job_workflow_ids() {
+            prepare_job_for_capture(&self.source_id, &self.source_job, &ids)?
+        } else {
+            prepare_job(&self.source_id, &self.source_job)?
+        };
+        #[cfg(not(feature = "test-render-capture"))]
         let expected = prepare_job(&self.source_id, &self.source_job)?;
         if expected.callee_path != self.callee_path
             || !jobs_equal(&expected.child_job, &self.child_job)
