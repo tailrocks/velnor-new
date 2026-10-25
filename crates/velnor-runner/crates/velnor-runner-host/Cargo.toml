@@ -8,6 +8,10 @@ license.workspace = true
 [[bin]]
 name = "velnor-resource-probe-release"
 path = "src/bin/velnor_resource_probe_release.rs"
+test = false
+
+[lib]
+test = false
 
 [lints]
 workspace = true

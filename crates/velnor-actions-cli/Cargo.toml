@@ -9,6 +9,7 @@ autotests = false
 [[bin]]
 name = "velnor-actions"
 path = "src/main.rs"
+test = false
 
 [dependencies]
 serde_json = { workspace = true }

@@ -1,5 +1,5 @@
 use std::io::Read;
-#[cfg(any(target_os = "macos", test))]
+#[cfg(target_os = "macos")]
 use std::sync::Mutex;
 
 use zeroize::Zeroizing;
@@ -8,7 +8,7 @@ use crate::error::HostError;
 
 const MAX_SECRET_LEN: usize = 4096;
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(target_os = "macos")]
 static KEYCHAIN_INTERACTION: Mutex<()> = Mutex::new(());
 
 pub fn read_secret<R: Read>(reader: &mut R) -> Result<Zeroizing<Vec<u8>>, HostError> {
@@ -81,7 +81,7 @@ where
     )
 }
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(target_os = "macos")]
 fn with_keychain_copy<T, G, A, D, C>(
     interaction_allowed: A,
     disable_interaction: D,

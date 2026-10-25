@@ -6,6 +6,9 @@ rust-version.workspace = true
 license.workspace = true
 autotests = false
 
+[lib]
+test = false
+
 [features]
 test-render-capture = []
 

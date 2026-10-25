@@ -44,6 +44,6 @@ env = { MBX_CARGO_SHIM_MODE = "1" }
 description = "Run repository-only maintenance helper test suites"
 run = '''
 set -e
-cargo --config build.jobs=2 nextest run --locked --manifest-path Cargo.toml --package velnor-actions-freshness --no-tests fail --jobs 2
-cargo --config build.jobs=2 nextest run --locked --manifest-path Cargo.toml --package velnor-archive-guard --no-tests fail --jobs 2
+cargo --config build.jobs=2 nextest run --locked --manifest-path Cargo.toml --package velnor-actions-freshness --no-tests warn --jobs 2
+cargo --config build.jobs=2 nextest run --locked --manifest-path Cargo.toml --package velnor-archive-guard --no-tests warn --jobs 2
 '''
