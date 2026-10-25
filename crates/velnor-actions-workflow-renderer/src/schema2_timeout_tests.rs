@@ -93,6 +93,9 @@ fn assert_job_budget(workflow: &str, id: &str, fields: &[&str]) {
     let compiler = matches!(
         (workflow, id),
         (
+            ".github/workflows/product-release-images.yml",
+            "build-images"
+        ) | (
             ".github/workflows/product-release-binary.yml",
             "build-binary"
         ) | (
