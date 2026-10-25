@@ -4,7 +4,10 @@ use super::inventory_values::{mapping_get, scalar_text, to_routing_yaml, untagge
 use crate::{RenderError, RenderedFile};
 use saphyr::Yaml;
 
-use super::{WorkflowRoutingPolicy, calls, container, labels, matrix, parse::parse_final_workflow};
+use super::{
+    WorkflowRoutingOverrides, WorkflowRoutingPolicy, calls, container, labels, matrix,
+    parse::parse_final_workflow,
+};
 use velnor_actions_contract::{ExecutionMode, RunsOn};
 
 #[derive(Debug)]
@@ -26,11 +29,14 @@ pub(super) struct ReusableCall {
 pub(super) fn validate_final_workflow_inventory(
     files: &[RenderedFile],
     policy: &WorkflowRoutingPolicy,
+    overrides: &WorkflowRoutingOverrides,
     typed_jobs: Option<&BTreeMap<String, velnor_actions_contract::Job>>,
     native_context: Option<super::native_preview::Context>,
 ) -> Result<(), RenderError> {
     super::paired_sdk::validate_snapshot(files, policy)?;
     let mut workflows = BTreeMap::new();
+    let mut applied_overrides = BTreeSet::new();
+    let hosted_only = WorkflowRoutingPolicy::hosted_only();
     let mut native_preview_found = false;
     for file in files.iter().filter(|file| is_workflow_path(&file.path)) {
         let document = parse_final_workflow(file)?;
@@ -45,10 +51,26 @@ pub(super) fn validate_final_workflow_inventory(
         let typed_jobs = (file.path == ".github/workflows/ci.yml")
             .then_some(typed_jobs)
             .flatten();
+        let file_policy = if overrides.is_hosted_only(&file.path) {
+            if typed_jobs.is_some()
+                || file_native_context.is_some()
+                || (policy.paired_sdk.is_some()
+                    && file.path == crate::schema2::QUALIFICATION_WORKFLOW)
+            {
+                return Err(invalid(format!(
+                    "workflow_routing_override_source_bound_workflow:{}",
+                    file.path
+                )));
+            }
+            applied_overrides.insert(file.path.clone());
+            &hosted_only
+        } else {
+            policy
+        };
         let entry = inspect_workflow(
             &file.path,
             &document,
-            policy,
+            file_policy,
             typed_jobs,
             file_native_context,
         )?;
@@ -58,6 +80,14 @@ pub(super) fn validate_final_workflow_inventory(
     }
     if native_context.is_some() && !native_preview_found {
         return Err(invalid("native_preview_workflow_missing".to_owned()));
+    }
+    if let Some(path) = overrides
+        .hosted_only_paths()
+        .find(|path| !applied_overrides.contains(*path))
+    {
+        return Err(invalid(format!(
+            "workflow_routing_override_workflow_missing:{path}"
+        )));
     }
     super::native_tasks::validate_completed_inventory(&workflows, policy)
 }

@@ -11,7 +11,9 @@ use crate::RenderError;
 use crate::render::RenderedFile;
 use crate::setup::MiseSetup;
 use crate::workflow_routing::paired_sdk;
-use crate::workflow_routing::{WorkflowRoutingPolicy, route_workflow_yaml};
+use crate::workflow_routing::{
+    WorkflowRoutingOverrides, WorkflowRoutingPolicy, route_workflow_yaml,
+};
 use crate::yaml::Yaml;
 
 #[cfg(test)]
@@ -192,9 +194,34 @@ pub fn render_schema2_workflows(
 pub fn render_schema2_workflows_with_verified_routing(
     request: &Schema2WorkflowRequest,
 ) -> Result<(Vec<RenderedFile>, WorkflowRoutingPolicy), RenderError> {
+    let (files, routing, _) =
+        render_schema2_workflows_with_verified_routing_and_overrides(request)?;
+    Ok((files, routing))
+}
+
+/// Render every requested workflow with its effective routing policy and explicit placement classes.
+///
+/// Product-release documents remain hosted-only in every requested execution mode. The returned
+/// classifications let a later whole-tree inventory apply that placement while retaining all
+/// cross-file call and source validation.
+///
+/// # Errors
+///
+/// Illegal selectors, missing qualification inputs, or workflow rendering and routing errors fail.
+pub fn render_schema2_workflows_with_verified_routing_and_overrides(
+    request: &Schema2WorkflowRequest,
+) -> Result<
+    (
+        Vec<RenderedFile>,
+        WorkflowRoutingPolicy,
+        WorkflowRoutingOverrides,
+    ),
+    RenderError,
+> {
     RunnerSpec::hosted(&request.hosted_label)?;
     let mut files = Vec::new();
     let mut final_routing = request.routing.clone();
+    let mut routing_overrides = WorkflowRoutingOverrides::default();
     if request.workflows.contains(&RoutingWorkflow::Qualification) {
         let workflow = qualification(request)?;
         let (workflow, source) = paired_sdk_qualification::append(workflow, request)?;
@@ -219,6 +246,7 @@ pub fn render_schema2_workflows_with_verified_routing(
     }
     if let Some(generated) = product_release::render(request)? {
         let product_routing = WorkflowRoutingPolicy::hosted_only();
+        routing_overrides.mark_hosted_only(PRODUCT_RELEASE_WORKFLOW);
         files.push(file(
             PRODUCT_RELEASE_WORKFLOW,
             &request.version,
@@ -229,6 +257,7 @@ pub fn render_schema2_workflows_with_verified_routing(
             )?,
         )?);
         for (path, workflow) in generated.family_workflows {
+            routing_overrides.mark_hosted_only(path.clone());
             let workflow = route_workflow_yaml(&path, workflow, &product_routing)?;
             files.push(file(&path, &request.version, &workflow)?);
         }
@@ -248,7 +277,7 @@ pub fn render_schema2_workflows_with_verified_routing(
             &route_workflow(request, MONITORING_WORKFLOW, monitoring(request)?)?,
         )?);
     }
-    Ok((files, final_routing))
+    Ok((files, final_routing, routing_overrides))
 }
 
 fn route_workflow(

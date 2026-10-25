@@ -8,7 +8,8 @@ use std::path::Path;
 use velnor_actions_contract::config::LATEST_RUNNER_LABEL;
 use velnor_actions_contract::{ExecutionConfig, ExecutionMode, RoutingWorkflow, VelnorConfig};
 use velnor_actions_workflow_renderer::{
-    MbxQualificationPins, RenderedFile, Schema2WorkflowRequest, WorkflowRoutingPolicy,
+    MbxQualificationPins, RenderedFile, Schema2WorkflowRequest, WorkflowRoutingOverrides,
+    WorkflowRoutingPolicy,
 };
 
 use crate::OrchestratorError;
@@ -58,38 +59,52 @@ pub(crate) fn extra_files(
     catalog: &velnor_actions_mise::ToolCatalog,
     version: &str,
     routing: &WorkflowRoutingPolicy,
-) -> Result<(Vec<RenderedFile>, WorkflowRoutingPolicy), OrchestratorError> {
+) -> Result<
+    (
+        Vec<RenderedFile>,
+        WorkflowRoutingPolicy,
+        WorkflowRoutingOverrides,
+    ),
+    OrchestratorError,
+> {
     if config.schema != VelnorConfig::SCHEMA_V2 {
-        return Ok((Vec::new(), routing.clone()));
+        return Ok((
+            Vec::new(),
+            routing.clone(),
+            WorkflowRoutingOverrides::default(),
+        ));
     }
     let Some(execution) = &config.execution else {
-        return Ok((Vec::new(), routing.clone()));
+        return Ok((
+            Vec::new(),
+            routing.clone(),
+            WorkflowRoutingOverrides::default(),
+        ));
     };
     if execution.workflows.is_empty() {
-        return Ok((Vec::new(), routing.clone()));
+        return Ok((
+            Vec::new(),
+            routing.clone(),
+            WorkflowRoutingOverrides::default(),
+        ));
     }
     let request = workflow_request(config, execution, catalog, version, routing)?;
-    let (mut files, verified_routing) =
-        velnor_actions_workflow_renderer::schema2::render_schema2_workflows_with_verified_routing(
-            &request,
-        )
-        .map_err(|err| OrchestratorError::Render {
-            problem: err.to_string(),
-        })?;
+    let (mut files, verified_routing, mut routing_overrides) = velnor_actions_workflow_renderer::schema2::render_schema2_workflows_with_verified_routing_and_overrides(&request)
+        .map_err(|err| OrchestratorError::Render { problem: err.to_string() })?;
     if execution
         .workflows
         .contains(&RoutingWorkflow::GeneratorRelease)
     {
         let pins = crate::product_release_pins::homebrew_adoption_pins()?;
-        files.push(
+        let callee =
             velnor_actions_workflow_renderer::render_homebrew_adoption_callee(version, &pins)
                 .map_err(|err| OrchestratorError::Render {
                     problem: err.to_string(),
-                })?
-                .file,
-        );
+                })?;
+        routing_overrides.mark_hosted_only(callee.file.path.clone());
+        files.push(callee.file);
     }
-    Ok((files, verified_routing))
+    Ok((files, verified_routing, routing_overrides))
 }
 
 /// Select the policy for every separate generated workflow.
@@ -258,6 +273,9 @@ pub(crate) fn job_image_candidate_file(
     })
 }
 
+#[cfg(test)]
+#[path = "routing_overrides_tests.rs"]
+mod overrides_tests;
 #[cfg(test)]
 #[path = "routing_tests.rs"]
 mod tests;

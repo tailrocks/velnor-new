@@ -11,8 +11,10 @@ use velnor_actions_workflow_renderer::render::{RenderedFile, RenderedTree, Rende
 use velnor_actions_workflow_renderer::steps::rehead_lint_config_marker;
 use velnor_actions_workflow_renderer::tree::render_tree_with_claude_mode;
 use velnor_actions_workflow_renderer::{
-    validate_generated_workflow_calls_with_ir,
+    WorkflowRoutingOverrides, validate_generated_workflow_calls_with_ir,
+    validate_generated_workflow_calls_with_ir_and_overrides,
     validate_generated_workflow_calls_with_native_preview_ir,
+    validate_generated_workflow_calls_with_native_preview_ir_and_overrides,
 };
 
 use crate::OrchestratorError;
@@ -68,7 +70,7 @@ pub(super) fn render_all(
     )?);
     extra.extend(crate::tofu_apply_emit::tofu_apply_files(prep, &routing)?);
     extra.extend(review_completion_workflow_emit::files(prep, &routing)?);
-    let (schema2_files, final_routing) =
+    let (schema2_files, final_routing, routing_overrides) =
         crate::routing::extra_files(&prep.config, &prep.emission_catalog(), version, &routing)?;
     extra.extend(schema2_files);
     extra.extend(crate::rust_suites_emit::suite_workflow_files(
@@ -95,17 +97,19 @@ pub(super) fn render_all(
         version,
         prep.config.agents.claude_md,
     )?;
-    if prep
+    let has_native_preview = prep
         .config
         .stacks
         .rust
         .as_ref()
-        .is_some_and(|rust| rust.binary_release.preview.enabled)
-    {
-        validate_generated_workflow_calls_with_native_preview_ir(&tree.files, &final_routing, &ir)?;
-    } else {
-        validate_final_routing(&tree.files, &final_routing, &ir)?;
-    }
+        .is_some_and(|rust| rust.binary_release.preview.enabled);
+    validate_final_routing_with_overrides(
+        &tree.files,
+        &final_routing,
+        &ir,
+        &routing_overrides,
+        has_native_preview,
+    )?;
     Ok(tree)
 }
 
@@ -171,5 +175,32 @@ fn validate_final_routing(
     workflow: &velnor_actions_contract::WorkflowIr,
 ) -> Result<(), OrchestratorError> {
     validate_generated_workflow_calls_with_ir(files, policy, workflow)?;
+    Ok(())
+}
+
+fn validate_final_routing_with_overrides(
+    files: &[RenderedFile],
+    policy: &velnor_actions_workflow_renderer::WorkflowRoutingPolicy,
+    workflow: &velnor_actions_contract::WorkflowIr,
+    overrides: &WorkflowRoutingOverrides,
+    native_preview: bool,
+) -> Result<(), OrchestratorError> {
+    if overrides.hosted_only_paths().next().is_none() {
+        if native_preview {
+            validate_generated_workflow_calls_with_native_preview_ir(files, policy, workflow)?;
+        } else {
+            validate_final_routing(files, policy, workflow)?;
+        }
+        return Ok(());
+    }
+    if native_preview {
+        validate_generated_workflow_calls_with_native_preview_ir_and_overrides(
+            files, policy, workflow, overrides,
+        )?;
+    } else {
+        validate_generated_workflow_calls_with_ir_and_overrides(
+            files, policy, workflow, overrides,
+        )?;
+    }
     Ok(())
 }

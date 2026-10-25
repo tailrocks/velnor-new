@@ -3,7 +3,10 @@ use std::error::Error;
 
 use velnor_actions_contract::{ExecutionMode, RoutingWorkflow};
 
-use crate::schema2::render_schema2_workflows;
+use crate::schema2::{
+    PRODUCT_RELEASE_WORKFLOW, render_schema2_workflows,
+    render_schema2_workflows_with_verified_routing_and_overrides,
+};
 
 use super::request;
 
@@ -150,6 +153,44 @@ fn composed_product_documents_stay_hosted_in_every_routing_mode() -> Result<(), 
         RoutingWorkflow::GeneratorRelease,
     ];
     assert_mode_invariance(&all_families)
+}
+
+#[test]
+fn product_producer_marks_only_emitted_workflow_documents_hosted() -> Result<(), Box<dyn Error>> {
+    let families = [
+        RoutingWorkflow::ImageRelease,
+        RoutingWorkflow::MacosBinaryRelease,
+        RoutingWorkflow::GeneratorRelease,
+    ];
+    let request = request(&families, ExecutionMode::ScaleSet)?;
+    let (files, _, overrides) =
+        render_schema2_workflows_with_verified_routing_and_overrides(&request)?;
+    let actual = overrides
+        .hosted_only_paths()
+        .map(str::to_owned)
+        .collect::<std::collections::BTreeSet<_>>();
+    let expected = [
+        PRODUCT_RELEASE_WORKFLOW,
+        ".github/workflows/product-release-images.yml",
+        ".github/workflows/product-release-binary.yml",
+        ".github/workflows/product-release-generator.yml",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect::<std::collections::BTreeSet<_>>();
+
+    assert_eq!(actual, expected);
+    assert!(
+        files.iter().any(|file| {
+            file.path == crate::schema2::schema2_job_image_candidate::WORKFLOW_PATH
+        })
+    );
+    assert!(
+        actual
+            .iter()
+            .all(|path| { files.iter().any(|file| file.path == *path) })
+    );
+    Ok(())
 }
 
 #[test]

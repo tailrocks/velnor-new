@@ -31,6 +31,8 @@ mod matrix;
 mod native_preview;
 #[path = "workflow_routing_native_tasks.rs"]
 mod native_tasks;
+#[path = "workflow_routing_overrides.rs"]
+mod overrides;
 #[path = "workflow_routing_paired_sdk.rs"]
 pub(crate) mod paired_sdk;
 #[path = "workflow_routing_parse.rs"]
@@ -47,7 +49,19 @@ pub(crate) use entrypoints::{
     route_native_preview_workflow_yaml, route_workflow_yaml, route_workflow_yaml_for_jobs,
 };
 use native_tasks::NativeHostedTask;
+pub use overrides::{
+    WorkflowRoutingOverrides, validate_generated_workflow_calls,
+    validate_generated_workflow_calls_with_ir,
+    validate_generated_workflow_calls_with_ir_and_overrides,
+    validate_generated_workflow_calls_with_native_preview_ir,
+    validate_generated_workflow_calls_with_native_preview_ir_and_overrides,
+    validate_generated_workflow_calls_with_overrides,
+};
 pub(crate) use typed_jobs::route_jobs;
+
+#[cfg(test)]
+#[path = "workflow_routing_inventory_overrides_tests.rs"]
+mod inventory_overrides_tests;
 
 pub(crate) fn parse_authority_document(
     file: &RenderedFile,
@@ -261,72 +275,6 @@ fn yaml_scalar(value: &Yaml) -> Option<&str> {
         Yaml::Str(value) | Yaml::Quoted(value) | Yaml::Annotated { value, .. } => Some(value),
         _ => None,
     }
-}
-
-/// Examine every job runner and reusable-workflow call in the final workflow files.
-///
-/// # Errors
-///
-/// The function gives an error for incorrect workflow data, unsupported Scale Set placement,
-/// or a reusable-workflow call whose target is missing, does not accept calls, or creates a
-/// call cycle.
-pub fn validate_generated_workflow_calls(
-    files: &[RenderedFile],
-    policy: &WorkflowRoutingPolicy,
-) -> Result<(), RenderError> {
-    if !policy.native_hosted_tasks.is_empty() {
-        return Err(invalid(
-            "native_hosted_tasks_require_typed_workflow".to_owned(),
-        ));
-    }
-    inventory::validate_final_workflow_inventory(files, policy, None, None)
-}
-
-/// Examine final files against the typed workflow used to render them.
-///
-/// Typed native checks and declared macOS task jobs need this workflow intermediate representation
-/// to prove their runner contract. The public file-only audit rejects those jobs because it has no
-/// typed source proof.
-///
-/// # Errors
-///
-/// Returns an error when the workflow intermediate representation or generated workflows fail
-/// validation.
-pub fn validate_generated_workflow_calls_with_ir(
-    files: &[RenderedFile],
-    policy: &WorkflowRoutingPolicy,
-    workflow: &velnor_actions_contract::WorkflowIr,
-) -> Result<(), RenderError> {
-    workflow
-        .validate()
-        .map_err(|error| invalid(format!("typed_workflow_invalid:{error}")))?;
-    policy.validate_native_task_source(workflow)?;
-    inventory::validate_final_workflow_inventory(files, policy, Some(&workflow.jobs), None)
-}
-
-/// Validate generated workflows when this tree includes the authenticated native preview graph.
-///
-/// This keeps exact source-derived preview runner expressions behind a typed entry point; the
-/// general file and IR validators continue to reject unresolved runners.
-///
-/// # Errors
-///
-/// Returns an error if the typed workflow or the generated workflow files fail validation.
-pub fn validate_generated_workflow_calls_with_native_preview_ir(
-    files: &[RenderedFile],
-    policy: &WorkflowRoutingPolicy,
-    workflow: &velnor_actions_contract::WorkflowIr,
-) -> Result<(), RenderError> {
-    workflow
-        .validate()
-        .map_err(|error| invalid(format!("typed_workflow_invalid:{error}")))?;
-    policy.validate_native_task_source(workflow)?;
-    inventory::validate_final_workflow_inventory(
-        files,
-        policy,
-        Some(&workflow.jobs),
-        Some(native_preview::Context),
-    )
 }
 
 fn invalid(problem: String) -> RenderError {
