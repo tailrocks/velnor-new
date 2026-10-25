@@ -97,7 +97,7 @@ pub(super) fn image_release(request: &Schema2WorkflowRequest) -> Result<Yaml, Re
                 "build-images",
                 "Build runner images",
                 hosted.clone(),
-                JobTimeout::PRODUCT_COMPILER,
+                JobTimeout::PRODUCT_IMAGE_BUILD,
                 build_steps,
                 "Upload image assets",
                 &files,

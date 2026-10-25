@@ -47,7 +47,7 @@ jobs:
   build-images:
     name: Build runner images
     runs-on: ubuntu-26.04
-    timeout-minutes: 10
+    timeout-minutes: 30
     permissions:
       actions: write
       contents: read
@@ -104,10 +104,10 @@ jobs:
         run: mise --no-config --no-env --no-hooks exec rust@1.99.1 mr-boxington@1.27.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.149 -- mbx nextest run --locked --manifest-path crates/velnor-runner/Cargo.toml --package velnor-runner-host --lib --target x86_64-unknown-linux-gnu -E 'test(artifact_admission::archive) | test(resource_probe_release)'
       - name: Build locked native resource-probe producer
         shell: bash
-        run: mise --no-config --no-env --no-hooks exec rust@1.99.1 mr-boxington@1.27.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.149 -- mbx build --locked --manifest-path crates/velnor-runner/Cargo.toml --package velnor-runner-host --bin velnor-resource-probe-release --release --target x86_64-unknown-linux-gnu
+        run: mise --no-config --no-env --no-hooks exec rust@1.99.1 mr-boxington@1.27.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.149 -- mbx build --locked --manifest-path crates/velnor-runner/Cargo.toml --package velnor-runner-host --bin velnor-resource-probe-release --target x86_64-unknown-linux-gnu
       - name: Build and smoke-test resource-probe image
         shell: bash
-        run: "set -euo pipefail\nproducer_target=\"$(cd -- \"${CARGO_TARGET_DIR:-crates/velnor-runner/target}\" && pwd -P)\"\nexport VELNOR_RESOURCE_PROBE_RELEASE_BIN=\"$producer_target/x86_64-unknown-linux-gnu/release/velnor-resource-probe-release\"\nbash images/resource-probe/build-image.sh"
+        run: "set -euo pipefail\nproducer_target=\"$(cd -- \"${CARGO_TARGET_DIR:-crates/velnor-runner/target}\" && pwd -P)\"\nexport VELNOR_RESOURCE_PROBE_RELEASE_BIN=\"$producer_target/x86_64-unknown-linux-gnu/debug/velnor-resource-probe-release\"\nbash images/resource-probe/build-image.sh"
       - name: Verify image architectures
         run: "set -eu\nrunner=\"$(docker image inspect --format '{{.Architecture}}' velnor-runner:linux-amd64)\"\ndind=\"$(docker image inspect --format '{{.Architecture}}' velnor-dind:linux-amd64)\"\ntest \"$runner\" = amd64\ntest \"$dind\" = amd64"
       - name: Save image archives
