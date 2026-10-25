@@ -31,19 +31,17 @@ pub fn render_homebrew_adoption_seed(
     transition
         .validate()
         .map_err(|error| RenderError::InvalidWorkflow(error.to_string()))?;
-    let output_paths = [
-        ".github/workflows/ci.yml",
-        ".velnor/config.toml",
-        "mise.lock",
-        "mise.toml",
-    ];
-    if transition.template_version != 1
+    if transition.template_version != 2
         || transition.required_sdk_capability != "homebrew-adoption-seed-v1"
         || !transition
             .generated_output_paths
             .iter()
             .map(String::as_str)
-            .eq(output_paths)
+            .eq(
+                velnor_actions_contract::homebrew_adoption::HOMEBREW_ADOPTION_SEED_V2_OUTPUT_PATHS
+                    .iter()
+                    .copied(),
+            )
     {
         return Err(seed_error("unsupported_transition_template"));
     }
@@ -70,6 +68,11 @@ pub fn render_homebrew_adoption_seed(
         RenderedFile {
             path: ".velnor/config.toml".to_owned(),
             bytes: config,
+        },
+        RenderedFile {
+            path: ".velnor/release-manifest.json".to_owned(),
+            bytes: String::from_utf8(sdk.manifest_bytes.to_vec())
+                .map_err(|_| seed_error("sdk_manifest_utf8"))?,
         },
         RenderedFile {
             path: "mise.lock".to_owned(),
