@@ -79,7 +79,7 @@ pub(crate) fn git_value(
 pub(crate) fn pull_request_number_from_env(
     event: WorkflowEvent,
 ) -> Result<Option<u64>, crate::OrchestratorError> {
-    if event != WorkflowEvent::PullRequest {
+    if !matches!(event, WorkflowEvent::PullRequest | WorkflowEvent::Fork) {
         return Ok(None);
     }
     let event_path = std::env::var_os("GITHUB_EVENT_PATH")

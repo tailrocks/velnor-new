@@ -6,11 +6,12 @@ use std::fmt::{self, Write as _};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-pub(crate) const TOOL_ENV: [&str; 11] = [
+pub(crate) const TOOL_ENV: [&str; 13] = [
     "HOME",
     "MISE_DATA_DIR",
     "MISE_INSTALLS_DIR",
     "MISE_CACHE_DIR",
+    "MISE_STATE_DIR",
     "MISE_CARGO_HOME",
     "MISE_RUSTUP_HOME",
     "CARGO_HOME",
@@ -18,6 +19,7 @@ pub(crate) const TOOL_ENV: [&str; 11] = [
     "RUSTUP_TOOLCHAIN",
     "XDG_DATA_HOME",
     "XDG_CACHE_HOME",
+    "XDG_STATE_HOME",
 ];
 const RUST_PIN: &str = "1.99.1";
 

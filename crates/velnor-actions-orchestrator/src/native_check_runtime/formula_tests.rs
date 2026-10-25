@@ -1,4 +1,6 @@
-use super::{validate_candidate_upgrade, verify_stable_sentinel_transition};
+use super::{
+    validate_candidate_upgrade, verify_stable_sentinel, verify_stable_sentinel_transition,
+};
 use crate::{homebrew::test_support as tap_test_support, tap_prepare::FormulaCandidateInput};
 use velnor_actions_contract::{
     VerifiedPackageRelease,
@@ -134,6 +136,54 @@ fn disabled_stable_formula_can_activate_at_first_stable_release() {
         )
         .is_ok()
     );
+}
+
+#[test]
+fn pinned_seed_formula_bytes_are_distinct_from_the_canonical_stable_sentinel() {
+    let spec_bytes = include_bytes!("../../../../.velnor/qualification/homebrew/formula-spec.json");
+    let plan_bytes = include_bytes!("../../../../.velnor/qualification/homebrew/preview-plan.json");
+    let spec: velnor_actions_contract::homebrew_spec::HomebrewFormulaSpec =
+        serde_json::from_slice(spec_bytes).expect("Jackin formula spec");
+    let plan: velnor_actions_contract::PackageReleasePlan =
+        serde_json::from_slice(plan_bytes).expect("Jackin preview plan");
+    let legacy_preview = include_bytes!("testdata/jackin-preview-seed.rb");
+    let legacy_stable = include_bytes!("testdata/jackin-stable-seed.rb");
+
+    assert_eq!(
+        crate::release_policy_admission::git_blob_sha1(legacy_preview).expect("preview blob"),
+        "c2814fe70420b1a5514fb68051ccb7c6f5ee3a2a"
+    );
+    assert_eq!(
+        crate::release_policy_admission::git_blob_sha1(legacy_stable).expect("stable blob"),
+        "53e4bee74ff88f6230eb7b61188fa089d8030083"
+    );
+    let preview = validate_homebrew_projection(&spec, &plan).expect("Jackin preview projection");
+    assert!(
+        std::str::from_utf8(legacy_preview)
+            .expect("legacy preview formula is UTF-8")
+            .starts_with("# source-sha: 41bad147b5ba9db09be99b07248531ce1bd867be\n"),
+        "the pinned legacy formula retains its reviewed source header"
+    );
+    assert!(
+        velnor_actions_contract::homebrew_spec::parse_generated_formula(
+            &spec,
+            &preview,
+            legacy_preview,
+        )
+        .is_err(),
+        "legacy seed bytes are intentionally not the current canonical formula template"
+    );
+
+    let mut stable_plan = plan;
+    stable_plan.channel = PackageReleaseChannel::Stable;
+    let stable = validate_homebrew_projection(&spec, &stable_plan).expect("stable projection");
+    let sentinel = HomebrewFormulaReleaseLiterals::stable_sentinel(&spec, &stable)
+        .expect("canonical disabled stable formula");
+    let canonical_sentinel =
+        render_homebrew_formula(&spec, &sentinel).expect("rendered stable sentinel");
+    assert_ne!(legacy_stable.as_slice(), canonical_sentinel.as_slice());
+    assert!(verify_stable_sentinel(&spec, &stable, legacy_stable).is_err());
+    assert!(verify_stable_sentinel(&spec, &stable, &canonical_sentinel).is_ok());
 }
 
 fn preview_formula(

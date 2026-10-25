@@ -61,7 +61,7 @@ set -euo pipefail
 
 tool_state="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 private_root="$(cd -- "${HOME:?}" && pwd -P)/.cache/velnor/archive-guard"
-for variable in MISE_DATA_DIR MISE_CACHE_DIR MISE_CARGO_HOME CARGO_HOME RUSTUP_HOME; do
+for variable in MISE_DATA_DIR MISE_CACHE_DIR MISE_STATE_DIR MISE_CARGO_HOME CARGO_HOME RUSTUP_HOME; do
   value="${!variable:-}"
   [[ "$value" == "$private_root/"* ]] \
     || { printf '%s escaped the private build namespace\n' "$variable" >&2; exit 98; }
@@ -166,7 +166,8 @@ chmod 700 "$tool_bin/mise"
 
 run_builder() {
   local checkout="$1"
-  HOME="$case_home" PATH="$tool_bin:/usr/bin:/bin" \
+  HOME="$case_home" MISE_STATE_DIR="$case_root/ambient-mise-state" \
+    PATH="$tool_bin:/usr/bin:/bin" \
     bash "$checkout/scripts/build-owned-archive-guard.sh"
 }
 
@@ -219,4 +220,10 @@ while IFS='=' read -r variable value; do
   [[ "$value" == "$expected_private_root/"* ]] \
     || { printf 'Mise environment escaped private namespace: %s\n' "$variable" >&2; exit 1; }
 done <"$tool_bin/mise-environments"
+private_state="$expected_private_root/mise-state"
+state_count="$(grep -c '^MISE_STATE_DIR=' "$tool_bin/mise-environments")"
+data_count="$(grep -c '^MISE_DATA_DIR=' "$tool_bin/mise-environments")"
+[[ "$private_state" != "$case_root/ambient-mise-state" \
+  && "$state_count" -gt 0 && "$state_count" == "$data_count" ]] \
+  || { printf 'Mise state was not isolated from the caller environment\n' >&2; exit 1; }
 printf 'archive guard target and native bootstrap regression passed\n'

@@ -1,5 +1,4 @@
-use std::collections::BTreeMap;
-use std::path::Path;
+use std::{collections::BTreeMap, path::Path};
 
 use velnor_actions_contract::homebrew_spec::{
     HomebrewFormulaReleaseLiterals, parse_generated_formula, render_homebrew_formula,
@@ -35,7 +34,16 @@ pub(crate) fn verify_formula(
     )?;
     validate_formula_authority(&authority, identity)?;
     let bytes = read_authenticated_formula(root, identity, deadline)?;
-    verify_protected_formula_bytes(&authority, channel, &bytes, deadline)
+    let seed_base =
+        crate::homebrew::structural_cutover::verify_seed_output_base(root, &authority, deadline)?;
+    if let Some(witness) = seed_base {
+        crate::homebrew::structural_cutover::validate_structural_candidate(
+            root, &authority, &witness, deadline,
+        )?;
+        cutover::verify_seed_cutover_formula_bytes(&authority, channel, &bytes, &witness, deadline)
+    } else {
+        verify_protected_formula_bytes(&authority, channel, &bytes, deadline)
+    }
 }
 
 fn validate_formula_identity(
@@ -103,10 +111,10 @@ pub(crate) fn verify_protected_formula_bytes(
     release_plan.channel = channel;
     let projection = validate_homebrew_projection(authority.spec(), &release_plan)
         .map_err(|_| internal("native_check_formula_projection"))?;
-    let protected_base = read_protected_formula(authority, channel, deadline)?;
     let parsed = parse_generated_formula(authority.spec(), &projection, bytes)
         .map_err(|_| internal("native_check_formula_invalid"))?;
     if channel == PackageReleaseChannel::Stable && parsed.is_disabled_stable_sentinel() {
+        let protected_base = read_protected_formula(authority, channel, deadline)?;
         verify_stable_sentinel_transition(authority.spec(), &projection, bytes, &protected_base)?;
         return Ok((None, bytes.to_vec()));
     }
@@ -124,6 +132,7 @@ pub(crate) fn verify_protected_formula_bytes(
         bytes,
         deadline,
     )?;
+    let protected_base = read_protected_formula(authority, channel, deadline)?;
     validate_formula_upgrade_history(authority, channel, &protected_base, bytes, &release)?;
     Ok((Some(receipt_digest), bytes.to_vec()))
 }
@@ -195,7 +204,7 @@ fn verify_stable_sentinel_transition(
     verify_stable_sentinel(spec, projection, protected_base)
 }
 
-fn verify_stable_sentinel(
+pub(super) fn verify_stable_sentinel(
     spec: &velnor_actions_contract::homebrew_spec::HomebrewFormulaSpec,
     projection: &velnor_actions_contract::homebrew_spec::ValidatedHomebrewProjection,
     bytes: &[u8],
@@ -287,7 +296,7 @@ fn verify_formula_release(
     Ok((receipt_digest, verified))
 }
 
-fn formula_release_literals(
+pub(super) fn formula_release_literals(
     authority: &crate::homebrew::authority::VerifiedHomebrewAuthority,
     projection: &velnor_actions_contract::homebrew_spec::ValidatedHomebrewProjection,
     release: &crate::package_release_public::VerifiedPublicPackageRelease,
@@ -312,6 +321,11 @@ fn formula_release_literals(
     )
     .map_err(|_| internal("native_check_formula_literals"))
 }
+
+#[path = "formula_cutover.rs"]
+mod cutover;
+
+pub(crate) use cutover::render_current_preview_formula;
 
 #[cfg(test)]
 #[path = "formula_tests.rs"]

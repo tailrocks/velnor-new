@@ -105,7 +105,7 @@ pub use package_release_tools::{
 };
 pub use preflight::{RouteDriver, RouteSelection, select_route};
 pub use requests::{MetadataDiscovery, MetadataQualification, MiseInstall, PinnedToolExec};
-pub use requests_presence::ToolPresence;
+pub use requests_presence::{ToolPresence, ToolPresenceFailure, ToolPresenceObservation};
 pub use restore::{
     MissReason, RestoreCheck, RestoreEvidence, ReuseFallback, SaveInputs, ToolAvailability,
     fallback_for_error, save_decision, save_useful, verify_restored_task_result, writers_overlap,

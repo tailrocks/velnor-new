@@ -67,6 +67,10 @@ pub(crate) use merge_group::{
     MergeGroupFacts, MergeGroupSelection, verify_public_merge_group_context,
 };
 
+#[path = "package_release_publish_workflow_dispatch.rs"]
+mod workflow_dispatch;
+pub(crate) use workflow_dispatch::{QualificationRunSelection, verify_public_qualification_run};
+
 #[path = "package_release_run_identity.rs"]
 mod run_identity;
 

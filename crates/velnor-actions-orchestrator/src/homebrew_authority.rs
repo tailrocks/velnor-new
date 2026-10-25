@@ -161,6 +161,7 @@ pub(crate) fn probe_protected_homebrew_authority(
     }
 
     let tap_context = context::authenticate_tap_context(
+        root,
         expected_tap_repository,
         event,
         pull_request,
@@ -199,6 +200,7 @@ pub(crate) fn probe_protected_homebrew_authority(
     } = load_source_projection(&locator, expected_tap_repository, deadline)?;
 
     context::recheck_tap_context(
+        root,
         expected_tap_repository,
         event,
         pull_request,
@@ -311,19 +313,41 @@ fn safe_source_path(path: &str) -> bool {
 
 fn admit_pull_request_context(
     pull: &crate::package_release_publish::PublicPullRequestSnapshot,
+    event: WorkflowEvent,
     repository: &str,
     repository_id: u64,
     expected_head: &str,
+    checkout_head: &str,
+    runner: &context::pull_request_context::RunnerFacts,
 ) -> Result<(String, String), OrchestratorError> {
+    if !matches!(event, WorkflowEvent::PullRequest | WorkflowEvent::Fork) {
+        return Err(internal("homebrew_authority_pull_request_event"));
+    }
+    let fork = event == WorkflowEvent::Fork;
     if pull.state != "open"
         || pull.draft
         || pull.merged
         || pull.base_repository != repository
         || pull.base_repository_id != repository_id
         || pull.base_ref != "main"
-        || pull.head_repository != repository
-        || pull.head_repository_id != repository_id
-        || pull.head_sha != expected_head
+        || runner.payload_base_repository != repository
+        || runner.payload_base_repository_id != repository_id
+        || runner.payload_base_ref != "main"
+        || (fork
+            && (pull.head_repository == repository || pull.head_repository_id == repository_id))
+        || (!fork
+            && (pull.head_repository != repository || pull.head_repository_id != repository_id))
+        || pull.base_sha != runner.payload_base_sha
+        || pull.head_sha != runner.payload_head_sha
+        || pull.head_repository != runner.payload_head_repository
+        || pull.head_repository_id != runner.payload_head_repository_id
+        || pull.head_ref != runner.payload_head_ref
+        || runner.payload_repository_id != repository_id
+        || (runner.sha != pull.head_sha
+            && pull.merge_commit_sha.as_deref() != Some(runner.sha.as_str()))
+        || (expected_head != pull.head_sha && expected_head != checkout_head)
+        || (checkout_head != pull.head_sha
+            && pull.merge_commit_sha.as_deref() != Some(checkout_head))
     {
         return Err(internal("homebrew_authority_pull_request_context"));
     }

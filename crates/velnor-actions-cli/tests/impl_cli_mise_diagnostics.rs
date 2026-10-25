@@ -4,18 +4,19 @@ use std::ffi::{OsStr, OsString};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
-const TOOL_ENV_KEYS: [&str; 11] = crate::impl_cli_tmp::tool_context::TOOL_ENV;
+const TOOL_ENV_KEYS: [&str; 13] = crate::impl_cli_tmp::tool_context::TOOL_ENV;
 pub(super) const INHERITED_MISE_SELECTOR_KEYS: [&str; 4] = [
     "MISE_CONFIG_DIR",
     "MISE_CONFIG_FILE",
     "MISE_ENV",
     "MISE_TRUSTED_CONFIG_PATHS",
 ];
-const TOOL_PATH_KEYS: [&str; 12] = [
+const TOOL_PATH_KEYS: [&str; 14] = [
     "HOME",
     "MISE_DATA_DIR",
     "MISE_INSTALLS_DIR",
     "MISE_CACHE_DIR",
+    "MISE_STATE_DIR",
     "MISE_CARGO_HOME",
     "MISE_CONFIG_DIR",
     "MISE_CONFIG_FILE",
@@ -24,7 +25,12 @@ const TOOL_PATH_KEYS: [&str; 12] = [
     "RUSTUP_HOME",
     "XDG_DATA_HOME",
     "XDG_CACHE_HOME",
+    "XDG_STATE_HOME",
 ];
+
+#[path = "impl_cli_mise_diagnostics_fs.rs"]
+mod fs_metadata;
+
 #[derive(Clone, Copy)]
 pub(crate) enum MiseDiagnosticContext {
     PathOnly,
@@ -66,7 +72,9 @@ pub(crate) fn mise_path_snapshot(cwd: &Path, context: MiseDiagnosticContext) -> 
         if TOOL_PATH_KEYS.contains(&key)
             && let Some(path) = value.as_deref()
         {
-            append_path_metadata(&mut report, key, Path::new(path));
+            let path = Path::new(path);
+            fs_metadata::append_path_metadata(&mut report, key, path);
+            fs_metadata::append_tool_home_metadata(&mut report, key, path);
         }
     }
     if matches!(context, MiseDiagnosticContext::Inherited) {
@@ -149,7 +157,7 @@ fn append_fixture_config_metadata(report: &mut String, cwd: &Path) {
         ".mise/config.toml",
         "mise/config.toml",
     ] {
-        append_path_metadata(report, "fixture-config", &cwd.join(relative));
+        fs_metadata::append_path_metadata(report, "fixture-config", &cwd.join(relative));
     }
 }
 
@@ -160,44 +168,7 @@ fn append_data_dir_metadata(report: &mut String, label: &str, data_dir: &Path) {
         data_dir.join("installs/rust"),
         data_dir.join("installs/rust/1.99.1"),
     ] {
-        append_path_metadata(report, label, &path);
-    }
-}
-
-fn append_path_metadata(report: &mut String, label: &str, path: &Path) {
-    match std::fs::symlink_metadata(path) {
-        Ok(metadata) => {
-            let kind = if metadata.file_type().is_symlink() {
-                "symlink"
-            } else if metadata.is_dir() {
-                "directory"
-            } else if metadata.is_file() {
-                "file"
-            } else {
-                "other"
-            };
-            let target = std::fs::read_link(path)
-                .map(|target| format!(" target={}", target.display()))
-                .unwrap_or_default();
-            push_line(
-                report,
-                format_args!(
-                    "{label}={} kind={kind} bytes={}{}",
-                    path.display(),
-                    metadata.len(),
-                    target
-                ),
-            );
-        }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            push_line(report, format_args!("{label}={} missing", path.display()));
-        }
-        Err(error) => {
-            push_line(
-                report,
-                format_args!("{label}={} metadata_error={error}", path.display()),
-            );
-        }
+        fs_metadata::append_path_metadata(report, label, &path);
     }
 }
 
@@ -206,10 +177,10 @@ fn append_mise_executable(report: &mut String, path: Option<&OsStr>) {
         push_line(report, format_args!("mise-executable=<PATH unset>"));
         return;
     };
-    for directory in std::env::split_paths(&path) {
+    for directory in std::env::split_paths(path) {
         let candidate = directory.join("mise");
         if std::fs::symlink_metadata(&candidate).is_ok() {
-            append_path_metadata(report, "mise-executable", &candidate);
+            fs_metadata::append_path_metadata(report, "mise-executable", &candidate);
             push_line(
                 report,
                 format_args!(
@@ -292,7 +263,7 @@ fn append_rustup_components(
         return;
     };
     let rustup = PathBuf::from(rustup);
-    append_path_metadata(report, "direct-rustup-executable", &rustup);
+    fs_metadata::append_path_metadata(report, "direct-rustup-executable", &rustup);
     let actual_rustup = match rustup.canonicalize() {
         Ok(path) => path,
         Err(error) => {
@@ -362,12 +333,6 @@ fn context_name(context: MiseDiagnosticContext) -> &'static str {
     }
 }
 
-fn effective_key_name(context: MiseDiagnosticContext, key: &str) -> String {
-    match context {
-        MiseDiagnosticContext::PathOnly
-        | MiseDiagnosticContext::PathAndToolHomes
-        | MiseDiagnosticContext::Inherited => {
-            format!("effective_{key}")
-        }
-    }
+fn effective_key_name(_context: MiseDiagnosticContext, key: &str) -> String {
+    format!("effective_{key}")
 }

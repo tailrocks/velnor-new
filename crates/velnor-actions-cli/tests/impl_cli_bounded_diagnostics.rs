@@ -13,7 +13,7 @@ const CAPTURE_LIMIT: usize = 8 * 1024;
 const DISPLAY_LIMIT: usize = 4096;
 const TRUNCATION_MARKER: &str = "…<truncated>";
 const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
-const TOOL_ENV_KEYS: [&str; 11] = super::tool_context::TOOL_ENV;
+const TOOL_ENV_KEYS: [&str; 13] = super::tool_context::TOOL_ENV;
 const VERIFY_CREDENTIAL_KEYS: [&str; 9] = [
     "MISE_GITHUB_TOKEN",
     "GITHUB_TOKEN",
@@ -232,6 +232,8 @@ mod tests {
             ("PATH", "/tools/bin"),
             ("HOME", "/home/runner"),
             ("MISE_INSTALLS_DIR", "/tools/installs"),
+            ("MISE_STATE_DIR", "/state/mise"),
+            ("XDG_STATE_HOME", "/state"),
             ("MISE_CONFIG_DIR", "/config"),
             ("MISE_CACHE_DIR", ""),
             ("GITHUB_TOKEN", "must-not-pass"),
@@ -258,6 +260,18 @@ mod tests {
                 .get(OsStr::new("MISE_INSTALLS_DIR"))
                 .map(OsString::as_os_str),
             Some(OsStr::new("/tools/installs"))
+        );
+        assert_eq!(
+            tool_homes
+                .get(OsStr::new("MISE_STATE_DIR"))
+                .map(OsString::as_os_str),
+            Some(OsStr::new("/state/mise"))
+        );
+        assert_eq!(
+            tool_homes
+                .get(OsStr::new("XDG_STATE_HOME"))
+                .map(OsString::as_os_str),
+            Some(OsStr::new("/state"))
         );
         assert!(!tool_homes.contains_key(OsStr::new("MISE_CACHE_DIR")));
         assert_eq!(
