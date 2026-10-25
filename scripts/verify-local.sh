@@ -44,6 +44,8 @@ GENERATED_RUN_LOG="$LOG_DIR/generated-run.log"
 GENERATED_DIFF_LOG="$LOG_DIR/generated-diff.log"
 CRATE_LIST_LOG="$LOG_DIR/crate-list.log"
 DOCTEST_LIST_LOG="$LOG_DIR/doctest-list.log"
+TEST_MEMBER_LIST_LOG="$LOG_DIR/test-member-list.log"
+RUNNER_TEST_MEMBER_LIST_LOG="$LOG_DIR/runner-test-member-list.log"
 INTEGRATION_LOG="$LOG_DIR/integration.log"
 echo "verify-local: log directory: $LOG_DIR"
 
@@ -121,10 +123,12 @@ fi
 MISE_EXEC=(mise exec "${SPEC_ARR[@]}" --)
 repo_policy() {
   local action="$1"
+  local manifest_path="${2-}"
   env \
     VELNOR_INTERNAL_OP=repo-policy-v1 \
     VELNOR_REPO_POLICY_ACTION="$action" \
     VELNOR_REPO_POLICY_ROOT="$ROOT" \
+    VELNOR_REPO_POLICY_MANIFEST_PATH="$manifest_path" \
     "${MISE_EXEC[@]}" cargo run --quiet --locked -p velnor-actions-cli \
       --bin velnor-actions
 }
@@ -169,7 +173,20 @@ RUNNER_MANIFEST="crates/velnor-runner/Cargo.toml"
 if [ -f "$RUNNER_MANIFEST" ]; then
   stage runner-fmt "${MISE_EXEC[@]}" cargo fmt --manifest-path "$RUNNER_MANIFEST" --all -- --check
   stage runner-clippy "${MISE_EXEC[@]}" cargo clippy --manifest-path "$RUNNER_MANIFEST" --locked --workspace --all-targets -- -D warnings
-  stage runner-nextest "${NEXTEST_RUN[@]}" run --manifest-path "$RUNNER_MANIFEST" --locked --workspace --no-tests warn
+  RUNNER_TEST_MEMBERS=""
+  RUNNER_TEST_MEMBERS_OK=0
+  if RUNNER_TEST_MEMBERS="$(repo_policy test-members "$RUNNER_MANIFEST" 2>"$RUNNER_TEST_MEMBER_LIST_LOG")"; then
+    RUNNER_TEST_MEMBERS_OK=1
+  else
+    fail "runner-test-members (metadata failed; log: $RUNNER_TEST_MEMBER_LIST_LOG)"
+  fi
+  if [ "$RUNNER_TEST_MEMBERS_OK" -eq 1 ]; then
+    if [ -z "$RUNNER_TEST_MEMBERS" ]; then
+      echo "skip: runner-nextest (metadata found no test-enabled targets)"
+    else
+      stage runner-nextest "${NEXTEST_RUN[@]}" run --manifest-path "$RUNNER_MANIFEST" --locked --workspace --no-tests fail
+    fi
+  fi
   stage runner-doctest "${MISE_EXEC[@]}" cargo test --manifest-path "$RUNNER_MANIFEST" --locked --workspace --doc
   stage runner-deny mise exec "cargo-deny@0.20.2" -- cargo-deny --locked --manifest-path "$RUNNER_MANIFEST" --config "crates/velnor-runner/deny.toml" check
 fi
@@ -209,17 +226,30 @@ fi
 
 MEMBERS=""
 MEMBERS="$(repo_policy workspace-members 2>"$CRATE_LIST_LOG")"
+TEST_MEMBERS=""
+TEST_MEMBERS_OK=0
 if [ -z "$MEMBERS" ]; then
   fail "crate-list (log: $CRATE_LIST_LOG)"
 else
+  if TEST_MEMBERS="$(repo_policy test-members 2>"$TEST_MEMBER_LIST_LOG")"; then
+    TEST_MEMBERS_OK=1
+  else
+    fail "test-members (metadata failed; log: $TEST_MEMBER_LIST_LOG)"
+  fi
   for member in $MEMBERS; do
     safe="$(printf '%s' "$member" | tr -c 'A-Za-z0-9' '_')"
     stage "clippy-$safe" "${MISE_EXEC[@]}" cargo clippy --locked -p "$member" --all-targets -- -D warnings
   done
-  for member in $MEMBERS; do
-    safe="$(printf '%s' "$member" | tr -c 'A-Za-z0-9' '_')"
-    stage "test-$safe" "${NEXTEST_RUN[@]}" run --locked -p "$member" --no-tests warn
-  done
+  if [ "$TEST_MEMBERS_OK" -eq 1 ]; then
+    if [ -z "$TEST_MEMBERS" ]; then
+      echo "skip: per-crate nextest (metadata found no test-enabled targets)"
+    else
+      for member in $TEST_MEMBERS; do
+        safe="$(printf '%s' "$member" | tr -c 'A-Za-z0-9' '_')"
+        stage "test-$safe" "${NEXTEST_RUN[@]}" run --locked -p "$member" --no-tests fail
+      done
+    fi
+  fi
   LIB_MEMBERS=""
   LIB_MEMBERS="$(repo_policy library-members 2>"$DOCTEST_LIST_LOG")"
   if [ -z "$LIB_MEMBERS" ]; then
@@ -244,11 +274,15 @@ else
 fi
 
 echo "--- verify-local: integration"
-if "${NEXTEST_RUN[@]}" run --workspace --locked --profile ci --no-tests warn \
-  >"$INTEGRATION_LOG" 2>&1; then
-  pass "integration (nextest ci)"
-else
-  fail "integration (log: $INTEGRATION_LOG)"
+if [ "$TEST_MEMBERS_OK" -eq 1 ]; then
+  if [ -z "$TEST_MEMBERS" ]; then
+    echo "skip: integration (metadata found no test-enabled targets)"
+  elif "${NEXTEST_RUN[@]}" run --workspace --locked --profile ci --no-tests fail \
+    >"$INTEGRATION_LOG" 2>&1; then
+    pass "integration (nextest ci)"
+  else
+    fail "integration (log: $INTEGRATION_LOG)"
+  fi
 fi
 
 if [ -z "$FAILURES" ]; then
