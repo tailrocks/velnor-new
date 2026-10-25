@@ -2,12 +2,35 @@
 use super::TestPollResponse;
 use super::finish::FinishContext;
 use super::{
-    Acknowledgement, AsyncFnMut, ConnectionJournal, EnsureError, Link, Poll, PositiveAdmission,
-    PositivePollContext, PositivePollOutcome, QueueSession, ack_ready, begin_poll,
-    completion_error, intake_and_ack_if_only_scoped, invoke_admission, poll_scoped_queue,
+    Acknowledgement, AsyncFnMut, ConnectionJournal, EnsureError, Link, Poll, PollCapacityMode,
+    PositiveAdmission, PositivePollContext, PositivePollOutcome, QueueSession, ack_ready,
+    begin_poll, completion_error, invoke_admission, poll_scoped_queue,
 };
-pub(crate) async fn positive_poll_once<F>(
+#[path = "controller/intake.rs"]
+mod intake;
+use intake::intake_and_ack;
+
+pub(crate) async fn positive_poll_once_with_pressure<F>(
     context: PositivePollContext<'_>,
+    sample: Option<crate::launch::FreshPressureSample>,
+    admit: F,
+) -> Result<PositivePollOutcome, EnsureError>
+where
+    F: AsyncFnMut(
+        &mut Link,
+        &Poll,
+        Option<String>,
+        String,
+        String,
+        String,
+    ) -> Result<PositiveAdmission, EnsureError>,
+{
+    positive_poll_once_with_mode(context, PollCapacityMode::Pressure(sample), admit).await
+}
+
+async fn positive_poll_once_with_mode<F>(
+    context: PositivePollContext<'_>,
+    capacity_mode: PollCapacityMode,
     admit: F,
 ) -> Result<PositivePollOutcome, EnsureError>
 where
@@ -22,6 +45,7 @@ where
 {
     positive_poll_once_core(
         context,
+        capacity_mode,
         async |link, session, scoped, session_intent_id, set_id, header, cursor| {
             poll_scoped_queue(
                 link,
@@ -67,6 +91,7 @@ where
     let mut response = Some(response);
     positive_poll_once_core(
         context,
+        PollCapacityMode::Fixed,
         async |_link, _session, _scoped, _session_intent_id, _set_id, _header, _cursor| {
             let response = response.take().ok_or(EnsureError::Uncertain)?;
             Ok((response.polled, response.path, response.queue))
@@ -79,6 +104,7 @@ where
 
 async fn positive_poll_once_core<F, P, A>(
     mut context: PositivePollContext<'_>,
+    capacity_mode: PollCapacityMode,
     poll_response: P,
     mut acknowledge: A,
     admit: F,
@@ -115,33 +141,20 @@ where
         context.set_id,
         context.session,
         context.allocation,
+        capacity_mode,
     )
     .await?;
     let (attempt, admin_base, polled, path, queue) =
         poll_once(&mut context, attempt, poll_response).await?;
-    let decision =
-        match intake_and_ack_if_only_scoped(context.scoped, context.set_id, &polled, || async {
-            acknowledge(
-                context.link,
-                context.session,
-                path.clone(),
-                queue.clone(),
-                &polled,
-            )
-            .await
-        })
-        .await
-        {
-            Ok(decision) => decision,
-            Err(error) => {
-                context
-                    .scoped
-                    .mark_session_poll_uncertain(context.session_intent_id, attempt)
-                    .await
-                    .map_err(|_| completion_error())?;
-                return Err(error);
-            }
-        };
+    let (attempt, decision) = intake_and_ack(
+        &mut context,
+        attempt,
+        &polled,
+        path.clone(),
+        queue.clone(),
+        &mut acknowledge,
+    )
+    .await?;
     let (attempt, admission) = classify_or_admit(
         &mut context,
         attempt,

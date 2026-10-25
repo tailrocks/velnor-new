@@ -5,8 +5,12 @@ use std::ops::AsyncFnMut;
 use velnor_runner_github::{Poll, QueueSession};
 
 use crate::journal::{ConnectionJournal, HeaderAllocation};
+use crate::launch::FreshPressureSample;
 use crate::listen::Link;
 use crate::scale_set::EnsureError;
+
+#[cfg(test)]
+use super::completion_intake::IntakeDecision;
 
 pub(crate) struct PositivePollContext<'a> {
     pub(crate) link: &'a mut Link,
@@ -25,10 +29,7 @@ pub(crate) struct TestPollResponse {
     pub(crate) queue: Option<String>,
 }
 
-#[cfg(test)]
-use super::completion_intake::IntakeDecision;
 use super::completion_intake::completion_error;
-use super::completion_intake::intake_and_ack_if_only_scoped;
 use super::steps::{AcquiredProvisioning, KnownNoAcquire};
 use super::{ack_ready, poll_scoped_queue};
 
@@ -108,7 +109,7 @@ pub(crate) enum Settlement {
 
 #[path = "positive_poll/controller.rs"]
 mod controller;
-pub(crate) use controller::positive_poll_once;
+pub(crate) use controller::positive_poll_once_with_pressure;
 #[cfg(test)]
 pub(crate) use controller::test_positive_poll_once_with_response;
 
@@ -118,17 +119,33 @@ async fn begin_poll(
     set_id: i64,
     session: &QueueSession,
     allocation: &HeaderAllocation,
+    capacity_mode: PollCapacityMode,
 ) -> Result<crate::journal::HeaderPollAttempt, EnsureError> {
     if allocation.target() == 0
         || !allocation.matches_session(scoped.connection_id(), set_id, &session.session_id)
     {
         return Err(EnsureError::AdmissionClosed);
     }
-    let attempt = scoped
-        .begin_session_poll(session_intent_id, allocation)
-        .await
-        .map_err(|_| completion_error())?;
-    if attempt.header_value() != allocation.target() || attempt.header_value() == 0 {
+    let attempt = match capacity_mode {
+        #[cfg(test)]
+        PollCapacityMode::Fixed => {
+            scoped
+                .begin_session_poll(session_intent_id, allocation)
+                .await
+        }
+        PollCapacityMode::Pressure(sample) => {
+            scoped
+                .begin_session_pressure_poll(session_intent_id, allocation, sample)
+                .await
+        }
+    }
+    .map_err(|_| completion_error())?;
+    let header_valid = match capacity_mode {
+        #[cfg(test)]
+        PollCapacityMode::Fixed => attempt.header_value() == allocation.target(),
+        PollCapacityMode::Pressure(_) => attempt.header_value() <= allocation.target(),
+    };
+    if !header_valid || attempt.header_value() == 0 {
         scoped
             .mark_session_poll_uncertain(session_intent_id, attempt)
             .await
@@ -136,6 +153,13 @@ async fn begin_poll(
         return Err(EnsureError::AdmissionClosed);
     }
     Ok(attempt)
+}
+
+#[derive(Clone, Copy)]
+enum PollCapacityMode {
+    #[cfg(test)]
+    Fixed,
+    Pressure(Option<FreshPressureSample>),
 }
 
 struct AdmissionContext<'a> {
@@ -202,6 +226,9 @@ use finish::{
     make_outcome, settle_known_response,
 };
 
+#[cfg(test)]
+#[path = "positive_poll_tests/pressure.rs"]
+mod pressure_tests;
 #[cfg(test)]
 #[path = "positive_poll_tests.rs"]
 mod tests;

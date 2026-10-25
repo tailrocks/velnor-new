@@ -10,7 +10,11 @@ use crate::{
     launch::{ReleaseReadSecret, SelectedEngineContext},
 };
 
-use super::{lifecycle, provider::ReleaseImageProvider, sample::Observation};
+use super::{
+    lifecycle,
+    provider::ReleaseImageProvider,
+    sample::{Observation, pressure::FreshPressureSample},
+};
 
 const MAX_OBSERVATION_AGE: Duration = Duration::from_secs(30);
 
@@ -39,6 +43,7 @@ pub(crate) struct ReadinessSample {
     effective_cpu_millicores: u64,
     memory_total_bytes: u64,
     memory_available_bytes: u64,
+    pressure_sample: Option<FreshPressureSample>,
 }
 
 impl ReadinessSample {
@@ -71,10 +76,15 @@ impl ReadinessSample {
     pub(crate) const fn memory_available_bytes(&self) -> u64 {
         self.memory_available_bytes
     }
+
+    pub(crate) const fn pressure_sample(&self) -> Option<FreshPressureSample> {
+        self.pressure_sample
+    }
 }
 
 impl From<Observation> for ReadinessSample {
     fn from(observation: Observation) -> Self {
+        let pressure_sample = observation.pressure_sample_at(Instant::now());
         Self {
             engine_id: observation.engine_id().to_owned(),
             docker_root_digest: observation.docker_root_digest().to_owned(),
@@ -83,6 +93,7 @@ impl From<Observation> for ReadinessSample {
             effective_cpu_millicores: observation.effective_cpu_millicores(),
             memory_total_bytes: observation.memory_total_bytes(),
             memory_available_bytes: observation.memory_available_bytes(),
+            pressure_sample,
         }
     }
 }

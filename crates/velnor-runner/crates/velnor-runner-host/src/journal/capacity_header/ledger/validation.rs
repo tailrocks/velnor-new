@@ -26,7 +26,9 @@ pub(super) fn valid_record(record: &HeaderRecord) -> bool {
         poll.sequence == sequence
             && poll.header_value <= MAX_HEADER_CAPACITY
             && match poll.purpose {
-                PollPurpose::Advertise => poll.header_value == record.target,
+                PollPurpose::Advertise => {
+                    poll.header_value == record.pressure_capacity.unwrap_or(record.target)
+                }
                 PollPurpose::ZeroHeader => poll.header_value == 0 && !record.zero_header_settled,
             }
     });
@@ -52,6 +54,9 @@ pub(super) fn valid_record(record: &HeaderRecord) -> bool {
         && record.identity.session_id.0.len() <= MAX_SESSION_ID_BYTES
         && !record.identity.session_id.0.chars().any(char::is_control)
         && record.target <= MAX_HEADER_CAPACITY
+        && record.pressure_capacity.is_none_or(|capacity| {
+            capacity <= record.target && (capacity != 0 || record.target == 0)
+        })
         && record.generation.0 > 0
         && sequence_valid
         && zero_poll_valid

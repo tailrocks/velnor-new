@@ -215,6 +215,7 @@ impl HeaderLedgerSnapshotV1 {
                     identity: record.identity,
                     generation: record.generation,
                     target: record.target,
+                    pressure_capacity: None,
                     state: record.state,
                     attempt_sequence: record.attempt_sequence,
                     in_flight_poll: record.in_flight_poll,

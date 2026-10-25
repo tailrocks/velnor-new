@@ -25,7 +25,9 @@ impl HeaderLedger {
                 && record.in_flight_delete.is_none()
                 && record.delete_sequence == 0
                 && record.in_flight_poll.is_none_or(|poll| match poll.purpose {
-                    PollPurpose::Advertise => poll.header_value == record.target,
+                    PollPurpose::Advertise => {
+                        poll.header_value == record.pressure_capacity.unwrap_or(record.target)
+                    }
                     PollPurpose::ZeroHeader => poll.header_value == 0,
                 })
         })

@@ -42,6 +42,10 @@ pub(crate) use drive::{
 };
 pub(crate) use engine_context::SelectedEngineContext;
 #[cfg(test)]
+pub(crate) use pressure::Sample as PressureSample;
+pub(crate) use pressure::{adjust_with_sample, advertise};
+pub(crate) use resource_probe::FreshPressureSample;
+#[cfg(test)]
 pub(crate) use resource_probe::IntakeCompositionProvider;
 pub(crate) use resource_probe::ReadinessSample;
 pub(crate) use resource_probe::StartObservationWitness;
@@ -77,7 +81,7 @@ pub(crate) use turn::test_scoped_intake;
 pub(crate) use turn::{Acknowledgement, TestPollResponse};
 pub(crate) use turn::{
     CursorDisposition, PositiveAdmission, PositivePollContext, PositivePollOutcome,
-    admit_when_ready, positive_poll_once,
+    admit_when_ready, positive_poll_once_with_pressure,
 };
 #[cfg(test)]
 pub(crate) use turn::{IntakeDecision, finish_positive_poll_with_ack};
@@ -85,7 +89,6 @@ pub(crate) use turn::{
     ScopedPollContext, ScopedPollOutcome, Settlement, ZeroHeaderMode,
     poll_scoped_connection_once_with_mode,
 };
-#[cfg(test)]
 mod pressure;
 mod session;
 #[cfg(test)]

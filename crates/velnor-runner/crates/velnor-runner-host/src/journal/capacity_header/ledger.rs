@@ -2,6 +2,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+#[path = "ledger/pressure.rs"]
+mod pressure;
 #[path = "ledger/readiness.rs"]
 mod readiness;
 #[path = "ledger/snapshot.rs"]
@@ -92,6 +94,11 @@ impl HeaderLedger {
             identity: identity.clone(),
             generation,
             target,
+            pressure_capacity: Some(if target == 0 {
+                0
+            } else {
+                crate::launch::advertise(target)
+            }),
             state: GenerationState::Pending,
             attempt_sequence: 0,
             in_flight_poll: None,
@@ -103,27 +110,6 @@ impl HeaderLedger {
         let allocation = record.allocation();
         self.records.insert(identity, record);
         Ok(allocation)
-    }
-
-    /// Persist an in-flight marker before issuing the corresponding GET.
-    pub(crate) fn begin_poll(
-        &mut self,
-        allocation: &HeaderAllocation,
-    ) -> Result<HeaderPollAttempt, HeaderLedgerError> {
-        let record = self.record_for_allocation_mut(allocation)?;
-        if record.state == GenerationState::Uncertain {
-            return Err(HeaderLedgerError::UnsettledPoll);
-        }
-        Self::ensure_delete_not_started(record)?;
-        if record.zero_header_settled {
-            return Err(HeaderLedgerError::ZeroHeaderSettled);
-        }
-        Self::begin_attempt(
-            record,
-            allocation,
-            allocation.target,
-            PollPurpose::Advertise,
-        )
     }
 
     /// Start the required same-session zero-header poll before retirement.

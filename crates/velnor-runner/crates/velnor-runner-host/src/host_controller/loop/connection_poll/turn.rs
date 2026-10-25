@@ -219,6 +219,12 @@ async fn execute_poll(
             prepared,
             &poll.allocation,
             &poll_context,
+            context
+                .control_state
+                .readiness_sample(context.selected_engine, std::time::Instant::now())
+                .ok()
+                .flatten()
+                .and_then(|sample| sample.pressure_sample()),
         ))
         .await
         .map_err(|_| HostError::Journal),

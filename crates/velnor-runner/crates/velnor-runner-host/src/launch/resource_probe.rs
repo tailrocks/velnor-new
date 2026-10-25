@@ -9,6 +9,7 @@ use crate::worker::ResourceBudget;
 pub(crate) use self::provider::ImageProvider;
 use self::provider::ReleaseImageProvider;
 
+pub(crate) use self::sample::FreshPressureSample;
 pub(crate) use self::sample::RecoveryObservation;
 pub(crate) use self::sample::{StartObservationWitness, StartPermit};
 pub(crate) use readiness::ReadinessSample;

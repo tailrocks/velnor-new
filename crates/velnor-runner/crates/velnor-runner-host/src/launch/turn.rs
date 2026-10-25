@@ -23,7 +23,7 @@ pub(crate) use positive_poll::test_positive_poll_once_with_response;
 pub(crate) use positive_poll::{Acknowledgement, TestPollResponse};
 pub(crate) use positive_poll::{
     CursorDisposition, PositiveAdmission, PositivePollContext, PositivePollOutcome, Settlement,
-    admit_when_ready, positive_poll_once,
+    admit_when_ready, positive_poll_once_with_pressure,
 };
 pub(crate) use scoped::{
     ScopedPollContext, ScopedPollOutcome, ZeroHeaderMode, poll_scoped_connection_once,

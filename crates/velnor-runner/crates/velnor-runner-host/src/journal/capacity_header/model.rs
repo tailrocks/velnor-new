@@ -213,6 +213,8 @@ pub(super) struct HeaderRecord {
     pub(super) in_flight_delete: Option<InFlightDelete>,
     #[serde(default)]
     pub(super) delete_uncertain: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) pressure_capacity: Option<u32>,
 }
 
 impl HeaderRecord {

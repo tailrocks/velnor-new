@@ -10,7 +10,7 @@ use crate::{
     journal::Journal,
     launch::{
         PositivePollContext as PositiveTurnContext, ReleaseReadSecret, SelectedEngineContext,
-        VerifiedWorkerImages, ZeroHeaderMode, positive_poll_once,
+        VerifiedWorkerImages, ZeroHeaderMode,
     },
 };
 
@@ -106,10 +106,18 @@ pub(super) async fn poll_positive_connection(
     prepared: &mut PreparedConnection,
     allocation: &crate::journal::HeaderAllocation,
     context: &PositivePollContext<'_>,
+    pressure_sample: Option<crate::launch::FreshPressureSample>,
 ) -> Result<ControllerPollOutcome, HostError> {
     authorized_offers::resume(prepared, allocation, context).await?;
     let cursor = prepared.cursor_for_poll(std::time::Instant::now());
-    let poll = Box::pin(positive_poll_message(prepared, allocation, context, cursor)).await?;
+    let poll = Box::pin(positive_poll_message(
+        prepared,
+        allocation,
+        context,
+        cursor,
+        pressure_sample,
+    ))
+    .await?;
     prepared.record_cursor_disposition(
         poll.message_id,
         poll.cursor_disposition,
@@ -135,6 +143,7 @@ async fn positive_poll_message(
     allocation: &crate::journal::HeaderAllocation,
     context: &PositivePollContext<'_>,
     cursor: i64,
+    pressure_sample: Option<crate::launch::FreshPressureSample>,
 ) -> Result<crate::launch::PositivePollOutcome, HostError> {
     let Some(credentials) = prepared.credentials.as_mut() else {
         return Err(HostError::Keychain);
@@ -162,7 +171,7 @@ async fn positive_poll_message(
         allocated_header: allocation.target(),
     };
     let session_intent = prepared.session_intent;
-    Box::pin(positive_poll_once(
+    Box::pin(crate::launch::positive_poll_once_with_pressure(
         PositiveTurnContext {
             link: &mut credentials.link,
             set_id,
@@ -172,6 +181,7 @@ async fn positive_poll_message(
             allocation,
             cursor,
         },
+        pressure_sample,
         async |link, polled, queue_origin, queue_path, queue_token, admin_token| {
             admit_positive_offer(
                 &inputs,

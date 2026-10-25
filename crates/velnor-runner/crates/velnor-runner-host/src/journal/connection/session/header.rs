@@ -10,6 +10,9 @@ use crate::journal::connection::storage::{
 };
 use crate::launch::{CompletedHeaderPoll, DeletedSession204};
 
+#[path = "header/pressure.rs"]
+mod pressure;
+
 impl ConnectionJournal {
     /// Read whether all other work for this session's connection is complete.
     pub(crate) async fn session_work_drained(
@@ -53,6 +56,7 @@ impl ConnectionJournal {
     }
 
     /// Before you send a session poll, record its session ID and request with a database commit.
+    #[cfg(test)]
     pub(crate) async fn begin_session_poll(
         &self,
         session_intent_id: i64,

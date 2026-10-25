@@ -23,7 +23,7 @@ impl CompletedHeaderPoll {
     ) -> Result<Self, EnsureError> {
         if !allocation.matches_session(journal.connection_id(), scale_set_id, session_id)
             || !attempt.matches_session(journal.connection_id(), scale_set_id, session_id)
-            || (attempt.header_value() != 0 && allocation.target() != attempt.header_value())
+            || (attempt.header_value() != 0 && attempt.header_value() > allocation.target())
         {
             return Err(EnsureError::AdmissionClosed);
         }

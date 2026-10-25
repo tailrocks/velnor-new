@@ -1,6 +1,7 @@
 //! Non-serializable results scoped to one completed probe transaction.
 
 mod guest_capacity;
+pub(in crate::launch::resource_probe) mod pressure;
 mod production_profile;
 mod recovery;
 mod storage_admission;
@@ -8,6 +9,7 @@ mod storage_admission;
 mod test_fixtures;
 mod witness;
 pub(crate) use guest_capacity::checked_guest_capacity;
+pub(crate) use pressure::FreshPressureSample;
 pub(in crate::launch) use production_profile::retained_tmpfs_bytes;
 pub(crate) use recovery::RecoveryObservation;
 pub(in crate::launch) use storage_admission::{
