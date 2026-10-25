@@ -36,3 +36,9 @@ and incorrect receipt identities are rejected. The existing absolute deadline,
 credential-scrubbed command environment, and process-group drain requirements
 continue to apply. Real hosted A-to-D installation and archived tests are required
 before SDK publication; unit tests do not replace that qualification.
+
+The qualified cleaner normalizes executables in `bin` to `0555`. Native
+installed-host inventory and receipt evidence require that exact final mode.
+Archive admission still checks the published archive policy. Auxiliary files in
+`libexec` retain the formula's explicit `0644` or `0755` mode; the coordinator
+neither accepts alternate host modes nor disables Homebrew cleaning.

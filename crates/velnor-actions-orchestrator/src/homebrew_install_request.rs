@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use rustix::fs::{self as unix_fs, Mode, OFlags};
 use velnor_actions_contract::homebrew_spec::{
-    HomebrewAuxiliaryTest, HomebrewInstalledMode, HomebrewPayloadRole, parse_generated_formula,
+    HomebrewAuxiliaryTest, HomebrewPayloadRole, parse_generated_formula,
 };
 use velnor_actions_contract::package_release::PackageReleaseChannel;
 use velnor_actions_mise::CheckDeadline;
@@ -14,7 +14,9 @@ use super::support::{
     current_host_target, expected_elf_for_asset, invalid, io_error, is_sha256, safe_component,
     safe_relative_path, sha256,
 };
-use super::{FORMULA_LIMIT, HomebrewInstallRequest};
+use super::{
+    FORMULA_LIMIT, HOMEBREW_HOST_INSTALLED_MODE, HomebrewInstallRequest, auxiliary_installed_mode,
+};
 use crate::{OrchestratorError, exclusive_write, filesystem_owner::held_file::HeldFile};
 
 pub(super) fn validate_request(
@@ -89,7 +91,11 @@ pub(super) fn validate_file_inventory(
     for bin in &request.spec.host.bins {
         expected.insert(
             (host_asset.to_owned(), bin.clone()),
-            (format!("bin/{bin}"), 0o755, HomebrewAuxiliaryTest::None),
+            (
+                format!("bin/{bin}"),
+                HOMEBREW_HOST_INSTALLED_MODE,
+                HomebrewAuxiliaryTest::None,
+            ),
         );
     }
 
@@ -111,10 +117,7 @@ pub(super) fn validate_file_inventory(
                 .iter()
                 .filter(|file| file.target == payload.target())
             {
-                let mode = match file.mode {
-                    HomebrewInstalledMode::Data => 0o644,
-                    HomebrewInstalledMode::Executable => 0o755,
-                };
+                let mode = auxiliary_installed_mode(file.mode);
                 expected.insert(
                     (payload.asset_name().to_owned(), file.member.clone()),
                     (format!("libexec/{}", file.destination), mode, file.test),
@@ -228,3 +231,7 @@ pub(super) fn write_formula_file(
     held.verify(deadline)?;
     Ok(path.to_path_buf())
 }
+
+#[cfg(test)]
+#[path = "homebrew_install_request_inventory_tests.rs"]
+mod inventory_tests;

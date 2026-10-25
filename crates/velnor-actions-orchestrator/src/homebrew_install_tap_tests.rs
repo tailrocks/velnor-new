@@ -99,6 +99,109 @@ fn replacement_refuses_changed_loader_and_symlinked_tap_ancestors() {
 }
 
 #[test]
+fn loader_rejects_extra_formula_entries_dotfiles_nested_paths_and_symlinks() {
+    for entry in ["other.rb", ".receipt", "nested"] {
+        let root = fixture_root();
+        let directory = formula_directory(root.path());
+        let bytes = b"candidate";
+        let loader = TapFormula::create_fresh_at(
+            &directory,
+            "example-preview",
+            bytes,
+            &digest(bytes),
+            deadline(),
+        )
+        .expect("fresh loader");
+        let extra = directory.join(entry);
+        if entry == "nested" {
+            fs::create_dir(&extra).expect("nested unexpected directory");
+        } else {
+            fs::write(&extra, b"unexpected").expect("unexpected formula entry");
+        }
+        assert!(
+            loader.verify(deadline()).is_err(),
+            "entry {entry} must fail closed"
+        );
+        assert!(
+            TapFormula::capture_existing_at(
+                &loader.path,
+                "example-preview",
+                bytes,
+                &digest(bytes),
+                deadline(),
+            )
+            .is_err()
+        );
+    }
+
+    let root = fixture_root();
+    let directory = formula_directory(root.path());
+    let bytes = b"candidate";
+    let loader = TapFormula::create_fresh_at(
+        &directory,
+        "example-preview",
+        bytes,
+        &digest(bytes),
+        deadline(),
+    )
+    .expect("fresh loader");
+    let target = root.path().join("outside.rb");
+    fs::write(&target, b"outside").expect("symlink target");
+    std::os::unix::fs::symlink(&target, directory.join("linked.rb")).expect("extra symlink");
+    assert!(loader.verify(deadline()).is_err());
+}
+
+#[test]
+fn tap_root_rejects_foreign_entries_and_formula_hardlinks() {
+    let root = fixture_root();
+    let directory = formula_directory(root.path());
+    let bytes = b"candidate";
+    let loader = TapFormula::create_fresh_at(
+        &directory,
+        "example-preview",
+        bytes,
+        &digest(bytes),
+        deadline(),
+    )
+    .expect("fresh loader");
+    let tap_root = directory.parent().expect("tap root");
+    fs::write(tap_root.join("foreign"), b"unexpected").expect("foreign root entry");
+    assert!(loader.verify(deadline()).is_err());
+
+    let root = fixture_root();
+    let directory = formula_directory(root.path());
+    let loader = TapFormula::create_fresh_at(
+        &directory,
+        "example-preview",
+        bytes,
+        &digest(bytes),
+        deadline(),
+    )
+    .expect("fresh loader");
+    fs::hard_link(&loader.path, directory.join(".linked-loader")).expect("formula hardlink");
+    assert!(loader.verify(deadline()).is_err());
+}
+
+#[test]
+fn replacement_refuses_unexpected_inventory_and_preserves_canonical_a() {
+    let root = fixture_root();
+    let directory = formula_directory(root.path());
+    let a = b"canonical-a";
+    let d = b"canonical-d";
+    let loader =
+        TapFormula::create_fresh_at(&directory, "example-preview", a, &digest(a), deadline())
+            .expect("A loader");
+    let canonical = root.path().join("request-a/example-preview.rb");
+    fs::create_dir(canonical.parent().expect("A request directory")).expect("A request root");
+    fs::write(&canonical, a).expect("A canonical candidate");
+    fs::write(directory.join(".foreign"), b"unexpected").expect("foreign tap formula entry");
+
+    assert!(loader.replace(d, &digest(d), a, deadline()).is_err());
+    assert_eq!(fs::read(canonical).expect("A candidate remains"), a);
+    assert!(!directory.join(".velnor-example-preview.stage").exists());
+}
+
+#[test]
 fn trust_identity_is_the_fixed_tap_and_formula() {
     assert_eq!(
         formula_reference("jackin-preview").expect("qualified tap identity"),
