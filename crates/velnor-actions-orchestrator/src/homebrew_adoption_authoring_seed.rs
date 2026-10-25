@@ -1,12 +1,15 @@
 use std::{collections::BTreeMap, path::Path};
 
-use velnor_actions_contract::homebrew_adoption::HomebrewAdoptionTransition;
+use velnor_actions_contract::{
+    homebrew_adoption::HomebrewAdoptionTransition,
+    package_release_policy::MAX_CARGO_VERSION_MANIFEST_BYTES,
+};
 use velnor_actions_mise::CheckDeadline;
 
 use super::{HomebrewAdoptionAuthoringReport, output};
 use crate::{OrchestratorError, internal::internal};
 
-const MAX_SDK_MANIFEST_BYTES: u64 = 8 * 1024 * 1024;
+pub(super) const MAX_SDK_MANIFEST_BYTES: u64 = 8 * 1024 * 1024;
 type VerifiedBaseInventory = BTreeMap<String, (u32, String)>;
 
 pub(super) fn author(
@@ -25,11 +28,9 @@ pub(super) fn author(
     let transition = load_transition(transition_id)?;
     let manifest_bytes =
         crate::safe_read::read_event_file(manifest_path, MAX_SDK_MANIFEST_BYTES)?.into_bytes();
-    let manifest_limit = usize::try_from(MAX_SDK_MANIFEST_BYTES)
-        .map_err(|_| internal("homebrew_adoption_sdk_manifest_size"))?;
     let sdk = authenticate_sdk(&transition, &manifest_bytes, deadline)?;
     let base_sha = protected_base_tip(&transition, deadline)?;
-    let (files_by_path, claude) = read_seed_base(&transition, &base_sha, manifest_limit, deadline)?;
+    let (files_by_path, claude) = read_seed_base(&transition, &base_sha, deadline)?;
     ensure_locator_absent(&transition, &base_sha, &files_by_path, deadline)?;
     let files = render_seed_files(&transition, &sdk, &manifest_bytes, claude)?;
     ensure_base_tip(&transition, &base_sha, deadline)?;
@@ -63,7 +64,6 @@ fn protected_base_tip(
 fn read_seed_base(
     transition: &HomebrewAdoptionTransition,
     base_sha: &str,
-    max_bytes: usize,
     deadline: CheckDeadline,
 ) -> Result<(VerifiedBaseInventory, Vec<u8>), OrchestratorError> {
     let symlink_sha =
@@ -83,7 +83,7 @@ fn read_seed_base(
         "main",
         base_sha,
         &transition.claude_source_path,
-        max_bytes,
+        MAX_TAP_AGENTS_BYTES,
         deadline,
     )?;
     if crate::release_policy_admission::git_blob_sha1(&claude)? != transition.claude_source_blob_sha
@@ -92,6 +92,8 @@ fn read_seed_base(
     }
     Ok((inventory, claude))
 }
+
+pub(super) const MAX_TAP_AGENTS_BYTES: usize = MAX_CARGO_VERSION_MANIFEST_BYTES;
 
 fn ensure_locator_absent(
     transition: &HomebrewAdoptionTransition,

@@ -9,7 +9,8 @@ const SDK_REPOSITORY_ID: u64 = 1_390_620_900;
 const SDK_OWNER_ID: u64 = 78_806_509;
 const SDK_CAPABILITY: &str = "homebrew-adoption-seed-v1";
 const MAX_MANIFEST_BYTES: usize = 8 * 1024 * 1024;
-const MAX_CALLEE_BYTES: usize = 2 * 1024 * 1024;
+const MAX_CALLEE_BYTES: usize =
+    velnor_actions_contract::package_release_policy::MAX_CARGO_VERSION_MANIFEST_BYTES;
 const MAX_BINARY_BYTES: u64 = 128 * 1024 * 1024;
 const MAX_SIDECAR_BYTES: u64 = 1024;
 const MAX_PROVENANCE_BYTES: u64 = 64 * 1024;
