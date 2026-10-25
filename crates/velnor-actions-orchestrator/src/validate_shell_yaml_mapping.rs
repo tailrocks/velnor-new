@@ -14,7 +14,7 @@ mod shape;
 
 const MAX_INPUT: usize = 500_000;
 #[cfg(all(test, feature = "test-render-capture"))]
-const MAX_EQUIVALENCE_INPUT: usize = 2_000_000;
+const MAX_EQUIVALENCE_INPUT: usize = 4_000_000;
 const MAX_DEPTH: usize = 32;
 const MAX_NODES: usize = 262_144;
 const MAX_BYTES: usize = 16 * 1024 * 1024;

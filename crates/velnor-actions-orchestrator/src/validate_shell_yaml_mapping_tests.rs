@@ -184,9 +184,26 @@ fn input_depth_nodes_and_expansion_are_bounded() {
 
 #[cfg(all(test, feature = "test-render-capture"))]
 #[test]
-fn equivalence_scanner_has_a_separate_hard_input_ceiling() {
-    let text = format!("value: \"{}\"\n", "x".repeat(MAX_EQUIVALENCE_INPUT));
-    assert!(normalize_for_equivalence(&text).is_err());
+fn equivalence_scanner_accepts_its_hard_input_ceiling_only_for_tests() {
+    let suffix = "\"\n";
+    let exact = format!(
+        "value: \"{}{}",
+        "x".repeat(MAX_EQUIVALENCE_INPUT - "value: \"".len() - suffix.len()),
+        suffix
+    );
+    assert_eq!(exact.len(), MAX_EQUIVALENCE_INPUT);
+    assert!(normalize_for_equivalence(&exact).is_ok());
+    assert!(
+        normalize(&exact)
+            .is_err_and(|error| { error.to_string().contains("workflow_mapping_input_limit") })
+    );
+
+    let above = format!("{}x{}", &exact[..exact.len() - suffix.len()], suffix);
+    assert_eq!(above.len(), MAX_EQUIVALENCE_INPUT + 1);
+    assert!(
+        normalize_for_equivalence(&above)
+            .is_err_and(|error| { error.to_string().contains("workflow_mapping_input_limit") })
+    );
 }
 
 #[test]
