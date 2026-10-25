@@ -35,7 +35,7 @@ pub(super) fn build_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, Render
             "Build and smoke-test resource-probe image",
             r#"set -euo pipefail
 producer_target="$(cd -- "${CARGO_TARGET_DIR:-crates/velnor-runner/target}" && pwd -P)"
-export VELNOR_RESOURCE_PROBE_RELEASE_BIN="$producer_target/x86_64-unknown-linux-gnu/release/velnor-resource-probe-release"
+export VELNOR_RESOURCE_PROBE_RELEASE_BIN="$producer_target/x86_64-unknown-linux-gnu/debug/velnor-resource-probe-release"
 bash images/resource-probe/build-image.sh"#,
         ),
     ])

@@ -33,6 +33,6 @@ e4dee482ff1e9f46fb82053152bfee26faf017dc679b03211b16d1ca47028d22  ./.github/work
 aa20e4655c2a87971854e7191bd3faa044a20905da8eb05d54371fe8a0c8ad60  ./.github/workflows/job-image-candidate.yml
 05a2c8ddb923a3d4bf297973fd75a24e4d25ab8c41c3ba1dfe606bfd28a075cf  ./.github/workflows/product-release-binary.yml
 df80cb534791d7a0edcf82f063ae5369524705032432a18e5abdabfbf789ab54  ./.github/workflows/product-release-generator.yml
-5e8fac454b8579f6847fea2771bd9edebc3178f6e22363dcf019bae7f952bf47  ./.github/workflows/product-release-images.yml
+cb6f1fbafdf1b5745f4e23f91d3272296eda6e9899153df7e037e02e047eed01  ./.github/workflows/product-release-images.yml
 662d2ae97c572787c6428c09c9de3d87d4120c20a4c7eeec226b1f6fc1a89c99  ./.github/workflows/product-release.yml
 3ba986aff998b937c16266f7d6f85b3906d96bdb67c3155e33864968edb647cc  ./.github/workflows/qualification.yml
