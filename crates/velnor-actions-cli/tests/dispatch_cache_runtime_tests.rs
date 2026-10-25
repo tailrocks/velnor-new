@@ -1,5 +1,4 @@
-use super::read_runtime_phase;
-use velnor_actions_orchestrator::QualificationCacheRuntimePhase;
+use super::{QualificationCacheRuntimePhase, read_runtime_phase};
 
 #[test]
 fn generated_runtime_phase_values_parse_in_dispatcher() {

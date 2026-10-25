@@ -3,6 +3,9 @@
 //! Covers ARCH-1.10, ARCH-1.12, ARCH-1.5, RQ-1.1, RQ-4.1, RQ-4.2, RQ-5.2,
 //! RQ-5.3, RQ-6.6. Reads repository files only; asserts through content.
 
+#[path = "impl_repo_shape_fixture_tree.rs"]
+mod fixture_tree;
+
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
@@ -320,21 +323,14 @@ fn rq66_rustfmt_baseline() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn fixtures_hold_no_symlinks() -> Result<(), Box<dyn Error>> {
-    let root = repo_root().join("fixtures");
-    let mut pending = vec![root];
-    while let Some(dir) = pending.pop() {
-        for entry in std::fs::read_dir(&dir)? {
-            let entry = entry?;
-            let file_type = entry.file_type()?;
-            assert!(
-                !file_type.is_symlink(),
-                "committed symlink {} breaks generic tree-walkers (run 36753845572); build hazards in TempDirs",
-                entry.path().display()
-            );
-            if file_type.is_dir() {
-                pending.push(entry.path());
-            }
-        }
-    }
+    let symlink = fixture_tree::first_fixture_symlink(&repo_root())?;
+    assert!(
+        symlink.is_none(),
+        "committed symlink {} breaks generic tree-walkers (run 36753845572); build hazards in TempDirs",
+        symlink
+            .as_deref()
+            .unwrap_or_else(|| Path::new(""))
+            .display()
+    );
     Ok(())
 }
