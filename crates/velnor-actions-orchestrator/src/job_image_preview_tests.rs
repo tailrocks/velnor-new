@@ -68,7 +68,7 @@ fn candidate_preview_repeats_without_task_discovery_or_a_job_image_pin() {
     assert!(!source.path().join(".github").exists());
     assert!(!source.path().join("Cargo.toml").exists());
     let output = fs::read_to_string(candidate(&first)).expect("Read the workflow text.");
-    assert!(output.contains("candidate/candidate.py build"));
+    assert!(output.contains("image-maintenance build-job-candidate"));
     assert!(output.contains("runs-on: ubuntu-26.04"));
 }
 

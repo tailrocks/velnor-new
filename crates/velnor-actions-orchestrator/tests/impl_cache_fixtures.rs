@@ -205,9 +205,16 @@ fn per_job_mise_keys_qualified_without_job_suffix() -> TestResult {
                 .map(|(job, _)| job.as_str())
                 .collect::<Vec<_>>(),
             if mbx {
-                vec!["dependency-seed", "jactionlint", "plan", "rust-a", "rust-b"]
+                vec![
+                    "dependency-seed",
+                    "jactionlint",
+                    "plan",
+                    "required",
+                    "rust-a",
+                    "rust-b",
+                ]
             } else {
-                vec!["jactionlint", "plan", "rust-a", "rust-b"]
+                vec!["jactionlint", "plan", "required", "rust-a", "rust-b"]
             },
             "each tool consumer has one cache key (mbx={mbx})"
         );

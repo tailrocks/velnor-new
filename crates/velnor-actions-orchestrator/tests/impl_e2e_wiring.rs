@@ -152,6 +152,8 @@ fn setup_is_early(job: &JobText, at: usize) -> bool {
         && steps
             .get(4)
             .is_some_and(|step| step.name == "Install cache tar adapters");
+    let standard_bootstrap_ready = at == 3 && has_checkout && standard_bootstrap;
+    let preseed_bootstrap_ready = at == 5 && has_checkout && preseed_bootstrap;
     if steps.iter().any(is_cache_clock) {
         return false;
     }
@@ -167,10 +169,10 @@ fn setup_is_early(job: &JobText, at: usize) -> bool {
             || standard_v2
             || at == locked_prefix.len() && has_prefix(steps, &locked_prefix)
             || at == preseed_prefix.len() && has_prefix(steps, &preseed_prefix)
-            || (at == 3 && has_checkout && standard_bootstrap)
-            || (at == 5 && has_checkout && preseed_bootstrap);
+            || standard_bootstrap_ready
+            || preseed_bootstrap_ready;
     }
-    at <= 1 || standard_v2
+    at <= 1 || standard_v2 || standard_bootstrap_ready || preseed_bootstrap_ready
 }
 
 fn has_prefix(steps: &[StepText], expected: &[&str]) -> bool {

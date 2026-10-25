@@ -127,13 +127,14 @@ fn merge_fails_failing_obligation_and_blocks_downstream() {
     let job_id = plan.matrix.include[0].job_id.clone();
     let artifact_id = plan.matrix.include[0].artifact_id.clone();
     plan.matrix.include[1].job_id.clone_from(&job_id);
-    plan.matrix.include[1].artifact_id = artifact_id;
+    plan.matrix.include[1].artifact_id = artifact_id.clone();
     plan.obligations[1].job_id.clone_from(&job_id);
     plan.jobs = super::task_report_tests::run_jobs(&plan);
     plan.validate().expect("shared-job failure plan validates");
     let temp = staged_run(&plan, "local");
     let run = temp.path().join("velnor").join("local");
-    let needs = Some(r#"{"plan":"success"}"#);
+    let needs = format!(r#"{{"plan":"success","{job_id}":"failure"}}"#);
+    let expected = format!(r#"["plan","{job_id}"]"#);
 
     let reported = write_task_report_for_job("local", CLIPPY, 1, None, &job_id, temp.path())
         .expect("clippy fails");
@@ -147,8 +148,8 @@ fn merge_fails_failing_obligation_and_blocks_downstream() {
     let full = assemble_with_needs(
         "local",
         &run,
-        needs,
-        Some(r#"["plan"]"#),
+        Some(&needs),
+        Some(&expected),
         Some("pull_request"),
         Some(PR_PAYLOAD),
     )
@@ -167,7 +168,7 @@ fn merge_fails_failing_obligation_and_blocks_downstream() {
     assert_eq!(verdict.counts.failed, 1);
     assert_eq!(verdict.counts.blocked, 1);
     assert_eq!(verdict.counts.not_run, 0);
-    assert_eq!(verdict.downloaded_artifact_ids.len(), 2);
+    assert_eq!(verdict.downloaded_artifact_ids, [artifact_id]);
 }
 
 #[test]

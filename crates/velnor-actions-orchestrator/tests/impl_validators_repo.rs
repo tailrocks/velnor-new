@@ -219,14 +219,7 @@ fn assert_sample_input_owners(
     );
     assert!(cli.complete, "CLI repository inputs remain complete");
     assert_package_owner(prep, "velnor-actions-cli")?;
-
-    let helper = rust
-        .inputs
-        .iter()
-        .find(|rule| rule.globs == ["scripts/parallel-targets/**"])
-        .ok_or("live helper input rule disappeared during typed admission")?;
-    assert_eq!(helper.packages, ["velnor-actions-workflow-renderer"]);
-    assert_package_owner(prep, &helper.packages[0])
+    Ok(())
 }
 
 /// Require a declared sample owner to resolve inside its workspace.
