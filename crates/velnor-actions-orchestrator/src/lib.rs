@@ -147,4 +147,4 @@ mod workflow_jobs_cache;
 mod workflow_task_jobs;
 pub use api::*;
 #[cfg(test)]
-pub(crate) use test_support_modules::{git_fixture, tap_test_support};
+pub(crate) use test_support_modules::git_fixture;

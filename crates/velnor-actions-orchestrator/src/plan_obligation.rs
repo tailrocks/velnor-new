@@ -115,20 +115,7 @@ pub(crate) fn plan_group(
 ) -> Result<(PlanObligation, Vec<MatrixEntry>), OrchestratorError> {
     let task = inputs.task;
     if Stack::from_id(&task.stack_id) == Some(Stack::Native) {
-        let check = inputs
-            .discovery
-            .native_checks
-            .iter()
-            .find(|check| task.task_id == format!("internal/native-check/{}", check.id))
-            .ok_or_else(|| internal("native_check_not_configured"))?;
-        return crate::internal_plan::native_homebrew_checks::derive(
-            inputs.root,
-            check,
-            task,
-            inputs.run_key,
-            inputs.wire.generator,
-            inputs.wire.event,
-        );
+        return plan_native_check_group(inputs);
     }
     if Stack::from_id(&task.stack_id) == Some(Stack::Mise) {
         let item = crate::internal_plan::named_checks::discovered(inputs.discovery, task)
@@ -208,6 +195,26 @@ pub(crate) fn plan_group(
             graph_digest,
             reuse,
         },
+    )
+}
+
+fn plan_native_check_group(
+    inputs: &GroupInputs<'_>,
+) -> Result<(PlanObligation, Vec<MatrixEntry>), OrchestratorError> {
+    let task = inputs.task;
+    let check = inputs
+        .discovery
+        .native_checks
+        .iter()
+        .find(|check| task.task_id == format!("internal/native-check/{}", check.id))
+        .ok_or_else(|| internal("native_check_not_configured"))?;
+    crate::internal_plan::native_homebrew_checks::derive(
+        inputs.root,
+        check,
+        task,
+        inputs.run_key,
+        inputs.wire.generator,
+        inputs.wire.event,
     )
 }
 
