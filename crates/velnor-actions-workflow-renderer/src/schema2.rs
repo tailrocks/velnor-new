@@ -218,13 +218,18 @@ pub fn render_schema2_workflows_with_verified_routing(
         }
     }
     if let Some(generated) = product_release::render(request)? {
+        let product_routing = WorkflowRoutingPolicy::hosted_only();
         files.push(file(
             PRODUCT_RELEASE_WORKFLOW,
             &request.version,
-            &route_workflow(request, PRODUCT_RELEASE_WORKFLOW, generated.workflow)?,
+            &route_workflow_yaml(
+                PRODUCT_RELEASE_WORKFLOW,
+                generated.workflow,
+                &product_routing,
+            )?,
         )?);
         for (path, workflow) in generated.family_workflows {
-            let workflow = route_workflow(request, &path, workflow)?;
+            let workflow = route_workflow_yaml(&path, workflow, &product_routing)?;
             files.push(file(&path, &request.version, &workflow)?);
         }
         for (path, action) in generated.actions {
