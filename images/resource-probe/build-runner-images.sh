@@ -1,6 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+usage() {
+  printf 'Usage: %s [--prebuilt-binaries]\n' "$0" >&2
+}
+
+prebuilt_binaries=0
+if [[ "$#" -gt 1 ]]; then
+  usage
+  exit 2
+fi
+if [[ "$#" -eq 1 ]]; then
+  case "$1" in
+    --prebuilt-binaries) prebuilt_binaries=1 ;;
+    *)
+      usage
+      exit 2
+      ;;
+  esac
+fi
+readonly prebuilt_binaries
+
 readonly runner_image='velnor-runner:linux-amd64'
 readonly dind_image='velnor-dind:linux-amd64'
 readonly target_dir="${CARGO_TARGET_DIR:-crates/velnor-runner/target}"
@@ -33,14 +53,16 @@ git diff --quiet HEAD -- || { printf 'The source tree differs from its release c
 
 python3 -B images/resource-probe/test_verify_runner_listener.py
 
-mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo build \
-  --locked \
-  --manifest-path crates/velnor-runner/Cargo.toml \
-  --package velnor-resource-probe \
-  --bin velnor-storage-init \
-  --bin velnor-job-start-hook \
-  --release \
-  --target x86_64-unknown-linux-musl
+if [[ "$prebuilt_binaries" -eq 0 ]]; then
+  mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo build \
+    --locked \
+    --manifest-path crates/velnor-runner/Cargo.toml \
+    --package velnor-resource-probe \
+    --bin velnor-storage-init \
+    --bin velnor-job-start-hook \
+    --release \
+    --target x86_64-unknown-linux-musl
+fi
 [[ "$(git rev-parse HEAD)" == "$source_revision" ]]
 git diff --quiet HEAD -- || { printf 'The source tree changed during the build.\n' >&2; exit 1; }
 [[ -z "$(git ls-files --others --exclude-standard)" ]] || {

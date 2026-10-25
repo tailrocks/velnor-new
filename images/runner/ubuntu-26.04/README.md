@@ -25,6 +25,29 @@ bash images/resource-probe/build-runner-images.sh
 Install Zig `0.17.0` before this build. The release workflow builds the helper
 with its pinned Rust toolchain and the exact release source commit.
 
+For a local build that must route Cargo through `rust-build-guard`, build all
+three static binaries from the nested runner workspace, then pass them to the
+image script. The script's default no-argument mode remains available; this
+option skips only its helper-binary Cargo build, while keeping the same source,
+binary, image, and runtime checks.
+
+```sh
+export VELNOR_SOURCE_REVISION="$(git rev-parse HEAD)"
+export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER="${TMPDIR:-/tmp}/velnor-zig-musl-linker"
+export RUSTFLAGS='-C link-self-contained=no'
+(
+  cd crates/velnor-runner
+  rust-build-guard -- mise exec -- cargo build --locked \
+    --package velnor-resource-probe \
+    --bin velnor-resource-probe \
+    --bin velnor-storage-init \
+    --bin velnor-job-start-hook \
+    --release \
+    --target x86_64-unknown-linux-musl
+)
+bash images/resource-probe/build-runner-images.sh --prebuilt-binaries
+```
+
 Set the OrbStack Linux guest memory to at least 20 GiB. The GNU tar build uses
 a 14 GiB temporary filesystem at `/tmp`. The mount lets the build run executable files. The build
 uses a memory limit of 20 GiB and a CPU quota of 400000.
