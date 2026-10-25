@@ -4,7 +4,7 @@ use std::error::Error;
 use std::path::Path;
 
 #[test]
-fn canonical_maintenance_check_is_required_without_adding_product_tasks()
+fn canonical_maintenance_check_is_required_with_native_package_tasks()
 -> Result<(), Box<dyn std::error::Error>> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let preparation = crate::prepare(&root)?;
@@ -43,9 +43,16 @@ fn canonical_maintenance_check_is_required_without_adding_product_tasks()
             .any(|task| { task.task_id == "stack/mise/maintenance-helpers/check/default" }),
         "the check remains a named repository-quality obligation"
     );
-    for task in &preparation.discovery.proposals {
-        assert!(!task.task_id.contains("velnor-actions-freshness"));
-        assert!(!task.task_id.contains("velnor-archive-guard"));
+    for package in ["velnor-actions-freshness", "velnor-archive-guard"] {
+        let nextest_task = format!("stack/rust/crates/{package}/nextest/default");
+        assert!(
+            preparation
+                .discovery
+                .proposals
+                .iter()
+                .any(|task| task.task_id == nextest_task),
+            "native Rust package task is discovered: {nextest_task}"
+        );
     }
 
     let mise = std::fs::read_to_string(root.join("mise.toml"))?;

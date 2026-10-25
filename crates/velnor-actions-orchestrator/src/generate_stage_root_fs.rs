@@ -45,7 +45,7 @@ impl StageRoot {
         root: RootIdentity,
         container: PathBuf,
     ) -> Result<Self, OrchestratorError> {
-        let owner = crate::filesystem_owner::effective_uid();
+        let owner = current_owner();
         let (container_identity, container_metadata) = FsIdentity::capture(&container)?;
         if !same_device(root.object, container_identity) {
             return Err(unsafe_path(&container, "cross_filesystem_staging"));
@@ -221,6 +221,19 @@ fn validate_private_file(
         return Err(unsafe_path(path, mismatch_reason));
     }
     Ok(())
+}
+
+/// Read an owner id without trusting user-controlled environment variables.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn current_owner() -> OwnerId {
+    #[cfg(unix)]
+    {
+        crate::filesystem_owner::effective_uid()
+    }
+    #[cfg(not(unix))]
+    {
+        ()
+    }
 }
 
 /// Compare device identity on Unix; staging is colocated by construction elsewhere.

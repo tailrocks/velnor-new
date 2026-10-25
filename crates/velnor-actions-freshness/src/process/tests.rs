@@ -37,8 +37,14 @@ fn timeout_kills_a_running_process_without_waiting_for_its_natural_exit() {
     let started = Instant::now();
     let result = run_bounded(&mut command, 1_024, Duration::from_millis(200));
     let elapsed = started.elapsed();
-    assert!(result.is_err());
-    assert!(elapsed < Duration::from_millis(350), "elapsed: {elapsed:?}");
+    let error = result.expect_err("the ten-second child must time out");
+    assert!(
+        error.contains("timed out"),
+        "unexpected process error: {error}"
+    );
+    // The reaper has a one-second grace window; allow it and scheduler jitter,
+    // while keeping this bound well below the child's ten-second natural exit.
+    assert!(elapsed < Duration::from_secs(2), "elapsed: {elapsed:?}");
 }
 
 #[test]

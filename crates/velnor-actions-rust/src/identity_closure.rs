@@ -300,6 +300,7 @@ mod tests {
                 .is_ok()
         );
         let group = TaskGroup {
+            all_features: false,
             declared_inputs: vec!["../escape".to_owned()],
             ..clippy.clone()
         };

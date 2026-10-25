@@ -34,6 +34,7 @@ fn ci_triggers() -> Trigger {
         push_branches: vec!["main".to_owned()],
         merge_group: false,
         workflow_dispatch: None,
+        workflow_call: false,
         schedule: None,
     }
 }

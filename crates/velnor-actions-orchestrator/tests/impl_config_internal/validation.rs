@@ -78,7 +78,7 @@ fn default_branch_comes_from_the_event_when_origin_head_is_absent() -> TestResul
         || {
             let repo = make_repo("schema = 1\n")?;
             assert_eq!(prepare(repo.path())?.default_branch, "trunk");
-            // The config key still wins over the event.
+            // The configuration value takes priority over the event value.
             let pinned = make_repo("schema = 1\n[workflow]\ndefault_branch = \"pinned\"\n")?;
             assert_eq!(prepare(pinned.path())?.default_branch, "pinned");
             Ok(())

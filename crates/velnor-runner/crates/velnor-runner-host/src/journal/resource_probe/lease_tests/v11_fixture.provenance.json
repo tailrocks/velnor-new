@@ -1,0 +1,22 @@
+{
+  "historical_commit": "afb7ab57c2cf56ab79e99e7530678f439e048914",
+  "historical_source_git_blob_sha1": {
+    "crates/velnor-runner/crates/velnor-runner-host/src/journal/schema.rs": "6fe03c881a8faeeb9bedcc37b66c40cbf05257d5",
+    "crates/velnor-runner/crates/velnor-runner-host/src/journal_schema.rs": "1878a40989654d7c03aea65161026348936de249",
+    "crates/velnor-runner/crates/velnor-runner-host/src/journal_schema/resource_probe.rs": "646d890fb22c35aa22bf885291d9bec8e8ce022a"
+  },
+  "fixture_method": "A test opened the journal with `Journal::open` from the earlier source. It set capacity. It recorded a `resource-probe` operation in phase `create_requested`. It saved `sqlite_schema` and row data. The dump left out only tables that Turso creates inside its database. `PRAGMA user_version` was 11.",
+  "historical_harness_nextest_id": "9fd7f2de-a4af-419e-8d63-466a9c3694ed",
+  "historical_harness_log": "/Users/donbeave/Downloads/velnor-goal/build/v11-genuine-fixture-20261020/historical-dump-nextest.log",
+  "historical_harness_log_sha256": "c63473353057499f470be05add47b6e8cce09fde0c15a64cfc4b9396d12c0903",
+  "fixture_sql_sha256": "aac2174ae918e6a01ef89bd70cb3e191b94fd7e50cb258a6354dddf5a4aa9480",
+  "tested_shipping_source_commit": "e61ef453003461aee008af6619a7c7738293f49d",
+  "validation": {
+    "nextest_id": "aee504ee-5fc3-456d-a34c-98e7ed148d6b",
+    "selector": "test(journal::resource_probe)",
+    "result": "9 passed, 0 failed",
+    "log": "/Users/donbeave/Downloads/velnor-goal/build/v11-genuine-fixture-20261020/resource-probe-final.log",
+    "log_sha256": "aab03fd53025fd23d061bb96817e421c25bd48f7c2a4cc74a832f41d58f26c1c",
+    "assertions": "The version 11 migration keeps the uncertain probe lease and adds the canonical digest. When the test reopens the journal, the migration repairs only the specified legacy digest 5d76d86293261804706a16a73e0491cf4caa859f1b876cda706e568592b85cdf. It leaves a second digest with 64 lower-case hexadecimal characters unchanged. The migration rejects that digest when it reads it."
+  }
+}

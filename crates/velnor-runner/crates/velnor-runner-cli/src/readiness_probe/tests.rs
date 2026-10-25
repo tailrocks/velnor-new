@@ -3,7 +3,30 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;
 
-use super::{ChildWait, INTERNAL_FLAG, bounded_wait, readiness_command};
+use super::{ChildWait, INTERNAL_FLAG, Readiness, bounded_wait, read_status, readiness_command};
+
+#[tokio::test]
+async fn readiness_child_accepts_ready_status_from_the_internal_observer() -> Result<(), String> {
+    let mut child = tokio::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg("printf 'ready\\n'")
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|error| error.to_string())?;
+    let status = child.wait().await.map_err(|error| error.to_string())?;
+    if !status.success() {
+        return Err("The readiness child test fixture failed.".to_owned());
+    }
+    let readiness = read_status(
+        &mut child,
+        tokio::time::Instant::now() + Duration::from_secs(1),
+    )
+    .await;
+    if readiness != Readiness::Ready {
+        return Err("The readiness parser did not accept the ready status.".to_owned());
+    }
+    Ok(())
+}
 
 #[test]
 fn readiness_child_uses_only_the_private_operation_and_state_path() -> Result<(), String> {

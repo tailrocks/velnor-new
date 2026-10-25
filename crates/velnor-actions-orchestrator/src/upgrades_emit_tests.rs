@@ -1,4 +1,5 @@
 use velnor_actions_contract::config::UpgradesConfig;
+use velnor_actions_workflow_renderer::WorkflowRoutingPolicy;
 use velnor_actions_workflow_renderer::setup::{MISE_BINARY_SHA256_LINUX_X64, MiseSetup};
 use velnor_actions_workflow_renderer::upgrades::{UpgradesSpec, render_upgrades_workflow};
 use velnor_actions_workflow_renderer::yaml::{Yaml, render_yaml};
@@ -55,7 +56,10 @@ fn real_rust_verifier_is_emitted_complete_in_prepare_and_verify()
         crate::workflow::ToolchainPhase::Installed,
         velnor_actions_mise::catalog::RUST_CHANNEL_MANIFESTS,
     );
-    let file = render_upgrades_workflow(&spec(verify_rust_script.clone()))?;
+    let file = render_upgrades_workflow(
+        &spec(verify_rust_script.clone()),
+        &WorkflowRoutingPolicy::hosted_only(),
+    )?;
     let expected_script =
         velnor_actions_contract::config::project_tool_refs::project_tool_refs_to_expressions(
             &verify_rust_script,

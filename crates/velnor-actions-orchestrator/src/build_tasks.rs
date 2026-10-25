@@ -81,9 +81,9 @@ fn validate_config_shape(
         .tools
         .get("rust")
         .ok_or_else(|| failure("build_task_rust_selector"))?;
-    // `components`, `targets` and `profile` may repeat the toolchain file's
-    // values: generation already requires the two to be identical
-    // (`rust_toolchain_mirror_mismatch`), so the file stays the build source.
+    // Mise can repeat the toolchain file's components, targets, and profile.
+    // Generation checks that these values agree (`rust_toolchain_mirror_mismatch`).
+    // Keep the toolchain file as the build source.
     if !rust.valid_shape
         || rust
             .unsupported_options

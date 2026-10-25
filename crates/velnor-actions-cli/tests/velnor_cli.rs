@@ -5,8 +5,26 @@ mod impl_archive_guard_builder;
 mod impl_cli;
 #[path = "impl_cli_args.rs"]
 mod impl_cli_args;
+#[path = "impl_cli_cache_normal_transfer.rs"]
+mod impl_cli_cache_normal_transfer;
+#[path = "impl_cli_cache_tar_launcher.rs"]
+mod impl_cli_cache_tar_launcher;
+#[path = "impl_cli_cache_tar_routing.rs"]
+mod impl_cli_cache_tar_routing;
 #[path = "impl_cli_gate.rs"]
 mod impl_cli_gate;
+#[path = "impl_cli_gate_cache_bind.rs"]
+mod impl_cli_gate_cache_bind;
+#[path = "impl_cli_gate_cache_normal_stage.rs"]
+mod impl_cli_gate_cache_normal_stage;
+#[path = "impl_cli_gate_cache_observe.rs"]
+mod impl_cli_gate_cache_observe;
+#[path = "impl_cli_gate_cache_receipt.rs"]
+mod impl_cli_gate_cache_receipt;
+#[path = "impl_cli_gate_cache_transfer.rs"]
+mod impl_cli_gate_cache_transfer;
+#[path = "impl_cli_gate_normal_tofu_preflight.rs"]
+mod impl_cli_gate_normal_tofu_preflight;
 #[path = "impl_cli_gate_preseed.rs"]
 mod impl_cli_gate_preseed;
 #[path = "impl_cli_gate_qualification.rs"]
@@ -82,3 +100,10 @@ mod impl_repo_strictness;
 mod impl_repo_suppressions;
 #[path = "impl_repo_test_registration.rs"]
 mod impl_repo_test_registration;
+
+#[path = "impl_cli_gate_source_evidence.rs"]
+mod impl_cli_gate_source_evidence;
+#[path = "impl_cli_job_authority_inventory.rs"]
+mod impl_cli_job_authority_inventory;
+#[path = "impl_cli_job_image_preview.rs"]
+mod impl_cli_job_image_preview;

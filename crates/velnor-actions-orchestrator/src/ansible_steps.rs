@@ -123,9 +123,8 @@ fn collections_step(
     catalog: &ToolCatalog,
     root: &AnsibleRoot,
 ) -> Result<Step, OrchestratorError> {
-    // The verified tarballs live in the family cache directory: a restored one
-    // is kept only when it still matches the declared SHA-256, otherwise it is
-    // downloaded again; either way it is verified before the offline install.
+    // Keep a restored tarball only if its SHA-256 matches the declared value.
+    // Otherwise, download it again. Verify every tarball before the offline install.
     let download = |collection: &AnsibleCollection| {
         let file = collection_file(collection);
         format!(

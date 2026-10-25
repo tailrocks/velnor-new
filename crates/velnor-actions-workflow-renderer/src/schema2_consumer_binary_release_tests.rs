@@ -2,9 +2,21 @@
 use super::{fixture, job, with_tap};
 use crate::schema2::{
     ConsumerReleaseSpec, ConsumerStableReleaseSpec, render_consumer_binary_release,
-    render_consumer_preview, render_release_tap_reconcile,
+    render_release_tap_reconcile,
 };
-use velnor_actions_contract::{JobTimeout, package_release::PackageReleaseChannel};
+use velnor_actions_contract::package_release::PackageReleaseChannel;
+
+fn hosted_policy() -> crate::workflow_routing::WorkflowRoutingPolicy {
+    crate::workflow_routing::WorkflowRoutingPolicy::hosted_only()
+}
+
+fn field<'a>(node: &'a crate::yaml::Yaml, name: &str) -> &'a crate::yaml::Yaml {
+    let crate::yaml::Yaml::Map(fields) = node else {
+        panic!("{name} parent is not a mapping");
+    };
+    &fields.iter().find(|(key, _)| key == name).expect(name).1
+}
+
 pub(super) fn stable() -> ConsumerReleaseSpec {
     let mut spec = fixture();
     spec.policy.channel = PackageReleaseChannel::Stable;
@@ -27,183 +39,13 @@ pub(super) fn stable() -> ConsumerReleaseSpec {
     spec
 }
 
-fn timeout_line<'a>(yaml: &'a str, name: &str, next: Option<&str>) -> &'a str {
-    job(yaml, name, next)
-        .lines()
-        .find(|line| line.trim_start().starts_with("timeout-minutes:"))
-        .expect("job timeout")
-}
-
-#[test]
-fn publication_timeout_only_extends_preview_admission_and_shared_publish_recovery_jobs() {
-    let preview_default = with_tap();
-    let preview_default_yaml = render_consumer_preview(&preview_default)
-        .expect("default preview")
-        .bytes;
-    assert_eq!(preview_default.publication_timeout_minutes.minutes(), 5);
-    for (name, next) in [
-        ("preview-eligibility", Some("preview-payload")),
-        ("preview-signer", Some("preview-publisher")),
-    ] {
-        assert!(timeout_line(&preview_default_yaml, name, next).contains("timeout-minutes: 5"));
-    }
-    assert!(
-        timeout_line(&preview_default_yaml, "preview-publisher", None)
-            .contains("timeout-minutes: 32")
-    );
-    assert!(
-        timeout_line(&preview_default_yaml, "preview-recovery", None)
-            .contains("timeout-minutes: 22")
-    );
-
-    let mut preview = preview_default.clone();
-    preview.publication_timeout_minutes = JobTimeout::new(15).expect("bounded timeout");
-    let preview_yaml = render_consumer_preview(&preview).expect("preview").bytes;
-    assert!(
-        timeout_line(
-            &preview_yaml,
-            "preview-eligibility",
-            Some("preview-payload")
-        )
-        .contains("timeout-minutes: 15")
-    );
-    assert!(timeout_line(&preview_yaml, "preview-publisher", None).contains("timeout-minutes: 42"));
-    assert!(timeout_line(&preview_yaml, "preview-recovery", None).contains("timeout-minutes: 32"));
-    for (name, next) in [
-        ("preview-signer", Some("preview-publisher")),
-        ("preview-tap-writer", Some("preview-tap-merge")),
-        ("preview-tap-merge", None),
-    ] {
-        assert!(timeout_line(&preview_yaml, name, next).contains("timeout-minutes: 5"));
-    }
-    assert!(
-        timeout_line(
-            &preview_yaml,
-            "preview-tap-prepare",
-            Some("preview-tap-writer")
-        )
-        .contains("timeout-minutes: 15")
-    );
-    assert_eq!(
-        timeout_line(
-            &preview_default_yaml,
-            "preview-tap-prepare",
-            Some("preview-tap-writer")
-        ),
-        timeout_line(
-            &preview_yaml,
-            "preview-tap-prepare",
-            Some("preview-tap-writer")
-        ),
-        "tap preparation timeout stays unchanged"
-    );
-    for (name, next) in [
-        ("preview-payload", Some("preview-assemble")),
-        ("preview-assemble", Some("preview-signer")),
-    ] {
-        assert_eq!(
-            timeout_line(&preview_default_yaml, name, next),
-            timeout_line(&preview_yaml, name, next),
-            "{name} native timeout remains source-configured"
-        );
-    }
-    assert_eq!(
-        render_release_tap_reconcile(&preview_default)
-            .expect("default reconciliation")
-            .bytes,
-        render_release_tap_reconcile(&preview)
-            .expect("reconciliation")
-            .bytes,
-        "separate reconciliation workflow keeps its timeout graph"
-    );
-}
-
-#[test]
-fn publication_timeout_only_extends_stable_shared_publish_recovery_jobs() {
-    let mut stable_default = stable();
-    let mut tap = with_tap().homebrew_tap.expect("tap policy");
-    tap.policy.destinations.stable =
-        Some(velnor_actions_contract::config::HomebrewTapDestination {
-            formula: "Formula/scanner.rb".to_owned(),
-        });
-    stable_default.homebrew_tap = Some(tap.clone());
-    let stable_default_yaml = render_consumer_binary_release(&stable_default)
-        .expect("default stable")
-        .bytes;
-    for (name, next) in [
-        ("stable-eligibility", Some("stable-prepare")),
-        ("stable-signer", Some("stable-publisher")),
-    ] {
-        assert!(timeout_line(&stable_default_yaml, name, next).contains("timeout-minutes: 5"));
-    }
-    assert!(
-        timeout_line(
-            &stable_default_yaml,
-            "stable-publisher",
-            Some("stable-recovery")
-        )
-        .contains("timeout-minutes: 32")
-    );
-    assert!(
-        timeout_line(&stable_default_yaml, "stable-recovery", None).contains("timeout-minutes: 22")
-    );
-    let mut stable = stable_default;
-    stable.publication_timeout_minutes = JobTimeout::new(15).expect("bounded timeout");
-    let stable_yaml = render_consumer_binary_release(&stable)
-        .expect("stable")
-        .bytes;
-    assert!(
-        timeout_line(&stable_yaml, "stable-publisher", Some("stable-recovery"))
-            .contains("timeout-minutes: 42")
-    );
-    assert!(timeout_line(&stable_yaml, "stable-recovery", None).contains("timeout-minutes: 32"));
-    for (name, next) in [
-        ("stable-eligibility", Some("stable-prepare")),
-        ("stable-signer", Some("stable-publisher")),
-        ("stable-payload-000", Some("stable-payload-001")),
-        ("stable-tap-writer", Some("stable-tap-merge")),
-        ("stable-tap-merge", None),
-    ] {
-        assert_eq!(
-            timeout_line(&stable_default_yaml, name, next),
-            timeout_line(&stable_yaml, name, next),
-            "{name} timeout stays unchanged"
-        );
-    }
-    assert!(
-        timeout_line(
-            &stable_default_yaml,
-            "stable-tap-prepare",
-            Some("stable-tap-writer")
-        )
-        .contains("timeout-minutes: 15")
-    );
-    assert_eq!(
-        timeout_line(
-            &stable_default_yaml,
-            "stable-tap-prepare",
-            Some("stable-tap-writer")
-        ),
-        timeout_line(
-            &stable_yaml,
-            "stable-tap-prepare",
-            Some("stable-tap-writer")
-        ),
-        "tap preparation timeout stays unchanged"
-    );
-    assert!(
-        timeout_line(&stable_yaml, "stable-eligibility", Some("stable-prepare"))
-            .contains("timeout-minutes: 5")
-    );
-    assert!(
-        timeout_line(&stable_yaml, "stable-signer", Some("stable-publisher"))
-            .contains("timeout-minutes: 5")
-    );
-}
+#[path = "schema2_consumer_binary_release_budget_tests.rs"]
+mod publication_timeout;
 
 #[test]
 fn stable_manual_graph_retains_complete_inventory_and_separates_custody() {
-    let rendered = render_consumer_binary_release(&stable()).expect("shared stable graph");
+    let rendered =
+        render_consumer_binary_release(&stable(), &hosted_policy()).expect("shared stable graph");
     assert_eq!(rendered.path, ".github/workflows/binary-release.yml");
     let yaml = rendered.bytes;
     let trigger = &yaml[..yaml.find("jobs:").expect("jobs")];
@@ -241,7 +83,7 @@ fn stable_manual_graph_retains_complete_inventory_and_separates_custody() {
 }
 #[test]
 fn stable_intent_precedes_tag_mutation_and_observed_origin_precedes_builds() {
-    let yaml = render_consumer_binary_release(&stable())
+    let yaml = render_consumer_binary_release(&stable(), &hosted_policy())
         .expect("stable")
         .bytes;
     let tag = job(&yaml, "stable-tag", Some("stable-payload-000"));
@@ -276,7 +118,7 @@ fn stable_intent_precedes_tag_mutation_and_observed_origin_precedes_builds() {
 fn stable_recovery_cannot_rebuild_and_preparation_is_explicitly_disabled() {
     let mut spec = stable();
     spec.stable.as_mut().expect("stable").release_pr = false;
-    let yaml = render_consumer_binary_release(&spec)
+    let yaml = render_consumer_binary_release(&spec, &hosted_policy())
         .expect("no prepare")
         .bytes;
     let trigger = &yaml[..yaml.find("jobs:").expect("jobs")];
@@ -304,14 +146,14 @@ fn stable_rejects_legacy_inventory_and_invalid_authority_before_rendering() {
     assert!(velnor_actions_contract::parse_package_release_policy(raw.as_bytes()).is_err());
     let mut spec = stable();
     spec.stable = None;
-    assert!(render_consumer_binary_release(&spec).is_err());
+    assert!(render_consumer_binary_release(&spec, &hosted_policy()).is_err());
     let mut spec = stable();
     spec.policy.channel = PackageReleaseChannel::Preview;
-    assert!(render_consumer_binary_release(&spec).is_err());
+    assert!(render_consumer_binary_release(&spec, &hosted_policy()).is_err());
     let mut spec = stable();
     spec.stable.as_mut().expect("stable").version_package =
         "x\"\npre_release_hook = ['evil']".to_owned();
-    assert!(render_consumer_binary_release(&spec).is_err());
+    assert!(render_consumer_binary_release(&spec, &hosted_policy()).is_err());
 }
 
 #[test]
@@ -324,7 +166,7 @@ fn stable_shares_bounded_production_and_channel_specific_tap_destinations() {
         formula: "Formula/scanner.rb".to_owned(),
     });
     spec.homebrew_tap = Some(tap);
-    let yaml = render_consumer_binary_release(&spec)
+    let yaml = render_consumer_binary_release(&spec, &hosted_policy())
         .expect("stable tap")
         .bytes;
     assert_eq!(yaml.matches("timeout-minutes: 25").count(), 7);
@@ -338,10 +180,87 @@ fn stable_shares_bounded_production_and_channel_specific_tap_destinations() {
     assert!(!merge.contains("actions/checkout"));
     assert!(!merge.contains("timeout-minutes: 25"));
     spec.producer_timeout_minutes = 31;
-    assert!(render_consumer_binary_release(&spec).is_err());
+    assert!(render_consumer_binary_release(&spec, &hosted_policy()).is_err());
     let mut spec = stable();
     spec.stable.as_mut().expect("stable").release_plz_argv[0] = "bash".to_owned();
-    assert!(render_consumer_binary_release(&spec).is_err());
+    assert!(render_consumer_binary_release(&spec, &hosted_policy()).is_err());
+}
+
+#[test]
+fn stable_source_verifier_uses_the_typed_boundary_and_preserves_owned_homes() {
+    let spec = stable();
+    let mut document = crate::yaml::Yaml::Map(vec![(
+        "jobs".to_owned(),
+        crate::yaml::Yaml::Map(
+            super::super::production::jobs(&spec).expect("stable production jobs"),
+        ),
+    )]);
+    crate::project_tool_resolver::bind_workflow(&mut document).expect("project tool binding");
+    let job = field(field(&document, "jobs"), "stable-payload-000");
+    let steps = match field(job, "steps") {
+        crate::yaml::Yaml::Seq(steps) => steps,
+        other => panic!("stable steps are not a sequence: {other:?}"),
+    };
+    let actual = steps
+        .iter()
+        .find(|step| {
+            field(step, "name") == &crate::yaml::Yaml::str(crate::VERIFY_RUST_TOOLCHAIN_STEP)
+        })
+        .expect("stable Rust verifier");
+    let mut expected = crate::verifier_shell::render_command(
+        velnor_actions_contract::StepRole::VerifyRustManifest,
+        crate::VERIFY_RUST_TOOLCHAIN_STEP,
+        &spec.verify_rust_argv,
+    )
+    .expect("canonical verifier");
+    super::super::steps::with_producer_homes(&mut expected, &spec.producer_cargo_env)
+        .expect("owned Cargo and Rustup homes");
+    assert_eq!(actual, &expected);
+
+    let environment = field(actual, "env");
+    for (key, value) in &spec.producer_cargo_env {
+        assert_eq!(field(environment, key), &crate::yaml::Yaml::str(value));
+    }
+    for key in [
+        "GH_TOKEN",
+        "GITHUB_TOKEN",
+        "MISE_GITHUB_TOKEN",
+        "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+        "ACTIONS_ID_TOKEN_REQUEST_URL",
+    ] {
+        assert_eq!(field(environment, key), &crate::yaml::Yaml::str(""));
+    }
+    let install = steps
+        .iter()
+        .position(|step| {
+            field(step, "name")
+                == &crate::yaml::Yaml::str("Install pinned Cargo metadata toolchain")
+        })
+        .expect("Rust install step");
+    let verify = steps
+        .iter()
+        .position(|step| step == actual)
+        .expect("verifier index");
+    assert!(
+        install < verify,
+        "verification must follow the Rust install"
+    );
+}
+
+#[test]
+fn scale_set_rejects_the_native_macos_binary_build_job() {
+    let policy = crate::workflow_routing::test_policy(
+        velnor_actions_contract::ExecutionMode::ScaleSet,
+        crate::schema2::Schema2WorkflowRequest::canonical_scale_set().expect("selector"),
+    );
+    let error = render_consumer_binary_release(&stable(), &policy)
+        .expect_err("macOS binary build cannot run on a Linux Scale Set");
+    assert!(
+        error.to_string().contains(
+            "unsupported_darwin_workload:.github/workflows/binary-release.yml:stable-payload-000:"
+        ),
+        "{error}"
+    );
 }
 
 #[test]
@@ -355,7 +274,8 @@ fn stable_tap_reconciliation_is_valid_without_dispatch_inputs() {
     });
     spec.homebrew_tap = Some(tap);
 
-    let rendered = render_release_tap_reconcile(&spec).expect("stable reconciliation workflow");
+    let rendered = render_release_tap_reconcile(&spec, &hosted_policy())
+        .expect("stable reconciliation workflow");
     assert_eq!(rendered.path, ".github/workflows/stable-tap-reconcile.yml");
     assert!(
         rendered.bytes.contains("name: Stable tap reconciliation"),
@@ -379,7 +299,7 @@ fn stable_tap_reconciliation_is_valid_without_dispatch_inputs() {
         assert!(rendered.bytes.contains(operation), "missing {operation}");
     }
 
-    let stable_release = render_consumer_binary_release(&spec)
+    let stable_release = render_consumer_binary_release(&spec, &hosted_policy())
         .expect("stable publisher")
         .bytes;
     assert!(stable_release.contains("VELNOR_STABLE_OPERATION: ${{ inputs.operation }}"));

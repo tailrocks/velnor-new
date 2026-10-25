@@ -240,9 +240,8 @@ fn receipts_require_exact_pins_paths_digests_and_platform() {
             velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(60))
                 .expect("test deadline"),
         )
-        .expect("empty")
-        .len(),
-        0
+        .expect("empty"),
+        [] as [velnor_actions_mise::checks::SystemToolProof; 0]
     );
 }
 

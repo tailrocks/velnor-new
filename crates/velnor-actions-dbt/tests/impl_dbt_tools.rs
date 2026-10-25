@@ -56,7 +56,7 @@ fn foreign_urls_missing_rows_and_garbage_fail() {
 
 #[test]
 fn stable_release_uses_the_same_archive_layout() {
-    let version = parse_fusion_version("2.0.9").expect("stable");
+    let version = parse_fusion_version("2.0.9").expect("The stable version must parse.");
     assert_eq!(
         fusion_url(version, FusionPlatform::LinuxX64),
         "https://public.cdn.getdbt.com/fs/cli/fs-v2.0.9-x86_64-unknown-linux-gnu.tar.gz"

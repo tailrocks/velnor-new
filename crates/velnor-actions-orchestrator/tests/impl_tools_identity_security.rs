@@ -275,3 +275,9 @@ fn emitted_job_resolver_uses_trusted_mise_and_scrubs_credentials() -> TestResult
     generated::assert_generated_workflow_resolver()?;
     Ok(())
 }
+
+#[test]
+fn emitted_shared_lane_composite_resolver_uses_trusted_mise_and_scrubs_credentials() -> TestResult {
+    generated::assert_generated_shared_lane_composite_resolver()?;
+    Ok(())
+}

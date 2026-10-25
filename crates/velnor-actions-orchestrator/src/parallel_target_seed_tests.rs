@@ -7,6 +7,7 @@ use super::inventory::{Entry, Identity, Snapshot};
 use super::*;
 use rustix::fs::{self as ufs, AtFlags, Mode};
 use std::{
+    ffi::OsString,
     fs,
     os::unix::fs::{MetadataExt, symlink},
     path::PathBuf,
@@ -60,13 +61,21 @@ fn cold_lanes_are_independent_and_keep_metadata_without_cargo_lock() {
         let copy = tree.target().join(lane).join("debug/deps/sample.rlib");
         let copy_meta = fs::metadata(&copy).expect("copied artifact");
         assert_eq!(fs::read(&copy).expect("copy bytes"), b"native artifact\0");
-        assert_eq!(copy_meta.mtime(), source_meta.mtime());
+        assert_eq!(
+            (copy_meta.mtime(), copy_meta.mtime_nsec()),
+            (source_meta.mtime(), source_meta.mtime_nsec())
+        );
         assert_ne!(
             (copy_meta.dev(), copy_meta.ino()),
             (source_meta.dev(), source_meta.ino())
         );
         assert_eq!(copy_meta.nlink(), 1);
         assert!(!tree.target().join(lane).join("debug/.cargo-lock").exists());
+        assert_eq!(
+            fs::read(tree.target().join(lane).join(".rustc_info.json"))
+                .expect("copied compiler metadata"),
+            b"{}"
+        );
     }
     fs::write(
         tree.target().join("velnor-clippy/debug/deps/sample.rlib"),
@@ -249,11 +258,11 @@ fn source_mutation_after_inventory_is_rejected() {
     let debug = openat_dir(&target, "debug").expect("debug fd");
     let mut snapshot = Snapshot::new(Instant::now(), DEFAULT_LIMITS);
     snapshot.entries.push(Entry::new(
-        vec!["debug".to_owned()],
+        vec![OsString::from("debug")],
         statat(&target, "debug").expect("debug stat"),
     ));
     snapshot
-        .inventory(&debug, &mut vec!["debug".to_owned()])
+        .inventory(&debug, &mut vec![OsString::from("debug")])
         .expect("inventory");
     fs::write(tree.target().join("debug/deps/sample.rlib"), b"mutated").expect("mutate baseline");
     assert!(snapshot.validate_source(&target).is_err());
@@ -281,32 +290,6 @@ fn metadata_and_stat_keep_platform_timestamp_values_losslessly() {
 }
 
 #[test]
-fn raw_mode_conversion_accepts_platform_width_and_rejects_narrowing() {
-    assert_eq!(
-        super::inventory::checked_raw_mode::<u16>(0o750).expect("mode"),
-        0o750
-    );
-    assert!(super::inventory::checked_raw_mode::<u16>(u32::MAX).is_err());
-    assert_eq!(
-        super::inventory::checked_raw_mode::<u32>(u32::MAX).expect("wide mode"),
-        u32::MAX
-    );
-}
-
-#[test]
-fn timestamp_conversion_preserves_pre_epoch_time_and_rejects_invalid_nanos() {
-    let expected = UNIX_EPOCH
-        .checked_sub(Duration::from_nanos(1))
-        .expect("representable timestamp");
-    assert_eq!(
-        super::inventory::system_time((-1, 999_999_999)).expect("pre-epoch time"),
-        expected
-    );
-    assert!(super::inventory::system_time((0, -1)).is_err());
-    assert!(super::inventory::system_time((0, 1_000_000_000)).is_err());
-}
-
-#[test]
 fn inventory_stops_retaining_names_at_the_configured_entry_limit() {
     let tree = Tree::new();
     let debug_path = tree.target().join("debug");
@@ -322,11 +305,11 @@ fn inventory_stops_retaining_names_at_the_configured_entry_limit() {
     };
     let mut snapshot = Snapshot::new(Instant::now(), limits);
     snapshot.entries.push(Entry::new(
-        vec!["debug".to_owned()],
+        vec![OsString::from("debug")],
         statat(&target, "debug").expect("debug stat"),
     ));
     assert!(matches!(
-        snapshot.inventory(&debug, &mut vec!["debug".to_owned()]),
+        snapshot.inventory(&debug, &mut vec![OsString::from("debug")]),
         Err(SeedError::Skip("entry limit"))
     ));
     assert!(snapshot.entries.len() <= limits.entries);
@@ -395,3 +378,6 @@ fn stage_replacement_is_never_removed_as_owned_cleanup() {
         b"preserve"
     );
 }
+
+#[path = "parallel_target_seed_migration_tests.rs"]
+mod migration;

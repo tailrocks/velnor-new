@@ -12,6 +12,7 @@ use crate::{RenderError, VERIFY_PATH, VERIFY_VERIFIER_SHELL, commands, yaml::Yam
 
 const VERIFY_RESTORED_RUST_STEP: &str = "Verify restored Rust toolchain";
 const VERIFY_JACTIONLINT_STEP: &str = "Verify jactionlint";
+
 const PROJECT_TOOLS_STEP: &str =
     velnor_actions_contract::config::project_tool_refs::PROJECT_TOOLS_STEP_NAME;
 const ZIZMOR_GITHUB_ENV_COMMENT: &str = "zizmor: ignore[github-env]";
@@ -41,16 +42,16 @@ pub(crate) fn render_typed_step(
     job_env: &BTreeMap<String, String>,
     composite: bool,
 ) -> Result<Option<Yaml>, RenderError> {
-    let is_rust_name = matches!(
-        step.name.as_str(),
-        crate::VERIFY_RUST_TOOLCHAIN_STEP | VERIFY_RESTORED_RUST_STEP
-    );
     let is_rust_role = step.role == Some(StepRole::VerifyRustManifest);
     let is_jactionlint_role = step.role == Some(StepRole::VerifyJactionlint);
-    let is_jactionlint_name = step.name == VERIFY_JACTIONLINT_STEP;
-
     if !is_rust_role && !is_jactionlint_role {
-        if is_rust_name || is_jactionlint_name {
+        // Reserved verifier labels make a negative identity claim only. They
+        // never grant verifier authority, but cannot be reused by ordinary
+        // shell steps to disguise a malformed verifier call.
+        if matches!(
+            step.name.as_str(),
+            crate::VERIFY_RUST_TOOLCHAIN_STEP | VERIFY_RESTORED_RUST_STEP | VERIFY_JACTIONLINT_STEP
+        ) {
             return Err(RenderError::InvalidWorkflow(
                 "verifier_identity_mismatch".to_owned(),
             ));
@@ -97,17 +98,12 @@ pub(crate) fn render_typed_step(
     .map(Some)
 }
 
-/// Render the fixed `sh -c SCRIPT` vector used by release workflow builders.
-pub(crate) fn render_command(name: &str, argv: &[String]) -> Result<Yaml, RenderError> {
-    let role = match name {
-        crate::VERIFY_RUST_TOOLCHAIN_STEP => StepRole::VerifyRustManifest,
-        VERIFY_JACTIONLINT_STEP => StepRole::VerifyJactionlint,
-        _ => {
-            return Err(RenderError::InvalidWorkflow(
-                "unrecognized_release_verifier".to_owned(),
-            ));
-        }
-    };
+/// Render a fixed `sh -c SCRIPT` vector under its explicit semantic role.
+pub(crate) fn render_command(
+    role: StepRole,
+    name: &str,
+    argv: &[String],
+) -> Result<Yaml, RenderError> {
     let step = crate::verifier_composite::verifier_shell_step(
         role,
         name,

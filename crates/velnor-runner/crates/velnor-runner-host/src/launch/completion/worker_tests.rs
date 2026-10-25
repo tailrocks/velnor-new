@@ -11,8 +11,51 @@ use std::time::Duration;
 use bollard::Docker;
 use tokio::sync::oneshot;
 
-use super::{CompletionWorker, HostError, bounded_docker, wake};
+use super::{CompletionWorker, HostError, ReapTask, Reaper, bounded_docker, wake};
 use crate::docker_client::DOCKER_OPERATION_TIMEOUT;
+
+#[path = "saturated_tests.rs"]
+mod saturated_tests;
+
+#[test]
+fn failed_reaper_start_retains_join_until_start_retry() -> Result<(), HostError> {
+    let reaper = Reaper::new();
+    let (release_worker, worker_release) = mpsc::channel();
+    let (worker_done_tx, worker_done) = mpsc::channel();
+    let thread = thread::spawn(move || {
+        if worker_release.recv().is_err() {
+            eprintln!("completion test worker lost phase=release");
+            return;
+        }
+        if worker_done_tx.send(()).is_err() {
+            eprintln!("completion test worker lost phase=done");
+        }
+    });
+    let (join_tx, join_rx) = mpsc::channel();
+    reaper.enqueue(ReapTask {
+        thread,
+        finished: None,
+        joined: None,
+        reaped: Some(join_tx),
+    });
+
+    assert!(matches!(
+        reaper.ensure_started_with(|_| Err(HostError::Journal)),
+        Err(HostError::Journal)
+    ));
+    assert_eq!(reaper.pending_count(), 1);
+
+    release_worker.send(()).map_err(|_| HostError::Journal)?;
+    worker_done
+        .recv_timeout(Duration::from_secs(1))
+        .map_err(|_| HostError::Journal)?;
+    reaper.ensure_started()?;
+    join_rx
+        .recv_timeout(Duration::from_secs(1))
+        .map_err(|_| HostError::Journal)?;
+    assert_eq!(reaper.pending_count(), 0);
+    Ok(())
+}
 
 #[test]
 fn repeated_notifications_coalesce_to_one_bounded_wake() {

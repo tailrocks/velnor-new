@@ -70,7 +70,11 @@ fn candidate_steps(
             &pins.install_qualify_tools_argv,
         )?,
         workflow_steps::verify_rust_step(pins)?,
-        workflow_steps::command_step("Verify jactionlint", &pins.verify_lint_argv)?,
+        workflow_steps::verifier_command_step(
+            velnor_actions_contract::StepRole::VerifyJactionlint,
+            "Verify jactionlint",
+            &pins.verify_lint_argv,
+        )?,
         workflow_steps::install_gh_step(&pins.install_gh_argv)?,
     ];
     steps.extend(assets::download_build_steps_for_id(

@@ -11,6 +11,7 @@ mod requests_app_token_tests;
 #[path = "../../test_support/temp_dir.rs"]
 mod test_temp_dir;
 
+pub mod bounded_file_filter;
 pub mod build;
 pub mod cache;
 pub mod cache_sources;
@@ -48,6 +49,7 @@ pub mod toolfiles;
 pub mod verify;
 pub mod wrappers;
 
+pub use bounded_file_filter::{FileFilterError, ZstdFilterMode, run_zstd_file_filter};
 pub use build::{CANDIDATE_BUILD_BIN, CANDIDATE_BUILD_PACKAGE, CandidateBuild};
 pub use cache::{
     CACHE_DIR_ENV, CachedTaskDescriptor, TASK_ARTIFACTS_DIR_NAME, TASK_ARTIFACTS_VERSION,
@@ -79,7 +81,7 @@ pub use command::{
     NO_AUTO_INSTALL_ENV, PROXY_ENV_KEYS, ProcessFileOutput, ProcessGroupDrainReceipt,
     ProcessOutput, RUSTUP_TOOLCHAIN_ENV, TF_CLI_CONFIG_FILE_ENV, TF_DATA_DIR_ENV,
     TF_IN_AUTOMATION_ENV, TF_IN_AUTOMATION_ON, TF_INPUT_ENV, TF_INPUT_OFF, TF_PLUGIN_CACHE_DIR_ENV,
-    TOOL_COMMAND_SEPARATOR, is_allowed_mise_subcommand, toolchain_env,
+    TOOL_COMMAND_SEPARATOR, is_allowed_mise_subcommand, is_cleanup_failure, toolchain_env,
 };
 pub use error::MiseError;
 pub use gate6::{Gate6Fixture, qualified_task_run_argv, render_gated_task_toml};

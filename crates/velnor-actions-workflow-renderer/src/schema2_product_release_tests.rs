@@ -1,10 +1,8 @@
 use std::collections::BTreeSet;
 use std::error::Error;
-use std::io::Write;
 use std::process::Command;
-use std::process::Stdio;
 
-use velnor_actions_contract::RoutingWorkflow;
+use velnor_actions_contract::{ExecutionMode, RoutingWorkflow};
 
 use crate::schema2::Schema2WorkflowRequest;
 use crate::yaml::render_yaml;
@@ -16,23 +14,36 @@ use super::{Family, ProductRelease, render};
 mod exec_tests;
 #[path = "schema2_product_release_gate_tests.rs"]
 mod gate_tests;
+#[path = "schema2_product_release_prepare_tests.rs"]
+mod prepare_tests;
 #[path = "schema2_product_release_rerun_tests.rs"]
 mod rerun_tests;
+#[path = "schema2_product_release_routing_tests.rs"]
+mod routing_tests;
 #[path = "schema2_product_release_timeout_tests.rs"]
 mod timeout_tests;
 use super::super::product_release_test_pins::test_pins;
 
 fn product(families: &[RoutingWorkflow]) -> Result<ProductRelease, Box<dyn Error>> {
-    let request = Schema2WorkflowRequest {
+    let request = request(families, ExecutionMode::Hosted)?;
+    render(&request)?.ok_or_else(|| "release workflow was not rendered".into())
+}
+
+fn request(
+    families: &[RoutingWorkflow],
+    mode: ExecutionMode,
+) -> Result<Schema2WorkflowRequest, crate::RenderError> {
+    let scale_set = Schema2WorkflowRequest::canonical_scale_set()?;
+    Ok(Schema2WorkflowRequest {
         version: "2.0.0".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
-        scale_set: Schema2WorkflowRequest::canonical_scale_set()?,
+        scale_set: scale_set.clone(),
+        routing: crate::workflow_routing::test_policy(mode, scale_set),
         workflows: BTreeSet::from_iter(families.iter().copied()),
         mbx_qualification: None,
         mise_pin_qualification: None,
         product_release: Some(test_pins()),
-    };
-    render(&request)?.ok_or_else(|| "release workflow was not rendered".into())
+    })
 }
 
 fn all_text(product: &ProductRelease) -> String {
@@ -54,10 +65,12 @@ fn all_text(product: &ProductRelease) -> String {
 
 #[test]
 fn empty_release_request_emits_no_workflow() -> Result<(), Box<dyn Error>> {
+    let scale_set = Schema2WorkflowRequest::canonical_scale_set()?;
     let request = Schema2WorkflowRequest {
         version: "2.0.0".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
-        scale_set: Schema2WorkflowRequest::canonical_scale_set()?,
+        scale_set: scale_set.clone(),
+        routing: crate::workflow_routing::test_policy(ExecutionMode::Hosted, scale_set),
         workflows: BTreeSet::new(),
         mbx_qualification: None,
         mise_pin_qualification: None,
@@ -182,176 +195,88 @@ fn only_requested_families_are_composed() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn generator_publisher_stays_inside_the_typed_release_graph() {
-    assert!(family::publish_script(Family::Generator, &test_pins()).is_err());
-}
 
-#[test]
-fn generator_prepare_uses_the_canonical_inventory_and_manifest_bytes() {
-    let generator =
-        family::prepare_script(Family::Generator, &test_pins()).expect("generator prepare script");
-    let version = env!("CARGO_PKG_VERSION");
-    let linux_checksum =
-        format!("$temp_dir/linux-assets/velnor-actions-{version}-x86_64-unknown-linux-gnu.sha256");
-    let arm_checksum =
-        format!("$temp_dir/macos-assets/velnor-actions-{version}-aarch64-apple-darwin.sha256");
-    let intel_checksum =
-        format!("$temp_dir/macos-intel-assets/velnor-actions-{version}-x86_64-apple-darwin.sha256");
-    let tag = format!("readonly fixed_tag='v{version}'");
-    for required in [
-        "--dir \"$temp_dir/linux-assets\"",
-        "--dir \"$temp_dir/macos-assets\"",
-        "--dir \"$temp_dir/macos-intel-assets\"",
-        &linux_checksum,
-        &arm_checksum,
-        &intel_checksum,
-        "cmp release-manifest.json manifest-assets/release-manifest.json",
-        &tag,
-        ".target_commitish == $sha",
-        "tag does not resolve to the exact source commit",
-    ] {
-        assert!(
-            generator.contains(required),
-            "missing {required}: {generator}"
-        );
-    }
-    assert_eq!(generator.matches("--pattern '").count(), 20);
-    assert!(!generator.contains("velnor-actions-0.1.0"));
-}
+fn binary_release_binds_the_built_helper_and_publishes_both_files() -> Result<(), Box<dyn Error>> {
+    let product = product(&[RoutingWorkflow::MacosBinaryRelease])?;
+    let body = all_text(&product);
+    let pins = test_pins();
+    let helper_build = pins.attestation_helper_build_argv.join(" ");
+    let host_build = pins.runner_build_argv.join(" ");
+    let helper_position = body
+        .find(&helper_build)
+        .ok_or("The helper build command is missing from the workflow.")?;
+    let digest_position = body
+        .find("helper_sha=")
+        .ok_or("The helper digest is missing from the workflow.")?;
+    let host_position = body
+        .find(&host_build)
+        .ok_or("The host build command is missing from the workflow.")?;
 
-#[test]
-fn generator_prepare_rerun_requires_source_target_and_exact_source_tag()
--> Result<(), Box<dyn Error>> {
-    let generator = family::prepare_script(Family::Generator, &test_pins())?;
-    let expected = extract_prepare_expected_assets(&generator)?;
-    let predicate = extract_prepare_metadata_predicate(&generator)?;
-    let tag_function = extract_prepare_tag_function(&generator)?;
-    let canonical = prepare_release_json(expected, "0123456789abcdef0123456789abcdef01234567");
-    let old_release = prepare_release_json(expected, "main");
-
-    assert!(run_prepare_metadata_predicate(
-        predicate, expected, &canonical
-    )?);
+    assert!(helper_position < digest_position && digest_position < host_position);
+    assert!(body.contains("VELNOR_RUNNER_BUILD_SOURCE_SHA"));
+    assert!(body.contains("VELNOR_RUNNER_BUILD_HELPER_SHA256"));
+    assert!(body.contains("set -euo pipefail"));
+    assert!(body.contains("$VELNOR_SOURCE_SHA"));
+    assert!(body.contains("$helper_sha"));
+    assert!(!body.contains("export VELNOR_ATTESTATION_HELPER_SHA256="));
+    assert!(body.contains("VELNOR_SOURCE_SHA"));
+    assert!(body.contains("cp "));
+    assert!(body.contains("$helper_path"));
+    assert!(body.contains("velnor-runner-attestation-helper"));
     assert!(
-        !run_prepare_metadata_predicate(predicate, expected, &old_release)?,
-        "existing v0.1.4 with target_commitish=main passed prepare revalidation"
+        body.contains("shasum -a 256 velnor-host velnor-runner-attestation-helper > SHA256SUMS")
     );
-    assert_prepare_tag_target(tag_function)?;
+    assert_eq!(
+        family::Family::Binary.asset_names(),
+        [
+            "velnor-host",
+            "velnor-runner-attestation-helper",
+            "SHA256SUMS"
+        ]
+        .map(str::to_owned)
+    );
     Ok(())
 }
 
-fn extract_prepare_expected_assets(script: &str) -> Result<&str, Box<dyn Error>> {
-    let start = script
-        .find("readonly prepare_expected_assets='")
-        .ok_or("generator prepare asset list is missing")?
-        + "readonly prepare_expected_assets='".len();
-    let end = script[start..]
-        .find('\'')
-        .map(|offset| start + offset)
-        .ok_or("generator prepare asset list is unterminated")?;
-    Ok(&script[start..end])
-}
+#[test]
+fn binary_host_build_identity_uses_only_the_measured_helper_and_release_source()
+-> Result<(), Box<dyn Error>> {
+    let product = product(&[RoutingWorkflow::MacosBinaryRelease])?;
+    let body = all_text(&product);
+    let digest_position = body.find("helper_sha=").ok_or("helper digest is absent")?;
+    let source_binding_position = body
+        .find("VELNOR_RUNNER_BUILD_SOURCE_SHA")
+        .ok_or("host source identity mapping is absent")?;
+    let helper_binding_position = body
+        .find("VELNOR_RUNNER_BUILD_HELPER_SHA256")
+        .ok_or("host helper identity mapping is absent")?;
+    let host_build = test_pins().runner_build_argv.join(" ");
+    let host_position = body
+        .find(&host_build)
+        .ok_or("host build command is absent")?;
 
-fn extract_prepare_metadata_predicate(script: &str) -> Result<&str, Box<dyn Error>> {
-    let start = script
-        .find("'.[0] as $release")
-        .ok_or("generator prepare metadata predicate is missing")?
-        + 1;
-    let end = script[start..]
-        .find(")' \\\n  <<<\"$matches\"")
-        .map(|offset| start + offset + 1)
-        .ok_or("generator prepare metadata predicate is unterminated")?;
-    Ok(&script[start..end])
-}
-
-fn extract_prepare_tag_function(script: &str) -> Result<&str, Box<dyn Error>> {
-    let start = script
-        .find("assert_tag_target() {")
-        .ok_or("generator prepare tag check is missing")?;
-    let end = script[start..]
-        .find("\n}\n")
-        .map(|offset| start + offset + 2)
-        .ok_or("generator prepare tag check is unterminated")?;
-    Ok(&script[start..end])
-}
-
-fn prepare_release_json(expected: &str, target_commitish: &str) -> String {
-    let assets = expected
-        .trim_start_matches('[')
-        .trim_end_matches(']')
-        .split(',')
-        .map(|name| {
-            format!(
-                r#"{{"name":{name},"state":"uploaded","size":1,"digest":"sha256:{}"}}"#,
-                "a".repeat(64)
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(",");
-    format!(
-        r#"[{{"id":406452151,"tag_name":"v0.1.4","target_commitish":"{target_commitish}","url":"https://api.github.com/repos/tailrocks/velnor-new/releases/406452151","html_url":"https://github.com/tailrocks/velnor-new/releases/tag/v0.1.4","draft":false,"prerelease":false,"immutable":true,"assets":[{assets}]}}]"#
-    )
-}
-
-fn run_prepare_metadata_predicate(
-    predicate: &str,
-    expected: &str,
-    release: &str,
-) -> Result<bool, Box<dyn Error>> {
-    let mut child = Command::new("jq")
-        .args([
-            "-e",
-            "--arg",
-            "tag",
-            "v0.1.4",
-            "--arg",
-            "sha",
-            "0123456789abcdef0123456789abcdef01234567",
-            "--argjson",
-            "expected",
-            expected,
-            predicate,
-        ])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()?;
-    child
-        .stdin
-        .take()
-        .ok_or("could not write generator release fixture")?
-        .write_all(release.as_bytes())?;
-    Ok(child.wait_with_output()?.status.success())
-}
-
-fn assert_prepare_tag_target(function: &str) -> Result<(), Box<dyn Error>> {
-    let script = format!(
-        "repository='tailrocks/velnor-new'\nrelease_commit='0123456789abcdef0123456789abcdef01234567'\nprepare_tag='v0.1.4'\ngh() {{ test \"$*\" = 'api repos/tailrocks/velnor-new/git/ref/tags/v0.1.4' || return 1; printf '%s\\n' \"$GH_TAG_FIXTURE\"; }}\n{function}\nassert_tag_target\n"
-    );
-    let output = Command::new("bash")
-        .args(["-euo", "pipefail", "-c", &script])
-        .env(
-            "GH_TAG_FIXTURE",
-            r#"{"object":{"type":"commit","sha":"0123456789abcdef0123456789abcdef01234567"}}"#,
-        )
-        .output()?;
     assert!(
-        output.status.success(),
-        "exact generator source tag failed: {}",
-        String::from_utf8_lossy(&output.stderr)
+        digest_position < source_binding_position
+            && source_binding_position < helper_binding_position
+            && helper_binding_position < host_position
     );
+    assert!(!body.contains("VELNOR_RUNNER_BUILD_SOURCE_SHA:"));
+    assert!(!body.contains("VELNOR_RUNNER_BUILD_HELPER_SHA256:"));
+    assert!(!body.contains("export VELNOR_ATTESTATION_HELPER_SHA256="));
     Ok(())
 }
 
 #[test]
 fn non_generator_publication_keeps_immutable_tag_and_attestation_checks() {
     let pins = test_pins();
-    let images = family::prepare_script(Family::Images, &pins).expect("image prepare script");
+    let images = family::prepare_script(Family::Images, &pins)
+        .expect("Could not build the image prepare script.");
     assert!(images.contains("--dir \"$temp_dir/assets\""));
     assert!(images.contains("velnor-runner-linux-amd64.tar"));
     assert!(images.contains("velnor-dind-linux-amd64.tar"));
 
-    let publisher = family::publish_script(Family::Binary, &pins).expect("binary publish script");
+    let publisher = family::publish_script(Family::Binary, &pins)
+        .expect("Could not build the binary publish script.");
     assert!(publisher.contains("assets/velnor-host"));
     assert!(publisher.contains("velnor-host binary built from $release_source_sha."));
     assert!(publisher.contains("--source-ref refs/heads/main"));
@@ -359,10 +284,12 @@ fn non_generator_publication_keeps_immutable_tag_and_attestation_checks() {
     assert!(publisher.contains("--latest=false"));
     assert!(publisher.contains("--draft"));
     assert!(publisher.contains("--verify-tag"));
-    let create_ref = publisher.find("git/refs").expect("explicit tag creation");
+    let create_ref = publisher
+        .find("git/refs")
+        .expect("The publisher script must create the tag explicitly.");
     let create_release = publisher
         .find("family_gh release create")
-        .expect("draft release creation");
+        .expect("The publisher script must create the draft release.");
     assert!(create_ref < create_release, "{publisher}");
 }
 

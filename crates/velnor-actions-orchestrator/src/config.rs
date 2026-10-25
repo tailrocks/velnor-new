@@ -187,6 +187,9 @@ struct PartialConfig {
     /// Optional downstream package promotion.
     #[serde(default)]
     distribution: velnor_actions_contract::config::DistributionConfig,
+    /// Reviewed job roles for explicit authority inventory generation.
+    #[serde(default)]
+    job_authority: Vec<velnor_actions_contract::config::JobAuthorityBinding>,
     /// Private cross-repository dependency credentials (HD-7).
     #[serde(default)]
     private_sources: Option<velnor_actions_contract::config::PrivateSourcesConfig>,
@@ -265,6 +268,7 @@ impl PartialConfig {
             native_checks: self.native_checks,
             qualified_tools: self.qualified_tools,
             distribution: self.distribution,
+            job_authority: self.job_authority,
             private_sources: self.private_sources,
             upgrades: self.upgrades,
             images: self.images,

@@ -17,15 +17,18 @@ fn generated_verification_jobs_accept_the_hosted_image_jq_line() -> TestResult {
     let workflow = required_file(&tree, ".github/workflows/ci.yml")?;
     assert!(
         workflow.contains(r"jq-1\\.8\\.[0-9]+"),
-        "jq guard accepts every 1.8 patch: {workflow}"
+        "The jq check must accept every 1.8 patch: {workflow}."
     );
-    assert!(!workflow.contains("jq-1.8.2"), "no exact patch pin");
+    assert!(
+        !workflow.contains("jq-1.8.2"),
+        "The jq check must not require one exact patch version."
+    );
     Ok(())
 }
 
 #[test]
 fn verification_tasks_follow_eligible_lanes_and_stay_required() -> TestResult {
-    for mode in ["hosted", "scale-set", "both"] {
+    for mode in ["hosted", "both", "scale-set"] {
         let repo = make_repo(&config(mode))?;
         write_verification_task_config(repo.path())?;
         let tree = render_staged_tree(&prepare(repo.path())?)?;
@@ -46,10 +49,7 @@ fn verification_tasks_follow_eligible_lanes_and_stay_required() -> TestResult {
                 && macos.contains(r#"case \"$path\" in \"$workspace_root/native/mise.toml\""#),
             "{mode}: exact nested config is hashed and admitted: {macos}"
         );
-        assert!(
-            actionlint.contains("runs-on: ubuntu-26.04"),
-            "{mode}: {actionlint}"
-        );
+        assert_jactionlint_execution_mode(mode, actionlint);
         assert!(
             !workflow.contains("  actionlint__hosted:"),
             "{mode}: {workflow}"
@@ -84,13 +84,6 @@ fn verification_tasks_follow_eligible_lanes_and_stay_required() -> TestResult {
                 assert!(!workflow.contains("  task-linux-lint__hosted:"));
                 assert!(!workflow.contains("  task-linux-lint__local:"));
             }
-            "scale-set" => {
-                let linux = job_body(workflow, "task-linux-lint")?;
-                assert!(linux.contains(SCALE_RUNS), "{linux}");
-                assert!(required.contains("- task-linux-lint"), "{required}");
-                assert!(!workflow.contains("  task-linux-lint__hosted:"));
-                assert!(!workflow.contains("  task-linux-lint__local:"));
-            }
             "both" => {
                 let hosted = job_body(workflow, "task-linux-lint__hosted")?;
                 let scale = job_body(workflow, "task-linux-lint__local")?;
@@ -100,14 +93,59 @@ fn verification_tasks_follow_eligible_lanes_and_stay_required() -> TestResult {
                 assert!(required.contains("- task-linux-lint__local"), "{required}");
                 assert!(!workflow.contains("  task-linux-lint:"));
             }
+            "scale-set" => {
+                let scale = job_body(workflow, "task-linux-lint")?;
+                assert!(scale.contains(SCALE_RUNS), "{scale}");
+                assert!(required.contains("- task-linux-lint"), "{required}");
+                assert!(!workflow.contains("  task-linux-lint__hosted:"));
+                assert!(!workflow.contains("  task-linux-lint__local:"));
+            }
             _ => unreachable!(),
         }
     }
     Ok(())
 }
 
+fn assert_jactionlint_execution_mode(mode: &str, actionlint: &str) {
+    match mode {
+        "hosted" | "both" => assert!(
+            actionlint.contains("runs-on: ubuntu-26.04"),
+            "{mode}: {actionlint}"
+        ),
+        "scale-set" => {
+            assert!(actionlint.contains(SCALE_RUNS), "{mode}: {actionlint}");
+            assert!(
+                actionlint.contains(
+                    "container:\n      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                ),
+                "{mode}: configured job container is retained: {actionlint}"
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
 #[test]
-fn macos_task_cannot_select_the_linux_scale_set_profile() -> TestResult {
+fn scale_set_mode_keeps_declared_darwin_verification_task_hosted() -> TestResult {
+    let repo = make_repo(&config("scale-set"))?;
+    write_verification_task_config(repo.path())?;
+    let prep = prepare(repo.path())?;
+    let tree = render_staged_tree(&prep)?;
+    let workflow = required_file(&tree, ".github/workflows/ci.yml")?;
+    let required = job_body(workflow, "required")?;
+    let native = job_body(workflow, "task-native-format")?;
+    assert!(
+        native.contains("runs-on: macos-15"),
+        "declared native verification stays on its exact hosted runner: {native}"
+    );
+    assert!(required.contains("- task-native-format"), "{required}");
+    assert!(!workflow.contains("task-native-format__hosted"));
+    assert!(!workflow.contains("task-native-format__local"));
+    Ok(())
+}
+
+#[test]
+fn macos_task_scale_set_override_is_rejected_explicitly() -> TestResult {
     let config = format!(
         "{}\n[execution.overrides.\"task-native-format\"]\nprofile = \"local\"\nrole = \"verification\"",
         config("hosted")
@@ -119,7 +157,7 @@ fn macos_task_cannot_select_the_linux_scale_set_profile() -> TestResult {
     assert!(
         error
             .to_string()
-            .contains("verification_runner_incompatible_with_scale_set"),
+            .contains("workflow_task_hosted_only_scale_set_override"),
         "{error}"
     );
     Ok(())
@@ -150,6 +188,6 @@ pub(crate) fn config(mode: &str) -> String {
 [[workflow.tasks]]\nid = \"native-format\"\nkind = \"verification\"\nmise_task = \"format-check\"\nrunner = \"macos-arm64\"\ntimeout_minutes = 5\nsource = {{ mise_config = \"native/mise.toml\", working_directory = \"native\" }}\n\
 [execution]\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\nmode = \"{mode}\"\n\
 [execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n\
-[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"ubuntu-26.04-scale-set\", \"velnor\", \"verification-worker\"]\nplatform = \"linux/amd64\""
+[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"ubuntu-26.04-scale-set\", \"velnor\", \"verification-worker\"]\nplatform = \"linux/amd64\"\njob_container_image = \"ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\""
     )
 }

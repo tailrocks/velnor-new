@@ -1,11 +1,11 @@
 //! Named-check workflow topology and failure inventory regressions.
 
 use super::*;
-use velnor_actions_contract::config::{
-    CheckPlatform, CheckRunner, MiseCheck, NativeHomebrewCheck, NativeHomebrewOperation,
-    QualifiedTool,
+use velnor_actions_contract::config::{CheckPlatform, CheckRunner, MiseCheck, QualifiedTool};
+use velnor_actions_contract::{
+    JobConclusion, RequiredJobResult, StepKind, VelnorConfig, WorkflowEvent,
 };
-use velnor_actions_contract::{StepKind, VelnorConfig};
+use velnor_actions_mise::PinnedTool;
 
 fn check(id: &str, runner: CheckRunner) -> MiseCheck {
     MiseCheck {
@@ -129,8 +129,12 @@ fn no_cargo_checks_gate_required_without_becoming_rust_jobs() {
     );
     assert!(!workflow.ir.jobs.keys().any(|id| id.starts_with("rust-")));
     let proposal = &discovery.proposals[0];
-    let owners = crate::crate_job_ids::JobOwners::new(&discovery.proposals).expect("owners");
-    let owner = owners.for_member(proposal).expect("check owner");
+    let owner = crate::crate_job_ids::job_id_for_member(
+        &discovery.proposals,
+        proposal,
+        WorkflowEvent::Qualification,
+    )
+    .expect("check owner");
     assert_eq!(owner, Some("check-ffi".to_owned()));
     assert_eq!(workflow.ir.jobs["plan"].runs_on, "ubuntu-26.04");
     assert!(
@@ -227,71 +231,6 @@ fn mixed_platform_checks_keep_exact_tools_and_unconditional_reports() {
 }
 
 #[test]
-fn native_check_job_uses_closed_sdk_step_and_standard_plan_transport() {
-    let check = NativeHomebrewCheck {
-        id: "tap-tree".to_owned(),
-        operation: NativeHomebrewOperation::TapTree,
-        formula_channel: None,
-        runner: hosted("macos-15", CheckPlatform::MacosArm64),
-        timeout_minutes: 1,
-    };
-    let discovery = Discovery {
-        native_checks: vec![check],
-        ..Discovery::default()
-    };
-    let jobs = build_check_jobs(
-        WorkflowPolicy::VelnorRepositoryV1,
-        &discovery,
-        &ToolCatalog::pinned(),
-    )
-    .expect("native check job");
-    assert_eq!(jobs.len(), 1);
-    let (id, job) = &jobs[0];
-    assert_eq!(id, "check-tap-tree");
-    assert_eq!(job.needs, ["plan"]);
-    let permissions = job.permissions.as_ref().expect("read-only API permissions");
-    assert_eq!(
-        permissions.contents,
-        velnor_actions_contract::workflow::permissions::PermissionLevel::Read
-    );
-    assert_eq!(
-        permissions.actions,
-        velnor_actions_contract::workflow::permissions::PermissionLevel::Read
-    );
-    assert_eq!(job.steps[0].name, "Checkout");
-    let prepare = job
-        .steps
-        .iter()
-        .find(|step| step.name == "Prepare pinned tools")
-        .expect("pinned gh preparation");
-    let StepKind::Shell { run, .. } = &prepare.kind else {
-        panic!("pinned gh preparation");
-    };
-    assert!(run.join(" ").contains("gh@"));
-    let step = job
-        .steps
-        .iter()
-        .find(|step| matches!(step.kind, StepKind::NativeCheckExecution { .. }))
-        .expect("typed native execution");
-    let StepKind::NativeCheckExecution {
-        check_id,
-        operation,
-        task_id,
-        ..
-    } = &step.kind
-    else {
-        panic!("native check execution variant");
-    };
-    assert_eq!(check_id, "tap-tree");
-    assert_eq!(*operation, NativeHomebrewOperation::TapTree);
-    assert_eq!(task_id, "internal/native-check/tap-tree");
-    assert_eq!(
-        job.steps.last().and_then(|step| step.condition.as_deref()),
-        Some("always()")
-    );
-}
-
-#[test]
 fn generic_registry_id_generates_without_catalog_fallback_and_keeps_plan_identity() {
     let mut declared = gh_qualification();
     let old_version = declared.version.clone();
@@ -346,5 +285,90 @@ fn generic_registry_id_generates_without_catalog_fallback_and_keeps_plan_identit
 
 #[path = "check_jobs_admission_tests.rs"]
 mod admission_tests;
+#[path = "check_jobs_tests/native.rs"]
+mod native;
 #[path = "check_jobs_shellcheck_tests.rs"]
 mod shellcheck_tests;
+
+#[test]
+fn fork_admission_skips_external_runner_and_required_rejects_skip() {
+    let runner = CheckRunner {
+        label: "native-check-scale-set".to_owned(),
+        platform: CheckPlatform::MacosArm64,
+        executor: CheckExecutor::EphemeralSelfHosted,
+        container: None,
+    };
+    let (_root, discovery) = fixture(&[check("native", runner)]);
+    let jobs = build_check_jobs(
+        WorkflowPolicy::VelnorRepositoryV1,
+        &discovery,
+        &ToolCatalog::pinned(),
+    )
+    .expect("external check");
+    assert_eq!(
+        jobs[0].1.condition.as_deref(),
+        Some(EPHEMERAL_CHECK_ADMISSION_CONDITION)
+    );
+    assert!(
+        EPHEMERAL_CHECK_ADMISSION_CONDITION.contains("head.repo.full_name == github.repository")
+    );
+    let mut signals = crate::cover::Signals::default();
+    crate::required_dispositions::fold_planned_jobs(
+        &[],
+        &[RequiredJobResult {
+            job_id: "check-native".to_owned(),
+            conclusion: JobConclusion::Skipped,
+        }],
+        &mut signals,
+        &mut std::collections::BTreeSet::new(),
+    );
+    assert!(signals.not_run);
+}
+
+#[test]
+fn required_rejects_failed_or_missing_named_check() {
+    for conclusion in [JobConclusion::Missing, JobConclusion::Failure] {
+        let mut signals = crate::cover::Signals::default();
+        crate::required_dispositions::fold_planned_jobs(
+            &[],
+            &[RequiredJobResult {
+                job_id: "check-ffi".to_owned(),
+                conclusion,
+            }],
+            &mut signals,
+            &mut std::collections::BTreeSet::new(),
+        );
+        assert!(signals.failed, "{conclusion:?}");
+    }
+}
+
+#[test]
+fn native_check_without_catalog_tools_adds_no_rust_install() {
+    let mut native = check("native", hosted("macos-15", CheckPlatform::MacosArm64));
+    native.tools.clear();
+    let (_root, discovery) = fixture(&[native]);
+    let jobs = build_check_jobs(
+        WorkflowPolicy::VelnorRepositoryV1,
+        &discovery,
+        &ToolCatalog::pinned(),
+    )
+    .expect("native system check");
+    let names: Vec<&str> = jobs[0]
+        .1
+        .steps
+        .iter()
+        .map(|step| step.name.as_str())
+        .collect();
+    assert!(!names.contains(&"Prepare pinned tools"));
+    assert!(!names.contains(&"Prepare Rust components"));
+    assert!(names.contains(&"Execute named check"));
+}
+
+#[path = "check_jobs_ignored_candidate_tests.rs"]
+mod ignored_candidate_tests;
+
+#[path = "check_jobs_tests/identity.rs"]
+mod identity;
+
+#[path = "check_jobs_tests/topology.rs"]
+mod topology;

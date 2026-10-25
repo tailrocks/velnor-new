@@ -10,7 +10,6 @@ use velnor_actions_rust::{CompileDriver, TestRunner};
 /// Identity extension for one Nextest package task.
 fn extension() -> RustTaskIdentityExtension {
     RustTaskIdentityExtension {
-        all_features: false,
         package_id: "demo 0.1.0".to_owned(),
         workspace_id: "workspace".to_owned(),
         profile: "default".to_owned(),
@@ -18,6 +17,7 @@ fn extension() -> RustTaskIdentityExtension {
         graph_digest: velnor_actions_contract::digest_b3(b"graph"),
         targets: vec!["lib".to_owned()],
         features: vec!["default".to_owned()],
+        all_features: false,
         target: "host".to_owned(),
         driver: "cargo+cargo_nextest".to_owned(),
         compile_driver: CompileDriver::Cargo,
@@ -130,7 +130,6 @@ fn constructor_inputs<'a>(
     declared: &'a [String],
 ) -> ExtensionInputs<'a> {
     ExtensionInputs {
-        all_features: false,
         package_id: "demo 0.1.0",
         workspace_id: "workspace",
         profile: "default",
@@ -138,6 +137,7 @@ fn constructor_inputs<'a>(
         graph_digest: "graph",
         targets,
         features,
+        all_features: false,
         target: "host",
         driver: CompileDriver::Cargo,
         runner: TestRunner::CargoNextest,

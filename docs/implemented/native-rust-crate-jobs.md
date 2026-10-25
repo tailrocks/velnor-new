@@ -53,12 +53,12 @@ so each compiles in its own lane through `CARGO_TARGET_DIR`:
 
 The lanes live inside the workspace `target/`. Compiled state reaches the next
 run as the opaque `mbx cache export` bundle, not as a `target/` payload. A crate
-job restores the dependency-seed bundle read-only and imports it; it never
-exports or saves. The non-crate `Dependency seed` job (one per MBX Cargo
-workspace; protected default-branch pushes only; not part of `Required`)
-compiles the three lanes for `--workspace` under the job's
-`MBX_CACHE_EXPORT_GROUP`, records the producer marker, and exports and saves the
-bundle ([cache decisions](../proposed/cache-decisions.md) 1 to 3). MBX shares
+job restores and imports the dependency seed bundle. It never exports or saves.
+Each MBX Cargo workspace has one `Dependency seed` job in addition to its crate jobs.
+This job runs only on protected pushes to the default branch. It is not part of `Required`.
+It compiles the three lanes for `--workspace` with the job's `MBX_CACHE_EXPORT_GROUP`.
+It then records the producer marker and exports and saves the bundle.
+See [cache decisions](../proposed/cache-decisions.md) 1 to 3. MBX shares
 one compiler CPU/memory budget and deduplicates identical in-flight
 compilations across target directories (upstream "Parallel Cargo steps"
 guidance).

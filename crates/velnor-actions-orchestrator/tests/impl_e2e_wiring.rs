@@ -121,25 +121,42 @@ fn check_setup_first(job: &JobText) -> Result<(), String> {
     }
 }
 
-/// Setup position is legal after the V2 wrapper and restore, or on the cold path.
+/// Setup position follows the supported cache bootstrap steps or the cold path.
 fn setup_is_early(job: &JobText, at: usize) -> bool {
     let offset = usize::from(job.steps.first().is_some_and(is_cache_clock));
     let steps = &job.steps[offset..];
     let Some(at) = at.checked_sub(offset) else {
         return false;
     };
+    let has_checkout = steps.first().is_some_and(|step| step.name == "Checkout");
+    let restored_cache = steps.get(1).is_some_and(|step| step.name == "V2 identity")
+        && steps.get(2).is_some_and(|step| {
+            step.name == velnor_actions_workflow_renderer::steps::TOOLS_RESTORE_NAME
+        });
+    let standard_v2 = at == 3 && has_checkout && restored_cache;
+    let standard_bootstrap = steps
+        .get(1)
+        .is_some_and(|step| step.name == "Acquire Velnor")
+        && steps
+            .get(2)
+            .is_some_and(|step| step.name == "Install cache tar adapters");
+    let preseed_bootstrap = steps
+        .get(1)
+        .is_some_and(|step| step.name == "Download helper (pre-seed trust-on-review)")
+        && steps
+            .get(2)
+            .is_some_and(|step| step.name == "Verify helper manifest (pre-seed trust-on-review)")
+        && steps
+            .get(3)
+            .is_some_and(|step| step.name == "Stage helper (pre-seed trust-on-review)")
+        && steps
+            .get(4)
+            .is_some_and(|step| step.name == "Install cache tar adapters");
+    let standard_bootstrap_ready = at == 3 && has_checkout && standard_bootstrap;
+    let preseed_bootstrap_ready = at == 5 && has_checkout && preseed_bootstrap;
     if steps.iter().any(is_cache_clock) {
         return false;
     }
-    let standard_v2 = at == 3
-        && has_prefix(
-            steps,
-            &[
-                "Checkout",
-                "V2 identity",
-                velnor_actions_workflow_renderer::steps::TOOLS_RESTORE_NAME,
-            ],
-        );
     if job.id == "required" {
         let locked_prefix = ["Acquire Velnor", "Checkout"];
         let preseed_prefix = [
@@ -148,12 +165,14 @@ fn setup_is_early(job: &JobText, at: usize) -> bool {
             "Stage helper (pre-seed trust-on-review)",
             "Checkout",
         ];
-        return at == 1 && has_prefix(steps, &["Checkout"])
+        return at == 1 && has_checkout
             || standard_v2
             || at == locked_prefix.len() && has_prefix(steps, &locked_prefix)
-            || at == preseed_prefix.len() && has_prefix(steps, &preseed_prefix);
+            || at == preseed_prefix.len() && has_prefix(steps, &preseed_prefix)
+            || standard_bootstrap_ready
+            || preseed_bootstrap_ready;
     }
-    at <= 1 || standard_v2
+    at <= 1 || standard_v2 || standard_bootstrap_ready || preseed_bootstrap_ready
 }
 
 fn has_prefix(steps: &[StepText], expected: &[&str]) -> bool {

@@ -13,43 +13,56 @@
 //! the environment set.
 
 use std::env;
-use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{
     ACQUIRE_PREVIEW_SOURCE_OP, ACQUIRE_RELEASE_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP,
     ADMIT_RELEASE_AGGREGATE_OP, ADMIT_STABLE_TAG_ORIGIN_OP, BUN_ASSETS_EXPORT_OP,
-    BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP, BUN_REGISTRY_INSTALL_OP,
-    CAPTURE_REVIEW_COMPLETION_OP, DYNAMIC_MATRIX_OUTPUT_MODE, EMIT_REVIEW_COMPLETION_OP,
-    EXECUTE_CHECK_OP, EXECUTE_RELEASE_PRODUCER_OP, FETCH_OP, FINALIZE_PREVIEW_SOURCE_OP,
-    GITHUB_EVIDENCE_FETCH_OP, GITHUB_EVIDENCE_IMPORT_OP, GRADLE_RUN_OP, MERGE_HOMEBREW_TAP_PR_OP,
-    MERGE_OP, OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PLAYWRIGHT_INSTALL_OP,
-    PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PRIVATE_FETCH_OP, PRIVATE_REVOKE_OP,
-    PUBLISH_PACKAGE_RELEASE_OP, PlanOutputMode, RECOVER_PACKAGE_RELEASE_OP, REPORT_OP,
-    REQUEST_FILE_ENV, SELECT_PREVIEW_SOURCE_OP, SELECT_RELEASE_TAP_CONTINUATION_OP,
-    SELECT_STABLE_RELEASE_SOURCE_OP, SIGN_PACKAGE_RELEASE_OP, TASK_EXECUTION_RESOLVER_OP,
-    WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP, WRITE_STABLE_TAG_INTENT_OP,
-    WRITE_STABLE_TAG_ORIGIN_OP, execute_check, merge_internal, merge_passed, plan_internal,
-    plan_outputs, publish_final_report, publish_plan_files, resolve_task_execution,
-    response_path_for, retrieve_reports, run_bun_registry_install, run_github_evidence_fetch,
-    run_github_evidence_import, run_gradle_run, run_playwright_install, run_private_fetch,
-    run_private_revoke, write_preseed_manifest, write_request, write_task_report,
+    BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP, BUN_REGISTRY_INSTALL_OP, CACHE_RECEIPT_OP,
+    CAPTURE_REVIEW_COMPLETION_OP, EMIT_REVIEW_COMPLETION_OP, EXECUTE_CHECK_OP,
+    EXECUTE_RELEASE_PRODUCER_OP, FETCH_OP, FINALIZE_PREVIEW_SOURCE_OP, GITHUB_EVIDENCE_FETCH_OP,
+    GITHUB_EVIDENCE_IMPORT_OP, GRADLE_RUN_OP, MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP,
+    OrchestratorError, PLAN_OP, PLAYWRIGHT_INSTALL_OP, PREPARE_HOMEBREW_TAP_OP,
+    PRESEED_MANIFEST_OP, PRIVATE_FETCH_OP, PRIVATE_REVOKE_OP, PUBLISH_PACKAGE_RELEASE_OP,
+    RECOVER_PACKAGE_RELEASE_OP, REPORT_OP, REQUEST_FILE_ENV, SELECT_PREVIEW_SOURCE_OP,
+    SELECT_RELEASE_TAP_CONTINUATION_OP, SELECT_STABLE_RELEASE_SOURCE_OP, SIGN_PACKAGE_RELEASE_OP,
+    SOURCE_EVIDENCE_OP, TASK_EXECUTION_RESOLVER_OP, WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP,
+    WRITE_STABLE_TAG_INTENT_OP, WRITE_STABLE_TAG_ORIGIN_OP,
 };
 
+#[path = "dispatch/diagnostics.rs"]
+mod diagnostics;
+pub(crate) use diagnostics::{fail_internal, fail_public, working_dir};
 #[path = "dispatch/bun_assets.rs"]
 mod bun_assets;
 #[path = "dispatch/fileless.rs"]
 mod fileless;
 #[path = "dispatch_preview_production.rs"]
 mod preview_production;
-mod public;
 #[path = "dispatch_review_completion.rs"]
 mod review_completion;
 #[path = "dispatch_tap_continuation.rs"]
 mod tap_continuation;
+
+mod public;
 pub(crate) use public::run_public;
+#[path = "dispatch_cache_bind.rs"]
+mod cache_bind;
+#[path = "dispatch_cache_owner_evidence.rs"]
+mod cache_owner_evidence;
+#[path = "dispatch_cache_receipt.rs"]
+mod cache_receipt;
+#[path = "dispatch_cache_runtime.rs"]
+mod cache_runtime;
+#[path = "dispatch_cache_tar.rs"]
+mod cache_tar;
+#[path = "dispatch_cache_tar_launcher.rs"]
+mod cache_tar_launcher;
+#[path = "dispatch_internal_run.rs"]
+mod internal_run;
+#[path = "dispatch_cache_normal_tofu_preflight.rs"]
+mod normal_tofu_cache_preflight;
 #[path = "dispatch_owned_tool_publication.rs"]
 mod owned_publication;
 #[path = "dispatch_package_release.rs"]
@@ -58,6 +71,10 @@ mod package_release;
 mod package_release_publish;
 #[path = "dispatch_package_release_recovery.rs"]
 mod package_release_recovery;
+#[path = "dispatch_run_context.rs"]
+mod run_context;
+#[path = "dispatch_source_evidence_gate.rs"]
+mod source_evidence_gate;
 #[path = "dispatch_tap_merge.rs"]
 mod tap_merge;
 #[path = "dispatch_tap_prepare.rs"]
@@ -74,17 +91,17 @@ const GITHUB_EVENT_ENV: &str = "GITHUB_EVENT_NAME";
 /// Environment variable carrying the event payload path. Never printed.
 const GITHUB_EVENT_PATH_ENV: &str = "GITHUB_EVENT_PATH";
 
-mod operation;
-use operation::{InternalOp, from_env as internal_op};
-
-/// Validated private request: operation plus exact request-file path.
-#[derive(Debug)]
-struct InternalRequest {
-    /// Operation to run.
-    op: InternalOp,
-    /// Exact request-file path from the environment.
-    path: PathBuf,
+fn unit_exit(result: Result<(), OrchestratorError>) -> ExitCode {
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => fail_internal(&error.to_string()),
+    }
 }
+
+#[path = "dispatch/operation.rs"]
+mod operation;
+use operation::from_env as internal_op;
+use operation::{InternalOp, InternalRequest};
 
 /// Run the private file entrypoint when the gate is satisfied.
 ///
@@ -93,7 +110,33 @@ struct InternalRequest {
 /// keeping public behavior byte-identical with or without the environment.
 pub(crate) fn try_internal() -> Option<ExitCode> {
     let request = gate_request()?;
-    Some(run_internal(&request))
+    Some(internal_run::run_internal(&request))
+}
+
+/// Route `tar` and `gtar` invocations to the cache adapter.
+///
+/// One `--version` argument does not need runner context. Archive operations
+/// need the exact operation tag and runner context before the adapter reads
+/// stage inputs.
+pub(crate) fn try_cache_tar_entrypoint() -> Option<ExitCode> {
+    let mut args = env::args_os();
+    let program = args.next()?;
+    if !matches!(
+        Path::new(&program).file_name(),
+        Some(name) if name == "tar" || name == "gtar"
+    ) {
+        return None;
+    }
+    let args: Vec<_> = args.collect();
+    if args.len() == 1 && args[0] == "--version" {
+        return Some(cache_tar::run(&args));
+    }
+    if !env::var(OP_ENV).is_ok_and(|operation| operation == cache_tar::OP)
+        || !cache_runner_context_is_valid()
+    {
+        return Some(fail_internal("cache_tar_runner_context_invalid"));
+    }
+    Some(cache_tar::run(&args))
 }
 
 /// Check the private gate: known op plus request-file presence by op.
@@ -103,9 +146,34 @@ pub(crate) fn try_internal() -> Option<ExitCode> {
 /// takes no request file either: runner temp scopes its output.
 fn gate_request() -> Option<InternalRequest> {
     let op = internal_op()?;
+    if matches!(
+        op,
+        InternalOp::BindQualificationCache
+            | InternalOp::ObserveQualificationCacheRuntime
+            | InternalOp::ObserveQualificationCacheRoots
+            | InternalOp::RecordQualificationCacheOwnerLayer
+            | InternalOp::AggregateQualificationCacheOwner
+            | InternalOp::ImportQualificationCachePayload
+            | InternalOp::ExportQualificationCachePayload
+            | InternalOp::NormalToolsCacheStagePath
+            | InternalOp::ImportNormalToolsCachePayload
+            | InternalOp::ExportNormalToolsCachePayload
+            | InternalOp::InstallCacheTarLaunchers
+            | InternalOp::PreflightNormalTofuCacheRestore
+            | InternalOp::WriteQualificationCacheReceipt
+    ) {
+        return cache_runner_request(op);
+    }
+    if op == InternalOp::WriteQualificationSourceEvidence {
+        return source_evidence_gate::request(op);
+    }
     if fileless::uses_runner_temp_gate(op) {
         return fileless::gate_runner_temp_operation(op);
     }
+    gate_request_file(op)
+}
+
+fn gate_request_file(op: InternalOp) -> Option<InternalRequest> {
     let path = env::var_os(REQUEST_FILE_ENV)
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)?;
@@ -120,8 +188,18 @@ fn gate_file_request(op: InternalOp, path: PathBuf) -> Option<InternalRequest> {
         InternalOp::CaptureReviewCompletion | InternalOp::EmitReviewCompletion => {
             return review_completion::gate_request(&path).map(|path| InternalRequest { op, path });
         }
+        InternalOp::TapAdmission => {
+            return tap_prepare::gate_admission_request(&path)
+                .map(|path| InternalRequest { op, path });
+        }
         InternalOp::WriteRequest => {
-            if !request_can_be_materialized(&path) {
+            if path.exists() {
+                return None;
+            }
+            if !env::var(GITHUB_EVENT_ENV).is_ok_and(|name| !name.is_empty()) {
+                return None;
+            }
+            if env::var_os(GITHUB_EVENT_PATH_ENV).is_none_or(|value| value.is_empty()) {
                 return None;
             }
         }
@@ -158,10 +236,6 @@ fn gate_file_request(op: InternalOp, path: PathBuf) -> Option<InternalRequest> {
         | InternalOp::AcquireReleaseLeaves => {
             return package_release::gate_request(&path).map(|path| InternalRequest { op, path });
         }
-        InternalOp::TapAdmission => {
-            return tap_prepare::gate_admission_request(&path)
-                .map(|path| InternalRequest { op, path });
-        }
         InternalOp::TapPrepare => {
             return tap_prepare::gate_request(&path).map(|path| InternalRequest { op, path });
         }
@@ -172,206 +246,63 @@ fn gate_file_request(op: InternalOp, path: PathBuf) -> Option<InternalRequest> {
         InternalOp::TapMerge => {
             return tap_merge::gate_request(&path).map(|path| InternalRequest { op, path });
         }
-        InternalOp::Fetch
-        | InternalOp::Report
-        | InternalOp::GitHubEvidenceFetch
-        | InternalOp::GitHubEvidenceImport
-        | InternalOp::BunRegistryInstall
-        | InternalOp::BunAssetsExport
-        | InternalOp::BunAssetsPrepare
-        | InternalOp::BunAssetsImport
-        | InternalOp::GradleRun
-        | InternalOp::PlaywrightInstall
-        | InternalOp::PrivateFetch
-        | InternalOp::PrivateRevoke
-        | InternalOp::PreseedManifest
-        | InternalOp::RepoPolicy
-        | InternalOp::ExecuteCheck
-        | InternalOp::ExecuteNativeHomebrewCheck
-        | InternalOp::QualifyHomebrew
-        | InternalOp::SeedParallelTargets
-        | InternalOp::ResolveTaskExecution => {}
+        op if request_file_only_gate(op) => {}
+        _ => return None,
     }
     Some(InternalRequest { op, path })
 }
 
-fn request_can_be_materialized(path: &Path) -> bool {
-    !path.exists()
-        && env::var(GITHUB_EVENT_ENV).is_ok_and(|name| !name.is_empty())
-        && env::var_os(GITHUB_EVENT_PATH_ENV).is_some_and(|value| !value.is_empty())
+fn request_file_only_gate(op: InternalOp) -> bool {
+    matches!(
+        op,
+        InternalOp::Fetch
+            | InternalOp::Report
+            | InternalOp::BunRegistryInstall
+            | InternalOp::PrivateFetch
+            | InternalOp::PrivateRevoke
+            | InternalOp::PreseedManifest
+            | InternalOp::RepoPolicy
+            | InternalOp::ExecuteCheck
+            | InternalOp::BindQualificationCache
+            | InternalOp::ObserveQualificationCacheRuntime
+            | InternalOp::ObserveQualificationCacheRoots
+            | InternalOp::RecordQualificationCacheOwnerLayer
+            | InternalOp::AggregateQualificationCacheOwner
+            | InternalOp::ImportQualificationCachePayload
+            | InternalOp::ExportQualificationCachePayload
+            | InternalOp::NormalToolsCacheStagePath
+            | InternalOp::ImportNormalToolsCachePayload
+            | InternalOp::ExportNormalToolsCachePayload
+            | InternalOp::InstallCacheTarLaunchers
+            | InternalOp::PreflightNormalTofuCacheRestore
+            | InternalOp::WriteQualificationCacheReceipt
+            | InternalOp::WriteQualificationSourceEvidence
+            | InternalOp::ResolveTaskExecution
+    )
 }
 
-/// Exit code of a unit-returning private operation.
-fn unit_exit(result: Result<(), OrchestratorError>) -> ExitCode {
-    match result {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(error) => fail_internal(&error.to_string()),
+/// Require both GitHub run coordinates before entering cache operations.
+fn cache_runner_request(op: InternalOp) -> Option<InternalRequest> {
+    if !run_context::valid_run_coordinates() {
+        return None;
     }
+    runner_velnor_dir().map(|path| InternalRequest { op, path })
 }
 
-/// Run one validated private operation.
-fn run_internal(request: &InternalRequest) -> ExitCode {
-    if let Some(code) = bun_assets::run(request.op) {
-        return code;
-    }
-    match request.op {
-        InternalOp::PreviewSourceSelection => {
-            preview_production::native(velnor_actions_orchestrator::select_preview_source_from_env())
-        }
-        InternalOp::PreviewSourceFinalization => preview_production::native(
-            velnor_actions_orchestrator::finalize_preview_source_from_env(),
-        ),
-        InternalOp::PreviewSourceAcquisition => preview_production::native(
-            velnor_actions_orchestrator::acquire_preview_source_from_env(),
-        ),
-        InternalOp::ExecuteCheck => unit_exit(execute_check().map(|_| ())),
-        InternalOp::SeedParallelTargets => {
-            unit_exit(velnor_actions_orchestrator::seed_parallel_targets_from_env())
-        }
-        InternalOp::QualifyHomebrew => {
-            unit_exit(velnor_actions_orchestrator::execute_homebrew_qualification_from_env())
-        }
-        InternalOp::ExecuteNativeHomebrewCheck => unit_exit(
-            velnor_actions_orchestrator::execute_native_homebrew_check_from_env().map(|_| ()),
-        ),
-        InternalOp::StableSourceSelection => preview_production::native(
-            velnor_actions_orchestrator::select_stable_release_source_from_env(),
-        ),
-        InternalOp::StableTagIntent => preview_production::native(
-            velnor_actions_orchestrator::write_stable_tag_intent_from_env(),
-        ),
-        InternalOp::StableTagOrigin => preview_production::native(
-            velnor_actions_orchestrator::write_stable_tag_origin_from_env(),
-        ),
-        InternalOp::StableTagAdmission => preview_production::native(
-            velnor_actions_orchestrator::admit_stable_tag_origin_from_env(),
-        ),
-        InternalOp::ExecuteReleaseProducer => preview_production::produce(),
-        InternalOp::AcquireReleaseLeaves => preview_production::acquire(),
-        InternalOp::TapContinuation => tap_continuation::run(),
-        InternalOp::CaptureReviewCompletion => review_completion::capture(),
-        InternalOp::EmitReviewCompletion => review_completion::emit(),
-        InternalOp::AdmitReleaseAggregate => preview_production::admit(),
-        InternalOp::WriteRequest => unit_exit(write_request().map(|_| ())),
-        InternalOp::Plan => run_plan_internal(&request.path),
-        InternalOp::Merge => run_merge_internal(&request.path),
-        InternalOp::Fetch => unit_exit(retrieve_reports().map(|_| ())),
-        InternalOp::Report => unit_exit(write_task_report().map(|_| ())),
-        InternalOp::GradleRun => unit_exit(run_gradle_run()),
-        InternalOp::BunRegistryInstall => unit_exit(run_bun_registry_install()),
-        InternalOp::PlaywrightInstall => unit_exit(run_playwright_install()),
-        InternalOp::PrivateFetch => unit_exit(run_private_fetch()),
-        InternalOp::PrivateRevoke => unit_exit(run_private_revoke()),
-        InternalOp::PreseedManifest => unit_exit(write_preseed_manifest()),
-        InternalOp::BunAssetsExport
-        | InternalOp::BunAssetsPrepare
-        | InternalOp::BunAssetsImport => ExitCode::FAILURE,
-        InternalOp::RepoPolicy => crate::dispatch_repo_policy::run(&request.path),
-        InternalOp::ResolveQualification => crate::dispatch_qualification::run(&request.path),
-        InternalOp::ResolveTaskExecution => match resolve_task_execution() {
-            Ok(frame) => match std::io::stdout().lock().write_all(&frame) {
-                Ok(()) => ExitCode::SUCCESS,
-                Err(error) => fail_internal(&format!("write task execution frame: {error}")),
-            },
-            Err(error) => fail_internal(&error.to_string()),
-        },
-        InternalOp::GitHubEvidenceFetch => unit_exit(run_github_evidence_fetch()),
-        InternalOp::GitHubEvidenceImport => unit_exit(run_github_evidence_import()),
-        InternalOp::PackageSigner => package_release::run(),
-        InternalOp::PackagePublisher => package_release_publish::run(),
-        InternalOp::PackageRecovery => package_release_recovery::run(),
-        InternalOp::TapPrepare => tap_prepare::run(),
-        InternalOp::TapAdmission => tap_prepare::run_admission(),
-        InternalOp::TapWriter => tap_prepare::run_writer(),
-        InternalOp::TapMerge => tap_merge::run(),
-    }
+/// Check the workflow context required by the cache tar adapter.
+pub(crate) fn cache_runner_context_is_valid() -> bool {
+    env::var("GITHUB_ACTIONS").is_ok_and(|value| value == "true")
+        && run_context::valid_run_coordinates()
+        && env::var_os(RUNNER_TEMP_ENV).is_some_and(|value| !value.is_empty())
 }
 
-/// Read the request, run the planner, publish files, write response plus outputs.
-fn run_plan_internal(path: &Path) -> ExitCode {
-    let text = match fs::read_to_string(path) {
-        Ok(text) => text,
-        Err(error) => return fail_internal(&format!("read request: {error}")),
-    };
-    let mode = match env::var_os(PLAN_MATRIX_OUTPUT_MODE_ENV) {
-        None => PlanOutputMode::Static,
-        Some(value) if value == DYNAMIC_MATRIX_OUTPUT_MODE => PlanOutputMode::DynamicMatrix,
-        Some(_) => return fail_internal("bad_plan_matrix_output_mode"),
-    };
-    let response = match plan_internal(&text) {
-        Ok(response) => response,
-        Err(error) => return fail_internal(&error.to_string()),
-    };
-    let sibling = match response_path_for(path) {
-        Ok(sibling) => sibling,
-        Err(error) => return fail_internal(&error.to_string()),
-    };
-    if let Err(error) = fs::write(&sibling, &response) {
-        return fail_internal(&format!("write response: {error}"));
-    }
-    let outputs = match plan_outputs(&response, mode) {
-        Ok(outputs) => outputs,
-        Err(error) => return fail_internal(&error.to_string()),
-    };
-    let Some(runner_temp) = env::var_os(RUNNER_TEMP_ENV).filter(|value| !value.is_empty()) else {
-        return fail_internal("missing runner temp");
-    };
-    let Some(output_path) = env::var_os(GITHUB_OUTPUT_ENV).filter(|value| !value.is_empty()) else {
-        return fail_internal("missing github output");
-    };
-    if let Err(error) = publish_plan_files(&response, &Path::new(&runner_temp).join("velnor")) {
-        return fail_internal(&error.to_string());
-    }
-    let mut body = String::new();
-    for (name, value) in outputs.step_outputs() {
-        body.push_str(name);
-        body.push('=');
-        body.push_str(value);
-        body.push('\n');
-    }
-    match fs::OpenOptions::new()
-        .append(true)
-        .create(true)
-        .open(&output_path)
-        .and_then(|mut file| {
-            use std::io::Write;
-            file.write_all(body.as_bytes())
-        }) {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(error) => fail_internal(&format!("append outputs: {error}")),
-    }
+/// Runner-temp velnor directory for file-less private operations.
+///
+/// `None` when `RUNNER_TEMP` is unset or empty; shared by the fetch,
+/// report, and preseed-manifest gate branches so the scoping rule has
+/// one definition.
+fn runner_velnor_dir() -> Option<PathBuf> {
+    env::var_os(RUNNER_TEMP_ENV)
+        .filter(|value| !value.is_empty())
+        .map(|temp| Path::new(&temp).join("velnor"))
 }
-
-/// Read the request, run the merge, publish the verdict, exit verdict.
-fn run_merge_internal(path: &Path) -> ExitCode {
-    let text = match fs::read_to_string(path) {
-        Ok(text) => text,
-        Err(error) => return fail_internal(&format!("read request: {error}")),
-    };
-    let response = match merge_internal(&text) {
-        Ok(response) => response,
-        Err(error) => return fail_internal(&error.to_string()),
-    };
-    let sibling = match response_path_for(path) {
-        Ok(sibling) => sibling,
-        Err(error) => return fail_internal(&error.to_string()),
-    };
-    if let Err(error) = fs::write(&sibling, &response) {
-        return fail_internal(&format!("write response: {error}"));
-    }
-    let Some(runner_temp) = env::var_os(RUNNER_TEMP_ENV).filter(|value| !value.is_empty()) else {
-        return fail_internal("missing runner temp");
-    };
-    if let Err(error) = publish_final_report(&response, &Path::new(&runner_temp).join("velnor")) {
-        return fail_internal(&error.to_string());
-    }
-    match merge_passed(&response) {
-        Ok(true) => ExitCode::SUCCESS,
-        Ok(false) => ExitCode::from(1),
-        Err(error) => fail_internal(&error.to_string()),
-    }
-}
-
-#[path = "dispatch/errors.rs"]
-mod errors;
-pub(crate) use errors::{fail_internal, fail_public, working_dir};

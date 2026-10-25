@@ -1,7 +1,8 @@
 //! Generated-tree limits apply to the base and extra workflow families.
 
 use std::collections::BTreeSet;
-use velnor_actions_contract::{RoutingWorkflow, ScheduleTrigger, WorkflowPolicy};
+use velnor_actions_contract::config::ValidatedImageReference;
+use velnor_actions_contract::{ExecutionMode, RoutingWorkflow, ScheduleTrigger, WorkflowPolicy};
 use velnor_actions_workflow_renderer::freshness::{FreshnessSpec, render_freshness_workflow};
 use velnor_actions_workflow_renderer::release_tree::render_release_workflow;
 use velnor_actions_workflow_renderer::schema2::MbxQualificationPins;
@@ -9,8 +10,8 @@ use velnor_actions_workflow_renderer::schema2::MisePinQualificationPins;
 use velnor_actions_workflow_renderer::schema2::Schema2WorkflowRequest;
 use velnor_actions_workflow_renderer::setup::MiseSetup;
 use velnor_actions_workflow_renderer::{
-    MAX_WORKFLOW_BYTES, RenderError, RenderedFile, render_schema2_workflows, render_tree,
-    render_tree_with_extra, render_workflow_ir, with_marker,
+    MAX_WORKFLOW_BYTES, RenderError, RenderedFile, WorkflowRoutingPolicy, render_schema2_workflows,
+    render_tree, render_tree_with_extra, render_workflow_ir, with_marker,
 };
 
 const VERSION: &str = "0.1.0";
@@ -179,10 +180,16 @@ fn direct_freshness_renderer_rejects_an_oversized_workflow() -> Result<(), Rende
 
 #[test]
 fn direct_schema2_renderer_rejects_an_oversized_workflow() -> Result<(), RenderError> {
+    let scale_set = Schema2WorkflowRequest::canonical_scale_set()?;
+    let image = ValidatedImageReference::parse(
+        "ghcr.io/tailrocks/velnor-job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    )
+    .expect("immutable test image");
     let request = Schema2WorkflowRequest {
         version: VERSION.to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
-        scale_set: Schema2WorkflowRequest::canonical_scale_set()?,
+        scale_set: scale_set.clone(),
+        routing: WorkflowRoutingPolicy::configured(ExecutionMode::Hosted, scale_set, Some(image)),
         workflows: BTreeSet::from([RoutingWorkflow::Qualification]),
         mbx_qualification: Some(MbxQualificationPins {
             mise_setup: MiseSetup {

@@ -1,7 +1,9 @@
 //! Runner-observed event resolution shared by plan and merge.
 
+use velnor_actions_contract::workflow::QUALIFICATION_WORKFLOW_PATH;
 use velnor_actions_contract::{
-    QualificationDispatch, QualificationPhase, QualificationRunRef, WorkflowEvent,
+    QualificationDispatch, QualificationDispatchMode, QualificationPhase, QualificationRunRef,
+    WorkflowEvent, verification_repeat_campaign,
 };
 
 use crate::OrchestratorError;
@@ -18,6 +20,15 @@ pub(crate) struct QualificationRunnerContext<'a> {
     pub(crate) source_sha: Option<&'a str>,
     pub(crate) run_id: Option<&'a str>,
     pub(crate) run_attempt: Option<&'a str>,
+}
+
+struct QualificationDispatchSource {
+    repository: String,
+    default_branch: String,
+    git_ref: String,
+    workflow_ref: String,
+    workflow_sha: String,
+    source_sha: String,
 }
 
 /// Resolve one GitHub event name plus payload to a workflow event.
@@ -71,43 +82,140 @@ pub(crate) fn qualification_dispatch_for_parts(
     if payload_repository != repository || payload_ref != git_ref {
         return Err(internal("qualification_payload_context_mismatch"));
     }
-    let campaign = nonempty(inputs["campaign"].as_str())
-        .ok_or_else(|| internal("missing_qualification_campaign"))?;
-    let phase = match inputs["phase"].as_str() {
-        Some("cold") => QualificationPhase::Cold,
-        Some("warm") => QualificationPhase::Warm,
-        Some("third") => QualificationPhase::Third,
-        Some("useful_delta") => QualificationPhase::UsefulDelta,
-        Some("control") => QualificationPhase::Control,
-        _ => return Err(internal("invalid_qualification_phase")),
+    let source = QualificationDispatchSource {
+        repository,
+        default_branch,
+        git_ref,
+        workflow_ref: required_context(runner.workflow_ref, "workflow_ref")?,
+        workflow_sha: required_context(runner.workflow_sha, "workflow_sha")?,
+        source_sha: required_context(runner.source_sha, "source_sha")?,
     };
-    let predecessor = qualification_predecessor(inputs)?;
+    let mode = qualification_mode(inputs)?;
     let run_id = runner
         .run_id
         .and_then(|value| value.parse::<u64>().ok())
+        .filter(|value| *value > 0)
         .ok_or_else(|| internal("invalid_qualification_run_id"))?;
     let run_attempt = runner
         .run_attempt
         .and_then(|value| value.parse::<u32>().ok())
+        .filter(|value| *value > 0)
         .ok_or_else(|| internal("invalid_qualification_run_attempt"))?;
+    let (campaign, phase, predecessor) =
+        qualification_selection(inputs, mode, &source, run_id, run_attempt)?;
+    let QualificationDispatchSource {
+        repository,
+        default_branch,
+        git_ref,
+        workflow_ref,
+        workflow_sha,
+        source_sha,
+    } = source;
     let context = QualificationDispatch {
+        mode,
         campaign,
         phase,
         repository,
         default_branch,
         git_ref,
         ref_protected: runner.ref_protected == Some("true"),
-        workflow_ref: required_context(runner.workflow_ref, "workflow_ref")?,
-        workflow_sha: required_context(runner.workflow_sha, "workflow_sha")?,
-        source_sha: required_context(runner.source_sha, "source_sha")?,
+        workflow_ref,
+        workflow_sha,
+        source_sha,
         run_id,
         run_attempt,
         predecessor,
+        scale_set_image_source_sha: None,
     };
     context
         .validate_shape()
         .map_err(|_| internal("invalid_qualification_context"))?;
     Ok(Some(context))
+}
+
+fn qualification_selection(
+    inputs: &serde_json::Value,
+    mode: QualificationDispatchMode,
+    source: &QualificationDispatchSource,
+    run_id: u64,
+    run_attempt: u32,
+) -> Result<(String, QualificationPhase, Option<QualificationRunRef>), OrchestratorError> {
+    match mode {
+        QualificationDispatchMode::Controlled => {
+            if source.git_ref != format!("refs/heads/{}", source.default_branch)
+                && is_qualification_wrapper(
+                    &source.workflow_ref,
+                    &source.repository,
+                    &source.git_ref,
+                )
+            {
+                return Err(internal("qualification_wrapper_requires_verification_only"));
+            }
+            let campaign = nonempty(inputs["campaign"].as_str())
+                .ok_or_else(|| internal("missing_qualification_campaign"))?;
+            let phase = match inputs["phase"].as_str() {
+                Some("cold") => QualificationPhase::Cold,
+                Some("warm") => QualificationPhase::Warm,
+                Some("third") => QualificationPhase::Third,
+                Some("useful_delta") => QualificationPhase::UsefulDelta,
+                Some("control") => QualificationPhase::Control,
+                _ => return Err(internal("invalid_qualification_phase")),
+            };
+            let predecessor = qualification_predecessor(inputs)?;
+            Ok((campaign, phase, predecessor))
+        }
+        QualificationDispatchMode::VerificationOnly => {
+            if !is_qualification_wrapper(&source.workflow_ref, &source.repository, &source.git_ref)
+            {
+                return Err(internal("verification_only_requires_qualification_wrapper"));
+            }
+            if !has_only_mode_input(inputs) {
+                return Err(internal("verification_only_rejects_extra_inputs"));
+            }
+            let campaign = verification_repeat_campaign(
+                &source.repository,
+                &source.default_branch,
+                &source.git_ref,
+                &source.workflow_ref,
+                &source.workflow_sha,
+                &source.source_sha,
+                run_id,
+            );
+            let phase = if run_attempt == 1 {
+                QualificationPhase::Cold
+            } else {
+                QualificationPhase::Warm
+            };
+            let predecessor = (run_attempt > 1).then_some(QualificationRunRef {
+                run_id,
+                run_attempt: 1,
+            });
+            Ok((campaign, phase, predecessor))
+        }
+    }
+}
+
+fn qualification_mode(
+    inputs: &serde_json::Value,
+) -> Result<QualificationDispatchMode, OrchestratorError> {
+    match inputs.as_object().and_then(|values| values.get("mode")) {
+        None => Ok(QualificationDispatchMode::Controlled),
+        Some(value) if value.as_str() == Some("both") => Ok(QualificationDispatchMode::Controlled),
+        Some(value) if value.as_str() == Some("verification-only") => {
+            Ok(QualificationDispatchMode::VerificationOnly)
+        }
+        Some(_) => Err(internal("invalid_qualification_mode")),
+    }
+}
+
+fn has_only_mode_input(inputs: &serde_json::Value) -> bool {
+    inputs
+        .as_object()
+        .is_some_and(|values| values.len() == 1 && values.contains_key("mode"))
+}
+
+fn is_qualification_wrapper(workflow_ref: &str, repository: &str, git_ref: &str) -> bool {
+    workflow_ref == format!("{repository}/{QUALIFICATION_WORKFLOW_PATH}@{git_ref}")
 }
 
 /// Parse the optional paired run locator. The contract applies phase rules;
@@ -221,125 +329,5 @@ fn is_zero_sha(sha: &str) -> bool {
 }
 
 #[cfg(test)]
-mod qualification_tests {
-    use super::{QualificationRunnerContext, qualification_dispatch_for_parts};
-    use velnor_actions_contract::QualificationPhase;
-
-    fn runner() -> QualificationRunnerContext<'static> {
-        QualificationRunnerContext {
-            repository: Some("owner/project"),
-            git_ref: Some("refs/heads/main"),
-            ref_protected: Some("true"),
-            workflow_ref: Some("owner/project/.github/workflows/ci.yml@refs/heads/main"),
-            workflow_sha: Some("0123456789abcdef0123456789abcdef01234567"),
-            source_sha: Some("0123456789abcdef0123456789abcdef01234567"),
-            run_id: Some("41"),
-            run_attempt: Some("3"),
-        }
-    }
-
-    #[test]
-    fn dispatch_inputs_select_typed_phase_and_bind_runner_identity() {
-        let payload = serde_json::json!({
-            "inputs": {
-                "campaign": "campaign-2030",
-                "phase": "third",
-                "predecessor_run_id": "39",
-                "predecessor_run_attempt": "2"
-            },
-            "ref": "refs/heads/main",
-            "repository": {
-                "full_name": "owner/project",
-                "default_branch": "main"
-            }
-        });
-        let context = qualification_dispatch_for_parts("workflow_dispatch", &payload, runner())
-            .expect("dispatch context")
-            .expect("qualification");
-        assert_eq!(context.phase, QualificationPhase::Third);
-        assert_eq!(context.campaign, "campaign-2030");
-        assert_eq!(context.run_id, 41);
-        assert_eq!(context.run_attempt, 3);
-        assert_eq!(
-            context.predecessor.as_ref().map(|value| value.run_id),
-            Some(39)
-        );
-    }
-
-    #[test]
-    fn rejects_unrecognized_phase_and_missing_campaign() {
-        for inputs in [
-            serde_json::json!({ "campaign": "campaign-2030", "phase": "schedule" }),
-            serde_json::json!({ "phase": "cold" }),
-        ] {
-            let payload = serde_json::json!({
-                "inputs": inputs,
-                "ref": "refs/heads/main",
-                "repository": {
-                    "full_name": "owner/project",
-                    "default_branch": "main"
-                }
-            });
-            assert!(
-                qualification_dispatch_for_parts(
-                    "workflow_dispatch",
-                    &payload,
-                    QualificationRunnerContext {
-                        run_attempt: Some("1"),
-                        ..runner()
-                    },
-                )
-                .is_err()
-            );
-        }
-    }
-
-    #[test]
-    fn rejects_partial_or_nonpositive_predecessor_locators() {
-        for inputs in [
-            serde_json::json!({
-                "campaign": "campaign-2030",
-                "phase": "warm",
-                "predecessor_run_id": "39"
-            }),
-            serde_json::json!({
-                "campaign": "campaign-2030",
-                "phase": "warm",
-                "predecessor_run_id": "0",
-                "predecessor_run_attempt": "2"
-            }),
-            serde_json::json!({
-                "campaign": "campaign-2030",
-                "phase": "warm",
-                "predecessor_run_id": "39",
-                "predecessor_run_attempt": "0"
-            }),
-            serde_json::json!({
-                "campaign": "campaign-2030",
-                "phase": "warm",
-                "predecessor_run_id": "39",
-                "predecessor_run_attempt": "2; exit 1"
-            }),
-        ] {
-            let payload = serde_json::json!({
-                "inputs": inputs,
-                "ref": "refs/heads/main",
-                "repository": {
-                    "full_name": "owner/project",
-                    "default_branch": "main"
-                }
-            });
-            assert!(
-                qualification_dispatch_for_parts(
-                    "workflow_dispatch",
-                    &payload,
-                    QualificationRunnerContext {
-                        run_attempt: Some("1"),
-                        ..runner()
-                    },
-                )
-                .is_err()
-            );
-        }
-    }
-}
+#[path = "request_event_tests.rs"]
+mod tests;

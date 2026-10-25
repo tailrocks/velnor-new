@@ -254,6 +254,7 @@ fn private_fetch_is_unreachable_from_analysis() -> TestResult {
                 | "private_fetch_http.rs"
                 | "private_fetch_root.rs"
                 | "private_fetch_session.rs"
+                | "private_fetch_owned_env.rs"
                 | "private_revoke.rs"
                 | "bun_assets_handoff.rs"
                 | "api.rs"
@@ -316,6 +317,7 @@ fn offline_deps_fail_closed_without_fetch() -> TestResult {
             name.as_str(),
             "private_fetch.rs"
                 | "private_fetch_session.rs"
+                | "private_fetch_owned_env.rs"
                 | "private_revoke.rs"
                 | "bun_registry_install.rs"
                 | "playwright_install.rs"

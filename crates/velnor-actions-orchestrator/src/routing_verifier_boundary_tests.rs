@@ -26,10 +26,12 @@ fn job<'a>(workflow: &'a str, id: &str) -> &'a str {
     let marker = format!("  {id}:");
     let start = workflow.find(&marker).expect("qualification job");
     let rest = &workflow[start..];
-    let end = rest[marker.len()..]
-        .find("\n  mbx-cache-")
-        .map_or(rest.len(), |offset| marker.len() + offset);
-    &rest[..end]
+    let body_len = rest[marker.len()..]
+        .split_inclusive('\n')
+        .take_while(|line| !line.starts_with("  ") || line.starts_with("    "))
+        .map(str::len)
+        .sum::<usize>();
+    &rest[..marker.len() + body_len]
 }
 
 fn assert_verifier_boundary(step: &str) {
@@ -89,7 +91,8 @@ fn qualification_routes_the_same_owned_verifier_to_writer_and_reader() -> Result
     );
     assert!(expected[2].starts_with(&prelude));
 
-    let request = workflow_request(&config, &execution, &catalog, "0.1.44")?;
+    let routing = super::workflow_routing_policy(&config, None)?;
+    let request = workflow_request(&config, &execution, &catalog, "0.1.44", &routing)?;
     let pins = request
         .mbx_qualification
         .as_ref()
@@ -112,13 +115,20 @@ fn qualification_routes_the_same_owned_verifier_to_writer_and_reader() -> Result
         assert_eq!(steps.len(), 1, "{id} has one Rust verifier");
         assert_verifier_boundary(steps[0]);
     }
+    let paired_builder_steps = verifier_steps(job(&rendered.bytes, "paired-sdk-build"));
+    assert_eq!(
+        paired_builder_steps.len(),
+        1,
+        "the paired fixture builder has one Rust verifier"
+    );
+    assert_verifier_boundary(paired_builder_steps[0]);
     assert_eq!(
         rendered
             .bytes
             .matches("name: Verify Rust channel manifest")
             .count(),
-        2,
-        "both qualification lanes use the orchestrator-owned payload"
+        3,
+        "the two cache lanes and paired fixture builder each use one verifier"
     );
     Ok(())
 }

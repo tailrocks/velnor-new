@@ -117,7 +117,8 @@ fn assert_jactionlint_verifier_boundary(job: &str) {
 
 #[test]
 fn renders_daily_schedule_only_workflow_with_four_jobs() {
-    let file = render_upgrades_workflow(&spec()).expect("render");
+    let file =
+        render_upgrades_workflow(&spec(), &WorkflowRoutingPolicy::hosted_only()).expect("render");
     assert_eq!(file.path, ".github/workflows/upgrades.yml");
     let yaml = &file.bytes;
     assert!(
@@ -141,7 +142,9 @@ fn renders_daily_schedule_only_workflow_with_four_jobs() {
 
 #[test]
 fn prepare_holds_no_credential_and_runs_without_cooldown() {
-    let yaml = render_upgrades_workflow(&spec()).expect("render").bytes;
+    let yaml = render_upgrades_workflow(&spec(), &WorkflowRoutingPolicy::hosted_only())
+        .expect("render")
+        .bytes;
     let prepare = job_text(&yaml, "prepare");
     assert!(
         prepare.contains("MISE_MINIMUM_RELEASE_AGE: 0s"),
@@ -196,7 +199,9 @@ fn prepare_holds_no_credential_and_runs_without_cooldown() {
 
 #[test]
 fn publish_mints_a_repository_scoped_write_token_and_never_force_pushes() {
-    let yaml = render_upgrades_workflow(&spec()).expect("render").bytes;
+    let yaml = render_upgrades_workflow(&spec(), &WorkflowRoutingPolicy::hosted_only())
+        .expect("render")
+        .bytes;
     let publish = job_text(&yaml, "publish");
     assert!(publish.contains("needs: verify"), "{publish}");
     assert!(
@@ -250,7 +255,9 @@ fn publish_mints_a_repository_scoped_write_token_and_never_force_pushes() {
 
 #[test]
 fn verify_regenerates_with_its_own_verified_velnor_and_holds_no_write() {
-    let yaml = render_upgrades_workflow(&spec()).expect("render").bytes;
+    let yaml = render_upgrades_workflow(&spec(), &WorkflowRoutingPolicy::hosted_only())
+        .expect("render")
+        .bytes;
     let verify = job_text(&yaml, "verify");
     assert!(verify.contains("needs: prepare"), "{verify}");
     assert!(
@@ -289,7 +296,9 @@ fn verify_regenerates_with_its_own_verified_velnor_and_holds_no_write() {
 fn freshness_gate_is_read_only_and_bounded_by_stuck_days() {
     let mut custom = spec();
     custom.config.stuck_days = 7;
-    let yaml = render_upgrades_workflow(&custom).expect("render").bytes;
+    let yaml = render_upgrades_workflow(&custom, &WorkflowRoutingPolicy::hosted_only())
+        .expect("render")
+        .bytes;
     let gate = job_text(&yaml, "freshness");
     assert!(gate.contains("name: Freshness gate"), "{gate}");
     assert!(gate.contains("pull-requests: read"), "{gate}");
@@ -315,13 +324,13 @@ fn freshness_gate_is_read_only_and_bounded_by_stuck_days() {
 fn disabled_or_invalid_configs_do_not_render() {
     let mut off = spec();
     off.config.enabled = false;
-    assert!(render_upgrades_workflow(&off).is_err());
+    assert!(render_upgrades_workflow(&off, &WorkflowRoutingPolicy::hosted_only()).is_err());
     let mut bad = spec();
     bad.config.stuck_days = 0;
-    assert!(render_upgrades_workflow(&bad).is_err());
+    assert!(render_upgrades_workflow(&bad, &WorkflowRoutingPolicy::hosted_only()).is_err());
     let mut floating = spec();
     floating.gh_version = "latest".to_owned();
-    assert!(render_upgrades_workflow(&floating).is_err());
+    assert!(render_upgrades_workflow(&floating, &WorkflowRoutingPolicy::hosted_only()).is_err());
     for tools in [
         vec![],
         vec!["shellcheck@latest".to_owned()],
@@ -329,13 +338,16 @@ fn disabled_or_invalid_configs_do_not_render() {
     ] {
         let mut bad_tools = spec();
         bad_tools.generate_tools = tools;
-        assert!(render_upgrades_workflow(&bad_tools).is_err());
+        assert!(
+            render_upgrades_workflow(&bad_tools, &WorkflowRoutingPolicy::hosted_only()).is_err()
+        );
     }
 }
 
 #[test]
 fn every_regeneration_verifies_jactionlint_before_running_generate() {
-    let file = render_upgrades_workflow(&spec()).expect("renders");
+    let file =
+        render_upgrades_workflow(&spec(), &WorkflowRoutingPolicy::hosted_only()).expect("renders");
     let yaml = file.bytes;
     for (id, generate) in [
         ("prepare", "Bump every pin"),
@@ -359,13 +371,17 @@ fn every_regeneration_verifies_jactionlint_before_running_generate() {
     for script in ["", "a\nb", "echo ${{ x }}"] {
         let mut bad = spec();
         bad.jactionlint_verify = script.to_owned();
-        assert!(render_upgrades_workflow(&bad).is_err(), "{script:?}");
+        assert!(
+            render_upgrades_workflow(&bad, &WorkflowRoutingPolicy::hosted_only()).is_err(),
+            "{script:?}"
+        );
     }
 }
 
 #[test]
 fn output_matches_generator_golden_snapshot() {
-    let file = render_upgrades_workflow(&spec()).expect("render");
+    let file =
+        render_upgrades_workflow(&spec(), &WorkflowRoutingPolicy::hosted_only()).expect("render");
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(GOLDEN);
     if std::env::var_os("VELNOR_UPDATE_GOLDENS").is_some() {
         std::fs::write(&path, &file.bytes).expect("write golden");

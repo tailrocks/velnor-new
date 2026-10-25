@@ -1,5 +1,8 @@
 //! Source-free, fixed-provider review completion companion.
-use crate::{RenderError, render::RenderedFile, setup::MiseSetup, yaml::Yaml};
+use crate::{
+    RenderError, WorkflowRoutingPolicy, render::RenderedFile, setup::MiseSetup,
+    workflow_routing::route_workflow_yaml, yaml::Yaml,
+};
 use velnor_actions_contract::{
     Step,
     config::ReviewCompletionConfig,
@@ -19,7 +22,7 @@ pub struct ReviewCompletionSpec {
     pub config: ReviewCompletionConfig,
     /// Exact official helper release version.
     pub generator_version: String,
-    /// Qualified hosted Linux Mise bootstrap.
+    /// Linux Mise configuration for the selected runner.
     pub setup: MiseSetup,
     /// Verified official helper acquisition; never repository code.
     pub acquire: Step,
@@ -30,7 +33,10 @@ pub struct ReviewCompletionSpec {
 /// Render the sole native completion workflow without checkout or source tasks.
 /// # Errors
 /// Rejects invalid policy, identities, pins, trigger shape or workflow bounds.
-pub fn render_review_completion(spec: &ReviewCompletionSpec) -> Result<RenderedFile, RenderError> {
+pub fn render_review_completion(
+    spec: &ReviewCompletionSpec,
+    routing: &WorkflowRoutingPolicy,
+) -> Result<RenderedFile, RenderError> {
     spec.policy
         .validate()
         .map_err(|e| RenderError::InvalidWorkflow(e.to_string()))?;
@@ -43,6 +49,24 @@ pub fn render_review_completion(spec: &ReviewCompletionSpec) -> Result<RenderedF
     {
         return Err(invalid());
     }
+    let document = route_workflow_yaml(
+        REVIEW_COMPLETION_WORKFLOW_PATH,
+        completion_document(spec)?,
+        routing,
+    )?;
+    validate_triggers(&document, &spec.policy.default_branch)?;
+    let bytes = crate::render::fallback::render_checked_workflow(
+        REVIEW_COMPLETION_WORKFLOW_PATH,
+        &document,
+        &spec.generator_version,
+    )?;
+    Ok(RenderedFile {
+        path: REVIEW_COMPLETION_WORKFLOW_PATH.to_owned(),
+        bytes,
+    })
+}
+
+fn completion_document(spec: &ReviewCompletionSpec) -> Result<Yaml, RenderError> {
     let job = Yaml::Map(vec![
         (
             "name".to_owned(),
@@ -87,16 +111,7 @@ pub fn render_review_completion(spec: &ReviewCompletionSpec) -> Result<RenderedF
             Yaml::Map(vec![("review-completion".to_owned(), job)]),
         ),
     ]);
-    validate_triggers(&document, &spec.policy.default_branch)?;
-    let bytes = crate::render::fallback::render_checked_workflow(
-        REVIEW_COMPLETION_WORKFLOW_PATH,
-        &document,
-        &spec.generator_version,
-    )?;
-    Ok(RenderedFile {
-        path: REVIEW_COMPLETION_WORKFLOW_PATH.to_owned(),
-        bytes,
-    })
+    Ok(document)
 }
 
 fn map(values: &[(&str, &str)]) -> Yaml {

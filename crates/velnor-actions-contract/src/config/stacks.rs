@@ -72,8 +72,8 @@ pub struct RustStackConfig {
     /// Optional exact `major.minor.patch` Rust toolchain override (`[stacks.rust] toolchain`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub toolchain: Option<String>,
-    /// Opt-in Mise-authoritative Rust version (`[stacks.rust] toolchain_source`);
-    /// absent keeps hard decision 4's agreement rule only.
+    /// Select the Mise Rust version with `[stacks.rust] toolchain_source`.
+    /// Without this option, only the agreement rule in hard decision 4 applies.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub toolchain_source: Option<super::RustToolchainSource>,
     /// Sticky declared compile driver; conflicts with durable evidence fail closed.
@@ -89,8 +89,7 @@ pub struct RustStackConfig {
     /// Existing target lanes are preserved; disabled by default.
     #[serde(default, skip_serializing_if = "is_false")]
     pub seed_parallel_targets: bool,
-    /// Activate every package feature for Clippy only (`--all-features`);
-    /// test, build, and documentation tasks keep their configured features.
+    /// Activate all package features for Clippy only; this does not change test or documentation tasks.
     #[serde(default, skip_serializing_if = "is_false")]
     pub clippy_all_features: bool,
     /// Rust release policy (`[stacks.rust.release]`); disabled by default.
@@ -129,14 +128,6 @@ pub struct RustCrateConfig {
     pub build_jobs: u32,
 }
 
-#[expect(
-    clippy::trivially_copy_pass_by_ref,
-    reason = "serde skip_serializing_if requires a borrowed boolean"
-)]
-fn is_false(value: &bool) -> bool {
-    !value
-}
-
 /// Documented default: one `default` configuration variant list.
 fn default_configurations() -> Vec<RustConfiguration> {
     vec![RustConfiguration {
@@ -156,12 +147,20 @@ pub struct RustConfiguration {
     /// Cargo features for this variant.
     #[serde(default)]
     pub features: Vec<String>,
-    /// Activate every feature each package declares (`--all-features`).
-    /// Conflicts with a `features` list other than empty or `["default"]`.
+    /// Activate every feature declared by each package in this variant (`--all-features`).
+    /// This conflicts with a feature list other than empty or `default` only.
     #[serde(default, skip_serializing_if = "is_false")]
     pub all_features: bool,
     /// Target triple or `host`.
     pub target: String,
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde skip_serializing_if needs a reference predicate"
+)]
+const fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// True for a render-safe Rust target: `host` or a lowercase triple over

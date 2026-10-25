@@ -1,5 +1,5 @@
 .firecrawl/
-/target/
+**/target/
 /.velnor/archive-guard/
 .DS_Store
 __pycache__/

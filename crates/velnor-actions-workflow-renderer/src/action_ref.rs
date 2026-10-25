@@ -3,11 +3,10 @@
 
 use crate::RenderError;
 use velnor_actions_contract::workflow::step_identity::{
-    TOOL_SEED_USES, TOOLS_CACHE_PRELUDE_USES, TOOLS_CACHE_RESTORE_USES,
+    CACHE_TAR_LAUNCHER_USES, JACTIONLINT_VERIFIER_USES, RUST_VERIFIER_USES, TOOL_SEED_USES,
+    TOOLS_CACHE_PRELUDE_USES, TOOLS_CACHE_RESTORE_USES,
 };
-use velnor_actions_contract::workflow::{
-    JACTIONLINT_VERIFIER_USES, RUST_VERIFIER_USES, Step, StepKind, StepRole,
-};
+use velnor_actions_contract::workflow::{Step, StepKind, StepRole};
 
 /// Prefix for renderer-generated shared `ToFu` setup composites.
 pub(crate) const TOFU_PROVIDER_PRELUDE_ACTION_PREFIX: &str =
@@ -17,25 +16,25 @@ pub(crate) const DECLARED_TASK_ACTION_PREFIX: &str = "./.github/actions/declared
 
 /// Validate an `owner/repo@<40 hex>` action ref. Branch names are rejected.
 ///
-/// Only registered tool-seed, tools-cache prelude/restore, and provider-
-/// admission composites are accepted as local paths. Every other local path
-/// is rejected.
+/// Only the fixed tool-seed, tools-cache, provider-admission, and cache-tar
+/// composites use local paths. Every other local path is rejected.
 ///
 /// # Errors
 ///
 /// Returns [`RenderError::BadActionRef`] for a missing pin, a malformed
 /// name, a forbidden installer action, or a short ref.
 pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
-    if RUST_VERIFIER_USES.contains(&uses)
-        || uses == JACTIONLINT_VERIFIER_USES
-        || matches!(
-            uses,
-            TOOL_SEED_USES
-                | TOOLS_CACHE_RESTORE_USES
-                | crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
-        )
+    if matches!(
+        uses,
+        CACHE_TAR_LAUNCHER_USES
+            | TOOL_SEED_USES
+            | TOOLS_CACHE_RESTORE_USES
+            | JACTIONLINT_VERIFIER_USES
+            | crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
+    ) || RUST_VERIFIER_USES.contains(&uses)
         || TOOLS_CACHE_PRELUDE_USES.contains(&uses)
         || is_generated_provider_prelude(uses)
+        || is_qualification_cache_composite(uses)
         || is_crate_obligation_action(uses)
         || is_generated_declared_task(uses)
     {
@@ -61,8 +60,73 @@ pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
     Ok(())
 }
 
+/// Validate the fixed role, empty input/environment envelope, and action kind
+/// for generated verifier calls.
+pub(crate) fn validate_verifier_call(
+    step: &Step,
+    uses: &str,
+    with: &std::collections::BTreeMap<String, String>,
+    env: &std::collections::BTreeMap<String, String>,
+) -> Result<(), RenderError> {
+    let expected_role = if RUST_VERIFIER_USES.contains(&uses) {
+        Some(StepRole::VerifyRustManifest)
+    } else if uses == JACTIONLINT_VERIFIER_USES {
+        Some(StepRole::VerifyJactionlint)
+    } else {
+        None
+    };
+    let verifier_role = matches!(
+        step.role,
+        Some(StepRole::VerifyRustManifest | StepRole::VerifyJactionlint)
+    );
+    if expected_role.is_none() && !verifier_role {
+        return Ok(());
+    }
+    if expected_role != step.role
+        || !with.is_empty()
+        || !env.is_empty()
+        || step.id.is_some()
+        || step.condition.is_some()
+        || step.parallel
+        || !matches!(&step.kind, StepKind::Action { .. })
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "verifier_action_identity_mismatch".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
 /// Prefix for renderer-generated crate obligation composites.
 pub(crate) const CRATE_OBLIGATION_ACTION_PREFIX: &str = "./.github/actions/crate-obligation-";
+
+/// Local composite for one validated qualification-cache owner and phase.
+const QUALIFICATION_CACHE_COMPOSITE_PREFIX: &str = "./.github/actions/qualification-cache-";
+
+pub(crate) fn is_qualification_cache_composite(uses: &str) -> bool {
+    let Some(suffix) = uses.strip_prefix(QUALIFICATION_CACHE_COMPOSITE_PREFIX) else {
+        return false;
+    };
+    if let Some(owner) = suffix.strip_prefix("prepare-") {
+        return velnor_actions_contract::validate_job_id(owner).is_ok();
+    }
+    let Some((phase, rest)) = suffix.split_once('-') else {
+        return false;
+    };
+    if !matches!(phase, "before" | "after") {
+        return false;
+    }
+    let Some(rest) = rest.strip_prefix("save-") else {
+        return false;
+    };
+    let Some((layer, owner)) = rest.split_once('-') else {
+        return false;
+    };
+    matches!(
+        layer,
+        "mbx_objects" | "cargo_sources" | "mise_tools" | "tofu_providers" | "task_result"
+    ) && velnor_actions_contract::validate_job_id(owner).is_ok()
+}
 
 /// Local composite that holds one crate job's obligation steps.
 ///
@@ -102,39 +166,6 @@ pub(crate) fn is_generated_declared_task(uses: &str) -> bool {
         })
 }
 
-pub(crate) fn validate_verifier_call(
-    step: &Step,
-    uses: &str,
-    with: &std::collections::BTreeMap<String, String>,
-    env: &std::collections::BTreeMap<String, String>,
-) -> Result<(), RenderError> {
-    let expected_role = if RUST_VERIFIER_USES.contains(&uses) {
-        Some(StepRole::VerifyRustManifest)
-    } else if uses == JACTIONLINT_VERIFIER_USES {
-        Some(StepRole::VerifyJactionlint)
-    } else {
-        None
-    };
-    let verifier_role = matches!(
-        step.role,
-        Some(StepRole::VerifyRustManifest | StepRole::VerifyJactionlint)
-    );
-    if expected_role.is_none() && !verifier_role {
-        return Ok(());
-    }
-    if expected_role != step.role || !with.is_empty() || !env.is_empty() {
-        return Err(RenderError::InvalidWorkflow(
-            "verifier_action_identity_mismatch".to_owned(),
-        ));
-    }
-    if !matches!(&step.kind, StepKind::Action { .. }) {
-        return Err(RenderError::InvalidWorkflow(
-            "verifier_action_payload_mismatch".to_owned(),
-        ));
-    }
-    Ok(())
-}
-
 /// True for `owner/repo` over alphanumerics plus `.-_`.
 fn is_action_name(name: &str) -> bool {
     !name.is_empty()
@@ -146,13 +177,16 @@ fn is_action_name(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::validate_uses;
-    use velnor_actions_contract::workflow::step_identity::TOOLS_CACHE_PRELUDE_USES;
+    use velnor_actions_contract::workflow::step_identity::{
+        CACHE_TAR_LAUNCHER_USES, TOOLS_CACHE_PRELUDE_USES,
+    };
 
     #[test]
     fn only_registered_cache_composites_are_local_actions() {
         for uses in TOOLS_CACHE_PRELUDE_USES {
             assert!(validate_uses(uses).is_ok(), "{uses}");
         }
+        assert!(validate_uses(CACHE_TAR_LAUNCHER_USES).is_ok());
         assert!(validate_uses("./.github/actions/tofu-provider-prelude-0").is_ok());
         assert!(validate_uses("./.github/actions/tofu-provider-prelude-12").is_ok());
         assert!(validate_uses("./.github/actions/crate-obligation-rust-demo").is_ok());

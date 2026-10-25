@@ -12,15 +12,21 @@ use crate::impl_common::{
     without_ambient_identity,
 };
 
+#[path = "impl_orch_release_emit_scale_set_tests.rs"]
+mod scale_set_tests;
+
 /// Release-enabled consumer config selecting the fixture crate.
 const OIDC_CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\nregistry = \"crates-io\"\npackages = [\"demo\"]\n";
 
+const SCALE_SET_OIDC_CONFIG: &str = "schema = 2\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\nregistry = \"crates-io\"\npackages = [\"demo\"]\n[execution]\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\n[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"ubuntu-26.04-scale-set\", \"velnor\"]\nplatform = \"linux/amd64\"\njob_container_image = \"ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n";
+
 /// Full generated tree with release enabled, in sorted path order.
-const RELEASE_FAMILY: [&str; 18] = [
+const RELEASE_FAMILY: [&str; 19] = [
     ".github/AGENTS.md",
     ".github/CLAUDE.md",
     ".github/actions/declared-task-0/action.yml",
     ".github/actions/u26/action.yml",
+    ".github/actions/velnor-cache-tar-launchers/action.yml",
     ".github/actions/velnor-tool-seed/action.yml",
     ".github/actions/velnor-tools-cache-restore/action.yml",
     ".github/actions/velnor-tools-prelude-u26/action.yml",
@@ -110,6 +116,7 @@ fn release_disabled_emits_base_tree_only() -> TestResult {
                 ".github/CLAUDE.md",
                 ".github/actions/declared-task-0/action.yml",
                 ".github/actions/u26/action.yml",
+                ".github/actions/velnor-cache-tar-launchers/action.yml",
                 ".github/actions/velnor-tool-seed/action.yml",
                 ".github/actions/velnor-tools-cache-restore/action.yml",
                 ".github/actions/velnor-tools-prelude-u26/action.yml",

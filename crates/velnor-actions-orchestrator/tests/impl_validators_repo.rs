@@ -12,6 +12,9 @@ use velnor_actions_orchestrator::prepare;
 
 use crate::impl_common::without_ambient_identity;
 
+#[path = "impl_validators_repo_schema.rs"]
+mod schema_tests;
+
 /// Test error shortcut.
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -59,11 +62,10 @@ fn repo_mise_text() -> Result<String, Box<dyn std::error::Error>> {
 fn fixture_config_sample(sample: &str) -> Result<String, Box<dyn std::error::Error>> {
     let table: toml::Table = toml::from_str(sample)?;
     let mut table = table;
-    let checks = table
+    let check = table
         .get_mut("checks")
         .and_then(toml::Value::as_array_mut)
-        .ok_or("live sample has no checks array")?;
-    let check = checks
+        .ok_or("live sample has no checks array")?
         .first_mut()
         .and_then(toml::Value::as_table_mut)
         .ok_or("live sample has no named check")?;
@@ -71,6 +73,27 @@ fn fixture_config_sample(sample: &str) -> Result<String, Box<dyn std::error::Err
         "inputs".into(),
         toml::Value::Array(vec![toml::Value::String("mise.toml".into())]),
     );
+    // Keep the sample's native-helper and CLI rules; the rest name live
+    // packages that this compact fixture does not carry.
+    if let Some(inputs) = table
+        .get_mut("stacks")
+        .and_then(|stacks| stacks.get_mut("rust"))
+        .and_then(|rust| rust.get_mut("inputs"))
+        .and_then(toml::Value::as_array_mut)
+    {
+        inputs.retain(|rule| {
+            rule.get("packages")
+                .and_then(toml::Value::as_array)
+                .is_some_and(|packages| {
+                    packages.iter().all(|name| {
+                        matches!(
+                            name.as_str(),
+                            Some("velnor-actions-workflow-renderer" | "velnor-actions-cli")
+                        )
+                    })
+                })
+        });
+    }
     Ok(toml::to_string(&table)?)
 }
 
@@ -100,7 +123,7 @@ fn make_sample_repo(sample: &str, mise: &str) -> Result<TempDir, Box<dyn std::er
     )?;
     fs::write(
         root.join("Cargo.toml"),
-        "[workspace]\nmembers = [\"crates/velnor-actions-cli\"]\nresolver = \"3\"\n",
+        "[workspace]\nmembers = [\"crates/velnor-actions-cli\", \"crates/velnor-actions-workflow-renderer\"]\nresolver = \"3\"\n",
     )?;
     let cli = root.join("crates/velnor-actions-cli");
     fs::create_dir_all(cli.join("src"))?;
@@ -109,6 +132,13 @@ fn make_sample_repo(sample: &str, mise: &str) -> Result<TempDir, Box<dyn std::er
         "[package]\nname = \"velnor-actions-cli\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
     )?;
     fs::write(cli.join("src/main.rs"), "fn main() {}\n")?;
+    let renderer = root.join("crates/velnor-actions-workflow-renderer");
+    fs::create_dir_all(renderer.join("src"))?;
+    fs::write(
+        renderer.join("Cargo.toml"),
+        "[package]\nname = \"velnor-actions-workflow-renderer\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )?;
+    fs::write(renderer.join("src/lib.rs"), "pub fn f() {}\n")?;
     git(&["add", "-A"], root)?;
     git(&["commit", "-m", "fixture"], root)?;
     git(
@@ -134,37 +164,10 @@ fn repo_config_sample_parses_through_prepare() -> TestResult {
         let repo = make_sample_repo(&sample, &mise)?;
         let prep = prepare(repo.path())?;
         assert_eq!(prep.config.schema, 2);
-        let rust = prep
-            .config
-            .stacks
-            .rust
-            .as_ref()
-            .ok_or("sample Rust policy")?;
-        let rule = rust
-            .inputs
-            .iter()
-            .find(|rule| rule.packages == ["velnor-actions-cli"])
-            .ok_or("live CLI repository input rule disappeared during typed admission")?;
-        assert_eq!(
-            rule.globs,
-            [
-                "crates/velnor-actions-*/**",
-                "crates/velnor-archive-guard/**",
-                "crates/velnor-runner/Cargo.toml",
-                "crates/velnor-runner/crates/*/**",
-            ]
-        );
-        assert!(rule.complete, "CLI repository inputs remain complete");
-        assert!(
-            prep.discovery
-                .workspaces
-                .iter()
-                .flat_map(|workspace| &workspace.record.packages)
-                .any(|package| package.name == "velnor-actions-cli"
-                    && package.in_workspace
-                    && !package.external),
-            "the sample fixture must contain the declared CLI input owner"
-        );
+        assert_eq!(prep.config.checks.len(), 1);
+        assert_eq!(prep.config.checks[0].id, "maintenance-helpers");
+        assert_eq!(prep.config.checks[0].task, "test-maintenance-helpers");
+        assert_sample_input_owners(&prep)?;
         let execution = prep
             .config
             .execution
@@ -188,6 +191,47 @@ fn repo_config_sample_parses_through_prepare() -> TestResult {
         assert_eq!(prep.default_branch, "main");
         Ok(())
     })
+}
+
+/// Keep each sample input rule attached to its declared workspace package.
+fn assert_sample_input_owners(
+    prep: &velnor_actions_orchestrator::GenerationPreparation,
+) -> TestResult {
+    let rust = prep
+        .config
+        .stacks
+        .rust
+        .as_ref()
+        .ok_or("sample Rust policy")?;
+    let cli = rust
+        .inputs
+        .iter()
+        .find(|rule| rule.packages == ["velnor-actions-cli"])
+        .ok_or("live CLI repository input rule disappeared during typed admission")?;
+    assert_eq!(
+        cli.globs,
+        [
+            "crates/velnor-actions-*/**",
+            "crates/velnor-archive-guard/**",
+            "crates/velnor-runner/Cargo.toml",
+            "crates/velnor-runner/crates/*/**",
+        ]
+    );
+    assert!(cli.complete, "CLI repository inputs remain complete");
+    assert_package_owner(prep, "velnor-actions-cli");
+    Ok(())
+}
+
+/// Require a declared sample owner to resolve inside its workspace.
+fn assert_package_owner(prep: &velnor_actions_orchestrator::GenerationPreparation, name: &str) {
+    assert!(
+        prep.discovery
+            .workspaces
+            .iter()
+            .flat_map(|workspace| &workspace.record.packages)
+            .any(|package| package.name == name && package.in_workspace && !package.external),
+        "fixture is missing declared input owner {name}"
+    );
 }
 
 #[test]
@@ -236,114 +280,6 @@ fn repo_sample_excludes_nested_cargo_test_fixtures_before_admission() -> TestRes
             Ok(())
         },
     )
-}
-
-#[test]
-fn repo_config_sample_covers_schema_keys() -> TestResult {
-    let sample = repo_sample_text()?;
-    let table: toml::Table = toml::from_str(&sample)?;
-    for key in table.keys() {
-        assert!(
-            [
-                "schema",
-                "workflow",
-                "resources",
-                "test_sharding",
-                "stacks",
-                "discovery",
-                "actions",
-                "execution",
-                "checks",
-                "qualified_tools",
-                "dco",
-            ]
-            .contains(&key.as_str()),
-            "sample key outside schema: {key}"
-        );
-    }
-    let section_keys = |section: &str| -> Vec<String> {
-        table
-            .get(section)
-            .and_then(toml::Value::as_table)
-            .map(|values| values.keys().cloned().collect())
-            .unwrap_or_default()
-    };
-    for key in section_keys("workflow") {
-        assert!(
-            [
-                "name",
-                "policy",
-                "default_branch",
-                "generator_validation",
-                "max_parallel_jobs",
-                "crate_timeout_minutes",
-                "plan_timeout_minutes",
-                "pull_request_cache_policy",
-                "runner_label",
-                "lint",
-            ]
-            .contains(&key.as_str()),
-            "workflow key outside schema: {key}"
-        );
-    }
-    for key in section_keys("discovery") {
-        assert_eq!(key, "exclude", "discovery key outside schema: {key}");
-    }
-    for key in section_keys("execution") {
-        assert!(
-            [
-                "default_profile",
-                "mode",
-                "hosted_profile",
-                "scale_set_profile",
-                "profiles",
-                "parity",
-                "overrides",
-                "workflows",
-            ]
-            .contains(&key.as_str()),
-            "execution key outside schema: {key}"
-        );
-    }
-    assert_sample_mentions(&sample);
-    Ok(())
-}
-
-/// Tokens the live schema-2 sample must still spell.
-fn assert_sample_mentions(sample: &str) {
-    for token in [
-        "schema",
-        "[workflow]",
-        "name",
-        "policy",
-        "default_branch",
-        "generator_validation",
-        "max_parallel_jobs",
-        "pull_request_cache_policy",
-        "[resources]",
-        "compiler_process_budget",
-        "test_process_budget",
-        "[test_sharding]",
-        "default_shards",
-        "by_manifest",
-        "[stacks]",
-        "ignore",
-        "[stacks.rust]",
-        "configurations",
-        "[discovery]",
-        "exclude",
-        "[actions.overrides]",
-        "[execution]",
-        "default_profile",
-        "hosted_profile",
-        "scale_set_profile",
-        "workflows",
-    ] {
-        assert!(
-            sample.contains(token),
-            "schema key missing from sample: {token}"
-        );
-    }
 }
 
 /// Pinned `uses:` ref fixture.

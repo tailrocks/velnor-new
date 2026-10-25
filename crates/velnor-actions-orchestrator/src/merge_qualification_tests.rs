@@ -1,16 +1,24 @@
 use super::*;
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
+use crate::cover::{CoverSinks, Fold, Signals, cover_entry};
+use crate::merge::FinalStatus;
 use velnor_actions_contract::{
-    PlanGenerator, PlanRunner, QualificationDispatch, QualificationPhase, QualificationRunRef,
-    RunnerSelection, Trust, WorkflowEvent, plan_id_for_run,
+    CacheLayer, CacheOutcome, CacheResult, ExecuteTaskIds, ExecuteTaskRef, MatrixEntry,
+    MatrixReport, MatrixStatus, MatrixTaskEntry, ObligationDecision, PlanGenerator, PlanObligation,
+    PlanRunner, PlannedPlatform, PlatformBinding, PlatformRunnerEnvironment, QualificationDispatch,
+    QualificationPhase, QualificationRunRef, RunnerSelection, TaskReport, TaskStatus, Trust,
+    WorkflowEvent, plan_id_for_run, task_report_id_for_task,
 };
 
 const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
+const CLIPPY: &str = "stack/rust/demo/clippy/default";
+const TEST: &str = "stack/rust/demo/test/default";
 
 fn context() -> QualificationDispatch {
     QualificationDispatch {
+        mode: velnor_actions_contract::QualificationDispatchMode::Controlled,
         campaign: "campaign-a".to_owned(),
         phase: QualificationPhase::Cold,
         repository: "owner/project".to_owned(),
@@ -23,6 +31,7 @@ fn context() -> QualificationDispatch {
         run_id: 123,
         run_attempt: 1,
         predecessor: None,
+        scale_set_image_source_sha: None,
     }
 }
 
@@ -124,3 +133,6 @@ fn merge_requires_identical_qualification_provenance() {
     }
     assert!(!is_coherent(&plan, &request(None)));
 }
+
+#[path = "merge_qualification_group_tests.rs"]
+mod group_tests;

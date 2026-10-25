@@ -1,10 +1,27 @@
 //! One-request GitHub reconciliation steps for a completed runner.
 
+use velnor_runner_github::session::Transport;
 use velnor_runner_github::{RunnerReference, get_runner_by_name, remove_runner};
 
 use super::{Context, EffectBudget, Failure, run_effect};
 use crate::error::HostError;
 use crate::journal::{CleanupClaim, CompletedLaunch, CompletionIdentity};
+
+#[cfg(test)]
+pub(crate) async fn reconcile_for_test<T: Transport + ?Sized>(
+    scope: &crate::journal::ConnectionJournal,
+    transport: &mut T,
+    admin: &crate::listen::Secret,
+    launch: &CompletedLaunch,
+    claim: CleanupClaim,
+) -> Result<(), HostError> {
+    let completion = super::super::journal_ref::CompletionJournal::scoped(scope.clone());
+    let stopping = std::sync::atomic::AtomicBool::new(false);
+    let mut budget = super::EffectBudget::new(&stopping);
+    reconcile_with_transport(&completion, transport, admin, launch, claim, &mut budget)
+        .await
+        .map_err(|failure| failure.error)
+}
 
 pub(super) async fn reconcile(
     context: &mut Context<'_>,
@@ -12,20 +29,35 @@ pub(super) async fn reconcile(
     claim: CleanupClaim,
     budget: &mut EffectBudget<'_>,
 ) -> Result<(), Failure> {
+    reconcile_with_transport(
+        context.journal,
+        context.transport,
+        context.admin,
+        launch,
+        claim,
+        budget,
+    )
+    .await
+}
+
+async fn reconcile_with_transport<T: Transport + ?Sized>(
+    journal: &crate::launch::completion::journal_ref::CompletionJournal,
+    transport: &mut T,
+    admin: &crate::listen::Secret,
+    launch: &CompletedLaunch,
+    claim: CleanupClaim,
+    budget: &mut EffectBudget<'_>,
+) -> Result<(), Failure> {
     let identity = &launch.identity;
     let found = run_effect(
-        context.journal,
+        journal,
         budget,
         launch.intent.id,
         claim,
         "runner lookup",
         || async {
-            get_runner_by_name(
-                context.transport,
-                &identity.runner_name,
-                context.admin.expose(),
-            )
-            .map_err(|_| HostError::Endpoint)
+            get_runner_by_name(transport, &identity.runner_name, admin.expose())
+                .map_err(|_| HostError::Endpoint)
         },
     )
     .await?;
@@ -37,43 +69,34 @@ pub(super) async fn reconcile(
     }
     if found.is_some() {
         run_effect(
-            context.journal,
+            journal,
             budget,
             launch.intent.id,
             claim,
             "runner delete",
             || async {
-                remove_runner(
-                    context.transport,
-                    identity.runner_id,
-                    context.admin.expose(),
-                )
-                .map_err(|_| HostError::Endpoint)
+                remove_runner(transport, identity.runner_id, admin.expose())
+                    .map_err(|_| HostError::Endpoint)
             },
         )
         .await?;
     }
     let absent = run_effect(
-        context.journal,
+        journal,
         budget,
         launch.intent.id,
         claim,
         "runner absence lookup",
         || async {
-            get_runner_by_name(
-                context.transport,
-                &identity.runner_name,
-                context.admin.expose(),
-            )
-            .map_err(|_| HostError::Endpoint)
+            get_runner_by_name(transport, &identity.runner_name, admin.expose())
+                .map_err(|_| HostError::Endpoint)
         },
     )
     .await?;
     if absent.is_some() {
         return Err(Failure::not_proven("runner absence"));
     }
-    let recorded = context
-        .journal
+    let recorded = journal
         .record_completion_runner_absent(launch.intent.id, claim.generation)
         .await
         .map_err(|error| Failure::request("runner absence record", error))?;
@@ -82,6 +105,10 @@ pub(super) async fn reconcile(
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "runner/transport_tests/mod.rs"]
+mod transport_tests;
 
 fn matches_identity(runner: &RunnerReference, identity: &CompletionIdentity) -> bool {
     runner.id == identity.runner_id

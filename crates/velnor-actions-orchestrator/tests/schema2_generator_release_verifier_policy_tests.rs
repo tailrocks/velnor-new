@@ -136,11 +136,14 @@ fn release_workflow_keeps_registry_token_empty_and_mise_auth_narrow() {
         )
         .is_err()
     );
+    let runner_image_step = "      - name: Build Runner and DinD images\n";
+    assert_eq!(WORKFLOW.matches(runner_image_step).count(), 1);
     let misplaced = WORKFLOW.replacen(
-        "      - name: Build runner and DinD images\n",
-        "      - name: Build runner and DinD images\n        env:\n          CARGO_REGISTRY_TOKEN: \"\"\n",
+        runner_image_step,
+        "      - name: Build Runner and DinD images\n        env:\n          CARGO_REGISTRY_TOKEN: \"\"\n",
         1,
     );
+    assert_ne!(misplaced, WORKFLOW, "the mutation changes one real step");
     assert!(
         assert_release_workflow_verifier(
             &misplaced,

@@ -18,7 +18,7 @@ use crate::impl_perf_p13::perf_fixtures_p13::{
 use crate::impl_perf_p13::perf_harness_p13::{
     BenchSample, RssSampler, bench_line, bench_line_with_phase_timings, commit_two,
     metadata_baseline_ms, obligation_digest, obligation_task_ids, plan_at,
-    plan_at_with_phase_timings, timed, timed_rss, toolchain_metadata,
+    plan_at_with_phase_timings, rustup_executable, timed, timed_rss, toolchain_metadata,
 };
 
 /// Fixture width for every benchmark case (44 obligations, under budget).
@@ -349,20 +349,27 @@ fn bench_real_dep_and_toolchain_change() -> TestResult {
 
 /// Same inventory parsed under two installed toolchains, or honest skip.
 fn toolchain_case(root: &std::path::Path) -> TestResult {
-    let listed = std::process::Command::new("rustup")
+    let rustup = rustup_executable()?;
+    let listed = std::process::Command::new(&rustup)
         .args(["toolchain", "list"])
         .output()?;
     let installed = String::from_utf8_lossy(&listed.stdout).into_owned();
+    eprintln!(
+        "bench: case=toolchain inventory rustup={} toolchains={}",
+        rustup.display(),
+        installed.lines().collect::<Vec<_>>().join(",")
+    );
     let have = |prefix: &str| installed.lines().any(|line| line.starts_with(prefix));
     if !(have("1.97.1-") && have("1.98.1-")) {
         eprintln!("bench: case=toolchain status=UNMEASURED note=needs-1.97.1-and-1.98.1");
         return Ok(());
     }
+    eprintln!("bench: case=toolchain status=COMPARING required=1.97.1,1.98.1");
     let mut walls = Vec::new();
     let mut records = Vec::new();
     for toolchain in ["1.97.1", "1.98.1"] {
         let start = std::time::Instant::now();
-        let json = toolchain_metadata(root, toolchain)?;
+        let json = toolchain_metadata(root, toolchain, &rustup)?;
         walls.push(start.elapsed().as_millis());
         records.push(parse_metadata_json(
             &json,

@@ -50,6 +50,11 @@ fn finalize_until(deadline: CheckDeadline) -> Result<(), OrchestratorError> {
 fn prepare_finalization(deadline: CheckDeadline) -> Result<Finalization, OrchestratorError> {
     let seed = parse_seed_policy()?;
     validate_finalize_environment(&seed)?;
+    let require_linux_amd64 = match std::env::var("VELNOR_RELEASE_REQUIRE_LINUX_AMD64") {
+        Ok(value) if value == "true" => true,
+        Err(std::env::VarError::NotPresent) => false,
+        _ => return Err(internal("preview_source_scale_set_requirement")),
+    };
     let source_sha = required("VELNOR_RELEASE_SOURCE_SHA")?;
     let authority = required("VELNOR_RELEASE_WORKFLOW_AUTHORITY_SHA")?;
     let workspace = PathBuf::from(required("GITHUB_WORKSPACE")?)
@@ -68,6 +73,7 @@ fn prepare_finalization(deadline: CheckDeadline) -> Result<Finalization, Orchest
     if !release.channel_enabled(PackageReleaseChannel::Preview) {
         return Err(internal("preview_source_channel_disabled"));
     }
+    validate_source_runner(release.producer.runner, require_linux_amd64)?;
     let ci_run_id = positive_u64("VELNOR_RELEASE_CI_RUN_ID")?;
     let ci_attempt = u32::try_from(positive_u64("VELNOR_RELEASE_CI_RUN_ATTEMPT")?)
         .map_err(|_| internal("preview_source_context"))?;
@@ -93,6 +99,18 @@ fn prepare_finalization(deadline: CheckDeadline) -> Result<Finalization, Orchest
     };
     authenticate_finalization(&state)?;
     Ok(state)
+}
+
+fn validate_source_runner(
+    runner: velnor_actions_contract::config::VerificationRunner,
+    require_linux_amd64: bool,
+) -> Result<(), OrchestratorError> {
+    if require_linux_amd64
+        && runner != velnor_actions_contract::config::VerificationRunner::LinuxX64
+    {
+        return Err(internal("preview_source_scale_set_runner"));
+    }
+    Ok(())
 }
 
 fn validate_finalize_environment(seed: &PackageReleasePolicy) -> Result<(), OrchestratorError> {
@@ -291,6 +309,10 @@ fn emit_finalization(
         super::super::super::github::sha256(&admission_bytes),
     ))
 }
+
+#[cfg(test)]
+#[path = "preview_source_admission_finalize_scale_set_tests.rs"]
+mod scale_set_tests;
 
 fn write_finalization_files(
     admission: &[u8],

@@ -1,65 +1,112 @@
 //! Per-user `LaunchAgent` install. The daemon stays in the foreground.
 
+mod filesystem;
+mod plist;
+mod quarantine;
+mod staging;
+#[cfg(test)]
+mod tests;
+
+use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
-use velnor_runner_host::launch_agent_plist;
-
 use crate::args::ServiceAction;
+use filesystem::write_plist;
+use plist::{plist_path, render_plist};
+use quarantine::{open_expected_file, uninstall_after_stop};
+
+#[cfg(test)]
+use filesystem::{atomic_write, publish_staged};
+pub(crate) use plist::log_dir;
+#[cfg(test)]
+use plist::{plist_matches, with_logs, with_state};
+#[cfg(test)]
+use quarantine::existing_matches;
+#[cfg(test)]
+use quarantine::same_file;
+#[cfg(test)]
+use quarantine::{path_is_absent, uninstall_after_stop_with};
+#[cfg(test)]
+use staging::PrivateDirectory;
 
 const LABEL: &str = "com.tailrocks.velnor.host";
+const LAUNCHCTL: &str = "/bin/launchctl";
 
-pub(crate) fn service(action: ServiceAction) -> ExitCode {
+struct InstalledPlist {
+    uid: u32,
+    path: PathBuf,
+    expected: String,
+    identity: File,
+}
+
+pub(crate) fn service(action: ServiceAction, state: &Path) -> ExitCode {
     match action {
-        ServiceAction::Install => install(),
-        ServiceAction::Start => start(),
-        ServiceAction::Stop => stop(),
-        ServiceAction::Uninstall => uninstall(),
+        ServiceAction::Install => install(state),
+        ServiceAction::Start => start(state),
+        ServiceAction::Stop => stop(state),
+        ServiceAction::Uninstall => uninstall(state),
     }
 }
 
-fn start() -> ExitCode {
-    let Some(uid) = read_uid() else {
-        return ExitCode::from(1);
-    };
+fn start(state: &Path) -> ExitCode {
     if std::fs::create_dir_all(log_dir()).is_err() {
+        eprintln!("Service configuration is different.");
         return ExitCode::from(1);
     }
-    spawn(&bootstrap_argv(uid, &plist_path()))
-}
-
-fn stop() -> ExitCode {
-    let Some(uid) = read_uid() else {
+    let Some(installed) = installed_plist(state) else {
+        eprintln!("Service configuration is different.");
         return ExitCode::from(1);
     };
-    spawn(&bootout_argv(uid))
+    let result = spawn(&bootstrap_argv(installed.uid, &installed.path));
+    drop(installed);
+    result
 }
 
-fn uninstall() -> ExitCode {
-    let _stopped = stop();
-    match std::fs::remove_file(plist_path()) {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => ExitCode::SUCCESS,
-        Err(_) => ExitCode::from(1),
-    }
+fn stop(state: &Path) -> ExitCode {
+    let Some(installed) = installed_plist(state) else {
+        eprintln!("Service configuration is different.");
+        return ExitCode::from(1);
+    };
+    let result = spawn(&bootout_argv(installed.uid));
+    drop(installed);
+    result
 }
 
-fn install() -> ExitCode {
+fn uninstall(state: &Path) -> ExitCode {
+    let Some(installed) = installed_plist(state) else {
+        eprintln!("Service configuration is different.");
+        return ExitCode::from(1);
+    };
+    let stopped = spawn(&bootout_argv(installed.uid));
+    uninstall_after_stop(
+        stopped,
+        &installed.path,
+        &installed.identity,
+        installed.expected.as_bytes(),
+    )
+}
+
+fn installed_plist(state: &Path) -> Option<InstalledPlist> {
+    let uid = read_uid()?;
+    let binary = std::env::current_exe().ok()?;
+    let path = plist_path();
+    let expected = render_plist(&binary, state, &log_dir())?;
+    let identity = open_expected_file(&path, expected.as_bytes()).ok()??;
+    Some(InstalledPlist {
+        uid,
+        path,
+        expected,
+        identity,
+    })
+}
+
+fn install(state: &Path) -> ExitCode {
     let Ok(bin) = std::env::current_exe() else {
         return ExitCode::from(1);
     };
-    let Ok(plist) = launch_agent_plist(&bin) else {
-        return ExitCode::from(1);
-    };
     let path = plist_path();
-    let Some(parent) = path.parent() else {
-        return ExitCode::from(1);
-    };
-    if std::fs::create_dir_all(parent).is_err() || std::fs::create_dir_all(log_dir()).is_err() {
-        return ExitCode::from(1);
-    }
-    let body = with_logs(&plist, &log_dir());
-    if std::fs::write(&path, body).is_err() {
+    if !write_plist(&bin, state, &path, &log_dir()) {
         return ExitCode::from(1);
     }
     println!("{}", path.display());
@@ -80,29 +127,13 @@ fn spawn(argv: &[String]) -> ExitCode {
 }
 
 fn read_uid() -> Option<u32> {
-    let output = Command::new("id").arg("-u").output().ok()?;
-    let text = String::from_utf8(output.stdout).ok()?;
-    let uid = text.trim().parse().ok()?;
+    let uid = rustix::process::geteuid().as_raw();
     if uid == 0 { None } else { Some(uid) }
-}
-
-pub(crate) fn log_dir() -> PathBuf {
-    home().join("Library/Logs/Velnor")
-}
-
-fn plist_path() -> PathBuf {
-    home()
-        .join("Library/LaunchAgents")
-        .join(format!("{LABEL}.plist"))
-}
-
-fn home() -> PathBuf {
-    std::env::var_os("HOME").map_or_else(|| PathBuf::from("."), PathBuf::from)
 }
 
 fn bootstrap_argv(uid: u32, plist: &Path) -> Vec<String> {
     vec![
-        "launchctl".to_owned(),
+        LAUNCHCTL.to_owned(),
         "bootstrap".to_owned(),
         format!("gui/{uid}"),
         plist.display().to_string(),
@@ -111,61 +142,8 @@ fn bootstrap_argv(uid: u32, plist: &Path) -> Vec<String> {
 
 fn bootout_argv(uid: u32) -> Vec<String> {
     vec![
-        "launchctl".to_owned(),
+        LAUNCHCTL.to_owned(),
         "bootout".to_owned(),
         format!("gui/{uid}/{LABEL}"),
     ]
-}
-
-fn with_logs(plist: &str, log_dir: &Path) -> String {
-    let out = log_dir.join("host.log");
-    let err = log_dir.join("host.err.log");
-    let keys = format!(
-        "<key>StandardOutPath</key><string>{}</string>\n<key>StandardErrorPath</key><string>{}</string>\n</dict>",
-        out.display(),
-        err.display()
-    );
-    plist.replacen("</dict>", &keys, 1)
-}
-
-#[cfg(test)]
-mod tests {
-    use std::path::Path;
-
-    use super::{bootout_argv, bootstrap_argv, with_logs};
-
-    #[test]
-    fn launchctl_uses_the_gui_domain_and_does_not_fork() {
-        let plist =
-            Path::new("/Users/example/Library/LaunchAgents/com.tailrocks.velnor.host.plist");
-        assert_eq!(
-            bootstrap_argv(501, plist),
-            vec![
-                "launchctl".to_owned(),
-                "bootstrap".to_owned(),
-                "gui/501".to_owned(),
-                plist.display().to_string(),
-            ]
-        );
-        assert_eq!(
-            bootout_argv(501),
-            vec![
-                "launchctl".to_owned(),
-                "bootout".to_owned(),
-                "gui/501/com.tailrocks.velnor.host".to_owned(),
-            ]
-        );
-    }
-
-    #[test]
-    fn plist_logs_stay_out_of_the_secret_channel() {
-        let body = with_logs(
-            "<dict>\n</dict>\n",
-            Path::new("/Users/example/Library/Logs/Velnor"),
-        );
-        assert!(body.contains("StandardOutPath"));
-        assert!(body.contains("/Users/example/Library/Logs/Velnor/host.log"));
-        assert!(!body.contains("ACTIONS_RUNNER_INPUT_JITCONFIG"));
-        assert!(!body.contains("daemon fork"));
-    }
 }

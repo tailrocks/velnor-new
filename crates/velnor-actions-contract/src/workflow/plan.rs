@@ -1,4 +1,5 @@
 //! Schema-2 affected plan and generic matrix entries.
+use super::TaskBindingDigest;
 use super::lanes::NamedCheckLaneVariant;
 pub use super::matrix_entry::MatrixEntry;
 pub use super::plan_jobs::{JobDisposition, PlanJob, plan_skips_work, selects_affected_work};
@@ -130,6 +131,8 @@ pub struct PlanObligation {
     pub reason: String,
     /// Task digest.
     pub task_digest: String,
+    /// Digest for the generated task binding with project-tool references.
+    pub task_binding_digest: TaskBindingDigest,
     /// Input digest.
     pub input_digest: String,
     /// Canonical digest over the task's complete input closure.
@@ -137,6 +140,12 @@ pub struct PlanObligation {
     /// The plan path resolves the closure against the checkout and binds
     /// this digest into `input_digest`.
     pub closure_digest: String,
+    /// Canonical digest over the task's workspace graph.
+    pub graph_digest: String,
+    /// Identity for the pinned MBX generation.
+    pub mbx_digest: String,
+    /// Build profile in the task identity.
+    pub profile: String,
     /// Generated job owning this obligation (`rust-<crate>`, `check-<id>`, ...).
     pub job_id: String,
 }
@@ -274,8 +283,12 @@ impl PlanObligation {
     fn validate(&self) -> Result<(), ContractError> {
         validate_task_id(&self.task_id)?;
         validate_digest(&self.task_digest)?;
+        validate_digest(self.task_binding_digest.as_str())?;
         validate_digest(&self.input_digest)?;
         validate_digest(&self.closure_digest)?;
+        validate_digest(&self.graph_digest)?;
+        validate_digest(&self.mbx_digest)?;
+        crate::cachekey::validate_semantic_text("obligations.profile", &self.profile)?;
         if self.job_id.trim().is_empty() {
             return Err(ContractError::identity(
                 "obligations.job_id",

@@ -27,6 +27,7 @@ fn shared_lanes_keep_ci_under_github_file_cap() {
     let context = ctx();
     let unshared_lanes = super::LaneShare {
         jobs: jobs.clone(),
+        job_workflows: BTreeMap::new(),
         calls: BTreeMap::new(),
         checkouts: BTreeMap::new(),
         env_steps: BTreeMap::new(),

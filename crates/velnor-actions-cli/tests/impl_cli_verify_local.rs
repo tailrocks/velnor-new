@@ -3,10 +3,9 @@
 //! Full end-to-end execution is prohibitive inside the suite: the
 //! `integration` stage re-runs this whole workspace suite (recursing
 //! into this very test), and `toolchain` needs `mise` plus network
-//! installs. Instead these tests pin the entrypoint's exact step list
-//! and fail-closed shape, syntax-check the script by executing
-//! `bash -n`, and execute the offline `repo-policy` stage against an
-//! isolated freshness fixture. A stage add, remove, or rename fails
+//! installs. These tests keep the entrypoint's exact step list and closed failure behavior.
+//! They use `bash -n` to examine script syntax.
+//! They do a check of the CLI freshness wrapper with a separate fixture. A stage add, remove, or rename fails
 //! the inventory test until the expectation moves with it.
 
 use std::error::Error;
@@ -17,6 +16,9 @@ use std::path::PathBuf;
 use std::process::Command;
 #[cfg(unix)]
 use std::time::{SystemTime, UNIX_EPOCH};
+
+#[path = "impl_cli_verify_local_nextest_guard.rs"]
+mod nextest_guard;
 
 use crate::impl_repo_policy::p12_harness as freshness;
 
@@ -71,15 +73,23 @@ fn staged_calls(script: &str) -> Result<Vec<String>, Box<dyn Error>> {
 #[test]
 fn verify_local_entrypoint_lists_exact_stages() -> Result<(), Box<dyn Error>> {
     let script = entrypoint_text()?;
+    assert_stage_inventory(&script)?;
+    assert_failure_and_policy_contracts(&script);
+    assert_locked_commands_and_workspace_inventory(&script);
+    Ok(())
+}
+
+fn assert_stage_inventory(script: &str) -> Result<(), Box<dyn Error>> {
     assert_eq!(
-        inline_stages(&script),
+        inline_stages(script),
         ["toolchain", "generated-tree", "fixtures", "integration",],
         "exact inline stage inventory"
     );
     assert_eq!(
-        staged_calls(&script)?,
+        staged_calls(script)?,
         [
             "fmt",
+            "root-deny",
             "runner-fmt",
             "runner-clippy",
             "runner-nextest",
@@ -94,6 +104,10 @@ fn verify_local_entrypoint_lists_exact_stages() -> Result<(), Box<dyn Error>> {
         ],
         "exact staged-call inventory"
     );
+    Ok(())
+}
+
+fn assert_failure_and_policy_contracts(script: &str) {
     // Fail-closed shape: strict mode, recorded failures, nonzero exit.
     assert!(script.contains("set -uo pipefail"), "strict mode");
     assert!(
@@ -105,19 +119,45 @@ fn verify_local_entrypoint_lists_exact_stages() -> Result<(), Box<dyn Error>> {
         !script.contains("/tmp/verify-local-"),
         "logs are allocated per invocation"
     );
-    // The repo-policy stage body is the freshness script at default
-    // (offline) flags — the exact command the stage test executes.
+    // The repo-policy stage calls the already-pinned Rust operation
+    // directly. The standalone freshness wrapper would start a nested
+    // Mise process and could reload project configuration here.
     assert!(
-        script.contains("stage repo-policy \"${MISE_EXEC[@]}\" bash scripts/check-freshness.sh"),
+        script.contains("stage repo-policy repo_policy freshness"),
         "repo-policy stage body"
     );
-    // Every locking cargo invocation passes `--locked` (`fmt` takes no
-    // such flag; `--version` probes build nothing). The trailing space
+    assert!(
+        script.contains("VELNOR_REPO_POLICY_CHECK_UPSTREAM=0")
+            && script.contains("VELNOR_REPO_POLICY_WITH_ADVISORIES=0"),
+        "repo-policy stage uses explicit offline flags"
+    );
+    assert!(
+        script.contains("\"${RUST_EXEC[@]}\" mbx run --quiet --locked -p velnor-actions-cli"),
+        "repo-policy uses the checked Rust toolchain"
+    );
+    assert!(
+        script.contains("$ROOT/Cargo.toml\" --config \"$ROOT/deny.toml\" check"),
+        "root dependency audit"
+    );
+    assert!(
+        script.contains(
+            "$ROOT/$RUNNER_MANIFEST\" --config \"$ROOT/crates/velnor-runner/deny.toml\" check"
+        ),
+        "nested dependency audit"
+    );
+}
+
+fn assert_locked_commands_and_workspace_inventory(script: &str) {
+    // Every build cargo invocation passes `--locked` (`fmt` takes no
+    // such flag; version probes build nothing). The trailing space
     // keeps echo text (`... falls back to cargo test"`) out of the
     // probe: only verb-plus-flags invocations match.
     for line in script.lines() {
         // Doc comments quote commands without flags; only code locks.
         if line.trim_start().starts_with('#') {
+            continue;
+        }
+        if line.contains(" --version") {
             continue;
         }
         let locks = ["cargo clippy ", "cargo test ", "cargo build ", "cargo doc "]
@@ -143,7 +183,6 @@ fn verify_local_entrypoint_lists_exact_stages() -> Result<(), Box<dyn Error>> {
         script.contains("run --workspace --locked"),
         "nextest integration run is locked"
     );
-    Ok(())
 }
 
 #[test]
@@ -178,7 +217,7 @@ fn verify_local_entrypoint_parses() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn verify_local_repo_policy_stage_executes() -> Result<(), Box<dyn Error>> {
+fn verify_local_freshness_wrapper_executes() -> Result<(), Box<dyn Error>> {
     let fixture = freshness::passing("verify-local-freshness")?;
     let output = freshness::run_script(&fixture.dir, &[]);
     freshness::cleanup(&fixture);
@@ -201,7 +240,7 @@ fn verify_local_log_parent() -> Result<PathBuf, Box<dyn Error>> {
     let mise = bin.join("mise");
     fs::write(
         &mise,
-        "#!/bin/sh\ncase \"$1\" in\n  --version) printf '2026.10.6\\n' ;;\n  install) printf '%s\\n' \"$VERIFY_LOCAL_LOG_TEST_MARKER\" >&2; exit 1 ;;\n  *) exit 2 ;;\nesac\n",
+        "#!/bin/sh\nif [ \"$1\" = --no-config ]; then shift; fi\ncase \"$1\" in\n  --version) printf '2026.10.6\\n' ;;\n  install) printf '%s\\n' \"$VERIFY_LOCAL_LOG_TEST_MARKER\" >&2; exit 1 ;;\n  *) exit 2 ;;\nesac\n",
     )?;
     fs::set_permissions(&mise, fs::Permissions::from_mode(0o700))?;
     Ok(parent)
@@ -275,3 +314,7 @@ fn verify_local_failure_logs_are_private_and_isolated() -> Result<(), Box<dyn Er
     fs::remove_dir_all(parent)?;
     Ok(())
 }
+
+#[cfg(unix)]
+#[path = "impl_cli_verify_local_cargo_home.rs"]
+mod cargo_home;

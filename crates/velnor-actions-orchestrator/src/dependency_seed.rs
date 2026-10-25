@@ -1,14 +1,14 @@
-//! Dependency-seed jobs: the only writer of the compiled-dependency bundle.
+//! Dependency seed jobs write MBX bundles for crate jobs.
 //!
-//! Cache decision 2. One non-crate job per MBX Cargo workspace compiles the
-//! three fixed lanes (test executables, Clippy, documentation) for the whole
-//! workspace on a trusted default-branch push and saves the opaque
-//! `mbx cache export` bundle once the compile succeeded. Crate jobs restore
-//! that bundle read-only. The seed job runs no checks, uploads no report and
-//! is never part of `Required`, so hard decision 1 (one job per crate) governs
-//! crate jobs only.
+//! Cache decision 2 defines one seed job for each MBX Cargo workspace.
+//! On a trusted push to the default branch, it compiles test executables,
+//! runs Clippy, and builds documentation for the whole workspace.
+//! After these commands succeed, it exports and saves an MBX bundle.
+//! Crate jobs import that bundle and do not write it.
+//! The seed job uploads no task report and is not part of `Required`.
+//! Hard decision 1 requires one job per crate. It applies only to crate jobs.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{Job, JobTimeout, Step, StepRole};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
@@ -17,19 +17,42 @@ use velnor_actions_workflow_renderer::steps::{MbxTransport, mbx_producer_mark_st
 use super::CrateJobInputs;
 use crate::OrchestratorError;
 use crate::config::private_wiring::PrivateWiring;
+use crate::discover::Discovery;
 
-/// Job id of the seed for the repository-root workspace.
+/// Identify the seed job for the workspace at the repository root.
 pub(crate) const SEED_JOB_ID: &str = "dependency-seed";
-/// One MBX Cargo workspace that needs a seed.
+/// Identify one MBX Cargo workspace that needs a seed job.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SeedWorkspace {
-    /// Workspace root relative to the checkout (`""` for the repository root).
+    /// This path identifies the workspace root relative to the checkout.
+    /// An empty string identifies the repository root.
     pub(crate) root: String,
-    /// True when any task of the workspace runs on Nextest.
+    /// This value is true when any workspace task uses Nextest.
     pub(crate) nextest: bool,
 }
 
-/// Seed job id for one workspace root.
+/// Collect distinct Cargo workspaces that contain a runnable MBX task.
+pub(crate) fn workspaces_for_discovery(
+    discovery: &Discovery,
+    fetch_roots: &[String],
+) -> Vec<SeedWorkspace> {
+    let mut roots = BTreeMap::<String, bool>::new();
+    for task in &discovery.proposals {
+        if !super::is_runnable(task) || !super::is_mbx(task) {
+            continue;
+        }
+        let root =
+            crate::source_prep::workspace_root_for_manifest(&task.identity.unit_path, fetch_roots)
+                .to_owned();
+        *roots.entry(root).or_default() |= super::is_nextest(task);
+    }
+    roots
+        .into_iter()
+        .map(|(root, nextest)| SeedWorkspace { root, nextest })
+        .collect()
+}
+
+/// Return the seed job ID for one workspace root.
 pub(crate) fn seed_job_id(root: &str) -> String {
     if root.is_empty() {
         SEED_JOB_ID.to_owned()
@@ -42,22 +65,53 @@ pub(crate) fn seed_job_id(root: &str) -> String {
 ///
 /// # Errors
 ///
-/// Returns contract or render errors for an unsafe root or rejected step.
+/// This function returns a contract or render error if the root is unsafe or a step fails validation.
 pub(crate) fn seed_jobs(
     input: &CrateJobInputs<'_>,
     workspaces: &[SeedWorkspace],
     private: Option<&PrivateWiring>,
     timeout: JobTimeout,
 ) -> Result<Vec<(String, Job)>, OrchestratorError> {
+    let job_ids = unique_seed_job_ids(workspaces);
+    workspaces
+        .iter()
+        .zip(job_ids)
+        .map(|(workspace, job_id)| Ok((job_id, seed_job(input, workspace, private, timeout)?)))
+        .collect()
+}
+
+pub(crate) fn unique_seed_job_ids(workspaces: &[SeedWorkspace]) -> Vec<String> {
+    let job_ids: Vec<_> = workspaces
+        .iter()
+        .map(|workspace| seed_job_id(&workspace.root))
+        .collect();
+    if job_ids.iter().collect::<BTreeSet<_>>().len() == job_ids.len()
+        && job_ids
+            .iter()
+            .all(|job_id| velnor_actions_contract::validate_job_id(job_id).is_ok())
+    {
+        return job_ids;
+    }
     workspaces
         .iter()
         .map(|workspace| {
-            Ok((
-                seed_job_id(&workspace.root),
-                seed_job(input, workspace, private, timeout)?,
-            ))
+            if workspace.root.is_empty() {
+                SEED_JOB_ID.to_owned()
+            } else {
+                format!("{SEED_JOB_ID}-{}", encode_seed_root(&workspace.root))
+            }
         })
         .collect()
+}
+
+fn encode_seed_root(root: &str) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut encoded = String::with_capacity(root.len().saturating_mul(2));
+    for byte in root.bytes() {
+        encoded.push(char::from(HEX[usize::from(byte >> 4)]));
+        encoded.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
+    encoded
 }
 
 fn seed_job(
@@ -93,8 +147,8 @@ fn seed_job(
     if let Some(private) = private {
         let private_steps = private.steps_for_roots(&roots)?;
         if !private_steps.is_empty() {
-            // The private fetch and revoke are Velnor helper operations: stage
-            // the digest-verified helper right after checkout, as crate jobs do.
+            // Private fetch and token revocation use the Velnor helper.
+            // Stage the helper after checkout, as crate jobs do. Verify its digest.
             let acquire = input.acquire.ok_or_else(|| OrchestratorError::Contract {
                 problem: "private_sources_seed_without_acquire".to_owned(),
             })?;
@@ -132,7 +186,7 @@ fn display_name(root: &str) -> String {
     }
 }
 
-/// The three fixed lane builds of one workspace, in the lane order of a crate job.
+/// Build the three fixed lanes of one workspace in the same order as a crate job.
 fn lane_steps(
     catalog: &ToolCatalog,
     workspace: &SeedWorkspace,

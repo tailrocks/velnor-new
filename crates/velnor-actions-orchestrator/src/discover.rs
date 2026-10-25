@@ -18,17 +18,21 @@ use velnor_actions_rust::{
     Recommendation, RustExecutionProfile, WorkspaceRecord, dedupe_workspaces, propose_task,
 };
 
-use crate::OrchestratorError;
-use crate::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
-use crate::config::gradle_jobs;
-use crate::discover_index::build_file_index;
 use crate::internal::phase_timing::PlanPhaseTimings;
-use crate::inventory::{qualify_workspaces, run_inventories, run_inventories_with_phase_timings};
-use crate::recommendations::collect_recommendations;
+use crate::inventory::{
+    qualify_workspaces, run_inventories_with_all_features,
+    run_inventories_with_phase_timings_and_all_features,
+};
+use crate::{OrchestratorError, recommendations::collect_recommendations};
+use crate::{clippy_groups, config::gradle_jobs, discover_index::build_file_index};
 #[path = "consumer_manifest.rs"]
 mod consumer_manifest;
 use crate::toolcheck::{ToolInputCheck, check_tool_inputs_with_paths};
 use crate::{discover_tofu::qualify_tofu_step, evidence::profile_for_workspace};
+
+#[path = "discover_manifest_paths.rs"]
+mod manifest_paths;
+pub(crate) use manifest_paths::{workspace_lock, workspace_manifest};
 
 /// One workspace with its inventory, profile, and recommendations.
 #[derive(Debug, Clone)]
@@ -63,27 +67,26 @@ pub struct Discovery {
     /// Tool-input checks: presence, parse, values, digests.
     pub tool_checks: Vec<ToolInputCheck>,
     /// Barrier-separated Clippy memory schedule.
-    pub clippy_memory: ClippyMemoryPlan,
+    pub clippy_memory: clippy_groups::ClippyMemoryPlan,
     /// Non-fatal generation recommendations.
     pub recommendations: Vec<String>,
     /// Release-manifest text for consumer policy from the committed file.
     ///
-    /// Consumer debug builds fall back to a stand-in when the file is absent
-    /// (flagged by [`Discovery::consumer_manifest_stand_in`], warned at
-    /// generation); release builds keep `None` so generation fails
-    /// closed with `consumer_requires_release_install`.
+    /// Consumer debug builds fall back to a stand-in when the file is absent (flagged by
+    /// [`Discovery::consumer_manifest_stand_in`], warned at generation); release builds keep
+    /// `None` so generation fails closed with `consumer_requires_release_install`.
     pub consumer_manifest_json: Option<String>,
     /// Whether the manifest text above is the debug-only stand-in.
     ///
-    /// False for Velnor policy and release builds. `generate` warns when
-    /// consumer policy uses the debug stand-in; `plan` stays silent.
+    /// False for Velnor policy and release builds; `generate` warns when consumer policy uses the
+    /// debug stand-in, while `plan` stays silent.
     pub consumer_manifest_stand_in: bool,
     /// Whether non-UTF-8 names require broad selection.
     pub skipped_non_utf8: bool,
     /// Tofu plan note: ignore marker or table-less evidence advisory.
     ///
-    /// `None` when the tofu table is absent and no evidence exists, or
-    /// when configured roots convert to selected projects.
+    /// `None` when the tofu table is absent and no evidence exists, or when configured roots
+    /// convert to selected projects.
     pub tofu_note: Option<velnor_actions_tofu::TofuNote>,
     /// Tofu selection records: head files plus edges per root.
     pub tofu_units: Vec<crate::select_tofu::TofuSelectionUnit>,
@@ -91,9 +94,9 @@ pub struct Discovery {
     pub affected: crate::affected_inputs::AffectedInputs,
     /// Bun workspaces named by `[stacks.bun]`, read from the same index.
     pub(crate) bun: crate::workflow_task_jobs::bun_inventory::BunInventory,
-    /// dbt projects named by `[stacks.dbt]`, analysed from the same index.
+    /// Discovery reads dbt projects from `[stacks.dbt]` through the shared file index.
     pub(crate) dbt: crate::workflow_task_jobs::dbt_inventory::DbtInventory,
-    /// Ansible roots named by `[stacks.ansible]`, analysed from the same index.
+    /// Discovery reads Ansible roots from `[stacks.ansible]` through the shared file index.
     pub(crate) ansible: crate::workflow_task_jobs::ansible_inventory::AnsibleInventory,
 }
 
@@ -140,7 +143,7 @@ fn discover_inner(
     root: &Path,
     config: &VelnorConfig,
     catalog: &ToolCatalog,
-    mut phases: Option<&mut PlanPhaseTimings>,
+    phases: Option<&mut PlanPhaseTimings>,
 ) -> Result<Discovery, OrchestratorError> {
     let (index, skipped_non_utf8) = build_file_index(root, &config.discovery.exclude)?;
     let mut candidates = detect_candidates(&index);
@@ -154,22 +157,15 @@ fn discover_inner(
         problem: err.to_string(),
     })?;
     let initial = apply_stack_ignores(projects, &config.stacks.ignore);
-    #[expect(
-        clippy::needless_option_as_deref,
-        reason = "the original Option must remain available after this branch"
-    )]
-    let inventory_result = match phases.as_deref_mut() {
-        Some(phases) => run_inventories_with_phase_timings(
-            root,
-            &candidates,
-            index.files(),
-            &mut reads,
-            phases,
-            catalog,
-        ),
-        None => run_inventories(root, &candidates, index.files(), &mut reads, catalog),
-    };
-    let ((outcomes, inventories), tofu_units) = inventory_result?;
+    let ((outcomes, inventories), tofu_units) = run_candidate_inventories(
+        root,
+        &candidates,
+        index.files(),
+        &mut reads,
+        phases,
+        rust_all_features(config),
+        catalog,
+    )?;
     let statuses = check_candidate_outcomes(initial, &outcomes).map_err(|err| {
         OrchestratorError::Detection {
             problem: err.to_string(),
@@ -194,7 +190,7 @@ fn discover_inner(
             .collect::<Result<Vec<_>, _>>()?,
     );
     proposals.sort_by(|a, b| a.task_id.cmp(&b.task_id));
-    let clippy_memory = clippy_memory_groups(&proposals);
+    let clippy_memory = clippy_groups::clippy_memory_groups(&proposals);
     let recommendations =
         collect_recommendations(root, config, &index, &workspaces, &tool_checks, &mut reads);
     let (consumer_manifest_json, consumer_manifest_stand_in) =
@@ -221,6 +217,45 @@ fn discover_inner(
         bun,
         dbt,
         ansible,
+    })
+}
+
+fn run_candidate_inventories(
+    root: &Path,
+    candidates: &[velnor_actions_contract::StackCandidate],
+    files: &[String],
+    reads: &mut velnor_actions_tofu::FileCache,
+    phases: Option<&mut PlanPhaseTimings>,
+    all_features: bool,
+    catalog: &ToolCatalog,
+) -> Result<
+    (
+        crate::inventory::Inventories,
+        Vec<crate::select_tofu::TofuSelectionUnit>,
+    ),
+    OrchestratorError,
+> {
+    match phases {
+        Some(phases) => run_inventories_with_phase_timings_and_all_features(
+            root,
+            candidates,
+            files,
+            reads,
+            phases,
+            all_features,
+            catalog,
+        ),
+        None => {
+            run_inventories_with_all_features(root, candidates, files, reads, all_features, catalog)
+        }
+    }
+}
+
+fn rust_all_features(config: &VelnorConfig) -> bool {
+    config.stacks.rust.as_ref().is_some_and(|rust| {
+        rust.configurations
+            .iter()
+            .any(|configuration| configuration.all_features)
     })
 }
 
@@ -358,24 +393,6 @@ fn derive_all(
     proposals.extend(crate::select_tofu::derive_tofu(statuses, index.files())?);
     proposals.sort_by(|left, right| left.task_id.cmp(&right.task_id));
     Ok((proposals, fallbacks))
-}
-
-/// Workspace-root manifest path for a workspace root.
-pub(crate) fn workspace_manifest(workspace_root: &str) -> String {
-    if workspace_root.is_empty() {
-        "Cargo.toml".to_owned()
-    } else {
-        format!("{workspace_root}/Cargo.toml")
-    }
-}
-
-/// Workspace-root lockfile path for a workspace root.
-pub(crate) fn workspace_lock(workspace_root: &str) -> String {
-    if workspace_root.is_empty() {
-        "Cargo.lock".to_owned()
-    } else {
-        format!("{workspace_root}/Cargo.lock")
-    }
 }
 
 #[cfg(test)]

@@ -28,7 +28,7 @@ fn assert_ir_component_order(mbx: bool) -> TestResult {
             assert_job_components(id, job, mbx)?;
         }
     }
-    assert_eq!(rust_jobs, 2, "both crate jobs are watched (mbx={mbx})");
+    assert_eq!(rust_jobs, 2, "each crate has one job (mbx={mbx})");
     Ok(())
 }
 
@@ -95,18 +95,13 @@ fn assert_yaml_component_order(mbx: bool) -> TestResult {
 fn assert_crate_yaml_order(names: &[String], id: &str) -> TestResult {
     let setup = step_index(names, SETUP_MISE_NAME, id)?;
     let components = step_index(names, PREPARE_RUST_COMPONENTS_STEP, id)?;
-    let obligation = if id.ends_with("-lint") {
-        "Clippy"
-    } else if id.ends_with("-tests") {
-        "Unit and integration tests"
-    } else {
-        "Documentation"
-    };
-    let obligation = step_index(names, obligation, id)?;
-    assert!(
-        setup < components && components < obligation,
-        "{id} emitted order"
-    );
+    for obligation in ["Clippy", "Unit and integration tests", "Documentation"] {
+        let obligation = step_index(names, obligation, id)?;
+        assert!(
+            setup < components && components < obligation,
+            "{id} prepares components before each task"
+        );
+    }
     Ok(())
 }
 

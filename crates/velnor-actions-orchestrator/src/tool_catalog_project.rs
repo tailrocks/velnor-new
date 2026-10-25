@@ -182,7 +182,25 @@ pub(crate) fn task_binding(
     catalog: &velnor_actions_mise::ToolCatalog,
 ) -> Result<(Vec<String>, String), OrchestratorError> {
     let emission = catalog.for_emission();
-    let toolchain = crate::internal_plan::toolchain_id(task, &emission)
+    let inputs = crate::internal_plan::identities::toolchain_inputs_for(task, &emission)
+        .map_err(crate::internal::internal_contract)?;
+    let toolchain = velnor_actions_contract::cachekey::toolchain_id(&inputs)
         .map_err(crate::internal::internal_contract)?;
     Ok((crate::vectors::task_argv(task, &emission)?, toolchain))
+}
+
+/// Return the digest for the emitted task binding.
+///
+/// # Errors
+///
+/// Returns an error when the task identity is invalid.
+pub(crate) fn task_binding_digest(
+    task: &velnor_actions_contract::ProposedTask,
+    catalog: &velnor_actions_mise::ToolCatalog,
+) -> Result<velnor_actions_contract::workflow::TaskBindingDigest, OrchestratorError> {
+    let (argv, toolchain) = task_binding(task, catalog)?;
+    let digest = crate::internal::plan_obligation::task_digest(&task.task_id, &argv, &toolchain)
+        .map_err(crate::internal::internal_contract)?;
+    velnor_actions_contract::workflow::TaskBindingDigest::new(digest)
+        .map_err(crate::internal::internal_contract)
 }

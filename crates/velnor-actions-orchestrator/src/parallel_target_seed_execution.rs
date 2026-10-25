@@ -1,4 +1,4 @@
-use std::{fs, os::fd::OwnedFd, os::unix::fs::MetadataExt, path::Path, time::Instant};
+use std::{ffi::OsString, fs, os::fd::OwnedFd, path::Path, time::Instant};
 
 use rustix::fs::{self as ufs, FileType, Mode};
 
@@ -62,9 +62,6 @@ fn prepare_target(
     if !target_meta.is_dir() || target_meta.file_type().is_symlink() {
         return Err(invalid("target_not_real_directory"));
     }
-    if target_meta.uid() != crate::filesystem_owner::effective_uid() {
-        return Err(invalid("target_directory_not_owned_by_current_user"));
-    }
     let target_identity = Identity::from_metadata(&target_meta);
     if Identity::from_stat(&ufs::fstat(&target_fd).map_err(io_error)?) != target_identity {
         return Err(invalid("target_path_changed"));
@@ -115,16 +112,21 @@ fn capture_snapshot(target: &SeedTarget, limits: SeedLimits) -> Result<Snapshot,
     }
     snapshot
         .entries
-        .push(Entry::new(vec!["debug".to_owned()], target.debug_stat));
-    snapshot.inventory(&debug_fd, &mut Vec::from(["debug".to_owned()]))?;
-    if let Ok(compiler) = statat(&target.fd, ".rustc_info.json") {
-        if FileType::from_raw_mode(compiler.st_mode) != FileType::RegularFile {
-            return Err(fail("compiler_metadata_not_regular"));
+        .push(Entry::new(vec![OsString::from("debug")], target.debug_stat));
+    snapshot.inventory(&debug_fd, &mut Vec::from([OsString::from("debug")]))?;
+    match statat(&target.fd, ".rustc_info.json") {
+        Ok(compiler) => {
+            if FileType::from_raw_mode(compiler.st_mode) != FileType::RegularFile {
+                return Err(fail("compiler_metadata_not_regular"));
+            }
+            snapshot.add_bytes(u64::try_from(compiler.st_size.max(0)).unwrap_or_default())?;
+            snapshot.entries.push(Entry::new(
+                vec![OsString::from(".rustc_info.json")],
+                compiler,
+            ));
         }
-        snapshot.add_bytes(u64::try_from(compiler.st_size.max(0)).unwrap_or_default())?;
-        snapshot
-            .entries
-            .push(Entry::new(vec![".rustc_info.json".to_owned()], compiler));
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(SeedError::Contract(io_error(error))),
     }
     verify_copy_capacity(target, &snapshot, limits)?;
     Ok(snapshot)
@@ -186,9 +188,7 @@ fn populate_and_admit_stages(
         let Some(stage) = stages.last() else {
             return Err(fail("staging_directory_missing"));
         };
-        if !statat(&target.fd, &stage.name).is_ok_and(|stat| identity.matches_stat(&stat)) {
-            return Err(fail("staging_directory_replaced"));
-        }
+        ensure_stage_identity(&target.fd, stage)?;
         snapshot.copy_to(&target.fd, &stage.fd)?;
     }
     snapshot.validate_source(&target.fd)?;
@@ -199,6 +199,22 @@ fn admit_stages(
     target: &SeedTarget,
     snapshot: &Snapshot,
     stages: &[Stage],
+) -> Result<(), SeedError> {
+    admit_stages_with_rename(target, snapshot, stages, rename_stage)
+}
+
+fn ensure_stage_identity(parent: &OwnedFd, stage: &Stage) -> Result<(), SeedError> {
+    if !statat(parent, &stage.name).is_ok_and(|stat| stage.identity.matches_stat(&stat)) {
+        return Err(fail("staging_directory_replaced"));
+    }
+    Ok(())
+}
+
+fn admit_stages_with_rename(
+    target: &SeedTarget,
+    snapshot: &Snapshot,
+    stages: &[Stage],
+    mut rename: impl FnMut(&SeedTarget, ParallelTargetLane, &Stage) -> Result<(), SeedError>,
 ) -> Result<(), SeedError> {
     for (lane, stage) in target.cold.iter().zip(stages) {
         snapshot.checkpoint()?;
@@ -213,7 +229,7 @@ fn admit_stages(
         {
             return Err(fail("staging_directory_replaced"));
         }
-        rename_stage(target, *lane, stage)?;
+        rename(target, *lane, stage)?;
         if !Identity::from_stat(&statat(&target.fd, lane.as_str()).map_err(seed_io_error)?)
             .same_object(&stage.identity)
         {
@@ -301,3 +317,7 @@ pub(super) struct Stage {
     pub(super) fd: OwnedFd,
     pub(super) identity: Identity,
 }
+
+#[cfg(test)]
+#[path = "parallel_target_seed_execution_tests.rs"]
+mod tests;

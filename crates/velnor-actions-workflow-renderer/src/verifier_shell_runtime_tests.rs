@@ -302,6 +302,29 @@ fn assert_verifier_output(
 }
 
 #[test]
+fn release_verifier_command_uses_the_same_startup_safe_boundary() {
+    let script = crate::selected_mise_verifier::test_script("2.3.4");
+    let argv = ["sh".to_owned(), "-c".to_owned(), script];
+    let step = crate::verifier_shell::render_command(
+        StepRole::VerifyJactionlint,
+        "Verify jactionlint",
+        &argv,
+    )
+    .expect("release verifier renders");
+    let canonical_step = crate::verifier_composite::verifier_shell_step(
+        StepRole::VerifyJactionlint,
+        "Verify jactionlint",
+        argv.to_vec(),
+        BTreeMap::new(),
+    )
+    .expect("canonical typed verifier step");
+    let canonical_yaml = crate::verifier_composite::verifier_shell_step_to_yaml(&canonical_step)
+        .expect("canonical verifier rendering");
+    assert_eq!(step, canonical_yaml);
+    assert_emitted_boundary(&step);
+}
+
+#[test]
 fn emitted_verifier_roles_ignore_hostile_startup_and_search_path_inputs()
 -> Result<(), Box<dyn Error>> {
     let root = Scratch::new()?;

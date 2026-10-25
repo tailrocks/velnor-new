@@ -2,30 +2,58 @@
 
 use std::fmt;
 
-use bollard::models::{
-    ContainerConfig, ContainerCreateBody, HostConfig, Mount, MountBindOptions, MountType,
-};
+use bollard::models::{ContainerConfig, ContainerCreateBody};
 use bollard::query_parameters::CreateContainerOptions;
 use sha2::{Digest, Sha256};
 
 use crate::error::HostError;
+use crate::journal::ResourceProbePurpose;
+use crate::worker::{AdmissionReserve, PROBE_CPU_MILLICORES, PROBE_MEMORY_LIMIT_BYTES};
 
 #[path = "projection/canonical.rs"]
-mod canonical;
+pub(super) mod canonical;
+#[path = "projection/container_config.rs"]
+mod container_config;
+mod validation;
+
+use validation::{
+    canonical_absolute_nonroot, digest_reference, digest_text, hex_string, image_config_matches,
+    valid_daemon_architecture,
+};
+pub(super) use validation::{expected_container_config, expected_image_config};
 
 const PROBE_TARGET: &str = "/velnor/docker-root";
+pub(super) const CGROUP_TARGET: &str = "/sys/fs/cgroup";
 const PROBE_PLATFORM: &str = "linux/amd64";
 const PROBE_ENTRYPOINT: &str = "/velnor/resource-probe";
-const PROBE_USER: &str = "65532:65532";
+pub(super) const PROBE_USER: &str = "65532:65532";
 const PROBE_WORKING_DIR: &str = "/";
+const PROBE_CPU_PERIOD: i64 = 100_000;
+const PROBE_CPU_QUOTA: i64 = 10_000;
+const PROBE_MEMORY_BYTES: i64 = PROBE_MEMORY_LIMIT_BYTES.cast_signed();
+const PROBE_PIDS_LIMIT: i64 = 4;
+const MILLICORES_PER_VCPU: u64 = 1_000;
 const PATH_ENV: &str = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 const SOURCE_LABEL: &str = "org.opencontainers.image.revision";
+const DAEMON_ARCH_LABEL: &str = "velnor.daemon.architecture";
 const DIGEST_DOMAIN: &[u8] = b"velnor-resource-probe-root-v1\0";
+const CAPACITY_REQUEST_DOMAIN: &[u8] = b"velnor-capacity-probe-request-v1\0";
+
+const fn probe_cpu_millicores() -> u64 {
+    (PROBE_CPU_QUOTA as u64 * MILLICORES_PER_VCPU) / PROBE_CPU_PERIOD as u64
+}
+
+const _: () = assert!(probe_cpu_millicores() == PROBE_CPU_MILLICORES);
+const _: () = assert!(probe_cpu_millicores() <= AdmissionReserve::OPERATIONAL_CPU_MILLICORES);
+const _: () = assert!(PROBE_MEMORY_BYTES > 0);
 
 /// Daemon-specific immutable image reference returned by the future verifier.
 pub(super) struct VerifiedProbeImage {
     runtime_id: String,
+    /// Verified image platform. This remains `linux/amd64` under emulation.
     platform: String,
+    /// Selected Docker engine architecture, separate from the image platform.
+    daemon_architecture: String,
     source_revision: String,
     binding_fingerprint: String,
 }
@@ -36,6 +64,7 @@ impl fmt::Debug for VerifiedProbeImage {
             .debug_struct("VerifiedProbeImage")
             .field("runtime_id", &self.runtime_id)
             .field("platform", &self.platform)
+            .field("daemon_architecture", &self.daemon_architecture)
             .field("source_revision", &self.source_revision)
             .field("binding_fingerprint", &self.binding_fingerprint)
             .finish()
@@ -47,12 +76,14 @@ impl VerifiedProbeImage {
     pub(super) fn from_verified_provider(
         runtime_id: String,
         platform: String,
+        daemon_architecture: String,
         source_revision: String,
         binding_fingerprint: String,
         config: &ContainerConfig,
     ) -> Result<Self, HostError> {
         if !digest_reference(&runtime_id)
             || platform != PROBE_PLATFORM
+            || !valid_daemon_architecture(&daemon_architecture)
             || !hex_string(&source_revision, 40)
             || !hex_string(&binding_fingerprint, 64)
             || !image_config_matches(config, &source_revision)
@@ -62,6 +93,7 @@ impl VerifiedProbeImage {
         Ok(Self {
             runtime_id,
             platform,
+            daemon_architecture,
             source_revision,
             binding_fingerprint,
         })
@@ -69,10 +101,12 @@ impl VerifiedProbeImage {
 
     pub(super) fn from_journal(
         runtime_id: String,
+        daemon_architecture: String,
         source_revision: String,
         binding_fingerprint: String,
     ) -> Result<Self, HostError> {
         if !digest_reference(&runtime_id)
+            || !valid_daemon_architecture(&daemon_architecture)
             || !hex_string(&source_revision, 40)
             || !hex_string(&binding_fingerprint, 64)
         {
@@ -81,6 +115,7 @@ impl VerifiedProbeImage {
         Ok(Self {
             runtime_id,
             platform: PROBE_PLATFORM.to_owned(),
+            daemon_architecture,
             source_revision,
             binding_fingerprint,
         })
@@ -88,6 +123,14 @@ impl VerifiedProbeImage {
 
     pub(super) fn runtime_id(&self) -> &str {
         &self.runtime_id
+    }
+
+    pub(super) fn platform(&self) -> &str {
+        &self.platform
+    }
+
+    pub(super) fn daemon_architecture(&self) -> &str {
+        &self.daemon_architecture
     }
 
     pub(super) fn source_revision(&self) -> &str {
@@ -106,6 +149,7 @@ impl VerifiedProbeImage {
         Self {
             runtime_id: id,
             platform: PROBE_PLATFORM.to_owned(),
+            daemon_architecture: "x86_64".to_owned(),
             source_revision: revision,
             binding_fingerprint: fingerprint,
         }
@@ -163,6 +207,8 @@ pub(super) struct ProbeProjection {
     pub(super) options: CreateContainerOptions,
     pub(super) config: ContainerCreateBody,
     pub(super) projection_digest: String,
+    pub(super) purpose: ResourceProbePurpose,
+    pub(super) request_sha256: String,
 }
 
 impl fmt::Debug for ProbeProjection {
@@ -176,6 +222,7 @@ impl fmt::Debug for ProbeProjection {
             .field("engine_id", &self.engine_id)
             .field("instance_id", &self.instance_id)
             .field("projection_digest", &self.projection_digest)
+            .field("purpose", &self.purpose)
             .finish_non_exhaustive()
     }
 }
@@ -189,8 +236,50 @@ impl ProbeProjection {
         root_path: &str,
         image: VerifiedProbeImage,
     ) -> Result<Self, HostError> {
+        Self::build_for_purpose(
+            operation_id,
+            instance_id,
+            engine_id,
+            root_path,
+            image,
+            ResourceProbePurpose::Capacity,
+            capacity_request_sha256(),
+        )
+    }
+
+    pub(super) fn build_owned_cgroups(
+        operation_id: String,
+        instance_id: String,
+        engine_id: String,
+        root_path: &str,
+        image: VerifiedProbeImage,
+        request_sha256: String,
+    ) -> Result<Self, HostError> {
+        Self::build_for_purpose(
+            operation_id,
+            instance_id,
+            engine_id,
+            root_path,
+            image,
+            ResourceProbePurpose::OwnedCgroups,
+            request_sha256,
+        )
+    }
+
+    fn build_for_purpose(
+        operation_id: String,
+        instance_id: String,
+        engine_id: String,
+        root_path: &str,
+        image: VerifiedProbeImage,
+        purpose: ResourceProbePurpose,
+        request_sha256: String,
+    ) -> Result<Self, HostError> {
         if !hex_string(&operation_id, 32)
             || !hex_string(&instance_id, 32)
+            || !hex_string(&request_sha256, 64)
+            || purpose == ResourceProbePurpose::Capacity
+                && request_sha256 != capacity_request_sha256()
             || engine_id.is_empty()
             || engine_id.len() > 256
             || engine_id.chars().any(char::is_control)
@@ -199,7 +288,15 @@ impl ProbeProjection {
         }
         let root = DockerRoot::parse(root_path)?;
         let name = format!("velnor-resource-probe-{operation_id}");
-        let config = config(&root, &image, &operation_id, &instance_id, &engine_id);
+        let config = container_config::config(
+            &root,
+            &image,
+            &operation_id,
+            &instance_id,
+            &engine_id,
+            purpose,
+            &request_sha256,
+        );
         let options = CreateContainerOptions {
             name: Some(name.clone()),
             platform: image.platform.clone(),
@@ -215,69 +312,44 @@ impl ProbeProjection {
             options,
             config,
             projection_digest: digest,
+            purpose,
+            request_sha256,
         })
     }
-}
 
-fn config(
-    root: &DockerRoot,
-    image: &VerifiedProbeImage,
-    operation_id: &str,
-    instance_id: &str,
-    engine_id: &str,
-) -> ContainerCreateBody {
-    let engine_digest = digest_text(engine_id.as_bytes());
-    let mut labels = std::collections::HashMap::new();
-    labels.insert("velnor.role".to_owned(), "resource-probe".to_owned());
-    labels.insert("velnor.operation".to_owned(), operation_id.to_owned());
-    labels.insert("velnor.instance".to_owned(), instance_id.to_owned());
-    labels.insert("velnor.engine".to_owned(), engine_digest);
-    labels.insert(
-        "velnor.probe.binding".to_owned(),
-        image.binding_fingerprint.clone(),
-    );
-    labels.insert(SOURCE_LABEL.to_owned(), image.source_revision.clone());
-    ContainerCreateBody {
-        image: Some(image.runtime_id.clone()),
-        user: Some(PROBE_USER.to_owned()),
-        env: None,
-        cmd: None,
-        entrypoint: None,
-        working_dir: None,
-        labels: Some(labels),
-        attach_stdin: Some(false),
-        open_stdin: Some(false),
-        stdin_once: Some(false),
-        attach_stdout: Some(true),
-        attach_stderr: Some(false),
-        tty: Some(false),
-        network_disabled: Some(true),
-        host_config: Some(host_config(root)),
-        ..Default::default()
+    pub(super) fn build_from_purpose(
+        operation_id: String,
+        instance_id: String,
+        engine_id: String,
+        root_path: &str,
+        image: VerifiedProbeImage,
+        purpose: ResourceProbePurpose,
+        request_sha256: String,
+    ) -> Result<Self, HostError> {
+        Self::build_for_purpose(
+            operation_id,
+            instance_id,
+            engine_id,
+            root_path,
+            image,
+            purpose,
+            request_sha256,
+        )
     }
 }
 
-fn host_config(root: &DockerRoot) -> HostConfig {
-    HostConfig {
-        auto_remove: Some(false),
-        cap_drop: Some(vec!["ALL".to_owned()]),
-        mounts: Some(vec![Mount {
-            target: Some(PROBE_TARGET.to_owned()),
-            source: Some(root.path.clone()),
-            typ: Some(MountType::BIND),
-            read_only: Some(true),
-            bind_options: Some(MountBindOptions {
-                create_mountpoint: Some(false),
-                ..Default::default()
-            }),
-            ..Default::default()
-        }]),
-        network_mode: Some("none".to_owned()),
-        privileged: Some(false),
-        readonly_rootfs: Some(true),
-        security_opt: Some(vec!["no-new-privileges:true".to_owned()]),
-        ..Default::default()
-    }
+fn capacity_request_sha256() -> String {
+    digest_text(CAPACITY_REQUEST_DOMAIN)
+}
+
+pub(super) const fn resource_limits() -> (i64, i64, i64, i64, i64) {
+    (
+        PROBE_CPU_PERIOD,
+        PROBE_CPU_QUOTA,
+        PROBE_MEMORY_BYTES,
+        PROBE_MEMORY_BYTES,
+        PROBE_PIDS_LIMIT,
+    )
 }
 
 fn projection_digest(
@@ -293,78 +365,4 @@ pub(super) fn test_projection_digest(
     config: &ContainerCreateBody,
 ) -> Result<String, HostError> {
     projection_digest(options, config)
-}
-
-fn canonical_absolute_nonroot(path: &str) -> bool {
-    path.starts_with('/')
-        && path != "/"
-        && path.len() <= 4096
-        && !path.chars().any(char::is_control)
-        && path[1..]
-            .split('/')
-            .all(|part| !part.is_empty() && part != "." && part != "..")
-}
-
-fn digest_reference(value: &str) -> bool {
-    value
-        .strip_prefix("sha256:")
-        .is_some_and(|hex| hex_string(hex, 64))
-}
-
-fn hex_string(value: &str, len: usize) -> bool {
-    value.len() == len && value.bytes().all(|byte| byte.is_ascii_hexdigit())
-}
-
-fn digest_text(value: &[u8]) -> String {
-    let digest = Sha256::digest(value);
-    let mut encoded = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        encoded.push(char::from(HEX[(byte >> 4) as usize]));
-        encoded.push(char::from(HEX[(byte & 0x0f) as usize]));
-    }
-    encoded
-}
-
-const HEX: &[u8; 16] = b"0123456789abcdef";
-
-fn image_config_matches(config: &ContainerConfig, source_revision: &str) -> bool {
-    config == &expected_image_config(source_revision)
-}
-
-pub(super) fn expected_container_config(projection: &ProbeProjection) -> Option<ContainerConfig> {
-    let mut expected =
-        serde_json::to_value(expected_image_config(projection.image.source_revision())).ok()?;
-    let requested = serde_json::to_value(&projection.config).ok()?;
-    let expected = expected.as_object_mut()?;
-    let requested = requested.as_object()?;
-    for (key, value) in requested {
-        if value.is_null() || key == "HostConfig" || key == "NetworkingConfig" {
-            continue;
-        }
-        if key == "Labels" {
-            let expected_labels = expected
-                .get_mut(key)
-                .and_then(serde_json::Value::as_object_mut)?;
-            let requested_labels = value.as_object()?;
-            for (label, label_value) in requested_labels {
-                expected_labels.insert(label.clone(), label_value.clone());
-            }
-        } else {
-            expected.insert(key.clone(), value.clone());
-        }
-    }
-    serde_json::from_value(serde_json::Value::Object(expected.clone())).ok()
-}
-
-pub(super) fn expected_image_config(source_revision: &str) -> ContainerConfig {
-    let mut labels = std::collections::HashMap::new();
-    labels.insert(SOURCE_LABEL.to_owned(), source_revision.to_owned());
-    ContainerConfig {
-        user: Some(PROBE_USER.to_owned()),
-        env: Some(vec![PATH_ENV.to_owned()]),
-        working_dir: Some(PROBE_WORKING_DIR.to_owned()),
-        entrypoint: Some(vec![PROBE_ENTRYPOINT.to_owned()]),
-        labels: Some(labels),
-        ..Default::default()
-    }
 }

@@ -1,16 +1,20 @@
 //! Closed private operation identities; no public dispatch aliases.
+use std::path::PathBuf;
+
 use super::{
     ACQUIRE_PREVIEW_SOURCE_OP, ACQUIRE_RELEASE_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP,
     ADMIT_RELEASE_AGGREGATE_OP, ADMIT_STABLE_TAG_ORIGIN_OP, BUN_ASSETS_EXPORT_OP,
-    BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP, BUN_REGISTRY_INSTALL_OP,
+    BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP, BUN_REGISTRY_INSTALL_OP, CACHE_RECEIPT_OP,
     CAPTURE_REVIEW_COMPLETION_OP, EMIT_REVIEW_COMPLETION_OP, EXECUTE_CHECK_OP,
     EXECUTE_RELEASE_PRODUCER_OP, FETCH_OP, FINALIZE_PREVIEW_SOURCE_OP, GITHUB_EVIDENCE_FETCH_OP,
     GITHUB_EVIDENCE_IMPORT_OP, GRADLE_RUN_OP, MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP, OP_ENV, PLAN_OP,
     PLAYWRIGHT_INSTALL_OP, PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PRIVATE_FETCH_OP,
     PRIVATE_REVOKE_OP, PUBLISH_PACKAGE_RELEASE_OP, RECOVER_PACKAGE_RELEASE_OP, REPORT_OP,
     SELECT_PREVIEW_SOURCE_OP, SELECT_RELEASE_TAP_CONTINUATION_OP, SELECT_STABLE_RELEASE_SOURCE_OP,
-    SIGN_PACKAGE_RELEASE_OP, TASK_EXECUTION_RESOLVER_OP, WRITE_HOMEBREW_TAP_PR_OP,
-    WRITE_REQUEST_OP, WRITE_STABLE_TAG_INTENT_OP, WRITE_STABLE_TAG_ORIGIN_OP, env,
+    SIGN_PACKAGE_RELEASE_OP, SOURCE_EVIDENCE_OP, TASK_EXECUTION_RESOLVER_OP,
+    WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP, WRITE_STABLE_TAG_INTENT_OP,
+    WRITE_STABLE_TAG_ORIGIN_OP, cache_bind, cache_owner_evidence, cache_runtime,
+    cache_tar_launcher, env, normal_tofu_cache_preflight,
 };
 
 /// Private operation selected by the gate.
@@ -22,107 +26,84 @@ pub(super) enum InternalOp {
     QualifyHomebrew,
     /// Bounded SDK-owned initialization of independent Cargo target lanes.
     SeedParallelTargets,
-    /// Source-free authenticated selection of the retained tap candidate.
     TapContinuation,
-    /// Read-only authenticated review proposal capture.
     CaptureReviewCompletion,
-    /// Independent C-App exact-head check emission.
     EmitReviewCompletion,
-    /// Materialize the request file from the GitHub environment.
-    WriteRequest,
-    /// Execute one named hosted platform check.
-    ExecuteCheck,
-    /// Run the credential-free native preview producer.
-    ExecuteReleaseProducer,
-    /// Source-free credentialed leaf acquisition before repository checkout.
-    AcquireReleaseLeaves,
-    /// Source-free authentication of the complete native preview union.
-    AdmitReleaseAggregate,
-    /// Authenticate source A and current workflow authority B before checkout.
-    PreviewSourceSelection,
-    /// Verify source A checkout and write its immutable admission record.
-    PreviewSourceFinalization,
-    /// Acquire the source admission artifact before checkout.
-    PreviewSourceAcquisition,
-    /// Read-only selection of fresh or retained stable source authority.
-    StableSourceSelection,
-    /// Source-free stable pre-tag authorization.
-    StableTagIntent,
-    /// Bind the actual permanent tag to its retained native intent.
-    StableTagOrigin,
-    /// Authenticate retained tag authority before source checkout.
-    StableTagAdmission,
-    /// Plan operation.
-    Plan,
-    /// Merge operation.
-    Merge,
-    /// Matrix-report fetch operation.
-    Fetch,
-    /// Task-report production operation.
-    Report,
-    /// Pre-seed manifest-writing operation.
-    PreseedManifest,
-    /// Repository-maintenance operation behind its separate private gate.
-    RepoPolicy,
-    /// Read-only predecessor resolution for hosted qualification.
-    ResolveQualification,
-    /// Data-only task execution record resolution for a generated wrapper.
-    ResolveTaskExecution,
-    /// Isolated, credentialed signing of a plan-bound package release.
-    PackageSigner,
-    /// Isolated publisher for an authenticated signed native package.
-    PackagePublisher,
-    /// Authenticated replay of a retained signed preview candidate.
-    PackageRecovery,
-    /// Credential-free updater prepared from captured public tap main.
-    TapPrepare,
-    /// Source-free authentication before credential-free tap preparation.
     TapAdmission,
-    /// Token-bound fetch of private cross-repository sources (HD-7).
-    PrivateFetch,
-    /// Installation-token revocation after the private fetch (HD-7).
-    PrivateRevoke,
-    /// `gradle-run-v1`: verify the wrapper, install the JDK, run Gradle.
+    /// Validated Gradle execution in the runner workspace.
     GradleRun,
-    /// Registry phase of `bun install` under the job token (HD-6, HD-7).
+    WriteRequest,
+    ExecuteCheck,
+    Plan,
+    Merge,
+    Fetch,
+    Report,
+    PreseedManifest,
+    RepoPolicy,
+    ResolveQualification,
+    BindQualificationCache,
+    ObserveQualificationCacheRuntime,
+    ObserveQualificationCacheRoots,
+    RecordQualificationCacheOwnerLayer,
+    AggregateQualificationCacheOwner,
+    ImportQualificationCachePayload,
+    ExportQualificationCachePayload,
+    NormalToolsCacheStagePath,
+    ImportNormalToolsCachePayload,
+    ExportNormalToolsCachePayload,
+    InstallCacheTarLaunchers,
+    PreflightNormalTofuCacheRestore,
+    WriteQualificationSourceEvidence,
+    WriteQualificationCacheReceipt,
+    ResolveTaskExecution,
+    PackageSigner,
+    PackagePublisher,
+    PackageRecovery,
+    TapPrepare,
+    TapWriter,
+    PrivateFetch,
+    PrivateRevoke,
+    TapMerge,
+    ExecuteReleaseProducer,
+    PreviewSourceSelection,
+    PreviewSourceFinalization,
+    PreviewSourceAcquisition,
+    AcquireReleaseLeaves,
+    AdmitReleaseAggregate,
+    StableSourceSelection,
+    StableTagIntent,
+    StableTagOrigin,
+    StableTagAdmission,
     BunRegistryInstall,
-    /// Export the verified Bun assets tarball.
     BunAssetsExport,
-    /// Reset the workspace assets and prepare the download directory.
     BunAssetsPrepare,
-    /// Safely import and pin-check the Bun assets tarball.
     BunAssetsImport,
     /// Read-only GitHub metadata and original artifact acquisition.
     GitHubEvidenceFetch,
     /// Credential-free verification and local import of the same-run bundle.
     GitHubEvidenceImport,
-    /// Hash-verified Playwright browser install (HD-6).
     PlaywrightInstall,
-    /// Isolated App-authenticated PR writer for a validated tap candidate.
-    TapWriter,
-    /// Isolated exact-head App-authenticated tap promotion merge.
-    TapMerge,
+}
+
+/// Validated private request: operation plus exact request-file path.
+#[derive(Debug)]
+pub(super) struct InternalRequest {
+    /// Operation to run.
+    pub(super) op: InternalOp,
+    /// Exact request-file path from the environment.
+    pub(super) path: PathBuf,
 }
 
 pub(super) fn from_env() -> Option<InternalOp> {
     Some(match env::var(OP_ENV).as_deref() {
         Ok("execute-native-homebrew-check-v1") => InternalOp::ExecuteNativeHomebrewCheck,
-        Ok("seed-parallel-targets-v1") => InternalOp::SeedParallelTargets,
         Ok("qualify-homebrew-v1") => InternalOp::QualifyHomebrew,
+        Ok("seed-parallel-targets-v1") => InternalOp::SeedParallelTargets,
         Ok(tag) if tag == SELECT_RELEASE_TAP_CONTINUATION_OP => InternalOp::TapContinuation,
         Ok(tag) if tag == CAPTURE_REVIEW_COMPLETION_OP => InternalOp::CaptureReviewCompletion,
         Ok(tag) if tag == EMIT_REVIEW_COMPLETION_OP => InternalOp::EmitReviewCompletion,
+        Ok(tag) if tag == ADMIT_HOMEBREW_TAP_OP => InternalOp::TapAdmission,
         Ok(tag) if tag == EXECUTE_CHECK_OP => InternalOp::ExecuteCheck,
-        Ok(tag) if tag == SELECT_STABLE_RELEASE_SOURCE_OP => InternalOp::StableSourceSelection,
-        Ok(tag) if tag == SELECT_PREVIEW_SOURCE_OP => InternalOp::PreviewSourceSelection,
-        Ok(tag) if tag == FINALIZE_PREVIEW_SOURCE_OP => InternalOp::PreviewSourceFinalization,
-        Ok(tag) if tag == ACQUIRE_PREVIEW_SOURCE_OP => InternalOp::PreviewSourceAcquisition,
-        Ok(tag) if tag == ADMIT_STABLE_TAG_ORIGIN_OP => InternalOp::StableTagAdmission,
-        Ok(tag) if tag == WRITE_STABLE_TAG_INTENT_OP => InternalOp::StableTagIntent,
-        Ok(tag) if tag == WRITE_STABLE_TAG_ORIGIN_OP => InternalOp::StableTagOrigin,
-        Ok(tag) if tag == ACQUIRE_RELEASE_LEAVES_OP => InternalOp::AcquireReleaseLeaves,
-        Ok(tag) if tag == EXECUTE_RELEASE_PRODUCER_OP => InternalOp::ExecuteReleaseProducer,
-        Ok(tag) if tag == ADMIT_RELEASE_AGGREGATE_OP => InternalOp::AdmitReleaseAggregate,
         Ok(tag) if tag == WRITE_REQUEST_OP => InternalOp::WriteRequest,
         Ok(tag) if tag == PLAN_OP => InternalOp::Plan,
         Ok(tag) if tag == MERGE_OP => InternalOp::Merge,
@@ -133,6 +114,34 @@ pub(super) fn from_env() -> Option<InternalOp> {
         Ok(tag) if crate::dispatch_qualification::is_resolver_op(tag) => {
             InternalOp::ResolveQualification
         }
+        Ok(tag) if tag == cache_bind::OP => InternalOp::BindQualificationCache,
+        Ok(tag) if tag == cache_runtime::RUNTIME_OP => InternalOp::ObserveQualificationCacheRuntime,
+        Ok(tag) if tag == cache_runtime::ROOTS_OP => InternalOp::ObserveQualificationCacheRoots,
+        Ok(tag) if tag == cache_owner_evidence::LAYER_OP => {
+            InternalOp::RecordQualificationCacheOwnerLayer
+        }
+        Ok(tag) if tag == cache_owner_evidence::OWNER_OP => {
+            InternalOp::AggregateQualificationCacheOwner
+        }
+        Ok(tag) if tag == cache_bind::transfer::IMPORT_OP => {
+            InternalOp::ImportQualificationCachePayload
+        }
+        Ok(tag) if tag == cache_bind::transfer::EXPORT_OP => {
+            InternalOp::ExportQualificationCachePayload
+        }
+        Ok(tag) if tag == cache_bind::normal_stage::OP => InternalOp::NormalToolsCacheStagePath,
+        Ok(tag) if tag == cache_bind::transfer::normal::IMPORT_OP => {
+            InternalOp::ImportNormalToolsCachePayload
+        }
+        Ok(tag) if tag == cache_bind::transfer::normal::EXPORT_OP => {
+            InternalOp::ExportNormalToolsCachePayload
+        }
+        Ok(tag) if tag == cache_tar_launcher::OP => InternalOp::InstallCacheTarLaunchers,
+        Ok(tag) if tag == normal_tofu_cache_preflight::OP => {
+            InternalOp::PreflightNormalTofuCacheRestore
+        }
+        Ok(tag) if tag == SOURCE_EVIDENCE_OP => InternalOp::WriteQualificationSourceEvidence,
+        Ok(tag) if tag == CACHE_RECEIPT_OP => InternalOp::WriteQualificationCacheReceipt,
         Ok(tag) if tag == TASK_EXECUTION_RESOLVER_OP => InternalOp::ResolveTaskExecution,
         Ok(tag) if tag == PRIVATE_FETCH_OP => InternalOp::PrivateFetch,
         Ok(tag) if tag == PRIVATE_REVOKE_OP => InternalOp::PrivateRevoke,
@@ -148,9 +157,18 @@ pub(super) fn from_env() -> Option<InternalOp> {
         Ok(tag) if tag == PUBLISH_PACKAGE_RELEASE_OP => InternalOp::PackagePublisher,
         Ok(tag) if tag == RECOVER_PACKAGE_RELEASE_OP => InternalOp::PackageRecovery,
         Ok(tag) if tag == PREPARE_HOMEBREW_TAP_OP => InternalOp::TapPrepare,
-        Ok(tag) if tag == ADMIT_HOMEBREW_TAP_OP => InternalOp::TapAdmission,
         Ok(tag) if tag == WRITE_HOMEBREW_TAP_PR_OP => InternalOp::TapWriter,
         Ok(tag) if tag == MERGE_HOMEBREW_TAP_PR_OP => InternalOp::TapMerge,
+        Ok(tag) if tag == SELECT_STABLE_RELEASE_SOURCE_OP => InternalOp::StableSourceSelection,
+        Ok(tag) if tag == SELECT_PREVIEW_SOURCE_OP => InternalOp::PreviewSourceSelection,
+        Ok(tag) if tag == FINALIZE_PREVIEW_SOURCE_OP => InternalOp::PreviewSourceFinalization,
+        Ok(tag) if tag == ACQUIRE_PREVIEW_SOURCE_OP => InternalOp::PreviewSourceAcquisition,
+        Ok(tag) if tag == WRITE_STABLE_TAG_INTENT_OP => InternalOp::StableTagIntent,
+        Ok(tag) if tag == WRITE_STABLE_TAG_ORIGIN_OP => InternalOp::StableTagOrigin,
+        Ok(tag) if tag == ADMIT_STABLE_TAG_ORIGIN_OP => InternalOp::StableTagAdmission,
+        Ok(tag) if tag == EXECUTE_RELEASE_PRODUCER_OP => InternalOp::ExecuteReleaseProducer,
+        Ok(tag) if tag == ACQUIRE_RELEASE_LEAVES_OP => InternalOp::AcquireReleaseLeaves,
+        Ok(tag) if tag == ADMIT_RELEASE_AGGREGATE_OP => InternalOp::AdmitReleaseAggregate,
         _ => return None,
     })
 }

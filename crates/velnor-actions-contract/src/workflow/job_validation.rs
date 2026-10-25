@@ -14,9 +14,9 @@ impl Job {
                 ));
             }
             runner.validate("workflow", &format!("jobs.{id}.check_runner"))?;
+            let admission = self.condition.as_deref();
             if runner.executor == crate::config::CheckExecutor::EphemeralSelfHosted
-                && self.condition.as_deref()
-                    != Some(crate::config::EPHEMERAL_CHECK_ADMISSION_CONDITION)
+                && !check_admission_matches(admission)
             {
                 return Err(ContractError::identity(
                     "job.condition",
@@ -27,9 +27,7 @@ impl Job {
                 .is_ok_and(|selector| selector.is_scale_set());
             if scale_set
                 && (runner.platform != crate::config::CheckPlatform::LinuxX64
-                    || runner.executor != crate::config::CheckExecutor::Hosted
-                    || self.condition.as_deref()
-                        != Some(crate::config::EPHEMERAL_CHECK_ADMISSION_CONDITION))
+                    || !scale_set_admission_matches(runner, admission))
             {
                 return Err(ContractError::identity(
                     "job.runs_on",
@@ -141,6 +139,33 @@ impl Job {
         }
         super::super::step_identity::validate_step_sequence(&self.steps, id)
     }
+}
+
+fn check_admission_matches(condition: Option<&str>) -> bool {
+    condition == Some(crate::config::EPHEMERAL_CHECK_ADMISSION_CONDITION)
+}
+
+fn scale_set_admission_matches(
+    runner: &crate::config::CheckRunner,
+    condition: Option<&str>,
+) -> bool {
+    if check_admission_matches(condition) {
+        return true;
+    }
+    let Some(condition) = condition else {
+        return false;
+    };
+    if runner.executor != crate::config::CheckExecutor::Hosted
+        || runner.platform != crate::config::CheckPlatform::LinuxX64
+    {
+        return false;
+    }
+    let expected = format!(
+        "({}) && ({})",
+        "always() && needs.plan.result == 'success'",
+        crate::config::EPHEMERAL_CHECK_ADMISSION_CONDITION
+    );
+    condition == expected.as_str()
 }
 
 #[cfg(test)]
@@ -283,3 +308,7 @@ mod admission_tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "job_validation_scale_set_tests.rs"]
+mod scale_set_tests;

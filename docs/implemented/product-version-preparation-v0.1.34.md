@@ -13,12 +13,10 @@ on top of 0.1.33:
 - V2 (#270): `private-revoke-v1` retries its post-revoke probe with a bounded
   backoff (29.5 s) and still fails closed when the token authenticates at the
   end.
-- V3 (#272): a dbt project whose `profiles.yml` uses the Postgres adapter gets
-  `DBT_ALLOW_EXPERIMENTAL_ADAPTERS=true` from the generator on every dbt step;
-  the `[stacks.dbt].env` allowlist stays closed.
-- V4 (#273): the default branch resolves from the config key, `origin/HEAD`,
-  then the CI event payload, so `[workflow] default_branch` is optional in CI.
-  Velnor’s own generated workflows are unchanged by V3 and V4.
+- V3 (#272): The generator sets `DBT_ALLOW_EXPERIMENTAL_ADAPTERS=true` on every dbt step when `profiles.yml` uses the Postgres adapter.
+  The `[stacks.dbt].env` allowlist remains closed.
+- V4 (#273): The generator checks the config key, `origin/HEAD`, then the CI event payload for the default branch.
+  `[workflow] default_branch` remains optional in CI. V3 and V4 do not change Velnor’s generated workflows.
 
 It does not change the release protocol or weaken source, attempt, role,
 signature or protected-environment admission.

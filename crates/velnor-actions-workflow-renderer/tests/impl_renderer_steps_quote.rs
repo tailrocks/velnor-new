@@ -192,6 +192,9 @@ fn emit_ctx() -> RenderContext {
         report_helper_version: EMIT_VERSION.to_owned(),
         runs_on: EMIT_LABEL.to_owned(),
         scale_set_selector: None,
+        scale_set_image_source_sha: None,
+        verified_cache_helpers: std::collections::BTreeMap::new(),
+        require_verified_cache_helper: false,
         staged_binary: format!("{STAGED_BINARY_PREFIX}{EMIT_VERSION}"),
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: pin("actions/checkout"),
@@ -220,6 +223,7 @@ fn emit_triggers() -> Trigger {
         push_branches: vec!["main".to_owned()],
         merge_group: true,
         workflow_dispatch: None,
+        workflow_call: false,
         schedule: None,
     }
 }

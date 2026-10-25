@@ -1,5 +1,4 @@
-//! Closed private preview operation dispatch; admission executes no source.
-
+//! Closed private native producer operations; execution remains source-bound only at producer time.
 use std::process::ExitCode;
 use velnor_actions_orchestrator::{admit_release_aggregate, execute_release_producer};
 

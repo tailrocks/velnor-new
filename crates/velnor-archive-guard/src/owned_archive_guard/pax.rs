@@ -1,10 +1,10 @@
-use super::profile::Profile;
+use super::profile::{PaxMode, Profile};
 
 const PAX_HEADER_LIMIT: u64 = 64 * 1024;
 const PAX_TOTAL_LIMIT: u64 = 16 * 1024 * 1024;
 
 pub(super) fn check_header(profile: Profile, size: u64, metadata: &mut u64) -> Result<(), String> {
-    if !profile.allow_pax {
+    if profile.pax_mode == PaxMode::Forbidden {
         return Err("PAX tar extensions are forbidden".to_owned());
     }
     check_metadata_size(size, metadata)
@@ -23,9 +23,11 @@ pub(super) fn check_metadata_size(size: u64, metadata: &mut u64) -> Result<(), S
     Ok(())
 }
 
-pub(super) fn parse(body: &[u8]) -> Result<(), String> {
+pub(super) fn parse(body: &[u8], mode: PaxMode) -> Result<(), String> {
     let mut offset = 0_usize;
     let mut records = 0_usize;
+    let mut path_seen = false;
+    let mut linkpath_seen = false;
     while offset < body.len() {
         let space = record_length_boundary(body, offset)?;
         let length = parse_record_length(body, offset, space)?;
@@ -37,12 +39,32 @@ pub(super) fn parse(body: &[u8]) -> Result<(), String> {
         }
         let (key, value) = record_fields(&body[space + 1..end - 1])?;
         check_key_value(key, value)?;
+        if mode == PaxMode::CachePaths {
+            check_cache_key(key, &mut path_seen, &mut linkpath_seen)?;
+        }
         records += 1;
         offset = end;
     }
     if records == 0 {
         return Err("empty PAX metadata".to_owned());
     }
+    Ok(())
+}
+
+fn check_cache_key(
+    key: &str,
+    path_seen: &mut bool,
+    linkpath_seen: &mut bool,
+) -> Result<(), String> {
+    let seen = match key {
+        "path" => path_seen,
+        "linkpath" => linkpath_seen,
+        _ => return Err("unsupported PAX key for cache payload".to_owned()),
+    };
+    if *seen {
+        return Err("duplicate PAX key for cache payload".to_owned());
+    }
+    *seen = true;
     Ok(())
 }
 

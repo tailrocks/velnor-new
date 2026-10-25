@@ -5,7 +5,7 @@
 use super::*;
 
 #[test]
-fn configured_timeout_reaches_every_crate_job() {
+fn configured_timeout_reaches_one_job_for_each_rust_package() {
     let clippy = group("demo", TaskKind::Clippy, &[]);
     let test = group("demo", TaskKind::Test, &[]);
     let doc = group("nested", TaskKind::Doc, &[]);

@@ -1,11 +1,26 @@
 //! Bounded background reconciliation for journaled runner completion.
 
 mod cleanup;
+mod diagnostics;
+mod journal_ref;
+mod reaper;
 
-use std::collections::VecDeque;
+pub(in crate::launch) use cleanup::{
+    remove_owned_resources_for_jit_conflict, remove_owned_resources_for_retirement,
+};
+
+#[cfg(test)]
+pub(crate) use cleanup::reconcile_for_test;
+
+use reaper::ReapTask;
+#[cfg(test)]
+use reaper::Reaper;
+use reaper::{defer_join, ensure_started as ensure_reaper_started, wake};
+
+use std::path::Path;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, SyncSender, TrySendError};
-use std::sync::{Arc, Condvar, Mutex, OnceLock};
+use std::sync::mpsc::{self, SyncSender};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -16,7 +31,9 @@ use zeroize::Zeroize;
 use crate::docker_client::DOCKER_OPERATION_TIMEOUT;
 use crate::error::HostError;
 use crate::https::HttpsTransport;
-use crate::journal::Journal;
+use crate::journal::ConnectionJournal;
+use crate::launch::SelectedEngineContext;
+use crate::launch::bootstrap::NativeCleanupRuntime;
 use crate::listen::Secret;
 
 const CLEANUP_DOCKER_REQUEST_TIMEOUT: Duration = DOCKER_OPERATION_TIMEOUT;
@@ -26,10 +43,24 @@ const CLEANUP_DOCKER_REQUEST_TIMEOUT: Duration = DOCKER_OPERATION_TIMEOUT;
 mod worker_tests;
 
 pub(super) struct Resources {
-    pub(super) journal: Journal,
+    pub(super) journal: journal_ref::CompletionJournal,
     pub(super) docker: Docker,
     pub(super) transport: HttpsTransport,
     pub(super) admin: Secret,
+    pub(super) diagnostics: diagnostics::DiagnosticsRoot,
+    pub(super) native_cleanup: NativeCleanupRuntime,
+    pub(super) selected_engine: SelectedEngineContext,
+}
+
+struct StartWithJournalInput<'a> {
+    journal: journal_ref::CompletionJournal,
+    connection_id: &'a str,
+    docker: Docker,
+    admin_base: &'a str,
+    admin_token: String,
+    state: &'a Path,
+    native_cleanup: NativeCleanupRuntime,
+    selected_engine: SelectedEngineContext,
 }
 
 /// One independently scheduled completion cleanup worker.
@@ -42,34 +73,41 @@ pub(crate) struct CompletionWorker {
     reaped: Option<mpsc::Sender<()>>,
 }
 
-struct ReapTask {
-    thread: JoinHandle<()>,
-    finished: Option<oneshot::Receiver<Result<(), HostError>>>,
-    joined: Option<oneshot::Sender<Result<(), HostError>>>,
-    #[cfg(test)]
-    reaped: Option<mpsc::Sender<()>>,
-}
-
-struct Reaper {
-    queue: Arc<ReapQueue>,
-    thread: Mutex<Option<JoinHandle<()>>>,
-}
-
-struct ReapQueue {
-    tasks: Mutex<VecDeque<ReapTask>>,
-    wake: Condvar,
-}
-
-static REAPER: OnceLock<Reaper> = OnceLock::new();
-
 impl CompletionWorker {
-    /// Start the bounded completer on its own thread and runtime.
-    pub(crate) fn start(
-        journal: Journal,
+    /// Start cleanup for one repository connection's completion rows.
+    pub(crate) fn start_scoped(
+        journal: ConnectionJournal,
+        native_cleanup: NativeCleanupRuntime,
         docker: Docker,
+        selected: SelectedEngineContext,
         admin_base: &str,
         admin_token: String,
+        state: &Path,
     ) -> Result<Self, HostError> {
+        let connection_id = journal.connection_id().as_str().to_owned();
+        Self::start_with_journal(StartWithJournalInput {
+            journal: journal_ref::CompletionJournal::scoped(journal),
+            connection_id: &connection_id,
+            docker,
+            admin_base,
+            admin_token,
+            state,
+            native_cleanup,
+            selected_engine: selected,
+        })
+    }
+
+    fn start_with_journal(input: StartWithJournalInput<'_>) -> Result<Self, HostError> {
+        let StartWithJournalInput {
+            journal,
+            connection_id,
+            docker,
+            admin_base,
+            admin_token,
+            state,
+            native_cleanup,
+            selected_engine,
+        } = input;
         if admin_token.is_empty() {
             return Err(HostError::EmptySecret);
         }
@@ -85,13 +123,21 @@ impl CompletionWorker {
         let thread_stopping = Arc::clone(&stopping);
         let (wake, receiver) = mpsc::sync_channel(1);
         let (finished_tx, finished) = oneshot::channel();
+        let journal_identity = journal.completion_state_identity();
         let resources = Resources {
+            diagnostics: diagnostics::DiagnosticsRoot::open_for_journal(
+                state,
+                journal_identity,
+                connection_id,
+            )?,
             journal,
             docker: bounded_docker(docker),
             transport,
             admin,
+            native_cleanup,
+            selected_engine,
         };
-        worker_reaper().ensure_started()?;
+        ensure_reaper_started()?;
         let thread = thread::Builder::new()
             .name("velnor-completion-reconciler".to_owned())
             .spawn(move || {
@@ -177,138 +223,6 @@ impl Drop for CompletionWorker {
         {
             eprintln!("completion worker failed phase=join_dispatch reason={error}");
         }
-    }
-}
-
-fn worker_reaper() -> &'static Reaper {
-    REAPER.get_or_init(Reaper::new)
-}
-
-impl Reaper {
-    fn new() -> Self {
-        Self {
-            queue: Arc::new(ReapQueue {
-                tasks: Mutex::new(VecDeque::new()),
-                wake: Condvar::new(),
-            }),
-            thread: Mutex::new(None),
-        }
-    }
-
-    fn ensure_started(&self) -> Result<(), HostError> {
-        self.ensure_started_with(spawn_reaper_thread)
-    }
-
-    fn ensure_started_with(
-        &self,
-        spawn: impl FnOnce(Arc<ReapQueue>) -> Result<JoinHandle<()>, HostError>,
-    ) -> Result<(), HostError> {
-        let mut thread = self
-            .thread
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if thread.as_ref().is_some_and(|handle| !handle.is_finished()) {
-            return Ok(());
-        }
-        if let Some(finished) = thread.take()
-            && finished.join().is_err()
-        {
-            eprintln!("completion worker failed phase=reaper reason=panic");
-        }
-        *thread = Some(spawn(Arc::clone(&self.queue))?);
-        Ok(())
-    }
-
-    fn enqueue(&self, task: ReapTask) {
-        let mut tasks = self
-            .queue
-            .tasks
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        tasks.push_back(task);
-        self.queue.wake.notify_one();
-    }
-
-    #[cfg(test)]
-    fn pending_count(&self) -> usize {
-        self.queue
-            .tasks
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .len()
-    }
-}
-
-fn spawn_reaper_thread(queue: Arc<ReapQueue>) -> Result<JoinHandle<()>, HostError> {
-    thread::Builder::new()
-        .name("velnor-completion-reaper".to_owned())
-        .spawn(move || reap_loop(&queue))
-        .map_err(|_| HostError::Journal)
-}
-
-fn reap_loop(queue: &Arc<ReapQueue>) {
-    loop {
-        let task = next_reap_task(queue);
-        reap_task(task);
-    }
-}
-
-fn next_reap_task(queue: &ReapQueue) -> ReapTask {
-    let mut tasks = queue
-        .tasks
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    loop {
-        if let Some(task) = tasks.pop_front() {
-            return task;
-        }
-        tasks = queue
-            .wake
-            .wait(tasks)
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-    }
-}
-
-fn defer_join(task: ReapTask) -> Result<(), HostError> {
-    let reaper = worker_reaper();
-    // Store the worker handle before any fallible thread creation. If the
-    // reaper cannot start, the queue keeps ownership for a later retry.
-    reaper.enqueue(task);
-    reaper.ensure_started()
-}
-
-fn reap_task(task: ReapTask) {
-    let joined = task.thread.join().map_err(|_| HostError::Journal);
-    if joined.is_err() {
-        eprintln!("completion worker failed phase=join reason=panic");
-    }
-    if let Some(mut finished) = task.finished {
-        match finished.try_recv() {
-            Ok(Ok(())) => {}
-            Ok(Err(error)) => {
-                eprintln!("completion worker failed phase=shutdown reason={error}");
-            }
-            Err(oneshot::error::TryRecvError::Empty | oneshot::error::TryRecvError::Closed) => {
-                eprintln!("completion worker failed phase=shutdown reason=missing_result");
-            }
-        }
-    }
-    if let Some(joined_tx) = task.joined
-        && let Err(Err(error)) = joined_tx.send(joined)
-    {
-        eprintln!("completion worker failed phase=join reason={error}");
-    }
-    #[cfg(test)]
-    if let Some(reaped) = task.reaped
-        && reaped.send(()).is_err()
-    {
-        eprintln!("completion worker test observer disconnected phase=join");
-    }
-}
-
-fn wake(sender: &SyncSender<()>) {
-    match sender.try_send(()) {
-        Ok(()) | Err(TrySendError::Full(()) | TrySendError::Disconnected(())) => {}
     }
 }
 

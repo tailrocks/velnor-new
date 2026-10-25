@@ -65,7 +65,7 @@ fn one_job_per_crate_builds_first_then_runs_checks_in_parallel() {
     assert!(single.contains(&"Clippy"));
     assert!(
         jobs["rust-nested"].steps.iter().all(|step| !step.parallel),
-        "a lone check stays sequential"
+        "a lone check remains sequential"
     );
 }
 
@@ -103,10 +103,7 @@ fn nested_workspace_lanes_live_below_that_workspace_target() {
         .collect();
     assert_eq!(
         dirs,
-        BTreeSet::from([
-            "crates/velnor-runner/target/velnor-clippy",
-            "crates/velnor-runner/target/velnor-doc"
-        ])
+        BTreeSet::from(["target/velnor-clippy", "target/velnor-doc"])
     );
 }
 

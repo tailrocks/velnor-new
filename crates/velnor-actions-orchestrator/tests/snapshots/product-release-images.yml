@@ -61,8 +61,8 @@ jobs:
           fetch-depth: "1"
           persist-credentials: "false"
           ref: ${{ inputs.source_sha }}
-      - name: Build runner and DinD images
-        run: "set -eu\ndocker build --platform linux/amd64 -t velnor-runner:linux-amd64 images/runner/ubuntu-26.04\ndocker build --platform linux/amd64 -t velnor-dind:linux-amd64 images/dind"
+      - name: Bind resource probe to the release source
+        run: "set -eu\nsource_revision=\"${GITHUB_SHA:?missing source revision}\"\n[[ \"$source_revision\" =~ ^[0-9a-f]{40}$ ]]\nprintf 'VELNOR_SOURCE_REVISION=%s\\n' \"$source_revision\" >> \"$GITHUB_ENV\""
       - name: Setup Mise
         uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e
         with:
@@ -108,6 +108,8 @@ jobs:
       - name: Build and smoke-test resource-probe image
         shell: bash
         run: "set -euo pipefail\nproducer_target=\"$(cd -- \"${CARGO_TARGET_DIR:-crates/velnor-runner/target}\" && pwd -P)\"\nexport VELNOR_RESOURCE_PROBE_RELEASE_BIN=\"$producer_target/x86_64-unknown-linux-gnu/debug/velnor-resource-probe-release\"\nbash images/resource-probe/build-image.sh"
+      - name: Build Runner and DinD images
+        run: bash images/resource-probe/build-runner-images.sh
       - name: Verify image architectures
         run: "set -eu\nrunner=\"$(docker image inspect --format '{{.Architecture}}' velnor-runner:linux-amd64)\"\ndind=\"$(docker image inspect --format '{{.Architecture}}' velnor-dind:linux-amd64)\"\ntest \"$runner\" = amd64\ntest \"$dind\" = amd64"
       - name: Save image archives

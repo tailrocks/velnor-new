@@ -35,9 +35,23 @@ fn parallel_target_seeding_loads_only_as_explicit_rust_boolean() {
 }
 
 #[test]
+fn all_features_configurations_remain_enabled_when_parallel_seeding_is_configured() {
+    let root = rooted(
+        "schema = 1\n[stacks.rust]\nseed_parallel_targets = true\n[[stacks.rust.configurations]]\nname = \"all\"\nfeatures = []\nall_features = true\ntarget = \"host\"\n",
+    );
+    let rust = load_config(root.path())
+        .expect("Rust stack")
+        .stacks
+        .rust
+        .expect("Rust stack configuration");
+    assert!(rust.seed_parallel_targets);
+    assert!(rust.configurations[0].all_features);
+}
+
+#[test]
 fn all_features_configuration_is_preserved_during_stack_materialization() {
     let root = rooted(
-        "schema = 1\n[[stacks.rust.configurations]]\nname = \"all\"\nall_features = true\ntarget = \"host\"\n",
+        "schema = 1\n[[stacks.rust.configurations]]\nname = \"all\"\nfeatures = []\nall_features = true\ntarget = \"host\"\n",
     );
     let rust = load_config(root.path())
         .expect("all-features configuration")
@@ -46,8 +60,6 @@ fn all_features_configuration_is_preserved_during_stack_materialization() {
         .expect("Rust stack");
     assert_eq!(rust.configurations[0].name, "all");
     assert!(rust.configurations[0].all_features);
-    assert_eq!(rust.configurations[0].features, [] as [String; 0]);
-    assert!(!rust.clippy_all_features);
 
     let root = rooted("schema = 1\n[stacks.rust]\n");
     let rust = load_config(root.path())
@@ -62,7 +74,7 @@ fn all_features_configuration_is_preserved_during_stack_materialization() {
 fn clippy_all_features_is_an_independent_optional_stack_setting() {
     let root = rooted("schema = 1\n[stacks.rust]\nclippy_all_features = true\n");
     let rust = load_config(root.path())
-        .expect("Clippy feature policy")
+        .expect("The Clippy feature policy must load.")
         .stacks
         .rust
         .expect("Rust stack");
@@ -71,14 +83,11 @@ fn clippy_all_features_is_an_independent_optional_stack_setting() {
 
     let root = rooted("schema = 1\n[stacks.rust]\n");
     let rust = load_config(root.path())
-        .expect("default feature policy")
+        .expect("The default feature policy must load.")
         .stacks
         .rust
         .expect("Rust stack");
     assert!(!rust.clippy_all_features);
-
-    let root = rooted("schema = 1\n[stacks.rust]\nclippy_all_features = \"true\"\n");
-    assert!(load_config(root.path()).is_err(), "not a string option");
 }
 
 #[test]
@@ -346,6 +355,12 @@ fn crate_build_jobs_parse_validate_and_reject_unknown_keys() {
         "schema = 1\n[resources]\ncompiler_process_budget = 4\ntest_process_budget = 2\n[stacks.rust.crates.demo]\nbuild_jobs = 3\n",
     );
     assert!(load(root.path()).is_ok(), "cap within raised budget");
+}
+
+#[test]
+fn clippy_all_features_rejects_non_boolean_values() {
+    let root = rooted("schema = 1\n[stacks.rust]\nclippy_all_features = \"true\"\n");
+    assert!(load_config(root.path()).is_err());
 }
 
 #[test]

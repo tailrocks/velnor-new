@@ -9,6 +9,8 @@ pub(crate) mod phase_timing;
 pub(crate) mod plan_obligation;
 #[path = "plan_response.rs"]
 mod plan_response;
+#[path = "internal_qualification.rs"]
+mod qualification;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -35,8 +37,8 @@ use crate::select::{ChangeEvidence, classify_changed, select_universe};
 use crate::select_edges::plan_task_graph;
 
 pub use crate::internal_request::{
-    merge_passed, publish_final_report, publish_plan_files, response_path_for, write_request,
-    write_request_parts,
+    merge_passed, publish_final_report, publish_plan_files, publish_plan_files_with_outputs,
+    response_path_for, write_request, write_request_parts,
 };
 pub use crate::plan_output_limits::{
     PlanOutputs, plan_outputs, plan_outputs_from_staged_admission, plan_outputs_with_admission,
@@ -99,6 +101,7 @@ fn plan_internal_inner(
         prepare(&root)?
     };
     validate_qualification_request(&request, &prep.default_branch)?;
+    let scale_set_image_source_sha = qualification::bind_image_source(&mut request, &prep)?;
     let named_check_lanes = named_lanes::resolve(&prep, request.named_check_lanes.take())?;
     let catalog = &prep.catalog;
     let mut warnings = Vec::new();
@@ -130,6 +133,12 @@ fn plan_internal_inner(
         &named_check_lanes,
         warnings,
         timings.as_deref_mut(),
+    )?;
+    qualification::validate_scale_set_image_source(
+        &request,
+        &prep,
+        &plan,
+        scale_set_image_source_sha.as_deref(),
     )?;
     plan.jobs.extend(crate::select::images::dispositions(
         &prep.root,
@@ -306,7 +315,7 @@ fn build_plan(
     if let Some(dup) = duplicates.first() {
         return Err(internal(&format!("duplicate_task_id:{dup}")));
     }
-    let needs = crate::plan_dispositions::job_needs(universe, &job_owners)?;
+    let needs = crate::plan_dispositions::job_needs(universe, &job_owners, request.event)?;
     let jobs =
         crate::plan_dispositions::finalize_dispositions(&mut obligations, &mut entries, &needs);
     let selected_ids = executing_units(universe, &obligations);
@@ -352,49 +361,5 @@ fn executing_units<'a>(
 }
 
 #[cfg(test)]
-mod budget_tests {
-    use std::collections::BTreeMap;
-
-    use velnor_actions_contract::{
-        ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, PlanMatrix, PlannedPlatform,
-    };
-
-    use super::{MATRIX_BUDGET_BYTES, check_matrix_budget};
-
-    #[test]
-    fn oversize_matrix_errors_and_does_not_truncate() {
-        let run = format!("echo {}", "x".repeat(MATRIX_BUDGET_BYTES));
-        let entry = MatrixEntry::derive(
-            "rust",
-            "stack/rust/demo/clippy/default",
-            &run,
-            &format!("b3-{}", "a".repeat(64)),
-            serde_json::json!({}),
-            ExecuteTaskIds {
-                tasks: BTreeMap::from([(
-                    "clippy".to_owned(),
-                    ExecuteTaskRef::Single("stack/rust/demo/clippy/default".to_owned()),
-                )]),
-            },
-            &format!("b3-{}", "b".repeat(64)),
-            "local",
-            "rust-demo",
-            PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu").expect("platform"),
-        )
-        .expect("entry");
-        let error = check_matrix_budget(&PlanMatrix {
-            include: vec![entry],
-        })
-        .expect_err("oversize matrix must fail closed");
-        let text = error.to_string();
-        assert!(text.contains("matrix_budget_exceeded"), "{text}");
-        assert!(!text.contains("truncat"), "{text}");
-        let size = text
-            .split("matrix_budget_exceeded:")
-            .nth(1)
-            .and_then(|rest| rest.split(':').next())
-            .and_then(|size| size.parse::<usize>().ok())
-            .expect("size");
-        assert!(size > MATRIX_BUDGET_BYTES, "{size}");
-    }
-}
+#[path = "internal_budget_tests.rs"]
+mod budget_tests;

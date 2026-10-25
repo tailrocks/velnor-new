@@ -37,10 +37,11 @@ fn obligation() -> CrateObligation {
     CrateObligation {
         task_id,
         kind: "validate".to_owned(),
+        configuration: "default".to_owned(),
         step_name: "Validate".to_owned(),
         gated_by: Vec::new(),
         matrix_key: matrix_key_for_id(&matrix_id).expect("matrix key"),
-        task_digest,
+        task_digest: crate::workflow::TaskBindingDigest::new(task_digest).expect("binding digest"),
         toolchain_inputs,
         run,
     }
@@ -114,14 +115,58 @@ fn crate_job_accepts_only_strictly_prior_gates() {
     later.task_id =
         task_id_for_stack("tofu", "stacks/a", "plan", "default", None).expect("task id");
     let toolchain = toolchain_id(&later.toolchain_inputs).expect("toolchain identity");
-    later.task_digest =
-        task_digest_for_execution(&later.task_id, &later.run, &toolchain).expect("task identity");
+    later.task_digest = crate::workflow::TaskBindingDigest::new(
+        task_digest_for_execution(&later.task_id, &later.run, &toolchain).expect("task identity"),
+    )
+    .expect("binding digest");
     later.gated_by.push(job.obligations[0].task_id.clone());
     job.obligations.push(later);
     assert!(job.validate().is_ok(), "prior gate accepted");
     job.obligations.swap(0, 1);
     let error = job.validate().expect_err("forward gate rejected");
     assert!(error.to_string().contains("unordered_gate:"), "{error}");
+}
+
+#[test]
+fn one_job_keeps_obligation_configuration_identity() {
+    let mut job = job("tofu-stacks-a", "OpenToFu — stacks/a");
+    let mut configured = obligation();
+    configured.task_id =
+        task_id_for_stack("tofu", "stacks/nested/a", "plan", "checks", Some((1, 2)))
+            .expect("configured task ID");
+    configured.configuration = "checks".to_owned();
+    let toolchain = toolchain_id(&configured.toolchain_inputs).expect("toolchain identity");
+    configured.task_digest = crate::workflow::TaskBindingDigest::new(
+        task_digest_for_execution(&configured.task_id, &configured.run, &toolchain)
+            .expect("configured task identity"),
+    )
+    .expect("binding digest");
+    configured.gated_by.push(job.obligations[0].task_id.clone());
+    job.obligations.push(configured);
+
+    job.validate()
+        .expect("one job accepts multiple configurations");
+    assert_eq!(job.obligations[0].configuration, "default");
+    assert_eq!(job.obligations[1].configuration, "checks");
+}
+
+#[test]
+fn crate_job_rejects_invalid_obligation_configuration() {
+    let mut invalid = job("tofu-stacks-a", "OpenToFu — stacks/a");
+    invalid.obligations[0].configuration = "checks\nother".to_owned();
+
+    let error = invalid.validate().expect_err("control character rejected");
+    assert!(error.to_string().contains("bad_configuration"), "{error}");
+
+    let mut mismatch = job("tofu-stacks-a", "OpenToFu — stacks/a");
+    mismatch.obligations[0].configuration = "checks".to_owned();
+    let error = mismatch
+        .validate()
+        .expect_err("configuration must match task identity");
+    assert!(
+        error.to_string().contains("configuration_mismatch"),
+        "{error}"
+    );
 }
 
 #[test]

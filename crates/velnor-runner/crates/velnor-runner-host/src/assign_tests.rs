@@ -15,7 +15,6 @@ fn batch(jobs: Vec<InnerJob>) -> Poll {
 
 fn job(kind: InnerKind, request_id: Option<i64>) -> InnerJob {
     InnerJob {
-        source: velnor_runner_github::SourceMetadata::default(),
         kind,
         request_id,
         job_id: None,
@@ -24,6 +23,7 @@ fn job(kind: InnerKind, request_id: Option<i64>) -> InnerJob {
         runner_name: None,
         result: None,
         fields: Vec::new(),
+        source: velnor_runner_github::SourceMetadata::default(),
     }
 }
 

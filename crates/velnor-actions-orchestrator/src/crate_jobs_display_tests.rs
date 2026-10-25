@@ -50,11 +50,7 @@ fn id_and_display_prefixes_agree_per_partition() {
         crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");
-    assert_eq!(
-        found.jobs.len(),
-        4,
-        "two Rust crate jobs plus two Tofu owners"
-    );
+    assert_eq!(found.jobs.len(), 4, "one job for each package or root");
     for (id, job) in &found.jobs {
         let tofu_id = id.starts_with(TOFU_JOB_ID_PREFIX);
         let tofu_display = job.display_name.starts_with(TOFU_DISPLAY_PREFIX);
@@ -72,17 +68,19 @@ fn id_and_display_prefixes_agree_per_partition() {
             .map(|(_, job)| job.display_name.clone())
             .expect("built job")
     };
-    assert_eq!(display("rust-demo"), "Rust / demo");
+    assert_eq!(display("rust-demo"), "Rust / demo (Cargo.toml)");
     assert_eq!(display("tofu-stacks-a"), "OpenToFu — stacks/a");
     assert_eq!(display("tofu-stacks-b"), "OpenToFu — stacks/b");
-    let mixed = found
+    let rust_jobs: Vec<_> = found
         .jobs
         .iter()
-        .find(|(id, _)| id.starts_with("rust-") && *id != "rust-demo")
-        .expect("Rust crate job sharing the Tofu unit");
+        .filter(|(id, _)| id.starts_with("rust-"))
+        .collect();
+    assert_eq!(rust_jobs.len(), 2);
+    assert!(rust_jobs.iter().all(|(id, _)| !id.ends_with("-lint")));
     assert!(
-        mixed.1.display_name.starts_with("Rust / ") && !mixed.1.display_name.contains(" / Lint"),
-        "Rust crate job keeps its display namespace: {}",
-        mixed.1.display_name
+        rust_jobs
+            .iter()
+            .all(|(_, job)| job.display_name.starts_with("Rust / "))
     );
 }

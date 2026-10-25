@@ -1,5 +1,9 @@
 //! Public generation policy fixes preview and stable publication authority.
 use super::*;
+
+fn hosted_policy() -> crate::workflow_routing::WorkflowRoutingPolicy {
+    crate::workflow_routing::WorkflowRoutingPolicy::hosted_only()
+}
 use velnor_actions_contract::package_release::PackageReleaseChannel;
 #[test]
 fn preview_has_no_mutable_release_or_bootstrap_environment() {
@@ -25,7 +29,7 @@ fn preview_has_no_mutable_release_or_bootstrap_environment() {
         !env.iter()
             .any(|(key, _)| key == "VELNOR_PREVIEW_BOOTSTRAP_SNAPSHOT_SHA256")
     );
-    let yaml = render_consumer_preview(&spec)
+    let yaml = render_consumer_preview(&spec, &hosted_policy())
         .expect("immutable preview workflow")
         .bytes;
     assert!(
@@ -38,8 +42,105 @@ fn preview_rejects_unbounded_producer_limits_before_rendering() {
     for minutes in [0, 31, 360, 361, u16::MAX] {
         let mut spec = fixture();
         spec.producer_timeout_minutes = minutes;
-        assert!(render_consumer_preview(&spec).is_err(), "{minutes}");
+        assert!(
+            render_consumer_preview(&spec, &hosted_policy()).is_err(),
+            "{minutes}"
+        );
     }
+}
+
+#[test]
+fn twenty_minute_producer_jobs_leave_control_signer_publication_and_updater_at_five() {
+    let mut spec = with_tap();
+    spec.producer_timeout_minutes = 20;
+    let rendered =
+        render_consumer_preview(&spec, &hosted_policy()).expect("explicit twenty-minute producer");
+    assert_eq!(
+        rendered
+            .bytes
+            .matches("timeout-minutes: ${{ matrix.timeout_minutes }}")
+            .count(),
+        1,
+        "The preview payload matrix gets its timeout from authenticated source output."
+    );
+    assert_eq!(
+        rendered
+            .bytes
+            .matches("timeout-minutes: ${{ fromJSON(needs.preview-eligibility.outputs.producer_timeout_minutes) }}")
+            .count(),
+        1,
+        "Assembly gets its timeout from authenticated source output."
+    );
+    assert!(rendered.bytes.contains("timeout-minutes: 5"));
+    assert!(!rendered.bytes.contains("timeout-minutes: 20"));
+    for minutes in [1, 5, 6, 10, 15, 20] {
+        spec.producer_timeout_minutes = minutes;
+        assert!(
+            render_consumer_preview(&spec, &hosted_policy()).is_ok(),
+            "{minutes}"
+        );
+    }
+    for minutes in [0, 31, 360, 361, u16::MAX] {
+        spec.producer_timeout_minutes = minutes;
+        assert!(
+            render_consumer_preview(&spec, &hosted_policy()).is_err(),
+            "{minutes}"
+        );
+    }
+    let spec = with_tap();
+    let rendered =
+        render_consumer_preview(&spec, &hosted_policy()).expect("native tap preparation");
+    let prepare = rendered
+        .bytes
+        .split("  preview-tap-prepare:")
+        .nth(1)
+        .expect("preparation job")
+        .split("  preview-tap-writer:")
+        .next()
+        .expect("preparation body");
+    assert!(prepare.contains("timeout-minutes: 15"));
+    let mut spec = with_custom_updater();
+    spec.homebrew_tap
+        .as_mut()
+        .expect("tap")
+        .policy
+        .updater
+        .as_mut()
+        .expect("configured custom updater")
+        .timeout_minutes = 6;
+    assert!(
+        render_consumer_preview(&spec, &hosted_policy()).is_err(),
+        "producer authorization does not widen updater"
+    );
+}
+
+fn with_custom_updater() -> ConsumerReleaseSpec {
+    use velnor_actions_contract::config::{
+        CheckExecutor, CheckPlatform, CheckRunner, MiseTaskSource, TapUpdaterBinding,
+    };
+    let mut spec = with_tap();
+    let tap = spec.homebrew_tap.as_mut().expect("tap");
+    tap.formula_spec = None;
+    tap.policy.updater = Some(TapUpdaterBinding {
+        task: "tap:update".to_owned(),
+        source: MiseTaskSource {
+            mise_config: "mise.toml".to_owned(),
+            working_directory: ".".to_owned(),
+        },
+        runner: CheckRunner {
+            label: "ubuntu-24.04".to_owned(),
+            platform: CheckPlatform::LinuxX64,
+            executor: CheckExecutor::Hosted,
+            container: None,
+        },
+        inputs: vec![
+            "mise.toml".to_owned(),
+            "Formula/scanner-preview.rb".to_owned(),
+        ],
+        tools: vec!["ruby".to_owned()],
+        timeout_minutes: 5,
+    });
+    spec
 }
 
 #[test]
@@ -69,9 +170,9 @@ fn both_channels_bound_native_work_inside_larger_producer_jobs() {
                 };
             producers.insert(format!("{prefix}-assemble"));
             let rendered = if channel == PackageReleaseChannel::Preview {
-                render_consumer_preview(&spec)
+                render_consumer_preview(&spec, &hosted_policy())
             } else {
-                crate::schema2::render_consumer_binary_release(&spec)
+                crate::schema2::render_consumer_binary_release(&spec, &hosted_policy())
             }
             .expect("bounded native production");
             if channel == PackageReleaseChannel::Preview {
@@ -86,17 +187,6 @@ fn both_channels_bound_native_work_inside_larger_producer_jobs() {
             }
         }
     }
-    let spec = with_tap();
-    let rendered = render_consumer_preview(&spec).expect("native tap preparation");
-    let prepare = rendered
-        .bytes
-        .split("  preview-tap-prepare:")
-        .nth(1)
-        .expect("preparation job")
-        .split("  preview-tap-writer:")
-        .next()
-        .expect("preparation body");
-    assert!(prepare.contains("timeout-minutes: 15"));
 }
 
 fn channel_with_tap(channel: PackageReleaseChannel) -> ConsumerReleaseSpec {

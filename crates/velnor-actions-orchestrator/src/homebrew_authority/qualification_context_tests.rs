@@ -1,11 +1,14 @@
 use super::dispatch_is_admitted;
-use velnor_actions_contract::{QualificationDispatch, QualificationPhase};
+use velnor_actions_contract::{
+    QualificationDispatch, QualificationDispatchMode, QualificationPhase,
+};
 
 const REPOSITORY: &str = "owner/tap";
 const SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 fn dispatch() -> QualificationDispatch {
     QualificationDispatch {
+        mode: QualificationDispatchMode::Controlled,
         campaign: "qualification".to_owned(),
         phase: QualificationPhase::Cold,
         repository: REPOSITORY.to_owned(),
@@ -18,6 +21,7 @@ fn dispatch() -> QualificationDispatch {
         run_id: 42,
         run_attempt: 1,
         predecessor: None,
+        scale_set_image_source_sha: None,
     }
 }
 

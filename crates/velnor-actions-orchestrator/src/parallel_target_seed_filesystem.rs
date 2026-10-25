@@ -1,7 +1,9 @@
 use std::{
+    ffi::{OsStr, OsString},
     fs::File,
     io::Read,
     os::fd::{AsFd, OwnedFd},
+    os::unix::ffi::OsStringExt,
     path::{Component, Path},
 };
 
@@ -41,19 +43,16 @@ pub(super) fn remove_tree(parent: &OwnedFd) -> Result<(), OrchestratorError> {
     let mut names = Vec::new();
     for entry in Dir::read_from(parent).map_err(io_error)? {
         let e = entry.map_err(io_error)?;
-        let n = e
-            .file_name()
-            .to_str()
-            .map_err(|_| invalid("stage_name_not_utf8"))?;
-        if n != "." && n != ".." {
-            names.push(n.to_owned());
+        let name = OsString::from_vec(e.file_name().to_bytes().to_vec());
+        if name.as_os_str() != OsStr::new(".") && name.as_os_str() != OsStr::new("..") {
+            names.push(name);
         }
     }
     for name in names {
-        let stat = statat(parent, &name).map_err(io_error)?;
+        let stat = statat_os(parent, &name).map_err(io_error)?;
         match FileType::from_raw_mode(stat.st_mode) {
             FileType::Directory => {
-                let child = openat_dir(parent, &name).map_err(io_error)?;
+                let child = openat_dir_os(parent, &name).map_err(io_error)?;
                 remove_tree(&child)?;
                 ufs::unlinkat(parent, &name, AtFlags::REMOVEDIR).map_err(io_error)?;
             }
@@ -75,6 +74,9 @@ pub(super) fn open_dir_path(path: &Path) -> Result<OwnedFd, OrchestratorError> {
     .map_err(io_error)
 }
 pub(super) fn openat_dir(parent: &impl AsFd, name: &str) -> Result<OwnedFd, std::io::Error> {
+    openat_dir_os(parent, OsStr::new(name))
+}
+pub(super) fn openat_dir_os(parent: &impl AsFd, name: &OsStr) -> Result<OwnedFd, std::io::Error> {
     ufs::openat(
         parent,
         name,
@@ -83,24 +85,27 @@ pub(super) fn openat_dir(parent: &impl AsFd, name: &str) -> Result<OwnedFd, std:
     )
     .map_err(Into::into)
 }
-pub(super) fn open_dir_parts(root: &OwnedFd, parts: &[String]) -> Result<OwnedFd, std::io::Error> {
+pub(super) fn open_dir_parts(
+    root: &OwnedFd,
+    parts: &[OsString],
+) -> Result<OwnedFd, std::io::Error> {
     let mut current = root.try_clone()?;
     for part in parts {
-        current = openat_dir(&current, part)?;
+        current = openat_dir_os(&current, part)?;
     }
     Ok(current)
 }
-pub(super) fn openat_parts(root: &OwnedFd, parts: &[String]) -> Result<OwnedFd, SeedError> {
+pub(super) fn openat_parts(root: &OwnedFd, parts: &[OsString]) -> Result<OwnedFd, SeedError> {
     let mut current = root.try_clone().map_err(io_error)?;
     for part in parts {
-        current = openat_dir(&current, part).map_err(io_error)?;
+        current = openat_dir_os(&current, part).map_err(io_error)?;
     }
     Ok(current)
 }
 pub(super) fn open_parent(
     root: &OwnedFd,
-    parts: &[String],
-) -> Result<(OwnedFd, String), SeedError> {
+    parts: &[OsString],
+) -> Result<(OwnedFd, OsString), SeedError> {
     let name = parts
         .last()
         .ok_or_else(|| fail("source_path_empty"))?
@@ -108,6 +113,12 @@ pub(super) fn open_parent(
     Ok((openat_parts(root, &parts[..parts.len() - 1])?, name))
 }
 pub(super) fn statat(parent: &impl AsFd, name: &str) -> Result<rustix::fs::Stat, std::io::Error> {
+    statat_os(parent, OsStr::new(name))
+}
+pub(super) fn statat_os(
+    parent: &impl AsFd,
+    name: &OsStr,
+) -> Result<rustix::fs::Stat, std::io::Error> {
     ufs::statat(parent, name, AtFlags::SYMLINK_NOFOLLOW).map_err(Into::into)
 }
 pub(super) fn rename_noreplace(
@@ -130,7 +141,7 @@ pub(super) fn random_stage_name() -> Result<String, OrchestratorError> {
     }
     Ok(out)
 }
-pub(super) fn validate_target(value: &str) -> Result<Vec<String>, OrchestratorError> {
+pub(super) fn validate_target(value: &str) -> Result<Vec<OsString>, OrchestratorError> {
     let path = Path::new(value);
     if value.starts_with('/')
         || path
@@ -139,14 +150,14 @@ pub(super) fn validate_target(value: &str) -> Result<Vec<String>, OrchestratorEr
     {
         return Err(invalid("invalid_scoped_target"));
     }
-    let parts = value.split('/').map(str::to_owned).collect::<Vec<_>>();
+    let parts = value.split('/').collect::<Vec<_>>();
     if parts.is_empty()
-        || parts.last().map(String::as_str) != Some("target")
-        || parts.iter().any(|p| !safe_part(p))
+        || parts.last().copied() != Some("target")
+        || parts.iter().any(|part| !safe_part(part))
     {
         return Err(invalid("invalid_scoped_target"));
     }
-    Ok(parts)
+    Ok(parts.into_iter().map(OsString::from).collect())
 }
 pub(super) fn validate_lanes(lanes: &[ParallelTargetLane]) -> Result<(), OrchestratorError> {
     if lanes.is_empty() || !lanes.windows(2).all(|w| w[0] < w[1]) {

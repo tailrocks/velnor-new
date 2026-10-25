@@ -29,6 +29,12 @@ fn mbx_wrapper_reads_scalar_inline_and_nested_tool_pins() {
             format!("[tools]\nmr-boxington = \"{v}\" # pinned\n[env]\nX = \"wrong\"\n"),
             "comment and unrelated section",
         ),
+        (
+            format!(
+                "[tools]\nmr-boxington = {{ version = \"{v}\", workflow = \"release.yml\" }}\n[env]\nMR_BOXINGTON_VERSION = \"wrong\"\n"
+            ),
+            "unrelated environment value",
+        ),
     ] {
         assert_eq!(
             status(&tools),
@@ -44,7 +50,7 @@ fn mbx_wrapper_reads_scalar_inline_and_nested_tool_pins() {
 fn mbx_wrapper_rejects_non_string_and_duplicate_tool_versions() {
     let v = MR_BOXINGTON_VERSION;
     for tools in [
-        format!("[tools]\nmr-boxington = {{ version = {v} }}\n"),
+        "[tools]\nmr-boxington = { version = 123 }\n".to_owned(),
         "[tools]\nmr-boxington = { version = true }\n".to_owned(),
         format!("[tools]\nmr-boxington = {{ version = [\"{v}\"] }}\n"),
         "[tools]\nmr-boxington.version = { major = 1 }\n".to_owned(),
@@ -89,6 +95,7 @@ fn mbx_wrapper_rejects_non_version_tool_selectors() {
 fn mbx_wrapper_rejects_tool_array_tables() {
     for tools in [
         format!("[[tools.mr-boxington]]\nversion = \"{MR_BOXINGTON_VERSION}\"\n"),
+        "[[tools.mr-boxington]]\nworkflow = \"release.yml\"\n".to_owned(),
         "[[tools.mr-boxington]]\n".to_owned(),
     ] {
         assert!(

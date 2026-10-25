@@ -6,7 +6,7 @@ use velnor_actions_contract::{
     MatrixEntry, MatrixReport, MatrixStatus, NotSelectedReason, ObligationDecision, Permissions,
     Plan, PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner, PlannedPlatform,
     PlatformBinding, PlatformRunnerEnvironment, PlatformUnavailableReason, RunnerSelection, Step,
-    StepKind, TaskReport, TaskStatus, Trigger, Trust, WorkflowEvent, WorkflowIr,
+    StepKind, TaskBindingDigest, TaskReport, TaskStatus, Trigger, Trust, WorkflowEvent, WorkflowIr,
     canonical_json_bytes, digest_b3, plan_id_for_run, run_key_for_ci, task_report_id_for_task,
 };
 
@@ -45,8 +45,12 @@ fn plan_validates_sorting_and_matrix() -> Result<(), ContractError> {
             decision: ObligationDecision::Execute,
             reason: "changed".to_owned(),
             task_digest: digest_b3(b"task"),
+            task_binding_digest: TaskBindingDigest::new(digest_b3(b"task"))?,
             input_digest: digest_b3(b"inputs"),
             closure_digest: digest_b3(b"closure"),
+            graph_digest: digest_b3(b"graph"),
+            mbx_digest: digest_b3(b"mbx"),
+            profile: "default".to_owned(),
             job_id: entry.job_id.clone(),
         }],
         jobs: vec![velnor_actions_contract::PlanJob {
@@ -205,6 +209,7 @@ fn workflow_ir_validates_pins_and_refs() -> Result<(), ContractError> {
             push_branches: vec!["main".to_owned()],
             merge_group: true,
             workflow_dispatch: None,
+            workflow_call: false,
             schedule: None,
         },
         permissions: Permissions::default(),

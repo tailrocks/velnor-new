@@ -12,11 +12,9 @@ use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::impl_common::{TestResult, config_with_branch, make_repo};
 
-type ToolsCacheIdentity = (String, String);
-type ToolsCacheIdentities = (
-    std::collections::BTreeSet<ToolsCacheIdentity>,
-    Vec<ToolsCacheIdentity>,
-);
+#[path = "impl_orch_p08/tools_cache.rs"]
+mod tools_cache;
+use tools_cache::assert_tools_saves_push_gated_per_key;
 
 /// Hand-written lock for a no-deps fixture package: hermetic, no network.
 fn demo_lock(name: &str) -> String {
@@ -172,17 +170,15 @@ fn c7_cargo_only_uses_exact_sources_transport_without_legacy_fallback() -> TestR
         "{plan:?}"
     );
     assert!(plan.contains(&"Save Cargo sources".to_owned()), "{plan:?}");
-    {
-        let crates = job_names("rust-demo", false)?;
-        assert!(
-            crates.contains(&"Restore Cargo sources".to_owned()),
-            "{crates:?}"
-        );
-        assert!(
-            !crates.contains(&"Save Cargo sources".to_owned()),
-            "reader only: {crates:?}"
-        );
-    }
+    let crates = job_names("rust-demo", false)?;
+    assert!(
+        crates.contains(&"Restore Cargo sources".to_owned()),
+        "{crates:?}"
+    );
+    assert!(
+        !crates.contains(&"Save Cargo sources".to_owned()),
+        "reader only: {crates:?}"
+    );
     Ok(())
 }
 
@@ -198,7 +194,7 @@ fn c8_crate_jobs_install_validators_for_test_spawns() -> TestResult {
         let prep = prepare(root)?;
         {
             let id = "rust-demo";
-            let job = prep.workflow.ir.jobs.get(id).ok_or("missing crate job")?;
+            let job = prep.workflow.ir.jobs.get(id).ok_or("missing package job")?;
             let step = job
                 .steps
                 .iter()
@@ -211,7 +207,7 @@ fn c8_crate_jobs_install_validators_for_test_spawns() -> TestResult {
             for tool in ["jactionlint@", "shellcheck@"] {
                 assert!(
                     text.contains(tool),
-                    "{id} prepare must install {tool} for test-spawned generate: {text}"
+                    "{id} job must install {tool} for test-spawned generate: {text}"
                 );
             }
         }
@@ -268,112 +264,4 @@ fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
     );
     assert_tools_saves_push_gated_per_key(&yaml);
     Ok(())
-}
-
-/// YAML: one push-gated tools save per restored V2 key (plus the sources
-/// save), every action-owned Mise cache disabled.
-fn assert_tools_saves_push_gated_per_key(yaml: &str) {
-    let (keys, saves) = tools_cache_identities(yaml);
-    assert!(!keys.is_empty(), "at least one restored tools key:\n{yaml}");
-    assert_one_save_per_identity(&keys, &saves, yaml);
-    let mbx_saves = yaml.matches("- name: Save MBX bundle").count();
-    assert_eq!(
-        yaml.matches("actions/cache/save@").count(),
-        1 + saves.len() + mbx_saves,
-        "sources plus one tools save per key plus the MBX bundle:\n{yaml}"
-    );
-    assert_eq!(
-        yaml.matches("if: success() && github.event_name == 'push'")
-            .count(),
-        saves.len(),
-        "tools saves stay push-gated:\n{yaml}"
-    );
-    assert!(
-        !yaml.contains("- name: Restore Cargo sources\n        if:")
-            || yaml
-                .match_indices("- name: Restore Cargo sources\n        if:")
-                .all(|(at, marker)| {
-                    yaml[at + marker.len()..]
-                        .lines()
-                        .next()
-                        .is_some_and(|condition| {
-                            condition.trim() == "github.event_name != 'workflow_dispatch'"
-                        })
-                }),
-        "restores carry at most the dispatch deny:\n{yaml}"
-    );
-    assert_eq!(
-        yaml.matches("- name: Save Mise tools").count(),
-        saves.len(),
-        "exactly one tools saver per key:\n{yaml}"
-    );
-    assert!(
-        !yaml.contains("cache_save: \"true\""),
-        "no unconditional mise save:\n{yaml}"
-    );
-    assert!(
-        !yaml.contains("cache_save: ${{"),
-        "no promised built-in save:\n{yaml}"
-    );
-    let setups = yaml.matches("- name: Setup Mise").count();
-    let demoted = yaml.matches("cache_save: \"false\"").count();
-    assert_eq!(setups, demoted, "every setup restore-only:\n{yaml}");
-}
-
-fn assert_one_save_per_identity(
-    restored: &std::collections::BTreeSet<ToolsCacheIdentity>,
-    saves: &[ToolsCacheIdentity],
-    yaml: &str,
-) {
-    for identity in restored {
-        assert_eq!(
-            saves.iter().filter(|saved| *saved == identity).count(),
-            1,
-            "exactly one writer for {identity:?}:\n{yaml}"
-        );
-    }
-    assert!(
-        saves.iter().all(|saved| restored.contains(saved)),
-        "every tools writer has a restored identity:\n{yaml}"
-    );
-}
-
-fn tools_cache_identities(yaml: &str) -> ToolsCacheIdentities {
-    let mut restored = std::collections::BTreeSet::new();
-    let mut saves = Vec::new();
-    let mut digest = None;
-    let mut identity_step = false;
-    let mut cache_step = None;
-    for line in yaml.lines() {
-        let trimmed = line.trim();
-        if line.starts_with("  ") && !line.starts_with("   ") && trimmed.ends_with(':') {
-            digest = None;
-        }
-        if let Some(name) = trimmed.strip_prefix("- name: ") {
-            identity_step = name.trim_matches('"') == "V2 identity";
-            cache_step = match name.trim_matches('"') {
-                "Restore Mise tools" => Some(false),
-                "Save Mise tools" => Some(true),
-                _ => None,
-            };
-            continue;
-        }
-        if identity_step && let Some(value) = trimmed.strip_prefix("d: ") {
-            digest = Some(value.to_owned());
-            identity_step = false;
-        }
-        if let Some(is_save) = cache_step
-            && let Some(key) = trimmed.strip_prefix("key: ")
-            && let Some(digest) = &digest
-        {
-            let identity = (key.trim_matches('"').to_owned(), digest.clone());
-            if is_save {
-                saves.push(identity);
-            } else {
-                restored.insert(identity);
-            }
-            cache_step = None;
-        }
-    }
-    (restored, saves)
 }

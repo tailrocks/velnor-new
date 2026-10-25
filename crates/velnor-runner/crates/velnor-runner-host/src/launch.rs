@@ -1,321 +1,179 @@
-//! Acquire jobs up to capacity, mint JIT, and start one paired worker each.
-//!
-//! The journal row is committed before acquire, JIT, and Docker. JIT bytes are
-//! passed to the starter and are not written to the journal.
-
-use std::future::Future;
+//! This module controls host launch state, queue polling, and worker life cycles.
 
 use velnor_runner_github::{
     Exchange, Poll, QueueSession, SessionRequest, Transport, TransportFail,
 };
 
-use crate::ensure_product_scale_set;
-use crate::error::HostError;
-use crate::journal::Journal;
-use crate::listen::{Link, Secret, admin_link};
-use crate::reconcile::Reconcile;
+use crate::journal::{ConnectionJournal, HeaderAllocation, Journal};
+use crate::listen::Link;
 use crate::scale_set::EnsureError;
 use crate::worker::ResourceBudget;
-use crate::worker::Started;
 
-mod bind;
-#[cfg(all(test, unix))]
-mod busy_slot_tests;
-mod capacity;
+mod admission_gate;
+pub(crate) mod bootstrap;
 mod completion;
 mod drive;
-#[cfg(all(test, unix))]
-mod effect_tests;
+mod engine_context;
+pub(crate) mod execution_authorization;
 mod gate;
 mod inspect;
 #[cfg(all(test, unix))]
-mod inspect_tests;
+pub(crate) mod inspect_tests;
+pub(crate) mod jit_conflict;
 mod name_taken;
-mod preflight;
-mod resource_capacity;
 mod resource_probe;
-mod runner_dir;
+pub(crate) mod retirement;
+pub(crate) mod scoped_runtime;
 
-pub(crate) use drive::{Drive, Lane, Rest};
-pub(crate) use inspect::classify_inspect;
-pub(crate) use slot::HOLDS_ROWS_SQL;
-mod mint_origin;
-mod pressure;
-mod session;
-mod slot;
-mod steady;
-mod steps;
-#[cfg(test)]
-mod subject_tests;
-mod trace;
-mod turn;
-
-pub(crate) use capacity::{install_job_capacity, job_capacity};
-pub(crate) use pressure::advertise as advertise_capacity;
-
-#[cfg(test)]
-pub(crate) use capacity::{
-    Admit, Seat, admit, needs_running, parse_admit_target, parse_job_capacity, poll_limit,
-    statistics_blocked, wide_poll_limit,
+pub(crate) use admission_gate::lock_connection;
+pub(in crate::launch) use completion::{
+    remove_owned_resources_for_jit_conflict, remove_owned_resources_for_retirement,
 };
 #[cfg(test)]
-pub(crate) use name_taken::{fail_unstarted, should_ack};
+pub(crate) use drive::authorize_positive_offer_with;
 #[cfg(test)]
-pub(crate) use steps::{Idle, idle};
+pub(crate) use drive::recover_acquired_scoped_offer_with_test_observation;
 #[cfg(test)]
-pub(crate) use turn::admission;
+pub(crate) use drive::recover_acquired_scoped_offer_with_test_provider;
+pub(crate) use drive::{
+    AcquiredRecoveryContext, DeferredAuthorizedOffer, DeferredAuthorizedOffers, Drive, Lane,
+    PositiveOfferAuthorization, Rest, ScopedAdmissionInput, acquire_authorized_scoped_offer,
+    authorize_deferred_offers, authorize_positive_offer, recover_acquired_scoped_offer,
+};
+pub(crate) use engine_context::SelectedEngineContext;
+#[cfg(test)]
+pub(crate) use pressure::Sample as PressureSample;
+pub(crate) use pressure::{adjust_with_sample, advertise};
+pub(crate) use resource_probe::FreshPressureSample;
+#[cfg(test)]
+pub(crate) use resource_probe::IntakeCompositionProvider;
+pub(crate) use resource_probe::ReadinessSample;
+pub(crate) use resource_probe::StartObservationWitness;
+pub(crate) use resource_probe::StartPermit;
+pub(crate) use resource_probe::VerifiedProbeCleanup;
+pub(crate) use resource_probe::build_pin_status;
+pub(crate) use resource_probe::collect_readiness_sample;
+#[cfg(test)]
+pub(crate) use resource_probe::collect_sample_for_engine;
+pub(crate) use resource_probe::publication::VerifiedExecutionPublicationCleanup;
+pub(crate) use resource_probe::run_doctor_probe;
+pub(crate) use resource_probe::start_permit;
+#[cfg(test)]
+pub(crate) use resource_probe::start_permit_with_test_provider;
+pub(in crate::launch) use resource_probe::{PreJitCapacityObservation, measure_pre_jit_capacity};
+pub(crate) use resource_probe::{RecoveryObservation, ReleaseReadSecret};
+pub(crate) use session::{
+    CompletedHeaderPoll, DeletedSession204, ReturnedSessionRefreshTransportError,
+    SessionDeleteOutcome, SessionRefreshStartupAuthority, VerifiedSessionRefresh,
+    delete_removed_connection_session, open_connection_session,
+};
+#[cfg(test)]
+pub(crate) use slot::HOLDS_ROWS_SQL;
+#[cfg(test)]
+pub(crate) use turn::FinishContext;
+#[cfg(test)]
+pub(crate) use turn::classify_owned_terminal_available;
+#[cfg(test)]
+pub(crate) use turn::test_positive_poll_once_with_response;
+#[cfg(test)]
+pub(crate) use turn::test_scoped_intake;
+#[cfg(test)]
+pub(crate) use turn::{Acknowledgement, TestPollResponse};
+pub(crate) use turn::{
+    CursorDisposition, PositiveAdmission, PositivePollContext, PositivePollOutcome,
+    admit_when_ready, positive_poll_once_with_pressure,
+};
+#[cfg(test)]
+pub(crate) use turn::{IntakeDecision, finish_positive_poll_with_ack};
+pub(crate) use turn::{
+    ScopedPollContext, ScopedPollOutcome, Settlement, ZeroHeaderMode,
+    poll_scoped_connection_once_with_mode,
+};
+mod pressure;
+mod session;
+#[cfg(test)]
+mod slot;
+#[cfg(all(test, unix))]
+#[path = "launch/source_order_tests.rs"]
+mod source_order_tests;
+pub(crate) mod steady;
+pub(crate) mod steps;
+#[cfg(test)]
+pub(crate) use steps::{RunnerCreateFailure, runner_create_409, runner_create_409_with_jobs};
+#[cfg(test)]
+#[cfg(test)]
+pub(crate) mod test_harness_stack;
+mod trace;
+mod turn;
+pub(crate) mod verified_images;
 
-/// What one launch attempt started. No JIT and no token.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LaunchReport {
-    /// Scale-set id.
-    pub set_id: i64,
-    /// First worker started in this call. Absent when the queue had no job.
-    pub started: Option<Started>,
-    /// Every worker started in this call, in start order. No JIT and no token.
-    pub workers: Vec<Started>,
+pub(crate) use completion::CompletionWorker;
+pub(crate) use gate::{gate_line, reconcile_gate};
+pub(crate) use resource_probe::prepare_worker_images;
+pub(crate) use verified_images::{VerifiedImageIdentity, VerifiedWorkerImages};
+
+#[cfg(test)]
+pub(crate) fn fake_runtime_filesystem_instance_digest(engine_id: &str) -> String {
+    let sample_generation = format!("{:032x}", u32::from(b'a'));
+    let permit =
+        resource_probe::StartPermit::test_fixture_with_engine_id(&sample_generation, engine_id);
+    resource_probe::filesystem_instance_digest(&resource_probe::FilesystemInstanceDigestInput {
+        engine_id: permit.engine_id(),
+        docker_root_digest: permit.docker_root_digest(),
+        guest_boot_id: b"12345678-1234-1234-1234-123456789abc",
+        mount_source: b"/dev/vdb",
+        filesystem_type_name: b"btrfs",
+        filesystem_type_magic: 0x9123_683e,
+        mount_device_major: 0,
+        mount_device_minor: 38,
+        statx_device_major: 0,
+        statx_device_minor: 41,
+        filesystem_id: 17,
+    })
 }
 
-/// Open one session, start the admitted workers, then delete that session.
-///
-/// # Errors
-///
-/// Returns [`EnsureError`] when registration, acquire, JIT, Docker, or the
-/// session delete fails. A failed delete is returned even when the poll failed,
-/// because a leaked session blocks the next create. The next open deletes only
-/// session ids this journal recorded. Timeout after acquire keeps the journal
-/// row uncertain and does not acknowledge. `VELNOR_RECONCILE=1` can fail the
-/// journal read before a session exists, and a hold skips it. The session stays
-/// open while an owned launch container is still running.
-pub async fn launch_once(
-    pat: &str,
-    owner: &str,
-    repo: &str,
+pub(crate) async fn startup_storage_profile(
     docker: &bollard::Docker,
     journal: &Journal,
-    resource_budget: ResourceBudget,
-) -> Result<LaunchReport, EnsureError> {
-    let ceiling = job_capacity();
-    let capacity = preflight::run(docker, docker, journal, resource_budget, ceiling).await?;
-    let _capacity = install_job_capacity(capacity.poll_header());
-    let set = ensure_product_scale_set(pat, owner, repo)?;
-    if std::env::var("VELNOR_RECONCILE").ok().as_deref() == Some("1") {
-        let decision = gate::reconcile_gate(journal, docker).await?;
-        eprintln!("reconcile={}", gate::gate_line(&decision));
-        if let Reconcile::Hold { .. } = decision {
-            return Ok(LaunchReport {
-                set_id: set.id,
-                started: None,
-                workers: Vec::new(),
-            });
-        }
-    }
-    let mut link = admin_link(pat, owner, repo)?;
-    let admin = Secret::new(link.token());
-    let (session, row) = session::open_session(&mut link, set.id, admin.expose(), journal).await?;
-    let rest = Rest {
-        owner,
-        repo,
-        pat,
-        resource_budget: Some(resource_budget),
-        static_capacity: capacity.permits_start(),
-        guest_admission: drive::GuestAdmission::Unavailable,
-    };
-    let driven = turn::poll_and_drive(
-        &mut link,
-        set.id,
-        &session,
-        admin.expose(),
-        journal,
-        docker,
-        rest,
-    )
-    .await;
-    let closed = session::close_session(
-        &mut link,
-        set.id,
-        &session.session_id,
-        row,
-        admin.expose(),
-        journal,
-    )
-    .await;
-    report(set.id, driven, closed)
+    budget: ResourceBudget,
+    max_jobs: u32,
+    secret: &ReleaseReadSecret,
+    images: &VerifiedWorkerImages,
+) -> Option<crate::journal::StorageProfile> {
+    let permit = resource_probe::start_permit(docker, journal, budget, secret).await?;
+    (permit.resource_budget() == budget)
+        .then(|| permit.storage_profile(images, budget, max_jobs))
+        .flatten()
 }
 
-/// Acquire, JIT, and start for one poll. No session create.
-///
-/// # Errors
-///
-/// Returns [`EnsureError`] when more than one job is offered, or a later step fails.
-/// An uncertain acquire is not acknowledged.
-pub(crate) async fn drive_offer<T, S, F>(
-    lane: &mut T,
-    ctx: &Drive,
-    polled: &Poll,
-    journal: &Journal,
-    start: S,
-) -> Result<Option<Started>, EnsureError>
-where
-    T: velnor_runner_github::Transport + Lane,
-    S: Fn(&str, &[u8], bind::Bind) -> F,
-    F: Future<Output = Result<Started, HostError>>,
-{
-    if matches!(steps::idle(polled), steps::Idle::Scale) {
-        let Poll::Batch(batch) = polled else {
-            return Ok(None);
-        };
-        return steps::scale_id(lane, ctx, batch, journal, start).await;
-    }
-    let Some((batch, request_id)) = steps::assignment(polled)? else {
-        return Ok(None);
-    };
-    steps::launch_id(lane, ctx, batch, journal, request_id, start).await
+pub(crate) fn retained_tmpfs_memory_bytes() -> Option<u64> {
+    resource_probe::retained_tmpfs_memory_bytes()
 }
 
-fn report(
-    set_id: i64,
-    driven: Result<Vec<Started>, EnsureError>,
-    closed: Result<(), EnsureError>,
-) -> Result<LaunchReport, EnsureError> {
-    match (driven, closed) {
-        (Ok(workers), Ok(())) => {
-            let started = workers.first().cloned();
-            Ok(LaunchReport {
-                set_id,
-                started,
-                workers,
-            })
-        }
-        (_, Err(error)) | (Err(error), Ok(())) => Err(error),
-    }
-}
-
-async fn scale_session(
+/// Run one scoped queue poll with the supplied durable zero-header allocation.
+pub(crate) async fn poll_scoped_connection_once(
     link: &mut Link,
     set_id: i64,
-    session: &QueueSession,
-    admin_token: &str,
-    journal: &Journal,
-    docker: &bollard::Docker,
-    rest: Rest<'_>,
-) -> Result<Option<Started>, EnsureError> {
-    if !rest.permits_start() {
-        return Ok(None);
-    }
-    let population = session
-        .statistics()
-        .map_or(0, velnor_runner_github::Statistics::assigned_population);
-    if population <= 0 {
-        return Ok(None);
-    }
-    let resource_budget = rest.resource_budget.ok_or(EnsureError::Unexpected {
-        status: 0,
-        step: "resource budget",
-    })?;
-    let Some(permit) = resource_probe::start_permit(docker, journal, resource_budget, rest).await
-    else {
-        return Ok(None);
-    };
-    let mut ctx = Drive::from_rest(
-        set_id,
-        String::new(),
-        session.token().to_owned(),
-        admin_token.to_owned(),
-        rest,
-    );
-    let Some((engine_id, root_digest)) = resource_probe::engine_binding(docker).await.ok() else {
-        return Ok(None);
-    };
-    if !resource_probe::consume_permit(permit, &engine_id, &root_digest) {
-        return Ok(None);
-    }
-    ctx.docker_engine_id = Some(engine_id);
-    let admin = link.base().to_owned();
-    let mut lane = HostLane {
+    session: &mut QueueSession,
+    scoped: &ConnectionJournal,
+    session_intent_id: i64,
+    allocation: &HeaderAllocation,
+    cursor: i64,
+) -> Result<ScopedPollOutcome, EnsureError> {
+    turn::poll_scoped_connection_once(
         link,
-        admin,
-        queue: None,
-    };
-    let name = runner_name(&session.session_id);
-    steps::scale_unacked(&mut lane, &ctx, journal, &name, |volume, jit, bind| {
-        let volume = volume.to_owned();
-        let payload = jit.to_vec();
-        async move { bind::start_bound(docker, &volume, &payload, resource_budget, &bind).await }
-    })
+        set_id,
+        session,
+        scoped,
+        session_intent_id,
+        allocation,
+        cursor,
+    )
     .await
 }
 
-fn runner_name(session_id: &str) -> String {
-    let mut name = String::from("s");
-    for ch in session_id.chars().filter(char::is_ascii_alphanumeric) {
-        name.push(ch);
-        if name.len() == 13 {
-            break;
-        }
-    }
-    if name.len() == 1 {
-        name.push('0');
-    }
-    name
-}
-
-struct Ready<'a> {
-    set_id: i64,
-    session: &'a QueueSession,
-    admin_token: &'a str,
-    path: String,
-    polled: &'a Poll,
-}
-
-async fn drive_ready<T>(
-    lane: &mut T,
-    ready: Ready<'_>,
-    journal: &Journal,
-    docker: &bollard::Docker,
-    capacity: u32,
-    rest: Rest<'_>,
-) -> Result<Option<Started>, EnsureError>
-where
-    T: Transport + Lane,
-{
-    if !rest.permits_start() {
-        return Ok(None);
-    }
-    let except = steps::mint_subject(ready.polled);
-    if slot::busy_except(journal, docker, capacity, except.as_deref()).await? {
-        return Ok(None);
-    }
-    let resource_budget = rest.resource_budget.ok_or(EnsureError::Unexpected {
-        status: 0,
-        step: "resource budget",
-    })?;
-    let Some(permit) = resource_probe::start_permit(docker, journal, resource_budget, rest).await
-    else {
-        return Ok(None);
-    };
-    let mut ctx = Drive::from_rest(
-        ready.set_id,
-        ready.path,
-        ready.session.token().to_owned(),
-        ready.admin_token.to_owned(),
-        rest,
-    );
-    let Some((engine_id, root_digest)) = resource_probe::engine_binding(docker).await.ok() else {
-        return Ok(None);
-    };
-    if !resource_probe::consume_permit(permit, &engine_id, &root_digest) {
-        return Ok(None);
-    }
-    ctx.docker_engine_id = Some(engine_id);
-    drive_offer(lane, &ctx, ready.polled, journal, |volume, jit, bind| {
-        let volume = volume.to_owned();
-        let payload = jit.to_vec();
-        async move { bind::start_bound(docker, &volume, &payload, resource_budget, &bind).await }
-    })
-    .await
-}
-
+#[cfg(test)]
+pub(crate) use name_taken::fail_unstarted;
 fn ack_ready(
     link: &mut Link,
     session: &QueueSession,
@@ -342,20 +200,31 @@ fn ack_ready(
             owner: "",
             repo: "",
             pat: "",
-            resource_budget: None,
-            static_capacity: false,
-            guest_admission: drive::GuestAdmission::Unavailable,
+            connection: None,
+            authority_policy: None,
+            host_journal: None,
+            scoped_journal: None,
+            allocated_header: 0,
+            source_authorized: false,
+            admission_state: None,
         },
     );
     let admin = link.base().to_owned();
-    let mut lane = HostLane { link, admin, queue };
+    let mut lane = HostLane::new(link, admin, queue);
     steps::acknowledge(&mut lane, &ctx, &batch)
 }
 
-struct HostLane<'a> {
+pub(crate) struct HostLane<'a> {
     link: &'a mut Link,
     admin: String,
     queue: Option<String>,
+}
+
+impl<'a> HostLane<'a> {
+    /// Bind one queue callback to its saved admin and queue origins.
+    pub(crate) fn new(link: &'a mut Link, admin: String, queue: Option<String>) -> Self {
+        Self { link, admin, queue }
+    }
 }
 
 impl Transport for HostLane<'_> {
@@ -376,8 +245,7 @@ impl Lane for HostLane<'_> {
         };
         self.link.set_base(&origin)
     }
-
-    fn use_github_api(&mut self) -> Result<(), EnsureError> {
-        self.link.set_base(crate::listen::GITHUB_API)
-    }
 }
+
+#[cfg(test)]
+pub(crate) use completion::reconcile_for_test;

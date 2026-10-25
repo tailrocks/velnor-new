@@ -9,7 +9,7 @@ use velnor_actions_mise::{PREPARE_PINNED_TOOLS_STEP, ToolCatalog};
 use velnor_actions_workflow_renderer::render::ValidatorCommand;
 use velnor_actions_workflow_renderer::steps::{DENY_STEP_NAME, MACHETE_STEP_NAME};
 
-use super::audit_prepare_installs;
+use super::{audit_prepare_installs, pinned_rust_spec};
 use crate::vectors::{CARGO_DENY_VERSION, LYCHEE_TOOL_SPEC, LYCHEE_VERSION};
 
 fn shell_job(run: Vec<String>) -> Job {
@@ -56,6 +56,7 @@ fn ir_for(job: Job) -> WorkflowIr {
             push_branches: Vec::new(),
             merge_group: false,
             workflow_dispatch: None,
+            workflow_call: false,
             schedule: None,
         },
         permissions: Permissions::default(),
@@ -66,6 +67,11 @@ fn ir_for(job: Job) -> WorkflowIr {
         jobs: BTreeMap::from([("plan".to_owned(), job)]),
         cache_mode: None,
     }
+}
+
+fn rust_verifier_step(catalog: &ToolCatalog, phase: crate::workflow::ToolchainPhase) -> Step {
+    crate::workflow::workflow_policy::rust_manifest_step::verifier_shell_step(catalog, phase)
+        .expect("production Rust shell verifier")
 }
 
 #[test]
@@ -113,10 +119,14 @@ fn unknown_label_skips_loudly_without_blocking() {
     // The unsupported runner label skips only lock-platform inspection. The
     // workflow still needs the canonical verifier sequence for its Rust
     // install so this test isolates the intended loud, nonblocking skip.
-    job.steps
-        .insert(0, crate::workflow::verify_restored_rust_step(&catalog));
-    job.steps
-        .push(crate::workflow::verify_rust_manifest_step(&catalog));
+    job.steps.insert(
+        0,
+        rust_verifier_step(&catalog, crate::workflow::ToolchainPhase::Restored),
+    );
+    job.steps.push(rust_verifier_step(
+        &catalog,
+        crate::workflow::ToolchainPhase::Installed,
+    ));
     let ir = ir_for(job);
     // Rust itself is already verified by the channel manifest, so include a
     // lock-backed validator install to exercise the unsupported-platform path.
@@ -136,7 +146,7 @@ fn empty_install_set_stays_silent() {
     let mut ir = ir_for(shell_job(vec!["true".to_owned()]));
     ir.jobs.get_mut("plan").expect("plan").steps.clear();
     let outcome = audit_prepare_installs(dir.path(), &ir, "ubuntu-26.04", &[]);
-    assert_eq!(outcome.blocking, [] as [std::string::String; 0]);
+    assert_eq!(outcome.blocking, [] as [String; 0]);
     assert!(outcome.recommendation.is_none());
 }
 
@@ -257,19 +267,20 @@ fn deny_drift_blocks() {
         "mise exec cargo-deny@0.20.2 -- cargo deny check",
     )];
     let outcome = audit_prepare_installs(dir.path(), &ir, "ubuntu-26.04", &commands);
-    assert_eq!(outcome.blocking, [] as [std::string::String; 0]);
+    assert_eq!(outcome.blocking, [] as [String; 0]);
     assert!(outcome.recommendation.is_none());
     // A catalog spec inside a validator command resolves through
     // nothing: commands audit validator pins only, never catalog tools.
-    let commands = vec![deny_command(
-        "{ mise --no-env --no-hooks install rust@1.98.1 && unset FOO } && payload",
-    )];
+    let commands = vec![deny_command(&format!(
+        "{{ mise --no-env --no-hooks install {} && unset FOO }} && payload",
+        pinned_rust_spec()
+    ))];
     let outcome = audit_prepare_installs(dir.path(), &ir, "ubuntu-26.04", &commands);
     assert!(
         outcome
             .blocking
             .iter()
-            .any(|line| line.contains("unauditable_install_spec:rust@1.98.1")),
+            .any(|line| line.contains(&format!("unauditable_install_spec:{}", pinned_rust_spec()))),
         "misplaced catalog spec must block: {:?}",
         outcome.blocking
     );
@@ -281,12 +292,15 @@ fn deny_drift_blocks() {
         argv: vec![
             "sh".to_owned(),
             "-c".to_owned(),
-            "cargo install foo && mise --no-env exec rust@1.98.1 -- cargo build".to_owned(),
+            format!(
+                "cargo install foo && mise --no-env exec {} -- cargo build",
+                pinned_rust_spec()
+            ),
         ],
         prepare_argv: Vec::new(),
     }];
     let outcome = audit_prepare_installs(dir.path(), &ir, "ubuntu-26.04", &commands);
-    assert_eq!(outcome.blocking, [] as [std::string::String; 0]);
+    assert_eq!(outcome.blocking, [] as [String; 0]);
     assert!(outcome.recommendation.is_none());
 }
 
@@ -371,7 +385,7 @@ fn oversized_tool_file_blocks() {
         "--no-env".to_owned(),
         "--no-hooks".to_owned(),
         "install".to_owned(),
-        "rust@1.98.1".to_owned(),
+        pinned_rust_spec(),
     ]));
     let outcome = audit_prepare_installs(dir.path(), &ir, "ubuntu-26.04", &[]);
     assert!(

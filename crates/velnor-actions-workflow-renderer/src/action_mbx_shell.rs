@@ -39,6 +39,9 @@ pub(crate) fn validate_argv_for_role(
     argv: &[String],
     role: Option<StepRole>,
 ) -> Result<(), RenderError> {
+    if validate_bundle_argv(argv, role)? {
+        return Ok(());
+    }
     validate_argv(argv)?;
     let script_at =
         commands::inline_shell_script_at(argv).ok_or_else(|| bad_shape("not_inline_shell"))?;
@@ -80,22 +83,6 @@ pub(crate) fn validate_argv_for_role(
                 &action,
             )?)?
         }
-        Some(StepRole::MbxBundleImport) => {
-            let working_dir = bundle_working_dir(script)?;
-            shell_run(crate::cache_steps::mbx_bundle_import_step(
-                rust,
-                working_dir.as_deref(),
-                BTreeMap::new(),
-            )?)?
-        }
-        Some(StepRole::MbxBundleExport) => {
-            let working_dir = bundle_working_dir(script)?;
-            shell_run(crate::cache_steps::mbx_bundle_export_step(
-                rust,
-                working_dir.as_deref(),
-                BTreeMap::new(),
-            )?)?
-        }
         Some(StepRole::PreseedBuild) => {
             let with_toolchain = script.contains(&format!("+{rust}"));
             let build = candidate_build_argv(rust, with_toolchain);
@@ -121,6 +108,23 @@ pub(crate) fn validate_argv_for_role(
     Ok(())
 }
 
+fn validate_bundle_argv(argv: &[String], role: Option<StepRole>) -> Result<bool, RenderError> {
+    let mode = match role {
+        Some(StepRole::MbxBundleImport) => "import",
+        Some(StepRole::MbxBundleExport) => "export",
+        _ => return Ok(false),
+    };
+    let expected_step = match mode {
+        "import" => crate::cache_steps::mbx_bundle_import_step("1.99.0", None, BTreeMap::new())?,
+        "export" => crate::cache_steps::mbx_bundle_export_step("1.99.0", None, BTreeMap::new())?,
+        _ => return Err(bad_shape("unknown_bundle_mode")),
+    };
+    if argv != shell_run(expected_step)? {
+        return Err(bad_shape("canonical_bundle_template_mismatch"));
+    }
+    Ok(true)
+}
+
 /// Validate a shell step using its role when the role owns an MBX template.
 ///
 /// All other steps retain the generic fixed-argv validator. A role never
@@ -129,28 +133,58 @@ pub(crate) fn validate_argv_for_role(
 pub(crate) fn validate_step_argv(
     argv: &[String],
     role: Option<StepRole>,
+    env: &BTreeMap<String, String>,
 ) -> Result<(), RenderError> {
-    if role_uses_resolver(role) {
+    if matches!(
+        role,
+        Some(StepRole::MbxBundleImport | StepRole::MbxBundleExport)
+    ) {
+        validate_bundle_environment(role, env)?;
+    }
+    if role_uses_canonical_template(role) {
         validate_argv_for_role(argv, role)
     } else {
         commands::validate_command_argv(argv)
     }
 }
 
-/// Workspace root encoded in a bundle step's `cd` (None for the checkout root).
-fn bundle_working_dir(script: &str) -> Result<Option<String>, RenderError> {
-    const PREFIX: &str = "cd \"$GITHUB_WORKSPACE/";
-    let Some((_, after)) = script.split_once(PREFIX) else {
-        return Ok(None);
+fn validate_bundle_environment(
+    role: Option<StepRole>,
+    env: &BTreeMap<String, String>,
+) -> Result<(), RenderError> {
+    let root = env.get("VELNOR_MBX_BUNDLE_ROOT").map(String::as_str);
+    let rust_toolchain = env
+        .get("VELNOR_MBX_BUNDLE_RUST_TOOLCHAIN")
+        .map_or("1.99.0", String::as_str);
+    let step = match role {
+        Some(StepRole::MbxBundleImport) => {
+            crate::cache_steps::mbx_bundle_import_step(rust_toolchain, root, BTreeMap::new())?
+        }
+        Some(StepRole::MbxBundleExport) => {
+            crate::cache_steps::mbx_bundle_export_step(rust_toolchain, root, BTreeMap::new())?
+        }
+        _ => return Err(bad_shape("bundle_environment_without_bundle_role")),
     };
-    let (dir, _) = after
-        .split_once('"')
-        .ok_or_else(|| bad_shape("bundle_working_dir_unclosed"))?;
-    Ok(Some(dir.to_owned()))
+    let StepKind::Shell {
+        env: expected_env, ..
+    } = step.kind
+    else {
+        return Err(bad_shape("canonical_bundle_step_not_shell"));
+    };
+    if expected_env
+        .get("VELNOR_MBX_BUNDLE_ROOT")
+        .map(String::as_str)
+        != root
+        || env.get("VELNOR_MBX_BUNDLE_RUST_TOOLCHAIN")
+            != expected_env.get("VELNOR_MBX_BUNDLE_RUST_TOOLCHAIN")
+    {
+        return Err(bad_shape("canonical_bundle_environment_mismatch"));
+    }
+    Ok(())
 }
 
 /// Whether this role selects one of the complete MBX templates.
-fn role_uses_resolver(role: Option<StepRole>) -> bool {
+fn role_uses_canonical_template(role: Option<StepRole>) -> bool {
     matches!(
         role,
         Some(

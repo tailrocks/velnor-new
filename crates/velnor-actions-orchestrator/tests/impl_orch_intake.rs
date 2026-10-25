@@ -91,10 +91,7 @@ fn intake_consumer_default_ignores_velnor_files() -> TestResult {
         prep.config.workflow.policy,
         WorkflowPolicy::ConsumerV1
     ));
-    assert_ne!(
-        prep.discovery.proposals,
-        [] as [velnor_actions_contract::ProposedTask; 0]
-    );
+    assert_ne!(prep.discovery.proposals, []);
     generate(&prep, &GenerateOptions { output_dir: None })?;
     Ok(())
 }
@@ -274,12 +271,15 @@ fn intake_generated_workflow_uses_one_crate_job_with_background_checks() -> Test
     let prep = prepare(repo.path())?;
     generate(&prep, &GenerateOptions { output_dir: None })?;
     let yml = fs::read_to_string(repo.path().join(".github/workflows/ci.yml"))?;
-    assert!(yml.contains("  rust-demo:"), "crate job:\n{yml}");
-    assert!(
-        yml.contains("        background: true\n"),
-        "parallel checks:\n{yml}"
+    assert_eq!(
+        yml.matches("  rust-demo:\n").count(),
+        1,
+        "one package job:\n{yml}"
     );
-    assert!(yml.contains("        wait-all:\n"), "joined checks:\n{yml}");
+    assert!(
+        !yml.contains("  rust-demo-lint:"),
+        "no split phase jobs:\n{yml}"
+    );
     assert!(!yml.contains("strategy:"), "static graph:\n{yml}");
     for line in yml.lines() {
         let stepped = line.trim_start();
@@ -339,10 +339,7 @@ fn intake_default_budgets_are_conservative_and_reported() -> TestResult {
 #[test]
 fn intake_detection_without_tool_files() -> TestResult {
     let repo = make_repo(config_with_branch())?;
-    assert_ne!(
-        prepare(repo.path())?.discovery.proposals,
-        [] as [velnor_actions_contract::ProposedTask; 0]
-    );
+    assert_ne!(prepare(repo.path())?.discovery.proposals, []);
     Ok(())
 }
 

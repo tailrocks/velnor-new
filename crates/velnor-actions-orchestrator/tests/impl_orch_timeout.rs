@@ -1,4 +1,4 @@
-//! G4 end to end: generated CI carries per-kind timeouts on every job.
+//! G4 end to end: generated CI carries bounded timeouts on every job.
 use std::collections::BTreeMap;
 use std::fs;
 
@@ -84,6 +84,7 @@ fn configured_crate_timeout_reaches_every_crate_job_only() -> TestResult {
     for (id, want) in [
         ("plan", "5"),
         ("required", "5"),
+        ("required-gate", "5"),
         ("jactionlint", "5"),
         ("rust-demo", "45"),
     ] {

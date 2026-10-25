@@ -1,4 +1,6 @@
 use super::*;
+use crate::workflow_routing::WorkflowRoutingPolicy;
+use velnor_actions_contract::config::ValidatedImageReference;
 
 #[test]
 fn every_schema2_family_renders_only_bounded_executable_jobs() {
@@ -7,6 +9,17 @@ fn every_schema2_family_renders_only_bounded_executable_jobs() {
         version: "0.1.0".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
         scale_set: Schema2WorkflowRequest::canonical_scale_set().expect("selector"),
+        routing: WorkflowRoutingPolicy::configured(
+            velnor_actions_contract::ExecutionMode::Hosted,
+            Schema2WorkflowRequest::canonical_scale_set().expect("selector"),
+            Some(
+                ValidatedImageReference::parse(&format!(
+                    "ghcr.io/team/job@sha256:{}",
+                    "a".repeat(64)
+                ))
+                .expect("image reference"),
+            ),
+        ),
         workflows: BTreeSet::from([
             RoutingWorkflow::Qualification,
             RoutingWorkflow::Monitoring,
@@ -32,6 +45,8 @@ fn every_schema2_family_renders_only_bounded_executable_jobs() {
         product_release: Some(pins),
     };
     let files = render_schema2_workflows(&request).expect("every family is admitted");
+    let paths: BTreeSet<_> = files.iter().map(|file| file.path.as_str()).collect();
+    assert_eq!(paths.len(), files.len(), "workflow paths must be unique");
     let workflows: Vec<_> = files
         .iter()
         .filter(|file| file.path.starts_with(".github/workflows/"))
@@ -103,6 +118,13 @@ fn assert_job_budget(workflow: &str, id: &str, fields: &[&str]) {
             "build-image-candidate" | "attest-image-candidate"
         )
     );
+    let paired_sdk = matches!(
+        (workflow, id),
+        (
+            ".github/workflows/qualification.yml",
+            "paired-sdk-build" | "paired-sdk-tls"
+        )
+    );
     let extended_budget = matches!(
         (workflow, id),
         (
@@ -119,7 +141,7 @@ fn assert_job_budget(workflow: &str, id: &str, fields: &[&str]) {
     );
     let expected = if compiler || sdk_qualification {
         10
-    } else if extended_budget {
+    } else if paired_sdk || extended_budget {
         30
     } else {
         5

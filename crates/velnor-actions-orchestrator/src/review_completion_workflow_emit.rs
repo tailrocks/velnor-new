@@ -12,7 +12,10 @@ use velnor_actions_workflow_renderer::{
 };
 
 /// Emit no companion unless the closed optional config is present.
-pub(crate) fn files(prep: &GenerationPreparation) -> Result<Vec<RenderedFile>, OrchestratorError> {
+pub(crate) fn files(
+    prep: &GenerationPreparation,
+    routing: &velnor_actions_workflow_renderer::WorkflowRoutingPolicy,
+) -> Result<Vec<RenderedFile>, OrchestratorError> {
     let Some(config) = prep.config.workflow.review_completion.as_ref() else {
         return Ok(Vec::new());
     };
@@ -45,7 +48,7 @@ pub(crate) fn files(prep: &GenerationPreparation) -> Result<Vec<RenderedFile>, O
         install_gh_argv: crate::utf8::strings_of(install.argv(&ToolCatalog::pinned()))
             .map_err(failure)?,
     };
-    Ok(vec![render_review_completion(&spec)?])
+    Ok(vec![render_review_completion(&spec, routing)?])
 }
 fn failure(problem: String) -> OrchestratorError {
     OrchestratorError::Contract { problem }

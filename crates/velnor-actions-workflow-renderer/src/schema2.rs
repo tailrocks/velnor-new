@@ -2,7 +2,6 @@
 //! Emitted only when schema 2 requests them.
 
 use std::collections::BTreeSet;
-use velnor_actions_contract::JobTimeout;
 
 use velnor_actions_contract::{
     ReleaseTarget, RoutingWorkflow, SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL,
@@ -10,8 +9,11 @@ use velnor_actions_contract::{
 
 use crate::RenderError;
 use crate::render::RenderedFile;
-use crate::runs_on::runs_on_yaml;
 use crate::setup::MiseSetup;
+use crate::workflow_routing::paired_sdk;
+use crate::workflow_routing::{
+    WorkflowRoutingOverrides, WorkflowRoutingPolicy, route_workflow_yaml,
+};
 use crate::yaml::Yaml;
 
 #[cfg(test)]
@@ -36,6 +38,8 @@ pub use consumer_preview::{
     ConsumerReleaseSpec, ConsumerReleaseTapSpec, render_consumer_preview,
     render_release_tap_reconcile,
 };
+#[path = "schema2_basic_workflows.rs"]
+mod basic_workflows;
 #[path = "schema2_ci_run_lookup.rs"]
 mod ci_run_lookup;
 pub(super) use ci_run_lookup::RETRY_DELAYS_SECONDS;
@@ -45,12 +49,16 @@ mod consumer_binary_release;
 mod features;
 #[path = "schema2_generator_release.rs"]
 mod generator_release;
-#[path = "schema2_job_image_candidate.rs"]
-mod job_image_candidate;
 #[path = "schema2_mbx_qualification.rs"]
 mod mbx_qualification;
 #[path = "schema2_mise_pin_qualification.rs"]
 mod mise_pin_qualification;
+pub(super) use basic_workflows::with_if;
+use basic_workflows::{monitoring, qualification};
+#[path = "schema2_paired_sdk_qualification.rs"]
+mod paired_sdk_qualification;
+#[path = "schema2_paired_sdk_steps.rs"]
+mod paired_sdk_steps;
 #[path = "schema2_product_release.rs"]
 mod product_release;
 #[path = "schema2_product_release_family.rs"]
@@ -64,17 +72,22 @@ mod release;
 pub mod release_eligibility;
 #[path = "schema2_resource_probe_image.rs"]
 mod resource_probe_image;
+#[path = "schema2_image_release.rs"]
+mod schema2_image_release;
+#[path = "schema2_job_image_candidate.rs"]
+pub mod schema2_job_image_candidate;
 pub use product_release_pins::ProductReleasePins;
 
-/// Render the generic one-package consumer binary release workflow.
+/// Render the native stable-release workflow under the effective placement policy.
 ///
 /// # Errors
 ///
-/// Returns render errors for invalid identities, pins, or commands.
+/// Invalid release inventory, pins, runners, or workflow rendering errors fail.
 pub fn render_consumer_binary_release(
     spec: &ConsumerReleaseSpec,
+    routing: &WorkflowRoutingPolicy,
 ) -> Result<RenderedFile, RenderError> {
-    consumer_binary_release::render_consumer_binary_release(spec)
+    consumer_binary_release::render_consumer_binary_release(spec, routing)
 }
 
 pub use consumer_binary_release::ConsumerStableReleaseSpec;
@@ -86,6 +99,10 @@ mod runner_shell_tests;
 #[cfg(test)]
 #[path = "schema2_resource_probe_image_tests.rs"]
 mod resource_probe_image_tests;
+
+#[cfg(test)]
+#[path = "schema2_paired_sdk_tests.rs"]
+mod paired_sdk_tests;
 
 #[cfg(test)]
 #[path = "schema2_product_release_test_pins.rs"]
@@ -100,6 +117,8 @@ pub struct Schema2WorkflowRequest {
     pub hosted_label: String,
     /// Validated scale-set selector.
     pub scale_set: ScaleSetSelector,
+    /// One validated placement policy shared by every generated workflow.
+    pub routing: WorkflowRoutingPolicy,
     /// Workflows to emit. Empty emits nothing.
     pub workflows: BTreeSet<RoutingWorkflow>,
     /// Pinned tool inputs, required only when qualification is emitted.
@@ -158,22 +177,88 @@ impl Schema2WorkflowRequest {
 pub fn render_schema2_workflows(
     request: &Schema2WorkflowRequest,
 ) -> Result<Vec<RenderedFile>, RenderError> {
+    render_schema2_workflows_with_verified_routing(request).map(|(files, _)| files)
+}
+
+/// Render every requested workflow and return the immutable routing policy
+/// bound to any paired SDK qualification workflow in the rendered files.
+///
+/// The existing [`render_schema2_workflows`] API remains the file-only
+/// convenience wrapper. Orchestrators that perform a later inventory pass
+/// must retain and use this returned policy.
+///
+/// # Errors
+///
+/// Illegal selectors, missing qualification inputs, or workflow rendering
+/// and routing errors fail.
+pub fn render_schema2_workflows_with_verified_routing(
+    request: &Schema2WorkflowRequest,
+) -> Result<(Vec<RenderedFile>, WorkflowRoutingPolicy), RenderError> {
+    let (files, routing, _) =
+        render_schema2_workflows_with_verified_routing_and_overrides(request)?;
+    Ok((files, routing))
+}
+
+/// Render every requested workflow with its effective routing policy and explicit placement classes.
+///
+/// Product-release documents remain hosted-only in every requested execution mode. The returned
+/// classifications let a later whole-tree inventory apply that placement while retaining all
+/// cross-file call and source validation.
+///
+/// # Errors
+///
+/// Illegal selectors, missing qualification inputs, or workflow rendering and routing errors fail.
+pub fn render_schema2_workflows_with_verified_routing_and_overrides(
+    request: &Schema2WorkflowRequest,
+) -> Result<
+    (
+        Vec<RenderedFile>,
+        WorkflowRoutingPolicy,
+        WorkflowRoutingOverrides,
+    ),
+    RenderError,
+> {
     RunnerSpec::hosted(&request.hosted_label)?;
     let mut files = Vec::new();
+    let mut final_routing = request.routing.clone();
+    let mut routing_overrides = WorkflowRoutingOverrides::default();
     if request.workflows.contains(&RoutingWorkflow::Qualification) {
-        files.push(file(
-            QUALIFICATION_WORKFLOW,
-            &request.version,
-            &qualification(request)?,
-        )?);
+        let workflow = qualification(request)?;
+        let (workflow, source) = paired_sdk_qualification::append(workflow, request)?;
+        if let Some(source) = source {
+            let (routed, routed_source) = paired_sdk::route_qualification(
+                QUALIFICATION_WORKFLOW,
+                workflow,
+                &request.version,
+                &request.routing,
+                &source,
+            )?;
+            let rendered = file(QUALIFICATION_WORKFLOW, &request.version, &routed)?;
+            final_routing = paired_sdk::bind_policy(&request.routing, routed_source, &rendered)?;
+            files.push(rendered);
+        } else {
+            files.push(file(
+                QUALIFICATION_WORKFLOW,
+                &request.version,
+                &route_workflow(request, QUALIFICATION_WORKFLOW, workflow)?,
+            )?);
+        }
     }
     if let Some(generated) = product_release::render(request)? {
+        let product_routing = WorkflowRoutingPolicy::hosted_only();
+        routing_overrides.mark_hosted_only(PRODUCT_RELEASE_WORKFLOW);
         files.push(file(
             PRODUCT_RELEASE_WORKFLOW,
             &request.version,
-            &generated.workflow,
+            &route_workflow_yaml(
+                PRODUCT_RELEASE_WORKFLOW,
+                generated.workflow,
+                &product_routing,
+            )?,
         )?);
         for (path, workflow) in generated.family_workflows {
+            routing_overrides.mark_hosted_only(path.clone());
+            let workflow = route_workflow_yaml(&path, workflow, &product_routing)?;
             files.push(file(&path, &request.version, &workflow)?);
         }
         for (path, action) in generated.actions {
@@ -181,16 +266,26 @@ pub fn render_schema2_workflows(
         }
     }
     if request.workflows.contains(&RoutingWorkflow::ImageRelease) {
-        files.push(job_image_candidate::render_candidate_workflow(request)?);
+        files.push(schema2_job_image_candidate::render_candidate_workflow(
+            request,
+        )?);
     }
     if request.workflows.contains(&RoutingWorkflow::Monitoring) {
         files.push(file(
             MONITORING_WORKFLOW,
             &request.version,
-            &monitoring(request)?,
+            &route_workflow(request, MONITORING_WORKFLOW, monitoring(request)?)?,
         )?);
     }
-    Ok(files)
+    Ok((files, final_routing, routing_overrides))
+}
+
+fn route_workflow(
+    request: &Schema2WorkflowRequest,
+    path: &str,
+    workflow: Yaml,
+) -> Result<Yaml, RenderError> {
+    route_workflow_yaml(path, workflow, &request.routing)
 }
 
 fn file(path: &str, version: &str, body: &Yaml) -> Result<RenderedFile, RenderError> {
@@ -199,172 +294,6 @@ fn file(path: &str, version: &str, body: &Yaml) -> Result<RenderedFile, RenderEr
         path: path.to_owned(),
         bytes,
     })
-}
-
-fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
-    let hosted = RunnerSpec::hosted(&request.hosted_label)?;
-    let scale = RunnerSpec::scale_set(runs_on_yaml(&request.scale_set.token())?);
-    let echo = "inputs.mode == 'both'";
-    let mut jobs = vec![
-        with_if(
-            job(
-                "verify-hosted",
-                "Verify / GitHub hosted / Linux x64",
-                &hosted,
-                JobTimeout::DEFAULT,
-                Vec::new(),
-                "Qualify hosted lane",
-                "echo qualification-hosted",
-            ),
-            echo,
-        ),
-        with_if(
-            job(
-                "verify-scale-set",
-                "Verify / Velnor Scale Set / Linux x64",
-                &scale,
-                JobTimeout::DEFAULT,
-                Vec::new(),
-                "Qualify scale-set lane",
-                "echo qualification-scale-set",
-            ),
-            echo,
-        ),
-        with_if(
-            job(
-                "compare",
-                "Compare hosted and Velnor execution",
-                &hosted,
-                JobTimeout::DEFAULT,
-                vec!["verify-hosted".to_owned(), "verify-scale-set".to_owned()],
-                "Compare lanes",
-                "echo compare-lanes",
-            ),
-            echo,
-        ),
-    ];
-    jobs.extend(features::feature_jobs(&hosted, &scale));
-    jobs.extend(features::negative_jobs(&hosted, &scale));
-    jobs.extend(classes::class_jobs(&hosted, &scale));
-    if let Some(pins) = &request.mbx_qualification {
-        jobs.extend(mbx_qualification::jobs(pins, &hosted)?);
-    } else if request.workflows.contains(&RoutingWorkflow::Qualification) {
-        return Err(RenderError::InvalidWorkflow(
-            "missing_mbx_qualification_pins".to_owned(),
-        ));
-    }
-    if let Some(pins) = &request.mise_pin_qualification {
-        jobs.extend(mise_pin_qualification::jobs(pins)?);
-    } else if request.workflows.contains(&RoutingWorkflow::Qualification) {
-        return Err(RenderError::InvalidWorkflow(
-            "missing_mise_pin_qualification_pins".to_owned(),
-        ));
-    }
-    Ok(document("Qualification", mode_trigger(), jobs))
-}
-
-fn with_if((id, body): (String, Yaml), when: &str) -> (String, Yaml) {
-    let Yaml::Map(mut fields) = body else {
-        return (id, body);
-    };
-    fields.insert(1, ("if".to_owned(), Yaml::str(when)));
-    (id, Yaml::Map(fields))
-}
-
-fn monitoring(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
-    let scale = RunnerSpec::scale_set(runs_on_yaml(&request.scale_set.token())?);
-    let hosted = RunnerSpec::hosted(&request.hosted_label)?;
-    Ok(document(
-        "Scale set monitoring",
-        empty_dispatch(),
-        vec![
-            job(
-                "scale-set-lane",
-                "Scale set lane",
-                &scale,
-                JobTimeout::DEFAULT,
-                Vec::new(),
-                "Run scale-set lane",
-                "echo scale-set-lane",
-            ),
-            job(
-                "queue-monitor",
-                "Queue monitor",
-                &hosted,
-                JobTimeout::DEFAULT,
-                Vec::new(),
-                "Watch admission",
-                "echo queue-monitor",
-            ),
-        ],
-    ))
-}
-
-fn document(name: &str, on: Yaml, jobs: Vec<(String, Yaml)>) -> Yaml {
-    Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str(name)),
-        ("on".to_owned(), on),
-        (
-            "permissions".to_owned(),
-            Yaml::Map(vec![("contents".to_owned(), Yaml::str("read"))]),
-        ),
-        ("jobs".to_owned(), Yaml::Map(jobs)),
-    ])
-}
-
-fn mode_trigger() -> Yaml {
-    Yaml::Map(vec![(
-        "workflow_dispatch".to_owned(),
-        Yaml::Map(vec![(
-            "inputs".to_owned(),
-            Yaml::Map(vec![(
-                "mode".to_owned(),
-                Yaml::Map(vec![
-                    ("type".to_owned(), Yaml::str("string")),
-                    ("required".to_owned(), Yaml::Bool(false)),
-                    ("default".to_owned(), Yaml::str("both")),
-                ]),
-            )]),
-        )]),
-    )])
-}
-
-fn empty_dispatch() -> Yaml {
-    Yaml::Map(vec![("workflow_dispatch".to_owned(), Yaml::Map(vec![]))])
-}
-
-fn job(
-    id: &str,
-    name: &str,
-    runner: &RunnerSpec,
-    timeout: JobTimeout,
-    needs: Vec<String>,
-    step_name: &str,
-    run: &str,
-) -> (String, Yaml) {
-    let mut fields = vec![
-        ("name".to_owned(), Yaml::str(name)),
-        ("runs-on".to_owned(), runner.runs_on.clone()),
-        (
-            "timeout-minutes".to_owned(),
-            Yaml::Int(i64::from(timeout.minutes())),
-        ),
-    ];
-    runner.push_default_shell(&mut fields, false);
-    if !needs.is_empty() {
-        fields.push((
-            "needs".to_owned(),
-            Yaml::Seq(needs.into_iter().map(Yaml::str).collect()),
-        ));
-    }
-    fields.push((
-        "steps".to_owned(),
-        Yaml::Seq(vec![Yaml::Map(vec![
-            ("name".to_owned(), Yaml::str(step_name)),
-            ("run".to_owned(), Yaml::str(run)),
-        ])]),
-    ));
-    (id.to_owned(), Yaml::Map(fields))
 }
 
 #[cfg(test)]

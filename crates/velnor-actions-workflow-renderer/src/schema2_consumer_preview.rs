@@ -92,7 +92,10 @@ pub struct ConsumerReleaseSpec {
 /// Render the independently enabled native preview workflow.
 /// # Errors
 /// Rejects malformed inventory, helper acquisition, pins, or generated commands.
-pub fn render_consumer_preview(spec: &ConsumerReleaseSpec) -> Result<RenderedFile, RenderError> {
+pub fn render_consumer_preview(
+    spec: &ConsumerReleaseSpec,
+    routing: &crate::workflow_routing::WorkflowRoutingPolicy,
+) -> Result<RenderedFile, RenderError> {
     spec.policy
         .validate()
         .map_err(|error| RenderError::InvalidWorkflow(error.to_string()))?;
@@ -122,7 +125,7 @@ pub fn render_consumer_preview(spec: &ConsumerReleaseSpec) -> Result<RenderedFil
             "preview_policy_invalid".to_owned(),
         ));
     }
-    let mut jobs = vec![source::job(spec)?];
+    let mut jobs = vec![source::job(spec, routing.is_scale_set())?];
     jobs.extend(production::jobs(spec)?);
     jobs.extend([signer(spec)?, publisher(spec)?, recovery(spec)?]);
     if let Some(tap) = &spec.homebrew_tap {
@@ -155,6 +158,11 @@ pub fn render_consumer_preview(spec: &ConsumerReleaseSpec) -> Result<RenderedFil
         ),
         ("jobs".to_owned(), Yaml::Map(jobs)),
     ]);
+    let document = crate::workflow_routing::route_native_preview_workflow_yaml(
+        PackageReleaseChannel::Preview.workflow_path(),
+        document,
+        routing,
+    )?;
     Ok(RenderedFile {
         path: PackageReleaseChannel::Preview.workflow_path().to_owned(),
         bytes: render_preview_document(spec, &document)?,
@@ -278,51 +286,9 @@ pub(super) fn publisher(spec: &ConsumerReleaseSpec) -> Result<(String, Yaml), Re
     finish_policy_job(&id, fields, job_steps)
 }
 
-pub(super) fn recovery(spec: &ConsumerReleaseSpec) -> Result<(String, Yaml), RenderError> {
-    let context = match spec.policy.channel {
-        PackageReleaseChannel::Preview => TapInvocationContext::Preview,
-        PackageReleaseChannel::Stable => TapInvocationContext::StableAuthority,
-    };
-    let id = format!("{}-recovery", context.prefix());
-    let mut fields = base(
-        "Recover the original signed release without rebuilding",
-        Yaml::str("ubuntu-26.04"),
-        spec.publication_timeout_minutes,
-    );
-    fields.push((
-        "if".to_owned(),
-        Yaml::str(match spec.policy.channel { PackageReleaseChannel::Preview => "${{ github.event_name == 'workflow_dispatch' }}", PackageReleaseChannel::Stable => "${{ github.event_name == 'workflow_dispatch' && inputs.operation == 'release' && inputs.original_run_id != '' && inputs.original_run_attempt != '' }}" }),
-    ));
-    fields.push((
-        "needs".to_owned(),
-        needs(&[&format!("{}-eligibility", context.prefix())]),
-    ));
-    fields.push(("environment".to_owned(), Yaml::str(context.environment())));
-    fields.push((
-        "permissions".to_owned(),
-        permissions(&[
-            ("actions", "read"),
-            ("attestations", "read"),
-            ("contents", "write"),
-        ]),
-    ));
-    let mut job_steps = vec![
-        setup(&spec.linux_setup),
-        run_step(
-            "Install pinned GitHub CLI",
-            &join_argv_for_run(&spec.install_gh_argv)?,
-        ),
-        acquire(&spec.linux_acquire, &id, "ubuntu-26.04")?,
-        operation(spec, "recover-package-release-v1", true, context)?,
-    ];
-    let preparation_step_count = job_steps.len() - 1;
-    publication_budget::apply_preparation_budget(
-        &mut fields,
-        &mut job_steps[..preparation_step_count],
-        spec.publication_timeout_minutes,
-    )?;
-    Ok(finish(&id, fields, job_steps))
-}
+#[path = "schema2_consumer_preview_recovery.rs"]
+mod recovery_job;
+pub(in crate::schema2) use recovery_job::recovery;
 
 #[cfg(test)]
 #[path = "schema2_consumer_preview_tests.rs"]

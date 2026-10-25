@@ -65,6 +65,14 @@ fn payload(runs_on: &str) -> ToolsCachePayload {
 }
 
 fn payload_with_specs(runs_on: &str, tool_specs: &[String]) -> ToolsCachePayload {
+    payload_with_specs_and_source(runs_on, tool_specs, None)
+}
+
+fn payload_with_specs_and_source(
+    runs_on: &str,
+    tool_specs: &[String],
+    scale_set_image_source_sha: Option<&str>,
+) -> ToolsCachePayload {
     let setup = MiseSetup {
         uses: "jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550".to_owned(),
         version: "2026.10.4".to_owned(),
@@ -77,6 +85,7 @@ fn payload_with_specs(runs_on: &str, tool_specs: &[String]) -> ToolsCachePayload
         tool_specs,
         rustup_toolchain: Some("1.98.1"),
         rustup_components: &[],
+        scale_set_image_source_sha,
     })
     .expect("typed payload")
 }
@@ -284,38 +293,6 @@ fn static_tools_digest_is_bound_into_the_canonical_runtime_key() -> Result<(), B
 }
 
 #[test]
-fn generated_identity_actions_bind_each_supported_hosted_lane() -> Result<(), Box<dyn Error>> {
-    for (lane, path, uses) in [
-        (
-            "ubuntu-22.04",
-            ".github/actions/u22/action.yml",
-            "./.github/actions/u22",
-        ),
-        (
-            "ubuntu-24.04",
-            ".github/actions/u24/action.yml",
-            "./.github/actions/u24",
-        ),
-        (
-            "ubuntu-26.04",
-            ".github/actions/u26/action.yml",
-            "./.github/actions/u26",
-        ),
-    ] {
-        let file = super::action_file(lane, env!("CARGO_PKG_VERSION"))?;
-        assert_eq!(file.path, path);
-        assert!(file.bytes.contains(&format!("VELNOR_CACHE_LANE: {lane}")));
-        let input = crate::cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT;
-        assert!(file.bytes.contains(&format!("  {input}:\n")));
-        assert!(file.bytes.contains(&format!(
-            "VELNOR_CACHE_STATIC_DIGEST: ${{{{ inputs.{input} }}}}"
-        )));
-        assert_eq!(super::action_uses(lane), Some(uses));
-    }
-    Ok(())
-}
-
-#[test]
 fn scale_set_identity_is_a_successful_cold_path_without_digest_injection()
 -> Result<(), Box<dyn Error>> {
     let fixture = Fixture::new()?;
@@ -326,36 +303,22 @@ fn scale_set_identity_is_a_successful_cold_path_without_digest_injection()
 }
 
 #[test]
-fn identity_step_binds_fixed_tool_home_environment() {
-    let payload = payload("ubuntu-26.04");
-    let step = payload.runtime_prelude_step().expect("identity prelude");
-    let StepKind::Action { uses, with, env } = step.kind else {
-        panic!("identity is a composite action step");
-    };
-    assert_eq!(
-        Some(uses.as_str()),
-        crate::cache_p08::runtime_prelude_action_uses("ubuntu-26.04")
+fn expected_scale_set_image_source_pin_does_not_qualify_runtime_identity() {
+    let source_sha = "a".repeat(40);
+    let payload = payload_with_specs_and_source(
+        "scale-set:velnor+ubuntu-26.04-scale-set",
+        &["rust@1.98.1".to_owned()],
+        Some(&source_sha),
     );
-    assert_eq!(env.len(), 0);
-    assert_eq!(
-        with.get(crate::cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT)
-            .map(String::as_str),
-        Some(payload.static_digest())
+    assert!(super::is_supported_lane(
+        &payload.runs_on,
+        "x86_64-unknown-linux-gnu"
+    ));
+    assert!(payload.scale_set_image_source_sha.is_some());
+    assert!(
+        !payload.runtime_identity_supported(),
+        "configured image source pin is not an observed runner identity"
     );
-    let inner = super::inner_step("ubuntu-26.04").expect("composite identity shell step");
-    let StepKind::Shell { env, .. } = inner.kind else {
-        panic!("composite identity body is a shell step");
-    };
-    let homes = BTreeMap::from([
-        ("MISE_RUSTUP_HOME", "${{ runner.temp }}/velnor/rustup"),
-        ("RUSTUP_HOME", "${{ runner.temp }}/velnor/rustup"),
-        ("MISE_CARGO_HOME", "${{ runner.temp }}/velnor/cargo"),
-        ("CARGO_HOME", "${{ runner.temp }}/velnor/cargo"),
-    ]);
-    for (key, value) in homes {
-        assert_eq!(env.get(key).map(String::as_str), Some(value));
-    }
-    assert_eq!(step.name, crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME);
 }
 
 #[path = "cache_p08_runtime_identity_fingerprint_tests.rs"]
@@ -366,3 +329,6 @@ mod scratch_tests;
 
 #[path = "cache_p08_runtime_identity_validation_tests.rs"]
 mod validation_tests;
+
+#[path = "cache_p08_runtime_identity_layout_tests.rs"]
+mod layout_tests;

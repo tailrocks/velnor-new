@@ -14,6 +14,22 @@ use crate::{
     },
 };
 
+const QUALIFICATION_CACHE_OPERATIONS: &[&str] = &[
+    "observe-qualification-cache-runtime-v1",
+    "observe-qualification-cache-roots-v1",
+    "bind-qualification-cache-v1",
+    "observe-qualification-cache-backend-v1",
+    "import-qualification-cache-payload-v1",
+    "export-qualification-cache-payload-v1",
+    "write-qualification-cache-receipt-v1",
+    "record-qualification-cache-owner-layer-v1",
+    "aggregate-qualification-cache-owner-v1",
+];
+
+pub(crate) fn is_qualification_cache_operation(operation: &str) -> bool {
+    QUALIFICATION_CACHE_OPERATIONS.contains(&operation)
+}
+
 /// Split an internal operation into env op plus request-file target op.
 ///
 /// `plan-v1`/`merge-v1`/`fetch-reports-v1` target
@@ -23,6 +39,9 @@ use crate::{
 /// `write-request-v1` while materializing the target's request file.
 /// # Errors
 pub(crate) fn split_internal_operation(operation: &str) -> Result<(&str, &str), RenderError> {
+    if is_qualification_cache_operation(operation) {
+        return Ok((operation, operation));
+    }
     if operation == RESOLVE_QUALIFICATION_OPERATION {
         return Ok((operation, PLAN_OPERATION));
     }
@@ -133,5 +152,28 @@ pub fn merge_step() -> Step {
 }
 
 #[cfg(test)]
+mod qualification_cache_operation_tests {
+    use super::split_internal_operation;
+
+    #[test]
+    fn qualification_cache_operations_do_not_take_request_files() {
+        for operation in [
+            "observe-qualification-cache-runtime-v1",
+            "observe-qualification-cache-roots-v1",
+            "bind-qualification-cache-v1",
+            "observe-qualification-cache-backend-v1",
+            "import-qualification-cache-payload-v1",
+            "export-qualification-cache-payload-v1",
+            "write-qualification-cache-receipt-v1",
+        ] {
+            assert_eq!(
+                split_internal_operation(operation).expect("fixed operation"),
+                (operation, operation)
+            );
+        }
+        assert!(split_internal_operation("write-qualification-cache-receipt-v2").is_err());
+    }
+}
+
 #[path = "steps_internal_tests.rs"]
-mod tests;
+mod parallel_target_seed_tests;

@@ -8,8 +8,10 @@ const MISE: &str = "[tools]\nrust = { version = \"1.99.1\", components = [\"rust
 const TOOLCHAIN: &str = "[toolchain]\nchannel = \"1.99.1\"\ncomponents = [\"clippy\", \"rustfmt\"]\ntargets = [\"aarch64-unknown-linux-gnu\", \"x86_64-unknown-linux-gnu\"]\n";
 
 fn repo(mise: Option<&str>, toolchain: Option<&str>) -> tempfile::TempDir {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let write = |rel: &str, text: &str| std::fs::write(dir.path().join(rel), text).expect("write");
+    let dir = tempfile::tempdir().expect("The temporary directory must be created.");
+    let write = |rel: &str, text: &str| {
+        std::fs::write(dir.path().join(rel), text).expect("The tool source file must be written.");
+    };
     if let Some(text) = mise {
         write("mise.toml", text);
     }
@@ -21,7 +23,7 @@ fn repo(mise: Option<&str>, toolchain: Option<&str>) -> tempfile::TempDir {
 
 fn error(root: &Path) -> String {
     check_toolchain_mirror(root)
-        .expect_err("the mirror must differ")
+        .expect_err("The toolchain mirror must differ.")
         .to_string()
 }
 

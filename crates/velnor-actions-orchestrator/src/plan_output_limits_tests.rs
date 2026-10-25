@@ -22,6 +22,7 @@ fn matrix_jobs_cap_uses_expanded_dynamic_entries_only() {
                 ("plan_id", "plan-r1-a1"),
                 ("run_key", "r1-a1")
             ],
+            0,
         )
         .is_ok()
     );
@@ -34,6 +35,7 @@ fn matrix_jobs_cap_uses_expanded_dynamic_entries_only() {
                 ("plan_id", "plan-r1-a1"),
                 ("run_key", "r1-a1")
             ],
+            0,
         )
         .is_err_and(|error| error.to_string().contains("matrix_jobs_exceeded:257"))
     );
@@ -42,6 +44,7 @@ fn matrix_jobs_cap_uses_expanded_dynamic_entries_only() {
             PlanOutputMode::Static,
             MATRIX_JOB_LIMIT + 1,
             &[("qualification_campaign", "")],
+            0,
         )
         .is_ok(),
         "static artifact rows do not expand into matrix jobs"
@@ -128,21 +131,24 @@ fn matrix_and_qualification_outputs_share_one_aggregate_budget() {
                 ("qualification_cache_write", "true"),
                 ("qualification_cache_directives", "{\"schema\":1}"),
             ],
+            0,
         )
         .is_err_and(|error| error.to_string().contains("job_outputs_budget_exceeded"))
     );
 }
 
 #[test]
-fn output_budget_boundary_is_inclusive() {
+fn output_budget_boundary_includes_cache_reserve() {
     let key_units = "qualification_campaign".encode_utf16().count() + 2;
-    let value_units = super::PLAN_STEP_OUTPUTS_BUDGET_UTF16_BYTES / 2 - key_units;
+    let cache_reserve = 128;
+    let value_units = (JOB_OUTPUTS_BUDGET_UTF16_BYTES - cache_reserve) / 2 - key_units;
     let exact = "x".repeat(value_units);
     assert!(
         check_plan_outputs(
             PlanOutputMode::Static,
             0,
-            &[("qualification_campaign", &exact)]
+            &[("qualification_campaign", &exact)],
+            cache_reserve,
         )
         .is_ok(),
         "the configured output budget itself is accepted"
@@ -152,8 +158,22 @@ fn output_budget_boundary_is_inclusive() {
         check_plan_outputs(
             PlanOutputMode::Static,
             0,
-            &[("qualification_campaign", &over)]
+            &[("qualification_campaign", &over)],
+            cache_reserve,
         )
         .is_err_and(|error| error.to_string().contains("job_outputs_budget_exceeded"))
     );
+}
+
+#[test]
+fn cache_reserve_uses_distinct_tofu_roots() -> Result<(), Box<dyn std::error::Error>> {
+    let task_ids = [
+        "stack/tofu/dir-737461636b732f61/init/default".to_owned(),
+        "stack/tofu/dir-737461636b732f61/validate/default".to_owned(),
+        "stack/tofu/dir-737461636b732f62/init/default".to_owned(),
+    ];
+    let expected =
+        velnor_actions_contract::workflow::cache_family::cache_output_reserve_utf16_bytes(2);
+    assert_eq!(super::cache_output_reserve(&task_ids)?, expected);
+    Ok(())
 }

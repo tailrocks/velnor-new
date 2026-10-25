@@ -285,6 +285,27 @@ fn accepts_one_source_bound_linux_amd64_image() -> Result<(), HostError> {
 }
 
 #[test]
+fn rejects_manifest_index_and_image_digest_drift() -> Result<(), HostError> {
+    let (archive, manifest) = fixture(None, false)?;
+
+    let mut wrong_index = manifest.clone();
+    wrong_index.oci_index_sha256 = "not-the-index-digest".to_owned();
+    assert_eq!(validate(&archive, &wrong_index), Err(HostError::Identity));
+
+    let mut wrong_manifest = manifest.clone();
+    wrong_manifest.image_manifest_digest = "sha256:not-the-manifest-digest".to_owned();
+    assert_eq!(
+        validate(&archive, &wrong_manifest),
+        Err(HostError::Identity)
+    );
+
+    let mut wrong_config = manifest;
+    wrong_config.config_digest = "sha256:not-the-config-digest".to_owned();
+    assert_eq!(validate(&archive, &wrong_config), Err(HostError::Identity));
+    Ok(())
+}
+
+#[test]
 fn rejects_wrong_platform_and_unreferenced_blob() -> Result<(), HostError> {
     let (wrong_platform, manifest) =
         fixture(Some(json!({"os": "linux", "architecture": "arm64"})), false)?;

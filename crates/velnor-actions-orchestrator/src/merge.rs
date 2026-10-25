@@ -19,8 +19,8 @@ use velnor_actions_contract::{
 
 use self::merge_checks::{
     CandidateAttestation, check_agreement, check_candidate_binding, check_execute_inventory,
-    check_plan_evidence, check_plan_shape, check_trust_coherence, expected_task_reports,
-    partition_task_reports, plan_digests, plan_entries, shards_failed,
+    check_matrix_job_inventory, check_plan_evidence, check_plan_shape, check_trust_coherence,
+    expected_task_reports, partition_task_reports, plan_digests, plan_entries, shards_failed,
 };
 use self::required_evidence::{
     check_required_evidence, diagnostic_without_plan, reported_job_results,
@@ -294,6 +294,7 @@ fn check_final_inputs(
     );
     check_candidate_binding(plan, request, signals, miss_reasons);
     check_plan_evidence(plan, request, signals, miss_reasons);
+    check_matrix_job_inventory(plan, request, signals, miss_reasons);
     check_execute_inventory(plan, signals, miss_reasons);
     if workspace_validation_required(plan, context) {
         match context.workspace() {

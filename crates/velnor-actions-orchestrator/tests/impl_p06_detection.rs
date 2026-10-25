@@ -102,10 +102,7 @@ fn wrapper_only_detects_mbx() -> TestResult {
             .command_or_setting
             .contains("wrappers.cargo.command")
     );
-    assert_eq!(
-        workspace.findings,
-        [] as [velnor_actions_rust::ProfileFinding; 0]
-    );
+    assert_eq!(workspace.findings, []);
     let plan = plan_for(&prep)?;
     assert!(plan.contains("mbx compile driver (detected)"), "{plan}");
     Ok(())
@@ -146,10 +143,7 @@ fn nextest_config_selects_ci_or_default() -> TestResult {
             Some(".config/nextest.toml")
         );
         assert_eq!(workspace.profile.compile_driver.as_str(), "cargo");
-        assert_eq!(
-            workspace.findings,
-            [] as [velnor_actions_rust::ProfileFinding; 0]
-        );
+        assert_eq!(workspace.findings, []);
         let plan = plan_for(&prep)?;
         let line = format!("Nextest profile .: {profile} (.config/nextest.toml)");
         assert!(plan.contains(&line), "{plan}");
@@ -194,10 +188,7 @@ fn no_evidence_defaults_to_cargo() -> TestResult {
     assert_eq!(workspace.profile.test_runner.as_str(), "cargo_test");
     assert_eq!(workspace.profile.nextest_profile.as_str(), "default");
     assert_eq!(workspace.profile.nextest_config, None);
-    assert_eq!(
-        workspace.profile.evidence,
-        [] as [velnor_actions_rust::Evidence; 0]
-    );
+    assert_eq!(workspace.profile.evidence, []);
     let text = prep.discovery.recommendations.join("\n");
     assert!(text.contains("nextest_recommendation"), "{text}");
     assert!(text.contains("persist_evidence"), "{text}");
@@ -300,10 +291,7 @@ fn misleading_names_and_comments_not_evidence() -> TestResult {
         "names/comments are not evidence: {:?}",
         workspace.profile.evidence
     );
-    assert_eq!(
-        workspace.findings,
-        [] as [velnor_actions_rust::ProfileFinding; 0]
-    );
+    assert_eq!(workspace.findings, []);
     Ok(())
 }
 

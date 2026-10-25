@@ -267,6 +267,7 @@ fn request(world: &World, repositories: &[&str], kinds: &[SourceKind]) -> FetchR
         roots: vec![String::new()],
         workspace: world.workspace.path().to_owned(),
         runner_temp: world.temp.path().to_owned(),
+        managed_cargo_home: world.temp.path().join("velnor/cargo"),
     }
 }
 
@@ -375,16 +376,17 @@ fn cargo_sources_are_fetched_with_the_rust_the_project_declares() {
     let fetch_with = |files: &[(&str, &str)]| {
         let world = world();
         for (name, text) in files {
-            fs::write(world.workspace.path().join(name), text).expect("project file");
+            fs::write(world.workspace.path().join(name), text)
+                .expect("The test project file must be written.");
         }
         let request = request(&world, &["eth-domain"], &[SourceKind::Cargo]);
-        execute(&request, &world.fake).expect("fetch");
+        execute(&request, &world.fake).expect("The private fetch must succeed.");
         world.fake.rust.borrow().clone()
     };
     assert_eq!(
         fetch_with(&[]),
         [pinned],
-        "no declaration keeps the Velnor pin"
+        "The Velnor pin must apply when no version is declared."
     );
     assert_eq!(
         fetch_with(&[("mise.toml", "[tools]\nrust = \"1.0.1\"\n")]),

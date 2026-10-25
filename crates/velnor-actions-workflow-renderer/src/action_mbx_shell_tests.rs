@@ -4,7 +4,7 @@ use velnor_actions_contract::{Step, StepKind, StepRole};
 
 use super::{
     ACTION_MBX_BIN, RESOLVE_ACTION_MBX_BIN, candidate_build_argv, mbx_probe_argv,
-    role_uses_resolver, validate_argv, validate_argv_for_role, validate_step_argv,
+    role_uses_canonical_template, validate_argv, validate_argv_for_role, validate_step_argv,
 };
 use crate::{RenderError, cache_steps};
 
@@ -51,7 +51,7 @@ fn run(step: &Step) -> &[String] {
 #[test]
 fn whole_templates_accept_all_four_producer_roles() {
     for step in [version_check(), cleanup(), build(), verify_build()] {
-        assert!(role_uses_resolver(step.role));
+        assert!(role_uses_canonical_template(step.role));
         validate_argv_for_role(run(&step), step.role).expect("canonical MBX template");
         crate::commands::join_validated_argv_for_run(run(&step)).expect("canonical template joins");
     }
@@ -129,7 +129,7 @@ fn generic_steps_still_reject_command_substitution() {
         format!("echo $(evil); {ACTION_MBX_BIN} --version"),
     ];
     assert!(matches!(
-        validate_step_argv(&argv, None),
+        validate_step_argv(&argv, None, &BTreeMap::new()),
         Err(RenderError::BadCommand(message)) if message.starts_with("command_substitution:")
     ));
 }
@@ -142,4 +142,34 @@ fn existing_resolver_fragment_remains_generic_validation_only() {
         Err(RenderError::BadCommand(message)) if message.starts_with("command_substitution:")
     ));
     validate_argv(run(&step)).expect("typed construction accepts its resolver");
+}
+
+#[test]
+fn bundle_templates_bind_the_canonical_command_and_safe_nested_root() {
+    let step = cache_steps::mbx_bundle_import_step(
+        "1.99.0",
+        Some("crates/velnor-runner"),
+        BTreeMap::new(),
+    )
+    .expect("The test could not create the nested bundle import.");
+    let StepKind::Shell { run, env } = &step.kind else {
+        panic!("The bundle import must use a shell step.");
+    };
+    validate_step_argv(run, step.role, env)
+        .expect("The validator rejected the canonical nested import.");
+
+    let mut injected = run.clone();
+    injected[2].push_str("; echo injected");
+    assert!(validate_step_argv(&injected, step.role, env).is_err());
+
+    let mut invalid_root = env.clone();
+    invalid_root.insert(
+        "VELNOR_MBX_BUNDLE_ROOT".to_owned(),
+        "crates/../outside".to_owned(),
+    );
+    assert!(validate_step_argv(run, step.role, &invalid_root).is_err());
+
+    let mut missing_root = env.clone();
+    missing_root.remove("VELNOR_MBX_BUNDLE_ROOT");
+    assert!(validate_step_argv(run, step.role, &missing_root).is_err());
 }

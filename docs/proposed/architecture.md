@@ -29,6 +29,7 @@ velnor-actions-orchestrator -> velnor-actions-tofu
 velnor-actions-orchestrator -> velnor-actions-mise
 velnor-actions-orchestrator -> velnor-actions-actionlint
 velnor-actions-orchestrator -> velnor-actions-workflow-renderer
+velnor-actions-orchestrator -> velnor-archive-guard (bounded cache-payload framing and OCI archive validation)
 velnor-actions-rust -> velnor-actions-contract
 velnor-actions-tofu -> velnor-actions-contract
 velnor-actions-mise -> velnor-actions-contract
@@ -47,10 +48,14 @@ and runs as a separate GitHub Actions job.
 
 The workspace also contains `velnor-actions-freshness` and
 `velnor-archive-guard` as repository-only maintenance members. Both are
-outside the eight-product V1 graph and do not enter V1 Rust task derivation.
+outside the eight-product V1 product graph. Under `VelnorRepositoryV1`, their
+typed `repository-maintenance` task owner excludes them from V1 Rust task
+derivation. Under `ConsumerV1`, same-named packages follow ordinary project
+derivation and produce tasks.
 Only the CLI's private maintenance gate consumes freshness at runtime.
-The orchestrator links archive guard solely for bounded, pure OCI archive
-validation; archive guard creates no processes, workflows, or product tasks.
+The orchestrator links archive guard for bounded cache-payload framing and
+pure OCI archive validation; archive guard creates no processes, workflows,
+or product tasks.
 Repository scripts also provision its standalone security utility. Under
 `VelnorRepositoryV1`, the existing named-Mise-check contract emits one
 independent `maintenance-helpers` Required check for both packages' Rust test
@@ -98,6 +103,13 @@ probes behind the private gate; their results MUST NOT enter V1 planning. The
 orchestrator supplies product requests and schedules calls; it never builds
 shell commands. The renderer receives validated command references and generic
 workflow IR; it never emits Mise syntax.
+
+Mise also owns a private bounded file filter for archive compression. The
+filter accepts open regular files, fixed zstd arguments, byte limits, and a
+child deadline. It uses the shared isolated command factory. It writes only
+through the caller's existing output file descriptor. It creates no paths and
+does not change path metadata. Before it starts the child, it reads the
+program's symbolic-link metadata. It rejects a symbolic link.
 
 All Velnor product Rust package roots MUST live under `crates/`. The root
 manifest MUST be a virtual workspace with explicit members.
@@ -172,7 +184,7 @@ schema = 1
 [workflow]
 name = "CI"
 policy = "consumer-v1"
-# default_branch = "main" # Optional: origin/HEAD, then the CI event payload, are used when omitted.
+# default_branch = "main" # Optional. If omitted, use origin/HEAD, then the CI event payload.
 generator_validation = "bootstrap"
 max_parallel_jobs = 2
 # runner_label = "ubuntu-24.04" # optional older pinned override; omit for latest

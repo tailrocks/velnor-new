@@ -431,9 +431,9 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
 name = "cc"
-version = "1.8.0"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6651c9ed80effdc7db0ff72512157f901af5e3549e341e24b1dd4887d836d838"
+checksum = "877bf67ac8e52449eb2f9e98a344ea163beb70dd1f9eebe3cc5357dcfeaee4df"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -888,9 +888,9 @@ dependencies = [
 
 [[package]]
 name = "find-msvc-tools"
-version = "0.1.14"
+version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aedcfb3409746eddb02b9e19ebda1c3394f759a152e48ee875a0844d1b955484"
+checksum = "1c66915cc5391097de7a2b0b972e8505aa33c0df401fd3a6811dbdb32881ba48"
 
 [[package]]
 name = "flagset"
@@ -3161,7 +3161,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.5",
  "windows-sys 0.61.2",
@@ -3842,6 +3842,7 @@ dependencies = [
  "rustix 1.1.5",
  "serde",
  "serde_json",
+ "sha2",
 ]
 
 [[package]]
@@ -3876,6 +3877,7 @@ name = "velnor-runner-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "rustix 1.1.5",
  "security-framework",
  "serde_json",
  "tokio",
@@ -3894,8 +3896,11 @@ dependencies = [
 name = "velnor-runner-github"
 version = "0.1.0"
 dependencies = [
+ "base64 0.23.1",
  "serde",
  "serde_json",
+ "sha1_smol",
+ "sha2",
  "thiserror",
  "velnor-runner-core",
  "zeroize",
@@ -3907,9 +3912,11 @@ version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
  "bollard",
+ "bytes",
  "flate2",
  "futures-util",
  "getrandom 0.4.3",
+ "httpdate",
  "libc",
  "reqwest",
  "rustix 1.1.5",
@@ -3923,6 +3930,7 @@ dependencies = [
  "toml",
  "turso",
  "uuid",
+ "velnor-resource-probe",
  "velnor-runner-core",
  "velnor-runner-github",
  "zeroize",

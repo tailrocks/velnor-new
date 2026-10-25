@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
 use std::error::Error;
+use velnor_actions_contract::ExecutionMode;
 
 use crate::schema2::{ProductReleasePins, Schema2WorkflowRequest};
 use crate::yaml::Yaml;
@@ -10,10 +11,12 @@ use crate::schema2::product_release_family as family;
 use crate::schema2::product_release_test_pins::test_pins;
 
 fn request(pins: ProductReleasePins) -> Result<Schema2WorkflowRequest, crate::RenderError> {
+    let scale_set = Schema2WorkflowRequest::canonical_scale_set()?;
     Ok(Schema2WorkflowRequest {
         version: "2.0.0".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
-        scale_set: Schema2WorkflowRequest::canonical_scale_set()?,
+        scale_set: scale_set.clone(),
+        routing: crate::workflow_routing::test_policy(ExecutionMode::Hosted, scale_set),
         workflows: BTreeSet::new(),
         mbx_qualification: None,
         mise_pin_qualification: None,

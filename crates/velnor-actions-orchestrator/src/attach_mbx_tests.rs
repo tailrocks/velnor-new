@@ -41,7 +41,7 @@ fn preseed_restores_mbx_builds_after_sources_with_homes() {
         steps.iter().all(|step| !matches!(
             &step.kind,
             velnor_actions_contract::StepKind::Shell { run, .. }
-                if run.iter().any(|argument| argument == "mr-boxington@1.21.1")
+                if run.iter().any(|argument| argument == &format!("mr-boxington@{}", velnor_actions_mise::catalog::MR_BOXINGTON_VERSION))
         )),
         "Mise must not install action-owned MBX: {names:?}"
     );
@@ -53,7 +53,10 @@ fn preseed_restores_mbx_builds_after_sources_with_homes() {
     let velnor_actions_contract::StepKind::Action { env, with, .. } = &mbx_action.kind else {
         panic!("MBX restore must be an action");
     };
-    assert_eq!(with.get("toolchain").map(String::as_str), Some("1.99.1"));
+    assert_eq!(
+        with.get("toolchain").map(String::as_str),
+        Some(velnor_actions_mise::catalog::RUST_VERSION)
+    );
     assert!(
         with.get("version").map(String::as_str)
             == Some(ToolCatalog::pinned().version(PinnedTool::MrBoxington)),

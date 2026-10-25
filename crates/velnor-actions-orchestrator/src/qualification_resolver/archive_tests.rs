@@ -3,8 +3,8 @@
 use std::io::{Cursor, Write};
 
 use velnor_actions_contract::{
-    QUALIFICATION_CACHE_RECEIPT_ARTIFACT, QUALIFICATION_CACHE_RECEIPT_FILENAME,
-    QualificationCacheArtifact,
+    QUALIFICATION_CACHE_RECEIPT_FILENAME, QualificationCacheArtifact, QualificationRunRef,
+    qualification_cache_receipt_artifact_name,
 };
 use zip::write::SimpleFileOptions;
 
@@ -71,7 +71,11 @@ fn mark_first_central_member_symlink(bytes: &mut [u8]) -> Result<(), String> {
 fn artifact(bytes: &[u8]) -> QualificationCacheArtifact {
     QualificationCacheArtifact {
         id: 7,
-        name: QUALIFICATION_CACHE_RECEIPT_ARTIFACT.to_owned(),
+        name: qualification_cache_receipt_artifact_name(QualificationRunRef {
+            run_id: 11,
+            run_attempt: 1,
+        })
+        .expect("receipt artifact name"),
         digest: sha256(bytes),
         size_bytes: bytes.len() as u64,
         expired: false,

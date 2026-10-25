@@ -15,8 +15,9 @@ operation-journal lifecycle are specified in the
 ## Resource budgets and worker creation
 
 Every new worker pair uses the validated `ResourceBudget` made from the four
-required `[host.resources]` fields. The configured CPU and memory sums are the
-per-job admission cost. The host configuration must reach the launch loop and
+required worker-limit fields in `[host.resources]` plus the required
+`operational_memory_reserve_bytes` field. The configured CPU and memory sums
+are the per-job admission cost. The host configuration must reach the launch loop and
 the final stage that builds both Docker create requests; there is no
 unbudgeted production constructor or fallback. Docker receives the runner's
 limits on the unprivileged runner container and the DinD limits on that
@@ -67,8 +68,19 @@ negative, or overflowing CPU values fail closed. The available CPU budget is
 the guest total minus the one-CPU reserve, and the upper bound for new pairs
 divides the remaining budget by the configured runner-plus-DinD pair cost.
 
-The total-memory bound uses guest `MemTotal` and the configured pair memory
-cost. The maximum total pair count is capped by `max_jobs` and the current D21
+The total-memory bound uses guest `MemTotal` minus the shared memory reserve
+and the configured pair memory cost. The reserve is the probe's exact 128 MiB
+memory cap plus the required, positive `operational_memory_reserve_bytes`
+setting. That setting has no default, is range-checked with the probe cap, and
+is operator supplied. The 1 GiB value used by initial qualification fixtures is
+provisional only; it does not establish safe headroom. Final qualification must
+select the value from measured peak guest-side shim, kernel, daemon, and
+controller startup growth plus an explicit safety allowance. A live
+measurement gate must pass against the same final image, budget, and engine
+before production admission is claimed. `MemTotal` represents total capacity;
+it does not account for current use.
+
+The maximum total pair count is capped by `max_jobs` and the current D21
 header. Available new slots are that ceiling minus all occupied journal
 permits, floored at zero. For each additional pair, sum its configured cost
 with the charges for all occupied rows and require the aggregate CPU and
@@ -86,8 +98,13 @@ jobs continue, and a lower capacity never kills a worker or releases a permit
 before journal cleanup proof.
 
 For each new admission attempt, `MemAvailable` must be at least one current
-configured pair's memory cost. This is a separate headroom check; do not
-subtract occupied pairs from `MemAvailable` a second time. The synchronous
+configured pair's memory cost plus the same shared reserve. `MemAvailable`
+already reflects current kernel and daemon use at sample time, but not
+additional use caused by the next start; the operational margin covers that
+future growth. The probe's bounded 128 MiB is also retained in the reserve as
+conservative headroom even though the sample is taken while the probe runs.
+This is a separate headroom check; do not subtract occupied pairs from
+`MemAvailable` a second time. The synchronous
 sample used by that attempt is also bound to the selected engine identity and
 canonical Docker-root path. The engine identity and root are checked again
 after sampling and must match the values observed before the probe ran. A
@@ -172,6 +189,10 @@ official release chain cannot authenticate and publish this manifest and
 asset, probe readiness fails closed until that source-owned release path is
 implemented.
 
+The probe runs with a hard CPU limit of 100 millicores, a memory and swap
+limit of 128 MiB, and a PID limit of four. Its 100m CPU limit is inside the
+shared one-vCPU operational CPU reserve. Those projection limits bound the
+probe container; they do not prove the operational memory margin sufficient.
 The controller accepts only the normalized absolute, non-root `DockerRootDir`
 returned by the selected daemon's `info` response; it does not accept a caller
 override. It creates the probe through a distinct typed controller-only

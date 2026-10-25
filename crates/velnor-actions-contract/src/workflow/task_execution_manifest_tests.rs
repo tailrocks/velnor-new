@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 
 use super::*;
 use crate::cachekey::{ToolchainInputs, toolchain_id};
+use crate::workflow::TaskBindingDigest;
 use crate::workflow::crate_job::task_digest_for_execution;
 use crate::{matrix_id_for_task_group, matrix_key_for_id};
 
@@ -61,7 +62,7 @@ fn entry() -> TaskExecutionManifestEntryV1 {
     let mut record = TaskExecutionManifestEntryV1 {
         task_id,
         execution_digest: String::new(),
-        task_digest,
+        task_digest: TaskBindingDigest::new(task_digest).expect("binding digest"),
         toolchain_inputs,
         argv,
         env,
@@ -131,7 +132,7 @@ fn task_manifest_validates_separate_plan_and_execution_digests() {
     let value = manifest();
     value.validate().expect("valid manifest");
     let record = value.tasks.values().next().expect("entry");
-    assert_ne!(record.execution_digest, record.task_digest);
+    assert_ne!(record.execution_digest, record.task_digest.as_str());
 
     let mut changed = record.clone();
     changed
@@ -165,7 +166,8 @@ fn execution_digest_binds_all_record_metadata() {
         digest
     );
     let mut changed = original.clone();
-    changed.task_digest = format!("b3-{}", "c".repeat(64));
+    changed.task_digest =
+        TaskBindingDigest::new(format!("b3-{}", "c".repeat(64))).expect("binding digest");
     assert_ne!(
         changed
             .computed_execution_digest()
@@ -251,7 +253,9 @@ fn marked_json_and_nul_frame_have_exact_bounded_shapes() {
     assert_eq!(marked.lines().count(), 2);
 
     let record = manifest.tasks.values().next().expect("record");
-    let frame = record.nul_frame().expect("frame");
+    let frame = record
+        .nul_frame(record.task_digest.as_str())
+        .expect("frame");
     assert!(frame.len() <= MAX_TASK_EXECUTION_FRAME_BYTES);
     assert_eq!(frame.last(), Some(&0));
     let fields = frame
@@ -262,7 +266,7 @@ fn marked_json_and_nul_frame_have_exact_bounded_shapes() {
     assert_eq!(fields[0], TASK_EXECUTION_FRAME_MAGIC);
     assert_eq!(fields[1], record.task_id);
     assert_eq!(fields[2], record.execution_digest);
-    assert_eq!(fields[3], record.task_digest);
+    assert_eq!(fields[3], record.task_digest.as_str());
     assert_eq!(fields[7], "1");
     assert_eq!(fields[8], "8");
     assert_eq!(fields[9], record.argv.len().to_string());

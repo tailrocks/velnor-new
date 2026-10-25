@@ -56,23 +56,14 @@ fn source_fixture_with_ids(
 }
 
 fn source_fixture(source: &[u8]) -> Result<(PathBuf, FreshnessContext), String> {
-    source_fixture_with_ids(source, std::process::id(), reserve_source_fixture_id)
-}
-
-fn reserve_source_fixture_id() -> Option<u128> {
-    let mut current = NEXT_SOURCE_FIXTURE_ID.load(Ordering::Relaxed);
-    loop {
-        let next = current.checked_add(1)?;
-        match NEXT_SOURCE_FIXTURE_ID.compare_exchange_weak(
-            current,
-            next,
-            Ordering::Relaxed,
-            Ordering::Relaxed,
-        ) {
-            Ok(_) => return Some(u128::from(current)),
-            Err(observed) => current = observed,
-        }
-    }
+    source_fixture_with_ids(source, std::process::id(), || {
+        NEXT_SOURCE_FIXTURE_ID
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+                current.checked_add(1)
+            })
+            .ok()
+            .map(u128::from)
+    })
 }
 
 fn remove_source_fixture(root: &Path) -> Result<(), String> {

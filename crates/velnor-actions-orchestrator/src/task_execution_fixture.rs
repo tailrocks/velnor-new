@@ -14,7 +14,7 @@ use velnor_actions_contract::workflow::{
 };
 use velnor_actions_contract::{RunnerSelection, Trust, plan_id_for_run};
 
-use super::super::{OrchestratorError, resolve_task_execution_to};
+use super::super::{OrchestratorError, resolve_task_execution_to, resolve_task_execution_to_with};
 use super::support::digest;
 use super::{GENERATOR_VERSION, RUN_KEY, TASK_ID};
 
@@ -97,7 +97,8 @@ fn build_manifest(
     let mut record = TaskExecutionManifestEntryV1 {
         task_id: TASK_ID.to_owned(),
         execution_digest: String::new(),
-        task_digest,
+        task_digest: velnor_actions_contract::TaskBindingDigest::new(task_digest)
+            .expect("binding digest"),
         toolchain_inputs,
         argv,
         env,
@@ -116,12 +117,13 @@ fn build_manifest(
     manifest
 }
 
-fn build_plan(task_digest: String) -> Plan {
-    let entry = MatrixEntry::derive(
+fn build_plan(task_digest: &str, toolchain_inputs: ToolchainInputs) -> Plan {
+    let toolchain_id = toolchain_id(&toolchain_inputs).expect("toolchain identity");
+    let mut entry = MatrixEntry::derive(
         "rust",
         TASK_ID,
         "true",
-        &task_digest,
+        task_digest,
         serde_json::json!({}),
         ExecuteTaskIds {
             tasks: BTreeMap::from([(
@@ -135,6 +137,8 @@ fn build_plan(task_digest: String) -> Plan {
         PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu").expect("planned platform"),
     )
     .expect("matrix entry");
+    entry.toolchain_inputs = Some(toolchain_inputs);
+    entry.toolchain_id = Some(toolchain_id);
     let plan = Plan {
         schema: Plan::SCHEMA,
         run_key: RUN_KEY.to_owned(),
@@ -158,9 +162,18 @@ fn build_plan(task_digest: String) -> Plan {
             task_id: TASK_ID.to_owned(),
             decision: ObligationDecision::Execute,
             reason: "selected".to_owned(),
-            task_digest,
+            task_digest: task_digest.to_owned(),
+            task_binding_digest: velnor_actions_contract::TaskBindingDigest::new(
+                task_digest.to_owned(),
+            )
+            .expect("binding digest"),
             input_digest: digest(11),
             closure_digest: digest(12),
+            graph_digest: "b3-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_owned(),
+            mbx_digest: "b3-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                .to_owned(),
+            profile: "default".to_owned(),
             job_id: entry.job_id.clone(),
         }],
         jobs: vec![velnor_actions_contract::PlanJob {
@@ -204,7 +217,13 @@ fn write_fixture_files(
 impl Fixture {
     pub(super) fn new() -> Self {
         let (manifest, task_digest) = manifest_and_task_digest();
-        let plan = build_plan(task_digest);
+        let toolchain_inputs = manifest
+            .tasks
+            .get(TASK_ID)
+            .expect("manifest record")
+            .toolchain_inputs
+            .clone();
+        let plan = build_plan(&task_digest, toolchain_inputs);
         let repo = TempDir::new().expect("repo tempdir");
         let runner_temp = TempDir::new().expect("runner tempdir");
         write_fixture_files(&repo, &runner_temp, &manifest, &plan);
@@ -224,6 +243,57 @@ impl Fixture {
             RUN_KEY,
             &record.execution_digest,
             GENERATOR_VERSION,
+            "crate_clippy",
+        )
+    }
+
+    pub(super) fn bind_project_rust_reference(&mut self) {
+        let record = self
+            .manifest
+            .tasks
+            .get_mut(TASK_ID)
+            .expect("manifest record");
+        for value in &mut record.argv {
+            *value = value.replace("rust@1.99.0", "rust@${VELNOR_TOOL_RUST}");
+        }
+        record.env.insert(
+            "RUSTUP_TOOLCHAIN".to_owned(),
+            "${VELNOR_TOOL_RUST}".to_owned(),
+        );
+        record.toolchain_inputs.tools = record
+            .toolchain_inputs
+            .tools
+            .iter()
+            .map(|value| value.replace("rust@1.99.0", "rust@${VELNOR_TOOL_RUST}"))
+            .collect();
+        let binding_toolchain = toolchain_id(&record.toolchain_inputs).expect("binding toolchain");
+        record.task_digest = velnor_actions_contract::TaskBindingDigest::new(
+            task_digest_for_execution(TASK_ID, &record.argv, &binding_toolchain)
+                .expect("binding task digest"),
+        )
+        .expect("binding digest");
+        record.refresh_execution_digest().expect("execution digest");
+        self.plan.obligations[0].task_binding_digest = record.task_digest.clone();
+        self.manifest
+            .validate()
+            .expect("project reference manifest");
+        self.plan.validate().expect("concrete plan");
+        write_fixture_files(&self.repo, &self.runner_temp, &self.manifest, &self.plan);
+    }
+
+    pub(super) fn resolve_with_project_rust(
+        &self,
+        version: &str,
+    ) -> Result<Vec<u8>, OrchestratorError> {
+        let record = self.manifest.tasks.get(TASK_ID).expect("manifest record");
+        resolve_task_execution_to_with(
+            self.repo.path(),
+            self.runner_temp.path(),
+            RUN_KEY,
+            &record.execution_digest,
+            GENERATOR_VERSION,
+            "crate_clippy",
+            |name| (name == "VELNOR_TOOL_RUST").then(|| version.to_owned()),
         )
     }
 }

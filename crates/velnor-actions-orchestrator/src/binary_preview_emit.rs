@@ -33,7 +33,10 @@ use velnor_actions_workflow_renderer::{
 #[path = "preview_source_prep.rs"]
 mod source_preparation;
 
-pub(crate) fn files(prep: &GenerationPreparation) -> Result<Vec<RenderedFile>, OrchestratorError> {
+pub(crate) fn files(
+    prep: &GenerationPreparation,
+    routing: &velnor_actions_workflow_renderer::WorkflowRoutingPolicy,
+) -> Result<Vec<RenderedFile>, OrchestratorError> {
     let Some(release) = prep
         .config
         .stacks
@@ -47,9 +50,9 @@ pub(crate) fn files(prep: &GenerationPreparation) -> Result<Vec<RenderedFile>, O
         return Ok(Vec::new());
     }
     let spec = specification(prep, release, PackageReleaseChannel::Preview)?;
-    let mut files = vec![render_consumer_preview(&spec)?];
+    let mut files = vec![render_consumer_preview(&spec, routing)?];
     if spec.homebrew_tap.is_some() {
-        files.push(render_release_tap_reconcile(&spec)?);
+        files.push(render_release_tap_reconcile(&spec, routing)?);
     }
     Ok(files)
 }

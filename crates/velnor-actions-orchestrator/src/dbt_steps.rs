@@ -35,9 +35,9 @@ fn contract(problem: impl Into<String>) -> OrchestratorError {
 
 /// The step environment: Velnor isolation plus the declared `DBT_*` literals.
 ///
-/// A project whose profile uses the Postgres adapter also gets
-/// `DBT_ALLOW_EXPERIMENTAL_ADAPTERS=true`: dbt Fusion refuses that adapter
-/// without it, and the variable is generator-owned rather than user `env`.
+/// The generator adds `DBT_ALLOW_EXPERIMENTAL_ADAPTERS=true` when a project profile uses the Postgres adapter.
+/// dbt Fusion requires this value for that adapter.
+/// The user `env` table does not permit this variable.
 fn step_env(
     catalog: &ToolCatalog,
     config: &velnor_actions_contract::config::DbtStackConfig,
@@ -128,14 +128,14 @@ fn packages_copy_step(
         .join("");
     let (name, copy) = if stage {
         (
-            "Stage dbt packages",
+            "Copy restored dbt packages",
             format!(
                 "if [ -d \"{family}\" ] && [ ! -L \"{family}\" ]; then rm -rf \"$p\"; mkdir -p \"$p\"; cp -a \"{family}/.\" \"$p/\"; fi"
             ),
         )
     } else {
         (
-            "Stash dbt packages",
+            "Copy installed dbt packages",
             format!(
                 "if [ -d \"$p\" ] && [ ! -L \"$p\" ]; then rm -rf \"{family}\"; mkdir -p \"{family}\"; cp -a \"$p/.\" \"{family}/\"; fi"
             ),

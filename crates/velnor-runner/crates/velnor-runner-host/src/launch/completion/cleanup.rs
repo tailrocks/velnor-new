@@ -1,62 +1,61 @@
 //! Claim-fenced cleanup orchestration and one-request effect boundaries.
 
-#[path = "container.rs"]
-mod container;
+mod native;
 #[path = "runner.rs"]
 mod runner;
 #[cfg(test)]
-#[path = "tests.rs"]
-mod tests;
-#[path = "volume.rs"]
-mod volume;
+#[path = "cleanup/scoped_shutdown_tests.rs"]
+mod scoped_shutdown_tests;
+#[path = "cleanup/service_loop.rs"]
+mod service_loop;
+
+pub(in crate::launch) use native::{
+    remove_owned_resources_for_jit_conflict, remove_owned_resources_for_retirement,
+};
+
+#[cfg(test)]
+pub(crate) use runner::reconcile_for_test;
+pub(super) use service_loop::run;
 
 use std::future::Future;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver};
-use std::time::Duration;
 
 use bollard::Docker;
 
-use super::Resources;
 use crate::error::HostError;
 use crate::https::HttpsTransport;
-use crate::journal::{CleanupClaim, CompletedLaunch, Journal};
+use crate::journal::{CleanupClaim, CompletedLaunch};
+use crate::launch::SelectedEngineContext;
+use crate::launch::bootstrap::NativeCleanupRuntime;
 use crate::listen::Secret;
 
+use super::journal_ref::CompletionJournal;
+
 const CLAIM_LEASE_SECONDS: i64 = 90;
-#[cfg(test)]
-const CURL_REQUEST_TIMEOUT_SECONDS: u64 = 60;
-#[cfg(test)]
-const EFFECT_MARGIN_SECONDS: u64 = 30;
 const EFFECT_WINDOW_SECONDS: i64 = 90;
 const RUNNER_REQUESTS: u64 = 3;
+const RUNNER_LOG_EFFECTS: u64 = 80;
 const CONTAINER_COUNT: u64 = 2;
-const CONTAINER_REQUESTS: u64 = 6;
-const VOLUME_COUNT: u64 = 3;
-const VOLUME_REQUESTS: u64 = 3;
-const MAX_CLEANUP_EFFECTS: u64 =
-    RUNNER_REQUESTS + CONTAINER_COUNT * CONTAINER_REQUESTS + VOLUME_COUNT * VOLUME_REQUESTS;
-#[cfg(test)]
-const MAX_EXTERNAL_CHAIN_SECONDS: u64 = RUNNER_REQUESTS * CURL_REQUEST_TIMEOUT_SECONDS
-    + (CONTAINER_COUNT * CONTAINER_REQUESTS + VOLUME_COUNT * VOLUME_REQUESTS)
-        * crate::docker_client::DOCKER_OPERATION_TIMEOUT.as_secs();
+const VOLUME_COUNT: u64 = crate::worker::WorkerVolumeRole::ALL.len() as u64;
+const MAX_NATIVE_CLEANUP_EFFECTS: u64 =
+    RUNNER_REQUESTS + CONTAINER_COUNT * 4 * 2 + VOLUME_COUNT * 3 * 2 + 7 + RUNNER_LOG_EFFECTS;
 const SCAN_LIMIT: u32 = 4;
 const MAX_SCAN_WAVES: usize = 3;
-const SCAN_INTERVAL: Duration = Duration::from_secs(30);
 
 type HostResult<T> = Result<T, HostError>;
 
 pub(super) struct Context<'a> {
-    pub(super) journal: &'a Journal,
+    pub(super) journal: &'a CompletionJournal,
     pub(super) docker: &'a Docker,
     pub(super) transport: &'a mut HttpsTransport,
     pub(super) admin: &'a Secret,
+    pub(super) diagnostics: &'a super::diagnostics::DiagnosticsRoot,
+    pub(super) native_cleanup: Option<&'a NativeCleanupRuntime>,
+    pub(super) selected_engine: Option<&'a SelectedEngineContext>,
 }
 
-/// One bounded reconciliation chain: three GitHub calls, twelve container
-/// calls, and nine volume calls at most. Each HTTP call renews the durable
-/// lease independently; no serial chain shares a single effect window.
+/// One bounded cleanup uses three GitHub calls, eighteen container calls, and three calls per volume role.
+/// Each call renews its durable lease independently.
 pub(super) struct EffectBudget<'a> {
     remaining: u64,
     stopping: &'a AtomicBool,
@@ -65,9 +64,14 @@ pub(super) struct EffectBudget<'a> {
 impl<'a> EffectBudget<'a> {
     pub(super) fn new(stopping: &'a AtomicBool) -> Self {
         Self {
-            remaining: MAX_CLEANUP_EFFECTS,
+            remaining: MAX_NATIVE_CLEANUP_EFFECTS,
             stopping,
         }
+    }
+
+    #[cfg(test)]
+    fn new_native(stopping: &'a AtomicBool) -> Self {
+        Self::new(stopping)
     }
 
     fn reserve(&mut self, phase: &'static str) -> Result<(), Failure> {
@@ -148,56 +152,6 @@ const fn error_reason(error: HostError) -> &'static str {
         HostError::Endpoint => "endpoint",
         HostError::Journal => "journal",
         _ => "host",
-    }
-}
-
-pub(super) fn run(
-    runtime: &tokio::runtime::Runtime,
-    resources: Resources,
-    stopping: &Arc<AtomicBool>,
-    receiver: &Receiver<()>,
-) -> Result<(), HostError> {
-    let Resources {
-        journal,
-        docker,
-        mut transport,
-        admin,
-    } = resources;
-    let mut context = Context {
-        journal: &journal,
-        docker: &docker,
-        transport: &mut transport,
-        admin: &admin,
-    };
-    let mut first_failure = None;
-    loop {
-        if stopping.load(Ordering::Acquire) {
-            return first_failure.map_or(Ok(()), Err);
-        }
-        match runtime.block_on(reconcile_due_burst(&mut context, stopping)) {
-            Ok((_, failure)) => remember_failure(&mut first_failure, failure),
-            Err(failure) => {
-                failure.report();
-                remember_failure(&mut first_failure, Some(failure));
-            }
-        }
-        if stopping.load(Ordering::Acquire) {
-            return first_failure.map_or(Ok(()), Err);
-        }
-        match receiver.recv_timeout(SCAN_INTERVAL) {
-            Ok(()) | Err(mpsc::RecvTimeoutError::Timeout) => {}
-            Err(mpsc::RecvTimeoutError::Disconnected) => {
-                return first_failure.map_or(Ok(()), Err);
-            }
-        }
-    }
-}
-
-fn remember_failure(first: &mut Option<HostError>, failure: Option<Failure>) {
-    if first.is_none()
-        && let Some(failure) = failure
-    {
-        *first = Some(failure.error);
     }
 }
 
@@ -299,12 +253,14 @@ async fn reconcile_claimed(
     claim: CleanupClaim,
     budget: &mut EffectBudget<'_>,
 ) -> Result<(), Failure> {
-    if !valid_completion(launch) {
-        return Err(Failure::not_proven("completion identity"));
+    if context
+        .diagnostics
+        .pending_for(launch.intent.id)
+        .map_err(|error| Failure::request("diagnostic worker state", error))?
+    {
+        return Err(Failure::not_proven("diagnostic write pending"));
     }
-    runner::reconcile(context, launch, claim, budget).await?;
-    container::cleanup(context, launch, claim, budget).await?;
-    volume::cleanup(context, launch, claim, budget).await?;
+    native::cleanup(context, launch, claim, budget).await?;
     let recorded = context
         .journal
         .record_completion_cleanup(launch.intent.id, claim.generation)
@@ -319,7 +275,7 @@ async fn reconcile_claimed(
 /// Renew before one HTTP request. A request closure must contain exactly one
 /// Docker Engine or curl exchange; serial requests have separate renewals.
 pub(super) async fn run_effect<T, F, Fut>(
-    journal: &Journal,
+    journal: &CompletionJournal,
     budget: &mut EffectBudget<'_>,
     intent_id: i64,
     claim: CleanupClaim,
@@ -361,21 +317,6 @@ where
 enum EffectOutcome<T> {
     Stopped,
     Completed(HostResult<T>),
-}
-
-fn valid_completion(launch: &CompletedLaunch) -> bool {
-    launch.intent.id > 0
-        && launch.intent.kind == "launch"
-        && !launch.intent.cleanup_proven
-        && launch.identity.scale_set_id > 0
-        && launch.identity.runner_request_id > 0
-        && launch.identity.runner_id > 0
-        && !launch.identity.runner_name.is_empty()
-        && launch
-            .intent
-            .worker_volume
-            .as_deref()
-            .is_some_and(|worker| crate::runner_plan(worker).is_ok())
 }
 
 fn retry_delay_seconds(attempt: u32) -> i64 {

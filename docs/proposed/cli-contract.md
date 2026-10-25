@@ -183,7 +183,7 @@ schema = 1
 # [workflow]
 # name = "CI"                         # Workflow display name.
 # policy = "consumer-v1"              # Only consumer policy; Velnor's reserved policy works only in tailrocks/velnor-new.
-# default_branch = "<branch>"         # Push branch override; omit to use origin/HEAD, then the CI event payload. Required if neither is available.
+# default_branch = "<branch>"         # Default branch override. Otherwise use origin/HEAD, then the CI event payload. Set this value if both are unavailable.
 # runner_label = "<latest pinned label>" # Exact latest pinned runner; omit for the default.
 # generator_validation = "bootstrap"  # Generator validation mode.
 # max_parallel_jobs = 2                # Maximum generated matrix concurrency.

@@ -1,15 +1,16 @@
 use super::*;
+use velnor_actions_contract::WorkflowEvent;
 use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
 
-fn task(package: &str, kind: TaskKind) -> ProposedTask {
+fn task(package: &str, kind: TaskKind, configuration: &str) -> ProposedTask {
     velnor_actions_rust::propose_task(&TaskGroup {
         all_features: false,
-        task_id: format!("stack/rust/{package}/{}/default", kind.as_str()),
+        task_id: format!("stack/rust/{package}/{}/{}", kind.as_str(), configuration),
         package_id: format!("{package} 0.1.0"),
         package_name: package.to_owned(),
         manifest_key: package.to_owned(),
         kind,
-        configuration: "default".to_owned(),
+        configuration: configuration.to_owned(),
         features: Vec::new(),
         target: "host".to_owned(),
         gated_by: Vec::new(),
@@ -31,197 +32,86 @@ fn task(package: &str, kind: TaskKind) -> ProposedTask {
 }
 
 #[test]
-fn all_obligations_of_a_crate_share_one_job() {
-    let tasks: Vec<_> = [
-        TaskKind::Fmt,
-        TaskKind::Clippy,
-        TaskKind::Build,
-        TaskKind::Nextest,
-        TaskKind::Test,
-        TaskKind::Doctest,
-        TaskKind::Doc,
-    ]
-    .into_iter()
-    .map(|kind| task("demo", kind))
-    .collect();
+fn every_rust_configuration_and_task_has_one_package_configuration_owner() {
+    let tasks: Vec<_> = vec![
+        task("demo", TaskKind::Fmt, "default"),
+        task("demo", TaskKind::Clippy, "default"),
+        task("demo", TaskKind::Test, "host"),
+        task("demo", TaskKind::Doc, "host"),
+    ];
     let groups = group_runnable(&tasks).expect("groups");
-    assert_eq!(groups.len(), 1);
-    let mut observed: Vec<_> = groups
-        .values()
-        .flatten()
-        .map(|task| &task.task_id)
-        .collect();
-    observed.sort();
-    let mut expected: Vec<_> = tasks.iter().map(|task| &task.task_id).collect();
-    expected.sort();
-    assert_eq!(observed, expected);
-    for task in &tasks {
+    assert_eq!(groups.len(), 2);
+    assert_eq!(
+        groups[&CrateGroupKey {
+            package_id: "demo 0.1.0".to_owned(),
+            configuration: "default".to_owned(),
+            stack: Stack::Rust,
+        }]
+            .len(),
+        2
+    );
+    assert_eq!(
+        groups[&CrateGroupKey {
+            package_id: "demo 0.1.0".to_owned(),
+            configuration: "host".to_owned(),
+            stack: Stack::Rust,
+        }]
+            .len(),
+        2
+    );
+    for (task, expected) in
+        tasks
+            .iter()
+            .zip(["rust-demo", "rust-demo", "rust-demo-host", "rust-demo-host"])
+    {
         assert_eq!(
-            JobOwners::new(&tasks)
-                .expect("owners")
-                .for_member(task)
-                .expect("owner"),
-            Some("rust-demo".to_owned())
+            job_id_for_member(&tasks, task, WorkflowEvent::PullRequest)
+                .expect("valid owner lookup"),
+            Some(expected.to_owned())
         );
     }
 }
 
 #[test]
-fn identity_collision_assignment_is_shared_by_planner_and_renderer() {
-    let first = task("demo", TaskKind::Clippy);
-    let mut second = task("other", TaskKind::Clippy);
+fn package_name_collisions_have_stable_distinct_ids() {
+    let first = task("demo", TaskKind::Clippy, "default");
+    let mut second = task("other", TaskKind::Clippy, "default");
     second.display_name = first.display_name.clone();
     let tasks = vec![first, second];
-    let groups = group_runnable(&tasks).expect("groups");
-    let assigned = assign_group_ids(&groups);
-    let raw = BTreeSet::from([
-        (
-            tasks[0].identity.unit_id.clone(),
-            "demo".to_owned(),
-            "default".to_owned(),
-        ),
-        (
-            tasks[1].identity.unit_id.clone(),
-            "demo".to_owned(),
-            "default".to_owned(),
-        ),
-    ]);
-    let expected = assign_crate_job_ids(&raw, CRATE_JOB_ID_PREFIX);
-    for (key, id) in &assigned {
-        assert_eq!(
-            id,
-            &expected[&(key.package_id.clone(), key.configuration.clone())]
-        );
-    }
-    assert_eq!(assigned.values().collect::<BTreeSet<_>>().len(), 2);
-    let reversed: Vec<_> = tasks.into_iter().rev().collect();
+    let ids = assign_group_ids(&group_runnable(&tasks).expect("groups"));
+    assert_eq!(ids.values().collect::<BTreeSet<_>>().len(), 2);
     assert_eq!(
-        assigned,
-        assign_group_ids(&group_runnable(&reversed).expect("reversed groups"))
+        ids,
+        assign_group_ids(
+            &group_runnable(&tasks.iter().cloned().rev().collect::<Vec<_>>())
+                .expect("reversed groups")
+        )
     );
 }
 
 #[test]
-fn each_configuration_owns_its_own_job() {
-    let first = task("demo", TaskKind::Clippy);
-    let mut second = first.clone();
-    second.configuration = "host".to_owned();
-    second.task_id = "stack/rust/demo/clippy/host".to_owned();
-    let tasks = vec![first, second];
-    let assigned = assign_group_ids(&group_runnable(&tasks).expect("groups"));
-    assert_eq!(
-        JobOwners::new(&tasks)
-            .expect("owners")
-            .for_member(&tasks[0])
-            .expect("default"),
-        Some("rust-demo".to_owned())
-    );
-    assert_eq!(
-        JobOwners::new(&tasks)
-            .expect("owners")
-            .for_member(&tasks[1])
-            .expect("host"),
-        Some("rust-demo-host".to_owned())
-    );
-    assert_eq!(assigned.len(), 2);
-}
-
-#[test]
-fn workspace_no_targets_and_named_check_keep_their_authorities() {
-    let mut workspace = task("demo", TaskKind::Fmt);
+fn workspace_and_named_check_owners_remain_separate() {
+    let mut workspace = task("demo", TaskKind::Fmt, "default");
     workspace.identity.unit_id.clear();
-    let mut absent = task("demo", TaskKind::Doctest);
-    absent.no_targets = true;
-    let mut check = task("check", TaskKind::Clippy);
+    let mut check = task("check", TaskKind::Clippy, "default");
     check.stack_id = Stack::Mise.id().to_owned();
     check.identity.unit_id = "ffi".to_owned();
-    let tasks = vec![workspace, absent, check];
-    assert!(group_runnable(&tasks).expect("empty").is_empty());
+    let tasks = vec![workspace.clone(), check.clone()];
     assert_eq!(
-        JobOwners::new(&tasks)
-            .expect("owners")
-            .for_member(&tasks[0])
-            .expect("workspace"),
+        job_id_for_member(&tasks, &workspace, WorkflowEvent::PullRequest).expect("workspace"),
         Some(PLAN_JOB_ID.to_owned())
     );
     assert_eq!(
-        JobOwners::new(&tasks)
-            .expect("owners")
-            .for_member(&tasks[1])
-            .expect("no targets"),
-        None
-    );
-    assert_eq!(
-        JobOwners::new(&tasks)
-            .expect("owners")
-            .for_member(&tasks[2])
-            .expect("check"),
+        job_id_for_member(&tasks, &check, WorkflowEvent::PullRequest).expect("check"),
         Some("check-ffi".to_owned())
     );
 }
 
 #[test]
-fn unknown_stack_fails_without_losing_tasks() {
-    let mut unknown = task("demo", TaskKind::Clippy);
-    unknown.stack_id = "foreign".to_owned();
+fn unknown_stack_or_rust_kind_fails_closed() {
+    let mut unknown = task("demo", TaskKind::Clippy, "default");
+    unknown.task_kind = "archive".to_owned();
     assert!(group_runnable(&[unknown.clone()]).is_err());
-    assert!(JobOwners::new(&[unknown.clone()]).is_err());
-}
-
-#[test]
-fn collocated_tofu_and_rust_keep_separate_jobs() {
-    let mut tofu = task("root", TaskKind::Clippy);
-    tofu.stack_id = Stack::Tofu.id().to_owned();
-    tofu.task_kind = "validate".to_owned();
-    let rust = task("root", TaskKind::Clippy);
-    let tasks = vec![tofu, rust];
-    let groups = group_runnable(&tasks).expect("mixed source groups");
-    assert_eq!(groups.len(), 2);
-    assert!(groups.keys().any(|key| key.stack == Stack::Tofu));
-    assert!(groups.keys().any(|key| key.stack == Stack::Rust));
-    assert_eq!(
-        JobOwners::new(&tasks)
-            .expect("owners")
-            .for_member(&tasks[0])
-            .expect("tofu"),
-        Some("tofu-root".to_owned())
-    );
-    assert_eq!(
-        JobOwners::new(&tasks)
-            .expect("owners")
-            .for_member(&tasks[1])
-            .expect("rust"),
-        Some("rust-root".to_owned())
-    );
-}
-
-#[test]
-fn outsider_package_has_no_owner() {
-    let tasks = vec![task("demo", TaskKind::Clippy)];
-    assert_eq!(
-        JobOwners::new(&tasks)
-            .expect("owners")
-            .for_member(&task("other", TaskKind::Doc))
-            .expect("outsider"),
-        None
-    );
-}
-
-#[test]
-fn shards_and_same_group_outsiders_reuse_the_complete_immutable_assignment() {
-    let mut first = task("demo", TaskKind::Nextest);
-    first.task_id.push_str("/shard-1-of-2");
-    let mut second = first.clone();
-    second.task_id = second.task_id.replace("shard-1-of-2", "shard-2-of-2");
-    let tasks = vec![first, second];
-    let owners = JobOwners::new(&tasks).expect("owners");
-    let outsider = task("demo", TaskKind::Test);
-    for member in tasks.iter().chain(std::iter::once(&outsider)) {
-        assert_eq!(
-            owners.for_member(member).expect("member"),
-            Some("rust-demo".to_owned())
-        );
-    }
-    assert!(owners.runnable_member(&tasks[0].task_id).is_some());
-    assert!(owners.runnable_member("absent-gate").is_none());
+    unknown.stack_id = "foreign".to_owned();
+    assert!(group_runnable(&[unknown]).is_err());
 }

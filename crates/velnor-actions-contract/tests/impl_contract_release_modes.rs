@@ -27,7 +27,7 @@ fn problem_of(config: &RustReleaseConfig) -> String {
 #[test]
 fn publishable_opt_in_satisfies_enabled_without_allowlist() {
     let config = enabled_publishable();
-    assert_eq!(config.packages, [] as [std::string::String; 0]);
+    assert_eq!(config.packages, Vec::<String>::new());
     assert_eq!(config.validate(FILE), Ok(()));
     assert!(!RustReleaseConfig::default().publishable_workspace);
 }

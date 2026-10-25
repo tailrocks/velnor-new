@@ -4,7 +4,27 @@ use super::*;
 fn receipt_artifact_name_is_stable() {
     assert_eq!(
         QUALIFICATION_CACHE_RECEIPT_ARTIFACT,
-        "velnor-qualification-cache-receipt-v2"
+        "velnor-qualification-cache-receipt-v4"
+    );
+    let first = qualification_cache_receipt_artifact_name(crate::workflow::QualificationRunRef {
+        run_id: 42,
+        run_attempt: 1,
+    })
+    .expect("first attempt name");
+    let second = qualification_cache_receipt_artifact_name(crate::workflow::QualificationRunRef {
+        run_id: 42,
+        run_attempt: 2,
+    })
+    .expect("second attempt name");
+    assert_eq!(first, "velnor-qualification-cache-receipt-v4-a1");
+    assert_eq!(second, "velnor-qualification-cache-receipt-v4-a2");
+    assert_ne!(first, second);
+    assert!(
+        qualification_cache_receipt_artifact_name(crate::workflow::QualificationRunRef {
+            run_id: 42,
+            run_attempt: 0,
+        })
+        .is_err()
     );
     assert_eq!(
         QUALIFICATION_CACHE_RECEIPT_FILENAME,
@@ -27,6 +47,7 @@ fn restore_admission_requires_exact_matched_key_and_backend_id() {
         id: 41,
         key: "qualification-k1".to_owned(),
         git_ref: "refs/heads/main".to_owned(),
+        version: "a".repeat(64),
         size_bytes: 4096,
     };
     let keys = BoundQualificationCacheKeys {

@@ -11,7 +11,10 @@ use crate::{
 };
 const SOURCE_ADMISSION_PATH: &str = "${{ runner.temp }}/velnor/preview-source-admission.json";
 
-pub(super) fn job(spec: &ConsumerReleaseSpec) -> Result<(String, Yaml), RenderError> {
+pub(super) fn job(
+    spec: &ConsumerReleaseSpec,
+    require_linux_amd64: bool,
+) -> Result<(String, Yaml), RenderError> {
     let mut fields = base(
         "Select authenticated main source for preview",
         Yaml::str("ubuntu-26.04"),
@@ -44,7 +47,7 @@ pub(super) fn job(spec: &ConsumerReleaseSpec) -> Result<(String, Yaml), RenderEr
         "${{ steps.source-select.outputs.source_sha }}",
         "${{ steps.source-select.outputs.checkout_lfs }}",
     ));
-    job_steps.push(finalize_step(spec)?);
+    job_steps.push(finalize_step(spec, require_linux_amd64)?);
     job_steps.push(source_admission_upload());
     fields.push(("outputs".to_owned(), job_outputs()));
     Ok(finish("preview-eligibility", fields, job_steps))
@@ -95,7 +98,10 @@ fn source_select_step(spec: &ConsumerReleaseSpec) -> Result<Yaml, RenderError> {
     Ok(step)
 }
 
-fn finalize_step(spec: &ConsumerReleaseSpec) -> Result<Yaml, RenderError> {
+fn finalize_step(
+    spec: &ConsumerReleaseSpec,
+    require_linux_amd64: bool,
+) -> Result<Yaml, RenderError> {
     let mut step = operation(
         spec,
         "finalize-preview-source-v1",
@@ -123,6 +129,9 @@ fn finalize_step(spec: &ConsumerReleaseSpec) -> Result<Yaml, RenderError> {
             ),
         ],
     )?;
+    if require_linux_amd64 {
+        operation_env(&mut step, &[("VELNOR_RELEASE_REQUIRE_LINUX_AMD64", "true")])?;
+    }
     set_id(&mut step, "source");
     Ok(step)
 }

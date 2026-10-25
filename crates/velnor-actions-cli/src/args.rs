@@ -40,6 +40,13 @@ pub(crate) enum Command {
         /// Qualify only on the exact reviewed infrastructure branch push.
         #[arg(long, requires = "owned_tool_candidates_only")]
         owned_tool_candidates_push: bool,
+        /// Generate only the job image candidate workflow outside the repository.
+        #[arg(
+            long,
+            requires = "output_dir",
+            conflicts_with = "owned_tool_candidates_only"
+        )]
+        job_image_candidate_only: bool,
     },
     /// List `.github` entries that generation would not emit or retire.
     ///
@@ -107,6 +114,8 @@ pub(crate) enum Command {
         #[arg(long, value_name = "PATH")]
         macos_arm64_binary: PathBuf,
     },
+    /// Write reviewed workflow authority facts as JSON to stdout.
+    AuthorityInventory,
 }
 
 impl Command {

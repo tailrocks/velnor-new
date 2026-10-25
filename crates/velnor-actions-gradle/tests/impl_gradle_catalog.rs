@@ -28,14 +28,17 @@ fn every_final_release_through_9_8_2_is_cataloged() {
         "9.3.1", "9.4.1", "9.5.0", "9.5.1", "9.6.0", "9.6.1", "9.7.0", "9.7.1", "9.8.0", "9.8.1",
         "9.8.2",
     ] {
-        assert!(release(version).is_some(), "{version} must be cataloged");
+        assert!(
+            release(version).is_some(),
+            "The catalog must contain version {version}."
+        );
     }
     assert_eq!(RELEASES.last().map(|row| row.version), Some("9.8.2"));
 }
 
 #[test]
 fn gradle_9_8_2_digests_match_services_gradle_org() {
-    let row = release("9.8.2").expect("9.8.2 is cataloged");
+    let row = release("9.8.2").expect("The catalog must contain version 9.8.2.");
     assert_eq!(
         row.bin_sha256,
         "21bd5da2de49b642904077f38c0efdc7778e92b3ed0889392dca61b97e389607"

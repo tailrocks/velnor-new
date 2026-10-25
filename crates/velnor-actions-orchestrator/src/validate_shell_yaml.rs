@@ -16,6 +16,11 @@ mod alias_scope;
 #[path = "validate_shell_yaml_mapping.rs"]
 mod mapping;
 
+#[path = "validate_shell_yaml/scan_support.rs"]
+mod scan_support;
+
+use scan_support::{content_is_step_item, hosted_runner_default, mapping_entry};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ShellDialect {
     Bash,
@@ -100,8 +105,20 @@ pub(super) fn staged_runs(
     Ok(runs)
 }
 
-fn scan_workflow(text: &str) -> Result<Vec<StagedRun>, OrchestratorError> {
+pub(super) fn scan_workflow(text: &str) -> Result<Vec<StagedRun>, OrchestratorError> {
     let normalized = mapping::normalize(text)?;
+    scan_normalized_workflow(&normalized)
+}
+
+#[cfg(all(test, feature = "test-render-capture"))]
+pub(super) fn scan_workflow_for_equivalence(
+    text: &str,
+) -> Result<Vec<StagedRun>, OrchestratorError> {
+    let normalized = mapping::normalize_for_equivalence(text)?;
+    scan_normalized_workflow(&normalized)
+}
+
+fn scan_normalized_workflow(normalized: &str) -> Result<Vec<StagedRun>, OrchestratorError> {
     let mut scan = WorkflowScan::default();
     for raw in normalized.lines() {
         let (indent, content) = mapping::indent_content(raw)?;
@@ -356,37 +373,6 @@ fn collect_runs(
     Ok(runs)
 }
 
-fn hosted_runner_default(runs_on: Option<&str>) -> Option<ShellDialect> {
-    let label = runs_on?;
-    let is_known_linux = velnor_actions_contract::config::is_hosted_catalog(label);
-    let is_known_macos = matches!(
-        velnor_actions_contract::ReleaseTarget::for_runner_label(label),
-        Some(
-            velnor_actions_contract::ReleaseTarget::MacosArm64
-                | velnor_actions_contract::ReleaseTarget::MacosX86_64
-        )
-    );
-    if (is_known_linux && label.starts_with("ubuntu-")) || is_known_macos {
-        // GitHub-hosted Ubuntu and macOS runners default `run` steps to Bash.
-        Some(ShellDialect::Bash)
-    } else {
-        None
-    }
-}
-
-fn mapping_entry(content: &str) -> Option<(&str, &str)> {
-    let content = content.strip_prefix("- ").unwrap_or(content);
-    let (key, value) = content.split_once(':')?;
-    if key.is_empty() || key.bytes().any(|byte| byte.is_ascii_whitespace()) {
-        return None;
-    }
-    Some((key, value.trim()))
-}
-
-fn content_is_step_item(key: &str, value: &str) -> bool {
-    key == "name" && !value.is_empty()
-}
-
 #[cfg(test)]
 #[path = "validate_shell_yaml_tests.rs"]
 mod tests;
@@ -394,3 +380,7 @@ mod tests;
 #[cfg(test)]
 #[path = "validate_shell_yaml_runner_tests.rs"]
 mod runner_tests;
+
+#[cfg(test)]
+#[path = "validate_shell_yaml_step_anchor_tests.rs"]
+mod step_anchor_tests;

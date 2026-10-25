@@ -32,6 +32,10 @@ pub(crate) use path::test_path_with_sbin;
 /// Test error shortcut.
 pub(crate) type TestResult = Result<(), Box<dyn std::error::Error>>;
 
+#[path = "impl_common/generated_task_files.rs"]
+mod generated_task_files;
+pub(crate) use generated_task_files::GENERATED_TASK_FILES;
+
 /// Plan text over the same finalized jobs `generate` writes.
 ///
 /// Tests asserting plan content go through this helper so they cover

@@ -9,41 +9,59 @@ use crate::{
     yaml::Yaml,
 };
 
+/// Borrowed invocation context for rendering an internal step.
+#[derive(Clone, Copy)]
+pub(super) struct InternalStepContext<'a> {
+    pub(super) job_id: &'a str,
+    pub(super) job_env: &'a BTreeMap<String, String>,
+    pub(super) step_env: &'a BTreeMap<String, String>,
+    pub(super) composite: bool,
+}
+
 /// Env for one internal step: op plus request file, authorized reads carry auth.
 ///
 /// The fetch op takes no request file; it reads the plan from the run directory and
 /// authenticates `gh` with the job token plus the repository slug (fixed
-/// literals, never caller input). This render-time pair is emitted only on
-/// that exact internal step. Merge-family steps in the final job
-/// additionally carry the finalized `needs` conclusions channel plus the
-/// rendered expected inventory, so the merge binds required validators to
-/// the committed workflow.
+/// literals, never caller input). Merge-family steps in the final job additionally
+/// carry the finalized `needs` conclusions channel and rendered expected inventory.
 pub(super) fn internal_env(
-    job_id: &str,
     op: &str,
     target: &str,
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
-    job_env: &BTreeMap<String, String>,
-    step_env: &BTreeMap<String, String>,
+    step: InternalStepContext<'_>,
 ) -> Result<Yaml, RenderError> {
-    commands::validate_env(step_env)?;
     if op == steps::FETCH_OPERATION {
-        if !step_env.is_empty() {
-            return Err(RenderError::InvalidWorkflow(
-                "fetch_internal_env_not_supported".to_owned(),
-            ));
-        }
-        return Ok(Yaml::Map(vec![
-            ("GH_REPO".to_owned(), Yaml::str("${{ github.repository }}")),
-            ("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")),
-            (INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned())),
-        ]));
+        return fetch_internal_env(op, step.step_env);
     }
-    if let Some(env) = crate::document_evidence::internal_env(op, step_env)? {
+    if let Some(env) = crate::document_evidence::internal_env(op, step.step_env)? {
         return Ok(env);
     }
-    if op == velnor_actions_contract::PRIVATE_FETCH_OPERATION
+    if is_private_source_operation(op) {
+        return private_source_env(op, step.step_env);
+    }
+    if steps::is_qualification_cache_operation(op) {
+        return qualification_cache_env(op, step.step_env, step.composite);
+    }
+    request_file_env(op, target, ctx, needs_envs, step)
+}
+
+fn fetch_internal_env(op: &str, step_env: &BTreeMap<String, String>) -> Result<Yaml, RenderError> {
+    commands::validate_env(step_env)?;
+    if !step_env.is_empty() {
+        return Err(RenderError::InvalidWorkflow(
+            "fetch_internal_env_not_supported".to_owned(),
+        ));
+    }
+    Ok(Yaml::Map(vec![
+        ("GH_REPO".to_owned(), Yaml::str("${{ github.repository }}")),
+        ("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")),
+        (INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned())),
+    ]))
+}
+
+fn is_private_source_operation(op: &str) -> bool {
+    op == velnor_actions_contract::PRIVATE_FETCH_OPERATION
         || op == velnor_actions_contract::PRIVATE_REVOKE_OPERATION
         || op == velnor_actions_contract::GRADLE_RUN_OPERATION
         || op == velnor_actions_contract::BUN_REGISTRY_INSTALL_OPERATION
@@ -51,26 +69,58 @@ pub(super) fn internal_env(
         || op == velnor_actions_contract::BUN_ASSETS_PREPARE_OPERATION
         || op == velnor_actions_contract::BUN_ASSETS_IMPORT_OPERATION
         || op == velnor_actions_contract::config::playwright_lock::PLAYWRIGHT_INSTALL_OPERATION
-    {
-        // Private-source operations take no request file: their whole input
-        // is the fixed step env (token binding plus the literal allowlist).
-        let mut env = vec![(INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned()))];
-        env.extend(
-            step_env
-                .iter()
-                .map(|(key, value)| (key.clone(), Yaml::str(value.clone()))),
-        );
-        return Ok(Yaml::Map(env));
+}
+
+fn private_source_env(op: &str, step_env: &BTreeMap<String, String>) -> Result<Yaml, RenderError> {
+    commands::validate_env(step_env)?;
+    // Private-source operations take no request file: their whole input
+    // is the fixed step env (token binding plus the literal allowlist).
+    let mut env = vec![(INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned()))];
+    env.extend(
+        step_env
+            .iter()
+            .map(|(key, value)| (key.clone(), Yaml::str(value.clone()))),
+    );
+    Ok(Yaml::Map(env))
+}
+
+fn qualification_cache_env(
+    op: &str,
+    step_env: &BTreeMap<String, String>,
+    composite: bool,
+) -> Result<Yaml, RenderError> {
+    if composite {
+        commands::validate_composite_qualification_cache_env(step_env)?;
+    } else {
+        commands::validate_qualification_cache_env(step_env)?;
     }
+    super::cache_env::validate_qualification_cache_env(op, step_env)?;
+    let mut env = vec![(INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned()))];
+    env.extend(
+        step_env
+            .iter()
+            .map(|(key, value)| (key.clone(), Yaml::str(value.clone()))),
+    );
+    Ok(Yaml::Map(env))
+}
+
+fn request_file_env(
+    op: &str,
+    target: &str,
+    ctx: &RenderContext,
+    needs_envs: &[(String, String)],
+    step: InternalStepContext<'_>,
+) -> Result<Yaml, RenderError> {
+    commands::validate_env(step.step_env)?;
     let request = format!("{}/{target}-request.json", ctx.request_dir);
     let mut env = Vec::new();
-    if (job_id == crate::render::PLAN_JOB_ID
+    if (step.job_id == crate::render::PLAN_JOB_ID
         && matches!(
             op,
             steps::RESOLVE_QUALIFICATION_OPERATION | steps::PLAN_OPERATION
         )
         && target == steps::PLAN_OPERATION)
-        || (job_id == crate::render::FINAL_JOB_ID
+        || (step.job_id == crate::render::FINAL_JOB_ID
             && op == steps::MERGE_OPERATION
             && target == steps::MERGE_OPERATION)
     {
@@ -83,14 +133,14 @@ pub(super) fn internal_env(
     env.push((REQUEST_FILE_ENV.to_owned(), Yaml::str(request)));
     if op == steps::PLAN_OPERATION && target == steps::PLAN_OPERATION {
         for (key, value) in &ctx.plan_consumer_env {
-            if job_env.get(key).map(String::as_str) != Some(value.as_str()) {
+            if step.job_env.get(key).map(String::as_str) != Some(value.as_str()) {
                 env.push((key.clone(), Yaml::str(value.clone())));
             }
         }
     }
     let mut seen: std::collections::BTreeSet<String> =
         env.iter().map(|(key, _)| key.clone()).collect();
-    for (key, value) in step_env {
+    for (key, value) in step.step_env {
         if !seen.insert(key.clone()) {
             return Err(RenderError::InvalidWorkflow(format!(
                 "duplicate_internal_env:{key}"
@@ -116,7 +166,10 @@ mod tests {
             report_helper_version: "0.1.0".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
             scale_set_selector: None,
+            scale_set_image_source_sha: None,
             staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
+            verified_cache_helpers: BTreeMap::new(),
+            require_verified_cache_helper: false,
             request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
             checkout_uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1".to_owned(),
             validator_commands: Vec::new(),
@@ -130,14 +183,19 @@ mod tests {
     }
 
     fn rendered_env(job: &str, operation: &str, target: &str) -> String {
+        let job_env = BTreeMap::new();
+        let step_env = BTreeMap::new();
         let rendered = internal_env(
-            job,
             operation,
             target,
             &context(),
             &[],
-            &BTreeMap::new(),
-            &BTreeMap::new(),
+            InternalStepContext {
+                job_id: job,
+                job_env: &job_env,
+                step_env: &step_env,
+                composite: false,
+            },
         )
         .expect("typed internal env");
         crate::yaml::render_yaml(&rendered)
@@ -157,6 +215,7 @@ mod tests {
                 job_env: &job_env,
                 runs_on: None,
                 actions_read: true,
+                relocated_child: false,
             },
         )
         .expect("typed internal step renders");
@@ -202,14 +261,18 @@ mod tests {
     #[test]
     fn generic_internal_step_env_cannot_inject_github_expression() {
         let step_env = BTreeMap::from([("GH_TOKEN".to_owned(), "${{ github.token }}".to_owned())]);
+        let job_env = BTreeMap::new();
         let error = internal_env(
-            "generic",
             steps::PLAN_OPERATION,
             steps::PLAN_OPERATION,
             &context(),
             &[],
-            &BTreeMap::new(),
-            &step_env,
+            InternalStepContext {
+                job_id: "generic",
+                job_env: &job_env,
+                step_env: &step_env,
+                composite: false,
+            },
         )
         .expect_err("generic env remains under unchanged expression validation");
         assert!(error.to_string().contains("bad_env_expression:GH_TOKEN"));

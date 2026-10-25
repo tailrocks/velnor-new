@@ -6,9 +6,9 @@
 //! Both archive exactly one job-private plugin-cache dir, never the
 //! data dir beside it.
 
+pub use velnor_actions_contract::workflow::cache_family::TOFU_PROVIDER_CACHE_BASE_EXPR;
 pub use velnor_actions_contract::workflow::step_identity::{
-    TOFU_PROVIDER_ADMISSION_USES, TOFU_PROVIDER_CACHE_BASE_EXPR, TOFU_PROVIDERS_KEY_OUTPUT_EXPR,
-    TOFU_PROVIDERS_PATH_OUTPUT_EXPR,
+    TOFU_PROVIDER_ADMISSION_USES, TOFU_PROVIDERS_KEY_OUTPUT_EXPR, TOFU_PROVIDERS_PATH_OUTPUT_EXPR,
 };
 use velnor_actions_contract::{Step, StepRole};
 

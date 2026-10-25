@@ -4,7 +4,7 @@ use serde::Deserialize;
 use velnor_actions_contract::{
     MAX_QUALIFICATION_RECEIPT_BYTES, QualificationCacheArtifact, QualificationCacheProducerContext,
     QualificationCacheReceipt, QualificationCacheReceiptArtifactDocument,
-    QualificationCacheRunMetadata, QualificationRunRef,
+    QualificationCacheRunMetadata, QualificationRunRef, qualification_cache_receipt_artifact_name,
 };
 
 use crate::OrchestratorError;
@@ -61,13 +61,13 @@ pub(in crate::qualification_resolver) fn resolve_chain(
     verify_expected_artifact(&artifact, expected_artifact)?;
     verify_artifact_run(&artifact, &metadata)?;
     let document = download_document(client, &artifact)?;
-    validate_document(&document, run)?;
-    let previous = load_predecessor(client, &document.receipt, depth)?;
+    let receipt = validate_document(&document, run, &metadata)?;
+    let previous = load_predecessor(client, &receipt, depth)?;
     Ok(FetchedNode {
         metadata,
         artifact,
         producer: document.producer,
-        receipt: document.receipt,
+        receipt,
         previous,
     })
 }
@@ -88,9 +88,11 @@ fn select_artifact(
     if list.total_count != Some(entries.len() as u64) {
         return Err(internal("qualification_artifact_list_incomplete"));
     }
-    let mut matches = entries.into_iter().filter(|entry| {
-        entry.name.as_deref() == Some(velnor_actions_contract::QUALIFICATION_CACHE_RECEIPT_ARTIFACT)
-    });
+    let artifact_name = qualification_cache_receipt_artifact_name(run)
+        .map_err(|_| internal("qualification_artifact_run_invalid"))?;
+    let mut matches = entries
+        .into_iter()
+        .filter(|entry| entry.name.as_deref() == Some(artifact_name.as_str()));
     let selected = matches
         .next()
         .ok_or_else(|| internal("qualification_artifact_missing"))?;
@@ -164,9 +166,15 @@ fn verify_artifact_run(
     artifact: &QualificationCacheArtifact,
     metadata: &QualificationCacheRunMetadata,
 ) -> Result<(), OrchestratorError> {
-    if artifact.name != velnor_actions_contract::QUALIFICATION_CACHE_RECEIPT_ARTIFACT
+    let branch = metadata
+        .git_ref
+        .strip_prefix("refs/heads/")
+        .ok_or_else(|| internal("qualification_artifact_ref_invalid"))?;
+    let artifact_name = qualification_cache_receipt_artifact_name(metadata.run)
+        .map_err(|_| internal("qualification_artifact_run_invalid"))?;
+    if artifact.name != artifact_name
         || artifact.workflow_run_id != metadata.run.run_id
-        || artifact.workflow_head_branch != metadata.default_branch
+        || artifact.workflow_head_branch != branch
         || artifact.workflow_head_sha != metadata.head_sha
     {
         return Err(internal("qualification_artifact_run_mismatch"));
@@ -194,11 +202,14 @@ fn download_document(
 fn validate_document(
     document: &QualificationCacheReceiptArtifactDocument,
     run: QualificationRunRef,
-) -> Result<(), OrchestratorError> {
-    if document.schema != 2 || document.producer.run != run || document.receipt.run != run {
-        return Err(internal("qualification_receipt_run_mismatch"));
+    metadata: &QualificationCacheRunMetadata,
+) -> Result<QualificationCacheReceipt, OrchestratorError> {
+    if document.schema != 4 || document.producer.run != run {
+        return Err(internal("qualification_producer_run_mismatch"));
     }
-    Ok(())
+    document
+        .completed_receipt(metadata)
+        .map_err(|_| internal("qualification_completed_run_mismatch"))
 }
 
 fn load_predecessor(

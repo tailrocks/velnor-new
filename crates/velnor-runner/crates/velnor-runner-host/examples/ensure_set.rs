@@ -1,47 +1,70 @@
-//! Get or create `ubuntu-26.04-scale-set` on `tailrocks/velnor-new`.
-//! The PAT comes from `gh auth token` and is not printed.
+//! Print the controller's cached Scale Set setup snapshot for one connection.
+//!
+//! Run with `<state-directory> <connection-id>`. This example does not run
+//! setup or contact the remote service.
 
-use std::process::{Command, ExitCode};
+use std::env;
+use std::path::PathBuf;
+use std::process::ExitCode;
+use std::time::Duration;
 
-use velnor_runner_host::ensure_product_scale_set;
-use zeroize::Zeroize;
+use velnor_runner_host::{ConnectionId, ConnectionSetupReceipt, wait_for_connection_setup_receipt};
 
 fn main() -> ExitCode {
-    let mut pat = match read_pat() {
-        Ok(pat) => pat,
-        Err(code) => return code,
+    let mut arguments = env::args_os().skip(1);
+    let Some(state) = arguments.next() else {
+        return usage();
     };
-    let outcome = ensure_product_scale_set(&pat, "tailrocks", "velnor-new");
-    pat.zeroize();
-    match outcome {
-        Ok(set) => {
-            let labels = set.labels.join(",");
-            println!(
-                "id={} name={} disable_update={} labels={labels}",
-                set.id, set.name, set.disable_update
-            );
+    let Some(connection) = arguments.next() else {
+        return usage();
+    };
+    if arguments.next().is_some() {
+        return usage();
+    }
+    let Some(connection) = connection.to_str() else {
+        return usage();
+    };
+    let Ok(connection) = ConnectionId::parse(connection) else {
+        return usage();
+    };
+    match wait_for_connection_setup_receipt(
+        &PathBuf::from(state),
+        &connection,
+        Duration::from_secs(30),
+    ) {
+        Ok(receipt) => {
+            report(&receipt);
             ExitCode::SUCCESS
         }
-        Err(err) => {
-            eprintln!("ensure_product_scale_set: {err}");
+        Err(error) => {
+            eprintln!("ensure_set: {error}");
             ExitCode::from(1)
         }
     }
 }
 
-fn read_pat() -> Result<String, ExitCode> {
-    let output = Command::new("gh")
-        .args(["auth", "token"])
-        .output()
-        .map_err(|_| ExitCode::from(1))?;
-    if !output.status.success() {
-        return Err(ExitCode::from(1));
+fn report(receipt: &ConnectionSetupReceipt) {
+    println!(
+        "setup_revision={} setup_captured_at_unix_ms={}",
+        receipt.revision, receipt.captured_at_unix_ms
+    );
+    for group in &receipt.runner_groups {
+        println!(
+            "runner_group id={} default={} name={:?}",
+            group.id, group.is_default, group.name
+        );
     }
-    let text = String::from_utf8(output.stdout).map_err(|_| ExitCode::from(1))?;
-    let pat = text.trim().to_owned();
-    if pat.is_empty() {
-        Err(ExitCode::from(1))
-    } else {
-        Ok(pat)
+    let set = &receipt.selected_set;
+    println!(
+        "scale_set id={} runner_group_id={} disable_update={} name={:?}",
+        set.id, set.runner_group_id, set.disable_update, set.name
+    );
+    for label in &set.labels {
+        println!("scale_set_label={label:?}");
     }
+}
+
+fn usage() -> ExitCode {
+    eprintln!("usage: ensure_set <state-directory> <connection-id>");
+    ExitCode::from(2)
 }

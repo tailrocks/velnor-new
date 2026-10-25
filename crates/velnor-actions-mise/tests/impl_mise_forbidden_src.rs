@@ -11,6 +11,8 @@ fn src_dir() -> PathBuf {
 
 const EXPECTED_MODULES: &[&str] = &[
     "build.rs",
+    "bounded_file_filter.rs",
+    "bounded_file_filter_process.rs",
     "cache.rs",
     "cache_sources.rs",
     "cache_transport.rs",
@@ -53,12 +55,14 @@ const EXPECTED_MODULES: &[&str] = &[
     "check_tool_projection.rs",
     "checks.rs",
     "command.rs",
+    "command_bounded_file_filter.rs",
     "command_cancellable.rs",
     "command_cancellable_helpers.rs",
     "command_credential.rs",
     "command_env.rs",
     "command_git.rs",
     "command_output.rs",
+    "command_parent_env.rs",
     "command_private_fetch.rs",
     "command_progress.rs",
     "command_progress_tests.rs",
@@ -93,6 +97,8 @@ const EXPECTED_MODULES: &[&str] = &[
     "release_plz.rs",
     "requests.rs",
     "requests_app_token_tests.rs",
+    "requests_executable_lookup.rs",
+    "requests_executable_lookup_tests.rs",
     "requests_helpers.rs",
     "requests_metadata.rs",
     "requests_presence.rs",
@@ -139,14 +145,13 @@ fn strip_line_comment(line: &str) -> &str {
     line
 }
 
-fn code_of(path: &Path) -> Result<Vec<(usize, String)>, String> {
-    let text = std::fs::read_to_string(path).map_err(|err| err.to_string())?;
-    Ok(text
+fn code_of(source: &str) -> Vec<(usize, String)> {
+    source
         .lines()
         .enumerate()
         .map(|(number, line)| (number + 1, strip_line_comment(line).to_owned()))
         .filter(|(_, line)| !line.trim().is_empty())
-        .collect())
+        .collect()
 }
 
 #[test]
@@ -162,8 +167,12 @@ fn mise_sources_stay_read_only_and_unmanaged() -> Result<(), String> {
                 .file_name()
                 .map(|name| name.to_string_lossy().into_owned())
                 .ok_or_else(|| format!("nameless entry: {}", path.display()))?;
-            found.push(name);
-            check_file(&path, &mut violations)?;
+            found.push(name.clone());
+            // This child compiles only for Unix tests.
+            // It tests file writes during process output handling.
+            if name != "command_stream_tests.rs" {
+                check_file(&path, &mut violations)?;
+            }
         }
     }
     found.sort_unstable();
@@ -183,6 +192,8 @@ fn mise_sources_stay_read_only_and_unmanaged() -> Result<(), String> {
 const ALWAYS_BANNED: &[&str] = &[
     "fs::write",
     "File::create",
+    "File::options",
+    "options()",
     "create_dir",
     "create_new",
     "OpenOptions",
@@ -209,35 +220,47 @@ const ALWAYS_BANNED: &[&str] = &[
     "apply_fix",
 ];
 
-/// Tool-file names allowed only in `toolfiles.rs` (read-only routing and
-/// inspection): owned Mise files plus foreign Rust files for routing.
-const TOOLFILES_ONLY: &[&str] = &[
-    "mise.toml",
-    "mise.lock",
-    "rust-toolchain.toml",
-    "Cargo.toml",
-    "Cargo.lock",
-];
+#[path = "impl_mise_forbidden_src_site_policy.rs"]
+mod site_policy;
 
 fn check_file(path: &Path, violations: &mut Vec<String>) -> Result<(), String> {
     let name = path
         .file_name()
         .map(|name| name.to_string_lossy())
         .ok_or_else(|| format!("nameless file: {}", path.display()))?;
+    let source = std::fs::read_to_string(path).map_err(|err| err.to_string())?;
+    check_source(&name, &source, violations);
+    Ok(())
+}
+
+fn check_source(name: &str, source: &str, violations: &mut Vec<String>) {
+    site_policy::check_source_sites(name, source, violations);
+    let is_filter_process = name == "bounded_file_filter_process.rs";
+    let is_filter = name == "bounded_file_filter.rs";
+    let is_command_stream = name == "command_stream.rs";
+    let metadata_expression = "std::fs::symlink_metadata(program)";
     let mut borrowed_file_writes = 0;
     let mut diagnostic_writes = 0;
-    for (line, code) in code_of(path)? {
+    for (line, mut code) in code_of(source) {
+        let borrowed_stream_write = is_command_stream && code.trim() == ".write_all(bytes)";
+        if is_filter_process && code.trim() == ".write_all(&buffer[..count])" {
+            code = code.replace("write_all", "");
+        }
+        if borrowed_stream_write {
+            code = code.replace("write_all", "");
+        }
+        if is_filter && code.contains(metadata_expression) {
+            code = code.replace(metadata_expression, "");
+        }
         let at = format!("{name}:{line}");
         for token in ALWAYS_BANNED {
-            // The stream sink borrows a caller-owned regular File; it cannot create paths.
-            if name == "command_stream.rs"
-                && *token == "write_all"
-                && code.trim() == ".write_all(bytes)"
-            {
+            if rustup_policy::token_allowed_in_scoped_fixture(name, token) {
+                continue;
+            }
+            if name == "command_stream.rs" && *token == "write_all" && borrowed_stream_write {
                 borrowed_file_writes += 1;
                 continue;
             }
-            // Diagnostics borrow a responsive sink, never a filesystem path.
             if name == "command_progress.rs"
                 && *token == "write_all"
                 && code.trim() == ".write_all(bytes)"
@@ -245,13 +268,12 @@ fn check_file(path: &Path, violations: &mut Vec<String>) -> Result<(), String> {
                 diagnostic_writes += 1;
                 continue;
             }
-            // Only this cfg(test) module constructs owned temporary stream fixtures.
             if name == "command_stream_tests.rs" && matches!(*token, "create_new" | "fs::write") {
                 continue;
             }
             // Presence observations retain the data-only Mise `symlinked_to`
             // response field; this exception never admits filesystem APIs.
-            if *token == "symlink" && allow_presence_symlink_field(&name, &code) {
+            if *token == "symlink" && allow_presence_symlink_field(name, &code) {
                 continue;
             }
             if code.contains(token) {
@@ -259,20 +281,23 @@ fn check_file(path: &Path, violations: &mut Vec<String>) -> Result<(), String> {
             }
         }
         if name != "toolfiles.rs" {
-            for token in TOOLFILES_ONLY {
+            for token in site_policy::TOOLFILES_ONLY {
                 if code.contains(token) {
                     violations.push(format!("{at}: `{token}` outside toolfiles.rs in `{code}`"));
                 }
             }
         }
-        if code.contains("\"rustup\"") && !code.contains("FORBIDDEN") {
+        if code.contains("\"rustup\"")
+            && !code.contains("FORBIDDEN")
+            && !rustup_policy::rustup_literal_allowed(name)
+        {
             violations.push(format!("{at}: unsanctioned `rustup` in `{code}`"));
         }
         if code.contains(".mise/tasks") && !code.contains("contains") {
             violations.push(format!("{at}: unsanctioned `.mise/tasks` in `{code}`"));
         }
     }
-    if name == "command_stream.rs" && borrowed_file_writes != 1 {
+    if is_command_stream && borrowed_file_writes != 1 {
         violations.push(format!("{name}: expected exactly one borrowed-file write"));
     }
     if name == "command_progress.rs" && diagnostic_writes != 1 {
@@ -280,7 +305,6 @@ fn check_file(path: &Path, violations: &mut Vec<String>) -> Result<(), String> {
             "{name}: expected exactly one borrowed-diagnostic write"
         ));
     }
-    Ok(())
 }
 
 fn allow_presence_symlink_field(name: &str, code: &str) -> bool {
@@ -306,23 +330,28 @@ fn diagnostic_write_admission_is_exactly_one_borrowed_sink_expression() -> Resul
     let root = crate::test_temp_dir::TestTempDir::new("mise-diagnostic-policy")
         .map_err(|error| error.to_string())?;
     for (name, source, admitted) in [
-        ("command_progress.rs", ".write_all(bytes)\n", true),
+        ("command_progress.rs", "{\nsink\n.write_all(bytes)\n}", true),
         ("command_progress.rs", "", false),
         (
             "command_progress.rs",
-            ".write_all(bytes)\n.write_all(bytes)\n",
+            "{\nsink\n.write_all(bytes)\n}\n{\nsink\n.write_all(bytes)\n}",
             false,
         ),
-        ("command_progress.rs", ".write_all(other)\n", false),
-        ("different.rs", ".write_all(bytes)\n", false),
         (
             "command_progress.rs",
-            ".write_all(bytes)\nstd::fs::write(path, bytes)\n",
+            "{\nsink\n.write_all(other)\n}",
+            false,
+        ),
+        ("different.rs", "{\nsink\n.write_all(bytes)\n}", false),
+        (
+            "command_progress.rs",
+            "{\nsink\n.write_all(bytes)\n}\nstd::fs::write(path, bytes);",
             false,
         ),
     ] {
         let path = root.path().join(name);
-        std::fs::write(&path, source).map_err(|error| error.to_string())?;
+        let source = format!("fn example(sink: &mut Sink, bytes: &[u8]) {{\n{source}\n}}");
+        std::fs::write(&path, &source).map_err(|error| error.to_string())?;
         let mut violations = Vec::new();
         check_file(&path, &mut violations)?;
         assert_eq!(
@@ -334,43 +363,11 @@ fn diagnostic_write_admission_is_exactly_one_borrowed_sink_expression() -> Resul
     Ok(())
 }
 
-#[test]
-fn presence_symlink_field_exception_is_data_only_and_exact() -> Result<(), String> {
-    let root = crate::test_temp_dir::TestTempDir::new("mise-presence-symlink-policy")
-        .map_err(|error| error.to_string())?;
-    for (name, source, admitted) in [
-        (
-            "requests_presence.rs",
-            "symlinked_to: Option<String>,\n",
-            true,
-        ),
-        ("requests_presence.rs", "symlinked_to: value\n", true),
-        (
-            "requests_presence_tests.rs",
-            "r#\"[{\"symlinked_to\":\"/mise/shims/rust\"}]\"#,\n",
-            true,
-        ),
-        (
-            "requests_presence_tests.rs",
-            "std::os::unix::fs::symlink(source, destination)\n",
-            false,
-        ),
-        (
-            "requests_presence_tests.rs",
-            "row.symlinked_to.as_deref(); std::fs::remove_file(path)\n",
-            false,
-        ),
-        ("other.rs", "symlinked_to: Option<String>,\n", false),
-    ] {
-        let path = root.path().join(name);
-        std::fs::write(&path, source).map_err(|error| error.to_string())?;
-        let mut violations = Vec::new();
-        check_file(&path, &mut violations)?;
-        assert_eq!(
-            violations.is_empty(),
-            admitted,
-            "{name}: {source:?}: {violations:?}"
-        );
-    }
-    Ok(())
-}
+#[path = "impl_mise_forbidden_src_filter_tests.rs"]
+mod filter_tests;
+
+#[path = "impl_mise_forbidden_src_path_policy.rs"]
+mod path_policy;
+
+#[path = "impl_mise_forbidden_src_rustup_policy.rs"]
+mod rustup_policy;

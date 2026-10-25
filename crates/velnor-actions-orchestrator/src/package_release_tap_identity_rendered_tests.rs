@@ -14,7 +14,8 @@ fn generated_identity(
     channel: PackageReleaseChannel,
 ) -> (String, String, BTreeMap<String, String>) {
     let spec = fixture(channel);
-    let workflow = render_release_tap_reconcile(&spec).expect("real continuation render");
+    let workflow = render_release_tap_reconcile(&spec, &WorkflowRoutingPolicy::hosted_only())
+        .expect("real continuation render");
     let name = workflow
         .bytes
         .lines()
@@ -33,8 +34,12 @@ fn rendered_producer_metadata_is_admitted_by_the_runtime_identity_api() {
     ] {
         let spec = fixture(channel);
         let rendered = match channel {
-            PackageReleaseChannel::Preview => render_consumer_preview(&spec),
-            PackageReleaseChannel::Stable => render_consumer_binary_release(&spec),
+            PackageReleaseChannel::Preview => {
+                render_consumer_preview(&spec, &WorkflowRoutingPolicy::hosted_only())
+            }
+            PackageReleaseChannel::Stable => {
+                render_consumer_binary_release(&spec, &WorkflowRoutingPolicy::hosted_only())
+            }
         }
         .expect("real release workflow render");
         let name = rendered

@@ -50,9 +50,9 @@ fn target_grammar_accepts_host_and_triples_only() {
 fn hostile_target_fails_validation() {
     let mut stack = RustStackConfig::default_config();
     stack.configurations = vec![RustConfiguration {
-        all_features: false,
         name: "default".to_owned(),
         features: Vec::new(),
+        all_features: false,
         target: "${{ secrets.CARGO_REGISTRY_TOKEN }}".to_owned(),
     }];
     let err = stack.validate("config.toml").expect_err("PoC target fails");
@@ -60,18 +60,19 @@ fn hostile_target_fails_validation() {
 }
 
 #[test]
-fn omitted_all_features_preserves_existing_configuration_bytes() {
-    let existing = r#"{"name":"default","features":["default"],"target":"host"}"#;
-    let config: RustConfiguration = serde_json::from_str(existing).expect("existing config");
+fn omitted_all_features_preserves_legacy_configuration_bytes() {
+    let legacy = r#"{"name":"default","features":["default"],"target":"host"}"#;
+    let config: RustConfiguration = serde_json::from_str(legacy).expect("legacy config");
+
     assert!(!config.all_features);
-    assert_eq!(serde_json::to_string(&config).expect("serialize"), existing);
+    assert_eq!(serde_json::to_string(&config).expect("serialize"), legacy);
 }
 
 #[test]
 fn clippy_all_features_defaults_off_and_is_omitted_from_serialization() {
     let stack = RustStackConfig::default_config();
     assert!(!stack.clippy_all_features);
-    let value = serde_json::to_value(stack).expect("stack JSON");
+    let value = serde_json::to_value(stack).expect("The stack data must become a JSON value.");
     assert_eq!(value.get("clippy_all_features"), None);
 }
 

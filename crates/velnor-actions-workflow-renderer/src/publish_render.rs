@@ -15,6 +15,7 @@ use crate::{
     render::RenderedFile,
     step_ids::push_explicit_step_id,
     steps,
+    workflow_routing::{WorkflowRoutingPolicy, route_workflow_yaml},
     yaml::Yaml,
 };
 
@@ -32,6 +33,19 @@ pub const PUBLISH_CONCURRENCY_GROUP: &str = "publish-${{ github.ref }}";
 pub fn render_publish_workflow(
     spec: &PublishWorkflowSpec,
     ctx: &ReleaseRenderContext,
+) -> Result<RenderedFile, RenderError> {
+    render_publish_workflow_with_routing(spec, ctx, &WorkflowRoutingPolicy::hosted_only())
+}
+
+/// This function renders the publication workflow with the selected runner policy.
+///
+/// # Errors
+///
+/// This function returns [`RenderError`] if the context, specification, steps, or runner routing is invalid.
+pub fn render_publish_workflow_with_routing(
+    spec: &PublishWorkflowSpec,
+    ctx: &ReleaseRenderContext,
+    routing: &WorkflowRoutingPolicy,
 ) -> Result<RenderedFile, RenderError> {
     ctx.validate()?;
     spec.validate()?;
@@ -60,6 +74,7 @@ pub fn render_publish_workflow(
         ),
         ("jobs".to_owned(), Yaml::Map(jobs)),
     ]);
+    let document = route_workflow_yaml(PUBLISH_WORKFLOW_PATH, document, routing)?;
     let text = crate::render::fallback::render_checked_workflow(
         PUBLISH_WORKFLOW_PATH,
         &document,
@@ -72,6 +87,10 @@ pub fn render_publish_workflow(
         bytes: text,
     })
 }
+
+#[cfg(test)]
+#[path = "publish_render_tests.rs"]
+mod tests;
 
 /// Render `push` branches and tags; no other event exists in the IR.
 fn triggers_to_yaml(triggers: &PublishTriggers) -> Yaml {

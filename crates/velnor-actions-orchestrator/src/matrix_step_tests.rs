@@ -44,11 +44,15 @@ fn obligation() -> CrateObligation {
     let toolchain = toolchain_id(&toolchain_inputs).expect("toolchain identity");
     CrateObligation {
         task_id: task_id.clone(),
+        configuration: "default".to_owned(),
         kind: "clippy".to_owned(),
         step_name: "Clippy".to_owned(),
         gated_by: Vec::new(),
         matrix_key,
-        task_digest: task_digest_for_execution(&task_id, &run, &toolchain).expect("task digest"),
+        task_digest: velnor_actions_contract::TaskBindingDigest::new(
+            task_digest_for_execution(&task_id, &run, &toolchain).expect("task digest"),
+        )
+        .expect("binding digest"),
         toolchain_inputs,
         run,
     }
@@ -85,9 +89,11 @@ fn refresh_task_identity(obligation: &mut CrateObligation) {
     obligation.matrix_key =
         velnor_actions_contract::matrix_key_for_id(&matrix_id).expect("matrix key");
     let toolchain = toolchain_id(&obligation.toolchain_inputs).expect("toolchain identity");
-    obligation.task_digest =
+    obligation.task_digest = velnor_actions_contract::TaskBindingDigest::new(
         task_digest_for_execution(&obligation.task_id, &obligation.run, &toolchain)
-            .expect("task digest");
+            .expect("task digest"),
+    )
+    .expect("binding digest");
 }
 
 #[test]
@@ -134,7 +140,6 @@ fn obligation_step_carries_the_report_lookup_key() {
     let step = obligation_step(
         &obligation,
         &ToolCatalog::pinned(),
-        &[],
         None,
         env!("CARGO_PKG_VERSION"),
         None,
@@ -231,24 +236,19 @@ fn actual_nextest_producer_selector_passes_task_execution_contract() {
         .expect("matrix identity");
     let obligation = CrateObligation {
         task_id: task.task_id.clone(),
+        configuration: task.configuration.clone(),
         kind: task.task_kind.clone(),
         step_name: "Nextest".to_owned(),
         gated_by: Vec::new(),
         matrix_key: velnor_actions_contract::matrix_key_for_id(&matrix_id).expect("matrix key"),
-        task_digest,
+        task_digest: velnor_actions_contract::TaskBindingDigest::new(task_digest)
+            .expect("binding digest"),
         toolchain_inputs,
         run,
     };
     let checkout_uses = format!("actions/checkout@{:040x}", 0);
-    let step = obligation_step(
-        &obligation,
-        &catalog,
-        &[],
-        None,
-        env!("CARGO_PKG_VERSION"),
-        None,
-    )
-    .expect("typed task step");
+    let step = obligation_step(&obligation, &catalog, None, env!("CARGO_PKG_VERSION"), None)
+        .expect("typed task step");
     let velnor_actions_contract::StepKind::TaskExecution {
         report_helper_version,
         ..
@@ -294,7 +294,7 @@ fn actual_obligation_producer_renders_150_jobs_through_one_typed_action_shape() 
         .map(|word| word.into_string().expect("UTF-8 task argv"))
         .collect();
         refresh_task_identity(&mut task);
-        let step = obligation_step(&task, &catalog, &[], None, env!("CARGO_PKG_VERSION"), None)
+        let step = obligation_step(&task, &catalog, None, env!("CARGO_PKG_VERSION"), None)
             .expect("producer step");
         ir.jobs.insert(
             format!("rust-crate-{index}"),

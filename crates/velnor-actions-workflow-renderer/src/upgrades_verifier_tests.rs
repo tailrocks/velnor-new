@@ -1,11 +1,15 @@
 use super::super::render_upgrades_workflow;
 use super::{job_text, spec};
+use crate::workflow_routing::WorkflowRoutingPolicy;
+use velnor_actions_contract::StepRole;
 
 #[test]
 fn upgrade_jactionlint_verifiers_use_the_canonical_release_renderer() {
     let spec = spec();
-    let file = render_upgrades_workflow(&spec).expect("render");
+    let file =
+        render_upgrades_workflow(&spec, &WorkflowRoutingPolicy::hosted_only()).expect("render");
     let yaml = crate::verifier_shell::render_command(
+        StepRole::VerifyJactionlint,
         "Verify jactionlint",
         &[
             "sh".to_owned(),
@@ -47,7 +51,8 @@ fn upgrade_rust_verifier_preserves_the_credential_prefixed_script() {
         "v=\"${VELNOR_TOOL_RUST}\"; echo verify \"$v\"",
     );
     let prefix = crate::toolchain_env::credential_unset_prelude();
-    let file = render_upgrades_workflow(&upgrades).expect("render");
+    let file =
+        render_upgrades_workflow(&upgrades, &WorkflowRoutingPolicy::hosted_only()).expect("render");
 
     for id in ["prepare", "verify"] {
         let job = job_text(&file.bytes, id);

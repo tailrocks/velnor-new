@@ -21,6 +21,18 @@ pub(crate) struct JobStepContext<'a> {
     pub job_env: &'a BTreeMap<String, String>,
     pub runs_on: Option<&'a str>,
     pub actions_read: bool,
+    pub relocated_child: bool,
+}
+
+impl<'a> JobStepContext<'a> {
+    pub(crate) fn composite(job_env: &'a BTreeMap<String, String>) -> Self {
+        Self {
+            job_env,
+            runs_on: None,
+            actions_read: false,
+            relocated_child: false,
+        }
+    }
 }
 /// Render a normal job body or a paired lane's cache prelude/composite/postlude.
 pub(crate) fn render_job_steps(

@@ -139,7 +139,7 @@ fn fetch_carries_offline_skip_branch() -> TestResult {
     for mbx in [false, true] {
         let repo = make_workspace(&lock_for(&["a", "b"]), mbx)?;
         let prep = prepare(repo.path())?;
-        let mut seen_probe = false;
+        let mut jobs_with_probe = Vec::new();
         for (id, job) in &prep.workflow.ir.jobs {
             if !id.starts_with("rust-") {
                 continue;
@@ -158,11 +158,15 @@ fn fetch_carries_offline_skip_branch() -> TestResult {
                     ] {
                         assert!(script.contains(need), "{id} fetch misses {need}");
                     }
-                    seen_probe = true;
+                    jobs_with_probe.push(id.as_str());
                 }
             }
         }
-        assert!(seen_probe, "crate fetch probe present (mbx={mbx})");
+        assert_eq!(
+            jobs_with_probe,
+            ["rust-a", "rust-b"],
+            "each crate has one fetch probe (mbx={mbx})"
+        );
         let tree = render_staged_tree(&prep)?;
         let manifest = task_manifest(&tree)?;
         let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
@@ -192,7 +196,7 @@ fn fetch_carries_offline_skip_branch() -> TestResult {
             }
             assert!(captured > 0, "{job_id} owns manifest-bound obligations");
         }
-        assert_eq!(crate_jobs, 2, "both fixture crate jobs (mbx={mbx})");
+        assert_eq!(crate_jobs, 2, "each crate has one job (mbx={mbx})");
         assert!(obligations >= 2, "obligations present (mbx={mbx})");
     }
     Ok(())

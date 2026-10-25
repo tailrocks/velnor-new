@@ -8,10 +8,15 @@ use std::error::Error;
 
 #[path = "impl_repo_archive_deps.rs"]
 pub(crate) mod archive_deps;
+#[path = "impl_repo_deps_process_methods.rs"]
+mod process_methods;
 #[path = "impl_repo_deps_process_policy.rs"]
 mod process_policy;
+use self::process_policy::direct_tool_policy_violation;
 #[path = "impl_repo_size_limits.rs"]
 mod size_limits;
+#[path = "impl_repo_workflow_yaml_deps.rs"]
+pub(crate) mod workflow_yaml_deps;
 
 use crate::impl_cli_tmp::git_fixture;
 
@@ -26,7 +31,6 @@ fn expected_internal(dir: &str) -> Vec<&str> {
         | "crates/velnor-actions-freshness"
         | "crates/velnor-actions-gradle" => vec![],
         "crates/velnor-actions-orchestrator" => vec![
-            "velnor-archive-guard",
             "velnor-actions-actionlint",
             "velnor-actions-ansible",
             "velnor-actions-bun",
@@ -37,6 +41,7 @@ fn expected_internal(dir: &str) -> Vec<&str> {
             "velnor-actions-rust",
             "velnor-actions-tofu",
             "velnor-actions-workflow-renderer",
+            "velnor-archive-guard",
         ],
         "crates/velnor-actions-cli" => {
             vec!["velnor-actions-freshness", "velnor-actions-orchestrator"]
@@ -188,10 +193,37 @@ fn lockfile_committed_and_locked_used() -> Result<(), Box<dyn Error>> {
 fn cli_invokes_no_tools_directly() -> Result<(), Box<dyn Error>> {
     for path in tree_files("crates/velnor-actions-cli/src", "rs")? {
         let body = std::fs::read_to_string(&path)?;
-        let violation = process_policy::direct_tool_policy_violation(&body);
-        assert_eq!(violation, None, "{} leaks a process launch", path.display());
+        if let Some(violation) = direct_tool_policy_violation(&body) {
+            return Err(format!("{} violates CLI tool policy: {violation}", path.display()).into());
+        }
     }
     Ok(())
+}
+
+#[test]
+fn direct_tool_policy_allows_cache_metadata_but_rejects_process_launches() {
+    let metadata = r#"const CACHE_LAYER: &str = "cargo_sources";"#;
+    assert_eq!(direct_tool_policy_violation(metadata), None);
+    assert_eq!(
+        direct_tool_policy_violation("fn process_id() { let _pid = std::process::id(); }"),
+        None
+    );
+
+    let fully_qualified =
+        r#"fn launch() { std::process::Command::new("cargo").status().unwrap(); }"#;
+    assert_eq!(
+        direct_tool_policy_violation(fully_qualified),
+        Some("process::Command".to_owned())
+    );
+
+    let aliased = r#"
+        use std::process::Command as Process;
+        fn launch() { Process::new("cargo").status().unwrap(); }
+    "#;
+    assert_eq!(
+        direct_tool_policy_violation(aliased),
+        Some("Process::new".to_owned())
+    );
 }
 
 #[test]
@@ -219,7 +251,13 @@ fn parse_tests_live_outside_src() -> Result<(), Box<dyn Error>> {
             path.display()
         );
     }
-    assert!(read("crates/velnor-actions-cli/tests/impl_cli_args.rs")?.contains("#[test]"));
+    let integration_tests = read("crates/velnor-actions-cli/tests/impl_cli_args.rs")?;
+    for test in ["unknown_flags_exit_two", "generate_output_dir_flag_parses"] {
+        assert!(
+            integration_tests.contains(&format!("fn {test}")),
+            "CLI argument parsing coverage is missing {test}"
+        );
+    }
     Ok(())
 }
 

@@ -18,8 +18,12 @@ mod impl_mise_cache_gates;
 mod impl_mise_cache_t22;
 #[path = "impl_mise_catalog.rs"]
 mod impl_mise_catalog;
+#[path = "impl_mise_catalog_identity_sources.rs"]
+mod impl_mise_catalog_identity_sources;
 #[path = "impl_mise_command.rs"]
 mod impl_mise_command;
+#[path = "impl_mise_command_stream.rs"]
+mod impl_mise_command_stream;
 #[path = "impl_mise_env.rs"]
 mod impl_mise_env;
 #[path = "impl_mise_env_policy.rs"]

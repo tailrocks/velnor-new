@@ -14,6 +14,19 @@ use crate::impl_orch_plansel::{
     BUMP, commit, has, make_ws, merge_status, plan_at, plan_change, put,
 };
 
+/// Complete merge validator inventory for each job emitted by the plan.
+fn successful_job_inventory(plan: &Plan) -> (Vec<String>, Vec<Json>) {
+    let mut ids = vec!["plan".to_owned()];
+    ids.extend(plan.matrix.include.iter().map(|entry| entry.job_id.clone()));
+    ids.sort();
+    ids.dedup();
+    let jobs = ids
+        .iter()
+        .map(|job_id| serde_json::json!({"job_id": job_id, "conclusion": "success"}))
+        .collect();
+    (ids, jobs)
+}
+
 #[test]
 fn offline_dependency_aborts_plan() -> TestResult {
     let repo = make_repo(config_with_branch())?;
@@ -97,8 +110,11 @@ fn cache_miss_cannot_fail_merge() -> TestResult {
     // Strict contract: `MatrixReport` carries no `cache` field, so the
     // old staple-and-tolerate reparse is rejected. Cache-miss validity
     // is pinned below on a real `TaskReport` with `CacheOutcome::Miss`.
+    let (required_job_ids, required_jobs) = successful_job_inventory(&plan);
+    let extra =
+        serde_json::json!({"required_job_ids": required_job_ids, "required_jobs": required_jobs});
     assert_eq!(
-        merge_status(&plan, &reports, &[], &serde_json::json!({}))?,
+        merge_status(&plan, &reports, &[], &extra)?,
         FinalStatus::Passed
     );
     let entry = &plan.matrix.include[0];
@@ -136,7 +152,8 @@ fn cache_miss_cannot_fail_merge() -> TestResult {
 fn merge_without_reports_is_not_run() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
     assert!(!plan.matrix.include.is_empty());
-    let request = serde_json::json!({"schema": 1, "run_key": "local", "actual_event": "pull_request", "plan": plan, "matrix": plan.matrix, "matrix_reports": [], "required_job_ids": ["plan"], "required_jobs": [{"job_id": "plan", "conclusion": "success"}]});
+    let (required_job_ids, required_jobs) = successful_job_inventory(&plan);
+    let request = serde_json::json!({"schema": 1, "run_key": "local", "actual_event": "pull_request", "plan": plan, "matrix": plan.matrix, "matrix_reports": [], "required_job_ids": required_job_ids, "required_jobs": required_jobs});
     let final_report: velnor_actions_contract::FinalReport =
         serde_json::from_str(&merge_fixture(&request.to_string())?)?;
     assert_eq!(final_report.status, FinalStatus::NotRun);

@@ -33,7 +33,7 @@ pub(super) fn provision_official_release() -> Result<PathBuf, String> {
     let platform = match (std::env::consts::OS, std::env::consts::ARCH) {
         ("linux", "x86_64") => "linux-x64",
         ("macos", "aarch64") => "macos-arm64",
-        (os, arch) => return Err(format!("unqualified mise platform: {os}/{arch}")),
+        (os, arch) => return Err(format!("The Mise platform is not qualified: {os}/{arch}.")),
     };
     let expected = official_release_digest(PINNED_MISE)?;
     let cache = std::env::temp_dir().join(format!("velnor-mise-official-{PINNED_MISE}"));
@@ -59,10 +59,10 @@ pub(super) fn provision_official_release() -> Result<PathBuf, String> {
         .arg(&archive)
         .arg(&url)
         .output()
-        .map_err(|err| format!("curl unavailable to fetch pinned mise: {err}"))?;
+        .map_err(|err| format!("curl could not fetch the pinned Mise release. Error: {err}."))?;
     if !fetched.status.success() {
         return Err(format!(
-            "PATH mise is not {PINNED_MISE}; fetching {url} failed: {}; set {PINNED_BINARY_ENV} to an official {PINNED_MISE} binary",
+            "The Mise executable on PATH is not version {PINNED_MISE}. Download from {url} failed. Error: {}. Set {PINNED_BINARY_ENV} to an official {PINNED_MISE} executable.",
             output_text(&fetched)
         ));
     }
@@ -74,13 +74,13 @@ pub(super) fn provision_official_release() -> Result<PathBuf, String> {
         .output()
         .map_err(|err| err.to_string())?;
     if !unpacked.status.success() {
-        return Err(format!("tar failed: {}", output_text(&unpacked)));
+        return Err(format!("tar failed. Error: {}.", output_text(&unpacked)));
     }
     let staged = staging.join("mise/bin/mise");
     let actual = sha256_file(&staged)?;
     if actual != expected {
         return Err(format!(
-            "downloaded mise digest mismatch: {actual} != {expected}"
+            "The downloaded Mise digest does not match: {actual} != {expected}."
         ));
     }
     std::fs::remove_dir_all(&cache).ok();
@@ -96,10 +96,10 @@ pub(super) fn provision_official_release() -> Result<PathBuf, String> {
 }
 
 pub(super) fn find_on_path(program: &str) -> Result<PathBuf, String> {
-    std::env::split_paths(&std::env::var_os("PATH").ok_or_else(|| "PATH is unset".to_owned())?)
+    std::env::split_paths(&std::env::var_os("PATH").ok_or_else(|| "PATH is not set.".to_owned())?)
         .map(|dir| dir.join(program))
         .find(|candidate| candidate.is_file())
-        .ok_or_else(|| format!("{program} not found on PATH"))
+        .ok_or_else(|| format!("The program {program} was not found on PATH."))
 }
 
 pub(super) fn official_release_digest(version: &str) -> Result<&'static str, String> {
@@ -111,7 +111,7 @@ pub(super) fn official_release_digest(version: &str) -> Result<&'static str, Str
             Ok("d40e2fcd96fed7c70b04af282c36534d87d0318bef89c16fa00c9f98e55ade88")
         }
         _ => Err(format!(
-            "unqualified mise release/platform: {version} {}/{}",
+            "The Mise release and platform are not qualified: {version} {}/{}.",
             std::env::consts::OS,
             std::env::consts::ARCH
         )),
@@ -129,8 +129,8 @@ pub(super) fn sha256_file(path: &Path) -> Result<String, String> {
             .split_whitespace()
             .next()
             .filter(|text| text.len() == 64 && text.chars().all(|ch| ch.is_ascii_hexdigit()))
-            .ok_or_else(|| format!("invalid SHA-256 output from {program}: {line}"))?;
+            .ok_or_else(|| format!("The SHA-256 output from {program} is invalid: {line}."))?;
         return Ok(digest.to_ascii_lowercase());
     }
-    Err("neither shasum nor sha256sum could hash the mise executable".to_owned())
+    Err("Neither shasum nor sha256sum could hash the Mise executable.".to_owned())
 }

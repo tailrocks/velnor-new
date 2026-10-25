@@ -2,8 +2,9 @@
 use crate::impl_contract_ids::{MANIFEST, TASK, sample_entry};
 use velnor_actions_contract::{
     ContractError, ObligationDecision, Plan, PlanGenerator, PlanMatrix, PlanObligation,
-    PlanPackage, PlanRunner, QualificationDispatch, QualificationPhase, RunnerSelection, Trust,
-    WorkflowEvent, digest_b3, plan_id_for_run, run_key_for_ci,
+    PlanPackage, PlanRunner, QualificationDispatch, QualificationDispatchMode, QualificationPhase,
+    RunnerSelection, TaskBindingDigest, Trust, WorkflowEvent, digest_b3, plan_id_for_run,
+    run_key_for_ci,
 };
 
 #[test]
@@ -45,6 +46,7 @@ fn sample_qualification_plan() -> Result<Plan, ContractError> {
         head: head.clone(),
         event: WorkflowEvent::Qualification,
         qualification: Some(QualificationDispatch {
+            mode: QualificationDispatchMode::Controlled,
             campaign: "campaign-2030".to_owned(),
             phase: QualificationPhase::Third,
             repository: "owner/project".to_owned(),
@@ -56,6 +58,7 @@ fn sample_qualification_plan() -> Result<Plan, ContractError> {
             source_sha: head,
             run_id: 3,
             run_attempt: 1,
+            scale_set_image_source_sha: None,
             predecessor: Some(velnor_actions_contract::QualificationRunRef {
                 run_id: 2,
                 run_attempt: 1,
@@ -84,8 +87,12 @@ fn sample_qualification_plan() -> Result<Plan, ContractError> {
             decision: ObligationDecision::Execute,
             reason: "qualification_full".to_owned(),
             task_digest: digest_b3(b"task"),
+            task_binding_digest: TaskBindingDigest::new(digest_b3(b"task"))?,
             input_digest: digest_b3(b"inputs"),
             closure_digest: digest_b3(b"closure"),
+            graph_digest: digest_b3(b"graph"),
+            mbx_digest: digest_b3(b"mbx"),
+            profile: "default".to_owned(),
             job_id: entry.job_id.clone(),
         }],
         jobs: vec![velnor_actions_contract::PlanJob {

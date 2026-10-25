@@ -251,8 +251,8 @@ impl Session {
             .map_err(|err| internal(&format!("private_mise_command:{err}")))
     }
 
-    /// `mise where <rust>`, which fails for a missing toolchain. `mise exec`
-    /// only warns and runs the ambient `cargo` with the ambient `CARGO_HOME`.
+    /// Use `mise where <rust>` to reject a missing toolchain.
+    /// A missing toolchain can cause `mise exec` to warn and run ambient `cargo` with ambient `CARGO_HOME`.
     pub(crate) fn rust_check_command(
         &self,
         rust: &str,

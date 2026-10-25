@@ -42,7 +42,12 @@
   },
   "HostConfig": {
     "AutoRemove": false,
+    "CpuPeriod": 100000,
+    "CpuQuota": 10000,
+    "Memory": 134217728,
+    "MemorySwap": 134217728,
     "Privileged": false,
+    "PidsLimit": 4,
     "ReadonlyRootfs": true,
     "NetworkMode": "none",
     "CapDrop": [

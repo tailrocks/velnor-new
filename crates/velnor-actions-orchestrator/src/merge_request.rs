@@ -118,7 +118,7 @@ pub(crate) fn assemble_with_needs(
         &task_reports,
         &mut errors,
     );
-    let (inventory, jobs) = parse_needs(needs, expected, &mut errors);
+    let (inventory, jobs) = parse_needs(needs, expected, actual_event, &mut errors);
     let attestation = read_attestation(run_dir, &inventory, &mut errors);
     let request = serde_json::json!({
         "schema": 1,

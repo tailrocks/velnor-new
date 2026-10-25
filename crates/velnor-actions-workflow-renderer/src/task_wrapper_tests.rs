@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::cachekey::{ToolchainInputs, toolchain_id};
+use velnor_actions_contract::workflow::TaskBindingDigest;
 use velnor_actions_contract::workflow::crate_job::task_digest_for_execution;
 use velnor_actions_contract::{
     Job, JobTimeout, MiseTaskSource, ScaleSetSelector, Step, StepKind, StepRole,
@@ -193,7 +194,7 @@ fn task_step(index: usize) -> Step {
             argv,
             env,
             task_id,
-            task_digest,
+            task_digest: TaskBindingDigest::new(task_digest).expect("binding digest"),
             toolchain_inputs,
             matrix_id,
             matrix_key,

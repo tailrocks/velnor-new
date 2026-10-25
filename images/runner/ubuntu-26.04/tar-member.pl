@@ -1,6 +1,6 @@
 #!/usr/bin/perl
-# List tar members and copy selected raw bytes in one forward pass. Extraction
-# stays BusyBox; pax and GNU long-name headers stay attached to their member.
+# List tar members and stream selected raw members. PAX and GNU long-name
+# headers stay attached to their member.
 use strict;
 use warnings;
 use bytes;

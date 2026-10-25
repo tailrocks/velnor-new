@@ -89,7 +89,13 @@ fn w1_crate_jobs_group_obligations_per_crate() -> TestResult {
     ] {
         assert!(job.contains(&format!("- name: {step}")), "{step}: {job}");
     }
-    for step in &obligations {
+    for step in [
+        "Format",
+        "Clippy",
+        "Unit and integration tests",
+        "Doctests",
+        "Documentation",
+    ] {
         assert!(
             job.contains(&format!("- name: {step}\n        background: true")),
             "{step} runs in the parallel group: {job}"
@@ -230,7 +236,7 @@ fn assert_clippy_task_uses_toolchain_union(
         .ir
         .jobs
         .get("rust-demo")
-        .ok_or("missing rust-demo IR job")?;
+        .ok_or("missing Rust package job")?;
     let clippy = crate_job
         .steps
         .iter()
@@ -315,13 +321,11 @@ fn assert_clippy_uses_pinned_rust(record: &TaskExecutionManifestEntryV1) {
 #[test]
 fn w1_crate_cache_v1_emits_no_cache_steps() -> TestResult {
     let (_repo, yaml) = preview_yaml(config_with_branch())?;
-    {
-        let task = window(&yaml, "  rust-demo:", "  required:")?;
-        assert!(
-            !task.contains("- name: Restore cache"),
-            "v1 no restore:\n{task}"
-        );
-        assert!(!task.contains("- name: Save cache"), "v1 no save:\n{task}");
-    }
+    let task = window(&yaml, "  rust-demo:", "  required:")?;
+    assert!(
+        !task.contains("- name: Restore cache"),
+        "v1 no restore:\n{task}"
+    );
+    assert!(!task.contains("- name: Save cache"), "v1 no save:\n{task}");
     Ok(())
 }

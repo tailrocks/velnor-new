@@ -1,4 +1,6 @@
+#[cfg(test)]
 use super::split_internal_operation;
+#[cfg(test)]
 use crate::parallel_target_seed::SEED_PARALLEL_TARGETS_OPERATION;
 
 #[test]

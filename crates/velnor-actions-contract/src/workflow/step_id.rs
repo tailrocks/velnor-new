@@ -5,6 +5,13 @@ use serde::{Deserialize, Serialize};
 /// Internal operation of the Gradle run step (verify wrapper, install JDK, run Gradle).
 pub const GRADLE_RUN_OPERATION: &str = "gradle-run-v1";
 
+mod qualification_cache;
+pub use qualification_cache::{
+    QualificationCacheCompositeId, QualificationCacheCompositePhase, QualificationCacheStepId,
+    QualificationCacheStepStage, qualification_cache_after_save_input_names,
+    qualification_cache_after_save_output_names, qualification_cache_before_save_output_names,
+    qualification_cache_composite_output_names, qualification_cache_layer_prepare_input_names,
+};
 /// Stable GitHub Actions id for a step whose outputs or outcome have consumers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -13,6 +20,16 @@ pub enum StepId {
     Plan,
     /// V2 hosted tools-cache output consumed by restore and save.
     ToolsCacheIdentity,
+    /// Staging path output for the normal tools-cache payload.
+    NormalToolsCacheStage,
+    /// Import result and admission outputs for the normal tools-cache payload.
+    NormalToolsCacheImport,
+    /// Staged payload identity outputs for the normal tools-cache save.
+    NormalToolsCacheExport,
+    /// Action-local PATH containing verified cache tar aliases.
+    CacheTarLaunchers,
+    /// Verified staged helper digest used by the tar adapter installer.
+    PreseedStage,
     /// `OpenTofu` provider-cache composite outputs consumed by the save step.
     TofuProviders,
     /// Successful MBX version/store guard that enables final workspace cleanup.
@@ -27,23 +44,31 @@ pub enum StepId {
     ToolsRestore,
     /// Private-source App token mint whose output feeds the fetch and revoke steps.
     DepsToken,
-    /// MBX bundle key step whose outputs feed the restore and save.
+    /// Restore and save steps use this MBX bundle key output.
     MbxBundleKey,
-    /// MBX bundle restore whose hit outputs gate the import and the save.
+    /// Import and save steps use this MBX bundle restore output.
     MbxBundleRestore,
-    /// MBX bundle export whose `exported` output gates the save.
+    /// The cache save step uses this MBX bundle export output.
     MbxBundleExport,
-    /// Per-job runtime keys and trust of the generated stack family caches.
+    /// Lane/layer owner for a qualification cache action.
+    QualificationCache(QualificationCacheStepId),
+    /// Typed output owner for one grouped qualification-cache composite.
+    QualificationCacheComposite(QualificationCacheCompositeId),
+    /// Runtime identity file consumed by qualification cache binding.
+    QualificationRuntimeIdentity,
+    /// Qualification receipt file consumed by the Required artifact upload.
+    QualificationCacheReceipt,
+    /// Runtime keys for generated stack-family caches.
     FamilyKeys,
-    /// Size admission of the Bun package cache before its save.
+    /// Size admission for Bun install cache.
     FamilySizeBunInstall,
-    /// Size admission of the Playwright browsers before their save.
+    /// Size admission for Playwright browser cache.
     FamilySizePlaywrightBrowsers,
-    /// Size admission of the dbt packages before their save.
+    /// Size admission for dbt package cache.
     FamilySizeDbtPackages,
-    /// Size admission of the uv wheel cache before its save.
+    /// Size admission for Python virtualenv cache.
     FamilySizePythonVenv,
-    /// Size admission of the Ansible collection tarballs before their save.
+    /// Size admission for Ansible collections cache.
     FamilySizeAnsibleCollections,
 }
 
@@ -54,6 +79,11 @@ impl StepId {
         match self {
             Self::Plan => "plan",
             Self::ToolsCacheIdentity => "v2",
+            Self::NormalToolsCacheStage => "normal-tools-cache-stage",
+            Self::NormalToolsCacheImport => "normal-tools-cache-import",
+            Self::NormalToolsCacheExport => "normal-tools-cache-export",
+            Self::CacheTarLaunchers => "cache-tar-launchers",
+            Self::PreseedStage => "preseed-stage",
             Self::TofuProviders => "tofu-providers",
             Self::MbxReady => "mbx-ready",
             Self::CacheKeys => "cache-keys",
@@ -64,12 +94,26 @@ impl StepId {
             Self::MbxBundleKey => "mbx-bundle-key",
             Self::MbxBundleRestore => "mbx-bundle-restore",
             Self::MbxBundleExport => "mbx-bundle-export",
+            Self::QualificationCache(_) => "qualification-cache",
+            Self::QualificationCacheComposite(_) => "qualification-cache-composite",
+            Self::QualificationRuntimeIdentity => "qualification-runtime-identity",
+            Self::QualificationCacheReceipt => "qualification-cache-receipt",
             Self::FamilyKeys => "family-keys",
             Self::FamilySizeBunInstall => "family-size-bun-install",
             Self::FamilySizePlaywrightBrowsers => "family-size-playwright-browsers",
             Self::FamilySizeDbtPackages => "family-size-dbt-packages",
             Self::FamilySizePythonVenv => "family-size-python-venv",
             Self::FamilySizeAnsibleCollections => "family-size-ansible-collections",
+        }
+    }
+
+    /// Render the complete YAML ID, including a typed owner/layer identity.
+    #[must_use]
+    pub fn as_string(self) -> String {
+        match self {
+            Self::QualificationCache(identity) => identity.as_string(),
+            Self::QualificationCacheComposite(identity) => identity.as_string(),
+            fixed => fixed.as_str().to_owned(),
         }
     }
 }

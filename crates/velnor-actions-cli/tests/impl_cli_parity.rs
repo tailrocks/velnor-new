@@ -75,21 +75,21 @@ fn assert_no_query_or_exposure(text: &str) {
     }
 }
 
-/// Crate-job count from the `- N Rust crate job(s)` plan line.
+/// Rust-package count from the `- N Rust package job(s)` plan line.
 fn crate_count(stdout: &str) -> Result<usize, Box<dyn Error>> {
     for line in stdout.lines() {
         let Some(rest) = line.trim().strip_prefix("- ") else {
             continue;
         };
         let Some(count) = rest
-            .strip_suffix(" Rust crate jobs")
-            .or_else(|| rest.strip_suffix(" Rust crate job"))
+            .strip_suffix(" Rust package jobs")
+            .or_else(|| rest.strip_suffix(" Rust package job"))
         else {
             continue;
         };
         return Ok(count.parse()?);
     }
-    Err("crate count line missing".into())
+    Err("Rust package count line missing".into())
 }
 
 /// Snapshot every file under `dir` except `.git`, as relative path to bytes.
@@ -268,7 +268,7 @@ fn plan_reports_full_configured_crates_in_agreement_with_yaml() -> Result<(), Bo
     // Ignored work: no crates in plan and none in YAML (both directions).
     ignore_rust(&tmp)?;
     let ignored = plan_stdout(&tmp)?;
-    assert!(!ignored.contains("Rust crate job"), "{ignored}");
+    assert!(!ignored.contains("Rust package job"), "{ignored}");
     assert!(ignored.contains("no matrix entries"), "{ignored}");
     let second = outer.join("second");
     let output = spawn(

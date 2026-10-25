@@ -4,21 +4,16 @@
 
 use super::*;
 use crate::clippy_groups::ClippyMemoryPlan;
-use crate::crate_job_ids::JobOwners;
 use crate::matrix_step::{shard_suffix, step_name_for};
 use std::collections::BTreeSet;
 use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
-
-#[path = "crate_jobs_prelude_tests.rs"]
-mod preludes;
 
 /// Runnable fixture proposal for one package/kind pair.
 pub(crate) fn group(package: &str, kind: TaskKind, gated_by: &[&str]) -> ProposedTask {
     group_with_all_features(package, kind, gated_by, false)
 }
 
-/// Runnable fixture proposal with an explicit Cargo all-features mode.
-pub(super) fn group_with_all_features(
+fn group_with_all_features(
     package: &str,
     kind: TaskKind,
     gated_by: &[&str],
@@ -88,114 +83,17 @@ pub(super) fn names(job: &Job) -> Vec<&str> {
     job.steps.iter().map(|step| step.name.as_str()).collect()
 }
 
+#[path = "crate_jobs_tests/planning.rs"]
+mod planning;
+
+#[path = "crate_jobs_prelude_tests.rs"]
+mod preludes;
+
 #[path = "crate_jobs_parallel_tests.rs"]
 mod parallel_tests;
 
 #[path = "crate_jobs_all_features_tests.rs"]
 mod all_features_tests;
-
-#[test]
-fn skips_testless_and_workspace_groups() {
-    let mut testless = group("demo", TaskKind::Doctest, &[]);
-    testless.no_targets = true;
-    let mut workspace_fmt = group("demo", TaskKind::Fmt, &[]);
-    workspace_fmt.identity.unit_id.clear();
-    workspace_fmt.display_name.clear();
-    let clippy = group("demo", TaskKind::Clippy, &[]);
-    let found = build_crate_jobs(CrateJobInputs {
-        label: "ubuntu-26.04",
-        policy: WorkflowPolicy::ConsumerV1,
-        discovery: &discovery(vec![testless, workspace_fmt, clippy]),
-        catalog: &ToolCatalog::pinned(),
-        fetch_roots: &[],
-        acquire: None,
-        max_parallel_jobs: 2,
-        timeout: velnor_actions_contract::JobTimeout::CRATE,
-        helper_version: env!("CARGO_PKG_VERSION"),
-        seed_parallel_targets: false,
-        crates: &std::collections::BTreeMap::new(),
-    })
-    .expect("crate jobs");
-    assert_eq!(found.jobs.len(), 1);
-    let steps = names(&found.jobs[0].1);
-    assert!(steps.contains(&"Clippy"), "{steps:?}");
-    assert!(!steps.contains(&"Doctests"), "{steps:?}");
-    assert!(!steps.contains(&"Format"), "{steps:?}");
-}
-
-#[test]
-fn member_binding_agrees_with_built_jobs() {
-    let clippy = group("demo", TaskKind::Clippy, &[]);
-    let test = group("demo", TaskKind::Test, &[]);
-    let mut workspace_fmt = group("demo", TaskKind::Fmt, &[]);
-    workspace_fmt.identity.unit_id.clear();
-    workspace_fmt.display_name.clear();
-    let groups = vec![clippy, test, workspace_fmt];
-    let found = build_crate_jobs(CrateJobInputs {
-        label: "ubuntu-26.04",
-        policy: WorkflowPolicy::ConsumerV1,
-        discovery: &discovery(groups.clone()),
-        catalog: &ToolCatalog::pinned(),
-        fetch_roots: &[],
-        acquire: None,
-        max_parallel_jobs: 2,
-        timeout: velnor_actions_contract::JobTimeout::CRATE,
-        helper_version: env!("CARGO_PKG_VERSION"),
-        seed_parallel_targets: false,
-        crates: &std::collections::BTreeMap::new(),
-    })
-    .expect("crate jobs");
-    assert_eq!(found.jobs.len(), 1);
-    let lint = found.jobs[0].0.as_str();
-    let tests = lint;
-    assert_eq!(
-        JobOwners::new(&groups)
-            .expect("owners")
-            .for_member(&groups[0])
-            .expect("valid owner")
-            .as_deref(),
-        Some(lint)
-    );
-    assert_eq!(
-        JobOwners::new(&groups)
-            .expect("owners")
-            .for_member(&groups[1])
-            .expect("valid owner")
-            .as_deref(),
-        Some(tests)
-    );
-    assert_eq!(
-        JobOwners::new(&groups)
-            .expect("owners")
-            .for_member(&groups[2])
-            .expect("valid owner")
-            .as_deref(),
-        Some(PLAN_JOB_ID)
-    );
-    let outsider = group("other", TaskKind::Clippy, &[]);
-    assert_eq!(
-        JobOwners::new(&groups)
-            .expect("owners")
-            .for_member(&outsider)
-            .expect("absent owner"),
-        None
-    );
-}
-
-#[test]
-fn gates_keep_same_crate_edges_only() {
-    let clippy_id = "stack/rust/root/clippy/default".to_owned();
-    let mut doc = group("demo", TaskKind::Doc, &[]);
-    doc.gated_by = vec![
-        clippy_id.clone(),
-        "stack/rust/foreign/clippy/default".to_owned(),
-    ];
-    doc.depends_on = vec![clippy_id.clone()];
-    let executed: BTreeSet<&str> = [clippy_id.as_str(), doc.task_id.as_str()]
-        .into_iter()
-        .collect();
-    assert_eq!(gates_for(&doc, &executed), [clippy_id]);
-}
 
 #[test]
 fn shards_name_their_index() {
@@ -216,6 +114,9 @@ fn shards_name_their_index() {
 
 #[path = "crate_jobs_mbx_tests.rs"]
 mod mbx_tests;
+
+#[path = "crate_jobs_timeout_tests.rs"]
+mod timeout_tests;
 
 #[test]
 fn drivers_follow_per_crate_selection() {
@@ -242,6 +143,40 @@ fn drivers_follow_per_crate_selection() {
     assert!(steps.contains(&"Set up MBX"), "{steps:?}");
     let steps = names(&found.jobs[1].1);
     assert!(!steps.contains(&"Set up MBX"), "{steps:?}");
+}
+
+#[test]
+fn all_features_obligation_selects_all_features_source_probe() {
+    let source_roots = [String::new()];
+    let found = build_crate_jobs(CrateJobInputs {
+        label: "ubuntu-26.04",
+        policy: WorkflowPolicy::ConsumerV1,
+        discovery: &discovery(vec![group_with_all_features(
+            "demo",
+            TaskKind::Clippy,
+            &[],
+            true,
+        )]),
+        catalog: &ToolCatalog::pinned(),
+        fetch_roots: &source_roots,
+        acquire: None,
+        max_parallel_jobs: 2,
+        timeout: velnor_actions_contract::JobTimeout::CRATE,
+        helper_version: env!("CARGO_PKG_VERSION"),
+        seed_parallel_targets: false,
+        crates: &std::collections::BTreeMap::new(),
+    })
+    .expect("crate jobs");
+    let fetch = found.jobs[0]
+        .1
+        .steps
+        .iter()
+        .find(|step| step.name == crate::source_prep::FETCH_SOURCES_STEP)
+        .expect("crate source probe");
+    let velnor_actions_contract::StepKind::Shell { run, .. } = &fetch.kind else {
+        panic!("source probe must be a shell step");
+    };
+    assert!(run[2].contains("metadata --locked --offline --all-features"));
 }
 
 #[test]
@@ -355,9 +290,6 @@ fn velnor_policy_trims_trio_except_validator_spawning_suites() {
         );
     }
 }
-
-#[path = "crate_jobs_timeout_tests.rs"]
-mod timeout_tests;
 
 #[path = "crate_jobs_seed_tests.rs"]
 mod seed_tests;

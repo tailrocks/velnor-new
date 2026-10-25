@@ -16,6 +16,7 @@ struct BuildArgv {
     product: Vec<String>,
     intel_product: Vec<String>,
     runner: Vec<String>,
+    attestation_helper: Vec<String>,
     resource_probe: Vec<String>,
 }
 
@@ -61,6 +62,7 @@ pub(crate) fn test_pins() -> ProductReleasePins {
         install_intel_target_argv,
         install_resource_probe_target_argv,
         runner_build_argv: build.runner,
+        attestation_helper_build_argv: build.attestation_helper,
         resource_probe_build_argv: build.resource_probe,
         install_resource_probe_release_tools_argv: install_argv(
             &[
@@ -202,10 +204,25 @@ fn build_argv(catalog: &ToolCatalog) -> BuildArgv {
         ],
         catalog,
     );
+    let attestation_helper = mbx_build_argv(
+        &[
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/velnor-runner/Cargo.toml",
+            "--release",
+            "--package",
+            "velnor-runner-attestation",
+            "--bin",
+            "velnor-runner-attestation-helper",
+        ],
+        catalog,
+    );
     BuildArgv {
         product,
         intel_product,
         runner,
+        attestation_helper,
         resource_probe,
     }
 }

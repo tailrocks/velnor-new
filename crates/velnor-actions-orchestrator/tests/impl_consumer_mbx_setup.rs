@@ -1,13 +1,13 @@
-//! Consumer Rust setup: the `mr_boxington = true` Mise option alone selects
-//! the MBX compile driver, the seed-only bundle writer, and the opaque
-//! bundle transport (consumer Rust setup docs, WP-B1).
+//! Test the standard consumer Rust setup with MBX and mirrored Rust toolchain declarations.
+//! Only the dependency seed job writes MBX bundles.
 //!
-//! The fixture is the owner's standard layout: `mise.toml` with
-//! `min_version`, `rust = { version, mr_boxington = true }`, exact
-//! `mr-boxington`, hk, cargo-binstall and Nextest pins, the binstall,
-//! idiomatic-file and lockfile settings and `[wrappers.cargo] command = "mbx"`,
-//! plus a `rust-toolchain.toml` mirroring the version with components and
-//! targets. `.velnor/config.toml` declares no `[stacks.rust] compile_driver`.
+//! The fixture uses the owner's standard layout.
+//! Its `mise.toml` declares `min_version` and `rust = { version, mr_boxington = true }`.
+//! It pins exact versions of `mr-boxington`, hk, cargo-binstall, and Nextest.
+//! It sets binstall, idiomatic version file, and lock file options.
+//! It also declares `[wrappers.cargo] command = "mbx"`.
+//! Its `rust-toolchain.toml` mirrors the version, components, and targets.
+//! Its `.velnor/config.toml` has no `[stacks.rust] compile_driver` declaration.
 
 use std::fs;
 
@@ -82,27 +82,33 @@ fn mr_boxington_option_selects_mbx_seed_writer_and_opaque_bundles() -> TestResul
     assert_eq!(
         workspace.profile.compile_driver.as_str(),
         "mbx",
-        "mr_boxington = true is durable evidence for the MBX driver"
+        "The mr_boxington = true setting must select the MBX driver."
     );
     assert!(
         workspace.findings.is_empty(),
-        "no transient-evidence finding: {:?}",
+        "The configuration must not produce a transient-evidence finding: {:?}.",
         workspace.findings
     );
     assert!(prep.catalog.rust_mr_boxington());
 
     let tree = render_staged_tree(&prep)?;
-    let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
+    let yaml = tree
+        .get(WORKFLOW_PATH)
+        .ok_or("The CI workflow must exist.")?;
     assert!(
         !yaml.contains("github-cache-mode"),
-        "the MBX action is install-only; no target-dir cache: {yaml}"
+        "The MBX action must only install MBX. It must not cache the target directory: {yaml}."
     );
     let jobs = jobs(yaml);
     let seed: Vec<_> = jobs
         .iter()
         .filter(|(_, job)| job.contains("name: Dependency seed"))
         .collect();
-    assert_eq!(seed.len(), 1, "one dependency-seed job: {yaml}");
+    assert_eq!(
+        seed.len(),
+        1,
+        "The workflow must contain one dependency seed job: {yaml}."
+    );
     let (seed_id, seed_job) = seed[0];
     for name in [
         "Compute MBX bundle key",
@@ -114,28 +120,35 @@ fn mr_boxington_option_selects_mbx_seed_writer_and_opaque_bundles() -> TestResul
     ] {
         assert_eq!(step_count(seed_job, name), 1, "{seed_id} runs {name}");
     }
+    let bundle_helper = tree
+        .get(".github/scripts/velnor-mbx-bundle.sh")
+        .ok_or("The MBX bundle helper must be rendered.")?;
     assert!(
-        seed_job.contains("cache export --group") && seed_job.contains("--format directory"),
-        "bundles are the opaque `mbx cache export --format directory` closure: {seed_job}"
+        bundle_helper
+            .contains("cache export --group \"$MBX_CACHE_EXPORT_GROUP\" --format directory"),
+        "The helper must export the MBX bundle: {bundle_helper}."
+    );
+    assert!(
+        bundle_helper.contains("cache import \"$dir\""),
+        "The helper must import restored MBX bundles: {bundle_helper}."
     );
 
     let crate_jobs: Vec<_> = jobs
         .iter()
         .filter(|(id, _)| id.starts_with("rust-"))
         .collect();
-    assert!(!crate_jobs.is_empty(), "a crate job exists: {yaml}");
+    assert!(
+        !crate_jobs.is_empty(),
+        "The workflow must contain a crate job: {yaml}."
+    );
     for (id, job) in crate_jobs {
         assert_eq!(step_count(job, "Restore MBX bundle"), 1, "{id} restores");
         assert_eq!(step_count(job, "Import MBX bundle"), 1, "{id} imports");
-        assert!(
-            job.contains("cache import"),
-            "{id} restores only via `mbx cache import`"
-        );
         for writer in ["Export MBX bundle", "Save MBX bundle"] {
             assert_eq!(
                 step_count(job, writer),
                 0,
-                "{id} is read-only; only the seed job writes bundles"
+                "Job {id} must only read bundles. Only the seed job may write them."
             );
         }
     }
@@ -190,30 +203,35 @@ extract_to = \"eth-sql\"\n"
         "mbx"
     );
     let tree = render_staged_tree(&prep)?;
-    let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
+    let yaml = tree
+        .get(WORKFLOW_PATH)
+        .ok_or("The CI workflow must exist.")?;
     assert!(yaml.contains("name: Dependency seed"), "{yaml}");
     assert!(yaml.contains("Fetch private sources"), "{yaml}");
 
-    // A rust-toolchain.toml that drops a target fails as a mirror mismatch.
+    // Generation fails if rust-toolchain.toml omits a target from the Mise declaration.
     fs::write(
         root.join("rust-toolchain.toml"),
         consumer_toolchain().replace(", \"x86_64-unknown-linux-gnu\"", ""),
     )?;
     let err = prepare(root)
         .err()
-        .ok_or("target drift must fail")?
+        .ok_or("A target mismatch must fail generation.")?
         .to_string();
     assert!(
         err.contains("rust_toolchain_mirror_mismatch:targets:"),
         "{err}"
     );
 
-    // A rust-toolchain.toml that drifts from mise.toml fails generation.
+    // Generation fails if rust-toolchain.toml and mise.toml declare different versions.
     fs::write(
         root.join("rust-toolchain.toml"),
         consumer_toolchain().replace(RUST_VERSION, "1.98.1"),
     )?;
-    let err = prepare(root).err().ok_or("drift must fail")?.to_string();
+    let err = prepare(root)
+        .err()
+        .ok_or("A version mismatch must fail generation.")?
+        .to_string();
     assert!(
         err.contains("rust_version_disagrees_with_mise:rust-toolchain.toml=1.98.1"),
         "{err}"

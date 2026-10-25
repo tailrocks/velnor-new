@@ -70,8 +70,9 @@ pub struct QualificationCacheLayerDirective {
     pub active: bool,
     /// Stable configuration/workspace/lane/cache-format identity commitment.
     pub identity_digest: String,
-    /// Required actual runner facts before key use.
-    pub runtime: QualificationRuntimeIdentityRequirements,
+    /// Required actual runner facts for an active cache layer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime: Option<QualificationRuntimeIdentityRequirements>,
     /// Prior admitted runtime facts; current observations must equal these.
     pub expected_runtime: Option<QualificationRuntimeIdentity>,
     /// Exact restore expectation; stage action output before import.
@@ -82,6 +83,36 @@ pub struct QualificationCacheLayerDirective {
     pub save_policy: QualificationCacheSavePolicy,
     /// Prior actual useful payload digest for conditional save decisions.
     pub expected_prior_state_digest: Option<String>,
+}
+
+/// One matrix member's reference to the cache layer owned by its generated job.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct QualificationCacheLaneLayerDirective {
+    /// Closed cache layer.
+    pub layer: QualificationCacheLayer,
+    /// Whether this member uses the cache layer owned by its generated job.
+    pub active: bool,
+    /// Cache identity shared by all members of this generated job.
+    pub identity_digest: String,
+    /// Exact generated job that owns the physical layer.
+    pub owner_id: Option<String>,
+}
+
+/// One generated job's complete, ordered physical cache ownership record.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct QualificationCacheOwnerDirective {
+    /// Exact validated generated job ID.
+    pub owner_id: String,
+    /// Platform identity shared by all members of this job.
+    pub platform_id: String,
+    /// Digest of the sorted matrix members and their required cache tasks.
+    pub member_digest: String,
+    /// All matrix members assigned to this job, in sorted order.
+    pub members: Vec<super::identity::QualificationCacheOwnerMemberRef>,
+    /// One directive for each allowed cache layer.
+    pub layers: Vec<QualificationCacheLayerDirective>,
 }
 
 /// One matrix lane's sorted layer directives.
@@ -95,7 +126,7 @@ pub struct QualificationCacheLaneDirective {
     /// Stable task-group identity.
     pub task_id: String,
     /// All layer directives, including the disabled `TaskResult` layer.
-    pub layers: Vec<QualificationCacheLayerDirective>,
+    pub layers: Vec<QualificationCacheLaneLayerDirective>,
 }
 
 /// Bounded phase directive map written as one job output.
@@ -123,6 +154,8 @@ pub struct QualificationCacheDirective {
     pub predecessor_receipt_digest: Option<String>,
     /// Source change proof required by `UsefulDelta`.
     pub source_delta: Option<QualificationSourceDelta>,
+    /// One cache owner record for each generated job.
+    pub owners: Vec<QualificationCacheOwnerDirective>,
     /// Sorted lane and layer records.
     pub lanes: Vec<QualificationCacheLaneDirective>,
 }

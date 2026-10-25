@@ -1,9 +1,13 @@
 use reqwest::header::{ACCEPT, AUTHORIZATION};
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpListener;
 
 use super::response::{attestation_path, parse_attestations, parse_release};
 use super::{
-    api_request, api_url, asset_redirect_request, client, valid_pat, validate_asset_redirect,
+    Asset, api_request, api_url, asset_redirect_request, client, download_asset_to_path, valid_pat,
+    validate_asset_redirect, write_verified_asset,
 };
 use crate::artifact_admission::manifest::{ARCHIVE_ASSET, CHECKSUM_ASSET, MANIFEST_ASSET};
 use crate::error::HostError;
@@ -249,4 +253,138 @@ fn asset_redirect_request_never_carries_the_api_credential() -> Result<(), HostE
         .map_err(|_| HostError::Identity)?;
     assert!(!request.headers().contains_key(AUTHORIZATION));
     Ok(())
+}
+
+#[tokio::test]
+async fn native_asset_writer_checks_size_digest_and_removes_partial_files() -> Result<(), HostError>
+{
+    let body = b"verified native bytes".to_vec();
+    let digest = format!("sha256:{}", lowercase_hex(&Sha256::digest(&body)));
+    let destination = test_path();
+    let response = local_response(body.clone(), None).await?;
+    write_verified_asset(
+        response,
+        body.len() as u64,
+        &digest,
+        &destination,
+        body.len() as u64,
+    )
+    .await?;
+    assert_eq!(
+        std::fs::read(&destination).map_err(|_| HostError::Path)?,
+        body
+    );
+    std::fs::remove_file(&destination).map_err(|_| HostError::Path)?;
+
+    let wrong_digest = test_path();
+    let response = local_response(body.clone(), None).await?;
+    assert_eq!(
+        write_verified_asset(
+            response,
+            body.len() as u64,
+            &format!("sha256:{}", "0".repeat(64)),
+            &wrong_digest,
+            body.len() as u64,
+        )
+        .await,
+        Err(HostError::Identity)
+    );
+    assert!(!wrong_digest.exists());
+
+    let oversized = test_path();
+    let response = local_response(body.clone(), None).await?;
+    assert_eq!(
+        write_verified_asset(
+            response,
+            body.len() as u64,
+            &digest,
+            &oversized,
+            (body.len() - 1) as u64,
+        )
+        .await,
+        Err(HostError::Frame)
+    );
+    assert!(!oversized.exists());
+
+    let truncated = test_path();
+    let response = local_response(body[..3].to_vec(), Some((body.len() + 1) as u64)).await?;
+    assert!(
+        write_verified_asset(
+            response,
+            body.len() as u64,
+            &digest,
+            &truncated,
+            body.len() as u64,
+        )
+        .await
+        .is_err()
+    );
+    assert!(!truncated.exists());
+    Ok(())
+}
+
+#[tokio::test]
+async fn native_worker_download_rejects_declared_size_over_the_bound() -> Result<(), HostError> {
+    let destination = test_path();
+    let asset = Asset {
+        id: 1,
+        name: "velnor-runner-linux-amd64.tar".to_owned(),
+        size: 2,
+        digest: format!("sha256:{}", "a".repeat(64)),
+    };
+    assert_eq!(
+        download_asset_to_path(&client()?, "token", &asset, &destination, 1).await,
+        Err(HostError::Identity)
+    );
+    assert!(!destination.exists());
+    Ok(())
+}
+
+fn lowercase_hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut output = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        output.push(char::from(HEX[usize::from(byte >> 4)]));
+        output.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
+    output
+}
+
+fn test_path() -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("native-asset-{}.bin", uuid::Uuid::new_v4()))
+}
+
+async fn local_response(
+    body: Vec<u8>,
+    declared_size: Option<u64>,
+) -> Result<reqwest::Response, HostError> {
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .map_err(|_| HostError::Identity)?;
+    let address = listener.local_addr().map_err(|_| HostError::Identity)?;
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.map_err(|_| HostError::Identity)?;
+        let mut request = [0_u8; 1024];
+        let _request_read = stream.read(&mut request).await;
+        let declared_size = declared_size.unwrap_or(body.len() as u64);
+        let header = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {declared_size}\r\nConnection: close\r\n\r\n"
+        );
+        stream
+            .write_all(header.as_bytes())
+            .await
+            .map_err(|_| HostError::Identity)?;
+        stream
+            .write_all(&body)
+            .await
+            .map_err(|_| HostError::Identity)?;
+        Ok::<(), HostError>(())
+    });
+    let response = reqwest::Client::new()
+        .get(format!("http://{address}/asset"))
+        .send()
+        .await
+        .map_err(|_| HostError::Identity)?;
+    server.await.map_err(|_| HostError::Identity)??;
+    Ok(response)
 }

@@ -344,7 +344,7 @@ pub fn preseed_stage_step(source: PreseedStageSource, staged: &str) -> Result<St
     validate_staged_path(staged)?;
     let dir = staged.rsplit_once('/').map_or(staged, |(head, _)| head);
     let script = format!(
-        "mkdir -p {dir} && cp {} {staged} && chmod +x {staged}",
+        "mkdir -p {dir} && cp {} {staged} && chmod +x {staged} && sha256sum {staged} | awk 'NF == 2 && length($1) == 64 && $1 !~ /[^0-9a-f]/ {{ printf \"helper-sha256=%s\\n\", $1; valid=1 }} END {{ if (!valid) exit 1 }}' >> \"$GITHUB_OUTPUT\"",
         source.path()
     );
     let mut step = steps::shell_step(
@@ -352,6 +352,7 @@ pub fn preseed_stage_step(source: PreseedStageSource, staged: &str) -> Result<St
         vec!["sh".to_owned(), "-c".to_owned(), script],
         std::collections::BTreeMap::new(),
     )?;
+    step.id = Some(velnor_actions_contract::StepId::PreseedStage);
     step.role = Some(StepRole::PreseedStage);
     Ok(step)
 }

@@ -52,6 +52,7 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
             "check_runtime.rs",
             "deps_lock.rs",
             "generate_unmanaged.rs",
+            "job_image_preview.rs",
             "native_homebrew_check_required.rs",
             "owned_tool_preview.rs",
             "playwright_resolve.rs",
@@ -59,12 +60,13 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
             "preview_producer_entry.rs",
             "preview_source_admission_finalize.rs",
             "private_fetch.rs",
+            "qualification_cache_backend.rs",
             "qualification_resolver.rs",
             "routing.rs",
             "tap_prepare_execute.rs",
             "tap_prepare_routes.rs",
         ],
-        "preparation, execution, native check admission, preview budget admission, routing, owned preview, qualification admission, captured tap preparation, the private dependency lock, the Playwright browser lock, and the private fetch load configuration at their boundaries"
+        "preparation, execution, image preview, native check admission, preview budget admission and source finalization, routing, owned preview, qualification admission and cache backend, captured tap preparation, the private dependency lock/fetch, and the Playwright browser lock load configuration at their boundaries"
     );
     Ok(())
 }
@@ -106,13 +108,24 @@ fn preparation_and_runtime_share_named_check_identity() -> TestResult {
         .split("pub(crate) fn plan_group(")
         .nth(1)
         .expect("production planning boundary")
-        .split("fn complete_group(")
+        .split("/// Digest of canonical bytes")
         .next()
         .expect("planning body");
     assert!(
         group.contains("named_checks::plan::derive_lanes("),
         "named obligations share runtime derivation"
     );
+    Ok(())
+}
+
+#[test]
+fn rust_qualification_jobs_keep_the_private_fetch_authority() -> TestResult {
+    let jobs = std::fs::read_to_string(orch_src().join("crate_jobs.rs"))?;
+    let jobs = jobs.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(jobs.contains("build_crate_jobs_inner(input, qualification, private, seed_timeout)"));
+    assert!(jobs.contains("qualification && !is_tofu, private,"));
+    assert!(jobs.contains("if use_rust && let Some(private) = private"));
+    assert!(jobs.contains("private.insert_into_job(&mut job, &roots)?"));
     Ok(())
 }
 

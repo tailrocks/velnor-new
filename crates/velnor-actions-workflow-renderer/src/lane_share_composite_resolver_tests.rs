@@ -23,7 +23,10 @@ fn context() -> crate::render::RenderContext {
         report_helper_version: "0.1.0".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         scale_set_selector: None,
+        scale_set_image_source_sha: None,
         staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
+        verified_cache_helpers: BTreeMap::new(),
+        require_verified_cache_helper: false,
         request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
         checkout_uses: "actions/checkout@0000000000000000000000000000000000000000".to_owned(),
         validator_commands: Vec::new(),
@@ -84,11 +87,7 @@ fn composite_document(
     )
     .map_err(RenderError::Contract)?;
     let empty_job_env = BTreeMap::new();
-    let step_context = crate::document_lanes::JobStepContext {
-        job_env: &empty_job_env,
-        runs_on: None,
-        actions_read: false,
-    };
+    let step_context = crate::document_lanes::JobStepContext::composite(&empty_job_env);
     let rendered = steps
         .iter()
         .map(|step| {

@@ -38,16 +38,16 @@ fn job(steps: Vec<Step>) -> BTreeMap<String, Job> {
 
 fn full(plan: &FamilyCachePlan) -> Vec<Step> {
     vec![
-        family_keys_step(std::slice::from_ref(plan)).expect("keys"),
-        family_restore_step(plan).expect("restore"),
-        family_size_step(plan).expect("size"),
-        family_save_step(plan).expect("save"),
+        family_keys_step(std::slice::from_ref(plan)).expect("The cache key step must render."),
+        family_restore_step(plan).expect("The cache restore step must render."),
+        family_size_step(plan).expect("The cache size step must render."),
+        family_save_step(plan).expect("The cache save step must render."),
     ]
 }
 
 fn with_mut(step: &mut Step) -> &mut BTreeMap<String, String> {
     let StepKind::Action { with, .. } = &mut step.kind else {
-        panic!("action");
+        panic!("The step must be an action.");
     };
     with
 }
@@ -76,21 +76,21 @@ fn the_doctor_rejects_a_foreign_path_a_loose_condition_and_a_hand_written_step()
     );
     assert!(
         crate::cache_doctor::check(&job(steps)).is_err(),
-        "foreign path"
+        "The validator must reject a foreign cache path."
     );
 
     let mut steps = full(&bun);
     steps[3].condition = Some("success()".to_owned());
     assert!(
         crate::cache_doctor::check(&job(steps)).is_err(),
-        "ungated save"
+        "The validator must reject a save without its required condition."
     );
 
     let mut steps = full(&bun);
     with_mut(&mut steps[1]).insert("restore-keys".to_owned(), String::new());
     assert!(
         crate::cache_doctor::check(&job(steps)).is_err(),
-        "restore keys"
+        "The validator must reject the changed restore keys."
     );
 
     let dbt = plan(CacheFamily::DbtPackages, Some("analytics"));
@@ -101,14 +101,14 @@ fn the_doctor_rejects_a_foreign_path_a_loose_condition_and_a_hand_written_step()
     );
     assert!(
         crate::cache_doctor::check(&job(steps)).is_err(),
-        "traversal"
+        "The validator must reject traversal in the cache path."
     );
 
     let mut steps = full(&bun);
     with_mut(&mut steps[2 + 1]).insert("key".to_owned(), "velnor-v1-bun-install-hand".to_owned());
     assert!(
         crate::cache_doctor::check(&job(steps)).is_err(),
-        "hand-written key"
+        "The validator must reject a key supplied by the caller."
     );
 }
 

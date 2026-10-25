@@ -1,9 +1,22 @@
-//! Curl argv and URL joins. These tests do not open a socket.
+//! Curl transport tests use only local fixtures.
+
+use std::fs;
+use std::io::{ErrorKind, Write};
+use std::net::{TcpListener, TcpStream};
+use std::path::PathBuf;
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
 
 use velnor_runner_github::{Method, SessionRequest};
 
-use super::https::{CURL_ARGV, HttpsTransport, join_url, trace_lines};
+use super::https::{
+    CURL_ARGV, HttpsTransport, exchange_fixture_response, join_url, request_deadline_at,
+    run_curl_in_home, trace_lines,
+};
 use crate::error::HostError;
+
+#[path = "https_retry_fixture_tests.rs"]
+mod retry_fixture_tests;
 
 #[test]
 fn https_base_rejects_plain_http() {
@@ -25,6 +38,75 @@ fn background_cleanup_client_has_a_short_deadline() {
             .map(|transport| transport.cleanup_client().timeout_seconds()),
         Ok(5)
     );
+}
+
+#[test]
+fn bounded_requests_share_the_original_absolute_deadline() {
+    let start = Instant::now();
+    let deadline = start + Duration::from_millis(120);
+    let first = request_deadline_at(Some(deadline), 60, start).expect("first deadline");
+    let later = start + Duration::from_millis(110);
+    let second = request_deadline_at(Some(deadline), 60, later).expect("second deadline");
+
+    assert_eq!(first, deadline);
+    assert_eq!(second, deadline);
+    assert_eq!(
+        deadline.saturating_duration_since(later),
+        Duration::from_millis(10)
+    );
+}
+
+#[test]
+fn expired_absolute_deadline_has_no_remaining_request_time() {
+    let now = Instant::now();
+    let deadline = now.checked_sub(Duration::from_millis(1));
+    assert!(deadline.is_some());
+    let deadline = deadline.unwrap_or(now);
+    let request = request_deadline_at(Some(deadline), 60, now).expect("deadline remains absolute");
+    assert_eq!(request, deadline);
+    assert!(deadline.checked_duration_since(now).is_none());
+}
+
+#[test]
+fn bounded_response_accepts_the_exact_limit_without_truncation()
+-> Result<(), Box<dyn std::error::Error>> {
+    let fixture = ResponseFixture::start(
+        "HTTP/1.1 200 OK\r\nContent-Length: 4\r\nConnection: close\r\n\r\n",
+        b"four".to_vec(),
+    )?;
+    let exchange = exchange_fixture_response(&fixture.base, 4)?;
+    fixture.finish()?;
+
+    assert_eq!(exchange.status, 200);
+    assert_eq!(exchange.body, b"four");
+    Ok(())
+}
+
+#[test]
+fn bounded_response_rejects_oversized_content_length() -> Result<(), Box<dyn std::error::Error>> {
+    let fixture = ResponseFixture::start(
+        "HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\n",
+        b"12345".to_vec(),
+    )?;
+    let result = exchange_fixture_response(&fixture.base, 4);
+    let _server_result = fixture.finish();
+
+    assert!(result.is_err());
+    Ok(())
+}
+
+#[test]
+fn bounded_response_rejects_streamed_body_without_content_length()
+-> Result<(), Box<dyn std::error::Error>> {
+    let fixture = ResponseFixture::start(
+        "HTTP/1.0 200 OK\r\nConnection: close\r\n\r\n",
+        vec![b'x'; 32 * 1024],
+    )?;
+    let result = exchange_fixture_response(&fixture.base, 4);
+    let _server_result = fixture.finish();
+
+    assert!(result.is_err());
+    Ok(())
 }
 
 #[test]
@@ -54,7 +136,29 @@ fn curl_argv_has_no_header() {
     let rendered = format!("{request:?}");
     assert!(rendered.contains("[redacted]"));
     assert!(!rendered.contains("secret"));
+    assert_eq!(CURL_ARGV.first(), Some(&"-q"));
     assert!(!CURL_ARGV.iter().any(|arg| arg.contains("Authorization")));
+}
+
+#[test]
+fn curl_ignores_retrying_curlrc_before_a_post() -> Result<(), Box<dyn std::error::Error>> {
+    let home = CurlHome::new()?;
+    fs::write(
+        home.path.join(".curlrc"),
+        "retry = 1\nretry-all-errors\nretry-delay = 0\n",
+    )?;
+    let server = RetryFixture::start()?;
+    let config = format!(
+        "request = \"POST\"\nurl = \"http://{}/create\"\noutput = \"-\"\nwrite-out = \"%{{http_code}}\"\nmax-time = 5\n",
+        server.address
+    );
+
+    let result = run_curl_in_home(&config, &home.path);
+    let requests = server.finish()?;
+
+    assert!(matches!(result, Ok(503)));
+    assert_eq!(requests, 1);
+    Ok(())
 }
 
 #[test]
@@ -101,5 +205,195 @@ fn trace_request() -> SessionRequest {
         query: None,
         headers: Vec::new(),
         body: Vec::new(),
+    }
+}
+
+struct CurlHome {
+    path: PathBuf,
+}
+
+impl CurlHome {
+    fn new() -> std::io::Result<Self> {
+        let path = std::env::temp_dir().join(format!("velnor-curl-home-{}", uuid::Uuid::new_v4()));
+        fs::create_dir(&path)?;
+        Ok(Self { path })
+    }
+}
+
+impl Drop for CurlHome {
+    fn drop(&mut self) {
+        let _removed = fs::remove_dir_all(&self.path);
+    }
+}
+
+struct RetryFixture {
+    address: std::net::SocketAddr,
+    requests: JoinHandle<std::io::Result<usize>>,
+}
+
+impl RetryFixture {
+    fn start() -> std::io::Result<Self> {
+        Self::start_with_first_accept_timeout(Duration::from_secs(30))
+    }
+
+    fn start_with_first_accept_timeout(first_accept_timeout: Duration) -> std::io::Result<Self> {
+        let listener = TcpListener::bind("127.0.0.1:0")?;
+        listener.set_nonblocking(true)?;
+        let address = listener.local_addr()?;
+        let requests = thread::spawn(move || serve_retry_fixture(&listener, first_accept_timeout));
+        Ok(Self { address, requests })
+    }
+
+    fn finish(self) -> std::io::Result<usize> {
+        self.requests
+            .join()
+            .map_err(|_| std::io::Error::other("retry fixture thread panicked"))?
+    }
+}
+
+fn serve_retry_fixture(
+    listener: &TcpListener,
+    first_accept_timeout: Duration,
+) -> std::io::Result<usize> {
+    let first_deadline = Instant::now() + first_accept_timeout;
+    let (mut first, _) = accept_before_deadline(listener, first_deadline)?;
+    read_headers(&mut first)?;
+    respond(&mut first, 503)?;
+
+    let deadline = Instant::now() + Duration::from_millis(750);
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Ok(1);
+        }
+        match listener.accept() {
+            Ok((mut retry, _)) => {
+                read_headers(&mut retry)?;
+                respond(&mut retry, 409)?;
+                return Ok(2);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                thread::sleep(Duration::from_millis(5).min(remaining));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+fn read_headers(stream: &mut TcpStream) -> std::io::Result<()> {
+    retry_fixture_tests::read_headers_until(stream, Duration::from_secs(2))
+}
+
+fn accept_before_deadline(
+    listener: &TcpListener,
+    deadline: Instant,
+) -> std::io::Result<(TcpStream, std::net::SocketAddr)> {
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "retry fixture did not receive its first request before the deadline",
+            ));
+        }
+        match listener.accept() {
+            Ok(connection) => return Ok(connection),
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                thread::sleep(Duration::from_millis(5).min(remaining));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+fn deadline_error(message: &'static str) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::TimedOut, message)
+}
+
+fn is_socket_timeout(error: &std::io::Error) -> bool {
+    matches!(error.kind(), ErrorKind::TimedOut | ErrorKind::WouldBlock)
+}
+
+fn write_before_deadline(
+    stream: &mut TcpStream,
+    bytes: &[u8],
+    deadline: Instant,
+) -> std::io::Result<()> {
+    let mut written = 0;
+    while written < bytes.len() {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Err(deadline_error(
+                "fixture response exceeded its write deadline",
+            ));
+        }
+        stream.set_write_timeout(Some(remaining))?;
+        match stream.write(&bytes[written..]) {
+            Ok(0) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::WriteZero,
+                    "failed to write fixture response",
+                ));
+            }
+            Ok(count) => written += count,
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
+        }
+        if Instant::now() >= deadline {
+            return Err(deadline_error(
+                "fixture response exceeded its write deadline",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn respond(stream: &mut TcpStream, status: u16) -> std::io::Result<()> {
+    let reason = if status == 503 {
+        "Service Unavailable"
+    } else {
+        "Conflict"
+    };
+    let response =
+        format!("HTTP/1.1 {status} {reason}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+    write_before_deadline(
+        stream,
+        response.as_bytes(),
+        Instant::now() + Duration::from_secs(2),
+    )
+}
+
+struct ResponseFixture {
+    base: String,
+    server: JoinHandle<std::io::Result<()>>,
+}
+
+impl ResponseFixture {
+    fn start(head: &'static str, body: Vec<u8>) -> std::io::Result<Self> {
+        let listener = TcpListener::bind("127.0.0.1:0")?;
+        let address = listener.local_addr()?;
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept()?;
+            read_headers(&mut stream)?;
+            stream.write_all(head.as_bytes())?;
+            for chunk in body.chunks(1024) {
+                if stream.write_all(chunk).is_err() {
+                    break;
+                }
+            }
+            Ok(())
+        });
+        Ok(Self {
+            base: format!("http://{address}"),
+            server,
+        })
+    }
+
+    fn finish(self) -> std::io::Result<()> {
+        self.server
+            .join()
+            .map_err(|_| std::io::Error::other("The response test fixture failed."))?
     }
 }

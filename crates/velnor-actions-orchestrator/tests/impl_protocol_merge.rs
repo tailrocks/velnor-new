@@ -65,8 +65,16 @@ fn merge_assembled_request_roundtrips_to_passed() -> TestResult {
     let request = assemble_merge_request("local", &run)?;
     let mut value: serde_json::Value = serde_json::from_str(&request)?;
     assert!(value.get("base").is_none(), "merge shape: {request}");
-    value["required_job_ids"] = serde_json::json!(["plan"]);
-    value["required_jobs"] = serde_json::json!([{"job_id": "plan", "conclusion": "success"}]);
+    let mut required_job_ids = vec!["plan".to_owned()];
+    required_job_ids.extend(plan.matrix.include.iter().map(|entry| entry.job_id.clone()));
+    required_job_ids.sort();
+    required_job_ids.dedup();
+    let required_jobs: Vec<serde_json::Value> = required_job_ids
+        .iter()
+        .map(|job_id| serde_json::json!({"job_id": job_id, "conclusion": "success"}))
+        .collect();
+    value["required_job_ids"] = serde_json::json!(required_job_ids);
+    value["required_jobs"] = serde_json::json!(required_jobs);
     value["assembly_errors"] = serde_json::json!([]);
     value["actual_event"] = value["plan"]["event"].clone();
     let final_report: velnor_actions_contract::FinalReport =

@@ -324,7 +324,7 @@ impl EnvPolicy {
                 }
             }
         } else {
-            env.extend(super::cleared_parent_passthrough(*self, parent));
+            env.extend(super::parent_env::cleared_parent_passthrough(*self, parent));
         }
         env.extend(additions.iter().cloned());
         env

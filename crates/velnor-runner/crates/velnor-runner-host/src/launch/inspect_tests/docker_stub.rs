@@ -1,5 +1,8 @@
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicU64, Ordering},
+};
 use std::time::Duration;
 
 use bollard::Docker;
@@ -9,23 +12,27 @@ use tokio::sync::oneshot;
 
 use super::TIMEOUT;
 
-pub(in crate::launch) struct DockerResponse {
+mod request;
+#[path = "docker_stub/threaded.rs"]
+pub(crate) mod threaded;
+
+pub(crate) struct DockerResponse {
     status: Option<u16>,
     body: Vec<u8>,
-    hang: bool,
     delay: Duration,
 }
 
-pub(in crate::launch) struct DockerStub {
-    pub(in crate::launch) docker: Docker,
+pub(crate) struct DockerStub {
+    pub(crate) docker: Docker,
     path: PathBuf,
     task: Option<tokio::task::JoinHandle<Result<Vec<String>, String>>>,
     stop: Option<oneshot::Sender<()>>,
     expected: usize,
+    observed: Arc<Mutex<Vec<request::RequestTrace>>>,
 }
 
 impl DockerStub {
-    pub(in crate::launch) fn open(responses: Vec<DockerResponse>) -> Result<Self, String> {
+    pub(crate) fn open(responses: Vec<DockerResponse>) -> Result<Self, String> {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let number = NEXT.fetch_add(1, Ordering::Relaxed);
         let path = PathBuf::from(format!(
@@ -34,6 +41,8 @@ impl DockerStub {
         ));
         let listener = UnixListener::bind(&path).map_err(|error| error.to_string())?;
         let expected = responses.len();
+        let observed = Arc::new(Mutex::new(Vec::new()));
+        let task_observed = Arc::clone(&observed);
         let (stop, mut stopped) = oneshot::channel();
         let task = tokio::spawn(async move {
             let mut requests = Vec::with_capacity(expected);
@@ -42,13 +51,31 @@ impl DockerStub {
                 tokio::select! {
                     accepted = listener.accept() => {
                         let (mut stream, _) = accepted.map_err(|error| error.to_string())?;
-                        requests.push(read_request(&mut stream).await?);
+                        let line = match read_request(&mut stream).await {
+                            Ok(line) => line,
+                            Err(failure) => {
+                                task_observed.lock().map_err(|_| "The test could not lock the Docker request trace.".to_owned())?.push(request::RequestTrace {
+                                    path: failure.path,
+                                    response_index: None,
+                                    response_status: None,
+                                    failure: Some(failure.message.clone()),
+                                });
+                                return Err(failure.message);
+                            }
+                        };
+                        requests.push(line.clone());
                         let response = responses.next().unwrap_or(DockerResponse {
                                 status: Some(500),
                                 body: br#"{"message":"unexpected Docker request"}"#.to_vec(),
-                                hang: false,
                                 delay: Duration::ZERO,
                             });
+                        let response_index = requests.len() - 1;
+                        task_observed.lock().map_err(|_| "The test could not lock the Docker request trace.".to_owned())?.push(request::RequestTrace {
+                            path: Some(request::request_path(&line)?),
+                            response_index: Some(response_index),
+                            response_status: response.status,
+                            failure: None,
+                        });
                         send_response(&mut stream, &response).await?;
                     }
                     _ = &mut stopped => break,
@@ -73,15 +100,23 @@ impl DockerStub {
             task: Some(task),
             stop: Some(stop),
             expected,
+            observed,
         })
     }
 
-    pub(in crate::launch) async fn finish(mut self) -> Result<Vec<String>, String> {
+    pub(crate) async fn finish(mut self) -> Result<Vec<String>, String> {
         self.collect(true).await
     }
 
-    pub(in crate::launch) async fn finish_observed(mut self) -> Result<Vec<String>, String> {
+    pub(crate) async fn finish_observed(mut self) -> Result<Vec<String>, String> {
         self.collect(false).await
+    }
+
+    pub(crate) fn observed_request_summary(&self) -> Result<String, String> {
+        self.observed
+            .lock()
+            .map(|requests| summarize_requests(&requests))
+            .map_err(|_| "The test could not lock the Docker request trace.".to_owned())
     }
 
     async fn collect(&mut self, require_expected: bool) -> Result<Vec<String>, String> {
@@ -126,20 +161,18 @@ impl Drop for DockerStub {
     }
 }
 
-pub(in crate::launch) fn http(status: u16, body: &str) -> DockerResponse {
+pub(crate) fn http(status: u16, body: &str) -> DockerResponse {
     DockerResponse {
         status: Some(status),
         body: body.as_bytes().to_vec(),
-        hang: false,
         delay: Duration::ZERO,
     }
 }
 
-pub(in crate::launch) fn raw_http(status: u16, body: Vec<u8>) -> DockerResponse {
+pub(crate) fn raw_http(status: u16, body: Vec<u8>) -> DockerResponse {
     DockerResponse {
         status: Some(status),
         body,
-        hang: false,
         delay: Duration::ZERO,
     }
 }
@@ -148,7 +181,6 @@ pub(in crate::launch) fn delayed_http(status: u16, body: &str, delay: Duration) 
     DockerResponse {
         status: Some(status),
         body: body.as_bytes().to_vec(),
-        hang: false,
         delay,
     }
 }
@@ -157,24 +189,11 @@ pub(in crate::launch) fn closed() -> DockerResponse {
     DockerResponse {
         status: None,
         body: Vec::new(),
-        hang: false,
-        delay: Duration::ZERO,
-    }
-}
-
-pub(in crate::launch) fn hanging() -> DockerResponse {
-    DockerResponse {
-        status: None,
-        body: Vec::new(),
-        hang: true,
         delay: Duration::ZERO,
     }
 }
 
 async fn send_response(stream: &mut UnixStream, response: &DockerResponse) -> Result<(), String> {
-    if response.hang {
-        std::future::pending::<()>().await;
-    }
     tokio::time::sleep(response.delay).await;
     let Some(status) = response.status else {
         return Ok(());
@@ -207,28 +226,52 @@ fn disconnected_peer(error: &std::io::Error) -> bool {
     )
 }
 
-async fn read_request(stream: &mut UnixStream) -> Result<String, String> {
-    let mut request = Vec::new();
+fn summarize_requests(requests: &[request::RequestTrace]) -> String {
+    requests
+        .iter()
+        .map(|request| {
+            format!(
+                "{} [response {} status {:?}]",
+                request.path.as_deref().unwrap_or("<unparsed>"),
+                request
+                    .response_index
+                    .map_or_else(|| "none".to_owned(), |index| index.to_string()),
+                request.response_status
+            ) + &request
+                .failure
+                .as_ref()
+                .map_or_else(String::new, |failure| {
+                    format!(" [request failure: {failure}]")
+                })
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+async fn read_request(stream: &mut UnixStream) -> Result<String, request::RequestFailure> {
+    let mut framing = request::RequestFraming::default();
     let mut buffer = [0_u8; 256];
     loop {
-        let read = stream
-            .read(&mut buffer)
-            .await
-            .map_err(|error| error.to_string())?;
+        let read = match stream.read(&mut buffer).await {
+            Ok(read) => read,
+            Err(error) => return Err(framing.failure(error.to_string())),
+        };
         if read == 0 {
-            return Err("Docker client closed before sending a request".to_owned());
+            return framing
+                .finish()
+                .map(str::to_owned)
+                .map_err(|error| framing.failure(error));
         }
-        request.extend_from_slice(&buffer[..read]);
-        if request.windows(2).any(|bytes| bytes == b"\r\n") {
-            break;
+        let complete = framing
+            .push(&buffer[..read])
+            .map_err(|error| framing.failure(error))?;
+        if complete {
+            return framing
+                .finish()
+                .map(str::to_owned)
+                .map_err(|error| framing.failure(error));
         }
     }
-    let request = std::str::from_utf8(&request).map_err(|error| error.to_string())?;
-    request
-        .lines()
-        .next()
-        .map(str::to_owned)
-        .ok_or_else(|| "Docker client sent an empty request".to_owned())
 }
 
 const fn reason(status: u16) -> &'static str {

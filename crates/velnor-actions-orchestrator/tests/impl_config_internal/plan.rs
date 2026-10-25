@@ -2,6 +2,21 @@
 
 use super::*;
 
+/// Complete the validator inventory for all jobs declared by the plan.
+fn successful_job_inventory(
+    plan: &velnor_actions_contract::Plan,
+) -> (Vec<String>, Vec<serde_json::Value>) {
+    let mut ids = vec!["plan".to_owned()];
+    ids.extend(plan.matrix.include.iter().map(|entry| entry.job_id.clone()));
+    ids.sort();
+    ids.dedup();
+    let jobs = ids
+        .iter()
+        .map(|job_id| serde_json::json!({"job_id": job_id, "conclusion": "success"}))
+        .collect();
+    (ids, jobs)
+}
+
 #[test]
 fn internal_plan_selects_affected_and_validates() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
@@ -12,6 +27,7 @@ fn internal_plan_selects_affected_and_validates() -> TestResult {
 #[test]
 fn internal_merge_aggregates_reports() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
+    let (required_job_ids, required_jobs) = successful_job_inventory(&plan);
     let merge_request = serde_json::json!({
         "schema": 1,
         "run_key": "local",
@@ -19,18 +35,20 @@ fn internal_merge_aggregates_reports() -> TestResult {
         "plan": plan,
         "matrix": plan.matrix,
         "matrix_reports": [],
-        "required_job_ids": ["plan"],
-        "required_jobs": [{"job_id": "plan", "conclusion": "success"}],
+        "required_job_ids": required_job_ids,
+        "required_jobs": required_jobs,
     });
     let merged = merge_fixture(&merge_request.to_string())?;
     let final_report: FinalReport = serde_json::from_str(&merged)?;
     final_report.validate()?;
     assert_eq!(
         final_report.status,
-        velnor_actions_contract::FinalStatus::NotRun
+        velnor_actions_contract::FinalStatus::NotRun,
+        "{final_report:?}"
     );
 
     let reports = passing_reports(&plan)?;
+    let (required_job_ids, required_jobs) = successful_job_inventory(&plan);
     let plan_value = serde_json::to_value(&plan)?;
     let task_files = task_reports_for(&plan_value, &serde_json::to_value(&reports)?);
     let merge_request = serde_json::json!({
@@ -41,8 +59,8 @@ fn internal_merge_aggregates_reports() -> TestResult {
         "matrix": plan.matrix,
         "matrix_reports": reports,
         "task_reports": task_files,
-        "required_job_ids": ["plan"],
-        "required_jobs": [{"job_id": "plan", "conclusion": "success"}],
+        "required_job_ids": required_job_ids,
+        "required_jobs": required_jobs,
     });
     let merged = merge_fixture(&merge_request.to_string())?;
     let final_report: FinalReport = serde_json::from_str(&merged)?;
@@ -84,6 +102,6 @@ fn plan_job_lines_come_from_finalized_jobs() -> TestResult {
         let line = format!("- {id} ({} steps)", job.steps.len());
         assert!(text.contains(&line), "missing {line}:\n{text}");
     }
-    assert!(text.contains("1 Rust crate job"), "crate detail:\n{text}");
+    assert!(text.contains("1 Rust package job"), "crate detail:\n{text}");
     Ok(())
 }

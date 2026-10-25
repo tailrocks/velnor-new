@@ -9,6 +9,10 @@ use crate::{RenderError, render::RenderedFile, runs_on::runs_on_yaml, yaml::Yaml
 
 use super::Schema2WorkflowRequest;
 
+#[path = "schema2_job_image_candidate/permissions.rs"]
+mod permission_map;
+use permission_map::permissions;
+
 /// The file path for the job image candidate workflow.
 pub(super) const WORKFLOW_PATH: &str = ".github/workflows/job-image-candidate.yml";
 
@@ -27,7 +31,7 @@ mod native;
 /// # Errors
 ///
 /// The function returns an error if the request or workflow bytes are incorrect.
-pub(super) fn render_candidate_workflow(
+pub fn render_candidate_workflow(
     request: &Schema2WorkflowRequest,
 ) -> Result<RenderedFile, RenderError> {
     if !request.workflows.contains(&RoutingWorkflow::ImageRelease) {
@@ -36,6 +40,7 @@ pub(super) fn render_candidate_workflow(
         ));
     }
     let workflow = render(request)?;
+    let workflow = super::route_workflow(request, WORKFLOW_PATH, workflow)?;
     super::file(WORKFLOW_PATH, &request.version, &workflow)
 }
 
@@ -364,15 +369,6 @@ fn download_step(artifact_id: &str, destination: &str) -> Yaml {
             ]),
         ),
     ])
-}
-
-fn permissions(values: &[(&str, &str)]) -> Yaml {
-    Yaml::Map(
-        values
-            .iter()
-            .map(|(key, value)| ((*key).to_owned(), Yaml::str(*value)))
-            .collect(),
-    )
 }
 
 #[cfg(test)]

@@ -4,11 +4,11 @@ use velnor_actions_contract::{Step, StepKind, StepRole};
 use velnor_actions_mise::toolfiles::lockfile::InstallSubject;
 use velnor_actions_workflow_renderer::render::ValidatorCommand;
 
-use crate::workflow::verifier_actions::VerifierActionSet;
+use crate::workflow::verifier_actions::{VerifierAction, VerifierActionSet, VerifierSteps};
 
 use super::{
     CommandInstalls, MiseVectors, validator_argv_specs, validator_subject,
-    vectors::classify_mise_vectors,
+    vectors::classify_mise_vectors, verifiers,
 };
 
 #[derive(Default)]
@@ -22,6 +22,7 @@ pub(super) fn verifier_positions(
     id: &str,
     job: &velnor_actions_contract::Job,
     verifiers: &VerifierActionSet,
+    inline_verifiers: Option<&VerifierSteps>,
     blocking: &mut Vec<String>,
 ) -> VerifierPositions {
     let mut positions = VerifierPositions::default();
@@ -38,27 +39,22 @@ pub(super) fn verifier_positions(
                 blocking.push(format!("noncanonical_verifier_call:{id}:{}", action.uses));
                 continue;
             }
-            match action.uses {
-                uses if uses == verifiers.restored_rust.uses => {
-                    positions.restored_rust.push(index);
-                }
-                uses if uses == verifiers.installed_rust.uses => {
-                    positions.installed_rust.push(index);
-                }
-                uses if uses == verifiers.jactionlint.uses => {
-                    positions.jactionlint.push(index);
-                }
-                _ => unreachable!("lookup returns only registered verifier actions"),
-            }
-        } else if matches!(
-            step.role,
-            Some(StepRole::VerifyRustManifest | StepRole::VerifyJactionlint)
-        ) || matches!(
-            step.name.as_str(),
-            crate::workflow::VERIFY_RESTORED_RUST_STEP
-                | crate::workflow::VERIFY_RUST_MANIFEST_STEP
-                | crate::workflow::VERIFY_JACTIONLINT_STEP
-        ) {
+            record_action(&mut positions, index, action, verifiers);
+            continue;
+        }
+        if verifiers::restored_rust(step, inline_verifiers) {
+            positions.restored_rust.push(index);
+            continue;
+        }
+        if verifiers::installed_rust(step, inline_verifiers) {
+            positions.installed_rust.push(index);
+            continue;
+        }
+        if verifiers::jactionlint(step, inline_verifiers) {
+            positions.jactionlint.push(index);
+            continue;
+        }
+        if claims_verifier(step) {
             blocking.push(format!("forged_verifier_call:{id}:{}", step.name));
         }
     }
@@ -74,6 +70,39 @@ pub(super) fn verifier_positions(
     positions
 }
 
+fn record_action(
+    positions: &mut VerifierPositions,
+    index: usize,
+    action: &VerifierAction,
+    verifiers: &VerifierActionSet,
+) {
+    if action.uses == verifiers.restored_rust.uses {
+        positions.restored_rust.push(index);
+    } else if action.uses == verifiers.installed_rust.uses {
+        positions.installed_rust.push(index);
+    } else if action.uses == verifiers.jactionlint.uses {
+        positions.jactionlint.push(index);
+    }
+}
+
+fn claims_verifier(step: &Step) -> bool {
+    matches!(
+        step.role,
+        Some(StepRole::VerifyRustManifest | StepRole::VerifyJactionlint)
+    ) || [
+        crate::workflow::VERIFY_RESTORED_RUST_STEP,
+        crate::workflow::VERIFY_RUST_MANIFEST_STEP,
+        crate::workflow::VERIFY_JACTIONLINT_STEP,
+    ]
+    .iter()
+    .any(|name| step.name.starts_with(name))
+        || matches!(
+            &step.kind,
+            StepKind::Action { uses, .. }
+                if uses.starts_with("./.github/actions/velnor-verify-")
+        )
+}
+
 pub(super) fn rust_verifier_sequence_valid(
     job: &velnor_actions_contract::Job,
     positions: &VerifierPositions,
@@ -86,13 +115,31 @@ pub(super) fn rust_verifier_sequence_valid(
     ) else {
         return false;
     };
-    let components_at = job
+    let jactionlint_at = match positions.jactionlint.as_slice() {
+        [] => None,
+        [index] if prepare_at.checked_add(1) == Some(*index) => Some(*index),
+        _ => return false,
+    };
+    let component_positions: Vec<_> = job
         .steps
         .iter()
-        .position(|step| step.role == Some(StepRole::PrepareRustComponents));
+        .enumerate()
+        .filter_map(|(index, step)| {
+            (step.role == Some(StepRole::PrepareRustComponents)).then_some(index)
+        })
+        .collect();
+    let first_component_after = jactionlint_at.unwrap_or(prepare_at);
+    let components_follow_ordered_checks = component_positions
+        .iter()
+        .all(|components_at| *components_at > first_component_after);
+    let last_setup_at = component_positions
+        .last()
+        .copied()
+        .or(jactionlint_at)
+        .unwrap_or(prepare_at);
     restored_at.checked_add(1) == Some(prepare_at)
-        && *installed_at > prepare_at
-        && components_at.is_none_or(|at| *installed_at > at)
+        && components_follow_ordered_checks
+        && last_setup_at.checked_add(1) == Some(*installed_at)
 }
 
 pub(super) fn jactionlint_verifier_sequence_valid(

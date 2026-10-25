@@ -180,8 +180,8 @@ fn committed_drift_warns_never_fails() -> TestResult {
         value["plan"]["task_ids"]
             .as_array()
             .expect("task ids")
-            .len(),
-        0
+            .as_slice(),
+        [] as [serde_json::Value; 0]
     );
     let prep = prepare(root)?;
     assert!(prep.runner_image.is_unobserved());
@@ -212,7 +212,7 @@ fn local_select_uses_working_tree() -> TestResult {
     fs::write(root.join("b/src/lib.rs"), "pub fn f() {}\npub fn g() {}\n")?;
     let value = plan_value(root, "local", None, &head)?;
     let ids = value["plan"]["task_ids"].as_array().expect("task ids");
-    assert_ne!(ids.len(), 0);
+    assert_ne!(ids.as_slice(), [] as [serde_json::Value; 0]);
     for member in ["/a/", "/b/"] {
         assert!(
             ids.iter()
@@ -239,8 +239,8 @@ fn local_select_uses_working_tree() -> TestResult {
         value["plan"]["task_ids"]
             .as_array()
             .expect("task ids")
-            .len(),
-        0
+            .as_slice(),
+        [] as [serde_json::Value; 0]
     );
     assert!(has_warning(&value, "no_affected_files"));
     Ok(())

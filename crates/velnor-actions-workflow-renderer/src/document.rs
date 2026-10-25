@@ -4,6 +4,17 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+mod job_options;
+#[path = "document_job_workflow_entry.rs"]
+mod job_workflow_entry;
+#[cfg(test)]
+pub(crate) use job_workflow_entry::render_job_workflow_relocations;
+#[cfg(feature = "test-render-capture")]
+pub(crate) use job_workflow_entry::render_job_workflow_relocations_for_capture;
+pub(crate) use job_workflow_entry::render_job_workflow_relocations_with_routing;
+#[path = "document/job_workflow.rs"]
+mod job_workflow;
+
 use crate::{
     RenderError,
     document_steps::string_map_yaml,
@@ -43,6 +54,7 @@ pub(crate) fn workflow_to_yaml(
         || shared.calls.keys().ne(shared.preludes.keys())
         || shared.calls.keys().ne(shared.postludes.keys())
         || shared.calls.keys().any(|id| !jobs.contains_key(id))
+        || shared.job_workflows.keys().any(|id| !jobs.contains_key(id))
     {
         return Err(RenderError::InvalidWorkflow(
             "shared_lane_checkout_map_mismatch".to_owned(),
@@ -54,11 +66,19 @@ pub(crate) fn workflow_to_yaml(
         crate::document_env::workflow_env(!ctx.workflow_tasks.is_empty(), ctx.mise_quiet);
     let mut rendered_jobs = Vec::with_capacity(jobs.len());
     for (id, job) in jobs {
-        let call = shared.calls.get(id).map(String::as_str);
-        let actions_read =
-            grants_exact_actions_read(job.permissions.as_ref().unwrap_or(&ir.permissions).actions);
-        rendered_jobs.push((
-            id.clone(),
+        let rendered = if let Some(prepared) = shared.job_workflows.get(id) {
+            prepared.validate_source()?;
+            if !job_workflow::source_metadata_matches(prepared, job) {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "job_workflow_extract:source_metadata_mismatch:{id}"
+                )));
+            }
+            job_workflow::caller_yaml(prepared)?
+        } else {
+            let call = shared.calls.get(id).map(String::as_str);
+            let actions_read = grants_exact_actions_read(
+                job.permissions.as_ref().unwrap_or(&ir.permissions).actions,
+            );
             job_to_yaml(
                 id,
                 job,
@@ -71,9 +91,11 @@ pub(crate) fn workflow_to_yaml(
                     plan_attempt: crate::document_env::plan_attempt_value(id, job, jobs),
                     actions_read,
                     workflow_env: &workflow_env,
+                    relocated_child: false,
                 },
-            )?,
-        ));
+            )?
+        };
+        rendered_jobs.push((id.clone(), rendered));
     }
     let mut top = vec![
         ("name".to_owned(), Yaml::str(ir.name.clone())),
@@ -103,6 +125,9 @@ pub(crate) fn workflow_to_yaml(
     ]);
     Ok(Yaml::Map(top))
 }
+
+#[cfg(feature = "test-render-capture")]
+pub(crate) use job_workflow::validate_routed_child_projection;
 
 /// Report download is limited to the least-privilege `read` grant.
 fn grants_exact_actions_read(level: PermissionLevel) -> bool {
@@ -207,6 +232,9 @@ fn triggers_to_yaml(triggers: &Trigger) -> Yaml {
             Yaml::Map(vec![("inputs".to_owned(), Yaml::Map(inputs))]),
         ));
     }
+    if triggers.workflow_call {
+        entries.push(("workflow_call".to_owned(), Yaml::Map(Vec::new())));
+    }
     entries.push(("merge_group".to_owned(), Yaml::Null));
     Yaml::Map(entries)
 }
@@ -260,6 +288,7 @@ struct JobRenderPolicy<'a> {
     plan_attempt: Option<&'static str>,
     actions_read: bool,
     workflow_env: &'a BTreeMap<String, String>,
+    relocated_child: bool,
 }
 
 /// Render one job: name, runs-on, timeout, environment, permissions, needs, if, steps.
@@ -323,8 +352,8 @@ fn job_to_yaml(
         }
     }
     crate::document_env::extend_job_env(&mut job_env, policy.native_mbx, policy.plan_attempt);
-    let mut entries = job_header_fields(job, runs_on);
-    append_job_options(&mut entries, job, scale_set, &job_env, policy.workflow_env)?;
+    let mut entries = job_options::job_header_fields(job, runs_on);
+    job_options::append_job_options(&mut entries, job, scale_set, &job_env, policy.workflow_env)?;
     let mut effective_env = policy.workflow_env.clone();
     effective_env.extend(job_env.clone());
     let mut rendered_steps = crate::document_lanes::render_job_steps(
@@ -338,63 +367,11 @@ fn job_to_yaml(
             job_env: &effective_env,
             runs_on: Some(&job.runs_on),
             actions_read: policy.actions_read,
+            relocated_child: policy.relocated_child,
         },
     )?;
     crate::cache_save_budget::apply(&mut rendered_steps, job.timeout_minutes.minutes())?;
     crate::document_services::push_services(&mut entries, &job.services);
     entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
     Ok(Yaml::Map(entries))
-}
-
-fn job_header_fields(job: &Job, runs_on: Yaml) -> Vec<(String, Yaml)> {
-    let timeout = Yaml::Int(i64::from(job.timeout_minutes.minutes()));
-    vec![
-        ("name".to_owned(), Yaml::str(job.display_name.clone())),
-        ("runs-on".to_owned(), runs_on),
-        ("timeout-minutes".to_owned(), timeout),
-    ]
-}
-
-fn append_job_options(
-    entries: &mut Vec<(String, Yaml)>,
-    job: &Job,
-    scale_set: bool,
-    job_env: &BTreeMap<String, String>,
-    workflow_env: &BTreeMap<String, String>,
-) -> Result<(), RenderError> {
-    if scale_set {
-        entries.push(crate::runs_on::run_shell_defaults_field(
-            crate::runs_on::SCALE_SET_RUN_SHELL,
-        ));
-    }
-    if job.is_dependency_seed() {
-        entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
-    }
-    let job_env = crate::document_env::exclude_inherited(job_env, workflow_env);
-    if !job_env.is_empty() {
-        entries.push(("env".to_owned(), string_map_yaml(&job_env)));
-    }
-    if let Some(environment) = &job.environment {
-        entries.push(("environment".to_owned(), Yaml::str(environment.clone())));
-    }
-    if let Some(permissions) = &job.permissions {
-        entries.push(("permissions".to_owned(), permissions_to_yaml(permissions)));
-    }
-    if let Some(cache_mode) = &job.cache_mode {
-        steps::scan_for_private_subcommands(cache_mode.as_str())?;
-        entries.push(Yaml::cache_mode_field(cache_mode));
-    }
-    if !job.needs.is_empty() {
-        let needs: Vec<Yaml> = job
-            .needs
-            .iter()
-            .map(|need| Yaml::str(need.clone()))
-            .collect();
-        entries.push(("needs".to_owned(), Yaml::Seq(needs)));
-    }
-    if let Some(condition) = &job.condition {
-        steps::scan_for_private_subcommands(condition)?;
-        entries.push(("if".to_owned(), Yaml::str(condition.clone())));
-    }
-    Ok(())
 }

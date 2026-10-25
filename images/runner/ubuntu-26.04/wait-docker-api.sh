@@ -2,6 +2,7 @@
 set -euo pipefail
 
 readonly EXPECTED_INFO='vfs|/var/lib/docker'
+readonly PRIVATE_ENDPOINT='tcp://localhost:2375'
 readonly INFO_FORMAT='{{.Driver}}|{{.DockerRootDir}}'
 readonly MAX_OVERALL_SECONDS=30
 readonly MAX_PROBE_SECONDS=2
@@ -11,11 +12,9 @@ usage_error() {
   exit 2
 }
 
-check_socket() {
-  case "$1" in
-    unix:///*) ;;
-    *) usage_error "expected an absolute private Unix socket URL" ;;
-  esac
+check_endpoint() {
+  [[ "$1" == "$PRIVATE_ENDPOINT" ]] \
+    || usage_error "expected the fixed private DinD loopback endpoint"
 }
 
 check_seconds() {
@@ -24,7 +23,7 @@ check_seconds() {
 }
 
 probe_loop() {
-  local socket="$1" overall="$2" probe="$3" docker_cli="$4" timeout_cli="$5"
+  local endpoint="$1" overall="$2" probe="$3" docker_cli="$4" timeout_cli="$5"
   local deadline=$((SECONDS + overall)) remaining call_seconds response
 
   while ((SECONDS < deadline)); do
@@ -37,7 +36,7 @@ probe_loop() {
       break
     fi
     if response="$("$timeout_cli" --signal=KILL "${call_seconds}s" env \
-      -u DOCKER_HOST -u DOCKER_CONTEXT "$docker_cli" --host "$socket" \
+      -u DOCKER_HOST -u DOCKER_CONTEXT "$docker_cli" --host "$endpoint" \
       info --format "$INFO_FORMAT" 2>/dev/null)"; then
       if [[ "$response" == "$EXPECTED_INFO" ]]; then
         if ((SECONDS < deadline)); then
@@ -45,39 +44,39 @@ probe_loop() {
         fi
         break
       fi
-      printf 'Docker API readiness: unexpected info response at %s\n' "$socket" >&2
+      printf 'Docker API readiness: unexpected info response at %s\n' "$endpoint" >&2
       return 65
     fi
     sleep 0.2
   done
 
-  printf 'Docker API readiness timed out after %s seconds at %s\n' "$overall" "$socket" >&2
+  printf 'Docker API readiness timed out after %s seconds at %s\n' "$overall" "$endpoint" >&2
   return 124
 }
 
 if [[ "${1:-}" == "--probe-loop" ]]; then
   [[ "$#" -eq 6 ]] || usage_error "invalid internal probe arguments"
-  socket="$2"
+  endpoint="$2"
   overall="$3"
   probe="$4"
   docker_cli="$5"
   timeout_cli="$6"
-  check_socket "$socket"
+  check_endpoint "$endpoint"
   check_seconds "$overall" "$MAX_OVERALL_SECONDS" \
     || usage_error "overall deadline must be between 1 and ${MAX_OVERALL_SECONDS} seconds"
   check_seconds "$probe" "$MAX_PROBE_SECONDS" \
     || usage_error "per-call timeout must be between 1 and ${MAX_PROBE_SECONDS} seconds"
   unset DOCKER_HOST DOCKER_CONTEXT
-  probe_loop "$socket" "$overall" "$probe" "$docker_cli" "$timeout_cli"
+  probe_loop "$endpoint" "$overall" "$probe" "$docker_cli" "$timeout_cli"
   exit $?
 fi
 
 [[ "$#" -ge 1 && "$#" -le 3 ]] \
-  || usage_error "usage: wait-docker-api.sh unix://SOCKET [overall-seconds] [probe-seconds]"
-socket="$1"
+  || usage_error "usage: wait-docker-api.sh tcp://localhost:2375 [overall-seconds] [probe-seconds]"
+endpoint="$1"
 overall="${2:-$MAX_OVERALL_SECONDS}"
 probe="${3:-$MAX_PROBE_SECONDS}"
-check_socket "$socket"
+check_endpoint "$endpoint"
 check_seconds "$overall" "$MAX_OVERALL_SECONDS" \
   || usage_error "overall deadline must be between 1 and ${MAX_OVERALL_SECONDS} seconds"
 check_seconds "$probe" "$MAX_PROBE_SECONDS" \
@@ -98,14 +97,14 @@ if [[ "$script_path" != /* ]]; then
 fi
 
 if "$timeout_cli" --signal=KILL "${overall}s" "$script_path" --probe-loop \
-  "$socket" "$overall" "$probe" "$docker_cli" "$timeout_cli"; then
+  "$endpoint" "$overall" "$probe" "$docker_cli" "$timeout_cli"; then
   exit 0
 else
   status="$?"
 fi
 if [[ "$status" -eq 124 || "$status" -eq 137 ]]; then
-  printf 'Docker API readiness timed out after %s seconds at %s\n' "$overall" "$socket" >&2
+  printf 'Docker API readiness timed out after %s seconds at %s\n' "$overall" "$endpoint" >&2
 else
-  printf 'Docker API readiness probe failed at %s (status %s)\n' "$socket" "$status" >&2
+  printf 'Docker API readiness probe failed at %s (status %s)\n' "$endpoint" "$status" >&2
 fi
 exit 1

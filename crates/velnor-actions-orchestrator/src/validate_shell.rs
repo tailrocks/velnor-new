@@ -115,6 +115,28 @@ pub(crate) fn run_shellcheck_bodies(
     }
 }
 
+#[cfg(all(test, feature = "test-render-capture"))]
+pub(crate) fn staged_run_signatures(
+    text: &str,
+) -> Result<Vec<(String, &'static str)>, OrchestratorError> {
+    workflow::scan_workflow(text).map(|runs| {
+        runs.into_iter()
+            .map(|run| (run.body, run.shell.shebang()))
+            .collect()
+    })
+}
+
+#[cfg(all(test, feature = "test-render-capture"))]
+pub(crate) fn staged_run_signatures_for_equivalence(
+    text: &str,
+) -> Result<Vec<(String, &'static str)>, OrchestratorError> {
+    workflow::scan_workflow_for_equivalence(text).map(|runs| {
+        runs.into_iter()
+            .map(|run| (run.body, run.shell.shebang()))
+            .collect()
+    })
+}
+
 /// Unquote one single-line scalar: plain or double-quoted only.
 /// A quoted scalar may carry a separated YAML comment emitted by `Yaml::annotated`.
 fn unquote_run_scalar(scalar: &str) -> Result<String, OrchestratorError> {

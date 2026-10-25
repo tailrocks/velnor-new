@@ -1,12 +1,22 @@
 //! Generated composite for the fixed V2 tools-cache restore payload.
 
-use velnor_actions_contract::{Step, StepKind, StepRole};
+use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 
 use crate::{RenderError, marker, steps, tree::RenderedFile, yaml::Yaml};
 
 /// Validate the only call shape accepted for the fixed restore composite.
 /// # Errors
 pub(crate) fn validate_call(step: &Step) -> Result<&str, RenderError> {
+    validate_call_in_scope(step, false)
+}
+
+/// Validate the fixed restore composite inside a source-derived child workflow.
+/// # Errors
+pub(crate) fn validate_call_for_relocated_child(step: &Step) -> Result<&str, RenderError> {
+    validate_call_in_scope(step, true)
+}
+
+fn validate_call_in_scope(step: &Step, relocated_child: bool) -> Result<&str, RenderError> {
     let StepKind::Action { uses, with, env } = &step.kind else {
         return Err(RenderError::InvalidWorkflow(
             "tools_cache_restore_shape".to_owned(),
@@ -17,7 +27,7 @@ pub(crate) fn validate_call(step: &Step) -> Result<&str, RenderError> {
     })?;
     let seed_admitted = with.get(super::TOOLS_SEED_ADMITTED_INPUT);
     if step.role != Some(StepRole::ToolsCacheRestore)
-        || step.id != Some(velnor_actions_contract::StepId::ToolsRestore)
+        || step.id != Some(StepId::ToolsRestore)
         || uses != super::TOOLS_RESTORE_USES
         || !env.is_empty()
         || with.len() != 3
@@ -26,7 +36,15 @@ pub(crate) fn validate_call(step: &Step) -> Result<&str, RenderError> {
             .is_some_and(|sha| is_mise_sha256(sha))
         || seed_admitted.map(String::as_str) != Some(super::TOOLS_SEED_ADMITTED_EXPRESSION)
         || !crate::cache_p08::is_v2_cache_key_expression(key)
-        || step.condition.as_deref() != Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION)
+        || !(matches!(
+            step.condition.as_deref(),
+            Some(
+                crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION
+                    | crate::cache_p08::TOOLS_CACHE_PLAN_RESTORE_CONDITION
+            )
+        ) || (relocated_child
+            && step.condition.as_deref()
+                == Some(crate::cache_p08::TOOLS_CACHE_RELOCATED_RESTORE_CONDITION)))
     {
         return Err(RenderError::InvalidWorkflow(
             "tools_cache_restore_shape".to_owned(),
@@ -85,9 +103,9 @@ if command -v sha256sum >/dev/null 2>&1; then actual=$(sha256sum "$mise_root/bin
 [ "${actual%% *}" = "$mise_sha256" ] || { echo "Mise binary does not match its pinned SHA-256" >&2; exit 1; };
 };
 keep=false;
-if [ "$cache_hit" = true ] && [[ "$expected_key" =~ ^mise-tools-v2-[0-9a-f]{64}$ ]] && [ "$matched_key" = "$expected_key" ]; then
+if [ "$cache_hit" = true ] && [[ "$expected_key" =~ ^mise-tools-v2-payload-v3-[0-9a-f]{64}$ ]] && [ "$matched_key" = "$expected_key" ]; then
 keep=true;
-elif [ -z "$cache_hit" ] && [[ "$expected_key" =~ ^mise-tools-v2-[0-9a-f]{64}$ ]] && [ -z "$matched_key" ] && [ "$seed_admitted" = true ]; then
+elif [ -z "$cache_hit" ] && [[ "$expected_key" =~ ^mise-tools-v2-payload-v3-[0-9a-f]{64}$ ]] && [ -z "$matched_key" ] && [ "$seed_admitted" = true ]; then
 keep=true;
 fi;
 if [ "$keep" = true ]; then
@@ -164,6 +182,73 @@ fn admission_step() -> Yaml {
     ])
 }
 
+fn action_inputs() -> Yaml {
+    Yaml::Map(vec![
+        (
+            "key".to_owned(),
+            Yaml::Map(vec![
+                (
+                    "description".to_owned(),
+                    Yaml::str("Exact runtime-qualified V2 tools key."),
+                ),
+                ("required".to_owned(), Yaml::Bool(true)),
+            ]),
+        ),
+        (
+            super::TOOLS_MISE_SHA256_INPUT.to_owned(),
+            Yaml::Map(vec![
+                (
+                    "description".to_owned(),
+                    Yaml::str("Pinned SHA-256 of the Setup Mise binary."),
+                ),
+                ("required".to_owned(), Yaml::Bool(true)),
+            ]),
+        ),
+        (
+            super::TOOLS_SEED_ADMITTED_INPUT.to_owned(),
+            Yaml::Map(vec![
+                (
+                    "description".to_owned(),
+                    Yaml::str("Whether the trusted V2 prelude copied the exact seed."),
+                ),
+                ("required".to_owned(), Yaml::Bool(false)),
+                ("default".to_owned(), Yaml::quoted("false")),
+            ]),
+        ),
+    ])
+}
+
+fn action_outputs() -> Yaml {
+    Yaml::Map(vec![
+        (
+            "cache-hit".to_owned(),
+            Yaml::Map(vec![
+                (
+                    "description".to_owned(),
+                    Yaml::str("Shows whether the restore action found the tools cache key."),
+                ),
+                (
+                    "value".to_owned(),
+                    Yaml::str("${{ steps.restore.outputs.cache-hit }}"),
+                ),
+            ]),
+        ),
+        (
+            "cache-matched-key".to_owned(),
+            Yaml::Map(vec![
+                (
+                    "description".to_owned(),
+                    Yaml::str("The tools cache key that the restore action found."),
+                ),
+                (
+                    "value".to_owned(),
+                    Yaml::str("${{ steps.restore.outputs.cache-matched-key }}"),
+                ),
+            ]),
+        ),
+    ])
+}
+
 /// Re-verify every restored Mise install against its pinned archive; a
 /// mismatch is discarded so `Prepare pinned tools` reinstalls it.
 const INSTALLS_VERIFY_SCRIPT: &str = include_str!("cache_steps_tools_installs_verify.sh");
@@ -211,58 +296,8 @@ fn action_body(tool_pins: &[String]) -> Result<Yaml, RenderError> {
             "description".to_owned(),
             Yaml::str("Restore the exact renderer-owned V2 Mise tools paths."),
         ),
-        (
-            "inputs".to_owned(),
-            Yaml::Map(vec![
-                (
-                    "key".to_owned(),
-                    Yaml::Map(vec![
-                        (
-                            "description".to_owned(),
-                            Yaml::str("Exact runtime-qualified V2 tools key."),
-                        ),
-                        ("required".to_owned(), Yaml::Bool(true)),
-                    ]),
-                ),
-                (
-                    super::TOOLS_MISE_SHA256_INPUT.to_owned(),
-                    Yaml::Map(vec![
-                        (
-                            "description".to_owned(),
-                            Yaml::str("Pinned SHA-256 of the Setup Mise binary."),
-                        ),
-                        ("required".to_owned(), Yaml::Bool(true)),
-                    ]),
-                ),
-                (
-                    super::TOOLS_SEED_ADMITTED_INPUT.to_owned(),
-                    Yaml::Map(vec![
-                        (
-                            "description".to_owned(),
-                            Yaml::str("Whether the trusted V2 prelude copied the exact seed."),
-                        ),
-                        ("required".to_owned(), Yaml::Bool(false)),
-                        ("default".to_owned(), Yaml::quoted("false")),
-                    ]),
-                ),
-            ]),
-        ),
-        (
-            "outputs".to_owned(),
-            Yaml::Map(vec![(
-                "cache-hit".to_owned(),
-                Yaml::Map(vec![
-                    (
-                        "description".to_owned(),
-                        Yaml::str("Exact-key hit of the restored V2 tools entry."),
-                    ),
-                    (
-                        "value".to_owned(),
-                        Yaml::str("${{ steps.restore.outputs.cache-hit }}"),
-                    ),
-                ]),
-            )]),
-        ),
+        ("inputs".to_owned(), action_inputs()),
+        ("outputs".to_owned(), action_outputs()),
         (
             "runs".to_owned(),
             Yaml::Map(vec![

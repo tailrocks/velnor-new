@@ -16,7 +16,7 @@ pub(in crate::workflow) struct TaskExecutionValidation<'a> {
     /// Stable task report lookup ID.
     pub(in crate::workflow) task_id: &'a str,
     /// Digest binding the task arguments and toolchain.
-    pub(in crate::workflow) task_digest: &'a str,
+    pub(in crate::workflow) task_digest: &'a super::TaskBindingDigest,
     /// Pinned toolchain selectors and compile/test-driver identities.
     pub(in crate::workflow) toolchain_inputs: &'a crate::cachekey::ToolchainInputs,
     /// Stable task matrix identity.

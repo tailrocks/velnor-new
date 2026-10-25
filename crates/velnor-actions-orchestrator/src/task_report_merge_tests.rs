@@ -16,7 +16,7 @@ use super::task_report_tests::{CLIPPY, TEST, fixture_plan, staged_run};
 use super::*;
 use crate::merge::{MergeContext, merge_internal_with_context};
 use crate::merge_request::assemble_with_needs;
-use crate::noop_report::{NoOpRequest, write_noop_report_to, write_skip_reports};
+use crate::noop_report::{NoOpRequest, write_noop_report_to, write_skip_reports_for_job};
 
 fn merge_detached(request: &str) -> Result<String, crate::OrchestratorError> {
     merge_internal_with_context(request, &MergeContext::detached())
@@ -54,19 +54,23 @@ fn stage_downloads(plan: &Plan, temp: &TempDir) {
 /// Non-fork PR payload: the fixture plan is a PR plan, so assembly must
 /// capture `pull_request` or trust coherence fails the merge closed.
 const PR_PAYLOAD: &str = r#"{"pull_request":{"head":{"repo":{"fork":false}}}}"#;
+const TWO_JOB_NEEDS: &str = r#"{"plan":"success","crate_clippy":"success","crate_test":"success"}"#;
+const TWO_JOB_EXPECTED: &str = r#"["plan","crate_clippy","crate_test"]"#;
+const ONE_JOB_NEEDS: &str = r#"{"plan":"success","crate_clippy":"success"}"#;
+const ONE_JOB_EXPECTED: &str = r#"["plan","crate_clippy"]"#;
 
 #[test]
 fn merge_flips_not_run_to_executed_end_to_end() {
     let plan = fixture_plan();
     let temp = staged_run(&plan, "local");
     let run = temp.path().join("velnor").join("local");
-    let needs = Some(r#"{"plan":"success"}"#);
+    let needs = Some(TWO_JOB_NEEDS);
 
     let bare = assemble_with_needs(
         "local",
         &run,
         needs,
-        Some(r#"["plan"]"#),
+        Some(TWO_JOB_EXPECTED),
         Some("pull_request"),
         Some(PR_PAYLOAD),
     )
@@ -85,16 +89,15 @@ fn merge_flips_not_run_to_executed_end_to_end() {
     assert_eq!(verdict.counts.executed, 0);
     assert!(verdict.counts.not_run > 0);
 
-    write_task_report_to("local", CLIPPY, 0, None, &[TEST.to_owned()], temp.path())
-        .expect("clippy");
-    write_task_report_to("local", TEST, 0, None, &[], temp.path()).expect("test");
+    write_task_report_to("local", CLIPPY, 0, None, temp.path()).expect("clippy");
+    write_task_report_to("local", TEST, 0, None, temp.path()).expect("test");
     stage_downloads(&plan, &temp);
 
     let full = assemble_with_needs(
         "local",
         &run,
         needs,
-        Some(r#"["plan"]"#),
+        Some(TWO_JOB_EXPECTED),
         Some("pull_request"),
         Some(PR_PAYLOAD),
     )
@@ -120,24 +123,33 @@ fn merge_flips_not_run_to_executed_end_to_end() {
 
 #[test]
 fn merge_fails_failing_obligation_and_blocks_downstream() {
-    let plan = fixture_plan();
+    let mut plan = fixture_plan();
+    let job_id = plan.matrix.include[0].job_id.clone();
+    let artifact_id = plan.matrix.include[0].artifact_id.clone();
+    plan.matrix.include[1].job_id.clone_from(&job_id);
+    plan.matrix.include[1].artifact_id = artifact_id.clone();
+    plan.obligations[1].job_id.clone_from(&job_id);
+    plan.jobs = super::task_report_tests::run_jobs(&plan);
+    plan.validate().expect("shared-job failure plan validates");
     let temp = staged_run(&plan, "local");
     let run = temp.path().join("velnor").join("local");
-    let needs = Some(r#"{"plan":"success"}"#);
+    let needs = format!(r#"{{"plan":"success","{job_id}":"failure"}}"#);
+    let expected = format!(r#"["plan","{job_id}"]"#);
 
-    let reported =
-        write_task_report_to("local", CLIPPY, 1, None, &[], temp.path()).expect("clippy fails");
+    let reported = write_task_report_for_job("local", CLIPPY, 1, None, &job_id, temp.path())
+        .expect("clippy fails");
     assert_eq!(reported, 1);
-    let skipped = write_skip_reports(&plan, CLIPPY, &[TEST.to_owned()], temp.path())
-        .expect("downstream skips");
+    let skipped =
+        write_skip_reports_for_job(&plan, CLIPPY, &job_id, &[TEST.to_owned()], temp.path())
+            .expect("downstream skips");
     assert_eq!(skipped, 1);
     stage_downloads(&plan, &temp);
 
     let full = assemble_with_needs(
         "local",
         &run,
-        needs,
-        Some(r#"["plan"]"#),
+        Some(&needs),
+        Some(&expected),
         Some("pull_request"),
         Some(PR_PAYLOAD),
     )
@@ -156,7 +168,7 @@ fn merge_fails_failing_obligation_and_blocks_downstream() {
     assert_eq!(verdict.counts.failed, 1);
     assert_eq!(verdict.counts.blocked, 1);
     assert_eq!(verdict.counts.not_run, 0);
-    assert_eq!(verdict.downloaded_artifact_ids.len(), 2);
+    assert_eq!(verdict.downloaded_artifact_ids, [artifact_id]);
 }
 
 #[test]
@@ -172,9 +184,8 @@ fn merge_rejects_hosted_observation_for_custom_plan_entry() {
 
     let temp = staged_run(&plan, "local");
     let run = temp.path().join("velnor").join("local");
-    write_task_report_to("local", CLIPPY, 0, None, &[TEST.to_owned()], temp.path())
-        .expect("clippy");
-    write_task_report_to("local", TEST, 0, None, &[], temp.path()).expect("test");
+    write_task_report_to("local", CLIPPY, 0, None, temp.path()).expect("clippy");
+    write_task_report_to("local", TEST, 0, None, temp.path()).expect("test");
 
     let entry = &plan.matrix.include[0];
     let obligation = plan
@@ -218,8 +229,8 @@ fn merge_rejects_hosted_observation_for_custom_plan_entry() {
     let request = assemble_with_needs(
         "local",
         &run,
-        Some(r#"{"plan":"success"}"#),
-        Some(r#"["plan"]"#),
+        Some(TWO_JOB_NEEDS),
+        Some(TWO_JOB_EXPECTED),
         Some("pull_request"),
         Some(PR_PAYLOAD),
     )
@@ -252,8 +263,8 @@ fn merge_blocks_all_skipped_noop_end_to_end() {
     let full = assemble_with_needs(
         "local",
         &run,
-        Some(r#"{"plan":"success"}"#),
-        Some(r#"["plan"]"#),
+        Some(TWO_JOB_NEEDS),
+        Some(TWO_JOB_EXPECTED),
         Some("pull_request"),
         Some(PR_PAYLOAD),
     )
@@ -285,16 +296,15 @@ fn merge_lists_shared_job_artifact_once() {
     plan.jobs = super::task_report_tests::run_jobs(&plan);
     plan.validate().expect("shared-job plan validates");
     let temp = staged_run(&plan, "local");
-    write_task_report_to("local", CLIPPY, 0, None, &[TEST.to_owned()], temp.path())
-        .expect("clippy");
-    write_task_report_to("local", TEST, 0, None, &[], temp.path()).expect("test");
+    write_task_report_to("local", CLIPPY, 0, None, temp.path()).expect("clippy");
+    write_task_report_to("local", TEST, 0, None, temp.path()).expect("test");
     stage_downloads(&plan, &temp);
     let run = temp.path().join("velnor").join("local");
     let full = assemble_with_needs(
         "local",
         &run,
-        Some(r#"{"plan":"success"}"#),
-        Some(r#"["plan"]"#),
+        Some(ONE_JOB_NEEDS),
+        Some(ONE_JOB_EXPECTED),
         Some("pull_request"),
         Some(PR_PAYLOAD),
     )

@@ -25,3 +25,12 @@ fn qualification_hosted_target_accepts_only_pinned_x64_runner_pairs() {
         );
     }
 }
+
+#[test]
+fn service_host_matches_the_job_network() {
+    let hosted = RunnerSpec::hosted("ubuntu-26.04").expect("hosted label");
+    let scale = RunnerSpec::scale_set(Yaml::str("linux-amd64"));
+    assert_eq!(hosted.service_host(false), "127.0.0.1");
+    assert_eq!(hosted.service_host(true), "redis");
+    assert_eq!(scale.service_host(false), "redis");
+}

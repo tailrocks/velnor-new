@@ -26,7 +26,7 @@ Detected stacks
     - velnor-runner-cli (crates/velnor-runner/crates/velnor-runner-cli/Cargo.toml) [bin, lib, test; depends on velnor-runner-core, velnor-runner-host]
     - velnor-runner-core (crates/velnor-runner/crates/velnor-runner-core/Cargo.toml) [lib, test]
     - velnor-runner-github (crates/velnor-runner/crates/velnor-runner-github/Cargo.toml) [lib, test; depends on velnor-runner-core]
-    - velnor-runner-host (crates/velnor-runner/crates/velnor-runner-host/Cargo.toml) [bin, example, lib; depends on velnor-runner-core, velnor-runner-github]
+    - velnor-runner-host (crates/velnor-runner/crates/velnor-runner-host/Cargo.toml) [bin, example, lib; depends on velnor-resource-probe, velnor-runner-core, velnor-runner-github]
   Profile .: mbx compile driver (declared), cargo_nextest test runner (declared)
   Nextest profile .: ci (.config/nextest.toml)
     evidence .config/nextest.toml:4 [profile.ci] [durable]
@@ -50,36 +50,38 @@ Workflow to generate
   Push branch: main
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
-    - alint (2 steps)
-    - cargo-deny (6 steps)
-    - cargo-machete (7 steps)
-    - check-maintenance-helpers (8 steps)
-    - dependency-seed (23 steps)
-    - dependency-seed-crates-velnor-runner (23 steps)
-    - jactionlint (8 steps)
-    - plan (28 steps)
-    - required (14 steps)
+    - alint (5 steps)
+    - cargo-deny (10 steps)
+    - cargo-machete (11 steps)
+    - check-maintenance-helpers (10 steps)
+    - dependency-seed (27 steps)
+    - dependency-seed-6372617465732f76656c6e6f722d72756e6e6572 (27 steps)
+    - jactionlint (12 steps)
+    - plan (23 steps)
+    - required (17 steps)
     - required-gate (1 steps)
-    - rust-velnor-actions-actionlint (29 steps)
-    - rust-velnor-actions-ansible (28 steps)
-    - rust-velnor-actions-bun (28 steps)
-    - rust-velnor-actions-cli (30 steps)
-    - rust-velnor-actions-contract (28 steps)
-    - rust-velnor-actions-dbt (28 steps)
-    - rust-velnor-actions-gradle (28 steps)
-    - rust-velnor-actions-mise (29 steps)
-    - rust-velnor-actions-orchestrator (30 steps)
-    - rust-velnor-actions-rust (28 steps)
-    - rust-velnor-actions-tofu (28 steps)
-    - rust-velnor-actions-workflow-renderer (28 steps)
-    - rust-velnor-resource-probe (28 steps)
-    - rust-velnor-runner-attestation (27 steps)
-    - rust-velnor-runner-cli (28 steps)
-    - rust-velnor-runner-core (28 steps)
-    - rust-velnor-runner-github (28 steps)
-    - rust-velnor-runner-host (28 steps)
-    - 18 Rust crate jobs
-      Timeout: 15 minutes per crate job
+    - rust-velnor-actions-actionlint (76 steps)
+    - rust-velnor-actions-ansible (75 steps)
+    - rust-velnor-actions-bun (75 steps)
+    - rust-velnor-actions-cli (77 steps)
+    - rust-velnor-actions-contract (75 steps)
+    - rust-velnor-actions-dbt (75 steps)
+    - rust-velnor-actions-freshness (75 steps)
+    - rust-velnor-actions-gradle (75 steps)
+    - rust-velnor-actions-mise (76 steps)
+    - rust-velnor-actions-orchestrator (77 steps)
+    - rust-velnor-actions-rust (75 steps)
+    - rust-velnor-actions-tofu (75 steps)
+    - rust-velnor-actions-workflow-renderer (75 steps)
+    - rust-velnor-archive-guard (75 steps)
+    - rust-velnor-resource-probe (75 steps)
+    - rust-velnor-runner-attestation (74 steps)
+    - rust-velnor-runner-cli (75 steps)
+    - rust-velnor-runner-core (75 steps)
+    - rust-velnor-runner-github (75 steps)
+    - rust-velnor-runner-host (75 steps)
+    - 20 Rust package jobs
+      Timeout: 60 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check
       Entries:
         - rust-velnor-actions-actionlint
@@ -88,12 +90,14 @@ Workflow to generate
         - rust-velnor-actions-cli
         - rust-velnor-actions-contract
         - rust-velnor-actions-dbt
+        - rust-velnor-actions-freshness
         - rust-velnor-actions-gradle
         - rust-velnor-actions-mise
         - rust-velnor-actions-orchestrator
         - rust-velnor-actions-rust
         - rust-velnor-actions-tofu
         - rust-velnor-actions-workflow-renderer
+        - rust-velnor-archive-guard
         - rust-velnor-resource-probe
         - rust-velnor-runner-attestation
         - rust-velnor-runner-cli
@@ -136,6 +140,12 @@ Workflow to generate
         - stack/rust/crates/velnor-actions-dbt/doctest/default
         - stack/rust/crates/velnor-actions-dbt/fmt/default
         - stack/rust/crates/velnor-actions-dbt/nextest/default
+        - stack/rust/crates/velnor-actions-freshness/build/default
+        - stack/rust/crates/velnor-actions-freshness/clippy/default
+        - stack/rust/crates/velnor-actions-freshness/doc/default
+        - stack/rust/crates/velnor-actions-freshness/doctest/default
+        - stack/rust/crates/velnor-actions-freshness/fmt/default
+        - stack/rust/crates/velnor-actions-freshness/nextest/default
         - stack/rust/crates/velnor-actions-gradle/build/default
         - stack/rust/crates/velnor-actions-gradle/clippy/default
         - stack/rust/crates/velnor-actions-gradle/doc/default
@@ -172,6 +182,12 @@ Workflow to generate
         - stack/rust/crates/velnor-actions-workflow-renderer/doctest/default
         - stack/rust/crates/velnor-actions-workflow-renderer/fmt/default
         - stack/rust/crates/velnor-actions-workflow-renderer/nextest/default
+        - stack/rust/crates/velnor-archive-guard/build/default
+        - stack/rust/crates/velnor-archive-guard/clippy/default
+        - stack/rust/crates/velnor-archive-guard/doc/default
+        - stack/rust/crates/velnor-archive-guard/doctest/default
+        - stack/rust/crates/velnor-archive-guard/fmt/default
+        - stack/rust/crates/velnor-archive-guard/nextest/default
         - stack/rust/crates/velnor-runner/crates/velnor-resource-probe/build/default
         - stack/rust/crates/velnor-runner/crates/velnor-resource-probe/clippy/default
         - stack/rust/crates/velnor-runner/crates/velnor-resource-probe/doc/default
@@ -207,7 +223,7 @@ Workflow to generate
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/doctest/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/fmt/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/nextest/default
-  Parallel: 18 execution jobs; dependencies preserved; no matrix fan-out
+  Parallel: 20 execution jobs; dependencies preserved; no matrix fan-out
   Critical path: stack/rust/crates/velnor-actions-actionlint/build/default -> stack/rust/crates/velnor-actions-actionlint/nextest/default (2 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources, MBX compilation objects

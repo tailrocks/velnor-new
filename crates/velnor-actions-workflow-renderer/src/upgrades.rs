@@ -22,9 +22,12 @@
 //!   longer than `stuck_days`. It runs only on this schedule, so it is never
 //!   a pull-request check.
 
-use velnor_actions_contract::config::{UPGRADES_WORKFLOW_PATH, UpgradesConfig};
+use velnor_actions_contract::config::UpgradesConfig;
 
-use crate::{MiseSetup, RenderError, guard, marker, render::RenderedFile, steps, yaml::Yaml};
+use crate::{
+    MiseSetup, RenderError, guard, marker, render::RenderedFile, steps,
+    workflow_routing::WorkflowRoutingPolicy, yaml::Yaml,
+};
 
 /// Display name of the upgrade workflow.
 pub const UPGRADES_WORKFLOW_NAME: &str = "Velnor Upgrades";
@@ -41,6 +44,8 @@ pub const CARGO_EDIT_VERSION: &str = "0.13.13";
 
 #[path = "upgrades_jobs.rs"]
 mod jobs;
+#[path = "upgrades/render.rs"]
+mod render;
 #[path = "upgrades_scripts.rs"]
 mod scripts;
 use jobs::{env, gate_job, prepare_job, publish_job, verify_job};
@@ -142,7 +147,10 @@ fn exact_tool(spec: &str) -> bool {
 /// # Errors
 ///
 /// Returns [`RenderError`] for invalid spec scalars or steps.
-pub fn render_upgrades_workflow(spec: &UpgradesSpec) -> Result<RenderedFile, RenderError> {
+pub fn render_upgrades_workflow(
+    spec: &UpgradesSpec,
+    routing: &WorkflowRoutingPolicy,
+) -> Result<RenderedFile, RenderError> {
     spec.validate()?;
     let document = Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(UPGRADES_WORKFLOW_NAME)),
@@ -177,16 +185,7 @@ pub fn render_upgrades_workflow(spec: &UpgradesSpec) -> Result<RenderedFile, Ren
             ]),
         ),
     ]);
-    let text = crate::render::fallback::render_checked_workflow(
-        UPGRADES_WORKFLOW_PATH,
-        &document,
-        &spec.generator_version,
-    )?;
-    steps::scan_for_private_subcommands(&text)?;
-    Ok(RenderedFile {
-        path: UPGRADES_WORKFLOW_PATH.to_owned(),
-        bytes: text,
-    })
+    render::finish(document, routing, &spec.generator_version)
 }
 
 #[cfg(test)]

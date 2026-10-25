@@ -28,7 +28,16 @@ pub(crate) fn plain_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
                 crate::steps::scan_for_private_subcommands(condition)?;
                 entries.push(("if".to_owned(), Yaml::str(condition.clone())));
             }
-            entries.push(("uses".to_owned(), Yaml::str(uses.clone())));
+            let uses_yaml = if velnor_actions_contract::workflow::step_identity::RUST_VERIFIER_USES
+                .contains(&uses.as_str())
+                || uses
+                    == velnor_actions_contract::workflow::step_identity::JACTIONLINT_VERIFIER_USES
+            {
+                Yaml::annotated(uses.clone(), "zizmor: ignore[self-repository]")
+            } else {
+                Yaml::str(uses.clone())
+            };
+            entries.push(("uses".to_owned(), uses_yaml));
             if !with.is_empty() {
                 entries.push(("with".to_owned(), string_map_yaml(with)));
             }
@@ -47,7 +56,7 @@ pub(crate) fn plain_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
             )? {
                 return Ok(verifier);
             }
-            crate::action_mbx_shell::validate_step_argv(run, step.role)?;
+            crate::action_mbx_shell::validate_step_argv(run, step.role, env)?;
             commands::validate_env(env)?;
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
             if let Some(condition) = &step.condition {

@@ -60,6 +60,17 @@ fn config_error(config: &str) -> Result<String, Box<dyn std::error::Error>> {
     Ok(err.to_string())
 }
 
+fn routed_bundle_config(mode: &str) -> String {
+    let config = BUNDLE_CONFIG
+        .replace("schema = 1", "schema = 2")
+        .replace("name = \"CI\"", "name = \"CI\"\npolicy = \"consumer-v1\"");
+    format!(
+        "{config}\n[execution]\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\nmode = \"{mode}\"\n\
+[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n\
+[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"velnor\", \"ubuntu-26.04-scale-set\"]\nplatform = \"linux/amd64\"\njob_container_image = \"ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n"
+    )
+}
+
 #[test]
 fn no_bundle_means_no_publish_workflow() -> TestResult {
     let repo = make_repo(crate::impl_common::config_with_branch())?;
@@ -118,6 +129,52 @@ fn tag_trigger_and_authority_gate() -> TestResult {
         yaml.contains("contents/Cargo.toml?ref=$GITHUB_SHA"),
         "manifest read:\n{yaml}"
     );
+    Ok(())
+}
+
+#[test]
+fn publication_jobs_follow_the_configured_execution_mode() -> TestResult {
+    let jobs = [
+        "publish-authority",
+        "bundle-build-demo-schema",
+        "bundle-attest-demo-schema",
+        "bundle-publish-demo-schema",
+        "bundle-build-demo-tables",
+        "bundle-attest-demo-tables",
+        "bundle-publish-demo-tables",
+    ];
+    for (mode, routed) in [("scale-set", true), ("both", false)] {
+        let yaml = rendered(&routed_bundle_config(mode))?;
+        for id in jobs {
+            let block = job_block(&yaml, id)?;
+            if routed {
+                assert!(
+                    block.contains("runs-on: [velnor, ubuntu-26.04-scale-set]"),
+                    "Job {id} must use the configured Scale Set runner in execution mode \"{mode}\". The job details follow:\n{block}"
+                );
+                assert!(
+                    block.contains("ghcr.io/team/job@sha256:aaaaaaaa"),
+                    "Job {id} must use the immutable job image in execution mode \"{mode}\". The job details follow:\n{block}"
+                );
+            } else {
+                assert!(
+                    block.contains("runs-on: ubuntu-26.04"),
+                    "Job {id} must use the hosted runner in execution mode \"{mode}\". The job details follow:\n{block}"
+                );
+                assert!(
+                    !block.contains("container:"),
+                    "Job {id} must not use a job container in execution mode \"{mode}\". The job details follow:\n{block}"
+                );
+            }
+        }
+        assert!(yaml.contains("group: publish-${{ github.ref }}"), "{yaml}");
+        assert!(yaml.contains("cancel-in-progress: false"), "{yaml}");
+        assert!(yaml.contains("tags:"), "{yaml}");
+        let publish = job_block(&yaml, "bundle-publish-demo-schema")?;
+        assert!(publish.contains("environment: release"), "{publish}");
+        assert!(publish.contains("contents: write"), "{publish}");
+        assert!(!publish.contains("actions/checkout@"), "{publish}");
+    }
     Ok(())
 }
 

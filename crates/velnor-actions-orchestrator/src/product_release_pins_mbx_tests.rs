@@ -71,7 +71,7 @@ fn release_qualification_uses_catalog_action_and_exact_version_probe() {
         velnor_actions_workflow_renderer::steps::MbxTransport::InstallOnly,
         None,
     )
-    .expect("catalog qualification MBX steps");
+    .expect("Could not build the MBX qualification steps from the tool catalog.");
     let StepKind::Action { uses, with, .. } = &steps[1].kind else {
         panic!("qualification middle step must install the native MBX action");
     };
@@ -100,9 +100,10 @@ fn release_qualification_uses_catalog_action_and_exact_version_probe() {
 #[test]
 fn production_host_build_uses_pinned_mbx_for_only_the_nested_host_binary() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let config = crate::config::load_config(&root).expect("repository release configuration");
+    let config = crate::config::load_config(&root)
+        .expect("Could not load the repository release configuration.");
     let pins = super::resolve(&config, &velnor_actions_mise::ToolCatalog::pinned())
-        .expect("production release pins");
+        .expect("Could not resolve the production release pins.");
     let catalog = ToolCatalog::pinned();
     let rust = format!("rust@{}", catalog.version(PinnedTool::Rust));
     let mbx = format!("mr-boxington@{}", catalog.version(PinnedTool::MrBoxington));
@@ -187,6 +188,42 @@ fn assert_probe_build_argv(argv: &[String], rust: &str, mbx: &str) {
             "--release",
             "--target",
             "x86_64-unknown-linux-musl",
+        ]
+    );
+}
+
+#[test]
+fn production_attestation_helper_build_uses_the_same_pinned_mbx_inputs() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let config = crate::config::load_config(&root)
+        .expect("Could not load the repository release configuration.");
+    let pins = super::resolve(&config, &ToolCatalog::pinned())
+        .expect("Could not resolve the production release pins.");
+    let catalog = ToolCatalog::pinned();
+    let rust = format!("rust@{}", catalog.version(PinnedTool::Rust));
+    let mbx = format!("mr-boxington@{}", catalog.version(PinnedTool::MrBoxington));
+
+    assert_eq!(
+        strings(&pins.attestation_helper_build_argv),
+        [
+            "mise",
+            "--no-config",
+            "--no-env",
+            "--no-hooks",
+            "exec",
+            rust.as_str(),
+            mbx.as_str(),
+            "--",
+            "mbx",
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/velnor-runner/Cargo.toml",
+            "--release",
+            "--package",
+            "velnor-runner-attestation",
+            "--bin",
+            "velnor-runner-attestation-helper",
         ]
     );
 }

@@ -19,6 +19,9 @@ fn run() -> Result<(), HostError> {
         (Some("validate-smoke"), [output, root]) => {
             resource_probe_release::validate_smoke(output, root)
         }
+        (Some("validate-smoke-schema5"), [output, root]) => {
+            resource_probe_release::validate_smoke_schema5(output, root)
+        }
         (Some("write-manifest"), [inspect, archive, output]) => {
             resource_probe_release::write_manifest(inspect, archive, output)
         }

@@ -9,9 +9,10 @@ use velnor_actions_mise::catalog::source_build_bootstrap::{
     SourceBuildBootstrapTool, official,
 };
 use velnor_actions_workflow_renderer::RenderedFile;
+use velnor_actions_workflow_renderer::WorkflowRoutingPolicy;
 use velnor_actions_workflow_renderer::owned_tool_publication::{
     OwnedBuildBootstrap, OwnedPublicationSpec, SourceBuildBinding, SourceQualificationTrigger,
-    render_owned_publication_files,
+    render_owned_publication_files_with_routing,
 };
 
 use crate::{OrchestratorError, prepare::GenerationPreparation, workflow::CHECKOUT_USES};
@@ -20,31 +21,56 @@ use crate::{OrchestratorError, prepare::GenerationPreparation, workflow::CHECKOU
 pub(crate) const SOURCE_APPROVAL_PATH: &str = ".velnor/owned-tool-sources.json";
 
 pub(crate) fn files(prep: &GenerationPreparation) -> Result<Vec<RenderedFile>, OrchestratorError> {
+    files_with_routing(prep, &WorkflowRoutingPolicy::hosted_only())
+}
+
+pub(crate) fn files_with_routing(
+    prep: &GenerationPreparation,
+    routing: &WorkflowRoutingPolicy,
+) -> Result<Vec<RenderedFile>, OrchestratorError> {
     if prep.config.workflow.policy != WorkflowPolicy::VelnorRepositoryV1 {
         return Ok(Vec::new());
     }
-    files_for_root(&prep.root)
+    files_for_root_with_routing(&prep.root, routing)
 }
 
-pub(crate) fn files_for_root(root: &Path) -> Result<Vec<RenderedFile>, OrchestratorError> {
-    files_for_trigger(root, SourceQualificationTrigger::DefaultBranchDispatch)
+fn files_for_root_with_routing(
+    root: &Path,
+    routing: &WorkflowRoutingPolicy,
+) -> Result<Vec<RenderedFile>, OrchestratorError> {
+    files_for_trigger_with_routing(
+        root,
+        SourceQualificationTrigger::DefaultBranchDispatch,
+        routing,
+    )
 }
 
 pub(crate) fn files_for_trigger(
     root: &Path,
     trigger: SourceQualificationTrigger,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
+    files_for_trigger_with_routing(root, trigger, &WorkflowRoutingPolicy::hosted_only())
+}
+
+fn files_for_trigger_with_routing(
+    root: &Path,
+    trigger: SourceQualificationTrigger,
+    routing: &WorkflowRoutingPolicy,
+) -> Result<Vec<RenderedFile>, OrchestratorError> {
     let sources = sources(root)?;
     if sources.is_empty() {
         return Ok(Vec::new());
     }
-    Ok(render_owned_publication_files(&OwnedPublicationSpec {
-        trigger,
-        generator_version: env!("CARGO_PKG_VERSION").to_owned(),
-        checkout_uses: CHECKOUT_USES.to_owned(),
-        sources,
-        bootstraps: bootstraps()?,
-    })?)
+    Ok(render_owned_publication_files_with_routing(
+        &OwnedPublicationSpec {
+            trigger,
+            generator_version: env!("CARGO_PKG_VERSION").to_owned(),
+            checkout_uses: CHECKOUT_USES.to_owned(),
+            sources,
+            bootstraps: bootstraps()?,
+        },
+        routing,
+    )?)
 }
 
 fn sources(root: &Path) -> Result<Vec<SourceBuildBinding>, OrchestratorError> {

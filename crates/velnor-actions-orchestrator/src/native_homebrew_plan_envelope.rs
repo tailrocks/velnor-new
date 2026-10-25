@@ -27,8 +27,23 @@ pub(crate) fn derive_plan_envelopes(
         decision: ObligationDecision::Execute,
         reason: "native_homebrew_check_requires_execution".to_owned(),
         task_digest: digests.task.clone(),
+        task_binding_digest: velnor_actions_contract::workflow::TaskBindingDigest::new(
+            digests.task.clone(),
+        )
+        .map_err(crate::internal::internal_contract)?,
         input_digest: digests.input.clone(),
         closure_digest: digests.closure,
+        // Native checks have no Cargo workspace graph; their source and
+        // authority identity is bound by the input closure above.
+        graph_digest: digest_b3(b"no-workspace"),
+        mbx_digest: velnor_actions_contract::digest_b3(
+            velnor_actions_contract::cachekey::mbx_cache_generation(
+                velnor_actions_mise::ToolCatalog::pinned()
+                    .version(velnor_actions_mise::PinnedTool::MrBoxington),
+            )
+            .as_bytes(),
+        ),
+        profile: task.configuration.clone(),
         job_id: job_id.clone(),
     };
     let metadata = serde_json::json!({

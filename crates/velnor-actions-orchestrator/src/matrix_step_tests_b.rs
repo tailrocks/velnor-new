@@ -7,7 +7,6 @@ fn obligation_step_runs_unconditionally() {
     let step = obligation_step(
         &obligation,
         &ToolCatalog::pinned(),
-        &[],
         None,
         env!("CARGO_PKG_VERSION"),
         None,
@@ -20,7 +19,6 @@ fn obligation_step_runs_unconditionally() {
         obligation_step(
             &forged,
             &ToolCatalog::pinned(),
-            &[],
             None,
             env!("CARGO_PKG_VERSION"),
             None
@@ -100,7 +98,6 @@ fn doc_obligation_step_carries_typed_rustdocflags() {
     let step = obligation_step(
         &doc,
         &ToolCatalog::pinned(),
-        &[],
         None,
         env!("CARGO_PKG_VERSION"),
         None,
@@ -151,7 +148,6 @@ fn assert_tofu_step_automation_environment() {
     let step = obligation_step(
         &tofu,
         &ToolCatalog::pinned(),
-        &[],
         None,
         env!("CARGO_PKG_VERSION"),
         None,
@@ -204,7 +200,6 @@ fn assert_rust_step_owned_homes() {
     let step = obligation_step(
         &obligation(),
         &ToolCatalog::pinned(),
-        &[],
         None,
         env!("CARGO_PKG_VERSION"),
         None,
@@ -235,7 +230,6 @@ fn non_doc_obligation_steps_carry_no_rustdocflags() {
     let step = obligation_step(
         &obligation(),
         &ToolCatalog::pinned(),
-        &[],
         None,
         env!("CARGO_PKG_VERSION"),
         None,

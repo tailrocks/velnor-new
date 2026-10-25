@@ -12,15 +12,11 @@ use crate::impl_common::{
 use crate::impl_orch_core::{merge, merge_request, success_jobs};
 use crate::impl_orch_plansel::{BUMP, commit, make_ws, plan_at, put};
 
-/// Merge status for one hand-built request value.
-fn status_of(request: &serde_json::Value) -> Result<FinalStatus, Box<dyn std::error::Error>> {
-    Ok(
-        serde_json::from_str::<velnor_actions_contract::FinalReport>(&merge_fixture(
-            &request.to_string(),
-        )?)?
-        .status,
-    )
-}
+#[path = "impl_required_evidence_inventory.rs"]
+mod inventory_helpers;
+use self::inventory_helpers::{
+    required_job_ids, results_with_conclusion, status_of, successful_results_except,
+};
 
 #[test]
 fn empty_required_inventory_fails_closed() -> TestResult {
@@ -49,7 +45,8 @@ fn validator_results_must_match_inventory_exactly() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
     let reports = passing_reports(&plan)?;
     let matrix = serde_json::to_value(&plan.matrix)?;
-    let inventory = json!(["plan", "jactionlint"]);
+    let inventory_ids = required_job_ids(&plan, &["jactionlint"]);
+    let inventory = json!(inventory_ids.clone());
     let plan_value = serde_json::to_value(&plan)?;
     let run = |jobs: serde_json::Value| {
         let mut request = merge_request(
@@ -63,7 +60,10 @@ fn validator_results_must_match_inventory_exactly() -> TestResult {
     };
 
     // A missing validator fails, and the report marks it missing.
-    let report = run(success_jobs())?;
+    let report = run(json!(successful_results_except(
+        &inventory_ids,
+        &["jactionlint"]
+    )))?;
     assert_eq!(report.status, FinalStatus::PlanningFailed);
     assert!(
         report
@@ -75,11 +75,9 @@ fn validator_results_must_match_inventory_exactly() -> TestResult {
     );
 
     // An unexpected validator fails as a corrupt evidence set.
-    let extra = json!([
-        {"job_id": "plan", "conclusion": "success"},
-        {"job_id": "jactionlint", "conclusion": "success"},
-        {"job_id": "velnor-stray", "conclusion": "success"},
-    ]);
+    let mut extra = successful_results_except(&inventory_ids, &[]);
+    extra.push(json!({"job_id": "velnor-stray", "conclusion": "success"}));
+    let extra = json!(extra);
     let report = run(extra)?;
     assert_eq!(report.status, FinalStatus::PlanningFailed);
     assert!(
@@ -89,18 +87,13 @@ fn validator_results_must_match_inventory_exactly() -> TestResult {
     );
 
     // A duplicated validator fails the same way.
-    let dupe = json!([
-        {"job_id": "plan", "conclusion": "success"},
-        {"job_id": "plan", "conclusion": "success"},
-        {"job_id": "jactionlint", "conclusion": "success"},
-    ]);
+    let mut dupe = successful_results_except(&inventory_ids, &[]);
+    dupe.push(json!({"job_id": "plan", "conclusion": "success"}));
+    let dupe = json!(dupe);
     assert_eq!(run(dupe)?.status, FinalStatus::PlanningFailed);
 
     // Exact coverage passes.
-    let full = json!([
-        {"job_id": "plan", "conclusion": "success"},
-        {"job_id": "jactionlint", "conclusion": "success"},
-    ]);
+    let full = json!(successful_results_except(&inventory_ids, &[]));
     assert_eq!(run(full)?.status, FinalStatus::Passed);
     Ok(())
 }
@@ -110,23 +103,14 @@ fn validator_states_fold_per_validator() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
     let reports = passing_reports(&plan)?;
     let matrix = serde_json::to_value(&plan.matrix)?;
+    let inventory_ids = required_job_ids(&plan, &["jactionlint"]);
     for failing in ["plan", "jactionlint"] {
         for (conclusion, status) in [
             ("failure", FinalStatus::Failed),
             ("cancelled", FinalStatus::Cancelled),
             ("skipped", FinalStatus::NotRun),
         ] {
-            let jobs: Vec<serde_json::Value> = ["plan", "jactionlint"]
-                .iter()
-                .map(|id| {
-                    let result = if *id == failing {
-                        conclusion
-                    } else {
-                        "success"
-                    };
-                    json!({"job_id": id, "conclusion": result})
-                })
-                .collect();
+            let jobs = results_with_conclusion(&inventory_ids, failing, conclusion);
             let plan_value = serde_json::to_value(&plan)?;
             let mut request = merge_request(
                 &plan_value,
@@ -134,7 +118,7 @@ fn validator_states_fold_per_validator() -> TestResult {
                 &serde_json::to_value(&reports)?,
                 &serde_json::Value::Array(jobs),
             );
-            request["required_job_ids"] = json!(["plan", "jactionlint"]);
+            request["required_job_ids"] = json!(inventory_ids.clone());
             assert_eq!(status_of(&request)?, status, "{failing}={conclusion}");
         }
     }
@@ -147,12 +131,14 @@ fn candidate_evidence_is_its_needs_conclusion() -> TestResult {
     let reports = passing_reports(&plan)?;
     let plan_value = serde_json::to_value(&plan)?;
     let matrix = serde_json::to_value(&plan.matrix)?;
+    let inventory_ids = required_job_ids(&plan, &["candidate"]);
     let gate = |request: &mut serde_json::Value, conclusion: &str| {
-        request["required_job_ids"] = json!(["candidate", "plan"]);
-        request["required_jobs"] = json!([
-            {"job_id": "candidate", "conclusion": conclusion},
-            {"job_id": "plan", "conclusion": "success"},
-        ]);
+        request["required_job_ids"] = json!(inventory_ids);
+        request["required_jobs"] = json!(results_with_conclusion(
+            &inventory_ids,
+            "candidate",
+            conclusion
+        ));
     };
     let base = || {
         let mut request = merge_request(
@@ -187,10 +173,8 @@ fn candidate_evidence_is_its_needs_conclusion() -> TestResult {
 
     // A gating candidate without its conclusion fails closed.
     let mut missing = base();
-    missing["required_job_ids"] = json!(["candidate", "plan"]);
-    missing["required_jobs"] = json!([
-        {"job_id": "plan", "conclusion": "success"},
-    ]);
+    missing["required_job_ids"] = json!(inventory_ids);
+    missing["required_jobs"] = json!(successful_results_except(&inventory_ids, &["candidate"]));
     assert_eq!(status_of(&missing)?, FinalStatus::PlanningFailed);
     Ok(())
 }

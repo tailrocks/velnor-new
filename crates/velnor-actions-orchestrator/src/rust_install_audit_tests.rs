@@ -242,6 +242,9 @@ fn missing_or_changed_verifier_composite_blocks_audit() {
 #[path = "rust_install_audit_verifier_tests.rs"]
 mod verifier_tests;
 
+#[path = "rust_install_audit_resolver_tests.rs"]
+mod resolver_tests;
+
 #[path = "rust_install_audit_parse_layout_tests.rs"]
 mod parse_layout_tests;
 

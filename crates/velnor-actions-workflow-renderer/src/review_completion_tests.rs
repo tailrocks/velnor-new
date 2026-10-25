@@ -50,7 +50,8 @@ fn field<'a>(node: &'a Yaml, key: &str) -> &'a Yaml {
 }
 #[test]
 fn completion_workflow_has_only_closed_trusted_triggers_and_five_minute_job() {
-    let file = render_review_completion(&spec()).expect("render");
+    let file =
+        render_review_completion(&spec(), &WorkflowRoutingPolicy::hosted_only()).expect("render");
     assert_eq!(file.path, REVIEW_COMPLETION_WORKFLOW_PATH);
     for required in [
         "review-completion:",
@@ -141,11 +142,52 @@ fn completion_trigger_admission_rejects_siblings_and_duplicate_on() {
 fn completion_rejects_mismatched_policy_and_shared_app_variable() {
     let mut input = spec();
     input.policy.check_name = "Other".to_owned();
-    assert!(render_review_completion(&input).is_err());
+    assert!(render_review_completion(&input, &WorkflowRoutingPolicy::hosted_only()).is_err());
     let mut input = spec();
     input
         .config
         .reviewer_app_id_variable
         .clone_from(&input.config.app_id_variable);
-    assert!(render_review_completion(&input).is_err());
+    assert!(render_review_completion(&input, &WorkflowRoutingPolicy::hosted_only()).is_err());
+}
+
+#[test]
+fn scale_set_completion_keeps_triggers_and_publication_authority() {
+    use velnor_actions_contract::{ExecutionMode, ScaleSetSelector};
+
+    let selector = ScaleSetSelector::try_new(
+        "linux-amd64",
+        &["velnor".to_owned(), "linux-amd64".to_owned()],
+    )
+    .expect("valid selector");
+    let policy = crate::workflow_routing::test_policy(ExecutionMode::ScaleSet, selector);
+    let input = spec();
+    let hosted = render_review_completion(&input, &WorkflowRoutingPolicy::hosted_only())
+        .expect("render hosted workflow");
+    let scale = render_review_completion(&input, &policy).expect("render Scale Set workflow");
+    assert!(scale.bytes.contains("runs-on: [velnor, linux-amd64]"));
+    assert!(!scale.bytes.contains("runs-on: ubuntu-26.04"));
+    assert!(scale.bytes.contains(
+        "image: ghcr.io/tailrocks/velnor-job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ));
+    assert_eq!(
+        crate::extract_workflow_authority(&[hosted]).expect("read hosted authority"),
+        crate::extract_workflow_authority(&[scale]).expect("read Scale Set authority")
+    );
+}
+
+#[test]
+fn scale_set_completion_without_global_image_stays_containerless() {
+    use velnor_actions_contract::{ExecutionMode, ScaleSetSelector};
+
+    let selector = ScaleSetSelector::try_new(
+        "linux-amd64",
+        &["velnor".to_owned(), "linux-amd64".to_owned()],
+    )
+    .expect("valid selector");
+    let policy = WorkflowRoutingPolicy::configured(ExecutionMode::ScaleSet, selector, None);
+    let rendered = render_review_completion(&spec(), &policy)
+        .expect("selector-only Scale Set completion remains valid");
+    assert!(rendered.bytes.contains("runs-on: [velnor, linux-amd64]"));
+    assert!(!rendered.bytes.contains("container:"));
 }

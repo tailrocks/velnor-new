@@ -85,8 +85,12 @@ fn qualification_uses_pinned_rust_and_lint_tools_before_candidate_steps() {
         ),
         (
             "Verify jactionlint",
-            super::workflow_steps::command_step("Verify jactionlint", &pins.verify_lint_argv)
-                .expect("render jactionlint verification"),
+            super::workflow_steps::verifier_command_step(
+                velnor_actions_contract::StepRole::VerifyJactionlint,
+                "Verify jactionlint",
+                &pins.verify_lint_argv,
+            )
+            .expect("render jactionlint verification"),
         ),
         (
             "Install pinned GitHub CLI",

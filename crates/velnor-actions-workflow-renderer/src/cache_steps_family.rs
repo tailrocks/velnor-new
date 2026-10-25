@@ -1,13 +1,12 @@
 //! Restore, size admission and save steps of the stack family caches.
 //!
-//! Bun's package cache, the Playwright browsers, dbt packages, the uv wheel
-//! cache and the Ansible collection tarballs each get a runtime key from one
-//! per-job `Compute family cache keys` step (compat: family, schema, paths,
-//! platform and caller-declared tool lines; snapshot: the job's lock files),
-//! a read-only restore before the producer step, and, right after it, a size
-//! admission plus a trusted-push save. The save is positioned after the
-//! producer, so later failing checks never starve the cache, and it needs the
-//! compressed directory to fit the family ceiling (`over_ceiling` otherwise).
+//! One `Compute family cache keys` step provides runtime keys for the job's supported stack families.
+//! Compatibility uses the family, schema, paths, platform, and tool values declared by the caller.
+//! The snapshot uses the job's lock files.
+//! Each family restores read-only before its producer step.
+//! A size check and trusted-push save follow the producer immediately.
+//! Thus, a later failing check does not prevent the save attempt.
+//! The compressed directory must fit the family ceiling, or the size check reports `over_ceiling`.
 
 use std::collections::BTreeMap;
 
@@ -28,7 +27,7 @@ pub const FAMILY_KEYS_NAME: &str = "Compute family cache keys";
 const DEFAULT_REF_ENV: &str = "VELNOR_DEFAULT_REF";
 const DEFAULT_REF_EXPR: &str =
     "${{ format('refs/heads/{0}', github.event.repository.default_branch) }}";
-const GUARD: &str = "case \"$RUNNER_TEMP\" in /*) ;; *) printf '%s\\n' 'RUNNER_TEMP must be absolute' >&2; exit 1 ;; esac";
+const GUARD: &str = "case \"$RUNNER_TEMP\" in /*) ;; *) printf '%s\\n' 'RUNNER_TEMP must be an absolute path.' >&2; exit 1 ;; esac";
 
 /// What a family's snapshot digest covers.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -137,7 +136,7 @@ fn key_commands(plan: &FamilyCachePlan) -> Vec<String> {
         "snap=\"s256-$h\"".to_owned(),
         format!("trusted=\"{}trusted-$compat-\"", plan.family.key_prefix()),
         "key=\"$trusted$snap\"".to_owned(),
-        format!("[ \"${{#key}}\" -le {MAX_CACHE_KEY_BYTES} ] || {{ printf 'cache key exceeds the GitHub cap: %s\\n' \"$key\" >&2; exit 1; }}"),
+        format!("[ \"${{#key}}\" -le {MAX_CACHE_KEY_BYTES} ] || {{ printf 'The cache key exceeds the GitHub size limit: %s\\n' \"$key\" >&2; exit 1; }}"),
         format!("printf '%s\\n' \"{stem}_key=$key\" \"{stem}_restore_keys=$trusted\" >> \"$GITHUB_OUTPUT\""),
     ]);
     commands
@@ -173,7 +172,7 @@ fn keys_step(plans: &[FamilyCachePlan], single_writer: bool) -> Result<Step, Ren
         "d=\"$RUNNER_TEMP/velnor/family-keys\"".to_owned(),
         "rm -rf \"$d\"".to_owned(),
         "mkdir -p \"$d\"".to_owned(),
-        "s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in ''|*[!0-9a-f]*) printf '%s\\n' 'sha256sum returned no digest' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }".to_owned(),
+        "s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in ''|*[!0-9a-f]*) printf '%s\\n' 'sha256sum did not return a digest.' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }".to_owned(),
         "uname -s > \"$d/platform\"".to_owned(),
         "uname -m >> \"$d/platform\"".to_owned(),
         format!("default_ref=\"${{{DEFAULT_REF_ENV}:-}}\""),
@@ -240,25 +239,31 @@ pub fn family_size_step(plan: &FamilyCachePlan) -> Result<Step, RenderError> {
     let ceiling = plan.family.spec().ceiling_bytes;
     let layer = plan.family.spec().layer;
     let script = [
-        "set -eu".to_owned(),
+        "set -euo pipefail".to_owned(),
         GUARD.to_owned(),
         format!("dir=\"{}\"", plan.shell_dir()),
         "out=${GITHUB_OUTPUT-}".to_owned(),
-        format!("refuse() {{ if [ -n \"$out\" ]; then printf '%s\\n' '{FAMILY_ADMITTED_OUTPUT}=false' >> \"$out\"; fi; printf '%s\\n' \"::warning::$1: {layer} cache not saved\"; exit 0; }}"),
+        format!("refuse() {{ if [ -n \"$out\" ]; then printf '%s\\n' '{FAMILY_ADMITTED_OUTPUT}=false' >> \"$out\"; fi; printf '%s\\n' \"::warning::$1: Velnor did not save the {layer} cache.\"; exit 0; }}"),
         "if [ ! -d \"$dir\" ] || [ -L \"$dir\" ]; then refuse missing_directory; fi".to_owned(),
         "mkdir -p \"$RUNNER_TEMP/velnor\"".to_owned(),
         "size=\"$RUNNER_TEMP/velnor/family-size\"".to_owned(),
         // Stored bytes are zstd-compressed; fall back to the on-disk bound without zstd.
-        format!("if command -v zstd >/dev/null 2>&1; then tar -C \"${{dir%/*}}\" -cf - \"${{dir##*/}}\" | zstd -T0 -q | wc -c > \"$size\"; limit={ceiling}; else du -sk \"$dir\" > \"$size\"; limit={}; fi", ceiling / 1024),
-        "n=; rest=; read -r n rest < \"$size\" || [ -n \"$n\" ]".to_owned(),
+        format!("if command -v zstd >/dev/null 2>&1; then if tar -C \"${{dir%/*}}\" -cf - \"${{dir##*/}}\" | zstd -T0 -q | wc -c > \"$size\"; then limit={ceiling}; measure=compressed; else refuse size_unreadable; fi; else if ! du -sk \"$dir\" > \"$size\"; then refuse size_unreadable; fi; limit={}; measure=disk; fi", ceiling / 1024),
+        "exec 3< \"$size\" || refuse size_unreadable".to_owned(),
+        "n=; rest=; if ! IFS=$' \\t' read -r n rest <&3; then exec 3<&-; refuse size_unreadable; fi".to_owned(),
+        "extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then exec 3<&-; refuse size_unreadable; fi".to_owned(),
+        "exec 3<&-".to_owned(),
         "case \"$n\" in ''|*[!0-9]*) refuse size_unreadable ;; esac".to_owned(),
+        "if [ \"${#n}\" -gt 18 ]; then refuse size_unreadable; fi".to_owned(),
+        "(( n = 10#$n, 1 ))".to_owned(),
+        "if [ \"$measure\" = compressed ]; then if [ -n \"$rest\" ]; then refuse size_unreadable; fi; elif [ \"$rest\" != \"$dir\" ]; then refuse size_unreadable; fi".to_owned(),
         "if [ \"$n\" -gt \"$limit\" ]; then refuse over_ceiling; fi".to_owned(),
         format!("if [ -n \"$out\" ]; then printf '%s\\n' '{FAMILY_ADMITTED_OUTPUT}=true' >> \"$out\"; fi"),
     ]
     .join("; ");
     let mut step = shell_step(
         &format!("Check {layer} cache size"),
-        vec!["sh".to_owned(), "-c".to_owned(), script],
+        vec!["bash".to_owned(), "-c".to_owned(), script],
         BTreeMap::new(),
     )?;
     step.id = Some(size_step_id(plan.family)?);

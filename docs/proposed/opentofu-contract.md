@@ -273,7 +273,7 @@ unknowable at generation (like the rust sources key), so isolation
 holds via exact-key restore, push-gated saves, and runner branch
 scoping, and every tofu hit still faces lock-verified readonly init
 plus mandatory validate; transport = plugin-cache dir
-only (job-private `$RUNNER_TEMP/velnor/tofu-cache/<root-locator>`), restore before
+only (job-private `$RUNNER_TEMP/velnor/cache/tofu/<root-locator>`), restore before
 init; per-root job saves only its own root-scoped key (plan never inits so
 never saves); push-gated trusted save; restore still faces readonly init;
 hit MUST still run init+validate (T23). State, plans, and credentials remain

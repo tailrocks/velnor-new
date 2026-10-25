@@ -1,66 +1,21 @@
 use super::projection::{DockerRoot, ProbeProjection, VerifiedProbeImage, expected_image_config};
-use super::record::ProbeRecord;
+use super::record::{InodePolicy, ProbeRecord, fixture_record};
 use crate::Journal;
-use crate::journal::{ProbePhase, ProbeSeed};
+use crate::journal::{
+    CapacityLimits, OperationalCapacityLimits, ProbePhase, ProbeSeed, ResourceProbePurpose,
+};
 use crate::launch_harness::Scratch;
+use bollard::models::HostConfigCgroupnsModeEnum;
+use record_fixture::{GIB, MEMORY_TOTAL, record, record_values};
 
-mod docker_lifecycle;
+mod cleanup_proof;
+pub(crate) mod docker_lifecycle;
+mod probe_cpu_pid_binding;
 mod projection_digest;
+mod record_fixture;
+#[path = "tests/record_parsing.rs"]
+mod record_parsing;
 mod sample_permit;
-
-const MEMORY_TOTAL: u64 = 8 * 1024 * 1024 * 1024;
-
-fn record(psi: &str) -> Vec<u8> {
-    record_values(1, 20, 40, 30, 125, psi)
-}
-
-fn record_values(version: u8, free: u64, total: u64, memory: u64, load: u64, psi: &str) -> Vec<u8> {
-    format!(
-        "{{\"schema_version\":{version},\"docker_root_free_bytes\":{free},\"docker_root_total_bytes\":{total},\"memory_available_bytes\":{memory},\"load_milli\":{load},\"memory_psi_some_avg10_bps\":{psi}}}\n"
-    )
-    .into_bytes()
-}
-
-#[test]
-fn parser_accepts_canonical_record_and_nullable_diagnostic() {
-    assert!(ProbeRecord::parse(&record("null"), MEMORY_TOTAL).is_some());
-    assert!(ProbeRecord::parse(&record("125"), MEMORY_TOTAL).is_some());
-}
-
-#[test]
-fn parser_rejects_noncanonical_framing_order_and_duplicates() {
-    let valid = record("null");
-    let mut two_newlines = valid.clone();
-    two_newlines.push(b'\n');
-    let reordered = b"{\"docker_root_free_bytes\":20,\"schema_version\":1,\"docker_root_total_bytes\":40,\"memory_available_bytes\":30,\"load_milli\":125,\"memory_psi_some_avg10_bps\":null}\n";
-    let duplicate = b"{\"schema_version\":1,\"schema_version\":1,\"docker_root_free_bytes\":20,\"docker_root_total_bytes\":40,\"memory_available_bytes\":30,\"load_milli\":125,\"memory_psi_some_avg10_bps\":null}\n";
-
-    assert!(ProbeRecord::parse(&valid[..valid.len() - 1], MEMORY_TOTAL).is_none());
-    assert!(ProbeRecord::parse(&two_newlines, MEMORY_TOTAL).is_none());
-    assert!(ProbeRecord::parse(reordered, MEMORY_TOTAL).is_none());
-    assert!(ProbeRecord::parse(duplicate, MEMORY_TOTAL).is_none());
-}
-
-#[test]
-fn parser_rejects_bad_values_missing_fields_and_oversize_output() {
-    for invalid in [
-        record_values(1, 41, 40, 30, 125, "null"),
-        record_values(1, 20, 40, MEMORY_TOTAL + 1, 125, "null"),
-        record_values(1, 20, 40, 30, 125, "10001"),
-        record_values(2, 20, 40, 30, 125, "null"),
-        record_values(1, 20, 40, 30, u64::from(u32::MAX) + 1, "null"),
-        b"{\"schema_version\":1}\n".to_vec(),
-        b"{\"schema_version\":1,\"docker_root_free_bytes\":20,\"docker_root_total_bytes\":40,\"memory_available_bytes\":30,\"load_milli\":125,\"memory_psi_some_avg10_bps\":null,\"unexpected\":1}\n".to_vec(),
-        b"{}\n".to_vec(),
-    ] {
-        assert!(ProbeRecord::parse(&invalid, MEMORY_TOTAL).is_none());
-    }
-    assert!(ProbeRecord::parse(&record("null"), 0).is_none());
-    assert!(ProbeRecord::parse(&vec![b' '; 512], MEMORY_TOTAL).is_none());
-    let mut oversize = vec![b' '; 512];
-    oversize.push(b'\n');
-    assert!(ProbeRecord::parse(&oversize, MEMORY_TOTAL).is_none());
-}
 
 #[test]
 fn docker_root_is_normalized_redacted_and_domain_separated() {
@@ -99,6 +54,11 @@ fn projection_is_private_and_uses_only_the_fixed_guest_mount() {
             assert_eq!(host.network_mode.as_deref(), Some("none"));
             assert_eq!(host.readonly_rootfs, Some(true));
             assert_eq!(host.privileged, Some(false));
+            assert_eq!(host.cpu_period, Some(100_000));
+            assert_eq!(host.cpu_quota, Some(10_000));
+            assert_eq!(host.memory, Some(128 * 1024 * 1024));
+            assert_eq!(host.memory_swap, Some(128 * 1024 * 1024));
+            assert_eq!(host.pids_limit, Some(4));
             assert_eq!(host.cap_drop.as_ref().map(Vec::len), Some(1));
             assert_eq!(
                 host.cap_drop
@@ -107,7 +67,14 @@ fn projection_is_private_and_uses_only_the_fixed_guest_mount() {
                     .map(String::as_str),
                 Some("ALL")
             );
-            assert_eq!(host.mounts.as_ref().map(Vec::len), Some(1));
+            assert_eq!(host.mounts.as_ref().map(Vec::len), Some(2));
+            assert_eq!(host.pid_mode.as_deref(), Some("host"));
+            assert_eq!(host.cgroupns_mode, Some(HostConfigCgroupnsModeEnum::HOST));
+            if let Some(mounts) = &host.mounts {
+                assert_eq!(mounts[0].source.as_deref(), Some("/var/lib/docker"));
+                assert_eq!(mounts[1].source.as_deref(), Some("/sys/fs/cgroup"));
+                assert!(mounts.iter().all(|mount| mount.read_only == Some(true)));
+            }
         }
         assert!(!format!("{projection:?}").contains("/var/lib/docker"));
         assert_eq!(projection.root.digest().len(), 64);
@@ -123,6 +90,7 @@ fn verified_image_requires_exact_source_config_and_immutable_platform_id() {
     let valid = VerifiedProbeImage::from_verified_provider(
         id.clone(),
         "linux/amd64".to_owned(),
+        "x86_64".to_owned(),
         revision.clone(),
         fingerprint.clone(),
         &config,
@@ -132,6 +100,7 @@ fn verified_image_requires_exact_source_config_and_immutable_platform_id() {
         VerifiedProbeImage::from_verified_provider(
             "velnor/resource-probe:latest".to_owned(),
             "linux/amd64".to_owned(),
+            "x86_64".to_owned(),
             revision.clone(),
             fingerprint.clone(),
             &config,
@@ -142,6 +111,7 @@ fn verified_image_requires_exact_source_config_and_immutable_platform_id() {
         VerifiedProbeImage::from_verified_provider(
             id,
             "linux/arm64".to_owned(),
+            "x86_64".to_owned(),
             revision.clone(),
             fingerprint,
             &config,
@@ -154,6 +124,7 @@ fn verified_image_requires_exact_source_config_and_immutable_platform_id() {
         VerifiedProbeImage::from_verified_provider(
             format!("sha256:{}", "a".repeat(64)),
             "linux/amd64".to_owned(),
+            "x86_64".to_owned(),
             revision,
             "c".repeat(64),
             &untrusted,
@@ -177,6 +148,7 @@ async fn journaled_probe_phases_are_exact_and_prepared_abort_is_effect_free() ->
         .bind_engine("probe-engine")
         .await
         .map_err(|error| error.to_string())?;
+    configure_probe_capacity(&journal).await?;
     let seed = probe_seed(&journal).await?;
     journal
         .prepare_probe(seed)
@@ -229,6 +201,7 @@ async fn probe_transition_requires_intents_and_exact_container_id() -> Result<()
         .bind_engine("probe-engine")
         .await
         .map_err(|error| error.to_string())?;
+    configure_probe_capacity(&journal).await?;
     journal
         .prepare_probe(probe_seed(&journal).await?)
         .await
@@ -280,6 +253,23 @@ async fn probe_transition_requires_intents_and_exact_container_id() -> Result<()
     Ok(())
 }
 
+pub(super) async fn configure_probe_capacity(journal: &Journal) -> Result<(), String> {
+    journal
+        .configure_capacity_with_operational_limits(
+            CapacityLimits {
+                jobs: 1,
+                cpu_millicores: 2_000,
+                memory_bytes: 8_589_934_592,
+            },
+            OperationalCapacityLimits {
+                cpu_millicores: 1_000,
+                memory_bytes: 268_435_456,
+            },
+        )
+        .await
+        .map_err(|error| error.to_string())
+}
+
 async fn probe_seed(journal: &Journal) -> Result<ProbeSeed, String> {
     probe_seed_with_id(journal, "d").await
 }
@@ -300,5 +290,7 @@ async fn probe_seed_with_id(journal: &Journal, nibble: &str) -> Result<ProbeSeed
         runtime_image_id: format!("sha256:{}", "c".repeat(64)),
         image_binding_digest: "e".repeat(64),
         projection_digest: "f".repeat(64),
+        purpose: ResourceProbePurpose::Capacity,
+        request_sha256: crate::journal::capacity_request_sha256(),
     })
 }

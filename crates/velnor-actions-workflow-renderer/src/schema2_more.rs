@@ -13,7 +13,7 @@ const COMPOSE_UP: &str = "docker compose -f qualification/compose/stack.yml up -
 const COMPOSE_PROOF: &str = "docker compose -f qualification/compose/stack.yml ps --services --status running > \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx api \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx db \"$RUNNER_TEMP/g4-compose-ps\"";
 const COMPOSE_DOWN: &str = "docker compose -f qualification/compose/stack.yml down --volumes";
 const BIND_RUN: &str = "printf '%s\\n' bind-ok > \"$GITHUB_WORKSPACE/g4-bind.txt\" && docker run --rm -v \"$GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro\" alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395 cat /g4-bind.txt > \"$RUNNER_TEMP/g4-bind-out\" && grep -qx bind-ok \"$RUNNER_TEMP/g4-bind-out\"";
-const SERVICE_PROBE: &str = "i=0; while [ \"$i\" -lt 30 ]; do nc -z -w 1 127.0.0.1 6379 && break; i=$((i+1)); sleep 1; done; nc -z -w 1 127.0.0.1 6379 && echo service-up && sleep 900";
+
 const TC_RUN: &str =
     "npm ci --prefix qualification/testcontainers && node qualification/testcontainers/reap.mjs";
 const SUBMODULE_PROOF: &str = "git rev-parse HEAD > \"$RUNNER_TEMP/g4-head\" && grep -qx \"$GITHUB_SHA\" \"$RUNNER_TEMP/g4-head\" && grep -qx submodule-ok qualification/fixtures/submodule/MARKER && grep -qx lfs-ok qualification/fixtures/lfs-marker.txt";
@@ -70,14 +70,7 @@ fn paired(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
         bind_steps(),
         Extras::default(),
     ));
-    out.extend(both(
-        "cancel-service",
-        "Cancel service",
-        hosted,
-        scale,
-        cancel_service_steps(),
-        service_extras(),
-    ));
+    out.extend(cancel_service_jobs(hosted, scale));
     out
 }
 
@@ -208,11 +201,33 @@ fn timed(
     )
 }
 
-fn service_extras() -> Extras {
-    Extras {
-        services: Some(redis_service()),
-        ..Extras::default()
-    }
+fn cancel_service_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
+    [hosted, scale]
+        .into_iter()
+        .map(|runner| {
+            let host = runner.service_host(false);
+            let scale_set = host == "redis";
+            let name = if scale_set {
+                "Cancel service / Velnor Scale Set"
+            } else {
+                "Cancel service / GitHub hosted"
+            };
+            let mut fields = lane_base(name, runner, JobTimeout::DEFAULT);
+            fields.push(("services".to_owned(), redis_service()));
+            gated(
+                finish(
+                    if scale_set {
+                        "cancel-service-scale-set"
+                    } else {
+                        "cancel-service-hosted"
+                    },
+                    fields,
+                    cancel_service_steps(host),
+                ),
+                "inputs.mode == 'cancel-service'",
+            )
+        })
+        .collect()
 }
 
 fn compose_steps() -> Vec<Yaml> {
@@ -229,8 +244,11 @@ fn bind_steps() -> Vec<Yaml> {
     vec![run_step("Bind workspace file", BIND_RUN)]
 }
 
-fn cancel_service_steps() -> Vec<Yaml> {
-    vec![run_step("Probe service then sleep", SERVICE_PROBE)]
+fn cancel_service_steps(host: &str) -> Vec<Yaml> {
+    let probe = format!(
+        "i=0; while [ \"$i\" -lt 30 ]; do nc -z -w 1 {host} 6379 && break; i=$((i+1)); sleep 1; done; nc -z -w 1 {host} 6379 && echo service-up && sleep 900"
+    );
+    vec![run_step("Service check", &probe)]
 }
 
 fn testcontainers_steps() -> Vec<Yaml> {
@@ -259,3 +277,7 @@ fn ports_steps() -> Vec<Yaml> {
 fn pressure_steps() -> Vec<Yaml> {
     vec![run_step("Pressure sleep", PRESSURE_RUN)]
 }
+
+#[cfg(test)]
+#[path = "schema2_more_tests.rs"]
+mod tests;

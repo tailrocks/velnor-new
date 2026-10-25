@@ -9,6 +9,39 @@ const NANO_CPUS_PER_CPU: u64 = 1_000_000_000;
 const NANOS_PER_MILLICORE: u64 = NANO_CPUS_PER_CPU / MILLICORES_PER_CPU;
 const DOCKER_MIN_MEMORY_BYTES: u64 = 6_291_456;
 
+/// The probe is capped independently from workflow containers.
+pub(crate) const PROBE_CPU_MILLICORES: u64 = 100;
+pub(crate) const PROBE_MEMORY_LIMIT_BYTES: u64 = 128 * 1024 * 1024;
+
+/// Total admission headroom kept outside worker-pair charges.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct AdmissionReserve {
+    pub(crate) cpu_millicores: u64,
+    pub(crate) memory_bytes: u64,
+}
+
+impl AdmissionReserve {
+    /// The CPU reserve covers controller/guest work and contains the probe cap.
+    pub(crate) const OPERATIONAL_CPU_MILLICORES: u64 = 1_000;
+
+    fn new(operational_memory_bytes: u64) -> Result<Self, HostError> {
+        if operational_memory_bytes == 0 {
+            return Err(HostError::Config);
+        }
+        let memory_bytes = PROBE_MEMORY_LIMIT_BYTES
+            .checked_add(operational_memory_bytes)
+            .filter(|value| i64::try_from(*value).is_ok())
+            .ok_or(HostError::Config)?;
+        if PROBE_CPU_MILLICORES > Self::OPERATIONAL_CPU_MILLICORES {
+            return Err(HostError::Config);
+        }
+        Ok(Self {
+            cpu_millicores: Self::OPERATIONAL_CPU_MILLICORES,
+            memory_bytes,
+        })
+    }
+}
+
 /// TOML values for the runner and the private `DinD` container.
 ///
 /// CPU values are millicores and memory values are bytes. Each side is
@@ -24,6 +57,8 @@ pub(crate) struct ResourceBudgetConfig {
     pub(crate) dind_cpu_millicores: u64,
     /// Private `DinD` container memory limit in bytes.
     pub(crate) dind_memory_bytes: u64,
+    /// Explicit operational memory margin beyond worker pairs and probe cap.
+    pub(crate) operational_memory_reserve_bytes: u64,
 }
 
 /// Docker CPU and memory limits after checked unit conversion.
@@ -50,6 +85,7 @@ pub struct ResourceBudget {
     runner: DockerResourceLimits,
     dind: DockerResourceLimits,
     pair: PairResourceBudget,
+    admission_reserve: AdmissionReserve,
 }
 
 impl ResourceBudgetConfig {
@@ -61,6 +97,7 @@ impl ResourceBudgetConfig {
     pub(crate) fn validate(self) -> Result<ResourceBudget, HostError> {
         let runner = docker_limits(self.runner_cpu_millicores, self.runner_memory_bytes)?;
         let dind = docker_limits(self.dind_cpu_millicores, self.dind_memory_bytes)?;
+        let admission_reserve = AdmissionReserve::new(self.operational_memory_reserve_bytes)?;
         let pair = PairResourceBudget {
             cpu_millicores: self
                 .runner_cpu_millicores
@@ -72,7 +109,12 @@ impl ResourceBudgetConfig {
                 .ok_or(HostError::Config)?,
         };
         let _ = pair.docker_limits(1)?;
-        Ok(ResourceBudget { runner, dind, pair })
+        Ok(ResourceBudget {
+            runner,
+            dind,
+            pair,
+            admission_reserve,
+        })
     }
 }
 
@@ -93,6 +135,12 @@ impl ResourceBudget {
     #[must_use]
     pub(crate) const fn pair(self) -> PairResourceBudget {
         self.pair
+    }
+
+    /// CPU and memory headroom excluded from static and per-start admission.
+    #[must_use]
+    pub(crate) const fn admission_reserve(self) -> AdmissionReserve {
+        self.admission_reserve
     }
 
     /// Ensure one complete pair fits within the selected Docker daemon's CPU count.
@@ -177,6 +225,7 @@ pub(crate) fn test_resource_budget() -> Result<ResourceBudget, HostError> {
         runner_memory_bytes: 2_147_483_648,
         dind_cpu_millicores: 3_000,
         dind_memory_bytes: 6_442_450_944,
+        operational_memory_reserve_bytes: 1_073_741_824,
     }
     .validate()
 }

@@ -1,13 +1,11 @@
-//! `[upgrades]`: opt-in daily upgrade pull request plus a freshness gate.
+//! Enable daily upgrade pull requests and a freshness gate with `[upgrades]`.
 //!
-//! Owner rule: every project runs the latest stable Rust, Mise tools,
-//! dependencies and Velnor, with no cooldown. When `enabled = true`, the
-//! generator emits `.github/workflows/upgrades.yml` (see
-//! `docs/implemented/upgrades.md`): an unprivileged job bumps everything and
-//! regenerates the lockfiles and `.github/`, a separate job pushes the result
-//! with a minted GitHub App token and opens or updates one pull request, and
-//! a read-only gate fails while a pin lags or the pull request is stuck.
-//! There is deliberately no cooldown setting.
+//! The owner requires the latest stable Rust, Mise tools, dependencies, and Velnor, without a cooldown.
+//! When `enabled = true`, generate `.github/workflows/upgrades.yml`.
+//! One job updates versions, lock files, and generated files without the App token.
+//! Another job uses an App token to push the result and open or update one pull request.
+//! A read-only gate fails when a pin needs an update or the pull request exceeds its age limit.
+//! See `docs/implemented/upgrades.md`. There is no cooldown setting.
 
 use crate::errors::ContractError;
 use crate::workflow::ScheduleTrigger;
@@ -15,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 /// Generated upgrade workflow path.
 pub const UPGRADES_WORKFLOW_PATH: &str = ".github/workflows/upgrades.yml";
-/// Default schedule: daily, off the top of the hour.
+/// Run daily at 05:17 UTC by default.
 pub const DEFAULT_UPGRADES_CRON: &str = "17 5 * * *";
 /// Default App client-id variable (the `velnor-deps` App pattern).
 pub const DEFAULT_UPGRADES_APP_ID_VARIABLE: &str = "VELNOR_DEPS_APP_ID";
@@ -39,11 +37,11 @@ const fn default_stuck_days() -> u8 {
     DEFAULT_UPGRADES_STUCK_DAYS
 }
 
-/// `[upgrades]` table; absent or `enabled = false` emits nothing.
+/// Generate no upgrade workflow when `[upgrades]` is absent or `enabled = false`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct UpgradesConfig {
-    /// Emit `upgrades.yml`; default off.
+    /// Generate `upgrades.yml` when enabled. The default is disabled.
     #[serde(default)]
     pub enabled: bool,
     /// One five-field cron expression (UTC).
@@ -75,7 +73,7 @@ impl Default for UpgradesConfig {
 impl UpgradesConfig {
     /// Validate the schedule, the credential names and the gate bound.
     /// # Errors
-    /// Names the key path and a machine-readable problem.
+    /// Return an error with the key path and a problem code.
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         let bad = |path: &str, problem: String| ContractError::config(file, path, problem);
         ScheduleTrigger::single(self.schedule.clone())
@@ -123,7 +121,7 @@ mod tests {
 
     #[test]
     fn defaults_are_off_daily_and_name_the_deps_app() {
-        let config = parse("").expect("defaults");
+        let config = parse("").expect("The default configuration must parse.");
         assert!(!config.enabled);
         assert_eq!(config, UpgradesConfig::default());
         assert_eq!(config.schedule, "17 5 * * *");
@@ -140,7 +138,7 @@ mod tests {
             "\"minimum_release_age\": \"1d\"",
             "\"scopes\": []",
         ] {
-            assert!(parse(key).is_err(), "{key} is rejected");
+            assert!(parse(key).is_err(), "The parser must reject {key}.");
         }
     }
 
@@ -158,7 +156,7 @@ mod tests {
             ("\"stuck_days\": 31", "upgrades.stuck_days"),
         ] {
             let err = parse(text)
-                .expect("parses")
+                .expect("The configuration must parse.")
                 .validate("c.toml")
                 .expect_err(text);
             assert!(err.to_string().contains(key), "{text}: {err}");

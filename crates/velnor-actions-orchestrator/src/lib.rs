@@ -9,6 +9,7 @@ mod binary_release_emit;
 mod build_task_tools;
 mod build_tasks;
 mod bun_assets_handoff;
+pub mod cache_action_stage;
 mod cache_keys;
 mod check_evidence;
 mod check_runtime;
@@ -46,6 +47,9 @@ mod internal_plan;
 mod internal_request;
 mod inventory;
 mod inventory_reuse;
+mod job_authority_inventory;
+mod job_authority_inventory_types;
+mod job_image_preview;
 pub mod local_release_manifest;
 mod lock_audit;
 mod matrix_step;
@@ -80,12 +84,15 @@ mod product_release_pins;
 pub(crate) mod project_tool_sources;
 mod provenance;
 mod publish_emit;
-mod publish_release_steps;
-#[cfg(test)]
-mod publish_scripts_tests;
 mod publish_steps;
+mod qualification_cache_backend;
+mod qualification_cache_payload;
+mod qualification_cache_runtime;
+mod qualification_cache_runtime_phase;
+mod qualification_cache_worker_facts;
 mod qualification_candidate;
 mod qualification_resolver;
+mod qualification_source_evidence;
 mod qualify;
 mod recommendations;
 mod release_checkouts;
@@ -119,6 +126,8 @@ mod tap_source_freshness;
 mod task_execution;
 pub(crate) mod task_report;
 mod task_report_aggregate;
+#[cfg(test)]
+mod test_support_modules;
 mod tofu_apply_emit;
 mod tofu_cache;
 pub(crate) mod tool_catalog_project;
@@ -136,14 +145,6 @@ mod workflow;
 mod workflow_jobs;
 mod workflow_jobs_cache;
 mod workflow_task_jobs;
-
-#[cfg(all(feature = "test-render-capture", test))]
-#[path = "test_render_capture_harness.rs"]
-mod test_render_capture_harness;
-
-#[cfg(test)]
-#[path = "../../test_support/git_fixture.rs"]
-pub(crate) mod git_fixture;
 pub use api::*;
-
-mod review_completion_workflow_emit;
+#[cfg(test)]
+pub(crate) use test_support_modules::git_fixture;

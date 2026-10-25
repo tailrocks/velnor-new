@@ -1,9 +1,20 @@
 # Product version preparation for v0.1.45
 
-The immutable v0.1.44 helper is published. Native preview source admission succeeds, but its exported admission file retains private permissions under the generated restrictive umask. The artifact consumer correctly requires the native upload contract’s exact regular-file mode.
+At the time this preparation began, the official v0.1.44 release was published
+and no v0.1.45 helper artifact had yet been published or verified. The source
+line prepared the root workspace and its internal path requirements for
+v0.1.45; generated consumers kept their verified immutable helper pins until
+a compatible helper and source identity were available.
 
-Version 0.1.45 prepares the producer fix using the existing secure upload helper. Private policy and plan files retain their private writer, and the strict ZIP inventory, file type, mode, size, and digest checks remain unchanged.
+The v0.1.45 source also corrected native preview source-admission upload
+permissions with the existing secure upload helper. Private policy and plan
+files kept their private writer, and the strict ZIP inventory, file type,
+mode, size, and digest checks remained unchanged. The 14 root-workspace lock
+records moved with the workspace version; external package records, checksums,
+features, the separately versioned runner workspace, tool pins, and historical
+release manifests stayed unchanged.
 
-The root workspace version, 24 exact internal path requirements, and 14 workspace lock records advance from 0.1.44 to 0.1.45. External dependency records, the separately versioned runner workspace, tool pins, and historical release manifests remain unchanged. Native workflows, parity fixtures, and OpenTofu goldens must be regenerated from this source.
-
-This is source preparation only. It does not publish, tag, retag, or claim a v0.1.45 release or helper artifact. Consumers must adopt only a published and verified helper and accepted manifest.
+Generated workflows, parity fixtures, and OpenTofu goldens had to be regenerated
+from the source before consumers could adopt the helper. This note records
+source preparation at that time; consumers adopt a helper only after its
+source identity and published artifact are verified.

@@ -39,7 +39,26 @@ cleanup_work() {
 trap cleanup_work EXIT
 STUB_BIN="$WORK/stub bin"
 MARKER="$WORK/cargo-invoked"
+MISE_TRACE="$WORK/mise-release-fetches"
+SEED_TRACE="$WORK/cargo-cache-seeds"
 ORIGINAL_PATH="$PATH"
+REAL_MISE_BIN="$(command -v mise)"
+if [[ "$REAL_MISE_BIN" != /* || ! -f "$REAL_MISE_BIN" || ! -x "$REAL_MISE_BIN" ]]; then
+  echo "FAIL: the test stub needs an absolute path to the mise executable." >&2
+  exit 2
+fi
+export VELNOR_TEST_REAL_MISE_BIN="$REAL_MISE_BIN"
+printf '%s\n' "$REAL_MISE_BIN" >"$WORK/real-mise-path"
+MISE_STATE_DIR="$WORK/mise-state"
+export MISE_STATE_DIR
+mkdir -p "$MISE_STATE_DIR"
+RUST_POLICY="$(awk -v key=rust -f "$ROOT/scripts/toml-tool-pin.awk" \
+  "$ROOT/.velnor/version-policy.toml")"
+RUST_INSTALL_PATH="$(MISE_AUTO_INSTALL=false MISE_EXEC_AUTO_INSTALL=false \
+  "$REAL_MISE_BIN" --no-config --no-env --no-hooks ls --json rust \
+  | jq -er --arg version "$RUST_POLICY" \
+    '[.[] | select(.version == $version and .installed == true) | .install_path] | if length == 1 then .[0] else error("missing or duplicate installed Rust pin") end')"
+CANONICAL_RUSTUP_HOME="$(cd "${RUSTUP_HOME:-$HOME/.rustup}" && pwd -P)"
 mkdir -p "$STUB_BIN" "$WORK/tmp workspace"
 ln -s "$WORK/tmp workspace" "$WORK/tmp symlink"
 # Only `cargo build` is the collector's implicit debug build. `plan` runs
@@ -47,6 +66,31 @@ ln -s "$WORK/tmp workspace" "$WORK/tmp symlink"
 # the spaced-path check fail before it can prove the collector skipped build.
 cat >"$STUB_BIN/cargo" <<'STUB'
 #!/bin/sh
+case "${CARGO_HOME-}" in
+  */.cache/velnor/archive-guard/cargo-home)
+    # The child's trusted-guard recheck uses an isolated archive-guard Cargo
+    # home. Let its build use real Cargo even though the candidate child has
+    # the collector fallback stub at the front of PATH.
+    stub_dir="${0%/*}"
+    filtered_path=''
+    old_ifs="$IFS"
+    IFS=:
+    set -f
+    for path_entry in $PATH; do
+      [ "$path_entry" = "$stub_dir" ] && continue
+      if [ -n "$filtered_path" ]; then
+        filtered_path="$filtered_path:$path_entry"
+      else
+        filtered_path="$path_entry"
+      fi
+    done
+    set +f
+    IFS="$old_ifs"
+    PATH="$filtered_path"
+    export PATH
+    exec cargo "$@"
+    ;;
+esac
 if [ "${1-}" = "build" ]; then
   printf invoked >"$VELNOR_TEST_CARGO_MARKER"
   exit 79
@@ -56,6 +100,64 @@ export PATH
 exec cargo "$@"
 STUB
 chmod u+x "$STUB_BIN/cargo"
+cat >"$STUB_BIN/mise" <<'STUB'
+#!/bin/sh
+# The candidate child rechecks the trusted guard. Its builder has a separate
+# Cargo/Mise home; let that isolated bootstrap use the real pinned tools.
+case "${MISE_DATA_DIR-}" in
+  */.cache/velnor/archive-guard/mise-data)
+    real_mise_bin="$(cat "${0%/*}/../real-mise-path")" || exit 87
+    exec "$real_mise_bin" "$@"
+    ;;
+esac
+case " $* " in
+  *" install "*) echo "unexpected Mise install" >&2; exit 80 ;;
+  *" cargo fetch --locked --manifest-path "*)
+    if [ "${MISE_AUTO_INSTALL-}" != false ] || [ "${MISE_EXEC_AUTO_INSTALL-}" != false ]; then
+      echo "release cargo fetch did not disable Mise auto-install" >&2
+      exit 81
+    fi
+    case "${CARGO_HOME-}" in
+      "${VELNOR_TEST_PRIVATE_TMPDIR-}"/velnor-goldens-work.*/stage/dogfood/cargo-home) ;;
+      *) echo "release cargo fetch did not use its private Cargo cache" >&2; exit 82 ;;
+    esac
+    if [ "${CARGO_NET_OFFLINE-}" = true ]; then
+      case "${VELNOR_TEST_CARGO_CACHE_HOME-}" in
+        /*) ;;
+        *) echo "offline release cargo fetch has no absolute registry cache source" >&2; exit 84 ;;
+      esac
+      for part in index cache; do
+        if [ ! -d "$VELNOR_TEST_CARGO_CACHE_HOME/registry/$part" ]; then
+          echo "offline release cargo fetch registry $part source is missing" >&2
+          exit 85
+        fi
+        mkdir -p "$CARGO_HOME/registry"
+        if [ ! -e "$CARGO_HOME/registry/$part" ]; then
+          cp -RL "$VELNOR_TEST_CARGO_CACHE_HOME/registry/$part" "$CARGO_HOME/registry/$part"
+        fi
+      done
+      if [ -e "$CARGO_HOME/config" ] || [ -e "$CARGO_HOME/config.toml" ]; then
+        echo "offline release cargo cache unexpectedly copied Cargo configuration" >&2
+        exit 86
+      fi
+      printf '%s\t%s\n' "$CARGO_HOME" "$VELNOR_TEST_CARGO_CACHE_HOME" \
+        >>"$VELNOR_TEST_MISE_SEED_TRACE"
+    fi
+    if [ "${RUSTUP_HOME-}" != "${VELNOR_TEST_CANONICAL_RUSTUP_HOME-}" ]; then
+      echo "release cargo fetch did not use the canonical Rustup home" >&2
+      exit 83
+    fi
+    printf '%s\n' "$*" >>"$VELNOR_TEST_MISE_TRACE"
+    ;;
+esac
+exec "$VELNOR_TEST_REAL_MISE_BIN" "$@"
+STUB
+chmod u+x "$STUB_BIN/mise"
+
+if ! bash "$ROOT/scripts/generator-release/test-release-rust-toolchain.sh"; then
+  echo "FAIL: guarded release Rust toolchain regression failed" >&2
+  exit 1
+fi
 
 test_file_sha256() {
   if command -v sha256sum >/dev/null 2>&1; then
@@ -90,6 +192,19 @@ golden_fingerprint() {
       done
     } | test_stdin_sha256
   )
+}
+
+rust_install_snapshot() {
+  python3 - "$RUST_INSTALL_PATH" <<'PYTHON'
+import os
+import stat
+import sys
+
+path = sys.argv[1]
+info = os.lstat(path)
+target = os.readlink(path) if stat.S_ISLNK(info.st_mode) else ""
+print(f"{info.st_dev}:{info.st_ino}:{info.st_mode:o}:{target}")
+PYTHON
 }
 
 BEFORE="$(golden_fingerprint)" || exit 2
@@ -195,9 +310,16 @@ test_candidate_stderr_diagnostic
 expect_release_check_match() {
   local status=0 log="$WORK/release-check.log" after
   local manifest="${1:-$WORK/valid manifest.json}"
+  local before
+  before="$(rust_install_snapshot)" || exit 2
   TMPDIR="$WORK/tmp symlink" GITHUB_SHA="$SOURCE_SHA" GITHUB_REPOSITORY=tailrocks/velnor-new \
     PATH="$STUB_BIN:$ORIGINAL_PATH" VELNOR_TEST_CARGO_MARKER="$MARKER" \
     VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
+    VELNOR_TEST_MISE_TRACE="$MISE_TRACE" \
+    VELNOR_TEST_PRIVATE_TMPDIR="$WORK/tmp workspace" \
+    VELNOR_TEST_CARGO_CACHE_HOME="$(cd "${CARGO_HOME:-$HOME/.cargo}" && pwd -P)" \
+    VELNOR_TEST_MISE_SEED_TRACE="$SEED_TRACE" \
+    VELNOR_TEST_CANONICAL_RUSTUP_HOME="$CANONICAL_RUSTUP_HOME" \
     "$SCRIPT" check-release "$CLI_BIN" "$manifest" \
       "$(test_file_sha256 "$manifest")" >"$log" 2>&1 || status=$?
   if [ "$status" -ne 0 ] || ! grep -Fq 'ALL RELEASE FIXTURE GOLDENS AND DOGFOOD PARITY MATCH' "$log"; then
@@ -206,6 +328,27 @@ expect_release_check_match() {
     exit 1
   fi
   if [ -e "$MARKER" ]; then echo "FAIL: release qualification invoked cargo build" >&2; exit 1; fi
+  if [ "$(wc -l <"$MISE_TRACE" | tr -d ' ')" -ne 2 ]; then
+    echo "FAIL: release qualification did not use guarded Mise for both lockfiles" >&2
+    exit 1
+  fi
+  if [ "${CARGO_NET_OFFLINE-}" = true ]; then
+    local expected_cache_home
+    expected_cache_home="$(cd "${CARGO_HOME:-$HOME/.cargo}" && pwd -P)"
+    if [ "$(wc -l <"$SEED_TRACE" | tr -d ' ')" -ne 2 ] || \
+      ! awk -F '\t' -v prefix="$WORK/tmp workspace/velnor-goldens-work." \
+        -v source="$expected_cache_home" \
+        '$1 !~ ("^" prefix "[^/]+/stage/dogfood/cargo-home$") || $2 != source { bad=1 } END { exit bad }' \
+        "$SEED_TRACE"; then
+      echo "FAIL: offline release Cargo cache records do not match the two expected fetches." >&2
+      exit 1
+    fi
+  fi
+  after="$(rust_install_snapshot)" || exit 2
+  if [ "$before" != "$after" ]; then
+    echo "FAIL: release qualification changed the installed Rust alias" >&2
+    exit 1
+  fi
   after="$(golden_fingerprint)" || exit 2
   if [ "$after" != "$BEFORE" ]; then echo "FAIL: successful release check changed goldens" >&2; exit 1; fi
   echo "passed positive release candidate fixture oracle"

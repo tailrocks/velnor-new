@@ -7,12 +7,16 @@ use crate::build_tasks::validate_config_shape;
 use crate::native_tool_input::{NativeMiseConfig, NativeToolSource, native_mise_source};
 use crate::native_tool_lock::NativeMiseLock;
 
-const ROOT_CONFIG: &str = r#"
+static ROOT_CONFIG: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+    let rust = velnor_actions_mise::catalog::RUST_VERSION;
+    let mbx = velnor_actions_mise::catalog::MR_BOXINGTON_VERSION;
+    format!(
+        r#"
 min_version = "2026.10.7"
 
 [tools]
-mr-boxington = "1.27.0"
-rust = { version = "1.99.1", mr_boxington = true }
+mr-boxington = "{mbx}"
+rust = {{ version = "{rust}", mr_boxington = true }}
 
 [settings]
 lockfile = true
@@ -22,8 +26,10 @@ idiomatic_version_file_enable_tools = ["rust"]
 binstall = true
 
 [tasks.native-ci]
-run = "mbx +1.99.1 xtask desktop ci"
-"#;
+run = "mbx +{rust} xtask desktop ci"
+"#
+    )
+});
 
 fn project(source: &str) -> NativeMiseConfig {
     let value = toml::from_str(source).expect("source TOML");
@@ -63,28 +69,55 @@ fn root_swiftlint_lock() -> NativeMiseLock {
 
 #[test]
 fn current_root_mise_shape_accepts_pinned_mbx_rust_without_wrappers() {
-    let config = project(ROOT_CONFIG);
-    validate_config_shape(&config, "1.99.1").expect("current pinned source");
+    let config = project(&ROOT_CONFIG);
+    validate_config_shape(&config, velnor_actions_mise::catalog::RUST_VERSION)
+        .expect("current pinned source");
     assert!(!config.root_keys.iter().any(|key| key == "wrappers"));
     assert_eq!(config.tools["rust"].mr_boxington, Some(true));
 }
 
 #[test]
 fn legacy_wrapper_and_selected_tool_drift_fail_closed() {
-    let legacy = format!("{ROOT_CONFIG}\n[wrappers.cargo]\ncommand = \"mbx\"\n");
-    assert!(validate_config_shape(&project(&legacy), "1.99.1").is_err());
+    let root_config = ROOT_CONFIG.as_str();
+    let legacy = format!("{root_config}\n[wrappers.cargo]\ncommand = \"mbx\"\n");
+    assert!(
+        validate_config_shape(
+            &project(&legacy),
+            velnor_actions_mise::catalog::RUST_VERSION
+        )
+        .is_err()
+    );
 
-    let wrong_mbx = ROOT_CONFIG.replace("1.27.0", "1.20.0");
-    assert!(validate_config_shape(&project(&wrong_mbx), "1.99.1").is_err());
+    let wrong_mbx =
+        ROOT_CONFIG.replace(velnor_actions_mise::catalog::MR_BOXINGTON_VERSION, "1.20.0");
+    assert!(
+        validate_config_shape(
+            &project(&wrong_mbx),
+            velnor_actions_mise::catalog::RUST_VERSION
+        )
+        .is_err()
+    );
 
-    let wrong_rust = ROOT_CONFIG.replace("1.99.1", "1.98.0");
+    let wrong_rust = ROOT_CONFIG.replace(velnor_actions_mise::catalog::RUST_VERSION, "1.98.0");
     assert!(validate_config_shape(&project(&wrong_rust), "1.98.0").is_err());
 
     let missing_route = ROOT_CONFIG.replace(", mr_boxington = true", "");
-    assert!(validate_config_shape(&project(&missing_route), "1.99.1").is_err());
+    assert!(
+        validate_config_shape(
+            &project(&missing_route),
+            velnor_actions_mise::catalog::RUST_VERSION
+        )
+        .is_err()
+    );
 
     let malformed_route = ROOT_CONFIG.replace("mr_boxington = true", "mr_boxington = \"true\"");
-    assert!(validate_config_shape(&project(&malformed_route), "1.99.1").is_err());
+    assert!(
+        validate_config_shape(
+            &project(&malformed_route),
+            velnor_actions_mise::catalog::RUST_VERSION
+        )
+        .is_err()
+    );
 }
 
 #[test]
@@ -137,8 +170,9 @@ fn rejects_duplicate_task_rows_and_ambiguous_root_rows() {
 
 #[test]
 fn task_local_lock_matches_only_declared_tools_and_root_authority() {
+    let root_config_text = ROOT_CONFIG.as_str();
     let root_config = project(&format!(
-        "{ROOT_CONFIG}\n[tools.swiftlint]\nversion = \"0.65.1\"\n"
+        "{root_config_text}\n[tools.swiftlint]\nversion = \"0.65.1\"\n"
     ));
     let source_config = project(
         r#"
@@ -156,7 +190,7 @@ tools = { swiftlint = "0.65.1" }
         false,
         &root_config,
         &root_lock,
-        "1.99.1",
+        velnor_actions_mise::catalog::RUST_VERSION,
         &BTreeMap::new(),
     )
     .expect("task-local selector has the exact root-selected locked row");
@@ -173,14 +207,14 @@ tools = { swiftlint = "0.65.1" }
             false,
             &root_config,
             &root_lock,
-            "1.99.1",
+            velnor_actions_mise::catalog::RUST_VERSION,
             &BTreeMap::new(),
         )
         .is_err()
     );
 
     let wrong_version_config = project(&format!(
-        "{ROOT_CONFIG}\n[tools.swiftlint]\nversion = \"0.64.0\"\n"
+        "{root_config_text}\n[tools.swiftlint]\nversion = \"0.64.0\"\n"
     ));
     assert!(
         validate_source_task_lock_requests(
@@ -189,7 +223,7 @@ tools = { swiftlint = "0.65.1" }
             false,
             &wrong_version_config,
             &root_lock,
-            "1.99.1",
+            velnor_actions_mise::catalog::RUST_VERSION,
             &BTreeMap::new(),
         )
         .is_err()

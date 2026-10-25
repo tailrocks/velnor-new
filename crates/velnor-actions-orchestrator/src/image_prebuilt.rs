@@ -65,7 +65,8 @@ pub(crate) fn steps(
     ] {
         env.insert(native.to_owned(), env[mise].clone());
     }
-    let source_steps = crate::source_prep::fetch_steps_for_crate(catalog, &roots, false)?;
+    let source_steps =
+        crate::source_prep::fetch_steps_for_crate_with_env(catalog, &roots, &env, false)?;
     let mut steps = vec![
         crate::workflow::verify_restored_rust_step(catalog),
         crate::matrix_step::prepare_crate_tools_step(catalog, true, false, false, false)?,

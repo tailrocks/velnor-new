@@ -220,6 +220,37 @@ fn assert_report_error_is_returned_after_success(fixture: &WrapperFrameFixture) 
 }
 
 #[cfg(unix)]
+fn assert_lane_matrix_ids_run(fixture: &WrapperFrameFixture) {
+    for suffix in ["/lane-hosted", "/lane-scale-set"] {
+        let mut fields = fixture.fields.clone();
+        fields[4].push_str(suffix);
+        std::fs::write(&fixture.frame_path, encode_frame(&fields)).expect("write lane frame");
+        let result = run_wrapper(fixture, "0");
+        assert!(
+            result.status.success(),
+            "{suffix}: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        remove_if_present(&fixture.task_started_marker);
+    }
+}
+
+#[cfg(unix)]
+fn assert_invalid_matrix_task_is_rejected(fixture: &WrapperFrameFixture) {
+    for matrix_task in [
+        "stack/rust/crate-1/test/default",
+        "stack/rust/crate-0/test/default/lane-unknown",
+    ] {
+        let mut fields = fixture.fields.clone();
+        fields[4] = format!("stack:rust|task:{matrix_task}");
+        std::fs::write(&fixture.frame_path, encode_frame(&fields)).expect("write invalid lane");
+        let result = run_wrapper(fixture, "0");
+        assert_eq!(result.status.code(), Some(125));
+        assert!(!fixture.task_started_marker.exists());
+    }
+}
+
+#[cfg(unix)]
 fn malformed_frames(fixture: &WrapperFrameFixture) -> Vec<(&'static str, Vec<u8>)> {
     let mut bad_count = fixture.fields.clone();
     bad_count[9] = "513".to_owned();
@@ -331,8 +362,11 @@ fn remove_if_present(path: &std::path::Path) {
 #[cfg(unix)]
 fn expected_helper_calls(invalid_frame_count: usize) -> String {
     format!(
-        "resolve-task-execution-v1\nwrite-task-report-v1\nresolve-task-execution-v1\nwrite-task-report-v1\nresolve-task-execution-v1\nwrite-task-report-v1\n{}",
-        "resolve-task-execution-v1\n".repeat(invalid_frame_count)
+        "{}{}{}",
+        "resolve-task-execution-v1\nwrite-task-report-v1\n".repeat(3),
+        "resolve-task-execution-v1\n".repeat(2),
+        "resolve-task-execution-v1\nwrite-task-report-v1\n".repeat(2)
+            + &"resolve-task-execution-v1\n".repeat(invalid_frame_count)
     )
 }
 
@@ -341,6 +375,8 @@ fn expected_helper_calls(invalid_frame_count: usize) -> String {
 fn wrapper_rejects_unresolved_expressions_and_passes_shell_metacharacters_as_data() {
     let fixture = wrapper_frame_fixture();
     assert_successful_task_receives_literal_data(&fixture);
+    assert_lane_matrix_ids_run(&fixture);
+    assert_invalid_matrix_task_is_rejected(&fixture);
     assert_task_error_precedes_report_failure(&fixture);
     assert_report_error_is_returned_after_success(&fixture);
     assert_invalid_frames_never_start_task(&fixture);

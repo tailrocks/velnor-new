@@ -242,7 +242,6 @@ fn archive_trust_follows_source_build() {
     let features = vec!["default".to_owned()];
     let declared: Vec<String> = Vec::new();
     let base = ExtensionInputs {
-        all_features: false,
         package_id: "demo 0.1.0",
         workspace_id: "workspace",
         profile: "default",
@@ -250,6 +249,7 @@ fn archive_trust_follows_source_build() {
         graph_digest: "graph",
         targets: &targets,
         features: &features,
+        all_features: false,
         target: "host",
         driver: CompileDriver::Cargo,
         runner: TestRunner::CargoNextest,

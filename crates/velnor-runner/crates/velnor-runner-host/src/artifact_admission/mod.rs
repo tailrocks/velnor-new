@@ -3,19 +3,20 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
-use bollard::Docker;
-use bollard::models::{ContainerConfig, SystemInfo};
 use reqwest::Client;
-use tokio::time::{Duration, Instant, timeout_at};
 
 use crate::compile_identity::CompiledReleaseIdentity;
 use crate::error::HostError;
 
+pub(crate) const MAX_WORKER_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
+
 mod archive;
 mod checksums;
+#[cfg(test)]
 mod docker;
 mod github;
 mod hash;
+mod inspection;
 mod manifest;
 mod release;
 mod strict_json;
@@ -42,12 +43,19 @@ pub(crate) struct NativeArtifactProvider<'a> {
     state_directory: PathBuf,
 }
 
-pub(crate) struct ArtifactCandidate {
-    pub(crate) runtime_id: String,
-    pub(crate) platform: String,
-    pub(crate) source_revision: String,
-    pub(crate) binding_fingerprint: String,
-    pub(crate) config: ContainerConfig,
+pub(crate) struct ProbeReleaseMaterial {
+    pub(crate) source_sha: String,
+    pub(crate) archive: Vec<u8>,
+    pub(crate) manifest: Vec<u8>,
+    pub(crate) checksums: Vec<u8>,
+}
+
+pub(crate) struct WorkerReleaseMaterial {
+    pub(crate) source_sha: String,
+    pub(crate) runner_path: PathBuf,
+    pub(crate) runner_sha256: String,
+    pub(crate) dind_path: PathBuf,
+    pub(crate) dind_sha256: String,
 }
 
 pub(crate) struct ReleaseArchiveIdentity {
@@ -102,7 +110,7 @@ pub(crate) fn inspect_release_archive(
         config_digest: archive_identity.config_digest.clone(),
         archive_sha256: hash::lowercase_hex(&hash::sha256(archive_bytes)),
     };
-    docker::validate_inspect(inspection, &probe_manifest, &archive_identity)?;
+    inspection::validate_inspect(inspection, &probe_manifest, &archive_identity)?;
     Ok(ReleaseArchiveIdentity {
         oci_index_sha256: archive_identity.oci_index_sha256,
         image_manifest_digest: archive_identity.image_manifest_digest,
@@ -138,32 +146,65 @@ impl<'a> NativeArtifactProvider<'a> {
         })
     }
 
-    pub(crate) async fn verified_candidate(
+    pub(crate) async fn verified_probe_material(&self) -> Result<ProbeReleaseMaterial, HostError> {
+        let release = self.verified_release().await?;
+        Ok(ProbeReleaseMaterial {
+            source_sha: release.source_sha.clone(),
+            archive: release.archive.clone(),
+            manifest: release.manifest_bytes.clone(),
+            checksums: release.checksum_bytes.clone(),
+        })
+    }
+
+    pub(crate) async fn download_worker_material(
         &self,
-        docker: &Docker,
-        engine_id: &str,
-        info: &SystemInfo,
-    ) -> Result<Option<ArtifactCandidate>, HostError> {
-        let deadline = Instant::now() + Duration::from_secs(27);
-        let release = timeout_at(deadline, self.verified_release())
-            .await
-            .map_err(|_| HostError::DockerTimeout)??;
-        if deadline.saturating_duration_since(Instant::now()) <= Duration::from_secs(5) {
-            return Err(HostError::DockerTimeout);
-        }
-        let root = info.docker_root_dir.as_deref().ok_or(HostError::Path)?;
-        if info.id.as_deref() != Some(engine_id) || root.is_empty() {
+        directory: &Path,
+    ) -> Result<WorkerReleaseMaterial, HostError> {
+        let release = self.verified_release().await?;
+        let metadata = std::fs::symlink_metadata(directory).map_err(|_| HostError::Path)?;
+        if !directory.is_absolute()
+            || !metadata.is_dir()
+            || metadata.file_type().is_symlink()
+            || release.runner_asset.name != crate::artifact_admission::manifest::RUNNER_ASSET
+            || release.dind_asset.name != crate::artifact_admission::manifest::DIND_ASSET
+        {
             return Err(HostError::Identity);
         }
-        let runtime = docker::load_and_inspect(docker, engine_id, root, &release, deadline).await?;
-        let fingerprint = image_binding_fingerprint(&release, engine_id, root, &runtime.runtime_id);
-        Ok(Some(ArtifactCandidate {
-            runtime_id: runtime.runtime_id,
-            platform: manifest::PLATFORM.to_owned(),
-            source_revision: release.source_sha.clone(),
-            binding_fingerprint: fingerprint,
-            config: runtime.config,
-        }))
+        let runner_path = directory.join(&release.runner_asset.name);
+        let dind_path = directory.join(&release.dind_asset.name);
+        github::download_asset_to_path(
+            &self.client,
+            self.pat,
+            &release.runner_asset,
+            &runner_path,
+            MAX_WORKER_ARCHIVE_BYTES,
+        )
+        .await?;
+        github::download_asset_to_path(
+            &self.client,
+            self.pat,
+            &release.dind_asset,
+            &dind_path,
+            MAX_WORKER_ARCHIVE_BYTES,
+        )
+        .await?;
+        Ok(WorkerReleaseMaterial {
+            source_sha: release.source_sha.clone(),
+            runner_path,
+            runner_sha256: release
+                .runner_asset
+                .digest
+                .strip_prefix("sha256:")
+                .ok_or(HostError::Identity)?
+                .to_owned(),
+            dind_path,
+            dind_sha256: release
+                .dind_asset
+                .digest
+                .strip_prefix("sha256:")
+                .ok_or(HostError::Identity)?
+                .to_owned(),
+        })
     }
 
     async fn verified_release(&self) -> Result<Arc<release::VerifiedRelease>, HostError> {
@@ -213,11 +254,12 @@ fn validate_fetched_release(
     }
 }
 
+#[cfg(test)]
 struct RuntimeImage {
     runtime_id: String,
-    config: ContainerConfig,
 }
 
+#[cfg(test)]
 fn image_binding_fingerprint(
     release: &release::VerifiedRelease,
     engine_id: &str,
@@ -245,145 +287,5 @@ fn image_binding_fingerprint(
 }
 
 #[cfg(test)]
-mod tests {
-    use std::path::{Path, PathBuf};
-    use std::sync::Arc;
-
-    use super::{
-        CacheKey, CachedRelease, NativeArtifactProvider, cached_release, image_binding_fingerprint,
-        validate_fetched_release,
-    };
-    use crate::artifact_admission::{hash, release::VerifiedRelease};
-    use crate::error::HostError;
-
-    fn release(source: &str, authority: &str, archive_sha: &str) -> VerifiedRelease {
-        let manifest = crate::artifact_admission::manifest::ProbeManifest {
-            source_commit: source.to_owned(),
-            workflow_authority_sha: authority.to_owned(),
-            platform: crate::artifact_admission::manifest::PLATFORM.to_owned(),
-            archive_format: crate::artifact_admission::manifest::ARCHIVE_FORMAT.to_owned(),
-            oci_index_sha256: "b".repeat(64),
-            image_manifest_digest: format!("sha256:{}", "c".repeat(64)),
-            config_digest: format!("sha256:{}", "d".repeat(64)),
-            archive_sha256: archive_sha.to_owned(),
-        };
-        VerifiedRelease {
-            source_sha: source.to_owned(),
-            authority_sha: authority.to_owned(),
-            archive_sha: archive_sha.to_owned(),
-            archive: Vec::new(),
-            manifest,
-            archive_identity: crate::artifact_admission::archive::ArchiveIdentity {
-                oci_index_sha256: "b".repeat(64),
-                image_manifest_digest: format!("sha256:{}", "c".repeat(64)),
-                image_manifest_media_type: "application/vnd.oci.image.manifest.v1+json".to_owned(),
-                image_manifest_size: 0,
-                config_digest: format!("sha256:{}", "d".repeat(64)),
-                config: bollard::models::ContainerConfig::default(),
-            },
-        }
-    }
-
-    #[test]
-    fn provider_factory_uses_only_the_current_compiled_pin_pair() -> Result<(), HostError> {
-        let Some(identity) = crate::compile_identity::compiled_release_identity() else {
-            assert_eq!(
-                NativeArtifactProvider::from_compiled_release_identity(
-                    "ghp_test-token",
-                    Path::new("/tmp/velnor-state"),
-                )
-                .map(|_| ()),
-                Err(HostError::Identity)
-            );
-            return Ok(());
-        };
-        let state_directory = Path::new("/tmp/velnor-state");
-        let provider = NativeArtifactProvider::from_compiled_release_identity(
-            "ghp_test-token",
-            state_directory,
-        )?;
-        assert_eq!(provider.identity, identity);
-        assert_eq!(
-            provider.key.source_sha,
-            hash::lowercase_hex(identity.source_sha())
-        );
-        assert_eq!(provider.key.helper_sha256, *identity.helper_sha256());
-        assert_eq!(provider.pat, "ghp_test-token");
-        assert_eq!(provider.state_directory, state_directory);
-        for invalid in ["", "token\nvalue", &"x".repeat(4097)] {
-            assert_eq!(
-                NativeArtifactProvider::from_compiled_release_identity(invalid, state_directory)
-                    .map(|_| ()),
-                Err(HostError::Identity)
-            );
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn cache_requires_both_the_compiled_source_and_helper_digest() {
-        let key = CacheKey {
-            source_sha: "a".repeat(40),
-            helper_sha256: [0x22; 32],
-            state_directory: PathBuf::from("/private/state-a"),
-        };
-        let cached = CachedRelease {
-            key: key.clone(),
-            release: Arc::new(release(&key.source_sha, &key.source_sha, &"b".repeat(64))),
-        };
-        assert!(cached_release(Some(&cached), &key).is_some());
-        let mut wrong_source = key.clone();
-        wrong_source.source_sha = "c".repeat(40);
-        let mut wrong_helper = key.clone();
-        wrong_helper.helper_sha256[0] ^= 1;
-        let mut wrong_state = key.clone();
-        wrong_state.state_directory = PathBuf::from("/private/state-b");
-        assert!(cached_release(Some(&cached), &wrong_source).is_none());
-        assert!(cached_release(Some(&cached), &wrong_helper).is_none());
-        assert!(cached_release(Some(&cached), &wrong_state).is_none());
-    }
-
-    #[test]
-    fn fetched_release_must_match_the_compiled_source_and_manifest_archive() {
-        let key = CacheKey {
-            source_sha: "a".repeat(40),
-            helper_sha256: [0x22; 32],
-            state_directory: PathBuf::from("/private/state-a"),
-        };
-        let valid = release(&key.source_sha, &key.source_sha, &"b".repeat(64));
-        assert_eq!(validate_fetched_release(&key, &valid), Ok(()));
-        assert_eq!(
-            validate_fetched_release(
-                &key,
-                &release(&"c".repeat(40), &key.source_sha, &"b".repeat(64))
-            ),
-            Err(HostError::Identity)
-        );
-        assert_eq!(
-            validate_fetched_release(
-                &key,
-                &release(&key.source_sha, &"c".repeat(40), &"b".repeat(64))
-            ),
-            Err(HostError::Identity)
-        );
-        let mut wrong_archive = release(&key.source_sha, &key.source_sha, &"b".repeat(64));
-        wrong_archive.archive_sha = "c".repeat(64);
-        assert_eq!(
-            validate_fetched_release(&key, &wrong_archive),
-            Err(HostError::Identity)
-        );
-    }
-
-    #[test]
-    fn fingerprint_binds_archive_engine_root_and_runtime_id() -> Result<(), HostError> {
-        let release = release(&"a".repeat(40), &"a".repeat(40), &"e".repeat(64));
-        let expected = image_binding_fingerprint(&release, "engine", "/data", "sha256:runtime");
-        if expected == image_binding_fingerprint(&release, "other", "/data", "sha256:runtime")
-            || expected == image_binding_fingerprint(&release, "engine", "/other", "sha256:runtime")
-            || expected == image_binding_fingerprint(&release, "engine", "/data", "sha256:other")
-        {
-            return Err(HostError::Identity);
-        }
-        Ok(())
-    }
-}
+#[path = "tests.rs"]
+mod tests;

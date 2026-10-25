@@ -4,58 +4,71 @@ use std::collections::HashMap;
 
 use crate::error::HostError;
 
-const JOURNAL_VERSION: i64 = 1;
-const CURRENT_COLUMNS: [ColumnShape; 23] = [
-    ColumnShape::new("id", "INTEGER", false, None),
-    ColumnShape::new("kind", "TEXT", true, None),
-    ColumnShape::new("subject", "TEXT", true, None),
-    ColumnShape::new("state", "TEXT", true, None),
-    ColumnShape::new("docker_id", "TEXT", false, None),
-    ColumnShape::new("github_runner_id", "TEXT", false, None),
-    ColumnShape::new("cleanup_proven", "INTEGER", true, Some("0")),
-    ColumnShape::new("dind_id", "TEXT", false, None),
-    ColumnShape::new("worker_volume", "TEXT", false, None),
-    ColumnShape::new("scale_set_id", "INTEGER", false, None),
-    ColumnShape::new("runner_request_id", "INTEGER", false, None),
-    ColumnShape::new("runner_name", "TEXT", false, None),
-    ColumnShape::new("acquire_attempted", "INTEGER", true, Some("0")),
-    ColumnShape::new("acquire_resolved", "INTEGER", true, Some("0")),
-    ColumnShape::new("acquired", "INTEGER", true, Some("0")),
-    ColumnShape::new("jit_requested", "INTEGER", true, Some("0")),
-    ColumnShape::new("docker_engine_id", "TEXT", false, None),
-    ColumnShape::new("launch_phase", "TEXT", false, None),
-    ColumnShape::new("launch_id", "TEXT", false, None),
-    ColumnShape::new("assignment_key", "TEXT", false, None),
-    ColumnShape::new("seed_generation_id", "TEXT", false, None),
-    ColumnShape::new("runner_completed", "INTEGER", true, Some("0")),
-    ColumnShape::new("worker_cleanup_proven", "INTEGER", true, Some("0")),
-];
+#[cfg(test)]
+mod cleanup_observer_orphan_tests;
+mod cleanup_observer_witness;
+#[cfg(test)]
+mod cleanup_observer_witness_tests;
+mod connection;
+mod current_columns;
+mod doctor_probe;
+mod driver;
+mod execution_authorization;
+mod execution_publication;
+mod image_import;
+mod jit_conflict_recovery;
+mod jit_conflict_settlement;
+mod migration;
+mod physical_attempts;
+#[cfg(test)]
+#[path = "schema/physical_attempts_migration_tests.rs"]
+mod physical_attempts_migration_tests;
+#[cfg(test)]
+#[path = "schema/physical_attempts_tests.rs"]
+mod physical_attempts_tests;
+#[cfg(test)]
+#[path = "schema/physical_attempts_v34_migration_tests.rs"]
+mod physical_attempts_v34_migration_tests;
+mod post_jit_effect_fences;
+#[cfg(test)]
+#[path = "schema/post_jit_effect_fences_tests.rs"]
+mod post_jit_effect_fences_tests;
+mod post_jit_retirement;
+mod pr_source_transition;
+mod pre_jit_cleanup;
 
-#[derive(Clone, Copy)]
-struct ColumnShape {
-    name: &'static str,
-    declared_type: &'static str,
-    not_null: bool,
-    default_value: Option<&'static str>,
+pub(in crate::journal) async fn validate_jit_conflict_progress_proofs(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
+    jit_conflict_settlement::validate_persisted_proofs(conn).await
 }
+#[cfg(test)]
+pub(in crate::journal) mod provisioning;
+#[cfg(not(test))]
+mod provisioning;
+mod remote;
+mod request_ledger;
+mod request_reservations;
+mod scale_set_create;
+mod session;
+mod session_refresh;
+mod source_authorization;
+mod sql_normalization;
+mod storage_budget;
+mod storage_handoff;
+mod storage_initialization;
+mod storage_network;
+mod storage_root_backing;
+#[cfg(test)]
+#[path = "schema/execution_publication/v30_migration_tests.rs"]
+mod v30_migration_tests;
+mod validation;
 
-impl ColumnShape {
-    const fn new(
-        name: &'static str,
-        declared_type: &'static str,
-        not_null: bool,
-        default_value: Option<&'static str>,
-    ) -> Self {
-        Self {
-            name,
-            declared_type,
-            not_null,
-            default_value,
-        }
-    }
-}
+pub(super) const JOURNAL_VERSION: i64 = 40;
+use current_columns::CURRENT_COLUMNS;
+pub(super) use validation::validate_persisted_schema_v35;
 
-struct ColumnInfo {
+pub(super) struct ColumnInfo {
     declared_type: String,
     not_null: bool,
     default_value: Option<String>,
@@ -77,17 +90,65 @@ pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError>
 }
 
 async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError> {
-    match journal_version(conn).await? {
-        0 => migrate_version_zero(conn).await,
-        JOURNAL_VERSION => {
-            ensure_completion_objects(conn).await?;
-            crate::journal_schema::bootstrap(conn).await?;
-            crate::journal_schema::install_revision_triggers(conn).await?;
-            validate_current_schema(conn).await
-        }
-        _ => Err(HostError::Journal),
+    let version = journal_version(conn).await?;
+    if version == JOURNAL_VERSION {
+        Box::pin(bootstrap_current_schema(conn)).await?;
+    } else {
+        driver::migrate_to_current(conn, version).await?;
     }
+    validate_persisted_schema(conn).await
 }
+
+async fn bootstrap_current_schema(conn: &turso::Connection) -> Result<(), HostError> {
+    // Repair only the exact v26 attachment/path contracts before
+    // provisioning validation requires the current v27 definitions.
+    execution_authorization::bootstrap(conn).await?;
+    storage_root_backing::upgrade_v27(conn).await?;
+    legacy_validation::validate_persisted_schema_v19_current40(conn).await?;
+    migration::ensure_completion_objects(conn).await?;
+    crate::journal_schema::bootstrap(conn).await?;
+    crate::journal_schema::install_revision_triggers(conn).await?;
+    storage_initialization::bootstrap(conn).await?;
+    crate::journal_schema::install_v20_revision_triggers(conn).await?;
+    storage_network::bootstrap(conn).await?;
+    storage_initialization::upgrade_v22(conn).await?;
+    storage_root_backing::upgrade_v27(conn).await?;
+    storage_root_backing::upgrade_v30(conn).await?;
+    storage_root_backing::bootstrap(conn).await?;
+    execution_authorization::bootstrap(conn).await?;
+    execution_publication::bootstrap(conn).await?;
+    execution_publication::upgrade_v25(conn).await?;
+    execution_publication::upgrade_v30(conn).await?;
+    storage_root_backing::upgrade_v31(conn).await?;
+    storage_handoff::bootstrap(conn).await?;
+    cleanup_observer_witness::bootstrap(conn).await?;
+    post_jit_retirement::validate_v40(conn).await?;
+    post_jit_effect_fences::validate(conn).await?;
+    pr_source_transition::validate(conn).await?;
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "schema/migration_driver_tests.rs"]
+mod migration_driver_tests;
+
+#[cfg(test)]
+#[path = "schema/historical_fixture.rs"]
+pub(crate) mod historical_fixture;
+
+async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_persisted_schema_v40(conn).await
+}
+
+mod legacy_validation;
+pub(super) use legacy_validation::{
+    validate_persisted_schema_v19, validate_persisted_schema_v20, validate_persisted_schema_v27,
+    validate_persisted_schema_v32, validate_persisted_schema_v33, validate_persisted_schema_v34,
+    validate_persisted_schema_v36, validate_persisted_schema_v37, validate_persisted_schema_v38,
+    validate_persisted_schema_v39,
+};
+mod validation_v40;
+pub(super) use validation_v40::validate_persisted_schema_v40;
 
 async fn journal_version(conn: &turso::Connection) -> Result<i64, HostError> {
     let mut rows = conn
@@ -102,144 +163,7 @@ async fn journal_version(conn: &turso::Connection) -> Result<i64, HostError> {
         .map_err(|_| HostError::Journal)
 }
 
-async fn migrate_version_zero(conn: &turso::Connection) -> Result<(), HostError> {
-    // Extended statements run first so legacy rows are quarantined before the
-    // lifecycle flags exist with a default; the single transaction keeps the
-    // migration atomic when validation fails below.
-    crate::journal_schema::bootstrap(conn).await?;
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS intents (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, subject TEXT NOT NULL, state TEXT NOT NULL, docker_id TEXT, github_runner_id TEXT, cleanup_proven INTEGER NOT NULL DEFAULT 0, dind_id TEXT, worker_volume TEXT)",
-        (),
-    )
-    .await
-    .map_err(|_| HostError::Journal)?;
-    ensure_legacy_columns(conn).await?;
-    ensure_completion_objects(conn).await?;
-    crate::journal_schema::install_revision_triggers(conn).await?;
-    validate_current_schema(conn).await?;
-    conn.execute(
-        "UPDATE intents SET state = CASE WHEN state = 'failed' THEN 'uncertain' ELSE state END, cleanup_proven = 0 WHERE kind = 'launch' AND state IN ('failed', 'pending', 'uncertain')",
-        (),
-    )
-    .await
-    .map_err(|_| HostError::Journal)?;
-    conn.execute("PRAGMA user_version = 1", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    Ok(())
-}
-
-async fn ensure_legacy_columns(conn: &turso::Connection) -> Result<(), HostError> {
-    let columns = read_columns(conn).await?;
-    for (column, definition) in [("dind_id", "TEXT"), ("worker_volume", "TEXT")] {
-        if !columns.contains_key(column) {
-            conn.execute(
-                &format!("ALTER TABLE intents ADD COLUMN {column} {definition}"),
-                (),
-            )
-            .await
-            .map_err(|_| HostError::Journal)?;
-        }
-    }
-    Ok(())
-}
-
-async fn ensure_completion_objects(conn: &turso::Connection) -> Result<(), HostError> {
-    let columns = read_columns(conn).await?;
-    for (column, definition) in [
-        ("scale_set_id", "INTEGER"),
-        ("runner_request_id", "INTEGER"),
-        ("runner_name", "TEXT"),
-        ("acquire_attempted", "INTEGER NOT NULL DEFAULT 0"),
-        ("acquire_resolved", "INTEGER NOT NULL DEFAULT 0"),
-        ("acquired", "INTEGER NOT NULL DEFAULT 0"),
-        ("jit_requested", "INTEGER NOT NULL DEFAULT 0"),
-        ("docker_engine_id", "TEXT"),
-        ("launch_phase", "TEXT"),
-    ] {
-        if !columns.contains_key(column) {
-            conn.execute(
-                &format!("ALTER TABLE intents ADD COLUMN {column} {definition}"),
-                (),
-            )
-            .await
-            .map_err(|_| HostError::Journal)?;
-        }
-    }
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS completion_cleanup (intent_id INTEGER PRIMARY KEY REFERENCES intents(id), scale_set_id INTEGER NOT NULL, runner_request_id INTEGER NOT NULL, runner_id INTEGER NOT NULL, runner_name TEXT NOT NULL, runner_absent INTEGER NOT NULL DEFAULT 0 CHECK (runner_absent IN (0, 1)), attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0), claim_generation INTEGER NOT NULL DEFAULT 0 CHECK (claim_generation >= 0), retry_after INTEGER NOT NULL DEFAULT 0 CHECK (retry_after >= 0), lease_until INTEGER NOT NULL DEFAULT 0 CHECK (lease_until >= 0), UNIQUE (scale_set_id, runner_request_id), UNIQUE (scale_set_id, runner_id), UNIQUE (scale_set_id, runner_name))",
-        (),
-    )
-    .await
-    .map_err(|_| HostError::Journal)?;
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS completion_inbox (scale_set_id INTEGER NOT NULL CHECK (scale_set_id > 0), message_id INTEGER NOT NULL CHECK (message_id >= 0), raw_body TEXT NOT NULL CHECK (length(CAST(raw_body AS BLOB)) BETWEEN 1 AND 262144), attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0), retry_after INTEGER NOT NULL DEFAULT 0 CHECK (retry_after >= 0), PRIMARY KEY (scale_set_id, message_id))",
-        (),
-    )
-    .await
-    .map_err(|_| HostError::Journal)?;
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS launch_recovery (intent_id INTEGER PRIMARY KEY REFERENCES intents(id), generation INTEGER NOT NULL DEFAULT 0 CHECK (generation >= 0), attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0), retry_after INTEGER NOT NULL DEFAULT 0 CHECK (retry_after >= 0), lease_until INTEGER NOT NULL DEFAULT 0 CHECK (lease_until >= 0))",
-        (),
-    )
-    .await
-    .map_err(|_| HostError::Journal)?;
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS launch_recovery_due ON launch_recovery(retry_after, lease_until, intent_id)",
-        (),
-    )
-    .await
-    .map_err(|_| HostError::Journal)?;
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS guest_probe_owner (id INTEGER PRIMARY KEY CHECK (id = 1), owner_token TEXT NOT NULL CHECK (length(owner_token) = 32 AND owner_token NOT GLOB '*[^0-9a-f]*'))",
-        (),
-    )
-    .await
-    .map_err(|_| HostError::Journal)?;
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS completion_inbox_due ON completion_inbox(retry_after, scale_set_id, message_id)",
-        (),
-    )
-    .await
-    .map_err(|_| HostError::Journal)?;
-    ensure_runner_absent(conn).await?;
-    conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS intents_completion_request ON intents(kind, scale_set_id, runner_request_id) WHERE kind = 'launch' AND scale_set_id IS NOT NULL AND runner_request_id IS NOT NULL AND cleanup_proven = 0",
-        (),
-    )
-    .await
-    .map_err(|_| HostError::Journal)?;
-    conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS intents_completion_name ON intents(kind, scale_set_id, runner_name) WHERE kind = 'launch' AND scale_set_id IS NOT NULL AND runner_name IS NOT NULL AND cleanup_proven = 0",
-        (),
-    )
-    .await
-    .map_err(|_| HostError::Journal)?;
-    Ok(())
-}
-
-async fn ensure_runner_absent(conn: &turso::Connection) -> Result<(), HostError> {
-    let mut has_runner_absent = false;
-    let mut rows = conn
-        .query("PRAGMA table_info(completion_cleanup)", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
-        let name: String = row.get(1).map_err(|_| HostError::Journal)?;
-        has_runner_absent |= name == "runner_absent";
-    }
-    if !has_runner_absent {
-        conn.execute(
-            "ALTER TABLE completion_cleanup ADD COLUMN runner_absent INTEGER NOT NULL DEFAULT 0 CHECK (runner_absent IN (0, 1))",
-            (),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    }
-    Ok(())
-}
-
-async fn validate_current_schema(conn: &turso::Connection) -> Result<(), HostError> {
+pub(super) async fn validate_current_schema(conn: &turso::Connection) -> Result<(), HostError> {
     let columns = read_columns(conn).await?;
     for expected in CURRENT_COLUMNS {
         let Some(actual) = columns.get(expected.name) else {
@@ -316,9 +240,16 @@ async fn has_primary_key_index(conn: &turso::Connection) -> Result<bool, HostErr
 }
 
 async fn read_columns(conn: &turso::Connection) -> Result<HashMap<String, ColumnInfo>, HostError> {
+    read_table_columns(conn, "intents").await
+}
+
+pub(super) async fn read_table_columns(
+    conn: &turso::Connection,
+    table: &str,
+) -> Result<HashMap<String, ColumnInfo>, HostError> {
     let mut columns = HashMap::new();
     let mut rows = conn
-        .query("PRAGMA table_info(intents)", ())
+        .query(&format!("PRAGMA table_info({table})"), ())
         .await
         .map_err(|_| HostError::Journal)?;
     while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {

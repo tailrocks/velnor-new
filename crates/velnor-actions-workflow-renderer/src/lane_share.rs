@@ -1,18 +1,28 @@
 //! One composite action per duplicated verification lane.
 //!
-//! GitHub will not start a workflow file larger than 500 KB. Inlining both
-//! lane step lists crosses that limit, so the steps live in one action and
-//! each lane job keeps its own id, `runs-on`, and `needs`.
+//! GitHub's 500 KB cap drives shared actions that keep lane ids, runners, and
+//! dependencies; Both can move typed Rust lane pairs into same-id reusable callees.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
-use velnor_actions_contract::{Job, Step, StepKind, StepRole};
+use velnor_actions_contract::{Job, Step};
 
-use crate::RenderError;
-use crate::render::RenderContext;
-use crate::tree::RenderedFile;
+use crate::{RenderError, render::RenderContext, tree::RenderedFile};
 
+#[path = "lane_share_checkout.rs"]
+mod checkout;
+#[cfg(test)]
+#[path = "lane_share_entry.rs"]
+mod entry;
+#[path = "lane_share_job_workflow.rs"]
+mod job_workflow;
+#[cfg(test)]
+pub(crate) use entry::share_lanes;
+#[path = "job_workflow_extract.rs"]
+pub(crate) mod job_workflow_extract;
+#[path = "lane_share_provider_restore.rs"]
+mod provider_restore;
 #[path = "lane_share_runtime.rs"]
 mod runtime;
 
@@ -30,13 +40,15 @@ pub struct RenderedWorkflow {
 pub(crate) struct LaneShare {
     /// Same jobs, with shared lanes keeping their headers and elected saves.
     pub jobs: BTreeMap<String, Job>,
+    /// Source-derived reusable-workflow bodies for selected typed lane jobs.
+    pub job_workflows: BTreeMap<String, job_workflow_extract::PreparedJob>,
     /// Job id to local `uses` path.
     pub calls: BTreeMap<String, String>,
     /// Job id to the original checkout step rendered before each shared call.
     pub checkouts: BTreeMap<String, Step>,
     /// Original step lists used to derive job-level environment values.
     pub env_steps: BTreeMap<String, Vec<Step>>,
-    /// Runner-specific V2 tools identity and restore steps, kept before setup.
+    /// Keep the verified Velnor program steps and cache-tar setup before shared steps.
     pub runtime_preludes: BTreeMap<String, Vec<Step>>,
     /// Common setup steps rendered before each lane's cache-specific prelude.
     pub prefixes: BTreeMap<String, Vec<Step>>,
@@ -68,9 +80,10 @@ struct SharedLaneParts {
 /// fails closed. The one typed hosted check admission condition may differ;
 /// lane identities, report uploads, and elected cache saves remain in their
 /// owning jobs. An unsafe logical id fails closed.
-pub(crate) fn share_lanes(
+pub(crate) fn share_lanes_with_selection(
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
+    job_workflow_ids: Option<&BTreeSet<String>>,
 ) -> Result<LaneShare, RenderError> {
     let mut calls = BTreeMap::new();
     let mut checkouts = BTreeMap::new();
@@ -81,11 +94,7 @@ pub(crate) fn share_lanes(
     let mut files = Vec::new();
     let mut next = jobs.clone();
     let mut env_steps = BTreeMap::new();
-    if next.values().any(|job| {
-        job.steps
-            .iter()
-            .any(|step| step.role == Some(StepRole::TofuProvidersRestore))
-    }) {
+    if provider_restore::has_tofu_provider_restore(&next) {
         files.push(crate::tofu_cache::provider_admission_file(
             &ctx.generator_version,
         )?);
@@ -111,7 +120,8 @@ pub(crate) fn share_lanes(
         {
             continue;
         }
-        let Some(parts) = split_pair(hosted, local, &ctx.checkout_uses) else {
+        let Some(parts) = split_pair(&hosted_id, &local_id, hosted, local, &ctx.checkout_uses)
+        else {
             return Err(RenderError::InvalidWorkflow(format!(
                 "lane_body_differs:{logical}"
             )));
@@ -142,6 +152,7 @@ pub(crate) fn share_lanes(
     crate::lane_share_sections::factor_provider_preludes(&mut preludes, &mut files, ctx)?;
     let shared = LaneShare {
         jobs: next,
+        job_workflows: job_workflow::prepare(jobs, job_workflow_ids)?,
         calls,
         checkouts,
         env_steps,
@@ -208,24 +219,42 @@ fn logical_id(hosted_id: &str) -> Option<&str> {
     ok.then_some(logical)
 }
 
-fn split_pair(hosted: &Job, local: &Job, checkout_uses: &str) -> Option<SharedLaneParts> {
+fn split_pair(
+    hosted_id: &str,
+    local_id: &str,
+    hosted: &Job,
+    local: &Job,
+    checkout_uses: &str,
+) -> Option<SharedLaneParts> {
     if hosted.timeout_minutes != local.timeout_minutes
-        || !crate::lane_share_sections::same_or_admitted_check_condition(hosted, local)
+        || !crate::lane_share_sections::same_or_admitted_check_condition(
+            hosted_id, local_id, hosted, local,
+        )
         || hosted.permissions != local.permissions
         || hosted.cache_mode != local.cache_mode
         || hosted.environment != local.environment
     {
         return None;
     }
-    let (hosted_checkout, hosted_steps) = peel_checkout(&hosted.steps, checkout_uses)?;
-    let (local_checkout, local_steps) = peel_checkout(&local.steps, checkout_uses)?;
+    let (hosted_checkout, hosted_steps) = checkout::peel_checkout(&hosted.steps, checkout_uses)?;
+    let (local_checkout, local_steps) = checkout::peel_checkout(&local.steps, checkout_uses)?;
     if hosted_checkout != local_checkout {
         return None;
     }
+    let (hosted_helper, hosted_steps) = runtime::peel_cache_helper_prefix(hosted_steps)?;
+    let (local_helper, local_steps) = runtime::peel_cache_helper_prefix(local_steps)?;
+    let hosted_needs_plan = hosted
+        .needs
+        .iter()
+        .any(|dependency| dependency == crate::render::PLAN_JOB_ID);
+    let local_needs_plan = local
+        .needs
+        .iter()
+        .any(|dependency| dependency == crate::render::PLAN_JOB_ID);
     let (mut hosted_runtime_prelude, mut hosted_steps) =
-        runtime::peel_tools_cache_prelude(hosted_steps, &hosted.runs_on)?;
+        runtime::peel_tools_cache_prelude(hosted_steps, &hosted.runs_on, hosted_needs_plan)?;
     let (mut local_runtime_prelude, mut local_steps) =
-        runtime::peel_tools_cache_prelude(local_steps, &local.runs_on)?;
+        runtime::peel_tools_cache_prelude(local_steps, &local.runs_on, local_needs_plan)?;
     // A lane prelude carries Setup Mise first; its pair renders the same
     // Setup Mise outside the shared body too.
     if hosted_runtime_prelude.is_empty() != local_runtime_prelude.is_empty() {
@@ -241,17 +270,32 @@ fn split_pair(hosted: &Job, local: &Job, checkout_uses: &str) -> Option<SharedLa
     if hosted_runtime_prelude.first() != local_runtime_prelude.first() {
         return None;
     }
-    if !runtime::same_tools_cache_prelude_shape(
+    let tools_shape = runtime::same_tools_cache_prelude_shape(
         &hosted_runtime_prelude,
         &local_runtime_prelude,
         &hosted.runs_on,
         &local.runs_on,
-    ) {
+        hosted_needs_plan,
+        local_needs_plan,
+    );
+    let helper_shape = runtime::same_cache_helper_prefix_shape(
+        &hosted_helper,
+        &local_helper,
+        &hosted.runs_on,
+        &local.runs_on,
+        runtime::has_tools_cache_prelude(&hosted_runtime_prelude),
+        runtime::has_tools_cache_prelude(&local_runtime_prelude),
+    );
+    if !tools_shape || !helper_shape {
         return None;
     }
     let mut parts = split_shared_steps(hosted_checkout, &hosted_steps, &local_steps)?;
-    parts.hosted_runtime_prelude = hosted_runtime_prelude;
-    parts.local_runtime_prelude = local_runtime_prelude;
+    let mut hosted_runtime = hosted_helper;
+    hosted_runtime.extend(hosted_runtime_prelude);
+    let mut local_runtime = local_helper;
+    local_runtime.extend(local_runtime_prelude);
+    parts.hosted_runtime_prelude = hosted_runtime;
+    parts.local_runtime_prelude = local_runtime;
     Some(parts)
 }
 
@@ -327,27 +371,6 @@ fn split_shared_steps(
         hosted_postlude,
         local_postlude,
     })
-}
-
-fn peel_checkout<'a>(steps: &'a [Step], checkout_uses: &str) -> Option<(&'a Step, &'a [Step])> {
-    let (checkout, remaining) = steps.split_first()?;
-    if !velnor_actions_contract::workflow::step_identity::is_configured_checkout(
-        checkout,
-        checkout_uses,
-    ) || remaining.iter().any(is_checkout_step)
-    {
-        return None;
-    }
-    Some((checkout, remaining))
-}
-
-fn is_checkout_step(step: &Step) -> bool {
-    step.role == Some(StepRole::Checkout)
-        || matches!(
-            &step.kind,
-            StepKind::Action { uses, .. }
-                if uses.starts_with("actions/checkout@")
-        )
 }
 
 fn set_steps(jobs: &mut BTreeMap<String, Job>, id: &str, steps: Vec<Step>) {

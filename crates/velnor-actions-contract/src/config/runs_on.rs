@@ -6,6 +6,7 @@
 
 use super::workflow::RUNNER_LABEL_CATALOG;
 use crate::errors::ContractError;
+use crate::targets::ReleaseTarget;
 
 /// Product marker registered on the scale set.
 pub const VELNOR_LABEL: &str = "velnor";
@@ -23,6 +24,38 @@ pub enum RunsOn {
     Hosted(String),
     /// Scale-set selector, rendered as a flow sequence.
     ScaleSet(ScaleSetSelector),
+}
+
+/// Native operating-system and architecture family for a known hosted runner.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunnerPlatform {
+    /// Linux on x86-64.
+    LinuxAmd64,
+    /// Linux on arm64.
+    LinuxArm64,
+    /// Any Darwin runner, including labels outside the release-target catalog.
+    Darwin,
+}
+
+/// Classify one runner label using the contract's hosted-runner identities.
+#[must_use]
+pub fn runner_platform(label: &str) -> Option<RunnerPlatform> {
+    if let Some(target) = ReleaseTarget::for_runner_label(label) {
+        return Some(match target {
+            ReleaseTarget::LinuxX86_64 => RunnerPlatform::LinuxAmd64,
+            ReleaseTarget::MacosArm64 | ReleaseTarget::MacosX86_64 => RunnerPlatform::Darwin,
+        });
+    }
+    if label.starts_with("macos-") {
+        return Some(RunnerPlatform::Darwin);
+    }
+    if !RUNNER_LABEL_CATALOG.contains(&label) {
+        return None;
+    }
+    Some(match label {
+        "ubuntu-22.04-arm" | "ubuntu-24.04-arm" | "ubuntu-26.04-arm" => RunnerPlatform::LinuxArm64,
+        _ => RunnerPlatform::LinuxAmd64,
+    })
 }
 
 /// Validated scale-set name plus labels in render order.
@@ -201,4 +234,23 @@ fn validate_label(label: &str, key: &str) -> Result<(), ContractError> {
 
 fn illegal(key: &str, label: &str) -> ContractError {
     ContractError::config("config.toml", key, format!("illegal_label:{label}"))
+}
+
+#[cfg(test)]
+#[test]
+fn runner_platform_uses_catalog_identities_and_rejects_unknown_labels() {
+    assert_eq!(
+        runner_platform("ubuntu-26.04"),
+        Some(RunnerPlatform::LinuxAmd64)
+    );
+    assert_eq!(
+        runner_platform("ubuntu-24.04-arm"),
+        Some(RunnerPlatform::LinuxArm64)
+    );
+    assert_eq!(
+        runner_platform("macos-15-intel"),
+        Some(RunnerPlatform::Darwin)
+    );
+    assert_eq!(runner_platform("macos-99"), Some(RunnerPlatform::Darwin));
+    assert_eq!(runner_platform("custom-linux"), None);
 }

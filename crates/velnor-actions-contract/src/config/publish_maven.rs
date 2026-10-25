@@ -28,13 +28,13 @@ pub struct PublishMaven {
     pub id: String,
     /// `[stacks.gradle]` root whose `:mavenBundle` task builds the bundle (`.` is the repository root).
     pub root: String,
-    /// Provenance attestation (default on). `false` is an explicit opt-out for
-    /// repositories whose GitHub plan cannot attest (private repository on a plan
-    /// without artifact attestations); it requires `attest_reason`, and the
-    /// generated job prints that reason as a workflow warning instead of attesting.
+    /// Enable artifact attestation by default.
+    /// Set `false` only when the repository GitHub plan does not support artifact attestations.
+    /// Supply `attest_reason` when this value is `false`.
+    /// The generated job prints the reason as a workflow warning instead of creating an attestation.
     #[serde(default = "default_attest")]
     pub attest: bool,
-    /// Why attestation is off; required when `attest = false`, forbidden otherwise.
+    /// Give the reason when `attest = false`. Do not set it when attestation is enabled.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attest_reason: Option<String>,
 }

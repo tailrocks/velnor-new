@@ -225,13 +225,13 @@ impl PlaywrightLock {
     }
 }
 
-/// Download URLs for a locked archive: the locked URL first, then the other
-/// mirrors Playwright's registry tries for the same artifact, in registry order.
-///
-/// Archives under `builds/cft/` have one host upstream and get no fallback.
-/// Every returned URL passes [`is_playwright_download_url`]; a URL that is not
-/// a known mirror form yields only itself. The expected sha256 and size are
-/// the caller's and never change with the host.
+/// Return download URLs for a locked archive.
+/// The locked URL comes first, followed by the other mirrors in Playwright registry order.
+/// Archives under `builds/cft/` use only the locked URL.
+/// The original URL is returned unchanged.
+/// Additional URLs pass [`is_playwright_download_url`].
+/// If the original URL does not match a known mirror, the function returns only that URL.
+/// The caller's expected SHA-256 and size do not change with the host.
 #[must_use]
 pub fn playwright_download_candidates(url: &str) -> Vec<String> {
     let mut candidates = vec![url.to_owned()];

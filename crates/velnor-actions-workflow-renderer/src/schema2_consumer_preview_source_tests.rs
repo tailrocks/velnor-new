@@ -49,7 +49,7 @@ fn with_sources() -> ConsumerReleaseSpec {
 #[test]
 fn source_selection_checks_out_authenticated_a_only_for_native_finalization() {
     let spec = fixture();
-    let rendered = render_consumer_preview(&spec).expect("preview").bytes;
+    let rendered = render_preview(&spec).expect("preview").bytes;
     let eligibility = job(&rendered, "preview-eligibility", Some("preview-payload"));
     assert!(eligibility.contains("select-preview-source-v1"));
     assert!(eligibility.contains("finalize-preview-source-v1"));
@@ -116,9 +116,7 @@ fn source_selection_checks_out_authenticated_a_only_for_native_finalization() {
 fn authenticated_source_lfs_flag_controls_every_preview_source_checkout() {
     let mut spec = super::with_tap();
     spec.checkout_lfs = false;
-    let rendered = render_consumer_preview(&spec)
-        .expect("preview with tap")
-        .bytes;
+    let rendered = render_preview(&spec).expect("preview with tap").bytes;
     let eligibility = job(&rendered, "preview-eligibility", Some("preview-payload"));
     assert!(eligibility.contains("lfs: ${{ steps.source-select.outputs.checkout_lfs }}"));
     let payload = job(&rendered, "preview-payload", Some("preview-assemble"));
@@ -161,7 +159,7 @@ fn source_admission_acquire_owns_policy_materialization() {
 #[test]
 fn every_preview_operation_binds_both_sha_identities_and_admission_locators() {
     let spec = fixture();
-    let rendered = render_consumer_preview(&spec).expect("preview").bytes;
+    let rendered = render_preview(&spec).expect("preview").bytes;
     let payload = job(&rendered, "preview-payload", Some("preview-assemble"));
     let assembly = job(&rendered, "preview-assemble", Some("preview-signer"));
     for yaml in [payload, assembly] {
@@ -181,7 +179,7 @@ fn every_preview_operation_binds_both_sha_identities_and_admission_locators() {
 #[test]
 fn producer_helper_bootstrap_selects_only_trusted_manifest_host_assets() {
     let spec = fixture();
-    let rendered = render_consumer_preview(&spec).expect("preview").bytes;
+    let rendered = render_preview(&spec).expect("preview").bytes;
     let producer = job(&rendered, "preview-payload", Some("preview-assemble"));
     for target in velnor_actions_contract::targets::ReleaseTarget::ALL {
         assert!(producer.contains(&format!("acquire-{}", target.triple())));
@@ -204,7 +202,7 @@ fn producer_helper_bootstrap_selects_only_trusted_manifest_host_assets() {
 #[test]
 fn preview_uses_authenticated_checkout_without_replaying_b_metadata() {
     let spec = with_sources();
-    let rendered = render_consumer_preview(&spec).expect("preview sources");
+    let rendered = render_preview(&spec).expect("preview sources");
     let yaml = rendered.bytes;
     let producer = job(&yaml, "preview-payload", Some("preview-assemble"));
     super::assert_production_credentials_are_native_only(&spec);
@@ -266,6 +264,12 @@ fn preview_steps_do_not_export_b_toolchain_or_home_environment() {
     let Some((_, Yaml::Seq(steps))) = fields.iter().find(|(key, _)| key == "steps") else {
         unreachable!()
     };
+    assert!(
+        !steps
+            .iter()
+            .any(|step| { field(step, "name") == &Yaml::str(crate::VERIFY_RUST_TOOLCHAIN_STEP) }),
+        "preview production retains its early return before Rust bootstrap"
+    );
     for step in steps {
         let Yaml::Map(fields) = step else {
             unreachable!()
@@ -291,14 +295,13 @@ fn preview_ignores_b_source_preparation_but_rejects_credential_environment() {
         "CARGO_HOME".to_owned(),
         "/historical-b-workspace/cargo".to_owned(),
     );
-    let rendered = render_consumer_preview(&spec).expect("A owns its preparation");
+    let rendered = render_preview(&spec).expect("A owns its preparation");
     assert!(!rendered.bytes.contains("historical-b-workspace"));
     assert!(!rendered.bytes.contains("prepare-Cargo.toml"));
-
     let mut spec = with_sources();
     spec.producer_cargo_env
         .insert("GH_TOKEN".to_owned(), "forbidden".to_owned());
-    assert!(render_consumer_preview(&spec).is_err());
+    assert!(render_preview(&spec).is_err());
 }
 
 #[test]
@@ -318,8 +321,14 @@ fn historical_b_toolchain_symbols_do_not_enter_preview_source_workflow() {
             "${VELNOR_TOOL_RUST}".to_owned(),
         );
     }
-    let jobs = production::jobs(&spec).expect("source-owned production graph");
-    let document = Yaml::Map(vec![("jobs".to_owned(), Yaml::Map(jobs))]);
+    let actual = render_preview(&spec)
+        .expect("full symbolic companion")
+        .bytes;
+    let mut document = Yaml::Map(vec![(
+        "jobs".to_owned(),
+        Yaml::Map(production::jobs(&spec).expect("composed production")),
+    )]);
+    crate::project_tool_resolver::bind_workflow(&mut document).expect("symbolic binding");
     let text = crate::yaml::render_yaml(&document);
     let payload = job(&text, "preview-payload", Some("preview-assemble"));
     let checkout = payload.find("actions/checkout@").expect("checkout");
@@ -337,6 +346,10 @@ fn historical_b_toolchain_symbols_do_not_enter_preview_source_workflow() {
         assert!(
             !payload.contains(forbidden),
             "B tool metadata leaked: {forbidden}"
+        );
+        assert!(
+            !actual.contains(forbidden),
+            "B tool metadata leaked into the generated workflow: {forbidden}"
         );
     }
 

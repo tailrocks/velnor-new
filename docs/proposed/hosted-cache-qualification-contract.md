@@ -76,11 +76,12 @@ wire documents, not the cache-key preimage.
 ## Immutable receipt and collection
 
 Each successful producer run publishes one artifact named
-`velnor-qualification-cache-receipt-v2` containing exactly
-`qualification-cache-receipt.json`. The schema-2 document binds the producer's
-runner context to the validated plan and contains every lane's completed task
-IDs, closure and useful-state digests, and one record per cache layer. Each
-layer records the requested primary key, restore result and exact matched
+`velnor-qualification-cache-receipt-v3-a<attempt>` containing exactly
+`qualification-cache-receipt.json`. The schema-3 artifact document records the
+authenticated dispatch mode and binds the producer's runner context to the
+validated plan. Its inner schema-2 receipt contains every lane's completed
+task IDs, closure and useful-state digests, and one record per cache layer.
+Each layer records the requested primary key, restore result and exact matched
 backend object (or an observed miss), post-job save result, and before/after
 state digest. Save eligibility is not evidence that a cache was created.
 

@@ -158,25 +158,21 @@ fn merge_with(
     proofs: &[serde_json::Value],
     extra: &serde_json::Value,
 ) -> Result<FinalStatus, Box<dyn std::error::Error>> {
-    let plan_value = serde_json::to_value(plan).unwrap_or(serde_json::Value::Null);
-    let reports_value = serde_json::to_value(reports).unwrap_or(serde_json::Value::Null);
-    let task_files = crate::impl_merge::task_reports_for(&plan_value, &reports_value);
-    let mut request = serde_json::json!({
-        "schema": 1,
-        "run_key": "local",
-        "actual_event": plan_value.get("event").cloned().unwrap_or(serde_json::Value::Null),
-        "plan": plan,
-        "matrix": plan.matrix,
-        "matrix_reports": reports,
-        "task_reports": task_files,
-        "required_job_ids": ["plan"],
-        "required_jobs": [{"job_id": "plan", "conclusion": "success"}],
-        "shard_proofs": proofs,
-    });
-    for (key, value) in extra.as_object().ok_or("not an object")? {
-        request[key] = value.clone();
-    }
-    Ok(crate::impl_gates_shard_tokens::merge_report_with(plan, reports, proofs, extra)?.status)
+    let mut required_job_ids = vec!["plan".to_owned()];
+    required_job_ids.extend(plan.matrix.include.iter().map(|entry| entry.job_id.clone()));
+    required_job_ids.sort();
+    required_job_ids.dedup();
+    let required_jobs: Vec<serde_json::Value> = required_job_ids
+        .iter()
+        .map(|job_id| serde_json::json!({"job_id": job_id, "conclusion": "success"}))
+        .collect();
+    let mut complete_extra = extra.clone();
+    complete_extra["required_job_ids"] = serde_json::json!(required_job_ids);
+    complete_extra["required_jobs"] = serde_json::json!(required_jobs);
+    Ok(
+        crate::impl_gates_shard_tokens::merge_report_with(plan, reports, proofs, &complete_extra)?
+            .status,
+    )
 }
 
 /// Canonical sharded plan plus inventory, proofs, and passing reports.

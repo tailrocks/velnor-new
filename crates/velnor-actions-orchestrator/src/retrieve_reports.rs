@@ -13,6 +13,8 @@
 //! run ID) fails outright.
 
 // Wired here so the shared reader compiles without touching `lib.rs`.
+#[path = "retrieve_reports/qualification_after.rs"]
+mod qualification_after;
 #[path = "staged_reads.rs"]
 pub(crate) mod staged_reads;
 #[cfg(test)]
@@ -58,7 +60,9 @@ pub fn retrieve_reports() -> Result<usize, OrchestratorError> {
         .filter(|value| !value.is_empty())
         .ok_or_else(|| internal("missing_runner_temp"))?;
     let run_dir = Path::new(&temp).join("velnor").join(&run_key);
-    Ok(retrieve_reports_to(run_id, &run_dir))
+    let retrieved = retrieve_reports_to(run_id, &run_dir);
+    qualification_after::stage_after(run_id, &run_key, &run_dir)?;
+    Ok(retrieved)
 }
 
 /// Download each plan-expected artifact into `reports/<artifact-id>/`.

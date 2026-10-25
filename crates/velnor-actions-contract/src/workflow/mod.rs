@@ -1,4 +1,8 @@
 //! Stack-neutral workflow IR, matrix, plan, and report types.
+
+/// Version marker for the qualification cache key and payload format.
+pub const QUALIFICATION_CACHE_FORMAT_VERSION: u8 = 4;
+
 pub mod artifacts;
 pub mod cache_family;
 pub mod cache_family_mbx;
@@ -34,6 +38,7 @@ pub use step_id::GRADLE_RUN_OPERATION;
 pub mod step_identity;
 mod step_mbx_lifecycle;
 mod step_protocol;
+mod task_binding_digest;
 pub mod task_execution_manifest;
 pub mod timeout;
 pub mod trust;
@@ -52,17 +57,19 @@ pub use ir::{
 };
 pub use jobs::{
     CI_WORKFLOW_PATH, CRATE_JOB_ID_PREFIX, FRESHNESS_CRON_WEEKLY, FRESHNESS_WORKFLOW_PATH,
-    PLAN_DISPLAY_NAME, PLAN_JOB_ID, REQUIRED_CONDITION, REQUIRED_DISPLAY_NAME,
-    REQUIRED_GATE_CONDITION, REQUIRED_GATE_FAIL_CONDITION, REQUIRED_GATE_JOB_ID, REQUIRED_JOB_ID,
-    REQUIRED_VERDICT_DISPLAY_NAME, STALE_WORKFLOW_PATHS, TOFU_APPLY_WORKFLOW_PATH,
-    TOFU_DISPLAY_PREFIX, TOFU_JOB_ID_PREFIX, ValidatorKind, WORKFLOW_DISPLAY_NAME,
-    assign_crate_job_ids, crate_display_label, crate_display_name, is_crate_job_id,
-    is_safe_display_name, slugify_segment, tofu_display_name, validate_job_id,
+    PLAN_DISPLAY_NAME, PLAN_JOB_ID, QUALIFICATION_WORKFLOW_PATH, REQUIRED_CONDITION,
+    REQUIRED_DISPLAY_NAME, REQUIRED_GATE_CONDITION, REQUIRED_GATE_FAIL_CONDITION,
+    REQUIRED_GATE_JOB_ID, REQUIRED_JOB_ID, REQUIRED_VERDICT_DISPLAY_NAME, STALE_WORKFLOW_PATHS,
+    TOFU_APPLY_WORKFLOW_PATH, TOFU_DISPLAY_PREFIX, TOFU_JOB_ID_PREFIX, ValidatorKind,
+    WORKFLOW_DISPLAY_NAME, assign_crate_job_ids, assign_rust_crate_job_ids, crate_display_label,
+    crate_display_name, is_crate_job_id, is_safe_display_name, slugify_segment, tofu_display_name,
+    validate_job_id,
 };
 pub use lanes::{
     HOSTED_SUFFIX, LaneClass, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV,
     NAMED_CHECK_LANES_ENV, NamedCheckLane, NamedCheckLaneVariant, SCALE_SUFFIX, expand_workflow,
-    lane_class, named_check_lanes,
+    expand_workflow_with_qualification_sources, lane_class, named_check_lanes,
+    qualification_job_lanes,
 };
 pub use needs::{
     NEEDS_CHANNEL_ENV, NEEDS_CHANNEL_EXPRESSION, NEEDS_EXPECTED_ENV, NeedsConclusions,
@@ -90,19 +97,28 @@ pub use qualification_cache_lineage::{
     QUALIFICATION_CACHE_RECEIPT_ARTIFACT, QUALIFICATION_CACHE_RECEIPT_FILENAME,
     QualificationCacheAdmission, QualificationCacheArtifact, QualificationCacheBackendEntry,
     QualificationCacheBackendObservation, QualificationCacheDirective,
-    QualificationCacheLaneDirective, QualificationCacheLaneReceipt, QualificationCacheLayer,
+    QualificationCacheLaneDirective, QualificationCacheLaneLayerDirective,
+    QualificationCacheLaneLayerReceipt, QualificationCacheLaneReceipt, QualificationCacheLayer,
     QualificationCacheLayerDirective, QualificationCacheLayerReceipt,
-    QualificationCacheProducerContext, QualificationCacheReceipt,
+    QualificationCacheOwnerDirective, QualificationCacheOwnerMemberRef,
+    QualificationCacheOwnerReceipt, QualificationCacheProducerContext,
+    QualificationCacheProducerEvidence, QualificationCacheReceipt,
     QualificationCacheReceiptArtifactDocument, QualificationCacheReceiptLink,
     QualificationCacheRestore, QualificationCacheRestoreDirective,
     QualificationCacheRestoreExpectation, QualificationCacheRestorePolicy,
     QualificationCacheRestoreResult, QualificationCacheRunMetadata, QualificationCacheSave,
     QualificationCacheSaveActionResult, QualificationCacheSavePolicy, QualificationCacheSlot,
-    QualificationRuntimeIdentity, QualificationRuntimeIdentityField,
-    QualificationRuntimeIdentityRequirements, QualificationRuntimePlatform,
-    QualificationSourceDelta,
+    QualificationRuntimeAbiObservation, QualificationRuntimeIdentity,
+    QualificationRuntimeIdentityField, QualificationRuntimeIdentityRequirements,
+    QualificationRuntimeImageDigests, QualificationRuntimeImageIdentity,
+    QualificationRuntimePlatform, QualificationRuntimeScaleSet,
+    QualificationRuntimeToolObservation, QualificationSourceDelta,
+    qualification_cache_receipt_artifact_name,
 };
-pub use qualification_dispatch::{QualificationDispatch, QualificationRunRef};
+pub use qualification_dispatch::{
+    QualificationDispatch, QualificationDispatchMode, QualificationRunRef,
+    verification_repeat_campaign,
+};
 pub use qualification_phase::{
     QUALIFICATION_CACHE_ENABLED_OUTPUT, QUALIFICATION_CACHE_WRITE_OUTPUT,
     QUALIFICATION_CAMPAIGN_OUTPUT, QUALIFICATION_PHASE_OUTPUT, QualificationPhase,
@@ -113,6 +129,11 @@ pub use report::{
 };
 pub use services::ServiceContainer;
 pub use step::{MAX_TASK_EXECUTION_ARGV, MAX_TASK_EXECUTION_ENV, Step, StepKind};
+pub use step_id::{
+    qualification_cache_after_save_input_names, qualification_cache_after_save_output_names,
+    qualification_cache_before_save_output_names, qualification_cache_composite_output_names,
+    qualification_cache_layer_prepare_input_names,
+};
 pub use step_identity::{
     BUN_ASSETS_EXPORT_OPERATION, BUN_ASSETS_IMPORT_OPERATION, BUN_ASSETS_PREPARE_OPERATION,
     BUN_REGISTRY_INSTALL_OPERATION, GITHUB_EVIDENCE_FETCH_OPERATION,
@@ -120,8 +141,10 @@ pub use step_identity::{
     JACTIONLINT_VERIFIER_USES, MBX_WORKSPACE_CLEAN_CONDITION, PRIVATE_FETCH_OPERATION,
     PRIVATE_FETCH_TOKEN_ENV, PRIVATE_NPM_READ_EXPR, PRIVATE_NPM_READ_TOKEN_ENV,
     PRIVATE_REVOKE_OPERATION, PRIVATE_TOKEN_MINT_ACTION_PREFIX, PRIVATE_TOKEN_OUTPUT_EXPR,
-    RUST_VERIFIER_USES, StepId, StepRole,
+    QualificationCacheCompositeId, QualificationCacheCompositePhase, QualificationCacheStepId,
+    QualificationCacheStepStage, RUST_VERIFIER_USES, StepId, StepRole,
 };
+pub use task_binding_digest::TaskBindingDigest;
 pub use task_execution_manifest::{
     MAX_TASK_EXECUTION_FRAME_BYTES, MAX_TASK_EXECUTION_RECORDS, TASK_EXECUTION_FRAME_MAGIC,
     TASK_EXECUTION_MANIFEST_PATH, TASK_EXECUTION_MANIFEST_SCHEMA, TaskExecutionManifestEntryV1,

@@ -28,23 +28,7 @@ fn task_execution_resolver_requires_runner_gate_and_keeps_stdout_data_only()
     assert_eq!(bare.stderr, no_run_id.stderr);
 
     let execution_digest = format!("b3-{}", "a".repeat(64));
-    let output = spawn_isolated(
-        &[],
-        &[
-            ("VELNOR_INTERNAL_OP", "resolve-task-execution-v1"),
-            ("RUNNER_TEMP", runner_temp.to_str().unwrap_or("/")),
-            (
-                "VELNOR_RUNTIME_RUNNER_TEMP",
-                runner_temp.to_str().unwrap_or("/"),
-            ),
-            ("GITHUB_WORKSPACE", workspace.to_str().unwrap_or("/")),
-            ("GITHUB_RUN_ID", "12345"),
-            ("GITHUB_RUN_ATTEMPT", "1"),
-            ("VELNOR_TASK_EXECUTION_DIGEST", execution_digest.as_str()),
-            ("VELNOR_GENERATOR_VERSION", "0.1.7"),
-        ],
-        &workspace,
-    )?;
+    let output = run_with_task_execution(&runner_temp, &workspace, &execution_digest)?;
     assert_eq!(code(&output), 1);
     assert!(
         output.stdout.is_empty(),
@@ -91,4 +75,29 @@ fn task_execution_resolver_requires_runner_gate_and_keeps_stdout_data_only()
 
     cleanup(&temp);
     Ok(())
+}
+
+fn run_with_task_execution(
+    runner_temp: &std::path::Path,
+    workspace: &std::path::Path,
+    execution_digest: &str,
+) -> Result<std::process::Output, Box<dyn Error>> {
+    spawn_isolated(
+        &[],
+        &[
+            ("VELNOR_INTERNAL_OP", "resolve-task-execution-v1"),
+            ("RUNNER_TEMP", runner_temp.to_str().unwrap_or("/")),
+            (
+                "VELNOR_RUNTIME_RUNNER_TEMP",
+                runner_temp.to_str().unwrap_or("/"),
+            ),
+            ("GITHUB_WORKSPACE", workspace.to_str().unwrap_or("/")),
+            ("GITHUB_RUN_ID", "12345"),
+            ("GITHUB_RUN_ATTEMPT", "1"),
+            ("GITHUB_JOB", "rust-velnor-actions-cli"),
+            ("VELNOR_TASK_EXECUTION_DIGEST", execution_digest),
+            ("VELNOR_GENERATOR_VERSION", "0.1.7"),
+        ],
+        workspace,
+    )
 }

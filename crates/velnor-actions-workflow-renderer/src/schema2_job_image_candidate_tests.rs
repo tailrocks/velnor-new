@@ -1,6 +1,8 @@
 use std::collections::BTreeSet;
 
-use velnor_actions_contract::RoutingWorkflow;
+use crate::workflow_routing::WorkflowRoutingPolicy;
+use velnor_actions_contract::config::ValidatedImageReference;
+use velnor_actions_contract::{ExecutionMode, RoutingWorkflow};
 
 use crate::yaml::Yaml;
 
@@ -9,6 +11,8 @@ use super::{ARTIFACT_NAME, PUBLICATION_EVIDENCE, WORKFLOW_PATH};
 
 #[path = "schema2_job_image_native_tests.rs"]
 mod native_source;
+#[path = "schema2_job_image_candidate_routing_tests.rs"]
+mod routing;
 
 #[test]
 fn image_selection_emits_repeatable_candidate_build_attestation_and_publish() {
@@ -135,6 +139,37 @@ fn build_job_has_no_attestation_or_repository_writer_permissions() {
     assert_eq!(
         field(field(publish, "concurrency"), "cancel-in-progress"),
         &Yaml::Bool(false)
+    );
+}
+
+#[test]
+fn attestation_download_uses_only_the_uploaded_artifact_id() {
+    let workflow = super::render(&request()).expect("Render the job image candidate workflow.");
+    let attest = field(field(&workflow, "jobs"), "attest-image-candidate");
+    let Yaml::Seq(steps) = field(attest, "steps") else {
+        panic!("The attestation steps are necessary.");
+    };
+    let artifact_id = "${{ needs.build-image-candidate.outputs.artifact_id }}";
+    let id_check = steps
+        .iter()
+        .position(|step| {
+            optional_field(step, "name") == Some(&Yaml::str("Examine the uploaded artifact ID"))
+        })
+        .expect("Check the uploaded artifact ID before downloading it.");
+    let download = steps
+        .iter()
+        .position(|step| {
+            optional_field(step, "uses") == Some(&Yaml::str(crate::steps::DOWNLOAD_ARTIFACT_USES))
+        })
+        .expect("Download the uploaded candidate artifact.");
+    assert!(id_check < download);
+    assert_eq!(
+        field(field(&steps[id_check], "env"), "ARTIFACT_ID"),
+        &Yaml::str(artifact_id)
+    );
+    assert_eq!(
+        field(field(&steps[download], "with"), "artifact-ids"),
+        &Yaml::str(artifact_id)
     );
 }
 
@@ -281,12 +316,20 @@ fn no_image_selection_emits_no_candidate_workflow() {
 }
 
 fn request() -> Schema2WorkflowRequest {
+    let image =
+        ValidatedImageReference::parse(&format!("ghcr.io/team/job@sha256:{}", "a".repeat(64)))
+            .expect("Read the image reference.");
+    request_with_image(Some(image))
+}
+
+fn request_with_image(image: Option<ValidatedImageReference>) -> Schema2WorkflowRequest {
     let scale_set =
         Schema2WorkflowRequest::canonical_scale_set().expect("Read the Scale Set selector.");
     Schema2WorkflowRequest {
         version: "0.1.19".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
-        scale_set,
+        scale_set: scale_set.clone(),
+        routing: WorkflowRoutingPolicy::configured(ExecutionMode::ScaleSet, scale_set, image),
         workflows: BTreeSet::from([RoutingWorkflow::ImageRelease]),
         mbx_qualification: None,
         mise_pin_qualification: None,

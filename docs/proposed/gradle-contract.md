@@ -38,10 +38,11 @@ Wrapper gate details:
    Snapshots, release candidates, other hosts and query strings fail.
 2. `distributionSha256Sum` must be present and equal the catalog digest for
    that version and flavour. The catalog (`catalog`) holds the official
-   `services.gradle.org` digests and was read on 2026-10-20 and extended on 2026-10-21
-   through 9.8.2 (every final release after 9.5.1). Rows are never typed by
-   hand: `scripts/refresh-gradle-catalog.sh <version>...` prints them from the
-   official `.sha256` files, until `velnor-actions-freshness` maintains them. The digest is never taken from the repository under test.
+   `services.gradle.org` digests. The catalog was read on 2026-10-20.
+   On 2026-10-21, it was extended through 9.8.2, including every final release after 9.5.1.
+   Do not type rows by hand.
+   `scripts/refresh-gradle-catalog.sh <version>...` prints rows from the official `.sha256` files.
+   Use this script until `velnor-actions-freshness` maintains the rows. The digest is never taken from the repository under test.
 3. The SHA-256 of `gradle/wrapper/gradle-wrapper.jar` must be an official
    wrapper-jar digest.
 

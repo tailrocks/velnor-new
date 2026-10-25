@@ -1,7 +1,9 @@
 use std::{
+    ffi::{OsStr, OsString},
     fs::{self, File, FileTimes},
     io::{Read, Write},
     os::fd::{AsFd, OwnedFd},
+    os::unix::ffi::OsStringExt,
     os::unix::fs::MetadataExt,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -11,7 +13,7 @@ use rustix::fs::{self as ufs, Dir, FileType, Mode, OFlags};
 use super::{
     READ_CHUNK, SeedLimits,
     execution::SeedError,
-    filesystem::{fail, open_parent, openat_dir, openat_parts, seed_io_error, statat},
+    filesystem::{fail, open_parent, openat_dir_os, openat_parts, seed_io_error, statat_os},
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -79,11 +81,11 @@ impl PartialEq for Identity {
 impl Eq for Identity {}
 
 pub(super) struct Entry {
-    pub(super) parts: Vec<String>,
+    pub(super) parts: Vec<OsString>,
     pub(super) identity: Identity,
 }
 impl Entry {
-    pub(super) fn new(parts: Vec<String>, stat: rustix::fs::Stat) -> Self {
+    pub(super) fn new(parts: Vec<OsString>, stat: rustix::fs::Stat) -> Self {
         Self {
             parts,
             identity: Identity::from_stat(&stat),
@@ -123,7 +125,7 @@ impl Snapshot {
     pub(super) fn inventory(
         &mut self,
         parent: &OwnedFd,
-        prefix: &mut Vec<String>,
+        prefix: &mut Vec<OsString>,
     ) -> Result<(), SeedError> {
         self.checkpoint()?;
         if prefix.len() > 64 {
@@ -136,29 +138,26 @@ impl Snapshot {
         for entry in Dir::read_from(parent).map_err(seed_io_error)? {
             self.checkpoint()?;
             let entry = entry.map_err(seed_io_error)?;
-            let name = entry
-                .file_name()
-                .to_str()
-                .map_err(|_| fail("source_name_not_utf8"))?;
-            if name == "." || name == ".." {
+            let name = OsString::from_vec(entry.file_name().to_bytes().to_vec());
+            if name.as_os_str() == OsStr::new(".") || name.as_os_str() == OsStr::new("..") {
                 continue;
             }
-            if prefix.as_slice() == ["debug"] && name == ".cargo-lock" {
+            if is_debug_root(prefix) && name.as_os_str() == OsStr::new(".cargo-lock") {
                 continue;
             }
             // Bound enumeration before retaining another filename.
             if self.entries.len().saturating_add(names.len()) >= self.limits.entries {
                 return Err(SeedError::Skip("entry limit"));
             }
-            names.push(name.to_owned());
+            names.push(name);
         }
         names.sort();
         for name in names {
             self.checkpoint()?;
-            if prefix.as_slice() == ["debug"] && name == ".cargo-lock" {
+            if is_debug_root(prefix) && name.as_os_str() == OsStr::new(".cargo-lock") {
                 continue;
             }
-            let stat = statat(parent, &name).map_err(seed_io_error)?;
+            let stat = statat_os(parent, &name).map_err(seed_io_error)?;
             let ty = FileType::from_raw_mode(stat.st_mode);
             if ty != FileType::Directory && ty != FileType::RegularFile {
                 return Err(fail("source_symlink_or_special_file"));
@@ -170,7 +169,7 @@ impl Snapshot {
             }
             self.entries.push(Entry::new(prefix.clone(), stat));
             if ty == FileType::Directory {
-                let child = openat_dir(parent, &name).map_err(seed_io_error)?;
+                let child = openat_dir_os(parent, &name).map_err(seed_io_error)?;
                 let opened = Identity::from_stat(&ufs::fstat(&child).map_err(seed_io_error)?);
                 let entry = self
                     .entries
@@ -196,7 +195,7 @@ impl Snapshot {
         for entry in &self.entries {
             self.checkpoint()?;
             let (parent, name) = open_parent(root, &entry.parts)?;
-            let current = statat(&parent, &name).map_err(seed_io_error)?;
+            let current = statat_os(&parent, &name).map_err(seed_io_error)?;
             if Identity::from_stat(&current) != entry.identity {
                 return Err(fail("source_changed_before_admission"));
             }
@@ -207,7 +206,7 @@ impl Snapshot {
         for entry in &self.entries {
             self.checkpoint()?;
             let (src_parent, name) = open_parent(source, &entry.parts)?;
-            if Identity::from_stat(&statat(&src_parent, &name).map_err(seed_io_error)?)
+            if Identity::from_stat(&statat_os(&src_parent, &name).map_err(seed_io_error)?)
                 != entry.identity
             {
                 return Err(fail("named_source_changed"));
@@ -219,13 +218,7 @@ impl Snapshot {
                 ufs::mkdirat(&dst_parent, &name, Mode::from_raw_mode(0o700))
                     .map_err(seed_io_error)?;
             } else {
-                let input = ufs::openat(
-                    &src_parent,
-                    &name,
-                    OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
-                    Mode::empty(),
-                )
-                .map_err(seed_io_error)?;
+                let input = open_copy_source(&src_parent, &name, entry.identity)?;
                 let output = ufs::openat(
                     &dst_parent,
                     &name,
@@ -239,7 +232,7 @@ impl Snapshot {
                 .map_err(seed_io_error)?;
                 copy_file(self, &input, &output, entry.identity)?;
             }
-            if Identity::from_stat(&statat(&src_parent, &name).map_err(seed_io_error)?)
+            if Identity::from_stat(&statat_os(&src_parent, &name).map_err(seed_io_error)?)
                 != entry.identity
             {
                 return Err(fail("source_changed_during_copy"));
@@ -270,6 +263,48 @@ fn copy_file(
     if Identity::from_metadata(&input.metadata().map_err(seed_io_error)?) != expected {
         return Err(fail("source_file_changed"));
     }
+    copy_bounded(snapshot, &mut input, &mut output, expected.size)?;
+    if Identity::from_metadata(&input.metadata().map_err(seed_io_error)?) != expected {
+        return Err(fail("source_changed_during_copy"));
+    }
+    let out = output.metadata().map_err(seed_io_error)?;
+    if out.nlink() != 1 || (out.dev(), out.ino()) == (expected.dev, expected.ino) {
+        return Err(fail("target_copy_not_independent"));
+    }
+    let mode = checked_raw_mode::<rustix::fs::RawMode>(expected.mode & 0o7777)?;
+    ufs::fchmod(&output, Mode::from_raw_mode(mode)).map_err(seed_io_error)?;
+    set_times(&output, &expected)?;
+    Ok(())
+}
+
+fn open_copy_source(
+    parent: &OwnedFd,
+    name: &OsStr,
+    expected: Identity,
+) -> Result<OwnedFd, SeedError> {
+    let input = ufs::openat(
+        parent,
+        name,
+        OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
+        Mode::empty(),
+    )
+    .map_err(seed_io_error)?;
+    if Identity::from_stat(&ufs::fstat(&input).map_err(seed_io_error)?) != expected {
+        return Err(fail("source_file_changed"));
+    }
+    Ok(input)
+}
+
+fn is_debug_root(prefix: &[OsString]) -> bool {
+    prefix.len() == 1 && prefix[0].as_os_str() == OsStr::new("debug")
+}
+
+fn copy_bounded(
+    snapshot: &Snapshot,
+    input: &mut impl Read,
+    output: &mut impl Write,
+    expected_size: u64,
+) -> Result<(), SeedError> {
     let mut copied = 0u64;
     let mut buffer = vec![0; READ_CHUNK];
     loop {
@@ -281,23 +316,14 @@ fn copy_file(
         copied = copied
             .checked_add(count as u64)
             .ok_or_else(|| fail("byte_budget_overflow"))?;
-        if copied > expected.size {
+        if copied > expected_size {
             return Err(fail("source_grew_beyond_budget"));
         }
         output.write_all(&buffer[..count]).map_err(seed_io_error)?;
     }
-    if copied != expected.size
-        || Identity::from_metadata(&input.metadata().map_err(seed_io_error)?) != expected
-    {
+    if copied != expected_size {
         return Err(fail("source_changed_during_copy"));
     }
-    let out = output.metadata().map_err(seed_io_error)?;
-    if out.nlink() != 1 || (out.dev(), out.ino()) == (expected.dev, expected.ino) {
-        return Err(fail("target_copy_not_independent"));
-    }
-    let mode = checked_raw_mode::<rustix::fs::RawMode>(expected.mode & 0o7777)?;
-    ufs::fchmod(&output, Mode::from_raw_mode(mode)).map_err(seed_io_error)?;
-    set_times(&output, &expected)?;
     Ok(())
 }
 
@@ -358,3 +384,7 @@ where
     mode.try_into()
         .map_err(|_| fail("source_file_mode_invalid"))
 }
+
+#[cfg(test)]
+#[path = "parallel_target_seed_inventory_tests.rs"]
+mod tests;

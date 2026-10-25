@@ -66,6 +66,7 @@ impl VelnorConfig {
             }
         }
         self.distribution.validate(file)?;
+        super::job_authority::validate_job_authority_bindings(&self.job_authority, file)?;
         if let Some(private_sources) = &self.private_sources {
             private_sources.validate(file)?;
         }
@@ -126,33 +127,5 @@ impl VelnorConfig {
             }
         }
         Ok(())
-    }
-
-    /// Schema 1 rejects routing. Schema 2 requires `[execution]`.
-    fn check_schema(&self, file: &str) -> Result<(), ContractError> {
-        match self.schema {
-            1 => {
-                if self.execution.is_some() {
-                    return Err(ContractError::config(
-                        file,
-                        "execution",
-                        "schema1_rejects_execution",
-                    ));
-                }
-                Ok(())
-            }
-            2 => {
-                let execution = self
-                    .execution
-                    .as_ref()
-                    .ok_or_else(|| ContractError::config(file, "execution", "missing_execution"))?;
-                execution.validate(file)
-            }
-            _ => Err(ContractError::UnsupportedSchema {
-                field: "schema",
-                found: self.schema.to_string(),
-                expected: "1 or 2",
-            }),
-        }
     }
 }

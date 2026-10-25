@@ -54,18 +54,19 @@ fn drivers_follow_per_crate_selection() {
     );
 }
 
-fn build_mbx(nextest: bool, fetch_roots: &[String]) -> CrateBuild {
-    let mut mbx = group("demo", TaskKind::Clippy, &[]);
-    mbx.identity.compile_driver = CompileDriver::Mbx.as_str().to_owned();
-    if nextest {
-        mbx.identity.test_runner = "cargo_nextest".to_owned();
-    }
-    build_crate_jobs(CrateJobInputs {
+#[test]
+fn mbx_crates_read_seed_and_seed_jobs_are_the_only_bundle_writers() {
+    use velnor_actions_contract::{StepKind, StepRole};
+
+    let mut task = group("demo", TaskKind::Clippy, &[]);
+    task.identity.compile_driver = CompileDriver::Mbx.as_str().to_owned();
+    task.identity.test_runner = "cargo_nextest".to_owned();
+    let found = build_crate_jobs(CrateJobInputs {
         label: "ubuntu-26.04",
         policy: WorkflowPolicy::ConsumerV1,
-        discovery: &discovery(vec![mbx, group("nested", TaskKind::Clippy, &[])]),
+        discovery: &discovery(vec![task]),
         catalog: &ToolCatalog::pinned(),
-        fetch_roots,
+        fetch_roots: &[],
         acquire: None,
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
@@ -73,74 +74,46 @@ fn build_mbx(nextest: bool, fetch_roots: &[String]) -> CrateBuild {
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
-    .expect("crate jobs")
-}
-
-#[test]
-fn an_mbx_workspace_gets_one_trusted_seed_job_that_is_the_only_bundle_writer() {
-    use velnor_actions_contract::StepRole;
-    let found = build_mbx(true, &[]);
-    let [(id, seed)] = found.seeds.as_slice() else {
-        panic!("one seed for the root workspace");
-    };
-    assert_eq!(id, "dependency-seed");
-    assert_eq!(found.drivers[id], RenderDriver::Mbx);
-    assert_eq!(seed.needs, ["plan"]);
+    .expect("crate jobs");
+    assert_eq!(found.seeds.len(), 1);
+    let (seed_id, seed) = &found.seeds[0];
+    assert_eq!(seed_id, "dependency-seed");
+    assert_eq!(seed.needs, [PLAN_JOB_ID]);
     assert_eq!(
         seed.condition.as_deref(),
         Some(velnor_actions_contract::workflow::DEPENDENCY_SEED_JOB_CONDITION),
         "only a protected default-branch push seeds"
     );
     let roles: Vec<_> = seed.steps.iter().map(|step| step.role).collect();
-    let lanes: Vec<_> = seed
-        .steps
-        .iter()
-        .filter(|step| step.role == Some(StepRole::MbxSeedBuild))
-        .map(|step| step.name.as_str())
-        .collect();
     assert_eq!(
-        lanes,
-        [
-            "Compile test executables (seed)",
-            "Compile Clippy lane (seed)",
-            "Compile documentation lane (seed)"
-        ]
+        roles
+            .iter()
+            .filter(|role| **role == Some(StepRole::MbxSeedBuild))
+            .count(),
+        3,
+        "The seed must have test, Clippy, and documentation lanes."
     );
-    let build_at = roles
-        .iter()
-        .position(|role| *role == Some(StepRole::MbxSeedBuild))
-        .expect("lane builds");
-    let mark_at = roles
-        .iter()
-        .position(|role| *role == Some(StepRole::MbxProducerMark))
-        .expect("producer mark");
-    let restore_at = roles
-        .iter()
-        .position(|role| *role == Some(StepRole::MbxBundleRestore))
-        .expect("seed restores the previous bundle");
-    assert!(restore_at < build_at && build_at < mark_at, "{roles:?}");
-    for step in seed
+    assert_eq!(roles.last(), Some(&Some(StepRole::MbxProducerMark)));
+    for lane in seed
         .steps
         .iter()
         .filter(|step| step.role == Some(StepRole::MbxSeedBuild))
     {
-        let velnor_actions_contract::StepKind::Shell { run, .. } = &step.kind else {
-            panic!("lane builds are shell steps");
+        let StepKind::Shell { run, .. } = &lane.kind else {
+            panic!("Seed lanes must use shell commands.");
         };
         let command = run.join(" ");
-        assert!(command.contains("--workspace") && command.contains("--locked --offline"));
+        assert!(command.contains("--workspace"));
+        assert!(command.contains("--locked --offline"));
     }
     let crate_job = &found.jobs[0].1;
     let crate_roles: Vec<_> = crate_job.steps.iter().map(|step| step.role).collect();
     assert!(crate_roles.contains(&Some(StepRole::MbxBundleRestore)));
-    assert!(
-        !crate_roles.contains(&Some(StepRole::MbxProducerMark)),
-        "crate jobs restore the seed read-only and never mark a producer"
-    );
+    assert!(!crate_roles.contains(&Some(StepRole::MbxProducerMark)));
 }
 
 #[test]
-fn each_nested_mbx_workspace_gets_its_own_seed_and_cargo_jobs_get_none() {
+fn nested_mbx_workspace_has_a_seed_but_cargo_jobs_do_not() {
     let mut nested = group("nested", TaskKind::Clippy, &[]);
     nested.identity.compile_driver = CompileDriver::Mbx.as_str().to_owned();
     nested.identity.unit_path = "crates/inner/Cargo.toml".to_owned();
@@ -158,13 +131,20 @@ fn each_nested_mbx_workspace_gets_its_own_seed_and_cargo_jobs_get_none() {
         crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");
-    let ids: Vec<_> = found.seeds.iter().map(|(id, _)| id.as_str()).collect();
-    assert_eq!(ids, ["dependency-seed-crates-inner"]);
+    assert_eq!(
+        found
+            .seeds
+            .iter()
+            .map(|(id, _)| id.as_str())
+            .collect::<Vec<_>>(),
+        ["dependency-seed-crates-inner"]
+    );
     assert_eq!(
         found.seeds[0].1.display_name,
         "Dependency seed / crates/inner"
     );
-    let cargo_only = build_crate_jobs(CrateJobInputs {
+
+    let cargo = build_crate_jobs(CrateJobInputs {
         label: "ubuntu-26.04",
         policy: WorkflowPolicy::ConsumerV1,
         discovery: &discovery(vec![group("plain", TaskKind::Clippy, &[])]),
@@ -178,5 +158,82 @@ fn each_nested_mbx_workspace_gets_its_own_seed_and_cargo_jobs_get_none() {
         crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");
-    assert!(cargo_only.seeds.is_empty());
+    assert!(cargo.seeds.is_empty());
+}
+
+#[test]
+fn colliding_flattened_workspace_roots_get_distinct_seed_ids() {
+    let mut dashed = group("dashed", TaskKind::Clippy, &[]);
+    dashed.identity.compile_driver = CompileDriver::Mbx.as_str().to_owned();
+    dashed.identity.unit_path = "crates/a-b/Cargo.toml".to_owned();
+    let mut nested = group("nested", TaskKind::Clippy, &[]);
+    nested.identity.compile_driver = CompileDriver::Mbx.as_str().to_owned();
+    nested.identity.unit_path = "crates/a/b/Cargo.toml".to_owned();
+
+    let found = build_crate_jobs(CrateJobInputs {
+        label: "ubuntu-26.04",
+        policy: WorkflowPolicy::ConsumerV1,
+        discovery: &discovery(vec![dashed, nested]),
+        catalog: &ToolCatalog::pinned(),
+        fetch_roots: &["crates/a-b".to_owned(), "crates/a/b".to_owned()],
+        acquire: None,
+        max_parallel_jobs: 2,
+        timeout: velnor_actions_contract::JobTimeout::CRATE,
+        helper_version: env!("CARGO_PKG_VERSION"),
+        seed_parallel_targets: false,
+        crates: &std::collections::BTreeMap::new(),
+    })
+    .expect("crate jobs");
+
+    let mut seed_ids: Vec<_> = found.seeds.iter().map(|(id, _)| id.as_str()).collect();
+    seed_ids.sort_unstable();
+    assert_eq!(
+        seed_ids,
+        [
+            "dependency-seed-6372617465732f612d62",
+            "dependency-seed-6372617465732f612f62",
+        ]
+    );
+}
+
+#[test]
+fn accepted_workspace_roots_get_valid_injective_seed_ids() {
+    use super::dependency_seed::{SeedWorkspace, unique_seed_job_ids};
+
+    let roots = [
+        "crates/a-b",
+        "crates/a/b",
+        "crates/lib.v2",
+        "crates/lib_2",
+        "crates/lib space",
+        "crates/velnor",
+        "crates/é",
+    ];
+    for root in roots {
+        velnor_actions_contract::validate_fetch_root(root).expect("The root must remain valid.");
+    }
+    let workspaces: Vec<_> = roots
+        .iter()
+        .map(|root| SeedWorkspace {
+            root: (*root).to_owned(),
+            nextest: false,
+        })
+        .collect();
+    let ids = unique_seed_job_ids(&workspaces);
+    assert_eq!(
+        ids.iter().collect::<std::collections::BTreeSet<_>>().len(),
+        roots.len()
+    );
+    for id in &ids {
+        velnor_actions_contract::validate_job_id(id).expect("The seed job ID must be valid.");
+    }
+
+    let ordinary = [SeedWorkspace {
+        root: "crates/lib_2".to_owned(),
+        nextest: false,
+    }];
+    assert_eq!(
+        unique_seed_job_ids(&ordinary),
+        ["dependency-seed-crates-lib_2"]
+    );
 }

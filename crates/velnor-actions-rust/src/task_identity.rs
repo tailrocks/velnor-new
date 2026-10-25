@@ -147,7 +147,7 @@ pub struct ExtensionInputs<'a> {
     pub targets: &'a [String],
     /// Enabled features.
     pub features: &'a [String],
-    /// Whether Cargo all-features mode is active.
+    /// Whether Cargo all-features mode is active; omitted when false.
     pub all_features: bool,
     /// Rust target and profile.
     pub target: &'a str,
@@ -251,10 +251,10 @@ impl RustTaskIdentityExtension {
 
 #[expect(
     clippy::trivially_copy_pass_by_ref,
-    reason = "serde skip_serializing_if requires a borrowed boolean"
+    reason = "serde skip_serializing_if needs a reference predicate"
 )]
-fn is_false(value: &bool) -> bool {
-    !value
+const fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// Sorted deduped copy for identity stability.

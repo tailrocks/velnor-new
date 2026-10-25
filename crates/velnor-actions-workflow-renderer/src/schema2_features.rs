@@ -20,10 +20,6 @@ pub(super) const CHECKOUT_USES: &str = crate::steps::CHECKOUT_USES;
 const UPLOAD_USES: &str = crate::steps::UPLOAD_ARTIFACT_USES;
 const REDIS_OPTIONS: &str =
     "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12";
-/// Host-style steps reach a published service port on localhost.
-/// The service DNS name is only on the Docker network of a `container:` job.
-const PROBE_LOCAL: &str =
-    "timeout 20 bash -c 'until echo >/dev/tcp/127.0.0.1/6379; do sleep 1; done'";
 const BUILDX_RUN: &str = "docker buildx version && printf 'FROM scratch\\n' > Dockerfile && docker buildx build --progress=plain -t velnor-g4:probe .";
 
 /// Feature jobs. `features` runs every class. A class name runs that class.
@@ -120,7 +116,12 @@ fn js_job(id: &str, name: &str, runs_on: &RunnerSpec) -> (String, Yaml) {
 fn service_job(id: &str, name: &str, runs_on: &RunnerSpec) -> (String, Yaml) {
     let mut fields = lane_base(name, runs_on, JobTimeout::DEFAULT);
     fields.push(("services".to_owned(), redis_service()));
-    finish(id, fields, vec![run_step("Localhost port", PROBE_LOCAL)])
+    let probe = service_probe(runs_on.service_host(false));
+    finish(id, fields, vec![run_step("Service check", &probe)])
+}
+
+fn service_probe(host: &str) -> String {
+    format!("timeout 20 bash -c 'until echo >/dev/tcp/{host}/6379; do sleep 1; done'")
 }
 
 fn artifact_job(id: &str, name: &str, runs_on: &RunnerSpec, artifact: &str) -> (String, Yaml) {
@@ -292,3 +293,7 @@ fn upload_step(artifact: &str) -> Yaml {
         ),
     ])
 }
+
+#[cfg(test)]
+#[path = "schema2_features_tests.rs"]
+mod tests;

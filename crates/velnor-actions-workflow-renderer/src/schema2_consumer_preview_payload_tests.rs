@@ -187,7 +187,7 @@ fn generated_leaf_names_match_native_admission_without_name_downloads() {
         assert_eq!(field(&upload, "id"), &Yaml::str("upload"));
         assert_eq!(field(with, "overwrite"), &Yaml::Bool(false));
     }
-    let rendered = render_consumer_preview(&spec).expect("render").bytes;
+    let rendered = render_preview(&spec).expect("render").bytes;
     let signer = job(&rendered, "preview-signer", Some("preview-publisher"));
     assert!(signer.contains("admit-release-aggregate-v1"));
     assert_eq!(signer.matches("id: aggregate\n").count(), 1);
@@ -268,9 +268,7 @@ fn maximum_literal_payload_inventory_renders_within_workflow_limit() {
     bind_version_owners(&mut spec);
     let pairs = spec.policy.payload_pairs().expect("maximum admitted plan");
     assert_eq!(pairs.len(), 128);
-    let rendered = render_consumer_preview(&spec)
-        .expect("maximum graph renders")
-        .bytes;
+    let rendered = render_preview(&spec).expect("maximum graph renders").bytes;
     assert!(
         rendered.len() <= crate::workflow_size::MAX_WORKFLOW_BYTES,
         "{} bytes",
@@ -302,7 +300,7 @@ fn oversized_fixed_cli_argument_still_fails_the_unchanged_byte_limit() {
     // setup graph, so one fixed argument exceeds the workflow limit by itself.
     spec.install_gh_argv
         .push("x".repeat(crate::workflow_size::MAX_WORKFLOW_BYTES + 1));
-    let error = render_consumer_preview(&spec).expect_err("irreducible graph rejected");
+    let error = render_preview(&spec).expect_err("irreducible graph rejected");
     assert!(
         matches!(error, RenderError::InvalidWorkflow(problem) if problem.starts_with("workflow_too_large:") && problem.ends_with(":500000"))
     );
@@ -330,7 +328,7 @@ fn jackin_payload_display_names_describe_all_six_literal_pairs() {
     bind_version_owners(&mut spec);
     let jobs = production::jobs(&spec).expect("production");
     assert_eq!(jobs.len(), 2);
-    let rendered = render_consumer_preview(&spec).expect("preview");
+    let rendered = render_preview(&spec).expect("preview");
     assert!(
         rendered
             .bytes

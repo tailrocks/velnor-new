@@ -6,15 +6,11 @@ use crate::launch::resource_probe::provider::{ImageProvider, VerifiedCandidate};
 
 struct FixtureProvider;
 
-fn has_exact_stop_request(requests: &[String]) -> bool {
-    let prefix = format!("POST /containers/{CONTAINER_ID}/stop?");
-    requests.iter().any(|request| request.starts_with(&prefix))
-}
-
 impl ImageProvider for FixtureProvider {
     async fn verified_candidate(
         &self,
         _docker: &bollard::Docker,
+        _journal: &Journal,
         _engine_id: &str,
         _info: &SystemInfo,
     ) -> Result<Option<VerifiedCandidate>, HostError> {
@@ -22,9 +18,14 @@ impl ImageProvider for FixtureProvider {
         Ok(Some(VerifiedCandidate {
             runtime_id: RUNTIME_ID.to_owned(),
             platform: "linux/amd64".to_owned(),
+            daemon_architecture: "x86_64".to_owned(),
             source_revision: REVISION.to_owned(),
             binding_fingerprint: BINDING.to_owned(),
             config: expected_image_config(REVISION),
+            engine_id: ENGINE_ID.to_owned(),
+            docker_root_digest: super::super::super::docker_root_digest("/var/lib/docker")
+                .expect("test root digest"),
+            workspace_cleanup_digest: "d".repeat(64),
         }))
     }
 }
@@ -40,9 +41,11 @@ async fn engine_change_before_create_blocks_mutation_and_keeps_row_recoverable()
         .bind_engine(ENGINE_ID)
         .await
         .map_err(|error| error.to_string())?;
-    let info_a = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","NCPU":8,"MemTotal":17179869184}"#;
-    let info_b = r#"{"ID":"other-engine","DockerRootDir":"/var/lib/docker","NCPU":8,"MemTotal":17179869184}"#;
+    super::super::configure_probe_capacity(&journal).await?;
+    let info_a = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64","NCPU":8,"MemTotal":17179869184}"#;
+    let info_b = r#"{"ID":"other-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64","NCPU":8,"MemTotal":17179869184}"#;
     let docker = DockerStub::open(vec![
+        http(200, info_a),
         http(200, info_a),
         http(200, info_b),
         http(200, info_b),
@@ -55,8 +58,8 @@ async fn engine_change_before_create_blocks_mutation_and_keeps_row_recoverable()
     .await;
     let requests = docker.finish_observed().await?;
     assert!(matches!(result, Err(HostError::Identity)));
-    assert_eq!(requests.len(), 3);
-    assert!(requests.iter().all(|request| request.starts_with("GET ")));
+    assert_request_order(&requests, &[RequestKind::Info; 4])?;
+    assert_eq!(requests.len(), 4);
     assert!(
         journal
             .active_probe()
@@ -68,7 +71,7 @@ async fn engine_change_before_create_blocks_mutation_and_keeps_row_recoverable()
 }
 
 #[tokio::test]
-async fn root_change_before_create_blocks_mutation_then_recovers_original_binding()
+async fn root_change_before_create_keeps_uncertain_create_charged_after_absence()
 -> Result<(), String> {
     let scratch = Scratch::new("probe-root-before-create").map_err(|error| error.to_string())?;
     let journal = Journal::open(&scratch.file())
@@ -78,9 +81,11 @@ async fn root_change_before_create_blocks_mutation_then_recovers_original_bindin
         .bind_engine(ENGINE_ID)
         .await
         .map_err(|error| error.to_string())?;
-    let original = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","NCPU":8,"MemTotal":17179869184}"#;
-    let replacement = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker-next","NCPU":8,"MemTotal":17179869184}"#;
+    super::super::configure_probe_capacity(&journal).await?;
+    let original = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64","NCPU":8,"MemTotal":17179869184}"#;
+    let replacement = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker-next","OSType":"linux","Architecture":"x86_64","NCPU":8,"MemTotal":17179869184}"#;
     let changed = DockerStub::open(vec![
+        http(200, original),
         http(200, original),
         http(200, replacement),
         http(200, replacement),
@@ -93,6 +98,7 @@ async fn root_change_before_create_blocks_mutation_then_recovers_original_bindin
     .await;
     let changed_requests = changed.finish_observed().await?;
     assert!(matches!(result, Err(HostError::Identity)));
+    assert_request_order(&changed_requests, &[RequestKind::Info; 4])?;
     assert!(
         changed_requests
             .iter()
@@ -118,15 +124,25 @@ async fn root_change_before_create_blocks_mutation_then_recovers_original_bindin
     ))
     .await;
     let recovery_requests = recovery.finish_observed().await?;
-    assert!(result.map_err(|error| error.to_string())?.is_none());
+    assert!(matches!(result, Err(HostError::Ownership)));
+    assert_request_order(
+        &recovery_requests,
+        &[RequestKind::Info, RequestKind::Info, RequestKind::Inspect],
+    )?;
     assert_eq!(recovery_requests.len(), 3);
-    assert!(
-        journal
-            .active_probe()
-            .await
-            .map_err(|error| error.to_string())?
-            .is_none()
+    let retained = journal
+        .active_probe()
+        .await
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| {
+            "uncertain create row was discarded after one absent-name read".to_owned()
+        })?;
+    assert_eq!(retained.phase, crate::journal::ProbePhase::Quarantined);
+    assert_eq!(
+        retained.lease_state,
+        crate::journal::ProbeLeaseState::Uncertain
     );
+    assert!(retained.container_id.is_none());
     Ok(())
 }
 
@@ -134,38 +150,30 @@ async fn root_change_before_create_blocks_mutation_then_recovers_original_bindin
 async fn engine_change_after_create_blocks_start_then_cleans_on_bound_engine() -> Result<(), String>
 {
     let (_scratch, journal, projection) = prepared().await?;
-    let info_a = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker"}"#;
-    let info_a_full = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","NCPU":8,"MemTotal":17179869184}"#;
-    let info_b = r#"{"ID":"other-engine","DockerRootDir":"/var/lib/docker"}"#;
+    let info_a = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64"}"#;
+    let info_a_full = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64","NCPU":8,"MemTotal":17179869184}"#;
+    let info_b = r#"{"ID":"other-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64"}"#;
     let changed = DockerStub::open(vec![
         http(200, info_a),
         http(200, &format!(r#"{{"Id":"{CONTAINER_ID}","Warnings":[]}}"#)),
+        http(200, info_a),
         http(200, &inspect(&projection, "created", 0)?),
         http(200, &inspect(&projection, "created", 0)?),
         http(200, info_b),
         http(200, info_b),
     ])?;
-    let result = execute::run(
+    let result = Box::pin(execute::run(
         &changed.docker,
         &journal,
         &projection,
+        image_evidence(&projection),
         16 * 1024 * 1024 * 1024,
         &Deadline::new(),
-    )
+    ))
     .await;
     let changed_requests = changed.finish_observed().await?;
     assert!(matches!(result, Err(HostError::Identity)));
-    assert!(
-        !changed_requests
-            .iter()
-            .any(|request| request.ends_with("/start HTTP/1.1"))
-    );
-    assert!(!has_exact_stop_request(&changed_requests));
-    assert!(
-        !changed_requests
-            .iter()
-            .any(|request| request.starts_with("DELETE "))
-    );
+    assert_start_rebind_blocks_effects(&changed_requests)?;
     assert_eq!(
         journal
             .active_probe()
@@ -188,6 +196,9 @@ async fn engine_change_after_create_blocks_start_then_cleans_on_bound_engine() -
         http(404, "{}"),
         http(404, "{}"),
         http(200, info_a),
+        http(404, "{}"),
+        http(404, "{}"),
+        http(200, info_a),
     ])?;
     let result = Box::pin(lifecycle::collect(
         &retry.docker,
@@ -198,6 +209,7 @@ async fn engine_change_after_create_blocks_start_then_cleans_on_bound_engine() -
     let retry_requests = retry.finish_observed().await?;
     let sample = result.map_err(|error| format!("{error}; requests: {retry_requests:?}"))?;
     assert!(sample.is_none());
+    assert_recovered_container_cleanup(&retry_requests)?;
     assert!(
         retry_requests
             .iter()
@@ -217,38 +229,30 @@ async fn engine_change_after_create_blocks_start_then_cleans_on_bound_engine() -
 async fn root_change_after_create_blocks_start_then_cleans_on_original_root() -> Result<(), String>
 {
     let (_scratch, journal, projection) = prepared().await?;
-    let original = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker"}"#;
-    let original_full = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","NCPU":8,"MemTotal":17179869184}"#;
-    let replacement = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker-next"}"#;
+    let original = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64"}"#;
+    let original_full = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64","NCPU":8,"MemTotal":17179869184}"#;
+    let replacement = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker-next","OSType":"linux","Architecture":"x86_64"}"#;
     let changed = DockerStub::open(vec![
         http(200, original),
         http(200, &format!(r#"{{"Id":"{CONTAINER_ID}","Warnings":[]}}"#)),
+        http(200, original),
         http(200, &inspect(&projection, "created", 0)?),
         http(200, &inspect(&projection, "created", 0)?),
         http(200, replacement),
         http(200, replacement),
     ])?;
-    let result = execute::run(
+    let result = Box::pin(execute::run(
         &changed.docker,
         &journal,
         &projection,
+        image_evidence(&projection),
         16 * 1024 * 1024 * 1024,
         &Deadline::new(),
-    )
+    ))
     .await;
     let changed_requests = changed.finish_observed().await?;
     assert!(matches!(result, Err(HostError::Identity)));
-    assert!(
-        !changed_requests
-            .iter()
-            .any(|request| request.ends_with("/start HTTP/1.1"))
-    );
-    assert!(!has_exact_stop_request(&changed_requests));
-    assert!(
-        !changed_requests
-            .iter()
-            .any(|request| request.starts_with("DELETE "))
-    );
+    assert_start_rebind_blocks_effects(&changed_requests)?;
     assert_eq!(
         journal
             .active_probe()
@@ -271,6 +275,9 @@ async fn root_change_after_create_blocks_start_then_cleans_on_original_root() ->
         http(404, "{}"),
         http(404, "{}"),
         http(200, original),
+        http(404, "{}"),
+        http(404, "{}"),
+        http(200, original),
     ])?;
     let result = Box::pin(lifecycle::collect(
         &recovery.docker,
@@ -280,6 +287,7 @@ async fn root_change_after_create_blocks_start_then_cleans_on_original_root() ->
     .await;
     let recovery_requests = recovery.finish_observed().await?;
     assert!(result.map_err(|error| error.to_string())?.is_none());
+    assert_recovered_container_cleanup(&recovery_requests)?;
     assert!(
         recovery_requests
             .iter()

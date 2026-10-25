@@ -3,6 +3,7 @@
 use std::error::Error;
 
 use crate::impl_repo_deps::archive_deps::reviewed_archive_dependency;
+use crate::impl_repo_deps::workflow_yaml_deps::reviewed_workflow_yaml_dependency;
 use crate::impl_repo_policy::{MEMBERS, dep_key, dep_lines, dep_referenced, manifest};
 
 #[test]
@@ -55,12 +56,16 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
                 continue;
             }
             let archive_decoder = reviewed_archive_dependency(dir, key, line);
+            let workflow_yaml = reviewed_workflow_yaml_dependency(dir, key, line);
             let checked_git_hash = reviewed_git_object_hash_dependency(dir, key, line);
             assert!(
-                allowed.contains(&key) || archive_decoder || checked_git_hash,
+                allowed.contains(&key) || archive_decoder || workflow_yaml || checked_git_hash,
                 "{dir} uses {key}"
             );
-            if let Some(index) = line.find("features").filter(|_| !archive_decoder) {
+            if let Some(index) = line
+                .find("features")
+                .filter(|_| !archive_decoder && !workflow_yaml && !checked_git_hash)
+            {
                 let quoted: Vec<&str> = line[index..].split('"').collect();
                 for feature in quoted.into_iter().skip(1).step_by(2) {
                     assert!(
@@ -81,11 +86,12 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn cli_rustix_process_support_is_pinned_and_test_only() -> Result<(), Box<dyn Error>> {
+fn cli_rustix_features_stay_scoped() -> Result<(), Box<dyn Error>> {
     let body = manifest("crates/velnor-actions-cli")?;
     let mut section = "";
-    let mut production_dependency = false;
-    let mut test_dependency = false;
+    let mut production_fs = false;
+    let mut production_process = false;
+    let mut test_fs_process = false;
     for raw_line in body.lines() {
         let line = raw_line.trim();
         if line.starts_with('[') {
@@ -95,18 +101,21 @@ fn cli_rustix_process_support_is_pinned_and_test_only() -> Result<(), Box<dyn Er
         if dep_key(line) != "rustix" {
             continue;
         }
+        let pinned = line.contains("version = \"=1.1.5\"");
         match section {
-            "[dependencies]" => production_dependency = true,
+            "[dependencies]" => {
+                production_fs = pinned && line.contains("features = [\"fs\"]");
+                production_process = line.contains("\"process\"");
+            }
             "[dev-dependencies]" => {
-                test_dependency = line.contains("version = \"=1.1.5\"")
-                    && line.contains("features = [\"fs\", \"process\"]");
+                test_fs_process = pinned && line.contains("features = [\"fs\", \"process\"]");
             }
             _ => (),
         }
     }
     assert!(
-        !production_dependency && test_dependency,
-        "CLI rustix process support must stay pinned and test-only"
+        production_fs && !production_process && test_fs_process,
+        "CLI rustix fs stays pinned in production; process support stays test-only"
     );
     Ok(())
 }
@@ -117,7 +126,6 @@ fn allowed_feature(dir: &str, key: &str, feature: &str) -> bool {
             && key == "zip"
             && feature == "deflate-flate2")
         || (key == "rustix" && feature == "fs")
-        // CLI test-only diagnostics need owned process groups and nonblocking pipes.
         || (key == "rustix"
             && feature == "process"
             && matches!(
@@ -138,6 +146,9 @@ fn allowed_feature(dir: &str, key: &str, feature: &str) -> bool {
         || (dir == "crates/velnor-actions-cli"
             && ((key == "syn" && matches!(feature, "full" | "visit"))
                 || (key == "flate2" && feature == "rust_backend")))
+        || (dir == "crates/velnor-actions-mise"
+            && key == "syn"
+            && matches!(feature, "full" | "parsing" | "visit"))
         // F2A scanner tests (dev-deps): syn parse + span lines.
         || (dir == "crates/velnor-actions-orchestrator"
             && ((key == "syn" && matches!(feature, "full" | "parsing" | "printing" | "visit"))

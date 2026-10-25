@@ -11,7 +11,7 @@ mod rust_install_audit;
 mod mise_task_suites_emit;
 
 use velnor_actions_contract::ExecutionMode;
-use velnor_actions_workflow_renderer::guard;
+use velnor_actions_workflow_renderer::guard::{self, SafeTreePath};
 use velnor_actions_workflow_renderer::render::RenderedTree;
 
 use crate::OrchestratorError;
@@ -31,10 +31,6 @@ mod preserve;
 #[path = "generate_runner_labels.rs"]
 mod runner_labels;
 
-#[path = "generate_render.rs"]
-mod render;
-use render::{check_tree_paths, render_all};
-
 /// Gates that run before any write: profile evidence and unmanaged content.
 #[path = "generate_preflight.rs"]
 mod preflight;
@@ -46,6 +42,9 @@ pub(crate) mod unmanaged;
 /// Stage and publish fresh preview output transactionally.
 #[path = "generate_preview.rs"]
 mod preview;
+
+#[path = "generate_render.rs"]
+mod render;
 
 /// Own the private persistent spare used only for in-place generation.
 #[path = "generate_stage_root.rs"]
@@ -151,9 +150,25 @@ pub fn render_staged_tree_with(
     dispatch: Option<ExecutionMode>,
 ) -> Result<RenderedTree, OrchestratorError> {
     let owned = owned_preparation(prep)?;
-    let tree = render_all(&owned, dispatch)?;
+    let mut tree = render::render_all(&owned, dispatch)?;
+    let routing = crate::routing::workflow_routing_policy(&owned.config, dispatch)?;
+    tree.files
+        .extend(cache_cleanup_emit::files(&owned, &routing)?);
+    tree.files.sort_by(|left, right| left.path.cmp(&right.path));
     check_tree_paths(&tree)?;
     Ok(tree)
+}
+
+/// Validate every rendered path lexically plus symlink-prefix probing.
+fn check_tree_paths(tree: &RenderedTree) -> Result<Vec<SafeTreePath>, OrchestratorError> {
+    let mut safe = Vec::with_capacity(tree.files.len() + tree.symlinks.len());
+    for file in &tree.files {
+        safe.push(guard::validate_tree_path(&file.path)?);
+    }
+    for link in &tree.symlinks {
+        safe.push(guard::validate_tree_path(&link.path)?);
+    }
+    Ok(safe)
 }
 
 /// Fail when a path exists as a symlink.

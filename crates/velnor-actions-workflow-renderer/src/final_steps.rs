@@ -22,6 +22,16 @@ use crate::{
 pub(crate) const FETCH_REPORTS_NAME: &str = "Download every expected matrix artifact";
 /// Contract-fixed display name of the final-report upload step.
 pub(crate) const PUBLISH_FINAL_NAME: &str = "Publish final report";
+/// Contract-fixed display name of the qualification cache receipt step.
+pub(crate) const QUALIFICATION_CACHE_RECEIPT_NAME: &str = "Write qualification cache receipt";
+/// Contract-fixed qualification receipt artifact name with the run attempt.
+pub(crate) const QUALIFICATION_CACHE_RECEIPT_ARTIFACT_NAME: &str =
+    "velnor-qualification-cache-receipt-v4-a${{ github.run_attempt }}";
+/// Output expression written by the qualification receipt step.
+pub(crate) const QUALIFICATION_CACHE_RECEIPT_PATH_EXPR: &str =
+    "${{ steps.qualification-cache-receipt.outputs.receipt_path }}";
+const QUALIFICATION_CACHE_RECEIPT_UPLOAD_CONDITION: &str =
+    "steps.qualification-cache-receipt.outputs.receipt_path != ''";
 /// Final artifact name with the derived run key (contract §4).
 pub(crate) const FINAL_ARTIFACT_NAME: &str =
     "velnor-final-r${{ github.run_id }}-a${{ github.run_attempt }}";
@@ -38,6 +48,46 @@ pub(crate) const FINAL_ARTIFACT_PATH: &str = "${{ runner.temp }}/velnor/r${{ git
 pub(crate) fn fetch_reports_step() -> Result<Step, RenderError> {
     let mut step = steps::internal_step(FETCH_REPORTS_NAME, steps::FETCH_OPERATION)?;
     step.role = Some(StepRole::FetchReports);
+    Ok(step)
+}
+
+/// Build the final-job qualification receipt writer. The operation is a no-op
+/// for plans without a typed qualification dispatch and exposes an empty path.
+/// # Errors
+pub(crate) fn qualification_cache_receipt_step() -> Result<Step, RenderError> {
+    let mut step = steps::internal_step(
+        QUALIFICATION_CACHE_RECEIPT_NAME,
+        "write-qualification-cache-receipt-v1",
+    )?;
+    step.id = Some(velnor_actions_contract::StepId::QualificationCacheReceipt);
+    step.role = Some(StepRole::QualificationCacheReceipt);
+    Ok(step)
+}
+
+/// Upload only when the qualification receipt writer produced a path.
+/// # Errors
+pub(crate) fn publish_qualification_cache_receipt_step() -> Result<Step, RenderError> {
+    let mut step = steps::action_step(
+        "Publish qualification cache receipt",
+        steps::UPLOAD_ARTIFACT_USES,
+        BTreeMap::from([
+            (
+                "name".to_owned(),
+                QUALIFICATION_CACHE_RECEIPT_ARTIFACT_NAME.to_owned(),
+            ),
+            (
+                "path".to_owned(),
+                QUALIFICATION_CACHE_RECEIPT_PATH_EXPR.to_owned(),
+            ),
+            ("if-no-files-found".to_owned(), "error".to_owned()),
+            (
+                "retention-days".to_owned(),
+                steps::ARTIFACT_RETENTION_DAYS.to_string(),
+            ),
+        ]),
+    )?;
+    step.role = Some(StepRole::QualificationCacheReceiptUpload);
+    step.condition = Some(QUALIFICATION_CACHE_RECEIPT_UPLOAD_CONDITION.to_owned());
     Ok(step)
 }
 
@@ -102,6 +152,26 @@ pub(crate) fn insert_final_fanin(
     if !final_job
         .steps
         .iter()
+        .any(|step| step.role == Some(StepRole::QualificationCacheReceipt))
+    {
+        let at = qualification_receipt_insert_at(final_job);
+        final_job
+            .steps
+            .insert(at, qualification_cache_receipt_step()?);
+    }
+    if !final_job
+        .steps
+        .iter()
+        .any(|step| step.role == Some(StepRole::QualificationCacheReceiptUpload))
+    {
+        let at = qualification_receipt_insert_at(final_job);
+        final_job
+            .steps
+            .insert(at, publish_qualification_cache_receipt_step()?);
+    }
+    if !final_job
+        .steps
+        .iter()
         .any(|step| step.role == Some(StepRole::PublishFinal))
     {
         final_job.steps.push(publish_final_report_step()?);
@@ -157,3 +227,31 @@ fn fetch_insert_at(job: &Job) -> usize {
         .or_else(|| at(steps::MERGE_OPERATION))
         .unwrap_or(job.steps.len())
 }
+
+/// Insert qualification receipt work after report retrieval and in writer/upload order.
+fn qualification_receipt_insert_at(job: &Job) -> usize {
+    let after_fetch = job
+        .steps
+        .iter()
+        .position(|step| step.role == Some(StepRole::FetchReports))
+        .map_or_else(|| fetch_insert_at(job), |at| at + 1);
+    job.steps
+        .iter()
+        .enumerate()
+        .filter(|(_, step)| {
+            matches!(
+                step.role,
+                Some(
+                    StepRole::QualificationCacheReceipt | StepRole::QualificationCacheReceiptUpload
+                )
+            )
+        })
+        .map(|(at, _)| at + 1)
+        .max()
+        .unwrap_or(after_fetch)
+        .max(after_fetch)
+}
+
+#[cfg(test)]
+#[path = "final_steps_tests.rs"]
+mod tests;

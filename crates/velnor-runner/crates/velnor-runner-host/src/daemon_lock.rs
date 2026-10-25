@@ -4,14 +4,21 @@ use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::error::HostError;
 use serde::{Deserialize, Serialize};
 
+#[path = "daemon_lock/controller_run.rs"]
+mod controller_run;
+#[path = "daemon_lock_filesystem.rs"]
+mod filesystem;
 #[path = "daemon_lock_identity.rs"]
 mod identity;
 
+pub(crate) use filesystem::canonical_journal_path;
+use filesystem::{ensure_regular_or_missing, open_lock, private_directory};
 pub(super) use identity::{engine_id_valid, engine_key, instance_id_valid};
 
 const ANCHOR_VERSION: u8 = 1;
@@ -22,6 +29,9 @@ const ANCHOR_DIR: &str = "runner-lineage";
 #[derive(Debug)]
 pub struct DaemonLock {
     file: File,
+    device: u64,
+    inode: u64,
+    controller_running: AtomicBool,
 }
 
 impl DaemonLock {
@@ -33,13 +43,62 @@ impl DaemonLock {
     pub fn try_acquire(path: &Path) -> Result<Self, HostError> {
         let file = open_lock(path)?;
         file.try_lock().map_err(|_| HostError::Lock)?;
-        Ok(Self { file })
+        let metadata = file.metadata().map_err(|_| HostError::Lock)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            Ok(Self {
+                file,
+                device: metadata.dev(),
+                inode: metadata.ino(),
+                controller_running: AtomicBool::new(false),
+            })
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = metadata;
+            Err(HostError::Lock)
+        }
     }
 
     /// The lock is held while the advisory file is still open.
     #[must_use]
     pub fn is_held(&self) -> bool {
         self.file.metadata().is_ok()
+    }
+
+    /// Check that the retained advisory lock still protects this exact path.
+    #[must_use]
+    pub(crate) fn matches_path(&self, path: &Path) -> bool {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+
+            let Ok(canonical) = fs::canonicalize(path) else {
+                return false;
+            };
+            if canonical != path {
+                return false;
+            }
+            let Ok(path_metadata) = fs::symlink_metadata(path) else {
+                return false;
+            };
+            if path_metadata.file_type().is_symlink() || !path_metadata.is_file() {
+                return false;
+            }
+            let Ok(descriptor_metadata) = self.file.metadata() else {
+                return false;
+            };
+            path_metadata.dev() == self.device
+                && path_metadata.ino() == self.inode
+                && descriptor_metadata.dev() == self.device
+                && descriptor_metadata.ino() == self.inode
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = path;
+            false
+        }
     }
 }
 
@@ -93,6 +152,11 @@ impl EngineLineageGuard {
         let guard = Self::acquire_at(engine_id, root)?;
         guards.insert(engine_id.to_owned(), guard.clone());
         Ok(guard)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn acquire_at_for_tests(engine_id: &str, root: &Path) -> Result<Self, HostError> {
+        Self::acquire_at(engine_id, root)
     }
 
     fn acquire_at(engine_id: &str, root: &Path) -> Result<Self, HostError> {
@@ -174,6 +238,14 @@ impl EngineLineageGuard {
         Ok(())
     }
 
+    pub(crate) fn engine_id(&self) -> &str {
+        &self.inner.engine_id
+    }
+
+    pub(crate) fn same_guard(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
+
     /// Advance the external anchor after the matching database commit.
     ///
     /// # Errors
@@ -205,93 +277,6 @@ impl EngineLineageGuard {
 fn process_guards() -> &'static Mutex<HashMap<String, EngineLineageGuard>> {
     static GUARDS: OnceLock<Mutex<HashMap<String, EngineLineageGuard>>> = OnceLock::new();
     GUARDS.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-/// Resolve a journal path without following a journal-file symlink.
-///
-/// # Errors
-///
-/// Returns [`HostError::Path`] unless the parent exists and the path names a
-/// regular file or a new file in that parent.
-pub(crate) fn canonical_journal_path(path: &Path) -> Result<PathBuf, HostError> {
-    if !path.is_absolute() || path.file_name().is_none() {
-        return Err(HostError::Path);
-    }
-    let parent = path.parent().ok_or(HostError::Path)?;
-    let parent = fs::canonicalize(parent).map_err(|_| HostError::Path)?;
-    if !fs::metadata(&parent).map_err(|_| HostError::Path)?.is_dir() {
-        return Err(HostError::Path);
-    }
-    let name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.chars().any(char::is_control))
-        .ok_or(HostError::Path)?;
-    let canonical = parent.join(name);
-    if canonical
-        .to_str()
-        .is_none_or(|text| text.chars().any(char::is_control))
-    {
-        return Err(HostError::Path);
-    }
-    match fs::symlink_metadata(&canonical) {
-        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
-            Err(HostError::Path)
-        }
-        Ok(_) => Ok(canonical),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(canonical),
-        Err(_) => Err(HostError::Path),
-    }
-}
-
-fn private_directory(path: &Path) -> Result<PathBuf, HostError> {
-    if !path.is_absolute() {
-        return Err(HostError::Path);
-    }
-    fs::create_dir_all(path).map_err(|_| HostError::Path)?;
-    let metadata = fs::symlink_metadata(path).map_err(|_| HostError::Path)?;
-    if metadata.file_type().is_symlink() || !metadata.is_dir() {
-        return Err(HostError::Path);
-    }
-    let canonical = fs::canonicalize(path).map_err(|_| HostError::Path)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&canonical, fs::Permissions::from_mode(0o700))
-            .map_err(|_| HostError::Path)?;
-    }
-    Ok(canonical)
-}
-
-fn open_lock(path: &Path) -> Result<File, HostError> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|_| HostError::Lock)?;
-    }
-    ensure_regular_or_missing(path)?;
-    let mut options = OpenOptions::new();
-    options.read(true).write(true).create(true).truncate(false);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let file = options.open(path).map_err(|_| HostError::Lock)?;
-    if !file.metadata().map_err(|_| HostError::Lock)?.is_file() {
-        return Err(HostError::Path);
-    }
-    ensure_regular_or_missing(path)?;
-    Ok(file)
-}
-
-fn ensure_regular_or_missing(path: &Path) -> Result<(), HostError> {
-    match fs::symlink_metadata(path) {
-        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
-            Err(HostError::Path)
-        }
-        Ok(_) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(_) => Err(HostError::Lock),
-    }
 }
 
 fn check_lineage(existing: &Anchor, desired: &Anchor) -> Result<(), HostError> {

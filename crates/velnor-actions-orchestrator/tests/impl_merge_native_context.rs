@@ -87,6 +87,12 @@ fn replace_with_contract_valid_native_check(plan: &mut Plan) -> TestResult {
     let task_digest = digest_b3(b"native-tap-tree-task");
     let input_digest = digest_b3(b"native-tap-tree-input");
     let closure_digest = digest_b3(b"native-tap-tree-closure");
+    let task_binding_digest = velnor_actions_contract::TaskBindingDigest::new(task_digest.clone())?;
+    let mbx_generation = velnor_actions_contract::cachekey::mbx_cache_generation(
+        velnor_actions_mise::ToolCatalog::pinned()
+            .version(velnor_actions_mise::PinnedTool::MrBoxington),
+    );
+    let mbx_digest = digest_b3(mbx_generation.as_bytes());
     let entry = MatrixEntry::derive(
         "native",
         TASK_ID,
@@ -118,8 +124,14 @@ fn replace_with_contract_valid_native_check(plan: &mut Plan) -> TestResult {
         decision: ObligationDecision::Execute,
         reason: "native_homebrew_check_requires_execution".to_owned(),
         task_digest,
+        task_binding_digest,
         input_digest,
         closure_digest,
+        graph_digest: digest_b3(b"no-workspace"),
+        mbx_digest,
+        profile: velnor_actions_contract::config::NativeHomebrewOperation::TapTree
+            .as_str()
+            .to_owned(),
         job_id: JOB_ID.to_owned(),
     }];
     plan.packages.clear();

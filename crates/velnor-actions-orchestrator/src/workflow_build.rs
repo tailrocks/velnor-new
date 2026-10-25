@@ -12,6 +12,7 @@ use velnor_actions_workflow_renderer::verification_jobs::WorkflowTaskPolicy;
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
+use crate::internal::internal;
 use crate::pins::consumer_acquire_step;
 use crate::workflow_jobs::{PlanJobToolNeeds, PlanRustNeed};
 
@@ -115,6 +116,11 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
     let validation = input.config.workflow.generator_validation;
     let verify = crate::verify::verify_kinds(&input.config.workflow.verify.jobs)?;
     let support = support_workflow(policy, validation, input.discovery, &verify);
+    let has_qualification = input.config.execution.as_ref().is_some_and(|execution| {
+        execution
+            .workflows
+            .contains(&velnor_actions_contract::RoutingWorkflow::Qualification)
+    });
     let acquire = match policy {
         WorkflowPolicy::ConsumerV1 => Some(consumer_acquire_step(
             input.label,
@@ -142,10 +148,18 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
     };
     let needs = PlanJobToolNeeds {
         rust,
-        all_features: plan_uses_all_features(input.discovery),
+        all_features: plan_uses_all_features(input.discovery)
+            || input.config.stacks.rust.as_ref().is_some_and(|rust| {
+                rust.clippy_all_features
+                    || rust
+                        .configurations
+                        .iter()
+                        .any(|configuration| configuration.all_features)
+            }),
         nextest: plan_uses_nextest(input.discovery),
         opentofu: plan_uses_opentofu(input.discovery),
         gh: policy == WorkflowPolicy::VelnorRepositoryV1
+            || has_qualification
             || !input.discovery.native_checks.is_empty(),
         resolve_qualification_predecessor: policy == WorkflowPolicy::VelnorRepositoryV1,
     };
@@ -185,9 +199,7 @@ fn build_workflow_plan(
     if let Some(format) = prepared.format.take() {
         insert_format_step(&mut plan, format);
     }
-    if prepared.policy == WorkflowPolicy::VelnorRepositoryV1
-        || !input.discovery.native_checks.is_empty()
-    {
+    if prepared.needs.gh {
         plan.permissions = Some(crate::workflow_jobs::read_actions_permissions());
     }
     Ok(plan)
@@ -200,7 +212,8 @@ fn build_workflow_jobs(
 ) -> Result<BTreeMap<String, Job>, OrchestratorError> {
     let mut jobs = BTreeMap::new();
     jobs.insert(PLAN_JOB_ID.to_owned(), plan);
-    let built = crate::crate_jobs::build_for_workflow(
+    let qualification_jobs_enabled = qualification_jobs_enabled(input.config);
+    let crate_job_inputs = crate::crate_jobs::workflow_job_inputs(
         input.config,
         input.label,
         input.discovery,
@@ -208,42 +221,53 @@ fn build_workflow_jobs(
         input.fetch_roots,
         prepared.acquire.as_ref(),
         &prepared.report_helper_version,
-        prepared.private.as_ref(),
     )?;
+    let built = crate::crate_jobs::build_for_workflow(
+        crate_job_inputs,
+        qualification_jobs_enabled,
+        prepared.private.as_ref(),
+        velnor_actions_contract::JobTimeout::new(
+            input.config.workflow.dependency_seed_timeout_minutes,
+        )?,
+    )?;
+    let qualification = if qualification_jobs_enabled {
+        crate::crate_jobs::build_qualification_for_workflow(
+            input.config,
+            input.label,
+            input.discovery,
+            &prepared.catalog,
+            input.fetch_roots,
+            prepared.acquire.as_ref(),
+            &prepared.report_helper_version,
+        )?
+    } else {
+        crate::crate_jobs::CrateBuild::default()
+    };
     let mut required_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
-    for (id, job) in built.jobs {
-        jobs.insert(id, job);
+    required_ids.extend(qualification.jobs.iter().map(|(id, _)| id.clone()));
+    for (id, mut job) in built.jobs {
+        if qualification_jobs_enabled && id.starts_with(velnor_actions_contract::TOFU_JOB_ID_PREFIX)
+        {
+            set_crate_job_condition(&mut job, false);
+        }
+        insert_job(&mut jobs, id, job)?;
     }
-    // Seeds run no checks and are never required (cache decision 2).
+    // Cache decision 2 excludes seed jobs from `Required`.
     for (id, job) in built.seeds {
-        jobs.insert(id, job);
+        insert_job(&mut jobs, id, job)?;
     }
-    for (id, job) in
-        check_jobs::build_check_jobs(prepared.policy, input.discovery, &prepared.catalog)?
-    {
-        required_ids.push(id.clone());
-        jobs.insert(id, job);
+    for (id, mut job) in qualification.jobs {
+        set_crate_job_condition(&mut job, true);
+        insert_job(&mut jobs, id, job)?;
     }
-    for (id, job) in crate::config::gradle_jobs::build_jobs(
-        input.config,
-        &input.discovery.gradle_roots,
-        prepared.acquire.as_ref(),
-        prepared.private.as_ref(),
-    )? {
-        required_ids.push(id.clone());
-        jobs.insert(id, job);
-    }
-    let (suite_jobs, suite_required_ids) = crate::rust_suites_emit::build_ci_jobs(
-        input.root,
-        input.config,
-        input.label,
-        input.discovery,
-        &prepared.catalog,
-    )?;
-    for (id, job) in suite_jobs {
-        jobs.insert(id, job);
-    }
-    required_ids.extend(suite_required_ids);
+    required_ids.extend(insert_check_jobs(
+        &mut jobs,
+        input,
+        prepared,
+        qualification_jobs_enabled,
+    )?);
+    required_ids.extend(insert_gradle_jobs(&mut jobs, input, prepared)?);
+    required_ids.extend(insert_suite_jobs(&mut jobs, input, prepared)?);
     crate::workflow_task_jobs::insert_jobs(&mut jobs, &prepared.workflow_tasks)?;
     insert_gate_jobs(
         &mut jobs,
@@ -252,6 +276,104 @@ fn build_workflow_jobs(
         prepared.acquire.take(),
         &prepared.catalog,
     )?;
-    wire_w1::check_crate_mbx_gating(&jobs, &built.drivers)?;
+    let mut drivers = built.drivers;
+    for (id, driver) in qualification.drivers {
+        if drivers.insert(id.clone(), driver).is_some() {
+            return Err(internal("crate_job_driver_id_collision"));
+        }
+    }
+    wire_w1::check_crate_mbx_gating(&jobs, &drivers)?;
     Ok(jobs)
+}
+
+fn insert_suite_jobs(
+    jobs: &mut BTreeMap<String, Job>,
+    input: &WorkflowBuildInput<'_>,
+    prepared: &PreparedWorkflow,
+) -> Result<Vec<String>, OrchestratorError> {
+    let (suite_jobs, suite_required_ids) = crate::rust_suites_emit::build_ci_jobs(
+        input.root,
+        input.config,
+        input.label,
+        input.discovery,
+        &prepared.catalog,
+    )?;
+    for (id, mut job) in suite_jobs {
+        if !job.needs.iter().any(|dependency| dependency == PLAN_JOB_ID) {
+            job.needs.push(PLAN_JOB_ID.to_owned());
+        }
+        jobs.insert(id, job);
+    }
+    Ok(suite_required_ids)
+}
+
+fn insert_gradle_jobs(
+    jobs: &mut BTreeMap<String, Job>,
+    input: &WorkflowBuildInput<'_>,
+    prepared: &PreparedWorkflow,
+) -> Result<Vec<String>, OrchestratorError> {
+    let mut required_ids = Vec::new();
+    for (id, job) in crate::config::gradle_jobs::build_jobs(
+        input.config,
+        &input.discovery.gradle_roots,
+        prepared.acquire.as_ref(),
+        prepared.private.as_ref(),
+    )? {
+        required_ids.push(id.clone());
+        insert_job(jobs, id, job)?;
+    }
+    Ok(required_ids)
+}
+
+fn insert_check_jobs(
+    jobs: &mut BTreeMap<String, Job>,
+    input: &WorkflowBuildInput<'_>,
+    prepared: &PreparedWorkflow,
+    qualification_jobs_enabled: bool,
+) -> Result<Vec<String>, OrchestratorError> {
+    let mut required_ids = Vec::new();
+    for (id, job) in check_jobs::build_check_jobs_with_qualification(
+        prepared.policy,
+        input.discovery,
+        &prepared.catalog,
+        qualification_jobs_enabled,
+    )? {
+        required_ids.push(id.clone());
+        insert_job(jobs, id, job)?;
+    }
+    Ok(required_ids)
+}
+
+/// Whether this workflow includes the Qualification executor set.
+fn qualification_jobs_enabled(config: &VelnorConfig) -> bool {
+    config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1
+        || config.execution.as_ref().is_some_and(|execution| {
+            execution
+                .workflows
+                .contains(&velnor_actions_contract::RoutingWorkflow::Qualification)
+        })
+}
+
+/// Gate one static `ToFu` crate-job set on the validated Qualification output.
+fn set_crate_job_condition(job: &mut Job, qualification: bool) {
+    let mode = if qualification {
+        "needs.plan.outputs.qualification_campaign != ''"
+    } else {
+        "needs.plan.outputs.qualification_campaign == ''"
+    };
+    job.condition = Some(format!(
+        "always() && needs.plan.result == 'success' && {mode}"
+    ));
+}
+
+/// Insert one generated job without replacing an existing identity.
+fn insert_job(
+    jobs: &mut BTreeMap<String, Job>,
+    id: String,
+    job: Job,
+) -> Result<(), OrchestratorError> {
+    if jobs.insert(id, job).is_some() {
+        return Err(internal("workflow_job_id_collision"));
+    }
+    Ok(())
 }

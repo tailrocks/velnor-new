@@ -21,7 +21,23 @@ fn draft_and_orphan_tags_fail_closed_without_mutation() -> Result<(), Box<dyn Er
     for mode in ["draft", "orphan"] {
         let fixture = Fixture::new(Family::Binary, mode)?;
         let result = fixture.run(family::prepare_script(Family::Binary, &test_pins())?, None)?;
-        assert!(!result.success, "mode {mode} unexpectedly passed");
+        assert!(!result.success, "The {mode} mode passed unexpectedly.");
+        assert!(!contains_mutation(&result.calls));
+    }
+    Ok(())
+}
+
+#[test]
+fn existing_binary_release_requires_the_exact_host_helper_pair() -> Result<(), Box<dyn Error>> {
+    for mode in ["missing-helper", "unexpected-asset"] {
+        let fixture = Fixture::new(Family::Binary, mode)?;
+        let result = fixture.run(family::prepare_script(Family::Binary, &test_pins())?, None)?;
+        assert!(!result.success, "The {mode} binary inventory was accepted.");
+        assert!(
+            result.stderr.contains("asset set does not match"),
+            "{}",
+            result.stderr
+        );
         assert!(!contains_mutation(&result.calls));
     }
     Ok(())
@@ -119,7 +135,7 @@ fn delayed_release_attestation_retries_only_confirmation() -> Result<(), Box<dyn
     assert!(result.success, "{}", result.stderr);
     assert_single_publication(&result.calls);
     assert_eq!(result.calls.matches("gh release verify ").count(), 3);
-    assert_eq!(result.calls.matches("gh release verify-asset ").count(), 2);
+    assert_eq!(result.calls.matches("gh release verify-asset ").count(), 3);
     assert_order(&result.calls, "release edit", "release verify ")?;
     assert_order(&result.calls, "release verify ", "release verify-asset ")?;
     Ok(())

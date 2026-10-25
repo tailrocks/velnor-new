@@ -109,6 +109,10 @@ fn gate6_limits_bound_fanout_and_subprocess_budgets() -> TestResult {
     let jobs = finalized_jobs(&prepare(dir.path())?)?;
     let ids: Vec<&String> = jobs.keys().filter(|id| is_crate_job(id)).collect();
     assert_eq!(ids.len(), 3, "one job per root, never per step");
+    assert!(
+        !jobs.contains_key("publish-baseline"),
+        "baseline publication stays outside the required workflow"
+    );
     for (id, job) in &jobs {
         let minutes = job.timeout_minutes.minutes();
         assert!(

@@ -4,7 +4,6 @@
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::cachekey::{
     FormatInputs, LaneInputs, ToolchainInputs, cache_format_id, lane_id, mbx_cache_generation,
-    toolchain_id,
 };
 use velnor_actions_contract::{
     ContractError, ProposedTask, Stack, component_id_for_unit, digest_b3,
@@ -329,18 +328,6 @@ pub(crate) fn toolchain_inputs_for(
         compile_driver: task.identity.compile_driver.clone(),
         test_runner: task.identity.test_runner.clone(),
     })
-}
-
-/// Toolchain identity digest over the centralized toolchain inputs.
-///
-/// # Errors
-///
-/// Returns [`ContractError`] for invalid toolchain inputs.
-pub(crate) fn toolchain_digest_for(
-    task: &ProposedTask,
-    catalog: &ToolCatalog,
-) -> Result<String, ContractError> {
-    toolchain_id(&toolchain_inputs_for(task, catalog)?)
 }
 
 /// Cache-format identity for one compile driver.

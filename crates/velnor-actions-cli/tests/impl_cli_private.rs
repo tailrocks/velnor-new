@@ -115,6 +115,7 @@ fn private_operations_without_runner_temp_fall_through_to_usage() -> Result<(), 
     for op in [
         "private-fetch-v1",
         "private-revoke-v1",
+        "gradle-run-v1",
         "bun-registry-install-v1",
         "playwright-browsers-install-v1",
         "bun-assets-export-v1",

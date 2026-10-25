@@ -143,8 +143,8 @@ fn observe_until_done(
 ) {
     let mut iteration = 0_u64;
     let mut first_error = None;
-    // Hang watchdog: fail only when the writer makes no progress for 30s. A
-    // fixed wall-clock bound on the whole run fails on a merely loaded host.
+    // Fail if the writer makes no progress for 30 seconds.
+    // A time limit for the entire run can fail when the host is busy.
     let mut last_phase = writer_phase.load(Ordering::Relaxed);
     let mut last_progress = Instant::now();
     while done.load(Ordering::Relaxed) == 0 {
@@ -155,7 +155,7 @@ fn observe_until_done(
         }
         assert!(
             last_progress.elapsed() <= std::time::Duration::from_secs(30),
-            "observer saw no writer progress for 30s"
+            "The observer saw no writer progress for 30 seconds."
         );
         iteration += 1;
         if let Err(error) = target.symlink_metadata() {
@@ -190,8 +190,8 @@ impl Drop for DoneGuard<'_> {
 #[test]
 fn atomic_commit_never_exposes_missing_tree() -> TestResult {
     let repo = make_repo(config_with_branch())?;
-    let root = repo.path();
-    let prep = prepare(root)?;
+    let root = repo.path().canonicalize()?;
+    let prep = prepare(&root)?;
     let opts = GenerateOptions { output_dir: None };
     generate(&prep, &opts)?;
     let live = root.join(".github");
@@ -210,7 +210,7 @@ fn atomic_commit_never_exposes_missing_tree() -> TestResult {
             writer_phase.store(WRITER_COMPLETE, Ordering::Relaxed);
         });
         for observer in 0..4 {
-            let parent = root.to_path_buf();
+            let parent = root.clone();
             let target = live.clone();
             let done_ref = &done;
             let counts_ref = &counts;

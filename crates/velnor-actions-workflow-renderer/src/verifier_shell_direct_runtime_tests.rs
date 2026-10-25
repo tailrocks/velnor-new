@@ -4,6 +4,7 @@ use super::*;
 fn release_verifier_command_uses_the_same_startup_safe_boundary() {
     let script = crate::selected_mise_verifier::test_script("2.3.4");
     let step = crate::verifier_shell::render_command(
+        StepRole::VerifyJactionlint,
         "Verify jactionlint",
         &["sh".to_owned(), "-c".to_owned(), script],
     )
@@ -22,9 +23,12 @@ fn direct_release_verifiers_match_the_typed_renderer_for_each_role() {
             crate::toolchain_env::credential_unset_prelude()
         ),
     ];
-    let direct_rust =
-        crate::verifier_shell::render_command(crate::VERIFY_RUST_TOOLCHAIN_STEP, &rust_argv)
-            .expect("canonical direct Rust command");
+    let direct_rust = crate::verifier_shell::render_command(
+        StepRole::VerifyRustManifest,
+        crate::VERIFY_RUST_TOOLCHAIN_STEP,
+        &rust_argv,
+    )
+    .expect("canonical direct Rust command");
     let typed_rust = rendered_probe(StepRole::VerifyRustManifest, rust_body);
     assert_eq!(direct_rust, typed_rust);
     assert_emitted_boundary(&direct_rust);
@@ -32,6 +36,7 @@ fn direct_release_verifiers_match_the_typed_renderer_for_each_role() {
     for version in ["2.3.4", "${VELNOR_TOOL_JACTIONLINT}"] {
         let script = crate::selected_mise_verifier::test_script(version);
         let direct_jactionlint = crate::verifier_shell::render_command(
+            StepRole::VerifyJactionlint,
             "Verify jactionlint",
             &["sh".to_owned(), "-c".to_owned(), script.clone()],
         )
@@ -47,6 +52,7 @@ fn direct_release_verifier_rejects_wrong_shape_and_altered_payloads() {
     let unset = crate::toolchain_env::credential_unset_prelude();
     assert!(
         crate::verifier_shell::render_command(
+            StepRole::VerifyRustManifest,
             crate::VERIFY_RUST_TOOLCHAIN_STEP,
             &["sh".to_owned(), "-c".to_owned(), "true".to_owned()],
         )
@@ -54,6 +60,7 @@ fn direct_release_verifier_rejects_wrong_shape_and_altered_payloads() {
     );
     assert!(
         crate::verifier_shell::render_command(
+            StepRole::VerifyRustManifest,
             crate::VERIFY_RUST_TOOLCHAIN_STEP,
             &["bash".to_owned(), "-c".to_owned(), format!("{unset} true")],
         )
@@ -64,6 +71,7 @@ fn direct_release_verifier_rejects_wrong_shape_and_altered_payloads() {
     altered_jactionlint.push(';');
     assert!(
         crate::verifier_shell::render_command(
+            StepRole::VerifyJactionlint,
             "Verify jactionlint",
             &["sh".to_owned(), "-c".to_owned(), altered_jactionlint],
         )

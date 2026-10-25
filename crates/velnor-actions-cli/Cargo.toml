@@ -15,6 +15,7 @@ serde_json = { workspace = true }
 velnor-actions-orchestrator = { version = "=0.1.54", path = "../velnor-actions-orchestrator" }
 velnor-actions-freshness = { version = "=0.1.54", path = "../velnor-actions-freshness" }
 clap = { version = "=4.6.7", features = ["derive"] }
+rustix = { version = "=1.1.5", features = ["fs"] }
 
 [lints]
 workspace = true
@@ -24,8 +25,9 @@ name = "velnor_cli"
 path = "tests/velnor_cli.rs"
 
 [dev-dependencies]
-proc-macro2 = "=1.0.107"
+toml = { version = "=1.1.8" }
 flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
 rustix = { version = "=1.1.5", features = ["fs", "process"] }
+proc-macro2 = "=1.0.107"
 sha2 = "=0.11.1"
 syn = { version = "=3.0.9", features = ["full", "visit"] }

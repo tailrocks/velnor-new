@@ -1,15 +1,16 @@
-//! Promote consumed `Compute cache keys` outputs to Plan job outputs.
+//! Send used cache outputs from the Plan job to other jobs.
 //!
-//! Consumers reference `needs.plan.outputs.<name>` for runtime cache keys;
-//! the Plan job promotes the runtime trust plus exactly the consumed key
-//! names from its typed key step, so no unconsumed key enters the per-job
-//! output budget.
+//! Other jobs read outputs through `needs.plan.outputs.<name>`.
+//! The Plan job sends cache trust and the keys that other jobs use.
+//! The typed key step supplies these values.
+//! This keeps unused keys out of the job output limit.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::workflow::cache_family::{
     PLAN_CACHE_OUTPUTS, PLAN_CACHE_OUTPUTS_RESERVE_UTF16_BYTES, PLAN_CACHE_TRUST_OUTPUT,
-    cache_output_reserve_utf16_bytes, is_plan_cache_output,
+    SOURCES_KEY_OUTPUT, SOURCES_RESTORE_KEYS_OUTPUT, cache_output_reserve_utf16_bytes,
+    is_plan_cache_output,
 };
 use velnor_actions_contract::{Job, Step, StepId, StepKind};
 
@@ -26,18 +27,7 @@ static EMPTY_ENV: std::sync::LazyLock<BTreeMap<String, String>> =
 pub(crate) fn consumed(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, String)>, RenderError> {
     let mut names = BTreeSet::new();
     for step in jobs.values().flat_map(|job| &job.steps) {
-        for text in step_texts(step) {
-            let mut rest = text;
-            while let Some(at) = rest.find(NEEDS_PLAN) {
-                rest = &rest[at + NEEDS_PLAN.len()..];
-                let end = rest
-                    .find(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
-                    .unwrap_or(rest.len());
-                if is_plan_cache_output(&rest[..end]) {
-                    names.insert(rest[..end].to_owned());
-                }
-            }
-        }
+        collect_step_cache_outputs(step, &mut names);
     }
     let has_key_step = jobs.get(crate::render::PLAN_JOB_ID).is_some_and(|plan| {
         plan.steps
@@ -73,6 +63,42 @@ pub(crate) fn consumed(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Stri
             (name, step_output)
         })
         .collect())
+}
+
+/// Source-cache outputs referenced by one original source job.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct SourceCacheUsage {
+    pub(crate) sources_key: bool,
+    pub(crate) sources_restore_keys: bool,
+}
+
+/// Find source-cache Plan outputs consumed by this source job's own steps.
+#[must_use]
+pub(crate) fn source_cache_usage(job: &Job) -> SourceCacheUsage {
+    let mut names = BTreeSet::new();
+    for step in &job.steps {
+        collect_step_cache_outputs(step, &mut names);
+    }
+    SourceCacheUsage {
+        sources_key: names.contains(SOURCES_KEY_OUTPUT),
+        sources_restore_keys: names.contains(SOURCES_RESTORE_KEYS_OUTPUT),
+    }
+}
+
+/// Add the exact Plan cache output names referenced by one step.
+fn collect_step_cache_outputs(step: &Step, names: &mut BTreeSet<String>) {
+    for text in step_texts(step) {
+        let mut rest = text;
+        while let Some(at) = rest.find(NEEDS_PLAN) {
+            rest = &rest[at + NEEDS_PLAN.len()..];
+            let end = rest
+                .find(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
+                .unwrap_or(rest.len());
+            if is_plan_cache_output(&rest[..end]) {
+                names.insert(rest[..end].to_owned());
+            }
+        }
+    }
 }
 
 /// Every expression-bearing string of one step.
@@ -192,7 +218,63 @@ mod tests {
             err.to_string()
                 .contains("plan_cache_output_without_key_step")
         );
+        let restore_keys = BTreeMap::from([
+            ("plan".to_owned(), job(Vec::new())),
+            (
+                "rust-a".to_owned(),
+                job(vec![step(
+                    None,
+                    "${{needs.plan.outputs.sources_restore_keys}}",
+                )]),
+            ),
+        ]);
+        let err = super::consumed(&restore_keys).expect_err("no key step for restore keys");
+        assert!(
+            err.to_string()
+                .contains("plan_cache_output_without_key_step")
+        );
         let plain = BTreeMap::from([("plan".to_owned(), job(Vec::new()))]);
         assert_eq!(super::consumed(&plain).expect("none"), Vec::new());
+    }
+
+    #[test]
+    fn source_cache_usage_reports_exact_consumed_fields() {
+        use super::{SourceCacheUsage, source_cache_usage};
+
+        let unused = job(Vec::new());
+        assert_eq!(source_cache_usage(&unused), SourceCacheUsage::default());
+
+        let key = job(vec![step(None, "${{needs.plan.outputs.sources_key}}")]);
+        assert_eq!(
+            source_cache_usage(&key),
+            SourceCacheUsage {
+                sources_key: true,
+                sources_restore_keys: false,
+            }
+        );
+
+        let restore_keys = job(vec![step(
+            None,
+            "${{needs.plan.outputs.sources_restore_keys}}",
+        )]);
+        assert_eq!(
+            source_cache_usage(&restore_keys),
+            SourceCacheUsage {
+                sources_key: false,
+                sources_restore_keys: true,
+            }
+        );
+
+        let both = job(vec![
+            step(None, "${{needs.plan.outputs.sources_key}}"),
+            step(None, "${{needs.plan.outputs.sources_restore_keys}}"),
+        ]);
+        assert_eq!(
+            source_cache_usage(&both),
+            SourceCacheUsage {
+                sources_key: true,
+                sources_restore_keys: true,
+            }
+        );
     }
 }

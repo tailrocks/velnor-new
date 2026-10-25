@@ -9,13 +9,18 @@ use velnor_actions_contract::{
 
 use super::{
     RustSuitesRenderSpec, build_ci_suite_jobs, render_suites_workflow, render_suites_workflows,
+    render_suites_workflows_with_routing_and_helpers,
 };
 use crate::{
     CHECK_GENERATED_NAME, CompileDriver, MiseSetup, download_suite_archive_step,
     freshness_step_with_claude_mode, setup::MISE_BINARY_SHA256_LINUX_X64,
     tree::render_tree_with_claude_mode, upload_suite_archive_step, upload_suite_artifact_step,
-    validate_env,
+    validate_env, workflow_routing::WorkflowRoutingPolicy,
 };
+
+#[path = "rust_suites_cache_helper_tests.rs"]
+mod cache_helper_tests;
+use self::cache_helper_tests::verified_acquire_step;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -86,7 +91,7 @@ fn claude_md_mode_import_and_symlink_render_and_freshness_step() -> TestResult {
     let act_yaml = format!("{hdr}\nself-hosted-runner:\n");
     let import_tree =
         render_tree_with_claude_mode(&ci_yaml, &act_yaml, &[], "0.1.0", ClaudeMdMode::Import)?;
-    assert_eq!(import_tree.symlinks.len(), 0);
+    assert_eq!(import_tree.symlinks, [] as [crate::RenderedSymlink; 0]);
     assert!(
         import_tree
             .files
@@ -348,7 +353,12 @@ fn multi_workflow_grouping_and_non_matrix_tools_cache_writer_election() -> TestR
             },
         )]),
     });
-    let files = render_suites_workflows(&spec)?;
+    let helper_steps = BTreeMap::from([("ubuntu-24.04".to_owned(), verified_acquire_step())]);
+    let files = render_suites_workflows_with_routing_and_helpers(
+        &spec,
+        &WorkflowRoutingPolicy::hosted_only(),
+        &helper_steps,
+    )?;
     assert_eq!(files.len(), 2);
     assert_eq!(files[0].path, ".github/workflows/nightly.yml");
     assert_eq!(files[1].path, ".github/workflows/suites.yml");
@@ -372,3 +382,6 @@ fn multi_workflow_grouping_and_non_matrix_tools_cache_writer_election() -> TestR
     assert!(!run_section.contains("name: Save Mise tools\n"));
     Ok(())
 }
+
+#[path = "rust_suites_custom_selector_tests.rs"]
+mod custom_selector_tests;

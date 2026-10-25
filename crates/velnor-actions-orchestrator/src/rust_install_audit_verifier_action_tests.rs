@@ -124,6 +124,9 @@ fn generated_calls_use_role_and_ref_authority_not_display_labels() {
         });
     });
     assert_typed_call_rejected(&verifiers.installed_rust, |step| {
+        step.id = Some(StepId::CacheKeys);
+    });
+    assert_typed_call_rejected(&verifiers.installed_rust, |step| {
         step.id = Some(StepId::Plan);
     });
     assert_typed_call_rejected(&verifiers.installed_rust, |step| {

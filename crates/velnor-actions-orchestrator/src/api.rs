@@ -21,11 +21,29 @@ mod github_evidence;
 #[path = "github_evidence_http.rs"]
 pub(crate) mod github_evidence_http;
 
+pub use super::qualification_candidate::qualify_tools;
+
 pub use super::bun_assets_handoff::{
     ASSET_ID_ENV as BUN_ASSETS_ID_ENV, ASSET_PINS_ENV as BUN_ASSETS_PINS_ENV, BUN_ASSETS_EXPORT_OP,
     BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP, run_bun_assets_export, run_bun_assets_import,
     run_bun_assets_prepare,
 };
+
+/// Version marker for the orchestrator shell.
+pub const ORCHESTRATOR_VERSION: u32 = 0;
+
+#[doc(hidden)]
+pub use velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES;
+#[doc(hidden)]
+pub use velnor_actions_contract::run_key_for_ci;
+#[doc(hidden)]
+pub use velnor_actions_contract::workflow::{
+    BoundQualificationCacheKeys, QualificationCacheBackendEntry,
+    QualificationCacheBackendObservation, QualificationCacheLayer, QualificationCacheLayerReceipt,
+    QualificationCacheRestore, QualificationCacheRestoreExpectation,
+    QualificationCacheRestoreResult, QualificationCacheSave, QualificationCacheSaveActionResult,
+};
+
 pub use super::check_runtime::{EXECUTE_CHECK_OP, execute_check};
 pub use super::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 pub use super::config::bun_registry_install::{BUN_REGISTRY_INSTALL_OP, run_bun_registry_install};
@@ -47,6 +65,8 @@ pub use super::extension_schemas::{
     extension_schema_for_stack, reuse_eligible_for_schema, task_key_segment, task_kind_segment,
     task_stack_segment,
 };
+#[doc(hidden)]
+pub use super::filesystem_owner::effective_uid;
 pub use super::finalized::finalized_jobs;
 pub use super::generate::unmanaged::{UnmanagedReport, unmanaged_report};
 pub use super::generate::{
@@ -60,9 +80,14 @@ pub use super::internal::validate_plan_response;
 pub use super::internal::{
     MERGE_OP, PLAN_OP, PlanOutputs, REQUEST_FILE_ENV, WRITE_REQUEST_OP, merge_passed,
     plan_internal, plan_outputs, plan_outputs_from_staged_admission, plan_outputs_with_admission,
-    publish_final_report, publish_plan_files, response_path_for, write_request,
-    write_request_parts,
+    publish_final_report, publish_plan_files, publish_plan_files_with_outputs, response_path_for,
+    write_request, write_request_parts,
 };
+pub use super::job_authority_inventory::{
+    InventoryCall, InventoryConcurrency, InventoryContext, InventoryJob, InventoryWorkflow,
+    JobAuthorityInventory, generate_job_authority_inventory,
+};
+pub use super::job_image_preview::preview_job_image_candidate;
 pub use super::merge::{MergeContext, merge_internal, merge_internal_with_context};
 pub use super::merge_request::assemble_merge_request;
 pub use super::owned_tool_preview::{SourceQualificationTrigger, preview_owned_tool_candidates};
@@ -76,9 +101,48 @@ pub use super::preview_producer::{
     acquire_release_leaves, admit_release_aggregate, execute_release_producer,
 };
 pub use super::provenance::{EvidenceProvenance, ProfileProvenance};
+pub use super::qualification_cache_backend::{
+    observe_qualification_cache_backend, validate_qualification_cache_backend_observation,
+};
+pub use super::qualification_cache_payload::{
+    CacheActionObservation, CacheExportProof, CacheRestoreProof, CacheRestoreStatus,
+    NormalTofuProvidersCacheBackendEvidence, NormalTofuProvidersCacheExport,
+    NormalTofuProvidersCachePayloadRequest, NormalTofuProvidersCacheRestorePreflight,
+    NormalToolsCachePayloadRequest, QualificationCachePayloadContext,
+    QualificationCachePayloadExport, QualificationCachePayloadImport,
+    QualificationCacheRootEnvironment, collect_owner_roots,
+    export_normal_tofu_providers_cache_payload, export_normal_tools_cache_payload,
+    export_qualification_cache_payload, import_normal_tools_cache_payload,
+    import_qualification_cache_payload,
+    import_qualification_cache_payload_with_backend_observation, normal_tools_cache_stage_path,
+    observe_normal_tofu_providers_cache_backend, preflight_normal_tofu_providers_cache_restore,
+    qualification_cache_stage_path, validate_normal_tofu_providers_cache_request,
+    validate_qualification_cache_root_observation,
+};
+pub use super::qualification_cache_runtime::{
+    QUALIFICATION_CACHE_BIND_OP, QUALIFICATION_CACHE_ROOTS_OP, QualificationCacheBindingOutputs,
+    QualificationCacheBindingRequest, QualificationCacheOwnerLayerContext,
+    aggregate_qualification_cache_owner_evidence, aggregate_qualification_cache_worker_owner_facts,
+    bind_qualification_cache_runtime, observe_qualification_cache_runtime,
+    observe_qualification_cache_runtime_after_import, qualification_cache_before_observation,
+    qualification_cache_owner_layer_context, qualification_cache_roots_filename,
+    qualification_cache_runtime_after_import_filename,
+    qualification_cache_runtime_identity_filename, read_qualification_cache_owner_evidence,
+    read_qualification_cache_roots, write_qualification_cache_owner_layer_evidence,
+    write_qualification_cache_roots, write_qualification_cache_worker_layer_facts,
+};
+pub use super::qualification_cache_runtime_phase::QualificationCacheRuntimePhase;
+pub use super::qualification_cache_worker_facts::{
+    QualificationCacheWorkerLayerFacts, QualificationCacheWorkerOwnerFacts,
+    QualificationCacheWorkerRestoreFacts, QualificationCacheWorkerSaveFacts,
+};
 pub use super::qualification_resolver::{
     QUALIFICATION_ADMISSION_FILENAME, QUALIFICATION_RESOLVER_OP, read_qualification_admission,
     resolve_qualification_admission,
+};
+pub use super::qualification_source_evidence::{
+    CACHE_RECEIPT_OP, SOURCE_EVIDENCE_OP, write_qualification_cache_receipt,
+    write_qualification_source_evidence,
 };
 pub use super::qualify::qualify_argv_staged;
 pub use super::retrieve_reports::{FETCH_OP, retrieve_reports};
@@ -110,10 +174,6 @@ pub use super::validators::{
     validate_select_diff_args, validate_select_show_args, validate_show_args, validate_show_path,
 };
 pub use super::workflow::{CHECKOUT_USES, DEFAULT_RUNNER_LABEL, WorkflowPlan};
-pub use github_evidence::{
-    GITHUB_EVIDENCE_FETCH_OP, GITHUB_EVIDENCE_IMPORT_OP, run_github_evidence_fetch,
-    run_github_evidence_import,
-};
 pub use velnor_actions_contract::ExecutionMode;
 pub use velnor_actions_contract::workflow::{
     QUALIFICATION_CACHE_ENABLED_OUTPUT, QUALIFICATION_CACHE_WRITE_OUTPUT,
@@ -140,10 +200,10 @@ pub use super::package_release_publish::{
 };
 pub use super::package_release_signer::{SIGN_PACKAGE_RELEASE_OP, sign_package_release_from_env};
 
-/// Version marker for the orchestrator shell.
-pub const ORCHESTRATOR_VERSION: u32 = 0;
-
-pub use crate::qualification_candidate::qualify_tools;
+pub use github_evidence::{
+    GITHUB_EVIDENCE_FETCH_OP, GITHUB_EVIDENCE_IMPORT_OP, run_github_evidence_fetch,
+    run_github_evidence_import,
+};
 
 pub use super::homebrew::qualification::execute_homebrew_qualification_from_env;
 pub use super::homebrew::runtime::execute_native_homebrew_check_from_env;

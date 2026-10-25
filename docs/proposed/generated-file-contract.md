@@ -186,8 +186,10 @@ This is the MBX form when repository evidence selected MBX:
 Rust command selection is per detected Rust workspace. The Rust adapter records
 whether the repository uses MBX and whether it uses Nextest; the generator uses
 the matching fixed command family. Without MBX, invoke Cargo through Mise.
-Without Nextest, use `cargo test`; do not add Nextest merely because Velnor
-supports it. If Nextest is selected, doctests still use `cargo test --doc`.
+Without Nextest, use `cargo test` for ordinary tests.
+Do not add Nextest only because Velnor supports it. Nextest runs ordinary tests only. It does not run
+doctests. Run doctests through the selected compile driver. The MBX profile uses
+`mbx test --doc` for doctests.
 
 `.github/jactionlint.yaml` MUST be rendered deterministically by
 `velnor-actions-actionlint` (the workflow-lint adapter, see

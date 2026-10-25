@@ -168,12 +168,13 @@ pub fn upload_assets_script(gh: &str, file: &str) -> String {
 
 /// Upload `names` from `dir` as immutable assets of the tag's GitHub release.
 ///
-/// A release that already holds an asset is never overwritten: the existing
-/// asset is downloaded and compared by sha256, an identical one is skipped
-/// and a different one fails the job. A missing release is created with
-/// every file at once (`--verify-tag`), so an immutable release is complete
-/// when it appears. `dir` is a fixed runner-temp directory, `names` are
-/// validated file names that may use `$ver`, and `notes` is fixed text.
+/// A release that already holds an asset is never overwritten: all existing
+/// assets are downloaded and compared by sha256 before any missing asset is
+/// uploaded. Identical assets are skipped; a different one fails the job.
+/// A missing release is created with every file at once (`--verify-tag`), so
+/// an immutable release is complete when it appears. `dir` is a fixed
+/// runner-temp directory, `names` are validated file names that may use
+/// `$ver`, and `notes` is fixed text.
 #[must_use]
 pub fn upload_files_script(gh: &str, dir: &str, names: &[String], notes: &str) -> String {
     let quoted: Vec<String> = names.iter().map(|name| format!("\"{name}\"")).collect();
@@ -197,8 +198,10 @@ pub fn upload_files_script(gh: &str, dir: &str, names: &[String], notes: &str) -
          if cmp -s \"$t/old.sum\" \"$t/new.sum\"; then \
          printf 'velnor: %s already published with the same sha256, skipping\\n' \"$f\"; \
          else printf 'velnor: %s already published with a different sha256, refusing to overwrite\\n' \"$f\" >&2; \
-         exit 1; fi; \
-         else gh release upload \"$GITHUB_REF_NAME\" --repo \"$GITHUB_REPOSITORY\" \"$b/$f\"; fi; done; \
+         exit 1; fi; fi; done; \
+         for f in {list}; do \
+         if ! grep -Fxq -- \"$f\" \"$t/names\"; then \
+         gh release upload \"$GITHUB_REF_NAME\" --repo \"$GITHUB_REPOSITORY\" \"$b/$f\"; fi; done; \
          else gh release create \"$GITHUB_REF_NAME\" --repo \"$GITHUB_REPOSITORY\" --verify-tag \
          --title \"$GITHUB_REF_NAME\" --notes '{notes}' {files}; fi"
     )

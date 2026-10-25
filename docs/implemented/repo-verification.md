@@ -10,6 +10,25 @@ All changes must pass the full repository verification suite from the repo root 
 
 ---
 
+## Git hooks
+
+Install the declared tools with `mise install`, then enable the repository hooks
+with `mise x -- hk install --global --mise`. Use one global installation on Git
+2.54 or later. The repository configuration pins hk 2.8.0 and runs the root and
+nested runner workspaces while excluding test fixtures, generated OpenTofu
+goldens, and build output. The pre-commit hook scans staged changes; pre-push
+runs the history scanner; `hk run security-audit` runs the full-history scans.
+
+The Cargo formatter and Clippy fix commands run through
+`scripts/hk-fix-write-guard.sh`. It checks the index and file state before and
+after each command, including tracked files and nonignored untracked files
+outside hk's selected input set. Existing staged, unstaged, and untracked
+changes may remain when a command does not change their content or index
+entries. The guard prints no file content or diff, does not stage changes, and
+returns the Cargo command's failure status.
+
+---
+
 ## The Verification Suite
 
 Run all six root-workspace checks sequentially from the workspace root. The
@@ -24,6 +43,17 @@ cannot remove active test binaries. After Nextest builds the CLI, set
 `VELNOR_ACTIONS_BIN="$CARGO_TARGET_DIR/debug/velnor-actions"` for the freshness
 script. Preserve the managed symlink and global cache settings. Bounded build/test
 parallelism is permitted; it must not omit any required test or gate.
+
+`bash scripts/verify-local.sh` is the single local entrypoint for these checks.
+It reads pinned versions from `.velnor/version-policy.toml` without loading
+project Mise configuration, verifies the selected Rust component paths and
+versions, and checks the MBX, Clippy, Nextest, and cargo-deny tools. It uses a
+private Cargo dispatcher for Nextest so MBX metadata/build calls use the
+selected toolchain while `cargo nextest` invokes the pinned Nextest executable;
+it preserves the caller's `CARGO_HOME`, configuration, and credentials.
+Nextest covers ordinary unit and integration tests, while MBX runs library
+doctests separately. The script also builds crate documentation and runs the
+freshness, repository-policy, generated-tree, and fixture checks.
 
 ```bash
 cargo fmt --all -- --check

@@ -1,0 +1,105 @@
+{
+  "schema": 1,
+  "package": "tar",
+  "version": "1.35+dfsg-4ubuntu0.4",
+  "distribution": "resolute-security",
+  "directory": "pool/main/t/tar",
+  "authority": {
+    "snapshot": {
+      "id": "20261018T000000Z",
+      "base_url": "https://snapshot.ubuntu.com/ubuntu/20261018T000000Z"
+    },
+    "archive_keyring": {
+      "url": "https://archive.ubuntu.com/ubuntu/project/ubuntu-archive-keyring.gpg",
+      "sha256": "80a36b0a6de2f69f49d2df75ef473ccde121e9e190b9ea01d20a4f63778d5c31",
+      "size": 3607
+    },
+    "signer_fingerprint": "F6ECB3762474EDA9D21B7022871920D1991BC93C",
+    "inrelease": {
+      "url": "https://snapshot.ubuntu.com/ubuntu/20261018T000000Z/dists/resolute-security/InRelease",
+      "sha256": "3ce187a5bb2a15221be6553f99268bd7494948dacba8835c711f7f1f4e9ce890",
+      "size": 137403
+    },
+    "sources_index": {
+      "url": "https://snapshot.ubuntu.com/ubuntu/20261018T000000Z/dists/resolute-security/main/source/Sources.xz",
+      "path_in_release": "main/source/Sources.xz",
+      "sha256": "c751ab065d1c3f3f6f60ba0fa55a31c8b0c7b50f53caa76ade54ac60c6ae24b4",
+      "size": 192876
+    },
+    "source_stanza_sha256": "b13e96788130502b9e3eabe79a4161385636eb621541d24ca017e1c61124e177"
+  },
+  "source_files": [
+    {
+      "name": "tar_1.35+dfsg.orig.tar.xz",
+      "sha256": "9ae57e981c1e73c0eebc2b26c9b0c4497fe310ef1d516ea430efb5470b71f7a8",
+      "size": 2111608
+    },
+    {
+      "name": "tar_1.35+dfsg-4ubuntu0.4.debian.tar.xz",
+      "sha256": "25d8e50e31629e85baef5da32b3030e5ad0c9148ab3ee6b1428212a10e307e4d",
+      "size": 52824
+    },
+    {
+      "name": "tar_1.35+dfsg-4ubuntu0.4.dsc",
+      "sha256": "e42458c1675ec7ba43cca2ea8e085231337e7a4553d7c6e2c21d2003761e5d43",
+      "size": 2124
+    }
+  ],
+  "debian_patch_series_sha256": "7bd5f6a223aacd698ed1ac6f71a4c8c7f1cdf809c76629bc622693b8c3805f47",
+  "official_patches": [
+    {"name": "pristine-tar.diff", "sha256": "36798b5873d91b6d7ba0d8152060276c1281b6b32c6315464b9484f4719d2258"},
+    {"name": "listed03-linux-only", "sha256": "6d39582219c17af939cc2edeffcddaff98f59e5ba0b935c16ff7d8a570c4c083"},
+    {"name": "oldgnu-unknown-mode-bits.patch", "sha256": "c229c8868501b603b27610a50a7ed9698f1550b5e44492cdef2aefe3713f621f"},
+    {"name": "proper_it_translation.patch", "sha256": "66fd133155b9764614c2f858f1789042472189132a3ad3cc3312b9771970fffa"},
+    {"name": "exclude17.patch", "sha256": "3e2d97936ee8267d99a134f48ac4deb811cf5cb747c48e31cbcef6b35c1dcffa"},
+    {"name": "exclude18.patch", "sha256": "b6b4c2ccfab6edbad9078d840a8623ec38c7ad35e750d26f444744254c79f008"},
+    {"name": "tar-1.35-revert-fix-savannah-bug-633567.patch", "sha256": "97542da7a2f8804bae2c43f36c2aec96315ffc241f497e1c6cb9945aaa0f3aad"},
+    {"name": "CVE-2026-5704.patch", "sha256": "a82c5c51168b9d4165792a7c14502626b1afd51e5f62be6df3c08f28b114bb7d"},
+    {"name": "CVE-2025-45582-1.patch", "sha256": "fff3ad30cbcff51358c304c628d21ec91cf87fdf9a7eab25a5aa5ddc2ded627d"},
+    {"name": "CVE-2025-45582-2.patch", "sha256": "0ad129bb161a77f425000ea6647d7390586ccfc63705c424ad67e222f2272be7"},
+    {"name": "CVE-2025-45582-3.patch", "sha256": "af9c7a883b0b5a99db963a65e25d65226e65e750fdf014617cf314cffc62bcd7"},
+    {"name": "CVE-2025-45582-4.patch", "sha256": "f923ff649475892e8d57892620295f3b8983369fde300d48549da7c3eba940b9"},
+    {"name": "CVE-2025-45582-5.patch", "sha256": "cd9392a8cc7767d84bb023c3da9050cbca46a3808f4e0312a23826551504b349"},
+    {"name": "CVE-2025-45582-6.patch", "sha256": "abd31f8780562d5d709697903b93624a97722c6dd20deca7af88674031daa6c6"},
+    {"name": "CVE-2025-45582-7.patch", "sha256": "11843f45db26862ff454bab872a348c22273fe015dda03c877b0add69782802f"},
+    {"name": "CVE-2025-45582-8.patch", "sha256": "632b34ebd6e12a1d823f085931d97c440f337477434b719af4580f7921b83d36"},
+    {"name": "CVE-2025-45582-9.patch", "sha256": "46b60d79931b059c3d223e5e0a4cdd34cc4dd3a39ed4f0778194ef41e553270d"},
+    {"name": "CVE-2025-45582-10.patch", "sha256": "2c931abebee1d441f0b384b88cdfe3c10d9b9b29a0b5f35dc71defcb1369d83a"},
+    {"name": "CVE-2025-45582-gnulib-1.patch", "sha256": "7448802ab7ee5de4d028af1d00c4a2da5af7a52fbaeb88cd604c71d9f80ad218"},
+    {"name": "CVE-2025-45582-gnulib-2.patch", "sha256": "4a256cb0fd17d3cca2efc894ceca57a5714d300c4ff77238fb596d494bd0d074"},
+    {"name": "CVE-2025-45582-gnulib-3.patch", "sha256": "80c0c2d0aae5d08cff2eaf2aed26f07cedf4c9286d8ec458dbda7a45ab736605"},
+    {"name": "CVE-2025-45582-gnulib-4.patch", "sha256": "2ce3088eebf0d44dfa9f731e5ac985e72f618c449ece4f3a630f109a8cd386fd"},
+    {"name": "CVE-2025-45582-gnulib-5.patch", "sha256": "58f70c722faece7e143ee2c8763e79f719372ed2f523f9eb923adba239246ed0"},
+    {"name": "CVE-2025-45582-gnulib-6.patch", "sha256": "d98fc9a3aeb7d1ed3f8651fc504a64e72be223722ee5237ec3ee0af8a9efab5b"},
+    {"name": "CVE-2026-5704-2.patch", "sha256": "5276f489f2f6f068875d4a9c27924d2f18399955e89b8004e11f7c80a1b4e4f1"},
+    {"name": "CVE-2026-5704-3.patch", "sha256": "685c2e4424194f890f11d5c4a5201fb3c24bc36ebbf7c8cf346d88fda1f46f82"},
+    {"name": "CVE-2026-5704-4.patch", "sha256": "91d3189935ab4f4733ae10a386643803f0c1dffedafe88a6e0e3c9786b8c6217"},
+    {"name": "CVE-2026-5704-5.patch", "sha256": "bb1a7dea938e7ee110f45a09590697e2dc86f8824076a04ba17ee025590c2063"}
+  ],
+  "custom_patch": {
+    "name": "gnu-tar-openat2-declaration.patch",
+    "sha256": "cc8ee0eea4c575d060c61ed2aad9008df79900c4ca267b519dd722b2b3c98dbe",
+    "result_sha256": "0dfd4ee0c9a9fd48754d0311b9761b06cc7a839915ecff1e6113fd3796013662"
+  },
+  "build": {
+    "target": "linux/amd64",
+    "configure_cache": {"ac_cv_func_openat2": "no"},
+    "debian_build_options": "parallel=4",
+    "debian_build_maint_options": "future=+lfs",
+    "debian_cflags_maint_append": "-Wall -Wno-analyzer-null-argument",
+    "package_command": "dpkg-buildpackage -us -uc -b",
+    "resource_envelope": {
+      "memory": "20g",
+      "cpu_quota": 400000,
+      "temporary_filesystem": "/tmp",
+      "temporary_filesystem_size_bytes": 15032385536
+    },
+    "required_tests": [110, 111, 112, 178],
+    "reference_test_results": {"passed": 235, "skipped": 14}
+  },
+  "runtime": {
+    "package_sha256": "9d2bd86436fba3a7c94e6c2f10789950c64feb8b3b1c3c4f0f64c07a91351f0a",
+    "tar_sha256": "035ec786cea68c6da6065e8c8d78e9b08aed5bbd168dee4e52da4a56417ba4c6",
+    "dependencies": ["libacl1", "libc6", "libselinux1"]
+  }
+}

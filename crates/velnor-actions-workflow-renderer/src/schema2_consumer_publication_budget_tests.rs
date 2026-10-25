@@ -21,24 +21,6 @@ fn budget_values(step: &Yaml) -> Vec<&Yaml> {
         .collect()
 }
 
-#[test]
-fn publication_operations_bind_one_canonical_configured_budget_in_both_channels() {
-    for mut spec in [fixture(), stable::stable()] {
-        let context = TapInvocationContext::for_channel(spec.policy.channel);
-        for minutes in [5, 1, 15, 333] {
-            spec.publication_timeout_minutes = JobTimeout::new(minutes).expect("bounded budget");
-            for op in ["publish-package-release-v1", "recover-package-release-v1"] {
-                let step = steps::operation(&spec, op, true, context).expect("publication step");
-                assert_eq!(
-                    budget_values(&step),
-                    [&Yaml::str(minutes.to_string())],
-                    "{op} receives one literal configured budget"
-                );
-            }
-        }
-    }
-}
-
 fn job_timeout(job: &Yaml) -> i64 {
     let Yaml::Map(fields) = job else {
         panic!("job mapping")
@@ -80,9 +62,30 @@ fn step_timeouts(job: &Yaml) -> Vec<i64> {
 }
 
 #[test]
-fn publication_jobs_budget_every_preparation_step_and_preserve_acquisition_cap() {
+fn publication_operations_bind_one_canonical_configured_budget_in_both_channels() {
+    for mut spec in [fixture(), stable::stable()] {
+        let context = TapInvocationContext::for_channel(spec.policy.channel);
+        for minutes in [5, 1, 15, 333] {
+            spec.publication_timeout_minutes = JobTimeout::new(minutes).expect("bounded budget");
+            for op in ["publish-package-release-v1", "recover-package-release-v1"] {
+                let step = steps::operation(&spec, op, true, context).expect("publication step");
+                assert_eq!(
+                    budget_values(&step),
+                    [&Yaml::str(minutes.to_string())],
+                    "{op} receives one literal configured budget"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn publication_jobs_budget_preparation_and_leave_signer_unchanged() {
     for mut spec in [fixture(), stable::stable()] {
         spec.publication_timeout_minutes = JobTimeout::new(15).expect("bounded budget");
+        let (_, signer) = super::signer(&spec).expect("signer");
+        assert_eq!(job_timeout(&signer), 5);
+
         let (publisher_id, publisher) = super::publisher(&spec).expect("publisher");
         assert!(publisher_id.ends_with("-publisher"));
         assert_eq!(job_timeout(&publisher), 42);
@@ -133,21 +136,21 @@ fn publisher_budget_tracks_a_changed_preparation_step_cap() {
 fn maximum_publication_runtime_fits_publisher_and_over_limit_is_rejected() {
     let mut preview = fixture();
     preview.publication_timeout_minutes = JobTimeout::new(333).expect("maximum runtime");
-    assert!(render_consumer_preview(&preview).is_ok());
+    assert!(render_consumer_preview(&preview, &hosted_policy()).is_ok());
     let (_, preview_publisher) = super::publisher(&preview).expect("preview publisher");
     assert_eq!(job_timeout(&preview_publisher), 360);
 
     let mut stable_maximum = stable::stable();
     stable_maximum.publication_timeout_minutes = JobTimeout::new(333).expect("maximum runtime");
-    assert!(render_consumer_binary_release(&stable_maximum).is_ok());
+    assert!(render_consumer_binary_release(&stable_maximum, &hosted_policy()).is_ok());
     let (_, stable_publisher) = super::publisher(&stable_maximum).expect("stable publisher");
     assert_eq!(job_timeout(&stable_publisher), 360);
 
     preview.publication_timeout_minutes = JobTimeout::new(334).expect("representable runtime");
-    assert!(render_consumer_preview(&preview).is_err());
+    assert!(render_consumer_preview(&preview, &hosted_policy()).is_err());
     let mut stable = stable::stable();
     stable.publication_timeout_minutes = JobTimeout::new(334).expect("representable runtime");
-    assert!(render_consumer_binary_release(&stable).is_err());
+    assert!(render_consumer_binary_release(&stable, &hosted_policy()).is_err());
 }
 
 #[test]
@@ -179,13 +182,15 @@ fn publication_budget_is_absent_from_other_native_operations_and_reconciliation(
     }
     let mut spec = with_tap();
     spec.publication_timeout_minutes = JobTimeout::new(15).expect("bounded budget");
-    let preview = render_consumer_preview(&spec).expect("preview").bytes;
+    let preview = render_consumer_preview(&spec, &hosted_policy())
+        .expect("preview")
+        .bytes;
     assert_eq!(preview.matches(BUDGET_ENV).count(), 2);
-    let stable = render_consumer_binary_release(&stable::stable())
+    let stable = render_consumer_binary_release(&stable::stable(), &hosted_policy())
         .expect("stable")
         .bytes;
     assert_eq!(stable.matches(BUDGET_ENV).count(), 2);
-    let reconcile = render_release_tap_reconcile(&spec)
+    let reconcile = render_release_tap_reconcile(&spec, &hosted_policy())
         .expect("reconciliation")
         .bytes;
     assert!(!reconcile.contains(BUDGET_ENV));

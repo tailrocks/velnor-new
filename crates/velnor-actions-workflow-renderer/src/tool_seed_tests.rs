@@ -24,7 +24,29 @@ fn cache_key() -> String {
 }
 
 fn runtime_key() -> String {
-    format!("mise-tools-v2-{}", "a".repeat(64))
+    format!("mise-tools-v2-payload-v3-{}", "a".repeat(64))
+}
+
+fn verified_helper_step() -> velnor_actions_contract::Step {
+    let helper = format!("{}0.1.0", crate::steps::STAGED_BINARY_PREFIX);
+    crate::steps::acquire_velnor_step(
+        vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            format!(
+                "curl -fsSL \"$VELNOR_ASSET_URL\" -o {helper} && echo \"$VELNOR_ASSET_SHA256  {helper}\" | sha256sum -c - && chmod +x {helper}"
+            ),
+        ],
+        &std::collections::BTreeMap::from([
+            (
+                crate::steps::ASSET_URL_ENV.to_owned(),
+                "https://example.invalid/velnor".to_owned(),
+            ),
+            (crate::steps::ASSET_SHA_ENV.to_owned(), "a".repeat(64)),
+            (crate::steps::RELEASE_COMMIT_ENV.to_owned(), "b".repeat(40)),
+        ]),
+    )
+    .expect("release-manifest-bound helper")
 }
 
 fn tools_payload() -> crate::cache_p08::ToolsCachePayload {
@@ -40,6 +62,7 @@ fn tools_payload() -> crate::cache_p08::ToolsCachePayload {
         tool_specs: &["rust@1.98.1".to_owned()],
         rustup_toolchain: Some("1.98.1"),
         rustup_components: &[],
+        scale_set_image_source_sha: None,
     })
     .expect("tools payload")
 }
@@ -283,6 +306,27 @@ fn disabled_runtime_identity_key_cannot_import_a_matching_seed() {
     );
     assert!(!home.exists(), "disabled identity creates no destination");
     fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn previous_payload_generation_seed_key_stays_cold() {
+    let root = scratch("previous-payload-generation");
+    let seed = root.join("seed");
+    let home = root.join("home");
+    let old_key = format!("mise-tools-v2-{}", "a".repeat(64));
+    ready_seed(&seed, &old_key);
+    let script = tool_seed_action_script(seed.to_str().expect("seed path")).expect("script");
+    let output = run_with_key(&script, &home, &seed, &mount(&seed), &old_key);
+    assert!(
+        output.status.success(),
+        "an old payload generation stays cold: {output:?}"
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("tool seed key mismatch"),
+        "{output:?}"
+    );
+    assert!(!home.exists(), "old seed creates no destination");
+    fs::remove_dir_all(root).expect("cleanup old seed");
 }
 
 #[path = "tool_seed_identity_tests.rs"]

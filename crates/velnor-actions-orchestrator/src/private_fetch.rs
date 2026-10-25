@@ -29,6 +29,10 @@ use crate::config::private_sources::{SourceKind, job_allowlist};
 use crate::discover::workspace_manifest;
 use crate::internal::internal;
 
+#[path = "private_fetch_owned_env.rs"]
+mod owned_env;
+use owned_env::owned_fetch_env;
+
 /// Operation names (shared with the contract and the renderer).
 pub const PRIVATE_FETCH_OP: &str = velnor_actions_contract::PRIVATE_FETCH_OPERATION;
 /// Revoke operation name.
@@ -48,6 +52,7 @@ pub(crate) struct FetchRequest {
     pub(crate) roots: Vec<String>,
     pub(crate) workspace: PathBuf,
     pub(crate) runner_temp: PathBuf,
+    pub(crate) managed_cargo_home: PathBuf,
 }
 
 /// What one fetch retrieved.
@@ -60,7 +65,7 @@ pub(crate) struct FetchSummary {
 
 /// Transport the fetch uses; the real one is the credential [`Session`].
 pub(crate) trait FetchBackend {
-    /// `rust` is the `rust@<version>` the checkout declares.
+    /// The resolved Rust toolchain uses the `rust@<version>` form.
     fn cargo_fetch(&self, manifest: &Path, rust: &str) -> Result<(), OrchestratorError>;
     fn download(&self, route: &str, accept: &str, dest: &Path) -> Result<(), OrchestratorError>;
 }
@@ -130,6 +135,7 @@ impl FetchRequest {
             roots,
             workspace: absolute("GITHUB_WORKSPACE")?,
             runner_temp: absolute("RUNNER_TEMP")?,
+            managed_cargo_home: absolute("MISE_CARGO_HOME")?,
         })
     }
 }
@@ -196,9 +202,8 @@ fn fetch_all(
 ) -> Result<FetchSummary, OrchestratorError> {
     let mut summary = FetchSummary::default();
     if request.kinds.contains(&SourceKind::Cargo) && !request.roots.is_empty() {
-        // The Rust the checkout declares (hard decision 4), resolved as generation
-        // does: the version the generated resolver exports as `VELNOR_TOOL_RUST`
-        // and installs into the owned Cargo home, never the Velnor pin.
+        // Resolve Rust as generation does, including the default pin when no project version is declared.
+        // The generated resolver exports this version as `VELNOR_TOOL_RUST` for installation in the managed Cargo home.
         let rust = crate::tool_catalog_resolve::resolve_tool_catalog(&request.workspace, config)?
             .tool_spec(velnor_actions_mise::PinnedTool::Rust);
         for root in &request.roots {
@@ -356,20 +361,7 @@ pub fn run_private_fetch() -> Result<(), OrchestratorError> {
     let token =
         Token::new(&get(velnor_actions_contract::PRIVATE_FETCH_TOKEN_ENV).unwrap_or_default())?;
     let request = FetchRequest::parse(&get)?;
-    let owned_env: Vec<(String, String)> = [
-        "MISE_NO_CONFIG",
-        "MISE_NO_ENV",
-        "MISE_NO_HOOKS",
-        "MISE_LOCKFILE",
-        "MISE_AUTO_INSTALL",
-        "MISE_EXEC_AUTO_INSTALL",
-        "MISE_RUSTUP_HOME",
-        "MISE_CARGO_HOME",
-        "RUSTUP_TOOLCHAIN",
-    ]
-    .iter()
-    .filter_map(|key| get(key).map(|value| ((*key).to_owned(), value)))
-    .collect();
+    let owned_env = owned_fetch_env(&request, &get)?;
     let session = Session::create(
         &request.runner_temp,
         token,

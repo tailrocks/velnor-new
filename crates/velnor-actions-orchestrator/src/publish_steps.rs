@@ -19,7 +19,7 @@ use velnor_actions_workflow_renderer::publish_spec::{
 use velnor_actions_workflow_renderer::{MiseSetup, ambient_shell_step, mise_setup_step};
 
 use crate::OrchestratorError;
-use crate::publish_release_steps::{
+use crate::publish_emit::release::{
     BRANCH_AUTHORITY_JOB, branch_authority_job, event_kind, release_jobs,
 };
 use crate::utf8::strings_of;

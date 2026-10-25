@@ -72,20 +72,22 @@ The `velnor-actions` binary is owned by package `velnor-actions-cli`. Future sta
 | --- | --- | --- |
 | `velnor-actions-contract` | Stack-neutral workflow/task contracts, task graph, identities, reports, recommendations | Rust/Cargo, Mise, process, filesystem, YAML implementation, CLI, generic application models |
 | `velnor-actions-rust` | All Rust/Cargo discovery, metadata conversion, targets, graph, affected selection, Rust task proposals, `rust-toolchain.toml` inspection | Mise config/commands, workflow YAML, process execution, or non-Rust stack behavior |
-| `velnor-actions-mise` | Mise tool selection, pinned command construction, fixed subprocess/environment wrapper, `mise.toml`/`mise.lock` inspection, Mise cache integration | Cargo metadata, Rust graph/selection rules, `rust-toolchain.toml`, GitHub YAML, stack discovery |
+| `velnor-actions-mise` | Mise tool selection, pinned command construction, fixed subprocess/environment wrapper, bounded file filter, `mise.toml`/`mise.lock` inspection, Mise cache integration | Cargo metadata, Rust graph/selection rules, `rust-toolchain.toml`, GitHub YAML, stack discovery |
 | `velnor-actions-actionlint` | jactionlint pin/capability metadata, generated config, action-schema validation | Mise process execution, stack scanning, generic workflow rendering |
 | `velnor-actions-workflow-renderer` | Generic GitHub Actions workflow YAML from typed workflow IR | Rust/Cargo, Mise syntax, repository scanning, subprocesses, stack policy |
 | `velnor-actions-orchestrator` | Composition, obligation selection, cache evidence, scheduling, generation coordination, typed process-request coordination | Parsing Cargo/Mise files, direct YAML templates, CLI parsing, OS process details and process creation/control, except the read-only `rustix::process::geteuid()` caller-owner lookup in the private generation-stage validator |
 | `velnor-actions-cli` | Clap parser, typed dispatch, concise deterministic human plan renderer, generation output, and exit-code formatting; emits binary `velnor-actions` | Orchestration algorithms or Rust, Mise, and renderer domain rules; process creation or any `std::process` item but `ExitCode`, under any import spelling or namespace alias (checked on Rust syntax by `impl_repo_deps_process_policy.rs`) |
 | `velnor-actions-tofu` | All OpenToFu/HCL discovery, root/module interpretation, task payloads, affected selection, identity extensions | Rust/Cargo, Mise execution, workflow YAML, process details, non-tofu stacks |
 | `velnor-actions-freshness` (repository-only support) | Read-only repository freshness/pin/lock/advisory checks and bounded bootstrap metadata operations behind the existing CLI private gate | V1 planning, task graph or selection, runner behavior, product evidence claims, public commands, or workflow generation |
-| `velnor-archive-guard` (repository-only security utility) | Bounded validation of owned candidate and Cargo package archive bytes through its explicit modes | V1 stack behavior, task derivation, workflow generation, or product dependencies |
+| `velnor-archive-guard` (repository-only security utility) | Bounded framing validation of owned candidate, Cargo-package, and cache-payload tar bytes through explicit profiles; pure OCI archive validation | V1 stack behavior, task derivation, workflow generation, cache paths/manifests/links, extraction, or product behavior beyond the explicit orchestrator framing and OCI validation calls |
 
 Both repository-only members are outside the eight-product V1 task graph. The
 CLI private gate consumes freshness at runtime, repository scripts provision
-archive guard, and the orchestrator links only archive guard's bounded, pure
-OCI validation API. Freshness stays outside the product dependency graph;
-archive guard owns no processes, workflow generation, or product tasks.
+archive guard, and the orchestrator links it for bounded cache-payload raw-tar
+framing and pure OCI archive validation. Cache-payload framing does not inspect
+cache paths or manifests, validate links, or extract files. Freshness stays
+outside the product dependency graph; archive guard owns no processes, workflow
+generation, or product tasks.
 The canonical repository's `maintenance-helpers` named Mise check runs their
 package test suites independently of Rust task derivation and the product
 matrix; this repository's VelnorRepositoryV1 configuration makes it required.

@@ -159,7 +159,23 @@ pub(crate) fn fetch_steps_for_crate(
     all_features: bool,
 ) -> Result<Vec<Step>, OrchestratorError> {
     let env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
-    fetch_steps_with(catalog, roots, &env, false, all_features)
+    fetch_steps_for_crate_with_env(catalog, roots, &env, all_features)
+}
+
+/// Fetch steps for crate jobs using the caller's validated task environment.
+///
+/// This keeps source acquisition on the same Cargo and Rustup homes as the
+/// following build while retaining the ambient-auth Cargo fetch role.
+/// # Errors
+///
+/// Returns contract errors for rejected roots or step environments.
+pub(crate) fn fetch_steps_for_crate_with_env(
+    catalog: &ToolCatalog,
+    roots: &[String],
+    env: &BTreeMap<String, String>,
+    all_features: bool,
+) -> Result<Vec<Step>, OrchestratorError> {
+    fetch_steps_with(catalog, roots, env, false, all_features)
 }
 
 /// Fetch steps for the plan job (trusted writer): same owned homes.
@@ -192,8 +208,6 @@ pub(crate) fn fetch_steps_for_preview(
 /// The script runs `cargo metadata --locked --offline` first: success
 /// skips online fetch (warm path); failure fetches explicitly and echoes
 /// the miss reason. Nested roots name their manifest in argv and step name.
-/// With `all_features` the probe resolves every optional dependency an
-/// `--all-features` task compiles, so a partial source cache misses.
 /// # Errors
 ///
 /// Returns contract errors for unsafe roots or rejected vectors.
@@ -239,15 +253,14 @@ fn fetch_steps_with(
 ///
 /// Runs from the cargo isolation dir with an absolute manifest path,
 /// so repo `.cargo/config.toml` (credential-providers, source
-/// replacement) is never read while ambient auth is in scope. Both
-/// paths print `velnor: sources downloaded=<n>`; the fallback counts
-/// Cargo's per-crate `Downloaded <name> v<version>` stderr lines.
+/// replacement) is never read while ambient auth is in scope.
 fn fetch_script(catalog: &ToolCatalog, root: &str, all_features: bool) -> String {
     let spec = catalog.tool_spec(PinnedTool::Rust);
     let base = format!("mise --no-config --no-env --no-hooks exec {spec} -- cargo");
     let manifest = format!(" {}", isolated_manifest_flag(root));
-    let features = if all_features { " --all-features" } else { "" };
-    let probe = format!("{base} metadata --locked --offline{features}{manifest} >/dev/null 2>&1");
+    let feature_flag = if all_features { " --all-features" } else { "" };
+    let probe =
+        format!("{base} metadata --locked --offline{feature_flag}{manifest} >/dev/null 2>&1");
     let log = "\"$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log\"";
     let count = "\"$RUNNER_TEMP/velnor/cargo-clean/fetch-downloads\"";
     let fetch = format!("{base} fetch --locked{manifest} 2> {log}");

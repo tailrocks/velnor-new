@@ -64,15 +64,18 @@ pub(crate) fn toolchain_inputs(
     tools.push(format!("mise@{}", velnor_actions_mise::MISE_VERSION));
     tools.sort();
     tools.dedup();
+    let mut components = task
+        .identity
+        .flags
+        .iter()
+        .filter(|flag| flag.starts_with("qualified_tools:"))
+        .cloned()
+        .collect::<Vec<_>>();
+    components.sort();
+    components.dedup();
     Ok(ToolchainInputs {
         tools,
-        components: task
-            .identity
-            .flags
-            .iter()
-            .filter(|flag| flag.starts_with("qualified_tools:"))
-            .cloned()
-            .collect(),
+        components,
         compile_driver: "mise".to_owned(),
         test_runner: "mise".to_owned(),
     })

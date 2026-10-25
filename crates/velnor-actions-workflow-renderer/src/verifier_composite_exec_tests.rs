@@ -133,13 +133,18 @@ pub(super) fn execute_emitted_verifier(
     let script_path = root.join(format!("{}.sh", name.replace(' ', "-")));
     fs::write(&script_path, run).expect("write emitted run body");
     let output_dir = root.join(format!("{}-out", name.replace(' ', "-")));
+    let supported_rust = velnor_actions_mise::RUST_VERSION;
+    assert_eq!(
+        supported_rust, "1.99.1",
+        "the execution fixture follows the pinned supported Rust version"
+    );
     let output = Command::new("/bin/bash")
         .args(["--noprofile", "--norc", "-p", "-e", "-o", "pipefail"])
         .arg(script_path)
         .env("PATH", poison)
         .envs(emitted_env.iter())
         .env("VERIFIER_TEST_OUT", &output_dir)
-        .env(reference, "1.99.1")
+        .env(reference, supported_rust)
         .envs(
             crate::toolchain_env::CREDENTIAL_UNSET_VARS
                 .iter()
@@ -155,4 +160,9 @@ pub(super) fn execute_emitted_verifier(
     assert!(output_dir.join("awk").is_file());
     assert!(output_dir.join("digest").is_file());
     assert!(output_dir.join("reference").is_file());
+    assert_eq!(
+        fs::read_to_string(output_dir.join("reference")).expect("read verifier probe output"),
+        format!("{supported_rust}\n"),
+        "the emitted verifier reads the exact supported Rust pin"
+    );
 }
