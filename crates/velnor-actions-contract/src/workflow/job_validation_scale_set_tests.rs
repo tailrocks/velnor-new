@@ -55,6 +55,47 @@ fn linux_scale_set_admits_hosted_and_ephemeral_check_runners() {
 }
 
 #[test]
+fn hosted_linux_scale_set_accepts_only_the_exact_preserved_qualification_condition() {
+    let condition = format!(
+        "({}) && ({})",
+        "always() && needs.plan.result == 'success'", EPHEMERAL_CHECK_ADMISSION_CONDITION
+    );
+    scale_set_check_runner(
+        CheckExecutor::Hosted,
+        CheckPlatform::LinuxX64,
+        Some(&condition),
+    )
+    .validate_runner("check-scale-set")
+    .expect("the known qualification condition and admission remain conjunctive");
+
+    let invalid_conditions = [
+        format!("(true) && ({EPHEMERAL_CHECK_ADMISSION_CONDITION})"),
+        format!(
+            "(always() && needs.plan.result == 'success') || ({EPHEMERAL_CHECK_ADMISSION_CONDITION})"
+        ),
+        format!(
+            "({}) && (true)",
+            "always() && needs.plan.result == 'success'"
+        ),
+    ];
+    for invalid in invalid_conditions {
+        let error = scale_set_check_runner(
+            CheckExecutor::Hosted,
+            CheckPlatform::LinuxX64,
+            Some(&invalid),
+        )
+        .validate_runner("check-scale-set")
+        .expect_err("only the exact canonical condition is supported");
+        assert!(
+            error
+                .to_string()
+                .contains("check_runner_scale_set_mismatch"),
+            "{error}"
+        );
+    }
+}
+
+#[test]
 fn scale_set_requires_exact_admission_for_each_executor() {
     for executor in [CheckExecutor::Hosted, CheckExecutor::EphemeralSelfHosted] {
         for condition in [

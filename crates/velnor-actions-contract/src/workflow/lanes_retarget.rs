@@ -6,7 +6,7 @@ use super::{
     EmitLane, HOSTED_SUFFIX, LaneClass, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV,
     SCALE_SUFFIX,
 };
-use crate::config::EPHEMERAL_CHECK_ADMISSION_CONDITION;
+use crate::config::{CheckExecutor, CheckPlatform, EPHEMERAL_CHECK_ADMISSION_CONDITION};
 use crate::errors::ContractError;
 use std::collections::BTreeMap;
 
@@ -32,8 +32,21 @@ pub(super) fn retarget(
     let mut next = job.clone();
     if let Some(token) = runs_on {
         token.clone_into(&mut next.runs_on);
-        if next.check_runner.is_some() {
-            next.condition = Some(EPHEMERAL_CHECK_ADMISSION_CONDITION.to_owned());
+        if let Some(runner) = &next.check_runner {
+            next.condition = Some(
+                if runner.executor == CheckExecutor::Hosted
+                    && runner.platform == CheckPlatform::LinuxX64
+                {
+                    match next.condition.as_deref() {
+                        Some(condition) => {
+                            format!("({condition}) && ({EPHEMERAL_CHECK_ADMISSION_CONDITION})")
+                        }
+                        None => EPHEMERAL_CHECK_ADMISSION_CONDITION.to_owned(),
+                    }
+                } else {
+                    EPHEMERAL_CHECK_ADMISSION_CONDITION.to_owned()
+                },
+            );
         }
     }
     retarget_check_identity(&mut next, source_id, output_id, lane, &references)?;

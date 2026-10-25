@@ -26,15 +26,28 @@ pub(crate) fn same_or_admitted_check_condition(
         return true;
     }
     same_affected_lane_condition(hosted_id, local_id, hosted, local)
-        || (hosted.condition.is_none()
-            && local.condition.as_deref() == Some(EPHEMERAL_CHECK_ADMISSION_CONDITION)
-            && matches!(
-                (&hosted.check_runner, &local.check_runner),
-                (Some(hosted_runner), Some(local_runner))
-                    if hosted_runner == local_runner
-                        && hosted_runner.platform == CheckPlatform::LinuxX64
-                        && hosted_runner.executor == CheckExecutor::Hosted
-            ))
+        || admitted_check_condition_pair(hosted, local)
+}
+
+fn admitted_check_condition_pair(hosted: &Job, local: &Job) -> bool {
+    if !matches!(
+        (&hosted.check_runner, &local.check_runner),
+        (Some(hosted_runner), Some(local_runner))
+            if hosted_runner == local_runner
+                && hosted_runner.platform == CheckPlatform::LinuxX64
+                && hosted_runner.executor == CheckExecutor::Hosted
+    ) {
+        return false;
+    }
+    match (hosted.condition.as_deref(), local.condition.as_deref()) {
+        (None, Some(local_condition)) => local_condition == EPHEMERAL_CHECK_ADMISSION_CONDITION,
+        (Some(hosted_condition), Some(local_condition)) => {
+            let expected =
+                format!("({hosted_condition}) && ({EPHEMERAL_CHECK_ADMISSION_CONDITION})");
+            local_condition == expected.as_str()
+        }
+        _ => false,
+    }
 }
 
 /// Accept job-specific affected gates for one hosted/local crate pair.

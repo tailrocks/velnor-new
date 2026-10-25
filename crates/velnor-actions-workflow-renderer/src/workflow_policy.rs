@@ -92,11 +92,21 @@ fn check_runner_is_valid(
 }
 
 fn scale_set_check_admission(condition: Option<&str>) -> bool {
-    condition.is_some_and(|condition| {
-        condition == velnor_actions_contract::config::EPHEMERAL_CHECK_ADMISSION_CONDITION
-            || condition
-                == "always() && needs.plan.result == 'success' && ((needs.plan.outputs.qualification_campaign == '' && (github.event_name == 'push' || github.event_name == 'merge_group' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository))) || needs.plan.outputs.qualification_campaign != '')"
-    })
+    let Some(condition) = condition else {
+        return false;
+    };
+    if condition == velnor_actions_contract::config::EPHEMERAL_CHECK_ADMISSION_CONDITION
+        || condition
+            == "always() && needs.plan.result == 'success' && ((needs.plan.outputs.qualification_campaign == '' && (github.event_name == 'push' || github.event_name == 'merge_group' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository))) || needs.plan.outputs.qualification_campaign != '')"
+    {
+        return true;
+    }
+    let expected = format!(
+        "({}) && ({})",
+        "always() && needs.plan.result == 'success'",
+        velnor_actions_contract::config::EPHEMERAL_CHECK_ADMISSION_CONDITION
+    );
+    condition == expected.as_str()
 }
 
 #[cfg(test)]

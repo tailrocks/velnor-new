@@ -1,5 +1,7 @@
 use super::*;
 
+const QUALIFICATION_CHECK_CONDITION: &str = "always() && needs.plan.result == 'success'";
+
 #[test]
 fn both_emits_coherent_named_check_and_required_proof_lanes() {
     let source = ir(&[
@@ -81,6 +83,81 @@ fn both_emits_coherent_named_check_and_required_proof_lanes() {
     let decoded: BTreeMap<String, Vec<NamedCheckLane>> =
         serde_json::from_str(encoded).expect("typed lane map");
     assert_eq!(decoded, expected);
+}
+
+#[test]
+fn both_preserves_qualified_check_condition_when_admitting_scale_set_lane() {
+    let mut source = ir(&[(
+        "check-linux",
+        runner("ubuntu-26.04", CheckPlatform::LinuxX64),
+    )]);
+    source
+        .jobs
+        .get_mut("check-linux")
+        .expect("named check")
+        .condition = Some(QUALIFICATION_CHECK_CONDITION.to_owned());
+
+    let expanded = expand_workflow(&source, &config(ExecutionMode::Both), None)
+        .expect("qualified check expands into both lanes");
+    let hosted = &expanded.jobs["check-linux__hosted"];
+    let local = &expanded.jobs["check-linux__local"];
+    let expected_local = format!(
+        "({QUALIFICATION_CHECK_CONDITION}) && ({})",
+        crate::config::EPHEMERAL_CHECK_ADMISSION_CONDITION
+    );
+    assert_eq!(
+        hosted.condition.as_deref(),
+        Some(QUALIFICATION_CHECK_CONDITION)
+    );
+    assert_eq!(local.condition.as_deref(), Some(expected_local.as_str()));
+    expanded
+        .validate()
+        .expect("both condition variants validate");
+
+    for lane in ["check-linux__hosted", "check-linux__local"] {
+        assert!(
+            expanded.jobs["required"]
+                .needs
+                .iter()
+                .any(|need| need == lane)
+        );
+    }
+}
+
+#[test]
+fn both_preserves_unknown_check_condition_but_validation_rejects_it() {
+    let mut source = ir(&[(
+        "check-linux",
+        runner("ubuntu-26.04", CheckPlatform::LinuxX64),
+    )]);
+    let unknown = "github.event_name == 'push'";
+    source
+        .jobs
+        .get_mut("check-linux")
+        .expect("named check")
+        .condition = Some(unknown.to_owned());
+
+    let expanded = expand_workflow(&source, &config(ExecutionMode::Both), None)
+        .expect("lane expansion preserves an unknown original condition");
+    let expected_local = format!(
+        "({unknown}) && ({})",
+        crate::config::EPHEMERAL_CHECK_ADMISSION_CONDITION
+    );
+    assert_eq!(
+        expanded.jobs["check-linux__hosted"].condition.as_deref(),
+        Some(unknown)
+    );
+    assert_eq!(
+        expanded.jobs["check-linux__local"].condition.as_deref(),
+        Some(expected_local.as_str())
+    );
+    assert!(
+        expanded
+            .validate()
+            .expect_err("unknown composed admission condition stays unsupported")
+            .to_string()
+            .contains("check_runner_scale_set_mismatch")
+    );
 }
 
 #[test]

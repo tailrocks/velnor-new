@@ -27,7 +27,7 @@ impl Job {
                 .is_ok_and(|selector| selector.is_scale_set());
             if scale_set
                 && (runner.platform != crate::config::CheckPlatform::LinuxX64
-                    || !check_admission_matches(admission))
+                    || !scale_set_admission_matches(runner, admission))
             {
                 return Err(ContractError::identity(
                     "job.runs_on",
@@ -143,6 +143,29 @@ impl Job {
 
 fn check_admission_matches(condition: Option<&str>) -> bool {
     condition == Some(crate::config::EPHEMERAL_CHECK_ADMISSION_CONDITION)
+}
+
+fn scale_set_admission_matches(
+    runner: &crate::config::CheckRunner,
+    condition: Option<&str>,
+) -> bool {
+    if check_admission_matches(condition) {
+        return true;
+    }
+    let Some(condition) = condition else {
+        return false;
+    };
+    if runner.executor != crate::config::CheckExecutor::Hosted
+        || runner.platform != crate::config::CheckPlatform::LinuxX64
+    {
+        return false;
+    }
+    let expected = format!(
+        "({}) && ({})",
+        "always() && needs.plan.result == 'success'",
+        crate::config::EPHEMERAL_CHECK_ADMISSION_CONDITION
+    );
+    condition == expected.as_str()
 }
 
 #[cfg(test)]

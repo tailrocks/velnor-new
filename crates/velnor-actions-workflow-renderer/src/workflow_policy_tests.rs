@@ -134,6 +134,46 @@ fn unified_scale_set_check_requires_event_admission_and_linux_hosted_runner() {
 }
 
 #[test]
+fn scale_set_policy_accepts_only_the_exact_preserved_qualification_condition() {
+    let scale = scale_set_label();
+    let condition = format!(
+        "({}) && ({})",
+        "always() && needs.plan.result == 'success'",
+        velnor_actions_contract::config::EPHEMERAL_CHECK_ADMISSION_CONDITION
+    );
+    let workflow = check_workflow(
+        "check-maintenance-helpers",
+        &scale,
+        "ubuntu-26.04",
+        CheckPlatform::LinuxX64,
+        CheckExecutor::Hosted,
+        Some(&condition),
+    );
+    assert!(check_single_label(&workflow, "ubuntu-26.04", &[]).is_ok());
+
+    for unsupported in [
+        format!(
+            "(true) && ({})",
+            velnor_actions_contract::config::EPHEMERAL_CHECK_ADMISSION_CONDITION
+        ),
+        format!(
+            "(always() && needs.plan.result == 'success') || ({})",
+            velnor_actions_contract::config::EPHEMERAL_CHECK_ADMISSION_CONDITION
+        ),
+    ] {
+        let workflow = check_workflow(
+            "check-maintenance-helpers",
+            &scale,
+            "ubuntu-26.04",
+            CheckPlatform::LinuxX64,
+            CheckExecutor::Hosted,
+            Some(&unsupported),
+        );
+        assert!(check_single_label(&workflow, "ubuntu-26.04", &[]).is_err());
+    }
+}
+
+#[test]
 fn ordinary_scale_set_checks_keep_normal_admission_condition() {
     let scale = scale_set_label();
     let workflow = check_workflow(
