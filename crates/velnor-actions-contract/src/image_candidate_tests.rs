@@ -115,6 +115,19 @@ fn source_closure_binds_exact_native_implementation_paths() {
         .collect::<BTreeMap<_, _>>();
     let closure = ImageCandidateSourceClosure::new("b".repeat(40), inputs)
         .expect("valid implementation closure");
+    for path in [
+        "crates/velnor-archive-guard/build.rs",
+        "crates/velnor-archive-guard/build_support/archive_guard_inputs.rs",
+        "crates/velnor-archive-guard/build_support/archive_guard_inputs_filesystem.rs",
+    ] {
+        assert!(NATIVE_IMAGE_CANDIDATE_INPUTS.contains(&path));
+        let mut missing = closure.clone();
+        missing.inputs.remove(path);
+        assert!(
+            validate_image_candidate_source_closure(&missing).is_err(),
+            "{path}"
+        );
+    }
     let bytes = serialize_image_candidate_source_closure(&closure).expect("serialize closure");
     assert_eq!(
         parse_image_candidate_source_closure(&bytes).expect("parse closure"),

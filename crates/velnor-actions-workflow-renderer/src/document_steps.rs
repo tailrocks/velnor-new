@@ -323,7 +323,15 @@ fn internal_step_to_yaml(
     crate::step_ids::push_step_id(&mut entries, step);
     entries.push((
         "env".to_owned(),
-        internal_env(op, target, ctx, channel, step_context.job_env, step_env)?,
+        internal_env(
+            job_id,
+            op,
+            target,
+            ctx,
+            channel,
+            step_context.job_env,
+            step_env,
+        )?,
     ));
     push_composite_shell(&mut entries, composite);
     entries.push((

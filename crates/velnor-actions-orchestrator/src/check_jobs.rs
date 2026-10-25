@@ -46,7 +46,7 @@ pub(crate) fn build_check_jobs(
             )?),
             WorkflowPolicy::VelnorRepositoryV1 => None,
         };
-        jobs.push((id.clone(), native_check_job(check, &id, acquire)?));
+        jobs.push((id.clone(), native_check_job(check, &id, acquire, catalog)?));
     }
     jobs.sort_by(|left, right| left.0.cmp(&right.0));
     Ok(jobs)
@@ -56,6 +56,7 @@ fn native_check_job(
     check: &NativeHomebrewCheck,
     job_id: &str,
     acquire: Option<Step>,
+    catalog: &ToolCatalog,
 ) -> Result<Job, OrchestratorError> {
     let task_id = format!("internal/native-check/{}", check.id);
     let step = Step {
@@ -71,9 +72,15 @@ fn native_check_job(
             sdk_version: env!("CARGO_PKG_VERSION").to_owned(),
         },
     };
+    let prepare_gh = crate::workflow_jobs::prepare_pinned_tools_step(
+        catalog,
+        vec![velnor_actions_mise::PinnedTool::Gh],
+        false,
+    )?;
     let mut steps = vec![crate::workflow::wire_w1::checkout_step_full()?];
     steps.extend(acquire);
     steps.push(crate::matrix_step::download_plan_step()?);
+    steps.push(prepare_gh);
     steps.push(step);
     let mut upload = crate::matrix_step::crate_upload_step(job_id)?;
     upload.condition = Some("always()".to_owned());
@@ -90,7 +97,7 @@ fn native_check_job(
         timeout_minutes: JobTimeout::new(minutes)?,
         needs: vec![PLAN_JOB_ID.to_owned()],
         condition: None,
-        permissions: Some(Permissions::default()),
+        permissions: Some(crate::workflow_jobs::read_actions_permissions()),
         environment: None,
         steps,
         cache_mode: None,

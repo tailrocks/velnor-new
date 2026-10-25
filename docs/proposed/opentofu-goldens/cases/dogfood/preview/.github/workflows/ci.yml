@@ -604,6 +604,7 @@ jobs:
       - name: Plan
         id: plan
         env:
+          GH_TOKEN: ${{ github.token }}
           VELNOR_INTERNAL_OP: plan-v1
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/plan-v1-request.json
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -684,10 +685,18 @@ jobs:
       - cargo-machete
     if: ${{ !cancelled() }}
     steps:
-      - *s3
+      - *s2
       - *s9
       - *s10
       - *s11
+      - *s8
+      - *s3
+      - name: V2 identity
+        id: v2
+        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
+        with:
+          d: 35aa477f0afd3cbc4dd8227e431518cc2f29f9d6412b62fcd2ef858fa968bb50
+      - *s4
       - name: Prepare pinned tools
         env: *m16
         run: mise --no-config --no-env --no-hooks install gh@2.103.2
@@ -710,11 +719,15 @@ jobs:
         run: *r18
       - name: Merge reports
         env:
+          GH_TOKEN: ${{ github.token }}
           VELNOR_INTERNAL_OP: merge-v1
           VELNOR_NEEDS_JSON: ${{ toJSON(needs) }}
           VELNOR_NEEDS_EXPECTED: "[\"alint\",\"cargo-deny\",\"cargo-machete\",\"check-maintenance-helpers\",\"jactionlint\",\"plan\",\"rust-velnor-actions-actionlint\",\"rust-velnor-actions-ansible\",\"rust-velnor-actions-bun\",\"rust-velnor-actions-cli\",\"rust-velnor-actions-contract\",\"rust-velnor-actions-dbt\",\"rust-velnor-actions-gradle\",\"rust-velnor-actions-mise\",\"rust-velnor-actions-orchestrator\",\"rust-velnor-actions-rust\",\"rust-velnor-actions-tofu\",\"rust-velnor-actions-workflow-renderer\",\"rust-velnor-resource-probe\",\"rust-velnor-runner-attestation\",\"rust-velnor-runner-cli\",\"rust-velnor-runner-core\",\"rust-velnor-runner-github\",\"rust-velnor-runner-host\"]"
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
         run: *r18
+      - *s5
+      - *s6
+      - *s7
       - name: Publish final report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9

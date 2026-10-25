@@ -106,6 +106,37 @@ fn pure_tofu_plan_drops_all_rust_setup() {
 }
 
 #[test]
+fn consumer_native_checks_install_pinned_gh_without_qualification_resolver() {
+    let catalog = ToolCatalog::pinned();
+    let job = plan_job(
+        "ubuntu-26.04",
+        None,
+        &catalog,
+        PlanJobToolNeeds {
+            gh: true,
+            resolve_qualification_predecessor: false,
+            ..needs(PlanRustNeed::None)
+        },
+        &[],
+        &[],
+    )
+    .expect("consumer native-check plan");
+    assert!(
+        job.steps.iter().any(|step| {
+            step.name == "Prepare pinned tools"
+                && matches!(&step.kind, StepKind::Shell { run, .. } if run.join(" ").contains("gh@"))
+        }),
+        "pinned gh must be available for native checks"
+    );
+    assert!(
+        !job.steps
+            .iter()
+            .any(|step| step.name == "Resolve qualification predecessor"),
+        "ConsumerV1 must not acquire the Velnor-only resolver side effect"
+    );
+}
+
+#[test]
 fn final_job_writes_request_before_merge() {
     let catalog = ToolCatalog::pinned();
     for acquire in [None, Some(checkout_action().expect("checkout step"))] {
@@ -140,5 +171,10 @@ fn final_job_needs_plan_crates_and_lint() {
         ]
     );
     let job = final_job("ubuntu-26.04", &[], None, &catalog).expect("final job");
+    assert_eq!(job.steps[0].name, "Checkout");
+    let StepKind::Action { with, .. } = &job.steps[0].kind else {
+        panic!("required job begins with checkout");
+    };
+    assert_eq!(with.get("fetch-depth").map(String::as_str), Some("0"));
     assert_eq!(job.needs, [PLAN_JOB_ID.to_owned(), LINT_JOB_ID.to_owned()]);
 }

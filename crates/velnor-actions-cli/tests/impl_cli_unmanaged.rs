@@ -42,8 +42,7 @@ fn default_policy_preserves_stray_files_silently() -> Result<(), Box<dyn Error>>
     let outer = fresh_tempdir("unmanaged-default-preview")?;
     let preview = outer.join("p");
     let preview = preview.to_str().ok_or("non-utf8 path")?;
-    let generated =
-        spawn_with_installed_rust_mise_fixture(&["generate", "--output-dir", preview], &[], &repo)?;
+    let generated = spawn(&["generate", "--output-dir", preview], &[], &repo)?;
     assert_eq!(code(&generated), 0, "{}", stderr(&generated));
     assert!(!stderr(&generated).contains("unmanaged_github"));
     let listed = spawn(&["unmanaged"], &[], &repo)?;

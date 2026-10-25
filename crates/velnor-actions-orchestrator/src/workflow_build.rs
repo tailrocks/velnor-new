@@ -145,7 +145,9 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
         all_features: plan_uses_all_features(input.discovery),
         nextest: plan_uses_nextest(input.discovery),
         opentofu: plan_uses_opentofu(input.discovery),
-        gh: policy == WorkflowPolicy::VelnorRepositoryV1,
+        gh: policy == WorkflowPolicy::VelnorRepositoryV1
+            || !input.discovery.native_checks.is_empty(),
+        resolve_qualification_predecessor: policy == WorkflowPolicy::VelnorRepositoryV1,
     };
     Ok(PreparedWorkflow {
         private,
@@ -183,7 +185,9 @@ fn build_workflow_plan(
     if let Some(format) = prepared.format.take() {
         insert_format_step(&mut plan, format);
     }
-    if prepared.policy == WorkflowPolicy::VelnorRepositoryV1 {
+    if prepared.policy == WorkflowPolicy::VelnorRepositoryV1
+        || !input.discovery.native_checks.is_empty()
+    {
         plan.permissions = Some(crate::workflow_jobs::read_actions_permissions());
     }
     Ok(plan)

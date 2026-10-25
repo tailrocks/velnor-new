@@ -172,6 +172,7 @@ fn qualification_resolver_is_scoped_between_request_and_plan() {
         &catalog,
         PlanJobToolNeeds {
             gh: true,
+            resolve_qualification_predecessor: true,
             ..needs(PlanRustNeed::CompilerAndComponents)
         },
         &[],

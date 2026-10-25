@@ -58,7 +58,7 @@ Workflow to generate
     - dependency-seed-crates-velnor-runner (23 steps)
     - jactionlint (8 steps)
     - plan (28 steps)
-    - required (10 steps)
+    - required (14 steps)
     - required-gate (1 steps)
     - rust-velnor-actions-actionlint (29 steps)
     - rust-velnor-actions-ansible (28 steps)

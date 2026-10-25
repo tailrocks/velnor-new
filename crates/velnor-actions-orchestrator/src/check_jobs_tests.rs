@@ -249,6 +249,25 @@ fn native_check_job_uses_closed_sdk_step_and_standard_plan_transport() {
     let (id, job) = &jobs[0];
     assert_eq!(id, "check-tap-tree");
     assert_eq!(job.needs, ["plan"]);
+    let permissions = job.permissions.as_ref().expect("read-only API permissions");
+    assert_eq!(
+        permissions.contents,
+        velnor_actions_contract::workflow::permissions::PermissionLevel::Read
+    );
+    assert_eq!(
+        permissions.actions,
+        velnor_actions_contract::workflow::permissions::PermissionLevel::Read
+    );
+    assert_eq!(job.steps[0].name, "Checkout");
+    let prepare = job
+        .steps
+        .iter()
+        .find(|step| step.name == "Prepare pinned tools")
+        .expect("pinned gh preparation");
+    let StepKind::Shell { run, .. } = &prepare.kind else {
+        panic!("pinned gh preparation");
+    };
+    assert!(run.join(" ").contains("gh@"));
     let step = job
         .steps
         .iter()

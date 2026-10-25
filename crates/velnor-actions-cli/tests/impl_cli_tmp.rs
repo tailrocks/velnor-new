@@ -91,6 +91,8 @@ pub(crate) fn spawn(
 
 /// Run a positive Rust-workspace CLI case with only Rust inventory made
 /// deterministic; metadata and pinned validator invocations remain real.
+/// This rendering fixture does not verify an installed Rust toolchain:
+/// metadata uses Cargo from PATH rather than the pinned Mise Rust selection.
 pub(crate) fn spawn_with_installed_rust_mise_fixture(
     args: &[&str],
     env: &[(&str, &str)],

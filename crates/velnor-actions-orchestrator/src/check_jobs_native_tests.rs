@@ -119,8 +119,9 @@ fn consumer_native_jobs_acquire_matching_manifest_target_after_checkout() {
             Some(&"f".repeat(40))
         );
         assert_eq!(job.steps[2].name, "Download plan");
+        assert_eq!(job.steps[3].name, "Prepare pinned tools");
         assert!(matches!(
-            job.steps[3].kind,
+            job.steps[4].kind,
             StepKind::NativeCheckExecution { .. }
         ));
         assert_eq!(

@@ -11,6 +11,9 @@ mod build;
 #[path = "image_maintenance/source.rs"]
 mod source;
 #[cfg(test)]
+#[path = "image_maintenance/source_tests.rs"]
+mod source_tests;
+#[cfg(test)]
 #[path = "image_maintenance_tests.rs"]
 mod tests;
 #[path = "image_maintenance/validate.rs"]
