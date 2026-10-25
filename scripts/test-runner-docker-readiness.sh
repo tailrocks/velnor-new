@@ -250,9 +250,6 @@ awk -v runner_root="$TEST_RUNNER_ROOT" '
     found = 1
     next
   }
-  # The integrated entrypoint waits for the socket and clears the dockerenv
-  # through absolute image paths this stub root cannot provide. Those steps
-  # are orthogonal to the API-readiness gate under test; no-op them here.
   $0 == "/usr/local/bin/wait-docker-sock" { print ":"; next }
   $0 == "/usr/local/bin/clear-dockerenv" { print ":"; next }
   { print }
