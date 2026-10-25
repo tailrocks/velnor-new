@@ -5,16 +5,18 @@ Shared working agreement: keep this section byte-identical across projects. Proj
 - No legacy code. Finish every migration: remove old paths completely — no compatibility shims, aliases, or deprecation periods. Breaking changes are preferred.
 - Research project: unsafe, breaking changes expected, never production-ready. Break things when needed; deliver fast.
 - Verification gates: verify from the repo root before committing or merging. Run tests with cargo nextest, never cargo test.
-- Tests are not forbidden. You must write tests wherever these rules require them.
-- Never write a test without a reviewed plan first. The plan must state which required behavior it proves, which real positive and negative scenarios it covers, and why existing tests cannot cover them.
+- Tests are not forbidden. You must write tests wherever you add or change required behavior.
+- Never write a test without a reviewed plan first: an independent subagent must confirm which required behavior it proves, which real positive and negative scenarios it covers, and why existing tests cannot cover them.
 - Write tests only to prove required functionality works and keeps working. Forbid tests written for coverage numbers or KPIs.
-- Test functional/integration-first through public APIs. Exercise observable behavior with real cases and real scenarios, never internals.
-- Never mock owned code. Mocks and fakes are permitted only at unowned I/O boundaries.
-- A red test must mean something is clearly broken, or an expected change under analysis. Never let a test go red over a reshaped abstraction or a bad mock; design every test so its report is trusted without questioning the doubles.
-- Prefer fewer high-signal tests with real fault-catching power over many low-signal tests. Forbid judging a suite by count, coverage %, or speed.
-- When an issue escapes, forbid appending one more test. Analyze why current tests missed it, spawn an architect subagent to rethink coverage conceptually, then write or refactor the test the analysis designs.
-- Every kept test must be observed to fail on broken code and pass on fixed code; reject tests never seen red. Every kept test must be hermetic and deterministic, must pass independent subagent verification before it is kept, and flakes must be quarantined, never tolerated.
-- Run narrow per change and the full relevant suite before done.
+- Test integration-first through public APIs, asserting resulting state, not interaction sequences. Test internals only for pure logic unreachable observably.
+- Forbid mirror-logic assertions and unreviewed snapshots.
+- Never mock owned code. Mocks and fakes are permitted only at unowned external I/O (network, clock, filesystem, OS services) behind interfaces you own.
+- A red test must name the broken user-observable behavior. A red caused by a reshaped abstraction or a bad double is a bad test: fix the test. Analyze an expected behavior change before updating its tests.
+- Prefer fewer high-signal tests over many low-signal tests. Forbid judging test quality by count or coverage %.
+- When an issue escapes, analyze why current tests missed it first: spawn an architect subagent to rethink coverage conceptually, then write or refactor the test the analysis designs. Forbid appending a test without that analysis.
+- Keep a test only if observed red on broken code and green on fixed code. Every kept test must pass independent subagent verification: fails on broken code, no mocks of owned code, hermetic and deterministic.
+- Keep tests hermetic and deterministic: seeded randomness, fake clocks, no live network. Quarantine flakes immediately; never skip, weaken, edit, or delete a test to go green.
+- Run narrow tests per change and the full relevant suite before done.
 - No comments in code. Code is the source of truth; a comment creates ambiguity about what is right, code or comment. Keep a comment only when functionality requires it: SPDX license headers for REUSE compliance, clap `#[command]`/`#[arg]` help text and similar string literals consumed by tools, parser directives such as Dockerfile `# syntax=`, and machine-generated files that the repo's own generators verify byte-identical. Never keep explanatory, TODO, or SAFETY comments; when code seems to need explanation, rewrite the code instead.
 - Judge correctness, consistency, and project fit. Never defer a known-wrong state for ROI, cost, effort, or edge cases.
 - Stop only when the required change is proven impossible with the available tools or model. When uncertain, inspect, test, and measure first.
