@@ -218,15 +218,12 @@ fn assert_sample_input_owners(
         ]
     );
     assert!(cli.complete, "CLI repository inputs remain complete");
-    assert_package_owner(prep, "velnor-actions-cli")?;
+    assert_package_owner(prep, "velnor-actions-cli");
     Ok(())
 }
 
 /// Require a declared sample owner to resolve inside its workspace.
-fn assert_package_owner(
-    prep: &velnor_actions_orchestrator::GenerationPreparation,
-    name: &str,
-) -> TestResult {
+fn assert_package_owner(prep: &velnor_actions_orchestrator::GenerationPreparation, name: &str) {
     assert!(
         prep.discovery
             .workspaces
@@ -235,7 +232,6 @@ fn assert_package_owner(
             .any(|package| package.name == name && package.in_workspace && !package.external),
         "fixture is missing declared input owner {name}"
     );
-    Ok(())
 }
 
 #[test]
