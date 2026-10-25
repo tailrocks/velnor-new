@@ -5,7 +5,7 @@ Shared working agreement: keep this section byte-identical across projects. Proj
 - No legacy code. Finish every migration: remove old paths completely — no compatibility shims, aliases, or deprecation periods. Breaking changes are preferred.
 - Research project: unsafe, breaking changes expected, never production-ready. Break things when needed; deliver fast.
 - Verification gates: verify from the repo root before committing or merging. Run tests with cargo nextest, never cargo test.
-- Tests are not forbidden: this tree was cleared to rebuild integration-first suites. New tests must catch real bugs — green must mean it works.
+- Tests are not forbidden. New tests must catch real bugs — green must mean it works.
 - Prove every new test fails before the fix: require the red-green loop, and reject any test never observed to fail.
 - Never mock owned code or the unit under test; mocks live only at unowned I/O boundaries behind interfaces you own.
 - Test observable behavior through public APIs: assert resulting state, not interaction sequences; no mirror-logic assertions and no unreviewed snapshots.
