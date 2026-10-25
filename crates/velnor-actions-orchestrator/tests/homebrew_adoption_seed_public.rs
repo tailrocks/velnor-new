@@ -192,6 +192,7 @@ fn pins() -> ProductReleasePins {
         resource_probe_build_argv: vec![],
         install_resource_probe_release_tools_argv: vec![],
         resource_probe_release_build_argv: vec![],
+        resource_probe_release_test_argv: vec![],
         lint_argv: vec![],
         verify_lint_argv: vec![],
         gh_argv: vec!["gh".to_owned()],

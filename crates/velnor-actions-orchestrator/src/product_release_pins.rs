@@ -81,10 +81,15 @@ pub(crate) fn resolve(
         )?,
         resource_probe_build_argv: resource_probe_build_argv(&catalog)?,
         install_resource_probe_release_tools_argv: install_argv(
-            &[PinnedTool::Rust, PinnedTool::MrBoxington],
+            &[
+                PinnedTool::Rust,
+                PinnedTool::MrBoxington,
+                PinnedTool::Nextest,
+            ],
             &catalog,
         )?,
         resource_probe_release_build_argv: resource_probe_release_build_argv(&catalog)?,
+        resource_probe_release_test_argv: resource_probe_release_test_argv(&catalog)?,
         lint_argv: scrubbed_inline(crate::workflow_jobs::workflow_lint_argv(&catalog)?),
         verify_lint_argv: crate::workflow::jactionlint_verify_argv(&catalog),
         gh_argv: exec_argv(&[PinnedTool::Gh], "gh", &[], &catalog)?,
@@ -225,6 +230,35 @@ fn resource_probe_release_build_argv(
             "velnor-resource-probe-release",
             "--target",
             "x86_64-unknown-linux-gnu",
+        ],
+        catalog,
+    )
+}
+
+fn resource_probe_release_test_argv(
+    catalog: &ToolCatalog,
+) -> Result<Vec<String>, OrchestratorError> {
+    exec_argv(
+        &[
+            PinnedTool::Rust,
+            PinnedTool::MrBoxington,
+            PinnedTool::Nextest,
+        ],
+        "mbx",
+        &[
+            "nextest",
+            "run",
+            "--locked",
+            "--manifest-path",
+            "crates/velnor-runner/Cargo.toml",
+            "--package",
+            "velnor-runner-host",
+            "--test",
+            "resource_probe_release_public",
+            "--target",
+            "x86_64-unknown-linux-gnu",
+            "--no-tests",
+            "fail",
         ],
         catalog,
     )

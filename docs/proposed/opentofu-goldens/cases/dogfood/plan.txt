@@ -26,7 +26,7 @@ Detected stacks
     - velnor-runner-cli (crates/velnor-runner/crates/velnor-runner-cli/Cargo.toml) [bin, lib; depends on velnor-runner-core, velnor-runner-host]
     - velnor-runner-core (crates/velnor-runner/crates/velnor-runner-core/Cargo.toml) [lib]
     - velnor-runner-github (crates/velnor-runner/crates/velnor-runner-github/Cargo.toml) [lib; depends on velnor-runner-core]
-    - velnor-runner-host (crates/velnor-runner/crates/velnor-runner-host/Cargo.toml) [bin, example, lib; depends on velnor-runner-core, velnor-runner-github]
+    - velnor-runner-host (crates/velnor-runner/crates/velnor-runner-host/Cargo.toml) [bin, example, lib, test; depends on velnor-runner-core, velnor-runner-github]
   Profile .: mbx compile driver (declared), cargo_nextest test runner (declared)
   Nextest profile .: ci (.config/nextest.toml)
     evidence .config/nextest.toml:4 [profile.ci] [durable]
@@ -77,7 +77,7 @@ Workflow to generate
     - rust-velnor-runner-cli (27 steps)
     - rust-velnor-runner-core (27 steps)
     - rust-velnor-runner-github (27 steps)
-    - rust-velnor-runner-host (27 steps)
+    - rust-velnor-runner-host (28 steps)
     - 18 Rust crate jobs
       Timeout: 15 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check
@@ -190,6 +190,7 @@ Workflow to generate
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/doc/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/doctest/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/fmt/default
+        - stack/rust/crates/velnor-runner/crates/velnor-runner-host/nextest/default
   Parallel: 18 execution jobs; dependencies preserved; no matrix fan-out
   Critical path: stack/rust/crates/velnor-actions-orchestrator/build/default -> stack/rust/crates/velnor-actions-orchestrator/nextest/default (2 tasks)
   Clippy memory groups: 1; barriers: 0
@@ -222,7 +223,6 @@ Workflow to generate
   Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-cli/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-core/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-github/nextest/default has no test targets; no test command emitted
-  Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-host/nextest/default has no test targets; no test command emitted
   Pull-request execution narrows crate obligations through its event-time affected-work plan.
 
 Required-check migration
