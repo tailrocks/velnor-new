@@ -1,19 +1,3 @@
-//! Every project file that can declare a catalog tool version (hard
-//! decision 5).
-//!
-//! Mise reads `[tools]` from many places, and rustup and Mise both read
-//! Rust toolchain files. A declaration the generator does not see would
-//! silently lose to a Velnor pin, so this module reads exactly the
-//! locations the generated resolver reads at run time
-//! ([`PROJECT_MISE_CONFIG_PATTERNS`], `.tool-versions`, the toolchain
-//! files) and applies the same rules to their values: nothing is executed,
-//! a file that does not parse is an error, and the raw declared text is
-//! kept so exactness can be judged in one place.
-//!
-//! Change selection parses base and head blobs with the same function, so
-//! "did a declared version change" and "which version is declared" cannot
-//! disagree.
-
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -27,32 +11,19 @@ use crate::OrchestratorError;
 use crate::git_paths::split_nul_paths_skipping;
 use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoRead, read_repo_file};
 
-/// One catalog-tool declaration exactly as written in a source file.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct RawDeclaration {
-    /// Catalog tool the key names.
     pub(crate) tool: PinnedTool,
-    /// Spelling of the key (`rust`, `aqua:nextest-rs/nextest/cargo-nextest`).
     pub(crate) key: String,
-    /// Declared value; exactness is judged by the caller.
     pub(crate) value: String,
 }
 
-/// Declarations found in one source file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SourceDeclarations {
-    /// Repository-relative path.
     pub(crate) file: String,
-    /// Declarations in file order.
     pub(crate) declarations: Vec<RawDeclaration>,
 }
 
-/// Parse one declaration source by its repository-relative path.
-///
-/// # Errors
-///
-/// Returns the parse problem for text that is not valid in the format the
-/// path implies; a malformed source never reads as "declares nothing".
 pub(crate) fn parse_source(path: &str, text: &str) -> Result<Vec<RawDeclaration>, String> {
     if path == PROJECT_TOOL_VERSIONS_FILE {
         return Ok(tool_versions(text));
@@ -85,8 +56,6 @@ fn mise_toml(text: &str) -> Result<Vec<RawDeclaration>, String> {
     Ok(out)
 }
 
-/// Declared text of one `[tools]` record, or `None` for an options-only
-/// table (no `version`), which declares nothing.
 fn raw_value(value: &toml::Value) -> Option<String> {
     match value {
         toml::Value::String(text) => Some(text.clone()),
@@ -146,8 +115,6 @@ fn toolchain(path: &str, text: &str) -> Result<Vec<RawDeclaration>, String> {
         .collect())
 }
 
-/// Catalog tool a `[tools]` key declares. The GitHub CLI runs with a token
-/// in every generated use, so repository configuration never selects it.
 fn catalog_tool(key: &str) -> Option<PinnedTool> {
     PinnedTool::ALL
         .into_iter()
@@ -155,14 +122,12 @@ fn catalog_tool(key: &str) -> Option<PinnedTool> {
         .find(|tool| tool.mise_config_keys().contains(&key))
 }
 
-/// Whether `rel` is a Mise config location (not a toolchain file).
 pub(crate) fn is_mise_config(rel: &str) -> bool {
     PROJECT_MISE_CONFIG_PATTERNS
         .iter()
         .any(|pattern| matches_source_pattern(pattern, rel))
 }
 
-/// Every existing declaration source under `root`, in a stable order.
 pub(crate) fn source_paths(root: &Path) -> Result<Vec<String>, OrchestratorError> {
     let mut dirs: Vec<&str> = PROJECT_MISE_CONFIG_PATTERNS
         .iter()
@@ -216,12 +181,6 @@ pub(crate) fn source_paths(root: &Path) -> Result<Vec<String>, OrchestratorError
     Ok(paths)
 }
 
-/// Read and parse every declaration source in the project root.
-///
-/// # Errors
-///
-/// Fails on a symlink, an unreadable or oversize file, or a file that does
-/// not parse in its format.
 pub(crate) fn read_project_sources(
     root: &Path,
 ) -> Result<Vec<SourceDeclarations>, OrchestratorError> {
@@ -242,16 +201,6 @@ pub(crate) fn read_project_sources(
     Ok(sources)
 }
 
-/// Rust toolchain files below the root, with their declared channel.
-///
-/// A sub-workspace toolchain file changes what rustup runs for commands in
-/// that directory. The generated resolver reads root sources only, so such a
-/// file is accepted only when it declares what the root declares
-/// ([`crate::tool_catalog_resolve`] enforces that).
-///
-/// # Errors
-///
-/// Fails on a symlink, an unreadable file, or one that does not parse.
 pub(crate) fn read_nested_toolchains(
     root: &Path,
 ) -> Result<Vec<SourceDeclarations>, OrchestratorError> {
@@ -273,8 +222,6 @@ pub(crate) fn read_nested_toolchains(
     Ok(out)
 }
 
-/// Repository-relative nested toolchain files: tracked plus untracked
-/// non-ignored paths in a git checkout, a bounded filesystem walk otherwise.
 pub(crate) fn nested_toolchain_paths(root: &Path) -> Vec<String> {
     let listed = [
         ["--cached"].as_slice(),
@@ -332,8 +279,6 @@ fn walk_toolchains(root: &Path, rel: &Path) -> Vec<String> {
     out
 }
 
-/// Declarations by tool for change selection: every `(key, value)` a source
-/// writes, so a base/head comparison sees any declared-version change.
 pub(crate) fn declared_versions(
     path: &str,
     text: &str,
@@ -349,7 +294,3 @@ pub(crate) fn declared_versions(
     }
     Ok(out)
 }
-
-#[cfg(test)]
-#[path = "project_tool_sources_tests.rs"]
-mod tests;

@@ -1,5 +1,3 @@
-//! Validation implementations for the versioned report schemas.
-
 use crate::canonical::validate_digest;
 use crate::errors::ContractError;
 use crate::ids::{
@@ -10,11 +8,8 @@ use crate::workflow::matrix_entry::MatrixEntry;
 use crate::workflow::report::{CacheResult, MatrixReport, TaskReport, TaskStatus};
 
 impl TaskReport {
-    /// Report schema version.
     pub const SCHEMA: u32 = 3;
 
-    /// Validate schema, derived ID, digests, binding, and status coherence.
-    /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {
         check_schema(self.schema, Self::SCHEMA)?;
         validate_run_key(&self.run_key)?;
@@ -63,8 +58,6 @@ impl TaskReport {
         Ok(())
     }
 
-    /// Validate this report against the immutable matrix placement in the plan.
-    /// # Errors
     pub fn validate_for_plan_entry(&self, entry: &MatrixEntry) -> Result<(), ContractError> {
         self.validate()?;
         if self.matrix_id != entry.id || self.matrix_key != entry.matrix_key {
@@ -77,8 +70,6 @@ impl TaskReport {
             .validate_for_plan(&entry.planned_platform)
     }
 
-    /// Check that outputs list only declared task outputs.
-    /// # Errors
     pub fn validate_outputs_declared(&self, declared: &[String]) -> Result<(), ContractError> {
         for output in &self.outputs {
             if !declared.contains(output) {
@@ -90,11 +81,8 @@ impl TaskReport {
 }
 
 impl MatrixReport {
-    /// Report schema version.
     pub const SCHEMA: u32 = 1;
 
-    /// Validate schema, derived ID, coverage, sorting, and counts.
-    /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {
         check_schema(self.schema, Self::SCHEMA)?;
         validate_run_key(&self.run_key)?;
@@ -158,7 +146,6 @@ impl MatrixReport {
     }
 }
 
-/// Check the exact schema version expected by one report type.
 fn check_schema(schema: u32, expected: u32) -> Result<(), ContractError> {
     if schema != expected {
         return Err(ContractError::UnsupportedSchema {
@@ -174,12 +161,10 @@ fn check_schema(schema: u32, expected: u32) -> Result<(), ContractError> {
     Ok(())
 }
 
-/// Check a string list is sorted.
 fn is_sorted(list: &[String]) -> bool {
     list.windows(2).all(|pair| pair[0] <= pair[1])
 }
 
-/// Check key derivation from the matrix ID.
 fn check_matrix_id(matrix_id: &str, matrix_key: &str) -> Result<(), ContractError> {
     if matrix_key_for_id(matrix_id)? != matrix_key {
         return Err(ContractError::identity("matrix_id", "id_mismatch"));

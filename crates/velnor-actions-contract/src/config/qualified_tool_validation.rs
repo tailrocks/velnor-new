@@ -1,4 +1,3 @@
-//! Complete archive/tree/executable evidence admission for qualified tools.
 use super::{ContractError, QualifiedTool, QualifiedToolRecipe};
 
 pub(super) fn sha256(value: &str) -> bool {

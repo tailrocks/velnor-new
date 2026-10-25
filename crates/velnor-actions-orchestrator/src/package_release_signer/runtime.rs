@@ -1,5 +1,3 @@
-//! Identity, version, and filesystem helpers used by the native release signer.
-
 use std::{env, path::PathBuf, time::Duration};
 
 use velnor_actions_contract::{
@@ -42,8 +40,6 @@ pub(super) fn signing_identity_for_repository(
     Ok(identity)
 }
 
-// Published reads authenticate the exact current Tap caller and remote stable
-// origin downstream; they never acquire signing authority from this identity.
 pub(super) fn published_identity_from_env(
     plan: &PackageReleasePlan,
 ) -> Result<PackageReleaseSigningIdentity, OrchestratorError> {

@@ -1,5 +1,3 @@
-//! Parsing for GitHub's classic branch-protection response.
-
 use serde_json::Value;
 
 use crate::{OrchestratorError, internal::internal};
@@ -153,7 +151,5 @@ fn classic_writer_bypass(
             .ok_or_else(|| internal("tap_merge_classic_bypass_unreadable"))?;
         Ok::<_, OrchestratorError>(found || login.eq_ignore_ascii_case(writer_bot_login))
     })?;
-    // Team membership is not visible at this credential boundary, so any
-    // configured team allowance is ambiguous with respect to the writer bot.
     Ok(app_bypass || user_bypass || !teams.is_empty())
 }

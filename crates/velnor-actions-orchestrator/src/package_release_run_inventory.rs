@@ -1,5 +1,3 @@
-//! Empty-only retry policy for exact-source workflow-run inventory reads.
-
 use super::WorkflowRunResponse;
 use super::{RunSource, WorkflowMetadata, run_matches, run_repository_names_match};
 use crate::{OrchestratorError, internal::internal};
@@ -23,8 +21,6 @@ pub(super) fn latest_ci_run(
     source: RunSource<'_>,
     repository: &str,
 ) -> Result<WorkflowRunResponse, OrchestratorError> {
-    // The head-SHA-only API query also returns eligible manual dispatches. As
-    // before the retry was added, only push runs can satisfy the CI gate.
     let runs: Vec<_> = runs
         .into_iter()
         .filter(|run| run.event.as_deref() == Some("push"))

@@ -1,7 +1,5 @@
 use super::{BTreeMap, CheckPlatform, NativeExpectedInstallFile, PathBuf};
 
-/// Derive the one hosted ARM-Mac Homebrew inventory from the protected
-/// projection. Runtime extraction and Required receipt validation share it.
 pub(crate) fn expected_install_files(
     spec: &velnor_actions_contract::homebrew_spec::HomebrewFormulaSpec,
     projection: &velnor_actions_contract::homebrew_spec::ValidatedHomebrewProjection,

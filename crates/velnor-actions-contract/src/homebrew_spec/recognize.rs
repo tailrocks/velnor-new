@@ -5,10 +5,6 @@ use super::{
     safe_release_tag, safe_version, unquote, validate_projection_spec,
 };
 
-/// Recognize the exact fixed-template literal slots and reject all structural edits.
-///
-/// # Errors
-/// Returns an error for invalid release literals or any deviation from the canonical formula template.
 pub fn parse_generated_formula(
     spec: &HomebrewFormulaSpec,
     projection: &ValidatedHomebrewProjection,

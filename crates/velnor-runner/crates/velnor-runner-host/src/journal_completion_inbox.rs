@@ -1,5 +1,3 @@
-//! Durable inbox for completion messages that do not yet match a launch.
-
 use crate::error::HostError;
 use crate::journal::Journal;
 
@@ -8,22 +6,18 @@ use super::finish_transaction;
 pub(crate) const MAX_COMPLETION_BODY_BYTES: usize = velnor_runner_github::MAX_POLL_BODY_BYTES;
 pub(crate) const MAX_COMPLETION_INBOX_SCAN: u32 = 4;
 
-/// One persisted completion body awaiting durable launch identity.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CompletionInboxEntry {
-    /// Owning runner scale set.
     pub(crate) scale_set_id: i64,
-    /// Stable poll message ID.
+
     pub(crate) message_id: i64,
-    /// Exact inner message body from the authenticated queue envelope.
+
     pub(crate) raw_body: String,
-    /// Number of bounded local match attempts.
+
     pub(crate) attempts: i64,
 }
 
 impl Journal {
-    /// Persist an unmatched body before the queue message can be acknowledged.
-    ///
     pub(crate) async fn store_completion_inbox(
         &self,
         scale_set_id: i64,
@@ -40,7 +34,6 @@ impl Journal {
         finish_transaction(&connection, result).await
     }
 
-    /// Read a small due prefix. The caller performs local journal work only.
     pub(crate) async fn pending_completion_inbox(
         &self,
         now: i64,
@@ -73,7 +66,6 @@ impl Journal {
         Ok(entries)
     }
 
-    /// Move one unresolved body to a bounded retry time.
     pub(crate) async fn defer_completion_inbox(
         &self,
         entry: &CompletionInboxEntry,
@@ -110,7 +102,6 @@ impl Journal {
         }
     }
 
-    /// Remove only the exact body after every completion in it has a journal match.
     pub(crate) async fn resolve_completion_inbox(
         &self,
         entry: &CompletionInboxEntry,

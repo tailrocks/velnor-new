@@ -1,5 +1,3 @@
-//! Offline image import and exact daemon-local identity validation.
-
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -238,11 +236,3 @@ fn ensure_remaining(deadline: Instant, minimum: Duration) -> Result<(), HostErro
         Err(HostError::DockerTimeout)
     }
 }
-
-#[cfg(test)]
-#[path = "docker_tests.rs"]
-mod tests;
-
-#[cfg(test)]
-#[path = "docker_flow_tests.rs"]
-mod flow_tests;

@@ -1,12 +1,9 @@
-//! The project model read from `dbt_project.yml` and its sibling control files.
-
 use crate::packages::{parse_packages, verify_lock};
 use crate::paths::stays_inside;
 use crate::yaml::{top_list, top_scalars};
 use crate::{DbtError, check_profiles, uses_postgres_adapter};
 use velnor_actions_contract::config::DBT_JOB_PREFIX;
 
-/// `dbt_project.yml` keys whose value is a list of project-relative directories.
 const PATH_LIST_KEYS: [&str; 8] = [
     "model-paths",
     "macro-paths",
@@ -18,43 +15,36 @@ const PATH_LIST_KEYS: [&str; 8] = [
     "docs-paths",
 ];
 
-/// `dbt_project.yml` keys whose value is one project-relative directory.
 const PATH_KEYS: [&str; 3] = ["target-path", "log-path", "packages-install-path"];
 
-/// Text of the control files in one project directory.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ProjectFiles<'a> {
-    /// `dbt_project.yml` (required).
     pub project: &'a str,
-    /// `packages.yml`, when present.
+
     pub packages: Option<&'a str>,
-    /// `package-lock.yml`, when present.
+
     pub lock: Option<&'a str>,
-    /// `profiles.yml`, when present.
+
     pub profiles: Option<&'a str>,
 }
 
-/// A validated dbt project.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Project {
-    /// Repository-relative project directory (`.` for the repository root).
     pub dir: String,
-    /// `name` from `dbt_project.yml`.
+
     pub name: String,
-    /// `profile` from `dbt_project.yml`.
+
     pub profile: String,
-    /// True when `profiles.yml` declares a `type: postgres` output.
+
     pub postgres_adapter: bool,
 }
 
-/// True for a dbt identifier: letters, digits and `_`, not starting with a digit.
 fn is_identifier(text: &str) -> bool {
     text.bytes().next().is_some_and(|b| !b.is_ascii_digit())
         && text.len() <= 64
         && text.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
 }
 
-/// Slug of a project directory: lowercase alphanumeric words joined by `-`.
 #[must_use]
 pub fn slug(dir: &str) -> String {
     let mut out = String::new();
@@ -71,23 +61,16 @@ pub fn slug(dir: &str) -> String {
     if slug.is_empty() { "root" } else { slug }.to_owned()
 }
 
-/// Generated job id of a project (`dbt-<slug>`).
 #[must_use]
 pub fn job_id(project: &Project) -> String {
     format!("{DBT_JOB_PREFIX}{}", slug(&project.dir))
 }
 
-/// Display name of a project's job (`dbt / <dir>`).
 #[must_use]
 pub fn job_name(project: &Project) -> String {
     format!("dbt / {}", project.dir)
 }
 
-/// Analyze one project directory.
-///
-/// Returns the model when `dbt_project.yml` names a valid project and every
-/// finding (sorted, possibly empty) from the project, package and profile
-/// policies.
 #[must_use]
 pub fn analyze_project(dir: &str, files: &ProjectFiles<'_>) -> (Option<Project>, Vec<DbtError>) {
     let mut findings = Vec::new();

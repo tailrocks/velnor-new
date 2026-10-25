@@ -1,6 +1,5 @@
 use velnor_actions_contract::Stack;
 
-/// Shared key for the order rendered into crate jobs and downstream reports.
 pub(crate) fn obligation_order_key<'a>(
     stack_id: &str,
     task_kind: &str,

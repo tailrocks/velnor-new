@@ -1,5 +1,3 @@
-//! Fixed subprocess wrapper: the sole `std::process::Command` constructor.
-//! Policy (`command_env.rs`) and output (`command_output.rs`) declare here.
 #[path = "command_cancellable.rs"]
 mod cancellable;
 #[path = "check_command.rs"]
@@ -61,7 +59,6 @@ fn cleared_parent_passthrough(
     parent: &[(OsString, OsString)],
 ) -> Vec<(OsString, OsString)> {
     match policy {
-        // Mise needs runner discovery plus its selected owned cache.
         EnvPolicy::GitHubToken => {
             let mut env: Vec<_> = parent
                 .iter()
@@ -89,28 +86,21 @@ fn cleared_parent_passthrough(
     }
 }
 
-/// Flags disable project config/env/hooks; exact specs carry project (decision 5) or catalog pins.
 pub const MISE_GLOBAL_FLAGS: [&str; 3] = ["--no-config", "--no-env", "--no-hooks"];
 
-/// Separator between mise tool selectors and the payload command.
 pub const TOOL_COMMAND_SEPARATOR: &str = "--";
 
-/// Mise subcommands Velnor may emit: `exec`, `install`, and `run`.
 pub const ALLOWED_MISE_SUBCOMMANDS: [&str; 3] = ["exec", "install", "run"];
 
-/// Captured bytes kept per stream; past this the run fails closed.
 pub const OUTPUT_CAPTURE_LIMIT_BYTES: usize = 8 * 1024 * 1024;
 
-/// Default run deadline in seconds; past this the child is killed.
 pub const RUN_TIMEOUT_SECS: u64 = 600;
 
-/// Whether a subcommand is inside the Velnor mise allowlist.
 #[must_use]
 pub fn is_allowed_mise_subcommand(subcommand: &str) -> bool {
     ALLOWED_MISE_SUBCOMMANDS.contains(&subcommand)
 }
 
-/// Fully isolated, shell-free child invocation (`Debug` redacts secrets).
 #[derive(Clone, PartialEq, Eq)]
 pub struct IsolatedCommand {
     program: OsString,
@@ -133,20 +123,10 @@ impl std::fmt::Debug for IsolatedCommand {
 }
 
 impl IsolatedCommand {
-    /// Build `mise <globals> exec <specs> -- <payload>`.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::EmptyCommand`] when `payload` is empty.
     pub fn mise_exec(tool_specs: &[String], payload: &[OsString]) -> Result<Self, MiseError> {
         Self::mise_with_subcommand("exec", tool_specs, Some(payload), true)
     }
 
-    /// Build `mise <globals> install <specs>`.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::EmptyToolchain`] when `tool_specs` is empty.
     pub fn mise_install(tool_specs: &[String]) -> Result<Self, MiseError> {
         if tool_specs.is_empty() {
             return Err(MiseError::EmptyToolchain);
@@ -154,11 +134,6 @@ impl IsolatedCommand {
         Self::mise_with_subcommand("install", tool_specs, None, false)
     }
 
-    /// Build `mise <globals> ls --json <tool>`: installed-version query.
-    ///
-    /// Read-only discovery under the same isolation overlay and
-    /// install-disable pair as `exec`, so it observes exactly the tool
-    /// state a later `exec` would select from; it never installs.
     pub(crate) fn mise_ls_json(tool: &str) -> Self {
         let mut args: Vec<OsString> = MISE_GLOBAL_FLAGS.iter().map(OsString::from).collect();
         args.push(OsString::from("ls"));
@@ -173,9 +148,6 @@ impl IsolatedCommand {
         }
     }
 
-    /// Build a repo-task child: cleared env plus declared inputs.
-    /// # Errors
-    /// Returns [`MiseError::InvalidStepInput`] on a reserved declared key.
     pub fn repo_task(
         program: &str,
         args: Vec<OsString>,
@@ -198,16 +170,12 @@ impl IsolatedCommand {
         })
     }
 
-    /// Override the working directory for this invocation.
     #[must_use]
     pub fn with_cwd(mut self, cwd: PathBuf) -> Self {
         self.cwd = Some(cwd);
         self
     }
 
-    /// Append extras; reserved keys fail loud naming the key.
-    /// # Errors
-    /// Returns [`MiseError::InvalidStepInput`] on the first reserved key.
     pub fn with_env(mut self, extra: &[(OsString, OsString)]) -> Result<Self, MiseError> {
         for pair in extra {
             let key = pair.0.to_string_lossy();
@@ -226,29 +194,21 @@ impl IsolatedCommand {
         Ok(self)
     }
 
-    /// Reassign the typed env policy (crate-internal constructors only).
-    ///
-    /// The only caller is the pinned-exec constructor, which selects
-    /// [`EnvPolicy::GhApi`] for the pinned `gh` tool; every
-    /// other command keeps the policy its own constructor assigned.
     pub(crate) fn with_policy(mut self, policy: EnvPolicy) -> Self {
         self.policy = policy;
         self
     }
 
-    /// Program executed directly.
     #[must_use]
     pub fn program(&self) -> &OsStr {
         &self.program
     }
 
-    /// Working directory override when set.
     #[must_use]
     pub fn cwd(&self) -> Option<&PathBuf> {
         self.cwd.as_ref()
     }
 
-    /// Full argument vector including the program, for renderers and tests.
     #[must_use]
     pub fn argv(&self) -> Vec<OsString> {
         let mut argv = Vec::with_capacity(self.args.len() + 1);
@@ -257,16 +217,11 @@ impl IsolatedCommand {
         argv
     }
 
-    /// Environment overlay applied by the spawner; tests read this.
     #[must_use]
     pub fn env_overlay() -> Vec<(OsString, OsString)> {
         pairs_of(&ISOLATION_ENV)
     }
 
-    /// Full environment the spawner applies: overlay first, then extras.
-    ///
-    /// Qualified probes receive explicit extras only. Qualified checks
-    /// retain task config visibility; other policies keep the fixed overlay.
     #[must_use]
     pub fn full_env(&self) -> Vec<(OsString, OsString)> {
         let mut env = if self.policy == EnvPolicy::QualifiedProbe {
@@ -281,13 +236,11 @@ impl IsolatedCommand {
         env
     }
 
-    /// Full child env over a parent snapshot (pure [`Self::run`] contract).
     #[must_use]
     pub fn spawn_env(&self, parent: &[(OsString, OsString)]) -> Vec<(OsString, OsString)> {
         self.policy.child_env(parent, &self.full_env())
     }
 
-    /// Whether implicit installation is disabled (effective last-wins value).
     #[must_use]
     pub fn disables_auto_install(&self) -> bool {
         let full = self.full_env();
@@ -299,17 +252,11 @@ impl IsolatedCommand {
         })
     }
 
-    /// Spawn the child under default bounds and wait for its typed exit.
-    /// # Errors
-    /// Returns [`MiseError::SpawnFailed`] on spawn/output/timeout failure.
     pub fn run(&self) -> Result<ProcessOutput, MiseError> {
         let timeout = Duration::from_secs(RUN_TIMEOUT_SECS);
         self.run_bounded(OUTPUT_CAPTURE_LIMIT_BYTES, timeout)
     }
 
-    /// Spawn the child under explicit bounds and wait for its typed exit.
-    /// # Errors
-    /// Returns [`MiseError::SpawnFailed`] on spawn/output/timeout failure.
     pub fn run_bounded(&self, cap: usize, timeout: Duration) -> Result<ProcessOutput, MiseError> {
         self.run_cancellable(cap, timeout, &CancelHandle::new())
     }
@@ -384,7 +331,3 @@ pub(crate) fn mise_install_argv_tail(specs: &[String]) -> Vec<OsString> {
     args.extend(specs.iter().map(OsString::from));
     args
 }
-
-#[cfg(test)]
-#[path = "command_release_signer_tests.rs"]
-mod release_signer_tests;

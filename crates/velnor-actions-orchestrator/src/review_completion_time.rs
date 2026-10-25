@@ -1,4 +1,3 @@
-//! Strict UTC API/provider timestamps; ambiguous ordering never authorizes restart completion.
 use crate::{OrchestratorError, internal::internal};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

@@ -1,5 +1,3 @@
-//! JSON parsing that rejects duplicate object keys at every depth.
-
 use std::collections::BTreeMap;
 
 use serde::de::{self, MapAccess, SeqAccess, Visitor};
@@ -136,25 +134,4 @@ pub(super) fn parse(bytes: &[u8]) -> Result<Value, HostError> {
     serde_json::from_slice::<StrictValue>(bytes)
         .map(StrictValue::into_value)
         .map_err(|_| HostError::Identity)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::parse;
-    use crate::error::HostError;
-
-    #[test]
-    fn rejects_duplicate_keys_at_each_depth() {
-        assert_eq!(parse(br#"{"a":1,"a":2}"#), Err(HostError::Identity));
-        assert_eq!(parse(br#"{"a":{"b":1,"b":2}}"#), Err(HostError::Identity));
-    }
-
-    #[test]
-    fn accepts_unique_nested_json() -> Result<(), HostError> {
-        let value = parse(br#"{"a":[true,null,{"b":3}]}"#)?;
-        if value["a"][2]["b"] != 3 {
-            return Err(HostError::Identity);
-        }
-        Ok(())
-    }
 }

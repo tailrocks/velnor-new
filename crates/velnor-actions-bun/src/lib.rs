@@ -1,10 +1,11 @@
-//! Bun stack adapter: lockfile policy, workspace members, Velnor-owned
-//! `bunfig.toml`, tool agreement and affected-member claims.
-//!
-//! Hard decision 6: one job per workspace member. This crate only reads text
-//! the orchestrator hands it; it launches no process, touches no file and
-//! renders no workflow text.
-
+#![allow(
+    clippy::missing_errors_doc,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
+#![allow(
+    missing_docs,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
 pub mod bunfig;
 pub mod error;
 pub mod jsonc;
@@ -30,5 +31,4 @@ pub use workspace::{
     resolve, resolve_member_dir, slug, suite_claims, suite_job_id, suite_job_name,
 };
 
-/// Stable identifier of the Bun stack.
 pub const STACK_ID: &str = "bun";

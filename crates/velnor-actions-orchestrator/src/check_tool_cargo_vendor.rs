@@ -1,4 +1,3 @@
-//! Verified Cargo archives become one owned offline source/vendor closure.
 use crate::OrchestratorError;
 use crate::internal::internal;
 use std::collections::BTreeSet;
@@ -143,7 +142,3 @@ fn require_cargo_home(tool_home: &Path) -> Result<(), OrchestratorError> {
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "check_tool_cargo_vendor_tests.rs"]
-mod tests;

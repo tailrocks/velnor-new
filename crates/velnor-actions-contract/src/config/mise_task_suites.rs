@@ -1,5 +1,3 @@
-//! Closed, credential-free companion workflows for explicitly declared Mise tasks.
-
 use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
@@ -34,18 +32,15 @@ pub(super) fn validate_rust_suite_slug_collisions(
     Ok(())
 }
 
-/// Events that may start a standalone Mise task suite.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MiseTaskSuiteEvent {
-    /// Pushes to the configured default branch.
     Push,
-    /// An explicitly declared schedule.
+
     Schedule,
 }
 
 impl MiseTaskSuiteEvent {
-    /// GitHub Actions event name.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -55,39 +50,34 @@ impl MiseTaskSuiteEvent {
     }
 }
 
-/// One bounded, credential-free task suite under `[[workflow.task_suites]]`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MiseTaskSuite {
-    /// Stable lowercase identifier used in job and artifact identities.
     pub id: String,
-    /// Exact task name from the locked Mise configuration.
+
     pub mise_task: String,
-    /// Exact Mise source and working-directory binding.
+
     pub source: MiseTaskSource,
-    /// Fixed operating-system and architecture pair.
+
     pub runner: VerificationRunner,
-    /// Bounded per-job timeout in minutes.
+
     pub timeout_minutes: u16,
-    /// Generated workflow filename slug, without `.yml`.
+
     pub workflow: String,
-    /// Explicit, non-empty set of allowed events.
+
     pub events: Vec<MiseTaskSuiteEvent>,
-    /// Cron expressions required when `events` contains `schedule`.
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub schedule: Vec<String>,
-    /// Declared evidence artifacts. Each name has one required path pattern.
-    /// Renderer names encode the suite and artifact identity per attempt.
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub artifacts: Vec<RustSuiteArtifact>,
-    /// Optional trusted, credential-separated GitHub evidence input collector.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub evidence_snapshot: Option<GitHubEvidenceSnapshotInput>,
 }
 
 impl MiseTaskSuite {
-    /// Validate task identity, source, event, workflow, and artifact bounds.
-    /// # Errors
     pub fn validate(&self, file: &str, prefix: &str) -> Result<(), ContractError> {
         self.validate_identity_and_limits(file, prefix)?;
         self.validate_events(file, prefix)?;
@@ -236,10 +226,6 @@ fn valid_workflow_slug(slug: &str) -> bool {
         })
 }
 
-/// Canonical attempt-qualified artifact identity for a generated task suite.
-///
-/// Kept in the contract so producer rendering and typed evidence references
-/// share one length-prefixed identity function.
 #[must_use]
 pub fn mise_task_suite_artifact_name(suite_id: &str, artifact_name: &str) -> String {
     task_suite_artifact_name_with_attempt(
@@ -250,7 +236,6 @@ pub fn mise_task_suite_artifact_name(suite_id: &str, artifact_name: &str) -> Str
     )
 }
 
-/// Runtime attempt-qualified task-suite artifact name used by the collector.
 #[must_use]
 pub fn mise_task_suite_artifact_name_for_attempt(
     suite_id: &str,

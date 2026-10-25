@@ -138,7 +138,7 @@ def observe(binary, root, candidate, candidate_receipt_sha256):
     distinct = versions == [candidate["version"]] and "DEBUG" not in version
     version_case["observation"] = ("matched" if version_case["returncode"] == 0 and
         distinct and version == candidate["version_banner"].strip() else "mismatched")
-    # A mismatched executable identity never reaches another MBX command.
+
     if version_case["observation"] == "matched":
         directory_case, raw = execute(binary, ["cache", "dir", "--json"], root,
                                       environment, "isolated-cache-directory")

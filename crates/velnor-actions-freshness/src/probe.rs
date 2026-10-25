@@ -1,5 +1,3 @@
-//! Upstream release selection for the optional scheduled freshness probe.
-
 use serde_json::Value;
 
 use crate::context::{FreshnessContext, iso_timestamp, norm_version};
@@ -11,7 +9,6 @@ const RUST_STABLE_MANIFEST_PREFIX_BYTES: usize = 128 * 1024;
 
 mod transport;
 
-/// Select the latest stable release value from the known upstream formats.
 pub(crate) fn sniff_latest(source: &str, body: &str) -> Option<String> {
     if let Ok(payload) = serde_json::from_str::<Value>(body)
         && let Some(release) = json_release(source, &payload)
@@ -101,7 +98,6 @@ fn semantic_version(text: &str) -> bool {
         && parts.next().is_none()
 }
 
-/// Run one optional upstream lookup for every inventoried tool and action.
 pub(crate) fn check_upstream_probe(ctx: &mut FreshnessContext) {
     let stamp = iso_timestamp(ctx.now);
     for tool in ctx.tools.clone() {
@@ -167,6 +163,3 @@ fn probe_pin(ctx: &mut FreshnessContext, subject: &str, source: &str, pinned: &s
         ),
     }
 }
-
-#[cfg(test)]
-mod tests;

@@ -1,16 +1,3 @@
-//! Configured-unit analysis: effective set, structural validity, scopes.
-//!
-//! The caller reads file bytes (bounded); this module never touches
-//! the filesystem. Shadowed files are dropped BEFORE parsing (never
-//! read, never parsed). Structural failures yield a typed
-//! [`UnitError`]: HCL/JSON syntax, non-object JSON roots, unknown
-//! top-level block types, bad label counts on tracked kinds, and
-//! duplicate declarations across non-override effective files in one
-//! directory (both dialects share one identity space: HCL+JSON
-//! doubles error; child directories keep their own namespace).
-//! Override files are exempt from duplicate detection (repeating
-//! blocks is their purpose) but not from block-type checks.
-
 use std::collections::BTreeMap;
 use std::fmt;
 
@@ -20,8 +7,6 @@ use crate::fmt_scope::fmt_scope_for_root;
 use crate::modules::ModuleRef;
 use crate::parser::{MAX_FILES_PER_UNIT, parse_json, parse_native};
 
-/// Top-level block types accepted in config files (superset-safe:
-/// validate judges anything subtler).
 const KNOWN_TOP_LEVEL: [&str; 13] = [
     "terraform",
     "resource",
@@ -38,7 +23,6 @@ const KNOWN_TOP_LEVEL: [&str; 13] = [
     "ephemeral",
 ];
 
-/// Tracked declaration kinds with their exact label counts.
 const TRACKED_LABELS: [(&str, usize); 5] = [
     ("variable", 1),
     ("output", 1),
@@ -47,55 +31,34 @@ const TRACKED_LABELS: [(&str, usize); 5] = [
     ("data", 2),
 ];
 
-/// Analyzed unit: load set plus independent fmt scope.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnalyzedUnit {
-    /// Sorted effective load-set survivors (shadowed files dropped).
     pub effective: Vec<String>,
-    /// Sorted fmt scope (precedence-independent, shadowed included).
     pub fmt: Vec<String>,
-    /// Module references from effective files (unresolved; boundary qualifies).
     pub modules: Vec<ModuleRef>,
 }
 
-/// Typed unit-analysis failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnitError {
-    /// Unit holds more files than [`MAX_FILES_PER_UNIT`].
     TooManyFiles {
-        /// Observed file count.
         count: usize,
     },
-    /// One effective file failed to parse.
     Parse {
-        /// Failing file.
         path: String,
-        /// Capped parser message.
         message: String,
     },
-    /// One effective file carries an unknown top-level block type.
     UnknownBlock {
-        /// Failing file.
         path: String,
-        /// Unknown block type.
         kind: String,
     },
-    /// A tracked block carries a wrong label count.
     Shape {
-        /// Failing file.
         path: String,
-        /// Stable shape diagnostic.
         message: String,
     },
-    /// A tracked declaration repeats across non-override files.
     Duplicate {
-        /// Repeated block type.
         kind: String,
-        /// Repeated labels.
         labels: Vec<String>,
-        /// First declaration file.
         first: String,
-        /// Offending repeat file.
         second: String,
     },
 }
@@ -126,12 +89,6 @@ impl fmt::Display for UnitError {
 
 impl std::error::Error for UnitError {}
 
-/// Repo-relative files under `prefix`, capped (`""` = whole index).
-///
-/// # Errors
-///
-/// Returns [`UnitError::TooManyFiles`] when the selection exceeds
-/// [`MAX_FILES_PER_UNIT`].
 pub fn files_for_prefix(files: &[String], prefix: &str) -> Result<Vec<String>, UnitError> {
     let selected: Vec<String> = files
         .iter()
@@ -146,16 +103,6 @@ pub fn files_for_prefix(files: &[String], prefix: &str) -> Result<Vec<String>, U
     Ok(selected)
 }
 
-/// Module references for `(path, bounded text)` config pairs.
-///
-/// Parses without block-type, shape, or duplicate checks: base-graph
-/// selection needs references from history that predates validation.
-/// Every pair must be an effective-shape config file.
-///
-/// # Errors
-///
-/// Returns [`UnitError`] for over-cap selections, non-config paths,
-/// and parse failures.
 pub fn module_refs_for_texts(pairs: &[(String, String)]) -> Result<Vec<ModuleRef>, UnitError> {
     if pairs.len() > MAX_FILES_PER_UNIT {
         return Err(UnitError::TooManyFiles { count: pairs.len() });
@@ -186,12 +133,6 @@ pub fn module_refs_for_texts(pairs: &[(String, String)]) -> Result<Vec<ModuleRef
     Ok(refs)
 }
 
-/// Analyze one unit's `(path, bounded text)` pairs.
-///
-/// # Errors
-///
-/// Returns [`UnitError`] for over-cap selections and every
-/// structural failure above.
 pub fn analyze_files(pairs: &[(String, String)]) -> Result<AnalyzedUnit, UnitError> {
     if pairs.len() > MAX_FILES_PER_UNIT {
         return Err(UnitError::TooManyFiles { count: pairs.len() });
@@ -250,7 +191,6 @@ pub fn analyze_files(pairs: &[(String, String)]) -> Result<AnalyzedUnit, UnitErr
     })
 }
 
-/// Check block types, label shapes, and cross-file duplicates.
 fn check_blocks(
     path: &str,
     blocks: &[crate::parser::BlockModel],

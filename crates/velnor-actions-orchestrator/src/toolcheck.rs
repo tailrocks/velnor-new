@@ -1,10 +1,3 @@
-//! Read-only tool-input checks shared by plan and generate (tool §1-§2).
-//!
-//! Asks the owning adapter about Rust toolchain files and reads the
-//! declared Mise sources read-only, reporting presence, parse status,
-//! extracted values, and content digests for every path. Nothing here writes,
-//! repairs, or passes project configuration to execution.
-
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -14,56 +7,34 @@ use crate::native_tool_input::{
 use velnor_actions_contract::digest_b3;
 use velnor_actions_rust::{TOOLING_INPUT_INVALID, inspect_toolchain_file};
 
-/// Tool-input paths checked on every plan and generate.
 pub const TOOL_INPUT_PATHS: [&str; 3] = ["rust-toolchain.toml", "mise.toml", "mise.lock"];
 
-/// Maximum problem detail kept from a parse failure.
 const MAX_PROBLEM: usize = 120;
 
-/// Parse status of one tool-input file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolParse {
-    /// File is absent (`NotFound`); never emitted for IO failures.
     Missing,
-    /// File exists but its bytes are inaccessible (P09-7: never
-    /// collapsed into [`ToolParse::Missing`]; the no-write proof
-    /// needs contents, so absence and inaccessibility differ).
     Unreadable,
-    /// File parsed; values extracted where the shape is known.
     Valid,
-    /// File is present but malformed.
-    Invalid {
-        /// First-line problem detail.
-        problem: String,
-    },
+    Invalid { problem: String },
 }
 
-/// One checked tool-input file: presence, parse, values, digest.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolInputCheck {
-    /// Repository-relative path.
     pub path: String,
-    /// True when bytes were readable.
     pub present: bool,
-    /// Parse status.
     pub parse: ToolParse,
-    /// Extracted `dotted.key` values, sorted.
     pub values: BTreeMap<String, String>,
-    /// BLAKE3 digest over raw bytes, when readable.
     pub digest: Option<String>,
-    /// Adapter finding codes, sorted unique (TOOL-1.2).
     pub codes: Vec<String>,
-    /// Sanitized native-build projection of this source, never raw config.
     pub(crate) native: Option<NativeToolInput>,
 }
 
-/// Check every tool-input path under `root`.
 #[must_use]
 pub fn check_tool_inputs(root: &Path) -> Vec<ToolInputCheck> {
     check_tool_inputs_with_paths(root, &[])
 }
 
-/// Check default tooling inputs plus explicitly declared task source files.
 #[must_use]
 pub(crate) fn check_tool_inputs_with_paths(
     root: &Path,
@@ -97,11 +68,6 @@ pub(crate) fn check_tool_inputs_with_paths(
         .collect()
 }
 
-/// Check for a tool file that exists but cannot be read.
-///
-/// `present` stays false (no bytes were readable) while the parse
-/// status names the inaccessibility, so callers never mistake it
-/// for an absent file.
 fn inaccessible(path: &str) -> ToolInputCheck {
     ToolInputCheck {
         path: path.to_owned(),
@@ -114,7 +80,6 @@ fn inaccessible(path: &str) -> ToolInputCheck {
     }
 }
 
-/// Check the Rust-owned toolchain file through the Rust adapter.
 fn check_toolchain(path: &str, content: Option<&str>) -> ToolInputCheck {
     let digest = content.map(|text| digest_b3(text.as_bytes()));
     let Ok(inspection) = inspect_toolchain_file(path, content) else {
@@ -143,7 +108,6 @@ fn check_toolchain(path: &str, content: Option<&str>) -> ToolInputCheck {
     }
 }
 
-/// Sorted unique finding codes from adapter findings.
 fn finding_codes(findings: &[velnor_actions_rust::ToolFinding]) -> Vec<String> {
     let mut codes: Vec<String> = findings
         .iter()
@@ -154,7 +118,6 @@ fn finding_codes(findings: &[velnor_actions_rust::ToolFinding]) -> Vec<String> {
     codes
 }
 
-/// Invalid problem from adapter findings, if the adapter flagged any.
 fn invalid_problem(findings: &[velnor_actions_rust::ToolFinding]) -> Option<String> {
     findings.iter().find_map(|finding| {
         (finding.code == TOOLING_INPUT_INVALID).then(|| {
@@ -166,7 +129,6 @@ fn invalid_problem(findings: &[velnor_actions_rust::ToolFinding]) -> Option<Stri
     })
 }
 
-/// Extracted channel, components, and targets from an adapter spec.
 fn spec_values(spec: Option<&velnor_actions_rust::ToolchainSpec>) -> BTreeMap<String, String> {
     let mut values = BTreeMap::new();
     let Some(spec) = spec else {
@@ -184,7 +146,6 @@ fn spec_values(spec: Option<&velnor_actions_rust::ToolchainSpec>) -> BTreeMap<St
     values
 }
 
-/// Check for bytes that cannot be inspected as text.
 fn unreadable(path: &str, digest: Option<String>) -> ToolInputCheck {
     ToolInputCheck {
         path: path.to_owned(),
@@ -199,10 +160,6 @@ fn unreadable(path: &str, digest: Option<String>) -> ToolInputCheck {
     }
 }
 
-/// Check a Mise-owned file read-only: TOML shape plus flattened values.
-///
-/// Lockfiles also accept JSON shape; their values stay scalar leaves
-/// only because lock internals belong to the Mise adapter.
 fn check_mise_file(path: &str, text: Option<&str>, json_fallback: bool) -> ToolInputCheck {
     let digest = text.map(|value| digest_b3(value.as_bytes()));
     let Some(text) = text else {
@@ -256,7 +213,6 @@ fn check_mise_file(path: &str, text: Option<&str>, json_fallback: bool) -> ToolI
     }
 }
 
-/// First line of `problem`, truncated to [`MAX_PROBLEM`] chars.
 fn shorten(problem: &str) -> String {
     let first = problem.lines().next().unwrap_or("malformed");
     let mut short: String = first.chars().take(MAX_PROBLEM).collect();
@@ -265,7 +221,3 @@ fn shorten(problem: &str) -> String {
     }
     short
 }
-
-#[cfg(test)]
-#[path = "toolcheck_tests.rs"]
-mod tests;

@@ -1,4 +1,4 @@
-//! Stable names for scale-set bootstrap runners.
+
 
 pub(super) fn runner_name(session_id: &str) -> String {
     let mut name = String::from("s");

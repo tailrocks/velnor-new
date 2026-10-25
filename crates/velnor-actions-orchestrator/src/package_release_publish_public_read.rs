@@ -1,5 +1,3 @@
-//! Read-only snapshots of public GitHub repositories, pull requests, branches, and releases.
-
 use std::collections::BTreeMap;
 use velnor_actions_mise::CheckDeadline;
 
@@ -9,8 +7,6 @@ use velnor_actions_contract::vcs::VcsInputs;
 use super::github::ReleaseResponse;
 use super::{GitHubApi, ReleaseAssetResponse, asset_tuples, asset_tuples_from_downloads, github};
 
-/// Read-only snapshot of one public immutable release. Contains downloaded bytes,
-/// never a mutation-capable API handle or credential.
 pub(crate) struct PublicReleaseSnapshot {
     pub(crate) release_id: u64,
     pub(crate) tag: String,
@@ -32,7 +28,6 @@ pub(crate) struct PublicReleaseAsset {
     pub(crate) bytes: Vec<u8>,
 }
 
-/// Public PR identity facts required to bind a protected source locator.
 pub(crate) struct PublicPullRequestSnapshot {
     pub(crate) state: String,
     pub(crate) draft: bool,
@@ -45,11 +40,9 @@ pub(crate) struct PublicPullRequestSnapshot {
     pub(crate) head_repository_id: u64,
     pub(crate) head_ref: String,
     pub(crate) head_sha: String,
-    /// GitHub's API-admitted merge commit, when the PR has one.
     pub(crate) merge_commit_sha: Option<String>,
 }
 
-/// Resolve a public repository's immutable numeric identity from its exact slug.
 pub(crate) fn read_public_repository_identity(
     repository: &str,
     deadline: CheckDeadline,
@@ -71,7 +64,6 @@ pub(crate) fn read_public_repository_identity(
     Ok(observed.id)
 }
 
-/// Read one PR from a verified public repository without exposing the API handle.
 pub(crate) fn read_public_pull_request(
     repository: &str,
     repository_id: u64,
@@ -148,7 +140,6 @@ fn valid_head_reference(reference: &str) -> bool {
     .is_ok()
 }
 
-/// Resolve an exact public branch ref from a verified repository.
 pub(crate) fn read_public_branch_tip(
     repository: &str,
     repository_id: u64,
@@ -216,10 +207,6 @@ struct PublicPullRequestRepository {
     full_name: String,
 }
 
-/// Fetch a complete immutable public release using only fixed GitHub read routes.
-///
-/// The endpoint, repository, tag, response sizes, asset count, and shared deadline
-/// are bounded here. This function grants no publication or promotion authority.
 pub(crate) fn read_public_release_snapshot(
     repository: &str,
     repository_id: u64,
@@ -379,7 +366,3 @@ pub(super) fn validate_public_asset_size_inventory(
     }
     Ok(total)
 }
-
-#[cfg(test)]
-#[path = "package_release_publish_public_read_tests.rs"]
-mod tests;

@@ -1,8 +1,5 @@
-//! Typed workflow-dispatch inputs for the hosted qualification path.
-
 use velnor_actions_contract::{DispatchInput, DispatchInputType, WorkflowDispatch};
 
-/// Build the closed, Velnor-only dispatch input set.
 pub(super) fn qualification_dispatch() -> WorkflowDispatch {
     WorkflowDispatch {
         inputs: vec![
@@ -26,7 +23,6 @@ pub(super) fn qualification_dispatch() -> WorkflowDispatch {
     }
 }
 
-/// Build one input with no default or choices.
 fn input(name: &str, required: bool, input_type: DispatchInputType) -> DispatchInput {
     DispatchInput {
         name: name.to_owned(),

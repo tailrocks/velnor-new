@@ -1,30 +1,16 @@
-//! Per-crate MSRV qualification (rust-quality §§2/9, workflow §3).
-//!
-//! MSRV checks run in the pinned toolchain-qualification workflow on
-//! updates/releases only — never in pull-request workflows. This module
-//! builds per-crate MSRV steps/jobs over orchestrator-supplied argv (the
-//! Mise tool must equal workspace `rust-version`, commands use `--locked`)
-//! and rejects any MSRV content from PR renders. Qualification-workflow
-//! triggers, file emission, and scheduling stay orchestrator-owned.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Job, JobTimeout, Step, StepRole};
 
 use crate::{RenderError, steps};
 
-/// Typed per-crate MSRV check: product crate plus declared minimum.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MsrvSpec {
-    /// Product crate name (Cargo charset).
     pub package: String,
-    /// Workspace `rust-version` the Mise tool must equal (`major.minor`).
     pub rust_version: String,
 }
 
 impl MsrvSpec {
-    /// Validate the crate name and `major.minor` MSRV spelling.
-    /// # Errors
     pub fn validate(&self) -> Result<(), RenderError> {
         if self.package.is_empty()
             || !self
@@ -54,18 +40,11 @@ impl MsrvSpec {
     }
 }
 
-/// MSRV step display name for one product crate.
 #[must_use]
 pub fn msrv_step_name(package: &str) -> String {
     format!("msrv {package}")
 }
 
-/// Per-crate MSRV step: Mise tool equals `rust-version`, `--locked` set.
-///
-/// The argv arrives from the orchestrator's Mise vectors; the renderer
-/// verifies the RQ-9.6 shape (exact `rust@<rust-version>` tool element
-/// plus `--locked`) instead of trusting the caller.
-/// # Errors
 pub fn msrv_step(
     spec: &MsrvSpec,
     argv: Vec<String>,
@@ -86,11 +65,6 @@ pub fn msrv_step(
     Ok(step)
 }
 
-/// Per-crate MSRV job: checkout plus the MSRV step, no matrix fan-in.
-///
-/// Jobs are independent (one per product crate); the qualification
-/// workflow's triggers and setup/tooling prelude are orchestrator-owned.
-/// # Errors
 pub fn msrv_job(
     label: &str,
     checkout_uses: &str,
@@ -117,12 +91,6 @@ pub fn msrv_job(
     })
 }
 
-/// Reject any MSRV job or step from a pull-request workflow render.
-///
-/// MSRV verification belongs to the pinned toolchain-qualification
-/// workflow only; its presence here fails closed instead of repeating
-/// per-crate minimum-version checks on every pull request.
-/// # Errors
 pub fn check_no_msrv(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
     for (id, job) in jobs {
         let leaking = id.to_lowercase().contains("msrv")

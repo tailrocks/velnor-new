@@ -1,11 +1,3 @@
-//! Artifact steps of sharded Bun suites: per-leg blob and failure results,
-//! the report job's blob download and its merged-report upload.
-//!
-//! Names derive from the job id and the leg ordinal, so they are unique in
-//! the run. Every upload sets `overwrite: true`: "Re-run failed jobs" replaces
-//! the earlier attempt's artifact of the same leg, and the re-run report job
-//! merges the latest blob per leg. Artifacts never cross runs.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Step, StepKind};
@@ -13,19 +5,12 @@ use velnor_actions_contract::{Step, StepKind};
 use crate::RenderError;
 use crate::steps::{DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES, action_step};
 
-/// Prefix of every artifact name a Bun suite job uploads or downloads.
 pub const BUN_ARTIFACT_PREFIX: &str = "velnor-pw-";
-/// Runner-temp directory a leg writes its blob into.
 pub const BUN_BLOB_DIR: &str = "${{ runner.temp }}/velnor/pw-blob";
-/// Runner-temp directory the report job downloads every leg blob into.
 pub const BUN_BLOBS_DIR: &str = "${{ runner.temp }}/velnor/pw-blobs";
-/// Runner-temp directory the report job writes the merged report into.
 pub const BUN_REPORT_DIR: &str = "${{ runner.temp }}/velnor/pw-report";
-/// Leg blobs only feed the same run's report job.
 pub(crate) const BUN_BLOB_RETENTION_DAYS: u16 = 1;
-/// Condition of the blob steps: upload even when tests failed.
 pub const NOT_CANCELLED: &str = "!cancelled()";
-/// Condition of the failure-results upload.
 pub(crate) const ON_FAILURE: &str = "failure()";
 
 fn upload(
@@ -48,11 +33,6 @@ fn upload(
     )
 }
 
-/// Upload of one leg's blob (`velnor-pw-blob-<job-id>-leg-<n>`).
-///
-/// # Errors
-///
-/// Returns render errors for an invalid step.
 pub fn bun_blob_upload_step(job_id: &str) -> Result<Step, RenderError> {
     let mut step = upload(
         "Upload Playwright blob",
@@ -65,11 +45,6 @@ pub fn bun_blob_upload_step(job_id: &str) -> Result<Step, RenderError> {
     Ok(step)
 }
 
-/// Upload of a failed leg's `test-results` (traces, screenshot diffs).
-///
-/// # Errors
-///
-/// Returns render errors for an invalid step.
 pub fn bun_results_upload_step(
     job_id: &str,
     member_dir: &str,
@@ -91,11 +66,6 @@ pub fn bun_results_upload_step(
     Ok(step)
 }
 
-/// The report job's download of every leg blob of `suite_job_id`.
-///
-/// # Errors
-///
-/// Returns render errors for an invalid step.
 pub fn bun_blobs_download_step(suite_job_id: &str) -> Result<Step, RenderError> {
     action_step(
         "Download Playwright blobs",
@@ -111,11 +81,6 @@ pub fn bun_blobs_download_step(suite_job_id: &str) -> Result<Step, RenderError> 
     )
 }
 
-/// The report job's upload of the merged HTML and JSON report.
-///
-/// # Errors
-///
-/// Returns render errors for an invalid step.
 pub fn bun_report_upload_step(suite_job_id: &str, retention: u16) -> Result<Step, RenderError> {
     upload(
         "Upload Playwright report",
@@ -126,24 +91,15 @@ pub fn bun_report_upload_step(suite_job_id: &str, retention: u16) -> Result<Step
     )
 }
 
-/// Directory of the private release assets a suite job receives (HD-7 layout).
 pub const BUN_ASSETS_DIR: &str = ".velnor/deps";
-/// Filename prefix of the raw tar.gz asset artifact.
 pub const BUN_ASSETS_ARCHIVE_PREFIX: &str = "velnor-pw-assets-";
-/// Runner-temp directory used to stage the raw asset archive.
 pub const BUN_ASSETS_STAGE_DIR: &str = "${{ runner.temp }}/velnor/bun-assets";
 
-/// Stable archive filename and raw artifact name for one member.
 #[must_use]
 pub fn bun_assets_archive_name(member_job_id: &str) -> String {
     format!("{BUN_ASSETS_ARCHIVE_PREFIX}{member_job_id}.tar.gz")
 }
 
-/// The assets job's upload of the verified `.velnor/deps` tree (1 day).
-///
-/// # Errors
-///
-/// Returns render errors for an invalid step.
 pub fn bun_assets_upload_step(member_job_id: &str) -> Result<Step, RenderError> {
     let archive = bun_assets_archive_name(member_job_id);
     action_step(
@@ -165,11 +121,6 @@ pub fn bun_assets_upload_step(member_job_id: &str) -> Result<Step, RenderError> 
     )
 }
 
-/// A suite job's download of the assets its member's assets job verified.
-///
-/// # Errors
-///
-/// Returns render errors for an invalid step.
 pub fn bun_assets_download_step(member_job_id: &str) -> Result<Step, RenderError> {
     let archive = bun_assets_archive_name(member_job_id);
     action_step(
@@ -186,9 +137,6 @@ pub fn bun_assets_download_step(member_job_id: &str) -> Result<Step, RenderError
     )
 }
 
-/// True for one of the pinned artifact actions above, by its generated shape:
-/// no role, the pinned upload or download action, a `velnor-pw-` name or
-/// pattern. The job reconstruction then compares every input byte for byte.
 pub(crate) fn is_bun_artifact_step(step: &Step) -> bool {
     let StepKind::Action { uses, with, .. } = &step.kind else {
         return false;

@@ -1,5 +1,3 @@
-//! Cache observation checks for one phase transition.
-
 use crate::errors::ContractError;
 use crate::workflow::QualificationPhase;
 

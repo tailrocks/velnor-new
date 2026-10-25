@@ -1,5 +1,3 @@
-//! Durable journal schema and small idempotent migrations.
-
 use turso::Connection;
 use uuid::Uuid;
 
@@ -7,10 +5,6 @@ use crate::error::HostError;
 
 mod resource_probe;
 
-/// Run the extended-schema statements inside the caller's transaction.
-///
-/// The journal bootstrap owns the transaction so a validation failure rolls
-/// back these statements together with the versioned schema migration.
 pub(super) async fn bootstrap(connection: &Connection) -> Result<(), HostError> {
     connection
         .execute(
@@ -48,8 +42,7 @@ pub(super) async fn bootstrap(connection: &Connection) -> Result<(), HostError> 
         .await
         .map_err(|_| HostError::Journal)?;
     resource_probe::bootstrap(connection).await?;
-    // The versioned schema owns `completion_cleanup`; its shape carries the
-    // scale-set identity columns and uniqueness guards this package never had.
+
     let instance_id = Uuid::new_v4().simple().to_string();
     connection
         .execute(
@@ -63,7 +56,7 @@ pub(super) async fn bootstrap(connection: &Connection) -> Result<(), HostError> 
     if !lifecycle_flags_present {
         quarantine_legacy_lifecycle(connection).await?;
     }
-    // Revision triggers install separately once `completion_cleanup` exists.
+
     connection
         .execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS unique_launch_id ON intents(launch_id) WHERE launch_id IS NOT NULL",
@@ -141,10 +134,6 @@ async fn drop_revision_triggers(connection: &Connection) -> Result<(), HostError
     Ok(())
 }
 
-/// Install the revision triggers once every journal table exists.
-///
-/// Runs after the versioned schema ensures `completion_cleanup`; creating a
-/// trigger on a missing table fails the whole bootstrap transaction.
 pub(super) async fn install_revision_triggers(connection: &Connection) -> Result<(), HostError> {
     for statement in [
         "DROP TRIGGER IF EXISTS journal_lineage_revision",

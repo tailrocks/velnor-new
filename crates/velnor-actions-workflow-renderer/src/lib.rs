@@ -1,7 +1,11 @@
-//! Typed-IR to YAML rendering for CI, release, and freshness workflows.
-//!
-//! Validated IR plus fixed argv in, marked YAML out. No subprocesses.
-
+#![allow(
+    clippy::missing_errors_doc,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
+#![allow(
+    missing_docs,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
 mod action_mbx_shell;
 mod action_ref;
 pub mod agents_md;
@@ -56,7 +60,6 @@ mod plan_gate;
 pub mod preseed;
 mod preseed_closure;
 pub mod private_source_steps;
-/// Project tool-version resolver binding (hard decision 5).
 mod project_tool_resolver;
 pub use project_tool_resolver::quote_project_tool_run_refs;
 pub mod publish_render;
@@ -94,40 +97,20 @@ mod tofu_apply_steps;
 pub mod tofu_cache;
 mod tool_seed;
 mod tool_seed_admission;
-#[cfg(test)]
-mod tool_seed_test_support;
+
 pub mod toolchain_env;
 pub mod tree;
 pub mod upgrades;
 mod verifier_shell;
 
-/// Display name of the step that verifies an installed Rust toolchain file
-/// by file against its pinned channel manifest; every generated job that
-/// installs Rust runs it before the toolchain is used.
 pub const VERIFY_RUST_TOOLCHAIN_STEP: &str = "Verify Rust channel manifest";
 
-/// The only `PATH` a cache, toolchain, or release-verification script runs with:
-/// root-owned system directories. Setup Mise has already put the Mise
-/// `bin/` and `shims/` directories on `PATH` ahead of them, and the tools
-/// cache restores both, so a bare helper name (`sha256sum`, `curl`, `tar`)
-/// resolved through the inherited `PATH` could run cached code inside the
-/// very check meant to gate it. Each script assigns this first.
 pub const VERIFY_PATH: &str = "/usr/bin:/bin:/usr/sbin:/sbin";
 
-/// Shell of the composite steps that run while restored, unverified bytes
-/// sit on `PATH`. The runner resolves a bare `bash` through `PATH`
-/// (`WhichUtil.Which`, with the `addPath` entries first) but runs a fully
-/// qualified path as given.
 pub const VERIFY_SHELL: &str = "/bin/bash --noprofile --norc -e -o pipefail {0}";
 
-/// Startup-safe shell used only by release-verifier steps.
-///
-/// Bash privileged mode prevents `BASH_ENV` and exported functions from
-/// running before the verifier's own credential boundary. Cache scripts keep
-/// using [`VERIFY_SHELL`] because their contract and execution context differ.
 pub const VERIFY_VERIFIER_SHELL: &str = "/bin/bash --noprofile --norc -p -e -o pipefail {0}";
 
-/// Fixed Jactionlint verifier script for one selected tool version.
 #[must_use]
 pub fn jactionlint_verifier_script(version: &str) -> String {
     selected_mise_verifier::script_for_version(version)
@@ -142,8 +125,6 @@ pub mod yaml;
 mod root_api;
 pub use self::root_api::*;
 
-/// Renderer implementation version (typed Gate-2 renderer).
 pub const RENDERER_VERSION: u32 = 2;
 
-/// Source-free authenticated review completion companion.
 pub mod review_completion;

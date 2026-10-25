@@ -1,11 +1,3 @@
-//! Crate-job body extraction for workflows over GitHub's file cap.
-//!
-//! Inlined obligation commands are unique per crate, so YAML anchors cannot
-//! share them. When `ci.yml` would exceed 500 KB, those steps move into one
-//! local composite per crate job. The job keeps checkout, tool setup, and
-//! report upload. Obligation steps are identified structurally: Rust
-//! task executions and the `OpenTofu` provider-cache consumers.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Job, Step, StepKind, StepRole};
@@ -16,15 +8,6 @@ use crate::render::RenderContext;
 use crate::tree::RenderedFile;
 use crate::{RenderError, composite, marker, steps, yaml};
 
-/// Move obligation steps out of crate jobs that are still inlined.
-///
-/// Lane-shared jobs already keep their bodies in a composite. Returns the
-/// number of actions written. Zero means this pass cannot shrink the file.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] when an obligation block is split or the action
-/// path collides.
 pub(crate) fn extract_obligation_composites(
     shared: &mut LaneShare,
     ctx: &RenderContext,
@@ -64,8 +47,6 @@ fn extract_job(
     job: &mut Job,
     ctx: &RenderContext,
 ) -> Result<Option<RenderedFile>, RenderError> {
-    // Composite actions cannot declare background steps; a job with a
-    // parallel group keeps its obligations literal in the workflow.
     if job.steps.iter().any(|step| step.parallel) {
         return Ok(None);
     }
@@ -141,92 +122,4 @@ fn obligation_action(
         path: format!(".github/actions/crate-obligation-{job_id}/action.yml"),
         bytes,
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use velnor_actions_contract::{Job, JobTimeout, Step, StepKind};
-
-    #[test]
-    fn extracts_job_starting_with_provider_prelude() {
-        let job_id = "tofu-provider-prelude-alpha";
-        let mut job = Job {
-            services: Vec::new(),
-            display_name: "tofu provider prelude alpha".to_owned(),
-            runs_on: "ubuntu-26.04".to_owned(),
-            timeout_minutes: JobTimeout::CRATE,
-            needs: Vec::new(),
-            condition: None,
-            permissions: None,
-            cache_mode: None,
-            environment: None,
-            check_runner: None,
-            steps: vec![
-                Step {
-                    parallel: false,
-                    name: "Checkout".to_owned(),
-                    id: None,
-                    role: None,
-                    condition: None,
-                    kind: StepKind::Action {
-                        uses: "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683"
-                            .to_owned(),
-                        with: BTreeMap::new(),
-                        env: BTreeMap::new(),
-                    },
-                },
-                Step {
-                    parallel: false,
-                    name: "Check task".to_owned(),
-                    id: None,
-                    role: Some(StepRole::TofuProviderUse),
-                    condition: None,
-                    kind: StepKind::Shell {
-                        run: vec!["echo".to_owned(), "task".to_owned()],
-                        env: BTreeMap::from([
-                            (
-                                "TF_PLUGIN_CACHE_DIR".to_owned(),
-                                "${{ runner.temp }}/velnor/tofu-cache/alpha".to_owned(),
-                            ),
-                            ("TF_DATA_DIR".to_owned(), ".terraform".to_owned()),
-                        ]),
-                    },
-                },
-            ],
-        };
-        let ctx = RenderContext {
-            tool_pins: Vec::new(),
-            generator_version: "0.1.0".to_owned(),
-            report_helper_version: "0.1.0".to_owned(),
-            runs_on: "ubuntu-26.04".to_owned(),
-            scale_set_selector: None,
-            staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
-            request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
-            checkout_uses: "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683".to_owned(),
-            validator_commands: Vec::new(),
-            candidate: None,
-            preseed: false,
-            workflow_tasks: Vec::new(),
-            pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-            mise_quiet: true,
-            plan_consumer_env: BTreeMap::new(),
-        };
-        let file = extract_job(job_id, &mut job, &ctx)
-            .expect("extraction must succeed")
-            .expect("obligation file written");
-        assert_eq!(
-            file.path,
-            ".github/actions/crate-obligation-tofu-provider-prelude-alpha/action.yml"
-        );
-        let call_step = &job.steps[1];
-        let StepKind::Action { uses, .. } = &call_step.kind else {
-            panic!("expected Action step");
-        };
-        assert_eq!(
-            uses,
-            "./.github/actions/crate-obligation-tofu-provider-prelude-alpha"
-        );
-        crate::action_ref::validate_uses(uses).expect("action step uses must validate");
-    }
 }

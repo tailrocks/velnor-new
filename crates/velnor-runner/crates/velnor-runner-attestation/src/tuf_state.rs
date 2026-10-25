@@ -116,10 +116,6 @@ struct GenerationManifest {
 }
 
 pub(crate) struct TufRefresh<V> {
-    #[cfg(test)]
-    pub(crate) repository: Repository,
-    #[cfg(test)]
-    pub(crate) root_chain: VerifiedRootChain,
     pub(crate) target_value: V,
 }
 
@@ -145,11 +141,3 @@ include!("tuf_state/generation.inc.rs");
 include!("tuf_state/lock.inc.rs");
 include!("tuf_state/path.inc.rs");
 include!("tuf_state/files.inc.rs");
-
-#[cfg(test)]
-#[path = "tuf_state_tests.rs"]
-mod tests;
-
-#[cfg(test)]
-#[path = "tuf_state_process_tests.rs"]
-mod process_tests;

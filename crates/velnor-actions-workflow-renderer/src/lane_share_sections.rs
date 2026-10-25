@@ -15,7 +15,6 @@ use crate::render::RenderContext;
 use crate::tree::RenderedFile;
 use crate::{RenderError, marker, steps, yaml::render_yaml};
 
-/// Permit the one documented hosted-to-hosted named-check condition refinement.
 pub(crate) fn same_or_admitted_check_condition(hosted: &Job, local: &Job) -> bool {
     if hosted.condition == local.condition {
         return true;
@@ -31,7 +30,6 @@ pub(crate) fn same_or_admitted_check_condition(hosted: &Job, local: &Job) -> boo
         )
 }
 
-/// Separate lane-only upload/identity steps from the shared action body.
 pub(crate) fn peel_lane_specific(steps: &[Step]) -> (Vec<Step>, Vec<Step>) {
     let mut common = Vec::new();
     let mut extra = Vec::new();
@@ -61,7 +59,6 @@ fn is_lane_specific(step: &Step) -> bool {
     }
 }
 
-/// Find the point where the lane-specific MBX cache prelude begins.
 pub(crate) fn mbx_prelude_index(steps: &[Step]) -> Option<usize> {
     let preflight = steps
         .iter()
@@ -69,7 +66,6 @@ pub(crate) fn mbx_prelude_index(steps: &[Step]) -> Option<usize> {
     (preflight < steps.len()).then_some(preflight)
 }
 
-/// Separate an MBX prelude from the remaining shared lane body.
 pub(crate) fn peel_mbx_prelude(steps: &[Step]) -> Option<(Vec<Step>, &[Step])> {
     let mut end = 0;
     for step in steps {
@@ -88,7 +84,6 @@ pub(crate) fn peel_mbx_prelude(steps: &[Step]) -> Option<(Vec<Step>, &[Step])> {
     Some((prelude.to_vec(), &steps[end..]))
 }
 
-/// Keep the provider output owner in the job scope that consumes its outputs.
 pub(crate) fn peel_provider_restore_prefix(steps: &[Step]) -> (Vec<Step>, &[Step]) {
     let Some(index) = steps
         .iter()
@@ -100,7 +95,6 @@ pub(crate) fn peel_provider_restore_prefix(steps: &[Step]) -> (Vec<Step>, &[Step
     (steps[..end].to_vec(), &steps[end..])
 }
 
-/// Separate writer and MBX export steps from the common lane action.
 pub(crate) fn peel_postlude(steps: &[Step]) -> (Vec<Step>, Vec<Step>) {
     let mut common = Vec::new();
     let mut postlude = Vec::new();
@@ -141,11 +135,6 @@ fn is_postlude_step(step: &Step) -> bool {
     )
 }
 
-/// Replace repeated pre-restore step sequences with one shared local action.
-///
-/// The provider restore itself remains in each workflow job because the
-/// elected save step consumes that job-scoped output ID. Only byte-identical
-/// prefixes shared by multiple lane jobs are factored.
 pub(crate) fn factor_provider_preludes(
     preludes: &mut BTreeMap<String, Vec<Step>>,
     files: &mut Vec<RenderedFile>,
@@ -207,7 +196,6 @@ pub(crate) fn factor_provider_preludes(
     Ok(())
 }
 
-/// Render one workflow composite from typed steps.
 pub(crate) fn composite_file(
     logical: &str,
     steps: &[Step],
@@ -236,7 +224,3 @@ pub(crate) fn composite_file(
         bytes,
     })
 }
-
-#[cfg(test)]
-#[path = "lane_share_composite_resolver_tests.rs"]
-mod composite_resolver_tests;

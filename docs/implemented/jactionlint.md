@@ -18,6 +18,28 @@ and the specification is the [workflow lint contract](../proposed/workflow-lint-
   `generated-files: report`, `config-variables: []` and the scale-set labels
   `velnor` and `ubuntu-26.04-scale-set`.
 
+## Pinned release provenance
+
+The pinned release is `jdx/jactionlint` tag `v2.3.0`, published as a stable
+release on 2026-10-21. The latest-release API was checked on 2026-10-22. At
+this bump, both provenance checks below passed on 2026-10-22 for the four
+archives covered by the current
+[`JACTIONLINT_DIGESTS` table](../../crates/velnor-actions-contract/src/config/jactionlint_verifier.rs#L18):
+
+- `cosign verify-blob-attestation` on `packslip.sigstore.json`, with type
+  `https://packslip.dev/release/v1`, signer identity
+  `https://github.com/jdx/jactionlint/.github/workflows/release.yaml@refs/tags/v2.3.0`,
+  and issuer `https://token.actions.githubusercontent.com`;
+- `gh attestation verify -R jdx/jactionlint --signer-workflow
+  jdx/jactionlint/.github/workflows/release.yaml`.
+
+The checks covered the Linux amd64 and arm64 archives and the Darwin amd64 and
+arm64 archives. This records the v2.3.0 bump only. For each future version
+bump, repeat both checks for every table platform and record that version's
+source tag, check date, and outcomes here; the current release's evidence does
+not qualify a later version. The bump-time procedure is specified in the
+[jactionlint subsection of the version policy](../proposed/version-policy.md#2-authoritative-version-inventory).
+
 ## Measurements
 
 These were taken with jactionlint 2.3.0, ShellCheck 0.11.0 and the generated

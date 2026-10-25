@@ -1,17 +1,7 @@
-//! A replay-aware launch intent claim.
-
 use super::{Journal, live_id, token_rejected};
 use crate::error::HostError;
 
 impl Journal {
-    /// Return a fresh launch row only when this subject has no unresolved row.
-    ///
-    /// The boolean is true for a newly inserted row. A caller must not repeat
-    /// acquire or provisioning when an unresolved row already exists.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Journal`] on invalid input or database failure.
     pub async fn begin_launch(&self, subject: &str) -> Result<(i64, bool), HostError> {
         if token_rejected(subject) {
             return Err(HostError::Journal);
@@ -30,11 +20,6 @@ impl Journal {
         result
     }
 
-    /// Whether another unproven launch row already holds this identity.
-    ///
-    /// A redelivered subject whose dead row still owns `(scale_set_id,
-    /// runner_name)` cannot bind a fresh row (unique index
-    /// `intents_completion_name`). The caller holds instead of failing.
     pub(crate) async fn launch_identity_taken(
         &self,
         scale_set_id: i64,

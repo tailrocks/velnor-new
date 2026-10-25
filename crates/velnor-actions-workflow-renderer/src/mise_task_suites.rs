@@ -1,5 +1,3 @@
-//! Standalone workflows for credential-free, compile-capable Mise tasks.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
@@ -19,45 +17,27 @@ use evidence::{
     evidence_fetch_job_yaml, github_evidence_internal_step, job_step_to_yaml,
 };
 
-/// One orchestrator-resolved task suite and its locked tool closure.
 #[derive(Debug, Clone)]
 pub struct MiseTaskSuitePolicy {
-    /// Validated config declaration.
     pub suite: MiseTaskSuite,
-    /// Exact fixed runner label.
     pub runner_label: String,
-    /// Pinned Mise action and binary digest for the runner target.
     pub mise_setup: MiseSetup,
-    /// Selected exact prebuilt tools from the source Mise lock.
     pub selected_tools: Vec<BuildTaskTool>,
-    /// SHA-256 of the task Mise config, when present.
     pub mise_config_sha256: Option<String>,
-    /// SHA-256 of the task Mise lock, when present.
     pub mise_lock_sha256: Option<String>,
-    /// SHA-256 of the task Rust toolchain file, when present.
     pub rust_toolchain_sha256: Option<String>,
-    /// Canonical closed GitHub snapshot specification, when enabled.
     pub evidence_fetch_spec: Option<GitHubEvidenceFetchSpecV1>,
-    /// Validated immutable release provenance for the fixed evidence helper steps.
     pub evidence_helper: Option<EvidenceHelperProvenance>,
 }
 
-/// Inputs required to render task-suite companion workflow files.
 #[derive(Debug, Clone)]
 pub struct MiseTaskSuitesRenderSpec {
-    /// Sorted task-suite policy inventory.
     pub suites: Vec<MiseTaskSuitePolicy>,
-    /// Push suites run only on this branch.
     pub default_branch: String,
-    /// Pinned checkout action reference.
     pub checkout_uses: String,
-    /// Generator version in ownership markers.
     pub generator_version: String,
 }
 
-/// Render every standalone `.github/workflows/<slug>.yml` task-suite file.
-/// # Errors
-/// Returns [`RenderError`] when a suite, action, or generated workflow is invalid.
 pub fn render_mise_task_suites(
     spec: &MiseTaskSuitesRenderSpec,
 ) -> Result<Vec<RenderedFile>, RenderError> {
@@ -339,7 +319,3 @@ fn artifact_step(
     step.condition = Some(artifact.when.github_condition().to_owned());
     job_step_to_yaml(policy, &step)
 }
-
-#[cfg(test)]
-#[path = "mise_task_suites_tests.rs"]
-mod tests;

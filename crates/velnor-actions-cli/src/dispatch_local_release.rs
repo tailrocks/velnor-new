@@ -1,5 +1,3 @@
-//! Local release-manifest verification command.
-
 use std::path::Path;
 use std::process::ExitCode;
 
@@ -7,7 +5,6 @@ use velnor_actions_orchestrator::local_release_manifest::verify_local_generator_
 
 use crate::dispatch::fail_public;
 
-/// Verify local binary bytes against a caller-provided release manifest.
 pub(crate) fn run_verify_release_manifest(
     manifest: &Path,
     expected_source_commit: &str,

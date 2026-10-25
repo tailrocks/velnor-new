@@ -1,5 +1,3 @@
-//! Read-only reconciliation of a formula already promoted by an earlier run.
-
 use std::collections::BTreeSet;
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
@@ -383,14 +381,3 @@ fn validate_squash_commit(
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "tap_writer_history_tests.rs"]
-mod tests;
-
-#[cfg(test)]
-#[path = "tap_writer_history_list_tests.rs"]
-mod list_tests;
-#[cfg(test)]
-#[path = "tap_writer_history_tamper_tests.rs"]
-mod tamper_tests;

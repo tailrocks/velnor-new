@@ -1,5 +1,4 @@
 #!/bin/bash
-# The wait accepts a socket that appears, and fails when it never does.
 set -euo pipefail
 root="$(cd "$(dirname "$0")" && pwd)"
 dir="$(mktemp -d)"

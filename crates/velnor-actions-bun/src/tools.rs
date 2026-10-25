@@ -1,16 +1,5 @@
-//! Agreement between `packageManager` and the Mise-declared Bun.
-
 use crate::BunError;
 
-/// Check the root `packageManager` against the exact Bun version Mise declares.
-///
-/// An absent field is accepted. Anything other than `bun@<exact>[+hash]` is a
-/// second package manager and fails.
-///
-/// # Errors
-///
-/// Returns `unsupported_package_manager` for a non-Bun manager and
-/// `conflicting_project_tool_versions:bun` when the versions differ.
 pub fn check_package_manager(
     package_manager: Option<&str>,
     mise_bun: &str,

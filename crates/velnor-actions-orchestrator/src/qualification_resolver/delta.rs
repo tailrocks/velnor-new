@@ -1,5 +1,3 @@
-//! Source-delta proof derived from the checked-out Git history.
-
 use std::ffi::OsString;
 use std::path::Path;
 

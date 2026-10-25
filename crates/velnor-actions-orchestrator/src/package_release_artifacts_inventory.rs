@@ -1,5 +1,3 @@
-//! Strict handoff, directory, and byte inventory admission.
-
 use std::{
     collections::BTreeMap,
     fs::{self, File, OpenOptions},
@@ -23,7 +21,6 @@ use velnor_actions_contract::package_release::{PackageReleaseAsset, PackageRelea
 mod tree;
 pub(crate) use tree::validate_source_tree;
 
-/// Compare every untrusted handoff row to the exact trusted inventory.
 pub(super) fn compare_manifest_inventory(
     manifest: &PackageOutputManifest,
     expected: &[ExpectedFile],
@@ -141,13 +138,11 @@ fn compare_sbom_inventory(
     Ok(())
 }
 
-/// Create a new empty staging directory without following the leaf path.
 pub(super) fn create_fresh_staging(path: &Path) -> Result<(), OrchestratorError> {
     fs::create_dir(path)
         .map_err(|error| OrchestratorError::io(path.display().to_string(), error.to_string()))
 }
 
-/// Copy and hash every declared asset into Velnor-owned staging.
 pub(super) fn copy_expected_files(
     producer: &Path,
     staging: &Path,
@@ -270,7 +265,6 @@ fn copy_hash_file(
     Ok((copied, hex_lower(&hash.finalize())))
 }
 
-/// Read one regular file without following its final symlink.
 pub(super) fn open_regular_nofollow(path: &Path) -> Result<File, OrchestratorError> {
     let metadata = fs::symlink_metadata(path)
         .map_err(|error| OrchestratorError::io(path.display().to_string(), error.to_string()))?;
@@ -315,7 +309,6 @@ fn create_private_file(path: &Path) -> Result<File, OrchestratorError> {
         .map_err(|error| OrchestratorError::io(path.display().to_string(), error.to_string()))
 }
 
-/// Read a bounded file through a no-follow regular-file descriptor.
 pub(super) fn read_limited(
     path: &Path,
     limit: u64,

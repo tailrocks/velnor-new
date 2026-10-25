@@ -1,9 +1,6 @@
-//! Closed step-payload scanning for release authority checks.
-
 use crate::RenderError;
 use velnor_actions_contract::{Step, StepKind};
 
-/// All scannable step payload texts (argv, env, action inputs).
 pub(super) fn payload_texts(step: &Step) -> Vec<&str> {
     match &step.kind {
         StepKind::Action { uses, with, env } => std::iter::once(uses.as_str())
@@ -50,7 +47,6 @@ pub(super) fn payload_texts(step: &Step) -> Vec<&str> {
     }
 }
 
-/// Reject one substring in every payload text of a job's steps.
 pub(super) fn forbid_substring(
     id: &str,
     steps: &[Step],

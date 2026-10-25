@@ -1,5 +1,3 @@
-//! Bounded predecessor admission and lineage validation.
-
 use crate::canonical::{canonical_json_bytes, digest_b3};
 use crate::errors::ContractError;
 use crate::workflow::plan::Plan;
@@ -19,7 +17,6 @@ use super::validation::{
     validate_lanes, validate_metadata, validate_node_metadata, validate_receipt_shape,
 };
 
-/// Validated, bounded predecessor receipt and its complete lineage.
 #[derive(Debug, Clone)]
 pub struct QualificationCacheAdmission {
     pub(super) root: Box<AdmissionNode>,
@@ -27,8 +24,6 @@ pub struct QualificationCacheAdmission {
 }
 
 impl QualificationCacheAdmission {
-    /// Parse a staged predecessor document after byte/depth limits pass.
-    /// # Errors
     pub fn parse_bounded(bytes: &[u8]) -> Result<Self, ContractError> {
         if bytes.is_empty() || bytes.len() > MAX_QUALIFICATION_RECEIPT_BYTES {
             return Err(invalid("artifact_size"));
@@ -44,8 +39,6 @@ impl QualificationCacheAdmission {
         Ok(admission)
     }
 
-    /// Validate receipt metadata and full predecessor lineage for a plan.
-    /// # Errors
     pub fn validate_for_plan(&self, plan: &Plan) -> Result<(), ContractError> {
         plan.validate()?;
         let dispatch = plan
@@ -74,8 +67,6 @@ impl QualificationCacheAdmission {
         Self::validate_chain(plan, &self.root, expected_phase, &current_config, 1)
     }
 
-    /// Canonical digest of the immediate predecessor receipt.
-    /// # Errors
     pub fn receipt_digest(&self) -> Result<String, ContractError> {
         Ok(digest_b3(&canonical_json_bytes(&self.root.receipt)?))
     }
@@ -109,7 +100,6 @@ impl QualificationCacheAdmission {
         find_latest_saved_entry(Some(&self.root), matrix_key, layer)
     }
 
-    /// Verified source change for `UsefulDelta`; absent in other phases.
     #[must_use]
     pub fn source_delta(&self) -> Option<&QualificationSourceDelta> {
         self.source_delta.as_ref()

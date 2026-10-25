@@ -1,39 +1,30 @@
-//! `AcquireJobs` result checks. Partial success is real. Unknown transport is not failure.
-
 use std::collections::BTreeSet;
 
 use crate::error::WireError;
 
-/// What `acquirejobs` proved.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AcquireOutcome {
-    /// Every returned id was requested. The list may be a subset.
     Acquired(Vec<i64>),
-    /// The same id set was already acquired. Do not mint another grant.
+
     Noop,
 }
 
-/// Whether a failed call might still have happened.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Certainty {
-    /// A timeout, reset, or unusable success response may hide an effect.
     Uncertain,
-    /// The service explicitly rejected the call or local validation stopped it.
+
     Definite,
 }
 
-/// Transport failure class.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransportFail {
-    /// Deadline elapsed.
     Timeout,
-    /// Connection reset.
+
     Reset,
-    /// A completed HTTP status.
+
     Http(u16),
 }
 
-/// Map a transport failure to certainty. Timeouts and server failures stay occupied.
 #[must_use]
 pub const fn effect_certainty(fail: TransportFail) -> Certainty {
     match fail {
@@ -44,11 +35,6 @@ pub const fn effect_certainty(fail: TransportFail) -> Certainty {
     }
 }
 
-/// Accept a partial value only when every returned id was requested.
-///
-/// # Errors
-///
-/// Returns [`WireError::OutsideRequest`] when the service returns a foreign id.
 pub fn classify_acquire(
     requested: &[i64],
     returned: &[i64],

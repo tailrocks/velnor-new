@@ -1,9 +1,6 @@
-//! UTF-8 converters for fixed argv and env pairs.
-
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 
-/// Convert fixed argv to UTF-8 strings.
 pub(crate) fn strings_of(argv: Vec<OsString>) -> Result<Vec<String>, String> {
     let mut out = Vec::with_capacity(argv.len());
     for arg in argv {
@@ -15,7 +12,6 @@ pub(crate) fn strings_of(argv: Vec<OsString>) -> Result<Vec<String>, String> {
     Ok(out)
 }
 
-/// Convert fixed env pairs to UTF-8 strings.
 pub(crate) fn strings_of_env(
     env: &[(OsString, OsString)],
 ) -> Result<BTreeMap<String, String>, String> {

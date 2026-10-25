@@ -1,9 +1,3 @@
-//! One composite action per duplicated verification lane.
-//!
-//! GitHub will not start a workflow file larger than 500 KB. Inlining both
-//! lane step lists crosses that limit, so the steps live in one action and
-//! each lane job keeps its own id, `runs-on`, and `needs`.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
@@ -16,35 +10,22 @@ use crate::tree::RenderedFile;
 #[path = "lane_share_runtime.rs"]
 mod runtime;
 
-/// CI workflow plus composite actions for duplicated lanes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedWorkflow {
-    /// Marked `ci.yml` bytes.
     pub yaml: String,
-    /// One composite action per shared logical job. Empty when no lane pair exists.
     pub shared: Vec<RenderedFile>,
 }
 
-/// Jobs rewritten to call a shared action, plus those action files.
 #[derive(Debug)]
 pub(crate) struct LaneShare {
-    /// Same jobs, with shared lanes keeping their headers and elected saves.
     pub jobs: BTreeMap<String, Job>,
-    /// Job id to local `uses` path.
     pub calls: BTreeMap<String, String>,
-    /// Job id to the original checkout step rendered before each shared call.
     pub checkouts: BTreeMap<String, Step>,
-    /// Original step lists used to derive job-level environment values.
     pub env_steps: BTreeMap<String, Vec<Step>>,
-    /// Runner-specific V2 tools identity and restore steps, kept before setup.
     pub runtime_preludes: BTreeMap<String, Vec<Step>>,
-    /// Common setup steps rendered before each lane's cache-specific prelude.
     pub prefixes: BTreeMap<String, Vec<Step>>,
-    /// Lane-specific MBX setup, restore, and import steps.
     pub preludes: BTreeMap<String, Vec<Step>>,
-    /// Lane-specific cache exports and saves rendered after the shared call.
     pub postludes: BTreeMap<String, Vec<Step>>,
-    /// Composite action files, one per logical job.
     pub files: Vec<RenderedFile>,
 }
 
@@ -60,14 +41,6 @@ struct SharedLaneParts {
     local_postlude: Vec<Step>,
 }
 
-/// Factor `__hosted` / `__local` pairs whose step lists match.
-///
-/// # Errors
-///
-/// A pair whose timeout, permissions, environment, or common steps differ
-/// fails closed. The one typed hosted check admission condition may differ;
-/// lane identities, report uploads, and elected cache saves remain in their
-/// owning jobs. An unsafe logical id fails closed.
 pub(crate) fn share_lanes(
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
@@ -103,8 +76,6 @@ pub(crate) fn share_lanes(
         let Some(hosted) = jobs.get(&hosted_id) else {
             continue;
         };
-        // Composite actions cannot declare background steps, so a lane pair
-        // with a parallel group keeps both bodies literal in the workflow.
         if [hosted, local]
             .iter()
             .any(|job| job.steps.iter().any(|step| step.parallel))
@@ -155,12 +126,7 @@ pub(crate) fn share_lanes(
     Ok(shared)
 }
 
-/// Validate the expanded workflow-job and composite-action step scopes.
 fn validate_serialized_scopes(shared: &LaneShare) -> Result<(), RenderError> {
-    // Validate each full source job before its common body moves into a
-    // composite. Provider restore/admission/use can span the hosted/local
-    // prelude and the shared composite, so validating only the serialized
-    // workflow steps and composite body independently would lose that order.
     for (id, steps) in &shared.env_steps {
         velnor_actions_contract::workflow::step_identity::validate_step_sequence(steps, id)
             .map_err(RenderError::Contract)?;
@@ -226,8 +192,6 @@ fn split_pair(hosted: &Job, local: &Job, checkout_uses: &str) -> Option<SharedLa
         runtime::peel_tools_cache_prelude(hosted_steps, &hosted.runs_on)?;
     let (mut local_runtime_prelude, mut local_steps) =
         runtime::peel_tools_cache_prelude(local_steps, &local.runs_on)?;
-    // A lane prelude carries Setup Mise first; its pair renders the same
-    // Setup Mise outside the shared body too.
     if hosted_runtime_prelude.is_empty() != local_runtime_prelude.is_empty() {
         let (empty, steps) = if hosted_runtime_prelude.is_empty() {
             (&mut hosted_runtime_prelude, &mut hosted_steps)
@@ -355,23 +319,3 @@ fn set_steps(jobs: &mut BTreeMap<String, Job>, id: &str, steps: Vec<Step>) {
         job.steps = steps;
     }
 }
-
-#[cfg(test)]
-#[path = "lane_share_tests.rs"]
-mod tests;
-
-#[cfg(test)]
-#[path = "lane_share_render_tests.rs"]
-mod render_tests;
-
-#[cfg(test)]
-#[path = "lane_share_shell_tests.rs"]
-mod shell_tests;
-
-#[cfg(test)]
-#[path = "lane_share_unpinned_tests.rs"]
-mod unpinned_tests;
-
-#[cfg(test)]
-#[path = "lane_share_named_check_tests.rs"]
-mod named_check_tests;

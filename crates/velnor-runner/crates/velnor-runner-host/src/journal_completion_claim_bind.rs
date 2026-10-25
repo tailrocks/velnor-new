@@ -1,5 +1,3 @@
-//! Claim-fenced container bindings and final cleanup proof.
-
 use crate::error::HostError;
 use crate::journal::{Journal, token_rejected};
 
@@ -7,7 +5,6 @@ use super::claim::{current_claim, unix_seconds};
 use super::finish_transaction;
 
 impl Journal {
-    /// Bind owned container ids only while this completion generation is current.
     pub(crate) async fn bind_completion_containers(
         &self,
         id: i64,
@@ -28,33 +25,6 @@ impl Journal {
             runner_container_id,
             dind_id,
             unix_seconds,
-        )
-        .await
-    }
-
-    #[cfg(test)]
-    pub(crate) async fn bind_completion_containers_at(
-        &self,
-        id: i64,
-        generation: i64,
-        runner_container_id: Option<&str>,
-        dind_id: Option<&str>,
-        now: i64,
-    ) -> Result<bool, HostError> {
-        if id <= 0
-            || generation <= 0
-            || now < 0
-            || runner_container_id.is_some_and(token_rejected)
-            || dind_id.is_some_and(token_rejected)
-        {
-            return Err(HostError::Journal);
-        }
-        self.bind_completion_containers_with_clock(
-            id,
-            generation,
-            runner_container_id,
-            dind_id,
-            || Ok(now),
         )
         .await
     }
@@ -86,7 +56,6 @@ impl Journal {
         finish_transaction(&connection, result).await
     }
 
-    /// Persist exact official runner absence under the current cleanup claim.
     pub(crate) async fn record_completion_runner_absent(
         &self,
         id: i64,
@@ -96,20 +65,6 @@ impl Journal {
             return Err(HostError::Journal);
         }
         self.record_completion_runner_absent_with_clock(id, generation, unix_seconds)
-            .await
-    }
-
-    #[cfg(test)]
-    pub(crate) async fn record_completion_runner_absent_at(
-        &self,
-        id: i64,
-        generation: i64,
-        now: i64,
-    ) -> Result<bool, HostError> {
-        if id <= 0 || generation <= 0 || now < 0 {
-            return Err(HostError::Journal);
-        }
-        self.record_completion_runner_absent_with_clock(id, generation, || Ok(now))
             .await
     }
 
@@ -142,7 +97,6 @@ impl Journal {
         finish_transaction(&connection, result).await
     }
 
-    /// Commit final proof only for the current unexpired generation.
     pub(crate) async fn record_completion_cleanup(
         &self,
         id: i64,
@@ -152,20 +106,6 @@ impl Journal {
             return Err(HostError::Journal);
         }
         self.record_completion_cleanup_with_clock(id, generation, unix_seconds)
-            .await
-    }
-
-    #[cfg(test)]
-    pub(crate) async fn record_completion_cleanup_at(
-        &self,
-        id: i64,
-        generation: i64,
-        now: i64,
-    ) -> Result<bool, HostError> {
-        if id <= 0 || generation <= 0 || now < 0 {
-            return Err(HostError::Journal);
-        }
-        self.record_completion_cleanup_with_clock(id, generation, || Ok(now))
             .await
     }
 

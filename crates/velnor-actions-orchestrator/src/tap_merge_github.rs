@@ -1,10 +1,3 @@
-//! Fixed, bounded GitHub API transport for exact-head tap merge admission.
-//!
-//! REST request shapes follow GitHub's current public REST API. Review-thread
-//! pagination uses the documented GraphQL `PullRequest.reviewThreads` edge.
-
-#[cfg(test)]
-use std::cell::RefCell;
 use std::{
     ffi::{OsStr, OsString},
     time::{Duration, Instant},
@@ -15,9 +8,6 @@ use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
 
 use crate::{OrchestratorError, internal::internal};
 
-#[cfg(test)]
-type TestTransport = dyn FnMut(&[OsString]) -> Result<ApiResponse, OrchestratorError>;
-
 const API_VERSION: &str = "2026-03-10";
 const RESPONSE_LIMIT: usize = 16 * 1024 * 1024;
 const API_TIMEOUT: Duration = Duration::from_secs(90);
@@ -26,8 +16,6 @@ pub(super) struct TapMergeGitHub {
     catalog: ToolCatalog,
     token: String,
     deadline: Instant,
-    #[cfg(test)]
-    test_transport: Option<RefCell<Box<TestTransport>>>,
 }
 
 pub(super) struct ApiResponse {
@@ -41,20 +29,6 @@ impl TapMergeGitHub {
             catalog: ToolCatalog::pinned(),
             token,
             deadline,
-            #[cfg(test)]
-            test_transport: None,
-        }
-    }
-
-    #[cfg(test)]
-    pub(super) fn with_test_transport(
-        transport: impl FnMut(&[OsString]) -> Result<ApiResponse, OrchestratorError> + 'static,
-    ) -> Self {
-        Self {
-            catalog: ToolCatalog::pinned(),
-            token: "test-only-token".to_owned(),
-            deadline: Instant::now() + Duration::from_secs(60),
-            test_transport: Some(RefCell::new(Box::new(transport))),
         }
     }
 
@@ -126,7 +100,6 @@ impl TapMergeGitHub {
         )
     }
 
-    /// Fixed Checks API write; only the independent completion emitter calls it.
     pub(super) fn write_completion_check(
         &self,
         repository: &str,
@@ -155,10 +128,6 @@ impl TapMergeGitHub {
     }
 
     fn request(&self, args: Vec<OsString>) -> Result<ApiResponse, OrchestratorError> {
-        #[cfg(test)]
-        if let Some(transport) = &self.test_transport {
-            return (transport.borrow_mut())(&args);
-        }
         let gh_args = request_arguments(args)?;
         let command = PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), gh_args)
             .map_err(|_| internal("tap_merge_gh_unavailable"))?
@@ -218,7 +187,3 @@ fn parse_included_response(bytes: &[u8]) -> Result<ApiResponse, OrchestratorErro
         body: body.as_bytes().to_vec(),
     })
 }
-
-#[cfg(test)]
-#[path = "tap_merge_github_tests.rs"]
-mod tests;

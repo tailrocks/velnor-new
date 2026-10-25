@@ -1,5 +1,3 @@
-//! Strict typed views of the GitHub Actions evidence endpoints.
-
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use velnor_actions_contract::MAX_GITHUB_EVIDENCE_DOCUMENT_BYTES;
@@ -87,9 +85,7 @@ pub(super) struct JobsPage {
 pub(super) struct JobResponse {
     pub(super) id: u64,
     pub(super) name: String,
-    /// Run identity returned on the Actions job resource.
     pub(super) run_id: u64,
-    /// Event commit returned on the Actions job resource.
     pub(super) head_sha: String,
 }
 

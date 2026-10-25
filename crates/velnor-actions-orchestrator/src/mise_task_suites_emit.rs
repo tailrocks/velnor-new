@@ -1,5 +1,3 @@
-//! Locked source resolution and standalone emission for Mise task suites.
-
 use velnor_actions_workflow_renderer::{
     MiseTaskSuitePolicy, MiseTaskSuitesRenderSpec, RenderedFile, render_mise_task_suites,
 };
@@ -8,7 +6,6 @@ use crate::OrchestratorError;
 use crate::pins::resolve_verification_mise_setup;
 use crate::prepare::GenerationPreparation;
 
-/// Resolve and render standalone task-suite workflow files.
 pub(crate) fn suite_workflow_files(
     prep: &GenerationPreparation,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {

@@ -1,9 +1,3 @@
-//! Closed `[[images]]` declarations for container image build and publication.
-//!
-//! Pure data plus lexical validation. Dockerfile content, filesystem state
-//! and registry ownership are checked by the orchestrator and by the
-//! generated jobs; this module accepts no shell, argv, YAML or `uses:` fields.
-
 use super::image_grammar::{
     is_cargo_name, is_valid_image_id, is_valid_image_repository, require_safe_path,
 };
@@ -11,21 +5,17 @@ use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Registry host every image repository must live under.
 pub const IMAGE_REGISTRY_HOST: &str = "ghcr.io";
 
-/// Closed native image platform catalog; one hosted runner per platform.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ImagePlatform {
-    /// `linux/amd64` built on a hosted amd64 runner.
     LinuxAmd64,
-    /// `linux/arm64` built on a hosted arm64 runner.
+
     LinuxArm64,
 }
 
 impl ImagePlatform {
-    /// Config spelling, also the job-id suffix.
     #[must_use]
     pub const fn key(self) -> &'static str {
         match self {
@@ -34,7 +24,6 @@ impl ImagePlatform {
         }
     }
 
-    /// Job-id-safe suffix.
     #[must_use]
     pub const fn job_suffix(self) -> &'static str {
         match self {
@@ -43,7 +32,6 @@ impl ImagePlatform {
         }
     }
 
-    /// OCI platform string passed to Buildx.
     #[must_use]
     pub const fn oci_platform(self) -> &'static str {
         match self {
@@ -52,7 +40,6 @@ impl ImagePlatform {
         }
     }
 
-    /// Exact hosted runner label that builds this platform natively.
     #[must_use]
     pub const fn runs_on(self) -> &'static str {
         match self {
@@ -62,18 +49,15 @@ impl ImagePlatform {
     }
 }
 
-/// Dockerfile location: one file, or one file per platform.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ImageDockerfile {
-    /// One Dockerfile shared by every platform.
     Single(String),
-    /// One Dockerfile per platform; keys must equal `platforms` exactly.
+
     PerPlatform(BTreeMap<ImagePlatform, String>),
 }
 
 impl ImageDockerfile {
-    /// Dockerfile path used for `platform`, when declared.
     #[must_use]
     pub fn for_platform(&self, platform: ImagePlatform) -> Option<&str> {
         match self {
@@ -82,7 +66,6 @@ impl ImageDockerfile {
         }
     }
 
-    /// Every declared Dockerfile path, sorted and unique.
     #[must_use]
     pub fn paths(&self) -> BTreeSet<&str> {
         match self {
@@ -92,57 +75,48 @@ impl ImageDockerfile {
     }
 }
 
-/// Artifacts Velnor builds outside `BuildKit` and stages into the context.
-///
-/// Closed tagged union. `gradle_task` is added by the Gradle stack work.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ImagePrebuilt {
-    /// A release Cargo binary built with `--locked --offline` through MBX.
     CargoBin {
-        /// Workspace package name.
         package: String,
-        /// Binary target name.
+
         bin: String,
-        /// Path inside the build context the Dockerfile `COPY`s from.
+
         stage: String,
     },
 }
 
-/// One `[[images]]` entry.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ImageConfig {
-    /// Stable id, unique across images; names every generated job.
     pub id: String,
-    /// `ghcr.io/<repo-owner-lowercase>/<name>`; the owner is bound at run time.
+
     pub repository: String,
-    /// Dockerfile path, or one per platform.
+
     pub dockerfile: ImageDockerfile,
-    /// Build context directory (repo-relative; `.` is the repository root).
+
     #[serde(default = "default_context")]
     pub context: String,
-    /// Native platforms, sorted and unique; no emulation.
+
     pub platforms: Vec<ImagePlatform>,
-    /// Manifest whose `version` names the promoted release tag.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version_file: Option<String>,
-    /// Optional artifacts Velnor builds before `BuildKit`.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub prebuilt: Option<ImagePrebuilt>,
-    /// Literal `timeout-minutes` of every build job of this image.
+
     #[serde(default = "default_timeout_minutes")]
     pub timeout_minutes: u16,
 }
 
-/// Default build-job bound; image builds outlast the 5-minute crate default.
 pub const DEFAULT_IMAGE_TIMEOUT_MINUTES: u16 = 30;
 
 fn default_timeout_minutes() -> u16 {
     DEFAULT_IMAGE_TIMEOUT_MINUTES
 }
 
-/// Generated build and publish job ids all start with this prefix.
 pub const IMAGE_JOB_PREFIX: &str = "image-";
 
 fn default_context() -> String {
@@ -150,25 +124,21 @@ fn default_context() -> String {
 }
 
 impl ImageConfig {
-    /// Generated build job id for `platform`.
     #[must_use]
     pub fn build_job_id(&self, platform: ImagePlatform) -> String {
         format!("image-{}-{}", self.id, platform.job_suffix())
     }
 
-    /// Generated publish job id.
     #[must_use]
     pub fn publish_job_id(&self) -> String {
         format!("image-publish-{}", self.id)
     }
 
-    /// Generated promote job id.
     #[must_use]
     pub fn promote_job_id(&self) -> String {
         format!("image-promote-{}", self.id)
     }
 
-    /// Every job id this image generates, in a stable order.
     fn generated_job_ids(&self) -> Vec<String> {
         let mut ids: Vec<String> = self
             .platforms
@@ -180,8 +150,6 @@ impl ImageConfig {
         ids
     }
 
-    /// Validate one entry; `index` locates it in error key paths.
-    /// # Errors
     pub fn validate(&self, file: &str, index: usize) -> Result<(), ContractError> {
         let at = |field: &str| format!("images[{index}].{field}");
         if !is_valid_image_id(&self.id) {
@@ -289,8 +257,6 @@ impl ImagePrebuilt {
     }
 }
 
-/// Validate the whole `[[images]]` inventory: entries, then uniqueness.
-/// # Errors
 pub fn validate_images(images: &[ImageConfig], file: &str) -> Result<(), ContractError> {
     let mut ids = BTreeSet::new();
     let mut repositories = BTreeSet::new();

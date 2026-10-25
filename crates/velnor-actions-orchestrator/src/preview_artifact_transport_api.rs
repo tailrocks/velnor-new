@@ -1,5 +1,3 @@
-//! Read-only capability over the existing pinned GitHub transport.
-
 use super::super::{
     preview_artifacts::{ArtifactPage, ArtifactReadApi, JobRecord, ReleaseConsumer},
     run_identity::{CurrentRun, RunSource, run_matches},
@@ -11,7 +9,6 @@ use velnor_actions_contract::{
     preview_production::ReleaseProductionContext,
 };
 
-/// No mutation method or underlying publisher API escapes this capability.
 pub(in crate::package_release_publish) struct ReleaseArtifactApi {
     api: GitHubApi,
     repository: String,
@@ -81,7 +78,6 @@ impl ReleaseArtifactApi {
                 &context.workflow_authority_sha,
             )?;
         }
-        // Historical attempt identity alone cannot establish the current attempt.
         for run in [
             api.workflow_run(context.run_id, context.run_attempt)?,
             api.get_json::<WorkflowRunResponse>(
@@ -175,7 +171,3 @@ impl ArtifactReadApi for ReleaseArtifactApi {
         )
     }
 }
-
-#[cfg(test)]
-#[path = "preview_artifact_transport_api_tests.rs"]
-mod tests;

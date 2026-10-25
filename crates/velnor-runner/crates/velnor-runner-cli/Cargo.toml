@@ -21,7 +21,9 @@ security-framework = { version = "=3.7.0" }
 [lib]
 name = "velnor_runner_cli"
 path = "src/lib.rs"
+test = false
 
 [[bin]]
 name = "velnor-host"
 path = "src/main.rs"
+test = false

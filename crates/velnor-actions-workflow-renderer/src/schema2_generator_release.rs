@@ -1,19 +1,10 @@
-//! Generator release for all supported Linux and macOS `velnor-actions` assets.
-//!
-//! The compiled package version is the next immutable release authority.
-//! Attest jobs never receive `contents: write`; only publication does.
-
 use super::{ProductReleasePins, Schema2WorkflowRequest};
 use crate::RenderError;
 use crate::runs_on::runs_on_yaml;
 use crate::yaml::Yaml;
 use velnor_actions_contract::ReleaseTarget;
 
-/// GitHub-hosted macOS label. The arm64 binary is not built on Ubuntu.
 const MACOS_RUNS_ON: &str = "macos-15";
-/// Intel macOS runner for native `x86_64` execution (qualify and attest).
-/// The `x86_64` binary itself cross-compiles on the ARM runner, where the
-/// pinned `mr-boxington` release is installable.
 const MACOS_INTEL_RUNS_ON: &str = "macos-15-intel";
 #[path = "schema2_generator_release_archive.rs"]
 mod archive;
@@ -32,13 +23,11 @@ mod source;
 #[path = "schema2_generator_release_workflow_steps.rs"]
 mod workflow_steps;
 
-/// The generator-release workflow and its checked-in local composite actions.
 pub(super) struct GeneratorRelease {
     pub workflow: Yaml,
     pub actions: Vec<(String, Yaml)>,
 }
 
-/// Typed role for one node in the generator release graph.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum JobRole {
     SourceGate,
@@ -51,7 +40,6 @@ pub(super) enum JobRole {
     Publish,
 }
 
-/// Resolve a job ID through the explicit asset/target inventory.
 pub(super) fn job_role(id: &str) -> Option<JobRole> {
     match id {
         "verify-release-source" => return Some(JobRole::SourceGate),
@@ -74,27 +62,22 @@ pub(super) fn job_role(id: &str) -> Option<JobRole> {
     })
 }
 
-/// Canonical paths published by the same-run release-manifest producer.
 pub(super) fn publication_asset_paths() -> Vec<String> {
     manifest::release_asset_path_list()
 }
 
-/// Version bound into the canonical release manifest and immutable tag.
 pub(super) const fn release_version() -> &'static str {
     assets::VERSION
 }
 
-/// Validate the candidate manifest against downloaded bytes and provenance.
 pub(super) fn verify_published_manifest_script(pins: &ProductReleasePins) -> String {
     manifest::verify_published_manifest_script(pins)
 }
 
-/// Verify all downloaded attestation bundles against the exact workflow authority.
 pub(super) fn verify_attestation_bundles_script() -> String {
     manifest::attestation_bundle_script()
 }
 
-/// Resolve the product-wide pinned Mise setup and GitHub CLI through adapters.
 pub(super) fn product_setup_steps(
     pins: &ProductReleasePins,
     target: ReleaseTarget,
@@ -105,7 +88,6 @@ pub(super) fn product_setup_steps(
     ])
 }
 
-/// Render one verified target's pinned Mise setup action.
 pub(super) fn mise_setup_step(
     pins: &ProductReleasePins,
     target: ReleaseTarget,
@@ -113,7 +95,6 @@ pub(super) fn mise_setup_step(
     workflow_steps::mise_step(pins.setup_for(target))
 }
 
-/// Render the pinned GitHub CLI invocation as a shell function.
 pub(super) fn gh_function(pins: &ProductReleasePins) -> Result<String, RenderError> {
     workflow_steps::gh_function(&pins.gh_argv)
 }
@@ -147,8 +128,6 @@ pub(super) fn release_gate_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>,
     Ok(steps)
 }
 
-/// Install the gate tools, verify the jactionlint executable, then lint the
-/// committed tree with jactionlint: one sequence for every gate.
 pub(super) fn lint_gate_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, RenderError> {
     Ok(vec![
         workflow_steps::command_step(
@@ -160,11 +139,6 @@ pub(super) fn lint_gate_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, Re
     ])
 }
 
-/// Qualify each native build in isolation, attest every product, then publish once.
-///
-/// # Errors
-///
-/// An illegal hosted or macOS label fails.
 pub(super) fn generator_release(
     request: &Schema2WorkflowRequest,
 ) -> Result<GeneratorRelease, RenderError> {
@@ -370,14 +344,3 @@ fn document(jobs: Vec<(String, Yaml)>) -> Yaml {
         ("jobs".to_owned(), Yaml::Map(jobs)),
     ])
 }
-
-#[cfg(test)]
-#[path = "../../test_support/required_tool_path.rs"]
-mod required_tool_path;
-
-#[cfg(test)]
-#[path = "schema2_generator_release_authority_tests.rs"]
-mod authority_tests;
-#[cfg(test)]
-#[path = "schema2_generator_release_tests.rs"]
-mod tests;

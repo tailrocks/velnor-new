@@ -1,15 +1,8 @@
-//! Read-only intent snapshots.
-
 use crate::{error::HostError, reconcile::IntentRow};
 
 use super::{Journal, intent_row};
 
 impl Journal {
-    /// Load every row. The connection closes before this returns.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Journal`] on I/O or a corrupt state.
     pub async fn rows(&self) -> Result<Vec<IntentRow>, HostError> {
         let conn = self.connection().await?;
         let mut query = conn
@@ -26,7 +19,6 @@ impl Journal {
         Ok(out)
     }
 
-    /// Read only active worker rows, refusing a prefix larger than the current ceiling.
     pub(crate) async fn capacity_rows(&self, ceiling: u32) -> Result<Vec<IntentRow>, HostError> {
         let limit = u64::from(ceiling)
             .checked_add(1)

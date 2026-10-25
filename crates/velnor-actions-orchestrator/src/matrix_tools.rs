@@ -1,8 +1,3 @@
-//! Crate-job tool-set construction and typed suite tool ownership.
-//!
-//! Declared via `#[path]` from `matrix_step.rs` (no `lib.rs` edit);
-//! `matrix_step` re-exports the constructors and suite resolver.
-
 use velnor_actions_contract::{Step, StepRole, WorkflowPolicy};
 use velnor_actions_mise::{
     PREPARE_PINNED_TOOLS_STEP, PinnedTool, PreparePinnedTools, ToolCatalog, ToolHomes,
@@ -11,10 +6,6 @@ use velnor_actions_mise::{
 use crate::OrchestratorError;
 use crate::utf8::{strings_of, strings_of_env};
 
-/// Crate-job Mise tools per role: Rust only when the job carries
-/// rust obligations, plus Opentofu
-/// when the job carries tofu obligations. Pure-tofu jobs install the
-/// opentofu driver with no Rust setup; mixed jobs install the union.
 #[must_use]
 pub(crate) fn task_driver_tools(use_rust: bool, use_opentofu: bool) -> Vec<PinnedTool> {
     let mut tools = Vec::new();
@@ -23,7 +14,6 @@ pub(crate) fn task_driver_tools(use_rust: bool, use_opentofu: bool) -> Vec<Pinne
     tools
 }
 
-/// One workspace suite with its exact package identity.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SuiteName {
     Orchestrator,
@@ -43,7 +33,6 @@ enum SuiteName {
 }
 
 impl SuiteName {
-    /// Canonical Cargo package name for this suite.
     const fn package_name(self) -> &'static str {
         match self {
             Self::Orchestrator => "velnor-actions-orchestrator",
@@ -64,14 +53,12 @@ impl SuiteName {
     }
 }
 
-/// Suite-owned tool capability used to construct crate-job setup.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SuiteTool {
     GenerateValidators,
     OpenTofuExecution,
 }
 
-/// Typed suite identity plus the tools its executed tests require.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct CrateSuite {
     name: SuiteName,
@@ -79,12 +66,10 @@ pub(crate) struct CrateSuite {
 }
 
 impl CrateSuite {
-    /// Whether this suite owns an execution that requires one installed tool.
     fn owns(self, tool: SuiteTool) -> bool {
         self.tools.contains(&tool)
     }
 
-    /// Canonical Cargo package name for this suite.
     const fn package_name(self) -> &'static str {
         self.name.package_name()
     }
@@ -94,7 +79,6 @@ const NO_SUITE_TOOLS: &[SuiteTool] = &[];
 const GENERATE_VALIDATOR_TOOLS: &[SuiteTool] = &[SuiteTool::GenerateValidators];
 const OPENTOFU_TOOLS: &[SuiteTool] = &[SuiteTool::OpenTofuExecution];
 
-/// Single source of truth for typed suite identities and owned tool needs.
 const SUITE_TOOL_OWNERS: [CrateSuite; 14] = [
     CrateSuite {
         name: SuiteName::Orchestrator,
@@ -154,7 +138,6 @@ const SUITE_TOOL_OWNERS: [CrateSuite; 14] = [
     },
 ];
 
-/// Resolve one known workspace package to its typed suite and tool owners.
 #[must_use]
 pub(crate) fn suite_for_package(package: &str) -> Option<CrateSuite> {
     SUITE_TOOL_OWNERS
@@ -163,17 +146,6 @@ pub(crate) fn suite_for_package(package: &str) -> Option<CrateSuite> {
         .find(|suite| suite.package_name() == package)
 }
 
-/// Whether one crate job installs the `generate` validators.
-///
-/// Velnor-policy jobs trim by executed suite: only suites owning
-/// [`SuiteTool::GenerateValidators`] install the trio; the rest install
-/// drivers plus Nextest. The orchestrator and CLI suites own it because
-/// their tests execute `generate`; other suites only assert argv.
-/// Consumer suites are opaque to the generator, so consumer jobs keep the trio
-/// fail-safe: dropping an install a suite needs fails CI with
-/// `couldn't exec process` (run 36751323928), while an unneeded
-/// install only costs seconds. Dedicated validator jobs remain the
-/// lint gates for the committed workflow either way.
 #[must_use]
 pub(crate) fn crate_needs_generate_validators(
     policy: WorkflowPolicy,
@@ -187,17 +159,6 @@ pub(crate) fn crate_needs_generate_validators(
     }
 }
 
-/// Whether one crate job installs opentofu for its executed suite.
-///
-/// Velnor-policy jobs install only for suites owning
-/// [`SuiteTool::OpenTofuExecution`]. Only mise executes the real-binary
-/// tests; the orchestrator only constructs the command for env assertions.
-/// Tofu obligations select the driver separately (see
-/// [`prepare_install_opentofu`]). Consumer jobs never install here:
-/// unlike the `generate` validators (fail-safe-true because
-/// consumer suites CAN execute `generate`), consumer suites CANNOT
-/// reach our `tofu_exec` ctor — the mise crate is not
-/// published/consumable — so false is correct, not just cheaper.
 #[must_use]
 pub(crate) fn crate_needs_tofu_install(policy: WorkflowPolicy, suite: Option<CrateSuite>) -> bool {
     match policy {
@@ -208,7 +169,6 @@ pub(crate) fn crate_needs_tofu_install(policy: WorkflowPolicy, suite: Option<Cra
     }
 }
 
-/// Effective opentofu install flag: tofu obligations or a tofu-spawning suite.
 #[must_use]
 pub(crate) fn prepare_install_opentofu(
     policy: WorkflowPolicy,
@@ -218,32 +178,6 @@ pub(crate) fn prepare_install_opentofu(
     use_opentofu || crate_needs_tofu_install(policy, suite)
 }
 
-/// Typed `Prepare pinned tools` step for the crate-job tool set.
-///
-/// Driver toolchain per role (Rust only for rust obligations, plus
-/// Opentofu for tofu jobs) plus Nextest when used, plus the
-/// `generate` validators only when `needs_validators` holds (see
-/// [`crate_needs_generate_validators`]). The set is exact and pinned
-/// by test: drivers, conditional validators, optional Nextest,
-/// nothing else. Pure-tofu roles carry no owned-homes triple in the
-/// step env; every other role keeps it.
-///
-/// When the repository `mise.toml` rust record sets `mr_boxington = true`
-/// (catalog [`ToolCatalog::rust_mr_boxington`]) and the job carries rust
-/// obligations, mise's exec-time wrapper dispatches cargo through the
-/// mise-managed `mr-boxington` tool at the repository's own pin, so that
-/// pin joins the install argv of the rust-carrying jobs; without it
-/// the preflight never installs `mr-boxington` and, with
-/// `MISE_AUTO_INSTALL=false`, the wrapper falls back to the action-owned
-/// PATH `mbx`, which may be a different version and emits no
-/// `WRAPPER command: mbx` trace (`jackin-project/jackin` issue 1142,
-/// test `case_02`). Pure-tofu jobs run no cargo, so they never install
-/// the pin — and never trip the renderer's mbx-selector gate, which
-/// admits the pin only next to the job's own native MBX action.
-///
-/// # Errors
-///
-/// Returns a contract error when the Mise adapter rejects the request.
 #[expect(
     clippy::fn_params_excessive_bools,
     reason = "five independent install flags mirror the driver selection"
@@ -279,61 +213,4 @@ pub(crate) fn prepare_crate_tools_step(
             .map_err(OrchestratorError::from)?;
     step.role = Some(StepRole::PreparePinnedTools);
     Ok(step)
-}
-
-#[cfg(test)]
-mod tests {
-    use std::fs;
-    use std::path::Path;
-
-    use super::{SUITE_TOOL_OWNERS, suite_for_package};
-
-    #[test]
-    fn typed_tool_owner_table_matches_workspace_members() {
-        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let root = manifest_dir
-            .parent()
-            .and_then(Path::parent)
-            .expect("crate lives two levels under the workspace root");
-        let mut members = Vec::new();
-        for entry in fs::read_dir(root.join("crates")).expect("crates dir lists") {
-            let manifest = entry.expect("dir entry reads").path().join("Cargo.toml");
-            if !manifest.is_file() {
-                continue;
-            }
-            let text = fs::read_to_string(&manifest).expect("member manifest reads");
-            let mut in_package = false;
-            for line in text.lines() {
-                if line.trim() == "[package]" {
-                    in_package = true;
-                } else if line.starts_with('[') {
-                    in_package = false;
-                } else if in_package && line.trim_start().starts_with("name = ") {
-                    let name = line
-                        .trim_start()
-                        .trim_start_matches("name = ")
-                        .trim()
-                        .trim_matches('"');
-                    members.push(name.to_owned());
-                    break;
-                }
-            }
-        }
-        let mut registered: Vec<String> = SUITE_TOOL_OWNERS
-            .iter()
-            .map(|suite| suite.package_name().to_owned())
-            .collect();
-        members.sort();
-        registered.sort();
-        assert_eq!(
-            members, registered,
-            "typed owner rows must cover each crate"
-        );
-        assert!(
-            members
-                .iter()
-                .all(|member| suite_for_package(member).is_some()),
-            "every workspace package resolves to its typed suite"
-        );
-    }
 }

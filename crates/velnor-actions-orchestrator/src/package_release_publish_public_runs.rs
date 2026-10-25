@@ -1,5 +1,3 @@
-//! Read-only verification of public release workflow and historical recovery provenance.
-
 use run_identity::RunSource;
 use velnor_actions_contract::{PackageReleasePlan, package_release::PackageReleaseReceipt};
 use velnor_actions_mise::CheckDeadline;

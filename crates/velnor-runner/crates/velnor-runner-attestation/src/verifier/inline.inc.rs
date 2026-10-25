@@ -160,9 +160,9 @@ fn validate_expected_inputs(
             return Err("expected claim value is empty or exceeds byte limit".into());
         }
     }
-    // Fulcio .1.10, .1.13, and .1.19 encode immutable Git references, such as
-    // the 40-character commit IDs used by this GitHub source policy. See
-    // https://github.com/sigstore/fulcio/blob/main/docs/oid-info.md.
+
+
+
     for commit_id in [
         &expected.signer_digest,
         &expected.source_digest,

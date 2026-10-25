@@ -1,14 +1,8 @@
-//! Validation helpers for the `[stacks.rust.release]` section.
-//!
-//! Pure shape checks over strings; [`super::release::RustReleaseConfig`]
-//! decides which apply and in which order.
-
 use crate::errors::ContractError;
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::release::BootstrapRelease;
 
-/// Validate the workspace manifest path (relative, safe, `Cargo.toml`).
 pub(super) fn validate_manifest_path(file: &str, path: &str) -> Result<(), ContractError> {
     let key = "stacks.rust.release.manifest_path";
     if path.is_empty() {
@@ -30,7 +24,6 @@ pub(super) fn validate_manifest_path(file: &str, path: &str) -> Result<(), Contr
     Ok(())
 }
 
-/// Validate the package scope (allowlist or publishable opt-in, never both).
 pub(super) fn validate_packages(
     file: &str,
     packages: &[String],
@@ -69,7 +62,6 @@ pub(super) fn validate_packages(
     Ok(())
 }
 
-/// Validate the protected environment name.
 pub(super) fn validate_environment(file: &str, name: &str) -> Result<(), ContractError> {
     let key = "stacks.rust.release.environment";
     if name.is_empty() {
@@ -90,7 +82,6 @@ pub(super) fn validate_environment(file: &str, name: &str) -> Result<(), Contrac
     Ok(())
 }
 
-/// Validate the tag template (safe charset, package and version vars).
 pub(super) fn validate_tag_name(file: &str, tag: &str) -> Result<(), ContractError> {
     let key = "stacks.rust.release.tag_name";
     if tag.is_empty() || !tag.bytes().all(is_tag_byte) {
@@ -116,14 +107,12 @@ pub(super) fn validate_tag_name(file: &str, tag: &str) -> Result<(), ContractErr
     Ok(())
 }
 
-/// The one package-independent stable application tag template.
 pub(super) fn is_stable_tag_name(tag: &str) -> bool {
     tag.strip_prefix("v{{")
         .and_then(|body| body.strip_suffix("}}"))
         .is_some_and(|body| body.trim_matches(' ') == "version")
 }
 
-/// Validate one bootstrap authorization record (fail closed).
 pub(super) fn validate_bootstrap(
     file: &str,
     bootstrap: &BootstrapRelease,
@@ -154,10 +143,6 @@ pub(super) fn validate_bootstrap(
     Ok(())
 }
 
-/// Validate version groups (known members, each in at most one group).
-///
-/// Under the publishable opt-in the allowlist is empty, so set membership
-/// is deferred to emission; every other check still applies.
 pub(super) fn validate_version_groups(
     file: &str,
     groups: &BTreeMap<String, Vec<String>>,
@@ -214,7 +199,6 @@ pub(super) fn validate_version_groups(
     Ok(())
 }
 
-/// Cargo package-name shape: start letter/`_`, rest alnum/`-`/`_`.
 pub(super) fn is_package_name(name: &str) -> bool {
     let mut bytes = name.bytes();
     let Some(first) = bytes.next() else {
@@ -224,7 +208,6 @@ pub(super) fn is_package_name(name: &str) -> bool {
         && bytes.all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'))
 }
 
-/// Strict bootstrap version: exactly three dot-separated numeric parts.
 pub(super) fn is_bootstrap_version(version: &str) -> bool {
     let parts: Vec<&str> = version.split('.').collect();
     parts.len() == 3
@@ -233,7 +216,6 @@ pub(super) fn is_bootstrap_version(version: &str) -> bool {
             .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
 }
 
-/// Full git SHA: 40 lowercase hex characters.
 pub(super) fn is_full_sha(sha: &str) -> bool {
     sha.len() == 40
         && sha
@@ -241,17 +223,14 @@ pub(super) fn is_full_sha(sha: &str) -> bool {
             .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
 }
 
-/// Bytes allowed in a repo-relative manifest path.
 pub(super) fn is_manifest_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'-' | b'_')
 }
 
-/// Bytes allowed in a protected environment name.
 pub(super) fn is_environment_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'/' | b'.')
 }
 
-/// Bytes allowed in a tag template (placeholders plus safe punctuation).
 pub(super) fn is_tag_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || matches!(byte, b' ' | b'-' | b'_' | b'.' | b'/' | b'{' | b'}')
 }

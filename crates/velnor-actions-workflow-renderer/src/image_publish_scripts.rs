@@ -1,34 +1,15 @@
-//! Fixed shell for the image publication jobs of `publish.yml`.
-//!
-//! Generated-workflow content, like `publish_scripts`: nothing runs at
-//! generation time. Every script is a constant template filled only with
-//! values the contract already validated (image id, registry repository,
-//! branch name, platform names), written for POSIX `sh` (the runner's
-//! `dash`), `jq` and `sha256sum`. No script prints or forwards a credential:
-//! the token reaches `gh` through its environment and `crane` through an
-//! isolated Docker config file. The generator rejects command substitution in
-//! any command, so scripts read command output through `get`, which stores
-//! the first word of a command's output in `$val`.
-
 use velnor_actions_contract::ImagePlatform;
 
-/// Step id whose outputs carry the digests the attestation steps consume.
 pub const ASSEMBLE_STEP_ID: &str = "image";
-/// Isolated Docker config directory shared by the login and later steps.
 const DOCKER_CONFIG_DIR: &str = "$RUNNER_TEMP/velnor/docker-config";
 
-/// Define the `crane` shell function through the pinned Mise tool.
-///
-/// `prefix` is the Mise argv up to and including `crane`.
 #[must_use]
 pub fn crane_function(prefix: &[String]) -> String {
     format!("crane() {{ {} \"$@\"; }}", prefix.join(" "))
 }
 
-/// Shell function: run a command and keep the first word of its output in `$val`.
 const GET: &str = "get() { \"$@\" > \"$dir/.val\"; IFS=' ' read -r val _ < \"$dir/.val\"; }";
 
-/// Per-image scratch directory (shell expression).
 fn work_dir(id: &str) -> String {
     format!("$RUNNER_TEMP/velnor/image/{id}")
 }
@@ -41,7 +22,6 @@ fn archs(platforms: &[ImagePlatform]) -> String {
         .join(" ")
 }
 
-/// Require the registry owner to equal the lowercase repository owner.
 #[must_use]
 pub fn owner_script(owner: &str) -> String {
     format!(
@@ -49,7 +29,6 @@ pub fn owner_script(owner: &str) -> String {
     )
 }
 
-/// Download each platform's OCI layout from the push's successful CI run.
 #[must_use]
 pub fn download_script(gh: &str, id: &str, branch: &str, platforms: &[ImagePlatform]) -> String {
     let dir = work_dir(id);
@@ -69,8 +48,6 @@ pub fn download_script(gh: &str, id: &str, branch: &str, platforms: &[ImagePlatf
     let program = format!(
         "[.[] | .workflow_runs[] | select(.head_sha == env.GITHUB_SHA and .event == \"push\" and .conclusion == \"success\" and .head_branch == \"{branch}\" and .head_repository.full_name == env.GITHUB_REPOSITORY)] | sort_by(.id) | last | .id // error(\"ci_run_not_found\")"
     );
-    // GitHub caps `head_sha`-filtered listings at 1,000 results, so `per_page=100`
-    // bounds pagination to ten pages.
     format!(
         "set -eu; {gh}; {GET}; dir=\"{dir}\"; rm -rf \"$dir\"; mkdir -p \"$dir/in\"; \
          for delay in {delays} ''; do \
@@ -86,15 +63,6 @@ pub fn download_script(gh: &str, id: &str, branch: &str, platforms: &[ImagePlatf
     )
 }
 
-/// Verify the downloaded layouts, merge them into one index, extract SBOMs.
-///
-/// Per platform: exactly the three build files, the checksum sidecar, a tar
-/// of only regular files and directories under relative paths, and a layout
-/// whose single top-level index digest equals the build's metadata digest
-/// and its own blob bytes. The merged layout keeps every descriptor of the
-/// per-platform indexes verbatim, attestation manifests included, so the
-/// pushed digest is the one computed here. Outputs: `digest` (index) and
-/// `digest_<arch>` (platform image manifest).
 #[must_use]
 pub fn assemble_script(id: &str, platforms: &[ImagePlatform]) -> String {
     let dir = work_dir(id);
@@ -132,10 +100,6 @@ printf '{\"schemaVersion\":2,\"mediaType\":\"application/vnd.oci.image.index.v1+
 printf '{\"imageLayoutVersion\":\"1.0.0\"}\\n' > \"$dir/merged/oci-layout\"; \
 printf 'digest=sha256:%s\\n' \"$idx\" >> \"$GITHUB_OUTPUT\"";
 
-/// Log in to the registry with an isolated Docker config.
-///
-/// The config directory is exported to later steps through `GITHUB_ENV` so
-/// the attestation action and `gh attestation verify` use the same login.
 #[must_use]
 pub fn login_script(crane: &str) -> String {
     format!(
@@ -145,10 +109,6 @@ pub fn login_script(crane: &str) -> String {
     )
 }
 
-/// Push the merged layout under `sha-<commit>` and optionally the branch tag.
-///
-/// The commit tag is immutable by construction: an existing tag with a
-/// different digest fails. The registry digest must equal the assembled one.
 #[must_use]
 pub fn push_script(crane: &str, id: &str, repository: &str, branch_tag: Option<&str>) -> String {
     let dir = work_dir(id);
@@ -163,7 +123,6 @@ pub fn push_script(crane: &str, id: &str, repository: &str, branch_tag: Option<&
     )
 }
 
-/// Verify the provenance of the index and the SBOM of every platform image.
 #[must_use]
 pub fn verify_script(gh: &str, id: &str, repository: &str, platforms: &[ImagePlatform]) -> String {
     let dir = work_dir(id);
@@ -180,12 +139,6 @@ pub fn verify_script(gh: &str, id: &str, repository: &str, platforms: &[ImagePla
     )
 }
 
-/// Verify the commit's image digest and add the release tag to that digest.
-///
-/// The digest behind `sha-<tagged commit>` must carry a provenance
-/// attestation signed by this workflow for exactly the tagged commit on the
-/// default branch; only then is `<X.Y.Z>` added to the same digest. An
-/// existing release tag must already name that digest. Nothing is rebuilt.
 #[must_use]
 pub fn promote_script(crane: &str, gh: &str, repository: &str, branch: &str) -> String {
     format!(

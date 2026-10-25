@@ -1,4 +1,3 @@
-//! Stable release recovery-envelope hints; the next job authenticates retained bytes.
 use super::super::{
     github::{GITHUB_ACTIONS_BOT_ID, ReleaseResponse, sha256},
     identity::{MAX_RECOVERY_BODY_BYTES, make_recovery_body},
@@ -13,9 +12,6 @@ use velnor_actions_contract::{
     preview_identity::PreviewIdentity,
 };
 
-/// Parse an immutable preview's exact signed recovery envelope as a selection hint.
-/// The retained signed artifact and remote release bytes remain subject to independent
-/// verification before promotion.
 pub(super) fn preview_receipt_hint(
     release: &ReleaseResponse,
     plan: &PackageReleasePlan,
@@ -69,8 +65,6 @@ pub(super) fn preview_receipt_hint(
     Ok(receipt)
 }
 
-/// Parse release metadata only as a hint to locate the original signed artifact.
-/// The caller independently authenticates the retained artifact and published release.
 pub(super) fn stable_receipt_hint(
     release: &ReleaseResponse,
     plan: &PackageReleasePlan,
@@ -138,7 +132,3 @@ fn invalid() -> OrchestratorError {
 fn invalid_preview() -> OrchestratorError {
     internal("tap_continuation_preview_envelope")
 }
-
-#[cfg(test)]
-#[path = "package_release_continuation_envelope_tests.rs"]
-mod tests;

@@ -1,17 +1,3 @@
-//! Typed dispatch for public commands and the private file entrypoint.
-//!
-//! The private gate requires `VELNOR_INTERNAL_OP` plus the exact request file
-//! in `VELNOR_REQUEST_FILE`: `write-request-v1` needs GitHub event env and no
-//! pre-existing file, `plan-v1`/`merge-v1` need a
-//! pre-existing request file, `fetch-reports-v1`/`write-task-report-v1`
-//! need runner temp plus the numeric run ID instead, and
-//! `write-preseed-manifest-v1` needs runner temp only, and
-//! `resolve-qualification-v1` requires a dispatch event, request file, and
-//! read-only GitHub token. `resolve-task-execution-v1` requires runner temp
-//! and the run ID; it emits only the plan-bound task data frame. Anything else
-//! falls through to Clap, so public behavior is byte-identical with or without
-//! the environment set.
-
 use std::env;
 use std::fs;
 use std::io::Write;
@@ -63,44 +49,31 @@ mod tap_merge;
 #[path = "dispatch_tap_prepare.rs"]
 mod tap_prepare;
 
-/// Environment variable selecting the private operation. Never printed.
 const OP_ENV: &str = "VELNOR_INTERNAL_OP";
-/// Environment variable carrying the `$GITHUB_OUTPUT` path. Never printed.
+
 const GITHUB_OUTPUT_ENV: &str = "GITHUB_OUTPUT";
-/// Environment variable carrying the runner temp dir. Never printed.
+
 const RUNNER_TEMP_ENV: &str = "RUNNER_TEMP";
-/// Environment variable carrying the triggering event name. Never printed.
+
 const GITHUB_EVENT_ENV: &str = "GITHUB_EVENT_NAME";
-/// Environment variable carrying the event payload path. Never printed.
+
 const GITHUB_EVENT_PATH_ENV: &str = "GITHUB_EVENT_PATH";
 
 mod operation;
 use operation::{InternalOp, from_env as internal_op};
 
-/// Validated private request: operation plus exact request-file path.
 #[derive(Debug)]
 struct InternalRequest {
-    /// Operation to run.
     op: InternalOp,
-    /// Exact request-file path from the environment.
+
     path: PathBuf,
 }
 
-/// Run the private file entrypoint when the gate is satisfied.
-///
-/// Returns `None` when the gate is not satisfied so the caller falls through
-/// to Clap; bare invocations then fail with the usage diagnostic (exit 2),
-/// keeping public behavior byte-identical with or without the environment.
 pub(crate) fn try_internal() -> Option<ExitCode> {
     let request = gate_request()?;
     Some(run_internal(&request))
 }
 
-/// Check the private gate: known op plus request-file presence by op.
-///
-/// Fetch and report take no request file: they need the runner-temp
-/// velnor directory plus the numeric run ID instead. The preseed-manifest op
-/// takes no request file either: runner temp scopes its output.
 fn gate_request() -> Option<InternalRequest> {
     let op = internal_op()?;
     if fileless::uses_runner_temp_gate(op) {
@@ -201,7 +174,6 @@ fn request_can_be_materialized(path: &Path) -> bool {
         && env::var_os(GITHUB_EVENT_PATH_ENV).is_some_and(|value| !value.is_empty())
 }
 
-/// Exit code of a unit-returning private operation.
 fn unit_exit(result: Result<(), OrchestratorError>) -> ExitCode {
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -209,7 +181,6 @@ fn unit_exit(result: Result<(), OrchestratorError>) -> ExitCode {
     }
 }
 
-/// Run one validated private operation.
 fn run_internal(request: &InternalRequest) -> ExitCode {
     if let Some(code) = bun_assets::run(request.op) {
         return code;
@@ -287,7 +258,6 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
     }
 }
 
-/// Read the request, run the planner, publish files, write response plus outputs.
 fn run_plan_internal(path: &Path) -> ExitCode {
     let text = match fs::read_to_string(path) {
         Ok(text) => text,
@@ -342,7 +312,6 @@ fn run_plan_internal(path: &Path) -> ExitCode {
     }
 }
 
-/// Read the request, run the merge, publish the verdict, exit verdict.
 fn run_merge_internal(path: &Path) -> ExitCode {
     let text = match fs::read_to_string(path) {
         Ok(text) => text,

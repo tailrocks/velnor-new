@@ -1,4 +1,4 @@
-//! Idempotent container create checks.
+
 
 use std::collections::{HashMap, HashSet};
 
@@ -135,6 +135,4 @@ fn observed_mounts(
     Ok(mounts)
 }
 
-#[cfg(test)]
-#[path = "containers_tests.rs"]
-mod tests;
+

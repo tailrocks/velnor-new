@@ -1,5 +1,3 @@
-//! Typed pinned build steps for the source-bound Linux resource-probe image.
-
 use velnor_actions_contract::ReleaseTarget;
 
 use crate::RenderError;

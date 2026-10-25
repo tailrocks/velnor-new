@@ -11,49 +11,32 @@ use super::{RuntimeEntryEvidence, RuntimeEntryKind};
 
 const MAX_RUNTIME_METADATA_BYTES: u64 = 64 * 1024;
 
-/// Stable identity of the declared Unix socket endpoint.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct SocketEvidence {
-    /// Canonical absolute socket path.
     pub path: String,
-    /// Owning Unix user ID.
     pub owner: u32,
-    /// Owning Unix group ID.
     pub group: u32,
-    /// Socket mode, including permission bits.
     pub mode: u32,
-    /// Device identity containing the socket inode.
     pub device: u64,
-    /// Socket inode identity.
     pub inode: u64,
 }
 
-/// Stable identity of the declared `OrbStack` runtime directory.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct RuntimeRootEvidence {
-    /// Canonical absolute runtime directory path.
     pub path: String,
-    /// Owning Unix user ID.
     pub owner: u32,
-    /// Owning Unix group ID.
     pub group: u32,
-    /// Full directory mode.
     pub mode: u32,
-    /// Device identity containing the directory inode.
     pub device: u64,
-    /// Runtime directory inode identity.
     pub inode: u64,
 }
 
-/// Fresh identity evidence captured after runtime revalidation.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct RuntimeObservation {
-    /// Fresh socket identity.
     pub socket: SocketEvidence,
-    /// Fresh `OrbStack` runtime directory identity.
     pub runtime_root: Option<RuntimeRootEvidence>,
 }
 

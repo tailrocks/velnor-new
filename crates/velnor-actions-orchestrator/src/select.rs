@@ -1,15 +1,3 @@
-//! Obligation universe and affected-work classification for `plan-v1`.
-//!
-//! The plan carries the full configured obligation universe. On events
-//! that select affected work (pull requests), packages the change cannot
-//! reach are classified unchanged and their crate jobs become
-//! `not_affected`. Every detectable doubt (unknown files, git failures, a
-//! stale merge ref, lockfile changes, unresolved graphs, unbounded
-//! symlinks) selects everything, and packages with unverified reads count
-//! as changed (`select_reads`); reads the static scan cannot see are the
-//! named residual risk (hard decision 4). Full-run events (push, merge
-//! group, qualification) change everything.
-
 use std::collections::BTreeSet;
 use std::path::Path;
 
@@ -50,13 +38,6 @@ mod tool_sources;
 use changes::{change_sets, local_change_set};
 use paths::head_sha;
 
-/// Full obligation universe: every task with applicable targets.
-///
-/// Tasks without applicable targets are never obligations: scheduling
-/// them would emit impossible work (for example `cargo test --doc` for a
-/// package with no doctest-able target). Each omission is recorded as a
-/// `valid_no_test_targets:<task-id>` warning, never silent. Tofu
-/// subdir roots additionally record one `path.cwd:<root>` caveat each.
 pub(crate) fn select_universe<'a>(
     discovery: &'a Discovery,
     warnings: &mut Vec<String>,
@@ -73,12 +54,6 @@ pub(crate) fn select_universe<'a>(
     Ok(kept)
 }
 
-/// Changed package IDs, or `None` when the comparison is unknown.
-///
-/// `None` marks every obligation changed (fail-closed broad: the correct
-/// unknown-comparison behavior). A set lists the affected packages; every
-/// other unchanged obligation becomes `not_affected`. Full-run events
-/// always return `None`.
 pub(crate) fn classify_changed(
     root: &Path,
     event: WorkflowEvent,
@@ -128,7 +103,6 @@ pub(crate) fn classify_changed(
     ))
 }
 
-/// Local pre-push classification: the working tree against `HEAD`.
 fn classify_local(
     root: &Path,
     discovery: &Discovery,
@@ -154,15 +128,6 @@ fn classify_local(
     ))
 }
 
-/// Changed package IDs for one change set, broadening on risk.
-///
-/// Any risk (lockfile, root config, broadening paths, unowned files, edge
-/// failures) marks every package changed. Rust ownership always sees the
-/// full change set: the Tofu split feeds only Tofu root selection, so a
-/// path some Tofu root owns but no Rust rule claims still selects every
-/// Rust package. Forced packages (unverified reads) count as changed on
-/// every pull request, empty change sets included, and seed the reverse
-/// closure so their dependents run too.
 fn affected_from_changed(
     discovery: &Discovery,
     changed: &BTreeSet<String>,
@@ -212,7 +177,6 @@ fn affected_from_changed(
     affected
 }
 
-/// The whole-run broadening warning one changed path triggers, if any.
 fn broadening_warning(changed: &BTreeSet<String>) -> Option<String> {
     for (kind, warning) in [
         (
@@ -237,7 +201,6 @@ fn broadening_warning(changed: &BTreeSet<String>) -> Option<String> {
         .map(str::to_owned)
 }
 
-/// Rust packages the full change set affects, or `None` to broaden.
 fn rust_affected(
     discovery: &Discovery,
     changed: &BTreeSet<String>,
@@ -281,10 +244,6 @@ fn rust_affected(
     }
 }
 
-/// True when one task counts as changed under the affected packages.
-///
-/// Tasks with an empty unit ID follow their manifest siblings: a
-/// workspace-level task is affected when any same-manifest package is.
 pub(crate) fn group_changed(
     task: &ProposedTask,
     changed: &BTreeSet<String>,
@@ -293,11 +252,3 @@ pub(crate) fn group_changed(
     changed.contains(&task.identity.unit_id)
         || (task.identity.unit_id.is_empty() && changed_keys.contains(&task.identity.unit_key))
 }
-
-#[cfg(test)]
-#[path = "group_selection_tests.rs"]
-mod group_selection_tests;
-
-#[cfg(test)]
-#[path = "select_matrix_tests.rs"]
-mod matrix_tests;

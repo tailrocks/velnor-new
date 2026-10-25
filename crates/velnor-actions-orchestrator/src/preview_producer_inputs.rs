@@ -1,5 +1,3 @@
-//! Exact tracked producer inputs under the caller's absolute budget.
-
 use crate::{OrchestratorError, internal::internal};
 use std::path::Path;
 use velnor_actions_mise::{CheckDeadline, GitRequest};

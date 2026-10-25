@@ -4,12 +4,6 @@ use velnor_actions_contract::{Step, StepKind};
 
 use crate::{RenderError, commands, steps};
 
-/// Validated fixed-argv shell step, scrubbed and unset by construction.
-///
-/// Every `run:` step gets an empty-string credential overlay and removes
-/// credentials through a shape-specific unset prelude. Callers pass the
-/// base env; this constructor owns and adds the scrub overlay.
-/// # Errors
 pub fn shell_step(
     name: &str,
     argv: Vec<String>,
@@ -24,11 +18,6 @@ pub fn shell_step(
     )
 }
 
-/// Construct the fixed, credential-scrubbed Jactionlint verifier step.
-///
-/// Its one shared Setup Mise binder is validated by the dedicated verifier
-/// validator; all other command bytes retain the generic argv checks.
-/// # Errors
 pub fn jactionlint_verifier_step(
     name: &str,
     argv: Vec<String>,
@@ -45,8 +34,6 @@ pub fn jactionlint_verifier_step(
     Ok(step)
 }
 
-/// Validated scrubbed shell step inside a generated composite action.
-/// # Errors
 pub(crate) fn composite_shell_step(
     name: &str,
     argv: Vec<String>,
@@ -61,8 +48,6 @@ pub(crate) fn composite_shell_step(
     )
 }
 
-/// Construct an MBX lifecycle step carrying the one fixed action-owned path resolver.
-/// # Errors
 pub(crate) fn action_owned_mbx_shell_step(
     name: &str,
     argv: Vec<String>,
@@ -114,12 +99,6 @@ fn shell_step_with_env_validation(
     })
 }
 
-/// Validated fixed-argv shell step with ambient credentials intact.
-///
-/// Only repository-code-free operations that need network auth use this
-/// exception: tool acquisition, Cargo Deny install/check, and publishing.
-/// Validators prepared separately use [`shell_step`] for execution.
-/// # Errors
 pub fn ambient_shell_step(
     name: &str,
     argv: Vec<String>,

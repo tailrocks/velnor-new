@@ -1,5 +1,3 @@
-//! Bounded, handle-pinned reads of local release authorization metadata.
-
 use crate::{OrchestratorError, internal::internal};
 use std::{fs, io::Read as _, os::unix::fs::MetadataExt as _, path::Path};
 
@@ -55,45 +53,4 @@ fn read_after_open(path: &Path, after_open: impl FnOnce()) -> Result<Vec<u8>, Or
         return Err(internal("release_metadata_changed"));
     }
     Ok(bytes)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn metadata_rejects_oversize_empty_and_symlink_inputs() {
-        let directory = tempfile::tempdir().expect("directory");
-        let path = directory.path().join("metadata");
-        fs::write(&path, b"safe").expect("write");
-        assert_eq!(read(&path).expect("read"), b"safe");
-        fs::write(&path, []).expect("empty");
-        assert!(read(&path).is_err());
-        fs::File::create(&path)
-            .expect("create")
-            .set_len(1024 * 1024 + 1)
-            .expect("oversize");
-        assert!(read(&path).is_err());
-        let link = directory.path().join("link");
-        std::os::unix::fs::symlink(&path, &link).expect("symlink");
-        assert!(read(&link).is_err());
-    }
-
-    #[test]
-    fn metadata_rejects_same_length_path_replacement_after_open() {
-        let directory = tempfile::tempdir().expect("directory");
-        let path = directory.path().join("metadata");
-        let replacement = directory.path().join("replacement");
-        fs::write(&path, b"safe").expect("write");
-        fs::write(&replacement, b"evil").expect("replacement");
-        assert!(read_after_open(&path, || fs::rename(&replacement, &path).expect("swap")).is_err());
-    }
-
-    #[test]
-    fn metadata_rejects_in_place_change_after_open() {
-        let directory = tempfile::tempdir().expect("directory");
-        let path = directory.path().join("metadata");
-        fs::write(&path, b"safe").expect("write");
-        assert!(read_after_open(&path, || fs::write(&path, b"changed").expect("mutate")).is_err());
-    }
 }

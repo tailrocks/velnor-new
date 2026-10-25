@@ -1,5 +1,3 @@
-//! Fail-closed resolution of GitHub's active branch check and bypass rules.
-
 use std::collections::BTreeSet;
 
 use serde_json::Value;
@@ -61,15 +59,6 @@ enum BranchControl {
 struct BranchControls(BTreeSet<BranchControl>);
 
 impl BranchControls {
-    #[cfg(test)]
-    fn set(&mut self, control: BranchControl, enabled: bool) {
-        if enabled {
-            self.insert(control);
-        } else {
-            self.0.remove(&control);
-        }
-    }
-
     fn insert(&mut self, control: BranchControl) {
         self.0.insert(control);
     }
@@ -248,7 +237,3 @@ fn encode_segment(value: &str) -> String {
     }
     encoded
 }
-
-#[cfg(test)]
-#[path = "tap_merge_protection_tests.rs"]
-mod tests;

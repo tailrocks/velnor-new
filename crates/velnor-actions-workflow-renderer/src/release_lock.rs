@@ -1,22 +1,12 @@
-//! Publisher lock and release-event eligibility.
-//!
-//! Declared from `release_spec.rs` (`#[path]`, no `lib.rs` edit); that
-//! module re-exports the lock types so `release_spec::X` paths keep
-//! working. New helpers stay under `release_spec::lock::`.
-
 use super::{is_clean_text, validate_repository};
 use crate::{RenderError, steps::scan_for_private_subcommands};
 
-/// Stable serialized lock: fixed key, publishers never cancel.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReleaseConcurrency {
-    /// Lock group expression (stable per repository/workspace).
     pub group: String,
-    /// Must always be false: never cancel an active publisher.
     pub cancel_in_progress: bool,
 }
 
-/// Tokens that would make the lock run-, version-, or source-unique.
 const FORBIDDEN_LOCK_TOKENS: &[&str] = &[
     "run_id",
     "run_attempt",
@@ -31,12 +21,6 @@ const FORBIDDEN_LOCK_TOKENS: &[&str] = &[
 ];
 
 impl ReleaseConcurrency {
-    /// Validate the stable group plus the never-cancel invariant.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`RenderError::InvalidWorkflow`] or
-    /// [`RenderError::PrivateSubcommand`] for unstable groups or cancel.
     pub fn validate(&self) -> Result<(), RenderError> {
         if !is_clean_text(&self.group, 256) {
             return Err(RenderError::InvalidWorkflow(format!(
@@ -59,11 +43,6 @@ impl ReleaseConcurrency {
     }
 }
 
-/// Require the lock key to anchor on the repository identity.
-///
-/// # Errors
-///
-/// Returns [`RenderError::InvalidWorkflow`] for unanchored groups.
 pub fn check_lock_anchor(group: &str, repository: &str) -> Result<(), RenderError> {
     if group.contains("github.repository") || group.contains(repository) {
         Ok(())
@@ -74,15 +53,6 @@ pub fn check_lock_anchor(group: &str, repository: &str) -> Result<(), RenderErro
     }
 }
 
-/// Derive the stable publisher lock for one registry/repository/workspace.
-///
-/// Key shape is literal (no expressions): `release-<registry>-<repository>-<workspace>`.
-/// It is stable across runs, versions, and sources, anchored on the
-/// repository identity, and never cancels an active publisher.
-///
-/// # Errors
-///
-/// Returns [`RenderError::InvalidWorkflow`] for malformed segments.
 pub fn stable_lock_group(
     registry: &str,
     repository: &str,
@@ -97,7 +67,6 @@ pub fn stable_lock_group(
     })
 }
 
-/// Validate one lock segment (registry or workspace): lowercase shape.
 fn validate_lock_segment(segment: &str, kind: &str) -> Result<(), RenderError> {
     let shaped = !segment.is_empty()
         && segment.len() <= 64
@@ -113,19 +82,8 @@ fn validate_lock_segment(segment: &str, kind: &str) -> Result<(), RenderError> {
     }
 }
 
-/// GitHub events eligible to run release work.
 const RELEASE_ELIGIBLE_EVENTS: &[&str] = &["push", "schedule", "workflow_dispatch"];
 
-/// Reject release-ineligible events: pull requests, forks, and runners.
-///
-/// `pull_request_target` and `workflow_run` never publish: the first
-/// executes untrusted PR content with base privileges, the second
-/// replays another workflow's context. Fork runs fail the repository
-/// gate as well; this rejects them by event name before any dispatch.
-///
-/// # Errors
-///
-/// Returns [`RenderError::InvalidWorkflow`] for ineligible events.
 pub fn reject_prohibited_release_event(event: &str) -> Result<(), RenderError> {
     if RELEASE_ELIGIBLE_EVENTS.contains(&event) {
         Ok(())

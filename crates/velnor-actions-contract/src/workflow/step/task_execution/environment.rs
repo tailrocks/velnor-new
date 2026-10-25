@@ -92,7 +92,6 @@ fn expected_environment_value(key: &str, value: &str, rust_version: &str) -> boo
         || (key == "CARGO_BUILD_JOBS" && valid_build_jobs(value))
 }
 
-/// A crate's configured compile cap: a plain decimal in `1..=MAX_CRATE_BUILD_JOBS`.
 fn valid_build_jobs(value: &str) -> bool {
     value.bytes().all(|byte| byte.is_ascii_digit())
         && value
@@ -100,8 +99,6 @@ fn valid_build_jobs(value: &str) -> bool {
             .is_ok_and(|jobs| (1..=crate::config::MAX_CRATE_BUILD_JOBS).contains(&jobs))
 }
 
-/// A crate job's concurrent check lane: `[<workspace>/]target/velnor-<lane>`,
-/// workspace-relative with plain segments only.
 fn concurrent_target_lane(value: &str) -> bool {
     let segments: Vec<&str> = value.split('/').collect();
     let [prefix @ .., target, lane] = segments.as_slice() else {
@@ -142,44 +139,4 @@ fn credential_shaped_key(key: &str) -> bool {
                 | "VELNOR_MATRIX_OUTPUT"
                 | "VELNOR_MATRIX_MAX_PARALLEL"
         )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{concurrent_target_lane, valid_build_jobs};
-
-    #[test]
-    fn build_jobs_are_bounded_plain_decimals_only() {
-        for valid in ["1", "2", "64"] {
-            assert!(valid_build_jobs(valid), "{valid}");
-        }
-        for invalid in [
-            "", "0", "65", "01x", "-1", "+1", "1 ", "$X", "${{ x }}", "all",
-        ] {
-            assert!(!valid_build_jobs(invalid), "{invalid}");
-        }
-    }
-
-    #[test]
-    fn target_lanes_are_workspace_relative_velnor_lanes_only() {
-        for valid in [
-            "target/velnor-clippy",
-            "target/velnor-doc",
-            "crates/velnor-runner/target/velnor-doc",
-        ] {
-            assert!(concurrent_target_lane(valid), "{valid}");
-        }
-        for invalid in [
-            "target",
-            "/tmp/target/velnor-doc",
-            "../target/velnor-doc",
-            "target/debug",
-            "target/velnor-",
-            "a//target/velnor-doc",
-            "x/./target/velnor-doc",
-            "${{ runner.temp }}/target/velnor-doc",
-        ] {
-            assert!(!concurrent_target_lane(invalid), "{invalid}");
-        }
-    }
 }

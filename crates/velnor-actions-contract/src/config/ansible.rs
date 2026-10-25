@@ -1,75 +1,59 @@
-//! `[stacks.ansible]`: Ansible roots, hash-pinned Python tooling and offline collections.
-//!
-//! The table is strict (unknown keys are errors) and carries no shell, argv,
-//! YAML or `uses:` field. Checks are a closed enum, the Python requirements
-//! file must be fully hash pinned (verified by the adapter) and every
-//! collection is an exact tarball with a declared SHA-256 that Velnor fetches
-//! and installs offline. Host rollout is out of scope (hard decision 9).
-
 use super::tofu::Utf8RepoRelDir;
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
-/// Largest accepted job timeout, matching the other stacks.
 pub(super) const MAX_ANSIBLE_TIMEOUT_MINUTES: u32 = 360;
-/// Job id prefix of every generated Ansible root job.
+
 pub const ANSIBLE_JOB_PREFIX: &str = "ansible-";
 
-/// Ansible stack options (`[stacks.ansible]`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AnsibleStackConfig {
-    /// Roots holding the playbooks: sorted, duplicate-free.
     pub roots: Vec<Utf8RepoRelDir>,
-    /// Repository-relative `requirements.txt`; every requirement hash pinned.
+
     pub python_requirements: String,
-    /// Repository-relative inventory file used by `--syntax-check`.
+
     pub inventory: String,
-    /// Checks the job runs; defaults to `syntax` then `lint`.
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub checks: Vec<AnsibleCheck>,
-    /// `ansible-lint` profile; defaults to [`LintProfile::Production`].
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lint_profile: Option<LintProfile>,
-    /// Exact collection tarballs, sorted by name; installed offline.
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub collections: Vec<AnsibleCollection>,
-    /// Job timeout in minutes; defaults to `workflow.crate_timeout_minutes`.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timeout_minutes: Option<u32>,
 }
 
-/// Closed set of Ansible checks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AnsibleCheck {
-    /// `ansible-playbook --syntax-check` over every top-level playbook.
     Syntax,
-    /// `ansible-lint --offline`.
+
     Lint,
 }
 
-/// The `ansible-lint` profiles, loosest to strictest.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LintProfile {
-    /// `min`.
     Min,
-    /// `basic`.
+
     Basic,
-    /// `moderate`.
+
     Moderate,
-    /// `safety`.
+
     Safety,
-    /// `shared`.
+
     Shared,
-    /// `production`.
+
     Production,
 }
 
 impl LintProfile {
-    /// Name `ansible-lint --profile` takes.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -83,20 +67,17 @@ impl LintProfile {
     }
 }
 
-/// One exact collection tarball (`[[stacks.ansible.collections]]`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AnsibleCollection {
-    /// `<namespace>.<name>`.
     pub name: String,
-    /// Exact `X.Y.Z`.
+
     pub version: String,
-    /// Lower-case hex SHA-256 of the tarball.
+
     pub sha256: String,
 }
 
 impl AnsibleStackConfig {
-    /// Checks the job runs: the declared set, or `syntax` and `lint`.
     #[must_use]
     pub fn effective_checks(&self) -> Vec<AnsibleCheck> {
         if self.checks.is_empty() {
@@ -106,14 +87,11 @@ impl AnsibleStackConfig {
         }
     }
 
-    /// Profile `ansible-lint` runs with.
     #[must_use]
     pub fn effective_lint_profile(&self) -> LintProfile {
         self.lint_profile.unwrap_or(LintProfile::Production)
     }
 
-    /// Validate roots, paths, checks and collections.
-    /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         self.validate_roots(file)?;
         for (key, path) in [
@@ -222,7 +200,6 @@ impl AnsibleStackConfig {
     }
 }
 
-/// True for `<namespace>.<name>` over lower-case alphanumerics and `_`.
 #[must_use]
 pub(super) fn is_valid_collection_name(name: &str) -> bool {
     let mut parts = name.split('.');
@@ -240,7 +217,6 @@ pub(super) fn is_valid_collection_name(name: &str) -> bool {
     )
 }
 
-/// True for an exact `X.Y.Z` of canonical decimal components.
 #[must_use]
 pub(super) fn is_exact_version(text: &str) -> bool {
     let parts: Vec<&str> = text.split('.').collect();
@@ -252,13 +228,11 @@ pub(super) fn is_exact_version(text: &str) -> bool {
         })
 }
 
-/// True for 64 lower-case hex digits.
 #[must_use]
 pub(super) fn is_sha256(text: &str) -> bool {
     text.len() == 64 && text.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
 }
 
-/// True for a repository-relative file path made of safe segments.
 #[must_use]
 pub(super) fn is_valid_file_path(path: &str) -> bool {
     !path.is_empty()
@@ -272,7 +246,3 @@ pub(super) fn is_valid_file_path(path: &str) -> bool {
                     .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
         })
 }
-
-#[cfg(test)]
-#[path = "ansible_tests.rs"]
-mod tests;

@@ -1,5 +1,3 @@
-//! Bounded, complete pagination for workflow-attempt jobs.
-
 use super::super::github::{WorkflowJob, WorkflowJobList};
 use crate::{OrchestratorError, internal::internal};
 use serde::Deserialize;
@@ -23,31 +21,6 @@ struct IdentifiedWorkflowJob {
     head_sha: Option<String>,
     status: Option<String>,
     conclusion: Option<String>,
-}
-
-#[cfg(test)]
-impl WorkflowJobsPage {
-    pub(super) fn from_ids(
-        total_count: usize,
-        run_id: u64,
-        sha: &str,
-        ids: impl IntoIterator<Item = u64>,
-    ) -> Self {
-        Self {
-            total_count,
-            jobs: ids
-                .into_iter()
-                .map(|id| IdentifiedWorkflowJob {
-                    id,
-                    run_id,
-                    name: format!("Build {id}"),
-                    head_sha: Some(sha.to_owned()),
-                    status: Some("completed".to_owned()),
-                    conclusion: Some("success".to_owned()),
-                })
-                .collect(),
-        }
-    }
 }
 
 #[derive(Default)]

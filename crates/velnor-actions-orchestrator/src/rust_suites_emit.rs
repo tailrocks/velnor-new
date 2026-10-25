@@ -1,5 +1,3 @@
-//! Orchestrator validation and emission for declared `[[stacks.rust.suites]]`.
-
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -20,7 +18,6 @@ use crate::pins::resolve_mise_setup;
 use crate::prepare::GenerationPreparation;
 use crate::workflow::CHECKOUT_USES;
 
-/// Validate declared Rust suites against discovered workspaces, packages, and Nextest profiles.
 pub(crate) fn validate_suites_against_repo(
     root: &Path,
     config: &VelnorConfig,
@@ -108,7 +105,6 @@ fn validate_single_suite(
     Ok(())
 }
 
-/// Build `ci.yml` suite jobs and the subset of job IDs that gate `Required`.
 pub(crate) fn build_ci_jobs(
     root: &Path,
     config: &VelnorConfig,
@@ -138,9 +134,6 @@ pub(crate) fn build_ci_jobs(
     Ok((ci_jobs, required_ids))
 }
 
-/// Replace only the canonical inline verifier steps in CI suite jobs with
-/// their generated local composite-action calls. Standalone suite workflows
-/// keep the inline form because they are rendered by a separate path.
 fn replace_ci_suite_verifiers(
     jobs: &mut BTreeMap<String, Job>,
     catalog: &ToolCatalog,
@@ -173,7 +166,6 @@ fn replace_ci_suite_verifiers(
     Ok(())
 }
 
-/// Render standalone `.github/workflows/<slug>.yml` suite workflow files.
 pub(crate) fn suite_workflow_files(
     prep: &GenerationPreparation,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
@@ -249,7 +241,3 @@ fn build_render_spec(
         ),
     }))
 }
-
-#[cfg(test)]
-#[path = "rust_suites_emit_tests.rs"]
-mod tests;

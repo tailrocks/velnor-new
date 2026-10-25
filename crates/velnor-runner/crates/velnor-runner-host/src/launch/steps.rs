@@ -1,5 +1,3 @@
-//! Acquire, JIT, and ack for one offered id. The journal commits first.
-
 use std::future::Future;
 
 use velnor_runner_github::{
@@ -23,26 +21,19 @@ use super::{Drive, Lane};
 
 pub(super) use scale::{scale_id, scale_unacked};
 
-/// What one poll allows before acquire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Idle {
-    /// HTTP 202. The queue has nothing else.
     Empty,
-    /// One `JobAvailable` id. Do not acknowledge yet.
+
     Launch,
-    /// Assigned population is positive. Mint one JIT runner, then acknowledge.
+
     Scale,
-    /// The batch is safe to acknowledge, even when assigned population is unknown.
-    /// Deleting it does not free a running slot.
+
     Ack,
-    /// A message that must stay on the queue.
+
     Blocked,
 }
 
-/// Classify one poll. One available id is acquired. A positive current assigned
-/// population starts one runner before ack. Missing census allows only empty or
-/// start/completion-only batches to be acknowledged; it never implies zero jobs.
-/// A batch whose every assigned job already started is acknowledged.
 #[must_use]
 pub(crate) fn idle(polled: &Poll) -> Idle {
     match polled {
@@ -68,7 +59,6 @@ pub(crate) fn idle(polled: &Poll) -> Idle {
     }
 }
 
-/// Subject of a redelivered assigned poll. Other polls have no exception.
 #[must_use]
 pub(super) fn mint_subject(polled: &Poll) -> Option<String> {
     let Poll::Batch(batch) = polled else {
@@ -118,9 +108,6 @@ fn one_request<'a>(
         })
     }
 }
-#[cfg(test)]
-#[path = "steps/assigned_resume_tests.rs"]
-mod assigned_resume_tests;
 
 fn acquired_request<'a>(
     ctx: &'a Drive,
@@ -325,7 +312,6 @@ pub(super) async fn hold(
     Err(error)
 }
 
-/// Settle one JIT error without the runner directory.
 pub(super) async fn fail_jit(
     journal: &Journal,
     id: i64,

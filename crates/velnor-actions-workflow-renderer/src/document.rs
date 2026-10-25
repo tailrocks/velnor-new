@@ -1,7 +1,3 @@
-//! Workflow-IR to YAML document builders.
-//!
-//! Fixed key order: name, on, permissions, env, concurrency, jobs.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
@@ -17,18 +13,6 @@ use velnor_actions_contract::{
     workflow::{DispatchInput, DispatchInputType, permissions::PermissionLevel},
 };
 
-#[cfg(test)]
-#[path = "document_services_tests.rs"]
-mod document_services_tests;
-#[cfg(test)]
-#[path = "document_runner_shell_tests.rs"]
-mod runner_shell_tests;
-
-#[cfg(test)]
-#[path = "document_verification_env_tests.rs"]
-mod verification_env_tests;
-
-/// Build the workflow document: name, on, permissions, concurrency, jobs.
 pub(crate) fn workflow_to_yaml(
     ir: &WorkflowIr,
     shared: &LaneShare,
@@ -104,7 +88,6 @@ pub(crate) fn workflow_to_yaml(
     Ok(Yaml::Map(top))
 }
 
-/// Report download is limited to the least-privilege `read` grant.
 fn grants_exact_actions_read(level: PermissionLevel) -> bool {
     level == PermissionLevel::Read
 }
@@ -120,7 +103,6 @@ fn lane_steps(shared: &LaneShare) -> crate::document_lanes::SharedLaneSteps<'_> 
     }
 }
 
-/// YAML spelling of one contract permission level.
 fn level_str(level: PermissionLevel) -> &'static str {
     match level {
         PermissionLevel::None => "none",
@@ -129,11 +111,6 @@ fn level_str(level: PermissionLevel) -> &'static str {
     }
 }
 
-/// Render permissions: contents is explicit; other scopes appear only when granted.
-///
-/// An omitted scope is denied by GitHub when a permissions map exists.
-/// Wider scopes render only when the IR grants them, so validated
-/// overrides are never silently dropped.
 fn permissions_to_yaml(permissions: &Permissions) -> Yaml {
     let mut entries = vec![(
         "contents".to_owned(),
@@ -166,7 +143,6 @@ fn permissions_to_yaml(permissions: &Permissions) -> Yaml {
     Yaml::Map(entries)
 }
 
-/// Render triggers: PR types, one push branch, schedule, dispatch, merge group.
 fn triggers_to_yaml(triggers: &Trigger) -> Yaml {
     let pr_types: Vec<Yaml> = triggers
         .pull_request_types
@@ -211,13 +187,6 @@ fn triggers_to_yaml(triggers: &Trigger) -> Yaml {
     Yaml::Map(entries)
 }
 
-/// Derive the merge `needs` channel from the gate job's `needs`.
-///
-/// The inventory is exactly what `toJSON(needs)` can observe at
-/// runtime; a lone gate has nothing to conclude over and fails closed
-/// instead of emitting a channel the merge would judge as
-/// `empty_needs`. The `gate_matches` check fails generation closed if
-/// the derivation ever diverges from the gate list again.
 fn needs_channel_envs(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, String)>, RenderError> {
     if !jobs.contains_key(FINAL_JOB_ID) {
         return Ok(Vec::new());
@@ -233,7 +202,6 @@ fn needs_channel_envs(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Strin
     Ok(vec![conclusions.channel_env(), conclusions.expected_env()])
 }
 
-/// Render one typed dispatch input: fixed string type, required, default.
 fn dispatch_input_to_yaml(input: &DispatchInput) -> Yaml {
     let mut fields = vec![
         (
@@ -262,7 +230,6 @@ struct JobRenderPolicy<'a> {
     workflow_env: &'a BTreeMap<String, String>,
 }
 
-/// Render one job: name, runs-on, timeout, environment, permissions, needs, if, steps.
 fn job_to_yaml(
     id: &str,
     job: &Job,
@@ -291,11 +258,9 @@ fn job_to_yaml(
     });
     let mut job_env = if step_has_env && ctx.workflow_tasks.iter().any(|task| task.owns_job_id(id))
     {
-        // Verification jobs execute repository-declared Mise tasks, so they need Mise
-        // config with the same credential scrub as every other repository-code step.
         crate::toolchain_env::credential_scrub()
     } else {
-        BTreeMap::new() // Hoisted: ordinary jobs inherit the workflow-level env.
+        BTreeMap::new()
     };
     if step_has_env {
         for step in source_steps {

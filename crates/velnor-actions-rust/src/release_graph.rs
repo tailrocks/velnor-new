@@ -1,12 +1,3 @@
-//! Packaging-rule publication graph over a release set.
-//!
-//! Normal, build, optional, and target-specific edges constrain publication
-//! order. Dev-edges are dropped per Cargo packaging rules (dev-dependencies
-//! never ship in the published manifest), so the conservative CI graph
-//! cannot invent publish cycles. Unresolved, Git-only, and registry-missing
-//! dependencies fail closed, as does a selected dependent whose local
-//! dependency sits outside the authorized set.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::metadata::WorkspaceRecord;
@@ -16,70 +7,45 @@ use crate::release_facts::{DepFact, DepSource};
 use crate::release_select::{ReleaseSelection, supported_or_default};
 use crate::release_semver::{VersionReq, parse_req, parse_version, req_matches};
 
-/// Observed registry state: package name to published versions.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RegistryState {
-    /// Published versions per package name.
     pub published: BTreeMap<String, BTreeSet<String>>,
 }
 
-/// One packaging edge between selected packages (never a dev-edge).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PackagingEdge {
-    /// Dependent package name.
     pub from: String,
-    /// Dependency package name.
     pub to: String,
-    /// Dependency kind (normal or build).
     pub kind: DepKind,
-    /// Whether the edge is optional.
     pub optional: bool,
-    /// Target filter when target-specific.
     pub target: Option<String>,
 }
 
-/// Dependency-ordered publication plan.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PublicationGraph {
-    /// Selected names in dependencies-first order.
     pub order: Vec<String>,
-    /// Packaging edges in sorted order.
     pub edges: Vec<PackagingEdge>,
 }
 
 impl PublicationGraph {
-    /// Number of ordered packages.
     #[must_use]
     pub fn len(&self) -> usize {
         self.order.len()
     }
 
-    /// Whether the graph holds no packages.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.order.is_empty()
     }
 }
 
-/// Per-package lookups shared across dependency checks.
 struct GraphLookups<'a> {
-    /// Selected names.
     selected: BTreeSet<&'a str>,
-    /// Package id to `(name, version)`.
     by_id: BTreeMap<&'a str, (&'a str, &'a str)>,
-    /// Observed registry state.
     registry: &'a RegistryState,
-    /// Effective supported registries.
     supported: Vec<String>,
 }
 
-/// Build the dependency-ordered publication graph for `selection`.
-///
-/// # Errors
-///
-/// Returns [`ReleaseError`] on unparseable requirements, Git-only or
-/// unknown sources, missing registry versions, unpublished local
-/// dependencies outside the allowlist, metadata disagreement, or cycles.
 pub fn publication_graph(
     selection: &ReleaseSelection,
     record: &WorkspaceRecord,
@@ -120,7 +86,6 @@ pub fn publication_graph(
     Ok(PublicationGraph { order, edges })
 }
 
-/// Every resolved path edge must exist in the retained metadata graph.
 fn check_edges_agree(
     selection: &ReleaseSelection,
     record: &WorkspaceRecord,
@@ -150,7 +115,6 @@ fn check_edges_agree(
     Ok(())
 }
 
-/// Check every dependency of one selected package, collecting pack edges.
 fn check_package_deps(
     name: &str,
     id: &str,
@@ -191,7 +155,6 @@ fn check_package_deps(
     Ok(())
 }
 
-/// Reject a dependency restricted to an unsupported registry.
 fn check_dep_registry(
     name: &str,
     fact: &DepFact,
@@ -211,7 +174,6 @@ fn check_dep_registry(
     Ok(())
 }
 
-/// Check a registry dependency against observed published versions.
 fn check_registry_dep(
     name: &str,
     fact: &DepFact,
@@ -229,7 +191,6 @@ fn check_registry_dep(
     }
 }
 
-/// Check a path dependency: selected targets add edges, others must exist.
 fn check_path_dep(
     name: &str,
     fact: &DepFact,
@@ -283,7 +244,6 @@ fn check_path_dep(
     Ok(())
 }
 
-/// Whether the observed registry holds a version of `name` matching `req`.
 fn registry_satisfies(registry: &RegistryState, name: &str, req: &VersionReq) -> bool {
     registry.published.get(name).is_some_and(|versions| {
         versions
@@ -292,7 +252,6 @@ fn registry_satisfies(registry: &RegistryState, name: &str, req: &VersionReq) ->
     })
 }
 
-/// Order selected names dependencies-first (deterministic, lexical).
 fn topo_order(
     selected: &BTreeSet<&str>,
     edges: &[PackagingEdge],

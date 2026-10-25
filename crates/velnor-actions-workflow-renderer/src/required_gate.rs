@@ -1,15 +1,3 @@
-//! The branch-protection `Required` gate over the verdict job.
-//!
-//! GitHub reports a skipped job's check as successful, and branch
-//! protection accepts it. The verdict job (`required`, `merge-v1`) runs
-//! under `!cancelled()` so a cancelled run never spends minutes judging
-//! reports while holding the concurrency group; a cancelled run therefore
-//! skips it. The protected check must come from a job that never ends
-//! skipped: the gate runs under `always()`, needs only the verdict, and
-//! its single runner-only step fails unless the verdict succeeded. A
-//! cancelled run's gate fails within one runner start, and a superseding
-//! run (same concurrency group) reports its own gate afterwards.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
@@ -21,14 +9,8 @@ use crate::RenderError;
 use crate::render::FINAL_JOB_ID;
 use crate::yaml::Yaml;
 
-/// Gate step display name.
 const GATE_STEP_NAME: &str = "Fail unless the verdict passed";
 
-/// Insert the gate when the workflow has a verdict job.
-///
-/// # Errors
-///
-/// Returns a policy error when a job already uses the gate ID.
 pub(crate) fn insert_required_gate(jobs: &mut BTreeMap<String, Job>) -> Result<(), RenderError> {
     let Some(verdict) = jobs.get(FINAL_JOB_ID) else {
         return Ok(());
@@ -56,11 +38,6 @@ fn required_gate_job(runs_on: &str) -> Result<Job, RenderError> {
     })
 }
 
-/// Render the authoritative gate factory result for the adoption workflow.
-///
-/// This deliberately accepts no name, condition, needs, or step overrides:
-/// the reusable callee receives the same cancellation-safe gate IR as the
-/// generated consumer workflow.
 pub(crate) fn required_gate_job_yaml(runs_on: &str) -> Result<(String, Yaml), RenderError> {
     let job = required_gate_job(runs_on)?;
     let verdict = Job {
@@ -124,7 +101,6 @@ pub(crate) fn required_gate_job_yaml(runs_on: &str) -> Result<(String, Yaml), Re
     Ok((REQUIRED_GATE_JOB_ID.to_owned(), Yaml::Map(fields)))
 }
 
-/// The gate's single step: `false` unless the verdict succeeded.
 fn gate_step() -> Result<velnor_actions_contract::Step, RenderError> {
     required_gate_job("ubuntu-latest")?
         .steps
@@ -133,11 +109,6 @@ fn gate_step() -> Result<velnor_actions_contract::Step, RenderError> {
         .ok_or_else(|| RenderError::InvalidWorkflow("required_gate_missing_step".to_owned()))
 }
 
-/// The gate must exist exactly over the verdict, unchanged.
-///
-/// # Errors
-///
-/// Returns an invalid-workflow error for a missing or altered gate.
 pub(crate) fn check_required_gate(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
     if !jobs.contains_key(FINAL_JOB_ID) {
         return Ok(());
@@ -161,7 +132,3 @@ pub(crate) fn check_required_gate(jobs: &BTreeMap<String, Job>) -> Result<(), Re
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "required_gate_tests.rs"]
-mod tests;

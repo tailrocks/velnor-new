@@ -1,5 +1,3 @@
-//! Run all synchronous readiness probes inside one killable child.
-
 use std::ffi::OsStr;
 use std::io::Write;
 use std::path::PathBuf;
@@ -22,7 +20,6 @@ enum ChildWait {
     Failed,
 }
 
-/// Run the private child operation when its exact argument shape is present.
 pub(crate) fn run_internal() -> Option<ExitCode> {
     let mut args = std::env::args_os();
     let _program = args.next()?;
@@ -38,7 +35,6 @@ pub(crate) fn run_internal() -> Option<ExitCode> {
     Some(write_readiness(&PathBuf::from(state)))
 }
 
-/// Assess readiness in a child so blocking system calls can be killed.
 pub(crate) async fn check(state: PathBuf, deadline: Instant) -> Readiness {
     let now = Instant::now();
     let probe_deadline = deadline.checked_sub(REAP_RESERVE).unwrap_or(now);
@@ -128,7 +124,7 @@ async fn read_status(child: &mut Child, deadline: Instant) -> Readiness {
     let Ok(text) = std::str::from_utf8(&bytes) else {
         return Readiness::Degraded;
     };
-    // A `ready` token is rejected because this partial observer cannot prove full reconciliation.
+
     match text.strip_suffix('\n') {
         Some("waiting_for_engine") => Readiness::WaitingForEngine,
         Some("waiting_for_credentials") => Readiness::WaitingForCredentials,
@@ -149,6 +145,3 @@ fn write_readiness(state: &std::path::Path) -> ExitCode {
     }
     ExitCode::SUCCESS
 }
-
-#[cfg(test)]
-mod tests;

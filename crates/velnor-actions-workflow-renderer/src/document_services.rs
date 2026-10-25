@@ -1,10 +1,7 @@
-//! Rendering of catalog service containers.
-
 use crate::yaml::Yaml;
 
 use crate::document_steps::string_map_yaml;
 
-/// Catalog services as the job's `services:` mapping, ordered by id.
 pub(crate) fn services_yaml(services: &[velnor_actions_contract::ServiceContainer]) -> Yaml {
     let mut sorted: Vec<&velnor_actions_contract::ServiceContainer> = services.iter().collect();
     sorted.sort_by(|left, right| left.id.cmp(&right.id));
@@ -29,7 +26,6 @@ pub(crate) fn services_yaml(services: &[velnor_actions_contract::ServiceContaine
     )
 }
 
-/// Append the `services:` entry when the job declares any.
 pub(crate) fn push_services(
     entries: &mut Vec<(String, Yaml)>,
     services: &[velnor_actions_contract::ServiceContainer],

@@ -2,19 +2,10 @@ use std::collections::BTreeMap;
 
 use crate::RenderError;
 
-/// Validate a fixed env map: `A-Z0-9_` keys, single-line clean values.
-///
-/// Expressions stay allowlisted, never blanket-banned: only fixed
-/// runner-provided spans pass (see the private `expressions` module).
-///
-/// # Errors
-///
-/// Returns [`RenderError::BadCommand`] or [`RenderError::PrivateSubcommand`].
 pub fn validate_env(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
     validate_env_in_scope(env, false)
 }
 
-/// Validate environment for a generated composite action's typed inputs.
 pub(crate) fn validate_composite_env(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
     validate_env_in_scope(env, true)
 }

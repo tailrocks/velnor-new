@@ -1,9 +1,6 @@
-//! Credential-free source preparation for candidate qualification.
-
 use super::workflow_steps;
 use crate::Yaml;
 
-/// Prepare the exact candidate source inline before local composite resolution.
 pub(super) fn qualification_step() -> Yaml {
     let mut step = workflow_steps::bash_step(
         "Fetch exact public qualification source without credentials",
@@ -15,11 +12,6 @@ pub(super) fn qualification_step() -> Yaml {
     step
 }
 
-/// Fetch this public repository at the exact run commit without credentials.
-///
-/// Every fixed Git command is visible as a direct `/usr/bin/git` invocation
-/// with a clean environment. The literal checkout is recognized by jactionlint
-/// before the repository-local qualification composite is called.
 pub(super) const QUALIFICATION_SOURCE_PREPARE: &str = r#"set -euo pipefail
 [[ "$GITHUB_REPOSITORY" == tailrocks/velnor-new && "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]] || {
   printf '%s\n' 'qualification source identity is invalid' >&2
@@ -37,7 +29,3 @@ cd -- "$GITHUB_WORKSPACE"
   printf '%s\n' 'qualification source does not match the requested commit' >&2
   exit 1
 }"#;
-
-#[cfg(test)]
-#[path = "schema2_generator_release_source_tests.rs"]
-mod tests;

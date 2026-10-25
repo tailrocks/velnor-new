@@ -1,5 +1,3 @@
-//! Shared state, strict time parsing, row output, and literal pin extraction.
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
 use std::io::Read;
@@ -12,7 +10,6 @@ use syn::{Item, Lit, Type};
 pub(crate) const RUST_SOURCE_CAP: usize = 256 * 1024;
 pub(crate) const FETCH_CAP: usize = 512 * 1024;
 
-/// One policy run over a repository or fixture root.
 #[derive(Debug)]
 pub(crate) struct FreshnessContext {
     pub(crate) root: PathBuf,
@@ -40,7 +37,6 @@ pub(crate) struct FreshnessContext {
 }
 
 impl FreshnessContext {
-    /// Create a context with the repository's current UTC time.
     #[must_use]
     pub(crate) fn new(root: PathBuf, check_upstream: bool, with_advisories: bool) -> Self {
         let now = SystemTime::now()
@@ -74,7 +70,6 @@ impl FreshnessContext {
         }
     }
 
-    /// Resolve a repository-relative path.
     #[must_use]
     pub(crate) fn path(&self, relative: &str) -> PathBuf {
         self.root.join(relative)
@@ -113,7 +108,6 @@ impl FreshnessContext {
         self.row(check, subject, "info", detail);
     }
 
-    /// Extract a single unconditional `pub const NAME: &str = "..."`.
     pub(crate) fn rust_const(&mut self, path: &str, name: &str) -> Option<String> {
         let relative = format!("{path}::{name}");
         match read_capped(&self.path(path), RUST_SOURCE_CAP)
@@ -127,7 +121,6 @@ impl FreshnessContext {
         }
     }
 
-    /// Extract one unconditional public `usize` literal from Rust source.
     pub(crate) fn rust_usize_const(&mut self, path: &str, name: &str) -> Option<String> {
         let relative = format!("{path}::{name}");
         match read_capped(&self.path(path), RUST_SOURCE_CAP)
@@ -141,7 +134,6 @@ impl FreshnessContext {
         }
     }
 
-    /// Print accumulated machine rows and human summary; return process code.
     pub(crate) fn finish(self) -> i32 {
         print!("{}", self.output);
         if self.failures.is_empty() {

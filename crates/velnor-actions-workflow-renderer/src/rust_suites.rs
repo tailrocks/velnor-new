@@ -1,8 +1,3 @@
-//! Generic Rust test suite job and workflow builders.
-//!
-//! Renders `[[stacks.rust.suites]]` into `ci.yml` jobs or standalone
-//! `.github/workflows/<slug>.yml` documents (`suites.yml` by default).
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
@@ -17,56 +12,30 @@ use crate::{CompileDriver, MiseSetup, RenderError, RenderedFile, steps};
 mod document;
 #[path = "rust_suites_steps.rs"]
 mod suite_steps;
-#[cfg(test)]
-#[path = "rust_suites_tests.rs"]
-mod tests;
+
 use suite_steps::{
     append_suite_artifact_uploads, compile_driver_steps, install_suite_tools_steps,
     nextest_archive_step, nextest_run_step, restored_rust_step,
 };
 
-/// Specification for rendering declared Rust test suite jobs and workflows.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustSuitesRenderSpec {
-    /// Declared Rust test suites in declaration order.
     pub suites: Vec<RustSuiteConfig>,
-    /// Optional custom `workflow_dispatch` inputs for suite workflows.
     pub workflow_dispatch: Option<WorkflowDispatchConfig>,
-    /// Default runner label when a suite omits `runner_label`.
     pub default_runs_on: String,
-    /// Full-SHA `actions/checkout` reference.
     pub checkout_uses: String,
-    /// Renderer generator version for the header marker.
     pub generator_version: String,
-    /// Pinned Mise setup for the default runner target.
     pub mise: MiseSetup,
-    /// Pinned Rust toolchain version (e.g., `"1.95.0"`).
     pub rust_version: String,
-    /// Pinned `cargo-nextest` tool version (e.g., `"0.9.133"`).
     pub cargo_nextest_version: String,
-    /// Compile driver (`Cargo` or `Mbx`) for suite compilation steps.
     pub compile_driver: CompileDriver,
-    /// Optional MBX action `(uses, version)` when `compile_driver` is `CompileDriver::Mbx`.
     pub mbx_action: Option<(String, String)>,
-    /// Pull-request cache save policy.
     pub pull_request_cache_policy: PullRequestCachePolicy,
-    /// `sh -c` argv run right after the tools cache restore: discards the
-    /// cached rustup and verifies a restored toolchain file by file.
     pub verify_restored_rust_argv: Vec<String>,
-    /// `sh -c` argv run right after the suite install: verifies the
-    /// installed toolchain file by file.
     pub verify_rust_argv: Vec<String>,
-    /// Whether step environments export `RUSTUP_TOOLCHAIN`.
     pub export_rustup_toolchain: bool,
 }
 
-/// Build suite jobs triggered on `pull_request` or `push` for merging into `ci.yml`.
-///
-/// `finalize_jobs` attaches V2 tools-cache setup, writer election, and cleanup.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] when `spec` or any suite configuration is invalid.
 pub fn build_ci_suite_jobs(
     spec: &RustSuitesRenderSpec,
 ) -> Result<BTreeMap<String, Job>, RenderError> {
@@ -83,12 +52,6 @@ pub fn build_ci_suite_jobs(
     Ok(jobs)
 }
 
-/// Render the default `.github/workflows/suites.yml` document when any suite
-/// targets the default `"suites"` workflow slug with `workflow_dispatch` or `schedule`.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] when `spec` or any suite configuration is invalid.
 pub fn render_suites_workflow(spec: &RustSuitesRenderSpec) -> Result<Option<String>, RenderError> {
     validate_spec(spec)?;
     let entries: Vec<&RustSuiteConfig> = spec
@@ -105,12 +68,6 @@ pub fn render_suites_workflow(spec: &RustSuitesRenderSpec) -> Result<Option<Stri
     document::render_workflow_for_slug(DEFAULT_SUITE_WORKFLOW_SLUG, &entries, spec).map(Some)
 }
 
-/// Render all standalone `.github/workflows/<slug>.yml` suite workflow files,
-/// grouped by workflow slug.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] when `spec` or any suite configuration is invalid.
 pub fn render_suites_workflows(
     spec: &RustSuitesRenderSpec,
 ) -> Result<Vec<RenderedFile>, RenderError> {

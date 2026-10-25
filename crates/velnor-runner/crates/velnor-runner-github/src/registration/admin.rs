@@ -1,5 +1,3 @@
-//! `POST /actions/runner-registration`. One extra try on HTTP 401 or 403.
-
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
@@ -10,13 +8,11 @@ use crate::{Method, SessionError, SessionRequest, Transport, WireError};
 
 use super::other_status;
 
-/// Inputs for [`admin_connection`](crate::admin_connection). `Debug` hides the token.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[must_use]
 pub struct AdminConnectionCall<'a> {
-    /// GitHub config URL. Sent as JSON `url`.
     pub config_url: &'a str,
-    /// Registration token. Empty never reaches [`Transport`](crate::Transport).
+
     pub registration_token: &'a str,
 }
 
@@ -30,12 +26,6 @@ impl fmt::Debug for AdminConnectionCall<'_> {
     }
 }
 
-/// Actions service URL and admin token. Both are secrets.
-///
-/// [`Debug`] is redacted. There is no [`Display`].
-///
-/// [`Debug`]: std::fmt::Debug
-/// [`Display`]: std::fmt::Display
 #[must_use]
 pub struct AdminConnection {
     url: String,
@@ -47,13 +37,11 @@ impl AdminConnection {
         Self { url, token }
     }
 
-    /// Borrow the service URL. Do not log it.
     #[must_use]
     pub const fn expose_url(&self) -> &str {
         self.url.as_str()
     }
 
-    /// Borrow the admin token for `Authorization` only.
     #[must_use]
     pub const fn expose_token(&self) -> &str {
         self.token.as_str()
@@ -73,17 +61,6 @@ impl Drop for AdminConnection {
     }
 }
 
-/// `POST /actions/runner-registration` with `RemoteAuth`, not `Bearer`.
-///
-/// Success is any HTTP 2xx. A 401 or 403 is sent once more, then the status
-/// stands. A second 403 is [`WireError::Forbidden`]. A second 401 is
-/// [`WireError::UnexpectedStatus`], not a session refresh.
-///
-/// # Errors
-///
-/// Returns [`WireError::RegistrationRejected`] for an empty registration
-/// token, or when `url` or `token` is null, missing, or empty.
-/// [`SessionError::Uncertain`] covers timeout and reset.
 pub fn admin_connection<T>(
     transport: &mut T,
     call: &AdminConnectionCall<'_>,
@@ -110,11 +87,6 @@ where
     decode_admin(&exchange.body)
 }
 
-/// Fresh when `expires_at` is more than 60 seconds after `now`.
-///
-/// Unix `0` is the zero time and is stale. `now + 60 >= expires_at` is stale.
-/// This is stricter than Go `Time.After` at the exact 60 second mark.
-/// The caller supplies both instants. This function does not parse a JWT.
 #[must_use]
 pub const fn admin_token_is_fresh(now_unix: i64, expires_at_unix: i64) -> bool {
     if expires_at_unix == 0 {

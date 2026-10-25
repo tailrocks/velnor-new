@@ -1,4 +1,3 @@
-//! Closed private operation identities; no public dispatch aliases.
 use super::{
     ACQUIRE_PREVIEW_SOURCE_OP, ACQUIRE_RELEASE_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP,
     ADMIT_RELEASE_AGGREGATE_OP, ADMIT_STABLE_TAG_ORIGIN_OP, BUN_ASSETS_EXPORT_OP,
@@ -13,94 +12,92 @@ use super::{
     WRITE_REQUEST_OP, WRITE_STABLE_TAG_INTENT_OP, WRITE_STABLE_TAG_ORIGIN_OP, env,
 };
 
-/// Private operation selected by the gate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum InternalOp {
-    /// Execute a closed SDK-owned Homebrew check through the common report engine.
     ExecuteNativeHomebrewCheck,
-    /// Authenticate and install historical binary releases on a hosted Mac.
+
     QualifyHomebrew,
-    /// Bounded SDK-owned initialization of independent Cargo target lanes.
+
     SeedParallelTargets,
-    /// Source-free authenticated selection of the retained tap candidate.
+
     TapContinuation,
-    /// Read-only authenticated review proposal capture.
+
     CaptureReviewCompletion,
-    /// Independent C-App exact-head check emission.
+
     EmitReviewCompletion,
-    /// Materialize the request file from the GitHub environment.
+
     WriteRequest,
-    /// Execute one named hosted platform check.
+
     ExecuteCheck,
-    /// Run the credential-free native preview producer.
+
     ExecuteReleaseProducer,
-    /// Source-free credentialed leaf acquisition before repository checkout.
+
     AcquireReleaseLeaves,
-    /// Source-free authentication of the complete native preview union.
+
     AdmitReleaseAggregate,
-    /// Authenticate source A and current workflow authority B before checkout.
+
     PreviewSourceSelection,
-    /// Verify source A checkout and write its immutable admission record.
+
     PreviewSourceFinalization,
-    /// Acquire the source admission artifact before checkout.
+
     PreviewSourceAcquisition,
-    /// Read-only selection of fresh or retained stable source authority.
+
     StableSourceSelection,
-    /// Source-free stable pre-tag authorization.
+
     StableTagIntent,
-    /// Bind the actual permanent tag to its retained native intent.
+
     StableTagOrigin,
-    /// Authenticate retained tag authority before source checkout.
+
     StableTagAdmission,
-    /// Plan operation.
+
     Plan,
-    /// Merge operation.
+
     Merge,
-    /// Matrix-report fetch operation.
+
     Fetch,
-    /// Task-report production operation.
+
     Report,
-    /// Pre-seed manifest-writing operation.
+
     PreseedManifest,
-    /// Repository-maintenance operation behind its separate private gate.
+
     RepoPolicy,
-    /// Read-only predecessor resolution for hosted qualification.
+
     ResolveQualification,
-    /// Data-only task execution record resolution for a generated wrapper.
+
     ResolveTaskExecution,
-    /// Isolated, credentialed signing of a plan-bound package release.
+
     PackageSigner,
-    /// Isolated publisher for an authenticated signed native package.
+
     PackagePublisher,
-    /// Authenticated replay of a retained signed preview candidate.
+
     PackageRecovery,
-    /// Credential-free updater prepared from captured public tap main.
+
     TapPrepare,
-    /// Source-free authentication before credential-free tap preparation.
+
     TapAdmission,
-    /// Token-bound fetch of private cross-repository sources (HD-7).
+
     PrivateFetch,
-    /// Installation-token revocation after the private fetch (HD-7).
+
     PrivateRevoke,
-    /// `gradle-run-v1`: verify the wrapper, install the JDK, run Gradle.
+
     GradleRun,
-    /// Registry phase of `bun install` under the job token (HD-6, HD-7).
+
     BunRegistryInstall,
-    /// Export the verified Bun assets tarball.
+
     BunAssetsExport,
-    /// Reset the workspace assets and prepare the download directory.
+
     BunAssetsPrepare,
-    /// Safely import and pin-check the Bun assets tarball.
+
     BunAssetsImport,
-    /// Read-only GitHub metadata and original artifact acquisition.
+
     GitHubEvidenceFetch,
-    /// Credential-free verification and local import of the same-run bundle.
+
     GitHubEvidenceImport,
-    /// Hash-verified Playwright browser install (HD-6).
+
     PlaywrightInstall,
-    /// Isolated App-authenticated PR writer for a validated tap candidate.
+
     TapWriter,
-    /// Isolated exact-head App-authenticated tap promotion merge.
+
     TapMerge,
 }
 

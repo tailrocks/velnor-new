@@ -19,7 +19,6 @@ use crate::pins::resolve_build_task_mise_setup;
 use crate::toolcheck::ToolInputCheck;
 use crate::{OrchestratorError, discover::Discovery};
 
-/// Resolve each task against source-bound Mise files and the fixed runner pin.
 pub(crate) fn policies(
     config: &VelnorConfig,
     discovery: &Discovery,

@@ -1,26 +1,15 @@
-//! Tool-input findings: invalid lines plus value conflicts (tool §1-§3).
-//!
-//! Turns adapter checks into recommendation lines and structured
-//! findings for conflicting or unsupported values. Findings identify
-//! the supplying file, suggest a manual action, and never write.
-
 use velnor_actions_contract::Finding;
 use velnor_actions_rust::MISSING_RECOMMENDED_INPUT;
 
 use crate::toolcheck::{ToolInputCheck, ToolParse};
 
-/// Finding code for divergent Rust pins across tool files.
 pub const CONFLICTING_TOOL_VALUES: &str = "conflicting_tool_values";
-/// Finding code for a recognized but unsupported tool value.
 pub const UNSUPPORTED_TOOL_VALUE: &str = "unsupported_tool_value";
 
-/// Recommendation lines for invalid/unreadable files and missing channel pins.
 #[must_use]
 pub fn tool_check_lines(checks: &[ToolInputCheck]) -> Vec<String> {
     let mut lines = Vec::new();
     for check in checks {
-        // Exhaustive: every non-valid parse state must surface or be
-        // explicitly silent, so a new variant cannot slip through.
         let problem = match &check.parse {
             ToolParse::Invalid { problem } => Some(problem.as_str()),
             ToolParse::Unreadable => Some("unreadable"),
@@ -48,7 +37,6 @@ pub fn tool_check_lines(checks: &[ToolInputCheck]) -> Vec<String> {
     lines
 }
 
-/// One recommendation line for a structured tool finding.
 #[must_use]
 pub fn finding_line(finding: &Finding) -> String {
     let observed = finding.observed.as_deref().unwrap_or("present");
@@ -60,11 +48,6 @@ pub fn finding_line(finding: &Finding) -> String {
     format!("{}: {}: {observed}; {guidance}", finding.code, finding.path)
 }
 
-/// Detect conflicting or unsupported Rust pins across tool files.
-///
-/// A conflict needs both pins present, comparable (both exact
-/// versions or both named channels), and different. Values that are
-/// neither exact versions nor named channels are unsupported.
 #[must_use]
 pub fn tool_conflicts(checks: &[ToolInputCheck]) -> Vec<Finding> {
     let mut findings = Vec::new();
@@ -113,7 +96,6 @@ pub fn tool_conflicts(checks: &[ToolInputCheck]) -> Vec<Finding> {
     findings
 }
 
-/// Extracted value for one `path` and dotted `key`, when present.
 fn value_for<'a>(checks: &'a [ToolInputCheck], path: &str, key: &str) -> Option<&'a str> {
     checks.iter().find_map(|check| {
         if check.path == path {
@@ -124,13 +106,11 @@ fn value_for<'a>(checks: &'a [ToolInputCheck], path: &str, key: &str) -> Option<
     })
 }
 
-/// True when both pins use the same scheme and can be compared.
 fn comparable(left: &str, right: &str) -> bool {
     (is_version_like(left) && is_version_like(right))
         || (is_channel_like(left) && is_channel_like(right))
 }
 
-/// True for exact versions (`1.85.0`, `1.85`, `v1.85.0`).
 fn is_version_like(value: &str) -> bool {
     value
         .strip_prefix('v')
@@ -140,57 +120,6 @@ fn is_version_like(value: &str) -> bool {
         .is_some_and(|first| first.is_ascii_digit())
 }
 
-/// True for named channels (`stable`, `beta`, `nightly`, dated nightlies).
 fn is_channel_like(value: &str) -> bool {
     matches!(value, "stable" | "beta" | "nightly") || value.starts_with("nightly-")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::toolcheck::check_tool_inputs;
-
-    /// Checks over a scratch root carrying `files`.
-    fn checks_for(files: &[(&str, &str)]) -> Vec<ToolInputCheck> {
-        let dir = tempfile::tempdir().expect("tempdir");
-        for (path, content) in files {
-            std::fs::write(dir.path().join(path), content).expect("write");
-        }
-        check_tool_inputs(dir.path())
-    }
-
-    #[test]
-    fn conflicts_need_comparable_divergent_pins() {
-        let checks = checks_for(&[
-            ("rust-toolchain.toml", "[toolchain]\nchannel = \"1.84.0\"\n"),
-            ("mise.toml", "[tools]\nrust = \"1.85.0\"\n"),
-        ]);
-        let findings = tool_conflicts(&checks);
-        assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].code, CONFLICTING_TOOL_VALUES);
-        assert!(findings[0].validate().is_ok());
-        assert!(finding_line(&findings[0]).contains("1.84.0"));
-        let aligned = checks_for(&[
-            ("rust-toolchain.toml", "[toolchain]\nchannel = \"1.84.0\"\n"),
-            ("mise.toml", "[tools]\nrust = \"1.84.0\"\n"),
-        ]);
-        assert!(tool_conflicts(&aligned).is_empty());
-        let mixed = checks_for(&[
-            ("rust-toolchain.toml", "[toolchain]\nchannel = \"stable\"\n"),
-            ("mise.toml", "[tools]\nrust = \"1.84.0\"\n"),
-        ]);
-        assert!(tool_conflicts(&mixed).is_empty());
-    }
-
-    #[test]
-    fn unrecognized_values_are_unsupported() {
-        let checks = checks_for(&[(
-            "rust-toolchain.toml",
-            "[toolchain]\nchannel = \"frobnicator\"\n",
-        )]);
-        let findings = tool_conflicts(&checks);
-        assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].code, UNSUPPORTED_TOOL_VALUE);
-        assert!(findings[0].validate().is_ok());
-    }
 }

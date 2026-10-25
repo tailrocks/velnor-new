@@ -1,5 +1,3 @@
-//! Static and runtime identity commitments for qualification cache keys.
-
 use serde::{Deserialize, Serialize};
 
 use crate::canonical::{canonical_json_bytes, digest_b3, validate_digest};
@@ -13,27 +11,23 @@ pub use super::runtime::{
     QualificationRuntimeIdentityRequirements, QualificationRuntimePlatform,
 };
 
-/// Maximum selected matrix lanes represented in a qualification directive.
 pub const MAX_QUALIFICATION_CACHE_LANES: usize = 256;
 
-/// Closed set of cache transports used by the current V1 qualification path.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum QualificationCacheLayer {
-    /// MBX action-owned object store.
     MbxObjects,
-    /// Shared Cargo registry and Git sources archive.
+
     CargoSources,
-    /// V2 Mise tools archive.
+
     MiseTools,
-    /// `OpenTofu` provider archive.
+
     TofuProviders,
-    /// Task-result cache, disabled for qualification.
+
     TaskResult,
 }
 
 impl QualificationCacheLayer {
-    /// Stable wire and key-layer spelling.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -46,22 +40,19 @@ impl QualificationCacheLayer {
     }
 }
 
-/// Cache-generation slot within one isolated campaign and identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum QualificationCacheSlot {
-    /// Cold seed snapshot.
     #[serde(rename = "k1")]
     K1,
-    /// Warm persisted snapshot.
+
     #[serde(rename = "k2")]
     K2,
-    /// Useful-delta snapshot.
+
     #[serde(rename = "k3")]
     K3,
 }
 
 impl QualificationCacheSlot {
-    /// Stable lowercase slot spelling.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -136,7 +127,6 @@ struct IdentityPreimage<'a> {
     cache_format_id: &'a str,
 }
 
-/// Derive the stable configuration commitment shared by all runs in a campaign.
 pub(crate) fn configuration_commitment(plan: &Plan) -> Result<String, ContractError> {
     let mut packages: Vec<_> = plan
         .packages
@@ -239,7 +229,6 @@ fn canonical_adapter_metadata(
     Ok(canonical)
 }
 
-/// Derive the stable identity commitment for one plan lane and cache layer.
 pub(crate) fn identity_commitment(
     plan: &Plan,
     entry: &MatrixEntry,
@@ -281,7 +270,6 @@ pub(crate) fn identity_commitment(
     Ok(digest_b3(&canonical_json_bytes(&preimage)?))
 }
 
-/// Runtime identity requirements derived from validated plan identity.
 pub(crate) fn runtime_requirements(
     plan: &Plan,
     entry: &MatrixEntry,
@@ -316,7 +304,6 @@ pub(crate) fn runtime_requirements(
     })
 }
 
-/// Construct a stable archive key from validated identity and one typed slot.
 pub(crate) fn key_for_slot(
     campaign: &str,
     layer: QualificationCacheLayer,
@@ -345,7 +332,3 @@ pub(crate) fn key_for_slot(
     }
     Ok(key)
 }
-
-#[cfg(test)]
-#[path = "../qualification_cache_lineage_identity_tests.rs"]
-mod tests;

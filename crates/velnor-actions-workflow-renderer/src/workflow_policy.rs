@@ -1,5 +1,3 @@
-//! Exact top-level workflow policy checks shared by render entrypoints.
-
 use velnor_actions_contract::{Concurrency, Trigger, WorkflowIr};
 
 use crate::{
@@ -7,7 +5,6 @@ use crate::{
     verification_jobs::WorkflowTaskPolicy,
 };
 
-/// Require the exact trigger shape: 4 PR types, one push branch, merge group.
 pub(crate) fn check_triggers(triggers: &Trigger) -> Result<(), RenderError> {
     let expected: Vec<String> = EXPECTED_PR_TYPES.iter().map(ToString::to_string).collect();
     if triggers.pull_request_types != expected {
@@ -29,7 +26,6 @@ pub(crate) fn check_triggers(triggers: &Trigger) -> Result<(), RenderError> {
     Ok(())
 }
 
-/// Require the exact concurrency group plus PR-only cancel.
 pub(crate) fn check_concurrency(concurrency: &Concurrency) -> Result<(), RenderError> {
     if concurrency.group != CONCURRENCY_GROUP
         || concurrency.cancel_in_progress != CONCURRENCY_CANCEL
@@ -39,7 +35,6 @@ pub(crate) fn check_concurrency(concurrency: &Concurrency) -> Result<(), RenderE
     Ok(())
 }
 
-/// Require every job to use the single context label.
 pub(crate) fn check_single_label(
     ir: &WorkflowIr,
     label: &str,

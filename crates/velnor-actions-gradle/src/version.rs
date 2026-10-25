@@ -1,16 +1,5 @@
-//! Adapter-specific exact version grammars (HD-4a).
-//!
-//! `java` accepts `<vendor>-<X.Y.Z[.N]*>[+<build>[.<n>]*][.LTS]` where the vendor
-//! is one of [`JAVA_VENDORS`] and the core has three or more numeric parts
-//! (Oracle `GraalVM` ships `25.0.4.1.1`; the first part is the Java feature
-//! version); Gradle accepts `N.N` or `N.N.N`. Bare majors,
-//! `lts`, `latest`, ranges and templates are rejected. Accepted strings are
-//! lower-case ASCII over `[a-z0-9.+-]` only, so they can be written to the
-//! single-line `$GITHUB_ENV` resolver output without escaping.
-
 use std::fmt;
 
-/// Vendors the Mise core `java` backend can install under an exact name.
 pub const JAVA_VENDORS: [&str; 5] = [
     "temurin",
     "oracle-graalvm",
@@ -19,21 +8,18 @@ pub const JAVA_VENDORS: [&str; 5] = [
     "zulu",
 ];
 
-/// Why a version string was rejected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VersionError {
-    /// The vendor prefix is missing or not in [`JAVA_VENDORS`].
     Vendor,
-    /// The `X.Y.Z` core is not exact (loose, leading zero, range, template).
+
     Core,
-    /// The `+<build>` suffix is malformed.
+
     Build,
-    /// A character outside `[A-Za-z0-9.+-]` (injection guard).
+
     Charset,
 }
 
 impl VersionError {
-    /// Stable finding code shared by every project tool version failure.
     #[must_use]
     pub const fn code(self) -> &'static str {
         "project_tool_version_not_exact"
@@ -52,21 +38,18 @@ impl fmt::Display for VersionError {
     }
 }
 
-/// A validated exact JDK declaration.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JavaVersion {
-    /// Vendor from [`JAVA_VENDORS`].
     pub vendor: &'static str,
-    /// Exact core of three or more numeric parts (`X.Y.Z[.N]*`).
+
     pub core: String,
-    /// `<build>[.<n>]*` after `+`, when present.
+
     pub build: Option<String>,
-    /// Whether the `.LTS` suffix is present.
+
     pub lts: bool,
 }
 
 impl JavaVersion {
-    /// Major version of the core (the Gradle toolchain `languageVersion`).
     #[must_use]
     pub fn major(&self) -> u32 {
         self.core
@@ -90,10 +73,6 @@ impl fmt::Display for JavaVersion {
     }
 }
 
-/// Parse an exact JDK declaration.
-///
-/// # Errors
-/// [`VersionError`] for anything outside the grammar.
 pub fn parse_java(text: &str) -> Result<JavaVersion, VersionError> {
     if text.is_empty()
         || !text
@@ -134,10 +113,6 @@ pub fn parse_java(text: &str) -> Result<JavaVersion, VersionError> {
     })
 }
 
-/// Parse a Gradle version: `N.N` or `N.N.N`.
-///
-/// # Errors
-/// [`VersionError::Core`] for pre-releases, ranges and leading zeros.
 pub fn parse_gradle(text: &str) -> Result<String, VersionError> {
     let parts: Vec<&str> = text.split('.').collect();
     if matches!(parts.len(), 2 | 3) && parts.iter().all(|part| is_number(part)) {
@@ -147,7 +122,6 @@ pub fn parse_gradle(text: &str) -> Result<String, VersionError> {
     }
 }
 
-/// True for `0` or a digit run without a leading zero.
 fn is_number(part: &str) -> bool {
     !part.is_empty()
         && part.chars().all(|c| c.is_ascii_digit())

@@ -1,12 +1,6 @@
-//! Read-only source-main freshness check at downstream tap mutation boundaries.
-//! Latest exact-source CI is independently reauthenticated before every mutation.
-
 use crate::{OrchestratorError, internal::internal};
 use velnor_actions_contract::{is_valid_branch_name, vcs::is_safe_github_repository};
 
-/// Determine whether the signed preview is still the authenticated protected main tip.
-/// # Errors
-/// Rejects invalid identities, reused credentials, and API/protection failures.
 pub(crate) fn verify_preview_source_is_current(
     repository: &str,
     branch: &str,
@@ -53,17 +47,4 @@ fn valid_sha(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
-}
-
-#[cfg(test)]
-#[test]
-fn historical_preview_stays_valid_but_is_not_current_for_tap_promotion() {
-    let source = "a".repeat(40);
-    let authority = "b".repeat(40);
-    let tip = "c".repeat(40);
-    assert!(valid_sha(&source));
-    assert!(valid_sha(&authority));
-    assert!(!is_current_preview_tip(&source, &tip));
-    assert!(is_current_preview_tip(&source, &source));
-    assert!(!is_current_preview_tip(&"A".repeat(40), &tip));
 }

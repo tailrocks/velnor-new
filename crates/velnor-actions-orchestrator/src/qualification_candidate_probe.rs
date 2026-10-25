@@ -1,4 +1,3 @@
-//! Existing isolated typed probes, using only candidate-owned dependencies.
 use super::{OrchestratorError, install, internal};
 use std::path::Path;
 use velnor_actions_contract::config::{CheckPlatform, QualifiedTool, QualifiedToolBackend};

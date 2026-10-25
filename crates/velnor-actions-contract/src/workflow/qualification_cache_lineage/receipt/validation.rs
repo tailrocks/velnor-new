@@ -1,5 +1,3 @@
-//! Validation facade for bounded receipt records.
-
 #[path = "validation_layers.rs"]
 mod validation_layers;
 #[path = "validation_shape.rs"]

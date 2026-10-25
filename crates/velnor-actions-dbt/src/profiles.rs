@@ -1,8 +1,5 @@
-//! Connection-profile hygiene: no literal credential in a checked-in profile.
-
 use crate::DbtError;
 
-/// Profile keys whose value is a credential.
 const SECRET_KEYS: [&str; 7] = [
     "password",
     "token",
@@ -13,7 +10,6 @@ const SECRET_KEYS: [&str; 7] = [
     "client_secret",
 ];
 
-/// Findings for `profiles.yml` text: a credential key must read `env_var(...)`.
 #[must_use]
 pub fn check_profiles(text: &str) -> Vec<DbtError> {
     let mut findings = Vec::new();
@@ -36,11 +32,6 @@ pub fn check_profiles(text: &str) -> Vec<DbtError> {
     findings
 }
 
-/// True when any profile output in `profiles.yml` text declares `type: postgres`.
-///
-/// dbt Fusion refuses that adapter unless `DBT_ALLOW_EXPERIMENTAL_ADAPTERS` is
-/// set, so the generator sets it for such a project instead of admitting the
-/// variable into the free-form `env` table.
 #[must_use]
 pub fn uses_postgres_adapter(text: &str) -> bool {
     text.lines().any(|line| {

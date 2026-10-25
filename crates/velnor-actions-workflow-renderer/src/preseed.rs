@@ -1,24 +1,3 @@
-//! Explicit pre-seed mode: build-once helper for unseeded Velnor CI.
-//!
-//! Velnor policy without `.velnor/generator.lock` has no release digest to
-//! verify (bootstrap §4.1 pre-seed is trust-on-review). Pre-seed mode makes
-//! that explicit: the plan job builds the helper ONCE from the checked-out
-//! source with the fixed §4 candidate vector, records the source commit in
-//! a manifest, and shares the binary via an exactly-named artifact. Crate
-//! and final jobs download that artifact; nothing rebuilds it (Gap A).
-//! Every pre-seed step name carries the trust-on-review marker so the
-//! weaker provenance is visible in CI logs, not silently implied.
-//!
-//! Downloaders verify the manifest before staging (same shape as the
-//! candidate gate): schema 1, commit equal to this run's checked-out
-//! `$GITHUB_SHA`, the generator-rendered expected target, and a sha256
-//! recomputed over the downloaded binary. The commit anchor binds staged
-//! bytes to this run's checkout (a swapped or cross-run artifact fails
-//! closed) and the digest binds them across artifact transit; neither
-//! reviews the source itself — a trojaned PR writes a consistent
-//! manifest, so the trust root for pre-seed source stays human review
-//! of the pre-seed source and workflow, exactly as for candidates.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Step, StepRole};
@@ -33,57 +12,33 @@ use crate::{
 #[path = "preseed_mbx.rs"]
 mod mbx;
 
-/// Exact pre-seed helper artifact name (run-scoped, no wildcards).
 pub const PRESEED_ARTIFACT_NAME: &str = "velnor-preseed-helper";
-/// Directory receiving the downloaded pre-seed helper.
-///
-/// Shell `run:` spelling only; the download input uses [`PRESEED_STAGE_DIR_EXPR`].
 pub const PRESEED_STAGE_DIR: &str = "$RUNNER_TEMP/velnor/preseed";
-/// Manifest filename inside the pre-seed artifact.
 pub const PRESEED_MANIFEST_FILE: &str = "preseed-manifest.json";
-/// Fixed `mbx build --release` output, mirrored from the candidate path.
 pub const PRESEED_BUILD_OUTPUT: &str = "target/release/velnor-actions";
-/// Temporary output from the pinned MBX compile-route check.
 const PRESEED_MBX_VERSION_OUTPUT: &str = "$RUNNER_TEMP/velnor/preseed-mbx-version";
-/// Downloaded helper binary inside the pre-seed stage directory.
 pub const PRESEED_DOWNLOADED_BINARY: &str = "$RUNNER_TEMP/velnor/preseed/velnor-actions";
 
-/// Trust marker suffixed to every pre-seed step name.
 const TRUST_MARK: &str = " (pre-seed trust-on-review)";
-/// Display name of the one pre-seed helper build step.
 pub const PRESEED_BUILD_NAME: &str = "Build helper (pre-seed trust-on-review)";
-/// Display name of the MBX-compile verification step.
 pub const PRESEED_VERIFY_NAME: &str = "Verify MBX compile (pre-seed trust-on-review)";
-/// Display name of the pre-seed manifest step.
 pub const PRESEED_MANIFEST_NAME: &str = "Write helper manifest (pre-seed trust-on-review)";
-/// Display name of the pre-seed helper upload step.
 pub const PRESEED_UPLOAD_NAME: &str = "Upload helper (pre-seed trust-on-review)";
-/// Display name of the pre-seed helper download step.
 pub const PRESEED_DOWNLOAD_NAME: &str = "Download helper (pre-seed trust-on-review)";
-/// Display name of the pre-seed manifest verification step.
 pub const PRESEED_VERIFY_MANIFEST_NAME: &str = "Verify helper manifest (pre-seed trust-on-review)";
-/// Display name of the pre-seed helper staging step.
 pub const PRESEED_STAGE_NAME: &str = "Stage helper (pre-seed trust-on-review)";
-/// Env key carrying the fresh binary path to the manifest op.
 pub const PRESEED_MANIFEST_BINARY_ENV: &str = "VELNOR_PRESEED_BINARY";
-/// Env key carrying the expanded manifest output directory.
 pub const PRESEED_MANIFEST_OUT_ENV: &str = "VELNOR_PRESEED_OUT";
-/// Env key carrying the literal target triple.
 pub const PRESEED_MANIFEST_TARGET_ENV: &str = "VELNOR_PRESEED_TARGET";
-/// Env key carrying the toolchain identity from the build vector.
 pub const PRESEED_MANIFEST_TOOLCHAIN_ENV: &str = "VELNOR_PRESEED_TOOLCHAIN";
 
-/// Pre-seed staging source: local build output or downloaded artifact.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PreseedStageSource {
-    /// Plan job: the binary just built by the fixed §4 vector.
     LocalBuild,
-    /// Task/final jobs: the binary downloaded from the plan artifact.
     DownloadedArtifact,
 }
 
 impl PreseedStageSource {
-    /// Fixed source path for this staging origin.
     #[must_use]
     pub const fn path(self) -> &'static str {
         match self {
@@ -93,17 +48,6 @@ impl PreseedStageSource {
     }
 }
 
-/// Pre-seed build step over the caller-supplied fixed §4 vector.
-///
-/// Argv arrives from the orchestrator's shared candidate-build constructor,
-/// so the pre-seed build is byte-identical to the candidate build. Env
-/// arrives from the caller too: the build must run under the same owned
-/// homes as the fetch steps, or it resolves a split cargo home and the
-/// restored sources never warm it. The build compiles PR source (build
-/// scripts run) after the plan job's prepare step installed the pinned
-/// toolchain, so the step carries the scrub overlay plus the unset
-/// wrapper and needs no ambient auth.
-/// # Errors
 pub fn preseed_build_step(
     build: &[String],
     env: &BTreeMap<String, String>,
@@ -121,17 +65,6 @@ pub fn preseed_build_step(
     Ok(step)
 }
 
-/// Fixed MBX-compile verification: output executable plus pinned-route proof.
-///
-/// Beyond the executable output, the step runs the caller-supplied
-/// isolated `mbx --version` probe and requires its whole line to equal
-/// `mbx <version>` (exact pinned catalog version, never `latest`), so a
-/// wrong-toolchain compile fails here instead of uploading. The probe
-/// resolves the action-owned executable before entering Rust-only Mise on
-/// every run, cold or warm. The script writes
-/// probe output to a temporary file before comparing it, so a matching
-/// partial response cannot mask a nonzero Mise exit.
-/// # Errors
 pub fn preseed_verify_step(
     probe: &[String],
     mbx_version: &str,
@@ -157,11 +90,6 @@ pub fn preseed_verify_step(
     Ok(step)
 }
 
-/// Portable probe shape: isolated `mise exec rust@<exact> -- mbx --version`.
-///
-/// The native action owns MBX installation. Runtime binding replaces the
-/// portable `mbx` token with the absolute executable resolved from the
-/// action's PATH before Mise selects only Rust.
 fn check_probe_shape(probe: &[String]) -> Result<(), RenderError> {
     let malformed = || RenderError::BadCommand("preseed_bad_mbx_probe".to_owned());
     if probe.len() != 9
@@ -194,7 +122,6 @@ fn check_probe_shape(probe: &[String]) -> Result<(), RenderError> {
     Ok(())
 }
 
-/// Probe args: nonempty alphanumerics plus `-_.@:/+` only.
 fn is_probe_token(arg: &str) -> bool {
     !arg.is_empty()
         && arg.bytes().all(|b| {
@@ -202,18 +129,6 @@ fn is_probe_token(arg: &str) -> bool {
         })
 }
 
-/// Pre-seed manifest step: the fresh helper writes its own manifest.
-///
-/// The plan job builds the helper from source, then runs the FRESH
-/// binary (never a staged or downloaded one) with the manifest op: it
-/// hashes its own file, stages the copy, and writes the §4.4 JSON
-/// through serde. Writing is not embedding (bootstrap §2 bans only
-/// compile-time bakes), so no self-hash paradox arises. Toolchain
-/// identity derives from the `tool@exact` specs in `build` (never
-/// guessed); the target must be a supported release triple; the output
-/// directory uses the runner-temp expression form so no shell expansion
-/// is needed. No JSON is composed in shell on this side.
-/// # Errors
 pub fn preseed_manifest_step(build: &[String], target: &str) -> Result<Step, RenderError> {
     debug_assert!(PRESEED_MANIFEST_NAME.ends_with(TRUST_MARK));
     if !velnor_actions_contract::is_supported_target(target) {
@@ -246,8 +161,6 @@ pub fn preseed_manifest_step(build: &[String], target: &str) -> Result<Step, Ren
     Ok(step)
 }
 
-/// Pre-seed helper upload step (exact artifact name, fails loud).
-/// # Errors
 pub fn preseed_upload_step() -> Result<Step, RenderError> {
     debug_assert!(PRESEED_UPLOAD_NAME.ends_with(TRUST_MARK));
     let mut step = steps::action_step(
@@ -267,8 +180,6 @@ pub fn preseed_upload_step() -> Result<Step, RenderError> {
     Ok(step)
 }
 
-/// Pre-seed helper download step (exact artifact name, no wildcards).
-/// # Errors
 pub fn preseed_download_step() -> Result<Step, RenderError> {
     debug_assert!(PRESEED_DOWNLOAD_NAME.ends_with(TRUST_MARK));
     let mut step = steps::action_step(
@@ -283,24 +194,6 @@ pub fn preseed_download_step() -> Result<Step, RenderError> {
     Ok(step)
 }
 
-/// Fixed script verifying the downloaded manifest before any staging.
-///
-/// Same shape as the candidate verification: schema 1, 40-hex commit
-/// equal to the checked-out `$GITHUB_SHA`, exact expected target,
-/// nonempty toolchain, 64-hex sha256 equal to the downloaded binary's
-/// recomputed digest. Existence-only on the binary: artifact downloads
-/// do not preserve the exec bit, so `test -x` here would fail closed on
-/// every legitimate payload; executability is established by the staging
-/// copy's `chmod +x` below. A tampered staged payload fails closed here,
-/// so the staging copy below never runs on attacker bytes.
-///
-/// Contract exception (raw shell parse, kept deliberately): consumers
-/// must verify the manifest BEFORE staging, and pre-staging they hold
-/// no trusted executor — executing downloaded bytes to verify them
-/// would defeat verification, and no pinned parser exists outside the
-/// helper. The write side runs in the fresh helper (see
-/// [`preseed_manifest_step`]); only this parse side stays shell, and it
-/// executes nothing but `test`/`read`/`sha256sum` over fixed paths.
 #[must_use]
 pub fn preseed_manifest_verify_script(target: &str) -> String {
     format!(
@@ -308,11 +201,6 @@ pub fn preseed_manifest_verify_script(target: &str) -> String {
     )
 }
 
-/// Manifest verification step; must precede every downloaded staging.
-///
-/// The expected target is the literal triple the plan job builds for
-/// (never the manifest's own claim).
-/// # Errors
 pub fn preseed_manifest_verify_step(target: &str) -> Result<Step, RenderError> {
     debug_assert!(PRESEED_VERIFY_MANIFEST_NAME.ends_with(TRUST_MARK));
     if !velnor_actions_contract::is_supported_target(target) {
@@ -333,12 +221,6 @@ pub fn preseed_manifest_verify_step(target: &str) -> Result<Step, RenderError> {
     Ok(step)
 }
 
-/// Pre-seed staging step: copy the helper to the staged binary path.
-///
-/// The staged path is the same fixed path internal steps invoke, so plan,
-/// merge, and freshness steps work unchanged. Only the two fixed origins
-/// exist; anything else is not a pre-seed stage.
-/// # Errors
 pub fn preseed_stage_step(source: PreseedStageSource, staged: &str) -> Result<Step, RenderError> {
     debug_assert!(PRESEED_STAGE_NAME.ends_with(TRUST_MARK));
     validate_staged_path(staged)?;
@@ -356,7 +238,6 @@ pub fn preseed_stage_step(source: PreseedStageSource, staged: &str) -> Result<St
     Ok(step)
 }
 
-/// Staged paths stay under the fixed helper prefix without traversal.
 fn validate_staged_path(staged: &str) -> Result<(), RenderError> {
     match staged.strip_prefix(steps::STAGED_BINARY_PREFIX) {
         Some(rest)

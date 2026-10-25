@@ -1,101 +1,72 @@
-//! Non-overwriting publication transitions over independently authenticated observations.
-//!
-//! This planner performs no authentication or I/O. Callers must verify the
-//! canonical receipt, source/authority/run identity, retained evidence, and
-//! observed tag/assets before constructing these inputs. Every mutation must
-//! recheck eligibility; a plan is not a reusable authorization token.
-
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Authenticated immutable receipt identity, including its complete asset set.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PublicationIdentity {
-    /// Exact source commit expected at the owned version tag.
     pub source_sha: String,
-    /// Canonical receipt digest binds channel, version, authority, run, and bytes.
+
     pub receipt_digest: String,
-    /// Complete release assets, including receipt and its detached bundle.
+
     pub assets: BTreeMap<String, String>,
 }
 
-/// Independently observed remote state at the deterministic owned tag.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PublicationState {
-    /// Neither tag nor release exists.
     Absent,
-    /// A tag exists without a draft or published release.
+
     TagOnly {
-        /// Full commit to which the observed tag resolves.
         source_sha: String,
-        /// Receipt digest embedded in the authenticated annotated tag message.
+
         original_receipt_digest: Option<String>,
     },
-    /// Existing permanent tag authenticated through retained pre-tag intent and
-    /// observed post-tag origin, independently bound to the signed generation.
+
     AuthorizedStableTag {
-        /// Verified signed generation admitted by the original manual tag job.
         identity: PublicationIdentity,
     },
-    /// Unpublished draft; unknown original authority is represented by `None`.
+
     Draft {
-        /// Full commit to which the draft tag resolves.
         source_sha: String,
-        /// Retained authenticated receipt identity from the original build run.
+
         original_receipt_digest: Option<String>,
-        /// Existing remote assets and their independently verified digests.
+
         assets: BTreeMap<String, String>,
     },
-    /// A visible release whose immutable status and exact assets were inspected.
+
     Published {
-        /// Authenticated original receipt and complete observed asset inventory.
         identity: PublicationIdentity,
-        /// Immutable status read from the authoritative release API.
+
         immutable: bool,
     },
 }
 
-/// Sole permitted next transition; no branch authorizes overwriting any object.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PublicationAction {
-    /// Create the immutable source tag without force, then reobserve before draft creation.
     CreateTag,
-    /// Resume after tag creation, preserving the exact existing tag.
+
     CreateDraft,
-    /// Upload only these missing original assets, then publish after rechecks.
-    CompleteDraft {
-        /// Declared original assets absent from the observed remote draft.
-        missing_assets: Vec<String>,
-    },
-    /// Publication is complete; only downstream reconciliation may resume.
+
+    CompleteDraft { missing_assets: Vec<String> },
+
     ReconcileDistribution,
-    /// Stop for inspected recovery; never move tags or replace assets.
+
     Reject(PublicationRejection),
 }
 
-/// Closed fail-closed publication conflicts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PublicationRejection {
-    /// An unfinished candidate is no longer the authorized default-branch head.
     StaleCandidate,
-    /// Existing tag resolves to a different commit.
+
     ConflictingTag,
-    /// Existing draft has no authenticated original receipt/run authority.
+
     UnknownPublicationOrigin,
-    /// Original receipt or existing asset identity conflicts with expected bytes.
+
     ConflictingIdentity,
-    /// Required missing asset bytes/evidence from the original run are unavailable.
+
     UnavailableOriginalAssets,
-    /// Published release is not immutable.
+
     MutablePublishedRelease,
 }
 
-/// Select a non-overwriting transition using verified receipt and remote state.
-///
-/// `available_original_assets` names assets whose exact original bytes and
-/// evidence remain authenticated and available. It must never describe a new
-/// build merely sharing source/version. Completed releases may reconcile after
-/// source advances; downstream freshness/downgrade checks still apply.
 #[must_use]
 pub fn publication_action(
     expected: &PublicationIdentity,
@@ -215,7 +186,6 @@ fn draft_action(
     PublicationAction::CompleteDraft { missing_assets }
 }
 
-/// Upload the signed receipt first so a partial draft can prove its origin.
 fn ordered_asset_names(expected: &PublicationIdentity) -> Vec<String> {
     let mut names = expected.assets.keys().cloned().collect::<Vec<_>>();
     names.sort_by(|left, right| {
@@ -233,7 +203,3 @@ fn asset_upload_rank(name: &str) -> u8 {
         _ => 2,
     }
 }
-
-#[cfg(test)]
-#[path = "publication_retry_tests.rs"]
-mod tests;

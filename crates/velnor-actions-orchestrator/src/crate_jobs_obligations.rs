@@ -1,5 +1,3 @@
-//! Ordered, validated obligations for one crate job.
-
 use std::collections::BTreeSet;
 
 use velnor_actions_contract::{
@@ -11,23 +9,11 @@ use crate::OrchestratorError;
 use crate::matrix_step::step_name_for;
 use crate::obligation_order::obligation_order_key;
 
-/// Rank one proposal through the shared task-order key.
-#[cfg(test)]
-pub(super) fn obligation_rank(task: &ProposedTask) -> u32 {
-    obligation_order_key(&task.stack_id, &task.task_kind, &task.task_id).0
-}
-
-/// Ordered validated obligations for one crate's tasks.
-///
-/// In Rust jobs same-job data producers come first, so every gate references
-/// a strictly earlier obligation and the remaining checks form one
-/// contiguous parallel group.
 pub(super) fn obligations_for(
     tasks: &[&ProposedTask],
     catalog: &ToolCatalog,
 ) -> Result<Vec<CrateObligation>, OrchestratorError> {
     let executed: BTreeSet<&str> = tasks.iter().map(|task| task.task_id.as_str()).collect();
-    // Only Rust jobs run a parallel group; OpenTofu keeps its kind order.
     let producers: BTreeSet<&str> = if tasks.iter().any(|task| super::is_opentofu(task)) {
         BTreeSet::new()
     } else {
@@ -55,7 +41,6 @@ pub(super) fn obligations_for(
     Ok(obligations)
 }
 
-/// One obligation: identities, same-job ordered gates, fixed argv.
 fn obligation_for(
     task: &ProposedTask,
     executed: &BTreeSet<&str>,
@@ -79,11 +64,6 @@ fn obligation_for(
     })
 }
 
-/// Sorted same-job gates: quality gates plus data producers.
-///
-/// Gates naming skipped tasks (test-less doctests) are vacuous: the
-/// kind order still sequences the survivors, and dangling references
-/// would fail the strictly-earlier validation.
 pub(super) fn gates_for(task: &ProposedTask, executed: &BTreeSet<&str>) -> Vec<String> {
     let mut gates: Vec<String> = task
         .gated_by

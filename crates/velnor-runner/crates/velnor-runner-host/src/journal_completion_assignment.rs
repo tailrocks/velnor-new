@@ -1,12 +1,9 @@
-//! Assigned request reservation and one-shot acquire/JIT transitions.
-
 use crate::error::HostError;
 use crate::journal::{IntentState, Journal, one_row, token_rejected};
 
 use super::{assigned_request, finish_transaction, is_message_name, is_session_name};
 
 impl Journal {
-    /// Persist launch identity before an external effect. Repeated identical binds are safe.
     pub(crate) async fn bind_launch_identity(
         &self,
         id: i64,
@@ -30,9 +27,6 @@ impl Journal {
         finish_transaction(&connection, result).await
     }
 
-    /// Atomically reserve one assigned request before acquire or JIT.
-    ///
-    /// A redelivery with another message id returns the existing intent as not fresh.
     pub(crate) async fn begin_assigned_launch(
         &self,
         subject: &str,
@@ -59,7 +53,6 @@ impl Journal {
         finish_transaction(&connection, result).await
     }
 
-    /// Persist the acquire attempt before calling the Scale Set endpoint.
     pub(crate) async fn claim_assigned_acquire(&self, id: i64) -> Result<bool, HostError> {
         if id <= 0 {
             return Err(HostError::Journal);
@@ -80,10 +73,6 @@ impl Journal {
         finish_transaction(&connection, result).await
     }
 
-    /// Record a definite `AcquireJobs` response before a JIT call.
-    ///
-    /// A rejected response clears the attempt marker for a safe retry; an acquired
-    /// response permanently fences `AcquireJobs` for this request.
     pub(crate) async fn record_assigned_acquire(
         &self,
         id: i64,
@@ -110,7 +99,6 @@ impl Journal {
         finish_transaction(&connection, result).await
     }
 
-    /// Persist one JIT attempt before making its HTTP request.
     pub(crate) async fn claim_launch_jit(&self, id: i64) -> Result<bool, HostError> {
         if id <= 0 {
             return Err(HostError::Journal);

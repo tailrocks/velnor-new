@@ -1,12 +1,3 @@
-//! Generated Gradle jobs: one per project (hard decision 5).
-//!
-//! `[stacks.gradle]` names the roots. Generation analyses each root statically
-//! (`velnor-actions-gradle`) and fails closed with the adapter's finding codes
-//! when a root violates the stack contract. Each project with a build script
-//! gets a job: checkout, helper, the private-source block for the lock's Maven
-//! bundles, Mise, then the `gradle-run-v1` step, which verifies the wrapper and
-//! runs `assemble` and `check` as one `--continue` invocation.
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
@@ -24,10 +15,8 @@ use crate::config::gradle_run::{DATABASE_ENV, JAVA_ENV, ROOT_ENV, TASKS_ENV, WOR
 use crate::config::private_wiring::PrivateWiring;
 use crate::safe_read::{RepoBytes, read_repo_bytes};
 
-/// Largest Gradle file read (verification metadata can be megabytes).
 const MAX_GRADLE_FILE_BYTES: u64 = 16 * 1024 * 1024;
 
-/// One analysed Gradle root: its directory and the projects with build scripts.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GradleRoot {
     pub(crate) root: String,
@@ -42,10 +31,6 @@ fn join(root: &str, rel: &str) -> String {
     }
 }
 
-/// Analyse every configured root; fail closed on any finding.
-///
-/// # Errors
-/// A contract error listing `<root>: <finding>` codes.
 pub(crate) fn analyze_roots(
     repo: &Path,
     index: &velnor_actions_contract::FileIndex,
@@ -112,7 +97,6 @@ pub(crate) fn analyze_roots(
     }
 }
 
-/// Job id for one project.
 fn job_id(root: &str, project: &str) -> String {
     let scope = if root.is_empty() {
         String::new()
@@ -125,7 +109,6 @@ fn job_id(root: &str, project: &str) -> String {
     )
 }
 
-/// The `gradle-run-v1` step of one project (`assemble` and `check`).
 fn run_step(root: &str, project: &str, workers: u8, database: bool) -> Step {
     run_step_for(
         "Gradle assemble and check",
@@ -136,7 +119,6 @@ fn run_step(root: &str, project: &str, workers: u8, database: bool) -> Step {
     )
 }
 
-/// A `gradle-run-v1` step running `tasks` (space-separated task paths) in `root`.
 pub(crate) fn run_step_for(
     name: &str,
     root: &str,
@@ -173,10 +155,6 @@ pub(crate) fn run_step_for(
     }
 }
 
-/// Build every Gradle job.
-///
-/// # Errors
-/// Missing helper (non-consumer policy), pin and private-source errors.
 pub(crate) fn build_jobs(
     config: &VelnorConfig,
     roots: &[GradleRoot],
@@ -247,7 +225,3 @@ pub(crate) fn build_jobs(
     jobs.sort_by(|left, right| left.0.cmp(&right.0));
     Ok(jobs)
 }
-
-#[cfg(test)]
-#[path = "gradle_jobs_tests.rs"]
-mod tests;

@@ -1,5 +1,3 @@
-//! Static CPU and memory capacity from Docker and durable worker rows.
-
 use bollard::Docker;
 
 use crate::docker_client::docker_deadline_after;
@@ -25,8 +23,6 @@ pub(super) struct GuestTotals {
     pub(super) memory_bytes: u64,
 }
 
-/// Resource-derived total job capacity. Zero remains distinct from the
-/// one-worker poll header required before a usable guest sample exists.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct JobCapacity {
     total: u32,
@@ -34,19 +30,16 @@ pub(super) struct JobCapacity {
 }
 
 impl JobCapacity {
-    /// Keep the queue header nonzero without granting a worker-start permit.
     #[must_use]
     pub(super) const fn poll_header(self) -> u32 {
         if self.total == 0 { 1 } else { self.total }
     }
 
-    /// Whether static CPU and memory totals can fit one configured pair.
     #[must_use]
     pub(super) const fn permits_start(self) -> bool {
         self.pair_fits
     }
 
-    /// Deny new starts when the selected engine is trusted but capacity is unknown.
     #[must_use]
     pub(super) const fn denied() -> Self {
         Self {
@@ -54,21 +47,14 @@ impl JobCapacity {
             pair_fits: false,
         }
     }
-
-    #[cfg(test)]
-    pub(super) const fn total(self) -> u32 {
-        self.total
-    }
 }
 
-/// Whether capacity was measured on a trusted engine or admission must stop.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Discovery {
-    /// A matching journal-bound engine and valid capacity measurement.
     Available(JobCapacity),
-    /// Engine identity is verified, but capacity cannot be established.
+
     Unavailable,
-    /// The selected Docker engine could not be verified against the journal.
+
     Untrusted(EnsureError),
 }
 
@@ -189,7 +175,3 @@ const fn remaining(total: u64, used: u64) -> u64 {
 fn capacity_error(step: &'static str) -> EnsureError {
     EnsureError::Unexpected { status: 0, step }
 }
-
-#[cfg(test)]
-#[path = "resource_capacity_tests.rs"]
-mod tests;

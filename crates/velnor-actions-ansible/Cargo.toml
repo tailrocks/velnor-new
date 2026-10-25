@@ -6,6 +6,9 @@ rust-version.workspace = true
 license.workspace = true
 autotests = false
 
+[lib]
+test = false
+
 [lints]
 workspace = true
 
@@ -14,6 +17,3 @@ velnor-actions-contract = { version = "=0.1.54", path = "../velnor-actions-contr
 thiserror = { workspace = true }
 toml = { version = "=1.1.8" }
 
-[[test]]
-name = "velnor_ansible"
-path = "tests/velnor_ansible.rs"

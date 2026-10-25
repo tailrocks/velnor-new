@@ -1,106 +1,89 @@
-//! Message poll decode. Null and omitted statistics both mean absent.
-
 use serde::Deserialize;
 use serde_json::Value;
 
 use crate::error::WireError;
 
-/// Local byte bound for one Scale Set poll body.
 pub const MAX_POLL_BODY_BYTES: usize = 256 * 1024;
-/// Maximum message count accepted from one Scale Set poll.
+
 pub const MAX_POLL_MESSAGES: usize = 50;
 const MAX_POLL_ENVELOPE_BYTES: usize = MAX_POLL_BODY_BYTES * 8;
 const MAX_JOB_ID_BYTES: usize = 256;
 
-/// One decoded poll.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Poll {
-    /// HTTP 202. Not an error and not an acknowledgement.
     Empty,
-    /// HTTP 200 envelope.
+
     Batch(ParsedBatch),
-    /// A valid outer envelope whose bounded inner body could not be decoded.
-    /// The host must persist this exact body under the outer ID before ACK.
+
     Quarantined(QuarantinedBatch),
 }
 
-/// Malformed inner body retained under its stable outer Scale Set message ID.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QuarantinedBatch {
-    /// The outer `runnerScaleSetMessageResponse.messageId`.
     pub message_id: i64,
-    /// Exact decoded outer `body` string, bounded by [`MAX_POLL_BODY_BYTES`].
+
     pub raw_body: String,
 }
 
-/// Inner job kind.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InnerKind {
-    /// `JobAvailable`.
     Available,
-    /// `JobAssigned`.
+
     Assigned,
-    /// `JobStarted`.
+
     Started,
-    /// `JobCompleted`.
+
     Completed,
-    /// Any other kind. Visible, and not silently acknowledged.
+
     Unsupported(String),
 }
 
-/// Decoded batch. `statistics == None` covers both JSON null and omission.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsedBatch {
-    /// Service message id. Zero is real. Negative one is synthetic.
     pub message_id: i64,
-    /// Exact inner message body. Keep it when ownership needs quarantine.
+
     pub raw_body: String,
-    /// Assigned-population snapshot, when the service sent one.
+
     pub statistics: Option<Statistics>,
-    /// Parsed inner messages, including unsupported kinds.
+
     pub jobs: Vec<InnerJob>,
 }
 
-/// One inner message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InnerJob {
-    /// Kind.
     pub kind: InnerKind,
-    /// `runnerRequestId` when present.
+
     pub request_id: Option<i64>,
-    /// `runnerId` on `JobStarted` and `JobCompleted` only.
+
     pub runner_id: Option<i64>,
-    /// `runnerName` on `JobStarted` and `JobCompleted` only.
+
     pub runner_name: Option<String>,
-    /// `result` on `JobCompleted` only.
+
     pub result: Option<String>,
-    /// Bounded opaque native `jobId`. It is not a workflow-job API identifier.
+
     pub job_id: Option<String>,
-    /// `requestLabels` names. Empty when the field is absent.
+
     pub labels: Vec<String>,
-    /// Object keys. Names only, so a live trace can show the shape.
+
     pub fields: Vec<String>,
-    /// Source values from this job message. Missing values stay absent.
+
     pub source: SourceMetadata,
 }
 
-/// Source values that the pinned Scale Set message can provide.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct SourceMetadata {
-    /// `ownerName` when present.
     pub owner_name: Option<String>,
-    /// `repositoryName` when present.
+
     pub repository_name: Option<String>,
-    /// `jobWorkflowRef` when present.
+
     pub job_workflow_ref: Option<String>,
-    /// `workflowRunId` when present.
+
     pub workflow_run_id: Option<i64>,
-    /// `eventName` when present.
+
     pub event_name: Option<String>,
 }
 
 impl SourceMetadata {
-    /// Return source values only when each field is present and usable.
     #[must_use]
     pub fn complete(&self) -> Option<CompleteSourceMetadata<'_>> {
         let owner_name = non_empty(self.owner_name.as_deref())?;
@@ -118,18 +101,16 @@ impl SourceMetadata {
     }
 }
 
-/// Complete source values borrowed from one job message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CompleteSourceMetadata<'a> {
-    /// GitHub account name.
     pub owner_name: &'a str,
-    /// GitHub repository name.
+
     pub repository_name: &'a str,
-    /// Workflow path and ref from the job message.
+
     pub job_workflow_ref: &'a str,
-    /// GitHub Actions workflow run identifier.
+
     pub workflow_run_id: i64,
-    /// GitHub event name.
+
     pub event_name: &'a str,
 }
 
@@ -137,28 +118,25 @@ fn non_empty(value: Option<&str>) -> Option<&str> {
     value.filter(|text| !text.trim().is_empty())
 }
 
-/// `statistics` object from the pinned Go struct.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Statistics {
-    /// Jobs waiting.
     pub total_available_jobs: i64,
-    /// Jobs acquired.
+
     pub total_acquired_jobs: i64,
-    /// Population authority. Not the length of this batch.
+
     pub total_assigned_jobs: i64,
-    /// Jobs running.
+
     pub total_running_jobs: i64,
-    /// Registered runners.
+
     pub total_registered_runners: i64,
-    /// Busy runners.
+
     pub total_busy_runners: i64,
-    /// Idle runners.
+
     pub total_idle_runners: i64,
 }
 
 impl Statistics {
-    /// Assigned population. Do not add the batch length to this.
     #[must_use]
     pub const fn assigned_population(&self) -> i64 {
         self.total_assigned_jobs
@@ -176,12 +154,6 @@ struct Envelope {
     statistics: Option<Statistics>,
 }
 
-/// Decode a poll. HTTP 202 ignores the body. A bounded malformed inner body
-/// is returned as [`Poll::Quarantined`] when its outer message ID is stable.
-///
-/// # Errors
-///
-/// Returns [`WireError::Malformed`] or [`WireError::UnsupportedEnvelope`].
 pub fn parse_poll(status: u16, body: &str) -> Result<Poll, WireError> {
     if status == 202 {
         return Ok(Poll::Empty);
@@ -235,11 +207,6 @@ fn parse_body(body: &str) -> Result<Vec<InnerJob>, WireError> {
     values.iter().map(parse_inner).collect()
 }
 
-/// Parse a persisted exact inner message body for bounded inbox recovery.
-///
-/// # Errors
-///
-/// Returns [`WireError::Malformed`] when JSON is invalid or exceeds a byte or message limit.
 pub fn parse_inner_messages(body: &str) -> Result<Vec<InnerJob>, WireError> {
     parse_body(body)
 }
@@ -385,7 +352,6 @@ fn label_names(value: Option<&Value>) -> Vec<String> {
         .collect()
 }
 
-/// Acknowledge only a real id, and never a batch that still has an unknown kind.
 #[must_use]
 pub fn may_ack(batch: &ParsedBatch, replay_safe: bool) -> bool {
     if batch.message_id < 0 || !replay_safe {

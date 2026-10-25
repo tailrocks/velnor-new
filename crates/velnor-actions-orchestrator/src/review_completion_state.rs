@@ -1,4 +1,3 @@
-//! Bounded canonical proposal data; no proposal is remote completion authority.
 use super::super::{
     feedback::{CapturedFeedback, FeedbackContext},
     github::TapMergeGitHub,

@@ -1,26 +1,9 @@
-//! Configured-roots qualification: grammar, containment, effective config.
-//!
-//! The caller passes the canonical checkout root plus the post-exclusion
-//! index. Lexical containment is proven by the config grammar (no
-//! absolutes, no `..`); this module adds canonical containment
-//! (symlink-resolved, in-repo) and the per-root effective-config rule.
-//! It returns one candidate per root; the caller suppresses emission
-//! when the stack is ignored. The index records canonical-side paths,
-//! so a symlink alias to an in-repo dir holds no indexed files and
-//! fails `no_effective_config`: configure the real directory.
-
 use std::path::Path;
 
 use velnor_actions_contract::{ContractError, FileIndex, StackCandidate, TofuStackConfig};
 
 use crate::effective::dir_has_effective_config;
 
-/// Qualify every configured root against the checkout at `root`.
-///
-/// # Errors
-///
-/// Returns key-path config errors for lexical violations, unreadable
-/// or escaping roots, and roots without effective configuration.
 pub fn qualify_roots(
     file: &str,
     root: &Path,
@@ -43,7 +26,6 @@ pub fn qualify_roots(
     Ok(candidates)
 }
 
-/// Qualify one root: canonical containment plus effective config.
 fn qualify_one(
     file: &str,
     canonical: &Path,
@@ -64,7 +46,6 @@ fn qualify_one(
     Ok(())
 }
 
-/// One `stacks.tofu.roots` key-path error.
 fn bad(file: &str, problem: String) -> ContractError {
     ContractError::config(file, "stacks.tofu.roots", problem)
 }

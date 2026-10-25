@@ -1,18 +1,9 @@
-//! Static `settings.gradle(.kts)` project model.
-//!
-//! Planning executes no Gradle code, so the project set must be spelled out
-//! in literals. Anything that computes projects (loops, directory listings,
-//! interpolated names, applied scripts) fails with `gradle_dynamic_settings`
-//! instead of being guessed.
-
 use std::collections::BTreeMap;
 
 use crate::lex::{Tok, tokenize};
 
-/// Finding code for a settings script the static model cannot read.
 pub const DYNAMIC_SETTINGS: &str = "gradle_dynamic_settings";
 
-/// Identifiers whose presence means projects may be computed.
 const DYNAMIC_IDENTS: [&str; 12] = [
     "for",
     "while",
@@ -28,35 +19,28 @@ const DYNAMIC_IDENTS: [&str; 12] = [
     "apply",
 ];
 
-/// A statically known project.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Project {
-    /// Gradle path, for example `:eth-domain`.
     pub path: String,
-    /// Directory relative to the settings directory (`/`-separated).
+
     pub dir: String,
 }
 
-/// The static model of one settings script.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct SettingsModel {
-    /// `rootProject.name`, when literal.
     pub root_name: Option<String>,
-    /// Included projects (and implied parents), sorted by path.
+
     pub projects: Vec<Project>,
-    /// Literal `includeBuild(...)` directories, sorted.
+
     pub included_builds: Vec<String>,
 }
 
-/// Why the settings script is not statically readable.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DynamicSettings {
-    /// Short machine-readable reason.
     pub reason: String,
 }
 
 impl DynamicSettings {
-    /// Stable finding code.
     #[must_use]
     pub const fn code(&self) -> &'static str {
         DYNAMIC_SETTINGS
@@ -69,11 +53,6 @@ fn dynamic<T>(reason: &str) -> Result<T, DynamicSettings> {
     })
 }
 
-/// Parse a settings script.
-///
-/// # Errors
-/// [`DynamicSettings`] when any project, directory or included build is not a
-/// plain string literal.
 pub fn parse(text: &str) -> Result<SettingsModel, DynamicSettings> {
     let toks = tokenize(text);
     let mut paths: Vec<String> = Vec::new();
@@ -121,7 +100,6 @@ pub fn parse(text: &str) -> Result<SettingsModel, DynamicSettings> {
     Ok(model)
 }
 
-/// `:a:b` and `a:b` both name the project path `:a:b`.
 fn normalize_path(raw: &str) -> String {
     if raw.starts_with(':') {
         raw.to_owned()
@@ -130,7 +108,6 @@ fn normalize_path(raw: &str) -> String {
     }
 }
 
-/// Parse `( "a", "b" )` or the Groovy command form `'a', 'b'` after a call name.
 fn call_args(toks: &[Tok], mut i: usize) -> Result<(Vec<String>, usize), DynamicSettings> {
     let parens = matches!(toks.get(i), Some(Tok::Punct('(')));
     if parens {
@@ -164,7 +141,6 @@ fn call_args(toks: &[Tok], mut i: usize) -> Result<(Vec<String>, usize), Dynamic
     Ok((args, i))
 }
 
-/// Match `project(":x").projectDir = file("dir")`.
 fn project_dir(toks: &[Tok], i: usize) -> Result<Option<(String, String, usize)>, DynamicSettings> {
     let (Some(Tok::Punct('(')), Some(Tok::Str(path, false)), Some(Tok::Punct(')'))) =
         (toks.get(i + 1), toks.get(i + 2), toks.get(i + 3))
@@ -215,7 +191,6 @@ fn root_name(toks: &[Tok], i: usize) -> Option<String> {
     }
 }
 
-/// Add implied parents and resolve directories.
 fn expand(
     paths: &[String],
     dirs: &BTreeMap<String, String>,

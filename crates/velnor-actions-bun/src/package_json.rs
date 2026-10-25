@@ -1,40 +1,30 @@
-//! The `package.json` facts Velnor reads.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::Value;
 
 use crate::BunError;
 
-/// Facts of one `package.json`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PackageJson {
-    /// `name`.
     pub name: Option<String>,
-    /// `version`.
+
     pub version: Option<String>,
-    /// `private` is `true`.
+
     pub private: bool,
-    /// `scripts` names.
+
     pub scripts: BTreeSet<String>,
-    /// `scripts` command text, read only by the Playwright shard
-    /// admissibility check ([`crate::playwright_script`]); never executed.
+
     pub commands: BTreeMap<String, String>,
-    /// Workspace member patterns (`workspaces` array or `workspaces.packages`).
+
     pub workspaces: Vec<String>,
-    /// `packageManager`.
+
     pub package_manager: Option<String>,
-    /// `publishConfig.registry`.
+
     pub publish_registry: Option<String>,
-    /// `dependencies`, `devDependencies`, `optionalDependencies`: name to specifier.
+
     pub dependencies: BTreeMap<String, String>,
 }
 
-/// Parse the facts of `package.json` text.
-///
-/// # Errors
-///
-/// Returns `package_json_invalid` for malformed JSON or a non-object root.
 pub fn parse_package_json(text: &str) -> Result<PackageJson, BunError> {
     let root: Value =
         serde_json::from_str(text).map_err(|_| BunError::bare("package_json_invalid"))?;

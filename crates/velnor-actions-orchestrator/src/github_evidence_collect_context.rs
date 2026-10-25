@@ -1,5 +1,3 @@
-//! Trusted fetch operation context and strict canonical specification parsing.
-
 use std::env;
 
 use velnor_actions_contract::GitHubEvidenceFetchSpecV1;

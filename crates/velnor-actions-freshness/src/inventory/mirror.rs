@@ -1,5 +1,3 @@
-//! Reviewed version-policy mirror checks.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::Value;

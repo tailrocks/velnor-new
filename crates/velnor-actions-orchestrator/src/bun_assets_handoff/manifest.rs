@@ -1,5 +1,3 @@
-//! Typed validation for Bun's verified private-fetch marker.
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Component, Path};

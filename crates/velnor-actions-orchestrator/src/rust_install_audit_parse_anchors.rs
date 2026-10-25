@@ -65,8 +65,6 @@ pub(super) fn duplicate_anchor_names(text: &str) -> BTreeSet<String> {
                     logical_entry.push_str(&continuation);
                 }
                 if state.is_open() {
-                    // An unclosed collection cannot authorize an alias. Poison
-                    // any anchor declarations found in its partial contents.
                     poison_partial_flow_anchors(&logical_entry, &mut counts);
                 }
                 continuation_indent =
@@ -208,7 +206,6 @@ fn flow_mapping_entry(entry: &str) -> Option<(&str, &str)> {
     Some((entry[..index].trim(), entry[index + 1..].trim()))
 }
 
-// `?` is syntax only when separated; its following node properties stay visible.
 fn strip_explicit_key_indicator(value: &str) -> &str {
     value.strip_prefix('?').map_or(value, |rest| {
         if rest.is_empty() || rest.starts_with(char::is_whitespace) {

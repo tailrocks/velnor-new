@@ -1,5 +1,3 @@
-//! Private gate for the credential-free native tap updater.
-
 use std::io::Write;
 use std::{
     env, fs,
@@ -17,7 +15,6 @@ const PLAN_FILE: &str = "package-release-policy.json";
 const PACKAGE_INPUT_DIR: &str = "release-publish-input";
 const CANDIDATE_DIR: &str = "tap-candidate";
 
-/// Admit only the fixed package plan plus retained signed release assets.
 pub(super) fn gate_request(path: &Path) -> Option<PathBuf> {
     if ["GH_TOKEN", "GITHUB_TOKEN"]
         .iter()
@@ -35,7 +32,6 @@ pub(super) fn gate_request(path: &Path) -> Option<PathBuf> {
     is_regular_file(&record).then_some(request)
 }
 
-/// Authenticate before any source checkout or updater configuration is read.
 pub(super) fn gate_admission_request(path: &Path) -> Option<PathBuf> {
     if !matches!(
         env::var("GITHUB_JOB").as_deref(),
@@ -57,7 +53,6 @@ fn valid_digest(value: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
-/// Publish only the authenticated metadata digest to the runner-owned step output.
 pub(super) fn run_admission() -> ExitCode {
     let digest = match admit_homebrew_tap_from_env() {
         Ok(digest) if valid_digest(&digest) => digest,
@@ -80,7 +75,6 @@ pub(super) fn run_admission() -> ExitCode {
     }
 }
 
-/// Admit only the fixed request, signed package handoff, candidate files, and App token.
 pub(super) fn gate_writer_request(path: &Path) -> Option<PathBuf> {
     gate_common(path, true)
 }
@@ -184,7 +178,6 @@ fn continuation_context() -> bool {
         })
 }
 
-/// Run the unprivileged updater and literal-only validator.
 pub(super) fn run() -> ExitCode {
     match prepare_homebrew_tap_from_env() {
         Ok(_) => ExitCode::SUCCESS,
@@ -192,7 +185,6 @@ pub(super) fn run() -> ExitCode {
     }
 }
 
-/// Reauthenticate, create/reconcile one PR, and emit the exact verified PR receipt.
 pub(super) fn run_writer() -> ExitCode {
     match write_homebrew_tap_pr_from_env() {
         Ok(receipt) => append_writer_outputs(&receipt),

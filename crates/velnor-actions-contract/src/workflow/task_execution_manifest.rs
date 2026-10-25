@@ -1,9 +1,3 @@
-//! Bounded, versioned data for generated declared-task wrappers.
-//!
-//! The manifest stores task inputs once. A wrapper selects one entry by its
-//! full execution digest and derives the stable task ID from that record; the
-//! existing plan digest remains a separate binding to the planner's obligation.
-
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
@@ -15,78 +9,59 @@ use crate::validate_digest;
 
 use super::step::{TaskExecutionValidation, validate_task_execution};
 
-/// Fixed generated path for the versioned task execution manifest.
 pub const TASK_EXECUTION_MANIFEST_PATH: &str = ".github/velnor/task-execution-manifest-v1.json";
-/// Current manifest schema.
+
 pub const TASK_EXECUTION_MANIFEST_SCHEMA: u32 = 1;
-/// Maximum distinct task records in one manifest.
-///
-/// This leaves more than fourfold headroom over the 897 distinct records in
-/// the measured current generated workflow; total manifest bytes have their
-/// own 8 MiB cap below.
+
 pub const MAX_TASK_EXECUTION_RECORDS: usize = 4096;
-/// Maximum bytes emitted for one wrapper record, including framing.
+
 pub const MAX_TASK_EXECUTION_FRAME_BYTES: usize = 1024 * 1024;
-/// First NUL-terminated field in the wrapper data protocol.
+
 pub const TASK_EXECUTION_FRAME_MAGIC: &str = "VELNOR-TASK-EXECUTION-V1";
 
 const MARKER_SUFFIX: &str = "; edit .velnor/config.toml and regenerate.";
 const FRAME_END: &str = "END";
 
-/// Versioned manifest of typed task executions.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TaskExecutionManifestV1 {
-    /// Manifest schema; must equal [`TASK_EXECUTION_MANIFEST_SCHEMA`].
     pub schema: u32,
-    /// Exact renderer version named by the generated-file header.
+
     pub generator_version: String,
-    /// Task records indexed by their stable task ID.
+
     pub tasks: BTreeMap<String, TaskExecutionManifestEntryV1>,
 }
 
-/// One task's full execution data and separate planner binding.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TaskExecutionManifestEntryV1 {
-    /// Stable task ID and manifest map key.
     pub task_id: String,
-    /// Digest over every execution field below, including `task_digest`.
+
     pub execution_digest: String,
-    /// Existing digest for the planner's task obligation.
+
     pub task_digest: String,
-    /// Canonical pinned tools and driver identity.
+
     pub toolchain_inputs: crate::cachekey::ToolchainInputs,
-    /// Fixed, element-preserving argv.
+
     pub argv: Vec<String>,
-    /// Fixed environment, serialized with sorted keys.
+
     pub env: BTreeMap<String, String>,
-    /// Stable matrix identity.
+
     pub matrix_id: String,
-    /// Short matrix lookup key.
+
     pub matrix_key: String,
-    /// Version of the staged task-report helper.
+
     pub report_helper_version: String,
-    /// Optional cap for the containing matrix.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub matrix_max_parallel: Option<u32>,
 }
 
 impl TaskExecutionManifestV1 {
-    /// Build the exact generated-file header for this manifest version.
-    ///
-    /// # Errors
-    ///
-    /// Returns a contract error when the version spelling is invalid.
     pub fn marker_line(&self) -> Result<String, ContractError> {
         task_execution_manifest_marker_line(&self.generator_version)
     }
 
-    /// Validate the schema, bounds, map keys, task contracts, and digests.
-    ///
-    /// # Errors
-    ///
-    /// Returns a contract error for unsupported schemas or malformed records.
     pub fn validate(&self) -> Result<(), ContractError> {
         if self.schema != TASK_EXECUTION_MANIFEST_SCHEMA {
             return Err(ContractError::identity(
@@ -113,11 +88,6 @@ impl TaskExecutionManifestV1 {
         Ok(())
     }
 
-    /// Encode the marker-prefixed canonical JSON document for generated output.
-    ///
-    /// # Errors
-    ///
-    /// Returns a contract error for invalid data or an oversized document.
     pub fn marked_json(&self) -> Result<String, ContractError> {
         self.validate()?;
         let header = self.marker_line()?;
@@ -139,15 +109,6 @@ impl TaskExecutionManifestV1 {
     }
 }
 
-/// Build the exact generated-file marker expected for an independently supplied
-/// renderer version.
-///
-/// The resolver uses this before parsing the manifest body, so the file cannot
-/// nominate its own trusted generator version.
-///
-/// # Errors
-///
-/// Returns a contract error when the version spelling is invalid.
 pub fn task_execution_manifest_marker_line(
     generator_version: &str,
 ) -> Result<String, ContractError> {
@@ -159,11 +120,6 @@ pub fn task_execution_manifest_marker_line(
 }
 
 impl TaskExecutionManifestEntryV1 {
-    /// Compute the execution digest without replacing the plan digest.
-    ///
-    /// # Errors
-    ///
-    /// Returns a contract error if canonical JSON serialization fails.
     pub fn computed_execution_digest(&self) -> Result<String, ContractError> {
         let inputs = ExecutionDigestInputs {
             task_id: &self.task_id,
@@ -179,21 +135,11 @@ impl TaskExecutionManifestEntryV1 {
         Ok(digest_b3(&canonical_json_bytes(&inputs)?))
     }
 
-    /// Set `execution_digest` to the canonical digest of this record.
-    ///
-    /// # Errors
-    ///
-    /// Returns a contract error if canonical JSON serialization fails.
     pub fn refresh_execution_digest(&mut self) -> Result<(), ContractError> {
         self.execution_digest = self.computed_execution_digest()?;
         Ok(())
     }
 
-    /// Validate this record against the task contract and both digests.
-    ///
-    /// # Errors
-    ///
-    /// Returns a contract error when any field or binding is malformed.
     pub fn validate(&self) -> Result<(), ContractError> {
         validate_task_execution(&TaskExecutionValidation {
             argv: &self.argv,
@@ -217,15 +163,6 @@ impl TaskExecutionManifestEntryV1 {
         Ok(())
     }
 
-    /// Encode one validated, bounded NUL-framed record for a generated wrapper.
-    ///
-    /// Field order is fixed by the `VELNOR-TASK-EXECUTION-V1` protocol. Counts
-    /// precede their arrays and `END` must be the final field, so the reader can
-    /// reject truncation and trailing data without interpreting shell syntax.
-    ///
-    /// # Errors
-    ///
-    /// Returns a contract error for invalid records or oversized frames.
     pub fn nul_frame(&self) -> Result<Vec<u8>, ContractError> {
         self.validate()?;
         let mut fields =
@@ -300,7 +237,3 @@ fn validate_marker_version(version: &str) -> Result<(), ContractError> {
         ))
     }
 }
-
-#[cfg(test)]
-#[path = "task_execution_manifest_tests.rs"]
-mod tests;

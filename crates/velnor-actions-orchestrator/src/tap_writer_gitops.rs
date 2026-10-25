@@ -1,5 +1,3 @@
-//! Idempotent Git object, branch, and pull-request operations.
-
 use super::{BotIdentity, TapGitHubApi, encode_segment};
 use super::{
     HomebrewTapPreparationProof, OrchestratorError, VerifiedPackageRelease,
@@ -10,12 +8,9 @@ use velnor_actions_contract::config::HomebrewTapConfig;
 
 const TAP_BASE: &str = "main";
 
-/// A write operation may stop cleanly when the separately authenticated source main advanced.
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum CurrentSourceWrite<T> {
-    /// Source A remained the current protected main tip and the operation completed.
     Completed(T),
-    /// The protected main tip is now newer than signed source A; retain prior safe side effects.
     SkippedStaleSource,
 }
 

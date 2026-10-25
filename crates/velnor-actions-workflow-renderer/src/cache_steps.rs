@@ -1,8 +1,3 @@
-//! Cache and lane step templates over validated action refs.
-//!
-//! Covers MBX objects-mode restore, `actions/cache` restore/save, and
-//! per-lane target directories; pins arrive validated.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Step, StepKind};
@@ -58,12 +53,8 @@ pub use tools::{
 };
 pub(crate) use tools::{TOOLS_SEED_ADMITTED_EXPRESSION, TOOLS_SEED_ADMITTED_INPUT};
 
-#[cfg(test)]
-pub(crate) use tools::assert_rendered_admission_parses;
 pub(crate) use tools::restore_action_file as tools_restore_action_file;
 
-/// Build the fixed V2 tools restore composite call.
-/// # Errors
 pub(crate) fn tools_cache_restore_step(
     key: &str,
     mise_sha256: &str,
@@ -72,8 +63,6 @@ pub(crate) fn tools_cache_restore_step(
     tools::restore_step(key, mise_sha256, condition)
 }
 
-/// Build the V2 tools save over the fixed path set.
-/// # Errors
 pub(crate) fn tools_cache_save_step(
     key: &str,
     condition: Option<String>,
@@ -85,23 +74,13 @@ pub(crate) fn validate_tools_restore_call(step: &Step) -> Result<&str, RenderErr
     tools::validate_restore_call(step)
 }
 
-/// Pinned mr-boxington action name (objects mode).
 pub const MBX_ACTION_NAME: &str = "jdx/mr-boxington-action";
-/// Cache restore/save action names.
 pub const CACHE_RESTORE_NAME: &str = "actions/cache/restore";
-/// Cache save action name.
 pub const CACHE_SAVE_NAME: &str = "actions/cache/save";
-/// Task-artifacts dir archived for task-result reuse.
 pub const TASK_ARTIFACTS_DIR: &str = "$MISE_TASK_CACHE_DIR/task-artifacts/v2";
 
-/// Never-archive markers: state, plans, and credential-bearing names
-/// must never enter a cache archive (T22).
-///
-/// Exact mirror of the Mise list (`cache_sources`); the orchestrator
-/// pins both equal by test, like the credential denylists.
 pub const NEVER_ARCHIVE_MARKERS: [&str; 3] = ["credentials", ".tfstate", ".tfplan"];
 
-/// True when `path` names state, plans, or credentials.
 #[must_use]
 pub fn is_never_archive_path(path: &str) -> bool {
     NEVER_ARCHIVE_MARKERS
@@ -109,20 +88,12 @@ pub fn is_never_archive_path(path: &str) -> bool {
         .any(|marker| path.contains(marker))
 }
 
-/// Detected Rust compile driver (task-execution contract profile).
-///
-/// The orchestrator maps the workspace's detected profile to this typed
-/// selector; the renderer never inspects evidence itself.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompileDriver {
-    /// Cargo profile: MBX action and installation are absent.
     Cargo,
-    /// MBX profile: the objects-mode action restores compiler objects.
     Mbx,
 }
 
-/// Cache restore/save step over `actions/cache`; MBX never archives here.
-/// # Errors
 pub fn cache_action_step(
     restore: bool,
     uses: &str,
@@ -184,7 +155,6 @@ fn validate_cache_path(layer: &str, path: &str) -> Result<(), RenderError> {
     }
 }
 
-/// P08 sources subset under the owned Cargo home expression.
 fn sources_subset_ok(path: &str) -> bool {
     const HOME: &str = "${{ runner.temp }}/velnor/cargo";
     if path.contains("..") || is_never_archive_path(path) {
@@ -202,11 +172,6 @@ fn sources_subset_ok(path: &str) -> bool {
         || suffix.starts_with("git/db/")
 }
 
-/// Check restore-before/save-after ordering over cache action steps.
-///
-/// Every `actions/cache/restore` step (plus MBX objects restore) must
-/// precede every `actions/cache/save` step within one job.
-/// # Errors
 pub fn check_cache_step_order(steps: &[Step]) -> Result<(), RenderError> {
     let mut last_restore: Option<usize> = None;
     let mut first_save: Option<usize> = None;

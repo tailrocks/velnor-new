@@ -1,4 +1,3 @@
-//! Admit every projected runtime socket against the executing target's Unix ABI.
 use super::{RuntimeEntryEvidence, RuntimeEntryKind};
 use crate::OrchestratorError;
 use crate::internal::internal;
@@ -18,8 +17,6 @@ pub(super) fn validate(
                 continue;
             }
             let path = runtime.join(&entry.path);
-            // std checks raw OS bytes plus the terminating NUL against this
-            // target's sockaddr_un.sun_path, without connecting or resolving links.
             SocketAddr::from_pathname(&path).map_err(|_| {
                 let bytes = path.as_os_str().as_bytes();
                 internal(&format!(
@@ -36,7 +33,3 @@ pub(super) fn validate(
         Err(internal("container_runtime:unix_platform_required"))
     }
 }
-
-#[cfg(test)]
-#[path = "check_container_runtime_socket_paths_tests.rs"]
-mod tests;

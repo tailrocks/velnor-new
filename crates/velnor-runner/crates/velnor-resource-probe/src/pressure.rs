@@ -1,6 +1,5 @@
 use crate::{ProbeError, units::percent_basis_points};
 
-/// Parse PSI output. Any missing, malformed, unsupported, or duplicate record is nonfatal.
 pub(crate) fn memory_some_avg10(input: &[u8]) -> Option<u64> {
     parse_pressure(input).ok()
 }

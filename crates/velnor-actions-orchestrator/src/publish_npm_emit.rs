@@ -1,5 +1,3 @@
-//! Resolve `[[publish.npm]]` entries against the Bun inventory and the work tree.
-
 use velnor_actions_bun::paths::under_root;
 use velnor_actions_bun::{parse_package_json, resolve_member_dir};
 use velnor_actions_contract::config::{NPM_PUBLISH_REGISTRY_URL, PublishNpm, VersionSource};
@@ -27,13 +25,6 @@ fn read_text(
     }
 }
 
-/// Resolve one entry: the member, its manifest policy and the Bun fragments.
-///
-/// # Errors
-///
-/// Fails closed when the member or root is not in `[stacks.bun]`, the member
-/// is private or targets another registry, the pack script is missing, a
-/// direct dependency comes from a private npm scope, or the version is not literal.
 pub(crate) fn resolve<'a>(
     prep: &GenerationPreparation,
     index: usize,

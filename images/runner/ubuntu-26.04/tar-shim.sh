@@ -1,8 +1,4 @@
 #!/bin/bash
-# GNU tar 1.35 stats and extracts with openat2. qemu-user returns ENOSYS and
-# glibc does not fall back. BusyBox tar works. Flags that change archive
-# bytes and are not implemented fail closed. -v is non-semantic: it does
-# not change archive bytes.
 set -euo pipefail
 
 mode=""
@@ -20,7 +16,6 @@ positionals=()
 args=("$@")
 i=0
 
-# GNU tar accepts a leading dashless cluster: `tar xz -C dir -f archive`.
 if [ "${#args[@]}" -gt 0 ]; then
   first="${args[0]}"
   if [[ "$first" != -* && "$first" =~ ^[A-Za-z]+$ ]]; then
@@ -56,7 +51,6 @@ while [ "$i" -lt "${#args[@]}" ]; do
       zstd=1
       ;;
     --posix)
-      # Create already goes through the pax writer. Extract stays fail-closed.
       posix=1
       ;;
     --delay-directory-restore | --force-local | --no-same-owner | --no-same-permissions | --numeric-owner | --overwrite)
@@ -130,14 +124,11 @@ while [ "$i" -lt "${#args[@]}" ]; do
           t) mode=t ;;
           z) gzip=1 ;;
           P) absolute=1 ;;
-          # -v is non-semantic. Verbose text is not part of the archive.
           v) ;;
           j | J | Z | h | m | o | k | O | a)
             die "unsupported flag -$flag"
             ;;
           f | C)
-            # In dashless old-style clusters, later flag letters stay flags.
-            # In dashed GNU clusters, -f/-C consume the complete remainder.
             rest="${cluster:$((k + 1))}"
             attached=0
             if [ -n "$rest" ] && [ "$cluster_legacy" -eq 0 ]; then
@@ -227,13 +218,10 @@ fi
 if [ -n "$chdir" ]; then
   bb+=(-C "$chdir")
 fi
-# A --files-from list can exceed ARG_MAX. Do not put it on the BusyBox argv.
-# tar-absolute.sh reads that list from the file instead.
 if [ -z "$files_from" ] && [ "${#filtered[@]}" -gt 0 ]; then
   bb+=("${filtered[@]}")
 fi
 
 _velnor_tar_here="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
-# shellcheck disable=SC1091
 . "$_velnor_tar_here/tar-absolute.sh"
 finish_tar

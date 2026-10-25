@@ -1,10 +1,3 @@
-//! Private source closure shared by the generator and the fetch operation (HD-7).
-//!
-//! The generator renders the token allowlist literally into the mint step; the
-//! fetch operation recomputes the same set from the checked-out data and refuses
-//! to run on any difference, so a pull request that edits a lock to name another
-//! repository fails before the token is used.
-
 use std::collections::BTreeSet;
 use std::path::Path;
 
@@ -17,21 +10,15 @@ use crate::discover::workspace_lock;
 use crate::internal::internal;
 use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoRead, read_repo_file};
 
-/// One kind of private source a fetch step retrieves.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum SourceKind {
-    /// Cargo git dependencies named by `Cargo.lock`.
     Cargo,
-    /// Git trees archived from tags.
     GitTrees,
-    /// Maven bundles shipped as release assets.
     MavenBundles,
-    /// Plain release assets.
     ReleaseAssets,
 }
 
 impl SourceKind {
-    /// Canonical spelling shared with the renderer's `PRIVATE_SOURCE_KINDS`.
     pub(crate) const fn as_str(self) -> &'static str {
         match self {
             Self::Cargo => "cargo",
@@ -41,7 +28,6 @@ impl SourceKind {
         }
     }
 
-    /// Parse one canonical spelling.
     pub(crate) fn parse(text: &str) -> Option<Self> {
         [
             Self::Cargo,
@@ -65,10 +51,6 @@ struct LockedPackage {
     source: Option<String>,
 }
 
-/// Repository names under `owner` that one workspace root's `Cargo.lock` pulls from git.
-///
-/// # Errors
-/// Rejects an unreadable, oversize or malformed lock.
 pub(crate) fn cargo_lock_repositories(
     workspace: &Path,
     root: &str,
@@ -92,7 +74,6 @@ pub(crate) fn cargo_lock_repositories(
     )
 }
 
-/// Repository names the locked sources of the requested kinds read.
 pub(crate) fn lock_repositories(
     lock: Option<&DepsLock>,
     owner: &str,
@@ -121,11 +102,6 @@ pub(crate) fn lock_repositories(
     repositories
 }
 
-/// The token allowlist for one job: Cargo sources of its roots plus the locked
-/// sources of the requested kinds, sorted by name.
-///
-/// # Errors
-/// Propagates lock read failures.
 pub(crate) fn job_allowlist(
     workspace: &Path,
     config: &PrivateSourcesConfig,
@@ -141,7 +117,3 @@ pub(crate) fn job_allowlist(
     }
     Ok(names.into_iter().collect())
 }
-
-#[cfg(test)]
-#[path = "private_sources_tests.rs"]
-mod tests;

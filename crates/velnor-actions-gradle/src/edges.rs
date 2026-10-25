@@ -1,14 +1,7 @@
-//! Project dependency edges read from a build script.
-//!
-//! Two literal spellings are recognised: `project(":x")` and the type-safe
-//! accessors `projects.fooBar` (kebab, snake and dot segments map to camel
-//! case: `:eth-domain` is `projects.ethDomain`, `:a:b` is `projects.a.b`).
-
 use std::collections::BTreeSet;
 
 use crate::lex::{Tok, tokenize};
 
-/// Type-safe accessor spelling of a project path (without `projects.`).
 #[must_use]
 pub fn accessor(path: &str) -> String {
     path.split(':')
@@ -34,7 +27,6 @@ fn camel(segment: &str) -> String {
     out
 }
 
-/// Known project paths a build script depends on, sorted and de-duplicated.
 #[must_use]
 pub fn project_edges(script: &str, known: &BTreeSet<String>) -> BTreeSet<String> {
     let toks = tokenize(script);
@@ -72,7 +64,6 @@ pub fn project_edges(script: &str, known: &BTreeSet<String>) -> BTreeSet<String>
     out
 }
 
-/// Longest accessor chain after `projects`.
 fn accessor_target(rest: &[Tok], known: &[(String, &String)]) -> Option<String> {
     let mut chain: Vec<&str> = Vec::new();
     let mut k = 0;

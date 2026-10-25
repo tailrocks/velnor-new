@@ -1,5 +1,3 @@
-//! Seed release identity scalar validation and digest encoding.
-
 use sha2::{Digest, Sha256};
 
 pub(super) fn lower_hex(value: &str, length: usize) -> bool {

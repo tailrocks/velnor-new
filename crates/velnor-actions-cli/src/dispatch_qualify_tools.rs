@@ -1,4 +1,3 @@
-//! Offline authoring command; candidate output never changes CI trust policy.
 use crate::dispatch::fail_public;
 use std::path::Path;
 use std::process::ExitCode;

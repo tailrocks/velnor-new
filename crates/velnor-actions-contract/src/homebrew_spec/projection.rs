@@ -5,17 +5,16 @@ use super::{
 };
 
 impl ValidatedHomebrewProjection {
-    /// Authenticated release channel selected from the package plan.
     #[must_use]
     pub const fn channel(&self) -> PackageReleaseChannel {
         self.channel
     }
-    /// Source repository slug from the package plan.
+
     #[must_use]
     pub fn repository(&self) -> &str {
         &self.repository
     }
-    /// Selected payloads, derived from exact plan entries.
+
     #[must_use]
     pub fn selected_payloads(&self) -> &[HomebrewSelectedPayload] {
         &self.selected
@@ -23,37 +22,32 @@ impl ValidatedHomebrewProjection {
 }
 
 impl HomebrewSelectedPayload {
-    /// Plan product ID.
     #[must_use]
     pub fn product(&self) -> &str {
         &self.product
     }
-    /// Exact selected Rust target.
+
     #[must_use]
     pub fn target(&self) -> &str {
         &self.target
     }
-    /// Exact immutable payload asset name.
+
     #[must_use]
     pub fn asset_name(&self) -> &str {
         &self.asset_name
     }
-    /// Exact archive members.
+
     #[must_use]
     pub fn members(&self) -> &[String] {
         &self.members
     }
-    /// Selected role.
+
     #[must_use]
     pub const fn role(&self) -> HomebrewPayloadRole {
         self.role
     }
 }
 
-/// Resolve exact selected host and auxiliary payloads against the signed release plan.
-///
-/// # Errors
-/// Returns an error when declared products, targets, members, or archive formats do not match the plan.
 pub fn validate_homebrew_projection(
     spec: &HomebrewFormulaSpec,
     plan: &PackageReleasePlan,

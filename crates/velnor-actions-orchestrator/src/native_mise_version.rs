@@ -1,13 +1,9 @@
-//! Exact `SemVer` parsing for a Mise configuration's hard minimum.
-
-/// Exact `SemVer` minimum declared by a Mise configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct NativeMiseVersion {
     core: [u64; 3],
     prerelease: bool,
 }
 
-/// Supported hard and soft minimum declarations from Mise config.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum NativeMiseMinimum {
     Hard(NativeMiseVersion),
@@ -95,8 +91,6 @@ impl NativeMiseVersion {
         match self.core.cmp(&other.core) {
             std::cmp::Ordering::Less => true,
             std::cmp::Ordering::Greater => false,
-            // The catalog is a stable Mise release. If that ever changes, fail closed
-            // for equal-core hard requirements until prerelease precedence is modeled.
             std::cmp::Ordering::Equal => !other.prerelease,
         }
     }

@@ -1,17 +1,7 @@
-//! Plain step rendering for the satellite workflow trees.
-//!
-//! Shared by the release and freshness renderers, which carry no
-//! internal planner steps: only pinned actions and fixed-argv shell
-//! survive; anything else is rejected fail-closed.
-
 use velnor_actions_contract::{Step, StepKind};
 
 use crate::{RenderError, commands, yaml::Yaml};
 
-/// Render one action/shell step; internal ops are rejected fail-closed.
-///
-/// Revalidates refs, argv, and env at render time so a `Step` built
-/// outside the validated constructors cannot smuggle content through.
 pub(crate) fn plain_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
     crate::steps::scan_for_private_subcommands(&step.name)?;
     crate::parallel_steps::reject_parallel(step, "plain")?;
@@ -72,7 +62,6 @@ pub(crate) fn plain_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
     }
 }
 
-/// Sorted string map as YAML (shared by `with:` and `env:` emission).
 fn string_map_yaml(map: &std::collections::BTreeMap<String, String>) -> Yaml {
     Yaml::Map(
         map.iter()

@@ -1,5 +1,3 @@
-//! Cross-policy authorization and producer qualification.
-
 use super::{VelnorConfig, WorkflowPolicy};
 use crate::WORKFLOW_DISPLAY_NAME;
 use crate::errors::ContractError;

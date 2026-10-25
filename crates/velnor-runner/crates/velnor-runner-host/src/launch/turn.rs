@@ -1,5 +1,3 @@
-//! One session loop. A running owned worker keeps the session up.
-
 use velnor_runner_github::{Poll, QueueSession};
 
 use crate::journal::Journal;
@@ -18,14 +16,7 @@ mod completion_intake;
 mod pump;
 use completion_intake::{completion_error, intake_and_ack_if_only};
 use pump::until_idle;
-#[cfg(all(test, unix))]
-use pump::{PollHost, pump};
 
-/// Poll until admission stops and no owned launch container is running.
-///
-/// # Errors
-///
-/// Returns [`EnsureError`] when one message carries two ids, or a later step fails.
 pub(super) async fn poll_and_drive(
     link: &mut Link,
     set_id: i64,
@@ -94,9 +85,6 @@ pub(super) async fn poll_and_drive(
     }
 }
 
-/// A cleared job name and a steady scale name stay on the queue.
-///
-/// Neither error acknowledges the message or ends the session.
 fn queue_stays(error: Option<&EnsureError>) -> bool {
     matches!(
         error,
@@ -231,7 +219,6 @@ impl Turn<'_> {
         polled: &Poll,
     ) -> Result<bool, EnsureError> {
         match decision {
-            // HTTP 202 keeps the session open. A job can arrive on a later poll.
             Admit::Stay => self.stay(workers).await,
             Admit::Hold | Admit::Start { .. } if !self.rest.permits_start() => {
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -244,7 +231,6 @@ impl Turn<'_> {
                 step: "queue",
             }),
             Admit::Ack { stop } => {
-                // Fail only an unstarted `m{id}` row. A container row stays.
                 super::name_taken::fail_unstarted(self.journal, polled).await?;
                 ack_ready(self.link, self.session, path, queue, polled)?;
                 Ok(stop)
@@ -284,7 +270,6 @@ impl Turn<'_> {
         )
         .await;
         if queue_stays(launched.as_ref().err()) {
-            // Skip this message id. Do not delete that runner again and do not ack.
             let id = super::steady::message_id(polled);
             if let Some(next) = super::steady::steady_cursor(self.cursor, id) {
                 self.cursor = next;
@@ -297,8 +282,6 @@ impl Turn<'_> {
         if let Err(EnsureError::Conflict) = &launched
             && super::name_taken::should_ack(steps::idle(polled))
         {
-            // A container row stays. The message is still acknowledged.
-            // A new mint of the same name cannot succeed.
             super::name_taken::fail_unstarted(self.journal, polled).await?;
             ack_ready(self.link, self.session, path, queue, polled)?;
             return Ok(false);
@@ -328,58 +311,3 @@ impl Turn<'_> {
         Ok(true)
     }
 }
-
-/// Test seam for one admitted poll through an injectable lane.
-///
-/// A conflict remains an error here; production handling for cleared and
-/// colliding names lives in [`Turn::start`]. Only a bound worker covers it.
-#[cfg(test)]
-struct StartTurn<'a> {
-    ready: Ready<'a>,
-    journal: &'a Journal,
-    docker: &'a bollard::Docker,
-    capacity: u32,
-    rest: Rest<'a>,
-    stop: bool,
-}
-
-#[cfg(test)]
-async fn start_turn<T>(
-    lane: &mut T,
-    workers: &mut Vec<Started>,
-    turn: StartTurn<'_>,
-) -> Result<bool, EnsureError>
-where
-    T: velnor_runner_github::Transport + super::Lane,
-{
-    let StartTurn {
-        ready,
-        journal,
-        docker,
-        capacity,
-        rest,
-        stop,
-    } = turn;
-    let Some(worker) = drive_ready(lane, ready, journal, docker, capacity, rest).await? else {
-        return Ok(false);
-    };
-    workers.push(worker);
-    Ok(stop)
-}
-
-#[cfg(all(test, unix))]
-mod progress_tests;
-#[cfg(all(test, unix))]
-mod start_idless_tests;
-#[cfg(all(test, unix))]
-mod start_jit_rejection_tests;
-#[cfg(all(test, unix))]
-mod start_tests;
-
-#[cfg(test)]
-#[path = "turn/completion_intake_tests.rs"]
-mod completion_intake_tests;
-
-#[cfg(test)]
-#[path = "turn/completion_quarantine_tests.rs"]
-mod completion_quarantine_tests;

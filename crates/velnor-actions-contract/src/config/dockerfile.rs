@@ -1,41 +1,30 @@
-//! Static Dockerfile analysis for `[[images]]`: pinned bases and context reads.
-//!
-//! Pure text parsing, no filesystem or network access. The generated build
-//! never passes secrets to `BuildKit`, so a Dockerfile that asks for a secret
-//! or SSH mount is rejected here instead of failing late in the build.
-
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Facts extracted from one Dockerfile.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DockerfileFacts {
-    /// External image references after `ARG` substitution, sorted and unique.
     pub external_images: BTreeSet<String>,
-    /// Build-context-relative `COPY`/`ADD` sources, sorted and unique.
+
     pub context_sources: BTreeSet<String>,
 }
 
-/// Machine-readable Dockerfile rejection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DockerfileProblem {
-    /// An external image reference is not pinned by `@sha256:<64 hex>`.
     ImageBaseUnpinned(String),
-    /// A `FROM` reference still names an `ARG` with no default.
+
     ImageBaseUnresolved(String),
-    /// `RUN --mount=type=secret|ssh`, which `BuildKit` may never receive.
+
     SecretMount,
-    /// `ADD` of a remote URL or git source, which is not content-addressed.
+
     RemoteAdd(String),
-    /// A context source that leaves the context with `..`.
+
     ContextEscape(String),
-    /// The `# escape=` directive changes parsing and is not supported.
+
     EscapeDirective,
-    /// An unpinned `# syntax=` frontend image.
+
     SyntaxUnpinned(String),
 }
 
 impl DockerfileProblem {
-    /// Stable code for config diagnostics.
     #[must_use]
     pub fn code(&self) -> String {
         match self {
@@ -50,7 +39,6 @@ impl DockerfileProblem {
     }
 }
 
-/// True for `name[:tag]@sha256:<64 lowercase hex>`.
 #[must_use]
 pub fn is_digest_pinned(reference: &str) -> bool {
     reference
@@ -64,8 +52,6 @@ pub fn is_digest_pinned(reference: &str) -> bool {
         })
 }
 
-/// Parse a Dockerfile and enforce the pinning and no-secret rules.
-/// # Errors
 pub fn analyze_dockerfile(text: &str) -> Result<DockerfileFacts, DockerfileProblem> {
     let mut state = State::default();
     check_directives(text)?;
@@ -220,7 +206,6 @@ fn unquote(value: &str) -> &str {
     value.trim_matches(|c| c == '"' || c == '\'')
 }
 
-/// Split `NAME`, `{NAME}` or `{NAME:-default}` after a `$`.
 fn parse_variable(tail: &str) -> (&str, Option<&str>, usize) {
     if let Some(body) = tail.strip_prefix('{')
         && let Some(end) = body.find('}')
@@ -239,7 +224,6 @@ fn parse_variable(tail: &str) -> (&str, Option<&str>, usize) {
     (&tail[..end], None, end)
 }
 
-/// `COPY` operands: JSON-array form or whitespace separated, quotes removed.
 fn split_operands(args: &str) -> Vec<String> {
     let trimmed = args.trim();
     if trimmed.starts_with('[')
@@ -275,7 +259,6 @@ fn check_directives(text: &str) -> Result<(), DockerfileProblem> {
     Ok(())
 }
 
-/// Logical instructions with continuations joined and heredoc bodies skipped.
 fn instructions(text: &str) -> Vec<(String, String)> {
     let mut out = Vec::new();
     let mut lines = text.lines();

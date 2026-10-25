@@ -1,9 +1,3 @@
-//! Runtime for the closed SDK-native Homebrew check operation.
-//!
-//! The operation, declaration, matrix identity, protected source authority,
-//! and candidate tap tree are re-resolved here. Workflow inputs select only a
-//! planned task; they do not supply policy or execution arguments.
-
 use serde::Serialize;
 use velnor_actions_contract::{
     config::NativeHomebrewOperation, package_release::PackageReleaseChannel,
@@ -56,8 +50,6 @@ pub(crate) struct NativeHomebrewHostedProfileEvidence {
     pub active_prefix_inode: u64,
 }
 
-/// Non-serializable custody created only after the plan entry and its exact
-/// obligation have been independently rederived and matched.
 #[derive(Debug, Clone)]
 pub(crate) struct VerifiedNativeHomebrewInstall {
     run_key: String,

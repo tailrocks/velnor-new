@@ -1,5 +1,3 @@
-//! Open a session after this host process died. Only listed ids are deleted.
-
 use crate::WireError;
 use crate::paths::SCALE_SET_ENDPOINT;
 use crate::refresh::{StatusClass, classify_status};
@@ -9,18 +7,6 @@ use super::open::{QueueSession, create_session};
 use super::request::{Method, SessionRequest, Transport};
 use super::retry::{API_QUERY, bearer, execute, fresh_gate, json_content};
 
-/// Delete each listed session id, then `POST` one new session.
-///
-/// An empty list only creates. HTTP 404 on a listed id means it is already
-/// gone. HTTP 400 whose body names `RunnerScaleSetSessionExpiredException`
-/// means the same thing: GitHub rejects an expired id instead of returning
-/// 404. Any other HTTP 400 still fails, and the body is not copied into the
-/// error. HTTP 409 does not delete any id that was not listed. No Docker.
-///
-/// # Errors
-///
-/// Returns [`SessionError::Conflict`] when create collides with a session
-/// this call did not delete, and [`SessionError::Wire`] for other refusals.
 pub fn reopen_session<T>(
     transport: &mut T,
     scale_set_id: i64,
@@ -63,7 +49,6 @@ where
     Err(status_error(exchange.status))
 }
 
-/// GitHub returns 400, not 404, once a scale-set session id has expired.
 const SESSION_EXPIRED: &[u8] = b"RunnerScaleSetSessionExpiredException";
 
 fn session_gone(status: u16, body: &[u8]) -> bool {

@@ -1,5 +1,3 @@
-//! Resolve workflow-emitted named-check lane identities for planning.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{ExecutionMode, NamedCheckLane, named_check_lanes};
@@ -8,7 +6,6 @@ use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
 use crate::prepare::GenerationPreparation;
 
-/// Verify the request's lane map against all supported workflow dispatch modes.
 pub(crate) fn resolve(
     prep: &GenerationPreparation,
     supplied: Option<BTreeMap<String, Vec<NamedCheckLane>>>,

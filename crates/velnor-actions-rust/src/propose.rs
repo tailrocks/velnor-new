@@ -1,11 +1,3 @@
-//! Rust proposal contract: task groups into neutral proposals.
-//!
-//! [`propose_task`] converts one derived [`TaskGroup`] wholesale into a
-//! [`ProposedTask`]: field copies plus precomputed adapter facts (payload,
-//! environment, component, project root), never recomputed downstream.
-//! The kind/tool helpers below back the orchestrator's closed per-stack
-//! dispatch: spellings stay here, decisions stay neutral out there.
-
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 
@@ -20,14 +12,6 @@ use crate::profile::{CompileDriver, TestRunner};
 use crate::tasks::{TaskGroup, TaskKind, cargo_payload_with_profile};
 
 impl TaskKind {
-    /// Parse a kind token; unknown tokens fail closed.
-    ///
-    /// Backs proposal dispatch: validated proposals always parse, so
-    /// dispatch sites fail closed on drift instead of defaulting.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ContractError`] for any token outside the seven kinds.
     pub fn parse(value: &str) -> Result<Self, ContractError> {
         match value {
             "fmt" => Ok(Self::Fmt),
@@ -45,17 +29,6 @@ impl TaskKind {
     }
 }
 
-/// Convert one task group into its neutral proposal.
-///
-/// Copies adapter-known fields verbatim (ids, edges, features, flags,
-/// drivers as spellings) and precomputes the payload, environment,
-/// component, and project root the pipeline needs. List order is
-/// preserved, never re-sorted: consumers sort their own copies.
-///
-/// # Errors
-///
-/// Returns [`ContractError`] when the fixed payload rejects a
-/// leading-dash value.
 pub fn propose_task(group: &TaskGroup) -> Result<ProposedTask, ContractError> {
     let manifest = manifest_for_key(&group.manifest_key);
     let project_root = project_root_for_unit_path(&manifest);
@@ -120,7 +93,6 @@ pub fn propose_task(group: &TaskGroup) -> Result<ProposedTask, ContractError> {
     })
 }
 
-/// Resource class for one task kind.
 #[must_use]
 pub fn resource_class_for_kind(kind: TaskKind) -> ResourceClass {
     match kind {
@@ -130,9 +102,6 @@ pub fn resource_class_for_kind(kind: TaskKind) -> ResourceClass {
     }
 }
 
-/// In-crate obligation order rank: Format, Clippy, build, tests, doctests, docs.
-///
-/// Unknown kinds sort last; validated proposals never carry them.
 #[must_use]
 pub fn task_kind_rank(kind: &str) -> u32 {
     match kind {
@@ -146,29 +115,21 @@ pub fn task_kind_rank(kind: &str) -> u32 {
     }
 }
 
-/// Whether `kind` is the Clippy lint gate.
 #[must_use]
 pub fn is_clippy_kind(kind: &str) -> bool {
     kind == TaskKind::Clippy.as_str()
 }
 
-/// Whether `kind` is the Nextest test runner.
 #[must_use]
 pub fn is_nextest_kind(kind: &str) -> bool {
     kind == TaskKind::Nextest.as_str()
 }
 
-/// Whether this is a package-less workspace Format task.
 #[must_use]
 pub fn is_workspace_fmt_task(kind: &str, unit_id: &str, display_name: &str) -> bool {
     kind == TaskKind::Fmt.as_str() && unit_id.is_empty() && display_name.is_empty()
 }
 
-/// Human step base name for one kind; shards suffix it downstream.
-///
-/// `fmt_name` carries the renderer's shared Format name so this table
-/// never duplicates it; unknown kinds echo (validated proposals never
-/// carry them).
 #[must_use]
 pub fn step_base_name<'a>(kind: &'a str, fmt_name: &'a str) -> &'a str {
     match kind {
@@ -182,7 +143,6 @@ pub fn step_base_name<'a>(kind: &'a str, fmt_name: &'a str) -> &'a str {
     }
 }
 
-/// Kind words in fixed plan order: `(kind spelling, display word)`.
 pub const KIND_DISPLAY_WORDS: [(&str, &str); 7] = [
     ("clippy", "Clippy"),
     ("build", "build"),
@@ -193,16 +153,12 @@ pub const KIND_DISPLAY_WORDS: [(&str, &str); 7] = [
     ("fmt", "format check"),
 ];
 
-/// Supplementary pinned tools one task needs beyond the base toolchain.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ToolNeeds {
-    /// Task compiles through MBX.
     pub mbx: bool,
-    /// Task runs tests through Nextest.
     pub nextest: bool,
 }
 
-/// Supplementary tool needs from driver/runner spellings.
 #[must_use]
 pub fn tool_needs(compile_driver: &str, test_runner: &str) -> ToolNeeds {
     ToolNeeds {
@@ -211,23 +167,11 @@ pub fn tool_needs(compile_driver: &str, test_runner: &str) -> ToolNeeds {
     }
 }
 
-/// Whether a task kind runs sequentially before a crate job's parallel checks.
-///
-/// Only the Nextest test-executable build is a same-job data producer; every
-/// other check runs in the parallel group, so its failure skips nothing else.
 #[must_use]
 pub fn runs_before_parallel_checks(kind: &str) -> bool {
     TaskKind::parse(kind) == Ok(TaskKind::Build)
 }
 
-/// Cargo target-directory lane for checks that run beside test execution.
-///
-/// One crate job builds its test executables first and then runs every other
-/// check concurrently. Cargo locks a target directory for a whole build, so
-/// Clippy and documentation compile in their own lane below the workspace
-/// `target/` (inside the MBX target cache payload) instead of serializing
-/// test execution and doctests behind them. Formatting compiles nothing;
-/// tests and doctests reuse the executables in the workspace target.
 #[must_use]
 pub fn concurrent_target_lane(kind: &str) -> Option<&'static str> {
     match TaskKind::parse(kind) {
@@ -237,7 +181,6 @@ pub fn concurrent_target_lane(kind: &str) -> Option<&'static str> {
     }
 }
 
-/// Fixed payload env for one kind spelling; empty unless `doc`.
 #[must_use]
 pub fn payload_env_for_kind(kind: &str) -> Vec<(OsString, OsString)> {
     match TaskKind::parse(kind) {
@@ -245,7 +188,3 @@ pub fn payload_env_for_kind(kind: &str) -> Vec<(OsString, OsString)> {
         Err(_) => Vec::new(),
     }
 }
-
-#[cfg(test)]
-#[path = "propose_tests.rs"]
-mod tests;

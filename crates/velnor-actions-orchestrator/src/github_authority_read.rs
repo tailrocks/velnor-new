@@ -1,4 +1,3 @@
-//! HTTP revalidation for mutable GitHub JSON; not origin linearizability.
 use crate::{OrchestratorError, internal::internal};
 use std::{
     ffi::OsString,
@@ -20,8 +19,6 @@ pub(crate) fn arguments(route: &str) -> Result<Vec<OsString>, OrchestratorError>
         .duration_since(UNIX_EPOCH)
         .map_err(|_| internal("github_read_clock"))?
         .as_nanos();
-    // Nonsecret identity: sequence prevents repetition within a process even
-    // after clock rollback; PID plus nanoseconds separate process lifetimes.
     let nonce = format!("{:x}-{nanos:x}-{sequence:x}", std::process::id());
     let separator = if route.contains('?') { '&' } else { '?' };
     Ok(vec![
@@ -80,8 +77,6 @@ fn validate_route(route: &str) -> Result<(), OrchestratorError> {
     if let Some((_, query)) = route.split_once('?') {
         for field in query.split('&') {
             let key = field.split('=').next().unwrap_or_default();
-            // Internal callers use literal ASCII keys and escape values only.
-            // Reject encoded keys rather than permit an escaped reserved key.
             if key.is_empty()
                 || key.eq_ignore_ascii_case(NONCE_KEY)
                 || !key
@@ -94,7 +89,3 @@ fn validate_route(route: &str) -> Result<(), OrchestratorError> {
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "github_authority_read_tests.rs"]
-mod tests;

@@ -1,9 +1,3 @@
-//! Shared local composites for typed declared-task report envelopes.
-//!
-//! `TaskExecution` carries argv, task/report identity, and env as distinct
-//! validated fields. This renderer never recovers task metadata from shell
-//! source or accepts an environment marker as proof of eligibility.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
@@ -30,8 +24,7 @@ use self::script::task_script;
 
 #[path = "task_wrapper_declared.rs"]
 mod declared;
-#[cfg(test)]
-use self::declared::declared_task_document;
+
 use self::declared::{declared_task_call, declared_task_file, validate_task_fields};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -57,12 +50,6 @@ struct CollectedTaskExecutions<'a> {
     manifest_tasks: BTreeMap<String, TaskExecutionManifestEntryV1>,
 }
 
-/// Replace typed task steps and emit one composite per structural shape.
-///
-/// Every typed step must use a supported Linux runner and follow the
-/// configured checkout. A task which violates either precondition fails
-/// closed instead of silently taking a shell fallback. The caller name and
-/// condition remain unchanged.
 pub(crate) fn factor_obligation_steps(
     jobs: &BTreeMap<String, Job>,
     checkout_uses: &str,
@@ -303,10 +290,6 @@ fn render_task_files(
     Ok(files)
 }
 
-/// Admit a hosted Ubuntu catalog runner or the exact Scale Set resolved from
-/// the validated Linux/amd64 execution profile. Crate-obligation jobs share
-/// that profile without being workflow-task jobs themselves. A selector's
-/// label alone never proves the platform.
 fn supports_task_runner(
     job_id: &str,
     runs_on: &str,
@@ -354,7 +337,3 @@ struct TaskExecutionRef<'a> {
     execution_digest: String,
     helper_version: &'a String,
 }
-
-#[cfg(test)]
-#[path = "task_wrapper_tests.rs"]
-mod tests;

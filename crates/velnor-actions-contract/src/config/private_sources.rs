@@ -1,72 +1,56 @@
-//! `[private_sources]`: private cross-repository dependency credentials (HD-7).
-//!
-//! The table names the GitHub App that mints a read-only installation token
-//! and declares every private release-asset, Maven-bundle and git-tree source.
-//! Commits and digests are never written here: only `velnor-actions deps lock`
-//! writes `.velnor/deps.lock` ([`crate::deps_lock`]). See
-//! `docs/proposed/private-sources-contract.md`.
-
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
-/// Repository-relative path of the generated-and-committed dependency lock.
 pub const DEPS_LOCK_PATH: &str = ".velnor/deps.lock";
 
-/// `[private_sources]` table.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PrivateSourcesConfig {
-    /// GitHub organization or user that owns every private producer repository.
     pub owner: String,
-    /// Organization variable holding the App client id.
+
     pub app_id_variable: String,
-    /// Organization secret holding the App private key.
+
     pub app_private_key_secret: String,
-    /// npm scopes served from `npm.pkg.github.com` (registry phase only).
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub npm_scopes: Vec<String>,
-    /// Maven bundles shipped as release assets.
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub maven_bundles: Vec<PrivateAssetSource>,
-    /// Plain release assets.
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub release_assets: Vec<PrivateAssetSource>,
-    /// Git trees archived from tags.
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub git_trees: Vec<PrivateGitTreeSource>,
 }
 
-/// One declared release asset (plain asset or Maven bundle).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PrivateAssetSource {
-    /// Stable identifier, unique across all private sources.
     pub id: String,
-    /// Producer repository as `Owner/name`.
+
     pub repository: String,
-    /// Release tag.
+
     pub tag: String,
-    /// Release asset file name.
+
     pub asset: String,
-    /// Extraction directory under the Velnor-owned dependency root (assets only).
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extract_to: Option<String>,
 }
 
-/// One declared git tree archived from a tag.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PrivateGitTreeSource {
-    /// Stable identifier, unique across all private sources.
     pub id: String,
-    /// Producer repository as `Owner/name`.
+
     pub repository: String,
-    /// Git tag.
+
     pub tag: String,
 }
 
-/// True for a GitHub login: ASCII alphanumerics and single hyphens, 1..=39.
 #[must_use]
 pub fn is_valid_github_owner(value: &str) -> bool {
     !value.is_empty()
@@ -79,7 +63,6 @@ pub fn is_valid_github_owner(value: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || b == b'-')
 }
 
-/// True for a GitHub repository name (not `.`/`..`, no `.git` suffix).
 #[must_use]
 pub fn is_valid_github_repo_name(value: &str) -> bool {
     !value.is_empty()
@@ -92,14 +75,12 @@ pub fn is_valid_github_repo_name(value: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
 }
 
-/// Split `Owner/name`, requiring both halves to be valid.
 #[must_use]
 pub fn split_repository(value: &str) -> Option<(&str, &str)> {
     let (owner, name) = value.split_once('/')?;
     (is_valid_github_owner(owner) && is_valid_github_repo_name(name)).then_some((owner, name))
 }
 
-/// True for a source identifier: lowercase alphanumerics and single hyphens.
 #[must_use]
 pub fn is_valid_source_id(value: &str) -> bool {
     !value.is_empty()
@@ -112,7 +93,6 @@ pub fn is_valid_source_id(value: &str) -> bool {
             .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
 }
 
-/// True for a release/git tag: conservative ref characters, no traversal.
 #[must_use]
 pub fn is_valid_source_tag(value: &str) -> bool {
     !value.is_empty()
@@ -126,7 +106,6 @@ pub fn is_valid_source_tag(value: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'/' | b'+'))
 }
 
-/// True for a release asset file name: one path segment of safe characters.
 #[must_use]
 pub fn is_valid_asset_name(value: &str) -> bool {
     !value.is_empty()
@@ -137,7 +116,6 @@ pub fn is_valid_asset_name(value: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'+'))
 }
 
-/// True for an extraction directory: relative, normalized, safe segments.
 #[must_use]
 pub fn is_valid_extract_to(value: &str) -> bool {
     !value.is_empty()
@@ -173,7 +151,6 @@ fn is_valid_npm_scope(value: &str) -> bool {
 }
 
 impl PrivateSourcesConfig {
-    /// Every declared source identifier in declaration order.
     pub fn source_ids(&self) -> impl Iterator<Item = &str> {
         self.maven_bundles
             .iter()
@@ -182,9 +159,6 @@ impl PrivateSourcesConfig {
             .chain(self.git_trees.iter().map(|source| source.id.as_str()))
     }
 
-    /// Validate every field; the owner governs every declared repository.
-    /// # Errors
-    /// Names the key path and a machine-readable problem.
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         let bad = |path: &str, problem: String| ContractError::config(file, path, problem);
         if !is_valid_github_owner(&self.owner) {

@@ -1,56 +1,29 @@
-//! Deterministic YAML emitter: stable order, safe quoting, and 2-space indent.
-//!
-//! Block style only. Workflow output uses typed anchors for repeated step-run
-//! strings and structurally identical workflow mappings. Flow sequences are
-//! empty `[]` plus the typed `runs-on` selector. Key order is caller-controlled.
-
-/// Minimal YAML value tree with explicit mapping order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Yaml {
-    /// Null renders as a bare key (`key:`).
     Null,
-    /// String scalar, quoted only when plain style is unsafe.
     Str(String),
-    /// Boolean scalar.
     Bool(bool),
-    /// Integer scalar.
     Int(i64),
-    /// Block sequence.
     Seq(Vec<Self>),
-    /// Block mapping in the given entry order.
     Map(Vec<(String, Self)>),
-    /// One-line flow sequence of scalars: `[a, b]`.
     Flow(Vec<String>),
-    /// One-line flow mapping of strings, used for compact generated inputs.
     FlowMap(Vec<(String, String)>),
-    /// Double-quoted scalar. Plain `6379:6379` is a mapping in a sequence.
     Quoted(String),
-    /// Plain or quoted scalar plus a trailing YAML comment.
     Annotated {
-        /// Scalar text.
         value: String,
-        /// Comment text, without the leading `#`.
         comment: String,
     },
-    /// Repeated workflow step command emitted with a YAML anchor.
     AnchoredScalar {
-        /// YAML anchor name.
         name: AnchorName,
-        /// Anchored scalar value.
         value: String,
     },
-    /// Repeated workflow mapping emitted with a YAML anchor.
     AnchoredMap {
-        /// YAML anchor name.
         name: AnchorName,
-        /// Anchored mapping entries.
         entries: Vec<(String, Self)>,
     },
-    /// Alias to an earlier YAML anchor.
     Alias(AnchorName),
 }
 
-/// Validated, conservative YAML anchor name.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AnchorName(String);
 
@@ -74,19 +47,16 @@ impl AnchorName {
 }
 
 impl Yaml {
-    /// Build a string scalar.
     #[must_use]
     pub fn str(value: impl Into<String>) -> Self {
         Self::Str(value.into())
     }
 
-    /// Build a scalar that is always double-quoted.
     #[must_use]
     pub fn quoted(value: impl Into<String>) -> Self {
         Self::Quoted(value.into())
     }
 
-    /// Build a scalar with a trailing comment on the same line.
     #[must_use]
     pub fn annotated(value: impl Into<String>, comment: impl Into<String>) -> Self {
         Self::Annotated {
@@ -95,13 +65,11 @@ impl Yaml {
         }
     }
 
-    /// Build a `cache-mode` mapping entry for workflow-level or job-level cache access control.
     #[must_use]
     pub fn cache_mode_field(mode: &velnor_actions_contract::CacheMode) -> (String, Self) {
         ("cache-mode".to_owned(), Self::str(mode.as_str().to_owned()))
     }
 
-    /// True when the value fits on one line after `key: ` or `- `.
     fn is_inline(&self) -> bool {
         match self {
             Self::Null
@@ -130,19 +98,16 @@ pub(crate) fn share_workflow_nodes(node: Yaml) -> Result<Yaml, crate::RenderErro
 #[path = "yaml_emit.rs"]
 mod emit;
 
-/// Render a document with a trailing newline.
 #[must_use]
 pub fn render_yaml(value: &Yaml) -> String {
     emit::render_yaml(value)
 }
 
-/// Render a compact document with one-space nesting indentation.
 #[must_use]
 pub fn render_yaml_compact(value: &Yaml) -> String {
     emit::render_yaml_compact(value)
 }
 
-/// Quote a scalar only when plain style would be unsafe or ambiguous.
 #[must_use]
 pub fn quote_scalar(value: &str) -> String {
     emit::quote_scalar(value)

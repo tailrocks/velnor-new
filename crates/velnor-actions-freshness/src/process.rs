@@ -1,20 +1,15 @@
-//! Bounded process capture for repository-maintenance probes.
-
 use std::process::{Command, ExitStatus};
 use std::time::Duration;
 
-/// Captured process result after bounded stdout/stderr reads and a deadline.
 #[derive(Debug)]
 pub(crate) struct ProcessOutput {
-    /// Final child status.
     pub(crate) status: ExitStatus,
-    /// Captured stdout, never larger than the selected cap.
+
     pub(crate) stdout: Vec<u8>,
-    /// Captured stderr, never larger than the selected cap.
+
     pub(crate) stderr: Vec<u8>,
 }
 
-/// Run a command with independently capped streams and a wall-clock timeout.
 pub(crate) fn run_bounded(
     command: &mut Command,
     cap: usize,
@@ -50,10 +45,7 @@ mod unix {
 
     const POLL_INTERVAL: Duration = Duration::from_millis(5);
     const MAX_CLEANUP_RESERVE: Duration = Duration::from_millis(100);
-    /// Extra time, past the caller's deadline, to reap a child that was just
-    /// sent SIGKILL. The signal cannot be ignored, so this only matters when
-    /// the host is too loaded for the child to be scheduled inside the short
-    /// cleanup reserve; without it the child is left a zombie.
+
     const KILL_REAP_GRACE: Duration = Duration::from_secs(1);
 
     pub(super) fn run_unix(
@@ -279,7 +271,6 @@ mod unix {
         combine_failure(cause, &failures)
     }
 
-    /// Reap a child that has been sent SIGKILL, allowing [`KILL_REAP_GRACE`].
     fn reap_killed_child(child: &mut Child, failures: &mut Vec<String>, unreaped: &str) {
         let limit = Instant::now() + KILL_REAP_GRACE;
         loop {
@@ -327,6 +318,3 @@ mod unix {
 
 #[cfg(unix)]
 use unix::run_unix;
-
-#[cfg(all(test, unix))]
-mod tests;

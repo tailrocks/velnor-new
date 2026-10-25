@@ -1,5 +1,3 @@
-//! Structural `ToFu` inventory analysis extracted from Cargo inventory flow.
-
 use std::path::Path;
 
 use velnor_actions_contract::CandidateOutcome;
@@ -9,13 +7,6 @@ use crate::select_tofu::TofuSelectionUnit;
 
 use super::ok_outcome;
 
-/// Analyze one tofu unit: bounded reads over the effective set.
-///
-/// Structural failures (including unreadable, oversize, symlinked,
-/// or non-UTF-8 effective files) report a malformed outcome naming
-/// the file; module-boundary failures (escapes, missing targets,
-/// cycles) likewise report malformed. Findings pass through.
-/// Successful units also return their selection record.
 pub(super) fn analyze_tofu_unit(
     root: &Path,
     files: &[String],
@@ -61,7 +52,6 @@ pub(super) fn analyze_tofu_unit(
     }
 }
 
-/// Sorted config-family files among unit paths (base-text candidates).
 fn config_files(selected: &[String]) -> Vec<String> {
     let mut configs: Vec<String> = selected
         .iter()
@@ -78,7 +68,6 @@ fn config_files(selected: &[String]) -> Vec<String> {
     configs
 }
 
-/// Evidence path naming a tofu unit failure.
 fn unit_error_path(err: &velnor_actions_tofu::UnitError, unit: &str) -> String {
     match err {
         velnor_actions_tofu::UnitError::TooManyFiles { .. } => unit.to_owned(),
@@ -89,7 +78,6 @@ fn unit_error_path(err: &velnor_actions_tofu::UnitError, unit: &str) -> String {
     }
 }
 
-/// Malformed outcome for one module-boundary failure.
 fn module_error_outcome(err: &velnor_actions_tofu::ModuleError, unit: &str) -> CandidateOutcome {
     let path = match err {
         velnor_actions_tofu::ModuleError::Escape { target }
@@ -104,7 +92,6 @@ fn module_error_outcome(err: &velnor_actions_tofu::ModuleError, unit: &str) -> C
     malformed_outcome(&path, err.to_string())
 }
 
-/// Malformed outcome for one evidence path and diagnostic.
 fn malformed_outcome(path: &str, diagnostic: String) -> CandidateOutcome {
     CandidateOutcome {
         manifest: path.to_owned(),

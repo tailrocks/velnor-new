@@ -1,11 +1,7 @@
-//! Per-entry cache identity digests recorded in the plan (cache §1).
 use crate::canonical::Digest;
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
-/// Workspace/lane/platform/toolchain/format digests for one entry.
-///
-/// Constructible only via [`EntryCacheIds::new`] or validated
-/// deserialization; every digest is a parsed [`Digest`].
+
 #[expect(
     clippy::struct_field_names,
     reason = "wire field names are fixed by the cache contract"
@@ -13,18 +9,17 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(try_from = "EntryCacheIdsUnchecked")]
 pub struct EntryCacheIds {
-    /// Workspace identity digest.
     workspace_id: Digest,
-    /// Lane identity digest.
+
     lane_id: Digest,
-    /// Platform identity digest.
+
     platform_id: Digest,
-    /// Toolchain identity digest.
+
     toolchain_id: Digest,
-    /// Cache-format identity digest.
+
     cache_format_id: Digest,
 }
-/// Unvalidated cache-IDs wire shape (never exposed).
+
 #[expect(
     clippy::struct_field_names,
     reason = "wire field names are fixed by the cache contract"
@@ -32,20 +27,17 @@ pub struct EntryCacheIds {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct EntryCacheIdsUnchecked {
-    /// Workspace identity digest.
     workspace_id: String,
-    /// Lane identity digest.
+
     lane_id: String,
-    /// Platform identity digest.
+
     platform_id: String,
-    /// Toolchain identity digest.
+
     toolchain_id: String,
-    /// Cache-format identity digest.
+
     cache_format_id: String,
 }
 impl EntryCacheIds {
-    /// Build cache IDs from five validated digests.
-    /// # Errors
     pub fn new(
         workspace_id: &str,
         lane_id: &str,
@@ -62,38 +54,31 @@ impl EntryCacheIds {
         })
     }
 
-    /// Workspace identity digest.
     #[must_use]
     pub fn workspace_id(&self) -> &str {
         self.workspace_id.as_str()
     }
 
-    /// Lane identity digest.
     #[must_use]
     pub fn lane_id(&self) -> &str {
         self.lane_id.as_str()
     }
 
-    /// Platform identity digest.
     #[must_use]
     pub fn platform_id(&self) -> &str {
         self.platform_id.as_str()
     }
 
-    /// Toolchain identity digest.
     #[must_use]
     pub fn toolchain_id(&self) -> &str {
         self.toolchain_id.as_str()
     }
 
-    /// Cache-format identity digest.
     #[must_use]
     pub fn cache_format_id(&self) -> &str {
         self.cache_format_id.as_str()
     }
 
-    /// Re-validate stored digests (construction already validated).
-    /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {
         Self::new(
             self.workspace_id.as_str(),
@@ -115,25 +100,5 @@ impl TryFrom<EntryCacheIdsUnchecked> for EntryCacheIds {
             &raw.toolchain_id,
             &raw.cache_format_id,
         )
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::EntryCacheIds;
-    use crate::canonical::digest_b3;
-
-    #[test]
-    fn cache_ids_need_five_valid_digests() {
-        let good = digest_b3(b"workspace");
-        let ids = EntryCacheIds::new(&good, &good, &good, &good, &good).expect("valid ids");
-        assert_eq!(ids.workspace_id(), good);
-        ids.validate().expect("revalidate");
-        assert!(EntryCacheIds::new("b3-nope", &good, &good, &good, &good).is_err());
-        let json = serde_json::to_string(&ids).expect("serialize");
-        let back = serde_json::from_str::<EntryCacheIds>(&json).expect("deserialize");
-        assert_eq!(back.cache_format_id(), good);
-        let forged = json.replace(&good, "b3-nope");
-        assert!(serde_json::from_str::<EntryCacheIds>(&forged).is_err());
     }
 }

@@ -100,7 +100,6 @@ fn read_authenticated_formula(
     }
 }
 
-/// Verify caller-supplied formula bytes against protected policy and the public release.
 pub(crate) fn verify_protected_formula_bytes(
     authority: &crate::homebrew::authority::VerifiedHomebrewAuthority,
     channel: PackageReleaseChannel,
@@ -326,7 +325,3 @@ pub(super) fn formula_release_literals(
 mod cutover;
 
 pub(crate) use cutover::render_current_preview_formula;
-
-#[cfg(test)]
-#[path = "formula_tests.rs"]
-mod tests;

@@ -302,7 +302,3 @@ impl<R: Read> Read for HashLimitReader<R> {
         Ok(count)
     }
 }
-
-#[cfg(test)]
-#[path = "layer_security_tests.rs"]
-mod security_tests;

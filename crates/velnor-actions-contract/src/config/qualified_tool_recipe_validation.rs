@@ -1,4 +1,3 @@
-//! Shared metadata admission for hash-free recipes and complete installations.
 use super::{
     ContractError, QualifiedCargoInstallation, QualifiedToolBackend, QualifiedToolOptions,
     QualifiedToolRecipe,

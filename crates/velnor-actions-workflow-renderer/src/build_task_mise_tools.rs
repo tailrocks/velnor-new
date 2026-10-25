@@ -1,5 +1,3 @@
-//! Selected-tool TOML projection and renderer-side closure validation.
-
 use std::collections::BTreeMap;
 
 use crate::RenderError;

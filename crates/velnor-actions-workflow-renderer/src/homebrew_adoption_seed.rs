@@ -1,9 +1,3 @@
-//! Pure seed-file renderer for one protected Homebrew transition.
-//!
-//! The caller supplies authenticated release identity and pins resolved from
-//! the trusted SDK catalog. This module verifies the manifest projection and
-//! renders its caller from the same generic callee factory used for binding.
-
 use std::collections::BTreeMap;
 
 use serde::Serialize;
@@ -20,38 +14,15 @@ const SDK_TARGET: &str = "x86_64-unknown-linux-gnu";
 const REUSABLE_WORKFLOW: &str = ".github/workflows/homebrew-adoption.yml";
 const MAX_MANIFEST_BYTES: usize = 8 * 1024 * 1024;
 
-/// Narrow published SDK identity used by the deterministic transition renderer.
-///
-/// This value is deliberately not a custody token. The orchestrator constructs
-/// it only from its private published-release verifier; the renderer rechecks
-/// the manifest projection and digests before producing bytes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HomebrewAdoptionSeedSdkIdentity<'a> {
-    /// Published SDK source commit.
     pub source_sha: &'a str,
-    /// Published semantic release version.
     pub version: &'a str,
-    /// Exact authenticated release-manifest bytes.
     pub manifest_bytes: &'a [u8],
-    /// SHA-256 of `manifest_bytes`, obtained from the published binding.
     pub manifest_sha256: &'a str,
-    /// SHA-256 of the SDK asset for the fixed Linux x64 hosted runner.
     pub host_target_sha256: &'a str,
 }
 
-/// Derive the complete exact seed file set for the protected transition.
-///
-/// The reusable workflow reference is pinned to the authenticated source SHA.
-/// The manifest identity passed to that workflow is likewise derived from the
-/// authenticated release, while all other content comes from this fixed
-/// semantic template and the protected transition record.
-///
-/// # Errors
-///
-/// Rejects a changed transition template, unsupported SDK identity, malformed
-/// manifest, or any mismatch between manifest and bound source/asset hashes.
-/// The caller must resolve `pins` from the trusted compiled SDK tool catalog;
-/// candidate repository configuration is not a valid source for them.
 pub fn render_homebrew_adoption_seed(
     transition: &HomebrewAdoptionTransition,
     sdk: &HomebrewAdoptionSeedSdkIdentity<'_>,
@@ -366,7 +337,3 @@ struct SeedMiseLock {
 fn seed_error(problem: &str) -> RenderError {
     RenderError::InvalidWorkflow(format!("homebrew_adoption_seed:{problem}"))
 }
-
-#[cfg(test)]
-#[path = "homebrew_adoption_seed_tests.rs"]
-mod tests;

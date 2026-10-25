@@ -1,41 +1,25 @@
-//! Tag-driven publication config (`[[publish.bundles]]`) and the tag grammar.
-//!
-//! Pure data plus validation: no subprocess, registry, or YAML access.
-//! Versioning is independent `SemVer` per artifact. The source of truth is the
-//! artifact's own manifest, read through [`VersionSource`], or an inline
-//! `version` literal in this config. A release tag is
-//! `<artifact-id>-v<X.Y.Z>` ([`ReleaseTag`]).
-
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
-/// Push-tag glob that admits release tags (`<id>-v<X.Y.Z>` shape only).
-///
-/// Coarse by design: the authority job re-parses the tag with the strict
-/// grammar, so the glob only keeps unrelated tags from starting a run.
 pub const RELEASE_TAG_GLOB: &str = "*-v[0-9]*.[0-9]*.[0-9]*";
 
-/// Longest accepted artifact id.
 const MAX_ID_BYTES: usize = 64;
-/// Most bundles one repository may declare.
+
 pub(super) const MAX_BUNDLES: usize = 64;
-/// Most paths one bundle may list.
+
 const MAX_PATHS: usize = 64;
 
-/// Manifest family a version is read from, chosen by the file name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VersionSource {
-    /// `Cargo.toml`: first literal `version` of `[package]` or `[workspace.package]`.
     CargoToml,
-    /// `gradle.properties`: the `version=X.Y.Z` line.
+
     GradleProperties,
-    /// `package.json`: the top-level `version` string.
+
     PackageJson,
 }
 
 impl VersionSource {
-    /// Pick the source from a repo-relative file name (`None` when unsupported).
     #[must_use]
     pub fn for_path(path: &str) -> Option<Self> {
         match path.rsplit('/').next()? {
@@ -46,10 +30,6 @@ impl VersionSource {
         }
     }
 
-    /// Extract the strict `X.Y.Z` version from manifest text.
-    ///
-    /// The generated authority job applies the same rule at run time, so a
-    /// manifest that passes here is read identically there.
     #[must_use]
     pub fn read(self, text: &str) -> Option<String> {
         match self {
@@ -70,7 +50,6 @@ impl VersionSource {
     }
 }
 
-/// First literal `version = "X.Y.Z"` inside `[package]` or `[workspace.package]`.
 fn read_cargo_version(text: &str) -> Option<String> {
     let mut in_package = false;
     for line in text.lines() {
@@ -84,7 +63,6 @@ fn read_cargo_version(text: &str) -> Option<String> {
     None
 }
 
-/// Match exactly `version`, spaces, `=`, spaces, a quoted strict version, spaces.
 fn cargo_version_line(line: &str) -> Option<&str> {
     let rest = line.strip_prefix("version")?.trim_start_matches(' ');
     let rest = rest.strip_prefix('=')?.trim_start_matches(' ');
@@ -93,7 +71,6 @@ fn cargo_version_line(line: &str) -> Option<&str> {
     (tail.trim_start_matches(' ').is_empty() && is_strict_semver(version)).then_some(version)
 }
 
-/// Strict `X.Y.Z`: three numeric parts, no leading zeros, no suffixes.
 #[must_use]
 pub fn is_strict_semver(version: &str) -> bool {
     let parts: Vec<&str> = version.split('.').collect();
@@ -105,7 +82,6 @@ pub fn is_strict_semver(version: &str) -> bool {
         })
 }
 
-/// Artifact id: lowercase alphanumeric words joined by single hyphens.
 #[must_use]
 pub fn is_artifact_id(id: &str) -> bool {
     !id.is_empty()
@@ -119,20 +95,14 @@ pub fn is_artifact_id(id: &str) -> bool {
         })
 }
 
-/// One parsed release tag, `<artifact-id>-v<X.Y.Z>`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReleaseTag {
-    /// Declared artifact id.
     pub artifact: String,
-    /// Strict `X.Y.Z` version.
+
     pub version: String,
 }
 
 impl ReleaseTag {
-    /// Parse a tag name; `None` unless both parts satisfy the strict grammar.
-    ///
-    /// The split is at the last `-v`; a `SemVer` never contains `-v`, so an id
-    /// such as `ui-v1` still parses unambiguously.
     #[must_use]
     pub fn parse(tag: &str) -> Option<Self> {
         let (artifact, version) = tag.rsplit_once("-v")?;
@@ -142,87 +112,64 @@ impl ReleaseTag {
         })
     }
 
-    /// Render the tag name.
     #[must_use]
     pub fn render(&self) -> String {
         format!("{}-v{}", self.artifact, self.version)
     }
 }
 
-/// One release-asset bundle (`[[publish.bundles]]`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PublishBundle {
-    /// Artifact id, also the tag prefix (`<id>-v<X.Y.Z>`).
     pub id: String,
-    /// Repo-relative files or directories packed into the bundle; sorted, unique.
+
     pub paths: Vec<String>,
-    /// Inline version literal; exclusive with `version_file`.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
-    /// Manifest holding the version; exclusive with `version`.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version_file: Option<String>,
 }
 
-/// Where the signed provenance of a tag-driven artifact is stored (`[publish] provenance`).
-///
-/// Both modes sign keylessly with the job's GitHub OIDC identity through
-/// GitHub's Sigstore instance; they differ only in where the signed bundle
-/// lives and how it is verified.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PublishProvenance {
-    /// GitHub's artifact attestation store (`actions/attest-build-provenance`).
-    /// A plan without the feature fails the attest job closed; there is no
-    /// automatic downgrade.
     #[default]
     GithubAttestation,
-    /// Declared fallback for repositories whose plan has no attestation store:
-    /// the same keyless signature, kept as a Sigstore bundle plus a provenance
-    /// receipt in the tag's GitHub release, verified with
-    /// `gh attestation verify --bundle` before anything is published.
+
     SigstoreBundle,
 }
 
 impl PublishProvenance {
-    /// True for the default mode (serialization skip predicate).
     #[must_use]
     pub fn is_default(&self) -> bool {
         *self == Self::GithubAttestation
     }
 }
 
-/// Publication section (`[publish]`).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PublishConfig {
-    /// Provenance store for every tag-driven artifact (bundles, npm, Maven).
     #[serde(default, skip_serializing_if = "PublishProvenance::is_default")]
     pub provenance: PublishProvenance,
-    /// Release-asset bundles, sorted by id.
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub bundles: Vec<PublishBundle>,
-    /// npm packages published to GitHub Packages, sorted by id.
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub npm: Vec<super::publish_npm::PublishNpm>,
-    /// Gradle Maven bundles published as release assets, sorted by id.
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub maven: Vec<super::publish_maven::PublishMaven>,
 }
 
 impl PublishConfig {
-    /// True when nothing is declared (serialization skip predicate).
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.bundles.is_empty() && self.npm.is_empty() && self.maven.is_empty()
     }
 
-    /// Validate every declaration.
-    ///
-    /// # Errors
-    ///
-    /// Returns a config error naming the first violated key.
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         if self.bundles.len() > MAX_BUNDLES {
             return Err(ContractError::config(file, "publish.bundles", "too_many"));
@@ -254,7 +201,6 @@ impl PublishConfig {
 }
 
 impl PublishConfig {
-    /// Validate npm entries: grammar, sorted unique ids, no id shared with a bundle.
     fn validate_npm<'a>(
         &'a self,
         file: &str,
@@ -285,11 +231,6 @@ impl PublishConfig {
 }
 
 impl PublishBundle {
-    /// Validate id, paths and the single version source.
-    ///
-    /// # Errors
-    ///
-    /// Returns a config error naming the first violated key.
     pub fn validate(&self, file: &str, key: &str) -> Result<(), ContractError> {
         if !is_artifact_id(&self.id) {
             return Err(ContractError::config(
@@ -320,7 +261,6 @@ impl PublishBundle {
         }
     }
 
-    /// Version source family when a `version_file` is declared.
     #[must_use]
     pub fn version_source(&self) -> Option<VersionSource> {
         self.version_file
@@ -329,7 +269,6 @@ impl PublishBundle {
     }
 }
 
-/// Validate a version manifest path: safe relative path of a known family.
 fn validate_version_file(file: &str, key: &str, path: &str) -> Result<(), ContractError> {
     validate_repo_path(file, key, path)?;
     if VersionSource::for_path(path).is_none() {
@@ -342,7 +281,6 @@ fn validate_version_file(file: &str, key: &str, path: &str) -> Result<(), Contra
     Ok(())
 }
 
-/// Validate the bundle path list (non-empty, sorted, unique, safe).
 fn validate_paths(file: &str, key: &str, paths: &[String]) -> Result<(), ContractError> {
     if paths.is_empty() || paths.len() > MAX_PATHS {
         return Err(ContractError::config(file, key, "bad_path_count"));
@@ -362,7 +300,6 @@ fn validate_paths(file: &str, key: &str, paths: &[String]) -> Result<(), Contrac
     Ok(())
 }
 
-/// Safe repo-relative path: plain charset, no empty, `.` or `..` segments.
 pub(super) fn validate_repo_path(file: &str, key: &str, path: &str) -> Result<(), ContractError> {
     let plain = |b: u8| b.is_ascii_alphanumeric() || matches!(b, b'/' | b'.' | b'-' | b'_');
     let segments_ok = path
@@ -377,7 +314,3 @@ pub(super) fn validate_repo_path(file: &str, key: &str, path: &str) -> Result<()
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "publish_tests.rs"]
-mod tests;

@@ -1,4 +1,3 @@
-//! Manual release-plz tag authority with the shared native release graph.
 use super::{
     ConsumerReleaseSpec,
     consumer_preview::{self as shared, TapInvocationContext, steps},
@@ -9,16 +8,11 @@ use velnor_actions_contract::package_release::PackageReleaseChannel;
 mod source;
 #[path = "schema2_consumer_stable_tag.rs"]
 mod tag;
-/// Closed metadata-only coordinator settings; inventory is shared with preview.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsumerStableReleaseSpec {
-    /// Exact shared version owner.
     pub version_package: String,
-    /// Whether release-plz version PR preparation is available.
     pub release_pr: bool,
-    /// Captured workspace manifest.
     pub manifest_path: String,
-    /// Qualified tool prefix, never repository-selected executable or hooks.
     pub release_plz_argv: Vec<String>,
 }
 pub(super) fn render_consumer_binary_release(

@@ -1,5 +1,3 @@
-//! Bind producer handoff identities to trusted source and version inputs.
-
 use super::{HANDOFF_SCHEMA, PackageOutputManifest, invalid};
 use crate::OrchestratorError;
 

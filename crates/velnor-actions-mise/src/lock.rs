@@ -1,10 +1,3 @@
-//! Bootstrap lock and version-policy IO plus verification.
-//!
-//! Parses `.velnor/generator.lock` (TOML subset) and the release-manifest
-//! JSON, then verifies the lock against the manifest per supported target
-//! (URL+SHA equality, immutable URLs) and the version-policy mirror
-//! against the compiled catalog. CI runs this before any bootstrap use.
-
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::path::Path;
@@ -18,32 +11,13 @@ use super::{MISE_VERSION, PinnedTool, ToolCatalog};
 
 pub use super::lock_verify::verify_lock_against_manifest;
 
-/// Lock, manifest, and version-policy verification failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum LockError {
-    /// A file could not be read.
-    Io {
-        /// Path being read.
-        path: String,
-        /// Operating-system error detail.
-        message: String,
-    },
-    /// Lock TOML is malformed.
-    MalformedToml {
-        /// Machine-readable problem detail.
-        problem: String,
-    },
-    /// A parsed document failed contract validation.
-    Invalid {
-        /// Machine-readable problem detail.
-        problem: String,
-    },
-    /// Lock and manifest disagree, or the policy mirror differs.
-    Mismatch {
-        /// Machine-readable problem detail.
-        problem: String,
-    },
+    Io { path: String, message: String },
+    MalformedToml { problem: String },
+    Invalid { problem: String },
+    Mismatch { problem: String },
 }
 
 impl Display for LockError {
@@ -59,8 +33,6 @@ impl Display for LockError {
 
 impl std::error::Error for LockError {}
 
-/// Read one UTF-8 bootstrap file (lock, manifest, or version policy).
-/// # Errors
 pub fn load_text(path: &Path) -> Result<String, LockError> {
     std::fs::read_to_string(path).map_err(|err| LockError::Io {
         path: path.display().to_string(),
@@ -68,8 +40,6 @@ pub fn load_text(path: &Path) -> Result<String, LockError> {
     })
 }
 
-/// Parse and validate `.velnor/generator.lock` TOML text.
-/// # Errors
 pub fn parse_generator_lock(text: &str) -> Result<GeneratorLock, LockError> {
     let doc = parse_toml(text)?;
     let lock = lock_from_doc(&doc)?;
@@ -80,8 +50,6 @@ pub fn parse_generator_lock(text: &str) -> Result<GeneratorLock, LockError> {
     Ok(lock)
 }
 
-/// Parse and validate release-manifest JSON text.
-/// # Errors
 pub fn parse_release_manifest(text: &str) -> Result<ReleaseManifest, LockError> {
     let manifest = ReleaseManifest::parse_json(text, "release-manifest.json").map_err(|err| {
         LockError::Invalid {
@@ -96,11 +64,6 @@ pub fn parse_release_manifest(text: &str) -> Result<ReleaseManifest, LockError> 
     Ok(manifest)
 }
 
-/// Verify the version-policy mirror equals the compiled catalog exactly.
-///
-/// Every `[tools]` pin must match [`ToolCatalog::pinned`] (plus the Mise
-/// runner release); any drift fails dogfood CI per bootstrap contract §1.
-/// # Errors
 pub fn verify_version_policy(text: &str, catalog: &ToolCatalog) -> Result<(), LockError> {
     let doc = parse_toml(text)?;
     check_schema(&doc, 1)?;
@@ -125,12 +88,6 @@ pub fn verify_version_policy(text: &str, catalog: &ToolCatalog) -> Result<(), Lo
     }
 }
 
-/// Parse the version-policy header into its contract document.
-///
-/// Reads the top-level header plus the `[runner]` inventory (or the dotted
-/// `[github_runner_images.linux_x64]` form); the `[tools]` mirror stays
-/// [`verify_version_policy`]'s job.
-/// # Errors
 pub fn parse_version_policy(text: &str) -> Result<VersionPolicy, LockError> {
     let doc = parse_toml(text)?;
     check_schema(&doc, VersionPolicy::SCHEMA)?;
@@ -152,35 +109,25 @@ pub fn parse_version_policy(text: &str) -> Result<VersionPolicy, LockError> {
     })
 }
 
-/// Verify the version-policy header against the contract schema.
-///
-/// Fails closed on malformed headers and weakened cadence. The `[tools]`
-/// mirror check stays separate until the repo file carries `registry` and
-/// `supported` (VER-2.19 human seed).
-/// # Errors
 pub fn verify_policy_header(text: &str) -> Result<(), LockError> {
     parse_version_policy(text)?
         .validate("version-policy.toml")
         .map_err(|err| invalid(err.to_string()))
 }
 
-/// Build a mismatch error.
 pub(crate) fn mismatch(problem: String) -> LockError {
     LockError::Mismatch { problem }
 }
 
-/// Build an invalid-document error.
 fn invalid(problem: String) -> LockError {
     LockError::Invalid { problem }
 }
 
-/// Fetch one required bare-integer entry.
 fn entry_int(entries: &BTreeMap<String, String>, key: &str) -> Result<u32, LockError> {
     let value = entries.get(key).and_then(|entry| entry.parse::<u32>().ok());
     value.ok_or_else(|| invalid(format!("missing_key:{key}")))
 }
 
-/// Parse a raw `["a", "b"]` value stored opaquely by [`parse_value`].
 fn parse_string_list(raw: &str) -> Result<Vec<String>, LockError> {
     let inner = raw
         .strip_prefix('[')
@@ -201,10 +148,8 @@ fn parse_string_list(raw: &str) -> Result<Vec<String>, LockError> {
     Ok(items)
 }
 
-/// One parsed TOML section: dotted name plus string-or-int entries.
 type TomlDoc = Vec<(String, BTreeMap<String, String>)>;
 
-/// Parse the bootstrap TOML subset (strings, bare ints, tables, arrays).
 fn parse_toml(text: &str) -> Result<TomlDoc, LockError> {
     let mut doc: TomlDoc = vec![(String::new(), BTreeMap::new())];
     for (index, raw) in text.lines().enumerate() {
@@ -240,7 +185,6 @@ fn parse_toml(text: &str) -> Result<TomlDoc, LockError> {
     Ok(doc)
 }
 
-/// Strip a trailing `#` comment outside double quotes.
 fn strip_comment(line: &str) -> &str {
     let mut quoted = false;
     let mut escape = false;
@@ -258,7 +202,6 @@ fn strip_comment(line: &str) -> &str {
     line
 }
 
-/// Parse one scalar: double-quoted string, bare integer, or raw `[...]`.
 fn parse_value(text: &str) -> Result<String, LockError> {
     if let Some(inner) = text.strip_prefix('"')
         && let Some(inner) = inner.strip_suffix('"')
@@ -274,7 +217,6 @@ fn parse_value(text: &str) -> Result<String, LockError> {
     Err(malformed(format!("bad_value:{text}")))
 }
 
-/// Unescape `\"` and `\\` inside a double-quoted scalar.
 fn unescape(text: &str) -> Result<String, LockError> {
     let mut out = String::with_capacity(text.len());
     let mut chars = text.chars();
@@ -292,12 +234,10 @@ fn unescape(text: &str) -> Result<String, LockError> {
     Ok(out)
 }
 
-/// Build a malformed-TOML error.
 fn malformed(problem: String) -> LockError {
     LockError::MalformedToml { problem }
 }
 
-/// Require the top-level `schema` entry to equal `want`.
 fn check_schema(doc: &TomlDoc, want: u32) -> Result<(), LockError> {
     section(doc, "")?
         .get("schema")
@@ -308,7 +248,6 @@ fn check_schema(doc: &TomlDoc, want: u32) -> Result<(), LockError> {
         })
 }
 
-/// Fetch one required string entry.
 fn entry(entries: &BTreeMap<String, String>, key: &str) -> Result<String, LockError> {
     entries
         .get(key)
@@ -316,7 +255,6 @@ fn entry(entries: &BTreeMap<String, String>, key: &str) -> Result<String, LockEr
         .ok_or_else(|| invalid(format!("missing_key:{key}")))
 }
 
-/// Fetch the single section with `name`.
 fn section(doc: &TomlDoc, name: &str) -> Result<BTreeMap<String, String>, LockError> {
     doc.iter()
         .find(|(title, _)| title == name)
@@ -324,7 +262,6 @@ fn section(doc: &TomlDoc, name: &str) -> Result<BTreeMap<String, String>, LockEr
         .ok_or_else(|| invalid(format!("missing_section:{name}")))
 }
 
-/// Map a parsed document onto the typed [`GeneratorLock`].
 fn lock_from_doc(doc: &TomlDoc) -> Result<GeneratorLock, LockError> {
     check_schema(doc, GeneratorLock::SCHEMA)?;
     let generator = section(doc, "generator")?;

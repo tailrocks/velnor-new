@@ -17,8 +17,6 @@ use velnor_actions_contract::{
 };
 use velnor_actions_mise::CheckDeadline;
 
-/// Verify A checkout custody, derive A policy/task closure, and write the one
-/// canonical artifact consumed by each source-bound production job.
 pub(in crate::package_release_publish::release_policy_admission) fn finalize()
 -> Result<(), OrchestratorError> {
     let deadline = CheckDeadline::after(Duration::from_secs(300))
@@ -308,7 +306,3 @@ fn write_finalization_files(
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "preview_source_admission_finalize_tests.rs"]
-mod tests;

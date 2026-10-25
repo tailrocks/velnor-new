@@ -1,42 +1,25 @@
-//! Dependency-integrity check (the `--locked` analogue for Gradle).
-//!
-//! Two committed artifacts must exist and be meaningful:
-//!
-//! - Gradle dependency locking: every project whose build script declares
-//!   `dependencies` has a `gradle.lockfile` in its directory;
-//! - dependency verification: `gradle/verification-metadata.xml` enables
-//!   metadata verification and gives every artifact a SHA-256, with no
-//!   catch-all trust entry.
-//!
-//! Jobs additionally run `--dependency-verification strict`; this module is
-//! the generation-time half and reads only repository files.
-
 use std::collections::BTreeSet;
 
 use crate::lex::{Tok, tokenize};
 
-/// Path of the verification metadata under a Gradle root.
 pub const VERIFICATION_METADATA: &str = "gradle/verification-metadata.xml";
-/// Name of a per-project dependency lockfile.
+
 pub const LOCKFILE: &str = "gradle.lockfile";
 
-/// A named integrity failure.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum IntegrityFinding {
-    /// A project with dependencies has no `gradle.lockfile`.
     DependencyLockMissing(String),
-    /// `gradle/verification-metadata.xml` is absent.
+
     VerificationMetadataMissing,
-    /// `<verify-metadata>` is not `true`.
+
     VerificationDisabled,
-    /// An artifact lacks a SHA-256 entry.
+
     VerificationNotSha256(String),
-    /// A trust entry that disables verification for everything.
+
     VerificationTrustTooBroad,
 }
 
 impl IntegrityFinding {
-    /// Stable machine-readable code.
     #[must_use]
     pub fn code(&self) -> String {
         match self {
@@ -53,7 +36,6 @@ impl IntegrityFinding {
     }
 }
 
-/// True when the build script has a top-level-or-nested `dependencies { }`.
 #[must_use]
 pub fn declares_dependencies(script: &str) -> bool {
     let toks = tokenize(script);
@@ -62,10 +44,6 @@ pub fn declares_dependencies(script: &str) -> bool {
     })
 }
 
-/// Check locking for the given projects.
-///
-/// `projects` are `(gradle path, directory)` pairs relative to the root;
-/// `read` returns a root-relative file's text; `files` lists root-relative files.
 #[must_use]
 pub fn check_locking(
     projects: &[(String, String)],
@@ -98,7 +76,6 @@ pub fn check_locking(
     findings
 }
 
-/// Check the verification metadata text (`None` when the file is absent).
 #[must_use]
 pub fn check_verification(metadata: Option<&str>) -> Vec<IntegrityFinding> {
     let Some(xml) = metadata else {
@@ -125,7 +102,6 @@ fn has_sha256(body: &str) -> bool {
         .any(|value| value.len() == 64 && value.chars().all(|c| c.is_ascii_hexdigit()))
 }
 
-/// Text of the first `<tag>text</tag>`.
 fn element_text(xml: &str, tag: &str) -> Option<String> {
     let open = format!("<{tag}>");
     let start = xml.find(&open)? + open.len();
@@ -133,7 +109,6 @@ fn element_text(xml: &str, tag: &str) -> Option<String> {
     Some(xml[start..start + end].trim().to_owned())
 }
 
-/// `(name attribute, inner text)` of every `<tag name="..">..</tag>`.
 fn elements(xml: &str, tag: &str) -> Vec<(String, String)> {
     let open = format!("<{tag} ");
     let close = format!("</{tag}>");
@@ -175,7 +150,6 @@ fn attribute_values(body: &str, tag: &str, attr: &str) -> Vec<String> {
         .collect()
 }
 
-/// A `<trust ...>` entry without a group restriction, or a catch-all regex.
 fn trust_too_broad(xml: &str) -> bool {
     xml.match_indices("<trust ").any(|(at, _)| {
         let head = &xml[at..];

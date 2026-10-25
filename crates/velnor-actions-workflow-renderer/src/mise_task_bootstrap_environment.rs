@@ -3,8 +3,6 @@ use crate::verification_jobs::MiseTaskBootstrapPolicy;
 pub(super) fn base_environment(root: &str) -> Vec<String> {
     vec![
         "set -euo pipefail".to_owned(),
-        // Credential unsets come from the renderer's injected prelude, which
-        // must stay the only token-naming text for the token-hygiene gate.
         "for name in ${!MISE_@}; do unset \"$name\"; done".to_owned(),
         "umask 077".to_owned(),
         format!("task_root=\"{root}\""),
@@ -107,10 +105,6 @@ pub(super) fn task_root(policy: &MiseTaskBootstrapPolicy) -> String {
     )
 }
 
-/// Inline-shell argv so the script is single-quoted whole at render time.
-///
-/// Inner-shell variables must survive the outer shell; the script itself
-/// starts with `set -euo pipefail`.
 pub(super) fn bash_script(script: &str) -> Vec<String> {
     vec!["bash".to_owned(), "-c".to_owned(), script.to_owned()]
 }

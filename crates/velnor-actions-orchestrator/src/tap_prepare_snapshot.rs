@@ -1,5 +1,3 @@
-//! Captured tap checkout snapshots and formula-only delta enforcement.
-
 use super::{FORMULA_LIMIT, SNAPSHOT_BYTES_LIMIT, SNAPSHOT_FILE_LIMIT, TREE_LIMIT};
 use crate::OrchestratorError;
 use sha2::{Digest, Sha256};

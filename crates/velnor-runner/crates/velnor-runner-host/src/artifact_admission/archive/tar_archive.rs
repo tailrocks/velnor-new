@@ -1,5 +1,3 @@
-//! Strict tar member extraction with byte, count, path, and duplicate bounds.
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Cursor, Read};
 

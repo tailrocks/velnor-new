@@ -1,5 +1,3 @@
-//! Event selection modes plus the graph and symlink inputs selection walks.
-
 use std::path::Path;
 
 use velnor_actions_contract::{WorkflowEvent, selects_affected_work};
@@ -8,20 +6,12 @@ use crate::discover::Discovery;
 use crate::select_affected::Ownership;
 use crate::select_symlinks::{ResolvedLink, tracked_links};
 
-/// How one triggering event selects work.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SelectionMode {
-    /// Only work the change can affect runs; the rest is `not_affected`.
     Affected,
-    /// Every obligation runs.
     Full,
 }
 
-/// Selection mode per event (hard decision 4).
-///
-/// The contract's [`selects_affected_work`] is the single event policy;
-/// `Plan::validate` and `Required` enforce the same predicate, so a
-/// planner bug cannot skip work on a full-run event.
 pub(crate) fn selection_mode(event: WorkflowEvent) -> SelectionMode {
     if selects_affected_work(event) {
         SelectionMode::Affected
@@ -30,7 +20,6 @@ pub(crate) fn selection_mode(event: WorkflowEvent) -> SelectionMode {
     }
 }
 
-/// Stable warning token for one event.
 pub(super) fn event_token(event: WorkflowEvent) -> &'static str {
     match event {
         WorkflowEvent::PullRequest => "pull_request",
@@ -42,11 +31,6 @@ pub(super) fn event_token(event: WorkflowEvent) -> &'static str {
     }
 }
 
-/// Every workspace's resolved edges, or `None` to broaden.
-///
-/// A workspace without a complete graph (lockless with registry
-/// dependencies, or an unparsable resolve) could reach any package
-/// through edges selection cannot see.
 pub(super) fn resolved_edges(
     discovery: &Discovery,
     warnings: &mut Vec<String>,
@@ -71,11 +55,6 @@ pub(super) fn resolved_edges(
     Some(resolved)
 }
 
-/// Tracked symlinks resolved at head, or `None` to broaden.
-///
-/// A link nobody claims never matters: its own change is unowned and
-/// broadens anyway. An owned link that escapes the repository, dangles,
-/// or loops cannot be bounded, so its owners' reads are unknown.
 pub(super) fn resolved_links(
     root: &Path,
     ownership: &Ownership<'_>,

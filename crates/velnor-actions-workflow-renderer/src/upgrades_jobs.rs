@@ -1,5 +1,3 @@
-//! The four jobs of `upgrades.yml` and their shared step builders.
-
 use velnor_actions_contract::{JobTimeout, StepRole};
 
 use super::scripts::{GATE, PUBLISH, RELEASE, prepare_script, publish_check_script, verify_script};
@@ -36,7 +34,6 @@ fn job(
     Ok(Yaml::Map(fields))
 }
 
-/// One `run:` step under bash.
 fn bash_step(name: &str, id: Option<&str>, step_env: &[(&str, &str)], run: String) -> Yaml {
     let mut fields = vec![("name".to_owned(), Yaml::str(name))];
     if let Some(id) = id {
@@ -50,8 +47,6 @@ fn bash_step(name: &str, id: Option<&str>, step_env: &[(&str, &str)], run: Strin
     Yaml::Map(fields)
 }
 
-/// Resolve and verify the newest stable Velnor before any repository code
-/// runs; the read-only `github.token` lives only in this step.
 fn velnor_release(spec: &UpgradesSpec) -> Yaml {
     bash_step(
         "Resolve and verify the latest Velnor release",
@@ -138,8 +133,6 @@ pub(super) fn prepare_job(spec: &UpgradesSpec) -> Result<Yaml, RenderError> {
     )
 }
 
-/// Regenerate `.github/` from the default branch with the verified Velnor and
-/// accept the patch only when prepare's `.github/` is exactly that.
 pub(super) fn verify_job(spec: &UpgradesSpec) -> Result<Yaml, RenderError> {
     let tools = spec.generate_tools.join(" ");
     let verify = bash_step(
@@ -234,9 +227,6 @@ pub(super) fn publish_job(spec: &UpgradesSpec) -> Result<Yaml, RenderError> {
     )
 }
 
-/// App token for this repository only, minted after every check passed:
-/// contents and pull requests, plus workflows only when the verified tree
-/// changes `.github/workflows/` (an empty input requests nothing).
 fn mint(spec: &UpgradesSpec) -> Yaml {
     Yaml::Map(vec![
         (
@@ -354,9 +344,6 @@ fn install_gh(spec: &UpgradesSpec) -> Yaml {
     ])
 }
 
-/// Install the validators `generate` executes, so the next step can check the
-/// jactionlint executable before anything runs it. The later prerequisite
-/// install in the regeneration script is then a no-op.
 fn install_generate_tools(spec: &UpgradesSpec) -> Yaml {
     Yaml::Map(vec![
         (
@@ -384,7 +371,6 @@ fn verify_jactionlint(spec: &UpgradesSpec) -> Result<Yaml, RenderError> {
     )
 }
 
-/// String map (`env:`, `with:`, `permissions:`, `outputs:`).
 pub(super) fn env(pairs: &[(&str, &str)]) -> Yaml {
     Yaml::Map(
         pairs

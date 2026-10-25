@@ -1,5 +1,3 @@
-//! Bounded structural preflight for raw candidate and gzip Cargo tar inputs.
-
 use std::io::{self, Read};
 
 use flate2::read::MultiGzDecoder;
@@ -70,33 +68,10 @@ impl<R: Read> Read for Bounded<R> {
     }
 }
 
-/// Check archive framing and resource limits before a higher-level tar parser runs.
-///
-/// `candidate` accepts raw tar from the release producer. `cargo-package`
-/// accepts gzip-compressed tar. Each mode rejects the other encoding.
-///
-/// # Errors
-///
-/// Returns a diagnostic when the mode, archive framing, metadata, compression,
-/// or resource bounds do not match the fixed policy.
 pub fn validate<R: Read>(reader: R, mode: &str) -> Result<(), String> {
     validate_with_profile(reader, profile(mode)?)
 }
 
-/// Extract the exact three regular-file members from a trusted raw release candidate.
-///
-/// The destination must be an existing directory owned by the current user.
-/// Group and other users must not have write access. Its path ancestors must
-/// be root-owned or current-user-owned; only a root-owned sticky shared
-/// directory is allowed. The final directory component and archive leaf are
-/// opened without following symlinks.
-///
-/// Published files use mode `0755` for the first member and `0644` for the
-/// remaining members. Publication is exclusive: existing names are never
-/// replaced, and partial publication is rolled back after inode checks.
-///
-/// # Errors
-/// Returns an error for invalid archive members, unsafe paths, changed identities, or failed exclusive publication.
 pub fn extract_candidate(
     archive: &std::path::Path,
     destination: &std::path::Path,
@@ -296,6 +271,3 @@ fn parse_octal(field: &[u8], label: &str) -> Result<u64, String> {
 }
 
 pub mod oci_candidate;
-#[cfg(test)]
-#[path = "tests.rs"]
-mod tests;

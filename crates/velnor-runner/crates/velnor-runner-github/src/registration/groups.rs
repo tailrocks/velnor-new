@@ -1,5 +1,3 @@
-//! `GET _apis/runtime/runnergroups`. Ids and names only.
-
 use serde::Deserialize;
 
 use crate::session::{API_QUERY, bearer, execute, json_content, user_agent};
@@ -7,24 +5,15 @@ use crate::{Method, SessionError, SessionRequest, Transport, WireError};
 
 use super::other_status;
 
-/// One runner group. No URL and no token.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RunnerGroup {
-    /// Service id.
     pub id: i64,
-    /// Group name.
+
     pub name: String,
-    /// `isDefaultGroup` from the service.
+
     pub is_default: bool,
 }
 
-/// List runner groups on the current Actions origin.
-///
-/// # Errors
-///
-/// Returns [`WireError::RegistrationRejected`] for an empty admin token.
-/// A non-200 status is the pinned status class. A `count` that does not match
-/// `value` is [`WireError::Malformed`].
 pub fn list_runner_groups<T>(
     transport: &mut T,
     admin_token: &str,

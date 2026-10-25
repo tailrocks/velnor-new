@@ -17,7 +17,6 @@ pub(crate) fn ensure_tracked_tree_clean(
     Ok(())
 }
 
-/// Recheck the exact checkout and every regular-file tree entry at execution or Required.
 pub(crate) fn read_checked_tap_tree(
     root: &Path,
     identity: &NativeCheckIdentityExtension,
@@ -101,9 +100,6 @@ pub(crate) fn tool_profile(operation: NativeHomebrewOperation, platform: CheckPl
     format!("{}-{}", operation.as_str(), platform.target())
 }
 
-/// Independently resolve protected tap policy and require every source-derived
-/// native operation in the final Required plan. Candidate declarations can
-/// add checks, but cannot erase a protected tree, formula, or install check.
 pub(crate) fn caller_repository(root: &Path) -> Result<String, crate::OrchestratorError> {
     use crate::internal::internal;
 

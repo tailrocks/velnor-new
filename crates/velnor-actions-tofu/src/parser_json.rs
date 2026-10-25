@@ -1,17 +1,7 @@
-//! JSON half of the bounded structural walk (S8).
-//!
-//! Extends `Walk` with JSON value modeling:
-//! top-level keys become block identities (tracked kinds extract
-//! labels from the documented object shapes), `terraform` values
-//! yield `required_version` literals, and every string value scans
-//! for legacy refs. Lives apart so the parser facade keeps the file
-//! size gate.
-
 use crate::modules::{ModuleDecl, source_from_json};
 use crate::parser::{BlockModel, MAX_DEPTH, ParseError, Walk};
 
 impl Walk {
-    /// Model one JSON top-level block and walk its values.
     pub(crate) fn json_block(
         &mut self,
         kind: &str,
@@ -85,7 +75,6 @@ impl Walk {
         Ok(())
     }
 
-    /// Collect `required_version` literals under a JSON `terraform` value.
     pub(crate) fn json_terraform(
         &mut self,
         value: &serde_json::Value,
@@ -110,7 +99,6 @@ impl Walk {
         Ok(())
     }
 
-    /// Walk one JSON value for string literals.
     pub(crate) fn json_value(
         &mut self,
         value: &serde_json::Value,

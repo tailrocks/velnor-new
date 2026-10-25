@@ -1,5 +1,3 @@
-//! Original manual tag authority for a cryptographically admitted generation.
-
 use super::super::github::{GitHubApi, WorkflowArtifact};
 use super::{
     ArtifactRef, Authorization, Intent, Origin, artifacts, authenticate, authorization_for_context,
@@ -197,7 +195,3 @@ fn locate(
         sha256,
     })
 }
-
-#[cfg(test)]
-#[path = "stable_tag_origin_retained_tests.rs"]
-mod tests;

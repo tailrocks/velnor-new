@@ -1,5 +1,3 @@
-//! Private gate for exact-head native Homebrew tap merge.
-
 use std::{
     env, fs,
     path::{Path, PathBuf},

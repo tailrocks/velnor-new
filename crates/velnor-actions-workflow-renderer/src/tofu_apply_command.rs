@@ -1,5 +1,3 @@
-//! Safe command and environment helpers for the generated apply workflow.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Step, StepKind, TofuApplyConfig};
@@ -7,7 +5,6 @@ use velnor_actions_contract::{Step, StepKind, TofuApplyConfig};
 use crate::tofu_apply::TofuApplySpec;
 use crate::{RenderError, commands, steps_plain::plain_step_to_yaml, yaml::Yaml};
 
-/// Build a fixed `OpenTofu` command with output redirected away from logs.
 #[expect(
     clippy::needless_pass_by_value,
     reason = "call sites build and yield an owned fixed argv"
@@ -27,7 +24,6 @@ pub(super) fn tofu_logged_step(
     tofu_shell_step(name, vec!["bash".to_owned(), "-c".to_owned(), script], &env)
 }
 
-/// AWS credential outputs are opt-in per step; provider tokens are separate.
 pub(super) fn aws_env(
     config: &TofuApplyConfig,
     include_github_tokens: bool,
@@ -85,7 +81,6 @@ pub(super) fn plan_paths_env() -> BTreeMap<String, String> {
     ])
 }
 
-/// Create a validated fixed shell step while admitting only workflow-owned env keys.
 pub(super) fn tofu_shell_step(
     name: &str,
     argv: Vec<String>,

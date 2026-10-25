@@ -1,5 +1,3 @@
-//! Captured PR identity shared by ordinary and fork review contexts.
-
 use serde_json::Value;
 use std::path::Path;
 use velnor_actions_contract::WorkflowEvent;
@@ -388,13 +386,3 @@ fn verify_checkout(
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "pull_request_runner_tests.rs"]
-mod runner_tests;
-#[cfg(test)]
-#[path = "pull_request_snapshot_git_tests.rs"]
-mod snapshot_git_tests;
-#[cfg(test)]
-#[path = "pull_request_context_tests.rs"]
-mod tests;

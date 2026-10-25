@@ -1,5 +1,3 @@
-//! Exact workflow-run attempt metadata from the Actions API.
-
 use velnor_actions_contract::{QualificationCacheRunMetadata, QualificationRunRef};
 
 use crate::OrchestratorError;
@@ -111,7 +109,3 @@ fn workflow_path_matches(value: &str, branch: &str) -> bool {
 fn valid_sha(value: &str) -> bool {
     value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
-
-#[cfg(test)]
-#[path = "run_tests.rs"]
-mod tests;

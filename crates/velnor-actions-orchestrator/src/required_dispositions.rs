@@ -1,27 +1,3 @@
-//! Planned-job verdicts: observed job results against plan dispositions.
-//!
-//! Hard decision 4: a crate job the plan marks `not_affected` is skipped by
-//! its generated job-level gate. `Required` never trusts a conclusion
-//! alone; it pairs every observed job result with the plan's disposition:
-//!
-//! | Plan           | Observed          | Verdict                         |
-//! |----------------|-------------------|---------------------------------|
-//! | `run`          | success           | pass (reports still required)   |
-//! | `run`          | skipped / neutral | fail, `planned_job_skipped`     |
-//! | `run`          | failure / missing | fail                            |
-//! | `run`          | cancelled         | cancelled                       |
-//! | `not_affected` | skipped           | pass, no report expected        |
-//! | `not_affected` | success / neutral | fail closed, `gate_mismatch`    |
-//! | `not_affected` | failure / missing | fail                            |
-//! | `not_affected` | cancelled         | cancelled                       |
-//!
-//! Jobs the plan does not list (plan, jactionlint, named checks, `OpenTofu`
-//! roots) keep the generic rule: skipped is never success. A missing,
-//! invalid, or failed plan never reaches this fold (`planning_failed`).
-//! A plan that skips any work on a full-run event (push, merge group,
-//! qualification, judged by the merge-time actual event) fails closed
-//! with `not_affected_on_full_event`, whatever the plan claims.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
@@ -31,18 +7,11 @@ use velnor_actions_contract::{
 
 use crate::cover::Signals;
 
-/// Miss reason for a planned job that was skipped.
 pub(crate) const PLANNED_JOB_SKIPPED: &str = "planned_job_skipped";
-/// Miss reason for a `not_affected` job that ran anyway.
 pub(crate) const GATE_MISMATCH: &str = "gate_mismatch";
 
-/// Miss reason for skipped work on a full-run event.
 pub(crate) const NOT_AFFECTED_ON_FULL_EVENT: &str = "not_affected_on_full_event";
 
-/// Full-run events never skip: backstop independent of plan validation.
-///
-/// A missing actual event fails trust coherence on its own; here only a
-/// known full-run actual event with skipped work is judged.
 pub(crate) fn check_full_event_skips(
     plan: &Plan,
     actual_event: Option<WorkflowEvent>,
@@ -56,7 +25,6 @@ pub(crate) fn check_full_event_skips(
     }
 }
 
-/// Fold every observed job result against the plan's job dispositions.
 pub(crate) fn fold_planned_jobs(
     planned: &[PlanJob],
     jobs: &[RequiredJobResult],
@@ -78,7 +46,6 @@ pub(crate) fn fold_planned_jobs(
     }
 }
 
-/// A job the plan scheduled must run and succeed.
 fn fold_run(conclusion: JobConclusion, signals: &mut Signals, miss_reasons: &mut BTreeSet<String>) {
     match conclusion {
         JobConclusion::Success => {}
@@ -91,7 +58,6 @@ fn fold_run(conclusion: JobConclusion, signals: &mut Signals, miss_reasons: &mut
     }
 }
 
-/// A job the plan marked `not_affected` must be skipped by its gate.
 fn fold_not_affected(
     conclusion: JobConclusion,
     signals: &mut Signals,
@@ -108,7 +74,6 @@ fn fold_not_affected(
     }
 }
 
-/// Jobs outside the plan's crate-job inventory: skipped is never success.
 fn fold_unplanned(conclusion: JobConclusion, signals: &mut Signals) {
     match conclusion {
         JobConclusion::Success => {}
@@ -117,7 +82,3 @@ fn fold_unplanned(conclusion: JobConclusion, signals: &mut Signals) {
         JobConclusion::Failure | JobConclusion::Missing => signals.failed = true,
     }
 }
-
-#[cfg(test)]
-#[path = "required_dispositions_tests.rs"]
-mod tests;

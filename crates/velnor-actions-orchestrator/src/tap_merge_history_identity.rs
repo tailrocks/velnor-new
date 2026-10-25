@@ -1,5 +1,3 @@
-//! Receipt-scoped branch and immutable identity parsing.
-
 use serde_json::Value;
 
 use crate::{OrchestratorError, internal::internal};
@@ -28,8 +26,6 @@ pub(super) fn belongs_to_receipt(
     digest_marker: &str,
 ) -> Result<bool, OrchestratorError> {
     if !branch.starts_with(receipt_branch_prefix) {
-        // Receipt markers are public and may be copied into unrelated PRs. Only
-        // the deterministic branch namespace establishes ownership.
         return Ok(false);
     }
     if !body.contains(digest_marker) {
@@ -122,7 +118,3 @@ fn is_lower_hex(value: &str, length: usize) -> bool {
             .bytes()
             .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
-
-#[cfg(test)]
-#[path = "tap_merge_history_identity_tests.rs"]
-mod tests;

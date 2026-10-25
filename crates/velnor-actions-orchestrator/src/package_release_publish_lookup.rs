@@ -1,5 +1,3 @@
-//! Exact release lookup and complete release-asset inventory reads.
-
 use std::collections::BTreeSet;
 
 use crate::{OrchestratorError, internal::internal};
@@ -50,7 +48,6 @@ impl GitHubApi {
         Err(internal("published_asset_inventory_pages"))
     }
 
-    /// Read one release by exact tag, with a typed absence result.
     pub(in crate::package_release_publish) fn release_by_tag(
         &self,
         tag: &str,
@@ -98,18 +95,6 @@ impl GitHubApi {
         query: &str,
         fields: &[(&str, String)],
     ) -> Result<serde_json::Value, OrchestratorError> {
-        #[cfg(test)]
-        if let Some(fixture) = &self.fixture {
-            let route = format!(
-                "graphql:{}",
-                fields
-                    .iter()
-                    .map(|(key, value)| format!("{key}={value}"))
-                    .collect::<Vec<_>>()
-                    .join("&")
-            );
-            return fixture.read(&route);
-        }
         let response: serde_json::Value =
             serde_json::from_slice(&self.request(graphql_arguments(query, fields), JSON_LIMIT)?)
                 .map_err(|_| internal("package_publish_api_json"))?;

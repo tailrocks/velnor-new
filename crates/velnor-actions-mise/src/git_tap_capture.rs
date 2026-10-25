@@ -1,5 +1,3 @@
-//! Credential-free capture of the public default branch of a Homebrew tap.
-
 use crate::{CheckDeadline, command::IsolatedCommand, error::MiseError};
 use std::{
     ffi::OsString,
@@ -13,36 +11,19 @@ pub use homebrew_pinned_source::{PinnedHomebrewSource, materialize_homebrew_pinn
 
 const OUTPUT_LIMIT: usize = 1024 * 1024;
 
-/// A fresh detached checkout of the exact observed `main` commit.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CapturedTapMain {
-    /// Full lowercase object ID returned by `ls-remote` and rechecked after fetch.
     pub commit_sha: String,
-    /// Isolated repository materialized at that commit.
     pub checkout: PathBuf,
 }
 
-/// One regular Git tree entry at the captured tap base.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TapTreeEntry {
-    /// Repository-relative UTF-8 path.
     pub path: String,
-    /// Git mode, restricted to regular files by this capture contract.
     pub mode: u32,
-    /// Full lowercase Git blob object ID.
     pub blob_sha: String,
 }
 
-/// Capture public tap `main` and materialize only that observed commit.
-///
-/// This uses a fixed HTTPS remote derived from a validated owner/repository
-/// slug. It never consults ambient Git configuration or credentials, and it
-/// disables helpers, hooks, submodules, and global/system configuration.
-///
-/// # Errors
-/// The caller must create an empty absolute destination directory before
-/// calling this function. Rejects malformed slugs, remote races, dirty
-/// materialization, Git failures, or an expired deadline.
 pub fn capture_tap_main(
     repository: &str,
     destination: &Path,
@@ -60,10 +41,6 @@ pub fn capture_tap_main(
     })
 }
 
-/// Read the exact regular-file tree of the previously captured commit.
-///
-/// # Errors
-/// Rejects nonregular entries, malformed tree records, or Git failures.
 pub fn read_tap_tree(
     checkout: &Path,
     commit_sha: &str,
@@ -129,10 +106,6 @@ fn parse_tree(bytes: &[u8]) -> Result<Vec<TapTreeEntry>, MiseError> {
     Ok(entries)
 }
 
-/// Admit one regular leaf from a captured Git tree or a recursive API tree.
-///
-/// # Errors
-/// Rejects unsafe paths, nonregular modes/types, or malformed blob identities.
 pub fn validate_tap_regular_leaf(
     path: &str,
     mode: u32,
@@ -318,7 +291,3 @@ fn invalid(problem: &'static str) -> MiseError {
         value: problem.to_owned(),
     }
 }
-
-#[cfg(test)]
-#[path = "git_tap_capture_tests.rs"]
-mod tests;

@@ -4,7 +4,6 @@ use std::ffi::OsString;
 use std::fmt::Write;
 use std::path::PathBuf;
 
-/// Pure command handle for externally owned isolated execution state.
 #[derive(Debug)]
 pub struct QualifiedCheck {
     pub(crate) home: PathBuf,
@@ -15,10 +14,6 @@ pub struct QualifiedCheck {
 }
 
 impl QualifiedCheck {
-    /// Bind a validated task to externally prepared, owned temporary homes.
-    /// The orchestrator owns files, executable projections, and cleanup.
-    /// # Errors
-    /// Rejects relative homes/cwd or malformed task projection.
     pub fn new(
         home: PathBuf,
         cwd: PathBuf,
@@ -84,19 +79,14 @@ impl QualifiedCheck {
         owned.bound_projection()?;
         Ok(owned)
     }
-    /// Config-visible execution of the authorized named native task.
-    /// # Errors
-    /// Fails if the owned projection has changed.
     pub fn command(&self, deadline: crate::CheckDeadline) -> Result<IsolatedCommand, MiseError> {
         IsolatedCommand::qualified_check_run(self, deadline)
     }
-    /// Per-check process deadline (includes the native task graph).
     #[must_use]
     pub fn timeout(&self) -> std::time::Duration {
         std::time::Duration::from_secs(u64::from(self.check.check.timeout_minutes) * 60)
     }
 
-    /// Exact owned executable materialized and verified by the orchestrator.
     #[must_use]
     pub fn mise_program(&self) -> PathBuf {
         self.home.join("bin/mise")
@@ -104,12 +94,7 @@ impl QualifiedCheck {
 }
 
 impl QualifiedCheck {
-    /// Task-only native config with fixed cwd and disabled freshness.
-    /// # Errors
-    /// Rejects malformed task bytes and unsupported directory encoding.
     pub fn bound_projection(&self) -> Result<String, MiseError> {
-        // Static discovery rejects per-task dir and nested task tables. Binding
-        // each copied native table preserves its original repository cwd.
         let dir = toml_quote(
             self.cwd
                 .to_str()

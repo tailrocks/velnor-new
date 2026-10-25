@@ -1,5 +1,3 @@
-//! Typed step builders for the protected `OpenTofu` apply workflow.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::TofuApplyConfig;
@@ -252,7 +250,6 @@ pub(super) fn tofu_cleanup_step() -> Result<Yaml, RenderError> {
     Ok(step)
 }
 
-/// Collapse documented jq whitespace so fixed shell scripts stay single-line.
 fn jq_contract(filter: &str) -> String {
     filter.split_whitespace().collect::<Vec<_>>().join(" ")
 }

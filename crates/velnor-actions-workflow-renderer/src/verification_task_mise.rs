@@ -1,5 +1,3 @@
-//! Verification-task adapter for the shared locked Mise bootstrap.
-
 use super::{MiseTaskBootstrapPolicy, VerificationTaskPolicy};
 use crate::RenderError;
 

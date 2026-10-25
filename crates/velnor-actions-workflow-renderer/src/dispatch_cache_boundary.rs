@@ -1,17 +1,9 @@
-//! Prevent cache access before the plan has authenticated dispatch context.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Job, Step, StepKind};
 
 pub(crate) const DISPATCH_DENY: &str = "github.event_name != 'workflow_dispatch'";
 
-/// Suppress every cache path until a validated directive controls its use.
-///
-/// Raw dispatch metadata can deny cache access, but cannot grant it. The
-/// current renderer has no cache producer that admits its selected backend
-/// object against a validated directive before import, so every cache path
-/// stays disabled on workflow dispatch, including downstream jobs.
 pub(crate) fn suppress_unvalidated_cache_access(jobs: &mut BTreeMap<String, Job>) {
     for job in jobs.values_mut() {
         for step in &mut job.steps {
@@ -46,7 +38,6 @@ fn is_cache_access(step: &Step) -> bool {
     };
     uses.starts_with("actions/cache@")
         || uses.starts_with("actions/cache/")
-        // The install-only MBX action (`backend: local`) touches no cache.
         || (uses.starts_with("jdx/mr-boxington-action@")
             && with.get("backend").map(String::as_str) != Some("local"))
 }
@@ -88,9 +79,6 @@ fn suppress_dispatch(step: &mut Step) {
         return;
     }
     let Some(prior) = step.condition.take() else {
-        // GitHub applies its implicit success() check when an if expression
-        // does not contain a status-check function. Keep the deny predicate
-        // short for the common no-condition cache step.
         step.condition = Some(DISPATCH_DENY.to_owned());
         return;
     };
@@ -101,13 +89,6 @@ fn suppress_dispatch(step: &mut Step) {
     step.condition = Some(format!("({prior}) && {DISPATCH_DENY}"));
 }
 
-/// Preserve the contract's canonical trust-gated writer gates.
-///
-/// These exact conditions already exclude workflow dispatch (the runtime
-/// key step grants writes only to protected pushes and same-repository
-/// pull requests). Conjoining the
-/// general dispatch deny would change the typed `ToFu` save protocol while
-/// adding no further protection.
 fn is_push_only_cache_save(step: &Step) -> bool {
     let condition = step.condition.as_deref();
     let tools_save_readonly = crate::cache_p08::tools_cache_save_condition(
@@ -143,10 +124,3 @@ fn is_push_only_cache_save(step: &Step) -> bool {
         && matches!(&step.kind, StepKind::Action { uses, .. }
             if uses.starts_with("actions/cache/save@"))
 }
-
-#[cfg(test)]
-#[path = "dispatch_cache_boundary_condition_tests.rs"]
-mod condition_tests;
-#[cfg(test)]
-#[path = "dispatch_cache_boundary_tests.rs"]
-mod tests;

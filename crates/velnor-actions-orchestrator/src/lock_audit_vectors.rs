@@ -1,17 +1,5 @@
-//! `mise` argv classification for the install audit.
-
 use super::MiseVectors;
 
-/// Classify the `mise` vectors in one token run, in order.
-///
-/// Each `mise` token classifies through the flags that follow it:
-/// `install` extracts its specs, `exec` skips to the next `mise`
-/// token, and anything else (unknown subcommand, truncated tail)
-/// fails closed — an installer-adjacent vector the audit cannot prove
-/// is an `exec` must block, never pass silently. A bare `install`
-/// without a preceding `mise` (a `cargo install` payload) never
-/// classifies. Specs run until the first shell metacharacter (scripts)
-/// or the end of argv (plain vectors).
 pub(super) fn classify_mise_vectors(tokens: &[&str]) -> MiseVectors {
     for (at, token) in tokens.iter().enumerate() {
         if *token != "mise" {
@@ -35,7 +23,6 @@ pub(super) fn classify_mise_vectors(tokens: &[&str]) -> MiseVectors {
     MiseVectors::NotInstall
 }
 
-/// Specs until the first shell metacharacter (scripts) or argv end.
 fn specs_until_metachar(tail: &[&str]) -> Vec<String> {
     let mut specs = Vec::new();
     for spec in tail {

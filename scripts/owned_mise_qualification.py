@@ -47,13 +47,13 @@ poison="fixture invalid toml [\n"
 configs=[work/".miserc.toml",nested/".miserc.toml",work/"mise.toml",nested/"mise.toml",root/"home/.miserc.toml",root/"home/.config/mise/config.toml",root/"config/config.toml",root/"system/config.toml"]
 configs += [work/".miserc.local.toml",nested/".miserc.local.toml",work/".config/miserc.toml",nested/".config/miserc.toml",root/"config/miserc.toml",root/"config/miserc.local.toml",root/"system/miserc.toml"]
 for p in configs: write(p,poison)
-# NoConfig must apply before settings/config parsing, including help/version.
+
 for cwd in (work,nested):
     run("cli-no-config-version-"+cwd.name,["--no-config","version"],env,cwd,expected=a.expected_version)
     run("env-no-config-version-"+cwd.name,["--version"],dict(env,MISE_NO_CONFIG="1"),cwd,expected=a.expected_version)
     run("cli-no-config-exec-"+cwd.name,["--no-config","exec","--","/usr/bin/true"],env,cwd)
     run("env-no-config-exec-"+cwd.name,["exec","--","/usr/bin/true"],dict(env,MISE_NO_CONFIG="1"),cwd)
-# Build a fake pinned Rust installation. Test native Mise dispatch, not Rust compilation.
+
 realbin=root/"cargo/bin"
 write(realbin/"cargo",'#!/bin/sh\nprintf "REAL_CARGO:%s:%s\\n" "$MBX_CARGO_SHIM_MODE" "$*"\nif [ "$1" = "fidelity" ]; then shift; pwd; printf "ARG:%s\\n" "$@"; exit 37; fi\n',0o700)
 write(realbin/"rustc",'#!/bin/sh\nprintf "rustc 1.99.1 (fixture)\\n"\n',0o700)
@@ -66,7 +66,7 @@ for cwd in (work,nested): run("exclusive-owned-"+cwd.name,exclusive,env,cwd,expe
 write(ambient/"mise",(ambient/"cargo").read_text(),0o700)
 run("poison-ambient-mise-authority",exclusive,dict(env,MISE_BIN=str(ambient/"mise")),nested,expected="OWNED_MBX:1\nREAL_CARGO:1:check")
 fidelity=run("native-cwd-argv-exit",["exec","rust@1.99.1","--","cargo","fidelity","has spaces","quote\"literal","Unicode-λ","--flag=literal"],env,nested,want=37)
-# Expected owner execution and exact nonzero exit belong to this positive fidelity case.
+
 results[-1]["passed"]=fidelity.returncode==37 and str(nested.resolve())+"\nARG:has spaces\nARG:quote\"literal\nARG:Unicode-λ\nARG:--flag=literal\n" in fidelity.stdout and not results[-1]["sentinel"]
 mutations={"relative-owner":{"MISE_OWNED_CARGO_WRAPPER":"owner/bin/mbx"},"nonliteral-owner":{"MISE_OWNED_CARGO_WRAPPER":"{{env.HOME}}/mbx"},"injection-owner":{"MISE_OWNED_CARGO_WRAPPER":str(owner)+"; touch sentinel"},"missing-owner":{"MISE_OWNED_CARGO_WRAPPER":str(root/"missing/mbx")},"wrong-digest":{"MISE_OWNED_CARGO_WRAPPER_SHA256":"0"*64},"uppercase-digest":{"MISE_OWNED_CARGO_WRAPPER_SHA256":env["MISE_OWNED_CARGO_WRAPPER_SHA256"].upper()},"malformed-digest":{"MISE_OWNED_CARGO_WRAPPER_SHA256":"g"*64},"empty-digest":{"MISE_OWNED_CARGO_WRAPPER_SHA256":""},"empty-owner":{"MISE_OWNED_CARGO_WRAPPER":""},"no-config-disabled":{"MISE_NO_CONFIG":"0"},"no-env-disabled":{"MISE_NO_ENV":"0"},"no-hooks-disabled":{"MISE_NO_HOOKS":"0"}}
 for name,changes in mutations.items(): run(name,exclusive,dict(env,**changes),nested,want=1)
@@ -78,7 +78,7 @@ for flag in ("MISE_NO_CONFIG","MISE_NO_ENV","MISE_NO_HOOKS"):
 owner.chmod(0o600);run("owner-no-execute",exclusive,env,nested,want=1);owner.chmod(0o755)
 run("owner-writable-0755-accepted",exclusive,env,nested,expected="OWNED_MBX:1\nREAL_CARGO:1:check");owner.chmod(0o700)
 run("owner-noncanonical-parent-path",exclusive,dict(env,MISE_OWNED_CARGO_WRAPPER=str(owner.parent)+"/../bin/mbx"),nested,want=1)
-# Cache shape belongs to the source wrapper, including exclusive directory inventory.
+
 shim=root/"data/command-wrappers/bin/cargo"
 shim.unlink();write(shim,f'#!/bin/sh\ntouch "{root}/sentinel"\nexit 86\n',0o700);run("cached-regular-shim-forged",exclusive,env,nested,want=1)
 shim.unlink();shim.symlink_to(ambient/"cargo");run("cached-symlink-shim-forged",exclusive,env,nested,want=1)
@@ -97,7 +97,7 @@ owner.unlink();owner_target.rename(owner)
 owner.chmod(0o777);run("world-writable-owner",exclusive,env,nested,want=1);owner.chmod(0o700)
 owner.chmod(0o720);run("group-writable-owner",exclusive,env,nested,want=1);owner.chmod(0o700)
 original_owner=owner.read_bytes();owner.write_bytes(original_owner+b"# tampered\n");run("tampered-owner",exclusive,env,nested,want=1);owner.write_bytes(original_owner)
-# Exact native HTTP backend ownership: one artifact GET, reinstall uses install state.
+
 archive=root/"owner.tar.gz"
 with tarfile.open(archive,"w:gz") as bundle: bundle.add(owner,arcname="bin/mbx")
 archive_hash=hashlib.sha256(archive.read_bytes()).hexdigest()

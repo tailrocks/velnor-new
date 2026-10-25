@@ -1,5 +1,3 @@
-//! Receipt shape and trusted-run provenance checks.
-
 use crate::canonical::validate_digest;
 use crate::errors::ContractError;
 use crate::workflow::QualificationPhase;

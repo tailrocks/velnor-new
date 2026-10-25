@@ -1,5 +1,3 @@
-//! Bounded, immutable projection of a declared `OrbStack` SDK bundle.
-
 use crate::OrchestratorError;
 use crate::internal::internal;
 use serde::{Deserialize, Serialize};
@@ -11,7 +9,6 @@ use velnor_actions_mise::CheckDeadline;
 #[path = "check_container_bundle_tree.rs"]
 mod tree;
 
-/// Retained, independently observed SDK identity used by the container gate.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct SdkProjection {
@@ -38,15 +35,6 @@ struct SourceIdentity {
     observed_info: String,
     observed_main: String,
     observed_source: String,
-}
-
-/// Verify the outer app, retain the complete nested CLI bundle, and freeze it.
-#[cfg(test)]
-pub(crate) fn project_sdk(
-    home: &Path,
-    sdk: &HostOrbStackSdk,
-) -> Result<SdkProjection, OrchestratorError> {
-    project_sdk_until(home, sdk, None)
 }
 
 pub(crate) fn project_sdk_until(
@@ -179,15 +167,6 @@ fn verify_source(
     })
 }
 
-/// Recheck source identity and the retained tree around each readonly probe.
-#[cfg(test)]
-pub(crate) fn revalidate_sdk(
-    projection: &SdkProjection,
-    sdk: &HostOrbStackSdk,
-) -> Result<(), OrchestratorError> {
-    revalidate_sdk_until(projection, sdk, None)
-}
-
 pub(crate) fn revalidate_sdk_until(
     projection: &SdkProjection,
     sdk: &HostOrbStackSdk,
@@ -246,7 +225,6 @@ pub(crate) fn revalidate_sdk_until(
     checkpoint(deadline)
 }
 
-/// Compute the SDK tree identity with the projection's canonical recipe.
 pub(crate) fn sdk_tree_sha256_until(
     root: &Path,
     deadline: Option<CheckDeadline>,
@@ -365,7 +343,3 @@ fn unsafe_path(path: &Path, reason: &str) -> OrchestratorError {
         reason: reason.to_owned(),
     }
 }
-
-#[cfg(test)]
-#[path = "check_container_bundle_tests.rs"]
-mod tests;

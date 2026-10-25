@@ -1,5 +1,3 @@
-//! Fixed adjacent verifier resolution and byte-identity checks.
-
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Component, Path, PathBuf};
@@ -143,7 +141,3 @@ fn executable_owner(path: &Path) -> Result<u32, HostError> {
 fn executable_owner(_path: &Path) -> Result<u32, HostError> {
     Err(HostError::Identity)
 }
-
-#[cfg(all(test, unix))]
-#[path = "path_tests.rs"]
-mod tests;

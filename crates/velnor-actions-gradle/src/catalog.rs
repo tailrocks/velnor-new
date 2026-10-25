@@ -1,29 +1,14 @@
-//! Official Gradle checksums, as published by `services.gradle.org`.
-//!
-//! Each row was read on 2026-10-20 (9.6.0 through 9.8.2: 2026-10-21) from
-//! `https://services.gradle.org/distributions/gradle-<version>-{bin,all}.zip.sha256`
-//! and `gradle-<version>-wrapper.jar.sha256` (the `wrapperChecksumUrl` of
-//! `https://services.gradle.org/versions/all`). `velnor-actions-freshness`
-//! is the intended maintainer; until that pipeline reads Gradle, rows are
-//! added together with the evidence date, never derived from a
-//! repository's own files and never typed by hand:
-//! `scripts/refresh-gradle-catalog.sh <version>...` prints the rows from the
-//! official `.sha256` files.
-
-/// One released Gradle version and its three official digests.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GradleRelease {
-    /// Version, as in `distributionUrl`.
     pub version: &'static str,
-    /// SHA-256 of `gradle-<version>-bin.zip`.
+
     pub bin_sha256: &'static str,
-    /// SHA-256 of `gradle-<version>-all.zip`.
+
     pub all_sha256: &'static str,
-    /// SHA-256 of the `gradle-wrapper.jar` that `gradle wrapper` writes.
+
     pub wrapper_jar_sha256: &'static str,
 }
 
-/// The catalog, ascending by version.
 pub const RELEASES: [GradleRelease; 11] = [
     GradleRelease {
         version: "9.3.1",
@@ -93,13 +78,11 @@ pub const RELEASES: [GradleRelease; 11] = [
     },
 ];
 
-/// Catalog row for a version.
 #[must_use]
 pub fn release(version: &str) -> Option<&'static GradleRelease> {
     RELEASES.iter().find(|row| row.version == version)
 }
 
-/// True when `sha256` is the official wrapper-jar digest of any cataloged release.
 #[must_use]
 pub fn is_official_wrapper_jar(sha256: &str) -> bool {
     RELEASES.iter().any(|row| row.wrapper_jar_sha256 == sha256)

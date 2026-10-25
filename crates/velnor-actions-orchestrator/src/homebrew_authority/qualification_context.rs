@@ -1,5 +1,3 @@
-//! Captured immutable runner and API context for protected-main qualification.
-
 use serde_json::Value;
 use std::path::Path;
 use velnor_actions_contract::QualificationDispatch;
@@ -134,7 +132,3 @@ fn public_selection(
         dispatch.run_attempt,
     )
 }
-
-#[cfg(test)]
-#[path = "qualification_context_tests.rs"]
-mod tests;

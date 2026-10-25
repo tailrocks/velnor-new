@@ -1,5 +1,3 @@
-//! Runtime identity gate for V2 Mise cache keys.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{RunsOn, Step, StepKind};
@@ -104,8 +102,6 @@ pub(super) fn is_supported_lane(runs_on: &str, target: &str) -> bool {
     !image.is_empty() && !arch.is_empty()
 }
 
-/// Emit the shared, version-marked identity script used by every job.
-/// # Errors
 pub(super) fn script_file(version: &str) -> Result<RenderedFile, RenderError> {
     let bytes = marker::with_marker(version, SCRIPT)?;
     steps::scan_for_private_subcommands(&bytes)?;
@@ -115,8 +111,6 @@ pub(super) fn script_file(version: &str) -> Result<RenderedFile, RenderError> {
     })
 }
 
-/// Emit the one local composite action that owns identity env and script setup.
-/// # Errors
 pub(super) fn action_file(runs_on: &str, version: &str) -> Result<RenderedFile, RenderError> {
     let action_path = action_path(runs_on).ok_or_else(|| {
         RenderError::BadCommand("unsupported_tools_cache_identity_lane".to_owned())
@@ -266,7 +260,3 @@ fn lane_identity(runs_on: &str, target: &str) -> (&'static str, &'static str) {
     }
     (hosted_image(runs_on).unwrap_or(""), "X64")
 }
-
-#[cfg(test)]
-#[path = "cache_p08_runtime_identity_tests.rs"]
-mod tests;

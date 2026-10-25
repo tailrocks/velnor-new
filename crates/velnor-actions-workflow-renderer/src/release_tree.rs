@@ -1,9 +1,3 @@
-//! Release workflow rendering and generated-tree assembly.
-//!
-//! Second render entrypoint: [`render_release_workflow`] turns a validated
-//! spec plus fixed argv into `release.yml`, and
-//! [`render_release_files`] adds the two effective release-plz configs.
-
 use crate::{
     RenderError, guard, marker,
     release_config::{
@@ -18,64 +12,34 @@ use crate::{
     yaml::Yaml,
 };
 
-/// Generated release workflow path inside the repository.
 pub const RELEASE_WORKFLOW_PATH: &str = ".github/workflows/release.yml";
-/// Generated effective normal-policy release-plz config path.
 pub const RELEASE_CONFIG_PATH: &str = ".github/release-plz.toml";
-/// Generated bootstrap-only release-plz config path.
 pub const RELEASE_BOOTSTRAP_CONFIG_PATH: &str = ".github/release-plz-bootstrap.toml";
-/// Workspace-relative directory of the exact-source checkout.
-///
-/// Jobs that run release-plz against the approved source check the
-/// policy tree out at the workspace root (event SHA: configs live
-/// there) plus the approved source SHA into this directory; release-plz
-/// then takes `--config` from the root and `--manifest-path` from here
-/// (release contract §11: never dirty the release checkout to insert
-/// config). Fixed so gates can bind argv to the source tree.
 pub const RELEASE_SOURCE_DIR: &str = "release-source";
-/// Every release-owned tree path, sorted.
 pub const RELEASE_TREE_PATHS: &[&str] = &[
     RELEASE_BOOTSTRAP_CONFIG_PATH,
     RELEASE_CONFIG_PATH,
     RELEASE_WORKFLOW_PATH,
 ];
 
-/// Release-owned paths the generator removes when release is disabled.
-///
-/// The orchestrator's whole-tree swap deletes anything outside the emitted
-/// tree; this inventory names the release family for previews and guards.
-/// With release disabled the CI tree holds none of these paths.
 #[must_use]
 pub fn release_stale_paths() -> &'static [&'static str] {
     RELEASE_TREE_PATHS
 }
 
-/// Caller-supplied validated scalars the release IR cannot carry.
 #[derive(Debug, Clone)]
 pub struct ReleaseRenderContext {
-    /// Exact generator version for the marker.
     pub generator_version: String,
-    /// Single literal versioned Ubuntu label every job must use.
     pub runs_on: String,
 }
 
 impl ReleaseRenderContext {
-    /// Validate every context scalar before rendering.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`RenderError`] describing the first invalid scalar.
     pub fn validate(&self) -> Result<(), RenderError> {
         marker::validate_version(&self.generator_version)?;
         guard::validate_runs_on(&self.runs_on)
     }
 }
 
-/// Render the release workflow document from validated typed IR.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] for invalid context, spec, gates, or steps.
 pub fn render_release_workflow(
     spec: &ReleaseWorkflowSpec,
     ctx: &ReleaseRenderContext,
@@ -102,7 +66,6 @@ pub fn render_release_workflow(
     Ok(text)
 }
 
-/// Build the release document: name, on, permissions, concurrency, jobs.
 fn release_document(spec: &ReleaseWorkflowSpec) -> Result<Yaml, RenderError> {
     let mut jobs = Vec::with_capacity(spec.jobs.len());
     for (id, job) in &spec.jobs {
@@ -132,7 +95,6 @@ fn release_document(spec: &ReleaseWorkflowSpec) -> Result<Yaml, RenderError> {
     ]))
 }
 
-/// Render release triggers: push, schedule, typed workflow dispatch.
 fn release_triggers_to_yaml(triggers: &ReleaseTriggers) -> Yaml {
     let branches: Vec<Yaml> = triggers
         .push_branches
@@ -172,7 +134,6 @@ fn release_triggers_to_yaml(triggers: &ReleaseTriggers) -> Yaml {
     Yaml::Map(entries)
 }
 
-/// Render one release job with environment, permissions, needs, steps.
 fn release_job_to_yaml(job: &ReleaseJobSpec) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&job.display_name)?;
     let mut entries = vec![
@@ -223,19 +184,14 @@ fn release_job_to_yaml(job: &ReleaseJobSpec) -> Result<Yaml, RenderError> {
     Ok(Yaml::Map(entries))
 }
 
-/// The three rendered release files with their fixed tree paths.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReleaseFiles {
-    /// `release.yml` workflow bytes.
     pub workflow: RenderedFile,
-    /// Effective normal-policy config bytes.
     pub config: RenderedFile,
-    /// Bootstrap-only config bytes.
     pub bootstrap_config: RenderedFile,
 }
 
 impl ReleaseFiles {
-    /// Borrow the three files as a sorted vector for tree assembly.
     #[must_use]
     pub fn as_sorted_vec(&self) -> Vec<RenderedFile> {
         let mut files = vec![
@@ -248,11 +204,6 @@ impl ReleaseFiles {
     }
 }
 
-/// Render the workflow plus both effective configs with fixed paths.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] for invalid specs, configs, or paths.
 pub fn render_release_files(
     spec: &ReleaseWorkflowSpec,
     ctx: &ReleaseRenderContext,
@@ -280,7 +231,6 @@ pub fn render_release_files(
     Ok(files)
 }
 
-/// Validate the release paths against the fixed release allowlist.
 fn check_release_paths(files: &ReleaseFiles) -> Result<(), RenderError> {
     guard::validate_allowlisted_path(&files.workflow.path, &[RELEASE_WORKFLOW_PATH])?;
     guard::validate_allowlisted_path(&files.config.path, &[RELEASE_CONFIG_PATH])?;

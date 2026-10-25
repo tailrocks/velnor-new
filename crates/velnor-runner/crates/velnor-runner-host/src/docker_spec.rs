@@ -1,48 +1,38 @@
-//! One Ubuntu 26.04 runner. Platform is `linux/amd64`. JIT stays off the plan.
-
 use crate::error::HostError;
 use velnor_runner_core::runner_work_path;
 
-/// One mount. `source` is `volume:<name>` or a bind path.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Mount {
-    /// Volume name or bind source.
     pub source: String,
-    /// Container path.
+
     pub target: String,
 }
 
-/// Docker create projection the controller is allowed to send.
-///
-/// One runner. JIT is not a field: stdin feeds the entrypoint, not env, cmd, or labels.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContainerPlan {
-    /// Deterministic per-worker container name used for crash recovery.
     pub name: String,
-    /// Must stay false for the runner.
+
     pub privileged: bool,
-    /// Requested OCI platform. Always `linux/amd64`, never the host or VM arch.
+
     pub platform: String,
-    /// Ubuntu 26.04 runner image. Not an ARM tag.
+
     pub image: String,
-    /// Env pairs. Must not carry JIT, host paths, or management tokens.
+
     pub env: Vec<String>,
-    /// Runner invocation. Must not carry the JIT payload.
+
     pub cmd: Vec<String>,
-    /// Labels. Must not carry JIT.
+
     pub labels: Vec<String>,
-    /// Private volumes for this worker's socket and work tree.
+
     pub mounts: Vec<Mount>,
 }
 
-/// What a delete may do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeleteDecision {
-    /// Immutable id matched the owned id.
     Delete,
-    /// Observed id is not the owned id. Leave it.
+
     KeepForeign,
-    /// Observed id missing. Not proof of cleanup.
+
     NotDeleted,
 }
 
@@ -62,15 +52,6 @@ const HOST_NEEDLES: &[&str] = &[
     "docker.sock",
 ];
 
-/// Build the runner plan. `private_volume` is this worker's socket volume.
-///
-/// The work tree uses `{private_volume}-work`. The archive cache env points
-/// at the shared read-only volume appended by `runner_mounts`. JIT is not
-/// accepted.
-///
-/// # Errors
-///
-/// Returns [`HostError::ForbiddenMount`] when the volume name is not one private name.
 pub fn runner_plan(private_volume: &str) -> Result<ContainerPlan, HostError> {
     if !private_volume_name(private_volume) {
         return Err(HostError::ForbiddenMount);
@@ -101,21 +82,14 @@ pub fn runner_plan(private_volume: &str) -> Result<ContainerPlan, HostError> {
     })
 }
 
-/// Shared read-only seed. Not created or deleted with one worker.
 pub(crate) const SEED_VOLUME: &str = "volume:velnor-seed";
-/// Container path the workflow scripts read. Not a job input.
+
 pub(crate) const SEED_TARGET: &str = "/opt/velnor/seed";
-/// Shared action archive volume. Not created or deleted with one worker.
+
 pub(crate) const ACTION_ARCHIVE_VOLUME: &str = "volume:velnor-action-archive";
-/// Container path the runner reads for cached action archives.
+
 pub(crate) const ACTION_ARCHIVE_TARGET: &str = "/opt/action-archive-cache";
 
-/// Private mounts plus the shared seed and action archive. Neither shared
-/// mount is a worker volume.
-///
-/// # Errors
-///
-/// Returns [`HostError::ForbiddenMount`] when a shared mount is rejected.
 pub(crate) fn runner_mounts(mounts: &[Mount]) -> Result<Vec<Mount>, HostError> {
     let mut out = mounts.to_vec();
     let seed = Mount {
@@ -133,13 +107,6 @@ pub(crate) fn runner_mounts(mounts: &[Mount]) -> Result<Vec<Mount>, HostError> {
     Ok(out)
 }
 
-/// Reject privileged runners, non-amd64 platforms, and host or token exposure.
-///
-/// # Errors
-///
-/// Returns [`HostError::PrivilegedRunner`] when privileged.
-/// Returns [`HostError::ForbiddenMount`] for host paths, tokens, `OrbStack`, the outer
-/// socket, JIT in Docker config, an ARM image, or a platform other than `linux/amd64`.
 pub fn audit_plan(plan: &ContainerPlan) -> Result<(), HostError> {
     if plan.privileged {
         return Err(HostError::PrivilegedRunner);
@@ -196,7 +163,6 @@ fn socket_source_ok(source: &str) -> bool {
         .is_some_and(private_volume_name)
 }
 
-/// True when `name` is one private Docker volume name.
 #[must_use]
 pub(crate) fn accepts_volume_name(name: &str) -> bool {
     private_volume_name(name)
@@ -271,7 +237,6 @@ fn path_boundary(text: &str, end: usize) -> bool {
     )
 }
 
-/// Delete only when the immutable id matches. A missing id is not cleanup.
 #[must_use]
 pub fn delete_decision(owned_id: &str, observed: Option<&str>) -> DeleteDecision {
     match observed {
@@ -281,9 +246,6 @@ pub fn delete_decision(owned_id: &str, observed: Option<&str>) -> DeleteDecision
     }
 }
 
-/// True only when `canary` leaked into env, cmd, labels, or mounts.
-///
-/// A canary that was never placed returns false. An empty canary is not a leak.
 #[must_use]
 pub fn plan_contains(plan: &ContainerPlan, canary: &str) -> bool {
     if canary.is_empty() {

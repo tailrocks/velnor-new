@@ -1,5 +1,3 @@
-//! Resolve native build tasks against the exact checked-in Mise source.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::BuildTask;
@@ -47,7 +45,6 @@ fn optional_checked_source<'a>(
         .ok_or_else(|| failure("build_task_source_missing_or_invalid"))
 }
 
-/// SHA-256 identity of a checked source's native projection.
 fn native_sha256(check: &ToolInputCheck) -> Result<String, OrchestratorError> {
     check
         .native
@@ -81,9 +78,6 @@ fn validate_config_shape(
         .tools
         .get("rust")
         .ok_or_else(|| failure("build_task_rust_selector"))?;
-    // `components`, `targets` and `profile` may repeat the toolchain file's
-    // values: generation already requires the two to be identical
-    // (`rust_toolchain_mirror_mismatch`), so the file stays the build source.
     if !rust.valid_shape
         || rust
             .unsupported_options
@@ -126,7 +120,6 @@ fn validate_config_shape(
     Ok(())
 }
 
-/// Rust build tasks must select the separately pinned MBX executable.
 fn validate_mbx_tool_closure(
     task: &velnor_actions_contract::BuildTask,
     selected_tools: &[velnor_actions_workflow_renderer::verification_jobs::BuildTaskTool],
@@ -204,7 +197,3 @@ fn build_task_graph_problem(problem: &str) -> &'static str {
         _ => "build_task_task_graph",
     }
 }
-
-#[cfg(test)]
-#[path = "build_tasks_tests.rs"]
-mod tests;

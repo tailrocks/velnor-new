@@ -1,5 +1,3 @@
-//! Publisher-owned checksum sidecars derived from verified bytes.
-
 use std::{io::Write, path::Path};
 
 use sha2::{Digest, Sha256};
@@ -11,8 +9,6 @@ use crate::OrchestratorError;
 const HEX: &[u8; 16] = b"0123456789abcdef";
 
 impl VerifiedPackageOutput {
-    /// Create checksum sidecars and `SHA256SUMS` from independently computed
-    /// archive digests. Producer-provided checksums are never read.
     pub(crate) fn write_checksum_assets(
         &self,
     ) -> Result<Vec<VerifiedPackageArtifact>, OrchestratorError> {

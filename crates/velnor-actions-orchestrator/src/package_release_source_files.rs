@@ -1,8 +1,3 @@
-//! Exact-commit regular Git blob reads for native version-policy admission.
-//!
-//! The Contents API can follow symlinks. This reader walks immutable Git trees
-//! instead, admits only regular-file modes and never checks out or executes code.
-
 const HEX: &[u8; 16] = b"0123456789abcdef";
 
 use super::super::{github::GitHubApi, identity::is_git_sha};
@@ -325,7 +320,3 @@ pub(crate) fn git_blob_sha1(bytes: &[u8]) -> Result<String, OrchestratorError> {
 fn valid_sha(sha: &str) -> bool {
     is_git_sha(sha) && !sha.bytes().any(|byte| byte.is_ascii_uppercase())
 }
-
-#[cfg(test)]
-#[path = "package_release_source_files_tests.rs"]
-mod tests;

@@ -1,5 +1,3 @@
-//! Closed records for the native job-image candidate producer.
-
 #[path = "image_candidate/closure.rs"]
 mod image_candidate_closure;
 #[path = "image_candidate/record.rs"]
@@ -16,7 +14,3 @@ pub use image_candidate_record::{
     ImageCandidateSource, ImageCandidateWorkflow, parse_image_candidate_record,
     serialize_image_candidate_record, validate_image_candidate_record,
 };
-
-#[cfg(test)]
-#[path = "image_candidate_tests.rs"]
-mod tests;

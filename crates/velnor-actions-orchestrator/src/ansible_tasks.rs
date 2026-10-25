@@ -1,5 +1,3 @@
-//! Resolve `[stacks.ansible]` into one job policy per root.
-
 use velnor_actions_contract::{JobTimeout, VelnorConfig};
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::verification_jobs::{StackJobKind, StackJobPolicy};
@@ -9,7 +7,6 @@ use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
 use crate::discover::Discovery;
 
-/// Policies for every root, sorted by job id.
 pub(crate) fn policies(
     config: &VelnorConfig,
     discovery: &Discovery,

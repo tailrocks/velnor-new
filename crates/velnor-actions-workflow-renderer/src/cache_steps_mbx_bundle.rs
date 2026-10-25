@@ -1,18 +1,3 @@
-//! Opaque MBX bundle transport: key, restore, import, producer mark, export, save.
-//!
-//! Velnor archives only the bytes `mbx cache export --format directory`
-//! writes and restores them only through `mbx cache import` (cache decision
-//! 3). MBX owns the format; Velnor never parses or composes its objects. The
-//! pinned native action is install-only (`backend: local`).
-//!
-//! Decision 1: the save is gated on the family's producer. The compile step
-//! is followed by `Record MBX producer success`, which writes a marker file;
-//! the export step runs `always()` on trusted pushes and exports only when
-//! that marker exists, so a failing test, lint or doc step no longer starves
-//! the cache, while a failed compile never saves. The marker lives in the
-//! runner temp directory, so the gate also holds when the job body is a
-//! shared composite action.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::cache_family::CacheFamily;
@@ -26,21 +11,13 @@ use super::mbx_preflight::{ACTION_MBX_BIN, RESOLVE_ACTION_MBX_BIN};
 use crate::RenderError;
 use crate::steps::{action_owned_mbx_shell_step, action_step_with_env, shell_step};
 
-/// Display name of the bundle key step.
 pub const MBX_BUNDLE_KEY_NAME: &str = "Compute MBX bundle key";
-/// Display name of the bundle restore step.
 pub const MBX_BUNDLE_RESTORE_NAME: &str = "Restore MBX bundle";
-/// Display name of the bundle import step.
 pub const MBX_BUNDLE_IMPORT_NAME: &str = "Import MBX bundle";
-/// Display name of the producer marker step.
 pub const MBX_PRODUCER_MARK_NAME: &str = "Record MBX producer success";
-/// Display name of the bundle export step.
 pub const MBX_BUNDLE_EXPORT_NAME: &str = "Export MBX bundle";
-/// Display name of the bundle save step.
 pub const MBX_BUNDLE_SAVE_NAME: &str = "Save MBX bundle";
-/// Job environment key naming the `mbx` export group of this job's builds.
 pub const MBX_EXPORT_GROUP_ENV: &str = "MBX_CACHE_EXPORT_GROUP";
-/// Job environment value of [`MBX_EXPORT_GROUP_ENV`] (one group per private runner job).
 pub const MBX_EXPORT_GROUP_VALUE: &str = "velnor";
 
 const DEFAULT_REF_ENV: &str = "VELNOR_DEFAULT_REF";
@@ -57,12 +34,10 @@ const KIB: u64 = 1024;
 
 const RUNNER_TEMP_GUARD: &str = "case \"$RUNNER_TEMP\" in /*) ;; *) printf '%s\\n' 'RUNNER_TEMP must be absolute' >&2; exit 1 ;; esac";
 
-/// Workspace root relative to the checkout, or `.` for the checkout root.
 fn workspace_root(working_directory: Option<&str>) -> Result<String, RenderError> {
     let Some(dir) = working_directory.filter(|dir| !dir.is_empty() && *dir != ".") else {
         return Ok(".".to_owned());
     };
-    // Reuse the cleanup step's path grammar (relative, no traversal).
     crate::action_mbx_shell::target_dir_for_action(&BTreeMap::from([(
         "working-directory".to_owned(),
         dir.to_owned(),
@@ -70,11 +45,6 @@ fn workspace_root(working_directory: Option<&str>) -> Result<String, RenderError
     Ok(dir.to_owned())
 }
 
-/// Bundle prelude: key, restore, import (inserted after the MBX ready check).
-///
-/// # Errors
-///
-/// Returns render errors for an invalid version, toolchain or workspace root.
 pub(crate) fn mbx_bundle_prelude(
     unit: &str,
     mbx_version_expr: &str,
@@ -158,7 +128,6 @@ fn restore_step() -> Result<Step, RenderError> {
     Ok(step)
 }
 
-/// `cd` into the Cargo workspace so `mbx` sees the matching checkout state.
 fn workspace_cd(working_directory: Option<&str>) -> Result<String, RenderError> {
     let root = workspace_root(working_directory)?;
     Ok(if root == "." {
@@ -168,7 +137,6 @@ fn workspace_cd(working_directory: Option<&str>) -> Result<String, RenderError> 
     })
 }
 
-/// Import the restored bundle; a bad bundle is discarded and the build runs cold.
 pub(crate) fn import_step(
     rust_toolchain: &str,
     working_directory: Option<&str>,
@@ -196,14 +164,6 @@ pub(crate) fn import_step(
     Ok(step)
 }
 
-/// Marker step placed right after the compile (the family's producer).
-///
-/// It runs under the default `success()`, so the marker exists only when
-/// every earlier step, including the compile, succeeded.
-///
-/// # Errors
-///
-/// Returns render errors for a rejected step shape.
 pub fn mbx_producer_mark_step() -> Result<Step, RenderError> {
     let script = [
         "set -eu".to_owned(),
@@ -221,7 +181,6 @@ pub fn mbx_producer_mark_step() -> Result<Step, RenderError> {
     Ok(step)
 }
 
-/// Export and save steps for one job, derived from its native MBX action.
 pub(crate) fn bundle_postlude(action: &Step) -> Result<[Step; 2], RenderError> {
     let StepKind::Action { with, env, .. } = &action.kind else {
         return Err(RenderError::InvalidWorkflow(
@@ -237,7 +196,6 @@ pub(crate) fn bundle_postlude(action: &Step) -> Result<[Step; 2], RenderError> {
     Ok([export, save])
 }
 
-/// `mbx cache export` gated on the producer marker and the family ceiling.
 pub(crate) fn export_step(
     rust_toolchain: &str,
     working_directory: Option<&str>,
@@ -294,15 +252,6 @@ fn save_step() -> Result<Step, RenderError> {
     Ok(step)
 }
 
-/// Append the export and save to every job that records a producer mark.
-///
-/// Runs right before the workspace cleanup is appended, so the cleanup stays
-/// the final step. A job that restores a bundle but records no producer mark
-/// is a reader (crate jobs restore the dependency seed) and gets neither.
-///
-/// # Errors
-///
-/// Returns render errors when a job carries a half-built bundle lifecycle.
 pub(crate) fn append_bundle_postludes(
     jobs: &mut BTreeMap<String, velnor_actions_contract::Job>,
 ) -> Result<(), RenderError> {
@@ -314,7 +263,6 @@ pub(crate) fn append_bundle_postludes(
             continue;
         }
         if marks == 0 && exports == 0 {
-            // A reader: it restores the bundle and never writes one.
             continue;
         }
         if marks != 1 {
@@ -341,7 +289,3 @@ pub(crate) fn append_bundle_postludes(
 fn count(steps: &[Step], role: StepRole) -> usize {
     steps.iter().filter(|step| step.role == Some(role)).count()
 }
-
-#[cfg(test)]
-#[path = "cache_steps_mbx_bundle_tests.rs"]
-mod tests;

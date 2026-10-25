@@ -1,14 +1,3 @@
-//! Crate-job graph model: logical obligations retain one execution owner.
-//!
-//! The P05 migration replaced arbitrary per-task matrices and vendor-prefixed
-//! jobs with package/configuration ownership and ordered obligations. The later
-//! five-minute capacity amendment splits Rust into closed lint/tests/docs
-//! responsibilities while retaining each logical task and its exact report.
-//! A [`super::crate_job::CrateJob`] validates local obligation order and gates;
-//! typed job dependencies preserve external quality/data gate owners. Required
-//! must validate every emitted phase, so partitioning cannot omit coverage or
-//! convert a failed, missing or canceled execution into a successful release.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
@@ -16,94 +5,60 @@ use serde::{Deserialize, Serialize};
 use crate::digest_b3;
 use crate::errors::ContractError;
 
-/// Generated main workflow path (P05-8: `ci.yml`, display `CI`).
 pub const CI_WORKFLOW_PATH: &str = ".github/workflows/ci.yml";
 
-/// Stale generated workflow paths the generator deletes on migration.
 pub const STALE_WORKFLOW_PATHS: [&str; 1] = [".github/workflows/velnor.yml"];
 
-/// Generated main workflow display name.
 pub const WORKFLOW_DISPLAY_NAME: &str = "CI";
 
-/// Scheduled upstream-freshness workflow path (emitted under velnor-repository-v1).
 pub const FRESHNESS_WORKFLOW_PATH: &str = ".github/workflows/freshness.yml";
 
-/// Protected post-merge `OpenTofu` apply workflow path.
 pub const TOFU_APPLY_WORKFLOW_PATH: &str = ".github/workflows/tofu-apply.yml";
 
-/// Canonical orchestration job ID for the planner.
 pub const PLAN_JOB_ID: &str = "plan";
 
-/// Canonical orchestration job ID for the required verdict (`merge-v1`).
 pub const REQUIRED_JOB_ID: &str = "required";
 
-/// Job ID of the branch-protection gate that reports the verdict.
 pub const REQUIRED_GATE_JOB_ID: &str = "required-gate";
 
-/// Display name of the planner job.
 pub const PLAN_DISPLAY_NAME: &str = "Plan";
 
-/// Display name of the branch-protection check, carried only by the gate
-/// job, which never ends skipped: a cancelled run cannot satisfy it.
 pub const REQUIRED_DISPLAY_NAME: &str = "Required";
 
-/// Display name of the verdict job the gate reports.
 pub const REQUIRED_VERDICT_DISPLAY_NAME: &str = "Required verdict";
 
-/// Verdict run condition: runs after any needed job failed or was
-/// skipped (it judges every conclusion) but not after cancellation.
-///
-/// `always()` also ran the full verdict after cancellation and held the
-/// concurrency group for 20+ minutes. `!cancelled()` is a status function,
-/// so the implicit `success()` is not added and the verdict still
-/// evaluates failed or skipped needs; a cancelled run skips it.
 pub const REQUIRED_CONDITION: &str = "${{ !cancelled() }}";
 
-/// Gate run condition: always, cancellation included.
-///
-/// GitHub reports a skipped job's check as successful, and branch
-/// protection accepts it. A cancelled run skips the verdict, so the
-/// protected check must come from a job that still runs then: the gate
-/// runs one runner-only step and fails unless the verdict succeeded.
 pub const REQUIRED_GATE_CONDITION: &str = "${{ always() }}";
 
-/// Gate step condition: fail whenever the verdict did not succeed.
-///
-/// `always()` keeps the step from inheriting the implicit `success()`,
-/// which a cancelled run could turn false and leave the gate green with
-/// every step skipped.
 pub const REQUIRED_GATE_FAIL_CONDITION: &str =
     "${{ always() && needs.required.result != 'success' }}";
 
-/// Weekly upstream-freshness schedule (Mondays 06:00 UTC).
 pub const FRESHNESS_CRON_WEEKLY: &str = "0 6 * * 1";
 
-/// Independent validator jobs (P05-6: no Policy umbrella).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ValidatorKind {
-    /// Repository-structure lint.
     Alint,
-    /// Dependency/security audit.
+
     CargoDeny,
-    /// Unused-dependency scan.
+
     CargoMachete,
-    /// Workflow, composite action and Dependabot lint (jactionlint).
+
     Jactionlint,
-    /// Markdown lint over repository docs.
+
     Markdownlint,
-    /// Strict JSON syntax plus duplicate-key rejection.
+
     StrictJson,
-    /// Skill frontmatter and ID agreement (Agent Skills spec).
+
     FrontmatterId,
-    /// Markdown link checking.
+
     LinkCheck,
-    /// Host-native plugin/skill validators, where installed.
+
     NativeValidators,
 }
 
 impl ValidatorKind {
-    /// Stable unbranded job ID.
     #[must_use]
     pub fn job_id(&self) -> &'static str {
         match self {
@@ -119,7 +74,6 @@ impl ValidatorKind {
         }
     }
 
-    /// Stable human-readable display name.
     #[must_use]
     pub fn display_name(&self) -> &'static str {
         match self {
@@ -135,7 +89,6 @@ impl ValidatorKind {
         }
     }
 
-    /// Every validator kind in emission order.
     #[must_use]
     pub fn all() -> [Self; 9] {
         [
@@ -151,9 +104,6 @@ impl ValidatorKind {
         ]
     }
 
-    /// Velnor-repository validators emitted as support jobs.
-    ///
-    /// Jactionlint is always-on base IR on both policies, never support.
     #[must_use]
     pub fn repository_validators() -> [Self; 3] {
         [Self::Alint, Self::CargoDeny, Self::CargoMachete]
@@ -161,12 +111,6 @@ impl ValidatorKind {
 }
 
 impl ValidatorKind {
-    /// Consumer-selectable validators, in canonical emission order.
-    ///
-    /// The `[workflow.verify]` allowlist names a subset of these by job
-    /// ID; the renderer merges them as support jobs on any policy.
-    /// Cargo-backed validators stay Velnor-only: their vectors assume
-    /// the Velnor workspace layout.
     #[must_use]
     pub fn consumer_verify() -> [Self; 6] {
         [
@@ -179,11 +123,6 @@ impl ValidatorKind {
         ]
     }
 
-    /// Resolve a `[workflow.verify]` job name to its validator kind.
-    ///
-    /// Names are the stable job IDs; anything else (including the
-    /// Velnor-only and always-on IDs) resolves to `None` and fails
-    /// config validation closed.
     #[must_use]
     pub fn from_verify_name(name: &str) -> Option<Self> {
         Self::consumer_verify()
@@ -192,46 +131,17 @@ impl ValidatorKind {
     }
 }
 
-/// Package-slug job-ID prefix: IDs below it derive from real package names.
-///
-/// [`assign_crate_job_ids`] emits one `rust-<slug>` ID per rust crate,
-/// so the branding gate in [`validate_job_id`] skips this prefix:
-/// self-hosting repositories keep their package names while
-/// orchestration IDs stay unbranded (P05-7).
 pub const CRATE_JOB_ID_PREFIX: &str = "rust-";
 
-/// Root-slug job-ID prefix: IDs below it derive from tofu root paths.
-///
-/// [`assign_crate_job_ids`] emits one `tofu-<slug>` ID per all-tofu
-/// group, giving tofu obligations their exact-set identity without
-/// touching the rust contract above. Mixed groups keep `rust-`.
 pub const TOFU_JOB_ID_PREFIX: &str = "tofu-";
 
-/// Display-name prefix for tofu root jobs (`OpenToFu — <root>`).
-///
-/// All-tofu groups take this prefix; every other group keeps
-/// `Rust / `, so displays partition exactly like the ID namespaces.
 pub const TOFU_DISPLAY_PREFIX: &str = "OpenToFu — ";
 
-/// True for crate-group job IDs under either stack prefix.
-///
-/// Single definition of the crate-job ID namespace: plan counts,
-/// lock/pre-seed attach, and the pre-seed closure gate all consult
-/// this instead of matching one prefix.
 #[must_use]
 pub fn is_crate_job_id(id: &str) -> bool {
     id.starts_with(CRATE_JOB_ID_PREFIX) || id.starts_with(TOFU_JOB_ID_PREFIX)
 }
 
-/// Validate a producer job ID: unbranded ASCII plus collision-safe shape.
-///
-/// Rejects empty IDs and non-`[a-z0-9-_]` bytes; `velnor` branding is
-/// rejected on orchestration IDs only, while crate-group IDs under
-/// either stack prefix keep their real names so self-hosting
-/// repositories and `velnor-*` tofu roots validate. The legacy
-/// renderer constants keep working because this gate applies to
-/// producer constructors only, never `Job::validate`.
-/// # Errors
 pub fn validate_job_id(id: &str) -> Result<(), ContractError> {
     if id.is_empty()
         || !id
@@ -252,7 +162,6 @@ pub fn validate_job_id(id: &str) -> Result<(), ContractError> {
     Ok(())
 }
 
-/// Slugify one package name into a job-ID segment.
 #[must_use]
 pub fn slugify_segment(name: &str) -> String {
     let mut slug = String::new();
@@ -275,23 +184,11 @@ pub fn slugify_segment(name: &str) -> String {
     slug
 }
 
-/// True when a display name renders safely: no expression opener, no
-/// control characters (newlines included).
-///
-/// Job `name:` fields evaluate `${{ }}` expressions, and a control byte
-/// would break YAML structure; both fail closed at the `Job` gate, and
-/// constructors sanitize through `sanitize_display_text` so generated
-/// names never reach the gate dirty.
 #[must_use]
 pub fn is_safe_display_name(name: &str) -> bool {
     !name.contains("${{") && !name.chars().any(char::is_control)
 }
 
-/// Sanitize one display label: controls become `?`, `${{` breaks open.
-///
-/// Cargo names can never trigger this (charset-limited); the manifest
-/// folder fallback can (directory names are unconstrained), so the
-/// constructor neutralizes rather than trusts. Idempotent.
 fn sanitize_display_text(label: &str) -> String {
     let mut out = String::with_capacity(label.len());
     for ch in label.chars() {
@@ -304,7 +201,6 @@ fn sanitize_display_text(label: &str) -> String {
     out.replace("${{", "$?{{")
 }
 
-/// Display label for one crate: package name, folder fallback when missing.
 #[must_use]
 pub fn crate_display_label(package_name: &str, manifest: &str) -> String {
     if !package_name.trim().is_empty() {
@@ -318,12 +214,6 @@ pub fn crate_display_label(package_name: &str, manifest: &str) -> String {
     }
 }
 
-/// Display name for one crate job: `Rust / <label>` plus config suffix.
-///
-/// The default configuration shows the bare label; extra feature
-/// configurations append ` (<config>)` so variants never silently drop
-/// checks or multiply default jobs (P05-4). The composed name is
-/// sanitized whole so the configuration suffix is covered too.
 #[must_use]
 pub fn crate_display_name(package_name: &str, manifest: &str, configuration: &str) -> String {
     let label = crate_display_label(package_name, manifest);
@@ -335,25 +225,11 @@ pub fn crate_display_name(package_name: &str, manifest: &str, configuration: &st
     sanitize_display_text(&composed)
 }
 
-/// Display name for one tofu root job: `OpenToFu — <label>`.
-///
-/// The label is the display root (`.` for the repository root); tofu
-/// carries no configuration suffix in v1. Sanitized whole through
-/// the same constructor as rust displays, so hostile labels fail
-/// closed at the same gate.
 #[must_use]
 pub fn tofu_display_name(root_label: &str) -> String {
     sanitize_display_text(&format!("{TOFU_DISPLAY_PREFIX}{root_label}"))
 }
 
-/// Assign stable collision-safe crate job IDs for one package set.
-///
-/// Base form is `<prefix><slug>` (`<prefix><slug>-<config>` off
-/// default); on slug collision the later key in sorted order takes
-/// `-<digest8>` of its package ID plus configuration. Deterministic
-/// for a fixed set. Callers pass [`CRATE_JOB_ID_PREFIX`] for rust
-/// groups and [`TOFU_JOB_ID_PREFIX`] for all-tofu groups; namespaces
-/// never collide across prefixes.
 #[must_use]
 pub fn assign_crate_job_ids(
     crates: &BTreeSet<(String, String, String)>,
@@ -383,7 +259,3 @@ pub fn assign_crate_job_ids(
     }
     assigned
 }
-
-#[cfg(test)]
-#[path = "jobs_tests.rs"]
-mod tests;

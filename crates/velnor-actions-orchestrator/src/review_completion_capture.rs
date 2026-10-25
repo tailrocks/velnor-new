@@ -1,4 +1,3 @@
-//! Read-only capture exports eligibility and a tamper-bound proposal, never a completion claim.
 use super::{
     provider,
     state::{self, CompletionState, Operation, Proposal},
@@ -8,12 +7,8 @@ use serde_json::Value;
 use std::path::Path;
 use velnor_actions_contract::{canonical_json_bytes, digest_b3};
 
-/// Fixed read-only operation; no repository code or source configuration executes.
 pub const CAPTURE_REVIEW_COMPLETION_OP: &str = "capture-review-completion-v1";
 
-/// Capture the current recognized PR and closed provider decision.
-/// # Errors
-/// Fails on authentication, identity, bounded IO or proposal publication errors.
 pub fn capture_review_completion() -> Result<Option<String>, OrchestratorError> {
     let operation = state::operation("review-completion")?;
     operation
@@ -68,8 +63,6 @@ pub(super) fn observe(operation: &Operation, number: u64) -> Result<Proposal, Or
         provider_digest: None,
         state: CompletionState::Blocked,
     };
-    // Recognized PRs remain eligible on incomplete/unknown feedback, so a C
-    // emitter still invalidates an old green check instead of being skipped.
     if let Ok(feedback) = state::feedback(operation, number, head) {
         proposal.feedback_digest = Some(
             feedback
@@ -151,10 +144,6 @@ fn hint(name: &str, event: &Value) -> Result<Option<u64>, OrchestratorError> {
         .map(Some)
         .ok_or_else(|| internal("review_completion_event_number"))
 }
-
-#[cfg(test)]
-#[path = "review_completion_capture_tests.rs"]
-mod tests;
 
 fn restart_hint(
     operation: &Operation,

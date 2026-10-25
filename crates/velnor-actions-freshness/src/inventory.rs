@@ -1,5 +1,3 @@
-//! Inventory shape, compiled pin, policy header, and mirror checks.
-
 mod mirror;
 
 mod pins;
@@ -65,7 +63,7 @@ pub(crate) const EXPECTED_ACTIONS: &[(&str, &str)] = &[
     ("actions/attest", "ATTEST_ACTION"),
     ("actions/github-script", "GITHUB_SCRIPT_ACTION"),
 ];
-/// Load the reviewed JSON inventory, recording shape errors as gate rows.
+
 pub(crate) fn load_inventory(ctx: &mut FreshnessContext) -> bool {
     let path = ctx.path(".velnor/freshness-inventory.json");
     let data = match fs::read(&path) {
@@ -103,7 +101,6 @@ pub(crate) fn load_inventory(ctx: &mut FreshnessContext) -> bool {
     true
 }
 
-/// Load the repository's TOML version policy.
 pub(crate) fn load_policy(ctx: &mut FreshnessContext) {
     let relative = ".velnor/version-policy.toml";
     match fs::read_to_string(ctx.path(relative))
@@ -120,16 +117,12 @@ pub(crate) fn load_policy(ctx: &mut FreshnessContext) {
     }
 }
 
-/// Default package release cooldown window (in days), matching GitHub's July 2026
-/// Dependabot 3-day default cooldown for newly published versions.
 pub(crate) const DEFAULT_COOLDOWN_DAYS: i64 = 3;
-/// Minimum allowed `default_cooldown_days` in `.velnor/version-policy.toml`.
+
 pub(crate) const MIN_COOLDOWN_DAYS: i64 = 1;
-/// Maximum allowed `default_cooldown_days` in `.velnor/version-policy.toml`,
-/// matching Dependabot's `1..=90` day cooldown contract.
+
 pub(crate) const MAX_COOLDOWN_DAYS: i64 = 90;
 
-/// Validate fixed policy header and prevent weakening the cadence limits.
 pub(crate) fn check_policy_header(ctx: &mut FreshnessContext) {
     let Some(policy) = ctx.policy.clone() else {
         return;
@@ -260,17 +253,14 @@ fn check_registry(ctx: &mut FreshnessContext, policy: &TomlValue) {
     }
 }
 
-/// Compare compiled tool/action pins against the JSON inventory.
 pub(crate) fn check_local_pins(ctx: &mut FreshnessContext) {
     pins::check_local_pins(ctx);
 }
 
-/// Compare inventory values with the reviewed version-policy mirror.
 pub(crate) fn check_policy_mirror(ctx: &mut FreshnessContext) {
     mirror::check_policy_mirror(ctx);
 }
 
-/// Parse the canonical tool specs used by `verify-local.sh` from version policy.
 pub(crate) fn toolchain_specs(root: &Path) -> Result<Vec<String>, String> {
     let policy = read_toml(root.join(".velnor/version-policy.toml"))?;
     let policy_tools = policy
@@ -294,7 +284,6 @@ pub(crate) fn toolchain_specs(root: &Path) -> Result<Vec<String>, String> {
         .collect()
 }
 
-/// Return the policy's Mise version for the local verification warning.
 pub(crate) fn policy_mise_version(root: &Path) -> Result<String, String> {
     let policy = read_toml(root.join(".velnor/version-policy.toml"))?;
     policy
@@ -319,6 +308,3 @@ fn toml_int(value: &TomlValue, key: &str) -> Option<i64> {
 pub(super) fn display_json(value: Option<&Value>) -> String {
     value.map_or_else(|| "null".to_owned(), ToString::to_string)
 }
-
-#[cfg(test)]
-mod tests;

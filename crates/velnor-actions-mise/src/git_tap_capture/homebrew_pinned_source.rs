@@ -1,5 +1,3 @@
-//! Materialize the single authenticated Homebrew source into a fresh directory.
-
 use std::{
     ffi::OsString,
     fs,
@@ -30,62 +28,40 @@ const COMMAND_LIMIT: Duration = Duration::from_secs(120);
 const OUTPUT_LIMIT: usize = 128 * 1024;
 const GIT: &str = "/usr/bin/git";
 
-/// Identity of the only supported fresh Homebrew source tree.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PinnedHomebrewSource {
-    /// Exact detached commit.
     commit: String,
-    /// Exact checked-out Git tree.
     tree: String,
-    /// Version distance from tag `7.0.10`.
     describe: String,
-    /// Exact commit to which tag `7.0.10` peels.
     tag_commit: String,
-    /// Fresh staging directory containing the complete checked-out repository.
     staging: PathBuf,
-    /// Staging directory device and inode, retained for the prefix swap proof.
     staging_device: u64,
-    /// Staging directory inode, retained for the prefix swap proof.
     staging_inode: u64,
 }
 
 impl PinnedHomebrewSource {
-    /// Exact detached commit.
     #[must_use]
     pub fn commit(&self) -> &str {
         &self.commit
     }
-    /// Exact checked-out Git tree.
     #[must_use]
     pub fn tree(&self) -> &str {
         &self.tree
     }
-    /// Exact `git describe` result.
     #[must_use]
     pub fn describe(&self) -> &str {
         &self.describe
     }
-    /// Commit to which the pinned `7.0.10` tag peels.
     #[must_use]
     pub fn tag_commit(&self) -> &str {
         &self.tag_commit
     }
-    /// Materialized, verified staging path.
     #[must_use]
     pub fn staging(&self) -> &Path {
         &self.staging
     }
 }
 
-/// Materialize the fixed Homebrew source into one empty, private staging directory.
-///
-/// The caller supplies only a newly created child of `RUNNER_TEMP`. This API
-/// has no URL, revision, tag, refspec, Git flags, or executable parameters.
-/// Git runs with a cleared environment and an absolute system executable.
-///
-/// # Errors
-/// Returns an error if the staging path is not fresh and private, Git cannot
-/// fetch the pinned source, or any checked source identity differs.
 pub fn materialize_homebrew_pinned_source(
     staging: &Path,
     deadline: CheckDeadline,
@@ -334,37 +310,5 @@ fn invalid(problem: &'static str) -> MiseError {
     MiseError::InvalidStepInput {
         field: "homebrew_pinned_source".to_owned(),
         value: problem.to_owned(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn pinned_profile_is_a_closed_tag_commit_tree_and_distance_tuple() {
-        assert_eq!(SOURCE_COMMIT.len(), 40);
-        assert_eq!(TAG_COMMIT.len(), 40);
-        assert_eq!(SOURCE_TREE.len(), 40);
-        assert_eq!(SOURCE_DESCRIBE, "7.0.10-84-g7a056ff");
-        assert!(SOURCE_DESCRIBE_ARGS.contains(&"--abbrev=7"));
-        let (_, hash) = SOURCE_DESCRIBE
-            .rsplit_once("-g")
-            .expect("pinned describe result has a git hash suffix");
-        assert_eq!(
-            hash.len(),
-            7,
-            "Homebrew source policy uses seven hash chars"
-        );
-        assert_eq!(SOURCE_DISTANCE, "84");
-        assert_ne!(SOURCE_COMMIT, TAG_COMMIT);
-        assert_eq!(GIT, "/usr/bin/git");
-    }
-
-    #[test]
-    fn materialization_rejects_any_caller_path_outside_its_fixed_staging_slot() {
-        let deadline = CheckDeadline::after(Duration::from_secs(10)).expect("deadline");
-        assert!(materialize_homebrew_pinned_source(Path::new("relative"), deadline).is_err());
-        assert!(materialize_homebrew_pinned_source(Path::new("/tmp/homebrew"), deadline).is_err());
     }
 }

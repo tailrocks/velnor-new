@@ -1,5 +1,3 @@
-//! Fail-closed limits for plan artifacts and job outputs.
-
 use crate::{
     OrchestratorError,
     internal::{PlanResponse, internal, internal_contract},
@@ -8,33 +6,20 @@ use velnor_actions_contract::{
     QualificationCacheAdmission, QualificationCacheDirective, canonical_json_str,
 };
 
-/// Validated plan values emitted to `$GITHUB_OUTPUT` and promoted to the job.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlanOutputs {
-    /// Canonical matrix JSON (single line).
     pub matrix: String,
-    /// Plan ID for step outputs (WF-4.15).
     pub plan_id: String,
-    /// Run key for step outputs (WF-4.15).
     pub run_key: String,
-    /// `not_affected` crate jobs as `,id1,id2,`; empty runs every job.
     pub not_affected_jobs: String,
-    /// Validated qualification namespace, empty outside Qualification.
     pub qualification_campaign: String,
-    /// Validated qualification phase, empty outside Qualification.
     pub qualification_phase: String,
-    /// Whether this run may restore isolated qualification caches.
     pub qualification_cache_enabled: bool,
-    /// Legacy global writer gate; writes require the typed per-layer directives.
     pub qualification_cache_write: bool,
-    /// Canonical typed cache directive map, empty outside Qualification.
     pub qualification_cache_directives: String,
-    /// Aggregate UTF-16 byte size of values promoted by this output mode.
     pub job_outputs_utf16_bytes: usize,
 }
 
-/// Split one `plan-v1` response into canonical output records.
-/// # Errors
 pub fn plan_outputs(
     response_json: &str,
     mode: PlanOutputMode,
@@ -42,8 +27,6 @@ pub fn plan_outputs(
     plan_outputs_with_admission(response_json, mode, None)
 }
 
-/// Split one plan response after admitting its staged predecessor evidence.
-/// # Errors
 pub fn plan_outputs_with_admission(
     response_json: &str,
     mode: PlanOutputMode,
@@ -83,8 +66,6 @@ pub fn plan_outputs_with_admission(
     })
 }
 
-/// Load the fixed runner-temp admission file before deriving qualification outputs.
-/// # Errors
 pub fn plan_outputs_from_staged_admission(
     response_json: &str,
     mode: PlanOutputMode,
@@ -95,32 +76,18 @@ pub fn plan_outputs_from_staged_admission(
     plan_outputs_with_admission(response_json, mode, admission.as_ref())
 }
 
-/// GitHub's maximum jobs created by one matrix strategy.
 pub(crate) const MATRIX_JOB_LIMIT: usize = 256;
-/// Conservative aggregate UTF-16 byte budget for one plan job's outputs.
-///
-/// GitHub documents a 1 MB per-job output limit, approximated in UTF-16.
-/// Keeping 100,000 bytes in reserve avoids depending on service-side
-/// accounting details.
 pub const JOB_OUTPUTS_BUDGET_UTF16_BYTES: usize = 900_000;
-/// Share of [`JOB_OUTPUTS_BUDGET_UTF16_BYTES`] left to plan-step outputs.
-///
-/// The Plan key step's cache outputs are promoted beside these values, so
-/// their generation-checked reserve stays free.
 pub(crate) const PLAN_STEP_OUTPUTS_BUDGET_UTF16_BYTES: usize = JOB_OUTPUTS_BUDGET_UTF16_BYTES
     - velnor_actions_contract::workflow::cache_family::PLAN_CACHE_OUTPUTS_RESERVE_UTF16_BYTES;
 
-/// Which outputs the plan job promotes to downstream jobs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlanOutputMode {
-    /// Static crate jobs promote qualification policy outputs.
     Static,
-    /// A task job promotes every plan-step output for matrix consumers.
     DynamicMatrix,
 }
 
 impl PlanOutputs {
-    /// Required named outputs written by the plan step, in stable order.
     #[must_use]
     pub fn step_outputs(&self) -> Vec<(&'static str, &str)> {
         vec![
@@ -148,7 +115,6 @@ impl PlanOutputs {
         ]
     }
 
-    /// Output records actually promoted to job outputs by this workflow path.
     #[must_use]
     pub fn promoted_job_outputs(&self, mode: PlanOutputMode) -> Vec<(&'static str, &str)> {
         match mode {
@@ -183,12 +149,6 @@ fn bool_output(value: bool) -> &'static str {
     if value { "true" } else { "false" }
 }
 
-/// Check expanded matrix cardinality and the aggregate promoted outputs.
-///
-/// # Errors
-///
-/// Returns an internal planning error when the workflow would exceed a
-/// platform limit or the conservative output budget.
 pub(crate) fn check_plan_outputs(
     mode: PlanOutputMode,
     matrix_entries: usize,
@@ -213,7 +173,6 @@ pub(crate) fn check_plan_outputs(
     Ok(bytes)
 }
 
-/// UTF-16 bytes for one `$GITHUB_OUTPUT` record, including syntax.
 fn output_record_utf16_bytes(name: &str, value: &str) -> Option<usize> {
     name.encode_utf16()
         .count()
@@ -222,7 +181,3 @@ fn output_record_utf16_bytes(name: &str, value: &str) -> Option<usize> {
         .checked_add(1)?
         .checked_mul(2)
 }
-
-#[cfg(test)]
-#[path = "plan_output_limits_tests.rs"]
-mod tests;

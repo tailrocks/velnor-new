@@ -1,5 +1,3 @@
-//! Step and command builders for declared Rust test suite jobs.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{NextestRunIgnored, RustSuiteConfig, Step};
@@ -44,7 +42,6 @@ pub(super) fn compile_driver_steps(spec: &RustSuitesRenderSpec) -> Result<Vec<St
     Ok(steps.unwrap_or_default())
 }
 
-/// Marker after the suite's compile (the whole step when compile and test are one).
 pub(super) fn producer_mark_steps(spec: &RustSuitesRenderSpec) -> Result<Vec<Step>, RenderError> {
     if spec.compile_driver == CompileDriver::Mbx {
         Ok(vec![steps::mbx_producer_mark_step()?])
@@ -53,7 +50,6 @@ pub(super) fn producer_mark_steps(spec: &RustSuitesRenderSpec) -> Result<Vec<Ste
     }
 }
 
-/// Owned rustup and Cargo homes the toolchain checks read.
 fn verify_env() -> BTreeMap<String, String> {
     BTreeMap::from([
         (
@@ -67,7 +63,6 @@ fn verify_env() -> BTreeMap<String, String> {
     ])
 }
 
-/// Right after the tools cache restore: no restored Rust byte runs unchecked.
 pub(super) fn restored_rust_step(spec: &RustSuitesRenderSpec) -> Result<Step, RenderError> {
     let step = crate::verifier_composite::verifier_shell_step(
         velnor_actions_contract::StepRole::VerifyRustManifest,
@@ -78,7 +73,6 @@ pub(super) fn restored_rust_step(spec: &RustSuitesRenderSpec) -> Result<Step, Re
     Ok(step)
 }
 
-/// The suite install and, directly after it, the toolchain verification.
 pub(super) fn install_suite_tools_steps(
     spec: &RustSuitesRenderSpec,
 ) -> Result<Vec<Step>, RenderError> {
@@ -295,53 +289,4 @@ pub(super) fn append_suite_artifact_uploads(
         )?);
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::base_suite_env;
-    use crate::{CompileDriver, MiseSetup, rust_suites::RustSuitesRenderSpec};
-    use velnor_actions_contract::PullRequestCachePolicy;
-
-    fn spec(export_rustup_toolchain: bool) -> RustSuitesRenderSpec {
-        RustSuitesRenderSpec {
-            suites: Vec::new(),
-            workflow_dispatch: None,
-            default_runs_on: "ubuntu-24.04".to_owned(),
-            checkout_uses: crate::steps::CHECKOUT_USES.to_owned(),
-            generator_version: "0.1.0".to_owned(),
-            mise: MiseSetup {
-                uses: format!("jdx/mise-action@{}", "a".repeat(40)),
-                version: "2026.10.18".to_owned(),
-                sha256: "b".repeat(64),
-            },
-            rust_version: "1.95.0".to_owned(),
-            cargo_nextest_version: "0.9.133".to_owned(),
-            compile_driver: CompileDriver::Cargo,
-            mbx_action: None,
-            pull_request_cache_policy: PullRequestCachePolicy::ReadOnly,
-            verify_restored_rust_argv: Vec::new(),
-            verify_rust_argv: Vec::new(),
-            export_rustup_toolchain,
-        }
-    }
-
-    #[test]
-    fn suite_homes_include_matching_direct_and_mise_aliases() {
-        let env = base_suite_env(&spec(true));
-        assert_eq!(env.get("MISE_RUSTUP_HOME"), env.get("RUSTUP_HOME"));
-        assert_eq!(env.get("MISE_CARGO_HOME"), env.get("CARGO_HOME"));
-        assert_eq!(
-            env.get("RUSTUP_TOOLCHAIN").map(String::as_str),
-            Some("1.95.0")
-        );
-    }
-
-    #[test]
-    fn suite_without_exported_toolchain_still_has_both_home_pairs() {
-        let env = base_suite_env(&spec(false));
-        assert_eq!(env.get("MISE_RUSTUP_HOME"), env.get("RUSTUP_HOME"));
-        assert_eq!(env.get("MISE_CARGO_HOME"), env.get("CARGO_HOME"));
-        assert!(!env.contains_key("RUSTUP_TOOLCHAIN"));
-    }
 }

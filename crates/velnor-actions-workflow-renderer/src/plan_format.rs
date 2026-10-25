@@ -1,26 +1,11 @@
-//! Plan-job `Format` step (workflow contract §3 plan step 5).
-//!
-//! Formatting runs in `plan` per selected stack config through
-//! pinned Mise; the fixed argv arrives from the orchestrator's Mise
-//! vectors. The renderer validates the Mise shape and anchors the step
-//! between helper staging and the freshness/plan closure.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 use crate::{RenderError, render::PLAN_JOB_ID, steps};
 
-/// Contract-fixed display name of the plan format step.
 pub const FORMAT_STEP_NAME: &str = "Format";
 
-/// Fixed `Format` step over orchestrator-supplied Mise argv plus env.
-///
-/// The vector must start with `mise`: plan formatting runs through
-/// pinned Mise, never a bare toolchain or ad-hoc installer. The env
-/// routes the step at the prepared toolchain (owned homes plus the
-/// exact `RUSTUP_TOOLCHAIN` pin), scrubbed since fmt needs no auth.
-/// # Errors
 pub fn format_step(argv: Vec<String>, env: &BTreeMap<String, String>) -> Result<Step, RenderError> {
     if argv.first().is_none_or(|program| program != "mise") {
         return Err(RenderError::BadCommand("format_without_mise".to_owned()));
@@ -30,12 +15,6 @@ pub fn format_step(argv: Vec<String>, env: &BTreeMap<String, String>) -> Result<
     Ok(step)
 }
 
-/// Insert `Format` into the plan job between staging and freshness.
-///
-/// Anchors before the freshness check when present, else before the
-/// `plan-v1` step, else before plan publish; without a plan job there is
-/// nothing to close over. Re-running never duplicates the step.
-/// # Errors
 pub fn ensure_plan_format(
     jobs: &mut BTreeMap<String, Job>,
     argv: Vec<String>,
@@ -57,7 +36,6 @@ pub fn ensure_plan_format(
     Ok(())
 }
 
-/// Reject present-but-malformed `Format` steps (non-shell payloads).
 fn check_format_shape(format: &Step) -> Result<(), RenderError> {
     if matches!(format.kind, StepKind::Shell { .. }) {
         Ok(())
@@ -68,7 +46,6 @@ fn check_format_shape(format: &Step) -> Result<(), RenderError> {
     }
 }
 
-/// Insert before freshness, else plan, else publish, else at the end.
 fn format_insert_at(plan: &Job) -> usize {
     plan.steps
         .iter()

@@ -1,67 +1,56 @@
-//! Historical feedback and authenticated completed-promotion admission.
-
 use super::{
     ContractError, TapFeedbackSnapshot, TapMergePolicy, TapRequiredCheck, TapReviewCompletion,
     TapServerMergeProtection, invalid, is_lower_hex_len, validate_checks, validate_feedback,
     validate_policy,
 };
 
-/// Independently captured feedback for one same-receipt pull request.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TapHistoricalFeedback {
-    /// Actual PR number in the configured tap repository.
     pub pull_request_number: u64,
-    /// Actual current PR head, even when the PR is closed or its branch deleted.
+
     pub head_sha: String,
-    /// Complete feedback, including outdated threads and general comments.
+
     pub feedback: TapFeedbackSnapshot,
-    /// Independent exact-head completion over that complete snapshot.
+
     pub completion: Option<TapReviewCompletion>,
 }
 
-/// Current tap-main evidence captured together for a completed promotion.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TapCompletedMainObservation {
-    /// Captured current tap main commit.
     pub current_sha: String,
-    /// Independently proven ancestry from the merge commit to this captured main.
+
     pub merge_is_ancestor: bool,
-    /// Independently validated formula at this main exactly matches the signed receipt.
+
     pub formula_matches_receipt: bool,
 }
 
-/// Authenticated evidence that a previous invocation already promoted this receipt.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TapCompletedPromotionObservation {
-    /// Selected authenticated merged PR and its current complete feedback.
     pub pull_request: TapHistoricalFeedback,
-    /// Original base reconstructed from the signed-receipt candidate proof.
+
     pub validated_base_sha: String,
-    /// Actual selected PR base returned by GitHub.
+
     pub observed_pr_base_sha: String,
-    /// Exact original formula commit reconstructed and independently validated.
+
     pub validated_head_sha: String,
-    /// Actual accepted merge commit from the selected merged PR.
+
     pub merge_sha: String,
-    /// Ancestry and exact canonical formula at the same captured main commit.
+
     pub main: TapCompletedMainObservation,
-    /// Actual merged state and expected bot, repository, branch, and PR identity.
+
     pub expected_merged_pull_request: bool,
-    /// Current server-enforced checks and absence of writer bypass.
+
     pub server_protection: TapServerMergeProtection,
-    /// All active required checks were exhaustively resolved for the original head.
+
     pub required_checks_complete: bool,
-    /// Exact-head results, including DCO and the protected completion App.
+
     pub checks: Vec<TapRequiredCheck>,
-    /// Every same-receipt PR was enumerated, without truncation.
+
     pub historical_feedback_complete: bool,
-    /// Sorted feedback for every other same-receipt PR.
+
     pub historical_feedback: Vec<TapHistoricalFeedback>,
 }
 
-/// Validate feedback disposition on an authenticated historical PR.
-/// # Errors
-/// Rejects malformed identity, unfinished reviews, and any unaddressed feedback.
 pub fn validate_tap_historical_feedback(
     policy: &TapMergePolicy,
     observed: &TapHistoricalFeedback,
@@ -79,10 +68,6 @@ pub fn validate_tap_historical_feedback(
     )
 }
 
-/// Admit an already completed promotion without authorizing any mutation.
-/// # Errors
-/// Rejects fabricated merges, stale identity, downgrade, missing checks or history,
-/// incomplete reviews, and a changed feedback snapshot after completion.
 pub fn validate_tap_completed_promotion_gate(
     policy: &TapMergePolicy,
     observed: &TapCompletedPromotionObservation,

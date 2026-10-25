@@ -1,19 +1,14 @@
-//! Discovery exclusions (repo-relative POSIX globs).
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 
-/// Discovery exclusions (repo-relative POSIX globs).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DiscoveryConfig {
-    /// Exclusion globs applied before detectors.
     #[serde(default)]
     pub exclude: Vec<String>,
 }
 
 impl DiscoveryConfig {
-    /// Validate exclusion globs (relative, no traversal, well-formed).
-    /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         for pattern in &self.exclude {
             if pattern.is_empty()
@@ -33,7 +28,6 @@ impl DiscoveryConfig {
     }
 }
 
-/// Bytes allowed in discovery globs (paths plus `*?[]{}!` classes).
 fn is_glob_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric()
         || matches!(

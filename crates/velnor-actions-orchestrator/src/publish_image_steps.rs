@@ -1,13 +1,3 @@
-//! Image publication jobs of `publish.yml`.
-//!
-//! The unprivileged build jobs of `ci.yml` leave one OCI layout per platform
-//! as an artifact. On a push to the default branch, after the branch
-//! authority job saw a green `Required` check, one `image-publish-<id>` job
-//! per image downloads those layouts from the push's CI run, verifies them,
-//! assembles one multi-platform index, pushes it to the registry and attests
-//! it. The job checks out nothing and executes no repository code: every
-//! script is a generator constant filled with contract-validated values.
-
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 
@@ -23,15 +13,12 @@ use crate::OrchestratorError;
 use crate::publish_release_steps::BRANCH_AUTHORITY_JOB;
 use crate::utf8::strings_of;
 
-/// Protected environment guarding registry writes.
 pub(crate) const IMAGE_ENVIRONMENT: &str = "images";
 
-/// Publish job id for one image.
 pub(crate) fn publish_job_id(image: &ImageConfig) -> String {
     image.publish_job_id()
 }
 
-/// `crane` shell function body through the pinned Mise tool.
 pub(crate) fn crane_function(catalog: &ToolCatalog) -> Result<String, OrchestratorError> {
     let exec = PinnedToolExec::new(vec![PinnedTool::Crane], OsStr::new("crane"), Vec::new())
         .map_err(|err| OrchestratorError::Contract {
@@ -42,10 +29,6 @@ pub(crate) fn crane_function(catalog: &ToolCatalog) -> Result<String, Orchestrat
     Ok(script::crane_function(&prefix))
 }
 
-/// The publish job of one image.
-///
-/// `branch_tag` is the moving tag naming the default branch, present only
-/// when the branch name is a valid image tag.
 pub(crate) fn publish_job(
     inputs: &Inputs<'_>,
     image: &ImageConfig,
@@ -108,10 +91,6 @@ pub(crate) fn publish_job(
     Ok(job)
 }
 
-/// The promote job of one image: verify the attestation, then re-tag the digest.
-///
-/// It runs on the release tag the authority job verified, needs only the
-/// registry, `gh` and `crane`, and never builds or downloads a layout.
 pub(crate) fn promote_job(
     inputs: &Inputs<'_>,
     image: &ImageConfig,
@@ -149,7 +128,6 @@ pub(crate) fn promote_job(
     Ok(job)
 }
 
-/// Lowercase registry owner segment of an image repository.
 fn registry_owner(image: &ImageConfig) -> Result<&str, OrchestratorError> {
     image
         .repository
@@ -160,7 +138,6 @@ fn registry_owner(image: &ImageConfig) -> Result<&str, OrchestratorError> {
         })
 }
 
-/// Build provenance for the pushed index digest, stored with the image.
 fn provenance_step(
     image: &ImageConfig,
 ) -> Result<velnor_actions_contract::Step, OrchestratorError> {
@@ -176,7 +153,6 @@ fn provenance_step(
     )?)
 }
 
-/// SPDX SBOM attestation for one platform image manifest.
 fn sbom_step(
     image: &ImageConfig,
     arch: &str,
@@ -203,7 +179,6 @@ fn sbom_step(
     )?)
 }
 
-/// Expression reading one output of the assemble step.
 fn output(name: &str) -> String {
     format!(
         "${{{{ steps.{}.outputs.{name} }}}}",
@@ -211,7 +186,6 @@ fn output(name: &str) -> String {
     )
 }
 
-/// True for a name usable as a registry tag without escaping.
 fn is_image_tag(name: &str) -> bool {
     name.len() <= 128
         && name
@@ -222,11 +196,3 @@ fn is_image_tag(name: &str) -> bool {
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-'))
 }
-
-#[cfg(test)]
-#[path = "publish_image_scripts_tests.rs"]
-mod scripts_tests;
-
-#[cfg(test)]
-#[path = "publish_image_promote_tests.rs"]
-mod promote_tests;

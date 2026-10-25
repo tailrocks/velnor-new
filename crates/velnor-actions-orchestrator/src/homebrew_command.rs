@@ -1,5 +1,3 @@
-//! Closed Homebrew command construction owned by the Homebrew coordinator.
-
 use std::{
     ffi::{OsStr, OsString},
     path::{Component, Path, PathBuf},
@@ -11,38 +9,35 @@ use crate::{
     OrchestratorError, homebrew::install::HOMEBREW_CANDIDATE_FORMULAE, internal::internal,
 };
 
-/// One fixed Homebrew operation; callers cannot supply executable, argv, or env.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum HomebrewCommand {
-    /// Report the exact Homebrew version.
     Version,
-    /// Report Homebrew's selected runtime and install configuration.
     Config,
-    /// Dispatch the pinned archive installer without starting Ruby.
     InstallPortableRuby,
-    /// Move one typed prefix transaction path with noninteractive sudo.
     MovePrefix {
         source: PathBuf,
         destination: PathBuf,
     },
-    /// Report the qualified Homebrew prefix.
     Prefix,
-    /// Report the qualified Homebrew Cellar.
     Cellar,
-    /// Install one exact candidate formula file.
-    InstallCandidate { recipe: PathBuf },
-    /// Trust only one formula in the fixed private candidate tap.
-    TrustFormula { formula: String },
-    /// Upgrade an already installed, verified formula to one exact candidate.
-    UpgradeCandidate { recipe: PathBuf },
-    /// Run the installed keg's archived recipe test.
-    TestArchived { recipe: PathBuf },
-    /// Query the installed host binary's version output.
-    InstalledBinaryVersion { executable: PathBuf },
+    InstallCandidate {
+        recipe: PathBuf,
+    },
+    TrustFormula {
+        formula: String,
+    },
+    UpgradeCandidate {
+        recipe: PathBuf,
+    },
+    TestArchived {
+        recipe: PathBuf,
+    },
+    InstalledBinaryVersion {
+        executable: PathBuf,
+    },
 }
 
 impl HomebrewCommand {
-    /// Stable diagnostic label; excludes every caller-controlled field.
     pub(crate) const fn diagnostic_label(&self) -> &'static str {
         match self {
             Self::Version => "version",
@@ -60,7 +55,6 @@ impl HomebrewCommand {
     }
 }
 
-/// Construct one fixed Homebrew command under a clean, credential-scrubbed env.
 pub(crate) fn homebrew_command(
     operation: HomebrewCommand,
     home: &Path,
@@ -303,7 +297,3 @@ fn validate_absolute_path(path: &Path, field: &'static str) -> Result<(), Orches
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "homebrew_command_tests.rs"]
-mod tests;

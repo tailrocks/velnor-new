@@ -1,5 +1,3 @@
-//! Independent Codex completion: read capture and separately credentialed emit.
-
 #[path = "review_completion_capture.rs"]
 mod capture;
 #[path = "review_completion_emit.rs"]

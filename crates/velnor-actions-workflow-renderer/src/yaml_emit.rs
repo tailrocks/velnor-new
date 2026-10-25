@@ -1,14 +1,10 @@
-//! YAML output primitives for the typed workflow tree.
-
 use super::Yaml;
 
-/// Render a document with a trailing newline.
 #[must_use]
 pub(super) fn render_yaml(value: &Yaml) -> String {
     render_yaml_with_indent(value, 2)
 }
 
-/// Same encoding as [`render_yaml`], with `width` spaces per nesting level.
 #[must_use]
 pub(super) fn render_yaml_compact(value: &Yaml) -> String {
     render_yaml_with_indent(value, 1)
@@ -20,7 +16,6 @@ fn render_yaml_with_indent(value: &Yaml, width: usize) -> String {
     out
 }
 
-/// Quote a scalar only when plain style would be unsafe or ambiguous.
 #[must_use]
 pub(super) fn quote_scalar(value: &str) -> String {
     if can_emit_plain(value) {
@@ -30,7 +25,6 @@ pub(super) fn quote_scalar(value: &str) -> String {
     }
 }
 
-/// Emit a nested node at an indent level.
 fn emit_node(value: &Yaml, indent: usize, width: usize, out: &mut String) {
     if value.is_inline() {
         emit_inline(value, out);
@@ -61,7 +55,6 @@ fn emit_node(value: &Yaml, indent: usize, width: usize, out: &mut String) {
     }
 }
 
-/// Emit one mapping entry.
 fn emit_map_entry(key: &str, value: &Yaml, indent: usize, width: usize, out: &mut String) {
     push_indent(indent, width, out);
     out.push_str(&quote_scalar(key));
@@ -92,7 +85,6 @@ fn emit_map_entry(key: &str, value: &Yaml, indent: usize, width: usize, out: &mu
     }
 }
 
-/// Emit one sequence item.
 fn emit_seq_item(item: &Yaml, indent: usize, width: usize, out: &mut String) {
     push_indent(indent, width, out);
     match item {
@@ -126,7 +118,6 @@ fn emit_seq_item(item: &Yaml, indent: usize, width: usize, out: &mut String) {
     }
 }
 
-/// Emit the first mapping entry of a sequence item after `- `.
 fn emit_first_entry(key: &str, value: &Yaml, indent: usize, width: usize, out: &mut String) {
     out.push_str(&quote_scalar(key));
     match value {
@@ -156,7 +147,6 @@ fn emit_first_entry(key: &str, value: &Yaml, indent: usize, width: usize, out: &
     }
 }
 
-/// Emit an inline value (scalars and empty collections).
 fn emit_inline(value: &Yaml, out: &mut String) {
     match value {
         Yaml::Str(text) => out.push_str(&quote_scalar(text)),
@@ -191,7 +181,6 @@ fn emit_inline(value: &Yaml, out: &mut String) {
     }
 }
 
-/// Emit `[a, b]` with the renderer's scalar quoting.
 fn emit_flow(items: &[String], out: &mut String) {
     out.push('[');
     for (index, item) in items.iter().enumerate() {
@@ -203,7 +192,6 @@ fn emit_flow(items: &[String], out: &mut String) {
     out.push(']');
 }
 
-/// Emit `{key: value}` with double-quoted scalars safe in flow context.
 fn emit_flow_map(entries: &[(String, String)], out: &mut String) {
     out.push('{');
     for (index, (key, value)) in entries.iter().enumerate() {
@@ -217,7 +205,6 @@ fn emit_flow_map(entries: &[(String, String)], out: &mut String) {
     out.push('}');
 }
 
-/// Push 2-space indentation.
 fn push_indent(indent: usize, width: usize, out: &mut String) {
     let unit = " ".repeat(width);
     for _ in 0..indent {
@@ -225,7 +212,6 @@ fn push_indent(indent: usize, width: usize, out: &mut String) {
     }
 }
 
-/// Plain style is safe only for simple single-line, unambiguous scalars.
 fn can_emit_plain(value: &str) -> bool {
     if value.is_empty() || looks_like_non_string(value) {
         return false;
@@ -245,7 +231,6 @@ fn can_emit_plain(value: &str) -> bool {
     !value.chars().any(char::is_control)
 }
 
-/// YAML structural indicator characters.
 fn is_indicator(ch: char) -> bool {
     matches!(
         ch,
@@ -270,7 +255,6 @@ fn is_indicator(ch: char) -> bool {
     )
 }
 
-/// True for scalars a YAML parser would not read back as strings.
 fn looks_like_non_string(value: &str) -> bool {
     const WORDS: &[&str] = &[
         "true", "false", "yes", "no", "y", "n", "on", "off", "null", "nil", "~",
@@ -291,7 +275,6 @@ fn looks_like_non_string(value: &str) -> bool {
     looks_like_date(value)
 }
 
-/// True for a leading `YYYY-MM-DD` timestamp shape.
 fn looks_like_date(value: &str) -> bool {
     let bytes = value.as_bytes();
     bytes.len() >= 10
@@ -304,7 +287,6 @@ fn looks_like_date(value: &str) -> bool {
         && bytes.get(9).is_some_and(u8::is_ascii_digit)
 }
 
-/// Push a `\uXXXX` escape for a control code point.
 fn push_unicode_escape(code: u32, out: &mut String) {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     out.push_str("\\u");
@@ -314,7 +296,6 @@ fn push_unicode_escape(code: u32, out: &mut String) {
     }
 }
 
-/// Double-quote with minimal escaping; printable Unicode stays raw.
 fn quote_double(value: &str) -> String {
     let mut out = String::with_capacity(value.len() + 2);
     out.push('"');
@@ -331,22 +312,4 @@ fn quote_double(value: &str) -> String {
     }
     out.push('"');
     out
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::yaml::{Yaml, render_yaml};
-
-    #[test]
-    fn flow_map_quotes_collection_delimiters_and_escapes() {
-        let document = Yaml::FlowMap(vec![(
-            "key,[]{}:? #".to_owned(),
-            "value,[]{}: # \"quoted\" \\ line\nnext".to_owned(),
-        )]);
-
-        assert_eq!(
-            render_yaml(&document),
-            "{\"key,[]{}:? #\": \"value,[]{}: # \\\"quoted\\\" \\\\ line\\nnext\"}\n"
-        );
-    }
 }

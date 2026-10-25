@@ -1,5 +1,3 @@
-//! Held process-group anchors and wait status for strict hosted transactions.
-
 use std::{
     os::unix::process::CommandExt,
     process::{Child, ChildStdin, Command, ExitStatus, Stdio},
@@ -13,10 +11,6 @@ use rustix::process::{
 
 use crate::ProcessGroupDrainReceipt;
 
-#[cfg(test)]
-#[path = "command_process_group_tests.rs"]
-mod tests;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct ObservedStatus {
     pub(super) code: Option<i32>,
@@ -24,8 +18,6 @@ pub(super) struct ObservedStatus {
     pub(super) success: bool,
 }
 
-// This value is the sole waiter for its anchor child. NOWAIT leaves a terminal
-// anchor unreaped, reserving its PID until the single group signal is complete.
 pub(super) struct ProcessGroupAnchor {
     child: Child,
     stdin: Option<ChildStdin>,

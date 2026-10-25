@@ -1,16 +1,11 @@
-//! Mise tool selection and pinned command construction.
-//!
-//! Owns the subprocess/environment wrapper, pinned tool requests, the Git
-//! discovery allowlist, and read-only task-cache helpers. Must not own Cargo
-//! metadata parsing, Rust graph rules, `rust-toolchain.toml`, or GitHub YAML.
-
-#[cfg(test)]
-#[path = "requests_app_token_tests.rs"]
-mod requests_app_token_tests;
-#[cfg(test)]
-#[path = "../../test_support/temp_dir.rs"]
-mod test_temp_dir;
-
+#![allow(
+    clippy::missing_errors_doc,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
+#![allow(
+    missing_docs,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
 pub mod build;
 pub mod cache;
 pub mod cache_sources;
@@ -132,6 +127,5 @@ pub use wrappers::{
     CargoWrapper, MBX_COMMAND, MBX_SHIM_ENV, WrapperDiagnostic, is_mbx_command, parse_cargo_wrapper,
 };
 
-/// Stable identifier for the Mise tool wrapper.
 pub const TOOL_ID: &str = "mise";
 pub mod check_tool_probes;

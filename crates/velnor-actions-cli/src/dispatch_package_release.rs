@@ -1,5 +1,3 @@
-//! Private native package-release operation admission and signer dispatch.
-
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -11,7 +9,6 @@ use velnor_actions_orchestrator::{OrchestratorError, sign_package_release_from_e
 const RUNNER_TEMP_ENV: &str = "RUNNER_TEMP";
 const REQUEST_FILE: &str = "package-release-policy.json";
 
-/// Validate the exact signer request location and its regular-file identity.
 pub(super) fn gate_request(path: &Path) -> Option<PathBuf> {
     gate_named_request(path, REQUEST_FILE)
 }
@@ -63,7 +60,6 @@ fn gate_named_request(path: &Path, name: &str) -> Option<PathBuf> {
     Some(path.to_path_buf())
 }
 
-/// Run the Velnor-owned signer after the private operation gate succeeds.
 pub(super) fn run() -> ExitCode {
     match sign_package_release_from_env() {
         Ok(()) => ExitCode::SUCCESS,

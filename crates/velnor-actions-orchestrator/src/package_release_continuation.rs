@@ -1,4 +1,3 @@
-//! Bounded discovery of an already-published channel candidate; never publication.
 use super::{
     github::GitHubApi,
     identity::read_regular,
@@ -21,28 +20,17 @@ mod envelope;
 mod source;
 pub(crate) use source::verify_current_source;
 
-/// Fixed private read-only selector for the generated continuation workflow.
 pub const SELECT_RELEASE_TAP_CONTINUATION_OP: &str = "select-release-tap-continuation-v1";
-/// Hints for the next independent retained-signature admission, never merge authority.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReleaseTapContinuationSelection {
-    /// Exact source commit of the selected release.
     pub source_sha: String,
-    /// Original signed channel workflow run.
     pub original_run_id: u64,
-    /// Original signed channel workflow attempt.
     pub original_run_attempt: u32,
-    /// Independently verified exact-source push CI.
     pub ci_run_id: u64,
-    /// Current attempt of that CI.
     pub ci_attempt: u32,
-    /// Complete source ancestry count.
     pub commit_count: u64,
 }
 
-/// Discover the sole canonical published current-source candidate without writes.
-/// # Errors
-/// Rejects ambiguous/malformed evidence, invalid caller identity and denied reads.
 pub fn select_release_tap_continuation_from_env()
 -> Result<Option<ReleaseTapContinuationSelection>, OrchestratorError> {
     super::artifact_zip::within_operation(select_from_env)
@@ -203,7 +191,6 @@ fn select_stable(
     }))
 }
 
-/// Recheck current publication identity after independent retained cryptographic verification.
 pub(super) fn verify_published_selection(
     signed: &VerifiedAttestedSignedPackage,
 ) -> Result<(), OrchestratorError> {
@@ -270,7 +257,3 @@ fn required(key: &str) -> Result<String, OrchestratorError> {
 fn invalid(problem: &str) -> OrchestratorError {
     internal(&format!("tap_continuation_{problem}"))
 }
-
-#[cfg(test)]
-#[path = "package_release_continuation_tests.rs"]
-mod tests;

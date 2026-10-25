@@ -33,9 +33,9 @@ MAX_RESULT_BYTES = 64 * 1024
 MAX_UPLOAD_BYTES = candidate.MAX_BLOB_BYTES
 CHUNK_BYTES = 1024 * 1024
 TIMEOUT_SECONDS = 30
-# GitHub intermittently answers an exact head_sha workflow-run listing with no
-# runs. Only an empty listing is retried; any run, API error or malformed
-# response is final, and a listing that stays empty fails closed.
+
+
+
 CI_EMPTY_LISTING_RETRY_SECONDS = (3, 6, 12, 24, 45)
 
 
@@ -214,8 +214,8 @@ def _check_artifact(identity: dict[str, Any]) -> None:
 
 
 def _list_ci_runs(source: str, sleep: Any = time.sleep) -> list[Any]:
-    # head_sha only: the branch and event filters make GitHub return an empty
-    # listing more often. _check_ci keeps every identity check.
+
+
     path = f"repos/{REPOSITORY}/actions/workflows/ci.yml/runs?head_sha={source}&per_page=100"
     delays = iter(CI_EMPTY_LISTING_RETRY_SECONDS)
     while True:

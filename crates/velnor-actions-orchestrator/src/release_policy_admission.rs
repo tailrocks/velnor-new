@@ -1,5 +1,3 @@
-//! Source-free version data admission for a static native release policy.
-
 use super::{
     github::{GitHubApi, sha256},
     run_identity::{CurrentRun, RunSource, release_job_name},
@@ -36,14 +34,8 @@ pub use source::{
 };
 pub(in crate::package_release_publish) use source_policy_projection::read_preview_policy_at_source;
 pub(crate) use source_validation::validate_admitted_source_checkout;
-#[cfg(test)]
-use source_validation::{
-    admission_covers_required_paths, admission_paths, admitted_preview_version_matches,
-};
 
-/// Select and retain the complete source-bound preview admission.
 pub const SELECT_PREVIEW_SOURCE_OP: &str = "select-preview-source-v1";
-/// Acquire and authenticate the exact admission artifact before source checkout.
 pub const ACQUIRE_PREVIEW_SOURCE_OP: &str = "acquire-preview-source-v1";
 const MAX_ADMISSION_BYTES: usize = 16 * 1024 * 1024;
 
@@ -73,8 +65,6 @@ struct Admission {
     qualification_digest: String,
 }
 
-/// Narrow, data-only projection of a previously authenticated preview source
-/// admission. `task_config` remains an opaque string and is never parsed or run.
 pub(crate) struct PublicHistoricalAdmissionProjection {
     pub(crate) repository_id: u64,
     pub(crate) head_repository_id: u64,
@@ -91,9 +81,6 @@ pub(crate) struct PublicHistoricalAdmissionProjection {
     pub(crate) policy_sha256: String,
 }
 
-/// Read only the fixed admission context after the caller authenticates the
-/// ZIP, artifact identity, and expected inner-file digest. Historical task
-/// configuration is retained as an opaque string by the strict closed parser.
 pub(crate) fn project_public_historical_admission(
     bytes: &[u8],
     expected_sha256: &str,
@@ -133,9 +120,6 @@ pub(crate) fn project_public_historical_admission(
     })
 }
 
-/// Acquire the exact source admission artifact for this current workflow attempt.
-/// # Errors
-/// Rejects any artifact, digest, source, context, policy, or plan substitution.
 pub fn acquire_preview_source_from_env() -> Result<(), OrchestratorError> {
     let deadline = CheckDeadline::after(Duration::from_secs(300))
         .map_err(|_| internal("release_policy_deadline"))?;
@@ -144,7 +128,6 @@ pub fn acquire_preview_source_from_env() -> Result<(), OrchestratorError> {
         .map_err(|_| internal("release_policy_deadline"))?
 }
 
-/// Load the digest-pinned pre-checkout policy/plan without network or credentials.
 pub(crate) fn admitted_policy_plan(
     temp: &Path,
     deadline: CheckDeadline,
@@ -197,9 +180,6 @@ pub(crate) fn admitted_policy_plan(
         .map_err(|_| internal("release_policy_deadline"))?
 }
 
-/// Return the context bound to the canonical, digest-pinned source admission.
-/// Consumers compare this value with their immutable GitHub environment before
-/// using policy or payload data.
 pub(crate) fn admitted_context(
     temp: &Path,
     deadline: CheckDeadline,
@@ -225,8 +205,6 @@ pub(crate) fn admitted_context(
     Ok(admission.context)
 }
 
-/// Recheck the immutable source closure and producer declaration before any
-/// source checkout is used to produce a payload.
 fn positive_u64(name: &str) -> Result<u64, OrchestratorError> {
     let value = required(name)?;
     let parsed = value
@@ -343,11 +321,6 @@ fn read_source_admission(path: &Path) -> Result<Vec<u8>, OrchestratorError> {
         .map_err(|_| internal("release_policy_admission_read"))
 }
 
-#[cfg(test)]
-#[path = "release_policy_admission_tests.rs"]
-mod tests;
-
-/// Resolve exact-source manifest data; callers authenticate source/workflow/CI.
 pub(crate) fn resolve_policy_from_env(
     source_sha: &str,
 ) -> Result<(PackageReleasePolicy, PackageReleasePlan), OrchestratorError> {

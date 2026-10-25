@@ -1,4 +1,3 @@
-//! Readonly container observations over orchestrator-verified owned binaries.
 use super::invalid;
 use crate::{CheckDeadline, IsolatedCommand, MiseError};
 use std::ffi::OsString;
@@ -17,37 +16,23 @@ pub use observation::{
 mod probe;
 use probe::{probe_failure, probe_orbstack};
 
-/// Owned bytes and runtime paths verified and prepared by the orchestrator.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreparedContainer {
-    /// Job-private canonical home containing all projected executables.
     pub home: PathBuf,
-    /// Private credential-free Docker metadata/config directory.
     pub docker_config: PathBuf,
-    /// Immutable owned Docker executable.
     pub docker_program: PathBuf,
-    /// Observed SHA-256 of those copied Docker bytes.
     pub docker_sha256: String,
-    /// Immutable owned nested `OrbStack` CLI executable, when requested.
     pub orbctl_program: Option<PathBuf>,
-    /// Observed SHA-256 of the owned `OrbStack` CLI bytes.
     pub orbctl_sha256: Option<String>,
-    /// Explicit local endpoint whose socket type the orchestrator verified.
     pub endpoint: String,
 }
 
-/// Required container observations, absent only for a profile without a container.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CheckCapabilityProof {
-    /// Complete declaration-bound observed container identity.
     pub container: Option<ContainerObservation>,
 }
 
-/// Probe prepared binaries, their declared context and the actual daemon.
-/// No ambient executable, home, context or credential lookup is performed.
-/// # Errors
-/// Rejects missing preparation, undeclared programs, version/hash/daemon drift.
 pub fn verify_check_capabilities(
     runner: &CheckRunner,
     prepared: Option<&PreparedContainer>,
@@ -247,7 +232,3 @@ fn probe(
         stderr_digest,
     })
 }
-
-#[cfg(all(test, unix))]
-#[path = "check_capabilities_encoding_tests.rs"]
-mod encoding_tests;

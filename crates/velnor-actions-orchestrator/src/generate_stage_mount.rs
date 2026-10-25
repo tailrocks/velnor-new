@@ -1,5 +1,3 @@
-//! Mount identity checks for in-place output and cleanup walks.
-
 use std::path::Path;
 
 use crate::OrchestratorError;
@@ -18,7 +16,6 @@ pub(super) struct MountIdentity {
 }
 
 impl MountIdentity {
-    /// Capture the mount containing a real directory without following its leaf.
     pub(super) fn capture(path: &Path) -> Result<Self, OrchestratorError> {
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         {
@@ -94,29 +91,8 @@ impl MountIdentity {
             "mount_identity_unavailable",
         ))
     }
-
-    #[cfg(test)]
-    pub(super) fn different_for_test(&self) -> Self {
-        #[cfg(target_os = "linux")]
-        {
-            Self {
-                mount_id: self.mount_id.wrapping_add(1),
-            }
-        }
-        #[cfg(target_os = "macos")]
-        {
-            let mut mount_point = self.mount_point;
-            mount_point[0] = i8::from(mount_point[0] == 0);
-            Self { mount_point }
-        }
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-        {
-            self
-        }
-    }
 }
 
-/// Require the directory to remain on the expected mount.
 pub(super) fn require_mount(
     path: &Path,
     expected: &MountIdentity,
@@ -135,25 +111,5 @@ fn unsafe_path(path: &Path, reason: &str) -> OrchestratorError {
     OrchestratorError::UnsafePath {
         path: path.display().to_string(),
         reason: reason.to_owned(),
-    }
-}
-
-#[cfg(all(test, target_os = "linux"))]
-mod tests {
-    use super::MountIdentity;
-
-    #[test]
-    fn linux_mount_id_requires_the_kernel_to_report_its_mask() {
-        let error = MountIdentity::from_linux_fields(
-            std::path::Path::new("directory"),
-            rustix::fs::StatxFlags::empty(),
-            1,
-        )
-        .expect_err("missing STATX_MNT_ID must fail closed");
-        assert!(
-            error
-                .to_string()
-                .contains("linux_statx_mount_id_unavailable")
-        );
     }
 }

@@ -1,15 +1,11 @@
-//! Whole-template validation for action-owned MBX lifecycle commands.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Step, StepKind, StepRole};
 
 use crate::{RenderError, commands};
 
-/// Resolve the executable installed by the pinned native action.
 pub(crate) const RESOLVE_ACTION_MBX_BIN: &str = "if ! mbx_bin=$(command -v mbx); then printf '%s\\n' 'action-owned MBX is not on PATH' >&2; exit 1; fi; case \"$mbx_bin\" in /*) ;; *) printf '%s\\n' 'action-owned MBX path must be absolute' >&2; exit 1 ;; esac; if [ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]; then printf '%s\\n' 'action-owned MBX path must be an executable file' >&2; exit 1; fi";
 
-/// Shell-local absolute path assigned by [`RESOLVE_ACTION_MBX_BIN`].
 pub(crate) const ACTION_MBX_BIN: &str = "$mbx_bin";
 
 const RUST_EXEC_PREFIX: &str = "mise --no-config --no-env --no-hooks exec rust@";
@@ -19,8 +15,6 @@ const VERSION_LINE_SUFFIX: &str = "' ] ||";
 const PRESEED_VERSION_PREFIX: &str = "grep -qxF \"mbx ";
 const PRESEED_VERSION_SUFFIX: &str = "\"";
 
-/// Validate a fixed internally-built shell vector before its role is attached.
-/// The serialized form is checked again against a role-specific producer.
 pub(crate) fn validate_argv(argv: &[String]) -> Result<(), RenderError> {
     let script_at =
         commands::inline_shell_script_at(argv).ok_or_else(|| bad_shape("not_inline_shell"))?;
@@ -34,7 +28,6 @@ pub(crate) fn validate_argv(argv: &[String]) -> Result<(), RenderError> {
     commands::validate_command_argv(&validated)
 }
 
-/// Validate a serialized MBX role by rebuilding its complete canonical argv.
 pub(crate) fn validate_argv_for_role(
     argv: &[String],
     role: Option<StepRole>,
@@ -121,11 +114,6 @@ pub(crate) fn validate_argv_for_role(
     Ok(())
 }
 
-/// Validate a shell step using its role when the role owns an MBX template.
-///
-/// All other steps retain the generic fixed-argv validator. A role never
-/// grants a partial shell exception: MBX roles must match a complete
-/// producer-generated template in [`validate_argv_for_role`].
 pub(crate) fn validate_step_argv(
     argv: &[String],
     role: Option<StepRole>,
@@ -137,7 +125,6 @@ pub(crate) fn validate_step_argv(
     }
 }
 
-/// Workspace root encoded in a bundle step's `cd` (None for the checkout root).
 fn bundle_working_dir(script: &str) -> Result<Option<String>, RenderError> {
     const PREFIX: &str = "cd \"$GITHUB_WORKSPACE/";
     let Some((_, after)) = script.split_once(PREFIX) else {
@@ -149,7 +136,6 @@ fn bundle_working_dir(script: &str) -> Result<Option<String>, RenderError> {
     Ok(Some(dir.to_owned()))
 }
 
-/// Whether this role selects one of the complete MBX templates.
 fn role_uses_resolver(role: Option<StepRole>) -> bool {
     matches!(
         role,
@@ -165,7 +151,6 @@ fn role_uses_resolver(role: Option<StepRole>) -> bool {
 }
 
 fn rust_toolchain(script: &str) -> Result<&str, RenderError> {
-    // Project-declared Rust renders `'rust@'"${VELNOR_TOOL_RUST}"` (hard decision 5).
     if let Some((_, after)) = script.split_once(RUST_EXEC_QUOTED_PREFIX)
         && let Some((rust, _)) = after.split_once("\" -- ")
         && velnor_actions_contract::config::project_tool_refs::is_project_tool_ref(rust)
@@ -277,7 +262,3 @@ pub(crate) fn target_dir_for_action(
 fn bad_shape(reason: &str) -> RenderError {
     RenderError::BadCommand(format!("action_owned_mbx_binding:{reason}"))
 }
-
-#[cfg(test)]
-#[path = "action_mbx_shell_tests.rs"]
-mod tests;

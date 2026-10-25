@@ -1,15 +1,9 @@
-//! Opaque credential transport validation and the explicit GitHub-token policy.
-
 use std::ffi::OsString;
 
 use crate::error::MiseError;
 
 use super::{EnvPolicy, IsolatedCommand};
 
-/// True when a value is safe to transport as an opaque credential.
-///
-/// This checks only the byte set needed by Velnor's environment and config
-/// transports. It does not authenticate the value or assume a token format.
 #[must_use]
 pub fn is_safe_credential_value(value: &str) -> bool {
     !value.is_empty()

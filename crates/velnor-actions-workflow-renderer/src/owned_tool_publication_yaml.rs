@@ -1,5 +1,3 @@
-//! Mechanical rendering of closed owned-source qualification event categories.
-
 use crate::{Yaml, steps};
 use velnor_actions_contract::JobTimeout;
 

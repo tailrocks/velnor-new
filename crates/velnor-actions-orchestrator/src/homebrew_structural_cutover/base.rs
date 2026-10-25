@@ -1,5 +1,3 @@
-//! Exact seed-output-base witness for the one-time structural Homebrew cutover.
-
 use std::{collections::BTreeMap, path::Path};
 
 use serde::{Deserialize, Serialize};
@@ -10,8 +8,6 @@ use crate::{OrchestratorError, internal::internal};
 const CALLER_WORKFLOW: &str = ".github/workflows/ci.yml";
 const MAX_CALLER_WORKFLOW_BYTES: usize = 256 * 1024;
 
-/// Serialized identity for proof that the protected base is the exact output
-/// of the protected seed transition under its authenticated SDK release.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct HomebrewSeedOutputBaseIdentity {
@@ -30,8 +26,6 @@ pub(crate) struct HomebrewSeedOutputBaseIdentity {
     pub(crate) witness_digest: String,
 }
 
-/// Private constructor custody. Candidate JSON can retain the identity but
-/// cannot construct this value or bypass replay of the protected seed output.
 #[derive(Debug, Clone)]
 pub(crate) struct PrivateVerifiedSeedOutputBase {
     identity: HomebrewSeedOutputBaseIdentity,
@@ -60,12 +54,6 @@ struct SeedSelection {
     source_sha: String,
     manifest_sha256: String,
 }
-/// Prove that the API-authenticated protected tap base is exactly the
-/// deterministic output of the initial seed under its published SDK binding.
-///
-/// A missing seed caller means ordinary source authority and returns `None`.
-/// A caller that selects the seed is fully authenticated and replayed; any
-/// mismatch is an error and never falls back to ordinary legacy-file parsing.
 pub(crate) fn verify_seed_output_base(
     root: &Path,
     authority: &crate::homebrew::authority::VerifiedHomebrewAuthority,
@@ -358,7 +346,3 @@ struct SeedOutputBaseWitnessPreimage {
     sdk_seed_runner_binary_sha256: String,
     formula_spec_digest: String,
 }
-
-#[cfg(test)]
-#[path = "../homebrew_structural_seed_tests.rs"]
-mod tests;

@@ -1,0 +1,649 @@
+row: {"check":"policy-header","detail":"1","status":"pass","subject":"schema"}
+ok: policy-header schema 1
+row: {"check":"policy-header","detail":"\"stable\"","status":"pass","subject":"channel"}
+ok: policy-header channel "stable"
+row: {"check":"policy-header","detail":"24","status":"pass","subject":"check_interval_hours"}
+ok: policy-header check_interval_hours 24
+row: {"check":"policy-header","detail":"14","status":"pass","subject":"max_exception_days"}
+ok: policy-header max_exception_days 14
+row: {"check":"policy-header","detail":"https://github.com/rust-lang/crates.io-index","status":"pass","subject":"registry"}
+ok: policy-header registry https://github.com/rust-lang/crates.io-index
+row: {"check":"policy-header","detail":"3 (default)","status":"pass","subject":"default_cooldown_days"}
+ok: policy-header default_cooldown_days 3 (default)
+row: {"check":"local-pin","detail":"2026.10.18","status":"pass","subject":"tool mise (crates/velnor-actions-mise/src/catalog.rs::MISE_VERSION)"}
+ok: local-pin tool mise (crates/velnor-actions-mise/src/catalog.rs::MISE_VERSION) 2026.10.18
+row: {"check":"local-pin","detail":"1.99.1","status":"pass","subject":"tool rust (crates/velnor-actions-mise/src/catalog.rs::RUST_VERSION)"}
+ok: local-pin tool rust (crates/velnor-actions-mise/src/catalog.rs::RUST_VERSION) 1.99.1
+row: {"check":"local-pin","detail":"1.27.0","status":"pass","subject":"tool mr-boxington (crates/velnor-actions-mise/src/catalog.rs::MR_BOXINGTON_VERSION)"}
+ok: local-pin tool mr-boxington (crates/velnor-actions-mise/src/catalog.rs::MR_BOXINGTON_VERSION) 1.27.0
+row: {"check":"local-pin","detail":"2.103.2","status":"pass","subject":"tool gh (crates/velnor-actions-mise/src/catalog.rs::GH_VERSION)"}
+ok: local-pin tool gh (crates/velnor-actions-mise/src/catalog.rs::GH_VERSION) 2.103.2
+row: {"check":"local-pin","detail":"2.3.0","status":"pass","subject":"tool jactionlint (crates/velnor-actions-contract/src/config/jactionlint_verifier.rs::JACTIONLINT_VERSION)"}
+ok: local-pin tool jactionlint (crates/velnor-actions-contract/src/config/jactionlint_verifier.rs::JACTIONLINT_VERSION) 2.3.0
+row: {"check":"local-pin","detail":"0.11.0","status":"pass","subject":"tool shellcheck (crates/velnor-actions-mise/src/catalog.rs::SHELLCHECK_VERSION)"}
+ok: local-pin tool shellcheck (crates/velnor-actions-mise/src/catalog.rs::SHELLCHECK_VERSION) 0.11.0
+row: {"check":"local-pin","detail":"0.9.149","status":"pass","subject":"tool nextest (crates/velnor-actions-mise/src/catalog.rs::NEXTEST_VERSION)"}
+ok: local-pin tool nextest (crates/velnor-actions-mise/src/catalog.rs::NEXTEST_VERSION) 0.9.149
+row: {"check":"local-pin","detail":"1.13.2","status":"pass","subject":"tool opentofu (crates/velnor-actions-mise/src/catalog.rs::OPENTOFU_VERSION)"}
+ok: local-pin tool opentofu (crates/velnor-actions-mise/src/catalog.rs::OPENTOFU_VERSION) 1.13.2
+row: {"check":"local-pin","detail":"0.4.1","status":"pass","subject":"tool release-plz (crates/velnor-actions-mise/src/catalog.rs::RELEASE_PLZ_VERSION)"}
+ok: local-pin tool release-plz (crates/velnor-actions-mise/src/catalog.rs::RELEASE_PLZ_VERSION) 0.4.1
+row: {"check":"local-pin","detail":"0.22.1","status":"pass","subject":"tool crane (crates/velnor-actions-mise/src/catalog.rs::CRANE_VERSION)"}
+ok: local-pin tool crane (crates/velnor-actions-mise/src/catalog.rs::CRANE_VERSION) 0.22.1
+row: {"check":"local-pin","detail":"1.4.4","status":"pass","subject":"tool bun (crates/velnor-actions-mise/src/catalog.rs::BUN_VERSION)"}
+ok: local-pin tool bun (crates/velnor-actions-mise/src/catalog.rs::BUN_VERSION) 1.4.4
+row: {"check":"local-pin","detail":"3.1.4","status":"pass","subject":"tool cosign (crates/velnor-actions-mise/src/catalog.rs::COSIGN_VERSION)"}
+ok: local-pin tool cosign (crates/velnor-actions-mise/src/catalog.rs::COSIGN_VERSION) 3.1.4
+row: {"check":"local-pin","detail":"145688404","status":"pass","subject":"tool cosign Linux x86_64 release size"}
+ok: local-pin tool cosign Linux x86_64 release size 145688404
+row: {"check":"local-pin","detail":"424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa","status":"pass","subject":"tool cosign Linux x86_64 release digest"}
+ok: local-pin tool cosign Linux x86_64 release digest 424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa
+row: {"check":"local-pin","detail":"136437761","status":"pass","subject":"tool cosign Linux arm64 release size"}
+ok: local-pin tool cosign Linux arm64 release size 136437761
+row: {"check":"local-pin","detail":"ade83b7aac62e131cacfe96d958948b2150cc9efec46a570a2649b8e27dedad2","status":"pass","subject":"tool cosign Linux arm64 release digest"}
+ok: local-pin tool cosign Linux arm64 release digest ade83b7aac62e131cacfe96d958948b2150cc9efec46a570a2649b8e27dedad2
+row: {"check":"local-pin","detail":"v4.2.2","status":"pass","subject":"action actions/attest version (crates/velnor-actions-actionlint/src/actions.rs::ATTEST_ACTION_VERSION)"}
+ok: local-pin action actions/attest version (crates/velnor-actions-actionlint/src/actions.rs::ATTEST_ACTION_VERSION) v4.2.2
+row: {"check":"local-pin","detail":"1e69f48acb82d1966a394da916b4c1698aa569d6","status":"pass","subject":"action actions/attest sha (crates/velnor-actions-actionlint/src/actions.rs::ATTEST_ACTION_SHA)"}
+ok: local-pin action actions/attest sha (crates/velnor-actions-actionlint/src/actions.rs::ATTEST_ACTION_SHA) 1e69f48acb82d1966a394da916b4c1698aa569d6
+row: {"check":"local-pin","detail":"v4.2.2","status":"pass","subject":"action actions/attest-build-provenance version (crates/velnor-actions-actionlint/src/actions.rs::ATTEST_BUILD_PROVENANCE_ACTION_VERSION)"}
+ok: local-pin action actions/attest-build-provenance version (crates/velnor-actions-actionlint/src/actions.rs::ATTEST_BUILD_PROVENANCE_ACTION_VERSION) v4.2.2
+row: {"check":"local-pin","detail":"4d101475d8b20a2381f78447822ac1eab6504dd8","status":"pass","subject":"action actions/attest-build-provenance sha (crates/velnor-actions-actionlint/src/actions.rs::ATTEST_BUILD_PROVENANCE_ACTION_SHA)"}
+ok: local-pin action actions/attest-build-provenance sha (crates/velnor-actions-actionlint/src/actions.rs::ATTEST_BUILD_PROVENANCE_ACTION_SHA) 4d101475d8b20a2381f78447822ac1eab6504dd8
+row: {"check":"local-pin","detail":"v6.1.0","status":"pass","subject":"action actions/cache/restore version (crates/velnor-actions-actionlint/src/actions.rs::CACHE_ACTION_VERSION)"}
+ok: local-pin action actions/cache/restore version (crates/velnor-actions-actionlint/src/actions.rs::CACHE_ACTION_VERSION) v6.1.0
+row: {"check":"local-pin","detail":"55cc8345863c7cc4c66a329aec7e433d2d1c52a9","status":"pass","subject":"action actions/cache/restore sha (crates/velnor-actions-actionlint/src/actions.rs::CACHE_ACTION_SHA)"}
+ok: local-pin action actions/cache/restore sha (crates/velnor-actions-actionlint/src/actions.rs::CACHE_ACTION_SHA) 55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+row: {"check":"local-pin","detail":"v6.1.0","status":"pass","subject":"action actions/cache/save version (crates/velnor-actions-actionlint/src/actions.rs::CACHE_ACTION_VERSION)"}
+ok: local-pin action actions/cache/save version (crates/velnor-actions-actionlint/src/actions.rs::CACHE_ACTION_VERSION) v6.1.0
+row: {"check":"local-pin","detail":"55cc8345863c7cc4c66a329aec7e433d2d1c52a9","status":"pass","subject":"action actions/cache/save sha (crates/velnor-actions-actionlint/src/actions.rs::CACHE_ACTION_SHA)"}
+ok: local-pin action actions/cache/save sha (crates/velnor-actions-actionlint/src/actions.rs::CACHE_ACTION_SHA) 55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+row: {"check":"local-pin","detail":"v7.0.1","status":"pass","subject":"action actions/checkout version (crates/velnor-actions-actionlint/src/actions.rs::CHECKOUT_ACTION_VERSION)"}
+ok: local-pin action actions/checkout version (crates/velnor-actions-actionlint/src/actions.rs::CHECKOUT_ACTION_VERSION) v7.0.1
+row: {"check":"local-pin","detail":"3d3c42e5aac5ba805825da76410c181273ba90b1","status":"pass","subject":"action actions/checkout sha (crates/velnor-actions-actionlint/src/actions.rs::CHECKOUT_ACTION_SHA)"}
+ok: local-pin action actions/checkout sha (crates/velnor-actions-actionlint/src/actions.rs::CHECKOUT_ACTION_SHA) 3d3c42e5aac5ba805825da76410c181273ba90b1
+row: {"check":"local-pin","detail":"v3.3.0","status":"pass","subject":"action actions/create-github-app-token version (crates/velnor-actions-actionlint/src/actions.rs::CREATE_GITHUB_APP_TOKEN_ACTION_VERSION)"}
+ok: local-pin action actions/create-github-app-token version (crates/velnor-actions-actionlint/src/actions.rs::CREATE_GITHUB_APP_TOKEN_ACTION_VERSION) v3.3.0
+row: {"check":"local-pin","detail":"64ab729a6294000f5aa4a4bc0b73d1f32bc45510","status":"pass","subject":"action actions/create-github-app-token sha (crates/velnor-actions-actionlint/src/actions.rs::CREATE_GITHUB_APP_TOKEN_ACTION_SHA)"}
+ok: local-pin action actions/create-github-app-token sha (crates/velnor-actions-actionlint/src/actions.rs::CREATE_GITHUB_APP_TOKEN_ACTION_SHA) 64ab729a6294000f5aa4a4bc0b73d1f32bc45510
+row: {"check":"local-pin","detail":"v8.0.2","status":"pass","subject":"action actions/download-artifact version (crates/velnor-actions-actionlint/src/actions.rs::DOWNLOAD_ARTIFACT_ACTION_VERSION)"}
+ok: local-pin action actions/download-artifact version (crates/velnor-actions-actionlint/src/actions.rs::DOWNLOAD_ARTIFACT_ACTION_VERSION) v8.0.2
+row: {"check":"local-pin","detail":"9000827ccba6bdab643e8b6fd33ac0654aef8333","status":"pass","subject":"action actions/download-artifact sha (crates/velnor-actions-actionlint/src/actions.rs::DOWNLOAD_ARTIFACT_ACTION_SHA)"}
+ok: local-pin action actions/download-artifact sha (crates/velnor-actions-actionlint/src/actions.rs::DOWNLOAD_ARTIFACT_ACTION_SHA) 9000827ccba6bdab643e8b6fd33ac0654aef8333
+row: {"check":"local-pin","detail":"v9.0.0","status":"pass","subject":"action actions/github-script version (crates/velnor-actions-actionlint/src/actions.rs::GITHUB_SCRIPT_ACTION_VERSION)"}
+ok: local-pin action actions/github-script version (crates/velnor-actions-actionlint/src/actions.rs::GITHUB_SCRIPT_ACTION_VERSION) v9.0.0
+row: {"check":"local-pin","detail":"3a2844b7e9c422d3c10d287c895573f7108da1b3","status":"pass","subject":"action actions/github-script sha (crates/velnor-actions-actionlint/src/actions.rs::GITHUB_SCRIPT_ACTION_SHA)"}
+ok: local-pin action actions/github-script sha (crates/velnor-actions-actionlint/src/actions.rs::GITHUB_SCRIPT_ACTION_SHA) 3a2844b7e9c422d3c10d287c895573f7108da1b3
+row: {"check":"local-pin","detail":"v7.0.2","status":"pass","subject":"action actions/upload-artifact version (crates/velnor-actions-actionlint/src/actions.rs::UPLOAD_ARTIFACT_ACTION_VERSION)"}
+ok: local-pin action actions/upload-artifact version (crates/velnor-actions-actionlint/src/actions.rs::UPLOAD_ARTIFACT_ACTION_VERSION) v7.0.2
+row: {"check":"local-pin","detail":"cf430e030ddbb5b0abf93d22962f4752f3646cd9","status":"pass","subject":"action actions/upload-artifact sha (crates/velnor-actions-actionlint/src/actions.rs::UPLOAD_ARTIFACT_ACTION_SHA)"}
+ok: local-pin action actions/upload-artifact sha (crates/velnor-actions-actionlint/src/actions.rs::UPLOAD_ARTIFACT_ACTION_SHA) cf430e030ddbb5b0abf93d22962f4752f3646cd9
+row: {"check":"local-pin","detail":"v0.20.1","status":"pass","subject":"action asamarts/alint version (crates/velnor-actions-actionlint/src/actions.rs::ALINT_ACTION_VERSION)"}
+ok: local-pin action asamarts/alint version (crates/velnor-actions-actionlint/src/actions.rs::ALINT_ACTION_VERSION) v0.20.1
+row: {"check":"local-pin","detail":"265d9fdc720bb8f59d00b87e33e4149869f77327","status":"pass","subject":"action asamarts/alint sha (crates/velnor-actions-actionlint/src/actions.rs::ALINT_ACTION_SHA)"}
+ok: local-pin action asamarts/alint sha (crates/velnor-actions-actionlint/src/actions.rs::ALINT_ACTION_SHA) 265d9fdc720bb8f59d00b87e33e4149869f77327
+row: {"check":"local-pin","detail":"v6.3.0","status":"pass","subject":"action aws-actions/configure-aws-credentials version (crates/velnor-actions-actionlint/src/actions.rs::AWS_CREDENTIALS_ACTION_VERSION)"}
+ok: local-pin action aws-actions/configure-aws-credentials version (crates/velnor-actions-actionlint/src/actions.rs::AWS_CREDENTIALS_ACTION_VERSION) v6.3.0
+row: {"check":"local-pin","detail":"e1253824e5c10ff9df46874f81ed3ec929e19cfd","status":"pass","subject":"action aws-actions/configure-aws-credentials sha (crates/velnor-actions-actionlint/src/actions.rs::AWS_CREDENTIALS_ACTION_SHA)"}
+ok: local-pin action aws-actions/configure-aws-credentials sha (crates/velnor-actions-actionlint/src/actions.rs::AWS_CREDENTIALS_ACTION_SHA) e1253824e5c10ff9df46874f81ed3ec929e19cfd
+row: {"check":"local-pin","detail":"v5.2.3","status":"pass","subject":"action jdx/mise-action version (crates/velnor-actions-actionlint/src/actions.rs::MISE_ACTION_VERSION)"}
+ok: local-pin action jdx/mise-action version (crates/velnor-actions-actionlint/src/actions.rs::MISE_ACTION_VERSION) v5.2.3
+row: {"check":"local-pin","detail":"82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e","status":"pass","subject":"action jdx/mise-action sha (crates/velnor-actions-actionlint/src/actions.rs::MISE_ACTION_SHA)"}
+ok: local-pin action jdx/mise-action sha (crates/velnor-actions-actionlint/src/actions.rs::MISE_ACTION_SHA) 82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e
+row: {"check":"local-pin","detail":"v1.7.2","status":"pass","subject":"action jdx/mr-boxington-action version (crates/velnor-actions-actionlint/src/actions.rs::MR_BOXINGTON_ACTION_VERSION)"}
+ok: local-pin action jdx/mr-boxington-action version (crates/velnor-actions-actionlint/src/actions.rs::MR_BOXINGTON_ACTION_VERSION) v1.7.2
+row: {"check":"local-pin","detail":"47ce49b32025d93a7a2f4570815afaa2b7092240","status":"pass","subject":"action jdx/mr-boxington-action sha (crates/velnor-actions-actionlint/src/actions.rs::MR_BOXINGTON_ACTION_SHA)"}
+ok: local-pin action jdx/mr-boxington-action sha (crates/velnor-actions-actionlint/src/actions.rs::MR_BOXINGTON_ACTION_SHA) 47ce49b32025d93a7a2f4570815afaa2b7092240
+row: {"check":"local-pin","detail":"2.3.0","status":"pass","subject":"tool jactionlint mirror (capabilities.rs)"}
+ok: local-pin tool jactionlint mirror (capabilities.rs) 2.3.0
+row: {"check":"local-pin","detail":"0.11.0","status":"pass","subject":"tool shellcheck mirror (tools.rs)"}
+ok: local-pin tool shellcheck mirror (tools.rs) 0.11.0
+row: {"check":"local-pin","detail":"v0.20.1","status":"pass","subject":"action asamarts/alint binary mirror (render.rs)"}
+ok: local-pin action asamarts/alint binary mirror (render.rs) v0.20.1
+row: {"check":"local-pin","detail":"actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8","status":"pass","subject":"action actions/attest-build-provenance renderer source ref (crates/velnor-actions-workflow-renderer/src/steps.rs::ATTEST_BUILD_PROVENANCE_USES)"}
+ok: local-pin action actions/attest-build-provenance renderer source ref (crates/velnor-actions-workflow-renderer/src/steps.rs::ATTEST_BUILD_PROVENANCE_USES) actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
+row: {"check":"local-pin","detail":"actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510","status":"pass","subject":"action actions/create-github-app-token renderer source ref (crates/velnor-actions-workflow-renderer/src/steps.rs::CREATE_GITHUB_APP_TOKEN_USES)"}
+ok: local-pin action actions/create-github-app-token renderer source ref (crates/velnor-actions-workflow-renderer/src/steps.rs::CREATE_GITHUB_APP_TOKEN_USES) actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
+row: {"check":"local-pin","detail":"ubuntu-26.04","status":"pass","subject":"runner default (workflow.rs::LATEST_RUNNER_LABEL)"}
+ok: local-pin runner default (workflow.rs::LATEST_RUNNER_LABEL) ubuntu-26.04
+row: {"check":"local-pin","detail":"ubuntu-26.04,ubuntu-24.04,ubuntu-22.04","status":"pass","subject":"runner supported"}
+ok: local-pin runner supported ubuntu-26.04,ubuntu-24.04,ubuntu-22.04
+row: {"check":"policy-mirror","detail":"1.4.4","status":"pass","subject":"tool bun"}
+ok: policy-mirror tool bun 1.4.4
+row: {"check":"policy-mirror","detail":"3.1.4","status":"pass","subject":"tool cosign"}
+ok: policy-mirror tool cosign 3.1.4
+row: {"check":"policy-mirror","detail":"0.22.1","status":"pass","subject":"tool crane"}
+ok: policy-mirror tool crane 0.22.1
+row: {"check":"policy-mirror","detail":"2.103.2","status":"pass","subject":"tool gh"}
+ok: policy-mirror tool gh 2.103.2
+row: {"check":"policy-mirror","detail":"2.3.0","status":"pass","subject":"tool jactionlint"}
+ok: policy-mirror tool jactionlint 2.3.0
+row: {"check":"policy-mirror","detail":"2026.10.18","status":"pass","subject":"tool mise"}
+ok: policy-mirror tool mise 2026.10.18
+row: {"check":"policy-mirror","detail":"1.27.0","status":"pass","subject":"tool mr-boxington"}
+ok: policy-mirror tool mr-boxington 1.27.0
+row: {"check":"policy-mirror","detail":"0.9.149","status":"pass","subject":"tool nextest"}
+ok: policy-mirror tool nextest 0.9.149
+row: {"check":"policy-mirror","detail":"1.13.2","status":"pass","subject":"tool opentofu"}
+ok: policy-mirror tool opentofu 1.13.2
+row: {"check":"policy-mirror","detail":"0.4.1","status":"pass","subject":"tool release-plz"}
+ok: policy-mirror tool release-plz 0.4.1
+row: {"check":"policy-mirror","detail":"1.99.1","status":"pass","subject":"tool rust"}
+ok: policy-mirror tool rust 1.99.1
+row: {"check":"policy-mirror","detail":"0.11.0","status":"pass","subject":"tool shellcheck"}
+ok: policy-mirror tool shellcheck 0.11.0
+row: {"check":"policy-mirror","detail":"ubuntu-26.04","status":"pass","subject":"runner default"}
+ok: policy-mirror runner default ubuntu-26.04
+row: {"check":"policy-mirror","detail":"ubuntu-26.04,ubuntu-24.04,ubuntu-22.04","status":"pass","subject":"runner supported"}
+ok: policy-mirror runner supported ubuntu-26.04,ubuntu-24.04,ubuntu-22.04
+row: {"check":"policy-mirror","detail":"v4.2.2@1e69f48acb82d1966a394da916b4c1698aa569d6","status":"pass","subject":"action actions/attest"}
+ok: policy-mirror action actions/attest v4.2.2@1e69f48acb82d1966a394da916b4c1698aa569d6
+row: {"check":"policy-mirror","detail":"v4.2.2@4d101475d8b20a2381f78447822ac1eab6504dd8","status":"pass","subject":"action actions/attest-build-provenance"}
+ok: policy-mirror action actions/attest-build-provenance v4.2.2@4d101475d8b20a2381f78447822ac1eab6504dd8
+row: {"check":"policy-mirror","detail":"v6.1.0@55cc8345863c7cc4c66a329aec7e433d2d1c52a9","status":"pass","subject":"action actions/cache/restore"}
+ok: policy-mirror action actions/cache/restore v6.1.0@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+row: {"check":"policy-mirror","detail":"v6.1.0@55cc8345863c7cc4c66a329aec7e433d2d1c52a9","status":"pass","subject":"action actions/cache/save"}
+ok: policy-mirror action actions/cache/save v6.1.0@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+row: {"check":"policy-mirror","detail":"v7.0.1@3d3c42e5aac5ba805825da76410c181273ba90b1","status":"pass","subject":"action actions/checkout"}
+ok: policy-mirror action actions/checkout v7.0.1@3d3c42e5aac5ba805825da76410c181273ba90b1
+row: {"check":"policy-mirror","detail":"v3.3.0@64ab729a6294000f5aa4a4bc0b73d1f32bc45510","status":"pass","subject":"action actions/create-github-app-token"}
+ok: policy-mirror action actions/create-github-app-token v3.3.0@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
+row: {"check":"policy-mirror","detail":"v8.0.2@9000827ccba6bdab643e8b6fd33ac0654aef8333","status":"pass","subject":"action actions/download-artifact"}
+ok: policy-mirror action actions/download-artifact v8.0.2@9000827ccba6bdab643e8b6fd33ac0654aef8333
+row: {"check":"policy-mirror","detail":"v9.0.0@3a2844b7e9c422d3c10d287c895573f7108da1b3","status":"pass","subject":"action actions/github-script"}
+ok: policy-mirror action actions/github-script v9.0.0@3a2844b7e9c422d3c10d287c895573f7108da1b3
+row: {"check":"policy-mirror","detail":"v7.0.2@cf430e030ddbb5b0abf93d22962f4752f3646cd9","status":"pass","subject":"action actions/upload-artifact"}
+ok: policy-mirror action actions/upload-artifact v7.0.2@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+row: {"check":"policy-mirror","detail":"v0.20.1@265d9fdc720bb8f59d00b87e33e4149869f77327","status":"pass","subject":"action asamarts/alint"}
+ok: policy-mirror action asamarts/alint v0.20.1@265d9fdc720bb8f59d00b87e33e4149869f77327
+row: {"check":"policy-mirror","detail":"v6.3.0@e1253824e5c10ff9df46874f81ed3ec929e19cfd","status":"pass","subject":"action aws-actions/configure-aws-credentials"}
+ok: policy-mirror action aws-actions/configure-aws-credentials v6.3.0@e1253824e5c10ff9df46874f81ed3ec929e19cfd
+row: {"check":"policy-mirror","detail":"v5.2.3@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e","status":"pass","subject":"action jdx/mise-action"}
+ok: policy-mirror action jdx/mise-action v5.2.3@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e
+row: {"check":"policy-mirror","detail":"v1.7.2@47ce49b32025d93a7a2f4570815afaa2b7092240","status":"pass","subject":"action jdx/mr-boxington-action"}
+ok: policy-mirror action jdx/mr-boxington-action v1.7.2@47ce49b32025d93a7a2f4570815afaa2b7092240
+row: {"check":"local-pin","detail":"27.1.0","status":"pass","subject":"validation-tools/cargo-mutants"}
+ok: local-pin validation-tools/cargo-mutants 27.1.0
+row: {"check":"local-pin","detail":"111 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-contract/src/config/**/*.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-contract/src/config/**/*.rs 111 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-contract/src/strict_json.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-contract/src/strict_json.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-contract/src/manifest.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-contract/src/manifest.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-contract/src/candidate_manifest.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-contract/src/candidate_manifest.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-contract/src/tooling.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-contract/src/tooling.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-contract/src/workflow/plan.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-contract/src/workflow/plan.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-rust/src/metadata.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-rust/src/metadata.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-mise/src/lock.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-mise/src/lock.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-mise/src/toolfiles.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-mise/src/toolfiles.rs 1 match(es)
+row: {"check":"local-pin","detail":"5 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-contract/src/ids/**/*.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-contract/src/ids/**/*.rs 5 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-contract/src/cachekey.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-contract/src/cachekey.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-contract/src/workflow/cache_ids.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-contract/src/workflow/cache_ids.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-rust/src/identity.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-rust/src/identity.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/generator.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/generator.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/select.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/select.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/select_affected.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/select_affected.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/select_edges.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/select_edges.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/cover.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/cover.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/merge.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/merge.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/merge_request.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/merge_request.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/inventory.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/inventory.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/pins.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/pins.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/validate.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/validate.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/wire_w1.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/wire_w1.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/wire_w2.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/wire_w2.rs 1 match(es)
+row: {"check":"lock-staleness","detail":"=0.1.55 @ workspace","status":"pass","subject":"velnor-actions-actionlint:dependencies:velnor-actions-contract"}
+ok: lock-staleness velnor-actions-actionlint:dependencies:velnor-actions-contract =0.1.55 @ workspace
+row: {"check":"lock-staleness","detail":"=2.0.21 @ registry","status":"pass","subject":"velnor-actions-ansible:dependencies:thiserror"}
+ok: lock-staleness velnor-actions-ansible:dependencies:thiserror =2.0.21 @ registry
+row: {"check":"lock-staleness","detail":"=1.1.8 @ registry","status":"pass","subject":"velnor-actions-ansible:dependencies:toml"}
+ok: lock-staleness velnor-actions-ansible:dependencies:toml =1.1.8 @ registry
+row: {"check":"lock-staleness","detail":"=0.1.55 @ workspace","status":"pass","subject":"velnor-actions-ansible:dependencies:velnor-actions-contract"}
+ok: lock-staleness velnor-actions-ansible:dependencies:velnor-actions-contract =0.1.55 @ workspace
+row: {"check":"lock-staleness","detail":"=1.0.154 @ registry","status":"pass","subject":"velnor-actions-bun:dependencies:serde_json"}
+ok: lock-staleness velnor-actions-bun:dependencies:serde_json =1.0.154 @ registry
+row: {"check":"lock-staleness","detail":"=2.0.21 @ registry","status":"pass","subject":"velnor-actions-bun:dependencies:thiserror"}
+ok: lock-staleness velnor-actions-bun:dependencies:thiserror =2.0.21 @ registry
+row: {"check":"lock-staleness","detail":"=1.1.8 @ registry","status":"pass","subject":"velnor-actions-bun:dependencies:toml"}
+ok: lock-staleness velnor-actions-bun:dependencies:toml =1.1.8 @ registry
+row: {"check":"lock-staleness","detail":"=0.1.55 @ workspace","status":"pass","subject":"velnor-actions-bun:dependencies:velnor-actions-contract"}
+ok: lock-staleness velnor-actions-bun:dependencies:velnor-actions-contract =0.1.55 @ workspace
+row: {"check":"lock-staleness","detail":"=4.6.7 @ registry","status":"pass","subject":"velnor-actions-cli:dependencies:clap"}
+ok: lock-staleness velnor-actions-cli:dependencies:clap =4.6.7 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.154 @ registry","status":"pass","subject":"velnor-actions-cli:dependencies:serde_json"}
+ok: lock-staleness velnor-actions-cli:dependencies:serde_json =1.0.154 @ registry
+row: {"check":"lock-staleness","detail":"=0.1.55 @ workspace","status":"pass","subject":"velnor-actions-cli:dependencies:velnor-actions-freshness"}
+ok: lock-staleness velnor-actions-cli:dependencies:velnor-actions-freshness =0.1.55 @ workspace
+row: {"check":"lock-staleness","detail":"=0.1.55 @ workspace","status":"pass","subject":"velnor-actions-cli:dependencies:velnor-actions-orchestrator"}
+ok: lock-staleness velnor-actions-cli:dependencies:velnor-actions-orchestrator =0.1.55 @ workspace
+row: {"check":"lock-staleness","detail":"=1.1.10 @ registry","status":"pass","subject":"velnor-actions-cli:dev-dependencies:flate2"}
+ok: lock-staleness velnor-actions-cli:dev-dependencies:flate2 =1.1.10 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.107 @ registry","status":"pass","subject":"velnor-actions-cli:dev-dependencies:proc-macro2"}
+ok: lock-staleness velnor-actions-cli:dev-dependencies:proc-macro2 =1.0.107 @ registry
+row: {"check":"lock-staleness","detail":"=1.1.5 @ registry","status":"pass","subject":"velnor-actions-cli:dev-dependencies:rustix"}
+ok: lock-staleness velnor-actions-cli:dev-dependencies:rustix =1.1.5 @ registry
+row: {"check":"lock-staleness","detail":"=0.11.1 @ registry","status":"pass","subject":"velnor-actions-cli:dev-dependencies:sha2"}
+ok: lock-staleness velnor-actions-cli:dev-dependencies:sha2 =0.11.1 @ registry
+row: {"check":"lock-staleness","detail":"=3.0.9 @ registry","status":"pass","subject":"velnor-actions-cli:dev-dependencies:syn"}
+ok: lock-staleness velnor-actions-cli:dev-dependencies:syn =3.0.9 @ registry
+row: {"check":"lock-staleness","detail":"=1.8.7 @ registry","status":"pass","subject":"velnor-actions-contract:dependencies:blake3"}
+ok: lock-staleness velnor-actions-contract:dependencies:blake3 =1.8.7 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.229 @ registry","status":"pass","subject":"velnor-actions-contract:dependencies:serde"}
+ok: lock-staleness velnor-actions-contract:dependencies:serde =1.0.229 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.154 @ registry","status":"pass","subject":"velnor-actions-contract:dependencies:serde_json"}
+ok: lock-staleness velnor-actions-contract:dependencies:serde_json =1.0.154 @ registry
+row: {"check":"lock-staleness","detail":"=0.11.1 @ registry","status":"pass","subject":"velnor-actions-contract:dependencies:sha2"}
+ok: lock-staleness velnor-actions-contract:dependencies:sha2 =0.11.1 @ registry
+row: {"check":"lock-staleness","detail":"=2.0.21 @ registry","status":"pass","subject":"velnor-actions-contract:dependencies:thiserror"}
+ok: lock-staleness velnor-actions-contract:dependencies:thiserror =2.0.21 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.154 @ registry","status":"pass","subject":"velnor-actions-contract:dev-dependencies:serde_json"}
+ok: lock-staleness velnor-actions-contract:dev-dependencies:serde_json =1.0.154 @ registry
+row: {"check":"lock-staleness","detail":"=2.0.21 @ registry","status":"pass","subject":"velnor-actions-dbt:dependencies:thiserror"}
+ok: lock-staleness velnor-actions-dbt:dependencies:thiserror =2.0.21 @ registry
+row: {"check":"lock-staleness","detail":"=1.1.8 @ registry","status":"pass","subject":"velnor-actions-dbt:dependencies:toml"}
+ok: lock-staleness velnor-actions-dbt:dependencies:toml =1.1.8 @ registry
+row: {"check":"lock-staleness","detail":"=0.1.55 @ workspace","status":"pass","subject":"velnor-actions-dbt:dependencies:velnor-actions-contract"}
+ok: lock-staleness velnor-actions-dbt:dependencies:velnor-actions-contract =0.1.55 @ workspace
+row: {"check":"lock-staleness","detail":"=1.1.10 @ registry","status":"pass","subject":"velnor-actions-freshness:dependencies:flate2"}
+ok: lock-staleness velnor-actions-freshness:dependencies:flate2 =1.1.10 @ registry
+row: {"check":"lock-staleness","detail":"=1.1.5 @ registry","status":"pass","subject":"velnor-actions-freshness:dependencies:rustix"}
+ok: lock-staleness velnor-actions-freshness:dependencies:rustix =1.1.5 @ registry
+row: {"check":"lock-staleness","detail":"=0.23.46 @ registry","status":"pass","subject":"velnor-actions-freshness:dependencies:rustls"}
+ok: lock-staleness velnor-actions-freshness:dependencies:rustls =0.23.46 @ registry
+row: {"check":"lock-staleness","detail":"=0.8.5 @ registry","status":"pass","subject":"velnor-actions-freshness:dependencies:rustls-native-certs"}
+ok: lock-staleness velnor-actions-freshness:dependencies:rustls-native-certs =0.8.5 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.229 @ registry","status":"pass","subject":"velnor-actions-freshness:dependencies:serde"}
+ok: lock-staleness velnor-actions-freshness:dependencies:serde =1.0.229 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.154 @ registry","status":"pass","subject":"velnor-actions-freshness:dependencies:serde_json"}
+ok: lock-staleness velnor-actions-freshness:dependencies:serde_json =1.0.154 @ registry
+row: {"check":"lock-staleness","detail":"=3.0.9 @ registry","status":"pass","subject":"velnor-actions-freshness:dependencies:syn"}
+ok: lock-staleness velnor-actions-freshness:dependencies:syn =3.0.9 @ registry
+row: {"check":"lock-staleness","detail":"=1.1.8 @ registry","status":"pass","subject":"velnor-actions-freshness:dependencies:toml"}
+ok: lock-staleness velnor-actions-freshness:dependencies:toml =1.1.8 @ registry
+row: {"check":"lock-staleness","detail":"=3.4.2 @ registry","status":"pass","subject":"velnor-actions-freshness:dependencies:ureq"}
+ok: lock-staleness velnor-actions-freshness:dependencies:ureq =3.4.2 @ registry
+row: {"check":"lock-staleness","detail":"=0.11.1 @ registry","status":"pass","subject":"velnor-actions-gradle:dependencies:sha2"}
+ok: lock-staleness velnor-actions-gradle:dependencies:sha2 =0.11.1 @ registry
+row: {"check":"lock-staleness","detail":"=1.1.5 @ registry","status":"pass","subject":"velnor-actions-mise:dependencies:rustix"}
+ok: lock-staleness velnor-actions-mise:dependencies:rustix =1.1.5 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.229 @ registry","status":"pass","subject":"velnor-actions-mise:dependencies:serde"}
+ok: lock-staleness velnor-actions-mise:dependencies:serde =1.0.229 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.154 @ registry","status":"pass","subject":"velnor-actions-mise:dependencies:serde_json"}
+ok: lock-staleness velnor-actions-mise:dependencies:serde_json =1.0.154 @ registry
+row: {"check":"lock-staleness","detail":"=0.11.1 @ registry","status":"pass","subject":"velnor-actions-mise:dependencies:sha2"}
+ok: lock-staleness velnor-actions-mise:dependencies:sha2 =0.11.1 @ registry
+row: {"check":"lock-staleness","detail":"=0.1.55 @ workspace","status":"pass","subject":"velnor-actions-mise:dependencies:velnor-actions-contract"}
+ok: lock-staleness velnor-actions-mise:dependencies:velnor-actions-contract =0.1.55 @ workspace
+row: {"check":"lock-staleness","detail":"=0.1.55 @ workspace","status":"pass","subject":"velnor-actions-mise:dev-dependencies:velnor-actions-tofu"}
+ok: lock-staleness velnor-actions-mise:dev-dependencies:velnor-actions-tofu =0.1.55 @ workspace
+row: {"check":"lock-staleness","detail":"=0.23.1 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dependencies:base64"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:base64 =0.23.1 @ registry
+row: {"check":"lock-staleness","detail":"=1.1.10 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dependencies:flate2"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:flate2 =1.1.10 @ registry
+row: {"check":"lock-staleness","detail":"=0.23.0 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dependencies:lzma-rust2"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:lzma-rust2 =0.23.0 @ registry
+row: {"check":"lock-staleness","detail":"=1.1.5 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dependencies:rustix"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:rustix =1.1.5 @ registry
+row: {"check":"lock-staleness","detail":"=0.23.46 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dependencies:rustls"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:rustls =0.23.46 @ registry
+row: {"check":"lock-staleness","detail":"=0.8.5 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dependencies:rustls-native-certs"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:rustls-native-certs =0.8.5 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.229 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dependencies:serde"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:serde =1.0.229 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.154 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dependencies:serde_json"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:serde_json =1.0.154 @ registry
+row: {"check":"lock-staleness","detail":"=0.10.0 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dependencies:sha1-checked"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:sha1-checked =0.10.0 @ registry
+row: {"check":"lock-staleness","detail":"=0.11.1 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dependencies:sha2"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:sha2 =0.11.1 @ registry
+row: {"check":"lock-staleness","detail":"=0.4.46 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dependencies:tar"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:tar =0.4.46 @ registry
+row: {"check":"lock-staleness","detail":"=3.27.0 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dependencies:tempfile"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:tempfile =3.27.0 @ registry
+row: {"check":"lock-staleness","detail":"=2.0.21 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dependencies:thiserror"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:thiserror =2.0.21 @ registry
+row: {"check":"lock-staleness","detail":"=1.1.8 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dependencies:toml"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:toml =1.1.8 @ registry
+row: {"check":"lock-staleness","detail":"=3.4.2 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dependencies:ureq"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:ureq =3.4.2 @ registry
+row: {"check":"lock-staleness","detail":"=0.1.55 @ workspace","status":"pass","subject":"velnor-actions-orchestrator:dependencies:velnor-actions-actionlint"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:velnor-actions-actionlint =0.1.55 @ workspace
+row: {"check":"lock-staleness","detail":"=0.1.55 @ workspace","status":"pass","subject":"velnor-actions-orchestrator:dependencies:velnor-actions-ansible"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:velnor-actions-ansible =0.1.55 @ workspace
+row: {"check":"lock-staleness","detail":"=0.1.55 @ workspace","status":"pass","subject":"velnor-actions-orchestrator:dependencies:velnor-actions-bun"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:velnor-actions-bun =0.1.55 @ workspace
+row: {"check":"lock-staleness","detail":"=0.1.55 @ workspace","status":"pass","subject":"velnor-actions-orchestrator:dependencies:velnor-actions-contract"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:velnor-actions-contract =0.1.55 @ workspace
+row: {"check":"lock-staleness","detail":"=0.1.55 @ workspace","status":"pass","subject":"velnor-actions-orchestrator:dependencies:velnor-actions-dbt"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:velnor-actions-dbt =0.1.55 @ workspace
+row: {"check":"lock-staleness","detail":"=0.1.55 @ workspace","status":"pass","subject":"velnor-actions-orchestrator:dependencies:velnor-actions-gradle"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:velnor-actions-gradle =0.1.55 @ workspace
+row: {"check":"lock-staleness","detail":"=0.1.55 @ workspace","status":"pass","subject":"velnor-actions-orchestrator:dependencies:velnor-actions-mise"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:velnor-actions-mise =0.1.55 @ workspace
+row: {"check":"lock-staleness","detail":"=0.1.55 @ workspace","status":"pass","subject":"velnor-actions-orchestrator:dependencies:velnor-actions-rust"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:velnor-actions-rust =0.1.55 @ workspace
+row: {"check":"lock-staleness","detail":"=0.1.55 @ workspace","status":"pass","subject":"velnor-actions-orchestrator:dependencies:velnor-actions-tofu"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:velnor-actions-tofu =0.1.55 @ workspace
+row: {"check":"lock-staleness","detail":"=0.1.55 @ workspace","status":"pass","subject":"velnor-actions-orchestrator:dependencies:velnor-actions-workflow-renderer"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:velnor-actions-workflow-renderer =0.1.55 @ workspace
+row: {"check":"lock-staleness","detail":"=0.1.55 @ workspace","status":"pass","subject":"velnor-actions-orchestrator:dependencies:velnor-archive-guard"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:velnor-archive-guard =0.1.55 @ workspace
+row: {"check":"lock-staleness","detail":"=9.0.5 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dependencies:zip"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:zip =9.0.5 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.107 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dev-dependencies:proc-macro2"}
+ok: lock-staleness velnor-actions-orchestrator:dev-dependencies:proc-macro2 =1.0.107 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.154 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dev-dependencies:serde_json"}
+ok: lock-staleness velnor-actions-orchestrator:dev-dependencies:serde_json =1.0.154 @ registry
+row: {"check":"lock-staleness","detail":"=3.0.9 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dev-dependencies:syn"}
+ok: lock-staleness velnor-actions-orchestrator:dev-dependencies:syn =3.0.9 @ registry
+row: {"check":"lock-staleness","detail":"=3.27.0 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dev-dependencies:tempfile"}
+ok: lock-staleness velnor-actions-orchestrator:dev-dependencies:tempfile =3.27.0 @ registry
+row: {"check":"lock-staleness","detail":"=0.1.55 @ workspace","status":"pass","subject":"velnor-actions-orchestrator:dev-dependencies:velnor-actions-contract"}
+ok: lock-staleness velnor-actions-orchestrator:dev-dependencies:velnor-actions-contract =0.1.55 @ workspace
+row: {"check":"lock-staleness","detail":"=1.0.229 @ registry","status":"pass","subject":"velnor-actions-rust:dependencies:serde"}
+ok: lock-staleness velnor-actions-rust:dependencies:serde =1.0.229 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.154 @ registry","status":"pass","subject":"velnor-actions-rust:dependencies:serde_json"}
+ok: lock-staleness velnor-actions-rust:dependencies:serde_json =1.0.154 @ registry
+row: {"check":"lock-staleness","detail":"=1.1.8 @ registry","status":"pass","subject":"velnor-actions-rust:dependencies:toml"}
+ok: lock-staleness velnor-actions-rust:dependencies:toml =1.1.8 @ registry
+row: {"check":"lock-staleness","detail":"=0.1.55 @ workspace","status":"pass","subject":"velnor-actions-rust:dependencies:velnor-actions-contract"}
+ok: lock-staleness velnor-actions-rust:dependencies:velnor-actions-contract =0.1.55 @ workspace
+row: {"check":"lock-staleness","detail":"=0.19.9 @ registry","status":"pass","subject":"velnor-actions-tofu:dependencies:hcl"}
+ok: lock-staleness velnor-actions-tofu:dependencies:hcl =0.19.9 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.229 @ registry","status":"pass","subject":"velnor-actions-tofu:dependencies:serde"}
+ok: lock-staleness velnor-actions-tofu:dependencies:serde =1.0.229 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.154 @ registry","status":"pass","subject":"velnor-actions-tofu:dependencies:serde_json"}
+ok: lock-staleness velnor-actions-tofu:dependencies:serde_json =1.0.154 @ registry
+row: {"check":"lock-staleness","detail":"=0.1.55 @ workspace","status":"pass","subject":"velnor-actions-tofu:dependencies:velnor-actions-contract"}
+ok: lock-staleness velnor-actions-tofu:dependencies:velnor-actions-contract =0.1.55 @ workspace
+row: {"check":"lock-staleness","detail":"=1.0.229 @ registry","status":"pass","subject":"velnor-actions-workflow-renderer:dependencies:serde"}
+ok: lock-staleness velnor-actions-workflow-renderer:dependencies:serde =1.0.229 @ registry
+row: {"check":"lock-staleness","detail":"=0.11.1 @ registry","status":"pass","subject":"velnor-actions-workflow-renderer:dependencies:sha2"}
+ok: lock-staleness velnor-actions-workflow-renderer:dependencies:sha2 =0.11.1 @ registry
+row: {"check":"lock-staleness","detail":"=1.1.8 @ registry","status":"pass","subject":"velnor-actions-workflow-renderer:dependencies:toml"}
+ok: lock-staleness velnor-actions-workflow-renderer:dependencies:toml =1.1.8 @ registry
+row: {"check":"lock-staleness","detail":"=0.1.55 @ workspace","status":"pass","subject":"velnor-actions-workflow-renderer:dependencies:velnor-actions-actionlint"}
+ok: lock-staleness velnor-actions-workflow-renderer:dependencies:velnor-actions-actionlint =0.1.55 @ workspace
+row: {"check":"lock-staleness","detail":"=0.1.55 @ workspace","status":"pass","subject":"velnor-actions-workflow-renderer:dependencies:velnor-actions-contract"}
+ok: lock-staleness velnor-actions-workflow-renderer:dependencies:velnor-actions-contract =0.1.55 @ workspace
+row: {"check":"lock-staleness","detail":"=3.27.0 @ registry","status":"pass","subject":"velnor-actions-workflow-renderer:dev-dependencies:tempfile"}
+ok: lock-staleness velnor-actions-workflow-renderer:dev-dependencies:tempfile =3.27.0 @ registry
+row: {"check":"lock-staleness","detail":"=0.1.55 @ workspace","status":"pass","subject":"velnor-actions-workflow-renderer:dev-dependencies:velnor-actions-mise"}
+ok: lock-staleness velnor-actions-workflow-renderer:dev-dependencies:velnor-actions-mise =0.1.55 @ workspace
+row: {"check":"lock-staleness","detail":"=1.1.10 @ registry","status":"pass","subject":"velnor-archive-guard:dependencies:flate2"}
+ok: lock-staleness velnor-archive-guard:dependencies:flate2 =1.1.10 @ registry
+row: {"check":"lock-staleness","detail":"=1.1.5 @ registry","status":"pass","subject":"velnor-archive-guard:dependencies:rustix"}
+ok: lock-staleness velnor-archive-guard:dependencies:rustix =1.1.5 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.229 @ registry","status":"pass","subject":"velnor-archive-guard:dependencies:serde"}
+ok: lock-staleness velnor-archive-guard:dependencies:serde =1.0.229 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.154 @ registry","status":"pass","subject":"velnor-archive-guard:dependencies:serde_json"}
+ok: lock-staleness velnor-archive-guard:dependencies:serde_json =1.0.154 @ registry
+row: {"check":"lock-staleness","detail":"=0.11.1 @ registry","status":"pass","subject":"velnor-archive-guard:dependencies:sha2"}
+ok: lock-staleness velnor-archive-guard:dependencies:sha2 =0.11.1 @ registry
+row: {"check":"lock-staleness","detail":"=0.4.46 @ registry","status":"pass","subject":"velnor-archive-guard:dependencies:tar"}
+ok: lock-staleness velnor-archive-guard:dependencies:tar =0.4.46 @ registry
+row: {"check":"lock-staleness","detail":"=3.27.0 @ registry","status":"pass","subject":"velnor-archive-guard:dev-dependencies:tempfile"}
+ok: lock-staleness velnor-archive-guard:dev-dependencies:tempfile =3.27.0 @ registry
+row: {"check":"lock-staleness","detail":"=1.1.5 @ registry","status":"pass","subject":"velnor-archive-guard:build-dependencies:rustix"}
+ok: lock-staleness velnor-archive-guard:build-dependencies:rustix =1.1.5 @ registry
+row: {"check":"lock-staleness","detail":"=0.11.1 @ registry","status":"pass","subject":"velnor-archive-guard:build-dependencies:sha2"}
+ok: lock-staleness velnor-archive-guard:build-dependencies:sha2 =0.11.1 @ registry
+row: {"check":"lock-staleness","detail":"98 match, 0 fail, 136 locked names retained","status":"info","subject":"(declared-summary)"}
+row: {"check":"lock-staleness","detail":"14 members","status":"pass","subject":"(lock-membership)"}
+ok: lock-staleness (lock-membership) 14 members
+row: {"check":"lock-staleness","detail":"142 locked packages reachable","status":"pass","subject":"(lock-graph)"}
+ok: lock-staleness (lock-graph) 142 locked packages reachable
+row: {"check":"lock-mtime","detail":"lock_is_newest=true","status":"info","subject":"Cargo.lock"}
+row: {"check":"lock-staleness","detail":"=1.1.5 @ registry","status":"pass","subject":"velnor-resource-probe:dependencies:rustix"}
+ok: lock-staleness velnor-resource-probe:dependencies:rustix =1.1.5 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.229 @ registry","status":"pass","subject":"velnor-resource-probe:dependencies:serde"}
+ok: lock-staleness velnor-resource-probe:dependencies:serde =1.0.229 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.154 @ registry","status":"pass","subject":"velnor-resource-probe:dependencies:serde_json"}
+ok: lock-staleness velnor-resource-probe:dependencies:serde_json =1.0.154 @ registry
+row: {"check":"lock-staleness","detail":"=0.1.92 @ registry","status":"pass","subject":"velnor-runner-attestation:dependencies:async-trait"}
+ok: lock-staleness velnor-runner-attestation:dependencies:async-trait =0.1.92 @ registry
+row: {"check":"lock-staleness","detail":"=0.23.1 @ registry","status":"pass","subject":"velnor-runner-attestation:dependencies:base64"}
+ok: lock-staleness velnor-runner-attestation:dependencies:base64 =0.23.1 @ registry
+row: {"check":"lock-staleness","detail":"=1.12.1 @ registry","status":"pass","subject":"velnor-runner-attestation:dependencies:bytes"}
+ok: lock-staleness velnor-runner-attestation:dependencies:bytes =1.12.1 @ registry
+row: {"check":"lock-staleness","detail":"=0.7.10 @ registry","status":"pass","subject":"velnor-runner-attestation:dependencies:der"}
+ok: lock-staleness velnor-runner-attestation:dependencies:der =0.7.10 @ registry
+row: {"check":"lock-staleness","detail":"=0.3.34 @ registry","status":"pass","subject":"velnor-runner-attestation:dependencies:futures-util"}
+ok: lock-staleness velnor-runner-attestation:dependencies:futures-util =0.3.34 @ registry
+row: {"check":"lock-staleness","detail":"=0.2.191 @ registry","status":"pass","subject":"velnor-runner-attestation:dependencies:libc"}
+ok: lock-staleness velnor-runner-attestation:dependencies:libc =0.2.191 @ registry
+row: {"check":"lock-staleness","detail":"=0.13.5 @ registry","status":"pass","subject":"velnor-runner-attestation:dependencies:reqwest"}
+ok: lock-staleness velnor-runner-attestation:dependencies:reqwest =0.13.5 @ registry
+row: {"check":"lock-staleness","detail":"=1.1.5 @ registry","status":"pass","subject":"velnor-runner-attestation:dependencies:rustix"}
+ok: lock-staleness velnor-runner-attestation:dependencies:rustix =1.1.5 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.229 @ registry","status":"pass","subject":"velnor-runner-attestation:dependencies:serde"}
+ok: lock-staleness velnor-runner-attestation:dependencies:serde =1.0.229 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.154 @ registry","status":"pass","subject":"velnor-runner-attestation:dependencies:serde_json"}
+ok: lock-staleness velnor-runner-attestation:dependencies:serde_json =1.0.154 @ registry
+row: {"check":"lock-staleness","detail":"=0.11.1 @ registry","status":"pass","subject":"velnor-runner-attestation:dependencies:sha2"}
+ok: lock-staleness velnor-runner-attestation:dependencies:sha2 =0.11.1 @ registry
+row: {"check":"lock-staleness","detail":"=0.15.0 @ registry","status":"pass","subject":"velnor-runner-attestation:dependencies:sigstore-trust-root"}
+ok: lock-staleness velnor-runner-attestation:dependencies:sigstore-trust-root =0.15.0 @ registry
+row: {"check":"lock-staleness","detail":"=0.15.0 @ registry","status":"pass","subject":"velnor-runner-attestation:dependencies:sigstore-verify"}
+ok: lock-staleness velnor-runner-attestation:dependencies:sigstore-verify =0.15.0 @ registry
+row: {"check":"lock-staleness","detail":"=1.1.2 @ registry","status":"pass","subject":"velnor-runner-attestation:dependencies:snap"}
+ok: lock-staleness velnor-runner-attestation:dependencies:snap =1.1.2 @ registry
+row: {"check":"lock-staleness","detail":"=1.53.3 @ registry","status":"pass","subject":"velnor-runner-attestation:dependencies:tokio"}
+ok: lock-staleness velnor-runner-attestation:dependencies:tokio =1.53.3 @ registry
+row: {"check":"lock-staleness","detail":"=0.24.0 @ registry","status":"pass","subject":"velnor-runner-attestation:dependencies:tough"}
+ok: lock-staleness velnor-runner-attestation:dependencies:tough =0.24.0 @ registry
+row: {"check":"lock-staleness","detail":"=2.5.8 @ registry","status":"pass","subject":"velnor-runner-attestation:dependencies:url"}
+ok: lock-staleness velnor-runner-attestation:dependencies:url =2.5.8 @ registry
+row: {"check":"lock-staleness","detail":"=0.2.5 @ registry","status":"pass","subject":"velnor-runner-attestation:dependencies:x509-cert"}
+ok: lock-staleness velnor-runner-attestation:dependencies:x509-cert =0.2.5 @ registry
+row: {"check":"lock-staleness","detail":"=1.18.2 @ registry","status":"pass","subject":"velnor-runner-attestation:dev-dependencies:aws-lc-rs"}
+ok: lock-staleness velnor-runner-attestation:dev-dependencies:aws-lc-rs =1.18.2 @ registry
+row: {"check":"lock-staleness","detail":"=0.2.38 @ registry","status":"pass","subject":"velnor-runner-attestation:dev-dependencies:jiff"}
+ok: lock-staleness velnor-runner-attestation:dev-dependencies:jiff =0.2.38 @ registry
+row: {"check":"lock-staleness","detail":"=3.27.0 @ registry","status":"pass","subject":"velnor-runner-attestation:dev-dependencies:tempfile"}
+ok: lock-staleness velnor-runner-attestation:dev-dependencies:tempfile =3.27.0 @ registry
+row: {"check":"lock-staleness","detail":"=4.6.7 @ registry","status":"pass","subject":"velnor-runner-cli:dependencies:clap"}
+ok: lock-staleness velnor-runner-cli:dependencies:clap =4.6.7 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.154 @ registry","status":"pass","subject":"velnor-runner-cli:dependencies:serde_json"}
+ok: lock-staleness velnor-runner-cli:dependencies:serde_json =1.0.154 @ registry
+row: {"check":"lock-staleness","detail":"=1.53.3 @ registry","status":"pass","subject":"velnor-runner-cli:dependencies:tokio"}
+ok: lock-staleness velnor-runner-cli:dependencies:tokio =1.53.3 @ registry
+row: {"check":"lock-staleness","detail":"=0.1.0 @ workspace","status":"pass","subject":"velnor-runner-cli:dependencies:velnor-runner-core"}
+ok: lock-staleness velnor-runner-cli:dependencies:velnor-runner-core =0.1.0 @ workspace
+row: {"check":"lock-staleness","detail":"=0.1.0 @ workspace","status":"pass","subject":"velnor-runner-cli:dependencies:velnor-runner-host"}
+ok: lock-staleness velnor-runner-cli:dependencies:velnor-runner-host =0.1.0 @ workspace
+row: {"check":"lock-staleness","detail":"=3.7.0 @ registry","status":"pass","subject":"velnor-runner-cli:target.cfg(target_os = \"macos\").dev-dependencies:security-framework"}
+ok: lock-staleness velnor-runner-cli:target.cfg(target_os = "macos").dev-dependencies:security-framework =3.7.0 @ registry
+row: {"check":"lock-staleness","detail":"=2.0.21 @ registry","status":"pass","subject":"velnor-runner-core:dependencies:thiserror"}
+ok: lock-staleness velnor-runner-core:dependencies:thiserror =2.0.21 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.229 @ registry","status":"pass","subject":"velnor-runner-github:dependencies:serde"}
+ok: lock-staleness velnor-runner-github:dependencies:serde =1.0.229 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.154 @ registry","status":"pass","subject":"velnor-runner-github:dependencies:serde_json"}
+ok: lock-staleness velnor-runner-github:dependencies:serde_json =1.0.154 @ registry
+row: {"check":"lock-staleness","detail":"=2.0.21 @ registry","status":"pass","subject":"velnor-runner-github:dependencies:thiserror"}
+ok: lock-staleness velnor-runner-github:dependencies:thiserror =2.0.21 @ registry
+row: {"check":"lock-staleness","detail":"=0.1.0 @ workspace","status":"pass","subject":"velnor-runner-github:dependencies:velnor-runner-core"}
+ok: lock-staleness velnor-runner-github:dependencies:velnor-runner-core =0.1.0 @ workspace
+row: {"check":"lock-staleness","detail":"=1.9.1 @ registry","status":"pass","subject":"velnor-runner-github:dependencies:zeroize"}
+ok: lock-staleness velnor-runner-github:dependencies:zeroize =1.9.1 @ registry
+row: {"check":"lock-staleness","detail":"=0.23.1 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:base64"}
+ok: lock-staleness velnor-runner-host:dependencies:base64 =0.23.1 @ registry
+row: {"check":"lock-staleness","detail":"=0.21.1 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:bollard"}
+ok: lock-staleness velnor-runner-host:dependencies:bollard =0.21.1 @ registry
+row: {"check":"lock-staleness","detail":"=1.1.10 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:flate2"}
+ok: lock-staleness velnor-runner-host:dependencies:flate2 =1.1.10 @ registry
+row: {"check":"lock-staleness","detail":"=0.3.34 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:futures-util"}
+ok: lock-staleness velnor-runner-host:dependencies:futures-util =0.3.34 @ registry
+row: {"check":"lock-staleness","detail":"=0.4.3 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:getrandom"}
+ok: lock-staleness velnor-runner-host:dependencies:getrandom =0.4.3 @ registry
+row: {"check":"lock-staleness","detail":"=0.2.191 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:libc"}
+ok: lock-staleness velnor-runner-host:dependencies:libc =0.2.191 @ registry
+row: {"check":"lock-staleness","detail":"=0.13.5 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:reqwest"}
+ok: lock-staleness velnor-runner-host:dependencies:reqwest =0.13.5 @ registry
+row: {"check":"lock-staleness","detail":"=1.1.5 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:rustix"}
+ok: lock-staleness velnor-runner-host:dependencies:rustix =1.1.5 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.229 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:serde"}
+ok: lock-staleness velnor-runner-host:dependencies:serde =1.0.229 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.154 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:serde_json"}
+ok: lock-staleness velnor-runner-host:dependencies:serde_json =1.0.154 @ registry
+row: {"check":"lock-staleness","detail":"=0.11.1 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:sha2"}
+ok: lock-staleness velnor-runner-host:dependencies:sha2 =0.11.1 @ registry
+row: {"check":"lock-staleness","detail":"=0.4.46 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:tar"}
+ok: lock-staleness velnor-runner-host:dependencies:tar =0.4.46 @ registry
+row: {"check":"lock-staleness","detail":"=2.0.21 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:thiserror"}
+ok: lock-staleness velnor-runner-host:dependencies:thiserror =2.0.21 @ registry
+row: {"check":"lock-staleness","detail":"=1.53.3 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:tokio"}
+ok: lock-staleness velnor-runner-host:dependencies:tokio =1.53.3 @ registry
+row: {"check":"lock-staleness","detail":"=1.1.8 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:toml"}
+ok: lock-staleness velnor-runner-host:dependencies:toml =1.1.8 @ registry
+row: {"check":"lock-staleness","detail":"=0.8.3 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:turso"}
+ok: lock-staleness velnor-runner-host:dependencies:turso =0.8.3 @ registry
+row: {"check":"lock-staleness","detail":"=1.28.0 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:uuid"}
+ok: lock-staleness velnor-runner-host:dependencies:uuid =1.28.0 @ registry
+row: {"check":"lock-staleness","detail":"=0.1.0 @ workspace","status":"pass","subject":"velnor-runner-host:dependencies:velnor-runner-core"}
+ok: lock-staleness velnor-runner-host:dependencies:velnor-runner-core =0.1.0 @ workspace
+row: {"check":"lock-staleness","detail":"=0.1.0 @ workspace","status":"pass","subject":"velnor-runner-host:dependencies:velnor-runner-github"}
+ok: lock-staleness velnor-runner-host:dependencies:velnor-runner-github =0.1.0 @ workspace
+row: {"check":"lock-staleness","detail":"=1.9.1 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:zeroize"}
+ok: lock-staleness velnor-runner-host:dependencies:zeroize =1.9.1 @ registry
+row: {"check":"lock-staleness","detail":"=3.7.0 @ registry","status":"pass","subject":"velnor-runner-host:target.cfg(target_os = \"macos\").dependencies:security-framework"}
+ok: lock-staleness velnor-runner-host:target.cfg(target_os = "macos").dependencies:security-framework =3.7.0 @ registry
+row: {"check":"lock-staleness","detail":"57 match, 0 fail, 418 locked names retained","status":"info","subject":"crates/velnor-runner/(declared-summary)"}
+row: {"check":"lock-staleness","detail":"6 members","status":"pass","subject":"crates/velnor-runner/(lock-membership)"}
+ok: lock-staleness crates/velnor-runner/(lock-membership) 6 members
+row: {"check":"lock-staleness","detail":"442 locked packages reachable","status":"pass","subject":"crates/velnor-runner/(lock-graph)"}
+ok: lock-staleness crates/velnor-runner/(lock-graph) 442 locked packages reachable
+row: {"check":"lock-mtime","detail":"lock_is_newest=false","status":"info","subject":"crates/velnor-runner/Cargo.lock"}
+row: {"check":"upstream-freshness","detail":"stale evidence: checked 2026-10-24T18:01:34Z (25.1h ago, interval 24h)","status":"fail","subject":"mise"}
+row: {"check":"upstream-freshness","detail":"stale evidence: checked 2026-10-24T18:01:34Z (25.1h ago, interval 24h)","status":"fail","subject":"rust"}
+row: {"check":"upstream-freshness","detail":"stale evidence: checked 2026-10-24T18:01:34Z (25.1h ago, interval 24h)","status":"fail","subject":"mr-boxington"}
+row: {"check":"upstream-freshness","detail":"stale evidence: checked 2026-10-24T18:01:35Z (25.1h ago, interval 24h)","status":"fail","subject":"gh"}
+row: {"check":"upstream-freshness","detail":"stale evidence: checked 2026-10-24T18:01:36Z (25.1h ago, interval 24h)","status":"fail","subject":"jactionlint"}
+row: {"check":"upstream-freshness","detail":"stale evidence: checked 2026-10-24T18:01:36Z (25.1h ago, interval 24h)","status":"fail","subject":"shellcheck"}
+row: {"check":"upstream-freshness","detail":"stale evidence: checked 2026-10-24T18:01:38Z (25.1h ago, interval 24h)","status":"fail","subject":"nextest"}
+row: {"check":"upstream-freshness","detail":"stale evidence: checked 2026-10-24T18:01:38Z (25.1h ago, interval 24h)","status":"fail","subject":"opentofu"}
+row: {"check":"upstream-freshness","detail":"stale evidence: checked 2026-10-24T18:01:40Z (25.1h ago, interval 24h)","status":"fail","subject":"release-plz"}
+row: {"check":"upstream-freshness","detail":"stale evidence: checked 2026-10-24T18:01:41Z (25.1h ago, interval 24h)","status":"fail","subject":"crane"}
+row: {"check":"upstream-freshness","detail":"stale evidence: checked 2026-10-24T18:01:42Z (25.1h ago, interval 24h)","status":"fail","subject":"bun"}
+row: {"check":"upstream-freshness","detail":"stale evidence: checked 2026-10-24T18:01:42Z (25.1h ago, interval 24h)","status":"fail","subject":"cosign"}
+row: {"check":"upstream-freshness","detail":"stale evidence: checked 2026-10-24T18:01:43Z (25.1h ago, interval 24h)","status":"fail","subject":"actions/attest"}
+row: {"check":"upstream-freshness","detail":"stale evidence: checked 2026-10-24T18:01:43Z (25.1h ago, interval 24h)","status":"fail","subject":"actions/attest-build-provenance"}
+row: {"check":"upstream-freshness","detail":"stale evidence: checked 2026-10-24T18:01:44Z (25.1h ago, interval 24h)","status":"fail","subject":"actions/cache/restore"}
+row: {"check":"upstream-freshness","detail":"stale evidence: checked 2026-10-24T18:01:45Z (25.1h ago, interval 24h)","status":"fail","subject":"actions/cache/save"}
+row: {"check":"upstream-freshness","detail":"stale evidence: checked 2026-10-24T18:01:45Z (25.1h ago, interval 24h)","status":"fail","subject":"actions/checkout"}
+row: {"check":"upstream-freshness","detail":"stale evidence: checked 2026-10-24T18:01:46Z (25.1h ago, interval 24h)","status":"fail","subject":"actions/create-github-app-token"}
+row: {"check":"upstream-freshness","detail":"stale evidence: checked 2026-10-24T18:01:46Z (25.1h ago, interval 24h)","status":"fail","subject":"actions/download-artifact"}
+row: {"check":"upstream-freshness","detail":"stale evidence: checked 2026-10-24T18:01:47Z (25.1h ago, interval 24h)","status":"fail","subject":"actions/github-script"}
+row: {"check":"upstream-freshness","detail":"stale evidence: checked 2026-10-24T18:01:48Z (25.1h ago, interval 24h)","status":"fail","subject":"actions/upload-artifact"}
+row: {"check":"upstream-freshness","detail":"stale evidence: checked 2026-10-24T18:01:48Z (25.1h ago, interval 24h)","status":"fail","subject":"asamarts/alint"}
+row: {"check":"upstream-freshness","detail":"stale evidence: checked 2026-10-24T18:01:49Z (25.1h ago, interval 24h)","status":"fail","subject":"aws-actions/configure-aws-credentials"}
+row: {"check":"upstream-freshness","detail":"stale evidence: checked 2026-10-24T18:01:49Z (25.1h ago, interval 24h)","status":"fail","subject":"jdx/mise-action"}
+row: {"check":"upstream-freshness","detail":"stale evidence: checked 2026-10-24T18:01:50Z (25.1h ago, interval 24h)","status":"fail","subject":"jdx/mr-boxington-action"}
+row: {"check":"upstream-freshness","detail":"stale evidence: checked 2026-10-24T18:04:39Z (25.0h ago, interval 24h)","status":"fail","subject":"runner"}
+row: {"check":"exception-expiry","detail":"no temporary holds","status":"pass","subject":"(none)"}
+ok: exception-expiry (none) no temporary holds
+row: {"check":"advisories","detail":"empty","status":"pass","subject":"deny.toml ignore list"}
+ok: advisories deny.toml ignore list empty
+row: {"check":"advisories","detail":"empty","status":"pass","subject":"crates/velnor-runner/deny.toml ignore list"}
+ok: advisories crates/velnor-runner/deny.toml ignore list empty
+row: {"check":"advisories","detail":"runs as the CI Cargo Deny job; --with-advisories runs it here","status":"info","subject":"live scan"}
+row: {"check":"upstream-probe","detail":"stale pin: pinned=\"2026.10.18\" latest=\"v2026.10.19\"; source https://api.github.com/repos/jdx/mise/releases/latest, checked 2026-10-25T19:06:57Z","status":"fail","subject":"mise"}
+row: {"check":"upstream-probe","detail":"pinned==latest 1.99.1; source https://static.rust-lang.org/dist/channel-rust-stable.toml, checked 2026-10-25T19:06:57Z","status":"pass","subject":"rust"}
+ok: upstream-probe rust pinned==latest 1.99.1; source https://static.rust-lang.org/dist/channel-rust-stable.toml, checked 2026-10-25T19:06:57Z
+row: {"check":"upstream-probe","detail":"pinned==latest v1.27.0; source https://api.github.com/repos/jdx/mr-boxington/releases/latest, checked 2026-10-25T19:06:57Z","status":"pass","subject":"mr-boxington"}
+ok: upstream-probe mr-boxington pinned==latest v1.27.0; source https://api.github.com/repos/jdx/mr-boxington/releases/latest, checked 2026-10-25T19:06:57Z
+row: {"check":"upstream-probe","detail":"pinned==latest v2.103.2; source https://api.github.com/repos/cli/cli/releases/latest, checked 2026-10-25T19:06:57Z","status":"pass","subject":"gh"}
+ok: upstream-probe gh pinned==latest v2.103.2; source https://api.github.com/repos/cli/cli/releases/latest, checked 2026-10-25T19:06:57Z
+row: {"check":"upstream-probe","detail":"pinned==latest v2.3.0; source https://api.github.com/repos/jdx/jactionlint/releases/latest, checked 2026-10-25T19:06:57Z","status":"pass","subject":"jactionlint"}
+ok: upstream-probe jactionlint pinned==latest v2.3.0; source https://api.github.com/repos/jdx/jactionlint/releases/latest, checked 2026-10-25T19:06:57Z
+row: {"check":"upstream-probe","detail":"pinned==latest v0.11.0; source https://api.github.com/repos/koalaman/shellcheck/releases/latest, checked 2026-10-25T19:06:57Z","status":"pass","subject":"shellcheck"}
+ok: upstream-probe shellcheck pinned==latest v0.11.0; source https://api.github.com/repos/koalaman/shellcheck/releases/latest, checked 2026-10-25T19:06:57Z
+row: {"check":"upstream-probe","detail":"pinned==latest 0.9.149; source https://crates.io/api/v1/crates/cargo-nextest, checked 2026-10-25T19:06:57Z","status":"pass","subject":"nextest"}
+ok: upstream-probe nextest pinned==latest 0.9.149; source https://crates.io/api/v1/crates/cargo-nextest, checked 2026-10-25T19:06:57Z
+row: {"check":"upstream-probe","detail":"pinned==latest v1.13.2; source https://api.github.com/repos/opentofu/opentofu/releases/latest, checked 2026-10-25T19:06:57Z","status":"pass","subject":"opentofu"}
+ok: upstream-probe opentofu pinned==latest v1.13.2; source https://api.github.com/repos/opentofu/opentofu/releases/latest, checked 2026-10-25T19:06:57Z
+row: {"check":"upstream-probe","detail":"pinned==latest 0.4.1; source https://crates.io/api/v1/crates/release-plz, checked 2026-10-25T19:06:57Z","status":"pass","subject":"release-plz"}
+ok: upstream-probe release-plz pinned==latest 0.4.1; source https://crates.io/api/v1/crates/release-plz, checked 2026-10-25T19:06:57Z
+row: {"check":"upstream-probe","detail":"pinned==latest v0.22.1; source https://api.github.com/repos/google/go-containerregistry/releases/latest, checked 2026-10-25T19:06:57Z","status":"pass","subject":"crane"}
+ok: upstream-probe crane pinned==latest v0.22.1; source https://api.github.com/repos/google/go-containerregistry/releases/latest, checked 2026-10-25T19:06:57Z
+row: {"check":"upstream-probe","detail":"pinned==latest bun-v1.4.4; source https://api.github.com/repos/oven-sh/bun/releases/latest, checked 2026-10-25T19:06:57Z","status":"pass","subject":"bun"}
+ok: upstream-probe bun pinned==latest bun-v1.4.4; source https://api.github.com/repos/oven-sh/bun/releases/latest, checked 2026-10-25T19:06:57Z
+row: {"check":"upstream-probe","detail":"pinned==latest v3.1.4; source https://api.github.com/repos/sigstore/cosign/releases/latest, checked 2026-10-25T19:06:57Z","status":"pass","subject":"cosign"}
+ok: upstream-probe cosign pinned==latest v3.1.4; source https://api.github.com/repos/sigstore/cosign/releases/latest, checked 2026-10-25T19:06:57Z
+row: {"check":"upstream-probe","detail":"pinned==latest v4.2.2; source https://api.github.com/repos/actions/attest/releases/latest, checked 2026-10-25T19:06:57Z","status":"pass","subject":"actions/attest"}
+ok: upstream-probe actions/attest pinned==latest v4.2.2; source https://api.github.com/repos/actions/attest/releases/latest, checked 2026-10-25T19:06:57Z
+row: {"check":"upstream-probe","detail":"pinned==latest v4.2.2; source https://api.github.com/repos/actions/attest-build-provenance/releases/latest, checked 2026-10-25T19:06:57Z","status":"pass","subject":"actions/attest-build-provenance"}
+ok: upstream-probe actions/attest-build-provenance pinned==latest v4.2.2; source https://api.github.com/repos/actions/attest-build-provenance/releases/latest, checked 2026-10-25T19:06:57Z
+row: {"check":"upstream-probe","detail":"pinned==latest v6.1.0; source https://api.github.com/repos/actions/cache/releases/latest, checked 2026-10-25T19:06:57Z","status":"pass","subject":"actions/cache/restore"}
+ok: upstream-probe actions/cache/restore pinned==latest v6.1.0; source https://api.github.com/repos/actions/cache/releases/latest, checked 2026-10-25T19:06:57Z
+row: {"check":"upstream-probe","detail":"pinned==latest v6.1.0; source https://api.github.com/repos/actions/cache/releases/latest, checked 2026-10-25T19:06:57Z","status":"pass","subject":"actions/cache/save"}
+ok: upstream-probe actions/cache/save pinned==latest v6.1.0; source https://api.github.com/repos/actions/cache/releases/latest, checked 2026-10-25T19:06:57Z
+row: {"check":"upstream-probe","detail":"pinned==latest v7.0.1; source https://api.github.com/repos/actions/checkout/releases/latest, checked 2026-10-25T19:06:57Z","status":"pass","subject":"actions/checkout"}
+ok: upstream-probe actions/checkout pinned==latest v7.0.1; source https://api.github.com/repos/actions/checkout/releases/latest, checked 2026-10-25T19:06:57Z
+row: {"check":"upstream-probe","detail":"pinned==latest v3.3.0; source https://api.github.com/repos/actions/create-github-app-token/releases/latest, checked 2026-10-25T19:06:57Z","status":"pass","subject":"actions/create-github-app-token"}
+ok: upstream-probe actions/create-github-app-token pinned==latest v3.3.0; source https://api.github.com/repos/actions/create-github-app-token/releases/latest, checked 2026-10-25T19:06:57Z
+row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/actions/download-artifact/releases/latest, checked 2026-10-25T19:06:57Z","status":"fail","subject":"actions/download-artifact"}
+row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/actions/github-script/releases/latest, checked 2026-10-25T19:06:57Z","status":"fail","subject":"actions/github-script"}
+row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/actions/upload-artifact/releases/latest, checked 2026-10-25T19:06:57Z","status":"fail","subject":"actions/upload-artifact"}
+row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/asamarts/alint/releases/latest, checked 2026-10-25T19:06:57Z","status":"fail","subject":"asamarts/alint"}
+row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/aws-actions/configure-aws-credentials/releases/latest, checked 2026-10-25T19:06:57Z","status":"fail","subject":"aws-actions/configure-aws-credentials"}
+row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/jdx/mise-action/releases/latest, checked 2026-10-25T19:06:57Z","status":"fail","subject":"jdx/mise-action"}
+row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/jdx/mr-boxington-action/releases, checked 2026-10-25T19:06:57Z","status":"fail","subject":"jdx/mr-boxington-action"}
+row: {"check":"upstream-probe","detail":"latest image family is platform-qualification evidence, not an API probe","status":"info","subject":"runner"}
+check-freshness: FAIL
+  - upstream-freshness mise: stale evidence: checked 2026-10-24T18:01:34Z (25.1h ago, interval 24h)
+  - upstream-freshness rust: stale evidence: checked 2026-10-24T18:01:34Z (25.1h ago, interval 24h)
+  - upstream-freshness mr-boxington: stale evidence: checked 2026-10-24T18:01:34Z (25.1h ago, interval 24h)
+  - upstream-freshness gh: stale evidence: checked 2026-10-24T18:01:35Z (25.1h ago, interval 24h)
+  - upstream-freshness jactionlint: stale evidence: checked 2026-10-24T18:01:36Z (25.1h ago, interval 24h)
+  - upstream-freshness shellcheck: stale evidence: checked 2026-10-24T18:01:36Z (25.1h ago, interval 24h)
+  - upstream-freshness nextest: stale evidence: checked 2026-10-24T18:01:38Z (25.1h ago, interval 24h)
+  - upstream-freshness opentofu: stale evidence: checked 2026-10-24T18:01:38Z (25.1h ago, interval 24h)
+  - upstream-freshness release-plz: stale evidence: checked 2026-10-24T18:01:40Z (25.1h ago, interval 24h)
+  - upstream-freshness crane: stale evidence: checked 2026-10-24T18:01:41Z (25.1h ago, interval 24h)
+  - upstream-freshness bun: stale evidence: checked 2026-10-24T18:01:42Z (25.1h ago, interval 24h)
+  - upstream-freshness cosign: stale evidence: checked 2026-10-24T18:01:42Z (25.1h ago, interval 24h)
+  - upstream-freshness actions/attest: stale evidence: checked 2026-10-24T18:01:43Z (25.1h ago, interval 24h)
+  - upstream-freshness actions/attest-build-provenance: stale evidence: checked 2026-10-24T18:01:43Z (25.1h ago, interval 24h)
+  - upstream-freshness actions/cache/restore: stale evidence: checked 2026-10-24T18:01:44Z (25.1h ago, interval 24h)
+  - upstream-freshness actions/cache/save: stale evidence: checked 2026-10-24T18:01:45Z (25.1h ago, interval 24h)
+  - upstream-freshness actions/checkout: stale evidence: checked 2026-10-24T18:01:45Z (25.1h ago, interval 24h)
+  - upstream-freshness actions/create-github-app-token: stale evidence: checked 2026-10-24T18:01:46Z (25.1h ago, interval 24h)
+  - upstream-freshness actions/download-artifact: stale evidence: checked 2026-10-24T18:01:46Z (25.1h ago, interval 24h)
+  - upstream-freshness actions/github-script: stale evidence: checked 2026-10-24T18:01:47Z (25.1h ago, interval 24h)
+  - upstream-freshness actions/upload-artifact: stale evidence: checked 2026-10-24T18:01:48Z (25.1h ago, interval 24h)
+  - upstream-freshness asamarts/alint: stale evidence: checked 2026-10-24T18:01:48Z (25.1h ago, interval 24h)
+  - upstream-freshness aws-actions/configure-aws-credentials: stale evidence: checked 2026-10-24T18:01:49Z (25.1h ago, interval 24h)
+  - upstream-freshness jdx/mise-action: stale evidence: checked 2026-10-24T18:01:49Z (25.1h ago, interval 24h)
+  - upstream-freshness jdx/mr-boxington-action: stale evidence: checked 2026-10-24T18:01:50Z (25.1h ago, interval 24h)
+  - upstream-freshness runner: stale evidence: checked 2026-10-24T18:04:39Z (25.0h ago, interval 24h)
+  - upstream-probe mise: stale pin: pinned="2026.10.18" latest="v2026.10.19"; source https://api.github.com/repos/jdx/mise/releases/latest, checked 2026-10-25T19:06:57Z
+  - upstream-probe actions/download-artifact: lookup_failed (http status: 403); source https://api.github.com/repos/actions/download-artifact/releases/latest, checked 2026-10-25T19:06:57Z
+  - upstream-probe actions/github-script: lookup_failed (http status: 403); source https://api.github.com/repos/actions/github-script/releases/latest, checked 2026-10-25T19:06:57Z
+  - upstream-probe actions/upload-artifact: lookup_failed (http status: 403); source https://api.github.com/repos/actions/upload-artifact/releases/latest, checked 2026-10-25T19:06:57Z
+  - upstream-probe asamarts/alint: lookup_failed (http status: 403); source https://api.github.com/repos/asamarts/alint/releases/latest, checked 2026-10-25T19:06:57Z
+  - upstream-probe aws-actions/configure-aws-credentials: lookup_failed (http status: 403); source https://api.github.com/repos/aws-actions/configure-aws-credentials/releases/latest, checked 2026-10-25T19:06:57Z
+  - upstream-probe jdx/mise-action: lookup_failed (http status: 403); source https://api.github.com/repos/jdx/mise-action/releases/latest, checked 2026-10-25T19:06:57Z
+  - upstream-probe jdx/mr-boxington-action: lookup_failed (http status: 403); source https://api.github.com/repos/jdx/mr-boxington-action/releases, checked 2026-10-25T19:06:57Z

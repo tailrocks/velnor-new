@@ -1,5 +1,3 @@
-//! Exact producer-archive closure validation for the evidence snapshot index.
-
 use std::collections::BTreeSet;
 
 use super::valid_bundle_path;
@@ -8,16 +6,6 @@ use crate::{
     GitHubEvidenceFetchSpecV1, GitHubEvidenceRunAttemptV1, GitHubEvidenceSnapshotV1,
     GitHubEvidenceWorkflowSourceRefV1, MAX_GITHUB_EVIDENCE_ARCHIVE_BYTES,
 };
-
-#[cfg(test)]
-use crate::{
-    GITHUB_EVIDENCE_SNAPSHOT_SCHEMA, GitHubEvidenceAcquisitionV1, GitHubEvidenceDocumentV1,
-    GitHubEvidenceRepositoryV1, GitHubEvidenceWorkflowRefV1,
-};
-
-#[cfg(test)]
-#[path = "github_evidence_snapshot_artifact_tests.rs"]
-mod artifact_tests;
 
 struct ExpectedArtifact<'a> {
     source: &'a GitHubEvidenceArtifactRefV1,

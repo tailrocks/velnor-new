@@ -1,4 +1,3 @@
-//! Stream verified assets between native-owned locations without payload-sized buffers.
 use super::{AssetProof, checkpoint, hex};
 use crate::filesystem_owner::held_file::HeldFile;
 use crate::{OrchestratorError, internal::internal};

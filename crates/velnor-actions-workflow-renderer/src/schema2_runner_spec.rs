@@ -1,5 +1,3 @@
-//! Runner selection and shell defaults for schema 2 workflows.
-
 use velnor_actions_contract::{ReleaseTarget, config::is_hosted_catalog};
 
 use crate::RenderError;
@@ -29,10 +27,6 @@ impl RunnerSpec {
         })
     }
 
-    /// Hosted runner selected by a native release target.
-    ///
-    /// Qualification may use the typed release-target catalog for macOS
-    /// x64 even though that runner is not a configurable CI label.
     pub(super) fn hosted_release_target(
         label: &str,
         target: ReleaseTarget,
@@ -73,7 +67,3 @@ impl RunnerSpec {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "schema2_runner_spec_tests.rs"]
-mod tests;

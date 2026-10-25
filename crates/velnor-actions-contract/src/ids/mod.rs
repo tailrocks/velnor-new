@@ -1,11 +1,3 @@
-//! Identity constructors and validators.
-//!
-//! Derivation formulas are normative; example strings are illustrative.
-//! `artifact_id` values are derived GitHub artifact names. Numeric run IDs
-//! appear only inside `run_key`, never as identity inputs.
-//! Task, input, and compatibility identities never include cwd, absolute
-//! paths, or `run_key`.
-
 pub mod artifact;
 mod branch;
 pub mod shard;
@@ -22,10 +14,6 @@ use crate::canonical::validate_digest;
 use crate::errors::ContractError;
 use task_ids::{validate_shard, validate_stack_task_id};
 
-/// Define a validated identifier newtype with a private constructor.
-///
-/// Parsing is the only construction path; serde deserialization routes
-/// through the same `TryFrom<String>` validation.
 macro_rules! id_newtype {
     ($name:ident, $validate:expr) => {
         #[doc = concat!("Validated `", stringify!($name), "` identifier.")]
@@ -33,18 +21,16 @@ macro_rules! id_newtype {
         #[serde(try_from = "String")]
         pub struct $name(String);
         impl $name {
-            /// Parse and validate.
-            /// # Errors
             pub fn parse(value: &str) -> Result<Self, ContractError> {
                 $validate(value)?;
                 Ok(Self(value.to_owned()))
             }
-            /// Borrow the inner string.
+
             #[must_use]
             pub fn as_str(&self) -> &str {
                 &self.0
             }
-            /// Unwrap the validated string.
+
             #[must_use]
             pub fn into_inner(self) -> String {
                 self.0
@@ -70,7 +56,6 @@ id_newtype!(TaskReportId, validate_task_report_id);
 id_newtype!(ArtifactId, artifact::validate_artifact_id);
 id_newtype!(TargetKey, artifact::validate_target_key);
 
-/// Build a CI run key `r<run-id>-a<attempt>` from numeric GitHub IDs.
 #[must_use]
 pub fn run_key_for_ci(run_id: u64, run_attempt: u64) -> String {
     let key = format!("r{run_id}-a{run_attempt}");
@@ -78,8 +63,6 @@ pub fn run_key_for_ci(run_id: u64, run_attempt: u64) -> String {
     key
 }
 
-/// Validate a run key (`local` or `r<digits>-a<digits>`).
-/// # Errors
 pub fn validate_run_key(value: &str) -> Result<(), ContractError> {
     if value == "local" || is_ci_run_key(value) {
         Ok(())
@@ -88,10 +71,6 @@ pub fn validate_run_key(value: &str) -> Result<(), ContractError> {
     }
 }
 
-/// Derive a manifest key from a repo-relative Cargo manifest path.
-///
-/// Strips the trailing `/Cargo.toml`; the root manifest maps to `root`.
-/// # Errors
 pub fn manifest_key_for_cargo_manifest(manifest: &str) -> Result<String, ContractError> {
     if manifest.starts_with('-') {
         return Err(ContractError::identity(
@@ -125,8 +104,6 @@ pub fn manifest_key_for_cargo_manifest(manifest: &str) -> Result<String, Contrac
     Ok(ManifestKey::parse(dir)?.into_inner())
 }
 
-/// Validate a manifest key (`root` or `/`-separated segments).
-/// # Errors
 pub fn validate_manifest_key(value: &str) -> Result<(), ContractError> {
     if value == "root" {
         return Ok(());
@@ -134,8 +111,6 @@ pub fn validate_manifest_key(value: &str) -> Result<(), ContractError> {
     validate_path_segments(value, "manifest_key")
 }
 
-/// Build `stack/<stack>/<manifest-key>/<kind>/<config>[/shard-i-of-n]`.
-/// # Errors
 pub fn task_id_for_stack(
     stack: &str,
     manifest_key: &str,
@@ -155,16 +130,12 @@ pub fn task_id_for_stack(
     Ok(TaskId::parse(&id)?.into_inner())
 }
 
-/// Build `internal/<kind>/<config>` for orchestration obligations.
-/// # Errors
 pub fn task_id_for_internal(kind: &str, config: &str) -> Result<String, ContractError> {
     validate_component(kind, "task_kind")?;
     validate_component(config, "configuration")?;
     Ok(TaskId::parse(&format!("internal/{kind}/{config}"))?.into_inner())
 }
 
-/// Validate a stack or internal task ID.
-/// # Errors
 pub fn validate_task_id(value: &str) -> Result<(), ContractError> {
     if let Some(rest) = value.strip_prefix("stack/") {
         return validate_stack_task_id(rest);
@@ -180,16 +151,12 @@ pub fn validate_task_id(value: &str) -> Result<(), ContractError> {
     Err(ContractError::identity("task_id", "malformed_task_id"))
 }
 
-/// Build a matrix `id` as `stack:<sid>|task:<task-group-id>`.
-/// # Errors
 pub fn matrix_id_for_task_group(stack: &str, task_group: &str) -> Result<String, ContractError> {
     validate_component(stack, "stack_id")?;
     validate_task_id(task_group)?;
     Ok(MatrixId::parse(&format!("stack:{stack}|task:{task_group}"))?.into_inner())
 }
 
-/// Validate a matrix `id` (charset plus `stack:`/`task:` shape).
-/// # Errors
 pub fn validate_id(value: &str) -> Result<(), ContractError> {
     if !value.bytes().all(is_id_byte) {
         return Err(ContractError::identity("id", "bad_charset"));
@@ -205,16 +172,12 @@ pub fn validate_id(value: &str) -> Result<(), ContractError> {
     Ok(())
 }
 
-/// Derive `matrix_key` as `m-` + first 16 hex of BLAKE3 over `id` bytes.
-/// # Errors
 pub fn matrix_key_for_id(id: &str) -> Result<String, ContractError> {
     validate_id(id)?;
     let hex = blake3::hash(id.as_bytes()).to_hex();
     Ok(MatrixKey::parse(&format!("m-{}", &hex.to_string()[..16]))?.into_inner())
 }
 
-/// Validate a `matrix_key` (`m-` + 16 lowercase hex).
-/// # Errors
 pub fn validate_matrix_key(value: &str) -> Result<(), ContractError> {
     let Some(hex) = value.strip_prefix("m-") else {
         return Err(ContractError::identity(
@@ -232,15 +195,11 @@ pub fn validate_matrix_key(value: &str) -> Result<(), ContractError> {
     }
 }
 
-/// Derive `plan_id` as `plan-<run-key>`.
-/// # Errors
 pub fn plan_id_for_run(run_key: &str) -> Result<String, ContractError> {
     validate_run_key(run_key)?;
     Ok(PlanId::parse(&format!("plan-{run_key}"))?.into_inner())
 }
 
-/// Validate a `plan_id`.
-/// # Errors
 pub fn validate_plan_id(value: &str) -> Result<(), ContractError> {
     let Some(run_key) = value.strip_prefix("plan-") else {
         return Err(ContractError::identity("plan_id", "malformed_plan_id"));
@@ -248,16 +207,12 @@ pub fn validate_plan_id(value: &str) -> Result<(), ContractError> {
     validate_run_key(run_key).map_err(|_| ContractError::identity("plan_id", "malformed_plan_id"))
 }
 
-/// Derive `report_id` as `report-<run-key>-<matrix-key>`.
-/// # Errors
 pub fn report_id_for_matrix(run_key: &str, matrix_key: &str) -> Result<String, ContractError> {
     validate_run_key(run_key)?;
     validate_matrix_key(matrix_key)?;
     Ok(ReportId::parse(&format!("report-{run_key}-{matrix_key}"))?.into_inner())
 }
 
-/// Validate a `report_id`.
-/// # Errors
 pub fn validate_report_id(value: &str) -> Result<(), ContractError> {
     let bad = || ContractError::identity("report_id", "malformed_report_id");
     let Some(rest) = value.strip_prefix("report-") else {
@@ -272,8 +227,6 @@ pub fn validate_report_id(value: &str) -> Result<(), ContractError> {
     Ok(())
 }
 
-/// Derive `task_report_id` as `task-<run-key>-<matrix-key>-<digest[0:16]>`.
-/// # Errors
 pub fn task_report_id_for_task(
     run_key: &str,
     matrix_key: &str,
@@ -287,8 +240,6 @@ pub fn task_report_id_for_task(
     Ok(TaskReportId::parse(&id)?.into_inner())
 }
 
-/// Validate a `task_report_id`.
-/// # Errors
 pub fn validate_task_report_id(value: &str) -> Result<(), ContractError> {
     let bad = || ContractError::identity("task_report_id", "malformed_task_report_id");
     let Some(rest) = value.strip_prefix("task-") else {
@@ -313,33 +264,27 @@ pub fn validate_task_report_id(value: &str) -> Result<(), ContractError> {
     Ok(())
 }
 
-/// Check whether a byte is allowed in a matrix `id`.
 fn is_id_byte(byte: u8) -> bool {
     byte.is_ascii_lowercase()
         || byte.is_ascii_digit()
         || matches!(byte, b':' | b'|' | b'/' | b'.' | b'-' | b'_')
 }
 
-/// Check whether a byte is allowed in a single path/name component.
 pub(crate) fn is_component_byte(byte: u8) -> bool {
     byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'-' | b'_')
 }
 
-/// Canonical lowercase-hex charset check (empty passes vacuously;
-/// fixed-width callers must use [`is_lower_hex_len`] instead).
 #[must_use]
 pub fn is_lower_hex(text: &str) -> bool {
     text.bytes()
         .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
 }
 
-/// Check exactly `len` lowercase-hex chars (empty always fails).
 #[must_use]
 pub fn is_lower_hex_len(text: &str, len: usize) -> bool {
     text.len() == len && is_lower_hex(text)
 }
 
-/// Check the `r<digits>-a<digits>` CI run-key shape.
 fn is_ci_run_key(value: &str) -> bool {
     let Some(rest) = value.strip_prefix('r') else {
         return false;
@@ -353,7 +298,6 @@ fn is_ci_run_key(value: &str) -> bool {
         && attempt.bytes().all(|b| b.is_ascii_digit())
 }
 
-/// Validate one lowercase component name (`.`/`..` are never components).
 fn validate_component(value: &str, field: &'static str) -> Result<(), ContractError> {
     if !value.is_empty() && value != "." && value != ".." && value.bytes().all(is_component_byte) {
         Ok(())
@@ -362,7 +306,6 @@ fn validate_component(value: &str, field: &'static str) -> Result<(), ContractEr
     }
 }
 
-/// Validate `/`-separated manifest-key segments.
 fn validate_path_segments(path: &str, field: &'static str) -> Result<(), ContractError> {
     if path.is_empty() {
         return Err(ContractError::identity(field, "empty_path"));
@@ -373,14 +316,6 @@ fn validate_path_segments(path: &str, field: &'static str) -> Result<(), Contrac
     Ok(())
 }
 
-/// Validate a fetch workspace root for shell interpolation.
-///
-/// Single source shared by the fetch-step generator (orchestrator) and
-/// the render-time ambient-auth exemption (renderer): both agree on
-/// which roots are safe by construction. Empty is the root workspace.
-/// Rejects parent traversal, quoting and expansion characters,
-/// backslashes, newlines, and absolute paths.
-/// # Errors
 pub fn validate_fetch_root(root: &str) -> Result<(), ContractError> {
     let bad = root.contains("..")
         || root.contains('\'')

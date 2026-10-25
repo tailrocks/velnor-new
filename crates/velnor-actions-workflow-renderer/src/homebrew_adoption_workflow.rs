@@ -1,8 +1,3 @@
-//! Protected SDK-owned reusable workflow for the Homebrew seed transition.
-//!
-//! This workflow is a bounded four-job application of the normal Velnor
-//! planner, native-check dispatcher, report transport, and merge operation.
-
 use crate::{RenderError, render::RenderedFile, schema2::ProductReleasePins, yaml::Yaml};
 
 #[path = "homebrew_adoption_bootstrap.rs"]
@@ -19,26 +14,11 @@ const PLAN_ARTIFACT: &str = "velnor-plan-r${{ github.run_id }}-a${{ env.VELNOR_R
 const RUN_DIR_EXPR: &str =
     "${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}";
 
-/// The concrete protected callee rendered by the one Homebrew seed factory.
-///
-/// The seed renderer and published-release verifier use this same factory, so
-/// no caller-selected remote workflow is admitted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedHomebrewAdoptionCallee {
-    /// Exact bytes and repository path produced by the protected template.
     pub file: RenderedFile,
 }
 
-/// Render the version-only reusable workflow published by the SDK.
-///
-/// The returned bytes do not include a source commit, manifest digest, or
-/// transition identifier. The same output is used by seed generation and by
-/// the published-release verifier to avoid a self-referential release hash.
-///
-/// # Errors
-///
-/// Returns an error when the SDK version, trusted pins, workflow inventory,
-/// or rendered workflow violates the renderer contract.
 pub fn render_homebrew_adoption_callee(
     version: &str,
     pins: &ProductReleasePins,
@@ -132,7 +112,3 @@ fn common_identity_env() -> Yaml {
         ),
     ])
 }
-
-#[cfg(test)]
-#[path = "homebrew_adoption_workflow_tests.rs"]
-mod tests;

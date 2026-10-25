@@ -1,15 +1,7 @@
-//! Freshness input classes and runner-image evidence (ver §2, §4).
-//!
-//! Freshness requirements apply per input class; the hosted-image record
-//! carries `ImageOS` evidence so family changes qualify as
-//! new platform identities. Labels never fix package sets: evidence
-//! records exactly the observed image, nothing more.
-
 use serde::{Deserialize, Serialize};
 
 use crate::errors::ContractError;
 
-/// The nine freshness input classes (ver §2).
 pub const FRESHNESS_CLASSES: [&str; 9] = [
     "compiler",
     "bootstrap",
@@ -22,34 +14,23 @@ pub const FRESHNESS_CLASSES: [&str; 9] = [
     "deferred",
 ];
 
-/// One per-class freshness requirement (ver §2).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct FreshnessRequirement {
-    /// Input class from [`FRESHNESS_CLASSES`].
     pub class: String,
-    /// Maximum pin age in days for this class.
+
     pub max_age_days: u32,
 }
 
-/// Observed hosted-runner image evidence (ver §4).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RunnerImageEvidence {
-    /// Runner `ImageOS` value; `unknown` when unobserved.
     pub image_os: String,
 }
 
-/// Marker for image fields the generator could not observe.
-///
-/// The generator never sees the provisioned runner, so label text is
-/// never split into these fields: observed facts arrive only through
-/// [`RunnerImageEvidence::observed`], everything else is unobserved.
 pub const UNOBSERVED_IMAGE_VALUE: &str = "unknown";
 
 impl FreshnessRequirement {
-    /// Validate class membership and a positive age bound.
-    /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         validate_freshness_class(&self.class)?;
         if self.max_age_days < 1 {
@@ -64,13 +45,6 @@ impl FreshnessRequirement {
 }
 
 impl RunnerImageEvidence {
-    /// Record genuinely observed provisioner facts.
-    ///
-    /// The value must be semantic and not the [`UNOBSERVED_IMAGE_VALUE`]
-    /// marker, so observed and unobserved records are disjoint by
-    /// construction (P03-4). The runner `ImageVersion` is deliberately not
-    /// part of any cache identity.
-    /// # Errors
     pub fn observed(os: &str) -> Result<Self, ContractError> {
         crate::cachekey::validate_semantic_text("image_os", os)?;
         if os == UNOBSERVED_IMAGE_VALUE {
@@ -81,7 +55,6 @@ impl RunnerImageEvidence {
         })
     }
 
-    /// Record explicitly unobserved image evidence (generation time).
     #[must_use]
     pub fn unobserved() -> Self {
         Self {
@@ -89,21 +62,16 @@ impl RunnerImageEvidence {
         }
     }
 
-    /// True when the field carries the unobserved marker.
     #[must_use]
     pub fn is_unobserved(&self) -> bool {
         self.image_os == UNOBSERVED_IMAGE_VALUE
     }
 
-    /// Validate the observed image value is present and semantic.
-    /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {
         crate::cachekey::validate_semantic_text("image_os", &self.image_os)
     }
 }
 
-/// Validate one input class against the closed set.
-/// # Errors
 pub fn validate_freshness_class(class: &str) -> Result<(), ContractError> {
     if FRESHNESS_CLASSES.contains(&class) {
         Ok(())
@@ -115,16 +83,11 @@ pub fn validate_freshness_class(class: &str) -> Result<(), ContractError> {
     }
 }
 
-/// True when two runner labels belong to different image families.
-///
-/// The `-arm` suffix selects a variant within one family; any other
-/// label difference is a family change that MUST requalify.
 #[must_use]
 pub fn runner_family_changed(old_label: &str, new_label: &str) -> bool {
     runner_family(old_label) != runner_family(new_label)
 }
 
-/// The image family of a runner label (variant suffix stripped).
 fn runner_family(label: &str) -> &str {
     label.strip_suffix("-arm").unwrap_or(label)
 }

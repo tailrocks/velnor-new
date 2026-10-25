@@ -1,5 +1,7 @@
-//! Embed the exact native archive guard source fingerprint in the CLI binary.
-
+#![allow(
+    missing_docs,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
 #[path = "build_support/archive_guard_inputs.rs"]
 mod archive_guard_inputs;
 use std::error::Error;

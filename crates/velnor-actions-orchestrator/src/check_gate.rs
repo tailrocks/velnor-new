@@ -1,4 +1,3 @@
-//! Mandatory named-check execution and scenario proof at the ordinary final fold.
 use super::{EvidenceReceipt, ScenarioEvidence, reject_link_components, validate_evidence};
 use serde::{Deserialize, Serialize};
 #[path = "check_container_gate.rs"]
@@ -14,7 +13,6 @@ use velnor_actions_contract::{
     MatrixEntry, Plan, TaskReport, TaskStatus, digest_b3, parse_strict_json,
 };
 
-/// Helper-produced execution receipt inside the existing matrix artifact.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct CheckExecutionReceipt {
@@ -44,7 +42,6 @@ pub(crate) enum CheckExecutionExecutor {
     NativeHomebrew,
 }
 
-/// Typed proof emitted by the SDK-native Homebrew checker.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct NativeCheckExecutionReceipt {
@@ -55,7 +52,6 @@ pub(crate) struct NativeCheckExecutionReceipt {
     pub result: serde_json::Value,
 }
 
-/// Downloaded bytes travel with the receipt; merge never trusts assembly alone.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct DownloadedProof {
@@ -135,7 +131,6 @@ pub(crate) fn native_execution_receipt(
     })
 }
 
-/// Read only plan-named receipts and evidence from exact downloaded matrix homes.
 pub(crate) fn read_proofs(
     plan: &serde_json::Value,
     reports_dir: &Path,
@@ -227,7 +222,6 @@ fn declaration_for(entry: &MatrixEntry) -> Result<Option<CheckEvidence>, &'stati
     .map_err(|_| "invalid_check_declaration")
 }
 
-/// Every successful named task needs exactly one valid proof; foreign proofs fail.
 pub(crate) fn validate_proofs(
     plan: &Plan,
     tasks: &[TaskReport],

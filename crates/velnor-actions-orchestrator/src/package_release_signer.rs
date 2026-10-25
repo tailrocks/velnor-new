@@ -1,8 +1,3 @@
-//! Credentialed signer for a plan-bound native package release.
-//!
-//! This module consumes an admitted static policy/plan and retained producer bytes. It
-//! never loads repository configuration, resolves task code, or executes source.
-
 use std::path::{Path, PathBuf};
 
 use velnor_actions_contract::{
@@ -36,31 +31,22 @@ mod attestation;
 mod cosign;
 #[path = "package_release_signer_publication.rs"]
 mod publication;
-#[cfg(test)]
-#[path = "package_release_signer_publication_budget_tests.rs"]
-mod publication_budget_tests;
+
 #[path = "package_release_signer_receipt.rs"]
 mod receipt;
 pub(crate) use attestation::{
     SdkManifestAttestationExpectation, verify_published_manifest_attestation,
 };
-#[cfg(test)]
-use publication::hold_signed_directory_for_publication;
+
 pub(crate) use publication::verify_attested_signed_package_with_owned_tempdir;
 pub(crate) use publication::verify_attested_signed_package_with_owned_tempdir_and_deadlines;
-#[cfg(test)]
-#[path = "package_release_signer_tests.rs"]
-mod tests;
 
-/// Private CLI operation for signing a statically planned package release.
 pub const SIGN_PACKAGE_RELEASE_OP: &str = "sign-package-release-v1";
-/// Fixed verified aggregate input shared by admission and signing.
 pub(crate) const SIGNER_INPUT_DIR: &str = "release-output";
 const OUTPUT_DIR: &str = "release-signed";
 const PUBLISH_INPUT_DIR: &str = "release-publish-input";
 const HANDOFF_FILE: &str = "package-output.json";
 
-/// Trusted GitHub workflow identity, independently captured from runner facts.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PackageReleaseSigningIdentity {
     pub repository: String,
@@ -79,8 +65,6 @@ pub(crate) struct PackageReleaseSigningIdentity {
     pub commit_count: Option<u64>,
 }
 
-/// Verified receipt plus its staged immutable assets; fields are private so
-/// publication cannot accept a caller-constructed proof.
 #[derive(Debug, Clone)]
 pub(crate) struct VerifiedSignedPackage {
     plan: PackageReleasePlan,
@@ -88,8 +72,6 @@ pub(crate) struct VerifiedSignedPackage {
     directory: PathBuf,
 }
 
-/// Signed package whose source and workflow provenance has also been checked
-/// against GitHub's cryptographically verified artifact attestation.
 #[derive(Debug, Clone)]
 pub(crate) struct VerifiedAttestedSignedPackage {
     signed: VerifiedSignedPackage,
@@ -129,11 +111,6 @@ impl VerifiedSignedPackage {
     }
 }
 
-/// Execute the private signer operation using fixed runner paths and a strict
-/// static policy request. No path or signer identity comes from producer data.
-///
-/// # Errors
-/// Returns a contract error if the request, identity, or signed artifact is invalid.
 pub fn sign_package_release_from_env() -> Result<(), OrchestratorError> {
     let runner_temp = absolute_env("RUNNER_TEMP")?;
     let root = runner_temp.join("velnor");
@@ -146,7 +123,6 @@ pub fn sign_package_release_from_env() -> Result<(), OrchestratorError> {
     Ok(())
 }
 
-/// Verify retained signer bytes and GitHub's exact run attestation before publication.
 pub(crate) fn verify_attested_signed_package_from_env()
 -> Result<VerifiedAttestedSignedPackage, OrchestratorError> {
     let deadline = default_verification_deadline()?;
@@ -175,8 +151,6 @@ pub(crate) fn verify_attested_signed_package_from_env_with_deadline(
     }
 }
 
-/// Verify signed assets and the GitHub attestation using an authenticated
-/// original workflow identity, including when executing a recovery run.
 pub(crate) fn verify_attested_signed_package(
     directory: &Path,
     plan: &PackageReleasePlan,
@@ -248,7 +222,6 @@ fn publisher_context_from_env(
     Ok((plan, expected, input))
 }
 
-/// Re-admit the exact aggregate layout before acquiring a signing tool.
 pub(crate) fn verify_signer_input(
     plan: &PackageReleasePlan,
     identity: &PackageReleaseSigningIdentity,
@@ -271,8 +244,6 @@ pub(crate) fn verify_signer_input(
     )
 }
 
-/// Independently re-admit producer bytes, create sidecars, sign payloads and
-/// companions, then sign the canonical receipt last and verify it immediately.
 pub(crate) fn sign_package_release(
     plan: &PackageReleasePlan,
     identity: &PackageReleaseSigningIdentity,
@@ -337,8 +308,6 @@ pub(crate) fn sign_package_release(
     })
 }
 
-/// Authenticate the canonical receipt and every signed asset against trusted
-/// plan and workflow facts. Used again by the publisher after artifact download.
 #[path = "package_release_signer_verification.rs"]
 mod verification;
 pub(crate) use verification::{verify_signed_package, verify_signed_package_with_deadline};

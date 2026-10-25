@@ -1,10 +1,3 @@
-//! One Gradle root, analysed statically.
-//!
-//! Combines the wrapper gates, the settings model, the project edges and the
-//! dependency-integrity check into one result with a flat, sorted list of
-//! finding codes. The caller supplies the file list and a reader, so the same
-//! function serves generation (working tree), planning (git objects) and tests.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::edges::project_edges;
@@ -12,18 +5,16 @@ use crate::integrity::{VERIFICATION_METADATA, check_locking, check_verification}
 use crate::settings::{self, SettingsModel};
 use crate::wrapper::{self, JAR_PATH, PROPERTIES_PATH, VerifiedWrapper};
 
-/// Result of analysing one root.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RootAnalysis {
-    /// Root directory relative to the repository (`""` for the repository root).
     pub root: String,
-    /// The verified wrapper, when every gate passed.
+
     pub wrapper: Option<VerifiedWrapper>,
-    /// The static settings model, when readable.
+
     pub settings: Option<SettingsModel>,
-    /// Project path to the project paths its build script depends on.
+
     pub edges: BTreeMap<String, BTreeSet<String>>,
-    /// Sorted, de-duplicated finding codes; empty means the root is acceptable.
+
     pub findings: Vec<String>,
 }
 
@@ -33,7 +24,6 @@ fn settings_name(files: &BTreeSet<String>) -> Option<&'static str> {
         .find(|name| files.contains(*name))
 }
 
-/// Analyse a root. `files` and `read` use root-relative `/` paths.
 #[must_use]
 pub fn analyze_root(
     root: &str,

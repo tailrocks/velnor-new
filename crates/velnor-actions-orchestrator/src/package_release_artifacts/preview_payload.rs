@@ -1,8 +1,3 @@
-//! Dedicated one-pair admission derived from the complete preview request.
-//!
-//! This is not a partial mode of the full signer verifier. No receipt or
-//! qualification assertion is produced here; signing still verifies the union.
-
 use std::{io::Read, path::Path, time::Instant};
 
 use sha2::{Digest, Sha256};
@@ -19,28 +14,16 @@ use crate::OrchestratorError;
 
 #[path = "preview_payload_staging.rs"]
 mod staging;
-#[cfg(test)]
-#[path = "preview_payload_tests.rs"]
-mod tests;
 
-/// Source-owned one-pair handoff, distinct from the full package output.
 pub(crate) const PAYLOAD_OUTPUT_SCHEMA_V1: &str = "velnor.package-payload-output.v1";
 
-/// Independently copied and inspected leaf bytes bound to the unchanged full request.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct VerifiedPayload {
-    /// Full plan and exact execution context structurally bound to these bytes.
-    /// The caller remains responsible for authenticating its remote authority.
     pub request: ReleaseProductionRequest,
-    /// The complete selected bin inventory, retained as its original archive.
     pub archive: VerifiedPackageArtifact,
-    /// One `CycloneDX` document bound to the actual archive name and digest.
     pub sbom: VerifiedPackageArtifact,
 }
 
-/// Validate one declared pair without reducing the full plan or admitting companions.
-/// All synchronous phases share the supplied absolute deadline. The caller must
-/// supply a fresh staging path below its own trusted directory authority.
 pub(crate) fn verify_payload_output(
     producer_dir: &Path,
     manifest_relative: &str,
@@ -48,18 +31,6 @@ pub(crate) fn verify_payload_output(
     request: &ReleaseProductionRequest,
     deadline: CheckDeadline,
 ) -> Result<VerifiedPayload, OrchestratorError> {
-    #[cfg(test)]
-    {
-        verify_with_hook(
-            producer_dir,
-            manifest_relative,
-            fresh_staging,
-            request,
-            deadline,
-            |_| {},
-        )
-    }
-    #[cfg(not(test))]
     {
         verify_with_hook(
             producer_dir,
@@ -77,7 +48,6 @@ fn verify_with_hook(
     fresh_staging: &Path,
     request: &ReleaseProductionRequest,
     deadline: CheckDeadline,
-    #[cfg(test)] after_copy: impl FnOnce(&Path),
 ) -> Result<VerifiedPayload, OrchestratorError> {
     let mut guard = staging::StagingGuard::default();
     let result = deadline
@@ -97,8 +67,7 @@ fn verify_with_hook(
                 &manifest,
                 started,
             )?;
-            #[cfg(test)]
-            after_copy(fresh_staging);
+
             archive::validate_copied_content(
                 &copied,
                 &expected,

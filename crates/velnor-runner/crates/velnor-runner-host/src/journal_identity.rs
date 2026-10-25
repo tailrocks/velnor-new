@@ -1,5 +1,3 @@
-//! Immutable engine, launch, and resource identities in the journal.
-
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -48,11 +46,6 @@ impl Drop for Journal {
 }
 
 impl Journal {
-    /// Attach the process-held engine lineage guard after startup validation.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Lock`] when the shared guard slot is poisoned.
     pub(crate) fn attach_lineage_guard(&self, guard: EngineLineageGuard) -> Result<(), HostError> {
         let state = process_state(self.path())?;
         let mut current = state.lineage_guard.lock().map_err(|_| HostError::Lock)?;
@@ -89,11 +82,6 @@ impl Journal {
 }
 
 impl Journal {
-    /// Bind this journal to one Docker engine. A changed engine fails closed.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Journal`] when the id is invalid or changes.
     pub async fn bind_engine(&self, engine_id: &str) -> Result<(), HostError> {
         let _write = self.write_guard().await;
         self.sync_lineage().await?;
@@ -102,41 +90,21 @@ impl Journal {
         self.sync_after(result).await
     }
 
-    /// Read the journal's stable instance identity.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Journal`] when the identity is absent.
     pub(crate) async fn instance_id(&self) -> Result<String, HostError> {
         let conn = self.connection().await?;
         journal_schema::instance_id(&conn).await
     }
 
-    /// Read the Docker engine identity bound to this journal.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Journal`] when the binding is absent or invalid.
     pub(crate) async fn engine_id(&self) -> Result<String, HostError> {
         let conn = self.connection().await?;
         journal_schema::engine_id(&conn).await
     }
 
-    /// Read the monotonic state revision committed with journal writes.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Journal`] when the revision is absent or invalid.
     pub(crate) async fn revision(&self) -> Result<u64, HostError> {
         let conn = self.connection().await?;
         journal_schema::revision(&conn).await
     }
 
-    /// Read one launch identity after the engine is bound.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Journal`] for a legacy row or an unbound engine.
     pub async fn launch_identity(&self, id: i64) -> Result<LaunchIdentity, HostError> {
         let conn = self.connection().await?;
         let mut rows = conn
@@ -158,11 +126,6 @@ impl Journal {
         LaunchIdentity::new(&instance_id, id, &launch_id, &engine_id)
     }
 
-    /// Bind both immutable Docker ids. Rebinding to another id fails.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Journal`] when either id conflicts or the row is missing.
     pub async fn bind_pair(
         &self,
         id: i64,
@@ -185,11 +148,6 @@ impl Journal {
         self.sync_after(changed.and_then(one_row)).await
     }
 
-    /// Bind one immutable seed generation to a launch.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Journal`] when a different generation is already bound.
     pub async fn bind_seed_generation(
         &self,
         id: i64,

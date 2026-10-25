@@ -1,5 +1,3 @@
-//! Historical public release recovery provenance predicates.
-
 use velnor_actions_contract::{PackageReleasePlan, package_release::PackageReleaseReceipt};
 use velnor_actions_mise::CheckDeadline;
 

@@ -52,15 +52,6 @@ fn partition_workspace_patterns<'a>(
     Ok((partition(members), partition(exclusions)))
 }
 
-/// Return the exact member `Cargo.toml` paths implied by a root manifest.
-///
-/// `regular_paths` must be the complete, bounded regular-file inventory for
-/// the authenticated source tree. Symlinks, gitlinks, missing paths and
-/// truncated inventories must not be supplied as regular files.
-///
-/// # Errors
-/// Rejects malformed workspace declarations, unsupported glob syntax,
-/// path escapes, and invalid or oversized root TOML.
 pub fn release_workspace_manifest_paths(
     workspace_manifest: &str,
     root_bytes: &[u8],

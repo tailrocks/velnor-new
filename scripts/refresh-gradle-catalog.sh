@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
-# Print `GradleRelease` rows for crates/velnor-actions-gradle/src/catalog.rs
-# straight from the official services.gradle.org `.sha256` files, so digests
-# are never typed by hand. Usage: refresh-gradle-catalog.sh <version>...
-# Pass the final (non-snapshot, non-rc) versions from
-# https://services.gradle.org/versions/all.
 set -euo pipefail
 
 base="https://services.gradle.org/distributions"

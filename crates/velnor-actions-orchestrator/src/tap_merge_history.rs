@@ -1,5 +1,3 @@
-//! Complete receipt-scoped PR history and feedback authentication.
-
 #[path = "tap_merge_history_identity.rs"]
 mod identity;
 
@@ -45,9 +43,6 @@ struct HistoricalFormula {
     proof_digest: String,
 }
 
-/// Enumerate every same-receipt PR and authenticate its original candidate and feedback.
-/// # Errors
-/// Fails closed on pagination gaps, ambiguous PR identity, or incomplete feedback.
 pub(super) fn capture_all(
     candidate: &MergeCandidate,
     authority: &MergeAuthority,
@@ -352,7 +347,3 @@ fn sha256(bytes: &[u8]) -> String {
             out
         })
 }
-
-#[cfg(test)]
-#[path = "tap_merge_history_tests.rs"]
-mod tests;

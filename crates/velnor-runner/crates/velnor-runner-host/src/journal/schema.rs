@@ -1,5 +1,3 @@
-//! Versioned journal initialization and conservative legacy-row migration.
-
 use std::collections::HashMap;
 
 use crate::error::HostError;
@@ -103,9 +101,6 @@ async fn journal_version(conn: &turso::Connection) -> Result<i64, HostError> {
 }
 
 async fn migrate_version_zero(conn: &turso::Connection) -> Result<(), HostError> {
-    // Extended statements run first so legacy rows are quarantined before the
-    // lifecycle flags exist with a default; the single transaction keeps the
-    // migration atomic when validation fails below.
     crate::journal_schema::bootstrap(conn).await?;
     conn.execute(
         "CREATE TABLE IF NOT EXISTS intents (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, subject TEXT NOT NULL, state TEXT NOT NULL, docker_id TEXT, github_runner_id TEXT, cleanup_proven INTEGER NOT NULL DEFAULT 0, dind_id TEXT, worker_volume TEXT)",

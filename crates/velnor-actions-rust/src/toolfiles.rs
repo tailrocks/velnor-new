@@ -1,19 +1,9 @@
-//! Read-only `rust-toolchain.toml` inspection owned by the Rust adapter.
-//!
-//! Pure over bytes the orchestrator supplies: this module never reads,
-//! writes, or stats the filesystem. Findings always name the supplying
-//! file; missing or malformed files yield findings plus manual
-//! recommendations, never repairs (tooling-input §1-§3).
-
 use std::fmt;
 
-/// Tool-file name owned by the Rust adapter.
 pub const RUST_TOOLCHAIN_FILE: &str = "rust-toolchain.toml";
 
-/// Legacy plain/TOML toolchain file name owned by the Rust adapter.
 pub const RUST_TOOLCHAIN_LEGACY_FILE: &str = "rust-toolchain";
 
-/// File symbols routed to the Rust stack (quality §1).
 pub const OWNED_SYMBOLS: &[&str] = &[
     "Cargo.toml",
     "Cargo.lock",
@@ -21,24 +11,14 @@ pub const OWNED_SYMBOLS: &[&str] = &[
     RUST_TOOLCHAIN_LEGACY_FILE,
 ];
 
-/// Tool files owned by sibling adapters; recognized but never inspected here.
 pub const FOREIGN_TOOL_FILES: &[&str] = &["mise.toml", "mise.lock"];
 
-/// Selection-broadening class one changed path triggers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelectionBroadening {
-    /// Lockfile change: every unit is affected.
     Lockfile,
-    /// Root configuration change: every unit is affected.
     RootConfig,
 }
 
-/// Broadening class for one changed path, if it invalidates selection.
-///
-/// Every `Cargo.lock` broadens (no lock-entry diff yet: any resolved
-/// version change could reach any package), as does the root Cargo
-/// configuration; other nested paths resolve through ownership and
-/// edges instead.
 #[must_use]
 pub fn selection_broadening(path: &str) -> Option<SelectionBroadening> {
     if path == "Cargo.lock" || path.ends_with("/Cargo.lock") {
@@ -50,10 +30,6 @@ pub fn selection_broadening(path: &str) -> Option<SelectionBroadening> {
     None
 }
 
-/// True for toolfiles the rust adapter recognizes (own plus foreign).
-///
-/// `.mise.toml` (hidden variant) stays orchestrator-global and is not
-/// covered here.
 #[must_use]
 pub fn is_known_toolfile(path: &str) -> bool {
     path == RUST_TOOLCHAIN_FILE
@@ -61,58 +37,39 @@ pub fn is_known_toolfile(path: &str) -> bool {
         || FOREIGN_TOOL_FILES.contains(&path)
 }
 
-/// Stable code for a missing recommended tool input (tooling-input §1).
 pub const MISSING_RECOMMENDED_INPUT: &str = "missing_recommended_input";
 
-/// Stable code for a malformed optional tool file (tooling-input §2).
 pub const TOOLING_INPUT_INVALID: &str = "tooling_input_invalid";
 
-/// One named tool-file blob offered for inspection.
 #[derive(Debug, Clone, Copy)]
 pub struct ToolFile<'a> {
-    /// Repository-relative path the content was read from.
     pub path: &'a str,
-    /// File content.
     pub content: &'a str,
 }
 
-/// Structured tool-input finding with a manual recommendation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolFinding {
-    /// Stable finding code.
     pub code: String,
-    /// Repository-relative file that supplied the finding.
     pub file: String,
-    /// Observed value or problem detail, when any.
     pub observed: Option<String>,
-    /// Concrete manual action; Velnor never executes it.
     pub recommendation: String,
 }
 
-/// Extracted `[toolchain]` selection (reported values only, never pins).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ToolchainSpec {
-    /// Selected channel (`stable`, `beta`, `nightly`, or `X.Y.Z`), if declared.
     pub channel: Option<String>,
-    /// Requested components, sorted.
     pub components: Vec<String>,
-    /// Requested targets, sorted.
     pub targets: Vec<String>,
 }
 
-/// Outcome of one owned tool-file inspection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolchainInspection {
-    /// Inspected repository-relative file.
     pub file: String,
-    /// Extracted selection (`None` when missing or malformed).
     pub spec: Option<ToolchainSpec>,
-    /// Findings plus manual recommendations; empty when valid and pinned.
     pub findings: Vec<ToolFinding>,
 }
 
 impl ToolchainInspection {
-    /// Inspection for a missing tool file: finding, no spec, no failure.
     fn missing(path: &str) -> Self {
         Self {
             file: path.to_owned(),
@@ -129,7 +86,6 @@ impl ToolchainInspection {
         }
     }
 
-    /// Inspection for a malformed tool file: finding, no spec, no failure.
     fn invalid(path: &str, problem: &str) -> Self {
         Self {
             file: path.to_owned(),
@@ -146,7 +102,6 @@ impl ToolchainInspection {
         }
     }
 
-    /// Inspection for a readable tool file, with a pin finding when unpinned.
     fn present(path: &str, spec: ToolchainSpec) -> Self {
         let findings = if spec.channel.as_deref().is_none_or(str::is_empty) {
             vec![ToolFinding {
@@ -169,14 +124,9 @@ impl ToolchainInspection {
     }
 }
 
-/// Tool-file inspection failure (ownership only; content issues are findings).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolInspectError {
-    /// Path belongs to another adapter or to no adapter.
-    NotOwned {
-        /// Rejected path.
-        path: String,
-    },
+    NotOwned { path: String },
 }
 
 impl fmt::Display for ToolInspectError {
@@ -188,11 +138,6 @@ impl fmt::Display for ToolInspectError {
 
 impl std::error::Error for ToolInspectError {}
 
-/// Route a path to its owning stack id by file name, if any.
-///
-/// The Rust stack owns Cargo manifests and locks plus
-/// `rust-toolchain.toml`; Mise tool files route to the Mise adapter and
-/// every other symbol routes nowhere.
 #[must_use]
 pub fn stack_for_symbol(path: &str) -> Option<&'static str> {
     let name = file_name(path);
@@ -205,7 +150,6 @@ pub fn stack_for_symbol(path: &str) -> Option<&'static str> {
     }
 }
 
-/// Whether `path` names a file this adapter may inspect.
 #[must_use]
 pub fn is_owned_tool_file(path: &str) -> bool {
     matches!(
@@ -214,17 +158,10 @@ pub fn is_owned_tool_file(path: &str) -> bool {
     )
 }
 
-/// Final path segment of a repository-relative path.
 fn file_name(path: &str) -> &str {
     path.rsplit('/').next().unwrap_or(path)
 }
 
-/// Extract the exact `X.Y.Z` toolchain version from `rust-toolchain.toml` or `rust-toolchain`.
-///
-/// # Errors
-///
-/// Returns an error string when `path` is not an owned toolchain file, the content
-/// is malformed, or the declared channel is missing or not an exact `X.Y.Z` version.
 pub fn extract_rust_toolchain_channel(path: &str, bytes: &str) -> Result<String, String> {
     if !is_owned_tool_file(path) {
         return Err(format!("tool_file_not_owned:{path}"));
@@ -263,15 +200,6 @@ fn is_target_triple(target: &str) -> bool {
             .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_'))
 }
 
-/// Inspect supplied `rust-toolchain.toml` or `rust-toolchain` bytes (`None` when missing).
-///
-/// Read-only: content issues become findings with manual recommendations,
-/// never errors and never writes.
-///
-/// # Errors
-///
-/// Returns [`ToolInspectError::NotOwned`] unless `path` names an owned
-/// tool file.
 pub fn inspect_toolchain_file(
     path: &str,
     content: Option<&str>,
@@ -290,7 +218,6 @@ pub fn inspect_toolchain_file(
     }
 }
 
-/// Parse toolchain specification according to whether `path` is TOML or legacy `rust-toolchain`.
 fn parse_toolchain_for_path(path: &str, content: &str) -> Result<ToolchainSpec, String> {
     if file_name(path) == RUST_TOOLCHAIN_LEGACY_FILE {
         let trimmed = content.trim();
@@ -314,7 +241,6 @@ fn parse_toolchain_for_path(path: &str, content: &str) -> Result<ToolchainSpec, 
     }
 }
 
-/// Parse `[toolchain]` channel/components/targets; unknown keys ignored.
 fn parse_toolchain(content: &str) -> Result<ToolchainSpec, String> {
     let mut spec = ToolchainSpec::default();
     let mut in_toolchain = false;
@@ -348,13 +274,11 @@ fn parse_toolchain(content: &str) -> Result<ToolchainSpec, String> {
     Ok(spec)
 }
 
-/// Section name of a `[section]` header, if well-formed.
 fn parse_section(code: &str) -> Option<&str> {
     let section = code.strip_prefix('[')?.strip_suffix(']')?;
     Some(section.trim())
 }
 
-/// Split one `key = value` setting inside `[toolchain]`.
 fn split_setting(code: &str, index: usize) -> Result<(&str, &str), String> {
     let (key, value) = code
         .split_once('=')
@@ -366,7 +290,6 @@ fn split_setting(code: &str, index: usize) -> Result<(&str, &str), String> {
     Ok((key, value.trim()))
 }
 
-/// Parse one quoted TOML basic or literal string.
 fn parse_string(value: &str, index: usize) -> Result<String, String> {
     let quote = value.chars().next().unwrap_or('\0');
     if (quote != '"' && quote != '\'') || value.len() < 2 || !value.ends_with(quote) {
@@ -375,7 +298,6 @@ fn parse_string(value: &str, index: usize) -> Result<String, String> {
     Ok(value[1..value.len() - 1].to_owned())
 }
 
-/// Parse a `["a", "b"]` string list (trailing commas tolerated).
 fn parse_string_list(value: &str, index: usize) -> Result<Vec<String>, String> {
     let inner = value
         .strip_prefix('[')
@@ -392,7 +314,6 @@ fn parse_string_list(value: &str, index: usize) -> Result<Vec<String>, String> {
     Ok(items)
 }
 
-/// `line N: problem` detail with one-based line numbers.
 fn line_problem(index: usize, problem: &str) -> String {
     format!("line {}: {problem}", index.saturating_add(1))
 }

@@ -1,5 +1,3 @@
-//! Lock membership and reachability checks.
-
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use std::fs;

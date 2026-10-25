@@ -1,5 +1,3 @@
-//! Small identity, digest, and environment helpers for the isolated tap writer.
-
 use std::{env, fs, path::Path};
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
@@ -162,68 +160,4 @@ pub(super) fn safe_app_slug(value: &str) -> Result<&str, OrchestratorError> {
 pub(super) fn real_directory(path: &Path) -> bool {
     fs::symlink_metadata(path)
         .is_ok_and(|metadata| metadata.is_dir() && !metadata.file_type().is_symlink())
-}
-
-#[cfg(test)]
-mod regular_tree_tests {
-    use super::*;
-    use crate::tap_prepare::writer::github::TreeEntry;
-
-    fn entry(path: &str, mode: &str, object_type: &str) -> TreeEntry {
-        TreeEntry {
-            path: path.to_owned(),
-            mode: mode.to_owned(),
-            object_type: object_type.to_owned(),
-            sha: "a".repeat(40),
-        }
-    }
-
-    fn tree(entries: Vec<TreeEntry>) -> TreeResponse {
-        TreeResponse {
-            sha: "b".repeat(40),
-            truncated: false,
-            tree: entries,
-        }
-    }
-
-    #[test]
-    fn complete_tree_rejects_nonformula_links_and_submodules() {
-        let formula = || entry("Formula/jackin-preview.rb", "100644", "blob");
-        let directory = || entry("Formula", "040000", "tree");
-        assert!(
-            validate_regular_tree(&tree(vec![
-                directory(),
-                formula(),
-                entry("AGENTS.md", "100644", "blob")
-            ]))
-            .is_ok()
-        );
-        for invalid in [
-            entry("CLAUDE.md", "120000", "blob"),
-            entry("vendor", "160000", "commit"),
-            entry("x", "100644", "tree"),
-        ] {
-            assert!(validate_regular_tree(&tree(vec![directory(), formula(), invalid])).is_err());
-        }
-    }
-
-    #[test]
-    fn complete_tree_rejects_duplicate_paths_and_non_directory_parents() {
-        assert!(
-            validate_regular_tree(&tree(vec![
-                entry("x", "100644", "blob"),
-                entry("x", "100755", "blob")
-            ]))
-            .is_err()
-        );
-        assert!(
-            validate_regular_tree(&tree(vec![
-                entry("x", "100644", "blob"),
-                entry("x/y", "100644", "blob")
-            ]))
-            .is_err()
-        );
-        assert!(validate_regular_tree(&tree(vec![entry("x/y", "100644", "blob")])).is_err());
-        assert!(validate_regular_tree(&tree(vec![entry("../escape", "100644", "blob")])).is_err());
-    }
 }

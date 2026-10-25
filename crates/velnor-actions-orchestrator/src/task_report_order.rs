@@ -1,14 +1,5 @@
-//! Same-job execution ordering for downstream report synthesis.
-
 use velnor_actions_contract::{ExecuteTaskRef, Plan, Stack};
 
-/// Obligation IDs a failure actually skips, in the crate job's execution order.
-///
-/// `OpenTofu` and other sequential jobs skip every later obligation. A Rust
-/// crate job runs its sequential producers (the Nextest build) first and then
-/// every other check as one parallel group: a failed producer skips the whole
-/// group, while a failed parallel member skips nothing because its siblings
-/// still run and report for themselves.
 pub(super) fn derive_downstream(plan: &Plan, task_id: &str, job_id: &str) -> Vec<String> {
     let mut ordered = Vec::new();
     let mut rust_job = true;

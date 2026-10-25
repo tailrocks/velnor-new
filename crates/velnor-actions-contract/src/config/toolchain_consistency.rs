@@ -1,5 +1,3 @@
-//! Cross-check repository-wide tool declarations.
-
 use super::VelnorConfig;
 use crate::errors::ContractError;
 

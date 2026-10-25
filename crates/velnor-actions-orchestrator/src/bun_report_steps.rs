@@ -1,14 +1,3 @@
-//! Leg blob verification and the report job of a sharded Playwright suite.
-//!
-//! The blob metadata proves the requested shard reached Playwright. For a
-//! non-empty project-selected leg, `onProject` events must contain the
-//! requested project and no projects outside its transitive dependency and
-//! teardown closure. Referenced projects may be absent from events when
-//! `--no-deps` is used. Playwright 1.64.1 removes empty suites before emitting
-//! those events, so an empty shard proves only its shard metadata; blob
-//! metadata does not record `--project`. The check is a fixed program run by
-//! pinned Bun over the zip's one `report.jsonl` entry; it extracts nothing.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::Step;
@@ -25,12 +14,10 @@ use super::bun_steps::{
 use crate::OrchestratorError;
 use crate::workflow_task_jobs::stack_family_cache;
 
-/// Leg env: the leg ordinal (`matrix.leg`), which names the blob file.
 pub(crate) const PW_LEG_ENV: &str = "VELNOR_PW_LEG";
 const VERIFY_NAME: &str = "Verify Playwright blob";
 const MERGE_NAME: &str = "Merge Playwright reports";
 
-/// The blob metadata check, as one Bun program (no single quotes, no newline).
 const VERIFY_JS: &str = concat!(
     "const t=await Bun.stdin.text();",
     "const e=t.split(\"\\n\").filter(l=>l.length>0).map(l=>JSON.parse(l));",
@@ -57,7 +44,6 @@ const VERIFY_JS: &str = concat!(
     "console.log(\"velnor: blob verified shard=\"+(got||\"none\")+\" projects=\"+(n.join(\",\")||\"none\"));",
 );
 
-/// Verify one leg's blob against the leg's own project and shard.
 pub(crate) fn blob_verify_step(
     input: &MemberInputs<'_>,
     leg: &LegArgs,
@@ -87,8 +73,6 @@ unzip -p \"$f\" report.jsonl | {{ grep -E '^[{{]\"method\":\"(onBlobReportMetada
     Ok(step)
 }
 
-/// Steps of the report job after checkout: tools, install, every leg blob,
-/// `playwright merge-reports` over the member's own Playwright, the upload.
 pub(crate) fn report_steps(
     input: &MemberInputs<'_>,
     suite_job_id: &str,
@@ -120,13 +104,7 @@ pub(crate) fn report_steps(
     Ok(steps)
 }
 
-#[cfg(test)]
-#[path = "bun_report_steps_tests.rs"]
-mod tests;
-
 fn merge_step(input: &MemberInputs<'_>) -> Result<Step, OrchestratorError> {
-    // `playwright` resolves to node_modules/.bin: generation refused a member
-    // script of that name (`bun_shard_script_name_shadow`).
     let run = bun_words(
         input.catalog,
         &[

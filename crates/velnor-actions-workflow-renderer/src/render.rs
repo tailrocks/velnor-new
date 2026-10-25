@@ -1,9 +1,3 @@
-//! Workflow-IR documents and the exact two-file generated tree.
-//!
-//! Fail-closed gates cover triggers, concurrency, runner, consumer support,
-//! and candidate-planning invariants. Strict rendering also mandates Mise,
-//! staged helpers, and the plan anchor; legacy preserves the prior contract.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Job, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy};
@@ -32,21 +26,12 @@ pub use action_pins_impl::action_pins;
 #[path = "validator_tools.rs"]
 mod validator_tools;
 
-/// Pinned Alint binary release tag for the step's `version:` input.
 pub const ALINT_BINARY_VERSION: &str = "v0.20.1";
 
 #[path = "render_context.rs"]
 mod context;
 pub use self::context::*;
 
-/// Render one workflow document from IR under a policy gate.
-///
-/// Inserts the mandated closures shared by both entrypoints; use
-/// [`render_workflow_ir_strict`] for setup and staged-helper gates.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] for invalid context, IR, policy, or steps.
 pub fn render_workflow_ir(
     ir: &WorkflowIr,
     policy: WorkflowPolicy,
@@ -72,19 +57,6 @@ fn render_workflow_parts(
     render_merged(ir, &jobs, ctx)
 }
 
-/// Strict render: setup insertion plus staged-helper and anchor gates.
-///
-/// Every `mise`-invoking job (plus plan/task unconditionally) gains a
-/// preceding pinned setup step; internal steps without a preceding
-/// Acquire step and anchorless plan jobs fail closed. In pre-seed mode
-/// the fixed pre-seed stage step stages instead, and the build-once
-/// artifact closure is enforced. Pins arrive via `mise`; the renderer
-/// never invents them.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] for invalid pins, context, IR, policy,
-/// missing setup/staging, or steps.
 pub fn render_workflow_ir_strict(
     ir: &WorkflowIr,
     policy: WorkflowPolicy,
@@ -95,12 +67,6 @@ pub fn render_workflow_ir_strict(
     Ok(render_workflow_ir_strict_shared(ir, policy, support, ctx, mise)?.yaml)
 }
 
-/// Strict render plus the composite actions duplicated lanes call.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] for invalid pins, context, IR, policy,
-/// missing setup/staging, steps, or a lane pair whose bodies differ.
 pub fn render_workflow_ir_strict_shared(
     ir: &WorkflowIr,
     policy: WorkflowPolicy,
@@ -112,17 +78,6 @@ pub fn render_workflow_ir_strict_shared(
     render_merged(ir, &jobs, ctx)
 }
 
-/// Finalize jobs exactly as `generate` writes them: policy merge, setup
-/// insertion, then every closure and the final fan-in.
-///
-/// `plan` lists these jobs (validators included) so its job table,
-/// step counts, and action pins match the written YAML by construction
-/// instead of echoing the pre-merge IR.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] for invalid pins, context, IR, policy,
-/// missing setup/staging, or steps.
 pub fn finalize_jobs(
     ir: &WorkflowIr,
     policy: WorkflowPolicy,
@@ -161,7 +116,6 @@ pub fn finalize_jobs(
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;
     }
-    // Both cache families are validated globally before either gets a save.
     cache_p08::elect_cache_writers_with_policy(&mut jobs, ctx.pull_request_cache_policy)?;
     closure::check_plan_anchor(&jobs)?;
     preseed_closure::check_preseed_closure(&jobs, ctx.preseed)?;
@@ -176,7 +130,6 @@ pub fn finalize_jobs(
     Ok(jobs)
 }
 
-/// Validate every finalized job after policy merging and internal expansion.
 fn validate_final_jobs(ir: &WorkflowIr, jobs: &mut JobMap) -> Result<(), RenderError> {
     crate::cache_steps::append_bundle_postludes(jobs)?;
     crate::cache_steps::append_workspace_cleanups(jobs)?;
@@ -185,7 +138,6 @@ fn validate_final_jobs(ir: &WorkflowIr, jobs: &mut JobMap) -> Result<(), RenderE
     finalized.validate().map_err(RenderError::Contract)
 }
 
-/// Validate context/IR plus policy merge and support invariants.
 fn merged_jobs(
     ir: &WorkflowIr,
     policy: WorkflowPolicy,
@@ -229,11 +181,6 @@ fn merged_jobs(
     Ok(jobs)
 }
 
-/// Emit matrix strategy plus the quoted, marked workflow text.
-///
-/// A file over GitHub's 500 KB cap is rendered again after each inlined
-/// crate obligation list moves into its own composite. The second miss
-/// still fails closed, and nothing is truncated.
 fn render_merged(
     ir: &WorkflowIr,
     jobs: &BTreeMap<String, Job>,

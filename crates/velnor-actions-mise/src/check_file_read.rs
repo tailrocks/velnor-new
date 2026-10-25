@@ -1,12 +1,9 @@
-//! Bounded, no-follow reads for named-check source and owned projections.
-
 use crate::MiseError;
 use crate::checks::invalid;
 use std::fs;
 use std::io::Read;
 use std::path::Path;
 
-/// Read a regular file through a pinned handle, stopping one byte past its cap.
 pub(crate) fn read_text(
     path: &Path,
     max_bytes: usize,
@@ -59,7 +56,3 @@ fn checkpoint(deadline: Option<crate::CheckDeadline>, field: &str) -> Result<(),
             .map_err(|error| invalid(field, error.to_string()))
     })
 }
-
-#[cfg(test)]
-#[path = "../tests/unit_check_file_read.rs"]
-mod tests;

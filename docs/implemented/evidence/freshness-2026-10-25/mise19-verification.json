@@ -1,0 +1,23 @@
+{
+  "release_url": "https://github.com/jdx/mise/releases/tag/v2026.10.19",
+  "tag": "v2026.10.19",
+  "published_at": "2026-10-24T20:02:03Z",
+  "prerelease": false,
+  "draft": false,
+  "macos_arm64_asset": {
+    "name": "mise-v2026.10.19-macos-arm64",
+    "size": 138238816,
+    "digest": "sha256:7dc61dfa71abbcda1c40d18440bc556b5d58b80e6042bc4f95fd106fa1bb3c66",
+    "browser_download_url": "https://github.com/jdx/mise/releases/download/v2026.10.19/mise-v2026.10.19-macos-arm64"
+  },
+  "local_runtime": {
+    "path": "../mise19-runtime/mise",
+    "sha256": "7dc61dfa71abbcda1c40d18440bc556b5d58b80e6042bc4f95fd106fa1bb3c66",
+    "bytes": 138238816,
+    "signature_verification": "PASS (parent-reported minisign check)",
+    "version_output": "2026.10.19 macos-arm64 (2026-10-24)",
+    "preserved_project_min_version": "2026.10.18",
+    "runtime_log": "../mise19-runtime/runtime.log",
+    "linux_and_intel_hosted_qualification": "pending; not claimed"
+  }
+}

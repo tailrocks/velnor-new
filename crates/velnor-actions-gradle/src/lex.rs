@@ -1,24 +1,14 @@
-//! Minimal Groovy/Kotlin DSL tokenizer for static reads.
-//!
-//! It understands exactly what the static models need: comments are skipped,
-//! string literals keep their text and whether they interpolate, identifiers
-//! (including backtick-quoted ones), punctuation and statement newlines. It
-//! executes nothing and rejects nothing: unknown bytes become punctuation.
-
-/// One lexical token.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Tok {
-    /// Identifier or keyword; backticks are removed.
     Ident(String),
-    /// String literal contents and whether it interpolates (`$name`, `${..}`).
+
     Str(String, bool),
-    /// A single punctuation byte.
+
     Punct(char),
-    /// A line break outside any string or comment.
+
     Newline,
 }
 
-/// Tokenize DSL text.
 #[must_use]
 pub fn tokenize(text: &str) -> Vec<Tok> {
     let chars: Vec<char> = text.chars().collect();
@@ -64,7 +54,6 @@ pub fn tokenize(text: &str) -> Vec<Tok> {
     out
 }
 
-/// Read one string literal starting at `start`; returns the index after it.
 fn string(chars: &[char], start: usize, out: &mut Vec<Tok>) -> usize {
     let quote = chars[start];
     let triple = chars.get(start + 1) == Some(&quote) && chars.get(start + 2) == Some(&quote);

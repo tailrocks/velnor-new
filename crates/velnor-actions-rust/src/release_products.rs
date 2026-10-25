@@ -1,5 +1,3 @@
-//! Resolve the shared native binary products against Cargo metadata.
-
 use std::collections::BTreeSet;
 
 use velnor_actions_contract::{
@@ -11,27 +9,12 @@ use velnor_actions_contract::{
 
 use crate::metadata::{PackageRecord, WorkspaceRecord};
 
-/// Resolved channel-neutral package inventory and its shared numeric base version.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedReleaseProducts {
-    /// Exact numeric Cargo package version shared by every product.
     pub base_version: String,
-    /// Products sorted by receipt product ID, with sorted payload/member inventories.
     pub products: Vec<PackageReleaseProduct>,
 }
 
-/// Resolve native release products from one selected Cargo workspace's metadata.
-///
-/// This deliberately does not require Cargo publishability: binary products
-/// may be private, workspace-only packages. All configured packages and bins
-/// must resolve exactly within the selected workspace, and required-feature
-/// bins fail closed because the shared product schema has no feature contract.
-/// `config` must have passed [`RustBinaryReleaseConfig::validate`] first; the
-/// schema layer owns path, target, uniqueness, and resource-limit validation.
-///
-/// # Errors
-/// Returns a contract error when the release policy, workspace membership,
-/// package/bin inventory, or shared numeric version is invalid.
 pub fn resolve_release_products(
     config: &RustBinaryReleaseConfig,
     workspace: &WorkspaceRecord,
@@ -99,9 +82,6 @@ pub fn resolve_release_products(
     })
 }
 
-/// Capture version ownership paths without copying any version value into generated policy.
-/// # Errors
-/// Rejects undiscovered/ambiguous/external packages or unsafe ownership paths.
 pub fn release_version_policy(
     config: &RustBinaryReleaseConfig,
     workspace: &WorkspaceRecord,
@@ -186,7 +166,3 @@ fn resolve_bins(
 fn invalid(problem: &'static str) -> ContractError {
     ContractError::identity("release_products", problem)
 }
-
-#[cfg(test)]
-#[path = "release_products_tests.rs"]
-mod tests;

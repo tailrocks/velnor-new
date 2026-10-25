@@ -1,4 +1,3 @@
-//! Strict scenario evidence bound to the source plan and named check.
 #[path = "check_gate.rs"]
 pub(crate) mod gate;
 
@@ -10,7 +9,6 @@ use std::path::{Component, Path};
 use velnor_actions_contract::config::{CheckEvidence, CheckPlatform};
 use velnor_actions_contract::{digest_b3, parse_strict_json};
 
-/// Producer payload; unknown fields and duplicate JSON keys fail closed.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ScenarioEvidence {
@@ -38,7 +36,6 @@ pub(crate) enum ScenarioStatus {
     Skipped,
 }
 
-/// Trusted receipt records precisely the bytes examined by this helper.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct EvidenceReceipt {
@@ -54,7 +51,6 @@ pub(crate) struct EvidenceReceipt {
     pub bytes: Vec<u8>,
 }
 
-/// Validate declared scenarios and produce a byte-bound receipt.
 pub(crate) fn verify_evidence(
     root: &Path,
     declaration: &CheckEvidence,
@@ -127,7 +123,6 @@ pub(crate) fn validate_evidence(
     Ok(())
 }
 
-/// Refuse every symlink component, including in-repository parent links.
 pub(crate) fn reject_link_components(root: &Path, relative: &str) -> Result<(), OrchestratorError> {
     let mut path = root.to_path_buf();
     for component in Path::new(relative).components() {

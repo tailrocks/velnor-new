@@ -1,5 +1,3 @@
-//! Standalone YAML workflow document builder for declared Rust test suites.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{

@@ -1,9 +1,3 @@
-//! Release roles, job specs, and workflow assembly.
-//!
-//! The legal role set, the forward-only needs graph, and the exact role
-//! conditions. The per-role permission matrix lives in
-//! [`crate::release_permissions`].
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{JobTimeout, Step, StepKind, validate_job_id};
@@ -18,23 +12,16 @@ use crate::{
     steps::scan_for_private_subcommands,
 };
 
-/// Release boundary role carried by one job (bootstrap optional).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ReleaseRole {
-    /// Release-PR preparation (GitHub authority, no registry/OIDC).
     Preparation,
-    /// Preflight validation (read-only, exact-source checkout).
     Preflight,
-    /// Trusted-publishing publication (OIDC, pinned environment).
     PublishOidc,
-    /// Bootstrap-token publication (distinct job, pinned environment).
     PublishBootstrap,
-    /// Independent reconciliation (read-only, always runs).
     Reconcile,
 }
 
 impl ReleaseRole {
-    /// Machine-readable role name for errors.
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
@@ -46,13 +33,11 @@ impl ReleaseRole {
         }
     }
 
-    /// True for validation-only roles (never hold write authority).
     #[must_use]
     pub fn is_validation(self) -> bool {
         matches!(self, Self::Preflight | Self::Reconcile)
     }
 
-    /// Forward-only pipeline rank (needs must point to lower ranks).
     fn rank(self) -> u8 {
         match self {
             Self::Preparation => 0,
@@ -63,31 +48,19 @@ impl ReleaseRole {
     }
 }
 
-/// One release job: a contract step list plus typed role metadata.
 #[derive(Debug, Clone)]
 pub struct ReleaseJobSpec {
-    /// Boundary role this job serves.
     pub role: ReleaseRole,
-    /// Stable display name.
     pub display_name: String,
-    /// Literal versioned Ubuntu label.
     pub runs_on: String,
-    /// Required per-job bound (G4): release jobs are generated jobs,
-    /// so they carry `timeout-minutes` by construction like CI jobs.
     pub timeout_minutes: JobTimeout,
-    /// Job dependencies (forward-only by role rank).
     pub needs: Vec<String>,
-    /// Run condition (`if`); publish/reconcile roles carry exact gates.
     pub condition: Option<String>,
-    /// Pinned GitHub environment (required for publication).
     pub environment: Option<String>,
-    /// Least-privilege permissions for the role.
     pub permissions: JobPermissions,
-    /// Ordered steps (action/shell only; internal ops rejected).
     pub steps: Vec<Step>,
 }
 
-/// Validate one `if:` condition shape (single line, no secret handles).
 fn check_condition_text(condition: &str) -> Result<(), RenderError> {
     if !is_clean_text(condition, 512) || condition.contains("secrets.") {
         return Err(RenderError::InvalidWorkflow(format!(
@@ -98,11 +71,6 @@ fn check_condition_text(condition: &str) -> Result<(), RenderError> {
 }
 
 impl ReleaseJobSpec {
-    /// Validate job shape, environment, permissions, and condition text.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`RenderError`] for malformed jobs or permission drift.
     pub fn validate_shape(&self, id: &str) -> Result<(), RenderError> {
         if !is_clean_text(&self.display_name, 128) {
             return Err(RenderError::InvalidWorkflow(format!(
@@ -137,33 +105,19 @@ impl ReleaseJobSpec {
     }
 }
 
-/// Complete typed release workflow: identity, triggers, jobs, plan.
 #[derive(Debug, Clone)]
 pub struct ReleaseWorkflowSpec {
-    /// Workflow display name.
     pub name: String,
-    /// Exact `owner/repo` identity every gate binds.
     pub repository: String,
-    /// Trusted-branch/schedule/typed-dispatch triggers.
     pub triggers: ReleaseTriggers,
-    /// Stable serialized concurrency.
     pub concurrency: ReleaseConcurrency,
-    /// Jobs keyed by job ID (sorted).
     pub jobs: BTreeMap<String, ReleaseJobSpec>,
-    /// Approved exact-source plan.
     pub bootstrap: BootstrapPlan,
-    /// Pinned environment for the OIDC publish job.
     pub publish_environment: String,
-    /// Pinned environment for the bootstrap publish job.
     pub bootstrap_environment: String,
 }
 
 impl ReleaseWorkflowSpec {
-    /// Validate identity, triggers, roles, graph, conditions, and binding.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`RenderError`] for any structural or binding violation.
     pub fn validate(&self) -> Result<(), RenderError> {
         if !is_clean_text(&self.name, 128) {
             return Err(RenderError::InvalidWorkflow("bad_release_name".to_owned()));
@@ -192,7 +146,6 @@ impl ReleaseWorkflowSpec {
     }
 }
 
-/// Require valid IDs plus the exact role set (bootstrap optional).
 fn check_role_set(jobs: &BTreeMap<String, ReleaseJobSpec>) -> Result<(), RenderError> {
     let mut roles: Vec<ReleaseRole> = Vec::with_capacity(jobs.len());
     for (id, job) in jobs {
@@ -219,7 +172,6 @@ fn check_role_set(jobs: &BTreeMap<String, ReleaseJobSpec>) -> Result<(), RenderE
     Ok(())
 }
 
-/// Require known, forward-only needs (rank order forbids cycles).
 fn check_needs_graph(jobs: &BTreeMap<String, ReleaseJobSpec>) -> Result<(), RenderError> {
     for (id, job) in jobs {
         for need in &job.needs {
@@ -241,7 +193,6 @@ fn check_needs_graph(jobs: &BTreeMap<String, ReleaseJobSpec>) -> Result<(), Rend
     Ok(())
 }
 
-/// Require exact publish gates plus the always-on reconcile condition.
 fn check_role_conditions(
     jobs: &BTreeMap<String, ReleaseJobSpec>,
     repository: &str,
@@ -270,7 +221,6 @@ fn check_role_conditions(
     Ok(())
 }
 
-/// Require publication after preflight and reconciliation after publishing.
 fn check_publish_needs(jobs: &BTreeMap<String, ReleaseJobSpec>) -> Result<(), RenderError> {
     let id_for = |role: ReleaseRole| {
         jobs.iter()

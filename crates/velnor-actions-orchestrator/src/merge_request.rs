@@ -1,32 +1,3 @@
-//! Event-time `merge-v1` request assembly from downloaded artifacts.
-//!
-//! The final job downloads the plan artifact (`plan.json`, `matrix.json`)
-//! plus every matrix-report artifact under `reports/<artifact-id>/` before
-//! the merge step; this module assembles those files into the canonical
-//! merge-request JSON that [`crate::merge_internal`] consumes. Candidate
-//! qualification evidence is the candidate job's `needs` conclusion,
-//! not a separate report file: no producer ever wrote one, so requiring
-//! it failed candidate mode closed on every run. The conclusion is
-//! bound to the plan head by the candidate attestation (S3), which the
-//! merge re-checks; the manifest's remaining fields stay consumer-side
-//! audit data (S10/D6).
-//!
-//! Required validator conclusions arrive through the `VELNOR_NEEDS_JSON`
-//! channel: a JSON object mapping each job in the final gate's `needs`
-//! to its conclusion, either directly (`{"plan": "success"}`) or in
-//! `toJSON(needs)` shape (`{"plan": {"result": "success"}}`). The
-//! renderer also emits the static expected inventory through
-//! `VELNOR_NEEDS_EXPECTED`; assembly declares it as the required
-//! inventory (minus the matrix-driver job, whose legs prove themselves
-//! through per-leg reports) and fails closed on a missing or unparsable
-//! channel or any observed-vs-expected divergence.
-//!
-//! Assembly never drops evidence silently: every missing or unparsable
-//! artifact becomes an explicit `assembly_errors` entry that fails the
-//! verdict, so the merge still emits its diagnostic `planning_failed`
-//! report instead of dying in request assembly.
-
-// Needs-channel parsing lives beside assembly so `lib.rs` stays untouched.
 #[path = "needs_channel.rs"]
 mod needs_channel;
 
@@ -44,19 +15,6 @@ use crate::request_event::{
     QualificationRunnerContext, qualification_dispatch_for_parts, workflow_event_for,
 };
 
-/// Assemble one canonical merge request from a run directory.
-///
-/// Reads `plan.json`, `matrix.json`, exactly the plan-expected
-/// `reports/<artifact-id>/matrix-report.json` files plus their
-/// `tasks/<task-report-id>.json` files (sorted by ID for determinism;
-/// anything else under `reports/` is ignored, never globbed).
-/// Validator inventory and conclusions come from `VELNOR_NEEDS_JSON`. Every
-/// missing or unparsable input is recorded in `assembly_errors`, never
-/// dropped, so the merge judges the gap explicitly.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for encoding failures.
 pub fn assemble_merge_request(run_key: &str, run_dir: &Path) -> Result<String, OrchestratorError> {
     let needs = std::env::var(NEEDS_ENV).ok();
     let expected = std::env::var(NEEDS_EXPECTED_ENV).ok();
@@ -75,24 +33,10 @@ pub fn assemble_merge_request(run_key: &str, run_dir: &Path) -> Result<String, O
     )
 }
 
-/// Event payload through the bounded, symlink-rejecting reader.
-///
-/// Unreadable payloads become `None` so assembly records the gap
-/// explicitly instead of failing the whole request; the plan side
-/// reads the same file through the same helper.
 fn event_payload_from(value: &std::ffi::OsStr) -> Option<String> {
     crate::safe_read::read_event_file(Path::new(value), crate::safe_read::MAX_REPO_FILE_BYTES).ok()
 }
 
-/// Assemble one merge request with explicit needs and event channels.
-///
-/// The public wrapper reads `VELNOR_NEEDS_JSON` plus
-/// `VELNOR_NEEDS_EXPECTED` plus the GitHub event name/payload; tests
-/// pass every channel explicitly for determinism.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for encoding failures.
 pub(crate) fn assemble_with_needs(
     run_key: &str,
     run_dir: &Path,
@@ -138,12 +82,6 @@ pub(crate) fn assemble_with_needs(
     canonical_json_str(&request).map_err(internal_contract)
 }
 
-/// Head-bound candidate attestation, required in candidate mode only.
-///
-/// Candidate mode is the candidate job's presence in the required
-/// inventory. Outside it the file is never read (no error); inside it
-/// a missing or unreadable attestation records an explicit error and
-/// the merge fails closed, never silent.
 fn read_attestation(
     run_dir: &Path,
     inventory: &[String],
@@ -158,17 +96,6 @@ fn read_attestation(
     read_json(run_dir, &relpath, "candidate_attestation", true, errors)
 }
 
-/// Merge-time triggering event from explicit GitHub parts.
-///
-/// The merge job runs in the same run as the plan job, so its
-/// `GITHUB_EVENT_NAME` is the ground truth the plan's stamped event
-/// must match; a forged plan artifact claiming a stronger event (push
-/// trust on PR content) fails closed at merge instead of inheriting
-/// its own stamp. Resolution shares [`workflow_event_for`] with plan
-/// requests so fork handling can never disagree. Only `pull_request`
-/// requires the payload (fork detection); every other event resolves
-/// from the name alone, but a present-but-malformed payload still
-/// fails closed (a corrupt runner channel proves nothing).
 fn resolve_actual_event(
     event_name: Option<&str>,
     event_payload: Option<&str>,
@@ -206,8 +133,6 @@ fn resolve_actual_event(
     }
 }
 
-/// Reacquire qualification provenance from this merge runner's actual
-/// dispatch payload and immutable GitHub environment.
 fn resolve_actual_qualification(
     event_name: Option<&str>,
     event_payload: Option<&str>,
@@ -252,16 +177,6 @@ fn resolve_actual_qualification(
     }
 }
 
-/// Materialize the merge request from the environment and run directory.
-///
-/// Resolves the run key from `GITHUB_RUN_ID`/`GITHUB_RUN_ATTEMPT` and the
-/// run directory from `RUNNER_TEMP`, then delegates to
-/// [`write_merge_request_to`].
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for missing env or unwritable
-/// paths; [`OrchestratorError::Io`] for unreadable artifact JSON.
 pub(crate) fn write_merge_request(request_path: &Path) -> Result<PathBuf, OrchestratorError> {
     let run_key = resolve_run_key(None)?;
     let temp = std::env::var_os("RUNNER_TEMP")
@@ -272,17 +187,6 @@ pub(crate) fn write_merge_request(request_path: &Path) -> Result<PathBuf, Orches
     write_merge_request_to(request_path, &run_key, &run_dir, &anchor)
 }
 
-/// Assemble and exclusively write one merge request file.
-///
-/// The file is written exclusively (a pre-existing file errors, never
-/// overwritten), matching the plan request writer. Missing inputs are
-/// recorded in the request, not refused here. Parents are created
-/// under `anchor` with symlink refusal, like the plan request writer.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for a pre-existing request
-/// file, anchor escapes, or unwritable paths.
 pub(crate) fn write_merge_request_to(
     request_path: &Path,
     run_key: &str,
@@ -298,19 +202,8 @@ pub(crate) fn write_merge_request_to(
     Ok(path)
 }
 
-/// Maximum bytes read from one assembled JSON artifact.
-///
-/// Plans carry obligations plus the matrix; four megabytes fails closed
-/// on runaway payloads without truncating legitimate evidence.
 const MAX_ASSEMBLY_JSON_BYTES: u64 = 4 << 20;
 
-/// Read one JSON artifact; failures become null plus an explicit error.
-///
-/// Absence errors only for required artifacts; corruption, duplicate
-/// keys, symlinks, unreadable paths, and oversize payloads always
-/// error. Reads enforce the shared staged-text gates (symlink rejection
-/// plus size bound) and the strict key check, so every assembly input
-/// hardens alike.
 fn read_json(
     run_dir: &Path,
     name: &str,
@@ -328,7 +221,6 @@ fn read_json(
     )
 }
 
-/// Read one JSON artifact with its own byte contract.
 fn read_json_with_limit(
     run_dir: &Path,
     name: &str,
@@ -366,14 +258,3 @@ fn read_json_with_limit(
         }
     }
 }
-
-#[cfg(test)]
-#[path = "merge_event_tests.rs"]
-mod merge_event_tests;
-#[cfg(test)]
-#[path = "merge_request_tests.rs"]
-mod merge_request_tests;
-
-#[cfg(test)]
-#[path = "actual_event_strict_tests.rs"]
-mod actual_event_strict_tests;

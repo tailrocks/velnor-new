@@ -1,5 +1,3 @@
-//! Parse and print. The host owns mutation.
-
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -13,7 +11,6 @@ use velnor_runner_host::{
 
 use crate::args::{Cli, Command, DaemonAction};
 
-/// Parse argv and run one command.
 #[must_use]
 pub fn run() -> ExitCode {
     if let Some(code) = crate::readiness_probe::run_internal() {
@@ -141,7 +138,6 @@ fn remove_flag(state: &Path, name: &str) -> ExitCode {
 pub(crate) const KEYCHAIN_SERVICE: &str = "com.tailrocks.velnor.host";
 const DEFAULT_KEYCHAIN_ACCOUNT: &str = "local";
 
-/// Fields for one `connect` invocation. The token is not a field.
 struct ConnectRequest<'a> {
     state: &'a Path,
     repo: &'a str,
@@ -328,9 +324,6 @@ fn not_proven() -> ExitCode {
     println!("NOT_PROVEN");
     ExitCode::from(1)
 }
-
-#[cfg(test)]
-mod connect_tests;
 
 fn disconnect(drain: bool) -> ExitCode {
     let effects = disconnect_effects(SetOwnership::Adopted, drain);

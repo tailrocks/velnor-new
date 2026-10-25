@@ -1,31 +1,21 @@
-//! Typed `runs-on` selectors. Hosted catalog labels and scale-set labels
-//! are different types; a hosted label cannot sit on a scale-set selector.
-//!
-//! Render order is fixed: `velnor`, then the scale-set name, then any
-//! extra labels in input order. It is not alphabetical.
-
 use super::workflow::RUNNER_LABEL_CATALOG;
 use crate::errors::ContractError;
 
-/// Product marker registered on the scale set.
 pub const VELNOR_LABEL: &str = "velnor";
-/// Canonical scale-set name and label.
+
 pub const SCALE_SET_NAME: &str = "ubuntu-26.04-scale-set";
-/// Platform recorded for the initial x64 profile.
+
 pub const LINUX_AMD64: &str = "linux/amd64";
-/// IR carrier prefix. The renderer never emits this text as YAML.
+
 const SCALE_SET_TOKEN_PREFIX: &str = "scale-set:";
 
-/// Hosted catalog label or a scale-set selector.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RunsOn {
-    /// One GitHub-hosted catalog label, rendered as a scalar.
     Hosted(String),
-    /// Scale-set selector, rendered as a flow sequence.
+
     ScaleSet(ScaleSetSelector),
 }
 
-/// Validated scale-set name plus labels in render order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScaleSetSelector {
     name: String,
@@ -33,12 +23,6 @@ pub struct ScaleSetSelector {
 }
 
 impl ScaleSetSelector {
-    /// Build a selector. Labels are reordered to the render order.
-    ///
-    /// # Errors
-    ///
-    /// Illegal characters, hosted catalog labels, duplicates, a missing
-    /// `velnor` label, or a name that is not one of the labels.
     pub fn try_new(name: &str, labels: &[String]) -> Result<Self, ContractError> {
         validate_label(name, "execution.profiles.scale_set.name")?;
         if name == VELNOR_LABEL || is_hosted_catalog(name) {
@@ -85,19 +69,16 @@ impl ScaleSetSelector {
         })
     }
 
-    /// Scale-set name.
     #[must_use]
     pub fn name(&self) -> &str {
         &self.name
     }
 
-    /// Labels in render order, not alphabetical order.
     #[must_use]
     pub fn labels(&self) -> &[String] {
         &self.labels
     }
 
-    /// IR token. Not valid YAML `runs-on` text.
     #[must_use]
     pub fn token(&self) -> String {
         let mut token = String::from(SCALE_SET_TOKEN_PREFIX);
@@ -105,11 +86,6 @@ impl ScaleSetSelector {
         token
     }
 
-    /// Parse an IR token produced by [`Self::token`].
-    ///
-    /// # Errors
-    ///
-    /// Returns a config error when the token is not a legal selector.
     pub fn parse_token(text: &str) -> Result<Self, ContractError> {
         let Some(body) = text.strip_prefix(SCALE_SET_TOKEN_PREFIX) else {
             return Err(illegal("runs_on", text));
@@ -124,11 +100,6 @@ impl ScaleSetSelector {
 }
 
 impl RunsOn {
-    /// Parse a hosted label or a scale-set IR token.
-    ///
-    /// # Errors
-    ///
-    /// Illegal labels fail. Hosted catalog text stays a hosted selector.
     pub fn parse(text: &str) -> Result<Self, ContractError> {
         if text.starts_with(SCALE_SET_TOKEN_PREFIX) {
             return Ok(Self::ScaleSet(ScaleSetSelector::parse_token(text)?));
@@ -139,13 +110,11 @@ impl RunsOn {
         Err(illegal("runs_on", text))
     }
 
-    /// True for a scale-set selector.
     #[must_use]
     pub fn is_scale_set(&self) -> bool {
         matches!(self, Self::ScaleSet(_))
     }
 
-    /// Hosted scalar, when this is a hosted selector.
     #[must_use]
     pub fn hosted_label(&self) -> Option<&str> {
         match self {
@@ -154,7 +123,6 @@ impl RunsOn {
         }
     }
 
-    /// Scale-set labels in render order.
     #[must_use]
     pub fn scale_labels(&self) -> Option<&[String]> {
         match self {
@@ -164,15 +132,11 @@ impl RunsOn {
     }
 }
 
-/// True when `label` is a hosted runner-catalog entry.
 #[must_use]
 pub fn is_hosted_catalog(label: &str) -> bool {
     RUNNER_LABEL_CATALOG.contains(&label)
 }
 
-/// Schema-1 pinned-label grammar (no `latest`, no expressions).
-///
-/// Kept identical so existing hosted labels still validate.
 #[must_use]
 pub fn is_legacy_hosted_label(label: &str) -> bool {
     !label.is_empty()
@@ -183,7 +147,6 @@ pub fn is_legacy_hosted_label(label: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_'))
 }
 
-/// Reject empty, oversized, or non-label characters.
 fn validate_label(label: &str, key: &str) -> Result<(), ContractError> {
     let chars_ok = (1..=64).contains(&label.len())
         && !label.starts_with('-')

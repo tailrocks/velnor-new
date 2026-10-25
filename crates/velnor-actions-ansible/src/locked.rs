@@ -1,41 +1,24 @@
-//! Locked tool archives: `mise.lock` rows with a SHA-256 and an admitted URL.
-//!
-//! The job installs `uv` and Python from the archive the repository's
-//! `mise.lock` records for the runner platform, after checking the row's
-//! SHA-256. A row without a checksum, or with a URL outside the admitted
-//! release path, fails generation.
-
 use crate::AnsibleError;
 
-/// One tool the Ansible job installs straight from the lock.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LockedTool {
-    /// Key under `[tools]` in `mise.lock`.
     pub key: &'static str,
-    /// URL every admitted archive starts with.
+
     pub url_prefix: &'static str,
 }
 
-/// The uv release archives.
 pub const UV: LockedTool = LockedTool {
     key: "uv",
     url_prefix: "https://github.com/astral-sh/uv/releases/download/",
 };
 
-/// The python-build-standalone release archives.
 pub const PYTHON: LockedTool = LockedTool {
     key: "python",
     url_prefix: "https://github.com/astral-sh/python-build-standalone/releases/download/",
 };
 
-/// Platform whose row the hosted runner uses.
 pub const PLATFORM: &str = "linux-x64";
 
-/// Check the row of `tool` for `PLATFORM` in the text of a `mise.lock`.
-///
-/// Findings: `ansible_tool_lock_missing:<key>`,
-/// `ansible_tool_url_untrusted:<key>` and `ansible_tool_checksum_missing:<key>`
-/// (the checksum must be `sha256:` followed by 64 lower-case hex digits).
 #[must_use]
 pub fn check_locked_tool(lock_text: &str, tool: LockedTool) -> Vec<AnsibleError> {
     let Ok(lock) = lock_text.parse::<toml::Table>() else {

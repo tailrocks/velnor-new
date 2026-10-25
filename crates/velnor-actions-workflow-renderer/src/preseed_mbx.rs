@@ -1,5 +1,3 @@
-//! Bind fixed pre-seed MBX vectors to the native action executable.
-
 use crate::{RenderError, cache_steps::ACTION_MBX_BIN};
 
 pub(super) fn probe_argv_for_action(probe: &[String]) -> Result<Vec<String>, RenderError> {

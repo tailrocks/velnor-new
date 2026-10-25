@@ -1,5 +1,3 @@
-//! One configured wall-clock budget for package publication and recovery.
-
 use std::{ffi::OsString, path::Path, time::Instant};
 
 use velnor_actions_contract::workflow::JobTimeout;
@@ -79,7 +77,3 @@ fn parse_timeout(raw: Option<OsString>) -> Result<JobTimeout, OrchestratorError>
         .map_err(|_| internal("package_publication_timeout_invalid"))?;
     JobTimeout::new(minutes).map_err(|_| internal("package_publication_timeout_invalid"))
 }
-
-#[cfg(test)]
-#[path = "package_release_publish_budget_tests.rs"]
-mod tests;

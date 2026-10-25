@@ -1,5 +1,3 @@
-//! Fixed rendering and policy for isolated verification-only task jobs.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
@@ -9,8 +7,6 @@ use velnor_actions_contract::{
 
 use crate::{MiseSetup, RenderError};
 
-// Workflow-task job builders live beside the verification job builder
-// (`#[path]`, no `lib.rs` edit).
 #[path = "build_task_jobs.rs"]
 pub(crate) mod build_task_jobs;
 #[path = "build_task_mise.rs"]
@@ -80,32 +76,18 @@ pub use playwright_install_step::{
 pub use stack_jobs::{STACK_RUNNER, StackJobKind, StackJobPolicy, build_stack_job};
 pub use workflow_task_jobs::WorkflowTaskPolicy;
 
-#[cfg(test)]
-#[path = "verification_jobs_tests.rs"]
-mod tests;
-
-/// Per-task, orchestrator-resolved runner and Mise binary pin.
 #[derive(Debug, Clone)]
 pub struct VerificationTaskPolicy {
-    /// Validated task declaration from `.velnor/config.toml`.
     pub task: VerificationTask,
-    /// Exact OS/architecture-specific runner label.
     pub runner_label: String,
-    /// Configured Scale Set selector token, absent for schema 1.
     pub scale_set_token: Option<String>,
-    /// Mise setup action with the binary digest for this runner target.
     pub mise_setup: MiseSetup,
-    /// Per-task explicitly declared tools, resolved to locked prebuilt rows.
     pub selected_tools: Vec<build_task_jobs::BuildTaskTool>,
-    /// SHA-256 of the source task config, if present.
     pub mise_config_sha256: Option<String>,
-    /// SHA-256 of the source Mise lock, if present.
     pub mise_lock_sha256: Option<String>,
-    /// SHA-256 of the source Rust toolchain file, if present.
     pub rust_toolchain_sha256: Option<String>,
 }
 
-/// Shared, validated task inputs consumed by the locked Mise bootstrap.
 #[derive(Debug, Clone)]
 pub(crate) struct MiseTaskBootstrapPolicy {
     pub(crate) id: String,
@@ -139,19 +121,15 @@ impl MiseTaskBootstrapPolicy {
     }
 }
 
-/// Step installing only the declared task's locked prebuilt tool closure.
 pub const INSTALL_VERIFICATION_TOOLS_NAME: &str = "Install declared prebuilt task tools";
-/// Step running the declared, credential-scrubbed Mise task.
 pub const RUN_VERIFICATION_TASK_NAME: &str = "Run declared Mise task";
 
 impl VerificationTaskPolicy {
-    /// Generated GitHub job key for this declaration.
     #[must_use]
     pub fn job_id(&self) -> String {
         format!("{WORKFLOW_TASK_JOB_PREFIX}{}", self.task.id)
     }
 
-    /// Whether `job_id` is this declaration's base or schema-2 lane copy.
     #[must_use]
     pub fn owns_job_id(&self, job_id: &str) -> bool {
         let base = self.job_id();
@@ -161,11 +139,6 @@ impl VerificationTaskPolicy {
     }
 }
 
-/// Build the exact read-only-token verification job for one declaration.
-///
-/// The shared renderer removes runner credentials before both direct Mise
-/// steps: locked install reads repo config/hooks, and `run` executes the task.
-/// # Errors
 pub fn build_verification_task_job(
     policy: &VerificationTaskPolicy,
     checkout_uses: &str,
@@ -188,8 +161,6 @@ pub fn build_verification_task_job(
     })
 }
 
-/// Validate every task job and return its sorted job IDs.
-/// # Errors
 pub(crate) fn validate_verification_jobs(
     jobs: &BTreeMap<String, Job>,
     policies: &[VerificationTaskPolicy],
@@ -252,7 +223,6 @@ pub(crate) fn validate_verification_jobs(
     Ok(job_ids)
 }
 
-/// One rendered form of a typed verification declaration.
 #[derive(Debug, Clone, Copy)]
 enum VerificationJobVariant {
     Base,
@@ -260,7 +230,6 @@ enum VerificationJobVariant {
     ScaleSet,
 }
 
-/// Rebuild the fixed task job for one schema-2 placement.
 fn expected_variant_job(
     policy: &VerificationTaskPolicy,
     variant: VerificationJobVariant,
@@ -292,11 +261,9 @@ fn expected_variant_job(
     Ok(expected)
 }
 
-/// Lane suffixes mirror the schema-2 workflow contract.
 const HOSTED_TASK_NAME_SUFFIX: &str = " / GitHub hosted / Linux x64";
 const SCALE_TASK_NAME_SUFFIX: &str = " / Velnor Scale Set / Linux x64";
 
-/// Ensure a Scale Set copy is only built for the Linux-x64 task kind.
 fn require_linux_task(policy: &VerificationTaskPolicy) -> Result<(), RenderError> {
     if policy.task.runner == VerificationRunner::LinuxX64 {
         return Ok(());
@@ -304,7 +271,6 @@ fn require_linux_task(policy: &VerificationTaskPolicy) -> Result<(), RenderError
     Err(runner_mismatch(policy))
 }
 
-/// Require the exact Scale Set selector resolved from execution config.
 fn require_scale_set(policy: &VerificationTaskPolicy, actual: &str) -> Result<(), RenderError> {
     require_linux_task(policy)?;
     if policy.scale_set_token.as_deref() == Some(actual) {
@@ -313,17 +279,14 @@ fn require_scale_set(policy: &VerificationTaskPolicy, actual: &str) -> Result<()
     Err(runner_mismatch(policy))
 }
 
-/// Whether a rendered `runs-on` value is a validated Scale Set token.
 fn is_scale_set(runs_on: &str) -> bool {
     RunsOn::parse(runs_on).is_ok_and(|selector| selector.is_scale_set())
 }
 
-/// Mismatch diagnostic for an unsupported verification-task placement.
 fn runner_mismatch(policy: &VerificationTaskPolicy) -> RenderError {
     RenderError::InvalidWorkflow(format!("verification_runner_mismatch:{}", policy.task.id))
 }
 
-/// Build the exact step sequence, with credentials absent before Mise reads config.
 fn verification_steps(
     policy: &VerificationTaskPolicy,
     checkout_uses: &str,
@@ -331,7 +294,6 @@ fn verification_steps(
     crate::verification_jobs::verification_task_mise::steps(policy, checkout_uses)
 }
 
-/// Validate the task schema and runner-to-platform binding.
 fn validate_policy(policy: &VerificationTaskPolicy) -> Result<(), RenderError> {
     policy
         .task
@@ -347,7 +309,6 @@ fn validate_policy(policy: &VerificationTaskPolicy) -> Result<(), RenderError> {
     crate::verification_jobs::verification_task_mise::validate_policy(policy)
 }
 
-/// Exact least-privilege token scopes for isolated task jobs.
 fn verification_permissions() -> Permissions {
     Permissions {
         contents: PermissionLevel::Read,
@@ -358,7 +319,6 @@ fn verification_permissions() -> Permissions {
     }
 }
 
-/// Compare every `Job` field and the full ordered step contract.
 fn same_job_contract(actual: &Job, expected: &Job) -> bool {
     actual.display_name == expected.display_name
         && actual.runs_on == expected.runs_on

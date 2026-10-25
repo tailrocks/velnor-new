@@ -1,19 +1,14 @@
-//! Lexical grammar shared by every `[[images]]` field: ids, registry names, paths.
-
 use super::images::IMAGE_REGISTRY_HOST;
 use super::workflow_task::is_valid_workflow_task_id;
 use crate::errors::ContractError;
 
-/// Longest accepted image id; job ids add `image-` and a platform suffix.
 const MAX_IMAGE_ID_BYTES: usize = 40;
 
-/// Image id: workflow-task grammar, bounded so job ids stay short.
 #[must_use]
 pub fn is_valid_image_id(id: &str) -> bool {
     id.len() <= MAX_IMAGE_ID_BYTES && is_valid_workflow_task_id(id)
 }
 
-/// `ghcr.io/<owner>/<name>[/<name>...]`, lowercase, no tag or digest.
 #[must_use]
 pub fn is_valid_image_repository(repository: &str) -> bool {
     let Some(rest) = repository
@@ -62,7 +57,6 @@ pub(super) fn is_cargo_name(name: &str) -> bool {
         && !name.starts_with('-')
 }
 
-/// Lexical repo-relative path check shared by every image path field.
 pub(super) fn require_safe_path(
     file: &str,
     key: String,

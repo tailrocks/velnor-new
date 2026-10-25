@@ -1,5 +1,3 @@
-//! Deterministic bounded tar.gz transport for Bun private assets.
-
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Component, Path, PathBuf};

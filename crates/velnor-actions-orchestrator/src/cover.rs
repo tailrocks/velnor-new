@@ -1,7 +1,3 @@
-//! Merge checks 2-3: report-set partition and per-entry coverage.
-
-// Wired here (not `lib.rs`, which Gate 4-7 does not own) so the sharding
-// module compiles without touching shared files.
 #[path = "shard.rs"]
 pub(crate) mod shard;
 
@@ -17,36 +13,25 @@ use crate::internal::internal_contract;
 use crate::internal_plan::wire_w2;
 use crate::merge::MergeRequest;
 
-/// Aggregated merge signals feeding result precedence.
 #[derive(Debug, Default)]
 #[expect(
     clippy::struct_excessive_bools,
     reason = "five precedence signals read clearest as named bools"
 )]
 pub(crate) struct Signals {
-    /// Structural validation failed.
     pub(crate) planning_failed: bool,
-    /// A required task, job, or candidate failed.
     pub(crate) failed: bool,
-    /// A required task, job, or candidate was cancelled.
     pub(crate) cancelled: bool,
-    /// A required task was blocked (`not_selected`).
     pub(crate) blocked: bool,
-    /// A report is missing, malformed, duplicated, skipped, or not run.
     pub(crate) not_run: bool,
 }
 
-/// Check-2 partition of submitted reports.
 pub(crate) struct Partition<'a> {
-    /// First valid report per expected report ID.
     pub(crate) valid: BTreeMap<&'a str, &'a MatrixReport>,
-    /// Reports failing validation or bound to another run.
     pub(crate) malformed: u32,
-    /// Extra reports beyond the first per report ID.
     pub(crate) duplicates: u32,
 }
 
-/// Check 2: keep the first valid report per expected ID exactly.
 pub(crate) fn partition_reports<'a>(
     request: &'a MergeRequest,
     entries: &BTreeMap<&str, &MatrixEntry>,
@@ -89,39 +74,25 @@ pub(crate) fn partition_reports<'a>(
     }
 }
 
-/// Folded task counts from covered reports.
 #[derive(Debug, Default)]
 pub(crate) struct Fold {
-    /// Reused tasks.
     pub(crate) reused: u32,
-    /// Executed tasks.
     pub(crate) executed: u32,
-    /// Empty-partition tasks.
     pub(crate) empty_partition: u32,
-    /// Failed tasks.
     pub(crate) failed: u32,
-    /// Cancelled tasks.
     pub(crate) cancelled: u32,
-    /// Not-selected (blocked) tasks.
     pub(crate) blocked: u32,
 }
 
-/// Mutable merge sinks threaded through per-entry coverage checks.
 #[derive(Debug)]
 pub(crate) struct CoverSinks<'a> {
-    /// Seen task-report IDs.
     pub(crate) seen_task_reports: &'a mut BTreeSet<String>,
-    /// Partitioned per-task files keyed by task-report ID.
     pub(crate) task_files: &'a BTreeMap<&'a str, &'a TaskReport>,
-    /// Folded task counts.
     pub(crate) fold: &'a mut Fold,
-    /// Merge signals.
     pub(crate) signals: &'a mut Signals,
-    /// Miss reasons for uncovered tasks.
     pub(crate) miss_reasons: &'a mut BTreeSet<String>,
 }
 
-/// Check 3 for one entry: binding, task set, counts, digests; fold on cover.
 pub(crate) fn cover_entry(
     request: &MergeRequest,
     entry: &MatrixEntry,
@@ -180,7 +151,6 @@ pub(crate) fn cover_entry(
     Ok(true)
 }
 
-/// Declared task IDs of one report, sorted.
 fn report_tasks(report: &MatrixReport) -> Vec<&str> {
     report
         .expected_task_ids
@@ -189,7 +159,6 @@ fn report_tasks(report: &MatrixReport) -> Vec<&str> {
         .collect()
 }
 
-/// Declared task IDs of one matrix entry, sorted.
 fn flattened(entry: &MatrixEntry) -> Vec<&str> {
     let mut ids = Vec::new();
     for task_ref in entry.execute_task_ids.tasks.values() {
@@ -204,7 +173,6 @@ fn flattened(entry: &MatrixEntry) -> Vec<&str> {
     ids
 }
 
-/// Recounted task statuses; `None` when the summary disagrees.
 fn recount(report: &MatrixReport) -> Option<Fold> {
     let mut recount = Fold::default();
     for task in &report.tasks {
@@ -226,7 +194,6 @@ fn recount(report: &MatrixReport) -> Option<Fold> {
     agrees.then_some(recount)
 }
 
-/// Task-report IDs unique with digests matching plan obligations.
 fn check_digests(
     request: &MergeRequest,
     report: &MatrixReport,
@@ -250,8 +217,6 @@ fn check_digests(
             miss_reasons.insert("cache_corrupt".to_owned());
             return Ok(false);
         }
-        // Task reports carry no restore observations yet (P04); reuse
-        // claims fail closed until the contract carries them.
         let observed: &[(String, Vec<u8>, String)] = &[];
         if task.status == TaskStatus::Reused
             && let Err(reason) =
@@ -264,14 +229,6 @@ fn check_digests(
     Ok(true)
 }
 
-/// Every aggregate task entry backed by its validated task file.
-///
-/// The aggregate alone never proves its tasks: each entry needs the
-/// partitioned file with matching task identity, plan digest, status,
-/// exit code, and declared-only outputs. A missing file is absent
-/// evidence; any contradiction corrupts the set. Exit coherence is
-/// structural: `Executed` must carry exit 0 and `Failed` a nonzero
-/// exit, and entry and file must agree on both fields.
 fn check_task_files(
     report: &MatrixReport,
     obligations: &BTreeMap<&str, &str>,
@@ -303,10 +260,6 @@ fn check_task_files(
     true
 }
 
-/// Exit code coherent with the task status.
-///
-/// `Executed` proves exit 0; `Failed` proves a nonzero exit. Other
-/// statuses carry producer-defined exits and stay unconstrained here.
 fn exit_coherent(status: TaskStatus, exit_code: i32) -> bool {
     match status {
         TaskStatus::Executed => exit_code == 0,
@@ -318,7 +271,6 @@ fn exit_coherent(status: TaskStatus, exit_code: i32) -> bool {
     }
 }
 
-/// Fold one aggregate report status into signals.
 fn fold_report_status(report: &MatrixReport, signals: &mut Signals) {
     match report.status {
         MatrixStatus::Failed => signals.failed = true,

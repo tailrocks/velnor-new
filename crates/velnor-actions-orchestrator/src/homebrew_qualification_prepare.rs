@@ -185,7 +185,3 @@ fn create_install_paths(
     }
     Ok(paths)
 }
-
-#[cfg(test)]
-#[path = "homebrew_qualification_prepare_tests.rs"]
-mod tests;

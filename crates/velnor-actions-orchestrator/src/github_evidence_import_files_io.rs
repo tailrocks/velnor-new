@@ -1,5 +1,3 @@
-//! Deadline-aware streaming reads, digests, and copies for evidence files.
-
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::Path;

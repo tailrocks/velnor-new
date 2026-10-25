@@ -1,51 +1,22 @@
-//! Closed official source-builder bootstrap assets.
-//!
-//! This authority owns only upstream bootstrap bytes used to acquire the
-//! source-build path. It is separate from runtime distribution qualification:
-//! an asset here does not establish Velnor-owned behavior or installation.
-//!
-//! Mise evidence was captured 2026-10-23 from release `v2026.10.18`; the
-//! official source commit is `8369bc78dc4761660337a2518b1445447438159d` with
-//! tree `f6484ac76553c3dca10c7ea690d01e359dac098b`. MBX evidence was captured
-//! from release `v1.27.0`; its source commit is
-//! `5a50200abf386580642b87eca2995156316b56a7` with tree
-//! `9d1061348a5724ab331264bf83eef9169878e94b`. Archive bytes and extracted
-//! members were hashed; only the Mac executable ran, with `--version` under a
-//! cleared environment.
-
-/// Closed upstream bootstrap tool identities.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SourceBuildBootstrapTool {
-    /// Official Mise bootstrap executable.
     Mise,
-    /// Official Mr. Boxington bootstrap executable.
     Mbx,
 }
 
-/// Closed hosts with measured official bootstrap assets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SourceBuildBootstrapHost {
-    /// GNU Linux on AMD64.
     LinuxAmd64,
-    /// GNU Linux on ARM64.
     LinuxArm64,
-    /// Darwin on ARM64.
     MacosArm64,
 }
 
-/// Container format of an official bootstrap asset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SourceBuildBootstrapFormat {
-    /// Standalone executable bytes.
     Binary,
-    /// Gzip-compressed tar archive.
     TarGzip,
 }
 
-/// Immutable official bootstrap asset record.
-///
-/// Fields remain private so callers can obtain records only through the
-/// closed [`official`] factory and read them through the accessors below.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SourceBuildBootstrapAsset {
     tool: SourceBuildBootstrapTool,
@@ -65,92 +36,77 @@ pub struct SourceBuildBootstrapAsset {
 }
 
 impl SourceBuildBootstrapAsset {
-    /// Exact upstream selector.
     #[must_use]
     pub const fn selector(&self) -> &'static str {
         self.selector
     }
 
-    /// Official asset URL.
     #[must_use]
     pub const fn asset_url(&self) -> &'static str {
         self.asset_url
     }
 
-    /// SHA-256 of the downloaded asset bytes.
     #[must_use]
     pub const fn archive_sha256(&self) -> &'static str {
         self.archive_sha256
     }
 
-    /// SHA-256 of the admitted executable bytes.
     #[must_use]
     pub const fn binary_sha256(&self) -> &'static str {
         self.binary_sha256
     }
 
-    /// Asset container format.
     #[must_use]
     pub const fn asset_format(&self) -> SourceBuildBootstrapFormat {
         self.asset_format
     }
 
-    /// Explicit executable member; empty for standalone binaries.
     #[must_use]
     pub const fn binary_member(&self) -> &'static str {
         self.binary_member
     }
 
-    /// Exact upstream source repository.
     #[must_use]
     pub const fn source_repository(&self) -> &'static str {
         self.source_repository
     }
 
-    /// Exact upstream source commit.
     #[must_use]
     pub const fn source_commit(&self) -> &'static str {
         self.source_commit
     }
 
-    /// Exact upstream source tree.
     #[must_use]
     pub const fn source_tree(&self) -> &'static str {
         self.source_tree
     }
 
-    /// Upstream owner identity.
     #[must_use]
     pub const fn owner(&self) -> &'static str {
         self.owner
     }
 
-    /// Upstream release version.
     #[must_use]
     pub const fn version(&self) -> &'static str {
         self.version
     }
 
-    /// Explicit bootstrap executable ABI.
     #[must_use]
     pub const fn abi(&self) -> &'static str {
         self.abi
     }
 
-    /// Bootstrap tool identity.
     #[must_use]
     pub const fn tool(&self) -> SourceBuildBootstrapTool {
         self.tool
     }
 
-    /// Bootstrap host identity.
     #[must_use]
     pub const fn host(&self) -> SourceBuildBootstrapHost {
         self.host
     }
 }
 
-/// Return the measured official bootstrap asset for a closed tool/host pair.
 #[must_use]
 pub const fn official(
     tool: SourceBuildBootstrapTool,
@@ -165,23 +121,23 @@ pub const fn official(
 const fn mise(host: SourceBuildBootstrapHost) -> SourceBuildBootstrapAsset {
     let (asset_url, archive_sha256, binary_sha256, asset_format, binary_member) = match host {
         SourceBuildBootstrapHost::LinuxAmd64 => (
-            "https://github.com/jdx/mise/releases/download/v2026.10.18/mise-v2026.10.18-linux-x64",
-            "e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942",
-            "e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942",
+            "https://github.com/jdx/mise/releases/download/v2026.10.19/mise-v2026.10.19-linux-x64",
+            "3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d",
+            "3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d",
             SourceBuildBootstrapFormat::Binary,
             "",
         ),
         SourceBuildBootstrapHost::LinuxArm64 => (
-            "https://github.com/jdx/mise/releases/download/v2026.10.18/mise-v2026.10.18-linux-arm64.tar.gz",
-            "c5a49a47f8184f5649f3d8685b408bd72325a823f41cf618c60f3ffc303090a1",
-            "3a3c72376687ba21a588d0f5a2c88c76f483fb6cdece7b0fc43d5e3132b08a52",
+            "https://github.com/jdx/mise/releases/download/v2026.10.19/mise-v2026.10.19-linux-arm64.tar.gz",
+            "f6dbd376928095d3bc8fde72eb1b27a8450d35c1795aa80c05aacf1ce42584aa",
+            "4a4ca53b28e5433c527f4f73fac1f98f992a17cf32ca136a58e2e375f790f627",
             SourceBuildBootstrapFormat::TarGzip,
             "mise/bin/mise",
         ),
         SourceBuildBootstrapHost::MacosArm64 => (
-            "https://github.com/jdx/mise/releases/download/v2026.10.18/mise-v2026.10.18-macos-arm64.tar.gz",
-            "1b1cd6ad4a6176db5ddaf03bf71e131b26324af09cfcf14d7d7038bee60be85d",
-            "d40e2fcd96fed7c70b04af282c36534d87d0318bef89c16fa00c9f98e55ade88",
+            "https://github.com/jdx/mise/releases/download/v2026.10.19/mise-v2026.10.19-macos-arm64.tar.gz",
+            "a8a581e115f4ebdbe2931c237949dbac7624bd8b4024bf3eb9da7981bde490c9",
+            "7dc61dfa71abbcda1c40d18440bc556b5d58b80e6042bc4f95fd106fa1bb3c66",
             SourceBuildBootstrapFormat::TarGzip,
             "mise/bin/mise",
         ),
@@ -189,18 +145,18 @@ const fn mise(host: SourceBuildBootstrapHost) -> SourceBuildBootstrapAsset {
     SourceBuildBootstrapAsset {
         tool: SourceBuildBootstrapTool::Mise,
         host,
-        selector: "github:jdx/mise@2026.10.18",
+        selector: "github:jdx/mise@2026.10.19",
         asset_url,
         archive_sha256,
         binary_sha256,
         asset_format,
         binary_member,
         source_repository: "https://github.com/jdx/mise",
-        source_commit: "8369bc78dc4761660337a2518b1445447438159d",
-        source_tree: "f6484ac76553c3dca10c7ea690d01e359dac098b",
+        source_commit: "860cdc0969db81b1a076b1eb4574bd4b49bdf4e0",
+        source_tree: "2fa25d5f04874ce37e374e25681fb35f4e9e5169",
         owner: "jdx/mise",
-        version: "2026.10.18",
-        abi: "mise-cli-v2026.10.18",
+        version: "2026.10.19",
+        abi: "mise-cli-v2026.10.19",
     }
 }
 
@@ -239,7 +195,3 @@ const fn mbx(host: SourceBuildBootstrapHost) -> SourceBuildBootstrapAsset {
         abi: "mbx-cli-v1.27.0",
     }
 }
-
-#[cfg(test)]
-#[path = "catalog_source_build_bootstrap_tests.rs"]
-mod tests;

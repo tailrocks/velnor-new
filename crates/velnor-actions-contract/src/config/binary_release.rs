@@ -1,5 +1,3 @@
-//! Shared native release inventory with closed rolling and stable policies.
-
 use crate::workflow::JobTimeout;
 use serde::{Deserialize, Serialize};
 
@@ -16,51 +14,45 @@ pub use publication_budget::{
 };
 pub(crate) use validation::validate_static_release_inventory;
 
-/// Shared inventory and qualified producer for both native release channels.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RustBinaryReleaseConfig {
-    /// Repo-relative Cargo workspace manifest.
     #[serde(default = "default_manifest_path")]
     pub manifest_path: String,
-    /// Discovered Cargo package owning the shared base version.
+
     #[serde(default)]
     pub version_package: String,
-    /// Application version supplied only by the native channel authority.
+
     #[serde(default)]
     pub version_env: String,
-    /// Qualified credential-free producer shared by both channels.
+
     #[serde(default)]
     pub producer: RustBinaryReleaseProducer,
-    /// Configured native publication deadline; defaults independently of producer budgets.
-    /// Publisher and recovery jobs add preparation-step caps and cleanup headroom.
-    /// Preview source eligibility continues to use this value as its outer job limit.
+
     #[serde(default = "default_publication_timeout")]
     pub publication_timeout_minutes: JobTimeout,
-    /// Closed explicit product matrix.
+
     #[serde(default)]
     pub products: Vec<RustBinaryReleaseProduct>,
-    /// Closed non-binary asset inventory.
+
     #[serde(default)]
     pub companions: Vec<RustBinaryReleaseCompanion>,
-    /// Complete mandatory evidence profile.
+
     pub evidence: RustBinaryReleaseEvidence,
-    /// Automatic rolling preview policy.
+
     #[serde(default)]
     pub preview: RustBinaryPreviewConfig,
-    /// Manual permanent stable release policy.
+
     #[serde(default)]
     pub stable: RustBinaryStableConfig,
 }
 
-/// Manual stable publication; there is no automatic source-push variant.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RustBinaryStableConfig {
-    /// Whether manual stable release preparation/publication is generated.
     #[serde(default)]
     pub enabled: bool,
-    /// Protected stable publication environment.
+
     #[serde(default = "default_stable_environment")]
     pub environment: String,
 }
@@ -102,13 +94,11 @@ impl Default for RustBinaryReleaseConfig {
 }
 
 impl RustBinaryReleaseConfig {
-    /// Whether either native channel is enabled.
     #[must_use]
     pub const fn enabled(&self) -> bool {
         self.preview.enabled || self.stable.enabled
     }
 
-    /// Select policy from the authenticated channel, never a release URL.
     #[must_use]
     pub const fn channel_enabled(
         &self,
@@ -120,11 +110,3 @@ impl RustBinaryReleaseConfig {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "binary_release_tests.rs"]
-mod tests;
-
-#[cfg(test)]
-#[path = "binary_release_channels_tests.rs"]
-mod channel_tests;

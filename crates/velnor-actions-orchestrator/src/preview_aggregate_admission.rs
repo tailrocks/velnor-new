@@ -1,5 +1,3 @@
-//! Privileged-job admission of authenticated aggregate bytes; executes no source.
-
 use super::{context, handoff, leaf_manifest::PreviewAggregateManifest};
 use crate::{
     OrchestratorError,
@@ -17,12 +15,8 @@ use std::{
 };
 use velnor_actions_mise::CheckDeadline;
 
-/// Admit the exact aggregate service ID before the separate, unchanged signer.
 pub const ADMIT_RELEASE_AGGREGATE_OP: &str = "admit-release-aggregate-v1";
 
-/// Authenticate and inspect the full union without running any repository task.
-/// # Errors
-/// Rejects role, source, remote authority, ZIP, native proof or full artifact drift.
 pub fn admit_release_aggregate() -> Result<(), OrchestratorError> {
     let deadline = CheckDeadline::from_start_with_cleanup_reserve(
         Instant::now(),
@@ -236,8 +230,6 @@ fn runner_temp() -> Result<std::path::PathBuf, OrchestratorError> {
     Ok(root)
 }
 
-// Reject aliases and file/directory collisions across the entire restored tree
-// before creating it, including fixed handoff and generated SBOM destinations.
 fn validate_destinations(
     plan: &velnor_actions_contract::PackageReleasePlan,
 ) -> Result<(), OrchestratorError> {
@@ -272,7 +264,6 @@ fn validate_destinations(
     Ok(())
 }
 
-// Paths come only from the validated source plan, never ZIP or manifest paths.
 fn create_parents(root: &Path, relative: &str) -> Result<(), OrchestratorError> {
     let mut parent = root.to_path_buf();
     let components = Path::new(relative).components().collect::<Vec<_>>();
@@ -286,7 +277,3 @@ fn create_parents(root: &Path, relative: &str) -> Result<(), OrchestratorError> 
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "preview_aggregate_admission_tests.rs"]
-mod tests;

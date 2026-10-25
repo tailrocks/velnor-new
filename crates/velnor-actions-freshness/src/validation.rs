@@ -1,5 +1,3 @@
-//! Activated validation tool pin and mutation-scope checks.
-
 use std::fs;
 
 use toml::Value;
@@ -9,7 +7,6 @@ use crate::patterns;
 
 const MUTANTS: &str = ".cargo/mutants.toml";
 
-/// Compare the activated cargo-mutants pin and ensure its source scope exists.
 pub(crate) fn check_validation_tool_pins(ctx: &mut FreshnessContext) {
     let text = match fs::read_to_string(ctx.path(MUTANTS)) {
         Ok(text) => text,

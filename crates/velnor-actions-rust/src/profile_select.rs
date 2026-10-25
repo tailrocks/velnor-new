@@ -1,11 +1,3 @@
-//! Profile-axis selection over durability-tagged evidence.
-//!
-//! The driver and runner axes stay independent: on each axis a declared
-//! `[stacks.rust]` key wins, else durable evidence, else transient
-//! evidence plus a blocking finding, else the documented default.
-//! Contradictions fail closed; the Nextest profile follows the nearest
-//! config (`ci` when declared, else the documented default).
-
 use crate::evidence::{
     Evidence, MiseWrapperInput, NEXTEST_RECOMMENDATION, PERSIST_EVIDENCE, SHADOWED_NEXTEST_CONFIG,
     Seen, wrapper_sightings,
@@ -15,7 +7,6 @@ use crate::profile::{
     Recommendation, TRANSIENT_EVIDENCE_CODE, TestRunner,
 };
 
-/// Select the compile driver: declared wins, else durable, else transient+finding.
 pub(crate) fn select_driver(
     seen: &Seen,
     inputs: &ProfileInputs<'_>,
@@ -51,7 +42,6 @@ pub(crate) fn select_driver(
     Ok((CompileDriver::Cargo, ProfileSource::Detected))
 }
 
-/// Select the test runner: declared wins, else durable, else transient+finding.
 pub(crate) fn select_runner(
     seen: &Seen,
     inputs: &ProfileInputs<'_>,
@@ -79,7 +69,6 @@ pub(crate) fn select_runner(
     Ok((TestRunner::CargoTest, ProfileSource::Detected))
 }
 
-/// Fail when durable runner evidence contradicts the declared runner.
 fn check_runner_conflict(seen: &Seen, declared: TestRunner) -> Result<(), ProfileError> {
     let (key, contradicting) = match declared {
         TestRunner::CargoTest => ("test_runner = \"cargo_test\"", seen.nextest_durable.clone()),
@@ -97,13 +86,11 @@ fn check_runner_conflict(seen: &Seen, declared: TestRunner) -> Result<(), Profil
     })
 }
 
-/// Sort one evidence bucket.
 fn sorted(mut evidence: Vec<Evidence>) -> Vec<Evidence> {
     evidence.sort();
     evidence
 }
 
-/// Build the blocking finding for a transient-only non-default selection.
 fn transient_finding(
     axis: &str,
     key: &str,
@@ -123,7 +110,6 @@ or (b) move the invocation to a durable executable task outside .github",
     }
 }
 
-/// Advisory recommendations for the detected selection.
 pub(crate) fn recommend(inputs: &ProfileInputs<'_>, seen: &Seen) -> Vec<Recommendation> {
     let mut out = Vec::new();
     if inputs.declared_runner.is_none() && !seen.has_runner() {
@@ -161,11 +147,6 @@ pub(crate) fn recommend(inputs: &ProfileInputs<'_>, seen: &Seen) -> Vec<Recommen
     out
 }
 
-/// Fail when wrapper commands contradict each other or MBX sightings.
-///
-/// Distinct `wrappers.cargo.command` values across the inspected files
-/// cannot all hold (one workspace, one compile route); likewise a
-/// durable MBX signal contradicts an explicit non-MBX wrapper.
 pub(crate) fn check_driver_ambiguity(
     seen: &Seen,
     wrappers: &[MiseWrapperInput],
@@ -196,10 +177,6 @@ pub(crate) fn check_driver_ambiguity(
     Ok(())
 }
 
-/// Select the Nextest profile from the nearest config.
-///
-/// Inputs arrive nearest-first: the first config selects `ci` when it
-/// declares `[profile.ci]`, else Nextest's documented `default` profile.
 pub(crate) fn select_nextest_profile(
     inputs: &ProfileInputs<'_>,
 ) -> (NextestProfile, Option<String>) {

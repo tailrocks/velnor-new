@@ -1,4 +1,3 @@
-//! Named checks complete through the existing obligation and matrix envelopes.
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
 use crate::internal_plan::identities::{platform_id_for_group, toolchain_digest_for};
@@ -11,31 +10,6 @@ use velnor_actions_contract::{
 };
 use velnor_actions_mise::{DiscoveredCheck, ToolCatalog};
 
-/// Shared plan-time and runtime derivation; no detector or Cargo inventory required.
-#[cfg(test)]
-pub(crate) fn derive(
-    root: &Path,
-    item: &DiscoveredCheck,
-    run_key: &str,
-    generator: &PlanGenerator,
-    catalog: &ToolCatalog,
-) -> Result<(PlanObligation, MatrixEntry), OrchestratorError> {
-    let job_id = format!("check-{}", item.check.id);
-    let lane = NamedCheckLane {
-        variant: None,
-        job_id,
-    };
-    let (obligation, mut entries) = derive_lanes(root, item, run_key, generator, catalog, &[lane])?;
-    let entry = entries
-        .pop()
-        .ok_or_else(|| internal("named_check_lane_missing"))?;
-    if !entries.is_empty() {
-        return Err(internal("named_check_single_lane_mismatch"));
-    }
-    Ok((obligation, entry))
-}
-
-/// Derive one logical obligation and one matrix entry for each emitted lane.
 pub(crate) fn derive_lanes(
     root: &Path,
     item: &DiscoveredCheck,
@@ -47,7 +21,6 @@ pub(crate) fn derive_lanes(
     derive_lanes_until(root, item, run_key, generator, catalog, lanes, None)
 }
 
-/// Derive lane entries and source identities against the same deadline as execution.
 pub(crate) fn derive_lanes_until(
     root: &Path,
     item: &DiscoveredCheck,
@@ -105,8 +78,6 @@ pub(crate) fn derive_lanes_until(
         task_digest: task_digest.clone(),
         input_digest: input_digest.clone(),
         closure_digest,
-        // Paired hosted/Scale Set lanes own one obligation; the first lane
-        // names it, and both lane jobs carry matrix entries (always `run`).
         job_id: lanes
             .first()
             .map(|lane| lane.job_id.clone())
@@ -141,11 +112,6 @@ pub(crate) fn derive_lanes_until(
     Ok((obligation, entries))
 }
 
-/// Bind one named check's plan identity to its effective runner label.
-///
-/// Mise planning ignores the global label: the check's own
-/// `runner_profile` selects the runner, so the planned platform must
-/// commit to that same label to stay coherent with the group digest.
 fn planned_platform_for_check(
     label: &str,
     task: &velnor_actions_contract::ProposedTask,

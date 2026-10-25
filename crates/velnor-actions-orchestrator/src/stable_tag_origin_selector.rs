@@ -1,5 +1,3 @@
-//! Read-only source/CI selection; permanent tag writers reauthenticate these hints.
-
 use super::super::{
     github::{GitHubApi, GitRefResponse, TagObjectResponse},
     run_identity::{CurrentRun, RunSource, run_matches},
@@ -11,12 +9,8 @@ use velnor_actions_contract::{
     package_release::PackageReleaseChannel,
 };
 
-/// Read-only selection of the exact fresh or original stable source.
 pub const SELECT_STABLE_RELEASE_SOURCE_OP: &str = "select-stable-release-source-v1";
 
-/// Select a fresh current source or the original authority of a same-run retry.
-/// # Errors
-/// Refuses stale/foreign workflows, missing full CI and changed original intents.
 pub fn select_stable_release_source_from_env() -> Result<(), OrchestratorError> {
     super::super::artifact_zip::within_operation(select)
 }

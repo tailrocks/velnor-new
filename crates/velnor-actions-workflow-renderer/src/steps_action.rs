@@ -1,4 +1,3 @@
-//! Validated pinned-action step constructors.
 
 use std::collections::BTreeMap;
 
@@ -6,11 +5,6 @@ use velnor_actions_contract::{Step, StepKind};
 
 use crate::{RenderError, steps};
 
-/// Validated pinned-action step.
-///
-/// Names share the step-name gate (no expressions); `with:` keys never
-/// carry expressions and values only allowlisted runner spans.
-/// # Errors
 pub fn action_step(
     name: &str,
     uses: &str,
@@ -19,13 +13,6 @@ pub fn action_step(
     action_step_with_env(name, uses, with, BTreeMap::new())
 }
 
-/// Validated action step with step-level environment.
-///
-/// Same gates as [`action_step`]; `env` renders as the step's `env:`
-/// map and applies to the action's main and post phases alike, which
-/// is what lets a cache mode gate the post-step save while the
-/// restore still runs on every event.
-/// # Errors
 pub fn action_step_with_env(
     name: &str,
     uses: &str,

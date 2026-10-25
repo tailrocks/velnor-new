@@ -1,9 +1,3 @@
-//! Release IR structs: triggers, concurrency, bootstrap plan.
-//!
-//! Typed inputs for release rendering. Every value is validated before use;
-//! the renderer branches on validated roles, never on stack or tool names.
-//! Scalar validators live in the child `validators` module, re-exported here.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{ScheduleTrigger, is_valid_branch_name};
@@ -19,35 +13,21 @@ pub use validators::{
     validate_repository, validate_source_sha,
 };
 
-/// Publisher lock and release-event eligibility (`#[path]`, no `lib.rs` edit);
-/// re-exported below so `release_spec::X` paths keep working.
 #[path = "release_lock.rs"]
 pub mod lock;
 pub use lock::{ReleaseConcurrency, check_lock_anchor};
 
-/// One typed `workflow_dispatch` input (plan reference, never free shell).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DispatchInput {
-    /// Input name (`plan`, `source_sha`, `version`, or a validated extra).
     pub name: String,
-    /// Single-line description.
     pub description: String,
-    /// Whether dispatch must supply the input.
     pub required: bool,
-    /// Fixed default value.
     pub default: Option<String>,
 }
 
 impl DispatchInput {
-    /// Rendered input type: always `string`, never boolean/choice.
     pub const INPUT_TYPE: &'static str = "string";
 
-    /// Validate name charset plus single-line clean description/default.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`RenderError::InvalidWorkflow`] or
-    /// [`RenderError::PrivateSubcommand`] for malformed inputs.
     pub fn validate(&self) -> Result<(), RenderError> {
         let charset =
             |b: u8| b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'_' | b'-');
@@ -80,27 +60,14 @@ impl DispatchInput {
     }
 }
 
-/// Release triggers: trusted branches, optional schedule, typed dispatch.
-///
-/// Structurally incapable of pull-request, `pull_request_target`, or
-/// `workflow_run` events: those variants do not exist here.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReleaseTriggers {
-    /// Trusted branch names (exact, never globs).
     pub push_branches: Vec<String>,
-    /// Optional preparation schedule.
     pub schedule: Option<ScheduleTrigger>,
-    /// Typed dispatch inputs (must bind the approved plan).
     pub dispatch_inputs: Vec<DispatchInput>,
 }
 
 impl ReleaseTriggers {
-    /// Validate branches, schedule, and approved-plan dispatch binding.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`RenderError`] for bad branches, bad cron, duplicate or
-    /// malformed inputs, or dispatch defaults that do not match `bootstrap`.
     pub fn validate(&self, bootstrap: &BootstrapPlan) -> Result<(), RenderError> {
         if self.push_branches.is_empty() || self.push_branches.len() > 8 {
             return Err(RenderError::InvalidWorkflow("no_push_branch".to_owned()));
@@ -119,11 +86,6 @@ impl ReleaseTriggers {
         self.check_dispatch_binding(bootstrap)
     }
 
-    /// Require unique inputs plus required `plan`/`source_sha` binding.
-    ///
-    /// An approved bootstrap version additionally binds a required
-    /// `version` input; without one, a `version` input is rejected as
-    /// an unbound version claim.
     fn check_dispatch_binding(&self, bootstrap: &BootstrapPlan) -> Result<(), RenderError> {
         let mut names = BTreeSet::new();
         for input in &self.dispatch_inputs {
@@ -145,7 +107,6 @@ impl ReleaseTriggers {
     }
 }
 
-/// Require one dispatch input to be required with the approved default.
 fn check_bound_input(
     inputs: &[DispatchInput],
     name: &str,
@@ -163,7 +124,6 @@ fn check_bound_input(
     }
 }
 
-/// Reject a dispatch input with no approved plan value behind it.
 fn check_absent_input(inputs: &[DispatchInput], name: &str) -> Result<(), RenderError> {
     let present = inputs.iter().any(|input| input.name == name);
     if present {
@@ -174,29 +134,17 @@ fn check_absent_input(inputs: &[DispatchInput], name: &str) -> Result<(), Render
     Ok(())
 }
 
-/// Approved exact-source bootstrap plan (identities only, no credentials).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BootstrapPlan {
-    /// Approved plan identifier referenced by dispatch inputs.
     pub plan_id: String,
-    /// Exact `owner/repo` the plan is approved for.
     pub repository: String,
-    /// Exact immutable source SHA the plan approves.
     pub source_sha: String,
-    /// Target registry name (for example `crates-io`).
     pub registry: String,
-    /// Approved package-to-version map.
     pub packages: BTreeMap<String, String>,
-    /// Approved exact bootstrap version (`None` outside bootstrap mode).
     pub version: Option<String>,
 }
 
 impl BootstrapPlan {
-    /// Validate every identity plus the package/version map.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`RenderError::InvalidWorkflow`] for malformed plans.
     pub fn validate(&self) -> Result<(), RenderError> {
         validate_plan_id(&self.plan_id)?;
         validate_repository(&self.repository)?;
@@ -225,13 +173,6 @@ impl BootstrapPlan {
     }
 }
 
-/// Exact publish gate: repo identity plus approved plan, source, and version.
-///
-/// Forks and rebound dispatches fail this condition at runtime; publish
-/// jobs must carry exactly this string (see role-condition checks). The
-/// version clause binds only in bootstrap mode, where the exact first
-/// version is the authorization; routine publishers resolve versions at
-/// runtime and carry no generation-time version.
 #[must_use]
 pub fn publish_gate_condition(repository: &str, bootstrap: &BootstrapPlan) -> String {
     let base = format!(

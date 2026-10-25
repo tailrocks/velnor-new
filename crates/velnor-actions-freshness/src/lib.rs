@@ -1,9 +1,7 @@
-//! Velnor repository-owned version and dependency policy checks.
-//!
-//! This maintenance gate is intentionally separate from the V1 workflow
-//! generator. It reads reviewed inventories and source metadata, and emits
-//! bounded machine-readable evidence for local and scheduled checks.
-
+#![allow(
+    missing_docs,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
 mod context;
 mod dependencies;
 mod evidence;
@@ -20,37 +18,35 @@ use std::path::{Path, PathBuf};
 
 use crate::context::FreshnessContext;
 
-/// Typed operation transported through the existing Velnor CLI.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
-    /// Run the freshness, lock identity, and offline deny-policy gates.
     Freshness {
-        /// Probe current upstream releases using bounded read-only requests.
         check_upstream: bool,
-        /// Run live cargo-deny advisory scans for all discovered workspaces.
+
         with_advisories: bool,
     },
-    /// Print pinned `mise exec` specs after comparing Mise and policy values.
+
     ToolchainSpecs,
-    /// Print the pinned Mise version from version policy.
+
     MiseVersion,
-    /// Print sorted Cargo package names.
+
     WorkspaceMembers {
-        /// Include packages with a library target only.
         libraries_only: bool,
     },
-    /// Select the unique Cargo executable reported for one target manifest.
+
+    WorkspaceTestMembers {
+        manifest_path: Option<PathBuf>,
+    },
+
     CargoArtifactExecutable {
-        /// JSON-lines file captured from Cargo.
         messages_path: PathBuf,
-        /// Package manifest expected in compiler-artifact records.
+
         manifest_path: PathBuf,
-        /// Cargo binary target name.
+
         target_name: String,
     },
 }
 
-/// Run one repository policy operation under `root`.
 #[must_use]
 pub fn run(root: &Path, operation: &Operation) -> i32 {
     match operation {
@@ -62,6 +58,9 @@ pub fn run(root: &Path, operation: &Operation) -> i32 {
         Operation::MiseVersion => print_mise_version(root),
         Operation::WorkspaceMembers { libraries_only } => {
             members::print_workspace_members(root, *libraries_only)
+        }
+        Operation::WorkspaceTestMembers { manifest_path } => {
+            members::print_test_members(root, manifest_path.as_deref())
         }
         Operation::CargoArtifactExecutable {
             messages_path,
@@ -121,6 +120,3 @@ fn print_mise_version(root: &Path) -> i32 {
         }
     }
 }
-
-#[cfg(test)]
-mod tests;

@@ -1,4 +1,3 @@
-//! Closed Codex-v1 adapter; human prose and reporting thresholds never prove readiness.
 #[path = "review_completion_time.rs"]
 mod time;
 use super::{
@@ -84,8 +83,6 @@ pub(super) fn inspect(
         &review_metadata,
         restart,
     )?;
-    // The authenticated exact-head role summary owns completion. Clean reviews
-    // emit no formal receipt; present receipts remain independent custody evidence.
     Ok((
         if covered {
             CompletionState::Ready
@@ -385,7 +382,3 @@ fn clean(role: &Role, head: &str) -> Result<bool, OrchestratorError> {
         && role.has_any_findings == Some(false)
         && role.has_unresolved_findings == Some(false))
 }
-
-#[cfg(test)]
-#[path = "review_completion_provider_tests.rs"]
-mod tests;

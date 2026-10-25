@@ -1,5 +1,3 @@
-//! Resolve GitHub's effective branch rules to their full ruleset records.
-
 use std::collections::BTreeMap;
 
 use serde_json::Value;
@@ -91,9 +89,6 @@ pub(super) fn ruleset_detail_route(
     if !admitted {
         return Err(internal("tap_merge_ruleset_source_untrusted"));
     }
-    // Repository detail includes inherited rules and the authenticated writer's
-    // requester-specific bypass state. Parent endpoints do not promise that field.
-    // The caller still requires exact returned ID, source type and source equality.
     Ok(format!(
         "repos/{repository}/rulesets/{id}?includes_parents=true"
     ))
@@ -157,8 +152,6 @@ fn writer_bypass(
     writer_app_id: u64,
     writer_bot_user_id: u64,
 ) -> Result<bool, OrchestratorError> {
-    // This record is fetched under the actual writer token. An observer's
-    // requester state or an omitted actor inventory cannot establish this fact.
     if ruleset["current_user_can_bypass"].as_str() != Some("never") {
         return Err(internal("tap_merge_ruleset_writer_bypass_unproven"));
     }
@@ -189,15 +182,13 @@ fn writer_bypass(
                     .ok_or_else(|| internal("tap_merge_ruleset_bypass_invalid"))?;
                 writer_bypass |= id == writer_bot_user_id;
             }
-            // Other actor membership does not contradict the authenticated
-            // writer's explicit never state; no membership lookup is needed.
             "Team" | "RepositoryRole" => {
                 actor["actor_id"]
                     .as_u64()
                     .filter(|id| *id > 0)
                     .ok_or_else(|| internal("tap_merge_ruleset_bypass_invalid"))?;
             }
-            "OrganizationAdmin" => {} // GitHub ignores this actor's ID.
+            "OrganizationAdmin" => {}
             "DeployKey" if actor["actor_id"].is_null() => {}
             _ => return Err(internal("tap_merge_ruleset_bypass_invalid")),
         }

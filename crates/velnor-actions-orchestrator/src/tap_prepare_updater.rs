@@ -1,5 +1,3 @@
-//! Isolated updater task handoff and execution.
-
 use std::{
     ffi::OsString,
     fs,

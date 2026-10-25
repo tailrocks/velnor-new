@@ -1,6 +1,3 @@
-//! Fixed Git controls belong to the discovery constructor.
-//! Optional locks prevent status refresh writes; Git diff needs separate protection.
-
 use std::ffi::OsString;
 
 use super::{EnvPolicy, IsolatedCommand};

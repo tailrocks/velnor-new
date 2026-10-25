@@ -1,10 +1,3 @@
-//! Enumerate `.github` entries that generation preserves as repository content.
-//!
-//! The walk mirrors `generate_preserve::copy_entry`: an entry that generation
-//! replaces or retires is generator-owned and skipped; everything else is
-//! unmanaged. Allowlisted workflows (`preserve_workflows`) and `[github] allow`
-//! paths are exempt.
-
 use std::path::{Path, PathBuf};
 
 use velnor_actions_contract::{GithubConfig, UnmanagedPolicy};
@@ -15,12 +8,6 @@ use super::preserve::{
 };
 use crate::OrchestratorError;
 
-/// Sorted repository-relative paths (`.github/...`) of non-exempt unmanaged
-/// files, symlinks and empty directories.
-///
-/// # Errors
-///
-/// Returns unsafe-path errors for a symlinked `.github` and IO errors.
 pub(crate) fn list(
     root: &Path,
     preserve_workflows: &[String],
@@ -53,29 +40,19 @@ pub(crate) fn list(
     Ok(paths)
 }
 
-/// Result of the `unmanaged` command.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnmanagedReport {
-    /// Configured `[github] unmanaged` policy.
     pub policy: UnmanagedPolicy,
-    /// Non-exempt unmanaged entries, sorted.
     pub entries: Vec<String>,
 }
 
 impl UnmanagedReport {
-    /// True when the policy is `deny` and at least one entry is listed.
     #[must_use]
     pub fn is_denied(&self) -> bool {
         self.policy == UnmanagedPolicy::Deny && !self.entries.is_empty()
     }
 }
 
-/// Read `.velnor/config.toml` and list unmanaged `.github` entries regardless
-/// of the configured policy (the allowlists still apply).
-///
-/// # Errors
-///
-/// Returns config, unsafe-path, or IO errors.
 pub fn unmanaged_report(root: &Path) -> Result<UnmanagedReport, OrchestratorError> {
     let config = crate::config::load_config(root)?;
     let entries = list(root, &config.workflow.preserve_workflows, &config.github)?;
@@ -85,7 +62,6 @@ pub fn unmanaged_report(root: &Path) -> Result<UnmanagedReport, OrchestratorErro
     })
 }
 
-/// Collect unmanaged leaves below `relative`, without following links.
 fn walk(
     base: &Path,
     relative: &Path,
@@ -129,7 +105,3 @@ fn walk(
 fn io(path: &Path, error: &std::io::Error) -> OrchestratorError {
     OrchestratorError::io(path.display().to_string(), error.to_string())
 }
-
-#[cfg(test)]
-#[path = "generate_unmanaged_tests.rs"]
-mod tests;

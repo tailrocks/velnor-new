@@ -1,5 +1,3 @@
-//! Cargo lock graph identity and dependency checks.
-
 mod graph;
 
 mod identity;

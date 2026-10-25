@@ -1,9 +1,3 @@
-//! Public orchestrator API re-exports.
-
-/// Seed fixed parallel target lanes through the bounded native filesystem seeder.
-///
-/// # Errors
-/// Rejects malformed environment or unsafe source/destination paths.
 pub fn seed_parallel_targets_from_env() -> Result<(), super::OrchestratorError> {
     super::parallel_target_seed::seed_parallel_targets_from_env().map(|_| ())
 }
@@ -140,7 +134,6 @@ pub use super::package_release_publish::{
 };
 pub use super::package_release_signer::{SIGN_PACKAGE_RELEASE_OP, sign_package_release_from_env};
 
-/// Version marker for the orchestrator shell.
 pub const ORCHESTRATOR_VERSION: u32 = 0;
 
 pub use crate::qualification_candidate::qualify_tools;

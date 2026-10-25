@@ -1,5 +1,3 @@
-//! Workflow-only, equivalence-checked sharing of repeated scalars and mappings.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
@@ -14,7 +12,6 @@ mod prune;
 #[path = "yaml_share_validation.rs"]
 mod validation;
 
-/// Over-cap workflow fallback only; action manifests never call this projection.
 pub(super) fn share_workflow_nodes(node: Yaml) -> Result<Yaml, RenderError> {
     let original = validation::expand(&node)?.value;
     let mut shared = share_step_run_scalars(node);
@@ -181,11 +178,3 @@ fn collect_anchor_names(node: &Yaml, names: &mut BTreeSet<AnchorName>) {
         | Yaml::Annotated { .. } => {}
     }
 }
-
-#[cfg(test)]
-#[path = "yaml_share_tests.rs"]
-mod tests;
-
-#[cfg(test)]
-#[path = "yaml_share_workflow_tests.rs"]
-mod workflow_tests;

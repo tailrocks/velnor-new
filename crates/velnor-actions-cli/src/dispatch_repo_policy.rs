@@ -1,5 +1,3 @@
-//! Private repository-maintenance operations behind the existing CLI binary.
-
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -10,8 +8,8 @@ const ACTION_ENV: &str = "VELNOR_REPO_POLICY_ACTION";
 const ROOT_ENV: &str = "VELNOR_REPO_POLICY_ROOT";
 const UPSTREAM_ENV: &str = "VELNOR_REPO_POLICY_CHECK_UPSTREAM";
 const ADVISORIES_ENV: &str = "VELNOR_REPO_POLICY_WITH_ADVISORIES";
+const MANIFEST_PATH_ENV: &str = "VELNOR_REPO_POLICY_MANIFEST_PATH";
 
-/// Accept only the private action allowlist and a repository root directory.
 pub(crate) fn gate_root() -> Option<PathBuf> {
     let action = env::var(ACTION_ENV).ok()?;
     if !matches!(
@@ -21,6 +19,7 @@ pub(crate) fn gate_root() -> Option<PathBuf> {
             | "mise-version"
             | "workspace-members"
             | "library-members"
+            | "test-members"
             | "artifact-executable"
     ) {
         return None;
@@ -34,7 +33,6 @@ pub(crate) fn gate_root() -> Option<PathBuf> {
     Some(root)
 }
 
-/// Run the allowlisted repository-maintenance operation selected by environment.
 pub(crate) fn run(root: &Path) -> ExitCode {
     let operation = match operation_from_environment() {
         Ok(operation) => operation,
@@ -58,12 +56,26 @@ fn operation_from_environment() -> Result<Operation, String> {
         Ok("library-members") => Ok(Operation::WorkspaceMembers {
             libraries_only: true,
         }),
+        Ok("test-members") => Ok(Operation::WorkspaceTestMembers {
+            manifest_path: optional_manifest_path(MANIFEST_PATH_ENV)?,
+        }),
         Ok("artifact-executable") => Ok(Operation::CargoArtifactExecutable {
             messages_path: required_path("VELNOR_REPO_POLICY_MESSAGES")?,
             manifest_path: required_path("VELNOR_REPO_POLICY_MANIFEST")?,
             target_name: required_text("VELNOR_REPO_POLICY_TARGET")?,
         }),
         _ => Err("invalid repository-policy action".to_owned()),
+    }
+}
+
+fn optional_manifest_path(name: &str) -> Result<Option<PathBuf>, String> {
+    match env::var(name) {
+        Err(env::VarError::NotPresent) => Ok(None),
+        Ok(value) if value.is_empty() => Ok(None),
+        Ok(value) if !value.chars().any(char::is_control) => Ok(Some(PathBuf::from(value))),
+        Ok(_) | Err(env::VarError::NotUnicode(_)) => Err(format!(
+            "{name} must be a repository-relative Cargo.toml path"
+        )),
     }
 }
 

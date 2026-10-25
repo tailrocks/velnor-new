@@ -1,5 +1,3 @@
-//! `POST .../generatejitconfig`. The request JSON and the response are not logged.
-
 use serde::{Deserialize, Serialize};
 use velnor_runner_core::RUNNER_WORK_FOLDER;
 use zeroize::Zeroize;
@@ -11,15 +9,6 @@ use super::error::{SessionError, reject};
 use super::request::{Method, SessionRequest, Transport};
 use super::retry::{API_QUERY, bearer, execute, fresh_gate, json_content, user_agent};
 
-/// JSON body for [`jit`]. `workFolder` is `_work`, relative to the runner root.
-/// This matches the official Actions runner's work directory and the container
-/// path mounted from this worker's named work volume. The JIT payload stays in
-/// a private `/tmp` file and is not persisted in that volume.
-///
-/// # Errors
-///
-/// Returns [`WireError::RegistrationRejected`] when `name` is empty or has
-/// whitespace or a slash. The name is a container name, not a path.
 pub fn jit_request(name: &str) -> Result<Vec<u8>, WireError> {
     if name.is_empty() || name.chars().any(|ch| ch.is_whitespace() || ch == '/') {
         return Err(WireError::RegistrationRejected);
@@ -31,21 +20,6 @@ pub fn jit_request(name: &str) -> Result<Vec<u8>, WireError> {
     .map_err(|_| WireError::Encode)
 }
 
-/// `POST` `request_json` to the JIT route. `admin_token` is the admin bearer.
-///
-/// The 200 body is JSON. Both the encoded configuration and created runner
-/// reference are preserved. Neither the request bytes nor the configuration
-/// are written into [`std::fmt::Debug`] or [`std::fmt::Display`]. This call
-/// does not refresh on HTTP 401.
-///
-/// # Errors
-///
-/// Returns [`WireError::RegistrationRejected`] for an empty admin token,
-/// [`SessionError::Uncertain`] on timeout, reset, server failure, or when a
-/// success response lacks a usable `encodedJITConfig` or runner reference,
-/// since the service may already have created the runner. Returns
-/// [`SessionError::Wire`] for other rejected statuses and
-/// [`SessionError::Conflict`] on HTTP 409.
 pub fn jit<T>(
     transport: &mut T,
     scale_set_id: i64,

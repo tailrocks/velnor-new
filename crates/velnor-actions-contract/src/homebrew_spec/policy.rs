@@ -8,10 +8,6 @@ use super::{
 };
 
 impl HomebrewFormulaSpec {
-    /// Validate all formula policy fields and their canonical ordering.
-    ///
-    /// # Errors
-    /// Returns an error for malformed metadata, channel identities, selections, or sentinel policy.
     pub fn validate(&self) -> Result<(), ContractError> {
         self.validate_metadata()?;
         self.validate_channels()?;
@@ -22,19 +18,11 @@ impl HomebrewFormulaSpec {
         Ok(())
     }
 
-    /// Canonical typed JSON bytes. The digest itself is never stored in the spec.
-    ///
-    /// # Errors
-    /// Returns an error when the policy is invalid or canonical serialization fails.
     pub fn canonical_bytes(&self) -> Result<Vec<u8>, ContractError> {
         self.validate()?;
         canonical_json_bytes(self)
     }
 
-    /// Computed BLAKE3 identity for every policy field affecting formula output.
-    ///
-    /// # Errors
-    /// Returns an error when policy validation or canonical serialization fails.
     pub fn digest(&self) -> Result<String, ContractError> {
         Ok(crate::canonical::digest_b3(&self.canonical_bytes()?))
     }

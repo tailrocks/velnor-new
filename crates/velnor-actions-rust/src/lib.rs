@@ -1,10 +1,11 @@
-//! Rust/Cargo stack discovery and task proposals.
-//!
-//! Pure inventory, evidence, and task-group derivation from bytes the
-//! orchestrator supplies. This crate launches no processes, builds no tool
-//! invocations, reads no files itself, and renders no workflow text. It owns
-//! read-only inspection of supplied `rust-toolchain.toml` bytes.
-
+#![allow(
+    clippy::missing_errors_doc,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
+#![allow(
+    missing_docs,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
 mod argv;
 pub mod cargo_env;
 pub mod closure;
@@ -109,5 +110,4 @@ pub use toolfiles::{
     stack_for_symbol,
 };
 
-/// Stable identifier for the Rust stack.
 pub const STACK_ID: &str = "rust";

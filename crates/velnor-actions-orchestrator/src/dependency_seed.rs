@@ -1,13 +1,3 @@
-//! Dependency-seed jobs: the only writer of the compiled-dependency bundle.
-//!
-//! Cache decision 2. One non-crate job per MBX Cargo workspace compiles the
-//! three fixed lanes (test executables, Clippy, documentation) for the whole
-//! workspace on a trusted default-branch push and saves the opaque
-//! `mbx cache export` bundle once the compile succeeded. Crate jobs restore
-//! that bundle read-only. The seed job runs no checks, uploads no report and
-//! is never part of `Required`, so hard decision 1 (one job per crate) governs
-//! crate jobs only.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Job, JobTimeout, Step, StepRole};
@@ -18,18 +8,13 @@ use super::CrateJobInputs;
 use crate::OrchestratorError;
 use crate::config::private_wiring::PrivateWiring;
 
-/// Job id of the seed for the repository-root workspace.
 pub(crate) const SEED_JOB_ID: &str = "dependency-seed";
-/// One MBX Cargo workspace that needs a seed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SeedWorkspace {
-    /// Workspace root relative to the checkout (`""` for the repository root).
     pub(crate) root: String,
-    /// True when any task of the workspace runs on Nextest.
     pub(crate) nextest: bool,
 }
 
-/// Seed job id for one workspace root.
 pub(crate) fn seed_job_id(root: &str) -> String {
     if root.is_empty() {
         SEED_JOB_ID.to_owned()
@@ -38,11 +23,6 @@ pub(crate) fn seed_job_id(root: &str) -> String {
     }
 }
 
-/// Build one seed job per workspace.
-///
-/// # Errors
-///
-/// Returns contract or render errors for an unsafe root or rejected step.
 pub(crate) fn seed_jobs(
     input: &CrateJobInputs<'_>,
     workspaces: &[SeedWorkspace],
@@ -93,8 +73,6 @@ fn seed_job(
     if let Some(private) = private {
         let private_steps = private.steps_for_roots(&roots)?;
         if !private_steps.is_empty() {
-            // The private fetch and revoke are Velnor helper operations: stage
-            // the digest-verified helper right after checkout, as crate jobs do.
             let acquire = input.acquire.ok_or_else(|| OrchestratorError::Contract {
                 problem: "private_sources_seed_without_acquire".to_owned(),
             })?;
@@ -132,7 +110,6 @@ fn display_name(root: &str) -> String {
     }
 }
 
-/// The three fixed lane builds of one workspace, in the lane order of a crate job.
 fn lane_steps(
     catalog: &ToolCatalog,
     workspace: &SeedWorkspace,

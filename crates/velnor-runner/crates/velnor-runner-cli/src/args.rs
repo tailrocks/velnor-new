@@ -1,5 +1,3 @@
-//! Command tree. The binary name is `velnor-host`.
-
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};

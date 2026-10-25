@@ -1,5 +1,3 @@
-//! Filesystem validation for the private in-place generation stage root.
-
 use std::fs::{self, Metadata, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -12,7 +10,6 @@ use super::{
     StageRoot,
 };
 
-/// Create the runtime container once, leaving partial failures for inspection.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub(super) fn create_container(
     root: &RootIdentity,
@@ -27,7 +24,6 @@ pub(super) fn create_container(
     set_mode(&spare, PRIVATE_DIR_MODE)
 }
 
-/// Write a new regular file with private mode and no replacement behavior.
 fn write_private_file(path: &Path, bytes: &[u8]) -> Result<(), OrchestratorError> {
     let mut file = OpenOptions::new()
         .write(true)
@@ -39,7 +35,6 @@ fn write_private_file(path: &Path, bytes: &[u8]) -> Result<(), OrchestratorError
 }
 
 impl StageRoot {
-    /// Validate a previously created container and bind its current identities.
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     pub(super) fn validate(
         root: RootIdentity,
@@ -73,7 +68,6 @@ impl StageRoot {
         Ok(stage)
     }
 
-    /// Revalidate the private container and its current spare directory.
     pub(super) fn validate_container_and_spare(
         &self,
         require_spare_identity: bool,
@@ -90,7 +84,6 @@ impl StageRoot {
         self.require_owner(&self.spare, &metadata)
     }
 
-    /// Revalidate container identity, owner, mode, and fixed private files.
     pub(super) fn validate_container(&self) -> Result<(), OrchestratorError> {
         let (actual, metadata) = FsIdentity::capture(&self.container)?;
         if actual != self.container_identity {
@@ -108,7 +101,6 @@ impl StageRoot {
         validate_container_files(&self.container, &self.root, self.owner)
     }
 
-    /// Require a path to remain the exact directory inode captured earlier.
     pub(super) fn require_identity(
         path: &Path,
         expected: FsIdentity,
@@ -120,7 +112,6 @@ impl StageRoot {
         Ok(())
     }
 
-    /// Require a directory to stay on the repository filesystem.
     pub(super) fn require_same_filesystem(&self, path: &Path) -> Result<(), OrchestratorError> {
         let (actual, _) = FsIdentity::capture(path)?;
         if !same_device(self.root.object, actual) {
@@ -129,12 +120,10 @@ impl StageRoot {
         Ok(())
     }
 
-    /// Require a directory to remain on the repository's exact mounted volume.
     pub(super) fn require_same_mount(&self, path: &Path) -> Result<(), OrchestratorError> {
         require_mount(path, &self.root.mount)
     }
 
-    /// Require the filesystem object to have the staging owner.
     pub(super) fn require_owner(
         &self,
         path: &Path,
@@ -143,7 +132,6 @@ impl StageRoot {
         require_owner_id(path, metadata, self.owner)
     }
 
-    /// Clear only contents after confirming the persistent root inode.
     pub(super) fn clear_children(
         path: &Path,
         expected: FsIdentity,
@@ -154,7 +142,6 @@ impl StageRoot {
     }
 }
 
-/// Validate fixed children without following their final path components.
 pub(super) fn validate_container_files(
     container: &Path,
     root: &RootIdentity,
@@ -173,7 +160,6 @@ pub(super) fn validate_container_files(
     require_owner_id(&spare, &metadata, owner)
 }
 
-/// Validate every real directory while leaving symlink entries untouched.
 pub(super) fn validate_directory_owners(
     root: &Path,
     expected_owner: OwnerId,
@@ -203,7 +189,6 @@ pub(super) fn validate_directory_owners(
     Ok(())
 }
 
-/// Verify file type, owner, mode, and exact contents for private metadata.
 fn validate_private_file(
     path: &Path,
     expected: &[u8],
@@ -223,7 +208,6 @@ fn validate_private_file(
     Ok(())
 }
 
-/// Compare device identity on Unix; staging is colocated by construction elsewhere.
 pub(super) fn same_device(first: FsIdentity, second: FsIdentity) -> bool {
     #[cfg(unix)]
     {
@@ -236,7 +220,6 @@ pub(super) fn same_device(first: FsIdentity, second: FsIdentity) -> bool {
     }
 }
 
-/// Verify an exact private permission mode on Unix.
 pub(super) fn require_mode(
     path: &Path,
     metadata: &Metadata,
@@ -256,7 +239,6 @@ pub(super) fn require_mode(
     Ok(())
 }
 
-/// Compare filesystem owner metadata with the expected current user.
 pub(super) fn require_owner_id(
     path: &Path,
     metadata: &Metadata,
@@ -268,7 +250,6 @@ pub(super) fn require_owner_id(
     Ok(())
 }
 
-/// Return a stable Unix owner id when the platform provides one.
 pub(super) fn metadata_owner(metadata: &Metadata) -> OwnerId {
     #[cfg(unix)]
     {
@@ -282,7 +263,6 @@ pub(super) fn metadata_owner(metadata: &Metadata) -> OwnerId {
     }
 }
 
-/// Set directory/file mode where Unix exposes permission bits.
 fn set_mode(path: &Path, mode: u32) -> Result<(), OrchestratorError> {
     #[cfg(unix)]
     {

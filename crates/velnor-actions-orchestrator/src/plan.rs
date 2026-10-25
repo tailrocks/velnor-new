@@ -1,5 +1,3 @@
-//! Deterministic human-readable plan text (no JSON, YAML, or writes).
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
@@ -19,19 +17,12 @@ use crate::prepare::GenerationPreparation;
 #[path = "plan_companions.rs"]
 mod companions;
 
-/// Render the concise deterministic `plan` report from a preparation.
-///
-/// # Errors
-///
-/// Returns render, workflow-lint, lock, or unsafe-path errors from the
-/// discarded renderer pass.
 pub fn plan_text_checked(prep: &GenerationPreparation) -> Result<String, OrchestratorError> {
     let _ = render_staged_tree(prep)?;
     let jobs = finalized_jobs(prep)?;
     Ok(plan_text(prep, &jobs))
 }
 
-/// Render the concise deterministic `plan` report from finalized jobs.
 #[must_use]
 pub fn plan_text(prep: &GenerationPreparation, jobs: &BTreeMap<String, Job>) -> String {
     let mut out = String::new();
@@ -48,13 +39,11 @@ pub fn plan_text(prep: &GenerationPreparation, jobs: &BTreeMap<String, Job>) -> 
     out
 }
 
-/// Append one line plus a newline.
 pub(crate) fn push(out: &mut String, line: &str) {
     out.push_str(line);
     out.push('\n');
 }
 
-/// Planned workflow files, jobs, matrix, runner, cache, and pins.
 fn workflow_section(out: &mut String, prep: &GenerationPreparation, jobs: &BTreeMap<String, Job>) {
     out.push('\n');
     push(out, "Workflow to generate");
@@ -117,7 +106,6 @@ fn workflow_section(out: &mut String, prep: &GenerationPreparation, jobs: &BTree
     );
 }
 
-/// Every distinct action pin the finalized jobs embed, sorted.
 fn pin_lines(out: &mut String, jobs: &BTreeMap<String, Job>) {
     let pins = action_pins(jobs);
     push(out, &format!("  Action pins: {}", pins.len()));
@@ -126,11 +114,6 @@ fn pin_lines(out: &mut String, jobs: &BTreeMap<String, Job>) {
     }
 }
 
-/// Finalized crate-job IDs: exactly the crate-group jobs.
-///
-/// Structural, never an exclusion list: plan, final, lint, validators,
-/// candidate, and release carry other IDs, so merged support jobs can
-/// never inflate the crate count.
 fn crate_job_ids(jobs: &BTreeMap<String, Job>) -> Vec<&str> {
     jobs.keys()
         .filter(|id| is_crate_job_id(id))
@@ -138,10 +121,6 @@ fn crate_job_ids(jobs: &BTreeMap<String, Job>) -> Vec<&str> {
         .collect()
 }
 
-/// Crate/root job counts plus the complete obligation-kind list.
-///
-/// Counts finalized crate/root jobs, never task groups; otherwise the
-/// static no-work line keeps plan and YAML in agreement.
 fn crate_lines(out: &mut String, prep: &GenerationPreparation, jobs: &BTreeMap<String, Job>) {
     let crates = crate_job_ids(jobs);
     if crates.is_empty() {
@@ -185,10 +164,6 @@ fn crate_lines(out: &mut String, prep: &GenerationPreparation, jobs: &BTreeMap<S
     }
 }
 
-/// One per-stack count line; zero-count stacks stay silent.
-///
-/// Rust counts one job per crate; Tofu counts validation roots.
-/// Both derive from finalized jobs in fixed display order.
 fn count_line(out: &mut String, count: usize, label: &str) {
     if count == 1 {
         push(out, &format!("    - 1 {label}"));
@@ -197,7 +172,6 @@ fn count_line(out: &mut String, count: usize, label: &str) {
     }
 }
 
-/// Kind words in fixed order for the tasks present.
 fn present_kinds(tasks: &[ProposedTask]) -> Vec<&'static str> {
     let mut kinds = Vec::new();
     let words = KIND_DISPLAY_WORDS
@@ -215,7 +189,6 @@ fn present_kinds(tasks: &[ProposedTask]) -> Vec<&'static str> {
     kinds
 }
 
-/// Structural critical path over the derived task proposals.
 fn critical_path_lines(out: &mut String, prep: &GenerationPreparation) {
     let eligible: Vec<ProposedTask> = prep
         .discovery
@@ -231,7 +204,6 @@ fn critical_path_lines(out: &mut String, prep: &GenerationPreparation) {
     );
 }
 
-/// Barrier-separated Clippy memory schedule.
 fn clippy_lines(out: &mut String, prep: &GenerationPreparation) {
     let memory = &prep.discovery.clippy_memory;
     push(
@@ -244,11 +216,6 @@ fn clippy_lines(out: &mut String, prep: &GenerationPreparation) {
     );
 }
 
-/// Cache layers derived from lock state plus selected drivers.
-///
-/// `Cargo sources` appears only when a lockfile exists to snapshot:
-/// lockless repos emit no fetch or restore steps, so advertising the
-/// layer would promise YAML that `generate` never writes.
 fn cache_layers(prep: &GenerationPreparation) -> String {
     let mut layers = vec!["Mise tools"];
     if !crate::source_prep::lockful_roots(&prep.root, &prep.discovery.workspaces).is_empty() {
@@ -262,7 +229,6 @@ fn cache_layers(prep: &GenerationPreparation) -> String {
     layers.join(", ")
 }
 
-/// Concise reasons for ineligible work.
 fn ineligible_lines(out: &mut String, prep: &GenerationPreparation) {
     for task in &prep.discovery.proposals {
         if task.no_targets {
@@ -277,7 +243,6 @@ fn ineligible_lines(out: &mut String, prep: &GenerationPreparation) {
     }
 }
 
-/// Per-crate feature narrowing, never silent.
 fn feature_lines(out: &mut String, prep: &GenerationPreparation) {
     for fallback in &prep.discovery.feature_fallbacks {
         let requested = fallback.requested.join(",");
@@ -302,12 +267,6 @@ fn feature_lines(out: &mut String, prep: &GenerationPreparation) {
     }
 }
 
-/// Required-check migration from the branded gate to `Required`.
-///
-/// Surfaces [`RequiredCheckMigration::velnor_to_ci`] so `plan` names
-/// the same old/new checks the procedure doc gives admins. The final
-/// step is an external branch-protection flip: the generator can only
-/// print it, never perform it.
 fn migration_section(out: &mut String) {
     let migration = RequiredCheckMigration::velnor_to_ci();
     let steps = migration.steps();
@@ -337,7 +296,6 @@ fn migration_section(out: &mut String) {
     }
 }
 
-/// Recommendations shared with `generate`.
 fn recommendations_section(out: &mut String, prep: &GenerationPreparation) {
     out.push('\n');
     push(out, "Recommendations");
@@ -349,7 +307,6 @@ fn recommendations_section(out: &mut String, prep: &GenerationPreparation) {
     }
 }
 
-/// Policy selector in config spelling.
 fn policy_name(policy: WorkflowPolicy) -> &'static str {
     match policy {
         WorkflowPolicy::ConsumerV1 => "consumer-v1",

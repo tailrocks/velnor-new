@@ -1,5 +1,3 @@
-//! Shared producer and closed channel validation.
-
 use super::{
     RustBinaryReleaseCompanion, RustBinaryReleaseConfig, RustBinaryReleaseProducer,
     RustBinaryReleaseProduct,
@@ -17,14 +15,6 @@ use inventory::paths_overlap;
 pub(crate) use inventory::validate_static_release_inventory;
 
 impl RustBinaryReleaseConfig {
-    /// Validate both channel policies and their one shared qualified inventory.
-    ///
-    /// Disabled channel policies retain defaults and may be configured ahead
-    /// of activation, but partial active policies fail closed.
-    ///
-    /// # Errors
-    ///
-    /// Returns a configuration error for an unsafe or incomplete policy.
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         let prefix = "stacks.rust.binary_release";
         let required = self.enabled();

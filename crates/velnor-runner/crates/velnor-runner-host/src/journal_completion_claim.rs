@@ -1,5 +1,3 @@
-//! Completion cleanup claim, retry, and bounded-effect authorization.
-
 use std::future::Future;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -11,7 +9,6 @@ use super::{CleanupClaim, finish_transaction};
 const MAX_COMPLETION_ATTEMPTS: i64 = 5;
 
 impl Journal {
-    /// Claim one due completion row before bounded HTTP or Docker work.
     pub(crate) async fn claim_completion_cleanup(
         &self,
         id: i64,
@@ -21,20 +18,6 @@ impl Journal {
             return Err(HostError::Journal);
         }
         self.claim_completion_cleanup_with(id, lease_seconds, unix_seconds)
-            .await
-    }
-
-    #[cfg(test)]
-    pub(crate) async fn claim_completion_cleanup_at(
-        &self,
-        id: i64,
-        now: i64,
-        lease_seconds: i64,
-    ) -> Result<Option<CleanupClaim>, HostError> {
-        if id <= 0 || now < 0 || lease_seconds <= 0 {
-            return Err(HostError::Journal);
-        }
-        self.claim_completion_cleanup_with(id, lease_seconds, || Ok(now))
             .await
     }
 
@@ -61,7 +44,6 @@ impl Journal {
         finish_transaction(&connection, result).await
     }
 
-    /// Schedule retry after cleanup failed to prove both release facts.
     pub(crate) async fn retry_completion_cleanup(
         &self,
         id: i64,
@@ -72,21 +54,6 @@ impl Journal {
             return Err(HostError::Journal);
         }
         self.retry_completion_cleanup_with(id, generation, retry_delay_seconds, unix_seconds)
-            .await
-    }
-
-    #[cfg(test)]
-    pub(crate) async fn retry_completion_cleanup_at(
-        &self,
-        id: i64,
-        generation: i64,
-        now: i64,
-        retry_after: i64,
-    ) -> Result<bool, HostError> {
-        if id <= 0 || generation <= 0 || now < 0 || retry_after < now {
-            return Err(HostError::Journal);
-        }
-        self.retry_completion_cleanup_with(id, generation, retry_after - now, || Ok(now))
             .await
     }
 
@@ -123,29 +90,6 @@ impl Journal {
         finish_transaction(&connection, result).await
     }
 
-    #[cfg(test)]
-    pub(crate) async fn completion_cleanup_claim_current_at(
-        &self,
-        id: i64,
-        generation: i64,
-        now: i64,
-    ) -> Result<bool, HostError> {
-        if id <= 0 || generation <= 0 || now < 0 {
-            return Err(HostError::Journal);
-        }
-        let connection = self.connection().await?;
-        connection
-            .execute("BEGIN IMMEDIATE", ())
-            .await
-            .map_err(|_| HostError::Journal)?;
-        let result = current_claim(&connection, id, generation, now).await;
-        finish_transaction(&connection, result).await
-    }
-
-    /// Renew a current claim to cover one bounded effect before invoking its factory.
-    ///
-    /// The renewal commits before external I/O. Expired or stale generations cannot
-    /// extend themselves, and a second journal handle cannot claim during the window.
     pub(crate) async fn run_completion_cleanup_effect<T, F, Fut>(
         &self,
         id: i64,
@@ -162,29 +106,6 @@ impl Journal {
             generation,
             effect_window_seconds,
             unix_seconds,
-            effect,
-        )
-        .await
-    }
-
-    #[cfg(test)]
-    pub(crate) async fn run_completion_cleanup_effect_at<T, F, Fut>(
-        &self,
-        id: i64,
-        generation: i64,
-        now: i64,
-        effect_window_seconds: i64,
-        effect: F,
-    ) -> Result<Option<T>, HostError>
-    where
-        F: FnOnce() -> Fut,
-        Fut: Future<Output = Result<T, HostError>>,
-    {
-        self.run_completion_cleanup_effect_with_clock(
-            id,
-            generation,
-            effect_window_seconds,
-            || Ok(now),
             effect,
         )
         .await

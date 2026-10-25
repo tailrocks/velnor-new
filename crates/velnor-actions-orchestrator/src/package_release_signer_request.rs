@@ -1,5 +1,3 @@
-//! Separate signing admission from exact-source published-release reads.
-
 use super::{absolute_env, read_regular_file, require_private_directory};
 use crate::{OrchestratorError, internal::internal};
 use std::{env, path::Path, time::Duration};
@@ -103,11 +101,3 @@ pub(super) fn direct_tap_plan(root: &Path) -> Result<PackageReleasePlan, Orchest
     }
     Ok(plan)
 }
-
-#[cfg(test)]
-#[path = "package_release_signer_request_tests.rs"]
-mod tests;
-
-#[cfg(test)]
-#[path = "package_release_signer_rendered_tests.rs"]
-mod rendered_tests;

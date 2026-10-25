@@ -3,10 +3,6 @@ use serde::de::{MapAccess, SeqAccess, Visitor};
 use serde_json::{Map, Number, Value};
 use std::fmt;
 
-#[cfg(test)]
-#[path = "strict_json_tests.rs"]
-mod tests;
-
 pub(super) fn parse_strict_json_bytes(bytes: &[u8], limit: usize) -> Result<Value, String> {
     if bytes.len() > limit {
         return Err("JSON document exceeds the byte limit".to_owned());

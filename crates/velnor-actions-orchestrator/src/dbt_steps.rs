@@ -1,12 +1,3 @@
-//! Steps of one dbt project job.
-//!
-//! `Install dbt-fusion` (a checksum-verified download), `dbt deps`, then one
-//! background step per check joined by the renderer's `wait-all`. The archive
-//! URL is rebuilt from the project-declared version and must equal the URL the
-//! project's `mise.lock` row records; the lock's SHA-256 is the only trust
-//! anchor. No step carries a credential: `dbt deps` talks to the public
-//! package hub only.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::config::DbtCheck;
@@ -19,12 +10,10 @@ use super::stack_support::{LockedArchive, bash, quote};
 use crate::OrchestratorError;
 use crate::workflow_task_jobs::stack_family_cache;
 
-/// Where the verified binary lives at run time.
 const FUSION_DIR: &str = "$RUNNER_TEMP/velnor/dbt-fusion/bin";
 const INSTALL_NAME: &str = "Install dbt-fusion";
 const DEPS_NAME: &str = "dbt deps";
 const LINUX_X64_TRIPLE: &str = "x86_64-unknown-linux-gnu";
-/// Fusion preview gate for the Postgres adapter.
 const EXPERIMENTAL_ADAPTERS_ENV: &str = "DBT_ALLOW_EXPERIMENTAL_ADAPTERS";
 
 fn contract(problem: impl Into<String>) -> OrchestratorError {
@@ -33,11 +22,6 @@ fn contract(problem: impl Into<String>) -> OrchestratorError {
     }
 }
 
-/// The step environment: Velnor isolation plus the declared `DBT_*` literals.
-///
-/// A project whose profile uses the Postgres adapter also gets
-/// `DBT_ALLOW_EXPERIMENTAL_ADAPTERS=true`: dbt Fusion refuses that adapter
-/// without it, and the variable is generator-owned rather than user `env`.
 fn step_env(
     catalog: &ToolCatalog,
     config: &velnor_actions_contract::config::DbtStackConfig,
@@ -100,7 +84,6 @@ fn dbt_step(
     )?)
 }
 
-/// Display name and arguments of one check step.
 fn check_command(check: DbtCheck) -> (&'static str, &'static str) {
     match check {
         DbtCheck::Parse => ("dbt parse", "parse"),
@@ -108,11 +91,6 @@ fn check_command(check: DbtCheck) -> (&'static str, &'static str) {
     }
 }
 
-/// Copy between the project's `dbt_packages` and the family cache directory.
-///
-/// `dbt deps` installs into the project; the family archives a Velnor-owned
-/// directory. `stage` seeds the project from a restored entry (the lock still
-/// decides what `dbt deps` installs), `stash` records the installed result.
 fn packages_copy_step(
     stage: bool,
     plan: &velnor_actions_workflow_renderer::steps::FamilyCachePlan,
@@ -152,7 +130,6 @@ fn packages_copy_step(
     )?)
 }
 
-/// Every step after checkout, in execution order.
 pub(crate) fn project_steps(
     config: &VelnorConfig,
     project: &Project,

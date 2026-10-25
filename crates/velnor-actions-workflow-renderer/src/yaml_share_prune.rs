@@ -1,10 +1,6 @@
-//! Remove declarations whose aliases disappeared during whole-step sharing.
-
 use crate::yaml::{AnchorName, Yaml};
 use std::collections::BTreeSet;
 
-/// Count literal uses, not expanded uses. Unwrapping preserves every child and
-/// alias, so the use set is unchanged and a single complete pass is sufficient.
 pub(super) fn prune(node: &mut Yaml) {
     let mut used = BTreeSet::new();
     collect_uses(node, &mut used);

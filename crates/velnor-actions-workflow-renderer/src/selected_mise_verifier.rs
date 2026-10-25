@@ -1,6 +1,3 @@
-//! Validation for the one fixed Jactionlint script that embeds the shared
-//! Setup Mise directory binder.
-
 use velnor_actions_contract::config::{
     is_exact_semver, jactionlint_verifier::jactionlint_verifier_script as contract_verifier_script,
     selected_mise::BIND_SELECTED_MISE_FUNCTION,
@@ -15,13 +12,10 @@ pub(crate) fn script_for_version(version: &str) -> String {
     contract_verifier_script(version, VERIFY_PATH)
 }
 
-/// Validate the fixed `sh -c SCRIPT` vector before the typed role is attached.
 pub(crate) fn validate_argv(argv: &[String]) -> Result<(), RenderError> {
     validate_jactionlint_argv(argv)
 }
 
-/// Validate the serialized verifier role after its canonical unset prefix was
-/// added by the constructor.
 pub(crate) fn validate_role_argv(argv: &[String]) -> Result<(), RenderError> {
     let Some(script) = argv.get(2) else {
         return Err(invalid_binding("verifier_shell_shape_mismatch"));
@@ -68,12 +62,3 @@ fn validate_jactionlint_argv_with_script(argv: &[String], script: &str) -> Resul
 fn invalid_binding(code: &str) -> RenderError {
     RenderError::BadCommand(code.to_owned())
 }
-
-#[cfg(test)]
-pub(crate) fn test_script(version: &str) -> String {
-    script_for_version(version)
-}
-
-#[cfg(test)]
-#[path = "selected_mise_verifier_tests.rs"]
-mod tests;

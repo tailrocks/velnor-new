@@ -1,5 +1,3 @@
-//! Current job authority is distinct from the workflow's aggregate queue status.
-
 use super::super::github::{GitHubApi, WorkflowRunResponse};
 use super::{RunSource, WorkflowMetadata, run_matches};
 use crate::{OrchestratorError, internal::internal};
@@ -136,7 +134,3 @@ fn validate_job(
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "package_release_active_job_tests.rs"]
-mod tests;

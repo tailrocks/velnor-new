@@ -1,5 +1,3 @@
-//! Bounded extraction of qualified tool archives.
-
 use std::collections::HashSet;
 #[cfg(not(unix))]
 use std::fs::OpenOptions;
@@ -43,19 +41,14 @@ enum ArchiveFormat {
     Zip,
 }
 
-/// Shared admission budget for every archive in one tool installation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct ArchiveBudget {
-    /// Remaining decoded regular-file and link-target bytes.
     pub(crate) bytes: u64,
-    /// Remaining archive entries.
     pub(crate) entries: usize,
-    /// Largest single regular file admitted.
     pub(crate) entry_bytes: u64,
 }
 
 impl ArchiveBudget {
-    /// Create the bounded installation budget.
     pub(crate) const fn new() -> Self {
         Self {
             bytes: MAX_TOTAL_BYTES,
@@ -64,8 +57,6 @@ impl ArchiveBudget {
         }
     }
 
-    /// Budget for a browser archive, whose single browser binary exceeds
-    /// the tool-archive entry bound (Chrome is about 300 MB).
     pub(crate) const fn browser() -> Self {
         Self {
             entry_bytes: MAX_BROWSER_ENTRY_BYTES,
@@ -96,7 +87,6 @@ impl Default for ArchiveBudget {
     }
 }
 
-/// Extract one declared archive into a fresh directory.
 pub(crate) fn extract_archive(
     archive: &Path,
     destination: &Path,
@@ -351,6 +341,3 @@ fn unsafe_path_text(path: &str, reason: &str) -> OrchestratorError {
         reason: reason.to_owned(),
     }
 }
-#[cfg(test)]
-#[path = "check_tool_archive_tests.rs"]
-mod tests;

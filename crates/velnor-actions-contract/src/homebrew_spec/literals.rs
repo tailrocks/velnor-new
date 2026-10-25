@@ -6,10 +6,6 @@ use super::{
 };
 
 impl HomebrewFormulaReleaseLiterals {
-    /// Construct release literals only when channel and payload inventory match projection.
-    ///
-    /// # Errors
-    /// Returns an error when release identities, payload inventory, or digests differ from the validated projection.
     pub fn new(
         spec: &HomebrewFormulaSpec,
         projection: &ValidatedHomebrewProjection,
@@ -84,10 +80,6 @@ impl HomebrewFormulaReleaseLiterals {
         })
     }
 
-    /// Construct the exact non-installable stable sentinel state.
-    ///
-    /// # Errors
-    /// Returns an error for a non-stable projection, a reserved version collision, or invalid policy.
     pub fn stable_sentinel(
         spec: &HomebrewFormulaSpec,
         projection: &ValidatedHomebrewProjection,
@@ -127,28 +119,26 @@ impl HomebrewFormulaReleaseLiterals {
         })
     }
 
-    /// Verified full source commit.
     #[must_use]
     pub fn source_sha(&self) -> Option<&str> {
         self.source_sha.as_deref()
     }
-    /// Verified channel version.
+
     #[must_use]
     pub fn version(&self) -> &str {
         &self.version
     }
-    /// Verified immutable release tag.
+
     #[must_use]
     pub fn tag(&self) -> Option<&str> {
         self.tag.as_deref()
     }
-    /// Selected payload URL and digest literals in canonical projection order.
+
     #[must_use]
     pub fn assets(&self) -> &[HomebrewFormulaAssetLiteral] {
         &self.assets
     }
 
-    /// Whether this state represents only the disabled stable template.
     #[must_use]
     pub const fn is_disabled_stable_sentinel(&self) -> bool {
         self.disabled_stable_sentinel
@@ -156,17 +146,16 @@ impl HomebrewFormulaReleaseLiterals {
 }
 
 impl HomebrewFormulaAssetLiteral {
-    /// Selected immutable payload archive name.
     #[must_use]
     pub fn name(&self) -> &str {
         &self.name
     }
-    /// Exact immutable GitHub release URL.
+
     #[must_use]
     pub fn url(&self) -> &str {
         &self.url
     }
-    /// Authenticated SHA-256 digest.
+
     #[must_use]
     pub fn sha256(&self) -> &str {
         &self.sha256

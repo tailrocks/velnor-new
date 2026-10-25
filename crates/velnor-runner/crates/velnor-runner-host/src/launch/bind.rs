@@ -1,11 +1,8 @@
-//! Journal binding for one pair. Ids are committed before the container starts.
-
 use crate::error::HostError;
 use crate::journal::Journal;
 use crate::stage::{PairSink, PairStop, drive};
 use crate::worker::{ResourceBudget, Started};
 
-/// Owned journal handle for the row this pair belongs to.
 #[derive(Debug, Clone)]
 pub(crate) struct Bind {
     journal: Journal,

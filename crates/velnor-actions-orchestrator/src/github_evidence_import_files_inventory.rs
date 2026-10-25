@@ -1,5 +1,3 @@
-//! Bounded expected file and directory inventories for a captured bundle.
-
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Component, Path, PathBuf};

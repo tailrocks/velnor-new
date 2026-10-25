@@ -12,24 +12,13 @@ use crate::internal_plan::{IdentityInputs, nextest_config_for, task_identity_dig
 
 use super::GroupInputs;
 
-/// Extension bundle plus closure-bound identity digests for one task.
 pub(super) struct PlannedIdentity {
-    /// Snapshot-indexed bundle with checkout-bound lock/Nextest digests.
     pub(super) bundle: ExtensionBundle,
-    /// Whether the stack extension permits reuse.
     pub(super) reuse_eligible: bool,
-    /// Canonical digest over the complete input closure.
     pub(super) closure_digest: String,
-    /// Input digest with the closure digest bound into the envelope.
     pub(super) input_digest: String,
 }
 
-/// Stack-extension envelope plus reuse eligibility for one task.
-///
-/// Closed per-stack dispatch: rust tasks derive through the rust
-/// bridge over the snapshot bundle; tofu tasks derive through the
-/// tofu bridge with a checkout-bound root-lockfile slot. Both feed
-/// the same neutral envelope and gate.
 pub(super) fn extension_for_task(
     task: &ProposedTask,
     root: &Path,
@@ -49,11 +38,6 @@ pub(super) fn extension_for_task(
     Ok((ext.to_stack_extension(), ext.reuse_eligible().is_ok()))
 }
 
-/// Snapshot bundle plus closure-bound identity digests for one task.
-///
-/// The closure resolves against the checkout and its digest binds into
-/// the identity envelope, so a source edit flips `input_digest` even
-/// when the changed-work hint misses it.
 pub(super) fn planned_identity(
     inputs: &GroupInputs<'_>,
     argv: &[String],

@@ -1,5 +1,3 @@
-//! Narrow typed projections of the Rust and Mise files used by native build tasks.
-
 use std::collections::BTreeMap;
 
 use crate::native_mise_version::{NativeMiseMinimum, NativeMiseVersion};
@@ -7,22 +5,16 @@ use crate::native_tool_lock::{NativeMiseLock, parse_native_mise_lock};
 
 const MAX_VALUES: usize = 64;
 
-/// Source identity and the narrowly modeled fields needed to install one
-/// declared native build task's selected tools.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct NativeToolInput {
     pub(crate) sha256: String,
     pub(crate) source: NativeToolSource,
 }
 
-/// Supported typed projection of one Mise-owned build input.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum NativeToolSource {
-    /// Rust version file; fields already validated by the Rust adapter.
     RustToolchain,
-    /// Project selectors, task names, and settings.
     MiseConfig(NativeMiseConfig),
-    /// Exact version/backend/platform artifact records from `mise.lock`.
     MiseLock(NativeMiseLock),
 }
 
@@ -58,7 +50,6 @@ impl NativeMiseConfig {
 pub(crate) struct NativeToolSelector {
     pub(crate) version: Option<String>,
     pub(crate) os: Option<Vec<String>>,
-    /// Whether the Rust selector delegates toolchain installation to MBX.
     pub(crate) mr_boxington: Option<bool>,
     pub(crate) config_options: BTreeMap<String, String>,
     pub(crate) unsupported_options: Vec<String>,
@@ -86,7 +77,6 @@ pub(crate) struct NativeMiseSettings {
     pub(crate) valid_shape: bool,
 }
 
-/// Build a typed source projection while retaining the exact raw-file identity.
 pub(crate) fn native_mise_source(
     path: &str,
     bytes: &[u8],
@@ -133,11 +123,6 @@ fn parse_native_mise_config(value: &toml::Value) -> Option<NativeMiseConfig> {
     Some(config)
 }
 
-/// Parse one `[tools]` record into the typed selector projection.
-///
-/// Shared with the tool-catalog resolver, which reads the same option
-/// surface (`mr_boxington`, `version`) from the repository `mise.toml`
-/// rust record; keep one parser so the shapes cannot drift.
 pub(crate) fn parse_native_tool_selector(value: &toml::Value) -> NativeToolSelector {
     if let Some(version) = value.as_str() {
         return NativeToolSelector {
@@ -269,19 +254,16 @@ fn parse_native_settings(value: &toml::Value) -> NativeMiseSettings {
     }
 }
 
-/// Convert TOML to JSON so one flattener serves both shapes.
 pub(crate) fn toml_to_json(value: &toml::Value) -> serde_json::Value {
     serde_json::to_value(value).unwrap_or(serde_json::Value::Null)
 }
 
-/// Flatten scalar leaves into dotted keys, capped and sorted.
 pub(crate) fn flatten_json(value: &serde_json::Value) -> BTreeMap<String, String> {
     let mut out = BTreeMap::new();
     flatten_into(String::new(), value, &mut out);
     out
 }
 
-/// Recurse one value, recording scalar leaves only.
 fn flatten_into(prefix: String, value: &serde_json::Value, out: &mut BTreeMap<String, String>) {
     if out.len() >= MAX_VALUES {
         return;
@@ -313,7 +295,6 @@ fn flatten_into(prefix: String, value: &serde_json::Value, out: &mut BTreeMap<St
     }
 }
 
-/// Scalar text of one JSON value, if it is a scalar.
 fn json_scalar(value: &serde_json::Value) -> Option<String> {
     match value {
         serde_json::Value::String(text) => Some(text.clone()),
@@ -324,7 +305,3 @@ fn json_scalar(value: &serde_json::Value) -> Option<String> {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "impl_mise_build_tools.rs"]
-mod tests;

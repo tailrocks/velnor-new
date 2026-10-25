@@ -1,25 +1,3 @@
-//! Run-time resolver for project-declared tool versions (hard decision 5).
-//!
-//! The generated workflow names each project-declared version as
-//! `${VELNOR_TOOL_<NAME>}`. One generated step per job, directly after Mise
-//! setup, fills those variables from the project's own config. It reads
-//! every location Mise reads `[tools]` from
-//! ([`crate::config::project_tool_refs::PROJECT_MISE_CONFIG_PATTERNS`], `.tool-versions`, and for Rust the
-//! toolchain files) with `mise --no-config --no-env --no-hooks config get`
-//! (stored TOML values only: no config is loaded, so no template, hook,
-//! env, task, plugin, setting, or wrapper from a fork's checkout is
-//! evaluated). An unparseable source, a symlink, a loose or malformed
-//! value, or two sources that disagree fail the step; otherwise it appends
-//! `NAME=<version>` to `$GITHUB_ENV`. The digits-and-dots check runs before
-//! the write, so a config value cannot inject another variable or line.
-//!
-//! A `NAME_LOCK` reference (the tools-cache identity reads one per
-//! installed project tool) also exports the SHA-256 of that tool's
-//! [`crate::config::project_tool_refs::PROJECT_TOOL_LOCK_FILES`] `checksum`/`url`
-//! rows for the runner platform at the resolved version, or `unlocked` when
-//! no lock has one. A fixed `awk` program reads each lock as text: it is
-//! never loaded or executed, and only the hex digest reaches `$GITHUB_ENV`.
-
 use std::collections::BTreeSet;
 
 use super::project_tool_grammar::push_grammar_functions;
@@ -32,9 +10,6 @@ use super::project_tool_refs::{
 };
 use super::selected_mise::BIND_SELECTED_MISE_FUNCTION;
 
-/// `(variable, [tools] keys)` for every catalog tool; the first key is the
-/// canonical spelling, the rest are other backends' spellings of the
-/// same tool, which declare its version just the same.
 pub const PROJECT_TOOL_KEYS: [(&str, &[&str]); 14] = [
     ("VELNOR_TOOL_RUST", &["rust", "core:rust"]),
     (
@@ -91,7 +66,6 @@ pub const PROJECT_TOOL_KEYS: [(&str, &[&str]); 14] = [
     ("VELNOR_TOOL_UV", &["uv", "aqua:astral-sh/uv"]),
 ];
 
-/// `[tools]` keys declaring the tool behind one reference variable.
 #[must_use]
 pub fn project_tool_keys(name: &str) -> &'static [&'static str] {
     PROJECT_TOOL_KEYS
@@ -270,11 +244,6 @@ velnor_lock() {
 }
 "##;
 
-/// Fixed resolver script for the referenced variables, in sorted order.
-///
-/// A `NAME_LOCK` reference resolves `NAME` too and then exports its lock
-/// digest. `export_rustup` also exports the resolved Rust channel as
-/// `RUSTUP_TOOLCHAIN` (job env cannot read the `env` context).
 #[must_use]
 pub fn project_tool_resolver_script(names: &BTreeSet<String>, export_rustup: bool) -> String {
     let tools: BTreeSet<&str> = names

@@ -1,21 +1,8 @@
-//! Stack-extension slot requirements (cache §1).
-//!
-//! The `rust-task-identity-v1` extension MUST record package, workspace,
-//! graph, targets, features, profile, driver, runner, config digests,
-//! Nextest digest, kind, and archive identity before selection. The
-//! optional `all_features` slot must be a boolean when present. The
-//! orchestrator stays opaque to adapter data; this validator pins the
-//! required slots so reuse never rests on a partial extension.
-
 use crate::cachekey::validate_semantic_text;
 use crate::cachekey::{RUST_EXTENSION_SCHEMA, TOFU_EXTENSION_SCHEMA};
 use crate::canonical::{StackExtension, validate_digest};
 use crate::errors::ContractError;
 
-/// Required `data` keys of the Rust task-identity extension.
-///
-/// `driver` carries driver+runner combined (`driver+runner`); `nextest`
-/// and `archive` may be null when the task is not a Nextest task.
 pub const RUST_EXTENSION_REQUIRED_SLOTS: [&str; 11] = [
     "package_id",
     "workspace_id",
@@ -30,8 +17,6 @@ pub const RUST_EXTENSION_REQUIRED_SLOTS: [&str; 11] = [
     "archive",
 ];
 
-/// Validate a Rust task-identity extension against the required slots.
-/// # Errors
 pub fn validate_rust_extension(extension: &StackExtension) -> Result<(), ContractError> {
     if extension.schema != RUST_EXTENSION_SCHEMA {
         return Err(ContractError::identity(
@@ -76,11 +61,6 @@ pub fn validate_rust_extension(extension: &StackExtension) -> Result<(), Contrac
     Ok(())
 }
 
-/// Required `data` keys of the tofu task-identity extension.
-///
-/// `driver` carries driver+runner combined (`tofu+none`); `root` is
-/// empty for the repository root; `lock_digest` is null when the
-/// root lockfile is absent.
 pub const TOFU_EXTENSION_REQUIRED_SLOTS: [&str; 9] = [
     "unit_id",
     "workspace_id",
@@ -93,8 +73,6 @@ pub const TOFU_EXTENSION_REQUIRED_SLOTS: [&str; 9] = [
     "kind",
 ];
 
-/// Validate a tofu task-identity extension against the required slots.
-/// # Errors
 pub fn validate_tofu_extension(extension: &StackExtension) -> Result<(), ContractError> {
     if extension.schema != TOFU_EXTENSION_SCHEMA {
         return Err(ContractError::identity(
@@ -128,7 +106,6 @@ pub fn validate_tofu_extension(extension: &StackExtension) -> Result<(), Contrac
     Ok(())
 }
 
-/// Check the root slot: empty (repository root) or semantic text.
 fn check_root_slot(data: &serde_json::Map<String, serde_json::Value>) -> Result<(), ContractError> {
     let root = slot_str(data, "root");
     if root.is_empty() {
@@ -138,14 +115,12 @@ fn check_root_slot(data: &serde_json::Map<String, serde_json::Value>) -> Result<
     Ok(())
 }
 
-/// Read a slot as a string, failing closed on any other shape.
 fn slot_str<'a>(data: &'a serde_json::Map<String, serde_json::Value>, slot: &str) -> &'a str {
     data.get(slot)
         .and_then(serde_json::Value::as_str)
         .unwrap_or("")
 }
 
-/// Check a required non-empty semantic-text slot.
 fn check_extension_text(
     data: &serde_json::Map<String, serde_json::Value>,
     slot: &str,
@@ -161,7 +136,6 @@ fn check_extension_text(
     Ok(())
 }
 
-/// Check the combined `driver+runner` slot.
 fn check_driver_slot(
     data: &serde_json::Map<String, serde_json::Value>,
 ) -> Result<(), ContractError> {
@@ -178,7 +152,6 @@ fn check_driver_slot(
     Ok(())
 }
 
-/// Check a required string-array slot.
 fn check_string_array(
     data: &serde_json::Map<String, serde_json::Value>,
     slot: &str,
@@ -201,7 +174,6 @@ fn check_string_array(
     Ok(())
 }
 
-/// Check a nullable text slot (null only when the task has no such input).
 fn check_nullable_text(
     data: &serde_json::Map<String, serde_json::Value>,
     slot: &str,

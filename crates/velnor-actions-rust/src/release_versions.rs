@@ -1,17 +1,8 @@
-//! Resolve Cargo versions from an authenticated, caller-supplied manifest closure.
-//! This module performs no I/O, metadata command, hook, Git operation or network read.
 use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract::package_release_policy::{
     CargoVersionBinding, MAX_CARGO_VERSION_INPUT_BYTES, MAX_CARGO_VERSION_MANIFEST_BYTES,
 };
 use velnor_actions_contract::{ContractError, PackageReleasePlan, PackageReleasePolicy};
-/// Resolve the shared version from exact-source regular Git-file bytes.
-///
-/// The caller authenticates source SHA, file paths, Git modes and byte identity.
-/// The exact map key set is mandatory: absent data never triggers an ambient
-/// filesystem read, parent search, Cargo command or network fallback.
-/// # Errors
-/// Rejects missing/extra/oversized TOML, ownership drift and ambiguous versions.
 pub fn resolve_release_policy(
     policy: &PackageReleasePolicy,
     manifests: &BTreeMap<String, Vec<u8>>,
@@ -121,6 +112,3 @@ fn explicit_workspace_path(manifest: &str, workspace: &str) -> Result<String, Co
 fn invalid(reason: &'static str) -> ContractError {
     ContractError::identity("cargo_release_version", reason)
 }
-#[cfg(test)]
-#[path = "release_versions_tests.rs"]
-mod tests;

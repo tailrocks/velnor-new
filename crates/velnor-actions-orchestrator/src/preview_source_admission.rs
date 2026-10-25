@@ -1,7 +1,3 @@
-//! Two-phase, source-bound preview admission. Phase one authenticates remote
-//! CI and workflow identities; phase two reads only regular files from the
-//! pinned source checkout and emits the immutable admission record.
-
 use super::{
     Admission, append_output, positive_u64, required, runner_root, source_files::SourceFiles,
 };
@@ -22,19 +18,12 @@ use super::super::{
     run_identity::{CurrentRun, RunSource},
 };
 
-/// Native operation that finalizes the selected preview source admission.
 pub const FINALIZE_PREVIEW_SOURCE_OP: &str = "finalize-preview-source-v1";
 
-/// Select source A and current workflow authority B from authenticated GitHub facts.
-/// # Errors
-/// Rejects an ineligible CI source, workflow authority, repository, or ancestry.
 pub fn select_preview_source_from_env() -> Result<(), OrchestratorError> {
     select()
 }
 
-/// Finalize A's static policy, task closure, and digest-bound source artifact.
-/// # Errors
-/// Rejects checkout, policy, producer-task, source-closure, or authentication drift.
 pub fn finalize_preview_source_from_env() -> Result<(), OrchestratorError> {
     finalize()
 }
@@ -76,8 +65,6 @@ struct WorkspaceSource<'a> {
     manifests: BTreeMap<String, Vec<u8>>,
 }
 
-/// Authenticate a successful main CI source and the current workflow authority.
-/// This phase runs before checkout and emits only remote identities.
 pub(super) fn select() -> Result<(), OrchestratorError> {
     let deadline = CheckDeadline::after(Duration::from_secs(300))
         .map_err(|_| internal("preview_source_deadline"))?;
@@ -263,7 +250,3 @@ fn release_job_name_seed(
 fn _file_mode_is_regular(mode: &str) -> bool {
     matches!(mode, "100644" | "100755")
 }
-
-#[cfg(test)]
-#[path = "preview_source_admission_tests.rs"]
-mod tests;

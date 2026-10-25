@@ -1,5 +1,3 @@
-//! Protected post-merge `OpenTofu` apply workflow emission.
-
 use velnor_actions_mise::PinnedTool;
 use velnor_actions_workflow_renderer::render::RenderedFile;
 use velnor_actions_workflow_renderer::{TofuApplySpec, render_tofu_apply_workflow};
@@ -9,16 +7,10 @@ use crate::pins::resolve_mise_setup;
 use crate::prepare::GenerationPreparation;
 use crate::workflow::CHECKOUT_USES;
 
-/// Whether the optional protected apply workflow is configured.
 pub(crate) fn tofu_apply_enabled(prep: &GenerationPreparation) -> bool {
     prep.config.workflow.tofu_apply.is_some()
 }
 
-/// Render the optional apply workflow from closed config, or emit no file.
-///
-/// # Errors
-///
-/// Returns pin-resolution or workflow-rendering errors.
 pub(crate) fn tofu_apply_files(
     prep: &GenerationPreparation,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {

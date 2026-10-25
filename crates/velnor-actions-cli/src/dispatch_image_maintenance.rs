@@ -1,5 +1,3 @@
-//! Thin CLI adapter for closed source-bound image-maintenance operations.
-
 use crate::args::ImageMaintenanceCommand;
 use std::{process::ExitCode, time::Duration};
 use velnor_actions_orchestrator::{

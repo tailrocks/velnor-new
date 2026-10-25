@@ -1,10 +1,3 @@
-//! Static scan for reads that leave a member's directory.
-//!
-//! A member whose configs reach outside its own directory (`tsconfig`
-//! `extends`/`references`/`paths`, a `*.config.*` literal with `..`) has
-//! inputs the directory claim cannot see. The orchestrator forces such a
-//! member until `[[stacks.bun.inputs]]` declares its reads complete.
-
 use serde_json::Value;
 
 use crate::jsonc;
@@ -19,7 +12,6 @@ const SCRIPT_CONFIG_SUFFIXES: [&str; 6] = [
     ".config.cjs",
 ];
 
-/// True for a file name the scan reads: a `tsconfig*.json` or a script config.
 #[must_use]
 pub fn is_config_file(name: &str) -> bool {
     is_tsconfig(name)
@@ -28,11 +20,6 @@ pub fn is_config_file(name: &str) -> bool {
             .any(|suffix| name.ends_with(suffix))
 }
 
-/// Repository paths outside `member_dir` that the member's config files name.
-///
-/// `files` are `(repository path, text)` pairs of the member's `tsconfig*.json`
-/// and `*.config.*` files. Paths keep any glob suffix; an unparsable
-/// `tsconfig` reports itself, because its reads are unknown.
 #[must_use]
 pub fn outside_reads(member_dir: &str, files: &[(String, String)]) -> Vec<String> {
     let mut reads = Vec::new();
@@ -69,7 +56,6 @@ pub fn outside_reads(member_dir: &str, files: &[(String, String)]) -> Vec<String
     reads
 }
 
-/// Path-like strings of one `tsconfig` that are relative (`./`, `../`) or contain `..`.
 fn tsconfig_references(text: &str) -> Option<Vec<String>> {
     let root: Value = serde_json::from_str(&jsonc::to_json(text).ok()?).ok()?;
     let mut out = Vec::new();
@@ -121,13 +107,11 @@ fn tsconfig_references(text: &str) -> Option<Vec<String>> {
     Some(out)
 }
 
-/// A path that names its parent (`..`) or starts relative to its own file.
 fn is_relative_escape(candidate: &str) -> bool {
     candidate.split('/').any(|segment| segment == "..")
         || (candidate.starts_with("./") && candidate.contains("../"))
 }
 
-/// Contents of every quoted literal (`'`, `"`, backtick) in `text`, escapes skipped.
 fn string_literals(text: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut chars = text.chars();

@@ -1,10 +1,3 @@
-//! Canonical JSON bytes and BLAKE3 digest helpers.
-//!
-//! Canonical bytes are UTF-8 JSON with lexicographically sorted object keys,
-//! declared array order, no insignificant whitespace, `/`-normalized paths,
-//! and no non-finite numbers. Digests are BLAKE3 over those bytes, encoded
-//! as `b3-` plus 64 lowercase hex characters.
-
 use std::collections::BTreeMap;
 
 use serde::Serialize;
@@ -12,26 +5,21 @@ use serde::Serialize;
 use crate::errors::ContractError;
 use crate::vcs::VcsInputs;
 
-/// A validated `b3-<64 lowercase hex>` digest.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[serde(try_from = "String")]
 pub struct Digest(String);
 
 impl Digest {
-    /// Parse and validate a digest string.
-    /// # Errors
     pub fn parse(value: &str) -> Result<Self, ContractError> {
         validate_digest(value)?;
         Ok(Self(value.to_owned()))
     }
 
-    /// Borrow the digest string.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
-    /// First 16 hex chars without the `b3-` prefix.
     #[must_use]
     pub fn prefix16(&self) -> &str {
         &self.0[3..19]
@@ -45,19 +33,15 @@ impl TryFrom<String> for Digest {
     }
 }
 
-/// A validated repository-relative POSIX path (no traversal, `/` separators).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[serde(try_from = "String")]
 pub struct PosixPath(String);
 
 impl PosixPath {
-    /// Parse and normalize (`\` becomes `/`).
-    /// # Errors
     pub fn parse(value: &str) -> Result<Self, ContractError> {
         Ok(Self(normalize_posix_path(value)?))
     }
 
-    /// Borrow the normalized path.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -71,20 +55,16 @@ impl TryFrom<String> for PosixPath {
     }
 }
 
-/// Compute the typed `b3-<hex>` digest over raw bytes.
 #[must_use]
 pub fn digest_b3_typed(bytes: &[u8]) -> Digest {
     Digest(format!("b3-{}", blake3::hash(bytes).to_hex()))
 }
 
-/// Compute `b3-<hex>` over raw bytes.
 #[must_use]
 pub fn digest_b3(bytes: &[u8]) -> String {
     digest_b3_typed(bytes).as_str().to_owned()
 }
 
-/// Serialize a value to canonical JSON bytes.
-/// # Errors
 pub fn canonical_json_bytes<T: Serialize + ?Sized>(value: &T) -> Result<Vec<u8>, ContractError> {
     let json =
         serde_json::to_value(value).map_err(|err| ContractError::CanonicalJson(err.to_string()))?;
@@ -93,22 +73,17 @@ pub fn canonical_json_bytes<T: Serialize + ?Sized>(value: &T) -> Result<Vec<u8>,
     Ok(out)
 }
 
-/// Serialize a value to a canonical JSON string.
-/// # Errors
 pub fn canonical_json_str<T: Serialize + ?Sized>(value: &T) -> Result<String, ContractError> {
     let bytes = canonical_json_bytes(value)?;
     String::from_utf8(bytes).map_err(|err| ContractError::CanonicalJson(err.to_string()))
 }
 
-/// Validate a `b3-<64 lowercase hex>` digest string.
-/// # Errors
 pub fn validate_digest(value: &str) -> Result<(), ContractError> {
     is_valid_digest(value)
         .then_some(())
         .ok_or_else(|| ContractError::identity("digest", "malformed_b3_digest"))
 }
 
-/// Check digest shape without allocating an error.
 #[must_use]
 pub fn is_valid_digest(value: &str) -> bool {
     let Some(hex) = value.strip_prefix("b3-") else {
@@ -120,8 +95,6 @@ pub fn is_valid_digest(value: &str) -> bool {
             .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
 }
 
-/// Normalize a repository path to POSIX form (`/` separators).
-/// # Errors
 pub fn normalize_posix_path(path: &str) -> Result<String, ContractError> {
     if path.is_empty() {
         return Err(ContractError::identity("path", "empty_path"));
@@ -136,103 +109,89 @@ pub fn normalize_posix_path(path: &str) -> Result<String, ContractError> {
     Ok(normalized)
 }
 
-/// Stack-neutral task identity envelope (cache §1).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TaskIdentity {
-    /// Identity schema version; must be 1.
     pub schema_version: u32,
-    /// Registered detector ID.
+
     pub stack_id: String,
-    /// Normalized repo-relative detected project root.
+
     pub project_root: String,
-    /// Detector-defined stable component identity.
+
     pub component_id: String,
-    /// Task kind.
+
     pub task_kind: String,
-    /// Stable internal task ID.
+
     pub task_id: String,
-    /// Fixed argument vector.
+
     pub argv: Vec<String>,
-    /// Repository-relative working directory.
+
     pub working_dir: String,
-    /// Task configuration.
+
     pub configuration: TaskConfiguration,
-    /// Declared input paths with content digests.
+
     pub inputs: Vec<TaskInput>,
-    /// Upstream task IDs this task depends on (sorted, cache §1).
+
     pub dependencies: Vec<String>,
-    /// Observed VCS revision inputs (par §4.2).
+
     pub vcs: VcsInputs,
-    /// Toolchain identity digest.
+
     pub toolchain_id: String,
-    /// Platform identity digest.
+
     pub platform_id: String,
-    /// Explicit environment identities.
+
     pub environment: BTreeMap<String, String>,
-    /// Output contract name.
+
     pub output_contract: String,
-    /// Generator identity.
+
     pub generator: TaskGenerator,
-    /// Typed, versioned adapter extension.
+
     pub stack_extension: StackExtension,
 }
 
-/// Task configuration block of [`TaskIdentity`].
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TaskConfiguration {
-    /// Execution target (`host` or triple).
     pub target: String,
-    /// Build profile.
+
     pub profile: String,
-    /// Enabled features (sorted).
+
     pub features: Vec<String>,
-    /// Extra fixed flags (sorted).
+
     pub flags: Vec<String>,
-    /// Task contract name.
+
     pub task_contract: String,
-    /// Selected compile driver.
+
     pub compile_driver: String,
-    /// Selected test runner.
+
     pub test_runner: String,
 }
 
-/// One declared task input.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TaskInput {
-    /// Repository-relative input path.
     pub path: String,
-    /// Content digest (`b3-` + hex).
+
     pub digest: String,
 }
 
-/// Generator identity block of [`TaskIdentity`].
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TaskGenerator {
-    /// Exact generator version.
     pub version: String,
-    /// Generator target triple.
+
     pub target: String,
 }
 
-/// Typed, versioned stack-extension envelope.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct StackExtension {
-    /// Extension schema ID (unknown schemas disable reuse).
     pub schema: String,
-    /// Canonical adapter data (opaque to the orchestrator).
+
     pub data: serde_json::Value,
 }
 
 impl TaskIdentity {
-    /// Parse identity JSON, rejecting duplicate keys (cache §1).
-    /// # Errors
     pub fn parse_json(text: &str) -> Result<Self, ContractError> {
         let value = crate::strict_json::parse_strict_json(text)?;
         serde_json::from_value(value).map_err(|err| ContractError::CanonicalJson(err.to_string()))
     }
 
-    /// Validate relative paths, task ID, and digest shapes.
-    /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {
         if self.schema_version != 1 {
             return Err(ContractError::UnsupportedSchema {
@@ -266,7 +225,6 @@ impl TaskIdentity {
         Ok(())
     }
 
-    /// Validate dependency task IDs are well-formed and sorted.
     fn validate_dependencies(&self) -> Result<(), ContractError> {
         for dep in &self.dependencies {
             crate::ids::validate_task_id(dep)?;
@@ -278,41 +236,34 @@ impl TaskIdentity {
     }
 }
 
-/// Compute `input_digest` as BLAKE3 over canonical [`TaskIdentity`] bytes.
-/// # Errors
 pub fn input_digest(identity: &TaskIdentity) -> Result<String, ContractError> {
     identity.validate()?;
     Ok(digest_b3(&canonical_json_bytes(identity)?))
 }
 
-/// Inputs for the cache `compatibility_id` digest.
 #[derive(Debug, Clone, Serialize)]
 pub struct CompatibilityInputs {
-    /// Schema id, always `v1`.
     pub schema_id: String,
-    /// Repository identity digest.
+
     pub repository_id: String,
-    /// Workspace identity digest.
+
     pub workspace_id: String,
-    /// Lane identity digest.
+
     pub lane_id: String,
-    /// Platform identity digest.
+
     pub platform_id: String,
-    /// Toolchain identity digest.
+
     pub toolchain_id: String,
-    /// Cache-format identity digest.
+
     pub cache_format_id: String,
-    /// Stack-extension identity digest.
+
     pub stack_extension_id: String,
 }
 
-/// Compute `compatibility_id` as BLAKE3 over the canonical inputs object.
-/// # Errors
 pub fn compatibility_id(inputs: &CompatibilityInputs) -> Result<String, ContractError> {
     Ok(digest_b3(&canonical_json_bytes(inputs)?))
 }
 
-/// Write canonical JSON: sorted keys, finite numbers, and no whitespace.
 fn write_canonical(value: &serde_json::Value, out: &mut Vec<u8>) -> Result<(), ContractError> {
     match value {
         serde_json::Value::Null => out.extend_from_slice(b"null"),
@@ -354,7 +305,6 @@ fn write_canonical(value: &serde_json::Value, out: &mut Vec<u8>) -> Result<(), C
     Ok(())
 }
 
-/// Write a JSON string with minimal escaping (ASCII-safe output).
 fn write_quoted(text: &str, out: &mut Vec<u8>) {
     out.push(b'"');
     if !text.bytes().any(|b| b == b'"' || b == b'\\' || b < 0x20) {
@@ -381,7 +331,6 @@ fn write_quoted(text: &str, out: &mut Vec<u8>) {
     out.push(b'"');
 }
 
-/// Encode the standard SHA-256 identity used by GitHub release artifacts.
 pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
     use sha2::{Digest as _, Sha256};
     const HEX: &[u8; 16] = b"0123456789abcdef";

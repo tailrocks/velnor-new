@@ -1,5 +1,3 @@
-//! Explicit same-run, later-attempt completion of a retained pre-tag intent.
-
 use super::super::github::GitHubApi;
 use super::{ArtifactRef, Authorization, Intent, artifacts, required};
 use crate::{OrchestratorError, internal::internal};

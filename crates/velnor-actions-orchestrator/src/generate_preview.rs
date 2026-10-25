@@ -1,5 +1,3 @@
-//! Transactional preview output publication.
-
 use std::path::Path;
 
 use velnor_actions_workflow_renderer::render::RenderedTree;
@@ -9,7 +7,6 @@ use crate::generate::guards::prepare_preview_dir;
 use crate::generate::{check_tree_paths, leaf_links::is_symlink, preserve, swap_directories};
 use crate::prepare::GenerationPreparation;
 
-/// Write `PATH/.github`, removing the reservation when staging fails.
 pub(super) fn write_preview(
     prep: &GenerationPreparation,
     dest: &Path,
@@ -30,7 +27,6 @@ pub(super) fn write_preview(
     }
 }
 
-/// Build preview output beside `.github`, then publish it by directory swap.
 fn write_staged_preview(
     prep: &GenerationPreparation,
     canonical: &Path,

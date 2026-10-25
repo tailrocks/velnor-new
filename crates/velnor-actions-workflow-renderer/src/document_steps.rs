@@ -1,5 +1,3 @@
-//! Rendering helpers for one workflow step.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Step, StepKind};
@@ -19,10 +17,6 @@ use crate::{
 #[path = "native_check_execution.rs"]
 mod native_check_execution;
 
-/// True for the final job's plan download (fetch is gated inline below).
-///
-/// An absent plan artifact (failed plan) must still reach the merge
-/// verdict instead of failing the job at the download step.
 fn is_verdict_download(step: &Step) -> bool {
     step.role == Some(velnor_actions_contract::StepRole::DownloadPlan)
         && matches!(
@@ -31,10 +25,6 @@ fn is_verdict_download(step: &Step) -> bool {
         )
 }
 
-/// Render one action step: name, condition, pin, inputs, step env.
-///
-/// Step env (cache modes) renders after `with:`; absent env renders
-/// nothing, so env-less steps keep their exact historical bytes.
 fn action_step_to_yaml(
     job_id: &str,
     step: &Step,
@@ -137,7 +127,6 @@ fn validate_action_step(
     Ok(runtime_identity)
 }
 
-/// Sorted string map as YAML (shared by `with:` and `env:` emission).
 pub(crate) fn string_map_yaml(map: &BTreeMap<String, String>) -> Yaml {
     Yaml::Map(
         map.iter()
@@ -198,7 +187,6 @@ fn shell_step_to_yaml(
     Ok(Yaml::Map(entries))
 }
 
-/// Render one action or shell step outside the CI internal-step pipeline.
 pub(crate) fn non_internal_step_to_yaml(
     job_id: &str,
     step: &Step,
@@ -220,8 +208,6 @@ pub(crate) fn non_internal_step_to_yaml(
     }
 }
 
-/// Render one step; internal ops become env plus request file, never argv.
-/// Every action ref (including the Alint pin) must be a full-SHA pin.
 pub(crate) fn step_to_yaml(
     job_id: &str,
     step: &Step,
@@ -273,13 +259,10 @@ pub(crate) fn step_to_yaml(
     }
 }
 
-/// Render a canonical shell step for a verifier composite with a fixed,
-/// trusted interpreter rather than resolving `bash` through restored PATH.
 pub(crate) fn verifier_shell_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
     crate::verifier_composite::verifier_shell_step_to_yaml(step)
 }
 
-/// Render one internal planner step. The operation travels in env, never argv.
 fn internal_step_to_yaml(
     job_id: &str,
     step: &Step,
@@ -311,10 +294,6 @@ fn internal_step_to_yaml(
         steps::scan_for_private_subcommands(condition)?;
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
     }
-    // No `continue-on-error` on the fetch step (F5): the helper
-    // retries each leg bounded and still exits success on
-    // per-leg failure, so the merge judges honestly; only hard
-    // environment failures fail the job, unmasked.
     let channel = if job_id == FINAL_JOB_ID && target == steps::MERGE_OPERATION {
         needs_envs
     } else {

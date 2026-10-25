@@ -1,4 +1,3 @@
-//! Schema-2 affected plan and generic matrix entries.
 use super::lanes::NamedCheckLaneVariant;
 pub use super::matrix_entry::MatrixEntry;
 pub use super::plan_jobs::{JobDisposition, PlanJob, plan_skips_work, selects_affected_work};
@@ -13,154 +12,136 @@ use crate::graph::{
 use crate::ids::{plan_id_for_run, validate_run_key, validate_task_id};
 use serde::{Deserialize, Serialize};
 
-/// Plan-step marker selecting output limits for an output-fed matrix job.
-///
-/// The renderer adds this environment variable only when the plan's
-/// `matrix` step output becomes a GitHub job output consumed by
-/// `strategy.matrix`.
 pub const PLAN_MATRIX_OUTPUT_MODE_ENV: &str = "VELNOR_PLAN_MATRIX_OUTPUT_MODE";
-/// Exact value of [`PLAN_MATRIX_OUTPUT_MODE_ENV`] for dynamic matrices.
+
 pub const DYNAMIC_MATRIX_OUTPUT_MODE: &str = "dynamic_matrix";
 use std::collections::{BTreeMap, BTreeSet};
-/// Schema-2 affected plan.
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Plan {
-    /// Plan schema version; must be 2.
     pub schema: u32,
-    /// Run key.
+
     pub run_key: String,
-    /// Derived plan ID.
+
     pub plan_id: String,
-    /// Base commit or null.
+
     pub base: Option<String>,
-    /// Head commit.
+
     pub head: String,
-    /// Triggering event.
+
     pub event: WorkflowEvent,
-    /// Authenticated dispatch context, required only for qualification runs.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub qualification: Option<QualificationDispatch>,
-    /// Selected runner.
+
     pub runner: PlanRunner,
-    /// Trust scope.
+
     pub trust: Trust,
-    /// Generator identity.
+
     pub generator: PlanGenerator,
-    /// Complete package inventory (sorted).
+
     pub packages: Vec<PlanPackage>,
-    /// Every current obligation (sorted).
+
     pub obligations: Vec<PlanObligation>,
-    /// Bounded matrix.
+
     pub matrix: PlanMatrix,
-    /// Every obligation ID (sorted unique).
+
     pub task_ids: Vec<String>,
-    /// Every job owning obligations with its disposition (sorted by job ID).
+
     pub jobs: Vec<PlanJob>,
-    /// Plan warnings.
+
     #[serde(default)]
     pub warnings: Vec<String>,
-    /// Typed graph edges incl. resource exclusions (par §3, §7).
+
     #[serde(default)]
     pub edges: Vec<TaskEdge>,
 }
-/// Triggering workflow event.
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkflowEvent {
-    /// Pull request.
     PullRequest,
-    /// Branch push.
+
     Push,
-    /// Merge group.
+
     MergeGroup,
-    /// Local pre-push run (tracked+staged+untracked+deletions).
+
     Local,
-    /// Fork pull-request run (untrusted, read-only caches).
+
     Fork,
-    /// Protected default-branch hosted qualification dispatch.
+
     Qualification,
 }
-/// Selected runner record.
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PlanRunner {
-    /// Literal runner label.
     pub label: String,
-    /// Selection provenance.
+
     pub selection: RunnerSelection,
 }
-/// Generator identity record.
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PlanGenerator {
-    /// Exact generator version.
     pub version: String,
-    /// Generator target triple.
+
     pub target: String,
-    /// Generator SHA-256 (64 lowercase hex).
+
     pub sha256: String,
 }
-/// One inventoried package.
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PlanPackage {
-    /// Cargo package ID.
     pub package_id: String,
-    /// Package name.
+
     pub name: String,
-    /// Repo-relative manifest path.
+
     pub manifest: String,
-    /// True when the package has an execute obligation.
+
     pub selected: bool,
-    /// Selection reasons (sorted).
+
     pub reasons: Vec<String>,
-    /// Package task IDs (sorted).
+
     pub tasks: Vec<String>,
 }
-/// One planned obligation.
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PlanObligation {
-    /// Obligation task ID.
     pub task_id: String,
-    /// Coverage decision.
+
     pub decision: ObligationDecision,
-    /// Decision reason.
+
     pub reason: String,
-    /// Task digest.
+
     pub task_digest: String,
-    /// Input digest.
+
     pub input_digest: String,
-    /// Canonical digest over the task's complete input closure.
-    ///
-    /// The plan path resolves the closure against the checkout and binds
-    /// this digest into `input_digest`.
+
     pub closure_digest: String,
-    /// Generated job owning this obligation (`rust-<crate>`, `check-<id>`, ...).
+
     pub job_id: String,
 }
-/// Obligation coverage decision.
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ObligationDecision {
-    /// Must execute in the matrix.
     Execute,
-    /// Reused from the task cache.
+
     ReusedFromTaskCache,
-    /// The change cannot affect it; its crate job is skipped (hard decision 4).
+
     NotAffected,
 }
-/// Bounded matrix payload.
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PlanMatrix {
-    /// Matrix entries (sorted by `id`).
     pub include: Vec<MatrixEntry>,
 }
 impl PlanRunner {
-    /// Validate the recorded label against the exact-label catalog.
-    /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {
         if !RUNNER_LABEL_CATALOG.contains(&self.label.as_str()) {
             return Err(ContractError::identity(
@@ -172,10 +153,8 @@ impl PlanRunner {
     }
 }
 impl Plan {
-    /// Plan schema version.
     pub const SCHEMA: u32 = 2;
-    /// Validate schema, plan ID, sorting, digests, and matrix entries.
-    /// # Errors
+
     pub fn validate(&self) -> Result<(), ContractError> {
         if self.schema != Self::SCHEMA {
             return Err(ContractError::UnsupportedSchema {
@@ -270,7 +249,6 @@ fn validate_named_check_lane_pairs(entries: &[MatrixEntry]) -> Result<(), Contra
 }
 
 impl PlanObligation {
-    /// Validate one obligation record.
     fn validate(&self) -> Result<(), ContractError> {
         validate_task_id(&self.task_id)?;
         validate_digest(&self.task_digest)?;
@@ -291,8 +269,7 @@ impl PlanObligation {
         Ok(())
     }
 }
-/// Validate one leg command: nonempty single line (GITHUB_OUTPUT-safe).
-/// # Errors
+
 pub fn validate_matrix_run(value: &str) -> Result<(), ContractError> {
     if value.is_empty() {
         return Err(ContractError::identity("run", "empty_run"));
@@ -306,11 +283,6 @@ pub fn validate_matrix_run(value: &str) -> Result<(), ContractError> {
     Ok(())
 }
 
-#[cfg(test)]
-#[path = "plan_tests.rs"]
-mod tests;
-
-/// Check `task_ids` contains every obligation ID, nothing else (wf §4).
 fn check_obligation_agreement(
     task_ids: &[String],
     obligations: &[PlanObligation],

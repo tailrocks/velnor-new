@@ -1,10 +1,3 @@
-//! Compiled pin resolution: Mise setup plus helper provenance.
-//!
-//! Resolves `[actions.overrides]` against the compiled approved-pair catalog,
-//! selects the installed Mise digest for each supported runner target, and
-//! builds digest-verified helper acquisition from release or lock provenance.
-//! Anything without provenance fails closed; no digest is ever invented.
-
 use velnor_actions_actionlint::actions::{MISE_ACTION_SHA, MISE_ACTION_VERSION};
 use velnor_actions_actionlint::overrides::{
     ActionPinOverride as ApprovedOverride, ApprovedPinCatalog,
@@ -20,7 +13,6 @@ use velnor_actions_workflow_renderer::{
 use crate::OrchestratorError;
 use crate::discover::Discovery;
 
-/// Override key selecting the Mise setup action pin.
 const MISE_ACTION_KEY: &str = "jdx/mise-action";
 
 use velnor_actions_workflow_renderer::setup::{
@@ -36,13 +28,6 @@ use consumer_evidence::validated_consumer_manifest;
 mod mise_pin_qualification;
 pub(super) use mise_pin_qualification::resolve as resolve_mise_pin_qualification;
 
-/// Resolve typed Mise setup pins: overrides plus the compiled catalog.
-///
-/// The `uses` ref comes from `[actions.overrides]` when present (approved
-/// pairs only; anything else fails closed) or the compiled default pin.
-/// `version` is the compiled Mise release; `sha256` is the verified
-/// installed-binary digest selected for the runner architecture. Unsupported
-/// targets fail closed.
 pub(crate) fn resolve_mise_setup(
     config: &VelnorConfig,
     label: &str,
@@ -54,7 +39,6 @@ pub(crate) fn resolve_mise_setup(
     resolve_mise_setup_for_release_target(config, target)
 }
 
-/// Resolve a release runner's Mise setup pins from the named platform ID.
 pub(crate) fn resolve_mise_setup_for_release_target(
     config: &VelnorConfig,
     target: ReleaseTarget,
@@ -71,7 +55,6 @@ pub(crate) fn resolve_mise_setup_for_release_target(
     })
 }
 
-/// Resolve cache-off Mise setup for an isolated verification runner.
 pub(crate) fn resolve_verification_mise_setup(
     config: &VelnorConfig,
     runner: VerificationRunner,
@@ -89,7 +72,6 @@ pub(crate) fn resolve_verification_mise_setup(
     })
 }
 
-/// Resolve cache-off Mise setup for the native macOS build runner.
 pub(crate) fn resolve_build_task_mise_setup(
     config: &VelnorConfig,
     runner: BuildTaskRunner,
@@ -106,7 +88,6 @@ pub(crate) fn resolve_build_task_mise_setup(
     })
 }
 
-/// Resolve the Mise action ref: an approved override or the compiled default.
 fn mise_action_uses(config: &VelnorConfig) -> Result<String, OrchestratorError> {
     let Some(pin) = config.actions.overrides.get(MISE_ACTION_KEY) else {
         return Ok(format!("{MISE_ACTION_KEY}@{MISE_ACTION_SHA}"));
@@ -122,11 +103,6 @@ fn mise_action_uses(config: &VelnorConfig) -> Result<String, OrchestratorError> 
     Ok(format!("{}@{}", approved.uses_key(), pin.sha))
 }
 
-/// Consumer Acquire step from the committed release manifest.
-///
-/// Bootstrap contract §2: a repo without the committed manifest file
-/// fails consumer generation with a provenance diagnostic recommending
-/// an official release; it never emits an unverified URL or digest.
 pub(crate) fn consumer_acquire_step(
     label: &str,
     version: &str,
@@ -135,15 +111,6 @@ pub(crate) fn consumer_acquire_step(
     consumer_acquire_from(label, version, discovery.consumer_manifest_json.as_deref())
 }
 
-/// Consumer Acquire step from an explicit manifest (pure; `None` fails).
-///
-/// A repo without the committed manifest file fails consumer generation
-/// with a provenance diagnostic recommending an official release (§2).
-///
-/// # Errors
-///
-/// Returns a contract error without provenance, on version or target
-/// mismatch, or on malformed manifests.
 pub fn consumer_acquire_step_with_manifest(
     label: &str,
     version: &str,
@@ -152,7 +119,6 @@ pub fn consumer_acquire_step_with_manifest(
     consumer_acquire_from(label, version, json)
 }
 
-/// Consumer Acquire step from an explicit manifest (pure; `None` fails).
 fn consumer_acquire_from(
     label: &str,
     version: &str,
@@ -165,9 +131,6 @@ fn consumer_acquire_from(
     consumer_acquire_for_target(target, version, json)
 }
 
-/// Acquire the exact helper asset for a validated check runner.
-/// # Errors
-/// Rejects invalid runner profiles or missing artifact provenance.
 pub(crate) fn consumer_acquire_for_runner(
     runner: &velnor_actions_contract::config::CheckRunner,
     version: &str,
@@ -198,7 +161,6 @@ pub(crate) fn consumer_acquire_for_target(
     )
 }
 
-/// Lock-backed Acquire step for one runner label (Velnor policy only).
 pub(crate) fn lock_acquire_step(
     lock: &GeneratorLock,
     label: &str,
@@ -239,8 +201,6 @@ fn lock_acquire_for_target(
     )
 }
 
-/// Digest-verified staging step: fetch URL, check SHA-256, record the source
-/// commit, make executable. Both provenance paths supply the commit (F3).
 fn acquire_step(
     url: &str,
     sha: &str,
@@ -259,28 +219,8 @@ fn acquire_step(
     )?)
 }
 
-/// Host path of the read-only generator seed. Not a job input.
 const GENERATOR_SEED_ROOT: &str = "/opt/velnor/seed";
 
-/// Fixed acquisition argv. A matching seed file is copied. Otherwise curl.
-///
-/// Curl stays HTTPS-only (`--proto '=https'`) over TLS 1.2+. Paths are
-/// double-quoted, and a seed with the wrong digest is never copied. Curl
-/// retries all failures up to five times, including a TLS EOF; certificate
-/// verification stays enabled. Every attempt is time-bounded
-/// (`--connect-timeout 15`, `--max-time 120`) and retrying stops after
-/// `--retry-max-time 180`, so a hung download during an Actions outage
-/// fails within about 5.5 minutes; the step's `timeout-minutes` backs it.
-/// Both checks inline that target's native digest utility. A shared hash
-/// prefix keeps each repeated step inside the 500_000-byte workflow cap.
-/// The staged path stays a literal `$RUNNER_TEMP/velnor/bin/velnor-actions-`
-/// prefix. `&&` still skips `chmod` when mkdir, copy, download, or the
-/// digest check fails.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Contract`] when the seed root or staged
-/// path is outside its closed safe-path grammar.
 pub fn acquire_script_argv(
     staged: &str,
     seed_root: &str,
@@ -325,7 +265,6 @@ fn absolute_token(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-'))
 }
 
-/// Allow static absolute test paths or the one emitted runner-temp prefix.
 fn staged_path_token(value: &str) -> bool {
     value
         .strip_prefix(STAGED_BINARY_PREFIX)
@@ -338,37 +277,3 @@ fn file_token(value: &str) -> bool {
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
 }
-
-/// `cfg(test)`-only fixture manifest matching the workspace version.
-#[cfg(test)]
-fn test_manifest_json() -> String {
-    let version = env!("CARGO_PKG_VERSION");
-    let targets = velnor_actions_contract::SUPPORTED_TARGETS
-        .iter()
-        .map(|target| {
-            format!(
-                "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{target}\",\"sha256\":\"{}\"}}",
-                "a".repeat(64)
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(",");
-    format!(
-        "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{}\",\"targets\":[{targets}]}}",
-        "a".repeat(40)
-    )
-}
-
-#[cfg(test)]
-#[path = "pins_tests.rs"]
-pub(crate) mod tests;
-#[cfg(test)]
-#[path = "pins_tests_b.rs"]
-mod tests_b;
-
-#[cfg(test)]
-#[path = "pins_mise_pin_qualification_tests.rs"]
-mod mise_pin_qualification_tests;
-#[cfg(test)]
-#[path = "pins_manifest_tests.rs"]
-mod pins_manifest_tests;

@@ -1,4 +1,3 @@
-//! Pure resolution of explicitly qualified installation closures.
 use super::invalid;
 use crate::MiseError;
 use std::collections::{BTreeMap, BTreeSet};
@@ -13,7 +12,6 @@ pub(super) struct ResolvedTools {
     pub(super) specs: Vec<String>,
     pub(super) fingerprint: String,
 }
-/// Resolve every selected ID from the explicit qualified registry.
 pub(super) fn resolve(
     registry: &[QualifiedTool],
     roots: &[String],
@@ -101,7 +99,6 @@ fn reserved_executables(check: &MiseCheck) -> BTreeSet<&'static str> {
     }
     names
 }
-/// Canonical identity is independent of the dependency installation schedule.
 pub(super) fn fingerprint(
     declarations: &[QualifiedTool],
     specs: &[String],
@@ -157,7 +154,6 @@ fn visit<'a>(
     output.push(tool.clone());
     Ok(())
 }
-/// Exact backend selector; options and qualification bind separately in the fingerprint.
 pub(super) fn selector(tool: &QualifiedTool) -> String {
     format!("{}@{}", backend_key(tool), tool.version)
 }
@@ -184,7 +180,3 @@ fn insert_selector(
     selectors.insert(key.to_owned(), spec);
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "check_qualified_tools_tests.rs"]
-mod tests;

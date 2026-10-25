@@ -43,7 +43,22 @@ env = { MBX_CARGO_SHIM_MODE = "1" }
 [tasks.test-maintenance-helpers]
 description = "Run repository-only maintenance helper test suites"
 run = '''
-set -e
-cargo --config build.jobs=2 nextest run --locked --manifest-path Cargo.toml --package velnor-actions-freshness --no-tests fail --jobs 2
-cargo --config build.jobs=2 nextest run --locked --manifest-path Cargo.toml --package velnor-archive-guard --no-tests fail --jobs 2
+set -eu
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+TEST_MEMBERS="$(VELNOR_INTERNAL_OP=repo-policy-v1 \
+  VELNOR_REPO_POLICY_ACTION=test-members \
+  VELNOR_REPO_POLICY_ROOT="$ROOT" \
+  VELNOR_REPO_POLICY_MANIFEST_PATH='' \
+  cargo --config build.jobs=2 run --quiet --locked --package velnor-actions-cli --bin velnor-actions)"
+for package in velnor-actions-freshness velnor-archive-guard; do
+  case " $TEST_MEMBERS " in
+    *" $package "*)
+      cargo --config build.jobs=2 nextest run --locked --manifest-path Cargo.toml --package "$package" --no-tests fail --jobs 2
+      ;;
+    *)
+      echo "skip: $package (Cargo metadata has no test-enabled targets)"
+      ;;
+  esac
+done
 '''

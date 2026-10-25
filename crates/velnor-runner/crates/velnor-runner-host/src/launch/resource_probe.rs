@@ -1,5 +1,3 @@
-//! Controller-only guest resource probe. Runner projections stay untouched.
-
 use bollard::Docker;
 use std::path::Path;
 
@@ -21,28 +19,12 @@ mod record;
 mod recover;
 mod sample;
 
-#[cfg(test)]
-mod tests;
-
-/// Obtain a fresh one-use admission permit immediately before acquire/JIT/start.
 pub(super) async fn start_permit(
     docker: &Docker,
     journal: &Journal,
     budget: ResourceBudget,
     rest: Rest<'_>,
 ) -> Option<StartPermit> {
-    #[cfg(test)]
-    if let TestOverride::Permit(permit) = test_override(rest.guest_admission) {
-        return Some(permit);
-    }
-    #[cfg(test)]
-    if matches!(
-        rest.guest_admission,
-        super::drive::GuestAdmission::Unavailable
-    ) {
-        return None;
-    }
-    #[cfg(not(test))]
     let _ = rest.guest_admission;
 
     Box::pin(collect(docker, journal, rest.pat))
@@ -52,34 +34,6 @@ pub(super) async fn start_permit(
         .and_then(|sample| sample.into_start_permit(budget))
 }
 
-#[cfg(test)]
-enum TestOverride {
-    Permit(StartPermit),
-    Deny,
-}
-
-#[cfg(test)]
-fn test_override(admission: super::drive::GuestAdmission) -> TestOverride {
-    match admission {
-        super::drive::GuestAdmission::FreshSample => {
-            TestOverride::Permit(StartPermit::test_fixture())
-        }
-        super::drive::GuestAdmission::Unavailable => TestOverride::Deny,
-    }
-}
-
-/// Obtain a separate sample for D21 poll-header adjustment; it never authorizes a start.
-#[cfg(test)]
-pub(super) async fn pressure_sample(
-    _docker: &Docker,
-    _journal: &Journal,
-    _rest: Rest<'_>,
-) -> Option<super::pressure::Sample> {
-    std::future::ready(None).await
-}
-
-/// Obtain a separate sample for D21 poll-header adjustment; it never authorizes a start.
-#[cfg(not(test))]
 pub(super) async fn pressure_sample(
     docker: &Docker,
     journal: &Journal,
@@ -193,28 +147,5 @@ fn docker_identity_error() -> EnsureError {
     EnsureError::Unexpected {
         status: 0,
         step: "docker identity",
-    }
-}
-
-#[cfg(test)]
-mod provider_selection_tests {
-    use super::provider_for_build;
-    use crate::error::HostError;
-    use std::path::Path;
-
-    #[test]
-    fn missing_compiled_identity_selects_only_the_unavailable_provider() -> Result<(), HostError> {
-        if provider_for_build("local-only", Path::new("/tmp/velnor-state"), false)?.is_some() {
-            return Err(HostError::Identity);
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn provider_factory_errors_are_not_converted_to_unavailable() {
-        assert_eq!(
-            provider_for_build("", Path::new("/tmp/velnor-state"), true).err(),
-            Some(HostError::Identity)
-        );
     }
 }

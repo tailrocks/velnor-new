@@ -1,12 +1,9 @@
-//! Read-only authenticated access to protected GitHub source objects.
-
 use velnor_actions_mise::CheckDeadline;
 
 use crate::{OrchestratorError, internal::internal};
 
 use super::{GitHubApi, github, release_policy_admission};
 
-/// Authenticate the protected source main tip for downstream promotion decisions.
 pub(crate) fn verify_preview_main_tip(
     repository: &str,
     repository_id: u64,
@@ -18,8 +15,6 @@ pub(crate) fn verify_preview_main_tip(
     github::GitHubApi::new(repository.to_owned()).verify_preview_main_tip(repository_id, branch)
 }
 
-/// Verify protected main policy, source → workflow ancestry, and a stable
-/// protected main tip through the existing GitHub read adapter.
 pub(crate) fn verify_public_protected_main_lineage(
     repository: &str,
     repository_id: u64,
@@ -48,9 +43,6 @@ pub(crate) fn verify_public_protected_main_lineage(
     Ok(tip)
 }
 
-/// Verify an exact public PR head descends from the current protected tap main
-/// tip. The PR selector supplies immutable SHA values only; it grants no write
-/// authority and uses no protected-status credential.
 pub(crate) fn verify_public_pull_request_lineage(
     repository: &str,
     repository_id: u64,
@@ -73,8 +65,6 @@ pub(crate) fn verify_public_pull_request_lineage(
     Ok(())
 }
 
-/// Read one regular file from an exact protected source commit using the
-/// existing tree/blob verifier. This exposes bytes only, never the GH adapter.
 pub(crate) fn read_protected_source_file(
     repository: &str,
     repository_id: u64,
@@ -96,8 +86,6 @@ pub(crate) fn read_protected_source_file(
     .ok_or_else(|| internal("package_public_source_file_missing"))
 }
 
-/// As above, but distinguishes an absent path from an invalid or unavailable
-/// protected source tree. Only a verified absence returns `Ok(None)`.
 pub(crate) fn try_read_protected_source_file(
     repository: &str,
     repository_id: u64,
@@ -133,8 +121,6 @@ pub(crate) fn try_read_protected_source_file(
     Ok(bytes)
 }
 
-/// Full protected commit tree identity, read from the same immutable Git
-/// object API used by protected source-file admission.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ProtectedSourceTreeIdentity {
     pub(crate) tree_sha: String,
@@ -143,7 +129,6 @@ pub(crate) struct ProtectedSourceTreeIdentity {
     pub(crate) directories: Vec<ProtectedSourceTreeEntry>,
 }
 
-/// Data-only Git tree entry identity returned to read-only protected-tree callers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ProtectedSourceTreeEntry {
     pub(crate) path: String,
@@ -151,8 +136,6 @@ pub(crate) struct ProtectedSourceTreeEntry {
     pub(crate) sha: String,
 }
 
-/// Read the complete, non-truncated regular-file inventory of one exact
-/// protected source commit. This is read-only and does not expose the API.
 pub(crate) fn read_protected_source_tree_identity(
     repository: &str,
     repository_id: u64,
@@ -162,8 +145,6 @@ pub(crate) fn read_protected_source_tree_identity(
     read_protected_source_tree_identity_inner(repository, repository_id, commit_sha, None, deadline)
 }
 
-/// Read an exact protected seed base, allowing only its transition-replaced
-/// symlink while preserving complete-tree validation for every other entry.
 pub(crate) fn read_protected_adoption_seed_base_tree_identity(
     repository: &str,
     repository_id: u64,

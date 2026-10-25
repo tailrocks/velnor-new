@@ -1,5 +1,11 @@
-//! Write one bounded version-1 guest measurement record to stdout.
-
+#![allow(
+    missing_docs,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
+#![allow(
+    clippy::missing_errors_doc,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
 use std::io::{self, Write};
 
 use velnor_resource_probe::{MAX_OUTPUT_BYTES, ProbeError, ProbeRecord, sample};

@@ -1,5 +1,3 @@
-//! OIDC credential handling for the one fixed Cosign signing command.
-
 use std::ffi::OsString;
 
 use super::{EnvPolicy, IsolatedCommand};

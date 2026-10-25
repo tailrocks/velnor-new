@@ -125,7 +125,6 @@ done
     );
 }
 
-/// Wrapper-owned and credential-bearing names a task frame may not set.
 const RESERVED_FRAME_ENV: [&str; 8] = [
     "VELNOR_TASK_ID",
     "VELNOR_TASK_DIGEST",
@@ -137,7 +136,6 @@ const RESERVED_FRAME_ENV: [&str; 8] = [
     "VELNOR_RUNTIME_RUNNER_TEMP",
 ];
 
-/// Credential and endpoint patterns beyond the shared step denylist.
 const RESERVED_FRAME_ENV_PATTERNS: [&str; 6] = [
     "CARGO_REGISTRIES_*",
     "*_TOKEN",
@@ -147,12 +145,6 @@ const RESERVED_FRAME_ENV_PATTERNS: [&str; 6] = [
     "CHECKPOINT_*",
 ];
 
-/// Every rejected frame key pattern once, in a stable order.
-///
-/// The shared denylist and the local patterns overlap
-/// (`ACTIONS_ID_TOKEN_REQUEST_URL`); a repeated `case` pattern can never
-/// match and `ShellCheck` reports it (SC2221/SC2222), so duplicates are
-/// dropped here rather than kept in step by hand.
 pub(super) fn reserved_frame_env_patterns() -> Vec<&'static str> {
     let mut patterns: Vec<&'static str> = Vec::new();
     for pattern in RESERVED_FRAME_ENV

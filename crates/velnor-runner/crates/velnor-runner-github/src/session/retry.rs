@@ -1,5 +1,3 @@
-//! One refresh, then the same request. HTTP 403 does not loop.
-
 use std::mem;
 
 use zeroize::Zeroize;
@@ -50,18 +48,12 @@ pub(crate) fn capacity_pair(total: u32) -> (String, String) {
     (CAPACITY_HEADER.to_owned(), capacity_header_value(total))
 }
 
-/// Product token. Not the GitHub Actions runner user agent.
 pub(crate) const USER_AGENT: &str = "velnor-host";
 
 pub(crate) fn user_agent() -> (String, String) {
     ("User-Agent".to_owned(), USER_AGENT.to_owned())
 }
 
-/// Queue or admin bearer. An empty token never reaches the transport.
-///
-/// # Errors
-///
-/// Returns [`WireError::RegistrationRejected`] when `token` is empty.
 pub(crate) fn bearer(token: &str) -> Result<(String, String), SessionError> {
     if token.is_empty() {
         return Err(SessionError::Wire(WireError::RegistrationRejected));

@@ -1,5 +1,3 @@
-//! Pre-seed closure gate: single plan build plus artifact sharing.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Job, StepRole, is_crate_job_id};
@@ -9,14 +7,6 @@ use crate::{
     render::{FINAL_JOB_ID, PLAN_JOB_ID},
 };
 
-/// Pre-seed closure: single plan build plus artifact sharing (Gap A).
-///
-/// In pre-seed mode the plan job must build, upload, and stage the helper
-/// while every present task/final/publish job downloads, digest-verifies,
-/// and stages it in that order; anything less would rebuild per job, stage
-/// unverified bytes, or invoke an unstaged helper. Outside pre-seed
-/// mode there is nothing to close over.
-/// # Errors
 pub(crate) fn check_preseed_closure(
     jobs: &BTreeMap<String, Job>,
     preseed: bool,

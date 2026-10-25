@@ -1,4 +1,3 @@
-//! Optional source-free review completion workflow emission.
 use crate::{OrchestratorError, prepare::GenerationPreparation};
 use velnor_actions_contract::{
     ReleaseTarget,
@@ -11,7 +10,6 @@ use velnor_actions_workflow_renderer::{
     review_completion::{ReviewCompletionSpec, render_review_completion},
 };
 
-/// Emit no companion unless the closed optional config is present.
 pub(crate) fn files(prep: &GenerationPreparation) -> Result<Vec<RenderedFile>, OrchestratorError> {
     let Some(config) = prep.config.workflow.review_completion.as_ref() else {
         return Ok(Vec::new());

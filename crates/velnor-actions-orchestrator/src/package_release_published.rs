@@ -1,5 +1,3 @@
-//! Independent channel publication checks before any downstream distribution.
-
 use super::{
     github::{GitHubApi, ReleaseResponse},
     identity::{local_identity, recovery_body},

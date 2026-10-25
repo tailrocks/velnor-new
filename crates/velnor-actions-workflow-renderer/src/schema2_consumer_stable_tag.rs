@@ -1,4 +1,3 @@
-//! Manual version preparation and source-free exact-SHA native tag authority.
 use super::shared::{TapInvocationContext, acquire};
 use super::{ConsumerReleaseSpec, ConsumerStableReleaseSpec, RenderError, Yaml, steps};
 use crate::{

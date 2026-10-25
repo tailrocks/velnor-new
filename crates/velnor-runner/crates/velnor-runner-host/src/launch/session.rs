@@ -1,5 +1,3 @@
-//! The open scale-set session id. Restart deletes that id and nothing else.
-
 use velnor_runner_github::{QueueSession, delete_session, reopen_session};
 
 use crate::error::HostError;
@@ -9,12 +7,6 @@ use crate::scale_set::EnsureError;
 
 const KIND: &str = "session";
 
-/// Drop recorded session ids, create one session, and store its id.
-///
-/// # Errors
-///
-/// Returns [`EnsureError`] when the journal or the session call fails.
-/// A failed remember deletes the session this call just created.
 pub(super) async fn open_session(
     link: &mut Link,
     set_id: i64,
@@ -30,12 +22,6 @@ pub(super) async fn open_session(
     Ok((session, row))
 }
 
-/// Delete the session this process opened, then mark that row cleaned.
-///
-/// # Errors
-///
-/// Returns [`EnsureError`] when delete or the journal write fails.
-/// The row stays open when delete fails, so the next open can retry it.
 pub(super) async fn close_session(
     link: &mut Link,
     set_id: i64,

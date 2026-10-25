@@ -1,18 +1,8 @@
-//! Single-task aggregate construction for `write-task-report-v1`.
-//!
-//! Split from `task_report` so the report module keeps the 400-line
-//! gate; the aggregate shape is unchanged.
-
 use velnor_actions_contract::{
     MatrixEntry, MatrixReport, MatrixStatus, MatrixTaskEntry, Plan, TaskReport, TaskStatus,
     report_id_for_matrix,
 };
 
-/// Validated single-task aggregate over one written task report.
-///
-/// # Errors
-///
-/// Returns [`ContractError`] for derivation or validation failures.
 pub(crate) fn single_task_aggregate(
     plan: &Plan,
     entry: &MatrixEntry,

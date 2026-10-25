@@ -1,12 +1,3 @@
-//! Mandated plan-job closure: provisioning gates plus freshness/publish.
-//!
-//! Covers the bootstrap state machine (bootstrap-and-release-contract
-//! §§2-4): internal plan/merge steps must follow a digest-verified
-//! `Acquire Velnor` step, and the plan job must check generated-tree
-//! freshness plus publish its report (workflow-contract §3 steps 6, 8).
-//! Provenance the contract does not allow fails closed with the
-//! documented seed remediation instead of emitting a dead helper call.
-
 use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 use crate::{
@@ -19,50 +10,27 @@ use crate::{
 mod freshness_impl;
 pub use freshness_impl::{freshness_step, freshness_step_with_claude_mode};
 
-/// Contract-fixed display name of the freshness step.
 pub const CHECK_GENERATED_NAME: &str = "Check generated files";
-/// Contract-fixed display name of the plan-report upload step.
 pub const PUBLISH_PLAN_NAME: &str = "Publish plan";
-/// Contract-fixed display name of the final plan-download step.
 pub const DOWNLOAD_PLAN_NAME: &str = "Download plan";
-/// Freshness preview root, verbatim from workflow-contract §3 step 6.
 pub const FRESHNESS_OUTDIR: &str =
     "$RUNNER_TEMP/velnor-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}";
-/// Plan artifact name with the derived run key (workflow-contract §4).
 pub const PLAN_ARTIFACT_NAME: &str =
     "velnor-plan-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}";
-/// Plan artifact source dir: the run-key directory under runner temp.
 pub const PLAN_ARTIFACT_PATH: &str =
     "${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}";
-/// Pre-seed remediation (bootstrap-and-release-contract §§4.1, 4.6).
 pub const SEED_REMEDIATION: &str = "seed_required:publish the bootstrap release (manual pinned-Mise+MBX seed build), record it in .velnor/generator.lock, then regenerate";
 
-/// Typed helper provenance for one plan/task/final job.
-///
-/// Release provenance stages the exact-version asset with SHA-256
-/// verification; anything else is the documented manual seed, which
-/// has no YAML emission and fails generation closed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HelperProvenance {
-    /// Release asset: immutable URL plus expected SHA-256.
     ReleaseAsset {
-        /// Immutable `https://` asset URL for the runner target.
         url: String,
-        /// Expected lowercase hex SHA-256 of the asset.
         sha256: String,
-        /// Source commit (required, F3): manifest and lock paths both supply it.
         commit: String,
     },
-    /// No provenance: the bootstrap release is not seeded yet.
     SeedRequired,
 }
 
-/// Acquire step from typed provenance; the seed path fails closed.
-///
-/// Release provenance builds the digest-verified staging step over
-/// caller-supplied fixed argv (download plus `sha256sum -c`); the seed
-/// path emits nothing and reports the documented manual remediation.
-/// # Errors
 pub fn provision_acquire_step(
     provenance: &HelperProvenance,
     argv: Vec<String>,
@@ -86,14 +54,6 @@ pub fn provision_acquire_step(
     }
 }
 
-/// Every internal step must follow a digest-verified Acquire step.
-///
-/// Internal steps invoke the staged helper; without a preceding
-/// Acquire the path does not exist and CI fails with exit 127, so
-/// generation fails closed here instead of emitting the dead call.
-/// In pre-seed mode the fixed pre-seed stage step stages instead, and
-/// only there: the stage role outside pre-seed mode fails closed.
-/// # Errors
 pub(crate) fn check_internal_staged(
     job_id: &str,
     job: &Job,
@@ -121,7 +81,6 @@ pub(crate) fn check_internal_staged(
     Ok(())
 }
 
-/// Reject role-tagged stage steps that do not copy a fixed origin to staging.
 fn check_preseed_stage_shape(job_id: &str, step: &Step) -> Result<(), RenderError> {
     let StepKind::Shell { run, .. } = &step.kind else {
         return Err(RenderError::InvalidWorkflow(format!(
@@ -145,13 +104,11 @@ fn check_preseed_stage_shape(job_id: &str, step: &Step) -> Result<(), RenderErro
     }
 }
 
-/// True for digest-verified Acquire steps (typed role plus asset env keys).
 pub(crate) fn is_acquire_step(step: &Step) -> bool {
     step.role == Some(StepRole::AcquireVelnor)
         && matches!(&step.kind, StepKind::Shell { env, .. } if env.contains_key(steps::ASSET_SHA_ENV) && env.contains_key(steps::ASSET_URL_ENV))
 }
 
-/// Reject Acquire-role steps whose staging shape is incomplete.
 fn check_acquire_shape(job_id: &str, step: &Step) -> Result<(), RenderError> {
     let StepKind::Shell { run, env } = &step.kind else {
         return Err(RenderError::InvalidWorkflow(format!(
@@ -176,12 +133,6 @@ fn check_acquire_shape(job_id: &str, step: &Step) -> Result<(), RenderError> {
     }
 }
 
-/// Fixed plan-report upload step (`velnor-plan-<run-key>`, fails loud).
-///
-/// Uploads the run-key directory (contract §4: `plan.json` plus
-/// `matrix.json`); `if-no-files-found: error` fails closed when the
-/// planner wrote nothing. `if: always()` is attached at render.
-/// # Errors
 pub fn publish_plan_step() -> Result<Step, RenderError> {
     let mut step = steps::action_step(
         PUBLISH_PLAN_NAME,
@@ -200,11 +151,6 @@ pub fn publish_plan_step() -> Result<Step, RenderError> {
     Ok(step)
 }
 
-/// Fixed plan-artifact download step (fails loud when absent).
-///
-/// Mirrors [`publish_plan_step`]: same name and directory, so the pair
-/// agrees by construction. No `if:`: the job-level `always()` governs.
-/// # Errors
 pub fn download_plan_step() -> Result<Step, RenderError> {
     let mut step = steps::action_step(
         DOWNLOAD_PLAN_NAME,
@@ -218,11 +164,6 @@ pub fn download_plan_step() -> Result<Step, RenderError> {
     Ok(step)
 }
 
-/// Insert `Download plan` before the merge write-request, once.
-///
-/// Without the download the final job has no plan to merge. Without a
-/// final job there is nothing to close over. Re-running never dupes.
-/// # Errors
 pub(crate) fn insert_final_closure(
     jobs: &mut std::collections::BTreeMap<String, Job>,
 ) -> Result<(), RenderError> {
@@ -240,7 +181,6 @@ pub(crate) fn insert_final_closure(
     Ok(())
 }
 
-/// Insert before the merge write-request, else before merge, else at end.
 fn final_download_at(job: &Job) -> usize {
     let want = [steps::WRITE_REQUEST_OPERATION, steps::MERGE_OPERATION].join(":");
     let at = |op: &str| {
@@ -253,12 +193,6 @@ fn final_download_at(job: &Job) -> usize {
         .unwrap_or(job.steps.len())
 }
 
-/// Insert freshness before and publish after the plan step, once each.
-///
-/// Anchored on the `plan-v1` step: without it there is no planner to
-/// close over and the job is left untouched (the strict entrypoint
-/// rejects anchorless plan jobs separately). Re-running never dupes.
-/// # Errors
 pub(crate) fn insert_plan_closure(
     jobs: &mut std::collections::BTreeMap<String, Job>,
     ctx: &RenderContext,
@@ -294,14 +228,6 @@ pub(crate) fn insert_plan_closure(
     Ok(())
 }
 
-/// Insert write-request steps immediately before their consumers.
-///
-/// The `plan-v1`/`merge-v1` gates require the request file materialized
-/// (workflow-contract §3); the orchestrator emits these in IR, and this
-/// backstop closes hand-built IR the same way. Idempotent: present
-/// request steps are never duplicated, and insertion always lands after
-/// any Acquire step (directly before the already-staged consumer).
-/// # Errors
 pub(crate) fn insert_request_closure(
     jobs: &mut std::collections::BTreeMap<String, Job>,
 ) -> Result<(), RenderError> {
@@ -328,13 +254,6 @@ pub(crate) fn insert_request_closure(
     Ok(())
 }
 
-/// Append the matrix-report upload to the task job exactly once.
-///
-/// Cache-contract §4 requires every matrix entry to upload its artifact
-/// with `if: always()` (attached at render); the template carries the
-/// leg's `matrix-report.json` plus `tasks/` files under the derived
-/// `velnor-matrix-<run-key>-<matrix-key>` name. Idempotent.
-/// # Errors
 pub(crate) fn insert_task_closure(
     jobs: &mut std::collections::BTreeMap<String, Job>,
 ) -> Result<(), RenderError> {
@@ -351,8 +270,6 @@ pub(crate) fn insert_task_closure(
     Ok(())
 }
 
-/// Require the `plan-v1` anchor in the plan job (strict entrypoint).
-/// # Errors
 pub(crate) fn check_plan_anchor(
     jobs: &std::collections::BTreeMap<String, Job>,
 ) -> Result<(), RenderError> {

@@ -1,5 +1,3 @@
-//! `POST` a runner registration token. The PAT is not refreshed.
-
 use std::fmt;
 
 use serde::Deserialize;
@@ -10,36 +8,21 @@ use crate::{Method, SessionError, SessionRequest, Transport, WireError};
 
 use super::other_status;
 
-/// Where the registration token is minted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[must_use]
 pub enum RegistrationScope<'a> {
-    /// `/repos/{owner}/{repo}/actions/runners/registration-token`.
-    Repository {
-        /// Repository owner.
-        owner: &'a str,
-        /// Repository name.
-        repo: &'a str,
-    },
-    /// `/orgs/{org}/actions/runners/registration-token`.
-    Organization {
-        /// Organization login.
-        org: &'a str,
-    },
-    /// `/enterprises/{enterprise}/actions/runners/registration-token`.
-    Enterprise {
-        /// Enterprise slug.
-        enterprise: &'a str,
-    },
+    Repository { owner: &'a str, repo: &'a str },
+
+    Organization { org: &'a str },
+
+    Enterprise { enterprise: &'a str },
 }
 
-/// Inputs for [`registration_token`](crate::registration_token). `Debug` hides `pat`.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[must_use]
 pub struct RegistrationTokenCall<'a> {
-    /// Scope path. An empty component is rejected before transport.
     pub scope: RegistrationScope<'a>,
-    /// Caller credential. Not a registration token.
+
     pub pat: &'a str,
 }
 
@@ -53,10 +36,6 @@ impl fmt::Debug for RegistrationTokenCall<'_> {
     }
 }
 
-/// Registration token. [`Debug`] is redacted. There is no [`Display`].
-///
-/// [`Debug`]: std::fmt::Debug
-/// [`Display`]: std::fmt::Display
 #[must_use]
 pub struct RegistrationToken {
     raw: String,
@@ -67,7 +46,6 @@ impl RegistrationToken {
         Self { raw }
     }
 
-    /// Borrow the token for the admin-connection header only.
     #[must_use]
     pub const fn expose(&self) -> &str {
         self.raw.as_str()
@@ -86,11 +64,6 @@ impl Drop for RegistrationToken {
     }
 }
 
-/// Repository registration-token path.
-///
-/// # Errors
-///
-/// Returns [`WireError::RegistrationRejected`] when `owner` or `repo` is empty.
 pub fn repository_registration_token_path(owner: &str, repo: &str) -> Result<String, WireError> {
     if owner.is_empty() || repo.is_empty() {
         return Err(WireError::RegistrationRejected);
@@ -100,11 +73,6 @@ pub fn repository_registration_token_path(owner: &str, repo: &str) -> Result<Str
     ))
 }
 
-/// Organization registration-token path.
-///
-/// # Errors
-///
-/// Returns [`WireError::RegistrationRejected`] when `org` is empty.
 pub fn organization_registration_token_path(org: &str) -> Result<String, WireError> {
     if org.is_empty() {
         return Err(WireError::RegistrationRejected);
@@ -112,11 +80,6 @@ pub fn organization_registration_token_path(org: &str) -> Result<String, WireErr
     Ok(format!("/orgs/{org}/actions/runners/registration-token"))
 }
 
-/// Enterprise registration-token path.
-///
-/// # Errors
-///
-/// Returns [`WireError::RegistrationRejected`] when `enterprise` is empty.
 pub fn enterprise_registration_token_path(enterprise: &str) -> Result<String, WireError> {
     if enterprise.is_empty() {
         return Err(WireError::RegistrationRejected);
@@ -138,17 +101,6 @@ fn scope_path(scope: RegistrationScope<'_>) -> Result<String, WireError> {
     }
 }
 
-/// `POST` a registration token. Empty scope or PAT never reaches [`Transport`].
-///
-/// Success is HTTP 201 and a non-empty `token`. `expires_at` is ignored.
-/// HTTP 401 is not a refresh loop. HTTP 403 is [`WireError::Forbidden`].
-///
-/// # Errors
-///
-/// Returns [`WireError::RegistrationRejected`] for an empty scope, an empty
-/// PAT, or a null, missing, or empty token. A non-201 status is
-/// [`WireError::UnexpectedStatus`] or the pinned status class.
-/// [`SessionError::Uncertain`] covers timeout and reset.
 pub fn registration_token<T>(
     transport: &mut T,
     call: &RegistrationTokenCall<'_>,

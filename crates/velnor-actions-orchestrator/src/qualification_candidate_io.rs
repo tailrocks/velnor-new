@@ -1,4 +1,3 @@
-//! Fresh owned staging and exclusive authoring output; no ambient configuration.
 use super::{OrchestratorError, internal};
 use std::path::{Component, Path, PathBuf};
 use velnor_actions_mise::CheckDeadline;

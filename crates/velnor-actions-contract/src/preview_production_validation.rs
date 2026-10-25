@@ -1,5 +1,3 @@
-//! Pure structural consistency; remote authority remains the caller's duty.
-
 use std::collections::BTreeSet;
 
 use super::{

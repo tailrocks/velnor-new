@@ -1,5 +1,3 @@
-//! One runner for the assigned population, then ack the batch.
-
 use std::future::Future;
 
 use crate::error::HostError;
@@ -12,7 +10,6 @@ use super::super::{Drive, Lane};
 use super::mint;
 use super::{acknowledge, docker_of, hold, map_journal, mark_done};
 
-/// One runner for `statistics.totalAssignedJobs`, then ack `batch`.
 pub(in crate::launch) async fn scale_id<T, S, F>(
     lane: &mut T,
     ctx: &Drive,
@@ -30,7 +27,6 @@ where
     ensure_runner(lane, ctx, journal, &name, &subject, Some(batch), start).await
 }
 
-/// One runner from the create-session statistics. There is no message to ack.
 pub(in crate::launch) async fn scale_unacked<T, S, F>(
     lane: &mut T,
     ctx: &Drive,
@@ -43,7 +39,6 @@ where
     S: Fn(&str, &[u8], super::super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
-    // A shared Done "scale" row blocked later mints. The subject is this session.
     ensure_runner(lane, ctx, journal, name, name, None, start).await
 }
 
@@ -94,7 +89,6 @@ where
     }
 }
 
-/// Clear one stale empty row. True retries the mint on a fresh row.
 async fn stale_cleared<T>(
     lane: &mut T,
     ctx: &Drive,
@@ -108,15 +102,13 @@ where
 {
     use super::super::runner_dir::Decision;
     match super::super::runner_dir::release_empty(lane, ctx, journal, id, name).await? {
-        // The cleared row was not a mint. The next mint keeps its one retry.
         Decision::Free if *extra > 0 => Ok(true),
-        // The row is already failed. A repeat must not hold the slot.
+
         Decision::Free | Decision::Repeat => Err(EnsureError::NameSteady),
         Decision::Live | Decision::Unknown => Ok(false),
     }
 }
 
-/// Row and batch inputs for one mint attempt.
 struct MintAttempt<'a> {
     id: i64,
     name: &'a str,
@@ -124,7 +116,6 @@ struct MintAttempt<'a> {
     fresh: bool,
 }
 
-/// Mint once on row `id`, claiming the JIT or binding the identity first.
 async fn mint_attempt<T, S, F>(
     lane: &mut T,
     ctx: &Drive,
@@ -205,7 +196,6 @@ where
         return hold(journal, id, error).await;
     }
     mark_done(journal, id).await?;
-    // Already recorded. Counting it fills `started` and the session stops
-    // before a later JobAvailable. A live container still occupies its slot.
+
     Ok(None)
 }

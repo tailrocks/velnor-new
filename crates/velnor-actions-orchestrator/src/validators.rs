@@ -1,29 +1,10 @@
-//! Verb-specific Git argument validation for `diff` and `show` call paths.
-//!
-//! `GitRequest` allowlists verbs but passes arguments byte-exact, so
-//! request-supplied revisions and paths need their own gate before they
-//! reach `git`. Two revision contexts exist:
-//!
-//! * Strict (`validate_rev`, `validate_diff_args`, `validate_show_args`,
-//!   `validate_git_args`): full 40-char hex SHAs only. Short SHAs,
-//!   symbolic refs, and flags all fail.
-//! * PR-selection (`validate_diff_rev`, `validate_select_diff_args`,
-//!   `validate_select_show_args`): short (4–40 hex) SHAs accepted because
-//!   git resolves them at spawn; flags, symbolic refs, and paths stay
-//!   gated exactly as in the strict context. Used by the `select.rs`
-//!   `changed_files`, `added_files`, and `batch_manifests` call paths.
-
 use std::ffi::OsString;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
-/// Full-length commit SHA: exactly 40 hex chars, never short.
 const FULL_SHA_LEN: usize = 40;
 
-/// Shortest unambiguous-ish SHA accepted in the PR-selection context.
 const SHORT_SHA_MIN_LEN: usize = 4;
 
-/// `git diff` flags the selection call paths emit; any other leading-dash
-/// argument is rejected.
 const DIFF_ALLOWED_FLAGS: [&str; 6] = [
     "--name-only",
     "--no-renames",
@@ -33,37 +14,16 @@ const DIFF_ALLOWED_FLAGS: [&str; 6] = [
     "--",
 ];
 
-/// `git show` flags the batched-manifest call path emits, besides the
-/// separately validated `--format=<payload>` flag.
 const SHOW_ALLOWED_FLAGS: [&str; 2] = ["-s", "--"];
 
-/// Prefix of the one parameterized `git show` flag.
 const SHOW_FORMAT_PREFIX: &str = "--format=";
 
-/// Rejected Git argument: fail closed, never spawn.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GitArgError {
-    /// Argument starts with `-` outside the verb allowlist.
-    LeadingDash {
-        /// Rejected argument.
-        arg: String,
-    },
-    /// Revision is not a full 40-char hex SHA.
-    BadRevision {
-        /// Rejected revision.
-        value: String,
-    },
-    /// `diff` argument is neither an allowlisted flag nor a revision.
-    BadDiffArg {
-        /// Rejected argument.
-        value: String,
-    },
-    /// `show` path escapes, is absolute, or carries control bytes.
-    BadPath {
-        /// Rejected path.
-        value: String,
-    },
-    /// Argument is not valid UTF-8.
+    LeadingDash { arg: String },
+    BadRevision { value: String },
+    BadDiffArg { value: String },
+    BadPath { value: String },
     NonUtf8Arg,
 }
 
@@ -81,30 +41,10 @@ impl Display for GitArgError {
 
 impl std::error::Error for GitArgError {}
 
-/// Validate one request-supplied revision: full 40-char hex SHA.
-///
-/// Short SHAs, symbolic refs (`HEAD`), URLs, and flags all fail; any hex
-/// case is accepted.
-///
-/// # Errors
-///
-/// Returns [`GitArgError::LeadingDash`] for a leading `-` and
-/// [`GitArgError::BadRevision`] for anything that is not full hex.
 pub fn validate_rev(rev: &str) -> Result<(), GitArgError> {
     check_rev(rev, false)
 }
 
-/// Validate one request-supplied revision in the PR-selection context.
-///
-/// Accepts full or short (4–40) hex SHAs, never a flag or symbolic ref;
-/// anything else fails closed to broadening via the caller, never
-/// reaching git. The `role` prefixes the error (`bad_base`, `bad_head`)
-/// so warnings keep their existing tags.
-///
-/// # Errors
-///
-/// Returns `{role}_leading_dash` for a leading `-` and
-/// `{role}_must_be_hex_sha` for anything that is not hex of length 4–40.
 pub fn validate_diff_rev(rev: &str, role: &str) -> Result<(), String> {
     if rev.starts_with('-') {
         return Err(format!("{role}_leading_dash"));
@@ -118,13 +58,6 @@ pub fn validate_diff_rev(rev: &str, role: &str) -> Result<(), String> {
     }
 }
 
-/// Validate a `show` object path: relative, no traversal, no control bytes.
-///
-/// # Errors
-///
-/// Returns [`GitArgError::BadPath`] for empty, absolute, traversing
-/// (`..`), colon-carrying, or control-byte paths, and
-/// [`GitArgError::LeadingDash`] for a leading `-`.
 pub fn validate_show_path(path: &str) -> Result<(), GitArgError> {
     if path.starts_with('-') {
         return Err(GitArgError::LeadingDash {
@@ -145,15 +78,6 @@ pub fn validate_show_path(path: &str) -> Result<(), GitArgError> {
     Ok(())
 }
 
-/// Validate full `git diff` arguments: allowlisted flags plus revisions.
-///
-/// Accepted: `--name-only`, `--no-renames`, `--diff-filter=A/D`, the
-/// `--` separator, `base...head` ranges of full SHAs, and bare full SHAs.
-/// Anything else — flags, symbolic refs, short SHAs, paths — is rejected.
-///
-/// # Errors
-///
-/// Returns [`GitArgError`] for the first rejected argument.
 pub fn validate_diff_args(args: &[OsString]) -> Result<(), GitArgError> {
     for arg in args {
         validate_diff_arg(arg, false)?;
@@ -161,15 +85,6 @@ pub fn validate_diff_args(args: &[OsString]) -> Result<(), GitArgError> {
     Ok(())
 }
 
-/// Validate `git diff` arguments in the PR-selection context.
-///
-/// Same shape as [`validate_diff_args`], but range sides and bare
-/// revisions may be short (4–40 hex) SHAs; git resolves them at spawn.
-/// Flags, symbolic refs, and paths stay rejected.
-///
-/// # Errors
-///
-/// Returns [`GitArgError`] for the first rejected argument.
 pub fn validate_select_diff_args(args: &[OsString]) -> Result<(), GitArgError> {
     for arg in args {
         validate_diff_arg(arg, true)?;
@@ -177,15 +92,6 @@ pub fn validate_select_diff_args(args: &[OsString]) -> Result<(), GitArgError> {
     Ok(())
 }
 
-/// Validate full `git show` arguments: allowlisted flags plus specs.
-///
-/// Accepted: `-s`, `--`, `--format=<safe payload>`, bare full-SHA
-/// separators, and `base:path` specs with a full-SHA base and a
-/// [`validate_show_path`] path. Anything else is rejected.
-///
-/// # Errors
-///
-/// Returns [`GitArgError`] for the first rejected argument.
 pub fn validate_show_args(args: &[OsString]) -> Result<(), GitArgError> {
     for arg in args {
         validate_show_arg(arg, false)?;
@@ -193,15 +99,6 @@ pub fn validate_show_args(args: &[OsString]) -> Result<(), GitArgError> {
     Ok(())
 }
 
-/// Validate `git show` arguments in the PR-selection context.
-///
-/// Same shape as [`validate_show_args`], but bare bases and spec bases
-/// may be short (4–40 hex) SHAs; git resolves them at spawn. Flags,
-/// format payloads, and paths stay gated exactly as in strict mode.
-///
-/// # Errors
-///
-/// Returns [`GitArgError`] for the first rejected argument.
 pub fn validate_select_show_args(args: &[OsString]) -> Result<(), GitArgError> {
     for arg in args {
         validate_show_arg(arg, true)?;
@@ -209,12 +106,6 @@ pub fn validate_select_show_args(args: &[OsString]) -> Result<(), GitArgError> {
     Ok(())
 }
 
-/// Validate arguments for one verb; only `diff` and `show` qualify.
-///
-/// # Errors
-///
-/// Returns [`GitArgError::BadDiffArg`] for verbs outside `diff`/`show`,
-/// else the verb-specific validation result.
 pub fn validate_git_args(verb: &str, args: &[OsString]) -> Result<(), GitArgError> {
     match verb {
         "diff" => validate_diff_args(args),
@@ -225,10 +116,6 @@ pub fn validate_git_args(verb: &str, args: &[OsString]) -> Result<(), GitArgErro
     }
 }
 
-/// Shared revision gate: leading dash rejected, then the hex-length rule.
-///
-/// Strict callers pass `allow_short = false` (full 40-char SHAs only);
-/// PR-selection callers pass `true` (4–40 hex SHAs).
 fn check_rev(rev: &str, allow_short: bool) -> Result<(), GitArgError> {
     if rev.starts_with('-') {
         return Err(GitArgError::LeadingDash {
@@ -249,7 +136,6 @@ fn check_rev(rev: &str, allow_short: bool) -> Result<(), GitArgError> {
     }
 }
 
-/// Validate one `diff` argument against flags, ranges, and revisions.
 fn validate_diff_arg(arg: &OsString, allow_short: bool) -> Result<(), GitArgError> {
     let text = arg_to_str(arg)?;
     if DIFF_ALLOWED_FLAGS.contains(&text) {
@@ -272,7 +158,6 @@ fn validate_diff_arg(arg: &OsString, allow_short: bool) -> Result<(), GitArgErro
     })
 }
 
-/// Validate one `show` argument against flags, separators, and specs.
 fn validate_show_arg(arg: &OsString, allow_short: bool) -> Result<(), GitArgError> {
     let text = arg_to_str(arg)?;
     if SHOW_ALLOWED_FLAGS.contains(&text) {
@@ -293,7 +178,6 @@ fn validate_show_arg(arg: &OsString, allow_short: bool) -> Result<(), GitArgErro
     check_rev(text, allow_short)
 }
 
-/// Validate a `--format=` payload: tight charset, no flags or whitespace.
 fn validate_format_payload(payload: &str) -> Result<(), GitArgError> {
     let safe = !payload.is_empty()
         && payload
@@ -308,7 +192,6 @@ fn validate_format_payload(payload: &str) -> Result<(), GitArgError> {
     }
 }
 
-/// Lossy-free argument text; non-UTF-8 fails closed.
 fn arg_to_str(arg: &OsString) -> Result<&str, GitArgError> {
     arg.to_str().ok_or(GitArgError::NonUtf8Arg)
 }

@@ -1,16 +1,9 @@
-//! Completion event identity binding.
-
 use crate::error::HostError;
 use crate::journal::{Journal, token_rejected};
 
 use super::{assigned_request, finish_transaction, is_message_name, is_session_name};
 
 impl Journal {
-    /// Record one exact runner completion before acknowledging its queue message.
-    ///
-    /// Assigned legacy subjects are matched by request id and `v{request_id}`.
-    /// Session launches are matched by persisted scale set and exact session name.
-    /// `None` means no local launch matched; ambiguous or conflicting identities fail.
     pub(crate) async fn record_runner_completed(
         &self,
         scale_set_id: i64,

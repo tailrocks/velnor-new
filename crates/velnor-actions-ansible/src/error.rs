@@ -1,8 +1,5 @@
-//! One machine-readable failure code per rejected input.
-
 use velnor_actions_contract::sanitize_error_detail;
 
-/// A rejected Ansible input; the code is stable and safe to print.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, thiserror::Error)]
 #[error("{code}")]
 pub struct AnsibleError {
@@ -10,7 +7,6 @@ pub struct AnsibleError {
 }
 
 impl AnsibleError {
-    /// Error with `name` and an attacker-adjacent `detail`, sanitized.
     #[must_use]
     pub fn new(name: &str, detail: &str) -> Self {
         Self {
@@ -18,7 +14,6 @@ impl AnsibleError {
         }
     }
 
-    /// Error that carries no detail.
     #[must_use]
     pub fn bare(name: &str) -> Self {
         Self {
@@ -26,7 +21,6 @@ impl AnsibleError {
         }
     }
 
-    /// Stable failure code.
     #[must_use]
     pub fn code(&self) -> &str {
         &self.code

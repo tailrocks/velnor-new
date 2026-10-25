@@ -203,8 +203,6 @@ fn admit_stages(
     for (lane, stage) in target.cold.iter().zip(stages) {
         snapshot.checkpoint()?;
         let current = fs::symlink_metadata(&target.path).map_err(seed_io_error)?;
-        // Creating staging directories changes the target directory's timestamps.
-        // Its inode identity is the relevant replacement guard here.
         if !Identity::from_metadata(&current).same_object(&target.identity) {
             return Err(fail("target_directory_replaced"));
         }
@@ -242,8 +240,6 @@ fn rename_stage(
         Err(error) => Err(SeedError::Io(error)),
     }
 }
-
-// Further implementation details follow in helper types/functions.
 
 #[derive(Debug)]
 pub(super) enum SeedError {

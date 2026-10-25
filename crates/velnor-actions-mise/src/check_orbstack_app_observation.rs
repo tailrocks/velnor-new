@@ -1,5 +1,3 @@
-//! Signed `OrbStack` app and nested CLI identity validation.
-
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::config::{
     HostOrbStackSdk, MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES,
@@ -10,31 +8,19 @@ use crate::MiseError;
 
 use super::{ContainerProbeOutput, invalid, validate_streams};
 
-/// Actual signed application identity, separate from CLI reported version/build.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct OrbStackAppObservation {
-    /// Actual Info.plist bundle identifier.
     pub bundle_id: String,
-    /// Actual application marketing release.
     pub version: String,
-    /// Actual application bundle build.
     pub build: String,
-    /// Actual signed developer team identity.
     pub team_id: String,
-    /// Exact Info.plist JSON observation.
     pub info: ContainerProbeOutput,
-    /// Exact codesign identity observation.
     pub signature: ContainerProbeOutput,
-    /// Successful strict outer application verification.
     pub outer_integrity: ContainerProbeOutput,
-    /// Successful strict source nested CLI verification.
     pub source_cli_integrity: ContainerProbeOutput,
-    /// Successful strict owned nested CLI verification.
     pub owned_cli_integrity: ContainerProbeOutput,
-    /// Actual source nested CLI signed identity.
     pub source_cli_signature: ContainerProbeOutput,
-    /// Actual owned nested CLI signed identity.
     pub owned_cli_signature: ContainerProbeOutput,
 }
 

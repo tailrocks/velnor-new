@@ -1,5 +1,3 @@
-//! Declaration-to-lock resolution checks.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use toml::Value;

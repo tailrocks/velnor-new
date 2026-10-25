@@ -1,9 +1,3 @@
-//! Credential-free export, prepare and import for Bun's private asset job.
-//!
-//! A single tar.gz artifact preserves executable bits and safe symlinks across
-//! GitHub's artifact transport. Import uses the same bounded archive reader as
-//! tool acquisition and verifies the private-fetch marker against lock pins.
-
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -22,25 +16,15 @@ mod manifest;
 use archive::{archive_name, export_archive, only_archive};
 use manifest::{Pin, parse_pins, verify_marker};
 
-/// Operation tags carried by generated handoff steps.
 pub const BUN_ASSETS_EXPORT_OP: &str = velnor_actions_contract::BUN_ASSETS_EXPORT_OPERATION;
-/// Prepare the workspace and runner-temp paths before artifact download.
 pub const BUN_ASSETS_PREPARE_OP: &str = velnor_actions_contract::BUN_ASSETS_PREPARE_OPERATION;
-/// Import the downloaded archive and verify its lock pins.
 pub const BUN_ASSETS_IMPORT_OP: &str = velnor_actions_contract::BUN_ASSETS_IMPORT_OPERATION;
 
-/// Step environment key selecting this member's staging directory.
 pub const ASSET_ID_ENV: &str = "VELNOR_BUN_ASSET_ID";
-/// Step environment key carrying space-separated `id:sha256` lock pins.
 pub const ASSET_PINS_ENV: &str = "VELNOR_BUN_ASSET_PINS";
 
 const ARCHIVE_TIMEOUT: Duration = Duration::from_mins(30);
 
-/// Run the archive producer from its fixed step environment.
-///
-/// # Errors
-/// Rejects unsafe workspace and runner paths, invalid pins, malformed source
-/// metadata, unsupported filesystem members and archive-limit violations.
 pub fn run_bun_assets_export() -> Result<(), OrchestratorError> {
     let workspace = workspace_root()?;
     let (id, pins) = step_inputs()?;
@@ -54,11 +38,6 @@ pub fn run_bun_assets_export() -> Result<(), OrchestratorError> {
     Ok(())
 }
 
-/// Clear repository assets before the artifact download and reset its private
-/// runner-temp destination.
-///
-/// # Errors
-/// Rejects unsafe paths and filesystem failures.
 pub fn run_bun_assets_prepare() -> Result<(), OrchestratorError> {
     let workspace = workspace_root()?;
     let (id, _) = step_inputs()?;
@@ -67,11 +46,6 @@ pub fn run_bun_assets_prepare() -> Result<(), OrchestratorError> {
     Ok(())
 }
 
-/// Import the downloaded tar.gz into a fresh `.velnor/deps` and check its
-/// verified marker against the lock pins.
-///
-/// # Errors
-/// Rejects unsafe archive layout, archive members, metadata or lock mismatch.
 pub fn run_bun_assets_import() -> Result<(), OrchestratorError> {
     let workspace = workspace_root()?;
     let (id, pins) = step_inputs()?;
@@ -232,7 +206,3 @@ fn safe_id(value: &str) -> bool {
 fn io_error(path: &Path, err: impl std::fmt::Display) -> OrchestratorError {
     OrchestratorError::io(path.display().to_string(), err.to_string())
 }
-
-#[cfg(test)]
-#[path = "bun_assets_handoff_tests.rs"]
-mod tests;

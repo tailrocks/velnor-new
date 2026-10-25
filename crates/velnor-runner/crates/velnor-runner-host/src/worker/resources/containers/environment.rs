@@ -1,4 +1,4 @@
-//! Exact effective environment for the pinned Ubuntu worker images.
+
 
 use std::collections::HashMap;
 
@@ -7,7 +7,7 @@ use bollard::models::ContainerConfig;
 use crate::error::HostError;
 use crate::worker::CreateProjection;
 
-// Exact PATH from the linux/amd64 `ubuntu:26.04` image configuration.
+
 const UBUNTU_PATH: &str = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 const ARCHIVE_CACHE_ENV: &str = "ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE=/opt/velnor/action-archives";
 

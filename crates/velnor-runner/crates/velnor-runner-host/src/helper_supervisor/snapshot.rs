@@ -1,9 +1,3 @@
-//! Private, digest-bound executable snapshots for the fixed verifier helper.
-//!
-//! Same-UID hostile writes to this service-owned directory are outside the model. If the
-//! controller crashes, an orphaned helper that has not loaded its image may fail to start when a
-//! successor prunes the released snapshot lock; it cannot be redirected to a different digest.
-
 use std::fs::{self, File};
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
 use std::path::{Component, Path, PathBuf};
@@ -17,7 +11,6 @@ mod store;
 
 const EXECUTABLE_DIRECTORY: &str = "attestation-helper-executables";
 
-/// A verified helper path protected from the store's stale-entry sweeper.
 #[derive(Debug)]
 pub(super) struct SnapshotLease {
     path: PathBuf,

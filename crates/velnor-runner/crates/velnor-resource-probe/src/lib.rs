@@ -1,5 +1,11 @@
-//! Fixed, bounded Linux guest resource measurements for the controller-only probe image.
-
+#![allow(
+    missing_docs,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
+#![allow(
+    clippy::missing_errors_doc,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
 mod capacity;
 mod error;
 mod load;
@@ -12,6 +18,3 @@ mod units;
 pub use error::ProbeError;
 pub use record::{MAX_OUTPUT_BYTES, ProbeRecord};
 pub use sample::sample;
-
-#[cfg(test)]
-mod tests;

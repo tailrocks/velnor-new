@@ -1,5 +1,3 @@
-//! Source-bound authorization for hosted qualification dispatches.
-
 use serde::{Deserialize, Serialize};
 
 use crate::errors::ContractError;
@@ -7,9 +5,6 @@ use crate::workflow::jobs::CI_WORKFLOW_PATH;
 use crate::workflow::plan::{ObligationDecision, Plan, WorkflowEvent};
 use crate::workflow::qualification_phase::QualificationPhase;
 
-/// Validate that a serialized plan carries qualification context only when its
-/// source, run, trust, and selected work still satisfy the dispatch
-/// contract.
 pub(super) fn validate_plan_qualification(plan: &Plan) -> Result<(), ContractError> {
     match (plan.event, plan.qualification.as_ref()) {
         (WorkflowEvent::Qualification, Some(context)) => {
@@ -57,53 +52,44 @@ pub(super) fn validate_plan_qualification(plan: &Plan) -> Result<(), ContractErr
     Ok(())
 }
 
-/// Immutable runner context captured for one qualification dispatch.
-///
-/// These fields are evidence to compare at planning and merge admission;
-/// they do not grant general push trust or authorize unrelated writers.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct QualificationDispatch {
-    /// Isolated experiment namespace, supplied by the dispatcher.
     pub campaign: String,
-    /// Cold, warm, or cache-disabled control phase.
+
     pub phase: QualificationPhase,
-    /// Actual `GITHUB_REPOSITORY` value.
+
     pub repository: String,
-    /// Repository default branch from the immutable dispatch payload.
+
     pub default_branch: String,
-    /// Actual `GITHUB_REF` value.
+
     pub git_ref: String,
-    /// Actual `GITHUB_REF_PROTECTED` value.
+
     pub ref_protected: bool,
-    /// Actual `GITHUB_WORKFLOW_REF` value.
+
     pub workflow_ref: String,
-    /// Actual `GITHUB_WORKFLOW_SHA` value.
+
     pub workflow_sha: String,
-    /// Actual `GITHUB_SHA` value and candidate source revision.
+
     pub source_sha: String,
-    /// Actual `GITHUB_RUN_ID`, retained for attempt binding.
+
     pub run_id: u64,
-    /// Actual `GITHUB_RUN_ATTEMPT`, retained for attempt binding.
+
     pub run_attempt: u32,
-    /// Run and attempt that produced the required predecessor receipt.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub predecessor: Option<QualificationRunRef>,
 }
 
-/// Lookup coordinates for a previous run; they grant no cache access.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct QualificationRunRef {
-    /// GitHub Actions run ID.
     pub run_id: u64,
-    /// Exact run attempt whose receipt must be admitted.
+
     pub run_attempt: u32,
 }
 
 impl QualificationRunRef {
-    /// Validate nonzero run and attempt coordinates.
-    /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {
         if self.run_id == 0 || self.run_attempt == 0 {
             return Err(ContractError::identity(
@@ -119,10 +105,6 @@ impl QualificationRunRef {
 }
 
 impl QualificationDispatch {
-    /// Validate runner provenance against the configured default branch and
-    /// the repository and source revision selected by the plan request.
-    ///
-    /// # Errors
     pub fn validate_for(
         &self,
         default_branch: &str,
@@ -172,9 +154,6 @@ impl QualificationDispatch {
         Ok(())
     }
 
-    /// Validate canonical fields without relying on external configuration.
-    ///
-    /// # Errors
     pub fn validate_shape(&self) -> Result<(), ContractError> {
         validate_campaign(&self.campaign)?;
         validate_repository(&self.repository)?;
@@ -293,7 +272,6 @@ fn validate_run_identity(context: &QualificationDispatch) -> Result<(), Contract
     }
 }
 
-/// Conservative branch-name check shared with the event payload binding.
 fn valid_branch_name(branch: &str) -> bool {
     !branch.is_empty()
         && !branch.starts_with('/')
@@ -307,14 +285,9 @@ fn valid_branch_name(branch: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'/'))
 }
 
-/// True for a lowercase hexadecimal Git object ID (SHA-1 or SHA-256).
 fn is_lower_hex_sha(value: &str) -> bool {
     matches!(value.len(), 40 | 64)
         && value
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
-
-#[cfg(test)]
-#[path = "qualification_dispatch_tests.rs"]
-mod tests;

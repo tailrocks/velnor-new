@@ -1,6 +1,11 @@
-//! Scale Set wire client. DTOs stay separate from core state.
-//! Session calls live in [`session`].
-
+#![allow(
+    missing_docs,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
+#![allow(
+    clippy::missing_errors_doc,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
 mod acquire;
 mod error;
 mod paths;

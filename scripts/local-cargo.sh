@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Run one local Cargo command with the Velnor policy Rust pin and a private target.
 set -euo pipefail
 
 usage() {

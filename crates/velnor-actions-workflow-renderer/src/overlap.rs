@@ -1,34 +1,16 @@
-//! Overlap-then-join for independent prep (parallelism §10 fixture).
-//!
-//! Independent preparation that needs separate runners overlaps at the job
-//! level: two branch jobs with no ordering edge run concurrently and the
-//! consumer joins both via `needs`. This module wires the join and proves
-//! branch independence instead of trusting the caller. Step-level
-//! concurrency inside one job uses native GitHub background steps.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::Job;
 
 use crate::RenderError;
 
-/// Typed overlap: two independent prep branches plus their join job.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PrepOverlap {
-    /// Branch job ID: verified artifact download.
     pub download_job: String,
-    /// Branch job ID: pinned image preparation.
     pub image_job: String,
-    /// Consumer job ID joining both branches before use.
     pub join_job: String,
 }
 
-/// Wire the join: validate independence, then need both branches.
-///
-/// All three jobs must exist and be distinct; neither branch may reach
-/// the other (directly or transitively) or depend on the join. Missing
-/// branch IDs are appended to the join's `needs` in branch order.
-/// # Errors
 pub fn wire_prep_join(
     jobs: &mut BTreeMap<String, Job>,
     spec: &PrepOverlap,
@@ -74,7 +56,6 @@ pub fn wire_prep_join(
     Ok(())
 }
 
-/// True when `target` is reachable from `from` through `needs` edges.
 fn reaches(jobs: &BTreeMap<String, Job>, from: &str, target: &str) -> bool {
     let mut seen = BTreeSet::new();
     let mut stack = vec![from.to_owned()];

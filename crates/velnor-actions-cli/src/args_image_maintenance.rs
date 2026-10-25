@@ -1,5 +1,3 @@
-//! Closed native operations for source-bound job-image candidate maintenance.
-
 use clap::Subcommand;
 use std::path::PathBuf;
 

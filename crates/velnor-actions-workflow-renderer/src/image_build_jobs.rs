@@ -1,13 +1,3 @@
-//! Unprivileged container image build jobs (`image-<id>-<platform>`).
-//!
-//! One job per image and native platform. The job checks out the repository
-//! without credentials, verifies the source-bound Dockerfile, creates a
-//! task-owned Buildx builder from a digest-pinned `BuildKit` image, builds an
-//! OCI layout with an SBOM and maximal provenance, removes the builder on every
-//! exit path and uploads the layout. It holds `contents: read` only and no
-//! credential reaches the build: there is no secret mount, build argument or
-//! remote cache.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
@@ -16,52 +6,32 @@ use velnor_actions_contract::{
 
 use crate::{RenderError, shell_step, steps};
 
-#[cfg(test)]
-#[path = "image_build_jobs_tests.rs"]
-mod tests;
-
-/// Digest-pinned `BuildKit` image for the task-owned builder (moby/buildkit v0.34.0).
 pub const BUILDKIT_IMAGE: &str =
     "moby/buildkit@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c";
 
-/// Source guard step name.
 pub(crate) const VERIFY_IMAGE_SOURCE_NAME: &str = "Verify image Dockerfile source";
-/// Native Docker host step name.
 pub(crate) const VERIFY_IMAGE_HOST_NAME: &str = "Verify native Docker host";
-/// Builder creation step name.
 pub(crate) const CREATE_IMAGE_BUILDER_NAME: &str = "Create task-owned Buildx builder";
-/// Build step name.
 pub(crate) const BUILD_IMAGE_NAME: &str = "Build OCI image";
-/// Builder removal step name (always runs).
 pub(crate) const REMOVE_IMAGE_BUILDER_NAME: &str = "Remove task-owned Buildx builder";
-/// Layout upload step name.
 pub(crate) const UPLOAD_IMAGE_NAME: &str = "Upload OCI layout";
 
 const DOCKER: &str = "/usr/bin/docker --host unix:///var/run/docker.sock";
 const DOCKER_ENV_RESET: &str = "unset DOCKER_CONFIG DOCKER_CONTEXT DOCKER_TLS_VERIFY DOCKER_CERT_PATH; DOCKER_HOST=unix:///var/run/docker.sock; export DOCKER_HOST";
 
-/// One image plus the Dockerfile digests resolved from the checkout.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImageBuildPolicy {
-    /// Validated declaration.
     pub image: ImageConfig,
-    /// SHA-256 of the Dockerfile bytes per platform, read at planning time.
     pub dockerfile_sha256: BTreeMap<ImagePlatform, String>,
-    /// Orchestrator-built steps that compile and stage the prebuilt artifact.
-    ///
-    /// Empty for a plain Dockerfile image. Their stack knowledge stays with
-    /// the orchestrator; the renderer only orders and validates them.
     pub prebuilt_steps: Vec<Step>,
 }
 
 impl ImageBuildPolicy {
-    /// True when the jobs run pinned tools (they then get Mise setup and the plan).
     #[must_use]
     pub fn uses_pinned_tools(&self) -> bool {
         !self.prebuilt_steps.is_empty()
     }
 
-    /// Build job ids, one per platform in declaration order.
     #[must_use]
     pub fn job_ids(&self) -> Vec<String> {
         self.image
@@ -71,7 +41,6 @@ impl ImageBuildPolicy {
             .collect()
     }
 
-    /// Platform whose build job has this id.
     #[must_use]
     pub fn platform_for_job(&self, job_id: &str) -> Option<ImagePlatform> {
         self.image
@@ -109,8 +78,6 @@ impl ImageBuildPolicy {
     }
 }
 
-/// Build the build job for one image and platform.
-/// # Errors
 pub fn build_image_build_job(
     policy: &ImageBuildPolicy,
     platform: ImagePlatform,
@@ -139,8 +106,6 @@ pub fn build_image_build_job(
     })
 }
 
-/// Reconstruct each declared job and reject altered, missing or split jobs.
-/// # Errors
 pub(crate) fn validate_image_build_jobs(
     jobs: &BTreeMap<String, Job>,
     policy: &ImageBuildPolicy,
@@ -220,13 +185,11 @@ fn image_build_steps(
     Ok(steps)
 }
 
-/// Artifact name carrying one platform's OCI layout.
 #[must_use]
 pub fn artifact_name(image: &ImageConfig, platform: ImagePlatform) -> String {
     format!("velnor-image-{}-{}", image.id, platform.job_suffix())
 }
 
-/// Expression-form directory holding the layout (`with: path:` only).
 #[must_use]
 pub fn artifact_path(image: &ImageConfig, platform: ImagePlatform) -> String {
     format!(

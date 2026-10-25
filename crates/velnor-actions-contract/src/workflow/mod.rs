@@ -1,4 +1,3 @@
-//! Stack-neutral workflow IR, matrix, plan, and report types.
 pub mod artifacts;
 pub mod cache_family;
 pub mod cache_family_mbx;

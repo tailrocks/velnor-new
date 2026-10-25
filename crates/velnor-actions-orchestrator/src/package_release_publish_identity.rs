@@ -1,5 +1,3 @@
-//! Canonical publication identity and draft/tag recovery-envelope helpers.
-
 use std::{collections::BTreeMap, fs, path::Path};
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};

@@ -1,5 +1,3 @@
-//! Exact declared producer artifacts, by-ID revalidation, and raw ZIP capture.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{

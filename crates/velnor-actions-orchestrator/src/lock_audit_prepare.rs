@@ -1,5 +1,3 @@
-//! Prepare/validator install inputs and their verifier-sequence checks.
-
 use velnor_actions_contract::{Step, StepKind, StepRole};
 use velnor_actions_mise::toolfiles::lockfile::InstallSubject;
 use velnor_actions_workflow_renderer::render::ValidatorCommand;
@@ -105,17 +103,12 @@ pub(super) fn jactionlint_verifier_sequence_valid(
     )
 }
 
-/// Bare-install diagnostic: zero specs means versions would come from
-/// `mise.toml`, so silence would be a fail-open.
 pub(super) fn bare_install(id: &str) -> String {
     format!(
         "bare_install_step:{id} installs zero specs (versions would come from mise.toml); emit explicit specs"
     )
 }
 
-/// Specs from a Prepare step's plain argv; a Prepare step always
-/// installs, so a missing or unclassifiable vector blocks as a
-/// generator bug.
 pub(super) fn prepare_specs(
     id: &str,
     step: &Step,
@@ -139,12 +132,6 @@ pub(super) fn prepare_specs(
     }
 }
 
-/// Audit one validator command's install contribution.
-///
-/// Isolated `exec` vectors contribute nothing; install specs resolve
-/// through the validator pin only (a catalog spec here blocks as
-/// misplaced instead of auditing through the wrong pin set), and an
-/// unclassifiable `mise` vector blocks instead of passing silently.
 pub(super) fn audit_validator_command(
     command: &ValidatorCommand,
     subjects: &mut Vec<InstallSubject>,

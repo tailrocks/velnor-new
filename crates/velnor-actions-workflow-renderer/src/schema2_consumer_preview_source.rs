@@ -1,5 +1,3 @@
-//! Native source admission for a successful main CI completion.
-
 use super::production::operation_env;
 use super::{
     ConsumerReleaseSpec, RenderError, TapInvocationContext, Yaml, acquire, operation, permissions,
@@ -27,9 +25,6 @@ pub(super) fn job(spec: &ConsumerReleaseSpec) -> Result<(String, Yaml), RenderEr
         "permissions".to_owned(),
         permissions(&[("actions", "read"), ("contents", "read")]),
     ));
-    // Phase one authenticates A without checkout. The fixed checkout fetches
-    // exact A with complete history and no persisted credentials; phase two
-    // verifies HEAD=A before deriving version data and retaining admission.
     let mut job_steps = vec![
         setup(&spec.linux_setup),
         run_step(

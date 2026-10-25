@@ -1,5 +1,3 @@
-//! Revalidate retained public release bytes before granting archive custody.
-
 use super::{ArtifactKind, VerifiedPackageArtifact, archive, expected_files, invalid};
 use crate::OrchestratorError;
 use std::{
@@ -12,8 +10,6 @@ use velnor_actions_contract::{
     package_release::{PackageReleaseAssetKind, PackageReleaseReceipt},
 };
 
-/// Revalidate every authenticated public payload, SBOM, companion, and
-/// checksum sidecar before a public-release custody is granted.
 pub(crate) fn validate_authenticated_release_content(
     plan: &PackageReleasePlan,
     receipt: &PackageReleaseReceipt,

@@ -160,7 +160,7 @@ def write_stage(output, archive, patch, receipt):
                             sort_keys=True) + "\n").encode())]:
             (directory / name).write_bytes(data)
             (directory / name).chmod(0o600)
-        # mkdir is exclusive. Concurrent staging cannot replace an existing receipt.
+
         output.mkdir(mode=0o700)
         for file in directory.iterdir():
             file.rename(output / file.name)

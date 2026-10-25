@@ -79,9 +79,6 @@ fn verified_mise_program(
     }
     Ok(program)
 }
-/// Resolve an installed executable before consumer task evaluation.
-/// # Errors
-/// Fails for unavailable executable or missing parent search path.
 pub fn resolve_program(name: &str) -> Result<OsString, MiseError> {
     let path = std::env::var_os("PATH").ok_or_else(|| invalid("mise_binary", "missing_path"))?;
     for dir in std::env::split_paths(&path) {

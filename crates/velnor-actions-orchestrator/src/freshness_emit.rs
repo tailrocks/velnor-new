@@ -1,11 +1,3 @@
-//! Scheduled upstream-freshness emission (P12-4 wiring).
-//!
-//! Adds the generated `freshness.yml` schedule-only probe under the
-//! Velnor-repository policy, where the Velnor-owned inventory and its
-//! `scripts/check-freshness.sh` reader exist. Consumers carry neither,
-//! so consumer trees omit the file instead of emitting a workflow
-//! that references a missing script.
-
 use velnor_actions_contract::{FRESHNESS_CRON_WEEKLY, ScheduleTrigger, WorkflowPolicy};
 use velnor_actions_mise::PinnedTool;
 use velnor_actions_workflow_renderer::freshness::{FreshnessSpec, render_freshness_workflow};
@@ -15,23 +7,13 @@ use crate::OrchestratorError;
 use crate::prepare::GenerationPreparation;
 use crate::workflow::CHECKOUT_USES;
 
-/// Opt-in daily upgrade pull request plus freshness gate (`[upgrades]`).
 #[path = "upgrades_emit.rs"]
 pub(crate) mod upgrades;
 
-/// True when the freshness workflow is emitted for this preparation.
-///
-/// Single predicate shared by emission and plan listing, so the two
-/// can never disagree about the file's presence.
 pub(crate) fn freshness_enabled(prep: &GenerationPreparation) -> bool {
     prep.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1
 }
 
-/// Render the freshness workflow, or nothing outside the Velnor policy.
-///
-/// # Errors
-///
-/// Returns render errors for invalid spec scalars or unsupported runners.
 pub(crate) fn freshness_files(
     prep: &GenerationPreparation,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {

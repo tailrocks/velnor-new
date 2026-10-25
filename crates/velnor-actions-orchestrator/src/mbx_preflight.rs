@@ -1,5 +1,3 @@
-//! Exact catalog MBX/Rust PATH preflight shared by every action insertion.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::PinnedActionRef;
@@ -10,9 +8,6 @@ use velnor_actions_workflow_renderer::steps::{CompileDriver, MbxTransport, mbx_s
 
 use crate::OrchestratorError;
 
-/// Build the strict preflight, install-only action, ready check and bundle
-/// restore from the compiled catalog pins.
-/// # Errors
 pub(crate) fn steps_for_catalog(
     catalog: &ToolCatalog,
     transport: MbxTransport,

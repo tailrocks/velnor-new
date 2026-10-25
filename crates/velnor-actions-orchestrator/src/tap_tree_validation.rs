@@ -1,5 +1,3 @@
-//! Shared admission checks for complete recursive Git tree inventories.
-
 use std::collections::BTreeMap;
 
 use crate::{OrchestratorError, internal::internal};
@@ -11,15 +9,10 @@ pub(crate) struct Entry<'a> {
     pub(crate) sha: &'a str,
 }
 
-/// Validate the complete inventory, including entries unrelated to the formula.
-/// The limit is supplied by the API adapter so this common validator does not
-/// weaken an existing caller's tighter response bound.
 pub(crate) fn validate(entries: &[Entry<'_>], limit: usize) -> Result<(), OrchestratorError> {
     validate_inner(entries, limit, None)
 }
 
-/// Validate one protected transition base whose exact symlink is replaced by
-/// the transition. Ordinary candidate inventories continue using `validate`.
 pub(crate) fn validate_protected_symlink_base(
     entries: &[Entry<'_>],
     limit: usize,
@@ -43,7 +36,6 @@ fn validate_inner(
             return Err(internal("tap_tree_duplicate_path"));
         }
         if entry.mode == "040000" && entry.kind == "tree" {
-            // The leaf validator also supplies the shared lexical-path and SHA checks.
             velnor_actions_mise::validate_tap_regular_leaf(
                 entry.path, 0o100_644, "blob", entry.sha,
             )
@@ -80,9 +72,6 @@ fn validate_inner(
     Ok(())
 }
 
-/// Admit a single formula update while allowing Git to recompute ancestor tree
-/// object IDs. Entry paths and modes remain fixed, and only those ancestor
-/// directory SHAs may differ; every unrelated tree object must remain identical.
 pub(crate) fn validate_formula_delta(
     base: &[Entry<'_>],
     head: &[Entry<'_>],

@@ -1,5 +1,3 @@
-//! Caller-bounded immutable metadata artifact download.
-
 use super::{ARTIFACT_LIMIT, GitHubApi};
 use crate::OrchestratorError;
 use std::ffi::OsString;

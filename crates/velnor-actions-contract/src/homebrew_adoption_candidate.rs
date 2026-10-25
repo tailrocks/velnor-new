@@ -5,11 +5,6 @@ use super::{
 };
 
 impl HomebrewAdoptionTransition {
-    /// Validate the exact candidate tree against authenticated transition data.
-    ///
-    /// # Errors
-    /// Returns an error if the base, diff, file bytes, modes, or transition
-    /// obligations do not match exactly.
     pub fn validate_candidate_tree(
         &self,
         input: HomebrewAdoptionCandidateInput<'_>,

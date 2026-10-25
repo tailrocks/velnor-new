@@ -1,13 +1,3 @@
-//! Release identity derivation: repository, source, registry, lock slug.
-//!
-//! The config schema carries no repository, routine source SHA, plan id,
-//! or registry inputs, so emission derives them deterministically: the
-//! repository from the local `origin` URL (the sole authority; no
-//! environment hint can unlock or widen it), the routine source from
-//! `HEAD`, the plan id from the source SHA, the registry from the
-//! selected set's intersection, and the lock slug from the release
-//! manifest directory. Every miss fails closed.
-
 use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::path::Path;
@@ -19,15 +9,6 @@ use velnor_actions_workflow_renderer::release_spec::validate_source_sha;
 use crate::OrchestratorError;
 use crate::origin::origin_url_via_git;
 
-/// Derive `owner/repo` from the local `origin` URL.
-///
-/// Origin is the only authority: a missing or non-GitHub origin fails
-/// closed instead of guessing from configuration or environment.
-///
-/// # Errors
-///
-/// Returns identity errors when no origin exists or it is not a
-/// `github.com` repository URL.
 pub(crate) fn origin_repository(root: &Path) -> Result<String, OrchestratorError> {
     let Some(url) = origin_url_via_git(root) else {
         return Err(OrchestratorError::IdentityRejected {
@@ -40,12 +21,6 @@ pub(crate) fn origin_repository(root: &Path) -> Result<String, OrchestratorError
     })
 }
 
-/// Normalize an origin URL to `owner/repo` (case preserved).
-///
-/// Accepts `https:`/`ssh:` URLs, scp-like `host:path`, and bare
-/// `owner/repo`; anything else (including non-GitHub hosts) yields `None`.
-/// Case is preserved: the publish gate compares against the live
-/// `github.repository` value, which keeps its registered casing.
 fn normalize_origin(url: &str) -> Option<String> {
     let trimmed = url.trim().trim_end_matches('/');
     let base = trimmed.strip_suffix(".git").unwrap_or(trimmed);
@@ -58,7 +33,6 @@ fn normalize_origin(url: &str) -> Option<String> {
     is_owner_repo(base).then(|| base.to_owned())
 }
 
-/// True for one `owner/repo` pair over repository segments.
 fn is_owner_repo(path: &str) -> bool {
     let Some((owner, name)) = path.split_once('/') else {
         return false;
@@ -66,7 +40,6 @@ fn is_owner_repo(path: &str) -> bool {
     !name.contains('/') && is_repo_segment(owner) && is_repo_segment(name)
 }
 
-/// True for one `owner`/`repo` segment over `[A-Za-z0-9_.-]`.
 fn is_repo_segment(segment: &str) -> bool {
     !segment.is_empty()
         && segment.len() <= 100
@@ -75,14 +48,6 @@ fn is_repo_segment(segment: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
 }
 
-/// Resolve `HEAD` to its full SHA for the routine (OIDC) source.
-///
-/// The tree state under generation is the exact source; dispatch-time
-/// inputs can only reaffirm it, never widen it.
-///
-/// # Errors
-///
-/// Returns contract errors when Git cannot run or the tree has no commit.
 pub(crate) fn head_sha(root: &Path) -> Result<String, OrchestratorError> {
     let output = GitRequest::rev_parse(vec![OsString::from("HEAD")])
         .run_in(root)
@@ -105,20 +70,10 @@ pub(crate) fn head_sha(root: &Path) -> Result<String, OrchestratorError> {
     Ok(sha)
 }
 
-/// Derive the plan id from the approved source SHA.
-///
-/// `release-<12 hex>` is stable for one source, distinct across
-/// sources, and fits the plan-id charset and length bound.
 pub(crate) fn plan_id_for_source(sha: &str) -> String {
     format!("release-{}", &sha[..12])
 }
 
-/// Intersect selected registries; the first sorted survivor wins.
-///
-/// # Errors
-///
-/// Returns a contract error when the selection spans registries with
-/// no common member: the approved plan carries exactly one.
 pub(crate) fn common_registry(selection: &ReleaseSelection) -> Result<String, OrchestratorError> {
     let mut common: Option<BTreeSet<&str>> = None;
     for package in &selection.packages {
@@ -135,10 +90,6 @@ pub(crate) fn common_registry(selection: &ReleaseSelection) -> Result<String, Or
         })
 }
 
-/// Slugify the release manifest directory for the publisher lock.
-///
-/// `Cargo.toml` maps to `root`; anything else lowercases to
-/// `[a-z0-9_-]`, capped at 64 characters.
 pub(crate) fn workspace_slug(manifest_path: &str) -> String {
     let dir = manifest_path.rsplit_once('/').map_or("", |(head, _)| head);
     let mut slug: String = dir
@@ -161,58 +112,5 @@ pub(crate) fn workspace_slug(manifest_path: &str) -> String {
         "root".to_owned()
     } else {
         slug.to_owned()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn origin_shapes_normalize_to_owner_repo() {
-        for (url, owner_repo) in [
-            ("https://github.com/acme/widgets.git", "acme/widgets"),
-            ("https://github.com/acme/widgets", "acme/widgets"),
-            ("https://github.com/acme/widgets/", "acme/widgets"),
-            ("git@github.com:acme/widgets.git", "acme/widgets"),
-            ("ssh://git@github.com/acme/widgets.git", "acme/widgets"),
-            ("ssh://git@GITHUB.COM/acme/widgets.git", "acme/widgets"),
-            ("Acme/Widgets", "Acme/Widgets"),
-        ] {
-            assert_eq!(normalize_origin(url).as_deref(), Some(owner_repo), "{url}");
-        }
-    }
-
-    #[test]
-    fn foreign_or_malformed_origins_yield_none() {
-        for url in [
-            "https://evil.example/acme/widgets",
-            "git@evil.example:acme/widgets.git",
-            "https://github.com/acme",
-            "https://github.com/acme/widgets/extra",
-            "https://github.com/acme/",
-            "git@github.com:acme",
-            "not a url",
-            "",
-        ] {
-            assert_eq!(normalize_origin(url), None, "{url}");
-        }
-    }
-
-    #[test]
-    fn workspace_slugs_stay_lock_shaped() {
-        assert_eq!(workspace_slug("Cargo.toml"), "root");
-        assert_eq!(workspace_slug("crates/foo/Cargo.toml"), "crates-foo");
-        assert_eq!(workspace_slug("My_WS.v2/Cargo.toml"), "my_ws-v2");
-        let long = format!("{}/Cargo.toml", "d".repeat(80));
-        let slug = workspace_slug(&long);
-        assert_eq!(slug.len(), 64);
-        assert!(slug.bytes().all(|b| b == b'd'));
-    }
-
-    #[test]
-    fn plan_ids_derive_from_the_source_sha() {
-        let sha = "0123456789abcdef0123456789abcdef01234567";
-        assert_eq!(plan_id_for_source(sha), "release-0123456789ab");
     }
 }

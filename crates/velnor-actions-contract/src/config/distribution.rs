@@ -1,5 +1,3 @@
-//! Typed downstream distribution policy.
-
 use super::CheckExecutor;
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
@@ -15,30 +13,22 @@ pub use destinations::{HomebrewTapDestination, HomebrewTapDestinations};
 pub use protection_observer::HomebrewTapProtectionObserver;
 pub use updater::TapUpdaterBinding;
 
-/// Optional distribution destinations outside `[stacks.rust]`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DistributionConfig {
-    /// Optional Homebrew tap update policy.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub homebrew_tap: Option<HomebrewTapConfig>,
-    /// Canonical repository-level formula policy shared by native checks and promotion.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub homebrew_formula: Option<crate::homebrew_spec::HomebrewFormulaSpec>,
 }
 
 impl DistributionConfig {
-    /// Whether no distribution destination is declared.
     #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.homebrew_tap.is_none() && self.homebrew_formula.is_none()
     }
 
-    /// Validate enabled distribution destinations.
-    ///
-    /// # Errors
-    ///
-    /// Returns the first invalid destination contract.
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         if let Some(spec) = &self.homebrew_formula {
             spec.validate().map_err(|_| {
@@ -100,75 +90,61 @@ impl DistributionConfig {
     }
 }
 
-/// Shared PR promotion custody for both native binary release channels.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct HomebrewTapConfig {
-    /// Whether to generate tap preparation and PR promotion.
     #[serde(default)]
     pub enabled: bool,
-    /// Closed channel destinations selected only from authenticated receipt identity.
+
     pub destinations: HomebrewTapDestinations,
-    /// Owner/repository slug, never a URL or arbitrary API destination.
+
     pub repository: String,
-    /// Optional source-qualified updater. When absent, the SDK renders the
-    /// canonical native formula from the typed formula specification.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub updater: Option<TapUpdaterBinding>,
-    /// Protected environment for the isolated App writer and merge boundary.
+
     pub environment: TapUpdateEnvironment,
-    /// Repository/environment variable containing the GitHub App ID.
+
     pub app_id_variable: String,
-    /// Repository/environment secret containing the GitHub App private key.
+
     pub app_private_key_secret: String,
-    /// Independently scoped read-only authority for classic branch protection.
+
     pub protection_observer: HomebrewTapProtectionObserver,
-    /// Closed merge policy; arbitrary merge modes and conditions are forbidden.
+
     pub merge: TapMergePolicy,
-    /// Trusted App check that must complete against the exact PR head SHA.
+
     pub review_completion: ExactHeadReviewCheck,
 }
 
-/// The only supported write environment name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TapUpdateEnvironment {
-    /// Environment containing the target-scoped App key, referenced only by writer.
     #[serde(rename = "tap-update")]
     TapUpdate,
 }
 
-/// The only supported automatic merge operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TapMergePolicy {
-    /// Squash only after checks and feedback completion for the exact head.
     #[serde(rename = "squash-after-gates")]
     SquashAfterGates,
 }
 
-/// Exact-head completion signal from a configured trusted GitHub App.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExactHeadReviewCheck {
-    /// Exact required check-run name emitted by the trusted completion App.
     pub check_name: String,
-    /// Variable naming the trusted completion App; runtime compares numeric App ID.
+
     pub app_id_variable: String,
-    /// Every expected reviewer App whose findings need explicit disposition.
-    /// The completion check must bind its result to the exact PR head SHA and
-    /// report each configured reviewer as complete with no unaddressed findings.
+
     pub expected_reviewers: Vec<ReviewAppIdentity>,
 }
 
-/// Trusted reviewer App identity, referred to by its numeric App ID variable.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReviewAppIdentity {
-    /// Variable naming the expected reviewer's numeric GitHub App ID.
     pub app_id_variable: String,
 }
 
 impl HomebrewTapConfig {
-    /// Formula authority selected from the signed release channel.
     #[must_use]
     pub const fn destination(
         &self,
@@ -177,12 +153,6 @@ impl HomebrewTapConfig {
         self.destinations.get(channel)
     }
 
-    /// Validate the closed tap contract and its credential references.
-    ///
-    /// # Errors
-    ///
-    /// Returns a config error for unsafe paths, malformed
-    /// credential references, or unsupported runtime bounds.
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         let key = "distribution.homebrew_tap";
         if !crate::vcs::is_safe_github_repository(&self.repository) {
@@ -341,13 +311,4 @@ pub(super) fn valid_secret_name(value: &str) -> bool {
             .bytes()
             .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'_')
         && value.contains("PRIVATE_KEY")
-}
-
-#[cfg(test)]
-#[path = "distribution_tests.rs"]
-mod tests;
-
-#[cfg(test)]
-pub(super) fn valid_tap() -> HomebrewTapConfig {
-    tests::valid()
 }

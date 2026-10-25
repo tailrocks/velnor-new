@@ -1,5 +1,3 @@
-//! Cross-file pin mirrors that keep runtime and rendered boundaries aligned.
-
 use serde_json::Value;
 
 use crate::context::FreshnessContext;
@@ -68,8 +66,6 @@ pub(super) fn check_local_mirrors(ctx: &mut FreshnessContext) {
 }
 
 fn check_renderer_action_ref(ctx: &mut FreshnessContext, key: &str, symbol: &str) {
-    // The action-pin adapter owns the reviewed pin; the renderer carries a
-    // literal immutable ref that this check independently matches.
     let value = ctx.rust_const(RENDERER_STEPS, symbol);
     let sha = ctx
         .action_pinned

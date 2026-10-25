@@ -1,25 +1,11 @@
-//! Plan-shape helpers for `plan-v1`: packages, metadata, and identity.
-
-// Wired here so the FLOW-half module compiles without touching `lib.rs`.
-#[path = "wire_w2.rs"]
-pub(crate) mod wire_w2;
-// P03 identity modules live here so no `lib.rs` edit can collide.
 #[path = "closure.rs"]
 pub(crate) mod closure;
-#[cfg(test)]
-#[path = "closure_slots.rs"]
-pub(crate) mod closure_slots;
-#[cfg(test)]
-#[path = "closure_tests.rs"]
-mod closure_tests;
+#[path = "wire_w2.rs"]
+pub(crate) mod wire_w2;
+
 #[path = "identities.rs"]
 pub(crate) mod identities;
-#[cfg(test)]
-#[path = "identities_tests.rs"]
-mod identities_tests;
-#[cfg(test)]
-#[path = "internal_plan_tests.rs"]
-mod internal_plan_tests;
+
 #[path = "snapshot.rs"]
 pub(crate) mod snapshot;
 
@@ -44,7 +30,6 @@ use velnor_actions_rust::{CompileDriver, Evidence, entry_metadata_for_task};
 use crate::discover::Discovery;
 use crate::internal_plan::identities::ExtensionBundle;
 
-/// # Errors
 pub(crate) fn tofu_extension_for(
     task: &ProposedTask,
     root: &std::path::Path,
@@ -67,7 +52,6 @@ pub(crate) fn tofu_extension_for(
 
 pub(crate) const CLOSURE_INPUT_PATH: &str = "velnor/input-closure";
 
-/// # Errors
 pub(crate) fn adapter_metadata(
     task: &ProposedTask,
     evidence: &[Evidence],
@@ -123,13 +107,6 @@ pub(crate) fn nextest_config_for(discovery: &Discovery, task: &ProposedTask) -> 
     None
 }
 
-/// schedule ordinal (ordinals are removed: no lane parameter exists).
-/// Platform identity binds runner image evidence; every digest is
-/// validated at construction, never stored raw.
-///
-/// # Errors
-///
-/// Returns [`ContractError`] when any digest fails validation.
 pub(crate) fn cache_ids_for(
     task: &ProposedTask,
     label: &str,
@@ -163,16 +140,10 @@ pub(crate) fn cache_ids_for(
     )
 }
 
-/// Isolated `CARGO_TARGET_DIR` for one lane identity (P03-7).
-///
-/// Production wiring helper: generated legs set `CARGO_TARGET_DIR` to
-/// this path so concurrent writers never share a target dir. The path
-/// derives from the responsibility-based lane digest, never an ordinal.
 pub(crate) fn target_dir_for_lane_id(lane_id: &str) -> String {
     velnor_actions_workflow_renderer::lane_target::target_dir_for_lane(lane_id)
 }
 
-/// Toolchain identity digest for one task.
 pub(crate) fn toolchain_id(
     task: &ProposedTask,
     catalog: &ToolCatalog,
@@ -180,7 +151,6 @@ pub(crate) fn toolchain_id(
     identities::toolchain_digest_for(task, catalog)
 }
 
-/// Record task-cache reuse outputs on entry metadata (REUSE-3, CACHE-2.8).
 pub(crate) fn record_task_cache(
     metadata: &mut serde_json::Value,
     enabled: bool,
@@ -201,33 +171,17 @@ pub(crate) fn record_task_cache(
     }
 }
 
-/// Contract identity preimage for one task (CACHE-1.17, TASK-4.2).
 pub(crate) struct IdentityInputs<'a> {
-    /// Adapter task proposal.
     pub(crate) task: &'a ProposedTask,
-    /// Fixed argument vector.
     pub(crate) argv: &'a [String],
-    /// Toolchain identity digest.
     pub(crate) toolchain_id: &'a str,
-    /// Platform identity digest.
     pub(crate) platform_id: &'a str,
-    /// Normalized manifest path.
     pub(crate) manifest: &'a str,
-    /// Generator identity.
     pub(crate) generator: &'a PlanGenerator,
-    /// Typed adapter extension.
     pub(crate) extension: StackExtension,
-    /// Canonical digest over the task's complete input closure.
     pub(crate) closure_digest: &'a str,
 }
 
-/// Input digest over the contract identity envelope.
-///
-/// The envelope binds argv, configuration, toolchain, platform, the
-/// behavior-affecting environment contract, the full adapter extension,
-/// and the canonical input-closure digest resolved against the checkout:
-/// a source edit flips `input_digest` even when the changed-work hint
-/// misses it.
 pub(crate) fn task_identity_digest(inputs: &IdentityInputs<'_>) -> Result<String, ContractError> {
     let task = inputs.task;
     let mut dependencies = task.depends_on.clone();
@@ -287,14 +241,12 @@ pub(crate) fn task_identity_digest(inputs: &IdentityInputs<'_>) -> Result<String
     input_digest(&identity)
 }
 
-/// Project root for a manifest path; `.` for the repository root.
 fn project_root_of(manifest: &str) -> &str {
     manifest
         .rsplit_once('/')
         .map_or(".", |(dir, _)| if dir.is_empty() { "." } else { dir })
 }
 
-/// Single executable obligation named by kind.
 pub(crate) fn execute_ids(task: &ProposedTask) -> ExecuteTaskIds {
     ExecuteTaskIds {
         tasks: BTreeMap::from([(
@@ -302,18 +254,6 @@ pub(crate) fn execute_ids(task: &ProposedTask) -> ExecuteTaskIds {
             ExecuteTaskRef::Single(task.task_id.clone()),
         )]),
     }
-}
-
-/// Default generator identity when the request omits it.
-///
-/// The target is a release triple when the host maps to one; the SHA is
-/// the running executable's real SHA-256 (release-comparable) when its
-/// bytes are readable, else the explicit unresolved marker (never
-/// all-zero, never a `b3-` hash: native hashes are incomparable with
-/// release pins and fail closed).
-#[cfg(test)]
-pub(crate) fn default_generator() -> PlanGenerator {
-    default_generator_with_phase_timings(None)
 }
 
 pub(crate) fn default_generator_with_phase_timings(

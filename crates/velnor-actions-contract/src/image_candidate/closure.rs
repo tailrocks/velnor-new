@@ -2,11 +2,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::ContractError;
 
-/// Schema for the separate native implementation source-closure artifact.
 pub const IMAGE_NATIVE_CLOSURE_SCHEMA: &str = "velnor.job-image-native-source-closure.v1";
 
-/// Exact tracked source inputs that implement candidate construction and validation.
-pub const NATIVE_IMAGE_CANDIDATE_INPUTS: [&str; 76] = [
+pub const NATIVE_IMAGE_CANDIDATE_INPUTS: [&str; 75] = [
     "Cargo.lock",
     "Cargo.toml",
     "crates/velnor-actions-cli/src/args.rs",
@@ -76,7 +74,6 @@ pub const NATIVE_IMAGE_CANDIDATE_INPUTS: [&str; 76] = [
     "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/layer.rs",
     "crates/velnor-archive-guard/src/owned_archive_guard/strict_json.rs",
     "crates/velnor-actions-workflow-renderer/src/schema2_job_image_candidate.rs",
-    "crates/velnor-actions-workflow-renderer/src/schema2_job_image_candidate_tests.rs",
     "crates/velnor-actions-workflow-renderer/src/schema2_job_image_native.rs",
     ".velnor/runner.lock",
     "images/job/ubuntu-26.04/Dockerfile",
@@ -85,23 +82,17 @@ pub const NATIVE_IMAGE_CANDIDATE_INPUTS: [&str; 76] = [
     "images/job/ubuntu-26.04/candidate/candidate.py",
 ];
 
-/// Source-bound proof for the native candidate producer implementation.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ImageCandidateSourceClosure {
-    /// Closure schema.
     pub schema: String,
-    /// Full lowercase source commit containing the implementation.
+
     pub source_commit: String,
-    /// Exact implementation path to SHA-256 hex map.
+
     pub inputs: BTreeMap<String, String>,
 }
 
 impl ImageCandidateSourceClosure {
-    /// Construct a closure after the caller hashes every required path.
-    ///
-    /// # Errors
-    /// Rejects a missing, extra, unsafe, or malformed input digest.
     pub fn new(
         source_commit: String,
         inputs: BTreeMap<String, String>,
@@ -116,10 +107,6 @@ impl ImageCandidateSourceClosure {
     }
 }
 
-/// Strictly parse a bounded native implementation source-closure artifact.
-///
-/// # Errors
-/// Rejects oversized, duplicate-key, malformed, unknown, or invalid closure data.
 pub fn parse_image_candidate_source_closure(
     bytes: &[u8],
 ) -> Result<ImageCandidateSourceClosure, ContractError> {
@@ -131,10 +118,6 @@ pub fn parse_image_candidate_source_closure(
     Ok(closure)
 }
 
-/// Validate exact closure identity and complete tracked-input coverage.
-///
-/// # Errors
-/// Rejects any source identity or input path set that differs from the contract.
 pub fn validate_image_candidate_source_closure(
     closure: &ImageCandidateSourceClosure,
 ) -> Result<(), ContractError> {
@@ -155,10 +138,6 @@ pub fn validate_image_candidate_source_closure(
     Ok(())
 }
 
-/// Serialize a valid closure as sorted-key canonical JSON with final LF.
-///
-/// # Errors
-/// Rejects invalid data or serialization errors.
 pub fn serialize_image_candidate_source_closure(
     closure: &ImageCandidateSourceClosure,
 ) -> Result<Vec<u8>, ContractError> {

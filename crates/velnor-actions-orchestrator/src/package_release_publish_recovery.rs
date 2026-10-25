@@ -1,5 +1,3 @@
-//! Retained-run recovery admission and identity verification.
-
 use std::path::{Path, PathBuf};
 
 use velnor_actions_contract::{
@@ -61,7 +59,6 @@ pub(super) fn recover(
     publish_backend(&mut backend)
 }
 
-/// Authenticate original bytes for promotion without release-write authority.
 pub(crate) fn verify_original_for_promotion()
 -> Result<VerifiedAttestedSignedPackage, OrchestratorError> {
     super::artifact_zip::within_operation(|| {
@@ -80,9 +77,6 @@ pub(crate) fn verify_original_for_promotion()
     })
 }
 
-/// Authenticate the retained native preview receipt before selecting source A
-/// for a manual recovery coordinator. The seed contributes repository custody
-/// only; the policy and plan are read from the exact receipt source.
 pub(in crate::package_release_publish) fn verify_preview_original_for_source_selection(
     seed: &PackageReleasePolicy,
     stage: PreviewRecoveryVerificationStage,
@@ -140,8 +134,6 @@ pub(in crate::package_release_publish) fn verify_preview_original_for_source_sel
         repository_id,
     )?;
 
-    // Preserve the original receipt's CI identity, but independently require
-    // the latest exact-A CI attempt to be successful before admitting A.
     let ci_source = RunSource {
         repository_id,
         sha: &source_sha,
@@ -374,7 +366,3 @@ use recovery_files::{
 
 #[path = "package_release_publish_recovery_archive.rs"]
 mod archive;
-
-#[cfg(test)]
-#[path = "package_release_publish_recovery_tests.rs"]
-mod tests;

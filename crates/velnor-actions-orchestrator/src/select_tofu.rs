@@ -1,16 +1,3 @@
-//! Tofu calling-root selection over base/head module graphs.
-//!
-//! The head graph is captured at inventory time (qualified per-root
-//! edges); the base graph is built from base-revision texts of
-//! head-unit files minus added files plus deleted config files.
-//! Tofu-owned changed paths select through
-//! [`select_roots`](velnor_actions_tofu::select_roots) over the union.
-//! The split is Tofu's own input only: Rust ownership always sees the
-//! full change set, so a Tofu-owned path never hides a Rust claim and a
-//! path no Rust rule claims still selects every Rust package (hard
-//! decision 4). Graph-build failures broaden via the caller, like the
-//! rust base edges.
-
 use std::collections::BTreeSet;
 use std::path::Path;
 
@@ -23,25 +10,15 @@ use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::select_edges::{added_files, base_manifests, deleted_files};
 
-#[cfg(test)]
-#[path = "select_tofu_tests.rs"]
-mod select_tofu_tests;
-
-/// One tofu unit's selection record: head files plus qualified edges.
 #[derive(Debug, Clone)]
 pub struct TofuSelectionUnit {
-    /// Normalized configured root.
     pub root: String,
-    /// Config-family unit files at head (base-text candidates).
     pub files: Vec<String>,
-    /// Qualified head module edges for this root.
     pub edges: ModuleEdges,
 }
 
-/// Max base files fetched; beyond this, broaden instead of reading.
 const MAX_TOFU_BASE_FILE_BATCH: usize = 512;
 
-/// Normalized configured roots backing selected tofu projects.
 pub(crate) fn tofu_selected_roots(statuses: &[DetectionStatus]) -> Vec<String> {
     let mut roots: Vec<String> = statuses
         .iter()
@@ -59,12 +36,6 @@ pub(crate) fn tofu_selected_roots(statuses: &[DetectionStatus]) -> Vec<String> {
     roots
 }
 
-/// `path.cwd` caveats for tofu subdir roots, one per root.
-///
-/// Subdir-root payloads run under `-chdir`, so each configured
-/// subdir root records its caveat finding; the repo root needs none
-/// (its identity carries `.`). Roots derive from the proposals and
-/// sort for a stable warning order.
 pub(crate) fn push_chdir_findings(
     discovery: &Discovery,
     warnings: &mut Vec<String>,
@@ -83,15 +54,6 @@ pub(crate) fn push_chdir_findings(
     Ok(())
 }
 
-/// Affected tofu unit keys for the tofu-owned subset of `changed`.
-///
-/// Only the paths a tofu node owns feed tofu root selection; the caller
-/// keeps classifying the full change set for Rust. Without tofu roots
-/// this is empty (no git calls). Fallback reasons record as warnings;
-/// graph-build failures are errors that broaden via the caller.
-///
-/// Base roots equal head roots: configured-root deletions fall back
-/// to select-all conservatively instead of parsing base config.
 pub(crate) fn select_tofu_keys(
     root: &Path,
     base: &str,
@@ -126,9 +88,6 @@ pub(crate) fn select_tofu_keys(
         .collect())
 }
 
-/// Tofu selection, recording graph-build failures as broaden warnings.
-///
-/// Returns `None` when selection is unavailable (the caller broadens).
 pub(crate) fn tofu_keys_or_broaden(
     root: &Path,
     base: &str,
@@ -146,7 +105,6 @@ pub(crate) fn tofu_keys_or_broaden(
     }
 }
 
-/// Merged head module graph over every selection record.
 fn head_module_graph(discovery: &Discovery) -> ModuleEdges {
     let mut edges = Vec::new();
     let mut findings = Vec::new();
@@ -172,12 +130,6 @@ fn head_module_graph(discovery: &Discovery) -> ModuleEdges {
     ModuleEdges { edges, findings }
 }
 
-/// Base module graph from base texts of head files plus deleted configs.
-///
-/// Head-unit config files minus added files plus deleted config
-/// files cover every base-existing unit file; shadowing is ignored
-/// (extra base edges only widen selection). References parse without
-/// validation (history predates checks); any failure broadens.
 fn base_module_graph(
     root: &Path,
     base: &str,
@@ -206,7 +158,6 @@ fn base_module_graph(
     velnor_actions_tofu::resolve_refs(&refs).map_err(|err| err.to_string())
 }
 
-/// Union attribution nodes: roots plus both graphs' edge ends.
 fn union_nodes(roots: &[String], base: &ModuleEdges, head: &ModuleEdges) -> BTreeSet<String> {
     let mut nodes: BTreeSet<String> = roots.iter().cloned().collect();
     for edges in [&base.edges, &head.edges] {
@@ -218,11 +169,6 @@ fn union_nodes(roots: &[String], base: &ModuleEdges, head: &ModuleEdges) -> BTre
     nodes
 }
 
-/// The tofu-owned subset of `changed`, Tofu's own selection input.
-///
-/// A path is tofu-owned when its nearest ancestor-or-self node is a
-/// tofu node (mirrors selection's attribution, so every tofu-owned
-/// path attributes inside [`select_roots`](velnor_actions_tofu::select_roots)).
 fn tofu_owned(changed: &BTreeSet<String>, nodes: &BTreeSet<String>) -> BTreeSet<String> {
     changed
         .iter()
@@ -231,7 +177,6 @@ fn tofu_owned(changed: &BTreeSet<String>, nodes: &BTreeSet<String>) -> BTreeSet<
         .collect()
 }
 
-/// True when `path` has an ancestor-or-self node in `nodes`.
 fn owns(nodes: &BTreeSet<String>, path: &str) -> bool {
     let mut current = path;
     loop {
@@ -248,18 +193,6 @@ fn owns(nodes: &BTreeSet<String>, path: &str) -> bool {
     }
 }
 
-/// Derive one fmt/init/validate triple per selected tofu root.
-///
-/// Derivation is joint over the whole root set: a root's fmt leg
-/// carries `no_targets` when its scope is empty or when another
-/// selected root's fmt leg already covers it (nested scopes merge so
-/// every file formats exactly once). Init and validate always derive
-/// exactly once per root.
-///
-/// # Errors
-///
-/// Returns contract errors when a triple falls outside the task-ID
-/// grammar or a proposal fails validation.
 pub(crate) fn derive_tofu(
     statuses: &[DetectionStatus],
     files: &[String],

@@ -1,5 +1,3 @@
-//! Attempt-owned staging survives the enclosing deadline's completion check.
-
 use super::{OrchestratorError, invalid};
 use std::{
     fs,
@@ -9,7 +7,6 @@ use std::{
 
 #[derive(Default)]
 pub(super) struct StagingGuard {
-    // Keep an open directory handle so inode reuse cannot counterfeit ownership.
     owned: Option<(PathBuf, fs::File)>,
 }
 

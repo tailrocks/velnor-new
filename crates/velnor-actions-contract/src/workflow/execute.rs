@@ -1,27 +1,22 @@
-//! Executable obligation references for one matrix entry.
 use crate::errors::ContractError;
 use crate::ids::validate_task_id;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-/// Executable obligations: single IDs or shard arrays (stack-neutral keys).
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct ExecuteTaskIds {
-    /// Named task references.
     pub tasks: BTreeMap<String, ExecuteTaskRef>,
 }
-/// One named task reference.
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ExecuteTaskRef {
-    /// Single task ID.
     Single(String),
-    /// Sharded task IDs.
+
     Shards(Vec<String>),
 }
 impl ExecuteTaskIds {
-    /// Validate reference names and every task ID they name.
-    /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {
         for (name, task_ref) in &self.tasks {
             if name.is_empty()
@@ -37,8 +32,6 @@ impl ExecuteTaskIds {
     }
 }
 impl ExecuteTaskRef {
-    /// Validate the named task ID or shard IDs.
-    /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {
         match self {
             Self::Single(id) => validate_task_id(id),

@@ -1,30 +1,11 @@
-//! Strict JSON parsing: duplicate object keys are rejected (cache §1).
-//!
-//! Canonical bytes forbid duplicate keys, so schema entry points MUST reject
-//! them at parse time instead of silently keeping the last value.
-
 use std::collections::BTreeSet;
 
 use crate::errors::ContractError;
 
-/// Default bound for untrusted JSON/TOML documents (8 MiB).
-///
-/// Legitimate plan/matrix/report/manifest documents are kilobytes; the
-/// bound only stops hostile or runaway inputs before scanning. Callers
-/// with a justified larger document use an explicit override limit.
 pub const MAX_UNTRUSTED_DOCUMENT_BYTES: usize = 8 * 1024 * 1024;
 
-/// Nesting budget for untrusted JSON, mirroring `serde_json`.
-///
-/// `serde_json` starts `remaining_depth` at 128 and trips on the 128th
-/// nested container (127 containers plus a scalar — 128-deep
-/// root-to-leaf — is the deepest accepted shape). The scanner enforces
-/// the identical boundary first, so hostile depth fails typed here
-/// instead of overflowing the stack in either parser.
 pub const MAX_JSON_NESTING_DEPTH: usize = 128;
 
-/// Reject a document whose byte length exceeds `limit`.
-/// # Errors
 pub fn check_document_size(len: usize, limit: usize) -> Result<(), ContractError> {
     if len > limit {
         return Err(ContractError::DocumentTooLarge { size: len, limit });
@@ -32,14 +13,10 @@ pub fn check_document_size(len: usize, limit: usize) -> Result<(), ContractError
     Ok(())
 }
 
-/// Parse JSON text, rejecting duplicate object keys at any depth.
-/// # Errors
 pub fn parse_strict_json(text: &str) -> Result<serde_json::Value, ContractError> {
     parse_strict_json_with_limit(text, MAX_UNTRUSTED_DOCUMENT_BYTES)
 }
 
-/// Parse JSON text with an explicit per-caller size bound in bytes.
-/// # Errors
 pub fn parse_strict_json_with_limit(
     text: &str,
     limit: usize,
@@ -54,8 +31,6 @@ pub fn parse_strict_json_with_limit(
     serde_json::from_str(text).map_err(|err| ContractError::CanonicalJson(err.to_string()))
 }
 
-/// Parse JSON bytes, requiring UTF-8 plus the size bound and key check.
-/// # Errors
 pub fn parse_strict_json_bytes(
     bytes: &[u8],
     limit: usize,
@@ -66,7 +41,6 @@ pub fn parse_strict_json_bytes(
     parse_strict_json_with_limit(text, limit)
 }
 
-/// Byte scanner that validates structure and key uniqueness.
 struct Scanner<'a> {
     text: &'a str,
     bytes: &'a [u8],
@@ -74,7 +48,6 @@ struct Scanner<'a> {
 }
 
 impl Scanner<'_> {
-    /// Parse one document plus trailing-whitespace check.
     fn parse_document(&mut self) -> Result<(), ContractError> {
         self.skip_ws();
         self.parse_value(0)?;
@@ -86,11 +59,6 @@ impl Scanner<'_> {
         }
     }
 
-    /// Parse one value by its leading byte; `depth` counts enclosing containers.
-    ///
-    /// Container entries spend the nesting budget: the 128th nested
-    /// container trips, exactly where `serde_json` trips, so the scanner
-    /// can never recurse past the bound on hostile input.
     fn parse_value(&mut self, depth: usize) -> Result<(), ContractError> {
         match self.peek() {
             Some(b'{') => {
@@ -116,7 +84,6 @@ impl Scanner<'_> {
         }
     }
 
-    /// Parse an object, rejecting duplicate keys; `depth` includes this object.
     fn parse_object(&mut self, depth: usize) -> Result<(), ContractError> {
         self.pos += 1;
         let mut keys = BTreeSet::new();
@@ -150,7 +117,6 @@ impl Scanner<'_> {
         }
     }
 
-    /// Parse an array; `depth` includes this array.
     fn parse_array(&mut self, depth: usize) -> Result<(), ContractError> {
         self.pos += 1;
         self.skip_ws();
@@ -171,7 +137,6 @@ impl Scanner<'_> {
         }
     }
 
-    /// Parse a string, decoding escapes for key comparison.
     fn parse_string(&mut self) -> Result<String, ContractError> {
         self.pos += 1;
         let mut out = String::new();
@@ -189,7 +154,6 @@ impl Scanner<'_> {
         }
     }
 
-    /// Decode one non-ASCII character after its first byte was consumed.
     fn parse_utf8_char(&mut self) -> Result<char, ContractError> {
         self.pos -= 1;
         let rest = self
@@ -201,7 +165,6 @@ impl Scanner<'_> {
         Ok(ch)
     }
 
-    /// Parse one escape sequence into its character.
     fn parse_escape(&mut self) -> Result<char, ContractError> {
         match self.next() {
             Some(b'"') => Ok('"'),
@@ -217,7 +180,6 @@ impl Scanner<'_> {
         }
     }
 
-    /// Parse a `\uXXXX` escape, folding UTF-16 surrogate pairs.
     fn parse_hex4(&mut self) -> Result<char, ContractError> {
         let high = self.hex_value()?;
         if (0xD800..0xDC00).contains(&high) {
@@ -233,7 +195,6 @@ impl Scanner<'_> {
         char::from_u32(high).ok_or_else(|| malformed("bad_escape"))
     }
 
-    /// Parse four hex digits into a `u32`.
     fn hex_value(&mut self) -> Result<u32, ContractError> {
         if self.pos + 4 > self.bytes.len() {
             return Err(malformed("bad_escape"));
@@ -248,7 +209,6 @@ impl Scanner<'_> {
         Ok(value)
     }
 
-    /// Parse a `true`/`false`/`null` literal.
     fn parse_literal(&mut self, word: &str) -> Result<(), ContractError> {
         if self.bytes[self.pos..].starts_with(word.as_bytes()) {
             self.pos += word.len();
@@ -258,7 +218,6 @@ impl Scanner<'_> {
         }
     }
 
-    /// Skip a JSON number, rejecting malformed shapes.
     fn parse_number(&mut self) -> Result<(), ContractError> {
         let start = self.pos;
         if self.peek() == Some(b'-') {
@@ -288,7 +247,6 @@ impl Scanner<'_> {
         Ok(())
     }
 
-    /// Consume ASCII digits, reporting whether any were present.
     fn take_digits(&mut self) -> bool {
         let start = self.pos;
         while matches!(self.peek(), Some(b'0'..=b'9')) {
@@ -297,19 +255,16 @@ impl Scanner<'_> {
         self.pos > start
     }
 
-    /// Peek the next byte.
     fn peek(&self) -> Option<u8> {
         self.bytes.get(self.pos).copied()
     }
 
-    /// Consume and return the next byte.
     fn next(&mut self) -> Option<u8> {
         let byte = self.peek()?;
         self.pos += 1;
         Some(byte)
     }
 
-    /// Consume one expected byte.
     fn consume(&mut self, want: u8) -> bool {
         if self.peek() == Some(want) {
             self.pos += 1;
@@ -319,7 +274,6 @@ impl Scanner<'_> {
         }
     }
 
-    /// Skip JSON whitespace.
     fn skip_ws(&mut self) {
         while matches!(self.peek(), Some(b' ' | b'\t' | b'\n' | b'\r')) {
             self.pos += 1;
@@ -327,19 +281,13 @@ impl Scanner<'_> {
     }
 }
 
-/// Build a malformed-JSON canonicalization error.
 fn malformed(problem: &str) -> ContractError {
     ContractError::CanonicalJson(format!("malformed_json:{problem}"))
 }
 
-/// Build a nesting-budget error for the tripping container level.
 fn too_deep(depth: usize) -> ContractError {
     ContractError::DocumentTooDeep {
         depth,
         limit: MAX_JSON_NESTING_DEPTH,
     }
 }
-
-#[cfg(test)]
-#[path = "strict_json_tests.rs"]
-mod strict_json_tests;

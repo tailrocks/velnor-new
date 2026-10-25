@@ -1,9 +1,3 @@
-//! Stack-neutral task graph: typed nodes, edges, resources (par §3, §6).
-//!
-//! The planner MUST construct this typed graph before rendering. Nodes carry
-//! the 13 required fields; edges distinguish data, gate, report/artifact,
-//! and resource-exclusion relationships.
-
 use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
@@ -13,33 +7,27 @@ use crate::config::VelnorConfig;
 use crate::errors::ContractError;
 use crate::ids::validate_task_id;
 
-/// Resource classes, at minimum (par §6).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ResourceClass {
-    /// Cheap local work.
     Lightweight,
-    /// Network-dependent work.
+
     Network,
-    /// Compiler CPU/memory work.
+
     Compiler,
-    /// Test CPU work.
+
     Test,
-    /// Service-backed tests.
+
     Service,
-    /// Mutually exclusive work.
+
     Exclusive,
 }
 
-/// Validated CPU bound in milli-cores: finite and positive (`Some(0)` is
-/// unrepresentable; use `None` for unbounded).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(try_from = "u32")]
 pub struct CpuMilli(u32);
 
 impl CpuMilli {
-    /// Build a positive CPU bound.
-    /// # Errors
     pub fn new(value: u32) -> Result<Self, ContractError> {
         if value == 0 {
             return Err(ContractError::identity("resource.cpu_milli", "zero_bound"));
@@ -47,7 +35,6 @@ impl CpuMilli {
         Ok(Self(value))
     }
 
-    /// Unwrap the bound.
     #[must_use]
     pub fn get(self) -> u32 {
         self.0
@@ -61,15 +48,11 @@ impl TryFrom<u32> for CpuMilli {
     }
 }
 
-/// Validated memory bound in MiB: finite and positive (`Some(0)` is
-/// unrepresentable; use `None` for unbounded).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(try_from = "u32")]
 pub struct MemoryMb(u32);
 
 impl MemoryMb {
-    /// Build a positive memory bound.
-    /// # Errors
     pub fn new(value: u32) -> Result<Self, ContractError> {
         if value == 0 {
             return Err(ContractError::identity("resource.memory_mb", "zero_bound"));
@@ -77,7 +60,6 @@ impl MemoryMb {
         Ok(Self(value))
     }
 
-    /// Unwrap the bound.
     #[must_use]
     pub fn get(self) -> u32 {
         self.0
@@ -91,109 +73,95 @@ impl TryFrom<u32> for MemoryMb {
     }
 }
 
-/// Bounded resource demand for one node.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ResourceDemand {
-    /// Resource class.
     pub class: ResourceClass,
-    /// CPU bound in milli-cores, when bounded.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cpu_milli: Option<CpuMilli>,
-    /// Memory bound in MiB, when bounded.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub memory_mb: Option<MemoryMb>,
-    /// Whether the task needs network access.
+
     #[serde(default)]
     pub needs_network: bool,
-    /// Required service name, when service-backed.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub service: Option<String>,
 }
 
-/// Cache-reuse policy for one node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CachePolicy {
-    /// Whether compilation reuse is allowed.
     pub allow_compilation_reuse: bool,
-    /// Whether task-result reuse is allowed.
+
     pub allow_task_reuse: bool,
 }
 
-/// One typed task node with the 13 required fields (par §3).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TaskNode {
-    /// Stable task ID.
     pub task_id: String,
-    /// Registered detector ID.
+
     pub stack_id: String,
-    /// Detector-defined stable component identity.
+
     pub component_id: String,
-    /// Detector-defined task kind.
+
     pub task_kind: String,
-    /// Toolchain/components/target/features/profile/flags/schema.
+
     pub configuration: String,
-    /// Digest of every declared semantic input.
+
     pub input_digest: String,
-    /// Data producers that must finish first (sorted).
+
     pub depends_on: Vec<String>,
-    /// Required quality gates (sorted).
+
     pub gated_by: Vec<String>,
-    /// Paths and external resources read.
+
     pub reads: Vec<String>,
-    /// Paths and external resources mutated.
+
     pub writes: Vec<String>,
-    /// Reports, binaries, files, or artifacts required downstream.
+
     pub outputs: Vec<String>,
-    /// Resource class and bounded demand.
+
     pub resource: ResourceDemand,
-    /// Stable isolated-lane identity digest.
+
     pub lane_id: String,
-    /// Cache-reuse policy.
+
     pub cache_policy: CachePolicy,
 }
 
-/// Edge relationship kinds (par §3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EdgeKind {
-    /// Data dependency: output flows into input.
     Data,
-    /// Quality gate: must pass, produces no input.
+
     Gate,
-    /// Report/artifact dependency.
+
     Report,
-    /// Resource exclusion: MUST NOT overlap.
+
     ResourceExclusion,
 }
 
-/// One typed edge between two node task IDs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TaskEdge {
-    /// Source task ID.
     pub from: String,
-    /// Target task ID.
+
     pub to: String,
-    /// Relationship kind.
+
     pub kind: EdgeKind,
 }
 
-/// The planner's typed task graph.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TaskGraph {
-    /// Task nodes, sorted by `task_id`.
     pub nodes: Vec<TaskNode>,
-    /// Edges between nodes.
+
     pub edges: Vec<TaskEdge>,
 }
 
 impl ResourceDemand {
-    /// Validate the service name (bounds are pre-validated newtypes).
-    /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {
         if self.class != ResourceClass::Service && self.service.is_some() {
             return Err(ContractError::identity(
@@ -213,8 +181,6 @@ impl ResourceDemand {
 }
 
 impl TaskNode {
-    /// Validate IDs, digests, ordering, paths, and resource demand.
-    /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {
         validate_task_id(&self.task_id)?;
         if !VelnorConfig::REGISTERED_STACKS.contains(&self.stack_id.as_str()) {
@@ -245,8 +211,6 @@ impl TaskNode {
 }
 
 impl TaskGraph {
-    /// Validate nodes, edges, references, and deterministic ordering.
-    /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {
         let mut ids = BTreeSet::new();
         let mut last: Option<&str> = None;
@@ -293,11 +257,6 @@ impl TaskGraph {
     }
 }
 
-/// Validate plan-level edges against the obligation task IDs.
-///
-/// Endpoints must name planned obligations, self-loops are rejected, and
-/// edges must be sorted and unique by (`from`, `to`, kind).
-/// # Errors
 pub fn validate_plan_edges(edges: &[TaskEdge], task_ids: &[String]) -> Result<(), ContractError> {
     let known: BTreeSet<&str> = task_ids.iter().map(String::as_str).collect();
     let mut seen = BTreeSet::new();
@@ -329,7 +288,6 @@ pub fn validate_plan_edges(edges: &[TaskEdge], task_ids: &[String]) -> Result<()
     Ok(())
 }
 
-/// Check a string list is sorted and duplicate-free.
 pub(crate) fn check_sorted_unique(
     list: &[String],
     field: &'static str,
@@ -342,7 +300,6 @@ pub(crate) fn check_sorted_unique(
     Ok(())
 }
 
-/// Check a string list is sorted.
 pub(crate) fn check_sorted(list: &[String], field: &'static str) -> Result<(), ContractError> {
     if list.windows(2).all(|pair| pair[0] <= pair[1]) {
         Ok(())
@@ -351,7 +308,6 @@ pub(crate) fn check_sorted(list: &[String], field: &'static str) -> Result<(), C
     }
 }
 
-/// Check records are sorted by a key.
 pub(crate) fn check_sorted_by<T>(
     list: &[T],
     field: &'static str,
@@ -364,7 +320,6 @@ pub(crate) fn check_sorted_by<T>(
     }
 }
 
-/// Check a task-ID list is sorted, unique, and well-formed.
 pub(crate) fn check_sorted_ids(list: &[String], field: &'static str) -> Result<(), ContractError> {
     for id in list {
         validate_task_id(id)?;
@@ -375,7 +330,6 @@ pub(crate) fn check_sorted_ids(list: &[String], field: &'static str) -> Result<(
     Ok(())
 }
 
-/// Rank edge kinds for duplicate detection.
 fn edge_kind_rank(kind: EdgeKind) -> u8 {
     match kind {
         EdgeKind::Data => 0,

@@ -12,7 +12,6 @@ use crate::workflow::scale_set_selector_for_dispatch;
 
 use super::{cache_cleanup_emit, mise_task_suites_emit, runner_labels, rust_install_audit};
 
-/// Render base files plus release extras into the marker-checked tree, in memory only.
 pub(super) fn render_all(
     prep: &GenerationPreparation,
     dispatch: Option<ExecutionMode>,
@@ -90,7 +89,6 @@ pub(super) fn render_all(
     Ok(tree)
 }
 
-/// Validate every rendered path lexically plus symlink-prefix probing.
 pub(super) fn check_tree_paths(
     tree: &RenderedTree,
 ) -> Result<Vec<SafeTreePath>, OrchestratorError> {

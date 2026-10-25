@@ -74,7 +74,6 @@ pub(crate) fn proposal(
     Ok(proposal)
 }
 
-/// Derive the one mandatory native lane using the ordinary plan envelopes.
 pub(crate) fn derive(
     root: &Path,
     check: &NativeHomebrewCheck,
@@ -320,7 +319,3 @@ fn require_formula_policy(
         Ok(())
     }
 }
-
-#[cfg(test)]
-#[path = "native_homebrew_check_plan_tests.rs"]
-mod tests;

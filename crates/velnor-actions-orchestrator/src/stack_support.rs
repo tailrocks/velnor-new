@@ -1,6 +1,3 @@
-//! Helpers shared by the dbt and Ansible stacks: the Mise-declared version of a
-//! tool, the lock text, and the checksum-verified archive install script.
-
 use std::path::Path;
 
 use velnor_actions_contract::FileIndex;
@@ -12,7 +9,6 @@ use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
 use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoRead, read_repo_file};
 
-/// Read one repository text file: absent, or text within the bound.
 pub(crate) fn read_text(root: &Path, rel: &str) -> Result<Option<String>, OrchestratorError> {
     match read_repo_file(root, rel, MAX_REPO_FILE_BYTES)? {
         RepoRead::Text(text) => Ok(Some(text)),
@@ -20,7 +16,6 @@ pub(crate) fn read_text(root: &Path, rel: &str) -> Result<Option<String>, Orches
     }
 }
 
-/// The text of the repository `mise.lock`, when one exists.
 pub(crate) fn read_lock(root: &Path) -> Result<Option<String>, OrchestratorError> {
     for name in PROJECT_TOOL_LOCK_FILES {
         if let Some(text) = read_text(root, name)? {
@@ -30,10 +25,6 @@ pub(crate) fn read_lock(root: &Path) -> Result<Option<String>, OrchestratorError
     Ok(None)
 }
 
-/// The one version every Mise config source declares under any of `keys`.
-///
-/// `stack` names the failing table (`stacks.dbt`). `None` when no source
-/// declares the tool; two sources that disagree fail closed.
 pub(crate) fn declared_version(
     root: &Path,
     index: &FileIndex,
@@ -79,20 +70,14 @@ pub(crate) fn declared_version(
     Ok(declared)
 }
 
-/// `bash -c <script>` argv.
 pub(crate) fn bash(script: &str) -> Vec<String> {
     vec!["bash".to_owned(), "-c".to_owned(), script.to_owned()]
 }
 
-/// Single-quote a validated repository path or literal for the shell.
 pub(crate) fn quote(text: &str) -> String {
     format!("'{}'", text.replace('\'', "'\\''"))
 }
 
-/// The awk program that prints `<url> <sha256>` of the declared version's row.
-///
-/// `table` is the `[tools.<key>."platforms.<p>"]` header, `want` the version,
-/// and `key` the tool key of the `[[tools.<key>]]` array header.
 const ROW_PROGRAM: &str = "$0 == arr { ver = \"\"; row = 0; next } \
 /^\\[/ { row = ($0 == table && ver == want); next } \
 /^version = \"/ && !row { ver = $0; sub(/^version = \"/, \"\", ver); sub(/\"$/, \"\", ver); next } \
@@ -100,25 +85,16 @@ row && /^url = \"/ { url = $0; sub(/^url = \"/, \"\", url); sub(/\"$/, \"\", url
 row && /^checksum = \"sha256:/ { sum = $0; sub(/^checksum = \"sha256:/, \"\", sum); sub(/\"$/, \"\", sum) } \
 END { print url, sum }";
 
-/// One archive installed from the `linux-x64` row of `mise.lock`.
 pub(crate) struct LockedArchive<'a> {
-    /// Key under `[tools]` in the lock (`dbt-fusion`, `uv`, `python`).
     pub(crate) key: &'a str,
-    /// Project-tool reference variable (`VELNOR_TOOL_UV`).
     pub(crate) version_var: &'a str,
-    /// Run-time directory the archive extracts into (`$RUNNER_TEMP/...`).
     pub(crate) dest: &'a str,
-    /// Shell that exits non-zero unless `$url` is the admitted archive URL.
     pub(crate) url_check: &'a str,
-    /// Extra `tar` arguments (`--strip-components=1`), possibly empty.
     pub(crate) tar_args: &'a str,
-    /// Path (under `dest`) that must be executable afterwards.
     pub(crate) binary: &'a str,
 }
 
 impl LockedArchive<'_> {
-    /// The install script: select the row, check URL and checksum, download,
-    /// verify, extract.
     pub(crate) fn script(&self) -> String {
         let table = format!("[tools.{}.\"platforms.linux-x64\"]", self.key);
         let array = format!("[[tools.{}]]", self.key);

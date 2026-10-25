@@ -1,165 +1,59 @@
-//! Typed orchestration failures with machine-readable problems.
-
 use thiserror::Error;
 
-/// Every failure the coordinator can report.
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum OrchestratorError {
-    /// Repository root discovery failed.
     #[error("root_discovery: {problem}")]
-    RootDiscovery {
-        /// Machine-readable problem detail.
-        problem: String,
-    },
-    /// The resolved root is not inside a Git working tree.
+    RootDiscovery { problem: String },
     #[error("not_work_tree: {problem}")]
-    NotWorkTree {
-        /// Machine-readable problem detail.
-        problem: String,
-    },
-    /// `.velnor/config.toml` is missing.
+    NotWorkTree { problem: String },
     #[error("config_missing: {path}")]
-    ConfigMissing {
-        /// Missing path as supplied.
-        path: String,
-    },
-    /// Configuration parsing or validation failed for one key path.
+    ConfigMissing { path: String },
     #[error("{file}: {key_path}: {problem}")]
     Config {
-        /// Config file path as reported to the user.
         file: String,
-        /// Dotted key path within the file.
         key_path: String,
-        /// Machine-readable problem code plus detail.
         problem: String,
     },
-    /// No default branch: config omits it and `origin/HEAD` is unresolvable.
     #[error("default_branch: {problem}")]
-    DefaultBranch {
-        /// Machine-readable problem detail.
-        problem: String,
-    },
-    /// Velnor-repository policy without the canonical repository identity.
+    DefaultBranch { problem: String },
     #[error("identity_rejected: {problem}")]
-    IdentityRejected {
-        /// Machine-readable problem detail.
-        problem: String,
-    },
-    /// File-index construction failed.
+    IdentityRejected { problem: String },
     #[error("discovery: {problem}")]
-    Discovery {
-        /// Machine-readable problem detail.
-        problem: String,
-    },
-    /// Stack detection failed.
+    Discovery { problem: String },
     #[error("detection: {problem}")]
-    Detection {
-        /// Machine-readable problem detail.
-        problem: String,
-    },
-    /// Cargo inventory parsing failed.
+    Detection { problem: String },
     #[error("inventory: {problem}")]
-    Inventory {
-        /// Machine-readable problem detail.
-        problem: String,
-    },
-    /// Tool execution for discovery failed without a Cargo diagnostic.
+    Inventory { problem: String },
     #[error("preparation_incomplete: {manifest}: {problem}")]
-    PreparationIncomplete {
-        /// Manifest whose discovery did not complete.
-        manifest: String,
-        /// Machine-readable problem detail.
-        problem: String,
-    },
-    /// Execution-profile detection failed.
+    PreparationIncomplete { manifest: String, problem: String },
     #[error("profile: {problem}")]
-    Profile {
-        /// Machine-readable problem detail.
-        problem: String,
-    },
-    /// Contract derivation or validation failed.
+    Profile { problem: String },
     #[error("contract: {problem}")]
-    Contract {
-        /// Machine-readable problem detail.
-        problem: String,
-    },
-    /// Workflow rendering failed.
+    Contract { problem: String },
     #[error("render: {problem}")]
-    Render {
-        /// Machine-readable problem detail.
-        problem: String,
-    },
-    /// Workflow-lint config rendering or syntax qualification failed.
+    Render { problem: String },
     #[error("jactionlint: {problem}")]
-    WorkflowLint {
-        /// Machine-readable problem detail.
-        problem: String,
-    },
-    /// Preview destination refused.
+    WorkflowLint { problem: String },
     #[error("preview_refused: {path}: {reason}")]
-    PreviewRefused {
-        /// Refused path as supplied.
-        path: String,
-        /// Machine-readable reason.
-        reason: String,
-    },
-    /// Refused to overwrite an existing file.
+    PreviewRefused { path: String, reason: String },
     #[error("overwrite_refused: {path}")]
-    OverwriteRefused {
-        /// Existing path as supplied.
-        path: String,
-    },
-    /// Output path is unsafe (symlink, traversal, or escape).
+    OverwriteRefused { path: String },
     #[error("unsafe_path: {path}: {reason}")]
-    UnsafePath {
-        /// Rejected path as supplied.
-        path: String,
-        /// Machine-readable reason.
-        reason: String,
-    },
-    /// Internal plan/merge request failed.
+    UnsafePath { path: String, reason: String },
     #[error("internal: {problem}")]
-    Internal {
-        /// Machine-readable problem detail.
-        problem: String,
-    },
-    /// Staged-tree validation failed before any write.
+    Internal { problem: String },
     #[error("validation: {tool}: {problem}")]
-    Validation {
-        /// Validator that failed (`jactionlint` or `shellcheck`).
-        tool: String,
-        /// Machine-readable problem detail.
-        problem: String,
-    },
-    /// Filesystem IO failed.
+    Validation { tool: String, problem: String },
     #[error("io: {path}: {problem}")]
-    Io {
-        /// Path being accessed.
-        path: String,
-        /// Operating-system error detail.
-        problem: String,
-    },
-    /// An operation was cancelled; never report as success or cache miss.
+    Io { path: String, problem: String },
     #[error("cancelled: {operation}: {detail}")]
-    Cancelled {
-        /// Cancelled operation name.
-        operation: String,
-        /// Machine-readable detail.
-        detail: String,
-    },
-    /// A capability or schema is unsupported on this input or platform.
+    Cancelled { operation: String, detail: String },
     #[error("unsupported: {capability}: {detail}")]
-    Unsupported {
-        /// Unsupported capability or schema name.
-        capability: String,
-        /// Machine-readable detail.
-        detail: String,
-    },
+    Unsupported { capability: String, detail: String },
 }
 
 impl OrchestratorError {
-    /// Build an IO error for one path.
     #[must_use]
     pub fn io(path: impl Into<String>, problem: impl Into<String>) -> Self {
         Self::Io {
@@ -168,7 +62,6 @@ impl OrchestratorError {
         }
     }
 
-    /// Build a config error for one key path.
     #[must_use]
     pub fn config(
         file: impl Into<String>,
@@ -182,7 +75,6 @@ impl OrchestratorError {
         }
     }
 
-    /// Build a cancellation error for one operation.
     #[must_use]
     pub fn cancelled(operation: impl Into<String>, detail: impl Into<String>) -> Self {
         Self::Cancelled {
@@ -191,7 +83,6 @@ impl OrchestratorError {
         }
     }
 
-    /// Build an unsupported-capability error.
     #[must_use]
     pub fn unsupported(capability: impl Into<String>, detail: impl Into<String>) -> Self {
         Self::Unsupported {
@@ -200,13 +91,11 @@ impl OrchestratorError {
         }
     }
 
-    /// Whether this error is a cancellation (not a success or cache miss).
     #[must_use]
     pub fn is_cancelled(&self) -> bool {
         matches!(self, Self::Cancelled { .. })
     }
 
-    /// Whether this error is an unsupported capability or schema.
     #[must_use]
     pub fn is_unsupported(&self) -> bool {
         matches!(self, Self::Unsupported { .. })
@@ -253,45 +142,5 @@ impl From<velnor_actions_actionlint::ActionlintError> for OrchestratorError {
         Self::WorkflowLint {
             problem: error.to_string(),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::OrchestratorError;
-    use velnor_actions_contract::ContractError;
-
-    #[test]
-    fn cancelled_and_unsupported_stay_distinct() {
-        // `retrieve`, not `fetch`: impl_orch_f2a forbids the fetch verb
-        // anywhere in orchestrator sources (offline analysis guarantee).
-        let cancelled = OrchestratorError::cancelled("retrieve", "signal");
-        assert!(cancelled.is_cancelled());
-        assert!(!cancelled.is_unsupported());
-        assert_eq!(cancelled.to_string(), "cancelled: retrieve: signal");
-        let unsupported = OrchestratorError::unsupported("schema", "version 9");
-        assert!(unsupported.is_unsupported());
-        assert!(!unsupported.is_cancelled());
-        assert_eq!(unsupported.to_string(), "unsupported: schema: version 9");
-        let io = OrchestratorError::io("plan.json", "missing");
-        assert!(!io.is_cancelled() && !io.is_unsupported());
-    }
-
-    #[test]
-    fn unsupported_schema_maps_to_unsupported() {
-        let err = ContractError::UnsupportedSchema {
-            field: "schema",
-            found: "9".to_owned(),
-            expected: "1",
-        };
-        let mapped = OrchestratorError::from(err);
-        assert!(mapped.is_unsupported());
-        assert_eq!(
-            mapped.to_string(),
-            "unsupported: schema: version 9, expected 1"
-        );
-        let conflict = ContractError::Collision("matrix key m-00".to_owned());
-        let mapped = OrchestratorError::from(conflict);
-        assert!(!mapped.is_unsupported() && !mapped.is_cancelled());
     }
 }

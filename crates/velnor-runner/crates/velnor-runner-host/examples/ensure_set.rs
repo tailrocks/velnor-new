@@ -1,6 +1,3 @@
-//! Get or create `ubuntu-26.04-scale-set` on `tailrocks/velnor-new`.
-//! The PAT comes from `gh auth token` and is not printed.
-
 use std::process::{Command, ExitCode};
 
 use velnor_runner_host::ensure_product_scale_set;

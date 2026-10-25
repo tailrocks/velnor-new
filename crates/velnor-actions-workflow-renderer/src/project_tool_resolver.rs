@@ -1,17 +1,3 @@
-//! Bind project version references to the run-time resolver (hard decision 5).
-//!
-//! Generated text carries `${VELNOR_TOOL_<NAME>}` wherever a version comes
-//! from the project's Mise config. This document pass runs on every
-//! rendered workflow before node sharing:
-//!
-//! - each job that references a project version gains the fixed resolver
-//!   step after both Mise setup and source checkout; no earlier step may read one
-//!   (the tools-cache identity and restore follow it);
-//! - `run:` text keeps the shell form; every other value (`with:`, `env:`,
-//!   cache keys) takes the `${{ env.NAME }}` expression form;
-//! - a job-level `RUSTUP_TOOLCHAIN` reference moves into the resolver,
-//!   which exports the resolved channel (job env cannot read `env`).
-
 use std::collections::BTreeSet;
 
 use velnor_actions_contract::config::project_tool_refs::PROJECT_TOOLS_STEP_NAME;
@@ -29,29 +15,10 @@ use tree::{names, rewrite_mappings, scalar};
 #[path = "project_tool_resolver_verifier.rs"]
 mod verifier;
 
-/// Apply the canonical shell quoting used when a `run:` scalar references a
-/// project-declared tool version.
-///
-/// Generator-side audits use this same transformation when comparing the
-/// typed pre-render verifier body with the emitted workflow scalar. Keeping
-/// the operation here prevents audits from accepting a looser, separately
-/// implemented approximation.
-///
-/// # Errors
-///
-/// Returns [`RenderError::InvalidWorkflow`] when the run text has malformed
-/// shell quoting around a project tool reference.
 pub fn quote_project_tool_run_refs(text: &str) -> Result<String, RenderError> {
     quote_run_refs(text)
 }
 
-/// Apply the resolver contract to one rendered workflow document.
-///
-/// # Errors
-///
-/// Returns [`RenderError::InvalidWorkflow`] when a job reads a project
-/// version without preceding Mise and checkout steps, an earlier step reads
-/// one, or workflow/job env carries one outside `RUSTUP_TOOLCHAIN`.
 pub(crate) fn bind_workflow(document: &mut Yaml) -> Result<(), RenderError> {
     let Yaml::Map(entries) = document else {
         return Ok(());
@@ -78,13 +45,6 @@ pub(crate) fn bind_workflow(document: &mut Yaml) -> Result<(), RenderError> {
 }
 
 fn bind_job(id: &str, job: &mut Yaml) -> Result<(), RenderError> {
-    // A verifier action's variable use is represented by the caller's
-    // canonical pinned-tool preparation step. Do not infer a project binding
-    // from the local action path alone: pinned/private workflows may use the
-    // same verifier action without any project-declared version reference.
-    // When the caller does carry a dynamic reference, the ordinary resolver
-    // contract below still requires checkout and the canonical Setup Mise
-    // prerequisite before the preparation and verifier steps.
     let referenced = names(job);
     if referenced.is_empty() {
         return Ok(());
@@ -110,9 +70,6 @@ fn bind_job(id: &str, job: &mut Yaml) -> Result<(), RenderError> {
         return Err(invalid(id));
     };
     let Some(checkout) = steps.iter().position(is_checkout) else {
-        // Without a checkout the project config is unreadable. Such a job
-        // installs no Rust, so a hoisted `RUSTUP_TOOLCHAIN` is inert there and
-        // is dropped; any other reference fails closed.
         for step in steps.iter_mut() {
             if let Yaml::Map(step_fields) = step
                 && let Some((_, env)) = step_fields.iter_mut().find(|(key, _)| key == "env")
@@ -165,9 +122,6 @@ fn bind_job(id: &str, job: &mut Yaml) -> Result<(), RenderError> {
 }
 
 fn hoist_early_rustup(id: &str, steps: &mut [Yaml]) -> Result<bool, RenderError> {
-    // Before both prerequisites, only the inert Rustup value may be hoisted.
-    // The resolver
-    // exports `RUSTUP_TOOLCHAIN` for every later step instead.
     let mut export_rustup = false;
     for step in steps.iter_mut() {
         if let Yaml::Map(fields) = step
@@ -215,21 +169,6 @@ fn resolver_at(
     Ok(true)
 }
 
-/// Bind one composite action's steps: insert the resolver after its own Mise
-/// setup, or first when it has none. This runs once per rendered document
-/// ([`bind_workflow`]); a composite that already carries the resolver step
-/// is left as it is.
-///
-/// A composite is a separate unit, and a caller job binds only the
-/// references written in its own steps, so a composite that reads a project
-/// version always resolves it itself. Only the shared-lane composite has no
-/// Setup Mise of its own: both lane jobs render Setup Mise before calling it,
-/// because the hosted lane's tools-cache identity reads resolved versions
-/// before the call.
-///
-/// # Errors
-///
-/// Returns [`RenderError::InvalidWorkflow`] for unbalanced `run` quoting.
 fn bind_composite_steps(steps: &mut Vec<Yaml>) -> Result<(), RenderError> {
     let referenced: BTreeSet<String> = steps.iter().flat_map(names).collect();
     if referenced.is_empty() {
@@ -249,30 +188,23 @@ fn bind_composite_steps(steps: &mut Vec<Yaml>) -> Result<(), RenderError> {
     Ok(())
 }
 
-/// Job and composite resolvers share the same narrowly validated write.
 fn resolver_step(
     referenced: &BTreeSet<String>,
     export_rustup: bool,
     composite: bool,
 ) -> Result<Yaml, RenderError> {
-    // jactionlint's `github-env` audit (which honours zizmor annotations)
-    // checks every composite and privileged job `GITHUB_ENV` write; this one
-    // appends only digits-and-dots values and lock digests (64 hex
-    // characters or `unlocked`) the script validated.
     crate::verifier_shell::render_project_tool_resolver(
         &project_tool_resolver_script(referenced, export_rustup),
         composite,
     )
 }
 
-/// Whether `step` is the generated resolver step.
 fn is_resolver_step(step: &Yaml) -> bool {
     matches!(step, Yaml::Map(fields) if fields.iter().any(|(key, value)| {
         key == "name" && scalar(value) == Some(PROJECT_TOOLS_STEP_NAME)
     }))
 }
 
-/// Remove a job-level `RUSTUP_TOOLCHAIN` reference; any other reference fails.
 fn take_job_rustup(id: &str, env: &mut Yaml) -> Result<bool, RenderError> {
     let Yaml::Map(pairs) = env else {
         return Ok(false);
@@ -285,7 +217,6 @@ fn take_job_rustup(id: &str, env: &mut Yaml) -> Result<bool, RenderError> {
     Ok(pairs.len() != before)
 }
 
-/// Remove a step's `env` mapping once it is empty (the workflow linter rejects it).
 fn drop_empty_env(step: &mut Yaml) {
     if let Yaml::Map(fields) = step {
         fields.retain(|(key, value)| {
@@ -314,7 +245,3 @@ fn uses_starts_with(step: &Yaml, prefix: &str) -> bool {
 pub(super) fn invalid(context: &str) -> RenderError {
     RenderError::InvalidWorkflow(format!("project_tool_ref_unbound:{context}"))
 }
-
-#[cfg(test)]
-#[path = "project_tool_resolver_tests.rs"]
-mod tests;

@@ -77,9 +77,6 @@ fn inspect_formula_metadata(
     )?;
     let receipt_sha256 = sha256(&receipt);
 
-    // Brew creates exactly one SPDX document at the keg root. Admit that
-    // fixed metadata file only after bounded structural and release-identity
-    // checks; it is part of the held A/D state below.
     let sbom_path = keg.join("sbom.spdx.json");
     let sbom = read_regular_nofollow(&sbom_path, 1024 * 1024)?;
     let host_target = current_host_target()?;
@@ -300,8 +297,6 @@ pub(super) fn validate_receipt(
         .and_then(serde_json::Value::as_bool)
         .ok_or_else(|| invalid("install_receipt_bottle_state_missing"))?;
     validate_receipt_changed_files(value.get("changed_files"))?;
-    // This list describes relocation metadata, not the payload inventory.
-    // The exact inventory is independently walked and byte-verified below.
     let now = epoch_seconds()?;
     if Path::new(source_path) != candidate_recipe
         || source_tap != HOMEBREW_CANDIDATE_TAP

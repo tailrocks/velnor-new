@@ -37,7 +37,7 @@ BUILD = {
             "--bin", "mbx", "--features", "owned-cache-transport"],
 }
 ABI = {"mise": "mise-owned-cargo-wrapper-v1", "mbx": None}
-# Exact measured authority: catalog_source_build_bootstrap.rs, Mise v2026.10.18.
+
 OFFICIAL_MISE_VERSION = "2026.10.18"
 OFFICIAL_MISE_SOURCE_COMMIT = "8369bc78dc4761660337a2518b1445447438159d"
 OFFICIAL_MISE_SOURCE_TREE = "f6484ac76553c3dca10c7ea690d01e359dac098b"
@@ -53,7 +53,7 @@ OFFICIAL_MISE_PINS = {
 OFFICIAL_MISE_HOSTS = {"x86_64-unknown-linux-gnu": "linux-x64",
                       "aarch64-unknown-linux-gnu": "linux-arm64.tar.gz",
                       "aarch64-apple-darwin": "macos-arm64.tar.gz"}
-# Exact measured authority: catalog_source_build_bootstrap.rs, release 421710725.
+
 OFFICIAL_MBX_VERSION = "1.27.0"
 OFFICIAL_MBX_SOURCE_COMMIT = "5a50200abf386580642b87eca2995156316b56a7"
 OFFICIAL_MBX_SOURCE_TREE = "9d1061348a5724ab331264bf83eef9169878e94b"

@@ -1,49 +1,40 @@
-//! Typed inputs for GitHub `workflow_dispatch` triggers.
-
 use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 
 use crate::errors::ContractError;
 
-/// Typed `workflow_dispatch` inputs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowDispatch {
-    /// Dispatch inputs, sorted by name, unique.
     pub inputs: Vec<DispatchInput>,
 }
 
-/// One typed dispatch input.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DispatchInput {
-    /// Input name (`[a-z0-9-_]`).
     pub name: String,
-    /// Whether the dispatcher must supply a value.
+
     pub required: bool,
-    /// GitHub input control type.
+
     #[serde(default)]
     pub input_type: DispatchInputType,
-    /// Allowed values for a `choice` input, sorted and unique.
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub choices: Vec<String>,
-    /// Optional default value (ASCII, no control characters).
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default: Option<String>,
 }
 
-/// Supported `workflow_dispatch` input widgets.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DispatchInputType {
-    /// Arbitrary validated single-line text.
     #[default]
     String,
-    /// One value from a fixed validated list.
+
     Choice,
 }
 
 impl DispatchInputType {
-    /// GitHub Actions YAML spelling.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -54,7 +45,6 @@ impl DispatchInputType {
 }
 
 impl WorkflowDispatch {
-    /// Validate input names (charset, sorted, unique) and defaults.
     pub(super) fn validate(&self) -> Result<(), ContractError> {
         let names: Vec<&str> = self
             .inputs
@@ -84,7 +74,6 @@ impl WorkflowDispatch {
 }
 
 impl DispatchInput {
-    /// Validate name charset and default value safety.
     fn validate(&self) -> Result<(), ContractError> {
         let name = self.name.as_str();
         let charset = name.bytes().all(|byte| {
@@ -118,7 +107,6 @@ impl DispatchInput {
         }
     }
 
-    /// Validate the closed, sorted values of a choice input.
     fn validate_choices(&self) -> Result<(), ContractError> {
         let valid_values = !self.choices.is_empty()
             && self.choices.iter().all(|choice| {

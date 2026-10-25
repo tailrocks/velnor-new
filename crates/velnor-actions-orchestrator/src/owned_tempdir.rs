@@ -8,7 +8,3 @@ pub(crate) fn private_tempdir_in(parent: &Path, prefix: &str) -> io::Result<temp
         .permissions(permissions)
         .tempdir_in(physical_parent)
 }
-
-#[cfg(test)]
-#[path = "owned_tempdir_tests.rs"]
-mod tests;

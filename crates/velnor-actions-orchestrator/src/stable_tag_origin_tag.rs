@@ -1,13 +1,9 @@
-//! Create-only permanent tags, bound to an uploaded pre-tag authorization.
-
 use super::super::github::{GitHubApi, GitRefResponse, TagObjectResponse};
 use super::super::identity::is_git_sha;
 use super::{Authorization, Intent, Tag, canonical, sha256};
 use crate::{OrchestratorError, internal::internal};
 use velnor_actions_contract::PackageReleasePlan;
 
-/// Detached objects do not create a permanent public tag; archive this object
-/// in the immutable intent before granting any create-ref authority.
 pub(super) fn prepare_tag_object(
     api: &GitHubApi,
     plan: &PackageReleasePlan,

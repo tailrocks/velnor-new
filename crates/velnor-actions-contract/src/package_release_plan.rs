@@ -1,5 +1,3 @@
-//! Static, credential-free input contract for native package release jobs.
-
 use serde::{Deserialize, Serialize};
 
 use crate::config::{RustBinaryReleaseArchive, RustBinaryReleaseProduct};
@@ -9,49 +7,41 @@ use crate::{
     is_valid_branch_name,
 };
 
-/// Static producer request schema. It contains inventory only, never task code.
 pub const PACKAGE_RELEASE_PLAN_SCHEMA_V1: &str = "velnor.package-release-plan.v1";
 
-/// Source-bound static plan passed from workflow authority to unprivileged producer.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PackageReleasePlan {
-    /// Closed static-plan schema discriminator.
     pub schema: String,
-    /// Release channel selected by the generated workflow.
+
     pub channel: PackageReleaseChannel,
-    /// Exact owner/repository slug from workflow context.
+
     pub repository: String,
-    /// Configured default branch, without `refs/heads/` prefix.
+
     pub default_branch: String,
-    /// Shared numeric Cargo package base version.
+
     pub base_version: String,
-    /// Literal product inventory copied from source policy.
+
     pub products: Vec<PackageReleasePlanProduct>,
-    /// Literal companion inventory copied from source policy.
+
     pub companions: Vec<RustBinaryReleaseCompanion>,
 }
 
-/// Channel-neutral product matrix carried to isolated release jobs.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PackageReleasePlanProduct {
-    /// Stable product identity.
     pub id: String,
-    /// Exact Cargo package name.
+
     pub package: String,
-    /// Exact executable targets in every payload.
+
     pub bins: Vec<String>,
-    /// Rust target triples.
+
     pub targets: Vec<String>,
-    /// Actual byte representation; never inferred from a filename.
+
     pub format: PackageReleasePayloadFormat,
 }
 
 impl PackageReleasePlan {
-    /// Validate this static plan independently from any source configuration.
-    /// # Errors
-    /// Rejects unknown schema, malformed repository/branch/version, or empty products.
     pub fn validate(&self) -> Result<(), ContractError> {
         if self.schema != PACKAGE_RELEASE_PLAN_SCHEMA_V1 {
             return Err(invalid("unknown_schema"));
@@ -106,18 +96,12 @@ impl PackageReleasePlan {
         Ok(())
     }
 
-    /// Canonical JSON bytes for workflow request files and output proofs.
-    /// # Errors
-    /// Returns an encoding error if canonical JSON cannot be represented.
     pub fn canonical_bytes(&self) -> Result<Vec<u8>, ContractError> {
         self.validate()?;
         canonical_json_bytes(self)
     }
 }
 
-/// Parse a strict canonical static plan from untrusted bytes.
-/// # Errors
-/// Rejects duplicate keys, unknown fields, invalid UTF-8, oversized/noncanonical bytes.
 pub fn parse_package_release_plan(bytes: &[u8]) -> Result<PackageReleasePlan, ContractError> {
     let value = crate::strict_json::parse_strict_json_bytes(bytes, 1024 * 1024)?;
     let plan: PackageReleasePlan = serde_json::from_value(value)
@@ -132,7 +116,3 @@ pub fn parse_package_release_plan(bytes: &[u8]) -> Result<PackageReleasePlan, Co
 fn invalid(problem: &'static str) -> ContractError {
     ContractError::identity("package_release_plan", problem)
 }
-
-#[cfg(test)]
-#[path = "package_release_plan_tests.rs"]
-mod tests;

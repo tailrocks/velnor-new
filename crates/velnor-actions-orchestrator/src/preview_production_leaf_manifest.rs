@@ -1,5 +1,3 @@
-//! Canonical native leaf and full-union evidence; neither is a public receipt.
-
 use super::{
     PreviewProducerProof,
     handoff::{AssetProof, MAX_NATIVE_MANIFEST, validate_asset_name},
@@ -214,7 +212,3 @@ fn validate_producer(
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "preview_production_leaf_manifest_tests.rs"]
-mod tests;

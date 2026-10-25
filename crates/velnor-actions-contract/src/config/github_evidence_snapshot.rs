@@ -1,5 +1,3 @@
-//! Closed declarations for same-repository GitHub evidence snapshots.
-
 use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
@@ -10,51 +8,39 @@ use crate::{
     GitHubEvidenceFetchSpecV1, GitHubEvidenceWorkflowRefV1, GitHubEvidenceWorkflowSourceRefV1,
 };
 
-/// Maximum snapshot lookback supported by the bounded collector.
 pub const MAX_GITHUB_EVIDENCE_WINDOW_DAYS: u8 = 31;
-/// Maximum number of generated workflows in one evidence declaration.
+
 pub const MAX_GITHUB_EVIDENCE_WORKFLOWS: usize = 16;
-/// Maximum number of exact producer artifacts in one evidence declaration.
+
 pub const MAX_GITHUB_EVIDENCE_ARTIFACTS: usize = 64;
 
-/// Optional closed input declaration on a scheduled task-suite collector.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GitHubEvidenceSnapshotInput {
-    /// Bounded history window (`1..=31` days).
     pub window_days: u8,
-    /// Exact generated workflow identities whose push runs are captured.
+
     pub workflow_sources: Vec<GitHubEvidenceWorkflowSource>,
-    /// Exact generated task-suite artifact declarations to capture.
+
     pub artifact_sources: Vec<GitHubEvidenceArtifactSource>,
 }
 
-/// V1 metadata source. Events and branch are fixed to default-branch pushes.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum GitHubEvidenceWorkflowSource {
-    /// The generator-owned primary `.github/workflows/ci.yml` workflow.
     PrimaryCi,
-    /// One generator-owned companion workflow for a declared task suite.
-    TaskSuite {
-        /// Exact ID from `workflow.task_suites`.
-        suite_id: String,
-    },
+
+    TaskSuite { suite_id: String },
 }
 
-/// One exact task-suite output declaration; runtime names are attempt-qualified.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GitHubEvidenceArtifactSource {
-    /// Exact ID from `workflow.task_suites`.
     pub suite_id: String,
-    /// Exact configured artifact declaration name.
+
     pub artifact_name: String,
 }
 
 impl GitHubEvidenceSnapshotInput {
-    /// Validate bounds and canonical ordering independent of suite inventory.
-    /// # Errors
     pub fn validate(&self, file: &str, prefix: &str) -> Result<(), ContractError> {
         if !(1..=MAX_GITHUB_EVIDENCE_WINDOW_DAYS).contains(&self.window_days) {
             return Err(ContractError::config(
@@ -95,8 +81,6 @@ impl GitHubEvidenceSnapshotInput {
         Ok(())
     }
 
-    /// Validate closed cross-references against generated task-suite declarations.
-    /// # Errors
     pub fn validate_inventory(
         &self,
         suites: &[MiseTaskSuite],
@@ -209,8 +193,6 @@ impl GitHubEvidenceSnapshotInput {
         Ok(())
     }
 
-    /// Resolve closed references to exact generator-owned workflow/job identities.
-    /// # Errors
     pub fn resolve_spec(
         &self,
         suites: &[MiseTaskSuite],

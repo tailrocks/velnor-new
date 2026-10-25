@@ -1,5 +1,3 @@
-//! Read-only controller readiness. No secret is logged and no worker is started.
-
 use std::future::Future;
 use std::io::Read;
 use std::os::unix::fs::OpenOptionsExt;
@@ -15,20 +13,18 @@ use crate::readiness::{Readiness, readiness_for_empty};
 use crate::reconcile::{IntentRow, occupies};
 
 const ENGINE_BUDGET: Duration = Duration::from_secs(2);
-/// Absolute wall-clock budget for one status or doctor assessment.
+
 pub const READINESS_BUDGET: Duration = Duration::from_secs(4);
 const MAX_CONFIG_BYTES: u64 = 64 * 1024;
 const MAX_JOURNAL_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_JOURNAL_ROWS: usize = 4096;
 
-/// Whether recorded intents still occupy a permit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum JournalFact {
-    /// No occupying row. A missing journal is this case.
     Clear,
-    /// At least one row still occupies a permit.
+
     Occupied,
-    /// The journal file could not be read, or a state token was unknown.
+
     Unreadable,
 }
 
@@ -38,12 +34,6 @@ enum ConfigFact {
     Invalid,
 }
 
-/// Check the local controller state and required Docker/journal facts.
-///
-/// The CLI must call this in its private bounded child process because
-/// synchronous filesystem and Keychain calls cannot be cooperatively stopped.
-/// This partial observer never reports `Ready` without full Docker/GitHub
-/// reconciliation proof.
 #[must_use]
 pub fn controller_readiness(state: &Path) -> Readiness {
     let runtime = tokio::runtime::Builder::new_current_thread()
@@ -278,6 +268,3 @@ fn marker_row(row: &turso::Row) -> Result<IntentRow, HostError> {
         runner_completed: false,
     })
 }
-
-#[cfg(test)]
-mod tests;

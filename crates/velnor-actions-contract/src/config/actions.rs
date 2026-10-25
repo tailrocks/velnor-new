@@ -1,16 +1,7 @@
-//! `[actions]` section: exact action-pin overrides.
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-/// Actions accepting per-project pin overrides (`[actions.overrides]` keys).
-///
-/// Intentional subset of `ALLOWED_ACTIONS` in
-/// `crates/velnor-actions-actionlint/src/actions.rs`: the policy-owned
-/// `asamarts/alint` pin is emittable but not consumer-overridable
-/// (version-policy §2, GitHub Action defaults). The shape rules below
-/// follow `overrides.rs` by convention (the contract cannot depend on
-/// the action-pin adapter, which owns the approved `(sha, version)` catalog check).
 pub const OVERRIDABLE_ACTIONS: [&str; 7] = [
     "jdx/mise-action",
     "actions/checkout",
@@ -21,32 +12,22 @@ pub const OVERRIDABLE_ACTIONS: [&str; 7] = [
     "jdx/mr-boxington-action",
 ];
 
-/// `[actions]` section: exact action-pin overrides.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ActionsConfig {
-    /// Pin overrides keyed by exact `owner/repo[/path]` action key.
     #[serde(default)]
     pub overrides: BTreeMap<String, ActionPinOverride>,
 }
 
-/// One `[actions.overrides]` value: exact SHA plus matching version.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ActionPinOverride {
-    /// Exact 40-char lowercase-hex commit SHA.
     pub sha: String,
-    /// Matching stable version (`vX.Y.Z`).
+
     pub version: String,
 }
 
 impl ActionsConfig {
-    /// Validate override keys (allowlist) and pin shapes.
-    ///
-    /// Catalog membership (approved `(sha, version)` pairs) is enforced by
-    /// the action-pin adapter at generation time; the contract rejects unknown keys
-    /// and malformed pins here.
-    /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         for (action, pin) in &self.overrides {
             let key_path = format!("actions.overrides.{action}");
@@ -72,7 +53,6 @@ impl ActionsConfig {
     }
 }
 
-/// Full commit SHA: 40 lowercase hex characters.
 fn is_full_sha(value: &str) -> bool {
     value.len() == 40
         && value
@@ -80,7 +60,6 @@ fn is_full_sha(value: &str) -> bool {
             .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
 }
 
-/// Stable version tags: `vX.Y.Z` with numeric parts.
 fn is_version_tag(value: &str) -> bool {
     let Some(number) = value.strip_prefix('v') else {
         return false;

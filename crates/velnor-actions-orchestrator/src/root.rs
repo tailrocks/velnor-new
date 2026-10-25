@@ -1,5 +1,3 @@
-//! Repository-root discovery through the Mise Git allowlist.
-
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
@@ -7,16 +5,6 @@ use velnor_actions_mise::GitRequest;
 
 use crate::OrchestratorError;
 
-/// Resolve the canonical working-tree root from `cwd`.
-///
-/// Runs `git rev-parse --is-inside-work-tree` (must print `true`) and
-/// `git rev-parse --show-toplevel`, then canonicalizes. All execution is
-/// delegated to the Mise adapter; this module builds no child invocations.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::NotWorkTree`] outside a working tree and
-/// [`OrchestratorError::RootDiscovery`] when Git or canonicalization fails.
 pub fn resolve_root(cwd: &Path) -> Result<PathBuf, OrchestratorError> {
     let inside = GitRequest::rev_parse(vec![OsString::from("--is-inside-work-tree")])
         .run_in(cwd)

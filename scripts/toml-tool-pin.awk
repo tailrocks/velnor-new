@@ -23,7 +23,7 @@ in_tools {
   if (name != key) next
   count++
   literal = trim(substr(line, separator + 1))
-  # Inline-table form: `rust = { version = "1.99.1", mr_boxington = true }`.
+
   if (substr(literal, 1, 1) == "{") {
     if (!match(literal, /[{,][[:space:]]*version[[:space:]]*=[[:space:]]*["'][^"']*["']/)) {
       invalid = 1

@@ -1,5 +1,3 @@
-//! Private dispatch for the Bun verified-assets handoff.
-
 use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{

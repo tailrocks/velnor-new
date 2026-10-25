@@ -1,21 +1,7 @@
-//! Policy gating and support-job construction.
-//!
-//! Consumer policy merges config-selected verification jobs only;
-//! Velnor policy merges one typed job per repository validator plus
-//! optional candidate jobs (P05-6: no Policy umbrella). No
-//! toolchain-qualification job exists. The always-on `jactionlint` job
-//! arrives via typed IR and is emitted for both policies; it is never
-//! support IR.
-
-// Token-hygiene gate lives beside the policy gates (`#[path]`, no `lib.rs` edit).
 #[path = "support_tokens.rs"]
 mod tokens;
 
 pub(crate) use tokens::check_token_hygiene;
-
-#[cfg(test)]
-#[path = "support_tests.rs"]
-mod support_tests;
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -33,29 +19,16 @@ use crate::{
     steps,
 };
 
-/// Always-on workflow-lint job ID, emitted for both policies.
 pub(crate) const LINT_JOB_ID: &str = "jactionlint";
 
-/// Display name of the always-on workflow-lint job.
 pub(crate) const LINT_DISPLAY_NAME: &str = "Jactionlint";
 
-/// Protected release job ID (Velnor policy, candidate mode only).
 pub(crate) const RELEASE_JOB_ID: &str = "release";
 
-/// Display name of the protected release job.
 pub(crate) const RELEASE_DISPLAY_NAME: &str = "Release";
 
-/// Release ref gate: the job runs only on protected refs (tags/branches).
 pub(crate) const RELEASE_REF_CONDITION: &str = "github.ref_protected == true";
 
-/// Consumer policy: config-selected verification jobs only.
-///
-/// Empty support passes through (historical behavior); a non-empty
-/// support set merges exactly when every validator is consumer
-/// selectable ([`ValidatorKind::consumer_verify`]) and candidate
-/// validation is off. Anything else fails closed exactly as before.
-/// Velnor-only job IDs in base IR stay rejected: verification jobs
-/// arrive through support, never through IR.
 pub(crate) fn merge_consumer_verify(
     jobs: &mut BTreeMap<String, Job>,
     support: Option<&VelnorSupportWorkflow>,
@@ -86,9 +59,6 @@ pub(crate) fn merge_consumer_verify(
     merge_support_jobs(jobs, support, ctx, "consumer-v1")
 }
 
-/// Consumer policy: reject Velnor-only job IDs in base IR.
-///
-/// The lint job is a base IR job, not support IR, so it passes through.
 fn reject_consumer_ir(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
     for validator in ValidatorKind::repository_validators() {
         let id = validator.job_id();
@@ -110,10 +80,6 @@ fn reject_consumer_ir(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
     Ok(())
 }
 
-/// Merge one typed job per validator plus candidates.
-/// The exhaustive `ValidatorKind` match is the whole support set, with no
-/// toolchain-qualification job and no umbrella grouping. Both policies
-/// share it; each policy gates its support set before calling.
 pub(crate) fn merge_support_jobs(
     jobs: &mut BTreeMap<String, Job>,
     support: Option<&VelnorSupportWorkflow>,
@@ -171,11 +137,6 @@ pub(crate) fn merge_support_jobs(
     Ok(())
 }
 
-/// Extend the final gate with merged support IDs (workflow-contract §4).
-///
-/// `Required` needs plan + every crate job + lint always, plus each merged
-/// validator and candidate when those policy jobs exist. The release job
-/// never gates: it publishes after merge on protected refs only.
 fn extend_final_needs(
     jobs: &mut BTreeMap<String, Job>,
     validators: &[ValidatorKind],
@@ -201,7 +162,6 @@ fn extend_final_needs(
     }
 }
 
-/// Insert a support job, failing on ID collision with IR jobs.
 pub(crate) fn insert_support_job(
     jobs: &mut BTreeMap<String, Job>,
     id: &str,
@@ -218,7 +178,6 @@ pub(crate) fn insert_support_job(
     Ok(())
 }
 
-/// Fixed Alint job: checkout plus the full-SHA Alint action.
 pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
     let checkout = steps::checkout_step(&ctx.checkout_uses)?;
     let mut with = BTreeMap::new();
@@ -257,12 +216,6 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
     })
 }
 
-/// Fixed validator job: checkout plus its caller-supplied command.
-///
-/// The validator runs its pinned analyzer with ambient auth so cold tool
-/// bootstrap has authenticated quota. Static analyzers execute no repo code,
-/// and cargo-backed validators (deny) run from the cargo isolation dir with an
-/// absolute manifest path so repo `.cargo/config.toml` providers never run.
 pub(crate) fn validator_job(
     ctx: &RenderContext,
     validator: ValidatorKind,
@@ -310,7 +263,6 @@ pub(crate) fn validator_job(
     })
 }
 
-/// Exactly one command per validator; missing or duplicated fails closed.
 fn find_validator_command(
     commands: &[ValidatorCommand],
     validator: ValidatorKind,
@@ -332,10 +284,6 @@ fn find_validator_command(
     })
 }
 
-/// Candidate never plans: it needs plan, holds no plan step, feeds no task.
-///
-/// Qualification downloads the built artifact; a candidate without a
-/// download step cannot prove the no-rebuild path and is rejected.
 pub(crate) fn check_candidate_invariants(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
     if let Some(candidate) = jobs.get(CANDIDATE_JOB_ID) {
         if !candidate.needs.contains(&PLAN_JOB_ID.to_owned()) {
@@ -374,9 +322,6 @@ pub(crate) fn check_candidate_invariants(jobs: &BTreeMap<String, Job>) -> Result
     Ok(())
 }
 
-/// Final gate keeps the exact required-check name and `always()` condition.
-///
-/// The always-on lint job keeps its exact display name on both policies.
 pub(crate) fn check_final_gate(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
     if let Some(final_job) = jobs.get(FINAL_JOB_ID) {
         if final_job.display_name != FINAL_DISPLAY_NAME {

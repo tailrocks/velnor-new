@@ -1,5 +1,3 @@
-//! Independently enabled native preview generation, composed from source metadata.
-
 use crate::{
     OrchestratorError,
     internal::internal,

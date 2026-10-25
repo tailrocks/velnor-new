@@ -1,6 +1,3 @@
-//! Fixed jq contracts for remote-backend and saved-plan admission.
-
-/// Fail-closed saved-plan review, implemented as a fixed jq filter.
 pub(super) const PLAN_REVIEW_JQ: &str = r#"
 def no_provisioners:
   type == "object"
@@ -27,7 +24,6 @@ and all((.resource_changes // [])[];
   or ((.mode == "data") and (.change.actions == ["no-op"] or .change.actions == ["read"]))))
 "#;
 
-/// Require the saved init metadata to prove that S3 is the active backend.
 pub(super) const BACKEND_REVIEW_JQ: &str = r#"
 .backend.type == "s3"
 and .backend.config.bucket == env.VELNOR_BACKEND_BUCKET

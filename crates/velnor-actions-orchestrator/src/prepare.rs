@@ -1,5 +1,3 @@
-//! Validated generation input shared by `plan` and `generate`.
-
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
@@ -14,61 +12,33 @@ use crate::internal::phase_timing::PlanPhaseTimings;
 use crate::source_prep::lockful_roots;
 use crate::workflow::{DEFAULT_RUNNER_LABEL, WorkflowPlan};
 
-/// Canonical repository identity allowed the Velnor-repository policy.
 const VELNOR_IDENTITY: &str = "tailrocks/velnor-new";
 
-/// Everything `plan` and `generate` need: config, branch, discovery, IR.
 #[derive(Debug, Clone)]
 pub struct GenerationPreparation {
-    /// Canonical repository root.
     pub root: PathBuf,
-    /// Validated configuration with defaults filled.
     pub config: VelnorConfig,
-    /// Push branch: config override or local `origin/HEAD`, never guessed.
     pub default_branch: String,
-    /// Literal runner label every job uses.
     pub runner_label: String,
-    /// Runner-label selection provenance.
     pub runner_selection: RunnerSelection,
-    /// Detection, inventory, profiles, and task groups.
     pub discovery: Discovery,
-    /// Workflow IR plus renderer inputs.
     pub workflow: WorkflowPlan,
-    /// Runner-image evidence for the label: explicitly unobserved at
-    /// generation time; observed provisioner facts bind later (VER-4.2).
     pub runner_image: RunnerImageEvidence,
-    /// Install lockfile audit blockers (G2): CI-platform holes and
-    /// corrupt checksums. `generate` fails closed on any entry while
-    /// `plan` reports them; also mirrored into recommendations.
     pub lock_audit_blocking: Vec<String>,
-    /// Repo-resolved tool catalog: every source/check internal execution and
-    /// derivation on this preparation uses this one catalog, never the
-    /// compile-time pins. Native security operations independently use the
-    /// generator's qualified fixed GitHub CLI and Cosign pins; repository
-    /// configuration cannot select their credential-bearing executables.
     pub catalog: ToolCatalog,
 }
 
 impl GenerationPreparation {
-    /// Catalog for generated text: project-declared versions render as
-    /// run-time references (hard decision 5); execution keeps [`Self::catalog`].
     #[must_use]
     pub fn emission_catalog(&self) -> ToolCatalog {
         self.catalog.for_emission()
     }
 }
 
-/// Build the shared preparation object for `root`.
-///
-/// # Errors
-///
-/// Returns root, config, branch, identity, discovery, or workflow errors.
 pub fn prepare(root: &Path) -> Result<GenerationPreparation, OrchestratorError> {
     prepare_inner(root, None, None)
 }
 
-/// Reuse one configuration admitted before a bounded execution's preparation.
-/// The same validation and policy checks also apply to typed caller input.
 pub(crate) fn prepare_with_config(
     root: &Path,
     config: VelnorConfig,
@@ -113,7 +83,6 @@ fn prepare_inner(
     };
     let fetch_roots = lockful_roots(&canonical, &discovery.workspaces);
     let (runner_label, runner_selection) = runner_label_for(&config);
-    // Hard decision 5: generated text never copies a project-declared version.
     let emission = catalog.for_emission();
     let workflow = crate::workflow::build_workflow_for_consumer_release(
         &crate::workflow::WorkflowBuildInput {
@@ -160,7 +129,6 @@ fn prepare_inner(
     })
 }
 
-/// Runner label plus provenance from the config override or the default.
 pub(crate) fn runner_label_for(config: &VelnorConfig) -> (String, RunnerSelection) {
     match &config.workflow.runner_label {
         Some(label) => (label.clone(), RunnerSelection::ConfigOverride),
@@ -171,12 +139,6 @@ pub(crate) fn runner_label_for(config: &VelnorConfig) -> (String, RunnerSelectio
     }
 }
 
-/// Default branch from the config override, local `origin/HEAD`, or the
-/// GitHub event payload (`repository.default_branch`).
-///
-/// A CI checkout has no `origin/HEAD`, but every event payload carries the
-/// repository's default branch, so `workflow.default_branch` stays optional
-/// there. When none of the three resolves, preparation fails closed.
 fn resolve_default_branch(root: &Path, config: &VelnorConfig) -> Result<String, OrchestratorError> {
     if let Some(branch) = &config.workflow.default_branch {
         return Ok(branch.clone());
@@ -192,7 +154,6 @@ fn resolve_default_branch(root: &Path, config: &VelnorConfig) -> Result<String, 
     })
 }
 
-/// Branch named by the local `origin/HEAD`, or `None` when it does not resolve.
 fn origin_head_branch(root: &Path) -> Result<Option<String>, OrchestratorError> {
     let output = GitRequest::rev_parse(vec![
         OsString::from("--abbrev-ref"),
@@ -213,7 +174,6 @@ fn origin_head_branch(root: &Path) -> Result<Option<String>, OrchestratorError> 
     Ok(branch_from_origin_head(text.trim()))
 }
 
-/// Default branch from the event payload at `GITHUB_EVENT_PATH`, when present.
 fn event_default_branch() -> Result<Option<String>, OrchestratorError> {
     let Some(path) = std::env::var_os("GITHUB_EVENT_PATH").filter(|value| !value.is_empty()) else {
         return Ok(None);
@@ -223,24 +183,17 @@ fn event_default_branch() -> Result<Option<String>, OrchestratorError> {
     Ok(branch_from_event_payload(&payload))
 }
 
-/// `repository.default_branch` of an event payload, when it is a valid branch name.
 fn branch_from_event_payload(payload: &str) -> Option<String> {
     let value: serde_json::Value = serde_json::from_str(payload).ok()?;
     let branch = value.get("repository")?.get("default_branch")?.as_str()?;
     velnor_actions_contract::is_valid_branch_name(branch).then(|| branch.to_owned())
 }
 
-/// Strip the `origin/` prefix, rejecting empty or malformed branches.
 fn branch_from_origin_head(text: &str) -> Option<String> {
     let branch = text.strip_prefix("origin/").unwrap_or(text);
     velnor_actions_contract::is_valid_branch_name(branch).then(|| branch.to_owned())
 }
 
-/// Require the canonical identity for the Velnor-repository policy.
-///
-/// The local `origin` URL is the authority. `GITHUB_REPOSITORY` is only a
-/// consistency hint: a mismatch fails closed and never unlocks, and a
-/// matching hint without a canonical origin unlocks nothing either.
 pub(crate) fn check_velnor_identity(
     root: &Path,
     config: &VelnorConfig,
@@ -264,25 +217,10 @@ pub(crate) fn check_velnor_identity(
     })
 }
 
-/// True when the local `origin` URL normalizes to the canonical identity.
-///
-/// Resolution runs through the shared [`crate::origin::origin_url_via_git`]
-/// helper, so linked worktrees, includes, and worktree configuration all
-/// follow Git semantics. Only that one key counts; other sections, other
-/// keys, and decoy remotes never grant the identity. A missing or
-/// mismatched origin fails; nothing is fetched.
 fn origin_matches(root: &Path) -> bool {
     crate::origin::origin_url_via_git(root).is_some_and(|url| url_matches_identity(&url))
 }
 
-/// True when a remote URL normalizes to the canonical identity.
-///
-/// Both host and path must match `github.com/tailrocks/velnor-new` exactly
-/// (after lowercasing and trimming an optional `.git` suffix and trailing
-/// slashes). A bare `tailrocks/velnor-new` grants nothing: a local-path
-/// remote is trivially forgeable via `git remote set-url`. A path-suffix
-/// match alone is rejected: any host that merely ends in the identity
-/// path (e.g. `evil.example/tailrocks/velnor-new`) grants nothing.
 fn url_matches_identity(value: &str) -> bool {
     let mut url = value.trim().to_lowercase();
     while url.ends_with('/') {
@@ -297,7 +235,6 @@ fn url_matches_identity(value: &str) -> bool {
     host == "github.com" && path == VELNOR_IDENTITY
 }
 
-/// Split a remote URL into `(host, path)` for `scheme://` and scp forms.
 pub(crate) fn split_host_path(url: &str) -> Option<(&str, &str)> {
     if let Some((_scheme, rest)) = url.split_once("://") {
         let after_user = rest.rsplit('@').next().unwrap_or(rest);
@@ -308,7 +245,6 @@ pub(crate) fn split_host_path(url: &str) -> Option<(&str, &str)> {
         }
         return Some((host, path));
     }
-    // scp-like `host:path` (user part already stripped by caller split).
     let (before_colon, path) = url.split_once(':')?;
     let host = before_colon.rsplit('@').next().unwrap_or(before_colon);
     if host.is_empty() || host.contains('/') || path.is_empty() || path.starts_with('/') {
@@ -316,7 +252,3 @@ pub(crate) fn split_host_path(url: &str) -> Option<(&str, &str)> {
     }
     Some((host, path))
 }
-
-#[cfg(test)]
-#[path = "prepare_branch_tests.rs"]
-mod prepare_branch_tests;

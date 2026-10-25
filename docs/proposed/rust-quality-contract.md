@@ -270,7 +270,6 @@ unsafe_code = "forbid"
 unused_must_use = "deny"
 unexpected_cfgs = "deny"
 unfulfilled_lint_expectations = "deny"
-missing_docs = "warn"
 missing_debug_implementations = "warn"
 unreachable_pub = "warn"
 rust_2018_idioms = { level = "warn", priority = -1 }

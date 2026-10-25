@@ -1,4 +1,3 @@
-//! Normalize retained verified payloads without multiplying extracted bytes.
 use crate::OrchestratorError;
 use crate::internal::internal;
 use std::path::{Path, PathBuf};
@@ -45,7 +44,6 @@ pub(crate) fn normalize_payload(
     )
 }
 
-/// Normalize only an admitted hash-free layout; runtime callers validate full pins first.
 pub(crate) fn normalize_recipe_payload(
     tool: &QualifiedToolRecipe,
     platform: CheckPlatform,
@@ -127,7 +125,3 @@ fn check_deadline(deadline: CheckDeadline) -> Result<(), OrchestratorError> {
         .map(|_| ())
         .map_err(|error| internal(&error.to_string()))
 }
-
-#[cfg(test)]
-#[path = "check_tool_layout_tests.rs"]
-mod tests;

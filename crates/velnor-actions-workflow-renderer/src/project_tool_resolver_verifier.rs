@@ -1,5 +1,3 @@
-//! Trust-sensitive recognition and construction for project-tool verifiers.
-
 use velnor_actions_contract::workflow::RUST_VERIFIER_USES;
 
 use crate::yaml::Yaml;

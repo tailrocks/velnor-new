@@ -89,9 +89,10 @@ the `# zizmor: ignore[<audit>]` annotations Velnor emits
 - The Mise catalog pins jactionlint (`jactionlint@<exact>`, backend
   `github:jdx/jactionlint`, which checks the release-API digest and the
   GitHub artifact attestation on every install).
-- `catalog_jactionlint_digests.rs` records, per Mise platform (`linux-x64`,
-  `linux-arm64`, `macos-arm64`, `macos-x64`), the archive and the extracted
-  executable SHA-256.
+- `JACTIONLINT_DIGESTS` in
+  `crates/velnor-actions-contract/src/config/jactionlint_verifier.rs` records,
+  per Mise platform (`linux-x64`, `linux-arm64`, `macos-arm64`, `macos-x64`),
+  the archive and the extracted executable SHA-256.
 - A `Verify jactionlint` step follows every install. It resolves the
   executable with `mise which --tool jactionlint@<v> jactionlint` and checks
   it with `sha256sum -c`; a catalogued version without a digest for the
@@ -100,9 +101,10 @@ the `# zizmor: ignore[<audit>]` annotations Velnor emits
   treats a verified, catalogued install as covered without a `mise.lock` row.
 - Provenance is checked when the version is bumped, never at generate time:
   `cosign verify-blob-attestation` on the release `packslip.sigstore.json`
-  and `gh attestation verify --signer-workflow
+  and `gh attestation verify -R jdx/jactionlint --signer-workflow
   jdx/jactionlint/.github/workflows/release.yaml` must pass for every table
-  platform; the evidence is recorded on `JACTIONLINT_VERSION`
+  platform; the verification summary is recorded in the
+  [Jactionlint pin and provenance record](../implemented/jactionlint.md#pinned-release-provenance)
   ([version policy](version-policy.md)).
 
 ## Local runs

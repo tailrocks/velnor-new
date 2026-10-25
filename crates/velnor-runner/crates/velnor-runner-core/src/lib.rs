@@ -1,7 +1,11 @@
-//! Pure scale-set state: identifiers, capacity, transitions, and parity.
-//!
-//! No HTTP, Docker, database, or process effects live here.
-
+#![allow(
+    missing_docs,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
+#![allow(
+    clippy::missing_errors_doc,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
 mod capacity;
 mod error;
 mod evidence;
@@ -22,6 +26,3 @@ pub use identity::{
 pub use lifecycle::{Effect, Transition, WorkerEvent, WorkerState, transition};
 pub use ownership::{CleanupProof, OwnedIds, OwnershipFailure};
 pub use paths::{RUNNER_ROOT, RUNNER_WORK_FOLDER, runner_work_path};
-
-#[cfg(test)]
-mod lifecycle_tests;

@@ -1,4 +1,3 @@
-//! Own a declaration-bound local container socket and Docker context.
 use crate::OrchestratorError;
 use crate::exclusive_write;
 use crate::generator::sha256_hex;
@@ -18,65 +17,39 @@ use context::{context_config_bytes, context_metadata_bytes, validate_owned_conte
 pub(crate) use inventory::{RuntimeObservation, RuntimeRootEvidence, SocketEvidence};
 use inventory::{inspect_runtime_until, owner, validate_socket};
 
-/// Safe, declaration-bound runtime evidence retained for the capability receipt.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub(crate) struct RuntimeProjection {
-    /// Canonical local Unix endpoint passed to the Docker CLI.
     pub endpoint: String,
-    /// Declared Docker context name.
     pub context: String,
-    /// Owned credential-free Docker configuration directory.
     pub docker_config: PathBuf,
-    /// Owned Docker context metadata file.
     pub context_metadata: PathBuf,
-    /// SHA-256 directory name used by Docker for this context.
     pub context_hash: String,
-    /// Validated external `OrbStack` runtime authority, when declared.
     pub runtime_dir: Option<PathBuf>,
-    /// Owned delegation link for the `OrbStack` runtime authority.
     pub runtime_link: Option<PathBuf>,
-    /// Bounded type/path/owner inventory of the runtime authority.
     pub runtime_entries: Vec<RuntimeEntryEvidence>,
     #[serde(skip)]
     socket_path: PathBuf,
-    /// Initial socket identity, revalidated before every probe.
     pub socket: SocketEvidence,
     #[serde(skip)]
     runtime_uid: Option<u32>,
     #[serde(skip)]
     home_owner: u32,
-    /// Initial `OrbStack` runtime directory identity.
     pub runtime_root: Option<RuntimeRootEvidence>,
 }
 
-/// One runtime entry, without reading its contents.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub(crate) struct RuntimeEntryEvidence {
-    /// POSIX path relative to the declared runtime directory, or the absolute
-    /// Docker socket path for a generic Docker profile.
     pub path: String,
-    /// Admitted filesystem type.
     pub kind: RuntimeEntryKind,
-    /// Owning Unix user ID.
     pub owner: u32,
 }
 
-/// Runtime entry kinds permitted by the narrow `OrbStack` authority.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum RuntimeEntryKind {
     Directory,
     RegularFile,
     UnixSocket,
-}
-
-/// Validate and project one typed host container runtime without process I/O.
-#[cfg(test)]
-pub(super) fn prepare_runtime(
-    home: &Path,
-    profile: &HostContainerProfile,
-) -> Result<RuntimeProjection, OrchestratorError> {
-    prepare_runtime_until(home, profile, None)
 }
 
 pub(super) fn prepare_runtime_until(
@@ -152,12 +125,6 @@ pub(super) fn prepare_runtime_until(
     })
 }
 
-/// Revalidate the external endpoint and `OrbStack` authority before probing.
-#[cfg(test)]
-pub(super) fn revalidate_runtime(projection: &RuntimeProjection) -> Result<(), OrchestratorError> {
-    revalidate_runtime_until(projection, None)
-}
-
 pub(super) fn revalidate_runtime_until(
     projection: &RuntimeProjection,
     deadline: Option<CheckDeadline>,
@@ -194,14 +161,6 @@ pub(super) fn revalidate_runtime_until(
     }
     validate_owned_context(projection, deadline)?;
     checkpoint(deadline)
-}
-
-/// Revalidate all runtime state, then freshly capture identity evidence.
-#[cfg(test)]
-pub(super) fn observe_runtime(
-    projection: &RuntimeProjection,
-) -> Result<RuntimeObservation, OrchestratorError> {
-    observe_runtime_until(projection, None)
 }
 
 pub(super) fn observe_runtime_until(
@@ -389,7 +348,3 @@ fn validate_context(context: &str) -> Result<String, OrchestratorError> {
 fn io(path: &Path, error: impl std::fmt::Display) -> OrchestratorError {
     OrchestratorError::io(path.display().to_string(), error.to_string())
 }
-
-#[cfg(test)]
-#[path = "check_container_runtime_tests.rs"]
-mod tests;

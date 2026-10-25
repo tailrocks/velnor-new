@@ -1,5 +1,3 @@
-//! Bounded HTTP range requests for stable manifests.
-
 use std::time::Duration;
 
 use crate::context::FETCH_CAP;

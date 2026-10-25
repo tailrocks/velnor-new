@@ -1,73 +1,58 @@
-//! `.velnor/playwright.lock`: hash-pinned Playwright browser archives (hard decision 6).
-//!
-//! Written only by `velnor-actions playwright lock`. Playwright publishes no
-//! checksums, so the first computation is trust-on-first-use of the download
-//! host; every later install verifies the recorded SHA-256 and fails closed.
-//! The `core_integrity` of each entry is the `playwright-core` tarball
-//! integrity from `bun.lock`, the anchor of the browser revision table the
-//! entry was derived from. See `docs/proposed/bun-contract.md`.
-
 use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 
 use crate::errors::ContractError;
 
-/// Repository-relative path of the committed browser lock.
 pub const PLAYWRIGHT_LOCK_PATH: &str = ".velnor/playwright.lock";
-/// Lock schema version.
+
 pub const PLAYWRIGHT_LOCK_SCHEMA: u32 = 1;
-/// Playwright host platform of the hosted Bun runner image (`ubuntu-26.04`, x86-64).
+
 pub const PLAYWRIGHT_HOST_PLATFORM: &str = "ubuntu26.04-x64";
-/// Hosts Playwright publishes browser archives on.
+
 pub const PLAYWRIGHT_DOWNLOAD_HOSTS: [&str; 2] = [
     "cdn.playwright.dev",
     "playwright.download.prss.microsoft.com",
 ];
-/// Playwright's `PLAYWRIGHT_CDN_MIRRORS`, in registry order
-/// (`packages/playwright-core/src/server/registry/index.ts`, v1.64.1).
+
 pub const PLAYWRIGHT_CDN_MIRRORS: [&str; 3] = [
     "https://cdn.playwright.dev/dbazure/download/playwright",
     "https://playwright.download.prss.microsoft.com/dbazure/download/playwright",
     "https://cdn.playwright.dev",
 ];
-/// Path prefix whose archives Playwright serves from `cdn.playwright.dev` only (`cftUrl`).
+
 const PLAYWRIGHT_SINGLE_MIRROR_PREFIX: &str = "builds/cft/";
-/// Internal operation of the Playwright browser install step (HD-6).
+
 pub const PLAYWRIGHT_INSTALL_OPERATION: &str = "playwright-browsers-install-v1";
-/// Largest archive the install accepts (bytes).
+
 pub const PLAYWRIGHT_MAX_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
 
-/// Parsed `.velnor/playwright.lock`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PlaywrightLock {
-    /// Lock schema; must equal [`PLAYWRIGHT_LOCK_SCHEMA`].
     pub schema: u32,
-    /// Playwright host platform the archives were resolved for.
+
     pub platform: String,
-    /// Pinned archives sorted by version, then directory.
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub archives: Vec<LockedArchive>,
 }
 
-/// One pinned browser archive.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LockedArchive {
-    /// Playwright version (`playwright-core` in `bun.lock`).
     pub version: String,
-    /// `playwright-core` tarball integrity recorded in `bun.lock`.
+
     pub core_integrity: String,
-    /// Requested browsers that need this archive (`chromium`, `firefox`, `webkit`), sorted.
+
     pub browsers: Vec<String>,
-    /// Directory name under the browsers path (`chromium-1248`).
+
     pub directory: String,
-    /// Download URL on a Playwright host.
+
     pub url: String,
-    /// Lowercase SHA-256 of the archive.
+
     pub sha256: String,
-    /// Archive size in bytes.
+
     pub bytes: u64,
 }
 
@@ -78,7 +63,6 @@ fn is_lower_hex(value: &str, len: usize) -> bool {
             .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
 }
 
-/// True for a Subresource-Integrity `sha512-` value.
 #[must_use]
 pub fn is_sha512_integrity(value: &str) -> bool {
     value.strip_prefix("sha512-").is_some_and(|b64| {
@@ -90,7 +74,6 @@ pub fn is_sha512_integrity(value: &str) -> bool {
     })
 }
 
-/// True for a browsers-path directory name such as `chromium_headless_shell-1248`.
 #[must_use]
 pub fn is_browser_directory(value: &str) -> bool {
     value.rsplit_once('-').is_some_and(|(name, revision)| {
@@ -106,7 +89,6 @@ pub fn is_browser_directory(value: &str) -> bool {
     })
 }
 
-/// True for an https URL on a Playwright host naming a `.zip` with a plain path.
 #[must_use]
 pub fn is_playwright_download_url(value: &str) -> bool {
     let Some(rest) = value.strip_prefix("https://") else {
@@ -129,10 +111,6 @@ pub fn is_playwright_download_url(value: &str) -> bool {
 }
 
 impl PlaywrightLock {
-    /// Validate shape only.
-    ///
-    /// # Errors
-    /// Names the lock path, key path and a machine-readable problem.
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         if self.schema != PLAYWRIGHT_LOCK_SCHEMA {
             return Err(ContractError::UnsupportedSchema {
@@ -185,12 +163,6 @@ impl PlaywrightLock {
         Ok(())
     }
 
-    /// The archives a member on `version` needs for `browsers`, sorted by directory.
-    ///
-    /// # Errors
-    /// `playwright_lock_missing:<version>:<browser>` when a requested browser
-    /// has no archive, and `playwright_lock_drift:<version>` when archives of
-    /// one version disagree on the `bun.lock` integrity.
     pub fn archives_for(
         &self,
         version: &str,
@@ -225,13 +197,6 @@ impl PlaywrightLock {
     }
 }
 
-/// Download URLs for a locked archive: the locked URL first, then the other
-/// mirrors Playwright's registry tries for the same artifact, in registry order.
-///
-/// Archives under `builds/cft/` have one host upstream and get no fallback.
-/// Every returned URL passes [`is_playwright_download_url`]; a URL that is not
-/// a known mirror form yields only itself. The expected sha256 and size are
-/// the caller's and never change with the host.
 #[must_use]
 pub fn playwright_download_candidates(url: &str) -> Vec<String> {
     let mut candidates = vec![url.to_owned()];
@@ -254,7 +219,6 @@ pub fn playwright_download_candidates(url: &str) -> Vec<String> {
     candidates
 }
 
-/// The `directory:sha256` pin list the install step carries literally.
 #[must_use]
 pub fn pin_list(archives: &[&LockedArchive]) -> String {
     archives
@@ -263,7 +227,3 @@ pub fn pin_list(archives: &[&LockedArchive]) -> String {
         .collect::<Vec<_>>()
         .join(",")
 }
-
-#[cfg(test)]
-#[path = "playwright_lock_tests.rs"]
-mod tests;

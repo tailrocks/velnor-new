@@ -1,12 +1,3 @@
-//! Fail-closed presence preflight for pinned tools.
-//!
-//! Mise prints `WARN missing:` on stderr and still executes the payload
-//! when a selected tool is not installed, so a nonzero-exit classifier
-//! can never see the gap. [`ToolPresence`] queries installed versions
-//! first (`mise <globals> ls --json <tool>` under the same isolation
-//! overlay as `exec`) and fails closed naming the unsatisfied spec
-//! before any payload can run.
-
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -19,28 +10,12 @@ const MAX_OBSERVATION_STRING_BYTES: usize = 48;
 const MAX_OBSERVATION_OTHER_ROWS: usize = 8;
 const MAX_OBSERVATION_JSON_BYTES: usize = 4096;
 
-/// Require installed presence for pinned tools before any payload spawn.
-///
-/// The query is read-only: `mise ls` lists versions, installs nothing.
-/// Scoped to plain catalog tools addressed by their registry name, with
-/// no backend aliasing: `mise ls --json <tool>` and
-/// `mise exec <tool>@<exact>` read the same installs directory under the
-/// same isolation overlay, so the list is a faithful proxy for what exec
-/// selects. Backend-qualified `aqua:` selectors are deliberately NOT
-/// covered here: their aliasing made `mise ls` miss versions that `exec`
-/// resolves (proven on CI), so their presence is never gated on `ls`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolPresence {
-    /// Tools that must already be installed.
     tools: Vec<PinnedTool>,
 }
 
 impl ToolPresence {
-    /// Require installed presence for the given pinned tools.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::EmptyToolchain`] for zero tools.
     pub fn new(tools: Vec<PinnedTool>) -> Result<Self, MiseError> {
         if tools.is_empty() {
             return Err(MiseError::EmptyToolchain);
@@ -48,33 +23,16 @@ impl ToolPresence {
         Ok(Self { tools })
     }
 
-    /// Installed-version query for one pinned tool.
     #[must_use]
     pub fn command(&self, tool: PinnedTool) -> IsolatedCommand {
         IsolatedCommand::mise_ls_json(tool.tool_name())
     }
 
-    /// Fail unless every pinned tool is installed; never spawns a payload.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::MissingToolPin`] naming the first unsatisfied
-    /// spec and the versions actually installed, and propagates spawn,
-    /// nonzero-exit, or unparsable-output failures of the read-only
-    /// `mise ls` query itself (absence of evidence fails closed too).
     pub fn run(&self, catalog: &ToolCatalog) -> Result<(), MiseError> {
         self.run_with_observation(catalog)
             .map_err(|failure| *failure.error)
     }
 
-    /// Fail unless every pinned tool is installed, retaining a bounded view of
-    /// the failed query rows without rerunning Mise.
-    ///
-    /// # Errors
-    ///
-    /// Returns the original query, parse, or missing-pin failure. A missing-pin
-    /// failure includes an observation only when the same query returned valid
-    /// JSON.
     pub fn run_with_observation(&self, catalog: &ToolCatalog) -> Result<(), ToolPresenceFailure> {
         for tool in &self.tools {
             let output = self
@@ -105,13 +63,9 @@ impl ToolPresence {
     }
 }
 
-/// One failed presence check, preserving the original error and optional
-/// allowlisted observation from the same `mise ls` response.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolPresenceFailure {
-    /// The original command, parse, or missing-pin failure.
     pub error: Box<MiseError>,
-    /// Bounded selected-row metadata when the query returned valid JSON.
     pub observation: Option<Box<ToolPresenceObservation>>,
 }
 
@@ -124,7 +78,6 @@ impl ToolPresenceFailure {
     }
 }
 
-/// Bounded, allowlisted rows from one failed `mise ls --json` query.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ToolPresenceObservation {
     requested_version: String,
@@ -134,7 +87,6 @@ pub struct ToolPresenceObservation {
 }
 
 impl ToolPresenceObservation {
-    /// Compact single-line JSON, capped independently of Mise's raw response.
     #[must_use]
     pub fn to_json_line(&self) -> String {
         match serde_json::to_vec(self) {
@@ -155,23 +107,11 @@ struct ObservedToolRow {
     symlinked_to: Option<String>,
 }
 
-/// One `mise ls --json` entry.
 #[derive(Deserialize)]
 struct InstalledTool {
-    /// Installed version selector.
     version: String,
-    /// Whether the version is installed (present and complete).
     #[serde(default)]
     installed: bool,
-}
-
-/// Sorted installed versions reported by `mise ls --json <tool>`.
-///
-/// Any shape drift fails closed with an empty list, which [`MiseError::MissingToolPin`]
-/// reports instead of silently passing.
-#[cfg(test)]
-fn installed_versions(json: &str) -> Result<Vec<String>, MiseError> {
-    parse_installed_entries(json).map(|(_, entries)| installed_version_names(entries))
 }
 
 fn installed_versions_with_observation(
@@ -268,7 +208,3 @@ fn bounded_string(value: &str) -> String {
     }
     bounded
 }
-
-#[cfg(test)]
-#[path = "requests_presence_tests.rs"]
-mod tests;

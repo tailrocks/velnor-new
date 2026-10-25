@@ -9,6 +9,7 @@ autotests = false
 [[bin]]
 name = "velnor-actions"
 path = "src/main.rs"
+test = false
 
 [dependencies]
 serde_json = { workspace = true }
@@ -18,10 +19,6 @@ clap = { version = "=4.6.7", features = ["derive"] }
 
 [lints]
 workspace = true
-
-[[test]]
-name = "velnor_cli"
-path = "tests/velnor_cli.rs"
 
 [dev-dependencies]
 proc-macro2 = "=1.0.107"

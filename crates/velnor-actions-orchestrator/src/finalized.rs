@@ -1,11 +1,3 @@
-//! Finalized jobs: the attached, merged, closed IR `generate` writes.
-//!
-//! [`owned_preparation`] applies the Velnor lock/preseed attach;
-//! [`finalized_jobs`] runs the full renderer finalization over it. Both
-//! `generate` and [`crate::plan_text`] build from these so the two
-//! surfaces agree by construction instead of echoing different
-//! pipeline stages.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Job, WorkflowPolicy, expand_workflow};
@@ -17,15 +9,6 @@ use crate::pins::resolve_mise_setup;
 use crate::prepare::GenerationPreparation;
 use crate::validate::verify_velnor_repository_files;
 
-/// Owned preparation with the Velnor lock/preseed attach applied.
-///
-/// Shared by [`crate::render_staged_tree`] and [`finalized_jobs`] so
-/// `plan` lists the same finalized IR `generate` writes, never the
-/// pre-attach discovery IR.
-///
-/// # Errors
-///
-/// Returns lock or attach errors from the Velnor-only file checks.
 pub(crate) fn owned_preparation(
     prep: &GenerationPreparation,
 ) -> Result<GenerationPreparation, OrchestratorError> {
@@ -50,15 +33,6 @@ pub(crate) fn owned_preparation(
     Ok(owned)
 }
 
-/// Finalized jobs `generate` writes: attached IR plus merged support,
-/// setup insertion, closures, and the final fan-in.
-///
-/// `plan` lists these jobs so its job table, step counts, and action
-/// pins match the written YAML by construction.
-///
-/// # Errors
-///
-/// Returns lock, render, workflow-lint, or unsafe-path errors.
 pub fn finalized_jobs(
     prep: &GenerationPreparation,
 ) -> Result<BTreeMap<String, Job>, OrchestratorError> {

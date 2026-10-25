@@ -1,5 +1,3 @@
-//! Typed projection of the selected current-platform rows in `mise.lock`.
-
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -11,7 +9,6 @@ pub(crate) struct NativeMiseLock {
 }
 
 impl NativeMiseLock {
-    /// Whether the lock uses the supported Mise v3 root schema.
     pub(crate) fn has_supported_root_shape(&self) -> bool {
         self.valid_shape
             && self.lockfile_version == Some(3)
@@ -22,7 +19,6 @@ impl NativeMiseLock {
 }
 
 impl NativeMiseLock {
-    /// Select exactly one lock row for a pinned request, preserving variant identity.
     pub(crate) fn selected_tool(
         &self,
         key: &str,
@@ -72,7 +68,6 @@ pub(crate) struct NativeRepositoryIds {
     pub(crate) owner: Option<String>,
 }
 
-/// Normalize the Rust toolchain's component and target options for the lock projection.
 pub(crate) fn rust_toolchain_options(
     values: &BTreeMap<String, String>,
 ) -> Option<BTreeMap<String, String>> {
@@ -91,7 +86,6 @@ pub(crate) fn rust_toolchain_options(
     Some(options)
 }
 
-/// Parse supported exact lock rows while preserving unknown fields for rejection.
 pub(crate) fn parse_native_mise_lock(value: &toml::Value) -> Option<NativeMiseLock> {
     let root = value.as_table()?;
     let mut lock = NativeMiseLock {

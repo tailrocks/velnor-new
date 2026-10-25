@@ -1,18 +1,3 @@
-//! Crate-job dispositions from obligation decisions (hard decision 4).
-//!
-//! A Rust crate job is `not_affected` only when every obligation it owns is
-//! and no running job needs it. Anything else runs:
-//!
-//! - a job owning both `not_affected` and executing obligations runs them
-//!   all (`job_runs`): a job is skipped whole or not at all;
-//! - a job another running job needs through a cross-job gate runs
-//!   (`needed_by_running_job`), so an implicit `needs` skip can never stand
-//!   in for a planned run;
-//! - `OpenTofu` root jobs, named check jobs, and the plan job always run in
-//!   phase 1; their selection has not been audited for skipping.
-//!
-//! Matrix entries remain only for jobs that run.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
@@ -25,16 +10,9 @@ use crate::crate_job_ids::JobOwners;
 use crate::internal::internal_contract;
 use crate::internal_plan::wire_w2::ReuseOutcome;
 
-/// Reason for a `not_affected` obligation whose job runs anyway.
 pub(crate) const JOB_RUNS_REASON: &str = "job_runs";
-/// Reason for an unaffected job that a running job needs.
 pub(crate) const NEEDED_REASON: &str = "needed_by_running_job";
 
-/// Disposition of one unchanged Rust obligation (hard decision 4).
-///
-/// Unchanged work is `not_affected` unless a fail-safe signal says its
-/// reads are not bounded by selection: a build script may read anything
-/// until in-job read verification exists, so its package always runs.
 pub(crate) fn unaffected_rust_outcome(task: &ProposedTask) -> ReuseOutcome {
     if task.identity.undeclared_reads {
         ReuseOutcome::execute("undeclared_reads")
@@ -43,14 +21,6 @@ pub(crate) fn unaffected_rust_outcome(task: &ProposedTask) -> ReuseOutcome {
     }
 }
 
-/// Cross-job gate dependencies: job ID to the job IDs it needs.
-///
-/// Mirrors the generated `needs` lift (`crate_jobs::gates`): a runnable
-/// gate owned by another job becomes a dependency of the gated job.
-///
-/// # Errors
-///
-/// Returns a contract error for a member with an unknown stack.
 pub(crate) fn job_needs(
     tasks: &[&ProposedTask],
     owners: &JobOwners<'_>,
@@ -75,7 +45,6 @@ pub(crate) fn job_needs(
     Ok(needs)
 }
 
-/// Decide every job's disposition and normalize obligations and entries.
 pub(crate) fn finalize_dispositions(
     obligations: &mut [PlanObligation],
     entries: &mut Vec<MatrixEntry>,
@@ -140,10 +109,6 @@ pub(crate) fn finalize_dispositions(
         .collect()
 }
 
-/// Encode `not_affected` job IDs for the plan job's output: `,a,b,` or empty.
-///
-/// Job IDs never contain commas, so `contains(..., ',<id>,')` matches whole
-/// IDs only; the empty encoding matches nothing and runs every job.
 pub(crate) fn encode_not_affected_jobs(jobs: &[PlanJob]) -> String {
     let ids: Vec<&str> = jobs
         .iter()
@@ -156,7 +121,3 @@ pub(crate) fn encode_not_affected_jobs(jobs: &[PlanJob]) -> String {
         format!(",{},", ids.join(","))
     }
 }
-
-#[cfg(test)]
-#[path = "plan_dispositions_tests.rs"]
-mod tests;

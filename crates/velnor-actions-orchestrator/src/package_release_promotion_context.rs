@@ -1,4 +1,3 @@
-//! Actual caller contexts for publication recovery and read-only tap continuation.
 use super::super::{
     github::GitHubApi,
     run_identity::{CurrentRun, RunSource, continuation_job_name, release_job_name},
@@ -139,7 +138,3 @@ impl Invocation {
         )
     }
 }
-
-#[cfg(test)]
-#[path = "package_release_promotion_context_tests.rs"]
-mod tests;

@@ -1,4 +1,3 @@
-//! Credential placement for the two closed tap invocation routes.
 use super::{
     ConsumerReleaseSpec, ConsumerReleaseTapSpec, RenderError, TapInvocationContext, Yaml, steps,
     variable,

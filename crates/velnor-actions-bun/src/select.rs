@@ -1,11 +1,3 @@
-//! Affected-member claims (hard decision 3 for the Bun stack).
-//!
-//! A member is selected when a changed path lies in its directory, in a
-//! file every member of its workspace shares (root `package.json`, `bun.lock`,
-//! `bunfig.toml`, root `tsconfig*.json`, `patches/**`), or in a declared
-//! input; every member that depends on a selected one through `workspace:`
-//! is selected with it.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::config::BunInputRule;
@@ -14,7 +6,6 @@ use velnor_actions_contract::matches_glob;
 use crate::paths::{is_tsconfig, is_under};
 use crate::workspace::{Member, Workspace};
 
-/// True for a file whose change affects every member of the workspace at `root`.
 fn is_shared(root: &str, path: &str) -> bool {
     let rel = if root.is_empty() {
         Some(path)
@@ -29,7 +20,6 @@ fn is_shared(root: &str, path: &str) -> bool {
     })
 }
 
-/// Names of the members affected by `changed` (repository-relative paths).
 #[must_use]
 pub fn affected_members(
     workspaces: &[Workspace],
@@ -56,7 +46,6 @@ pub fn affected_members(
     close_over_dependents(&all, selected)
 }
 
-/// The deepest member directory that contains `path`.
 fn owner_of<'a>(members: &[&'a Member], path: &str) -> Option<&'a Member> {
     members
         .iter()
@@ -79,8 +68,6 @@ fn close_over_dependents(members: &[&Member], mut selected: BTreeSet<String>) ->
     }
 }
 
-/// Members that must always run: their configs read outside their directory
-/// and no rule naming them declares those reads complete.
 #[must_use]
 pub fn forced_members(
     reads: &BTreeMap<String, Vec<String>>,

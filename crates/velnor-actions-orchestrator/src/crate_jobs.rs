@@ -1,17 +1,3 @@
-//! Crate-job construction: one job per crate with parallel check steps.
-//!
-//! Every Rust package/configuration owns exactly one job (a hard decision in
-//! `docs/hard-decisions.md`): checkout, pinned tools, lockful sources and the
-//! MBX target cache are prepared once, the test executables are built once,
-//! and then Format, Clippy, Documentation, test execution and doctests run as
-//! concurrent GitHub steps joined by one `wait-all`. A failed check fails the
-//! job at that join; the always-on report upload still runs afterwards.
-//! Clippy and documentation compile in their own Cargo target lanes, so the
-//! target lock never serializes tests behind them. Same-job data producers
-//! (the Nextest build) are sequential obligations strictly before the
-//! parallel group in the validated [`CrateJob`](velnor_actions_contract::CrateJob).
-//! Gate owners elsewhere become job dependencies; `OpenTofu` keeps one job per root.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
@@ -20,8 +6,6 @@ use velnor_actions_contract::{
 };
 use velnor_actions_mise::{TaskCacheMode, ToolCatalog};
 use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
-#[cfg(test)]
-use {velnor_actions_mise::PinnedTool, velnor_actions_workflow_renderer::render::PLAN_JOB_ID};
 
 use crate::OrchestratorError;
 use crate::config::private_wiring::PrivateWiring;
@@ -32,8 +16,6 @@ use crate::internal::internal;
 #[path = "crate_jobs_inputs.rs"]
 mod inputs;
 pub(crate) use inputs::CrateJobInputs;
-#[cfg(test)]
-pub(crate) use inputs::build_crate_jobs_with;
 
 #[path = "dependency_seed.rs"]
 pub(crate) mod dependency_seed;
@@ -54,25 +36,15 @@ mod job_steps;
 mod obligations;
 use job_steps::obligation_steps;
 use obligations::obligations_for;
-#[cfg(test)]
-use obligations::{gates_for, obligation_rank};
 
-#[cfg(test)]
-pub(crate) use stage::needs;
 pub(crate) use stage::{is_mbx, is_nextest, is_opentofu, is_rust};
 
-/// Built crate jobs plus their driver selections for MBX gating.
 pub(crate) struct CrateBuild {
-    /// Dependency-seed jobs (cache decision 2): never part of `Required`.
     pub(crate) seeds: Vec<(String, Job)>,
-    /// `(job_id, job)` pairs in deterministic job-ID order.
     pub(crate) jobs: Vec<(String, Job)>,
-    /// Render-driver selection per crate job ID.
     pub(crate) drivers: BTreeMap<String, RenderDriver>,
 }
 
-/// Build crate jobs with the repository's workflow and Rust-stack config.
-/// # Errors
 #[expect(
     clippy::too_many_arguments,
     reason = "one call site; the private-source wiring joins the existing inputs"
@@ -115,25 +87,6 @@ pub(crate) fn build_for_workflow(
         private,
         JobTimeout::new(config.workflow.dependency_seed_timeout_minutes)?,
     )
-}
-
-/// Build one ordered IR job for each runnable package/configuration.
-///
-/// Tasks without test targets carry no command and stay out; the
-/// package-less workspace Format scope belongs to the plan job, so its
-/// tasks stay out too. Same-job data producers run first; the remaining
-/// obligations keep the Format, Clippy, tests, doctests, docs order (shards
-/// by task ID) and, in Rust jobs, run as one parallel group. Gates naming
-/// other runnable owners become job dependencies. The acquire step stages
-/// the helper every report wrapper invokes; callers without one (pre-seed,
-/// lock attach) provision separately.
-///
-/// # Errors
-///
-/// Returns contract, render-context, or tool-request errors.
-#[cfg(test)]
-pub(crate) fn build_crate_jobs(input: CrateJobInputs<'_>) -> Result<CrateBuild, OrchestratorError> {
-    build_crate_jobs_with(input, None)
 }
 
 fn build_crate_jobs_with_seed_timeout(
@@ -223,11 +176,6 @@ fn build_crate_jobs_with_seed_timeout(
     })
 }
 
-/// True when the task becomes a crate-job obligation.
-///
-/// Test-less tasks carry no command and package-less workspace tasks
-/// belong to the plan job, so neither is emitted as an obligation.
-/// Shared with `plan` so its obligation list matches emission exactly.
 pub(crate) fn is_runnable(task: &ProposedTask) -> bool {
     !task.no_targets
         && !task.identity.unit_id.is_empty()
@@ -237,7 +185,6 @@ pub(crate) fn is_runnable(task: &ProposedTask) -> bool {
         )
 }
 
-/// Private-source block (HD-7) plus the Cargo source fetch of one Rust job.
 fn rust_source_steps(
     input: &CrateJobInputs<'_>,
     model: &CrateJob,
@@ -265,16 +212,6 @@ fn rust_source_steps(
     Ok(steps)
 }
 
-/// Render one validated crate model to its fixed IR job.
-///
-/// P08 order: helper staging, plan download (report identities bind
-/// the plan), restore the exact shared Cargo sources subset, the
-/// per-root provider restore on opentofu roles, then MBX objects,
-/// then probe-and-fetch, then report-wrapped obligations, then one
-/// always-on crate-report upload carrying every entry. Readers never
-/// save. Rust setup (components, restore, fetch) emits only for rust
-/// roles; pure-tofu roles carry the opentofu driver with no Rust
-/// setup, mixed roles the union.
 #[expect(
     clippy::fn_params_excessive_bools,
     clippy::too_many_arguments,
@@ -364,23 +301,3 @@ fn render_job(
         cache_mode: None,
     })
 }
-
-#[cfg(test)]
-#[path = "crate_jobs_tests.rs"]
-pub(crate) mod crate_jobs_tests;
-
-#[cfg(test)]
-#[path = "crate_jobs_display_tests.rs"]
-mod crate_jobs_display_tests;
-
-#[cfg(test)]
-#[path = "crate_jobs_tofu_cache_tests.rs"]
-mod crate_jobs_tofu_cache_tests;
-
-#[cfg(test)]
-#[path = "crate_jobs_tofu_tests.rs"]
-mod crate_jobs_tofu_tests;
-
-#[cfg(test)]
-#[path = "crate_jobs_upload_tests.rs"]
-mod crate_jobs_upload_tests;

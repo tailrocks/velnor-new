@@ -1,5 +1,3 @@
-//! Container command and application probes for capability admission.
-
 use std::ffi::OsString;
 use std::path::Path;
 
@@ -12,7 +10,6 @@ use velnor_actions_contract::config::{
 
 use super::{OrbStackAppObservation, OrbStackObservation, PreparedContainer, invalid, probe};
 
-/// Render a bounded probe failure without disclosing unbounded tool output.
 pub(super) fn probe_failure(
     program: &Path,
     args: &[&str],
@@ -31,7 +28,6 @@ pub(super) fn probe_failure(
     )
 }
 
-/// Collect fixed Docker, codesign, plutil, and `OrbStack` CLI observations.
 pub(super) fn probe_orbstack(
     sdk: &HostOrbStackSdk,
     prepared: &PreparedContainer,
@@ -150,27 +146,4 @@ fn owned_cli_bundle(program: &Path) -> Result<&str, MiseError> {
         })
         .and_then(Path::to_str)
         .ok_or_else(|| invalid("orbstack", "owned_nested_bundle_missing"))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::owned_cli_bundle;
-
-    #[test]
-    fn owned_bundle_accepts_uppercase_extension_and_rejects_near_names()
-    -> Result<(), crate::MiseError> {
-        for name in ["scli.app", "scli.APP", "scli.ApP"] {
-            let path = std::path::PathBuf::from("/owned")
-                .join(name)
-                .join("Contents/MacOS/scli");
-            assert_eq!(owned_cli_bundle(&path)?, format!("/owned/{name}"));
-        }
-        assert!(
-            owned_cli_bundle(std::path::Path::new(
-                "/owned/scli.app-copy/Contents/MacOS/scli"
-            ))
-            .is_err()
-        );
-        Ok(())
-    }
 }

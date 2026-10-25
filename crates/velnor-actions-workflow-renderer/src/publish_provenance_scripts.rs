@@ -1,56 +1,24 @@
-//! Fixed shell text for `[publish] provenance = "sigstore_bundle"`.
-//!
-//! The declared fallback for repositories whose plan has no GitHub attestation
-//! store. The signature is unchanged in kind: keyless, bound to the job's
-//! GitHub OIDC identity, issued by GitHub's Sigstore instance (Fulcio
-//! `fulcio.githubapp.com`, timestamp authority `timestamp.githubapp.com`, no
-//! transparency log, so a private repository's identity never reaches a
-//! public log). Only the store differs: instead of `POST /attestations`, the
-//! signed bundle and a provenance receipt travel as a run artifact and are
-//! recorded as immutable assets of the tag's GitHub release.
-//!
-//! Every script is a constant template. Its only inputs are validated
-//! artifact names, fixed directories and the pinned Cosign digest, so no
-//! config text can introduce shell syntax. The verifier is
-//! `gh attestation verify --bundle`, which selects GitHub's trusted root
-//! from the certificate issuer and checks the certificate's source
-//! repository, source digest, source ref, signer workflow and signer digest.
-//! It also binds verified certificate repository and owner IDs to the runner's
-//! GitHub context.
-
 use crate::publish_render::PUBLISH_WORKFLOW_PATH;
 
-/// A pinned Cosign Linux release asset the sign job admits.
-///
-/// The caller passes the catalog pin (`velnor_actions_mise`); the script
-/// requires exactly `size` bytes and the matching `sha256`.
 #[derive(Debug, Clone, Copy)]
 pub struct CosignPin<'a> {
-    /// Release version without the `v` (`3.1.4`).
     pub version: &'a str,
-    /// Lowercase hex sha256 of the asset.
     pub sha256: &'a str,
-    /// Exact asset size in bytes.
     pub size: usize,
 }
 
-/// Architecture of the fixed Cosign release asset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CosignPlatform {
-    /// Linux `x86_64` executable.
     LinuxAmd64,
-    /// Linux `AArch64` executable.
     LinuxArm64,
 }
 
 impl CosignPin<'_> {
-    /// Release asset URL of the pin.
     #[must_use]
     pub fn url(&self) -> String {
         self.url_for(CosignPlatform::LinuxAmd64)
     }
 
-    /// Release asset URL of the pin for one supported architecture.
     #[must_use]
     pub fn url_for(&self, platform: CosignPlatform) -> String {
         let asset = match platform {
@@ -76,33 +44,22 @@ impl CosignPin<'_> {
     }
 }
 
-/// Directory (under runner temp) the bundle and the receipt travel in.
 pub const PROVENANCE_DIR: &str = "$RUNNER_TEMP/provenance";
-/// Suffix of the Sigstore bundle written next to a subject name.
 pub const BUNDLE_SUFFIX: &str = ".sigstore.json";
-/// Suffix of the provenance receipt written next to a subject name.
 pub const RECEIPT_SUFFIX: &str = ".provenance.json";
-/// Sigstore bundle media type the signer must produce.
 pub const BUNDLE_MEDIA_TYPE: &str = "application/vnd.dev.sigstore.bundle.v0.3+json";
-/// SLSA provenance predicate type signed into the in-toto statement.
 pub const PREDICATE_TYPE: &str = "https://slsa.dev/provenance/v1";
 
-/// Signing config naming GitHub's Sigstore instance and no transparency log.
 const SIGNING_CONFIG: &str = r#"{"mediaType":"application/vnd.dev.sigstore.signingconfig.v0.2+json","caUrls":[{"url":"https://fulcio.githubapp.com","majorApiVersion":1,"validFor":{"start":"2023-01-01T00:00:00Z"},"operator":"github.com"}],"oidcUrls":[],"rekorTlogUrls":[],"tsaUrls":[{"url":"https://timestamp.githubapp.com/api/v1/timestamp","majorApiVersion":1,"validFor":{"start":"2023-01-01T00:00:00Z"},"operator":"github.com"}],"rekorTlogConfig":{"selector":"ANY"},"tsaConfig":{"selector":"ANY"}}"#;
 
-/// jq filter picking GitHub's trusted root out of `gh attestation trusted-root`.
 const GITHUB_ROOT_FILTER: &str = r#"select((.certificateAuthorities // []) | length > 0 and all(.uri == "fulcio.githubapp.com"))"#;
 
-/// SLSA v1 predicate built from the runner's own GitHub context.
 const PREDICATE: &str = r#"{buildDefinition: {buildType: "https://actions.github.io/buildtypes/workflow/v1", externalParameters: {workflow: {ref: env.GITHUB_REF, repository: ("https://github.com/" + env.GITHUB_REPOSITORY), path: $path}}, internalParameters: {github: {event_name: env.GITHUB_EVENT_NAME, repository_id: env.GITHUB_REPOSITORY_ID, repository_owner_id: env.GITHUB_REPOSITORY_OWNER_ID, runner_environment: env.RUNNER_ENVIRONMENT}}, resolvedDependencies: [{uri: ("git+https://github.com/" + env.GITHUB_REPOSITORY + "@" + env.GITHUB_REF), digest: {gitCommit: env.GITHUB_SHA}}]}, runDetails: {builder: {id: ("https://github.com/actions/runner/" + (env.RUNNER_ENVIRONMENT // "unknown"))}, metadata: {invocationId: ("https://github.com/" + env.GITHUB_REPOSITORY + "/actions/runs/" + env.GITHUB_RUN_ID + "/attempts/" + env.GITHUB_RUN_ATTEMPT)}}}"#;
 
-/// Receipt recording the declared mode, the exact bytes and how to verify them.
 const RECEIPT: &str = r#"{schema: 1, kind: "velnor-publish-provenance", provenance: "sigstore_bundle", reason: "declared [publish] provenance = sigstore_bundle: the GitHub attestation store is not used", sigstore_instance: "github", predicate_type: $predicate, subject: {name: $name, sha256: $subject}, bundle: {name: ($name + $suffix), sha256: $bundle, media_type: $media}, source: {repository: env.GITHUB_REPOSITORY, repository_id: env.GITHUB_REPOSITORY_ID, repository_owner_id: env.GITHUB_REPOSITORY_OWNER_ID, ref: env.GITHUB_REF, sha: env.GITHUB_SHA}, workflow: {path: $path, ref: env.GITHUB_WORKFLOW_REF, sha: env.GITHUB_WORKFLOW_SHA}, run: {id: env.GITHUB_RUN_ID, attempt: env.GITHUB_RUN_ATTEMPT}, verify: ("gh attestation verify " + $name + " --bundle " + $name + $suffix + " --repo " + env.GITHUB_REPOSITORY + " --source-digest " + env.GITHUB_SHA + " --source-ref " + env.GITHUB_REF + " --signer-workflow " + env.GITHUB_REPOSITORY + "/" + $path + " --signer-digest " + env.GITHUB_WORKFLOW_SHA + " --predicate-type " + $predicate + " --format json")}"#;
 
-/// Require nonempty canonical numeric IDs and bind every verified certificate result.
 const VERIFIED_IDENTITY_FILTER: &str = r#"def canonical_id: type == "string" and test("^[1-9][0-9]*$"); type == "array" and length > 0 and ($repository_id | canonical_id) and ($owner_id | canonical_id) and all(.[]; (.verificationResult.signature.certificate.sourceRepositoryIdentifier | canonical_id and . == $repository_id) and (.verificationResult.signature.certificate.sourceRepositoryOwnerIdentifier | canonical_id and . == $owner_id))"#;
 
-/// The exact `gh attestation verify` that admits `$s` with bundle `$p/$name.sigstore.json`.
 fn verify_command(output: &str) -> String {
     format!(
         "gh attestation verify \"$s\" --bundle \"$p/$name{BUNDLE_SUFFIX}\" \
@@ -113,7 +70,6 @@ fn verify_command(output: &str) -> String {
     )
 }
 
-/// Check verifier output against trusted immutable GitHub identities.
 fn verified_identity_check(output: &str) -> String {
     format!(
         "jq -e --arg repository_id \"$GITHUB_REPOSITORY_ID\" \
@@ -122,10 +78,6 @@ fn verified_identity_check(output: &str) -> String {
     )
 }
 
-/// Shell prelude: `$s` is the subject, `$name` its file name, `$p` the provenance dir.
-///
-/// `dir` is a fixed runner-temp directory and `file` a validated name that
-/// may use `$ver` (the tag's version).
 fn prelude(gh: &str, dir: &str, file: &str) -> String {
     format!(
         "set -eu; {gh}; ver=${{GITHUB_REF_NAME##*-v}}; s=\"{dir}/{file}\"; test -f \"$s\"; \
@@ -133,18 +85,6 @@ fn prelude(gh: &str, dir: &str, file: &str) -> String {
     )
 }
 
-/// Sign `dir/file` into a Sigstore bundle, verify it, and write the receipt.
-///
-/// The pinned Cosign is fetched over HTTPS and admitted by its exact byte
-/// length and sha256. Signing uses the job's ambient GitHub OIDC token. The bundle is
-/// verified at once with the same `gh attestation verify` the publish job
-/// repeats; a bundle that does not verify fails the job before any receipt
-/// exists.
-///
-/// # Errors
-///
-/// Returns `invalid_cosign_pin` when the pin is not a strict version,
-/// lowercase sha256 and positive size.
 pub fn sign_script(
     gh: &str,
     dir: &str,
@@ -154,12 +94,6 @@ pub fn sign_script(
     sign_script_for_platform(gh, dir, file, cosign, CosignPlatform::LinuxAmd64)
 }
 
-/// Sign with the exact architecture-specific Cosign release asset.
-///
-/// # Errors
-///
-/// Returns `invalid_cosign_pin` when the pin is not a strict version,
-/// lowercase sha256 and positive size.
 pub fn sign_script_for_platform(
     gh: &str,
     dir: &str,
@@ -206,11 +140,6 @@ pub fn sign_script_for_platform(
     ))
 }
 
-/// Re-verify the downloaded bundle and receipt against `dir/file` before publishing.
-///
-/// The provenance directory holds exactly the bundle and the receipt; the
-/// bundle must pass the same `gh attestation verify`, and the receipt must
-/// name this subject's and bundle's sha256 and this run's source commit.
 #[must_use]
 pub fn verify_script(gh: &str, dir: &str, file: &str) -> String {
     let prelude = prelude(gh, dir, file);
@@ -224,7 +153,6 @@ pub fn verify_script(gh: &str, dir: &str, file: &str) -> String {
     )
 }
 
-/// Receipt check without `gh`: subject and bundle sha256, mode and source commit.
 fn receipt_check() -> String {
     format!(
         "sha256sum < \"$s\" > \"$p.subject.sum\"; read -r subject rest < \"$p.subject.sum\"; \
@@ -240,8 +168,6 @@ fn receipt_check() -> String {
 
 const RECEIPT_CHECK_FILTER: &str = r#"def canonical_id: type == "string" and test("^[1-9][0-9]*$"); .provenance == "sigstore_bundle" and .subject.name == $name and .subject.sha256 == $subject and .bundle.sha256 == $bundle and .source.repository == env.GITHUB_REPOSITORY and .source.sha == env.GITHUB_SHA and .source.ref == env.GITHUB_REF and ($repository_id | canonical_id) and ($owner_id | canonical_id) and .source.repository_id == $repository_id and .source.repository_owner_id == $owner_id"#;
 
-/// Receipt check for a job without `gh` (the npm push): binds the pushed
-/// bytes to the receipt the provenance job already verified and recorded.
 #[must_use]
 pub fn receipt_script(dir: &str, file: &str) -> String {
     format!(
@@ -251,7 +177,6 @@ pub fn receipt_script(dir: &str, file: &str) -> String {
     )
 }
 
-/// Copy the verified bundle and receipt beside the subject for the release upload.
 #[must_use]
 pub fn stage_script(dir: &str, file: &str) -> String {
     format!(

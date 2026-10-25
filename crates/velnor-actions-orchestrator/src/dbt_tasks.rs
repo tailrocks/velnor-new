@@ -1,5 +1,3 @@
-//! Resolve `[stacks.dbt]` into one job policy per project.
-
 use velnor_actions_contract::config::DbtService;
 use velnor_actions_contract::{JobTimeout, ServiceContainer, VelnorConfig};
 use velnor_actions_dbt::{job_id, job_name};
@@ -11,10 +9,8 @@ use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
 use crate::discover::Discovery;
 
-/// Postgres major the service catalog offers for dbt warehouse stand-ins.
 const POSTGRES_MAJOR: u8 = 18;
 
-/// Policies for every project, sorted by job id.
 pub(crate) fn policies(
     config: &VelnorConfig,
     discovery: &Discovery,
@@ -62,7 +58,6 @@ pub(crate) fn policies(
     Ok(out)
 }
 
-/// Connection values the catalog Postgres service publishes (host port, credentials).
 fn check_postgres_env(
     env: &std::collections::BTreeMap<String, String>,
     service: &ServiceContainer,

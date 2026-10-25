@@ -1,5 +1,3 @@
-//! Literal syntax helpers for the Homebrew formula contract.
-
 use crate::ContractError;
 use std::ffi::OsStr;
 

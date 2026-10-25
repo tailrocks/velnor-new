@@ -1,4 +1,3 @@
-//! Filesystem custody for verified Cargo source archives.
 use crate::OrchestratorError;
 use crate::internal::internal;
 use sha2::{Digest, Sha256};

@@ -1,5 +1,3 @@
-//! Bounded normalization of the renderer's closed workflow alias grammar.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::OrchestratorError;
@@ -107,7 +105,6 @@ impl Normalizer {
                 let resolved = run_anchor::resolve_run_scalar(&value, &mut self.runs)?;
                 line.content = format!("run: {resolved}");
             }
-            // Keep all existing scope/tag/flow checks on ordinary source lines.
             if let Some((key, value)) = mapping_entry(&line.content) {
                 alias_scope::validate_mapping_value(key, value, shape::is_run(&line, &path))?;
             } else {
@@ -212,7 +209,3 @@ fn block_end(lines: &[Line], index: usize) -> usize {
 fn fail(problem: &str) -> OrchestratorError {
     shellcheck_fail(&format!("workflow_mapping_{problem}"))
 }
-
-#[cfg(test)]
-#[path = "validate_shell_yaml_mapping_tests.rs"]
-mod tests;

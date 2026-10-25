@@ -1,38 +1,16 @@
-//! Pure rendering failures; no IO is performed.
-
 use std::fmt::{Display, Formatter};
 
-/// Pure rendering failures; no IO is performed.
 #[derive(Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum RenderError {
-    /// Contract IR validation failed.
     Contract(velnor_actions_contract::ContractError),
-    /// Workflow IR violates a renderer-enforced invariant.
     InvalidWorkflow(String),
-    /// Policy gate rejected the render request.
-    PolicyRejected {
-        /// Policy name as rendered.
-        policy: String,
-        /// Machine-readable problem code plus detail.
-        problem: String,
-    },
-    /// Generator version is malformed.
+    PolicyRejected { policy: String, problem: String },
     BadVersion(String),
-    /// First-line marker is missing or inexact.
-    BadMarker {
-        /// Expected marker line.
-        expected: String,
-        /// Marker line found.
-        found: String,
-    },
-    /// Action reference is not a pinned allowlist entry.
+    BadMarker { expected: String, found: String },
     BadActionRef(String),
-    /// Command argv violates fixed-vector policy.
     BadCommand(String),
-    /// Rendered text would leak a private subcommand token.
     PrivateSubcommand(String),
-    /// Output path is unsafe (traversal, absolute, or symlink).
     UnsafePath(String),
 }
 

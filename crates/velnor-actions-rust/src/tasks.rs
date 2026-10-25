@@ -1,5 +1,3 @@
-//! Per-package task-group derivation with clippy-gates-tests edges.
-
 use velnor_actions_contract::{ContractError, manifest_key_for_cargo_manifest, task_id_for_stack};
 
 use crate::{
@@ -13,27 +11,18 @@ pub use crate::argv::{
 };
 pub use crate::task_identity::{DigestSlot, ExtensionInputs, RustTaskIdentityExtension, SlotState};
 
-/// Rust task kinds derived per package.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TaskKind {
-    /// Formatting check.
     Fmt,
-    /// Clippy lint gate.
     Clippy,
-    /// Unit and integration tests via plain `cargo test`.
     Test,
-    /// Unit and integration tests via Nextest.
     Nextest,
-    /// Documentation tests.
     Doctest,
-    /// Documentation build.
     Doc,
-    /// Test-executable or archive build.
     Build,
 }
 
 impl TaskKind {
-    /// Stable task-id kind segment.
     #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -48,67 +37,38 @@ impl TaskKind {
     }
 }
 
-/// One derived Rust task group.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[expect(
     clippy::struct_excessive_bools,
     reason = "task-group cache/reuse signal flags"
 )]
 pub struct TaskGroup {
-    /// Stable task id.
     pub task_id: String,
-    /// Cargo package id (empty for workspace-level formatting).
     pub package_id: String,
-    /// Package name (display only).
     pub package_name: String,
-    /// Manifest key used in the task id.
     pub manifest_key: String,
-    /// Task kind.
     pub kind: TaskKind,
-    /// Configuration name.
     pub configuration: String,
-    /// Sorted enabled features.
     pub features: Vec<String>,
-    /// Cargo all-features mode: every package feature is active.
     pub all_features: bool,
-    /// Execution target (`host` or triple).
     pub target: String,
-    /// Quality gates that must pass first (task ids).
     pub gated_by: Vec<String>,
-    /// Data producers that must finish first (task ids).
     pub depends_on: Vec<String>,
-    /// Existing metadata-derived non-doc target flags (`test` kind only).
     pub target_flags: Vec<String>,
-    /// No applicable test target exists; emit no test command.
     pub no_test_targets: bool,
-    /// Package named by Clippy (`clippy` kind only).
     pub package_arg: Option<String>,
-    /// Selected compile driver.
     pub compile_driver: CompileDriver,
-    /// Selected test runner.
     pub test_runner: TestRunner,
-    /// Resolved Nextest profile.
     pub nextest_profile: NextestProfile,
-    /// Whether nextest should run ignored tests.
     pub run_ignored: Option<String>,
-    /// Declared non-Rust task inputs (sorted, deduped).
     pub declared_inputs: Vec<String>,
-    /// Build script may read undeclared inputs (conservative at derive).
     pub undeclared_reads: bool,
-    /// Task needs network access (Rust payloads run offline: false).
     pub uses_network: bool,
-    /// Task reads the wall clock (Rust payloads: false).
     pub uses_clock: bool,
-    /// Task needs randomness (Rust payloads: false).
     pub uses_random: bool,
 }
 
 impl TaskGroup {
-    /// Attach declared non-Rust inputs (sorted, deduped).
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ContractError`] for empty, absolute, or traversing paths.
     pub fn with_declared_inputs(mut self, paths: &[String]) -> Result<Self, ContractError> {
         for path in paths {
             let bad =
@@ -128,28 +88,18 @@ impl TaskGroup {
     }
 }
 
-/// Inputs for per-package derivation.
 #[derive(Debug, Clone)]
 pub struct DeriveInputs<'a> {
-    /// Package inventory.
     pub package: &'a PackageRecord,
-    /// Workspace profile.
     pub profile: &'a RustExecutionProfile,
-    /// Configuration name.
     pub configuration: &'a str,
-    /// Enabled features.
     pub features: &'a [String],
-    /// Activate every package feature for every compiling task.
     pub all_features: bool,
-    /// Activate every package feature for the Clippy task only.
     pub clippy_all_features: bool,
-    /// Execution target.
     pub target: &'a str,
-    /// Whether the package has explicit formatting configuration.
     pub explicit_fmt: bool,
 }
 
-/// Shared group fields resolved once per derivation.
 struct GroupBase<'a> {
     key: &'a str,
     configuration: &'a str,
@@ -164,18 +114,6 @@ struct GroupBase<'a> {
     package: &'a PackageRecord,
 }
 
-/// Derive the per-package task groups.
-///
-/// Formatting is per package only with explicit configuration; otherwise the
-/// plan-job Format step covers formatting. The build group exists only for
-/// Nextest profiles; plain `cargo test` compiles and runs in one step. The
-/// only edge is the Nextest data dependency on its build: Clippy,
-/// documentation, test execution and doctests are independent checks that
-/// one crate job runs concurrently, and each must pass on its own.
-///
-/// # Errors
-///
-/// Returns [`ContractError`] when a task id cannot be derived.
 pub fn derive_task_groups(inputs: &DeriveInputs<'_>) -> Result<Vec<TaskGroup>, ContractError> {
     let manifest_key = manifest_key_for_cargo_manifest(&inputs.package.manifest)?;
     let mut features = inputs.features.to_vec();
@@ -215,11 +153,6 @@ pub fn derive_task_groups(inputs: &DeriveInputs<'_>) -> Result<Vec<TaskGroup>, C
     Ok(groups)
 }
 
-/// Derive the single plan-level formatting group for a workspace root.
-///
-/// # Errors
-///
-/// Returns [`ContractError`] when the workspace manifest or task id is invalid.
 pub fn derive_workspace_fmt(
     workspace_manifest: &str,
     profile: &RustExecutionProfile,
@@ -261,15 +194,6 @@ pub fn derive_workspace_fmt(
     })
 }
 
-/// Derive the workspace formatting group only with explicit root config.
-///
-/// Returns `None` without explicit workspace formatting configuration:
-/// per-package groups cover explicit packages and the plan-job Format
-/// step covers the rest, so a workspace matrix obligation would double-run.
-///
-/// # Errors
-///
-/// Returns [`ContractError`] when the workspace manifest or task id is invalid.
 pub fn derive_workspace_fmt_if_explicit(
     workspace_manifest: &str,
     profile: &RustExecutionProfile,
@@ -283,7 +207,6 @@ pub fn derive_workspace_fmt_if_explicit(
     derive_workspace_fmt(workspace_manifest, profile, configuration, target).map(Some)
 }
 
-/// Derive one task id for `kind`.
 fn task_id(base: &GroupBase<'_>, kind: TaskKind) -> Result<String, ContractError> {
     task_id_for_stack(
         crate::STACK_ID,
@@ -294,7 +217,6 @@ fn task_id(base: &GroupBase<'_>, kind: TaskKind) -> Result<String, ContractError
     )
 }
 
-/// Build a group without gate or data edges.
 fn plain_group(base: &GroupBase<'_>, kind: TaskKind, id: &str) -> TaskGroup {
     TaskGroup {
         task_id: id.to_owned(),
@@ -323,7 +245,6 @@ fn plain_group(base: &GroupBase<'_>, kind: TaskKind, id: &str) -> TaskGroup {
     }
 }
 
-/// Build the Clippy gate naming exactly one package.
 fn clippy_group(base: &GroupBase<'_>, id: &str) -> TaskGroup {
     let mut group = plain_group(base, TaskKind::Clippy, id);
     group.all_features |= base.clippy_all_features;
@@ -331,7 +252,6 @@ fn clippy_group(base: &GroupBase<'_>, id: &str) -> TaskGroup {
     group
 }
 
-/// Build the test group with metadata-derived target flags.
 fn test_group(base: &GroupBase<'_>, kind: TaskKind, id: &str, build_id: Option<&str>) -> TaskGroup {
     let mut group = plain_group(base, kind, id);
     if kind == TaskKind::Test {
@@ -348,14 +268,12 @@ fn test_group(base: &GroupBase<'_>, kind: TaskKind, id: &str, build_id: Option<&
     group
 }
 
-/// Build the doctest group, separate in either test profile.
 fn doctest_group(base: &GroupBase<'_>, id: &str) -> TaskGroup {
     let mut group = plain_group(base, TaskKind::Doctest, id);
     group.no_test_targets = !base.package.targets.iter().any(|target| target.doctest);
     group
 }
 
-/// Test-bearing non-doc target flags; `test = false` targets get none.
 fn target_flags(package: &PackageRecord) -> Vec<String> {
     [
         ("lib", "--lib"),
@@ -370,7 +288,6 @@ fn target_flags(package: &PackageRecord) -> Vec<String> {
     .collect()
 }
 
-/// Whether any target is exercised by `cargo test` (mirrors `test`).
 fn has_test_targets(package: &PackageRecord) -> bool {
     package.targets.iter().any(|target| {
         target.test

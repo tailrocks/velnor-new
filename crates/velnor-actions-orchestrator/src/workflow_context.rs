@@ -1,5 +1,3 @@
-//! Renderer context construction from discovered repository evidence.
-
 use velnor_actions_contract::{
     ExecutionMode, GeneratorValidation, ScaleSetSelector, ValidatorKind, VelnorConfig,
     WorkflowPolicy,
@@ -20,7 +18,6 @@ use super::{CHECKOUT_USES, REQUEST_DIR};
 #[path = "tool_cache_pins.rs"]
 mod tool_cache_pins;
 
-/// Inputs used to derive renderer context from the workflow build.
 pub(super) struct RenderContextInputs<'a> {
     pub(super) config: &'a VelnorConfig,
     pub(super) label: &'a str,
@@ -33,12 +30,6 @@ pub(super) struct RenderContextInputs<'a> {
     pub(super) verify: &'a [ValidatorKind],
 }
 
-/// Renderer scalars: generator marker version, helper version, label, request
-/// directory, and pins.
-///
-/// The plan-consumer env follows the plan role: pure-tofu plans run
-/// the plan-op and freshness steps triple-less, every other role
-/// keeps the owned-homes triple.
 pub(super) fn render_context(
     input: RenderContextInputs<'_>,
 ) -> Result<RenderContext, OrchestratorError> {

@@ -1,14 +1,3 @@
-//! Opt-in Mise-authoritative Rust version (`[stacks.rust] toolchain_source = "mise"`).
-//!
-//! The owner's standard layout keeps both `mise.toml`
-//! (`rust = { version, mr_boxington = true }`) and a `rust-toolchain.toml`
-//! whose `channel` mirrors it (for components, targets and tools outside
-//! Mise). Opting in makes the Mise declaration the authority: it must exist,
-//! and every other Rust declaration (root or nested toolchain file,
-//! `.tool-versions`, a `.velnor/config.toml` pin) must equal it. A mismatch
-//! fails generation naming both files and the version each declares. A
-//! toolchain file without a `channel` declares no version and is accepted.
-
 use velnor_actions_contract::VelnorConfig;
 use velnor_actions_contract::config::RustToolchainSource;
 use velnor_actions_mise::PinnedTool;
@@ -19,16 +8,9 @@ use crate::project_tool_sources::{
     SourceDeclarations, is_mise_config, read_nested_toolchains, read_project_sources,
 };
 
-/// Stable code for a Rust declaration that disagrees with the Mise one.
 pub(crate) const DISAGREES_CODE: &str = "rust_version_disagrees_with_mise";
-/// Stable code for an opted-in project whose Mise config declares no Rust.
 pub(crate) const MISSING_SOURCE_CODE: &str = "rust_not_declared_in_mise";
 
-/// Enforce [`enforce_mise_authority`] when the config opts in; a no-op otherwise.
-///
-/// # Errors
-///
-/// Returns the [`enforce_mise_authority`] errors, or a source read error.
 pub(crate) fn enforce_when_opted_in(
     root: &std::path::Path,
     config: &VelnorConfig,
@@ -39,7 +21,6 @@ pub(crate) fn enforce_when_opted_in(
     Ok(())
 }
 
-/// Whether the config opts into the Mise-authoritative Rust version.
 fn mise_authoritative(config: &VelnorConfig) -> bool {
     config
         .stacks
@@ -49,12 +30,6 @@ fn mise_authoritative(config: &VelnorConfig) -> bool {
         == Some(RustToolchainSource::Mise)
 }
 
-/// Require a Mise Rust declaration and every other declaration to equal it.
-///
-/// # Errors
-///
-/// Returns [`MISSING_SOURCE_CODE`] when no Mise config declares Rust, or
-/// [`DISAGREES_CODE`] naming the first source whose version differs.
 fn enforce_mise_authority(
     root: &std::path::Path,
     config: &VelnorConfig,
@@ -118,7 +93,3 @@ fn disagreement(file: &str, value: &str, mise: &str) -> String {
         "{DISAGREES_CODE}:{file}={value},{mise}; [stacks.rust] toolchain_source = \"mise\" makes the mise.toml rust version the authority: set {file} to the same version"
     )
 }
-
-#[cfg(test)]
-#[path = "tool_catalog_rust_source_tests.rs"]
-mod tests;

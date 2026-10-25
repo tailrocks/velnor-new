@@ -1,5 +1,3 @@
-//! Literal-only JSON mutation fields for the native publisher transport.
-
 use super::{GitHubApi, JSON_LIMIT};
 use crate::OrchestratorError;
 use std::ffi::OsString;
@@ -11,18 +9,12 @@ impl GitHubApi {
         method: &str,
         fields: &[(&str, String)],
     ) -> Result<Vec<u8>, OrchestratorError> {
-        #[cfg(test)]
-        if let Some(fixture) = &self.fixture {
-            return fixture.mutate(method, route, fields);
-        }
         let mut args = vec![
             OsString::from(route),
             OsString::from("--method"),
             OsString::from(method),
         ];
         for (key, value) in fields {
-            // `make_latest` is a string enum; draft, prerelease and force are booleans.
-            // Raw fields also prevent accidental @file expansion of literal data.
             args.push(OsString::from(
                 if matches!(*key, "draft" | "prerelease" | "force") {
                     "--field"

@@ -1,5 +1,3 @@
-//! Exclusive, reviewable data-only authoring outputs.
-
 use std::{
     collections::BTreeMap,
     fs,
@@ -24,7 +22,6 @@ pub(super) struct DeletionManifest<'a> {
     pub(super) deleted_files: &'a [HomebrewAdoptionFileIdentity],
 }
 
-/// Resolve a fresh absolute target outside the repository before any writes.
 pub(super) fn fresh_output_path(
     output_dir: &Path,
     repository_root: &Path,
@@ -55,8 +52,6 @@ pub(super) fn fresh_output_path(
     Ok((parent, target))
 }
 
-/// Stage every overlay file in an exclusive private directory, then publish it
-/// only at the caller-selected fresh path without replacing an existing entry.
 pub(super) fn write_overlay(
     parent: &Path,
     target: &Path,

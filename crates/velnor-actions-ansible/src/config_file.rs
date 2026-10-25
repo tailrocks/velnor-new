@@ -1,15 +1,6 @@
-//! `ansible.cfg` policy: a closed key allowlist.
-//!
-//! The committed file is the only configuration the Ansible job runs under
-//! (`ANSIBLE_CONFIG` points at the verified in-place root file). Plugin,
-//! callback, library, vault and connection-plugin keys would let the repository
-//! name code or secrets for the job to load, so only inert settings are admitted,
-//! and every path is a literal root-relative name that stays inside the root.
-
 use crate::AnsibleError;
 use crate::paths::stays_inside;
 
-/// `(section, key)` pairs the job admits.
 const ALLOWED: [(&str, &str); 14] = [
     ("defaults", "inventory"),
     ("defaults", "roles_path"),
@@ -27,7 +18,6 @@ const ALLOWED: [(&str, &str); 14] = [
     ("ssh_connection", "retries"),
 ];
 
-/// Keys whose value is one or more root-relative paths.
 const PATH_KEYS: [&str; 2] = ["inventory", "roles_path"];
 
 fn path_problem(key: &str, value: &str) -> Option<&'static str> {
@@ -67,7 +57,6 @@ fn strip_comment(line: &str) -> &str {
     trimmed[..cut].trim_end()
 }
 
-/// Findings (sorted) for the text of a root's `ansible.cfg`.
 #[must_use]
 pub fn check_ansible_cfg(text: &str) -> Vec<AnsibleError> {
     let mut findings = Vec::new();

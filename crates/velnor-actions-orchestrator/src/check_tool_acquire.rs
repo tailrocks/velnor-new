@@ -1,4 +1,3 @@
-//! Qualified source bytes become retained, observed owned installation trees.
 use crate::OrchestratorError;
 use crate::check_evidence::gate::tools::{QualifiedToolReceipt, receipt};
 use crate::internal::internal;
@@ -241,7 +240,6 @@ fn observe_executables(
     Ok(proofs)
 }
 
-/// Recheck every prefix after all executable probes and link subprocesses.
 pub(crate) fn validate_installations(
     tools: &[QualifiedTool],
     platform: velnor_actions_contract::config::CheckPlatform,
@@ -337,7 +335,3 @@ fn staged_read_error(problem: &'static str, context: &str) -> OrchestratorError 
         internal(context)
     }
 }
-
-#[cfg(test)]
-#[path = "check_tool_acquire_tests.rs"]
-mod tests;

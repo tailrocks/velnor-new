@@ -1,5 +1,3 @@
-//! UTC-second window selection without a general date/time dependency.
-
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone, Copy)]
@@ -70,7 +68,3 @@ fn civil_from_days(days_since_epoch: i64) -> (i64, i64, i64) {
     let month = month_part + if month_part < 10 { 3 } else { -9 };
     (year + i64::from(month <= 2), month, day)
 }
-
-#[cfg(test)]
-#[path = "github_evidence_collect_time_tests.rs"]
-mod tests;

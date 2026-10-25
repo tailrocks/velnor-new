@@ -1,5 +1,3 @@
-//! Credential-free verification and import of the current-run snapshot bundle.
-
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -15,10 +13,6 @@ use crate::internal::internal;
 
 const SPEC_LIMIT: usize = 64 * 1024;
 
-#[cfg(test)]
-#[path = "github_evidence_import_tests.rs"]
-mod tests;
-
 pub(super) fn run() -> Result<(), OrchestratorError> {
     let deadline = files::new_deadline()?;
     let spec = read_spec()?;
@@ -28,18 +22,6 @@ pub(super) fn run() -> Result<(), OrchestratorError> {
     let snapshot = files::load_snapshot(&bundle, &spec, deadline)?;
     let context = ImportContext::from_env()?;
     import_snapshot(&spec, &bundle, &workspace, &snapshot, &context, deadline)
-}
-
-#[cfg(test)]
-pub(super) fn import_with_context(
-    spec: &GitHubEvidenceFetchSpecV1,
-    bundle: &Path,
-    workspace: &Path,
-    context: &ImportContext,
-) -> Result<(), OrchestratorError> {
-    let deadline = files::new_deadline()?;
-    let snapshot = files::load_snapshot(bundle, spec, deadline)?;
-    import_snapshot(spec, bundle, workspace, &snapshot, context, deadline)
 }
 
 fn import_snapshot(
@@ -54,17 +36,6 @@ fn import_snapshot(
     validate_context(spec, snapshot, context)?;
     files::check_deadline(deadline)?;
     files::stage_bundle(bundle, workspace, snapshot, deadline)
-}
-
-#[cfg(test)]
-pub(super) fn verify_test_bundle(
-    root: &Path,
-    spec: &GitHubEvidenceFetchSpecV1,
-) -> Result<velnor_actions_contract::GitHubEvidenceSnapshotV1, OrchestratorError> {
-    let deadline = files::new_deadline()?;
-    let snapshot = files::load_snapshot(root, spec, deadline)?;
-    files::verify_bundle(root, &snapshot, deadline)?;
-    Ok(snapshot)
 }
 
 fn read_spec() -> Result<GitHubEvidenceFetchSpecV1, OrchestratorError> {

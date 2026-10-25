@@ -1,11 +1,8 @@
-//! Gates that run before generation writes anything.
-
 use velnor_actions_contract::UnmanagedPolicy;
 
 use crate::OrchestratorError;
 use crate::prepare::GenerationPreparation;
 
-/// Fail closed on transient-only profile evidence before touching `.github`.
 pub(super) fn fail_on_blocking_findings(
     prep: &GenerationPreparation,
 ) -> Result<(), OrchestratorError> {
@@ -30,12 +27,6 @@ pub(super) fn fail_on_blocking_findings(
     Ok(())
 }
 
-/// Apply `[github] unmanaged`: fail under `deny`, return notices under `warn`.
-///
-/// # Errors
-///
-/// Returns a contract error naming every non-exempt unmanaged entry when the
-/// policy is `deny`, or the walk error when `.github` cannot be inspected.
 pub(super) fn unmanaged_notices(
     prep: &GenerationPreparation,
 ) -> Result<Vec<String>, OrchestratorError> {

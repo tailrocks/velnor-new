@@ -1,12 +1,9 @@
-//! Exact public repository identity and default-branch snapshots.
-
 use velnor_actions_mise::CheckDeadline;
 
 use crate::{OrchestratorError, internal::internal};
 
 use super::{GitHubApi, github};
 
-/// Repository identity and the exact default branch reported by GitHub.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PublicRepositorySnapshot {
     pub(crate) id: u64,
@@ -14,7 +11,6 @@ pub(crate) struct PublicRepositorySnapshot {
     pub(crate) default_branch: String,
 }
 
-/// Read a repository snapshot with an exact slug and a safe, nonempty branch.
 pub(crate) fn read_public_repository_snapshot(
     repository: &str,
     deadline: CheckDeadline,

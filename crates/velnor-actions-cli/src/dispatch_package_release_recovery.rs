@@ -1,10 +1,7 @@
-//! Private retained-candidate publication recovery dispatch.
-
 use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{OrchestratorError, recover_package_release_from_env};
 
-/// Resume publication using the exact retained signed artifact from an earlier run.
 pub(super) fn run() -> ExitCode {
     match recover_package_release_from_env() {
         Ok(_) => ExitCode::SUCCESS,

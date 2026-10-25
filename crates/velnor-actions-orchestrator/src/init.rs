@@ -1,5 +1,3 @@
-//! `.velnor/config.toml` creation (missing files only, never overwrite).
-
 use std::fs::OpenOptions;
 use std::path::Path;
 
@@ -7,21 +5,11 @@ use velnor_actions_workflow_renderer::marker::marker_for_version;
 
 use crate::OrchestratorError;
 
-/// Report for [`init_config`].
 #[derive(Debug, Clone)]
 pub struct InitReport {
-    /// Repository-relative files created.
     pub created: Vec<String>,
 }
 
-/// Create the missing `.velnor/config.toml` sample, refusing overwrites.
-///
-/// Writes no other file. Fails when `.velnor` is an ordinary file, when
-/// the config already exists, or when the root is unusable.
-///
-/// # Errors
-///
-/// Returns overwrite-refused, unsafe-path, render, or IO errors.
 pub fn init_config(root: &Path) -> Result<InitReport, OrchestratorError> {
     let canonical = root
         .canonicalize()
@@ -73,13 +61,11 @@ pub fn init_config(root: &Path) -> Result<InitReport, OrchestratorError> {
     })
 }
 
-/// Sample text: versioned marker, required schema, commented sections.
 fn sample_text() -> Result<String, OrchestratorError> {
     let marker = marker_for_version(env!("CARGO_PKG_VERSION"))?;
     Ok(format!("{marker}\n{SAMPLE_BODY}"))
 }
 
-/// Commented sample body from cli-contract section 4.
 const SAMPLE_BODY: &str = r#"schema = 1
 
 # Optional repository-owned named Mise checks, independent of language stacks.

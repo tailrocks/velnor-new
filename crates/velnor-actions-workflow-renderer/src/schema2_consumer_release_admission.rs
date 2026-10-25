@@ -1,4 +1,3 @@
-//! Source-free stable origin and exact aggregate artifact bindings.
 use super::{
     ConsumerReleaseSpec, PackageReleaseChannel, RenderError, TapInvocationContext, Yaml, operation,
     production,
@@ -70,7 +69,6 @@ pub(super) fn aggregate_admission(spec: &ConsumerReleaseSpec) -> Result<Yaml, Re
     Ok(step)
 }
 
-/// Keep the public policy at job scope, while every credential stays step-scoped.
 pub(super) fn finish_policy_job(
     id: &str,
     mut fields: Vec<(String, Yaml)>,

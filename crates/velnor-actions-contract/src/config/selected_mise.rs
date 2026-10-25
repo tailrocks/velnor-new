@@ -1,14 +1,3 @@
-//! Fixed shell binding for the Setup Mise data directory selected by the runner.
-//!
-//! Callers run this in a startup-safe shell with a trusted system `PATH`. The
-//! function keeps Setup Mise's directory precedence, resolves relative paths
-//! and symlinked ancestors to a physical absolute path, then accepts only the
-//! real executable at that directory's `bin/mise`.
-
-/// POSIX-shell function that binds `MISE_DATA_DIR` and `mise_bin`.
-///
-/// Return codes distinguish a missing selector (1), invalid selected directory
-/// (2), failed physical-path resolution (3), and invalid Mise binary (4).
 pub const BIND_SELECTED_MISE_FUNCTION: &str = r#"velnor_capture_physical_path() {
   [ "$#" -eq 2 ] || return 1
   (cd -P "$1" && pwd -P) > "$2" || return 1

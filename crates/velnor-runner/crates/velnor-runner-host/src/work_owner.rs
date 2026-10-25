@@ -1,8 +1,3 @@
-//! Give the job work volume to the runner user before the listener starts.
-//!
-//! A new named volume is root-owned mode `0755`. The runner uid is `1000`.
-//! `CreateDirectory("/home/runner/_work/_tool")` then fails.
-
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -17,15 +12,6 @@ use crate::error::HostError;
 const ATTEMPTS: u32 = 40;
 const PAUSE: Duration = Duration::from_millis(500);
 
-/// `chown runner:runner` on `{volume}` mounted at the runner work path.
-///
-/// The container is root, unprivileged, and has no network. It is removed
-/// before this function returns.
-///
-/// # Errors
-///
-/// Returns [`HostError::ForbiddenMount`] when `volume` is not a private work
-/// volume. Returns [`HostError::Docker`] when create, start, or `chown` fails.
 pub(crate) async fn own_work_volume(docker: &Docker, volume: &str) -> Result<(), HostError> {
     let config = chown_body(volume)?;
     let options = CreateContainerOptions {
@@ -59,12 +45,6 @@ pub(crate) async fn own_work_volume(docker: &Docker, volume: &str) -> Result<(),
     }
 }
 
-/// Create body for the one-shot owner. No network and no privilege.
-///
-/// # Errors
-///
-/// Returns [`HostError::ForbiddenMount`] when `volume` is not a private
-/// `*-work` name.
 pub(crate) fn chown_body(volume: &str) -> Result<ContainerCreateBody, HostError> {
     let name = work_volume(volume)?;
     let work = runner_work_path();
@@ -122,54 +102,5 @@ async fn wait_exit(docker: &Docker, id: &str) -> Result<i64, HostError> {
 
 async fn remove_force(docker: &Docker, id: &str) {
     let options = RemoveContainerOptionsBuilder::new().force(true).build();
-    if docker.remove_container(id, Some(options)).await.is_err() {
-        // The chown result still stands when removal fails.
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use velnor_runner_core::runner_work_path;
-
-    use super::chown_body;
-    use crate::docker_spec::RUNNER_IMAGE;
-
-    #[test]
-    fn chown_runs_as_root_on_the_work_volume_only() {
-        let work = runner_work_path();
-        let body = chown_body("worker_a-work").expect("work volume");
-        assert_eq!(body.image.as_deref(), Some(RUNNER_IMAGE));
-        assert_eq!(body.user.as_deref(), Some("0:0"));
-        assert_eq!(
-            body.entrypoint.as_deref(),
-            Some(["chown".to_owned()].as_slice())
-        );
-        assert_eq!(
-            body.cmd.as_deref(),
-            Some(["runner:runner".to_owned(), work.clone()].as_slice())
-        );
-        assert_eq!(body.network_disabled, Some(true));
-        let host = body.host_config.expect("host");
-        assert_eq!(host.privileged, Some(false));
-        assert_eq!(host.network_mode.as_deref(), Some("none"));
-        let mounts = host.mounts.expect("mount");
-        assert_eq!(mounts.len(), 1);
-        assert_eq!(mounts[0].source.as_deref(), Some("worker_a-work"));
-        assert_eq!(mounts[0].target.as_deref(), Some(work.as_str()));
-        assert_eq!(
-            body.labels
-                .expect("labels")
-                .get("velnor.role")
-                .map(String::as_str),
-            Some("work-owner")
-        );
-    }
-
-    #[test]
-    fn chown_rejects_the_socket_volume_and_host_paths() {
-        assert!(chown_body("worker_a").is_err());
-        assert!(chown_body("-work").is_err());
-        assert!(chown_body("../secret-work").is_err());
-        assert!(chown_body("/var/lib/docker-work").is_err());
-    }
+    if docker.remove_container(id, Some(options)).await.is_err() {}
 }

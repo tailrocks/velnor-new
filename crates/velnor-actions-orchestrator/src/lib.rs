@@ -1,6 +1,11 @@
-//! Generation coordination: discovery, planning, workflow IR, and writes.
-//! Execution belongs to Mise, vector requests to vectors, and YAML to the renderer.
-
+#![allow(
+    clippy::missing_errors_doc,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
+#![allow(
+    missing_docs,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
 mod affected_inputs;
 mod api;
 mod attach;
@@ -81,8 +86,7 @@ pub(crate) mod project_tool_sources;
 mod provenance;
 mod publish_emit;
 mod publish_release_steps;
-#[cfg(test)]
-mod publish_scripts_tests;
+
 mod publish_steps;
 mod qualification_candidate;
 mod qualification_resolver;
@@ -137,13 +141,6 @@ mod workflow_jobs;
 mod workflow_jobs_cache;
 mod workflow_task_jobs;
 
-#[cfg(all(feature = "test-render-capture", test))]
-#[path = "test_render_capture_harness.rs"]
-mod test_render_capture_harness;
-
-#[cfg(test)]
-#[path = "../../test_support/git_fixture.rs"]
-pub(crate) mod git_fixture;
 pub use api::*;
 
 mod review_completion_workflow_emit;

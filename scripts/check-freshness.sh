@@ -1,28 +1,4 @@
 #!/usr/bin/env bash
-# Fail-closed freshness gate over the Velnor-owned version inventories.
-#
-# Validates four separate concerns:
-#   local-pin          compiled-in constants == reviewed inventory pins,
-#                      including the policy mirror and cargo-mutants pin.
-#   effective-identity declared requirements == each Cargo.lock resolution,
-#                      across discovered workspaces and all dependency scopes.
-#   upstream-freshness reviewed pins have fresh upstream evidence; stale pins,
-#                      stale evidence, and lookup failures fail closed.
-#   advisories         deny policy and optional live scan cover every Cargo
-#                      workspace, with no ignored advisories.
-#
-# Machine-readable output: every `row: {...}` line on stdout is one compact
-# JSON object with keys check/subject/status/detail. `status` is pass, fail,
-# or info. Every fail row makes this command exit nonzero.
-#
-# Usage: scripts/check-freshness.sh [--root DIR] [--check-upstream]
-#                                   [--with-advisories]
-#   --root DIR         validate a fixture tree instead of this repository.
-#   --check-upstream   bounded read-only probe: latest stable release lookup
-#                      with a 10 s timeout and 512 KiB encoded/decoded cap.
-#                      Writes nothing; CI runs it weekly, outside build gates.
-#   --with-advisories  run the live Cargo Deny scan for every workspace
-#                      (180 s timeout each) plus the local deny-policy checks.
 set -euo pipefail
 
 ROOT=""
@@ -69,7 +45,7 @@ elif [[ ! -d "$ROOT" ]]; then
   echo "check-freshness: root is not a directory: $ROOT" >&2
   exit 1
 else
-  ROOT="$(CDPATH= cd -- "$ROOT" && pwd -P)"
+  ROOT="$(CDPATH='' cd -- "$ROOT" && pwd -P)"
 fi
 INV="$ROOT/.velnor/freshness-inventory.json"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

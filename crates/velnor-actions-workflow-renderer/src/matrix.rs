@@ -1,13 +1,3 @@
-//! Task matrix strategy: marker trio plus `strategy`/`outputs` emission.
-//!
-//! The orchestrator marks the matrix consumer step with a fixed env trio;
-//! the renderer validates the producer wiring, scrubs the markers, and
-//! emits the typed `strategy` (`fail-fast: false`, capped `max-parallel`,
-//! exact `fromJSON` producer ref) plus producer `outputs` and step ID.
-//! Capped crate jobs carry the same trio on one obligation step; the
-//! renderer validates it identically and emits the declared
-//! `strategy.max-parallel` the lane staging enforces through `needs`.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Job, StepId, StepKind};
@@ -29,47 +19,26 @@ pub(crate) mod suites;
 #[path = "matrix_bun.rs"]
 pub(crate) mod bun;
 
-/// Matrix marker: producer job backing `needs.<job>.outputs.<output>`.
 pub const MATRIX_NEEDS_JOB_ENV: &str = "VELNOR_MATRIX_NEEDS_JOB";
-/// Matrix marker: producer output name consumed via `fromJSON`.
 pub const MATRIX_OUTPUT_ENV: &str = "VELNOR_MATRIX_OUTPUT";
-/// Matrix marker: `strategy.max-parallel` entry cap.
 pub const MATRIX_MAX_PARALLEL_ENV: &str = "VELNOR_MATRIX_MAX_PARALLEL";
-/// Step ID of the matrix-producing plan step.
 pub const PLAN_STEP_ID: &str = StepId::Plan.as_str();
-/// Job-output name carrying the plan ID (`plan-<run-key>`).
 pub const PLAN_ID_OUTPUT: &str = "plan_id";
-/// Job-output name carrying the run key (`r<run-id>-a<run-attempt>`).
 pub const RUN_KEY_OUTPUT: &str = "run_key";
-/// Plan job output listing `not_affected` crate jobs as `,id1,id2,`.
-///
-/// Negative list: empty or missing means every crate job runs, so a
-/// failed or garbled plan can never skip work by itself.
 pub const NOT_AFFECTED_JOBS_OUTPUT: &str = "not_affected_jobs";
 
-/// Plan job output carrying the run attempt that produced the plan.
 pub const PLAN_ATTEMPT_OUTPUT: &str = "plan_attempt";
-/// Env key binding run-scoped identities to the plan's attempt.
 pub const PLAN_ATTEMPT_ENV: &str = "VELNOR_RUN_KEY_ATTEMPT";
 
-/// Typed matrix source for the task job's `strategy.matrix`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MatrixSource {
-    /// `strategy.matrix` from `fromJSON(needs.<job>.outputs.<output>)`.
-    PlanOutput {
-        /// Producer job ID the task job needs.
-        needs_job: String,
-        /// Producer output name carrying the matrix JSON.
-        output: String,
-    },
+    PlanOutput { needs_job: String, output: String },
 }
 
-/// Shorthand for a matrix invariant failure.
 pub(crate) fn matrix_invalid(problem: &str) -> RenderError {
     RenderError::InvalidWorkflow(problem.to_owned())
 }
 
-/// First marker trio hit in one job's shell steps, if any key present.
 fn marker_trio(job: &Job) -> Option<[Option<String>; 3]> {
     for step in &job.steps {
         if let StepKind::Shell { env, .. } = &step.kind {
@@ -87,7 +56,6 @@ fn marker_trio(job: &Job) -> Option<[Option<String>; 3]> {
     None
 }
 
-/// Task matrix directive from the fixed-step env trio (`None` = static).
 pub(crate) fn task_matrix_of(
     jobs: &BTreeMap<String, Job>,
 ) -> Result<Option<(MatrixSource, u32)>, RenderError> {
@@ -125,11 +93,6 @@ pub(crate) fn task_matrix_of(
     )))
 }
 
-/// Declared concurrency caps from per-job marker trios, by job ID.
-///
-/// Every non-task job carrying any trio key must carry the full trio
-/// with a live producer and a positive cap, exactly like the task
-/// matrix; unmarked jobs stay out.
 pub(crate) fn crate_job_caps(
     jobs: &BTreeMap<String, Job>,
 ) -> Result<BTreeMap<String, u32>, RenderError> {
@@ -164,7 +127,6 @@ pub(crate) fn crate_job_caps(
     Ok(caps)
 }
 
-/// Clone jobs minus the matrix marker trio, which never renders.
 pub(crate) fn scrub_matrix_marker(jobs: &BTreeMap<String, Job>) -> BTreeMap<String, Job> {
     let mut scrubbed = jobs.clone();
     for job in scrubbed.values_mut() {
@@ -189,7 +151,6 @@ pub(crate) fn scrub_matrix_marker(jobs: &BTreeMap<String, Job>) -> BTreeMap<Stri
     scrubbed
 }
 
-/// True for `needs.<job>.outputs.<output>` identifier spellings.
 fn is_matrix_name(value: &str) -> bool {
     !value.is_empty()
         && value
@@ -197,7 +158,6 @@ fn is_matrix_name(value: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
 }
 
-/// Emit the task `strategy`, producer `outputs`, and plan step ID.
 pub(crate) fn attach_task_matrix(
     document: &mut Yaml,
     source: &MatrixSource,
@@ -251,11 +211,6 @@ pub(crate) fn attach_task_matrix(
     require_plan_step_id(jobs, needs_job, output)
 }
 
-/// Emit each capped job's declared `strategy.max-parallel`.
-///
-/// The cap declares the lane-staging bound the orchestrator enforces
-/// through `needs`; without it the staging would be invisible. Empty
-/// caps change nothing.
 pub(crate) fn attach_crate_job_caps(
     document: &mut Yaml,
     caps: &BTreeMap<String, u32>,
@@ -284,10 +239,6 @@ pub(crate) fn attach_crate_job_caps(
     Ok(())
 }
 
-/// The plan job's `plan_attempt` output: the attempt that ran the plan.
-///
-/// Evaluated by the plan job itself, so a partial re-run that keeps the
-/// plan job's earlier result keeps its attempt too.
 fn plan_attempt_output() -> (String, Yaml) {
     (
         PLAN_ATTEMPT_OUTPUT.to_owned(),
@@ -295,11 +246,6 @@ fn plan_attempt_output() -> (String, Yaml) {
     )
 }
 
-/// Emit the plan job's selection, attempt, and qualification outputs.
-///
-/// Static (non-matrix) workflows gate crate jobs on `not_affected_jobs`
-/// and bind downstream run identities to `plan_attempt`; without a plan
-/// job or plan step there is nothing to export.
 pub(crate) fn attach_plan_outputs(
     document: &mut Yaml,
     cache: &[(String, String)],
@@ -331,7 +277,6 @@ pub(crate) fn attach_plan_outputs(
     insert_job_key(jobs, PLAN_JOB_ID, "outputs", Yaml::Map(outputs))
 }
 
-/// Insert a job key directly before its `steps` entry.
 pub(super) fn insert_job_key(
     jobs: &mut [(String, Yaml)],
     id: &str,
@@ -355,7 +300,6 @@ pub(super) fn insert_job_key(
     Ok(())
 }
 
-/// Require the planner's typed output id before wiring job outputs.
 fn require_plan_step_id(
     jobs: &mut [(String, Yaml)],
     id: &str,
@@ -369,7 +313,6 @@ fn require_plan_step_id(
     mark_dynamic_matrix_output_mode(jobs, id, PLAN_STEP_ID)
 }
 
-/// Check for one explicitly declared step id in a serialized job.
 fn has_step_id(jobs: &[(String, Yaml)], id: &str, step_id: &str) -> bool {
     let steps = jobs
         .iter()

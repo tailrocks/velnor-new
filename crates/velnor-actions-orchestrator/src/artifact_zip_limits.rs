@@ -1,4 +1,3 @@
-//! Separate historical recovery and unsigned preview disk/expansion budgets.
 use crate::package_release_artifacts::{
     MAX_FILE_COUNT, MAX_HANDOFF_BYTES, MAX_PAYLOAD_BYTES, MAX_SBOM_BYTES, MAX_TOTAL_BYTES,
 };
@@ -30,7 +29,6 @@ impl ZipProfile {
         match self {
             Self::Recovery | Self::Evidence => super::MAX_ENTRIES,
             Self::PreviewLeaf => 3,
-            // The full verifier counts its source handoff; native proof is additional.
             Self::PreviewAggregate => MAX_FILE_COUNT + 1,
         }
     }
@@ -52,12 +50,6 @@ impl ZipProfile {
     }
 }
 
-/// A disk admission ceiling, not a promise to accept arbitrarily padded DEFLATE.
-/// Reserve 12.5% for ordinary incompressible DEFLATE block overhead. Each ZIP
-/// entry can additionally carry two names, two extra fields and one comment,
-/// each bounded by its 16-bit length, plus local/central/descriptors/ZIP64
-/// fixed framing. End records include their independently bounded comment.
-/// Arbitrarily padded compressed streams still fail this finite disk ceiling.
 pub(crate) const fn compressed_bound(raw: u64, entries: u64) -> u64 {
     const ENTRY_FRAMING: u64 = 5 * 65_535 + 256;
     const END_FRAMING: u64 = 65_535 + 256;

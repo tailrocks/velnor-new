@@ -1,6 +1,5 @@
 use crate::{ProbeError, units::digits};
 
-/// Parse the one required `MemAvailable: <decimal> kB` record and convert it to bytes.
 pub(crate) fn available_bytes(input: &[u8]) -> Result<u64, ProbeError> {
     let text = std::str::from_utf8(input).map_err(|_| ProbeError::Invalid("meminfo_utf8"))?;
     let mut available = None;

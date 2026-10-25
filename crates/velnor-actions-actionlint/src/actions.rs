@@ -1,11 +1,5 @@
-//! Pinned action refs against the 13-entry allowlist.
-//!
-//! Every ref pins `repo[/path]@sha` plus a `# vX.Y.Z` comment; no
-//! mutable-tag exceptions exist.
-
 use crate::ActionlintError;
 
-/// Exhaustive allowlist of `owner/repo[/path]` action keys.
 pub const ALLOWED_ACTIONS: [&str; 13] = [
     "jdx/mise-action",
     "actions/checkout",
@@ -22,123 +16,99 @@ pub const ALLOWED_ACTIONS: [&str; 13] = [
     "actions/github-script",
 ];
 
-/// Action key for the pinned JavaScript script runner.
 pub const GITHUB_SCRIPT_ACTION: &str = "actions/github-script";
-/// Current reviewed `actions/github-script` release.
+
 pub const GITHUB_SCRIPT_ACTION_VERSION: &str = "v9.0.0";
-/// Immutable commit resolved from the v9.0.0 release tag.
+
 pub const GITHUB_SCRIPT_ACTION_SHA: &str = "3a2844b7e9c422d3c10d287c895573f7108da1b3";
-/// Full immutable action ref used by generated qualification fixtures.
+
 pub const GITHUB_SCRIPT_ACTION_USES: &str =
     "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3";
 
-/// Action that creates a narrowly scoped GitHub App installation token.
 pub const CREATE_GITHUB_APP_TOKEN_ACTION: &str = "actions/create-github-app-token";
-/// Reviewed immutable release of the GitHub App token action.
+
 pub const CREATE_GITHUB_APP_TOKEN_ACTION_VERSION: &str = "v3.3.0";
-/// Full commit SHA for [`CREATE_GITHUB_APP_TOKEN_ACTION_VERSION`].
+
 pub const CREATE_GITHUB_APP_TOKEN_ACTION_SHA: &str = "64ab729a6294000f5aa4a4bc0b73d1f32bc45510";
-/// Complete immutable action ref for workflow rendering.
+
 pub const CREATE_GITHUB_APP_TOKEN_USES: &str =
     "actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510";
 
-/// Action producing build-provenance attestations for release subjects.
 pub const ATTEST_BUILD_PROVENANCE_ACTION: &str = "actions/attest-build-provenance";
-/// Reviewed immutable release of the build-provenance action.
+
 pub const ATTEST_BUILD_PROVENANCE_ACTION_VERSION: &str = "v4.2.2";
-/// Full commit SHA for [`ATTEST_BUILD_PROVENANCE_ACTION_VERSION`].
+
 pub const ATTEST_BUILD_PROVENANCE_ACTION_SHA: &str = "4d101475d8b20a2381f78447822ac1eab6504dd8";
-/// Complete immutable action ref for workflow rendering.
+
 pub const ATTEST_BUILD_PROVENANCE_USES: &str =
     "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8";
 
-/// Action producing custom-predicate attestations (SBOM attestations for images).
 pub const ATTEST_ACTION: &str = "actions/attest";
-/// Reviewed immutable release of the generic attestation action.
+
 pub const ATTEST_ACTION_VERSION: &str = "v4.2.2";
-/// Full commit SHA for [`ATTEST_ACTION_VERSION`].
+
 pub const ATTEST_ACTION_SHA: &str = "1e69f48acb82d1966a394da916b4c1698aa569d6";
-/// Complete immutable action ref for workflow rendering.
+
 pub const ATTEST_USES: &str = "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6";
 
-/// Action key for the repository-policy Alint job's pinned ref.
 pub const ALINT_ACTION: &str = "asamarts/alint";
 
-/// Action key for the no-credentials checkout every job embeds.
 pub const CHECKOUT_ACTION: &str = "actions/checkout";
-/// Qualified immutable checkout action ref.
+
 pub const CHECKOUT_ACTION_USES: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 
-/// Policy-owned action used to obtain short-lived AWS credentials through OIDC.
 pub const AWS_CREDENTIALS_ACTION: &str = "aws-actions/configure-aws-credentials";
-/// Latest reviewed immutable AWS credentials action release.
+
 pub const AWS_CREDENTIALS_ACTION_VERSION: &str = "v6.3.0";
-/// Full commit SHA for [`AWS_CREDENTIALS_ACTION_VERSION`].
+
 pub const AWS_CREDENTIALS_ACTION_SHA: &str = "e1253824e5c10ff9df46874f81ed3ec929e19cfd";
 
-/// Selected `asamarts/alint` v0.20.1 release candidate; hosted qualification
-/// remains pending. Its action manifest retains the inputs used here:
-/// `version`, `path`, `config`, `format`, and `fail-on-warning`.
-/// Source: `https://api.github.com/repos/asamarts/alint/releases/tags/v0.20.1`.
 pub const ALINT_ACTION_VERSION: &str = "v0.20.1";
-/// Full commit SHA for [`ALINT_ACTION_VERSION`] from its immutable tag ref.
+
 pub const ALINT_ACTION_SHA: &str = "265d9fdc720bb8f59d00b87e33e4149869f77327";
 
-/// Selected `jdx/mise-action` v5.2.3 release candidate; hosted qualification
-/// remains pending. Its manifest retains the explicit version and SHA inputs
-/// used here. Velnor disables the action cache, so the release's expanded
-/// config-hash search does not affect generated jobs. Source:
-/// `https://api.github.com/repos/jdx/mise-action/releases/tags/v5.2.3`.
 pub const MISE_ACTION_VERSION: &str = "v5.2.3";
-/// Full commit SHA for [`MISE_ACTION_VERSION`] from its immutable tag ref.
+
 pub const MISE_ACTION_SHA: &str = "82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e";
-/// Qualified `actions/checkout` release.
-/// Source: `https://api.github.com/repos/actions/checkout/releases/latest`; checked 2026-09-28.
+
 pub const CHECKOUT_ACTION_VERSION: &str = "v7.0.1";
-/// Full commit SHA for [`CHECKOUT_ACTION_VERSION`] (`v7` moves with it).
+
 pub const CHECKOUT_ACTION_SHA: &str = "3d3c42e5aac5ba805825da76410c181273ba90b1";
-/// Qualified `actions/download-artifact` release.
-/// Source: `https://api.github.com/repos/actions/download-artifact/releases/latest`; checked 2026-10-18.
+
 pub const DOWNLOAD_ARTIFACT_ACTION_VERSION: &str = "v8.0.2";
-/// Full commit SHA for [`DOWNLOAD_ARTIFACT_ACTION_VERSION`] (`v8` moves with it).
+
 pub const DOWNLOAD_ARTIFACT_ACTION_SHA: &str = "9000827ccba6bdab643e8b6fd33ac0654aef8333";
-/// Qualified immutable artifact download ref.
+
 pub const DOWNLOAD_ARTIFACT_ACTION_USES: &str =
     "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333";
-/// Qualified `actions/upload-artifact` release.
-/// Source: `https://api.github.com/repos/actions/upload-artifact/releases/latest`; checked 2026-10-18.
+
 pub const UPLOAD_ARTIFACT_ACTION_VERSION: &str = "v7.0.2";
-/// Full commit SHA for [`UPLOAD_ARTIFACT_ACTION_VERSION`] (`v7` moves with it).
+
 pub const UPLOAD_ARTIFACT_ACTION_SHA: &str = "cf430e030ddbb5b0abf93d22962f4752f3646cd9";
-/// Qualified immutable artifact upload ref.
+
 pub const UPLOAD_ARTIFACT_ACTION_USES: &str =
     "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9";
-/// Qualified `actions/cache` release (shared by `restore` and `save`).
-/// Source: `https://api.github.com/repos/actions/cache/releases/latest`; checked 2026-09-28.
+
 pub const CACHE_ACTION_VERSION: &str = "v6.1.0";
-/// Full commit SHA for [`CACHE_ACTION_VERSION`] (`v6` moves with it; v6 is current, no replacement).
+
 pub const CACHE_ACTION_SHA: &str = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
-/// Qualified `jdx/mr-boxington-action` release, exercised by cache qualification.
-/// Source: `https://api.github.com/repos/jdx/mr-boxington-action/releases`; checked 2026-10-18.
+
 pub const MR_BOXINGTON_ACTION_VERSION: &str = "v1.7.2";
-/// Full commit SHA for [`MR_BOXINGTON_ACTION_VERSION`] (immutable release tag).
+
 pub const MR_BOXINGTON_ACTION_SHA: &str = "47ce49b32025d93a7a2f4570815afaa2b7092240";
 
-/// One pinned action reference: `repo[/path]@sha` plus version comment.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PinnedActionRef {
-    /// Action repository (`owner/repo`).
     pub repo: String,
-    /// Sub-action path (e.g. `restore` for `actions/cache/restore`).
+
     pub path: Option<String>,
-    /// Full 40-char commit SHA.
+
     pub sha: String,
-    /// Matching `# vX.Y.Z` comment text.
+
     pub version_comment: String,
 }
 
 impl PinnedActionRef {
-    /// Canonical OIDC credentials action pin.
     #[must_use]
     pub fn aws_credentials() -> Self {
         Self {
@@ -149,12 +119,6 @@ impl PinnedActionRef {
         }
     }
 
-    /// Build and validate an ordinary SHA-pinned ref.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ActionlintError`] when the key is not allowlisted, the
-    /// SHA is not 40 lowercase hex, or the version comment is not `vX.Y.Z`.
     pub fn new(
         repo: &str,
         path: Option<&str>,
@@ -171,10 +135,6 @@ impl PinnedActionRef {
         Ok(candidate)
     }
 
-    /// Canonical qualified Alint ref for the repository-policy job.
-    ///
-    /// Binds [`ALINT_ACTION_SHA`] to [`ALINT_ACTION_VERSION`] so
-    /// emitters never hand-write the pin. Valid by construction.
     #[must_use]
     pub fn alint() -> Self {
         Self {
@@ -185,10 +145,6 @@ impl PinnedActionRef {
         }
     }
 
-    /// Canonical qualified checkout ref for job `uses:` values.
-    ///
-    /// Binds [`CHECKOUT_ACTION_SHA`] to [`CHECKOUT_ACTION_VERSION`] so
-    /// emitters never hand-write the pin. Valid by construction.
     #[must_use]
     pub fn checkout() -> Self {
         Self {
@@ -199,7 +155,6 @@ impl PinnedActionRef {
         }
     }
 
-    /// Full action key: `repo` plus optional `/path`.
     #[must_use]
     pub fn uses_key(&self) -> String {
         match &self.path {
@@ -208,27 +163,16 @@ impl PinnedActionRef {
         }
     }
 
-    /// Bare `key@ref` value carried by `StepKind::Action` payloads.
-    ///
-    /// Comment-free: the renderer emits this verbatim as the `uses:`
-    /// scalar, so emitters must pass it through unmodified.
     #[must_use]
     pub fn uses_value(&self) -> String {
         format!("{}@{}", self.uses_key(), self.sha)
     }
 
-    /// Render the deterministic `uses:` line with version comment.
     #[must_use]
     pub fn render_uses(&self) -> String {
         format!("uses: {} # {}", self.uses_value(), self.version_comment)
     }
 
-    /// Parse `repo[/path]@ref` with an expected version comment.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ActionlintError`] for unknown actions, branch or moving
-    /// refs, installer actions, and malformed pins or comments.
     pub fn parse_uses(value: &str, version_comment: &str) -> Result<Self, ActionlintError> {
         let (key, reference) =
             value
@@ -264,12 +208,6 @@ impl PinnedActionRef {
         Self::new(&repo, path.as_deref(), reference, version_comment)
     }
 
-    /// Validate allowlist membership, pin shape, and version comment.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ActionlintError`] for unknown actions, malformed SHAs,
-    /// and bad version comments.
     pub fn validate(&self) -> Result<(), ActionlintError> {
         let key = self.uses_key();
         let uses = format!("{key}@{}", self.sha);
@@ -292,7 +230,6 @@ impl PinnedActionRef {
     }
 }
 
-/// Split an action key into repo plus optional sub-action path.
 pub(crate) fn split_key(key: &str) -> (String, Option<String>) {
     let mut parts = key.splitn(3, '/');
     let owner = parts.next().unwrap_or_default();
@@ -301,7 +238,6 @@ pub(crate) fn split_key(key: &str) -> (String, Option<String>) {
     (format!("{owner}/{repo}"), path)
 }
 
-/// Repo keys are `owner/repo[/path]` without refs or whitespace.
 fn is_valid_repo_key(key: &str) -> bool {
     if key.is_empty() || key.contains('@') || key.contains('#') {
         return false;
@@ -316,7 +252,6 @@ fn is_valid_repo_key(key: &str) -> bool {
     parts.all(is_key_segment)
 }
 
-/// One `/`-separated key segment.
 fn is_key_segment(segment: &str) -> bool {
     !segment.is_empty()
         && segment
@@ -324,7 +259,6 @@ fn is_key_segment(segment: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
 }
 
-/// Full commit SHA: 40 lowercase hex characters.
 pub(crate) fn is_full_sha(value: &str) -> bool {
     value.len() == 40
         && value
@@ -332,7 +266,6 @@ pub(crate) fn is_full_sha(value: &str) -> bool {
             .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
 }
 
-/// Stable version tags: `vX.Y.Z` with numeric parts.
 pub(crate) fn is_version_tag(value: &str) -> bool {
     let Some(number) = value.strip_prefix('v') else {
         return false;

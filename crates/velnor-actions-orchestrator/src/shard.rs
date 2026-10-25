@@ -1,34 +1,20 @@
-//! Nextest sharding proofs and budgets.
-//!
-//! Shard proofs bind each partition to its plan obligation. Cargo-test
-//! profiles never shard and never receive archives.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{canonical_json_bytes, digest_b3, validate_digest};
 
-/// V1 retry budget: retries are always zero.
 pub(crate) const MAX_RETRIES: u32 = 0;
 
-/// One selected test: package, target, features, binary, name.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub(crate) struct TestIdentity {
-    /// Cargo package ID.
     pub(crate) package: String,
-    /// Cargo target name.
     pub(crate) target: String,
-    /// Sorted enabled features.
     pub(crate) features: Vec<String>,
-    /// Test binary name.
     pub(crate) binary: String,
-    /// Test name.
     pub(crate) name: String,
 }
 
 impl TestIdentity {
-    /// Validate fields: nonempty, relative, sorted features.
-    /// # Errors
     pub(crate) fn validate(&self) -> Result<(), String> {
         let fields = [&self.package, &self.target, &self.binary, &self.name];
         let clean = fields
@@ -43,7 +29,6 @@ impl TestIdentity {
     }
 }
 
-/// Digest over the canonical sorted test inventory.
 #[must_use]
 pub(crate) fn inventory_digest(tests: &[TestIdentity]) -> String {
     let mut sorted = tests.to_vec();
@@ -53,31 +38,19 @@ pub(crate) fn inventory_digest(tests: &[TestIdentity]) -> String {
         .unwrap_or_default()
 }
 
-/// Merge-time shard proof binding one partition to its plan obligation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct ShardProof {
-    /// Full shard task ID with its suffix.
     pub(crate) task_id: String,
-    /// Plan obligation input digest binding the selected inventory.
     pub(crate) input_digest: String,
-    /// Detected test runner.
     pub(crate) runner: String,
-    /// One-based shard index.
     pub(crate) shard_index: u32,
-    /// Total shard count.
     pub(crate) shard_count: u32,
-    /// Sorted tests assigned to this shard.
     pub(crate) tests: Vec<TestIdentity>,
-    /// Digest over the canonical sorted full inventory.
     pub(crate) inventory_digest: String,
-    /// Archive digest (Nextest only).
     pub(crate) archive_digest: Option<String>,
-    /// Metadata proves the target carries no applicable tests.
     pub(crate) no_test_targets: bool,
 }
 
-/// Validate merge proofs for the sharded bases of one entry.
-/// # Errors
 pub(crate) fn check_entry_shards(
     bases: &BTreeSet<String>,
     empty_count: u32,
@@ -102,7 +75,6 @@ pub(crate) fn check_entry_shards(
     }
 }
 
-/// Validate one base group, returning its empty-partition proof count.
 fn check_group(
     group: &[&ShardProof],
     obligations: &BTreeMap<String, String>,
@@ -163,28 +135,18 @@ fn check_group(
     Ok(u32::try_from(empty).unwrap_or(u32::MAX))
 }
 
-/// Configured resource limits revalidated at merge time.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct ResourceLimits {
-    /// Compiler process budget.
     pub(crate) compiler_budget: u32,
-    /// Test process budget.
     pub(crate) test_budget: u32,
-    /// Matrix `max-parallel` setting.
     pub(crate) max_parallel: u32,
-    /// Known runner capacity.
     pub(crate) capacity: u32,
-    /// Total requested shards.
     pub(crate) shards: u32,
-    /// Configured retries (V1: zero).
     pub(crate) retries: u32,
-    /// Shared-service resource groups, when measured (PAR-8.19).
     #[serde(default)]
     pub(crate) resource_groups: Vec<String>,
 }
 
-/// Reject zero budgets, over-budget shards, and above-capacity concurrency.
-/// # Errors
 pub(crate) fn validate_budgets(limits: &ResourceLimits) -> Result<(), String> {
     let budgets = [
         limits.compiler_budget,

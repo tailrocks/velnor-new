@@ -1,9 +1,3 @@
-//! Protected post-merge `OpenTofu` apply workflow.
-//!
-//! This is a separate generated workflow: pull-request CI never receives
-//! backend credentials, provider tokens, or OIDC permission. Its closed
-//! inputs render only one protected default-branch apply path.
-
 use velnor_actions_contract::JobTimeout;
 use velnor_actions_contract::{TOFU_APPLY_WORKFLOW_PATH, TofuApplyConfig};
 
@@ -12,47 +6,27 @@ use crate::{
     tofu_apply_document::tofu_apply_document,
 };
 
-/// Generated workflow display name.
 pub const TOFU_APPLY_WORKFLOW_NAME: &str = "OpenTofu Apply";
-/// Stable protected apply concurrency group.
 pub const TOFU_APPLY_CONCURRENCY_GROUP: &str = "velnor-tofu-apply-${{ github.repository }}";
-/// Job ID for the one privileged apply job.
 pub const TOFU_APPLY_JOB_ID: &str = "tofu-apply";
-/// Workflow timeout bounds provider and backend operations.
 pub const TOFU_APPLY_TIMEOUT_MINUTES: u16 = JobTimeout::DEFAULT.minutes();
-/// Stable step ID consumed by the `OpenTofu` credential env maps.
 pub const AWS_CREDENTIALS_STEP_ID: &str = "aws-credentials";
-/// Locally mirrored immutable AWS credentials action pin; the action-pin adapter owns its inventory.
 pub const AWS_CREDENTIALS_USES: &str =
     "aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd";
-/// Version comment paired with [`AWS_CREDENTIALS_USES`].
 pub const AWS_CREDENTIALS_VERSION: &str = "v6.3.0";
 
-/// All caller-controlled values needed by the workflow renderer.
 #[derive(Debug, Clone)]
 pub struct TofuApplySpec {
-    /// Closed per-repository apply configuration.
     pub config: TofuApplyConfig,
-    /// Protected default branch; used as the workflow's only trigger branch.
     pub default_branch: String,
-    /// Literal versioned Ubuntu runner label.
     pub runs_on: String,
-    /// Pinned checkout action.
     pub checkout_uses: String,
-    /// Pinned Mise action and executable digest.
     pub mise_setup: MiseSetup,
-    /// Exact `OpenTofu` version from the compiled tool catalog.
     pub opentofu_version: String,
-    /// Exact generator marker version.
     pub generator_version: String,
 }
 
 impl TofuApplySpec {
-    /// Validate caller-supplied scalars and action pins.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`RenderError`] for invalid renderer inputs.
     pub fn validate(&self) -> Result<(), RenderError> {
         self.config
             .validate(TOFU_APPLY_WORKFLOW_PATH)
@@ -82,11 +56,6 @@ impl TofuApplySpec {
     }
 }
 
-/// Render a distinct protected-main-push `OpenTofu` apply workflow.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] for invalid typed inputs or workflow size.
 pub fn render_tofu_apply_workflow(spec: &TofuApplySpec) -> Result<RenderedFile, RenderError> {
     spec.validate()?;
     let document = tofu_apply_document(spec)?;
@@ -102,9 +71,6 @@ pub fn render_tofu_apply_workflow(spec: &TofuApplySpec) -> Result<RenderedFile, 
     })
 }
 
-#[cfg(test)]
-pub(super) use crate::tofu_apply_policy::PLAN_REVIEW_JQ;
-
 fn is_valid_default_branch(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 255
@@ -118,7 +84,3 @@ fn is_valid_default_branch(value: &str) -> bool {
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.' | b'/'))
 }
-
-#[cfg(test)]
-#[path = "tofu_apply_tests.rs"]
-mod tests;

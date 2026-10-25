@@ -1,9 +1,3 @@
-//! Sorted unique recommendation collection for plan and generate.
-//!
-//! Merges profile recommendations, tool-file presence notes, adapter
-//! check lines, and value-conflict findings into the shared text both
-//! commands report.
-
 use std::collections::BTreeSet;
 use std::path::Path;
 
@@ -13,7 +7,6 @@ use crate::discover::PlannedWorkspace;
 use crate::toolcheck::ToolInputCheck;
 use crate::toolfindings::{finding_line, tool_check_lines, tool_conflicts};
 
-/// Collect profile plus tool-file recommendations, sorted and unique.
 pub(crate) fn collect_recommendations(
     root: &Path,
     config: &VelnorConfig,

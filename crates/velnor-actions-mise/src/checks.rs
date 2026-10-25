@@ -1,4 +1,3 @@
-//! Static named-check discovery. Only Mise executes the native task graph.
 #[path = "check_capabilities.rs"]
 mod capabilities;
 #[path = "check_discovery.rs"]
@@ -27,9 +26,6 @@ pub(crate) fn invalid(field: &str, value: impl Into<String>) -> crate::MiseError
     }
 }
 
-/// Resolve a repository-relative existing path; symlink escapes fail closed.
-/// # Errors
-/// Rejects malformed paths, unavailable files, and paths outside the repository.
 pub fn repository_path(
     root: &std::path::Path,
     relative: &str,
@@ -51,7 +47,6 @@ pub fn repository_path(
     Ok(resolved)
 }
 
-/// Fixed owned Rust tool-home directory name.
 pub const RUSTUP_HOME_SUFFIX: &str = "rust-home";
 
 #[path = "check_system_tools.rs"]

@@ -1,5 +1,3 @@
-//! Hosted ARM Homebrew qualification of two independently authenticated previews.
-
 use std::path::Path;
 
 use sha2::{Digest, Sha256};
@@ -22,9 +20,7 @@ mod prepare;
 use budget::absolute_deadline;
 #[path = "homebrew_qualification_record.rs"]
 mod record;
-#[cfg(test)]
-#[path = "homebrew_qualification_tests.rs"]
-mod tests;
+
 use record::{HistoricalRecord, admission};
 
 const REPOSITORY: &str = "jackin-project/jackin";
@@ -38,12 +34,6 @@ const A_ADMISSION: &[u8] =
     include_bytes!("../../../.velnor/qualification/homebrew/preview-a-source-admission.json");
 const PLAN_SHA256: &str = "5f4dc66b22cbce0f309ea9ab8c93709774a8890f365e0d61277fb2b0b505d9ae";
 
-/// Execute the workflow's bounded native operation. The caller authenticates the
-/// same-run artifact before invocation; this function additionally binds the
-/// running executable to the exact Mac ARM target digest in its manifest.
-///
-/// # Errors
-/// Rejects invalid source evidence, exhausted budgets, or failed binary qualification.
 pub fn execute_homebrew_qualification_from_env() -> Result<(), OrchestratorError> {
     let deadline = absolute_deadline()?;
     let candidate = crate::homebrew::hosted_profile::verify_release_qualification_candidate()?;

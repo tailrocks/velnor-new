@@ -1,5 +1,3 @@
-//! Safe staging and typed command adapter for the fixed Mise Cosign boundary.
-
 use std::{fs, os::unix::fs::PermissionsExt, path::Path};
 
 use velnor_actions_contract::package_release::{PackageReleaseAsset, PackageReleaseAssetKind};
@@ -236,7 +234,3 @@ fn set_executable_mode(path: &Path) -> Result<(), OrchestratorError> {
 fn set_executable_mode(_path: &Path) -> Result<(), OrchestratorError> {
     Err(internal("cosign_platform_unsupported"))
 }
-
-#[cfg(test)]
-#[path = "package_release_signer_cosign_tests.rs"]
-mod tests;

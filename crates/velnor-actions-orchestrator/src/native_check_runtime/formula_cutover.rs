@@ -1,5 +1,3 @@
-//! Seed-witness-only formula verification for the first normal tap tree.
-
 use velnor_actions_contract::{
     digest_b3,
     homebrew_spec::{
@@ -43,8 +41,6 @@ pub(super) fn verify_seed_cutover_formula_bytes(
     }
 }
 
-/// Verify candidate bytes against the current public Preview selected by the
-/// protected source authority, without consulting seed-base formula history.
 pub(super) fn verify_current_preview_formula_bytes(
     authority: &crate::homebrew::authority::VerifiedHomebrewAuthority,
     bytes: &[u8],
@@ -57,7 +53,6 @@ pub(super) fn verify_current_preview_formula_bytes(
     Ok((Some(receipt_digest), formula))
 }
 
-/// Resolve and render only the current preview selected by protected authority.
 pub(crate) fn render_current_preview_formula(
     authority: &crate::homebrew::authority::VerifiedHomebrewAuthority,
     deadline: CheckDeadline,

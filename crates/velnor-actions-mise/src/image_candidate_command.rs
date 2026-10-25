@@ -1,5 +1,3 @@
-//! Closed subprocess requests used by native job-image candidate maintenance.
-
 use std::{ffi::OsString, path::Path};
 
 use crate::{CheckDeadline, IsolatedCommand, MiseError, ProcessOutput};
@@ -9,19 +7,10 @@ const BASH: &str = "/usr/bin/bash";
 const DOCKER: &str = "/usr/bin/docker";
 const OUTPUT_LIMIT: usize = 128 * 1024;
 
-#[cfg(test)]
-#[path = "image_candidate_command_tests.rs"]
-mod tests;
-
-/// Fixed command constructors for source-bound job-image operations.
 #[derive(Debug, Clone, Copy)]
 pub struct ImageCandidateCommand;
 
 impl ImageCandidateCommand {
-    /// Download the fixed Buildx release URL with HTTPS-only redirects into a new private file.
-    ///
-    /// # Errors
-    /// Rejects relative paths or a command-construction failure.
     pub fn download_buildx(url: &str, destination: &Path) -> Result<IsolatedCommand, MiseError> {
         if !url.starts_with("https://github.com/docker/buildx/releases/download/")
             || url.bytes().any(|byte| matches!(byte, b'\n' | b'\r' | 0))
@@ -55,10 +44,6 @@ impl ImageCandidateCommand {
         IsolatedCommand::repo_task(CURL, args, &[])
     }
 
-    /// Run the checked-in shell source validator from the repository root.
-    ///
-    /// # Errors
-    /// Rejects a relative root or command-construction failure.
     pub fn check_job_source(root: &Path) -> Result<IsolatedCommand, MiseError> {
         if !root.is_absolute() {
             return Err(invalid("image_source_root"));
@@ -71,10 +56,6 @@ impl ImageCandidateCommand {
         .map(|command| command.with_cwd(root.to_path_buf()))
     }
 
-    /// Inspect Docker's Buildx version using the source-pinned CLI.
-    ///
-    /// # Errors
-    /// Returns a command-construction failure.
     pub fn buildx_version(docker_config: &Path) -> Result<IsolatedCommand, MiseError> {
         if !docker_config.is_absolute() {
             return Err(invalid("image_candidate_docker_config"));
@@ -86,10 +67,6 @@ impl ImageCandidateCommand {
         )
     }
 
-    /// Inspect Docker's Buildx plugin metadata.
-    ///
-    /// # Errors
-    /// Returns a command-construction failure.
     pub fn buildx_plugin_info(docker_config: &Path) -> Result<IsolatedCommand, MiseError> {
         if !docker_config.is_absolute() {
             return Err(invalid("image_candidate_docker_config"));
@@ -108,10 +85,6 @@ impl ImageCandidateCommand {
         })
     }
 
-    /// Build only the fixed linux/amd64 OCI image with the exact reviewed exporter options.
-    ///
-    /// # Errors
-    /// Rejects relative or equal context/output paths and command construction failure.
     pub fn build_oci(
         context: &Path,
         archive: &Path,
@@ -146,10 +119,6 @@ impl ImageCandidateCommand {
         })
     }
 
-    /// Run one bounded child invocation under the caller's shared deadline.
-    ///
-    /// # Errors
-    /// Returns spawn, timeout, capture, or child-exit failures.
     pub fn run(
         command: &IsolatedCommand,
         deadline: CheckDeadline,

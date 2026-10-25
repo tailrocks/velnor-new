@@ -1,5 +1,3 @@
-//! Remove staged or retired entries without unlinking their persistent root.
-
 use std::fs::{self, Metadata};
 use std::path::{Path, PathBuf};
 
@@ -7,7 +5,6 @@ use crate::OrchestratorError;
 
 const CLEANUP_DIRECTORY_MODE: u32 = 0o700;
 
-/// Delete every child under a verified root, preserving the root directory.
 pub(super) fn clear_children(root: &Path) -> Result<(), OrchestratorError> {
     let metadata = fs::symlink_metadata(root).map_err(|error| io(root, &error))?;
     if metadata.file_type().is_symlink() || !metadata.is_dir() {
@@ -24,7 +21,6 @@ pub(super) fn clear_children(root: &Path) -> Result<(), OrchestratorError> {
     Ok(())
 }
 
-/// Process one path, visiting real directories before removing them.
 fn clear_entry(
     path: &Path,
     visited: bool,
@@ -46,7 +42,6 @@ fn clear_entry(
     Ok(())
 }
 
-/// Enumerate direct children without resolving any symbolic links.
 fn children(path: &Path) -> Result<Vec<PathBuf>, OrchestratorError> {
     let entries = fs::read_dir(path).map_err(|error| io(path, &error))?;
     entries
@@ -58,7 +53,6 @@ fn children(path: &Path) -> Result<Vec<PathBuf>, OrchestratorError> {
         .collect()
 }
 
-/// Remove a symbolic link itself, including a directory link on Windows.
 fn remove_link(path: &Path, metadata: &Metadata) -> Result<(), OrchestratorError> {
     #[cfg(unix)]
     {

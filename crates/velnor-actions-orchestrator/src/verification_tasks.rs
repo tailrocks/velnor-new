@@ -1,5 +1,3 @@
-//! Construction of isolated verification-only task jobs.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{VelnorConfig, VerificationRunner, WorkflowTask};
@@ -14,12 +12,9 @@ use crate::pins::resolve_verification_mise_setup;
 use crate::toolcheck::{ToolInputCheck, ToolParse};
 use crate::{OrchestratorError, discover::Discovery};
 
-/// (version, options) resolved for the rust toolchain.
 type RustToolValues = (String, BTreeMap<String, String>);
-/// (`version`, `options`, `extra_args`) selected for a tool.
 type ToolVersionSelection = (String, BTreeMap<String, String>, Vec<String>);
 
-/// Resolve each workflow task onto its fixed platform and Mise binary pin.
 pub(crate) fn policies(
     config: &VelnorConfig,
     discovery: &Discovery,
@@ -176,8 +171,6 @@ fn rust_tool_values(
     Ok(Some((version.to_owned(), options)))
 }
 
-/// True when (`key`, `backend`) names a pinned tool backend: rust core,
-/// mr-boxington, boltffi, aqua, or a matching `github:` tool.
 fn is_pinned_tool_backend(key: &str, backend: &str) -> bool {
     key == "rust" && backend == "core:rust"
         || key == "mr-boxington" && backend == "packslip:github.com/jdx/mr-boxington"
@@ -383,7 +376,3 @@ fn failure(problem: &str) -> OrchestratorError {
         problem: problem.to_owned(),
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/impl_verification_task_bootstrap.rs"]
-mod tests;

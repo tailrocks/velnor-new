@@ -1,10 +1,3 @@
-//! Shared selected, locked, prebuilt-only bootstrap for Mise task jobs.
-//!
-//! Every emitted guard is one single-line `bash -c` script: statements join
-//! with `;`, captures use the `> file` plus `read` idiom, and file writes
-//! use `printf`. Newlines, command substitution, and backticks never appear,
-//! per the renderer's command policy.
-
 use std::collections::BTreeMap;
 
 use crate::steps;
@@ -22,9 +15,6 @@ const MBX_BACKEND: &str = "packslip:github.com/jdx/mr-boxington";
 const MBX_TOOL_KEY: &str = "mr-boxington";
 pub(crate) const RUN_MISE_TASK_SUITE_NAME: &str = "Run declared Mise task suite";
 
-/// Render the shared locked bootstrap for one explicit task declaration.
-/// Verification callers use shallow checkout and no compile limits; suites
-/// use event-SHA checkout and fixed conservative Rust limits.
 pub(crate) fn steps(
     policy: &MiseTaskBootstrapPolicy,
     mise_setup: &crate::MiseSetup,
@@ -314,7 +304,6 @@ fn run_script(policy: &MiseTaskBootstrapPolicy) -> String {
     statements.join("; ")
 }
 
-/// Pinned-MBX identity checks without command substitution.
 fn mbx_guard(mbx_version: &str) -> Vec<String> {
     vec![
         capture_command(

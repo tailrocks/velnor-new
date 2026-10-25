@@ -1,5 +1,3 @@
-//! Resolve `[[images]]` declarations against the checked-out repository.
-
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::fs;
@@ -17,7 +15,6 @@ use crate::safe_read::{RepoRead, read_repo_file};
 
 const MAX_DOCKERFILE_BYTES: u64 = 1024 * 1024;
 
-/// One sorted policy per declared image.
 pub(crate) fn policies(
     root: &Path,
     config: &VelnorConfig,
@@ -30,14 +27,11 @@ pub(crate) fn policies(
         .collect()
 }
 
-/// Planning inputs the prebuilt (`cargo_bin`) steps need.
 pub(crate) struct PrebuiltInputs<'a> {
     pub(crate) discovery: &'a Discovery,
     pub(crate) catalog: &'a ToolCatalog,
     pub(crate) fetch_roots: &'a [String],
-    /// Helper staging step (consumer policy); the private-source block needs it.
     pub(crate) acquire: Option<&'a Step>,
-    /// Private-source wiring; `None` without `[private_sources]`.
     pub(crate) private: Option<&'a PrivateWiring>,
 }
 
@@ -79,7 +73,6 @@ fn resolve(
     })
 }
 
-/// A prebuilt artifact must not pre-exist and the Dockerfile must copy it.
 fn require_stage_copied(
     image: &ImageConfig,
     sources: &std::collections::BTreeSet<String>,
@@ -108,7 +101,6 @@ fn require_stage_copied(
     }
 }
 
-/// Every component exists, is not a symlink, and the leaf has the right type.
 fn require_plain_path(
     root: &Path,
     path: &str,

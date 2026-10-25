@@ -1,5 +1,3 @@
-//! Per-product asset contracts and immutable release scripts.
-
 use std::collections::BTreeMap;
 
 use crate::RenderError;
@@ -10,11 +8,8 @@ use super::release_eligibility as eligibility;
 
 const PREPARE_TEMPLATE: &str = include_str!("schema2_release_prepare.sh");
 const PUBLISH_TEMPLATE: &str = include_str!("schema2_release_publish.sh");
-// Leave three minutes of the five-minute job for setup and final asset checks.
-// Their variable costs remain bounded by the job timeout, not this phase cap.
 const RELEASE_CONFIRMATION_BUDGET_SECONDS: u16 = 120;
 
-/// Stable ID for the legacy family publisher before typed composition.
 pub(super) const PUBLISH_STEP_ID: &str = "publish-family-release";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,19 +21,14 @@ pub(super) fn step_role(id: &str) -> Option<StepRole> {
     (id == PUBLISH_STEP_ID).then_some(StepRole::Publish)
 }
 
-/// One independently published family inside the composed release workflow.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Family {
-    /// Linux runner and `DinD` image archives.
     Images,
-    /// macOS Velnor host binary.
     Binary,
-    /// Linux and macOS Velnor generator binaries.
     Generator,
 }
 
 impl Family {
-    /// Stable release tag prefix retained for existing consumers.
     pub(super) const fn tag_prefix(self) -> &'static str {
         match self {
             Self::Images => "runner",
@@ -54,7 +44,6 @@ impl Family {
         }
     }
 
-    /// Build and attestation IDs for the two legacy non-generator families.
     pub(super) const fn job_ids(
         self,
     ) -> Option<(
@@ -69,7 +58,6 @@ impl Family {
         }
     }
 
-    /// Stable preparation job identity.
     pub(super) const fn prepare_id(self) -> &'static str {
         match self {
             Self::Images => "prepare-images",
@@ -78,7 +66,6 @@ impl Family {
         }
     }
 
-    /// Reusable workflow path reached by the dispatch-only coordinator.
     pub(super) const fn workflow_path(self) -> &'static str {
         match self {
             Self::Images => ".github/workflows/product-release-images.yml",
@@ -87,7 +74,6 @@ impl Family {
         }
     }
 
-    /// Stable caller job identity for this reusable workflow.
     pub(super) const fn call_id(self) -> &'static str {
         match self {
             Self::Images => "release-images",
@@ -96,7 +82,6 @@ impl Family {
         }
     }
 
-    /// Runner target that owns this family's pinned GitHub CLI setup.
     pub(super) const fn runner_target(self) -> ReleaseTarget {
         match self {
             Self::Images | Self::Generator => ReleaseTarget::LinuxX86_64,
@@ -104,7 +89,6 @@ impl Family {
         }
     }
 
-    /// Human-readable family label for job names and release notes.
     pub(super) const fn label(self) -> &'static str {
         match self {
             Self::Images => "runner images",
@@ -113,7 +97,6 @@ impl Family {
         }
     }
 
-    /// Paths where same-run workflow artifacts are downloaded.
     fn asset_paths(self) -> Vec<String> {
         match self {
             Self::Images => [
@@ -140,8 +123,6 @@ impl Family {
     }
 }
 
-/// Install Mise and the one canonical GitHub CLI version.
-/// Validate an existing release or require the exact tag to be absent.
 pub(super) fn prepare_script(
     family: Family,
     pins: &ProductReleasePins,
@@ -167,7 +148,6 @@ pub(super) fn prepare_script(
         ))
 }
 
-/// Recheck source eligibility, then publish or idempotently validate one family.
 pub(super) fn publish_script(
     family: Family,
     pins: &ProductReleasePins,
@@ -213,7 +193,6 @@ pub(super) fn publish_script(
         ))
 }
 
-/// Return commands that download each asset into its consumer-compatible path.
 fn download_commands(family: Family) -> Result<String, RenderError> {
     match family {
         Family::Images | Family::Binary => Ok(format!(
@@ -254,7 +233,6 @@ fn grouped_download_commands(paths: Vec<String>) -> Result<String, RenderError> 
         .join("\n"))
 }
 
-/// Return local checksum validation commands for downloaded or new assets.
 fn checksum_check(
     family: Family,
     root: &str,

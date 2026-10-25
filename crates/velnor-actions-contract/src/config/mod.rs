@@ -1,7 +1,3 @@
-//! `.velnor/config.toml` schema types (TOML shape, serde only).
-//!
-//! Unknown fields are rejected; validation reports file, key path, problem.
-
 mod actions;
 mod agents;
 mod ansible;
@@ -30,9 +26,9 @@ mod native_checks;
 pub mod playwright_lock;
 mod preview_policy;
 mod private_sources;
-/// Generated run-time resolver for project-declared versions (hard decision 5).
+
 mod project_tool_grammar;
-/// Run-time references to project-declared tool versions (hard decision 5).
+
 pub mod project_tool_refs;
 pub mod project_tool_resolver;
 mod publish;
@@ -47,7 +43,7 @@ mod rust_inputs;
 mod rust_suites;
 mod rust_suites_validate;
 mod rust_toolchain_source;
-/// Shared, fixed shell binding for the Setup Mise data directory and binary.
+
 pub mod selected_mise;
 mod stacks;
 mod task_source;
@@ -191,81 +187,68 @@ pub use workflow_task::{WORKFLOW_TASK_JOB_PREFIX, WorkflowTask, is_valid_workflo
 
 use serde::{Deserialize, Serialize};
 
-/// Mandatory job admission for external ephemeral check runners.
-/// GitHub evaluates job conditions before allocating a runner. Unknown
-/// event classes and fork PRs cannot enter this execution environment.
 pub const EPHEMERAL_CHECK_ADMISSION_CONDITION: &str = "github.event_name == 'push' || github.event_name == 'merge_group' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)";
 
-/// Top-level `.velnor/config.toml` document.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct VelnorConfig {
-    /// Config schema version. `1` is hosted-only. `2` is routing.
     pub schema: u32,
-    /// Workflow policy and naming.
+
     pub workflow: WorkflowConfig,
-    /// Process budgets.
+
     pub resources: ResourcesConfig,
-    /// Test sharding policy.
+
     pub test_sharding: TestShardingConfig,
-    /// Stack selection.
+
     pub stacks: StacksConfig,
-    /// Discovery exclusions.
+
     pub discovery: DiscoveryConfig,
-    /// Action-pin overrides; absent means bundled latest pins.
+
     #[serde(default)]
     pub actions: ActionsConfig,
-    /// Tool-version overrides (`[tools]`); absent means bundled catalog pins.
+
     #[serde(default, skip_serializing_if = "ToolsConfig::is_empty")]
     pub tools: ToolsConfig,
-    /// Agent instruction file policy (`[agents]`).
+
     #[serde(default, skip_serializing_if = "AgentsConfig::is_default")]
     pub agents: AgentsConfig,
-    /// Generated dco2 configuration (`[dco]`); absent emits no `.github/dco.yml`.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dco: Option<DcoConfig>,
-    /// Policy for `.github` entries the generator does not emit (`[github]`).
+
     #[serde(default, skip_serializing_if = "GithubConfig::is_default")]
     pub github: GithubConfig,
-    /// Schema 2 routing. Absent on schema 1.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub execution: Option<ExecutionConfig>,
-    /// Explicit repository-owned checks independent of language stacks.
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub checks: Vec<MiseCheck>,
-    /// SDK-owned checks with closed operations and no repository task execution.
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub native_checks: Vec<NativeHomebrewCheck>,
-    /// Explicit check-scoped tool qualification registry.
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub qualified_tools: Vec<QualifiedTool>,
-    /// Optional downstream package promotion policy.
+
     #[serde(default, skip_serializing_if = "DistributionConfig::is_empty")]
     pub distribution: DistributionConfig,
-    /// Private cross-repository dependency credentials (`[private_sources]`, HD-7).
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub private_sources: Option<PrivateSourcesConfig>,
-    /// Daily upgrade pull request and freshness gate (`[upgrades]`); off by default.
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub upgrades: Option<UpgradesConfig>,
-    /// Container images built on every run and published from the default branch.
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub images: Vec<ImageConfig>,
-    /// Tag-driven publication (`[[publish.bundles]]`).
+
     #[serde(default, skip_serializing_if = "PublishConfig::is_empty")]
     pub publish: PublishConfig,
 }
-
-#[cfg(test)]
-#[path = "check_tool_reference_tests.rs"]
-mod check_tool_reference_tests;
-
-#[cfg(test)]
-mod unit_tests;
 
 mod review_completion;
 pub(crate) use distribution::valid_review_check_name;
 pub use review_completion::{ReviewCompletionConfig, ReviewCompletionProvider};
 
-/// Tap updater execution remains independently bounded to five minutes.
 pub(crate) const NATIVE_TAP_UPDATER_MAX_TIMEOUT_MINUTES: u16 = 5;

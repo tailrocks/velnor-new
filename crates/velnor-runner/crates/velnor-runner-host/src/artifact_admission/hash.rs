@@ -1,5 +1,3 @@
-//! Fixed-format SHA-256 helpers for signed release assets.
-
 use sha2::{Digest, Sha256};
 
 pub(super) fn sha256(bytes: &[u8]) -> [u8; 32] {

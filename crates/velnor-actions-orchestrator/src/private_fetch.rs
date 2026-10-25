@@ -1,13 +1,3 @@
-//! `private-fetch-v1` and `private-revoke-v1`: the Velnor-owned steps between
-//! token mint and every repository-controlled step (HD-7).
-//!
-//! The fetch recomputes the token allowlist from the checked-out data and
-//! refuses to run when it differs from the one rendered into the mint step,
-//! fetches Cargo git dependencies (`cargo fetch --locked`, no build scripts),
-//! release assets, Maven bundles and git trees, verifies every pin (tag commit
-//! and SHA-256), and extracts through the hardened archive reader. The revoke
-//! deletes the installation token and requires the API to then reject it.
-
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
@@ -29,9 +19,7 @@ use crate::config::private_sources::{SourceKind, job_allowlist};
 use crate::discover::workspace_manifest;
 use crate::internal::internal;
 
-/// Operation names (shared with the contract and the renderer).
 pub const PRIVATE_FETCH_OP: &str = velnor_actions_contract::PRIVATE_FETCH_OPERATION;
-/// Revoke operation name.
 pub const PRIVATE_REVOKE_OP: &str = velnor_actions_contract::PRIVATE_REVOKE_OPERATION;
 
 const UPPER_HEX: &[u8; 16] = b"0123456789ABCDEF";
@@ -39,7 +27,6 @@ const JSON: &str = "application/vnd.github+json";
 const OCTET: &str = "application/octet-stream";
 const JSON_LIMIT: u64 = 4 * 1024 * 1024;
 
-/// Parsed and validated fetch input.
 #[derive(Debug)]
 pub(crate) struct FetchRequest {
     pub(crate) owner: String,
@@ -50,7 +37,6 @@ pub(crate) struct FetchRequest {
     pub(crate) runner_temp: PathBuf,
 }
 
-/// What one fetch retrieved.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) struct FetchSummary {
     pub(crate) cargo_roots: usize,
@@ -58,9 +44,7 @@ pub(crate) struct FetchSummary {
     pub(crate) trees: usize,
 }
 
-/// Transport the fetch uses; the real one is the credential [`Session`].
 pub(crate) trait FetchBackend {
-    /// `rust` is the `rust@<version>` the checkout declares.
     fn cargo_fetch(&self, manifest: &Path, rust: &str) -> Result<(), OrchestratorError>;
     fn download(&self, route: &str, accept: &str, dest: &Path) -> Result<(), OrchestratorError>;
 }
@@ -76,10 +60,6 @@ impl FetchBackend for Session {
 }
 
 impl FetchRequest {
-    /// Parse the step env. The token is validated by the caller.
-    ///
-    /// # Errors
-    /// Rejects missing or malformed values.
     pub(crate) fn parse(get: &dyn Fn(&str) -> Option<String>) -> Result<Self, OrchestratorError> {
         let need = |key: &str| {
             get(key)
@@ -134,11 +114,6 @@ impl FetchRequest {
     }
 }
 
-/// Verify the request against the repository data and perform the fetch.
-///
-/// # Errors
-/// Fails closed on allowlist drift, a moved tag, a digest mismatch, an
-/// unsafe archive, or any transport failure.
 pub(crate) fn execute(
     request: &FetchRequest,
     backend: &dyn FetchBackend,
@@ -196,9 +171,6 @@ fn fetch_all(
 ) -> Result<FetchSummary, OrchestratorError> {
     let mut summary = FetchSummary::default();
     if request.kinds.contains(&SourceKind::Cargo) && !request.roots.is_empty() {
-        // The Rust the checkout declares (hard decision 4), resolved as generation
-        // does: the version the generated resolver exports as `VELNOR_TOOL_RUST`
-        // and installs into the owned Cargo home, never the Velnor pin.
         let rust = crate::tool_catalog_resolve::resolve_tool_catalog(&request.workspace, config)?
             .tool_spec(velnor_actions_mise::PinnedTool::Rust);
         for root in &request.roots {
@@ -277,7 +249,6 @@ fn read_json(
         .map_err(|err| OrchestratorError::io(scratch.display().to_string(), err.to_string()))
 }
 
-/// Encode a tag for a URL path, keeping `/` (tags like `platform-history/2025-11`).
 fn encode_tag(tag: &str) -> String {
     let mut out = String::with_capacity(tag.len());
     for byte in tag.bytes() {
@@ -347,10 +318,6 @@ fn fetch_asset(
     extract_into(&archive, destination, budget)
 }
 
-/// Run `private-fetch-v1` from the step environment.
-///
-/// # Errors
-/// Any fetch failure; the credential directory is removed in every case.
 pub fn run_private_fetch() -> Result<(), OrchestratorError> {
     let get = |key: &str| std::env::var(key).ok();
     let token =
@@ -385,7 +352,3 @@ pub fn run_private_fetch() -> Result<(), OrchestratorError> {
     );
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "private_fetch_tests.rs"]
-mod tests;

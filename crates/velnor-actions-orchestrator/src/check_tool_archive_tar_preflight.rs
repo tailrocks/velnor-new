@@ -1,5 +1,3 @@
-//! Bounded raw TAR admission before the `tar` crate can consume extension data.
-
 use std::io::Read;
 
 use tar::EntryType;
@@ -12,9 +10,6 @@ use super::{MAX_ENTRIES, MAX_ENTRY_BYTES, MAX_TOTAL_BYTES, archive_error};
 const TAR_BLOCK_BYTES: u64 = 512;
 pub(super) const MAX_TAR_EXTENSION_ENTRY_BYTES: u64 = 64 * 1024;
 const MAX_TAR_EXTENSION_BYTES: u64 = 1024 * 1024;
-// Historical stress measurement: the Rust 1.99.0 candidate Linux std archive had 65 GNU
-// long-name records. It is not the selected Rust 1.98.1 toolchain; 256 caps extension
-// headers at 128 KiB while payloads remain capped at 1 MiB.
 pub(super) const MAX_TAR_EXTENSION_ENTRIES: usize = 256;
 
 pub(super) fn preflight_tar<R: Read>(mut reader: R) -> Result<usize, OrchestratorError> {

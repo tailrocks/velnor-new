@@ -1,7 +1,5 @@
 #!/bin/sh
-# Start the private daemon before publishing its socket to the runner.
 set -eu
-# The image ships the helper; the entrypoint test env does not.
 if [ -f /usr/local/libexec/velnor/cgroup-v2-delegation.sh ]; then
   . /usr/local/libexec/velnor/cgroup-v2-delegation.sh
   velnor_enable_cgroup_v2
@@ -10,7 +8,6 @@ export PATH="/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 real=/run/docker.sock.real
 public=/run/docker.sock
 rm -f "$public"
-# Do not publish a socket unless the daemon creates it within about 10 seconds.
 dockerd --host="unix://${real}" "$@" &
 pid=$!
 trap 'kill "$pid" 2>/dev/null || true; wait "$pid" || true; exit 0' TERM INT

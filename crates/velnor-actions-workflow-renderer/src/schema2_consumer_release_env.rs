@@ -1,4 +1,3 @@
-//! Closed environment bindings for native release operations, never command input.
 use super::super::TapInvocationContext;
 use super::{ConsumerReleaseSpec, RenderError, Yaml};
 use velnor_actions_contract::package_release::PackageReleaseChannel;

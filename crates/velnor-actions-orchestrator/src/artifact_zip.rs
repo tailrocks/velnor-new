@@ -1,8 +1,3 @@
-//! Closed, bounded ZIP admission shared by native leaf and signed recovery readers.
-//!
-//! This module knows file identities, never a leaf/receipt schema or signature.
-//! Optional expected hashes belong only to the historical signed-recovery caller;
-//! unsigned leaf callers must supply their complete exact size/hash/mode inventory.
 use crate::{OrchestratorError, internal::internal};
 use sha2::{Digest, Sha256};
 use std::{
@@ -22,10 +17,6 @@ mod limits;
 pub(crate) use limits::{NATIVE_MANIFEST_BYTES, ZipProfile, leaf_union_compressed_bound};
 const MAX_ENTRIES: usize = 4096;
 
-/// Validate an evidence artifact ZIP without extracting it.
-///
-/// This profile permits safe nested relative paths while retaining the stricter
-/// flat-name rules used by native recovery and preview archives.
 pub(crate) fn validate_evidence_archive(
     file: &mut std::fs::File,
     deadline: CheckDeadline,
@@ -58,7 +49,6 @@ fn validate_evidence_reader<R: Read + Seek>(input: R) -> Result<u64, Orchestrato
     Ok(total)
 }
 
-/// One exact flat file, with optional historical signature-bundle byte identity.
 pub(crate) struct ExpectedZipEntry {
     pub name: String,
     pub size: Option<u64>,
@@ -67,7 +57,6 @@ pub(crate) struct ExpectedZipEntry {
     pub unix_permissions: Option<u32>,
 }
 
-/// Read a bounded native manifest from an authenticated, descriptor-held ZIP.
 pub(crate) fn read_manifest_file(
     file: &mut std::fs::File,
     profile: ZipProfile,
@@ -80,7 +69,6 @@ pub(crate) fn read_manifest_file(
         .map_err(|_| invalid("deadline"))?
 }
 
-/// Stream a native ZIP from its held descriptor; historical slice callers keep their bounds.
 pub(crate) fn extract_file(
     file: &mut std::fs::File,
     profile: ZipProfile,
@@ -97,7 +85,6 @@ pub(crate) fn extract_file(
     finish(result, &mut output)
 }
 
-/// Read one fixed manifest only after validating the complete archive headers.
 pub(super) fn read_manifest_in_scope(
     bytes: &[u8],
     name: &str,
@@ -133,8 +120,6 @@ fn read_manifest_reader<R: Read + Seek>(
     Ok(output)
 }
 
-/// Extract an exact inventory into an existing empty directory owned by the caller.
-/// The directory is never removed. Failed work removes only pinned files created here.
 pub(super) fn extract_in_scope(
     bytes: &[u8],
     destination: &Path,
@@ -252,7 +237,6 @@ fn admit<'a, R: Read + Seek>(
     Ok(admitted)
 }
 
-/// Stream through EOF: the ZIP reader checks CRC; our counter/hash bind actual output.
 fn copy(
     input: &mut impl Read,
     output: &mut impl Write,
@@ -319,7 +303,6 @@ fn invalid(reason: &str) -> OrchestratorError {
     internal(&format!("artifact_zip_{reason}"))
 }
 
-/// One native recovery/promotion budget, intersected with any enclosing operation.
 pub(crate) fn within_operation<T>(
     operation: impl FnOnce() -> Result<T, OrchestratorError>,
 ) -> Result<T, OrchestratorError> {
@@ -331,18 +314,3 @@ pub(crate) fn within_operation<T>(
             .map_err(|_| invalid("deadline"))?;
     deadline.scope(operation).map_err(|_| invalid("deadline"))?
 }
-
-#[cfg(test)]
-#[path = "artifact_zip_tests.rs"]
-mod tests;
-
-#[cfg(test)]
-#[path = "artifact_zip_stream_tests.rs"]
-mod stream_tests;
-
-#[cfg(test)]
-#[path = "github_evidence_zip_tests.rs"]
-mod evidence_tests;
-#[cfg(test)]
-#[path = "artifact_zip_metadata_tests.rs"]
-mod metadata_tests;

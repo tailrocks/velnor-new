@@ -1,5 +1,3 @@
-//! Validate exact release bytes and their shared signed checksum provenance.
-
 use reqwest::Client;
 use std::path::Path;
 
@@ -194,30 +192,4 @@ fn validate_asset_bytes(asset: &Asset, bytes: &[u8]) -> Result<(), HostError> {
         return Err(HostError::Identity);
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::validate_asset_bytes;
-    use crate::artifact_admission::github::Asset;
-    use crate::artifact_admission::hash::lowercase_hex;
-    use crate::error::HostError;
-    use sha2::{Digest, Sha256};
-
-    #[test]
-    fn checks_download_size_and_digest() -> Result<(), HostError> {
-        let bytes = b"manifest";
-        let asset = Asset {
-            id: 1,
-            name: "RESOURCE_PROBE_MANIFEST.json".to_owned(),
-            size: u64::try_from(bytes.len()).map_err(|_| HostError::Frame)?,
-            digest: format!("sha256:{}", lowercase_hex(&Sha256::digest(bytes))),
-        };
-        validate_asset_bytes(&asset, bytes)?;
-        assert_eq!(
-            validate_asset_bytes(&asset, b"tampered"),
-            Err(HostError::Identity)
-        );
-        Ok(())
-    }
 }

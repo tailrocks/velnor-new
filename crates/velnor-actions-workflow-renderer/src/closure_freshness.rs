@@ -1,5 +1,3 @@
-//! Generated-tree freshness step constructors for `import` and `symlink` modes.
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{ClaudeMdMode, Step, StepRole};
@@ -11,12 +9,6 @@ use crate::{
     steps,
 };
 
-/// Fixed freshness step: regenerate into scratch, byte-compare `.github`.
-///
-/// Runs the helper's `generate --output-dir`, diffs preview against
-/// committed `.github`; `env` is the caller-validated consumer env,
-/// scrubbed here since local generation needs no ambient auth.
-/// # Errors
 pub fn freshness_step(
     binary: &str,
     output_dir: &str,
@@ -33,15 +25,6 @@ pub fn freshness_step(
     Ok(step)
 }
 
-/// Freshness step parameterized by the repository's `.github/CLAUDE.md` emission mode.
-///
-/// In `import` mode this emits the exact [`freshness_step`] command; in `symlink`
-/// mode it additionally verifies `.github/CLAUDE.md -> AGENTS.md` in both the
-/// committed tree and the scratch output before running `diff -r --brief`.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] for invalid helper path, output directory, or env.
 pub fn freshness_step_with_claude_mode(
     binary: &str,
     output_dir: &str,

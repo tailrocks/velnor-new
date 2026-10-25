@@ -1,16 +1,3 @@
-//! Hosted-only MBX objects-cache qualification experiment.
-//!
-//! Write and read are separate jobs in one dispatch. The writer is restricted
-//! to protected main; the shared cache generation is bound to that run,
-//! attempt, source SHA, action pin, and MBX release. The dependent reader
-//! cannot publish a cache or pass on data from an earlier run.
-//! The action ref is an explicit candidate input separate from the production
-//! pin; emitting this probe does not assert that candidate qualification passed.
-//!
-//! Both jobs set `MBX_GC_AUTO=0` and `MBX_SHARE_OUT_DIR=0`. The candidate
-//! action experiment remains separate from the production action pin and
-//! typed hosted/Scale Set routes; passing it does not qualify those routes.
-
 use super::features::{checkout_step, finish, gated, lane_base, run_step};
 use super::{MbxQualificationPins, RunnerSpec};
 use crate::cache_steps::MBX_ACTION_NAME;
@@ -45,10 +32,6 @@ const DISK_SAMPLE: &str = "df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"
 const IMPORT_PROBE: &str = "set -e -o pipefail; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx cache stats --json | tee \"$RUNNER_TEMP/mbx-object-stats.json\"; jq -e '.objects > 0' \"$RUNNER_TEMP/mbx-object-stats.json\"";
 const REUSE_PROBE: &str = "set -e -o pipefail; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx stats --json | tee \"$RUNNER_TEMP/mbx-reuse-stats.json\"; jq -e '.savings.cached_compilations > 0' \"$RUNNER_TEMP/mbx-reuse-stats.json\"";
 
-/// Emit isolated writer and reader jobs for the pinned MBX runtime.
-///
-/// # Errors
-/// Invalid action, Mise, MBX, or Rust pins fail closed.
 pub(super) fn jobs(
     request: &MbxQualificationPins,
     hosted: &RunnerSpec,
@@ -173,8 +156,6 @@ fn mise_install_step(request: &MbxQualificationPins) -> Yaml {
     ])
 }
 
-/// Runs only after the verification: `rustc` is the first toolchain binary
-/// the job executes.
 fn expose_rust_step(request: &MbxQualificationPins) -> Yaml {
     let rust = &request.rust_version;
     Yaml::Map(vec![
@@ -228,9 +209,6 @@ fn verify_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
     } else {
         "workflow_dispatch; save-on-workflow-dispatch is off"
     };
-    // A dispatch writer saves under a run/attempt suffix. The dependent
-    // read-only job restores via the run-bound prefix, so exact equality is
-    // false even when the import and compilation-reuse probes pass.
     let exact_cache_hit = if writer {
         ""
     } else {

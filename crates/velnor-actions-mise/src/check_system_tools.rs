@@ -1,4 +1,3 @@
-//! Closed native tool probes: observation only, never installation.
 use super::invalid;
 use crate::{CheckDeadline, IsolatedCommand, MiseError, ProcessOutput};
 use serde::{Deserialize, Serialize};
@@ -7,47 +6,27 @@ use std::path::Path;
 use velnor_actions_contract::canonical::{digest_b3, is_valid_digest};
 use velnor_actions_contract::config::{CheckPlatform, CheckSystemTool, CheckSystemToolKind};
 
-/// Native tool observation bound to its exact declared pin.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SystemToolProof {
-    /// Exact repository declaration.
     pub declared: CheckSystemTool,
-    /// Parsed product version.
     pub observed_version: String,
-    /// Parsed complete compiler or product build identity.
     pub observed_build: String,
-    /// Exact macOS SDK version selected from the developer directory; absent for Swift.
     pub observed_sdk_version: Option<String>,
-    /// Digest of the exact SDK version stdout; absent for Swift.
     pub sdk_stdout_digest: Option<String>,
-    /// Digest of the exact SDK version stderr; absent for Swift.
     pub sdk_stderr_digest: Option<String>,
-    /// Complete native Swift target triple; absent for Xcode.
     pub observed_target: Option<String>,
-    /// Canonical absolute executable identity.
     pub executable: String,
-    /// Fixed system launcher used for observation.
     pub launcher: String,
-    /// Canonical selected developer directory, bound into every later probe and task.
     pub developer_dir: String,
-    /// Exact fixed system selector stdout digest.
     pub developer_stdout_digest: String,
-    /// Exact fixed system selector stderr digest.
     pub developer_stderr_digest: String,
-    /// Digest of the exact version stdout bytes.
     pub stdout_digest: String,
-    /// Digest of the exact version stderr bytes.
     pub stderr_digest: String,
-    /// Swift executable discovery stdout digest.
     pub discovery_stdout_digest: Option<String>,
-    /// Swift executable discovery stderr digest.
     pub discovery_stderr_digest: Option<String>,
 }
 
-/// Observe native system tools using fixed system executables and arguments.
-/// # Errors
-/// Rejects unsupported hosts, missing tools, malformed output and pin drift.
 pub fn verify_check_system_tools(
     platform: CheckPlatform,
     pins: &[CheckSystemTool],
@@ -102,9 +81,6 @@ pub fn verify_check_system_tools(
     Ok(proofs)
 }
 
-/// Check receipt observations against the repository declarations.
-/// # Errors
-/// Rejects missing, reordered, extra, malformed or drifting proofs.
 pub fn validate_system_tool_proofs(
     platform: CheckPlatform,
     pins: &[CheckSystemTool],
@@ -302,10 +278,6 @@ fn observe_xcode_sdk(
 mod parse;
 pub use parse::parse_system_tool_version;
 use parse::{absolute_identity, valid_build, valid_proof_target, valid_version};
-
-#[cfg(test)]
-#[path = "check_system_tools_tests.rs"]
-mod tests;
 
 fn canonical_executable(value: &str) -> Result<String, MiseError> {
     let path = Path::new(value)

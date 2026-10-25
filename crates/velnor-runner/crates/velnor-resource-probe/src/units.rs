@@ -1,6 +1,5 @@
 use crate::ProbeError;
 
-/// Parse a finite nonnegative decimal and round upward to thousandths.
 pub(crate) fn decimal_milli_ceil(value: &str) -> Result<u64, ProbeError> {
     let (whole, fractional) = value
         .split_once('.')
@@ -30,7 +29,6 @@ pub(crate) fn decimal_milli_ceil(value: &str) -> Result<u64, ProbeError> {
         .ok_or(ProbeError::Overflow("decimal"))
 }
 
-/// Parse a PSI decimal percentage into hundredths of one percent.
 pub(crate) fn percent_basis_points(value: &str) -> Result<u64, ProbeError> {
     let (whole, fractional) = value
         .split_once('.')

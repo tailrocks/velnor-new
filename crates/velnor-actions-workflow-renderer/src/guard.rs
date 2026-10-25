@@ -1,32 +1,17 @@
-//! Output-path and context-scalar guards: traversal rejection, symlink
-//! probing, plus the pinned label/binary/directory shapes every render
-//! context carries.
-//!
-//! Pure helpers: lexical checks run here, symlink detection uses a
-//! caller-supplied probe so this crate never touches the filesystem.
-
 use std::path::{Path, PathBuf};
 
 use crate::{RenderError, steps};
 
-/// A validated relative output path inside the generated tree.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SafeTreePath(String);
 
 impl SafeTreePath {
-    /// Borrow the validated path.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 }
 
-/// Reject absolute paths, traversal, backslashes, and control characters.
-///
-/// # Errors
-///
-/// Returns [`RenderError::UnsafePath`] for empty, overlong, absolute,
-/// traversing, or otherwise unsafe paths.
 pub fn validate_tree_path(path: &str) -> Result<SafeTreePath, RenderError> {
     if path.is_empty() || path.len() > 4096 {
         return Err(RenderError::UnsafePath(format!("bad_length:{path}")));
@@ -42,14 +27,6 @@ pub fn validate_tree_path(path: &str) -> Result<SafeTreePath, RenderError> {
     Ok(SafeTreePath(path.to_owned()))
 }
 
-/// Validate a generated-tree path against a fixed allowlist.
-///
-/// Lexical validation first, then exact allowlist membership: release
-/// files cannot smuggle arbitrary paths into the tree.
-///
-/// # Errors
-///
-/// Returns [`RenderError::UnsafePath`] for unsafe or unlisted paths.
 pub fn validate_allowlisted_path(
     path: &str,
     allowed: &[&str],
@@ -62,11 +39,6 @@ pub fn validate_allowlisted_path(
     }
 }
 
-/// Require a literal versioned Ubuntu label (no aliases or expressions).
-///
-/// # Errors
-///
-/// Returns [`RenderError::InvalidWorkflow`] for unpinned labels.
 pub fn validate_runs_on(label: &str) -> Result<(), RenderError> {
     let pinned = !label.is_empty()
         && label.starts_with("ubuntu-")
@@ -84,11 +56,6 @@ pub fn validate_runs_on(label: &str) -> Result<(), RenderError> {
     }
 }
 
-/// Require the staged path with the exact generator version suffix.
-///
-/// # Errors
-///
-/// Returns [`RenderError::InvalidWorkflow`] for unstaged binaries.
 pub fn validate_staged_binary(staged: &str, version: &str) -> Result<(), RenderError> {
     match staged.strip_prefix(steps::STAGED_BINARY_PREFIX) {
         Some(suffix) if suffix == version => Ok(()),
@@ -98,11 +65,6 @@ pub fn validate_staged_binary(staged: &str, version: &str) -> Result<(), RenderE
     }
 }
 
-/// Require a runner-temp request directory without traversal.
-///
-/// # Errors
-///
-/// Returns [`RenderError::InvalidWorkflow`] for malformed directories.
 pub fn validate_request_dir(dir: &str) -> Result<(), RenderError> {
     match dir.strip_prefix(steps::REQUEST_DIR_PREFIX) {
         Some(rest)
@@ -118,20 +80,11 @@ pub fn validate_request_dir(dir: &str) -> Result<(), RenderError> {
     }
 }
 
-/// Lexically join a safe path under `root` (cannot escape by construction).
 #[must_use]
 pub fn join_within_root(root: &Path, rel: &SafeTreePath) -> PathBuf {
     root.join(&rel.0)
 }
 
-/// Fail when any generated-tree prefix is a symlink (caller probe).
-///
-/// Walks `root/<segment...>` prefixes and calls `is_symlink` on each one.
-/// The crate performs no filesystem IO itself.
-///
-/// # Errors
-///
-/// Returns [`RenderError::UnsafePath`] naming the symlinked prefix.
 pub fn check_no_symlink<F>(
     root: &Path,
     rel: &SafeTreePath,

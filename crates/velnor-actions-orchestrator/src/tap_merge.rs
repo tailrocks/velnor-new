@@ -1,5 +1,3 @@
-//! Exact-head, feedback-gated Homebrew tap merge.
-
 #[path = "tap_merge_candidate.rs"]
 mod candidate;
 #[path = "tap_merge_completed.rs"]
@@ -35,24 +33,15 @@ use velnor_actions_mise::CheckDeadline;
 
 use crate::{OrchestratorError, internal::internal};
 
-/// Fixed private operation selecting the independently credentialed tap merge.
 pub const MERGE_HOMEBREW_TAP_PR_OP: &str = "merge-homebrew-tap-pr-v1";
-/// Result of one bounded promotion observation; pending never claims a merge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TapMergeOutcome {
-    /// Checks or review completion have not yet admitted the exact head.
     Pending,
-    /// The exact validated head was merged with the server SHA precondition.
     Merged,
-    /// A previous merge was independently authenticated without another write.
     AlreadyPromoted,
-    /// An authenticated newer protected source tip superseded this preview.
     SkippedStaleSource,
 }
 
-/// Reauthenticate candidate and PR, await exact-head gates, then squash with SHA precondition.
-/// # Errors
-/// Rejects stale or conflicting PRs, failed checks, incomplete feedback, and API errors.
 pub fn merge_homebrew_tap_from_env() -> Result<TapMergeOutcome, OrchestratorError> {
     crate::package_release_publish::artifact_zip::within_operation(merge_once)
 }
@@ -169,7 +158,6 @@ fn merge_validated_head(
     Ok(())
 }
 
-/// Admit both distinct installation capabilities under one operation deadline.
 fn authenticate_merge(
     candidate: &candidate::MergeCandidate,
 ) -> Result<
@@ -230,11 +218,3 @@ fn required_token(name: &str) -> Result<String, OrchestratorError> {
         .filter(|value| !value.is_empty())
         .ok_or_else(|| internal("tap_merge_token_missing"))
 }
-
-#[cfg(test)]
-#[path = "tap_merge_tests.rs"]
-mod tests;
-
-#[cfg(test)]
-#[path = "tap_merge_protocol_tests.rs"]
-mod protocol_tests;

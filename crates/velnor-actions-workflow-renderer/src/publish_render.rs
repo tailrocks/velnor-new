@@ -1,10 +1,3 @@
-//! Publication workflow rendering (`publish.yml`).
-//!
-//! Turns a validated [`PublishWorkflowSpec`] into marked YAML. The trigger
-//! block can only express `push` branches and tags, and the concurrency
-//! group is one fixed string per ref that never cancels, so a queued
-//! release can neither be dropped nor overlap another run of the same tag.
-
 use velnor_actions_contract::{Step, StepKind};
 
 use crate::{
@@ -18,17 +11,10 @@ use crate::{
     yaml::Yaml,
 };
 
-/// Generated publication workflow path inside the repository.
 pub const PUBLISH_WORKFLOW_PATH: &str = ".github/workflows/publish.yml";
 
-/// Fixed concurrency group: one queue per pushed ref, never cancelled.
 pub const PUBLISH_CONCURRENCY_GROUP: &str = "publish-${{ github.ref }}";
 
-/// Render the publication workflow from validated typed IR.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] for invalid context, spec or steps.
 pub fn render_publish_workflow(
     spec: &PublishWorkflowSpec,
     ctx: &ReleaseRenderContext,
@@ -73,7 +59,6 @@ pub fn render_publish_workflow(
     })
 }
 
-/// Render `push` branches and tags; no other event exists in the IR.
 fn triggers_to_yaml(triggers: &PublishTriggers) -> Yaml {
     let list = |items: &[String]| Yaml::Seq(items.iter().map(|i| Yaml::str(i.clone())).collect());
     let mut push = Vec::new();
@@ -86,7 +71,6 @@ fn triggers_to_yaml(triggers: &PublishTriggers) -> Yaml {
     Yaml::Map(vec![("push".to_owned(), Yaml::Map(push))])
 }
 
-/// Render one job's permissions, listing only granted levels.
 fn permissions_to_yaml(job: &PublishJobSpec) -> Yaml {
     let perms = &job.permissions;
     let rows = [
@@ -106,8 +90,6 @@ fn permissions_to_yaml(job: &PublishJobSpec) -> Yaml {
     )
 }
 
-/// Render one build-side internal step: the operation travels in env, the
-/// staged helper is the only command (never argv from config text).
 fn internal_step_to_yaml(step: &Step, staged: &str) -> Result<Yaml, RenderError> {
     let StepKind::Internal { operation, env } = &step.kind else {
         return Err(RenderError::InvalidWorkflow(
@@ -140,7 +122,6 @@ fn internal_step_to_yaml(step: &Step, staged: &str) -> Result<Yaml, RenderError>
     Ok(Yaml::Map(entries))
 }
 
-/// Render one step, inserting its explicit id after the name.
 fn step_to_yaml(step: &PublishStep, staged: Option<&str>) -> Result<Yaml, RenderError> {
     let rendered = match (&step.step.kind, staged) {
         (StepKind::Internal { .. }, Some(staged)) => internal_step_to_yaml(&step.step, staged)?,
@@ -155,7 +136,6 @@ fn step_to_yaml(step: &PublishStep, staged: Option<&str>) -> Result<Yaml, Render
     Ok(Yaml::Map(entries))
 }
 
-/// Render one job with environment, permissions, needs, outputs and steps.
 fn job_to_yaml(job: &PublishJobSpec, staged: Option<&str>) -> Result<Yaml, RenderError> {
     let mut entries = vec![
         ("name".to_owned(), Yaml::str(job.display_name.clone())),

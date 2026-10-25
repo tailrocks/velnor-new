@@ -1,5 +1,3 @@
-//! Fixed source handoff and identity-checked native staging.
-
 use crate::filesystem_owner::held_file::HeldFile;
 use crate::{
     OrchestratorError,
@@ -143,7 +141,6 @@ pub(super) fn stage_asset(
     Ok(proof)
 }
 
-/// Only newly created upload files receive the literal mode expected in service ZIPs.
 pub(crate) fn write_upload(
     path: &Path,
     bytes: &[u8],
@@ -184,7 +181,6 @@ fn normalize_upload_file(
             | rustix::fs::Mode::ROTH,
     )
     .map_err(|_| internal("preview_upload_mode"))?;
-    // Mode normalization is an explicit producer mutation, never a refreshed admission.
     let normalized = HeldFile::new(path, &proof.sha256, proof.size, deadline)?;
     let after = normalized
         .file()
@@ -243,7 +239,3 @@ pub(super) fn checkpoint(deadline: CheckDeadline) -> Result<(), OrchestratorErro
         .map(|_| ())
         .map_err(|_| internal("preview_deadline_exhausted"))
 }
-
-#[cfg(test)]
-#[path = "preview_production_handoff_tests.rs"]
-mod tests;

@@ -6,15 +6,12 @@ use super::{
 };
 
 impl VelnorConfig {
-    /// Schema 1: hosted-only generation. Schema 2 is routing.
     pub const SCHEMA: u32 = 1;
-    /// Routing schema.
+
     pub const SCHEMA_V2: u32 = 2;
-    /// Stack IDs registered in V1.
+
     pub const REGISTERED_STACKS: &'static [&'static str] = &["mise", "native", "rust", "tofu"];
 
-    /// Validate every field; failures name file, key path, and problem.
-    /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         self.check_schema(file)?;
         self.workflow.validate(file)?;
@@ -128,7 +125,6 @@ impl VelnorConfig {
         Ok(())
     }
 
-    /// Schema 1 rejects routing. Schema 2 requires `[execution]`.
     fn check_schema(&self, file: &str) -> Result<(), ContractError> {
         match self.schema {
             1 => {

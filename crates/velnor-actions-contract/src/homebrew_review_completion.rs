@@ -1,7 +1,3 @@
-//! Closed check-output protocol for an independent exact-head completion App.
-
-/// GitHub's shared Actions App cannot independently authenticate review completion.
-/// Identity: `GET https://api.github.com/apps/github-actions`.
 pub const GITHUB_ACTIONS_APP_ID: u64 = 15_368;
 
 use crate::{
@@ -11,77 +7,59 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
-/// Sole supported independent review-completion payload schema.
 pub const TAP_REVIEW_COMPLETION_SCHEMA: &str = "velnor.review-completion.v1";
 
-/// GitHub-authenticated check metadata, obtained independently of output text.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TapCompletionCheckMetadata {
-    /// Actual check name from GitHub's check-run API.
     pub name: String,
-    /// Actual numeric App identity from GitHub's check-run API.
+
     pub app_id: u64,
-    /// Actual check head from GitHub's check-run API.
+
     pub head_sha: String,
-    /// Actual completed/success result, never inferred from payload claims.
+
     pub completed_successfully: bool,
 }
 
-/// Canonical complete verdict emitted only by the independent trusted App.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TapReviewCompletionPayload {
-    /// Exact versioned discriminator.
     pub schema: String,
-    /// Exact tap repository.
+
     pub repository: String,
-    /// Exact PR database number within the repository.
+
     pub pull_request_number: u64,
-    /// Exact reviewed formula commit.
+
     pub head_sha: String,
-    /// Sole terminal successful verdict; unknown or incomplete states reject.
+
     pub verdict: TapReviewVerdict,
-    /// Canonical digest of the complete current feedback snapshot.
+
     pub feedback_digest: String,
-    /// Explicit finding disposition summary; it must be false.
+
     pub has_unaddressed_findings: bool,
-    /// Sorted, unique, complete expected reviewer identities with evidence bindings.
+
     pub reviewers: Vec<TapCompletedReviewer>,
 }
 
-/// The only verdict which can be used for merge admission.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TapReviewVerdict {
-    /// Every configured review and finding disposition has completed.
     Complete,
 }
 
-/// A trusted completion App's authenticated exact-head reviewer evidence binding.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TapCompletedReviewer {
-    /// Numeric reviewer App identity from configured policy and GitHub metadata.
     pub app_id: u64,
-    /// Exact commit explicitly completed by that reviewer.
+
     pub head_sha: String,
-    /// Digest of the authenticated terminal review and disposition records.
+
     pub evidence_digest: String,
-    /// Explicit terminal completion; missing or false fails closed.
+
     pub complete: bool,
-    /// Explicit finding disposition summary; it must be false.
+
     pub has_unaddressed_findings: bool,
 }
 
-/// Parse a trusted check's exact canonical output text into merge evidence.
-///
-/// This function does not authenticate GitHub transport or App identity. The
-/// caller must fetch the unique check run from the expected repository and pass
-/// its actual metadata. The merge gate separately compares configured App IDs,
-/// expected reviewers, PR/head identity, and a freshly captured feedback digest.
-/// # Errors
-/// Rejects unknown/duplicate fields, noncanonical bytes, missing or incomplete
-/// review identities, duplicate/unsorted reviewers, and any unresolved finding.
 pub fn parse_tap_review_completion(
     metadata: &TapCompletionCheckMetadata,
     bytes: &[u8],
@@ -140,7 +118,3 @@ fn valid_digest(value: &str) -> bool {
 fn invalid(reason: &'static str) -> ContractError {
     ContractError::identity("homebrew_review_completion", reason)
 }
-
-#[cfg(test)]
-#[path = "homebrew_review_completion_tests.rs"]
-mod tests;

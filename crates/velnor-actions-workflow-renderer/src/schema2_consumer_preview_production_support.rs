@@ -1,5 +1,3 @@
-//! Shared preview producer source and host-bootstrap step construction.
-
 use super::super::{BTreeMap, TapInvocationContext, non_internal_step_to_yaml, steps};
 use super::ReleasePayloadPair;
 use super::{
@@ -179,7 +177,6 @@ pub(super) fn bind_stage(
     Ok(())
 }
 
-/// Bind only the matrix/literal payload identity, without downstream admission digests.
 pub(super) fn bind_payload_pair(
     operation: &mut Yaml,
     pair: Option<&ReleasePayloadPair>,

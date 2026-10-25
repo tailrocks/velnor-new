@@ -1,5 +1,3 @@
-//! Cargo workspace discovery and locked dependency identity checks.
-
 mod lock;
 mod workspace;
 
@@ -20,7 +18,6 @@ pub(super) struct DeclaredDependency {
     pub(super) requirement: String,
 }
 
-/// Discover every workspace and compare its declarations with its lock graph.
 pub(crate) fn check_effective_identity(ctx: &mut FreshnessContext) {
     ctx.workspace_roots = workspace::discover_workspaces(ctx);
     ctx.locked.clear();

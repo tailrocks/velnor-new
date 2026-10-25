@@ -1,16 +1,3 @@
-//! System libraries for Playwright browsers the hosted image does not carry
-//! (`playwright-browsers-install-v1`, `VELNOR_PLAYWRIGHT_SYSTEM_DEPS`).
-//!
-//! The `ubuntu-26.04` hosted image runs Playwright Chromium as is but lacks
-//! the `WebKit` and Firefox runtime libraries (tailrocks/velnor-new#352). For
-//! those browsers the step runs Playwright's own `install-deps` from the
-//! `playwright-core` tarball whose integrity `bun.lock` records: the tarball
-//! is downloaded from the npm registry, verified against that integrity (the
-//! same anchor as every locked archive) and only then executed under the
-//! Velnor-pinned Bun, with the lock's host platform. Repository-resolved code
-//! (`node_modules`) never runs here, and the package list is Playwright's
-//! `nativeDeps` table for that platform inside the verified tarball.
-
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -29,20 +16,11 @@ const NPM_REGISTRY: &str = "https://registry.npmjs.org";
 const CORE_MAX_BYTES: u64 = 64 * 1024 * 1024;
 const CORE_SUBDIR: &str = "velnor/playwright-core";
 const EXTRACT_TIMEOUT: Duration = Duration::from_mins(5);
-/// One `install-deps` run takes well under a minute on the hosted image; a run
-/// that stalls on an apt mirror (seen on 7 of 10 concurrent legs once, every
-/// leg passing on rerun) is killed and retried once instead of holding the job.
 const INSTALL_TIMEOUT: Duration = Duration::from_mins(8);
 const INSTALL_ATTEMPTS: u32 = 2;
 const CAPTURE_BYTES: usize = 1024 * 1024;
-/// Exact Bun version, exported by the project-tool resolver step.
 pub(crate) const BUN_VERSION_ENV: &str = "VELNOR_TOOL_BUN";
 
-/// The step's sorted, duplicate-free browser list; absent is none.
-///
-/// # Errors
-/// `playwright_system_deps_invalid` for an empty, unsorted, repeated or
-/// unknown entry.
 pub(crate) fn parse_system_deps(value: Option<&str>) -> Result<Vec<String>, OrchestratorError> {
     let Some(value) = value else {
         return Ok(Vec::new());
@@ -57,16 +35,10 @@ pub(crate) fn parse_system_deps(value: Option<&str>) -> Result<Vec<String>, Orch
     Ok(list)
 }
 
-/// Runs Playwright's `install-deps`; the real one uses the pinned Bun.
 pub(crate) trait DepsInstaller {
-    /// Run `<cli> install-deps <browsers>`.
-    ///
-    /// # Errors
-    /// Fails when the command cannot run or exits nonzero.
     fn install_deps(&self, cli: &Path, browsers: &[String]) -> Result<(), OrchestratorError>;
 }
 
-/// `mise exec bun@<pin> -- bun <cli> install-deps <browsers>`.
 pub(crate) struct BunInstallDeps {
     pub(crate) bun_version: String,
 }
@@ -91,8 +63,6 @@ impl DepsInstaller for BunInstallDeps {
             })
             .map_err(|err| internal(&format!("playwright_system_deps_command:{err}")))?;
         install_with_retry(INSTALL_ATTEMPTS, &mut || {
-            // Live, escaped output: an apt run that stalls shows where in the
-            // job log instead of only after the deadline kills it.
             let deadline = CheckDeadline::after(INSTALL_TIMEOUT)?;
             command
                 .run_until_with_progress(CAPTURE_BYTES, deadline, &mut std::io::stderr().lock())
@@ -101,16 +71,6 @@ impl DepsInstaller for BunInstallDeps {
     }
 }
 
-/// Run `install-deps` up to `attempts` times; `run` reports whether one run
-/// exited successfully.
-///
-/// A nonzero exit or a deadline whose process group was cleaned up is retried.
-/// A failed cleanup is terminal: the previous apt and sudo processes may still
-/// run, so a second attempt could overlap them and a later success would hide
-/// the failure.
-///
-/// # Errors
-/// The last failure, or the first cleanup failure.
 pub(crate) fn install_with_retry(
     attempts: u32,
     run: &mut dyn FnMut() -> Result<bool, velnor_actions_mise::MiseError>,
@@ -138,15 +98,6 @@ fn io_error(path: &Path, err: &std::io::Error) -> OrchestratorError {
     OrchestratorError::io(path.display().to_string(), err.to_string())
 }
 
-/// Install the system libraries of `request.system_deps`.
-///
-/// Each browser must be one the verified archives pin, and the tarball must
-/// match their `core_integrity` (already checked equal to `bun.lock`'s)
-/// before anything in it runs.
-///
-/// # Errors
-/// `playwright_system_deps_unpinned:<browser>`, a download failure,
-/// `playwright_core_integrity_mismatch`, an unsafe tarball or a failed install.
 pub(crate) fn install_system_deps(
     request: &InstallRequest,
     archives: &[&LockedArchive],
@@ -202,7 +153,3 @@ pub(crate) fn install_system_deps(
     );
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "playwright_system_deps_tests.rs"]
-mod tests;

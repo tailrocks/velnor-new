@@ -1,5 +1,3 @@
-//! Stage-specific execution with receipt-last native evidence.
-
 use super::{
     aggregate::AdmittedLeaves,
     handoff::{self, AssetProof},

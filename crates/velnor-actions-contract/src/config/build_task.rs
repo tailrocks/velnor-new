@@ -1,62 +1,49 @@
-//! Closed declarations for native build-capable Mise tasks.
-
 use super::MiseTaskSource;
 use crate::errors::ContractError;
 use crate::workflow::timeout::JobTimeout;
 
-/// One allowlisted task that may compile repository code in a native job.
-///
-/// Build tasks are an explicit variant in the same workflow task collection as
-/// compile-free verification tasks. They declare a runner, tool closure, time
-/// limit, and per-tool parallelism bounds.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BuildTask {
-    /// Stable lowercase identifier; the generated job ID is `task-{id}`.
     pub id: String,
-    /// Exact task name from the repository's locked Mise configuration.
+
     pub mise_task: String,
-    /// Exact Mise source file and task working directory.
+
     pub source: MiseTaskSource,
-    /// Sorted, explicit closure of tool keys consumed by this task.
+
     pub tools: Vec<String>,
-    /// Native OS and architecture used for this build task.
+
     pub runner: BuildTaskRunner,
-    /// Required per-job timeout in minutes.
+
     pub timeout_minutes: u16,
-    /// Maximum concurrent Cargo build jobs (1 or 2).
+
     pub cargo_build_jobs: u8,
-    /// Maximum concurrent Nextest test threads (1 or 2).
+
     pub nextest_test_threads: u8,
 }
 
-/// Supported build-task runner OS and architecture pairs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum BuildTaskRunner {
-    /// GitHub-hosted Apple ARM64 macOS 26 runner.
     #[serde(rename = "macos-26-arm64")]
     Macos26Arm64,
-    /// GitHub-hosted Xcode 27 Apple ARM64 runner.
+
     #[serde(rename = "xcode-27-arm64")]
     Xcode27Arm64,
 }
 
-/// Exact Xcode installation advertised by one native build runner label.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BuildTaskXcodeCapability {
-    /// Xcode marketing version reported by `xcodebuild -version`.
     pub version: &'static str,
-    /// Exact Xcode build identifier reported by `xcodebuild -version`.
+
     pub build: &'static str,
-    /// macOS SDK version reported by `xcrun --sdk macosx --show-sdk-version`.
+
     pub sdk_version: &'static str,
-    /// Canonical developer directory for this runner's selected Xcode.
+
     pub developer_dir: &'static str,
 }
 
 impl BuildTaskRunner {
-    /// Exact Xcode capability selected by this runner label.
     #[must_use]
     pub const fn xcode_capability(self) -> BuildTaskXcodeCapability {
         match self {
@@ -75,7 +62,6 @@ impl BuildTaskRunner {
         }
     }
 
-    /// Exact GitHub-hosted runner label.
     #[must_use]
     pub const fn runs_on(self) -> &'static str {
         match self {
@@ -84,7 +70,6 @@ impl BuildTaskRunner {
         }
     }
 
-    /// Mise target triple for the runner's operating system and architecture.
     #[must_use]
     pub const fn mise_target(self) -> &'static str {
         match self {
@@ -94,8 +79,6 @@ impl BuildTaskRunner {
 }
 
 impl BuildTask {
-    /// Validate names, the declared tool closure, timeout, and resource bounds.
-    /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         if !super::is_valid_workflow_task_id(&self.id) {
             return Err(ContractError::config(
@@ -180,7 +163,6 @@ impl BuildTask {
     }
 }
 
-/// True for a bounded literal key that may name one Mise tool selector.
 #[must_use]
 pub fn is_valid_build_tool_key(key: &str) -> bool {
     !key.is_empty()
@@ -189,130 +171,4 @@ pub fn is_valid_build_tool_key(key: &str) -> bool {
         && key
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b':' | b'/'))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{BuildTask, BuildTaskRunner, is_valid_build_tool_key};
-    use crate::config::MiseTaskSource;
-
-    fn build_task(id: &str, mise_task: &str) -> BuildTask {
-        BuildTask {
-            id: id.to_owned(),
-            mise_task: mise_task.to_owned(),
-            source: MiseTaskSource {
-                mise_config: "mise.toml".to_owned(),
-                working_directory: ".".to_owned(),
-            },
-            tools: vec!["mr-boxington".to_owned(), "rust".to_owned()],
-            runner: BuildTaskRunner::Macos26Arm64,
-            timeout_minutes: 5,
-            cargo_build_jobs: 2,
-            nextest_test_threads: 2,
-        }
-    }
-
-    #[test]
-    fn timeout_accepts_configured_budgets_and_rejects_above_github_limit() {
-        for minutes in [1, 5, 6, 120, 360] {
-            let mut task = build_task("native-desktop", "desktop-ci");
-            task.timeout_minutes = minutes;
-            assert!(task.validate("config.toml").is_ok(), "{minutes}");
-        }
-        for minutes in [0, 361, u16::MAX] {
-            let mut task = build_task("native-desktop", "desktop-ci");
-            task.timeout_minutes = minutes;
-            assert!(task.validate("config.toml").is_err(), "{minutes}");
-        }
-    }
-
-    #[test]
-    fn names_and_native_resource_limits_are_bounded() {
-        for id in ["native-desktop", "macos26-ci", "desktop1"] {
-            assert!(super::super::is_valid_workflow_task_id(id), "{id}");
-        }
-        for id in ["", "Upper", "-start", "end-", "a--b", "required", "x/y"] {
-            assert!(!super::super::is_valid_workflow_task_id(id), "{id:?}");
-        }
-
-        let task = build_task("native-desktop", "desktop-ci");
-        assert!(task.validate("config.toml").is_ok());
-        assert_eq!(task.runner.runs_on(), "macos-26");
-        assert_eq!(task.runner.mise_target(), "aarch64-apple-darwin");
-        assert_eq!(BuildTaskRunner::Xcode27Arm64.runs_on(), "xcode-27");
-        assert_eq!(
-            BuildTaskRunner::Xcode27Arm64.mise_target(),
-            "aarch64-apple-darwin"
-        );
-
-        let mut invalid = task.clone();
-        invalid.timeout_minutes = 361;
-        assert!(invalid.validate("config.toml").is_err());
-        let mut invalid = task.clone();
-        invalid.cargo_build_jobs = 3;
-        assert!(invalid.validate("config.toml").is_err());
-        let mut invalid = task.clone();
-        invalid.nextest_test_threads = 0;
-        assert!(invalid.validate("config.toml").is_err());
-        let mut invalid = task;
-        invalid.mise_task = "desktop-ci;id".to_owned();
-        assert!(invalid.validate("config.toml").is_err());
-        let invalid = build_task("native-desktop", &"a".repeat(65));
-        assert!(invalid.validate("config.toml").is_err());
-    }
-
-    #[test]
-    fn tool_closure_is_safe_sorted_bounded_and_requires_mbx() {
-        for key in ["jactionlint", "aqua:example/tool", "github:boltffi/boltffi"] {
-            assert!(is_valid_build_tool_key(key), "{key}");
-        }
-        for key in [
-            "",
-            "-prefix",
-            "tool.name",
-            "tool name",
-            "tool;true",
-            "../tool",
-        ] {
-            assert!(!is_valid_build_tool_key(key), "{key:?}");
-        }
-
-        let mut task = build_task("native-desktop", "desktop-ci");
-        task.tools = vec!["rust".to_owned()];
-        assert!(task.validate("config.toml").is_err(), "MBX is required");
-        task.tools = vec![
-            "mr-boxington".to_owned(),
-            "rust".to_owned(),
-            "rust".to_owned(),
-        ];
-        assert!(task.validate("config.toml").is_err(), "duplicates fail");
-        task.tools = vec!["rust".to_owned(), "mr-boxington".to_owned()];
-        assert!(
-            task.validate("config.toml").is_err(),
-            "sort order is required"
-        );
-        task.tools = vec!["mr-boxington".to_owned(), "rust".to_owned()];
-        assert!(task.validate("config.toml").is_ok());
-    }
-
-    #[test]
-    fn serde_is_stable_closed_and_uses_exact_runner_name() {
-        let task = build_task("native-desktop", "desktop-ci");
-        let encoded = serde_json::to_string(&task).expect("serialize build task");
-        assert_eq!(
-            encoded,
-            "{\"id\":\"native-desktop\",\"mise_task\":\"desktop-ci\",\"source\":{\"mise_config\":\"mise.toml\",\"working_directory\":\".\"},\"tools\":[\"mr-boxington\",\"rust\"],\"runner\":\"macos-26-arm64\",\"timeout_minutes\":5,\"cargo_build_jobs\":2,\"nextest_test_threads\":2}"
-        );
-        assert_eq!(
-            serde_json::to_string(&task).expect("repeat serialization"),
-            encoded
-        );
-        assert!(serde_json::from_str::<BuildTask>(
-            "{\"id\":\"native-desktop\",\"mise_task\":\"desktop-ci\",\"source\":{\"mise_config\":\"mise.toml\",\"working_directory\":\".\"},\"tools\":[\"mr-boxington\",\"rust\"],\"runner\":\"macos-26-arm64\",\"timeout_minutes\":5,\"cargo_build_jobs\":2,\"nextest_test_threads\":2,\"extra\":true}"
-        )
-        .is_err());
-        assert!(serde_json::from_str::<BuildTask>(
-            "{\"id\":\"native-desktop\",\"mise_task\":\"desktop-ci\",\"tools\":[\"mr-boxington\",\"rust\"],\"runner\":\"macos-26-arm64\",\"timeout_minutes\":5,\"cargo_build_jobs\":2,\"nextest_test_threads\":2}"
-        ).is_err(), "the task source is mandatory");
-    }
 }

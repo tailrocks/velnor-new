@@ -1,4 +1,3 @@
-//! Dedicated native preview completion admission; generic triggers stay restricted.
 use crate::{RenderError, yaml::Yaml};
 use velnor_actions_contract::{WORKFLOW_DISPLAY_NAME, package_release::NativePreviewEvent};
 
@@ -19,8 +18,6 @@ pub(in super::super) fn trigger(branch: &str) -> (String, Yaml) {
     )
 }
 
-/// The annotation covers zizmor's whole `on` span, so admit only this closed shape.
-/// Unknown/duplicate/sibling triggers must fail before any annotated bytes emit.
 pub(in super::super) fn validate(document: &Yaml, recovery: Yaml) -> Result<(), RenderError> {
     let Yaml::Map(fields) = document else {
         return Err(trigger_error());

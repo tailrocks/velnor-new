@@ -1,14 +1,7 @@
-//! `LaunchAgent` program arguments and Keychain argv. The secret is not an argument.
-
 use std::path::Path;
 
 use crate::error::HostError;
 
-/// Plist whose program is absolute `velnor-host daemon run`. No double-fork.
-///
-/// # Errors
-///
-/// Returns [`HostError::Path`] unless `binary` is absolute unicode.
 pub fn launch_agent_plist(binary: &Path) -> Result<String, HostError> {
     let bin = binary
         .to_str()
@@ -48,10 +41,6 @@ fn xml_text(text: &str) -> String {
     out
 }
 
-/// Argv for a Keychain import.
-///
-/// A trailing `-w` with no value makes `security` prompt. The password
-/// is not an argument. `-w <password>` is the insecure form and is not used.
 #[must_use]
 pub fn keychain_import_argv(service: &str) -> Vec<String> {
     vec![

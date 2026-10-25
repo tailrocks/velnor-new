@@ -1,5 +1,7 @@
-//! Run the trusted bounded tar preflight on standard input.
-
+#![allow(
+    missing_docs,
+    reason = "documentation comments are intentionally absent from this codebase"
+)]
 use std::env;
 use std::ffi::OsString;
 use std::io;

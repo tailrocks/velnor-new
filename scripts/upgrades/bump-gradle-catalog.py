@@ -15,7 +15,7 @@ def releases(base, group, artifact):
     try:
         with urllib.request.urlopen(url, timeout=20) as response:
             root = ET.fromstring(response.read())
-    except Exception:  # noqa: BLE001 - unreachable or unknown artifact stays pinned
+    except Exception:
         return set()
     return {v.text for v in root.iter("version") if v.text and not UNSTABLE.search(v.text)}
 

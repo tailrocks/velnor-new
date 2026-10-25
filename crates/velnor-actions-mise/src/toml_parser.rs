@@ -1,23 +1,12 @@
-//! Character-cursor TOML parser behind [`crate::toml_scan::parse_toml`].
-//!
-//! Owns tokenization (sections, dotted keys, strings, arrays, inline
-//! tables) with one-based line tracking; document assembly and
-//! flattening stay in [`crate::toml_scan`].
-
 use crate::toml_scan::{TomlDiagnostic, TomlDoc, TomlScope, TomlValue, flatten_entry};
 
-/// Character cursor with one-based line tracking.
 pub(crate) struct Parser {
-    /// Input characters.
     pub(crate) chars: Vec<char>,
-    /// Cursor position.
     pub(crate) pos: usize,
-    /// One-based current line.
     pub(crate) line: u32,
 }
 
 impl Parser {
-    /// Cursor over `content` starting at line one.
     pub(crate) fn new(content: &str) -> Self {
         Self {
             chars: content.chars().collect(),
@@ -26,7 +15,6 @@ impl Parser {
         }
     }
 
-    /// Parse one `[section]` or `[[table]]` header; return `(path, is_array)`.
     pub(crate) fn parse_header(
         &mut self,
         doc: &mut TomlDoc,
@@ -82,7 +70,6 @@ impl Parser {
         Ok((path, array))
     }
 
-    /// Parse one `dotted = value` entry under `section`.
     pub(crate) fn parse_entry(
         &mut self,
         section: &[String],
@@ -102,7 +89,6 @@ impl Parser {
         flatten_entry(path, key, value, line, doc, scope)
     }
 
-    /// Parse one value: string, boolean, number, array, or inline table.
     fn parse_value(&mut self) -> Result<InlineValue, TomlDiagnostic> {
         self.eat_space();
         match self.peek() {
@@ -114,7 +100,6 @@ impl Parser {
         }
     }
 
-    /// Parse a dotted (possibly quoted) key path.
     fn parse_dotted(&mut self) -> Result<Vec<String>, TomlDiagnostic> {
         let mut parts = vec![self.parse_key()?];
         loop {
@@ -127,7 +112,6 @@ impl Parser {
         }
     }
 
-    /// Parse one bare or quoted key segment.
     fn parse_key(&mut self) -> Result<String, TomlDiagnostic> {
         match self.peek() {
             Some('"' | '\'') => self.parse_quoted_text(),
@@ -146,7 +130,6 @@ impl Parser {
         }
     }
 
-    /// Parse `true`/`false` or an opaque bare scalar token.
     fn parse_bare(&mut self) -> Result<TomlValue, TomlDiagnostic> {
         let mut token = String::new();
         while let Some(char) = self.peek() {
@@ -164,7 +147,6 @@ impl Parser {
         }
     }
 
-    /// Parse an array value across lines; commas separate items.
     fn parse_array(&mut self) -> Result<TomlValue, TomlDiagnostic> {
         self.bump();
         let mut items = Vec::new();
@@ -188,7 +170,6 @@ impl Parser {
         }
     }
 
-    /// Parse one array item (scalars and arrays nest; tables do not).
     fn parse_array_item(&mut self) -> Result<TomlValue, TomlDiagnostic> {
         self.eat_space();
         match self.peek() {
@@ -200,7 +181,6 @@ impl Parser {
         }
     }
 
-    /// Parse an inline table into nested entries for flattening.
     fn parse_inline_table(&mut self) -> Result<InlineValue, TomlDiagnostic> {
         self.bump();
         let mut entries = Vec::new();
@@ -224,7 +204,6 @@ impl Parser {
         }
     }
 
-    /// Parse one inline-table `dotted = value` entry with its key line.
     fn parse_table_entry(&mut self) -> Result<(Vec<String>, InlineValue, u32), TomlDiagnostic> {
         let line = self.line;
         let key = self.parse_dotted()?;
@@ -236,7 +215,6 @@ impl Parser {
         Ok((key, value, line))
     }
 
-    /// Require end of line (or file) after one entry or header.
     fn end_of_line(&mut self) -> Result<(), TomlDiagnostic> {
         self.eat_space();
         match self.peek() {
@@ -249,7 +227,6 @@ impl Parser {
         }
     }
 
-    /// Skip spaces, newlines, and comments between entries.
     pub(crate) fn skip_trivia(&mut self) {
         loop {
             self.eat_space();
@@ -263,21 +240,18 @@ impl Parser {
         }
     }
 
-    /// Skip horizontal whitespace (spaces, tabs, carriage returns).
     fn eat_space(&mut self) {
         while matches!(self.peek(), Some(' ' | '\t' | '\r')) {
             self.bump();
         }
     }
 
-    /// Skip a `#` comment up to (not consuming) the newline.
     fn skip_comment(&mut self) {
         while !matches!(self.peek(), None | Some('\n')) {
             self.bump();
         }
     }
 
-    /// Consume `want` when it is next; report whether it matched.
     fn eat(&mut self, want: char) -> bool {
         if self.peek() == Some(want) {
             self.bump();
@@ -287,22 +261,18 @@ impl Parser {
         }
     }
 
-    /// Peek the next character without consuming it.
     pub(crate) fn peek(&self) -> Option<char> {
         self.peek_at(0)
     }
 
-    /// Peek the character `offset` ahead of the cursor.
     pub(crate) fn peek_at(&self, offset: usize) -> Option<char> {
         self.chars.get(self.pos + offset).copied()
     }
 
-    /// Whether the cursor reached the input end.
     pub(crate) fn at_end(&self) -> bool {
         self.pos >= self.chars.len()
     }
 
-    /// Consume one character, tracking newlines.
     pub(crate) fn bump(&mut self) -> Option<char> {
         let next = self.chars.get(self.pos).copied()?;
         self.pos += 1;
@@ -312,7 +282,6 @@ impl Parser {
         Some(next)
     }
 
-    /// Diagnostic at the current line for `problem`.
     pub(crate) fn fail(&self, problem: &str) -> TomlDiagnostic {
         TomlDiagnostic {
             line: self.line,
@@ -320,20 +289,15 @@ impl Parser {
         }
     }
 }
-/// Inline-table parse value: scalars flatten, tables recurse.
 pub(crate) enum InlineValue {
-    /// Scalar or array leaf.
     Scalar(TomlValue),
-    /// Nested `(dotted key, value, key line)` entries.
     Table(Vec<(Vec<String>, InlineValue, u32)>),
 }
 
-/// Whether `char` may appear in a bare key.
 fn is_bare_char(char: char) -> bool {
     char.is_ascii_alphanumeric() || char == '_' || char == '-'
 }
 
-/// Whether `char` may appear in a bare scalar token.
 fn is_bare_value_char(char: char) -> bool {
     char.is_ascii_alphanumeric() || matches!(char, '_' | '+' | '-' | '.' | ':')
 }

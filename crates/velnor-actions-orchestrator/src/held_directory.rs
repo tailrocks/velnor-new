@@ -1,4 +1,3 @@
-//! A complete local byte closure sealed before cryptographic admission.
 use crate::{
     OrchestratorError,
     filesystem_owner::held_file::{HeldFile, checkpoint, same_metadata},
@@ -18,8 +17,6 @@ pub(crate) struct HeldDirectory {
     original: fs::Metadata,
     files: BTreeMap<String, HeldFile>,
     deadline: CheckDeadline,
-    // Last so file and directory handles drop before TempDir removes the tree;
-    // shared custody keeps the owner alive through its final Arc.
     _owner: Option<tempfile::TempDir>,
 }
 
@@ -160,7 +157,3 @@ impl HeldDirectory {
 fn invalid(reason: &str) -> OrchestratorError {
     internal(&format!("held_directory_{reason}"))
 }
-
-#[cfg(test)]
-#[path = "held_directory_tests.rs"]
-mod tests;

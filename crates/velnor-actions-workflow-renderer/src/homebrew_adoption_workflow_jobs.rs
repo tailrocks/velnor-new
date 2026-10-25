@@ -1,5 +1,3 @@
-//! Native planner, report transport, and Required verdict jobs for adoption.
-
 use std::collections::BTreeMap;
 
 use crate::{

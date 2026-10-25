@@ -1,5 +1,3 @@
-//! Private, create-new snapshot staging below the runner-owned temp root.
-
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};

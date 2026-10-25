@@ -1,11 +1,8 @@
-//! Stack task-ID tail and shard validators.
-
 use crate::errors::ContractError;
 
 use super::shard::split_shard_suffix;
 use super::{validate_component, validate_path_segments};
 
-/// Validate shard index/count (`shard-<index>-of-<count>` inputs).
 pub(super) fn validate_shard(index: u32, count: u32) -> Result<(), ContractError> {
     if count >= 1 && index >= 1 && index <= count {
         Ok(())
@@ -14,7 +11,6 @@ pub(super) fn validate_shard(index: u32, count: u32) -> Result<(), ContractError
     }
 }
 
-/// Validate the tail of a `stack/` task ID.
 pub(super) fn validate_stack_task_id(rest: &str) -> Result<(), ContractError> {
     let parts: Vec<&str> = rest.split('/').collect();
     if parts.len() < 4 {

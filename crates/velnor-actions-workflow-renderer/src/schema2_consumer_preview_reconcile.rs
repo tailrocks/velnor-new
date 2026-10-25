@@ -1,4 +1,3 @@
-//! Fixed retained-release tap continuation; no publication or producer route.
 use super::{
     ConsumerReleaseSpec, RenderError, RenderedFile, TapInvocationContext, Yaml, acquire, base,
     finish, run_step, steps, tap,
@@ -11,9 +10,6 @@ fn context(spec: &ConsumerReleaseSpec) -> TapInvocationContext {
         PackageReleaseChannel::Stable => TapInvocationContext::StableReconcile,
     }
 }
-/// Render only read-only selection and existing independently gated tap stages.
-/// # Errors
-/// Rejects missing promotion policy, malformed inventory or unsupported pins.
 pub fn render_release_tap_reconcile(
     spec: &ConsumerReleaseSpec,
 ) -> Result<RenderedFile, RenderError> {

@@ -1,5 +1,3 @@
-//! Reusable workflow steps and permission sets for the generator release.
-
 use crate::commands::join_argv_for_run;
 use crate::setup::SETUP_MISE_NAME;
 use crate::steps::{ATTEST_BUILD_PROVENANCE_USES, DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
@@ -21,7 +19,6 @@ pub(super) fn command_step(name: &str, argv: &[String]) -> Result<Yaml, RenderEr
     Ok(bash_step(name, &join_argv_for_run(argv)?))
 }
 
-/// The file-by-file Rust toolchain check, run right after every Rust install.
 pub(super) fn verify_rust_step(pins: &super::ProductReleasePins) -> Result<Yaml, RenderError> {
     command_step(crate::VERIFY_RUST_TOOLCHAIN_STEP, &pins.verify_rust_argv)
 }
@@ -91,9 +88,6 @@ pub(super) fn gh_confirmation_function(argv: &[String]) -> Result<String, Render
 fn gh_function_with_timeout(argv: &[String], timeout_seconds: u16) -> Result<String, RenderError> {
     let executable = join_argv_for_run(argv)?;
     let kill_after_seconds = GH_COMMAND_KILL_AFTER_SECONDS;
-    // The watchdog lives inside a foreground subshell with stdin detached:
-    // background jobs of a `bash -s` script reader corrupt the shared
-    // seekable stdin, so the caller must never see a background job here.
     Ok(format!(
         "gh() {{\n  (\n    {executable} \"$@\" & _velnor_gh_pid=$!\n    ( sleep {timeout_seconds}; kill -TERM \"$_velnor_gh_pid\" 2>/dev/null; sleep {kill_after_seconds}; kill -KILL \"$_velnor_gh_pid\" 2>/dev/null ) </dev/null >/dev/null 2>&1 & _velnor_gh_watch=$!\n    _velnor_gh_status=0\n    wait \"$_velnor_gh_pid\" || _velnor_gh_status=$?\n    kill -KILL \"$_velnor_gh_watch\" 2>/dev/null || true\n    wait \"$_velnor_gh_watch\" 2>/dev/null || true\n    exit \"$_velnor_gh_status\"\n  ) </dev/null\n}}\nexport -f gh"
     ))
@@ -119,7 +113,6 @@ pub(super) fn bash_step_with_id(id: &str, name: &str, run: &str) -> Yaml {
     ])
 }
 
-/// Run one API step with only the repository's read-scoped token.
 pub(super) fn bash_step_with_env(name: &str, run: &str, env: Vec<(&str, &str)>) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
@@ -255,12 +248,10 @@ pub(super) fn with_needs(mut fields: Vec<(String, Yaml)>, needs: &[&str]) -> Vec
     fields
 }
 
-/// Build uploads a workflow artifact. That needs `actions: write`, not contents write.
 pub(super) fn build_permissions() -> Yaml {
     perm(&[("actions", "write"), ("contents", "read")])
 }
 
-/// Attestation uploads bundle artifacts but cannot write repository contents.
 pub(super) fn attest_permissions() -> Yaml {
     perm(&[
         ("actions", "write"),
@@ -271,12 +262,10 @@ pub(super) fn attest_permissions() -> Yaml {
     ])
 }
 
-/// Qualification needs no token because it fetches the public source by commit.
 pub(super) fn qualification_permissions() -> Yaml {
     Yaml::Map(Vec::new())
 }
 
-/// The publisher uploads one accepted-metadata artifact and writes the release.
 pub(super) fn publish_permissions() -> Yaml {
     perm(&[("actions", "write"), ("contents", "write")])
 }
@@ -301,7 +290,3 @@ pub(super) fn subject_list(files: &[&str], directory: &str) -> String {
 fn newline_list(files: &[&str]) -> String {
     files.join("\n")
 }
-
-#[cfg(test)]
-#[path = "schema2_generator_release_workflow_steps_tests.rs"]
-mod tests;

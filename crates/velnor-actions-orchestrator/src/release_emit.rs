@@ -1,15 +1,3 @@
-//! Consumer release emission: selection plus release-tree assembly.
-//!
-//! Builds the release family (`release.yml` plus both effective
-//! configs) when `[stacks.rust.release].enabled` under `consumer-v1`;
-//! anything else yields no files. Selection reuses the Rust adapter's
-//! allowlist resolution over pinned `cargo metadata`; identities the
-//! config schema does not carry derive in
-//! [`crate::release_identity`], and jobs assemble in
-//! [`crate::release_steps`]. Publication-graph validation against live
-//! registry state stays a runtime preflight concern: generation runs
-//! no registry queries.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::WorkflowPolicy;
@@ -40,18 +28,8 @@ use crate::release_steps::{JobInputs, assemble_jobs};
 mod config;
 use config::plz_config;
 
-/// Release workflow display name (fixed; config carries no workflow name).
 const RELEASE_WORKFLOW_NAME: &str = "Velnor Release";
 
-/// Render the release family, or nothing when release is not enabled.
-///
-/// # Errors
-///
-/// Returns config errors for policy or bootstrap-record conflicts,
-/// preparation errors when release metadata cannot run, contract
-/// errors for unresolvable identities or selections, unsupported
-/// errors for native version groups, and render errors for invalid
-/// assembled specs.
 pub(crate) fn release_files(
     prep: &GenerationPreparation,
     mise: &MiseSetup,
@@ -60,7 +38,6 @@ pub(crate) fn release_files(
         return Ok(Vec::new());
     };
     if release.registry == ReleaseRegistry::GitTag {
-        // Tag-only releases are generated with the publication workflow.
         return Ok(Vec::new());
     }
     if !release.version_groups.is_empty() {
@@ -94,8 +71,6 @@ pub(crate) fn release_files(
     );
     let gate = publish_gate_condition(&repository, &bootstrap);
     let catalog = &prep.emission_catalog();
-    // Keep Cargo’s implicit default implicit; pass `--registry` only for an
-    // explicitly selected alternative registry.
     let registry_arg = (registry != DEFAULT_REGISTRY).then_some(registry.as_str());
     let jobs = assemble_jobs(&JobInputs {
         release,
@@ -130,14 +105,6 @@ pub(crate) fn release_files(
     Ok(render_release_files(&spec, &ctx, &config, &bootstrap_config)?.as_sorted_vec())
 }
 
-/// Borrow the active release section, enforcing the consumer-only policy.
-///
-/// # Errors
-///
-/// Returns a config error when `velnor-repository-v1` enables release:
-/// the filename keeps its Velnor-internal meaning there, so consumer
-/// release content must not be emitted and the explicit opt-in must
-/// not be silently ignored.
 pub(crate) fn enabled_release(
     prep: &GenerationPreparation,
 ) -> Result<Option<&RustReleaseConfig>, OrchestratorError> {
@@ -158,15 +125,9 @@ pub(crate) fn enabled_release(
     Ok(Some(release))
 }
 
-/// Active `git-tag` release section, if enabled under `consumer-v1`.
-///
-/// # Errors
-///
-/// Returns the policy error of [`enabled_release`].
 pub(crate) fn git_tag_release(
     prep: &GenerationPreparation,
 ) -> Result<Option<&RustReleaseConfig>, OrchestratorError> {
-    // Native stable has one manual coordinator; never add an automatic tag writer.
     if prep
         .config
         .stacks
@@ -179,12 +140,6 @@ pub(crate) fn git_tag_release(
     Ok(enabled_release(prep)?.filter(|release| release.registry == ReleaseRegistry::GitTag))
 }
 
-/// Resolve the release set over pinned `cargo metadata`.
-///
-/// # Errors
-///
-/// Returns preparation errors when metadata cannot run and contract
-/// errors for unknown, forbidden, or unsupported selections.
 fn select_packages(
     prep: &GenerationPreparation,
     release: &RustReleaseConfig,
@@ -193,11 +148,6 @@ fn select_packages(
     select_from_json(prep, release, &json)
 }
 
-/// Resolve the release set from already-fetched `cargo metadata` JSON.
-///
-/// # Errors
-///
-/// Returns contract errors for unknown, forbidden, or unsupported selections.
 pub(crate) fn select_from_json(
     prep: &GenerationPreparation,
     release: &RustReleaseConfig,
@@ -227,13 +177,6 @@ pub(crate) fn select_from_json(
     })
 }
 
-/// Run repo-pinned metadata discovery for the release manifest.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::PreparationIncomplete`] when the pinned
-/// toolchain is absent (fail closed, before any spawn), the tool cannot
-/// run, or the manifest read fails.
 pub(crate) fn release_metadata_json(
     root: &std::path::Path,
     manifest: &str,
@@ -266,12 +209,6 @@ pub(crate) fn release_metadata_json(
         .map_err(|err| incomplete(err.to_string()))
 }
 
-/// Cross-check the bootstrap record against the selected set.
-///
-/// # Errors
-///
-/// Returns config errors when the record names an unselected package
-/// or a version disagreeing with workspace metadata.
 fn check_bootstrap_record(
     release: &RustReleaseConfig,
     selection: &ReleaseSelection,
@@ -307,12 +244,6 @@ fn check_bootstrap_record(
     Ok(())
 }
 
-/// Approved source: configured SHA for bootstrap, `HEAD` for routine.
-///
-/// # Errors
-///
-/// Returns config errors for a missing record and contract errors for
-/// an unresolvable `HEAD` or malformed SHA.
 fn approved_source(
     root: &std::path::Path,
     release: &RustReleaseConfig,
@@ -331,11 +262,6 @@ fn approved_source(
     head_sha(root)
 }
 
-/// Assemble the approved exact-source plan from selection plus identity.
-///
-/// `version` is the configured bootstrap version, present only in
-/// bootstrap-token mode (config validation forbids the record under
-/// trusted publishing); routine publishers resolve versions at runtime.
 fn bootstrap_plan(
     selection: &ReleaseSelection,
     repository: &str,
@@ -359,8 +285,6 @@ fn bootstrap_plan(
     }
 }
 
-/// Trusted-branch push plus plan-bound dispatch (no schedule: the config
-/// schema carries no cron field, so emission invents none).
 fn release_triggers(branch: &str, bootstrap: &BootstrapPlan) -> ReleaseTriggers {
     let mut dispatch_inputs = vec![
         DispatchInput {

@@ -1,5 +1,3 @@
-//! Recursive collection and rewriting of project-tool YAML references.
-
 use std::collections::BTreeSet;
 
 use velnor_actions_contract::config::project_tool_refs::{
@@ -10,8 +8,6 @@ use crate::{RenderError, yaml::Yaml};
 
 use super::quote_run_refs;
 
-/// Rewrite every non-`run` scalar to the expression form and quote every
-/// `run` reference as one shell word ([`quote_run_refs`]).
 pub(super) fn rewrite_mappings(node: &mut Yaml, in_run: bool) -> Result<(), RenderError> {
     let rewrite = |text: &mut String| -> Result<(), RenderError> {
         *text = if in_run {
@@ -49,7 +45,6 @@ pub(super) fn rewrite_mappings(node: &mut Yaml, in_run: bool) -> Result<(), Rend
     Ok(())
 }
 
-/// Project reference names anywhere under `node`.
 pub(super) fn names(node: &Yaml) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
     collect(node, &mut out);

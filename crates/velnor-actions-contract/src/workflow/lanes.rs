@@ -1,8 +1,3 @@
-//! Expand one logical job graph into hosted and scale-set lanes.
-//!
-//! Schema 1 returns the same jobs. Control and single-writer jobs stay
-//! one hosted job. `both` duplicates eligible verification only.
-
 use super::ValidatorKind;
 use super::ir::{Job, WorkflowIr};
 use super::jobs::{PLAN_JOB_ID, REQUIRED_GATE_JOB_ID, REQUIRED_JOB_ID};
@@ -22,22 +17,19 @@ use std::collections::BTreeMap;
 mod retargeting;
 use retargeting::retarget;
 
-/// Suffix for the hosted copy of a verification job.
 pub const HOSTED_SUFFIX: &str = "__hosted";
-/// Suffix for the scale-set copy of a verification job.
+
 pub const SCALE_SUFFIX: &str = "__local";
-/// Planner class of a job id. Role overrides cannot change this.
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LaneClass {
-    /// Trusted control job.
     Control,
-    /// Single external writer.
+
     SingleWriter,
-    /// Comparable verification workload.
+
     Verification,
 }
 
-/// Where one verification workload is emitted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Placement {
     HostedOnly,
@@ -45,7 +37,6 @@ pub(super) enum Placement {
     Both,
 }
 
-/// Which copy of a split dependency a consumer keeps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum EmitLane {
     Single,
@@ -53,7 +44,6 @@ enum EmitLane {
     Scale,
 }
 
-/// Classify a planner job id.
 #[must_use]
 pub fn lane_class(job_id: &str) -> LaneClass {
     if job_id == ValidatorKind::Jactionlint.job_id()
@@ -70,12 +60,6 @@ pub fn lane_class(job_id: &str) -> LaneClass {
     }
 }
 
-/// Expand jobs for schema 2. Schema 1 is returned unchanged.
-///
-/// # Errors
-///
-/// Unknown profiles, unknown override keys, or a role that disagrees
-/// with [`lane_class`].
 pub fn expand_workflow(
     ir: &WorkflowIr,
     config: &VelnorConfig,
@@ -207,7 +191,6 @@ pub(super) fn placement_for(
     }
 }
 
-/// Only Linux-x64 verification variants can use the Linux/amd64 Scale Set.
 fn workflow_task_supports_scale_set(
     job_id: &str,
     job: &Job,

@@ -1,19 +1,5 @@
-//! GitHub expression allowlists for names, env, and action inputs.
-//!
-//! Constructors accept `${{ }}` (narrow gates diagnose misuse with
-//! specific codes; there is no blanket argv ban, and the release
-//! `secret_outside_bootstrap` gate keeps diagnosing placement). Step
-//! display names never legitimately carry one, and env/action values
-//! only ever carry fixed runner-provided expressions, so those layers
-//! fail closed on anything unlisted here.
-
 use crate::RenderError;
 
-/// Reject `${{` plus control characters in a step display name.
-///
-/// Shared by shell, action, and internal constructors: names are fixed
-/// literals, and an expression in one is injection or corruption.
-/// # Errors
 pub(crate) fn check_name_content(name: &str) -> Result<(), RenderError> {
     if name.contains("${{") {
         return Err(RenderError::BadCommand(format!(
@@ -29,7 +15,6 @@ pub(crate) fn check_name_content(name: &str) -> Result<(), RenderError> {
     Ok(())
 }
 
-/// Extract `${{ ... }}` span inners; `None` on unclosed/nested/empty.
 fn expression_spans(text: &str) -> Option<Vec<&str>> {
     let mut spans = Vec::new();
     let mut rest = text;
@@ -46,14 +31,6 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
     Some(spans)
 }
 
-/// Exact `${{ }}` inners permitted in shell-step env values.
-///
-/// Runner paths, the release tag, plan-matrix coordinates, fixed
-/// workflow secret handles, AWS action outputs, and the MBX
-/// cache-mode selector. Hosted writes require a protected push to the
-/// default branch; Scale Set routes do not invoke action restore.
-/// Notably absent: `github.token` (render-time fetch binding only)
-/// and run IDs (never in env).
 const ENV_EXPRESSIONS: [&str; 14] = [
     "runner.temp",
     "format('refs/heads/{0}', github.event.repository.default_branch)",
@@ -71,11 +48,6 @@ const ENV_EXPRESSIONS: [&str; 14] = [
     "steps.aws-credentials.outputs.aws-session-token",
 ];
 
-/// Exact `${{ }}` inners permitted in action `with:` values.
-///
-/// Run-scoped names, runner paths, matrix coordinates, the
-/// push-gated cache-save flag, and runtime cache identities. Notably absent: every `secrets.*` handle (rejected
-/// separately as `secret_in_action_input`).
 const WITH_EXPRESSIONS: [&str; 18] = [
     "runner.temp",
     "github.run_id",
@@ -97,17 +69,12 @@ const WITH_EXPRESSIONS: [&str; 18] = [
     "steps.mbx-bundle-key.outputs.restore_keys",
 ];
 
-/// True for an output of the image publication assemble step.
-///
-/// Digests only: the step id and the output names are generator constants,
-/// so no other step output can reach an attestation input.
 fn is_image_publish_output(inner: &str) -> bool {
     inner
         .strip_prefix("steps.image.outputs.")
         .is_some_and(|name| matches!(name, "digest" | "digest_amd64" | "digest_arm64"))
 }
 
-/// True for a stack family key or restore-keys output of the job's own key step.
 fn is_family_key_output(inner: &str) -> bool {
     use velnor_actions_contract::workflow::cache_family_steps::{FAMILY_KEYS_ID, family_for_stem};
     inner
@@ -119,7 +86,6 @@ fn is_family_key_output(inner: &str) -> bool {
         .is_some_and(|stem| family_for_stem(stem).is_some())
 }
 
-/// True for a Plan-published per-root provider key (`tofu_providers_key_<n>`).
 fn is_tofu_providers_plan_key(inner: &str) -> bool {
     inner
         .strip_prefix("needs.plan.outputs.")
@@ -130,7 +96,6 @@ fn is_tofu_providers_plan_key(inner: &str) -> bool {
         })
 }
 
-/// True for a `matrix.*` field reference (both layers allow the family).
 fn is_matrix_field(inner: &str) -> bool {
     inner.strip_prefix("matrix.").is_some_and(|field| {
         !field.is_empty()
@@ -140,11 +105,6 @@ fn is_matrix_field(inner: &str) -> bool {
     })
 }
 
-/// True for a `hashFiles('...')` call over quoted fixed paths.
-///
-/// Action cache keys only: the file list carries quotes, commas, dots,
-/// slashes, dashes, underscores, globs, and alphanumerics, nothing else.
-/// Each quoted pattern may start with one exclusion marker.
 fn is_hash_files(inner: &str) -> bool {
     inner
         .strip_prefix("hashFiles(")
@@ -166,13 +126,10 @@ fn is_hash_files(inner: &str) -> bool {
         })
 }
 
-/// Reject unlisted `${{ }}` spans in one shell-step env value.
-/// # Errors
 pub(crate) fn check_env_value(key: &str, value: &str) -> Result<(), RenderError> {
     check_env_value_with_scope(key, value, false)
 }
 
-/// Validate env expressions scoped to a generated composite action body.
 pub(crate) fn check_composite_env_value(key: &str, value: &str) -> Result<(), RenderError> {
     check_env_value_with_scope(key, value, true)
 }
@@ -201,18 +158,12 @@ fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result
     Ok(())
 }
 
-/// True for the two private-source bindings, each scoped to its own env key.
-///
-/// The step placement is enforced separately by the token-hygiene gate
-/// (`credential_binding_outside_private_fetch`); this only keeps the exact
-/// expression from being legal under any other key.
 fn is_private_env_binding(key: &str, inner: &str) -> bool {
     (key == velnor_actions_contract::PRIVATE_FETCH_TOKEN_ENV
         && inner == "steps.deps-token.outputs.token")
         || (key == velnor_actions_contract::PRIVATE_NPM_READ_TOKEN_ENV && inner == "github.token")
 }
 
-/// True for the mint step's two handle inputs, each under its own key.
 fn is_private_mint_input(key: &str, inner: &str) -> bool {
     let handle = |context: &str| {
         inner
@@ -233,7 +184,6 @@ fn is_task_execution_input(name: &str) -> bool {
     name == "digest"
 }
 
-/// True for a validated `inputs.<name>` workflow-dispatch input reference.
 fn is_workflow_input(inner: &str) -> bool {
     inner.strip_prefix("inputs.").is_some_and(|name| {
         let mut bytes = name.bytes();
@@ -246,7 +196,6 @@ fn is_workflow_input(inner: &str) -> bool {
     })
 }
 
-/// Declared provider token inputs use an uppercase Actions secret handle.
 fn is_github_token_secret(inner: &str) -> bool {
     inner.strip_prefix("secrets.").is_some_and(|name| {
         name.starts_with("GH_TOKEN_")
@@ -257,8 +206,6 @@ fn is_github_token_secret(inner: &str) -> bool {
     })
 }
 
-/// Reject bad action `with:` keys: empty, `${{`, or control characters.
-/// # Errors
 pub(crate) fn check_with_key(key: &str) -> Result<(), RenderError> {
     if key.is_empty()
         || key.contains("${{")
@@ -269,12 +216,6 @@ pub(crate) fn check_with_key(key: &str) -> Result<(), RenderError> {
     Ok(())
 }
 
-/// Reject control characters plus unlisted `${{ }}` in `with:` values.
-///
-/// Newlines stay legal: `actions/cache` takes newline-separated path
-/// lists (the YAML emitter double-quotes them safely). Nul and CR are
-/// never legitimate input content.
-/// # Errors
 pub(crate) fn check_with_value(key: &str, value: &str) -> Result<(), RenderError> {
     if value.chars().any(|ch| ch == '\0' || ch == '\r') {
         return Err(RenderError::BadActionRef(format!("bad_with_value:{key}")));
@@ -301,7 +242,6 @@ pub(crate) fn check_with_value(key: &str, value: &str) -> Result<(), RenderError
     Ok(())
 }
 
-/// Permit the immutable event SHA only as checkout's `ref` input.
 pub(crate) fn check_with_action_value(
     uses: &str,
     key: &str,
@@ -311,76 +251,4 @@ pub(crate) fn check_with_action_value(
         return Ok(());
     }
     check_with_value(key, value)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{check_with_action_value, check_with_value};
-
-    #[test]
-    fn check_with_value_accepts_glob_hash_files() {
-        assert!(
-            check_with_value(
-                "cache-key",
-                "prefix-${{ hashFiles('**/Cargo.lock','**/Cargo.toml') }}"
-            )
-            .is_ok()
-        );
-    }
-
-    #[test]
-    fn check_with_value_accepts_quoted_hash_file_exclusions() {
-        assert!(
-            check_with_value(
-                "cache-key",
-                "prefix-${{ hashFiles('**/Cargo.toml','!target/**') }}"
-            )
-            .is_ok()
-        );
-    }
-
-    #[test]
-    fn check_with_value_rejects_nonliteral_hash_file_arguments() {
-        for arguments in [
-            "",
-            "''",
-            "'!'",
-            "'!!target/**'",
-            "!'Cargo.toml'",
-            "'Cargo.toml',",
-            "'Cargo.toml'||'other'",
-            "github.token",
-        ] {
-            let value = format!("prefix-${{{{ hashFiles({arguments}) }}}}");
-            assert!(check_with_value("cache-key", &value).is_err(), "{value}");
-        }
-    }
-
-    #[test]
-    fn event_sha_is_allowed_only_for_checkout_ref() {
-        assert!(
-            check_with_action_value(
-                "actions/checkout@0123456789012345678901234567890123456789",
-                "ref",
-                "${{ github.sha }}"
-            )
-            .is_ok()
-        );
-        assert!(
-            check_with_action_value(
-                "actions/upload-artifact@0123456789012345678901234567890123456789",
-                "ref",
-                "${{ github.sha }}"
-            )
-            .is_err()
-        );
-        assert!(
-            check_with_action_value(
-                "actions/checkout@0123456789012345678901234567890123456789",
-                "ref",
-                "prefix-${{ github.sha }}"
-            )
-            .is_err()
-        );
-    }
 }

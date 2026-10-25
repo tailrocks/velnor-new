@@ -1,5 +1,3 @@
-//! Workflow inventory, complete run pagination, attempts, and jobs closure.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{

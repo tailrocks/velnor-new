@@ -1,5 +1,3 @@
-//! Protected seed replay and exact structural cutover validation.
-
 #[path = "homebrew_structural_cutover/base.rs"]
 mod base;
 #[path = "homebrew_structural_cutover/candidate.rs"]

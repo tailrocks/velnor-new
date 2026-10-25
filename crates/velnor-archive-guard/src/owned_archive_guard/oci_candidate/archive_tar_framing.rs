@@ -1,5 +1,3 @@
-//! Bounded tar framing admission for an outer OCI archive.
-
 use std::{
     fs::File,
     io::{Read, Seek, SeekFrom},

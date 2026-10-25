@@ -1,4 +1,3 @@
-//! Deadline-aware ZIP metadata admission, including duplicate/overlap rejection.
 use super::{ZipProfile, check, invalid, safe_evidence_name, safe_name};
 use crate::OrchestratorError;
 use std::{
@@ -11,8 +10,6 @@ use std::{
 pub(super) type Archive<R> = zip::ZipArchive<CheckedCursor<R>>;
 pub(super) struct CheckedCursor<R> {
     cursor: R,
-    // Prevent malformed central-directory candidates from growing metadata without
-    // bound before ZipArchive exposes its decoded entry count. Disabled for bodies.
     metadata_ops: Rc<Cell<Option<usize>>>,
 }
 impl<R> CheckedCursor<R> {
@@ -49,20 +46,11 @@ pub(super) fn open<R: Read + Seek>(
         return Err(invalid("compressed_limit"));
     }
     input.rewind().map_err(|_| invalid("seek"))?;
-    // zip 9 searches at most 65 overlapping 1024-byte windows for the EOCD
-    // (22 fixed bytes + the 16-bit comment limit). Reserve 256 operations for
-    // those read/seek pairs and fixed EOCD/ZIP64 probes, then 32 per entry for
-    // central/local headers, variable fields and consistency checks. Malformed
-    // candidate storms still stop at this finite cap, regardless of body size.
     let operations = Rc::new(Cell::new(Some(256 + profile.entries() * 32)));
     let cursor = CheckedCursor {
         cursor: input,
         metadata_ops: Rc::clone(&operations),
     };
-    // Native Actions ZIP offsets are absolute within the supplied archive.
-    // Detect would scan the entire compressed payload to infer an SFX offset,
-    // exhausting metadata fuel on legitimate large files. Known(0) checks the
-    // declared directory directly and never falls back to payload scanning.
     let config = zip::read::Config {
         archive_offset: zip::read::ArchiveOffset::Known(0),
     };
@@ -71,9 +59,6 @@ pub(super) fn open<R: Read + Seek>(
     if archive.is_empty() || archive.len() > profile.entries() {
         return Err(invalid("entry_limit"));
     }
-    // zip 9 stores names in an IndexMap: the default by_index/by_name path can
-    // conceal duplicates. This explicit pass also rejects local/central aliases
-    // and overlapping compressed entry ranges before any manifest is selected.
     archive
         .validate_header_consistency()
         .map_err(|_| invalid("header_consistency"))?;

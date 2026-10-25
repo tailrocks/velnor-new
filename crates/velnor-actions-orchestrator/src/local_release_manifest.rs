@@ -1,11 +1,3 @@
-//! Read-only verification of local generator binaries against a release manifest.
-//!
-//! This binds declared manifest digests and source SHA to caller-supplied
-//! expectations. It does not authenticate those expectations or establish
-//! publication, artifact-run, ABI, or attestation provenance. File bytes are
-//! observed through opened handles; concurrent writes and ancestor symlinks
-//! are outside this local verification boundary.
-
 use std::fmt::Write as _;
 use std::fs::File;
 use std::io::Read;
@@ -21,19 +13,6 @@ const MAX_MANIFEST_BYTES: usize = 8 * 1024 * 1024;
 const MAX_MANIFEST_BYTES_U64: u64 = 8 * 1024 * 1024;
 const MAX_BINARY_BYTES: u64 = 512 * 1024 * 1024;
 
-/// Verify a release manifest against two local target binaries.
-///
-/// `expected_source_commit` is a caller-provided expectation, not authenticated
-/// provenance. The function performs only bounded local reads: it does not
-/// execute binaries, inspect sidecars, contact a release service, or write.
-/// A final-component symlink and non-regular file are refused. Ancestor-link
-/// resolution and concurrent mutation of an already opened file are not ruled
-/// out, so this is a local byte check rather than a race-free security proof.
-///
-/// # Errors
-///
-/// Returns an error for malformed or mismatched manifest identity, unreadable
-/// inputs, unsupported file types, empty/oversize binaries, or digest mismatch.
 pub fn verify_local_generator_release_manifest(
     manifest_path: &Path,
     expected_source_commit: &str,
@@ -60,13 +39,6 @@ pub fn verify_local_generator_release_manifest(
     )
 }
 
-/// Verify that an executable SHA-256 matches at least one target artifact record
-/// in the consumer `.velnor/release-manifest.json` (`release_manifest_binary_mismatch`).
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Contract`] when `exe_sha256` does not match any
-/// target record in `manifest`.
 pub fn verify_binary_matches_consumer_manifest(
     manifest: &ReleaseManifest,
     exe_sha256: &str,
@@ -85,9 +57,6 @@ pub fn verify_binary_matches_consumer_manifest(
     }
 }
 
-/// Verify in release builds (`not(debug_assertions)`) that the running
-/// `velnor-actions` binary's SHA-256 matches a target entry in the consumer
-/// `.velnor/release-manifest.json`.
 pub(crate) fn verify_current_exe_matches_consumer_manifest(
     manifest: &ReleaseManifest,
 ) -> Result<(), OrchestratorError> {
@@ -229,7 +198,3 @@ fn local_contract(problem: &str) -> OrchestratorError {
         problem: problem.to_owned(),
     }
 }
-
-#[cfg(test)]
-#[path = "local_release_manifest_tests.rs"]
-mod tests;

@@ -1,30 +1,16 @@
-//! Strict semver versions plus Cargo-style requirement matching.
-//!
-//! Dependency-free: only the subset Cargo accepts for member versions and
-//! dependency requirements is implemented. Build metadata is validated and
-//! then ignored for precedence, per the semver specification.
-
 use std::cmp::Ordering;
 
-/// One prerelease identifier.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PreIdent {
-    /// Numeric identifier (no leading zeros).
     Numeric(u64),
-    /// Alphanumeric identifier.
     Alpha(String),
 }
 
-/// One `major.minor.patch[-pre][+build]` version ordered by precedence.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SemVersion {
-    /// Major component.
     pub major: u64,
-    /// Minor component.
     pub minor: u64,
-    /// Patch component.
     pub patch: u64,
-    /// Prerelease identifiers (empty for a stable release).
     pub pre: Vec<PreIdent>,
 }
 
@@ -42,12 +28,10 @@ impl Ord for SemVersion {
     }
 }
 
-/// Core components for ordering.
 fn core_parts(version: &SemVersion) -> (u64, u64, u64) {
     (version.major, version.minor, version.patch)
 }
 
-/// Compare prerelease identifier lists (absent release outranks prerelease).
 fn cmp_pre(left: &[PreIdent], right: &[PreIdent]) -> Ordering {
     match (left.is_empty(), right.is_empty()) {
         (true, true) => Ordering::Equal,
@@ -57,7 +41,6 @@ fn cmp_pre(left: &[PreIdent], right: &[PreIdent]) -> Ordering {
     }
 }
 
-/// Compare two non-empty prerelease identifier lists.
 fn cmp_pre_lists(left: &[PreIdent], right: &[PreIdent]) -> Ordering {
     for pair in left.iter().zip(right.iter()) {
         let order = cmp_pre_ident(pair.0, pair.1);
@@ -68,7 +51,6 @@ fn cmp_pre_lists(left: &[PreIdent], right: &[PreIdent]) -> Ordering {
     left.len().cmp(&right.len())
 }
 
-/// Compare two prerelease identifiers (numeric sorts below alphanumeric).
 fn cmp_pre_ident(left: &PreIdent, right: &PreIdent) -> Ordering {
     match (left, right) {
         (PreIdent::Numeric(left), PreIdent::Numeric(right)) => left.cmp(right),
@@ -78,7 +60,6 @@ fn cmp_pre_ident(left: &PreIdent, right: &PreIdent) -> Ordering {
     }
 }
 
-/// Whether `text` is a numeric component without leading zeros.
 fn parse_component(text: &str) -> Option<u64> {
     if text.is_empty() || !text.bytes().all(|byte| byte.is_ascii_digit()) {
         return None;
@@ -89,12 +70,10 @@ fn parse_component(text: &str) -> Option<u64> {
     text.parse::<u64>().ok()
 }
 
-/// Whether every character is legal inside prerelease/build identifiers.
 fn ident_char_ok(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'-'
 }
 
-/// Parse one prerelease section into identifiers.
 fn parse_pre(text: &str) -> Option<Vec<PreIdent>> {
     let mut idents = Vec::new();
     for part in text.split('.') {
@@ -111,7 +90,6 @@ fn parse_pre(text: &str) -> Option<Vec<PreIdent>> {
     Some(idents)
 }
 
-/// Parse a strict semver version; build metadata is validated, then dropped.
 #[must_use]
 pub fn parse_version(text: &str) -> Option<SemVersion> {
     let (core, build) = match text.split_once('+') {
@@ -147,48 +125,31 @@ pub fn parse_version(text: &str) -> Option<SemVersion> {
     })
 }
 
-/// Requirement operator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Op {
-    /// Compatible release (`^`, the default).
     Caret,
-    /// Patch-level release (`~`).
     Tilde,
-    /// Exact core (`=`).
     Exact,
-    /// Greater than (`>`).
     Gt,
-    /// Greater than or equal (`>=`).
     Gte,
-    /// Less than (`<`).
     Lt,
-    /// Less than or equal (`<=`).
     Lte,
 }
 
-/// One comma-separated comparator of a requirement.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Comparator {
-    /// Operator.
     op: Op,
-    /// Core components (missing parts are zero).
     parts: [u64; 3],
-    /// Number of specified core components.
     len: u8,
-    /// Prerelease gate (empty unless the comparator names one).
     pre: Vec<PreIdent>,
-    /// Whether a `*` component appears.
     wildcard: bool,
 }
 
-/// One parsed version requirement (comma-separated comparators).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VersionReq {
-    /// Comparators (all must match).
     comparators: Vec<Comparator>,
 }
 
-/// Split one comparator into its operator and version text.
 fn split_op(text: &str) -> (Op, &str) {
     for (prefix, op) in [
         (">=", Op::Gte),
@@ -206,7 +167,6 @@ fn split_op(text: &str) -> (Op, &str) {
     (Op::Caret, text)
 }
 
-/// Parse the core (and optional prerelease) of one comparator.
 fn parse_comparator_core(text: &str) -> Option<([u64; 3], u8, Vec<PreIdent>, bool)> {
     let (core, pre) = match text.split_once('-') {
         Some((core, pre)) => (core, Some(pre)),
@@ -238,7 +198,6 @@ fn parse_comparator_core(text: &str) -> Option<([u64; 3], u8, Vec<PreIdent>, boo
     Some((parts, len, pre, wildcard))
 }
 
-/// Append one numeric component at position `len`.
 fn push_part(parts: [u64; 3], len: u8, value: u64) -> Option<[u64; 3]> {
     let [first, second, third] = parts;
     match len {
@@ -249,7 +208,6 @@ fn push_part(parts: [u64; 3], len: u8, value: u64) -> Option<[u64; 3]> {
     }
 }
 
-/// Parse one comma-separated comparator.
 fn parse_comparator(text: &str) -> Option<Comparator> {
     let trimmed = text.trim();
     if trimmed.is_empty() || trimmed == "*" {
@@ -275,7 +233,6 @@ fn parse_comparator(text: &str) -> Option<Comparator> {
     })
 }
 
-/// Parse a Cargo-style version requirement.
 #[must_use]
 pub fn parse_req(text: &str) -> Option<VersionReq> {
     if text.trim().is_empty() {
@@ -288,7 +245,6 @@ pub fn parse_req(text: &str) -> Option<VersionReq> {
     Some(VersionReq { comparators })
 }
 
-/// Whether any comparator opts into `version`'s prerelease line.
 fn allows_pre(req: &VersionReq, version: &SemVersion) -> bool {
     req.comparators.iter().any(|comparator| {
         let [major, minor, patch] = comparator.parts;
@@ -299,7 +255,6 @@ fn allows_pre(req: &VersionReq, version: &SemVersion) -> bool {
     })
 }
 
-/// Compare `version` against comparator core plus its prerelease gate.
 fn cmp_gated(version: &SemVersion, parts: &[u64; 3], pre: &[PreIdent]) -> Ordering {
     let [major, minor, patch] = *parts;
     (version.major, version.minor, version.patch)
@@ -313,7 +268,6 @@ fn cmp_gated(version: &SemVersion, parts: &[u64; 3], pre: &[PreIdent]) -> Orderi
         })
 }
 
-/// Caret upper bound: increment the leftmost nonzero specified component.
 fn caret_upper(parts: &[u64; 3], len: u8) -> (u64, u64, u64) {
     let [major, minor, patch] = *parts;
     if major > 0 || len <= 1 {
@@ -329,7 +283,6 @@ fn caret_upper(parts: &[u64; 3], len: u8) -> (u64, u64, u64) {
     }
 }
 
-/// Whether one comparator accepts `version` (prerelease already gated).
 fn comparator_matches(comparator: &Comparator, version: &SemVersion) -> bool {
     let [major, minor, patch] = comparator.parts;
     if comparator.wildcard {
@@ -358,7 +311,6 @@ fn comparator_matches(comparator: &Comparator, version: &SemVersion) -> bool {
     }
 }
 
-/// Tilde upper bound: minor (or major for a bare major) may not advance.
 fn tilde_upper(parts: &[u64; 3], len: u8) -> (u64, u64, u64) {
     let [major, minor, _] = *parts;
     if len <= 1 {
@@ -368,7 +320,6 @@ fn tilde_upper(parts: &[u64; 3], len: u8) -> (u64, u64, u64) {
     }
 }
 
-/// Whether `version` satisfies every comparator of `req`.
 #[must_use]
 pub fn req_matches(req: &VersionReq, version: &SemVersion) -> bool {
     if !version.pre.is_empty() && !allows_pre(req, version) {
@@ -379,7 +330,6 @@ pub fn req_matches(req: &VersionReq, version: &SemVersion) -> bool {
         .all(|comparator| comparator_matches(comparator, version))
 }
 
-/// Whether `version_text` parses and satisfies `req_text`.
 #[must_use]
 pub fn version_satisfies(req_text: &str, version_text: &str) -> bool {
     match (parse_req(req_text), parse_version(version_text)) {

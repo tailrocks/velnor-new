@@ -1,8 +1,3 @@
-//! Per-project override schema and action-input validation.
-//!
-//! Overrides are allowlisted by action key and approved `(sha, version)`
-//! pairs; inputs validate against each action's allowlisted schema.
-
 use crate::ActionlintError;
 use crate::actions::{
     ALINT_ACTION, ALLOWED_ACTIONS, CHECKOUT_ACTION, PinnedActionRef, is_full_sha, is_version_tag,
@@ -10,49 +5,33 @@ use crate::actions::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Per-project pin override from `[actions.overrides]`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActionPinOverride {
-    /// Override key (`owner/repo[/path]`).
     pub action: String,
-    /// Exact 40-char commit SHA.
+
     pub sha: String,
-    /// Matching stable version (`vX.Y.Z`).
+
     pub version: String,
 }
 
-/// One approved `(sha, version)` pair for an allowlisted action.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApprovedPin {
-    /// Exact 40-char commit SHA.
     pub sha: String,
-    /// Matching stable version (`vX.Y.Z`).
+
     pub version: String,
 }
 
-/// Bundled approved-pin catalog: latest release plus compat pins.
-///
-/// The catalog data is supplied by the caller (compiled-in registry);
-/// an empty catalog rejects every override (fail closed).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ApprovedPinCatalog {
-    /// Approved pairs per allowlisted action key.
     pins: BTreeMap<String, Vec<ApprovedPin>>,
 }
 
 impl ApprovedPinCatalog {
-    /// Empty catalog; rejects every override until populated.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Insert one approved pair for an overridable action.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ActionlintError`] for unknown or policy-owned actions
-    /// and for malformed pairs.
     pub fn insert(
         &mut self,
         action: &str,
@@ -81,12 +60,6 @@ impl ApprovedPinCatalog {
         Ok(())
     }
 
-    /// Validate an override against the allowlist and catalog pairs.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ActionlintError`] for unknown actions, policy-owned
-    /// actions, malformed pairs, and pairs absent from the catalog.
     pub fn validate_override(
         &self,
         request: &ActionPinOverride,
@@ -129,19 +102,16 @@ impl ApprovedPinCatalog {
     }
 }
 
-/// Allowlisted input schema for one action: only these inputs are valid.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActionInputSchema {
-    /// Action key (`owner/repo[/path]`).
     pub action: String,
-    /// Inputs the renderer must always supply.
+
     pub required: Vec<String>,
-    /// Inputs the renderer may supply.
+
     pub optional: Vec<String>,
 }
 
 impl ActionInputSchema {
-    /// Every input name the action accepts.
     #[must_use]
     pub fn allowed_inputs(&self) -> BTreeSet<String> {
         self.required
@@ -152,10 +122,6 @@ impl ActionInputSchema {
     }
 }
 
-/// Canonical input schema for the no-credentials checkout step.
-///
-/// `persist-credentials` is required (always `false` in generated
-/// jobs); `ref`, `fetch-depth` and `lfs` are the only other accepted inputs.
 #[must_use]
 pub fn checkout_inputs_schema() -> ActionInputSchema {
     ActionInputSchema {
@@ -165,12 +131,6 @@ pub fn checkout_inputs_schema() -> ActionInputSchema {
     }
 }
 
-/// Validate action inputs against the action's allowlisted schema.
-///
-/// # Errors
-///
-/// Returns [`ActionlintError`] for unknown actions, unknown inputs,
-/// missing required inputs, and empty or multi-line values.
 pub fn validate_action_inputs(
     schema: &ActionInputSchema,
     inputs: &BTreeMap<String, String>,
@@ -203,14 +163,10 @@ pub fn validate_action_inputs(
     Ok(())
 }
 
-/// Policy-owned actions are emittable but never consumer-overridable
-/// (version-policy §2, GitHub Action defaults); mirrors the contract's
-/// exclusion of alint from `OVERRIDABLE_ACTIONS`.
 fn is_policy_owned(action: &str) -> bool {
     action == ALINT_ACTION
 }
 
-/// Reject empty and multi-line input values (YAML-injection safety).
 fn check_input_value(action: &str, name: &str, value: &str) -> Result<(), ActionlintError> {
     if value.is_empty() {
         return Err(ActionlintError::InvalidActionInput {

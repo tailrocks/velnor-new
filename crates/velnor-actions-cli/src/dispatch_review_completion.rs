@@ -1,4 +1,3 @@
-//! Fixed private completion policy admission and digest-only capture output.
 use std::{
     env, fs,
     io::Write,

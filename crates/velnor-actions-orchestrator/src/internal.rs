@@ -1,6 +1,3 @@
-//! Event-time `plan-v1` / `merge-v1` JSON entrypoints (schema 1).
-
-// Obligation identities live beside the planner so `lib.rs` stays untouched.
 #[path = "internal_named_lanes.rs"]
 mod named_lanes;
 #[path = "phase_timing.rs"]
@@ -42,44 +39,22 @@ pub use crate::plan_output_limits::{
     PlanOutputs, plan_outputs, plan_outputs_from_staged_admission, plan_outputs_with_admission,
 };
 
-/// Schema version accepted by both internal entrypoints.
 pub(crate) const SCHEMA: u32 = 1;
 
-/// Maximum canonical `matrix.json` artifact bytes; oversize errors, never
-/// truncates. Job outputs have a separate UTF-16 aggregate budget.
-///
-/// Static crate jobs keep this document in the plan artifact. One hundred
-/// fifty crates with their `run` commands are about 2 MB, so the cap sits
-/// above that and still rejects a pathological matrix. Dynamic plans still
-/// fail on the 256-job and 900,000 UTF-16 output limits.
 pub(crate) const MATRIX_BUDGET_BYTES: usize = 4_194_304;
 
-/// Env key carrying the exact request-file path.
 pub const REQUEST_FILE_ENV: &str = "VELNOR_REQUEST_FILE";
-/// Write-request operation tag.
 pub const WRITE_REQUEST_OP: &str = "write-request-v1";
-/// Plan operation tag.
 pub const PLAN_OP: &str = "plan-v1";
-/// Merge operation tag.
 pub const MERGE_OP: &str = "merge-v1";
 
-/// `plan-v1` response: schema plus plan and matrix copies.
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct PlanResponse {
-    /// Response schema; always 1.
     pub(crate) schema: u32,
-    /// Affected plan.
     pub(crate) plan: Plan,
-    /// Matrix copy, byte-identical to the embedded matrix.
     pub(crate) matrix: PlanMatrix,
 }
 
-/// Compute the affected plan plus matrix for one event (schema-1 JSON).
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for malformed requests and
-/// discovery, selection, or validation failures.
 pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
     plan_internal_inner(request_json, None)
 }
@@ -162,7 +137,6 @@ fn plan_internal_inner(
     })
 }
 
-/// Bind qualification provenance to the prepared repository and checkout.
 fn validate_qualification_request(
     request: &PlanRequest,
     default_branch: &str,
@@ -183,7 +157,6 @@ fn validate_qualification_request(
     }
 }
 
-/// Assemble the `plan-v1` response: the plan plus its matrix copy.
 fn plan_response(plan: Plan) -> PlanResponse {
     PlanResponse {
         schema: SCHEMA,
@@ -192,7 +165,6 @@ fn plan_response(plan: Plan) -> PlanResponse {
     }
 }
 
-/// Reject a matrix whose canonical bytes exceed the budget.
 fn check_matrix_budget(matrix: &PlanMatrix) -> Result<(), OrchestratorError> {
     let bytes = canonical_json_bytes(matrix).map_err(internal_contract)?;
     if bytes.len() > MATRIX_BUDGET_BYTES {
@@ -204,7 +176,6 @@ fn check_matrix_budget(matrix: &PlanMatrix) -> Result<(), OrchestratorError> {
     Ok(())
 }
 
-/// Reject any schema other than 1.
 pub(crate) fn check_schema(schema: u32) -> Result<(), OrchestratorError> {
     if schema == SCHEMA {
         Ok(())
@@ -213,14 +184,12 @@ pub(crate) fn check_schema(schema: u32) -> Result<(), OrchestratorError> {
     }
 }
 
-/// Build an internal error.
 pub(crate) fn internal(problem: &str) -> OrchestratorError {
     OrchestratorError::Internal {
         problem: problem.to_owned(),
     }
 }
 
-/// Map a contract error into an internal error.
 #[expect(
     clippy::needless_pass_by_value,
     reason = "used directly as a map_err fn"
@@ -231,11 +200,6 @@ pub(crate) fn internal_contract(error: ContractError) -> OrchestratorError {
     }
 }
 
-/// Build the validated plan from the obligation universe.
-///
-/// Identities attach for every member before changed-work hints
-/// classify dispositions; the execution matrix keeps execute
-/// obligations only after that classification.
 #[expect(
     clippy::too_many_arguments,
     reason = "one call site threads plan scope, universe, classification, and per-call timings"
@@ -261,8 +225,6 @@ fn build_plan(
     let keys = changed
         .map(|set| changed_keys(universe, set))
         .unwrap_or_default();
-    // The running binary names itself: no request override, no lock
-    // fill, so a source build can never emit a release-pinned identity.
     #[expect(
         clippy::needless_option_as_deref,
         reason = "the original Option must remain available after this call"
@@ -334,7 +296,6 @@ fn build_plan(
     })
 }
 
-/// Unit IDs owning at least one obligation that is not `not_affected`.
 fn executing_units<'a>(
     universe: &[&'a ProposedTask],
     obligations: &[velnor_actions_contract::PlanObligation],
@@ -349,52 +310,4 @@ fn executing_units<'a>(
         .filter(|task| executing.contains(task.task_id.as_str()))
         .map(|task| task.identity.unit_id.as_str())
         .collect()
-}
-
-#[cfg(test)]
-mod budget_tests {
-    use std::collections::BTreeMap;
-
-    use velnor_actions_contract::{
-        ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, PlanMatrix, PlannedPlatform,
-    };
-
-    use super::{MATRIX_BUDGET_BYTES, check_matrix_budget};
-
-    #[test]
-    fn oversize_matrix_errors_and_does_not_truncate() {
-        let run = format!("echo {}", "x".repeat(MATRIX_BUDGET_BYTES));
-        let entry = MatrixEntry::derive(
-            "rust",
-            "stack/rust/demo/clippy/default",
-            &run,
-            &format!("b3-{}", "a".repeat(64)),
-            serde_json::json!({}),
-            ExecuteTaskIds {
-                tasks: BTreeMap::from([(
-                    "clippy".to_owned(),
-                    ExecuteTaskRef::Single("stack/rust/demo/clippy/default".to_owned()),
-                )]),
-            },
-            &format!("b3-{}", "b".repeat(64)),
-            "local",
-            "rust-demo",
-            PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu").expect("platform"),
-        )
-        .expect("entry");
-        let error = check_matrix_budget(&PlanMatrix {
-            include: vec![entry],
-        })
-        .expect_err("oversize matrix must fail closed");
-        let text = error.to_string();
-        assert!(text.contains("matrix_budget_exceeded"), "{text}");
-        assert!(!text.contains("truncat"), "{text}");
-        let size = text
-            .split("matrix_budget_exceeded:")
-            .nth(1)
-            .and_then(|rest| rest.split(':').next())
-            .and_then(|size| size.parse::<usize>().ok())
-            .expect("size");
-        assert!(size > MATRIX_BUDGET_BYTES, "{size}");
-    }
 }

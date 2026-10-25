@@ -1,34 +1,20 @@
-//! The closed set of tools Velnor may select through Mise.
-
 use crate::error::MiseError;
 
-/// Tools Velnor may select through mise, by registry name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum PinnedTool {
-    /// Rust toolchain (`rust`, invoked as `cargo`/`rustc`).
     Rust,
-    /// Mr Boxington compiler cache (`mr-boxington`, invoked as `mbx`).
     MrBoxington,
-    /// GitHub CLI (`gh`).
     Gh,
-    /// Workflow, composite action and Dependabot linter (`jactionlint`).
     Jactionlint,
-    /// Shell linter (`shellcheck`).
     Shellcheck,
-    /// Nextest test runner (`nextest`, invoked as `cargo nextest`).
     Nextest,
-    /// `OpenTofu` engine (`opentofu`, invoked as `tofu`).
     Opentofu,
-    /// Release coordinator (`release-plz`, const-pinned: no catalog slot).
     ReleasePlz,
-    /// OCI registry client (`crane`) for image publication and promotion.
     Crane,
-    /// JavaScript runtime and package manager (`bun`) for Bun workspace jobs.
     Bun,
 }
 
 impl PinnedTool {
-    /// Every catalog tool in stable order.
     pub const ALL: [Self; 10] = [
         Self::Rust,
         Self::MrBoxington,
@@ -42,7 +28,6 @@ impl PinnedTool {
         Self::Bun,
     ];
 
-    /// Mise registry name used in `<tool>@<version>` selectors.
     #[must_use]
     pub const fn tool_name(self) -> &'static str {
         match self {
@@ -59,13 +44,6 @@ impl PinnedTool {
         }
     }
 
-    /// Resolve a registry name to its typed tool.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::UnknownTool`] for names outside the catalog.
-    /// `mbx` and `mr_boxington` are rejected: the tool is `mr-boxington`.
-    /// `cargo-nextest` is rejected: the tool is `nextest`.
     pub fn from_tool_name(name: &str) -> Result<Self, MiseError> {
         Self::ALL
             .iter()

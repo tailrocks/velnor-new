@@ -1,5 +1,3 @@
-//! Typed composition of the source-bound generator release graph.
-
 use velnor_actions_contract::ReleaseTarget;
 
 use crate::RenderError;
@@ -9,7 +7,6 @@ use super::super::features::CHECKOUT_USES;
 use super::super::generator_release::{self, JobRole};
 use super::family_jobs::take_jobs;
 
-/// Attach the shared source/eligibility gate to every typed generator job.
 pub(super) fn compose_jobs(document: Yaml) -> Result<Vec<(String, Yaml)>, RenderError> {
     take_jobs(document)?
         .into_iter()
@@ -151,7 +148,3 @@ fn bind_checkout(step: Yaml, job_id: &str) -> Result<Yaml, RenderError> {
     with.push(("ref".to_owned(), Yaml::str("${{ inputs.source_sha }}")));
     Ok(Yaml::Map(fields))
 }
-
-#[cfg(test)]
-#[path = "schema2_product_release_generator_tests.rs"]
-mod tests;

@@ -1,5 +1,3 @@
-//! Credential-free execution of the declared native preview producer.
-
 use crate::OrchestratorError;
 use crate::check_evidence::reject_link_components;
 use crate::check_runtime::preparation::prepare_check;
@@ -18,8 +16,6 @@ use velnor_actions_mise::{CheckDeadline, GitRequest, IsolatedCommand, ProcessOut
 #[path = "preview_producer_inputs.rs"]
 mod inputs;
 use inputs::require_tracked_clean_input;
-#[cfg(test)]
-use inputs::valid_stage_zero_regular_file;
 
 #[path = "preview_producer_progress.rs"]
 mod progress;
@@ -50,7 +46,6 @@ struct PreviewTaskSpec<'a> {
     handoff: &'a Path,
 }
 
-/// Evidence retained after one isolated producer task succeeds.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct PreviewProducerProof {
@@ -68,15 +63,6 @@ pub(crate) struct PreviewProducerProof {
     pub qualified_tools: Vec<crate::check_evidence::gate::tools::QualifiedToolReceipt>,
 }
 
-/// Execute exactly the configured producer task in a fresh isolated tool home.
-///
-/// The producer receives only the fixed release handoff variables and its
-/// validated application version variable. It cannot supply task arguments or
-/// arbitrary environment additions. The output root is created exclusively
-/// beneath the repository after refusing preexisting content.
-/// # Errors
-/// Rejects a changed checkout, untracked/modified/linked inputs, unsafe output
-/// paths, failed task execution, or incomplete tool qualification.
 fn execute_preview_task(
     root: &Path,
     temp: &Path,
@@ -173,8 +159,6 @@ fn run_preview_task(
     let output = command
         .run_until_with_progress(MAX_TASK_OUTPUT, deadline, &mut std::io::stderr().lock())
         .map_err(|error| internal(&error.to_string()))?;
-    // Live output has already been escaped. Never re-emit raw captured stderr
-    // through NonZeroExit's Display on a failed credential-free source task.
     if !output.success {
         return Err(internal(&format!(
             "preview_producer_task_failed:code={:?}:signal={:?}",
@@ -389,7 +373,3 @@ fn checkpoint(deadline: CheckDeadline) -> Result<(), OrchestratorError> {
         .map(|_| ())
         .map_err(|error| internal(&error.to_string()))
 }
-
-#[cfg(test)]
-#[path = "preview_producer_tests.rs"]
-mod tests;

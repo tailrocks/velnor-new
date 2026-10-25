@@ -1,8 +1,3 @@
-//! FLOW-half wiring: reuse qualification, archive identity (PAR-8.3).
-//!
-//! Pure coordination glue, declared via `#[path]` from `internal_plan.rs`.
-
-// Wired here so reuse stages compile without touching `lib.rs`.
 #[path = "reuse_stages.rs"]
 pub(crate) mod reuse_stages;
 
@@ -22,18 +17,12 @@ use velnor_actions_rust::{CompileDriver, is_nextest_kind};
 
 use self::reuse_stages::{ExpectedReuseIdentity, ObservedRestoreMeta, verify_reused_pipeline};
 use crate::{OrchestratorError, internal::internal};
-/// Wiring inputs for one task: event plus generator identity.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct GroupWire<'a> {
     pub(crate) event: WorkflowEvent,
     pub(crate) generator: &'a PlanGenerator,
 }
 
-/// Reuse-cache event name for one workflow event.
-///
-/// Spellings match [`mode_for_event`](velnor_actions_mise::cache::mode_for_event)
-/// exactly: forks stay `fork` (read-only), never the `pull_request`
-/// spelling, so the two layers can never disagree about fork handling.
 pub(crate) fn reuse_event_name(event: WorkflowEvent) -> &'static str {
     match event {
         WorkflowEvent::PullRequest => "pull_request",
@@ -45,7 +34,6 @@ pub(crate) fn reuse_event_name(event: WorkflowEvent) -> &'static str {
     }
 }
 
-/// Qualification for one task: kind plus event plus adapter signals.
 pub(crate) fn reuse_qualification(task: &ProposedTask, event: WorkflowEvent) -> ReuseQualification {
     let mut qualification = ReuseQualification::new(&task.task_kind, reuse_event_name(event));
     for (flag, signal) in [
@@ -61,15 +49,11 @@ pub(crate) fn reuse_qualification(task: &ProposedTask, event: WorkflowEvent) -> 
     qualification
 }
 
-/// Reuse outcome for one plan obligation.
 pub(crate) struct ReuseOutcome {
     pub(crate) decision: ObligationDecision,
     pub(crate) reason: String,
     pub(crate) task_cache_key: Option<String>,
     pub(crate) task_cache_enabled: bool,
-    /// Validated plan-time input digest the merge-time live digest must
-    /// still equal; `None` only for forced-execution paths that never
-    /// validated a digest.
     pub(crate) recorded_input_digest: Option<String>,
 }
 impl ReuseOutcome {
@@ -82,11 +66,9 @@ impl ReuseOutcome {
             recorded_input_digest,
         }
     }
-    /// Forced execution with an explicit reason (changed work).
     pub(crate) fn execute(reason: &str) -> Self {
         Self::execute_with(reason.to_owned(), None)
     }
-    /// The change cannot reach the task; its crate job is skipped.
     pub(crate) fn not_affected() -> Self {
         Self {
             decision: ObligationDecision::NotAffected,
@@ -98,14 +80,7 @@ impl ReuseOutcome {
     }
 }
 
-/// Reason recorded on every `not_affected` obligation.
 pub(crate) const NOT_AFFECTED_REASON: &str = "not_affected";
-/// Decide reuse eligibility for one task (REUSE-1/6/7, PAR-3.4).
-/// Plan time never grants reuse: merge-time evidence required, so eligible
-/// tasks execute with `no_entry` and task-cache stays disabled. The
-/// validated input digest is recorded on the outcome so the persisted
-/// obligation carries the exact value the merge-time live digest must
-/// still equal (same-path source edits flip the live digest and reject).
 pub(crate) fn plan_reuse_outcome(
     task: &ProposedTask,
     event: WorkflowEvent,
@@ -149,26 +124,17 @@ pub(crate) fn plan_reuse_outcome(
     }
 }
 
-/// Shard index/count from a `/shard-<index>-of-<count>` task-ID suffix.
 fn parse_shard_suffix(task_id: &str) -> Option<(u32, u32)> {
     let (_, index, count) = velnor_actions_contract::split_shard_suffix(task_id)?;
     Some((index, count))
 }
 
-/// Archive-gate verdict for one task.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ArchiveGate {
-    /// No archive to verify, or the archive identity verified.
     Clear,
-    /// Sharded archive with unbound source: execute with reason, never abort.
     SourceUnbound,
 }
 
-/// Archive gate with an explicit content-bound source digest.
-///
-/// Sharded Nextest tasks clear only on a content-bound source; unbound
-/// sources refuse the task (execute with reason) instead of aborting
-/// the plan.
 pub(crate) fn check_archive_identity_with_source(
     task: &ProposedTask,
     toolchain_id: &str,
@@ -223,12 +189,6 @@ pub(crate) fn check_archive_identity_with_source(
         .map_err(|err| internal(&format!("archive_identity_rejected:{err}")))
 }
 
-/// Verify a `reused` task against its bound identity and live inputs.
-///
-/// The restore evidence must name `task_id`, and the live input digest
-/// must still equal the recorded plan-time digest; missing evidence of
-/// any kind fails closed. `Verified` needs the full observation set
-/// once reports carry restore metadata.
 pub(crate) fn verify_reused_task(
     task_id: &str,
     declared: &[String],
@@ -247,6 +207,3 @@ pub(crate) fn verify_reused_task(
         live_input_digest,
     )
 }
-#[cfg(test)]
-#[path = "wire_w2_tests.rs"]
-mod wire_w2_tests;

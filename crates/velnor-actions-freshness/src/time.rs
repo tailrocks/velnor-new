@@ -1,6 +1,3 @@
-//! Strict Gregorian date and timestamp parsing for repository freshness records.
-
-/// Parse a strict Gregorian date and return days since the Unix epoch.
 pub(crate) fn parse_iso_date(text: &str) -> Option<i64> {
     let bytes = text.as_bytes();
     if bytes.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {
@@ -23,7 +20,6 @@ pub(crate) fn parse_iso_date(text: &str) -> Option<i64> {
     Some(days_from_civil(year, month, day))
 }
 
-/// Parse an ISO date or timezone-aware timestamp into Unix seconds.
 pub(crate) fn parse_timestamp(text: &str) -> Option<i64> {
     if let Some(days) = parse_iso_date(text) {
         return days.checked_mul(86_400);
@@ -159,7 +155,6 @@ pub(crate) fn iso_timestamp(seconds: i64) -> String {
     )
 }
 
-/// Trim a leading `v` and build metadata for version comparisons.
 #[must_use]
 pub(crate) fn norm_version(value: &str) -> String {
     let value = value.trim();

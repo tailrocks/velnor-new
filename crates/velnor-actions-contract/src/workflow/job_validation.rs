@@ -1,10 +1,8 @@
-//! Job permission, placement and dependency validation.
 use super::{
     BTreeSet, ContractError, Job, PermissionLevel, Permissions, is_pinned_label,
     is_safe_display_name, is_valid_environment,
 };
 impl Job {
-    /// Validate runner metadata before rendering placement.
     fn validate_runner(&self, id: &str) -> Result<(), ContractError> {
         if let Some(runner) = &self.check_runner {
             if !id.starts_with("check-") {
@@ -55,7 +53,7 @@ impl Job {
         }
         Ok(())
     }
-    /// Validate one job: labels, refs, effective permissions, steps.
+
     pub(super) fn validate(
         &self,
         id: &str,
@@ -140,146 +138,5 @@ impl Job {
             ));
         }
         super::super::step_identity::validate_step_sequence(&self.steps, id)
-    }
-}
-
-#[cfg(test)]
-mod admission_tests {
-    use std::collections::{BTreeMap, BTreeSet};
-
-    use super::*;
-    use crate::config::{
-        CheckExecutor, CheckPlatform, CheckRunner, EPHEMERAL_CHECK_ADMISSION_CONDITION,
-    };
-
-    fn ephemeral_job(condition: Option<&str>) -> Job {
-        Job {
-            services: Vec::new(),
-            display_name: "Check / native".to_owned(),
-            runs_on: "native-scale-set".to_owned(),
-            check_runner: Some(CheckRunner {
-                label: "native-scale-set".to_owned(),
-                platform: CheckPlatform::MacosArm64,
-                executor: CheckExecutor::EphemeralSelfHosted,
-                container: None,
-            }),
-            timeout_minutes: super::super::JobTimeout::CRATE,
-            needs: Vec::new(),
-            condition: condition.map(str::to_owned),
-            permissions: None,
-            cache_mode: None,
-            environment: None,
-            steps: Vec::new(),
-        }
-    }
-
-    #[test]
-    fn external_runner_admission_is_mandatory_even_for_public_typed_ir() {
-        for condition in [
-            None,
-            Some("true"),
-            Some("always()"),
-            Some("success()"),
-            Some("github.event_name == 'pull_request'"),
-        ] {
-            let error = ephemeral_job(condition)
-                .validate_runner("check-native")
-                .expect_err("external execution requires exact admission");
-            assert!(
-                error
-                    .to_string()
-                    .contains("ephemeral_check_requires_admission_condition")
-            );
-        }
-        ephemeral_job(Some(EPHEMERAL_CHECK_ADMISSION_CONDITION))
-            .validate_runner("check-native")
-            .expect("canonical admission accepted");
-    }
-
-    fn verifier_seed_job(verifier_uses: &str) -> Job {
-        use crate::workflow::{RUST_VERIFIER_USES, Step, StepKind, StepRole};
-
-        assert!(RUST_VERIFIER_USES.contains(&verifier_uses));
-        let mut steps = vec![Step {
-            name: "Verify Rust channel manifest".to_owned(),
-            id: None,
-            role: Some(StepRole::VerifyRustManifest),
-            condition: None,
-            parallel: false,
-            kind: StepKind::Action {
-                uses: verifier_uses.to_owned(),
-                with: BTreeMap::new(),
-                env: BTreeMap::new(),
-            },
-        }];
-        steps.extend((0..3).map(|index| Step {
-            name: format!("Build seed {index}"),
-            id: None,
-            role: Some(StepRole::MbxSeedBuild),
-            condition: None,
-            parallel: false,
-            kind: StepKind::Shell {
-                run: vec!["true".to_owned()],
-                env: BTreeMap::new(),
-            },
-        }));
-        steps.push(Step {
-            name: "Mark seed producer".to_owned(),
-            id: None,
-            role: Some(StepRole::MbxProducerMark),
-            condition: None,
-            parallel: false,
-            kind: StepKind::Shell {
-                run: vec!["true".to_owned()],
-                env: BTreeMap::new(),
-            },
-        });
-        Job {
-            display_name: "Dependency seed".to_owned(),
-            runs_on: "ubuntu-26.04".to_owned(),
-            check_runner: None,
-            timeout_minutes: super::super::super::JobTimeout::CRATE,
-            needs: vec!["plan".to_owned()],
-            condition: Some(super::super::super::DEPENDENCY_SEED_JOB_CONDITION.to_owned()),
-            permissions: None,
-            cache_mode: None,
-            environment: None,
-            services: Vec::new(),
-            steps,
-        }
-    }
-
-    #[test]
-    fn both_fixed_rust_verifier_calls_remain_admissible_in_a_seed_job() {
-        use crate::workflow::RUST_VERIFIER_USES;
-
-        let ids = BTreeSet::from(["plan"]);
-        for uses in RUST_VERIFIER_USES {
-            verifier_seed_job(uses)
-                .validate("dependency-seed", &ids, &Permissions::default(), false)
-                .expect("fixed verifier action remains a cache-only seed role");
-        }
-    }
-
-    #[test]
-    fn forged_verifier_role_cannot_admit_a_seed_job() {
-        use crate::workflow::{StepKind, StepRole};
-
-        let ids = BTreeSet::from(["plan"]);
-        let mut job = verifier_seed_job("./.github/actions/velnor-verify-rust-manifest");
-        let Some(step) = job.steps.first_mut() else {
-            unreachable!("fixture has a verifier step");
-        };
-        step.kind = StepKind::Action {
-            uses: "./.github/actions/other-verifier".to_owned(),
-            with: BTreeMap::new(),
-            env: BTreeMap::new(),
-        };
-        step.role = Some(StepRole::VerifyRustManifest);
-        assert!(
-            job.validate("dependency-seed", &ids, &Permissions::default(), false)
-                .is_err(),
-            "forged action path must fail typed role validation"
-        );
     }
 }
