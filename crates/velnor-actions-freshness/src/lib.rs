@@ -34,6 +34,10 @@ pub enum Operation {
         libraries_only: bool,
     },
 
+    WorkspaceTestMembers {
+        manifest_path: Option<PathBuf>,
+    },
+
     CargoArtifactExecutable {
         messages_path: PathBuf,
 
@@ -54,6 +58,9 @@ pub fn run(root: &Path, operation: &Operation) -> i32 {
         Operation::MiseVersion => print_mise_version(root),
         Operation::WorkspaceMembers { libraries_only } => {
             members::print_workspace_members(root, *libraries_only)
+        }
+        Operation::WorkspaceTestMembers { manifest_path } => {
+            members::print_test_members(root, manifest_path.as_deref())
         }
         Operation::CargoArtifactExecutable {
             messages_path,

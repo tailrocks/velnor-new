@@ -18,27 +18,34 @@ file alone does not make Cargo discover or execute it: register or enable the
 Cargo target, confirm the generated task plan selects it, and check execution
 evidence to confirm that it ran.
 
-The repository-owned `test-maintenance-helpers` task uses `--no-tests warn`. A
-full-workspace or nested-workspace Nextest run also uses `--no-tests warn`
-while the workspace has no tests. This accepts an empty discovery; it does not
-prove that a required suite ran or enforce its completion criteria. The task
-generator currently uses `--no-tests warn` for hash-partitioned selections so
-an individual empty shard is allowed; that behavior does not prove complete
-suite coverage. As suites return, generated verification must enforce
-fail-on-empty at each declared required-suite scope, while intentional filtered
-or partitioned subruns may allow an empty selection only when the generated
-plan selects the complete suite and execution evidence confirms its tasks ran.
-V1 has no permanent empty-suite exception.
+`scripts/verify-local.sh` uses offline Cargo metadata to identify packages
+with Nextest-applicable targets (`test = true`). A successful empty result
+skips Nextest only for that workspace; metadata errors fail verification. The
+root workspace runs per-package and workspace-wide Nextest scopes with
+`--no-tests fail` when applicable targets exist. The nested runner workspace
+keeps its existing workspace-wide scope, guarded by its own manifest's
+metadata result and `--no-tests fail`. The required
+`test-maintenance-helpers` task applies the same metadata rule to its two named
+package scopes. Each invoked Nextest scope fails when its selected suite is
+empty. The task generator separately uses `--no-tests warn` for
+hash-partitioned selections so an individual empty shard is allowed; that does
+not prove complete suite coverage. As suites return, generated verification
+must enforce fail-on-empty at each declared required-suite scope, while
+intentional filtered or partitioned subruns may allow an empty selection only
+when the generated plan selects the complete suite and execution evidence
+confirms its tasks ran. V1 has no permanent empty-suite exception.
 
 ---
 
 ## The Verification Suite
 
-Use these six root-workspace checks for full verification; for each change,
-run the narrow checks that exercise it and complete the full relevant
-verification scope before finishing. The nested runner is a separate Cargo
-workspace and needs its own formatting, lint, test, and dependency checks; root
-`cargo --workspace` and root formatting do not include it.
+For complete Rust verification, run `bash scripts/verify-local.sh` from the repo
+root. It checks the root and nested workspaces, including formatting, Clippy,
+metadata-gated Nextest, docs, and freshness. Run the independent repository
+checks alongside it. For each change, run narrow checks that exercise it and
+complete the full relevant verification scope before finishing. The nested
+runner is a separate Cargo workspace and root `cargo --workspace` and root
+formatting do not include it.
 
 If the workspace `target` is a symlink into an MBX-managed cache, direct Cargo
 commands do not hold an MBX cache lease. Use a separately owned absolute
@@ -51,13 +58,13 @@ and global cache settings. Bounded build/test parallelism is permitted; it must
 not omit any required test or gate.
 
 ```bash
-cargo fmt --all -- --check
-cargo clippy --locked --workspace --all-targets -- -D warnings
-cargo nextest run --locked --workspace --no-tests warn
+bash scripts/verify-local.sh
 alint validate-config && alint check --fail-on-warning
 cargo deny check
-bash scripts/check-freshness.sh
 ```
+
+The local script also runs `scripts/check-freshness.sh` and covers the nested
+runner workspace.
 
 ---
 
@@ -78,12 +85,12 @@ bash scripts/check-freshness.sh
   - `--all-targets`: Ensures tests and benchmarks meet the same lint standards as product crates.
   - `-D warnings`: Prevents warning accumulation.
 
-### 3. Test Suite Execution: `cargo nextest run --locked --workspace --no-tests warn`
+### 3. Test Suite Execution: `bash scripts/verify-local.sh`
 
-- **Purpose**: Runs all discovered unit, integration, and property tests across all workspace crates. `--no-tests warn` permits the intentional empty suite during the reset above.
+- **Purpose**: Runs root per-package and workspace Nextest scopes, plus the existing nested workspace scope. Cargo metadata decides whether each workspace or named package scope has a `test = true` target; only a successful empty result skips Nextest. Metadata errors fail, and each invoked Nextest scope uses `--no-tests fail`.
 - **Strict Prohibition**: **Never use `cargo test`**. `cargo test` is forbidden because it lacks process isolation, nextest profile management, and retry handling.
 - **Focused Execution**:
-  - Run a package that may still be empty during the reset: `cargo nextest run --locked -p <package_name> --no-tests warn`
+  - Run a package whose Cargo metadata reports a test-enabled target: `cargo nextest run --locked -p <package_name> --no-tests fail`
   - Run a specific test and fail if the filter selects none: `cargo nextest run --locked -p <package_name> -E 'test(<test_filter>)' --no-tests fail`
 
 ### 4. Repository Structure & Agent Instructions: `alint validate-config && alint check --fail-on-warning`
@@ -105,11 +112,10 @@ bash scripts/check-freshness.sh
 
 ## Nested Runner Workspace (`crates/velnor-runner`)
 
-The runner controller and supervisor live in the nested virtual workspace `crates/velnor-runner`, which has its own `Cargo.toml`, `Cargo.lock`, and `deny.toml`. To verify the runner workspace (always using `cargo nextest`):
+The runner controller and supervisor live in the nested virtual workspace `crates/velnor-runner`, which has its own `Cargo.toml`, `Cargo.lock`, and `deny.toml`. `scripts/verify-local.sh` queries metadata for this manifest and runs the existing workspace-wide Nextest scope with `--no-tests fail` only when applicable targets exist.
 
 ```bash
 cargo fmt --manifest-path crates/velnor-runner/Cargo.toml --all -- --check
 cargo clippy --manifest-path crates/velnor-runner/Cargo.toml --locked --all-targets -- -D warnings
-cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --no-tests warn
 cargo deny --manifest-path crates/velnor-runner/Cargo.toml check
 ```
