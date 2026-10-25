@@ -247,18 +247,13 @@ fn assert_parent_and_required_dependencies(fixture: &fixture::RenderedFixture) {
         .condition
         .as_deref()
         .expect("the typed source job carries its affected-job predicate");
-    let caller_condition = crate::lane_share::job_workflow_extract::caller_condition_for_selection(
-        PROTOTYPE_JOB_ID,
-        Some(source_condition),
-    )
-    .expect("the explicit caller condition preserves the default success gate");
     let Yaml::Map(caller_fields) = parent_caller else {
         panic!("the hosted job is a reusable-workflow caller");
     };
     assert!(
-        caller_fields
-            .iter()
-            .any(|(name, value)| { name == "if" && value == &Yaml::str(caller_condition.clone()) })
+        caller_fields.iter().any(|(name, value)| {
+            name == "if" && value == &Yaml::str(source_condition.to_owned())
+        })
     );
     let required = workflow_job(&fixture.parent, crate::render::FINAL_JOB_ID);
     assert!(job_needs(required).contains(&PROTOTYPE_JOB_ID));
