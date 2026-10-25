@@ -101,3 +101,10 @@ in a different repository: this is fail-closed observation and repair, not an
 instantaneous cross-repository latestness guarantee. A mutable URL changing after
 formula validation produces a checksum failure, never permission to accept new
 bytes. Stable uses permanent version-tagged assets and cannot be downgraded.
+
+The protected Homebrew seed transition uses the closed version-two template.
+Its output inventory includes `.velnor/release-manifest.json`, rendered from
+the exact authenticated SDK manifest bytes used to qualify the seed. This keeps
+the Tap's committed SDK identity aligned with the SDK that produced its
+workflow and tool files. The transition rejects older template inventories and
+candidate evidence that omits or changes the manifest.

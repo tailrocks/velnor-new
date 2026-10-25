@@ -13,5 +13,5 @@ test = false
 workspace = true
 
 [dependencies]
-velnor-actions-contract = { version = "=0.1.54", path = "../velnor-actions-contract" }
+velnor-actions-contract = { version = "=0.1.55", path = "../velnor-actions-contract" }
 
