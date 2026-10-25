@@ -345,8 +345,12 @@ mod tests {
     #[test]
     fn bounded_probe_stops_on_deadline_and_output_limit() {
         let started = Instant::now();
-        let timeout = run_shell("sleep 5", CAPTURE_LIMIT, Duration::from_millis(100));
-        assert!(matches!(timeout, Err(BoundedProcessError::TimedOut)));
+        let timeout = run_shell("sleep 5", CAPTURE_LIMIT, Duration::from_secs(1));
+        match timeout {
+            Err(BoundedProcessError::TimedOut) => {}
+            Err(error) => panic!("expected a timeout, received {error}"),
+            Ok(output) => panic!("expected a timeout, received output: {output:?}"),
+        }
         assert!(started.elapsed() < Duration::from_secs(2));
 
         let oversized = run_shell("printf 0123456789", 4, Duration::from_secs(2));
