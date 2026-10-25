@@ -54,7 +54,23 @@ git diff --quiet HEAD -- || { printf 'The source tree differs from its release c
 python3 -B images/resource-probe/test_verify_runner_listener.py
 
 if [[ "$prebuilt_binaries" -eq 0 ]]; then
-  mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo build \
+  project_rust_version="$(python3 - mise.toml <<'PY'
+import pathlib
+import re
+import sys
+import tomllib
+
+config = tomllib.loads(pathlib.Path(sys.argv[1]).read_text())
+tools = config.get("tools", {})
+rust = tools.get("rust") if isinstance(tools, dict) else None
+if isinstance(rust, dict):
+    rust = rust.get("version")
+if not isinstance(rust, str) or re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", rust) is None:
+    raise SystemExit("mise.toml must declare an exact tools.rust version")
+print(rust)
+PY
+  )"
+  mise --no-config --no-env --no-hooks exec "rust@$project_rust_version" -- cargo build \
     --locked \
     --manifest-path crates/velnor-runner/Cargo.toml \
     --package velnor-resource-probe \

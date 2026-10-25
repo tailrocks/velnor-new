@@ -63,7 +63,7 @@ pub(crate) fn owned_preparation(
                 &mut owned.workflow,
                 &prep.runner_label,
                 env!("CARGO_PKG_VERSION"),
-                &prep.catalog,
+                &prep.emission_catalog(),
                 Some(selector),
             )?;
         } else {
