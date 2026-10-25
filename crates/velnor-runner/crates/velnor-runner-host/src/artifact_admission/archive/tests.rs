@@ -15,6 +15,9 @@ use crate::error::HostError;
 #[path = "tests/edge_cases.rs"]
 mod edge_cases;
 
+#[path = "tests/directory_tests.rs"]
+mod directory_tests;
+
 #[path = "release_tests.rs"]
 mod release_tests;
 

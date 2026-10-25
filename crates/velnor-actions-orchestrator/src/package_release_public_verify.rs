@@ -21,7 +21,6 @@ use crate::{
         verify_attested_signed_package_with_owned_tempdir_and_deadlines,
     },
 };
-
 pub(crate) fn verify_public_package_release(
     policy: &PackageReleasePublicPolicy,
     selection: &PackageReleasePublicSelection,
@@ -182,7 +181,11 @@ fn verify_public_release_custody(
         &files,
         verification_deadline,
     )?;
-    let owner = tempfile::tempdir().map_err(|_| internal("package_public_tempdir_create"))?;
+    let owner = crate::filesystem_owner::owned_tempdir::private_tempdir_in(
+        &std::env::temp_dir(),
+        "velnor-public-release-",
+    )
+    .map_err(|_| internal("package_public_tempdir_create"))?;
     for (name, bytes) in files {
         write_new_file(&owner.path().join(name), &bytes)?;
     }

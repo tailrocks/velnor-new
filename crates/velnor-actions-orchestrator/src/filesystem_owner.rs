@@ -1,4 +1,4 @@
-//! Read-only filesystem ownership identity shared by private staging and artifacts.
+//! Read-only filesystem ownership and private temporary roots shared by artifacts.
 
 /// Read an owner id without trusting user-controlled environment variables.
 /// Every ownership check reads the live effective UID; no value is cached.
@@ -11,3 +11,5 @@ pub(crate) fn effective_uid() -> u32 {
 pub(crate) mod held_directory;
 #[path = "held_file.rs"]
 pub(crate) mod held_file;
+#[path = "owned_tempdir.rs"]
+pub(crate) mod owned_tempdir;
