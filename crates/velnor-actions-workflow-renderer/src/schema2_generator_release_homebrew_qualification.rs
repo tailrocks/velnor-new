@@ -65,6 +65,12 @@ fn candidate_steps(
     let product = assets::MACOS_ARM64;
     let mut steps = vec![
         workflow_steps::mise_step(pins.setup_for(ReleaseTarget::MacosArm64))?,
+        workflow_steps::command_step(
+            "Install pinned qualification tools",
+            &pins.install_qualify_tools_argv,
+        )?,
+        workflow_steps::verify_rust_step(pins)?,
+        workflow_steps::command_step("Verify jactionlint", &pins.verify_lint_argv)?,
         workflow_steps::install_gh_step(&pins.install_gh_argv)?,
     ];
     steps.extend(assets::download_build_steps_for_id(

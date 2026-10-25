@@ -24,6 +24,7 @@ fn compiler_and_homebrew_qualification_jobs_get_their_bounded_budgets() -> Resul
     );
     let observed = audit_workflows(&workflows).expect("generated timeout contract");
     let compiler_jobs = BTreeSet::from([
+        "build-images".to_owned(),
         "build-linux".to_owned(),
         "build-macos".to_owned(),
         "build-macos-intel".to_owned(),
@@ -40,8 +41,8 @@ fn compiler_and_homebrew_qualification_jobs_get_their_bounded_budgets() -> Resul
             .iter()
             .filter(|(job, _)| compiler_jobs.contains(job))
             .count(),
-        4,
-        "exactly four compiler jobs must receive the larger budget"
+        5,
+        "exactly five compiler jobs must receive the larger budget"
     );
     for (job, timeout) in observed {
         let expected = if compiler_jobs.contains(&job) {
