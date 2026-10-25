@@ -9,6 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 #[path = "job_workflow_extract_expression.rs"]
 mod expression;
 use expression::{rewrite_condition, rewrite_expressions};
+#[cfg(any(test, feature = "test-render-capture"))]
 pub(crate) use expression::{test_condition_has_unbound_needs, test_expression_has_unbound_needs};
 use velnor_actions_contract::{CacheMode, HostContainerProfile, Job, Step, StepKind};
 

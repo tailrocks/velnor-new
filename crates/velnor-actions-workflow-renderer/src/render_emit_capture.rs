@@ -91,8 +91,14 @@ fn render_capture_children(
     source_ids: &BTreeSet<String>,
     runner_metadata: &BTreeMap<String, job_workflow_extract::CaptureRunnerMetadata>,
 ) -> Result<Vec<job_workflow_extract::JobWorkflowRelocation>, RenderError> {
-    let shared = empty_lane_share(prepared.clone());
-    let relocations = document::render_job_workflow_relocations(ir, &shared, ctx, mbx_jobs)?;
+    let mut relocations = Vec::with_capacity(prepared.len());
+    for (source_id, prepared_job) in prepared {
+        let single_job = BTreeMap::from([(source_id.clone(), prepared_job.clone())]);
+        let shared = empty_lane_share(single_job);
+        let mut child = document::render_job_workflow_relocations(ir, &shared, ctx, mbx_jobs)
+            .map_err(|error| invalid_capture(source_id, &format!("child_lowering:{error}")))?;
+        relocations.append(&mut child);
+    }
     if relocations.len() != source_ids.len() {
         return Err(invalid_capture("capture", "source_child_count_mismatch"));
     }
