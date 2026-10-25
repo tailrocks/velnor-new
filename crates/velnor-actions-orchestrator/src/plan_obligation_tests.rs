@@ -16,6 +16,7 @@ fn empty_discovery() -> Discovery {
     Discovery {
         gradle_roots: Vec::new(),
         mise_checks: Vec::new(),
+        native_checks: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
         proposals: Vec::new(),

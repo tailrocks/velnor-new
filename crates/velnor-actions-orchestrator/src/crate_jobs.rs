@@ -368,7 +368,10 @@ fn build_job_for_members(
 pub(crate) fn is_runnable(task: &ProposedTask) -> bool {
     !task.no_targets
         && !task.identity.unit_id.is_empty()
-        && Stack::from_id(&task.stack_id) != Some(Stack::Mise)
+        && !matches!(
+            Stack::from_id(&task.stack_id),
+            Some(Stack::Mise | Stack::Native)
+        )
 }
 
 #[cfg(test)]

@@ -15,7 +15,7 @@ Workflow to generate
   Jobs:
     - jactionlint (10 steps)
     - plan (15 steps)
-    - required (10 steps)
+    - required (15 steps)
     - required-gate (1 steps)
     - no matrix entries (no-work workflow)
   Parallel: single job; no matrix fan-out

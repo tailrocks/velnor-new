@@ -32,6 +32,8 @@ mod plist;
 mod readiness;
 mod readiness_scan;
 mod reconcile;
+pub(crate) mod resource_probe_record;
+pub mod resource_probe_release;
 mod scale_set;
 mod stage;
 mod worker;

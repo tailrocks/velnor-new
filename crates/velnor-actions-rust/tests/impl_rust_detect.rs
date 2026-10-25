@@ -11,16 +11,22 @@ use velnor_actions_rust::{
 };
 
 #[test]
-fn registry_orders_mise_rust_and_tofu() {
-    assert_eq!(VelnorConfig::REGISTERED_STACKS, &["mise", "rust", "tofu"]);
-    assert_eq!(Stack::all(), &[Stack::Mise, Stack::Rust, Stack::Tofu]);
+fn registry_orders_mise_native_rust_and_tofu() {
+    assert_eq!(
+        VelnorConfig::REGISTERED_STACKS,
+        &["mise", "native", "rust", "tofu"]
+    );
+    assert_eq!(
+        Stack::all(),
+        &[Stack::Mise, Stack::Native, Stack::Rust, Stack::Tofu]
+    );
 }
 
 #[test]
 fn registration_matches_contract_registry() {
     assert!(VelnorConfig::REGISTERED_STACKS.contains(&STACK_ID));
     assert_eq!(STACK_ID, Stack::Rust.id());
-    assert_eq!(VelnorConfig::REGISTERED_STACKS[1], STACK_ID);
+    assert_eq!(VelnorConfig::REGISTERED_STACKS[2], STACK_ID);
 }
 
 #[test]

@@ -309,10 +309,17 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
 mod prepare;
 
 #[test]
-fn v1_registers_three_stacks_and_detects_rust_and_tofu() {
-    use velnor_actions_contract::VelnorConfig;
+fn v1_registers_native_and_detects_rust_and_tofu() {
+    use velnor_actions_contract::{Stack, VelnorConfig};
     use velnor_actions_orchestrator::decisions::{DetectorInfo, detector_registry};
-    assert_eq!(VelnorConfig::REGISTERED_STACKS, &["mise", "rust", "tofu"]);
+    assert_eq!(
+        VelnorConfig::REGISTERED_STACKS,
+        &["mise", "native", "rust", "tofu"]
+    );
+    assert_eq!(
+        Stack::all(),
+        &[Stack::Mise, Stack::Native, Stack::Rust, Stack::Tofu]
+    );
     assert_eq!(
         detector_registry(),
         vec![

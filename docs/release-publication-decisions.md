@@ -58,3 +58,51 @@ Maven `attest = false` opt-out remains available with a validated reason and
 warning; it takes precedence over either repository-level provenance mode.
 See the
 [package publication contract](proposed/package-publication-contract.md#10-provenance-store-publish-provenance).
+
+**Native Homebrew distribution and adoption (2026-10-24).** Formula policy and
+release selection belong to the source repository. Velnor owns the typed
+projection, standalone formula renderer, independent literal-update admission,
+whole-tree checks, binary install qualification, and protected promotion. A tap
+contains conventional generated Homebrew formula DSL, not executable Python or
+Ruby helper scripts. Public release verification uses read-only authority and
+keeps authenticated archive custody through installation. Disabled stable policy
+has a canonical non-installable sentinel; it never produces a fabricated
+successful stable installation.
+
+**Protected tap transition authoring (2026-10-24).** Adoption first replaces one
+exact cataloged legacy base with a small authenticated SDK callee. The published
+SDK source, external manifest digest, and Linux runner binary digest are separate
+from the operator's current-host executable identity. Native authoring commands
+emit a fresh reviewable overlay and exact deletion manifest; they never apply
+files or create branches. The following structural cutover reuses the ordinary
+workflow renderer and the same complete-tree validator used by Required. Neither
+phase executes candidate configuration, legacy helpers, or candidate-selected
+migration code to establish authority.
+
+**Hosted Homebrew custody (2026-10-24).** Hosted qualification uses a freshly
+materialized, exact pinned Homebrew source tree and private home. It preserves
+the existing prefix and verifies the vendored Ruby archive before first runtime
+execution. Mise owns the closed command and process-group execution adapters;
+orchestration owns prefix changes, filesystem identities, and retained recovery
+state. Strict command completion requires a held process-group anchor and proven
+group absence. An uncertain cleanup result cannot authorize restoration. The
+qualification job must prove the historical binary upgrade and both archived
+recipe tests before SDK release publication.
+
+**Native image maintenance during SDK publication (2026-10-24).** Automatic
+job-image candidate builds and the resource-probe producer use source-built Rust
+operations. The job candidate keeps its existing v1 wire format and declared
+legacy input digests so the independently dispatched publisher remains compatible;
+those input files are provenance data and are not executed by the native build.
+A separately validated and attested source-closure record binds the native
+implementation. Resource-probe production and admission share the same bounded
+OCI validator. Required native fixture qualification precedes producer execution.
+
+**Source Homebrew policy export (2026-10-24).** The source repository commits the
+canonical release-policy projection used by protected tap verification. Native
+export reuses the preview release-policy serializer and source preparation;
+native-route generation rejects a missing or stale policy. Export does not
+invoke generation, and generation does not write outside its managed `.github`
+tree. Adopters may retain their source-qualified updater route without a native
+formula spec, or select the native route by using the typed formula spec and
+omitting the updater; the two routes cannot be combined.

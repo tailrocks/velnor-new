@@ -56,7 +56,7 @@ pub(super) fn assert_image_producer(body: &str) -> TestResult {
         body,
         "Verify Rust channel manifest",
         "CARGO_REGISTRY_TOKEN",
-        "Install pinned Rust for the resource probe",
+        "Install pinned resource-probe build and qualification tools",
         Some(("GITHUB_TOKEN", "${{ github.token }}")),
     )?;
     assert!(!body.contains("echo release"));
@@ -75,7 +75,17 @@ fn assert_probe_build_source() -> TestResult {
     assert!(PROBE_BUILD.contains("resource probe does not contain its source revision"));
     assert!(PROBE_BUILD.contains("python3 -B images/resource-probe/test_write_manifest.py"));
     assert!(PROBE_BUILD.contains("python3 -B images/resource-probe/test_validate_smoke.py"));
-    assert!(PROBE_BUILD.contains("python3 images/resource-probe/validate_smoke.py"));
+    let native_schema5_validation = required_position(
+        PROBE_BUILD,
+        "\"$release_validator\" validate-smoke-schema5 \"$smoke_output\" \"$smoke_root\"",
+        "native resource-probe schema-5 validation is present",
+    )?;
+    let python_schema5_validation = required_position(
+        PROBE_BUILD,
+        "python3 -B images/resource-probe/validate_smoke.py \"$smoke_output\" \"$smoke_root\"",
+        "Python resource-probe schema-5 validation is present",
+    )?;
+    assert!(native_schema5_validation < python_schema5_validation);
     assert!(PROBE_BUILD.contains("--network none --read-only --cap-drop=ALL"));
     let source_check = required_position(
         PROBE_BUILD,

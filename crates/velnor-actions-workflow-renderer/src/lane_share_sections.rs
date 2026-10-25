@@ -117,6 +117,7 @@ fn is_lane_specific(step: &Step) -> bool {
             env.contains_key(NAMED_CHECK_JOB_ID_ENV)
                 || env.contains_key(NAMED_CHECK_LANE_VARIANT_ENV)
         }
+        StepKind::NativeCheckExecution { .. } => true,
         StepKind::Action { .. } => false,
     }
 }

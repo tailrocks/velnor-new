@@ -31,6 +31,15 @@ pub(super) fn run_internal(request: &InternalRequest) -> ExitCode {
         return code;
     }
     match request.op {
+        InternalOp::ExecuteNativeHomebrewCheck => finish_internal_result(
+            velnor_actions_orchestrator::execute_native_homebrew_check_from_env().map(|_| ()),
+        ),
+        InternalOp::QualifyHomebrew => finish_internal_result(
+            velnor_actions_orchestrator::execute_homebrew_qualification_from_env(),
+        ),
+        InternalOp::SeedParallelTargets => {
+            finish_internal_result(velnor_actions_orchestrator::seed_parallel_targets_from_env())
+        }
         InternalOp::TapContinuation => tap_continuation::run(),
         InternalOp::CaptureReviewCompletion => review_completion::capture(),
         InternalOp::EmitReviewCompletion => review_completion::emit(),

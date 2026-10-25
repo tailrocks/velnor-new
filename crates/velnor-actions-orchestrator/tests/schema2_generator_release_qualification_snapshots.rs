@@ -1,5 +1,8 @@
 use super::action_snapshots::{Actions, action};
 
+#[path = "schema2_generator_release_qualification_snapshots/output_bindings.rs"]
+mod output_bindings;
+
 pub(super) fn assert_candidate_qualification(
     workflow: &str,
     actions: &Actions,
@@ -161,25 +164,34 @@ fn assert_release_fixture_generation_requirements() -> Result<(), Box<dyn std::e
 fn assert_candidate_output_binding_validation(
     qualification_helpers: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    output_bindings::assert_qualification_pipeline(qualification_helpers)?;
     let release_case = qualification_helpers
         .find("capture_release_case()")
         .ok_or("release candidate case capture must exist")?;
     let capture_window = &qualification_helpers[release_case..];
-    let raw_binding_check = capture_window
-        .find("validate_candidate_output_bindings")
-        .ok_or("raw candidate output bindings must be validated")?;
+    let checker = capture_window
+        .find("validate_candidate_output_bindings()")
+        .ok_or("trusted output-binding checker must be defined")?;
     let normalization = capture_window
-        .find("normalize_candidate_digests")
-        .ok_or("candidate output normalization must exist")?;
+        .find("normalize_candidate_digests()")
+        .ok_or("candidate output normalization must be defined")?;
+    let checker_source = &capture_window[checker..normalization];
+    for handoff in [
+        "prepare_qualification_guard || return 1",
+        "verify_qualification_guard || return 1",
+        "\"$QUALIFICATION_GUARD_BIN\" qualification-output-bindings",
+        "\"$CANDIDATE_MANIFEST\" \"$preview/.github\"",
+    ] {
+        assert!(
+            checker_source.contains(handoff),
+            "trusted output-binding checker is missing {handoff}"
+        );
+    }
     assert!(
-        raw_binding_check < normalization,
-        "raw candidate output bindings must be validated before normalization"
-    );
-    assert!(
-        qualification_helpers.contains("target = targets.get(url)")
-            && qualification_helpers.contains("if digest != expected_digest")
-            && qualification_helpers.contains("if source != commit"),
-        "every generated ConsumerV1 binding must match its candidate manifest target, digest, and source"
+        !checker_source.contains("$BIN")
+            && !checker_source.contains("VELNOR_REPO_POLICY_ACTION")
+            && !checker_source.contains("VELNOR_INTERNAL_OP"),
+        "candidate CLI must not be asked to validate its own output bindings"
     );
     Ok(())
 }

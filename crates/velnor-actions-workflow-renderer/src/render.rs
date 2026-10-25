@@ -185,6 +185,13 @@ pub fn finalize_jobs(
         }
         if !bootstrap_plan {
             insert_verified_cache_helper(id, job, ctx)?;
+            if ctx.preseed && id == FINAL_JOB_ID {
+                crate::cache_tar_setup::move_preseed_consumer_after_checkout(
+                    id,
+                    job,
+                    &ctx.checkout_uses,
+                )?;
+            }
         }
         closure::check_internal_staged(id, job, ctx.preseed)?;
         let always = id == PLAN_JOB_ID || id == TASK_JOB_ID || job.check_runner.is_some();

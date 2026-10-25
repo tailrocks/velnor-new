@@ -30,6 +30,14 @@ fn tool_env() -> BTreeMap<String, String> {
             "MISE_CARGO_HOME".to_owned(),
             "${{ runner.temp }}/velnor/cargo".to_owned(),
         ),
+        (
+            "RUSTUP_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/rustup".to_owned(),
+        ),
+        (
+            "CARGO_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/cargo".to_owned(),
+        ),
         ("RUSTUP_TOOLCHAIN".to_owned(), RUST.to_owned()),
     ])
 }

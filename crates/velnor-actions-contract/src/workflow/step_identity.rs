@@ -1,12 +1,11 @@
 //! Typed workflow step identity and semantic role.
 
-use super::step::{Step, StepKind};
-use super::step_payloads::{
-    valid_configured_checkout_payload, valid_mise_setup, valid_tool_seed_payload,
-};
+use super::step::Step;
+use super::step_payloads::{valid_mise_setup, valid_tool_seed_payload};
 use crate::errors::ContractError;
 use std::collections::BTreeSet;
 mod payload;
+pub use payload::{is_configured_checkout, is_tool_seed_step};
 pub(super) use payload::{valid_cache_tar_launcher, valid_tools_cache_identity};
 
 /// Fixed local action path used for exact provider-cache admission.
@@ -89,26 +88,6 @@ pub(super) fn verifier_action_role(uses: &str) -> Option<StepRole> {
 
 mod role;
 pub use role::StepRole;
-
-/// Check that a step is the configured checkout owner in this workflow scope.
-///
-/// Checkout is a semantic role, not a display-name convention. The caller
-/// supplies the exact pinned action ref from its validated render context.
-#[must_use]
-pub fn is_configured_checkout(step: &Step, expected_uses: &str) -> bool {
-    step.role == Some(StepRole::Checkout)
-        && step.condition.is_none()
-        && matches!(&step.kind, StepKind::Action { uses, .. } if uses == expected_uses)
-        && valid_configured_checkout_payload(&step.kind)
-}
-
-/// Check that a step is the unconditional local tool-seed consumer.
-#[must_use]
-pub fn is_tool_seed_step(step: &Step) -> bool {
-    step.role == Some(StepRole::ToolSeed)
-        && step.condition.is_none()
-        && valid_tool_seed_payload(&step.kind)
-}
 
 /// Validate one serialized step scope, including role payloads and unique output IDs.
 ///

@@ -20,7 +20,7 @@ Workflow to generate
     - dependency-seed (24 steps)
     - jactionlint (10 steps)
     - plan (15 steps)
-    - required (10 steps)
+    - required (15 steps)
     - required-gate (1 steps)
     - rust-app (27 steps)
     - 1 Rust package job

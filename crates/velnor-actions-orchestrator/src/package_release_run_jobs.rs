@@ -74,6 +74,7 @@ impl WorkflowJobsAccumulator {
                 return Err(internal("package_ci_job_inventory_identity"));
             }
             self.jobs.push(WorkflowJob {
+                id: job.id,
                 run_id: job.run_id,
                 name: job.name,
                 head_sha: job.head_sha,

@@ -13,6 +13,10 @@ use crate::internal_plan::identities::{ExtensionBundle, extension_bundle_with_sn
 use crate::internal_plan::snapshot::{ExecutionSnapshot, canonical_digest};
 use crate::internal_plan::{IdentityInputs, nextest_config_for, task_identity_digest};
 
+use super::GroupInputs;
+
+pub(super) type PlannedIdentity = TaskIdentityDerivation;
+
 /// Extension bundle with input digests for one task.
 pub(crate) struct TaskIdentityDerivation {
     /// Bundle with lockfile and Nextest digests for source files in this checkout.
@@ -106,6 +110,29 @@ pub(crate) fn derive_task_identity(
         closure_digest,
         input_digest,
     })
+}
+
+/// Preserve the plan-group entry point while sharing the public derivation contract.
+pub(super) fn planned_identity(
+    inputs: &GroupInputs<'_>,
+    argv: &[String],
+    toolchain: &str,
+    platform_id: &str,
+    reads: &mut velnor_actions_tofu::FileCache,
+) -> Result<PlannedIdentity, OrchestratorError> {
+    derive_task_identity(
+        &TaskIdentityDerivationInputs {
+            root: inputs.root,
+            discovery: inputs.discovery,
+            task: inputs.task,
+            argv,
+            toolchain,
+            platform_id,
+            generator: inputs.wire.generator,
+            snapshot: inputs.snapshot,
+        },
+        reads,
+    )
 }
 
 /// Stack-extension envelope plus reuse eligibility for one task.

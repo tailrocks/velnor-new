@@ -52,7 +52,7 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         assert!(!body.contains("tokio"), "{dir} must not use tokio");
         for line in dep_lines(&body) {
             let key = dep_key(line);
-            if key.starts_with("velnor-actions") || key == "velnor-archive-guard" {
+            if key.starts_with("velnor-") {
                 continue;
             }
             let archive_decoder = reviewed_archive_dependency(dir, key, line);
@@ -85,6 +85,41 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+#[test]
+fn cli_rustix_features_stay_scoped() -> Result<(), Box<dyn Error>> {
+    let body = manifest("crates/velnor-actions-cli")?;
+    let mut section = "";
+    let mut production_fs = false;
+    let mut production_process = false;
+    let mut test_fs_process = false;
+    for raw_line in body.lines() {
+        let line = raw_line.trim();
+        if line.starts_with('[') {
+            section = line;
+            continue;
+        }
+        if dep_key(line) != "rustix" {
+            continue;
+        }
+        let pinned = line.contains("version = \"=1.1.5\"");
+        match section {
+            "[dependencies]" => {
+                production_fs = pinned && line.contains("features = [\"fs\"]");
+                production_process = line.contains("\"process\"");
+            }
+            "[dev-dependencies]" => {
+                test_fs_process = pinned && line.contains("features = [\"fs\", \"process\"]");
+            }
+            _ => (),
+        }
+    }
+    assert!(
+        production_fs && !production_process && test_fs_process,
+        "CLI rustix fs stays pinned in production; process support stays test-only"
+    );
+    Ok(())
+}
+
 fn allowed_feature(dir: &str, key: &str, feature: &str) -> bool {
     feature == "derive"
         || (dir == "crates/velnor-actions-orchestrator"
@@ -98,6 +133,7 @@ fn allowed_feature(dir: &str, key: &str, feature: &str) -> bool {
                 "crates/velnor-actions-freshness"
                     | "crates/velnor-actions-mise"
                     | "crates/velnor-actions-orchestrator"
+                    | "crates/velnor-actions-cli"
             ))
         || (dir == "crates/velnor-actions-freshness"
             && ((key == "flate2" && feature == "rust_backend")
@@ -108,8 +144,8 @@ fn allowed_feature(dir: &str, key: &str, feature: &str) -> bool {
             && ((key == "rustls" && feature == "ring")
                 || (key == "ureq" && feature == "rustls-no-provider")))
         || (dir == "crates/velnor-actions-cli"
-            && key == "syn"
-            && matches!(feature, "full" | "visit"))
+            && ((key == "syn" && matches!(feature, "full" | "visit"))
+                || (key == "flate2" && feature == "rust_backend")))
         || (dir == "crates/velnor-actions-mise"
             && key == "syn"
             && matches!(feature, "full" | "parsing" | "visit"))

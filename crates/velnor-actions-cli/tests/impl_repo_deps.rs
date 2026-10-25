@@ -61,9 +61,7 @@ fn dependency_edges_match_ownership_table() -> Result<(), Box<dyn Error>> {
             .map(|deps| {
                 deps.pairs
                     .iter()
-                    .filter(|pair| {
-                        pair.0.starts_with("velnor-actions") || pair.0 == "velnor-archive-guard"
-                    })
+                    .filter(|pair| pair.0.starts_with("velnor-"))
                     .map(|pair| pair.0.clone())
                     .collect()
             })
@@ -246,11 +244,13 @@ fn init_reads_no_tool_files() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn parse_tests_live_outside_src() -> Result<(), Box<dyn Error>> {
-    let args = read("crates/velnor-actions-cli/src/args.rs")?;
-    assert!(
-        !args.contains("#[test]"),
-        "CLI argument definitions should not contain inline tests"
-    );
+    for path in tree_files("crates/velnor-actions-cli/src", "rs")? {
+        assert!(
+            !std::fs::read_to_string(&path)?.contains("#[test]"),
+            "{}",
+            path.display()
+        );
+    }
     let integration_tests = read("crates/velnor-actions-cli/tests/impl_cli_args.rs")?;
     for test in ["unknown_flags_exit_two", "generate_output_dir_flag_parses"] {
         assert!(

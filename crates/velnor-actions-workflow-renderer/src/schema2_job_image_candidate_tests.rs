@@ -9,6 +9,11 @@ use crate::yaml::Yaml;
 use super::super::{Schema2WorkflowRequest, product_release_test_pins};
 use super::{ARTIFACT_NAME, PUBLICATION_EVIDENCE, WORKFLOW_PATH};
 
+#[path = "schema2_job_image_native_tests.rs"]
+mod native_source;
+#[path = "schema2_job_image_candidate_routing_tests.rs"]
+mod routing;
+
 #[test]
 fn image_selection_emits_repeatable_candidate_build_attestation_and_publish() {
     let request = request();
@@ -35,23 +40,28 @@ fn image_selection_emits_repeatable_candidate_build_attestation_and_publish() {
         "attest-image-candidate:",
         "publish-job-image:",
         "needs:",
-        "images/job/ubuntu-26.04/candidate/candidate.py build",
         "--source-commit",
         "GITHUB_SHA",
         "--archive",
         "RUNNER_TEMP/job-image.oci.tar",
         "--record",
         "RUNNER_TEMP/job-image-candidate.json",
+        "image-maintenance check-job-source",
+        "image-maintenance install-buildx",
+        "image-maintenance build-job-candidate",
+        "image-maintenance validate-job-candidate",
+        "job-image-native-source-closure.json",
+        "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+        "-u ACTIONS_ID_TOKEN_REQUEST_URL",
+        "-u ACTIONS_RUNTIME_TOKEN",
+        "-u GITHUB_TOKEN",
+        "-u MISE_GITHUB_TOKEN",
+        "-u GH_TOKEN",
+        "-u GH_HOST",
+        "-u GH_CONFIG_DIR",
+        "target/release/velnor-actions",
         ".velnor/runner.lock",
-        "buildx_version",
-        "buildx_asset_url",
-        "buildx_sha256",
-        "docker-buildx",
-        "hashlib.file_digest",
-        "actual_sha256 != expected_sha256",
-        "plugin.parent.chmod(0o700)",
-        "os.chmod(temporary, 0o755)",
-        "DOCKER_CONFIG",
+        "--runner-temp \\\"$RUNNER_TEMP\\\"",
         "${{ github.sha }}",
         "${{ runner.temp }}/job-image.oci.tar",
         "${{ runner.temp }}/job-image-candidate.json",
@@ -91,7 +101,7 @@ fn build_job_has_no_attestation_or_repository_writer_permissions() {
     let workflow = super::render(&request()).expect("Render the job image candidate workflow.");
     let jobs = field(&workflow, "jobs");
     let build = field(jobs, "build-image-candidate");
-    assert_eq!(field(build, "timeout-minutes"), &Yaml::Int(5));
+    assert_eq!(field(build, "timeout-minutes"), &Yaml::Int(10));
     let permissions = field(build, "permissions");
     assert!(optional_field(permissions, "actions").is_none());
     assert_eq!(field(permissions, "contents"), &Yaml::str("read"));
@@ -100,7 +110,7 @@ fn build_job_has_no_attestation_or_repository_writer_permissions() {
     assert!(optional_field(permissions, "attestations").is_none());
 
     let attest = field(jobs, "attest-image-candidate");
-    assert_eq!(field(attest, "timeout-minutes"), &Yaml::Int(5));
+    assert_eq!(field(attest, "timeout-minutes"), &Yaml::Int(10));
     let permissions = field(attest, "permissions");
     assert_eq!(field(permissions, "attestations"), &Yaml::str("write"));
     assert_eq!(field(permissions, "id-token"), &Yaml::str("write"));
@@ -132,9 +142,6 @@ fn build_job_has_no_attestation_or_repository_writer_permissions() {
     );
 }
 
-#[path = "schema2_job_image_candidate_tests/buildx_installer_tests.rs"]
-mod buildx_installer_tests;
-
 #[test]
 fn attestation_download_uses_only_the_uploaded_artifact_id() {
     let workflow = super::render(&request()).expect("Render the job image candidate workflow.");
@@ -142,23 +149,99 @@ fn attestation_download_uses_only_the_uploaded_artifact_id() {
     let Yaml::Seq(steps) = field(attest, "steps") else {
         panic!("The attestation steps are necessary.");
     };
+    let artifact_id = "${{ needs.build-image-candidate.outputs.artifact_id }}";
+    let id_check = steps
+        .iter()
+        .position(|step| {
+            optional_field(step, "name") == Some(&Yaml::str("Examine the uploaded artifact ID"))
+        })
+        .expect("Check the uploaded artifact ID before downloading it.");
     let download = steps
         .iter()
-        .find(|step| {
+        .position(|step| {
             optional_field(step, "uses") == Some(&Yaml::str(crate::steps::DOWNLOAD_ARTIFACT_USES))
         })
-        .expect("The artifact download step is not available.");
-    let inputs = field(download, "with");
+        .expect("Download the uploaded candidate artifact.");
+    assert!(id_check < download);
     assert_eq!(
-        field(inputs, "artifact-ids"),
-        &Yaml::str("${{ needs.build-image-candidate.outputs.artifact_id }}")
+        field(field(&steps[id_check], "env"), "ARTIFACT_ID"),
+        &Yaml::str(artifact_id)
     );
-    assert!(optional_field(inputs, "name").is_none());
-    assert!(steps.iter().any(|step| {
-        optional_field(step, "name") == Some(&Yaml::str("Examine the uploaded artifact ID"))
-    }));
+    assert_eq!(
+        field(field(&steps[download], "with"), "artifact-ids"),
+        &Yaml::str(artifact_id)
+    );
 }
 
+#[test]
+fn build_job_uses_closed_native_image_maintenance_operations() {
+    let workflow = super::render(&request()).expect("Render the job image candidate workflow.");
+    let build = field(field(&workflow, "jobs"), "build-image-candidate");
+    let Yaml::Seq(steps) = field(build, "steps") else {
+        panic!("The build steps are necessary.");
+    };
+
+    let source_build = step_named(steps, "Build exact-source native image maintenance");
+    let source_command = string_field(source_build, "run");
+    for expected in [
+        "trusted_git rev-parse --verify HEAD",
+        "/usr/bin/env -i PATH=/usr/bin:/bin",
+        "--git-dir=\"$GITHUB_WORKSPACE/.git\" --work-tree=\"$GITHUB_WORKSPACE\" -c core.fsmonitor=false",
+        "test \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"",
+        "GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_OPTIONAL_LOCKS=0",
+        "diff --cached --quiet --no-ext-diff --no-textconv",
+        "status --porcelain=v1 --untracked-files=all",
+        "The source checkout is not clean.",
+        "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+        "-u ACTIONS_ID_TOKEN_REQUEST_URL",
+        "-u ACTIONS_RUNTIME_TOKEN",
+        "-u GITHUB_TOKEN",
+        "-u MISE_GITHUB_TOKEN",
+        "-u GH_TOKEN",
+        "-u GH_HOST",
+        "-u GH_CONFIG_DIR",
+        "target/release/velnor-actions",
+        "set -o noclobber",
+        "mktemp -d",
+        "VELNOR_NATIVE_IMAGE_ACTIONS=%s",
+        "chmod 0500",
+    ] {
+        assert!(
+            source_command.contains(expected),
+            "Missing {expected}: {source_command}"
+        );
+    }
+    assert!(!source_command.contains("python"));
+    let pinned_build = crate::commands::join_argv_for_run(&test_pins().build_argv)
+        .expect("The pinned native build command is valid.");
+    assert!(source_command.contains(&pinned_build));
+    let pinned_tools = crate::commands::join_argv_for_run(&test_pins().install_build_tools_argv)
+        .expect("The pinned tool installation command is valid.");
+    assert_eq!(
+        string_field(step_named(steps, "Install pinned Rust and MBX"), "run"),
+        format!("set -eu\n: \"${{GITHUB_TOKEN:?missing workflow token}}\"\n{pinned_tools}")
+    );
+
+    for (name, operation) in [
+        (
+            "Verify native implementation source closure",
+            "check-job-source",
+        ),
+        (
+            "Install the Buildx plugin from .velnor/runner.lock",
+            "install-buildx",
+        ),
+        ("Build the job image candidate", "build-job-candidate"),
+    ] {
+        let command = string_field(step_named(steps, name), "run");
+        assert!(command.contains("$VELNOR_NATIVE_IMAGE_ACTIONS"));
+        assert!(command.contains(&format!("image-maintenance {operation}")));
+        if operation == "install-buildx" {
+            assert!(command.contains("--runner-temp \"$RUNNER_TEMP\""));
+        }
+        assert!(!command.contains("python"));
+    }
+}
 #[test]
 fn publisher_consumes_same_run_artifact_and_keeps_token_out_of_evidence_upload() {
     let workflow = super::render(&request()).expect("Render the job image candidate workflow.");
@@ -172,6 +255,10 @@ fn publisher_consumes_same_run_artifact_and_keeps_token_out_of_evidence_upload()
             optional_field(step, "uses") == Some(&Yaml::str(crate::steps::DOWNLOAD_ARTIFACT_USES))
         })
         .expect("Find the same-run candidate download step.");
+    assert_eq!(
+        field(field(download, "with"), "path"),
+        &Yaml::str("candidate")
+    );
     assert_eq!(
         field(field(download, "with"), "artifact-ids"),
         &Yaml::str("${{ needs.build-image-candidate.outputs.artifact_id }}")
@@ -228,43 +315,6 @@ fn no_image_selection_emits_no_candidate_workflow() {
     assert!(!files.iter().any(|file| file.path == WORKFLOW_PATH));
 }
 
-#[test]
-fn scale_set_candidate_without_image_uses_all_selector_labels() {
-    let request = request_with_image(None);
-    let files = crate::schema2::render_schema2_workflows(&request)
-        .expect("Render the image candidate on the configured Scale Set.");
-    let paths = files
-        .iter()
-        .map(|file| file.path.as_str())
-        .collect::<Vec<_>>();
-    assert_eq!(
-        paths,
-        vec![
-            ".github/workflows/product-release.yml",
-            ".github/workflows/product-release-images.yml",
-            WORKFLOW_PATH,
-        ]
-    );
-    let file = files
-        .iter()
-        .find(|file| file.path == WORKFLOW_PATH)
-        .expect("Render the job image candidate workflow.");
-    assert_eq!(file.path, WORKFLOW_PATH);
-    let runs_on = format!("runs-on: [{}]", request.scale_set.labels().join(", "));
-    assert_eq!(file.bytes.matches(&runs_on).count(), 3);
-    assert!(!file.bytes.contains("container:"));
-    assert!(file.bytes.contains("candidate.py build"));
-    assert!(file.bytes.contains("--source-commit"));
-    assert!(file.bytes.contains("GITHUB_SHA"));
-}
-
-#[test]
-fn scale_set_candidate_rejects_a_non_linux_amd64_source_runner() {
-    let mut request = request_with_image(None);
-    request.hosted_label = "ubuntu-26.04-arm".to_owned();
-    assert!(crate::schema2::render_schema2_workflows(&request).is_err());
-}
-
 fn request() -> Schema2WorkflowRequest {
     let image =
         ValidatedImageReference::parse(&format!("ghcr.io/team/job@sha256:{}", "a".repeat(64)))
@@ -287,47 +337,22 @@ fn request_with_image(image: Option<ValidatedImageReference>) -> Schema2Workflow
     }
 }
 
-fn lock_text(sha256: &str) -> String {
-    format!(
-        "buildx_version = \"0.38.0\"\nbuildx_asset_url = \"https://github.com/docker/buildx/releases/download/v0.38.0/buildx-v0.38.0.linux-amd64\"\nbuildx_sha256 = \"{sha256}\"\n"
-    )
-}
-
-fn run_installer(
-    workspace: &std::path::Path,
-    runner_temp: &std::path::Path,
-    fake_bin: &std::path::Path,
-) -> std::process::Output {
-    use std::process::Command;
-
-    let path = std::env::join_paths(std::iter::once(fake_bin.to_path_buf()).chain(
-        std::env::split_paths(&std::env::var_os("PATH").expect("PATH is available.")),
-    ))
-    .expect("The test path cannot be joined.");
-    Command::new("bash")
-        .args(["-e", "-o", "pipefail", "-c", super::BUILDX_INSTALL])
-        .env("GITHUB_WORKSPACE", workspace)
-        .env("RUNNER_TEMP", runner_temp)
-        .env("PATH", path)
-        .output()
-        .expect("Run the test installer.")
-}
-
-fn temporary_directory(label: &str) -> std::path::PathBuf {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    std::env::temp_dir().join(format!(
-        "velnor-{label}-{}-{}",
-        std::process::id(),
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("System time is later than the epoch.")
-            .as_nanos()
-    ))
-}
-
 fn test_pins() -> super::super::ProductReleasePins {
     product_release_test_pins::test_pins()
+}
+
+fn step_named<'a>(steps: &'a [Yaml], name: &str) -> &'a Yaml {
+    steps
+        .iter()
+        .find(|step| optional_field(step, "name") == Some(&Yaml::str(name)))
+        .unwrap_or_else(|| panic!("The workflow step is necessary: {name}."))
+}
+
+fn string_field<'a>(value: &'a Yaml, key: &str) -> &'a str {
+    let Yaml::Str(text) = field(value, key) else {
+        panic!("The YAML field {key} must be a string.");
+    };
+    text
 }
 
 fn field<'a>(value: &'a Yaml, key: &str) -> &'a Yaml {

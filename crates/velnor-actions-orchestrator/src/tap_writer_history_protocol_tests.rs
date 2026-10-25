@@ -2,12 +2,12 @@ use super::super::super::helpers::{branch_name, sha256};
 use super::super::find_already_promoted;
 use crate::tap_prepare::reconstruct_historical_candidate_proof;
 use crate::{
+    homebrew::test_support as tap_test_support,
     tap_prepare::writer::github::ScriptedResponse,
     tap_prepare::writer::gitops::{expected_pr_body, expected_pr_title, signed_off_message},
     tap_prepare::writer::identity::BotIdentity,
     tap_prepare::writer::{TapGitHubApi, WriterInputs},
     tap_prepare::{HomebrewTapPreparationProof, TapPreparationDisposition},
-    tap_test_support,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use std::path::PathBuf;
@@ -44,6 +44,8 @@ fn already_promoted_case() -> (WriterInputs, BotIdentity, ExpectedPromotion) {
     let inputs = WriterInputs {
         root: PathBuf::from("/tmp/unused-writer-test"),
         policy: fixture.policy,
+        spec: Some(fixture.spec),
+        sdk_artifact_digest: "9".repeat(64),
         plan: fixture.plan,
         release: fixture.release,
         formula_path: fixture.formula_path.clone(),
@@ -60,7 +62,7 @@ fn already_promoted_case() -> (WriterInputs, BotIdentity, ExpectedPromotion) {
 fn current_proof(fixture: &tap_test_support::TapFixture) -> HomebrewTapPreparationProof {
     let formula_sha = sha256(&fixture.proposed_formula);
     HomebrewTapPreparationProof {
-        schema: "velnor.homebrew-candidate.v3".to_owned(),
+        schema: "velnor.homebrew-candidate.v4".to_owned(),
         channel: fixture.release.receipt.channel,
         disposition: TapPreparationDisposition::FormulaAlreadyCurrent,
         base_sha: "a".repeat(40),
@@ -69,6 +71,8 @@ fn current_proof(fixture: &tap_test_support::TapFixture) -> HomebrewTapPreparati
         new_formula_sha256: formula_sha,
         receipt_digest: fixture.release.receipt_digest.clone(),
         plan_digest: sha256(&canonical_json_bytes(&fixture.plan).expect("plan JSON")),
+        formula_spec_digest: Some(fixture.spec.digest().expect("spec digest")),
+        sdk_artifact_digest: "9".repeat(64),
         tap_config_digest: sha256(&canonical_json_bytes(&fixture.policy).expect("policy JSON")),
         tap_repository: fixture.policy.repository.clone(),
         source_repository: fixture.release.receipt.repository.slug.clone(),
@@ -98,16 +102,19 @@ fn historical_identity(fixture: &tap_test_support::TapFixture) -> HistoricalIden
     let base_sha = "b".repeat(40);
     let head_sha = "c".repeat(40);
     let merge_sha = "d".repeat(40);
-    let original_proof = reconstruct_historical_candidate_proof(
-        &fixture.plan.repository,
-        &fixture.policy,
-        &fixture.plan,
-        &fixture.release,
-        &base_sha,
-        &fixture.base_formula,
-        &fixture.proposed_formula,
-    )
-    .expect("historical proof");
+    let original_proof =
+        reconstruct_historical_candidate_proof(crate::tap_prepare::HistoricalCandidateInput {
+            source_repository: &fixture.plan.repository,
+            tap: &fixture.policy,
+            plan: &fixture.plan,
+            release: &fixture.release,
+            spec: Some(&fixture.spec),
+            sdk_artifact_digest: &"9".repeat(64),
+            base_sha: &base_sha,
+            base_formula: &fixture.base_formula,
+            proposed_formula: &fixture.proposed_formula,
+        })
+        .expect("historical proof");
     let proof_digest = sha256(&canonical_json_bytes(&original_proof).expect("proof JSON"));
     let bot = BotIdentity {
         login: "tap-writer[bot]".to_owned(),
@@ -277,6 +284,8 @@ fn current_formula_without_historical_pull_is_not_already_promoted() {
     let inputs = WriterInputs {
         root: PathBuf::from("/tmp/unused-writer-test"),
         policy: fixture.policy,
+        spec: Some(fixture.spec),
+        sdk_artifact_digest: "9".repeat(64),
         plan: fixture.plan,
         release: fixture.release,
         formula_path: fixture.formula_path.clone(),
@@ -335,12 +344,31 @@ fn commit_json(sha: &str, tree: &str, parent: &str, message: &str) -> serde_json
 }
 
 fn tree_json(tree_sha: &str, formula: &str, formula_blob: &str) -> serde_json::Value {
+    let mut tree = Vec::new();
+    let mut parent = String::new();
+    let directory_sha = formula_blob[..1].repeat(40);
+    for component in formula
+        .split('/')
+        .take(formula.split('/').count().saturating_sub(1))
+    {
+        if !parent.is_empty() {
+            parent.push('/');
+        }
+        parent.push_str(component);
+        tree.push(serde_json::json!({
+            "path": parent,
+            "mode": "040000",
+            "type": "tree",
+            "sha": directory_sha
+        }));
+    }
+    tree.push(
+        serde_json::json!({"path": formula, "mode": "100644", "type": "blob", "sha": formula_blob}),
+    );
+    tree.push(serde_json::json!({"path": "README.md", "mode": "100644", "type": "blob", "sha": "3".repeat(40)}));
     serde_json::json!({
         "sha": tree_sha, "truncated": false,
-        "tree": [
-            {"path": formula, "mode": "100644", "type": "blob", "sha": formula_blob},
-            {"path": "README.md", "mode": "100644", "type": "blob", "sha": "3".repeat(40)}
-        ]
+        "tree": tree
     })
 }
 

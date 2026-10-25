@@ -7,6 +7,7 @@ use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 
 use crate::{
     RenderError,
+    parallel_target_seed::SEED_PARALLEL_TARGETS_OPERATION,
     steps::{
         FETCH_OPERATION, MERGE_OPERATION, PLAN_OPERATION, RESOLVE_QUALIFICATION_OPERATION,
         WRITE_REQUEST_OPERATION, scan_for_private_subcommands,
@@ -31,10 +32,11 @@ pub(crate) fn is_qualification_cache_operation(operation: &str) -> bool {
 
 /// Split an internal operation into env op plus request-file target op.
 ///
-/// `plan-v1`/`merge-v1`/`fetch-reports-v1` target themselves (fetch takes no
-/// request file; its input root is the runner-temp velnor directory);
-/// `write-request-v1:<target>` gates on `write-request-v1` while materializing
-/// the target's request file.
+/// `plan-v1`/`merge-v1`/`fetch-reports-v1` target
+/// themselves (fetch takes no request file; its input root is the
+/// runner-temp velnor directory); `seed-parallel-targets-v1` initializes
+/// the fixed independent target lanes; `write-request-v1:<target>` gates on
+/// `write-request-v1` while materializing the target's request file.
 /// # Errors
 pub(crate) fn split_internal_operation(operation: &str) -> Result<(&str, &str), RenderError> {
     if is_qualification_cache_operation(operation) {
@@ -46,6 +48,7 @@ pub(crate) fn split_internal_operation(operation: &str) -> Result<(&str, &str), 
     if operation == PLAN_OPERATION
         || operation == MERGE_OPERATION
         || operation == FETCH_OPERATION
+        || operation == SEED_PARALLEL_TARGETS_OPERATION
         || operation == velnor_actions_contract::PRIVATE_FETCH_OPERATION
         || operation == velnor_actions_contract::PRIVATE_REVOKE_OPERATION
         || operation == velnor_actions_contract::GRADLE_RUN_OPERATION
@@ -171,3 +174,6 @@ mod qualification_cache_operation_tests {
         assert!(split_internal_operation("write-qualification-cache-receipt-v2").is_err());
     }
 }
+
+#[path = "steps_internal_tests.rs"]
+mod parallel_target_seed_tests;

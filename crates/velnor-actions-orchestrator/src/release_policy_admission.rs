@@ -19,8 +19,10 @@ use velnor_actions_mise::CheckDeadline;
 #[path = "release_metadata_read.rs"]
 pub(super) mod metadata;
 #[path = "package_release_source_files.rs"]
-mod source_files;
+pub(super) mod source_files;
 use metadata::read as read_regular;
+pub(super) use source_files::SourceFiles;
+pub(crate) use source_files::git_blob_sha1;
 #[path = "release_policy_admission_acquire.rs"]
 mod acquire;
 #[path = "preview_source_admission.rs"]
@@ -69,6 +71,66 @@ struct Admission {
     tool_specs: Vec<String>,
     qualified_tools: Vec<velnor_actions_contract::config::QualifiedTool>,
     qualification_digest: String,
+}
+
+/// Narrow, data-only projection of a previously authenticated preview source
+/// admission. `task_config` remains an opaque string and is never parsed or run.
+pub(crate) struct PublicHistoricalAdmissionProjection {
+    pub(crate) repository_id: u64,
+    pub(crate) head_repository_id: u64,
+    pub(crate) source_sha: String,
+    pub(crate) source_ref: String,
+    pub(crate) workflow_authority_sha: String,
+    pub(crate) run_id: u64,
+    pub(crate) run_attempt: u32,
+    pub(crate) ci_run_id: u64,
+    pub(crate) ci_run_attempt: u32,
+    pub(crate) commit_count: u64,
+    pub(crate) version: String,
+    pub(crate) plan_sha256: String,
+    pub(crate) policy_sha256: String,
+}
+
+/// Read only the fixed admission context after the caller authenticates the
+/// ZIP, artifact identity, and expected inner-file digest. Historical task
+/// configuration is retained as an opaque string by the strict closed parser.
+pub(crate) fn project_public_historical_admission(
+    bytes: &[u8],
+    expected_sha256: &str,
+) -> Result<PublicHistoricalAdmissionProjection, OrchestratorError> {
+    if !lower_sha256(expected_sha256) || sha256(bytes) != expected_sha256 {
+        return Err(internal("package_public_historical_admission_digest"));
+    }
+    let value =
+        velnor_actions_contract::strict_json::parse_strict_json_bytes(bytes, MAX_ADMISSION_BYTES)
+            .map_err(|_| internal("package_public_historical_admission_json"))?;
+    let admission: Admission = serde_json::from_value(value)
+        .map_err(|_| internal("package_public_historical_admission_schema"))?;
+    if admission.schema != "velnor.preview-source-admission.v1"
+        || canonical_json_bytes(&admission)
+            .map_err(|_| internal("package_public_historical_admission_encode"))?
+            != bytes
+        || !lower_sha256(&admission.plan_sha256)
+        || !lower_sha256(&admission.policy_sha256)
+    {
+        return Err(internal("package_public_historical_admission_invalid"));
+    }
+    let context = admission.context;
+    Ok(PublicHistoricalAdmissionProjection {
+        repository_id: context.repository_id,
+        head_repository_id: context.head_repository_id,
+        source_sha: context.source_sha,
+        source_ref: context.source_ref,
+        workflow_authority_sha: context.workflow_authority_sha,
+        run_id: context.run_id,
+        run_attempt: context.run_attempt,
+        ci_run_id: context.ci_run_id,
+        ci_run_attempt: context.ci_run_attempt,
+        commit_count: context.commit_count,
+        version: context.version,
+        plan_sha256: admission.plan_sha256,
+        policy_sha256: admission.policy_sha256,
+    })
 }
 
 /// Acquire the exact source admission artifact for this current workflow attempt.

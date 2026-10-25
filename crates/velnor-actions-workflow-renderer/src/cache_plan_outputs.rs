@@ -16,6 +16,8 @@ use velnor_actions_contract::{Job, Step, StepId, StepKind};
 use crate::RenderError;
 
 const NEEDS_PLAN: &str = "needs.plan.outputs.";
+static EMPTY_ENV: std::sync::LazyLock<BTreeMap<String, String>> =
+    std::sync::LazyLock::new(BTreeMap::new);
 
 /// `(job output, key-step output)` pairs consumed anywhere in `jobs`.
 /// # Errors
@@ -76,10 +78,21 @@ pub(crate) fn consumed(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Stri
 /// Every expression-bearing string of one step.
 fn step_texts(step: &Step) -> Vec<&str> {
     let mut texts: Vec<&str> = step.condition.iter().map(String::as_str).collect();
+    if let StepKind::NativeCheckExecution {
+        check_id,
+        task_id,
+        sdk_version,
+        ..
+    } = &step.kind
+    {
+        texts.extend([check_id.as_str(), task_id.as_str(), sdk_version.as_str()]);
+        return texts;
+    }
     let (values, env) = match &step.kind {
         StepKind::Action { with, env, .. } => (with.values().collect::<Vec<_>>(), env),
         StepKind::Shell { run, env } => (run.iter().collect(), env),
         StepKind::TaskExecution { argv, env, .. } => (argv.iter().collect(), env),
+        StepKind::NativeCheckExecution { .. } => (Vec::new(), &*EMPTY_ENV),
         StepKind::Internal { env, .. } => (Vec::new(), env),
     };
     texts.extend(values.into_iter().map(String::as_str));

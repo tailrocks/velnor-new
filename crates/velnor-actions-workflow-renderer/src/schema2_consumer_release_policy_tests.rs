@@ -87,17 +87,60 @@ fn twenty_minute_producer_jobs_leave_control_signer_publication_and_updater_at_f
             "{minutes}"
         );
     }
-    let mut spec = with_tap();
+    let spec = with_tap();
+    let rendered =
+        render_consumer_preview(&spec, &hosted_policy()).expect("native tap preparation");
+    let prepare = rendered
+        .bytes
+        .split("  preview-tap-prepare:")
+        .nth(1)
+        .expect("preparation job")
+        .split("  preview-tap-writer:")
+        .next()
+        .expect("preparation body");
+    assert!(prepare.contains("timeout-minutes: 15"));
+    let mut spec = with_custom_updater();
     spec.homebrew_tap
         .as_mut()
         .expect("tap")
         .policy
         .updater
+        .as_mut()
+        .expect("configured custom updater")
         .timeout_minutes = 6;
     assert!(
         render_consumer_preview(&spec, &hosted_policy()).is_err(),
         "producer authorization does not widen updater"
     );
+}
+
+fn with_custom_updater() -> ConsumerReleaseSpec {
+    use velnor_actions_contract::config::{
+        CheckExecutor, CheckPlatform, CheckRunner, MiseTaskSource, TapUpdaterBinding,
+    };
+    let mut spec = with_tap();
+    let tap = spec.homebrew_tap.as_mut().expect("tap");
+    tap.formula_spec = None;
+    tap.policy.updater = Some(TapUpdaterBinding {
+        task: "tap:update".to_owned(),
+        source: MiseTaskSource {
+            mise_config: "mise.toml".to_owned(),
+            working_directory: ".".to_owned(),
+        },
+        runner: CheckRunner {
+            label: "ubuntu-24.04".to_owned(),
+            platform: CheckPlatform::LinuxX64,
+            executor: CheckExecutor::Hosted,
+            container: None,
+        },
+        inputs: vec![
+            "mise.toml".to_owned(),
+            "Formula/scanner-preview.rb".to_owned(),
+        ],
+        tools: vec!["ruby".to_owned()],
+        timeout_minutes: 5,
+    });
+    spec
 }
 
 #[test]
@@ -156,10 +199,6 @@ fn channel_with_tap(channel: PackageReleaseChannel) -> ConsumerReleaseSpec {
         Some(velnor_actions_contract::config::HomebrewTapDestination {
             formula: "Formula/scanner.rb".to_owned(),
         });
-    tap.policy
-        .updater
-        .inputs
-        .push("Formula/scanner.rb".to_owned());
     stable.homebrew_tap = Some(tap);
     stable
 }
@@ -180,6 +219,8 @@ fn assert_job_envelopes(yaml: &str, producers: &std::collections::BTreeSet<Strin
                 32
             } else if id.ends_with("-recovery") {
                 22
+            } else if id.ends_with("-tap-prepare") {
+                15
             } else if producers.contains(id) {
                 observed.insert(id.to_owned());
                 minutes + 5

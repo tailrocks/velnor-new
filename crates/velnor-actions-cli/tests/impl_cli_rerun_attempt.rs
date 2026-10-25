@@ -11,7 +11,7 @@ use std::error::Error;
 use std::path::Path;
 
 use crate::impl_cli_parity_golden::checkout;
-use crate::impl_cli_tmp::{cleanup, code, spawn};
+use crate::impl_cli_tmp::{cleanup, code, spawn_isolated, tool_context};
 
 /// Plan an empty pull-request diff as attempt 1 and stage its artifacts.
 fn stage_attempt_one_plan(
@@ -35,7 +35,7 @@ fn stage_attempt_one_plan(
     )?;
     let github_output = internal.join("github-output.txt");
     std::fs::write(&github_output, "")?;
-    let output = spawn(
+    let output = tool_context::spawn_isolated_with_tools(
         &[],
         &[
             ("VELNOR_INTERNAL_OP", "plan-v1"),
@@ -53,8 +53,9 @@ fn stage_attempt_one_plan(
     )?;
     if code(&output) != 0 {
         return Err(format!(
-            "plan-v1 failed: {}",
-            String::from_utf8_lossy(&output.stderr)
+            "plan-v1 failed: {}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+            tool_context::diagnostic()
         )
         .into());
     }
@@ -121,13 +122,16 @@ fn merge_attempt_two(
     for op in ["write-request-v1", "merge-v1"] {
         let mut vars = env.clone();
         vars.push(("VELNOR_INTERNAL_OP", op));
-        let output = spawn(&[], &vars, repo)?;
+        let output = spawn_isolated(&[], &vars, repo)?;
         if op == "write-request-v1" && code(&output) != 0 {
             return Err(format!("{op} failed: {}", String::from_utf8_lossy(&output.stderr)).into());
         }
     }
     let response = request.with_file_name("merge-v1-response.json");
     let report: serde_json::Value = serde_json::from_slice(&std::fs::read(response)?)?;
+    if report["status"] != "passed" {
+        eprintln!("{name} merge report: {report}");
+    }
     Ok(report["status"].as_str().unwrap_or_default().to_owned())
 }
 

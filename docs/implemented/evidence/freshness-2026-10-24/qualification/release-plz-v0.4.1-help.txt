@@ -1,0 +1,32 @@
+Release-plz manages versioning, changelogs, and releases for Rust projects.
+
+See the Release-plz website for more information <https://release-plz.dev/>.
+
+Usage: release-plz [OPTIONS] <COMMAND>
+
+Commands:
+  update                Update packages version and changelogs based on commit messages
+  release-pr            Create a Pull Request representing the next release
+  release               Release the package to the cargo registry and git forge
+  generate-completions  Generate command autocompletions for various shells
+  check-updates         Check if a newer version of release-plz is available
+  generate-schema       Write the JSON schema of the release-plz.toml configuration to
+                        .schema/latest.json
+  init                  Initialize release-plz for the current GitHub repository
+  set-version           Edit the version of a package in Cargo.toml and changelog
+  help                  Print this message or the help of the given subcommand(s)
+
+Options:
+  -v, --verbose...
+          Print source location and additional information in logs.
+
+          If this option is unspecified, logs are printed at the INFO level without verbosity. `-v`
+          adds verbosity to logs. `-vv` adds verbosity and sets the log level to DEBUG. `-vvv` adds
+          verbosity and sets the log level to TRACE. To change the log level without setting
+          verbosity, use the `RELEASE_PLZ_LOG` environment variable. E.g. `RELEASE_PLZ_LOG=DEBUG`.
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version

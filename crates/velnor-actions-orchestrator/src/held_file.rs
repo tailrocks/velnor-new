@@ -69,6 +69,49 @@ impl HeldFile {
         self.verify_identity()
     }
 
+    pub(crate) fn read_bytes(
+        &self,
+        max_size: u64,
+        deadline: CheckDeadline,
+    ) -> Result<Vec<u8>, OrchestratorError> {
+        use std::os::unix::fs::FileExt;
+
+        if self.size > max_size {
+            return Err(invalid("read_size"));
+        }
+        let capacity = usize::try_from(self.size).map_err(|_| invalid("read_size"))?;
+        self.verify_identity()?;
+        let mut bytes = Vec::with_capacity(capacity);
+        let mut offset = 0_u64;
+        let mut buffer = vec![0_u8; 64 * 1024].into_boxed_slice();
+        let mut hash = Sha256::new();
+        while offset < self.size {
+            checkpoint(deadline)?;
+            let remaining = self.size - offset;
+            let length = usize::try_from(remaining.min(buffer.len() as u64))
+                .map_err(|_| invalid("read_size"))?;
+            let count = self
+                .file
+                .read_at(&mut buffer[..length], offset)
+                .map_err(|_| invalid("read"))?;
+            if count == 0 {
+                return Err(invalid("read_size"));
+            }
+            bytes.extend_from_slice(&buffer[..count]);
+            hash.update(&buffer[..count]);
+            offset = offset
+                .checked_add(count as u64)
+                .filter(|total| *total <= self.size)
+                .ok_or_else(|| invalid("read_size"))?;
+        }
+        checkpoint(deadline)?;
+        if offset != self.size || hex(&hash.finalize()) != self.digest {
+            return Err(invalid("read_digest"));
+        }
+        self.verify_identity()?;
+        Ok(bytes)
+    }
+
     pub(crate) fn file(&self) -> &fs::File {
         &self.file
     }

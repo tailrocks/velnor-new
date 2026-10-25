@@ -2,7 +2,9 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::config::{CheckExecutor, EPHEMERAL_CHECK_ADMISSION_CONDITION};
+use velnor_actions_contract::config::{
+    CheckExecutor, EPHEMERAL_CHECK_ADMISSION_CONDITION, NativeHomebrewCheck,
+};
 use velnor_actions_contract::{
     Job, JobTimeout, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, Permissions, Step,
     WorkflowPolicy,
@@ -31,7 +33,7 @@ pub(crate) fn build_check_jobs_with_qualification(
     catalog: &ToolCatalog,
     qualification_enabled: bool,
 ) -> Result<Vec<(String, Job)>, OrchestratorError> {
-    let mut jobs = Vec::with_capacity(discovery.mise_checks.len());
+    let mut jobs = Vec::with_capacity(discovery.mise_checks.len() + discovery.native_checks.len());
     for discovered in &discovery.mise_checks {
         let check = &discovered.check;
         let acquire = match policy {
@@ -48,8 +50,72 @@ pub(crate) fn build_check_jobs_with_qualification(
             check_job(discovered, &id, acquire, catalog, qualification_enabled)?,
         ));
     }
+    for check in &discovery.native_checks {
+        let id = format!("check-{}", check.id);
+        let acquire = match policy {
+            WorkflowPolicy::ConsumerV1 => Some(crate::pins::consumer_acquire_for_runner(
+                &check.runner,
+                env!("CARGO_PKG_VERSION"),
+                discovery.consumer_manifest_json.as_deref(),
+            )?),
+            WorkflowPolicy::VelnorRepositoryV1 => None,
+        };
+        jobs.push((id.clone(), native_check_job(check, &id, acquire, catalog)?));
+    }
     jobs.sort_by(|left, right| left.0.cmp(&right.0));
     Ok(jobs)
+}
+
+fn native_check_job(
+    check: &NativeHomebrewCheck,
+    job_id: &str,
+    acquire: Option<Step>,
+    catalog: &ToolCatalog,
+) -> Result<Job, OrchestratorError> {
+    let task_id = format!("internal/native-check/{}", check.id);
+    let step = Step {
+        name: "Execute native Homebrew check".to_owned(),
+        id: None,
+        role: None,
+        condition: None,
+        parallel: false,
+        kind: velnor_actions_contract::StepKind::NativeCheckExecution {
+            check_id: check.id.clone(),
+            operation: check.operation,
+            task_id,
+            sdk_version: env!("CARGO_PKG_VERSION").to_owned(),
+        },
+    };
+    let prepare_gh = crate::workflow_jobs::prepare_pinned_tools_step(
+        catalog,
+        vec![velnor_actions_mise::PinnedTool::Gh],
+        false,
+    )?;
+    let mut steps = vec![crate::workflow::wire_w1::checkout_step_full()?];
+    steps.extend(acquire);
+    steps.push(crate::matrix_step::download_plan_step()?);
+    steps.push(prepare_gh);
+    steps.push(step);
+    let mut upload = crate::matrix_step::crate_upload_step(job_id)?;
+    upload.condition = Some("always()".to_owned());
+    steps.push(upload);
+    let minutes =
+        u16::try_from(check.timeout_minutes).map_err(|_| OrchestratorError::Contract {
+            problem: format!("check_timeout_out_of_range:{}", check.id),
+        })?;
+    Ok(Job {
+        services: Vec::new(),
+        display_name: format!("Homebrew / {}", check.id),
+        runs_on: check.runner.label.clone(),
+        check_runner: Some(check.runner.clone()),
+        timeout_minutes: JobTimeout::new(minutes)?,
+        needs: vec![PLAN_JOB_ID.to_owned()],
+        condition: None,
+        permissions: Some(crate::workflow_jobs::read_actions_permissions()),
+        environment: None,
+        steps,
+        cache_mode: None,
+    })
 }
 
 fn check_job(
@@ -144,3 +210,7 @@ mod package_tests;
 #[cfg(test)]
 #[path = "check_jobs_maintenance_tests.rs"]
 mod maintenance_tests;
+
+#[cfg(test)]
+#[path = "check_jobs_native_tests.rs"]
+mod native_tests;

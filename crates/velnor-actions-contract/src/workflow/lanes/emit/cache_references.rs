@@ -18,16 +18,16 @@ pub(super) fn cache_owner_references(
             Some(StepId::QualificationCache(_) | StepId::QualificationCacheComposite(_))
         );
         if is_cache_step {
-            let owner_env = match &step.kind {
+            let owner_id = match &step.kind {
                 crate::workflow::step::StepKind::Shell { env, .. }
                 | crate::workflow::step::StepKind::Internal { env, .. }
                 | crate::workflow::step::StepKind::Action { env, .. }
-                | crate::workflow::step::StepKind::TaskExecution { env, .. } => env,
+                | crate::workflow::step::StepKind::TaskExecution { env, .. } => {
+                    env.get(QUALIFICATION_CACHE_OWNER_ID_ENV)
+                }
+                crate::workflow::step::StepKind::NativeCheckExecution { .. } => None,
             };
-            if owner_env
-                .get(QUALIFICATION_CACHE_OWNER_ID_ENV)
-                .is_some_and(|owner_id| owner_id != source_id)
-            {
+            if owner_id.is_some_and(|owner_id| owner_id != source_id) {
                 return Err(cache_owner_mismatch());
             }
         }

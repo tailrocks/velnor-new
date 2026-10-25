@@ -306,6 +306,8 @@ fn assert_clippy_uses_pinned_rust(record: &TaskExecutionManifestEntryV1) {
     for (key, expected) in [
         ("MISE_RUSTUP_HOME", "${{ runner.temp }}/velnor/rustup"),
         ("MISE_CARGO_HOME", "${{ runner.temp }}/velnor/cargo"),
+        ("RUSTUP_HOME", "${{ runner.temp }}/velnor/rustup"),
+        ("CARGO_HOME", "${{ runner.temp }}/velnor/cargo"),
         ("RUSTUP_TOOLCHAIN", rust_version.as_str()),
     ] {
         assert_eq!(

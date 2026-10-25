@@ -17,7 +17,7 @@ Workflow to generate
   Jobs:
     - jactionlint (10 steps)
     - plan (19 steps)
-    - required (10 steps)
+    - required (15 steps)
     - required-gate (1 steps)
     - rust-a (21 steps)
     - rust-lib (20 steps)

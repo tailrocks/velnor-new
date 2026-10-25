@@ -10,7 +10,6 @@ use velnor_actions_contract::{
     CacheLayer, CacheOutcome, CacheResult, ExecuteTaskRef, MatrixEntry, MatrixReport, Plan,
     PlatformBinding, PlatformRunnerEnvironment, PlatformUnavailableReason, TaskReport, TaskStatus,
     canonical_json_bytes, parse_strict_json, task_report_id_for_task, validate_run_key,
-    validate_task_id,
 };
 
 use crate::OrchestratorError;
@@ -23,6 +22,10 @@ use timing::now_ms;
 use timing::{elapsed_ms, parse_exit_code, parse_start_ms};
 
 pub(crate) use crate::task_report_aggregate::single_task_aggregate;
+
+#[path = "task_report_entry.rs"]
+mod entry;
+pub(crate) use entry::{entry_and_digest, entry_and_digest_for_job};
 
 /// Report-production operation tag.
 pub const REPORT_OP: &str = "write-task-report-v1";
@@ -241,36 +244,6 @@ pub(crate) fn load_plan(run_key: &str, runner_temp: &Path) -> Result<Plan, Orche
 /// Downloaded plan path under runner temp.
 fn plan_path(runner_temp: &Path, run_key: &str) -> PathBuf {
     runner_temp.join("velnor").join(run_key).join("plan.json")
-}
-
-/// Resolve one named-check report entry by its generated job identity.
-pub(crate) fn entry_and_digest_for_job<'a>(
-    plan: &'a Plan,
-    task_id: &str,
-    job_id: &str,
-) -> Result<(&'a MatrixEntry, &'a str), OrchestratorError> {
-    validate_task_id(task_id).map_err(internal_contract)?;
-    let mut found = None;
-    for entry in &plan.matrix.include {
-        if entry.job_id != job_id || !flattened(entry).contains(&task_id) {
-            continue;
-        }
-        if flattened(entry).len() != 1 {
-            return Err(internal("multi_task_entry"));
-        }
-        if found.is_some() {
-            return Err(internal("duplicate_task_entry"));
-        }
-        found = Some(entry);
-    }
-    let entry = found.ok_or_else(|| internal("task_not_in_plan_for_job"))?;
-    let digest = plan
-        .obligations
-        .iter()
-        .find(|obligation| obligation.task_id == task_id)
-        .map(|obligation| obligation.task_digest.as_str())
-        .ok_or_else(|| internal("task_without_obligation"))?;
-    Ok((entry, digest))
 }
 
 /// Declared task IDs of one matrix entry, sorted.

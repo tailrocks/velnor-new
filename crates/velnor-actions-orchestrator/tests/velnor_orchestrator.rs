@@ -58,6 +58,7 @@ mod impl_local_shared_action;
 mod impl_matrix;
 mod impl_merge;
 mod impl_merge_full_event;
+mod impl_merge_native_context;
 mod impl_merge_plan;
 mod impl_merge_tamper;
 mod impl_merge_trust;

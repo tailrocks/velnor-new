@@ -5,6 +5,10 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[[bin]]
+name = "velnor-resource-probe-release"
+path = "src/bin/velnor_resource_probe_release.rs"
+
 [lints]
 workspace = true
 

@@ -49,12 +49,32 @@ fn publication_timeout_only_extends_preview_admission_and_shared_publish_recover
     assert!(timeout_line(&preview_yaml, "preview-recovery", None).contains("timeout-minutes: 32"));
     for (name, next) in [
         ("preview-signer", Some("preview-publisher")),
-        ("preview-tap-prepare", Some("preview-tap-writer")),
         ("preview-tap-writer", Some("preview-tap-merge")),
         ("preview-tap-merge", None),
     ] {
         assert!(timeout_line(&preview_yaml, name, next).contains("timeout-minutes: 5"));
     }
+    assert!(
+        timeout_line(
+            &preview_default_yaml,
+            "preview-tap-prepare",
+            Some("preview-tap-writer")
+        )
+        .contains("timeout-minutes: 15")
+    );
+    assert_eq!(
+        timeout_line(
+            &preview_default_yaml,
+            "preview-tap-prepare",
+            Some("preview-tap-writer")
+        ),
+        timeout_line(
+            &preview_yaml,
+            "preview-tap-prepare",
+            Some("preview-tap-writer")
+        ),
+        "tap preparation timeout stays unchanged"
+    );
     for (name, next) in [
         ("preview-payload", Some("preview-assemble")),
         ("preview-assemble", Some("preview-signer")),
@@ -84,10 +104,6 @@ fn publication_timeout_only_extends_stable_shared_publish_recovery_jobs() {
         Some(velnor_actions_contract::config::HomebrewTapDestination {
             formula: "Formula/scanner.rb".to_owned(),
         });
-    tap.policy
-        .updater
-        .inputs
-        .push("Formula/scanner.rb".to_owned());
     stable_default.homebrew_tap = Some(tap.clone());
     let stable_default_yaml = render_consumer_binary_release(&stable_default, &hosted_policy())
         .expect("default stable")
@@ -133,6 +149,14 @@ fn publication_timeout_only_extends_stable_shared_publish_recovery_jobs() {
             "{name} timeout stays unchanged"
         );
     }
+    assert!(
+        timeout_line(
+            &stable_default_yaml,
+            "stable-tap-prepare",
+            Some("stable-tap-writer")
+        )
+        .contains("timeout-minutes: 15")
+    );
     assert!(
         timeout_line(&stable_yaml, "stable-eligibility", Some("stable-prepare"))
             .contains("timeout-minutes: 5")

@@ -31,6 +31,8 @@ pub(crate) fn assert_format_task_record(
     for (key, expected) in [
         ("MISE_RUSTUP_HOME", "${{ runner.temp }}/velnor/rustup"),
         ("MISE_CARGO_HOME", "${{ runner.temp }}/velnor/cargo"),
+        ("RUSTUP_HOME", "${{ runner.temp }}/velnor/rustup"),
+        ("CARGO_HOME", "${{ runner.temp }}/velnor/cargo"),
         ("RUSTUP_TOOLCHAIN", rustup_toolchain.as_str()),
     ] {
         assert_eq!(

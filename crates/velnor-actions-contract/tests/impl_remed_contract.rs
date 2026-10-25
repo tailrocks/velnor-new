@@ -15,6 +15,7 @@ use velnor_actions_contract::{
 pub(crate) fn valid_config() -> VelnorConfig {
     VelnorConfig {
         checks: Vec::new(),
+        native_checks: Vec::new(),
         qualified_tools: Vec::new(),
         distribution: velnor_actions_contract::config::DistributionConfig::default(),
         job_authority: Vec::new(),

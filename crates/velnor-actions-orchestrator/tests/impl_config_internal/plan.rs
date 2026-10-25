@@ -38,7 +38,7 @@ fn internal_merge_aggregates_reports() -> TestResult {
         "required_job_ids": required_job_ids,
         "required_jobs": required_jobs,
     });
-    let merged = merge_internal(&merge_request.to_string())?;
+    let merged = merge_fixture(&merge_request.to_string())?;
     let final_report: FinalReport = serde_json::from_str(&merged)?;
     final_report.validate()?;
     assert_eq!(
@@ -62,7 +62,7 @@ fn internal_merge_aggregates_reports() -> TestResult {
         "required_job_ids": required_job_ids,
         "required_jobs": required_jobs,
     });
-    let merged = merge_internal(&merge_request.to_string())?;
+    let merged = merge_fixture(&merge_request.to_string())?;
     let final_report: FinalReport = serde_json::from_str(&merged)?;
     assert_eq!(
         final_report.status,
@@ -78,7 +78,7 @@ fn internal_entrypoints_reject_bad_schema() -> TestResult {
         matches!(err, OrchestratorError::Internal { .. }),
         "got {err}"
     );
-    let err = err_of(merge_internal(r#"{"schema":2}"#), "merge schema rejected")?;
+    let err = err_of(merge_fixture(r#"{"schema":2}"#), "merge schema rejected")?;
     assert!(
         matches!(err, OrchestratorError::Internal { .. }),
         "got {err}"

@@ -32,6 +32,8 @@ pub(crate) fn run_public() -> ExitCode {
         Command::Config { command } => crate::dispatch_config::run_config(&command),
         Command::Deps { command } => crate::dispatch_deps::run_deps(&command),
         Command::Playwright { command } => crate::dispatch_deps::run_playwright(&command),
+        Command::Homebrew { command } => crate::dispatch_homebrew_adoption::run(&command),
+        Command::ImageMaintenance { command } => crate::dispatch_image_maintenance::run(&command),
         Command::QualifyTools {
             request,
             work_dir,

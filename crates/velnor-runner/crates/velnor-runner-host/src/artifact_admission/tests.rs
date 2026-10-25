@@ -41,6 +41,7 @@ fn release(source: &str, authority: &str, archive_sha: &str) -> VerifiedRelease 
         },
         manifest,
         archive_identity: crate::artifact_admission::archive::ArchiveIdentity {
+            oci_index_sha256: "b".repeat(64),
             image_manifest_digest: format!("sha256:{}", "c".repeat(64)),
             image_manifest_media_type: "application/vnd.oci.image.manifest.v1+json".to_owned(),
             image_manifest_size: 0,

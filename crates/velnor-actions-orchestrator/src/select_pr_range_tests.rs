@@ -142,6 +142,7 @@ fn discovery() -> Discovery {
         affected: crate::affected_inputs::AffectedInputs::default(),
         gradle_roots: Vec::new(),
         mise_checks: Vec::new(),
+        native_checks: Vec::new(),
         statuses: Vec::new(),
         workspaces: vec![PlannedWorkspace {
             record: WorkspaceRecord {

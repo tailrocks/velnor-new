@@ -33,6 +33,7 @@ fn discovery_with_proposals(proposals: Vec<ProposedTask>) -> Discovery {
         affected: crate::affected_inputs::AffectedInputs::default(),
         gradle_roots: Vec::new(),
         mise_checks: Vec::new(),
+        native_checks: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
         proposals,

@@ -6,6 +6,7 @@ use std::{
     time::Duration,
 };
 
+use velnor_actions_mise::CheckDeadline;
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
 
 use crate::{OrchestratorError, internal::internal};
@@ -34,6 +35,8 @@ mod preview_reads;
 pub(super) use preview_reads::ReleaseArtifactApi;
 #[path = "package_release_publish_ancestry.rs"]
 mod ancestry;
+pub(super) use ancestry::verify_public_preview_main_ancestry;
+pub(super) use ancestry::verify_public_pull_request_lineage;
 #[path = "package_release_publish_github_immutable_status.rs"]
 mod immutable_status;
 #[path = "package_release_publish_lookup.rs"]
@@ -56,6 +59,7 @@ pub(super) struct GitHubApi {
     catalog: ToolCatalog,
     repository: String,
     pub(super) run_identity_cache: std::cell::RefCell<super::run_identity::RunIdentityCache>,
+    deadline: Option<CheckDeadline>,
     #[cfg(test)]
     fixture: Option<std::rc::Rc<fixture::JsonFixture>>,
 }
@@ -66,9 +70,15 @@ impl GitHubApi {
             catalog: ToolCatalog::pinned(),
             repository,
             run_identity_cache: std::cell::RefCell::default(),
+            deadline: None,
             #[cfg(test)]
             fixture: None,
         }
+    }
+
+    pub(super) fn with_deadline(mut self, deadline: CheckDeadline) -> Self {
+        self.deadline = Some(deadline);
+        self
     }
 
     pub(super) fn route(&self, suffix: &str) -> String {
@@ -328,9 +338,19 @@ impl GitHubApi {
         let args = gh_api_arguments(request_args, accept);
         let exec = PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), args)
             .map_err(|_| internal("package_publish_gh_unavailable"))?;
+        let timeout = self
+            .deadline
+            .map(|deadline| {
+                deadline
+                    .remaining()
+                    .map(|remaining| remaining.min(API_TIMEOUT))
+                    .map_err(|_| internal("package_public_verification_deadline"))
+            })
+            .transpose()?
+            .unwrap_or(API_TIMEOUT);
         let result = exec
             .command(&self.catalog)
-            .and_then(|command| command.run_bounded(limit, API_TIMEOUT))
+            .and_then(|command| command.run_bounded(limit, timeout))
             .map_err(|_| internal("package_publish_api_failed"))?;
         if !result.success {
             return Err(internal("package_publish_api_failed"));

@@ -60,8 +60,9 @@ pub(crate) struct ObservedLaneClosure {
 /// `discovery` must come from a new source scan after the task command ends.
 /// Rust and `ToFu` use the same identity method as plan creation. Named checks
 /// use the plan-time lane method with the current check definition and task
-/// settings. The logical runner label is the plan label. Physical matrix
-/// lanes can use different runner labels.
+/// settings. Native checks cannot request cache-closure evidence because
+/// their plan explicitly disables task reuse. The logical runner label is the
+/// plan label. Physical matrix lanes can use different runner labels.
 /// # Errors
 pub(crate) fn recompute_post_task_closure(
     context: &PostTaskClosureContext<'_>,
@@ -78,6 +79,7 @@ pub(crate) fn recompute_post_task_closure(
     match Stack::require_known(&task.stack_id).map_err(internal_contract)? {
         Stack::Mise => recompute_named_check(context, requested_matrix_key, planned_entry, task),
         Stack::Rust | Stack::Tofu => recompute_adapter_task(context, requested_matrix_key, task),
+        Stack::Native => Err(internal("qualification_closure_native_not_cacheable")),
     }
 }
 

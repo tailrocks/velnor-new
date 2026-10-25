@@ -18,16 +18,13 @@ use velnor_actions_rust::{
     Recommendation, RustExecutionProfile, WorkspaceRecord, dedupe_workspaces, propose_task,
 };
 
-use crate::OrchestratorError;
-use crate::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
-use crate::config::gradle_jobs;
-use crate::discover_index::build_file_index;
 use crate::internal::phase_timing::PlanPhaseTimings;
 use crate::inventory::{
     qualify_workspaces, run_inventories_with_all_features,
     run_inventories_with_phase_timings_and_all_features,
 };
-use crate::recommendations::collect_recommendations;
+use crate::{OrchestratorError, recommendations::collect_recommendations};
+use crate::{clippy_groups, config::gradle_jobs, discover_index::build_file_index};
 #[path = "consumer_manifest.rs"]
 mod consumer_manifest;
 use crate::toolcheck::{ToolInputCheck, check_tool_inputs_with_paths};
@@ -35,8 +32,6 @@ use crate::{discover_tofu::qualify_tofu_step, evidence::profile_for_workspace};
 
 #[path = "discover_manifest_paths.rs"]
 mod manifest_paths;
-#[path = "discover_task_inventories.rs"]
-mod task_inventories;
 pub(crate) use manifest_paths::{workspace_lock, workspace_manifest};
 
 /// One workspace with its inventory, profile, and recommendations.
@@ -59,6 +54,8 @@ pub struct Discovery {
     pub(crate) gradle_roots: Vec<crate::config::gradle_jobs::GradleRoot>,
     /// Explicit repository-owned checks, independent of detected workspaces.
     pub mise_checks: Vec<velnor_actions_mise::DiscoveredCheck>,
+    /// Closed SDK-owned native Homebrew checks.
+    pub native_checks: Vec<velnor_actions_contract::config::NativeHomebrewCheck>,
     /// Per-project selection states.
     pub statuses: Vec<DetectionStatus>,
     /// Selected workspaces with profiles.
@@ -70,27 +67,26 @@ pub struct Discovery {
     /// Tool-input checks: presence, parse, values, digests.
     pub tool_checks: Vec<ToolInputCheck>,
     /// Barrier-separated Clippy memory schedule.
-    pub clippy_memory: ClippyMemoryPlan,
+    pub clippy_memory: clippy_groups::ClippyMemoryPlan,
     /// Non-fatal generation recommendations.
     pub recommendations: Vec<String>,
     /// Release-manifest text for consumer policy from the committed file.
     ///
-    /// Consumer debug builds fall back to a stand-in when the file is absent
-    /// (flagged by [`Discovery::consumer_manifest_stand_in`], warned at
-    /// generation); release builds keep `None` so generation fails
-    /// closed with `consumer_requires_release_install`.
+    /// Consumer debug builds fall back to a stand-in when the file is absent (flagged by
+    /// [`Discovery::consumer_manifest_stand_in`], warned at generation); release builds keep
+    /// `None` so generation fails closed with `consumer_requires_release_install`.
     pub consumer_manifest_json: Option<String>,
     /// Whether the manifest text above is the debug-only stand-in.
     ///
-    /// False for Velnor policy and release builds. `generate` warns when
-    /// consumer policy uses the debug stand-in; `plan` stays silent.
+    /// False for Velnor policy and release builds; `generate` warns when consumer policy uses the
+    /// debug stand-in, while `plan` stays silent.
     pub consumer_manifest_stand_in: bool,
     /// Whether non-UTF-8 names require broad selection.
     pub skipped_non_utf8: bool,
     /// Tofu plan note: ignore marker or table-less evidence advisory.
     ///
-    /// `None` when the tofu table is absent and no evidence exists, or
-    /// when configured roots convert to selected projects.
+    /// `None` when the tofu table is absent and no evidence exists, or when configured roots
+    /// convert to selected projects.
     pub tofu_note: Option<velnor_actions_tofu::TofuNote>,
     /// Tofu selection records: head files plus edges per root.
     pub tofu_units: Vec<crate::select_tofu::TofuSelectionUnit>,
@@ -127,6 +123,22 @@ pub(crate) fn discover_with_phase_timings(
     discover_inner(root, config, catalog, Some(phases))
 }
 
+#[path = "discovery_inventories.rs"]
+mod task_inventory;
+use task_inventory::task_inventories;
+
+fn detect_candidates(index: &FileIndex) -> Vec<velnor_actions_contract::StackCandidate> {
+    let mut candidates = Vec::new();
+    let mut previous = "";
+    for (stack_id, schema, detect) in DETECTORS {
+        debug_assert!(previous < stack_id, "registry runs ascending");
+        debug_assert_eq!(schema, DETECTION_SCHEMA, "registry schema");
+        previous = stack_id;
+        candidates.extend(detect(index));
+    }
+    candidates
+}
+
 fn discover_inner(
     root: &Path,
     config: &VelnorConfig,
@@ -134,14 +146,7 @@ fn discover_inner(
     phases: Option<&mut PlanPhaseTimings>,
 ) -> Result<Discovery, OrchestratorError> {
     let (index, skipped_non_utf8) = build_file_index(root, &config.discovery.exclude)?;
-    let mut candidates = Vec::new();
-    let mut previous = "";
-    for (stack_id, schema, detect) in DETECTORS {
-        debug_assert!(previous < stack_id, "registry runs ascending");
-        debug_assert_eq!(schema, DETECTION_SCHEMA, "registry schema");
-        previous = stack_id;
-        candidates.extend(detect(&index));
-    }
+    let mut candidates = detect_candidates(&index);
     let task_tool_paths = task_tool_paths(config);
     let tool_checks = check_tool_inputs_with_paths(root, &task_tool_paths);
     let mut reads = velnor_actions_tofu::FileCache::new();
@@ -176,18 +181,26 @@ fn discover_inner(
             .map_err(|err| OrchestratorError::Contract {
                 problem: err.to_string(),
             })?;
+    let native_checks = config.native_checks.clone();
     proposals.extend(mise_checks.iter().map(|item| item.proposal.clone()));
+    proposals.extend(
+        native_checks
+            .iter()
+            .map(crate::internal_plan::native_homebrew_checks::proposal)
+            .collect::<Result<Vec<_>, _>>()?,
+    );
     proposals.sort_by(|a, b| a.task_id.cmp(&b.task_id));
-    let clippy_memory = clippy_memory_groups(&proposals);
+    let clippy_memory = clippy_groups::clippy_memory_groups(&proposals);
     let recommendations =
         collect_recommendations(root, config, &index, &workspaces, &tool_checks, &mut reads);
     let (consumer_manifest_json, consumer_manifest_stand_in) =
         consumer_manifest::for_policy(root, config.workflow.policy)?;
-    let (bun, dbt, ansible) = task_inventories::load(root, &index, config)?;
+    let (bun, dbt, ansible) = task_inventories(root, &index, config)?;
     let gradle_roots = gradle_jobs::analyze_roots(root, &index, config)?;
     Ok(Discovery {
         gradle_roots,
         mise_checks,
+        native_checks,
         statuses,
         workspaces,
         proposals,

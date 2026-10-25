@@ -46,6 +46,7 @@ pub(super) fn read_formula_base(
     if tree.truncated || tree.sha != commit.tree.sha {
         return Err(internal("tap_writer_tree_truncated"));
     }
+    validate_regular_tree(&tree)?;
     let mut entries = tree.tree.iter().filter(|entry| entry.path == formula);
     let entry = entries
         .next()
@@ -60,10 +61,29 @@ pub(super) fn read_formula_base(
     let bytes = STANDARD
         .decode(blob.content.replace('\n', ""))
         .map_err(|_| internal("tap_writer_formula_blob_encoding"))?;
+    if bytes.len() > 1024 * 1024
+        || crate::release_policy_admission::git_blob_sha1(&bytes)? != entry.sha
+    {
+        return Err(internal("tap_writer_formula_blob_digest_mismatch"));
+    }
     Ok(FormulaBase {
         bytes,
         tree_sha: tree.sha,
     })
+}
+
+fn validate_regular_tree(tree: &TreeResponse) -> Result<(), OrchestratorError> {
+    let entries = tree
+        .tree
+        .iter()
+        .map(|entry| crate::homebrew::tree_validation::Entry {
+            path: &entry.path,
+            mode: &entry.mode,
+            kind: &entry.object_type,
+            sha: &entry.sha,
+        })
+        .collect::<Vec<_>>();
+    crate::homebrew::tree_validation::validate(&entries, 50_000)
 }
 
 pub(super) fn branch_name(
@@ -142,4 +162,68 @@ pub(super) fn safe_app_slug(value: &str) -> Result<&str, OrchestratorError> {
 pub(super) fn real_directory(path: &Path) -> bool {
     fs::symlink_metadata(path)
         .is_ok_and(|metadata| metadata.is_dir() && !metadata.file_type().is_symlink())
+}
+
+#[cfg(test)]
+mod regular_tree_tests {
+    use super::*;
+    use crate::tap_prepare::writer::github::TreeEntry;
+
+    fn entry(path: &str, mode: &str, object_type: &str) -> TreeEntry {
+        TreeEntry {
+            path: path.to_owned(),
+            mode: mode.to_owned(),
+            object_type: object_type.to_owned(),
+            sha: "a".repeat(40),
+        }
+    }
+
+    fn tree(entries: Vec<TreeEntry>) -> TreeResponse {
+        TreeResponse {
+            sha: "b".repeat(40),
+            truncated: false,
+            tree: entries,
+        }
+    }
+
+    #[test]
+    fn complete_tree_rejects_nonformula_links_and_submodules() {
+        let formula = || entry("Formula/jackin-preview.rb", "100644", "blob");
+        let directory = || entry("Formula", "040000", "tree");
+        assert!(
+            validate_regular_tree(&tree(vec![
+                directory(),
+                formula(),
+                entry("AGENTS.md", "100644", "blob")
+            ]))
+            .is_ok()
+        );
+        for invalid in [
+            entry("CLAUDE.md", "120000", "blob"),
+            entry("vendor", "160000", "commit"),
+            entry("x", "100644", "tree"),
+        ] {
+            assert!(validate_regular_tree(&tree(vec![directory(), formula(), invalid])).is_err());
+        }
+    }
+
+    #[test]
+    fn complete_tree_rejects_duplicate_paths_and_non_directory_parents() {
+        assert!(
+            validate_regular_tree(&tree(vec![
+                entry("x", "100644", "blob"),
+                entry("x", "100755", "blob")
+            ]))
+            .is_err()
+        );
+        assert!(
+            validate_regular_tree(&tree(vec![
+                entry("x", "100644", "blob"),
+                entry("x/y", "100644", "blob")
+            ]))
+            .is_err()
+        );
+        assert!(validate_regular_tree(&tree(vec![entry("x/y", "100644", "blob")])).is_err());
+        assert!(validate_regular_tree(&tree(vec![entry("../escape", "100644", "blob")])).is_err());
+    }
 }

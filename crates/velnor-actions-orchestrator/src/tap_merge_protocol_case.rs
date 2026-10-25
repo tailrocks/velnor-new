@@ -2,11 +2,11 @@ use super::super::{candidate::MergeCandidate, observation::MergeAuthority};
 use super::response_helpers::sha256;
 use super::responses::completed_responses;
 use crate::{
+    homebrew::test_support as tap_test_support,
     tap_prepare::{
         HomebrewTapPreparationProof, TapPreparationDisposition, TapPromotionOutcome,
         TapPromotionReceipt,
     },
-    tap_test_support,
 };
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -34,13 +34,17 @@ pub(super) fn completed_case() -> (
     )
     .expect("receipt and base branch");
     let historical = crate::tap_prepare::reconstruct_historical_candidate_proof(
-        &fixture.plan.repository,
-        &fixture.policy,
-        &fixture.plan,
-        &fixture.release,
-        &base,
-        &fixture.base_formula,
-        &fixture.proposed_formula,
+        crate::tap_prepare::HistoricalCandidateInput {
+            source_repository: &fixture.plan.repository,
+            tap: &fixture.policy,
+            plan: &fixture.plan,
+            release: &fixture.release,
+            spec: Some(&fixture.spec),
+            sdk_artifact_digest: &"9".repeat(64),
+            base_sha: &base,
+            base_formula: &fixture.base_formula,
+            proposed_formula: &fixture.proposed_formula,
+        },
     )
     .expect("canonical historical formula proof");
     let proof_digest = sha256(&canonical_json_bytes(&historical).expect("proof bytes"));
@@ -76,6 +80,8 @@ fn completed_candidate(
     let formula_path = fixture.formula_path.clone();
     MergeCandidate {
         policy: fixture.policy,
+        spec: Some(fixture.spec),
+        sdk_artifact_digest: "9".repeat(64),
         plan: fixture.plan,
         release: fixture.release,
         proof: current_proof,
@@ -105,7 +111,7 @@ fn current_proof(
 ) -> HomebrewTapPreparationProof {
     let formula_sha = sha256(&fixture.proposed_formula);
     HomebrewTapPreparationProof {
-        schema: "velnor.homebrew-candidate.v3".to_owned(),
+        schema: "velnor.homebrew-candidate.v4".to_owned(),
         channel: fixture.release.receipt.channel,
         disposition: TapPreparationDisposition::FormulaAlreadyCurrent,
         base_sha: base.to_owned(),
@@ -114,6 +120,8 @@ fn current_proof(
         new_formula_sha256: formula_sha,
         receipt_digest: fixture.release.receipt_digest.clone(),
         plan_digest: sha256(&fixture.plan.canonical_bytes().expect("plan bytes")),
+        formula_spec_digest: Some(fixture.spec.digest().expect("spec digest")),
+        sdk_artifact_digest: "9".repeat(64),
         tap_config_digest: sha256(&canonical_json_bytes(&fixture.policy).expect("policy bytes")),
         tap_repository: fixture.policy.repository.clone(),
         source_repository: fixture.plan.repository.clone(),

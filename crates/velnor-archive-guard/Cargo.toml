@@ -18,14 +18,24 @@ path = "src/bin/velnor_archive_guard.rs"
 name = "archive_guard_cli"
 path = "tests/archive_guard_cli.rs"
 
+[[test]]
+name = "archive_guard_builder"
+path = "tests/archive_guard_builder.rs"
+
 [dependencies]
 flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
+serde = { workspace = true }
+rustix = { version = "=1.1.5", default-features = false, features = ["fs", "process", "std"] }
+serde_json = { workspace = true }
+sha2 = { version = "=0.11.1", default-features = false }
+tar = { version = "=0.4.46", default-features = false }
 
 [build-dependencies]
+rustix = { version = "=1.1.5", default-features = false, features = ["fs", "process", "std"] }
 sha2 = { version = "=0.11.1", default-features = false }
 
 [dev-dependencies]
-sha2 = { version = "=0.11.1", default-features = false }
+tempfile = { version = "=3.27.0" }
 
 [lints]
 workspace = true

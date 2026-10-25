@@ -5,7 +5,8 @@ use std::fs;
 use std::path::Path;
 
 use crate::impl_cli_tmp::{
-    cleanup, code, commit_all, fresh_tempdir, init_repo, spawn, write_workspace,
+    cleanup, code, commit_all, fresh_tempdir, init_repo, spawn,
+    spawn_with_installed_rust_mise_fixture, write_workspace,
 };
 
 fn repo_with_github_table(prefix: &str, table: &str) -> Result<std::path::PathBuf, Box<dyn Error>> {
@@ -56,7 +57,7 @@ fn default_policy_preserves_stray_files_silently() -> Result<(), Box<dyn Error>>
 fn warn_prints_notice_and_succeeds() -> Result<(), Box<dyn Error>> {
     let repo = repo_with_github_table("unmanaged-warn", "\n[github]\nunmanaged = \"warn\"\n")?;
     stray(&repo)?;
-    let generated = spawn(&["generate"], &[], &repo)?;
+    let generated = spawn_with_installed_rust_mise_fixture(&["generate"], &[], &repo)?;
     assert_eq!(code(&generated), 0, "{}", stderr(&generated));
     assert!(
         stderr(&generated)
@@ -95,7 +96,7 @@ fn deny_accepts_generated_output_and_allowlisted_paths() -> Result<(), Box<dyn E
     let repo = repo_with_github_table("unmanaged-allow", table)?;
     stray(&repo)?;
     for _ in 0..2 {
-        let generated = spawn(&["generate"], &[], &repo)?;
+        let generated = spawn_with_installed_rust_mise_fixture(&["generate"], &[], &repo)?;
         assert_eq!(code(&generated), 0, "{}", stderr(&generated));
     }
     let listed = spawn(&["unmanaged"], &[], &repo)?;

@@ -306,7 +306,7 @@ fn property_plan_count_exact_and_deterministic() -> Result<(), Box<dyn Error>> {
     for index in 0..24 {
         let count = rng.below(4);
         let (repo, names) = crate_repo("p12-prop-count", &mut rng, count)?;
-        let first = tmp::spawn(&["plan"], &[], &repo)?;
+        let first = tmp::spawn_for_rust_workspace(count > 0, &["plan"], &[], &repo)?;
         assert_eq!(
             tmp::code(&first),
             0,
@@ -319,7 +319,7 @@ fn property_plan_count_exact_and_deterministic() -> Result<(), Box<dyn Error>> {
             names.len(),
             "case {index} names {names:?}"
         );
-        let second = tmp::spawn(&["plan"], &[], &repo)?;
+        let second = tmp::spawn_for_rust_workspace(count > 0, &["plan"], &[], &repo)?;
         assert_eq!(tmp::code(&second), 0, "case {index} rerun failed");
         assert_eq!(
             second.stdout, first.stdout,
@@ -336,12 +336,13 @@ fn property_generate_repeats_byte_identical() -> Result<(), Box<dyn Error>> {
     for index in 0..8 {
         let count = rng.below(3);
         let (repo, names) = crate_repo("p12-prop-gen", &mut rng, count)?;
-        let plan = tmp::spawn(&["plan"], &[], &repo)?;
+        let plan = tmp::spawn_for_rust_workspace(count > 0, &["plan"], &[], &repo)?;
         assert_eq!(tmp::code(&plan), 0, "case {index} plan failed");
         let first = tmp::fresh_tempdir("p12-prop-gen-a")?;
         let second = tmp::fresh_tempdir("p12-prop-gen-b")?;
         for dir in [&first, &second] {
-            let output = tmp::spawn(
+            let output = tmp::spawn_for_rust_workspace(
+                count > 0,
                 &["generate", "--output-dir", dir.to_str().unwrap_or("/")],
                 &[],
                 &repo,

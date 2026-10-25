@@ -15,7 +15,7 @@ use crate::{
 #[path = "support_private_tokens.rs"]
 mod private;
 
-/// Token hygiene: `${{ github.token }}` only as plan/final `GH_TOKEN`.
+/// Token hygiene scopes `${{ github.token }}` to fixed SDK/API operations.
 ///
 /// Parallelism §5: the planning process receives the token only as
 /// `GH_TOKEN`, never printed or inherited by task execution; before any
@@ -25,7 +25,8 @@ mod private;
 /// against the full nine-key credential set (single source:
 /// [`crate::toolchain_env::STEP_CREDENTIAL_DENYLIST`], never a local
 /// copy): any nonempty credential fails everywhere, `GH_TOKEN` carries
-/// the exact `${{ github.token }}` value only in the plan/final jobs,
+/// the exact `${{ github.token }}` value only in plan/final jobs or a typed
+/// native-check dispatch,
 /// empty values are the explicit scrub overlay stopping ambient
 /// inheritance, and no `run:` content or action input may name a token
 /// (nothing prints or forwards one).
@@ -128,6 +129,12 @@ fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
                 check_env_tokens(id, env, step.role == Some(StepRole::GitHubEvidenceFetch))?;
             }
         }
+        StepKind::NativeCheckExecution {
+            check_id,
+            task_id,
+            sdk_version,
+            ..
+        } => validate_native_check_token_scope(id, check_id, task_id, sdk_version)?,
     }
     if matches!(&step.kind, StepKind::Internal { operation, .. }
         if operation == crate::steps::RESOLVE_QUALIFICATION_OPERATION)
@@ -142,19 +149,40 @@ fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
     Ok(())
 }
 
-/// Reject nonempty credentials everywhere; scope `GH_TOKEN` to plan/final jobs.
+/// Reject nonempty credentials everywhere; scope `GH_TOKEN` to fixed operations.
 ///
 /// Empty values on denylisted keys are the explicit scrub overlay (see
 /// [`crate::toolchain_env::credential_scrub`]) and pass; anything else
 /// on those keys is a leak. `MISE_GITHUB_TOKEN` contains `GITHUB_TOKEN`
 /// as a substring, so it needs no separate `names_token` arm.
 /// True for the one scoped token binding: `GH_TOKEN` carrying exactly
-/// `${{ github.token }}` in the plan or final job.
+/// `${{ github.token }}` in the plan or final job. Native-check tokens are
+/// introduced only from the typed `NativeCheckExecution` renderer.
 fn is_scoped_gh_token(id: &str, env: &BTreeMap<String, String>) -> bool {
     (id == PLAN_JOB_ID || id == FINAL_JOB_ID)
         && env
             .get("GH_TOKEN")
             .is_some_and(|value| value == "${{ github.token }}")
+}
+
+/// Validate the job identity that receives the renderer-derived native token.
+fn validate_native_check_token_scope(
+    job_id: &str,
+    check_id: &str,
+    task_id: &str,
+    sdk_version: &str,
+) -> Result<(), RenderError> {
+    if !check_id.is_empty()
+        && job_id == format!("check-{check_id}")
+        && task_id == format!("internal/native-check/{check_id}")
+        && sdk_version == env!("CARGO_PKG_VERSION")
+    {
+        Ok(())
+    } else {
+        Err(RenderError::InvalidWorkflow(format!(
+            "native_check_token_scope:{job_id}"
+        )))
+    }
 }
 
 fn is_scoped_evidence_token(

@@ -381,6 +381,8 @@ pub fn toolchain_env(rustup: &str, cargo: &str, toolchain: &str) -> Vec<(OsStrin
         (MISE_RUSTUP_HOME_ENV, rustup),
         (MISE_CARGO_HOME_ENV, cargo),
         (RUSTUP_TOOLCHAIN_ENV, toolchain),
+        ("RUSTUP_HOME", rustup),
+        ("CARGO_HOME", cargo),
     ]
     .iter()
     .map(|(key, value)| (OsString::from(key), OsString::from(value)))

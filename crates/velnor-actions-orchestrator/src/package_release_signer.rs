@@ -41,9 +41,13 @@ mod publication;
 mod publication_budget_tests;
 #[path = "package_release_signer_receipt.rs"]
 mod receipt;
+pub(crate) use attestation::{
+    SdkManifestAttestationExpectation, verify_published_manifest_attestation,
+};
 #[cfg(test)]
 use publication::hold_signed_directory_for_publication;
 pub(crate) use publication::verify_attested_signed_package_with_owned_tempdir;
+pub(crate) use publication::verify_attested_signed_package_with_owned_tempdir_and_deadlines;
 #[cfg(test)]
 #[path = "package_release_signer_tests.rs"]
 mod tests;
@@ -335,60 +339,6 @@ pub(crate) fn sign_package_release(
 
 /// Authenticate the canonical receipt and every signed asset against trusted
 /// plan and workflow facts. Used again by the publisher after artifact download.
-pub(crate) fn verify_signed_package(
-    directory: &Path,
-    plan: &PackageReleasePlan,
-    expected: &PackageReleaseSigningIdentity,
-) -> Result<VerifiedSignedPackage, OrchestratorError> {
-    validate_identity(plan, expected)?;
-    let receipt_path = directory.join("release.json");
-    let bytes = read_regular_file(&receipt_path, 4 * 1024 * 1024)?;
-    let value = velnor_actions_contract::parse_strict_json(
-        std::str::from_utf8(&bytes).map_err(|_| internal("package_receipt_not_utf8"))?,
-    )
-    .map_err(|_| internal("package_receipt_invalid_json"))?;
-    let receipt: PackageReleaseReceipt =
-        serde_json::from_value(value).map_err(|_| internal("package_receipt_invalid_schema"))?;
-    receipt
-        .validate()
-        .map_err(|_| internal("package_receipt_invalid"))?;
-    if receipt
-        .canonical_bytes()
-        .map_err(|_| internal("package_receipt_canonical_encode"))?
-        != bytes
-    {
-        return Err(internal("package_receipt_noncanonical"));
-    }
-    receipt::require_expected_identity(&receipt, plan, expected)?;
-    validate_release_directory(directory, &receipt)?;
-    let runner_temp = absolute_env("RUNNER_TEMP")?;
-    let cosign = cosign::acquire_cosign(&runner_temp)?;
-    for asset in &receipt.assets {
-        let path = directory.join(&asset.name);
-        let data = read_regular_file(&path, 1024 * 1024 * 1024)?;
-        if data.len() as u64 != asset.size || sha256(&data) != asset.sha256 {
-            return Err(internal("package_asset_digest_mismatch"));
-        }
-        if matches!(
-            asset.kind,
-            PackageReleaseAssetKind::SignatureBundle
-                | PackageReleaseAssetKind::CompanionSignatureBundle
-        ) {
-            continue;
-        }
-        if matches!(
-            asset.kind,
-            PackageReleaseAssetKind::Payload | PackageReleaseAssetKind::Companion
-        ) {
-            let bundle_path = directory.join(format!("{}.bundle", asset.name));
-            cosign::verify_blob(&cosign, &path, &bundle_path, expected)?;
-        }
-    }
-    let bundle_path = directory.join("release.json.bundle");
-    cosign::verify_blob(&cosign, &receipt_path, &bundle_path, expected)?;
-    Ok(VerifiedSignedPackage {
-        plan: plan.clone(),
-        receipt,
-        directory: directory.to_path_buf(),
-    })
-}
+#[path = "package_release_signer_verification.rs"]
+mod verification;
+pub(crate) use verification::{verify_signed_package, verify_signed_package_with_deadline};

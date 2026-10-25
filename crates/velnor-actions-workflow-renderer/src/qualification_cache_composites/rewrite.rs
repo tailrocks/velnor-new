@@ -40,6 +40,11 @@ pub(super) fn rewrite_cross_phase_outputs(
                     "qualification_cache_task_inside_composite_tail".to_owned(),
                 ));
             }
+            StepKind::NativeCheckExecution { .. } => {
+                return Err(RenderError::InvalidWorkflow(
+                    "qualification_cache_native_check_inside_composite_tail".to_owned(),
+                ));
+            }
         }
     }
     Ok(steps)

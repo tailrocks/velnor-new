@@ -19,6 +19,7 @@ fn preview_plan() -> PackageReleasePlan {
 
 fn successful_signer_job() -> WorkflowJob {
     WorkflowJob {
+        id: 0,
         run_id: 42,
         name: "preview-signer".to_owned(),
         head_sha: Some("a".repeat(40)),

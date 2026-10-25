@@ -1,78 +1,42 @@
 //! Credential-free source preparation for candidate qualification.
 
-use crate::Yaml;
-
 use super::workflow_steps;
+use crate::Yaml;
 
 /// Prepare the exact candidate source inline before local composite resolution.
 pub(super) fn qualification_step() -> Yaml {
-    workflow_steps::bash_step(
-        "Fetch exact public source without an action post hook",
+    let mut step = workflow_steps::bash_step(
+        "Fetch exact public qualification source without credentials",
         QUALIFICATION_SOURCE_PREPARE,
-    )
+    );
+    if let Yaml::Map(fields) = &mut step {
+        fields.push(("timeout-minutes".to_owned(), Yaml::Int(2)));
+    }
+    step
 }
 
-/// Fetch this public repository at the exact run commit without an action post hook.
+/// Fetch this public repository at the exact run commit without credentials.
 ///
-/// Each Git command names `git` and its subcommand on one line, so workflow
-/// linters that look for a checkout before a local action (jactionlint
-/// `local-action-checkout`) see this step as the checkout it is.
-pub(super) const QUALIFICATION_SOURCE_PREPARE: &str = r#"set -eu
-python3 - "$GITHUB_WORKSPACE" "$GITHUB_REPOSITORY" "$GITHUB_SHA" <<'PY'
-import os
-import re
-import subprocess
-import sys
-
-workspace, repository, commit = sys.argv[1:]
-if repository != "tailrocks/velnor-new" or re.fullmatch(r"[0-9a-f]{40}", commit) is None:
-    raise SystemExit("qualification source identity is invalid")
-
-environment = os.environ.copy()
-for name in tuple(environment):
-    if name.startswith("GIT_") or name in {
-        "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
-        "ACTIONS_ID_TOKEN_REQUEST_URL",
-        "ACTIONS_RUNTIME_TOKEN",
-        "GITHUB_TOKEN",
-        "GH_TOKEN",
-        "MISE_GITHUB_TOKEN",
-    }:
-        environment.pop(name, None)
-environment.update(
-    GIT_CONFIG_GLOBAL=os.devnull,
-    GIT_CONFIG_NOSYSTEM="1",
-    GIT_TERMINAL_PROMPT="0",
-)
-
-def run(command, timeout):
-    subprocess.run(
-        command,
-        cwd=workspace,
-        env=environment,
-        check=True,
-        timeout=timeout,
-    )
-
-run(["git", "init", "--quiet"], timeout=10)
-run(
-    ["git", "-c", "credential.helper=", "fetch", "--quiet", "--depth=1", "--no-tags",
-     f"https://github.com/{repository}.git", commit],
-    timeout=60,
-)
-run(["git", "checkout", "--quiet", "--detach", "FETCH_HEAD"], timeout=10)
-head = subprocess.run(
-    ["git", "rev-parse", "HEAD"],
-    cwd=workspace,
-    env=environment,
-    check=True,
-    capture_output=True,
-    text=True,
-    timeout=5,
-).stdout.strip()
-if head != commit:
-    raise SystemExit("qualification source does not match the requested commit")
-PY"#;
+/// Every fixed Git command is visible as a direct `/usr/bin/git` invocation
+/// with a clean environment. The literal checkout is recognized by jactionlint
+/// before the repository-local qualification composite is called.
+pub(super) const QUALIFICATION_SOURCE_PREPARE: &str = r#"set -euo pipefail
+[[ "$GITHUB_REPOSITORY" == tailrocks/velnor-new && "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+  printf '%s\n' 'qualification source identity is invalid' >&2
+  exit 1
+}
+[[ "$GITHUB_WORKSPACE" == /* && -d "$GITHUB_WORKSPACE" && ! -L "$GITHUB_WORKSPACE" ]]
+cd -- "$GITHUB_WORKSPACE"
+[[ "$(pwd -P)" == "$GITHUB_WORKSPACE" ]]
+# A clean environment prevents inherited Git configuration, helpers, hooks,
+# credentials, and OIDC state from reaching source acquisition.
+/usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 GIT_ALLOW_PROTOCOL=https /usr/bin/git -c credential.helper= -c core.hooksPath=/dev/null -c submodule.recurse=false -c protocol.file.allow=never -c http.lowSpeedLimit=1 -c http.lowSpeedTime=60 init --quiet --template=/dev/null
+/usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 GIT_ALLOW_PROTOCOL=https /usr/bin/git -c credential.helper= -c core.hooksPath=/dev/null -c submodule.recurse=false -c protocol.file.allow=never -c http.lowSpeedLimit=1 -c http.lowSpeedTime=60 fetch --quiet --depth=1 --no-tags --no-recurse-submodules https://github.com/tailrocks/velnor-new.git "$GITHUB_SHA"
+/usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 GIT_ALLOW_PROTOCOL=https /usr/bin/git -c credential.helper= -c core.hooksPath=/dev/null -c submodule.recurse=false -c protocol.file.allow=never -c http.lowSpeedLimit=1 -c http.lowSpeedTime=60 checkout --quiet --detach FETCH_HEAD
+[[ "$(/usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 GIT_ALLOW_PROTOCOL=https /usr/bin/git -c credential.helper= -c core.hooksPath=/dev/null -c submodule.recurse=false -c protocol.file.allow=never -c http.lowSpeedLimit=1 -c http.lowSpeedTime=60 rev-parse --verify 'HEAD^{commit}')" == "$GITHUB_SHA" ]] || {
+  printf '%s\n' 'qualification source does not match the requested commit' >&2
+  exit 1
+}"#;
 
 #[cfg(test)]
 #[path = "schema2_generator_release_source_tests.rs"]

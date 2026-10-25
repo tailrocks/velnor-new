@@ -158,7 +158,10 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
             }),
         nextest: plan_uses_nextest(input.discovery),
         opentofu: plan_uses_opentofu(input.discovery),
-        gh: policy == WorkflowPolicy::VelnorRepositoryV1 || has_qualification,
+        gh: policy == WorkflowPolicy::VelnorRepositoryV1
+            || has_qualification
+            || !input.discovery.native_checks.is_empty(),
+        resolve_qualification_predecessor: policy == WorkflowPolicy::VelnorRepositoryV1,
     };
     Ok(PreparedWorkflow {
         private,

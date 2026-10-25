@@ -93,6 +93,17 @@ pub enum StepKind {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         matrix_max_parallel: Option<u32>,
     },
+    /// Closed native Homebrew check through the authenticated SDK binary.
+    NativeCheckExecution {
+        /// Configured native check identifier.
+        check_id: String,
+        /// Closed operation; never caller-supplied argv.
+        operation: crate::config::NativeHomebrewOperation,
+        /// Fixed task lookup identity; digest and matrix key are resolved from the downloaded plan.
+        task_id: String,
+        /// Authenticated SDK release version selecting the staged binary.
+        sdk_version: String,
+    },
     /// Fixed internal planner/aggregation step.
     Internal {
         /// Internal operation name.

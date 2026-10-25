@@ -43,6 +43,10 @@ pub(crate) fn resolve_closure_at_root(
             toolchain_id,
             platform_id,
         ),
+        Stack::Native => Err(ContractError::identity(
+            "native_check",
+            "native_closure_requires_plan_derivation",
+        )),
         Stack::Tofu => velnor_actions_tofu::resolve_closure_at_root(
             root,
             task,

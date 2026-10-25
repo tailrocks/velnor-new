@@ -1,0 +1,69 @@
+rust build guard: warning: free space is below 2200000000000 bytes (2084679573504 bytes); run the cleanup steps in ~/.agents/DISK_POLICY.md until 2500000000000 bytes are free, then stop
+rust build guard: allowed; checked 1 filesystem(s)
+   Compiling velnor-archive-guard v0.1.53 (/Users/donbeave/Projects/velnor-native-homebrew-20261024/crates/velnor-archive-guard)
+   Compiling velnor-actions-orchestrator v0.1.53 (/Users/donbeave/Projects/velnor-native-homebrew-20261024/crates/velnor-actions-orchestrator)
+   Compiling velnor-actions-cli v0.1.53 (/Users/donbeave/Projects/velnor-native-homebrew-20261024/crates/velnor-actions-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.33s
+info: using target runner `mbx-test-runner aarch64-apple-darwin` defined by environment variable `CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER`
+────────────
+ Nextest run ID dbb1917b-9802-4e7f-9b74-fe3c77a62517 with nextest profile: default
+    Starting 15 tests across 31 binaries (5886 tests skipped)
+        PASS [   0.016s] ( 1/15) velnor-actions-mise::velnor_mise impl_mise_release_plz::release_plz_cksum_is_full_sha256
+        PASS [   0.016s] ( 2/15) velnor-actions-cli::velnor_cli impl_repo_shape::alint_pin_is_full_sha_and_zizmor_config_is_gone
+        PASS [   0.034s] ( 3/15) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_lint::policy::velnor_policy_emits_full_sha_alint_pin
+        PASS [   0.034s] ( 4/15) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_tree_rejections::velnor_policy_emits_full_sha_alint_pin
+        PASS [   0.047s] ( 5/15) velnor-actions-workflow-renderer tofu_apply::tests::output_matches_generator_golden_snapshot
+        PASS [   0.048s] ( 6/15) velnor-actions-workflow-renderer upgrades::tests::output_matches_generator_golden_snapshot
+        PASS [   0.172s] ( 7/15) velnor-actions-orchestrator::velnor_orchestrator impl_bun_golden::bun_workspace_without_suites_is_byte_identical
+        PASS [   0.179s] ( 8/15) velnor-actions-orchestrator::velnor_orchestrator impl_bun_golden::bun_workspace_with_suites_matches_its_golden
+        PASS [   0.512s] ( 9/15) velnor-actions-orchestrator::velnor_orchestrator impl_schema2_routing::binary_release_tests::binary_release_uses_native_github_cli_pin_despite_source_mise_override
+        FAIL [   0.873s] (10/15) velnor-actions-orchestrator::velnor_orchestrator impl_schema2_routing::schema2_workflow_snapshot_tests::schema2_workflows_match_expected_bytes
+  stdout ───
+
+    running 1 test
+    test impl_schema2_routing::schema2_workflow_snapshot_tests::schema2_workflows_match_expected_bytes ... FAILED
+
+    failures:
+
+    failures:
+        impl_schema2_routing::schema2_workflow_snapshot_tests::schema2_workflows_match_expected_bytes
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 967 filtered out; finished in 0.85s
+
+  stderr ───
+
+    thread 'impl_schema2_routing::schema2_workflow_snapshot_tests::schema2_workflows_match_expected_bytes' (109158503) panicked at crates/velnor-actions-orchestrator/tests/schema2_generator_release_qualification_snapshots.rs:178:5:
+    every generated ConsumerV1 binding must match its candidate manifest target, digest, and source
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+  Cancelling due to test failure: 5 tests still running
+        FAIL [   1.632s] (11/15) velnor-actions-orchestrator::velnor_orchestrator impl_schema2_routing::schema2_workflow_snapshot_tests::committed_release_files_match_schema2_bytes
+  stdout ───
+
+    running 1 test
+    test impl_schema2_routing::schema2_workflow_snapshot_tests::committed_release_files_match_schema2_bytes ... FAILED
+
+    failures:
+
+    failures:
+        impl_schema2_routing::schema2_workflow_snapshot_tests::committed_release_files_match_schema2_bytes
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 967 filtered out; finished in 1.61s
+
+  stderr ───
+
+    thread 'impl_schema2_routing::schema2_workflow_snapshot_tests::committed_release_files_match_schema2_bytes' (109158490) panicked at crates/velnor-actions-orchestrator/tests/schema2_generator_release_qualification_snapshots.rs:178:5:
+    every generated ConsumerV1 binding must match its candidate manifest target, digest, and source
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+        PASS [   2.024s] (12/15) velnor-actions-orchestrator::velnor_orchestrator impl_orch_lock_audit::full_lock_leaves_nothing_unverifiable
+        PASS [   2.025s] (13/15) velnor-actions-orchestrator::velnor_orchestrator impl_orch_lock_audit::missing_lock_advises_and_generates
+        PASS [   2.042s] (14/15) velnor-actions-cli::velnor_cli impl_repo_quality::qc_keeps_original_normatives
+        PASS [  26.401s] (15/15) velnor-actions-cli::velnor_cli impl_cli_release_manifest::check_release_rejects_invalid_candidate_manifests
+────────────
+     Summary [  26.404s] 15 tests run: 13 passed, 2 failed, 5886 skipped
+        FAIL [   0.873s] (10/15) velnor-actions-orchestrator::velnor_orchestrator impl_schema2_routing::schema2_workflow_snapshot_tests::schema2_workflows_match_expected_bytes
+        FAIL [   1.632s] (11/15) velnor-actions-orchestrator::velnor_orchestrator impl_schema2_routing::schema2_workflow_snapshot_tests::committed_release_files_match_schema2_bytes
+error: test run failed
+mbx[cache]: 7 hits, 0 misses, 7 not looked up, 7 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: 3269510 compilations served. ask rustc how many it remembers doing.

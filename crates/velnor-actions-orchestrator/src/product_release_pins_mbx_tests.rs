@@ -29,11 +29,12 @@ fn product_release_installs_catalog_rust_for_runner_builds() {
 }
 
 #[test]
-fn linux_resource_probe_build_uses_cargo_and_pinned_rust() {
+fn linux_resource_probe_build_uses_mbx_with_exact_pinned_versions() {
     let catalog = ToolCatalog::pinned();
     let argv = resource_probe_build_argv(&catalog).expect("pinned resource-probe build arguments");
     let actual = strings(&argv);
     let rust = format!("rust@{}", catalog.version(PinnedTool::Rust));
+    let mbx = format!("mr-boxington@{}", catalog.version(PinnedTool::MrBoxington));
 
     assert_eq!(
         actual,
@@ -44,8 +45,9 @@ fn linux_resource_probe_build_uses_cargo_and_pinned_rust() {
             "--no-hooks",
             "exec",
             rust.as_str(),
+            mbx.as_str(),
             "--",
-            "cargo",
+            "mbx",
             "build",
             "--locked",
             "--manifest-path",
@@ -130,10 +132,30 @@ fn production_host_build_uses_pinned_mbx_for_only_the_nested_host_binary() {
     );
     assert!(pins.install_build_tools_argv.contains(&mbx));
     assert!(!pins.install_runner_build_tools_argv.contains(&mbx));
-    assert!(
-        pins.resource_probe_build_argv
-            .iter()
-            .any(|arg| arg == "cargo")
+    assert_eq!(
+        strings(&pins.resource_probe_build_argv),
+        [
+            "mise",
+            "--no-config",
+            "--no-env",
+            "--no-hooks",
+            "exec",
+            rust.as_str(),
+            mbx.as_str(),
+            "--",
+            "mbx",
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/velnor-runner/Cargo.toml",
+            "--package",
+            "velnor-resource-probe",
+            "--bin",
+            "velnor-resource-probe",
+            "--release",
+            "--target",
+            "x86_64-unknown-linux-musl",
+        ]
     );
 }
 

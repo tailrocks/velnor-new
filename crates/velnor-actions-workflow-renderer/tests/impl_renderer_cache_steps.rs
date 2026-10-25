@@ -18,6 +18,7 @@ fn kind_name(step: &Step) -> &'static str {
         StepKind::Action { .. } => "action",
         StepKind::Shell { .. } => "shell",
         StepKind::TaskExecution { .. } => "task_execution",
+        StepKind::NativeCheckExecution { .. } => "native_check_execution",
         StepKind::Internal { .. } => "internal",
     }
 }

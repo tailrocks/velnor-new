@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct HomebrewTapDestination {
-    /// Exact formula path admitted to updater and writer scopes.
+    /// Exact formula path admitted by the canonical formula spec.
     pub formula: String,
 }
 
@@ -47,7 +47,7 @@ impl HomebrewTapDestinations {
         &self,
         file: &str,
         enabled: bool,
-        inputs: &[String],
+        updater_inputs: Option<&[String]>,
     ) -> Result<(), ContractError> {
         let key = "distribution.homebrew_tap.destinations";
         if enabled && self.preview.is_none() && self.stable.is_none() {
@@ -62,7 +62,7 @@ impl HomebrewTapDestinations {
             if !valid_formula_path(&destination.formula) {
                 return Err(config_error(file, key, "formula", "bad_formula_path"));
             }
-            if !inputs.contains(&destination.formula) {
+            if updater_inputs.is_some_and(|inputs| !inputs.contains(&destination.formula)) {
                 return Err(config_error(
                     file,
                     key,

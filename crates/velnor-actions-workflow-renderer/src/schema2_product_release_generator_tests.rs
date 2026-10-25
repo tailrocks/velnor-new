@@ -172,6 +172,7 @@ fn composed_publish_requires_the_verified_manifest_and_all_target_attestations()
         "attest-macos",
         "attest-macos-intel",
         "attest-manifest",
+        "qualify-homebrew-macos",
     ] {
         assert!(needs.contains(&Yaml::str(needed)), "missing need {needed}");
     }
@@ -183,7 +184,7 @@ fn composed_publish_requires_the_verified_manifest_and_all_target_attestations()
     assert_eq!(
         condition,
         &Yaml::str(
-            "always() && inputs.release_action == 'build' && needs.attest-linux.result == 'success' && needs.attest-macos.result == 'success' && needs.attest-macos-intel.result == 'success' && needs.attest-manifest.result == 'success'"
+            "always() && inputs.release_action == 'build' && needs.attest-linux.result == 'success' && needs.attest-macos.result == 'success' && needs.attest-macos-intel.result == 'success' && needs.attest-manifest.result == 'success' && needs.qualify-homebrew-macos.result == 'success'"
         )
     );
 }

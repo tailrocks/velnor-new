@@ -16,8 +16,11 @@ use crate::impl_e2e_tools_save::{check_one_tools_saver_per_key, check_tools_save
 
 #[path = "impl_e2e_wiring_preseed.rs"]
 mod preseed_tests;
+#[path = "impl_e2e_wiring_setup_tests.rs"]
+mod setup_tests;
 
 /// One parsed step: display name plus full step body.
+#[derive(Clone)]
 pub(crate) struct StepText {
     /// Step display name; empty when the entry carries no `name:`.
     pub(crate) name: String,
@@ -130,6 +133,7 @@ fn setup_is_early(job: &JobText, at: usize) -> bool {
         && steps.get(2).is_some_and(|step| {
             step.name == velnor_actions_workflow_renderer::steps::TOOLS_RESTORE_NAME
         });
+    let standard_v2 = at == 3 && has_checkout && restored_cache;
     let standard_bootstrap = steps
         .get(1)
         .is_some_and(|step| step.name == "Acquire Velnor")
@@ -148,10 +152,33 @@ fn setup_is_early(job: &JobText, at: usize) -> bool {
         && steps
             .get(4)
             .is_some_and(|step| step.name == "Install cache tar adapters");
-    !steps.iter().any(is_cache_clock)
-        && (at <= 1
-            || (at == 3 && has_checkout && (restored_cache || standard_bootstrap))
-            || (at == 5 && has_checkout && preseed_bootstrap))
+    if steps.iter().any(is_cache_clock) {
+        return false;
+    }
+    if job.id == "required" {
+        let locked_prefix = ["Acquire Velnor", "Checkout"];
+        let preseed_prefix = [
+            "Download helper (pre-seed trust-on-review)",
+            "Verify helper manifest (pre-seed trust-on-review)",
+            "Stage helper (pre-seed trust-on-review)",
+            "Checkout",
+        ];
+        return at == 1 && has_checkout
+            || standard_v2
+            || at == locked_prefix.len() && has_prefix(steps, &locked_prefix)
+            || at == preseed_prefix.len() && has_prefix(steps, &preseed_prefix)
+            || (at == 3 && has_checkout && standard_bootstrap)
+            || (at == 5 && has_checkout && preseed_bootstrap);
+    }
+    at <= 1 || standard_v2
+}
+
+fn has_prefix(steps: &[StepText], expected: &[&str]) -> bool {
+    steps.len() >= expected.len()
+        && steps
+            .iter()
+            .zip(expected)
+            .all(|(step, name)| step.name == *name)
 }
 
 /// Only the renderer's reserved first-step clock may extend the bootstrap prefix.
@@ -163,39 +190,6 @@ fn is_cache_clock(step: &StepText) -> bool {
                 "id: velnor-cache-clock" | "id: \"velnor-cache-clock\""
             )
         })
-}
-
-#[test]
-fn setup_prefix_accepts_only_one_reserved_cache_clock() {
-    let mut job = JobText {
-        id: "test".to_owned(),
-        steps: vec![
-            StepText {
-                name: "Record optional cache budget".to_owned(),
-                body: "id: \"velnor-cache-clock\"".to_owned(),
-            },
-            StepText {
-                name: "Checkout".to_owned(),
-                body: String::new(),
-            },
-            StepText {
-                name: "Setup Mise".to_owned(),
-                body: String::new(),
-            },
-        ],
-    };
-    assert!(setup_is_early(&job, 2));
-    job.steps[0].body = "id: unknown-clock".to_owned();
-    assert!(!setup_is_early(&job, 2));
-    job.steps[0].body = "id: velnor-cache-clock".to_owned();
-    job.steps.insert(
-        1,
-        StepText {
-            name: "Record optional cache budget".to_owned(),
-            body: "id: velnor-cache-clock".to_owned(),
-        },
-    );
-    assert!(!setup_is_early(&job, 3));
 }
 
 /// Setup Mise must leave restore and save ownership to the explicit V2 layer.

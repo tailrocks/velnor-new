@@ -2,7 +2,10 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Job, Step, StepKind, StepRole, workflow::JobTimeout};
 
-use super::{insert_launcher_steps, is_launcher, strip_preseed_bootstrap_cache};
+use super::{
+    insert_launcher_steps, is_launcher, move_preseed_consumer_after_checkout,
+    strip_preseed_bootstrap_cache, valid_launcher_step,
+};
 
 #[test]
 fn keeps_verified_helper_order_and_installs_adapters_before_cache_and_internal_steps()
@@ -185,6 +188,95 @@ fn preseed_stage_can_provide_the_verified_helper() -> Result<(), crate::RenderEr
             .map(String::as_str),
         Some(crate::steps::PRESEED_HELPER_SHA256_OUTPUT_EXPR)
     );
+    Ok(())
+}
+
+#[test]
+fn required_preseed_helper_moves_after_checkout_and_keeps_cache_validation()
+-> Result<(), crate::RenderError> {
+    let checkout_uses = "actions/checkout@0000000000000000000000000000000000000000";
+    let staged = format!("{}0.1.0", crate::steps::STAGED_BINARY_PREFIX);
+    let mut job = job(vec![
+        crate::preseed::preseed_download_step()?,
+        crate::preseed::preseed_manifest_verify_step("x86_64-unknown-linux-gnu")?,
+        crate::preseed::preseed_stage_step(
+            crate::preseed::PreseedStageSource::DownloadedArtifact,
+            &staged,
+        )?,
+        crate::steps::checkout_step(checkout_uses)?,
+        step(
+            "Prepare pinned tools",
+            StepRole::PreparePinnedTools,
+            shell(),
+        ),
+        step(
+            "Restore sources",
+            StepRole::CargoSourcesRestore,
+            cache_action(),
+        ),
+        step("Plan", StepRole::PlanProducer, internal("plan-v1")),
+    ]);
+
+    move_preseed_consumer_after_checkout("required", &mut job, checkout_uses)?;
+    let mut jobs = BTreeMap::from([("required".to_owned(), job)]);
+    insert_launcher_steps(&mut jobs)?;
+    let rendered = jobs
+        .get("required")
+        .ok_or_else(|| crate::RenderError::InvalidWorkflow("test_required_missing".to_owned()))?;
+
+    assert_eq!(
+        rendered
+            .steps
+            .iter()
+            .map(|step| step.role)
+            .collect::<Vec<_>>(),
+        [
+            Some(StepRole::Checkout),
+            Some(StepRole::PreseedDownload),
+            Some(StepRole::PreseedVerifyManifest),
+            Some(StepRole::PreseedStage),
+            Some(StepRole::CacheTarLaunchers),
+            Some(StepRole::PreparePinnedTools),
+            Some(StepRole::CargoSourcesRestore),
+            Some(StepRole::PlanProducer),
+        ]
+    );
+    assert!(valid_launcher_step(
+        &rendered.steps[4],
+        crate::steps::PRESEED_HELPER_SHA256_OUTPUT_EXPR
+    ));
+    Ok(())
+}
+
+#[test]
+fn preseed_helper_is_not_moved_after_an_unconfigured_checkout() -> Result<(), crate::RenderError> {
+    let checkout_uses = "actions/checkout@0000000000000000000000000000000000000000";
+    let foreign_checkout = "actions/checkout@1111111111111111111111111111111111111111";
+    let staged = format!("{}0.1.0", crate::steps::STAGED_BINARY_PREFIX);
+    let mut job = job(vec![
+        crate::preseed::preseed_download_step()?,
+        crate::preseed::preseed_manifest_verify_step("x86_64-unknown-linux-gnu")?,
+        crate::preseed::preseed_stage_step(
+            crate::preseed::PreseedStageSource::DownloadedArtifact,
+            &staged,
+        )?,
+        crate::steps::checkout_step(foreign_checkout)?,
+    ]);
+    let original_steps = job.steps.clone();
+
+    let Err(error) = move_preseed_consumer_after_checkout("required", &mut job, checkout_uses)
+    else {
+        return Err(crate::RenderError::InvalidWorkflow(
+            "test_expected_unconfigured_checkout_error".to_owned(),
+        ));
+    };
+
+    assert!(
+        error
+            .to_string()
+            .contains("cache_helper_checkout_unconfigured:required")
+    );
+    assert_eq!(job.steps, original_steps);
     Ok(())
 }
 

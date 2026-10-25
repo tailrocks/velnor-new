@@ -84,17 +84,16 @@ fn preview_producer_skips_shared_metadata_prepare_after_source_admission() -> Te
 }
 
 fn assert_configuration_admission_boundaries(config_calls: &[String]) {
-    // Preparation discovers repository evidence, execution reloads the
+    // Preparation discovers repository evidence, native checks reload the
+    // source config to enforce their protected inventory, execution reloads the
     // source-bound definition, routing reloads before schema migration,
-    // the owned-tool preview reloads at its CLI-gated boundary, qualification
-    // admission reloads for the repo-resolved catalog, and tap preparation
-    // reloads the captured tap's own config before using its updater task;
-    // preview finalization reloads A's config to derive the admitted policy;
-    // producer execution validates that same A config and bypasses shared
-    // preparation; Stable retains shared preparation. Private-source, image
-    // preview, cache-backend, Playwright, and unmanaged checks each load only
-    // the configuration needed at their admission boundary.
-    assert_eq!(config_calls.len(), 15, "{config_calls:?}");
+    // owned-tool preview and qualification admission reload at their policy
+    // boundaries, and tap routing/execution reload the captured tap config.
+    // Preview finalization reloads A's config; producer execution validates
+    // that config without shared preparation. Private-source, image preview,
+    // cache-backend, Playwright, and unmanaged checks each load only what their
+    // own admission boundary requires.
+    assert_eq!(config_calls.len(), 16, "{config_calls:?}");
     for expected in [
         "prepare.rs",
         "check_runtime.rs",
@@ -102,6 +101,8 @@ fn assert_configuration_admission_boundaries(config_calls: &[String]) {
         "owned_tool_preview.rs",
         "qualification_resolver.rs",
         "preview_source_admission_finalize.rs",
+        "native_homebrew_check_required.rs",
+        "tap_prepare_routes.rs",
     ] {
         assert!(
             config_calls.iter().any(|call| call.starts_with(expected)),
@@ -115,6 +116,7 @@ fn assert_configuration_admission_boundaries(config_calls: &[String]) {
                 "preview_producer_entry.rs",
                 "preview_source_admission_finalize.rs",
                 "check_runtime.rs",
+                "native_homebrew_check_required.rs",
                 "routing.rs",
                 "deps_lock.rs",
                 "job_image_preview.rs",
@@ -124,8 +126,8 @@ fn assert_configuration_admission_boundaries(config_calls: &[String]) {
                 "qualification_cache_backend.rs",
                 "playwright_resolve.rs",
                 "qualification_resolver.rs",
-                "tap_prepare.rs",
                 "tap_prepare_execute.rs",
+                "tap_prepare_routes.rs",
             ]
             .iter()
             .any(|prefix| call.starts_with(prefix))

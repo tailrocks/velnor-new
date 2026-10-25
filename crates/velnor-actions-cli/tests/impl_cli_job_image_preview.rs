@@ -67,7 +67,8 @@ fn candidate_preview_cli_writes_only_the_candidate_workflow() -> Result<(), Box<
     assert!(!root.join(".github").exists());
     let workflow =
         fs::read_to_string(destination.join(".github/workflows/job-image-candidate.yml"))?;
-    assert!(workflow.contains("candidate/candidate.py build"));
+    assert!(workflow.contains("$VELNOR_NATIVE_IMAGE_ACTIONS"));
+    assert!(workflow.contains("image-maintenance build-job-candidate"));
     assert!(workflow.contains("runs-on: ubuntu-26.04"));
     cleanup(&root);
     cleanup(&output);

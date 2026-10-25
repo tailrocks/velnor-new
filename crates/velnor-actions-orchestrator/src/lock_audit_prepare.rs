@@ -27,9 +27,14 @@ pub(super) fn verifier_positions(
 ) -> VerifierPositions {
     let mut positions = VerifierPositions::default();
     for (index, step) in job.steps.iter().enumerate() {
-        if let StepKind::Action { uses, .. } = &step.kind
-            && let Some(action) = verifiers.by_uses(uses)
-        {
+        let action = match &step.kind {
+            StepKind::Action { uses, .. } => verifiers.by_uses(uses),
+            StepKind::Shell { .. }
+            | StepKind::TaskExecution { .. }
+            | StepKind::Internal { .. }
+            | StepKind::NativeCheckExecution { .. } => None,
+        };
+        if let Some(action) = action {
             if !VerifierActionSet::canonical_call(step, action) {
                 blocking.push(format!("noncanonical_verifier_call:{id}:{}", action.uses));
                 continue;

@@ -17,9 +17,15 @@ fn stack_id_spells_tofu() {
 }
 
 #[test]
-fn registry_lists_rust_before_tofu() {
-    assert_eq!(VelnorConfig::REGISTERED_STACKS, &["mise", "rust", "tofu"]);
-    assert_eq!(Stack::all(), &[Stack::Mise, Stack::Rust, Stack::Tofu]);
+fn registry_lists_mise_native_rust_before_tofu() {
+    assert_eq!(
+        VelnorConfig::REGISTERED_STACKS,
+        &["mise", "native", "rust", "tofu"]
+    );
+    assert_eq!(
+        Stack::all(),
+        &[Stack::Mise, Stack::Native, Stack::Rust, Stack::Tofu]
+    );
 }
 
 #[test]

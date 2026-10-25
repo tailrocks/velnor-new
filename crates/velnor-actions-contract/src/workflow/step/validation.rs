@@ -51,6 +51,14 @@ fn validate_step_basics(step: &Step, job: &str) -> Result<(), ContractError> {
             format!("task_execution_authority_mismatch:{job}"),
         ));
     }
+    if matches!(&step.kind, StepKind::NativeCheckExecution { .. })
+        && (step.id.is_some() || step.role.is_some() || step.condition.is_some() || step.parallel)
+    {
+        return Err(ContractError::identity(
+            "step.native_check",
+            format!("native_check_authority_mismatch:{job}"),
+        ));
+    }
     if step.parallel
         && (step.id.is_some()
             || step.role.is_some()
@@ -286,6 +294,12 @@ fn validate_kind(kind: &StepKind, job: &str) -> Result<(), ContractError> {
             matrix_max_parallel: *matrix_max_parallel,
             job,
         })?,
+        StepKind::NativeCheckExecution {
+            check_id,
+            task_id,
+            sdk_version,
+            ..
+        } => validate_native_check_kind(check_id, task_id, sdk_version)?,
         StepKind::Internal { operation, env } => {
             if operation.trim().is_empty() {
                 return Err(ContractError::identity(
@@ -300,6 +314,37 @@ fn validate_kind(kind: &StepKind, job: &str) -> Result<(), ContractError> {
                 ));
             }
         }
+    }
+    Ok(())
+}
+
+fn validate_native_check_kind(
+    check_id: &str,
+    task_id: &str,
+    sdk_version: &str,
+) -> Result<(), ContractError> {
+    if check_id.is_empty()
+        || check_id.len() > 128
+        || !check_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+    {
+        return Err(ContractError::identity(
+            "step.native_check",
+            "invalid_check_id",
+        ));
+    }
+    crate::ids::validate_task_id(task_id)
+        .map_err(|_| ContractError::identity("step.native_check", "invalid_task_id"))?;
+    if sdk_version.is_empty()
+        || sdk_version
+            .bytes()
+            .any(|byte| !(byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'+')))
+    {
+        return Err(ContractError::identity(
+            "step.native_check",
+            "invalid_sdk_version",
+        ));
     }
     Ok(())
 }

@@ -59,6 +59,18 @@ project tool declarations. The declared task still acquires its qualified tools
 from A in a fresh isolated home. Stable retains its existing preparation path.
 Source checkouts use A's admitted `checkout_lfs` setting.
 
+Historical Homebrew qualification retains A's original source-admission bytes
+in the protected SDK catalog at
+`.velnor/qualification/homebrew/preview-a-source-admission.json`. The 34,639-byte
+document has SHA-256
+`73eacadf794d40c16e39e6693d09741ce9146cefc867d135f4a1fee023daa972`.
+The verifier checks the exact size and digest, then strictly projects and binds
+the admission to the source, complete plan, policy, CI, and recovery run. Original
+artifact identity remains audit metadata; qualification does not download that
+expiring artifact or require cross-repository Actions credentials. Live original
+producer and recovery jobs, source CI, signed receipt, artifact attestations, and
+immutable public release verification remain required.
+
 ## Source task handoff
 
 The declared qualified Mise task receives one additional fixed variable:

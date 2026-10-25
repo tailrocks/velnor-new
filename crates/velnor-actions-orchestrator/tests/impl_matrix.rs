@@ -8,14 +8,13 @@ use velnor_actions_contract::{
     FinalStatus, Plan, StepKind, matrix_id_for_task_group, matrix_key_for_id,
 };
 use velnor_actions_orchestrator::{
-    GenerateOptions, generate, merge_internal, merge_passed, plan_internal, prepare,
-    render_staged_tree,
+    GenerateOptions, generate, merge_passed, plan_internal, prepare, render_staged_tree,
 };
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::impl_common::{
-    TestResult, config_with_branch, git, git_line, make_repo, passing_reports, plan_for,
-    plan_for_source_change,
+    TestResult, config_with_branch, git, git_line, make_repo, merge_fixture, passing_reports,
+    plan_for, plan_for_source_change,
 };
 use crate::impl_merge::{merge, merge_request, success_jobs};
 
@@ -220,7 +219,7 @@ fn ignored_rust_merges_to_no_work_never_passes() -> TestResult {
     assert_eq!(final_report.counts.failed, 0);
     assert_eq!(final_report.counts.blocked, 0);
     assert_eq!(final_report.counts.not_run, 0);
-    let merged = merge_internal(&request.to_string())?;
+    let merged = merge_fixture(&request.to_string())?;
     assert!(
         merge_passed(&merged)?,
         "no work with valid required checks passes"
@@ -240,7 +239,7 @@ fn ignored_rust_merges_to_no_work_never_passes() -> TestResult {
     );
     let final_report = merge(&request)?;
     assert_eq!(final_report.status, FinalStatus::Passed);
-    let merged = merge_internal(&request.to_string())?;
+    let merged = merge_fixture(&request.to_string())?;
     assert!(merge_passed(&merged)?, "passing work greens the gate");
     Ok(())
 }

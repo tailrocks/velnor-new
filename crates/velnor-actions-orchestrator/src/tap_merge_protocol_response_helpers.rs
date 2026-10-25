@@ -80,7 +80,24 @@ pub(super) fn checks(
 }
 
 pub(super) fn tree(sha: &str, path: &str, blob: &str) -> Value {
-    json!({"sha": sha, "truncated": false, "tree": [{"path": path, "mode": "100644", "type": "blob", "sha": blob}]})
+    let mut entries = Vec::new();
+    let mut parent = String::new();
+    let directory_sha = blob[..1].repeat(40);
+    let components = path.split('/').collect::<Vec<_>>();
+    for component in components.iter().take(components.len().saturating_sub(1)) {
+        if !parent.is_empty() {
+            parent.push('/');
+        }
+        parent.push_str(component);
+        entries.push(json!({
+            "path": parent,
+            "mode": "040000",
+            "type": "tree",
+            "sha": directory_sha
+        }));
+    }
+    entries.push(json!({"path": path, "mode": "100644", "type": "blob", "sha": blob}));
+    json!({"sha": sha, "truncated": false, "tree": entries})
 }
 
 pub(super) fn content(bytes: &[u8]) -> Value {

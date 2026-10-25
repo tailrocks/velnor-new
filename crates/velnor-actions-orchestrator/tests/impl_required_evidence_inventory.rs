@@ -1,15 +1,15 @@
 //! Exact required-job inventory fixtures for merge evidence tests.
 
+use crate::impl_common::merge_fixture;
 use serde_json::json;
 use velnor_actions_contract::FinalStatus;
-use velnor_actions_orchestrator::merge_internal;
 
 /// Merge status for one hand-built request value.
 pub(super) fn status_of(
     request: &serde_json::Value,
 ) -> Result<FinalStatus, Box<dyn std::error::Error>> {
     Ok(
-        serde_json::from_str::<velnor_actions_contract::FinalReport>(&merge_internal(
+        serde_json::from_str::<velnor_actions_contract::FinalReport>(&merge_fixture(
             &request.to_string(),
         )?)?
         .status,

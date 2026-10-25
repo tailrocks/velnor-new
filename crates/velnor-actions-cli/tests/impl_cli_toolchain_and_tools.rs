@@ -11,6 +11,9 @@ use crate::impl_cli_tmp::{
     write_workspace,
 };
 
+#[cfg(unix)]
+use crate::impl_cli_tmp::{MiseDiagnosticContext, mise_failure_diagnostics, tool_context};
+
 const NEXTEST_CONFIG: &str = r"[profile.ci]
 fail-fast = false
 
@@ -308,6 +311,7 @@ fn conflicting_or_non_exact_toolchain_file_fails_closed() -> Result<(), Box<dyn 
 }
 
 #[test]
+#[cfg(unix)]
 fn tools_table_overrides_versions_across_generated_workflows() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("tc-tools-overrides")?;
     let extra_root = r#"
@@ -320,13 +324,14 @@ gh = "2.103.0"
     let cfg = config_with_suites("", extra_root);
     setup_repo(&tmp, &cfg)?;
     commit_all(&tmp)?;
-
     let plan_out = spawn(&["plan"], &[], &tmp)?;
     assert_eq!(
         code(&plan_out),
         0,
-        "plan stderr: {}",
-        String::from_utf8_lossy(&plan_out.stderr)
+        "plan stderr: {}\n{}\n{}",
+        String::from_utf8_lossy(&plan_out.stderr),
+        tool_context::diagnostic(),
+        mise_failure_diagnostics(&tmp, MiseDiagnosticContext::Inherited, &[], None)
     );
     let plan_stdout = String::from_utf8_lossy(&plan_out.stdout);
     assert!(
@@ -338,14 +343,17 @@ gh = "2.103.0"
     assert_eq!(
         code(&gen_out),
         0,
-        "generate stderr: {}",
-        String::from_utf8_lossy(&gen_out.stderr)
+        "generate stderr: {}\n{}\n{}",
+        String::from_utf8_lossy(&gen_out.stderr),
+        tool_context::diagnostic(),
+        mise_failure_diagnostics(&tmp, MiseDiagnosticContext::Inherited, &[], None)
     );
 
     let ci_yaml = fs::read_to_string(tmp.join(".github/workflows/ci.yml"))?;
     let suites_yaml = fs::read_to_string(tmp.join(".github/workflows/suites.yml"))?;
 
     for needle in [
+        "rust@1.99.1",
         "aqua:nextest-rs/nextest/cargo-nextest@0.9.150",
         "jactionlint@2.3.1",
         "shellcheck@0.11.1",
@@ -356,6 +364,10 @@ gh = "2.103.0"
             "missing {needle:?} in ci.yml:\n{ci_yaml}"
         );
     }
+    assert!(
+        suites_yaml.contains("rust@1.99.1"),
+        "missing default Rust pin in suites.yml:\n{suites_yaml}"
+    );
     assert!(
         suites_yaml.contains("aqua:nextest-rs/nextest/cargo-nextest@0.9.150"),
         "missing overridden cargo-nextest in suites.yml:\n{suites_yaml}"

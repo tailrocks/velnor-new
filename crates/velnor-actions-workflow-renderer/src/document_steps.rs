@@ -6,7 +6,7 @@ use velnor_actions_contract::{Step, StepKind};
 
 #[path = "document_steps_internal_env.rs"]
 mod internal_env_module;
-use internal_env_module::internal_env;
+use internal_env_module::{InternalStepContext, internal_env};
 
 use crate::{
     RenderError, commands,
@@ -18,6 +18,8 @@ use crate::{
 
 #[path = "document_steps_cache_env.rs"]
 mod cache_env;
+#[path = "native_check_execution.rs"]
+mod native_check_execution;
 
 /// True for the final job's plan download (fetch is gated inline below).
 ///
@@ -129,9 +131,11 @@ pub(crate) fn non_internal_step_to_yaml(
             },
         ),
         StepKind::Shell { run, env } => shell_step_to_yaml(step, run, env, job_env, false, None),
-        StepKind::Internal { .. } | StepKind::TaskExecution { .. } => Err(
-            RenderError::InvalidWorkflow("internal_op_rejected".to_owned()),
-        ),
+        StepKind::Internal { .. }
+        | StepKind::TaskExecution { .. }
+        | StepKind::NativeCheckExecution { .. } => Err(RenderError::InvalidWorkflow(
+            "internal_op_rejected".to_owned(),
+        )),
     }
 }
 
@@ -185,6 +189,9 @@ pub(crate) fn step_to_yaml(
         StepKind::TaskExecution { .. } => Err(RenderError::InvalidWorkflow(
             "unfactored_task_execution".to_owned(),
         )),
+        StepKind::NativeCheckExecution { .. } => {
+            native_check_execution::render(step, step_context.job_env)
+        }
     }
 }
 
@@ -243,9 +250,12 @@ fn internal_step_to_yaml(
             target,
             ctx,
             channel,
-            step_context.job_env,
-            step_env,
-            composite,
+            InternalStepContext {
+                job_id,
+                job_env: step_context.job_env,
+                step_env,
+                composite,
+            },
         )?,
     ));
     push_composite_shell(&mut entries, composite);

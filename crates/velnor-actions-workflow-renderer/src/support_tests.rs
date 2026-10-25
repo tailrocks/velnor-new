@@ -232,3 +232,81 @@ fn evidence_fetch_token_is_bound_to_its_exact_collector_job() {
     assert!(tokens::check_token_hygiene(&evidence_job("github-evidence-fetch-collector")).is_ok());
     assert!(tokens::check_token_hygiene(&evidence_job("github-evidence-fetch-unrelated")).is_err());
 }
+
+fn native_token_job(job_id: &str, kind: StepKind) -> BTreeMap<String, Job> {
+    let mut jobs = BTreeMap::new();
+    jobs.insert(
+        job_id.to_owned(),
+        Job {
+            services: Vec::new(),
+            display_name: "Native check".to_owned(),
+            runs_on: "ubuntu-26.04".to_owned(),
+            check_runner: None,
+            timeout_minutes: JobTimeout::VALIDATOR,
+            needs: Vec::new(),
+            condition: None,
+            permissions: None,
+            environment: None,
+            steps: vec![Step {
+                name: "User-controlled label is irrelevant".to_owned(),
+                id: None,
+                role: None,
+                condition: None,
+                parallel: false,
+                kind,
+            }],
+            cache_mode: None,
+        },
+    );
+    jobs
+}
+
+#[test]
+fn native_token_scope_requires_the_typed_sdk_dispatch() {
+    use velnor_actions_contract::config::NativeHomebrewOperation;
+
+    let typed = StepKind::NativeCheckExecution {
+        check_id: "tap-tree".to_owned(),
+        operation: NativeHomebrewOperation::TapTree,
+        task_id: "internal/native-check/tap-tree".to_owned(),
+        sdk_version: env!("CARGO_PKG_VERSION").to_owned(),
+    };
+    assert!(tokens::check_token_hygiene(&native_token_job("check-tap-tree", typed)).is_ok());
+    assert!(
+        tokens::check_token_hygiene(&native_token_job(
+            "check-tap-tree",
+            StepKind::NativeCheckExecution {
+                check_id: "tap-tree".to_owned(),
+                operation: NativeHomebrewOperation::TapTree,
+                task_id: "wrong-task".to_owned(),
+                sdk_version: env!("CARGO_PKG_VERSION").to_owned(),
+            },
+        ))
+        .is_err()
+    );
+    assert!(
+        tokens::check_token_hygiene(&native_token_job(
+            "check-tap-tree",
+            StepKind::NativeCheckExecution {
+                check_id: "tap-tree".to_owned(),
+                operation: NativeHomebrewOperation::TapTree,
+                task_id: "internal/native-check/tap-tree".to_owned(),
+                sdk_version: "0.0.0".to_owned(),
+            },
+        ))
+        .is_err()
+    );
+
+    let spoofed_env = BTreeMap::from([
+        ("GH_TOKEN".to_owned(), "${{ github.token }}".to_owned()),
+        (
+            "VELNOR_INTERNAL_OP".to_owned(),
+            "execute-native-homebrew-check-v1".to_owned(),
+        ),
+    ]);
+    let spoofed = StepKind::Shell {
+        run: vec!["velnor-actions-0.1.0".to_owned()],
+        env: spoofed_env,
+    };
+    assert!(tokens::check_token_hygiene(&native_token_job("check-tap-tree", spoofed)).is_err());
+}

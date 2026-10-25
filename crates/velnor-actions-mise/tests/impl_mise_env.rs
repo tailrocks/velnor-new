@@ -33,7 +33,7 @@ fn rustup_toolchain_is_exact_catalog_pin() -> Result<(), String> {
 }
 
 #[test]
-fn toolchain_env_triple_is_exact() {
+fn toolchain_env_homes_and_toolchain_are_exact() {
     assert_eq!(
         toolchain_env("/velnor/rustup", "/velnor/cargo", "1.99.1"),
         vec![
@@ -46,6 +46,14 @@ fn toolchain_env_triple_is_exact() {
                 OsString::from("/velnor/cargo")
             ),
             (OsString::from("RUSTUP_TOOLCHAIN"), OsString::from("1.99.1")),
+            (
+                OsString::from("RUSTUP_HOME"),
+                OsString::from("/velnor/rustup")
+            ),
+            (
+                OsString::from("CARGO_HOME"),
+                OsString::from("/velnor/cargo")
+            ),
         ]
     );
 }
@@ -121,7 +129,7 @@ fn with_env_appends_toolchain_pairs() -> Result<(), String> {
     let extra = toolchain_env("/velnor/rustup", "/velnor/cargo", "1.99.1");
     let extended = command.with_env(&extra).map_err(|err| err.to_string())?;
     let full = extended.full_env();
-    assert_eq!(&full[full.len() - 3..], extra.as_slice());
+    assert_eq!(&full[full.len() - 5..], extra.as_slice());
     assert!(
         full.iter().any(|(key, _)| key == "MISE_EXEC_AUTO_INSTALL"),
         "verification disable survives extension: {full:?}"

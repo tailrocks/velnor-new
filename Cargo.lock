@@ -1074,6 +1074,7 @@ name = "velnor-actions-cli"
 version = "0.1.53"
 dependencies = [
  "clap",
+ "flate2",
  "proc-macro2",
  "rustix",
  "serde_json",
@@ -1112,6 +1113,7 @@ dependencies = [
  "rustix",
  "rustls",
  "rustls-native-certs",
+ "serde",
  "serde_json",
  "syn",
  "toml",
@@ -1200,6 +1202,10 @@ version = "0.1.53"
 dependencies = [
  "saphyr",
  "saphyr-parser",
+ "serde",
+ "sha2",
+ "tempfile",
+ "toml",
  "velnor-actions-actionlint",
  "velnor-actions-contract",
  "velnor-actions-mise",
@@ -1210,7 +1216,12 @@ name = "velnor-archive-guard"
 version = "0.1.53"
 dependencies = [
  "flate2",
+ "rustix",
+ "serde",
+ "serde_json",
  "sha2",
+ "tar",
+ "tempfile",
 ]
 
 [[package]]

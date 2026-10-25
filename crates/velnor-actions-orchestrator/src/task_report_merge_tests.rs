@@ -14,9 +14,13 @@ use velnor_actions_contract::{
 
 use super::task_report_tests::{CLIPPY, TEST, fixture_plan, staged_run};
 use super::*;
-use crate::merge::merge_internal;
+use crate::merge::{MergeContext, merge_internal_with_context};
 use crate::merge_request::assemble_with_needs;
-use crate::noop_report::{NoOpRequest, write_noop_report_to};
+use crate::noop_report::{NoOpRequest, write_noop_report_to, write_skip_reports_for_job};
+
+fn merge_detached(request: &str) -> Result<String, crate::OrchestratorError> {
+    merge_internal_with_context(request, &MergeContext::detached())
+}
 
 /// Stage producer output as final-job `reports/<artifact-id>/` downloads.
 ///
@@ -72,7 +76,7 @@ fn merge_flips_not_run_to_executed_end_to_end() {
     )
     .expect("assemble bare");
     let verdict: velnor_actions_contract::FinalReport =
-        serde_json::from_str(&merge_internal(&bare).expect("merge bare")).expect("final json");
+        serde_json::from_str(&merge_detached(&bare).expect("merge bare")).expect("final json");
     eprintln!(
         "e2e before: status={:?} executed={} not_run={} downloaded={:?} miss={:?}",
         verdict.status,
@@ -103,7 +107,7 @@ fn merge_flips_not_run_to_executed_end_to_end() {
         "all artifacts staged: {full}"
     );
     let verdict: velnor_actions_contract::FinalReport =
-        serde_json::from_str(&merge_internal(&full).expect("merge full")).expect("final json");
+        serde_json::from_str(&merge_detached(&full).expect("merge full")).expect("final json");
     eprintln!(
         "e2e after: status={:?} executed={} not_run={} downloaded={:?}",
         verdict.status,
@@ -113,6 +117,55 @@ fn merge_flips_not_run_to_executed_end_to_end() {
     );
     assert_eq!(verdict.status, FinalStatus::Passed);
     assert_eq!(verdict.counts.executed, 2);
+    assert_eq!(verdict.counts.not_run, 0);
+    assert_eq!(verdict.downloaded_artifact_ids.len(), 2);
+}
+
+#[test]
+fn merge_fails_failing_obligation_and_blocks_downstream() {
+    let mut plan = fixture_plan();
+    let job_id = plan.matrix.include[0].job_id.clone();
+    let artifact_id = plan.matrix.include[0].artifact_id.clone();
+    plan.matrix.include[1].job_id.clone_from(&job_id);
+    plan.matrix.include[1].artifact_id = artifact_id;
+    plan.obligations[1].job_id.clone_from(&job_id);
+    plan.jobs = super::task_report_tests::run_jobs(&plan);
+    plan.validate().expect("shared-job failure plan validates");
+    let temp = staged_run(&plan, "local");
+    let run = temp.path().join("velnor").join("local");
+    let needs = Some(r#"{"plan":"success"}"#);
+
+    let reported = write_task_report_for_job("local", CLIPPY, 1, None, &job_id, temp.path())
+        .expect("clippy fails");
+    assert_eq!(reported, 1);
+    let skipped =
+        write_skip_reports_for_job(&plan, CLIPPY, &job_id, &[TEST.to_owned()], temp.path())
+            .expect("downstream skips");
+    assert_eq!(skipped, 1);
+    stage_downloads(&plan, &temp);
+
+    let full = assemble_with_needs(
+        "local",
+        &run,
+        needs,
+        Some(r#"["plan"]"#),
+        Some("pull_request"),
+        Some(PR_PAYLOAD),
+    )
+    .expect("assemble full");
+    assert!(
+        !full.contains("missing_report"),
+        "all artifacts staged: {full}"
+    );
+    let verdict: velnor_actions_contract::FinalReport =
+        serde_json::from_str(&merge_detached(&full).expect("merge full")).expect("final json");
+    eprintln!(
+        "e2e failure: status={:?} failed={} blocked={} not_run={}",
+        verdict.status, verdict.counts.failed, verdict.counts.blocked, verdict.counts.not_run
+    );
+    assert_eq!(verdict.status, FinalStatus::Failed);
+    assert_eq!(verdict.counts.failed, 1);
+    assert_eq!(verdict.counts.blocked, 1);
     assert_eq!(verdict.counts.not_run, 0);
     assert_eq!(verdict.downloaded_artifact_ids.len(), 2);
 }
@@ -182,7 +235,7 @@ fn merge_rejects_hosted_observation_for_custom_plan_entry() {
     )
     .expect("assemble merge request");
     let verdict: velnor_actions_contract::FinalReport =
-        serde_json::from_str(&merge_internal(&request).expect("merge")).expect("final report");
+        serde_json::from_str(&merge_detached(&request).expect("merge")).expect("final report");
     assert_ne!(verdict.status, FinalStatus::Passed);
     assert!(
         verdict
@@ -220,7 +273,7 @@ fn merge_blocks_all_skipped_noop_end_to_end() {
         "all artifacts staged: {full}"
     );
     let verdict: velnor_actions_contract::FinalReport =
-        serde_json::from_str(&merge_internal(&full).expect("merge full")).expect("final json");
+        serde_json::from_str(&merge_detached(&full).expect("merge full")).expect("final json");
     eprintln!(
         "e2e noop: status={:?} blocked={} not_run={}",
         verdict.status, verdict.counts.blocked, verdict.counts.not_run
@@ -260,7 +313,7 @@ fn merge_lists_shared_job_artifact_once() {
         "sibling entries share one artifact: {full}"
     );
     let verdict: velnor_actions_contract::FinalReport =
-        serde_json::from_str(&merge_internal(&full).expect("merge")).expect("final json");
+        serde_json::from_str(&merge_detached(&full).expect("merge")).expect("final json");
     assert_eq!(verdict.status, FinalStatus::Passed);
     assert_eq!(verdict.counts.executed, 2);
     assert_eq!(verdict.downloaded_artifact_ids, [shared]);

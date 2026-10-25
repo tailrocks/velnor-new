@@ -57,6 +57,7 @@ const EXPECTED_MODULES: &[&str] = &[
     "command.rs",
     "command_bounded_file_filter.rs",
     "command_cancellable.rs",
+    "command_cancellable_helpers.rs",
     "command_credential.rs",
     "command_env.rs",
     "command_git.rs",
@@ -65,6 +66,8 @@ const EXPECTED_MODULES: &[&str] = &[
     "command_private_fetch.rs",
     "command_progress.rs",
     "command_progress_tests.rs",
+    "command_process_group.rs",
+    "command_process_group_tests.rs",
     "command_release_signer.rs",
     "command_release_signer_tests.rs",
     "command_stream.rs",
@@ -76,6 +79,8 @@ const EXPECTED_MODULES: &[&str] = &[
     "git.rs",
     "git_tap_capture.rs",
     "git_tap_capture_tests.rs",
+    "image_candidate_command.rs",
+    "image_candidate_command_tests.rs",
     "lib.rs",
     "lock.rs",
     "lock_verify.rs",
@@ -266,6 +271,11 @@ fn check_source(name: &str, source: &str, violations: &mut Vec<String>) {
             if name == "command_stream_tests.rs" && matches!(*token, "create_new" | "fs::write") {
                 continue;
             }
+            // Presence observations retain the data-only Mise `symlinked_to`
+            // response field; this exception never admits filesystem APIs.
+            if *token == "symlink" && allow_presence_symlink_field(name, &code) {
+                continue;
+            }
             if code.contains(token) {
                 violations.push(format!("{at}: forbidden `{token}` in `{code}`"));
             }
@@ -294,6 +304,24 @@ fn check_source(name: &str, source: &str, violations: &mut Vec<String>) {
         violations.push(format!(
             "{name}: expected exactly one borrowed-diagnostic write"
         ));
+    }
+}
+
+fn allow_presence_symlink_field(name: &str, code: &str) -> bool {
+    let code = code.trim();
+    match name {
+        "requests_presence.rs" => matches!(
+            code,
+            "symlinked_to: Option<String>," | "symlinked_to: value" | ".get(\"symlinked_to\")"
+        ),
+        "requests_presence_tests.rs" => {
+            code.starts_with("r#\"[{")
+                && code.contains("\"symlinked_to\":\"")
+                && code.ends_with("\"#,")
+                || code == "\"symlinked_to\": \"y\".repeat(600),"
+                || code == "row.symlinked_to.as_deref(),"
+        }
+        _ => false,
     }
 }
 

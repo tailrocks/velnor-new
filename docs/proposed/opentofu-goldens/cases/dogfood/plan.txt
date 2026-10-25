@@ -26,7 +26,7 @@ Detected stacks
     - velnor-runner-cli (crates/velnor-runner/crates/velnor-runner-cli/Cargo.toml) [bin, lib, test; depends on velnor-runner-core, velnor-runner-host]
     - velnor-runner-core (crates/velnor-runner/crates/velnor-runner-core/Cargo.toml) [lib, test]
     - velnor-runner-github (crates/velnor-runner/crates/velnor-runner-github/Cargo.toml) [lib, test; depends on velnor-runner-core]
-    - velnor-runner-host (crates/velnor-runner/crates/velnor-runner-host/Cargo.toml) [example, lib; depends on velnor-resource-probe, velnor-runner-core, velnor-runner-github]
+    - velnor-runner-host (crates/velnor-runner/crates/velnor-runner-host/Cargo.toml) [bin, example, lib; depends on velnor-resource-probe, velnor-runner-core, velnor-runner-github]
   Profile .: mbx compile driver (declared), cargo_nextest test runner (declared)
   Nextest profile .: ci (.config/nextest.toml)
     evidence .config/nextest.toml:4 [profile.ci] [durable]
@@ -58,7 +58,7 @@ Workflow to generate
     - dependency-seed-6372617465732f76656c6e6f722d72756e6e6572 (27 steps)
     - jactionlint (12 steps)
     - plan (23 steps)
-    - required (12 steps)
+    - required (17 steps)
     - required-gate (1 steps)
     - rust-velnor-actions-actionlint (76 steps)
     - rust-velnor-actions-ansible (75 steps)

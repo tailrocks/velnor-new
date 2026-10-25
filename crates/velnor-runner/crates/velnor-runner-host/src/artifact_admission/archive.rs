@@ -29,6 +29,7 @@ use image::{
 
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct ArchiveIdentity {
+    pub(super) oci_index_sha256: String,
     pub(super) image_manifest_digest: String,
     pub(super) image_manifest_media_type: String,
     pub(super) image_manifest_size: u64,
@@ -48,15 +49,30 @@ pub(super) fn validate(
     {
         return Err(HostError::Identity);
     }
+    let identity = inspect_for_release(archive, &manifest.source_commit)?;
+    if identity.oci_index_sha256 != manifest.oci_index_sha256
+        || identity.image_manifest_digest != manifest.image_manifest_digest
+        || identity.config_digest != manifest.config_digest
+    {
+        return Err(HostError::Identity);
+    }
+    Ok(identity)
+}
+
+pub(super) fn inspect_for_release(
+    archive: &[u8],
+    source_commit: &str,
+) -> Result<ArchiveIdentity, HostError> {
+    if archive.is_empty() || archive.len() > MAX_ARCHIVE_BYTES {
+        return Err(HostError::Identity);
+    }
     let files = read_archive(archive)?;
     let layout = parse_json(file(&files, "oci-layout")?, "OCI layout")?;
     if layout != serde_json::json!({"imageLayoutVersion": "1.0.0"}) {
         return Err(HostError::Identity);
     }
     let index_bytes = file(&files, "index.json")?;
-    if lowercase_hex(&Sha256::digest(index_bytes)) != manifest.oci_index_sha256 {
-        return Err(HostError::Identity);
-    }
+    let oci_index_sha256 = lowercase_hex(&Sha256::digest(index_bytes));
     let index = parse_json(index_bytes, "OCI index")?;
     validate_index_header(&index)?;
     let (compatible_config, compatible_layers) = compatibility_entry(&files)?;
@@ -77,7 +93,7 @@ pub(super) fn validate(
                 &files,
                 &compatible_config,
                 &compatible_layers,
-                &manifest.source_commit,
+                source_commit,
                 &mut referenced,
             )?);
         }
@@ -86,11 +102,6 @@ pub(super) fn validate(
         return Err(HostError::Identity);
     }
     let image = images.pop().ok_or(HostError::Identity)?;
-    if image.image_manifest_digest != manifest.image_manifest_digest
-        || image.config_digest != manifest.config_digest
-    {
-        return Err(HostError::Identity);
-    }
     if let Some(referrer) = referrers.first() {
         validate_referrer(
             referrer,
@@ -108,6 +119,7 @@ pub(super) fn validate(
         return Err(HostError::Identity);
     }
     Ok(ArchiveIdentity {
+        oci_index_sha256,
         image_manifest_digest: image.image_manifest_digest,
         image_manifest_media_type: image.image_manifest_media_type,
         image_manifest_size: image.image_manifest_size,
@@ -115,6 +127,8 @@ pub(super) fn validate(
         config: image.config,
     })
 }
+
+pub(super) const MAX_RELEASE_ARCHIVE_BYTES: usize = MAX_ARCHIVE_BYTES;
 
 fn validate_index_header(index: &Value) -> Result<(), HostError> {
     if index.get("schemaVersion").and_then(Value::as_u64) != Some(2)

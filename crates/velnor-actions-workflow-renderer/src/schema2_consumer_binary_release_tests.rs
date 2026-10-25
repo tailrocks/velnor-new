@@ -16,6 +16,7 @@ fn field<'a>(node: &'a crate::yaml::Yaml, name: &str) -> &'a crate::yaml::Yaml {
     };
     &fields.iter().find(|(key, _)| key == name).expect(name).1
 }
+
 pub(super) fn stable() -> ConsumerReleaseSpec {
     let mut spec = fixture();
     spec.policy.channel = PackageReleaseChannel::Stable;
@@ -30,7 +31,7 @@ pub(super) fn stable() -> ConsumerReleaseSpec {
             "--no-hooks".to_owned(),
             "exec".to_owned(),
             "rust@1.99.1".to_owned(),
-            "release-plz@0.4.0".to_owned(),
+            "release-plz@0.4.1".to_owned(),
             "--".to_owned(),
             "release-plz".to_owned(),
         ],
@@ -164,10 +165,6 @@ fn stable_shares_bounded_production_and_channel_specific_tap_destinations() {
     tap.policy.destinations.stable = Some(HomebrewTapDestination {
         formula: "Formula/scanner.rb".to_owned(),
     });
-    tap.policy
-        .updater
-        .inputs
-        .push("Formula/scanner.rb".to_owned());
     spec.homebrew_tap = Some(tap);
     let yaml = render_consumer_binary_release(&spec, &hosted_policy())
         .expect("stable tap")
@@ -181,7 +178,6 @@ fn stable_shares_bounded_production_and_channel_specific_tap_destinations() {
     let merge = job(&yaml, "stable-tap-merge", None);
     assert!(merge.contains("merge-homebrew-tap-pr-v1"));
     assert!(!merge.contains("actions/checkout"));
-    assert!(!merge.contains("timeout-minutes: 20"));
     assert!(!merge.contains("timeout-minutes: 25"));
     spec.producer_timeout_minutes = 31;
     assert!(render_consumer_binary_release(&spec, &hosted_policy()).is_err());
@@ -276,10 +272,6 @@ fn stable_tap_reconciliation_is_valid_without_dispatch_inputs() {
     tap.policy.destinations.stable = Some(HomebrewTapDestination {
         formula: "Formula/scanner.rb".to_owned(),
     });
-    tap.policy
-        .updater
-        .inputs
-        .push("Formula/scanner.rb".to_owned());
     spec.homebrew_tap = Some(tap);
 
     let rendered = render_release_tap_reconcile(&spec, &hosted_policy())

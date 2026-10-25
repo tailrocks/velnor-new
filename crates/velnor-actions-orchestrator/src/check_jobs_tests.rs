@@ -55,6 +55,7 @@ fn fixture_with_tools(
     let discovery = Discovery {
         proposals: checks.iter().map(|row| row.proposal.clone()).collect(),
         mise_checks: checks,
+        native_checks: Vec::new(),
         ..Discovery::default()
     };
     (root, discovery)
@@ -282,6 +283,10 @@ fn generic_registry_id_generates_without_catalog_fallback_and_keeps_plan_identit
     );
 }
 
+#[path = "check_jobs_admission_tests.rs"]
+mod admission_tests;
+#[path = "check_jobs_tests/native.rs"]
+mod native;
 #[path = "check_jobs_shellcheck_tests.rs"]
 mod shellcheck_tests;
 

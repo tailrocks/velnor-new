@@ -1,5 +1,6 @@
 use super::super::output::output_map;
 use super::*;
+use velnor_actions_contract::config::NativeHomebrewOperation;
 use velnor_actions_contract::{Step, StepKind};
 
 fn owner_record_step(
@@ -97,6 +98,30 @@ fn restore_action_facts_reject_foreign_owner_and_layer_steps() {
             .is_err()
         );
     }
+}
+
+#[test]
+fn native_checks_are_rejected_from_qualification_cache_composite_tails() {
+    let step = Step {
+        name: "Execute native Homebrew check".to_owned(),
+        id: None,
+        role: None,
+        condition: None,
+        parallel: false,
+        kind: StepKind::NativeCheckExecution {
+            check_id: "formula-contract".to_owned(),
+            operation: NativeHomebrewOperation::FormulaContract,
+            task_id: "internal/native-check/formula-contract".to_owned(),
+            sdk_version: env!("CARGO_PKG_VERSION").to_owned(),
+        },
+    };
+    let error = rewrite_cross_phase_outputs(vec![step], &BTreeMap::new())
+        .expect_err("native checks are outside qualification cache composite payloads");
+    assert!(
+        error
+            .to_string()
+            .contains("qualification_cache_native_check_inside_composite_tail")
+    );
 }
 
 #[test]

@@ -109,7 +109,15 @@ pub(super) fn attest_job(
             base(name, runs_on, JobTimeout::DEFAULT),
             workflow_steps::attest_permissions(),
         ),
-        &[product.build_job, product.qualify_job],
+        &if product.target == ReleaseTarget::MacosArm64 {
+            vec![
+                product.build_job,
+                product.qualify_job,
+                "qualify-homebrew-macos",
+            ]
+        } else {
+            vec![product.build_job, product.qualify_job]
+        },
     );
     fields.retain(|(key, _)| key != "name");
     Ok(finish(
@@ -143,6 +151,7 @@ pub(super) fn publish_job(
             "attest-macos-intel",
             "attest-manifest",
             "candidate-manifest",
+            "qualify-homebrew-macos",
             "build-linux",
             "build-macos",
             "build-macos-intel",

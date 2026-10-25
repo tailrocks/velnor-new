@@ -90,7 +90,7 @@ impl<'a> JobOwners<'a> {
             return Ok(None);
         }
         let stack = Stack::require_known(&member.stack_id)?;
-        if stack == Stack::Mise {
+        if matches!(stack, Stack::Mise | Stack::Native) {
             return Ok(Some(format!("check-{}", member.identity.unit_id)));
         }
         if event == WorkflowEvent::Qualification && stack == Stack::Tofu {

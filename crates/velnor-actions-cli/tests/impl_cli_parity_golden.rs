@@ -24,6 +24,9 @@ use crate::impl_cli_tmp::{
     cleanup, code, commit_all, fresh_tempdir, git_init, install_consumer_manifest, spawn,
 };
 
+#[path = "impl_cli_parity_golden/plan_v1.rs"]
+mod plan_v1;
+
 /// Success cases: full artifact goldens.
 const CASES: [&str; 3] = ["minimal-cargo", "multi-crate", "ignored-stack"];
 /// Failure cases: `plan` must fail with the malformed-manifest token.
@@ -234,55 +237,15 @@ fn task_report(bytes: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
     Ok(out.into_bytes())
 }
 
-/// Run `plan-v1` through the binary's internal dispatch; return the response.
-fn plan_v1(repo: &Path, head: &str) -> Result<Vec<u8>, Box<dyn Error>> {
-    let internal = repo.join("parity-internal");
-    std::fs::create_dir_all(&internal)?;
-    let request = internal.join("plan-v1-request.json");
-    std::fs::write(
-        &request,
-        serde_json::json!({
-            "schema": 1,
-            "run_key": RUN_KEY,
-            "base": null,
-            "head": head,
-            "event": "local",
-        })
-        .to_string(),
-    )?;
-    let runner_temp = repo.join("runner-temp");
-    std::fs::create_dir_all(&runner_temp)?;
-    let github_output = internal.join("github-output.txt");
-    std::fs::write(&github_output, "")?;
-    let output = spawn(
-        &[],
-        &[
-            ("VELNOR_INTERNAL_OP", "plan-v1"),
-            (
-                "VELNOR_REQUEST_FILE",
-                request.to_str().ok_or("non-utf8 request path")?,
-            ),
-            (
-                "RUNNER_TEMP",
-                runner_temp.to_str().ok_or("non-utf8 temp path")?,
-            ),
-            (
-                "GITHUB_OUTPUT",
-                github_output.to_str().ok_or("non-utf8 output path")?,
-            ),
-        ],
-        repo,
-    )?;
-    if code(&output) != 0 {
-        return Err(format!("plan-v1 failed: {:?}", output.stderr).into());
-    }
-    Ok(std::fs::read(internal.join("plan-v1-response.json"))?)
-}
-
 /// Full artifact goldens for one success case.
 fn check_case(case: &str) -> Result<(), Box<dyn Error>> {
     let (repo, head) = checkout(case)?;
-    let plan = spawn(&["plan"], &[], &repo)?;
+    let plan = crate::impl_cli_tmp::spawn_for_rust_workspace(
+        case != "ignored-stack",
+        &["plan"],
+        &[],
+        &repo,
+    )?;
     if code(&plan) != 0 {
         return Err(format!("{case}: plan failed: {:?}", plan.stderr).into());
     }
@@ -295,7 +258,8 @@ fn check_case(case: &str) -> Result<(), Box<dyn Error>> {
         &normalized_plan(&repo, &head, &plan.stdout)?,
     )?;
     let preview = repo.parent().ok_or("repo lacks a parent")?.join("preview");
-    let generate = spawn(
+    let generate = crate::impl_cli_tmp::spawn_for_rust_workspace(
+        case != "ignored-stack",
         &[
             "generate",
             "--output-dir",
@@ -318,7 +282,7 @@ fn check_case(case: &str) -> Result<(), Box<dyn Error>> {
         &std::fs::read(preview.join(".github/jactionlint.yaml"))?,
     )?;
     crate::impl_cli_parity_golden_tree::check(case, &preview)?;
-    let response = plan_v1(&repo, &head)?;
+    let response = plan_v1::run(&repo, &head, RUN_KEY, case != "ignored-stack")?;
     check_golden(
         case,
         "plan-v1.json",
@@ -371,7 +335,10 @@ fn parity_malformed_fails_with_token() -> Result<(), Box<dyn Error>> {
 fn consumer_cli_rejects_a_missing_manifest() -> Result<(), Box<dyn Error>> {
     let (repo, _) = checkout("minimal-cargo")?;
     std::fs::remove_file(repo.join(".velnor/release-manifest.json"))?;
+    #[cfg(not(debug_assertions))]
     let plan = spawn(&["plan"], &[], &repo)?;
+    #[cfg(debug_assertions)]
+    let plan = crate::impl_cli_tmp::spawn_for_rust_workspace(true, &["plan"], &[], &repo)?;
     cleanup(repo.parent().ok_or("repo lacks parent")?);
     let stderr = String::from_utf8_lossy(&plan.stderr);
     // Release builds fail closed; debug builds plan against the

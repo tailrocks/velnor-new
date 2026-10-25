@@ -9,10 +9,10 @@ use velnor_actions_contract::{
     FinalReport, MatrixReport, MatrixStatus, ObligationDecision, Plan, TaskStatus,
     canonical_json_str, validate_digest,
 };
-use velnor_actions_orchestrator::{PlanOutputMode, merge_internal, plan_internal, plan_outputs};
+use velnor_actions_orchestrator::{PlanOutputMode, plan_internal, plan_outputs};
 
 use crate::impl_common::{
-    TestResult, config_with_branch, fixture_manifest_json, git, git_line, make_repo,
+    TestResult, config_with_branch, fixture_manifest_json, git, git_line, make_repo, merge_fixture,
     plan_for_source_change,
 };
 use crate::impl_merge::task_reports_for;
@@ -21,9 +21,7 @@ use crate::impl_merge::task_reports_for;
 pub(crate) fn merge(
     request: &serde_json::Value,
 ) -> Result<FinalReport, Box<dyn std::error::Error>> {
-    Ok(serde_json::from_str(&merge_internal(
-        &request.to_string(),
-    )?)?)
+    Ok(serde_json::from_str(&merge_fixture(&request.to_string())?)?)
 }
 
 /// Canonical merge request for plan/matrix values with report/job overrides.

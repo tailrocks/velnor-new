@@ -284,6 +284,9 @@ fn assert_worker_steps_stay_local_and_token_free(steps: &[velnor_actions_contrac
             StepKind::Shell { .. } | StepKind::TaskExecution { .. } => {
                 panic!("cache ownership operations must not launch worker REST commands");
             }
+            StepKind::NativeCheckExecution { .. } => {
+                panic!("cache ownership operations must not launch native check executions");
+            }
         };
         assert!(!env.contains_key("GH_TOKEN"));
         assert!(!env.contains_key("GITHUB_TOKEN"));

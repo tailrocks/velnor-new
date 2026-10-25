@@ -33,6 +33,25 @@ fn parser_accepts_canonical_record_and_nullable_diagnostic() {
 }
 
 #[test]
+fn shared_schema5_parser_keeps_runtime_resource_binding_in_the_wrapper() {
+    let mut beyond_daemon_memory = fixture_record();
+    beyond_daemon_memory.memory_available_bytes = MEMORY_TOTAL + 1;
+    let beyond_daemon_memory = serialize(&beyond_daemon_memory);
+    assert!(
+        crate::resource_probe_record::ProbeRecord::parse_schema5(&beyond_daemon_memory).is_some()
+    );
+    assert!(ProbeRecord::parse(&beyond_daemon_memory, MEMORY_TOTAL).is_none());
+
+    let mut changed_probe_quota = fixture_record();
+    changed_probe_quota.probe_cgroup_cpu_quota_micros = Some(20_000);
+    let changed_probe_quota = serialize(&changed_probe_quota);
+    assert!(
+        crate::resource_probe_record::ProbeRecord::parse_schema5(&changed_probe_quota).is_some()
+    );
+    assert!(ProbeRecord::parse(&changed_probe_quota, MEMORY_TOTAL).is_none());
+}
+
+#[test]
 fn schema_five_record_contains_the_mount_root_source_cpu_and_pid_witness() {
     let record = fixture_record();
     assert_eq!(record.schema_version, 5);
@@ -44,6 +63,7 @@ fn schema_five_record_contains_the_mount_root_source_cpu_and_pid_witness() {
     assert_eq!(record.probe_host_pid, record.probe_namespace_pid);
 
     let value = serde_json::to_value(&record).unwrap_or_default();
+    assert_eq!(value.as_object().map(|object| object.len()), Some(35));
     for required in [
         "probe_cgroup_cpuset_cpus_count",
         "cpu_ancestor_limits",

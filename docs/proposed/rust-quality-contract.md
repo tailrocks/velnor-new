@@ -79,16 +79,18 @@ The `velnor-actions` binary is owned by package `velnor-actions-cli`. Future sta
 | `velnor-actions-cli` | Clap parser, typed dispatch, concise deterministic human plan renderer, generation output, and exit-code formatting; emits binary `velnor-actions` | Orchestration algorithms or Rust, Mise, and renderer domain rules; process creation or any `std::process` item but `ExitCode`, under any import spelling or namespace alias (checked on Rust syntax by `impl_repo_deps_process_policy.rs`) |
 | `velnor-actions-tofu` | All OpenToFu/HCL discovery, root/module interpretation, task payloads, affected selection, identity extensions | Rust/Cargo, Mise execution, workflow YAML, process details, non-tofu stacks |
 | `velnor-actions-freshness` (repository-only support) | Read-only repository freshness/pin/lock/advisory checks and bounded bootstrap metadata operations behind the existing CLI private gate | V1 planning, task graph or selection, runner behavior, product evidence claims, public commands, or workflow generation |
-| `velnor-archive-guard` (repository-only security utility) | Bounded framing validation of owned candidate, Cargo-package, and cache-payload tar bytes through explicit profiles | V1 stack behavior, task derivation, workflow generation, cache paths/manifests/links, extraction, or product behavior beyond the explicit orchestrator framing call |
+| `velnor-archive-guard` (repository-only security utility) | Bounded framing validation of owned candidate, Cargo-package, and cache-payload tar bytes through explicit profiles; pure OCI archive validation | V1 stack behavior, task derivation, workflow generation, cache paths/manifests/links, extraction, or product behavior beyond the explicit orchestrator framing and OCI validation calls |
 
 Both repository-only members are outside the eight-product V1 task graph. The
 CLI private gate consumes freshness at runtime, repository scripts provision
-archive guard, and the orchestrator links its library for bounded cache-payload
-raw-tar framing. The guard does not inspect cache paths or manifests, validate
-links, or extract files. The canonical repository's `maintenance-helpers`
-named Mise check runs their package test suites independently of Rust task
-derivation and the product matrix; this repository's VelnorRepositoryV1
-configuration makes it required.
+archive guard, and the orchestrator links it for bounded cache-payload raw-tar
+framing and pure OCI archive validation. Cache-payload framing does not inspect
+cache paths or manifests, validate links, or extract files. Freshness stays
+outside the product dependency graph; archive guard owns no processes, workflow
+generation, or product tasks.
+The canonical repository's `maintenance-helpers` named Mise check runs their
+package test suites independently of Rust task derivation and the product
+matrix; this repository's VelnorRepositoryV1 configuration makes it required.
 
 Each repository-only package declares its task owner with Cargo package metadata:
 

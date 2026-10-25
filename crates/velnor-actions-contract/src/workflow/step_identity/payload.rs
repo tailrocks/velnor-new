@@ -1,8 +1,9 @@
-use super::super::step::StepKind;
+use super::super::step::{Step, StepKind};
+use super::super::step_payloads::{valid_configured_checkout_payload, valid_tool_seed_payload};
 use super::{
     CACHE_TAR_LAUNCHER_SHA256_INPUT, CACHE_TAR_LAUNCHER_USES, JACTIONLINT_VERIFIER_USES,
-    PRESEED_HELPER_SHA256_OUTPUT_EXPR, RUST_VERIFIER_USES, TOOLS_CACHE_IDENTITY_DIGEST_INPUT,
-    TOOLS_CACHE_PRELUDE_USES,
+    PRESEED_HELPER_SHA256_OUTPUT_EXPR, RUST_VERIFIER_USES, StepRole,
+    TOOLS_CACHE_IDENTITY_DIGEST_INPUT, TOOLS_CACHE_PRELUDE_USES,
 };
 
 /// Preserve inline Rust verification and admit only the fixed empty-binding actions.
@@ -12,7 +13,9 @@ pub(super) fn valid_rust_verifier_payload(kind: &StepKind) -> bool {
         StepKind::Action { uses, with, env } => {
             RUST_VERIFIER_USES.contains(&uses.as_str()) && with.is_empty() && env.is_empty()
         }
-        StepKind::TaskExecution { .. } | StepKind::Internal { .. } => false,
+        StepKind::TaskExecution { .. }
+        | StepKind::NativeCheckExecution { .. }
+        | StepKind::Internal { .. } => false,
     }
 }
 
@@ -23,8 +26,30 @@ pub(super) fn valid_jactionlint_verifier_payload(kind: &StepKind) -> bool {
         StepKind::Action { uses, with, env } => {
             uses == JACTIONLINT_VERIFIER_USES && with.is_empty() && env.is_empty()
         }
-        StepKind::TaskExecution { .. } | StepKind::Internal { .. } => false,
+        StepKind::TaskExecution { .. }
+        | StepKind::NativeCheckExecution { .. }
+        | StepKind::Internal { .. } => false,
     }
+}
+
+/// Check that a step is the configured checkout owner in this workflow scope.
+///
+/// Checkout is a semantic role, not a display-name convention. The caller
+/// supplies the exact pinned action ref from its validated render context.
+#[must_use]
+pub fn is_configured_checkout(step: &Step, expected_uses: &str) -> bool {
+    step.role == Some(StepRole::Checkout)
+        && step.condition.is_none()
+        && matches!(&step.kind, StepKind::Action { uses, .. } if uses == expected_uses)
+        && valid_configured_checkout_payload(&step.kind)
+}
+
+/// Check that a step is the unconditional local tool-seed consumer.
+#[must_use]
+pub fn is_tool_seed_step(step: &Step) -> bool {
+    step.role == Some(StepRole::ToolSeed)
+        && step.condition.is_none()
+        && valid_tool_seed_payload(&step.kind)
 }
 
 /// Require the fixed generated hosted identity-and-seed composite and digest.

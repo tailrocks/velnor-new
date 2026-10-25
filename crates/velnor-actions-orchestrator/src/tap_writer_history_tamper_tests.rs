@@ -2,11 +2,11 @@ use super::super::gitops::{expected_pr_body, expected_pr_title};
 use super::super::helpers::{branch_name, sha256};
 use super::find_already_promoted;
 use crate::{
+    homebrew::test_support as tap_test_support,
     tap_prepare::writer::github::ScriptedResponse,
     tap_prepare::writer::identity::BotIdentity,
     tap_prepare::writer::{TapGitHubApi, WriterInputs},
     tap_prepare::{HomebrewTapPreparationProof, TapPreparationDisposition},
-    tap_test_support,
 };
 use velnor_actions_contract::canonical_json_bytes;
 
@@ -71,7 +71,7 @@ fn open_receipt_inputs(mutate_title: bool) -> (WriterInputs, BotIdentity) {
     let api = scripted_history_api(&fixture, route, valid_closed, open);
     let formula_sha = sha256(&fixture.proposed_formula);
     let proof = HomebrewTapPreparationProof {
-        schema: "velnor.homebrew-candidate.v3".to_owned(),
+        schema: "velnor.homebrew-candidate.v4".to_owned(),
         channel: fixture.release.receipt.channel,
         disposition: TapPreparationDisposition::FormulaAlreadyCurrent,
         base_sha: "f".repeat(40),
@@ -80,6 +80,8 @@ fn open_receipt_inputs(mutate_title: bool) -> (WriterInputs, BotIdentity) {
         new_formula_sha256: formula_sha,
         receipt_digest: fixture.release.receipt_digest.clone(),
         plan_digest: sha256(&canonical_json_bytes(&fixture.plan).expect("plan JSON")),
+        formula_spec_digest: Some(fixture.spec.digest().expect("spec digest")),
+        sdk_artifact_digest: "9".repeat(64),
         tap_config_digest: sha256(&canonical_json_bytes(&fixture.policy).expect("policy JSON")),
         tap_repository: fixture.policy.repository.clone(),
         source_repository: fixture.plan.repository.clone(),
@@ -90,6 +92,8 @@ fn open_receipt_inputs(mutate_title: bool) -> (WriterInputs, BotIdentity) {
     let inputs = WriterInputs {
         root: std::path::PathBuf::from("/tmp/unused-writer-test"),
         policy: fixture.policy,
+        spec: Some(fixture.spec),
+        sdk_artifact_digest: "9".repeat(64),
         plan: fixture.plan,
         release: fixture.release,
         formula_path: fixture.formula_path.clone(),

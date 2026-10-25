@@ -78,6 +78,8 @@ mod impl_mise_restore;
 mod impl_mise_reuse;
 #[path = "impl_mise_steps.rs"]
 mod impl_mise_steps;
+#[path = "impl_mise_steps_catalog_modes.rs"]
+mod impl_mise_steps_catalog_modes;
 #[path = "impl_mise_surface.rs"]
 mod impl_mise_surface;
 #[path = "impl_mise_templates.rs"]

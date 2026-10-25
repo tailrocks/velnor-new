@@ -360,7 +360,7 @@ fn assert_image_producer(body: &str) -> TestResult {
         &["Verify Rust channel manifest"],
         &[
             (
-                "Install pinned Rust for the resource probe",
+                "Install pinned resource-probe build and qualification tools",
                 "GITHUB_TOKEN",
                 "${{ github.token }}",
             ),

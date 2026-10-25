@@ -9,13 +9,13 @@ use std::fs;
 
 use velnor_actions_contract::{FinalStatus, MatrixReport, MatrixStatus, TaskStatus};
 use velnor_actions_orchestrator::{
-    GenerateOptions, OrchestratorError, generate, merge_internal, merge_passed, plan_internal,
-    prepare, publish_final_report,
+    GenerateOptions, OrchestratorError, generate, merge_passed, plan_internal, prepare,
+    publish_final_report,
 };
 
 use crate::impl_common::{
-    TestResult, config_with_branch, err_of, git, git_line, make_repo, passing_reports,
-    plan_for_source_change,
+    TestResult, config_with_branch, err_of, git, git_line, make_repo, merge_fixture,
+    passing_reports, plan_for_source_change,
 };
 use crate::impl_merge::{merge_request, success_jobs};
 use crate::impl_perf_p13::perf_fixtures_p13::workspace_repo;
@@ -131,7 +131,7 @@ fn negative_reports_missing_leg_fails_required() -> TestResult {
         &serde_json::to_value(&reports)?,
         &success_jobs(),
     );
-    let response = merge_internal(&request.to_string())?;
+    let response = merge_fixture(&request.to_string())?;
     let final_report: velnor_actions_contract::FinalReport = serde_json::from_str(&response)?;
     final_report.validate()?;
     assert_eq!(final_report.status, FinalStatus::NotRun);
@@ -174,7 +174,7 @@ fn negative_required_failed_leg_reports_red() -> TestResult {
         &serde_json::to_value(&reports)?,
         &success_jobs(),
     );
-    let response = merge_internal(&request.to_string())?;
+    let response = merge_fixture(&request.to_string())?;
     assert!(!merge_passed(&response)?, "failed merge never passes");
     let dir = tempfile::TempDir::new()?;
     let artifact = publish_final_report(&response, dir.path())?;
@@ -194,7 +194,7 @@ fn pipeline_positive_control_all_green() -> TestResult {
         &serde_json::to_value(&reports)?,
         &success_jobs(),
     );
-    let response = merge_internal(&request.to_string())?;
+    let response = merge_fixture(&request.to_string())?;
     assert!(merge_passed(&response)?, "green chain passes");
     let dir = tempfile::TempDir::new()?;
     let artifact = publish_final_report(&response, dir.path())?;

@@ -344,24 +344,17 @@ GEN_DIR="$(mktemp -d 2>/dev/null)"
 if [ -z "$GEN_DIR" ]; then
   fail "generated-tree (mktemp failed; logs: $LOG_DIR)"
 else
-  echo "--- verify-local: generated-selector"
-  if python3 -B scripts/test_cargo_artifact_executable.py \
-    >"$GENERATED_SELECTOR_LOG" 2>&1; then
-    pass "generated-selector"
-  else
-    fail "generated-selector (log: $GENERATED_SELECTOR_LOG)"
-  fi
+  stage generated-selector "${NEXTEST_RUN[@]}" run --locked -p velnor-actions-freshness cargo_artifact_selection
   echo "--- verify-local: generated-tree"
   if "${RUST_EXEC[@]}" mbx build --locked --message-format=json-render-diagnostics \
     -p velnor-actions-cli --bin velnor-actions \
     >"$GENERATED_ARTIFACTS" \
     2>"$GENERATED_BUILD_LOG"; then
-    BIN="$(python3 scripts/cargo_artifact_executable.py \
-      --workspace-root "$ROOT" \
-      --manifest-path crates/velnor-actions-cli/Cargo.toml \
-      --target velnor-actions \
-      "$GENERATED_ARTIFACTS" \
-      2>>"$GENERATED_BUILD_LOG")"
+    BIN="$(VELNOR_REPO_POLICY_ACTION=artifact-executable \
+      VELNOR_REPO_POLICY_MESSAGES="$GENERATED_ARTIFACTS" \
+      VELNOR_REPO_POLICY_MANIFEST=crates/velnor-actions-cli/Cargo.toml \
+      VELNOR_REPO_POLICY_TARGET=velnor-actions \
+      repo_policy artifact-executable 2>>"$GENERATED_BUILD_LOG")"
     # Schema 2 emits the full product workflow set; compare it directly.
     : >"$GENERATED_RUN_LOG"
     : >"$GENERATED_DIFF_LOG"

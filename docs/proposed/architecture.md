@@ -29,7 +29,7 @@ velnor-actions-orchestrator -> velnor-actions-tofu
 velnor-actions-orchestrator -> velnor-actions-mise
 velnor-actions-orchestrator -> velnor-actions-actionlint
 velnor-actions-orchestrator -> velnor-actions-workflow-renderer
-velnor-actions-orchestrator -> velnor-archive-guard (cache-payload framing only)
+velnor-actions-orchestrator -> velnor-archive-guard (bounded cache-payload framing and OCI archive validation)
 velnor-actions-rust -> velnor-actions-contract
 velnor-actions-tofu -> velnor-actions-contract
 velnor-actions-mise -> velnor-actions-contract
@@ -46,12 +46,24 @@ MUST use explicit stack names such as `velnor-actions-node`; each adapter
 contains only its named stack. Alint is the sole repository-structure linter
 and runs as a separate GitHub Actions job.
 
-The workspace includes `velnor-actions-freshness` and `velnor-archive-guard`.
-The required `maintenance-helpers` check runs both packages' Rust test suites
-in VelnorRepositoryV1. Freshness checks Velnor policy files. Repository scripts
-run the compiler for the archive guard. Owner metadata can stop this policy
-from making package tasks. ConsumerV1 makes tasks for packages with this
-metadata. Package names and paths do not change the task list.
+The workspace also contains `velnor-actions-freshness` and
+`velnor-archive-guard` as repository-only maintenance members. Both are
+outside the eight-product V1 product graph. Under `VelnorRepositoryV1`, their
+typed `repository-maintenance` task owner excludes them from V1 Rust task
+derivation. Under `ConsumerV1`, same-named packages follow ordinary project
+derivation and produce tasks.
+Only the CLI's private maintenance gate consumes freshness at runtime.
+The orchestrator links archive guard for bounded cache-payload framing and
+pure OCI archive validation; archive guard creates no processes, workflows,
+or product tasks.
+Repository scripts also provision its standalone security utility. Under
+`VelnorRepositoryV1`, the existing named-Mise-check contract emits one
+independent `maintenance-helpers` Required check for both packages' Rust test
+suites. That repository-quality check stays outside the product crate matrix;
+ordinary ConsumerV1 configurations do not declare this repository-owned
+check. Both manifests declare
+the typed `repository-maintenance` task owner; package names and paths alone
+never grant the task-derivation exclusion.
 
 | Crate | Owns | Must not own |
 |---|---|---|

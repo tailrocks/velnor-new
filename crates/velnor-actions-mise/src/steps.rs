@@ -89,6 +89,14 @@ impl ToolHomes {
                     OsString::from(MISE_CARGO_HOME_ENV),
                     OsString::from(&self.cargo_home),
                 ),
+                (
+                    OsString::from("RUSTUP_HOME"),
+                    OsString::from(&self.rustup_home),
+                ),
+                (
+                    OsString::from("CARGO_HOME"),
+                    OsString::from(&self.cargo_home),
+                ),
             ]
         }
     }
@@ -156,7 +164,7 @@ impl PreparePinnedTools {
         self.install.argv(catalog)
     }
 
-    /// Full step env: isolation overlay plus the owned-homes triple.
+    /// Full step env: isolation overlay plus the owned-home environment.
     #[must_use]
     pub fn env(&self, catalog: &ToolCatalog) -> Vec<(OsString, OsString)> {
         let mut env = IsolatedCommand::env_overlay();
@@ -164,7 +172,7 @@ impl PreparePinnedTools {
         env
     }
 
-    /// Step env without the owned-homes triple: isolation overlay only.
+    /// Step env without owned homes: isolation overlay only.
     #[must_use]
     pub fn env_without_homes(&self) -> Vec<(OsString, OsString)> {
         IsolatedCommand::env_overlay()
@@ -245,9 +253,7 @@ impl PrepareRustComponents {
     /// Step env. It matches [`Self::command`] and sets the process homes.
     #[must_use]
     pub fn env(&self, catalog: &ToolCatalog) -> Vec<(OsString, OsString)> {
-        let mut env = self.homes.exec_env(catalog);
-        env.extend(self.process_homes());
-        env
+        self.homes.exec_env(catalog)
     }
 
     /// Isolated command running this installation under the owned homes.
@@ -258,22 +264,8 @@ impl PrepareRustComponents {
     /// empty, which construction rules out.
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
         let specs = catalog.tool_specs(&[PinnedTool::Rust]);
-        let mut extra = self.homes.env(catalog);
-        extra.extend(self.process_homes());
-        IsolatedCommand::mise_exec(&specs, &Self::payload(catalog))?.with_env(&extra)
-    }
-
-    fn process_homes(&self) -> [(OsString, OsString); 2] {
-        [
-            (
-                OsString::from("RUSTUP_HOME"),
-                OsString::from(self.homes.rustup_home()),
-            ),
-            (
-                OsString::from("CARGO_HOME"),
-                OsString::from(self.homes.cargo_home()),
-            ),
-        ]
+        IsolatedCommand::mise_exec(&specs, &Self::payload(catalog))?
+            .with_env(&self.homes.env(catalog))
     }
 
     /// Fixed payload: `rustup component add --toolchain <name> clippy rustfmt`.

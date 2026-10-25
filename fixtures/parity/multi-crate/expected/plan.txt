@@ -20,7 +20,7 @@ Workflow to generate
     - dependency-seed (25 steps)
     - jactionlint (10 steps)
     - plan (19 steps)
-    - required (10 steps)
+    - required (15 steps)
     - required-gate (1 steps)
     - rust-parity-app (30 steps)
     - rust-parity-tool (28 steps)

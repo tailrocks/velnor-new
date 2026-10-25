@@ -37,6 +37,8 @@ mod impl_cli_gate_tap_merge;
 mod impl_cli_gate_tap_recovery;
 #[path = "impl_cli_gate_task_execution.rs"]
 mod impl_cli_gate_task_execution;
+#[path = "impl_cli_homebrew_adoption.rs"]
+mod impl_cli_homebrew_adoption;
 #[path = "impl_cli_init.rs"]
 mod impl_cli_init;
 #[path = "impl_cli_parity.rs"]

@@ -90,3 +90,10 @@ pub use crate::workflow_routing::{
 };
 pub use crate::workflow_size::MAX_WORKFLOW_BYTES;
 pub use crate::yaml::{Yaml, quote_scalar, render_yaml};
+
+pub use crate::homebrew_adoption_seed::{
+    HomebrewAdoptionSeedSdkIdentity, render_homebrew_adoption_seed,
+};
+pub use crate::homebrew_adoption_workflow::{
+    RenderedHomebrewAdoptionCallee, render_homebrew_adoption_callee,
+};

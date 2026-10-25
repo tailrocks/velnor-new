@@ -107,6 +107,21 @@ impl HeldDirectory {
         checkpoint(self.deadline)
     }
 
+    pub(crate) fn read_file(
+        &self,
+        name: &str,
+        max_size: u64,
+    ) -> Result<Vec<u8>, OrchestratorError> {
+        checkpoint(self.deadline)?;
+        let file = self
+            .files
+            .get(name)
+            .ok_or_else(|| invalid("file_missing"))?;
+        let bytes = file.read_bytes(max_size, self.deadline)?;
+        self.verify()?;
+        Ok(bytes)
+    }
+
     fn verify_identity(&self) -> Result<(), OrchestratorError> {
         checkpoint(self.deadline)?;
         let held = self.directory.metadata().map_err(|_| invalid("stat"))?;

@@ -4,6 +4,10 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
+#[path = "args_image_maintenance.rs"]
+mod image_maintenance;
+pub(crate) use image_maintenance::ImageMaintenanceCommand;
+
 /// Velnor Actions: generate GitHub Actions workflows from repository state.
 #[derive(Debug, Parser)]
 #[command(name = "velnor-actions", version, about)]
@@ -67,6 +71,17 @@ pub(crate) enum Command {
         /// Playwright subcommand.
         #[command(subcommand)]
         command: PlaywrightCommand,
+    },
+    /// Author a data-only Homebrew adoption overlay from protected evidence.
+    Homebrew {
+        /// Homebrew adoption authoring operation.
+        #[command(subcommand)]
+        command: HomebrewCommand,
+    },
+    /// Maintain exact-source native image candidates.
+    ImageMaintenance {
+        #[command(subcommand)]
+        command: ImageMaintenanceCommand,
     },
     /// Author qualified-tool candidates offline from independently pinned local archives.
     ///
@@ -132,6 +147,52 @@ pub(crate) enum PlaywrightCommand {
     /// the `playwright-core` version `bun.lock` pins (verified against its
     /// integrity) and every browser archive; the digests are trust-on-first-use.
     Lock,
+}
+
+/// Protected Homebrew adoption authoring operations.
+#[derive(Debug, Subcommand)]
+pub(crate) enum HomebrewCommand {
+    /// Export or check the canonical Homebrew preview source policy.
+    SourcePolicy {
+        /// Project checkout whose configuration and inventory define policy.
+        #[arg(long, value_name = "CHECKOUT")]
+        root: PathBuf,
+        /// New absolute file path for the canonical policy export.
+        #[arg(
+            long,
+            value_name = "EXCLUSIVE_NEW",
+            conflicts_with = "check",
+            required_unless_present = "check"
+        )]
+        output: Option<PathBuf>,
+        /// Check `.velnor/homebrew-release-policy.json` in the checkout.
+        #[arg(long, conflicts_with = "output")]
+        check: bool,
+    },
+    /// Produce the exact initial seed overlay from the published SDK release.
+    AdoptionSeed {
+        /// Protected transition identifier.
+        #[arg(long, value_name = "ID")]
+        transition: String,
+        /// Local copy of the published SDK release manifest.
+        #[arg(long = "sdk-manifest", value_name = "ABS")]
+        sdk_manifest: PathBuf,
+        /// Fresh external output directory.
+        #[arg(long = "output-dir", value_name = "FRESHABS")]
+        output_dir: PathBuf,
+    },
+    /// Produce the normal structural cutover overlay over the protected seed.
+    AdoptionCutover {
+        /// Protected transition identifier.
+        #[arg(long, value_name = "ID")]
+        transition: String,
+        /// Local copy of the published SDK release manifest.
+        #[arg(long = "sdk-manifest", value_name = "ABS")]
+        sdk_manifest: PathBuf,
+        /// Fresh external output directory.
+        #[arg(long = "output-dir", value_name = "FRESHABS")]
+        output_dir: PathBuf,
+    },
 }
 
 /// Config subcommands.

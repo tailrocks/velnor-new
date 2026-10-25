@@ -19,7 +19,7 @@ fn image_family_uses_pinned_musl_build_and_exact_five_file_inventory() -> Result
     let steps = resource_probe_image::build_steps(&pins)?;
     let step_text = render_yaml(&Yaml::Seq(steps));
     for expected in [
-        "Install pinned Rust for the resource probe",
+        "Install pinned resource-probe build and qualification tools",
         "Install pinned Linux musl target",
         "rustup target add --toolchain",
         "x86_64-unknown-linux-musl",
@@ -27,6 +27,11 @@ fn image_family_uses_pinned_musl_build_and_exact_five_file_inventory() -> Result
         "mbx build --locked --manifest-path crates/velnor-runner/Cargo.toml",
         "--package velnor-resource-probe --bin velnor-resource-probe --release --target x86_64-unknown-linux-musl",
         "bash images/resource-probe/build-image.sh",
+        "Qualify native resource-probe producer and shared archive fixtures",
+        "mbx nextest run --locked --manifest-path crates/velnor-runner/Cargo.toml",
+        "--package velnor-runner-host --lib --target x86_64-unknown-linux-gnu",
+        "--bin velnor-resource-probe-release --release --target x86_64-unknown-linux-gnu",
+        "VELNOR_RESOURCE_PROBE_RELEASE_BIN",
     ] {
         assert!(
             step_text.contains(expected),
@@ -143,6 +148,19 @@ fn assert_image_save_preserves_validated_probe(rendered: &str) {
     assert!(IMAGE_BUILD_SCRIPT.contains("[[ \"$actual_sha256\" == \"$expected_sha256\" ]]"));
     assert!(PROBE_BUILD_SCRIPT.contains("source_revision=\"${VELNOR_SOURCE_REVISION:?"));
     assert!(PROBE_BUILD_SCRIPT.contains("[[ \"$source_revision\" == \"$source_sha\" ]]"));
+    assert!(
+        PROBE_BUILD_SCRIPT.contains("validate-smoke-schema5 \"$smoke_output\" \"$smoke_root\"")
+    );
+    assert!(PROBE_BUILD_SCRIPT.contains(
+        "python3 -B images/resource-probe/validate_smoke.py \"$smoke_output\" \"$smoke_root\""
+    ));
+    assert!(PROBE_BUILD_SCRIPT.contains("bash images/resource-probe/test_container_lifecycle.sh"));
+    assert!(PROBE_BUILD_SCRIPT.contains("--cgroupns=host --pid=host"));
+    assert!(PROBE_BUILD_SCRIPT.contains("--memory=134217728 --memory-swap=134217728"));
+    assert!(
+        PROBE_BUILD_SCRIPT
+            .contains("--mount \"type=bind,source=/sys/fs/cgroup,target=/sys/fs/cgroup,readonly\"")
+    );
 }
 
 fn field<'a>(value: &'a Yaml, key: &str) -> Result<&'a Yaml, Box<dyn Error>> {

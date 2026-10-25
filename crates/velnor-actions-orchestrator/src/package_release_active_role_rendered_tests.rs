@@ -68,8 +68,9 @@ fn fixture(channel: PackageReleaseChannel) -> ConsumerReleaseSpec {
         gh_argv: vec!["gh".to_owned()],
         homebrew_tap: Some(ConsumerReleaseTapSpec {
             policy: tap_policy(),
-            updater_acquire: acquire,
-            updater_setup: setup,
+            formula_spec: Some(crate::homebrew::test_support::spec()),
+            preparation_acquire: acquire,
+            preparation_setup: setup,
         }),
         stable: (channel == PackageReleaseChannel::Stable).then(|| ConsumerStableReleaseSpec {
             version_package: "app".to_owned(),
@@ -174,13 +175,6 @@ merge = "squash-after-gates"
 formula = "Formula/app-preview.rb"
 [destinations.stable]
 formula = "Formula/app.rb"
-[updater]
-task = "package:update"
-source = { mise_config = "mise.toml", working_directory = "." }
-runner = { label = "ubuntu-26.04", platform = "linux_x64", executor = "hosted" }
-inputs = ["mise.toml", "Formula/app-preview.rb", "Formula/app.rb"]
-tools = ["python"]
-timeout_minutes = 5
 [review_completion]
 check_name = "Review completion"
 app_id_variable = "COMPLETION_APP_ID"

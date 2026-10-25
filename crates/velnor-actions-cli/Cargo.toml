@@ -26,6 +26,8 @@ path = "tests/velnor_cli.rs"
 
 [dev-dependencies]
 toml = { version = "=1.1.8" }
+flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
+rustix = { version = "=1.1.5", features = ["fs", "process"] }
 proc-macro2 = "=1.0.107"
 sha2 = "=0.11.1"
 syn = { version = "=3.0.9", features = ["full", "visit"] }

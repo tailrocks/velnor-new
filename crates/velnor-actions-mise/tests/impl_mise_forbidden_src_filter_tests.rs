@@ -311,3 +311,40 @@ fn read(path: &std::path::Path) -> std::io::Result<Handle> { <Handle>::open(path
     );
     Ok(())
 }
+
+#[test]
+fn presence_symlink_field_exception_is_data_only_and_exact() -> Result<(), String> {
+    for (name, source, admitted) in [
+        (
+            "requests_presence.rs",
+            "symlinked_to: Option<String>,\n",
+            true,
+        ),
+        ("requests_presence.rs", "symlinked_to: value\n", true),
+        (
+            "requests_presence_tests.rs",
+            "r#\"[{\"symlinked_to\":\"/mise/shims/rust\"}]\"#,\n",
+            true,
+        ),
+        (
+            "requests_presence_tests.rs",
+            "std::os::unix::fs::symlink(source, destination)\n",
+            false,
+        ),
+        (
+            "requests_presence_tests.rs",
+            "row.symlinked_to.as_deref(); std::fs::remove_file(path)\n",
+            false,
+        ),
+        ("other.rs", "symlinked_to: Option<String>,\n", false),
+    ] {
+        let mut violations = Vec::new();
+        check_source_fixture(name, source, &mut violations)?;
+        assert_eq!(
+            violations.is_empty(),
+            admitted,
+            "{name}: {source:?}: {violations:?}"
+        );
+    }
+    Ok(())
+}

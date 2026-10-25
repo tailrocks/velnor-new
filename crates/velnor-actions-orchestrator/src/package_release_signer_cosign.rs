@@ -4,8 +4,8 @@ use std::{fs, os::unix::fs::PermissionsExt, path::Path};
 
 use velnor_actions_contract::package_release::{PackageReleaseAsset, PackageReleaseAssetKind};
 use velnor_actions_mise::{
-    COSIGN_COMMAND_OUTPUT_LIMIT, COSIGN_COMMAND_TIMEOUT, COSIGN_LINUX_AMD64_SHA256,
-    COSIGN_MAX_BYTES, COSIGN_VERSION, CosignCertificateIdentity, PinnedCosign,
+    COSIGN_COMMAND_OUTPUT_LIMIT, COSIGN_COMMAND_TIMEOUT, COSIGN_MAX_BYTES, COSIGN_VERSION,
+    CosignCertificateIdentity, PinnedCosign, cosign_artifact,
 };
 
 use super::{
@@ -24,6 +24,7 @@ pub(super) fn acquire_cosign(runner_temp: &Path) -> Result<PinnedCosign, Orchest
     ensure_private_directory(&root)?;
     let tools = root.join("tools");
     ensure_private_directory(&tools)?;
+    let artifact = cosign_artifact().map_err(|_| internal("cosign_platform_unsupported"))?;
     let binary = tools.join(format!("cosign-{COSIGN_VERSION}"));
     if path_exists(&binary) {
         verify_staged_binary(&binary)?;
@@ -33,9 +34,9 @@ pub(super) fn acquire_cosign(runner_temp: &Path) -> Result<PinnedCosign, Orchest
 
     let output = PinnedCosign::download_command()
         .map_err(|_| internal("cosign_download_command_invalid"))?
-        .run_bounded(COSIGN_MAX_BYTES, COSIGN_COMMAND_TIMEOUT)
+        .run_bounded(artifact.bytes, COSIGN_COMMAND_TIMEOUT)
         .map_err(|_| internal("cosign_download_failed"))?;
-    if !output.success || !valid_cosign_bytes(&output.stdout) {
+    if !output.success || !valid_cosign_bytes(&output.stdout, artifact.sha256, artifact.bytes) {
         return Err(internal("cosign_download_digest_mismatch"));
     }
 
@@ -80,17 +81,36 @@ pub(super) fn verify_blob(
     artifact: &Path,
     bundle: &Path,
     expected: &PackageReleaseSigningIdentity,
+    deadline: velnor_actions_mise::CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     let certificate = certificate_identity(expected)?;
     let command = cosign
         .verify_blob_command(artifact, bundle, &certificate)
         .map_err(|_| internal("cosign_verify_command_invalid"))?;
-    run_cosign(&command)
+    run_cosign_with_deadline(&command, deadline)
 }
 
 fn run_cosign(command: &velnor_actions_mise::IsolatedCommand) -> Result<(), OrchestratorError> {
     let output = command
         .run_bounded(COSIGN_COMMAND_OUTPUT_LIMIT, COSIGN_COMMAND_TIMEOUT)
+        .map_err(|_| internal("cosign_operation_failed"))?;
+    if output.success {
+        Ok(())
+    } else {
+        Err(internal("cosign_operation_failed"))
+    }
+}
+
+fn run_cosign_with_deadline(
+    command: &velnor_actions_mise::IsolatedCommand,
+    deadline: velnor_actions_mise::CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    let timeout = deadline
+        .remaining()
+        .map(|remaining| remaining.min(COSIGN_COMMAND_TIMEOUT))
+        .map_err(|_| internal("package_verification_deadline"))?;
+    let output = command
+        .run_bounded(COSIGN_COMMAND_OUTPUT_LIMIT, timeout)
         .map_err(|_| internal("cosign_operation_failed"))?;
     if output.success {
         Ok(())
@@ -143,15 +163,17 @@ fn signed_bundle_artifact(
     })
 }
 
-fn valid_cosign_bytes(bytes: &[u8]) -> bool {
+fn valid_cosign_bytes(bytes: &[u8], expected_sha256: &str, expected_bytes: usize) -> bool {
     !bytes.is_empty()
         && bytes.len() <= COSIGN_MAX_BYTES
-        && sha256(bytes) == COSIGN_LINUX_AMD64_SHA256
+        && bytes.len() == expected_bytes
+        && sha256(bytes) == expected_sha256
 }
 
 fn verify_staged_binary(path: &Path) -> Result<(), OrchestratorError> {
-    let bytes = read_regular_file(path, COSIGN_MAX_BYTES as u64)?;
-    if !valid_cosign_bytes(&bytes) {
+    let artifact = cosign_artifact().map_err(|_| internal("cosign_platform_unsupported"))?;
+    let bytes = read_regular_file(path, artifact.bytes as u64)?;
+    if !valid_cosign_bytes(&bytes, artifact.sha256, artifact.bytes) {
         return Err(internal("cosign_staged_binary_digest_mismatch"));
     }
     set_executable_mode(path)

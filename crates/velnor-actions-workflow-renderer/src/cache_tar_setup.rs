@@ -14,6 +14,120 @@ const CACHE_ACTION_ROLES: [StepRole; 6] = [
     StepRole::TofuProvidersRestore,
     StepRole::TofuProvidersSave,
 ];
+const PRESEED_CONSUMER_HELPER_ROLES: [StepRole; 3] = [
+    StepRole::PreseedDownload,
+    StepRole::PreseedVerifyManifest,
+    StepRole::PreseedStage,
+];
+
+/// Place the verified Required-job pre-seed helper after its configured checkout.
+///
+/// The caller first validates the helper payload against the runner map. This
+/// function only moves the exact contiguous consumer block; launcher insertion
+/// still validates its stage, checkout, cache, and internal-step ordering.
+/// # Errors
+pub(crate) fn move_preseed_consumer_after_checkout(
+    job_id: &str,
+    job: &mut Job,
+    checkout_uses: &str,
+) -> Result<(), RenderError> {
+    let start = preseed_helper_block_start(job_id, job)?;
+    let checkout_at = configured_checkout_at(job_id, job, checkout_uses)?;
+    if start == checkout_at + 1 {
+        return Ok(());
+    }
+
+    let helper_steps = job
+        .steps
+        .drain(start..start + PRESEED_CONSUMER_HELPER_ROLES.len())
+        .collect::<Vec<_>>();
+    let checkout_at = if start < checkout_at {
+        checkout_at - helper_steps.len()
+    } else {
+        checkout_at
+    };
+    job.steps
+        .splice(checkout_at + 1..checkout_at + 1, helper_steps);
+    Ok(())
+}
+
+fn preseed_helper_block_start(job_id: &str, job: &Job) -> Result<usize, RenderError> {
+    let helper_roles = job
+        .steps
+        .iter()
+        .filter(|step| is_verified_cache_helper_role(step.role))
+        .count();
+    let helper_positions = job
+        .steps
+        .iter()
+        .enumerate()
+        .filter(|(_, step)| {
+            step.role
+                .is_some_and(|role| PRESEED_CONSUMER_HELPER_ROLES.contains(&role))
+        })
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+    let Some(start) = helper_positions.first().copied() else {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "cache_preseed_helper_block_malformed:{job_id}"
+        )));
+    };
+    if helper_roles != PRESEED_CONSUMER_HELPER_ROLES.len()
+        || helper_positions.len() != PRESEED_CONSUMER_HELPER_ROLES.len()
+        || helper_positions.as_slice() != [start, start + 1, start + 2]
+        || job.steps[start..start + PRESEED_CONSUMER_HELPER_ROLES.len()]
+            .iter()
+            .map(|step| step.role)
+            .ne(PRESEED_CONSUMER_HELPER_ROLES.into_iter().map(Some))
+    {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "cache_preseed_helper_block_malformed:{job_id}"
+        )));
+    }
+    Ok(start)
+}
+
+fn configured_checkout_at(
+    job_id: &str,
+    job: &Job,
+    checkout_uses: &str,
+) -> Result<usize, RenderError> {
+    let checkout_count = job
+        .steps
+        .iter()
+        .filter(|step| step.role == Some(StepRole::Checkout))
+        .count();
+    if checkout_count != 1 {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "cache_helper_checkout_count:{job_id}:{}",
+            checkout_count
+        )));
+    }
+    let Some(checkout_at) = job
+        .steps
+        .iter()
+        .position(|step| step.role == Some(StepRole::Checkout))
+    else {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "cache_helper_checkout_count:{job_id}:0"
+        )));
+    };
+    if !velnor_actions_contract::workflow::step_identity::is_configured_checkout(
+        &job.steps[checkout_at],
+        checkout_uses,
+    ) {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "cache_helper_checkout_unconfigured:{job_id}"
+        )));
+    }
+    Ok(checkout_at)
+}
+
+fn is_verified_cache_helper_role(role: Option<StepRole>) -> bool {
+    role.is_some_and(|role| {
+        role == StepRole::AcquireVelnor || PRESEED_CONSUMER_HELPER_ROLES.contains(&role)
+    })
+}
 
 /// Drop archive-cache steps from the local-build bootstrap plan.
 ///

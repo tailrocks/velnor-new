@@ -4,12 +4,14 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 HELPER="$ROOT/scripts/local-cargo.sh"
+TEST_POLICY_RUST="$(awk -v key=rust -f "$ROOT/scripts/toml-tool-pin.awk" "$ROOT/.velnor/version-policy.toml")"
 TEST_ROOT="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/velnor-local-cargo-test.XXXXXX")"
+TEST_ROOT="$(cd "$TEST_ROOT" && pwd -P)"
 trap 'rm -rf "$TEST_ROOT"' EXIT
 
 FAKE_BIN="$TEST_ROOT/bin"
 FAKE_RUSTUP_HOME="$TEST_ROOT/rustup"
-FAKE_TOOLCHAIN="$FAKE_RUSTUP_HOME/toolchains/1.98.1-test"
+FAKE_TOOLCHAIN="$FAKE_RUSTUP_HOME/toolchains/$TEST_POLICY_RUST-test"
 FAKE_TOOLCHAIN_199="$FAKE_RUSTUP_HOME/toolchains/1.99.0-test"
 FAKE_MBX_BIN="$TEST_ROOT/mbx/bin"
 TEST_TMPDIR="$TEST_ROOT/tmp"
@@ -112,7 +114,8 @@ chmod +x "$FAKE_BIN/rustup" "$FAKE_BIN/mktemp" \
   "$FAKE_MBX_BIN/cargo" "$FAKE_MBX_BIN/mbx"
 
 export LOCAL_CARGO_TEST_RUSTUP_HOME="$FAKE_RUSTUP_HOME"
-export LOCAL_CARGO_TEST_POLICY_RUST=1.98.1
+LOCAL_CARGO_TEST_POLICY_RUST="$TEST_POLICY_RUST"
+export LOCAL_CARGO_TEST_POLICY_RUST
 export LOCAL_CARGO_TEST_TOOLCHAIN="$FAKE_TOOLCHAIN"
 export LOCAL_CARGO_TEST_MBX_BIN="$FAKE_MBX_BIN"
 export LOCAL_CARGO_TEST_MBX_SENTINEL="$TEST_ROOT/mbx-invoked"
@@ -123,7 +126,7 @@ export TMPDIR="$TEST_TMPDIR"
 export CARGO_HOME="$TEST_ROOT/cargo-home"
 export CARGO_TARGET_DIR="$TEST_ROOT/shared-target"
 export MBX_CARGO_SHIM_MODE=1
-export MBX_CACHE_DIR="$TEST_ROOT/mbx-cache"
+export MBX_CACHE_DIR="$TEST_ROOT/absent/../mbx-cache"
 
 expect_failure() {
   local label="$1"
@@ -149,6 +152,18 @@ TARGET_DIR="$(cat "$LOG_FILE")"
 [[ ! -e "$LOCAL_CARGO_TEST_MBX_SENTINEL" ]] || { echo 'FAIL: MBX shim ran' >&2; exit 1; }
 rm "$LOG_FILE"
 
+ln -s "$CARGO_HOME" "$TEST_ROOT/mbx-cache-link"
+export MBX_CACHE_DIR="$TEST_ROOT/mbx-cache-link/not-created"
+expect_failure symlinked-mbx-overlap "$HELPER" local-check test --locked
+[[ ! -f "$LOG_FILE" ]] || { echo 'FAIL: Cargo ran with an overlapping MBX path' >&2; exit 1; }
+export MBX_CACHE_DIR="$TEST_ROOT/absent/../mbx-cache"
+
+ln -s "$CARGO_HOME"$'\n' "$TEST_ROOT/newline-target"
+export MBX_CACHE_DIR="$TEST_ROOT/newline-target"
+expect_failure newline-symlink-target "$HELPER" local-check test --locked
+[[ ! -f "$LOG_FILE" ]] || { echo 'FAIL: Cargo ran with a newline symlink target' >&2; exit 1; }
+export MBX_CACHE_DIR="$TEST_ROOT/absent/../mbx-cache"
+
 printf '[build]\nrustc-wrapper = "mbx"\n' > "$CARGO_HOME/config.toml"
 expect_failure cargo-config-wrapper "$HELPER" local-check test --locked
 rm "$CARGO_HOME/config.toml"
@@ -167,6 +182,7 @@ rm "$TEST_TMPDIR/velnor-local-cargo-$LOCAL_CARGO_TEST_NAMESPACE.link"
 MISMATCH_REPO="$TEST_ROOT/policy-mismatch"
 mkdir -p "$MISMATCH_REPO/scripts" "$MISMATCH_REPO/.velnor"
 cp "$HELPER" "$MISMATCH_REPO/scripts/local-cargo.sh"
+cp "$ROOT/scripts/toml-tool-pin.awk" "$MISMATCH_REPO/scripts/toml-tool-pin.awk"
 printf '[tools]\nrust = "1.98.1"\n' > "$MISMATCH_REPO/mise.toml"
 printf '[tools]\nrust = "1.99.0"\n' > "$MISMATCH_REPO/.velnor/version-policy.toml"
 export LOCAL_CARGO_TEST_POLICY_RUST=1.99.0

@@ -92,8 +92,6 @@ pub(crate) fn member_changed(
     changed.is_none_or(|set| group_changed(task, set, keys))
 }
 
-type PlannedIdentity = identity::TaskIdentityDerivation;
-
 #[path = "plan_obligation/complete.rs"]
 mod complete;
 #[cfg(test)]
@@ -105,33 +103,7 @@ use complete::derive_lane_entries;
 
 #[cfg(test)]
 use identity::extension_for_task;
-
-/// Snapshot bundle plus closure-bound identity digests for one task.
-///
-/// The closure resolves against the checkout and its digest binds into
-/// the identity envelope, so a source edit flips `input_digest` even
-/// when the changed-work hint misses it.
-fn planned_identity(
-    inputs: &GroupInputs<'_>,
-    argv: &[String],
-    toolchain: &str,
-    platform_id: &str,
-    reads: &mut velnor_actions_tofu::FileCache,
-) -> Result<PlannedIdentity, OrchestratorError> {
-    identity::derive_task_identity(
-        &identity::TaskIdentityDerivationInputs {
-            root: inputs.root,
-            discovery: inputs.discovery,
-            task: inputs.task,
-            argv,
-            toolchain,
-            platform_id,
-            generator: inputs.wire.generator,
-            snapshot: inputs.snapshot,
-        },
-        reads,
-    )
-}
+use identity::planned_identity;
 
 /// Obligation plus matrix entry for one universe member.
 ///
@@ -142,6 +114,22 @@ pub(crate) fn plan_group(
     reads: &mut velnor_actions_tofu::FileCache,
 ) -> Result<(PlanObligation, Vec<MatrixEntry>), OrchestratorError> {
     let task = inputs.task;
+    if Stack::from_id(&task.stack_id) == Some(Stack::Native) {
+        let check = inputs
+            .discovery
+            .native_checks
+            .iter()
+            .find(|check| task.task_id == format!("internal/native-check/{}", check.id))
+            .ok_or_else(|| internal("native_check_not_configured"))?;
+        return crate::internal_plan::native_homebrew_checks::derive(
+            inputs.root,
+            check,
+            task,
+            inputs.run_key,
+            inputs.wire.generator,
+            inputs.wire.event,
+        );
+    }
     if Stack::from_id(&task.stack_id) == Some(Stack::Mise) {
         let item = crate::internal_plan::named_checks::discovered(inputs.discovery, task)
             .map_err(internal_contract)?;

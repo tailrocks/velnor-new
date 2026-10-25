@@ -74,6 +74,16 @@ pub(crate) fn resolve(
         runner_build_argv,
         attestation_helper_build_argv,
         resource_probe_build_argv: resource_probe_build_argv(&catalog)?,
+        install_resource_probe_release_tools_argv: install_argv(
+            &[
+                PinnedTool::Rust,
+                PinnedTool::MrBoxington,
+                PinnedTool::Nextest,
+            ],
+            &catalog,
+        )?,
+        resource_probe_release_build_argv: native_resource_probe_argv(&catalog, false)?,
+        resource_probe_release_test_argv: native_resource_probe_argv(&catalog, true)?,
         // The release gates lint the committed tree exactly as the CI lint
         // job does, with the same token scrub: the linter needs no credential.
         lint_argv: scrubbed_inline(crate::workflow_jobs::workflow_lint_argv(&catalog)?),
@@ -119,6 +129,14 @@ fn binary_build_argv(
     Ok((runner, helper))
 }
 
+/// Resolve the seed reusable-workflow pins from this compiled SDK's own
+/// protected config and bundled catalog, never from the tap candidate.
+pub(crate) fn homebrew_adoption_pins() -> Result<ProductReleasePins, OrchestratorError> {
+    let config =
+        crate::config::load_config_from_text(include_str!("../../../.velnor/config.toml"))?;
+    resolve(&config, &ToolCatalog::pinned())
+}
+
 /// `bash -c` argv whose script first unsets the credential variables, the
 /// same scrub the renderer gives an inline CI script (an `env -u` prefix
 /// would leave the inner script single-quoted for `ShellCheck`, SC2016).
@@ -138,9 +156,7 @@ fn resource_probe_target_argv(catalog: &ToolCatalog) -> Result<Vec<String>, Orch
 }
 
 fn resource_probe_build_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
-    exec_argv(
-        &[PinnedTool::Rust],
-        "cargo",
+    mbx_locked_build_argv(
         &[
             "build",
             "--locked",
@@ -237,3 +253,49 @@ fn contract_error(problem: impl std::fmt::Display) -> OrchestratorError {
 #[cfg(test)]
 #[path = "product_release_pins_mbx_tests.rs"]
 mod mbx_tests;
+
+fn native_resource_probe_argv(
+    catalog: &ToolCatalog,
+    tests: bool,
+) -> Result<Vec<String>, OrchestratorError> {
+    let args = if tests {
+        vec![
+            "nextest",
+            "run",
+            "--locked",
+            "--manifest-path",
+            "crates/velnor-runner/Cargo.toml",
+            "--package",
+            "velnor-runner-host",
+            "--lib",
+            "--target",
+            "x86_64-unknown-linux-gnu",
+            "-E",
+            "test(artifact_admission::archive) | test(resource_probe_release)",
+        ]
+    } else {
+        vec![
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/velnor-runner/Cargo.toml",
+            "--package",
+            "velnor-runner-host",
+            "--bin",
+            "velnor-resource-probe-release",
+            "--release",
+            "--target",
+            "x86_64-unknown-linux-gnu",
+        ]
+    };
+    exec_argv(
+        &[
+            PinnedTool::Rust,
+            PinnedTool::MrBoxington,
+            PinnedTool::Nextest,
+        ],
+        "mbx",
+        &args,
+        catalog,
+    )
+}

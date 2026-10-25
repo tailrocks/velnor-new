@@ -25,13 +25,18 @@ pub(crate) mod snapshot;
 
 #[path = "named_checks.rs"]
 pub(crate) mod named_checks;
+#[path = "native_homebrew_checks.rs"]
+pub(crate) mod native_homebrew_checks;
+#[path = "internal_plan_packages.rs"]
+mod packages;
+pub(crate) use packages::plan_packages;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    ContractError, EntryCacheIds, ExecuteTaskIds, ExecuteTaskRef, PlanGenerator, PlanPackage,
-    ProposedTask, Stack, StackExtension, TaskConfiguration, TaskGenerator, TaskIdentity, TaskInput,
-    VcsInputs, component_id_for_unit, digest_b3, input_digest,
+    ContractError, EntryCacheIds, ExecuteTaskIds, ExecuteTaskRef, PlanGenerator, ProposedTask,
+    Stack, StackExtension, TaskConfiguration, TaskGenerator, TaskIdentity, TaskInput, VcsInputs,
+    component_id_for_unit, digest_b3, input_digest,
 };
 use velnor_actions_rust::{CompileDriver, Evidence, entry_metadata_for_task};
 
@@ -78,6 +83,10 @@ pub(crate) fn adapter_metadata(
         Stack::Mise => Err(ContractError::identity(
             "check",
             "discovered_metadata_required",
+        )),
+        Stack::Native => Err(ContractError::identity(
+            "native_check",
+            "native_metadata_requires_plan_derivation",
         )),
     }
 }
@@ -138,7 +147,10 @@ pub(crate) fn cache_ids_for_platform(
     platform_id: &str,
     catalog: &velnor_actions_mise::ToolCatalog,
 ) -> Result<EntryCacheIds, ContractError> {
-    if Stack::require_known(&task.stack_id)? == Stack::Mise {
+    if matches!(
+        Stack::require_known(&task.stack_id)?,
+        Stack::Mise | Stack::Native
+    ) {
         return Err(ContractError::identity(
             "cache",
             "opaque_check_cache_forbidden",
@@ -232,6 +244,8 @@ pub(crate) fn task_identity_digest(inputs: &IdentityInputs<'_>) -> Result<String
         task.identity.project_root.as_str()
     } else if Stack::from_id(&task.stack_id) == Some(Stack::Mise) {
         task.identity.project_root.as_str()
+    } else if Stack::from_id(&task.stack_id) == Some(Stack::Native) {
+        "."
     } else {
         project_root_of(inputs.manifest)
     };
@@ -314,83 +328,4 @@ pub(crate) fn default_generator_with_phase_timings(
         sha256: crate::generator::current_exe_sha256_with_phase_timings(phases)
             .unwrap_or_else(|| snapshot::UNRESOLVED_GENERATOR_SHA.to_owned()),
     }
-}
-
-/// Complete package inventory with selection flags.
-///
-/// Rust rows enumerate workspace packages; tofu rows enumerate
-/// selected tofu projects by root key, so an untouched root stays
-/// distinguishable (`not_affected`) instead of vanishing.
-pub(crate) fn plan_packages(discovery: &Discovery, selected: &BTreeSet<&str>) -> Vec<PlanPackage> {
-    let mut packages = Vec::new();
-    for workspace in &discovery.workspaces {
-        for package in &workspace.record.packages {
-            if !package.in_workspace || package.external {
-                continue;
-            }
-            packages.push(package_row(
-                &package.id,
-                &package.name,
-                &package.manifest,
-                discovery,
-                selected,
-            ));
-        }
-    }
-    packages.extend(tofu_packages(discovery, selected));
-    packages.extend(discovery.mise_checks.iter().map(|item| {
-        package_row(
-            &item.proposal.identity.unit_id,
-            &item.check.id,
-            &item.proposal.identity.unit_path,
-            discovery,
-            selected,
-        )
-    }));
-    packages.sort_by(|left, right| left.package_id.cmp(&right.package_id));
-    packages
-}
-
-/// One inventory row: selection flag plus sorted task IDs.
-fn package_row(
-    package_id: &str,
-    name: &str,
-    manifest: &str,
-    discovery: &Discovery,
-    selected: &BTreeSet<&str>,
-) -> PlanPackage {
-    let is_selected = selected.contains(package_id);
-    let mut tasks: Vec<String> = discovery
-        .proposals
-        .iter()
-        .filter(|task| task.identity.unit_id == package_id)
-        .map(|task| task.task_id.clone())
-        .collect();
-    tasks.sort();
-    PlanPackage {
-        package_id: package_id.to_owned(),
-        name: name.to_owned(),
-        manifest: manifest.to_owned(),
-        selected: is_selected,
-        reasons: vec![if is_selected {
-            "selected".to_owned()
-        } else {
-            "not_affected".to_owned()
-        }],
-        tasks,
-    }
-}
-
-/// Tofu inventory rows: one per selected project, keyed by root key.
-fn tofu_packages(discovery: &Discovery, selected: &BTreeSet<&str>) -> Vec<PlanPackage> {
-    let mut roots = crate::select_tofu::tofu_selected_roots(&discovery.statuses);
-    roots.dedup();
-    roots
-        .iter()
-        .map(|root| {
-            let key = velnor_actions_tofu::key_for_root(root);
-            let display = velnor_actions_tofu::display_for_root(root);
-            package_row(&key, &display, &display, discovery, selected)
-        })
-        .collect()
 }
