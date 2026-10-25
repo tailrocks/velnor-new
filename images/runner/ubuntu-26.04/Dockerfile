@@ -100,7 +100,7 @@ RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/wait-docke
     && cmake --version \
     && jq --version \
     && python3 --version \
-    && bash -euo pipefail -c 'port=$((49152 + RANDOM % 16384)); nc -l -k -s 127.0.0.1 "$port" >/dev/null 2>&1 & listener=$!; trap "kill $listener 2>/dev/null || true" EXIT; for ((attempt = 0; attempt < 20; attempt++)); do if nc -z -w 1 127.0.0.1 "$port" && kill -0 "$listener" 2>/dev/null; then exit 0; fi; sleep 0.1; done; exit 1' \
+    && bash -euo pipefail -c 'port=$((49152 + RANDOM % 16384)); nc -d -l -k 127.0.0.1 "$port" >/dev/null 2>&1 & listener=$!; trap "kill $listener 2>/dev/null || true" EXIT; for ((attempt = 0; attempt < 20; attempt++)); do if nc -z -w 1 127.0.0.1 "$port" && kill -0 "$listener" 2>/dev/null; then exit 0; fi; sleep 0.1; done; exit 1' \
     && test -n "$(find /usr/lib -path '/usr/lib/llvm-*/lib/libclang.so' -print -quit)" \
     && protoc --version \
     && printf 'syntax = "proto3"; message M { int32 x = 1; }\n' > /tmp/m.proto \

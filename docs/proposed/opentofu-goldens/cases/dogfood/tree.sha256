@@ -10,7 +10,7 @@ d83300f5465de6623036c23881112f6fe3b601683c5642bebbc78c1ec2afa4c2  ./.github/acti
 6cd86347b4c114fa64c529eb0d7292f97afa3bda4794408aa98da3b314c22f91  ./.github/actions/generator-release-build-macos-intel/action.yml
 6a59a4eb0ab89d82399ab8edb9cdcd7a84761a28229d56cc7527771d786ebb30  ./.github/actions/generator-release-build-macos/action.yml
 eb9cf91e6ef3ade9738c6249dff0637a8fd1aff787937387653158a66387a04a  ./.github/actions/generator-release-publish/action.yml
-b65ffd39b6b98d98b986b26e4c6e4db64f735419a08bcdd0aad2fe6f845754d2  ./.github/actions/generator-release-qualify-homebrew/action.yml
+f187e35b052da759d6e55163d5a47d37f394f58484a394eb6f26701aaf0c1a30  ./.github/actions/generator-release-qualify-homebrew/action.yml
 e9eaf0923b862e5d9224d9e8b9de0620d823cca5bd09dc66b95fceac6829b1ab  ./.github/actions/generator-release-qualify-linux/action.yml
 83167a13e4058260a3861b1e504150396fe7e349d4541452b957f88a0eda9a84  ./.github/actions/generator-release-qualify-macos-intel/action.yml
 fabc13b03ba29569505e8cb61e877ac5de7f0fb6117a1b28f01ed7c3feb98b66  ./.github/actions/generator-release-qualify-macos/action.yml

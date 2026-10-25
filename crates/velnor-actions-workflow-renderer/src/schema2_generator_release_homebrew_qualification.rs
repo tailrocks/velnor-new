@@ -63,14 +63,16 @@ fn candidate_steps(
     candidate_path: &str,
 ) -> Result<Vec<Yaml>, RenderError> {
     let product = assets::MACOS_ARM64;
-    Ok(vec![
+    let mut steps = vec![
         workflow_steps::mise_step(pins.setup_for(ReleaseTarget::MacosArm64))?,
         workflow_steps::install_gh_step(&pins.install_gh_argv)?,
-        workflow_steps::download_step_by_id(
-            "Download exact ARM candidate artifact",
-            "${{ inputs.artifact_id }}",
-            product.directory,
-        ),
+    ];
+    steps.extend(assets::download_build_steps_for_id(
+        product,
+        "Download exact ARM candidate artifact",
+        "${{ inputs.artifact_id }}",
+    ));
+    steps.extend([
         workflow_steps::download_step_by_id(
             "Download canonical same-run candidate manifest",
             "${{ inputs.manifest_artifact_id }}",
@@ -107,7 +109,8 @@ fn candidate_steps(
                 ),
             ],
         ),
-    ])
+    ]);
+    Ok(steps)
 }
 
 fn start_budget_step() -> Yaml {
