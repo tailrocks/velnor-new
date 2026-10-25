@@ -81,6 +81,11 @@ targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
   `cargo` through MBX. They need `mr-boxington` in the same active `[tools]`.
 - Install hk hooks with `hk install --mise` (or `HK_MISE=1`), so cargo-based
   hook steps run inside the Mise environment even from GUI git clients.
+- The `cargo_fmt`, `cargo_check`, and `cargo_clippy` HK steps use
+  `scripts/hk-workspace-admission`, which requires an operator-provided
+  `rust-build-guard` executable on the hook's `PATH`. The project Mise config
+  does not install it; admission exits with status 69 if it is missing or not
+  a regular executable.
 - Dockerfiles take the version from Mise, not from the toolchain file:
   pass `--build-arg RUST_VERSION="$(mise current rust)"`, and in the base
   layer run `rustup component add clippy rustfmt` and `rustup target add`
