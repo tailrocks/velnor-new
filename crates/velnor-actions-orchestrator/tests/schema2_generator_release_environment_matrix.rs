@@ -4,6 +4,7 @@ use super::super::action_snapshots::{Actions, action};
 
 type AuthenticatedBinding = (&'static str, &'static str, &'static str);
 
+#[derive(Default)]
 struct JobPolicy {
     verifiers: Vec<&'static str>,
     authenticated: Vec<AuthenticatedBinding>,
@@ -14,17 +15,13 @@ pub(super) fn assert_action_environment_matrix(
     project_tool_resolver: bool,
 ) -> Result<(), Box<dyn Error>> {
     for action_name in [
-        "generator-release-attest-manifest",
         "generator-release-build-linux",
         "generator-release-build-macos",
         "generator-release-build-macos-intel",
-        "generator-release-attest-linux",
         "generator-release-qualify-linux",
-        "generator-release-attest-macos",
         "generator-release-qualify-macos",
-        "generator-release-attest-macos-intel",
         "generator-release-qualify-macos-intel",
-        "generator-release-publish",
+        "generator-release-qualify-homebrew",
     ] {
         let body = action(actions, action_name)?;
         let is_build = action_name.starts_with("generator-release-build-");
@@ -60,26 +57,11 @@ fn action_bindings(action: &str) -> Vec<AuthenticatedBinding> {
             "GITHUB_TOKEN",
             "${{ github.token }}",
         )],
-        "generator-release-attest-linux"
-        | "generator-release-attest-macos"
-        | "generator-release-attest-macos-intel" => vec![(
-            "Fetch and verify candidate attestation bundles",
+        "generator-release-qualify-homebrew" => vec![(
+            "Authenticate historical A and D; install and test preserved Homebrew kegs",
             "GH_TOKEN",
             "${{ github.token }}",
         )],
-        "generator-release-attest-manifest" => vec![(
-            "Fetch and verify manifest attestation bundle",
-            "GH_TOKEN",
-            "${{ github.token }}",
-        )],
-        "generator-release-publish" => vec![
-            (
-                "Fetch and verify signed release attestations",
-                "GH_TOKEN",
-                "${{ github.token }}",
-            ),
-            ("Publish GitHub release", "GH_TOKEN", "${{ github.token }}"),
-        ],
         _ => Vec::new(),
     }
 }
@@ -141,10 +123,7 @@ fn assert_workflow_job_environment(
 }
 
 fn workflow_job_policy(workflow: &str, job: &str) -> JobPolicy {
-    let mut policy = JobPolicy {
-        verifiers: Vec::new(),
-        authenticated: Vec::new(),
-    };
+    let mut policy = JobPolicy::default();
     match (workflow, job) {
         ("product-release.yml", "release-eligibility") => {
             policy.verifiers.push("Verify jactionlint");
@@ -174,6 +153,31 @@ fn workflow_job_policy(workflow: &str, job: &str) -> JobPolicy {
                     "GH_TOKEN",
                     "${{ github.token }}",
                 ),
+            ]);
+        }
+        (
+            "product-release-generator.yml",
+            "attest-linux" | "attest-macos" | "attest-macos-intel",
+        ) => policy.authenticated.push((
+            "Fetch and verify candidate attestation bundles",
+            "GH_TOKEN",
+            "${{ github.token }}",
+        )),
+        ("product-release-generator.yml", "attest-manifest") => {
+            policy.authenticated.push((
+                "Fetch and verify manifest attestation bundle",
+                "GH_TOKEN",
+                "${{ github.token }}",
+            ));
+        }
+        ("product-release-generator.yml", "publish-generator") => {
+            policy.authenticated.extend([
+                (
+                    "Fetch and verify signed release attestations",
+                    "GH_TOKEN",
+                    "${{ github.token }}",
+                ),
+                ("Publish GitHub release", "GH_TOKEN", "${{ github.token }}"),
             ]);
         }
         ("product-release-images.yml", "build-images") => {

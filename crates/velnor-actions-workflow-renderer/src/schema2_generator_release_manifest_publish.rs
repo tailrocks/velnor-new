@@ -1,23 +1,24 @@
 //! Draft and publish one verified release through a stable release ID.
 
 use super::assets::{ASSETS, REPOSITORY, VERSION};
-use super::{ATTESTATION_DIR, DIR, FILE, ProductReleasePins, publication_verify_script};
+use super::{ATTESTATION_DIR, DIR, FILE};
 
 const ACCEPTED_DIRECTORY: &str = "release-accepted";
 pub(super) const ACCEPTED_MANIFEST: &str = "release-accepted/release-manifest.json";
 pub(super) const ACCEPTANCE_RECEIPT: &str = "release-accepted/release-acceptance.json";
 
 /// Publish the exact qualified inventory, then emit receipt inputs after immutability.
-pub(super) fn publish_script(pins: &ProductReleasePins) -> String {
+pub(super) fn publish_script() -> String {
     let paths = release_asset_path_list();
     let upload = paths
         .iter()
         .map(|path| format!("  '{path}'"))
         .collect::<Vec<_>>()
         .join(" \\\n");
-    let verify = publication_verify_script(pins);
+    let verify = super::publication_verify_source_free_script();
     let preflight = tag_preflight_script();
-    let ci_definition = super::super::super::release_eligibility::publisher_definition();
+    let ci_definition =
+        super::super::super::release_eligibility::publisher_definition_source_free();
     let names = asset_names_bash(&paths);
     let draft_check = verify_release_script("true", "draft-release.json", "false");
     let published_check = published_release_verify_script();
@@ -49,7 +50,10 @@ pub(super) fn publish_script(pins: &ProductReleasePins) -> String {
 
 /// Require confirmed 404 responses for both immutable tag and release lookups.
 pub(super) fn tag_preflight_script() -> String {
-    format!("bash scripts/generator-release/preflight-release-tag.sh '{VERSION}' '{REPOSITORY}'")
+    format!(
+        "bash -s -- '{VERSION}' '{REPOSITORY}' <<'VELNOR_PREFLIGHT_RELEASE_TAG'\n{}\nVELNOR_PREFLIGHT_RELEASE_TAG",
+        include_str!("../../../scripts/generator-release/preflight-release-tag.sh")
+    )
 }
 
 /// Resolve a release ID once; all later release reads use that immutable ID.

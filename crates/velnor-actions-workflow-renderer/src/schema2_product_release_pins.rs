@@ -58,6 +58,9 @@ pub struct ProductReleasePins {
     pub verify_rust_argv: Vec<String>,
     /// Exact MBX release selected by the Mise catalog.
     pub mr_boxington_version: String,
+    /// GitHub CLI authority value carried from the selected emission catalog.
+    /// The source-bound candidate job validates it before privileged jobs consume it.
+    pub gh_version: String,
 }
 
 impl ProductReleasePins {

@@ -188,7 +188,7 @@ pub(super) fn assert_draft_metadata_is_only_url_mismatch(
     root: &Path,
 ) -> Result<(), Box<dyn Error>> {
     let version = release_version();
-    let script = manifest::publish_script(&super::test_pins());
+    let script = manifest::publish_script();
     let start = script
         .find("verify_release_metadata() {")
         .ok_or("publisher metadata verifier is missing")?;
@@ -259,7 +259,7 @@ pub(super) fn assert_draft_metadata_is_only_url_mismatch(
 
 pub(super) fn assert_draft_asset_validation_passes(root: &Path) -> Result<(), Box<dyn Error>> {
     let version = release_version();
-    let script = manifest::publish_script(&super::test_pins());
+    let script = manifest::publish_script();
     let start = script
         .find("verify_release_assets() {")
         .ok_or("publisher asset verifier is missing")?;

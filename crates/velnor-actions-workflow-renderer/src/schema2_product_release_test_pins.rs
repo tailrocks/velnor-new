@@ -89,6 +89,7 @@ pub(crate) fn test_pins() -> ProductReleasePins {
         ]
         .to_vec(),
         mr_boxington_version: catalog.version(PinnedTool::MrBoxington).to_owned(),
+        gh_version: catalog.version(PinnedTool::Gh).to_owned(),
     }
 }
 

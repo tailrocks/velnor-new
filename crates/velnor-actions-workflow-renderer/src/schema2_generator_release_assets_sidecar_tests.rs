@@ -1,4 +1,7 @@
-use super::super::{LINUX, VERSION, qualification_script, verify_provenance_in_directory};
+use super::super::{
+    LINUX, VERSION, qualification_script, verify_authority_provenance_script,
+    verify_provenance_in_directory,
+};
 use super::{Scratch, TOKEN_SENTINEL, run_step, write_executable};
 use crate::schema2::git_fixture;
 
@@ -40,6 +43,13 @@ fn wrong_checksum_filename_stops_before_candidate_execution() -> Result<(), Box<
         String::from_utf8_lossy(&positive.stderr)
     );
     assert_eq!(fs::read_to_string(&executed)?, "executed\n");
+    assert_eq!(
+        fs::metadata(directory.join(LINUX.binary))?
+            .permissions()
+            .mode()
+            & 0o777,
+        0o500
+    );
     assert_eq!(fs::read_to_string(&jq_calls)?, "called\n");
     assert_eq!(fs::read_to_string(&qualification_calls)?, "reached\n");
 
@@ -68,6 +78,127 @@ fn wrong_checksum_filename_stops_before_candidate_execution() -> Result<(), Box<
         "qualification ran after a wrong checksum filename"
     );
     Ok(())
+}
+
+#[test]
+fn authority_provenance_uses_validated_double_quoted_toolchain_inputs() {
+    let script = verify_authority_provenance_script(LINUX);
+    assert!(script.contains("$VELNOR_RELEASE_RUST_VERSION =~ $semver"));
+    assert!(script.contains("$VELNOR_RELEASE_MR_BOXINGTON_VERSION =~ $semver"));
+    assert!(script.contains("--arg rust \"$VELNOR_RELEASE_RUST_VERSION\""));
+    assert!(script.contains("--arg mr_boxington \"$VELNOR_RELEASE_MR_BOXINGTON_VERSION\""));
+    assert!(!script.contains("--arg rust '"));
+    assert!(!script.contains("--arg mr_boxington '"));
+}
+
+#[test]
+fn authority_provenance_rejects_each_changed_binding_and_shell_metacharacters()
+-> Result<(), Box<dyn Error>> {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()?;
+    let scratch = Scratch::new()?;
+    let directory_name = LINUX.directory;
+    let directory = scratch.0.join(directory_name);
+    let (source_sha, _) = source_identity(&root)?;
+    let digest = prepare_candidate_fixture(&scratch, directory_name, &source_sha)?;
+    let (mock_bin, real_jq) = install_jq_probe(&scratch)?;
+    let provenance_path = directory.join(LINUX.provenance);
+    let original = fs::read_to_string(&provenance_path)?;
+    let valid = run_authority_validation(&scratch, &mock_bin, &real_jq, &source_sha)?;
+    assert!(
+        valid.status.success(),
+        "valid authority provenance failed: {}",
+        String::from_utf8_lossy(&valid.stderr)
+    );
+
+    for (old, new) in [
+        (source_sha.clone(), "f".repeat(40)),
+        (
+            LINUX.target.triple().to_owned(),
+            "changed-target".to_owned(),
+        ),
+        ("1.99.1".to_owned(), "1.99.2".to_owned()),
+        ("1.26.0".to_owned(), "1.26.1".to_owned()),
+        (digest, "0".repeat(64)),
+    ] {
+        let changed = original.replacen(&old, &new, 1);
+        assert_ne!(changed, original, "fixture must contain {old}");
+        fs::write(&provenance_path, changed)?;
+        let rejected = run_authority_validation(&scratch, &mock_bin, &real_jq, &source_sha)?;
+        assert!(
+            !rejected.status.success(),
+            "accepted changed provenance field {old}"
+        );
+    }
+    fs::write(&provenance_path, original)?;
+
+    let marker = scratch.0.join("shell-injected");
+    let mut command = authority_command(&scratch, &mock_bin, &real_jq, &source_sha)?;
+    command.env(
+        "VELNOR_RELEASE_RUST_VERSION",
+        format!("1.99.1; touch {}", marker.display()),
+    );
+    let rejected = command.output()?;
+    assert!(
+        !rejected.status.success(),
+        "accepted shell syntax as a toolchain version"
+    );
+    assert!(!marker.exists(), "toolchain input executed shell syntax");
+    Ok(())
+}
+
+#[test]
+fn malformed_authority_versions_stop_before_reading_provenance() -> Result<(), Box<dyn Error>> {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()?;
+    let scratch = Scratch::new()?;
+    let (source_sha, _) = source_identity(&root)?;
+    prepare_candidate_fixture(&scratch, LINUX.directory, &source_sha)?;
+    let (mock_bin, real_jq) = install_jq_probe(&scratch)?;
+    for (key, version) in [
+        ("VELNOR_RELEASE_RUST_VERSION", "01.99.1"),
+        ("VELNOR_RELEASE_MR_BOXINGTON_VERSION", "01.26.0"),
+        ("VELNOR_RELEASE_RUST_VERSION", "1.99.1; exit 0"),
+        ("VELNOR_RELEASE_MR_BOXINGTON_VERSION", "1.26.0; exit 0"),
+    ] {
+        let mut command = authority_command(&scratch, &mock_bin, &real_jq, &source_sha)?;
+        command.env(key, version);
+        assert!(!command.output()?.status.success(), "accepted {key}");
+        assert!(
+            !scratch.0.join("authority-jq-called").exists(),
+            "malformed {key} reached provenance reader"
+        );
+    }
+    Ok(())
+}
+
+fn run_authority_validation(
+    scratch: &Scratch,
+    mock_bin: &Path,
+    real_jq: &str,
+    source_sha: &str,
+) -> Result<std::process::Output, Box<dyn Error>> {
+    Ok(authority_command(scratch, mock_bin, real_jq, source_sha)?.output()?)
+}
+
+fn authority_command(
+    scratch: &Scratch,
+    mock_bin: &Path,
+    real_jq: &str,
+    source_sha: &str,
+) -> Result<Command, Box<dyn Error>> {
+    let script = verify_authority_provenance_script(LINUX);
+    let mut command = run_step(&script, &scratch.0, mock_bin, TOKEN_SENTINEL)?;
+    command
+        .env("REAL_JQ", real_jq)
+        .env("JQ_CALLS", scratch.0.join("authority-jq-called"))
+        .env("GITHUB_REPOSITORY", "tailrocks/velnor-new")
+        .env("GITHUB_SHA", source_sha)
+        .env("VELNOR_RELEASE_RUST_VERSION", "1.99.1")
+        .env("VELNOR_RELEASE_MR_BOXINGTON_VERSION", "1.26.0");
+    Ok(command)
 }
 
 fn source_identity(root: &Path) -> Result<(String, String), Box<dyn Error>> {

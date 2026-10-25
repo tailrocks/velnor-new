@@ -13,46 +13,69 @@ pub(super) fn assert_candidate_qualification(
     binary: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let action_body = action(actions, action_name)?;
-    let archive_extract = action_body
-        .find("Prevalidate and extract uploaded candidate archive")
-        .ok_or("missing prevalidated candidate archive extraction")?;
-    let file_modes = action_body
-        .find("Verify extracted candidate file types and executable mode")
-        .ok_or("missing extracted candidate file-type check")?;
-    let checksum = action_body
-        .find("Verify downloaded checksum sidecar")
-        .ok_or("missing downloaded checksum verification")?;
+    let raw_validation = action_body
+        .find("Validate exact downloaded candidate files")
+        .ok_or("missing raw candidate artifact validation")?;
+    let non_executable_raw_file = action_body
+        .find(r#"test ! -x \"$path\""#)
+        .ok_or("raw candidate file must not arrive executable")?;
     let provenance = action_body
         .find("Verify candidate provenance record")
         .ok_or("missing candidate provenance verification")?;
+    let checksum = action_body
+        .find("Verify downloaded checksum sidecar")
+        .ok_or("missing downloaded checksum verification")?;
     let qualification = action_body
         .find("Qualify downloaded candidate")
         .ok_or("missing exact candidate qualification")?;
+    let executable_mode = action_body
+        .find("chmod 0500 ")
+        .ok_or("candidate binary must be made non-writable before qualification")?;
+    let job = super::super::job_body(workflow, job_id)?;
+    assert!(
+        raw_validation < non_executable_raw_file
+            && non_executable_raw_file < provenance
+            && provenance < checksum
+            && checksum < qualification
+            && qualification < executable_mode,
+        "{job}"
+    );
+    assert_candidate_executes_only_after_mode_change(
+        action_body,
+        executable_mode,
+        directory,
+        binary,
+    )?;
+    assert_qualification_action_contract(action_body, directory, binary);
+    assert_qualification_job_inputs(workflow, job_id, build_job)?;
+    assert_release_fixture_generation_requirements()?;
+    Ok(())
+}
+
+fn assert_qualification_job_inputs(
+    workflow: &str,
+    job_id: &str,
+    build_job: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     let job = super::super::job_body(workflow, job_id)?;
     let caller_artifact_id =
         format!("artifact_id: ${{{{ needs.{build_job}.outputs.artifact_id }}}}");
-    assert!(
-        archive_extract < file_modes
-            && file_modes < provenance
-            && provenance < checksum
-            && checksum < qualification,
-        "{job}"
-    );
     assert!(job.contains(&caller_artifact_id), "{job}");
     assert!(
         job.contains("manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}"),
         "{job}"
     );
+    Ok(())
+}
+
+fn assert_qualification_action_contract(action_body: &str, directory: &str, binary: &str) {
     assert!(
         action_body.contains("artifact-ids: ${{ inputs.artifact_id }}"),
         "{action_body}"
     );
     assert!(
-        action_body.contains("inputs:\n  artifact_id:"),
-        "{action_body}"
-    );
-    assert!(
-        action_body.contains("  manifest_artifact_id:")
+        action_body.contains("inputs:\n  artifact_id:")
+            && action_body.contains("  manifest_artifact_id:")
             && action_body.contains("  manifest_sha256:")
             && action_body
                 .contains("VELNOR_RELEASE_MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}"),
@@ -72,7 +95,6 @@ pub(super) fn assert_candidate_qualification(
         action_body.matches("Qualify downloaded candidate").count(),
         1
     );
-    assert!(action_body.contains("test -x "), "{action_body}");
     assert!(action_body.contains("toolchain"), "{action_body}");
     assert!(action_body.contains("--version"), "{action_body}");
     assert!(
@@ -81,7 +103,21 @@ pub(super) fn assert_candidate_qualification(
         )),
         "{action_body}"
     );
-    assert_release_fixture_generation_requirements()?;
+}
+
+fn assert_candidate_executes_only_after_mode_change(
+    action_body: &str,
+    executable_mode: usize,
+    directory: &str,
+    binary: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let invocation = action_body
+        .find(&format!("./{directory}/{binary} --version"))
+        .ok_or("missing candidate version invocation")?;
+    assert!(
+        executable_mode < invocation,
+        "candidate must be made executable only after raw transport validation"
+    );
     Ok(())
 }
 

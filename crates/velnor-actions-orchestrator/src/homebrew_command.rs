@@ -37,6 +37,24 @@ pub(crate) enum HomebrewCommand {
     InstalledBinaryVersion { executable: PathBuf },
 }
 
+impl HomebrewCommand {
+    /// Stable diagnostic label; excludes every caller-controlled field.
+    pub(crate) const fn diagnostic_label(&self) -> &'static str {
+        match self {
+            Self::Version => "version",
+            Self::Config => "config",
+            Self::InstallPortableRuby => "install-portable-ruby",
+            Self::MovePrefix { .. } => "move-prefix",
+            Self::Prefix => "prefix",
+            Self::Cellar => "cellar",
+            Self::InstallCandidate { .. } => "install-candidate",
+            Self::UpgradeCandidate { .. } => "upgrade-candidate",
+            Self::TestArchived { .. } => "test-archived",
+            Self::InstalledBinaryVersion { .. } => "installed-binary-version",
+        }
+    }
+}
+
 /// Construct one fixed Homebrew command under a clean, credential-scrubbed env.
 pub(crate) fn homebrew_command(
     operation: HomebrewCommand,

@@ -1,4 +1,4 @@
-use super::{Failure, expected_asset_args, manifest, release_version, test_pins};
+use super::{Failure, expected_asset_args, manifest, release_version};
 use std::error::Error;
 use std::fs;
 use std::io::Write;
@@ -54,7 +54,10 @@ fn read_publish_marker(
 
 #[test]
 fn publisher_observes_one_release_id_before_and_after_publication() {
-    let script = manifest::publish_script(&test_pins());
+    let script = manifest::publish_script();
+    assert!(!script.contains("git rev-parse HEAD"));
+    assert!(script.contains("bash -s -- '"));
+    assert!(!script.contains("scripts/generator-release/preflight-release-tag.sh"));
     let create_tag = script
         .find("created_ref=")
         .expect("publisher creates the exact source tag");
@@ -213,7 +216,7 @@ pub(super) fn assert_success_receipt(root: &Path) -> Result<(), Box<dyn Error>> 
 
 #[test]
 fn publisher_defines_eligibility_once_and_calls_it_before_tagging_and_publishing() {
-    let script = manifest::publish_script(&test_pins());
+    let script = manifest::publish_script();
     // The step prepends the one pinned `gh` function; the body never redefines it.
     assert_eq!(script.matches("gh() {").count(), 0, "{script}");
     assert_eq!(script.matches("release_eligibility() {").count(), 1);

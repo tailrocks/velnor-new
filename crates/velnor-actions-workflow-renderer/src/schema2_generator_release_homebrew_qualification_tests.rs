@@ -31,13 +31,12 @@ fn hosted_homebrew_job_is_read_only_bounded_and_scoped_to_exact_candidate_artifa
     assert!(action_yaml.contains("${{ inputs.artifact_id }}"));
     assert!(action_yaml.contains("${{ inputs.manifest_artifact_id }}"));
     assert!(action_yaml.contains("${{ inputs.manifest_sha256 }}"));
-    let product = super::super::assets::MACOS_ARM64;
     let artifact_download = action_yaml
         .find("Download exact ARM candidate artifact")
         .expect("candidate artifact download step is rendered");
-    let extraction = action_yaml
-        .find("Prevalidate and extract uploaded candidate archive")
-        .expect("archive extraction step is rendered");
+    let validation = action_yaml
+        .find("Validate exact downloaded candidate files")
+        .expect("raw artifact validation step is rendered");
     let manifest_download = action_yaml
         .find("Download canonical same-run candidate manifest")
         .expect("manifest download step is rendered");
@@ -45,21 +44,15 @@ fn hosted_homebrew_job_is_read_only_bounded_and_scoped_to_exact_candidate_artifa
         .find("Verify source-bound build record")
         .expect("provenance verification step is rendered");
     assert!(
-        artifact_download < extraction
-            && extraction < manifest_download
+        artifact_download < validation
+            && validation < manifest_download
             && manifest_download < provenance,
-        "download and extract candidate before provenance validation"
+        "download and validate candidate before provenance verification"
     );
-    assert!(action_yaml.contains("scripts/with-owned-archive-guard.sh --"));
-    assert!(action_yaml.contains(&format!(
-        "extract-candidate '{}/{}' '{}' '{}' '{}' '{}'",
-        product.directory,
-        product.archive,
-        product.directory,
-        product.binary,
-        product.sidecar,
-        product.provenance
-    )));
+    assert!(action_yaml.contains("-eq 3"));
+    assert!(action_yaml.contains("268435456"));
+    assert!(action_yaml.contains("-links 1"));
+    assert!(!action_yaml.contains("with-owned-archive-guard"));
     assert!(action_yaml.contains("GH_TOKEN: ${{ github.token }}"));
     assert!(action_yaml.contains("VELNOR_INTERNAL_OP: qualify-homebrew-v1"));
     assert!(!action_yaml.contains("homebrew-qualify"));
