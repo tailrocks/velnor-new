@@ -1,4 +1,5 @@
 use super::*;
+use crate::workflow::QualificationCacheStepId;
 
 pub(super) fn bind_id(owner_id: &str) -> String {
     QualificationCacheStepId::new(

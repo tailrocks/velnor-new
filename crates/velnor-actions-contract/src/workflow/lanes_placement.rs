@@ -83,6 +83,10 @@ pub(in crate::workflow) fn placement_for_source(
             return Ok(Placement::HostedOnly);
         }
     }
+    let capabilities = PlacementCapabilities {
+        supports_scale_set,
+        is_image_job,
+    };
     placement_for_mode_or_profile(
         execution,
         dispatch,
@@ -90,9 +94,14 @@ pub(in crate::workflow) fn placement_for_source(
         job_id,
         override_id,
         job,
-        supports_scale_set,
-        is_image_job,
+        capabilities,
     )
+}
+
+#[derive(Clone, Copy)]
+struct PlacementCapabilities {
+    supports_scale_set: bool,
+    is_image_job: bool,
 }
 
 fn placement_for_mode_or_profile(
@@ -102,20 +111,25 @@ fn placement_for_mode_or_profile(
     job_id: &str,
     override_id: &str,
     job: &Job,
-    supports_scale_set: bool,
-    is_image_job: bool,
+    capabilities: PlacementCapabilities,
 ) -> Result<Placement, ContractError> {
     if let Some(mode) = dispatch.or(execution.mode) {
         return match mode {
             ExecutionMode::Hosted => Ok(Placement::HostedOnly),
             ExecutionMode::ScaleSet => {
-                require_scale_set_support(supports_scale_set, execution, job_id, override_id, job)?;
+                require_scale_set_support(
+                    capabilities.supports_scale_set,
+                    execution,
+                    job_id,
+                    override_id,
+                    job,
+                )?;
                 Ok(Placement::ScaleSetOnly)
             }
             ExecutionMode::Both => Ok(
-                if !is_image_job
+                if !capabilities.is_image_job
                     && class == LaneClass::Verification
-                    && supports_scale_set
+                    && capabilities.supports_scale_set
                     && supports_hosted_scale_set_pair(job)
                 {
                     Placement::Both
@@ -134,7 +148,13 @@ fn placement_for_mode_or_profile(
     if key == execution.hosted_profile {
         Ok(Placement::HostedOnly)
     } else if key == execution.scale_set_profile {
-        require_scale_set_support(supports_scale_set, execution, job_id, override_id, job)?;
+        require_scale_set_support(
+            capabilities.supports_scale_set,
+            execution,
+            job_id,
+            override_id,
+            job,
+        )?;
         Ok(Placement::ScaleSetOnly)
     } else {
         Err(ContractError::config(

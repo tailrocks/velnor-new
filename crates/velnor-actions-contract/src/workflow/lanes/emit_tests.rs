@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use super::*;
 use crate::workflow::{
     QualificationCacheCompositeId, QualificationCacheCompositePhase, QualificationCacheLayer,
-    QualificationCacheStepStage, Step, StepKind, StepRole,
+    QualificationCacheStepId, QualificationCacheStepStage, Step, StepId, StepKind, StepRole,
 };
 
 const SOURCE_OWNER: &str = "rust-demo";
