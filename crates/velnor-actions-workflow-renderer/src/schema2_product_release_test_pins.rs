@@ -125,6 +125,8 @@ fn qualification_mbx_action_steps(catalog: &ToolCatalog) -> [Step; 3] {
         MISE_CARGO_HOME_ENV.to_owned(),
         homes.cargo_home().to_owned(),
     );
+    env.insert("RUSTUP_HOME".to_owned(), homes.rustup_home().to_owned());
+    env.insert("CARGO_HOME".to_owned(), homes.cargo_home().to_owned());
     env.insert(RUSTUP_TOOLCHAIN_ENV.to_owned(), catalog.rustup_toolchain());
     mbx_steps_for_driver(
         &format!("jdx/mr-boxington-action@{}", "a".repeat(40)),

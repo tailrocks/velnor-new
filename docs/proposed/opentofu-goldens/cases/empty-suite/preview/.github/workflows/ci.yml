@@ -158,8 +158,10 @@ jobs:
         uses: ./.github/actions/velnor-verify-restored-rust # zizmor: ignore[self-repository]
       - name: Prepare pinned tools
         env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: mise --no-config --no-env --no-hooks install rust@1.99.1 jactionlint@2.3.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.149
       - name: Verify jactionlint
         uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]
@@ -175,16 +177,20 @@ jobs:
         run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.53'"
       - name: Check generated files
         env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.53 generate --output-dir \"$RUNNER_TEMP/velnor-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}\" && diff -r --brief .github \"$RUNNER_TEMP/velnor-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/.github\"'"
       - name: Plan
         id: plan
         env:
           VELNOR_INTERNAL_OP: plan-v1
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/plan-v1-request.json
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.53'"
       - name: Publish plan
         if: always()
@@ -249,8 +255,10 @@ jobs:
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.53\"&&mkdir -p \"${d%/*}\"&&s=\"/opt/velnor/seed/generator/${d##*/}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|sha256sum -c -;then cp \"$s\" \"$d\";else curl -fsSL --connect-timeout 15 --max-time 120 --retry 5 --retry-all-errors --retry-max-time 180 --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|sha256sum -c -;fi&&chmod +x \"$d\"'"
       - name: Prepare pinned tools
         env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: mise --no-config --no-env --no-hooks install gh@2.103.2
       - name: Download plan
         continue-on-error: true
@@ -357,8 +365,10 @@ jobs:
         uses: ./.github/actions/velnor-verify-restored-rust # zizmor: ignore[self-repository]
       - name: Prepare pinned tools
         env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: mise --no-config --no-env --no-hooks install rust@1.99.1 jactionlint@2.3.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.149
       - name: Verify jactionlint
         uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]
@@ -373,19 +383,19 @@ jobs:
         uses: ./.github/actions/velnor-verify-rust-manifest # zizmor: ignore[self-repository]
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-85aeaf27a979e069f89048f0303bbf3d83124c11e8c26bb454c0e84dc83772c5"}
+        with: {"digest": "b3-fdbe7192a09f535c8dbd8d37613a8dec5e3a49bb73769f668f38325cbc461c05"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-aac5272ba284e85d363e63fed3eccb3a369510ce05f4e6f470ac760fc5ba06ad"}
+        with: {"digest": "b3-4779366a406a212e10dd5f90dbab41d130ad633b2ffbe09898c29b48b913f1ae"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-78f6cdeacfcba3b476fde369be3b037e3da589c9bc8e856358a29b8312ac4674"}
+        with: {"digest": "b3-b9a0a181a5de00454893f91ff51c232f1611b9ca449f565c3c835eaeae4a1423"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-062c6fceae4fd8a5ab30e36d81cf008472f5db84bd105c256a48a993faedff8c"}
+        with: {"digest": "b3-a4c034f883fd60a903cca655a85657fae80e00c2df67e3ba67fac3d66835fe35"}
       - name: Wait for parallel checks
         wait-all:
       - name: Upload crate reports

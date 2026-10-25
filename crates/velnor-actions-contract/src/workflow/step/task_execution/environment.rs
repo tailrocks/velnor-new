@@ -2,7 +2,7 @@ use crate::errors::ContractError;
 
 use super::TaskExecutionValidation;
 
-const FIXED_ENV: [(&str, &str); 8] = [
+const FIXED_ENV: [(&str, &str); 10] = [
     ("MISE_NO_CONFIG", "1"),
     ("MISE_NO_ENV", "1"),
     ("MISE_NO_HOOKS", "1"),
@@ -11,6 +11,8 @@ const FIXED_ENV: [(&str, &str); 8] = [
     ("MISE_EXEC_AUTO_INSTALL", "false"),
     ("MISE_RUSTUP_HOME", "${{ runner.temp }}/velnor/rustup"),
     ("MISE_CARGO_HOME", "${{ runner.temp }}/velnor/cargo"),
+    ("RUSTUP_HOME", "${{ runner.temp }}/velnor/rustup"),
+    ("CARGO_HOME", "${{ runner.temp }}/velnor/cargo"),
 ];
 
 pub(super) fn validate_environment(

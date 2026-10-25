@@ -3,7 +3,9 @@
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
-use velnor_actions_mise::{JACTIONLINT_VERSION, SHELLCHECK_VERSION};
+
+const JACTIONLINT_VERSION: &str = "2.3.0";
+const SHELLCHECK_VERSION: &str = "0.11.0";
 
 /// Satisfy the exact Rust inventory query and forward only the pinned
 /// metadata request used by CLI planning to the real Cargo executable.

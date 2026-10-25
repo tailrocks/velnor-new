@@ -54,10 +54,7 @@ pub(super) fn make_request(
     use velnor_actions_contract::config::CheckPlatform;
     let projection = validate_homebrew_projection(spec, plan)
         .map_err(|_| internal("homebrew_qualification_projection"))?;
-    let mut hashes = BTreeMap::new();
-    for asset in &release.receipt().assets {
-        hashes.insert(asset.name.clone(), asset.sha256.clone());
-    }
+    let hashes = selected_payload_hashes(&projection, &release.receipt().assets)?;
     let literals = HomebrewFormulaReleaseLiterals::new(
         spec,
         &projection,
@@ -93,6 +90,31 @@ pub(super) fn make_request(
         files,
         paths,
     })
+}
+
+fn selected_payload_hashes(
+    projection: &velnor_actions_contract::homebrew_spec::ValidatedHomebrewProjection,
+    assets: &[velnor_actions_contract::package_release::PackageReleaseAsset],
+) -> Result<BTreeMap<String, String>, OrchestratorError> {
+    let mut selected = BTreeSet::new();
+    let mut hashes = BTreeMap::new();
+    for payload in projection.selected_payloads() {
+        let name = payload.asset_name();
+        if !selected.insert(name) {
+            return Err(internal(
+                "homebrew_qualification_payload_duplicate_projection",
+            ));
+        }
+        let mut matches = assets.iter().filter(|asset| asset.name == name);
+        let asset = matches
+            .next()
+            .ok_or_else(|| internal("homebrew_qualification_payload_digest_missing"))?;
+        if matches.next().is_some() {
+            return Err(internal("homebrew_qualification_payload_digest_duplicate"));
+        }
+        hashes.insert(name.to_owned(), asset.sha256.clone());
+    }
+    Ok(hashes)
 }
 
 fn extract_expected_members(
@@ -163,3 +185,7 @@ fn create_install_paths(
     }
     Ok(paths)
 }
+
+#[cfg(test)]
+#[path = "homebrew_qualification_prepare_tests.rs"]
+mod tests;

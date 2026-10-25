@@ -95,6 +95,14 @@ fn mbx_transport_stays_with_mr_boxington_action() {
             "MISE_CARGO_HOME".to_owned(),
             "${{ runner.temp }}/velnor/cargo".to_owned(),
         ),
+        (
+            "RUSTUP_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/rustup".to_owned(),
+        ),
+        (
+            "CARGO_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/cargo".to_owned(),
+        ),
         ("RUSTUP_TOOLCHAIN".to_owned(), rust.clone()),
     ]);
     let [preflight, step, version_check] = mbx_steps_for_driver(

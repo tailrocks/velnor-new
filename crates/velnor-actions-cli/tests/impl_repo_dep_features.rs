@@ -80,12 +80,44 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+#[test]
+fn cli_rustix_process_support_is_pinned_and_test_only() -> Result<(), Box<dyn Error>> {
+    let body = manifest("crates/velnor-actions-cli")?;
+    let mut section = "";
+    let mut production_dependency = false;
+    let mut test_dependency = false;
+    for raw_line in body.lines() {
+        let line = raw_line.trim();
+        if line.starts_with('[') {
+            section = line;
+            continue;
+        }
+        if dep_key(line) != "rustix" {
+            continue;
+        }
+        match section {
+            "[dependencies]" => production_dependency = true,
+            "[dev-dependencies]" => {
+                test_dependency = line.contains("version = \"=1.1.5\"")
+                    && line.contains("features = [\"fs\", \"process\"]");
+            }
+            _ => (),
+        }
+    }
+    assert!(
+        !production_dependency && test_dependency,
+        "CLI rustix process support must stay pinned and test-only"
+    );
+    Ok(())
+}
+
 fn allowed_feature(dir: &str, key: &str, feature: &str) -> bool {
     feature == "derive"
         || (dir == "crates/velnor-actions-orchestrator"
             && key == "zip"
             && feature == "deflate-flate2")
         || (key == "rustix" && feature == "fs")
+        // CLI test-only diagnostics need owned process groups and nonblocking pipes.
         || (key == "rustix"
             && feature == "process"
             && matches!(
@@ -93,6 +125,7 @@ fn allowed_feature(dir: &str, key: &str, feature: &str) -> bool {
                 "crates/velnor-actions-freshness"
                     | "crates/velnor-actions-mise"
                     | "crates/velnor-actions-orchestrator"
+                    | "crates/velnor-actions-cli"
             ))
         || (dir == "crates/velnor-actions-freshness"
             && ((key == "flate2" && feature == "rust_backend")

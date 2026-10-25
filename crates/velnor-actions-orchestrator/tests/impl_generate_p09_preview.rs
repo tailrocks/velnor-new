@@ -144,6 +144,7 @@ fn fetch_matches_obligation_contract_by_construction() -> TestResult {
     assert_eq!(
         keys,
         [
+            "CARGO_HOME",
             "MISE_AUTO_INSTALL",
             "MISE_CARGO_HOME",
             "MISE_EXEC_AUTO_INSTALL",
@@ -152,6 +153,7 @@ fn fetch_matches_obligation_contract_by_construction() -> TestResult {
             "MISE_NO_ENV",
             "MISE_NO_HOOKS",
             "MISE_RUSTUP_HOME",
+            "RUSTUP_HOME",
             "RUSTUP_TOOLCHAIN",
         ],
         "fetch carries exactly the validated contract"

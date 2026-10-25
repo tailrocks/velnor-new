@@ -3,10 +3,11 @@
 use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 use std::path::Path;
+use std::process::Command;
 use std::time::Duration;
 
 use super::MiseDiagnosticContext;
-use velnor_actions_mise::{IsolatedCommand, MiseError, ProcessOutput};
+use super::bounded_process::{BoundedOutput, BoundedProcessError};
 
 const CAPTURE_LIMIT: usize = 8 * 1024;
 const DISPLAY_LIMIT: usize = 4096;
@@ -105,7 +106,7 @@ pub(super) fn run_bounded(
     environment: &BTreeMap<OsString, OsString>,
     capture_limit: usize,
     timeout: Duration,
-) -> Result<ProcessOutput, MiseError> {
+) -> Result<BoundedOutput, BoundedProcessError> {
     let mut env_args = vec![OsString::from("-i")];
     env_args.extend(
         environment
@@ -114,9 +115,9 @@ pub(super) fn run_bounded(
     );
     env_args.push(program.to_owned());
     env_args.extend_from_slice(args);
-    IsolatedCommand::repo_task("/usr/bin/env", env_args, &[])?
-        .with_cwd(cwd.to_path_buf())
-        .run_bounded(capture_limit, timeout)
+    let mut command = Command::new("/usr/bin/env");
+    command.env_clear().args(env_args).current_dir(cwd);
+    super::bounded_process::run_bounded(&mut command, capture_limit, timeout)
 }
 
 pub(super) fn run_probe(
@@ -124,7 +125,7 @@ pub(super) fn run_probe(
     args: &[OsString],
     cwd: &Path,
     environment: &BTreeMap<OsString, OsString>,
-) -> Result<ProcessOutput, MiseError> {
+) -> Result<BoundedOutput, BoundedProcessError> {
     run_bounded(
         program,
         args,
@@ -142,7 +143,7 @@ fn assignment(key: &OsStr, value: &OsStr) -> OsString {
     assignment
 }
 
-pub(super) fn command_summary(result: &ProcessOutput) -> String {
+pub(super) fn command_summary(result: &BoundedOutput) -> String {
     format!(
         "success={} code={:?} signal={:?} stdout={:?} stderr={:?}",
         result.success,
@@ -200,7 +201,6 @@ mod tests {
     use super::*;
     use std::error::Error;
     use std::time::Instant;
-    use velnor_actions_mise::command::is_cancel_or_timeout;
 
     fn pairs(values: &[(&str, &str)]) -> Vec<(OsString, OsString)> {
         values
@@ -209,7 +209,11 @@ mod tests {
             .collect()
     }
 
-    fn run_shell(script: &str, cap: usize, timeout: Duration) -> Result<ProcessOutput, MiseError> {
+    fn run_shell(
+        script: &str,
+        cap: usize,
+        timeout: Duration,
+    ) -> Result<BoundedOutput, BoundedProcessError> {
         let environment =
             BTreeMap::from([(OsString::from("PATH"), OsString::from("/bin:/usr/bin"))]);
         run_bounded(
@@ -328,7 +332,7 @@ mod tests {
     fn bounded_probe_stops_on_deadline_and_output_limit() {
         let started = Instant::now();
         let timeout = run_shell("sleep 5", CAPTURE_LIMIT, Duration::from_millis(100));
-        assert!(timeout.as_ref().is_err_and(is_cancel_or_timeout));
+        assert!(matches!(timeout, Err(BoundedProcessError::TimedOut)));
         assert!(started.elapsed() < Duration::from_secs(2));
 
         let oversized = run_shell("printf 0123456789", 4, Duration::from_secs(2));

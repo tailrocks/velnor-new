@@ -47,6 +47,14 @@ fn entry() -> TaskExecutionManifestEntryV1 {
             "MISE_CARGO_HOME".to_owned(),
             "${{ runner.temp }}/velnor/cargo".to_owned(),
         ),
+        (
+            "RUSTUP_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/rustup".to_owned(),
+        ),
+        (
+            "CARGO_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/cargo".to_owned(),
+        ),
         ("RUSTUP_TOOLCHAIN".to_owned(), "1.99.0".to_owned()),
     ]);
     env.insert("RUSTDOCFLAGS".to_owned(), "-D warnings".to_owned());
@@ -67,11 +75,54 @@ fn entry() -> TaskExecutionManifestEntryV1 {
 }
 
 fn manifest() -> TaskExecutionManifestV1 {
-    let record = entry();
+    manifest_with(entry())
+}
+
+fn manifest_with(record: TaskExecutionManifestEntryV1) -> TaskExecutionManifestV1 {
     TaskExecutionManifestV1 {
         schema: TASK_EXECUTION_MANIFEST_SCHEMA,
         generator_version: "0.1.7".to_owned(),
         tasks: BTreeMap::from([(record.task_id.clone(), record)]),
+    }
+}
+
+#[test]
+fn direct_rust_homes_are_required_even_with_refreshed_execution_digest() {
+    for (key, expected) in [
+        ("RUSTUP_HOME", "${{ runner.temp }}/velnor/rustup"),
+        ("CARGO_HOME", "${{ runner.temp }}/velnor/cargo"),
+    ] {
+        let mut missing = entry();
+        missing.env.remove(key);
+        missing
+            .refresh_execution_digest()
+            .expect("refresh missing-home digest");
+        assert!(
+            manifest_with(missing).validate().is_err(),
+            "missing {key} must fail independently of digest freshness"
+        );
+
+        let mut blank = entry();
+        blank.env.insert(key.to_owned(), String::new());
+        blank
+            .refresh_execution_digest()
+            .expect("refresh blank-home digest");
+        assert!(
+            manifest_with(blank).validate().is_err(),
+            "blank {key} must fail independently of digest freshness"
+        );
+
+        let mut conflicting = entry();
+        conflicting
+            .env
+            .insert(key.to_owned(), format!("{expected}/other"));
+        conflicting
+            .refresh_execution_digest()
+            .expect("refresh conflicting-home digest");
+        assert!(
+            manifest_with(conflicting).validate().is_err(),
+            "conflicting {key} must fail independently of digest freshness"
+        );
     }
 }
 

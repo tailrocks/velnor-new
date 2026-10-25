@@ -1006,11 +1006,11 @@ dependencies = [
  "clap",
  "flate2",
  "proc-macro2",
+ "rustix",
  "serde_json",
  "sha2",
  "syn",
  "velnor-actions-freshness",
- "velnor-actions-mise",
  "velnor-actions-orchestrator",
 ]
 
