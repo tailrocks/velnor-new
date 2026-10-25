@@ -182,14 +182,24 @@ worker's private DinD engine. The runner container is not privileged. The job
 does not receive the outer Docker socket, host home, Keychain, SSH agent,
 controller config, or management tokens.
 
-Every host configuration must set four per-job budgets under
-`[host.resources]`: `runner_cpu_millicores`, `runner_memory_bytes`,
-`dind_cpu_millicores`, and `dind_memory_bytes`. CPU is millicores; memory is
-bytes. There are no resource defaults. The controller validates each Docker
-limit, checked pair totals, and the selected daemon's CPU count before it opens
-a job session. It applies the runner limits to the unprivileged runner
-container and the DinD limits to the private privileged DinD container. Swap is
-limited to each container's memory limit.
+Every host configuration must set four per-job budgets and the operational
+memory reserve under `[host.resources]`: `runner_cpu_millicores`,
+`runner_memory_bytes`, `dind_cpu_millicores`, `dind_memory_bytes`, and
+`operational_memory_reserve_bytes`. CPU values are millicores; memory values
+are bytes. There are no resource defaults. The reserve setting must be positive.
+The shared memory reserve adds that operator-supplied margin to the probe's
+fixed 128 MiB memory cap; checked arithmetic rejects a sum that does not fit a
+signed 64-bit byte count. The controller validates each Docker limit, checked
+pair totals, and the selected daemon's CPU count before it opens a job session.
+It applies the runner limits to the unprivileged runner container and the DinD
+limits to the private privileged DinD container. Swap is limited to each
+container's memory limit.
+
+Set the operational reserve from measured peak guest-side shim, kernel, daemon,
+and controller-startup memory growth, plus an explicit safety allowance. The
+1 GiB value used in initial qualification fixtures is provisional. Production
+admission remains unqualified until the live measurement gate passes against
+the same final image, budget, and engine.
 
 The configured pair CPU and memory totals are the per-job admission costs.
 Admission must also account for already occupied jobs and measured guest CPU,
