@@ -13,6 +13,7 @@ use crate::error::HostError;
 #[cfg(test)]
 mod deadline_tests;
 mod process;
+mod retry_after;
 #[cfg(test)]
 mod test_support;
 #[cfg(test)]
@@ -134,17 +135,22 @@ fn perform_with_scratch(
     max_response_bytes: usize,
     scratch: &Scratch,
 ) -> Result<Exchange, CurlFail> {
+    retry_after::wait_for_base(base, deadline)?;
     let url = join_url(base, &request.path, request.query.as_deref()).ok_or(CurlFail::Reset)?;
     let body_path = scratch.path("body");
     write_private(&body_path, &request.body)?;
     let max_time = remaining(deadline).ok_or(CurlFail::Timeout)?;
     let config = curl_config(&url, request, &body_path, max_time)?;
-    let (status, body) = process::run_curl(&config, deadline, max_response_bytes)?;
+    let response = process::run_curl(&config, deadline, max_response_bytes)?;
+    retry_after::record_response(base, response.status, response.retry_after.as_deref());
     if Instant::now() >= deadline {
         return Err(CurlFail::Timeout);
     }
-    trace(base, request, status, body.len());
-    Ok(Exchange { status, body })
+    trace(base, request, response.status, response.body.len());
+    Ok(Exchange {
+        status: response.status,
+        body: response.body,
+    })
 }
 
 fn trace(base: &str, request: &SessionRequest, status: u16, response_bytes: usize) {
@@ -239,7 +245,7 @@ fn curl_config(
         format!("request = \"{}\"", method_name(request.method)),
         quoted("url", url)?,
         "output = \"-\"".to_owned(),
-        "write-out = \"%{http_code}\"".to_owned(),
+        "write-out = \"%{http_code}%{stderr}%header{retry-after}\"".to_owned(),
         format!("max-time = {max_time_seconds:.3}"),
     ];
     for (name, value) in &request.headers {

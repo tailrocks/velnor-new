@@ -7,11 +7,19 @@ use std::time::{Duration, Instant};
 
 use super::{CURL_ARGV, CurlFail, classify_exit};
 
+const MAX_RETRY_AFTER_BYTES: usize = 256;
+
+pub(super) struct CurlResponse {
+    pub(super) status: u16,
+    pub(super) body: Vec<u8>,
+    pub(super) retry_after: Option<Vec<u8>>,
+}
+
 pub(super) fn run_curl(
     config: &str,
     deadline: Instant,
     max_response_bytes: usize,
-) -> Result<(u16, Vec<u8>), CurlFail> {
+) -> Result<CurlResponse, CurlFail> {
     run_curl_with_home(config, None, deadline, max_response_bytes)
 }
 
@@ -23,7 +31,7 @@ pub(super) fn run_in_home(config: &str, home: &Path) -> Result<u16, CurlFail> {
         Instant::now() + Duration::from_secs(60),
         super::MAX_RESPONSE_BODY_BYTES,
     )
-    .map(|(status, _)| status)
+    .map(|response| response.status)
 }
 
 fn run_curl_with_home(
@@ -31,7 +39,7 @@ fn run_curl_with_home(
     home: Option<&Path>,
     deadline: Instant,
     max_response_bytes: usize,
-) -> Result<(u16, Vec<u8>), CurlFail> {
+) -> Result<CurlResponse, CurlFail> {
     if Instant::now() >= deadline {
         return Err(CurlFail::Timeout);
     }
@@ -43,7 +51,7 @@ fn run_curl_with_home(
     let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .map_err(|_| CurlFail::Reset)?;
     let Some(stdout) = child.stdout.take() else {
@@ -57,16 +65,44 @@ fn run_curl_with_home(
         stop_child(&mut child);
         return Err(CurlFail::Reset);
     };
+    let Some(stderr) = child.stderr.take() else {
+        stop_child(&mut child);
+        let _reader_result = reader.join();
+        return Err(CurlFail::Reset);
+    };
+    let Ok(stderr_reader) = thread::Builder::new()
+        .name("velnor-https-retry-after".to_owned())
+        .spawn(move || read_bounded_stderr(stderr))
+    else {
+        stop_child(&mut child);
+        let _reader_result = reader.join();
+        return Err(CurlFail::Reset);
+    };
     if let Err(error) = write_config_until(&mut child, config.as_bytes(), deadline) {
         stop_child(&mut child);
         let _reader_result = reader.join();
+        let _stderr_result = stderr_reader.join();
         return Err(error);
     }
     let finished = wait_until(child, deadline);
-    let response = reader.join().map_err(|_| CurlFail::Reset)??;
+    let response = match reader.join() {
+        Ok(response) => response,
+        Err(_) => Err(CurlFail::Reset),
+    };
+    let stderr = stderr_reader.join().ok();
     let finished = finished?;
+    let response = response?;
     let status = classify_exit(finished.status.code(), &response.status)?;
-    Ok((status, response.body))
+    let retry_after = stderr
+        .filter(|captured| !captured.overflow)
+        .filter(|_| matches!(status, 429 | 503))
+        .map(|captured| captured.bytes)
+        .filter(|bytes| !bytes.is_empty());
+    Ok(CurlResponse {
+        status,
+        body: response.body,
+        retry_after,
+    })
 }
 
 struct BoundedResponse {
@@ -100,6 +136,34 @@ fn read_bounded_response<R: Read>(
         body,
         status: trailer,
     })
+}
+
+struct BoundedStderr {
+    bytes: Vec<u8>,
+    overflow: bool,
+}
+
+fn read_bounded_stderr<R: Read>(mut reader: R) -> BoundedStderr {
+    let mut bytes = Vec::with_capacity(MAX_RETRY_AFTER_BYTES);
+    let mut overflow = false;
+    let mut chunk = [0_u8; 1024];
+    loop {
+        match reader.read(&mut chunk) {
+            Ok(0) => break,
+            Ok(read) => {
+                let available = MAX_RETRY_AFTER_BYTES.saturating_sub(bytes.len());
+                let retained = read.min(available);
+                bytes.extend_from_slice(&chunk[..retained]);
+                overflow |= retained < read;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(_) => {
+                overflow = true;
+                break;
+            }
+        }
+    }
+    BoundedStderr { bytes, overflow }
 }
 
 fn write_config_until(child: &mut Child, config: &[u8], deadline: Instant) -> Result<(), CurlFail> {
