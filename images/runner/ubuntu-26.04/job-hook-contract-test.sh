@@ -17,7 +17,7 @@ grep -Fq -- '--bin velnor-job-start-hook' "$build"
 grep -Fq -- "--build-context \"job_start_hook=" "$build"
 grep -Fq -- "--build-context \"job_started_hook=" "$build"
 grep -Fq 'export ACTIONS_RUNNER_HOOK_JOB_STARTED=/usr/local/bin/velnor-job-start-hook' "$entrypoint"
-grep -Fq 'export ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER=true' "$entrypoint"
+grep -Fq 'export ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER=false' "$entrypoint"
 grep -Fq 'unset ACTIONS_RUNNER_CONTAINER_HOOKS' "$entrypoint"
 [[ "$(cat "$wrapper")" == $'#!/bin/bash\nset -euo pipefail\n\nexec /velnor/job-start-hook' ]]
 
@@ -25,19 +25,38 @@ cat > "$fixture/listener" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 [[ "$#" -eq 1 && "$1" == run ]]
-printf '%s\n' "${ACTIONS_RUNNER_HOOK_JOB_STARTED-}" "${ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER-}" "${ACTIONS_RUNNER_CONTAINER_HOOKS-}" > "$HOOK_CAPTURE"
+if [[ ${ACTIONS_RUNNER_CONTAINER_HOOKS+x} ]]; then
+  container_hooks_state=set
+else
+  container_hooks_state=unset
+fi
+printf '%s\n%s\n%s' \
+  "${ACTIONS_RUNNER_HOOK_JOB_STARTED-}" \
+  "${ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER-}" \
+  "$container_hooks_state" > "$HOOK_CAPTURE"
+printf '%s' "${ACTIONS_RUNNER_INPUT_JITCONFIG-}" > "$JIT_CAPTURE"
 EOF
 chmod 0755 "$fixture/listener"
-{
-  printf 'payload=%q\nlistener=%q\n' test-payload "$fixture/listener"
-  sed -n '/^unset ACTIONS_RUNNER_CONTAINER_HOOKS$/,$p' "$entrypoint"
-} > "$fixture/launch.sh"
-HOOK_CAPTURE="$fixture/capture" \
-  ACTIONS_RUNNER_HOOK_JOB_STARTED=/tmp/incorrect-hook \
-  ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER=false \
-  ACTIONS_RUNNER_CONTAINER_HOOKS=/tmp/incorrect-container-hooks \
-  bash "$fixture/launch.sh"
-[[ "$(cat "$fixture/capture")" == $'/usr/local/bin/velnor-job-start-hook\ntrue' ]]
+
+run_launch_fixture() {
+  local name="$1"
+  local payload="$2"
+  {
+    printf 'payload=%q\nlistener=%q\n' "$payload" "$fixture/listener"
+    sed -n '/^unset ACTIONS_RUNNER_CONTAINER_HOOKS$/,$p' "$entrypoint"
+  } > "$fixture/launch-${name}.sh"
+  HOOK_CAPTURE="$fixture/hook-${name}" \
+    JIT_CAPTURE="$fixture/jit-${name}" \
+    ACTIONS_RUNNER_HOOK_JOB_STARTED=/tmp/incorrect-hook \
+    ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER=true \
+    ACTIONS_RUNNER_CONTAINER_HOOKS=/tmp/incorrect-container-hooks \
+    bash "$fixture/launch-${name}.sh"
+  [[ "$(cat "$fixture/hook-${name}")" == $'/usr/local/bin/velnor-job-start-hook\nfalse\nunset' ]]
+  [[ "$(cat "$fixture/jit-${name}")" == "$payload" ]]
+}
+
+run_launch_fixture containerless '{"fixture":"containerless"}'
+run_launch_fixture declared-container '{"fixture":"declared-container","container":{"image":"ubuntu:26.04"}}'
 
 python3 - "$entrypoint" <<'PY'
 from pathlib import Path
@@ -46,7 +65,7 @@ import sys
 lines = Path(sys.argv[1]).read_text().splitlines()
 required = [
     "unset ACTIONS_RUNNER_CONTAINER_HOOKS",
-    "export ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER=true",
+    "export ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER=false",
     "export ACTIONS_RUNNER_HOOK_JOB_STARTED=/usr/local/bin/velnor-job-start-hook",
     'ACTIONS_RUNNER_INPUT_JITCONFIG="$payload" exec "$listener" run',
 ]

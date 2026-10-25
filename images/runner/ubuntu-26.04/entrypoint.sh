@@ -92,6 +92,6 @@ cd "$root"
 "${entrypoint_dir}/velnor-wait-docker-api" "$docker_host"
 # The host approval hook must keep its fixed path.
 unset ACTIONS_RUNNER_CONTAINER_HOOKS
-export ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER=true
+export ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER=false
 export ACTIONS_RUNNER_HOOK_JOB_STARTED=/usr/local/bin/velnor-job-start-hook
 ACTIONS_RUNNER_INPUT_JITCONFIG="$payload" exec "$listener" run
