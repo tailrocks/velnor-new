@@ -47,15 +47,9 @@ pub(super) fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::AdmitReleaseAggregate => preview_production::admit(),
         InternalOp::ExecuteCheck => finish_internal_result(execute_check()),
         InternalOp::ExecuteReleaseProducer => preview_production::produce(),
-        InternalOp::PreviewSourceSelection => {
-            preview_production::native(select_preview_source_from_env())
-        }
-        InternalOp::PreviewSourceFinalization => {
-            preview_production::native(finalize_preview_source_from_env())
-        }
-        InternalOp::PreviewSourceAcquisition => {
-            preview_production::native(acquire_preview_source_from_env())
-        }
+        InternalOp::PreviewSourceSelection => run_preview_source_selection(),
+        InternalOp::PreviewSourceFinalization => run_preview_source_finalization(),
+        InternalOp::PreviewSourceAcquisition => run_preview_source_acquisition(),
         InternalOp::StableSourceSelection => {
             preview_production::native(select_stable_release_source_from_env())
         }
@@ -113,6 +107,18 @@ pub(super) fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::TapWriter => tap_prepare::run_writer(),
         InternalOp::TapMerge => tap_merge::run(),
     }
+}
+
+fn run_preview_source_selection() -> ExitCode {
+    preview_production::native(select_preview_source_from_env())
+}
+
+fn run_preview_source_finalization() -> ExitCode {
+    preview_production::native(finalize_preview_source_from_env())
+}
+
+fn run_preview_source_acquisition() -> ExitCode {
+    preview_production::native(acquire_preview_source_from_env())
 }
 
 fn run_task_execution() -> ExitCode {
