@@ -46,8 +46,8 @@ pub(crate) fn move_preseed_consumer_after_checkout(
     } else {
         checkout_at
     };
-    job.steps
-        .splice(checkout_at + 1..checkout_at + 1, helper_steps);
+    let insert_at = checkout_at + 1;
+    job.steps.splice(insert_at..insert_at, helper_steps);
     Ok(())
 }
 
@@ -99,8 +99,7 @@ fn configured_checkout_at(
         .count();
     if checkout_count != 1 {
         return Err(RenderError::InvalidWorkflow(format!(
-            "cache_helper_checkout_count:{job_id}:{}",
-            checkout_count
+            "cache_helper_checkout_count:{job_id}:{checkout_count}"
         )));
     }
     let Some(checkout_at) = job

@@ -228,23 +228,33 @@ pub fn finalize_jobs(
         cache_p08::check_no_legacy_rust_cache(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
     }
-    // Both cache families are validated globally before either gets a save.
-    cache_p08::elect_cache_writers_with_policy(&mut jobs, ctx.pull_request_cache_policy)?;
-    closure::check_plan_anchor(&jobs)?;
-    preseed_closure::check_preseed_closure(&mut jobs, ctx.preseed)?;
-    closure::insert_plan_closure(&mut jobs, ctx)?;
-    closure::insert_request_closure(&mut jobs)?;
-    closure::insert_task_closure(&mut jobs)?;
-    closure::insert_final_closure(&mut jobs)?;
-    final_steps::insert_final_fanin(&mut jobs, ctx)?;
-    crate::workflow_routing::route_jobs(&mut jobs, &routing)?;
-    crate::dispatch_cache_boundary::suppress_unvalidated_cache_access(&mut jobs);
-    crate::cache_tar_setup::insert_launcher_steps(&mut jobs)?;
-    apply_affected_job_gates(&mut jobs)?;
-    validate_final_jobs(ir, &mut jobs)?;
-    crate::required_gate::check_required_gate(&jobs)?;
-    crate::cache_doctor::check(&jobs)?;
+    finalize_shared_job_graph(&mut jobs, ir, ctx, &routing)?;
     Ok(jobs)
+}
+
+fn finalize_shared_job_graph(
+    jobs: &mut BTreeMap<String, Job>,
+    ir: &WorkflowIr,
+    ctx: &RenderContext,
+    routing: &crate::workflow_routing::WorkflowRoutingPolicy,
+) -> Result<(), RenderError> {
+    // Both cache families are validated globally before either gets a save.
+    cache_p08::elect_cache_writers_with_policy(jobs, ctx.pull_request_cache_policy)?;
+    closure::check_plan_anchor(jobs)?;
+    preseed_closure::check_preseed_closure(jobs, ctx.preseed)?;
+    closure::insert_plan_closure(jobs, ctx)?;
+    closure::insert_request_closure(jobs)?;
+    closure::insert_task_closure(jobs)?;
+    closure::insert_final_closure(jobs)?;
+    final_steps::insert_final_fanin(jobs, ctx)?;
+    crate::workflow_routing::route_jobs(jobs, routing)?;
+    crate::dispatch_cache_boundary::suppress_unvalidated_cache_access(jobs);
+    crate::cache_tar_setup::insert_launcher_steps(jobs)?;
+    apply_affected_job_gates(jobs)?;
+    validate_final_jobs(ir, jobs)?;
+    crate::required_gate::check_required_gate(jobs)?;
+    crate::cache_doctor::check(jobs)?;
+    Ok(())
 }
 
 #[path = "render_validation.rs"]

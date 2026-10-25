@@ -10,6 +10,20 @@ fn timeout_line<'a>(yaml: &'a str, name: &str, next: Option<&str>) -> &'a str {
         .expect("job timeout")
 }
 
+fn assert_timeout_line_unchanged(
+    default_yaml: &str,
+    actual_yaml: &str,
+    name: &str,
+    next: Option<&str>,
+    message: &str,
+) {
+    assert_eq!(
+        timeout_line(default_yaml, name, next),
+        timeout_line(actual_yaml, name, next),
+        "{message}"
+    );
+}
+
 #[test]
 fn publication_timeout_only_extends_preview_admission_and_shared_publish_recovery_jobs() {
     let preview_default = with_tap();
@@ -62,18 +76,12 @@ fn publication_timeout_only_extends_preview_admission_and_shared_publish_recover
         )
         .contains("timeout-minutes: 15")
     );
-    assert_eq!(
-        timeout_line(
-            &preview_default_yaml,
-            "preview-tap-prepare",
-            Some("preview-tap-writer")
-        ),
-        timeout_line(
-            &preview_yaml,
-            "preview-tap-prepare",
-            Some("preview-tap-writer")
-        ),
-        "tap preparation timeout stays unchanged"
+    assert_timeout_line_unchanged(
+        &preview_default_yaml,
+        &preview_yaml,
+        "preview-tap-prepare",
+        Some("preview-tap-writer"),
+        "tap preparation timeout stays unchanged",
     );
     for (name, next) in [
         ("preview-payload", Some("preview-assemble")),
