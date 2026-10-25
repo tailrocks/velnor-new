@@ -111,7 +111,12 @@ fn host_files_match_brews_cleaned_mode_while_libexec_modes_stay_policy_bound() {
             paths: &paths,
             deadline,
         };
-        validate_file_inventory(&request).expect("555 host and policy auxiliary modes");
+        validate_file_inventory_for_host(&request, "aarch64-apple-darwin")
+            .expect("555 Mac ARM host and policy auxiliary modes");
+        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+        validate_file_inventory(&request).expect("production Mac ARM host inventory");
+        #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
+        assert!(validate_file_inventory(&request).is_err());
     }
     files[host_index].mode = 0o755;
     let request = HomebrewInstallRequest {
@@ -124,5 +129,9 @@ fn host_files_match_brews_cleaned_mode_while_libexec_modes_stay_policy_bound() {
         paths: &paths,
         deadline,
     };
+    assert!(validate_file_inventory_for_host(&request, "aarch64-apple-darwin").is_err());
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    assert!(validate_file_inventory(&request).is_err());
+    #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
     assert!(validate_file_inventory(&request).is_err());
 }

@@ -69,6 +69,13 @@ pub(super) fn validate_file_inventory(
     request: &HomebrewInstallRequest<'_>,
 ) -> Result<(), OrchestratorError> {
     let host_target = current_host_target()?;
+    validate_file_inventory_for_host(request, host_target)
+}
+
+fn validate_file_inventory_for_host(
+    request: &HomebrewInstallRequest<'_>,
+    host_target: &str,
+) -> Result<(), OrchestratorError> {
     if !request
         .spec
         .host
