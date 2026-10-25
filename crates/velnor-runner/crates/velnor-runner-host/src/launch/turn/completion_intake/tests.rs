@@ -11,6 +11,9 @@ use crate::journal::request_lifecycle::tests::post_jit_retirement::late_events;
 use crate::launch::turn::completion_intake::intake_and_ack_if_only_scoped;
 use crate::scale_set::EnsureError;
 
+#[path = "tests/reordered.rs"]
+mod reordered;
+
 #[test]
 fn late_lifecycle_batch_acks_without_resuming_or_scheduling_cleanup() -> Result<(), String> {
     crate::launch::test_harness_stack::run_on_test_harness_stack(
