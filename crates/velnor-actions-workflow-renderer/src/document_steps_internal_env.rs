@@ -215,6 +215,7 @@ mod tests {
                 job_env: &job_env,
                 runs_on: None,
                 actions_read: true,
+                relocated_child: false,
             },
         )
         .expect("typed internal step renders");

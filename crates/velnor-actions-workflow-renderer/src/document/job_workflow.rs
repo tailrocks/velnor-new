@@ -133,6 +133,7 @@ fn callee_yaml(
             plan_attempt: Some("${{ inputs.run_key_attempt }}"),
             actions_read,
             workflow_env,
+            relocated_child: true,
         },
     )?;
     let mut top = vec![

@@ -103,6 +103,7 @@ fn rendered_condition(step: &Step) -> String {
         job_env: &job_env,
         runs_on: Some("ubuntu-26.04"),
         actions_read: false,
+        relocated_child: false,
     };
     let Yaml::Map(entries) =
         crate::document_steps::step_to_yaml("rust-amq", step, &context, &[], false, &step_context)

@@ -84,6 +84,7 @@ pub(crate) fn workflow_to_yaml(
                     plan_attempt: crate::document_env::plan_attempt_value(id, job, jobs),
                     actions_read,
                     workflow_env: &workflow_env,
+                    relocated_child: false,
                 },
             )?
         };
@@ -293,6 +294,7 @@ struct JobRenderPolicy<'a> {
     plan_attempt: Option<&'static str>,
     actions_read: bool,
     workflow_env: &'a BTreeMap<String, String>,
+    relocated_child: bool,
 }
 
 /// Render one job: name, runs-on, timeout, environment, permissions, needs, if, steps.
@@ -371,6 +373,7 @@ fn job_to_yaml(
             job_env: &effective_env,
             runs_on: Some(&job.runs_on),
             actions_read: policy.actions_read,
+            relocated_child: policy.relocated_child,
         },
     )?;
     crate::cache_save_budget::apply(&mut rendered_steps, job.timeout_minutes.minutes())?;

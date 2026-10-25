@@ -13,6 +13,7 @@ pub use tool_payload::{ToolsCacheInputs, ToolsCachePayload};
 pub(crate) use tool_payload::{
     runtime_identity_action_file, runtime_identity_action_uses, runtime_identity_script_file,
     runtime_prelude_action_file, runtime_prelude_action_uses, validate_runtime_identity_action,
+    validate_runtime_identity_action_for_relocated_child,
 };
 #[path = "cache_p08_save_policy.rs"]
 mod save_policy;
@@ -39,6 +40,8 @@ pub(crate) const TOOLS_CACHE_IDENTITY_DIGEST_INPUT: &str =
 /// Condition for cache restore when a job needs the plan job.
 pub const TOOLS_CACHE_NORMAL_RUN_CONDITION: &str =
     "needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''";
+pub(crate) const TOOLS_CACHE_RELOCATED_RUN_CONDITION: &str =
+    "inputs.plan_result == 'success' && inputs.qualification_campaign == ''";
 /// Jobs that do not need the plan job cannot read its outputs.
 pub const TOOLS_CACHE_PLAN_RUN_CONDITION: &str = "github.event_name != 'workflow_dispatch'";
 /// A tool seed may run only after its runtime identity action succeeds.

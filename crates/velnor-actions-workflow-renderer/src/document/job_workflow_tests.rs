@@ -24,6 +24,8 @@ mod call_schema;
 mod capture_runner;
 #[path = "job_workflow_tests/fixture.rs"]
 mod fixture;
+#[path = "job_workflow_tests/identity_condition.rs"]
+mod identity_condition;
 
 fn source_job() -> Job {
     Job {

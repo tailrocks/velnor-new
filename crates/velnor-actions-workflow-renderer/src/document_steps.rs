@@ -128,6 +128,7 @@ pub(crate) fn non_internal_step_to_yaml(
                 job_env,
                 runs_on: Some(runs_on),
                 composite: false,
+                relocated_child: false,
             },
         ),
         StepKind::Shell { run, env } => shell_step_to_yaml(step, run, env, job_env, false, None),
@@ -178,6 +179,7 @@ pub(crate) fn step_to_yaml(
                 job_env: step_context.job_env,
                 runs_on: step_context.runs_on,
                 composite,
+                relocated_child: step_context.relocated_child,
             },
         ),
         StepKind::Shell { run, env } => {

@@ -107,6 +107,7 @@ fn assert_receipt_step_order_and_rendering(job: &Job, ctx: &RenderContext) {
         job_env: &BTreeMap::new(),
         runs_on: Some("ubuntu-24.04"),
         actions_read: true,
+        relocated_child: false,
     };
     let rendered_fetch = crate::document_steps::step_to_yaml(
         FINAL_JOB_ID,

@@ -294,11 +294,7 @@ pub(crate) fn composite_file(
     .map_err(RenderError::Contract)?;
     let mut rendered = Vec::with_capacity(steps.len());
     let empty_job_env = BTreeMap::new();
-    let step_context = crate::document_lanes::JobStepContext {
-        job_env: &empty_job_env,
-        runs_on: None,
-        actions_read: false,
-    };
+    let step_context = crate::document_lanes::JobStepContext::composite(&empty_job_env);
     for step in steps {
         rendered.push(step_to_yaml(logical, step, ctx, &[], true, &step_context)?);
     }

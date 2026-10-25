@@ -87,11 +87,7 @@ fn composite_document(
     )
     .map_err(RenderError::Contract)?;
     let empty_job_env = BTreeMap::new();
-    let step_context = crate::document_lanes::JobStepContext {
-        job_env: &empty_job_env,
-        runs_on: None,
-        actions_read: false,
-    };
+    let step_context = crate::document_lanes::JobStepContext::composite(&empty_job_env);
     let rendered = steps
         .iter()
         .map(|step| {

@@ -378,3 +378,5 @@ fn generated_files_exist_only_for_real_v2_consumers() -> Result<(), RenderError>
 
 #[path = "cache_p08_helper_policy_tests.rs"]
 mod helper_policy_tests;
+#[path = "cache_p08_runtime_prelude_relocated_condition_tests.rs"]
+mod relocated_condition_tests;

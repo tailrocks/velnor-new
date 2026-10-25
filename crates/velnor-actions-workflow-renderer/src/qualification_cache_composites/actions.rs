@@ -140,11 +140,7 @@ fn render_composite_steps(
     }
     let mut rendered = Vec::with_capacity(steps.len());
     let empty_job_env = BTreeMap::new();
-    let step_context = JobStepContext {
-        job_env: &empty_job_env,
-        runs_on: None,
-        actions_read: false,
-    };
+    let step_context = JobStepContext::composite(&empty_job_env);
     for step in steps.iter() {
         rendered.push(crate::document_steps::step_to_yaml(
             job_id,

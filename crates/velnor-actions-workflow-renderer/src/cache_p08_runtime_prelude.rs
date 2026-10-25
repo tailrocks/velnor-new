@@ -66,17 +66,32 @@ pub(super) fn validate_action_call(
     with: &BTreeMap<String, String>,
     env: &BTreeMap<String, String>,
 ) -> Result<(), RenderError> {
+    validate_action_call_in_scope(step, uses, runs_on, with, env, false)
+}
+
+pub(super) fn validate_action_call_for_relocated_child(
+    step: &Step,
+    uses: &str,
+    runs_on: &str,
+    with: &BTreeMap<String, String>,
+    env: &BTreeMap<String, String>,
+) -> Result<(), RenderError> {
+    validate_action_call_in_scope(step, uses, runs_on, with, env, true)
+}
+
+fn validate_action_call_in_scope(
+    step: &Step,
+    uses: &str,
+    runs_on: &str,
+    with: &BTreeMap<String, String>,
+    env: &BTreeMap<String, String>,
+    relocated_child: bool,
+) -> Result<(), RenderError> {
     let is_scale_set = is_scale_set_lane(runs_on)?;
     let source_sha =
         with.get(super::runtime_identity::TOOLS_CACHE_SCALE_SET_IMAGE_SOURCE_SHA_INPUT);
     if step.role != Some(StepRole::ToolsCacheIdentity)
-        || !matches!(
-            step.condition.as_deref(),
-            Some(
-                cache_p08::TOOLS_CACHE_NORMAL_RUN_CONDITION
-                    | cache_p08::TOOLS_CACHE_PLAN_RUN_CONDITION
-            )
-        )
+        || !valid_identity_condition(step.condition.as_deref(), relocated_child)
         || Some(uses) != action_uses(runs_on)
         || !env.is_empty()
         || with.len() != if is_scale_set { 2 } else { 1 }
@@ -99,6 +114,15 @@ pub(super) fn validate_action_call(
         ));
     }
     Ok(())
+}
+
+fn valid_identity_condition(condition: Option<&str>, relocated_child: bool) -> bool {
+    matches!(
+        condition,
+        Some(
+            cache_p08::TOOLS_CACHE_NORMAL_RUN_CONDITION | cache_p08::TOOLS_CACHE_PLAN_RUN_CONDITION
+        )
+    ) || (relocated_child && condition == Some(cache_p08::TOOLS_CACHE_RELOCATED_RUN_CONDITION))
 }
 
 pub(super) fn action_file(runs_on: &str, version: &str) -> Result<RenderedFile, RenderError> {

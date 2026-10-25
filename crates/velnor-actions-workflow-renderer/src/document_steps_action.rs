@@ -16,6 +16,7 @@ pub(super) struct ActionStepContext<'a> {
     pub(super) job_env: &'a BTreeMap<String, String>,
     pub(super) runs_on: Option<&'a str>,
     pub(super) composite: bool,
+    pub(super) relocated_child: bool,
 }
 
 pub(super) fn action_step_to_yaml(
@@ -30,8 +31,10 @@ pub(super) fn action_step_to_yaml(
         job_env,
         runs_on,
         composite,
+        relocated_child,
     } = context;
-    let runtime_identity = validate_action_step(step, uses, with, env, runs_on, composite)?;
+    let runtime_identity =
+        validate_action_step(step, uses, with, env, runs_on, composite, relocated_child)?;
     let rendered_env = cache_action_env(step, env)?;
     commands::validate_env(&rendered_env)?;
     let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
@@ -96,6 +99,7 @@ fn validate_action_step(
     env: &BTreeMap<String, String>,
     runs_on: Option<&str>,
     composite: bool,
+    relocated_child: bool,
 ) -> Result<bool, RenderError> {
     crate::action_ref::validate_verifier_call(step, uses, with, env)?;
     let runtime_identity = step.role == Some(velnor_actions_contract::StepRole::ToolsCacheIdentity)
@@ -111,7 +115,13 @@ fn validate_action_step(
                 "tools_cache_identity_missing_runner".to_owned(),
             ));
         };
-        crate::cache_p08::validate_runtime_identity_action(step, uses, lane, with, env)?;
+        if relocated_child {
+            crate::cache_p08::validate_runtime_identity_action_for_relocated_child(
+                step, uses, lane, with, env,
+            )?;
+        } else {
+            crate::cache_p08::validate_runtime_identity_action(step, uses, lane, with, env)?;
+        }
     } else if uses == crate::tool_seed::TOOL_SEED_USES {
         crate::tool_seed::validate_action_call(step, uses, with, env)?;
     } else if uses == crate::cache_steps::TOOLS_RESTORE_USES {

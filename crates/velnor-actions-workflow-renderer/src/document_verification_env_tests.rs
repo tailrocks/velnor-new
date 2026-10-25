@@ -69,6 +69,7 @@ fn rendered_verification_job() -> String {
             plan_attempt: None,
             actions_read: false,
             workflow_env: &BTreeMap::new(),
+            relocated_child: false,
         },
     )
     .expect("render verification job");
