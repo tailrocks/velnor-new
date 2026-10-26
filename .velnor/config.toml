@@ -16,10 +16,3 @@ kind = "github-scale-set"
 name = "ubuntu-26.04-scale-set"
 labels = ["velnor", "ubuntu-26.04-scale-set"]
 platform = "linux/amd64"
-[[native_checks]]
-id = "fixture-native-tree"
-operation = "tap_tree"
-[native_checks.runner]
-label = "ubuntu-26.04"
-platform = "linux_x64"
-executor = "hosted"
