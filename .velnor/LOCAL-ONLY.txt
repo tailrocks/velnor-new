@@ -1,1 +1,1 @@
-LOCAL ONLY inverse protocol fixture. Copied real Git fixture; synthetic producer identity and event. No hosted or SDK56 release-authentication claim. No Rust task executes.
+LOCAL ONLY Rust resolver fixture. No hosted claim or release authentication for SDK56. Never execute resolved Cargo argv. Native generation/planning invokes Cargo metadata and is reserved for the root guarded executor.

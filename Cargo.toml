@@ -1,0 +1,9 @@
+[package]
+name = "inverse-rust-fixture"
+version = "0.1.0"
+edition = "2024"
+autotests = false
+
+[lib]
+test = false
+doctest = false
