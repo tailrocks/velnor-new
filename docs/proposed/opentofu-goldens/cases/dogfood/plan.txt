@@ -10,7 +10,7 @@ Detected stacks
     - velnor-actions-actionlint (crates/velnor-actions-actionlint/Cargo.toml) [lib; depends on velnor-actions-contract]
     - velnor-actions-ansible (crates/velnor-actions-ansible/Cargo.toml) [lib; depends on velnor-actions-contract]
     - velnor-actions-bun (crates/velnor-actions-bun/Cargo.toml) [lib; depends on velnor-actions-contract]
-    - velnor-actions-cli (crates/velnor-actions-cli/Cargo.toml) [bin, test; depends on velnor-actions-freshness, velnor-actions-orchestrator]
+    - velnor-actions-cli (crates/velnor-actions-cli/Cargo.toml) [bin, test; depends on velnor-actions-contract, velnor-actions-freshness, velnor-actions-mise, velnor-actions-orchestrator]
     - velnor-actions-contract (crates/velnor-actions-contract/Cargo.toml) [lib]
     - velnor-actions-dbt (crates/velnor-actions-dbt/Cargo.toml) [lib; depends on velnor-actions-contract]
     - velnor-actions-freshness (crates/velnor-actions-freshness/Cargo.toml) [lib]
@@ -51,6 +51,7 @@ Workflow to generate
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
     - alint (2 steps)
+    - candidate (18 steps)
     - cargo-deny (6 steps)
     - cargo-machete (7 steps)
     - check-maintenance-helpers (6 steps)
@@ -58,7 +59,7 @@ Workflow to generate
     - dependency-seed-crates-velnor-runner (23 steps)
     - jactionlint (8 steps)
     - plan (16 steps)
-    - required (9 steps)
+    - required (10 steps)
     - required-gate (1 steps)
     - rust-velnor-actions-actionlint (26 steps)
     - rust-velnor-actions-ansible (25 steps)

@@ -15,6 +15,10 @@ test = false
 name = "api2026_pull_context_public"
 path = "tests/api2026_pull_context_public.rs"
 
+[[test]]
+name = "candidate_freshness_public"
+path = "tests/candidate_freshness_public.rs"
+
 [dependencies]
 serde_json = { workspace = true }
 velnor-actions-orchestrator = { version = "=0.1.56", path = "../velnor-actions-orchestrator" }
@@ -25,6 +29,8 @@ clap = { version = "=4.6.7", features = ["derive"] }
 workspace = true
 
 [dev-dependencies]
+velnor-actions-contract = { version = "=0.1.56", path = "../velnor-actions-contract" }
+velnor-actions-mise = { version = "=0.1.56", path = "../velnor-actions-mise" }
 proc-macro2 = "=1.0.107"
 flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
 rustix = { version = "=1.1.5", features = ["fs", "process"] }

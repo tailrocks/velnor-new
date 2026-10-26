@@ -1011,7 +1011,9 @@ dependencies = [
  "sha2",
  "syn",
  "tempfile",
+ "velnor-actions-contract",
  "velnor-actions-freshness",
+ "velnor-actions-mise",
  "velnor-actions-orchestrator",
 ]
 

@@ -31,7 +31,7 @@ impl CandidateBuild {
         let args = BUILD_ARGS.iter().map(OsString::from).collect();
         Ok(Self {
             exec: PinnedToolExec::new(
-                vec![PinnedTool::Rust],
+                vec![PinnedTool::Rust, PinnedTool::MrBoxington],
                 std::ffi::OsStr::new(MBX_PROGRAM),
                 args,
             )?,

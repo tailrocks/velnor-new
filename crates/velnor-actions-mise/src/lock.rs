@@ -9,7 +9,7 @@ use velnor_actions_contract::{
 
 use super::{MISE_VERSION, PinnedTool, ToolCatalog};
 
-pub use super::lock_verify::verify_lock_against_manifest;
+pub use super::lock_verify::{verify_lock_against_manifest, verify_lock_against_published_release};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]

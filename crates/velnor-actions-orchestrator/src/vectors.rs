@@ -266,9 +266,10 @@ pub(crate) fn candidate_build_argv(
     strings_of(build.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
-pub(crate) fn candidate_spec(catalog: &ToolCatalog) -> Result<CandidateSpec, OrchestratorError> {
+pub(crate) fn candidate_spec() -> Result<CandidateSpec, OrchestratorError> {
+    let catalog = ToolCatalog::pinned();
     Ok(CandidateSpec {
-        build: candidate_build_argv(catalog)?,
+        build: candidate_build_argv(&catalog)?,
         qualify: QualifyRequest::staged().argv()?,
     })
 }

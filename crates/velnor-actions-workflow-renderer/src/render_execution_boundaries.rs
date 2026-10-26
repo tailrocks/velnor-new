@@ -10,7 +10,25 @@ use crate::{
 
 type JobMap = BTreeMap<String, Job>;
 
-pub(super) fn validate_required_verdict(jobs: &JobMap) -> Result<(), RenderError> {
+#[derive(Clone, Copy)]
+pub(super) enum ValidationPhase {
+    BeforeSetup,
+    Finalized,
+}
+
+impl ValidationPhase {
+    fn admits_mise_count(self, count: usize) -> bool {
+        match self {
+            Self::BeforeSetup => count <= 1,
+            Self::Finalized => count == 1,
+        }
+    }
+}
+
+pub(super) fn validate_required_verdict(
+    jobs: &JobMap,
+    phase: ValidationPhase,
+) -> Result<(), RenderError> {
     let Some(job) = jobs.get(FINAL_JOB_ID) else {
         return Ok(());
     };
@@ -21,7 +39,7 @@ pub(super) fn validate_required_verdict(jobs: &JobMap) -> Result<(), RenderError
             .count()
     };
     if count(StepRole::Checkout) != 1
-        || count(StepRole::MiseSetup) != 1
+        || !phase.admits_mise_count(count(StepRole::MiseSetup))
         || count(StepRole::AcquireVelnor) != 1
         || count(StepRole::PreparePinnedTools) != 1
     {
@@ -74,6 +92,7 @@ fn required_verdict_step(step: &Step) -> bool {
 pub(super) fn validate_trusted_plan(
     jobs: &JobMap,
     policy: WorkflowPolicy,
+    phase: ValidationPhase,
 ) -> Result<(), RenderError> {
     if policy != WorkflowPolicy::VelnorRepositoryV1 {
         return Ok(());
@@ -92,15 +111,15 @@ pub(super) fn validate_trusted_plan(
             "trusted_plan_operation_count".to_owned(),
         ));
     }
-    validate_plan_prefix(&plan.steps[..=plan_indices[0]])
+    validate_plan_prefix(&plan.steps[..=plan_indices[0]], phase)
 }
 
 fn matches_plan_operation(step: &Step) -> bool {
     matches!(&step.kind, StepKind::Internal { operation, .. } if operation == steps::PLAN_OPERATION)
 }
 
-fn validate_plan_prefix(prefix: &[Step]) -> Result<(), RenderError> {
-    if !has_plan_bootstrap(prefix) {
+fn validate_plan_prefix(prefix: &[Step], phase: ValidationPhase) -> Result<(), RenderError> {
+    if !has_plan_bootstrap(prefix, phase) {
         return Err(RenderError::InvalidWorkflow(
             "trusted_plan_bootstrap_missing".to_owned(),
         ));
@@ -125,7 +144,7 @@ fn validate_plan_prefix(prefix: &[Step]) -> Result<(), RenderError> {
     Ok(())
 }
 
-fn has_plan_bootstrap(prefix: &[Step]) -> bool {
+fn has_plan_bootstrap(prefix: &[Step], phase: ValidationPhase) -> bool {
     let count = |role| prefix.iter().filter(|step| step.role == Some(role)).count();
     let Some(acquire) = prefix
         .iter()
@@ -134,7 +153,7 @@ fn has_plan_bootstrap(prefix: &[Step]) -> bool {
         return false;
     };
     count(StepRole::Checkout) == 1
-        && count(StepRole::MiseSetup) == 1
+        && phase.admits_mise_count(count(StepRole::MiseSetup))
         && count(StepRole::AcquireVelnor) == 1
         && prefix[..acquire]
             .iter()

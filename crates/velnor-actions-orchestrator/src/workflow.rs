@@ -53,6 +53,13 @@ pub(crate) fn scale_set_selector_for_dispatch(
     workflow_context::scale_set_selector(config, dispatch)
 }
 
+pub(crate) fn validate_candidate_tool_pins(
+    config: &VelnorConfig,
+    catalog: &ToolCatalog,
+) -> Result<(), OrchestratorError> {
+    workflow_context::validate_candidate_tool_pins(config, catalog)
+}
+
 pub const CHECKOUT_USES: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 
 pub const DEFAULT_RUNNER_LABEL: &str = "ubuntu-26.04";

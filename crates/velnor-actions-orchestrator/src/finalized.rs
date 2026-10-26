@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, ReleaseManifest, TargetRecord, expand_workflow};
+use velnor_actions_contract::{Job, expand_workflow};
 use velnor_actions_workflow_renderer::finalize_jobs as finalize_render_jobs;
 
 use crate::OrchestratorError;
@@ -10,24 +10,7 @@ use crate::prepare::GenerationPreparation;
 pub(crate) fn validate_published_generator_lock(
     lock: &velnor_actions_contract::GeneratorLock,
 ) -> Result<(), OrchestratorError> {
-    let manifest = ReleaseManifest {
-        schema: ReleaseManifest::SCHEMA,
-        version: lock.generator.version.clone(),
-        repository: velnor_actions_contract::targets::EXPECTED_REPOSITORY.to_owned(),
-        commit: lock.generator.commit.clone(),
-        targets: lock
-            .generator
-            .binaries
-            .iter()
-            .map(|binary| TargetRecord {
-                target: binary.target.clone(),
-                artifact: binary.artifact.clone(),
-                sha256: binary.sha256.clone(),
-            })
-            .collect(),
-    };
-    manifest
-        .validate(".velnor/generator.lock")
+    lock.validate(".velnor/generator.lock")
         .map_err(|err| OrchestratorError::Contract {
             problem: err.to_string(),
         })?;
@@ -35,11 +18,11 @@ pub(crate) fn validate_published_generator_lock(
         .map_err(|err| OrchestratorError::Contract {
             problem: err.to_string(),
         })?;
-    velnor_actions_mise::catalog::lock::verify_lock_against_manifest(lock, &manifest).map_err(
-        |err| OrchestratorError::Contract {
+    velnor_actions_mise::catalog::lock::verify_lock_against_published_release(lock).map_err(|err| {
+        OrchestratorError::Contract {
             problem: err.to_string(),
-        },
-    )
+        }
+    })
 }
 
 pub fn finalized_jobs(

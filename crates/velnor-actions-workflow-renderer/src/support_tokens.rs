@@ -274,7 +274,7 @@ fn check_scrub_coverage(
     env: &BTreeMap<String, String>,
 ) -> Result<(), RenderError> {
     use crate::toolchain_env::STEP_CREDENTIAL_DENYLIST;
-    if id == super::RELEASE_JOB_ID || is_ambient_auth_role(role) {
+    if is_ambient_auth_role(role) {
         return Ok(());
     }
     let scoped = is_scoped_gh_token(id, env);

@@ -1,20 +1,17 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, ffi::OsString};
 
-use velnor_actions_contract::{Job, JobTimeout, Step};
+use velnor_actions_contract::{Job, JobTimeout, Step, StepRole};
+use velnor_actions_mise::{PinnedTool, PreparePinnedTools, ToolCatalog, ToolHomes};
 
 use crate::{
     RenderError,
     artifact_paths::{CANDIDATE_OUTPUT_DIR_EXPR, CANDIDATE_STAGE_DIR_EXPR},
-    closure::{FRESHNESS_OUTDIR, download_plan_step, freshness_step},
-    render::{CANDIDATE_JOB_ID, CandidateSpec, PLAN_JOB_ID, RenderContext},
+    closure::{FRESHNESS_OUTDIR, download_plan_step, freshness_step_with_claude_mode},
+    render::{CandidateSpec, PLAN_JOB_ID, RenderContext},
     steps,
 };
 
 pub const VERIFY_MANIFEST_NAME: &str = "Verify candidate manifest";
-
-pub fn check_release_build(version: &str, file: &str) -> Result<(), RenderError> {
-    velnor_actions_contract::require_release_version(version, file).map_err(RenderError::Contract)
-}
 
 pub fn candidate_artifact_name(target: &str) -> Result<String, RenderError> {
     let key = velnor_actions_contract::target_key(target).map_err(RenderError::Contract)?;
@@ -69,7 +66,27 @@ pub(crate) fn candidate_job(ctx: &RenderContext, spec: &CandidateSpec) -> Result
         environment: None,
         steps: vec![
             steps::checkout_step(&ctx.checkout_uses)?,
-            steps::shell_step("Build candidate", spec.build.clone(), BTreeMap::new())?,
+            verifier_step(
+                "Verify restored Rust toolchain",
+                velnor_actions_contract::workflow::RUST_VERIFIER_USES[0],
+                StepRole::VerifyRustManifest,
+            )?,
+            prepare_candidate_tools_step()?,
+            verifier_step(
+                "Verify jactionlint",
+                velnor_actions_contract::workflow::JACTIONLINT_VERIFIER_USES,
+                StepRole::VerifyJactionlint,
+            )?,
+            verifier_step(
+                crate::VERIFY_RUST_TOOLCHAIN_STEP,
+                velnor_actions_contract::workflow::RUST_VERIFIER_USES[1],
+                StepRole::VerifyRustManifest,
+            )?,
+            steps::shell_step(
+                "Build candidate",
+                spec.build.clone(),
+                owned_tool_env(&ToolHomes::runner_temp(), &ToolCatalog::pinned())?,
+            )?,
             download_plan_step()?,
             steps::shell_step(
                 "Write candidate manifest",
@@ -88,7 +105,12 @@ pub(crate) fn candidate_job(ctx: &RenderContext, spec: &CandidateSpec) -> Result
             steps::upload_artifact_step(&artifact, CANDIDATE_OUTPUT_DIR_EXPR)?,
             steps::download_artifact_step(&artifact, CANDIDATE_STAGE_DIR_EXPR)?,
             candidate_manifest_verify_step(target.triple())?,
-            freshness_step(&candidate_binary, FRESHNESS_OUTDIR, &ctx.plan_consumer_env)?,
+            freshness_step_with_claude_mode(
+                &candidate_binary,
+                FRESHNESS_OUTDIR,
+                &ctx.plan_consumer_env,
+                ctx.claude_md,
+            )?,
             steps::shell_step(
                 "Qualify candidate",
                 qualify_scrubbed_argv(&spec.qualify)?,
@@ -96,6 +118,61 @@ pub(crate) fn candidate_job(ctx: &RenderContext, spec: &CandidateSpec) -> Result
             )?,
         ],
     })
+}
+
+fn prepare_candidate_tools_step() -> Result<Step, RenderError> {
+    let catalog = ToolCatalog::pinned();
+    let homes = ToolHomes::runner_temp();
+    let prepare = PreparePinnedTools::new(
+        vec![
+            PinnedTool::Rust,
+            PinnedTool::MrBoxington,
+            PinnedTool::Jactionlint,
+            PinnedTool::Shellcheck,
+        ],
+        homes.clone(),
+    )
+    .map_err(|error| RenderError::BadCommand(error.to_string()))?;
+    let argv = prepare
+        .argv(&catalog)
+        .into_iter()
+        .map(OsString::into_string)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| RenderError::BadCommand("candidate_tools_non_utf8_argv".to_owned()))?;
+    let env = env_strings(prepare.env(&catalog))?;
+    let mut step = steps::ambient_shell_step("Prepare pinned tools", argv, env)?;
+    step.role = Some(StepRole::PreparePinnedTools);
+    Ok(step)
+}
+
+fn verifier_step(name: &str, uses: &str, role: StepRole) -> Result<Step, RenderError> {
+    let mut step = steps::action_step(name, uses, BTreeMap::new())?;
+    step.role = Some(role);
+    Ok(step)
+}
+
+fn owned_tool_env(
+    homes: &ToolHomes,
+    catalog: &ToolCatalog,
+) -> Result<BTreeMap<String, String>, RenderError> {
+    env_strings(homes.exec_env(catalog))
+}
+
+fn env_strings(
+    entries: impl IntoIterator<Item = (OsString, OsString)>,
+) -> Result<BTreeMap<String, String>, RenderError> {
+    entries
+        .into_iter()
+        .map(|(key, value)| {
+            Ok((
+                key.into_string()
+                    .map_err(|_| RenderError::BadCommand("candidate_env_non_utf8".to_owned()))?,
+                value
+                    .into_string()
+                    .map_err(|_| RenderError::BadCommand("candidate_env_non_utf8".to_owned()))?,
+            ))
+        })
+        .collect()
 }
 
 fn qualify_scrubbed_argv(argv: &[String]) -> Result<Vec<String>, RenderError> {
@@ -106,61 +183,6 @@ fn qualify_scrubbed_argv(argv: &[String]) -> Result<Vec<String>, RenderError> {
         return Err(RenderError::BadCommand("qualify_without_unset".to_owned()));
     }
     Ok(argv.to_vec())
-}
-
-pub(crate) fn release_job(ctx: &RenderContext) -> Result<Job, RenderError> {
-    let target = velnor_actions_contract::ReleaseTarget::for_runner_label(&ctx.runs_on)
-        .ok_or_else(|| {
-            RenderError::InvalidWorkflow(format!("unsupported_target_for_runner:{}", ctx.runs_on))
-        })?;
-    let artifact = candidate_artifact_name(target.triple())?;
-    Ok(Job {
-        services: Vec::new(),
-        display_name: super::support::RELEASE_DISPLAY_NAME.to_owned(),
-        runs_on: ctx.runs_on.clone(),
-        check_runner: None,
-        timeout_minutes: JobTimeout::RELEASE,
-        needs: vec![CANDIDATE_JOB_ID.to_owned()],
-        condition: Some(super::support::RELEASE_REF_CONDITION.to_owned()),
-        permissions: None,
-        cache_mode: None,
-        environment: None,
-        steps: vec![
-            steps::checkout_step(&ctx.checkout_uses)?,
-            steps::download_artifact_step(&artifact, CANDIDATE_STAGE_DIR_EXPR)?,
-            steps::ambient_shell_step(
-                "Publish release assets",
-                vec![
-                    "sh".to_owned(),
-                    "-c".to_owned(),
-                    "gh release upload \"$VELNOR_RELEASE_TAG\" \"$VELNOR_STAGE_DIR\"/velnor-actions --clobber".to_owned(),
-                ],
-                release_env(),
-            )?,
-            steps::ambient_shell_step(
-                "Verify release digests",
-                vec![
-                    "sh".to_owned(),
-                    "-c".to_owned(),
-                    "gh release download \"$VELNOR_RELEASE_TAG\" --dir \"$RUNNER_TEMP/velnor/verify\" --clobber && sha256sum -c \"$VELNOR_STAGE_DIR\"/candidate-manifest.json.sha256".to_owned(),
-                ],
-                release_env(),
-            )?,
-        ],
-    })
-}
-
-fn release_env() -> BTreeMap<String, String> {
-    BTreeMap::from([
-        (
-            "VELNOR_RELEASE_TAG".to_owned(),
-            "${{ github.ref_name }}".to_owned(),
-        ),
-        (
-            "VELNOR_STAGE_DIR".to_owned(),
-            CANDIDATE_STAGE_DIR_EXPR.to_owned(),
-        ),
-    ])
 }
 
 pub(crate) fn toolchain_identity(build: &[String]) -> Result<String, RenderError> {

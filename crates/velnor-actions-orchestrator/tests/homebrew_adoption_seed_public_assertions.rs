@@ -1,11 +1,16 @@
 use std::{collections::BTreeMap, error::Error, io};
 
-use velnor_actions_contract::{GeneratorBinary, GeneratorLock, Job, Step, StepKind, StepRole};
+use velnor_actions_contract::{
+    GeneratorBinary, GeneratorLock, Job, Step, StepKind, StepRole, WorkflowPolicy,
+};
 use velnor_actions_orchestrator::{GenerationPreparation, OrchestratorError, finalized_jobs};
 use velnor_actions_workflow_renderer::{
     ASSET_SHA_ENV, ASSET_URL_ENV, FINAL_JOB_ID, PLAN_JOB_ID, RELEASE_COMMIT_ENV,
     STAGED_BINARY_PREFIX,
 };
+
+mod lock_trust;
+pub(super) use lock_trust::assert_lock_trust_rejections;
 
 pub(super) const BOOTSTRAP_CONFIG: &str = r#"schema = 2
 [workflow]
@@ -34,6 +39,32 @@ platform = "linux_x64"
 executor = "hosted"
 "#;
 
+pub(super) fn assert_raw_consumer_render(
+    preparation: &GenerationPreparation,
+) -> Result<(), Box<dyn Error>> {
+    assert_raw_render(preparation, WorkflowPolicy::ConsumerV1)
+}
+
+pub(super) fn assert_raw_producer_render(
+    preparation: &GenerationPreparation,
+) -> Result<(), Box<dyn Error>> {
+    assert_raw_render(preparation, WorkflowPolicy::VelnorRepositoryV1)
+}
+
+fn assert_raw_render(
+    preparation: &GenerationPreparation,
+    policy: WorkflowPolicy,
+) -> Result<(), Box<dyn Error>> {
+    let yaml = velnor_actions_workflow_renderer::render::render_workflow_ir(
+        &preparation.workflow.ir,
+        policy,
+        preparation.workflow.support.as_ref(),
+        &preparation.workflow.context,
+    )?;
+    assert!(!yaml.contains("jdx/mise-action@"));
+    Ok(())
+}
+
 pub(super) fn assert_bootstrap_authority(
     preparation: &GenerationPreparation,
     jobs: &BTreeMap<String, Job>,
@@ -44,7 +75,8 @@ pub(super) fn assert_bootstrap_authority(
     assert_plan_authority(jobs, lock)?;
     assert_source_free_boundary(jobs)?;
     assert_helper_versions(jobs, helper_version);
-    assert_native_check(jobs, lock, helper_version)
+    assert_native_check(jobs, lock, helper_version)?;
+    assert_finalized_mise_jobs(jobs)
 }
 
 pub(super) fn assert_plan_checkout_pin_is_required(
@@ -66,6 +98,19 @@ pub(super) fn assert_plan_checkout_pin_is_required(
         return Err(io::Error::other("Plan checkout is not an action").into());
     };
     "actions/checkout@0000000000000000000000000000000000000000".clone_into(uses);
+    let raw_error = velnor_actions_workflow_renderer::render::render_workflow_ir(
+        &changed.workflow.ir,
+        WorkflowPolicy::VelnorRepositoryV1,
+        changed.workflow.support.as_ref(),
+        &changed.workflow.context,
+    )
+    .err()
+    .ok_or("raw rendering accepted a changed checkout pin")?;
+    assert!(matches!(
+        raw_error,
+        velnor_actions_workflow_renderer::RenderError::InvalidWorkflow(problem)
+            if problem == "trusted_plan_candidate_execution"
+    ));
     let error = finalized_jobs(&changed).err().ok_or_else(|| {
         io::Error::other("Plan must reject a checkout action with a different pin")
     })?;
@@ -74,6 +119,25 @@ pub(super) fn assert_plan_checkout_pin_is_required(
         OrchestratorError::Render { problem }
             if problem == "invalid workflow: trusted_plan_candidate_execution"
     ));
+    Ok(())
+}
+
+pub(super) fn assert_finalized_mise_jobs(
+    jobs: &BTreeMap<String, Job>,
+) -> Result<(), Box<dyn Error>> {
+    for id in [PLAN_JOB_ID, FINAL_JOB_ID] {
+        let job = jobs
+            .get(id)
+            .ok_or_else(|| io::Error::other(format!("workflow omitted {id}")))?;
+        assert_eq!(
+            job.steps
+                .iter()
+                .filter(|step| step.role == Some(StepRole::MiseSetup))
+                .count(),
+            1,
+            "{id} must retain exactly one official Mise setup"
+        );
+    }
     Ok(())
 }
 

@@ -88,6 +88,7 @@ fn prepare_inner(
         None
     };
     let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&canonical, &config)?;
+    crate::workflow::validate_candidate_tool_pins(&config, &catalog)?;
     let default_branch = resolve_default_branch(&canonical, &config)?;
     let mut discovery = match phases {
         Some(phases) => discover_with_phase_timings(&canonical, &config, &catalog, phases)?,

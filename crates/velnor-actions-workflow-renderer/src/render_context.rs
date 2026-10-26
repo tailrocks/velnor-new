@@ -1,6 +1,6 @@
 use super::{BTreeMap, RenderError, commands, guard, marker, steps, validator_tools};
 use velnor_actions_contract::{
-    CI_WORKFLOW_PATH, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID, PullRequestCachePolicy,
+    CI_WORKFLOW_PATH, ClaudeMdMode, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID, PullRequestCachePolicy,
     REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION, REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID,
     REQUIRED_VERDICT_DISPLAY_NAME as CONTRACT_REQUIRED_VERDICT_DISPLAY_NAME, ScaleSetSelector,
     ValidatorKind,
@@ -47,6 +47,7 @@ pub struct RenderContext {
     pub checkout_uses: String,
     pub validator_commands: Vec<ValidatorCommand>,
     pub candidate: Option<CandidateSpec>,
+    pub claude_md: ClaudeMdMode,
     pub preseed: bool,
     pub workflow_tasks: Vec<crate::verification_jobs::WorkflowTaskPolicy>,
     pub pull_request_cache_policy: PullRequestCachePolicy,

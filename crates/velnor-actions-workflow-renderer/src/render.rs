@@ -10,6 +10,8 @@ use crate::{
 #[path = "render_execution_boundaries.rs"]
 mod execution_boundaries;
 
+use execution_boundaries::ValidationPhase;
+
 type JobMap = BTreeMap<String, Job>;
 
 #[path = "render_emit.rs"]
@@ -56,8 +58,8 @@ fn render_workflow_parts(
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
-    validate_final_jobs(ir, &mut jobs, policy)?;
-    render_merged(ir, &jobs, ctx, policy)
+    validate_final_jobs(ir, &mut jobs, policy, ValidationPhase::BeforeSetup)?;
+    render_merged(ir, &jobs, ctx, policy, ValidationPhase::BeforeSetup)
 }
 
 pub fn render_workflow_ir_strict(
@@ -78,7 +80,7 @@ pub fn render_workflow_ir_strict_shared(
     mise: &MiseSetup,
 ) -> Result<RenderedWorkflow, RenderError> {
     let jobs = finalize_jobs(ir, policy, support, ctx, mise)?;
-    render_merged(ir, &jobs, ctx, policy)
+    render_merged(ir, &jobs, ctx, policy, ValidationPhase::Finalized)
 }
 
 pub fn finalize_jobs(
@@ -136,7 +138,7 @@ pub fn finalize_jobs(
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
     crate::dispatch_cache_boundary::suppress_unvalidated_cache_access(&mut jobs);
-    validate_final_jobs(ir, &mut jobs, policy)?;
+    validate_final_jobs(ir, &mut jobs, policy, ValidationPhase::Finalized)?;
     crate::cache_doctor::check(&jobs)?;
     Ok(jobs)
 }
@@ -145,11 +147,12 @@ fn validate_final_jobs(
     ir: &WorkflowIr,
     jobs: &mut JobMap,
     policy: WorkflowPolicy,
+    phase: ValidationPhase,
 ) -> Result<(), RenderError> {
     crate::cache_steps::append_bundle_postludes(jobs)?;
     crate::cache_steps::append_workspace_cleanups(jobs)?;
-    execution_boundaries::validate_required_verdict(jobs)?;
-    execution_boundaries::validate_trusted_plan(jobs, policy)?;
+    execution_boundaries::validate_required_verdict(jobs, phase)?;
+    execution_boundaries::validate_trusted_plan(jobs, policy, phase)?;
     let mut finalized = ir.clone();
     finalized.jobs.clone_from(jobs);
     finalized.validate().map_err(RenderError::Contract)
@@ -203,6 +206,7 @@ fn render_merged(
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
     policy: WorkflowPolicy,
+    phase: ValidationPhase,
 ) -> Result<RenderedWorkflow, RenderError> {
     let matrix = matrix::task_matrix_of(jobs)?;
     let caps = matrix::crate_job_caps(jobs)?;
@@ -231,8 +235,8 @@ fn render_merged(
     )?;
     let mut shared = crate::lane_share::share_lanes(&jobs, ctx)?;
     shared.files.extend(task_files);
-    execution_boundaries::validate_required_verdict(&shared.jobs)?;
-    execution_boundaries::validate_trusted_plan(&shared.jobs, policy)?;
+    execution_boundaries::validate_required_verdict(&shared.jobs, phase)?;
+    execution_boundaries::validate_trusted_plan(&shared.jobs, policy, phase)?;
     match emit::emit_shared(
         ir,
         &shared,
@@ -249,8 +253,8 @@ fn render_merged(
             if extracted == 0 {
                 return Err(error);
             }
-            execution_boundaries::validate_required_verdict(&shared.jobs)?;
-            execution_boundaries::validate_trusted_plan(&shared.jobs, policy)?;
+            execution_boundaries::validate_required_verdict(&shared.jobs, phase)?;
+            execution_boundaries::validate_trusted_plan(&shared.jobs, policy, phase)?;
             emit::emit_shared(
                 ir,
                 &shared,

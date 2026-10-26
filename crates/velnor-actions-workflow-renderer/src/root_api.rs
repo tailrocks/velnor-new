@@ -4,7 +4,7 @@ pub use crate::artifact_paths::{
 };
 pub use crate::candidate::{
     VERIFY_MANIFEST_NAME, candidate_artifact_name, candidate_manifest_verify_script,
-    candidate_manifest_verify_step, check_release_build,
+    candidate_manifest_verify_step,
 };
 pub use crate::closure::{
     CHECK_GENERATED_NAME, DOWNLOAD_PLAN_NAME, FRESHNESS_OUTDIR, HelperProvenance,

@@ -2,7 +2,7 @@ use velnor_actions_contract::{
     ExecutionMode, GeneratorValidation, ScaleSetSelector, ValidatorKind, VelnorConfig,
     WorkflowPolicy,
 };
-use velnor_actions_mise::ToolCatalog;
+use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::render::{CandidateSpec, RenderContext, ValidatorCommand};
 use velnor_actions_workflow_renderer::steps::{
     DENY_STEP_NAME, MACHETE_STEP_NAME, REQUEST_DIR_PREFIX, STAGED_BINARY_PREFIX,
@@ -48,6 +48,7 @@ pub(super) fn render_context(
         checkout_uses: CHECKOUT_USES.to_owned(),
         validator_commands,
         candidate,
+        claude_md: input.config.agents.claude_md,
         preseed: false,
         workflow_tasks: input.workflow_tasks,
         pull_request_cache_policy: input.config.workflow.pull_request_cache_policy,
@@ -102,10 +103,35 @@ fn candidate_spec_for(
     let is_candidate = input.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1
         && input.config.workflow.generator_validation == GeneratorValidation::Candidate;
     if is_candidate {
-        candidate_spec(input.catalog).map(Some)
+        candidate_spec().map(Some)
     } else {
         Ok(None)
     }
+}
+
+pub(super) fn validate_candidate_tool_pins(
+    config: &VelnorConfig,
+    catalog: &ToolCatalog,
+) -> Result<(), OrchestratorError> {
+    if config.workflow.policy != WorkflowPolicy::VelnorRepositoryV1
+        || config.workflow.generator_validation != GeneratorValidation::Candidate
+    {
+        return Ok(());
+    }
+    let compiled = ToolCatalog::pinned();
+    for tool in [PinnedTool::Rust, PinnedTool::Jactionlint] {
+        let resolved = catalog.version(tool);
+        let expected = compiled.version(tool);
+        if resolved != expected {
+            return Err(OrchestratorError::Contract {
+                problem: format!(
+                    "candidate_tool_catalog_mismatch:{}:expected={expected}:resolved={resolved}",
+                    tool.tool_name()
+                ),
+            });
+        }
+    }
+    Ok(())
 }
 
 pub(super) fn scale_set_selector(

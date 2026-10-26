@@ -11,7 +11,7 @@ use velnor_actions_contract::{
 
 use crate::{
     RenderError,
-    candidate::{candidate_job, release_job},
+    candidate::candidate_job,
     render::{
         ALINT_BINARY_VERSION, ALINT_USES, CANDIDATE_JOB_ID, FINAL_CONDITION, FINAL_DISPLAY_NAME,
         FINAL_JOB_ID, PLAN_JOB_ID, RenderContext, ValidatorCommand,
@@ -22,12 +22,6 @@ use crate::{
 pub(crate) const LINT_JOB_ID: &str = "jactionlint";
 
 pub(crate) const LINT_DISPLAY_NAME: &str = "Jactionlint";
-
-pub(crate) const RELEASE_JOB_ID: &str = "release";
-
-pub(crate) const RELEASE_DISPLAY_NAME: &str = "Release";
-
-pub(crate) const RELEASE_REF_CONDITION: &str = "github.ref_protected == true";
 
 pub(crate) fn merge_consumer_verify(
     jobs: &mut BTreeMap<String, Job>,
@@ -69,13 +63,11 @@ fn reject_consumer_ir(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
             });
         }
     }
-    for id in [CANDIDATE_JOB_ID, RELEASE_JOB_ID] {
-        if jobs.contains_key(id) {
-            return Err(RenderError::PolicyRejected {
-                policy: "consumer-v1".to_owned(),
-                problem: format!("forbidden_job:{id}"),
-            });
-        }
+    if jobs.contains_key(CANDIDATE_JOB_ID) {
+        return Err(RenderError::PolicyRejected {
+            policy: "consumer-v1".to_owned(),
+            problem: format!("forbidden_job:{CANDIDATE_JOB_ID}"),
+        });
     }
     Ok(())
 }
@@ -131,7 +123,6 @@ pub(crate) fn merge_support_jobs(
             });
         };
         insert_support_job(jobs, CANDIDATE_JOB_ID, candidate_job(ctx, spec)?, policy)?;
-        insert_support_job(jobs, RELEASE_JOB_ID, release_job(ctx)?, policy)?;
     }
     extend_final_needs(jobs, &workflow.validators, workflow.candidate_validation);
     Ok(())
@@ -310,10 +301,7 @@ pub(crate) fn check_candidate_invariants(jobs: &BTreeMap<String, Job>) -> Result
         }
     }
     for (id, job) in jobs {
-        if id.as_str() != FINAL_JOB_ID
-            && id.as_str() != RELEASE_JOB_ID
-            && job.needs.contains(&CANDIDATE_JOB_ID.to_owned())
-        {
+        if id.as_str() != FINAL_JOB_ID && job.needs.contains(&CANDIDATE_JOB_ID.to_owned()) {
             return Err(RenderError::InvalidWorkflow(
                 "task_must_not_consume_candidate".to_owned(),
             ));

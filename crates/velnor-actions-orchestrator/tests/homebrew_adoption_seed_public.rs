@@ -51,7 +51,10 @@ platform = "linux/amd64"
         action.join("action.yml"),
         "name: candidate-controlled\nruns:\n  using: composite\n  steps:\n    - shell: bash\n      run: exit 0\n",
     )?;
-    let jobs = finalized_jobs(&prepare(temp.path())?)?;
+    let preparation = prepare(temp.path())?;
+    homebrew_adoption_seed_public_assertions::assert_raw_consumer_render(&preparation)?;
+    let jobs = finalized_jobs(&preparation)?;
+    homebrew_adoption_seed_public_assertions::assert_finalized_mise_jobs(&jobs)?;
     let required = jobs
         .get(velnor_actions_workflow_renderer::render::FINAL_JOB_ID)
         .ok_or_else(|| io::Error::other("ordinary consumer omitted Required"))?;
@@ -158,7 +161,8 @@ fn public_seed_manifest_replaces_legacy_consumer_manifest() -> Result<(), Box<dy
         temp.path().join(MANIFEST_PATH),
         rendered_manifest.bytes.as_bytes(),
     )?;
-    prepare(temp.path())?;
+    let preparation = prepare(temp.path())?;
+    homebrew_adoption_seed_public_assertions::assert_raw_consumer_render(&preparation)?;
     Ok(())
 }
 
@@ -188,31 +192,18 @@ fn public_velnor_repository_bootstrap_accepts_only_catalog_mise_lock() -> Result
         &jobs,
         &published_lock,
     )?;
+    homebrew_adoption_seed_public_assertions::assert_raw_producer_render(&preparation)?;
     homebrew_adoption_seed_public_assertions::assert_plan_checkout_pin_is_required(&preparation)?;
     homebrew_adoption_seed_public_assertions::assert_symlink_bootstrap(
         temp.path(),
         &published_lock,
     )?;
 
-    let lock_path = temp.path().join(".velnor/generator.lock");
-    let lock = fs::read_to_string(&lock_path)?;
-    let pinned_version = "version = \"2026.10.19\"";
-    assert_eq!(lock.matches(pinned_version).count(), 1);
-    fs::write(
-        lock_path,
-        lock.replacen(pinned_version, "version = \"2026.10.18\"", 1),
+    homebrew_adoption_seed_public_assertions::assert_lock_trust_rejections(
+        temp.path(),
+        &lock_path,
+        lock_text,
     )?;
-    let error = prepare(temp.path())
-        .and_then(|preparation| finalized_jobs(&preparation))
-        .expect_err("a stale bootstrap Mise version must fail the public pipeline");
-    assert!(matches!(
-        error,
-        OrchestratorError::Contract { problem }
-            if problem == format!(
-                "lock_mismatch:mise_bootstrap:2026.10.18:{}",
-                velnor_actions_mise::MISE_VERSION
-            )
-    ));
     Ok(())
 }
 
