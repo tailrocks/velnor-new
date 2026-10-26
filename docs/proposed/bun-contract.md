@@ -61,9 +61,9 @@ Bun is the catalog tool `PinnedTool::Bun` (Mise core `bun`). A project's
 `[tools] bun` (or `core:bun`) is read at run time into `VELNOR_TOOL_BUN` like
 every project-declared tool (hard decision 4); the catalog pin
 (`BUN_VERSION`, freshness-gated against the `oven-sh/bun` release feed) applies
-only to callers that declare none. Node is not a catalog tool: `bun run`
-provides a `node` alias for scripts, and a repository that needs a real Node
-runs that check as a Mise check.
+only to callers that declare none. Node is not a catalog tool. Project scripts
+that start JavaScript tools use `bun --bun run` so Bun runs the script's
+JavaScript executable.
 
 ## Workspace members
 
@@ -129,7 +129,7 @@ steps like every pinned-tool job. Steps:
    both flags use the `=` spelling; `--config` replaces the `bunfig.toml` found in
    the working directory (measured with Bun 1.4.2), which is why a repository
    registry setting cannot redirect the install even before generation rejects it.
-4. One `background: true` step per script (`bun run --cwd=<member dir>
+4. One `background: true` step per script (`bun --bun run --cwd=<member dir>
    <script>`), joined by one `wait-all`. Display names are `Typecheck`,
    `Lint`, `Test`, `Build`; any other script is `Script <name>`.
 

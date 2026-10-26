@@ -133,7 +133,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-26T12:44:09Z",
+      "checked_at": "2026-10-26T14:11:25Z",
       "key": "jdx/mr-boxington-action",
       "latest": "v1.7.3",
       "pinned_sha": "88acf2bb50552c7c508cbac13e5f8c576b95b1de",
@@ -146,7 +146,7 @@
     }
   ],
   "check_interval_hours": 24,
-  "checked_at": "2026-10-25T19:14:14Z",
+  "checked_at": "2026-10-26T14:11:25Z",
   "exceptions": [],
   "max_exception_days": 14,
   "runner": {
@@ -182,7 +182,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-26T12:44:09Z",
+      "checked_at": "2026-10-26T14:11:25Z",
       "latest": "v1.28.0",
       "name": "mr-boxington",
       "pinned": "1.28.0",
