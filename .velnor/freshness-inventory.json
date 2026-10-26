@@ -133,16 +133,16 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-25T19:12:01Z",
+      "checked_at": "2026-10-26T12:44:09Z",
       "key": "jdx/mr-boxington-action",
-      "latest": "v1.7.2",
-      "pinned_sha": "47ce49b32025d93a7a2f4570815afaa2b7092240",
-      "pinned_version": "v1.7.2",
-      "qualified_sha": "47ce49b32025d93a7a2f4570815afaa2b7092240",
-      "qualified_version": "v1.7.2",
+      "latest": "v1.7.3",
+      "pinned_sha": "88acf2bb50552c7c508cbac13e5f8c576b95b1de",
+      "pinned_version": "v1.7.3",
+      "qualified_sha": "88acf2bb50552c7c508cbac13e5f8c576b95b1de",
+      "qualified_version": "v1.7.3",
       "source": "https://api.github.com/repos/jdx/mr-boxington-action/releases",
       "status": "current",
-      "latest_sha": "47ce49b32025d93a7a2f4570815afaa2b7092240"
+      "latest_sha": "88acf2bb50552c7c508cbac13e5f8c576b95b1de"
     }
   ],
   "check_interval_hours": 24,
@@ -182,14 +182,14 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-25T19:11:48Z",
-      "latest": "v1.27.0",
+      "checked_at": "2026-10-26T12:44:09Z",
+      "latest": "v1.28.0",
       "name": "mr-boxington",
-      "pinned": "1.27.0",
-      "qualified": "1.27.0",
+      "pinned": "1.28.0",
+      "qualified": "1.28.0",
       "source": "https://api.github.com/repos/jdx/mr-boxington/releases/latest",
       "status": "current",
-      "latest_sha": "5a50200abf386580642b87eca2995156316b56a7"
+      "latest_sha": "44f50c329a83dedd012e1e49cf9f265f79226a83"
     },
     {
       "checked_at": "2026-10-25T19:11:49Z",
