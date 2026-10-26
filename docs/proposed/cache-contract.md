@@ -289,28 +289,10 @@ counts. Its `status` MUST use the final result enum below. `required_job_results
 non-matrix required job's ID and conclusion, including `alint` when emitted. The final report is an
 aggregate and is not a task-cache input.
 
-Candidate validation, when required, writes one report with ID `candidate-<run-key>-<target-key>` and artifact
-ID `velnor-candidate-<run-key>-<target-key>`. Its schema-1 shape is:
-
-```json
-{
-  "schema": 1,
-  "report_id": "candidate-r123-a1-x86-64-unknown-linux-gnu",
-  "run_key": "r123-a1",
-  "source_commit": "<40 lowercase hex characters>",
-  "target": "x86_64-unknown-linux-gnu",
-  "artifact_sha256": "<64 lowercase hex characters>",
-  "generator_version": "<exact-semver>",
-  "status": "passed|failed|cancelled",
-  "checks": ["generate-check", "fixtures", "policy"]
-}
-```
-
-The candidate artifact contains the executable and a manifest with the same source commit, target, version,
-and SHA-256. The report MUST verify the manifest before running any candidate command. Candidate artifacts are
-run-scoped qualification outputs and MUST NOT be restored by ordinary cache keys or treated as a promoted
-generator binary. The merge re-checks the head-bound attestation (`commit == plan.head`) in candidate mode;
-manifest fields beyond the commit are consumer-asserted audit data at merge time (S10/D6 residual).
+Generated workflows do not emit a generic Candidate job or candidate report. Schema-1 merge requests retain
+the optional `candidate_attestation` field and the `candidate` required-job identifier for wire compatibility
+with previously emitted requests; when that identifier is present, merge checks the attested commit against
+`plan.head`. New workflow generation rejects `generator_validation = "candidate"`.
 
 Field grammars here are normative over examples. `*_digest` fields are path-independent semantic identities:
 BLAKE3 over canonical JSON with absolute paths stripped and repository-relative POSIX paths. Artifact `*_id`
@@ -323,11 +305,9 @@ prior bytes byte-identical.
 ## 4. Final gate and exit rules
 
 Every matrix entry uploads the artifact named by its matrix `artifact_id` with `if: always()`.
-`candidate`, when present, uploads its derived candidate artifact and report with `if: always()`.
-`required` MUST download exactly the plan artifact `velnor-plan-<run-key>`, every expected matrix
-artifact, and the candidate artifact when `generator_validation = "candidate"`. It MUST fail when an expected
-artifact or report is absent, malformed, duplicated, or has an unknown schema. Artifact names MUST be matched
-against the plan's derived IDs; wildcard downloads are prohibited.
+`required` MUST download exactly the plan artifact `velnor-plan-<run-key>` and every expected matrix
+artifact. It MUST fail when an expected artifact or report is absent, malformed, duplicated, or has an unknown
+schema. Artifact names MUST be matched against the plan's derived IDs; wildcard downloads are prohibited.
 
 The final job MUST validate, in order:
 
@@ -337,10 +317,8 @@ current workflow run.
 matrix report IDs exactly.
 3. Every matrix report contains exactly the task IDs declared by its matrix
 entry, and every task report ID is unique and has the matching task digest.
-4. If candidate validation is required, the candidate report is present,
-references the expected source commit and target artifact, and is passing.
-5. The result precedence below is applied only after structural validation.
-6. The plan's `generator` `{version, sha256}` MUST equal the lock record
+4. The result precedence below is applied only after structural validation.
+5. The plan's `generator` `{version, sha256}` MUST equal the lock record
 for the runner target (consumers: the embedded release descriptor);
 mismatch is `planning_failed`.
 
@@ -350,7 +328,7 @@ The final gate computes exactly one result:
 |---|---|---:|
 | `no_work` | Valid plan has zero obligations, and every always-required plan/policy/workflow/format check passed | 0 |
 | `passed` | Every obligation is `reused`, `executed`, validly `empty_partition`, or `not_affected` on an affected-selection event with its crate job skipped | 0 |
-| `failed` | A valid required task report records failure, a nonzero child exit, or required candidate validation fails | 1 |
+| `failed` | A valid required task report records failure or a nonzero child exit | 1 |
 | `cancelled` | Any required task was cancelled | 1 |
 | `blocked` | A required task was blocked (`not_selected`), below cancelled | 1 |
 | `not_run` | A selected matrix entry lacks a valid report and no task failure was reported | 1 |

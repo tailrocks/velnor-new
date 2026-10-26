@@ -125,6 +125,13 @@ pub(crate) fn check_policy_mode(config: &VelnorConfig) -> Result<(), Orchestrato
             "candidate_requires_velnor_policy",
         ));
     }
+    if config.workflow.generator_validation == GeneratorValidation::Candidate {
+        return Err(OrchestratorError::config(
+            CONFIG_REL,
+            "workflow.generator_validation",
+            "candidate_requires_report_aware_helper",
+        ));
+    }
     Ok(())
 }
 

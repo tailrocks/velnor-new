@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::StepSyntax;
+use velnor_actions_contract::GeneratorLock;
 use velnor_actions_contract::{
     Job, Step, ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowPolicy,
 };
@@ -14,14 +15,17 @@ use velnor_actions_workflow_renderer::verification_jobs::WorkflowTaskPolicy;
 use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::pins::consumer_acquire_step;
-use crate::workflow_jobs::{PlanJobToolNeeds, PlanRustNeed};
+use crate::workflow_jobs::{PlanJobToolNeeds, PlanRustNeed, plan_job};
+
+#[path = "workflow_native_authority.rs"]
+mod native_authority;
 
 use super::workflow_policy::{
     plan_uses_all_features, plan_uses_nextest, plan_uses_opentofu, plan_uses_rust,
 };
 use super::{
-    WorkflowPlan, build_plan_job, check_jobs, insert_format_step, insert_gate_jobs,
-    lint_config_input, support_workflow, wire_w1, workflow_context, workflow_ir,
+    WorkflowPlan, check_jobs, insert_format_step, insert_gate_jobs, lint_config_input,
+    support_workflow, wire_w1, workflow_context, workflow_ir,
 };
 
 pub(crate) struct WorkflowBuildInput<'a> {
@@ -32,6 +36,7 @@ pub(crate) struct WorkflowBuildInput<'a> {
     pub(crate) discovery: &'a Discovery,
     pub(crate) fetch_roots: &'a [String],
     pub(crate) consumer_release_version: &'a str,
+    pub(crate) published_generator_lock: Option<&'a GeneratorLock>,
     pub(crate) catalog: &'a ToolCatalog,
 }
 
@@ -59,18 +64,22 @@ pub(crate) fn build_workflow_for_consumer_release(
         wire_w1::apply_checkout_lfs(&mut jobs);
     }
     let mut ir = workflow_ir(input.config, input.branch, jobs, prepared.policy);
+    let native = native_authority::build(input, &prepared, &mut ir.jobs)?;
+    let runtime = native.runtime();
+    let authority_steps = native.authority();
     let context = workflow_context::render_context(workflow_context::RenderContextInputs {
+        authority_steps,
+        runtime,
         config: input.config,
         label: input.label,
         generator_version: prepared.generator_version,
-        report_helper_version: &prepared.report_helper_version,
         catalog: &prepared.catalog,
         discovery: input.discovery,
-        plan_needs_rust: prepared.needs.rust.has_compiler(),
         workflow_tasks: prepared.workflow_tasks,
         verify: &prepared.verify,
     })?;
-    if input.config.agents.claude_md == velnor_actions_contract::ClaudeMdMode::Symlink
+    if prepared.policy != WorkflowPolicy::VelnorRepositoryV1
+        && input.config.agents.claude_md == velnor_actions_contract::ClaudeMdMode::Symlink
         && let Some(plan_job) = ir.jobs.get_mut(PLAN_JOB_ID)
         && let Some(at) = plan_job.steps.iter().position(|step| {
             matches!(
@@ -107,19 +116,35 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
         input.discovery,
     )?;
     let catalog = input.catalog;
-    let report_helper_version = input.consumer_release_version.to_owned();
+    let report_helper_version = input
+        .published_generator_lock
+        .map_or(input.consumer_release_version, |lock| {
+            lock.generator.version.as_str()
+        })
+        .to_owned();
     let generator_version = env!("CARGO_PKG_VERSION");
     let policy = input.config.workflow.policy;
-    let validation = input.config.workflow.generator_validation;
     let verify = crate::verify::verify_kinds(&input.config.workflow.verify.jobs)?;
-    let support = support_workflow(policy, validation, input.discovery, &verify);
+    let support = support_workflow(policy, input.discovery, &verify);
     let acquire = match policy {
         WorkflowPolicy::ConsumerV1 => Some(consumer_acquire_step(
             input.label,
             &report_helper_version,
             input.discovery,
         )?),
-        WorkflowPolicy::VelnorRepositoryV1 => None,
+        WorkflowPolicy::VelnorRepositoryV1 => {
+            let lock =
+                input
+                    .published_generator_lock
+                    .ok_or_else(|| OrchestratorError::Contract {
+                        problem: "required_verdict_requires_published_generator_lock".to_owned(),
+                    })?;
+            Some(crate::attach::published_lock_acquire_step(
+                lock,
+                input.label,
+                &lock.generator.version,
+            )?)
+        }
     };
     let private =
         crate::config::private_wiring::PrivateWiring::load(input.root, input.config, catalog)?;
@@ -166,22 +191,34 @@ fn build_workflow_plan(
     input: &WorkflowBuildInput<'_>,
     prepared: &mut PreparedWorkflow,
 ) -> Result<Job, OrchestratorError> {
-    let mut plan = build_plan_job(
+    let tofu_roots = crate::tofu_cache::tofu_cache_roots(input.discovery)?;
+    let mut plan = plan_job(
         input.label,
         prepared.acquire.clone(),
         &prepared.catalog,
         prepared.needs,
         input.fetch_roots,
-        input.discovery,
-        prepared.private.as_ref(),
+        &tofu_roots,
+        prepared.policy,
     )?;
+    if let Some(private) = prepared.private.as_ref() {
+        private.insert_into_job(&mut plan, input.fetch_roots)?;
+    }
+    super::insert_format_report_steps(
+        &mut plan,
+        wire_w1::workspace_format_report_steps(input.discovery, &prepared.report_helper_version)?,
+    );
     plan.timeout_minutes =
         velnor_actions_contract::JobTimeout::new(input.config.workflow.plan_timeout_minutes)
             .map_err(|err| OrchestratorError::Contract {
                 problem: err.to_string(),
             })?;
     if let Some(format) = prepared.format.take() {
-        insert_format_step(&mut plan, format);
+        insert_format_step(
+            &mut plan,
+            format,
+            prepared.policy == WorkflowPolicy::VelnorRepositoryV1,
+        );
     }
     if prepared.policy == WorkflowPolicy::VelnorRepositoryV1
         || !input.discovery.native_checks.is_empty()
@@ -215,9 +252,13 @@ fn build_workflow_jobs(
     for (id, job) in built.seeds {
         jobs.insert(id, job);
     }
-    for (id, job) in
-        check_jobs::build_check_jobs(prepared.policy, input.discovery, &prepared.catalog)?
-    {
+    for (id, job) in check_jobs::build_check_jobs(
+        prepared.policy,
+        input.discovery,
+        &prepared.catalog,
+        input.published_generator_lock,
+        &prepared.report_helper_version,
+    )? {
         required_ids.push(id.clone());
         jobs.insert(id, job);
     }

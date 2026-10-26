@@ -196,7 +196,7 @@ pub(crate) fn obligation_step(
                 problem: err.to_string(),
             },
         )?;
-        let run = report_wrapper_argv(&joined, &helper_path_for_version());
+        let run = report_wrapper_argv(&joined, &helper_path_for_version(helper_version));
         let mut tofu =
             velnor_actions_workflow_renderer::shell_step(&obligation.step_name, run, env)
                 .map_err(OrchestratorError::from)?;
@@ -225,5 +225,5 @@ pub(crate) fn check_identity_env_contract(
 mod matrix_step_reports;
 pub(crate) use matrix_step_reports::{
     crate_upload_step, deferred_report_argv, download_plan_step, helper_path_for_version,
-    outcome_path_for_key, outcome_wrapper_argv, report_wrapper_argv, start_path_for_key,
+    outcome_path_for_key, report_wrapper_argv, start_path_for_key,
 };

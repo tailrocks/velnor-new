@@ -10,6 +10,15 @@ use crate::{
     preseed_closure, steps, support, workflow_policy,
 };
 
+#[path = "render_execution_boundaries.rs"]
+mod execution_boundaries;
+
+#[path = "render_authority_steps.rs"]
+mod authority_steps;
+pub use authority_steps::{CanonicalAuthoritySteps, CanonicalRuntimeInputs};
+
+use execution_boundaries::ValidationPhase;
+
 type JobMap = BTreeMap<String, Job>;
 
 #[path = "render_emit.rs"]
@@ -51,13 +60,13 @@ fn render_workflow_parts(
     ctx: &RenderContext,
 ) -> Result<RenderedWorkflow, RenderError> {
     let mut jobs = merged_jobs(ir, policy, support, ctx)?;
-    closure::insert_plan_closure(&mut jobs, ctx)?;
+    closure::insert_plan_closure(&mut jobs, ctx, policy)?;
     closure::insert_request_closure(&mut jobs)?;
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
-    validate_final_jobs(ir, &mut jobs)?;
-    render_merged(ir, &jobs, ctx)
+    validate_final_jobs(ir, &mut jobs, policy, ValidationPhase::BeforeSetup, ctx)?;
+    render_merged(ir, &jobs, ctx, policy, ValidationPhase::BeforeSetup)
 }
 
 pub fn render_workflow_ir_strict(
@@ -78,7 +87,7 @@ pub fn render_workflow_ir_strict_shared(
     mise: &MiseSetup,
 ) -> Result<RenderedWorkflow, RenderError> {
     let jobs = finalize_jobs(ir, policy, support, ctx, mise)?;
-    render_merged(ir, &jobs, ctx)
+    render_merged(ir, &jobs, ctx, policy, ValidationPhase::Finalized)
 }
 
 pub fn finalize_jobs(
@@ -88,6 +97,11 @@ pub fn finalize_jobs(
     ctx: &RenderContext,
     mise: &MiseSetup,
 ) -> Result<BTreeMap<String, Job>, RenderError> {
+    if !ctx.authority_steps.matches_mise_setup(mise)? {
+        return Err(RenderError::InvalidWorkflow(
+            "required_verdict_candidate_execution".to_owned(),
+        ));
+    }
     mise.validate()?;
     let mut jobs = merged_jobs(ir, policy, support, ctx)?;
     for (id, job) in &mut jobs {
@@ -114,7 +128,15 @@ pub fn finalize_jobs(
         } else {
             mise.clone()
         };
-        cache_p08::ensure_tools_cache_v2(id, job, &setup, always, target, &ctx.checkout_uses)?;
+        cache_p08::ensure_tools_cache_v2(
+            id,
+            job,
+            &setup,
+            always,
+            target,
+            &ctx.checkout_uses,
+            policy == WorkflowPolicy::VelnorRepositoryV1 && id == PLAN_JOB_ID,
+        )?;
         cache_p08::check_no_legacy_rust_cache(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;
@@ -122,20 +144,28 @@ pub fn finalize_jobs(
     cache_p08::elect_cache_writers_with_policy(&mut jobs, ctx.pull_request_cache_policy)?;
     closure::check_plan_anchor(&jobs)?;
     preseed_closure::check_preseed_closure(&jobs, ctx.preseed)?;
-    closure::insert_plan_closure(&mut jobs, ctx)?;
+    closure::insert_plan_closure(&mut jobs, ctx, policy)?;
     closure::insert_request_closure(&mut jobs)?;
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
     crate::dispatch_cache_boundary::suppress_unvalidated_cache_access(&mut jobs);
-    validate_final_jobs(ir, &mut jobs)?;
+    validate_final_jobs(ir, &mut jobs, policy, ValidationPhase::Finalized, ctx)?;
     crate::cache_doctor::check(&jobs)?;
     Ok(jobs)
 }
 
-fn validate_final_jobs(ir: &WorkflowIr, jobs: &mut JobMap) -> Result<(), RenderError> {
+fn validate_final_jobs(
+    ir: &WorkflowIr,
+    jobs: &mut JobMap,
+    policy: WorkflowPolicy,
+    phase: ValidationPhase,
+    ctx: &RenderContext,
+) -> Result<(), RenderError> {
     crate::cache_steps::append_bundle_postludes(jobs)?;
     crate::cache_steps::append_workspace_cleanups(jobs)?;
+    execution_boundaries::validate_required_verdict(jobs, phase, &ctx.authority_steps)?;
+    execution_boundaries::validate_trusted_plan(jobs, policy, phase, &ctx.authority_steps)?;
     let mut finalized = ir.clone();
     finalized.jobs.clone_from(jobs);
     finalized.validate().map_err(RenderError::Contract)
@@ -147,6 +177,9 @@ fn merged_jobs(
     support: Option<&VelnorSupportWorkflow>,
     ctx: &RenderContext,
 ) -> Result<BTreeMap<String, Job>, RenderError> {
+    ctx.authority_steps
+        .validate_binding(&ir.jobs, policy, support, ctx)?;
+    execution_boundaries::validate_raw_authority(&ir.jobs, policy, &ctx.authority_steps)?;
     ctx.validate()?;
     if ctx.preseed && policy != WorkflowPolicy::VelnorRepositoryV1 {
         return Err(RenderError::PolicyRejected {
@@ -165,12 +198,23 @@ fn merged_jobs(
             support::merge_support_jobs(&mut jobs, support, ctx, "velnor-repository-v1")?;
         }
     }
-    let workflow_task_ids =
-        crate::verification_jobs::workflow_task_jobs::validate_workflow_task_jobs(
-            &jobs,
-            &ctx.workflow_tasks,
-            &ctx.checkout_uses,
-        )?;
+    execution_boundaries::validate_required_verdict(
+        &jobs,
+        ValidationPhase::BeforeSetup,
+        &ctx.authority_steps,
+    )?;
+    execution_boundaries::validate_trusted_plan(
+        &jobs,
+        policy,
+        ValidationPhase::BeforeSetup,
+        &ctx.authority_steps,
+    )?;
+    crate::verification_jobs::workflow_task_jobs::validate_workflow_task_jobs(
+        &jobs,
+        &ctx.workflow_tasks,
+        &ctx.checkout_uses,
+    )?;
+    let workflow_task_ids = ctx.authority_steps.required_workflow_ids(&jobs);
     crate::verification_jobs::workflow_task_jobs::extend_required_needs(
         &mut jobs,
         &workflow_task_ids,
@@ -180,7 +224,7 @@ fn merged_jobs(
     support::check_candidate_invariants(&jobs)?;
     support::check_final_gate(&jobs)?;
     crate::required_gate::check_required_gate(&jobs)?;
-    support::check_token_hygiene(&jobs)?;
+    support::check_token_hygiene(&jobs, &ctx.report_helper_version)?;
     Ok(jobs)
 }
 
@@ -188,6 +232,8 @@ fn render_merged(
     ir: &WorkflowIr,
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
+    policy: WorkflowPolicy,
+    phase: ValidationPhase,
 ) -> Result<RenderedWorkflow, RenderError> {
     let matrix = matrix::task_matrix_of(jobs)?;
     let caps = matrix::crate_job_caps(jobs)?;
@@ -216,6 +262,8 @@ fn render_merged(
     )?;
     let mut shared = crate::lane_share::share_lanes(&jobs, ctx)?;
     shared.files.extend(task_files);
+    execution_boundaries::validate_required_verdict(&shared.jobs, phase, &ctx.authority_steps)?;
+    execution_boundaries::validate_trusted_plan(&shared.jobs, policy, phase, &ctx.authority_steps)?;
     match emit::emit_shared(
         ir,
         &shared,
@@ -232,6 +280,17 @@ fn render_merged(
             if extracted == 0 {
                 return Err(error);
             }
+            execution_boundaries::validate_required_verdict(
+                &shared.jobs,
+                phase,
+                &ctx.authority_steps,
+            )?;
+            execution_boundaries::validate_trusted_plan(
+                &shared.jobs,
+                policy,
+                phase,
+                &ctx.authority_steps,
+            )?;
             emit::emit_shared(
                 ir,
                 &shared,

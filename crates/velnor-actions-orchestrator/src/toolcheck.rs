@@ -140,6 +140,9 @@ fn spec_values(spec: Option<&velnor_actions_rust::ToolchainSpec>) -> BTreeMap<St
     if let Some(channel) = &spec.channel {
         values.insert("channel".to_owned(), channel.clone());
     }
+    if let Some(profile) = &spec.profile {
+        values.insert("profile".to_owned(), profile.clone());
+    }
     if !spec.components.is_empty() {
         values.insert("components".to_owned(), spec.components.join(","));
     }

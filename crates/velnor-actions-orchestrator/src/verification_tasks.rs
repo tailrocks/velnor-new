@@ -10,10 +10,16 @@ use velnor_actions_workflow_renderer::{
 };
 
 use crate::native_tool_input::{NativeMiseConfig, NativeToolInput, NativeToolSource};
-use crate::native_tool_lock::{NativeLockedTool, NativeMiseLock, rust_toolchain_options};
+use crate::native_tool_lock::{
+    NativeLockedTool, NativeMiseLock, rust_toolchain_options, valid_rust_toolchain_options,
+};
 use crate::pins::resolve_verification_mise_setup;
 use crate::toolcheck::{ToolInputCheck, ToolParse};
 use crate::{OrchestratorError, discover::Discovery};
+
+#[path = "verification_task_backend.rs"]
+mod backend;
+use backend::{is_pinned_tool_backend, valid_github_matching_regex};
 
 type RustToolValues = (String, BTreeMap<String, String>);
 type ToolVersionSelection = (String, BTreeMap<String, String>, Vec<String>);
@@ -174,14 +180,6 @@ fn rust_tool_values(
     Ok(Some((version.to_owned(), options)))
 }
 
-fn is_pinned_tool_backend(key: &str, backend: &str) -> bool {
-    key == "rust" && backend == "core:rust"
-        || key == "mr-boxington" && backend == "packslip:github.com/jdx/mr-boxington"
-        || key == "github:boltffi/boltffi" && backend == key
-        || backend.starts_with("aqua:") && backend.len() > "aqua:".len()
-        || key.starts_with("github:") && key == backend
-}
-
 fn requested_tool_version(
     key: &str,
     requested_version: String,
@@ -305,13 +303,16 @@ fn resolve_tool(
     if backend.starts_with("cargo:") || !is_pinned_tool_backend(key, &backend) {
         return Err(failure("verification_tool_backend_unsupported"));
     }
+    if key != "rust"
+        && !config_options.is_empty()
+        && !valid_github_matching_regex(key, &backend, &config_options)
+    {
+        return Err(failure("verification_tool_selector"));
+    }
     let artifact = if key == "rust" {
         if backend != "core:rust"
             || !locked.platforms.is_empty()
-            || !locked
-                .options
-                .keys()
-                .all(|option| matches!(option.as_str(), "components" | "targets"))
+            || !valid_rust_toolchain_options(&locked.options)
         {
             return Err(failure("verification_rust_tool_lock"));
         }

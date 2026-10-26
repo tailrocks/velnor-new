@@ -1,10 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::{
-    RELEASE_MANIFEST_FILENAME, ReleaseManifest, ReleaseTarget, check_release_artifact,
-};
-use velnor_actions_workflow_renderer::EvidenceHelperProvenance;
+use velnor_actions_contract::ReleaseTarget;
+use velnor_actions_workflow_renderer::{EvidenceHelperProvenance, release_helpers};
 
 use crate::{OrchestratorError, discover::Discovery};
 
@@ -17,46 +15,11 @@ pub(crate) fn consumer_evidence_helper(
         ReleaseTarget::for_runner_label(label).ok_or_else(|| OrchestratorError::Contract {
             problem: format!("unsupported_target_for_runner:{label}"),
         })?;
-    let manifest =
-        validated_consumer_manifest(target, version, discovery.consumer_manifest_json.as_deref())?;
+    let manifest = release_helpers::validate_consumer_manifest_for_version(
+        target,
+        version,
+        discovery.consumer_manifest_json.as_deref(),
+    )
+    .map_err(crate::local_release_manifest::map_release_helper_error)?;
     EvidenceHelperProvenance::from_release_manifest(&manifest, label, version).map_err(Into::into)
-}
-
-pub(super) fn validated_consumer_manifest(
-    target: ReleaseTarget,
-    version: &str,
-    json: Option<&str>,
-) -> Result<ReleaseManifest, OrchestratorError> {
-    let Some(json) = json else {
-        return Err(OrchestratorError::Contract {
-            problem: "consumer_requires_release_install:install an official velnor-actions release"
-                .to_owned(),
-        });
-    };
-    let manifest = ReleaseManifest::parse_json(json, RELEASE_MANIFEST_FILENAME)?;
-    manifest.validate(RELEASE_MANIFEST_FILENAME)?;
-    if manifest.version != version {
-        return Err(OrchestratorError::Contract {
-            problem: format!(
-                "release_manifest_version_mismatch:{}:{version}",
-                manifest.version
-            ),
-        });
-    }
-    crate::local_release_manifest::verify_current_exe_matches_consumer_manifest(&manifest)?;
-    let record =
-        manifest
-            .record_for_target(target.triple())
-            .ok_or_else(|| OrchestratorError::Contract {
-                problem: format!("manifest_missing_target:{}", target.triple()),
-            })?;
-    check_release_artifact(
-        &record.artifact,
-        &manifest.version,
-        &manifest.commit,
-        target.triple(),
-        RELEASE_MANIFEST_FILENAME,
-        "targets.artifact",
-    )?;
-    Ok(manifest)
 }

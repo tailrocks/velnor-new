@@ -63,7 +63,7 @@ Local equality is never presented as an upstream freshness proof.
    with a required migration — never silently omitted (VER-1.5).
 2. The change records freshness timestamp + version delta, and refreshes
    Velnor-owned pins and locks: `Cargo.lock`, `.velnor/version-policy.toml`,
-   `.velnor/generator.lock` (once seeded), and `.velnor/runner.lock`.
+   `.velnor/generator.lock`, and `.velnor/runner.lock` when present.
    Ordinary freshness updates MUST NOT edit `mise.toml`, `mise.lock`, or
    `rust-toolchain.toml` (VER-3.4, VER-4.4); those get maintainer
    recommendations only. A separately authorized toolchain migration may
@@ -248,10 +248,16 @@ relabel handwritten code as generated, or reduce test assertions to satisfy
 a limit. There is no Alint baseline: §5 limits are hard errors, oversized
 files MUST be split, and grandfathering new or existing debt is forbidden.
 
-## Row pre-declaration (locks not yet created)
+## Lock inventory and refresh rules
 
-- `.velnor/generator.lock`: Velnor bootstrap identity; created at seed
-  ([release-gates.md](release-gates.md)). Refresh rule: protected release
-  job only, separate reviewed change.
-- `.velnor/runner.lock`: Scale Set runner identity (`crates/velnor-runner`). Refresh
-  rule: reviewed, binds image digest + runner version + arch + API versions.
+- `.velnor/generator.lock`: committed bootstrap identity for authenticated
+  Velnor 0.1.55 from source commit
+  `693f3aae14406fb7851ac70f0aee647a869b5063`. Refresh only after a successor
+  release is authenticated and published; use the protected release job and a
+  separate reviewed change. Keep the existing lock as the bootstrap until the
+  successor lock validates against the official release manifest and pinned
+  Mise catalog. A committed lock does not prove hosted qualification of current
+  source.
+- `.velnor/runner.lock`: Scale Set runner identity (`crates/velnor-runner`);
+  not created yet (deferred V2). Refresh rule: reviewed, binds image digest +
+  runner version + arch + API versions.

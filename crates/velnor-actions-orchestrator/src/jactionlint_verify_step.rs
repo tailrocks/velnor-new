@@ -1,38 +1,26 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-
 use velnor_actions_contract::Step;
 use velnor_actions_mise::ToolCatalog;
+use velnor_actions_workflow_renderer::verifier_builders;
 
 use crate::OrchestratorError;
 
-pub(crate) const VERIFY_JACTIONLINT_STEP: &str = "Verify jactionlint";
+pub(crate) const VERIFY_JACTIONLINT_STEP: &str = verifier_builders::VERIFY_JACTIONLINT_STEP;
 
 pub(crate) fn script(catalog: &ToolCatalog) -> String {
-    velnor_actions_workflow_renderer::jactionlint_verifier_script(
-        catalog.version(velnor_actions_mise::PinnedTool::Jactionlint),
-    )
+    verifier_builders::jactionlint_verifier_script(catalog)
 }
 
 pub(crate) fn argv(catalog: &ToolCatalog) -> Vec<String> {
-    vec!["sh".to_owned(), "-c".to_owned(), script(catalog)]
+    verifier_builders::jactionlint_verifier_argv(catalog)
 }
 
 pub(crate) fn verify_jactionlint_step(_catalog: &ToolCatalog) -> Step {
-    crate::workflow::verifier_actions::call_step(
-        VERIFY_JACTIONLINT_STEP,
-        velnor_actions_contract::workflow::JACTIONLINT_VERIFIER_USES,
-        Some(velnor_actions_contract::StepRole::VerifyJactionlint),
-    )
+    verifier_builders::verify_jactionlint_step()
 }
 
 pub(crate) fn verifier_shell_step(catalog: &ToolCatalog) -> Result<Step, OrchestratorError> {
-    velnor_actions_workflow_renderer::steps::jactionlint_verifier_step(
-        VERIFY_JACTIONLINT_STEP,
-        argv(catalog),
-        BTreeMap::new(),
-    )
-    .map_err(OrchestratorError::from)
+    verifier_builders::jactionlint_verifier_shell_step(catalog).map_err(OrchestratorError::from)
 }

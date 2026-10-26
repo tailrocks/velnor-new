@@ -306,6 +306,7 @@ fn job_to_yaml(
             job_env: &effective_env,
             runs_on: Some(&job.runs_on),
             actions_read: policy.actions_read,
+            report_helper_version: &ctx.report_helper_version,
         },
     )?;
     crate::cache_save_budget::apply(&mut rendered_steps, job.timeout_minutes.minutes())?;

@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::MISE_BINARY_SHA256_LINUX_X64;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SourceBuildBootstrapTool {
     Mise,
@@ -125,8 +127,8 @@ const fn mise(host: SourceBuildBootstrapHost) -> SourceBuildBootstrapAsset {
     let (asset_url, archive_sha256, binary_sha256, asset_format, binary_member) = match host {
         SourceBuildBootstrapHost::LinuxAmd64 => (
             "https://github.com/jdx/mise/releases/download/v2026.10.19/mise-v2026.10.19-linux-x64",
-            "3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d",
-            "3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d",
+            MISE_BINARY_SHA256_LINUX_X64,
+            MISE_BINARY_SHA256_LINUX_X64,
             SourceBuildBootstrapFormat::Binary,
             "",
         ),

@@ -256,9 +256,11 @@ pub(crate) fn step_to_yaml(
         StepKind::TaskExecution { .. } => Err(RenderError::InvalidWorkflow(
             "unfactored_task_execution".to_owned(),
         )),
-        StepKind::NativeCheckExecution { .. } => {
-            native_check_execution::render(step, step_context.job_env)
-        }
+        StepKind::NativeCheckExecution { .. } => native_check_execution::render(
+            step,
+            step_context.job_env,
+            step_context.report_helper_version,
+        ),
     }
 }
 
