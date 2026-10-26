@@ -1,6 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
-// SPDX-License-Identifier: Apache-2.0
-
 // expected-lines: 151
 // filler line 2: padding so this fixture exceeds the 150-line lib limit
 // filler line 3: padding so this fixture exceeds the 150-line lib limit

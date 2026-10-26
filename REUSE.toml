@@ -10,3 +10,15 @@ path = "**"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Alexey Zhokhov"
 SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "docs/reviews/native-mbx-active-run-gc/active-prediction-repro.patch"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Jeff Dickey"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "docs/reviews/native-mbx-active-run-gc/LICENSE"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Jeff Dickey"
+SPDX-License-Identifier = "MIT"
