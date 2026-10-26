@@ -22,7 +22,7 @@ f47b77dcb887c3e2709a77651df59547386a565455f30ed6f7db250a50598752  ./.github/acti
 6b03cb00102de171f684829a834be329ec1329a854106d512a709b34f2d8f8bc  ./.github/velnor/task-execution-manifest-v1.json
 aed4dd559da28f45ecaf6d1539243a448e0078ae4489762813c20eb52affec31  ./.github/workflows/cache-cleanup.yml
 60c8d55ca26de41280c918e0571cfb268683e3a31c44bab369ece3108229304c  ./.github/workflows/cache-prune.yml
-e9b491071a1edf0d1c6d04d5781335e6149f6bf1081504a46c0af746382544ee  ./.github/workflows/ci.yml
+f55ca1727c3236d52340022a5f3c20159986f6c4d22c47e704d6408a86e055f4  ./.github/workflows/ci.yml
 7536fe1c47eeb57a6f66b583d28109ce8b1ffb17e790de1053d59c3cd369110f  ./.github/workflows/freshness.yml
 334cc985baddf22ade91aeadc7315f568b174948e863384509e7c6ae952428b4  ./.github/workflows/homebrew-adoption.yml
 746bc99497bfacb45c18a414a7798bbb31b0af943c4d4d8cc4a4115e5a23373f  ./.github/workflows/job-image-candidate.yml
@@ -30,4 +30,4 @@ e9b491071a1edf0d1c6d04d5781335e6149f6bf1081504a46c0af746382544ee  ./.github/work
 b733cc634324edbb050e063cfc65eeafad7d2f92a758c514d788613a7c5ed79b  ./.github/workflows/product-release-generator.yml
 5ab1e1cf02cd6e1cd3806d8b4d88c24572c961a7ba3c8595ec26a6a83faa4e13  ./.github/workflows/product-release-images.yml
 48bf7b4e36f6f5f6b8f37cf9dd5b9ce7515167ebe557675bdc2524496e52fe78  ./.github/workflows/product-release.yml
-711ddd037760fde200bbf7316d199206c0f2a53c28ec3e7e9bfd64320af4fd0d  ./.github/workflows/qualification.yml
+4509df13e39d52234e2da4563a5b7389737c490992defe0b99a4d12781b55d60  ./.github/workflows/qualification.yml
