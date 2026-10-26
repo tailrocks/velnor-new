@@ -1,6 +1,1 @@
-This release-manifest.json is synthetic local qualification input only.
-It is not a published release manifest, authenticated artifact inventory,
-release asset, attestation, or provenance claim. Versioned URLs are canonical
-shape fixtures only. The ARM digest is the local SDK56 candidate executable;
-the Linux and x86_64 macOS digests are unmistakable fixture sentinels. None of
-these records may be uploaded or used as publication authority.
+LOCAL ONLY inverse protocol fixture. Copied real Git fixture; synthetic producer identity and event. No hosted or SDK56 release-authentication claim. No Rust task executes.

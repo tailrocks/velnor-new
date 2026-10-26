@@ -2,7 +2,8 @@ schema = 2
 
 [workflow]
 name = "Compatibility Fixture"
-policy = "consumer-v1"
+policy = "velnor-repository-v1"
+generator_validation = "bootstrap"
 default_branch = "main"
 
 [execution]
