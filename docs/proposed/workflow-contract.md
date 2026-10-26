@@ -132,6 +132,7 @@ toolchain = "1.98.1" # optional exact X.Y.Z override; must agree with rust-toolc
 configurations = [{ name = "default", features = ["default"], target = "host" }]
 # seed_parallel_targets = true # default false; see ../implemented/parallel-target-seeding.md
 # clippy_all_features = true # default false; Clippy alone runs --all-features
+# allow_empty_test_suite = true # default false; unsharded nextest tasks emit --no-tests warn; see task-execution-contract.md
 # each [[stacks.rust.configurations]] entry accepts all_features = true (default false; features must be
 # empty or ["default"]): every compiling task of that configuration runs --all-features.
 # [[stacks.rust.suites]] declares named Nextest suites (id, profile, run_ignored, partitions 1..=64,
