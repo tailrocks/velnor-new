@@ -66,15 +66,23 @@ pub(super) fn verify_binary_matches_consumer_manifest(
 pub(super) fn verify_current_exe_matches_consumer_manifest(
     manifest: &ReleaseManifest,
 ) -> Result<(), ReleaseHelperError> {
-    if !cfg!(debug_assertions)
-        && manifest.commit != "b".repeat(40)
-        && let Ok(exe_path) = std::env::current_exe()
-        && let Ok(canonical) = std::fs::canonicalize(&exe_path)
-        && let Ok(exe_sha256) = sha256_nonempty_file(&canonical, MAX_BINARY_BYTES)
-    {
-        return verify_binary_matches_consumer_manifest(manifest, &exe_sha256);
+    if cfg!(debug_assertions) {
+        return Ok(());
     }
-    Ok(())
+    let exe_path = std::env::current_exe().map_err(|error| {
+        local_problem(&format!(
+            "current_executable_path_unavailable:{:?}",
+            error.kind()
+        ))
+    })?;
+    let canonical = std::fs::canonicalize(&exe_path).map_err(|error| {
+        local_problem(&format!(
+            "current_executable_canonicalization_failed:{:?}",
+            error.kind()
+        ))
+    })?;
+    let exe_sha256 = sha256_nonempty_file(&canonical, MAX_BINARY_BYTES)?;
+    verify_binary_matches_consumer_manifest(manifest, &exe_sha256)
 }
 
 fn validate_expected_commit(commit: &str) -> Result<(), ReleaseHelperError> {

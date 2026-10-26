@@ -14,7 +14,11 @@ impl<'a> Fixture<'a> {
         Self { paths }
     }
 
-    pub(crate) fn initialize(&self, digest: &str) -> Result<Identities, Box<dyn Error>> {
+    pub(crate) fn initialize(
+        &self,
+        digest: &str,
+        commit: &str,
+    ) -> Result<Identities, Box<dyn Error>> {
         self.git(&["init", "-b", "main"])?;
         self.git(&["config", "user.name", "Fixture"])?;
         self.git(&["config", "user.email", "fixture@example.invalid"])?;
@@ -30,7 +34,7 @@ impl<'a> Fixture<'a> {
         fs::write(self.paths.repo.join(".velnor/config.toml"), CONFIG)?;
         fs::write(
             self.paths.repo.join(".velnor/release-manifest.json"),
-            manifest(digest),
+            manifest(digest, commit),
         )?;
         self.git(&["add", "."])?;
         self.git(&["commit", "-m", "fixture base"])?;
@@ -83,7 +87,7 @@ impl<'a> Fixture<'a> {
     }
 }
 
-fn manifest(digest: &str) -> String {
+fn manifest(digest: &str, commit: &str) -> String {
     let targets = [
         "x86_64-unknown-linux-gnu",
         "aarch64-apple-darwin",
@@ -94,7 +98,7 @@ fn manifest(digest: &str) -> String {
         "artifact": format!("https://github.com/tailrocks/velnor-new/releases/download/v{}/velnor-actions-{}-{target}", env!("CARGO_PKG_VERSION"), env!("CARGO_PKG_VERSION")),
         "sha256": digest
     })).collect::<Vec<_>>();
-    serde_json::json!({"schema":1,"version":env!("CARGO_PKG_VERSION"),"repository":"tailrocks/velnor-new","commit":"6930000000000000000000000000000000000000","targets":targets}).to_string()
+    serde_json::json!({"schema":1,"version":env!("CARGO_PKG_VERSION"),"repository":"tailrocks/velnor-new","commit":commit,"targets":targets}).to_string()
 }
 
 const CONFIG: &str = r#"schema = 2

@@ -18,6 +18,8 @@ mod provider;
 
 #[derive(Clone, Copy)]
 pub(crate) enum Scenario {
+    #[cfg(not(debug_assertions))]
+    ReleaseSentinel,
     Valid,
     ReversedParents,
     ChangedRef,
@@ -37,15 +39,25 @@ pub(crate) fn run(scenario: Scenario, expected: &str) -> Result<(), Box<dyn Erro
     fs::create_dir_all(&paths.runner_temp)?;
     fs::write(paths.runner_temp.join("github-output"), "")?;
     let cli = Path::new(env!("CARGO_BIN_EXE_velnor-actions"));
-    let digest = sha256(&fs::read(cli)?);
+    let (digest, commit) = manifest_identity(cli, scenario)?;
     let git = git::Fixture::new(&paths);
-    let identities = git.initialize(&digest)?;
+    let identities = git.initialize(&digest, &commit)?;
     write_event(&paths, &identities)?;
     provider::write(&paths, &identities, scenario)?;
     let output = invoke(&paths, &identities)?;
     assert!(!output.status.success(), "fixture unexpectedly passed");
     let stderr = String::from_utf8_lossy(&output.stderr);
-    let requests = fs::read_to_string(paths.root.join("provider/requests.log"))?;
+    let requests = match fs::read_to_string(paths.root.join("provider/requests.log")) {
+        Ok(requests) => requests,
+        #[cfg(not(debug_assertions))]
+        Err(error)
+            if matches!(scenario, Scenario::ReleaseSentinel)
+                && error.kind() == io::ErrorKind::NotFound =>
+        {
+            String::new()
+        }
+        Err(error) => return Err(error.into()),
+    };
     assert!(
         stderr.contains(expected),
         "expected {expected}, got {stderr}; fixture routes: {requests}"
@@ -93,6 +105,26 @@ pub(crate) fn run(scenario: Scenario, expected: &str) -> Result<(), Box<dyn Erro
             .exists()
     );
     Ok(())
+}
+
+fn manifest_identity(cli: &Path, scenario: Scenario) -> Result<(String, String), Box<dyn Error>> {
+    let digest = sha256(&fs::read(cli)?);
+    Ok(match scenario {
+        #[cfg(not(debug_assertions))]
+        Scenario::ReleaseSentinel => {
+            let incorrect = if digest == "1".repeat(64) {
+                "2".repeat(64)
+            } else {
+                "1".repeat(64)
+            };
+            assert_ne!(incorrect, digest);
+            (incorrect, "b".repeat(40))
+        }
+        _ => (
+            digest,
+            "6930000000000000000000000000000000000000".to_owned(),
+        ),
+    })
 }
 
 pub(crate) struct Paths {

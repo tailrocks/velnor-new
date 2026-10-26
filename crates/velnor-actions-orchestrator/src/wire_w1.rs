@@ -159,17 +159,9 @@ pub(crate) fn workspace_format_step(
             problem: "format_without_mise".to_owned(),
         });
     }
-    let joined = velnor_actions_workflow_renderer::join_argv_for_run(&argv).map_err(|err| {
-        OrchestratorError::Contract {
-            problem: err.to_string(),
-        }
-    })?;
     let matrix_key = matrix_key_for(fmt)?;
-    let outcome = crate::matrix_step::outcome_path_for_key(&matrix_key);
-    let start = crate::matrix_step::start_path_for_key(&matrix_key);
-    let run = crate::matrix_step::outcome_wrapper_argv(&joined, &outcome, &start);
     let env = format_step_env(catalog)?;
-    plan_format::format_step(run, &env)
+    plan_format::outcome_format_step(argv, &matrix_key, &env)
         .map(Some)
         .map_err(OrchestratorError::from)
 }

@@ -6,6 +6,16 @@ use std::error::Error;
 #[path = "api2026_pull_context_fixture.rs"]
 mod fixture;
 
+#[cfg(not(debug_assertions))]
+#[test]
+fn release_consumer_manifest_sentinel_never_bypasses_executable_binding()
+-> Result<(), Box<dyn Error>> {
+    fixture::run(
+        fixture::Scenario::ReleaseSentinel,
+        "release_manifest_binary_mismatch",
+    )
+}
+
 #[test]
 fn absent_rest_merge_sha_reaches_owned_locator_gate() -> Result<(), Box<dyn Error>> {
     fixture::run(
