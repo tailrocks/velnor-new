@@ -18,9 +18,8 @@ use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::JactionlintConfigInput;
 use velnor_actions_contract::{
-    Concurrency, ExecutionMode, GeneratorValidation, Job, Permissions, ScaleSetSelector, Step,
-    StepKind, Trigger, ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowIr,
-    WorkflowPolicy,
+    Concurrency, ExecutionMode, Job, Permissions, ScaleSetSelector, Step, StepKind, Trigger,
+    ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::render::{
@@ -51,13 +50,6 @@ pub(crate) fn scale_set_selector_for_dispatch(
     dispatch: Option<ExecutionMode>,
 ) -> Result<Option<ScaleSetSelector>, OrchestratorError> {
     workflow_context::scale_set_selector(config, dispatch)
-}
-
-pub(crate) fn validate_candidate_tool_pins(
-    config: &VelnorConfig,
-    catalog: &ToolCatalog,
-) -> Result<(), OrchestratorError> {
-    workflow_context::validate_candidate_tool_pins(config, catalog)
 }
 
 pub const CHECKOUT_USES: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
@@ -102,7 +94,6 @@ fn workflow_ir(
 
 fn support_workflow(
     policy: WorkflowPolicy,
-    validation: GeneratorValidation,
     discovery: &Discovery,
     verify: &[ValidatorKind],
 ) -> Option<VelnorSupportWorkflow> {
@@ -113,10 +104,9 @@ fn support_workflow(
             }
             VelnorSupportWorkflow {
                 validators: verify.to_vec(),
-                candidate_validation: false,
             }
         }
-        WorkflowPolicy::VelnorRepositoryV1 => policy.support_workflow(validation),
+        WorkflowPolicy::VelnorRepositoryV1 => policy.support_workflow(),
     };
     if discovery.workspaces.is_empty() {
         support

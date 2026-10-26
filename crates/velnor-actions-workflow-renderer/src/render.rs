@@ -10,6 +10,10 @@ use crate::{
 #[path = "render_execution_boundaries.rs"]
 mod execution_boundaries;
 
+#[path = "render_authority_steps.rs"]
+mod authority_steps;
+pub use authority_steps::CanonicalAuthoritySteps;
+
 use execution_boundaries::ValidationPhase;
 
 type JobMap = BTreeMap<String, Job>;
@@ -58,7 +62,7 @@ fn render_workflow_parts(
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
-    validate_final_jobs(ir, &mut jobs, policy, ValidationPhase::BeforeSetup)?;
+    validate_final_jobs(ir, &mut jobs, policy, ValidationPhase::BeforeSetup, ctx)?;
     render_merged(ir, &jobs, ctx, policy, ValidationPhase::BeforeSetup)
 }
 
@@ -138,7 +142,7 @@ pub fn finalize_jobs(
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
     crate::dispatch_cache_boundary::suppress_unvalidated_cache_access(&mut jobs);
-    validate_final_jobs(ir, &mut jobs, policy, ValidationPhase::Finalized)?;
+    validate_final_jobs(ir, &mut jobs, policy, ValidationPhase::Finalized, ctx)?;
     crate::cache_doctor::check(&jobs)?;
     Ok(jobs)
 }
@@ -148,11 +152,12 @@ fn validate_final_jobs(
     jobs: &mut JobMap,
     policy: WorkflowPolicy,
     phase: ValidationPhase,
+    ctx: &RenderContext,
 ) -> Result<(), RenderError> {
     crate::cache_steps::append_bundle_postludes(jobs)?;
     crate::cache_steps::append_workspace_cleanups(jobs)?;
-    execution_boundaries::validate_required_verdict(jobs, phase)?;
-    execution_boundaries::validate_trusted_plan(jobs, policy, phase)?;
+    execution_boundaries::validate_required_verdict(jobs, phase, &ctx.authority_steps)?;
+    execution_boundaries::validate_trusted_plan(jobs, policy, phase, &ctx.authority_steps)?;
     let mut finalized = ir.clone();
     finalized.jobs.clone_from(jobs);
     finalized.validate().map_err(RenderError::Contract)
@@ -182,6 +187,17 @@ fn merged_jobs(
             support::merge_support_jobs(&mut jobs, support, ctx, "velnor-repository-v1")?;
         }
     }
+    execution_boundaries::validate_required_verdict(
+        &jobs,
+        ValidationPhase::BeforeSetup,
+        &ctx.authority_steps,
+    )?;
+    execution_boundaries::validate_trusted_plan(
+        &jobs,
+        policy,
+        ValidationPhase::BeforeSetup,
+        &ctx.authority_steps,
+    )?;
     let workflow_task_ids =
         crate::verification_jobs::workflow_task_jobs::validate_workflow_task_jobs(
             &jobs,
@@ -235,8 +251,8 @@ fn render_merged(
     )?;
     let mut shared = crate::lane_share::share_lanes(&jobs, ctx)?;
     shared.files.extend(task_files);
-    execution_boundaries::validate_required_verdict(&shared.jobs, phase)?;
-    execution_boundaries::validate_trusted_plan(&shared.jobs, policy, phase)?;
+    execution_boundaries::validate_required_verdict(&shared.jobs, phase, &ctx.authority_steps)?;
+    execution_boundaries::validate_trusted_plan(&shared.jobs, policy, phase, &ctx.authority_steps)?;
     match emit::emit_shared(
         ir,
         &shared,
@@ -253,8 +269,17 @@ fn render_merged(
             if extracted == 0 {
                 return Err(error);
             }
-            execution_boundaries::validate_required_verdict(&shared.jobs, phase)?;
-            execution_boundaries::validate_trusted_plan(&shared.jobs, policy, phase)?;
+            execution_boundaries::validate_required_verdict(
+                &shared.jobs,
+                phase,
+                &ctx.authority_steps,
+            )?;
+            execution_boundaries::validate_trusted_plan(
+                &shared.jobs,
+                policy,
+                phase,
+                &ctx.authority_steps,
+            )?;
             emit::emit_shared(
                 ir,
                 &shared,

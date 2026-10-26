@@ -57,8 +57,14 @@ pub(crate) fn build_workflow_for_consumer_release(
     if input.config.workflow.checkout_lfs {
         wire_w1::apply_checkout_lfs(&mut jobs);
     }
+    let authority_steps =
+        velnor_actions_workflow_renderer::render::CanonicalAuthoritySteps::from_native_jobs(
+            &jobs,
+            prepared.policy,
+        );
     let mut ir = workflow_ir(input.config, input.branch, jobs, prepared.policy);
     let context = workflow_context::render_context(workflow_context::RenderContextInputs {
+        authority_steps,
         config: input.config,
         label: input.label,
         generator_version: prepared.generator_version,
@@ -115,9 +121,8 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
         .to_owned();
     let generator_version = env!("CARGO_PKG_VERSION");
     let policy = input.config.workflow.policy;
-    let validation = input.config.workflow.generator_validation;
     let verify = crate::verify::verify_kinds(&input.config.workflow.verify.jobs)?;
-    let support = support_workflow(policy, validation, input.discovery, &verify);
+    let support = support_workflow(policy, input.discovery, &verify);
     let acquire = match policy {
         WorkflowPolicy::ConsumerV1 => Some(consumer_acquire_step(
             input.label,

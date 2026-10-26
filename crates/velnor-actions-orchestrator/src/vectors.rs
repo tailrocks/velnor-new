@@ -2,13 +2,12 @@ use std::ffi::{OsStr, OsString};
 
 use velnor_actions_contract::{ProposedTask, Stack};
 use velnor_actions_mise::{
-    CandidateBuild, IsolatedCommand, PinnedTool, PinnedToolExec, RouteDriver, ToolCatalog,
+    IsolatedCommand, PinnedTool, PinnedToolExec, RouteDriver, ToolCatalog,
     custom_run::custom_task_run_argv, validate_exact_version,
 };
 use velnor_actions_rust::tool_needs;
-use velnor_actions_workflow_renderer::render::CandidateSpec;
 
-use crate::{OrchestratorError, qualify::QualifyRequest};
+use crate::OrchestratorError;
 
 pub(crate) const CARGO_DENY_VERSION: &str = "0.20.2";
 
@@ -255,23 +254,6 @@ fn validator_argv_parts<'a>(
             }
         })?;
     strings_of(exec.argv()).map_err(|problem| OrchestratorError::Contract { problem })
-}
-
-pub(crate) fn candidate_build_argv(
-    catalog: &ToolCatalog,
-) -> Result<Vec<String>, OrchestratorError> {
-    let build = CandidateBuild::new().map_err(|err| OrchestratorError::Contract {
-        problem: err.to_string(),
-    })?;
-    strings_of(build.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
-}
-
-pub(crate) fn candidate_spec() -> Result<CandidateSpec, OrchestratorError> {
-    let catalog = ToolCatalog::pinned();
-    Ok(CandidateSpec {
-        build: candidate_build_argv(&catalog)?,
-        qualify: QualifyRequest::staged().argv()?,
-    })
 }
 
 fn strings_of(argv: Vec<OsString>) -> Result<Vec<String>, String> {

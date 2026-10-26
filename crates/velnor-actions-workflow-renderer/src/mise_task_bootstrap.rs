@@ -4,7 +4,7 @@ use crate::steps;
 use crate::verification_jobs::build_task_jobs::BuildTaskTool;
 use crate::verification_jobs::build_task_mise_tools::{
     BOLTFFI_KEY, BOLTFFI_MATCHING_REGEX, exact_rust_version, safe_backend, safe_identity,
-    safe_version, selected_mise_files_for, validate_artifact,
+    safe_version, selected_mise_files_for, valid_rust_toolchain_options, validate_artifact,
 };
 use crate::verification_jobs::task_script::{capture_command, jq_guard, printf_write};
 use crate::verification_jobs::{INSTALL_VERIFICATION_TOOLS_NAME, MiseTaskBootstrapPolicy};
@@ -143,11 +143,7 @@ fn validate_tool(tool: &BuildTaskTool) -> Result<(), RenderError> {
             || tool.artifact.is_some()
             || tool.config_options != tool.lock_options
             || !exact_rust_version(&tool.version)
-            || tool
-                .lock_options
-                .keys()
-                .any(|key| !matches!(key.as_str(), "components" | "targets"))
-            || tool.lock_options.values().any(|value| !safe_option(value))
+            || !valid_rust_toolchain_options(&tool.lock_options)
         {
             return Err(RenderError::InvalidWorkflow(
                 "verification_rust_tool_pin".to_owned(),
@@ -330,6 +326,5 @@ fn mbx_guard(mbx_version: &str) -> Vec<String> {
 mod environment;
 use self::environment::{
     base_environment, bash_script, platform, private_config_chain_check, private_environment,
-    repository_path_guards, safe_option, source_hash_check, task_root,
-    workspace_config_chain_check,
+    repository_path_guards, source_hash_check, task_root, workspace_config_chain_check,
 };

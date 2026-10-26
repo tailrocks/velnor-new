@@ -32,6 +32,26 @@ pub const PRESEED_MANIFEST_OUT_ENV: &str = "VELNOR_PRESEED_OUT";
 pub const PRESEED_MANIFEST_TARGET_ENV: &str = "VELNOR_PRESEED_TARGET";
 pub const PRESEED_MANIFEST_TOOLCHAIN_ENV: &str = "VELNOR_PRESEED_TOOLCHAIN";
 
+pub(crate) fn toolchain_identity(build: &[String]) -> Result<String, RenderError> {
+    let mut specs = Vec::new();
+    let mut in_specs = false;
+    for arg in build {
+        if arg == "exec" {
+            in_specs = true;
+        } else if arg == "--" {
+            break;
+        } else if in_specs {
+            specs.push(arg.clone());
+        }
+    }
+    if specs.is_empty() || specs.iter().any(|spec| !spec.contains('@')) {
+        return Err(RenderError::BadCommand(
+            "candidate_build_without_toolchain".to_owned(),
+        ));
+    }
+    Ok(specs.join("+"))
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PreseedStageSource {
     LocalBuild,
@@ -136,7 +156,7 @@ pub fn preseed_manifest_step(build: &[String], target: &str) -> Result<Step, Ren
             "preseed_unsupported_target:{target}"
         )));
     }
-    let toolchain = crate::candidate::toolchain_identity(build)?;
+    let toolchain = toolchain_identity(build)?;
     let mut step = steps::shell_step(
         PRESEED_MANIFEST_NAME,
         vec![PRESEED_BUILD_OUTPUT.to_owned()],

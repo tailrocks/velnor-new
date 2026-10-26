@@ -28,6 +28,7 @@ impl ValidationPhase {
 pub(super) fn validate_required_verdict(
     jobs: &JobMap,
     phase: ValidationPhase,
+    authority: &super::CanonicalAuthoritySteps,
 ) -> Result<(), RenderError> {
     let Some(job) = jobs.get(FINAL_JOB_ID) else {
         return Ok(());
@@ -47,7 +48,9 @@ pub(super) fn validate_required_verdict(
             "required_verdict_candidate_execution".to_owned(),
         ));
     }
-    if job.steps.iter().any(|step| !required_verdict_step(step)) {
+    if !authority.matches_required(&job.steps)
+        || job.steps.iter().any(|step| !required_verdict_step(step))
+    {
         return Err(RenderError::InvalidWorkflow(
             "required_verdict_candidate_execution".to_owned(),
         ));
@@ -93,6 +96,7 @@ pub(super) fn validate_trusted_plan(
     jobs: &JobMap,
     policy: WorkflowPolicy,
     phase: ValidationPhase,
+    authority: &super::CanonicalAuthoritySteps,
 ) -> Result<(), RenderError> {
     if policy != WorkflowPolicy::VelnorRepositoryV1 {
         return Ok(());
@@ -111,7 +115,13 @@ pub(super) fn validate_trusted_plan(
             "trusted_plan_operation_count".to_owned(),
         ));
     }
-    validate_plan_prefix(&plan.steps[..=plan_indices[0]], phase)
+    let prefix = &plan.steps[..=plan_indices[0]];
+    if !authority.matches_producer_plan(prefix) {
+        return Err(RenderError::InvalidWorkflow(
+            "trusted_plan_candidate_execution".to_owned(),
+        ));
+    }
+    validate_plan_prefix(prefix, phase)
 }
 
 fn matches_plan_operation(step: &Step) -> bool {

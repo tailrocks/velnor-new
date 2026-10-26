@@ -72,6 +72,12 @@ pub(crate) fn rust_toolchain_options(
     values: &BTreeMap<String, String>,
 ) -> Option<BTreeMap<String, String>> {
     let mut options = BTreeMap::new();
+    if let Some(profile) = values.get("profile") {
+        if !valid_rust_toolchain_profile(profile) {
+            return None;
+        }
+        options.insert("profile".to_owned(), profile.clone());
+    }
     for key in ["components", "targets"] {
         if let Some(value) = values.get(key) {
             let mut items = value.split(',').map(ToOwned::to_owned).collect::<Vec<_>>();
@@ -84,6 +90,18 @@ pub(crate) fn rust_toolchain_options(
         }
     }
     Some(options)
+}
+
+pub(crate) fn valid_rust_toolchain_profile(value: &str) -> bool {
+    matches!(value, "minimal" | "default" | "complete")
+}
+
+pub(crate) fn valid_rust_toolchain_options(options: &BTreeMap<String, String>) -> bool {
+    options.iter().all(|(key, value)| match key.as_str() {
+        "components" | "targets" => true,
+        "profile" => valid_rust_toolchain_profile(value),
+        _ => false,
+    })
 }
 
 pub(crate) fn parse_native_mise_lock(value: &toml::Value) -> Option<NativeMiseLock> {

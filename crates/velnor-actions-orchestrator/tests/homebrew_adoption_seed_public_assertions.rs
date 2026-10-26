@@ -10,6 +10,7 @@ use velnor_actions_workflow_renderer::{
 };
 
 mod lock_trust;
+mod shell_authority;
 pub(super) use lock_trust::assert_lock_trust_rejections;
 
 pub(super) const BOOTSTRAP_CONFIG: &str = r#"schema = 2
@@ -42,13 +43,15 @@ executor = "hosted"
 pub(super) fn assert_raw_consumer_render(
     preparation: &GenerationPreparation,
 ) -> Result<(), Box<dyn Error>> {
-    assert_raw_render(preparation, WorkflowPolicy::ConsumerV1)
+    assert_raw_render(preparation, WorkflowPolicy::ConsumerV1)?;
+    shell_authority::assert_shell_authority(preparation, WorkflowPolicy::ConsumerV1)
 }
 
 pub(super) fn assert_raw_producer_render(
     preparation: &GenerationPreparation,
 ) -> Result<(), Box<dyn Error>> {
-    assert_raw_render(preparation, WorkflowPolicy::VelnorRepositoryV1)
+    assert_raw_render(preparation, WorkflowPolicy::VelnorRepositoryV1)?;
+    shell_authority::assert_shell_authority(preparation, WorkflowPolicy::VelnorRepositoryV1)
 }
 
 fn assert_raw_render(

@@ -7,7 +7,9 @@ use velnor_actions_workflow_renderer::{
 };
 
 use crate::native_tool_input::{NativeMiseConfig, NativeToolInput, NativeToolSource};
-use crate::native_tool_lock::{NativeLockedTool, NativeMiseLock, rust_toolchain_options};
+use crate::native_tool_lock::{
+    NativeLockedTool, NativeMiseLock, rust_toolchain_options, valid_rust_toolchain_options,
+};
 use crate::pins::resolve_verification_mise_setup;
 use crate::toolcheck::{ToolInputCheck, ToolParse};
 use crate::{OrchestratorError, discover::Discovery};
@@ -305,10 +307,7 @@ fn resolve_tool(
     let artifact = if key == "rust" {
         if backend != "core:rust"
             || !locked.platforms.is_empty()
-            || !locked
-                .options
-                .keys()
-                .all(|option| matches!(option.as_str(), "components" | "targets"))
+            || !valid_rust_toolchain_options(&locked.options)
         {
             return Err(failure("verification_rust_tool_lock"));
         }

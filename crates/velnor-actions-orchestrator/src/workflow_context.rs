@@ -1,9 +1,8 @@
 use velnor_actions_contract::{
-    ExecutionMode, GeneratorValidation, ScaleSetSelector, ValidatorKind, VelnorConfig,
-    WorkflowPolicy,
+    ExecutionMode, ScaleSetSelector, ValidatorKind, VelnorConfig, WorkflowPolicy,
 };
-use velnor_actions_mise::{PinnedTool, ToolCatalog};
-use velnor_actions_workflow_renderer::render::{CandidateSpec, RenderContext, ValidatorCommand};
+use velnor_actions_mise::ToolCatalog;
+use velnor_actions_workflow_renderer::render::{RenderContext, ValidatorCommand};
 use velnor_actions_workflow_renderer::steps::{
     DENY_STEP_NAME, MACHETE_STEP_NAME, REQUEST_DIR_PREFIX, STAGED_BINARY_PREFIX,
 };
@@ -11,7 +10,7 @@ use velnor_actions_workflow_renderer::verification_jobs::WorkflowTaskPolicy;
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
-use crate::vectors::{candidate_spec, deny_argv, machete_argv, machete_install_argv};
+use crate::vectors::{deny_argv, machete_argv, machete_install_argv};
 
 use super::{CHECKOUT_USES, REQUEST_DIR};
 
@@ -19,6 +18,7 @@ use super::{CHECKOUT_USES, REQUEST_DIR};
 mod tool_cache_pins;
 
 pub(super) struct RenderContextInputs<'a> {
+    pub(super) authority_steps: velnor_actions_workflow_renderer::render::CanonicalAuthoritySteps,
     pub(super) config: &'a VelnorConfig,
     pub(super) label: &'a str,
     pub(super) generator_version: &'a str,
@@ -35,9 +35,9 @@ pub(super) fn render_context(
 ) -> Result<RenderContext, OrchestratorError> {
     debug_assert!(REQUEST_DIR.starts_with(REQUEST_DIR_PREFIX));
     let validator_commands = validator_commands(&input)?;
-    let candidate = candidate_spec_for(&input)?;
     let scale_set_selector = scale_set_selector(input.config, None)?;
     Ok(RenderContext {
+        authority_steps: input.authority_steps,
         tool_pins: tool_cache_pins::catalog_tool_pins(input.catalog),
         generator_version: input.generator_version.to_owned(),
         report_helper_version: input.report_helper_version.to_owned(),
@@ -47,8 +47,6 @@ pub(super) fn render_context(
         request_dir: REQUEST_DIR.to_owned(),
         checkout_uses: CHECKOUT_USES.to_owned(),
         validator_commands,
-        candidate,
-        claude_md: input.config.agents.claude_md,
         preseed: false,
         workflow_tasks: input.workflow_tasks,
         pull_request_cache_policy: input.config.workflow.pull_request_cache_policy,
@@ -95,43 +93,6 @@ fn validator_commands(
         &input.config.workflow.verify,
     )?;
     Ok(validator_commands)
-}
-
-fn candidate_spec_for(
-    input: &RenderContextInputs<'_>,
-) -> Result<Option<CandidateSpec>, OrchestratorError> {
-    let is_candidate = input.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1
-        && input.config.workflow.generator_validation == GeneratorValidation::Candidate;
-    if is_candidate {
-        candidate_spec().map(Some)
-    } else {
-        Ok(None)
-    }
-}
-
-pub(super) fn validate_candidate_tool_pins(
-    config: &VelnorConfig,
-    catalog: &ToolCatalog,
-) -> Result<(), OrchestratorError> {
-    if config.workflow.policy != WorkflowPolicy::VelnorRepositoryV1
-        || config.workflow.generator_validation != GeneratorValidation::Candidate
-    {
-        return Ok(());
-    }
-    let compiled = ToolCatalog::pinned();
-    for tool in [PinnedTool::Rust, PinnedTool::Jactionlint] {
-        let resolved = catalog.version(tool);
-        let expected = compiled.version(tool);
-        if resolved != expected {
-            return Err(OrchestratorError::Contract {
-                problem: format!(
-                    "candidate_tool_catalog_mismatch:{}:expected={expected}:resolved={resolved}",
-                    tool.tool_name()
-                ),
-            });
-        }
-    }
-    Ok(())
 }
 
 pub(super) fn scale_set_selector(

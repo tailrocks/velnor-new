@@ -119,11 +119,3 @@ pub(super) fn platform(
         | velnor_actions_contract::VerificationRunner::Xcode27Arm64 => ("macos", "macos-arm64"),
     }
 }
-
-pub(super) fn safe_option(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 512
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b',' | b'.' | b'_' | b'-'))
-}

@@ -19,7 +19,6 @@ mod cache_plan_outputs;
 pub mod cache_prune;
 mod cache_save_budget;
 mod cache_steps;
-mod candidate;
 pub mod closure;
 mod closure_paths;
 mod commands;

@@ -11,7 +11,6 @@ use velnor_actions_contract::{
 
 use crate::{
     RenderError,
-    candidate::candidate_job,
     render::{
         ALINT_BINARY_VERSION, ALINT_USES, CANDIDATE_JOB_ID, FINAL_CONDITION, FINAL_DISPLAY_NAME,
         FINAL_JOB_ID, PLAN_JOB_ID, RenderContext, ValidatorCommand,
@@ -32,14 +31,8 @@ pub(crate) fn merge_consumer_verify(
     let Some(workflow) = support else {
         return Ok(());
     };
-    if workflow.validators.is_empty() && !workflow.candidate_validation {
+    if workflow.validators.is_empty() {
         return Ok(());
-    }
-    if workflow.candidate_validation {
-        return Err(RenderError::PolicyRejected {
-            policy: "consumer-v1".to_owned(),
-            problem: "support_ir_rejected".to_owned(),
-        });
     }
     let allowed = ValidatorKind::consumer_verify();
     for validator in &workflow.validators {
@@ -115,33 +108,17 @@ pub(crate) fn merge_support_jobs(
         };
         insert_support_job(jobs, validator.job_id(), job, policy)?;
     }
-    if workflow.candidate_validation {
-        let Some(spec) = &ctx.candidate else {
-            return Err(RenderError::PolicyRejected {
-                policy: policy.to_owned(),
-                problem: "candidate_without_spec".to_owned(),
-            });
-        };
-        insert_support_job(jobs, CANDIDATE_JOB_ID, candidate_job(ctx, spec)?, policy)?;
-    }
-    extend_final_needs(jobs, &workflow.validators, workflow.candidate_validation);
+    extend_final_needs(jobs, &workflow.validators);
     Ok(())
 }
 
-fn extend_final_needs(
-    jobs: &mut BTreeMap<String, Job>,
-    validators: &[ValidatorKind],
-    candidate: bool,
-) {
+fn extend_final_needs(jobs: &mut BTreeMap<String, Job>, validators: &[ValidatorKind]) {
     let mut extra = Vec::new();
     for validator in validators {
         let id = validator.job_id();
         if jobs.contains_key(id) {
             extra.push(id.to_owned());
         }
-    }
-    if candidate && jobs.contains_key(CANDIDATE_JOB_ID) {
-        extra.push(CANDIDATE_JOB_ID.to_owned());
     }
     let Some(final_job) = jobs.get_mut(FINAL_JOB_ID) else {
         return;

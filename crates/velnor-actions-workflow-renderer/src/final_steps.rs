@@ -80,7 +80,7 @@ fn download_attestation_step(ctx: &RenderContext) -> Result<Step, RenderError> {
         .ok_or_else(|| {
             RenderError::InvalidWorkflow(format!("unsupported_target_for_runner:{}", ctx.runs_on))
         })?;
-    let artifact = crate::candidate_artifact_name(target.triple())?;
+    let artifact = crate::artifact_paths::candidate_artifact_name(target.triple())?;
     let path = format!(
         "{}/{}",
         crate::closure::PLAN_ARTIFACT_PATH,

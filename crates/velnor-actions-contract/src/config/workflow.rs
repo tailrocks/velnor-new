@@ -144,21 +144,16 @@ pub enum RunnerSelection {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VelnorSupportWorkflow {
     pub validators: Vec<ValidatorKind>,
-
-    pub candidate_validation: bool,
 }
 
 impl WorkflowPolicy {
     #[must_use]
-    pub fn support_workflow(&self, validation: GeneratorValidation) -> VelnorSupportWorkflow {
+    pub fn support_workflow(&self) -> VelnorSupportWorkflow {
         let validators = match self {
             Self::ConsumerV1 => Vec::new(),
             Self::VelnorRepositoryV1 => ValidatorKind::repository_validators().to_vec(),
         };
-        VelnorSupportWorkflow {
-            validators,
-            candidate_validation: validation == GeneratorValidation::Candidate,
-        }
+        VelnorSupportWorkflow { validators }
     }
 }
 

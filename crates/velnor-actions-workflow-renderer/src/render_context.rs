@@ -1,6 +1,6 @@
 use super::{BTreeMap, RenderError, commands, guard, marker, steps, validator_tools};
 use velnor_actions_contract::{
-    CI_WORKFLOW_PATH, ClaudeMdMode, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID, PullRequestCachePolicy,
+    CI_WORKFLOW_PATH, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID, PullRequestCachePolicy,
     REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION, REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID,
     REQUIRED_VERDICT_DISPLAY_NAME as CONTRACT_REQUIRED_VERDICT_DISPLAY_NAME, ScaleSetSelector,
     ValidatorKind,
@@ -38,6 +38,7 @@ pub const ALINT_USES: &str = "asamarts/alint@265d9fdc720bb8f59d00b87e33e4149869f
 
 #[derive(Debug, Clone)]
 pub struct RenderContext {
+    pub authority_steps: super::CanonicalAuthoritySteps,
     pub generator_version: String,
     pub report_helper_version: String,
     pub runs_on: String,
@@ -46,8 +47,6 @@ pub struct RenderContext {
     pub request_dir: String,
     pub checkout_uses: String,
     pub validator_commands: Vec<ValidatorCommand>,
-    pub candidate: Option<CandidateSpec>,
-    pub claude_md: ClaudeMdMode,
     pub preseed: bool,
     pub workflow_tasks: Vec<crate::verification_jobs::WorkflowTaskPolicy>,
     pub pull_request_cache_policy: PullRequestCachePolicy,
@@ -62,12 +61,6 @@ pub struct ValidatorCommand {
     pub name: String,
     pub argv: Vec<String>,
     pub prepare_argv: Vec<String>,
-}
-
-#[derive(Debug, Clone)]
-pub struct CandidateSpec {
-    pub build: Vec<String>,
-    pub qualify: Vec<String>,
 }
 
 pub use crate::lane_share::RenderedWorkflow;
@@ -96,10 +89,6 @@ impl RenderContext {
                 commands::validate_command_argv(&command.prepare_argv)?;
             }
             commands::validate_command_argv(&command.argv)?;
-        }
-        if let Some(candidate) = &self.candidate {
-            commands::validate_command_argv(&candidate.build)?;
-            commands::validate_command_argv(&candidate.qualify)?;
         }
         Ok(())
     }
