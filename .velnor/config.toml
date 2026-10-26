@@ -2,7 +2,7 @@ schema = 2
 [workflow]
 policy = "velnor-repository-v1"
 default_branch = "main"
-generator_validation = "bootstrap"
+generator_validation = "candidate"
 [execution]
 default_profile = "hosted"
 hosted_profile = "hosted"
