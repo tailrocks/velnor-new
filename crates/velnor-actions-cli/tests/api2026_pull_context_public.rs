@@ -97,8 +97,11 @@ fn pull_request_changed_during_mergeability_refresh_is_rejected() -> Result<(), 
 
 #[test]
 fn mergeability_polling_obeys_the_public_operation_deadline() -> Result<(), Box<dyn Error>> {
-    fixture::run(
+    for scenario in [
         fixture::Scenario::MergePendingDeadline,
-        "package_public_verification_deadline",
-    )
+        fixture::Scenario::MergePendingApiDeadline,
+    ] {
+        fixture::run(scenario, "package_public_verification_deadline")?;
+    }
+    Ok(())
 }

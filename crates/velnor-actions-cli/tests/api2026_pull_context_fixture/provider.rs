@@ -20,12 +20,15 @@ pub(crate) fn write(
         Scenario::StderrLimit => "stderr",
         Scenario::Deadline => "deadline",
         Scenario::MergePendingDeadline => "merge-deadline",
+        Scenario::MergePendingApiDeadline => "merge-api-deadline",
         _ => "none",
     };
     fs::write(state.join("failure"), failure)?;
     let mergeability = match scenario {
         Scenario::MergePendingReady => "ready",
-        Scenario::MergePendingExhausted | Scenario::MergePendingDeadline => "pending",
+        Scenario::MergePendingExhausted
+        | Scenario::MergePendingDeadline
+        | Scenario::MergePendingApiDeadline => "pending",
         Scenario::MergePendingFalse => "false",
         Scenario::MergePendingChanged => "changed",
         _ => "none",
@@ -232,6 +235,7 @@ case "$route" in
     count=$(cat "$VELNOR_FIXTURE_STATE/pull-count")
     count=$((count + 1))
     printf '%s' "$count" > "$VELNOR_FIXTURE_STATE/pull-count"
+    if [ "$(cat "$VELNOR_FIXTURE_STATE/failure")" = merge-api-deadline ] && [ "$count" -ge 2 ]; then exec /bin/sleep 15; fi
     mode=$(cat "$VELNOR_FIXTURE_STATE/mergeability")
     file=pull.json
     if [ "$mode" != pending ] && [ "$mode" != none ] && [ "$count" -ge 3 ]; then file=pull-ready.json; fi

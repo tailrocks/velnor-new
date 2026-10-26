@@ -28,10 +28,20 @@ pub(crate) enum Scenario {
     MergePendingFalse,
     MergePendingChanged,
     MergePendingDeadline,
+    MergePendingApiDeadline,
     HttpFailure,
     StdoutLimit,
     StderrLimit,
     Deadline,
+}
+
+impl Scenario {
+    fn is_deadline_child(self) -> bool {
+        matches!(
+            self,
+            Self::Deadline | Self::MergePendingDeadline | Self::MergePendingApiDeadline
+        )
+    }
 }
 
 pub(crate) const REPOSITORY_ID: u64 = 819_273;
@@ -49,9 +59,13 @@ pub(crate) fn run(scenario: Scenario, expected: &str) -> Result<(), Box<dyn Erro
     let identities = git.initialize(&digest, &commit)?;
     write_event(&paths, &identities)?;
     provider::write(&paths, &identities, scenario)?;
-    let output = invoke(&paths, &identities)?;
-    assert!(!output.status.success(), "fixture unexpectedly passed");
+    let output = invoke(&paths, &identities, scenario)?;
     let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(
+        output.status.success(),
+        scenario.is_deadline_child(),
+        "unexpected fixture status: {stderr}"
+    );
     let requests = match fs::read_to_string(paths.root.join("provider/requests.log")) {
         Ok(requests) => requests,
         #[cfg(not(debug_assertions))]
@@ -64,7 +78,7 @@ pub(crate) fn run(scenario: Scenario, expected: &str) -> Result<(), Box<dyn Erro
         Err(error) => return Err(error.into()),
     };
     assert!(
-        stderr.contains(expected),
+        expected_error(scenario, &stderr, expected),
         "expected {expected}, got {stderr}; fixture routes: {requests}"
     );
     if matches!(
@@ -172,7 +186,7 @@ fn write_event(paths: &Paths, ids: &Identities) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn invoke(paths: &Paths, ids: &Identities) -> Result<Output, Box<dyn Error>> {
+fn invoke(paths: &Paths, ids: &Identities, scenario: Scenario) -> Result<Output, Box<dyn Error>> {
     let cli = env!("CARGO_BIN_EXE_velnor-actions");
     let path = format!("{}:/usr/bin:/bin", paths.root.join("bin").display());
     let request = paths
@@ -190,10 +204,7 @@ fn invoke(paths: &Paths, ids: &Identities) -> Result<Output, Box<dyn Error>> {
         })
         .to_string(),
     )?;
-    let is_deadline = matches!(
-        fs::read_to_string(paths.root.join("provider/failure"))?.as_str(),
-        "deadline" | "merge-deadline"
-    );
+    let is_deadline = scenario.is_deadline_child();
     let mut command = if is_deadline {
         let mut command = Command::new(std::env::current_exe()?);
         command.args([
@@ -248,27 +259,25 @@ pub(crate) fn deadline_child() -> Result<bool, Box<dyn Error>> {
     }
     let request = fs::read_to_string(std::env::var("VELNOR_REQUEST_FILE")?)?;
     let deadline = velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(5))?;
-    let polling =
-        fs::read_to_string(Path::new(&std::env::var("VELNOR_FIXTURE_STATE")?).join("failure"))?
-            == "merge-deadline";
-    let expected = if polling {
-        "package_public_verification_deadline"
-    } else {
-        "category=timeout"
-    };
+    let failure =
+        fs::read_to_string(Path::new(&std::env::var("VELNOR_FIXTURE_STATE")?).join("failure"))?;
+    let polling = matches!(failure.as_str(), "merge-deadline" | "merge-api-deadline");
     let expired = deadline.scope(|| {
         let result = velnor_actions_orchestrator::plan_internal(&request);
         assert!(result.is_err(), "deadline plan unexpectedly succeeded");
         if let Err(error) = result {
             eprintln!("{error}");
-            assert!(
-                error.to_string().contains(expected),
-                "transport timeout diagnostic missing: {error}"
-            );
+            let error_text = error.to_string();
+            let accepted = if polling {
+                polling_deadline_error(&error_text)
+            } else {
+                error_text.contains("category=timeout")
+            };
+            assert!(accepted, "transport timeout diagnostic missing: {error}");
         }
     });
     assert!(expired.is_err(), "public operation deadline did not expire");
-    Err(io::Error::other("expected diagnostic child rejection").into())
+    Ok(true)
 }
 
 fn sha256(bytes: &[u8]) -> String {
@@ -279,4 +288,22 @@ fn sha256(bytes: &[u8]) -> String {
         text.push(char::from(HEX[usize::from(byte & 0x0f)]));
     }
     text
+}
+
+fn expected_error(scenario: Scenario, stderr: &str, expected: &str) -> bool {
+    if matches!(
+        scenario,
+        Scenario::MergePendingDeadline | Scenario::MergePendingApiDeadline
+    ) {
+        stderr.lines().any(polling_deadline_error)
+    } else {
+        stderr.contains(expected)
+    }
+}
+
+fn polling_deadline_error(error: &str) -> bool {
+    error == "internal: package_public_verification_deadline"
+        || error.starts_with(
+            "internal: package_publish_api_failed: operation=pull_requests category=timeout ",
+        )
 }
