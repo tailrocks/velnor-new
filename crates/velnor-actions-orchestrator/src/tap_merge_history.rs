@@ -1,5 +1,7 @@
 #[path = "tap_merge_history_identity.rs"]
 mod identity;
+#[path = "tap_merge_history_landed.rs"]
+mod landed;
 
 use serde_json::Value;
 use velnor_actions_contract::{canonical_json_bytes, homebrew_merge_gate::TapHistoricalFeedback};
@@ -41,6 +43,15 @@ struct HistoricalFormula {
     old_formula_sha256: String,
     head_bytes: Vec<u8>,
     proof_digest: String,
+}
+
+struct MergeProjection<'a> {
+    number: u64,
+    branch: &'a str,
+    head_sha: &'a str,
+    observed_base_sha: &'a str,
+    merged: bool,
+    merged_at: Option<&'a str>,
 }
 
 pub(super) fn capture_all(
@@ -113,14 +124,7 @@ fn authenticate_pull(
     api: &TapMergeGitHub,
     summary: &Value,
 ) -> Result<AuthenticatedPull, OrchestratorError> {
-    let number = summary["number"]
-        .as_u64()
-        .filter(|number| *number > 0)
-        .ok_or_else(|| internal("tap_merge_history_pr_number"))?;
-    let detail: Value = api.get(&format!(
-        "repos/{}/pulls/{number}",
-        candidate.policy.repository
-    ))?;
+    let (number, detail) = read_pull_detail(candidate, api, summary)?;
     let branch = required_text(&detail, "/head/ref", "tap_merge_history_branch")?.to_owned();
     let head_sha = required_sha(&detail, "/head/sha", "tap_merge_history_head")?;
     validate_pull_identity(candidate, authority, &detail, number, &branch, &head_sha)?;
@@ -130,7 +134,21 @@ fn authenticate_pull(
         candidate.release.receipt.channel,
     )?;
     let observed_base_sha = required_sha(&detail, "/base/sha", "tap_merge_history_base")?;
-    let (merged, merge_sha, merged_at) = merged_fields(&detail)?;
+    let (merged, merged_at) = merged_fields(&detail)?;
+    let merge_sha = landed::read_merge_sha(
+        candidate,
+        authority,
+        api,
+        &detail,
+        &MergeProjection {
+            number,
+            branch: &branch,
+            head_sha: &head_sha,
+            observed_base_sha: &observed_base_sha,
+            merged,
+            merged_at: merged_at.as_deref(),
+        },
+    )?;
     identity::validate_observed_base(&detail, &base_sha, merged)?;
     let formula = validate_historical_formula(candidate, api, number, &detail, &branch, &head_sha)?;
     verify_commit(
@@ -180,6 +198,22 @@ fn authenticate_pull(
         },
         check_runs: runs,
     })
+}
+
+fn read_pull_detail(
+    candidate: &MergeCandidate,
+    api: &TapMergeGitHub,
+    summary: &Value,
+) -> Result<(u64, Value), OrchestratorError> {
+    let number = summary["number"]
+        .as_u64()
+        .filter(|number| *number > 0)
+        .ok_or_else(|| internal("tap_merge_history_pr_number"))?;
+    let detail = api.get(&format!(
+        "repos/{}/pulls/{number}",
+        candidate.policy.repository
+    ))?;
+    Ok((number, detail))
 }
 
 fn validate_historical_formula(
@@ -244,9 +278,7 @@ fn validate_historical_formula(
     })
 }
 
-fn merged_fields(
-    detail: &Value,
-) -> Result<(bool, Option<String>, Option<String>), OrchestratorError> {
+fn merged_fields(detail: &Value) -> Result<(bool, Option<String>), OrchestratorError> {
     let merged = detail["merged"]
         .as_bool()
         .ok_or_else(|| internal("tap_merge_history_merged_missing"))?;
@@ -254,11 +286,10 @@ fn merged_fields(
         if detail["state"].as_str() != Some("closed") {
             return Err(internal("tap_merge_history_merged_state"));
         }
-        let sha = required_sha(detail, "/merge_commit_sha", "tap_merge_history_merge_sha")?;
         let at = required_text(detail, "/merged_at", "tap_merge_history_merged_at")?;
-        Ok((true, Some(sha), Some(at.to_owned())))
+        Ok((true, Some(at.to_owned())))
     } else {
-        Ok((false, None, None))
+        Ok((false, None))
     }
 }
 

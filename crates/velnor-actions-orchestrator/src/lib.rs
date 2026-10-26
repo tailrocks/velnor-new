@@ -41,6 +41,7 @@ mod generator;
 mod gh_download;
 mod git_paths;
 mod github_authority_read;
+mod github_landed_pull;
 mod homebrew;
 mod image_build_tasks;
 mod image_maintenance;

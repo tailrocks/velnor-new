@@ -8,6 +8,7 @@ use velnor_actions_contract::config::HomebrewTapConfig;
 pub(super) struct BotIdentity {
     pub(super) login: String,
     pub(super) user_id: u64,
+    pub(super) repository_id: u64,
 }
 
 pub(super) fn verify_app_scope(
@@ -45,5 +46,6 @@ pub(super) fn verify_app_scope(
     Ok(BotIdentity {
         login: bot_login,
         user_id: user.id,
+        repository_id: current_repo.id,
     })
 }

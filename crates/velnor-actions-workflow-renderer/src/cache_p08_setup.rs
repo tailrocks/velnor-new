@@ -24,7 +24,8 @@ pub(crate) fn ensure_tools_cache_v2(
             "duplicate_setup_mise:{job_id}"
         )));
     }
-    let needed = always || job.steps.iter().any(step_uses_mise);
+    let needed =
+        always || job_id == crate::render::FINAL_JOB_ID || job.steps.iter().any(step_uses_mise);
     if !needed && setup_indices.is_empty() {
         reject_v2_steps(job_id, job)?;
         return Ok(());
@@ -50,6 +51,9 @@ pub(crate) fn ensure_tools_cache_v2(
         )));
     }
     reject_v2_steps(job_id, job)?;
+    if job_id == crate::render::FINAL_JOB_ID {
+        return Ok(());
+    }
     if !checkout_precedes_setup(job, setup_index, checkout_uses) {
         return Ok(());
     }

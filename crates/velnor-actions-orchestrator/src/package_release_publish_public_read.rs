@@ -7,6 +7,9 @@ use velnor_actions_contract::vcs::VcsInputs;
 use super::github::ReleaseResponse;
 use super::{GitHubApi, ReleaseAssetResponse, asset_tuples, asset_tuples_from_downloads, github};
 
+#[path = "package_release_publish_pull_request_merge_ref.rs"]
+mod pull_request_merge_ref;
+
 pub(crate) struct PublicReleaseSnapshot {
     pub(crate) release_id: u64,
     pub(crate) tag: String,
@@ -40,7 +43,7 @@ pub(crate) struct PublicPullRequestSnapshot {
     pub(crate) head_repository_id: u64,
     pub(crate) head_ref: String,
     pub(crate) head_sha: String,
-    pub(crate) merge_commit_sha: Option<String>,
+    pub(crate) merge_ref_sha: Option<String>,
 }
 
 pub(crate) fn read_public_repository_identity(
@@ -95,7 +98,6 @@ pub(crate) fn read_public_pull_request(
         || !velnor_actions_contract::vcs::is_safe_github_repository(&head_repository.full_name)
         || !github::is_lowercase_git_sha(&base.sha)
         || !github::is_lowercase_git_sha(&head.sha)
-        || !valid_merge_commit_sha(response.merge_commit_sha.as_deref())
         || base.reference.is_empty()
         || head.reference.is_empty()
         || base.reference.bytes().any(|byte| byte.is_ascii_control())
@@ -106,10 +108,18 @@ pub(crate) fn read_public_pull_request(
     deadline
         .remaining()
         .map_err(|_| internal("package_public_verification_deadline"))?;
+    let merged = response.merged_at.is_some();
+    let merge_ref_sha = if response.state == "open" && !merged {
+        pull_request_merge_ref::read_public_pull_request_merge_ref(
+            &api, number, &base.sha, &head.sha, deadline,
+        )?
+    } else {
+        None
+    };
     let snapshot = PublicPullRequestSnapshot {
         state: response.state,
         draft: response.draft,
-        merged: response.merged_at.is_some(),
+        merged,
         base_repository: base_repository.full_name,
         base_repository_id: base_repository.id,
         base_ref: base.reference,
@@ -118,16 +128,12 @@ pub(crate) fn read_public_pull_request(
         head_repository_id: head_repository.id,
         head_ref: head.reference,
         head_sha: head.sha,
-        merge_commit_sha: response.merge_commit_sha,
+        merge_ref_sha,
     };
     if !valid_head_reference(&snapshot.head_ref) {
         return Err(internal("package_public_pull_request_identity_mismatch"));
     }
     Ok(snapshot)
-}
-
-fn valid_merge_commit_sha(sha: Option<&str>) -> bool {
-    sha.is_none_or(github::is_lowercase_git_sha)
 }
 
 fn valid_head_reference(reference: &str) -> bool {
@@ -187,8 +193,6 @@ struct PublicPullRequestResponse {
     state: String,
     draft: bool,
     merged_at: Option<String>,
-    #[serde(default)]
-    merge_commit_sha: Option<String>,
     base: PublicPullRequestRef,
     head: PublicPullRequestRef,
 }

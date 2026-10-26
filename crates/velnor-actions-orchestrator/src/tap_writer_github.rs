@@ -41,6 +41,24 @@ impl TapGitHubApi {
             .map_err(|_| internal("tap_writer_api_json"))
     }
 
+    pub(super) fn graphql(
+        &self,
+        query: &str,
+        fields: &[(&str, String)],
+    ) -> Result<serde_json::Value, OrchestratorError> {
+        let mut args = vec![
+            OsString::from("graphql"),
+            OsString::from("--raw-field"),
+            OsString::from(format!("query={query}")),
+        ];
+        for (name, value) in fields {
+            args.push(OsString::from("--field"));
+            args.push(OsString::from(format!("{name}={value}")));
+        }
+        serde_json::from_slice(&self.request(args, JSON_LIMIT)?)
+            .map_err(|_| internal("tap_writer_api_json"))
+    }
+
     pub(super) fn post_fields<T: DeserializeOwned>(
         &self,
         route: &str,
@@ -178,9 +196,14 @@ pub(super) struct BlobResponse {
 #[derive(Debug, serde::Deserialize)]
 pub(super) struct CommitResponse {
     pub sha: String,
-    pub tree: RefObject,
-    pub parents: Vec<RefObject>,
+    pub tree: CommitObject,
+    pub parents: Vec<CommitObject>,
     pub message: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub(super) struct CommitObject {
+    pub sha: String,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -193,7 +216,6 @@ pub(super) struct PullRequestResponse {
     pub merged: Option<bool>,
     pub user: UserResponse,
     pub merged_at: Option<String>,
-    pub merge_commit_sha: Option<String>,
     pub head: PullRequestRef,
     pub base: PullRequestRef,
 }
@@ -209,6 +231,7 @@ pub(super) struct PullRequestRef {
 
 #[derive(Debug, serde::Deserialize)]
 pub(super) struct PullRequestRepository {
+    pub id: u64,
     pub full_name: String,
 }
 
@@ -225,8 +248,8 @@ pub(super) struct TreeCreateResponse {
 #[derive(Debug, serde::Deserialize)]
 pub(super) struct CommitCreateResponse {
     pub sha: String,
-    pub tree: RefObject,
-    pub parents: Vec<RefObject>,
+    pub tree: CommitObject,
+    pub parents: Vec<CommitObject>,
     pub message: String,
 }
 

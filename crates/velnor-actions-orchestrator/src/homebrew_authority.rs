@@ -305,33 +305,73 @@ fn admit_pull_request_context(
         return Err(internal("homebrew_authority_pull_request_event"));
     }
     let fork = event == WorkflowEvent::Fork;
-    if pull.state != "open"
-        || pull.draft
-        || pull.merged
-        || pull.base_repository != repository
-        || pull.base_repository_id != repository_id
-        || pull.base_ref != "main"
-        || runner.payload_base_repository != repository
-        || runner.payload_base_repository_id != repository_id
-        || runner.payload_base_ref != "main"
-        || (fork
-            && (pull.head_repository == repository || pull.head_repository_id == repository_id))
-        || (!fork
-            && (pull.head_repository != repository || pull.head_repository_id != repository_id))
-        || pull.base_sha != runner.payload_base_sha
-        || pull.head_sha != runner.payload_head_sha
-        || pull.head_repository != runner.payload_head_repository
-        || pull.head_repository_id != runner.payload_head_repository_id
-        || pull.head_ref != runner.payload_head_ref
-        || runner.payload_repository_id != repository_id
-        || (runner.sha != pull.head_sha
-            && pull.merge_commit_sha.as_deref() != Some(runner.sha.as_str()))
-        || (expected_head != pull.head_sha && expected_head != checkout_head)
-        || (checkout_head != pull.head_sha
-            && pull.merge_commit_sha.as_deref() != Some(checkout_head))
-    {
-        return Err(internal("homebrew_authority_pull_request_context"));
+    let prefix = "homebrew_authority_pull_request_context";
+    macro_rules! reject_if {
+        ($condition:expr, $reason:literal) => {
+            if $condition {
+                return Err(internal(&format!("{prefix}:{}", $reason)));
+            }
+        };
     }
+    reject_if!(pull.state != "open", "pull_not_open");
+    reject_if!(pull.draft, "pull_is_draft");
+    reject_if!(pull.merged, "pull_is_merged");
+    reject_if!(pull.base_repository != repository, "base_repository");
+    reject_if!(
+        pull.base_repository_id != repository_id,
+        "base_repository_id"
+    );
+    reject_if!(pull.base_ref != "main", "base_ref");
+    reject_if!(
+        runner.payload_base_repository != repository,
+        "payload_base_repository"
+    );
+    reject_if!(
+        runner.payload_base_repository_id != repository_id,
+        "payload_base_repository_id"
+    );
+    reject_if!(runner.payload_base_ref != "main", "payload_base_ref");
+    reject_if!(
+        fork && (pull.head_repository == repository || pull.head_repository_id == repository_id),
+        "fork_head_is_base_repository"
+    );
+    reject_if!(
+        !fork && (pull.head_repository != repository || pull.head_repository_id != repository_id),
+        "same_repository_head_mismatch"
+    );
+    reject_if!(
+        pull.base_sha != runner.payload_base_sha,
+        "base_sha_mismatch"
+    );
+    reject_if!(
+        pull.head_sha != runner.payload_head_sha,
+        "head_sha_mismatch"
+    );
+    reject_if!(
+        pull.head_repository != runner.payload_head_repository,
+        "payload_head_repository"
+    );
+    reject_if!(
+        pull.head_repository_id != runner.payload_head_repository_id,
+        "payload_head_repository_id"
+    );
+    reject_if!(pull.head_ref != runner.payload_head_ref, "payload_head_ref");
+    reject_if!(
+        runner.payload_repository_id != repository_id,
+        "payload_repository_id"
+    );
+    reject_if!(
+        runner.sha != pull.head_sha && pull.merge_ref_sha.as_deref() != Some(runner.sha.as_str()),
+        "runner_sha"
+    );
+    reject_if!(
+        expected_head != pull.head_sha && expected_head != checkout_head,
+        "expected_head"
+    );
+    reject_if!(
+        checkout_head != pull.head_sha && pull.merge_ref_sha.as_deref() != Some(checkout_head),
+        "checkout_head"
+    );
     Ok((pull.base_sha.clone(), pull.head_sha.clone()))
 }
 

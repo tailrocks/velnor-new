@@ -2,8 +2,8 @@ use std::{error::Error, fs, io, path::Path, process::Command};
 
 use sha2::{Digest, Sha256};
 use tempfile::TempDir;
-use velnor_actions_contract::{ReleaseTarget, Step, StepKind};
-use velnor_actions_orchestrator::{OrchestratorError, prepare};
+use velnor_actions_contract::{ReleaseTarget, Step, StepKind, StepRole};
+use velnor_actions_orchestrator::{OrchestratorError, finalized_jobs, prepare};
 use velnor_actions_workflow_renderer::{
     HomebrewAdoptionSeedSdkIdentity, MiseSetup, ProductReleasePins, render_homebrew_adoption_seed,
 };
@@ -12,6 +12,107 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 const SOURCE_SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const HOST_SHA: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const MANIFEST_PATH: &str = ".velnor/release-manifest.json";
+
+#[test]
+fn public_consumer_required_verdict_never_executes_candidate_prelude() -> Result<(), Box<dyn Error>>
+{
+    let temp = repository()?;
+    fs::create_dir_all(temp.path().join(".velnor"))?;
+    fs::write(
+        temp.path().join(".velnor/config.toml"),
+        r#"schema = 2
+[workflow]
+policy = "consumer-v1"
+default_branch = "main"
+[execution]
+default_profile = "hosted"
+hosted_profile = "hosted"
+scale_set_profile = "local"
+[execution.profiles.hosted]
+kind = "github-hosted"
+label = "ubuntu-26.04"
+platform = "linux/amd64"
+[execution.profiles.local]
+kind = "github-scale-set"
+name = "ubuntu-26.04-scale-set"
+labels = ["velnor", "ubuntu-26.04-scale-set"]
+platform = "linux/amd64"
+"#,
+    )?;
+    fs::write(
+        temp.path().join(MANIFEST_PATH),
+        release_manifest(VERSION, SOURCE_SHA, &current_executable_sha256()?),
+    )?;
+    let action = temp.path().join(".github/actions/velnor-tools-prelude-u26");
+    fs::create_dir_all(&action)?;
+    fs::write(
+        action.join("action.yml"),
+        "name: candidate-controlled\nruns:\n  using: composite\n  steps:\n    - shell: bash\n      run: exit 0\n",
+    )?;
+    let jobs = finalized_jobs(&prepare(temp.path())?)?;
+    let required = jobs
+        .get(velnor_actions_workflow_renderer::render::FINAL_JOB_ID)
+        .ok_or_else(|| io::Error::other("ordinary consumer omitted Required"))?;
+    assert_eq!(required.condition.as_deref(), Some("${{ !cancelled() }}"));
+    assert!(required.needs.iter().any(|need| need == "plan"));
+    assert!(
+        jobs.iter()
+            .filter(|(id, _)| id.as_str() != velnor_actions_workflow_renderer::render::FINAL_JOB_ID)
+            .any(|(_, job)| job
+                .steps
+                .iter()
+                .any(|step| step.role == Some(StepRole::ToolsCacheIdentity)))
+    );
+    let acquire = required
+        .steps
+        .iter()
+        .position(|step| step.role == Some(StepRole::AcquireVelnor))
+        .ok_or_else(|| io::Error::other("Required omitted authenticated acquisition"))?;
+    assert!(
+        required
+            .steps
+            .iter()
+            .any(|step| step.role == Some(StepRole::Checkout))
+    );
+    assert!(required.steps.iter().any(|step| {
+        step.role == Some(StepRole::PreparePinnedTools)
+            && matches!(&step.kind,
+            StepKind::Shell { run, .. } if run.join(" ").contains("gh@2.103.2"))
+    }));
+    assert_trusted_required_steps(&required.steps, acquire)
+}
+
+fn assert_trusted_required_steps(steps: &[Step], acquire: usize) -> Result<(), Box<dyn Error>> {
+    for (index, step) in steps.iter().enumerate() {
+        match &step.kind {
+            StepKind::Action { uses, .. } => assert!(
+                [
+                    "actions/checkout@",
+                    "jdx/mise-action@",
+                    "actions/download-artifact@",
+                    "actions/upload-artifact@"
+                ]
+                .iter()
+                .any(|prefix| uses.starts_with(prefix)),
+                "candidate or cache action in Required: {uses}"
+            ),
+            StepKind::Shell { .. } => assert!(matches!(
+                step.role,
+                Some(StepRole::AcquireVelnor | StepRole::PreparePinnedTools)
+            )),
+            StepKind::Internal { .. } => {
+                assert!(index > acquire, "native operation preceded acquisition");
+            }
+            other => {
+                return Err(io::Error::other(format!(
+                    "candidate execution in Required: {other:?}"
+                ))
+                .into());
+            }
+        }
+    }
+    Ok(())
+}
 
 #[test]
 fn public_seed_manifest_replaces_legacy_consumer_manifest() -> Result<(), Box<dyn Error>> {

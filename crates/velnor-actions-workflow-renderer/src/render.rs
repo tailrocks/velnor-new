@@ -133,9 +133,90 @@ pub fn finalize_jobs(
 fn validate_final_jobs(ir: &WorkflowIr, jobs: &mut JobMap) -> Result<(), RenderError> {
     crate::cache_steps::append_bundle_postludes(jobs)?;
     crate::cache_steps::append_workspace_cleanups(jobs)?;
+    validate_required_verdict_execution_boundary(jobs)?;
     let mut finalized = ir.clone();
     finalized.jobs.clone_from(jobs);
     finalized.validate().map_err(RenderError::Contract)
+}
+
+fn validate_required_verdict_execution_boundary(jobs: &JobMap) -> Result<(), RenderError> {
+    let Some(job) = jobs.get(FINAL_JOB_ID) else {
+        return Ok(());
+    };
+    let checkouts = job
+        .steps
+        .iter()
+        .filter(|step| step.role == Some(velnor_actions_contract::StepRole::Checkout))
+        .count();
+    let mise_setups = job
+        .steps
+        .iter()
+        .filter(|step| step.role == Some(velnor_actions_contract::StepRole::MiseSetup))
+        .count();
+    let acquisitions = job
+        .steps
+        .iter()
+        .filter(|step| step.role == Some(velnor_actions_contract::StepRole::AcquireVelnor))
+        .count();
+    let tool_preparations = job
+        .steps
+        .iter()
+        .filter(|step| step.role == Some(velnor_actions_contract::StepRole::PreparePinnedTools))
+        .count();
+    if checkouts != 1 || mise_setups != 1 || acquisitions != 1 || tool_preparations != 1 {
+        return Err(RenderError::InvalidWorkflow(
+            "required_verdict_candidate_execution".to_owned(),
+        ));
+    }
+    for step in &job.steps {
+        let trusted = match &step.kind {
+            velnor_actions_contract::StepKind::Action { uses, with, .. } => match step.role {
+                Some(velnor_actions_contract::StepRole::Checkout) => {
+                    uses.starts_with("actions/checkout@")
+                }
+                Some(velnor_actions_contract::StepRole::MiseSetup) => {
+                    uses.starts_with("jdx/mise-action@")
+                        && with.get("install").is_some_and(|value| value == "false")
+                        && with.get("env").is_some_and(|value| value == "false")
+                        && with.get("cache").is_some_and(|value| value == "false")
+                        && with.get("cache_save").is_some_and(|value| value == "false")
+                }
+                Some(
+                    velnor_actions_contract::StepRole::DownloadPlan
+                    | velnor_actions_contract::StepRole::AttestationDownload,
+                ) => uses == crate::steps::DOWNLOAD_ARTIFACT_USES,
+                Some(velnor_actions_contract::StepRole::PublishFinal) => {
+                    uses == crate::steps::UPLOAD_ARTIFACT_USES
+                }
+                _ => false,
+            },
+            velnor_actions_contract::StepKind::Shell { .. } => matches!(
+                step.role,
+                Some(
+                    velnor_actions_contract::StepRole::AcquireVelnor
+                        | velnor_actions_contract::StepRole::PreparePinnedTools
+                )
+            ),
+            velnor_actions_contract::StepKind::Internal { operation, .. } => {
+                operation == crate::steps::MERGE_OPERATION
+                    || operation == crate::steps::FETCH_OPERATION
+                    || operation
+                        == &format!(
+                            "{}:{}",
+                            crate::steps::WRITE_REQUEST_OPERATION,
+                            crate::steps::MERGE_OPERATION
+                        )
+            }
+            velnor_actions_contract::StepKind::TaskExecution { .. }
+            | velnor_actions_contract::StepKind::NativeCheckExecution { .. } => false,
+        };
+        if !trusted {
+            return Err(RenderError::InvalidWorkflow(
+                "required_verdict_candidate_execution".to_owned(),
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn merged_jobs(
@@ -213,6 +294,7 @@ fn render_merged(
     )?;
     let mut shared = crate::lane_share::share_lanes(&jobs, ctx)?;
     shared.files.extend(task_files);
+    validate_required_verdict_execution_boundary(&shared.jobs)?;
     match emit::emit_shared(
         ir,
         &shared,
@@ -229,6 +311,7 @@ fn render_merged(
             if extracted == 0 {
                 return Err(error);
             }
+            validate_required_verdict_execution_boundary(&shared.jobs)?;
             emit::emit_shared(
                 ir,
                 &shared,

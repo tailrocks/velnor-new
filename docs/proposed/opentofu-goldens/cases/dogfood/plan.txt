@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.55
+Velnor Actions plan 0.1.56
 Repository: <repo>
 
 Detected stacks
@@ -10,7 +10,7 @@ Detected stacks
     - velnor-actions-actionlint (crates/velnor-actions-actionlint/Cargo.toml) [lib; depends on velnor-actions-contract]
     - velnor-actions-ansible (crates/velnor-actions-ansible/Cargo.toml) [lib; depends on velnor-actions-contract]
     - velnor-actions-bun (crates/velnor-actions-bun/Cargo.toml) [lib; depends on velnor-actions-contract]
-    - velnor-actions-cli (crates/velnor-actions-cli/Cargo.toml) [bin; depends on velnor-actions-freshness, velnor-actions-orchestrator]
+    - velnor-actions-cli (crates/velnor-actions-cli/Cargo.toml) [bin, test; depends on velnor-actions-freshness, velnor-actions-orchestrator]
     - velnor-actions-contract (crates/velnor-actions-contract/Cargo.toml) [lib]
     - velnor-actions-dbt (crates/velnor-actions-dbt/Cargo.toml) [lib; depends on velnor-actions-contract]
     - velnor-actions-freshness (crates/velnor-actions-freshness/Cargo.toml) [lib]
@@ -58,12 +58,12 @@ Workflow to generate
     - dependency-seed-crates-velnor-runner (23 steps)
     - jactionlint (8 steps)
     - plan (28 steps)
-    - required (14 steps)
+    - required (9 steps)
     - required-gate (1 steps)
     - rust-velnor-actions-actionlint (28 steps)
     - rust-velnor-actions-ansible (27 steps)
     - rust-velnor-actions-bun (27 steps)
-    - rust-velnor-actions-cli (29 steps)
+    - rust-velnor-actions-cli (30 steps)
     - rust-velnor-actions-contract (27 steps)
     - rust-velnor-actions-dbt (27 steps)
     - rust-velnor-actions-gradle (27 steps)
@@ -120,6 +120,7 @@ Workflow to generate
         - stack/rust/crates/velnor-actions-cli/clippy/default
         - stack/rust/crates/velnor-actions-cli/doc/default
         - stack/rust/crates/velnor-actions-cli/fmt/default
+        - stack/rust/crates/velnor-actions-cli/nextest/default
         - stack/rust/crates/velnor-actions-contract/build/default
         - stack/rust/crates/velnor-actions-contract/clippy/default
         - stack/rust/crates/velnor-actions-contract/doc/default
@@ -192,7 +193,7 @@ Workflow to generate
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/fmt/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/nextest/default
   Parallel: 18 execution jobs; dependencies preserved; no matrix fan-out
-  Critical path: stack/rust/crates/velnor-actions-orchestrator/build/default -> stack/rust/crates/velnor-actions-orchestrator/nextest/default (2 tasks)
+  Critical path: stack/rust/crates/velnor-actions-cli/build/default -> stack/rust/crates/velnor-actions-cli/nextest/default (2 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources, MBX compilation objects
   Jactionlint: 2.3.0 pinned, profile default
@@ -209,7 +210,6 @@ Workflow to generate
   Ineligible: stack/rust/crates/velnor-actions-ansible/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-actions-bun/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-actions-cli/doctest/default has no test targets; no test command emitted
-  Ineligible: stack/rust/crates/velnor-actions-cli/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-actions-contract/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-actions-dbt/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-actions-gradle/nextest/default has no test targets; no test command emitted

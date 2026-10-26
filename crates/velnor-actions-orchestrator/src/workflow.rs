@@ -157,7 +157,7 @@ fn insert_gate_jobs(
     jobs.insert(LINT_JOB_ID.to_owned(), lint_job(label, catalog)?);
     jobs.insert(
         FINAL_JOB_ID.to_owned(),
-        final_job(label, crate_ids, acquire, catalog)?,
+        final_job(label, crate_ids, acquire)?,
     );
     Ok(())
 }
