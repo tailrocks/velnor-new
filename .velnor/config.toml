@@ -1,36 +1,25 @@
 schema = 2
-
 [workflow]
-name = "Compatibility Fixture"
 policy = "velnor-repository-v1"
-generator_validation = "bootstrap"
 default_branch = "main"
-
+generator_validation = "bootstrap"
 [execution]
 default_profile = "hosted"
 hosted_profile = "hosted"
 scale_set_profile = "local"
-
 [execution.profiles.hosted]
 kind = "github-hosted"
 label = "ubuntu-26.04"
 platform = "linux/amd64"
-
 [execution.profiles.local]
 kind = "github-scale-set"
-name = "compatibility-local"
-labels = ["velnor", "compatibility-local"]
+name = "ubuntu-26.04-scale-set"
+labels = ["velnor", "ubuntu-26.04-scale-set"]
 platform = "linux/amd64"
-
-[[checks]]
-id = "protocol-smoke"
-task = "protocol-smoke"
-directory = "."
-inputs = ["mise.toml", "protocol-input.txt"]
-tools = []
-timeout_minutes = 1
-
-[checks.runner]
-label = "macos-26"
-platform = "macos_arm64"
+[[native_checks]]
+id = "fixture-native-tree"
+operation = "tap_tree"
+[native_checks.runner]
+label = "ubuntu-26.04"
+platform = "linux_x64"
 executor = "hosted"
