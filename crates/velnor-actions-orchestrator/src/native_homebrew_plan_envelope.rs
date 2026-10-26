@@ -84,7 +84,7 @@ fn plan_digests(
             check.operation,
             OPERATION_VERSION,
             &generator.version,
-            &generator.sha256,
+            &generator.digest_b3,
             &identity.tool_profile,
         ))
         .map_err(internal_contract)?,

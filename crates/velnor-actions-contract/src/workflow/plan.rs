@@ -92,7 +92,7 @@ pub struct PlanGenerator {
 
     pub target: String,
 
-    pub sha256: String,
+    pub digest_b3: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
