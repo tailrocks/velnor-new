@@ -9,6 +9,14 @@ use crate::{OrchestratorError, prepare::GenerationPreparation};
 #[path = "cache_prune_emit.rs"]
 mod prune;
 
+#[expect(
+    dead_code,
+    unreachable_pub,
+    reason = "T27 registers cleanup policy here; the thin emission owner wires it next"
+)]
+#[path = "cache_cleanup_policy.rs"]
+mod policy;
+
 pub(crate) fn files(prep: &GenerationPreparation) -> Result<Vec<RenderedFile>, OrchestratorError> {
     let mut files = files_for(
         prep.config.workflow.pull_request_cache_policy,

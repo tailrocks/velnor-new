@@ -3,12 +3,18 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_contract::{CacheMode, Job, Step, StepKind};
 
 pub(crate) const DISPATCH_DENY: &str = "github.event_name != 'workflow_dispatch'";
 
+pub(crate) const SAVE_DENY: &str = "false";
+
 pub(crate) fn suppress_unvalidated_cache_access(jobs: &mut BTreeMap<String, Job>) {
     for job in jobs.values_mut() {
+        let reader = job
+            .cache_mode
+            .as_ref()
+            .is_some_and(CacheMode::is_explicit_read);
         for step in &mut job.steps {
             if is_mise_setup_cache(step) {
                 disable_mise_cache(step);
@@ -16,6 +22,9 @@ pub(crate) fn suppress_unvalidated_cache_access(jobs: &mut BTreeMap<String, Job>
                 suppress_tool_seed(step);
             } else if is_cache_access(step) {
                 suppress_dispatch(step);
+            }
+            if reader && is_cache_save(step) {
+                suppress_save(step);
             }
         }
     }
@@ -33,6 +42,14 @@ fn disable_mise_cache(step: &mut Step) {
     };
     with.insert("cache".to_owned(), "false".to_owned());
     with.insert("cache_save".to_owned(), "false".to_owned());
+}
+
+fn is_cache_save(step: &Step) -> bool {
+    matches!(&step.kind, StepKind::Action { uses, .. } if uses.starts_with("actions/cache/save@"))
+}
+
+fn suppress_save(step: &mut Step) {
+    step.condition = Some(SAVE_DENY.to_owned());
 }
 
 fn is_cache_access(step: &Step) -> bool {

@@ -152,15 +152,6 @@ impl ToolsCachePayload {
             Some(cache_p08::TOOLS_CACHE_RESTORE_CONDITION.to_owned()),
         )
     }
-
-    pub fn save_step(&self) -> Result<Step, RenderError> {
-        steps::tools_cache_save_step(
-            &self.key_expression(),
-            Some(super::save_policy::condition(
-                velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-            )),
-        )
-    }
 }
 
 fn validate_inputs(inputs: &ToolsCacheInputs<'_>) -> Result<(), RenderError> {

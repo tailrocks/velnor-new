@@ -13,6 +13,10 @@ autotests = false
 name = "homebrew_adoption_seed_public"
 path = "tests/homebrew_adoption_seed_public.rs"
 
+[[test]]
+name = "velnor_orchestrator"
+path = "tests/velnor_orchestrator.rs"
+
 [lib]
 test = false
 

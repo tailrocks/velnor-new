@@ -41,6 +41,34 @@ UNKNOWN_ACTUAL_COUNTER_REASON_FIELDS = {
     "native_cpu": "native_cpu_unknown_reason",
 }
 
+# Owned observation bindings carried inside the API-bound final artifact ZIP.
+# Field-for-field mirror of the merge pipeline's UnitObservationBinding
+# (crates/velnor-actions-orchestrator/src/task_report.rs); the merge pipeline
+# recomputes the blake3 content digest before sealing the artifact, and this
+# collector pins the sealed bytes through the artifact API size/digest gate.
+OBSERVATION_SCHEMA = 1
+OBSERVATION_SUFFIX = ".observation.json"
+MAX_OBSERVATION_BYTES = 64 << 10
+OBSERVATION_BINDING_FIELDS = (
+    "schema",
+    "task_report_id",
+    "artifact_id",
+    "member_name",
+    "member_size_bytes",
+    "member_digest",
+    "producer_job",
+    "producer_attempt",
+    "source_sha",
+    "observation_session_id",
+    "unit_ledger_digest",
+)
+_B3_DIGEST = re.compile(r"^b3-[0-9a-f]{64}$")
+_RUN_KEY = re.compile(r"^r[0-9]+-a[0-9]+$")
+_TASK_REPORT_ID = re.compile(r"^task-r[0-9]+-a[0-9]+-m-[0-9a-f]{16}-[0-9a-f]{16}$")
+_MATRIX_KEY = re.compile(r"^m-[0-9a-f]{16}$")
+_JOB_ID = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
+_SOURCE_SHA = re.compile(r"^[0-9a-f]{40}$")
+
 
 def fail(message: str) -> None:
     raise ValueError(message)
@@ -275,3 +303,211 @@ def inspect_task_reports(report_dir: Path | None, expected_run: int, expected_at
         receipts.append(file_receipt(path, "legacy_task_report"))
     manifest = json.dumps(receipts, sort_keys=True, separators=(",", ":")).encode()
     return {"status": "unavailable_as_phase_measurement" if all_unmeasured else "not_used_as_hosted_phase_measurement", "report_count": len(reports), "stage_fields": list(STAGE_TIMINGS), "all_stage_values_zero_or_null": all_unmeasured, "stage_field_value_counts": value_counts, "parent_artifact_api_bound": artifact_doc is not None, "parent_artifact_attempt_name_bound": artifact_doc is not None, "parent_artifact_zip_digests_verified": False, "parent_artifact_zip_limit": "Extracted report files are hashed; the separate per-crate artifact ZIP bytes were not retained in this packet.", "zero_values_disposition": "zero and null sentinel fields are missing telemetry, not measured durations; task_ms is not split into phases", "source_manifest_sha256": hashlib.sha256(manifest).hexdigest(), "report_receipts": receipts}
+
+
+def _reject_non_string(value: Any, field: str, member_label: str) -> str:
+    if not isinstance(value, str) or not value:
+        fail(f"observation {member_label}: {field} is not a non-empty string")
+    return value
+
+
+def _check_b3_digest(value: Any, field: str, member_label: str) -> str:
+    text = _reject_non_string(value, field, member_label)
+    if not _B3_DIGEST.match(text):
+        fail(f"observation {member_label}: {field} is not a b3-<64-lower-hex> digest")
+    return text
+
+
+_CRATE_ARTIFACT = re.compile(r"^velnor-crate-(r[0-9]+-a[0-9]+)-(.+)$")
+_MATRIX_ARTIFACT = re.compile(r"^velnor-matrix-(r[0-9]+-a[0-9]+)-m-([0-9a-f]{16})$")
+
+
+def _check_run_key_embedded(artifact_id: str, run_key: str, member_label: str) -> None:
+    if artifact_id.startswith("velnor-final-"):
+        fail(f"observation {member_label}: artifact_id must not be the final artifact itself")
+    crate = _CRATE_ARTIFACT.match(artifact_id)
+    matrix = _MATRIX_ARTIFACT.match(artifact_id)
+    if crate is not None:
+        valid = crate.group(1) == run_key and bool(_JOB_ID.match(crate.group(2)))
+    elif matrix is not None:
+        valid = matrix.group(1) == run_key
+    else:
+        valid = False
+    if not valid:
+        fail(f"observation {member_label}: artifact_id does not bind run {run_key}")
+
+
+def parse_observation_binding(text: str, member_label: str) -> dict[str, Any]:
+    """Strictly parse one owned observation binding member.
+
+    Mirrors the merge pipeline's shape rules: bounded size, strict JSON object
+    with exactly the known fields, and per-field identity formats. Anything
+    else fails; loose or producer-claimed bytes never become evidence here.
+    """
+    if not isinstance(text, str):
+        fail(f"observation {member_label}: member is not text")
+    if len(text.encode("utf-8")) > MAX_OBSERVATION_BYTES:
+        fail(f"observation {member_label}: oversize observation member")
+
+    def _no_constant(value: str) -> Any:
+        fail(f"observation {member_label}: non-finite JSON constant {value!r}")
+
+    def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        seen: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in seen:
+                fail(f"observation {member_label}: duplicate JSON key {key!r}")
+            seen[key] = value
+        return seen
+
+    try:
+        binding = json.loads(text, object_pairs_hook=_pairs, parse_constant=_no_constant)
+    except ValueError as error:
+        fail(f"observation {member_label}: unparsable observation: {error}")
+    if not isinstance(binding, dict):
+        fail(f"observation {member_label}: observation is not a JSON object")
+    unknown = sorted(set(binding) - set(OBSERVATION_BINDING_FIELDS))
+    if unknown:
+        fail(f"observation {member_label}: unknown observation fields {unknown}")
+    missing = sorted(set(OBSERVATION_BINDING_FIELDS) - set(binding))
+    if missing:
+        fail(f"observation {member_label}: missing observation fields {missing}")
+    if type(binding["schema"]) is not int or binding["schema"] != OBSERVATION_SCHEMA:
+        fail(f"observation {member_label}: unsupported observation schema")
+    if not _TASK_REPORT_ID.match(str(binding["task_report_id"])):
+        fail(f"observation {member_label}: malformed task_report_id")
+    _reject_non_string(binding["artifact_id"], "artifact_id", member_label)
+    _reject_non_string(binding["member_name"], "member_name", member_label)
+    if type(binding["member_size_bytes"]) is not int or not 0 < binding["member_size_bytes"] <= MAX_OBSERVATION_BYTES:
+        fail(f"observation {member_label}: bad member_size_bytes")
+    _check_b3_digest(binding["member_digest"], "member_digest", member_label)
+    if not _JOB_ID.match(str(binding["producer_job"])):
+        fail(f"observation {member_label}: bad producer_job")
+    if type(binding["producer_attempt"]) is not int or binding["producer_attempt"] <= 0:
+        fail(f"observation {member_label}: bad producer_attempt")
+    if not _SOURCE_SHA.match(str(binding["source_sha"])):
+        fail(f"observation {member_label}: bad source_sha")
+    session = _reject_non_string(binding["observation_session_id"], "observation_session_id", member_label)
+    if "/" in session or "\\" in session or ".." in session or "\0" in session:
+        fail(f"observation {member_label}: bad observation_session_id")
+    _check_b3_digest(binding["unit_ledger_digest"], "unit_ledger_digest", member_label)
+    return binding
+
+
+def check_observation_member_name(member_name: str, task_report_id: str, member_label: str) -> str:
+    """Require the Velnor-generated relative member path for one task report."""
+    if member_name != member_label:
+        fail(f"observation {member_label}: member_name field does not match the archive member path")
+    if not member_name or member_name.startswith("/") or "\\" in member_name or "\0" in member_name:
+        fail(f"observation {member_label}: non-relative member path")
+    parts = member_name.split("/")
+    if any(part in ("", ".", "..") for part in parts):
+        fail(f"observation {member_label}: escaping member path")
+    if len(parts) != 3 or parts[1] != "tasks":
+        fail(f"observation {member_label}: member is not a generated unit observation path")
+    if not _MATRIX_KEY.match(parts[0]):
+        fail(f"observation {member_label}: member is not under a valid matrix key")
+    expected = f"{parts[0]}/tasks/{task_report_id}{OBSERVATION_SUFFIX}"
+    if member_name != expected:
+        fail(f"observation {member_label}: member is not indexed for task report {task_report_id}")
+    return parts[0]
+
+
+def collect_bound_observations(archive: zipfile.ZipFile, *, run_key: str, head_sha: str,
+                               effective_jobs: dict[tuple[str, int], dict[str, Any]]) -> dict[str, Any]:
+    """Admit owned observation members from an API-bound final artifact ZIP.
+
+    The caller verifies the ZIP through validate_artifact first; this function
+    never reads members from an unbound archive. Each generated observation
+    member is strictly parsed, bound to source/run/job/actual attempt through
+    the authenticated effective-job map, and deduplicated. Task reports without
+    a bound observation stay explicitly unknown; loose members prove nothing.
+    """
+    if not _RUN_KEY.match(run_key):
+        fail(f"observation collection: malformed run_key {run_key!r}")
+    if not _SOURCE_SHA.match(head_sha):
+        fail("observation collection: malformed head_sha")
+    names = archive.namelist()
+    duplicates = sorted({name for name in names if names.count(name) > 1})
+    if duplicates:
+        fail(f"observation collection: duplicate archive members {duplicates}")
+    accepted: dict[str, dict[str, Any]] = {}
+    seen_producers: set[tuple[str, int, str]] = set()
+    for name in names:
+        if not name.endswith(OBSERVATION_SUFFIX):
+            continue
+        payload = archive.read(name)
+        if len(payload) > MAX_OBSERVATION_BYTES:
+            fail(f"observation {name}: oversize observation member")
+        try:
+            text = payload.decode("utf-8")
+        except UnicodeDecodeError as error:
+            fail(f"observation {name}: member is not UTF-8 text: {error}")
+        binding = parse_observation_binding(text, name)
+        task_report_id = binding["task_report_id"]
+        check_observation_member_name(binding["member_name"], task_report_id, name)
+        _check_run_key_embedded(binding["artifact_id"], run_key, name)
+        if binding["source_sha"] != head_sha:
+            fail(f"observation {name}: source_sha is not the authenticated run source")
+        key = (binding["producer_job"], binding["producer_attempt"])
+        job = effective_jobs.get(key)
+        if job is None:
+            fail(f"observation {name}: producer job/attempt {key} has no authenticated job record")
+        producer = (binding["producer_job"], binding["producer_attempt"], binding["observation_session_id"])
+        if producer in seen_producers:
+            fail(f"observation {name}: duplicate observation for producer {producer}")
+        seen_producers.add(producer)
+        if task_report_id in accepted:
+            fail(f"observation {name}: duplicate observation for task report {task_report_id}")
+        accepted[task_report_id] = {
+            "task_report_id": task_report_id,
+            "matrix_key": binding["member_name"].split("/")[0],
+            "member_name": binding["member_name"],
+            "member_size_bytes": binding["member_size_bytes"],
+            "member_digest": binding["member_digest"],
+            "producer_job": binding["producer_job"],
+            "producer_attempt": binding["producer_attempt"],
+            "effective_job_id": job["id"],
+            "effective_job_conclusion": job.get("conclusion"),
+            "source_sha": binding["source_sha"],
+            "observation_session_id": binding["observation_session_id"],
+            "unit_ledger_digest": binding["unit_ledger_digest"],
+            "digest_basis": "pinned from the API-bound final artifact ZIP; "
+                            "blake3 content recomputation stays with the merge pipeline",
+        }
+    task_members = sorted({name for name in names
+                           if "/tasks/task-" in name
+                           and name.endswith(".json") and not name.endswith(OBSERVATION_SUFFIX)})
+    missing = []
+    for member in task_members:
+        report_id = member.rsplit("/", 1)[1][:-len(".json")]
+        if report_id not in accepted:
+            missing.append({"task_report_id": report_id, "archive_member": member,
+                            "disposition": "unknown",
+                            "unknown_reason": "No bound observation member covers this task report; "
+                                              "its counters stay null, never zero."})
+    return {"status": "verified",
+            "run_key": run_key,
+            "observation_count": len(accepted),
+            "accepted": accepted,
+            "missing_task_report_observations": missing,
+            "digest_basis": "final artifact ZIP verified through the artifact API size/digest gate "
+                            "before any member was read"}
+
+
+def admit_measured_counter(value: Any, *, task_report_id: str, accepted: dict[str, dict[str, Any]]) -> int:
+    """Permit one measured counter only with complete bound observation.
+
+    A zero is returned only when the task report has a bound observation; an
+    unbound zero or an unknown (null) value always fails instead of silently
+    standing in for a measurement.
+    """
+    record = accepted.get(task_report_id)
+    if record is None:
+        fail(f"measured counter for {task_report_id}: no bound observation; "
+             "unmeasured counters stay unknown, never zero")
+    if value is None:
+        fail(f"measured counter for {task_report_id}: value is unknown, not measured")
+    if type(value) is not int or value < 0:
+        fail(f"measured counter for {task_report_id}: value is not a non-negative integer")
+    return value

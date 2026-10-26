@@ -8,11 +8,12 @@ from pathlib import Path
 from typing import Any
 
 from .hosted_dag import compute_workflow_dag_path
-from .measure_support import (SCHEMA, file_receipt, inspect_task_reports, load_json,
-                              read_step_logs, validate_actual_counter_unknowns,
+from .measure_support import (SCHEMA, collect_bound_observations, file_receipt, inspect_task_reports,
+                              load_json, read_step_logs, validate_actual_counter_unknowns,
                               validate_artifact, validate_identity, workflow_receipt)
-from .report_counters import build_actual_counters
-from .report_events import collect_job_events, phase_map, phase_worker_time, workflow_timeline
+from .report_counters import build_actual_counters, build_lifecycle_aggregates
+from .report_events import (build_effective_job_map, collect_job_events, phase_map, phase_worker_time,
+                            workflow_timeline)
 
 
 def _workflow_path(workflow: dict[str, Any], run: dict[str, Any], attempt: int,
@@ -43,6 +44,38 @@ def _source_receipts(args: Namespace, run: dict[str, Any], jobs_path: Path, work
             "workflow": workflow, "final_report_artifact": artifact}
 
 
+def _observed_lifecycle(args: Namespace, run: dict[str, Any], attempt: int,
+                        jobs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate complete lifecycle work from verified owned observations.
+
+    The final artifact ZIP is API-bound by validate_artifact before any
+    member is read. Observations join to authenticated jobs by actual
+    attempt; anything without a bound observation stays unknown, never
+    zero. Without an API-bound artifact the whole lifecycle view is
+    unavailable, not zero.
+    """
+    if args.artifact_json is None and args.artifact_id is None and args.final_artifact is None:
+        return {"status": "unavailable",
+                "reason": "No API-bound final artifact was supplied; lifecycle coverage is unknown, never zero.",
+                "disposition": "unknown",
+                "join": None,
+                "join_unknown_reason": "No verified owned observations were supplied to join.",
+                "executed_lifecycle": None,
+                "executed_lifecycle_unknown_reason": "No authenticated job/attempt records were joined; "
+                                                    "lifecycle work stays unknown, never zero.",
+                "effective_required": None,
+                "effective_required_unknown_reason": "No retained-or-rerun jobs were accepted; "
+                                                     "effective coverage stays unknown, never zero."}
+    effective_jobs = build_effective_job_map(jobs)
+    run_key = f"r{run['id']}-a{attempt}"
+    with zipfile.ZipFile(args.final_artifact) as archive:
+        collected = collect_bound_observations(archive, run_key=run_key, head_sha=run["head_sha"],
+                                               effective_jobs=effective_jobs)
+    return build_lifecycle_aggregates(repository=args.repository, run_id=run["id"],
+                                      head_sha=run["head_sha"], jobs=jobs,
+                                      effective_jobs=effective_jobs, collected=collected)
+
+
 def build_report(args: Namespace) -> dict[str, Any]:
     run = load_json(args.run_json)
     jobs_doc = load_json(args.jobs_json)
@@ -57,6 +90,7 @@ def build_report(args: Namespace) -> dict[str, Any]:
     timeline = workflow_timeline(run, jobs, events, dag_path)
     counters = build_actual_counters(events["steps"], timeline)
     validate_actual_counter_unknowns(counters)
+    lifecycle = _observed_lifecycle(args, run, attempt, jobs)
     return {
         "schema": SCHEMA,
         "measurement_policy": {"durations": "GitHub Actions run/job/step API start and completion timestamps only",
@@ -68,7 +102,7 @@ def build_report(args: Namespace) -> dict[str, Any]:
             "workflow_path": run.get("path"), "status": run.get("status"), "conclusion": run.get("conclusion")},
         "source_receipts": _source_receipts(args, run, args.jobs_json, workflow, artifact_receipt, events, archive_counts),
         "timeline": timeline, "phase_worker_time": phase_worker_time(events), "phase_map": phase_map(events),
-        "jobs": events["jobs"], "actual_counters": counters,
+        "jobs": events["jobs"], "actual_counters": counters, "observed_lifecycle": lifecycle,
         "legacy_task_report_telemetry": inspect_task_reports(args.task_report_dir, run["id"], attempt, run["head_sha"], artifact_doc),
         "log_coverage": {"completed_steps_without_per_step_log": events["missing_logs"],
             "note": "Missing step logs leave only the API span; they are not backfilled from aggregate job logs."},

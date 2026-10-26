@@ -67,6 +67,14 @@ fn obligation_for(
     })
 }
 
+#[expect(
+    dead_code,
+    unreachable_pub,
+    reason = "T25 registers coverage replay here; the emission owner wires it next"
+)]
+#[path = "cache_coverage_replay.rs"]
+pub mod cache_coverage_replay;
+
 pub(super) fn gates_for(task: &ProposedTask, executed: &BTreeSet<&str>) -> Vec<String> {
     let mut gates: Vec<String> = task
         .gated_by

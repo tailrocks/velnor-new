@@ -3,6 +3,9 @@
 
 use std::collections::BTreeMap;
 
+use velnor_actions_contract::workflow::cache_family::{
+    COMPLETE_STATE_ROOT_EXPR, COMPLETE_STATE_TRANSPORT_EXPR,
+};
 use velnor_actions_contract::{Step, StepKind};
 
 #[path = "cache_steps_family.rs"]
@@ -150,7 +153,7 @@ fn validate_cache_path(layer: &str, path: &str) -> Result<(), RenderError> {
         || layer == "tools" && tools::tools_cache_path_ok(path)
         || layer == "tofu-providers" && crate::tofu_cache::tofu_providers_path_ok(path)
         || layer == "mbx-bundle"
-            && path == velnor_actions_contract::workflow::cache_family_mbx::MBX_BUNDLE_PATH_EXPR
+            && (path == COMPLETE_STATE_ROOT_EXPR || path == COMPLETE_STATE_TRANSPORT_EXPR)
     {
         Ok(())
     } else {

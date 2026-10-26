@@ -124,12 +124,8 @@ pub(super) fn build_steps(
     } else {
         &pins.build_argv
     };
-    let target_dir = if cross {
-        format!("target/{}/release", product.target.triple())
-    } else {
-        "target/release".to_owned()
-    };
-    let build = build_script(product.binary, build_argv, &target_dir)?;
+    let output_dir = workflow_steps::release_compiler_output_dir(product.target);
+    let build = build_script(product.binary, build_argv, &output_dir)?;
     let mut steps = vec![
         workflow_steps::mise_step(pins.setup_for(build_host))?,
         workflow_steps::mise_install_step(
@@ -162,10 +158,10 @@ pub(super) fn build_steps(
 fn build_script(
     asset: &str,
     build_argv: &[String],
-    target_dir: &str,
+    output_dir: &str,
 ) -> Result<String, crate::RenderError> {
     Ok(format!(
-        "set -eu\nenv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR {}\ncp {target_dir}/velnor-actions {asset}\ntest -s {asset}",
+        "set -eu\n: \"${{CARGO_TARGET_DIR:?missing shared release target dir}}\"\nenv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR {}\ncp {output_dir}/velnor-actions {asset}\ntest -s {asset}",
         crate::commands::join_argv_for_run(build_argv)?
     ))
 }

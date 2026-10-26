@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use velnor_actions_contract::canonical::Digest;
 use velnor_actions_contract::{
     ClosureBuilder, ContractError, ProposedTask, Provenance, TaskInputClosure, digest_b3,
 };
@@ -12,6 +13,7 @@ use super::closure_probes::{
     probe_cargo_config, probe_declared, probe_file, probe_lockfile, probe_nextest_config,
     source_tree_files,
 };
+use crate::identity::DependencyCoverage;
 use crate::task_identity::DigestSlot;
 use crate::tasks::TaskKind;
 
@@ -115,6 +117,34 @@ pub fn resolve_closure_at_root_cached(
     }
     let closure = closure.input("vcs", vcs_provenance(task.identity.undeclared_reads));
     Ok(closure.build(&task.task_id))
+}
+
+pub fn resolve_dependency_closure(
+    task_id: &str,
+    coverage: &DependencyCoverage,
+) -> Result<TaskInputClosure, ContractError> {
+    if task_id.is_empty() {
+        return Err(ContractError::identity(
+            "dependency_closure.task_id",
+            "unknown_task",
+        ));
+    }
+    for digest in [
+        &coverage.dependency_digest,
+        &coverage.workspace_digest,
+        &coverage.native_digest,
+        &coverage.coverage_digest,
+    ] {
+        Digest::parse(digest).map_err(|_| {
+            ContractError::identity("dependency_closure.coverage", "malformed_b3_digest")
+        })?;
+    }
+    Ok(ClosureBuilder::new()
+        .digest("dependencies", &coverage.dependency_digest)
+        .digest("workspace_deps", &coverage.workspace_digest)
+        .digest("native_inputs", &coverage.native_digest)
+        .digest("coverage", &coverage.coverage_digest)
+        .build(task_id))
 }
 
 fn digest_slot(provenance: Provenance) -> DigestSlot {

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::cache::{CACHE_CLEANUP_OP, CACHE_PUBLISH_OP, CACHE_RECOVER_OP};
 use super::{
     ACQUIRE_PREVIEW_SOURCE_OP, ACQUIRE_RELEASE_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP,
     ADMIT_RELEASE_AGGREGATE_OP, ADMIT_STABLE_TAG_ORIGIN_OP, BUN_ASSETS_EXPORT_OP,
@@ -102,6 +103,12 @@ pub(super) enum InternalOp {
     TapWriter,
 
     TapMerge,
+
+    CachePublish,
+
+    CacheRecover,
+
+    CacheCleanup,
 }
 
 pub(super) fn from_env() -> Option<InternalOp> {
@@ -151,6 +158,9 @@ pub(super) fn from_env() -> Option<InternalOp> {
         Ok(tag) if tag == ADMIT_HOMEBREW_TAP_OP => InternalOp::TapAdmission,
         Ok(tag) if tag == WRITE_HOMEBREW_TAP_PR_OP => InternalOp::TapWriter,
         Ok(tag) if tag == MERGE_HOMEBREW_TAP_PR_OP => InternalOp::TapMerge,
+        Ok(tag) if tag == CACHE_PUBLISH_OP => InternalOp::CachePublish,
+        Ok(tag) if tag == CACHE_RECOVER_OP => InternalOp::CacheRecover,
+        Ok(tag) if tag == CACHE_CLEANUP_OP => InternalOp::CacheCleanup,
         _ => return None,
     })
 }

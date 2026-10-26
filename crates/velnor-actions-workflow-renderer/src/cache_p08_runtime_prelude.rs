@@ -25,11 +25,41 @@ pub(super) fn action_uses(runs_on: &str) -> Option<&'static str> {
         .find_map(|(candidate, prelude)| (*candidate == identity).then_some(*prelude))
 }
 
+pub(super) fn shared_homes() -> Result<crate::toolchain_env::SharedRunnerHomes, RenderError> {
+    let homes = crate::toolchain_env::SharedRunnerHomes::github();
+    homes.validate()?;
+    Ok(homes)
+}
+
+fn check_wrapper_homes(bytes: &str) -> Result<(), RenderError> {
+    for marker in [
+        "HOME=",
+        "$task_root",
+        "${{ runner.temp }}/velnor/",
+        ".velnor-mbx-cache-qualification",
+    ] {
+        if bytes.contains(marker) {
+            return Err(RenderError::BadCommand(format!(
+                "disposable_prelude_home:{marker}"
+            )));
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn step(payload: &super::ToolsCachePayload) -> Result<Step, RenderError> {
+    let homes = shared_homes()?;
     let uses = action_uses(&payload.runs_on).ok_or_else(|| {
         RenderError::BadCommand("unsupported_tools_cache_identity_lane".to_owned())
     })?;
-    Ok(Step {
+    let shared = crate::toolchain_env::with_toolchain_homes(
+        &BTreeMap::new(),
+        &homes.rustup_home,
+        &homes.cargo_home,
+        "",
+    );
+    crate::toolchain_env::check_toolchain_homes(&shared)?;
+    let step = Step {
         parallel: false,
         name: cache_p08::TOOLS_CACHE_IDENTITY_NAME.to_owned(),
         id: Some(StepId::ToolsCacheIdentity),
@@ -43,7 +73,14 @@ pub(super) fn step(payload: &super::ToolsCachePayload) -> Result<Step, RenderErr
             )]),
             env: BTreeMap::new(),
         },
-    })
+    };
+    let StepKind::Action { env, .. } = &step.kind else {
+        return Err(RenderError::InvalidWorkflow(
+            "malformed_tools_cache_identity_action".to_owned(),
+        ));
+    };
+    crate::toolchain_env::reject_conflicting_home_assignments(env)?;
+    Ok(step)
 }
 
 pub(super) fn validate_action_call(
@@ -102,8 +139,10 @@ pub(super) fn action_file(runs_on: &str, version: &str) -> Result<RenderedFile, 
             ]),
         ),
     ]);
+    shared_homes()?;
     let bytes = marker::with_marker(version, &render_yaml(&body))?;
     crate::steps::scan_for_private_subcommands(&bytes)?;
+    check_wrapper_homes(&bytes)?;
     Ok(RenderedFile {
         path: format!("{}/action.yml", uses.trim_start_matches("./")),
         bytes,

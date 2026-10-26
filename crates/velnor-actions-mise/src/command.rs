@@ -50,6 +50,10 @@ pub use self::output::{
     SPAWN_CANCELLED_MESSAGE, SPAWN_DEADLINE_MESSAGE, SPAWN_TIMEOUT_MESSAGE_PREFIX,
     is_cancel_or_timeout, is_cleanup_failure,
 };
+pub use crate::compiler_observer::{
+    MBX_PREVIOUS_RUSTC_WRAPPER_ENV, MBX_TARGET_VIEWS_DISABLED, MBX_TARGET_VIEWS_ENV,
+    RUSTC_WRAPPER_ENV, RUSTDOC_ENV,
+};
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -200,6 +204,22 @@ impl IsolatedCommand {
     pub(crate) fn with_policy(mut self, policy: EnvPolicy) -> Self {
         self.policy = policy;
         self
+    }
+
+    pub fn with_compiler_observer(
+        self,
+        observer: &str,
+        rustdoc_observer: &str,
+        previous_rustc_wrapper: Option<&str>,
+        previous_rustdoc: Option<&str>,
+    ) -> Result<Self, MiseError> {
+        let overlay = crate::compiler_observer::observer_env(
+            observer,
+            rustdoc_observer,
+            previous_rustc_wrapper,
+            previous_rustdoc,
+        )?;
+        self.with_env(&overlay)
     }
 
     #[must_use]

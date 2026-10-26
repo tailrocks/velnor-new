@@ -9,6 +9,44 @@ from .measure_support import duration_ms, extract_log_evidence, parse_time, safe
 from .step_phases import STEP_PHASES, normalize_step_name, phase_for_step
 
 
+def build_effective_job_map(jobs: list[dict[str, Any]]) -> dict[tuple[str, int], dict[str, Any]]:
+    """Index authenticated jobs by (job name, actual run attempt).
+
+    Every record here already passed identity validation (same run, attempt,
+    and source; repository-bound URLs), so presence in this map is retention
+    evidence: an earlier attempt's record is usable only when GitHub still
+    returns that exact record. A rerun job resolves to its actual new attempt;
+    nothing here overwrites an earlier record's attempt number.
+    """
+    effective: dict[tuple[str, int], dict[str, Any]] = {}
+    for job in jobs:
+        name = job.get("name")
+        attempt = job.get("run_attempt")
+        if not isinstance(name, str) or not name or type(attempt) is not int or attempt <= 0:
+            raise ValueError(f"effective job map: job {job.get('id')} lacks a name or actual attempt")
+        if not isinstance(job.get("id"), int) or job["id"] <= 0:
+            raise ValueError(f"effective job map: job {name!r} lacks a numeric job id")
+        key = (name, attempt)
+        if key in effective and effective[key]["id"] != job["id"]:
+            raise ValueError(f"effective job map: ambiguous records for job {name!r} attempt {attempt}")
+        effective[key] = job
+    return effective
+
+
+def resolve_effective_job(effective_jobs: dict[tuple[str, int], dict[str, Any]], *,
+                          producer_job: str, producer_attempt: int) -> dict[str, Any]:
+    """Return the authenticated record for a producer-claimed job/attempt.
+
+    A claim with no matching authenticated record — a forged effective attempt
+    or a stale attempt GitHub no longer retains — fails instead of joining.
+    """
+    job = effective_jobs.get((producer_job, producer_attempt))
+    if job is None:
+        raise ValueError(f"producer job/attempt {(producer_job, producer_attempt)} "
+                         "has no authenticated job record")
+    return job
+
+
 def collect_job_events(jobs: list[dict[str, Any]], log_entries: dict[str, bytes]) -> dict[str, Any]:
     job_rows, event_steps, missing = [], [], []
     phase_worker_ms: dict[str, int] = {}

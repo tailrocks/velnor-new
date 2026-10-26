@@ -11,6 +11,8 @@ use velnor_actions_workflow_renderer::toolchain_env::with_credential_unset_scrip
 use velnor_actions_workflow_renderer::{MiseSetup, ProductReleasePins};
 
 use crate::OrchestratorError;
+#[path = "cache_recipes.rs"]
+pub(crate) mod cache_recipes;
 use crate::mbx_preflight::steps_for_catalog;
 use crate::pins::resolve_mise_setup_for_release_target;
 use crate::utf8::strings_of;

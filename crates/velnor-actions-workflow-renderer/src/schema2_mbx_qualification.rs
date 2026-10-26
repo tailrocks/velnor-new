@@ -7,7 +7,9 @@ use crate::cache_steps::MBX_ACTION_NAME;
 use crate::yaml::Yaml;
 use crate::{RenderError, steps::validate_uses};
 use velnor_actions_contract::JobTimeout;
+use velnor_actions_contract::cachekey::mbx_cache_generation;
 use velnor_actions_contract::workflow::MBX_WORKSPACE_CLEAN_CONDITION;
+use velnor_actions_contract::workflow::qualification_cache_lineage::validate_qualification_cache_generation;
 
 const MAIN_REF: &str = "github.ref == 'refs/heads/main' && github.ref_protected == true";
 const SMOKE_CRATE: &str = r#"set -eu
@@ -50,6 +52,7 @@ pub(super) fn jobs(
     }
     validate_exact_version(&request.mbx_version, "mbx")?;
     validate_exact_version(&request.rust_version, "rust")?;
+    validate_bounded_generation(&request.mbx_version)?;
     let verify_rust_step = crate::verifier_composite::verifier_shell_step(
         velnor_actions_contract::StepRole::VerifyRustManifest,
         crate::VERIFY_RUST_TOOLCHAIN_STEP,
@@ -175,12 +178,14 @@ fn expose_rust_step(request: &MbxQualificationPins) -> Yaml {
     ])
 }
 
+fn validate_bounded_generation(mbx_version: &str) -> Result<(), RenderError> {
+    let generation = mbx_cache_generation(mbx_version);
+    validate_qualification_cache_generation(&generation, mbx_version)
+        .map_err(|error| RenderError::BadCommand(format!("qualification_cache_generation:{error}")))
+}
+
 fn mbx_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
-    let generation = format!(
-        "velnor-qualification-mbx-{}-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-{}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}",
-        request.mbx_version,
-        &request.candidate_action_uses[format!("{MBX_ACTION_NAME}@").len()..]
-    );
+    let generation = mbx_cache_generation(&request.mbx_version);
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Restore MBX objects")),
         (

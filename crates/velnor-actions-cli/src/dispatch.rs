@@ -29,6 +29,8 @@ use velnor_actions_orchestrator::{
 
 #[path = "dispatch/bun_assets.rs"]
 mod bun_assets;
+#[path = "dispatch/cache.rs"]
+mod cache;
 #[path = "dispatch/fileless.rs"]
 mod fileless;
 #[path = "dispatch_preview_production.rs"]
@@ -88,13 +90,21 @@ fn gate_request() -> Option<InternalRequest> {
     gate_file_request(op, path)
 }
 
+fn gated(
+    op: InternalOp,
+    path: &Path,
+    gate: impl FnOnce(&Path) -> Option<PathBuf>,
+) -> Option<InternalRequest> {
+    gate(path).map(|path| InternalRequest { op, path })
+}
+
 fn gate_file_request(op: InternalOp, path: PathBuf) -> Option<InternalRequest> {
     match op {
         InternalOp::TapContinuation => {
-            return tap_continuation::gate_request(&path).map(|path| InternalRequest { op, path });
+            return gated(op, &path, tap_continuation::gate_request);
         }
         InternalOp::CaptureReviewCompletion | InternalOp::EmitReviewCompletion => {
-            return review_completion::gate_request(&path).map(|path| InternalRequest { op, path });
+            return gated(op, &path, review_completion::gate_request);
         }
         InternalOp::WriteRequest => {
             if !request_can_be_materialized(&path) {
@@ -107,16 +117,13 @@ fn gate_file_request(op: InternalOp, path: PathBuf) -> Option<InternalRequest> {
             }
         }
         InternalOp::ExecuteReleaseProducer => {
-            return package_release::gate_producer_request(&path)
-                .map(|path| InternalRequest { op, path });
+            return gated(op, &path, package_release::gate_producer_request);
         }
         InternalOp::PreviewSourceSelection | InternalOp::PreviewSourceFinalization => {
-            return package_release::gate_preview_source_seed_request(&path)
-                .map(|path| InternalRequest { op, path });
+            return gated(op, &path, package_release::gate_preview_source_seed_request);
         }
         InternalOp::PreviewSourceAcquisition => {
-            return package_release::gate_preview_source_acquisition(&path)
-                .map(|path| InternalRequest { op, path });
+            return gated(op, &path, package_release::gate_preview_source_acquisition);
         }
         InternalOp::ResolveQualification => {
             if !crate::dispatch_qualification::request_is_eligible(&path) {
@@ -132,21 +139,22 @@ fn gate_file_request(op: InternalOp, path: PathBuf) -> Option<InternalRequest> {
         | InternalOp::PackageRecovery
         | InternalOp::AdmitReleaseAggregate
         | InternalOp::AcquireReleaseLeaves => {
-            return package_release::gate_request(&path).map(|path| InternalRequest { op, path });
+            return gated(op, &path, package_release::gate_request);
         }
         InternalOp::TapAdmission => {
-            return tap_prepare::gate_admission_request(&path)
-                .map(|path| InternalRequest { op, path });
+            return gated(op, &path, tap_prepare::gate_admission_request);
         }
         InternalOp::TapPrepare => {
-            return tap_prepare::gate_request(&path).map(|path| InternalRequest { op, path });
+            return gated(op, &path, tap_prepare::gate_request);
         }
         InternalOp::TapWriter => {
-            return tap_prepare::gate_writer_request(&path)
-                .map(|path| InternalRequest { op, path });
+            return gated(op, &path, tap_prepare::gate_writer_request);
         }
         InternalOp::TapMerge => {
-            return tap_merge::gate_request(&path).map(|path| InternalRequest { op, path });
+            return gated(op, &path, tap_merge::gate_request);
+        }
+        InternalOp::CachePublish | InternalOp::CacheRecover | InternalOp::CacheCleanup => {
+            return gated(op, &path, |request| cache::gate_request(op, request));
         }
         InternalOp::Fetch
         | InternalOp::Report
@@ -258,6 +266,9 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::TapAdmission => tap_prepare::run_admission(),
         InternalOp::TapWriter => tap_prepare::run_writer(),
         InternalOp::TapMerge => tap_merge::run(),
+        InternalOp::CachePublish | InternalOp::CacheRecover | InternalOp::CacheCleanup => {
+            cache::run(request.op, &request.path)
+        }
     }
 }
 

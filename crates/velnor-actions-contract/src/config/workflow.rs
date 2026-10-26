@@ -120,6 +120,35 @@ pub enum PullRequestCachePolicy {
     SameRepositoryScoped,
 }
 
+impl WorkflowConfig {
+    /// Fixed GitHub repository allowance in bytes.
+    ///
+    /// Part of the single GitHub-only cache policy configuration. Consumer
+    /// configuration cannot request a larger accounting ceiling.
+    pub const GITHUB_CACHE_ACCOUNTING_CEILING_BYTES: u64 = 10_000_000_000;
+
+    /// Provisional operating ceiling in bytes.
+    ///
+    /// Part of the single GitHub-only cache policy configuration. Only a
+    /// lower operating ceiling may be used; the accounting ceiling above is
+    /// never raised and paid overflow is never enabled.
+    pub const GITHUB_CACHE_DEFAULT_OPERATING_CEILING_BYTES: u64 = 8_000_000_000;
+
+    /// Minimum headroom below the accounting ceiling in bytes.
+    ///
+    /// Part of the single GitHub-only cache policy configuration. Repair
+    /// revisions advance only through a reviewed repair record, never through
+    /// consumer configuration, and legacy caching has no configuration knob.
+    pub const GITHUB_CACHE_MINIMUM_RESERVE_BYTES: u64 = 2_000_000_000;
+}
+
+const _: () = assert!(
+    WorkflowConfig::GITHUB_CACHE_DEFAULT_OPERATING_CEILING_BYTES
+        + WorkflowConfig::GITHUB_CACHE_MINIMUM_RESERVE_BYTES
+        == WorkflowConfig::GITHUB_CACHE_ACCOUNTING_CEILING_BYTES,
+    "operating ceiling plus minimum reserve must equal the accounting ceiling"
+);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum WorkflowPolicy {
@@ -167,6 +196,7 @@ impl WorkflowPolicy {
 
 impl WorkflowConfig {
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
+        self.validate_cache_policy(file)?;
         if self.name.trim().is_empty() {
             return Err(ContractError::config(file, "workflow.name", "empty_name"));
         }
@@ -232,6 +262,17 @@ impl WorkflowConfig {
         self.dispatch.validate(file)?;
         validate_preserve_workflows(&self.preserve_workflows, file)?;
         Ok(())
+    }
+
+    fn validate_cache_policy(&self, file: &str) -> Result<(), ContractError> {
+        match self.pull_request_cache_policy {
+            PullRequestCachePolicy::ReadOnly => Ok(()),
+            PullRequestCachePolicy::SameRepositoryScoped => Err(ContractError::config(
+                file,
+                "workflow.pull_request_cache_policy",
+                "obsolete_pr_write_policy:same-repository-scoped",
+            )),
+        }
     }
 
     fn validate_tasks(&self, file: &str) -> Result<(), ContractError> {

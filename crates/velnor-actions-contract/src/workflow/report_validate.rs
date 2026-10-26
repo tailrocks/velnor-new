@@ -1,12 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::canonical::validate_digest;
+use crate::canonical::{canonical_json_bytes, digest_b3_typed, validate_digest};
 use crate::errors::ContractError;
 use crate::ids::{
     matrix_key_for_id, task_report_id_for_task, validate_matrix_key, validate_report_id,
     validate_run_key, validate_task_id, validate_task_report_id,
 };
+use crate::workflow::cache_context::{UnitOutcome, UnitResultV1};
 use crate::workflow::matrix_entry::MatrixEntry;
 use crate::workflow::report::{CacheResult, MatrixReport, TaskReport, TaskStatus};
 
@@ -77,6 +78,43 @@ impl TaskReport {
         for output in &self.outputs {
             if !declared.contains(output) {
                 return Err(ContractError::identity("outputs", "undeclared_output"));
+            }
+        }
+        Ok(())
+    }
+
+    pub fn validate_bound_unit_result(&self, unit: &UnitResultV1) -> Result<(), ContractError> {
+        self.validate()?;
+        unit.validate()?;
+        let digest = digest_b3_typed(&canonical_json_bytes(self)?);
+        if digest != unit.report_digest {
+            return Err(ContractError::identity(
+                "unit_result.report_digest",
+                "report_mismatch",
+            ));
+        }
+        match unit.outcome {
+            UnitOutcome::Executed | UnitOutcome::Failed => {
+                if unit.exit_code != Some(self.exit_code) {
+                    return Err(ContractError::identity(
+                        "unit_result.exit_code",
+                        "exit_mismatch",
+                    ));
+                }
+                if unit.is_successful_completion() != self.is_successful_completion() {
+                    return Err(ContractError::identity(
+                        "unit_result.outcome",
+                        "completion_mismatch",
+                    ));
+                }
+            }
+            UnitOutcome::CacheHit | UnitOutcome::NeedsPrepare | UnitOutcome::Cancelled => {
+                if self.status == TaskStatus::Executed {
+                    return Err(ContractError::identity(
+                        "unit_result.outcome",
+                        "hit_presented_as_execution",
+                    ));
+                }
             }
         }
         Ok(())

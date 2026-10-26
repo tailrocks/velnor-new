@@ -85,7 +85,11 @@ impl PrivateSourcesSpec<'_> {
                 || crate::toolchain_env::is_denied_endpoint_key(key)
                 || crate::toolchain_env::is_fetch_redirect_key(key)
                 || key.starts_with("VELNOR_")
-        }) {
+        }) || self
+            .toolchain_env
+            .values()
+            .any(|value| value.contains("${{"))
+        {
             return Err(bad("toolchain_env"));
         }
         Ok(())

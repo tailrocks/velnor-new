@@ -127,6 +127,14 @@ pub(crate) fn check_required_gate(jobs: &BTreeMap<String, Job>) -> Result<(), Re
     {
         return bad("bad_required_gate");
     }
+    if gate.check_runner.is_some()
+        || gate.permissions.is_some()
+        || gate.cache_mode.is_some()
+        || gate.environment.is_some()
+        || !gate.services.is_empty()
+    {
+        return bad("required_gate_carries_payload");
+    }
     if jobs
         .iter()
         .any(|(id, job)| id != REQUIRED_GATE_JOB_ID && job.display_name == REQUIRED_DISPLAY_NAME)

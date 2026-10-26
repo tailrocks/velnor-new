@@ -26,6 +26,10 @@ velnor-actions-contract = { version = "=0.1.55", path = "../velnor-actions-contr
 tempfile = { version = "=3.27.0" }
 velnor-actions-mise = { version = "=0.1.55", path = "../velnor-actions-mise" }
 
+[[test]]
+name = "velnor_workflow_renderer"
+path = "tests/velnor_workflow_renderer.rs"
+
 [lints]
 workspace = true
 

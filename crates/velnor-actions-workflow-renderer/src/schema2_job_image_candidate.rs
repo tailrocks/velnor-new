@@ -19,6 +19,8 @@ const PUBLICATION_EVIDENCE: &str =
     "velnor-job-image-publication-evidence-${{ github.run_attempt }}";
 const ATTESTATION_CANDIDATE: &str = "${{ runner.temp }}/privatecandidate";
 const ATTESTATION_RUNTIME_CANDIDATE: &str = "$RUNNER_TEMP/privatecandidate";
+#[path = "job_image_authority.rs"]
+mod authority;
 #[path = "schema2_job_image_native.rs"]
 mod native;
 
@@ -41,7 +43,7 @@ fn render(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
         RenderError::InvalidWorkflow("image_candidate_missing_native_pins".to_owned())
     })?;
     let build = build_job(hosted.clone(), pins)?;
-    let attest = attest_job(hosted.clone(), artifact_id, pins)?;
+    let attest = attest_job(hosted.clone(), artifact_id);
     let publish = publish_job(hosted, artifact_id);
     Ok(Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Job image candidate")),
@@ -117,18 +119,10 @@ fn build_job(
     Ok(("build-image-candidate".to_owned(), Yaml::Map(fields)))
 }
 
-fn attest_job(
-    hosted: Yaml,
-    artifact_id: &str,
-    pins: &super::ProductReleasePins,
-) -> Result<(String, Yaml), RenderError> {
+fn attest_job(hosted: Yaml, artifact_id: &str) -> (String, Yaml) {
     let archive = format!("{ATTESTATION_RUNTIME_CANDIDATE}/{ARCHIVE}");
     let record = format!("{ATTESTATION_RUNTIME_CANDIDATE}/{RECORD}");
-    let binary = native::BINARY;
     let closure = native::CLOSURE;
-    let validate = format!(
-        "\"{binary}\" image-maintenance validate-job-candidate --root \"$GITHUB_WORKSPACE\" --archive-path \"{archive}\" --record-path \"{record}\" --source-closure-path \"{ATTESTATION_RUNTIME_CANDIDATE}/{closure}\""
-    );
     let attest = Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Attest all candidate bytes.")),
         ("uses".to_owned(), Yaml::str(ATTEST_BUILD_PROVENANCE_USES)),
@@ -142,14 +136,13 @@ fn attest_job(
             )]),
         ),
     ]);
-    let mut steps = vec![checkout_step("Use the source commit selected by GitHub.")];
-    steps.extend(native::source_steps(pins)?);
-    steps.extend([
+    let steps = vec![
         artifact_id_check_step(artifact_id),
         download_step(artifact_id, ATTESTATION_CANDIDATE),
-        run_step("Do a check of source and archive identity", &validate),
+        authority::materialize_step(),
+        authority::verify_candidate_step(&archive, &record),
         attest,
-    ]);
+    ];
     let fields = vec![
         (
             "name".to_owned(),
@@ -176,37 +169,18 @@ fn attest_job(
         ),
         ("steps".to_owned(), Yaml::Seq(steps)),
     ];
-    Ok(("attest-image-candidate".to_owned(), Yaml::Map(fields)))
+    ("attest-image-candidate".to_owned(), Yaml::Map(fields))
 }
 
 fn publish_job(hosted: Yaml, artifact_id: &str) -> (String, Yaml) {
     let archive = format!("candidate/{ARCHIVE}");
     let record = format!("candidate/{RECORD}");
     let result = "$RUNNER_TEMP/job-image-publication.json";
-    let publish = format!(
-        "python3 images/job/ubuntu-26.04/candidate/publish.py --root . --archive \"{archive}\" --record \"{record}\" --result \"{result}\""
-    );
-    let mut publish_step = run_step(
-        "Publish the job image with its signed build evidence.",
-        &publish,
-    );
-    if let Yaml::Map(fields) = &mut publish_step {
-        fields.push((
-            "env".to_owned(),
-            Yaml::Map(vec![
-                ("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")),
-                (
-                    "VELNOR_CANDIDATE_ARTIFACT_ID".to_owned(),
-                    Yaml::str(artifact_id),
-                ),
-            ]),
-        ));
-    }
     let steps = vec![
-        checkout_step("Use the source commit selected by GitHub."),
         artifact_id_check_step(artifact_id),
         download_step(artifact_id, "candidate"),
-        publish_step,
+        authority::materialize_step(),
+        authority::assemble_evidence_step(&archive, &record, result, artifact_id),
         publication_evidence_upload_step("${{ runner.temp }}/job-image-publication.json"),
     ];
     let fields = vec![

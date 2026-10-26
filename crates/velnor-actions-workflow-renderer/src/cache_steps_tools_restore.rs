@@ -170,6 +170,7 @@ fn installs_verify_step(tool_pins: &[String]) -> Result<Yaml, RenderError> {
     }
     Ok(Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(INSTALLS_VERIFY_NAME)),
+        ("id".to_owned(), Yaml::str("verify")),
         ("shell".to_owned(), Yaml::str(crate::VERIFY_SHELL)),
         (
             "env".to_owned(),
@@ -180,6 +181,46 @@ fn installs_verify_step(tool_pins: &[String]) -> Result<Yaml, RenderError> {
         ),
         ("run".to_owned(), Yaml::str(INSTALLS_VERIFY_SCRIPT)),
     ]))
+}
+
+fn action_outputs() -> Yaml {
+    let mut entries = Vec::with_capacity(5);
+    for (name, description, value) in [
+        (
+            "cache-hit",
+            "Exact-key hit of the restored V2 tools entry.",
+            "${{ steps.restore.outputs.cache-hit }}",
+        ),
+        (
+            "origin-bytes",
+            "Origin bytes downloaded while re-verifying restored Mise installs; empty when unmeasured.",
+            "${{ steps.verify.outputs.origin-bytes }}",
+        ),
+        (
+            "origin-fetches",
+            "Origin archive downloads while re-verifying restored Mise installs.",
+            "${{ steps.verify.outputs.origin-fetches }}",
+        ),
+        (
+            "reused-archives",
+            "Verified local tool archives reused without an origin download.",
+            "${{ steps.verify.outputs.reused-archives }}",
+        ),
+        (
+            "verified-files",
+            "Restored install files verified against trusted archives.",
+            "${{ steps.verify.outputs.verified-files }}",
+        ),
+    ] {
+        entries.push((
+            name.to_owned(),
+            Yaml::Map(vec![
+                ("description".to_owned(), Yaml::str(description)),
+                ("value".to_owned(), Yaml::str(value)),
+            ]),
+        ));
+    }
+    Yaml::Map(entries)
 }
 
 fn action_body(tool_pins: &[String]) -> Result<Yaml, RenderError> {
@@ -228,22 +269,7 @@ fn action_body(tool_pins: &[String]) -> Result<Yaml, RenderError> {
                 ),
             ]),
         ),
-        (
-            "outputs".to_owned(),
-            Yaml::Map(vec![(
-                "cache-hit".to_owned(),
-                Yaml::Map(vec![
-                    (
-                        "description".to_owned(),
-                        Yaml::str("Exact-key hit of the restored V2 tools entry."),
-                    ),
-                    (
-                        "value".to_owned(),
-                        Yaml::str("${{ steps.restore.outputs.cache-hit }}"),
-                    ),
-                ]),
-            )]),
-        ),
+        ("outputs".to_owned(), action_outputs()),
         (
             "runs".to_owned(),
             Yaml::Map(vec![
@@ -265,7 +291,13 @@ pub(crate) fn action_file(
     version: &str,
     tool_pins: &[String],
 ) -> Result<RenderedFile, RenderError> {
-    let body = action_body(tool_pins)?;
+    let mut union = Vec::with_capacity(tool_pins.len());
+    for pin in tool_pins {
+        if !union.contains(pin) {
+            union.push(pin.clone());
+        }
+    }
+    let body = action_body(&union)?;
     let bytes = marker::with_marker(version, &crate::yaml::render_yaml(&body))?;
     steps::scan_for_private_subcommands(&bytes)?;
     let action_directory = super::TOOLS_RESTORE_USES

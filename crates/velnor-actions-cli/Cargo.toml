@@ -14,6 +14,10 @@ name = "velnor-actions"
 path = "src/main.rs"
 test = false
 
+[[test]]
+name = "velnor_cli"
+path = "tests/velnor_cli.rs"
+
 [dependencies]
 serde_json = { workspace = true }
 velnor-actions-orchestrator = { version = "=0.1.55", path = "../velnor-actions-orchestrator" }

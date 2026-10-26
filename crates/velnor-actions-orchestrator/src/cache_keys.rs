@@ -13,6 +13,22 @@ use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
 use crate::OrchestratorError;
 
+#[expect(
+    dead_code,
+    unreachable_pub,
+    reason = "T24 registers discovery and intent here; the emission owner wires them next"
+)]
+#[path = "cache_discovery.rs"]
+pub mod cache_discovery;
+
+#[expect(
+    dead_code,
+    unreachable_pub,
+    reason = "T24 registers discovery and intent here; the emission owner wires them next"
+)]
+#[path = "cache_intent.rs"]
+pub mod cache_intent;
+
 pub(crate) const DEFAULT_REF_ENV: &str = "VELNOR_DEFAULT_REF";
 pub(crate) const HEAD_FORK_ENV: &str = "VELNOR_PR_HEAD_FORK";
 const DEFAULT_REF_EXPR: &str =

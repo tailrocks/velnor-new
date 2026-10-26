@@ -4,7 +4,10 @@
 use velnor_actions_contract::Step;
 use velnor_actions_contract::config::AnsibleCollection;
 use velnor_actions_contract::workflow::cache_family::CacheFamily;
-use velnor_actions_contract::workflow::cache_family_steps::root_locator;
+use velnor_actions_contract::workflow::cache_family::GC1_HARD_CEILING_BYTES;
+use velnor_actions_contract::workflow::cache_family_steps::{
+    root_locator, validate_stack_family_plan,
+};
 use velnor_actions_workflow_renderer::steps::{
     FamilyCachePlan, FamilySnapshot, family_keys_step, family_keys_step_single_writer,
     family_restore_step, family_save_step, family_size_step,
@@ -86,10 +89,39 @@ pub(crate) fn prelude(plans: &[FamilyCachePlan]) -> Result<Vec<Step>, Orchestrat
     prelude_for(plans, false)
 }
 
+fn check_common_policy(plan: &FamilyCachePlan) -> Result<(), OrchestratorError> {
+    let policy =
+        validate_stack_family_plan(plan.family, plan.locator.as_deref()).map_err(|error| {
+            OrchestratorError::Contract {
+                problem: format!("family_contract:{error}"),
+            }
+        })?;
+    if policy.hard_ceiling_bytes != GC1_HARD_CEILING_BYTES {
+        return Err(OrchestratorError::Contract {
+            problem: format!("family_contract:ceiling_drift:{}", plan.family.spec().layer),
+        });
+    }
+    plan.family
+        .spec()
+        .check_subordinate_to_common_ceiling()
+        .map_err(|error| OrchestratorError::Contract {
+            problem: format!("family_contract:{error}"),
+        })?;
+    plan.family
+        .validate_key_bound()
+        .map_err(|error| OrchestratorError::Contract {
+            problem: format!("family_contract:{error}"),
+        })?;
+    Ok(())
+}
+
 pub(crate) fn prelude_for(
     plans: &[FamilyCachePlan],
     single_writer: bool,
 ) -> Result<Vec<Step>, OrchestratorError> {
+    for plan in plans {
+        check_common_policy(plan)?;
+    }
     let keys = if single_writer {
         family_keys_step_single_writer(plans)?
     } else {
@@ -103,5 +135,6 @@ pub(crate) fn prelude_for(
 }
 
 pub(crate) fn after_producer(plan: &FamilyCachePlan) -> Result<Vec<Step>, OrchestratorError> {
+    check_common_policy(plan)?;
     Ok(vec![family_size_step(plan)?, family_save_step(plan)?])
 }

@@ -7,6 +7,7 @@ use velnor_actions_contract::{Job, StepRole, is_crate_job_id};
 
 use crate::{
     RenderError,
+    preseed::check_preseed_step_order,
     render::{FINAL_JOB_ID, PLAN_JOB_ID},
 };
 
@@ -32,10 +33,12 @@ pub(crate) fn check_preseed_closure(
             )));
         }
     }
+    check_preseed_step_order(PLAN_JOB_ID, &plan.steps, true)?;
     for (id, job) in jobs {
         if id != FINAL_JOB_ID && !is_crate_job_id(id) {
             continue;
         }
+        check_preseed_step_order(id, &job.steps, false)?;
         let position = |role| job.steps.iter().position(|step| step.role == Some(role));
         let (Some(download_at), Some(verify_at), Some(stage_at)) = (
             position(StepRole::PreseedDownload),

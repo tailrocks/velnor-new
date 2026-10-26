@@ -139,6 +139,7 @@ pub(crate) fn read_staged_reports(
         else {
             continue;
         };
+        check_staged_observations(run_key, plan, entry, matrix_key, &home, &digests, errors);
         let tasks_dir = home.join("tasks");
         let linked = path_is_symlink(&tasks_dir);
         for report_id in expected_file_ids(entry, run_key, &digests) {
@@ -161,6 +162,87 @@ pub(crate) fn read_staged_reports(
         staged_id(left, "task_report_id").cmp(staged_id(right, "task_report_id"))
     });
     (reports, tasks)
+}
+
+fn check_staged_observations(
+    run_key: &str,
+    plan: &serde_json::Value,
+    entry: &serde_json::Value,
+    matrix_key: &str,
+    home: &Path,
+    digests: &BTreeMap<&str, &str>,
+    errors: &mut Vec<String>,
+) {
+    let source = plan
+        .get("head")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    let artifact = entry
+        .get("artifact_id")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    let job = entry
+        .get("job_id")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    let attempt = crate::task_report::run_attempt(run_key);
+    let tasks_dir = home.join("tasks");
+    let linked = path_is_symlink(&tasks_dir);
+    for report_id in expected_file_ids(entry, run_key, digests) {
+        if linked {
+            errors.push(format!("symlink_observation:{report_id}"));
+            continue;
+        }
+        let Ok(member) = crate::task_report::unit_observation_member_name(matrix_key, &report_id)
+        else {
+            errors.push(format!("corrupt_observation:{report_id}"));
+            continue;
+        };
+        let expectation = crate::task_report::UnitObservationExpectation {
+            task_report_id: report_id.clone(),
+            artifact_id: artifact.to_owned(),
+            member_name: member,
+            producer_job: job.to_owned(),
+            producer_attempt: attempt,
+            source_sha: source.to_owned(),
+        };
+        check_staged_observation(&expectation, &tasks_dir, errors);
+    }
+}
+
+fn check_staged_observation(
+    expectation: &crate::task_report::UnitObservationExpectation,
+    tasks_dir: &Path,
+    errors: &mut Vec<String>,
+) {
+    let report_id = expectation.task_report_id.as_str();
+    let path = tasks_dir.join(format!(
+        "{report_id}{}",
+        crate::task_report::UNIT_OBSERVATION_SUFFIX
+    ));
+    let text = match read_bounded(&path) {
+        Ok(text) => text,
+        Err("missing") => return,
+        Err("symlink") => {
+            errors.push(format!("symlink_observation:{report_id}"));
+            return;
+        }
+        Err("oversize") => {
+            errors.push(format!("oversize_observation:{report_id}"));
+            return;
+        }
+        Err(_) => {
+            errors.push(format!("unreadable_observation:{report_id}"));
+            return;
+        }
+    };
+    let Ok(binding) = crate::task_report::parse_unit_observation_binding(&text) else {
+        errors.push(format!("unparsable_observation:{report_id}"));
+        return;
+    };
+    if crate::task_report::verify_unit_observation_binding(&binding, expectation).is_err() {
+        errors.push(format!("corrupt_observation:{report_id}"));
+    }
 }
 
 fn obligation_digests(plan: &serde_json::Value) -> BTreeMap<&str, &str> {

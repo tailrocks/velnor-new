@@ -6,6 +6,8 @@
     reason = "documentation comments are intentionally absent from this codebase"
 )]
 mod args;
+#[path = "dispatch/compiler.rs"]
+mod compiler;
 mod dispatch;
 mod dispatch_config;
 mod dispatch_deps;
@@ -21,6 +23,9 @@ mod dispatch_unmanaged;
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
+    if let Some(outcome) = compiler::try_observer_entry() {
+        return outcome;
+    }
     if std::env::args_os().len() <= 1
         && let Some(outcome) = dispatch::try_internal()
     {
