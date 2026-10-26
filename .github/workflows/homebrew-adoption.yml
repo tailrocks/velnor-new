@@ -52,15 +52,15 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d
-          version: 2026.10.19
+          sha256: 2eb27467b6f369915ee76f18d66a0696cdb5c20e7ecc8cb49c2bfaca60f0fc9c
+          version: 2026.10.20
       - name: Install pinned GitHub CLI
         shell: bash
-        run: mise --no-config --no-env --no-hooks install gh@2.103.2
+        run: mise --no-config --no-env --no-hooks install gh@2.103.3
       - name: Authenticate and stage published SDK binary
         env:
           GH_TOKEN: ${{ github.token }}
-          VELNOR_ADOPTION_GH: mise --no-config --no-env --no-hooks exec gh@2.103.2 -- gh
+          VELNOR_ADOPTION_GH: mise --no-config --no-env --no-hooks exec gh@2.103.3 -- gh
         shell: bash
         run: "set -euo pipefail\n[[ \"$VELNOR_HOMEBREW_ADOPTION_VERSION\" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]]\n[[ \"$VELNOR_HOMEBREW_ADOPTION_SOURCE_SHA\" =~ ^[0-9a-f]{40}$ ]]\n[[ \"$VELNOR_HOMEBREW_ADOPTION_MANIFEST_SHA256\" =~ ^[0-9a-f]{64}$ ]]\nreadonly root=\"$RUNNER_TEMP/velnor/bootstrap\"\nmkdir -p \"$root\" \"$RUNNER_TEMP/velnor/bin\"\nreadonly manifest=\"$root/release-manifest.json\"\neval \"$VELNOR_ADOPTION_GH\" release download \"v$VELNOR_HOMEBREW_ADOPTION_VERSION\" \\\n  --repo tailrocks/velnor-new --pattern release-manifest.json --dir \"$root\"\nprintf '%s  %s\\n' \"$VELNOR_HOMEBREW_ADOPTION_MANIFEST_SHA256\" \"$manifest\" | sha256sum --check --status\neval \"$VELNOR_ADOPTION_GH\" attestation verify \"$manifest\" \\\n  --repo tailrocks/velnor-new \\\n  --signer-workflow tailrocks/velnor-new/.github/workflows/product-release-generator.yml \\\n  --signer-digest \"$VELNOR_HOMEBREW_ADOPTION_SOURCE_SHA\" \\\n  --source-ref refs/heads/main \\\n  --source-digest \"$VELNOR_HOMEBREW_ADOPTION_SOURCE_SHA\"\n/usr/bin/jq -e --arg version \"$VELNOR_HOMEBREW_ADOPTION_VERSION\" \\\n  --arg source \"$VELNOR_HOMEBREW_ADOPTION_SOURCE_SHA\" \\\n  --arg repository \"tailrocks/velnor-new\" \\\n  '.schema == 1 and .repository == $repository and .version == $version and .commit == $source' \\\n  \"$manifest\" >/dev/null\nasset_sha=\"$(/usr/bin/jq -er --arg version \"$VELNOR_HOMEBREW_ADOPTION_VERSION\" --arg repository \"tailrocks/velnor-new\" '[.targets[] | select(.target == \"x86_64-unknown-linux-gnu\" and .artifact == (\"https://github.com/\" + $repository + \"/releases/download/v\" + $version + \"/velnor-actions-\" + $version + \"-x86_64-unknown-linux-gnu\"))] | if length == 1 then .[0].sha256 else error(\"target inventory\") end' \"$manifest\")\"\nreadonly asset_sha\n[[ \"$asset_sha\" =~ ^[0-9a-f]{64}$ ]]\nreadonly asset=\"$root/velnor-actions-${VELNOR_HOMEBREW_ADOPTION_VERSION}-x86_64-unknown-linux-gnu\"\neval \"$VELNOR_ADOPTION_GH\" release download \"v$VELNOR_HOMEBREW_ADOPTION_VERSION\" \\\n  --repo tailrocks/velnor-new --pattern \"${asset##*/}\" --dir \"$root\"\nprintf '%s  %s\\n' \"$asset_sha\" \"$asset\" | sha256sum --check --status\ninstall -m 0755 \"$asset\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-${VELNOR_HOMEBREW_ADOPTION_VERSION}\"\n\"$RUNNER_TEMP/velnor/bin/velnor-actions-${VELNOR_HOMEBREW_ADOPTION_VERSION}\" --version\n"
       - name: Checkout
@@ -119,15 +119,15 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d
-          version: 2026.10.19
+          sha256: 2eb27467b6f369915ee76f18d66a0696cdb5c20e7ecc8cb49c2bfaca60f0fc9c
+          version: 2026.10.20
       - name: Install pinned GitHub CLI
         shell: bash
-        run: mise --no-config --no-env --no-hooks install gh@2.103.2
+        run: mise --no-config --no-env --no-hooks install gh@2.103.3
       - name: Authenticate and stage published SDK binary
         env:
           GH_TOKEN: ${{ github.token }}
-          VELNOR_ADOPTION_GH: mise --no-config --no-env --no-hooks exec gh@2.103.2 -- gh
+          VELNOR_ADOPTION_GH: mise --no-config --no-env --no-hooks exec gh@2.103.3 -- gh
         shell: bash
         run: "set -euo pipefail\n[[ \"$VELNOR_HOMEBREW_ADOPTION_VERSION\" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]]\n[[ \"$VELNOR_HOMEBREW_ADOPTION_SOURCE_SHA\" =~ ^[0-9a-f]{40}$ ]]\n[[ \"$VELNOR_HOMEBREW_ADOPTION_MANIFEST_SHA256\" =~ ^[0-9a-f]{64}$ ]]\nreadonly root=\"$RUNNER_TEMP/velnor/bootstrap\"\nmkdir -p \"$root\" \"$RUNNER_TEMP/velnor/bin\"\nreadonly manifest=\"$root/release-manifest.json\"\neval \"$VELNOR_ADOPTION_GH\" release download \"v$VELNOR_HOMEBREW_ADOPTION_VERSION\" \\\n  --repo tailrocks/velnor-new --pattern release-manifest.json --dir \"$root\"\nprintf '%s  %s\\n' \"$VELNOR_HOMEBREW_ADOPTION_MANIFEST_SHA256\" \"$manifest\" | sha256sum --check --status\neval \"$VELNOR_ADOPTION_GH\" attestation verify \"$manifest\" \\\n  --repo tailrocks/velnor-new \\\n  --signer-workflow tailrocks/velnor-new/.github/workflows/product-release-generator.yml \\\n  --signer-digest \"$VELNOR_HOMEBREW_ADOPTION_SOURCE_SHA\" \\\n  --source-ref refs/heads/main \\\n  --source-digest \"$VELNOR_HOMEBREW_ADOPTION_SOURCE_SHA\"\n/usr/bin/jq -e --arg version \"$VELNOR_HOMEBREW_ADOPTION_VERSION\" \\\n  --arg source \"$VELNOR_HOMEBREW_ADOPTION_SOURCE_SHA\" \\\n  --arg repository \"tailrocks/velnor-new\" \\\n  '.schema == 1 and .repository == $repository and .version == $version and .commit == $source' \\\n  \"$manifest\" >/dev/null\nasset_sha=\"$(/usr/bin/jq -er --arg version \"$VELNOR_HOMEBREW_ADOPTION_VERSION\" --arg repository \"tailrocks/velnor-new\" '[.targets[] | select(.target == \"x86_64-unknown-linux-gnu\" and .artifact == (\"https://github.com/\" + $repository + \"/releases/download/v\" + $version + \"/velnor-actions-\" + $version + \"-x86_64-unknown-linux-gnu\"))] | if length == 1 then .[0].sha256 else error(\"target inventory\") end' \"$manifest\")\"\nreadonly asset_sha\n[[ \"$asset_sha\" =~ ^[0-9a-f]{64}$ ]]\nreadonly asset=\"$root/velnor-actions-${VELNOR_HOMEBREW_ADOPTION_VERSION}-x86_64-unknown-linux-gnu\"\neval \"$VELNOR_ADOPTION_GH\" release download \"v$VELNOR_HOMEBREW_ADOPTION_VERSION\" \\\n  --repo tailrocks/velnor-new --pattern \"${asset##*/}\" --dir \"$root\"\nprintf '%s  %s\\n' \"$asset_sha\" \"$asset\" | sha256sum --check --status\ninstall -m 0755 \"$asset\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-${VELNOR_HOMEBREW_ADOPTION_VERSION}\"\n\"$RUNNER_TEMP/velnor/bin/velnor-actions-${VELNOR_HOMEBREW_ADOPTION_VERSION}\" --version\n"
       - name: Checkout
@@ -187,15 +187,15 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d
-          version: 2026.10.19
+          sha256: 2eb27467b6f369915ee76f18d66a0696cdb5c20e7ecc8cb49c2bfaca60f0fc9c
+          version: 2026.10.20
       - name: Install pinned GitHub CLI
         shell: bash
-        run: mise --no-config --no-env --no-hooks install gh@2.103.2
+        run: mise --no-config --no-env --no-hooks install gh@2.103.3
       - name: Authenticate and stage published SDK binary
         env:
           GH_TOKEN: ${{ github.token }}
-          VELNOR_ADOPTION_GH: mise --no-config --no-env --no-hooks exec gh@2.103.2 -- gh
+          VELNOR_ADOPTION_GH: mise --no-config --no-env --no-hooks exec gh@2.103.3 -- gh
         shell: bash
         run: "set -euo pipefail\n[[ \"$VELNOR_HOMEBREW_ADOPTION_VERSION\" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]]\n[[ \"$VELNOR_HOMEBREW_ADOPTION_SOURCE_SHA\" =~ ^[0-9a-f]{40}$ ]]\n[[ \"$VELNOR_HOMEBREW_ADOPTION_MANIFEST_SHA256\" =~ ^[0-9a-f]{64}$ ]]\nreadonly root=\"$RUNNER_TEMP/velnor/bootstrap\"\nmkdir -p \"$root\" \"$RUNNER_TEMP/velnor/bin\"\nreadonly manifest=\"$root/release-manifest.json\"\neval \"$VELNOR_ADOPTION_GH\" release download \"v$VELNOR_HOMEBREW_ADOPTION_VERSION\" \\\n  --repo tailrocks/velnor-new --pattern release-manifest.json --dir \"$root\"\nprintf '%s  %s\\n' \"$VELNOR_HOMEBREW_ADOPTION_MANIFEST_SHA256\" \"$manifest\" | sha256sum --check --status\neval \"$VELNOR_ADOPTION_GH\" attestation verify \"$manifest\" \\\n  --repo tailrocks/velnor-new \\\n  --signer-workflow tailrocks/velnor-new/.github/workflows/product-release-generator.yml \\\n  --signer-digest \"$VELNOR_HOMEBREW_ADOPTION_SOURCE_SHA\" \\\n  --source-ref refs/heads/main \\\n  --source-digest \"$VELNOR_HOMEBREW_ADOPTION_SOURCE_SHA\"\n/usr/bin/jq -e --arg version \"$VELNOR_HOMEBREW_ADOPTION_VERSION\" \\\n  --arg source \"$VELNOR_HOMEBREW_ADOPTION_SOURCE_SHA\" \\\n  --arg repository \"tailrocks/velnor-new\" \\\n  '.schema == 1 and .repository == $repository and .version == $version and .commit == $source' \\\n  \"$manifest\" >/dev/null\nasset_sha=\"$(/usr/bin/jq -er --arg version \"$VELNOR_HOMEBREW_ADOPTION_VERSION\" --arg repository \"tailrocks/velnor-new\" '[.targets[] | select(.target == \"x86_64-unknown-linux-gnu\" and .artifact == (\"https://github.com/\" + $repository + \"/releases/download/v\" + $version + \"/velnor-actions-\" + $version + \"-x86_64-unknown-linux-gnu\"))] | if length == 1 then .[0].sha256 else error(\"target inventory\") end' \"$manifest\")\"\nreadonly asset_sha\n[[ \"$asset_sha\" =~ ^[0-9a-f]{64}$ ]]\nreadonly asset=\"$root/velnor-actions-${VELNOR_HOMEBREW_ADOPTION_VERSION}-x86_64-unknown-linux-gnu\"\neval \"$VELNOR_ADOPTION_GH\" release download \"v$VELNOR_HOMEBREW_ADOPTION_VERSION\" \\\n  --repo tailrocks/velnor-new --pattern \"${asset##*/}\" --dir \"$root\"\nprintf '%s  %s\\n' \"$asset_sha\" \"$asset\" | sha256sum --check --status\ninstall -m 0755 \"$asset\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-${VELNOR_HOMEBREW_ADOPTION_VERSION}\"\n\"$RUNNER_TEMP/velnor/bin/velnor-actions-${VELNOR_HOMEBREW_ADOPTION_VERSION}\" --version\n"
       - name: Checkout

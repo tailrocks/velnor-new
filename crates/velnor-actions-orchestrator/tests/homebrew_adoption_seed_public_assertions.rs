@@ -13,6 +13,7 @@ use velnor_actions_workflow_renderer::{
 };
 
 mod complete_job_authority;
+mod helper_tools;
 mod lock_trust;
 mod native_context_authority;
 mod native_fact_inventory;
@@ -101,6 +102,7 @@ pub(super) fn assert_bootstrap_authority(
     assert_plan_authority(jobs, lock)?;
     assert_source_free_boundary(jobs)?;
     assert_helper_versions(jobs, helper_version);
+    helper_tools::assert_published_helper_tools(preparation, jobs)?;
     assert_native_check(jobs, lock, helper_version)?;
     assert_finalized_mise_jobs(jobs)
 }

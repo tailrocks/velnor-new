@@ -22,7 +22,7 @@ name = "workflow_configuration_public"
 path = "tests/workflow_configuration_public.rs"
 
 [lib]
-test = false
+test = true
 
 [features]
 test-render-capture = ["velnor-actions-workflow-renderer/test-render-capture"]

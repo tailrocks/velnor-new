@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::Deserialize;
-use velnor_actions_contract::{canonical_json_bytes, config::HomebrewTapConfig};
+use velnor_actions_contract::canonical_json_bytes;
 
 use super::{
     BotIdentity, OrchestratorError, TapGitHubApi, WriterInputs,
@@ -20,9 +20,10 @@ const PAGE_SIZE: usize = 100;
 const MAX_PAGES: usize = 100;
 const TAP_BASE: &str = "main";
 
+#[path = "tap_writer_history_landed.rs"]
+mod landed;
 #[path = "tap_writer_history_timestamp.rs"]
 mod timestamp;
-use timestamp::valid_timestamp;
 
 pub(super) struct HistoricalPromotion {
     pub(super) pull_request: u64,
@@ -146,7 +147,7 @@ fn authenticate_merged_pull(
         || pull.user.id != bot.user_id
         || pull.user.login != bot.login
         || pull.base.ref_name != TAP_BASE
-        || !same_repository(pull, &inputs.policy)
+        || !same_repository(pull, bot.repository_id, &inputs.policy.repository)
     {
         return Err(internal("tap_historical_pull_identity_mismatch"));
     }
@@ -172,25 +173,16 @@ fn authenticate_merged_pull(
     }
     let proof_digest =
         authenticate_historical_candidate(inputs, bot, pull, base_sha, &head_commit)?;
-    let merge_sha = pull
-        .merge_commit_sha
-        .as_deref()
-        .filter(|sha| is_full_sha(sha))
-        .ok_or_else(|| internal("tap_historical_merge_sha_missing"))?;
-    let merged_at = pull
-        .merged_at
-        .as_deref()
-        .filter(|value| valid_timestamp(value))
-        .ok_or_else(|| internal("tap_historical_merge_time_missing"))?;
-    validate_squash_commit(&inputs.api, merge_sha, base_sha, &head_commit.tree.sha)?;
+    let (merge_sha, merged_at) = landed::merge_oid(inputs, bot, pull)?;
+    validate_squash_commit(&inputs.api, &merge_sha, base_sha, &head_commit.tree.sha)?;
     Ok(HistoricalPromotion {
         pull_request: pull.number,
         head_sha: head_sha.clone(),
         base_sha: base_sha.clone(),
         branch,
         candidate_proof_digest: proof_digest,
-        merge_sha: merge_sha.to_owned(),
-        merged_at: merged_at.to_owned(),
+        merge_sha,
+        merged_at,
     })
 }
 
@@ -234,16 +226,16 @@ fn authenticate_historical_candidate(
     Ok(proof_digest)
 }
 
-fn same_repository(pull: &PullRequestResponse, policy: &HomebrewTapConfig) -> bool {
+fn same_repository(pull: &PullRequestResponse, repository_id: u64, repository: &str) -> bool {
     pull.head
         .repo
         .as_ref()
-        .is_some_and(|repo| repo.full_name == policy.repository)
+        .is_some_and(|repo| repo.id == repository_id && repo.full_name == repository)
         && pull
             .base
             .repo
             .as_ref()
-            .is_some_and(|repo| repo.full_name == policy.repository)
+            .is_some_and(|repo| repo.id == repository_id && repo.full_name == repository)
 }
 
 fn proof_digest_from_body(pull: &PullRequestResponse) -> Result<String, OrchestratorError> {

@@ -17,9 +17,9 @@ pub struct MiseSetup {
 }
 
 pub const MISE_BINARY_SHA256_MACOS_ARM64: &str =
-    "7dc61dfa71abbcda1c40d18440bc556b5d58b80e6042bc4f95fd106fa1bb3c66";
+    "7acfdbf412c8ec5b0d919d277417648c0534333d55f0242d5f9520d0d8ca7cc9";
 pub const MISE_BINARY_SHA256_MACOS_X64: &str =
-    "8d5e1591811143f15334f690373cefb58c13bd6cbd0292008748fd777f6c99d8";
+    "98b031e88eb0fd33c1507acb538f429747d26b770cd3cfe257408ec104ac9f6d";
 
 impl MiseSetup {
     pub fn for_target(&self, target: &str) -> Result<Self, RenderError> {

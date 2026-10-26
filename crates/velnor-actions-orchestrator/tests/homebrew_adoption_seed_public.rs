@@ -94,7 +94,7 @@ platform = "linux/amd64"
     assert!(required.steps.iter().any(|step| {
         step.role == Some(StepRole::PreparePinnedTools)
             && matches!(&step.kind,
-            StepKind::Shell { run, .. } if run.join(" ").contains("gh@2.103.2"))
+            StepKind::Shell { run, .. } if run.join(" ").contains(&format!("gh@{}", velnor_actions_mise::catalog::GH_VERSION)))
     }));
     homebrew_adoption_seed_public_assertions::assert_trusted_required_steps(
         &required.steps,

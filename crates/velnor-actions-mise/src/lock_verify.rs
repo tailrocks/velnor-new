@@ -4,7 +4,7 @@
 use velnor_actions_contract::{GeneratorLock, ReleaseManifest, ReleaseTarget, TargetRecord};
 
 use super::{
-    MISE_VERSION,
+    MISE_VERSION, PinnedTool, ToolCatalog,
     lock::{LockError, mismatch},
     source_build_bootstrap::{
         SourceBuildBootstrapHost, SourceBuildBootstrapTool, official as bootstrap_asset,
@@ -12,6 +12,7 @@ use super::{
 };
 
 const PUBLISHED_GENERATOR_VERSION: &str = "0.1.55";
+const PUBLISHED_GENERATOR_GH_VERSION: &str = "2.103.2";
 const PUBLISHED_GENERATOR_COMMIT: &str = "693f3aae14406fb7851ac70f0aee647a869b5063";
 const PUBLISHED_GENERATOR_LINUX_X64_SHA256: &str =
     "c8f1440e4f767ecc903e6611c56c2db4005011d33ee6f0fd566f4b7e5345eba4";
@@ -126,4 +127,15 @@ fn verify_mise_bootstrap(lock: &GeneratorLock) -> Result<(), LockError> {
         return Err(mismatch("mise_bootstrap_sha256".to_owned()));
     }
     Ok(())
+}
+
+pub fn catalog_for_published_generator(
+    lock: &GeneratorLock,
+    catalog: &ToolCatalog,
+) -> Result<ToolCatalog, LockError> {
+    verify_lock_against_published_release(lock)?;
+    let mut helper = catalog.clone();
+    PUBLISHED_GENERATOR_GH_VERSION.clone_into(&mut helper.gh);
+    helper.project.remove(&PinnedTool::Gh);
+    Ok(helper)
 }

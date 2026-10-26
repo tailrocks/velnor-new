@@ -152,15 +152,15 @@ pub fn final_job(
     label: &str,
     crate_job_ids: &[String],
     acquire: Option<Step>,
+    catalog: &ToolCatalog,
 ) -> Result<Job, NativeJobBuilderError> {
     let mut needs = vec![PLAN_JOB_ID.to_owned()];
     needs.extend(crate_job_ids.iter().cloned());
     needs.push(LINT_JOB_ID.to_owned());
     let mut steps = vec![checkout_history_action()?];
     steps.extend(acquire);
-    let pinned_tools = ToolCatalog::pinned();
     steps.push(prepare_pinned_tools_step(
-        &pinned_tools,
+        catalog,
         vec![PinnedTool::Gh],
         true,
     )?);
