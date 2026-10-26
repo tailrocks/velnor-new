@@ -1313,7 +1313,7 @@ jobs:
       - name: Unit and integration tests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-c12cf67b1d2b6cf744ee95d05c133cea76bbf37f5e80d1d334dea907d881a858"}
+        with: {"digest": "b3-295dd9142f252dfc4868f19f99bdfb6e8fc3f4e6091bd542e932f4a05b6e9973"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1862,7 +1862,7 @@ jobs:
       - name: Unit and integration tests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-09fc10a7849cbaea6e1a99b8064e3279606224cb27b1d0f7cd663d3e92928c25"}
+        with: {"digest": "b3-6f39f93f69809c878e170d9d1ea77cc7c8c05ec8946a34a214127145eb0713ba"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
