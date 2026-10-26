@@ -1138,6 +1138,7 @@ dependencies = [
  "velnor-actions-actionlint",
  "velnor-actions-contract",
  "velnor-actions-mise",
+ "velnor-actions-tofu",
 ]
 
 [[package]]

@@ -22,6 +22,7 @@ toml = { version = "=1.1.8" }
 velnor-actions-actionlint = { version = "=0.1.57", path = "../velnor-actions-actionlint" }
 velnor-actions-contract = { version = "=0.1.57", path = "../velnor-actions-contract" }
 velnor-actions-mise = { version = "=0.1.57", path = "../velnor-actions-mise" }
+velnor-actions-tofu = { version = "=0.1.57", path = "../velnor-actions-tofu" }
 
 [dev-dependencies]
 tempfile = { version = "=3.27.0" }

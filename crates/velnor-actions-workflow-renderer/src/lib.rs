@@ -59,6 +59,7 @@ mod parallel_steps;
 mod parallel_target_seed;
 pub mod plan_format;
 mod plan_gate;
+pub mod plan_sources;
 pub mod preseed;
 mod preseed_closure;
 pub mod private_source_steps;

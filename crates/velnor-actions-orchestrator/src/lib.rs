@@ -17,7 +17,6 @@ mod binary_release_emit;
 mod build_task_tools;
 mod build_tasks;
 mod bun_assets_handoff;
-mod cache_keys;
 mod check_evidence;
 mod check_runtime;
 mod clippy_groups;
