@@ -20,6 +20,12 @@ pub(super) fn internal_env(
     step_env: &BTreeMap<String, String>,
 ) -> Result<Yaml, RenderError> {
     commands::validate_env(step_env)?;
+    if job_id == crate::render::PLAN_JOB_ID
+        && op == steps::PLAN_OPERATION
+        && target == steps::PLAN_OPERATION
+    {
+        ctx.validate_runtime_authority()?;
+    }
     if op == steps::FETCH_OPERATION {
         if !step_env.is_empty() {
             return Err(RenderError::InvalidWorkflow(

@@ -64,22 +64,27 @@ pub(crate) fn build_workflow_for_consumer_release(
     let mut ir = workflow_ir(input.config, input.branch, jobs, prepared.policy);
     let canonical_mise_setup = crate::pins::resolve_mise_setup(input.config, input.label)?;
     let expanded_plan_jobs = expanded_plan_variants(&ir, input.config, prepared.policy)?;
+    let runtime = workflow_context::canonical_runtime(
+        &prepared.catalog,
+        &prepared.report_helper_version,
+        prepared.needs.rust.has_compiler(),
+    )?;
     let authority_steps = velnor_actions_workflow_renderer::render::CanonicalAuthoritySteps::
         from_native_jobs_with_mise_setup(
             &ir.jobs,
             prepared.policy,
             &canonical_mise_setup,
             &expanded_plan_jobs,
+            runtime.clone(),
         )?;
     let context = workflow_context::render_context(workflow_context::RenderContextInputs {
         authority_steps,
+        runtime,
         config: input.config,
         label: input.label,
         generator_version: prepared.generator_version,
-        report_helper_version: &prepared.report_helper_version,
         catalog: &prepared.catalog,
         discovery: input.discovery,
-        plan_needs_rust: prepared.needs.rust.has_compiler(),
         workflow_tasks: prepared.workflow_tasks,
         verify: &prepared.verify,
     })?;

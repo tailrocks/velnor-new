@@ -15,7 +15,7 @@ mod execution_boundaries;
 
 #[path = "render_authority_steps.rs"]
 mod authority_steps;
-pub use authority_steps::CanonicalAuthoritySteps;
+pub use authority_steps::{CanonicalAuthoritySteps, CanonicalRuntimeInputs};
 
 use execution_boundaries::ValidationPhase;
 

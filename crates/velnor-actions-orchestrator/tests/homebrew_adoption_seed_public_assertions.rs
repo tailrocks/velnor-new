@@ -14,6 +14,7 @@ use velnor_actions_workflow_renderer::{
 
 mod lock_trust;
 mod raw_step_authority;
+mod runtime_context_authority;
 mod shell_authority;
 pub(super) use lock_trust::assert_lock_trust_rejections;
 
@@ -48,6 +49,10 @@ pub(super) fn assert_raw_consumer_render(
     preparation: &GenerationPreparation,
 ) -> Result<(), Box<dyn Error>> {
     assert_raw_render(preparation, WorkflowPolicy::ConsumerV1)?;
+    runtime_context_authority::assert_runtime_context_authority(
+        preparation,
+        WorkflowPolicy::ConsumerV1,
+    )?;
     shell_authority::assert_shell_authority(preparation, WorkflowPolicy::ConsumerV1)?;
     raw_step_authority::assert_raw_step_authority(preparation, WorkflowPolicy::ConsumerV1)
 }
@@ -56,6 +61,10 @@ pub(super) fn assert_raw_producer_render(
     preparation: &GenerationPreparation,
 ) -> Result<(), Box<dyn Error>> {
     assert_raw_render(preparation, WorkflowPolicy::VelnorRepositoryV1)?;
+    runtime_context_authority::assert_runtime_context_authority(
+        preparation,
+        WorkflowPolicy::VelnorRepositoryV1,
+    )?;
     shell_authority::assert_shell_authority(preparation, WorkflowPolicy::VelnorRepositoryV1)?;
     raw_step_authority::assert_raw_step_authority(preparation, WorkflowPolicy::VelnorRepositoryV1)
 }

@@ -72,6 +72,7 @@ pub use velnor_actions_contract::{AGENTS_MD_PATH, CLAUDE_MD_PATH};
 
 impl RenderContext {
     pub fn validate(&self) -> Result<(), RenderError> {
+        self.validate_runtime_authority()?;
         marker::validate_version(&self.generator_version)?;
         marker::validate_version(&self.report_helper_version)?;
         guard::validate_runs_on(&self.runs_on)?;
@@ -94,5 +95,15 @@ impl RenderContext {
             commands::validate_command_argv(&command.argv)?;
         }
         Ok(())
+    }
+
+    pub(crate) fn validate_runtime_authority(&self) -> Result<(), RenderError> {
+        if self.authority_steps.matches_runtime(self) {
+            Ok(())
+        } else {
+            Err(RenderError::InvalidWorkflow(
+                "trusted_plan_runtime_context".to_owned(),
+            ))
+        }
     }
 }

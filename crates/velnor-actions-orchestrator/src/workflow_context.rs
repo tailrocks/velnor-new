@@ -5,7 +5,9 @@ use velnor_actions_contract::{
     ExecutionMode, ScaleSetSelector, ValidatorKind, VelnorConfig, WorkflowPolicy,
 };
 use velnor_actions_mise::ToolCatalog;
-use velnor_actions_workflow_renderer::render::{RenderContext, ValidatorCommand};
+use velnor_actions_workflow_renderer::render::{
+    CanonicalRuntimeInputs, RenderContext, ValidatorCommand,
+};
 use velnor_actions_workflow_renderer::steps::{
     DENY_STEP_NAME, MACHETE_STEP_NAME, REQUEST_DIR_PREFIX, STAGED_BINARY_PREFIX,
 };
@@ -22,15 +24,33 @@ mod tool_cache_pins;
 
 pub(super) struct RenderContextInputs<'a> {
     pub(super) authority_steps: velnor_actions_workflow_renderer::render::CanonicalAuthoritySteps,
+    pub(super) runtime: CanonicalRuntimeInputs,
     pub(super) config: &'a VelnorConfig,
     pub(super) label: &'a str,
     pub(super) generator_version: &'a str,
-    pub(super) report_helper_version: &'a str,
     pub(super) catalog: &'a ToolCatalog,
     pub(super) discovery: &'a Discovery,
-    pub(super) plan_needs_rust: bool,
     pub(super) workflow_tasks: Vec<WorkflowTaskPolicy>,
     pub(super) verify: &'a [ValidatorKind],
+}
+
+pub(super) fn canonical_runtime(
+    catalog: &ToolCatalog,
+    report_helper_version: &str,
+    plan_needs_rust: bool,
+) -> Result<CanonicalRuntimeInputs, OrchestratorError> {
+    Ok(CanonicalRuntimeInputs::new(
+        crate::matrix_step::task_step_env(
+            catalog,
+            &std::collections::BTreeMap::new(),
+            plan_needs_rust,
+        )?,
+        report_helper_version.to_owned(),
+        format!("{STAGED_BINARY_PREFIX}{report_helper_version}"),
+        REQUEST_DIR.to_owned(),
+        CHECKOUT_USES.to_owned(),
+        false,
+    )?)
 }
 
 pub(super) fn render_context(
@@ -39,26 +59,23 @@ pub(super) fn render_context(
     debug_assert!(REQUEST_DIR.starts_with(REQUEST_DIR_PREFIX));
     let validator_commands = validator_commands(&input)?;
     let scale_set_selector = scale_set_selector(input.config, None)?;
+    let runtime = input.runtime;
     Ok(RenderContext {
         authority_steps: input.authority_steps,
         tool_pins: tool_cache_pins::catalog_tool_pins(input.catalog),
         generator_version: input.generator_version.to_owned(),
-        report_helper_version: input.report_helper_version.to_owned(),
+        report_helper_version: runtime.report_helper_version().to_owned(),
         runs_on: input.label.to_owned(),
         scale_set_selector,
-        staged_binary: format!("{STAGED_BINARY_PREFIX}{}", input.report_helper_version),
-        request_dir: REQUEST_DIR.to_owned(),
-        checkout_uses: CHECKOUT_USES.to_owned(),
+        staged_binary: runtime.staged_binary().to_owned(),
+        request_dir: runtime.request_dir().to_owned(),
+        checkout_uses: runtime.checkout_uses().to_owned(),
         validator_commands,
-        preseed: false,
+        preseed: runtime.preseed(),
         workflow_tasks: input.workflow_tasks,
         pull_request_cache_policy: input.config.workflow.pull_request_cache_policy,
         mise_quiet: input.config.workflow.mise_quiet,
-        plan_consumer_env: crate::matrix_step::task_step_env(
-            input.catalog,
-            &std::collections::BTreeMap::new(),
-            input.plan_needs_rust,
-        )?,
+        plan_consumer_env: runtime.plan_consumer_env().clone(),
     })
 }
 
