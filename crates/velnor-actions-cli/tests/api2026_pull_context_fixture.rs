@@ -21,6 +21,10 @@ pub(crate) enum Scenario {
     Valid,
     ReversedParents,
     ChangedRef,
+    HttpFailure,
+    StdoutLimit,
+    StderrLimit,
+    Deadline,
 }
 
 pub(crate) const REPOSITORY_ID: u64 = 819_273;
@@ -46,6 +50,41 @@ pub(crate) fn run(scenario: Scenario, expected: &str) -> Result<(), Box<dyn Erro
         stderr.contains(expected),
         "expected {expected}, got {stderr}; fixture routes: {requests}"
     );
+    if matches!(
+        scenario,
+        Scenario::HttpFailure | Scenario::StdoutLimit | Scenario::StderrLimit | Scenario::Deadline
+    ) {
+        assert!(
+            requests.contains("route=repos/test-owner/test-tap\n"),
+            "GH failure boundary was not reached"
+        );
+        for text in [
+            "package_publish_api_failed",
+            "operation=repository",
+            "cap=1048576",
+            "elapsed_ms=",
+            "timeout_ms=",
+        ] {
+            assert!(stderr.contains(text), "missing {text}: {stderr}");
+        }
+        for secret in [
+            "fixture-secret-canary",
+            "fixture-signed-canary",
+            "redirect.invalid",
+            "\u{1b}",
+            "_velnor_read_nonce",
+            "Accept:",
+            "repos/test-owner/test-tap",
+        ] {
+            assert!(!stderr.contains(secret), "unsafe diagnostic field escaped");
+        }
+        if matches!(scenario, Scenario::HttpFailure) {
+            assert!(
+                stderr.contains("http=403") && stderr.contains("code=1"),
+                "missing actual numeric HTTP/exit status: {stderr}"
+            );
+        }
+    }
     assert!(!paths.runner_temp.join("velnor/local/plan.json").exists());
     assert!(
         !paths
@@ -114,9 +153,25 @@ fn invoke(paths: &Paths, ids: &Identities) -> Result<Output, Box<dyn Error>> {
         })
         .to_string(),
     )?;
-    let output = Command::new(cli)
+    let is_deadline = fs::read_to_string(paths.root.join("provider/failure"))? == "deadline";
+    let mut command = if is_deadline {
+        let mut command = Command::new(std::env::current_exe()?);
+        command.args([
+            "--exact",
+            "github_api_deadline_reports_safe_context",
+            "--nocapture",
+        ]);
+        command
+    } else {
+        Command::new(cli)
+    };
+    let output = command
         .current_dir(&paths.repo)
         .env_clear()
+        .env(
+            "VELNOR_API_DIAGNOSTIC_CHILD",
+            if is_deadline { "1" } else { "0" },
+        )
         .env("PATH", path)
         .env("VELNOR_FIXTURE_STATE", paths.root.join("provider"))
         .env("VELNOR_FIXTURE_BASE", &ids.base)
@@ -145,6 +200,27 @@ fn invoke(paths: &Paths, ids: &Identities) -> Result<Output, Box<dyn Error>> {
         )
         .output()?;
     Ok(output)
+}
+
+pub(crate) fn deadline_child() -> Result<bool, Box<dyn Error>> {
+    if std::env::var("VELNOR_API_DIAGNOSTIC_CHILD").ok().as_deref() != Some("1") {
+        return Ok(false);
+    }
+    let request = fs::read_to_string(std::env::var("VELNOR_REQUEST_FILE")?)?;
+    let deadline = velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(5))?;
+    let expired = deadline.scope(|| {
+        let result = velnor_actions_orchestrator::plan_internal(&request);
+        assert!(result.is_err(), "deadline plan unexpectedly succeeded");
+        if let Err(error) = result {
+            eprintln!("{error}");
+            assert!(
+                error.to_string().contains("category=timeout"),
+                "transport timeout diagnostic missing: {error}"
+            );
+        }
+    });
+    assert!(expired.is_err(), "public operation deadline did not expire");
+    Err(io::Error::other("expected diagnostic child rejection").into())
 }
 
 fn sha256(bytes: &[u8]) -> String {

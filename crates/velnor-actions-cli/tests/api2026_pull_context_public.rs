@@ -29,3 +29,26 @@ fn changed_merge_ref_is_rejected() -> Result<(), Box<dyn Error>> {
         "package_public_pull_request_merge_ref_changed",
     )
 }
+
+#[test]
+fn github_api_http_failure_reports_safe_context() -> Result<(), Box<dyn Error>> {
+    fixture::run(fixture::Scenario::HttpFailure, "category=nonzero")
+}
+
+#[test]
+fn github_api_stdout_limit_reports_safe_context() -> Result<(), Box<dyn Error>> {
+    fixture::run(fixture::Scenario::StdoutLimit, "category=stdout_limit")
+}
+
+#[test]
+fn github_api_stderr_limit_reports_safe_context() -> Result<(), Box<dyn Error>> {
+    fixture::run(fixture::Scenario::StderrLimit, "category=stderr_limit")
+}
+
+#[test]
+fn github_api_deadline_reports_safe_context() -> Result<(), Box<dyn Error>> {
+    if fixture::deadline_child()? {
+        return Ok(());
+    }
+    fixture::run(fixture::Scenario::Deadline, "category=timeout")
+}

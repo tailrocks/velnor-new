@@ -14,6 +14,14 @@ pub(crate) fn write(
     fs::create_dir_all(&bin)?;
     let state = paths.root.join("provider");
     fs::create_dir_all(&state)?;
+    let failure = match scenario {
+        Scenario::HttpFailure => "http",
+        Scenario::StdoutLimit => "stdout",
+        Scenario::StderrLimit => "stderr",
+        Scenario::Deadline => "deadline",
+        _ => "none",
+    };
+    fs::write(state.join("failure"), failure)?;
     write_identity(&state, ids)?;
     write_merge(&state, ids, scenario)?;
     write_lineage(&state, ids)?;
@@ -189,6 +197,17 @@ strip_read_nonce() {
 }
 strip_read_nonce || exit 88
 printf 'route=%s\n' "$route" >> "$VELNOR_FIXTURE_STATE/requests.log"
+if [ "$route" = repos/test-owner/test-tap ]; then
+  case "$(cat "$VELNOR_FIXTURE_STATE/failure")" in
+    http)
+      printf 'gh: diagnostic fixture (HTTP 403)\nfixture-secret-canary https://redirect.invalid/private?credential=fixture-signed-canary\033[31m\n' >&2
+      exit 1
+      ;;
+    stdout) dd if=/dev/zero bs=1048577 count=1 2>/dev/null; exit 0 ;;
+    stderr) dd if=/dev/zero bs=1048577 count=1 1>&2 2>/dev/null; exit 1 ;;
+    deadline) exec /bin/sleep 15 ;;
+  esac
+fi
 case "$route" in
   repos/test-owner/test-tap) file=repository.json ;;
   repos/test-owner/test-tap/pulls/17) file=pull.json ;;
