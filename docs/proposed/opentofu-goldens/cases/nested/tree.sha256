@@ -3,7 +3,7 @@
 e5f58e49247ae80cc50c75ae27fb4de38dd0817627e10ba1c74da58ac5a5358d  ./.github/actions/declared-task-0/action.yml
 f47b77dcb887c3e2709a77651df59547386a565455f30ed6f7db250a50598752  ./.github/actions/u26/action.yml
 8b09ae13db0f913097899496ebd43c729876d844aac5d1f3c68bdd7f2cd0e09e  ./.github/actions/velnor-tool-seed/action.yml
-ef3fe68b36421f1b4ef217bec5fb9bc9733e5563d133ee4c18518b48c4d9ecc4  ./.github/actions/velnor-tools-cache-restore/action.yml
+bfa2cc553b95c22a5fae70465ec6d1de5eabfe4160edc7419f0275c0c669ecdf  ./.github/actions/velnor-tools-cache-restore/action.yml
 43e1464a44d1b51a3f19d0e90fa27dbdc152a0aad56dd62ab5f2d5b7d8d58984  ./.github/actions/velnor-tools-prelude-u26/action.yml
 ca27d379286544f9c43d6ef1bfe0921398e1764690b365cfa4c8ac159cd005d5  ./.github/actions/velnor-verify-jactionlint/action.yml
 b9399e1d5a42585bc4e848f8505233efeffb191bf7786de567aee7440dbdb5ba  ./.github/actions/velnor-verify-restored-rust/action.yml
