@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "version": "0.1.56",
+  "repository": "tailrocks/velnor-new",
+  "commit": "693f3aae14406fb7851ac70f0aee647a869b5063",
+  "targets": [
+    {
+      "target": "x86_64-unknown-linux-gnu",
+      "artifact": "https://github.com/tailrocks/velnor-new/releases/download/v0.1.56/velnor-actions-0.1.56-x86_64-unknown-linux-gnu",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    {
+      "target": "aarch64-apple-darwin",
+      "artifact": "https://github.com/tailrocks/velnor-new/releases/download/v0.1.56/velnor-actions-0.1.56-aarch64-apple-darwin",
+      "sha256": "e4a30643c45432ea180dc5057f7b575528bd8212626cdf53eae28cca5a0f7157"
+    },
+    {
+      "target": "x86_64-apple-darwin",
+      "artifact": "https://github.com/tailrocks/velnor-new/releases/download/v0.1.56/velnor-actions-0.1.56-x86_64-apple-darwin",
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+    }
+  ]
+}
