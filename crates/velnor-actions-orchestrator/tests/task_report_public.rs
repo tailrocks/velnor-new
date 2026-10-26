@@ -8,8 +8,10 @@ mod process;
 #[path = "task_report_public/report_files.rs"]
 mod report_files;
 
-use velnor_actions_contract::{FinalStatus, NotSelectedReason, TaskStatus};
+use velnor_actions_contract::{EdgeKind, FinalStatus, NotSelectedReason, TaskStatus};
 
+use sha2::{Digest, Sha256};
+use std::fs;
 use std::io;
 
 type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
@@ -170,6 +172,7 @@ fn valid_selected_noop_reports_block_tasks() -> TestResult<()> {
     Ok(())
 }
 
+#[cfg(unix)]
 #[test]
 fn shared_job_artifact_is_downloaded_once() -> TestResult<()> {
     if process::child_mode(SHARED_ARTIFACT_TEST)? {
@@ -193,9 +196,41 @@ fn shared_job_artifact_is_downloaded_once() -> TestResult<()> {
             1
         );
     }
-    report_files::stage_all(&scenario)?;
+    let payload = scenario.root().join("artifact-payload");
+    fs::create_dir_all(&payload)?;
+    report_files::stage_artifact_payload(&scenario, &payload)?;
+    let mise_data_dir = fixture::install_fake_gh(&scenario)?;
+    let fake_mise_bin = report_files::install_fake_mise(&scenario)?;
+    let request_log = scenario.root().join("gh-requests.tsv");
+    assert_eq!(
+        report_files::retrieve(
+            &scenario,
+            SHARED_ARTIFACT_TEST,
+            "retrieve-shared",
+            &mise_data_dir,
+            &fake_mise_bin,
+            &payload,
+            &request_log,
+        )?,
+        1
+    );
+    let expected_request = format!(
+        "{}\t{}\ttailrocks/velnor-new\n",
+        fixture::RUN_ID,
+        entries[0].artifact_id
+    );
+    assert_eq!(fs::read_to_string(request_log)?, expected_request);
     let jobs = [("crate_clippy", "success")];
     let request = report_files::assemble(&scenario, SHARED_ARTIFACT_TEST, "shared", &jobs)?;
+    let tasks = report_files::task_reports(&request)?;
+    assert_eq!(tasks.len(), 2);
+    for task_id in &scenario.plan.task_ids {
+        let task = tasks
+            .iter()
+            .find(|task| task.task_id == *task_id)
+            .ok_or_else(|| io::Error::other("retrieved task report missing"))?;
+        assert_eq!(task.status, TaskStatus::Executed);
+    }
     let final_report = report_files::merge(&request)?;
     assert_eq!(final_report.status, FinalStatus::Passed);
     assert_eq!(final_report.counts.executed, 2);
@@ -211,38 +246,63 @@ fn provider_hit_does_not_reclassify_executed_task() -> TestResult<()> {
     if process::child_mode(PROVIDER_HIT_TEST)? {
         return Ok(());
     }
-    let scenario = fixture::Scenario::new(&[("clippy", "crate_clippy")])?;
-    let task_id = scenario.plan.task_ids[0].clone();
-    assert_eq!(
-        report_files::write_task(
-            &scenario,
-            PROVIDER_HIT_TEST,
-            "provider-writer",
-            &task_id,
-            0,
-            None
-        )?,
-        1
-    );
+    let scenario = fixture::Scenario::tofu_provider()?;
+    let init_task_id = velnor_actions_tofu::task_id_for_root(
+        "infra",
+        velnor_actions_tofu::TofuTaskKind::InitForValidate,
+        "default",
+    )?;
+    let validate_task_id = velnor_actions_tofu::task_id_for_root(
+        "infra",
+        velnor_actions_tofu::TofuTaskKind::Validate,
+        "default",
+    )?;
+    assert!(scenario.plan.task_ids.contains(&init_task_id));
+    assert!(scenario.plan.task_ids.contains(&validate_task_id));
+    assert_eq!(scenario.plan.edges.len(), 1);
+    assert_eq!(scenario.plan.edges[0].from, init_task_id);
+    assert_eq!(scenario.plan.edges[0].to, validate_task_id);
+    assert_eq!(scenario.plan.edges[0].kind, EdgeKind::Data);
+    for (label, task_id) in [
+        ("tofu-init", init_task_id.as_str()),
+        ("tofu-validate", validate_task_id.as_str()),
+    ] {
+        assert_eq!(
+            report_files::write_task(&scenario, PROVIDER_HIT_TEST, label, task_id, 0, None)?,
+            1
+        );
+    }
     report_files::stage_all(&scenario)?;
-    report_files::stage_provider_hit(&scenario)?;
-    let jobs = [("crate_clippy", "success")];
+    let lockfile = fs::read(scenario.root().join("infra/.terraform.lock.hcl"))?;
+    let cache_key = tofu_provider_key(&lockfile)?;
+    report_files::stage_provider_hit(&scenario, &validate_task_id, &cache_key)?;
+    let jobs = [(scenario.plan.jobs[0].job_id.as_str(), "success")];
     let request = report_files::assemble(&scenario, PROVIDER_HIT_TEST, "provider-merge", &jobs)?;
     let tasks = report_files::task_reports(&request)?;
-    assert_eq!(tasks.len(), 1);
-    assert_eq!(tasks[0].status, TaskStatus::Executed);
+    assert_eq!(tasks.len(), 2);
+    let init = tasks
+        .iter()
+        .find(|task| task.task_id == init_task_id)
+        .ok_or_else(|| io::Error::other("init report missing"))?;
+    let validate = tasks
+        .iter()
+        .find(|task| task.task_id == validate_task_id)
+        .ok_or_else(|| io::Error::other("validate report missing"))?;
+    assert_eq!(init.status, TaskStatus::Executed);
+    assert_eq!(validate.status, TaskStatus::Executed);
     assert_eq!(
-        tasks[0].cache.layer,
+        validate.cache.layer,
         velnor_actions_contract::CacheLayer::TofuProviders
     );
     assert_eq!(
-        tasks[0].cache.result,
+        validate.cache.result,
         velnor_actions_contract::CacheResult::Hit
     );
+    assert_eq!(validate.cache.key, cache_key);
     let final_report = report_files::merge(&request)?;
     assert_eq!(final_report.status, FinalStatus::Passed);
-    assert_eq!(final_report.counts.selected, 1);
-    assert_eq!(final_report.counts.executed, 1);
+    assert_eq!(final_report.counts.selected, 2);
+    assert_eq!(final_report.counts.executed, 2);
     assert_eq!(final_report.counts.reused, 0);
     assert_eq!(final_report.counts.failed, 0);
     assert_eq!(final_report.counts.cancelled, 0);
@@ -253,4 +313,51 @@ fn provider_hit_does_not_reclassify_executed_task() -> TestResult<()> {
         [scenario.plan.matrix.include[0].artifact_id.clone()]
     );
     Ok(())
+}
+
+fn digest_hex(digest: impl AsRef<[u8]>) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let bytes = digest.as_ref();
+    let mut encoded = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        let value = *byte;
+        encoded.push(char::from(HEX[usize::from(value >> 4)]));
+        encoded.push(char::from(HEX[usize::from(value & 0x0f)]));
+    }
+    encoded
+}
+
+fn tofu_provider_key(lockfile: &[u8]) -> TestResult<String> {
+    let family = velnor_actions_contract::workflow::cache_family::CacheFamily::TofuProviders;
+    let locator = velnor_actions_tofu::tofu_root_locator("infra")?;
+    let compatibility =
+        Sha256::digest(format!("{locator}\n{}", velnor_actions_mise::OPENTOFU_VERSION).as_bytes());
+    let snapshot = Sha256::digest(lockfile);
+    let key = format!(
+        "{}trusted-s256-{}-s256-{}",
+        family.key_prefix(),
+        digest_hex(compatibility),
+        digest_hex(snapshot)
+    );
+    let payload = key
+        .strip_prefix(&format!("{}trusted-s256-", family.key_prefix()))
+        .ok_or_else(|| io::Error::other("provider key prefix mismatch"))?;
+    let (compatibility, snapshot) = payload
+        .split_once("-s256-")
+        .ok_or_else(|| io::Error::other("provider key snapshot missing"))?;
+    for digest in [compatibility, snapshot] {
+        assert_eq!(digest.len(), 64);
+        assert!(
+            digest
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        );
+    }
+    assert_eq!(
+        velnor_actions_contract::workflow::cache_family::CacheFamily::for_key(&key),
+        Some(family)
+    );
+    assert!(key.len() <= family.max_key_bytes());
+    assert!(key.len() <= velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES);
+    Ok(key)
 }
