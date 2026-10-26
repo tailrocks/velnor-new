@@ -5,15 +5,42 @@ use super::{EnvPolicy, IsolatedCommand, MISE_GLOBAL_FLAGS};
 use crate::MiseError;
 use crate::checks::{QualifiedCheck, invalid};
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use velnor_actions_contract::config::{
     QualifiedCargoInstallation, QualifiedTool, QualifiedToolBackend, QualifiedToolOptions,
 };
+use velnor_actions_contract::ids::is_lower_hex_len;
+
+const QUALIFIED_SHARED_ROOT_DIR: &str = "velnor-gc1";
+const QUALIFIED_SHARED_TOOL_DIR: &str = "tools";
+const QUALIFIED_SHARED_ARCHIVE_DIR: &str = "archives";
+const QUALIFIED_SHARED_PREFIX_DIR: &str = "prefix";
 
 impl QualifiedCheck {
     pub fn qualified_tool_home(&self, id: &str) -> Result<PathBuf, MiseError> {
         self.selected_tool(id)?;
         Ok(self.home.join("tools").join(id))
+    }
+
+    pub fn qualified_shared_tool_home(&self, id: &str) -> Result<PathBuf, MiseError> {
+        self.selected_tool(id)?;
+        shared_tool_home(&self.home, &self.cwd, id)
+    }
+
+    pub fn qualified_shared_prefix(&self, id: &str) -> Result<PathBuf, MiseError> {
+        Ok(self
+            .qualified_shared_tool_home(id)?
+            .join(QUALIFIED_SHARED_PREFIX_DIR))
+    }
+
+    pub fn qualified_shared_archive(&self, id: &str, sha256: &str) -> Result<PathBuf, MiseError> {
+        if !is_lower_hex_len(sha256, 64) {
+            return Err(invalid("qualified_acquisition", "archive_digest_required"));
+        }
+        Ok(self
+            .qualified_shared_tool_home(id)?
+            .join(QUALIFIED_SHARED_ARCHIVE_DIR)
+            .join(sha256))
     }
 
     pub fn qualified_source_command(&self, id: &str) -> Result<IsolatedCommand, MiseError> {
@@ -237,4 +264,35 @@ impl QualifiedCheck {
             policy: EnvPolicy::QualifiedAcquisition,
         })
     }
+}
+
+fn shared_tool_home(home: &Path, cwd: &Path, id: &str) -> Result<PathBuf, MiseError> {
+    if !home.is_absolute() || !cwd.is_absolute() {
+        return Err(invalid(
+            "qualified_acquisition",
+            "absolute_shared_context_required",
+        ));
+    }
+    if id.is_empty()
+        || id == "."
+        || id == ".."
+        || id
+            .bytes()
+            .any(|byte| byte == b'/' || byte == b'\\' || byte == 0)
+    {
+        return Err(invalid("qualified_acquisition", "shared_tool_id_required"));
+    }
+    let temp = home
+        .parent()
+        .ok_or_else(|| invalid("qualified_acquisition", "shared_temp_required"))?;
+    let shared = temp
+        .join(QUALIFIED_SHARED_ROOT_DIR)
+        .join(QUALIFIED_SHARED_TOOL_DIR)
+        .join(id);
+    for other in [home, cwd] {
+        if shared.as_path() == other || shared.starts_with(other) || other.starts_with(&shared) {
+            return Err(invalid("qualified_acquisition", "shared_home_overlap"));
+        }
+    }
+    Ok(shared)
 }

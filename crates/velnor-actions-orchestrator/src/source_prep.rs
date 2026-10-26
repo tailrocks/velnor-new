@@ -10,6 +10,9 @@ use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use crate::OrchestratorError;
 use crate::discover::{PlannedWorkspace, workspace_lock, workspace_manifest};
 
+#[path = "cache_source_projection.rs"]
+pub(crate) mod cache_source_projection;
+
 pub(crate) const FETCH_SOURCES_STEP: &str = "Fetch Cargo sources";
 
 pub(crate) const CARGO_CLEAN_DIR: &str = "$RUNNER_TEMP/velnor/cargo-clean";

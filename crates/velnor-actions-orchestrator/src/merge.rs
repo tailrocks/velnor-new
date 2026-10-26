@@ -19,8 +19,8 @@ use velnor_actions_contract::{
 
 use self::merge_checks::{
     CandidateAttestation, check_agreement, check_candidate_binding, check_execute_inventory,
-    check_plan_evidence, check_plan_shape, check_trust_coherence, expected_task_reports,
-    partition_task_reports, plan_digests, plan_entries, shards_failed,
+    check_group_ledgers, check_plan_evidence, check_plan_shape, check_trust_coherence,
+    expected_task_reports, partition_task_reports, plan_digests, plan_entries, shards_failed,
 };
 use self::required_evidence::{
     check_required_evidence, diagnostic_without_plan, reported_job_results,
@@ -56,6 +56,8 @@ pub(crate) struct MergeRequest {
     pub(crate) check_proofs: Vec<serde_json::Value>,
     pub(crate) required_job_ids: Vec<String>,
     pub(crate) required_jobs: Vec<RequiredJobResult>,
+    #[serde(default)]
+    pub(crate) group_ledgers: Vec<serde_json::Value>,
     #[serde(default)]
     pub(crate) assembly_errors: Vec<String>,
     #[serde(default)]
@@ -157,6 +159,7 @@ fn build_final(
     let mut downloaded = Vec::new();
     let mut uncovered = 0u32;
     check_required_evidence(plan, request, &mut signals, &mut miss_reasons);
+    check_group_ledgers(plan, request, &mut signals, &mut miss_reasons);
     for entry in &plan.matrix.include {
         let Some(report) = partition.valid.get(entry.report_id.as_str()) else {
             uncovered += 1;
