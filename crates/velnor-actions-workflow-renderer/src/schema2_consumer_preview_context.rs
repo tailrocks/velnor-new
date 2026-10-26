@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 #[derive(Clone, Copy)]
 pub(in crate::schema2) enum TapInvocationContext {
     Preview,

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{CheckDeadline, command::IsolatedCommand, error::MiseError};
 use std::{
     ffi::OsString,

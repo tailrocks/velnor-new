@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
 use crate::internal_plan::identities::{platform_id_for_group, toolchain_digest_for};

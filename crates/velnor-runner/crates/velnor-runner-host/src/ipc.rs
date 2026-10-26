@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::error::HostError;
 
 pub const MAX_FRAME: usize = 1024 * 1024;

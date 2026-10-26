@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use std::{io, os::unix::fs::PermissionsExt, path::Path};
 
 pub(crate) fn private_tempdir_in(parent: &Path, prefix: &str) -> io::Result<tempfile::TempDir> {

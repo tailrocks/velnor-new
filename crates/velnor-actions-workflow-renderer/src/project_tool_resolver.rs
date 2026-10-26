@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use std::collections::BTreeSet;
 
 use velnor_actions_contract::config::project_tool_refs::PROJECT_TOOLS_STEP_NAME;

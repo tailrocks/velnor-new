@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 too-many-lines-threshold = 80
 allow-unwrap-in-tests = false
 allow-expect-in-tests = true

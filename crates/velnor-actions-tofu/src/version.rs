@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 pub const OPENTOFU_FLOOR: (u32, u32, u32) = (1, 6, 0);
 
 type Triple = (u32, u32, u32);

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::versions::invalid_version;
 use super::{PinnedTool, ToolCatalog, validate_exact_version};
 use crate::error::MiseError;

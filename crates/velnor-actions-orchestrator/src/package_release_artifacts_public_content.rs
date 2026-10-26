@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{ArtifactKind, VerifiedPackageArtifact, archive, expected_files, invalid};
 use crate::OrchestratorError;
 use std::{

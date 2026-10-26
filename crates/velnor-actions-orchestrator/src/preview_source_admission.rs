@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{
     Admission, append_output, positive_u64, required, runner_root, source_files::SourceFiles,
 };

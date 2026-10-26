@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::RenderError;
 use crate::commands::join_argv_for_run;
 use crate::runs_on::runs_on_yaml;
@@ -17,6 +20,8 @@ const DIND_TAR: &str = "velnor-dind-linux-amd64.tar";
 const RESOURCE_PROBE_TAR: &str = "velnor-resource-probe-linux-amd64.tar";
 const RESOURCE_PROBE_MANIFEST: &str = "RESOURCE_PROBE_MANIFEST.json";
 const HOST_BIN: &str = "velnor-host";
+const LICENSE: &str = "LICENSE";
+const NOTICE: &str = "NOTICE";
 
 const IMAGE_BUILD: &str = "\
 set -eu
@@ -41,7 +46,7 @@ test -s RESOURCE_PROBE_MANIFEST.json";
 
 const IMAGE_SUM: &str = "\
 set -eu
-sha256sum velnor-runner-linux-amd64.tar velnor-dind-linux-amd64.tar velnor-resource-probe-linux-amd64.tar RESOURCE_PROBE_MANIFEST.json > SHA256SUMS";
+sha256sum velnor-runner-linux-amd64.tar velnor-dind-linux-amd64.tar velnor-resource-probe-linux-amd64.tar RESOURCE_PROBE_MANIFEST.json LICENSE NOTICE > SHA256SUMS";
 
 const BINARY_VERIFY: &str = "\
 set -eu
@@ -53,7 +58,7 @@ esac";
 
 const BINARY_SUM: &str = "\
 set -eu
-shasum -a 256 velnor-host > SHA256SUMS";
+shasum -a 256 velnor-host LICENSE NOTICE > SHA256SUMS";
 
 pub(super) fn image_release(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
     let pins = request
@@ -66,6 +71,8 @@ pub(super) fn image_release(request: &Schema2WorkflowRequest) -> Result<Yaml, Re
         DIND_TAR,
         RESOURCE_PROBE_TAR,
         RESOURCE_PROBE_MANIFEST,
+        LICENSE,
+        NOTICE,
         CHECKSUMS,
     ];
     let mut build_steps = vec![run_step("Build runner and DinD images", IMAGE_BUILD)];
@@ -122,7 +129,7 @@ pub(super) fn macos_binary_release(request: &Schema2WorkflowRequest) -> Result<Y
         join_argv_for_run(&pins.runner_build_argv)?
     );
     let macos = runs_on_yaml(MACOS_RUNS_ON)?;
-    let files = [HOST_BIN, CHECKSUMS];
+    let files = [HOST_BIN, LICENSE, NOTICE, CHECKSUMS];
     Ok(document(
         "macOS binary release",
         vec![

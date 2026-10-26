@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 pub(crate) fn detector_words(run: &[String]) -> Vec<String> {
     if crate::commands::is_inline_shell(run) {
         run[2].split_whitespace().map(unquote_word).collect()

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::metadata_edges::{DepKind, LocalEdge};
 
 pub fn manifest_edges(

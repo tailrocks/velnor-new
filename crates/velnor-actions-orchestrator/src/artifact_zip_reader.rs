@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{ZipProfile, check, invalid, safe_evidence_name, safe_name};
 use crate::OrchestratorError;
 use std::{

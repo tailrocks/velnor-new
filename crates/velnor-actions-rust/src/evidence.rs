@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use velnor_actions_contract::is_generated_marker_line;
 
 use crate::evidence_text::{scan_cargo_config, scan_command_text, scan_tool_config};

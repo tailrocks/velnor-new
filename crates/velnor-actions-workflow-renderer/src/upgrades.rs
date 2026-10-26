@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use velnor_actions_contract::config::{UPGRADES_WORKFLOW_PATH, UpgradesConfig};
 
 use crate::{MiseSetup, RenderError, guard, marker, render::RenderedFile, steps, yaml::Yaml};

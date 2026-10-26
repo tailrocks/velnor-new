@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::super::github::{GitHubApi, WorkflowRunResponse};
 use super::{RunSource, WorkflowMetadata, run_matches};
 use crate::{OrchestratorError, internal::internal};

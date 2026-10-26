@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use velnor_actions_bun::paths::under_root;
 use velnor_actions_bun::{parse_package_json, resolve_member_dir};
 use velnor_actions_contract::config::{NPM_PUBLISH_REGISTRY_URL, PublishNpm, VersionSource};

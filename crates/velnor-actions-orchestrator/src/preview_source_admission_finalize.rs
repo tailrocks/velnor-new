@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{
     ADMISSION_FILE, Admission, CurrentRun, Finalization, GitHubApi, MAX_ADMISSION_BYTES,
     MAX_MANIFEST_CLOSURE_BYTES, RunSource, SourceEntryMap, SourceFiles, append_output,

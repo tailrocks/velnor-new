@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 # Velnor-repository-only version-policy file (version-policy §0–§2).
 # Header declares the policy schema, stable channel, release registry,
 # freshness cadence, and maximum exception age. The [tools] mirror MUST

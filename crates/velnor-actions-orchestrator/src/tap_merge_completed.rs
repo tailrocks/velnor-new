@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use serde_json::Value;
 use velnor_actions_contract::homebrew_merge_gate::{
     TapCompletedMainObservation, TapCompletedPromotionObservation, TapServerMergeProtection,

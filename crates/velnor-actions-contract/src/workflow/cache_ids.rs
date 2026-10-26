@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::canonical::Digest;
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};

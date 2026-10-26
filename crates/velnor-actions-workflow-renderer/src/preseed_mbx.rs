@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{RenderError, cache_steps::ACTION_MBX_BIN};
 
 pub(super) fn probe_argv_for_action(probe: &[String]) -> Result<Vec<String>, RenderError> {

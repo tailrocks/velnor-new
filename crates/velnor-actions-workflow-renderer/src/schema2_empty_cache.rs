@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::super::features::run_step;
 use super::steps::{mapping, run_env};
 use super::{Extras, RunnerSpec, both};

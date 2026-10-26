@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::features::{checkout_step, finish, gated, lane_base, run_step};
 use super::{MbxQualificationPins, RunnerSpec};
 use crate::cache_steps::MBX_ACTION_NAME;

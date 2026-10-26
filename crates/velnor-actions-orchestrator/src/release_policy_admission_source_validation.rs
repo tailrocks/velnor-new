@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::super::identity;
 use super::{
     Admission, MAX_ADMISSION_BYTES, admitted_policy_plan, parse_package_release_policy,

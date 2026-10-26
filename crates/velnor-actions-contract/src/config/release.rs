@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::release_validation::{
     validate_bootstrap, validate_environment, validate_manifest_path, validate_packages,
     validate_tag_name, validate_version_groups,

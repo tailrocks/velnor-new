@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 # Nextest profiles (Gate 0 skeleton).
 # Empty-run behavior is enforced via CLI `--no-tests fail` (contract §4);
 # nextest has no profile-level equivalent, so it is not set here.

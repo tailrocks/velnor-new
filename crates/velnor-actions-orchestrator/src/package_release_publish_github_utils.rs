@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{GitTagResponse, TagObservation, preflight};
 use crate::{OrchestratorError, internal::internal};
 use sha2::{Digest, Sha256};

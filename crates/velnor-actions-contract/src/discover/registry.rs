@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::discover::FileIndex;
 use crate::errors::ContractError;
 use crate::propose::StackCandidate;

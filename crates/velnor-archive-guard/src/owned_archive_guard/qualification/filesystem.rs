@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use std::ffi::{CStr, CString};
 use std::fs::File;
 use std::io::{Read, Take};

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use velnor_actions_contract::PullRequestCachePolicy;
 
 pub(crate) const TOOLS_RESTORE_MISS: &str = "steps.tools-restore.outputs.cache-hit != 'true'";

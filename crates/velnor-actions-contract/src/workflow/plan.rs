@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::lanes::NamedCheckLaneVariant;
 pub use super::matrix_entry::MatrixEntry;
 pub use super::plan_jobs::{JobDisposition, PlanJob, plan_skips_work, selects_affected_work};

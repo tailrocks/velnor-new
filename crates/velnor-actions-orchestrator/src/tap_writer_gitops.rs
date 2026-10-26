@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{BotIdentity, TapGitHubApi, encode_segment};
 use super::{
     HomebrewTapPreparationProof, OrchestratorError, VerifiedPackageRelease,

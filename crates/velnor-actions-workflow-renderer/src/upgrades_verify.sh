@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 set -euo pipefail
 : "${VELNOR_UPGRADE_DIR:?}" "${GITHUB_OUTPUT:?}" "${VELNOR_GENERATE_TOOLS:?}"
 # Prepare ran repository code and fresh third-party releases, so nothing it

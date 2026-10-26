@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::publish_render::PUBLISH_WORKFLOW_PATH;
 
 #[derive(Debug, Clone, Copy)]

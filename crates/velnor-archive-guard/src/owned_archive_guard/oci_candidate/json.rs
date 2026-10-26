@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{OciCandidateError, Result};
 
 pub(super) fn parse(bytes: &[u8]) -> Result<Value> {

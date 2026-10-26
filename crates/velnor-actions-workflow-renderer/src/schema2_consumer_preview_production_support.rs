@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::super::{BTreeMap, TapInvocationContext, non_internal_step_to_yaml, steps};
 use super::ReleasePayloadPair;
 use super::{

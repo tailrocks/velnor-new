@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 const EXACT_SECRET_NAMES: [&str; 4] = [
     "GH_TOKEN",
     "GITHUB_TOKEN",

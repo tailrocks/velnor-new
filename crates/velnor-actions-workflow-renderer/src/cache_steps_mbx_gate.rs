@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use std::collections::BTreeMap;
 
 use super::mbx_command::{has_external_mbx_selector, mbx_selector_surfaces, uses_mbx_command};

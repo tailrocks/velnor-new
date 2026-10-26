@@ -8,7 +8,7 @@ Detected stacks
   Profile .: mbx compile driver (detected), cargo_nextest test runner (detected)
   Nextest profile .: default (no nextest config)
     evidence .mise/tasks/test:2 cargo nextest run --locked [durable]
-    evidence mise.toml:5 mr_boxington = true [durable]
+    evidence mise.toml:8 mr_boxington = true [durable]
 
 Workflow to generate
   .github/jactionlint.yaml

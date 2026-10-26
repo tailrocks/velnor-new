@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract::package_release_policy::{
     CargoVersionBinding, MAX_CARGO_VERSION_INPUT_BYTES, MAX_CARGO_VERSION_MANIFEST_BYTES,

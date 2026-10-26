@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 const HEX: &[u8; 16] = b"0123456789abcdef";
 
 use super::super::{github::GitHubApi, identity::is_git_sha};

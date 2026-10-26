@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use std::{env, fs, path::Path};
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};

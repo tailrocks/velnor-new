@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::canonical::validate_digest;
 use crate::errors::ContractError;
 use crate::ids::manifest_key_for_cargo_manifest;

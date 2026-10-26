@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 pub const PROJECT_TOOL_REF_PREFIX: &str = "${VELNOR_TOOL_";
 
 pub const PROJECT_TOOLS_STEP_NAME: &str = "Resolve project tool versions";

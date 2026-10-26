@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::tree::{caller_repository, pull_request_number_from_env};
 use super::{
     BTreeMap, CheckDeadline, Duration, Instant, NativeHomebrewCheck, NativeHomebrewOperation,

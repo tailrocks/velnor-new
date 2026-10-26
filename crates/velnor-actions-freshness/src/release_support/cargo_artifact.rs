@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{
     MAX_CARGO_MESSAGES_BYTES, MAX_UNTRUSTED_DOCUMENT_BYTES, Path, PathBuf, Value, fs,
     parse_strict_json_bytes, rooted_path,

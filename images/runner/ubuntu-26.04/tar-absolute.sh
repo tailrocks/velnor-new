@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 # Sourced by tar-shim.sh. BusyBox strips leading "/" and ".." and rejects -P.
 # GNU tar cannot stat or open those paths under qemu-user (openat2 ENOSYS).
 # -P extract: stage each stripped member by archive index, then move that

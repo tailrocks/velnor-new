@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 # What `velnor-actions generate` needs before it runs, shared by prepare and
 # verify: the Velnor-pinned validators it executes (`VELNOR_GENERATE_TOOLS`),
 # the project Rust for its offline `cargo metadata`, and every tracked Cargo

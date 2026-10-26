@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{
     OrchestratorError,
     filesystem_owner::held_file::{HeldFile, checkpoint, same_metadata},

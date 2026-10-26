@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use std::path::{Path, PathBuf};
 
 const DEPS_ROOT_RELPATH: &str = ".velnor/deps";

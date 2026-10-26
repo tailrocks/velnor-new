@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{
     RustBinaryReleaseCompanion, RustBinaryReleaseConfig, RustBinaryReleaseProduct, config_error,
     unique, valid_asset_name, valid_identifier, valid_repo_path,

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 fn read_regular_file(path: &Path, limit: u64) -> io::Result<Vec<u8>> {
     let parent = path
         .parent()

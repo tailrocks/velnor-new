@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::selected_mise::BIND_SELECTED_MISE_FUNCTION;
 
 pub const JACTIONLINT_VERSION: &str = "2.3.0";

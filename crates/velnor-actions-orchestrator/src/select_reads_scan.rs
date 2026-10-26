@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::select_reads_lex::{Token, tokenize};
 
 const INCLUDE_MACROS: &[&str] = &["include_str", "include_bytes", "include"];

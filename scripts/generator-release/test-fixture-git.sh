@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 source "$ROOT/scripts/generator-release/fixture-git.sh"
 
 test_fixture_git_isolation() (

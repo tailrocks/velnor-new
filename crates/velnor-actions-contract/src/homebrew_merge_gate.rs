@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{ContractError, canonical_json_bytes, digest_b3, ids::is_lower_hex_len};
 use std::collections::BTreeSet;
 

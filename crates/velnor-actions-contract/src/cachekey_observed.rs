@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{PlatformInputs, platform_id};
 use crate::cachekey::validate_semantic_text;
 use crate::errors::ContractError;

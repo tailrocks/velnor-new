@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use velnor_actions_workflow_renderer::{
     MiseTaskSuitePolicy, MiseTaskSuitesRenderSpec, RenderedFile, render_mise_task_suites,
 };

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 pub(super) fn valid_json_path(value: &str) -> bool {
     !value.is_empty()
         && std::path::Path::new(value)

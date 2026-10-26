@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::packages::{parse_packages, verify_lock};
 use crate::paths::stays_inside;
 use crate::yaml::{top_list, top_scalars};

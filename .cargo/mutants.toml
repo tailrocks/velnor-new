@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 # cargo-mutants scope for risk-triggered verification (RQ-9.8).
 # Manual runs only: `cargo mutants` from the repo root. NOT wired into CI —
 # before any scheduled/CI use, the tool must additionally be pinned in the

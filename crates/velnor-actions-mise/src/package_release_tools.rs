@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use std::{ffi::OsString, fs, io::Read, path::Path, time::Duration};
 
 use sha2::{Digest, Sha256};

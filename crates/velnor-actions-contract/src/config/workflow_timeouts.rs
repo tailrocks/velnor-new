@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 #[must_use]
 pub const fn default_crate_timeout_minutes() -> u16 {
     crate::workflow::timeout::JobTimeout::DEFAULT_MINUTES

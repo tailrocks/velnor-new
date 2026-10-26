@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{
     BREW_DESCRIBE, BREW_PINNED_COMMIT, BREW_PINNED_TREE, BREW_TAG_COMMIT, CAPTURE_LIMIT,
     COMMAND_LIMIT, HOMEBREW_PREFIX, HostedHomebrewProfile, PORTABLE_RUBY_ARCHIVE_SHA256,
