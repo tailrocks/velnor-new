@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 # Velnor formatter baseline (rust-quality-contract §6).
 # Checked with `cargo fmt --all -- --check` through Mise.
 # No unstable options are part of this baseline.

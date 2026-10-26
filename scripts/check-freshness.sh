@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 set -euo pipefail
 
 ROOT=""
@@ -45,7 +49,7 @@ elif [[ ! -d "$ROOT" ]]; then
   echo "check-freshness: root is not a directory: $ROOT" >&2
   exit 1
 else
-  ROOT="$(CDPATH= cd -- "$ROOT" && pwd -P)"
+  ROOT="$(CDPATH='' cd -- "$ROOT" && pwd -P)"
 fi
 INV="$ROOT/.velnor/freshness-inventory.json"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

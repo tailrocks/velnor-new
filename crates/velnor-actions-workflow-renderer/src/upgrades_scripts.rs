@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 pub(super) const FILTER: &str = include_str!("upgrades_patch_filter.sh");
 const GENERATE: &str = include_str!("upgrades_generate.sh");
 pub(super) const RELEASE: &str = include_str!("upgrades_velnor_release.sh");

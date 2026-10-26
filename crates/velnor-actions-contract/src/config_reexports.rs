@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 pub use crate::config::{
     AgentsConfig, BuildTask, BuildTaskRunner, BuildTaskXcodeCapability, CheckEvidence,
     CheckExecutor, CheckPlatform, CheckRunner, CheckSystemTool, CheckSystemToolKind, ClaudeMdMode,

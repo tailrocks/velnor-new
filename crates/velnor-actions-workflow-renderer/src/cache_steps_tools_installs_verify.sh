@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 set -euo pipefail
 # Re-verify every Mise install the tools cache restored, before anything runs
 # one. A cached install is kept only when every file in it is byte-identical

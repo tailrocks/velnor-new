@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::ActionlintError;
 
 pub const ALLOWED_ACTIONS: [&str; 13] = [
@@ -93,9 +96,9 @@ pub const CACHE_ACTION_VERSION: &str = "v6.1.0";
 
 pub const CACHE_ACTION_SHA: &str = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 
-pub const MR_BOXINGTON_ACTION_VERSION: &str = "v1.7.2";
+pub const MR_BOXINGTON_ACTION_VERSION: &str = "v1.7.3";
 
-pub const MR_BOXINGTON_ACTION_SHA: &str = "47ce49b32025d93a7a2f4570815afaa2b7092240";
+pub const MR_BOXINGTON_ACTION_SHA: &str = "88acf2bb50552c7c508cbac13e5f8c576b95b1de";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PinnedActionRef {

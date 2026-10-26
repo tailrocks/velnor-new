@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 [workspace]
 members = [
     "crates/velnor-actions-contract",
@@ -28,15 +31,14 @@ thiserror = { version = "=2.0.21" }
 [workspace.package]
 edition = "2024"
 rust-version = "1.99"
-version = "0.1.54"
-license = "MIT OR Apache-2.0"
+version = "0.1.56"
+license = "Apache-2.0"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
 unused_must_use = "deny"
 unexpected_cfgs = "deny"
 unfulfilled_lint_expectations = "deny"
-missing_docs = "warn"
 missing_debug_implementations = "warn"
 unreachable_pub = "warn"
 rust_2018_idioms = { level = "warn", priority = -1 }

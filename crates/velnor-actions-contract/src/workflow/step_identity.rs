@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::step::{Step, StepKind};
 pub(super) use super::step_payloads::valid_tools_cache_identity;
 use super::step_payloads::{valid_checkout_payload, valid_mise_setup, valid_tool_seed_payload};

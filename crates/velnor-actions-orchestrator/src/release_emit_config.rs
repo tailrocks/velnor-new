@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use velnor_actions_contract::config::RustReleaseConfig;
 use velnor_actions_rust::release_select::ReleaseSelection;
 use velnor_actions_workflow_renderer::release_config::{ReleasePlzConfig, ReleasePlzPackage};

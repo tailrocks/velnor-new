@@ -1,4 +1,7 @@
-use std::collections::BTreeMap;
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{Job, JobTimeout, Step, StepRole};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
@@ -29,15 +32,46 @@ pub(crate) fn seed_jobs(
     private: Option<&PrivateWiring>,
     timeout: JobTimeout,
 ) -> Result<Vec<(String, Job)>, OrchestratorError> {
+    let job_ids = unique_seed_job_ids(workspaces);
+    workspaces
+        .iter()
+        .zip(job_ids)
+        .map(|(workspace, job_id)| Ok((job_id, seed_job(input, workspace, private, timeout)?)))
+        .collect()
+}
+
+pub(crate) fn unique_seed_job_ids(workspaces: &[SeedWorkspace]) -> Vec<String> {
+    let job_ids: Vec<_> = workspaces
+        .iter()
+        .map(|workspace| seed_job_id(&workspace.root))
+        .collect();
+    if job_ids.iter().collect::<BTreeSet<_>>().len() == job_ids.len()
+        && job_ids
+            .iter()
+            .all(|job_id| velnor_actions_contract::validate_job_id(job_id).is_ok())
+    {
+        return job_ids;
+    }
     workspaces
         .iter()
         .map(|workspace| {
-            Ok((
-                seed_job_id(&workspace.root),
-                seed_job(input, workspace, private, timeout)?,
-            ))
+            if workspace.root.is_empty() {
+                SEED_JOB_ID.to_owned()
+            } else {
+                format!("{SEED_JOB_ID}-{}", encode_seed_root(&workspace.root))
+            }
         })
         .collect()
+}
+
+fn encode_seed_root(root: &str) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut encoded = String::with_capacity(root.len().saturating_mul(2));
+    for byte in root.bytes() {
+        encoded.push(char::from(HEX[usize::from(byte >> 4)]));
+        encoded.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
+    encoded
 }
 
 fn seed_job(

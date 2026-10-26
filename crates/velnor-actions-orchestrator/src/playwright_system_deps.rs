@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -51,7 +54,11 @@ impl DepsInstaller for BunInstallDeps {
         let catalog = ToolCatalog::pinned()
             .with_project_tool(PinnedTool::Bun, &self.bun_version)
             .map_err(|err| internal(&format!("playwright_system_deps_bun:{err}")))?;
-        let mut args = vec![cli.as_os_str().to_owned(), OsString::from("install-deps")];
+        let mut args = vec![
+            OsString::from("--bun"),
+            cli.as_os_str().to_owned(),
+            OsString::from("install-deps"),
+        ];
         args.extend(browsers.iter().map(OsString::from));
         let command = PinnedToolExec::new(vec![PinnedTool::Bun], OsStr::new("bun"), args)
             .and_then(|exec| exec.command(&catalog))

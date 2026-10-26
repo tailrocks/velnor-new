@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::RenderError;
 
 pub(crate) const JQ_VERSION_PATTERN: &str = r"jq-1\.8\.[0-9]+";

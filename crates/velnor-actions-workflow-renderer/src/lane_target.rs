@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 pub const TARGET_DIR_PREFIX: &str = "$RUNNER_TEMP/velnor/target/";
 
 #[must_use]

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use velnor_actions_contract::Stack;
 use velnor_actions_contract::cachekey::{
     RUST_EXTENSION_SCHEMA, TOFU_EXTENSION_SCHEMA, is_known_stack_extension_schema,

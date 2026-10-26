@@ -1,0 +1,28 @@
+{
+  "observed_at": "2026-10-25T19:13:17Z",
+  "documentation": {
+    "url": "https://docs.github.com/en/actions/reference/runners/github-hosted-runners",
+    "sha256": "6a8c282dce844e254a8d4c86dbce5b9339fc232abd6069a131032a53d9935074",
+    "supported_labels": [
+      "ubuntu-26.04",
+      "ubuntu-24.04",
+      "ubuntu-22.04"
+    ]
+  },
+  "successful_ci": {
+    "run_id": "40214740408",
+    "url": "https://github.com/tailrocks/velnor-new/actions/runs/40214740408",
+    "head_sha": "a2ec35929e51b336bf54bd982f4cc0f5774eb397",
+    "job_id": "121234527128",
+    "job_url": "https://github.com/tailrocks/velnor-new/actions/runs/40214740408/job/121234527128",
+    "job_name": "Rust / velnor-actions-cli",
+    "conclusion": "success",
+    "plan_log_sha256": "13e24e5b054cb423fdfad5b60a6bc84d852d992679efa933219433d3d454ae43",
+    "runner_version": "2.338.0",
+    "runner_label": "ubuntu-26.04",
+    "operating_system": "Ubuntu 26.04.1 LTS",
+    "image_version": "20261012.163.1",
+    "image_release": "ubuntu26/20261012.163",
+    "provisioner_version": "20261021.618"
+  }
+}

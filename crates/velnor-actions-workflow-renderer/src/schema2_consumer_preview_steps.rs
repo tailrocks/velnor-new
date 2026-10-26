@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{ConsumerReleaseSpec, MiseSetup, PackageReleasePolicy, RenderError, Yaml};
 use crate::steps::CHECKOUT_USES;
 

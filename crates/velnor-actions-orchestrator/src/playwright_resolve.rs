@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::{OsStr, OsString};
 use std::fs;
@@ -220,6 +223,7 @@ impl BrowserSource for NetworkSource {
     fn dry_run(&self, core_dir: &Path, browser: &str) -> Result<String, OrchestratorError> {
         let cli: PathBuf = core_dir.join("cli.js");
         let args = vec![
+            OsString::from("--bun"),
             cli.into_os_string(),
             OsString::from("install"),
             OsString::from("--dry-run"),

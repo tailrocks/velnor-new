@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::ansible::AnsibleStackConfig;
 use super::binary_release::RustBinaryReleaseConfig;
 use super::bun::BunStackConfig;
@@ -81,6 +84,9 @@ pub struct RustStackConfig {
 
     #[serde(default, skip_serializing_if = "is_false")]
     pub clippy_all_features: bool,
+
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub allow_empty_test_suite: bool,
 
     #[serde(default)]
     pub release: RustReleaseConfig,
@@ -169,6 +175,7 @@ impl RustStackConfig {
             run_ignored: None,
             seed_parallel_targets: false,
             clippy_all_features: false,
+            allow_empty_test_suite: false,
             release: RustReleaseConfig::default(),
             binary_release: RustBinaryReleaseConfig::default(),
             suites: Vec::new(),

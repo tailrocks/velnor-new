@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 pub const NPM_DIR: &str = "$RUNNER_TEMP/npm";
 pub const NPM_REGISTRY: &str = "https://npm.pkg.github.com";
 

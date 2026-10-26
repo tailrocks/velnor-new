@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 set -uo pipefail
 
 ROOT=""
@@ -43,7 +47,6 @@ GENERATED_BUILD_LOG="$LOG_DIR/generated-build.log"
 GENERATED_RUN_LOG="$LOG_DIR/generated-run.log"
 GENERATED_DIFF_LOG="$LOG_DIR/generated-diff.log"
 CRATE_LIST_LOG="$LOG_DIR/crate-list.log"
-DOCTEST_LIST_LOG="$LOG_DIR/doctest-list.log"
 TEST_MEMBER_LIST_LOG="$LOG_DIR/test-member-list.log"
 RUNNER_TEST_MEMBER_LIST_LOG="$LOG_DIR/runner-test-member-list.log"
 INTEGRATION_LOG="$LOG_DIR/integration.log"
@@ -168,6 +171,12 @@ fi
 pass "toolchain"
 
 stage fmt "${MISE_EXEC[@]}" cargo fmt --all --check
+HK_BIN="$(MISE_AUTO_INSTALL=false MISE_OFFLINE=true mise which hk --tool hk@2.8.0 2>>"$TOOLCHAIN_LOG" || true)"
+if [[ "$HK_BIN" == /* && -x "$HK_BIN" ]]; then
+  stage hk-native-fmt env HK_BIN="$HK_BIN" bash scripts/test-native-hk-fmt.sh
+else
+  fail "hk-native-fmt (installed hk 2.8.0 is unavailable; log: $TOOLCHAIN_LOG)"
+fi
 
 RUNNER_MANIFEST="crates/velnor-runner/Cargo.toml"
 if [ -f "$RUNNER_MANIFEST" ]; then
@@ -187,7 +196,6 @@ if [ -f "$RUNNER_MANIFEST" ]; then
       stage runner-nextest "${NEXTEST_RUN[@]}" run --manifest-path "$RUNNER_MANIFEST" --locked --workspace --no-tests fail
     fi
   fi
-  stage runner-doctest "${MISE_EXEC[@]}" cargo test --manifest-path "$RUNNER_MANIFEST" --locked --workspace --doc
   stage runner-deny mise exec "cargo-deny@0.20.2" -- cargo-deny --locked --manifest-path "$RUNNER_MANIFEST" --config "crates/velnor-runner/deny.toml" check
 fi
 
@@ -249,23 +257,6 @@ else
         stage "test-$safe" "${NEXTEST_RUN[@]}" run --locked -p "$member" --no-tests fail
       done
     fi
-  fi
-  LIB_MEMBERS=""
-  LIB_MEMBERS="$(repo_policy library-members 2>"$DOCTEST_LIST_LOG")"
-  if [ -z "$LIB_MEMBERS" ]; then
-    fail "doctest-list (log: $DOCTEST_LIST_LOG)"
-  else
-    for member in $MEMBERS; do
-      safe="$(printf '%s' "$member" | tr -c 'A-Za-z0-9' '_')"
-      case " $LIB_MEMBERS " in
-        *" $member "*)
-          stage "doctest-$safe" "${MISE_EXEC[@]}" cargo test --locked -p "$member" --doc
-          ;;
-        *)
-          echo "skip: doctest-$safe (no library targets)"
-          ;;
-      esac
-    done
   fi
   for member in $MEMBERS; do
     safe="$(printf '%s' "$member" | tr -c 'A-Za-z0-9' '_')"

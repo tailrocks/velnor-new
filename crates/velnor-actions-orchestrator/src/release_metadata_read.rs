@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{OrchestratorError, internal::internal};
 use std::{fs, io::Read as _, os::unix::fs::MetadataExt as _, path::Path};
 

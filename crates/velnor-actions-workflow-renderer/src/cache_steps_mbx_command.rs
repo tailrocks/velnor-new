@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use velnor_actions_contract::{Step, StepKind, StepRole};
 
 const MISE_PREFIX: [&str; 5] = ["mise", "--no-config", "--no-env", "--no-hooks", "exec"];

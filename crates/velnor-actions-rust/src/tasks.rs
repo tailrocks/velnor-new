@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use velnor_actions_contract::{ContractError, manifest_key_for_cargo_manifest, task_id_for_stack};
 
 use crate::{
@@ -60,6 +63,7 @@ pub struct TaskGroup {
     pub compile_driver: CompileDriver,
     pub test_runner: TestRunner,
     pub nextest_profile: NextestProfile,
+    pub allow_empty_test_suite: bool,
     pub run_ignored: Option<String>,
     pub declared_inputs: Vec<String>,
     pub undeclared_reads: bool,
@@ -89,6 +93,10 @@ impl TaskGroup {
 }
 
 #[derive(Debug, Clone)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "derive inputs mirror the task-group flag set"
+)]
 pub struct DeriveInputs<'a> {
     pub package: &'a PackageRecord,
     pub profile: &'a RustExecutionProfile,
@@ -96,6 +104,7 @@ pub struct DeriveInputs<'a> {
     pub features: &'a [String],
     pub all_features: bool,
     pub clippy_all_features: bool,
+    pub allow_empty_test_suite: bool,
     pub target: &'a str,
     pub explicit_fmt: bool,
 }
@@ -106,6 +115,7 @@ struct GroupBase<'a> {
     features: &'a [String],
     all_features: bool,
     clippy_all_features: bool,
+    allow_empty_test_suite: bool,
     target: &'a str,
     driver: CompileDriver,
     runner: TestRunner,
@@ -124,6 +134,7 @@ pub fn derive_task_groups(inputs: &DeriveInputs<'_>) -> Result<Vec<TaskGroup>, C
         features: &features,
         all_features: inputs.all_features,
         clippy_all_features: inputs.clippy_all_features,
+        allow_empty_test_suite: inputs.allow_empty_test_suite,
         target: inputs.target,
         driver: inputs.profile.compile_driver,
         runner: inputs.profile.test_runner,
@@ -185,6 +196,7 @@ pub fn derive_workspace_fmt(
         compile_driver: profile.compile_driver,
         test_runner: profile.test_runner,
         nextest_profile: profile.nextest_profile,
+        allow_empty_test_suite: false,
         run_ignored: None,
         declared_inputs: Vec::new(),
         undeclared_reads: false,
@@ -236,6 +248,7 @@ fn plain_group(base: &GroupBase<'_>, kind: TaskKind, id: &str) -> TaskGroup {
         compile_driver: base.driver,
         test_runner: base.runner,
         nextest_profile: base.nextest_profile,
+        allow_empty_test_suite: base.allow_empty_test_suite,
         run_ignored: None,
         declared_inputs: Vec::new(),
         undeclared_reads: base.package.has_build_script,

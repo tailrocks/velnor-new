@@ -107,6 +107,24 @@ runner workspace.
 
 - **Purpose**: Verifies that toolchain pins, GitHub Actions versions, and external dependencies adhere to `.velnor/version-policy.toml` and `.velnor/freshness-inventory.json`.
 - **Why It Matters**: Prevents unrecorded drift from upstream tooling and validates active pin exceptions.
+- **Checks**:
+  - `local-pin`: Compiled-in constants match reviewed inventory pins, including
+    the policy mirror and cargo-mutants pin.
+  - `effective-identity`: Declared requirements match every Cargo.lock
+    resolution across discovered workspaces and dependency scopes.
+  - `upstream-freshness`: Reviewed pins have fresh upstream evidence; stale pins,
+    stale evidence, and lookup failures fail closed.
+  - `advisories`: Deny policy and optional live scans cover every Cargo
+    workspace, with no ignored advisories.
+- **Output**: Each `row: {...}` line is a compact JSON object with `check`,
+  `subject`, `status`, and `detail` keys. A row with `status: fail` makes the
+  command exit nonzero.
+- **Options**: `--root DIR` validates a fixture tree instead of the repository.
+  `--check-upstream` performs a bounded, read-only latest-stable lookup with a
+  10-second timeout and 512 KiB encoded/decoded cap; it writes nothing and runs
+  weekly in CI outside build gates. `--with-advisories` runs the live Cargo Deny
+  scan for every workspace, with a 180-second timeout per workspace, and the
+  local deny-policy checks.
 
 ---
 
@@ -119,3 +137,8 @@ cargo fmt --manifest-path crates/velnor-runner/Cargo.toml --all -- --check
 cargo clippy --manifest-path crates/velnor-runner/Cargo.toml --locked --all-targets -- -D warnings
 cargo deny --manifest-path crates/velnor-runner/Cargo.toml check
 ```
+
+The Docker-readiness fixture rewrites the entrypoint to no-op its absolute-path
+`wait-docker-sock` and `clear-dockerenv` commands because the fixture stub root
+does not provide those image paths. It verifies the Docker API-readiness gate
+only; it does not exercise those entrypoint preflights.

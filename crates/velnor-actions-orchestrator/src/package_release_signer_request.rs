@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{absolute_env, read_regular_file, require_private_directory};
 use crate::{OrchestratorError, internal::internal};
 use std::{env, path::Path, time::Duration};

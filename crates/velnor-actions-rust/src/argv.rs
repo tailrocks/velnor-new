@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use std::ffi::OsString;
 
 use velnor_actions_contract::{ContractError, split_shard_suffix, task_id_for_stack};
@@ -155,8 +158,10 @@ fn push_kind_args(
                     flag("--partition"),
                     flag(&format!("hash:{index}/{count}")),
                 ]);
-            } else {
+            } else if group.allow_empty_test_suite {
                 args.extend([flag("--no-tests"), flag("warn")]);
+            } else {
+                args.extend([flag("--no-tests"), flag("fail")]);
             }
         }
         TaskKind::Doctest => {

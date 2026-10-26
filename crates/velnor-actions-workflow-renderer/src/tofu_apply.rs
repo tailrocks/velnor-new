@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use velnor_actions_contract::JobTimeout;
 use velnor_actions_contract::{TOFU_APPLY_WORKFLOW_PATH, TofuApplyConfig};
 

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use velnor_actions_contract::ReleaseTarget;
 
 use crate::RenderError;
@@ -22,7 +25,7 @@ pub(super) fn build_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, Render
             &pins.resource_probe_build_argv,
         )?,
         generator_release::command_step(
-            "Qualify native resource-probe producer and shared archive fixtures",
+            "Qualify public resource-probe release admission",
             &pins.resource_probe_release_test_argv,
         )?,
         generator_release::command_step(

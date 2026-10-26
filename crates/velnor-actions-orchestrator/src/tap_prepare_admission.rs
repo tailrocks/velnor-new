@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{absolute_env, static_tap_policy};
 use crate::{
     OrchestratorError, internal::internal, retrieve_reports::staged_reads::read_staged_bytes_until,

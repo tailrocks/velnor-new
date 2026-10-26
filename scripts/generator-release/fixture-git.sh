@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 # Scratch repositories must not execute caller hooks or inherit Git authority.
 # ROOT index/archive reads deliberately do not use this helper.
 fixture_git() (

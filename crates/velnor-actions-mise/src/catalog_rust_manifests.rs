@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 pub const RUST_CHANNEL_MANIFESTS: &[(&str, &str, &str)] = &[
     (
         "1.85.0",

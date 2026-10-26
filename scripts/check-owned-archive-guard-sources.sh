@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 # Sourced by the checkout-owned archive guard builder after its own path and
 # checkout ancestry have been admitted. This uses only the shared input manifest.
 

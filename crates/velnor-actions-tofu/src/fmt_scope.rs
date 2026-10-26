@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 const FMT_SUFFIXES: [&str; 5] = [".tofutest.hcl", ".tftest.hcl", ".tfvars", ".tofu", ".tf"];
 
 #[must_use]

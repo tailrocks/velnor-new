@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::workflow::JobTimeout;
 
 pub const PUBLICATION_PREPARATION_STEP_DEFAULT_MINUTES: u16 = JobTimeout::DEFAULT_MINUTES;

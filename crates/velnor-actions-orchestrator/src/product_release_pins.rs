@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use std::ffi::{OsStr, OsString};
 
 use velnor_actions_contract::{ReleaseTarget, VelnorConfig};
@@ -88,8 +91,8 @@ pub(crate) fn resolve(
             ],
             &catalog,
         )?,
-        resource_probe_release_build_argv: native_resource_probe_argv(&catalog, false)?,
-        resource_probe_release_test_argv: native_resource_probe_argv(&catalog, true)?,
+        resource_probe_release_build_argv: resource_probe_release_build_argv(&catalog)?,
+        resource_probe_release_test_argv: resource_probe_release_test_argv(&catalog)?,
         lint_argv: scrubbed_inline(crate::workflow_jobs::workflow_lint_argv(&catalog)?),
         verify_lint_argv: crate::workflow::jactionlint_verify_argv(&catalog),
         gh_argv: exec_argv(&[PinnedTool::Gh], "gh", &[], &catalog)?,
@@ -215,27 +218,11 @@ fn contract_error(problem: impl std::fmt::Display) -> OrchestratorError {
     }
 }
 
-fn native_resource_probe_argv(
+fn resource_probe_release_build_argv(
     catalog: &ToolCatalog,
-    tests: bool,
 ) -> Result<Vec<String>, OrchestratorError> {
-    let args = if tests {
-        vec![
-            "nextest",
-            "run",
-            "--locked",
-            "--manifest-path",
-            "crates/velnor-runner/Cargo.toml",
-            "--package",
-            "velnor-runner-host",
-            "--lib",
-            "--target",
-            "x86_64-unknown-linux-gnu",
-            "-E",
-            "test(artifact_admission::archive) | test(resource_probe_release)",
-        ]
-    } else {
-        vec![
+    mbx_locked_build_argv(
+        &[
             "build",
             "--locked",
             "--manifest-path",
@@ -246,8 +233,14 @@ fn native_resource_probe_argv(
             "velnor-resource-probe-release",
             "--target",
             "x86_64-unknown-linux-gnu",
-        ]
-    };
+        ],
+        catalog,
+    )
+}
+
+fn resource_probe_release_test_argv(
+    catalog: &ToolCatalog,
+) -> Result<Vec<String>, OrchestratorError> {
     exec_argv(
         &[
             PinnedTool::Rust,
@@ -255,7 +248,21 @@ fn native_resource_probe_argv(
             PinnedTool::Nextest,
         ],
         "mbx",
-        &args,
+        &[
+            "nextest",
+            "run",
+            "--locked",
+            "--manifest-path",
+            "crates/velnor-runner/Cargo.toml",
+            "--package",
+            "velnor-runner-host",
+            "--test",
+            "resource_probe_release_public",
+            "--target",
+            "x86_64-unknown-linux-gnu",
+            "--no-tests",
+            "fail",
+        ],
         catalog,
     )
 }

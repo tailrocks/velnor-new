@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::WorkflowRunResponse;
 use super::{RunSource, WorkflowMetadata, run_matches, run_repository_names_match};
 use crate::{OrchestratorError, internal::internal};

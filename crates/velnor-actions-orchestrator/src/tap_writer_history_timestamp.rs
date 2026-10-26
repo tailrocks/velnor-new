@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 pub(super) fn valid_timestamp(value: &str) -> bool {
     let Some((date, clock)) = value.split_once('T') else {
         return false;

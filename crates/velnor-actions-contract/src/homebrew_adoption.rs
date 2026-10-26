@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
@@ -18,6 +21,14 @@ use validation::{
 };
 
 pub const HOMEBREW_ADOPTION_TRANSITION_SCHEMA_V1: &str = "velnor.homebrew-adoption-transition.v1";
+
+pub const HOMEBREW_ADOPTION_SEED_V2_OUTPUT_PATHS: &[&str] = &[
+    ".github/workflows/ci.yml",
+    ".velnor/config.toml",
+    ".velnor/release-manifest.json",
+    "mise.lock",
+    "mise.toml",
+];
 
 pub const MAX_HOMEBREW_ADOPTION_TRANSITION_BYTES: usize = 128 * 1024;
 
@@ -138,7 +149,7 @@ impl HomebrewAdoptionTransition {
             || self.tap_repository_id == 0
             || !full_sha(&self.base_sha)
             || !full_sha(&self.base_tree)
-            || self.template_version != 1
+            || self.template_version != 2
             || !stable_semver(&self.minimum_sdk_version)
             || self.required_sdk_capability != "homebrew-adoption-seed-v1"
             || self.claude_source_path != "AGENTS.md"
@@ -166,15 +177,16 @@ impl HomebrewAdoptionTransition {
         if self.unchanged_inert_files.is_empty() {
             return Err(invalid("homebrew_adoption_inert_inventory"));
         }
-        if self.generated_output_paths.is_empty()
-            || !strict_sorted_unique(&self.generated_output_paths)
-            || self.generated_output_paths.iter().any(|path| {
-                !safe_repo_path(path)
-                    || !(path.starts_with(".github/workflows/")
-                        || path == ".velnor/config.toml"
-                        || path == "mise.toml"
-                        || path == "mise.lock")
-            })
+        if !strict_sorted_unique(&self.generated_output_paths)
+            || !self
+                .generated_output_paths
+                .iter()
+                .map(String::as_str)
+                .eq(HOMEBREW_ADOPTION_SEED_V2_OUTPUT_PATHS.iter().copied())
+            || self
+                .generated_output_paths
+                .iter()
+                .any(|path| !safe_repo_path(path))
         {
             return Err(invalid("homebrew_adoption_generated_paths"));
         }

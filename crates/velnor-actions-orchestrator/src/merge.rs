@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 #[path = "merge_checks.rs"]
 pub(crate) mod merge_checks;
 #[path = "merge_lenient.rs"]

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{HomebrewTapConfig, config_error, valid_app_id_variable, valid_secret_name};
 use crate::ContractError;
 use serde::{Deserialize, Serialize};

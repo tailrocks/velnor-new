@@ -1,4 +1,8 @@
 #!/bin/bash
+
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 # Regression for tar-shim extract. Runs the real shim, not a reimplementation.
 set -euo pipefail
 

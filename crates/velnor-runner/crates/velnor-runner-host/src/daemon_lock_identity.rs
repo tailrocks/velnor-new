@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use sha2::{Digest, Sha256};
 
 pub(crate) fn engine_key(engine_id: &str) -> String {

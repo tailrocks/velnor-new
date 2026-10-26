@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 pub const MAX_CHECK_SOURCE_BYTES: usize = 8 * 1024 * 1024;
 
 pub const MAX_CHECK_SYSTEM_VERSION_BYTES: usize = 128;

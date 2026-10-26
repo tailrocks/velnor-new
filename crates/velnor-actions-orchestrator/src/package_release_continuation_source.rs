@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::super::{
     github::{GitHubApi, GitRefResponse, RepositoryResponse},
     run_identity::{RunSource, ci_run_is_success, sleep_for_retry},

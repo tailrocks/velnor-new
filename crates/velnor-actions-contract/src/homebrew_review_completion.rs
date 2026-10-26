@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 pub const GITHUB_ACTIONS_APP_ID: u64 = 15_368;
 
 use crate::{

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use velnor_actions_contract::{Step, StepRole};
 
 use crate::{RenderError, steps};
@@ -13,16 +16,16 @@ pub struct MiseSetup {
 }
 
 pub const MISE_BINARY_SHA256_LINUX_X64: &str =
-    "e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942";
+    "3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d";
 pub const MISE_BINARY_SHA256_MACOS_ARM64: &str =
-    "d40e2fcd96fed7c70b04af282c36534d87d0318bef89c16fa00c9f98e55ade88";
+    "7dc61dfa71abbcda1c40d18440bc556b5d58b80e6042bc4f95fd106fa1bb3c66";
 pub const MISE_BINARY_SHA256_MACOS_X64: &str =
-    "72e1ced3bac89d0e0aa28b04bd22f8941c111d3b20c74a77bfb6a9486f25f7d3";
+    "8d5e1591811143f15334f690373cefb58c13bd6cbd0292008748fd777f6c99d8";
 
 impl MiseSetup {
     pub fn for_target(&self, target: &str) -> Result<Self, RenderError> {
         self.validate()?;
-        if self.version != "2026.10.18" {
+        if self.version != "2026.10.19" {
             return Err(RenderError::BadCommand(format!(
                 "mise_setup_unqualified_version:{}",
                 self.version

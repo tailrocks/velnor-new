@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{
     FeedbackContext, MAX_FEEDBACK_RECORDS, TapMergeGitHub, Value, internal, paged_commit_comments,
     paged_values,

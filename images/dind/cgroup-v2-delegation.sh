@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 # This cgroup-v2 block is adapted from Moby hack/dind at
 # 8d9e3502aba39127e4d12196dae16d306f76993d (SHA-256
 # 673bb7adc8b463b56e9e929672ea74b40951f655a023d0b9801f46c9da4bc509).

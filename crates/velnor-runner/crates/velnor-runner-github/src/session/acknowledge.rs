@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::refresh::RefreshGate;
 use crate::refresh::StatusClass;
 use crate::{ParsedBatch, WireError, may_ack};

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 [package]
 name = "velnor-actions-rust"
 version.workspace = true
@@ -13,7 +16,7 @@ test = false
 workspace = true
 
 [dependencies]
-velnor-actions-contract = { version = "=0.1.54", path = "../velnor-actions-contract" }
+velnor-actions-contract = { version = "=0.1.56", path = "../velnor-actions-contract" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { version = "=1.1.8" }

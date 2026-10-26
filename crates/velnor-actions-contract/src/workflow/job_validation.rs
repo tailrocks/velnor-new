@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{
     BTreeSet, ContractError, Job, PermissionLevel, Permissions, is_pinned_label,
     is_safe_display_name, is_valid_environment,

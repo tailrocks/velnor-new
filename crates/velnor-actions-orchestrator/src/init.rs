@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use std::fs::OpenOptions;
 use std::path::Path;
 
@@ -181,6 +184,6 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # "actions/cache/save" = { version = "v6.1.0", sha = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9" }
 # "actions/upload-artifact" = { version = "v7.0.2", sha = "cf430e030ddbb5b0abf93d22962f4752f3646cd9" }
 # "actions/download-artifact" = { version = "v8.0.2", sha = "9000827ccba6bdab643e8b6fd33ac0654aef8333" }
-# "jdx/mr-boxington-action" = { version = "v1.7.2", sha = "47ce49b32025d93a7a2f4570815afaa2b7092240" }
+# "jdx/mr-boxington-action" = { version = "v1.7.3", sha = "88acf2bb50552c7c508cbac13e5f8c576b95b1de" }
 # Values must be an allowlisted action's matching release version and full SHA.
 "#;

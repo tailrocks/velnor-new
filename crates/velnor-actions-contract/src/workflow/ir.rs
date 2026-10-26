@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::dispatch::WorkflowDispatch;
 use super::jobs::is_safe_display_name;
 use super::permissions::{PermissionLevel, Permissions};

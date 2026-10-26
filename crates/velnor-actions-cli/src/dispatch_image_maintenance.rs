@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::args::ImageMaintenanceCommand;
 use std::{process::ExitCode, time::Duration};
 use velnor_actions_orchestrator::{

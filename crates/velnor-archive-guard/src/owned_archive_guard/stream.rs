@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use std::io::Read;
 
 use super::{BLOCK_SIZE, BLOCK_SIZE_U64};

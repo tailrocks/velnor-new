@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 pub(super) fn is_expected_executable(bytes: &[u8], target: &str) -> bool {
     if target.contains("apple-darwin") {
         return mach_o_arch(bytes).is_some_and(|arch| target.starts_with(arch));

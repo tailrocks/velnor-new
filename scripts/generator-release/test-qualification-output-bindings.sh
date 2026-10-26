@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 write_output_binding_candidate_wrapper() {
   local wrapper="$1"
   cat >"$wrapper" <<'WRAPPER'

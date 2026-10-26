@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{CrateJobInputs, build_jobs::cap_cargo_jobs};
 use crate::{OrchestratorError, internal::internal};
 use std::collections::BTreeSet;

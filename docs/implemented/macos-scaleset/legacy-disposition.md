@@ -5,7 +5,7 @@ draft PRs, zero reviews, zero comments. Neither draft is production proof.
 Unmerged safety fixes are ported as invariants and retested. They are not
 assumed correct and they are not dropped.
 
-Legacy runner license is Apache-2.0 only. This repository is MIT OR Apache-2.0.
+Legacy runner license is Apache-2.0 only. This repository is Apache-2.0 only.
 Do not copy legacy blobs and relabel them.
 
 ## PR 1135 head `3074bb36` (unchanged)

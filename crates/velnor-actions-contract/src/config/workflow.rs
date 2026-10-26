@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::rust_suites::WorkflowDispatchConfig;
 use super::rust_suites_validate::validate_preserve_workflows;
 use super::workflow_flags::{default_true, is_false, is_true};
@@ -33,6 +36,9 @@ pub struct WorkflowConfig {
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_branch: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verification_branch: Option<String>,
 
     pub generator_validation: GeneratorValidation,
 
@@ -201,6 +207,7 @@ impl WorkflowConfig {
                 "malformed_branch",
             ));
         }
+        self.validate_verification_branch(file)?;
         if let Some(label) = &self.runner_label
             && !RUNNER_LABEL_CATALOG.contains(&label.as_str())
         {
@@ -228,6 +235,26 @@ impl WorkflowConfig {
         self.verify.validate(file)?;
         self.dispatch.validate(file)?;
         validate_preserve_workflows(&self.preserve_workflows, file)?;
+        Ok(())
+    }
+
+    fn validate_verification_branch(&self, file: &str) -> Result<(), ContractError> {
+        if let Some(branch) = &self.verification_branch {
+            if !crate::is_valid_branch_name(branch) {
+                return Err(ContractError::config(
+                    file,
+                    "workflow.verification_branch",
+                    "malformed_branch",
+                ));
+            }
+            if self.default_branch.as_deref() == Some(branch.as_str()) {
+                return Err(ContractError::config(
+                    file,
+                    "workflow.verification_branch",
+                    "must_differ_from_default_branch",
+                ));
+            }
+        }
         Ok(())
     }
 

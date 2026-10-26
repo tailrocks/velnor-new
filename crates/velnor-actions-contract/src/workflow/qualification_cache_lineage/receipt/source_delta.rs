@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::errors::invalid;
 use super::types::QualificationSourceDelta;
 use crate::canonical::{canonical_json_bytes, digest_b3, validate_digest};

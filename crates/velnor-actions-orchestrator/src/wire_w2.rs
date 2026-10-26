@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 #[path = "reuse_stages.rs"]
 pub(crate) mod reuse_stages;
 

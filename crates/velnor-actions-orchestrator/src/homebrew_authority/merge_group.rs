@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::package_release_publish::MergeGroupSelection;
 use serde_json::Value;
 use std::collections::BTreeMap;

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{ProbeError, units::decimal_milli_ceil};
 
 pub(crate) fn one_minute_milli(input: &[u8]) -> Result<u64, ProbeError> {

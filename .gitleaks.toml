@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 # Gitleaks and BetterLeaks config; BetterLeaks reads this when no .betterleaks.toml exists.
 # Uses upstream defaults plus the exact field/path-scoped matrix exception below.
 [extend]

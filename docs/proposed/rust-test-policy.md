@@ -55,7 +55,11 @@ A test source file alone does not establish a registered suite. When a package
 sets `autotests = false` or marks a target `test = false`, the intended Cargo
 test target MUST be enabled or explicitly registered, and the generated task
 plan MUST select it, with execution evidence confirming that it ran. V1 has
-no permanent empty-suite exception.
+no permanent empty-suite exception except the explicit per-repo
+`[stacks.rust] allow_empty_test_suite = true` opt-out defined in the
+task-execution contract: an opted-in repository's unsharded `nextest run`
+steps emit `--no-tests warn` instead of `--no-tests fail`, and every other
+repository keeps the fail-on-empty default.
 
 ## Owner-approved test reset
 

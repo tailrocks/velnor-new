@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::RenderError;
 
 pub(crate) fn is_expansion_at(bytes: &[u8], index: usize) -> bool {

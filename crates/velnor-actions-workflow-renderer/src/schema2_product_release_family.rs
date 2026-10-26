@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use std::collections::BTreeMap;
 
 use crate::RenderError;
@@ -104,11 +107,13 @@ impl Family {
                 "velnor-dind-linux-amd64.tar",
                 "velnor-resource-probe-linux-amd64.tar",
                 "RESOURCE_PROBE_MANIFEST.json",
+                "LICENSE",
+                "NOTICE",
                 "SHA256SUMS",
             ]
             .map(|name| format!("assets/{name}"))
             .to_vec(),
-            Self::Binary => ["velnor-host", "SHA256SUMS"]
+            Self::Binary => ["velnor-host", "LICENSE", "NOTICE", "SHA256SUMS"]
                 .map(|name| format!("assets/{name}"))
                 .to_vec(),
             Self::Generator => super::generator_release::publication_asset_paths(),

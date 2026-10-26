@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::super::github::{GitHubApi, WorkflowArtifact};
 use super::{
     ArtifactRef, Authorization, Intent, Origin, artifacts, authenticate, authorization_for_context,

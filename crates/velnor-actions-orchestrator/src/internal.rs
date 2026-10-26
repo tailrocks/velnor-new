@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 #[path = "internal_named_lanes.rs"]
 mod named_lanes;
 #[path = "phase_timing.rs"]

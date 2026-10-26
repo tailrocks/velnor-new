@@ -272,7 +272,14 @@ configures `default_shards == 1` (single shard `shard-1-of-1` with no `by_manife
 in `1..=n` so crates with fewer tests than shards do not fail with Nextest exit code 4 on an empty
 hash bucket. Empty selected
 suites fail unless Cargo metadata proves that the package has no applicable
-test target. A mixed test runner is never selected by guesswork.
+test target. A repository whose Rust workspace intentionally carries zero tests
+may record the explicit per-repo opt-out `[stacks.rust] allow_empty_test_suite = true`
+(default `false`): its unsharded `nextest run` steps then emit `--no-tests warn`
+instead of `--no-tests fail`. The opt-out changes no other behavior: tasks whose
+metadata proves no applicable test target are still skipped with
+`valid_no_test_targets`, sharded steps keep `--no-tests warn --partition`, and
+every other repository keeps the fail-on-empty default. A mixed test runner is
+never selected by guesswork.
 
 Each generated workflow command uses the Velnor-owned environment:
 

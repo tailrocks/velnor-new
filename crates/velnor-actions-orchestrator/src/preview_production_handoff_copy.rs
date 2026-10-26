@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{AssetProof, checkpoint, hex};
 use crate::filesystem_owner::held_file::HeldFile;
 use crate::{OrchestratorError, internal::internal};

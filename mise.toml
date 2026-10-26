@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 min_version = "2026.10.18"
 
 [tools]
@@ -14,7 +17,7 @@ rust = { version = "1.99.1", profile = "minimal", components = [
   "aarch64-unknown-linux-gnu",
   "x86_64-unknown-linux-gnu",
 ], mr_boxington = true }
-mr-boxington = "1.27.0"
+mr-boxington = { version = "1.28.0", workflow = "release.yml@refs/heads/main" }
 hk = "2.8.0"
 cargo-binstall = "1.26.0"
 "aqua:nextest-rs/nextest/cargo-nextest" = "0.9.149"

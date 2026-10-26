@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::RunnerSpec;
 use super::features::{
     checkout_step, finish, gated, lane_base_with_container, local_action_step, redis_service,

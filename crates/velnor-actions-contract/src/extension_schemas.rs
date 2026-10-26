@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 pub const RUST_EXTENSION_SCHEMA: &str = "rust-task-identity-v1";
 
 pub const TOFU_EXTENSION_SCHEMA: &str = "tofu-task-identity-v1";

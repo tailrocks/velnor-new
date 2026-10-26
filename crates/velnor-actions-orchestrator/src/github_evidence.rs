@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 #[path = "github_evidence_collect.rs"]
 mod collect;
 #[path = "github_evidence_import.rs"]

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{BTreeMap, RenderError, commands, guard, marker, steps, validator_tools};
 use velnor_actions_contract::{
     CI_WORKFLOW_PATH, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID, PullRequestCachePolicy,

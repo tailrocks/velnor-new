@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
+
 archive_guard_source_fingerprint() {
   local fingerprint executable="${ARCHIVE_GUARD_BOOTSTRAP_BIN:-}"
   [[ -n "$executable" && "$executable" == /* && -x "$executable" && ! -L "$executable" ]] \

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use velnor_actions_contract::validate_digest;
 use velnor_actions_mise::CachedTaskDescriptor;
 use velnor_actions_mise::cache::verify_artifact_digest;

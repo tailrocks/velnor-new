@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{GitHubApi, JSON_LIMIT, RepositoryResponse};
 use crate::{OrchestratorError, internal::internal};
 

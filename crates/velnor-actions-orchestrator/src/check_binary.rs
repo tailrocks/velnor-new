@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::OrchestratorError;
 use crate::internal::internal;
 use std::path::Path;
@@ -14,9 +17,9 @@ struct MiseBinaryPin {
 
 fn mise_binary_pin(platform: CheckPlatform) -> MiseBinaryPin {
     let (sha256, max_bytes) = match platform {
-        CheckPlatform::LinuxX64 => (MISE_BINARY_SHA256_LINUX_X64, 173_078_656),
-        CheckPlatform::MacosArm64 => (MISE_BINARY_SHA256_MACOS_ARM64, 138_217_968),
-        CheckPlatform::MacosX64 => (MISE_BINARY_SHA256_MACOS_X64, 168_410_640),
+        CheckPlatform::LinuxX64 => (MISE_BINARY_SHA256_LINUX_X64, 173_449_632),
+        CheckPlatform::MacosArm64 => (MISE_BINARY_SHA256_MACOS_ARM64, 138_238_816),
+        CheckPlatform::MacosX64 => (MISE_BINARY_SHA256_MACOS_X64, 169_788_224),
     };
     MiseBinaryPin { sha256, max_bytes }
 }

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use std::io::{self, Read};
 
 use rustix::fs::{OFlags, fcntl_getfl, fcntl_setfl};

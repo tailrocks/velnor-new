@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 pub(crate) const RETRY_DELAYS_SECONDS: [u16; 5] = [3, 6, 12, 24, 45];
 
 pub(super) const EMPTY_LISTING_JQ: &str = "[.[] | (.workflow_runs // [])[]] | length == 0";

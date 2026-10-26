@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use std::collections::BTreeSet;
 
 use velnor_actions_contract::{
@@ -66,6 +69,11 @@ pub(crate) fn derive_for_config(
         .rust
         .as_ref()
         .is_some_and(|rust| rust.clippy_all_features);
+    let allow_empty_test_suite = config
+        .stacks
+        .rust
+        .as_ref()
+        .is_some_and(|rust| rust.allow_empty_test_suite);
     let mut groups = Vec::new();
     let mut fallbacks = Vec::new();
     for package in &record.packages {
@@ -93,6 +101,7 @@ pub(crate) fn derive_for_config(
             features: &features,
             all_features: rust_config.all_features,
             clippy_all_features,
+            allow_empty_test_suite,
             target: &rust_config.target,
             explicit_fmt,
         };
