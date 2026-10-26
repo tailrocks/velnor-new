@@ -17,7 +17,21 @@ mod binary_release_emit;
 mod build_task_tools;
 mod build_tasks;
 mod bun_assets_handoff;
+mod cache_admission;
+mod cache_archive;
+mod cache_inventory;
 mod cache_keys;
+#[expect(
+    missing_debug_implementations,
+    reason = "T52 binds the T26-owned publication interface; the Debug derive stays with the owning task"
+)]
+pub mod cache_publication;
+#[expect(
+    missing_debug_implementations,
+    reason = "T52 binds the T26-owned recovery interface; the Debug derive stays with the owning task"
+)]
+pub mod cache_recovery;
+mod cache_snapshot;
 mod check_evidence;
 mod check_runtime;
 mod clippy_groups;
