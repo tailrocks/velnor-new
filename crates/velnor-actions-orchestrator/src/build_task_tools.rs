@@ -8,7 +8,7 @@ use velnor_actions_workflow_renderer::verification_jobs::{BuildTaskArtifact, Bui
 
 use crate::OrchestratorError;
 use crate::native_tool_input::NativeMiseConfig;
-use crate::native_tool_lock::{NativeLockedTool, NativeMiseLock};
+use crate::native_tool_lock::{NativeLockedTool, NativeMiseLock, valid_rust_toolchain_options};
 
 pub(crate) type ToolVersionSelection = (String, BTreeMap<String, String>, Vec<String>);
 
@@ -146,11 +146,7 @@ fn validate_backend_selection(
         BOLTFFI_MATCHING_REGEX.to_owned(),
     )]);
     match (key, backend) {
-        ("rust", "core:rust")
-            if locked
-                .options
-                .keys()
-                .all(|key| matches!(key.as_str(), "components" | "targets")) => {}
+        ("rust", "core:rust") if valid_rust_toolchain_options(&locked.options) => {}
         ("mr-boxington", "packslip:github.com/jdx/mr-boxington")
             if config_options.is_empty() && locked.options.is_empty() => {}
         (BOLTFFI_KEY, BOLTFFI_KEY)

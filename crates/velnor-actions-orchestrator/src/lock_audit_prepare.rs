@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::{Step, StepKind, StepRole};
+use velnor_actions_contract::{Step, StepKind, StepRole, WorkflowPolicy};
 use velnor_actions_mise::toolfiles::lockfile::InstallSubject;
 use velnor_actions_workflow_renderer::render::ValidatorCommand;
 
@@ -23,19 +23,27 @@ pub(super) fn verifier_positions(
     id: &str,
     job: &velnor_actions_contract::Job,
     verifiers: &VerifierActionSet,
+    policy: WorkflowPolicy,
     blocking: &mut Vec<String>,
 ) -> VerifierPositions {
     let mut positions = VerifierPositions::default();
+    let allow_inline_plan_verifiers = policy == WorkflowPolicy::VelnorRepositoryV1
+        && id == velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
     for (index, step) in job.steps.iter().enumerate() {
         let action = match &step.kind {
             StepKind::Action { uses, .. } => verifiers.by_uses(uses),
+            StepKind::Shell { .. } if allow_inline_plan_verifiers => {
+                verifiers.by_canonical_inline_call(step)
+            }
             StepKind::Shell { .. }
             | StepKind::TaskExecution { .. }
             | StepKind::Internal { .. }
             | StepKind::NativeCheckExecution { .. } => None,
         };
         if let Some(action) = action {
-            if !VerifierActionSet::canonical_call(step, action) {
+            if matches!(&step.kind, StepKind::Action { .. })
+                && !VerifierActionSet::canonical_call(step, action)
+            {
                 blocking.push(format!("noncanonical_verifier_call:{id}:{}", action.uses));
                 continue;
             }

@@ -41,6 +41,7 @@ pub const ALINT_USES: &str = "asamarts/alint@265d9fdc720bb8f59d00b87e33e4149869f
 
 #[derive(Debug, Clone)]
 pub struct RenderContext {
+    pub authority_steps: super::CanonicalAuthoritySteps,
     pub generator_version: String,
     pub report_helper_version: String,
     pub runs_on: String,
@@ -49,7 +50,6 @@ pub struct RenderContext {
     pub request_dir: String,
     pub checkout_uses: String,
     pub validator_commands: Vec<ValidatorCommand>,
-    pub candidate: Option<CandidateSpec>,
     pub preseed: bool,
     pub workflow_tasks: Vec<crate::verification_jobs::WorkflowTaskPolicy>,
     pub bun_lane_plan: Option<BunLanePlan>,
@@ -59,18 +59,12 @@ pub struct RenderContext {
     pub tool_pins: Vec<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ValidatorCommand {
     pub validator: ValidatorKind,
     pub name: String,
     pub argv: Vec<String>,
     pub prepare_argv: Vec<String>,
-}
-
-#[derive(Debug, Clone)]
-pub struct CandidateSpec {
-    pub build: Vec<String>,
-    pub qualify: Vec<String>,
 }
 
 pub use crate::lane_share::RenderedWorkflow;
@@ -79,6 +73,7 @@ pub use velnor_actions_contract::{AGENTS_MD_PATH, CLAUDE_MD_PATH};
 
 impl RenderContext {
     pub fn validate(&self) -> Result<(), RenderError> {
+        self.validate_runtime_authority()?;
         marker::validate_version(&self.generator_version)?;
         marker::validate_version(&self.report_helper_version)?;
         guard::validate_runs_on(&self.runs_on)?;
@@ -100,10 +95,16 @@ impl RenderContext {
             }
             commands::validate_command_argv(&command.argv)?;
         }
-        if let Some(candidate) = &self.candidate {
-            commands::validate_command_argv(&candidate.build)?;
-            commands::validate_command_argv(&candidate.qualify)?;
-        }
         Ok(())
+    }
+
+    pub(crate) fn validate_runtime_authority(&self) -> Result<(), RenderError> {
+        if self.authority_steps.matches_runtime(self) {
+            Ok(())
+        } else {
+            Err(RenderError::InvalidWorkflow(
+                "trusted_plan_runtime_context".to_owned(),
+            ))
+        }
     }
 }

@@ -2,33 +2,34 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_actions_contract::{
-    ExecutionMode, GeneratorValidation, ScaleSetSelector, ValidatorKind, VelnorConfig,
-    WorkflowPolicy,
+    ExecutionMode, ScaleSetSelector, ValidatorKind, VelnorConfig, WorkflowPolicy,
 };
 use velnor_actions_mise::ToolCatalog;
-use velnor_actions_workflow_renderer::render::{CandidateSpec, RenderContext, ValidatorCommand};
+use velnor_actions_workflow_renderer::render::{
+    CanonicalRuntimeInputs, RenderContext, ValidatorCommand,
+};
 use velnor_actions_workflow_renderer::steps::{
-    DENY_STEP_NAME, MACHETE_STEP_NAME, REQUEST_DIR_PREFIX, STAGED_BINARY_PREFIX,
+    DENY_STEP_NAME, MACHETE_STEP_NAME, REQUEST_DIR_PREFIX,
 };
 use velnor_actions_workflow_renderer::verification_jobs::WorkflowTaskPolicy;
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
-use crate::vectors::{candidate_spec, deny_argv, machete_argv, machete_install_argv};
+use crate::vectors::{deny_argv, machete_argv, machete_install_argv};
 
-use super::{CHECKOUT_USES, REQUEST_DIR};
+use super::REQUEST_DIR;
 
 #[path = "tool_cache_pins.rs"]
 mod tool_cache_pins;
 
 pub(super) struct RenderContextInputs<'a> {
+    pub(super) authority_steps: velnor_actions_workflow_renderer::render::CanonicalAuthoritySteps,
+    pub(super) runtime: CanonicalRuntimeInputs,
     pub(super) config: &'a VelnorConfig,
     pub(super) label: &'a str,
     pub(super) generator_version: &'a str,
-    pub(super) report_helper_version: &'a str,
     pub(super) catalog: &'a ToolCatalog,
     pub(super) discovery: &'a Discovery,
-    pub(super) plan_needs_rust: bool,
     pub(super) workflow_tasks: Vec<WorkflowTaskPolicy>,
     pub(super) verify: &'a [ValidatorKind],
 }
@@ -38,29 +39,25 @@ pub(super) fn render_context(
 ) -> Result<RenderContext, OrchestratorError> {
     debug_assert!(REQUEST_DIR.starts_with(REQUEST_DIR_PREFIX));
     let validator_commands = validator_commands(&input)?;
-    let candidate = candidate_spec_for(&input)?;
     let scale_set_selector = scale_set_selector(input.config, None)?;
+    let runtime = input.runtime;
     Ok(RenderContext {
+        authority_steps: input.authority_steps,
         tool_pins: tool_cache_pins::catalog_tool_pins(input.catalog),
         generator_version: input.generator_version.to_owned(),
-        report_helper_version: input.report_helper_version.to_owned(),
+        report_helper_version: runtime.report_helper_version().to_owned(),
         runs_on: input.label.to_owned(),
         scale_set_selector,
-        staged_binary: format!("{STAGED_BINARY_PREFIX}{}", input.report_helper_version),
-        request_dir: REQUEST_DIR.to_owned(),
-        checkout_uses: CHECKOUT_USES.to_owned(),
+        staged_binary: runtime.staged_binary().to_owned(),
+        request_dir: runtime.request_dir().to_owned(),
+        checkout_uses: runtime.checkout_uses().to_owned(),
         validator_commands,
-        candidate,
-        preseed: false,
+        preseed: runtime.preseed(),
         workflow_tasks: input.workflow_tasks,
         bun_lane_plan: None,
         pull_request_cache_policy: input.config.workflow.pull_request_cache_policy,
         mise_quiet: input.config.workflow.mise_quiet,
-        plan_consumer_env: crate::matrix_step::task_step_env(
-            input.catalog,
-            &std::collections::BTreeMap::new(),
-            input.plan_needs_rust,
-        )?,
+        plan_consumer_env: runtime.plan_consumer_env().clone(),
     })
 }
 
@@ -98,18 +95,6 @@ fn validator_commands(
         &input.config.workflow.verify,
     )?;
     Ok(validator_commands)
-}
-
-fn candidate_spec_for(
-    input: &RenderContextInputs<'_>,
-) -> Result<Option<CandidateSpec>, OrchestratorError> {
-    let is_candidate = input.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1
-        && input.config.workflow.generator_validation == GeneratorValidation::Candidate;
-    if is_candidate {
-        candidate_spec(input.catalog).map(Some)
-    } else {
-        Ok(None)
-    }
 }
 
 pub(super) fn scale_set_selector(

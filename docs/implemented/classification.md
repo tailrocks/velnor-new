@@ -13,6 +13,7 @@ review; the row must name a verification rule that actually runs.
 | Class | Paths | Owner | Verification |
 |---|---|---|---|
 | Cargo lockfile | `Cargo.lock` | repo maintainers (`CODEOWNERS`) | `cargo metadata --locked` in CI; `scripts/check-freshness.sh` declared-vs-locked probe (RQ-2.11) |
+| Generator bootstrap lock | `.velnor/generator.lock` | repo maintainers | required-verdict generator validates the official release manifest, supported targets, and pinned Mise catalog |
 | Version-policy mirror + inventory | `.velnor/version-policy.toml`, `.velnor/freshness-inventory.json` | repo maintainers | `repo_policy_mirror_matches_compiled_catalog`; `scripts/check-freshness.sh` |
 | Alint baseline | none — no `.alint-baseline.json` at HEAD | repo maintainers | §5 limits are hard errors; no grandfathering ([update-procedure.md](update-procedure.md)) |
 | Test fixtures (committed inputs) | `fixtures/**` | owning crate's tests | Excluded from Alint's walked index (`.alint.yml` `ignore:`); each fixture dir carries a `README.md` stating intent |
@@ -27,6 +28,8 @@ review; the row must name a verification rule that actually runs.
   blanks; only the classes above are outside the handwritten budget.
 - `mise.lock` is repo-owned and tracked after the authorized toolchain
   migration; Velnor only reads it and MUST NOT create or refresh it (RQ-2.12).
-- `.velnor/generator.lock` / `.velnor/runner.lock` do not exist yet (pre-seed
-  / deferred V2). Their rows are pre-declared in
-  [update-procedure.md](update-procedure.md) and move here on creation.
+- `.velnor/generator.lock` is committed and records authenticated Velnor 0.1.55
+  from source commit `693f3aae14406fb7851ac70f0aee647a869b5063`. This bootstrap
+  identity does not establish hosted qualification of current source. The
+  `.velnor/runner.lock` remains deferred V2; its row is pre-declared in
+  [update-procedure.md](update-procedure.md).

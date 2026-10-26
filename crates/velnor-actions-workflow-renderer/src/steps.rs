@@ -59,9 +59,6 @@ pub const UPLOAD_ARTIFACT_USES: &str = UPLOAD_ARTIFACT_ACTION_USES;
 pub const CHECKOUT_USES: &str = CHECKOUT_ACTION_USES;
 pub const ARTIFACT_RETENTION_DAYS: u32 = 30;
 pub const DOWNLOAD_ARTIFACT_USES: &str = DOWNLOAD_ARTIFACT_ACTION_USES;
-pub const CANDIDATE_MANIFEST_FILE: &str = "candidate-manifest.json";
-pub const CANDIDATE_OUTPUT_DIR: &str = "$RUNNER_TEMP/velnor/candidate-output";
-pub const CANDIDATE_STAGE_DIR: &str = "$RUNNER_TEMP/velnor/candidate";
 pub const ACQUIRE_NAME: &str = "Acquire Velnor";
 
 pub const ACQUIRE_TIMEOUT_MINUTES: i64 =
@@ -141,24 +138,6 @@ pub fn rehead_lint_config_marker(yaml: &str, version: &str) -> Result<String, Re
         ));
     };
     Ok(format!("{}\n{body}", marker::marker_for_version(version)?))
-}
-
-#[must_use]
-pub fn candidate_manifest_script(target: &str, toolchain: &str) -> String {
-    format!(
-        "mkdir -p {CANDIDATE_OUTPUT_DIR} && cp target/release/velnor-actions {CANDIDATE_OUTPUT_DIR}/velnor-actions && sha256sum {CANDIDATE_OUTPUT_DIR}/velnor-actions | cut -d' ' -f1 > {CANDIDATE_OUTPUT_DIR}/sha.txt && read sha rest < {CANDIDATE_OUTPUT_DIR}/sha.txt && printf '{{\"schema\":1,\"commit\":\"%s\",\"target\":\"{target}\",\"toolchain\":\"{toolchain}\",\"sha256\":\"%s\"}}' \"$GITHUB_SHA\" \"$sha\" > {CANDIDATE_OUTPUT_DIR}/{CANDIDATE_MANIFEST_FILE}"
-    )
-}
-
-pub const RUN_DIR_SHELL: &str =
-    "$RUNNER_TEMP/velnor/r$GITHUB_RUN_ID-a${VELNOR_RUN_KEY_ATTEMPT:-$GITHUB_RUN_ATTEMPT}";
-
-#[must_use]
-pub fn candidate_attestation_script() -> String {
-    let attestation = velnor_actions_contract::CANDIDATE_ATTESTATION_FILENAME;
-    format!(
-        "line=; rest=; p=\"{RUN_DIR_SHELL}/plan.json\" && test -f \"$p\" && read line rest < \"$p\" || [ -n \"$line\" ] && h=${{line#*\\\"head\\\":\\\"}} && h=${{h%%\\\"*}} && [ -n \"$h\" ] && [ \"${{#h}}\" -le 64 ] && printf '{{\"schema\":1,\"commit\":\"%s\"}}' \"$h\" > {CANDIDATE_OUTPUT_DIR}/{attestation}"
-    )
 }
 
 pub fn acquire_velnor_step(

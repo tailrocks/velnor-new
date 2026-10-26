@@ -24,11 +24,11 @@ pub(crate) use crate::task_report_aggregate::single_task_aggregate;
 #[path = "task_report_order.rs"]
 mod task_report_order;
 
-pub const REPORT_OP: &str = "write-task-report-v1";
-pub(crate) const TASK_ID_ENV: &str = "VELNOR_TASK_ID";
-pub(crate) const EXIT_CODE_ENV: &str = "VELNOR_EXIT_CODE";
+pub const REPORT_OP: &str = velnor_actions_workflow_renderer::plan_report::REPORT_OP;
+pub(crate) const TASK_ID_ENV: &str = velnor_actions_workflow_renderer::plan_report::TASK_ID_ENV;
+pub(crate) const EXIT_CODE_ENV: &str = velnor_actions_workflow_renderer::plan_report::EXIT_CODE_ENV;
 pub(crate) const DOWNSTREAM_IDS_ENV: &str = "VELNOR_DOWNSTREAM_TASK_IDS";
-pub(crate) const START_MS_ENV: &str = "VELNOR_START_MS";
+pub(crate) const START_MS_ENV: &str = velnor_actions_workflow_renderer::plan_report::START_MS_ENV;
 
 pub fn write_task_report() -> Result<usize, OrchestratorError> {
     let run_key = resolve_run_key(None)?;

@@ -2,12 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub use crate::artifact_paths::{
-    CANDIDATE_OUTPUT_DIR_EXPR, CANDIDATE_STAGE_DIR_EXPR, PRESEED_OUTPUT_DIR_EXPR,
-    PRESEED_STAGE_DIR_EXPR,
-};
-pub use crate::candidate::{
-    VERIFY_MANIFEST_NAME, candidate_artifact_name, candidate_manifest_verify_script,
-    candidate_manifest_verify_step, check_release_build,
+    PRESEED_OUTPUT_DIR_EXPR, PRESEED_STAGE_DIR_EXPR, candidate_artifact_name,
 };
 pub use crate::closure::{
     CHECK_GENERATED_NAME, DOWNLOAD_PLAN_NAME, FRESHNESS_OUTDIR, HelperProvenance,
@@ -37,13 +32,12 @@ pub use crate::preseed::{
 };
 pub use crate::render::{
     AGENTS_MD_PATH, ALINT_BINARY_VERSION, ALINT_USES, CANDIDATE_JOB_ID, CLAUDE_MD_PATH,
-    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, CandidateSpec, EXPECTED_PR_TYPES, FINAL_CONDITION,
-    FINAL_DISPLAY_NAME, FINAL_JOB_ID, JACTIONLINT_PATH, MATRIX_MAX_PARALLEL_ENV,
-    MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV, MatrixSource, MiseSetup, NOT_AFFECTED_JOBS_OUTPUT,
-    PLAN_ATTEMPT_ENV, PLAN_ATTEMPT_OUTPUT, PLAN_ID_OUTPUT, PLAN_JOB_ID, PLAN_STEP_ID,
-    RUN_KEY_OUTPUT, RenderContext, RenderedFile, RenderedSymlink, RenderedTree, TASK_JOB_ID,
-    ValidatorCommand, WORKFLOW_PATH, action_pins, finalize_jobs, not_affected_gate,
-    render_workflow_ir, render_workflow_ir_strict,
+    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, FINAL_CONDITION, FINAL_DISPLAY_NAME,
+    FINAL_JOB_ID, JACTIONLINT_PATH, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV,
+    MATRIX_OUTPUT_ENV, MatrixSource, MiseSetup, NOT_AFFECTED_JOBS_OUTPUT, PLAN_ATTEMPT_ENV,
+    PLAN_ATTEMPT_OUTPUT, PLAN_ID_OUTPUT, PLAN_JOB_ID, PLAN_STEP_ID, RUN_KEY_OUTPUT, RenderContext,
+    RenderedFile, RenderedSymlink, RenderedTree, TASK_JOB_ID, ValidatorCommand, WORKFLOW_PATH,
+    action_pins, finalize_jobs, not_affected_gate, render_workflow_ir, render_workflow_ir_strict,
 };
 pub use crate::rust_suites::{
     RustSuitesRenderSpec, build_ci_suite_jobs, render_suites_workflow, render_suites_workflows,

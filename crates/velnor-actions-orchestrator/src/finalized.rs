@@ -3,55 +3,37 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, WorkflowPolicy, expand_workflow_with_bun_plan};
+use velnor_actions_contract::{Job, expand_workflow_with_bun_plan};
 use velnor_actions_workflow_renderer::finalize_jobs as finalize_render_jobs;
 
 use crate::OrchestratorError;
-use crate::attach::{attach_lock_acquire, attach_preseed};
 use crate::pins::resolve_mise_setup;
 use crate::prepare::GenerationPreparation;
-use crate::validate::verify_velnor_repository_files;
 
-pub(crate) fn owned_preparation(
-    prep: &GenerationPreparation,
-) -> Result<GenerationPreparation, OrchestratorError> {
-    let mut owned = prep.clone();
-    if prep.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1 {
-        if let Some(lock) = verify_velnor_repository_files(&prep.root)? {
-            attach_lock_acquire(
-                &mut owned.workflow.ir,
-                &lock,
-                &prep.runner_label,
-                env!("CARGO_PKG_VERSION"),
-            )?;
-        } else {
-            attach_preseed(
-                &mut owned.workflow,
-                &prep.runner_label,
-                env!("CARGO_PKG_VERSION"),
-                &prep.emission_catalog(),
-            )?;
-        }
-    }
-    Ok(owned)
+pub(crate) fn validate_published_generator_lock(
+    lock: &velnor_actions_contract::GeneratorLock,
+) -> Result<(), OrchestratorError> {
+    velnor_actions_workflow_renderer::release_helpers::validate_published_generator_lock(lock)
+        .map_err(crate::local_release_manifest::map_release_helper_error)
 }
 
 pub fn finalized_jobs(
     prep: &GenerationPreparation,
 ) -> Result<BTreeMap<String, Job>, OrchestratorError> {
-    let owned = owned_preparation(prep)?;
-    let mise = resolve_mise_setup(&owned.config, &owned.runner_label)?;
-    let expansion = expand_workflow_with_bun_plan(&owned.workflow.ir, &owned.config, None)
-        .map_err(|err| OrchestratorError::Contract {
-            problem: err.to_string(),
+    let mise = resolve_mise_setup(&prep.config, &prep.runner_label)?;
+    let expansion =
+        expand_workflow_with_bun_plan(&prep.workflow.ir, &prep.config, None).map_err(|err| {
+            OrchestratorError::Contract {
+                problem: err.to_string(),
+            }
         })?;
     let ir = expansion.ir;
-    let mut context = owned.workflow.context.clone();
+    let mut context = prep.workflow.context.clone();
     context.bun_lane_plan = expansion.bun_lane_plan;
     Ok(finalize_render_jobs(
         &ir,
-        owned.config.workflow.policy,
-        owned.workflow.support.as_ref(),
+        prep.config.workflow.policy,
+        prep.workflow.support.as_ref(),
         &context,
         &mise,
     )?)

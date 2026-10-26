@@ -14,7 +14,6 @@ use velnor_actions_workflow_renderer::guard;
 use velnor_actions_workflow_renderer::render::RenderedTree;
 
 use crate::OrchestratorError;
-use crate::finalized::owned_preparation;
 use crate::prepare::GenerationPreparation;
 use crate::provenance::{ProfileProvenance, profile_provenance};
 use crate::validate::validate_staged;
@@ -108,8 +107,7 @@ pub fn render_staged_tree_with(
     prep: &GenerationPreparation,
     dispatch: Option<ExecutionMode>,
 ) -> Result<RenderedTree, OrchestratorError> {
-    let owned = owned_preparation(prep)?;
-    let tree = render_all(&owned, dispatch)?;
+    let tree = render_all(prep, dispatch)?;
     check_tree_paths(&tree)?;
     Ok(tree)
 }

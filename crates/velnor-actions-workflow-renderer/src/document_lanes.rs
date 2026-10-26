@@ -24,6 +24,7 @@ pub(crate) struct JobStepContext<'a> {
     pub job_env: &'a BTreeMap<String, String>,
     pub runs_on: Option<&'a str>,
     pub actions_read: bool,
+    pub report_helper_version: &'a str,
 }
 pub(crate) fn render_job_steps(
     id: &str,
