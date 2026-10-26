@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.56
+Velnor Actions plan 0.1.57
 Repository: <repo>
 
 Detected stacks
@@ -65,4 +65,4 @@ Recommendations
   nextest_recommendation: no explicit test-runner usage; defaulting to `cargo test`
   persist_evidence: no MBX or Nextest usage detected; to adopt either, add a durable signal
   rust-toolchain.toml not found; Velnor will not create it
-  tool_install_unverified:2 installs skip verification (no mise.lock): gh@2.103.2, shellcheck@0.11.0; install on the CI platform and commit the resulting lock
+  tool_install_unverified:2 installs skip verification (no mise.lock): gh@2.103.3, shellcheck@0.11.0; install on the CI platform and commit the resulting lock
