@@ -15,6 +15,7 @@ use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, QualifiedCheck};
 pub(crate) mod acquisition;
 #[path = "check_binary.rs"]
 mod binary;
+pub(crate) mod cache_execution_context;
 #[path = "check_container.rs"]
 pub(crate) mod container;
 
