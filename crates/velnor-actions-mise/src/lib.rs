@@ -36,6 +36,7 @@ pub mod restore;
 pub mod restore_evidence;
 pub mod reuse;
 pub mod runtime_paths;
+pub mod selected_lock;
 pub mod steps;
 pub mod steps_rust_target;
 pub mod template;

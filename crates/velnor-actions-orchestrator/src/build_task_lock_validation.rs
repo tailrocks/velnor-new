@@ -9,11 +9,11 @@ use crate::OrchestratorError;
 use crate::build_task_tools::selected_version_and_options;
 use crate::native_mise_tasks::safe_task_tool_version;
 use crate::native_tool_input::NativeMiseConfig;
-use crate::native_tool_lock::NativeMiseLock;
+use velnor_actions_mise::selected_lock::{SelectedMiseLock, SelectedMiseTool};
 
 use super::failure;
 
-pub(super) fn validate_lock_shape(lock: &NativeMiseLock) -> Result<(), OrchestratorError> {
+pub(super) fn validate_lock_shape(lock: &SelectedMiseLock) -> Result<(), OrchestratorError> {
     if !lock.has_supported_root_shape() {
         return Err(failure("build_task_mise_lock_root"));
     }
@@ -21,8 +21,8 @@ pub(super) fn validate_lock_shape(lock: &NativeMiseLock) -> Result<(), Orchestra
 }
 
 pub(super) fn validate_source_lock_subset(
-    source: &NativeMiseLock,
-    root: &NativeMiseLock,
+    source: &SelectedMiseLock,
+    root: &SelectedMiseLock,
 ) -> Result<(), OrchestratorError> {
     if !source.has_supported_root_shape() || !root.has_supported_root_shape() {
         return Err(failure("build_task_source_mise_lock"));
@@ -54,10 +54,7 @@ pub(super) fn validate_source_lock_subset(
     Ok(())
 }
 
-fn lock_row_is_subset(
-    source: &crate::native_tool_lock::NativeLockedTool,
-    root: &crate::native_tool_lock::NativeLockedTool,
-) -> bool {
+fn lock_row_is_subset(source: &SelectedMiseTool, root: &SelectedMiseTool) -> bool {
     source.version == root.version
         && source.backend == root.backend
         && source.specifiers == root.specifiers
@@ -68,7 +65,7 @@ fn lock_row_is_subset(
             .all(|(platform, artifact)| root.platforms.get(platform) == Some(artifact))
 }
 
-fn supported_lock_row(row: &crate::native_tool_lock::NativeLockedTool) -> bool {
+fn supported_lock_row(row: &SelectedMiseTool) -> bool {
     row.valid_shape
         && row.unsupported_fields.is_empty()
         && row
@@ -121,10 +118,10 @@ pub(super) fn source_task_tool_requests(
 
 pub(super) fn validate_source_task_lock_requests(
     requests: &BTreeSet<(String, String)>,
-    source_lock: Option<&NativeMiseLock>,
+    source_lock: Option<&SelectedMiseLock>,
     source_lock_is_root: bool,
     root_config: &NativeMiseConfig,
-    root_lock: &NativeMiseLock,
+    root_lock: &SelectedMiseLock,
     rust_version: &str,
     rust_options: &BTreeMap<String, String>,
 ) -> Result<(), OrchestratorError> {

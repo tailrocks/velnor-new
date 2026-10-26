@@ -9,11 +9,13 @@ use velnor_actions_workflow_renderer::{
     verification_jobs::{BuildTaskArtifact, BuildTaskTool},
 };
 
-use crate::native_tool_input::{NativeMiseConfig, NativeToolInput, NativeToolSource};
-use crate::native_tool_lock::{NativeLockedTool, NativeMiseLock, rust_toolchain_options};
+use crate::native_tool_input::{
+    NativeMiseConfig, NativeToolInput, NativeToolSource, rust_toolchain_options,
+};
 use crate::pins::resolve_verification_mise_setup;
 use crate::toolcheck::{ToolInputCheck, ToolParse};
 use crate::{OrchestratorError, discover::Discovery};
+use velnor_actions_mise::selected_lock::{SelectedMiseLock, SelectedMiseTool};
 
 type RustToolValues = (String, BTreeMap<String, String>);
 type ToolVersionSelection = (String, BTreeMap<String, String>, Vec<String>);
@@ -267,7 +269,7 @@ fn validate_settings(config: &NativeMiseConfig) -> Result<(), OrchestratorError>
     Ok(())
 }
 
-fn validate_lock_shape(lock: &NativeMiseLock) -> Result<(), OrchestratorError> {
+fn validate_lock_shape(lock: &SelectedMiseLock) -> Result<(), OrchestratorError> {
     if !lock.has_supported_root_shape() {
         return Err(failure("verification_mise_lock_root"));
     }
@@ -279,7 +281,7 @@ fn resolve_tool(
     version: &str,
     config_options: BTreeMap<String, String>,
     os: Vec<String>,
-    locked: &NativeLockedTool,
+    locked: &SelectedMiseTool,
     lock_platform: &str,
 ) -> Result<BuildTaskTool, OrchestratorError> {
     if !safe_version(version)

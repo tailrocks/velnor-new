@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use crate::native_mise_version::{NativeMiseMinimum, NativeMiseVersion};
-use crate::native_tool_lock::{NativeMiseLock, parse_native_mise_lock};
+use velnor_actions_mise::selected_lock::{SelectedMiseLock, parse_selected_mise_lock};
 
 const MAX_VALUES: usize = 64;
 
@@ -18,7 +18,7 @@ pub(crate) struct NativeToolInput {
 pub(crate) enum NativeToolSource {
     RustToolchain,
     MiseConfig(NativeMiseConfig),
-    MiseLock(NativeMiseLock),
+    MiseLock(SelectedMiseLock),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -90,13 +90,31 @@ pub(crate) fn native_mise_source(
         .and_then(|name| name.to_str())
     {
         Some("mise.toml") => NativeToolSource::MiseConfig(parse_native_mise_config(value)?),
-        Some("mise.lock") => NativeToolSource::MiseLock(parse_native_mise_lock(value)?),
+        Some("mise.lock") => NativeToolSource::MiseLock(parse_selected_mise_lock(value)?),
         _ => return None,
     };
     Some(NativeToolInput {
         sha256: crate::generator::sha256_hex(bytes),
         source,
     })
+}
+
+pub(crate) fn rust_toolchain_options(
+    values: &BTreeMap<String, String>,
+) -> Option<BTreeMap<String, String>> {
+    let mut options = BTreeMap::new();
+    for key in ["components", "targets"] {
+        if let Some(value) = values.get(key) {
+            let mut items = value.split(',').map(ToOwned::to_owned).collect::<Vec<_>>();
+            items.sort();
+            items.dedup();
+            if items.is_empty() || items.iter().any(String::is_empty) {
+                return None;
+            }
+            options.insert(key.to_owned(), items.join(","));
+        }
+    }
+    Some(options)
 }
 
 fn parse_native_mise_config(value: &toml::Value) -> Option<NativeMiseConfig> {

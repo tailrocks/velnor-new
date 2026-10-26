@@ -16,11 +16,11 @@ use super::{
     validate_task_source_shape, validate_task_tool_selection,
 };
 use crate::build_task_tools::resolve_selected_tools;
-use crate::native_tool_input::{NativeMiseConfig, NativeToolSource};
-use crate::native_tool_lock::{NativeMiseLock, rust_toolchain_options};
+use crate::native_tool_input::{NativeMiseConfig, NativeToolSource, rust_toolchain_options};
 use crate::pins::resolve_build_task_mise_setup;
 use crate::toolcheck::ToolInputCheck;
 use crate::{OrchestratorError, discover::Discovery};
+use velnor_actions_mise::selected_lock::SelectedMiseLock;
 
 pub(crate) fn policies(
     config: &VelnorConfig,
@@ -70,7 +70,7 @@ struct RootBuildTaskSources<'a> {
     rust_lock_options: BTreeMap<String, String>,
     mise_check: &'a ToolInputCheck,
     mise_config: &'a NativeMiseConfig,
-    mise_lock: &'a NativeMiseLock,
+    mise_lock: &'a SelectedMiseLock,
     lock_sha256: String,
     rust_sha256: String,
 }

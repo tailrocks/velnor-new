@@ -4,15 +4,16 @@
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub(crate) struct NativeMiseLock {
-    pub(crate) root_keys: Vec<String>,
-    pub(crate) lockfile_version: Option<i64>,
-    pub(crate) tools: BTreeMap<String, Vec<NativeLockedTool>>,
-    pub(crate) valid_shape: bool,
+pub struct SelectedMiseLock {
+    pub root_keys: Vec<String>,
+    pub lockfile_version: Option<i64>,
+    pub tools: BTreeMap<String, Vec<SelectedMiseTool>>,
+    pub valid_shape: bool,
 }
 
-impl NativeMiseLock {
-    pub(crate) fn has_supported_root_shape(&self) -> bool {
+impl SelectedMiseLock {
+    #[must_use]
+    pub fn has_supported_root_shape(&self) -> bool {
         self.valid_shape
             && self.lockfile_version == Some(3)
             && self.root_keys.len() == 2
@@ -21,14 +22,15 @@ impl NativeMiseLock {
     }
 }
 
-impl NativeMiseLock {
-    pub(crate) fn selected_tool(
+impl SelectedMiseLock {
+    #[must_use]
+    pub fn selected_tool(
         &self,
         key: &str,
         version: &str,
         specifier: &str,
         options: &BTreeMap<String, String>,
-    ) -> Option<&NativeLockedTool> {
+    ) -> Option<&SelectedMiseTool> {
         let mut matching = self.tools.get(key)?.iter().filter(|tool| {
             tool.version.as_deref() == Some(version)
                 && tool
@@ -43,80 +45,62 @@ impl NativeMiseLock {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub(crate) struct NativeLockedTool {
-    pub(crate) version: Option<String>,
-    pub(crate) backend: Option<String>,
-    pub(crate) specifiers: Option<Vec<String>>,
-    pub(crate) options: BTreeMap<String, String>,
-    pub(crate) platforms: BTreeMap<String, NativeLockedArtifact>,
-    pub(crate) unsupported_fields: Vec<String>,
-    pub(crate) valid_shape: bool,
+pub struct SelectedMiseTool {
+    pub version: Option<String>,
+    pub backend: Option<String>,
+    pub specifiers: Option<Vec<String>>,
+    pub options: BTreeMap<String, String>,
+    pub platforms: BTreeMap<String, SelectedMiseArtifact>,
+    pub unsupported_fields: Vec<String>,
+    pub valid_shape: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub(crate) struct NativeLockedArtifact {
-    pub(crate) checksum: Option<String>,
-    pub(crate) url: Option<String>,
-    pub(crate) url_api: Option<String>,
-    pub(crate) signer: Option<String>,
-    pub(crate) provenance: Option<String>,
-    pub(crate) repository_ids: Option<NativeRepositoryIds>,
-    pub(crate) unsupported_fields: Vec<String>,
-    pub(crate) valid_shape: bool,
+pub struct SelectedMiseArtifact {
+    pub checksum: Option<String>,
+    pub url: Option<String>,
+    pub url_api: Option<String>,
+    pub signer: Option<String>,
+    pub provenance: Option<String>,
+    pub repository_ids: Option<SelectedRepositoryIds>,
+    pub unsupported_fields: Vec<String>,
+    pub valid_shape: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub(crate) struct NativeRepositoryIds {
-    pub(crate) repository: Option<String>,
-    pub(crate) owner: Option<String>,
+pub struct SelectedRepositoryIds {
+    pub repository: Option<String>,
+    pub owner: Option<String>,
 }
 
-pub(crate) fn rust_toolchain_options(
-    values: &BTreeMap<String, String>,
-) -> Option<BTreeMap<String, String>> {
-    let mut options = BTreeMap::new();
-    for key in ["components", "targets"] {
-        if let Some(value) = values.get(key) {
-            let mut items = value.split(',').map(ToOwned::to_owned).collect::<Vec<_>>();
-            items.sort();
-            items.dedup();
-            if items.is_empty() || items.iter().any(String::is_empty) {
-                return None;
-            }
-            options.insert(key.to_owned(), items.join(","));
-        }
-    }
-    Some(options)
-}
-
-pub(crate) fn parse_native_mise_lock(value: &toml::Value) -> Option<NativeMiseLock> {
+pub fn parse_selected_mise_lock(value: &toml::Value) -> Option<SelectedMiseLock> {
     let root = value.as_table()?;
-    let mut lock = NativeMiseLock {
+    let mut lock = SelectedMiseLock {
         root_keys: root.keys().cloned().collect(),
         lockfile_version: root
             .get("lockfile_version")
             .and_then(toml::Value::as_integer),
         valid_shape: true,
-        ..NativeMiseLock::default()
+        ..SelectedMiseLock::default()
     };
     let tools = root.get("tools")?.as_table()?;
     for (name, value) in tools {
         let Some(entries) = value.as_array() else {
             lock.tools
-                .insert(name.clone(), vec![NativeLockedTool::default()]);
+                .insert(name.clone(), vec![SelectedMiseTool::default()]);
             continue;
         };
         lock.tools.insert(
             name.clone(),
-            entries.iter().map(parse_native_locked_tool).collect(),
+            entries.iter().map(parse_selected_tool).collect(),
         );
     }
     Some(lock)
 }
 
-fn parse_native_locked_tool(value: &toml::Value) -> NativeLockedTool {
+fn parse_selected_tool(value: &toml::Value) -> SelectedMiseTool {
     let Some(entry) = value.as_table() else {
-        return NativeLockedTool::default();
+        return SelectedMiseTool::default();
     };
     let mut unsupported_fields = Vec::new();
     let mut options = BTreeMap::new();
@@ -124,7 +108,7 @@ fn parse_native_locked_tool(value: &toml::Value) -> NativeLockedTool {
     if let Some(options_table) = entry.get("options") {
         if let Some(table) = options_table.as_table() {
             for (key, option) in table {
-                if let Some(text) = native_scalar_or_list(option) {
+                if let Some(text) = scalar_or_list(option) {
                     options.insert(key.clone(), text);
                 } else {
                     unsupported_fields.push(format!("options.{key}"));
@@ -138,7 +122,7 @@ fn parse_native_locked_tool(value: &toml::Value) -> NativeLockedTool {
     for (key, item) in entry {
         if let Some(platform) = key.strip_prefix("platforms.") {
             if platforms
-                .insert(platform.to_owned(), parse_native_locked_artifact(item))
+                .insert(platform.to_owned(), parse_selected_artifact(item))
                 .is_some()
             {
                 unsupported_fields.push(format!("platforms.{platform}.duplicate"));
@@ -150,7 +134,7 @@ fn parse_native_locked_tool(value: &toml::Value) -> NativeLockedTool {
             unsupported_fields.push(key.clone());
         }
     }
-    NativeLockedTool {
+    SelectedMiseTool {
         version: entry
             .get("version")
             .and_then(toml::Value::as_str)
@@ -206,7 +190,7 @@ fn parse_lock_specifiers(
     }
 }
 
-fn native_scalar_or_list(value: &toml::Value) -> Option<String> {
+fn scalar_or_list(value: &toml::Value) -> Option<String> {
     match value {
         toml::Value::String(text) => Some(text.clone()),
         toml::Value::Integer(number) => Some(number.to_string()),
@@ -220,9 +204,9 @@ fn native_scalar_or_list(value: &toml::Value) -> Option<String> {
     }
 }
 
-fn parse_native_locked_artifact(value: &toml::Value) -> NativeLockedArtifact {
+fn parse_selected_artifact(value: &toml::Value) -> SelectedMiseArtifact {
     let Some(table) = value.as_table() else {
-        return NativeLockedArtifact::default();
+        return SelectedMiseArtifact::default();
     };
     let str_field = |key: &str| {
         table
@@ -256,7 +240,7 @@ fn parse_native_locked_artifact(value: &toml::Value) -> NativeLockedArtifact {
         if ids.get("owner").is_some() && owner.is_none() {
             unsupported_fields.push("repository_ids.owner".to_owned());
         }
-        Some(NativeRepositoryIds { repository, owner })
+        Some(SelectedRepositoryIds { repository, owner })
     });
     if table
         .get("provenance_verified")
@@ -281,7 +265,7 @@ fn parse_native_locked_artifact(value: &toml::Value) -> NativeLockedArtifact {
             })
             .cloned(),
     );
-    NativeLockedArtifact {
+    SelectedMiseArtifact {
         checksum: str_field("checksum"),
         url: str_field("url"),
         url_api: str_field("url_api"),

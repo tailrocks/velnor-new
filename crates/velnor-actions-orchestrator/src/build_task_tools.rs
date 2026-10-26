@@ -8,7 +8,7 @@ use velnor_actions_workflow_renderer::verification_jobs::{BuildTaskArtifact, Bui
 
 use crate::OrchestratorError;
 use crate::native_tool_input::NativeMiseConfig;
-use crate::native_tool_lock::{NativeLockedTool, NativeMiseLock};
+use velnor_actions_mise::selected_lock::{SelectedMiseLock, SelectedMiseTool};
 
 pub(crate) type ToolVersionSelection = (String, BTreeMap<String, String>, Vec<String>);
 
@@ -18,7 +18,7 @@ const BOLTFFI_MATCHING_REGEX: &str = r"^boltffi-(darwin-aarch64|darwin-x86_64|li
 pub(crate) fn resolve_selected_tools(
     task: &BuildTask,
     config: &NativeMiseConfig,
-    lock: &NativeMiseLock,
+    lock: &SelectedMiseLock,
     rust_version: &str,
     rust_lock_options: &BTreeMap<String, String>,
 ) -> Result<Vec<BuildTaskTool>, OrchestratorError> {
@@ -101,7 +101,7 @@ pub(crate) fn selected_version_and_options(
 
 fn selected_artifact(
     key: &str,
-    selected: &NativeLockedTool,
+    selected: &SelectedMiseTool,
 ) -> Result<Option<BuildTaskArtifact>, OrchestratorError> {
     if key == "rust" {
         if !selected.platforms.is_empty() {
@@ -139,7 +139,7 @@ fn validate_backend_selection(
     key: &str,
     backend: &str,
     config_options: &BTreeMap<String, String>,
-    locked: &NativeLockedTool,
+    locked: &SelectedMiseTool,
 ) -> Result<(), OrchestratorError> {
     let expected_boltffi = BTreeMap::from([(
         "matching_regex".to_owned(),
