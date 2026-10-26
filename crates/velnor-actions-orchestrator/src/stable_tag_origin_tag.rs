@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::super::github::{GitHubApi, GitRefResponse, TagObjectResponse};
 use super::super::identity::is_git_sha;
 use super::{Authorization, Intent, Tag, canonical, sha256};

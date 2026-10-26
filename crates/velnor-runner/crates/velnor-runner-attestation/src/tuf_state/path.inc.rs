@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 fn reject_symlink_directory(path: &Path) -> io::Result<()> {
     validate_private_directory_path(path)
 }

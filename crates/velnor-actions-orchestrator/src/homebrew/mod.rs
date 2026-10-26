@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 #[path = "../homebrew_adoption.rs"]
 pub(crate) mod adoption;
 #[path = "../homebrew_adoption_authoring.rs"]

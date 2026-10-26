@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 set -euo pipefail
 
 readonly release_confirmation_deadline=$((SECONDS + @RELEASE_BUDGET_SECONDS@))

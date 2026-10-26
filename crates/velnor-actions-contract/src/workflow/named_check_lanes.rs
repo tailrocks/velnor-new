@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::ir::WorkflowIr;
 use super::jobs::PLAN_JOB_ID;
 use super::lanes::{Placement, placement_for};

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 #[path = "closure.rs"]
 pub(crate) mod closure;
 #[path = "wire_w2.rs"]

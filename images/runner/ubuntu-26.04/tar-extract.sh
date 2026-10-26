@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 # Sourced by tar-absolute.sh. -P members are planned into conflict-free
 # extraction groups with rewritten relative names. Hardlinks need their target
 # in the same BusyBox extract; staged merge groups preserve that inode.

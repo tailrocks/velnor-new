@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use serde::Deserialize;
 
 use crate::session::{API_QUERY, bearer, execute, json_content, user_agent};

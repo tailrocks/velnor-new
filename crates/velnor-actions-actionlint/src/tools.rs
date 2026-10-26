@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::JACTIONLINT_VERSION;
 
 pub const SHELLCHECK_VERSION: &str = "0.11.0";

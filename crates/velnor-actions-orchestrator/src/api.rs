@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 pub fn seed_parallel_targets_from_env() -> Result<(), super::OrchestratorError> {
     super::parallel_target_seed::seed_parallel_targets_from_env().map(|_| ())
 }

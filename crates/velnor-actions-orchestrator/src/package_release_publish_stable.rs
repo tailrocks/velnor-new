@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::super::{GitHubPackagePublisher, OrchestratorError, github::ReleaseResponse, internal};
 use velnor_actions_contract::package_release::PackageReleaseChannel;
 use velnor_actions_contract::publication_retry::{

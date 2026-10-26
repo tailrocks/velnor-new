@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::*;
 use crate::package_release::{PackageReleaseChannel, PackageReleasePayloadFormat};
 use crate::{PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlanProduct};

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{HomebrewTapPreparationProof, OrchestratorError, internal, prepare_homebrew_tap};
 use std::{env, fs, path::PathBuf};
 use velnor_actions_contract::{canonical_json_bytes, config::HomebrewTapConfig, parse_strict_json};

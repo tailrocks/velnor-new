@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use std::{fs, os::fd::OwnedFd, os::unix::fs::MetadataExt, path::Path, time::Instant};
 
 use rustix::fs::{self as ufs, FileType, Mode};

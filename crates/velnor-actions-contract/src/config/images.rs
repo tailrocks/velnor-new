@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::image_grammar::{
     is_cargo_name, is_valid_image_id, is_valid_image_repository, require_safe_path,
 };

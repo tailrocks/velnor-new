@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 # Planned extraction regressions shared by tar-semantics-test.sh.
 
 case_strip_components_rejected_before_symlink_extract() {

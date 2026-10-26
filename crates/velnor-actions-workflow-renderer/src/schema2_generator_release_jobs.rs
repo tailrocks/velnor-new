@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::RenderError;
 use crate::composite::{
     composite_yaml, composite_yaml_with_inputs, shared_call_named, shared_call_named_with_inputs,

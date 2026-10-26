@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 set -euo pipefail
 : "${GH_TOKEN:?}" "${VELNOR_UPGRADE_DIR:?}" "${VELNOR_GH_VERSION:?}"
 # Resolve the newest stable velnor-actions release and verify it before any

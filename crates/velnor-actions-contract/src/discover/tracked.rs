@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use std::path::Path;
 
 use super::index::{FileIndex, IndexError, build_index_from_list};

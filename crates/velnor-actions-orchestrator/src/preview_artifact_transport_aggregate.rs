@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{
     ArtifactReadApi, ReleaseArtifactApi, ReleaseConsumer, ZipProfile, archive_file::SealedArchive,
     checkpoint, inventory, require_consumer_environment, validate_metadata,

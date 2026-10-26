@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::shared::{TapInvocationContext, acquire};
 use super::{ConsumerReleaseSpec, ConsumerStableReleaseSpec, RenderError, Yaml, steps};
 use crate::{

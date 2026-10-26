@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::yaml::Yaml;
 
 pub(super) fn run_id(name: &str, id: &str, run: &str) -> Yaml {

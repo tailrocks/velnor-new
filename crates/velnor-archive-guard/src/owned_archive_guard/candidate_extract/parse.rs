@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{BLOCK, MEMBER_LIMIT, Member, TRAILER_LIMIT};
 
 pub(super) fn parse_candidate(bytes: &[u8], expected: [&str; 3]) -> Result<[Member; 3], String> {

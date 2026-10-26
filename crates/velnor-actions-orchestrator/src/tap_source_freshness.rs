@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{OrchestratorError, internal::internal};
 use velnor_actions_contract::{is_valid_branch_name, vcs::is_safe_github_repository};
 

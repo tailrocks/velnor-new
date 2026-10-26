@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 #[path = "image_candidate/closure.rs"]
 mod image_candidate_closure;
 #[path = "image_candidate/record.rs"]

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{RenderError, invalid};
 use velnor_actions_contract::config::project_tool_refs::project_tool_ref_names;
 

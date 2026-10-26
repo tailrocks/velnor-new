@@ -1,4 +1,8 @@
 #!/bin/bash
+
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 # Drives images/dind/entrypoint.sh with stub dockerd and docker.
 # Refuses the host: it would replace /usr/local/bin/docker.
 set -euo pipefail

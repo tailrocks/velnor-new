@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{PackageReleaseChannel, PackageReleaseReceipt, invalid};
 use crate::{ContractError, config::is_exact_semver, is_valid_branch_name};
 

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 pub(crate) const NON_UTF8_PATH: &str = "non_utf8_path";
 
 pub(crate) fn split_nul_paths<Paths>(stdout: &[u8]) -> Result<Paths, String>

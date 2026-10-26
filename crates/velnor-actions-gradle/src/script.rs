@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 pub const INIT_SCRIPT_NAME: &str = "velnor.init.gradle.kts";
 
 #[must_use]

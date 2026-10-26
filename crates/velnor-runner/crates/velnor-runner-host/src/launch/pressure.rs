@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 const GROW_LOAD_PER_CPU_MILLIS: u32 = 750;
 const SHRINK_LOAD_PER_CPU_MILLIS: u32 = 1150;
 const GIB: u64 = 1024 * 1024 * 1024;

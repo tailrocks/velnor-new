@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::toml_scan::{TomlDiagnostic, TomlDoc, TomlScope, TomlValue, flatten_entry};
 
 pub(crate) struct Parser {

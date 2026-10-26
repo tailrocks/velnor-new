@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use rustix::fs::{self as ufs, AtFlags, Dir, FileType, Mode, OFlags, Stat};
 use std::error::Error;
 use std::ffi::{CStr, CString};

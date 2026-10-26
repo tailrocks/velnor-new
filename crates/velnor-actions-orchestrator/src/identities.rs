@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::cachekey::{
     FormatInputs, LaneInputs, ToolchainInputs, cache_format_id, lane_id, mbx_cache_generation,

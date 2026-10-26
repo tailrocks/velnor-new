@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::super::GitHubEvidenceAcquisitionV1;
 
 pub(super) fn is_utc_timestamp(value: &str) -> bool {

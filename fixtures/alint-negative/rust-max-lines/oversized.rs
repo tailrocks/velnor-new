@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 // expected-lines: 401
 // filler line 2: padding so this fixture exceeds the 400-line limit
 // filler line 3: padding so this fixture exceeds the 400-line limit

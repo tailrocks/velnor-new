@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::inventory::{validate_brew_sbom, verify_keg_file_inventory, verify_payload_directories};
 use std::collections::BTreeSet;
 use std::ffi::OsString;

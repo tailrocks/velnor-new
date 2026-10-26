@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::modules::{ModuleDecl, source_from_json};
 use crate::parser::{BlockModel, MAX_DEPTH, ParseError, Walk};
 

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{config_error, valid_formula_path};
 use crate::{ContractError, package_release::PackageReleaseChannel};
 use serde::{Deserialize, Serialize};

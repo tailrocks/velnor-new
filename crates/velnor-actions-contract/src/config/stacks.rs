@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::ansible::AnsibleStackConfig;
 use super::binary_release::RustBinaryReleaseConfig;
 use super::bun::BunStackConfig;

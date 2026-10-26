@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{
     BTreeMap, CheckDeadline, HOMEBREW_SOURCE_CONFIG_PATH, HOMEBREW_SOURCE_RELEASE_POLICY_PATH,
     HomebrewSourceAuthorityLocator, HomebrewTapConfig, OrchestratorError, PackageReleaseChannel,

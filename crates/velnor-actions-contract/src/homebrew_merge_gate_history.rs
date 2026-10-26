@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{
     ContractError, TapFeedbackSnapshot, TapMergePolicy, TapRequiredCheck, TapReviewCompletion,
     TapServerMergeProtection, invalid, is_lower_hex_len, validate_checks, validate_feedback,

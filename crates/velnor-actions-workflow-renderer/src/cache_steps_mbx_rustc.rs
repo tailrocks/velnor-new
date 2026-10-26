@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::ACTION_MBX_BIN;
 
 pub(super) fn mbx_rustc_identity_commands(rust_toolchain: &str) -> [String; 9] {

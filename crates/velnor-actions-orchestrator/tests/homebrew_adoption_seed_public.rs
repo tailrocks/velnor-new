@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use std::{error::Error, fs, io, path::Path, process::Command};
 
 use sha2::{Digest, Sha256};

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 #[cfg(unix)]
 use super::process_group::{
     ObservedStatus, ProcessGroupAnchor, observe_exit, reap_observed, terminate_unanchored,

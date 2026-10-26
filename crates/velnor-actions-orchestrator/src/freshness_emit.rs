@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use velnor_actions_contract::{FRESHNESS_CRON_WEEKLY, ScheduleTrigger, WorkflowPolicy};
 use velnor_actions_mise::PinnedTool;
 use velnor_actions_workflow_renderer::freshness::{FreshnessSpec, render_freshness_workflow};

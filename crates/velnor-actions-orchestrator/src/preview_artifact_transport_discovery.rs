@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{
     ArtifactRecord, BTreeMap, BTreeSet, JobRecord, OrchestratorError, PayloadArtifactRef,
     ReleaseProductionRequest, ReleaseProductionStage, internal, release_payload_artifact_name,

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::ProbeError;
 
 pub(crate) fn decimal_milli_ceil(value: &str) -> Result<u64, ProbeError> {

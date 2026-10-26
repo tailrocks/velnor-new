@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{
     RenderError,
     commands_scan::{expansion_end, is_expansion_at, quote_expansion},

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use velnor_actions_contract::config::{
     is_exact_semver, jactionlint_verifier::jactionlint_verifier_script as contract_verifier_script,
     selected_mise::BIND_SELECTED_MISE_FUNCTION,

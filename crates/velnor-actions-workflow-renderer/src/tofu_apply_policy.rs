@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 pub(super) const PLAN_REVIEW_JQ: &str = r#"
 def no_provisioners:
   type == "object"

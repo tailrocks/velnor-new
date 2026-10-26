@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 pub(crate) const MAX_DOWNLOAD_ATTEMPTS: u32 = 3;
 
 pub(crate) fn download_with_retry(mut attempt: impl FnMut() -> bool) -> (bool, u32) {

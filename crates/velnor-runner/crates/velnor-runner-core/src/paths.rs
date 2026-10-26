@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 pub const RUNNER_ROOT: &str = "/home/runner";
 
 pub const RUNNER_WORK_FOLDER: &str = "_work";

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::super::{
     github::{GITHUB_ACTIONS_BOT_ID, ReleaseResponse, sha256},
     identity::{MAX_RECOVERY_BODY_BYTES, make_recovery_body},

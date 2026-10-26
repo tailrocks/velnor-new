@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::RenderError;
 use crate::yaml::Yaml;
 use velnor_actions_contract::{JobTimeout, ReleaseTarget};

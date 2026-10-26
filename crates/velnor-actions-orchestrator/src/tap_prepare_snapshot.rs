@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{FORMULA_LIMIT, SNAPSHOT_BYTES_LIMIT, SNAPSHOT_FILE_LIMIT, TREE_LIMIT};
 use crate::OrchestratorError;
 use sha2::{Digest, Sha256};

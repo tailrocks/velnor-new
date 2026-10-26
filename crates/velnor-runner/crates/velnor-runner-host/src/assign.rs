@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use velnor_runner_github::{InnerJob, InnerKind, ParsedBatch, Poll};
 
 #[derive(Debug, Clone, PartialEq, Eq)]

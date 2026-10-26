@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{
     ConsumerReleaseSpec, JobTimeout, PackageReleaseChannel, RenderError, Yaml, acquire, base,
     finish, join_argv_for_run, operation, permissions, run_step, setup,

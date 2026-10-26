@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::artifact_zip::{ZipProfile, leaf_union_compressed_bound};
 use super::github::ReleaseArtifactApi;
 use std::{fs::File, path::Path};

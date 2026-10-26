@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::distribution::{valid_app_id_variable, valid_review_check_name, valid_secret_name};
 use crate::ContractError;
 use serde::{Deserialize, Serialize};

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 const MBX_DISK_SAMPLE_BODY: &[&str] = &[
     "boundary=$1",
     r#"case "${RUNNER_TEMP:-}" in /*) ;; *) printf '%s\n' 'MBX_DISK_SAMPLE_ERROR runner_temp_not_absolute' >&2; return 0 ;; esac"#,
