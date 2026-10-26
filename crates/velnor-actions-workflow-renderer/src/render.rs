@@ -97,6 +97,11 @@ pub fn finalize_jobs(
     ctx: &RenderContext,
     mise: &MiseSetup,
 ) -> Result<BTreeMap<String, Job>, RenderError> {
+    if !ctx.authority_steps.matches_mise_setup(mise)? {
+        return Err(RenderError::InvalidWorkflow(
+            "required_verdict_candidate_execution".to_owned(),
+        ));
+    }
     mise.validate()?;
     let mut jobs = merged_jobs(ir, policy, support, ctx)?;
     for (id, job) in &mut jobs {
@@ -172,6 +177,7 @@ fn merged_jobs(
     support: Option<&VelnorSupportWorkflow>,
     ctx: &RenderContext,
 ) -> Result<BTreeMap<String, Job>, RenderError> {
+    execution_boundaries::validate_raw_authority(&ir.jobs, policy, &ctx.authority_steps)?;
     ctx.validate()?;
     if ctx.preseed && policy != WorkflowPolicy::VelnorRepositoryV1 {
         return Err(RenderError::PolicyRejected {

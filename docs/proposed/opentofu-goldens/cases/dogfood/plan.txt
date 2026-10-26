@@ -55,7 +55,7 @@ Workflow to generate
     - cargo-machete (7 steps)
     - check-maintenance-helpers (6 steps)
     - dependency-seed (23 steps)
-    - dependency-seed-crates-velnor-runner (23 steps)
+    - dependency-seed-6372617465732f76656c6e6f722d72756e6e6572 (23 steps)
     - jactionlint (8 steps)
     - plan (16 steps)
     - required (9 steps)

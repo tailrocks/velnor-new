@@ -13,6 +13,24 @@ use crate::{
 
 type JobMap = BTreeMap<String, Job>;
 
+pub(super) fn validate_raw_authority(
+    jobs: &JobMap,
+    policy: WorkflowPolicy,
+    authority: &super::CanonicalAuthoritySteps,
+) -> Result<(), RenderError> {
+    if !authority.matches_raw_required(jobs) {
+        return Err(RenderError::InvalidWorkflow(
+            "required_verdict_candidate_execution".to_owned(),
+        ));
+    }
+    if policy == WorkflowPolicy::VelnorRepositoryV1 && !authority.matches_raw_producer_plan(jobs) {
+        return Err(RenderError::InvalidWorkflow(
+            "trusted_plan_candidate_execution".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
 #[derive(Clone, Copy)]
 pub(super) enum ValidationPhase {
     BeforeSetup,

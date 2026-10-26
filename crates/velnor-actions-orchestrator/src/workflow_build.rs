@@ -6,7 +6,8 @@ use std::collections::BTreeMap;
 use velnor_actions_actionlint::StepSyntax;
 use velnor_actions_contract::GeneratorLock;
 use velnor_actions_contract::{
-    Job, Step, ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowPolicy,
+    ExecutionMode, Job, Step, ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowIr,
+    WorkflowPolicy, expand_workflow,
 };
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
@@ -60,12 +61,16 @@ pub(crate) fn build_workflow_for_consumer_release(
     if input.config.workflow.checkout_lfs {
         wire_w1::apply_checkout_lfs(&mut jobs);
     }
-    let authority_steps =
-        velnor_actions_workflow_renderer::render::CanonicalAuthoritySteps::from_native_jobs(
-            &jobs,
-            prepared.policy,
-        );
     let mut ir = workflow_ir(input.config, input.branch, jobs, prepared.policy);
+    let canonical_mise_setup = crate::pins::resolve_mise_setup(input.config, input.label)?;
+    let expanded_plan_jobs = expanded_plan_variants(&ir, input.config, prepared.policy)?;
+    let authority_steps = velnor_actions_workflow_renderer::render::CanonicalAuthoritySteps::
+        from_native_jobs_with_mise_setup(
+            &ir.jobs,
+            prepared.policy,
+            &canonical_mise_setup,
+            &expanded_plan_jobs,
+        )?;
     let context = workflow_context::render_context(workflow_context::RenderContextInputs {
         authority_steps,
         config: input.config,
@@ -104,6 +109,44 @@ pub(crate) fn build_workflow_for_consumer_release(
         context,
         lint_config,
     })
+}
+
+fn expanded_plan_variants(
+    ir: &WorkflowIr,
+    config: &VelnorConfig,
+    policy: WorkflowPolicy,
+) -> Result<Vec<Job>, OrchestratorError> {
+    if policy != WorkflowPolicy::VelnorRepositoryV1 {
+        return Ok(Vec::new());
+    }
+    let dispatches = [
+        None,
+        Some(ExecutionMode::Hosted),
+        Some(ExecutionMode::ScaleSet),
+        Some(ExecutionMode::Both),
+    ];
+    let mut plans = Vec::new();
+    for dispatch in dispatches {
+        let expanded = match expand_workflow(ir, config, dispatch) {
+            Ok(expanded) => expanded,
+            Err(error) if dispatch.is_none() => {
+                return Err(OrchestratorError::Contract {
+                    problem: error.to_string(),
+                });
+            }
+            Err(_) => continue,
+        };
+        let plan =
+            expanded
+                .jobs
+                .get(PLAN_JOB_ID)
+                .cloned()
+                .ok_or_else(|| OrchestratorError::Contract {
+                    problem: "workflow_missing_plan_authority_snapshot".to_owned(),
+                })?;
+        plans.push(plan);
+    }
+    Ok(plans)
 }
 
 fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, OrchestratorError> {

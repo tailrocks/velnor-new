@@ -92,6 +92,7 @@ fn prepare_inner(
     };
     let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&canonical, &config)?;
     let default_branch = resolve_default_branch(&canonical, &config)?;
+    validate_verification_branch(&config, &default_branch)?;
     let mut discovery = match phases {
         Some(phases) => discover_with_phase_timings(&canonical, &config, &catalog, phases)?,
         None => discover(&canonical, &config, &catalog)?,
@@ -144,6 +145,20 @@ fn prepare_inner(
         lock_audit_blocking: audit.blocking,
         catalog,
     })
+}
+
+fn validate_verification_branch(
+    config: &VelnorConfig,
+    default_branch: &str,
+) -> Result<(), OrchestratorError> {
+    if config.workflow.verification_branch.as_deref() == Some(default_branch) {
+        return Err(OrchestratorError::config(
+            crate::config::CONFIG_REL,
+            "workflow.verification_branch",
+            "must_differ_from_default_branch",
+        ));
+    }
+    Ok(())
 }
 
 pub(crate) fn runner_label_for(config: &VelnorConfig) -> (String, RunnerSelection) {
