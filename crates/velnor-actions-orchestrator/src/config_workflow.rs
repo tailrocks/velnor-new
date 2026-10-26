@@ -13,6 +13,7 @@ pub(super) struct PartialWorkflow {
     name: Option<String>,
     policy: Option<WorkflowPolicy>,
     default_branch: Option<String>,
+    verification_branch: Option<String>,
     generator_validation: Option<GeneratorValidation>,
     max_parallel_jobs: Option<u32>,
     plan_timeout_minutes: Option<u16>,
@@ -45,6 +46,7 @@ impl PartialWorkflow {
             name: self.name.unwrap_or_else(|| "CI".to_owned()),
             policy: self.policy.unwrap_or(WorkflowPolicy::ConsumerV1),
             default_branch: self.default_branch,
+            verification_branch: self.verification_branch,
             generator_validation: self
                 .generator_validation
                 .unwrap_or(GeneratorValidation::Bootstrap),

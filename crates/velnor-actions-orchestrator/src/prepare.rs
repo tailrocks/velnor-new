@@ -79,6 +79,13 @@ fn prepare_inner(
     };
     let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&canonical, &config)?;
     let default_branch = resolve_default_branch(&canonical, &config)?;
+    if config.workflow.verification_branch.as_deref() == Some(default_branch.as_str()) {
+        return Err(OrchestratorError::config(
+            crate::config::CONFIG_REL,
+            "workflow.verification_branch",
+            "must_differ_from_default_branch",
+        ));
+    }
     check_velnor_identity(&canonical, &config)?;
     let mut discovery = match phases {
         Some(phases) => discover_with_phase_timings(&canonical, &config, &catalog, phases)?,
