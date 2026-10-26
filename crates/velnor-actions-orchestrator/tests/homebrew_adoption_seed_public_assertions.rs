@@ -12,10 +12,12 @@ use velnor_actions_workflow_renderer::{
     STAGED_BINARY_PREFIX,
 };
 
+mod complete_job_authority;
 mod lock_trust;
 mod raw_step_authority;
 mod runtime_context_authority;
 mod shell_authority;
+pub(super) use complete_job_authority::assert_complete_job_authority;
 pub(super) use lock_trust::assert_lock_trust_rejections;
 
 pub(super) const BOOTSTRAP_CONFIG: &str = r#"schema = 2

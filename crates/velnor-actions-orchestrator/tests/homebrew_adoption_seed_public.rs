@@ -56,6 +56,10 @@ platform = "linux/amd64"
     )?;
     let preparation = prepare(temp.path())?;
     homebrew_adoption_seed_public_assertions::assert_raw_consumer_render(&preparation)?;
+    homebrew_adoption_seed_public_assertions::assert_complete_job_authority(
+        &preparation,
+        velnor_actions_contract::WorkflowPolicy::ConsumerV1,
+    )?;
     let jobs = finalized_jobs(&preparation)?;
     homebrew_adoption_seed_public_assertions::assert_finalized_mise_jobs(&jobs)?;
     let required = jobs
@@ -196,6 +200,10 @@ fn public_velnor_repository_bootstrap_accepts_only_catalog_mise_lock() -> Result
         &published_lock,
     )?;
     homebrew_adoption_seed_public_assertions::assert_raw_producer_render(&preparation)?;
+    homebrew_adoption_seed_public_assertions::assert_complete_job_authority(
+        &preparation,
+        velnor_actions_contract::WorkflowPolicy::VelnorRepositoryV1,
+    )?;
     homebrew_adoption_seed_public_assertions::assert_plan_checkout_pin_is_required(&preparation)?;
     homebrew_adoption_seed_public_assertions::assert_symlink_bootstrap(
         temp.path(),

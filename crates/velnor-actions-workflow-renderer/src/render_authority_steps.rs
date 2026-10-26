@@ -69,13 +69,17 @@ impl CanonicalRuntimeInputs {
 
 #[derive(Debug, Clone)]
 pub struct CanonicalAuthoritySteps {
-    required_steps: Option<Vec<Step>>,
-    producer_plan_steps: Option<Vec<Step>>,
-    producer_plan_expansions: Vec<Vec<Step>>,
+    authority_jobs: Vec<CanonicalAuthorityJobs>,
     mise_setup: Option<Step>,
     required_shells: Vec<Step>,
     producer_plan_shells: Option<Vec<Step>>,
     runtime: CanonicalRuntimeInputs,
+}
+
+#[derive(Debug, Clone)]
+struct CanonicalAuthorityJobs {
+    required: Option<Vec<u8>>,
+    producer_plan: Option<Vec<u8>>,
 }
 
 impl CanonicalAuthoritySteps {
@@ -83,58 +87,72 @@ impl CanonicalAuthoritySteps {
         jobs: &BTreeMap<String, Job>,
         policy: WorkflowPolicy,
         setup: &crate::setup::MiseSetup,
-        expanded_plan_jobs: &[Job],
+        expanded_authority_jobs: &[(Job, Option<Job>)],
         runtime: CanonicalRuntimeInputs,
     ) -> Result<Self, crate::RenderError> {
+        if policy == WorkflowPolicy::VelnorRepositoryV1
+            && expanded_authority_jobs
+                .iter()
+                .any(|(_, producer_plan)| producer_plan.is_none())
+        {
+            return Err(crate::RenderError::InvalidWorkflow(
+                "trusted_plan_candidate_execution".to_owned(),
+            ));
+        }
         let setup = crate::setup::mise_setup_step(setup)?;
-        Ok(Self::from_native_jobs_inner(
-            jobs,
-            policy,
-            Some(setup),
-            expanded_plan_jobs,
-            runtime,
-        ))
+        let variants = expanded_authority_jobs
+            .iter()
+            .cloned()
+            .map(|(required, plan)| (Some(required), plan))
+            .collect::<Vec<_>>();
+        Self::from_native_jobs_inner(jobs, policy, Some(setup), &variants, runtime)
     }
 
     fn from_native_jobs_inner(
         jobs: &BTreeMap<String, Job>,
         policy: WorkflowPolicy,
         mise_setup: Option<Step>,
-        expanded_plan_jobs: &[Job],
+        expanded_authority_jobs: &[(Option<Job>, Option<Job>)],
         runtime: CanonicalRuntimeInputs,
-    ) -> Self {
-        let required_steps = jobs.get(FINAL_JOB_ID).map(|job| job.steps.clone());
-        let required_shells = required_steps
-            .as_deref()
-            .map_or_else(Vec::new, |steps| shell_steps(steps).cloned().collect());
-        let producer_plan_steps = if policy == WorkflowPolicy::VelnorRepositoryV1 {
-            jobs.get(PLAN_JOB_ID)
-                .map(|job| plan_prefix(&job.steps).to_vec())
-        } else {
-            None
-        };
-        let producer_plan_shells = (policy == WorkflowPolicy::VelnorRepositoryV1).then(|| {
-            producer_plan_steps
-                .as_deref()
-                .map_or_else(Vec::new, |steps| shell_steps(steps).cloned().collect())
-        });
-        let producer_plan_expansions = if policy == WorkflowPolicy::VelnorRepositoryV1 {
-            expanded_plan_jobs
+    ) -> Result<Self, crate::RenderError> {
+        let mut authority_jobs = vec![CanonicalAuthorityJobs {
+            required: jobs.get(FINAL_JOB_ID).map(canonical_job).transpose()?,
+            producer_plan: if policy == WorkflowPolicy::VelnorRepositoryV1 {
+                jobs.get(PLAN_JOB_ID).map(canonical_job).transpose()?
+            } else {
+                None
+            },
+        }];
+        authority_jobs.extend(
+            expanded_authority_jobs
                 .iter()
-                .map(|job| plan_prefix(&job.steps).to_vec())
-                .collect()
-        } else {
-            Vec::new()
-        };
-        Self {
-            required_steps,
-            producer_plan_steps,
-            producer_plan_expansions,
+                .map(|(required, producer_plan)| {
+                    Ok(CanonicalAuthorityJobs {
+                        required: required.as_ref().map(canonical_job).transpose()?,
+                        producer_plan: if policy == WorkflowPolicy::VelnorRepositoryV1 {
+                            producer_plan.as_ref().map(canonical_job).transpose()?
+                        } else {
+                            None
+                        },
+                    })
+                })
+                .collect::<Result<Vec<_>, crate::RenderError>>()?,
+        );
+        let required_shells = jobs
+            .get(FINAL_JOB_ID)
+            .map_or_else(Vec::new, |job| shell_steps(&job.steps).cloned().collect());
+        let producer_plan_shells = (policy == WorkflowPolicy::VelnorRepositoryV1).then(|| {
+            jobs.get(PLAN_JOB_ID).map_or_else(Vec::new, |job| {
+                shell_steps(plan_prefix(&job.steps)).cloned().collect()
+            })
+        });
+        Ok(Self {
+            authority_jobs,
             mise_setup,
             required_shells,
             producer_plan_shells,
             runtime,
-        }
+        })
     }
 
     pub(super) fn matches_runtime(&self, context: &crate::render::RenderContext) -> bool {
@@ -157,39 +175,68 @@ impl CanonicalAuthoritySteps {
     }
 
     pub(super) fn matches_raw_required(&self, jobs: &BTreeMap<String, Job>) -> bool {
-        match (self.required_steps.as_deref(), jobs.get(FINAL_JOB_ID)) {
-            (Some(expected), Some(job)) => {
-                matches_with_optional_setup(expected, &job.steps, self.mise_setup.as_ref())
-            }
-            (None, None) => true,
-            _ => false,
-        }
+        let actual = match jobs.get(FINAL_JOB_ID) {
+            Some(job) => self
+                .normalize_optional_setup(job)
+                .and_then(|normalized| canonical_job(&normalized).ok())
+                .map(Some),
+            None => Some(None),
+        };
+        let Some(actual) = actual else {
+            return false;
+        };
+        self.authority_jobs
+            .iter()
+            .any(|expected| expected.required == actual)
     }
 
     pub(super) fn matches_raw_producer_plan(&self, jobs: &BTreeMap<String, Job>) -> bool {
-        match (self.producer_plan_steps.as_deref(), jobs.get(PLAN_JOB_ID)) {
-            (Some(expected), Some(job)) => {
-                let operations = job
-                    .steps
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(index, step)| {
-                        matches!(&step.kind, StepKind::Internal { operation, .. }
-                            if operation == crate::steps::PLAN_OPERATION)
-                        .then_some(index)
-                    })
-                    .collect::<Vec<_>>();
-                if operations.len() != 1 {
-                    return false;
-                }
-                let prefix = &job.steps[..=operations[0]];
-                matches_with_optional_setup(expected, prefix, self.mise_setup.as_ref())
-                    || self.producer_plan_expansions.iter().any(|candidate| {
-                        matches_with_optional_setup(candidate, prefix, self.mise_setup.as_ref())
-                    })
+        let required = match jobs.get(FINAL_JOB_ID) {
+            Some(job) => self
+                .normalize_optional_setup(job)
+                .and_then(|normalized| canonical_job(&normalized).ok())
+                .map(Some),
+            None => Some(None),
+        };
+        let producer_plan = match jobs.get(PLAN_JOB_ID) {
+            Some(job) => self
+                .normalize_optional_setup(job)
+                .and_then(|normalized| canonical_job(&normalized).ok())
+                .map(Some),
+            None => Some(None),
+        };
+        let (Some(required), Some(producer_plan)) = (required, producer_plan) else {
+            return false;
+        };
+        self.authority_jobs.iter().any(|expected| {
+            expected.required == required && expected.producer_plan == producer_plan
+        })
+    }
+
+    fn normalize_optional_setup(&self, job: &Job) -> Option<Job> {
+        let mut normalized = job.clone();
+        let positions = normalized
+            .steps
+            .iter()
+            .enumerate()
+            .filter_map(|(index, step)| (step.role == Some(StepRole::MiseSetup)).then_some(index))
+            .collect::<Vec<_>>();
+        match positions.as_slice() {
+            [] => Some(normalized),
+            [index]
+                if self
+                    .mise_setup
+                    .as_ref()
+                    .is_some_and(|setup| normalized.steps.get(*index) == Some(setup))
+                    && normalized
+                        .steps
+                        .get(index.wrapping_sub(1))
+                        .is_some_and(|step| step.role == Some(StepRole::Checkout)) =>
+            {
+                normalized.steps.remove(*index);
+                Some(normalized)
             }
-            (None, None) => true,
-            _ => false,
+            _ => None,
         }
     }
 
@@ -229,40 +276,18 @@ fn validate_plan_consumer_env(env: &BTreeMap<String, String>) -> Result<(), crat
     crate::commands::validate_env(env)
 }
 
+fn canonical_job(job: &Job) -> Result<Vec<u8>, crate::RenderError> {
+    velnor_actions_contract::canonical_json_bytes(job).map_err(|error| {
+        crate::RenderError::InvalidWorkflow(format!("authority_job_encoding:{error}"))
+    })
+}
+
 fn plan_prefix(steps: &[Step]) -> &[Step] {
     let end = steps.iter().position(|step| {
         matches!(&step.kind, StepKind::Internal { operation, .. }
             if operation == crate::steps::PLAN_OPERATION)
     });
     end.map_or(steps, |at| &steps[..=at])
-}
-
-fn matches_with_optional_setup(expected: &[Step], actual: &[Step], setup: Option<&Step>) -> bool {
-    if expected == actual {
-        return true;
-    }
-    let Some(setup) = setup else {
-        return false;
-    };
-    if actual.len() != expected.len() + 1
-        || expected
-            .iter()
-            .filter(|step| step.role == Some(StepRole::Checkout))
-            .count()
-            != 1
-    {
-        return false;
-    }
-    let Some(checkout) = expected
-        .iter()
-        .position(|step| step.role == Some(StepRole::Checkout))
-    else {
-        return false;
-    };
-    let insertion = checkout + 1;
-    actual[..insertion] == expected[..insertion]
-        && actual[insertion] == *setup
-        && actual[insertion + 1..] == expected[insertion..]
 }
 
 fn shell_steps(steps: &[Step]) -> impl Iterator<Item = &Step> {

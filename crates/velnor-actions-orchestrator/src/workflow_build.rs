@@ -10,7 +10,7 @@ use velnor_actions_contract::{
     WorkflowPolicy, expand_workflow,
 };
 use velnor_actions_mise::ToolCatalog;
-use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
+use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID};
 use velnor_actions_workflow_renderer::verification_jobs::WorkflowTaskPolicy;
 
 use crate::OrchestratorError;
@@ -63,7 +63,7 @@ pub(crate) fn build_workflow_for_consumer_release(
     }
     let mut ir = workflow_ir(input.config, input.branch, jobs, prepared.policy);
     let canonical_mise_setup = crate::pins::resolve_mise_setup(input.config, input.label)?;
-    let expanded_plan_jobs = expanded_plan_variants(&ir, input.config, prepared.policy)?;
+    let expanded_authority_jobs = expanded_authority_variants(&ir, input.config, prepared.policy)?;
     let runtime = workflow_context::canonical_runtime(
         &prepared.catalog,
         &prepared.report_helper_version,
@@ -74,7 +74,7 @@ pub(crate) fn build_workflow_for_consumer_release(
             &ir.jobs,
             prepared.policy,
             &canonical_mise_setup,
-            &expanded_plan_jobs,
+            &expanded_authority_jobs,
             runtime.clone(),
         )?;
     let context = workflow_context::render_context(workflow_context::RenderContextInputs {
@@ -116,21 +116,18 @@ pub(crate) fn build_workflow_for_consumer_release(
     })
 }
 
-fn expanded_plan_variants(
+fn expanded_authority_variants(
     ir: &WorkflowIr,
     config: &VelnorConfig,
     policy: WorkflowPolicy,
-) -> Result<Vec<Job>, OrchestratorError> {
-    if policy != WorkflowPolicy::VelnorRepositoryV1 {
-        return Ok(Vec::new());
-    }
+) -> Result<Vec<(Job, Option<Job>)>, OrchestratorError> {
     let dispatches = [
         None,
         Some(ExecutionMode::Hosted),
         Some(ExecutionMode::ScaleSet),
         Some(ExecutionMode::Both),
     ];
-    let mut plans = Vec::new();
+    let mut authorities = Vec::new();
     for dispatch in dispatches {
         let expanded = match expand_workflow(ir, config, dispatch) {
             Ok(expanded) => expanded,
@@ -141,17 +138,23 @@ fn expanded_plan_variants(
             }
             Err(_) => continue,
         };
-        let plan =
-            expanded
-                .jobs
-                .get(PLAN_JOB_ID)
-                .cloned()
-                .ok_or_else(|| OrchestratorError::Contract {
+        let required = expanded.jobs.get(FINAL_JOB_ID).cloned().ok_or_else(|| {
+            OrchestratorError::Contract {
+                problem: "workflow_missing_required_authority_snapshot".to_owned(),
+            }
+        })?;
+        let producer_plan = if policy == WorkflowPolicy::VelnorRepositoryV1 {
+            Some(expanded.jobs.get(PLAN_JOB_ID).cloned().ok_or_else(|| {
+                OrchestratorError::Contract {
                     problem: "workflow_missing_plan_authority_snapshot".to_owned(),
-                })?;
-        plans.push(plan);
+                }
+            })?)
+        } else {
+            None
+        };
+        authorities.push((required, producer_plan));
     }
-    Ok(plans)
+    Ok(authorities)
 }
 
 fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, OrchestratorError> {
