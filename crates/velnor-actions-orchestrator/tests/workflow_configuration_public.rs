@@ -7,6 +7,8 @@ mod workflow_configuration_fixture;
 mod branches;
 #[path = "workflow_configuration_public/bun_assets_routing.rs"]
 mod bun_assets_routing;
+#[path = "workflow_configuration_public/bun_malformed.rs"]
+mod bun_malformed;
 #[path = "workflow_configuration_public/bun_routing.rs"]
 mod bun_routing;
 #[path = "workflow_configuration_public/bun_runtime.rs"]

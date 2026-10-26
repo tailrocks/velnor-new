@@ -1,12 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
-use std::error::Error;
-use std::fs;
-
-use super::bun_routing::make_bun_repo;
-use super::support::rendered_job_block;
+use super::{bun_routing::make_bun_repo, support::rendered_job_block};
+use std::{collections::BTreeSet, error::Error, fmt::Write as _, fs, path::Path};
 use velnor_actions_orchestrator::{
     ExecutionMode, migrate_config, prepare, render_staged_tree_with,
 };
@@ -15,6 +11,16 @@ use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 const MEMBER_ID: &str = "bun-fixture-web";
 const ASSETS_JOB_ID: &str = "bun-fixture-web--assets";
 const SUITE_IDS: [&str; 2] = ["bun-fixture-web--unit", "bun-fixture-web--browser"];
+const BROWSER_SUITE_ID: &str = "bun-fixture-web--browser";
+const BROWSER_REPORT_ID: &str = "bun-fixture-web--browser--report";
+const MIXED_BUN_JOB_IDS: [&str; 6] = [
+    "bun-fixture-ui",
+    MEMBER_ID,
+    "bun-fixture-web--unit",
+    BROWSER_SUITE_ID,
+    BROWSER_REPORT_ID,
+    ASSETS_JOB_ID,
+];
 
 #[test]
 fn schema2_bun_both_routes_private_asset_handoffs_per_lane() -> Result<(), Box<dyn Error>> {
@@ -34,7 +40,6 @@ fn schema2_bun_both_routes_private_asset_handoffs_per_lane() -> Result<(), Box<d
         2,
         "paired assets producers must publish distinct archives"
     );
-
     for (suffix, other_suffix) in [("__hosted", "__local"), ("__local", "__hosted")] {
         let member_id = format!("{MEMBER_ID}{suffix}");
         let other_member_id = format!("{MEMBER_ID}{other_suffix}");
@@ -86,7 +91,35 @@ fn schema2_bun_both_routes_private_asset_handoffs_per_lane() -> Result<(), Box<d
     Ok(())
 }
 
-fn render_bun_with_private_asset() -> Result<String, Box<dyn Error>> {
+#[test]
+fn schema2_bun_mixed_profiles_keep_private_asset_handoffs() -> Result<(), Box<dyn Error>> {
+    for (default_profile, suite_profile, default_runner, suite_runner) in [
+        (
+            "hosted",
+            "local",
+            "ubuntu-26.04",
+            "[velnor, ubuntu-26.04-scale-set]",
+        ),
+        (
+            "local",
+            "hosted",
+            "[velnor, ubuntu-26.04-scale-set]",
+            "ubuntu-26.04",
+        ),
+    ] {
+        let repo = make_private_assets_repo()?;
+        configure_mixed_execution(repo.path(), default_profile, suite_profile)?;
+        let prepared = prepare(repo.path())?;
+        let rendered = render_staged_tree_with(&prepared, None)?;
+        let workflow = rendered
+            .get(WORKFLOW_PATH)
+            .ok_or("rendered CI workflow is missing")?;
+        assert_mixed_bun_workflow(workflow, default_runner, suite_runner)?;
+    }
+    Ok(())
+}
+
+fn make_private_assets_repo() -> Result<tempfile::TempDir, Box<dyn Error>> {
     let repo = make_bun_repo()?;
     let config_path = repo.path().join(".velnor/config.toml");
     let mut config = fs::read_to_string(&config_path)?;
@@ -122,12 +155,153 @@ extract_to = "fixture-assets"
     )?;
     let migrated = migrate_config(repo.path(), 2, true)?;
     assert_eq!(fs::read_to_string(config_path)?, migrated);
+    Ok(repo)
+}
+
+fn render_bun_with_private_asset() -> Result<String, Box<dyn Error>> {
+    let repo = make_private_assets_repo()?;
     let prepared = prepare(repo.path())?;
     let rendered = render_staged_tree_with(&prepared, Some(ExecutionMode::Both))?;
     rendered
         .get(WORKFLOW_PATH)
         .map(str::to_owned)
         .ok_or_else(|| "rendered CI workflow is missing".into())
+}
+
+fn configure_mixed_execution(
+    repo: &Path,
+    default_profile: &str,
+    suite_profile: &str,
+) -> Result<(), Box<dyn Error>> {
+    let config_path = repo.join(".velnor/config.toml");
+    let config = fs::read_to_string(&config_path)?;
+    assert!(!config.lines().any(|line| line.starts_with("mode = ")));
+    let previous = "default_profile = \"hosted\"";
+    let replacement = format!("default_profile = \"{default_profile}\"");
+    assert_eq!(config.matches(previous).count(), 1);
+    let mut config = config.replace(previous, &replacement);
+    write!(
+        config,
+        r#"
+
+[execution.overrides."bun-fixture-web--unit"]
+profile = "{suite_profile}"
+role = "verification"
+
+[execution.overrides."bun-fixture-web--browser"]
+profile = "{suite_profile}"
+role = "verification"
+"#
+    )?;
+    fs::write(config_path, config)?;
+    Ok(())
+}
+
+fn assert_mixed_bun_workflow(
+    workflow: &str,
+    default_runner: &str,
+    suite_runner: &str,
+) -> Result<(), Box<dyn Error>> {
+    let actual: BTreeSet<String> = rendered_job_ids(workflow)
+        .into_iter()
+        .filter(|id| id.starts_with("bun-"))
+        .collect();
+    assert_eq!(
+        actual,
+        MIXED_BUN_JOB_IDS
+            .iter()
+            .map(|id| (*id).to_owned())
+            .collect::<BTreeSet<_>>()
+    );
+    for id in [
+        "bun-fixture-ui",
+        MEMBER_ID,
+        ASSETS_JOB_ID,
+        BROWSER_REPORT_ID,
+    ] {
+        assert_job_runner(workflow, id, default_runner)?;
+    }
+    for id in SUITE_IDS {
+        assert_job_runner(workflow, id, suite_runner)?;
+    }
+
+    let archive_name = format!("velnor-pw-assets-{MEMBER_ID}.tar.gz");
+    let stage_dir = format!("${{{{ runner.temp }}}}/velnor/bun-assets/{MEMBER_ID}");
+    let producer = rendered_job_block(workflow, ASSETS_JOB_ID)?;
+    let archive_path = format!("{stage_dir}/{archive_name}");
+    assert_eq!(asset_archive_path(producer)?, archive_path.as_str());
+    assert_named_asset_step_id(producer, "Bundle verified private assets", MEMBER_ID)?;
+
+    for suite_id in SUITE_IDS {
+        let suite = rendered_job_block(workflow, suite_id)?;
+        assert_eq!(
+            needs_for_block(suite)?,
+            BTreeSet::from(["plan".to_owned(), ASSETS_JOB_ID.to_owned()])
+        );
+        assert_private_asset_handoff(suite, MEMBER_ID, &archive_name, &stage_dir)?;
+    }
+
+    let report = rendered_job_block(workflow, BROWSER_REPORT_ID)?;
+    assert_eq!(
+        needs_for_block(report)?,
+        BTreeSet::from([
+            "plan".to_owned(),
+            ASSETS_JOB_ID.to_owned(),
+            BROWSER_SUITE_ID.to_owned(),
+        ])
+    );
+    assert!(report.contains(&format!("needs.{BROWSER_SUITE_ID}.result")));
+    assert_private_asset_handoff(report, MEMBER_ID, &archive_name, &stage_dir)?;
+
+    let browser_suite = rendered_job_block(workflow, BROWSER_SUITE_ID)?;
+    assert_single_lane_artifacts(browser_suite, report, BROWSER_SUITE_ID);
+    Ok(())
+}
+
+fn assert_private_asset_handoff(
+    block: &str,
+    member_id: &str,
+    archive_name: &str,
+    stage_dir: &str,
+) -> Result<(), Box<dyn Error>> {
+    assert!(has_yaml_value(block, "name", archive_name));
+    assert!(has_yaml_value(block, "path", stage_dir));
+    assert_named_asset_step_id(block, "Prepare private asset handoff", member_id)?;
+    assert_named_asset_step_id(block, "Import and verify private assets", member_id)?;
+    Ok(())
+}
+
+fn assert_single_lane_artifacts(suite: &str, report: &str, suite_id: &str) {
+    let blob_name = format!("velnor-pw-blob-{suite_id}-leg-${{{{ matrix.leg }}}}");
+    let blob_pattern = format!("velnor-pw-blob-{suite_id}-leg-*");
+    let results_name = format!("velnor-pw-results-{suite_id}-leg-${{{{ matrix.leg }}}}");
+    let report_name = format!("velnor-pw-report-{suite_id}");
+    assert!(suite.contains(&format!("name: {blob_name}")));
+    assert!(suite.contains(&format!("name: {results_name}")));
+    assert!(report.contains(&format!("pattern: {blob_pattern}")));
+    assert!(report.contains(&format!("name: {report_name}")));
+}
+
+fn rendered_job_ids(workflow: &str) -> BTreeSet<String> {
+    workflow
+        .lines()
+        .skip_while(|line| *line != "jobs:")
+        .skip(1)
+        .filter_map(|line| line.strip_prefix("  "))
+        .filter_map(|line| line.strip_suffix(':'))
+        .filter(|id| !id.starts_with(' '))
+        .map(str::to_owned)
+        .collect()
+}
+
+fn assert_job_runner(workflow: &str, id: &str, expected: &str) -> Result<(), Box<dyn Error>> {
+    let block = rendered_job_block(workflow, id)?;
+    let actual = block
+        .lines()
+        .find_map(|line| line.trim_start().strip_prefix("runs-on: "))
+        .ok_or_else(|| format!("rendered job {id} has no runner"))?;
+    assert_eq!(actual, expected, "runner selector for {id}");
+    Ok(())
 }
 
 fn asset_archive_path(block: &str) -> Result<&str, Box<dyn Error>> {
