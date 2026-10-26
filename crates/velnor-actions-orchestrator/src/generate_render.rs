@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_actions_actionlint::render_jactionlint_yaml;
-use velnor_actions_contract::{ExecutionMode, expand_workflow_with_bun_plan};
+use velnor_actions_contract::{ExecutionMode, expand_workflow};
 use velnor_actions_workflow_renderer::guard::{self, SafeTreePath};
 use velnor_actions_workflow_renderer::render::RenderedTree;
 use velnor_actions_workflow_renderer::steps::rehead_lint_config_marker;
@@ -26,10 +26,11 @@ pub(super) fn render_all(
     }
     let version = env!("CARGO_PKG_VERSION");
     let mise = resolve_mise_setup(&prep.config, &prep.runner_label)?;
-    let expansion = expand_workflow_with_bun_plan(&prep.workflow.ir, &prep.config, dispatch)
-        .map_err(|err| OrchestratorError::Contract {
+    let expansion = expand_workflow(&prep.workflow.ir, &prep.config, dispatch).map_err(|err| {
+        OrchestratorError::Contract {
             problem: err.to_string(),
-        })?;
+        }
+    })?;
     let ir = expansion.ir;
     let mut render_context = prep.workflow.context.clone();
     render_context.bun_lane_plan = expansion.bun_lane_plan;

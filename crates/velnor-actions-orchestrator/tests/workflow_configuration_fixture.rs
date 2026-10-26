@@ -10,7 +10,7 @@ use tempfile::TempDir;
 use velnor_actions_contract::SUPPORTED_TARGETS;
 
 #[path = "../../test_support/git_fixture.rs"]
-mod git_fixture;
+pub(crate) mod git_fixture;
 
 pub(crate) fn make_repo(config: &str) -> Result<TempDir, Box<dyn Error>> {
     let dir = tempfile::tempdir()?;

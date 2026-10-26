@@ -10,7 +10,7 @@ use crate::errors::ContractError;
 
 #[derive(Debug, Clone)]
 pub struct BunLanePlan {
-    routes: BTreeMap<String, JobRoute>,
+    pub(super) routes: BTreeMap<String, JobRoute>,
     id_map: BTreeMap<String, Vec<String>>,
     output_to_logical: BTreeMap<String, String>,
     asset_producers: BTreeMap<String, String>,
@@ -18,15 +18,15 @@ pub struct BunLanePlan {
 }
 
 #[derive(Debug, Clone)]
-struct JobRoute {
+pub(super) struct JobRoute {
     class: LaneClass,
     placement: Placement,
-    outputs: Vec<LaneOutput>,
+    pub(super) outputs: Vec<LaneOutput>,
 }
 
 #[derive(Debug, Clone)]
-struct LaneOutput {
-    id: String,
+pub(super) struct LaneOutput {
+    pub(super) id: String,
     lane: PhysicalLane,
     paired: bool,
 }
@@ -105,7 +105,7 @@ impl BunLanePlan {
                 .ok_or_else(|| plan_error("output_route_missing", logical_id))?;
             let identities = self.output_identities(logical_id, output, canonical_job)?;
             self.project_needs(canonical_job, &identities, job)?;
-            project_condition(canonical_job, &identities, job);
+            project_condition(logical_id, output_id, canonical_job, &identities, job);
             project_steps(&identities, output, job);
         }
         Ok(projected)
@@ -236,6 +236,8 @@ fn lane_outputs(logical_id: &str, placement: Placement) -> Vec<LaneOutput> {
 }
 
 fn project_condition(
+    logical_id: &str,
+    output_id: &str,
     canonical_job: &Job,
     identities: &BTreeMap<String, String>,
     projected_job: &mut Job,
@@ -251,6 +253,12 @@ fn project_condition(
                 *condition = condition.replace(source.as_str(), target.as_str());
             }
         }
+    }
+    let logical_gate = format!("!contains(needs.plan.outputs.not_affected_jobs, ',{logical_id},')");
+    if condition.contains(logical_gate.as_str()) {
+        let output_gate =
+            format!("!contains(needs.plan.outputs.not_affected_jobs, ',{output_id},')");
+        *condition = condition.replace(logical_gate.as_str(), output_gate.as_str());
     }
 }
 

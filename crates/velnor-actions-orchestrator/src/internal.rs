@@ -30,7 +30,7 @@ use crate::internal_plan::{default_generator_with_phase_timings, plan_packages};
 use crate::internal_request::{PlanRequest, checked_plan_request};
 
 pub use self::plan_response::validate_plan_response;
-use crate::prepare::{prepare, prepare_with_phase_timings};
+use crate::prepare::{GenerationPreparation, prepare, prepare_with_phase_timings};
 use crate::select::{ChangeEvidence, classify_changed, select_universe};
 use crate::select_edges::plan_task_graph;
 
@@ -70,14 +70,18 @@ fn plan_internal_inner(
     request_json: &str,
     mut timings: Option<&mut phase_timing::PlanPhaseTimings>,
 ) -> Result<String, OrchestratorError> {
-    let (mut request, root) = checked_plan_request(request_json)?;
+    let (request, root) = checked_plan_request(request_json)?;
     let prep = if let Some(phases) = timings.as_deref_mut() {
         phases.measure_prepare(|phases| prepare_with_phase_timings(&root, phases))?
     } else {
         prepare(&root)?
     };
     validate_qualification_request(&request, &prep.default_branch)?;
-    let named_check_lanes = named_lanes::resolve(&prep, request.named_check_lanes.take())?;
+    let planning_lanes = named_lanes::resolve(
+        &prep,
+        request.named_check_lanes.as_ref(),
+        request.bun_job_lanes.as_ref(),
+    )?;
     let catalog = &prep.catalog;
     let mut warnings = Vec::new();
     warnings.extend(crate::evidence::workspace_drift_warnings(
@@ -105,31 +109,18 @@ fn plan_internal_inner(
         &prep.runner_label,
         prep.runner_selection,
         catalog,
-        &named_check_lanes,
+        &planning_lanes.named_check_lanes,
         warnings,
         timings.as_deref_mut(),
     )?;
-    plan.jobs.extend(crate::select::images::dispositions(
-        &prep.root,
-        &prep.config.images,
-        &prep.discovery,
+    append_stack_dispositions(
+        &mut plan,
+        &prep,
         request.event,
         changed.as_ref(),
         &evidence,
-    ));
-    for dispositions in [
-        crate::select::ansible::dispositions,
-        crate::select::bun::dispositions,
-        crate::select::dbt::dispositions,
-    ] {
-        plan.jobs.extend(dispositions(
-            &prep.config,
-            &prep.discovery,
-            request.event,
-            changed.as_ref(),
-            &evidence,
-        ));
-    }
+        &planning_lanes.bun_job_lanes,
+    )?;
     plan.jobs
         .sort_by(|left, right| left.job_id.cmp(&right.job_id));
     plan.validate().map_err(internal_contract)?;
@@ -138,6 +129,45 @@ fn plan_internal_inner(
     serde_json::to_string(&response).map_err(|err| OrchestratorError::Internal {
         problem: format!("response_encode:{err}"),
     })
+}
+
+fn append_stack_dispositions(
+    plan: &mut Plan,
+    prep: &GenerationPreparation,
+    event: WorkflowEvent,
+    changed: Option<&BTreeSet<String>>,
+    evidence: &ChangeEvidence,
+    bun_job_lanes: &BTreeMap<String, Vec<String>>,
+) -> Result<(), OrchestratorError> {
+    plan.jobs.extend(crate::select::images::dispositions(
+        &prep.root,
+        &prep.config.images,
+        &prep.discovery,
+        event,
+        changed,
+        evidence,
+    ));
+    for dispositions in [
+        crate::select::ansible::dispositions,
+        crate::select::dbt::dispositions,
+    ] {
+        plan.jobs.extend(dispositions(
+            &prep.config,
+            &prep.discovery,
+            event,
+            changed,
+            evidence,
+        ));
+    }
+    plan.jobs.extend(crate::select::bun::dispositions(
+        &prep.config,
+        &prep.discovery,
+        event,
+        changed,
+        evidence,
+        bun_job_lanes,
+    )?);
+    Ok(())
 }
 
 fn validate_qualification_request(

@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, expand_workflow_with_bun_plan};
+use velnor_actions_contract::{Job, expand_workflow};
 use velnor_actions_workflow_renderer::finalize_jobs as finalize_render_jobs;
 
 use crate::OrchestratorError;
@@ -21,12 +21,11 @@ pub fn finalized_jobs(
     prep: &GenerationPreparation,
 ) -> Result<BTreeMap<String, Job>, OrchestratorError> {
     let mise = resolve_mise_setup(&prep.config, &prep.runner_label)?;
-    let expansion =
-        expand_workflow_with_bun_plan(&prep.workflow.ir, &prep.config, None).map_err(|err| {
-            OrchestratorError::Contract {
-                problem: err.to_string(),
-            }
-        })?;
+    let expansion = expand_workflow(&prep.workflow.ir, &prep.config, None).map_err(|err| {
+        OrchestratorError::Contract {
+            problem: err.to_string(),
+        }
+    })?;
     let ir = expansion.ir;
     let mut context = prep.workflow.context.clone();
     context.bun_lane_plan = expansion.bun_lane_plan;

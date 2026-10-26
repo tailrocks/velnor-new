@@ -4,7 +4,7 @@
 pub use crate::workflow::qualification_cache_lineage::*;
 pub use crate::workflow::{
     ALLOWED_WORKFLOW_EVENTS, BUN_ASSETS_EXPORT_OPERATION, BUN_ASSETS_IMPORT_OPERATION,
-    BUN_ASSETS_PREPARE_OPERATION, BUN_REGISTRY_INSTALL_OPERATION, BunLanePlan,
+    BUN_ASSETS_PREPARE_OPERATION, BUN_JOB_LANES_ENV, BUN_REGISTRY_INSTALL_OPERATION, BunLanePlan,
     CACHE_MODE_PUSH_WRITE_EXPR, CANDIDATE_ATTESTATION_FILENAME, CANDIDATE_EVIDENCE_SUBDIR,
     CI_WORKFLOW_PATH, CRATE_JOB_ID_PREFIX, CacheLayer, CacheMode, CacheOutcome, CacheResult,
     Concurrency, CrateJob, CrateObligation, DEFAULT_BLOCKED_PUBLIC_REPO_EVENTS,
@@ -33,11 +33,11 @@ pub use crate::workflow::{
     TOFU_JOB_ID_PREFIX, TaskExecutionManifestEntryV1, TaskExecutionManifestV1, TaskReport,
     TaskStatus, TaskTiming, Trigger, Trust, ValidatorKind, WORKFLOW_DISPLAY_NAME, WorkflowDispatch,
     WorkflowEvent, WorkflowExpansion, WorkflowIr, assign_crate_job_ids, check_matrix_agreement,
-    crate_display_label, crate_display_name, expand_workflow, expand_workflow_with_bun_plan,
-    final_report_id_for_run, final_report_relpath, is_allowed_workflow_event, is_crate_job_id,
-    is_restricted_action_event, is_safe_display_name, join_runner_temp, matrix_json_bytes,
-    matrix_report_relpath, named_check_lanes, plan_json_bytes, plan_skips_work,
-    selects_affected_work, slugify_segment, task_report_relpath, tofu_display_name,
-    trust_for_event, validate_final_report_id, validate_job_id, validate_matrix_run,
-    validate_workflow_trigger_event, validate_workflow_trigger_events,
+    crate_display_label, crate_display_name, expand_workflow, final_report_id_for_run,
+    final_report_relpath, is_allowed_workflow_event, is_crate_job_id, is_restricted_action_event,
+    is_safe_display_name, join_runner_temp, matrix_json_bytes, matrix_report_relpath,
+    named_check_lanes, plan_json_bytes, plan_skips_work, selects_affected_work, slugify_segment,
+    task_report_relpath, tofu_display_name, trust_for_event, validate_final_report_id,
+    validate_job_id, validate_matrix_run, validate_workflow_trigger_event,
+    validate_workflow_trigger_events,
 };

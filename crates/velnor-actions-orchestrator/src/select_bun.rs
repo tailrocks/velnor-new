@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_bun::{
     affected_members, forced_members, job_id, member_job_scripts, suite_job_id,
@@ -9,11 +9,12 @@ use velnor_actions_bun::{
 use velnor_actions_contract::{
     JobDisposition, PlanJob, VelnorConfig, WorkflowEvent, selects_affected_work,
 };
-
 use velnor_actions_workflow_renderer::verification_jobs::BUN_ASSETS_SUFFIX;
 
 use super::ChangeEvidence;
+use crate::OrchestratorError;
 use crate::discover::Discovery;
+use crate::internal::internal;
 
 pub(crate) fn dispositions(
     config: &VelnorConfig,
@@ -21,9 +22,10 @@ pub(crate) fn dispositions(
     event: WorkflowEvent,
     affected: Option<&BTreeSet<String>>,
     evidence: &ChangeEvidence,
-) -> Vec<PlanJob> {
+    bun_job_lanes: &BTreeMap<String, Vec<String>>,
+) -> Result<Vec<PlanJob>, OrchestratorError> {
     let Some(bun) = &config.stacks.bun else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
     let inventory = &discovery.bun;
     let workspaces = inventory.workspaces();
@@ -74,5 +76,23 @@ pub(crate) fn dispositions(
             });
         }
     }
-    jobs
+    project_lane_jobs(jobs, bun_job_lanes)
+}
+
+fn project_lane_jobs(
+    logical_jobs: Vec<PlanJob>,
+    bun_job_lanes: &BTreeMap<String, Vec<String>>,
+) -> Result<Vec<PlanJob>, OrchestratorError> {
+    let mut physical_jobs = Vec::new();
+    for logical_job in logical_jobs {
+        let outputs = bun_job_lanes
+            .get(&logical_job.job_id)
+            .filter(|outputs| !outputs.is_empty())
+            .ok_or_else(|| internal("bun_job_lane_missing"))?;
+        physical_jobs.extend(outputs.iter().map(|job_id| PlanJob {
+            job_id: job_id.clone(),
+            disposition: logical_job.disposition,
+        }));
+    }
+    Ok(physical_jobs)
 }

@@ -33,6 +33,8 @@ pub(crate) struct PlanRequest {
     pub(crate) repository: Option<String>,
     #[serde(default)]
     pub(crate) named_check_lanes: Option<BTreeMap<String, Vec<NamedCheckLane>>>,
+    #[serde(default)]
+    pub(crate) bun_job_lanes: Option<BTreeMap<String, Vec<String>>>,
 }
 
 pub(crate) fn checked_plan_request(

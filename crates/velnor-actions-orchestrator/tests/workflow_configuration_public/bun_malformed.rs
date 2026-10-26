@@ -7,8 +7,7 @@ use std::fs;
 use super::bun_routing::make_bun_repo;
 use velnor_actions_contract::workflow::ir::WorkflowIr;
 use velnor_actions_contract::{
-    Job, ScaleSetSelector, StepKind, VelnorSupportWorkflow, WorkflowPolicy,
-    expand_workflow_with_bun_plan,
+    Job, ScaleSetSelector, StepKind, VelnorSupportWorkflow, WorkflowPolicy, expand_workflow,
 };
 use velnor_actions_orchestrator::{ExecutionMode, migrate_config, prepare};
 use velnor_actions_workflow_renderer::{
@@ -175,7 +174,7 @@ fn both_render_input() -> Result<BunRenderInput, Box<dyn Error>> {
         .as_ref()
         .ok_or("migrated config has no execution settings")?
         .scale_selector()?;
-    let expansion = expand_workflow_with_bun_plan(
+    let expansion = expand_workflow(
         &prepared.workflow.ir,
         &prepared.config,
         Some(ExecutionMode::Both),

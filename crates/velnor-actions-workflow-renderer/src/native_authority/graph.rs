@@ -50,13 +50,13 @@ pub(super) fn build(
             Err(_) => continue,
         };
         projections.push((
-            projection(&expanded.jobs, input.config.workflow.policy)?,
+            projection(&expanded.ir.jobs, input.config.workflow.policy)?,
             selector(input.config, dispatch)?,
         ));
         variants.push((
-            expanded.jobs.get(crate::render::FINAL_JOB_ID).cloned(),
+            expanded.ir.jobs.get(crate::render::FINAL_JOB_ID).cloned(),
             if input.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1 {
-                expanded.jobs.get(crate::render::PLAN_JOB_ID).cloned()
+                expanded.ir.jobs.get(crate::render::PLAN_JOB_ID).cloned()
             } else {
                 None
             },

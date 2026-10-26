@@ -18,12 +18,17 @@ use std::collections::BTreeMap;
 
 #[path = "lanes_bun_plan.rs"]
 mod bun_plan;
+#[path = "lanes_bun_routes.rs"]
+mod bun_routes;
 pub use bun_plan::BunLanePlan;
+pub use bun_routes::BUN_JOB_LANES_ENV;
+use bun_routes::{add_bun_job_lanes, identity_job_lanes};
 
 #[derive(Debug, Clone)]
 pub struct WorkflowExpansion {
     pub ir: WorkflowIr,
     pub bun_lane_plan: Option<BunLanePlan>,
+    pub bun_job_lanes: BTreeMap<String, Vec<String>>,
 }
 
 #[path = "lanes_retarget.rs"]
@@ -77,19 +82,13 @@ pub fn expand_workflow(
     ir: &WorkflowIr,
     config: &VelnorConfig,
     dispatch: Option<ExecutionMode>,
-) -> Result<WorkflowIr, ContractError> {
-    Ok(expand_workflow_with_bun_plan(ir, config, dispatch)?.ir)
-}
-
-pub fn expand_workflow_with_bun_plan(
-    ir: &WorkflowIr,
-    config: &VelnorConfig,
-    dispatch: Option<ExecutionMode>,
 ) -> Result<WorkflowExpansion, ContractError> {
     if config.schema != 2 {
+        let bun_job_lanes = identity_job_lanes(&ir.jobs);
         return Ok(WorkflowExpansion {
             ir: ir.clone(),
             bun_lane_plan: None,
+            bun_job_lanes,
         });
     }
     let execution = config
@@ -128,9 +127,12 @@ pub fn expand_workflow_with_bun_plan(
     let mut expanded = ir.clone();
     expanded.jobs = jobs;
     add_named_check_lanes(&mut expanded, &check_lanes)?;
+    let bun_job_lanes = bun_lane_plan.job_lanes();
+    add_bun_job_lanes(&mut expanded, &bun_job_lanes)?;
     Ok(WorkflowExpansion {
         ir: expanded,
         bun_lane_plan: Some(bun_lane_plan),
+        bun_job_lanes,
     })
 }
 

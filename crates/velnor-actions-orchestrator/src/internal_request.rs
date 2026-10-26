@@ -7,9 +7,10 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
-    FINAL_JSON_FILENAME, FinalStatus, MATRIX_JSON_FILENAME, NAMED_CHECK_LANES_ENV, NamedCheckLane,
-    PLAN_JSON_FILENAME, QualificationDispatch, WorkflowEvent, canonical_json_bytes,
-    matrix_json_bytes, plan_json_bytes, run_key_for_ci, validate_run_key,
+    BUN_JOB_LANES_ENV, FINAL_JSON_FILENAME, FinalStatus, MATRIX_JSON_FILENAME,
+    NAMED_CHECK_LANES_ENV, NamedCheckLane, PLAN_JSON_FILENAME, QualificationDispatch,
+    WorkflowEvent, canonical_json_bytes, matrix_json_bytes, parse_strict_json, plan_json_bytes,
+    run_key_for_ci, validate_run_key,
 };
 
 use crate::OrchestratorError;
@@ -35,6 +36,14 @@ struct EventRequest {
     qualification: Option<QualificationDispatch>,
     #[serde(skip_serializing_if = "Option::is_none")]
     named_check_lanes: Option<BTreeMap<String, Vec<NamedCheckLane>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bun_job_lanes: Option<BTreeMap<String, Vec<String>>>,
+}
+
+#[derive(Default)]
+struct RequestLanes {
+    named_check_lanes: Option<BTreeMap<String, Vec<NamedCheckLane>>>,
+    bun_job_lanes: Option<BTreeMap<String, Vec<String>>>,
 }
 
 #[path = "internal_request_plan.rs"]
@@ -69,6 +78,18 @@ pub fn write_request() -> Result<PathBuf, OrchestratorError> {
             serde_json::from_str(&value).map_err(|_| internal("malformed_named_check_lanes"))
         })
         .transpose()?;
+    let bun_job_lanes: Option<BTreeMap<String, Vec<String>>> = match env::var(BUN_JOB_LANES_ENV) {
+        Ok(value) => {
+            let document =
+                parse_strict_json(&value).map_err(|_| internal("malformed_bun_job_lanes"))?;
+            Some(
+                serde_json::from_value(document)
+                    .map_err(|_| internal("malformed_bun_job_lanes"))?,
+            )
+        }
+        Err(env::VarError::NotPresent) => None,
+        Err(env::VarError::NotUnicode(_)) => return Err(internal("malformed_bun_job_lanes")),
+    };
     write_request_parts_with_lanes(
         &path,
         &event_name,
@@ -76,7 +97,10 @@ pub fn write_request() -> Result<PathBuf, OrchestratorError> {
         sha.as_deref(),
         repository.as_deref(),
         &anchor,
-        named_check_lanes,
+        RequestLanes {
+            named_check_lanes,
+            bun_job_lanes,
+        },
     )
 }
 
@@ -95,7 +119,7 @@ pub fn write_request_parts(
         github_sha,
         repository,
         anchor,
-        None,
+        RequestLanes::default(),
     )
 }
 
@@ -106,7 +130,7 @@ fn write_request_parts_with_lanes(
     github_sha: Option<&str>,
     repository: Option<&str>,
     anchor: &Path,
-    named_check_lanes: Option<BTreeMap<String, Vec<NamedCheckLane>>>,
+    lanes: RequestLanes,
 ) -> Result<PathBuf, OrchestratorError> {
     let path = request_path.to_path_buf();
     let op = request_op(&path)?;
@@ -142,7 +166,8 @@ fn write_request_parts_with_lanes(
             .filter(|slug| !slug.is_empty())
             .map(str::to_owned),
         qualification,
-        named_check_lanes,
+        named_check_lanes: lanes.named_check_lanes,
+        bun_job_lanes: lanes.bun_job_lanes,
     };
     let bytes = canonical_json_bytes(&request).map_err(internal_contract)?;
     if let Some(parent) = path.parent() {
