@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 #[path = "toolfiles_config_tools.rs"]
 mod config_tools;
 #[path = "mise_lockfile.rs"]

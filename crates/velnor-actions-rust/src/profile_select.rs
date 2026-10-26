@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::evidence::{
     Evidence, MiseWrapperInput, NEXTEST_RECOMMENDATION, PERSIST_EVIDENCE, SHADOWED_NEXTEST_CONFIG,
     Seen, wrapper_sightings,

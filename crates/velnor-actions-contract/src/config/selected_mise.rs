@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 pub const BIND_SELECTED_MISE_FUNCTION: &str = r#"velnor_capture_physical_path() {
   [ "$#" -eq 2 ] || return 1
   (cd -P "$1" && pwd -P) > "$2" || return 1

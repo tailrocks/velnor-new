@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::evidence::is_generated_output;
 use crate::profile::{CompileDriver, TestRunner};
 use crate::scan::{has_adjacent, has_command, strip_comment};

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 set -euo pipefail
 : "${VELNOR_UPGRADE_DIR:?}" "${VELNOR_VERIFIED_TREE:?}" "${VELNOR_VERIFIED_PATCH_SHA256:?}"
 # Runs before the App token exists: the patch must be byte-for-byte the one

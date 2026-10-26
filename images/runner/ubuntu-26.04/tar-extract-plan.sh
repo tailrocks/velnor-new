@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 # Group streamed members that can share a staged BusyBox extraction.
 
 record_directory_metadata() {

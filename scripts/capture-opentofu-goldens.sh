@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 # T04/T07 supplementary goldens: CLI-level plan/generate bytes for Rust-only
 # fixtures the parity corpus does not cover (nested, mbx-nextest, empty-suite,
 # minimal-cargo CLI surface) plus the producer dogfood repo.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use velnor_actions_contract::workflow::step_identity::is_configured_checkout;
 use velnor_actions_contract::{Job, Step, StepKind};
 

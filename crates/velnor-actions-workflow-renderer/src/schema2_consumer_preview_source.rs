@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::production::operation_env;
 use super::{
     ConsumerReleaseSpec, RenderError, TapInvocationContext, Yaml, acquire, operation, permissions,

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use velnor_actions_contract::ValidatorKind;
 use velnor_actions_contract::VerifyConfig;
 use velnor_actions_mise::IsolatedCommand;

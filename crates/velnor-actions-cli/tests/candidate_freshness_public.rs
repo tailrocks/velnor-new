@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use std::{
     error::Error,
     fs,
@@ -11,7 +14,7 @@ use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{finalized_jobs, prepare};
 
 mod candidate_freshness_public_support;
-use candidate_freshness_public_support::{write_mbx_transport, write_mise_transport};
+use candidate_freshness_public_support::{status, write_mbx_transport, write_mise_transport};
 
 const TASK_NAME: &str = "check-generated-workflow-freshness";
 const TASK_JOB: &str = "task-generated-workflow-freshness";
@@ -387,12 +390,4 @@ fn set_test_env(command: &mut Command, paths: &FixturePaths) {
     command
         .env("PATH", path)
         .env("HOME", paths.root.join("home"));
-}
-
-fn status(status: ExitStatus, message: &str) -> Result<(), Box<dyn Error>> {
-    if status.success() {
-        Ok(())
-    } else {
-        Err(format!("{message}: {status}").into())
-    }
 }

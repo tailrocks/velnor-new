@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{RenderError, render::RenderedFile, setup::MiseSetup, yaml::Yaml};
 use velnor_actions_contract::{
     Step,

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::WireError;
 use crate::paths::SCALE_SET_ENDPOINT;
 use crate::refresh::{StatusClass, classify_status};

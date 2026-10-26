@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use velnor_actions_contract::{Step, StepKind, StepRole, WorkflowPolicy};
 use velnor_actions_mise::toolfiles::lockfile::InstallSubject;
 use velnor_actions_workflow_renderer::render::ValidatorCommand;

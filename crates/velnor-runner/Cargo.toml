@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 [workspace]
 members = [
     "crates/velnor-runner-core",
@@ -14,7 +17,7 @@ resolver = "3"
 edition = "2024"
 rust-version = "1.99"
 version = "0.1.0"
-license = "MIT OR Apache-2.0"
+license = "Apache-2.0"
 
 [workspace.dependencies]
 serde = { version = "=1.0.229", features = ["derive"] }

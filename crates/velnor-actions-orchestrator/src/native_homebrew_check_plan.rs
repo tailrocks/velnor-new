@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::plan_envelope::derive_plan_envelopes;
 use super::seed::derive_seed_transition;
 use super::tree::{

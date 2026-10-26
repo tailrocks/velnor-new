@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 #[must_use]
 pub fn is_valid_branch_name(value: &str) -> bool {
     !value.is_empty()

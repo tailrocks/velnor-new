@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 pub use crate::artifact_paths::{
     PRESEED_OUTPUT_DIR_EXPR, PRESEED_STAGE_DIR_EXPR, candidate_artifact_name,
 };

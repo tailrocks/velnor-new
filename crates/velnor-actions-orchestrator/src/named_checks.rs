@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 #[path = "named_check_plan.rs"]
 pub(crate) mod plan;
 use crate::discover::Discovery;

@@ -11,7 +11,7 @@ ff74e6f493aa5c4062e44122dbc10ae5d61d67941c2f41920bd3fc36e64aa049  ./.github/acti
 1ec7efa18bec9aa42e0e778c41ff99d6b61bfbb871feffb7067f6de507db24f5  ./.github/actions/generator-release-qualify-macos/action.yml
 827b07374cd694f50e36bbc6e16e925cb2e0da63a936ede51c8d1b9d8f3db983  ./.github/actions/u26/action.yml
 ea3fa2fed1947b18f9ebb3a9d53aa8c0b29c623a160c8526513ba94b8dd5b054  ./.github/actions/velnor-tool-seed/action.yml
-765f9bba992e853428d90d26d6ab83be174226283597da0c27babf239d710c29  ./.github/actions/velnor-tools-cache-restore/action.yml
+949d40c24bc005e3100767f354f02c24c96d4cf5566dde76068dec0be6e30485  ./.github/actions/velnor-tools-cache-restore/action.yml
 9c13206f45551fb3111619a7dcb30f99655d2a4fa402e95fe083a0254487da34  ./.github/actions/velnor-tools-prelude-u26/action.yml
 8cf9af1afcaa580d0a9517daf757d4767e0c922079a8a229f272b0eeef9dd4ee  ./.github/actions/velnor-verify-jactionlint/action.yml
 6d4478b9cbb474b6fa8b3f18d0d7626ef8a53ff271c7062aff149d52f19f95a2  ./.github/actions/velnor-verify-restored-rust/action.yml
@@ -26,8 +26,8 @@ ac7642862acbf9fe367916989e45e6ce604b7e7f3a6947cae894d370a3000e07  ./.github/work
 b2c281e61988042981d2cd2e5d4ed7a51439379d9d96212912acd09e7824cbf4  ./.github/workflows/freshness.yml
 c8c59cacbf6ac82b4203815b5110346a80f5d6c328bc740603e5a91974c41886  ./.github/workflows/homebrew-adoption.yml
 128046a9b82e3499c5efb37f5b753647729b97d7eeca183c48246a942e42d9ee  ./.github/workflows/job-image-candidate.yml
-41060404fe64233f7c627edec241811520ee9ed04f4fee7c89bfd6d88a026bdb  ./.github/workflows/product-release-binary.yml
-22e96bef5d83b50cccff09be6c10868267b523aab9372a08c6156820aa3cf1f0  ./.github/workflows/product-release-generator.yml
-541ef0c21cf33e4eba3dc6278923bbd8e34b3479a25917cf4299155aaea1e4dc  ./.github/workflows/product-release-images.yml
-08c3324525db64af98fe7e2dec2a37e91e4a8bf449d2b72ff6bf92ef37e9c7c7  ./.github/workflows/product-release.yml
+d1c7b392bc6f46f359b7fd88254d052d0776f0f8317d75d66306c7bbb64f7575  ./.github/workflows/product-release-binary.yml
+35ddd8559506b7fc5e5fb16bb82a0784abec7e19e1bb4890637480d00ea72b04  ./.github/workflows/product-release-generator.yml
+30ea60297e0795e97ca3e77a5829eb2737d82562b0f1022e1b4591f660d5a85e  ./.github/workflows/product-release-images.yml
+7de78cd9af24b70d523b7edb5a8379d2ab585655899fd5adbfbde999386df5c4  ./.github/workflows/product-release.yml
 ff2bb7724b38a29a0e3b6b649dfc42c35265d773a51e0a6b61a1314af278df6a  ./.github/workflows/qualification.yml

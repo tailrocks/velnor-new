@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::RenderError;
 use crate::verification_jobs::build_task_jobs::{BuildTaskPolicy, CARGO_BINSTALL_ONLY_ENV};
 use crate::verification_jobs::task_script::{capture_command, jq_guard, printf_write};

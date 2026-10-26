@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{ActionlintError, is_known_hosted_label};
 use std::collections::BTreeSet;
 use velnor_actions_contract::config::WorkflowLintProfile;

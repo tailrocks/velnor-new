@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::canonical::canonical_json_bytes;
 use crate::errors::ContractError;
 use crate::strict_json::{MAX_UNTRUSTED_DOCUMENT_BYTES, parse_strict_json_bytes};

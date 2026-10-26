@@ -1,4 +1,8 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 set -eu
 if [ -f /usr/local/libexec/velnor/cgroup-v2-delegation.sh ]; then
   . /usr/local/libexec/velnor/cgroup-v2-delegation.sh

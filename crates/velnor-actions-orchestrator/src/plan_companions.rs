@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{GenerationPreparation, push};
 use velnor_actions_contract::config::ReleaseRegistry;
 use velnor_actions_contract::{FRESHNESS_WORKFLOW_PATH, TOFU_APPLY_WORKFLOW_PATH};

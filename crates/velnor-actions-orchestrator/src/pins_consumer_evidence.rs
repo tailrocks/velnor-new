@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use velnor_actions_contract::{
     RELEASE_MANIFEST_FILENAME, ReleaseManifest, ReleaseTarget, check_release_artifact,
 };

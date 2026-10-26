@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{EnvPolicy, IsolatedCommand, NO_AUTO_INSTALL_ENV, pairs_of};
 use crate::MiseError;
 use crate::checks::{QualifiedCheck, invalid};

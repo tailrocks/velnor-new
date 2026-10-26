@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use velnor_actions_contract::workflow::cache_family::CacheFamily;
 use velnor_actions_contract::workflow::cache_family_steps::{
     FAMILY_WRITER_ENV, FAMILY_WRITER_EXPR,

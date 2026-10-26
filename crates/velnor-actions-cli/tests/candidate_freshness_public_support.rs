@@ -1,4 +1,9 @@
-use std::{error::Error, fs, os::unix::fs::PermissionsExt, path::Path};
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use std::{
+    error::Error, fs, os::unix::fs::PermissionsExt, path::Path, process::ExitStatus,
+};
 
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
@@ -99,6 +104,14 @@ pub(super) fn write_mise_transport(bin: &Path) -> Result<(), Box<dyn Error>> {
 
 pub(super) fn write_mbx_transport(bin: &Path) -> Result<(), Box<dyn Error>> {
     write_executable(bin.join("mbx"), MBX_TRANSPORT.as_bytes())
+}
+
+pub(super) fn status(status: ExitStatus, message: &str) -> Result<(), Box<dyn Error>> {
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("{message}: {status}").into())
+    }
 }
 
 fn write_executable(path: impl AsRef<Path>, content: &[u8]) -> Result<(), Box<dyn Error>> {

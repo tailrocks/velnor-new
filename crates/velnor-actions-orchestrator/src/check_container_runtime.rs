@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::OrchestratorError;
 use crate::exclusive_write;
 use crate::generator::sha256_hex;

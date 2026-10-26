@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::effective::Dialect;
 use crate::parser::{FileModel, ParseError, parse_json, parse_native};
 use crate::version::is_terraform_only;

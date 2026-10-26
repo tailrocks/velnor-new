@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 #[cfg(unix)]
 pub(crate) fn effective_uid() -> u32 {
     rustix::process::geteuid().as_raw()

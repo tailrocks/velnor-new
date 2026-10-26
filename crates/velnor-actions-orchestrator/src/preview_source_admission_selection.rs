@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{
     positive_value, release_job_name_seed, required_value, source_checkout_lfs, valid_git_sha,
 };

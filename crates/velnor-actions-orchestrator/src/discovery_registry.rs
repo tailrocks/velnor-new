@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::OrchestratorError;
 use velnor_actions_contract::{
     DETECTION_SCHEMA, DetectedProject, DetectorEntry, Stack, StackCandidate,

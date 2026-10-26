@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{EvidenceReceipt, ScenarioEvidence, reject_link_components, validate_evidence};
 use serde::{Deserialize, Serialize};
 #[path = "check_container_gate.rs"]

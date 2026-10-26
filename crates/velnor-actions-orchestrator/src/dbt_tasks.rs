@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use velnor_actions_contract::config::DbtService;
 use velnor_actions_contract::{JobTimeout, ServiceContainer, VelnorConfig};
 use velnor_actions_dbt::{job_id, job_name};

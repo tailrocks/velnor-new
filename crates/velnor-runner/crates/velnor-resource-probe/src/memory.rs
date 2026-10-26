@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{ProbeError, units::digits};
 
 pub(crate) fn available_bytes(input: &[u8]) -> Result<u64, ProbeError> {

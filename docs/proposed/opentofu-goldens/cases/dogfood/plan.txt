@@ -29,17 +29,17 @@ Detected stacks
     - velnor-runner-host (crates/velnor-runner/crates/velnor-runner-host/Cargo.toml) [bin, example, lib, test; depends on velnor-runner-core, velnor-runner-github]
   Profile .: mbx compile driver (declared), cargo_nextest test runner (declared)
   Nextest profile .: ci (.config/nextest.toml)
-    evidence .config/nextest.toml:4 [profile.ci] [durable]
+    evidence .config/nextest.toml:7 [profile.ci] [durable]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
-    evidence mise.toml:16 ], mr_boxington = true } [durable]
-    evidence mise.toml:40 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
+    evidence mise.toml:19 ], mr_boxington = true } [durable]
+    evidence mise.toml:43 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
   Profile crates/velnor-runner: mbx compile driver (declared), cargo_nextest test runner (declared)
   Nextest profile crates/velnor-runner: ci (crates/velnor-runner/.config/nextest.toml)
-    evidence .config/nextest.toml:4 [profile.ci] [durable]
+    evidence .config/nextest.toml:7 [profile.ci] [durable]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
-    evidence crates/velnor-runner/.config/nextest.toml:1 [profile.ci] [durable]
-    evidence mise.toml:16 ], mr_boxington = true } [durable]
-    evidence mise.toml:40 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
+    evidence crates/velnor-runner/.config/nextest.toml:4 [profile.ci] [durable]
+    evidence mise.toml:19 ], mr_boxington = true } [durable]
+    evidence mise.toml:43 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
 
 Workflow to generate
   .github/jactionlint.yaml

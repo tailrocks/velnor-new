@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{
     GitHubApi, MAX_MANIFEST_CLOSURE_BYTES, SourceEntryMap, SourceFiles, WorkspaceSource,
     read_local, required,

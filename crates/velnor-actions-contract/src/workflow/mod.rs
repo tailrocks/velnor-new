@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 pub mod artifacts;
 pub mod cache_family;
 pub mod cache_family_mbx;

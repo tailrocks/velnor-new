@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 async fn qualify_checksum_target_bytes(
     bundle_bytes: &[u8],
     checksum_bytes: &[u8],

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::config::{
     PrivateSourcesConfig, is_valid_asset_name, is_valid_extract_to, is_valid_source_id,
     is_valid_source_tag, split_repository,

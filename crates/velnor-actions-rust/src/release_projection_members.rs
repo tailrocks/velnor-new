@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{
     BTreeSet, ContractError, MAX_GLOB_PATTERNS, MAX_GLOB_STEPS, MAX_MANIFESTS, MAX_REGULAR_PATHS,
     glob_matches, has_glob_metacharacters, invalid, join_path, parent, parse_manifest, relative_to,

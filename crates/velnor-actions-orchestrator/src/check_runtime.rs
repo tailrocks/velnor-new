@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::OrchestratorError;
 use crate::check_evidence::{EvidenceReceipt, reject_link_components, verify_evidence};
 use crate::internal::{internal, internal_contract};

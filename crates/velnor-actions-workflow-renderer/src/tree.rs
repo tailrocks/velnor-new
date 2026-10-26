@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use velnor_actions_contract::{
     AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_POINTER_BODY, ClaudeMdMode,
 };

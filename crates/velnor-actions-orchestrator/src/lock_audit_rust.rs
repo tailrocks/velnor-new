@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use velnor_actions_mise::PinnedTool;
 use velnor_actions_mise::catalog::rust_channel_manifest_sha256;
 use velnor_actions_mise::toolfiles::lockfile::InstallSubject;

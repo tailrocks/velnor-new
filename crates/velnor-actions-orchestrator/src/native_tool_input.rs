@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use std::collections::BTreeMap;
 
 use crate::native_mise_version::{NativeMiseMinimum, NativeMiseVersion};

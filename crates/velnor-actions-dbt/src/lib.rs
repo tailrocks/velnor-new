@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 #![allow(
     clippy::missing_errors_doc,
     reason = "documentation comments are intentionally absent from this codebase"

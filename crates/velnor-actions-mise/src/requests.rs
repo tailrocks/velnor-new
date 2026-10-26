@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::catalog::{PinnedTool, ToolCatalog};
 use crate::command::{
     IsolatedCommand, ProcessOutput, mise_install_argv_tail, redact_argv_for_debug,

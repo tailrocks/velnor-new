@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{
     BTreeMap, ContractError, HomebrewFormulaAssetLiteral, HomebrewFormulaReleaseLiterals,
     HomebrewFormulaSpec, MAX_FORMULA_BYTES, PackageReleaseChannel, ValidatedHomebrewProjection,

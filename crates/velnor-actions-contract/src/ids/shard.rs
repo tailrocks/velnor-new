@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 #[must_use]
 pub fn split_shard_suffix(task_id: &str) -> Option<(&str, u32, u32)> {
     let (base, shard) = task_id.rsplit_once("/shard-")?;

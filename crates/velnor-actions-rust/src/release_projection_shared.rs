@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{ContractError, MAX_GLOB_PATTERN_BYTES, MAX_MANIFEST_BYTES, MAX_REPO_PATH_BYTES};
 
 pub(super) fn parse_manifest(_path: &str, bytes: &[u8]) -> Result<toml::Value, ContractError> {

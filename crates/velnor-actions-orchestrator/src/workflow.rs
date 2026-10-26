@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 #[path = "wire_w1.rs"]
 pub(crate) mod wire_w1;
 #[path = "workflow_build.rs"]

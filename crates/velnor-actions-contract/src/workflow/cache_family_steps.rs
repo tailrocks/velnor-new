@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::cache_family::CacheFamily;
 
 pub const FAMILY_KEYS_ID: &str = "family-keys";

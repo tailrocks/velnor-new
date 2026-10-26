@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 #[must_use]
 pub fn normalize(base: &str, rel: &str) -> Option<String> {
     let mut parts: Vec<&str> = base.split('/').filter(|part| !part.is_empty()).collect();

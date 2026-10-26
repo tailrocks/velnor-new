@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{
     AtFlags, CString, Component, File, FileIdentity, Mode, OFlags, Ordering, Path, TEMP_ID,
     Temporary, fs, unix_fs,

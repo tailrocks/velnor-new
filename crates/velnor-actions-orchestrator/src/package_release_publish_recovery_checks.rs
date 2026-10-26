@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::super::github::{WorkflowArtifact, sha256};
 use super::super::identity::is_git_sha;
 use super::{

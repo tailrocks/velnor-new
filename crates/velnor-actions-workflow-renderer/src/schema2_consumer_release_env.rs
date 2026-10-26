@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::super::TapInvocationContext;
 use super::{ConsumerReleaseSpec, RenderError, Yaml};
 use velnor_actions_contract::package_release::PackageReleaseChannel;

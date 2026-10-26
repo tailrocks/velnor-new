@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use std::{fs, io::Read, os::unix::fs::MetadataExt, path::Path};
 use velnor_actions_contract::{
     ImageCandidateRecord, parse_image_candidate_record, parse_image_candidate_source_closure,

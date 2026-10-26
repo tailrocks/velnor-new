@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::RenderError;
 
 pub const PRESEED_OUTPUT_DIR_EXPR: &str = "${{ runner.temp }}/velnor/preseed-output";

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{
     CancelHandle, IsolatedCommand, ObservedStatus, ProcessGroupAnchor, ProcessOutput, Streams,
     observe_exit, reap_observed, terminate_unanchored,

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::{BTreeMap, Path, SeedTransitionAdmission, WorkflowEvent};
 
 pub(crate) fn derive_seed_transition(

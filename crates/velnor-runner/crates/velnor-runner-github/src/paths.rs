@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 pub(crate) const SCALE_SET_ENDPOINT: &str = "_apis/runtime/runnerscalesets";
 
 pub(crate) const RUNNER_ENDPOINT: &str = "_apis/distributedtask/pools/0/agents";

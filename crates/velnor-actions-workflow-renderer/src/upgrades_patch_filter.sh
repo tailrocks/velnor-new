@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 # Upgrade patch filter, shared by every upgrades.yml job that builds, checks
 # or applies the patch. It validates the patch itself and the index the patch
 # produces; it never relies on `git apply` rejecting anything.

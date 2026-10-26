@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use super::NAMED_CHECK_EXTENSION_SCHEMA;
 use crate::{ContractError, MiseCheck, StackExtension, validate_digest};
 use serde::{Deserialize, Serialize};

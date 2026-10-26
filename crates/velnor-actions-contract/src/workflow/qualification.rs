@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::errors::ContractError;
 use crate::ids::{
     artifact_id_for_final, validate_artifact_id, validate_report_id, validate_run_key,
