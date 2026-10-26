@@ -4,56 +4,19 @@
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 
-use velnor_actions_contract::workflow::permissions::PermissionLevel;
-use velnor_actions_contract::{Job, JobTimeout, Permissions, Step, StepRole};
-use velnor_actions_mise::{
-    PREPARE_PINNED_TOOLS_STEP, PinnedTool, PinnedToolExec, PreparePinnedTools, ToolCatalog,
-    ToolHomes,
-};
-use velnor_actions_workflow_renderer::render::{FINAL_CONDITION, FINAL_DISPLAY_NAME, PLAN_JOB_ID};
-use velnor_actions_workflow_renderer::steps::{
-    MERGE_OPERATION, PLAN_OPERATION, RESOLVE_QUALIFICATION_OPERATION, merge_step, plan_step,
-    write_request_step,
-};
+use velnor_actions_contract::{Job, JobTimeout, Permissions, Step, StepRole, WorkflowPolicy};
+use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
+use velnor_actions_workflow_renderer::native_job_builders::NativeJobBuilderError;
 
 use crate::OrchestratorError;
-use crate::source_prep::fetch_steps_for_plan;
-use crate::utf8::{strings_of, strings_of_env};
+use crate::utf8::strings_of;
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) enum PlanRustNeed {
-    #[default]
-    None,
-    Compiler,
-    CompilerAndComponents,
-}
+pub(crate) use velnor_actions_workflow_renderer::native_job_builders::{
+    PlanJobToolNeeds, PlanRustNeed,
+};
 
-impl PlanRustNeed {
-    pub(crate) fn has_compiler(self) -> bool {
-        self != Self::None
-    }
-
-    fn has_components(self) -> bool {
-        self == Self::CompilerAndComponents
-    }
-}
-
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "independent opt-in planner tool signals"
-)]
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) struct PlanJobToolNeeds {
-    pub(crate) rust: PlanRustNeed,
-    pub(crate) all_features: bool,
-    pub(crate) nextest: bool,
-    pub(crate) opentofu: bool,
-    pub(crate) gh: bool,
-    pub(crate) resolve_qualification_predecessor: bool,
-}
-
-pub(crate) const LINT_JOB_ID: &str = "jactionlint";
-
+pub(crate) const LINT_JOB_ID: &str =
+    velnor_actions_workflow_renderer::native_job_builders::LINT_JOB_ID;
 pub(crate) const LINT_DISPLAY_NAME: &str = "Jactionlint";
 
 pub(crate) fn plan_job(
@@ -63,77 +26,18 @@ pub(crate) fn plan_job(
     needs: PlanJobToolNeeds,
     fetch_roots: &[String],
     tofu_roots: &[String],
-    source_free: bool,
+    policy: WorkflowPolicy,
 ) -> Result<Job, OrchestratorError> {
-    let mut steps = vec![checkout_history_action()?];
-    let mut acquire = acquire;
-    if source_free {
-        steps.extend(acquire.take());
-    }
-    if needs.rust.has_compiler() {
-        steps.push(if source_free {
-            crate::workflow::workflow_policy::rust_manifest_step::verifier_shell_step(
-                catalog,
-                crate::workflow::ToolchainPhase::Restored,
-            )?
-        } else {
-            crate::workflow::verify_restored_rust_step(catalog)
-        });
-    }
-    let prepare = prepare_pinned_tools_step(catalog, plan_tools(needs), needs.rust.has_compiler())?;
-    steps.push(prepare);
-    steps.push(if source_free {
-        crate::workflow::workflow_policy::jactionlint_verify_step::verifier_shell_step(catalog)?
-    } else {
-        crate::workflow::verify_jactionlint_step(catalog)
-    });
-    if needs.rust.has_components() {
-        steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
-    }
-    if needs.rust.has_compiler() {
-        steps.push(if source_free {
-            crate::workflow::workflow_policy::rust_manifest_step::verifier_shell_step(
-                catalog,
-                crate::workflow::ToolchainPhase::Installed,
-            )?
-        } else {
-            crate::workflow::verify_rust_manifest_step(catalog)
-        });
-    }
-    let cached =
-        crate::workflow_jobs_cache::cache_steps_for_plan(catalog, fetch_roots, tofu_roots)?;
-    steps.extend(cached.restore);
-    let mut source_steps = fetch_steps_for_plan(catalog, fetch_roots, needs.all_features)?;
-    crate::workflow_jobs_cache::mark_writer_gate(&mut source_steps);
-    steps.extend(source_steps);
-    steps.extend(acquire);
-    steps.push(request_step(PLAN_OPERATION)?);
-    if needs.resolve_qualification_predecessor {
-        let mut resolve = velnor_actions_workflow_renderer::steps::internal_step(
-            "Resolve qualification predecessor",
-            RESOLVE_QUALIFICATION_OPERATION,
-        )
-        .map_err(|err| OrchestratorError::Contract {
-            problem: err.to_string(),
-        })?;
-        resolve.condition = Some("github.event_name == 'workflow_dispatch'".to_owned());
-        steps.push(resolve);
-    }
-    steps.push(plan_step());
-    steps.extend(cached.save);
-    Ok(Job {
-        services: Vec::new(),
-        display_name: "Plan".to_owned(),
-        runs_on: label.to_owned(),
-        check_runner: None,
-        timeout_minutes: JobTimeout::PLAN,
-        needs: Vec::new(),
-        condition: None,
-        permissions: None,
-        environment: None,
-        steps,
-        cache_mode: None,
-    })
+    velnor_actions_workflow_renderer::native_job_builders::plan_job(
+        label,
+        acquire,
+        catalog,
+        needs,
+        fetch_roots,
+        tofu_roots,
+        policy,
+    )
+    .map_err(map_native_job_builder_error)
 }
 
 pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, OrchestratorError> {
@@ -189,52 +93,12 @@ pub(crate) fn final_job(
     crate_job_ids: &[String],
     acquire: Option<Step>,
 ) -> Result<Job, OrchestratorError> {
-    let mut needs = vec![PLAN_JOB_ID.to_owned()];
-    needs.extend(crate_job_ids.iter().cloned());
-    needs.push(LINT_JOB_ID.to_owned());
-    let mut steps = vec![checkout_history_action()?];
-    steps.extend(acquire);
-    let pinned_tools = ToolCatalog::pinned();
-    steps.push(prepare_pinned_tools_step(
-        &pinned_tools,
-        vec![PinnedTool::Gh],
-        true,
-    )?);
-    steps.push(request_step(MERGE_OPERATION)?);
-    steps.push(merge_step());
-    Ok(Job {
-        services: Vec::new(),
-        display_name: FINAL_DISPLAY_NAME.to_owned(),
-        runs_on: label.to_owned(),
-        check_runner: None,
-        timeout_minutes: JobTimeout::REQUIRED,
-        needs,
-        condition: Some(FINAL_CONDITION.to_owned()),
-        permissions: Some(read_actions_permissions()),
-        environment: None,
-        steps,
-        cache_mode: None,
-    })
+    velnor_actions_workflow_renderer::native_job_builders::final_job(label, crate_job_ids, acquire)
+        .map_err(map_native_job_builder_error)
 }
 
 pub(crate) fn read_actions_permissions() -> Permissions {
-    Permissions {
-        contents: PermissionLevel::Read,
-        pull_requests: PermissionLevel::None,
-        id_token: PermissionLevel::None,
-        actions: PermissionLevel::Read,
-        packages: PermissionLevel::None,
-    }
-}
-
-fn plan_tools(needs: PlanJobToolNeeds) -> Vec<PinnedTool> {
-    let mut tools = Vec::new();
-    tools.extend(needs.rust.has_compiler().then_some(PinnedTool::Rust));
-    tools.extend([PinnedTool::Jactionlint, PinnedTool::Shellcheck]);
-    tools.extend(needs.nextest.then_some(PinnedTool::Nextest));
-    tools.extend(needs.opentofu.then_some(PinnedTool::Opentofu));
-    tools.extend(needs.gh.then_some(PinnedTool::Gh));
-    tools
+    velnor_actions_workflow_renderer::native_job_builders::read_actions_permissions()
 }
 
 pub(crate) fn prepare_pinned_tools_step(
@@ -242,38 +106,45 @@ pub(crate) fn prepare_pinned_tools_step(
     tools: Vec<PinnedTool>,
     rust_homes: bool,
 ) -> Result<Step, OrchestratorError> {
-    let homes = ToolHomes::runner_temp();
-    let prepare =
-        PreparePinnedTools::new(tools, homes).map_err(|err| OrchestratorError::Contract {
-            problem: err.to_string(),
-        })?;
-    let run = strings_of(prepare.argv(catalog))
-        .map_err(|problem| OrchestratorError::Contract { problem })?;
-    let env = if rust_homes {
-        strings_of_env(&prepare.env(catalog))
-    } else {
-        strings_of_env(&prepare.env_without_homes())
-    }
-    .map_err(|problem| OrchestratorError::Contract { problem })?;
-    let mut step =
-        velnor_actions_workflow_renderer::ambient_shell_step(PREPARE_PINNED_TOOLS_STEP, run, env)
-            .map_err(|err| OrchestratorError::Contract {
-            problem: err.to_string(),
-        })?;
-    step.role = Some(StepRole::PreparePinnedTools);
-    Ok(step)
+    velnor_actions_workflow_renderer::native_job_builders::prepare_pinned_tools_step(
+        catalog, tools, rust_homes,
+    )
+    .map_err(map_native_job_builder_error)
 }
 
-fn request_step(target: &str) -> Result<Step, OrchestratorError> {
-    write_request_step(target).map_err(|err| OrchestratorError::Contract {
-        problem: err.to_string(),
-    })
+pub(crate) fn prepare_rust_components_step(
+    catalog: &ToolCatalog,
+) -> Result<Step, OrchestratorError> {
+    velnor_actions_workflow_renderer::native_job_builders::prepare_rust_components_step(catalog)
+        .map_err(map_native_job_builder_error)
+}
+
+fn map_native_job_builder_error(error: NativeJobBuilderError) -> OrchestratorError {
+    match error {
+        NativeJobBuilderError::Contract(problem) => OrchestratorError::Contract { problem },
+        NativeJobBuilderError::Render(error) => OrchestratorError::from(error),
+        NativeJobBuilderError::PlanSources(error) => match error {
+            velnor_actions_workflow_renderer::plan_sources::PlanSourcesError::Contract(error) => {
+                OrchestratorError::from(error)
+            }
+            velnor_actions_workflow_renderer::plan_sources::PlanSourcesError::ShellRender(error) => {
+                OrchestratorError::Contract {
+                    problem: error.to_string(),
+                }
+            }
+            velnor_actions_workflow_renderer::plan_sources::PlanSourcesError::CacheSourcesPolicy(
+                problem,
+            ) => OrchestratorError::Contract { problem },
+            velnor_actions_workflow_renderer::plan_sources::PlanSourcesError::CacheActionRef(
+                problem,
+            ) => OrchestratorError::WorkflowLint { problem },
+            velnor_actions_workflow_renderer::plan_sources::PlanSourcesError::Render(error) => {
+                OrchestratorError::from(error)
+            }
+        },
+    }
 }
 
 fn checkout_action() -> Result<Step, OrchestratorError> {
     crate::workflow::wire_w1::checkout_step()
-}
-
-fn checkout_history_action() -> Result<Step, OrchestratorError> {
-    crate::workflow::wire_w1::checkout_step_full()
 }

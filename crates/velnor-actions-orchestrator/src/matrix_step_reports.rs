@@ -1,24 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::Step;
-use velnor_actions_workflow_renderer::steps::{INTERNAL_OP_ENV, STAGED_BINARY_PREFIX};
-
 use crate::OrchestratorError;
-use crate::task_report::{EXIT_CODE_ENV, REPORT_OP, START_MS_ENV};
+use velnor_actions_contract::Step;
 
 pub(crate) fn helper_path_for_version(version: &str) -> String {
-    format!("{STAGED_BINARY_PREFIX}{version}")
+    velnor_actions_workflow_renderer::plan_report::helper_path_for_version(version)
 }
 
 pub(crate) fn report_wrapper_argv(joined: &str, helper: &str) -> Vec<String> {
-    vec![
-        "sh".to_owned(),
-        "-c".to_owned(),
-        format!(
-            "s=$(date +%s%3N); {joined}; code=$?; {EXIT_CODE_ENV}=\"$code\" {START_MS_ENV}=\"$s\" {INTERNAL_OP_ENV}={REPORT_OP} \"{helper}\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\""
-        ),
-    ]
+    velnor_actions_workflow_renderer::plan_report::report_wrapper_argv(joined, helper)
 }
 
 pub(crate) fn outcome_wrapper_argv(
@@ -26,13 +17,11 @@ pub(crate) fn outcome_wrapper_argv(
     outcome_path: &str,
     start_path: &str,
 ) -> Vec<String> {
-    vec![
-        "sh".to_owned(),
-        "-c".to_owned(),
-        format!(
-            "date +%s%3N > \"{start_path}\"; {joined}; code=$?; echo \"$code\" > \"{outcome_path}\"; exit \"$code\""
-        ),
-    ]
+    velnor_actions_workflow_renderer::plan_report::outcome_wrapper_argv(
+        joined,
+        outcome_path,
+        start_path,
+    )
 }
 
 pub(crate) fn deferred_report_argv(
@@ -40,21 +29,19 @@ pub(crate) fn deferred_report_argv(
     helper: &str,
     start_path: &str,
 ) -> Vec<String> {
-    vec![
-        "sh".to_owned(),
-        "-c".to_owned(),
-        format!(
-            "read -r code rest < \"{outcome_path}\"; read -r start_ms rest < \"{start_path}\"; {EXIT_CODE_ENV}=\"$code\" {START_MS_ENV}=\"$start_ms\" {INTERNAL_OP_ENV}={REPORT_OP} \"{helper}\""
-        ),
-    ]
+    velnor_actions_workflow_renderer::plan_report::deferred_report_argv(
+        outcome_path,
+        helper,
+        start_path,
+    )
 }
 
 pub(crate) fn outcome_path_for_key(matrix_key: &str) -> String {
-    format!("$RUNNER_TEMP/velnor/outcome-{matrix_key}")
+    velnor_actions_workflow_renderer::plan_report::outcome_path_for_key(matrix_key)
 }
 
 pub(crate) fn start_path_for_key(matrix_key: &str) -> String {
-    format!("$RUNNER_TEMP/velnor/start-{matrix_key}")
+    velnor_actions_workflow_renderer::plan_report::start_path_for_key(matrix_key)
 }
 
 pub(crate) fn download_plan_step() -> Result<Step, OrchestratorError> {

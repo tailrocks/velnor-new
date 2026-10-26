@@ -53,12 +53,15 @@ mod matrix;
 mod matrix_output_mode;
 mod mbx_gc_policy;
 pub mod msrv;
+mod native_helper;
+pub mod native_job_builders;
 pub mod overlap;
 pub mod owned_tool_publication;
 mod parallel_steps;
 mod parallel_target_seed;
 pub mod plan_format;
 mod plan_gate;
+pub mod plan_report;
 pub mod plan_sources;
 pub mod preseed;
 mod preseed_closure;
@@ -73,6 +76,14 @@ pub mod release_checkout_gates;
 pub mod release_config;
 pub mod release_gates;
 pub mod release_jobs;
+pub mod release_helpers {
+    pub use crate::native_helper::{
+        ReleaseHelperError, acquire_script_argv, consumer_acquire_for_target,
+        lock_acquire_for_target, validate_consumer_manifest_for_version,
+        validate_published_generator_lock, verify_binary_matches_consumer_manifest,
+        verify_local_generator_release_manifest,
+    };
+}
 pub mod release_permissions;
 pub mod release_spec;
 pub mod release_tree;
@@ -101,6 +112,7 @@ pub mod tofu_cache;
 mod tool_seed;
 mod tool_seed_admission;
 
+mod native_verifiers;
 pub mod toolchain_env;
 pub mod tree;
 pub mod upgrades;
@@ -120,6 +132,15 @@ pub fn jactionlint_verifier_script(version: &str) -> String {
 }
 pub mod verification_jobs;
 pub mod verifier_composite;
+pub mod verifier_builders {
+    pub use crate::native_verifiers::{
+        NOT_CATALOGUED_CODE, ToolchainPhase, VERIFY_JACTIONLINT_STEP, VERIFY_RESTORED_RUST_STEP,
+        jactionlint_verifier_argv, jactionlint_verifier_script, jactionlint_verifier_shell_step,
+        rust_verifier_shell_step, toolchain_script, verify_jactionlint_step,
+        verify_restored_rust_step, verify_rust_argv, verify_rust_manifest_step,
+        verify_rust_owned_argv,
+    };
+}
 mod workflow_policy;
 mod workflow_size;
 mod workflow_timeout;

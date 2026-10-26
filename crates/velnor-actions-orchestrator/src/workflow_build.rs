@@ -250,7 +250,7 @@ fn build_workflow_plan(
         prepared.needs,
         input.fetch_roots,
         &tofu_roots,
-        prepared.policy == WorkflowPolicy::VelnorRepositoryV1,
+        prepared.policy,
     )?;
     if let Some(private) = prepared.private.as_ref() {
         private.insert_into_job(&mut plan, input.fetch_roots)?;

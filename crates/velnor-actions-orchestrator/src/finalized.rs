@@ -13,19 +13,8 @@ use crate::prepare::GenerationPreparation;
 pub(crate) fn validate_published_generator_lock(
     lock: &velnor_actions_contract::GeneratorLock,
 ) -> Result<(), OrchestratorError> {
-    lock.validate(".velnor/generator.lock")
-        .map_err(|err| OrchestratorError::Contract {
-            problem: err.to_string(),
-        })?;
-    lock.check_supported_targets(".velnor/generator.lock")
-        .map_err(|err| OrchestratorError::Contract {
-            problem: err.to_string(),
-        })?;
-    velnor_actions_mise::catalog::lock::verify_lock_against_published_release(lock).map_err(|err| {
-        OrchestratorError::Contract {
-            problem: err.to_string(),
-        }
-    })
+    velnor_actions_workflow_renderer::release_helpers::validate_published_generator_lock(lock)
+        .map_err(crate::local_release_manifest::map_release_helper_error)
 }
 
 pub fn finalized_jobs(

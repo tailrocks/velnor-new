@@ -274,18 +274,3 @@ fn verifier_action(
         file,
     })
 }
-
-pub(crate) fn call_step(name: &str, uses: &'static str, role: Option<StepRole>) -> Step {
-    Step {
-        name: name.to_owned(),
-        id: None,
-        role,
-        condition: None,
-        parallel: false,
-        kind: StepKind::Action {
-            uses: uses.to_owned(),
-            with: BTreeMap::new(),
-            env: BTreeMap::new(),
-        },
-    }
-}

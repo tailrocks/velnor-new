@@ -1131,6 +1131,7 @@ dependencies = [
 name = "velnor-actions-workflow-renderer"
 version = "0.1.57"
 dependencies = [
+ "rustix",
  "serde",
  "sha2",
  "tempfile",

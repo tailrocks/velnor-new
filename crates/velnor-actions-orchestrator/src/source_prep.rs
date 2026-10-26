@@ -91,15 +91,6 @@ pub(crate) fn fetch_steps_for_crate(
     fetch_steps_with(catalog, roots, &env, false, all_features)
 }
 
-pub(crate) fn fetch_steps_for_plan(
-    catalog: &ToolCatalog,
-    roots: &[String],
-    all_features: bool,
-) -> Result<Vec<Step>, OrchestratorError> {
-    let env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
-    fetch_steps_with(catalog, roots, &env, false, all_features)
-}
-
 pub(crate) fn fetch_steps_for_preview(
     catalog: &ToolCatalog,
     roots: &[String],

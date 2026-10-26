@@ -1,15 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::{Stack, Step, StepRole, WorkflowPolicy};
-use velnor_actions_mise::{
-    PREPARE_RUST_COMPONENTS_STEP, PrepareRustComponents, ToolCatalog, ToolHomes,
-};
+use velnor_actions_contract::{Stack, Step, WorkflowPolicy};
+use velnor_actions_mise::ToolCatalog;
 use velnor_actions_rust::TestRunner;
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
-use crate::utf8::{strings_of, strings_of_env};
 
 #[path = "jactionlint_verify_step.rs"]
 pub(crate) mod jactionlint_verify_step;
@@ -59,17 +56,5 @@ pub(crate) fn plan_uses_rust(discovery: &Discovery, policy: WorkflowPolicy) -> b
 pub(crate) fn prepare_rust_components_step(
     catalog: &ToolCatalog,
 ) -> Result<Step, OrchestratorError> {
-    let request = PrepareRustComponents::new(ToolHomes::runner_temp());
-    let run = strings_of(request.argv(catalog))
-        .map_err(|problem| OrchestratorError::Contract { problem })?;
-    let env = strings_of_env(&request.env(catalog))
-        .map_err(|problem| OrchestratorError::Contract { problem })?;
-    let mut step = velnor_actions_workflow_renderer::ambient_shell_step(
-        PREPARE_RUST_COMPONENTS_STEP,
-        run,
-        env,
-    )
-    .map_err(OrchestratorError::from)?;
-    step.role = Some(StepRole::PrepareRustComponents);
-    Ok(step)
+    crate::workflow_jobs::prepare_rust_components_step(catalog)
 }

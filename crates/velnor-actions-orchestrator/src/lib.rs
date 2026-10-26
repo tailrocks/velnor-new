@@ -140,7 +140,6 @@ mod verification_tasks;
 mod verify;
 mod workflow;
 mod workflow_jobs;
-mod workflow_jobs_cache;
 mod workflow_task_jobs;
 
 pub use api::*;
