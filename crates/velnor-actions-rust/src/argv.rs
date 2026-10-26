@@ -158,6 +158,8 @@ fn push_kind_args(
                     flag("--partition"),
                     flag(&format!("hash:{index}/{count}")),
                 ]);
+            } else if group.allow_empty_test_suite {
+                args.extend([flag("--no-tests"), flag("warn")]);
             } else {
                 args.extend([flag("--no-tests"), flag("fail")]);
             }
