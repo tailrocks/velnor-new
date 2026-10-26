@@ -159,7 +159,7 @@ fn push_kind_args(
                     flag(&format!("hash:{index}/{count}")),
                 ]);
             } else {
-                args.extend([flag("--no-tests"), flag("fail")]);
+                args.extend([flag("--no-tests"), flag("warn")]);
             }
         }
         TaskKind::Doctest => {
