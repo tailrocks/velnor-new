@@ -2,7 +2,8 @@ schema = 2
 
 [workflow]
 name = "Compatibility Fixture"
-policy = "consumer-v1"
+policy = "velnor-repository-v1"
+generator_validation = "bootstrap"
 default_branch = "main"
 
 [execution]
@@ -30,6 +31,6 @@ tools = []
 timeout_minutes = 1
 
 [checks.runner]
-label = "compatibility-macos-arm64"
+label = "macos-26"
 platform = "macos_arm64"
-executor = "ephemeral_self_hosted"
+executor = "hosted"
