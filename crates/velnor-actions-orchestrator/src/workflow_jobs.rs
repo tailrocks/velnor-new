@@ -119,7 +119,7 @@ pub(crate) fn prepare_rust_components_step(
         .map_err(map_native_job_builder_error)
 }
 
-fn map_native_job_builder_error(error: NativeJobBuilderError) -> OrchestratorError {
+pub(crate) fn map_native_job_builder_error(error: NativeJobBuilderError) -> OrchestratorError {
     match error {
         NativeJobBuilderError::Contract(problem) => OrchestratorError::Contract { problem },
         NativeJobBuilderError::Render(error) => OrchestratorError::from(error),

@@ -177,6 +177,8 @@ fn merged_jobs(
     support: Option<&VelnorSupportWorkflow>,
     ctx: &RenderContext,
 ) -> Result<BTreeMap<String, Job>, RenderError> {
+    ctx.authority_steps
+        .validate_binding(&ir.jobs, policy, support, ctx)?;
     execution_boundaries::validate_raw_authority(&ir.jobs, policy, &ctx.authority_steps)?;
     ctx.validate()?;
     if ctx.preseed && policy != WorkflowPolicy::VelnorRepositoryV1 {
@@ -207,12 +209,12 @@ fn merged_jobs(
         ValidationPhase::BeforeSetup,
         &ctx.authority_steps,
     )?;
-    let workflow_task_ids =
-        crate::verification_jobs::workflow_task_jobs::validate_workflow_task_jobs(
-            &jobs,
-            &ctx.workflow_tasks,
-            &ctx.checkout_uses,
-        )?;
+    crate::verification_jobs::workflow_task_jobs::validate_workflow_task_jobs(
+        &jobs,
+        &ctx.workflow_tasks,
+        &ctx.checkout_uses,
+    )?;
+    let workflow_task_ids = ctx.authority_steps.required_workflow_ids(&jobs);
     crate::verification_jobs::workflow_task_jobs::extend_required_needs(
         &mut jobs,
         &workflow_task_ids,

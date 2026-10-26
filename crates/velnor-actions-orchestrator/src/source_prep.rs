@@ -10,10 +10,6 @@ use velnor_actions_mise::ToolCatalog;
 use crate::OrchestratorError;
 use crate::discover::{PlannedWorkspace, workspace_lock};
 
-pub(crate) fn cargo_isolation_prefix() -> String {
-    velnor_actions_workflow_renderer::plan_sources::cargo_fetch::cargo_isolation_prefix()
-}
-
 pub(crate) fn workspace_root_for_manifest<'a>(
     manifest: &str,
     fetch_roots: &'a [String],
@@ -44,29 +40,6 @@ pub(crate) fn crate_fetch_roots(
         .filter(|candidate| candidate.as_str() == root)
         .cloned()
         .collect()
-}
-
-pub(crate) fn isolated_manifest_flag(root: &str) -> String {
-    velnor_actions_workflow_renderer::plan_sources::cargo_fetch::isolated_manifest_flag(root)
-}
-
-pub(crate) fn privilege_drop_argv(install: &str, payload: &str) -> Vec<String> {
-    let prelude = velnor_actions_workflow_renderer::toolchain_env::credential_unset_prelude();
-    let script = format!(
-        "{{ {install} && {prelude} }} && {}{payload}",
-        cargo_isolation_prefix(),
-    );
-    vec!["sh".to_owned(), "-c".to_owned(), script]
-}
-
-const NATIVE_VALIDATORS_SCRIPT: &str = r#"fail=0; if command -v claude >/dev/null 2>&1; then claude plugin validate --strict . || fail=1; fi; if command -v muse >/dev/null 2>&1; then muse plugins validate . || fail=1; for d in skills/*/; do [ -d "$d" ] || continue; muse skills validate "$d" || fail=1; done; fi; if command -v grok >/dev/null 2>&1; then grok plugin validate . || fail=1; fi; exit $fail"#;
-
-pub(crate) fn native_validators_argv() -> Vec<String> {
-    vec![
-        "sh".to_owned(),
-        "-c".to_owned(),
-        NATIVE_VALIDATORS_SCRIPT.to_owned(),
-    ]
 }
 
 pub(crate) fn lockful_roots(root: &Path, workspaces: &[PlannedWorkspace]) -> Vec<String> {

@@ -18,7 +18,7 @@ pub struct CanonicalRuntimeInputs {
 }
 
 impl CanonicalRuntimeInputs {
-    pub fn new(
+    pub(crate) fn new(
         plan_consumer_env: BTreeMap<String, String>,
         report_helper_version: String,
         staged_binary: String,
@@ -70,6 +70,7 @@ impl CanonicalRuntimeInputs {
 #[derive(Debug, Clone)]
 pub struct CanonicalAuthoritySteps {
     authority_jobs: Vec<CanonicalAuthorityJobs>,
+    binding: crate::native_authority::AuthorityBinding,
     mise_setup: Option<Step>,
     required_shells: Vec<Step>,
     producer_plan_shells: Option<Vec<Step>>,
@@ -83,37 +84,13 @@ struct CanonicalAuthorityJobs {
 }
 
 impl CanonicalAuthoritySteps {
-    pub fn from_native_jobs_with_mise_setup(
-        jobs: &BTreeMap<String, Job>,
-        policy: WorkflowPolicy,
-        setup: &crate::setup::MiseSetup,
-        expanded_authority_jobs: &[(Job, Option<Job>)],
-        runtime: CanonicalRuntimeInputs,
-    ) -> Result<Self, crate::RenderError> {
-        if policy == WorkflowPolicy::VelnorRepositoryV1
-            && expanded_authority_jobs
-                .iter()
-                .any(|(_, producer_plan)| producer_plan.is_none())
-        {
-            return Err(crate::RenderError::InvalidWorkflow(
-                "trusted_plan_candidate_execution".to_owned(),
-            ));
-        }
-        let setup = crate::setup::mise_setup_step(setup)?;
-        let variants = expanded_authority_jobs
-            .iter()
-            .cloned()
-            .map(|(required, plan)| (Some(required), plan))
-            .collect::<Vec<_>>();
-        Self::from_native_jobs_inner(jobs, policy, Some(setup), &variants, runtime)
-    }
-
-    fn from_native_jobs_inner(
+    pub(crate) fn from_native_jobs_inner(
         jobs: &BTreeMap<String, Job>,
         policy: WorkflowPolicy,
         mise_setup: Option<Step>,
         expanded_authority_jobs: &[(Option<Job>, Option<Job>)],
         runtime: CanonicalRuntimeInputs,
+        binding: crate::native_authority::AuthorityBinding,
     ) -> Result<Self, crate::RenderError> {
         let mut authority_jobs = vec![CanonicalAuthorityJobs {
             required: jobs.get(FINAL_JOB_ID).map(canonical_job).transpose()?,
@@ -148,11 +125,70 @@ impl CanonicalAuthoritySteps {
         });
         Ok(Self {
             authority_jobs,
+            binding,
             mise_setup,
             required_shells,
             producer_plan_shells,
             runtime,
         })
+    }
+
+    pub(super) fn validate_binding(
+        &self,
+        jobs: &BTreeMap<String, Job>,
+        policy: WorkflowPolicy,
+        support: Option<&velnor_actions_contract::VelnorSupportWorkflow>,
+        context: &crate::render::RenderContext,
+    ) -> Result<(), crate::RenderError> {
+        let variants = self.binding.validate(jobs, policy, support, context)?;
+        let required = match jobs.get(FINAL_JOB_ID) {
+            Some(job) => Some(
+                self.normalize_optional_setup(job)
+                    .and_then(|job| canonical_job(&job).ok())
+                    .ok_or_else(|| {
+                        crate::RenderError::InvalidWorkflow(
+                            "required_verdict_candidate_execution".to_owned(),
+                        )
+                    })?,
+            ),
+            None => None,
+        };
+        let matched = variants
+            .into_iter()
+            .filter(|index| self.authority_jobs[*index].required == required)
+            .collect::<Vec<_>>();
+        if matched.is_empty() {
+            return Err(crate::RenderError::InvalidWorkflow(
+                "required_verdict_candidate_execution".to_owned(),
+            ));
+        }
+        if policy == WorkflowPolicy::VelnorRepositoryV1 {
+            let plan = match jobs.get(PLAN_JOB_ID) {
+                Some(job) => Some(
+                    self.normalize_optional_setup(job)
+                        .and_then(|job| canonical_job(&job).ok())
+                        .ok_or_else(|| {
+                            crate::RenderError::InvalidWorkflow(
+                                "trusted_plan_candidate_execution".to_owned(),
+                            )
+                        })?,
+                ),
+                None => None,
+            };
+            if !matched
+                .into_iter()
+                .any(|index| self.authority_jobs[index].producer_plan == plan)
+            {
+                return Err(crate::RenderError::InvalidWorkflow(
+                    "trusted_plan_candidate_execution".to_owned(),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    pub(super) fn required_workflow_ids(&self, jobs: &BTreeMap<String, Job>) -> Vec<String> {
+        self.binding.required_workflow_ids(jobs)
     }
 
     pub(super) fn matches_runtime(&self, context: &crate::render::RenderContext) -> bool {

@@ -58,7 +58,7 @@ pub struct RenderContext {
     pub tool_pins: Vec<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ValidatorCommand {
     pub validator: ValidatorKind,
     pub name: String,

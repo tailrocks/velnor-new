@@ -56,6 +56,11 @@ platform = "linux/amd64"
     )?;
     let preparation = prepare(temp.path())?;
     homebrew_adoption_seed_public_assertions::assert_raw_consumer_render(&preparation)?;
+    homebrew_adoption_seed_public_assertions::assert_tofu_inventory_rejected(&preparation)?;
+    homebrew_adoption_seed_public_assertions::assert_native_context_rejections(
+        &preparation,
+        velnor_actions_contract::WorkflowPolicy::ConsumerV1,
+    )?;
     homebrew_adoption_seed_public_assertions::assert_complete_job_authority(
         &preparation,
         velnor_actions_contract::WorkflowPolicy::ConsumerV1,
@@ -91,39 +96,10 @@ platform = "linux/amd64"
             && matches!(&step.kind,
             StepKind::Shell { run, .. } if run.join(" ").contains("gh@2.103.2"))
     }));
-    assert_trusted_required_steps(&required.steps, acquire)
-}
-
-fn assert_trusted_required_steps(steps: &[Step], acquire: usize) -> Result<(), Box<dyn Error>> {
-    for (index, step) in steps.iter().enumerate() {
-        match &step.kind {
-            StepKind::Action { uses, .. } => assert!(
-                [
-                    "actions/checkout@",
-                    "jdx/mise-action@",
-                    "actions/download-artifact@",
-                    "actions/upload-artifact@"
-                ]
-                .iter()
-                .any(|prefix| uses.starts_with(prefix)),
-                "candidate or cache action in Required: {uses}"
-            ),
-            StepKind::Shell { .. } => assert!(matches!(
-                step.role,
-                Some(StepRole::AcquireVelnor | StepRole::PreparePinnedTools)
-            )),
-            StepKind::Internal { .. } => {
-                assert!(index > acquire, "native operation preceded acquisition");
-            }
-            other => {
-                return Err(io::Error::other(format!(
-                    "candidate execution in Required: {other:?}"
-                ))
-                .into());
-            }
-        }
-    }
-    Ok(())
+    homebrew_adoption_seed_public_assertions::assert_trusted_required_steps(
+        &required.steps,
+        acquire,
+    )
 }
 
 #[test]
@@ -200,6 +176,10 @@ fn public_velnor_repository_bootstrap_accepts_only_catalog_mise_lock() -> Result
         &published_lock,
     )?;
     homebrew_adoption_seed_public_assertions::assert_raw_producer_render(&preparation)?;
+    homebrew_adoption_seed_public_assertions::assert_native_context_rejections(
+        &preparation,
+        velnor_actions_contract::WorkflowPolicy::VelnorRepositoryV1,
+    )?;
     homebrew_adoption_seed_public_assertions::assert_complete_job_authority(
         &preparation,
         velnor_actions_contract::WorkflowPolicy::VelnorRepositoryV1,

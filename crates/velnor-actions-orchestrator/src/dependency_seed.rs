@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Job, JobTimeout, Step, StepRole};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
@@ -11,19 +11,10 @@ use super::CrateJobInputs;
 use crate::OrchestratorError;
 use crate::config::private_wiring::PrivateWiring;
 
-pub(crate) const SEED_JOB_ID: &str = "dependency-seed";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SeedWorkspace {
     pub(crate) root: String,
     pub(crate) nextest: bool,
-}
-
-pub(crate) fn seed_job_id(root: &str) -> String {
-    if root.is_empty() {
-        SEED_JOB_ID.to_owned()
-    } else {
-        format!("{SEED_JOB_ID}-{}", root.replace('/', "-"))
-    }
 }
 
 pub(crate) fn seed_jobs(
@@ -41,37 +32,12 @@ pub(crate) fn seed_jobs(
 }
 
 pub(crate) fn unique_seed_job_ids(workspaces: &[SeedWorkspace]) -> Vec<String> {
-    let job_ids: Vec<_> = workspaces
-        .iter()
-        .map(|workspace| seed_job_id(&workspace.root))
-        .collect();
-    if job_ids.iter().collect::<BTreeSet<_>>().len() == job_ids.len()
-        && job_ids
+    velnor_actions_workflow_renderer::native_authority::unique_dependency_seed_job_ids(
+        &workspaces
             .iter()
-            .all(|job_id| velnor_actions_contract::validate_job_id(job_id).is_ok())
-    {
-        return job_ids;
-    }
-    workspaces
-        .iter()
-        .map(|workspace| {
-            if workspace.root.is_empty() {
-                SEED_JOB_ID.to_owned()
-            } else {
-                format!("{SEED_JOB_ID}-{}", encode_seed_root(&workspace.root))
-            }
-        })
-        .collect()
-}
-
-fn encode_seed_root(root: &str) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut encoded = String::with_capacity(root.len().saturating_mul(2));
-    for byte in root.bytes() {
-        encoded.push(char::from(HEX[usize::from(byte >> 4)]));
-        encoded.push(char::from(HEX[usize::from(byte & 0x0f)]));
-    }
-    encoded
+            .map(|workspace| workspace.root.clone())
+            .collect::<Vec<_>>(),
+    )
 }
 
 fn seed_job(

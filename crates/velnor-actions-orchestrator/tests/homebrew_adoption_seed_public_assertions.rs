@@ -14,11 +14,17 @@ use velnor_actions_workflow_renderer::{
 
 mod complete_job_authority;
 mod lock_trust;
+mod native_context_authority;
+mod native_fact_inventory;
+pub(super) use native_fact_inventory::assert_tofu_inventory_rejected;
 mod raw_step_authority;
+mod required_steps;
+pub(super) use required_steps::assert_trusted_required_steps;
 mod runtime_context_authority;
 mod shell_authority;
 pub(super) use complete_job_authority::assert_complete_job_authority;
 pub(super) use lock_trust::assert_lock_trust_rejections;
+pub(super) use native_context_authority::assert_native_context_rejections;
 
 pub(super) const BOOTSTRAP_CONFIG: &str = r#"schema = 2
 [workflow]

@@ -6,17 +6,19 @@ use std::collections::BTreeMap;
 use velnor_actions_actionlint::StepSyntax;
 use velnor_actions_contract::GeneratorLock;
 use velnor_actions_contract::{
-    ExecutionMode, Job, Step, ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowIr,
-    WorkflowPolicy, expand_workflow,
+    Job, Step, ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowPolicy,
 };
 use velnor_actions_mise::ToolCatalog;
-use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID};
+use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::verification_jobs::WorkflowTaskPolicy;
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::pins::consumer_acquire_step;
 use crate::workflow_jobs::{PlanJobToolNeeds, PlanRustNeed, plan_job};
+
+#[path = "workflow_native_authority.rs"]
+mod native_authority;
 
 use super::workflow_policy::{
     plan_uses_all_features, plan_uses_nextest, plan_uses_opentofu, plan_uses_rust,
@@ -62,21 +64,9 @@ pub(crate) fn build_workflow_for_consumer_release(
         wire_w1::apply_checkout_lfs(&mut jobs);
     }
     let mut ir = workflow_ir(input.config, input.branch, jobs, prepared.policy);
-    let canonical_mise_setup = crate::pins::resolve_mise_setup(input.config, input.label)?;
-    let expanded_authority_jobs = expanded_authority_variants(&ir, input.config, prepared.policy)?;
-    let runtime = workflow_context::canonical_runtime(
-        &prepared.catalog,
-        &prepared.report_helper_version,
-        prepared.needs.rust.has_compiler(),
-    )?;
-    let authority_steps = velnor_actions_workflow_renderer::render::CanonicalAuthoritySteps::
-        from_native_jobs_with_mise_setup(
-            &ir.jobs,
-            prepared.policy,
-            &canonical_mise_setup,
-            &expanded_authority_jobs,
-            runtime.clone(),
-        )?;
+    let native = native_authority::build(input, &prepared, &mut ir.jobs)?;
+    let runtime = native.runtime();
+    let authority_steps = native.authority();
     let context = workflow_context::render_context(workflow_context::RenderContextInputs {
         authority_steps,
         runtime,
@@ -114,47 +104,6 @@ pub(crate) fn build_workflow_for_consumer_release(
         context,
         lint_config,
     })
-}
-
-fn expanded_authority_variants(
-    ir: &WorkflowIr,
-    config: &VelnorConfig,
-    policy: WorkflowPolicy,
-) -> Result<Vec<(Job, Option<Job>)>, OrchestratorError> {
-    let dispatches = [
-        None,
-        Some(ExecutionMode::Hosted),
-        Some(ExecutionMode::ScaleSet),
-        Some(ExecutionMode::Both),
-    ];
-    let mut authorities = Vec::new();
-    for dispatch in dispatches {
-        let expanded = match expand_workflow(ir, config, dispatch) {
-            Ok(expanded) => expanded,
-            Err(error) if dispatch.is_none() => {
-                return Err(OrchestratorError::Contract {
-                    problem: error.to_string(),
-                });
-            }
-            Err(_) => continue,
-        };
-        let required = expanded.jobs.get(FINAL_JOB_ID).cloned().ok_or_else(|| {
-            OrchestratorError::Contract {
-                problem: "workflow_missing_required_authority_snapshot".to_owned(),
-            }
-        })?;
-        let producer_plan = if policy == WorkflowPolicy::VelnorRepositoryV1 {
-            Some(expanded.jobs.get(PLAN_JOB_ID).cloned().ok_or_else(|| {
-                OrchestratorError::Contract {
-                    problem: "workflow_missing_plan_authority_snapshot".to_owned(),
-                }
-            })?)
-        } else {
-            None
-        };
-        authorities.push((required, producer_plan));
-    }
-    Ok(authorities)
 }
 
 fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, OrchestratorError> {

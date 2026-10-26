@@ -53,6 +53,7 @@ mod matrix;
 mod matrix_output_mode;
 mod mbx_gc_policy;
 pub mod msrv;
+pub mod native_authority;
 mod native_helper;
 pub mod native_job_builders;
 pub mod overlap;
@@ -75,15 +76,8 @@ pub mod publish_spec;
 pub mod release_checkout_gates;
 pub mod release_config;
 pub mod release_gates;
+pub mod release_helpers;
 pub mod release_jobs;
-pub mod release_helpers {
-    pub use crate::native_helper::{
-        ReleaseHelperError, acquire_script_argv, consumer_acquire_for_target,
-        lock_acquire_for_target, validate_consumer_manifest_for_version,
-        validate_published_generator_lock, verify_binary_matches_consumer_manifest,
-        verify_local_generator_release_manifest,
-    };
-}
 pub mod release_permissions;
 pub mod release_spec;
 pub mod release_tree;
@@ -131,16 +125,8 @@ pub fn jactionlint_verifier_script(version: &str) -> String {
     selected_mise_verifier::script_for_version(version)
 }
 pub mod verification_jobs;
+pub mod verifier_builders;
 pub mod verifier_composite;
-pub mod verifier_builders {
-    pub use crate::native_verifiers::{
-        NOT_CATALOGUED_CODE, ToolchainPhase, VERIFY_JACTIONLINT_STEP, VERIFY_RESTORED_RUST_STEP,
-        jactionlint_verifier_argv, jactionlint_verifier_script, jactionlint_verifier_shell_step,
-        rust_verifier_shell_step, toolchain_script, verify_jactionlint_step,
-        verify_restored_rust_step, verify_rust_argv, verify_rust_manifest_step,
-        verify_rust_owned_argv,
-    };
-}
 mod workflow_policy;
 mod workflow_size;
 mod workflow_timeout;

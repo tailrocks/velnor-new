@@ -1133,12 +1133,16 @@ version = "0.1.57"
 dependencies = [
  "rustix",
  "serde",
+ "serde_json",
  "sha2",
  "tempfile",
  "toml",
  "velnor-actions-actionlint",
+ "velnor-actions-bun",
  "velnor-actions-contract",
+ "velnor-actions-dbt",
  "velnor-actions-mise",
+ "velnor-actions-rust",
  "velnor-actions-tofu",
 ]
 

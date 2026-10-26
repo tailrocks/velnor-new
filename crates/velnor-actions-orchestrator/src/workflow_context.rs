@@ -9,7 +9,7 @@ use velnor_actions_workflow_renderer::render::{
     CanonicalRuntimeInputs, RenderContext, ValidatorCommand,
 };
 use velnor_actions_workflow_renderer::steps::{
-    DENY_STEP_NAME, MACHETE_STEP_NAME, REQUEST_DIR_PREFIX, STAGED_BINARY_PREFIX,
+    DENY_STEP_NAME, MACHETE_STEP_NAME, REQUEST_DIR_PREFIX,
 };
 use velnor_actions_workflow_renderer::verification_jobs::WorkflowTaskPolicy;
 
@@ -17,7 +17,7 @@ use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::vectors::{deny_argv, machete_argv, machete_install_argv};
 
-use super::{CHECKOUT_USES, REQUEST_DIR};
+use super::REQUEST_DIR;
 
 #[path = "tool_cache_pins.rs"]
 mod tool_cache_pins;
@@ -32,25 +32,6 @@ pub(super) struct RenderContextInputs<'a> {
     pub(super) discovery: &'a Discovery,
     pub(super) workflow_tasks: Vec<WorkflowTaskPolicy>,
     pub(super) verify: &'a [ValidatorKind],
-}
-
-pub(super) fn canonical_runtime(
-    catalog: &ToolCatalog,
-    report_helper_version: &str,
-    plan_needs_rust: bool,
-) -> Result<CanonicalRuntimeInputs, OrchestratorError> {
-    Ok(CanonicalRuntimeInputs::new(
-        crate::matrix_step::task_step_env(
-            catalog,
-            &std::collections::BTreeMap::new(),
-            plan_needs_rust,
-        )?,
-        report_helper_version.to_owned(),
-        format!("{STAGED_BINARY_PREFIX}{report_helper_version}"),
-        REQUEST_DIR.to_owned(),
-        CHECKOUT_USES.to_owned(),
-        false,
-    )?)
 }
 
 pub(super) fn render_context(
