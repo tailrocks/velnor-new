@@ -1,9 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    error::Error, fs, os::unix::fs::PermissionsExt, path::Path, process::ExitStatus,
-};
+use std::{error::Error, fs, os::unix::fs::PermissionsExt, path::Path, process::ExitStatus};
 
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
