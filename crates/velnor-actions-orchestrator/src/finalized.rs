@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, WorkflowPolicy, expand_workflow};
+use velnor_actions_contract::{Job, WorkflowPolicy, expand_workflow_with_bun_plan};
 use velnor_actions_workflow_renderer::finalize_jobs as finalize_render_jobs;
 
 use crate::OrchestratorError;
@@ -41,16 +41,18 @@ pub fn finalized_jobs(
 ) -> Result<BTreeMap<String, Job>, OrchestratorError> {
     let owned = owned_preparation(prep)?;
     let mise = resolve_mise_setup(&owned.config, &owned.runner_label)?;
-    let ir = expand_workflow(&owned.workflow.ir, &owned.config, None).map_err(|err| {
-        OrchestratorError::Contract {
+    let expansion = expand_workflow_with_bun_plan(&owned.workflow.ir, &owned.config, None)
+        .map_err(|err| OrchestratorError::Contract {
             problem: err.to_string(),
-        }
-    })?;
+        })?;
+    let ir = expansion.ir;
+    let mut context = owned.workflow.context.clone();
+    context.bun_lane_plan = expansion.bun_lane_plan;
     Ok(finalize_render_jobs(
         &ir,
         owned.config.workflow.policy,
         owned.workflow.support.as_ref(),
-        &owned.workflow.context,
+        &context,
         &mise,
     )?)
 }

@@ -157,7 +157,12 @@ fn merged_jobs(
     ir.validate().map_err(RenderError::Contract)?;
     workflow_policy::check_triggers(&ir.triggers)?;
     workflow_policy::check_concurrency(&ir.concurrency)?;
-    workflow_policy::check_single_label(ir, &ctx.runs_on, &ctx.workflow_tasks)?;
+    workflow_policy::check_single_label(
+        ir,
+        &ctx.runs_on,
+        &ctx.workflow_tasks,
+        ctx.bun_lane_plan.as_ref(),
+    )?;
     let mut jobs = ir.jobs.clone();
     match policy {
         WorkflowPolicy::ConsumerV1 => support::merge_consumer_verify(&mut jobs, support, ctx)?,
@@ -170,6 +175,7 @@ fn merged_jobs(
             &jobs,
             &ctx.workflow_tasks,
             &ctx.checkout_uses,
+            ctx.bun_lane_plan.as_ref(),
         )?;
     crate::verification_jobs::workflow_task_jobs::extend_required_needs(
         &mut jobs,
@@ -212,6 +218,7 @@ fn render_merged(
         &ctx.generator_version,
         &ctx.report_helper_version,
         &ctx.workflow_tasks,
+        ctx.bun_lane_plan.as_ref(),
         ctx.scale_set_selector.as_ref(),
     )?;
     let mut shared = crate::lane_share::share_lanes(&jobs, ctx)?;

@@ -3,7 +3,7 @@
 
 use super::{BTreeMap, RenderError, commands, guard, marker, steps, validator_tools};
 use velnor_actions_contract::{
-    CI_WORKFLOW_PATH, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID, PullRequestCachePolicy,
+    BunLanePlan, CI_WORKFLOW_PATH, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID, PullRequestCachePolicy,
     REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION, REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID,
     REQUIRED_VERDICT_DISPLAY_NAME as CONTRACT_REQUIRED_VERDICT_DISPLAY_NAME, ScaleSetSelector,
     ValidatorKind,
@@ -52,6 +52,7 @@ pub struct RenderContext {
     pub candidate: Option<CandidateSpec>,
     pub preseed: bool,
     pub workflow_tasks: Vec<crate::verification_jobs::WorkflowTaskPolicy>,
+    pub bun_lane_plan: Option<BunLanePlan>,
     pub pull_request_cache_policy: PullRequestCachePolicy,
     pub mise_quiet: bool,
     pub plan_consumer_env: BTreeMap<String, String>,

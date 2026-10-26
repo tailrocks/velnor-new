@@ -259,7 +259,11 @@ fn job_to_yaml(
         | StepKind::TaskExecution { env, .. } => !env.is_empty(),
         StepKind::NativeCheckExecution { .. } | StepKind::Internal { .. } => false,
     });
-    let mut job_env = if step_has_env && ctx.workflow_tasks.iter().any(|task| task.owns_job_id(id))
+    let mut job_env = if step_has_env
+        && ctx
+            .workflow_tasks
+            .iter()
+            .any(|task| task.owns_projected_job_id(id, ctx.bun_lane_plan.as_ref()))
     {
         crate::toolchain_env::credential_scrub()
     } else {

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
     Job, JobTimeout, PermissionLevel, Permissions, Step, StepKind, StepRole,
@@ -167,19 +167,24 @@ pub(crate) fn validate_bun_member_job(
     jobs: &BTreeMap<String, Job>,
     policy: &BunMemberPolicy,
     checkout_uses: &str,
+    plan: Option<&velnor_actions_contract::BunLanePlan>,
 ) -> Result<Vec<String>, RenderError> {
-    let actual = jobs.get(&policy.id).ok_or_else(|| {
-        RenderError::InvalidWorkflow(format!("bun_member_job_missing:{}", policy.id))
-    })?;
-    let expected = build_bun_member_job(policy, checkout_uses)?;
-    if !same_bun_job(actual, &expected) {
-        return Err(RenderError::InvalidWorkflow(format!(
-            "bun_member_job_contract:{}",
-            policy.id
-        )));
+    let projected = crate::verification_jobs::bun_lane_validation::project_job(
+        &policy.id,
+        &build_bun_member_job(policy, checkout_uses)?,
+        plan,
+    )?;
+    for (id, expected) in &projected {
+        let actual = jobs
+            .get(id)
+            .ok_or_else(|| RenderError::InvalidWorkflow(format!("bun_member_job_missing:{id}")))?;
+        if !same_bun_job(actual, expected) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "bun_member_job_contract:{id}"
+            )));
+        }
     }
-    let ids: BTreeSet<&String> = BTreeSet::from([&policy.id]);
-    Ok(ids.into_iter().cloned().collect())
+    Ok(projected.into_iter().map(|(id, _)| id).collect())
 }
 
 pub(crate) fn same_bun_job(actual: &Job, expected: &Job) -> bool {
