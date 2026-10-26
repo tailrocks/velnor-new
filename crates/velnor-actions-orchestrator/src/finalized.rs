@@ -66,7 +66,12 @@ fn validate_published_generator_lock(
     lock.check_supported_targets(".velnor/generator.lock")
         .map_err(|err| OrchestratorError::Contract {
             problem: err.to_string(),
-        })
+        })?;
+    velnor_actions_mise::catalog::lock::verify_lock_against_manifest(lock, &manifest).map_err(
+        |err| OrchestratorError::Contract {
+            problem: err.to_string(),
+        },
+    )
 }
 
 pub fn finalized_jobs(

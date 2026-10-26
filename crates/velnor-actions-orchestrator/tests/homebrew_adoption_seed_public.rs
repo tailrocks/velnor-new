@@ -160,6 +160,58 @@ fn public_seed_manifest_replaces_legacy_consumer_manifest() -> Result<(), Box<dy
     Ok(())
 }
 
+#[test]
+fn public_velnor_repository_bootstrap_accepts_only_catalog_mise_lock() -> Result<(), Box<dyn Error>>
+{
+    let temp = repository_with_origin(Some("https://github.com/tailrocks/velnor-new.git"))?;
+    fs::create_dir_all(temp.path().join(".velnor"))?;
+    fs::write(
+        temp.path().join(".velnor/config.toml"),
+        r#"schema = 2
+[workflow]
+policy = "velnor-repository-v1"
+default_branch = "main"
+generator_validation = "bootstrap"
+[execution]
+default_profile = "hosted"
+hosted_profile = "hosted"
+scale_set_profile = "local"
+[execution.profiles.hosted]
+kind = "github-hosted"
+label = "ubuntu-26.04"
+platform = "linux/amd64"
+[execution.profiles.local]
+kind = "github-scale-set"
+name = "ubuntu-26.04-scale-set"
+labels = ["velnor", "ubuntu-26.04-scale-set"]
+platform = "linux/amd64"
+"#,
+    )?;
+    let lock_path = temp.path().join(".velnor/generator.lock");
+    fs::write(lock_path, include_str!("../../../.velnor/generator.lock"))?;
+    finalized_jobs(&prepare(temp.path())?)?;
+
+    let lock_path = temp.path().join(".velnor/generator.lock");
+    let lock = fs::read_to_string(&lock_path)?;
+    let pinned_version = "version = \"2026.10.19\"";
+    assert_eq!(lock.matches(pinned_version).count(), 1);
+    fs::write(
+        lock_path,
+        lock.replacen(pinned_version, "version = \"2026.10.18\"", 1),
+    )?;
+    let error = finalized_jobs(&prepare(temp.path())?)
+        .expect_err("a stale bootstrap Mise version must fail public finalization");
+    assert!(matches!(
+        error,
+        OrchestratorError::Contract { problem }
+            if problem == format!(
+                "lock_mismatch:mise_bootstrap:2026.10.18:{}",
+                velnor_actions_mise::MISE_VERSION
+            )
+    ));
+    Ok(())
+}
+
 fn apply_rendered(
     root: &Path,
     files: &[velnor_actions_workflow_renderer::RenderedFile],
@@ -178,6 +230,10 @@ fn apply_rendered(
 }
 
 fn repository() -> Result<TempDir, Box<dyn Error>> {
+    repository_with_origin(None)
+}
+
+fn repository_with_origin(origin: Option<&str>) -> Result<TempDir, Box<dyn Error>> {
     let temp = tempfile::tempdir()?;
     let templates = temp.path().join("templates");
     let hooks = temp.path().join("hooks");
@@ -221,6 +277,9 @@ fn repository() -> Result<TempDir, Box<dyn Error>> {
         .to_str()
         .ok_or_else(|| io::Error::other("Git template path is not UTF-8"))?;
     git(&["init", "-b", "main", "--template", template_arg])?;
+    if let Some(origin) = origin {
+        git(&["remote", "add", "origin", origin])?;
+    }
     let hooks_arg = hooks
         .to_str()
         .ok_or_else(|| io::Error::other("Git hooks path is not UTF-8"))?;

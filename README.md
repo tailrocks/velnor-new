@@ -95,9 +95,12 @@ source commit, asset URLs, and digests. A source build still fails
 consumer-policy generation by design (`consumer_requires_release_install`);
 it never emits an unverified download URL or a placeholder digest. Velnor's
 own repository instead uses the reserved `velnor-repository-v1` policy;
-`.velnor/generator.lock` does not exist yet (BOOT-3.4 NEEDS-HUMAN —
-seed creates it), so the lock half of the bootstrap cycle is future work,
-not a present claim.
+`.velnor/generator.lock` records the authenticated Velnor 0.1.55 release at
+commit `693f3aae14406fb7851ac70f0aee647a869b5063`, with its three supported
+binary artifact URLs and SHA-256 digests. Required-verdict generation checks
+the lock against the release manifest rules and the pinned Mise catalog. This
+bootstrap input does not establish hosted qualification of the current source
+or a historical signed qualification.
 
 ## Proposed V1 direction
 
