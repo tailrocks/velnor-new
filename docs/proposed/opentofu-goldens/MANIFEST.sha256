@@ -5,7 +5,7 @@ b583091d58d48371c4ca236ed1b7bd7548e019c557633502aee0fd88a60370df  ./dogfood/gene
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/generate.stdout.txt
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./dogfood/plan.exit
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/plan.stderr.txt
-a6669757866f74660cf52ded4903de874ec5412bf250c061a187ac1781933b60  ./dogfood/plan.txt
+e8e2550a1eead5c11e9f17098157dcb1470a8cf8ad4207bcfe7ef99c45608ab3  ./dogfood/plan.txt
 9051dfa842ec24d41643009b0226dd18c7696ae7688d2b58c93502c81f191fdf  ./dogfood/preview/.github/AGENTS.md
 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./dogfood/preview/.github/CLAUDE.md
 952c78c7e8f944dc89ae7733a76f912e2c6b7f7e6013bb2bad00ae85e5ceed3a  ./dogfood/preview/.github/PULL_REQUEST_TEMPLATE.md
