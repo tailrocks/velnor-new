@@ -15,6 +15,8 @@ mod bun_malformed;
 mod bun_planning;
 #[path = "workflow_configuration_public/bun_planning_fixture.rs"]
 mod bun_planning_fixture;
+#[path = "workflow_configuration_public/bun_request_lanes.rs"]
+mod bun_request_lanes;
 #[path = "workflow_configuration_public/bun_routing.rs"]
 mod bun_routing;
 #[path = "workflow_configuration_public/bun_runtime.rs"]
