@@ -1,0 +1,2 @@
+[tasks.protocol-smoke]
+run = "test -f protocol-input.txt"

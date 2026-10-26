@@ -1,0 +1,1 @@
+SDK56 to SDK55 native merge compatibility fixture input.

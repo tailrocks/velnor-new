@@ -1,0 +1,35 @@
+schema = 2
+
+[workflow]
+name = "Compatibility Fixture"
+policy = "consumer-v1"
+default_branch = "main"
+
+[execution]
+default_profile = "hosted"
+hosted_profile = "hosted"
+scale_set_profile = "local"
+
+[execution.profiles.hosted]
+kind = "github-hosted"
+label = "ubuntu-26.04"
+platform = "linux/amd64"
+
+[execution.profiles.local]
+kind = "github-scale-set"
+name = "compatibility-local"
+labels = ["velnor", "compatibility-local"]
+platform = "linux/amd64"
+
+[[checks]]
+id = "protocol-smoke"
+task = "protocol-smoke"
+directory = "."
+inputs = ["mise.toml", "protocol-input.txt"]
+tools = []
+timeout_minutes = 1
+
+[checks.runner]
+label = "compatibility-macos-arm64"
+platform = "macos_arm64"
+executor = "ephemeral_self_hosted"
