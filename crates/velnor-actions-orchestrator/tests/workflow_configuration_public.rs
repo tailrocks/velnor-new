@@ -5,6 +5,8 @@ mod workflow_configuration_fixture;
 
 #[path = "workflow_configuration_public/branches.rs"]
 mod branches;
+#[path = "workflow_configuration_public/bun_runtime.rs"]
+mod bun_runtime;
 #[path = "workflow_configuration_public/empty_suite.rs"]
 mod empty_suite;
 #[path = "workflow_configuration_public/feature_toggles.rs"]
