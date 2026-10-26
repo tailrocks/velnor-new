@@ -22,6 +22,7 @@ fn prepared_bun_workflow_forces_bun_for_scripts_and_keeps_frozen_install()
         .get(PUBLISH_WORKFLOW_PATH)
         .ok_or("rendered npm publication workflow is missing")?;
 
+    assert_npm_publish_install_is_frozen(publish_workflow)?;
     assert_npm_pack_forces_bun(publish_workflow)?;
     assert_project_scripts_force_bun(&prepared);
     assert_frozen_install_stays_unchanged(&prepared);
@@ -52,6 +53,47 @@ fn make_bun_repo() -> Result<tempfile::TempDir, Box<dyn Error>> {
         repo.path(),
     )?;
     Ok(repo)
+}
+
+fn assert_npm_publish_install_is_frozen(publish_workflow: &str) -> Result<(), Box<dyn Error>> {
+    let install_marker = "- name: Install dependencies\n";
+    assert_eq!(
+        publish_workflow.matches(install_marker).count(),
+        1,
+        "expected exactly one npm publication install step"
+    );
+    let section = publish_workflow
+        .split(install_marker)
+        .nth(1)
+        .ok_or("npm publication install step is missing")?;
+    let next_step = section
+        .lines()
+        .position(|line| line.trim_start().starts_with("- name: "))
+        .ok_or("npm publication install step has no following workflow step")?;
+    let install_step = section
+        .lines()
+        .take(next_step)
+        .collect::<Vec<_>>()
+        .join("\n");
+    let command = install_step
+        .lines()
+        .find_map(|line| line.trim_start().strip_prefix("run: "))
+        .ok_or("npm publication install command is missing")?;
+    let bun = command.find("'bun'");
+    let install = command.find("'install'");
+    let frozen = command.find("'--frozen-lockfile'");
+    assert!(
+        matches!(
+            (bun, install, frozen),
+            (Some(bun), Some(install), Some(frozen)) if bun < install && install < frozen
+        ),
+        "npm publication install must run Bun install with --frozen-lockfile: {command}"
+    );
+    assert!(
+        !command.contains("'--bun'"),
+        "npm publication install must not use --bun: {command}"
+    );
+    Ok(())
 }
 
 fn assert_project_scripts_force_bun(prepared: &velnor_actions_orchestrator::GenerationPreparation) {
