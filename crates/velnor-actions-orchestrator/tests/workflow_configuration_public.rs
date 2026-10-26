@@ -21,3 +21,5 @@ mod seed_ids;
 mod support;
 #[path = "workflow_configuration_public/timeouts.rs"]
 mod timeouts;
+#[path = "workflow_configuration_public/verification_tools.rs"]
+mod verification_tools;

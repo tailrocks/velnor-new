@@ -7,7 +7,8 @@ use crate::steps;
 use crate::verification_jobs::build_task_jobs::BuildTaskTool;
 use crate::verification_jobs::build_task_mise_tools::{
     BOLTFFI_KEY, BOLTFFI_MATCHING_REGEX, exact_rust_version, safe_backend, safe_identity,
-    safe_version, selected_mise_files_for, valid_rust_toolchain_options, validate_artifact,
+    safe_version, selected_mise_files_for, valid_github_matching_regex,
+    valid_rust_toolchain_options, validate_artifact,
 };
 use crate::verification_jobs::task_script::{capture_command, jq_guard, printf_write};
 use crate::verification_jobs::{INSTALL_VERIFICATION_TOOLS_NAME, MiseTaskBootstrapPolicy};
@@ -16,6 +17,7 @@ use velnor_actions_contract::{Step, StepKind, StepRole};
 
 const MBX_BACKEND: &str = "packslip:github.com/jdx/mr-boxington";
 const MBX_TOOL_KEY: &str = "mr-boxington";
+const HK_BACKEND: &str = "packslip:github.com/jdx/hk";
 pub(crate) const RUN_MISE_TASK_SUITE_NAME: &str = "Run declared Mise task suite";
 
 pub(crate) fn steps(
@@ -157,14 +159,16 @@ fn validate_tool(tool: &BuildTaskTool) -> Result<(), RenderError> {
     let artifact = tool.artifact.as_ref().ok_or_else(|| {
         RenderError::InvalidWorkflow(format!("verification_tool_artifact_missing:{}", tool.key))
     })?;
+    let github_selector = valid_github_matching_regex(tool);
     let allowed_backend = (tool.key == MBX_TOOL_KEY && tool.backend == MBX_BACKEND)
+        || (tool.key == "hk" && tool.backend == HK_BACKEND)
         || (tool.key == BOLTFFI_KEY && tool.backend == BOLTFFI_KEY)
         || (tool.backend.starts_with("aqua:")
             && tool.backend.len() > "aqua:".len()
             && tool.config_options.is_empty())
         || (tool.key.starts_with("github:")
             && tool.key == tool.backend
-            && tool.config_options.is_empty());
+            && (tool.config_options.is_empty() || github_selector));
     let boltffi_options = BTreeMap::from([(
         "matching_regex".to_owned(),
         BOLTFFI_MATCHING_REGEX.to_owned(),
@@ -174,6 +178,7 @@ fn validate_tool(tool: &BuildTaskTool) -> Result<(), RenderError> {
         || (tool.key == BOLTFFI_KEY
             && (tool.config_options != boltffi_options || tool.lock_options != boltffi_options))
         || (tool.key != BOLTFFI_KEY
+            && !github_selector
             && (!tool.config_options.is_empty() || !tool.lock_options.is_empty()))
     {
         return Err(RenderError::InvalidWorkflow(format!(

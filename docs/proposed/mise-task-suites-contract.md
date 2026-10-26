@@ -48,6 +48,24 @@ undeclared or unlocked tools, source installs, unsupported backends, and
 invalid Rust toolchain sources before emitting a workflow. No Nextest profile
 is required.
 
+Task suites and `VerificationTask` share native tool admission. The tool key
+`hk` admits only the exact `packslip:github.com/jdx/hk` backend with its pinned
+version and locked platform artifact. A GitHub tool MAY declare the single
+`matching_regex` option when its key equals its backend and has the form
+`github:owner/repository` with a validated GitHub repository. The regex MUST
+be non-empty, at most 512 bytes, and contain only printable ASCII bytes
+(`0x20` through `0x7e`). Tera openers `{{`, `{%`, and `{#` are rejected:
+Mise renders backend-option templates even when their values are safely
+TOML-quoted. Source and lock options MUST match exactly. The admitted regex
+is serialized as a TOML string and remains a literal selector; project Mise
+templates are not evaluated to resolve tool versions.
+
+`BuildTask` retains its existing exact Boltffi selector restriction. These
+shared serialization changes do not admit new BuildTask backends or options.
+Native admission and preservation of locked artifact metadata do not prove
+installation or execution qualification; a cold private-store run of the
+declared tool closure remains a separate gate.
+
 ## 2. Events and placement
 
 V1 accepts only `push` and `schedule`. A push workflow is restricted to the
