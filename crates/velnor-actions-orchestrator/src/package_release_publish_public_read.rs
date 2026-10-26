@@ -12,6 +12,8 @@ use super::{GitHubApi, ReleaseAssetResponse, asset_tuples, asset_tuples_from_dow
 
 #[path = "package_release_publish_pull_request_merge_ref.rs"]
 mod pull_request_merge_ref;
+#[path = "package_release_publish_pull_request_poll.rs"]
+mod pull_request_poll;
 
 pub(crate) struct PublicReleaseSnapshot {
     pub(crate) release_id: u64,
@@ -87,27 +89,12 @@ pub(crate) fn read_public_pull_request(
         .map_err(|_| internal("package_public_verification_deadline"))?;
     let api = GitHubApi::new(repository.to_owned()).with_deadline(deadline);
     api.verify_repository_identity(repository_id)?;
-    let response: PublicPullRequestResponse =
-        api.get_json(&api.route(&format!("pulls/{number}")))?;
+    let response = pull_request_poll::read(&api, repository, repository_id, number, deadline)?;
     let base = response.base;
     let head = response.head;
     let (Some(base_repository), Some(head_repository)) = (base.repo, head.repo) else {
         return Err(internal("package_public_pull_request_repository_missing"));
     };
-    if response.number != number
-        || base_repository.id != repository_id
-        || head_repository.id == 0
-        || base_repository.full_name != repository
-        || !velnor_actions_contract::vcs::is_safe_github_repository(&head_repository.full_name)
-        || !github::is_lowercase_git_sha(&base.sha)
-        || !github::is_lowercase_git_sha(&head.sha)
-        || base.reference.is_empty()
-        || head.reference.is_empty()
-        || base.reference.bytes().any(|byte| byte.is_ascii_control())
-        || head.reference.bytes().any(|byte| byte.is_ascii_control())
-    {
-        return Err(internal("package_public_pull_request_identity_mismatch"));
-    }
     deadline
         .remaining()
         .map_err(|_| internal("package_public_verification_deadline"))?;
@@ -196,11 +183,12 @@ struct PublicPullRequestResponse {
     state: String,
     draft: bool,
     merged_at: Option<String>,
+    mergeable: Option<bool>,
     base: PublicPullRequestRef,
     head: PublicPullRequestRef,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, PartialEq, Eq)]
 struct PublicPullRequestRef {
     #[serde(rename = "ref")]
     reference: String,
@@ -208,7 +196,7 @@ struct PublicPullRequestRef {
     repo: Option<PublicPullRequestRepository>,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, PartialEq, Eq)]
 struct PublicPullRequestRepository {
     id: u64,
     full_name: String,

@@ -23,6 +23,11 @@ pub(crate) enum Scenario {
     Valid,
     ReversedParents,
     ChangedRef,
+    MergePendingReady,
+    MergePendingExhausted,
+    MergePendingFalse,
+    MergePendingChanged,
+    MergePendingDeadline,
     HttpFailure,
     StdoutLimit,
     StderrLimit,
@@ -185,7 +190,10 @@ fn invoke(paths: &Paths, ids: &Identities) -> Result<Output, Box<dyn Error>> {
         })
         .to_string(),
     )?;
-    let is_deadline = fs::read_to_string(paths.root.join("provider/failure"))? == "deadline";
+    let is_deadline = matches!(
+        fs::read_to_string(paths.root.join("provider/failure"))?.as_str(),
+        "deadline" | "merge-deadline"
+    );
     let mut command = if is_deadline {
         let mut command = Command::new(std::env::current_exe()?);
         command.args([
@@ -240,13 +248,21 @@ pub(crate) fn deadline_child() -> Result<bool, Box<dyn Error>> {
     }
     let request = fs::read_to_string(std::env::var("VELNOR_REQUEST_FILE")?)?;
     let deadline = velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(5))?;
+    let polling =
+        fs::read_to_string(Path::new(&std::env::var("VELNOR_FIXTURE_STATE")?).join("failure"))?
+            == "merge-deadline";
+    let expected = if polling {
+        "package_public_verification_deadline"
+    } else {
+        "category=timeout"
+    };
     let expired = deadline.scope(|| {
         let result = velnor_actions_orchestrator::plan_internal(&request);
         assert!(result.is_err(), "deadline plan unexpectedly succeeded");
         if let Err(error) = result {
             eprintln!("{error}");
             assert!(
-                error.to_string().contains("category=timeout"),
+                error.to_string().contains(expected),
                 "transport timeout diagnostic missing: {error}"
             );
         }

@@ -62,3 +62,43 @@ fn github_api_deadline_reports_safe_context() -> Result<(), Box<dyn Error>> {
     }
     fixture::run(fixture::Scenario::Deadline, "category=timeout")
 }
+
+#[test]
+fn pending_mergeability_refreshes_before_trusting_merge_ref() -> Result<(), Box<dyn Error>> {
+    fixture::run(
+        fixture::Scenario::MergePendingReady,
+        "homebrew_authority_locator_missing",
+    )
+}
+
+#[test]
+fn unresolved_mergeability_never_produces_a_plan() -> Result<(), Box<dyn Error>> {
+    fixture::run(
+        fixture::Scenario::MergePendingExhausted,
+        "package_public_pull_request_mergeability_unresolved",
+    )
+}
+
+#[test]
+fn conflicting_pull_request_finishes_mergeability_refresh() -> Result<(), Box<dyn Error>> {
+    fixture::run(
+        fixture::Scenario::MergePendingFalse,
+        "homebrew_authority_pull_request_context:runner_sha",
+    )
+}
+
+#[test]
+fn pull_request_changed_during_mergeability_refresh_is_rejected() -> Result<(), Box<dyn Error>> {
+    fixture::run(
+        fixture::Scenario::MergePendingChanged,
+        "package_public_pull_request_changed",
+    )
+}
+
+#[test]
+fn mergeability_polling_obeys_the_public_operation_deadline() -> Result<(), Box<dyn Error>> {
+    fixture::run(
+        fixture::Scenario::MergePendingDeadline,
+        "package_public_verification_deadline",
+    )
+}

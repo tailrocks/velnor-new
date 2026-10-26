@@ -19,17 +19,30 @@ pub(crate) fn write(
         Scenario::StdoutLimit => "stdout",
         Scenario::StderrLimit => "stderr",
         Scenario::Deadline => "deadline",
+        Scenario::MergePendingDeadline => "merge-deadline",
         _ => "none",
     };
     fs::write(state.join("failure"), failure)?;
-    write_identity(&state, ids)?;
+    let mergeability = match scenario {
+        Scenario::MergePendingReady => "ready",
+        Scenario::MergePendingExhausted | Scenario::MergePendingDeadline => "pending",
+        Scenario::MergePendingFalse => "false",
+        Scenario::MergePendingChanged => "changed",
+        _ => "none",
+    };
+    fs::write(state.join("mergeability"), mergeability)?;
+    write_identity(&state, ids, mergeability)?;
     write_merge(&state, ids, scenario)?;
     write_lineage(&state, ids)?;
     write_source_trees(&state, ids)?;
     write_programs(&bin, &state)
 }
 
-fn write_identity(state: &Path, ids: &Identities) -> Result<(), Box<dyn Error>> {
+fn write_identity(
+    state: &Path,
+    ids: &Identities,
+    mergeability: &str,
+) -> Result<(), Box<dyn Error>> {
     response(
         state,
         "repository.json",
@@ -37,16 +50,20 @@ fn write_identity(state: &Path, ids: &Identities) -> Result<(), Box<dyn Error>> 
             "id":REPOSITORY_ID,"full_name":"test-owner/test-tap","default_branch":"main"
         }),
     )?;
-    response(
-        state,
-        "pull.json",
-        &serde_json::json!({
-            "number":17,"state":"open","draft":false,"merged_at":null,
-            "base":{"sha":ids.base,"ref":"main","repo":{"id":REPOSITORY_ID,"full_name":"test-owner/test-tap"}},
-            "head":{"sha":ids.head,"ref":"fixture-head","repo":{"id":REPOSITORY_ID,"full_name":"test-owner/test-tap"}}
-        }),
-    )?;
-    Ok(())
+    let mut pull = serde_json::json!({
+        "number":17,"state":"open","draft":false,"merged_at":null,"mergeable":true,
+        "base":{"sha":ids.base,"ref":"main","repo":{"id":REPOSITORY_ID,"full_name":"test-owner/test-tap"}},
+        "head":{"sha":ids.head,"ref":"fixture-head","repo":{"id":REPOSITORY_ID,"full_name":"test-owner/test-tap"}}
+    });
+    if mergeability != "none" {
+        pull["mergeable"] = serde_json::Value::Null;
+    }
+    response(state, "pull.json", &pull)?;
+    pull["mergeable"] = serde_json::json!(mergeability != "false");
+    if mergeability == "changed" {
+        pull["head"]["sha"] = serde_json::json!("9999999999999999999999999999999999999999");
+    }
+    response(state, "pull-ready.json", &pull)
 }
 
 fn write_merge(state: &Path, ids: &Identities, scenario: Scenario) -> Result<(), Box<dyn Error>> {
@@ -128,6 +145,7 @@ fn write_source_trees(state: &Path, ids: &Identities) -> Result<(), Box<dyn Erro
 
 fn write_programs(bin: &Path, state: &Path) -> Result<(), Box<dyn Error>> {
     fs::write(state.join("ref-count"), "0")?;
+    fs::write(state.join("pull-count"), "0")?;
     fs::write(state.join("requests.log"), "")?;
     fs::write(bin.join("mise"), MISE)?;
     fs::write(bin.join("gh"), GH)?;
@@ -210,8 +228,18 @@ if [ "$route" = repos/test-owner/test-tap ]; then
 fi
 case "$route" in
   repos/test-owner/test-tap) file=repository.json ;;
-  repos/test-owner/test-tap/pulls/17) file=pull.json ;;
+  repos/test-owner/test-tap/pulls/17)
+    count=$(cat "$VELNOR_FIXTURE_STATE/pull-count")
+    count=$((count + 1))
+    printf '%s' "$count" > "$VELNOR_FIXTURE_STATE/pull-count"
+    mode=$(cat "$VELNOR_FIXTURE_STATE/mergeability")
+    file=pull.json
+    if [ "$mode" != pending ] && [ "$mode" != none ] && [ "$count" -ge 3 ]; then file=pull-ready.json; fi
+    ;;
   repos/test-owner/test-tap/git/matching-refs/pull/17/merge)
+    mode=$(cat "$VELNOR_FIXTURE_STATE/mergeability")
+    pull_count=$(cat "$VELNOR_FIXTURE_STATE/pull-count")
+    if [ "$mode" = false ] || { [ "$mode" != none ] && [ "$pull_count" -lt 3 ]; }; then printf '[]'; exit 0; fi
     count=$(cat "$VELNOR_FIXTURE_STATE/ref-count")
     count=$((count + 1))
     printf '%s' "$count" > "$VELNOR_FIXTURE_STATE/ref-count"
