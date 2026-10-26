@@ -30,7 +30,7 @@ use velnor_actions_workflow_renderer::steps::PLAN_OPERATION;
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
-use crate::workflow_jobs::{PlanJobToolNeeds, final_job, lint_job, plan_job};
+use crate::workflow_jobs::{final_job, lint_job};
 
 #[path = "workflow_policy.rs"]
 pub(super) mod workflow_policy;
@@ -65,27 +65,6 @@ pub struct WorkflowPlan {
     pub support: Option<VelnorSupportWorkflow>,
     pub context: RenderContext,
     pub lint_config: JactionlintConfigInput,
-}
-
-fn build_plan_job(
-    label: &str,
-    acquire: Option<Step>,
-    catalog: &ToolCatalog,
-    needs: PlanJobToolNeeds,
-    fetch_roots: &[String],
-    discovery: &Discovery,
-    private: Option<&crate::config::private_wiring::PrivateWiring>,
-) -> Result<Job, OrchestratorError> {
-    let tofu_roots = crate::tofu_cache::tofu_cache_roots(discovery)?;
-    let mut plan = plan_job(label, acquire, catalog, needs, fetch_roots, &tofu_roots)?;
-    if let Some(private) = private {
-        private.insert_into_job(&mut plan, fetch_roots)?;
-    }
-    insert_format_report_steps(
-        &mut plan,
-        wire_w1::workspace_format_report_steps(discovery)?,
-    );
-    Ok(plan)
 }
 
 fn workflow_ir(
@@ -176,14 +155,15 @@ fn insert_format_report_steps(plan: &mut Job, reports: Vec<Step>) {
     plan.steps.splice(at..at, reports);
 }
 
-fn insert_format_step(plan: &mut Job, format: Step) {
-    let at = plan
+fn insert_format_step(plan: &mut Job, format: Step, after_plan: bool) {
+    let plan_at = plan
         .steps
         .iter()
         .position(|step| {
             matches!(&step.kind, StepKind::Internal { operation, .. } if operation == PLAN_OPERATION)
         })
         .unwrap_or(plan.steps.len());
+    let at = plan_at + usize::from(after_plan && plan_at < plan.steps.len());
     plan.steps.insert(at, format);
 }
 

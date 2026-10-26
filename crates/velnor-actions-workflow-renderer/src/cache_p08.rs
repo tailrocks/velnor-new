@@ -37,8 +37,17 @@ pub(crate) fn ensure_tools_cache_v2(
     always: bool,
     target: &str,
     checkout_uses: &str,
+    source_free_plan: bool,
 ) -> Result<(), RenderError> {
-    setup_pipeline::ensure_tools_cache_v2(job_id, job, setup, always, target, checkout_uses)
+    setup_pipeline::ensure_tools_cache_v2(
+        job_id,
+        job,
+        setup,
+        always,
+        target,
+        checkout_uses,
+        source_free_plan,
+    )
 }
 
 pub fn check_no_legacy_rust_cache(job_id: &str, job: &Job) -> Result<(), RenderError> {

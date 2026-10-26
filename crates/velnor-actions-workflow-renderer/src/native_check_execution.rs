@@ -4,7 +4,11 @@ use velnor_actions_contract::{Step, StepKind};
 
 use crate::{RenderError, document_steps::shell_step_to_yaml, yaml::Yaml};
 
-pub(super) fn render(step: &Step, job_env: &BTreeMap<String, String>) -> Result<Yaml, RenderError> {
+pub(super) fn render(
+    step: &Step,
+    job_env: &BTreeMap<String, String>,
+    report_helper_version: &str,
+) -> Result<Yaml, RenderError> {
     let StepKind::NativeCheckExecution {
         check_id,
         operation,
@@ -16,7 +20,7 @@ pub(super) fn render(step: &Step, job_env: &BTreeMap<String, String>) -> Result<
             "native_check_step_kind_mismatch".to_owned(),
         ));
     };
-    if sdk_version != env!("CARGO_PKG_VERSION") {
+    if sdk_version != report_helper_version {
         return Err(RenderError::InvalidWorkflow(
             "native_check_sdk_version_mismatch".to_owned(),
         ));

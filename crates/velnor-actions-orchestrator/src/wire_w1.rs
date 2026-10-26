@@ -173,6 +173,7 @@ pub(crate) fn workspace_format_step(
 
 pub(crate) fn workspace_format_report_steps(
     discovery: &Discovery,
+    helper_version: &str,
 ) -> Result<Vec<Step>, OrchestratorError> {
     let Some(fmt) = workspace_fmt_group(discovery) else {
         return Ok(Vec::new());
@@ -180,7 +181,7 @@ pub(crate) fn workspace_format_report_steps(
     let matrix_key = matrix_key_for(fmt)?;
     let outcome = crate::matrix_step::outcome_path_for_key(&matrix_key);
     let start = crate::matrix_step::start_path_for_key(&matrix_key);
-    let helper = crate::matrix_step::helper_path_for_version();
+    let helper = crate::matrix_step::helper_path_for_version(helper_version);
     let report = velnor_actions_workflow_renderer::shell_step(
         REPORT_FORMAT_NAME,
         crate::matrix_step::deferred_report_argv(&outcome, &helper, &start),

@@ -104,6 +104,7 @@ fn obligation_action(
         job_env: &empty_job_env,
         runs_on: None,
         actions_read: false,
+        report_helper_version: &ctx.report_helper_version,
     };
     for step in obligations {
         rendered.push(crate::document_steps::step_to_yaml(

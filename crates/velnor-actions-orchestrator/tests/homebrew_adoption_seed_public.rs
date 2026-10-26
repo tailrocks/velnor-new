@@ -1,8 +1,10 @@
+mod homebrew_adoption_seed_public_assertions;
+
 use std::{error::Error, fs, io, path::Path, process::Command};
 
 use sha2::{Digest, Sha256};
 use tempfile::TempDir;
-use velnor_actions_contract::{ReleaseTarget, Step, StepKind, StepRole};
+use velnor_actions_contract::{GeneratorLock, ReleaseTarget, Step, StepKind, StepRole};
 use velnor_actions_orchestrator::{OrchestratorError, finalized_jobs, prepare};
 use velnor_actions_workflow_renderer::{
     HomebrewAdoptionSeedSdkIdentity, MiseSetup, ProductReleasePins, render_homebrew_adoption_seed,
@@ -167,29 +169,30 @@ fn public_velnor_repository_bootstrap_accepts_only_catalog_mise_lock() -> Result
     fs::create_dir_all(temp.path().join(".velnor"))?;
     fs::write(
         temp.path().join(".velnor/config.toml"),
-        r#"schema = 2
-[workflow]
-policy = "velnor-repository-v1"
-default_branch = "main"
-generator_validation = "bootstrap"
-[execution]
-default_profile = "hosted"
-hosted_profile = "hosted"
-scale_set_profile = "local"
-[execution.profiles.hosted]
-kind = "github-hosted"
-label = "ubuntu-26.04"
-platform = "linux/amd64"
-[execution.profiles.local]
-kind = "github-scale-set"
-name = "ubuntu-26.04-scale-set"
-labels = ["velnor", "ubuntu-26.04-scale-set"]
-platform = "linux/amd64"
-"#,
+        homebrew_adoption_seed_public_assertions::BOOTSTRAP_CONFIG,
     )?;
     let lock_path = temp.path().join(".velnor/generator.lock");
-    fs::write(lock_path, include_str!("../../../.velnor/generator.lock"))?;
-    finalized_jobs(&prepare(temp.path())?)?;
+    let lock_text = include_str!("../../../.velnor/generator.lock");
+    fs::write(&lock_path, lock_text)?;
+    let published_lock: GeneratorLock =
+        velnor_actions_mise::catalog::lock::parse_generator_lock(lock_text)?;
+    let preparation = prepare(temp.path())?;
+    assert!(
+        preparation.lock_audit_blocking.is_empty(),
+        "producer preparation must pass lock audit: {:?}",
+        preparation.lock_audit_blocking
+    );
+    let jobs = finalized_jobs(&preparation)?;
+    homebrew_adoption_seed_public_assertions::assert_bootstrap_authority(
+        &preparation,
+        &jobs,
+        &published_lock,
+    )?;
+    homebrew_adoption_seed_public_assertions::assert_plan_checkout_pin_is_required(&preparation)?;
+    homebrew_adoption_seed_public_assertions::assert_symlink_bootstrap(
+        temp.path(),
+        &published_lock,
+    )?;
 
     let lock_path = temp.path().join(".velnor/generator.lock");
     let lock = fs::read_to_string(&lock_path)?;
@@ -199,8 +202,9 @@ platform = "linux/amd64"
         lock_path,
         lock.replacen(pinned_version, "version = \"2026.10.18\"", 1),
     )?;
-    let error = finalized_jobs(&prepare(temp.path())?)
-        .expect_err("a stale bootstrap Mise version must fail public finalization");
+    let error = prepare(temp.path())
+        .and_then(|preparation| finalized_jobs(&preparation))
+        .expect_err("a stale bootstrap Mise version must fail the public pipeline");
     assert!(matches!(
         error,
         OrchestratorError::Contract { problem }

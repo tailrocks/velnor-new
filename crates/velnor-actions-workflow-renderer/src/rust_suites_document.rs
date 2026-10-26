@@ -118,6 +118,7 @@ fn finalize_suite_workflow_jobs(
             true,
             target,
             &spec.checkout_uses,
+            false,
         )?;
         crate::cache_p08::check_no_legacy_rust_cache(id, job)?;
         crate::cache_p08::check_mbx_before_fetch(id, job)?;

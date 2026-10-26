@@ -10,6 +10,15 @@ execution boundary. Producer workflows require `.velnor/generator.lock`, which
 authenticates SDK 0.1.55 at commit
 `693f3aae14406fb7851ac70f0aee647a869b5063` during this preparation.
 
+Ordinary producer Plan uses the authenticated published SDK 0.1.55 for request
+creation and planning. It does not build or stage the candidate generator, run
+candidate-local tools preludes or cache actions, or ask SDK 0.1.55 to regenerate
+SDK 0.1.56 output. Generated manifests retain generator version 0.1.56 and bind
+execution and report helpers to version 0.1.55. The separate native generator
+release workflow still builds SDK 0.1.56 and qualifies those exact candidate
+artifacts and their manifest before publication. Ordinary CI planning does not
+replace candidate release qualification.
+
 Open pull-request admission uses the exact merge ref, validates its immutable
 commit and ordered base/head parents, and requires an unchanged second ref read.
 The public CLI regression exercises this path with real Git history and an

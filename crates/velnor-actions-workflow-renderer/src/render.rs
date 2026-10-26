@@ -7,6 +7,9 @@ use crate::{
     preseed_closure, steps, support, workflow_policy,
 };
 
+#[path = "render_execution_boundaries.rs"]
+mod execution_boundaries;
+
 type JobMap = BTreeMap<String, Job>;
 
 #[path = "render_emit.rs"]
@@ -48,13 +51,13 @@ fn render_workflow_parts(
     ctx: &RenderContext,
 ) -> Result<RenderedWorkflow, RenderError> {
     let mut jobs = merged_jobs(ir, policy, support, ctx)?;
-    closure::insert_plan_closure(&mut jobs, ctx)?;
+    closure::insert_plan_closure(&mut jobs, ctx, policy)?;
     closure::insert_request_closure(&mut jobs)?;
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
-    validate_final_jobs(ir, &mut jobs)?;
-    render_merged(ir, &jobs, ctx)
+    validate_final_jobs(ir, &mut jobs, policy)?;
+    render_merged(ir, &jobs, ctx, policy)
 }
 
 pub fn render_workflow_ir_strict(
@@ -75,7 +78,7 @@ pub fn render_workflow_ir_strict_shared(
     mise: &MiseSetup,
 ) -> Result<RenderedWorkflow, RenderError> {
     let jobs = finalize_jobs(ir, policy, support, ctx, mise)?;
-    render_merged(ir, &jobs, ctx)
+    render_merged(ir, &jobs, ctx, policy)
 }
 
 pub fn finalize_jobs(
@@ -111,7 +114,15 @@ pub fn finalize_jobs(
         } else {
             mise.clone()
         };
-        cache_p08::ensure_tools_cache_v2(id, job, &setup, always, target, &ctx.checkout_uses)?;
+        cache_p08::ensure_tools_cache_v2(
+            id,
+            job,
+            &setup,
+            always,
+            target,
+            &ctx.checkout_uses,
+            policy == WorkflowPolicy::VelnorRepositoryV1 && id == PLAN_JOB_ID,
+        )?;
         cache_p08::check_no_legacy_rust_cache(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;
@@ -119,104 +130,29 @@ pub fn finalize_jobs(
     cache_p08::elect_cache_writers_with_policy(&mut jobs, ctx.pull_request_cache_policy)?;
     closure::check_plan_anchor(&jobs)?;
     preseed_closure::check_preseed_closure(&jobs, ctx.preseed)?;
-    closure::insert_plan_closure(&mut jobs, ctx)?;
+    closure::insert_plan_closure(&mut jobs, ctx, policy)?;
     closure::insert_request_closure(&mut jobs)?;
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
     crate::dispatch_cache_boundary::suppress_unvalidated_cache_access(&mut jobs);
-    validate_final_jobs(ir, &mut jobs)?;
+    validate_final_jobs(ir, &mut jobs, policy)?;
     crate::cache_doctor::check(&jobs)?;
     Ok(jobs)
 }
 
-fn validate_final_jobs(ir: &WorkflowIr, jobs: &mut JobMap) -> Result<(), RenderError> {
+fn validate_final_jobs(
+    ir: &WorkflowIr,
+    jobs: &mut JobMap,
+    policy: WorkflowPolicy,
+) -> Result<(), RenderError> {
     crate::cache_steps::append_bundle_postludes(jobs)?;
     crate::cache_steps::append_workspace_cleanups(jobs)?;
-    validate_required_verdict_execution_boundary(jobs)?;
+    execution_boundaries::validate_required_verdict(jobs)?;
+    execution_boundaries::validate_trusted_plan(jobs, policy)?;
     let mut finalized = ir.clone();
     finalized.jobs.clone_from(jobs);
     finalized.validate().map_err(RenderError::Contract)
-}
-
-fn validate_required_verdict_execution_boundary(jobs: &JobMap) -> Result<(), RenderError> {
-    let Some(job) = jobs.get(FINAL_JOB_ID) else {
-        return Ok(());
-    };
-    let checkouts = job
-        .steps
-        .iter()
-        .filter(|step| step.role == Some(velnor_actions_contract::StepRole::Checkout))
-        .count();
-    let mise_setups = job
-        .steps
-        .iter()
-        .filter(|step| step.role == Some(velnor_actions_contract::StepRole::MiseSetup))
-        .count();
-    let acquisitions = job
-        .steps
-        .iter()
-        .filter(|step| step.role == Some(velnor_actions_contract::StepRole::AcquireVelnor))
-        .count();
-    let tool_preparations = job
-        .steps
-        .iter()
-        .filter(|step| step.role == Some(velnor_actions_contract::StepRole::PreparePinnedTools))
-        .count();
-    if checkouts != 1 || mise_setups != 1 || acquisitions != 1 || tool_preparations != 1 {
-        return Err(RenderError::InvalidWorkflow(
-            "required_verdict_candidate_execution".to_owned(),
-        ));
-    }
-    for step in &job.steps {
-        let trusted = match &step.kind {
-            velnor_actions_contract::StepKind::Action { uses, with, .. } => match step.role {
-                Some(velnor_actions_contract::StepRole::Checkout) => {
-                    uses.starts_with("actions/checkout@")
-                }
-                Some(velnor_actions_contract::StepRole::MiseSetup) => {
-                    uses.starts_with("jdx/mise-action@")
-                        && with.get("install").is_some_and(|value| value == "false")
-                        && with.get("env").is_some_and(|value| value == "false")
-                        && with.get("cache").is_some_and(|value| value == "false")
-                        && with.get("cache_save").is_some_and(|value| value == "false")
-                }
-                Some(
-                    velnor_actions_contract::StepRole::DownloadPlan
-                    | velnor_actions_contract::StepRole::AttestationDownload,
-                ) => uses == crate::steps::DOWNLOAD_ARTIFACT_USES,
-                Some(velnor_actions_contract::StepRole::PublishFinal) => {
-                    uses == crate::steps::UPLOAD_ARTIFACT_USES
-                }
-                _ => false,
-            },
-            velnor_actions_contract::StepKind::Shell { .. } => matches!(
-                step.role,
-                Some(
-                    velnor_actions_contract::StepRole::AcquireVelnor
-                        | velnor_actions_contract::StepRole::PreparePinnedTools
-                )
-            ),
-            velnor_actions_contract::StepKind::Internal { operation, .. } => {
-                operation == crate::steps::MERGE_OPERATION
-                    || operation == crate::steps::FETCH_OPERATION
-                    || operation
-                        == &format!(
-                            "{}:{}",
-                            crate::steps::WRITE_REQUEST_OPERATION,
-                            crate::steps::MERGE_OPERATION
-                        )
-            }
-            velnor_actions_contract::StepKind::TaskExecution { .. }
-            | velnor_actions_contract::StepKind::NativeCheckExecution { .. } => false,
-        };
-        if !trusted {
-            return Err(RenderError::InvalidWorkflow(
-                "required_verdict_candidate_execution".to_owned(),
-            ));
-        }
-    }
-    Ok(())
 }
 
 fn merged_jobs(
@@ -258,7 +194,7 @@ fn merged_jobs(
     support::check_candidate_invariants(&jobs)?;
     support::check_final_gate(&jobs)?;
     crate::required_gate::check_required_gate(&jobs)?;
-    support::check_token_hygiene(&jobs)?;
+    support::check_token_hygiene(&jobs, &ctx.report_helper_version)?;
     Ok(jobs)
 }
 
@@ -266,6 +202,7 @@ fn render_merged(
     ir: &WorkflowIr,
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
+    policy: WorkflowPolicy,
 ) -> Result<RenderedWorkflow, RenderError> {
     let matrix = matrix::task_matrix_of(jobs)?;
     let caps = matrix::crate_job_caps(jobs)?;
@@ -294,7 +231,8 @@ fn render_merged(
     )?;
     let mut shared = crate::lane_share::share_lanes(&jobs, ctx)?;
     shared.files.extend(task_files);
-    validate_required_verdict_execution_boundary(&shared.jobs)?;
+    execution_boundaries::validate_required_verdict(&shared.jobs)?;
+    execution_boundaries::validate_trusted_plan(&shared.jobs, policy)?;
     match emit::emit_shared(
         ir,
         &shared,
@@ -311,7 +249,8 @@ fn render_merged(
             if extracted == 0 {
                 return Err(error);
             }
-            validate_required_verdict_execution_boundary(&shared.jobs)?;
+            execution_boundaries::validate_required_verdict(&shared.jobs)?;
+            execution_boundaries::validate_trusted_plan(&shared.jobs, policy)?;
             emit::emit_shared(
                 ir,
                 &shared,

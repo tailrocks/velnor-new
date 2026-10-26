@@ -4,8 +4,8 @@ use velnor_actions_workflow_renderer::steps::{INTERNAL_OP_ENV, STAGED_BINARY_PRE
 use crate::OrchestratorError;
 use crate::task_report::{EXIT_CODE_ENV, REPORT_OP, START_MS_ENV};
 
-pub(crate) fn helper_path_for_version() -> String {
-    format!("{STAGED_BINARY_PREFIX}{}", env!("CARGO_PKG_VERSION"))
+pub(crate) fn helper_path_for_version(version: &str) -> String {
+    format!("{STAGED_BINARY_PREFIX}{version}")
 }
 
 pub(crate) fn report_wrapper_argv(joined: &str, helper: &str) -> Vec<String> {

@@ -10,6 +10,7 @@ pub(crate) fn ensure_tools_cache_v2(
     always: bool,
     target: &str,
     checkout_uses: &str,
+    source_free_plan: bool,
 ) -> Result<(), RenderError> {
     setup.validate()?;
     let setup_indices = job
@@ -52,6 +53,9 @@ pub(crate) fn ensure_tools_cache_v2(
     }
     reject_v2_steps(job_id, job)?;
     if job_id == crate::render::FINAL_JOB_ID {
+        return Ok(());
+    }
+    if source_free_plan {
         return Ok(());
     }
     if !checkout_precedes_setup(job, setup_index, checkout_uses) {

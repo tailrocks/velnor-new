@@ -257,10 +257,6 @@ fn validator_argv_parts<'a>(
     strings_of(exec.argv()).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
-pub(crate) fn mbx_probe_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
-    exec_argv(vec![PinnedTool::Rust], "mbx", &["--version"], catalog)
-}
-
 pub(crate) fn candidate_build_argv(
     catalog: &ToolCatalog,
 ) -> Result<Vec<String>, OrchestratorError> {

@@ -1,7 +1,7 @@
 use std::io::Read;
 use std::path::Path;
 
-use velnor_actions_contract::{ReleaseTarget, StepRole, WorkflowIr};
+use velnor_actions_contract::{ReleaseTarget, StepRole, WorkflowIr, WorkflowPolicy};
 use velnor_actions_mise::toolfiles::lockfile::{
     InstallCoverage, InstallSubject, audit_install_coverage, mise_platform_for_target,
     parse_mise_lockfile, subject_for_install_spec,
@@ -50,6 +50,7 @@ enum MiseVectors {
 pub(crate) fn audit_prepare_installs_with_catalog_and_verifiers(
     root: &Path,
     ir: &WorkflowIr,
+    policy: WorkflowPolicy,
     label: &str,
     validator_commands: &[ValidatorCommand],
     catalog: &ToolCatalog,
@@ -58,7 +59,7 @@ pub(crate) fn audit_prepare_installs_with_catalog_and_verifiers(
     let mut blocking = Vec::new();
     let mut subjects: Vec<InstallSubject> = Vec::new();
     for (id, job) in &ir.jobs {
-        let positions = verifier_positions(id, job, verifiers, &mut blocking);
+        let positions = verifier_positions(id, job, verifiers, policy, &mut blocking);
         let mut rust_sequence_reported = false;
         let mut jactionlint_sequence_reported = false;
         for (step_index, step) in job.steps.iter().enumerate() {

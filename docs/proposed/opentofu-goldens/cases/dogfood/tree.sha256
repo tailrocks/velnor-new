@@ -1,7 +1,7 @@
 934fd8cecb73877e02de2f9d5b1838b3b8058498db167cdca054c8447b62d042  ./.github/AGENTS.md
 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./.github/CLAUDE.md
 952c78c7e8f944dc89ae7733a76f912e2c6b7f7e6013bb2bad00ae85e5ceed3a  ./.github/PULL_REQUEST_TEMPLATE.md
-b21e6fb44200ffc4723056044072c7ac695f5e4a889d58a4a7046fa506e71cce  ./.github/actions/declared-task-0/action.yml
+88a8de21b3f886f845c9d662322f1e88444c2f96d9a9ae1af37d7579968bbb1f  ./.github/actions/declared-task-0/action.yml
 ccbdabc81ad5ba9234e4134f1dc002d8bb8f24fb03ec76a5a3bac660f5b6af60  ./.github/actions/generator-release-build-linux/action.yml
 259d00a36edcf3b3e079a2a26dcdb31c13f06e1c9db3c03bce23fb9caea2fba7  ./.github/actions/generator-release-build-macos-intel/action.yml
 079d11d42c0b740ddbf6b1c3fcf9814715f606ec0031cc22fa61bd1988579fb9  ./.github/actions/generator-release-build-macos/action.yml
@@ -19,10 +19,10 @@ ed10bbbe26fb3a27082d0b9472010bff1bee21a1542e169cb516ac19f2a99073  ./.github/acti
 8635596a58b8b188c00d814f7a9068bf3924853945773ec7c5919313f13f85ff  ./.github/dco.yml
 c85c5fb3715667f3b515374647a28f36ceaed748b1790f60a0368c7f6dc2c1d8  ./.github/jactionlint.yaml
 0c82fc85c31137ab97752a7c8bda26f9b76ecd62e145900380f51cea32c98302  ./.github/scripts/velnor-tools-cache-identity.sh
-2bd70199a98572b5796c1b1f93a67c7f08add877e08171a3d60c2965ac5a6565  ./.github/velnor/task-execution-manifest-v1.json
+ba437687b6d8eeb9965452db44a9dadc787c61cfd59edf45c3f6e38320623796  ./.github/velnor/task-execution-manifest-v1.json
 ac7642862acbf9fe367916989e45e6ce604b7e7f3a6947cae894d370a3000e07  ./.github/workflows/cache-cleanup.yml
 99c775eaf41348d7e5ef017fa670388a35b9cffb459c2f999bb4ee4c5cd82b49  ./.github/workflows/cache-prune.yml
-d5310218d43880f29a13b5e43d6eef81e7d9105d4c948b20b367aad8622ac472  ./.github/workflows/ci.yml
+0721d446fad0877a56b9b5c67c3604868bb0009eb73ebeca9033089bff104aac  ./.github/workflows/ci.yml
 b2c281e61988042981d2cd2e5d4ed7a51439379d9d96212912acd09e7824cbf4  ./.github/workflows/freshness.yml
 c8c59cacbf6ac82b4203815b5110346a80f5d6c328bc740603e5a91974c41886  ./.github/workflows/homebrew-adoption.yml
 128046a9b82e3499c5efb37f5b753647729b97d7eeca183c48246a942e42d9ee  ./.github/workflows/job-image-candidate.yml

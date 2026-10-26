@@ -60,19 +60,42 @@ pub(crate) fn plan_job(
     needs: PlanJobToolNeeds,
     fetch_roots: &[String],
     tofu_roots: &[String],
+    source_free: bool,
 ) -> Result<Job, OrchestratorError> {
     let mut steps = vec![checkout_history_action()?];
+    let mut acquire = acquire;
+    if source_free {
+        steps.extend(acquire.take());
+    }
     if needs.rust.has_compiler() {
-        steps.push(crate::workflow::verify_restored_rust_step(catalog));
+        steps.push(if source_free {
+            crate::workflow::workflow_policy::rust_manifest_step::verifier_shell_step(
+                catalog,
+                crate::workflow::ToolchainPhase::Restored,
+            )?
+        } else {
+            crate::workflow::verify_restored_rust_step(catalog)
+        });
     }
     let prepare = prepare_pinned_tools_step(catalog, plan_tools(needs), needs.rust.has_compiler())?;
     steps.push(prepare);
-    steps.push(crate::workflow::verify_jactionlint_step(catalog));
+    steps.push(if source_free {
+        crate::workflow::workflow_policy::jactionlint_verify_step::verifier_shell_step(catalog)?
+    } else {
+        crate::workflow::verify_jactionlint_step(catalog)
+    });
     if needs.rust.has_components() {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     }
     if needs.rust.has_compiler() {
-        steps.push(crate::workflow::verify_rust_manifest_step(catalog));
+        steps.push(if source_free {
+            crate::workflow::workflow_policy::rust_manifest_step::verifier_shell_step(
+                catalog,
+                crate::workflow::ToolchainPhase::Installed,
+            )?
+        } else {
+            crate::workflow::verify_rust_manifest_step(catalog)
+        });
     }
     let cached =
         crate::workflow_jobs_cache::cache_steps_for_plan(catalog, fetch_roots, tofu_roots)?;
