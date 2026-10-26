@@ -113,27 +113,61 @@ fn assert_npm_pack_forces_bun(publish_workflow: &str) -> Result<(), Box<dyn Erro
 fn assert_frozen_install_stays_unchanged(
     prepared: &velnor_actions_orchestrator::GenerationPreparation,
 ) {
-    let install_commands = prepared
+    let install_steps = prepared
         .workflow
         .ir
         .jobs
         .values()
-        .flat_map(|job| &job.steps)
-        .filter_map(|step| match &step.kind {
-            StepKind::Shell { run, .. } if run.len() == 3 => Some(&run[2]),
-            _ => None,
+        .flat_map(|job| {
+            job.steps
+                .iter()
+                .filter(|step| step.name == "Install dependencies")
+                .map(move |step| (job.display_name.as_str(), step))
         })
-        .filter(|command| command.contains("'bun' 'install' '--frozen-lockfile'"))
         .collect::<Vec<_>>();
-    assert!(
-        !install_commands.is_empty(),
-        "frozen Bun install is missing"
+    assert!(!install_steps.is_empty(), "Bun install steps are missing");
+    assert_eq!(
+        install_steps.len(),
+        5,
+        "unexpected number of Bun install steps: {install_steps:?}"
     );
-    assert!(
-        install_commands
+    for expected_job in [
+        "Bun / @fixture/ui",
+        "Bun / @fixture/web",
+        "Bun / @fixture/web / unit",
+        "Bun / @fixture/web / browser",
+        "Bun / @fixture/web / browser / report",
+    ] {
+        let job_steps = install_steps
             .iter()
-            .all(|command| !command.contains("'bun' '--bun' 'install'"))
-    );
+            .filter(|(display_name, _)| *display_name == expected_job)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            job_steps.len(),
+            1,
+            "expected one Bun install step in {expected_job}: {job_steps:?}"
+        );
+        let (_, step) = *job_steps[0];
+        assert!(
+            matches!(&step.kind, StepKind::Shell { run, .. } if run.len() == 3),
+            "Bun install step in {expected_job} must be a three-argument shell command: {step:?}"
+        );
+        if let StepKind::Shell { run, .. } = &step.kind
+            && run.len() == 3
+        {
+            let command = &run[2];
+            let install = command.find("'bun' 'install'");
+            let frozen = command.find("'--frozen-lockfile'");
+            assert!(
+                matches!((install, frozen), (Some(install), Some(frozen)) if frozen > install),
+                "Bun install in {expected_job} must use --frozen-lockfile: {command}"
+            );
+            assert!(
+                !command.contains("'bun' '--bun' 'install'"),
+                "Bun install in {expected_job} must not use --bun: {command}"
+            );
+        }
+    }
 }
 
 fn shell_commands_for(
