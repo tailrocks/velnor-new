@@ -168,35 +168,35 @@ const fn mise(host: SourceBuildBootstrapHost) -> SourceBuildBootstrapAsset {
 const fn mbx(host: SourceBuildBootstrapHost) -> SourceBuildBootstrapAsset {
     let (asset_url, archive_sha256, binary_sha256) = match host {
         SourceBuildBootstrapHost::LinuxAmd64 => (
-            "https://github.com/jdx/mr-boxington/releases/download/v1.27.0/mbx-x86_64-unknown-linux-gnu.tar.gz",
-            "f530d0870efcf15c845314ffccd049f53eaec9a35e9f42c0dec0e16b3135e31c",
-            "d02159722e826f1ed0729b07abaa5767907b7f5f9d3c2658f832e33da42c1907",
+            "https://github.com/jdx/mr-boxington/releases/download/v1.28.0/mbx-x86_64-unknown-linux-gnu.tar.gz",
+            "50ce9360221d9274a73d70c9d2d5285dc2d8353a101de0845e3da5bb0083bcfb",
+            "6d3e1afe2a91f83aeed762a576d0a2b3c990a82f7e3e45926e1cd4b922f0df1b",
         ),
         SourceBuildBootstrapHost::LinuxArm64 => (
-            "https://github.com/jdx/mr-boxington/releases/download/v1.27.0/mbx-aarch64-unknown-linux-gnu.tar.gz",
-            "8a1aaf0a495e455d2ea09430c92c59169eef6a29a140c6b21a6d1581fe252f86",
-            "1b464d5b790b146d92cdef0a923cf00cc6d2a3b3d5acd69083b2bd75d604f1d4",
+            "https://github.com/jdx/mr-boxington/releases/download/v1.28.0/mbx-aarch64-unknown-linux-gnu.tar.gz",
+            "9056d34520991f80c9f708d36008fcc732e500d735591a8649029d476cb566bd",
+            "bc9d537789f16da1e37b9ca64fde107246a902f916b989fe3f84b0a4d4bbd2a5",
         ),
         SourceBuildBootstrapHost::MacosArm64 => (
-            "https://github.com/jdx/mr-boxington/releases/download/v1.27.0/mbx-aarch64-apple-darwin.tar.gz",
-            "b23a6f67c4fe8c5ef5c3f5b7a747de69d5c9ffe4d00c642eb6e835736cd8dc22",
-            "13f3409d70ebb1b76992f8d28c57d2954b9bc6eccb01eeb738af64b23b386421",
+            "https://github.com/jdx/mr-boxington/releases/download/v1.28.0/mbx-aarch64-apple-darwin.tar.gz",
+            "ac73ba0637a443ba9c43354008f6bcd5d9e8a84b703e46f23202025c1f849472",
+            "068cf7b41d58b5dd630e56b4980650a4f57f5e3267abc6d16a614088f499cebf",
         ),
     };
     SourceBuildBootstrapAsset {
         tool: SourceBuildBootstrapTool::Mbx,
         host,
-        selector: "github:jdx/mr-boxington@1.27.0",
+        selector: "github:jdx/mr-boxington@1.28.0",
         asset_url,
         archive_sha256,
         binary_sha256,
         asset_format: SourceBuildBootstrapFormat::TarGzip,
         binary_member: "mbx",
         source_repository: "https://github.com/jdx/mr-boxington",
-        source_commit: "5a50200abf386580642b87eca2995156316b56a7",
-        source_tree: "9d1061348a5724ab331264bf83eef9169878e94b",
+        source_commit: "44f50c329a83dedd012e1e49cf9f265f79226a83",
+        source_tree: "ccfdb5978fb74a7bd854a0cd9eeafa635619c50f",
         owner: "jdx/mr-boxington",
-        version: "1.27.0",
-        abi: "mbx-cli-v1.27.0",
+        version: "1.28.0",
+        abi: "mbx-cli-v1.28.0",
     }
 }

@@ -4,7 +4,7 @@
 min_version = "2026.10.18"
 
 [tools]
-"mr-boxington" = "1.27.0"
+"mr-boxington" = "1.28.0"
 "github:jdx/jactionlint" = "2.3.0"
 shellcheck = "0.11.0"
 
@@ -14,7 +14,7 @@ idiomatic_version_file_enable_tools = ["rust"]
 
 [tasks.check-generated-workflow-freshness]
 description = "Verify generated GitHub workflows match the checked-in tree"
-tools = { rust = "1.99.1", "mr-boxington" = "1.27.0", "github:jdx/jactionlint" = "2.3.0", shellcheck = "0.11.0" }
+tools = { rust = "1.99.1", "mr-boxington" = "1.28.0", "github:jdx/jactionlint" = "2.3.0", shellcheck = "0.11.0" }
 run = '''
 set -eu
 ROOT="$(git -C .. rev-parse --show-toplevel)"

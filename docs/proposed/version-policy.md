@@ -110,23 +110,26 @@ input/output metadata. Generation emits the exact SHA and a matching version
 comment; it never queries a floating `latest` ref. No tag exception
 exists: `asamarts/alint` pins a full SHA like every other action.
 
-Verified current defaults on 2026-10-19:
+The examples below show reviewed action defaults. The MBX and Mr. Boxington
+action updates were checked on 2026-10-26. Their qualification records reflect
+completed local update-set checks. Required pull-request and protected-main
+hosted checks remain separate publication gates:
 
 ```yaml
-uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7 # v5.2.0
+uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e # v5.2.3
 uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-uses: jdx/mr-boxington-action@47ce49b32025d93a7a2f4570815afaa2b7092240 # v1.7.2
+uses: jdx/mr-boxington-action@88acf2bb50552c7c508cbac13e5f8c576b95b1de # v1.7.3
 uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
 uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
 uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
 uses: asamarts/alint@f39a25a7e061bb8738a87372561d8b9a6a29ca87 # v0.19.0
 ```
 
-Release records: [mise-action v5.2.0](https://github.com/jdx/mise-action/releases/tag/v5.2.0),
+Release records: [mise-action v5.2.3](https://github.com/jdx/mise-action/releases/tag/v5.2.3),
 [checkout v7.0.1](https://github.com/actions/checkout/releases/tag/v7.0.1),
 [download-artifact v8.0.2](https://github.com/actions/download-artifact/releases/tag/v8.0.2),
-[mr-boxington-action v1.7.2](https://github.com/jdx/mr-boxington-action/releases/tag/v1.7.2),
+[mr-boxington-action v1.7.3](https://github.com/jdx/mr-boxington-action/releases/tag/v1.7.3),
 [cache v6.1.0](https://github.com/actions/cache/releases/tag/v6.1.0),
 [upload-artifact v7.0.2](https://github.com/actions/upload-artifact/releases/tag/v7.0.2),
 [Alint v0.19.0](https://github.com/asamarts/alint/releases/tag/v0.19.0).

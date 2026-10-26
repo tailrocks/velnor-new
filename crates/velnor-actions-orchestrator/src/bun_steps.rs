@@ -148,12 +148,15 @@ pub(crate) fn bun_words(
     catalog: &ToolCatalog,
     args: &[String],
 ) -> Result<String, OrchestratorError> {
-    let request = PinnedToolExec::new(
-        vec![PinnedTool::Bun],
-        std::ffi::OsStr::new("bun"),
-        args.iter().map(std::ffi::OsString::from).collect(),
-    )
-    .map_err(|err| contract(err.to_string()))?;
+    let mut args = args
+        .iter()
+        .map(std::ffi::OsString::from)
+        .collect::<Vec<_>>();
+    if args.first().is_some_and(|arg| arg == "run") {
+        args.insert(0, std::ffi::OsString::from("--bun"));
+    }
+    let request = PinnedToolExec::new(vec![PinnedTool::Bun], std::ffi::OsStr::new("bun"), args)
+        .map_err(|err| contract(err.to_string()))?;
     let words = strings_of(request.argv(catalog)).map_err(contract)?;
     Ok(words
         .iter()

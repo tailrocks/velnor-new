@@ -19,13 +19,13 @@ test-render-capture = []
 serde = { workspace = true }
 sha2 = { workspace = true }
 toml = { version = "=1.1.8" }
-velnor-actions-actionlint = { version = "=0.1.56", path = "../velnor-actions-actionlint" }
-velnor-actions-contract = { version = "=0.1.56", path = "../velnor-actions-contract" }
-velnor-actions-mise = { version = "=0.1.56", path = "../velnor-actions-mise" }
+velnor-actions-actionlint = { version = "=0.1.57", path = "../velnor-actions-actionlint" }
+velnor-actions-contract = { version = "=0.1.57", path = "../velnor-actions-contract" }
+velnor-actions-mise = { version = "=0.1.57", path = "../velnor-actions-mise" }
 
 [dev-dependencies]
 tempfile = { version = "=3.27.0" }
-velnor-actions-mise = { version = "=0.1.56", path = "../velnor-actions-mise" }
+velnor-actions-mise = { version = "=0.1.57", path = "../velnor-actions-mise" }
 
 [lints]
 workspace = true

@@ -14,13 +14,13 @@ url_api = "https://api.github.com/repos/jdx/jactionlint/releases/assets/66221049
 provenance = "github-attestations"
 
 [[tools.mr-boxington]]
-version = "1.27.0"
+version = "1.28.0"
 backend = "packslip:github.com/jdx/mr-boxington"
-specifiers = ["1.27.0"]
+specifiers = ["1.28.0"]
 
 [tools.mr-boxington."platforms.linux-x64"]
-checksum = "sha256:f530d0870efcf15c845314ffccd049f53eaec9a35e9f42c0dec0e16b3135e31c"
-url = "https://github.com/jdx/mr-boxington/releases/download/v1.27.0/mbx-x86_64-unknown-linux-gnu.tar.gz"
+checksum = "sha256:50ce9360221d9274a73d70c9d2d5285dc2d8353a101de0845e3da5bb0083bcfb"
+url = "https://github.com/jdx/mr-boxington/releases/download/v1.28.0/mbx-x86_64-unknown-linux-gnu.tar.gz"
 signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml"
 repository_ids = { repository = "1340721957" }
 
