@@ -241,6 +241,10 @@ impl FixturePaths {
             include_str!("../../../.velnor/generator.lock"),
         )?;
         fs::write(
+            self.repo.join(".velnor/controller-approvals.json"),
+            include_str!("../../../.velnor/controller-approvals.json"),
+        )?;
+        fs::write(
             self.repo.join(".velnor/mise.toml"),
             include_str!("../../../.velnor/mise.toml"),
         )?;
