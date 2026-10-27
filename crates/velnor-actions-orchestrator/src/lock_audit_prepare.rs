@@ -186,7 +186,16 @@ pub(super) fn published_helper_catalog(
         blocking.push("required_verdict_requires_published_generator_lock".to_owned());
         return None;
     };
-    match velnor_actions_mise::catalog::lock::catalog_for_published_generator(lock, catalog) {
+    let Some(approved) = authority.approved_release else {
+        blocking.push("controller_approvals:missing_approval".to_owned());
+        return None;
+    };
+    let helper = velnor_actions_mise::catalog::lock::catalog_for_approved_generator(
+        lock,
+        catalog,
+        &approved.as_authority(),
+    );
+    match helper {
         Ok(helper) => Some(helper),
         Err(error) => {
             blocking.push(error.to_string());

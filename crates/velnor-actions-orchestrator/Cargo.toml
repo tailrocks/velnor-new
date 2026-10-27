@@ -10,6 +10,10 @@ license.workspace = true
 autotests = false
 
 [[test]]
+name = "controller_approval_public"
+path = "tests/controller_approval_public.rs"
+
+[[test]]
 name = "homebrew_adoption_seed_public"
 path = "tests/homebrew_adoption_seed_public.rs"
 
@@ -32,22 +36,22 @@ test = true
 test-render-capture = ["velnor-actions-workflow-renderer/test-render-capture"]
 
 [dependencies]
-velnor-archive-guard = { version = "=0.1.60", path = "../velnor-archive-guard" }
+velnor-archive-guard = { version = "=0.1.61", path = "../velnor-archive-guard" }
 base64 = { workspace = true }
 flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
 lzma-rust2 = { version = "=0.23.0", default-features = false, features = ["std", "xz"] }
 tar = { version = "=0.4.46", default-features = false }
 zip = { version = "=9.0.5", default-features = false, features = ["deflate-flate2"] }
-velnor-actions-actionlint = { version = "=0.1.60", path = "../velnor-actions-actionlint" }
-velnor-actions-ansible = { version = "=0.1.60", path = "../velnor-actions-ansible" }
-velnor-actions-bun = { version = "=0.1.60", path = "../velnor-actions-bun" }
-velnor-actions-contract = { version = "=0.1.60", path = "../velnor-actions-contract" }
-velnor-actions-dbt = { version = "=0.1.60", path = "../velnor-actions-dbt" }
-velnor-actions-mise = { version = "=0.1.60", path = "../velnor-actions-mise" }
-velnor-actions-rust = { version = "=0.1.60", path = "../velnor-actions-rust" }
-velnor-actions-tofu = { version = "=0.1.60", path = "../velnor-actions-tofu" }
-velnor-actions-gradle = { version = "=0.1.60", path = "../velnor-actions-gradle" }
-velnor-actions-workflow-renderer = { version = "=0.1.60", path = "../velnor-actions-workflow-renderer" }
+velnor-actions-actionlint = { version = "=0.1.61", path = "../velnor-actions-actionlint" }
+velnor-actions-ansible = { version = "=0.1.61", path = "../velnor-actions-ansible" }
+velnor-actions-bun = { version = "=0.1.61", path = "../velnor-actions-bun" }
+velnor-actions-contract = { version = "=0.1.61", path = "../velnor-actions-contract" }
+velnor-actions-dbt = { version = "=0.1.61", path = "../velnor-actions-dbt" }
+velnor-actions-mise = { version = "=0.1.61", path = "../velnor-actions-mise" }
+velnor-actions-rust = { version = "=0.1.61", path = "../velnor-actions-rust" }
+velnor-actions-tofu = { version = "=0.1.61", path = "../velnor-actions-tofu" }
+velnor-actions-gradle = { version = "=0.1.61", path = "../velnor-actions-gradle" }
+velnor-actions-workflow-renderer = { version = "=0.1.61", path = "../velnor-actions-workflow-renderer" }
 rustix = { version = "=1.1.5", features = ["fs", "process"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -73,4 +77,4 @@ proc-macro2 = { version = "=1.0.107", features = ["span-locations"] }
 serde_json = { workspace = true }
 syn = { version = "=3.0.9", default-features = false, features = ["full", "parsing", "printing", "visit"] }
 tempfile = { version = "=3.27.0" }
-velnor-actions-contract = { version = "=0.1.60", path = "../velnor-actions-contract" }
+velnor-actions-contract = { version = "=0.1.61", path = "../velnor-actions-contract" }

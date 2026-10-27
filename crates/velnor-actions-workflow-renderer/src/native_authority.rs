@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::{GeneratorLock, Job, VelnorConfig, WorkflowPolicy};
 use velnor_actions_mise::ToolCatalog;
+use velnor_actions_mise::catalog::lock::ApprovedGeneratorRelease;
 
 mod check_mise;
 mod graph;
@@ -51,6 +52,7 @@ pub struct NativeAuthorityInput<'a> {
     pub config: &'a VelnorConfig,
     pub runner: &'a str,
     pub published_generator_lock: Option<&'a GeneratorLock>,
+    pub approved_release: Option<ApprovedGeneratorRelease<'a>>,
     pub consumer_manifest_json: Option<&'a str>,
     pub tool_pins: &'a [NativeToolPin],
     pub rust_source: NativeRustSource,
@@ -87,19 +89,7 @@ impl NativeAuthority {
         let (required_ids, tofu_roots) = inputs::validate_graph(&input)?;
         let producer = input.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1;
         let (version, acquire) = if producer {
-            let lock = input
-                .published_generator_lock
-                .ok_or_else(|| invalid("required_verdict_requires_published_generator_lock"))?;
-            crate::release_helpers::validate_published_generator_lock(lock)
-                .map_err(NativeAuthorityError::Release)?;
-            let staged = format!(
-                "{}{}",
-                crate::steps::STAGED_BINARY_PREFIX,
-                lock.generator.version
-            );
-            let acquire = crate::release_helpers::lock_acquire_for_target(lock, target, &staged)
-                .map_err(NativeAuthorityError::Release)?;
-            (lock.generator.version.clone(), acquire)
+            Self::producer_release_acquire(&input, target)?
         } else {
             let version = env!("CARGO_PKG_VERSION").to_owned();
             let acquire = crate::release_helpers::consumer_acquire_for_target(
@@ -155,6 +145,32 @@ impl NativeAuthority {
             producer_plan,
             mise,
         })
+    }
+
+    fn producer_release_acquire(
+        input: &NativeAuthorityInput<'_>,
+        target: velnor_actions_contract::ReleaseTarget,
+    ) -> Result<(String, velnor_actions_contract::Step), NativeAuthorityError> {
+        let lock = input
+            .published_generator_lock
+            .ok_or_else(|| invalid("required_verdict_requires_published_generator_lock"))?;
+        match input.approved_release {
+            Some(approved) => {
+                crate::release_helpers::validate_approved_generator_lock(lock, &approved)
+                    .map_err(NativeAuthorityError::Release)?;
+            }
+            None => {
+                return Err(invalid("controller_approvals:missing_approval"));
+            }
+        }
+        let staged = format!(
+            "{}{}",
+            crate::steps::STAGED_BINARY_PREFIX,
+            lock.generator.version
+        );
+        let acquire = crate::release_helpers::lock_acquire_for_target(lock, target, &staged)
+            .map_err(NativeAuthorityError::Release)?;
+        Ok((lock.generator.version.clone(), acquire))
     }
 
     #[must_use]

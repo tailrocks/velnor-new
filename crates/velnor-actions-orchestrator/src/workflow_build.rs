@@ -37,6 +37,8 @@ pub(crate) struct WorkflowBuildInput<'a> {
     pub(crate) fetch_roots: &'a [String],
     pub(crate) consumer_release_version: &'a str,
     pub(crate) published_generator_lock: Option<&'a GeneratorLock>,
+    pub(crate) approved_release:
+        Option<velnor_actions_mise::catalog::lock::ApprovedGeneratorRelease<'a>>,
     pub(crate) catalog: &'a ToolCatalog,
 }
 
@@ -322,9 +324,18 @@ fn helper_catalog(
         .ok_or_else(|| OrchestratorError::Contract {
             problem: "required_verdict_requires_published_generator_lock".to_owned(),
         })?;
-    velnor_actions_mise::catalog::lock::catalog_for_published_generator(lock, catalog).map_err(
-        |error| OrchestratorError::Contract {
+    let map_err = |error: velnor_actions_mise::catalog::lock::LockError| {
+        OrchestratorError::Contract {
             problem: error.to_string(),
-        },
-    )
+        }
+    };
+    match input.approved_release {
+        Some(approved) => velnor_actions_mise::catalog::lock::catalog_for_approved_generator(
+            lock, catalog, &approved,
+        )
+        .map_err(map_err),
+        None => Err(OrchestratorError::Contract {
+            problem: "controller_approvals:missing_approval".to_owned(),
+        }),
+    }
 }

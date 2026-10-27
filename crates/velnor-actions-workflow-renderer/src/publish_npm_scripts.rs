@@ -46,9 +46,11 @@ pub fn publish_script(member: &str) -> String {
     format!(
         "set -eu; ver=${{GITHUB_REF_NAME##*-v}}; cd -- \"{dir}\"; tgz='{stem}'-\"$ver\".tgz; \
          sha1sum -- \"$tgz\" > sha1.txt; read -r sha1 rest < sha1.txt; \
-         openssl dgst -sha512 -binary \"$tgz\" | openssl base64 -A > sha512.b64; \
-         read -r b64 < sha512.b64; wc -c < \"$tgz\" > size.txt; read -r len < size.txt; \
-         base64 -w0 \"$tgz\" > data.b64; tar -xOf \"$tgz\" package/package.json > manifest.json; \
+         openssl dgst -sha512 -binary \"$tgz\" > sha512.bin; \
+         openssl base64 -A -in sha512.bin > sha512.b64; printf '\\n' >> sha512.b64; \
+         read -r b64 < sha512.b64; rm -- sha512.bin sha512.b64; \
+         wc -c < \"$tgz\" > size.txt; read -r len < size.txt; \
+         openssl base64 -A -in \"$tgz\" > data.b64; tar -xOf \"$tgz\" package/package.json > manifest.json; \
          jq -n --arg name '{member}' --arg ver \"$ver\" --arg tgz \"$tgz\" --arg sha1 \"$sha1\" \
          --arg integrity \"sha512-$b64\" --argjson len \"$len\" --rawfile data data.b64 \
          --slurpfile manifest manifest.json '{document}' > document.json; \

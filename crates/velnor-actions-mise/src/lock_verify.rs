@@ -4,22 +4,10 @@
 use velnor_actions_contract::{GeneratorLock, ReleaseManifest, ReleaseTarget, TargetRecord};
 
 use super::{
-    MISE_VERSION, PinnedTool, ToolCatalog,
+    PinnedTool, ToolCatalog,
     lock::{LockError, mismatch},
-    source_build_bootstrap::{
-        SourceBuildBootstrapHost, SourceBuildBootstrapTool, official as bootstrap_asset,
-    },
 };
 
-const PUBLISHED_GENERATOR_VERSION: &str = "0.1.55";
-const PUBLISHED_GENERATOR_GH_VERSION: &str = "2.103.2";
-const PUBLISHED_GENERATOR_COMMIT: &str = "693f3aae14406fb7851ac70f0aee647a869b5063";
-const PUBLISHED_GENERATOR_LINUX_X64_SHA256: &str =
-    "c8f1440e4f767ecc903e6611c56c2db4005011d33ee6f0fd566f4b7e5345eba4";
-const PUBLISHED_GENERATOR_MACOS_ARM64_SHA256: &str =
-    "eb8690b6a05b18bf025a0d7876c8497cedc04d54df04fdb5a3c20d203478e756";
-const PUBLISHED_GENERATOR_MACOS_X64_SHA256: &str =
-    "0938a574c00b05a71735285bf0d2840235ca4f9559359909564dd53b27d77883";
 const PUBLISHED_VERDICT_VERSION: &str = "0.1.59";
 const PUBLISHED_VERDICT_GH_VERSION: &str = "2.103.3";
 const PUBLISHED_VERDICT_COMMIT: &str = "4bb724119971fe49f07b12876c54c3c159edb5e5";
@@ -62,6 +50,15 @@ pub fn catalog_for_published_verdict(catalog: &ToolCatalog) -> ToolCatalog {
     verdict
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct ApprovedGeneratorRelease<'a> {
+    pub manifest: &'a ReleaseManifest,
+    pub gh_version: &'a str,
+    pub mise_version: &'a str,
+    pub mise_artifact: &'a str,
+    pub mise_sha256: &'a str,
+}
+
 pub fn verify_lock_against_manifest(
     lock: &GeneratorLock,
     manifest: &ReleaseManifest,
@@ -89,17 +86,14 @@ pub fn verify_lock_against_manifest(
             return Err(mismatch(format!("target_diverged:{}", target.triple())));
         }
     }
-    if lock.mise_bootstrap.version != MISE_VERSION {
-        return Err(mismatch(format!(
-            "mise_bootstrap:{}:{MISE_VERSION}",
-            lock.mise_bootstrap.version
-        )));
-    }
     Ok(())
 }
 
-pub fn verify_lock_against_published_release(lock: &GeneratorLock) -> Result<(), LockError> {
-    let manifest = published_generator_manifest();
+pub fn verify_lock_against_approved_release(
+    lock: &GeneratorLock,
+    approved: &ApprovedGeneratorRelease<'_>,
+) -> Result<(), LockError> {
+    let manifest = approved.manifest;
     manifest
         .validate("published-generator-manifest")
         .map_err(|err| LockError::Invalid {
@@ -111,43 +105,8 @@ pub fn verify_lock_against_published_release(lock: &GeneratorLock) -> Result<(),
             lock.generator.binary
         )));
     }
-    verify_lock_against_manifest(lock, &manifest)?;
-    verify_mise_bootstrap(lock)
-}
-
-fn published_generator_manifest() -> ReleaseManifest {
-    ReleaseManifest {
-        schema: ReleaseManifest::SCHEMA,
-        version: PUBLISHED_GENERATOR_VERSION.to_owned(),
-        repository: velnor_actions_contract::targets::EXPECTED_REPOSITORY.to_owned(),
-        commit: PUBLISHED_GENERATOR_COMMIT.to_owned(),
-        targets: vec![
-            published_target(
-                ReleaseTarget::LinuxX86_64,
-                PUBLISHED_GENERATOR_LINUX_X64_SHA256,
-            ),
-            published_target(
-                ReleaseTarget::MacosArm64,
-                PUBLISHED_GENERATOR_MACOS_ARM64_SHA256,
-            ),
-            published_target(
-                ReleaseTarget::MacosX86_64,
-                PUBLISHED_GENERATOR_MACOS_X64_SHA256,
-            ),
-        ],
-    }
-}
-
-fn published_target(target: ReleaseTarget, sha256: &str) -> TargetRecord {
-    let target = target.triple();
-    TargetRecord {
-        target: target.to_owned(),
-        artifact: format!(
-            "https://github.com/{}/releases/download/v{PUBLISHED_GENERATOR_VERSION}/velnor-actions-{PUBLISHED_GENERATOR_VERSION}-{target}",
-            velnor_actions_contract::targets::EXPECTED_REPOSITORY
-        ),
-        sha256: sha256.to_owned(),
-    }
+    verify_lock_against_manifest(lock, manifest)?;
+    verify_approved_mise_bootstrap(lock, approved)
 }
 
 fn published_verdict_target(target: ReleaseTarget, sha256: &str) -> TargetRecord {
@@ -162,42 +121,43 @@ fn published_verdict_target(target: ReleaseTarget, sha256: &str) -> TargetRecord
     }
 }
 
-fn verify_mise_bootstrap(lock: &GeneratorLock) -> Result<(), LockError> {
-    let released = bootstrap_asset(
-        SourceBuildBootstrapTool::Mise,
-        SourceBuildBootstrapHost::LinuxAmd64,
-    );
-    if lock.mise_bootstrap.version != MISE_VERSION {
+fn verify_approved_mise_bootstrap(
+    lock: &GeneratorLock,
+    approved: &ApprovedGeneratorRelease<'_>,
+) -> Result<(), LockError> {
+    if lock.mise_bootstrap.version != approved.mise_version {
         return Err(mismatch(format!(
-            "mise_bootstrap:{}:{MISE_VERSION}",
-            lock.mise_bootstrap.version
+            "mise_bootstrap:{}:{}",
+            lock.mise_bootstrap.version, approved.mise_version
         )));
     }
-    if lock.mise_bootstrap.artifact != released.asset_url() {
+    if lock.mise_bootstrap.artifact != approved.mise_artifact {
         return Err(mismatch("mise_bootstrap_artifact".to_owned()));
     }
-    if lock.mise_bootstrap.sha256 != released.binary_sha256() {
+    if lock.mise_bootstrap.sha256 != approved.mise_sha256 {
         return Err(mismatch("mise_bootstrap_sha256".to_owned()));
     }
     Ok(())
 }
 
-pub fn catalog_for_published_generator(
+pub fn catalog_for_approved_generator(
     lock: &GeneratorLock,
     catalog: &ToolCatalog,
+    approved: &ApprovedGeneratorRelease<'_>,
 ) -> Result<ToolCatalog, LockError> {
-    verify_lock_against_published_release(lock)?;
+    verify_lock_against_approved_release(lock, approved)?;
     let mut helper = catalog.clone();
-    PUBLISHED_GENERATOR_GH_VERSION.clone_into(&mut helper.gh);
+    approved.gh_version.clone_into(&mut helper.gh);
     helper.project.remove(&PinnedTool::Gh);
     Ok(helper)
 }
 
-pub fn mise_binary_for_published_generator(
+pub fn mise_binary_for_approved_generator(
     lock: &GeneratorLock,
     target: ReleaseTarget,
+    approved: &ApprovedGeneratorRelease<'_>,
 ) -> Result<super::MiseBinaryIdentity, LockError> {
-    verify_lock_against_published_release(lock)?;
+    verify_lock_against_approved_release(lock, approved)?;
     let (sha256, bytes) = match target {
         ReleaseTarget::LinuxX86_64 => (
             "3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d",

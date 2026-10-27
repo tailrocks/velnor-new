@@ -10,6 +10,8 @@ use velnor_actions_contract::StepKind;
 
 #[path = "bun_install_runtime.rs"]
 mod bun_install_runtime;
+#[path = "npm_publish_runtime.rs"]
+mod npm_publish_runtime;
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::publish_render::PUBLISH_WORKFLOW_PATH;
 
