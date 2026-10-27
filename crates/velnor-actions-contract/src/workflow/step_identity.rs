@@ -56,11 +56,11 @@ pub const TOFU_PROVIDERS_PATH_OUTPUT_EXPR: &str = "${{ steps.tofu-providers.outp
 pub const MBX_WORKSPACE_CLEAN_CONDITION: &str = "always() && steps.mbx-ready.outcome == 'success'";
 pub use super::step_private::{
     BUN_ASSETS_EXPORT_OPERATION, BUN_ASSETS_IMPORT_OPERATION, BUN_ASSETS_PREPARE_OPERATION,
-    BUN_REGISTRY_INSTALL_OPERATION, GITHUB_EVIDENCE_FETCH_OPERATION,
-    GITHUB_EVIDENCE_IMPORT_OPERATION, GITHUB_EVIDENCE_SPEC_ENV, GITHUB_EVIDENCE_TOKEN_ENV,
-    PRIVATE_FETCH_OPERATION, PRIVATE_FETCH_TOKEN_ENV, PRIVATE_NPM_READ_EXPR,
-    PRIVATE_NPM_READ_TOKEN_ENV, PRIVATE_REVOKE_OPERATION, PRIVATE_TOKEN_MINT_ACTION_PREFIX,
-    PRIVATE_TOKEN_OUTPUT_EXPR,
+    BUN_ASSETS_REPOSITORY_CHECK_OPERATION, BUN_REGISTRY_INSTALL_OPERATION,
+    GITHUB_EVIDENCE_FETCH_OPERATION, GITHUB_EVIDENCE_IMPORT_OPERATION, GITHUB_EVIDENCE_SPEC_ENV,
+    GITHUB_EVIDENCE_TOKEN_ENV, PRIVATE_FETCH_OPERATION, PRIVATE_FETCH_TOKEN_ENV,
+    PRIVATE_NPM_READ_EXPR, PRIVATE_NPM_READ_TOKEN_ENV, PRIVATE_REVOKE_OPERATION,
+    PRIVATE_TOKEN_MINT_ACTION_PREFIX, PRIVATE_TOKEN_OUTPUT_EXPR,
 };
 
 pub use super::step_id::StepId;
@@ -201,6 +201,17 @@ pub enum StepRole {
     GitHubEvidenceImport,
 }
 
+fn valid_bun_assets_handoff(kind: &StepKind) -> bool {
+    [
+        BUN_ASSETS_EXPORT_OPERATION,
+        BUN_ASSETS_PREPARE_OPERATION,
+        BUN_ASSETS_IMPORT_OPERATION,
+        BUN_ASSETS_REPOSITORY_CHECK_OPERATION,
+    ]
+    .into_iter()
+    .any(|operation| internal_operation(kind, operation))
+}
+
 impl StepRole {
     pub(crate) fn validate(self, kind: &StepKind, job: &str) -> Result<(), ContractError> {
         if self.matches_payload(kind) {
@@ -251,13 +262,7 @@ impl StepRole {
             }
             Self::PrivateRevoke => internal_operation(kind, PRIVATE_REVOKE_OPERATION),
             Self::BunRegistryInstall => internal_operation(kind, BUN_REGISTRY_INSTALL_OPERATION),
-            Self::BunAssetsHandoff => [
-                BUN_ASSETS_EXPORT_OPERATION,
-                BUN_ASSETS_PREPARE_OPERATION,
-                BUN_ASSETS_IMPORT_OPERATION,
-            ]
-            .into_iter()
-            .any(|operation| internal_operation(kind, operation)),
+            Self::BunAssetsHandoff => valid_bun_assets_handoff(kind),
             Self::MbxCache => super::step_mbx_lifecycle::valid_mbx_cache(kind),
             Self::PlaywrightInstall => super::step_protocol::valid_playwright_install(kind),
             Self::VerifyRustManifest => valid_rust_verifier_payload(kind),

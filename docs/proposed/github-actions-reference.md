@@ -414,3 +414,17 @@ Checked against GitHub's [MergeQueueEntry schema](https://docs.github.com/en/ent
 The captured entry for [DataFusion pull request 26770](https://github.com/apache/datafusion/pull/26770) identified base commit `c18e5d974c49382ba892fa9f89ce71d3aa0ab8ae`, queue head commit `97ff724f2c20f906277dc29fa8ba66a5824538a7`, and original pull-request head `a8448250c3fea792fcbe17130de5a6eed35aef9b`. GitHub's merge-group workflow runs used the queue head, not the original pull-request head. The queue commit had one parent, the base commit. These observations cover one queue entry; they do not establish batching behavior.
 
 A cutover author check must bind the current queue entry's base and head to the authenticated merge-group context, then authenticate the associated pull request and its current author. A queue branch name alone is not author evidence. The pull-request test merge reference and an assumed two-parent queue commit are not substitutes for queue membership. Missing, stale, ambiguous or truncated membership must fail closed.
+
+## Private Bun artifact admission (2026-10-27)
+
+GitHub documents that authenticated users with repository read access can
+download workflow artifacts. Artifact retention does not restrict that audience.
+A public consuming repository therefore cannot receive a plaintext private-asset
+handoff. Source: [Downloading workflow artifacts](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts).
+
+The generated native admission step uses the current
+`GET /repos/{owner}/{repo}` response rather than trigger-time event visibility.
+It requires matching identity, Boolean private status and private visibility.
+The existing bounded native GitHub transport supplies fixed-origin HTTPS,
+workflow-token authentication and a deadline. Source:
+[Get a repository](https://docs.github.com/en/rest/repos/repos?apiVersion=2026-03-10#get-a-repository).
