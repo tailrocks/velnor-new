@@ -25,6 +25,8 @@ mod bun_private_credentials;
 mod bun_private_credentials_boundaries;
 #[path = "workflow_configuration_public/bun_private_credentials_support.rs"]
 mod bun_private_credentials_support;
+#[path = "workflow_configuration_public/bun_private_profiles.rs"]
+mod bun_private_profiles;
 #[path = "workflow_configuration_public/bun_private_repository.rs"]
 mod bun_private_repository;
 #[path = "workflow_configuration_public/bun_private_repository_conditions.rs"]

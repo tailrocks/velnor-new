@@ -219,7 +219,7 @@ pub(super) fn placement_for(
         if execution
             .overrides
             .get(job_id)
-            .is_some_and(|over| over.profile == execution.scale_set_profile)
+            .is_some_and(|over| over.profile != execution.hosted_profile)
         {
             return Err(ContractError::config(
                 "config.toml",
