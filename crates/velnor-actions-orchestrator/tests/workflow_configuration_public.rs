@@ -7,6 +7,8 @@ mod workflow_configuration_fixture;
 mod branches;
 #[path = "workflow_configuration_public/bun_assets_routing.rs"]
 mod bun_assets_routing;
+#[path = "workflow_configuration_public/bun_assets_routing_support.rs"]
+mod bun_assets_routing_support;
 #[path = "workflow_configuration_public/bun_dispositions.rs"]
 mod bun_dispositions;
 #[path = "workflow_configuration_public/bun_expansion.rs"]
