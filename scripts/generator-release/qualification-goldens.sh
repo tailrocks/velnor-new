@@ -14,6 +14,319 @@ QUALIFICATION_GUARD_SHA256=''
 QUALIFICATION_GUARD_IDENTITY=''
 QUALIFICATION_GUARD_FINGERPRINT=''
 
+test_mise_rust_version() {
+  local tool_version file_version
+  tool_version="$(awk -F '"' '
+    /^\[tools\][[:space:]]*$/ { in_tools = 1; next }
+    /^\[/ { in_tools = 0 }
+    in_tools && /^[[:space:]]*rust[[:space:]]*=[[:space:]]*\{/ {
+      if (NF < 3 || $2 == "") { failed = 1; next }
+      version = $2
+      count++
+    }
+    END {
+      if (failed || count != 1) exit 1
+      print version
+    }
+  ' "$ROOT/mise.toml")" || return 1
+  file_version="$(awk -F '"' '
+    /^[[:space:]]*channel[[:space:]]*=/ {
+      if (NF < 3 || $2 == "") { failed = 1; next }
+      version = $2
+      count++
+    }
+    END {
+      if (failed || count != 1) exit 1
+      print version
+    }
+  ' "$ROOT/rust-toolchain.toml")" || return 1
+  [[ "$tool_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ \
+    && "$tool_version" == "$file_version" ]] || return 1
+  printf '%s\n' "$tool_version"
+}
+
+test_mise_resolve_cargo() {
+  local real_mise="$1" rust_version="$2" prefix="$3" stub_cargo="$4"
+  local rust_spec="rust@$rust_version" resolution_rc=0 cargo_path
+  printf '%s --no-config --no-env --no-hooks which cargo --tool %s\n' \
+    "$real_mise" "$rust_spec" >"$prefix.command.txt" || return 1
+  env MISE_NO_CONFIG=1 MISE_NO_ENV=1 MISE_NO_HOOKS=1 MISE_LOCKFILE=0 \
+    MISE_AUTO_INSTALL=false MISE_EXEC_AUTO_INSTALL=false \
+    "$real_mise" --no-config --no-env --no-hooks which cargo --tool "$rust_spec" \
+    >"$prefix.stdout.txt" 2>"$prefix.stderr.txt" \
+    || resolution_rc=$?
+  printf '%s\n' "$resolution_rc" >"$prefix.exit" || return 1
+  if [ "$resolution_rc" -ne 0 ] \
+    || ! awk 'NR == 1 { if ($0 !~ /^\//) exit 1; next } END { if (NR != 1) exit 1 }' \
+      "$prefix.stdout.txt"; then
+    cat "$prefix.stderr.txt" >&2
+    echo 'FATAL: real Mise could not resolve the pinned Rust Cargo executable' >&2
+    return 1
+  fi
+  cargo_path="$(cat "$prefix.stdout.txt")" || return 1
+  if [ ! -x "$cargo_path" ] || { [ -n "$stub_cargo" ] && [ "$cargo_path" = "$stub_cargo" ]; }; then
+    echo "FATAL: real Mise resolved an invalid Cargo executable: $cargo_path" >&2
+    return 1
+  fi
+  TEST_MISE_CARGO_PATH="$cargo_path"
+  export TEST_MISE_CARGO_PATH
+}
+
+test_mise_adapter_create() {
+  local adapter_dir="$1" real_mise="$2" original_path="$3" guard="$4" rust_version="$5"
+  if [[ "$adapter_dir" != /* || "$real_mise" != /* || ! -x "$real_mise" \
+    || -z "$original_path" || ! "$rust_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo 'FATAL: test Mise adapter inputs are invalid' >&2
+    return 1
+  fi
+  if [[ -n "$guard" && ( "$guard" != /* || ! -x "$guard" ) ]]; then
+    echo 'FATAL: test Mise adapter guard path is invalid' >&2
+    return 1
+  fi
+  mkdir -p "$adapter_dir" || return 1
+  adapter_dir="$(cd "$adapter_dir" && pwd -P)" || return 1
+  cat >"$adapter_dir/mise" <<'ADAPTER'
+#!/usr/bin/env bash
+set -uo pipefail
+
+REAL_MISE="${VELNOR_TEST_REAL_MISE:-}"
+ORIGINAL_PATH="${VELNOR_TEST_ORIGINAL_PATH:-}"
+RUST_VERSION="${VELNOR_TEST_RUST_VERSION:-}"
+RUST_SPEC="rust@$RUST_VERSION"
+GUARD="${VELNOR_TEST_CARGO_GUARD:-}"
+RECEIPT="${VELNOR_TEST_MISE_RECEIPT:-}"
+CARGO_PATH="${VELNOR_TEST_MISE_CARGO_PATH:-}"
+
+if [[ "$REAL_MISE" != /* || ! -x "$REAL_MISE" || -z "$ORIGINAL_PATH" ]]; then
+  echo 'FATAL: test Mise adapter has no absolute real Mise path or original PATH' >&2
+  exit 125
+fi
+
+arguments=("$@")
+payload_index=-1
+for ((arg_index = 0; arg_index < ${#arguments[@]}; arg_index++)); do
+  if [[ "${arguments[$arg_index]}" == exec ]]; then
+    for ((separator_index = arg_index + 1; separator_index < ${#arguments[@]}; separator_index++)); do
+      if [[ "${arguments[$separator_index]}" == -- ]]; then
+        payload_index=$((separator_index + 1))
+        break
+      fi
+    done
+    break
+  fi
+done
+
+cargo_request=0
+if (( payload_index >= 0 && payload_index < ${#arguments[@]} )); then
+  payload_program="${arguments[$payload_index]}"
+  [[ "${payload_program##*/}" == cargo ]] && cargo_request=1
+fi
+
+PATH="$ORIGINAL_PATH"
+export PATH
+if [ "$cargo_request" -eq 0 ]; then
+  exec "$REAL_MISE" "$@"
+fi
+
+if [ -z "$RECEIPT" ] || [ ! -f "$RECEIPT" ]; then
+  echo 'FATAL: test Mise adapter received Cargo without a receipt path' >&2
+  exit 125
+fi
+
+request_pid=$$
+record_arguments() {
+  local name="$1" argument_index=0
+  shift
+  for argument in "$@"; do
+    printf '%s-argv[%s]=%s\n' "$name" "$argument_index" "$argument" >>"$RECEIPT"
+    argument_index=$((argument_index + 1))
+  done
+}
+
+printf 'metadata-request-begin pid=%s\n' "$request_pid" >>"$RECEIPT"
+record_arguments original "$@"
+
+reject_request() {
+  local reason="$1"
+  printf 'metadata-request-rejected pid=%s reason=%s\n' "$request_pid" "$reason" >>"$RECEIPT"
+  printf 'request-exit pid=%s code=78\n' "$request_pid" >>"$RECEIPT"
+  printf 'metadata-request-end pid=%s\n' "$request_pid" >>"$RECEIPT"
+  echo "FATAL: test Mise adapter rejected Cargo request: $reason" >&2
+  exit 78
+}
+
+if [ "$#" -ne 13 ] && [ "$#" -ne 15 ]; then
+  reject_request 'unsupported-argv-count'
+fi
+if [[ "${arguments[0]}" != --no-config || "${arguments[1]}" != --no-env \
+  || "${arguments[2]}" != --no-hooks || "${arguments[3]}" != exec \
+  || "${arguments[5]}" != -- || "${arguments[6]}" != cargo \
+  || "${arguments[7]}" != metadata || "${arguments[8]}" != --format-version \
+  || "${arguments[9]}" != 1 ]]; then
+  reject_request 'unsupported-mise-or-metadata-argv'
+fi
+
+rust_spec="${arguments[4]}"
+if [[ ! "$rust_spec" =~ ^rust@[0-9]+\.[0-9]+\.[0-9]+$ || "$rust_spec" != "$RUST_SPEC" ]]; then
+  reject_request 'rust-spec-mismatch'
+fi
+printf 'rust-spec pid=%s value=%s\n' "$request_pid" "$rust_spec" >>"$RECEIPT"
+
+if [ "$#" -eq 13 ]; then
+  if [[ "${arguments[10]}" != --no-deps || "${arguments[11]}" != --manifest-path ]]; then
+    reject_request 'unsupported-metadata-options'
+  fi
+  manifest_path="${arguments[12]}"
+  metadata_shape=discovery
+else
+  if [[ "${arguments[10]}" != --locked || "${arguments[11]}" != --offline \
+    || "${arguments[12]}" != --all-features || "${arguments[13]}" != --manifest-path ]]; then
+    reject_request 'unsupported-metadata-options'
+  fi
+  manifest_path="${arguments[14]}"
+  metadata_shape=qualification
+fi
+
+original_cwd="$(pwd -P)" || reject_request 'original-cwd-unavailable'
+if [ ! -x "$CARGO_PATH" ]; then
+  reject_request 'real-mise-cargo-path-unavailable'
+fi
+
+identity_rc=0
+rustc_identity="$("$REAL_MISE" --no-config --no-env --no-hooks exec "$rust_spec" -- rustc --version 2>&1)" \
+  || identity_rc=$?
+if [ "$identity_rc" -ne 0 ] \
+  || [[ ! "$rustc_identity" =~ ^rustc[[:space:]]([0-9]+\.[0-9]+\.[0-9]+)([[:space:]]|$) ]] \
+  || [ "${BASH_REMATCH[1]:-}" != "$RUST_VERSION" ]; then
+  printf 'rustc-identity pid=%s output=%s\n' "$request_pid" "$rustc_identity" >>"$RECEIPT"
+  printf 'request-exit pid=%s code=78\n' "$request_pid" >>"$RECEIPT"
+  printf 'metadata-request-end pid=%s\n' "$request_pid" >>"$RECEIPT"
+  echo 'FATAL: test Mise adapter Rust toolchain identity differs from the requested pin' >&2
+  exit 78
+fi
+printf 'rustc-version pid=%s value=%s\n' "$request_pid" "${BASH_REMATCH[1]}" >>"$RECEIPT"
+printf 'rustc-identity pid=%s output=%s\n' "$request_pid" "$rustc_identity" >>"$RECEIPT"
+printf 'real-cargo-path pid=%s value=%s\n' "$request_pid" "$CARGO_PATH" >>"$RECEIPT"
+printf 'original-cwd pid=%s value=%s\n' "$request_pid" "$original_cwd" >>"$RECEIPT"
+printf 'manifest-original pid=%s value=%s\n' "$request_pid" "$manifest_path" >>"$RECEIPT"
+printf 'metadata-shape pid=%s value=%s\n' "$request_pid" "$metadata_shape" >>"$RECEIPT"
+
+if [ -z "$GUARD" ]; then
+  "$REAL_MISE" "$@"
+  request_rc=$?
+  printf 'request-exit pid=%s code=%s\n' "$request_pid" "$request_rc" >>"$RECEIPT"
+  printf 'metadata-request-end pid=%s\n' "$request_pid" >>"$RECEIPT"
+  exit "$request_rc"
+fi
+
+if [[ "$manifest_path" != /* || "${manifest_path##*/}" != Cargo.toml \
+  || ! -f "$manifest_path" || -L "$manifest_path" ]]; then
+  reject_request 'manifest-is-not-absolute-regular-Cargo.toml'
+fi
+manifest_parent="$(cd "$(dirname "$manifest_path")" 2>/dev/null && pwd -P)" \
+  || reject_request 'manifest-parent-unavailable'
+manifest_translated="$manifest_parent/Cargo.toml"
+if [ ! -f "$manifest_translated" ] || [ -L "$manifest_translated" ]; then
+  reject_request 'translated-manifest-unavailable'
+fi
+if [ "$original_cwd" != "$manifest_parent" ]; then
+  case "$original_cwd" in
+    /) ;;
+    *) [[ "$manifest_parent" == "$original_cwd"/* ]] || reject_request 'manifest-parent-is-not-below-original-cwd' ;;
+  esac
+  config_dir="$manifest_parent"
+  while [ "$config_dir" != "$original_cwd" ]; do
+    if [ -e "$config_dir/.cargo/config" ] || [ -L "$config_dir/.cargo/config" ] \
+      || [ -e "$config_dir/.cargo/config.toml" ] || [ -L "$config_dir/.cargo/config.toml" ]; then
+      reject_request 'manifest-parent-cwd-would-change-cargo-config'
+    fi
+    config_dir="$(dirname "$config_dir")"
+  done
+fi
+printf 'manifest-parent pid=%s value=%s\n' "$request_pid" "$manifest_parent" >>"$RECEIPT"
+
+translated=(--no-config --no-env --no-hooks exec "$rust_spec" -- "$GUARD" -- mise exec -- cargo metadata --format-version 1)
+if [ "$metadata_shape" = discovery ]; then
+  translated+=(--no-deps --manifest-path Cargo.toml)
+else
+  translated+=(--locked --offline --all-features --manifest-path Cargo.toml)
+fi
+printf 'translated-cwd pid=%s value=%s\n' "$request_pid" "$manifest_parent" >>"$RECEIPT"
+record_arguments translated "${translated[@]}"
+
+(cd "$manifest_parent" && "$REAL_MISE" "${translated[@]}")
+metadata_rc=$?
+printf 'guarded-metadata-exit pid=%s code=%s\n' "$request_pid" "$metadata_rc" >>"$RECEIPT"
+printf 'request-exit pid=%s code=%s\n' "$request_pid" "$metadata_rc" >>"$RECEIPT"
+printf 'metadata-request-end pid=%s\n' "$request_pid" >>"$RECEIPT"
+exit "$metadata_rc"
+ADAPTER
+  chmod u+x "$adapter_dir/mise" || return 1
+  TEST_MISE_ADAPTER_BIN="$adapter_dir"
+  TEST_MISE_REAL_MISE="$real_mise"
+  TEST_MISE_ORIGINAL_PATH="$original_path"
+  TEST_MISE_RUST_VERSION="$rust_version"
+  TEST_MISE_GUARD="$guard"
+  export TEST_MISE_ADAPTER_BIN TEST_MISE_REAL_MISE TEST_MISE_ORIGINAL_PATH TEST_MISE_RUST_VERSION TEST_MISE_GUARD
+}
+
+test_mise_adapter_verify() {
+  local label="$1" receipt="$2" rust_version="$3" guard="$4"
+  if [ ! -s "$receipt" ] || ! awk -v expected_version="$rust_version" -v guard_required="$([ -n "$guard" ] && echo 1 || echo 0)" '
+    function field(name, field_number, prefix) {
+      prefix = name "="
+      for (field_number = 1; field_number <= NF; field_number++) {
+        if (index($field_number, prefix) == 1) return substr($field_number, length(prefix) + 1)
+      }
+      return ""
+    }
+    /^metadata-request-begin / {
+      id = field("pid")
+      if (id == "" || started[id]++) failed = 1
+      requests++
+    }
+    /^metadata-request-rejected / { failed = 1 }
+    /^rust-spec / {
+      id = field("pid")
+      if (!started[id] || field("value") != "rust@" expected_version) failed = 1
+      specs[id]++
+    }
+    /^rustc-version / {
+      id = field("pid")
+      if (!started[id] || field("value") != expected_version) failed = 1
+      identities[id]++
+    }
+    /^guarded-metadata-exit / {
+      id = field("pid")
+      if (!started[id] || field("code") != "0") failed = 1
+      guards[id]++
+    }
+    /^request-exit / {
+      id = field("pid")
+      if (!started[id] || field("code") != "0") failed = 1
+      completions[id]++
+    }
+    /^metadata-request-end / {
+      id = field("pid")
+      if (!started[id]) failed = 1
+      endings[id]++
+    }
+    END {
+      if (requests == 0) failed = 1
+      for (id in started) {
+        if (specs[id] != 1 || identities[id] != 1 || completions[id] != 1 || endings[id] != 1) failed = 1
+        if (guard_required && guards[id] != 1) failed = 1
+        if (!guard_required && guards[id] != 0) failed = 1
+      }
+      if (failed) exit 1
+    }
+  ' "$receipt"; then
+    cat "$receipt" >&2
+    echo "FAIL: test Mise adapter did not complete a guarded metadata request for $label" >&2
+    return 1
+  fi
+}
+
 candidate_tree_oid() {
   if ! git -C "$ROOT" diff --quiet --; then
     echo "FATAL: dogfood candidate has unstaged tracked changes" >&2

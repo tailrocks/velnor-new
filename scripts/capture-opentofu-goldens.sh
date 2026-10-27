@@ -137,6 +137,45 @@ normalize_generate_stderr() {
   fi
 }
 
+normalize_plan_stderr() {
+  local path="$1"
+  shift
+  node - "$path" "$@" <<'NODE'
+const fs = require('node:fs');
+const file = process.argv[2];
+const args = process.argv.slice(3);
+if (args.length === 0 || args.length % 2 !== 0) {
+  process.stderr.write('FATAL: invalid plan stderr path normalization arguments\n');
+  process.exit(2);
+}
+const mappings = [];
+for (let index = 0; index < args.length; index += 2) {
+  if (!args[index]) {
+    process.stderr.write('FATAL: empty path in plan stderr normalization\n');
+    process.exit(2);
+  }
+  mappings.push([Buffer.from(args[index]), Buffer.from(args[index + 1])]);
+}
+mappings.sort((left, right) => right[0].length - left[0].length);
+let content = fs.readFileSync(file);
+for (const [needle, replacement] of mappings) {
+  const chunks = [];
+  let offset = 0;
+  while (true) {
+    const match = content.indexOf(needle, offset);
+    if (match < 0) break;
+    chunks.push(content.subarray(offset, match), replacement);
+    offset = match + needle.length;
+  }
+  if (offset !== 0) {
+    chunks.push(content.subarray(offset));
+    content = Buffer.concat(chunks);
+  }
+}
+fs.writeFileSync(file, content);
+NODE
+}
+
 # Deterministic content+link pin of a tree: sha256 per regular file
 # (sorted) plus one `link <path> -> <target>` line per symlink (sorted).
 # `find -type f` alone skips links, leaving targets unpinned.
@@ -215,12 +254,14 @@ capture_case() {
   mkdir -p "$out" "$preview" "$raw"
   (cd "$repo" && "$BIN" plan >"$raw/plan.raw.txt" 2>"$raw/plan.stderr.raw.txt"; echo "$?" >"$out/plan.exit")
   if ! cp "$raw/plan.stderr.raw.txt" "$out/plan.stderr.txt" \
-    || ! normalize_generate_stderr "$out/plan.stderr.txt"; then
+    || ! normalize_plan_stderr "$out/plan.stderr.txt" \
+      "$repo" '<repo>' "$ROOT" '<root>' "$WORK" '<work>'; then
     echo "FATAL: could not stage normalized plan diagnostics for $case"
     exit 2
   fi
   if [ "$(cat "$out/plan.exit")" != "0" ]; then
     echo "FATAL: plan failed for $case"
+    cat "$raw/plan.stderr.raw.txt" >&2
     exit 2
   fi
   sed -e "s|Repository: .*|Repository: <repo>|" -e "s|$head|<head>|g" \
@@ -273,12 +314,14 @@ capture_dogfood() {
   head=$(git -C "$ROOT" rev-parse HEAD)
   (cd "$ROOT" && "$BIN" plan >"$raw/plan.raw.txt" 2>"$raw/plan.stderr.raw.txt"; echo "$?" >"$out/plan.exit")
   if ! cp "$raw/plan.stderr.raw.txt" "$out/plan.stderr.txt" \
-    || ! normalize_generate_stderr "$out/plan.stderr.txt"; then
+    || ! normalize_plan_stderr "$out/plan.stderr.txt" \
+      "$ROOT" '<root>' "$WORK" '<work>'; then
     echo "FATAL: could not stage normalized dogfood plan diagnostics"
     exit 2
   fi
   if [ "$(cat "$out/plan.exit")" != "0" ]; then
     echo "FATAL: dogfood plan failed"
+    cat "$raw/plan.stderr.raw.txt" >&2
     exit 2
   fi
   sed -e "s|Repository: .*|Repository: <repo>|" -e "s|$head|<head>|g" -e "s|$ROOT|<root>|g" \

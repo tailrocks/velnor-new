@@ -84,7 +84,36 @@ cleanup_work() {
 trap cleanup_work EXIT
 STUB_BIN="$WORK/stub bin"
 MARKER="$WORK/cargo-invoked"
+GUARD_RECEIPT="$WORK/cargo-guard-receipt"
+MISE_RECEIPT="$WORK/mise-metadata-receipt"
 ORIGINAL_PATH="$PATH"
+REAL_MISE="$(command -v mise 2>/dev/null)" || REAL_MISE=''
+case "$REAL_MISE" in
+  /*) ;;
+  '' ) echo 'FATAL: real Mise executable is unavailable' >&2; exit 2 ;;
+  *)
+    real_mise_parent="$(cd "$(dirname "$REAL_MISE")" 2>/dev/null && pwd -P)" \
+      || { echo 'FATAL: real Mise executable parent is unavailable' >&2; exit 2; }
+    REAL_MISE="$real_mise_parent/$(basename "$REAL_MISE")"
+    ;;
+esac
+if [ ! -x "$REAL_MISE" ]; then
+  echo "FATAL: real Mise executable is unavailable: $REAL_MISE" >&2
+  exit 2
+fi
+VELNOR_TEST_CARGO_GUARD="${VELNOR_TEST_CARGO_GUARD:-${VELNOR_TEST_RUST_BUILD_GUARD:-}}"
+if [ "$(uname -s)" = Darwin ] && [ "${GITHUB_ACTIONS:-}" != true ] && [ -z "$VELNOR_TEST_CARGO_GUARD" ]; then
+  echo 'FATAL: set VELNOR_TEST_CARGO_GUARD to the required Rust build guard' >&2
+  exit 2
+fi
+if [ -n "$VELNOR_TEST_CARGO_GUARD" ] \
+  && { [ ! -f "$VELNOR_TEST_CARGO_GUARD" ] || [ ! -x "$VELNOR_TEST_CARGO_GUARD" ]; }; then
+  echo "FATAL: the configured Rust build guard is unavailable: $VELNOR_TEST_CARGO_GUARD" >&2
+  exit 2
+fi
+VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH"
+VELNOR_TEST_CARGO_RECEIPT="$GUARD_RECEIPT"
+export VELNOR_TEST_CARGO_GUARD VELNOR_TEST_REAL_CARGO_PATH VELNOR_TEST_CARGO_RECEIPT
 mkdir -p "$STUB_BIN" "$WORK/tmp workspace"
 ln -s "$WORK/tmp workspace" "$WORK/tmp symlink"
 # Only `cargo build` is the collector's implicit debug build. `plan` runs
@@ -96,11 +125,49 @@ if [ "${1-}" = "build" ]; then
   printf invoked >"$VELNOR_TEST_CARGO_MARKER"
   exit 79
 fi
+printf 'cargo-invocation=%s\n' "$*" >>"$VELNOR_TEST_CARGO_RECEIPT"
 PATH="$VELNOR_TEST_REAL_CARGO_PATH"
 export PATH
-exec cargo "$@"
+if [ -n "${VELNOR_TEST_CARGO_GUARD:-}" ]; then
+  "$VELNOR_TEST_CARGO_GUARD" -- mise exec -- cargo "$@"
+  guard_rc=$?
+  printf 'guard-exit=%s\n' "$guard_rc" >>"$VELNOR_TEST_CARGO_RECEIPT"
+  exit "$guard_rc"
+fi
+exit 79
 STUB
 chmod u+x "$STUB_BIN/cargo"
+
+RUST_VERSION="$(test_mise_rust_version)" || {
+  echo 'FATAL: could not resolve the owned pinned Rust version' >&2
+  exit 2
+}
+if ! test_mise_resolve_cargo "$REAL_MISE" "$RUST_VERSION" "$WORK/mise-cargo-resolution" "$STUB_BIN/cargo"; then
+  exit 2
+fi
+test_mise_adapter_create "$WORK/mise-adapter-bin" "$REAL_MISE" "$ORIGINAL_PATH" \
+  "$VELNOR_TEST_CARGO_GUARD" "$RUST_VERSION" || exit 2
+MISE_ADAPTER_BIN="$TEST_MISE_ADAPTER_BIN"
+MISE_CARGO_PATH="$TEST_MISE_CARGO_PATH"
+
+verify_guard_receipt() {
+  local label="$1" receipt="$2" direct_receipt="$3"
+  test_mise_adapter_verify "$label" "$receipt" "$RUST_VERSION" "$VELNOR_TEST_CARGO_GUARD" || return 1
+  if [ -s "$direct_receipt" ] && [ -n "$VELNOR_TEST_CARGO_GUARD" ] && ! awk '
+      /^cargo-invocation=/ { requested++ }
+      /^guard-exit=/ { completed++; if ($0 != "guard-exit=0") failed=1 }
+      END { if (requested == 0 || requested != completed || failed) exit 1 }
+    ' "$direct_receipt"; then
+    cat "$direct_receipt" >&2
+    echo "FAIL: direct collector Cargo request lacked a successful guard receipt: $label" >&2
+    return 1
+  fi
+  if [ -s "$direct_receipt" ] && [ -z "$VELNOR_TEST_CARGO_GUARD" ]; then
+    cat "$direct_receipt" >&2
+    echo "FAIL: collector bypassed real Mise metadata routing: $label" >&2
+    return 1
+  fi
+}
 
 test_file_sha256() {
   if command -v sha256sum >/dev/null 2>&1; then
@@ -272,9 +339,16 @@ test_candidate_stderr_diagnostic
 expect_release_check_match() {
   local status=0 log="$WORK/release-check.log" after
   local manifest="${1:-$WORK/valid manifest.json}"
-  TMPDIR="$WORK/tmp symlink" GITHUB_SHA="$SOURCE_SHA" GITHUB_REPOSITORY=tailrocks/velnor-new \
-    PATH="$STUB_BIN:$ORIGINAL_PATH" VELNOR_TEST_CARGO_MARKER="$MARKER" \
+  : >"$GUARD_RECEIPT"
+  : >"$MISE_RECEIPT"
+  rm -f "$MARKER"
+  env -u CARGO_TARGET_DIR -u CARGO_BUILD_TARGET \
+    TMPDIR="$WORK/tmp symlink" MBX_GC_AUTO=0 GITHUB_SHA="$SOURCE_SHA" GITHUB_REPOSITORY=tailrocks/velnor-new \
+    PATH="$STUB_BIN:$MISE_ADAPTER_BIN:$ORIGINAL_PATH" VELNOR_TEST_CARGO_MARKER="$MARKER" \
     VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
+    VELNOR_TEST_REAL_MISE="$REAL_MISE" VELNOR_TEST_ORIGINAL_PATH="$ORIGINAL_PATH" \
+    VELNOR_TEST_RUST_VERSION="$RUST_VERSION" VELNOR_TEST_CARGO_GUARD="$VELNOR_TEST_CARGO_GUARD" \
+    VELNOR_TEST_MISE_CARGO_PATH="$MISE_CARGO_PATH" VELNOR_TEST_MISE_RECEIPT="$MISE_RECEIPT" \
     "$SCRIPT" check-release "$CLI_BIN" "$manifest" \
       "$(test_file_sha256 "$manifest")" >"$log" 2>&1 || status=$?
   if [ "$status" -ne 0 ] || ! grep -Fq 'ALL RELEASE FIXTURE GOLDENS AND DOGFOOD PARITY MATCH' "$log"; then
@@ -282,6 +356,7 @@ expect_release_check_match() {
     echo "FAIL: valid candidate did not match release fixture goldens (exit $status)" >&2
     exit 1
   fi
+  if ! verify_guard_receipt release-check "$MISE_RECEIPT" "$GUARD_RECEIPT"; then cat "$log" >&2; exit 1; fi
   if [ -e "$MARKER" ]; then echo "FAIL: release qualification invoked cargo build" >&2; exit 1; fi
   after="$(golden_fingerprint)" || exit 2
   if [ "$after" != "$BEFORE" ]; then echo "FAIL: successful release check changed goldens" >&2; exit 1; fi
@@ -507,12 +582,22 @@ if [ "$source_digest" != "$copy_digest" ]; then
 fi
 WORKSPACES_BEFORE="$(find "$WORK/tmp workspace" -mindepth 1 -maxdepth 1 -type d \
   -name 'velnor-goldens-work.*' -print | LC_ALL=C sort)"
+: >"$GUARD_RECEIPT"
+: >"$MISE_RECEIPT"
+rm -f "$MARKER"
 if (
   cd "$WORK" || exit 2
-  TMPDIR="$WORK/tmp workspace" PATH="$STUB_BIN:$ORIGINAL_PATH" \
+  env -u CARGO_TARGET_DIR -u CARGO_BUILD_TARGET \
+    TMPDIR="$WORK/tmp workspace" MBX_GC_AUTO=0 PATH="$STUB_BIN:$MISE_ADAPTER_BIN:$ORIGINAL_PATH" \
     VELNOR_GOLDEN_KEEP_WORK=0 \
     VELNOR_TEST_CARGO_MARKER="$MARKER" \
     VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
+    VELNOR_TEST_REAL_MISE="$REAL_MISE" \
+    VELNOR_TEST_ORIGINAL_PATH="$ORIGINAL_PATH" \
+    VELNOR_TEST_RUST_VERSION="$RUST_VERSION" \
+    VELNOR_TEST_CARGO_GUARD="$VELNOR_TEST_CARGO_GUARD" \
+    VELNOR_TEST_MISE_CARGO_PATH="$MISE_CARGO_PATH" \
+    VELNOR_TEST_MISE_RECEIPT="$MISE_RECEIPT" \
     "$SCRIPT" check "space path/velnor-actions"
 ) >"$WORK/spaced-path.log" 2>&1; then
   cat "$WORK/spaced-path.log"
@@ -526,6 +611,7 @@ if [ -e "$MARKER" ]; then
   echo "FAIL: explicit CLI path invoked the default cargo build" >&2
   exit 1
 fi
+if ! verify_guard_receipt spaced-path "$MISE_RECEIPT" "$GUARD_RECEIPT"; then cat "$WORK/spaced-path.log" >&2; exit 1; fi
 WORKSPACES_AFTER="$(find "$WORK/tmp workspace" -mindepth 1 -maxdepth 1 -type d \
   -name 'velnor-goldens-work.*' -print | LC_ALL=C sort)"
 if [ "$WORKSPACES_AFTER" != "$WORKSPACES_BEFORE" ]; then
