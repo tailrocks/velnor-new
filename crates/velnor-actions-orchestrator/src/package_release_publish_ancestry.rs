@@ -38,10 +38,7 @@ pub(in crate::package_release_publish) fn verify_public_preview_main_ancestry(
     api.verify_preview_repository_identity(repository_id, branch)?;
     let captured_tip = public_protected_tip(api, branch)?;
     for sha in [source_sha, workflow_authority_sha, captured_tip.as_str()] {
-        let commit: Value = api.get_json(&api.route(&format!("commits/{sha}")))?;
-        if commit.get("sha").and_then(Value::as_str) != Some(sha) {
-            return Err(internal("package_public_preview_commit_mismatch"));
-        }
+        verify_commit_identity(api, sha, "package_public_preview_commit_mismatch")?;
     }
     require_ancestor(api, source_sha, workflow_authority_sha)?;
     require_ancestor(api, workflow_authority_sha, &captured_tip)?;
@@ -71,10 +68,7 @@ pub(in crate::package_release_publish) fn verify_public_pull_request_lineage(
     if captured_tip != base_sha {
         return Err(internal("package_public_pr_base_not_current"));
     }
-    let head: Value = api.get_json(&api.route(&format!("commits/{head_sha}")))?;
-    if head.get("sha").and_then(Value::as_str) != Some(head_sha) {
-        return Err(internal("package_public_pr_head_mismatch"));
-    }
+    verify_commit_identity(api, head_sha, "package_public_pr_head_mismatch")?;
     require_ancestor(api, base_sha, head_sha)?;
     if public_protected_tip(api, branch)? != captured_tip {
         return Err(internal("package_public_pr_base_changed"));
@@ -169,10 +163,7 @@ where
     }
 
     for sha in [source_sha, workflow_authority_sha, captured_tip.as_str()] {
-        let commit: Value = api.get_json(&api.route(&format!("commits/{sha}")))?;
-        if commit.get("sha").and_then(Value::as_str) != Some(sha) {
-            return Err(internal("package_publish_preview_commit_mismatch"));
-        }
+        verify_commit_identity(api, sha, "package_publish_preview_commit_mismatch")?;
     }
     require_ancestor(api, source_sha, workflow_authority_sha)?;
     require_ancestor(api, workflow_authority_sha, &captured_tip)?;
@@ -182,6 +173,26 @@ where
         return Err(internal("package_publish_main_ref_changed"));
     }
     Ok(captured_tip)
+}
+
+fn verify_commit_identity(
+    api: &GitHubApi,
+    expected_sha: &str,
+    mismatch: &'static str,
+) -> Result<(), OrchestratorError> {
+    let bytes = api.request_accept(
+        crate::github_authority_read::arguments(&api.route(&format!("commits/{expected_sha}")))?,
+        super::JSON_LIMIT,
+        "application/vnd.github.sha",
+    )?;
+    let identity = bytes.strip_suffix(b"\n").unwrap_or(bytes.as_slice());
+    let identity = std::str::from_utf8(identity)
+        .ok()
+        .filter(|identity| is_lowercase_git_sha(identity));
+    if identity != Some(expected_sha) {
+        return Err(internal(mismatch));
+    }
+    Ok(())
 }
 
 fn require_ancestor(api: &GitHubApi, base: &str, head: &str) -> Result<(), OrchestratorError> {

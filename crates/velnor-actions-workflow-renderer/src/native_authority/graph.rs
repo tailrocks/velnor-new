@@ -275,6 +275,7 @@ impl AuthorityBinding {
             crate::RenderError::InvalidWorkflow(format!("native_authority_graph:{error:?}"))
         })?;
         Ok(Self {
+            check_mise: super::check_mise::CheckMiseSetups::default(),
             policy,
             variants: vec![(graph, None)],
             config: config.clone(),
