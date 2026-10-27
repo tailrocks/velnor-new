@@ -135,61 +135,70 @@ jobs:
         run: |
           set -euo pipefail
           evidence="$RUNNER_TEMP/source-qualification-artifacts"
-          python3 - "$GITHUB_ENV" "$evidence/tool-pins.json" <<'PY'
-          import hashlib
-          import json
-          from pathlib import Path
-          import sys
-          import tomllib
-
-          env_path = Path(sys.argv[1])
-          receipt_path = Path(sys.argv[2])
-          mise_version = Path('.mise-version').read_text().strip()
-          tools = tomllib.loads(Path('mise.toml').read_text())['tools']
-          rust = tools['rust']['version']
-          mbx = tools['mr-boxington']['version']
-          nextest = tools['aqua:nextest-rs/nextest/cargo-nextest']
-          channel = tomllib.loads(Path('rust-toolchain.toml').read_text())['toolchain']['channel']
-          expected = {
-              'mise': '2026.10.20',
-              'rust': '1.99.1',
-              'mr-boxington': '1.28.0',
-              'nextest': '0.9.150',
-          }
-          actual = {
-              'mise': mise_version,
-              'rust': rust,
-              'mr-boxington': mbx,
-              'nextest': nextest,
-          }
-          if actual != expected or channel != rust:
-              raise SystemExit(f'repository tool pin mismatch: actual={actual}, channel={channel}')
-          source_files = [Path('.mise-version'), Path('mise.toml'), Path('rust-toolchain.toml')]
-          receipt = {
-              'versions': actual,
-              'rust_toolchain_channel': channel,
-              'source_sha256': {
-                  str(path): hashlib.sha256(path.read_bytes()).hexdigest()
-                  for path in source_files
+          mise_version="$(cat .mise-version)"
+          rust="$(mise --no-config --no-env --no-hooks config get -f mise.toml tools.rust.version)"
+          mbx="$(mise --no-config --no-env --no-hooks config get -f mise.toml tools.mr-boxington.version)"
+          nextest="$(mise --no-config --no-env --no-hooks config get -f mise.toml 'tools."aqua:nextest-rs/nextest/cargo-nextest"')"
+          jactionlint="$(mise --no-config --no-env --no-hooks config get -f mise.toml tools.jactionlint)"
+          shellcheck="$(mise --no-config --no-env --no-hooks config get -f mise.toml tools.shellcheck)"
+          channel="$(mise --no-config --no-env --no-hooks config get -f rust-toolchain.toml toolchain.channel)"
+          expected_mise=2026.10.20
+          expected_rust=1.99.1
+          expected_mbx=1.28.0
+          expected_nextest=0.9.150
+          expected_jactionlint=2.3.0
+          expected_shellcheck=0.11.0
+          if [ "$mise_version" != "$expected_mise" ] || [ "$rust" != "$expected_rust" ] \
+            || [ "$mbx" != "$expected_mbx" ] || [ "$nextest" != "$expected_nextest" ] \
+            || [ "$jactionlint" != "$expected_jactionlint" ] \
+            || [ "$shellcheck" != "$expected_shellcheck" ] \
+            || [ "$channel" != "$rust" ]; then
+            printf 'repository tool pin mismatch: mise=%s rust=%s mbx=%s nextest=%s jactionlint=%s shellcheck=%s channel=%s\n' \
+              "$mise_version" "$rust" "$mbx" "$nextest" "$jactionlint" "$shellcheck" "$channel" >&2
+            exit 1
+          fi
+          node_version=26.12.0
+          mise --no-config --no-env --no-hooks install "node@$node_version"
+          mise --no-config --no-env --no-hooks exec "node@$node_version" -- node --version \
+            | tee "$evidence/node-version.txt"
+          grep -Fx "v$node_version" "$evidence/node-version.txt"
+          mise --no-config --no-env --no-hooks exec "node@$node_version" -- node - \
+            "$mise_version" "$rust" "$mbx" "$nextest" "$jactionlint" "$shellcheck" \
+            "$channel" "$node_version" "$evidence/tool-pins.json" "$GITHUB_ENV" <<'JS'
+            const fs = require("node:fs");
+            const crypto = require("node:crypto");
+            const [mise, rust, mbx, nextest, jactionlint, shellcheck, channel, node, receiptPath, envPath] = process.argv.slice(2);
+            const files = [".mise-version", "mise.toml", "rust-toolchain.toml"];
+            const source_sha256 = Object.fromEntries(files.map((file) => [
+              file,
+              crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex"),
+            ]));
+            const receipt = {
+              versions: {
+                mise, rust, "mr-boxington": mbx, nextest, jactionlint, shellcheck,
               },
-          }
-          receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + '\n')
-          with env_path.open('a') as stream:
-              stream.write(f"VELNOR_MISE_VERSION={mise_version}\n")
-              stream.write(f"VELNOR_RUST_VERSION={rust}\n")
-              stream.write(f"VELNOR_MBX_VERSION={mbx}\n")
-              stream.write(f"VELNOR_NEXTEST_VERSION={nextest}\n")
-          PY
+              rust_toolchain_channel: channel, node, source_sha256,
+            };
+            fs.writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
+            fs.appendFileSync(envPath,
+              `VELNOR_MISE_VERSION=${mise}\n` +
+              `VELNOR_RUST_VERSION=${rust}\n` +
+              `VELNOR_MBX_VERSION=${mbx}\n` +
+              `VELNOR_NEXTEST_VERSION=${nextest}\n` +
+              `VELNOR_JACTIONLINT_VERSION=${jactionlint}\n` +
+              `VELNOR_SHELLCHECK_VERSION=${shellcheck}\n`);
+          JS
           mise --version | tee "$evidence/mise-version.txt"
           grep -Eq "(^|[[:space:]])2026\.10\.20([[:space:]]|$)" "$evidence/mise-version.txt"
 
-      - name: Install pinned Rust and MBX
+      - name: Install pinned qualification tools
         shell: bash
         run: |
           set -euo pipefail
           evidence="$RUNNER_TEMP/source-qualification-artifacts"
           mise --no-config --no-env --no-hooks install \
             "rust@$VELNOR_RUST_VERSION" "mr-boxington@$VELNOR_MBX_VERSION" \
+            "jactionlint@$VELNOR_JACTIONLINT_VERSION" "shellcheck@$VELNOR_SHELLCHECK_VERSION" \
             >"$evidence/logs/tool-install.log" 2>&1
           cat "$evidence/logs/tool-install.log"
 
@@ -202,9 +211,92 @@ jobs:
             >"$evidence/rustc-version.txt"
           mise --no-config --no-env --no-hooks exec "mr-boxington@$VELNOR_MBX_VERSION" -- mbx --version \
             >"$evidence/mbx-version.txt"
-          cat "$evidence/rustc-version.txt" "$evidence/mbx-version.txt"
+          mise --no-config --no-env --no-hooks exec "jactionlint@$VELNOR_JACTIONLINT_VERSION" -- jactionlint --version \
+            >"$evidence/jactionlint-version.txt"
+          mise --no-config --no-env --no-hooks exec "shellcheck@$VELNOR_SHELLCHECK_VERSION" -- shellcheck --version \
+            >"$evidence/shellcheck-version.txt"
+          mise --no-config --no-env --no-hooks exec node@26.12.0 -- node --version \
+            >"$evidence/node-version.txt"
+          cat "$evidence/rustc-version.txt" "$evidence/mbx-version.txt" \
+            "$evidence/jactionlint-version.txt" "$evidence/shellcheck-version.txt" \
+            "$evidence/node-version.txt"
           grep -F "rustc $VELNOR_RUST_VERSION " "$evidence/rustc-version.txt"
           grep -Eq "(^|[^0-9])$VELNOR_MBX_VERSION([^0-9]|$)" "$evidence/mbx-version.txt"
+          grep -Fx "$VELNOR_JACTIONLINT_VERSION" "$evidence/jactionlint-version.txt"
+          grep -Fx "version: $VELNOR_SHELLCHECK_VERSION" "$evidence/shellcheck-version.txt"
+          grep -Fx "v26.12.0" "$evidence/node-version.txt"
+
+      - name: Prefetch locked sources for qualification workspaces
+        shell: bash
+        run: |
+          set -uo pipefail
+          evidence="$RUNNER_TEMP/source-qualification-artifacts"
+          root="$GITHUB_WORKSPACE"
+          log="$evidence/logs/cargo-prefetch.log"
+          status_file="$evidence/logs/cargo-prefetch.exit"
+          before="$evidence/cargo-fetch-locks.before.txt"
+          after="$evidence/cargo-fetch-locks.after.txt"
+          identity="$evidence/cargo-fetch-lock-identity.txt"
+          manifests=(Cargo.toml crates/velnor-runner/Cargo.toml)
+          locks=(Cargo.lock crates/velnor-runner/Cargo.lock)
+          final_status=0
+          : >"$log"
+          : >"$identity"
+          record_lock_hashes() {
+            local destination="$1" lock digest
+            : >"$destination" || return 1
+            for lock in "${locks[@]}"; do
+              if [ -L "$root/$lock" ] || [ ! -f "$root/$lock" ]; then
+                printf 'invalid lockfile: %s\n' "$lock" >&2
+                return 1
+              fi
+              if ! digest="$(sha256sum -- "$root/$lock" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')" \
+                || [[ ! "$digest" =~ ^[0-9a-f]{64}$ ]]; then
+                printf 'could not calculate lockfile SHA-256: %s\n' "$lock" >&2
+                return 1
+              fi
+              printf '%s  %s\n' "$digest" "$lock" >>"$destination" || return 1
+            done
+          }
+          if ! record_lock_hashes "$before"; then
+            final_status=1
+            printf 'lockfile baseline capture failed\n' >>"$log"
+          else
+            for manifest in "${manifests[@]}"; do
+              if [ -L "$root/$manifest" ] || [ ! -f "$root/$manifest" ]; then
+                printf 'invalid manifest: %s\n' "$manifest" >>"$log"
+                final_status=1
+                continue
+              fi
+              printf 'command=mise --no-config --no-env --no-hooks exec rust@%s -- cargo fetch --locked --manifest-path %s/%s\n' \
+                "$VELNOR_RUST_VERSION" "$root" "$manifest" >>"$log"
+              mise --no-config --no-env --no-hooks exec "rust@$VELNOR_RUST_VERSION" -- \
+                cargo fetch --locked --manifest-path "$root/$manifest" >>"$log" 2>&1
+              command_status=$?
+              printf 'manifest=%s status=%s\n' "$manifest" "$command_status" >>"$log"
+              if [ "$command_status" -ne 0 ]; then final_status=1; fi
+            done
+          fi
+          if ! record_lock_hashes "$after"; then
+            final_status=1
+            printf 'lockfile post-fetch capture failed\n' >>"$log"
+          elif [ -f "$before" ] && ! cmp -s "$before" "$after"; then
+            final_status=1
+            printf 'lockfile hashes changed during cargo fetch\n' >>"$log"
+          fi
+          {
+            printf 'source_head=%s\n' "$GITHUB_SHA"
+            printf 'fetch_scope=root-and-velnor-runner\n'
+            printf 'target_filter=none\n'
+            printf 'locked=true\n'
+            printf 'before_sha256\n'
+            cat "$before"
+            printf 'after_sha256\n'
+            cat "$after"
+          } >"$identity" || final_status=1
+          printf '%s\n' "$final_status" >"$status_file" || exit 1
+          cat "$log"
+          exit "$final_status"
 
       - name: Build runner-native archive guard from this checkout
         shell: bash
@@ -314,7 +406,7 @@ jobs:
             identity_status=1
             printf 'FATAL: successful build did not produce a regular executable CLI at %s\n' "$binary" >&2
           else
-            if ! expected_version="$(python3 -c 'import pathlib,tomllib; print(tomllib.loads(pathlib.Path("Cargo.toml").read_text())["workspace"]["package"]["version"])')"; then
+            if ! expected_version="$(mise --no-config --no-env --no-hooks config get -f Cargo.toml workspace.package.version)"; then
               identity_status=1
               printf 'FATAL: could not read the workspace package version\n' >&2
             fi
@@ -517,6 +609,7 @@ jobs:
           fi
           set +e
           TMPDIR="$RUNNER_TEMP/velnor-source-qualification-tmp" VELNOR_GOLDEN_DIR="$oracle" VELNOR_GOLDEN_KEEP_WORK=0 \
+            mise --no-config --no-env --no-hooks exec node@26.12.0 -- \
             scripts/test-capture-opentofu-goldens-bin.sh "$binary" \
             >"$evidence/logs/external-shell-harness.log" 2>&1
           command_status=$?
@@ -569,7 +662,8 @@ jobs:
           fi
           set +e
           TMPDIR="$RUNNER_TEMP/velnor-source-qualification-tmp" VELNOR_GOLDEN_DIR="$oracle" \
-            VELNOR_GOLDEN_KEEP_WORK=1 scripts/test-capture-opentofu-goldens-bin.sh "$binary" \
+            VELNOR_GOLDEN_KEEP_WORK=1 mise --no-config --no-env --no-hooks exec node@26.12.0 -- \
+            scripts/test-capture-opentofu-goldens-bin.sh "$binary" \
             >"$evidence/logs/$name.log" 2>&1
           command_status=$?
           artifact_status=0
@@ -809,96 +903,106 @@ jobs:
           second_status=$?
           printf '%s\n' "$second_status" >"$evidence/logs/root-preview-2.exit"
           cat "$evidence/logs/root-preview-1.log" "$evidence/logs/root-preview-2.log"
-          python3 - "$GITHUB_WORKSPACE/.github" "$preview_root/generated-1/.github" \
+          mise --no-config --no-env --no-hooks exec node@26.12.0 -- node - \
+            "$GITHUB_WORKSPACE/.github" "$preview_root/generated-1/.github" \
             "$preview_root/generated-2/.github" "$evidence/previews" \
-            >"$evidence/logs/root-preview-identity.log" 2>&1 <<'PY'
-          import difflib
-          import hashlib
-          import json
-          import os
-          from pathlib import Path
-          import stat
-          import sys
+            >"$evidence/logs/root-preview-identity.log" 2>&1 <<'JS'
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const crypto = require("node:crypto");
 
-          root, first, second, output = map(Path, sys.argv[1:])
-          output.mkdir(parents=True, exist_ok=True)
-
-          def inventory(base):
-              if base.is_symlink() or not base.is_dir():
-                  return None
-              rows = []
-
-              def walk(directory, prefix=''):
-                  for entry in sorted(os.scandir(directory), key=lambda item: item.name):
-                      rel = f'{prefix}/{entry.name}' if prefix else entry.name
-                      path = Path(entry.path)
-                      mode = stat.S_IMODE(path.lstat().st_mode)
-                      if entry.is_symlink():
-                          rows.append({'path': rel, 'type': 'symlink', 'mode': mode,
-                                       'target': os.readlink(path)})
-                      elif entry.is_dir(follow_symlinks=False):
-                          rows.append({'path': rel, 'type': 'directory', 'mode': mode})
-                          walk(path, rel)
-                      elif entry.is_file(follow_symlinks=False):
-                          digest = hashlib.sha256(path.read_bytes()).hexdigest()
-                          rows.append({'path': rel, 'type': 'file', 'mode': mode,
-                                       'sha256': digest})
-                      else:
-                          rows.append({'path': rel, 'type': 'special', 'mode': mode})
-
-              walk(base)
-              return rows
-
-          inventories = {
-              'repository_github': inventory(root),
-              'generated_preview_1_github': inventory(first),
-              'generated_preview_2_github': inventory(second),
+          const [root, first, second, output] = process.argv.slice(2);
+          fs.mkdirSync(output, { recursive: true });
+          const sortJson = (value) => {
+            if (Array.isArray(value)) return value.map(sortJson);
+            if (value !== null && typeof value === "object") {
+              return Object.fromEntries(Object.keys(value).sort().map((key) => [key, sortJson(value[key])]));
+            }
+            return value;
+          };
+          const inventory = (base) => {
+            let rootStat;
+            try {
+              rootStat = fs.lstatSync(base);
+            } catch (error) {
+              if (error.code === "ENOENT") return null;
+              throw error;
+            }
+            if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) return null;
+            const rows = [];
+            const walk = (directory, prefix = "") => {
+              const names = fs.readdirSync(directory).sort((left, right) =>
+                Buffer.compare(Buffer.from(left), Buffer.from(right)));
+              for (const name of names) {
+                const relative = prefix ? `${prefix}/${name}` : name;
+                const entryPath = path.join(directory, name);
+                const info = fs.lstatSync(entryPath);
+                const mode = info.mode & 0o7777;
+                if (info.isSymbolicLink()) {
+                  rows.push({ path: relative, type: "symlink", mode, target: fs.readlinkSync(entryPath) });
+                } else if (info.isDirectory()) {
+                  rows.push({ path: relative, type: "directory", mode });
+                  walk(entryPath, relative);
+                } else if (info.isFile()) {
+                  const sha256 = crypto.createHash("sha256").update(fs.readFileSync(entryPath)).digest("hex");
+                  rows.push({ path: relative, type: "file", mode, sha256 });
+                } else {
+                  rows.push({ path: relative, type: "special", mode });
+                }
+              }
+            };
+            walk(base);
+            return rows;
+          };
+          const inventories = {
+            repository_github: inventory(root),
+            generated_preview_1_github: inventory(first),
+            generated_preview_2_github: inventory(second),
+          };
+          fs.writeFileSync(path.join(output, "github-identities.json"),
+            `${JSON.stringify(sortJson(inventories), null, 2)}\n`);
+          if (Object.values(inventories).some((rows) => rows === null)) {
+            process.stderr.write("missing or invalid .github tree\n");
+            process.exitCode = 1;
           }
-          (output / 'github-identities.json').write_text(
-              json.dumps(inventories, indent=2, sort_keys=True) + '\n')
-          failed = False
-          for left_name, right_name, filename in (
-              ('repository_github', 'generated_preview_1_github', 'repository-vs-preview.diff'),
-              ('generated_preview_1_github', 'generated_preview_2_github', 'preview-idempotence.diff'),
-          ):
-              left = inventories[left_name]
-              right = inventories[right_name]
-              if left is None or right is None:
-                  failed = True
-                  diff = [f'missing tree: {left_name} or {right_name}\n']
-              else:
-                  left_lines = json.dumps(left, indent=2, sort_keys=True).splitlines(keepends=True)
-                  right_lines = json.dumps(right, indent=2, sort_keys=True).splitlines(keepends=True)
-                  diff = list(difflib.unified_diff(left_lines, right_lines,
-                                                  fromfile=left_name, tofile=right_name))
-                  if diff:
-                      failed = True
-              (output / filename).write_text(''.join(diff))
-          if first_status := int(Path(str(output.parent / 'logs/root-preview-1.exit')).read_text()):
-              failed = True
-          if second_status := int(Path(str(output.parent / 'logs/root-preview-2.exit')).read_text()):
-              failed = True
-          raise SystemExit(1 if failed else 0)
-          PY
+          JS
           identity_status=$?
+          set +e
+          jq -S '.repository_github' "$evidence/previews/github-identities.json" \
+            >"$evidence/previews/repository-github.json" || identity_status=1
+          jq -S '.generated_preview_1_github' "$evidence/previews/github-identities.json" \
+            >"$evidence/previews/generated-preview-1-github.json" || identity_status=1
+          jq -S '.generated_preview_2_github' "$evidence/previews/github-identities.json" \
+            >"$evidence/previews/generated-preview-2-github.json" || identity_status=1
+          diff -u --label repository_github --label generated_preview_1_github \
+            "$evidence/previews/repository-github.json" "$evidence/previews/generated-preview-1-github.json" \
+            >"$evidence/previews/repository-vs-preview.diff"
+          first_raw_diff_status=$?
+          diff -u --label generated_preview_1_github --label generated_preview_2_github \
+            "$evidence/previews/generated-preview-1-github.json" "$evidence/previews/generated-preview-2-github.json" \
+            >"$evidence/previews/preview-idempotence.diff"
+          second_raw_diff_status=$?
           diff -ruN "$GITHUB_WORKSPACE/.github" "$preview_root/generated-1/.github" \
             >"$evidence/previews/repository-vs-preview.raw.diff" 2>&1
-          first_raw_diff_status=$?
+          first_content_diff_status=$?
           diff -ruN "$preview_root/generated-1/.github" "$preview_root/generated-2/.github" \
             >"$evidence/previews/preview-idempotence.raw.diff" 2>&1
-          second_raw_diff_status=$?
+          second_content_diff_status=$?
           printf 'repository_preview_diff_status=%s\npreview_idempotence_diff_status=%s\n' \
-            "$first_raw_diff_status" "$second_raw_diff_status" >"$evidence/previews/raw-diff-status.txt"
+            "$first_content_diff_status" "$second_content_diff_status" >"$evidence/previews/raw-diff-status.txt"
+          printf 'repository_preview_diff_status=%s\npreview_idempotence_diff_status=%s\n' \
+            "$first_raw_diff_status" "$second_raw_diff_status" >"$evidence/previews/diff-status.txt"
           cat "$evidence/logs/root-preview-identity.log"
           if [ "$first_status" -ne 0 ] || [ "$second_status" -ne 0 ] \
-            || [ "$identity_status" -ne 0 ] || [ "$first_raw_diff_status" -gt 1 ] \
-            || [ "$second_raw_diff_status" -gt 1 ]; then
-            printf 'generate_statuses=%s,%s identity_status=%s raw_diff_statuses=%s,%s\n' \
+            || [ "$identity_status" -ne 0 ] || [ "$first_raw_diff_status" -ne 0 ] \
+            || [ "$second_raw_diff_status" -ne 0 ] \
+            || [ "$first_content_diff_status" -gt 1 ] || [ "$second_content_diff_status" -gt 1 ]; then
+            printf 'generate_statuses=%s,%s identity_status=%s diff_statuses=%s,%s\n' \
               "$first_status" "$second_status" "$identity_status" \
               "$first_raw_diff_status" "$second_raw_diff_status" >"$evidence/logs/root-preview.exit"
             exit 1
           fi
-          printf 'generate_statuses=0,0 identity_status=0 raw_diff_statuses=%s,%s\n' \
+          printf 'generate_statuses=0,0 identity_status=0 diff_statuses=%s,%s\n' \
             "$first_raw_diff_status" "$second_raw_diff_status" >"$evidence/logs/root-preview.exit"
 
       - name: Check source output against checked-in repository goldens
@@ -977,7 +1081,7 @@ jobs:
           evidence="$RUNNER_TEMP/source-qualification-artifacts"
           archive="$evidence/source-qualification-preserved.tar.gz"
           final_status=0
-          for name in archive-guard-build cli-build external-capture external-check \
+          for name in cargo-prefetch archive-guard-build cli-build external-capture external-check \
             external-shell-harness external-shell-harness-keep external-shell-harness-json-proof \
             repository-oracle-check; do
             status_file="$evidence/logs/$name.exit"
@@ -987,7 +1091,7 @@ jobs:
             fi
           done
           if [ ! -f "$evidence/logs/root-preview.exit" ] \
-            || ! grep -Eq '^generate_statuses=0,0 identity_status=0 raw_diff_statuses=[01],[01]$' \
+            || ! grep -Fxq 'generate_statuses=0,0 identity_status=0 diff_statuses=0,0' \
               "$evidence/logs/root-preview.exit"; then
             final_status=1
           fi
@@ -1000,7 +1104,8 @@ jobs:
             external-shell-harness-json-proof.receipt.txt external-shell-harness-keep-json-proof.receipt.txt \
             archive-guard-identity.txt qualification-final-status.txt \
             checkout-status.txt source-identity.txt source-inputs.sha256 build-environment.txt \
-            tool-pins.json mise-version.txt rustc-version.txt mbx-version.txt cli-identity.txt; do
+            tool-pins.json cargo-fetch-lock-identity.txt mise-version.txt rustc-version.txt \
+            mbx-version.txt jactionlint-version.txt shellcheck-version.txt node-version.txt cli-identity.txt; do
             if [ -e "$evidence/$path" ] || [ -L "$evidence/$path" ]; then
               paths+=("$path")
             fi
