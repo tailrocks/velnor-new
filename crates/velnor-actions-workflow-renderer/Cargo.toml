@@ -37,6 +37,10 @@ velnor-actions-mise = { version = "=0.1.58", path = "../velnor-actions-mise" }
 name = "generator_release_prepare_public"
 path = "tests/generator_release_prepare_public.rs"
 
+[[test]]
+name = "product_release_binary_public"
+path = "tests/product_release_binary_public.rs"
+
 [lints]
 workspace = true
 
