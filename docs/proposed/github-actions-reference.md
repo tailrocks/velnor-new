@@ -406,3 +406,17 @@ Checked against [GitHub's mergeability guidance](https://docs.github.com/en/rest
 A REST pull-request GET starts asynchronous calculation of the test merge commit. GitHub requires polling that endpoint until `mergeable` is `true` or `false` before reading the merge reference. Two equal reference observations while `mergeable` is null do not establish freshness.
 
 Velnor bounds this polling by attempts and the existing public-operation deadline. Each response must retain the original pull-request identity, repository identities, base and head, state, draft status, and merge status. After calculation finishes, Velnor retains the exact-reference checks, ordered base/head parent checks, and unchanged-reference recheck. The merge reference does not replace the independently verified pull-request context.
+
+## Private Bun artifact admission (2026-10-27)
+
+GitHub documents that authenticated users with repository read access can
+download workflow artifacts. Artifact retention does not restrict that audience.
+A public consuming repository therefore cannot receive a plaintext private-asset
+handoff. Source: [Downloading workflow artifacts](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts).
+
+The generated native admission step uses the current
+`GET /repos/{owner}/{repo}` response rather than trigger-time event visibility.
+It requires matching identity, Boolean private status and private visibility.
+The existing bounded native GitHub transport supplies fixed-origin HTTPS,
+workflow-token authentication and a deadline. Source:
+[Get a repository](https://docs.github.com/en/rest/repos/repos?apiVersion=2026-03-10#get-a-repository).

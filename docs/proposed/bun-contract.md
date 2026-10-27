@@ -175,18 +175,26 @@ consuming repository after its first publish; there is no API for it.
 
 ### Private release assets
 
-A member job in a repository whose `.velnor/deps.lock` pins release assets
-(documentation-portal, platform) starts with the HD-7 block: the staged helper,
-then the mint, fetch and revoke steps for the `release-assets` repositories
-(see the [private sources contract](private-sources-contract.md)). Everything
-else follows the block, so the App token is dead before `bun install`, the
-lifecycle scripts and every script step. A job with both release assets and
-npm scopes holds both credentials in disjoint, ordered steps: the App token
-(revoked) and then the `github.token` registry phase. Maven bundles are not Bun
-inputs. The `velnor-deps` GitHub App exists (id 5394413, installed on the 17
-producer repositories with `contents:read` and `metadata:read`); the
-organization variable `VELNOR_DEPS_APP_ID` and secret
-`VELNOR_DEPS_APP_PRIVATE_KEY` are set.
+A repository whose `.velnor/deps.lock` pins release assets has one hosted
+producer per Bun member, including members without browser suites. The producer
+owns the staged helper and the mint, fetch and revoke steps for the
+`release-assets` repositories. Member, suite and report jobs never receive the
+App private key or copy that credential block. They depend on the producer and
+import its same-run verified archive before tool setup or repository execution.
+The [private sources contract](private-sources-contract.md) defines the bounded
+archive, inventory and pinned release-asset integrity checks.
+
+Native current-repository checks must admit a private destination before token
+acquisition and immediately before artifact upload. Failed admission, fetch,
+revocation or verification fails the producer and prevents consumer execution.
+Producer overrides must select the designated hosted profile; a consumer's
+ScaleSet placement does not move its producer onto that runner.
+
+A member with both release assets and npm scopes imports the verified assets
+before its separate registry phase. Maven bundles are not Bun inputs. The
+`velnor-deps` GitHub App exists (id 5394413, installed on the 17 producer
+repositories with `contents:read` and `metadata:read`); the organization variable
+`VELNOR_DEPS_APP_ID` and secret `VELNOR_DEPS_APP_PRIVATE_KEY` are set.
 
 ## Affected selection (hard decision 3)
 

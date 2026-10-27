@@ -10,14 +10,14 @@ use std::process::ExitCode;
 use velnor_actions_orchestrator::{
     ACQUIRE_PREVIEW_SOURCE_OP, ACQUIRE_RELEASE_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP,
     ADMIT_RELEASE_AGGREGATE_OP, ADMIT_STABLE_TAG_ORIGIN_OP, BUN_ASSETS_EXPORT_OP,
-    BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP, BUN_REGISTRY_INSTALL_OP,
-    CAPTURE_REVIEW_COMPLETION_OP, DYNAMIC_MATRIX_OUTPUT_MODE, EMIT_REVIEW_COMPLETION_OP,
-    EXECUTE_CHECK_OP, EXECUTE_RELEASE_PRODUCER_OP, FETCH_OP, FINALIZE_PREVIEW_SOURCE_OP,
-    GITHUB_EVIDENCE_FETCH_OP, GITHUB_EVIDENCE_IMPORT_OP, GRADLE_RUN_OP, MERGE_HOMEBREW_TAP_PR_OP,
-    MERGE_OP, OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PLAYWRIGHT_INSTALL_OP,
-    PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PRIVATE_FETCH_OP, PRIVATE_REVOKE_OP,
-    PUBLISH_PACKAGE_RELEASE_OP, PlanOutputMode, RECOVER_PACKAGE_RELEASE_OP, REPORT_OP,
-    REQUEST_FILE_ENV, SELECT_PREVIEW_SOURCE_OP, SELECT_RELEASE_TAP_CONTINUATION_OP,
+    BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP, BUN_ASSETS_REPOSITORY_CHECK_OP,
+    BUN_REGISTRY_INSTALL_OP, CAPTURE_REVIEW_COMPLETION_OP, DYNAMIC_MATRIX_OUTPUT_MODE,
+    EMIT_REVIEW_COMPLETION_OP, EXECUTE_CHECK_OP, EXECUTE_RELEASE_PRODUCER_OP, FETCH_OP,
+    FINALIZE_PREVIEW_SOURCE_OP, GITHUB_EVIDENCE_FETCH_OP, GITHUB_EVIDENCE_IMPORT_OP, GRADLE_RUN_OP,
+    MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP, OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP,
+    PLAYWRIGHT_INSTALL_OP, PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PRIVATE_FETCH_OP,
+    PRIVATE_REVOKE_OP, PUBLISH_PACKAGE_RELEASE_OP, PlanOutputMode, RECOVER_PACKAGE_RELEASE_OP,
+    REPORT_OP, REQUEST_FILE_ENV, SELECT_PREVIEW_SOURCE_OP, SELECT_RELEASE_TAP_CONTINUATION_OP,
     SELECT_STABLE_RELEASE_SOURCE_OP, SIGN_PACKAGE_RELEASE_OP, TASK_EXECUTION_RESOLVER_OP,
     WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP, WRITE_STABLE_TAG_INTENT_OP,
     WRITE_STABLE_TAG_ORIGIN_OP, execute_check, merge_internal, merge_passed, plan_internal,
@@ -96,16 +96,8 @@ fn gate_file_request(op: InternalOp, path: PathBuf) -> Option<InternalRequest> {
         InternalOp::CaptureReviewCompletion | InternalOp::EmitReviewCompletion => {
             return review_completion::gate_request(&path).map(|path| InternalRequest { op, path });
         }
-        InternalOp::WriteRequest => {
-            if !request_can_be_materialized(&path) {
-                return None;
-            }
-        }
-        InternalOp::Plan | InternalOp::Merge => {
-            if !path.is_file() {
-                return None;
-            }
-        }
+        InternalOp::WriteRequest if !request_can_be_materialized(&path) => return None,
+        InternalOp::Plan | InternalOp::Merge if !path.is_file() => return None,
         InternalOp::ExecuteReleaseProducer => {
             return package_release::gate_producer_request(&path)
                 .map(|path| InternalRequest { op, path });
@@ -148,11 +140,15 @@ fn gate_file_request(op: InternalOp, path: PathBuf) -> Option<InternalRequest> {
         InternalOp::TapMerge => {
             return tap_merge::gate_request(&path).map(|path| InternalRequest { op, path });
         }
-        InternalOp::Fetch
+        InternalOp::WriteRequest
+        | InternalOp::Plan
+        | InternalOp::Merge
+        | InternalOp::Fetch
         | InternalOp::Report
         | InternalOp::GitHubEvidenceFetch
         | InternalOp::GitHubEvidenceImport
         | InternalOp::BunRegistryInstall
+        | InternalOp::BunAssetsRepositoryCheck
         | InternalOp::BunAssetsExport
         | InternalOp::BunAssetsPrepare
         | InternalOp::BunAssetsImport
@@ -237,7 +233,8 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::PrivateFetch => unit_exit(run_private_fetch()),
         InternalOp::PrivateRevoke => unit_exit(run_private_revoke()),
         InternalOp::PreseedManifest => unit_exit(write_preseed_manifest()),
-        InternalOp::BunAssetsExport
+        InternalOp::BunAssetsRepositoryCheck
+        | InternalOp::BunAssetsExport
         | InternalOp::BunAssetsPrepare
         | InternalOp::BunAssetsImport => ExitCode::FAILURE,
         InternalOp::RepoPolicy => crate::dispatch_repo_policy::run(&request.path),
