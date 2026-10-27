@@ -1,0 +1,2445 @@
+{
+ "schema": 1,
+ "task": "T02",
+ "observation_date": "2026-10-26T07:31:15Z",
+ "auth": {
+  "tool": "gh api",
+  "account": "donbeave",
+  "result": "authenticated; all 9 inventory+usage reads HTTP 200; storage-limit and retention-limit HTTP 402 (no payment method on file)"
+ },
+ "connector_route_note": "EVIDENCE.md (2026-10-25) records cache inventory/usage/settings requests failing through the plan connector route with HTTP 400 (endpoint allowlist, not a permission denial). That finding is unchanged. This file records a new direct `gh api` observation on 2026-10-26, which succeeds for inventory and usage.",
+ "scope_exclusion_note": "Listed entry sizes are stored-archive sizes per entry. Raw-directory export displays from run logs are NOT used as stored bytes anywhere.",
+ "fleet_active_caches_size_sum_bytes": 49198076569,
+ "repositories": [
+  {
+   "repository": "jackin-project/jackin",
+   "inventory_endpoint": "repos/jackin-project/jackin/actions/caches?per_page=100",
+   "inventory_pages_fetched": 1,
+   "inventory_page_truncated": false,
+   "total_count": 63,
+   "entries_returned": 63,
+   "listed_size_sum_bytes": 10727864905,
+   "usage_endpoint": "repos/jackin-project/jackin/actions/cache/usage",
+   "active_caches_size_in_bytes": 10727864905,
+   "active_caches_count": 61,
+   "storage_limit_endpoint": "repos/jackin-project/jackin/actions/cache/storage-limit",
+   "storage_limit_bytes": null,
+   "storage_limit_unknown_reason": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+   "retention_limit_endpoint": "repos/jackin-project/jackin/actions/cache/retention-limit",
+   "retention_limit_days": null,
+   "retention_limit_unknown_reason": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+   "family_breakdown": [
+    {
+     "key_prefix": "mise-tools",
+     "count": 12,
+     "bytes": 3380016111
+    },
+    {
+     "key_prefix": "velnor-v2",
+     "count": 51,
+     "bytes": 7347848794
+    }
+   ],
+   "entries": [
+    {
+     "id": 9486675958,
+     "ref": "refs/heads/main",
+     "key": "velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-a912c2cf47f832ca87ef58e2ae69f3fd10e1a9c85cb181f655867fc2f4a77b90",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-26T07:31:27.447455Z",
+     "created_at": "2026-10-25T18:58:56.433193Z",
+     "size_in_bytes": 145340199
+    },
+    {
+     "id": 9413728559,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-38db0a3c6aab07112aac9aad8fe5691d559ee1f60a59fb29a3a1a06109149189",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-26T07:31:24.534273Z",
+     "created_at": "2026-10-23T17:28:01.491699Z",
+     "size_in_bytes": 360086180
+    },
+    {
+     "id": 9413369159,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-67f75e62d709721284ca18514e2d4e573b387ced2eb34374e25e07fde6ba62cf",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-26T07:27:55.992039Z",
+     "created_at": "2026-10-23T17:20:04.336101Z",
+     "size_in_bytes": 353274256
+    },
+    {
+     "id": 9413323907,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-1e5e01ec6918ef4e0ce785d62c763c7b1f7656a21405e2fca2d8a5b16838b603",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-26T07:27:53.616621Z",
+     "created_at": "2026-10-23T17:19:03.229191Z",
+     "size_in_bytes": 66329675
+    },
+    {
+     "id": 9506061986,
+     "ref": "refs/pull/1231/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-955fbe30e6873fe322437b18eb7c1d9cbd36bb67abe1fa122ed7b81e57bf8588",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-26T07:17:56.798339Z",
+     "created_at": "2026-10-26T07:12:01.636027Z",
+     "size_in_bytes": 145339919
+    },
+    {
+     "id": 9505164186,
+     "ref": "refs/pull/1231/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-be64bac13e4bbcd84401c2175e0710b78689f8427a1f1ea59e4ee492ba4a5ef6",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-26T06:50:44.028968Z",
+     "created_at": "2026-10-26T06:44:44.010691Z",
+     "size_in_bytes": 145337776
+    },
+    {
+     "id": 9493887095,
+     "ref": "refs/pull/1230/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-2859e8a9142536eead022f4f3b4ea27adc9e0bb394682e5e1c8970ac144d0d6f",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-26T06:00:06.493697Z",
+     "created_at": "2026-10-25T23:51:31.959959Z",
+     "size_in_bytes": 147949503
+    },
+    {
+     "id": 9503320414,
+     "ref": "refs/pull/1231/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-65f6105db0c41bcdc5fe759beae2eebb31ba36a1fe8b15be604f813062d8752c",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-26T05:55:14.512166Z",
+     "created_at": "2026-10-26T05:47:27.730104Z",
+     "size_in_bytes": 145340995
+    },
+    {
+     "id": 9501983679,
+     "ref": "refs/pull/1231/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-afb094f135f96ea1c29f0a85bc69ff0455ee3a3ed831e76feeb86128e057d1bd",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-26T05:28:11.069527Z",
+     "created_at": "2026-10-26T05:00:25.639051Z",
+     "size_in_bytes": 145340750
+    },
+    {
+     "id": 9501074914,
+     "ref": "refs/pull/1231/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-ea575aa99a269f9803b2223749c7ece5e3f020ca693259dc6ed5233e7a0c6df1",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-26T04:52:26.822942Z",
+     "created_at": "2026-10-26T04:26:59.569667Z",
+     "size_in_bytes": 145339101
+    },
+    {
+     "id": 9497102529,
+     "ref": "refs/pull/1231/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-1d4f784fc2bd716e42c7f14e29fb4edb3167264557198301d52c410f22476da0",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-26T03:59:11.042043Z",
+     "created_at": "2026-10-26T01:59:33.507517Z",
+     "size_in_bytes": 145338659
+    },
+    {
+     "id": 9494381257,
+     "ref": "refs/pull/1231/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-65032b0093ee654b5ee632149149682abf689dae1a6dd81299ede0c8ebbccc35",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-26T00:59:20.859084Z",
+     "created_at": "2026-10-26T00:13:37.331719Z",
+     "size_in_bytes": 145340996
+    },
+    {
+     "id": 9413786606,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-109f3588ab14530e7e54ba16e8c70e49b383459273d5ed4119e16cf094e94e90",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-26T00:10:39.310792Z",
+     "created_at": "2026-10-23T17:29:19.792867Z",
+     "size_in_bytes": 349575754
+    },
+    {
+     "id": 9492086451,
+     "ref": "refs/pull/1230/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-e6492f94f0c24e4033bdb64e0aa70c39c2651f2aa085b27f11c7651e34f9539e",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-25T23:33:20.385240Z",
+     "created_at": "2026-10-25T22:32:33.330923Z",
+     "size_in_bytes": 147923034
+    },
+    {
+     "id": 9490715127,
+     "ref": "refs/pull/1231/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-6d74d6a795bfe1ba071aeeedcf108b6719f0d3d5ee427ac8ce1fcfab7109025a",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-25T22:35:46.992640Z",
+     "created_at": "2026-10-25T21:37:24.366670Z",
+     "size_in_bytes": 145338661
+    },
+    {
+     "id": 9487406116,
+     "ref": "refs/pull/1230/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-05fc25340a420025e033d1064cca395365a16a05ee21b7fd4eb2df67892feafb",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-25T22:07:02.174121Z",
+     "created_at": "2026-10-25T19:27:53.497242Z",
+     "size_in_bytes": 147947756
+    },
+    {
+     "id": 9487885205,
+     "ref": "refs/pull/1231/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-f9e88c6daada4664f5d8e0b648e474474ed935930081f91a017646de71b7ac31",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-25T21:22:11.084805Z",
+     "created_at": "2026-10-25T19:46:15.964782Z",
+     "size_in_bytes": 145341026
+    },
+    {
+     "id": 9485168650,
+     "ref": "refs/pull/1230/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-45ac6373b45bb8be5bec5c08f654491551429d83b819c6efa8ed6bb5c506d2a1",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-25T19:14:43.499398Z",
+     "created_at": "2026-10-25T17:59:35.503088Z",
+     "size_in_bytes": 147923199
+    },
+    {
+     "id": 9483075506,
+     "ref": "refs/heads/main",
+     "key": "velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-a7d283831b305486d0c32aa10af7888ae56d085671d9f46502ec497c872dbb57",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-25T19:09:45.459835Z",
+     "created_at": "2026-10-25T16:38:57.895512Z",
+     "size_in_bytes": 145340047
+    },
+    {
+     "id": 9485734727,
+     "ref": "refs/pull/1227/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-a912c2cf47f832ca87ef58e2ae69f3fd10e1a9c85cb181f655867fc2f4a77b90",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-25T18:41:31.123056Z",
+     "created_at": "2026-10-25T18:22:03.755211Z",
+     "size_in_bytes": 145342150
+    },
+    {
+     "id": 9484564451,
+     "ref": "refs/pull/1230/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-9fcb3322d7ee69e890d75e97fb72e5247c0004cfd2ad8ed6f789c6927617d90c",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-25T17:56:31.779948Z",
+     "created_at": "2026-10-25T17:35:36.552960Z",
+     "size_in_bytes": 147863131
+    },
+    {
+     "id": 9473108960,
+     "ref": "refs/heads/main",
+     "key": "velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-1072dcc298454708b1d29f8e3af0b148a81a764dfc8d780d2b82c70c593898fb",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-25T16:38:35.812406Z",
+     "created_at": "2026-10-25T09:45:45.255785Z",
+     "size_in_bytes": 145340116
+    },
+    {
+     "id": 9482553265,
+     "ref": "refs/pull/1230/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-01217e62b9318a9de7b66016594f6d1928cb2af108f9e79aecb2a75022a4a389",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-25T16:35:33.669669Z",
+     "created_at": "2026-10-25T16:18:44.579680Z",
+     "size_in_bytes": 147839996
+    },
+    {
+     "id": 9481606410,
+     "ref": "refs/pull/1229/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-a7d283831b305486d0c32aa10af7888ae56d085671d9f46502ec497c872dbb57",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-25T16:14:25.233382Z",
+     "created_at": "2026-10-25T15:41:08.147485Z",
+     "size_in_bytes": 145339593
+    },
+    {
+     "id": 9476256292,
+     "ref": "refs/pull/1227/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-702d75e512757f70366a48ffe8b25eaa3e807c705ec7f90cf866b328296e4bcb",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-25T12:23:55.569897Z",
+     "created_at": "2026-10-25T12:07:38.733646Z",
+     "size_in_bytes": 145341540
+    },
+    {
+     "id": 9471153240,
+     "ref": "refs/pull/1226/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-1072dcc298454708b1d29f8e3af0b148a81a764dfc8d780d2b82c70c593898fb",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-25T09:10:36.370670Z",
+     "created_at": "2026-10-25T08:22:45.617653Z",
+     "size_in_bytes": 145340373
+    },
+    {
+     "id": 9456992786,
+     "ref": "refs/pull/1214/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-c8c3943a78f56cbc1be853be2ea2f2c9abfef860ab8f32e0dbc4cba9444563a1",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-24T22:10:56.182502Z",
+     "created_at": "2026-10-24T20:22:10.582142Z",
+     "size_in_bytes": 145339212
+    },
+    {
+     "id": 9439727743,
+     "ref": "refs/pull/1203/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-b93d525cc5f4a6c7a4be7e6753b0f189d61e56cb23d4432d3013676bd53285fc",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-24T08:32:23.469708Z",
+     "created_at": "2026-10-24T08:27:41.177354Z",
+     "size_in_bytes": 145341933
+    },
+    {
+     "id": 9436157164,
+     "ref": "refs/pull/1203/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-42ca998ad324b3c7d0d685e7bc1606d384ab0d0045527a9ab6b610a5509e3884",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-24T08:25:55.854399Z",
+     "created_at": "2026-10-24T05:43:34.045308Z",
+     "size_in_bytes": 145160672
+    },
+    {
+     "id": 9435892638,
+     "ref": "refs/pull/1202/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-5dc35e1b319f32bf95bc4326935fbec8d9413c00d8a605bab850c83cd7fe35b6",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-24T07:39:53.892877Z",
+     "created_at": "2026-10-24T05:29:24.305946Z",
+     "size_in_bytes": 144718326
+    },
+    {
+     "id": 9431241761,
+     "ref": "refs/pull/1200/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-312884c3c9235aaaae52f118e5e22e834de6b8199d9984984058490afe731b25",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-24T02:19:46.502132Z",
+     "created_at": "2026-10-24T01:40:46.643424Z",
+     "size_in_bytes": 144715785
+    },
+    {
+     "id": 9428405915,
+     "ref": "refs/pull/1201/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-bf65ac968988aba4630071781e12d78e19e4355c1a16b1f7c8eb8e04677a3fbb",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-24T00:55:26.792308Z",
+     "created_at": "2026-10-23T23:48:50.706386Z",
+     "size_in_bytes": 144718820
+    },
+    {
+     "id": 9428293843,
+     "ref": "refs/pull/1200/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-5e7c6b68a80a5e967ec3b472b5e35b2654634ed08fa3ffe4683fff8b661956c7",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-23T23:48:17.939680Z",
+     "created_at": "2026-10-23T23:44:40.357745Z",
+     "size_in_bytes": 144718045
+    },
+    {
+     "id": 9424548410,
+     "ref": "refs/pull/1193/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-5649078ced8c8bfa46b71928cd6665593013e318b98955698beac897318a3652",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-23T22:18:52.697267Z",
+     "created_at": "2026-10-23T21:47:18.051741Z",
+     "size_in_bytes": 144717134
+    },
+    {
+     "id": 9421860656,
+     "ref": "refs/pull/1198/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-6ae1cb089ba566d66a575770b996dee0ad93462d6e142794f3cbf80cc89e911b",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-23T20:43:50.409917Z",
+     "created_at": "2026-10-23T20:38:18.732246Z",
+     "size_in_bytes": 144613324
+    },
+    {
+     "id": 9417863720,
+     "ref": "refs/pull/1193/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-7aa8f16042a29d1c05513e1240bb0b9bd299eeb3364640e136405792695a7135",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-23T19:39:47.789312Z",
+     "created_at": "2026-10-23T19:02:15.339364Z",
+     "size_in_bytes": 144035470
+    },
+    {
+     "id": 9363740963,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-60ffe74b07a2abccea04f9edd1cb5182b87eb83cb5252b861149f4f486085667",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T17:07:20.528063Z",
+     "created_at": "2026-10-22T20:16:23.794084Z",
+     "size_in_bytes": 358853214
+    },
+    {
+     "id": 9363337871,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-01fe00daf763bc32194fba0a67a3d18dbea33609858eff5ef4085ed2320dbfff",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T17:03:54.837582Z",
+     "created_at": "2026-10-22T20:08:11.100871Z",
+     "size_in_bytes": 352650479
+    },
+    {
+     "id": 9363273338,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-47b780117aa4ede3408349bc01d970a91c1cb3e2ee66718361244f288361d78f",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T17:03:51.388543Z",
+     "created_at": "2026-10-22T20:06:56.608508Z",
+     "size_in_bytes": 64915151
+    },
+    {
+     "id": 9412233755,
+     "ref": "refs/pull/1194/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-0c68877b97360214ee03c37fd13f2147acbb318982c027c185868cffad00ca0f",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-23T17:00:42.898126Z",
+     "created_at": "2026-10-23T16:55:41.498068Z",
+     "size_in_bytes": 143910436
+    },
+    {
+     "id": 9410968750,
+     "ref": "refs/pull/1193/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-8a4c35bcc3ae07316dcc67e13cc09cb2e468443fc32f4f77b18c4684945eb1b1",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-23T16:34:21.558640Z",
+     "created_at": "2026-10-23T16:28:21.962132Z",
+     "size_in_bytes": 143495315
+    },
+    {
+     "id": 9366400703,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-a802af81fe6e1461c418101c69691b63c4cd38c43fdc0aeb79a625874f18cceb",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T15:50:45.440043Z",
+     "created_at": "2026-10-22T21:12:31.841262Z",
+     "size_in_bytes": 348644834
+    },
+    {
+     "id": 9397836422,
+     "ref": "refs/pull/1190/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-fb3fe2a2daf276b6a1afc6ff04c0da15db74fce04bca118d3bf8cd3bd2d6de95",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-23T11:57:31.936826Z",
+     "created_at": "2026-10-23T11:54:00.648907Z",
+     "size_in_bytes": 143374201
+    },
+    {
+     "id": 9395058808,
+     "ref": "refs/pull/1189/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-5407116348ae059682a555c7a1b8df66b92d3c107243ad6f57727b0f9b6b91dc",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-23T10:51:46.927199Z",
+     "created_at": "2026-10-23T10:47:51.884844Z",
+     "size_in_bytes": 143374653
+    },
+    {
+     "id": 9388861591,
+     "ref": "refs/pull/1188/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-aea5611cd83288d625aa2ebf4718673c03cb0541d2ed80bce3984217044150ea",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-23T08:32:23.339973Z",
+     "created_at": "2026-10-23T08:29:09.034099Z",
+     "size_in_bytes": 143083042
+    },
+    {
+     "id": 9382238790,
+     "ref": "refs/pull/1186/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-081a3c79c6d009adaf68965905397369f408568b8988af24a5b5e018d6a47898",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-23T05:29:11.720043Z",
+     "created_at": "2026-10-23T05:23:47.746546Z",
+     "size_in_bytes": 142398850
+    },
+    {
+     "id": 9381193184,
+     "ref": "refs/pull/1186/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-a4ffdea400441a3a36ecdebeb9856d94499215ff74c9715049a24e92f7af8e60",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-23T04:49:35.348903Z",
+     "created_at": "2026-10-23T04:45:46.762535Z",
+     "size_in_bytes": 142437859
+    },
+    {
+     "id": 9380721308,
+     "ref": "refs/pull/1183/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-a24a821bbe4a479bd3c435c0d0997003eb241ad03ac25d6532d4f307f9f8c99e",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-23T04:32:48.487825Z",
+     "created_at": "2026-10-23T04:28:55.728013Z",
+     "size_in_bytes": 141996227
+    },
+    {
+     "id": 9379204439,
+     "ref": "refs/pull/1183/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-7666d01ee2430c783e53ee261d904a539841b845d5b5df6602095bab523cb4ad",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-23T04:26:58.967769Z",
+     "created_at": "2026-10-23T03:35:36.127233Z",
+     "size_in_bytes": 141993424
+    },
+    {
+     "id": 9372773672,
+     "ref": "refs/pull/1183/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-ce898e3e3193b4dda9b950b1cfa0b8185b4b4e37eca7178a4b6d63b4a599dac6",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-23T03:31:22.565997Z",
+     "created_at": "2026-10-22T23:59:51.943271Z",
+     "size_in_bytes": 141314479
+    },
+    {
+     "id": 9378459527,
+     "ref": "refs/pull/1185/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-65f2fc9b1f55e09656cd42a3453c252e5868c14f1b2b12be6819cc0553d6b655",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-23T03:14:18.546507Z",
+     "created_at": "2026-10-23T03:10:32.889046Z",
+     "size_in_bytes": 141997146
+    },
+    {
+     "id": 9376149334,
+     "ref": "refs/pull/1185/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-0aed97a484bdc0c98d11193206e97e4f9969249dfb255dd1ccf3ade2066535db",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-23T03:08:39.495276Z",
+     "created_at": "2026-10-23T01:51:26.151387Z",
+     "size_in_bytes": 141315588
+    },
+    {
+     "id": 9376034359,
+     "ref": "refs/pull/1180/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-e18fd1bd72b71f5c8233037b5e97f1031573d261fed5d2007c747f7233fde803",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-23T01:58:47.073382Z",
+     "created_at": "2026-10-23T01:47:22.018401Z",
+     "size_in_bytes": 142052314
+    },
+    {
+     "id": 9369194513,
+     "ref": "refs/pull/1180/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-a4fa37960fd1410839e67aeafbbd47b31559b1ec03dd503bea3cddb54a5afe7a",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-23T00:18:29.589072Z",
+     "created_at": "2026-10-22T22:18:12.979183Z",
+     "size_in_bytes": 141323074
+    },
+    {
+     "id": 9369005467,
+     "ref": "refs/pull/1179/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-a4fa37960fd1410839e67aeafbbd47b31559b1ec03dd503bea3cddb54a5afe7a",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T22:33:10.906168Z",
+     "created_at": "2026-10-22T22:13:38.375470Z",
+     "size_in_bytes": 141348578
+    },
+    {
+     "id": 9362696086,
+     "ref": "refs/pull/1173/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-e27f89b42e6a23bfa4976d65867d0123afe645240a85c5c0c140e6906a143ea7",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T19:59:08.600677Z",
+     "created_at": "2026-10-22T19:55:28.574925Z",
+     "size_in_bytes": 138307174
+    },
+    {
+     "id": 9270108620,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-20abc708c8747bae5ae8774c9d6c981683e3b92bcb52a3b67ed08ee5ae729530",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T19:48:25.011912Z",
+     "created_at": "2026-10-21T10:19:31.521403Z",
+     "size_in_bytes": 362389019
+    },
+    {
+     "id": 9360942601,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-d6b50a0b1221c6a049c8a191584450098a625f8ce8b4684c6a93aecfb8acf035",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T19:47:08.160558Z",
+     "created_at": "2026-10-22T19:19:20.584261Z",
+     "size_in_bytes": 347633057
+    },
+    {
+     "id": 9336699227,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-049e31dfd87fb70f744855eefa953a140911ffbbbb2eee478322281c68674d20",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T19:44:34.318125Z",
+     "created_at": "2026-10-22T11:27:12.546801Z",
+     "size_in_bytes": 355600170
+    },
+    {
+     "id": 9336647263,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-079bfcdf384fab5cf43bf91b34359db5070da6c3ba8f99af20698c0103af8ad2",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T19:44:32.370646Z",
+     "created_at": "2026-10-22T11:26:08.677319Z",
+     "size_in_bytes": 60064322
+    },
+    {
+     "id": 9358839151,
+     "ref": "refs/pull/1173/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-a0911fc112774121f312d4fa01eebf44739e4e25e65b8f6f0c4ab811e1ad77ce",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T19:43:16.617269Z",
+     "created_at": "2026-10-22T18:34:19.120245Z",
+     "size_in_bytes": 138295216
+    },
+    {
+     "id": 9359534989,
+     "ref": "refs/pull/1174/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-1fe5a279d2a8666a715259d9e11ed32aefa22defa0cf0503590d8d3cb5e87ff5",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T19:36:11.620847Z",
+     "created_at": "2026-10-22T18:48:58.868699Z",
+     "size_in_bytes": 138065678
+    },
+    {
+     "id": 9335724127,
+     "ref": "refs/pull/1165/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-2849b392f1e3f34f120ced4967a25c39be6640a83d8109285a27f196d49e8e11",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T11:24:20.834917Z",
+     "created_at": "2026-10-22T11:06:48.333670Z",
+     "size_in_bytes": 136798299
+    }
+   ]
+  },
+  {
+   "repository": "tailrocks/velnor-new",
+   "inventory_endpoint": "repos/tailrocks/velnor-new/actions/caches?per_page=100",
+   "inventory_pages_fetched": 1,
+   "inventory_page_truncated": false,
+   "total_count": 48,
+   "entries_returned": 48,
+   "listed_size_sum_bytes": 10049212892,
+   "usage_endpoint": "repos/tailrocks/velnor-new/actions/cache/usage",
+   "active_caches_size_in_bytes": 10049212892,
+   "active_caches_count": 40,
+   "storage_limit_endpoint": "repos/tailrocks/velnor-new/actions/cache/storage-limit",
+   "storage_limit_bytes": null,
+   "storage_limit_unknown_reason": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+   "retention_limit_endpoint": "repos/tailrocks/velnor-new/actions/cache/retention-limit",
+   "retention_limit_days": null,
+   "retention_limit_unknown_reason": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+   "family_breakdown": [
+    {
+     "key_prefix": "mise-tools",
+     "count": 41,
+     "bytes": 9528848878
+    },
+    {
+     "key_prefix": "velnor-v2",
+     "count": 7,
+     "bytes": 520364014
+    }
+   ],
+   "entries": [
+    {
+     "id": 9493968997,
+     "ref": "refs/heads/main",
+     "key": "velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-972c5704ae89908a81ab373486a727cda61f18c1ccff511615139a8874ca9dd7",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-26T07:27:48.081375Z",
+     "created_at": "2026-10-25T23:55:31.217424Z",
+     "size_in_bytes": 74337079
+    },
+    {
+     "id": 9491075955,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-d8cfad3418960f285f884669de7f72f434b70e87de2e6ae357bde2edc5ffa426",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-26T07:27:16.980365Z",
+     "created_at": "2026-10-25T21:51:49.506746Z",
+     "size_in_bytes": 368083489
+    },
+    {
+     "id": 9490999499,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-9ea58ae500f01472445721c96c2c97910c68c9d265596ce940e3bb8ccece6518",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-26T07:27:06.072707Z",
+     "created_at": "2026-10-25T21:48:47.514642Z",
+     "size_in_bytes": 58277587
+    },
+    {
+     "id": 9490999476,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-99ad0fa5df027fffe7a07f8844896de52ec80703a59692a10128ff32917ca670",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-26T07:27:05.266018Z",
+     "created_at": "2026-10-25T21:48:48.115794Z",
+     "size_in_bytes": 60878935
+    },
+    {
+     "id": 9490997385,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-41f912a602310dbf46ae143fd29d932702f459ec957334f661544488a514271c",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-26T07:27:04.698536Z",
+     "created_at": "2026-10-25T21:48:43.618921Z",
+     "size_in_bytes": 66622658
+    },
+    {
+     "id": 9504089413,
+     "ref": "refs/pull/395/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-2de2a9b2c803799ee5a58b021c10d26e1665cb0d4ab603d8b5b6289ef7109d26",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-26T06:14:22.250532Z",
+     "created_at": "2026-10-26T06:12:28.300799Z",
+     "size_in_bytes": 74337713
+    },
+    {
+     "id": 9491118518,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-5e6514096ead086007548cc4877b0b544ebffaf758a1572db92ca1fa795b1788",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-26T06:13:50.088462Z",
+     "created_at": "2026-10-25T21:53:34.206962Z",
+     "size_in_bytes": 349685351
+    },
+    {
+     "id": 9491126503,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-2c16d58513c7ccc28eb6a5aed030f4a868cd790d79b28f9c22fbc830a782ea84",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-26T06:13:38.250739Z",
+     "created_at": "2026-10-25T21:53:55.173159Z",
+     "size_in_bytes": 381726396
+    },
+    {
+     "id": 9491120640,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-778da39acf58c55fe6dab3ed8c880f0d51f979cb45440d82f7987f8e19847821",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-26T06:13:27.346862Z",
+     "created_at": "2026-10-25T21:53:39.152494Z",
+     "size_in_bytes": 360364589
+    },
+    {
+     "id": 9498061556,
+     "ref": "refs/pull/395/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-60853309ced6b3313b08221c9bd658d4317f9251399f1049f56d53c32105ff16",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-26T06:06:42.523698Z",
+     "created_at": "2026-10-26T02:35:22.227133Z",
+     "size_in_bytes": 74338380
+    },
+    {
+     "id": 9491197724,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-4a23a4bc2c40727b42c1f469c53caf79a4af9ab0e112bf15ce261079117d2b56",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-26T00:04:34.252636Z",
+     "created_at": "2026-10-25T21:56:48.979110Z",
+     "size_in_bytes": 70562156
+    },
+    {
+     "id": 9492007024,
+     "ref": "refs/heads/main",
+     "key": "velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-621ab70ccb85e73e154265e76c7566ce5faddffb6625e48241dca2b1338a8d3b",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-25T23:53:02.104636Z",
+     "created_at": "2026-10-25T22:29:20.165329Z",
+     "size_in_bytes": 74339001
+    },
+    {
+     "id": 9483894389,
+     "ref": "refs/heads/main",
+     "key": "velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-d6ca5e105e7bfbf220a3f70dadd109115452af08eb65552a8944eae939b50926",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-25T22:25:23.368742Z",
+     "created_at": "2026-10-25T17:09:51.761987Z",
+     "size_in_bytes": 74337153
+    },
+    {
+     "id": 9454533358,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-a54180858d357aa4736acc009165c61be3b855d7ae14e61be04f2bb81268c43b",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-25T21:19:14.348354Z",
+     "created_at": "2026-10-24T18:39:55.245451Z",
+     "size_in_bytes": 349668191
+    },
+    {
+     "id": 9454653944,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-931e471c13e67c2d235873b690286de686caecfd31ab8abd857fe7ac68aa278a",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-25T21:18:44.632838Z",
+     "created_at": "2026-10-24T18:45:00.624265Z",
+     "size_in_bytes": 360005366
+    },
+    {
+     "id": 9454606080,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-181d02b32dec4abddb48070f009cf9ca1dc1521d701b3509700ed46ab6fa5f7d",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-25T21:17:36.878498Z",
+     "created_at": "2026-10-24T18:43:01.102245Z",
+     "size_in_bytes": 381333280
+    },
+    {
+     "id": 9454404829,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-fdf57c2c535bd220e648bf997eedbbb65f6668d0fb0818915e36ea0f84c2a4b5",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-25T21:07:15.971436Z",
+     "created_at": "2026-10-24T18:34:25.861476Z",
+     "size_in_bytes": 367832132
+    },
+    {
+     "id": 9454310740,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-eed0b14e81989f21106a6e32807e33be54f3252f412b9f061857b06c984df440",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-25T21:07:07.608137Z",
+     "created_at": "2026-10-24T18:30:31.813234Z",
+     "size_in_bytes": 66329572
+    },
+    {
+     "id": 9454316664,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-0b34661746783cb3dc1f17636891de748a52282dbbfecacb1ae237a02f6b6190",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-25T21:07:07.588306Z",
+     "created_at": "2026-10-24T18:30:48.355183Z",
+     "size_in_bytes": 58002149
+    },
+    {
+     "id": 9454308150,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-356b82067bca1419817e21904ae3cc7100f268c5beec00fbe3a5534b9979a8e7",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-25T21:07:07.007889Z",
+     "created_at": "2026-10-24T18:30:24.352378Z",
+     "size_in_bytes": 60588583
+    },
+    {
+     "id": 9464465138,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-9e503bbee4776e3258f8204fc81d0419c468b7411dc52a10763740b75473830b",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-25T19:55:58.422524Z",
+     "created_at": "2026-10-25T02:20:07.755646Z",
+     "size_in_bytes": 70274944
+    },
+    {
+     "id": 9464246606,
+     "ref": "refs/heads/main",
+     "key": "velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-9781aafbbe67dfd71978b7eed894b89bc6b3eb45f65d83db45d5fb98e954ec05",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-25T17:05:58.508780Z",
+     "created_at": "2026-10-25T02:08:55.030120Z",
+     "size_in_bytes": 74337765
+    },
+    {
+     "id": 9401583577,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-38db0a3c6aab07112aac9aad8fe5691d559ee1f60a59fb29a3a1a06109149189",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-24T07:42:00.181926Z",
+     "created_at": "2026-10-23T13:18:33.470904Z",
+     "size_in_bytes": 360091197
+    },
+    {
+     "id": 9401395246,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-109f3588ab14530e7e54ba16e8c70e49b383459273d5ed4119e16cf094e94e90",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-24T07:41:44.329185Z",
+     "created_at": "2026-10-23T13:14:38.685160Z",
+     "size_in_bytes": 349487222
+    },
+    {
+     "id": 9401409018,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-c53a121512fa17025892111b98e67746c25de31e04c9d9b554ed49cecef31bac",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-24T07:40:45.494196Z",
+     "created_at": "2026-10-23T13:14:56.976468Z",
+     "size_in_bytes": 381298309
+    },
+    {
+     "id": 9401322642,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-f2b107f5eab6f0f6b75a20c35649bb40617b327e6e7fae83fa4a89d58127492a",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-24T07:36:37.739320Z",
+     "created_at": "2026-10-23T13:13:05.542194Z",
+     "size_in_bytes": 367761308
+    },
+    {
+     "id": 9401191319,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-2b813a06900c86b29443bcc29f5d45ff70dc6151e9ca6a03ad2efacb27b1c6db",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-24T07:36:29.871298Z",
+     "created_at": "2026-10-23T13:10:17.171700Z",
+     "size_in_bytes": 58002204
+    },
+    {
+     "id": 9401187753,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-ef0717b944ac759bcbd426c55ef66b01cf6761281f98e53467bc4bcbbc39bc6d",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-24T07:36:29.351868Z",
+     "created_at": "2026-10-23T13:10:11.999831Z",
+     "size_in_bytes": 60588623
+    },
+    {
+     "id": 9401185818,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-1e5e01ec6918ef4e0ce785d62c763c7b1f7656a21405e2fca2d8a5b16838b603",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-24T07:36:28.991449Z",
+     "created_at": "2026-10-23T13:10:10.343797Z",
+     "size_in_bytes": 66329644
+    },
+    {
+     "id": 9340541690,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-a802af81fe6e1461c418101c69691b63c4cd38c43fdc0aeb79a625874f18cceb",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T11:21:32.182587Z",
+     "created_at": "2026-10-22T12:45:08.477610Z",
+     "size_in_bytes": 347920634
+    },
+    {
+     "id": 9340741542,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-60ffe74b07a2abccea04f9edd1cb5182b87eb83cb5252b861149f4f486085667",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T11:21:29.762447Z",
+     "created_at": "2026-10-22T12:48:55.666460Z",
+     "size_in_bytes": 358948750
+    },
+    {
+     "id": 9366535149,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-b006cdbb2c103a59361027b26efcb0ccfc53989684362e0b45dcdf186eb77edb",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T11:21:29.636353Z",
+     "created_at": "2026-10-22T21:15:30.920949Z",
+     "size_in_bytes": 379964864
+    },
+    {
+     "id": 9341411006,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-049c0176b29fe6367f482f29c26478987454aed2d9100b9c1ba95653e073e32e",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T11:17:07.380657Z",
+     "created_at": "2026-10-22T13:01:35.907279Z",
+     "size_in_bytes": 366542547
+    },
+    {
+     "id": 9340261884,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-17c490346d74deb500f60d54a9e8de08ace76a60a37d8a5526563ceae4abd064",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T11:16:53.701915Z",
+     "created_at": "2026-10-22T12:39:43.456292Z",
+     "size_in_bytes": 59178876
+    },
+    {
+     "id": 9340268851,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-47b780117aa4ede3408349bc01d970a91c1cb3e2ee66718361244f288361d78f",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T11:16:52.752751Z",
+     "created_at": "2026-10-22T12:39:52.233632Z",
+     "size_in_bytes": 64914996
+    },
+    {
+     "id": 9340274923,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-0a716a75176a7ee983773e91de4e171ea7e1d9abf3b6b02f6b2823f7ade42220",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T11:16:52.122429Z",
+     "created_at": "2026-10-22T12:39:59.061005Z",
+     "size_in_bytes": 56585929
+    },
+    {
+     "id": 9377678822,
+     "ref": "refs/pull/365/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-dd2a92ade36e9e1176293b4fc35c274fff928cfb4c0a41748edebda299564d1e",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-23T02:44:55.499351Z",
+     "created_at": "2026-10-23T02:44:01.923057Z",
+     "size_in_bytes": 74336923
+    },
+    {
+     "id": 9340597101,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-2889e42d91ac814592c19a8e28bba4dbd01e01a8d9687cf7537bf2f829bf612d",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T20:48:48.112516Z",
+     "created_at": "2026-10-22T12:46:07.914940Z",
+     "size_in_bytes": 380779931
+    },
+    {
+     "id": 9294556562,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-d6b50a0b1221c6a049c8a191584450098a625f8ce8b4684c6a93aecfb8acf035",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T12:39:09.991635Z",
+     "created_at": "2026-10-21T18:07:01.315131Z",
+     "size_in_bytes": 347782249
+    },
+    {
+     "id": 9294581220,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-319be58ff8cca3de3f88899a5f28c4e99e36eded54493f132d21057741983a3a",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T12:37:57.202358Z",
+     "created_at": "2026-10-21T18:07:24.822201Z",
+     "size_in_bytes": 380039752
+    },
+    {
+     "id": 9333773734,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-ca1ed430512b194c8d379b83b6eecc35bd60f5faf55fbb0c4046cbff3f446dc8",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T12:36:17.720700Z",
+     "created_at": "2026-10-22T10:25:23.394508Z",
+     "size_in_bytes": 358955266
+    },
+    {
+     "id": 9339110482,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-5c4d51dd94d684cf85a8b76f9a187241fba30e67df5b6e82b73ce012eebb7b43",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T12:30:41.545592Z",
+     "created_at": "2026-10-22T12:16:55.544280Z",
+     "size_in_bytes": 366874572
+    },
+    {
+     "id": 9328458698,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-8c9ea0254e5e08471cf055b17836ea1a4ff8f1c802e4a9430d46ff4481b6bfb2",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T12:30:34.934595Z",
+     "created_at": "2026-10-22T08:38:34.899168Z",
+     "size_in_bytes": 64915130
+    },
+    {
+     "id": 9267189932,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-b8786aeb9a812079fe8f16f4f378628d611d36ffe0bdae46beac9ea7961e3e32",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T12:30:33.956323Z",
+     "created_at": "2026-10-21T09:18:16.468467Z",
+     "size_in_bytes": 56585954
+    },
+    {
+     "id": 9267192987,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-22698886404b441b8ec4093c5270498fe35d6ca0bab40deeef303e46abf3c473",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T12:30:33.813563Z",
+     "created_at": "2026-10-21T09:18:18.940420Z",
+     "size_in_bytes": 59178874
+    },
+    {
+     "id": 9328935667,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-1dbc07ac2bde1c2fac502593dbb30f7c7ba3d213a7ff04b1c7e7af3b46d09fb3",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T10:35:52.624237Z",
+     "created_at": "2026-10-22T08:47:44.842719Z",
+     "size_in_bytes": 367435218
+    },
+    {
+     "id": 9329460916,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-037df5ab16669ff36f712e4e0a08ea02ec751fbd1106fd22c8aa0035ae8fde50",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T10:31:14.179800Z",
+     "created_at": "2026-10-22T08:58:09.323817Z",
+     "size_in_bytes": 375424106
+    },
+    {
+     "id": 9267185209,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-c7bc509b3e04153b1d197b83e00dd572145ccc82d1b44727efe42870c0421d65",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T10:31:07.577191Z",
+     "created_at": "2026-10-21T09:18:09.918116Z",
+     "size_in_bytes": 63027345
+    }
+   ]
+  },
+  {
+   "repository": "ChainArgos/bitcoin-grpc-server",
+   "inventory_endpoint": "repos/ChainArgos/bitcoin-grpc-server/actions/caches?per_page=100",
+   "inventory_pages_fetched": 1,
+   "inventory_page_truncated": false,
+   "total_count": 27,
+   "entries_returned": 27,
+   "listed_size_sum_bytes": 6506789758,
+   "usage_endpoint": "repos/ChainArgos/bitcoin-grpc-server/actions/cache/usage",
+   "active_caches_size_in_bytes": 6506789758,
+   "active_caches_count": 27,
+   "storage_limit_endpoint": "repos/ChainArgos/bitcoin-grpc-server/actions/cache/storage-limit",
+   "storage_limit_bytes": null,
+   "storage_limit_unknown_reason": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+   "retention_limit_endpoint": "repos/ChainArgos/bitcoin-grpc-server/actions/cache/retention-limit",
+   "retention_limit_days": null,
+   "retention_limit_unknown_reason": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+   "family_breakdown": [
+    {
+     "key_prefix": "mise-tools",
+     "count": 19,
+     "bytes": 5551448034
+    },
+    {
+     "key_prefix": "velnor-v2",
+     "count": 8,
+     "bytes": 955341724
+    }
+   ],
+   "entries": [
+    {
+     "id": 9353709130,
+     "ref": "refs/heads/main",
+     "key": "velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-e593bc9dc312591bec0b1b67a2f968c4b71fad5eb380178ebe8aff8c129ff735",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-23T01:41:13.001233Z",
+     "created_at": "2026-10-22T16:49:51.668752Z",
+     "size_in_bytes": 132583887
+    },
+    {
+     "id": 9364905768,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-60ffe74b07a2abccea04f9edd1cb5182b87eb83cb5252b861149f4f486085667",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T01:40:32.861477Z",
+     "created_at": "2026-10-22T20:39:57.043311Z",
+     "size_in_bytes": 359018236
+    },
+    {
+     "id": 9365029894,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-a802af81fe6e1461c418101c69691b63c4cd38c43fdc0aeb79a625874f18cceb",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T01:40:32.387027Z",
+     "created_at": "2026-10-22T20:42:37.322037Z",
+     "size_in_bytes": 347959895
+    },
+    {
+     "id": 9364843505,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-01fe00daf763bc32194fba0a67a3d18dbea33609858eff5ef4085ed2320dbfff",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T01:39:33.426723Z",
+     "created_at": "2026-10-22T20:38:39.998049Z",
+     "size_in_bytes": 352153758
+    },
+    {
+     "id": 9364795527,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-47b780117aa4ede3408349bc01d970a91c1cb3e2ee66718361244f288361d78f",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T01:39:33.168301Z",
+     "created_at": "2026-10-22T20:37:41.587697Z",
+     "size_in_bytes": 64914952
+    },
+    {
+     "id": 9353772049,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-2d6a41aed2a1150a47b3213b69800028bceb5bb24638cf34d5419274164f5683",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T16:51:04.694028Z",
+     "created_at": "2026-10-22T16:51:04.694028Z",
+     "size_in_bytes": 362440844
+    },
+    {
+     "id": 9293793146,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-d6b50a0b1221c6a049c8a191584450098a625f8ce8b4684c6a93aecfb8acf035",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T16:50:22.714551Z",
+     "created_at": "2026-10-21T17:53:08.718997Z",
+     "size_in_bytes": 347881610
+    },
+    {
+     "id": 9353718320,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-b583e5d32df03b5ccadfe426119ed7cd2467c3c0a0fbba110cfefc230bf0e5a9",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T16:50:02.827970Z",
+     "created_at": "2026-10-22T16:50:02.827970Z",
+     "size_in_bytes": 356592838
+    },
+    {
+     "id": 9276934887,
+     "ref": "refs/heads/main",
+     "key": "velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-87d80fbdc9efe77fb93d28f305598f91b33248003658258cd29b98f17355ca38",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T16:49:35.844959Z",
+     "created_at": "2026-10-21T12:42:55.852890Z",
+     "size_in_bytes": 129959446
+    },
+    {
+     "id": 9353684482,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-fba52d22394e715240f54026c6267a3b91fe682c1ed2baf45137ccff910b2575",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T16:49:20.905263Z",
+     "created_at": "2026-10-22T16:49:20.905263Z",
+     "size_in_bytes": 60064363
+    },
+    {
+     "id": 9353386915,
+     "ref": "refs/pull/14/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-e593bc9dc312591bec0b1b67a2f968c4b71fad5eb380178ebe8aff8c129ff735",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T16:43:48.140457Z",
+     "created_at": "2026-10-22T16:43:10.575509Z",
+     "size_in_bytes": 132583688
+    },
+    {
+     "id": 9293629877,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-a34acc542ec0592c971b9f9c09916b6b68872c9d9de3b6584a5b193998a9fe6f",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T11:15:53.422582Z",
+     "created_at": "2026-10-21T17:50:07.825765Z",
+     "size_in_bytes": 362347389
+    },
+    {
+     "id": 9291752624,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-d5b60eb5599d424c156a58530a2c597ef836d8613b1967c30f0397d6f5f3f616",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T11:15:07.406835Z",
+     "created_at": "2026-10-21T17:15:12.119791Z",
+     "size_in_bytes": 355730475
+    },
+    {
+     "id": 9273006357,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-5a1b1349ba09f1836d27c718e3177eb5fa259100bb1020ba505bd995453fa5e7",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T11:15:06.215045Z",
+     "created_at": "2026-10-21T11:22:31.877780Z",
+     "size_in_bytes": 60064324
+    },
+    {
+     "id": 9291805027,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-0452e18cf3f47aef8377929fc60dc72887f1dd5c40f283ba38b849e4c6b1d87e",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-21T17:16:10.801543Z",
+     "created_at": "2026-10-21T17:16:10.801543Z",
+     "size_in_bytes": 355798879
+    },
+    {
+     "id": 9275436677,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-b5af76b9007cc5a818ec698a7b2fbb718ca99f1b9f9f0f115984c626327ee047",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-21T12:43:17.462907Z",
+     "created_at": "2026-10-21T12:13:10.405942Z",
+     "size_in_bytes": 355771357
+    },
+    {
+     "id": 9275372488,
+     "ref": "refs/heads/main",
+     "key": "velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-729be84f3cf662450cff80c7380701483d06fb9346f0cedbdbc7d10abdd27a4e",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-21T12:42:39.396979Z",
+     "created_at": "2026-10-21T12:11:56.238637Z",
+     "size_in_bytes": 129960277
+    },
+    {
+     "id": 9275381570,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-7525adac7fcfa793526d6a9defa1b05265c8bca4ba517d573dd743ab72a47e0f",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-21T12:42:24.181666Z",
+     "created_at": "2026-10-21T12:12:05.701760Z",
+     "size_in_bytes": 355618676
+    },
+    {
+     "id": 9276522772,
+     "ref": "refs/pull/9/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-87d80fbdc9efe77fb93d28f305598f91b33248003658258cd29b98f17355ca38",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-21T12:35:43.077152Z",
+     "created_at": "2026-10-21T12:35:00.679820Z",
+     "size_in_bytes": 129961413
+    },
+    {
+     "id": 9274595136,
+     "ref": "refs/pull/8/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-729be84f3cf662450cff80c7380701483d06fb9346f0cedbdbc7d10abdd27a4e",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-21T11:56:28.533065Z",
+     "created_at": "2026-10-21T11:55:44.679577Z",
+     "size_in_bytes": 129961109
+    },
+    {
+     "id": 9273075313,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-89c111180e8eb53c55d8221990d5917314543dbb36627a9fede0c3f77fcc569c",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-21T11:23:59.853771Z",
+     "created_at": "2026-10-21T11:23:59.853771Z",
+     "size_in_bytes": 348585365
+    },
+    {
+     "id": 9273034281,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-92ee26503fe852559f1879ff6b929ef124c9c96257fbe124353e8cf62c808aad",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-21T11:23:07.866337Z",
+     "created_at": "2026-10-21T11:23:07.866337Z",
+     "size_in_bytes": 348674694
+    },
+    {
+     "id": 9245669433,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-f85f489d31d620fb97909e5b29e0e68be805a3cc29393eb819c3e90570108dee",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-21T07:00:59.309616Z",
+     "created_at": "2026-10-20T22:52:18.796469Z",
+     "size_in_bytes": 348976384
+    },
+    {
+     "id": 9245633846,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-47081fd909cc591afaf893b7ab5dd4432ebaa82903ad84581a4770c604d46818",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-21T07:00:19.832255Z",
+     "created_at": "2026-10-20T22:51:21.907984Z",
+     "size_in_bytes": 348850808
+    },
+    {
+     "id": 9245610167,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-1ddcafd5aaae6ff543aee6aaeb5f8f71acab061d240e9a9cd64fae1e76f27169",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-21T07:00:18.269387Z",
+     "created_at": "2026-10-20T22:50:41.172347Z",
+     "size_in_bytes": 60003187
+    },
+    {
+     "id": 9245299433,
+     "ref": "refs/pull/3/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-f33c75367bae1245a8a24533f65f6d73c40ab9bd7d51b399ec9240aa3a031584",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-20T22:42:48.913733Z",
+     "created_at": "2026-10-20T22:42:03.855229Z",
+     "size_in_bytes": 85168501
+    },
+    {
+     "id": 9235216579,
+     "ref": "refs/pull/2/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-f33c75367bae1245a8a24533f65f6d73c40ab9bd7d51b399ec9240aa3a031584",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-20T19:01:49.637064Z",
+     "created_at": "2026-10-20T18:52:17.153701Z",
+     "size_in_bytes": 85163403
+    }
+   ]
+  },
+  {
+   "repository": "ChainArgos/bitcoin-processor-rust",
+   "inventory_endpoint": "repos/ChainArgos/bitcoin-processor-rust/actions/caches?per_page=100",
+   "inventory_pages_fetched": 1,
+   "inventory_page_truncated": false,
+   "total_count": 16,
+   "entries_returned": 16,
+   "listed_size_sum_bytes": 3579123515,
+   "usage_endpoint": "repos/ChainArgos/bitcoin-processor-rust/actions/cache/usage",
+   "active_caches_size_in_bytes": 3579123515,
+   "active_caches_count": 16,
+   "storage_limit_endpoint": "repos/ChainArgos/bitcoin-processor-rust/actions/cache/storage-limit",
+   "storage_limit_bytes": null,
+   "storage_limit_unknown_reason": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+   "retention_limit_endpoint": "repos/ChainArgos/bitcoin-processor-rust/actions/cache/retention-limit",
+   "retention_limit_days": null,
+   "retention_limit_unknown_reason": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+   "family_breakdown": [
+    {
+     "key_prefix": "mise-tools",
+     "count": 11,
+     "bytes": 3022583344
+    },
+    {
+     "key_prefix": "velnor-v2",
+     "count": 5,
+     "bytes": 556540171
+    }
+   ],
+   "entries": [
+    {
+     "id": 9351751182,
+     "ref": "refs/heads/main",
+     "key": "velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-e29b86a8db82b2c260d08ea25fef57b5c21ffd7029e44847b8871e591c5607c6",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-23T01:39:42.161945Z",
+     "created_at": "2026-10-22T16:10:54.516520Z",
+     "size_in_bytes": 112810554
+    },
+    {
+     "id": 9365221658,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-60ffe74b07a2abccea04f9edd1cb5182b87eb83cb5252b861149f4f486085667",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T01:38:52.712116Z",
+     "created_at": "2026-10-22T20:46:43.032398Z",
+     "size_in_bytes": 359027436
+    },
+    {
+     "id": 9365366707,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-a802af81fe6e1461c418101c69691b63c4cd38c43fdc0aeb79a625874f18cceb",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T01:38:48.992046Z",
+     "created_at": "2026-10-22T20:49:51.094607Z",
+     "size_in_bytes": 348101404
+    },
+    {
+     "id": 9364807140,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-47b780117aa4ede3408349bc01d970a91c1cb3e2ee66718361244f288361d78f",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T01:37:39.600307Z",
+     "created_at": "2026-10-22T20:37:56.030417Z",
+     "size_in_bytes": 64915124
+    },
+    {
+     "id": 9364858788,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-01fe00daf763bc32194fba0a67a3d18dbea33609858eff5ef4085ed2320dbfff",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T01:37:34.372582Z",
+     "created_at": "2026-10-22T20:39:00.515469Z",
+     "size_in_bytes": 352048193
+    },
+    {
+     "id": 9352344114,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-d6b50a0b1221c6a049c8a191584450098a625f8ce8b4684c6a93aecfb8acf035",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T16:21:42.697132Z",
+     "created_at": "2026-10-22T16:21:42.697132Z",
+     "size_in_bytes": 347994050
+    },
+    {
+     "id": 9352065286,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-2d6a41aed2a1150a47b3213b69800028bceb5bb24638cf34d5419274164f5683",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T16:16:23.276970Z",
+     "created_at": "2026-10-22T16:16:23.276970Z",
+     "size_in_bytes": 363264578
+    },
+    {
+     "id": 9351762751,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-b583e5d32df03b5ccadfe426119ed7cd2467c3c0a0fbba110cfefc230bf0e5a9",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T16:11:06.006677Z",
+     "created_at": "2026-10-22T16:11:06.006677Z",
+     "size_in_bytes": 355774704
+    },
+    {
+     "id": 9312144756,
+     "ref": "refs/heads/main",
+     "key": "velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-38cd9ce025e2db7e8ba8680cef5325b25d137dd11ca6919f72e182785ba0ef0d",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T16:10:27.852825Z",
+     "created_at": "2026-10-22T00:47:18.997196Z",
+     "size_in_bytes": 110308374
+    },
+    {
+     "id": 9351714397,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-fba52d22394e715240f54026c6267a3b91fe682c1ed2baf45137ccff910b2575",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T16:10:13.289371Z",
+     "created_at": "2026-10-22T16:10:13.289371Z",
+     "size_in_bytes": 60064363
+    },
+    {
+     "id": 9350988832,
+     "ref": "refs/pull/11/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-e29b86a8db82b2c260d08ea25fef57b5c21ffd7029e44847b8871e591c5607c6",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T15:58:08.611711Z",
+     "created_at": "2026-10-22T15:57:19.292653Z",
+     "size_in_bytes": 112810521
+    },
+    {
+     "id": 9312308164,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-0452e18cf3f47aef8377929fc60dc72887f1dd5c40f283ba38b849e4c6b1d87e",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T11:16:38.086079Z",
+     "created_at": "2026-10-22T00:52:23.671195Z",
+     "size_in_bytes": 355597989
+    },
+    {
+     "id": 9312150109,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-d5b60eb5599d424c156a58530a2c597ef836d8613b1967c30f0397d6f5f3f616",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T11:15:28.868232Z",
+     "created_at": "2026-10-22T00:47:28.507116Z",
+     "size_in_bytes": 355731157
+    },
+    {
+     "id": 9312126854,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-5a1b1349ba09f1836d27c718e3177eb5fa259100bb1020ba505bd995453fa5e7",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T11:15:28.042007Z",
+     "created_at": "2026-10-22T00:46:45.830729Z",
+     "size_in_bytes": 60064346
+    },
+    {
+     "id": 9311709922,
+     "ref": "refs/pull/9/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-38cd9ce025e2db7e8ba8680cef5325b25d137dd11ca6919f72e182785ba0ef0d",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T00:35:12.463174Z",
+     "created_at": "2026-10-22T00:34:25.576309Z",
+     "size_in_bytes": 110304427
+    },
+    {
+     "id": 9310373686,
+     "ref": "refs/pull/6/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-1889888b625e1113cd841ea5d5eae3d42a13e52b84383a8bfa50b7cc66f9e520",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T00:20:49.133595Z",
+     "created_at": "2026-10-21T23:55:10.026228Z",
+     "size_in_bytes": 110306295
+    }
+   ]
+  },
+  {
+   "repository": "ChainArgos/blockchain-explorer",
+   "inventory_endpoint": "repos/ChainArgos/blockchain-explorer/actions/caches?per_page=100",
+   "inventory_pages_fetched": 1,
+   "inventory_page_truncated": false,
+   "total_count": 16,
+   "entries_returned": 16,
+   "listed_size_sum_bytes": 3595935131,
+   "usage_endpoint": "repos/ChainArgos/blockchain-explorer/actions/cache/usage",
+   "active_caches_size_in_bytes": 3595935131,
+   "active_caches_count": 16,
+   "storage_limit_endpoint": "repos/ChainArgos/blockchain-explorer/actions/cache/storage-limit",
+   "storage_limit_bytes": null,
+   "storage_limit_unknown_reason": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+   "retention_limit_endpoint": "repos/ChainArgos/blockchain-explorer/actions/cache/retention-limit",
+   "retention_limit_days": null,
+   "retention_limit_unknown_reason": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+   "family_breakdown": [
+    {
+     "key_prefix": "mise-tools",
+     "count": 11,
+     "bytes": 3022738467
+    },
+    {
+     "key_prefix": "velnor-v2",
+     "count": 5,
+     "bytes": 573196664
+    }
+   ],
+   "entries": [
+    {
+     "id": 9355630045,
+     "ref": "refs/heads/main",
+     "key": "velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-039a2580146acf7ab49e7006831b6411e52a1c2d0984459e2cedd2f0656a875c",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-23T02:06:28.685510Z",
+     "created_at": "2026-10-22T17:28:56.506909Z",
+     "size_in_bytes": 115877889
+    },
+    {
+     "id": 9366217431,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-60ffe74b07a2abccea04f9edd1cb5182b87eb83cb5252b861149f4f486085667",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T02:05:42.280108Z",
+     "created_at": "2026-10-22T21:08:20.448311Z",
+     "size_in_bytes": 359102263
+    },
+    {
+     "id": 9366209951,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-a802af81fe6e1461c418101c69691b63c4cd38c43fdc0aeb79a625874f18cceb",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T02:05:41.904574Z",
+     "created_at": "2026-10-22T21:08:09.758883Z",
+     "size_in_bytes": 348115655
+    },
+    {
+     "id": 9365565033,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-47b780117aa4ede3408349bc01d970a91c1cb3e2ee66718361244f288361d78f",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T02:04:31.491978Z",
+     "created_at": "2026-10-22T20:54:06.808325Z",
+     "size_in_bytes": 64915123
+    },
+    {
+     "id": 9365612762,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-01fe00daf763bc32194fba0a67a3d18dbea33609858eff5ef4085ed2320dbfff",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T02:04:30.548559Z",
+     "created_at": "2026-10-22T20:55:37.554111Z",
+     "size_in_bytes": 352043996
+    },
+    {
+     "id": 9356268269,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-2d6a41aed2a1150a47b3213b69800028bceb5bb24638cf34d5419274164f5683",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T17:41:55.481001Z",
+     "created_at": "2026-10-22T17:41:55.481001Z",
+     "size_in_bytes": 362485665
+    },
+    {
+     "id": 9356157398,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-d6b50a0b1221c6a049c8a191584450098a625f8ce8b4684c6a93aecfb8acf035",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T17:39:36.260374Z",
+     "created_at": "2026-10-22T17:39:36.260374Z",
+     "size_in_bytes": 348676400
+    },
+    {
+     "id": 9355640384,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-b583e5d32df03b5ccadfe426119ed7cd2467c3c0a0fbba110cfefc230bf0e5a9",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T17:29:07.711920Z",
+     "created_at": "2026-10-22T17:29:07.711920Z",
+     "size_in_bytes": 355751671
+    },
+    {
+     "id": 9319571675,
+     "ref": "refs/heads/main",
+     "key": "velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-e832828082df66b0b16c4cb5de5354dd771cc9d78ca362ff6f7ae1abd6b84ea8",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T17:28:33.961859Z",
+     "created_at": "2026-10-22T04:44:38.053195Z",
+     "size_in_bytes": 114604834
+    },
+    {
+     "id": 9355600934,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-fba52d22394e715240f54026c6267a3b91fe682c1ed2baf45137ccff910b2575",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T17:28:18.948342Z",
+     "created_at": "2026-10-22T17:28:18.948342Z",
+     "size_in_bytes": 60064388
+    },
+    {
+     "id": 9355101839,
+     "ref": "refs/pull/11/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-039a2580146acf7ab49e7006831b6411e52a1c2d0984459e2cedd2f0656a875c",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T17:18:57.635250Z",
+     "created_at": "2026-10-22T17:18:18.237086Z",
+     "size_in_bytes": 115880825
+    },
+    {
+     "id": 9319964381,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-0452e18cf3f47aef8377929fc60dc72887f1dd5c40f283ba38b849e4c6b1d87e",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T11:16:31.370451Z",
+     "created_at": "2026-10-22T04:57:14.287516Z",
+     "size_in_bytes": 355743585
+    },
+    {
+     "id": 9319577547,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-d5b60eb5599d424c156a58530a2c597ef836d8613b1967c30f0397d6f5f3f616",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T11:15:36.027412Z",
+     "created_at": "2026-10-22T04:44:48.836923Z",
+     "size_in_bytes": 355775419
+    },
+    {
+     "id": 9319551910,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-5a1b1349ba09f1836d27c718e3177eb5fa259100bb1020ba505bd995453fa5e7",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T11:15:35.013798Z",
+     "created_at": "2026-10-22T04:44:01.902475Z",
+     "size_in_bytes": 60064302
+    },
+    {
+     "id": 9313258908,
+     "ref": "refs/pull/8/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-e832828082df66b0b16c4cb5de5354dd771cc9d78ca362ff6f7ae1abd6b84ea8",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T01:23:02.792763Z",
+     "created_at": "2026-10-22T01:22:23.061597Z",
+     "size_in_bytes": 114604755
+    },
+    {
+     "id": 9310488992,
+     "ref": "refs/pull/6/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-f34ae1b7bd7f4cef2ed1638703bfbec5714e45b086ddab0221c0f26bc0d841d6",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-21T23:59:18.938098Z",
+     "created_at": "2026-10-21T23:58:33.436420Z",
+     "size_in_bytes": 112228361
+    }
+   ]
+  },
+  {
+   "repository": "ChainArgos/eth-grpc-server",
+   "inventory_endpoint": "repos/ChainArgos/eth-grpc-server/actions/caches?per_page=100",
+   "inventory_pages_fetched": 1,
+   "inventory_page_truncated": false,
+   "total_count": 18,
+   "entries_returned": 18,
+   "listed_size_sum_bytes": 3787676853,
+   "usage_endpoint": "repos/ChainArgos/eth-grpc-server/actions/cache/usage",
+   "active_caches_size_in_bytes": 3787676853,
+   "active_caches_count": 18,
+   "storage_limit_endpoint": "repos/ChainArgos/eth-grpc-server/actions/cache/storage-limit",
+   "storage_limit_bytes": null,
+   "storage_limit_unknown_reason": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+   "retention_limit_endpoint": "repos/ChainArgos/eth-grpc-server/actions/cache/retention-limit",
+   "retention_limit_days": null,
+   "retention_limit_unknown_reason": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+   "family_breakdown": [
+    {
+     "key_prefix": "mise-tools",
+     "count": 11,
+     "bytes": 3022475987
+    },
+    {
+     "key_prefix": "velnor-v2",
+     "count": 7,
+     "bytes": 765200866
+    }
+   ],
+   "entries": [
+    {
+     "id": 9354527279,
+     "ref": "refs/heads/main",
+     "key": "velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-7710898cd3c01a281099f3e2a36c228c67d09816d647e9dd9dafca6d2bb168d6",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-23T01:48:49.764876Z",
+     "created_at": "2026-10-22T17:06:14.500742Z",
+     "size_in_bytes": 110667874
+    },
+    {
+     "id": 9365257159,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-60ffe74b07a2abccea04f9edd1cb5182b87eb83cb5252b861149f4f486085667",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T01:48:04.731755Z",
+     "created_at": "2026-10-22T20:47:27.742441Z",
+     "size_in_bytes": 358899548
+    },
+    {
+     "id": 9365639321,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-a802af81fe6e1461c418101c69691b63c4cd38c43fdc0aeb79a625874f18cceb",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T01:48:03.907238Z",
+     "created_at": "2026-10-22T20:55:39.575720Z",
+     "size_in_bytes": 348054653
+    },
+    {
+     "id": 9365187098,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-01fe00daf763bc32194fba0a67a3d18dbea33609858eff5ef4085ed2320dbfff",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T01:46:52.533734Z",
+     "created_at": "2026-10-22T20:46:01.372385Z",
+     "size_in_bytes": 352173924
+    },
+    {
+     "id": 9365142642,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-47b780117aa4ede3408349bc01d970a91c1cb3e2ee66718361244f288361d78f",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T01:46:50.543351Z",
+     "created_at": "2026-10-22T20:45:04.251203Z",
+     "size_in_bytes": 64915275
+    },
+    {
+     "id": 9355003622,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-d6b50a0b1221c6a049c8a191584450098a625f8ce8b4684c6a93aecfb8acf035",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T17:16:13.936377Z",
+     "created_at": "2026-10-22T17:16:13.936377Z",
+     "size_in_bytes": 348736491
+    },
+    {
+     "id": 9354596697,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-2d6a41aed2a1150a47b3213b69800028bceb5bb24638cf34d5419274164f5683",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T17:07:42.727769Z",
+     "created_at": "2026-10-22T17:07:42.727769Z",
+     "size_in_bytes": 362391211
+    },
+    {
+     "id": 9354536721,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-b583e5d32df03b5ccadfe426119ed7cd2467c3c0a0fbba110cfefc230bf0e5a9",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T17:06:34.219155Z",
+     "created_at": "2026-10-22T17:06:34.219155Z",
+     "size_in_bytes": 355781098
+    },
+    {
+     "id": 9354498590,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-fba52d22394e715240f54026c6267a3b91fe682c1ed2baf45137ccff910b2575",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T17:05:55.899122Z",
+     "created_at": "2026-10-22T17:05:55.899122Z",
+     "size_in_bytes": 60064387
+    },
+    {
+     "id": 9313100225,
+     "ref": "refs/heads/main",
+     "key": "velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-64d3f6b3960e84acf6de73e7f15265f289b33bc69b357e0387c8afe0286e5f01",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T17:05:53.939221Z",
+     "created_at": "2026-10-22T01:17:26.953926Z",
+     "size_in_bytes": 109353135
+    },
+    {
+     "id": 9353890846,
+     "ref": "refs/pull/10/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-7710898cd3c01a281099f3e2a36c228c67d09816d647e9dd9dafca6d2bb168d6",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T16:54:00.862748Z",
+     "created_at": "2026-10-22T16:53:23.085367Z",
+     "size_in_bytes": 110691571
+    },
+    {
+     "id": 9312712977,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-0452e18cf3f47aef8377929fc60dc72887f1dd5c40f283ba38b849e4c6b1d87e",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T11:17:00.150703Z",
+     "created_at": "2026-10-22T01:05:28.328609Z",
+     "size_in_bytes": 355690256
+    },
+    {
+     "id": 9312676269,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-d5b60eb5599d424c156a58530a2c597ef836d8613b1967c30f0397d6f5f3f616",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T11:16:19.748389Z",
+     "created_at": "2026-10-22T01:04:05.532498Z",
+     "size_in_bytes": 355704726
+    },
+    {
+     "id": 9312654464,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-5a1b1349ba09f1836d27c718e3177eb5fa259100bb1020ba505bd995453fa5e7",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T11:16:18.873394Z",
+     "created_at": "2026-10-22T01:03:15.960528Z",
+     "size_in_bytes": 60064418
+    },
+    {
+     "id": 9312671208,
+     "ref": "refs/heads/main",
+     "key": "velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-581a170d68c64450db5316698dabe737f5351a6e9572ab5817ab752db028ca30",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T01:17:08.373171Z",
+     "created_at": "2026-10-22T01:03:49.264344Z",
+     "size_in_bytes": 109359621
+    },
+    {
+     "id": 9312680755,
+     "ref": "refs/pull/7/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-64d3f6b3960e84acf6de73e7f15265f289b33bc69b357e0387c8afe0286e5f01",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T01:04:48.564336Z",
+     "created_at": "2026-10-22T01:04:08.774068Z",
+     "size_in_bytes": 109354295
+    },
+    {
+     "id": 9312225199,
+     "ref": "refs/pull/6/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-581a170d68c64450db5316698dabe737f5351a6e9572ab5817ab752db028ca30",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T00:50:29.442390Z",
+     "created_at": "2026-10-22T00:49:50.452970Z",
+     "size_in_bytes": 109359742
+    },
+    {
+     "id": 9310479951,
+     "ref": "refs/pull/4/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-c6c883ef912c74870b0b2eee68bc5ba5b5eb556d90056388dfaeabdf8a8006cf",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-21T23:59:00.189498Z",
+     "created_at": "2026-10-21T23:58:18.758160Z",
+     "size_in_bytes": 106414628
+    }
+   ]
+  },
+  {
+   "repository": "ChainArgos/eth-processor-rust",
+   "inventory_endpoint": "repos/ChainArgos/eth-processor-rust/actions/caches?per_page=100",
+   "inventory_pages_fetched": 1,
+   "inventory_page_truncated": false,
+   "total_count": 16,
+   "entries_returned": 16,
+   "listed_size_sum_bytes": 3582319132,
+   "usage_endpoint": "repos/ChainArgos/eth-processor-rust/actions/cache/usage",
+   "active_caches_size_in_bytes": 3582319132,
+   "active_caches_count": 16,
+   "storage_limit_endpoint": "repos/ChainArgos/eth-processor-rust/actions/cache/storage-limit",
+   "storage_limit_bytes": null,
+   "storage_limit_unknown_reason": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+   "retention_limit_endpoint": "repos/ChainArgos/eth-processor-rust/actions/cache/retention-limit",
+   "retention_limit_days": null,
+   "retention_limit_unknown_reason": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+   "family_breakdown": [
+    {
+     "key_prefix": "mise-tools",
+     "count": 11,
+     "bytes": 3022117297
+    },
+    {
+     "key_prefix": "velnor-v2",
+     "count": 5,
+     "bytes": 560201835
+    }
+   ],
+   "entries": [
+    {
+     "id": 9353501553,
+     "ref": "refs/heads/main",
+     "key": "velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-2f7156d4d246fb00ee018bdbc7be76f7c20b95fd8af71c2177bc1511c83e466c",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-23T01:41:12.512296Z",
+     "created_at": "2026-10-22T16:45:38.404742Z",
+     "size_in_bytes": 113543918
+    },
+    {
+     "id": 9365310310,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-60ffe74b07a2abccea04f9edd1cb5182b87eb83cb5252b861149f4f486085667",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T01:40:08.294375Z",
+     "created_at": "2026-10-22T20:48:37.824249Z",
+     "size_in_bytes": 358933729
+    },
+    {
+     "id": 9365359106,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-a802af81fe6e1461c418101c69691b63c4cd38c43fdc0aeb79a625874f18cceb",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T01:40:05.966734Z",
+     "created_at": "2026-10-22T20:49:39.588977Z",
+     "size_in_bytes": 347864219
+    },
+    {
+     "id": 9364963140,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-01fe00daf763bc32194fba0a67a3d18dbea33609858eff5ef4085ed2320dbfff",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T01:38:44.228Z",
+     "created_at": "2026-10-22T20:41:10.942707Z",
+     "size_in_bytes": 352155627
+    },
+    {
+     "id": 9364916729,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-47b780117aa4ede3408349bc01d970a91c1cb3e2ee66718361244f288361d78f",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T01:38:42.692797Z",
+     "created_at": "2026-10-22T20:40:09.697381Z",
+     "size_in_bytes": 64915217
+    },
+    {
+     "id": 9353949523,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-d6b50a0b1221c6a049c8a191584450098a625f8ce8b4684c6a93aecfb8acf035",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T16:54:32.309351Z",
+     "created_at": "2026-10-22T16:54:32.309351Z",
+     "size_in_bytes": 348658611
+    },
+    {
+     "id": 9353780597,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-2d6a41aed2a1150a47b3213b69800028bceb5bb24638cf34d5419274164f5683",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T16:51:14.482881Z",
+     "created_at": "2026-10-22T16:51:14.482881Z",
+     "size_in_bytes": 362318019
+    },
+    {
+     "id": 9353508914,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-b583e5d32df03b5ccadfe426119ed7cd2467c3c0a0fbba110cfefc230bf0e5a9",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T16:45:48.849876Z",
+     "created_at": "2026-10-22T16:45:48.849876Z",
+     "size_in_bytes": 355675424
+    },
+    {
+     "id": 9312130684,
+     "ref": "refs/heads/main",
+     "key": "velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-708041620b346bb98061ca0100bae0f9aa2885adeddfcb976bc0ba9634287537",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T16:45:14.807278Z",
+     "created_at": "2026-10-22T00:46:54.051612Z",
+     "size_in_bytes": 111038127
+    },
+    {
+     "id": 9353468251,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-fba52d22394e715240f54026c6267a3b91fe682c1ed2baf45137ccff910b2575",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T16:44:57.927193Z",
+     "created_at": "2026-10-22T16:44:57.927193Z",
+     "size_in_bytes": 60064388
+    },
+    {
+     "id": 9352665254,
+     "ref": "refs/pull/11/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-2f7156d4d246fb00ee018bdbc7be76f7c20b95fd8af71c2177bc1511c83e466c",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T16:28:35.929511Z",
+     "created_at": "2026-10-22T16:27:52.530487Z",
+     "size_in_bytes": 113544421
+    },
+    {
+     "id": 9312364394,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-0452e18cf3f47aef8377929fc60dc72887f1dd5c40f283ba38b849e4c6b1d87e",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T11:17:32.842109Z",
+     "created_at": "2026-10-22T00:54:06.798897Z",
+     "size_in_bytes": 355693937
+    },
+    {
+     "id": 9312135857,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-d5b60eb5599d424c156a58530a2c597ef836d8613b1967c30f0397d6f5f3f616",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T11:16:38.886438Z",
+     "created_at": "2026-10-22T00:47:04.171513Z",
+     "size_in_bytes": 355773841
+    },
+    {
+     "id": 9312112944,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-5a1b1349ba09f1836d27c718e3177eb5fa259100bb1020ba505bd995453fa5e7",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T11:16:37.829775Z",
+     "created_at": "2026-10-22T00:46:20.762177Z",
+     "size_in_bytes": 60064285
+    },
+    {
+     "id": 9311541662,
+     "ref": "refs/pull/9/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-708041620b346bb98061ca0100bae0f9aa2885adeddfcb976bc0ba9634287537",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T00:29:59.220463Z",
+     "created_at": "2026-10-22T00:29:15.315287Z",
+     "size_in_bytes": 111037824
+    },
+    {
+     "id": 9310430487,
+     "ref": "refs/pull/6/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-29e81838f1c03635c4b20f6688115d0e822e613c8603ed5200fe671f056f0c1b",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-21T23:57:28.110973Z",
+     "created_at": "2026-10-21T23:56:51.593785Z",
+     "size_in_bytes": 111037545
+    }
+   ]
+  },
+  {
+   "repository": "ChainArgos/tron-grpc-server",
+   "inventory_endpoint": "repos/ChainArgos/tron-grpc-server/actions/caches?per_page=100",
+   "inventory_pages_fetched": 1,
+   "inventory_page_truncated": false,
+   "total_count": 18,
+   "entries_returned": 18,
+   "listed_size_sum_bytes": 3785514312,
+   "usage_endpoint": "repos/ChainArgos/tron-grpc-server/actions/cache/usage",
+   "active_caches_size_in_bytes": 3785514312,
+   "active_caches_count": 18,
+   "storage_limit_endpoint": "repos/ChainArgos/tron-grpc-server/actions/cache/storage-limit",
+   "storage_limit_bytes": null,
+   "storage_limit_unknown_reason": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+   "retention_limit_endpoint": "repos/ChainArgos/tron-grpc-server/actions/cache/retention-limit",
+   "retention_limit_days": null,
+   "retention_limit_unknown_reason": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+   "family_breakdown": [
+    {
+     "key_prefix": "mise-tools",
+     "count": 11,
+     "bytes": 3022850454
+    },
+    {
+     "key_prefix": "velnor-v2",
+     "count": 7,
+     "bytes": 762663858
+    }
+   ],
+   "entries": [
+    {
+     "id": 9354885753,
+     "ref": "refs/heads/main",
+     "key": "velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-0c4409e536777330a2f2d5886e327ec1fa87ce53bd65732cccd44f57f8d4a327",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-23T01:49:10.099823Z",
+     "created_at": "2026-10-22T17:13:44.151217Z",
+     "size_in_bytes": 110307111
+    },
+    {
+     "id": 9365269834,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-60ffe74b07a2abccea04f9edd1cb5182b87eb83cb5252b861149f4f486085667",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T01:48:21.786251Z",
+     "created_at": "2026-10-22T20:47:44.265581Z",
+     "size_in_bytes": 358983215
+    },
+    {
+     "id": 9365666561,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-a802af81fe6e1461c418101c69691b63c4cd38c43fdc0aeb79a625874f18cceb",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T01:48:19.152275Z",
+     "created_at": "2026-10-22T20:56:14.267334Z",
+     "size_in_bytes": 348040260
+    },
+    {
+     "id": 9365198586,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-01fe00daf763bc32194fba0a67a3d18dbea33609858eff5ef4085ed2320dbfff",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T01:46:58.549909Z",
+     "created_at": "2026-10-22T20:46:15.307162Z",
+     "size_in_bytes": 352160404
+    },
+    {
+     "id": 9365147841,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-47b780117aa4ede3408349bc01d970a91c1cb3e2ee66718361244f288361d78f",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T01:46:57.243433Z",
+     "created_at": "2026-10-22T20:45:11.196138Z",
+     "size_in_bytes": 64915163
+    },
+    {
+     "id": 9354947824,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-2d6a41aed2a1150a47b3213b69800028bceb5bb24638cf34d5419274164f5683",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T17:26:17.438665Z",
+     "created_at": "2026-10-22T17:15:02.564192Z",
+     "size_in_bytes": 363353632
+    },
+    {
+     "id": 9355382717,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-d6b50a0b1221c6a049c8a191584450098a625f8ce8b4684c6a93aecfb8acf035",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T17:26:14.782361Z",
+     "created_at": "2026-10-22T17:23:55.267402Z",
+     "size_in_bytes": 348023969
+    },
+    {
+     "id": 9354893822,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-b583e5d32df03b5ccadfe426119ed7cd2467c3c0a0fbba110cfefc230bf0e5a9",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T17:25:20.870458Z",
+     "created_at": "2026-10-22T17:13:53.728285Z",
+     "size_in_bytes": 355745586
+    },
+    {
+     "id": 9354860194,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-fba52d22394e715240f54026c6267a3b91fe682c1ed2baf45137ccff910b2575",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T17:25:19.942297Z",
+     "created_at": "2026-10-22T17:13:13.833454Z",
+     "size_in_bytes": 60064375
+    },
+    {
+     "id": 9312967446,
+     "ref": "refs/heads/main",
+     "key": "velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-cc36c8b010178a321926a93741bc74414e75579cd8cad0ef1bcd89c6baa1097c",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T17:13:25.994717Z",
+     "created_at": "2026-10-22T01:13:13.340689Z",
+     "size_in_bytes": 108994186
+    },
+    {
+     "id": 9354287098,
+     "ref": "refs/pull/10/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-0c4409e536777330a2f2d5886e327ec1fa87ce53bd65732cccd44f57f8d4a327",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T17:02:07.445285Z",
+     "created_at": "2026-10-22T17:01:20.130556Z",
+     "size_in_bytes": 110319835
+    },
+    {
+     "id": 9312578699,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-0452e18cf3f47aef8377929fc60dc72887f1dd5c40f283ba38b849e4c6b1d87e",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T11:19:20.267643Z",
+     "created_at": "2026-10-22T01:00:55.322540Z",
+     "size_in_bytes": 355714499
+    },
+    {
+     "id": 9312544261,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-d5b60eb5599d424c156a58530a2c597ef836d8613b1967c30f0397d6f5f3f616",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T11:18:23.553083Z",
+     "created_at": "2026-10-22T00:59:51.139638Z",
+     "size_in_bytes": 355785145
+    },
+    {
+     "id": 9312521516,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-5a1b1349ba09f1836d27c718e3177eb5fa259100bb1020ba505bd995453fa5e7",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T11:18:20.376630Z",
+     "created_at": "2026-10-22T00:59:06.290594Z",
+     "size_in_bytes": 60064206
+    },
+    {
+     "id": 9312539064,
+     "ref": "refs/heads/main",
+     "key": "velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-64a642d8cf0aa4b2850b2f1eef609a6e2f747f0f09c643acece2de7fdb99307e",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T01:12:58.077362Z",
+     "created_at": "2026-10-22T00:59:40.937695Z",
+     "size_in_bytes": 109000464
+    },
+    {
+     "id": 9312563130,
+     "ref": "refs/pull/7/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-cc36c8b010178a321926a93741bc74414e75579cd8cad0ef1bcd89c6baa1097c",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T01:01:10.431564Z",
+     "created_at": "2026-10-22T01:00:26.342862Z",
+     "size_in_bytes": 108993815
+    },
+    {
+     "id": 9312227678,
+     "ref": "refs/pull/6/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-64a642d8cf0aa4b2850b2f1eef609a6e2f747f0f09c643acece2de7fdb99307e",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T00:50:33.274460Z",
+     "created_at": "2026-10-22T00:49:55.635612Z",
+     "size_in_bytes": 109000188
+    },
+    {
+     "id": 9310480531,
+     "ref": "refs/pull/4/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-bda46e9cd4fbc5519a14d3ef3d2aeafc2586a2ba92b7d72173a3176399b7cecb",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-21T23:58:58.695420Z",
+     "created_at": "2026-10-21T23:58:20.106952Z",
+     "size_in_bytes": 106048259
+    }
+   ]
+  },
+  {
+   "repository": "ChainArgos/tron-processor-rust",
+   "inventory_endpoint": "repos/ChainArgos/tron-processor-rust/actions/caches?per_page=100",
+   "inventory_pages_fetched": 1,
+   "inventory_page_truncated": false,
+   "total_count": 16,
+   "entries_returned": 16,
+   "listed_size_sum_bytes": 3583640071,
+   "usage_endpoint": "repos/ChainArgos/tron-processor-rust/actions/cache/usage",
+   "active_caches_size_in_bytes": 3583640071,
+   "active_caches_count": 16,
+   "storage_limit_endpoint": "repos/ChainArgos/tron-processor-rust/actions/cache/storage-limit",
+   "storage_limit_bytes": null,
+   "storage_limit_unknown_reason": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+   "retention_limit_endpoint": "repos/ChainArgos/tron-processor-rust/actions/cache/retention-limit",
+   "retention_limit_days": null,
+   "retention_limit_unknown_reason": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+   "family_breakdown": [
+    {
+     "key_prefix": "mise-tools",
+     "count": 11,
+     "bytes": 3023258756
+    },
+    {
+     "key_prefix": "velnor-v2",
+     "count": 5,
+     "bytes": 560381315
+    }
+   ],
+   "entries": [
+    {
+     "id": 9353901549,
+     "ref": "refs/heads/main",
+     "key": "velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-f6f9d75a056825bc8c70a435396e9f9b2512d1ae8a4014e4a8fb26cbfecb58be",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-23T01:41:11.535295Z",
+     "created_at": "2026-10-22T16:53:35.862137Z",
+     "size_in_bytes": 113522727
+    },
+    {
+     "id": 9365352112,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-60ffe74b07a2abccea04f9edd1cb5182b87eb83cb5252b861149f4f486085667",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T01:40:12.920490Z",
+     "created_at": "2026-10-22T20:49:29.516294Z",
+     "size_in_bytes": 359089777
+    },
+    {
+     "id": 9365528321,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-a802af81fe6e1461c418101c69691b63c4cd38c43fdc0aeb79a625874f18cceb",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T01:40:09.725669Z",
+     "created_at": "2026-10-22T20:53:18.004109Z",
+     "size_in_bytes": 348017851
+    },
+    {
+     "id": 9364963715,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-01fe00daf763bc32194fba0a67a3d18dbea33609858eff5ef4085ed2320dbfff",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T01:38:48.946943Z",
+     "created_at": "2026-10-22T20:41:11.995577Z",
+     "size_in_bytes": 352030617
+    },
+    {
+     "id": 9364922987,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-47b780117aa4ede3408349bc01d970a91c1cb3e2ee66718361244f288361d78f",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-23T01:38:48.486246Z",
+     "created_at": "2026-10-22T20:40:17.792818Z",
+     "size_in_bytes": 64915132
+    },
+    {
+     "id": 9354309804,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-d6b50a0b1221c6a049c8a191584450098a625f8ce8b4684c6a93aecfb8acf035",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T17:01:49.636791Z",
+     "created_at": "2026-10-22T17:01:49.636791Z",
+     "size_in_bytes": 348620204
+    },
+    {
+     "id": 9354308212,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-2d6a41aed2a1150a47b3213b69800028bceb5bb24638cf34d5419274164f5683",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T17:01:47.810328Z",
+     "created_at": "2026-10-22T17:01:47.810328Z",
+     "size_in_bytes": 362487180
+    },
+    {
+     "id": 9353910609,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-b583e5d32df03b5ccadfe426119ed7cd2467c3c0a0fbba110cfefc230bf0e5a9",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T16:53:45.927247Z",
+     "created_at": "2026-10-22T16:53:45.927247Z",
+     "size_in_bytes": 356585675
+    },
+    {
+     "id": 9312140820,
+     "ref": "refs/heads/main",
+     "key": "velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-66c0e8b60a33f64cb03fb7211d26add7f88cd7f02bfab1509d80e549db12b2b7",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T16:53:15.240042Z",
+     "created_at": "2026-10-22T00:47:13.029235Z",
+     "size_in_bytes": 111072179
+    },
+    {
+     "id": 9353875386,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-fba52d22394e715240f54026c6267a3b91fe682c1ed2baf45137ccff910b2575",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T16:53:04.253734Z",
+     "created_at": "2026-10-22T16:53:04.253734Z",
+     "size_in_bytes": 60064270
+    },
+    {
+     "id": 9353209842,
+     "ref": "refs/pull/11/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-f6f9d75a056825bc8c70a435396e9f9b2512d1ae8a4014e4a8fb26cbfecb58be",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T16:39:59.247923Z",
+     "created_at": "2026-10-22T16:39:18.228488Z",
+     "size_in_bytes": 113645466
+    },
+    {
+     "id": 9312398546,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-0452e18cf3f47aef8377929fc60dc72887f1dd5c40f283ba38b849e4c6b1d87e",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T11:19:17.156646Z",
+     "created_at": "2026-10-22T00:55:09.792492Z",
+     "size_in_bytes": 355739579
+    },
+    {
+     "id": 9312119241,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-5a1b1349ba09f1836d27c718e3177eb5fa259100bb1020ba505bd995453fa5e7",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T11:18:32.330536Z",
+     "created_at": "2026-10-22T00:46:31.452105Z",
+     "size_in_bytes": 60064259
+    },
+    {
+     "id": 9312146267,
+     "ref": "refs/heads/main",
+     "key": "mise-tools-v2-d5b60eb5599d424c156a58530a2c597ef836d8613b1967c30f0397d6f5f3f616",
+     "version": "288801acb3e8493d00e00ea30483ef3e30f9d619d9a15fb51e13e3cfcb6972ba",
+     "last_accessed_at": "2026-10-22T11:18:32.164171Z",
+     "created_at": "2026-10-22T00:47:22.723939Z",
+     "size_in_bytes": 355644212
+    },
+    {
+     "id": 9311555278,
+     "ref": "refs/pull/9/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-66c0e8b60a33f64cb03fb7211d26add7f88cd7f02bfab1509d80e549db12b2b7",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-22T00:30:20.040220Z",
+     "created_at": "2026-10-22T00:29:41.158369Z",
+     "size_in_bytes": 111070801
+    },
+    {
+     "id": 9310432156,
+     "ref": "refs/pull/6/merge",
+     "key": "velnor-v2-sources-pr-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-cd12c291ea789e409ee2495cc8a6a2f29d54e0b79bfd964696de351d5631a236",
+     "version": "f995b0cd5acc54e9f51c11c488d00736eb54e84522dd28a4940ac77b4665b5c1",
+     "last_accessed_at": "2026-10-21T23:57:32.385700Z",
+     "created_at": "2026-10-21T23:56:54.540682Z",
+     "size_in_bytes": 111070142
+    }
+   ]
+  }
+ ]
+}

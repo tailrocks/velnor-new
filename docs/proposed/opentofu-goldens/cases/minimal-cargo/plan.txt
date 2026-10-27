@@ -16,21 +16,23 @@ Workflow to generate
   Jobs:
     - jactionlint (8 steps)
     - plan (14 steps)
-    - required (9 steps)
+    - required (10 steps)
     - required-gate (1 steps)
-    - rust-minimal-cargo (18 steps)
-    - 1 Rust crate job
+    - rust-minimal-cargo-read (17 steps)
+    - rust-minimal-cargo-write (18 steps)
+    - 2 Rust crate jobs
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> run tests -> doctests -> doc build -> format check
       Entries:
-        - rust-minimal-cargo
+        - rust-minimal-cargo-read
+        - rust-minimal-cargo-write
       Obligations:
         - stack/rust/root/clippy/default
         - stack/rust/root/doc/default
         - stack/rust/root/doctest/default
         - stack/rust/root/fmt/default
         - stack/rust/root/test/default
-  Parallel: 1 execution job; dependencies preserved; no matrix fan-out
+  Parallel: 2 execution jobs; dependencies preserved; no matrix fan-out
   Critical path: stack/rust/root/clippy/default (1 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools

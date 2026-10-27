@@ -27,6 +27,7 @@ pub(crate) struct Signals {
     pub(crate) cancelled: bool,
     pub(crate) blocked: bool,
     pub(crate) not_run: bool,
+    pub(crate) needs_prepare: bool,
 }
 
 pub(crate) struct Partition<'a> {

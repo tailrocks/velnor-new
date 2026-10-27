@@ -19,7 +19,7 @@ Commands:
 Options:
   -v, --verbose...
           Print source location and additional information in logs.
-          
+
           If this option is unspecified, logs are printed at the INFO level without verbosity. `-v`
           adds verbosity to logs. `-vv` adds verbosity and sets the log level to DEBUG. `-vvv` adds
           verbosity and sets the log level to TRACE. To change the log level without setting

@@ -3,23 +3,31 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::workflow::cache_family::CacheFamily;
-use velnor_actions_contract::workflow::cache_family_mbx::{
-    MBX_BUNDLE_EXPORT_CONDITION, MBX_BUNDLE_IMPORT_CONDITION, MBX_BUNDLE_KEY_EXPR,
-    MBX_BUNDLE_PATH_EXPR, MBX_BUNDLE_RESTORE_KEYS_EXPR, MBX_BUNDLE_SAVE_CONDITION,
+use velnor_actions_contract::workflow::cache_family::{
+    COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL,
 };
-use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
+use velnor_actions_contract::workflow::cache_family_mbx::{
+    MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_RESTORE_KEYS_EXPR,
+};
+use velnor_actions_contract::{Step, StepId, StepRole};
 
-use super::mbx_preflight::{ACTION_MBX_BIN, RESOLVE_ACTION_MBX_BIN};
 use crate::RenderError;
-use crate::steps::{action_owned_mbx_shell_step, action_step_with_env, shell_step};
+use crate::steps::shell_step;
 
-pub const MBX_BUNDLE_KEY_NAME: &str = "Compute MBX bundle key";
-pub const MBX_BUNDLE_RESTORE_NAME: &str = "Restore MBX bundle";
-pub const MBX_BUNDLE_IMPORT_NAME: &str = "Import MBX bundle";
-pub const MBX_PRODUCER_MARK_NAME: &str = "Record MBX producer success";
-pub const MBX_BUNDLE_EXPORT_NAME: &str = "Export MBX bundle";
-pub const MBX_BUNDLE_SAVE_NAME: &str = "Save MBX bundle";
+#[path = "cache_steps_mbx_bundle_publish.rs"]
+mod publish;
+#[path = "cache_steps_mbx_bundle_recover.rs"]
+mod recover;
+
+pub(crate) use publish::append_bundle_postludes;
+pub use recover::mbx_producer_mark_step;
+
+pub const MBX_BUNDLE_KEY_NAME: &str = "Compute state snapshot key";
+pub const MBX_BUNDLE_RESTORE_NAME: &str = "Restore state snapshot";
+pub const MBX_BUNDLE_IMPORT_NAME: &str = "Recover state snapshot";
+pub const MBX_PRODUCER_MARK_NAME: &str = "Record state producer success";
+pub const MBX_BUNDLE_EXPORT_NAME: &str = "Publish state snapshot";
+pub const MBX_BUNDLE_SAVE_NAME: &str = "Save state snapshot";
 pub const MBX_EXPORT_GROUP_ENV: &str = "MBX_CACHE_EXPORT_GROUP";
 pub const MBX_EXPORT_GROUP_VALUE: &str = "velnor";
 
@@ -31,9 +39,25 @@ const HEAD_FORK_EXPR: &str = "${{ github.event.pull_request.head.repo.fork }}";
 const VERSION_ENV: &str = "VELNOR_MBX_BUNDLE_VERSION";
 const TOOLCHAIN_ENV: &str = "VELNOR_MBX_BUNDLE_TOOLCHAIN";
 const ROOT_ENV: &str = "VELNOR_MBX_BUNDLE_ROOT";
-const MARK_FILE: &str = "$RUNNER_TEMP/velnor/mbx-producer-ok";
-const BUNDLE_SHELL_DIR: &str = "$RUNNER_TEMP/velnor/mbx-bundle";
-const KIB: u64 = 1024;
+const MARK_FILE: &str = "$RUNNER_TEMP/velnor/state-producer-ok";
+const SIZE_FILE: &str = "$RUNNER_TEMP/velnor/state-payload.size";
+
+const DISCOVERY_RECORD: &str = "$RUNNER_TEMP/velnor/state-discovery.record";
+const RECOVERY_RECORD: &str = "$RUNNER_TEMP/velnor/state-recovery.record";
+const PUBLICATION_RECORD: &str = "$RUNNER_TEMP/velnor/state-publication.record";
+
+/// Baked expression for the cache-matched key published by the restore step.
+///
+/// The recover script classifies the restore observation (exact hit versus
+/// predecessor fallback) against the intended key at runtime, so both sides
+/// are baked as literal workflow expressions here rather than passed through
+/// step env (the env expression allowlist does not cover step outputs).
+const MATCHED_KEY_EXPR: &str = "${{steps.mbx-bundle-restore.outputs.cache-matched-key}}";
+
+/// Cap for the number of archive members the recover and publish scripts
+/// accept. Mirrors the orchestrator snapshot archive entry budget so a
+/// hostile or degenerate payload is refused before extraction.
+const MAX_ARCHIVE_MEMBERS: u64 = 100_000;
 
 const RUNNER_TEMP_GUARD: &str = "case \"$RUNNER_TEMP\" in /*) ;; *) printf '%s\\n' 'RUNNER_TEMP must be absolute' >&2; exit 1 ;; esac";
 
@@ -48,6 +72,24 @@ fn workspace_root(working_directory: Option<&str>) -> Result<String, RenderError
     Ok(dir.to_owned())
 }
 
+/// Fixed shell literal for one complete-state transport expression.
+///
+/// Cache action inputs carry the expression form while shell scripts need
+/// the shell form. Both derive from the same common family literal so the
+/// transport path cannot drift between restore, recovery, publish, and save.
+fn shell_literal(expr: &str) -> Result<String, RenderError> {
+    expr.strip_prefix(RUNNER_TEMP_EXPR)
+        .map(|rest| format!("{RUNNER_TEMP_SHELL}{rest}"))
+        .ok_or_else(|| RenderError::InvalidWorkflow("state_transport_not_runner_temp".to_owned()))
+}
+
+fn split_shell(path: &str) -> Result<(String, String), RenderError> {
+    path.rsplit_once('/')
+        .map(|(parent, base)| (parent.to_owned(), base.to_owned()))
+        .filter(|(parent, base)| !parent.is_empty() && !base.is_empty())
+        .ok_or_else(|| RenderError::InvalidWorkflow("state_transport_bad_path".to_owned()))
+}
+
 pub(crate) fn mbx_bundle_prelude(
     unit: &str,
     mbx_version_expr: &str,
@@ -57,43 +99,104 @@ pub(crate) fn mbx_bundle_prelude(
     env: &BTreeMap<String, String>,
 ) -> Result<[Step; 3], RenderError> {
     let root = workspace_root(working_directory)?;
-    let key = key_step(unit, mbx_version_expr, toolchain_expr, &root)?;
+    let discover = discover_step(unit, mbx_version_expr, toolchain_expr, &root)?;
     let restore = restore_step()?;
-    let import = import_step(rust_toolchain, working_directory, env.clone())?;
-    Ok([key, restore, import])
+    let recover = recover::recover_step(rust_toolchain, working_directory, env.clone())?;
+    Ok([discover, restore, recover])
 }
 
-fn key_step(unit: &str, version: &str, toolchain: &str, root: &str) -> Result<Step, RenderError> {
+/// Shared compatibility-digest shell fragment.
+///
+/// Both the discovery step and the recovery/publication steps compute the
+/// snapshot compatibility digest with the same byte layout: the family
+/// identity line, the OS identity lines, then the pinned lock digest. The
+/// recovery side recomputes it from the discovery record values and refuses
+/// on drift, which is the shell half of the coverage-replay check.
+fn compat_head_lines(
+    dir: &str,
+    version: &str,
+    toolchain: &str,
+    root: &str,
+    unit: &str,
+    unit_is_literal: bool,
+) -> Vec<String> {
+    let spec = CacheFamily::MbxBundle.spec();
+    let unit_arg = if unit_is_literal {
+        format!("'unit={unit}'")
+    } else {
+        format!("\"unit={unit}\"")
+    };
+    vec![
+        format!(
+            "printf '%s\\n' 'family={}' 'schema={}' '{}' {unit_arg} \"mbx={version}\" \"toolchain={toolchain}\" \"root={root}\" 'ceiling={}' > \"{dir}/compat\"",
+            spec.layer,
+            spec.schema,
+            spec.shell_paths(None).join("' '"),
+            spec.ceiling_bytes,
+        ),
+        format!("uname -s >> \"{dir}/compat\""),
+        format!("uname -m >> \"{dir}/compat\""),
+        format!("s256 \"{dir}/compat\""),
+    ]
+}
+
+const S256_FN: &str = "s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in ''|*[!0-9a-f]*) printf '%s\\n' 'sha256sum returned no digest' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }";
+
+/// Discover the restore candidate and record its provenance.
+///
+/// This replaces the old key-only computation with a discovery step: the
+/// key and restore-keys outputs keep their exact legacy semantics for the
+/// transport steps, while the new `provenance`/`decision` outputs plus the
+/// discovery record bind every later stage (verify the restore observation,
+/// replay the coverage digest, admit the payload, publish, exact readback)
+/// to the same provenance classification.
+fn discover_step(
+    unit: &str,
+    version: &str,
+    toolchain: &str,
+    root: &str,
+) -> Result<Step, RenderError> {
     let spec = CacheFamily::MbxBundle.spec();
     let prefix = CacheFamily::MbxBundle.key_prefix();
     let ceiling = spec.ceiling_bytes;
-    let script = [
+    let mut script = vec![
         "set -eu".to_owned(),
         RUNNER_TEMP_GUARD.to_owned(),
-        "d=\"$RUNNER_TEMP/velnor/mbx-bundle-key\"".to_owned(),
+        "d=\"$RUNNER_TEMP/velnor/state-snapshot-key\"".to_owned(),
         "rm -rf \"$d\"".to_owned(),
         "mkdir -p \"$d\"".to_owned(),
-        "s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in ''|*[!0-9a-f]*) printf '%s\\n' 'sha256sum returned no digest' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }".to_owned(),
+        S256_FN.to_owned(),
         format!("default_ref=\"${{{DEFAULT_REF_ENV}:-}}\""),
         "trust=none".to_owned(),
         "if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; fi".to_owned(),
-        format!("printf '%s\\n' 'family={}' 'schema={}' '{}' 'unit={unit}' \"mbx=${{{VERSION_ENV}}}\" \"toolchain=${{{TOOLCHAIN_ENV}}}\" \"root=${{{ROOT_ENV}}}\" 'ceiling={ceiling}' > \"$d/compat\"", spec.layer, spec.schema, spec.shell_paths(None).join("' '")),
-        "uname -s >> \"$d/compat\"".to_owned(),
-        "uname -m >> \"$d/compat\"".to_owned(),
-        "s256 \"$d/compat\"".to_owned(),
-        "compat=\"s256-$h\"".to_owned(),
-        format!("lock=\"$GITHUB_WORKSPACE/${{{ROOT_ENV}}}/Cargo.lock\""),
-        "if [ -f \"$lock\" ] && [ ! -L \"$lock\" ]; then s256 \"$lock\"; else printf '%s\\n' absent > \"$d/absent\"; s256 \"$d/absent\"; fi".to_owned(),
-        "snap=\"s256-$h\"".to_owned(),
-        format!("trusted=\"{prefix}trusted-$compat-\""),
-        "key=\"$trusted$snap\"".to_owned(),
-        format!("[ \"${{#key}}\" -le {} ] || {{ printf 'cache key exceeds the GitHub cap: %s\\n' \"$key\" >&2; exit 1; }}", velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES),
-        "save=false".to_owned(),
-        "[ \"$trust\" != trusted ] || save=true".to_owned(),
-        "printf '%s\\n' \"key=$key\" \"restore_keys=$trusted\" \"save=$save\" >> \"$GITHUB_OUTPUT\"".to_owned(),
-        "printf 'velnor: mbx bundle trust=%s key=%s save=%s\\n' \"$trust\" \"$key\" \"$save\"".to_owned(),
-    ]
-    .join("; ");
+    ];
+    script.extend(compat_head_lines(
+        "$d",
+        &format!("${{{VERSION_ENV}}}"),
+        &format!("${{{TOOLCHAIN_ENV}}}"),
+        &format!("${{{ROOT_ENV}}}"),
+        unit,
+        true,
+    ));
+    script.extend(
+        [
+            "compat=\"s256-$h\"".to_owned(),
+            format!("lock=\"$GITHUB_WORKSPACE/${{{ROOT_ENV}}}/Cargo.lock\""),
+            "if [ -f \"$lock\" ] && [ ! -L \"$lock\" ]; then s256 \"$lock\"; else printf '%s\\n' absent > \"$d/absent\"; s256 \"$d/absent\"; fi".to_owned(),
+            "snap=\"s256-$h\"".to_owned(),
+            format!("trusted=\"{prefix}trusted-$compat-\""),
+            "key=\"$trusted$snap\"".to_owned(),
+            format!("[ \"${{#key}}\" -le {} ] || {{ printf 'cache key exceeds the GitHub cap: %s\\n' \"$key\" >&2; exit 1; }}", velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES),
+            "save=false".to_owned(),
+            "[ \"$trust\" != trusted ] || save=true".to_owned(),
+            "if [ \"$trust\" = trusted ]; then provenance=trusted; decision=admitted; else case \"${GITHUB_EVENT_NAME:-}\" in pull_request) provenance=untrusted ;; *) provenance=ambiguous ;; esac; decision=restore-only; fi".to_owned(),
+            "printf '%s\\n' \"key=$key\" \"restore_keys=$trusted\" \"save=$save\" \"provenance=$provenance\" \"decision=$decision\" >> \"$GITHUB_OUTPUT\"".to_owned(),
+            format!("record=\"{DISCOVERY_RECORD}\""),
+            format!("printf '%s\\n' \"key=$key\" \"restore_prefix=$trusted\" \"compat=$compat\" \"provenance=$provenance\" \"decision=$decision\" \"ceiling={ceiling}\" \"save=$save\" \"unit={unit}\" \"mbx_version=${{{VERSION_ENV}}}\" \"toolchain=${{{TOOLCHAIN_ENV}}}\" \"root=${{{ROOT_ENV}}}\" > \"$record\""),
+            "printf 'velnor: state snapshot trust=%s key=%s save=%s provenance=%s decision=%s\\n' \"$trust\" \"$key\" \"$save\" \"$provenance\" \"$decision\"".to_owned(),
+        ],
+    );
+    let script = script.join("; ");
     let env = BTreeMap::from([
         (DEFAULT_REF_ENV.to_owned(), DEFAULT_REF_EXPR.to_owned()),
         (HEAD_FORK_ENV.to_owned(), HEAD_FORK_EXPR.to_owned()),
@@ -112,183 +215,16 @@ fn key_step(unit: &str, version: &str, toolchain: &str, root: &str) -> Result<St
 }
 
 fn restore_step() -> Result<Step, RenderError> {
-    let uses = crate::cache_steps::TOOLS_RESTORE_ACTION_USES;
-    let mut step = action_step_with_env(
-        MBX_BUNDLE_RESTORE_NAME,
-        uses,
-        BTreeMap::from([
-            ("key".to_owned(), MBX_BUNDLE_KEY_EXPR.to_owned()),
-            (
-                "restore-keys".to_owned(),
-                MBX_BUNDLE_RESTORE_KEYS_EXPR.to_owned(),
-            ),
-            ("path".to_owned(), MBX_BUNDLE_PATH_EXPR.to_owned()),
-        ]),
-        BTreeMap::new(),
+    let mut step = super::cache_action_step(
+        true,
+        crate::cache_steps::TOOLS_RESTORE_ACTION_USES,
+        "mbx-bundle",
+        MBX_BUNDLE_KEY_EXPR,
+        &[MBX_BUNDLE_RESTORE_KEYS_EXPR.to_owned()],
+        &[COMPLETE_STATE_TRANSPORT_EXPR.to_owned()],
     )?;
+    MBX_BUNDLE_RESTORE_NAME.clone_into(&mut step.name);
     step.id = Some(StepId::MbxBundleRestore);
     step.role = Some(StepRole::MbxBundleRestore);
     Ok(step)
-}
-
-fn workspace_cd(working_directory: Option<&str>) -> Result<String, RenderError> {
-    let root = workspace_root(working_directory)?;
-    Ok(if root == "." {
-        "cd \"$GITHUB_WORKSPACE\"".to_owned()
-    } else {
-        format!("cd \"$GITHUB_WORKSPACE/{root}\"")
-    })
-}
-
-pub(crate) fn import_step(
-    rust_toolchain: &str,
-    working_directory: Option<&str>,
-    env: BTreeMap<String, String>,
-) -> Result<Step, RenderError> {
-    super::mbx_preflight::validate_rust_toolchain(rust_toolchain)?;
-    let script = [
-        "set -eu".to_owned(),
-        RUNNER_TEMP_GUARD.to_owned(),
-        format!("dir=\"{BUNDLE_SHELL_DIR}\""),
-        "if [ ! -d \"$dir\" ] || [ -L \"$dir\" ]; then printf '%s\\n' 'velnor: mbx bundle no_entry'; exit 0; fi".to_owned(),
-        RESOLVE_ACTION_MBX_BIN.to_owned(),
-        workspace_cd(working_directory)?,
-        format!("if mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- \"{ACTION_MBX_BIN}\" cache import \"$dir\"; then printf '%s\\n' 'velnor: mbx bundle imported'; else printf '%s\\n' '::warning::cache_corrupt: MBX bundle import failed; building cold'; fi"),
-        "rm -rf \"$dir\"".to_owned(),
-    ]
-    .join("; ");
-    let mut step = action_owned_mbx_shell_step(
-        MBX_BUNDLE_IMPORT_NAME,
-        vec!["sh".to_owned(), "-c".to_owned(), script],
-        env,
-    )?;
-    step.condition = Some(MBX_BUNDLE_IMPORT_CONDITION.to_owned());
-    step.role = Some(StepRole::MbxBundleImport);
-    Ok(step)
-}
-
-pub fn mbx_producer_mark_step() -> Result<Step, RenderError> {
-    let script = [
-        "set -eu".to_owned(),
-        RUNNER_TEMP_GUARD.to_owned(),
-        "mkdir -p \"$RUNNER_TEMP/velnor\"".to_owned(),
-        format!(": > \"{MARK_FILE}\""),
-    ]
-    .join("; ");
-    let mut step = shell_step(
-        MBX_PRODUCER_MARK_NAME,
-        vec!["sh".to_owned(), "-c".to_owned(), script],
-        BTreeMap::new(),
-    )?;
-    step.role = Some(StepRole::MbxProducerMark);
-    Ok(step)
-}
-
-pub(crate) fn bundle_postlude(action: &Step) -> Result<[Step; 2], RenderError> {
-    let StepKind::Action { with, env, .. } = &action.kind else {
-        return Err(RenderError::InvalidWorkflow(
-            "mbx_bundle_action_kind_mismatch".to_owned(),
-        ));
-    };
-    let rust = with
-        .get("toolchain")
-        .ok_or_else(|| RenderError::InvalidWorkflow("mbx_bundle_toolchain_missing".to_owned()))?;
-    let working_directory = with.get("working-directory").map(String::as_str);
-    let export = export_step(rust, working_directory, env.clone())?;
-    let save = save_step()?;
-    Ok([export, save])
-}
-
-pub(crate) fn export_step(
-    rust_toolchain: &str,
-    working_directory: Option<&str>,
-    env: BTreeMap<String, String>,
-) -> Result<Step, RenderError> {
-    super::mbx_preflight::validate_rust_toolchain(rust_toolchain)?;
-    let ceiling_kib = CacheFamily::MbxBundle.spec().ceiling_bytes / KIB;
-    let script = [
-        "set -eu".to_owned(),
-        RUNNER_TEMP_GUARD.to_owned(),
-        format!("dir=\"{BUNDLE_SHELL_DIR}\""),
-        format!("mark=\"{MARK_FILE}\""),
-        "out=${GITHUB_OUTPUT-}".to_owned(),
-        "skip() { if [ -n \"$out\" ]; then printf '%s\\n' 'exported=false' >> \"$out\"; fi; printf 'velnor: mbx bundle not exported (%s)\\n' \"$1\"; exit 0; }".to_owned(),
-        "if [ ! -f \"$mark\" ] || [ -L \"$mark\" ]; then skip producer_not_succeeded; fi".to_owned(),
-        format!("[ -n \"${{{MBX_EXPORT_GROUP_ENV}:-}}\" ] || skip export_group_missing"),
-        RESOLVE_ACTION_MBX_BIN.to_owned(),
-        workspace_cd(working_directory)?,
-        "rm -rf \"$dir\"".to_owned(),
-        format!("if mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- \"{ACTION_MBX_BIN}\" cache export --group \"${MBX_EXPORT_GROUP_ENV}\" --format directory \"$dir\"; then :; else rm -rf \"$dir\"; printf '%s\\n' '::warning::cache_unavailable: MBX export failed or had nothing new'; skip export_failed; fi"),
-        "if [ ! -d \"$dir\" ] || [ -L \"$dir\" ]; then skip export_missing; fi".to_owned(),
-        "du -sk \"$dir\" > \"$RUNNER_TEMP/velnor/mbx-bundle.size\"".to_owned(),
-        "kib=; rest=; read -r kib rest < \"$RUNNER_TEMP/velnor/mbx-bundle.size\" || [ -n \"$kib\" ]".to_owned(),
-        "case \"$kib\" in ''|*[!0-9]*) rm -rf \"$dir\"; skip size_unreadable ;; esac".to_owned(),
-        format!("if [ \"$kib\" -gt {ceiling_kib} ]; then rm -rf \"$dir\"; printf '%s\\n' '::warning::over_ceiling: MBX bundle exceeds the family ceiling; save refused'; skip over_ceiling; fi"),
-        "if [ \"$kib\" -eq 0 ]; then rm -rf \"$dir\"; skip empty_export; fi".to_owned(),
-        "if [ -n \"$out\" ]; then printf '%s\\n' 'exported=true' >> \"$out\"; fi".to_owned(),
-        "printf 'velnor: mbx bundle exported (%s KiB)\\n' \"$kib\"".to_owned(),
-    ]
-    .join("; ");
-    let mut step = action_owned_mbx_shell_step(
-        MBX_BUNDLE_EXPORT_NAME,
-        vec!["sh".to_owned(), "-c".to_owned(), script],
-        env,
-    )?;
-    step.id = Some(StepId::MbxBundleExport);
-    step.condition = Some(MBX_BUNDLE_EXPORT_CONDITION.to_owned());
-    step.role = Some(StepRole::MbxBundleExport);
-    Ok(step)
-}
-
-fn save_step() -> Result<Step, RenderError> {
-    let mut step = action_step_with_env(
-        MBX_BUNDLE_SAVE_NAME,
-        crate::cache_steps::TOOLS_SAVE_USES,
-        BTreeMap::from([
-            ("key".to_owned(), MBX_BUNDLE_KEY_EXPR.to_owned()),
-            ("path".to_owned(), MBX_BUNDLE_PATH_EXPR.to_owned()),
-        ]),
-        BTreeMap::new(),
-    )?;
-    step.condition = Some(MBX_BUNDLE_SAVE_CONDITION.to_owned());
-    step.role = Some(StepRole::MbxBundleSave);
-    Ok(step)
-}
-
-pub(crate) fn append_bundle_postludes(
-    jobs: &mut BTreeMap<String, velnor_actions_contract::Job>,
-) -> Result<(), RenderError> {
-    for (id, job) in jobs {
-        let restores = count(&job.steps, StepRole::MbxBundleRestore);
-        let exports = count(&job.steps, StepRole::MbxBundleExport);
-        let marks = count(&job.steps, StepRole::MbxProducerMark);
-        if restores == 0 && exports == 0 && marks == 0 {
-            continue;
-        }
-        if marks == 0 && exports == 0 {
-            continue;
-        }
-        if marks != 1 {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "mbx_producer_mark_count:{id}"
-            )));
-        }
-        if restores != 1 || exports != 0 {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "mbx_bundle_lifecycle:{id}"
-            )));
-        }
-        let action = job
-            .steps
-            .iter()
-            .find(|step| step.role == Some(StepRole::MbxCache))
-            .ok_or_else(|| RenderError::InvalidWorkflow(format!("mbx_bundle_no_action:{id}")))?;
-        let postlude = bundle_postlude(action)?;
-        job.steps.extend(postlude);
-    }
-    Ok(())
-}
-
-fn count(steps: &[Step], role: StepRole) -> usize {
-    steps.iter().filter(|step| step.role == Some(role)).count()
 }

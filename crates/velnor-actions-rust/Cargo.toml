@@ -15,6 +15,10 @@ test = false
 [lints]
 workspace = true
 
+[[test]]
+name = "velnor_rust"
+path = "tests/velnor_rust.rs"
+
 [dependencies]
 velnor-actions-contract = { version = "=0.1.59", path = "../velnor-actions-contract" }
 serde = { workspace = true }

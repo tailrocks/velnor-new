@@ -3,11 +3,39 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{RustCrateConfig, Step, StepKind};
+use velnor_actions_contract::workflow::crate_job::{
+    CrateGroupPlan, group_timeout_for, validate_group_needs,
+};
+use velnor_actions_contract::{CrateJob, JobTimeout, RustCrateConfig, Step, StepKind};
 
 use super::is_rust;
 use crate::OrchestratorError;
 use crate::discover::Discovery;
+
+pub(super) fn group_plan_for(
+    model: &CrateJob,
+    workspace_root: &str,
+    environment: &str,
+    bound: JobTimeout,
+) -> Result<CrateGroupPlan, OrchestratorError> {
+    let mut unit_ids: Vec<String> = model
+        .obligations
+        .iter()
+        .map(|obligation| obligation.task_id.clone())
+        .collect();
+    unit_ids.sort();
+    Ok(CrateGroupPlan::new(
+        model.job_id.clone(),
+        workspace_root.to_owned(),
+        environment.to_owned(),
+        unit_ids,
+        group_timeout_for(None, bound),
+    )?)
+}
+
+pub(super) fn reject_seed_needs(needs: &[String], job_id: &str) -> Result<(), OrchestratorError> {
+    Ok(validate_group_needs(needs, job_id)?)
+}
 
 pub(super) fn reject_unknown_crates(
     crates: &BTreeMap<String, RustCrateConfig>,

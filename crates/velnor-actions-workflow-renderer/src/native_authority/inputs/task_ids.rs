@@ -6,6 +6,7 @@ use super::{
     admit_manifest, invalid,
 };
 use std::collections::{BTreeMap, BTreeSet};
+use velnor_actions_contract::workflow::crate_job::{reader_job_id_for, writer_job_id_for};
 
 type Ids = BTreeMap<(String, String), String>;
 
@@ -80,7 +81,15 @@ impl TaskIds {
             }
             self.tofu.get(&key)
         };
-        if assigned != Some(&fact.id) {
+        let Some(expected) = assigned else {
+            return Err(invalid("native_task_job_identity"));
+        };
+        // Reader/writer branch jobs are deterministic derivatives of the canonical
+        // group id, so they carry the same identity binding as the group itself.
+        if fact.id != *expected
+            && fact.id != reader_job_id_for(expected)
+            && fact.id != writer_job_id_for(expected)
+        {
             return Err(invalid("native_task_job_identity"));
         }
         Ok(())

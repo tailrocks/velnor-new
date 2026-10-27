@@ -85,10 +85,26 @@ impl PrivateSourcesSpec<'_> {
                 || crate::toolchain_env::is_denied_endpoint_key(key)
                 || crate::toolchain_env::is_fetch_redirect_key(key)
                 || key.starts_with("VELNOR_")
-        }) {
+        }) || self
+            .toolchain_env
+            .iter()
+            .any(|(key, value)| value.contains("${{") && !is_toolchain_expression(key, value))
+        {
             return Err(bad("toolchain_env"));
         }
         Ok(())
+    }
+}
+
+fn is_toolchain_expression(key: &str, value: &str) -> bool {
+    use velnor_actions_mise::runtime_paths::{CARGO_HOME_EXPR, RUSTUP_HOME_EXPR};
+    use velnor_actions_mise::{PinnedTool, project_tool_expression};
+
+    match key {
+        "MISE_RUSTUP_HOME" => value == RUSTUP_HOME_EXPR,
+        "MISE_CARGO_HOME" => value == CARGO_HOME_EXPR,
+        "RUSTUP_TOOLCHAIN" => value == project_tool_expression(PinnedTool::Rust),
+        _ => false,
     }
 }
 

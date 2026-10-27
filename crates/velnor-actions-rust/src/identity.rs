@@ -4,14 +4,21 @@
 #[path = "identity_closure.rs"]
 mod identity_closure;
 
-pub use self::identity_closure::{UnresolvedInput, normalize_identity_path, unresolved_inputs};
+pub use self::identity_closure::{
+    DependencyCoverage, DependencyCoverageInputs, UnresolvedInput, dependency_closure_ids,
+    dependency_coverage, normalize_identity_path, unresolved_inputs,
+};
 
 use velnor_actions_contract::{ContractError, ProposedTask, component_id_for_unit};
 
+pub use crate::task_identity::DigestSlot;
+
 use crate::argv::{entry_metadata, require_nextest_for_shards, shards_allowed};
 use crate::evidence::Evidence;
+use crate::metadata::WorkspaceRecord;
 use crate::profile::{CompileDriver, TestRunner};
-use crate::task_identity::{DigestSlot, ExtensionInputs, RustTaskIdentityExtension};
+use crate::resolved_graph::ResolvedGraph;
+use crate::task_identity::{ExtensionInputs, RustTaskIdentityExtension};
 use crate::tasks::{TaskGroup, TaskKind};
 
 #[derive(Debug, Clone)]
@@ -74,6 +81,25 @@ impl TaskGroup {
 }
 
 impl RustTaskIdentityExtension {
+    pub fn dependency_coverage(
+        &self,
+        package_id: &str,
+        graph: &ResolvedGraph,
+        workspaces: &[WorkspaceRecord],
+        native_inputs: &[String],
+    ) -> Result<DependencyCoverage, ContractError> {
+        dependency_coverage(&DependencyCoverageInputs {
+            package_id,
+            graph,
+            workspaces,
+            features: &self.features,
+            all_features: self.all_features,
+            targets: &self.targets,
+            lock_digest: &self.lock_slot,
+            native_inputs,
+        })
+    }
+
     #[must_use]
     pub fn conservative_execution_required(&self) -> bool {
         self.undeclared_reads || self.first_blocking_input().is_some()

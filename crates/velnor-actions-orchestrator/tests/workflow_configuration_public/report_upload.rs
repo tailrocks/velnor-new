@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 
 use velnor_actions_contract::{Job, REQUIRED_JOB_ID, StepKind};
@@ -10,7 +10,8 @@ use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::parallel_owners::{assert_package_tasks_are_not_planned, assert_rust_owner_jobs};
 use super::support::{
-    discovered_rust_packages, rendered_job_block, rust_owner_jobs, task_execution_steps,
+    discovered_rust_packages, logical_owner_id, rendered_job_block, rust_owner_jobs,
+    task_execution_steps,
 };
 use super::workflow_configuration_fixture;
 
@@ -62,10 +63,22 @@ fn prepare_and_render_upload_owner_reports_after_parallel_checks() -> Result<(),
         workflow,
     )?;
 
-    let mut artifact_names = BTreeSet::new();
-    for (owner_id, job) in owner_jobs {
-        let artifact_name = assert_crate_report_upload_ir(owner_id, job)?;
-        assert!(artifact_names.insert(artifact_name.clone()));
+    // Both branches upload under their logical owner's stable name: the
+    // branches run on mutually exclusive events and artifact names are
+    // run-scoped, so reader and writer never collide.
+    let all: BTreeSet<&str> = owner_jobs.iter().map(|(id, _)| *id).collect();
+    let mut artifact_names = BTreeMap::new();
+    for (owner_id, job) in &owner_jobs {
+        let owner = logical_owner_id(&all, owner_id);
+        let artifact_name = assert_crate_report_upload_ir(owner, job)?;
+        match artifact_names.entry(owner) {
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                entry.insert(artifact_name.clone());
+            }
+            std::collections::btree_map::Entry::Occupied(entry) => {
+                assert_eq!(entry.get(), &artifact_name);
+            }
+        }
         assert_rendered_crate_report_upload(workflow, owner_id, &artifact_name, job)?;
     }
     assert_eq!(artifact_names.len(), expected_packages.len());

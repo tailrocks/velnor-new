@@ -57,6 +57,28 @@ pub(super) fn rust_owner_jobs(prepared: &GenerationPreparation) -> Vec<(&str, &J
         .collect()
 }
 
+/// Map a branch job id to its logical owner: reader/writer branches run on
+/// mutually exclusive events, so a branch pair counts as one owner. The
+/// counterpart must exist, so naturally suffixed group ids never mis-group.
+pub(super) fn logical_owner_id<'a>(all: &BTreeSet<&'a str>, id: &'a str) -> &'a str {
+    use velnor_actions_contract::workflow::crate_job::{
+        GROUP_READER_SUFFIX, GROUP_WRITER_SUFFIX, reader_job_id_for, writer_job_id_for,
+    };
+    for suffix in [GROUP_READER_SUFFIX, GROUP_WRITER_SUFFIX] {
+        if let Some(base) = id.strip_suffix(suffix) {
+            let counterpart = if suffix == GROUP_READER_SUFFIX {
+                writer_job_id_for(base)
+            } else {
+                reader_job_id_for(base)
+            };
+            if all.contains(counterpart.as_str()) {
+                return base;
+            }
+        }
+    }
+    id
+}
+
 pub(super) fn task_execution_ids(job: &Job) -> impl Iterator<Item = &str> {
     job.steps.iter().filter_map(|step| match &step.kind {
         StepKind::TaskExecution { task_id, .. } => Some(task_id.as_str()),

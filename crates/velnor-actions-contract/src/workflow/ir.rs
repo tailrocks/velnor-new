@@ -5,10 +5,16 @@ use super::dispatch::WorkflowDispatch;
 use super::jobs::is_safe_display_name;
 use super::permissions::{PermissionLevel, Permissions};
 pub use super::step::{Step, StepKind};
+mod cache_mode;
+mod concurrency;
 #[path = "job_validation.rs"]
 mod job_validation;
+mod schedule;
 use super::timeout::JobTimeout;
 use crate::errors::ContractError;
+pub use cache_mode::CacheMode;
+pub use concurrency::{Concurrency, WRITER_QUEUE_CANCEL_IN_PROGRESS};
+pub use schedule::ScheduleTrigger;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -44,78 +50,6 @@ pub struct Trigger {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Concurrency {
-    pub group: String,
-
-    pub cancel_in_progress: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum CacheMode {
-    Read,
-
-    Write,
-
-    WriteOnly,
-
-    None,
-
-    #[serde(untagged)]
-    Expression(String),
-}
-impl CacheMode {
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        match self {
-            Self::Read => "read",
-            Self::Write => "write",
-            Self::WriteOnly => "write-only",
-            Self::None => "none",
-            Self::Expression(expr) => expr.as_str(),
-        }
-    }
-
-    #[must_use]
-    pub fn push_write_expression() -> Self {
-        Self::Expression(CACHE_MODE_PUSH_WRITE_EXPR.to_owned())
-    }
-
-    pub fn parse(value: &str) -> Result<Self, ContractError> {
-        let mode = match value {
-            "read" => Self::Read,
-            "write" => Self::Write,
-            "write-only" => Self::WriteOnly,
-            "none" => Self::None,
-            expr if expr.starts_with("${{") && expr.ends_with("}}") => {
-                Self::Expression(expr.to_owned())
-            }
-            _ => {
-                return Err(ContractError::identity(
-                    "cache_mode",
-                    format!("invalid_cache_mode:{value}"),
-                ));
-            }
-        };
-        mode.validate("cache_mode")?;
-        Ok(mode)
-    }
-
-    pub fn validate(&self, field: &'static str) -> Result<(), ContractError> {
-        if let Self::Expression(expr) = self {
-            let inner = expr
-                .strip_prefix("${{")
-                .and_then(|rest| rest.strip_suffix("}}"))
-                .map(str::trim);
-            if inner.is_none_or(str::is_empty) || expr.chars().any(char::is_control) {
-                return Err(ContractError::identity(field, "bad_cache_mode_expression"));
-            }
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Job {
     pub display_name: String,
 
@@ -144,6 +78,13 @@ pub struct Job {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub services: Vec<super::services::ServiceContainer>,
 
+    /// Job-level outputs (`jobs.<id>.outputs`) published for `needs` readers.
+    /// Empty for jobs that publish nothing; the branch reader publishes the
+    /// bundle key outputs so the writer recheck can restore by the same key
+    /// before the writer's own key step runs.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub outputs: BTreeMap<String, String>,
+
     pub steps: Vec<Step>,
 }
 
@@ -152,7 +93,89 @@ pub const CACHE_SAVE_CONDITION: &str = "success() && github.event_name == 'push'
 pub const CACHE_MODE_PUSH_WRITE_EXPR: &str =
     "${{ github.event_name == 'push' && 'write' || 'read' }}";
 
+impl Job {
+    #[must_use]
+    pub fn uses_checkout(&self) -> bool {
+        self.steps.iter().any(|step| {
+            matches!(&step.kind, StepKind::Action { uses, .. } if uses.starts_with("actions/checkout@"))
+        })
+    }
+}
+
 impl WorkflowIr {
+    pub fn validate_event_authority(
+        &self,
+        readers: &BTreeSet<&str>,
+        writers: &BTreeSet<&str>,
+        cleanup: &BTreeSet<&str>,
+    ) -> Result<(), ContractError> {
+        for id in readers {
+            let job = self.jobs.get(*id).ok_or_else(|| {
+                ContractError::identity("job.authority", format!("unknown_reader:{id}"))
+            })?;
+            if !job
+                .cache_mode
+                .as_ref()
+                .is_some_and(CacheMode::is_explicit_read)
+            {
+                return Err(ContractError::identity(
+                    "job.cache_mode",
+                    format!("reader_requires_explicit_read:{id}"),
+                ));
+            }
+        }
+        for id in writers {
+            if !self.jobs.contains_key(*id) {
+                return Err(ContractError::identity(
+                    "job.authority",
+                    format!("unknown_writer:{id}"),
+                ));
+            }
+        }
+        for (id, job) in &self.jobs {
+            if writers.contains(id.as_str()) {
+                continue;
+            }
+            if job.cache_mode.as_ref().is_some_and(CacheMode::grants_write) {
+                return Err(ContractError::identity(
+                    "job.cache_mode",
+                    format!("cache_write_outside_trusted_writer:{id}"),
+                ));
+            }
+        }
+        for id in cleanup {
+            let job = self.jobs.get(*id).ok_or_else(|| {
+                ContractError::identity("job.authority", format!("unknown_cleanup:{id}"))
+            })?;
+            let effective = job.permissions.as_ref().unwrap_or(&self.permissions);
+            if !matches!(effective.actions, PermissionLevel::Write) {
+                return Err(ContractError::identity(
+                    "job.permissions",
+                    format!("cleanup_requires_actions_write:{id}"),
+                ));
+            }
+            if job.uses_checkout() {
+                return Err(ContractError::identity(
+                    "job.permissions",
+                    format!("actions_write_requires_checkout_free:{id}"),
+                ));
+            }
+        }
+        for (id, job) in &self.jobs {
+            if cleanup.contains(id.as_str()) {
+                continue;
+            }
+            let effective = job.permissions.as_ref().unwrap_or(&self.permissions);
+            if matches!(effective.actions, PermissionLevel::Write) {
+                return Err(ContractError::identity(
+                    "job.permissions",
+                    format!("actions_write_outside_cleanup:{id}"),
+                ));
+            }
+        }
+        Ok(())
+    }
+
     pub fn validate(&self) -> Result<(), ContractError> {
         if self.name.trim().is_empty() {
             return Err(ContractError::identity("workflow.name", "empty_name"));
@@ -175,8 +198,38 @@ impl WorkflowIr {
         }
         let ids: BTreeSet<&str> = self.jobs.keys().map(String::as_str).collect();
         let pr_triggered = !self.triggers.pull_request_types.is_empty();
+        let untrusted = pr_triggered || self.triggers.merge_group;
         for (id, job) in &self.jobs {
             job.validate(id, &ids, &self.permissions, pr_triggered)?;
+            if untrusted
+                && job
+                    .cache_mode
+                    .as_ref()
+                    .is_some_and(CacheMode::grants_unconditional_write)
+            {
+                return Err(ContractError::identity(
+                    "job.cache_mode",
+                    format!("cache_write_outside_trusted_writer:{id}"),
+                ));
+            }
+            let effective = job.permissions.as_ref().unwrap_or(&self.permissions);
+            if matches!(effective.actions, PermissionLevel::Write) && job.uses_checkout() {
+                return Err(ContractError::identity(
+                    "job.permissions",
+                    format!("actions_write_requires_checkout_free:{id}"),
+                ));
+            }
+        }
+        if untrusted
+            && self
+                .cache_mode
+                .as_ref()
+                .is_some_and(CacheMode::grants_unconditional_write)
+        {
+            return Err(ContractError::identity(
+                "workflow.cache_mode",
+                "cache_write_outside_trusted_writer",
+            ));
         }
         Ok(())
     }
@@ -207,90 +260,6 @@ impl Trigger {
         }
         Ok(())
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ScheduleTrigger {
-    pub cron: Vec<String>,
-}
-
-impl ScheduleTrigger {
-    #[must_use]
-    pub fn new(cron: Vec<String>) -> Self {
-        Self { cron }
-    }
-
-    #[must_use]
-    pub fn single(expr: impl Into<String>) -> Self {
-        Self {
-            cron: vec![expr.into()],
-        }
-    }
-
-    pub fn validate(&self) -> Result<(), ContractError> {
-        if self.cron.is_empty() {
-            return Err(ContractError::identity("schedule.cron", "empty_cron"));
-        }
-        let bounds: [(u32, u32); 5] = [(0, 59), (0, 23), (1, 31), (1, 12), (0, 7)];
-        for entry in &self.cron {
-            let fields: Vec<&str> = entry.split_whitespace().collect();
-            let valid = fields.len() == 5
-                && fields
-                    .into_iter()
-                    .zip(bounds)
-                    .all(|(field, (min, max))| is_valid_cron_field(field, min, max));
-            if !valid {
-                return Err(ContractError::identity(
-                    "schedule.cron",
-                    format!("bad_cron:{entry}"),
-                ));
-            }
-        }
-        Ok(())
-    }
-}
-
-fn is_valid_cron_field(field: &str, min: u32, max: u32) -> bool {
-    !field.is_empty()
-        && field
-            .split(',')
-            .all(|part| is_valid_cron_part(part, min, max))
-}
-
-fn is_valid_cron_part(part: &str, min: u32, max: u32) -> bool {
-    if part.is_empty() {
-        return false;
-    }
-    let (range_part, step_ok) = match part.split_once('/') {
-        Some((base, step)) => (
-            base,
-            parse_cron_num(step).is_some_and(|s| s >= 1 && s <= max.max(1)),
-        ),
-        None => (part, true),
-    };
-    if !step_ok || range_part.is_empty() {
-        return false;
-    }
-    if range_part == "*" {
-        return true;
-    }
-    if let Some((start_str, end_str)) = range_part.split_once('-') {
-        let Some(start) = parse_cron_num(start_str) else {
-            return false;
-        };
-        let Some(end) = parse_cron_num(end_str) else {
-            return false;
-        };
-        start >= min && end <= max && start <= end
-    } else {
-        parse_cron_num(range_part).is_some_and(|n| n >= min && n <= max)
-    }
-}
-
-fn parse_cron_num(text: &str) -> Option<u32> {
-    (!text.is_empty() && text.bytes().all(|b| b.is_ascii_digit()))
-        .then(|| text.parse::<u32>().ok())
-        .flatten()
 }
 
 fn is_valid_environment(name: &str) -> bool {

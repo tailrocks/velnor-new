@@ -10,6 +10,9 @@ use velnor_actions_mise::ToolCatalog;
 use crate::OrchestratorError;
 use crate::discover::{PlannedWorkspace, workspace_lock};
 
+#[path = "cache_source_projection.rs"]
+pub(crate) mod cache_source_projection;
+
 pub(crate) fn workspace_root_for_manifest<'a>(
     manifest: &str,
     fetch_roots: &'a [String],

@@ -12,9 +12,55 @@ use crate::{
     yaml::Yaml,
 };
 use velnor_actions_contract::{
-    Job, Permissions, RunsOn, StepKind, StepRole, Trigger, WorkflowIr,
+    CacheMode, Job, Permissions, Trigger, WorkflowIr,
     workflow::{DispatchInput, DispatchInputType, permissions::PermissionLevel},
 };
+
+const PUSH_EVENT_GATE: &str = "github.event_name == 'push'";
+
+fn outer_wrapped(text: &str) -> bool {
+    if !text.starts_with('(') {
+        return false;
+    }
+    let mut depth = 0i32;
+    for (index, byte) in text.bytes().enumerate() {
+        if byte == b'(' {
+            depth += 1;
+        } else if byte == b')' {
+            depth -= 1;
+            if depth == 0 && index != text.len() - 1 {
+                return false;
+            }
+        }
+        if depth < 0 {
+            return false;
+        }
+    }
+    depth == 0
+}
+
+fn push_only_condition(condition: &str) -> bool {
+    if condition == PUSH_EVENT_GATE {
+        return true;
+    }
+    let Some(head) = condition.strip_suffix(PUSH_EVENT_GATE) else {
+        return false;
+    };
+    let Some(head) = head.trim_end().strip_suffix("&&") else {
+        return false;
+    };
+    outer_wrapped(head.trim_end())
+}
+
+fn push_gated_literal_mode(mode: &CacheMode, condition: Option<&str>) -> Option<CacheMode> {
+    if !matches!(mode, CacheMode::Expression(_)) {
+        return None;
+    }
+    if condition.is_some_and(push_only_condition) {
+        return Some(CacheMode::Write);
+    }
+    None
+}
 
 pub(crate) fn workflow_to_yaml(
     ir: &WorkflowIr,
@@ -72,7 +118,13 @@ pub(crate) fn workflow_to_yaml(
     ];
     if let Some(cache_mode) = &ir.cache_mode {
         steps::scan_for_private_subcommands(cache_mode.as_str())?;
-        top.push(Yaml::cache_mode_field(cache_mode));
+        // Same IR-only rule as job-level conditional modes above.
+        if !matches!(
+            cache_mode,
+            velnor_actions_contract::CacheMode::Expression(_)
+        ) {
+            top.push(Yaml::cache_mode_field(cache_mode));
+        }
     }
     top.extend([
         ("env".to_owned(), string_map_yaml(&workflow_env)),
@@ -226,100 +278,14 @@ fn dispatch_input_to_yaml(input: &DispatchInput) -> Yaml {
 }
 
 #[derive(Clone, Copy)]
-struct JobRenderPolicy<'a> {
-    native_mbx: bool,
-    plan_attempt: Option<&'static str>,
-    actions_read: bool,
-    workflow_env: &'a BTreeMap<String, String>,
+pub(super) struct JobRenderPolicy<'a> {
+    pub(super) native_mbx: bool,
+    pub(super) plan_attempt: Option<&'static str>,
+    pub(super) actions_read: bool,
+    pub(super) workflow_env: &'a BTreeMap<String, String>,
 }
 
-fn job_to_yaml(
-    id: &str,
-    job: &Job,
-    ctx: &RenderContext,
-    needs_envs: &[(String, String)],
-    shared: Option<&str>,
-    lanes: &crate::document_lanes::SharedLaneSteps<'_>,
-    policy: JobRenderPolicy<'_>,
-) -> Result<Yaml, RenderError> {
-    steps::scan_for_private_subcommands(&job.display_name)?;
-    let runner = RunsOn::parse(&job.runs_on).map_err(RenderError::Contract)?;
-    let scale_set = matches!(&runner, RunsOn::ScaleSet(_));
-    let runs_on = match runner {
-        RunsOn::Hosted(label) => Yaml::str(label),
-        RunsOn::ScaleSet(selector) => Yaml::Flow(selector.labels().to_vec()),
-    };
-    let source_steps = lanes
-        .env_steps
-        .get(id)
-        .map_or(job.steps.as_slice(), Vec::as_slice);
-    let step_has_env = source_steps.iter().any(|step| match &step.kind {
-        StepKind::Shell { env, .. }
-        | StepKind::Action { env, .. }
-        | StepKind::TaskExecution { env, .. } => !env.is_empty(),
-        StepKind::NativeCheckExecution { .. } | StepKind::Internal { .. } => false,
-    });
-    let mut job_env = if step_has_env
-        && ctx
-            .workflow_tasks
-            .iter()
-            .any(|task| task.owns_projected_job_id(id, ctx.bun_lane_plan.as_ref()))
-    {
-        crate::toolchain_env::credential_scrub()
-    } else {
-        BTreeMap::new()
-    };
-    if step_has_env {
-        for step in source_steps {
-            if let StepKind::Shell { env, .. }
-            | StepKind::Action { env, .. }
-            | StepKind::TaskExecution { env, .. } = &step.kind
-            {
-                if let Some(toolchain) = env.get("RUSTUP_TOOLCHAIN") {
-                    job_env.insert("RUSTUP_TOOLCHAIN".to_owned(), toolchain.clone());
-                    let (key, value) = crate::toolchain_env::CARGO_AUTO_CLEAN_ENV;
-                    job_env.insert(key.to_owned(), value.to_owned());
-                }
-                if step.role == Some(StepRole::AcquireVelnor) {
-                    for key in [
-                        crate::steps::ASSET_SHA_ENV,
-                        crate::steps::ASSET_URL_ENV,
-                        crate::steps::RELEASE_COMMIT_ENV,
-                    ] {
-                        if let Some(val) = env.get(key) {
-                            job_env.insert(key.to_owned(), val.to_owned());
-                        }
-                    }
-                }
-            }
-        }
-    }
-    crate::document_env::extend_job_env(&mut job_env, policy.native_mbx, policy.plan_attempt);
-    let mut entries = job_header_fields(job, runs_on);
-    append_job_options(&mut entries, job, scale_set, &job_env, policy.workflow_env)?;
-    let mut effective_env = policy.workflow_env.clone();
-    effective_env.extend(job_env.clone());
-    let mut rendered_steps = crate::document_lanes::render_job_steps(
-        id,
-        job,
-        ctx,
-        needs_envs,
-        shared,
-        lanes,
-        &crate::document_lanes::JobStepContext {
-            job_env: &effective_env,
-            runs_on: Some(&job.runs_on),
-            actions_read: policy.actions_read,
-            report_helper_version: &ctx.report_helper_version,
-        },
-    )?;
-    crate::cache_save_budget::apply(&mut rendered_steps, job.timeout_minutes.minutes())?;
-    crate::document_services::push_services(&mut entries, &job.services);
-    entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
-    Ok(Yaml::Map(entries))
-}
-
-fn job_header_fields(job: &Job, runs_on: Yaml) -> Vec<(String, Yaml)> {
+pub(super) fn job_header_fields(job: &Job, runs_on: Yaml) -> Vec<(String, Yaml)> {
     let timeout = Yaml::Int(i64::from(job.timeout_minutes.minutes()));
     vec![
         ("name".to_owned(), Yaml::str(job.display_name.clone())),
@@ -328,7 +294,7 @@ fn job_header_fields(job: &Job, runs_on: Yaml) -> Vec<(String, Yaml)> {
     ]
 }
 
-fn append_job_options(
+pub(super) fn append_job_options(
     entries: &mut Vec<(String, Yaml)>,
     job: &Job,
     scale_set: bool,
@@ -355,7 +321,11 @@ fn append_job_options(
     }
     if let Some(cache_mode) = &job.cache_mode {
         steps::scan_for_private_subcommands(cache_mode.as_str())?;
-        entries.push(Yaml::cache_mode_field(cache_mode));
+        if let Some(literal) = push_gated_literal_mode(cache_mode, job.condition.as_deref()) {
+            entries.push(Yaml::cache_mode_field(&literal));
+        } else if !matches!(cache_mode, CacheMode::Expression(_)) {
+            entries.push(Yaml::cache_mode_field(cache_mode));
+        }
     }
     if !job.needs.is_empty() {
         let needs: Vec<Yaml> = job
@@ -365,9 +335,22 @@ fn append_job_options(
             .collect();
         entries.push(("needs".to_owned(), Yaml::Seq(needs)));
     }
+    if !job.outputs.is_empty() {
+        entries.push(("outputs".to_owned(), string_map_yaml(&job.outputs)));
+    }
     if let Some(condition) = &job.condition {
         steps::scan_for_private_subcommands(condition)?;
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
     }
     Ok(())
 }
+
+use super::document_jobs::job_to_yaml;
+
+#[cfg(test)]
+#[path = "document_tests.rs"]
+mod tests;
+
+#[cfg(test)]
+#[path = "document_authority_regression_tests.rs"]
+mod authority_regression_tests;

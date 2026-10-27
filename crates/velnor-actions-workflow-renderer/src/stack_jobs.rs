@@ -83,6 +83,7 @@ pub fn build_stack_job(policy: &StackJobPolicy, checkout_uses: &str) -> Result<J
     all.extend(policy.steps.iter().cloned());
     Ok(Job {
         services: policy.services.clone(),
+        outputs: BTreeMap::new(),
         display_name: policy.display_name.clone(),
         runs_on: STACK_RUNNER.to_owned(),
         timeout_minutes: policy.timeout,

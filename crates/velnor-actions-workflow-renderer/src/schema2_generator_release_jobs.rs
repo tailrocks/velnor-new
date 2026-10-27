@@ -35,6 +35,10 @@ pub(super) fn build_job(
             Yaml::str("${{ steps.upload.outputs.artifact-id }}"),
         )]),
     ));
+    fields.push((
+        "env".to_owned(),
+        Yaml::Map(workflow_steps::release_build_job_env(product.target)),
+    ));
     Ok(finish(
         id,
         fields,

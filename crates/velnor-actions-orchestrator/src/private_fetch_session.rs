@@ -290,6 +290,9 @@ impl Session {
         accept: &str,
         dest: &Path,
     ) -> Result<(), OrchestratorError> {
+        if dest.starts_with(&self.dir) {
+            return Err(internal("private_fetch_output_overlaps_credentials"));
+        }
         let text = curl_config(&self.token, "GET", route, accept, dest, false)?;
         let output = self.curl(&text)?;
         if output.success {

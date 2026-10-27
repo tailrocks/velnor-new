@@ -3,6 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use velnor_actions_contract::workflow::crate_job::{GROUP_READER_SUFFIX, GROUP_WRITER_SUFFIX};
 use velnor_actions_contract::{
     JobConclusion, JobDisposition, Plan, PlanJob, RequiredJobResult, WorkflowEvent,
     plan_skips_work, selects_affected_work,
@@ -31,6 +32,7 @@ pub(crate) fn check_full_event_skips(
 pub(crate) fn fold_planned_jobs(
     planned: &[PlanJob],
     jobs: &[RequiredJobResult],
+    plan_event: WorkflowEvent,
     signals: &mut Signals,
     miss_reasons: &mut BTreeSet<String>,
 ) {
@@ -39,6 +41,18 @@ pub(crate) fn fold_planned_jobs(
         .map(|job| (job.job_id.as_str(), job.disposition))
         .collect();
     for job in jobs {
+        if let Some((disposition, is_writer)) = branch_disposition(&dispositions, job.job_id.as_str())
+        {
+            fold_branch(
+                disposition,
+                is_writer,
+                job.conclusion,
+                plan_event,
+                signals,
+                miss_reasons,
+            );
+            continue;
+        }
         match dispositions.get(job.job_id.as_str()) {
             Some(JobDisposition::Run) => fold_run(job.conclusion, signals, miss_reasons),
             Some(JobDisposition::NotAffected) => {
@@ -46,6 +60,43 @@ pub(crate) fn fold_planned_jobs(
             }
             None => fold_unplanned(job.conclusion, signals),
         }
+    }
+}
+
+fn branch_disposition(
+    dispositions: &BTreeMap<&str, JobDisposition>,
+    job_id: &str,
+) -> Option<(JobDisposition, bool)> {
+    if let Some(group) = job_id.strip_suffix(GROUP_WRITER_SUFFIX) {
+        return dispositions.get(group).copied().map(|disposition| (disposition, true));
+    }
+    if let Some(group) = job_id.strip_suffix(GROUP_READER_SUFFIX) {
+        return dispositions
+            .get(group)
+            .copied()
+            .map(|disposition| (disposition, false));
+    }
+    None
+}
+
+fn fold_branch(
+    disposition: JobDisposition,
+    is_writer: bool,
+    conclusion: JobConclusion,
+    plan_event: WorkflowEvent,
+    signals: &mut Signals,
+    miss_reasons: &mut BTreeSet<String>,
+) {
+    if disposition == JobDisposition::Run
+        && is_writer
+        && conclusion == JobConclusion::Skipped
+        && plan_event != WorkflowEvent::Push
+    {
+        return;
+    }
+    match disposition {
+        JobDisposition::Run => fold_run(conclusion, signals, miss_reasons),
+        JobDisposition::NotAffected => fold_not_affected(conclusion, signals, miss_reasons),
     }
 }
 
@@ -83,5 +134,114 @@ fn fold_unplanned(conclusion: JobConclusion, signals: &mut Signals) {
         JobConclusion::Cancelled => signals.cancelled = true,
         JobConclusion::Skipped | JobConclusion::Neutral => signals.not_run = true,
         JobConclusion::Failure | JobConclusion::Missing => signals.failed = true,
+    }
+}
+
+#[cfg(test)]
+mod writer_skip_tests {
+    use super::*;
+    use velnor_actions_contract::{JobDisposition, PlanJob, RequiredJobResult};
+
+    const GROUP: &str = "rust-velnor-actions-actionlint";
+
+    fn planned_run_group() -> Vec<PlanJob> {
+        vec![PlanJob {
+            job_id: GROUP.to_owned(),
+            disposition: JobDisposition::Run,
+        }]
+    }
+
+    fn result(job_id: &str, conclusion: JobConclusion) -> RequiredJobResult {
+        RequiredJobResult {
+            job_id: job_id.to_owned(),
+            conclusion,
+        }
+    }
+
+    fn fold(
+        planned: &[PlanJob],
+        jobs: &[RequiredJobResult],
+        event: WorkflowEvent,
+    ) -> (Signals, BTreeSet<String>) {
+        let mut signals = Signals::default();
+        let mut miss_reasons = BTreeSet::new();
+        fold_planned_jobs(planned, jobs, event, &mut signals, &mut miss_reasons);
+        (signals, miss_reasons)
+    }
+
+    fn quiet(signals: &Signals) -> bool {
+        !signals.planning_failed
+            && !signals.failed
+            && !signals.cancelled
+            && !signals.blocked
+            && !signals.not_run
+    }
+
+    #[test]
+    fn planned_writer_skipped_off_push_is_accepted() {
+        let planned = planned_run_group();
+        let jobs = vec![result(
+            "rust-velnor-actions-actionlint-write",
+            JobConclusion::Skipped,
+        )];
+        let (signals, miss_reasons) =
+            fold(&planned, &jobs, WorkflowEvent::PullRequest);
+        assert!(
+            quiet(&signals) && miss_reasons.is_empty(),
+            "planned writer skipped off push must stay quiet"
+        );
+    }
+
+    #[test]
+    fn planned_writer_skipped_on_push_still_blocks() {
+        let planned = planned_run_group();
+        let jobs = vec![result(
+            "rust-velnor-actions-actionlint-write",
+            JobConclusion::Skipped,
+        )];
+        let (signals, miss_reasons) = fold(&planned, &jobs, WorkflowEvent::Push);
+        assert!(signals.not_run, "planned writer skipped on push must block");
+        assert!(
+            miss_reasons.contains(PLANNED_JOB_SKIPPED),
+            "push skip must name its reason"
+        );
+    }
+
+    #[test]
+    fn planned_reader_skipped_off_push_still_blocks() {
+        let planned = planned_run_group();
+        let jobs = vec![result(
+            "rust-velnor-actions-actionlint-read",
+            JobConclusion::Skipped,
+        )];
+        let (signals, _) = fold(&planned, &jobs, WorkflowEvent::PullRequest);
+        assert!(
+            signals.not_run,
+            "the carve-out covers writers only, never readers"
+        );
+    }
+
+    #[test]
+    fn planned_writer_failure_off_push_still_blocks() {
+        let planned = planned_run_group();
+        let jobs = vec![result(
+            "rust-velnor-actions-actionlint-write",
+            JobConclusion::Failure,
+        )];
+        let (signals, _) = fold(&planned, &jobs, WorkflowEvent::PullRequest);
+        assert!(signals.failed, "writer failure must block on every event");
+    }
+
+    #[test]
+    fn unplanned_writer_skipped_off_push_still_blocks() {
+        let (signals, _) = fold(
+            &planned_run_group(),
+            &[result("rust-velnor-actions-unknown-write", JobConclusion::Skipped)],
+            WorkflowEvent::PullRequest,
+        );
+        assert!(
+            signals.not_run,
+            "writers outside the plan keep the old unplanned rule"
+        );
     }
 }

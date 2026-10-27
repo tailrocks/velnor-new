@@ -59,6 +59,8 @@ mod report_upload;
 mod seed_ids;
 #[path = "workflow_configuration_public/source_qualification.rs"]
 mod source_qualification;
+#[path = "workflow_configuration_public/source_qualification_checkout.rs"]
+mod source_qualification_checkout;
 #[path = "workflow_configuration_public/support.rs"]
 mod support;
 #[path = "workflow_configuration_public/timeouts.rs"]

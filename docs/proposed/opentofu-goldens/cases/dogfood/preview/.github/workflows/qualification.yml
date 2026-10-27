@@ -876,7 +876,7 @@ jobs:
           version: ${{ env.VELNOR_TOOL_MR_BOXINGTON }}
           toolchain: ${{ env.VELNOR_TOOL_RUST }}
           isolate-objects-cache: "true"
-          cache-generation: velnor-qualification-mbx-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-88acf2bb50552c7c508cbac13e5f8c576b95b1de-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          cache-generation: velnor-mbx-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-share-out-dir-disabled-v1
           save-on-workflow-dispatch: "true"
       - name: Verify MBX action identity and write policy
         id: mbx-ready
@@ -975,7 +975,7 @@ jobs:
           version: ${{ env.VELNOR_TOOL_MR_BOXINGTON }}
           toolchain: ${{ env.VELNOR_TOOL_RUST }}
           isolate-objects-cache: "true"
-          cache-generation: velnor-qualification-mbx-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-88acf2bb50552c7c508cbac13e5f8c576b95b1de-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          cache-generation: velnor-mbx-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-share-out-dir-disabled-v1
           save-on-workflow-dispatch: "false"
       - name: Verify MBX action identity and write policy
         id: mbx-ready

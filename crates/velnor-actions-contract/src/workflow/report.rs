@@ -124,6 +124,13 @@ pub enum TaskStatus {
     Cancelled,
 }
 
+impl TaskReport {
+    #[must_use]
+    pub const fn is_successful_completion(&self) -> bool {
+        matches!(self.status, TaskStatus::Executed) && self.exit_code == 0
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NotSelectedReason {

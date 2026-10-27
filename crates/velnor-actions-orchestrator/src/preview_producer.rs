@@ -3,7 +3,7 @@
 
 use crate::OrchestratorError;
 use crate::check_evidence::reject_link_components;
-use crate::check_runtime::preparation::prepare_check;
+use crate::check_runtime::preparation::{RestoredGroupContext, prepare_check_with_context};
 use crate::exclusive_write::create_dir_no_symlink;
 use crate::internal::internal;
 use crate::release_task_identity::ReleaseTaskIdentity;
@@ -32,6 +32,9 @@ pub use entry::{
     ACQUIRE_RELEASE_LEAVES_OP, ADMIT_RELEASE_AGGREGATE_OP, EXECUTE_RELEASE_PRODUCER_OP,
     acquire_release_leaves, admit_release_aggregate, execute_release_producer,
 };
+
+pub const PREVIEW_CACHE_RECIPE_KEY: &str =
+    super::product_release_pins::cache_recipes::PREVIEW_PRODUCER_RECIPE_KEY;
 
 pub(crate) fn release_workflow_context(
     plan: &velnor_actions_contract::PackageReleasePlan,
@@ -68,7 +71,7 @@ pub(crate) struct PreviewProducerProof {
 
 fn execute_preview_task(
     root: &Path,
-    temp: &Path,
+    group: &RestoredGroupContext,
     spec: PreviewTaskSpec<'_>,
     qualified_tools: &[velnor_actions_contract::config::QualifiedTool],
     deadline: CheckDeadline,
@@ -86,6 +89,9 @@ fn execute_preview_task(
     if !preview.enabled() || !valid_source_ref(source_ref) || !canonical_identity(identity) {
         return Err(internal("preview_producer_identity"));
     }
+    if !preview.channel_enabled(identity.channel) {
+        return Err(internal("preview_producer_channel_disabled"));
+    }
     let producer = &preview.producer;
     let root = root.canonicalize().map_err(|_| internal("preview_root"))?;
     validate_preview_source(&root, identity, deadline)?;
@@ -97,6 +103,16 @@ fn execute_preview_task(
     {
         return Err(internal("preview_producer_host_platform"));
     }
+    let closure_tools = crate::native_mise_tasks::resolve_preview_producer_tools(
+        &discovered.config_source,
+        &producer.task,
+    )
+    .map_err(|problem| internal(&format!("preview_producer_task_graph:{problem}")))?;
+    for key in closure_tools.keys() {
+        if !producer.tools.iter().any(|declared| declared == key) {
+            return Err(internal("preview_producer_task_tool_not_declared"));
+        }
+    }
 
     let mut inputs: BTreeSet<String> = producer.inputs.iter().cloned().collect();
     inputs.extend(discovered.config_inputs.iter().cloned());
@@ -106,7 +122,7 @@ fn execute_preview_task(
 
     let started = Instant::now();
     progress.mark(progress::Phase::Qualification);
-    let owned = prepare_check(&root, temp, &discovered, deadline)?;
+    let owned = prepare_check_with_context(&root, group, &discovered, deadline)?;
     progress.mark(progress::Phase::QualificationComplete);
     let pairs = producer_handoff(&root, &output, &spec)?;
     let command = owned

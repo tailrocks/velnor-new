@@ -1,0 +1,229 @@
+{
+ "schema": 1,
+ "task": "T02",
+ "observation_date": "2026-10-26T07:31:15Z",
+ "prerequisite": "T01 maps at source-map.json, caller-map.md, output-map.json, regression-map.json, removal-map.json (read 2026-10-26)",
+ "admission_formula": "I + P + F + B <= Q - R",
+ "generation_limit": "At most two per active compatible family/group/version, including unverified replacement overlap.",
+ "physical_replicas_rule": "Charge each actual ref and cache-version ID. Do not assume cross-host source archive deduplication.",
+ "units": "decimal bytes",
+ "fit_status": "pending_for_all_nine_repositories",
+ "repositories": [
+  {
+   "repository": "jackin-project/jackin",
+   "audited_source_sha": "faa2ab6c12e3de45a76ab6b98df0c64dac7aac6e",
+   "generator": "0.1.52",
+   "stored_inventory_bytes_measured": 10727864905,
+   "stored_inventory_count_measured": 61,
+   "listed_total_count": 63,
+   "hard_ceiling_bytes": 10000000000,
+   "previously_unknown_now_measured": [
+    "stored inventory bytes",
+    "stored inventory count"
+   ],
+   "still_unknown": {
+    "retention_limit_days": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+    "storage_limit_bytes": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+    "replacement_archive_bytes": "No replacement archive built, uploaded, restored, or timed.",
+    "cold_warm_comparison": "Requires approved hosted experiments (see run-budget.json).",
+    "compiler_process_ledger": "Requires approved hosted experiments (see run-budget.json).",
+    "origin_bytes": "Requires approved hosted experiments (see run-budget.json).",
+    "peak_disk_bytes": "Requires approved hosted experiments (see run-budget.json).",
+    "ten_gb_fit_proof": "No current evidence proves a ten-GB fit or the new zero-work contract."
+   },
+   "fitted": null
+  },
+  {
+   "repository": "tailrocks/velnor-new",
+   "audited_source_sha": "e851b39e3bedc664f8bd6470c629e7bac36c561c",
+   "generator": "0.1.53",
+   "stored_inventory_bytes_measured": 10049212892,
+   "stored_inventory_count_measured": 40,
+   "listed_total_count": 48,
+   "hard_ceiling_bytes": 10000000000,
+   "previously_unknown_now_measured": [
+    "stored inventory bytes",
+    "stored inventory count"
+   ],
+   "still_unknown": {
+    "retention_limit_days": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+    "storage_limit_bytes": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+    "replacement_archive_bytes": "No replacement archive built, uploaded, restored, or timed.",
+    "cold_warm_comparison": "Requires approved hosted experiments (see run-budget.json).",
+    "compiler_process_ledger": "Requires approved hosted experiments (see run-budget.json).",
+    "origin_bytes": "Requires approved hosted experiments (see run-budget.json).",
+    "peak_disk_bytes": "Requires approved hosted experiments (see run-budget.json).",
+    "ten_gb_fit_proof": "No current evidence proves a ten-GB fit or the new zero-work contract."
+   },
+   "fitted": null
+  },
+  {
+   "repository": "ChainArgos/bitcoin-grpc-server",
+   "audited_source_sha": "cd0a5bfb92538c230d1762b0ab7fafb52282fc33",
+   "generator": "0.1.41",
+   "stored_inventory_bytes_measured": 6506789758,
+   "stored_inventory_count_measured": 27,
+   "listed_total_count": 27,
+   "hard_ceiling_bytes": 10000000000,
+   "previously_unknown_now_measured": [
+    "stored inventory bytes",
+    "stored inventory count"
+   ],
+   "still_unknown": {
+    "retention_limit_days": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+    "storage_limit_bytes": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+    "replacement_archive_bytes": "No replacement archive built, uploaded, restored, or timed.",
+    "cold_warm_comparison": "Requires approved hosted experiments (see run-budget.json).",
+    "compiler_process_ledger": "Requires approved hosted experiments (see run-budget.json).",
+    "origin_bytes": "Requires approved hosted experiments (see run-budget.json).",
+    "peak_disk_bytes": "Requires approved hosted experiments (see run-budget.json).",
+    "ten_gb_fit_proof": "No current evidence proves a ten-GB fit or the new zero-work contract."
+   },
+   "fitted": null
+  },
+  {
+   "repository": "ChainArgos/bitcoin-processor-rust",
+   "audited_source_sha": "d9115d1d42c881b23e6a5dd2f0dcd2dab5f3babd",
+   "generator": "0.1.41",
+   "stored_inventory_bytes_measured": 3579123515,
+   "stored_inventory_count_measured": 16,
+   "listed_total_count": 16,
+   "hard_ceiling_bytes": 10000000000,
+   "previously_unknown_now_measured": [
+    "stored inventory bytes",
+    "stored inventory count"
+   ],
+   "still_unknown": {
+    "retention_limit_days": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+    "storage_limit_bytes": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+    "replacement_archive_bytes": "No replacement archive built, uploaded, restored, or timed.",
+    "cold_warm_comparison": "Requires approved hosted experiments (see run-budget.json).",
+    "compiler_process_ledger": "Requires approved hosted experiments (see run-budget.json).",
+    "origin_bytes": "Requires approved hosted experiments (see run-budget.json).",
+    "peak_disk_bytes": "Requires approved hosted experiments (see run-budget.json).",
+    "ten_gb_fit_proof": "No current evidence proves a ten-GB fit or the new zero-work contract."
+   },
+   "fitted": null
+  },
+  {
+   "repository": "ChainArgos/blockchain-explorer",
+   "audited_source_sha": "4b9fc98f29705541d74e181dcc52c717c21e6075",
+   "generator": "0.1.41",
+   "stored_inventory_bytes_measured": 3595935131,
+   "stored_inventory_count_measured": 16,
+   "listed_total_count": 16,
+   "hard_ceiling_bytes": 10000000000,
+   "previously_unknown_now_measured": [
+    "stored inventory bytes",
+    "stored inventory count"
+   ],
+   "still_unknown": {
+    "retention_limit_days": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+    "storage_limit_bytes": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+    "replacement_archive_bytes": "No replacement archive built, uploaded, restored, or timed.",
+    "cold_warm_comparison": "Requires approved hosted experiments (see run-budget.json).",
+    "compiler_process_ledger": "Requires approved hosted experiments (see run-budget.json).",
+    "origin_bytes": "Requires approved hosted experiments (see run-budget.json).",
+    "peak_disk_bytes": "Requires approved hosted experiments (see run-budget.json).",
+    "ten_gb_fit_proof": "No current evidence proves a ten-GB fit or the new zero-work contract."
+   },
+   "fitted": null
+  },
+  {
+   "repository": "ChainArgos/eth-grpc-server",
+   "audited_source_sha": "4b97aa1a0cf8c15f7a2ab75435c7c6da270b2ea6",
+   "generator": "0.1.41",
+   "stored_inventory_bytes_measured": 3787676853,
+   "stored_inventory_count_measured": 18,
+   "listed_total_count": 18,
+   "hard_ceiling_bytes": 10000000000,
+   "previously_unknown_now_measured": [
+    "stored inventory bytes",
+    "stored inventory count"
+   ],
+   "still_unknown": {
+    "retention_limit_days": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+    "storage_limit_bytes": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+    "replacement_archive_bytes": "No replacement archive built, uploaded, restored, or timed.",
+    "cold_warm_comparison": "Requires approved hosted experiments (see run-budget.json).",
+    "compiler_process_ledger": "Requires approved hosted experiments (see run-budget.json).",
+    "origin_bytes": "Requires approved hosted experiments (see run-budget.json).",
+    "peak_disk_bytes": "Requires approved hosted experiments (see run-budget.json).",
+    "ten_gb_fit_proof": "No current evidence proves a ten-GB fit or the new zero-work contract."
+   },
+   "fitted": null
+  },
+  {
+   "repository": "ChainArgos/eth-processor-rust",
+   "audited_source_sha": "c08aa7d5232e43466fcfd4fa6929ef7dec7bb76c",
+   "generator": "0.1.41",
+   "stored_inventory_bytes_measured": 3582319132,
+   "stored_inventory_count_measured": 16,
+   "listed_total_count": 16,
+   "hard_ceiling_bytes": 10000000000,
+   "previously_unknown_now_measured": [
+    "stored inventory bytes",
+    "stored inventory count"
+   ],
+   "still_unknown": {
+    "retention_limit_days": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+    "storage_limit_bytes": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+    "replacement_archive_bytes": "No replacement archive built, uploaded, restored, or timed.",
+    "cold_warm_comparison": "Requires approved hosted experiments (see run-budget.json).",
+    "compiler_process_ledger": "Requires approved hosted experiments (see run-budget.json).",
+    "origin_bytes": "Requires approved hosted experiments (see run-budget.json).",
+    "peak_disk_bytes": "Requires approved hosted experiments (see run-budget.json).",
+    "ten_gb_fit_proof": "No current evidence proves a ten-GB fit or the new zero-work contract."
+   },
+   "fitted": null
+  },
+  {
+   "repository": "ChainArgos/tron-grpc-server",
+   "audited_source_sha": "9143caa0321469ca6627a9feb638e20da714dcb5",
+   "generator": "0.1.41",
+   "stored_inventory_bytes_measured": 3785514312,
+   "stored_inventory_count_measured": 18,
+   "listed_total_count": 18,
+   "hard_ceiling_bytes": 10000000000,
+   "previously_unknown_now_measured": [
+    "stored inventory bytes",
+    "stored inventory count"
+   ],
+   "still_unknown": {
+    "retention_limit_days": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+    "storage_limit_bytes": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+    "replacement_archive_bytes": "No replacement archive built, uploaded, restored, or timed.",
+    "cold_warm_comparison": "Requires approved hosted experiments (see run-budget.json).",
+    "compiler_process_ledger": "Requires approved hosted experiments (see run-budget.json).",
+    "origin_bytes": "Requires approved hosted experiments (see run-budget.json).",
+    "peak_disk_bytes": "Requires approved hosted experiments (see run-budget.json).",
+    "ten_gb_fit_proof": "No current evidence proves a ten-GB fit or the new zero-work contract."
+   },
+   "fitted": null
+  },
+  {
+   "repository": "ChainArgos/tron-processor-rust",
+   "audited_source_sha": "0e2a1050b34284530047a49d9a65fff333cecaed",
+   "generator": "0.1.41",
+   "stored_inventory_bytes_measured": 3583640071,
+   "stored_inventory_count_measured": 16,
+   "listed_total_count": 16,
+   "hard_ceiling_bytes": 10000000000,
+   "previously_unknown_now_measured": [
+    "stored inventory bytes",
+    "stored inventory count"
+   ],
+   "still_unknown": {
+    "retention_limit_days": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+    "storage_limit_bytes": "HTTP 402: account has no valid payment method on file; limit not readable via this auth.",
+    "replacement_archive_bytes": "No replacement archive built, uploaded, restored, or timed.",
+    "cold_warm_comparison": "Requires approved hosted experiments (see run-budget.json).",
+    "compiler_process_ledger": "Requires approved hosted experiments (see run-budget.json).",
+    "origin_bytes": "Requires approved hosted experiments (see run-budget.json).",
+    "peak_disk_bytes": "Requires approved hosted experiments (see run-budget.json).",
+    "ten_gb_fit_proof": "No current evidence proves a ten-GB fit or the new zero-work contract."
+   },
+   "fitted": null
+  }
+ ]
+}

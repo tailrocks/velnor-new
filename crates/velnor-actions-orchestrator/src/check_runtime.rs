@@ -16,7 +16,9 @@ use velnor_actions_contract::{
 use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, ToolCatalog, discover_checks_until};
 #[path = "check_prepare.rs"]
 pub(crate) mod preparation;
-use preparation::prepare_check;
+use preparation::{RestoredGroupContext, prepare_check_with_context};
+#[path = "compiler_observation.rs"]
+mod compiler_observation;
 
 pub const EXECUTE_CHECK_OP: &str = "execute-check-v1";
 pub(crate) const CHECK_ID_ENV: &str = "VELNOR_CHECK_ID";
@@ -90,7 +92,7 @@ pub(crate) fn execute_check_to(
         return Err(internal("check_lane_variant_mismatch"));
     }
     bind_check(root, &item, &plan, entry, task_id, &catalog, deadline)?;
-    let outcome = run_check(root, temp, &item, &plan, deadline);
+    let outcome = run_check(root, temp, &item, &plan, entry, deadline);
     let (code, receipt) = match &outcome {
         Ok(success) => (0, success.evidence.as_ref()),
         Err(_) => (1, None),
@@ -186,11 +188,19 @@ struct CheckOutcome {
     qualified_tools: Vec<crate::check_evidence::gate::tools::QualifiedToolReceipt>,
 }
 
+struct ChildExecution {
+    evidence: Option<EvidenceReceipt>,
+    container: Option<crate::check_evidence::gate::container::ContainerReceipt>,
+    system_tools: Vec<velnor_actions_mise::checks::SystemToolProof>,
+    qualified_tools: Vec<crate::check_evidence::gate::tools::QualifiedToolReceipt>,
+}
+
 fn run_check(
     root: &Path,
     temp: &Path,
     item: &DiscoveredCheck,
     plan: &Plan,
+    entry: &MatrixEntry,
     deadline: CheckDeadline,
 ) -> Result<CheckOutcome, OrchestratorError> {
     deadline.remaining().map_err(|e| internal(&e.to_string()))?;
@@ -200,7 +210,32 @@ fn run_check(
             return Err(internal("check_evidence_preexisting"));
         }
     }
-    let owned = prepare_check(root, temp, item, deadline)?;
+    let group = RestoredGroupContext::resolve(temp)?;
+    let mut owned = prepare_check_with_context(root, &group, item, deadline)?;
+    let executed = run_owned(root, item, plan, deadline, &owned);
+    let outcome = if executed.is_err() {
+        compiler_observation::ChildOutcome::Failure
+    } else {
+        compiler_observation::ChildOutcome::Success
+    };
+    let observation = owned.finish_observation(outcome)?;
+    write_observation_report(temp, plan, entry, &observation)?;
+    let executed = executed?;
+    Ok(CheckOutcome {
+        evidence: executed.evidence,
+        container: executed.container,
+        system_tools: executed.system_tools,
+        qualified_tools: executed.qualified_tools,
+    })
+}
+
+fn run_owned(
+    root: &Path,
+    item: &DiscoveredCheck,
+    plan: &Plan,
+    deadline: CheckDeadline,
+    owned: &preparation::OwnedCheck,
+) -> Result<ChildExecution, OrchestratorError> {
     let platform =
         serde_json::to_value(item.check.runner.platform).map_err(|_| internal("check_platform"))?;
     let pairs = [
@@ -253,7 +288,7 @@ fn run_check(
             )
         })
         .transpose()?;
-    Ok(CheckOutcome {
+    Ok(ChildExecution {
         evidence,
         container,
         system_tools: owned.system_tools.clone(),
@@ -291,6 +326,27 @@ fn write_execution_receipt(
         &base.join("check-execution.json"),
         &bytes,
         "check_execution",
+    )
+}
+
+fn write_observation_report(
+    temp: &Path,
+    plan: &Plan,
+    entry: &MatrixEntry,
+    observation: &compiler_observation::ObservationReport,
+) -> Result<(), OrchestratorError> {
+    let bytes = observation
+        .to_canonical_json()
+        .map_err(|error| internal(&error.to_string()))?;
+    let base = temp
+        .join("velnor")
+        .join(&plan.run_key)
+        .join(&entry.matrix_key);
+    crate::exclusive_write::create_dir_no_symlink(temp, &base)?;
+    crate::exclusive_write::write_exclusive(
+        &base.join("check-observation.json"),
+        &bytes,
+        "check_observation",
     )
 }
 

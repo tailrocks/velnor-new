@@ -29,6 +29,45 @@ pub use super::bun_assets_handoff::{
     BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP, run_bun_assets_export, run_bun_assets_import,
     run_bun_assets_prepare,
 };
+pub use super::cache_admission::{
+    ADMISSION_SCHEMA, AdmissionDecision, AdmissionRequest, AdmissionV1,
+    BLOCKED_GENERATION_SLOTS_EXHAUSTED, BLOCKED_INSUFFICIENT_HEADROOM,
+    BLOCKED_INSUFFICIENT_LOCAL_DISK, BLOCKED_UNKNOWN_FOREIGN_EXPOSURE, BLOCKED_UNKNOWN_INVENTORY,
+    BLOCKED_UNKNOWN_LOCAL_DISK, BLOCKED_UNKNOWN_PENDING_WRITES, BLOCKED_UNKNOWN_RUNTIME_ENVELOPE,
+    MAX_ADMISSION_JSON_BYTES, MAX_IDENTITY_BYTES, admission_canonical_bytes, admission_digest,
+    decide_admission, parse_admission_bytes,
+};
+pub use super::cache_archive::cache_archive_envelope::{
+    ENVELOPE_SCHEMA, FrozenInnerPayload, HARD_CEILING_BYTES, MAX_ENVELOPE_JSON_BYTES,
+    MAX_GENERATION_SLOTS, MAX_OUTER_BYTES, MIN_RESERVE_BYTES, MeasuredEnvelope,
+    OPERATING_CEILING_BYTES, OUTER_MEMBER_NAME, OuterEnvelope, OuterEnvelopeIdentity,
+    PreflightMeasurement, UNKNOWN_HOSTED_PACKAGING, UNKNOWN_REPACK_BASIS, UNKNOWN_RUNNER_LAYOUT,
+    UNKNOWN_TOOL_IDENTITY, UnknownEnvelope, envelope_canonical_bytes, freeze_inner_payload,
+    measure_envelope, parse_envelope_bytes, run_preflight_packaging, unknown_envelope,
+};
+pub use super::cache_archive::{
+    ExtractedSnapshot, MAX_ARCHIVE_BYTES, MAX_ARCHIVE_ENTRIES, MAX_ARCHIVE_ENTRY_BYTES,
+    MAX_ARCHIVE_TOTAL_BYTES, PackRequest, PackedArchive, extract_snapshot_archive,
+    pack_snapshot_archive,
+};
+pub use super::cache_inventory::{
+    EntryTupleV1, INVENTORY_SCHEMA, InventoryV1, MAX_CACHE_KEY_BYTES, MAX_CACHE_REF_BYTES,
+    MAX_INVENTORY_ENTRIES, MAX_INVENTORY_JSON_BYTES, build_inventory, inventory_canonical_bytes,
+    inventory_digest, mark_inventory_unknown, measured_bytes, parse_inventory_bytes, unknown_bytes,
+    unknown_inventory_gap,
+};
+pub use super::cache_snapshot::{
+    ArchivedProjectionEntry, LaneRoot, MANIFEST_ARCHIVE_MEMBER, MAX_SNAPSHOT_ENTRIES,
+    MAX_SNAPSHOT_PAYLOAD_BYTES, PROJECTION_ARCHIVE_PREFIX, PROJECTION_INDEX_ARCHIVE_MEMBER,
+    PlannedProjectionEntry, REQUIRED_OUTPUT_INDEX_ARCHIVE_MEMBER, SNAPSHOT_ARCHIVE_FORMAT,
+    SNAPSHOT_MTIME_PRECISION, SNAPSHOT_SCHEMA, STATE_ARCHIVE_PREFIX, STATE_INDEX_ARCHIVE_MEMBER,
+    SnapshotInputs, SnapshotManifestV1, SnapshotPlan, StateEntryV1, StateMtime,
+    archived_projection_records, build_snapshot_plan, collect_state_index, digest_record,
+    excluded_policy_digest, is_excluded, manifest_canonical_bytes, parse_manifest_bytes,
+    parse_projection_index_bytes, parse_required_output_bytes, parse_state_index_bytes,
+    plan_projection_payload, projection_index_digest, required_output_index_digest,
+    state_index_digest, validate_required_outputs, validate_state_index,
+};
 pub use super::check_runtime::{EXECUTE_CHECK_OP, execute_check};
 pub use super::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 pub use super::config::bun_registry_install::{BUN_REGISTRY_INSTALL_OP, run_bun_registry_install};
@@ -76,7 +115,13 @@ pub use super::prepare::{GenerationPreparation, prepare};
 pub use super::preseed_manifest::{PRESEED_MANIFEST_OP, write_preseed_manifest};
 pub use super::preview_producer::{
     ACQUIRE_RELEASE_LEAVES_OP, ADMIT_RELEASE_AGGREGATE_OP, EXECUTE_RELEASE_PRODUCER_OP,
-    acquire_release_leaves, admit_release_aggregate, execute_release_producer,
+    PREVIEW_CACHE_RECIPE_KEY, acquire_release_leaves, admit_release_aggregate,
+    execute_release_producer,
+};
+pub use super::product_release_pins::cache_recipes::{
+    CacheRecipe, CacheRecipeError, CacheRecipeKind, PREVIEW_PRODUCER_RECIPE_KEY, all_recipes,
+    lookup_recipe, parse_kind, recipes_of, validate_catalog, validate_catalog_slice,
+    validate_recipe,
 };
 pub use super::provenance::{EvidenceProvenance, ProfileProvenance};
 pub use super::qualification_resolver::{
@@ -87,6 +132,13 @@ pub use super::qualify::qualify_argv_staged;
 pub use super::retrieve_reports::{FETCH_OP, retrieve_reports};
 pub use super::root::resolve_root;
 pub use super::routing::{migrate_config, parse_dispatch_mode};
+pub use super::source_prep::cache_source_projection::{
+    CheckoutState, EntryKind, InstallOutcome, ProjectionEntry, RealMtime, RestoreDecision,
+    authenticate_entry, checkout_metadata_matches, decide, install_staged_file,
+    install_staged_symlink, is_git_path, reconcile, reject_link_parents, restore_directory_times,
+    restore_times, sha256_hex, sort_deepest_first, staged_path, validate_link_target,
+    validate_link_target_in_root, validate_relative_path, validate_sha256, verify_times,
+};
 pub use super::tap_merge::review_completion::{
     CAPTURE_REVIEW_COMPLETION_OP, EMIT_REVIEW_COMPLETION_OP, capture_review_completion,
     emit_review_completion,
@@ -157,3 +209,9 @@ pub use super::image_maintenance::{
     validate_job_candidate,
 };
 pub use velnor_actions_mise::CheckDeadline;
+
+#[path = "group_ledger/mod.rs"]
+mod group_ledger;
+pub use self::group_ledger::{
+    ASSEMBLE_GROUP_LEDGERS_OP, EMIT_GROUP_LEDGER_OP, assemble_group_ledgers, emit_group_ledger,
+};

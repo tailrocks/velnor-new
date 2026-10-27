@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{DiscoveredCheck, invalid};
-use crate::{IsolatedCommand, MiseError};
+use crate::{IsolatedCommand, MISE_CARGO_HOME_ENV, MISE_RUSTUP_HOME_ENV, MiseError};
 use std::ffi::OsString;
 use std::fmt::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub struct QualifiedCheck {
@@ -14,6 +14,7 @@ pub struct QualifiedCheck {
     pub(crate) cwd: PathBuf,
     pub(crate) check: DiscoveredCheck,
     pub(crate) capability_env: Vec<(OsString, OsString)>,
+    restored_overlay: Vec<(OsString, OsString)>,
 }
 
 impl QualifiedCheck {
@@ -78,12 +79,30 @@ impl QualifiedCheck {
             cwd,
             check,
             capability_env,
+            restored_overlay: Vec::new(),
         };
         owned.bound_projection()?;
         Ok(owned)
     }
     pub fn command(&self, deadline: crate::CheckDeadline) -> Result<IsolatedCommand, MiseError> {
-        IsolatedCommand::qualified_check_run(self, deadline)
+        IsolatedCommand::qualified_check_run(self, deadline)?.with_env(&self.restored_overlay)
+    }
+
+    pub fn project_restored_homes(
+        &mut self,
+        state_root: &Path,
+        cargo_home: &Path,
+        rustup_home: &Path,
+        tool_root: &Path,
+    ) -> Result<(), MiseError> {
+        self.restored_overlay =
+            self.restored_home_overlay(state_root, cargo_home, rustup_home, tool_root)?;
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn restored_overlay(&self) -> &[(OsString, OsString)] {
+        &self.restored_overlay
     }
     #[must_use]
     pub fn timeout(&self) -> std::time::Duration {
@@ -196,6 +215,72 @@ impl QualifiedCheck {
         Ok(env)
     }
 
+    pub fn restored_home_overlay(
+        &self,
+        state_root: &Path,
+        cargo_home: &Path,
+        rustup_home: &Path,
+        tool_root: &Path,
+    ) -> Result<Vec<(OsString, OsString)>, MiseError> {
+        for (field, root) in [
+            ("execution_state_root", state_root),
+            ("execution_cargo_home", cargo_home),
+            ("execution_rustup_home", rustup_home),
+            ("execution_tool_root", tool_root),
+        ] {
+            if !root.is_absolute() {
+                return Err(invalid(field, "absolute_owned_root_required"));
+            }
+            if root == self.home
+                || root == self.cwd
+                || root.starts_with(&self.home)
+                || self.home.starts_with(root)
+                || root.starts_with(&self.cwd)
+                || self.cwd.starts_with(root)
+            {
+                return Err(invalid(field, "shared_home_overlaps_private_home"));
+            }
+        }
+        let roots = [state_root, cargo_home, rustup_home, tool_root];
+        for (index, first) in roots.iter().enumerate() {
+            for second in &roots[index + 1..] {
+                if first == second || first.starts_with(second) || second.starts_with(first) {
+                    return Err(invalid("execution_roots", "shared_roots_must_be_distinct"));
+                }
+            }
+        }
+        Ok(vec![
+            (
+                OsString::from("CARGO_HOME"),
+                cargo_home.as_os_str().to_owned(),
+            ),
+            (
+                OsString::from("RUSTUP_HOME"),
+                rustup_home.as_os_str().to_owned(),
+            ),
+            (
+                OsString::from(MISE_CARGO_HOME_ENV),
+                cargo_home.as_os_str().to_owned(),
+            ),
+            (
+                OsString::from(MISE_RUSTUP_HOME_ENV),
+                rustup_home.as_os_str().to_owned(),
+            ),
+        ])
+    }
+
+    pub fn lane_target_dir(&self, state_root: &Path, lane: &str) -> Result<PathBuf, MiseError> {
+        let dir = lane_dir(state_root, lane, "target")?;
+        reject_private_overlap(&self.home, &self.cwd, &dir)?;
+        Ok(dir)
+    }
+
+    pub fn lane_build_dir(&self, state_root: &Path, lane: &str) -> Result<PathBuf, MiseError> {
+        let dir = lane_dir(state_root, lane, "build")?;
+        reject_private_overlap(&self.home, &self.cwd, &dir)?;
+        Ok(dir)
+    }
+
     fn compiler_prefix(&self) -> Result<Option<PathBuf>, MiseError> {
         use velnor_actions_contract::config::QualifiedToolBackend;
         let mut compilers = self.check.qualified_tools.iter().filter(
@@ -209,6 +294,41 @@ impl QualifiedCheck {
         }
         Ok(prefix)
     }
+}
+
+fn lane_dir(state_root: &Path, lane: &str, kind: &str) -> Result<PathBuf, MiseError> {
+    if !state_root.is_absolute() {
+        return Err(invalid(
+            "execution_state_root",
+            "absolute_owned_root_required",
+        ));
+    }
+    if lane.is_empty()
+        || lane == "."
+        || lane == ".."
+        || lane.contains('/')
+        || lane.contains('\\')
+        || lane.contains('\0')
+    {
+        return Err(invalid("execution_lane", "invalid_lane_id"));
+    }
+    Ok(state_root.join(lane).join(kind))
+}
+
+fn reject_private_overlap(home: &Path, cwd: &Path, dir: &Path) -> Result<(), MiseError> {
+    if dir == home
+        || dir == cwd
+        || dir.starts_with(home)
+        || dir.starts_with(cwd)
+        || home.starts_with(dir)
+        || cwd.starts_with(dir)
+    {
+        return Err(invalid(
+            "execution_lane_dir",
+            "lane_dir_overlaps_private_home",
+        ));
+    }
+    Ok(())
 }
 
 fn toml_quote(value: &str) -> String {

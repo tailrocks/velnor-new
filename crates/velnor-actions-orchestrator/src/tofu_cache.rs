@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use velnor_actions_contract::workflow::cache_family::{
+    CacheFamily, GC1_HARD_CEILING_BYTES, GC1_MAX_GENERATION_SLOTS, family_contract_policy,
+};
 use velnor_actions_contract::{CrateObligation, Step, StepId, StepRole};
 
 use crate::OrchestratorError;
@@ -39,10 +42,29 @@ pub(crate) fn tofu_provider_cache_path(root: &str) -> Result<String, Orchestrato
     )
 }
 
+fn check_tofu_family_policy() -> Result<(), OrchestratorError> {
+    let policy = family_contract_policy(CacheFamily::TofuProviders);
+    if policy.gc1.is_some()
+        || policy.hard_ceiling_bytes != GC1_HARD_CEILING_BYTES
+        || policy.max_generation_slots != GC1_MAX_GENERATION_SLOTS
+    {
+        return Err(bad_key("tofu_family_policy_drift".to_owned()));
+    }
+    CacheFamily::TofuProviders
+        .spec()
+        .check_subordinate_to_common_ceiling()
+        .map_err(|error| bad_key(format!("tofu_family_policy:{error}")))?;
+    CacheFamily::TofuProviders
+        .validate_key_bound()
+        .map_err(|error| bad_key(format!("tofu_family_policy:{error}")))?;
+    Ok(())
+}
+
 pub(crate) fn tofu_providers_restore_step(
     key: &str,
     path: &str,
 ) -> Result<Step, OrchestratorError> {
+    check_tofu_family_policy()?;
     if key.trim().is_empty()
         || !velnor_actions_workflow_renderer::tofu_cache::tofu_providers_path_ok(path)
     {
@@ -143,6 +165,7 @@ pub(crate) fn provider_cache_step_for_tofu_root(
     tofu_roots: &[String],
 ) -> Result<[Step; 1], OrchestratorError> {
     use velnor_actions_contract::workflow::cache_family::tofu_providers_key_plan_expr;
+    check_tofu_family_policy()?;
     let ordinal = tofu_roots
         .iter()
         .position(|candidate| candidate == root)

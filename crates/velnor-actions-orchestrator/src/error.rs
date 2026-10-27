@@ -147,3 +147,11 @@ impl From<velnor_actions_actionlint::ActionlintError> for OrchestratorError {
         }
     }
 }
+
+impl From<velnor_actions_workflow_renderer::plan_sources::PlanSourcesError> for OrchestratorError {
+    fn from(error: velnor_actions_workflow_renderer::plan_sources::PlanSourcesError) -> Self {
+        Self::Contract {
+            problem: format!("{error:?}"),
+        }
+    }
+}

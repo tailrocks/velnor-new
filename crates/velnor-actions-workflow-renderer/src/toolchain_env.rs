@@ -8,8 +8,10 @@ use crate::RenderError;
 #[path = "toolchain_env_homes.rs"]
 mod homes;
 pub use homes::{
-    TOOLCHAIN_HOME_KEYS, check_toolchain_homes, checked_project_task_env, checked_task_env,
-    with_toolchain_homes,
+    SHARED_CARGO_HOME, SHARED_OBSERVATION_ROOT, SHARED_OWNED_ROOT, SHARED_RUSTUP_HOME,
+    SHARED_SOURCE_ROOT, SHARED_TOOL_ROOT, SHARED_TRANSPORT_ROOT, SHARED_WORKSPACE_ROOT,
+    SharedRunnerHomes, TOOLCHAIN_HOME_KEYS, check_toolchain_homes, checked_project_task_env,
+    checked_task_env, reject_conflicting_home_assignments, with_toolchain_homes,
 };
 
 pub const STEP_CREDENTIAL_DENYLIST: [&str; 9] = [

@@ -14,10 +14,8 @@ use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use super::PlanSourcesError;
 
 pub const DEFAULT_REF_ENV: &str = "VELNOR_DEFAULT_REF";
-pub const HEAD_FORK_ENV: &str = "VELNOR_PR_HEAD_FORK";
 const DEFAULT_REF_EXPR: &str =
     "${{ format('refs/heads/{0}', github.event.repository.default_branch) }}";
-const HEAD_FORK_EXPR: &str = "${{ github.event.pull_request.head.repo.fork }}";
 const OUTPUT_DELIMITER: &str = "VELNOR_CACHE_KEYS_EOF";
 const MAX_KEY: usize = velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES;
 
@@ -45,10 +43,7 @@ pub fn cache_keys_step(
     script.push(format!(
         "printf '%s\\n' \"{TRUST_OUTPUT}=$trust\" >> \"$GITHUB_OUTPUT\""
     ));
-    let env = BTreeMap::from([
-        (DEFAULT_REF_ENV.to_owned(), DEFAULT_REF_EXPR.to_owned()),
-        (HEAD_FORK_ENV.to_owned(), HEAD_FORK_EXPR.to_owned()),
-    ]);
+    let env = BTreeMap::from([(DEFAULT_REF_ENV.to_owned(), DEFAULT_REF_EXPR.to_owned())]);
     let mut step = crate::steps::shell_step(
         CACHE_KEYS_STEP_NAME,
         vec!["sh".to_owned(), "-c".to_owned(), script.join("; ")],
@@ -72,7 +67,7 @@ fn prelude() -> Vec<String> {
         "uname -m >> \"$d/platform\"".to_owned(),
         format!("default_ref=\"${{{DEFAULT_REF_ENV}:-}}\""),
         "trust=none".to_owned(),
-        format!("if [ \"${{GITHUB_EVENT_NAME:-}}\" = push ] && [ -n \"${{default_ref#refs/heads/}}\" ] && [ \"${{GITHUB_REF:-}}\" = \"$default_ref\" ] && [ \"${{GITHUB_REF_PROTECTED:-}}\" = true ]; then trust=trusted; elif [ \"${{GITHUB_EVENT_NAME:-}}\" = pull_request ] && [ \"${{{HEAD_FORK_ENV}:-}}\" = false ]; then trust=pr; fi"),
+        "if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; fi".to_owned(),
         format!("check_key() {{ [ \"${{#1}}\" -le {MAX_KEY} ] || {{ printf 'cache key exceeds {MAX_KEY} bytes: %s\\n' \"$1\" >&2; exit 1; }}; }}"),
     ]
 }
@@ -119,12 +114,11 @@ fn sources_commands(fetch_roots: &[String]) -> Result<Vec<String>, PlanSourcesEr
         "s256 \"$d/sources-snapshot\"".to_owned(),
         "snap=\"s256-$h\"".to_owned(),
         format!("trusted=\"{prefix}trusted-$compat-\""),
-        format!("if [ \"$trust\" = pr ]; then key=\"{prefix}pr-$compat-$snap\"; else key=\"$trusted$snap\"; fi"),
+        "key=\"$trusted$snap\"".to_owned(),
         "check_key \"$key\"".to_owned(),
         "save=false".to_owned(),
         "[ \"$trust\" = none ] || save=true".to_owned(),
         format!("printf '%s\\n' \"{SOURCES_KEY_OUTPUT}=$key\" \"{SOURCES_SAVE_OUTPUT}=$save\" \"{SOURCES_SNAPSHOT_OUTPUT}=$snap\" '{SOURCES_RESTORE_KEYS_OUTPUT}<<{OUTPUT_DELIMITER}' >> \"$GITHUB_OUTPUT\""),
-        "if [ \"$trust\" = pr ]; then printf '%s\\n' \"$trusted$snap\" >> \"$GITHUB_OUTPUT\"; fi".to_owned(),
         format!("printf '%s\\n' \"$trusted\" '{OUTPUT_DELIMITER}' >> \"$GITHUB_OUTPUT\""),
         "printf 'velnor: cache trust=%s sources key=%s save=%s\\n' \"$trust\" \"$key\" \"$save\"".to_owned(),
     ]);
@@ -178,5 +172,39 @@ fn workspace_lock(root: &str) -> String {
         "Cargo.lock".to_owned()
     } else {
         format!("{root}/Cargo.lock")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{prelude, sources_commands};
+
+    fn script() -> String {
+        prelude().join("\n")
+    }
+
+    fn key_script() -> String {
+        sources_commands(&[String::new()])
+            .expect("key commands render")
+            .join("\n")
+    }
+
+    #[test]
+    fn cache_keys_never_trust_pull_requests() {
+        let text = script();
+        assert!(!text.contains("trust=pr"));
+        assert!(!text.contains("pull_request"));
+        let keys = key_script();
+        assert!(!keys.contains("trust=pr"));
+        assert!(!keys.contains("pull_request"));
+        assert!(!keys.contains("-pr-"));
+    }
+
+    #[test]
+    fn cache_keys_still_gate_trusted_push() {
+        let text = script();
+        assert!(text.contains("trust=none"));
+        assert!(text.contains("then trust=trusted; fi"));
+        assert!(text.contains("GITHUB_REF_PROTECTED"));
     }
 }

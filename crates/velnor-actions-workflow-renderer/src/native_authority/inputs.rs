@@ -91,6 +91,9 @@ pub struct LogicalJobFact {
     pub runs_on: String,
     pub check_runner: Option<CheckRunner>,
     pub needs: Vec<String>,
+    /// Declared job outputs (`jobs.<id>.outputs`), mirrored from the built
+    /// job so the authority projection pins the same data-flow interface.
+    pub outputs: std::collections::BTreeMap<String, String>,
     pub source: LogicalJobSource,
 }
 

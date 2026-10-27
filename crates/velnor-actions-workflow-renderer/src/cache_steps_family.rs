@@ -4,11 +4,13 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES;
-use velnor_actions_contract::workflow::cache_family::CacheFamily;
+use velnor_actions_contract::workflow::cache_family::{
+    CacheFamily, GC1_HARD_CEILING_BYTES, GC1_MAX_GENERATION_SLOTS,
+};
 use velnor_actions_contract::workflow::cache_family_steps::{
     FAMILY_ADMITTED_OUTPUT, FAMILY_SAVE_OUTPUT, FAMILY_WRITER_ENV, FAMILY_WRITER_EXPR,
     family_key_expr, family_output_stem, family_restore_keys_expr, family_save_condition,
-    family_size_step_id, is_stack_family,
+    family_size_step_id, is_stack_family, validate_stack_family_plan,
 };
 use velnor_actions_contract::{Step, StepId, StepRole};
 
@@ -58,7 +60,17 @@ impl FamilyCachePlan {
             };
         ok.then_some(()).ok_or_else(|| {
             RenderError::InvalidWorkflow(format!("family_cache_plan:{}", self.family.spec().layer))
-        })
+        })?;
+        self.family
+            .spec()
+            .check_subordinate_to_common_ceiling()
+            .map_err(|error| {
+                RenderError::InvalidWorkflow(format!("family_cache_policy:{error}"))
+            })?;
+        self.family.validate_key_bound().map_err(|error| {
+            RenderError::InvalidWorkflow(format!("family_cache_policy:{error}"))
+        })?;
+        Ok(())
     }
 
     fn path_input(&self) -> String {
@@ -71,6 +83,21 @@ impl FamilyCachePlan {
             .shell_paths(self.locator.as_deref())
             .join("")
     }
+}
+
+fn check_save_policy(plan: &FamilyCachePlan) -> Result<(), RenderError> {
+    let policy = validate_stack_family_plan(plan.family, plan.locator.as_deref())
+        .map_err(|error| RenderError::InvalidWorkflow(format!("family_save_policy:{error}")))?;
+    if policy.gc1.is_some()
+        || policy.hard_ceiling_bytes != GC1_HARD_CEILING_BYTES
+        || policy.max_generation_slots != GC1_MAX_GENERATION_SLOTS
+    {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "family_save_policy_drift:{}",
+            plan.family.spec().layer
+        )));
+    }
+    Ok(())
 }
 
 fn safe_relative(path: &str) -> bool {
@@ -200,6 +227,7 @@ pub fn family_size_step(plan: &FamilyCachePlan) -> Result<Step, RenderError> {
     plan.check()?;
     let ceiling = plan.family.spec().ceiling_bytes;
     let layer = plan.family.spec().layer;
+    let output_stem = family_output_stem(plan.family);
     let script = [
         "set -eu".to_owned(),
         GUARD.to_owned(),
@@ -209,11 +237,11 @@ pub fn family_size_step(plan: &FamilyCachePlan) -> Result<Step, RenderError> {
         "if [ ! -d \"$dir\" ] || [ -L \"$dir\" ]; then refuse missing_directory; fi".to_owned(),
         "mkdir -p \"$RUNNER_TEMP/velnor\"".to_owned(),
         "size=\"$RUNNER_TEMP/velnor/family-size\"".to_owned(),
-        format!("if command -v zstd >/dev/null 2>&1; then tar -C \"${{dir%/*}}\" -cf - \"${{dir##*/}}\" | zstd -T0 -q | wc -c > \"$size\"; limit={ceiling}; else du -sk \"$dir\" > \"$size\"; limit={}; fi", ceiling / 1024),
+        format!("if command -v zstd >/dev/null 2>&1; then tar -C \"${{dir%/*}}\" -cf - \"${{dir##*/}}\" | zstd -T0 -q | wc -c > \"$size\"; limit={ceiling}; unit=1; else du -sk \"$dir\" > \"$size\"; limit={}; unit=1024; fi", ceiling / 1024),
         "n=; rest=; read -r n rest < \"$size\" || [ -n \"$n\" ]".to_owned(),
         "case \"$n\" in ''|*[!0-9]*) refuse size_unreadable ;; esac".to_owned(),
         "if [ \"$n\" -gt \"$limit\" ]; then refuse over_ceiling; fi".to_owned(),
-        format!("if [ -n \"$out\" ]; then printf '%s\\n' '{FAMILY_ADMITTED_OUTPUT}=true' >> \"$out\"; fi"),
+        format!("if [ -n \"$out\" ]; then printf '%s\\n' '{FAMILY_ADMITTED_OUTPUT}=true' >> \"$out\"; printf '%s\\n' \"{output_stem}_bytes=$n\" >> \"$out\"; printf '%s\\n' \"{output_stem}_bytes_unit=$unit\" >> \"$out\"; fi"),
     ]
     .join("; ");
     let mut step = shell_step(
@@ -241,6 +269,7 @@ fn size_step_id(family: CacheFamily) -> Result<StepId, RenderError> {
 
 pub fn family_save_step(plan: &FamilyCachePlan) -> Result<Step, RenderError> {
     plan.check()?;
+    check_save_policy(plan)?;
     let mut step = action_step_with_env(
         &format!("Save {} cache", plan.family.spec().layer),
         crate::cache_steps::TOOLS_SAVE_USES,

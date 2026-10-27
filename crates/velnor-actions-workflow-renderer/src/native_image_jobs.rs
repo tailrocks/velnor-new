@@ -49,6 +49,7 @@ pub fn build_native_image_job(
     let timeout = JobTimeout::new(policy.task.timeout_minutes).map_err(RenderError::Contract)?;
     Ok(Job {
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         display_name: format!("Validate native image {}", policy.task.id),
         runs_on: policy.runner_label.clone(),
         timeout_minutes: timeout,

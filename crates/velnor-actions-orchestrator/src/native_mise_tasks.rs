@@ -67,7 +67,7 @@ fn selected_task_tools_with_run_policy(
     let mut tools = BTreeMap::new();
     let mut count = 0;
     visit(
-        config,
+        &config.tasks,
         task_name,
         &mut active,
         &mut complete,
@@ -78,8 +78,129 @@ fn selected_task_tools_with_run_policy(
     Ok(tools)
 }
 
+pub(crate) fn resolve_preview_producer_tools(
+    mise_source: &str,
+    task_name: &str,
+) -> Result<BTreeMap<String, String>, &'static str> {
+    if !is_valid_mise_task_name(task_name) {
+        return Err("preview_producer_task_name");
+    }
+    let value: toml::Value =
+        toml::from_str(mise_source).map_err(|_| "preview_producer_task_source_invalid")?;
+    let Some(table) = value.as_table() else {
+        return Err("preview_producer_task_source_invalid");
+    };
+    let Some(tasks) = table.get("tasks").and_then(toml::Value::as_table) else {
+        return Err("preview_producer_task_missing");
+    };
+    if !tasks.contains_key(task_name) {
+        return Err("preview_producer_task_missing");
+    }
+    let mut parsed = BTreeMap::new();
+    for (name, task) in tasks {
+        if !is_valid_mise_task_name(name) {
+            return Err("preview_producer_task_name");
+        }
+        let parsed_task = parse_task(task);
+        if !parsed_task.valid_shape {
+            return Err("preview_producer_task_shape");
+        }
+        parsed.insert(name.clone(), parsed_task);
+    }
+    let mut active = BTreeSet::new();
+    let mut complete = BTreeSet::new();
+    let mut tools = BTreeMap::new();
+    let mut count = 0;
+    visit_preview_closure(
+        &parsed,
+        task_name,
+        &mut active,
+        &mut complete,
+        &mut tools,
+        &mut count,
+    )?;
+    Ok(tools)
+}
+
+fn visit_preview_closure(
+    tasks: &BTreeMap<String, NativeMiseTask>,
+    name: &str,
+    active: &mut BTreeSet<String>,
+    complete: &mut BTreeSet<String>,
+    tools: &mut BTreeMap<String, String>,
+    count: &mut usize,
+) -> Result<(), &'static str> {
+    if complete.contains(name) {
+        return Ok(());
+    }
+    if !active.insert(name.to_owned()) {
+        return Err("preview_producer_task_cycle");
+    }
+    *count += 1;
+    if *count > MAX_TASK_CLOSURE {
+        return Err("preview_producer_task_graph_bound");
+    }
+    let task = tasks
+        .get(name)
+        .ok_or("preview_producer_task_dependency_missing")?;
+    for (key, version) in &task.task_tools {
+        if !safe_tool_key(key) || !safe_version(version) {
+            return Err("preview_producer_task_tool_shape");
+        }
+        if tools
+            .insert(key.clone(), version.clone())
+            .is_some_and(|old| old != *version)
+        {
+            return Err("preview_producer_task_tool_conflict");
+        }
+    }
+    let mut children = BTreeSet::new();
+    for dependency in &task.dependencies {
+        if !is_valid_mise_task_name(dependency) {
+            return Err("preview_producer_task_dependency");
+        }
+        children.insert(dependency.clone());
+    }
+    collect_nested_calls(
+        task.run_commands.as_ref(),
+        &mut children,
+        "preview_producer_task_nested_call",
+    )?;
+    for child in children {
+        visit_preview_closure(tasks, &child, active, complete, tools, count)?;
+    }
+    active.remove(name);
+    complete.insert(name.to_owned());
+    Ok(())
+}
+
+fn collect_nested_calls(
+    commands: Option<&Vec<String>>,
+    children: &mut BTreeSet<String>,
+    problem: &'static str,
+) -> Result<(), &'static str> {
+    for command in commands.into_iter().flatten() {
+        for line in command.lines() {
+            let line = line.trim();
+            if !line.contains("mise") {
+                continue;
+            }
+            let words = line.split_whitespace().collect::<Vec<_>>();
+            if words.len() != 3
+                || words[0] != "mise"
+                || words[1] != "run"
+                || !is_valid_mise_task_name(words[2])
+            {
+                return Err(problem);
+            }
+            children.insert(words[2].to_owned());
+        }
+    }
+    Ok(())
+}
+
 fn visit(
-    config: &crate::native_tool_input::NativeMiseConfig,
+    tasks: &BTreeMap<String, NativeMiseTask>,
     name: &str,
     active: &mut BTreeSet<String>,
     complete: &mut BTreeSet<String>,
@@ -97,7 +218,7 @@ fn visit(
     if *count > MAX_TASK_CLOSURE {
         return Err("verification_task_graph_bound");
     }
-    let task = config.tasks.get(name).ok_or("verification_task_missing")?;
+    let task = tasks.get(name).ok_or("verification_task_missing")?;
     if !task.valid_shape || !task.unsupported_fields.is_empty() {
         return Err("verification_task_shape");
     }
@@ -125,29 +246,17 @@ fn visit(
         }
         children.insert(dependency.clone());
     }
-    for command in task.run_commands.iter().flatten() {
-        for line in command.lines() {
-            let line = line.trim();
-            if !line.contains("mise") {
-                continue;
-            }
-            let words = line.split_whitespace().collect::<Vec<_>>();
-            if words.len() != 3
-                || words[0] != "mise"
-                || words[1] != "run"
-                || !is_valid_mise_task_name(words[2])
-            {
-                return Err("verification_task_nested_call");
-            }
-            children.insert(words[2].to_owned());
-        }
-    }
+    collect_nested_calls(
+        task.run_commands.as_ref(),
+        &mut children,
+        "verification_task_nested_call",
+    )?;
     if !require_inline_run && !task.run_field_present && children.is_empty() {
         return Err("build_task_task_empty");
     }
     for child in children {
         visit(
-            config,
+            tasks,
             &child,
             active,
             complete,

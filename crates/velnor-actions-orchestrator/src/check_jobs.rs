@@ -108,6 +108,7 @@ fn native_check_job(
         })?;
     Ok(Job {
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         display_name: format!("Homebrew / {}", check.id),
         runs_on: check.runner.label.clone(),
         check_runner: Some(check.runner.clone()),
@@ -142,6 +143,7 @@ fn check_job(
         })?;
     Ok(Job {
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         display_name: format!("Check / {}", check.id),
         runs_on: check.runner.label.clone(),
         check_runner: Some(check.runner.clone()),

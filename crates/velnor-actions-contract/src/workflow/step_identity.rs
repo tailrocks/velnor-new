@@ -176,6 +176,8 @@ pub enum StepRole {
 
     MbxBundleSave,
 
+    MbxBundleRecord,
+
     FamilyKeys,
 
     FamilyRestore,
@@ -277,6 +279,7 @@ impl StepRole {
             | Self::MbxProducerMark
             | Self::MbxSeedBuild
             | Self::MbxBundleExport
+            | Self::MbxBundleRecord
             | Self::PrepareRustComponents
             | Self::CargoDeny
             | Self::CargoMachete
@@ -311,7 +314,9 @@ impl StepRole {
             Self::ToolsCacheRestore => Some(StepId::ToolsRestore),
             Self::PrivateTokenMint => Some(StepId::DepsToken),
             Self::MbxBundleKey => Some(StepId::MbxBundleKey),
-            Self::MbxBundleRestore => Some(StepId::MbxBundleRestore),
+            // No pinned id: the writer's queue-slot recheck re-runs the
+            // bundle restore without an id (a job carries one canonical
+            // restore id), like the other restore roles below.
             Self::MbxBundleExport => Some(StepId::MbxBundleExport),
             Self::FamilyKeys => Some(StepId::FamilyKeys),
             _ => None,

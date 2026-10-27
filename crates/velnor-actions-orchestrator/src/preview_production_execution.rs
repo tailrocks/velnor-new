@@ -64,9 +64,10 @@ pub(super) fn execute(
         &execution_request.context.source_sha,
         execution_request.context.commit_count,
     )?;
+    let group = crate::check_runtime::preparation::RestoredGroupContext::resolve(temp)?;
     let producer = execute_preview_task(
         root,
-        temp,
+        &group,
         PreviewTaskSpec {
             identity: &identity,
             source_ref: &execution_request.context.source_ref,

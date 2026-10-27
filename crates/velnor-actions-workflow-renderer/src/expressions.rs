@@ -34,7 +34,8 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
     Some(spans)
 }
 
-const ENV_EXPRESSIONS: [&str; 14] = [
+const ENV_EXPRESSIONS: [&str; 15] = [
+    "job.status",
     "runner.temp",
     "format('refs/heads/{0}', github.event.repository.default_branch)",
     "github.event.pull_request.head.repo.fork",
@@ -87,6 +88,13 @@ fn is_family_key_output(inner: &str) -> bool {
                 .or_else(|| name.strip_suffix("_key"))
         })
         .is_some_and(|stem| family_for_stem(stem).is_some())
+}
+
+fn is_mbx_bundle_reader_key(inner: &str) -> bool {
+    use velnor_actions_contract::workflow::cache_family_mbx::{
+        is_mbx_bundle_key_needs_inner, is_mbx_bundle_restore_keys_needs_inner,
+    };
+    is_mbx_bundle_key_needs_inner(inner) || is_mbx_bundle_restore_keys_needs_inner(inner)
 }
 
 fn is_tofu_providers_plan_key(inner: &str) -> bool {
@@ -233,6 +241,7 @@ pub(crate) fn check_with_value(key: &str, value: &str) -> Result<(), RenderError
             && !is_matrix_field(inner)
             && !is_hash_files(inner)
             && !is_tofu_providers_plan_key(inner)
+            && !is_mbx_bundle_reader_key(inner)
             && !is_private_mint_input(key, inner)
             && !is_image_publish_output(inner)
             && !is_family_key_output(inner)

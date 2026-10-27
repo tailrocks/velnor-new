@@ -109,8 +109,8 @@ and fails when it exceeds 85 % of the 10 GiB quota.
 
 | Family | Ceiling per entry | Retained per unit | Unit | Reference units | Worst case | Measured |
 |---|---:|---:|---|---:|---:|---|
-| `sources` | 128 MiB | 3 | repository | 1 | 384 MiB | 16.8 MiB stored ([measurements](../implemented/cache-measurements.md)) |
-| `tofu-providers` | 256 MiB | 3 | OpenTofu root | 2 | 1.5 GiB | 131.5 MiB stored (zstd) and 792 MiB on disk for `hashicorp/aws` + `hashicorp/random` with OpenTofu 1.13.1; ceiling kept at about 1.9 times the heaviest common provider set |
+| `sources` | 128 MiB | 2 | repository | 1 | 256 MiB | 16.8 MiB stored ([measurements](../implemented/cache-measurements.md)) |
+| `tofu-providers` | 256 MiB | 2 | OpenTofu root | 2 | 1 GiB | 131.5 MiB stored (zstd) and 792 MiB on disk for `hashicorp/aws` + `hashicorp/random` with OpenTofu 1.13.1; ceiling kept at about 1.9 times the heaviest common provider set |
 | `bun-install` | 256 MiB | 2 | Bun root | 4 | 2 GiB | 30.3 MB gzip (115 MB raw) for a 61-package frontend (Bun 1.4.2) |
 | `dbt-packages` | 64 MiB | 2 | dbt project | 1 | 128 MiB | not measured; ceiling is a placeholder to revise with data |
 | `python-venv` | 384 MiB | 2 | requirements file | 1 | 768 MiB | not measured; ceiling is a placeholder to revise with data |
@@ -118,7 +118,7 @@ and fails when it exceeds 85 % of the 10 GiB quota.
 | `playwright-browsers` | 512 MiB | 2 | Playwright version | 1 | 1 GiB | 328 MB of Chromium archives (Chromium, headless shell, ffmpeg; Playwright 1.64.1) |
 | `mbx-bundle` | 384 MiB | 1 | Cargo workspace and unit | 2 (seed, suite) | 768 MiB | 63.7 MiB (root workspace) and 12.8 MiB (nested runner workspace) stored, first main push after #278 (run 39575862041); the former `target` payload was 770 MiB |
 
-The reference total with the tools allowance is about 8.25 GiB against the
+The reference total with the tools allowance is about 7.63 GiB against the
 8.5 GiB budget (85 % of 10 GiB). A real Bun root that stores more than 256 MiB is
 refused at save time and reported, never silently truncated; the owner raises
 that ceiling with a measurement.

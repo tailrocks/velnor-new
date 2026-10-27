@@ -6,8 +6,13 @@ use std::path::{Path, PathBuf};
 
 use velnor_actions_contract::config::PrivateSourcesConfig;
 use velnor_actions_contract::deps_lock::DepsLock;
-use velnor_actions_contract::{Job, Step, StepRole, VelnorConfig};
+use velnor_actions_contract::{
+    Job, PRIVATE_FETCH_TOKEN_ENV, PRIVATE_TOKEN_OUTPUT_EXPR, Step, StepKind, StepRole, VelnorConfig,
+};
 use velnor_actions_mise::ToolCatalog;
+use velnor_actions_mise::cache_sources::{
+    ImmutableSourceObject, is_approved_origin, is_never_archive_path, require_approved_origins,
+};
 use velnor_actions_workflow_renderer::private_source_steps::{
     PrivateSourcesSpec, private_source_steps,
 };
@@ -68,6 +73,7 @@ impl PrivateWiring {
             }
             None => {}
         }
+        check_private_asset_layout(private, lock.as_ref())?;
         let all = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
         let toolchain_env = all
             .into_iter()
@@ -146,6 +152,7 @@ impl PrivateWiring {
         .map_err(|err| OrchestratorError::Contract {
             problem: err.to_string(),
         })?;
+        verify_private_block(&steps)?;
         Ok(steps.into())
     }
 
@@ -178,5 +185,123 @@ impl PrivateWiring {
         }
         job.steps.splice(at..at, inserted);
         Ok(())
+    }
+}
+
+pub(crate) fn verify_private_block(steps: &[Step]) -> Result<(), OrchestratorError> {
+    let roles: Vec<Option<StepRole>> = steps.iter().map(|step| step.role).collect();
+    if roles
+        != [
+            Some(StepRole::PrivateTokenMint),
+            Some(StepRole::PrivateFetch),
+            Some(StepRole::PrivateRevoke),
+        ]
+    {
+        return Err(internal("private_block_order"));
+    }
+    for step in steps {
+        match &step.kind {
+            StepKind::Action { with, env, .. } => {
+                if with
+                    .values()
+                    .any(|value| value.contains(PRIVATE_TOKEN_OUTPUT_EXPR))
+                {
+                    return Err(internal("private_token_output_exposure"));
+                }
+                check_private_env(env)?;
+            }
+            StepKind::Shell { env, .. }
+            | StepKind::TaskExecution { env, .. }
+            | StepKind::Internal { env, .. } => check_private_env(env)?,
+            StepKind::NativeCheckExecution { .. } => {}
+        }
+    }
+    Ok(())
+}
+
+fn check_private_env(env: &BTreeMap<String, String>) -> Result<(), OrchestratorError> {
+    for (key, value) in env {
+        if key == PRIVATE_FETCH_TOKEN_ENV {
+            if value != PRIVATE_TOKEN_OUTPUT_EXPR {
+                return Err(internal("private_token_binding"));
+            }
+        } else if value.contains(PRIVATE_TOKEN_OUTPUT_EXPR) {
+            return Err(internal("private_token_output_exposure"));
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn check_private_asset_layout(
+    config: &PrivateSourcesConfig,
+    lock: Option<&DepsLock>,
+) -> Result<(), OrchestratorError> {
+    let Some(lock) = lock else {
+        return Ok(());
+    };
+    let mut approved: Vec<&str> = Vec::new();
+    for source in config
+        .maven_bundles
+        .iter()
+        .chain(config.release_assets.iter())
+    {
+        approved.push(source.repository.as_str());
+    }
+    for tree in &config.git_trees {
+        approved.push(tree.repository.as_str());
+    }
+    let mut objects: Vec<ImmutableSourceObject> = Vec::new();
+    for bundle in &lock.maven_bundles {
+        stable_private_path(&bundle.id)?;
+        objects.push(private_asset_object(
+            &bundle.id,
+            &bundle.repository,
+            &bundle.sha256,
+        ));
+    }
+    for asset in &lock.release_assets {
+        let Some(relative) = asset.extract_to.as_deref() else {
+            return Err(internal("private_asset_without_extract_to"));
+        };
+        stable_private_path(relative)?;
+        objects.push(private_asset_object(
+            &asset.id,
+            &asset.repository,
+            &asset.sha256,
+        ));
+    }
+    for tree in &lock.git_trees {
+        stable_private_path(&tree.id)?;
+        if !is_approved_origin(&tree.repository, &approved) {
+            return Err(internal(&format!(
+                "private_tree_origin_unapproved:{}",
+                tree.id
+            )));
+        }
+    }
+    require_approved_origins(&objects, &approved).map_err(|error| map_mise(&error))?;
+    Ok(())
+}
+
+fn private_asset_object(id: &str, repository: &str, sha256: &str) -> ImmutableSourceObject {
+    ImmutableSourceObject {
+        object_id: id.to_owned(),
+        kind: "private_asset".to_owned(),
+        approved_origin_id: repository.to_owned(),
+        content_digest: format!("s256-{sha256}"),
+    }
+}
+
+fn stable_private_path(path: &str) -> Result<(), OrchestratorError> {
+    crate::source_prep::cache_source_projection::validate_relative_path(path)?;
+    if is_never_archive_path(path) {
+        return Err(internal("private_asset_credential_path"));
+    }
+    Ok(())
+}
+
+fn map_mise(error: &velnor_actions_mise::MiseError) -> OrchestratorError {
+    OrchestratorError::Contract {
+        problem: error.to_string(),
     }
 }

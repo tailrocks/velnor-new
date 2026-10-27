@@ -1,6 +1,5 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
-
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Step, StepRole};
@@ -12,8 +11,15 @@ use crate::{
     steps,
 };
 
+#[path = "preseed_digest.rs"]
+mod digest;
 #[path = "preseed_mbx.rs"]
 mod mbx;
+#[path = "preseed_order.rs"]
+mod order;
+
+pub use digest::{source_bound_helper_digest, source_bound_helper_digest_input};
+pub use order::check_preseed_step_order;
 
 pub const PRESEED_ARTIFACT_NAME: &str = "velnor-preseed-helper";
 pub const PRESEED_STAGE_DIR: &str = "$RUNNER_TEMP/velnor/preseed";
@@ -34,6 +40,7 @@ pub const PRESEED_MANIFEST_BINARY_ENV: &str = "VELNOR_PRESEED_BINARY";
 pub const PRESEED_MANIFEST_OUT_ENV: &str = "VELNOR_PRESEED_OUT";
 pub const PRESEED_MANIFEST_TARGET_ENV: &str = "VELNOR_PRESEED_TARGET";
 pub const PRESEED_MANIFEST_TOOLCHAIN_ENV: &str = "VELNOR_PRESEED_TOOLCHAIN";
+pub const PRESEED_MANIFEST_INPUT_DIGEST_ENV: &str = "VELNOR_PRESEED_INPUT_DIGEST";
 
 pub(crate) fn toolchain_identity(build: &[String]) -> Result<String, RenderError> {
     let mut specs = Vec::new();
@@ -159,6 +166,7 @@ pub fn preseed_manifest_step(build: &[String], target: &str) -> Result<Step, Ren
             "preseed_unsupported_target:{target}"
         )));
     }
+    let digest = source_bound_helper_digest(build, target)?;
     let toolchain = toolchain_identity(build)?;
     let mut step = steps::shell_step(
         PRESEED_MANIFEST_NAME,
@@ -178,6 +186,7 @@ pub fn preseed_manifest_step(build: &[String], target: &str) -> Result<Step, Ren
             ),
             (PRESEED_MANIFEST_TARGET_ENV.to_owned(), target.to_owned()),
             (PRESEED_MANIFEST_TOOLCHAIN_ENV.to_owned(), toolchain),
+            (PRESEED_MANIFEST_INPUT_DIGEST_ENV.to_owned(), digest),
         ]),
     )?;
     step.role = Some(StepRole::PreseedManifest);
@@ -218,25 +227,30 @@ pub fn preseed_download_step() -> Result<Step, RenderError> {
 }
 
 #[must_use]
-pub fn preseed_manifest_verify_script(target: &str) -> String {
+pub fn preseed_manifest_verify_script(target: &str, input_digest: &str) -> String {
+    debug_assert!(velnor_actions_contract::ids::is_lower_hex_len(
+        input_digest,
+        64
+    ));
     format!(
-        "line=; rest=; m=\"{PRESEED_STAGE_DIR}/{PRESEED_MANIFEST_FILE}\" && b=\"{PRESEED_STAGE_DIR}/velnor-actions\" && test -f \"$m\" && test -f \"$b\" && read line rest < \"$m\" || [ -n \"$line\" ] && v=${{line#*\\\"schema\\\":}} && v=${{v%%,*}} && [ \"$v\" = 1 ] && c=${{line#*\\\"commit\\\":\\\"}} && c=${{c%%\\\"*}} && [ \"${{#c}}\" = 40 ] && [ \"$c\" = \"$GITHUB_SHA\" ] && t=${{line#*\\\"target\\\":\\\"}} && t=${{t%%\\\"*}} && [ \"$t\" = \"{target}\" ] && tc=${{line#*\\\"toolchain\\\":\\\"}} && tc=${{tc%%\\\"*}} && [ -n \"$tc\" ] && s=${{line#*\\\"sha256\\\":\\\"}} && s=${{s%%\\\"*}} && [ \"${{#s}}\" = 64 ] && sha256sum \"$b\" > \"{PRESEED_STAGE_DIR}/got.txt\" && read got rest < \"{PRESEED_STAGE_DIR}/got.txt\" && [ \"$got\" = \"$s\" ]"
+        "line=; rest=; m=\"{PRESEED_STAGE_DIR}/{PRESEED_MANIFEST_FILE}\" && b=\"{PRESEED_STAGE_DIR}/velnor-actions\" && test -f \"$m\" && test -f \"$b\" && read line rest < \"$m\" || [ -n \"$line\" ] && v=${{line#*\\\"schema\\\":}} && v=${{v%%,*}} && [ \"$v\" = 1 ] && c=${{line#*\\\"commit\\\":\\\"}} && c=${{c%%\\\"*}} && [ \"${{#c}}\" = 40 ] && [ \"$c\" = \"$GITHUB_SHA\" ] && t=${{line#*\\\"target\\\":\\\"}} && t=${{t%%\\\"*}} && [ \"$t\" = \"{target}\" ] && tc=${{line#*\\\"toolchain\\\":\\\"}} && tc=${{tc%%\\\"*}} && [ -n \"$tc\" ] && d=${{line#*\\\"input_digest\\\":\\\"}} && d=${{d%%\\\"*}} && [ \"$d\" = \"{input_digest}\" ] && s=${{line#*\\\"sha256\\\":\\\"}} && s=${{s%%\\\"*}} && [ \"${{#s}}\" = 64 ] && sha256sum \"$b\" > \"{PRESEED_STAGE_DIR}/got.txt\" && read got rest < \"{PRESEED_STAGE_DIR}/got.txt\" && [ \"$got\" = \"$s\" ]"
     )
 }
 
-pub fn preseed_manifest_verify_step(target: &str) -> Result<Step, RenderError> {
+pub fn preseed_manifest_verify_step(build: &[String], target: &str) -> Result<Step, RenderError> {
     debug_assert!(PRESEED_VERIFY_MANIFEST_NAME.ends_with(TRUST_MARK));
     if !velnor_actions_contract::is_supported_target(target) {
         return Err(RenderError::BadCommand(format!(
             "preseed_unsupported_target:{target}"
         )));
     }
+    let input_digest = source_bound_helper_digest(build, target)?;
     let mut step = steps::shell_step(
         PRESEED_VERIFY_MANIFEST_NAME,
         vec![
             "sh".to_owned(),
             "-c".to_owned(),
-            preseed_manifest_verify_script(target),
+            preseed_manifest_verify_script(target, &input_digest),
         ],
         std::collections::BTreeMap::new(),
     )?;
