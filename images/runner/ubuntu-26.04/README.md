@@ -2,21 +2,20 @@
 
 Platform: `linux/amd64`. ARM64 is not the baseline.
 
-From a clean, committed Git checkout, build and qualify the Runner image with
-its matching private DinD image:
+Build with one standard command:
 
 ```sh
-VELNOR_SOURCE_REVISION="$(git rev-parse HEAD)" bash images/resource-probe/build-runner-images.sh
+docker build --platform linux/amd64 -t velnor-runner:2.338.0 images/runner/ubuntu-26.04
 ```
 
-The builder checks that the revision matches `HEAD` and that tracked and
-untracked source stays clean before and after the build. It gives both images
-unique local tags and source-revision labels, verifies immutable image IDs,
-`linux/amd64`, the pinned Runner.Listener and Docker versions, and that a
-Runner-image Docker client reaches the private DinD daemon through its shared
-Unix socket rather than the outer Docker daemon. It removes both labelled
-smoke-test containers and their labelled volumes; the two uniquely tagged
-images remain local.
+Build and integration qualification are separate operations. Required checks
+cover the exact source and clean checkout before and after execution,
+immutable image identities, `linux/amd64`, and locked Runner and Docker
+versions. A Runner-image Docker client must reach its private DinD Unix socket
+and a daemon distinct from the outer daemon. Bounded cleanup must remove only
+the test's owned containers and volumes and preserve unrelated resources and
+both input images. See the
+[Runner image release contract](../../../docs/proposed/runner-image-release.md).
 
 Official [actions/runner `2.338.0` release](https://github.com/actions/runner/releases/tag/v2.338.0)
 linux-x64, SHA256

@@ -62,11 +62,15 @@ Manifest schema version 2 requires these fields:
 | `signer_workflow` | `.github/workflows/product-release-images.yml`. |
 | `signer_ref` | `refs/heads/main`. |
 | `workflow_authority_sha` | The same source SHA under the current protected release authority. |
-| `trusted_signing_identity` | Existing pinned OIDC issuer and image-workflow certificate identity, checked against verified provenance. |
+| `trusted_signing_identity` | Exactly `oidc_issuer` and `certificate_identity`, checked against verified provenance. |
 | `platform` | `linux/amd64`. |
 | `versions` | Required `runner`, `docker`, `buildx`, `compose`, and `node` versions from the selected source's `.velnor/runner.lock`. |
 | `images` | Exactly `runner`, `dind`, and `resource_probe` entries. |
 | `resource_probe` | Protocol version `1`, image user `65532:65532`, entrypoint `/velnor/resource-probe`, and working directory `/`. |
+
+`oidc_issuer` is `https://token.actions.githubusercontent.com`.
+`certificate_identity` is
+`https://github.com/tailrocks/velnor-new/.github/workflows/product-release-images.yml@refs/heads/main`.
 
 Each image entry requires `repository`, `tag`, `registry_digest`,
 `platform_manifest_digest`, and `config_digest`. Repository and source tag must
