@@ -1,0 +1,1025 @@
+name: Source qualification
+
+"on":
+  pull_request: {}
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: source-qualification-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  source-qualification:
+    name: Source qualification
+    runs-on: ubuntu-26.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      MBX_GC_AUTO: "0"
+      PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+      PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+    steps:
+      - name: Checkout exact event source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: "2"
+          persist-credentials: "false"
+
+      - name: Prepare external evidence directories
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$RUNNER_TEMP" in
+            /*) ;;
+            *) printf 'FATAL: RUNNER_TEMP must be absolute\n' >&2; exit 1 ;;
+          esac
+          workspace="$(cd "$GITHUB_WORKSPACE" && pwd -P)"
+          evidence="$RUNNER_TEMP/source-qualification-artifacts"
+          mkdir -p "$evidence/logs" "$evidence/previews"
+          mkdir -p "$RUNNER_TEMP/velnor-source-qualification-tmp"
+          evidence="$(cd "$evidence" && pwd -P)"
+          case "$evidence" in
+            "$workspace"|"$workspace"/*)
+              printf 'FATAL: qualification evidence must stay outside the checkout\n' >&2
+              exit 1
+              ;;
+          esac
+          {
+            printf 'CARGO_TARGET_DIR=%s/velnor-source-qualification-target\n' "$RUNNER_TEMP"
+            printf 'CARGO_HOME=%s/velnor-source-qualification-cargo-home\n' "$RUNNER_TEMP"
+          } >>"$GITHUB_ENV"
+          {
+            printf 'CARGO_TARGET_DIR=%s/velnor-source-qualification-target\n' "$RUNNER_TEMP"
+            printf 'CARGO_HOME=%s/velnor-source-qualification-cargo-home\n' "$RUNNER_TEMP"
+          } >"$evidence/build-environment.txt"
+
+      - name: Verify exact clean source checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/source-qualification-artifacts"
+          actual_head="$(GIT_OPTIONAL_LOCKS=0 git rev-parse HEAD)"
+          actual_tree="$(GIT_OPTIONAL_LOCKS=0 git rev-parse 'HEAD^{tree}')"
+          test "$actual_head" = "$GITHUB_SHA"
+          test "$GITHUB_REPOSITORY" = tailrocks/velnor-new
+          pr_head_commit=not-applicable
+          pr_head_tree=not-applicable
+          pr_base_commit=not-applicable
+          pr_base_tree=not-applicable
+          merge_parent_1=not-applicable
+          merge_parent_2=not-applicable
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            if ! [[ "$PR_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] \
+              || ! [[ "$PR_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+              echo 'FATAL: pull_request event lacks exact head/base commit SHAs' >&2
+              exit 1
+            fi
+            pr_head_commit="$(GIT_OPTIONAL_LOCKS=0 git rev-parse "${PR_HEAD_SHA}^{commit}")"
+            pr_head_tree="$(GIT_OPTIONAL_LOCKS=0 git rev-parse "${PR_HEAD_SHA}^{tree}")"
+            pr_base_commit="$(GIT_OPTIONAL_LOCKS=0 git rev-parse "${PR_BASE_SHA}^{commit}")"
+            pr_base_tree="$(GIT_OPTIONAL_LOCKS=0 git rev-parse "${PR_BASE_SHA}^{tree}")"
+            merge_parent_1="$(GIT_OPTIONAL_LOCKS=0 git rev-parse 'HEAD^1')"
+            merge_parent_2="$(GIT_OPTIONAL_LOCKS=0 git rev-parse 'HEAD^2')"
+            test "$pr_head_commit" = "$PR_HEAD_SHA"
+            test "$pr_base_commit" = "$PR_BASE_SHA"
+            test "$merge_parent_1" = "$PR_BASE_SHA"
+            test "$merge_parent_2" = "$PR_HEAD_SHA"
+          fi
+          GIT_OPTIONAL_LOCKS=0 git status --porcelain=v1 --untracked-files=all >"$evidence/checkout-status.txt"
+          test ! -s "$evidence/checkout-status.txt"
+          {
+            printf 'event=%s\n' "$GITHUB_EVENT_NAME"
+            printf 'repository=%s\n' "$GITHUB_REPOSITORY"
+            printf 'ref=%s\n' "$GITHUB_REF"
+            printf 'github_sha=%s\n' "$GITHUB_SHA"
+            printf 'workflow_ref=%s\n' "$GITHUB_WORKFLOW_REF"
+            printf 'workflow_sha=%s\n' "$GITHUB_WORKFLOW_SHA"
+            printf 'checkout_head=%s\n' "$actual_head"
+            printf 'checkout_tree=%s\n' "$actual_tree"
+            printf 'pr_head_sha=%s\n' "$pr_head_commit"
+            printf 'pr_head_tree=%s\n' "$pr_head_tree"
+            printf 'pr_base_sha=%s\n' "$pr_base_commit"
+            printf 'pr_base_tree=%s\n' "$pr_base_tree"
+            printf 'merge_parent_1=%s\n' "$merge_parent_1"
+            printf 'merge_parent_2=%s\n' "$merge_parent_2"
+            printf 'worktree=clean\n'
+            printf 'runner=%s/%s\n' "$RUNNER_OS" "$RUNNER_ARCH"
+          } | tee "$evidence/source-identity.txt"
+          : >"$evidence/source-inputs.sha256"
+          for path in .mise-version mise.toml mise.lock rust-toolchain.toml .velnor/config.toml .velnor/mise.toml .velnor/mise.lock .velnor/generator.lock .github/workflows/source-qualification.yml; do
+            if [ -f "$path" ] && [ ! -L "$path" ]; then
+              sha256sum "$path" >>"$evidence/source-inputs.sha256"
+            else
+              printf 'absent-or-unsafe %s\n' "$path" >>"$evidence/source-inputs.sha256"
+            fi
+          done
+
+      - name: Set up pinned Mise
+        uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e
+        with:
+          cache: "false"
+          cache_save: "false"
+          env: "false"
+          install: "false"
+          sha256: 2eb27467b6f369915ee76f18d66a0696cdb5c20e7ecc8cb49c2bfaca60f0fc9c
+          version: 2026.10.20
+
+      - name: Read and verify repository tool pins
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/source-qualification-artifacts"
+          python3 - "$GITHUB_ENV" "$evidence/tool-pins.json" <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          import sys
+          import tomllib
+
+          env_path = Path(sys.argv[1])
+          receipt_path = Path(sys.argv[2])
+          mise_version = Path('.mise-version').read_text().strip()
+          tools = tomllib.loads(Path('mise.toml').read_text())['tools']
+          rust = tools['rust']['version']
+          mbx = tools['mr-boxington']['version']
+          nextest = tools['aqua:nextest-rs/nextest/cargo-nextest']
+          channel = tomllib.loads(Path('rust-toolchain.toml').read_text())['toolchain']['channel']
+          expected = {
+              'mise': '2026.10.20',
+              'rust': '1.99.1',
+              'mr-boxington': '1.28.0',
+              'nextest': '0.9.150',
+          }
+          actual = {
+              'mise': mise_version,
+              'rust': rust,
+              'mr-boxington': mbx,
+              'nextest': nextest,
+          }
+          if actual != expected or channel != rust:
+              raise SystemExit(f'repository tool pin mismatch: actual={actual}, channel={channel}')
+          source_files = [Path('.mise-version'), Path('mise.toml'), Path('rust-toolchain.toml')]
+          receipt = {
+              'versions': actual,
+              'rust_toolchain_channel': channel,
+              'source_sha256': {
+                  str(path): hashlib.sha256(path.read_bytes()).hexdigest()
+                  for path in source_files
+              },
+          }
+          receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + '\n')
+          with env_path.open('a') as stream:
+              stream.write(f"VELNOR_MISE_VERSION={mise_version}\n")
+              stream.write(f"VELNOR_RUST_VERSION={rust}\n")
+              stream.write(f"VELNOR_MBX_VERSION={mbx}\n")
+              stream.write(f"VELNOR_NEXTEST_VERSION={nextest}\n")
+          PY
+          mise --version | tee "$evidence/mise-version.txt"
+          grep -Eq "(^|[[:space:]])2026\.10\.20([[:space:]]|$)" "$evidence/mise-version.txt"
+
+      - name: Install pinned Rust and MBX
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/source-qualification-artifacts"
+          mise --no-config --no-env --no-hooks install \
+            "rust@$VELNOR_RUST_VERSION" "mr-boxington@$VELNOR_MBX_VERSION" \
+            >"$evidence/logs/tool-install.log" 2>&1
+          cat "$evidence/logs/tool-install.log"
+
+      - name: Record installed tool identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/source-qualification-artifacts"
+          mise --no-config --no-env --no-hooks exec "rust@$VELNOR_RUST_VERSION" -- rustc --version \
+            >"$evidence/rustc-version.txt"
+          mise --no-config --no-env --no-hooks exec "mr-boxington@$VELNOR_MBX_VERSION" -- mbx --version \
+            >"$evidence/mbx-version.txt"
+          cat "$evidence/rustc-version.txt" "$evidence/mbx-version.txt"
+          grep -F "rustc $VELNOR_RUST_VERSION " "$evidence/rustc-version.txt"
+          grep -Eq "(^|[^0-9])$VELNOR_MBX_VERSION([^0-9]|$)" "$evidence/mbx-version.txt"
+
+      - name: Build runner-native archive guard from this checkout
+        shell: bash
+        run: |
+          set -uo pipefail
+          evidence="$RUNNER_TEMP/source-qualification-artifacts"
+          log="$evidence/logs/archive-guard-build.log"
+          receipt="$evidence/archive-guard-identity.txt"
+          printf '%s\n' 'bash scripts/build-owned-archive-guard.sh' >"$evidence/logs/archive-guard-build.command"
+          set +e
+          bash scripts/build-owned-archive-guard.sh >"$log" 2>&1
+          command_status=$?
+          cat "$log"
+          identity_status=0
+          artifact_status=0
+          guard="$GITHUB_WORKSPACE/.velnor/archive-guard/bin/velnor-archive-guard"
+          fingerprint=unavailable
+          source_fingerprint=unavailable
+          digest=unavailable
+          file_identity=unavailable
+          if [ "$command_status" -ne 0 ]; then
+            identity_status=1
+            printf 'guard identity unavailable because the host-native build failed\n' >&2
+          elif [ -L "$guard" ] || [ ! -f "$guard" ] || [ ! -x "$guard" ]; then
+            identity_status=1
+            printf 'FATAL: builder did not produce a regular executable guard in the checkout\n' >&2
+          else
+            if ! fingerprint="$("$guard" --fingerprint)" \
+              || ! source_fingerprint="$("$guard" source-fingerprint "$GITHUB_WORKSPACE")" \
+              || [[ ! "$fingerprint" =~ ^[0-9a-f]{64}$ ]] \
+              || [ "$source_fingerprint" != "$fingerprint" ]; then
+              identity_status=1
+              printf 'FATAL: runner-native archive guard fingerprint does not match this checkout\n' >&2
+            fi
+            if ! digest="$(sha256sum "$guard" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')" \
+              || [[ ! "$digest" =~ ^[0-9a-f]{64}$ ]]; then
+              identity_status=1
+              digest=unavailable
+              printf 'FATAL: could not calculate the archive guard SHA-256\n' >&2
+            fi
+            if ! file_identity="$(stat -c '%u:%a:%h:%s' "$guard")"; then
+              identity_status=1
+              file_identity=unavailable
+              printf 'FATAL: could not inspect the archive guard identity\n' >&2
+            fi
+            owner="${file_identity%%:*}"
+            remainder="${file_identity#*:}"
+            mode="${remainder%%:*}"
+            remainder="${remainder#*:}"
+            links="${remainder%%:*}"
+            size="${remainder#*:}"
+            if [[ ! "$owner" =~ ^[0-9]+$ || "$owner" != "$(id -u)" \
+              || ! "$mode" =~ ^[0-7]+$ || ! "$links" =~ ^[0-9]+$ \
+              || "$links" != 1 || ! "$size" =~ ^[0-9]+$ ]] \
+              || (( (8#$mode & 022) != 0 || (8#$mode & 0111) == 0 )); then
+              identity_status=1
+              printf 'FATAL: archive guard file ownership or permissions are unsafe\n' >&2
+            fi
+            if ! {
+              printf 'source_head=%s\n' "$GITHUB_SHA"
+              printf 'host=%s/%s\n' "$RUNNER_OS" "$RUNNER_ARCH"
+              printf 'builder=scripts/build-owned-archive-guard.sh\n'
+              printf 'binary_path=%s\n' "$guard"
+              printf 'binary_sha256=%s\n' "$digest"
+              printf 'binary_identity=%s\n' "$file_identity"
+              printf 'source_fingerprint=%s\n' "$source_fingerprint"
+            } >"$receipt"; then
+              artifact_status=1
+              printf 'FATAL: could not write the archive guard identity receipt\n' >&2
+            fi
+          fi
+          printf '%s\n' "$command_status" >"$evidence/logs/archive-guard-build.command.exit" || artifact_status=1
+          printf '%s\n' "$identity_status" >"$evidence/logs/archive-guard-build.identity.exit" || artifact_status=1
+          printf '%s\n' "$artifact_status" >"$evidence/logs/archive-guard-build.artifact.exit" || artifact_status=1
+          final_status=0
+          if [ "$command_status" -ne 0 ] || [ "$identity_status" -ne 0 ] || [ "$artifact_status" -ne 0 ]; then
+            final_status=1
+          fi
+          printf '%s\n' "$final_status" >"$evidence/logs/archive-guard-build.exit" || exit 1
+          if [ "$artifact_status" -ne 0 ]; then
+            printf 'artifact_status=1\n' >"$evidence/logs/archive-guard-build.artifact.exit" || true
+          fi
+          exit "$final_status"
+
+      - name: Build source CLI with pinned MBX
+        shell: bash
+        run: |
+          set -uo pipefail
+          evidence="$RUNNER_TEMP/source-qualification-artifacts"
+          mise --no-config --no-env --no-hooks exec \
+            "rust@$VELNOR_RUST_VERSION" "mr-boxington@$VELNOR_MBX_VERSION" -- \
+            mbx build --locked --release --package velnor-actions-cli --bin velnor-actions \
+            >"$evidence/logs/cli-build.log" 2>&1
+          command_status=$?
+          identity_status=0
+          artifact_status=0
+          binary="$CARGO_TARGET_DIR/release/velnor-actions"
+          if ! cat "$evidence/logs/cli-build.log"; then artifact_status=1; fi
+          version=unavailable
+          digest=unavailable
+          size=unavailable
+          expected_version=unavailable
+          if [ "$command_status" -ne 0 ]; then
+            identity_status=1
+            printf 'CLI identity unavailable because the build command failed\n' >&2
+          elif [ ! -f "$binary" ] || [ -L "$binary" ] || [ ! -x "$binary" ]; then
+            identity_status=1
+            printf 'FATAL: successful build did not produce a regular executable CLI at %s\n' "$binary" >&2
+          else
+            if ! expected_version="$(python3 -c 'import pathlib,tomllib; print(tomllib.loads(pathlib.Path("Cargo.toml").read_text())["workspace"]["package"]["version"])')"; then
+              identity_status=1
+              printf 'FATAL: could not read the workspace package version\n' >&2
+            fi
+            if ! version="$("$binary" --version)"; then
+              identity_status=1
+              version=unavailable
+              printf 'FATAL: built CLI version command failed\n' >&2
+            elif [ "$version" != "velnor-actions $expected_version" ]; then
+              identity_status=1
+              printf 'FATAL: built CLI version %s does not match expected velnor-actions %s\n' "$version" "$expected_version" >&2
+            fi
+            if ! digest="$(sha256sum "$binary" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')" \
+              || [[ ! "$digest" =~ ^[0-9a-f]{64}$ ]]; then
+              identity_status=1
+              digest=unavailable
+              printf 'FATAL: could not compute the built CLI SHA-256\n' >&2
+            fi
+            if ! size="$(stat -c '%s' "$binary")" || [[ ! "$size" =~ ^[0-9]+$ ]]; then
+              identity_status=1
+              size=unavailable
+              printf 'FATAL: could not read the built CLI size\n' >&2
+            fi
+            identity_tmp="$evidence/cli-identity.txt.tmp"
+            if ! {
+              printf 'source_head=%s\n' "$GITHUB_SHA"
+              printf 'expected_version=velnor-actions %s\n' "$expected_version"
+              printf 'binary_path=%s\n' "$binary"
+              printf 'binary_version=%s\n' "$version"
+              printf 'binary_sha256=%s\n' "$digest"
+              printf 'binary_size=%s\n' "$size"
+              printf 'mise=%s\n' "$VELNOR_MISE_VERSION"
+              printf 'rust=%s\n' "$VELNOR_RUST_VERSION"
+              printf 'mr_boxington=%s\n' "$VELNOR_MBX_VERSION"
+              printf 'nextest_pin=%s\n' "$VELNOR_NEXTEST_VERSION"
+            } >"$identity_tmp" || ! mv "$identity_tmp" "$evidence/cli-identity.txt"; then
+              artifact_status=1
+              printf 'FATAL: could not write CLI identity receipt\n' >&2
+            else
+              cat "$evidence/cli-identity.txt" || artifact_status=1
+            fi
+          fi
+          printf '%s\n' "$command_status" >"$evidence/logs/cli-build.command.exit" || artifact_status=1
+          printf '%s\n' "$identity_status" >"$evidence/logs/cli-build.identity.exit" || artifact_status=1
+          printf '%s\n' "$artifact_status" >"$evidence/logs/cli-build.artifact.exit" || artifact_status=1
+          final_status=0
+          if [ "$command_status" -ne 0 ] || [ "$identity_status" -ne 0 ] || [ "$artifact_status" -ne 0 ]; then
+            final_status=1
+          fi
+          printf '%s\n' "$final_status" >"$evidence/logs/cli-build.exit" || exit 1
+          if [ "$artifact_status" -ne 0 ]; then
+            printf 'artifact_status=1\n' >"$evidence/logs/cli-build.artifact.exit" || true
+          fi
+          exit "$final_status"
+
+      - name: Capture all five external goldens
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          evidence="$RUNNER_TEMP/source-qualification-artifacts"
+          tmp="$RUNNER_TEMP/velnor-source-qualification-tmp"
+          oracle="$evidence/external-oracle"
+          binary="$CARGO_TARGET_DIR/release/velnor-actions"
+          if [ ! -f "$binary" ] || [ ! -x "$binary" ]; then
+            printf 'CLI binary unavailable; capture not run\n' >"$evidence/logs/external-capture.log"
+            printf '1\n' >"$evidence/logs/external-capture.command.exit"
+            printf '0\n' >"$evidence/logs/external-capture.artifact.exit"
+            printf '1\n' >"$evidence/logs/external-capture.exit"
+            printf 'capture workspace unavailable\n' >"$evidence/logs/external-capture-workspace.txt"
+            exit 1
+          fi
+          mkdir -p "$oracle"
+          set +e
+          TMPDIR="$tmp" VELNOR_GOLDEN_DIR="$oracle" VELNOR_GOLDEN_KEEP_WORK=1 \
+            scripts/capture-opentofu-goldens.sh capture "$binary" \
+            >"$evidence/logs/external-capture.log" 2>&1
+          command_status=$?
+          artifact_status=0
+          cat "$evidence/logs/external-capture.log"
+          workspace="$(sed -n 's/^retaining \(successful golden evidence\|failed golden\) workspace: //p' "$evidence/logs/external-capture.log" | tail -n 1)"
+          printf '%s\n' "$workspace" >"$evidence/logs/external-capture-workspace.txt"
+          case "$workspace" in
+            "$tmp"/velnor-goldens-work.*)
+              if [ ! -L "$workspace" ] && [ ! -L "$workspace/stage" ] && [ -d "$workspace/stage" ]; then
+                rm -rf "$evidence/captured-stage"
+                if ! cp -RP "$workspace/stage" "$evidence/captured-stage"; then
+                  printf 'could not preserve retained capture stage\n' >>"$evidence/logs/external-capture-workspace.txt"
+                  artifact_status=1
+                fi
+              else
+                printf 'retained workspace has no stage directory\n' >>"$evidence/logs/external-capture-workspace.txt"
+                artifact_status=1
+              fi
+              if [ ! -L "$workspace/raw" ] && [ -d "$workspace/raw" ]; then
+                rm -rf "$evidence/captured-raw"
+                if ! cp -RP "$workspace/raw" "$evidence/captured-raw"; then
+                  printf 'could not preserve retained raw capture logs\n' >>"$evidence/logs/external-capture-workspace.txt"
+                  artifact_status=1
+                fi
+              else
+                printf 'retained workspace has no safe raw log directory\n' >>"$evidence/logs/external-capture-workspace.txt"
+                artifact_status=1
+              fi
+              ;;
+            *)
+              printf 'retained workspace path was absent or outside controlled TMPDIR\n' >>"$evidence/logs/external-capture-workspace.txt"
+              artifact_status=1
+              ;;
+          esac
+          final_status=$command_status
+          if [ "$final_status" -eq 0 ] && [ "$artifact_status" -ne 0 ]; then final_status=1; fi
+          printf '%s\n' "$command_status" >"$evidence/logs/external-capture.command.exit"
+          printf '%s\n' "$artifact_status" >"$evidence/logs/external-capture.artifact.exit"
+          printf '%s\n' "$final_status" >"$evidence/logs/external-capture.exit"
+          exit "$final_status"
+
+      - name: Repeat check against external oracle
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          evidence="$RUNNER_TEMP/source-qualification-artifacts"
+          tmp="$RUNNER_TEMP/velnor-source-qualification-tmp"
+          oracle="$evidence/external-oracle"
+          binary="$CARGO_TARGET_DIR/release/velnor-actions"
+          if [ ! -x "$binary" ] || [ ! -d "$oracle/cases" ]; then
+            printf 'CLI or externally captured oracle is unavailable\n' >"$evidence/logs/external-check.log"
+            printf '1\n' >"$evidence/logs/external-check.command.exit"
+            printf '0\n' >"$evidence/logs/external-check.artifact.exit"
+            printf '1\n' >"$evidence/logs/external-check.exit"
+            printf 'check workspace unavailable\n' >"$evidence/logs/external-check-workspace.txt"
+            exit 1
+          fi
+          set +e
+          TMPDIR="$tmp" VELNOR_GOLDEN_DIR="$oracle" VELNOR_GOLDEN_KEEP_WORK=1 \
+            scripts/capture-opentofu-goldens.sh check "$binary" \
+            >"$evidence/logs/external-check.log" 2>&1
+          command_status=$?
+          artifact_status=0
+          cat "$evidence/logs/external-check.log"
+          workspace="$(sed -n 's/^retaining \(successful golden evidence\|failed golden\) workspace: //p' "$evidence/logs/external-check.log" | tail -n 1)"
+          printf '%s\n' "$workspace" >"$evidence/logs/external-check-workspace.txt"
+          case "$workspace" in
+            "$tmp"/velnor-goldens-work.*)
+              if [ ! -L "$workspace" ] && [ ! -L "$workspace/stage" ] && [ -d "$workspace/stage" ]; then
+                rm -rf "$evidence/external-check-stage"
+                if ! cp -RP "$workspace/stage" "$evidence/external-check-stage"; then
+                  printf 'could not preserve external check stage\n' >>"$evidence/logs/external-check-workspace.txt"
+                  artifact_status=1
+                fi
+              else
+                printf 'retained check workspace has no safe stage directory\n' >>"$evidence/logs/external-check-workspace.txt"
+                artifact_status=1
+              fi
+              if [ ! -L "$workspace/raw" ] && [ -d "$workspace/raw" ]; then
+                rm -rf "$evidence/external-check-raw"
+                if ! cp -RP "$workspace/raw" "$evidence/external-check-raw"; then
+                  printf 'could not preserve external check raw logs\n' >>"$evidence/logs/external-check-workspace.txt"
+                  artifact_status=1
+                fi
+              else
+                printf 'retained check workspace has no safe raw log directory\n' >>"$evidence/logs/external-check-workspace.txt"
+                artifact_status=1
+              fi
+              if [ ! -L "$workspace/check-diff" ] && [ -d "$workspace/check-diff" ]; then
+                rm -rf "$evidence/external-check-diff"
+                if ! cp -RP "$workspace/check-diff" "$evidence/external-check-diff"; then
+                  printf 'could not preserve external check differences\n' >>"$evidence/logs/external-check-workspace.txt"
+                  artifact_status=1
+                fi
+              fi
+              ;;
+            *)
+              printf 'retained workspace path was absent or outside controlled TMPDIR\n' >>"$evidence/logs/external-check-workspace.txt"
+              artifact_status=1
+              ;;
+          esac
+          final_status=$command_status
+          if [ "$final_status" -eq 0 ] && [ "$artifact_status" -ne 0 ]; then final_status=1; fi
+          printf '%s\n' "$command_status" >"$evidence/logs/external-check.command.exit"
+          printf '%s\n' "$artifact_status" >"$evidence/logs/external-check.artifact.exit"
+          printf '%s\n' "$final_status" >"$evidence/logs/external-check.exit"
+          exit "$final_status"
+
+      - name: Run full golden shell harness against external oracle
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          evidence="$RUNNER_TEMP/source-qualification-artifacts"
+          binary="$CARGO_TARGET_DIR/release/velnor-actions"
+          oracle="$evidence/external-oracle"
+          if [ ! -x "$binary" ] || [ ! -d "$oracle/cases" ]; then
+            printf 'CLI or externally captured oracle is unavailable\n' >"$evidence/logs/external-shell-harness.log"
+            printf '1\n' >"$evidence/logs/external-shell-harness.command.exit"
+            printf '0\n' >"$evidence/logs/external-shell-harness.artifact.exit"
+            printf '1\n' >"$evidence/logs/external-shell-harness.exit"
+            printf 'harness workspace unavailable\n' >"$evidence/logs/external-shell-harness-workspace.txt"
+            exit 1
+          fi
+          set +e
+          TMPDIR="$RUNNER_TEMP/velnor-source-qualification-tmp" VELNOR_GOLDEN_DIR="$oracle" VELNOR_GOLDEN_KEEP_WORK=0 \
+            scripts/test-capture-opentofu-goldens-bin.sh "$binary" \
+            >"$evidence/logs/external-shell-harness.log" 2>&1
+          command_status=$?
+          artifact_status=0
+          cat "$evidence/logs/external-shell-harness.log"
+          workspace="$(sed -n 's/^retaining failed golden harness workspace: //p' "$evidence/logs/external-shell-harness.log" | tail -n 1)"
+          printf '%s\n' "$workspace" >"$evidence/logs/external-shell-harness-workspace.txt"
+          case "$workspace" in
+            "$RUNNER_TEMP"/velnor-source-qualification-tmp/velnor-goldens-bin-test.*)
+              mkdir -p "$evidence/external-shell-harness-logs"
+              for file in "$workspace"/*.log "$workspace"/*.diff; do
+                if [ -f "$file" ] && [ ! -L "$file" ]; then
+                  if ! cp -p "$file" "$evidence/external-shell-harness-logs/${file##*/}"; then
+                    printf 'could not preserve %s\n' "$file" >>"$evidence/logs/external-shell-harness-workspace.txt"
+                    artifact_status=1
+                  fi
+                fi
+              done
+              ;;
+            *)
+              if [ "$command_status" -ne 0 ]; then
+                printf 'failed harness workspace was absent or outside controlled TMPDIR\n' >>"$evidence/logs/external-shell-harness-workspace.txt"
+                artifact_status=1
+              fi
+              ;;
+          esac
+          final_status=$command_status
+          if [ "$final_status" -eq 0 ] && [ "$artifact_status" -ne 0 ]; then final_status=1; fi
+          printf '%s\n' "$command_status" >"$evidence/logs/external-shell-harness.command.exit"
+          printf '%s\n' "$artifact_status" >"$evidence/logs/external-shell-harness.artifact.exit"
+          printf '%s\n' "$final_status" >"$evidence/logs/external-shell-harness.exit"
+          exit "$final_status"
+
+      - name: Run full golden shell harness with retained workspaces
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          evidence="$RUNNER_TEMP/source-qualification-artifacts"
+          binary="$CARGO_TARGET_DIR/release/velnor-actions"
+          oracle="$evidence/external-oracle"
+          name=external-shell-harness-keep
+          if [ ! -x "$binary" ] || [ ! -d "$oracle/cases" ]; then
+            printf 'CLI or externally captured oracle is unavailable\n' >"$evidence/logs/$name.log"
+            printf '1\n' >"$evidence/logs/$name.command.exit"
+            printf '0\n' >"$evidence/logs/$name.artifact.exit"
+            printf '1\n' >"$evidence/logs/$name.exit"
+            printf 'harness workspace unavailable\n' >"$evidence/logs/$name-workspace.txt"
+            exit 1
+          fi
+          set +e
+          TMPDIR="$RUNNER_TEMP/velnor-source-qualification-tmp" VELNOR_GOLDEN_DIR="$oracle" \
+            VELNOR_GOLDEN_KEEP_WORK=1 scripts/test-capture-opentofu-goldens-bin.sh "$binary" \
+            >"$evidence/logs/$name.log" 2>&1
+          command_status=$?
+          artifact_status=0
+          cat "$evidence/logs/$name.log"
+          workspace="$(sed -n 's/^retaining \(successful golden harness evidence\|failed golden harness\) workspace: //p' "$evidence/logs/$name.log" | tail -n 1)"
+          printf '%s\n' "$workspace" >"$evidence/logs/$name-workspace.txt"
+          case "$workspace" in
+            "$RUNNER_TEMP"/velnor-source-qualification-tmp/velnor-goldens-bin-test.*)
+              if [ ! -L "$workspace" ] && [ -d "$workspace" ]; then
+                mkdir -p "$evidence/external-shell-harness-keep-logs"
+                for file in "$workspace"/*.log "$workspace"/*.diff; do
+                  if [ -f "$file" ] && [ ! -L "$file" ]; then
+                    if ! cp -p "$file" "$evidence/external-shell-harness-keep-logs/${file##*/}"; then
+                      printf 'could not preserve %s\n' "$file" >>"$evidence/logs/$name-workspace.txt"
+                      artifact_status=1
+                    fi
+                  fi
+                done
+              else
+                printf 'retained harness workspace is not a safe directory\n' >>"$evidence/logs/$name-workspace.txt"
+                artifact_status=1
+              fi
+              ;;
+            *)
+              printf 'retained harness workspace was absent or outside controlled TMPDIR\n' >>"$evidence/logs/$name-workspace.txt"
+              artifact_status=1
+              ;;
+          esac
+          final_status=$command_status
+          if [ "$final_status" -eq 0 ] && [ "$artifact_status" -ne 0 ]; then final_status=1; fi
+          printf '%s\n' "$command_status" >"$evidence/logs/$name.command.exit"
+          printf '%s\n' "$artifact_status" >"$evidence/logs/$name.artifact.exit"
+          printf '%s\n' "$final_status" >"$evidence/logs/$name.exit"
+          exit "$final_status"
+
+      - name: Preserve output-binding JSON proof files
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          evidence="$RUNNER_TEMP/source-qualification-artifacts"
+          tmp_root="$RUNNER_TEMP/velnor-source-qualification-tmp"
+          name=external-shell-harness-json-proof
+          proof_status=0
+
+          preserve_mode_proofs() {
+            local mode="$1" workspace_file="$2" command_file="$3" destination="$4"
+            local command_status workspace require_complete mode_status copied missing
+            local root_physical workspace_physical backup_root fault_dir relative source target target_parent
+            local parent_status expected_count
+            local files=(
+              'output-binding manifest.json'
+              'output-binding duplicate manifest.json'
+            )
+            local faults=(wrong-digest wrong-commit both missing-digest missing-url missing-commit wrong-url wrong-target)
+            local leaves=(original.json replacement.json receipt.json)
+            local fault leaf
+
+            for fault in "${faults[@]}"; do
+              for leaf in "${leaves[@]}"; do
+                files+=("manifest backups/$fault/$leaf")
+              done
+            done
+            expected_count=${#files[@]}
+            command_status=unavailable
+            workspace=''
+            mode_status=0
+            copied=0
+            missing=0
+
+            if [ -L "$command_file" ] || [ ! -f "$command_file" ]; then
+              printf 'invalid or missing harness command status: %s\n' "$command_file" >&2
+              mode_status=1
+            else
+              command_status="$(cat "$command_file")"
+              if [[ ! "$command_status" =~ ^[0-9]+$ ]]; then
+                printf 'malformed harness command status: %s\n' "$command_file" >&2
+                mode_status=1
+              fi
+            fi
+            if [ -L "$workspace_file" ] || [ ! -f "$workspace_file" ]; then
+              printf 'invalid or missing harness workspace receipt: %s\n' "$workspace_file" >&2
+              mode_status=1
+            elif [ "$(wc -l <"$workspace_file" | tr -d '[:space:]')" != 1 ]; then
+              printf 'harness workspace receipt must contain one line: %s\n' "$workspace_file" >&2
+              mode_status=1
+            else
+              IFS= read -r workspace <"$workspace_file" || mode_status=1
+            fi
+
+            if [ "$mode_status" -eq 0 ] && [ "$mode" = ordinary ] \
+              && [ "$command_status" = 0 ] && [ -z "$workspace" ]; then
+              printf 'mode=ordinary\ncommand_status=0\nworkspace=not-retained-on-success\ncopied=0\nmissing=%s\nproof_status=0\n' \
+                "$expected_count" >"$evidence/$destination.receipt.txt" || mode_status=1
+              if [ "$mode_status" -ne 0 ]; then proof_status=1; fi
+              return 0
+            fi
+
+            if [ -z "$workspace" ]; then
+              printf 'retained %s harness workspace is missing\n' "$mode" >&2
+              mode_status=1
+            elif [ -L "$RUNNER_TEMP" ] || [ -L "$tmp_root" ] || [ ! -d "$tmp_root" ]; then
+              printf 'harness temporary parent is missing or a symlink\n' >&2
+              mode_status=1
+            else
+              root_physical="$(cd "$tmp_root" && pwd -P)" || root_physical=''
+              case "$workspace" in
+                "$tmp_root"/velnor-goldens-bin-test.*) ;;
+                *) printf 'retained %s workspace is outside the controlled temporary root\n' "$mode" >&2; mode_status=1 ;;
+              esac
+              if [ "$(dirname -- "$workspace")" != "$tmp_root" ] \
+                || [ "$root_physical" != "$tmp_root" ] \
+                || [ -L "$workspace" ] || [ ! -d "$workspace" ]; then
+                printf 'retained %s workspace or parent is missing, noncanonical, or a symlink\n' "$mode" >&2
+                mode_status=1
+              else
+                workspace_physical="$(cd "$workspace" && pwd -P)" || workspace_physical=''
+                if [ "$workspace_physical" != "$workspace" ]; then
+                  printf 'retained %s workspace traverses a symlink\n' "$mode" >&2
+                  mode_status=1
+                fi
+              fi
+            fi
+
+            if [ "$mode_status" -eq 0 ]; then
+              if [ -L "$evidence" ] || [ ! -d "$evidence" ] \
+                || [ -L "$evidence/$destination" ] \
+                || { [ -e "$evidence/$destination" ] && [ ! -d "$evidence/$destination" ]; }; then
+                printf 'proof destination is unsafe: %s\n' "$evidence/$destination" >&2
+                mode_status=1
+              elif ! mkdir -p "$evidence/$destination"; then
+                printf 'could not create proof destination: %s\n' "$evidence/$destination" >&2
+                mode_status=1
+              elif [ "$(cd "$evidence/$destination" && pwd -P)" != "$evidence/$destination" ]; then
+                printf 'proof destination traverses a symlink: %s\n' "$evidence/$destination" >&2
+                mode_status=1
+              fi
+            fi
+
+            if [ "$mode_status" -eq 0 ]; then
+              backup_root="$workspace/manifest backups"
+              for relative in "${files[@]}"; do
+                source="$workspace/$relative"
+                parent_status=0
+                if [[ "$relative" == 'manifest backups/'* ]]; then
+                  fault_dir="${relative#manifest backups/}"
+                  fault_dir="$workspace/manifest backups/${fault_dir%%/*}"
+                  if [ -L "$backup_root" ] \
+                    || { [ -e "$backup_root" ] && [ ! -d "$backup_root" ]; } \
+                    || [ -L "$fault_dir" ] \
+                    || { [ -e "$fault_dir" ] && [ ! -d "$fault_dir" ]; }; then
+                    printf 'proof parent is not a regular directory: %s\n' "$fault_dir" >&2
+                    parent_status=1
+                    mode_status=1
+                  fi
+                fi
+                if [ "$parent_status" -ne 0 ]; then continue; fi
+                if [ -L "$source" ] || { [ -e "$source" ] && [ ! -f "$source" ]; }; then
+                  printf 'proof file is not a regular non-symlink file: %s\n' "$source" >&2
+                  mode_status=1
+                  continue
+                fi
+                if [ ! -f "$source" ]; then
+                  missing=$((missing + 1))
+                  continue
+                fi
+                target="$evidence/$destination/$relative"
+                target_parent="$(dirname -- "$target")"
+                if ! mkdir -p "$target_parent" \
+                  || [ -L "$target_parent" ] || [ -e "$target" ] || [ -L "$target" ] \
+                  || ! cp -p -- "$source" "$target"; then
+                  printf 'could not safely preserve proof file: %s\n' "$source" >&2
+                  mode_status=1
+                  continue
+                fi
+                copied=$((copied + 1))
+              done
+            fi
+
+            require_complete=0
+            if [ "$mode" = keep ] && [ "$command_status" = 0 ]; then
+              require_complete=1
+            fi
+            if [ "$require_complete" -eq 1 ] && [ "$copied" -ne "$expected_count" ]; then
+              printf 'successful KEEP_WORK run retained %s of %s required JSON proof files\n' \
+                "$copied" "$expected_count" >&2
+              mode_status=1
+            fi
+            if ! {
+              printf 'mode=%s\n' "$mode"
+              printf 'command_status=%s\n' "$command_status"
+              printf 'workspace=%s\n' "$workspace"
+              printf 'copied=%s\n' "$copied"
+              printf 'missing=%s\n' "$missing"
+              printf 'expected=%s\n' "$expected_count"
+              printf 'proof_status=%s\n' "$mode_status"
+            } >"$evidence/$destination.receipt.txt"; then
+              mode_status=1
+            fi
+            if [ "$mode_status" -ne 0 ]; then proof_status=1; fi
+            return 0
+          }
+
+          preserve_mode_proofs ordinary \
+            "$evidence/logs/external-shell-harness-workspace.txt" \
+            "$evidence/logs/external-shell-harness.command.exit" \
+            external-shell-harness-json-proof
+          preserve_mode_proofs keep \
+            "$evidence/logs/external-shell-harness-keep-workspace.txt" \
+            "$evidence/logs/external-shell-harness-keep.command.exit" \
+            external-shell-harness-keep-json-proof
+          printf '%s\n' 0 >"$evidence/logs/$name.command.exit" || proof_status=1
+          printf '%s\n' "$proof_status" >"$evidence/logs/$name.artifact.exit" || proof_status=1
+          printf '%s\n' "$proof_status" >"$evidence/logs/$name.exit" || exit 1
+          exit "$proof_status"
+
+      - name: Generate twice and retain root-to-preview identities
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          evidence="$RUNNER_TEMP/source-qualification-artifacts"
+          preview_root="$evidence/previews"
+          binary="$CARGO_TARGET_DIR/release/velnor-actions"
+          if [ ! -x "$binary" ]; then
+            printf 'CLI binary unavailable; previews not generated\n' >"$evidence/logs/root-preview.log"
+            printf 'preview statuses unavailable\n' >"$evidence/logs/root-preview.exit"
+            exit 1
+          fi
+          set +e
+          "$binary" generate --output-dir "$preview_root/generated-1" \
+            >"$evidence/logs/root-preview-1.log" 2>&1
+          first_status=$?
+          printf '%s\n' "$first_status" >"$evidence/logs/root-preview-1.exit"
+          "$binary" generate --output-dir "$preview_root/generated-2" \
+            >"$evidence/logs/root-preview-2.log" 2>&1
+          second_status=$?
+          printf '%s\n' "$second_status" >"$evidence/logs/root-preview-2.exit"
+          cat "$evidence/logs/root-preview-1.log" "$evidence/logs/root-preview-2.log"
+          python3 - "$GITHUB_WORKSPACE/.github" "$preview_root/generated-1/.github" \
+            "$preview_root/generated-2/.github" "$evidence/previews" \
+            >"$evidence/logs/root-preview-identity.log" 2>&1 <<'PY'
+          import difflib
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import stat
+          import sys
+
+          root, first, second, output = map(Path, sys.argv[1:])
+          output.mkdir(parents=True, exist_ok=True)
+
+          def inventory(base):
+              if base.is_symlink() or not base.is_dir():
+                  return None
+              rows = []
+
+              def walk(directory, prefix=''):
+                  for entry in sorted(os.scandir(directory), key=lambda item: item.name):
+                      rel = f'{prefix}/{entry.name}' if prefix else entry.name
+                      path = Path(entry.path)
+                      mode = stat.S_IMODE(path.lstat().st_mode)
+                      if entry.is_symlink():
+                          rows.append({'path': rel, 'type': 'symlink', 'mode': mode,
+                                       'target': os.readlink(path)})
+                      elif entry.is_dir(follow_symlinks=False):
+                          rows.append({'path': rel, 'type': 'directory', 'mode': mode})
+                          walk(path, rel)
+                      elif entry.is_file(follow_symlinks=False):
+                          digest = hashlib.sha256(path.read_bytes()).hexdigest()
+                          rows.append({'path': rel, 'type': 'file', 'mode': mode,
+                                       'sha256': digest})
+                      else:
+                          rows.append({'path': rel, 'type': 'special', 'mode': mode})
+
+              walk(base)
+              return rows
+
+          inventories = {
+              'repository_github': inventory(root),
+              'generated_preview_1_github': inventory(first),
+              'generated_preview_2_github': inventory(second),
+          }
+          (output / 'github-identities.json').write_text(
+              json.dumps(inventories, indent=2, sort_keys=True) + '\n')
+          failed = False
+          for left_name, right_name, filename in (
+              ('repository_github', 'generated_preview_1_github', 'repository-vs-preview.diff'),
+              ('generated_preview_1_github', 'generated_preview_2_github', 'preview-idempotence.diff'),
+          ):
+              left = inventories[left_name]
+              right = inventories[right_name]
+              if left is None or right is None:
+                  failed = True
+                  diff = [f'missing tree: {left_name} or {right_name}\n']
+              else:
+                  left_lines = json.dumps(left, indent=2, sort_keys=True).splitlines(keepends=True)
+                  right_lines = json.dumps(right, indent=2, sort_keys=True).splitlines(keepends=True)
+                  diff = list(difflib.unified_diff(left_lines, right_lines,
+                                                  fromfile=left_name, tofile=right_name))
+                  if diff:
+                      failed = True
+              (output / filename).write_text(''.join(diff))
+          if first_status := int(Path(str(output.parent / 'logs/root-preview-1.exit')).read_text()):
+              failed = True
+          if second_status := int(Path(str(output.parent / 'logs/root-preview-2.exit')).read_text()):
+              failed = True
+          raise SystemExit(1 if failed else 0)
+          PY
+          identity_status=$?
+          diff -ruN "$GITHUB_WORKSPACE/.github" "$preview_root/generated-1/.github" \
+            >"$evidence/previews/repository-vs-preview.raw.diff" 2>&1
+          first_raw_diff_status=$?
+          diff -ruN "$preview_root/generated-1/.github" "$preview_root/generated-2/.github" \
+            >"$evidence/previews/preview-idempotence.raw.diff" 2>&1
+          second_raw_diff_status=$?
+          printf 'repository_preview_diff_status=%s\npreview_idempotence_diff_status=%s\n' \
+            "$first_raw_diff_status" "$second_raw_diff_status" >"$evidence/previews/raw-diff-status.txt"
+          cat "$evidence/logs/root-preview-identity.log"
+          if [ "$first_status" -ne 0 ] || [ "$second_status" -ne 0 ] \
+            || [ "$identity_status" -ne 0 ] || [ "$first_raw_diff_status" -gt 1 ] \
+            || [ "$second_raw_diff_status" -gt 1 ]; then
+            printf 'generate_statuses=%s,%s identity_status=%s raw_diff_statuses=%s,%s\n' \
+              "$first_status" "$second_status" "$identity_status" \
+              "$first_raw_diff_status" "$second_raw_diff_status" >"$evidence/logs/root-preview.exit"
+            exit 1
+          fi
+          printf 'generate_statuses=0,0 identity_status=0 raw_diff_statuses=%s,%s\n' \
+            "$first_raw_diff_status" "$second_raw_diff_status" >"$evidence/logs/root-preview.exit"
+
+      - name: Check source output against checked-in repository goldens
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          evidence="$RUNNER_TEMP/source-qualification-artifacts"
+          binary="$CARGO_TARGET_DIR/release/velnor-actions"
+          if [ ! -x "$binary" ]; then
+            printf 'CLI binary unavailable; repository oracle check not run\n' >"$evidence/logs/repository-oracle-check.log"
+            printf '1\n' >"$evidence/logs/repository-oracle-check.command.exit"
+            printf '0\n' >"$evidence/logs/repository-oracle-check.artifact.exit"
+            printf '1\n' >"$evidence/logs/repository-oracle-check.exit"
+            printf 'repository oracle workspace unavailable\n' >"$evidence/logs/repository-oracle-workspace.txt"
+            exit 1
+          fi
+          set +e
+          env -u VELNOR_GOLDEN_DIR TMPDIR="$RUNNER_TEMP/velnor-source-qualification-tmp" \
+            VELNOR_GOLDEN_KEEP_WORK=1 scripts/capture-opentofu-goldens.sh check "$binary" \
+            >"$evidence/logs/repository-oracle-check.log" 2>&1
+          command_status=$?
+          artifact_status=0
+          cat "$evidence/logs/repository-oracle-check.log"
+          workspace="$(sed -n 's/^retaining \(successful golden evidence\|failed golden\) workspace: //p' "$evidence/logs/repository-oracle-check.log" | tail -n 1)"
+          printf '%s\n' "$workspace" >"$evidence/logs/repository-oracle-workspace.txt"
+          case "$workspace" in
+            "$RUNNER_TEMP"/velnor-source-qualification-tmp/velnor-goldens-work.*)
+              if [ ! -L "$workspace" ] && [ ! -L "$workspace/stage" ] && [ -d "$workspace/stage" ]; then
+                rm -rf "$evidence/repository-oracle-stage"
+                if ! cp -RP "$workspace/stage" "$evidence/repository-oracle-stage"; then
+                  printf 'could not preserve repository oracle stage\n' >>"$evidence/logs/repository-oracle-workspace.txt"
+                  artifact_status=1
+                fi
+              else
+                printf 'retained repository oracle workspace has no safe stage directory\n' >>"$evidence/logs/repository-oracle-workspace.txt"
+                artifact_status=1
+              fi
+              if [ ! -L "$workspace/raw" ] && [ -d "$workspace/raw" ]; then
+                rm -rf "$evidence/repository-oracle-raw"
+                if ! cp -RP "$workspace/raw" "$evidence/repository-oracle-raw"; then
+                  printf 'could not preserve repository oracle raw logs\n' >>"$evidence/logs/repository-oracle-workspace.txt"
+                  artifact_status=1
+                fi
+              else
+                printf 'retained repository oracle workspace has no safe raw log directory\n' >>"$evidence/logs/repository-oracle-workspace.txt"
+                artifact_status=1
+              fi
+              if [ ! -L "$workspace/check-diff" ] && [ -d "$workspace/check-diff" ]; then
+                rm -rf "$evidence/repository-oracle-diff"
+                if ! cp -RP "$workspace/check-diff" "$evidence/repository-oracle-diff"; then
+                  printf 'could not preserve repository oracle differences\n' >>"$evidence/logs/repository-oracle-workspace.txt"
+                  artifact_status=1
+                fi
+              elif [ "$command_status" -ne 0 ]; then
+                printf 'failed repository oracle check retained no safe diff directory\n' >>"$evidence/logs/repository-oracle-workspace.txt"
+              fi
+              ;;
+            *)
+              printf 'retained workspace path was absent or outside controlled TMPDIR\n' >>"$evidence/logs/repository-oracle-workspace.txt"
+              artifact_status=1
+              ;;
+          esac
+          final_status=$command_status
+          if [ "$final_status" -eq 0 ] && [ "$artifact_status" -ne 0 ]; then final_status=1; fi
+          printf '%s\n' "$command_status" >"$evidence/logs/repository-oracle-check.command.exit"
+          printf '%s\n' "$artifact_status" >"$evidence/logs/repository-oracle-check.artifact.exit"
+          printf '%s\n' "$final_status" >"$evidence/logs/repository-oracle-check.exit"
+          exit "$final_status"
+
+      - name: Bundle selected qualification evidence
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          evidence="$RUNNER_TEMP/source-qualification-artifacts"
+          archive="$evidence/source-qualification-preserved.tar.gz"
+          final_status=0
+          for name in archive-guard-build cli-build external-capture external-check \
+            external-shell-harness external-shell-harness-keep external-shell-harness-json-proof \
+            repository-oracle-check; do
+            status_file="$evidence/logs/$name.exit"
+            if [ ! -f "$status_file" ] || [ -L "$status_file" ] \
+              || ! grep -Eq '^0$' "$status_file"; then
+              final_status=1
+            fi
+          done
+          if [ ! -f "$evidence/logs/root-preview.exit" ] \
+            || ! grep -Eq '^generate_statuses=0,0 identity_status=0 raw_diff_statuses=[01],[01]$' \
+              "$evidence/logs/root-preview.exit"; then
+            final_status=1
+          fi
+          if ! printf 'qualification_checks_status=%s\n' "$final_status" \
+            >"$evidence/qualification-final-status.txt"; then final_status=1; fi
+          paths=(logs previews)
+          for path in external-oracle captured-stage captured-raw external-check-stage external-check-raw external-check-diff \
+            external-shell-harness-logs external-shell-harness-keep-logs repository-oracle-diff repository-oracle-stage repository-oracle-raw \
+            external-shell-harness-json-proof external-shell-harness-keep-json-proof \
+            external-shell-harness-json-proof.receipt.txt external-shell-harness-keep-json-proof.receipt.txt \
+            archive-guard-identity.txt qualification-final-status.txt \
+            checkout-status.txt source-identity.txt source-inputs.sha256 build-environment.txt \
+            tool-pins.json mise-version.txt rustc-version.txt mbx-version.txt cli-identity.txt; do
+            if [ -e "$evidence/$path" ] || [ -L "$evidence/$path" ]; then
+              paths+=("$path")
+            fi
+          done
+          set +e
+          tar -czf "$archive" -C "$evidence" -- "${paths[@]}" \
+            2>"$evidence/source-qualification-preserved.tar.stderr.log"
+          status=$?
+          if ! printf '%s\n' "$status" >"$evidence/logs/evidence-bundle.exit"; then final_status=1; fi
+          if ! cat "$evidence/source-qualification-preserved.tar.stderr.log"; then final_status=1; fi
+          if [ "$status" -ne 0 ]; then final_status=1; fi
+          exit "$final_status"
+
+      - name: Upload source qualification evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: source-qualification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/source-qualification-artifacts/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 14
