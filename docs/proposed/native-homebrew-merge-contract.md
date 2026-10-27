@@ -103,15 +103,23 @@ formula validation produces a checksum failure, never permission to accept new
 bytes. Stable uses permanent version-tagged assets and cannot be downgraded.
 
 The protected Homebrew seed transition uses the closed version-three template
-and requires SDK 0.1.59 or newer. Its eight authored outputs include
+and requires SDK 0.1.60 or newer. Its eight authored outputs include
 `.velnor/release-manifest.json`, rendered from the exact authenticated SDK manifest
 bytes used to qualify the seed, and `.github/workflows/review-completion.yml`,
 rendered through the ordinary review-completion renderer and authenticated SDK
 acquisition path. This keeps the Tap's committed SDK identity aligned with the
 SDK that produced its workflow and tool files. The transition rejects older
 template inventories, missing review-completion workflows, and candidate evidence
-that omits or changes the manifest. Immutable SDK 0.1.57 and 0.1.58 retain their
-original version-two implementation.
+that omits or changes the manifest. Immutable SDK 0.1.57, 0.1.58, and 0.1.59
+retain their original version-two implementation.
+
+For Velnor's current workflow, `.velnor/generator.lock` and the Plan bootstrap
+remain on authenticated SDK 0.1.55. The Required verdict job separately acquires
+the fully published and authenticated SDK 0.1.59 controller from source commit
+`4bb724119971fe49f07b12876c54c3c159edb5e5`, using its closed platform hashes
+and GH 2.103.3 helper catalog. This Required-only controller role does not advance
+the project generator lock or change Plan's bootstrap. Its Setup Mise step keeps
+the default 2026.10.21 pin.
 
 The candidate workflow establishes no pre-merge authority. The protected
 default-branch review-completion workflow remains authoritative until the seed

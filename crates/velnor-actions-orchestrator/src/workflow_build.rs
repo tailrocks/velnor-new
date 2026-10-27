@@ -285,12 +285,24 @@ fn build_workflow_jobs(
     }
     required_ids.extend(suite_required_ids);
     crate::workflow_task_jobs::insert_jobs(&mut jobs, &prepared.workflow_tasks)?;
-    let required_catalog = helper_catalog(input, &ToolCatalog::pinned())?;
+    let (required_catalog, required_acquire) = if prepared.policy == WorkflowPolicy::VelnorRepositoryV1 {
+        let target = velnor_actions_contract::ReleaseTarget::for_runner_label(input.label)
+            .ok_or_else(|| OrchestratorError::Contract {
+                problem: format!("unsupported_target_for_runner:{}", input.label),
+            })?;
+        (
+            velnor_actions_mise::catalog::lock::catalog_for_published_verdict(&ToolCatalog::pinned()),
+            Some(velnor_actions_workflow_renderer::release_helpers::published_verdict_acquire_for_target(target)
+                .map_err(crate::local_release_manifest::map_release_helper_error)?),
+        )
+    } else {
+        (helper_catalog(input, &ToolCatalog::pinned())?, prepared.acquire.take())
+    };
     insert_gate_jobs(
         &mut jobs,
         input.label,
         &required_ids,
-        prepared.acquire.take(),
+        required_acquire,
         &prepared.catalog,
         &required_catalog,
     )?;

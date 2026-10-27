@@ -9,7 +9,7 @@ use velnor_actions_contract::workflow::{
     ExecutionBranch, JobBindingV1, TaskExecutionManifestV1, UnitLedgerV1, UnitResultV1,
 };
 use velnor_actions_contract::{
-    Plan, parse_strict_json, plan_json_bytes, task_report_id_for_task, validate_matrix_key,
+    Plan, parse_strict_json, plan_json_bytes, validate_matrix_key,
 };
 
 use crate::OrchestratorError;
@@ -39,11 +39,11 @@ pub(crate) struct EmitEnv {
     pub(crate) ref_name: String,
     pub(crate) repository: String,
     pub(crate) workflow_sha: String,
-    pub(crate) matrix_key: String,
+    pub(crate) matrix_key: Option<String>,
     pub(crate) job_status: JobStatus,
 }
 
-/// Read the tokenless emit environment and write the matrix job ledger.
+/// Read the tokenless emit environment and write the matrix or crate job ledger.
 ///
 /// Identity binds on the repository slug, `run_id`, `run_attempt`, and
 /// `job_key`: the numeric `repository_id`/`job_id` are unresolvable without
@@ -93,7 +93,11 @@ fn emit_env_from_process() -> Result<EmitEnv, OrchestratorError> {
         ref_name: required_env("GITHUB_REF")?,
         repository,
         workflow_sha: required_env("GITHUB_WORKFLOW_SHA")?,
-        matrix_key: required_env("VELNOR_MATRIX_KEY")?,
+        matrix_key: match env::var("VELNOR_MATRIX_KEY") {
+            Ok(key) => Some(key),
+            Err(env::VarError::NotPresent) => None,
+            Err(env::VarError::NotUnicode(_)) => return Err(internal("bad_velnor_matrix_key")),
+        },
         job_status,
     })
 }
@@ -117,7 +121,9 @@ pub(crate) fn emit_group_ledger_to(
     run_key: &str,
     emit: &EmitEnv,
 ) -> Result<PathBuf, OrchestratorError> {
-    validate_matrix_key(&emit.matrix_key).map_err(internal_contract)?;
+    if let Some(key) = &emit.matrix_key {
+        validate_matrix_key(key).map_err(internal_contract)?;
+    }
     let plan_text =
         crate::retrieve_reports::read_staged_text(&run_dir.join("plan.json"), MAX_PLAN_JSON_BYTES)
             .map_err(|kind| internal(&format!("{kind}_plan")))?;
@@ -137,9 +143,8 @@ pub(crate) fn emit_group_ledger_to(
     let group_digest =
         UnitLedgerV1::group_digest_for_group(group_key, &plan_digest).map_err(internal_contract)?;
     let finished_secs = clock_secs()?;
-    let tasks_dir = run_dir.join(&emit.matrix_key).join("tasks");
     let (ordered_results, observation_sidecars) =
-        build_ordered_results(&plan, &manifest, run_key, emit, &tasks_dir, finished_secs)?;
+        selection::build_ordered_results(&plan, &manifest, run_key, emit, run_dir, finished_secs)?;
     let observation_refs: Vec<Option<&[u8]>> = observation_sidecars
         .iter()
         .map(|sidecar| sidecar.as_deref())
@@ -177,7 +182,10 @@ pub(crate) fn emit_group_ledger_to(
     };
     ledger.validate().map_err(internal_contract)?;
     let bytes = ledger.to_canonical_bytes().map_err(internal_contract)?;
-    let out_dir = run_dir.join(&emit.matrix_key);
+    let out_dir = emit
+        .matrix_key
+        .as_ref()
+        .map_or_else(|| run_dir.to_path_buf(), |key| run_dir.join(key));
     crate::exclusive_write::create_dir_no_symlink(anchor, &out_dir)?;
     let out_path = out_dir.join(GROUP_LEDGER_FILENAME);
     crate::exclusive_write::write_exclusive(&out_path, &bytes, "group_ledger")?;
@@ -186,40 +194,8 @@ pub(crate) fn emit_group_ledger_to(
 
 type OrderedUnits = (Vec<UnitResultV1>, Vec<Option<Vec<u8>>>);
 
-fn build_ordered_results(
-    plan: &Plan,
-    manifest: &TaskExecutionManifestV1,
-    run_key: &str,
-    emit: &EmitEnv,
-    tasks_dir: &Path,
-    finished_secs: u64,
-) -> Result<OrderedUnits, OrchestratorError> {
-    let unit_ids = units_for_matrix_key(plan, &emit.matrix_key)?;
-    let mut ordered_results = Vec::with_capacity(unit_ids.len());
-    let mut observation_sidecars = Vec::with_capacity(unit_ids.len());
-    for unit_id in &unit_ids {
-        let entry = manifest
-            .tasks
-            .get(unit_id)
-            .ok_or_else(|| internal(&format!("task_without_manifest_entry:{unit_id}")))?;
-        let task_digest = obligation_digest(plan, unit_id)?;
-        let report_id = task_report_id_for_task(run_key, &emit.matrix_key, task_digest)
-            .map_err(internal_contract)?;
-        let staged = read_staged_report(tasks_dir, &report_id)?;
-        let sidecar = read_staged_sidecar(tasks_dir, &report_id)?;
-        let result = unit_result_for_report(
-            unit_id,
-            entry,
-            &report_id,
-            staged.as_deref(),
-            emit.job_status,
-            finished_secs,
-        )?;
-        observation_sidecars.push(sidecar);
-        ordered_results.push(result);
-    }
-    Ok((ordered_results, observation_sidecars))
-}
+#[path = "emit_selection.rs"]
+mod selection;
 
 /// Parse the on-disk task execution manifest: the checked-in document
 /// carries a generated-marker header line (see `marked_json`) which is
@@ -239,29 +215,6 @@ fn parse_manifest_document(text: &str) -> Result<TaskExecutionManifestV1, Orches
         serde_json::from_value(value).map_err(|_| internal("unparsable_manifest"))?;
     manifest.validate().map_err(internal_contract)?;
     Ok(manifest)
-}
-
-fn units_for_matrix_key(plan: &Plan, matrix_key: &str) -> Result<Vec<String>, OrchestratorError> {
-    let mut units = std::collections::BTreeSet::new();
-    for entry in &plan.matrix.include {
-        if entry.matrix_key != matrix_key {
-            continue;
-        }
-        for tasks in entry.execute_task_ids.tasks.values() {
-            match tasks {
-                velnor_actions_contract::ExecuteTaskRef::Single(id) => {
-                    units.insert(id.clone());
-                }
-                velnor_actions_contract::ExecuteTaskRef::Shards(ids) => {
-                    units.extend(ids.iter().cloned());
-                }
-            }
-        }
-    }
-    if units.is_empty() {
-        return Err(internal("matrix_key_not_in_plan"));
-    }
-    Ok(units.into_iter().collect())
 }
 
 fn obligation_digest<'a>(plan: &'a Plan, unit_id: &str) -> Result<&'a str, OrchestratorError> {
@@ -291,8 +244,6 @@ fn split_job_key(job_key: &str) -> Result<(&str, ExecutionBranch), OrchestratorE
     }
     Err(internal("job_key_without_branch_suffix"))
 }
-
-use super::emit_read::{read_staged_report, read_staged_sidecar, unit_result_for_report};
 
 fn clock_secs() -> Result<u64, OrchestratorError> {
     SystemTime::now()

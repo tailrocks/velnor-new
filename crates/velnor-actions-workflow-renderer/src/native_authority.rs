@@ -112,8 +112,10 @@ impl NativeAuthority {
         };
         let helper_catalog = plan::helper_catalog(&input, &catalog)?;
         let mise = tools::mise_setup(input.config, target)?;
-        let runtime = runtime(&catalog, &version, input.tools.rust.has_compiler())?;
-        let mut required = plan::required_job(&input, &required_ids, acquire.clone())?;
+        let mut runtime = runtime(&catalog, &version, input.tools.rust.has_compiler())?;
+        let required_acquire =
+            required_acquisition(producer, target, acquire.clone(), &mut runtime)?;
+        let mut required = plan::required_job(&input, &required_ids, required_acquire)?;
         let mut producer_plan = if producer {
             Some(plan::build(
                 &input,
@@ -175,6 +177,23 @@ impl NativeAuthority {
     pub fn mise_setup(&self) -> crate::MiseSetup {
         self.mise.clone()
     }
+}
+
+fn required_acquisition(
+    producer: bool,
+    target: velnor_actions_contract::ReleaseTarget,
+    acquire: velnor_actions_contract::Step,
+    runtime: &mut crate::render::CanonicalRuntimeInputs,
+) -> Result<velnor_actions_contract::Step, NativeAuthorityError> {
+    if !producer {
+        return Ok(acquire);
+    }
+    let manifest = velnor_actions_mise::catalog::lock::published_verdict_manifest();
+    *runtime = runtime
+        .clone()
+        .with_required_helper_version(&manifest.version)?;
+    crate::release_helpers::published_verdict_acquire_for_target(target)
+        .map_err(NativeAuthorityError::Release)
 }
 
 fn runtime(
