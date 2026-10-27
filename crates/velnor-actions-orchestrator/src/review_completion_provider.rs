@@ -14,6 +14,24 @@ use velnor_actions_contract::{canonical_json_bytes, digest_b3};
 
 #[path = "review_completion_findings.rs"]
 mod findings;
+#[path = "review_completion_sonar.rs"]
+mod sonar;
+
+pub(super) fn request_role(body: &str) -> Option<&'static str> {
+    [
+        ("@codex security review", "security"),
+        ("@codex review", "code"),
+    ]
+    .into_iter()
+    .find_map(|(prefix, role)| {
+        (body == prefix
+            || body
+                .strip_prefix(prefix)
+                .and_then(|suffix| suffix.chars().next())
+                .is_some_and(char::is_whitespace))
+        .then_some(role)
+    })
+}
 
 const SUMMARY: &str = "<!-- codex-pull-request-review-summary -->";
 const STATE: &str = "<!-- codex-review-state:v1 ";
@@ -41,6 +59,7 @@ pub(super) fn inspect(
     records: &FeedbackRecords,
     restart: Option<(&str, &str)>,
     location: (&str, u64),
+    repository_id: u64,
 ) -> Result<(CompletionState, Option<String>), OrchestratorError> {
     let Some(authenticated) = authenticate(api, records)? else {
         return Ok((CompletionState::Pending, None));
@@ -66,7 +85,15 @@ pub(super) fn inspect(
     {
         return Ok((CompletionState::Pending, Some(evidence)));
     }
-    let Ok(fresh) = requests(records, summary, code_time, security_time, restart) else {
+    let Ok((fresh, mut automation_metadata)) = sonar::classify(
+        api,
+        records,
+        summary,
+        head,
+        (code_time, security_time),
+        restart,
+        (location.0, location.1, repository_id),
+    ) else {
         return Ok((CompletionState::Blocked, Some(evidence)));
     };
     if !fresh {
@@ -77,6 +104,7 @@ pub(super) fn inspect(
     else {
         return Ok((CompletionState::Blocked, Some(evidence)));
     };
+    review_metadata.append(&mut automation_metadata);
     review_metadata.extend(finding.metadata);
     let evidence = evidence_digest(
         &app,
@@ -194,53 +222,6 @@ fn authenticate<'a>(
     Ok(Some((app, summary, editor)))
 }
 
-fn requests(
-    records: &FeedbackRecords,
-    summary: &Value,
-    code_time: time::Timestamp,
-    security_time: time::Timestamp,
-    restart: Option<(&str, &str)>,
-) -> Result<bool, OrchestratorError> {
-    if let Some((role, stamp)) = restart {
-        let stamp = time::parse(stamp)?;
-        if (role == "code" && code_time <= stamp) || (role == "security" && security_time <= stamp)
-        {
-            return Ok(false);
-        }
-    }
-    let mut ids = std::collections::BTreeSet::new();
-    for comment in &records.issue_comments {
-        let id = comment["id"]
-            .as_u64()
-            .filter(|id| *id > 0)
-            .ok_or_else(|| internal("review_provider_comment_id"))?;
-        if !ids.insert(id) {
-            return Err(internal("review_provider_comment_id"));
-        }
-        if comment["id"] == summary["id"] {
-            continue;
-        }
-        let Some(text) = comment["body"].as_str() else {
-            return Err(internal("review_provider_unknown_feedback"));
-        };
-        let role = match text {
-            "@codex review" => "code",
-            "@codex security review" => "security",
-            _ => return Err(internal("review_provider_unknown_feedback")),
-        };
-        let stamp = time::parse(
-            comment["updated_at"]
-                .as_str()
-                .ok_or_else(|| internal("review_request_time"))?,
-        )?;
-        if (role == "code" && code_time <= stamp) || (role == "security" && security_time <= stamp)
-        {
-            return Ok(false);
-        }
-    }
-    Ok(true)
-}
-
 fn authenticate_review(
     api: &TapMergeGitHub,
     review: &Value,
@@ -341,12 +322,17 @@ fn validate_editor(summary: &Value, response: &Value) -> Result<(), Orchestrator
             .as_str()
             .ok_or_else(|| internal("review_provider_editor"))?,
     )?;
+    let created = time::parse(
+        summary["created_at"]
+            .as_str()
+            .ok_or_else(|| internal("review_provider_editor"))?,
+    )?;
     let updated = time::parse(
         summary["updated_at"]
             .as_str()
             .ok_or_else(|| internal("review_provider_editor"))?,
     )?;
-    if edited != updated {
+    if edited < created || edited > updated {
         return Err(internal("review_provider_editor"));
     }
     if node.pointer("/editor/databaseId").and_then(Value::as_u64) != Some(PROVIDER_BOT)

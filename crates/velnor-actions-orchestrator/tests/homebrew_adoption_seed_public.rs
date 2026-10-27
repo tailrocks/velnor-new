@@ -105,7 +105,13 @@ fn public_seed_manifest_replaces_legacy_consumer_manifest() -> Result<(), Box<dy
         },
         &pins,
     )?;
-    assert_eq!(rendered.len(), 5);
+    assert!(
+        rendered
+            .iter()
+            .any(|file| file.path == ".github/workflows/review-completion.yml"),
+        "configured native review completion workflow omitted from seed"
+    );
+    assert_eq!(rendered.len(), 6);
     let rendered_manifest = rendered
         .iter()
         .find(|file| file.path == MANIFEST_PATH)

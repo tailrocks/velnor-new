@@ -6,7 +6,18 @@ use std::collections::BTreeMap;
 use serde::Serialize;
 use velnor_actions_contract::homebrew_adoption::HomebrewAdoptionTransition;
 
-use crate::{RenderError, render::RenderedFile, schema2::ProductReleasePins, yaml::Yaml};
+use crate::{
+    RenderError,
+    render::RenderedFile,
+    review_completion::{ReviewCompletionSpec, render_review_completion},
+    schema2::ProductReleasePins,
+    yaml::Yaml,
+};
+use velnor_actions_contract::{
+    ReleaseTarget,
+    config::{ReviewCompletionConfig, ReviewCompletionProvider},
+    review_completion::{REVIEW_COMPLETION_POLICY_SCHEMA, ReviewCompletionPolicy},
+};
 
 #[path = "homebrew_adoption_seed_identity.rs"]
 mod identity;
@@ -34,14 +45,14 @@ pub fn render_homebrew_adoption_seed(
     transition
         .validate()
         .map_err(|error| RenderError::InvalidWorkflow(error.to_string()))?;
-    if transition.template_version != 2
+    if transition.template_version != 3
         || transition.required_sdk_capability != "homebrew-adoption-seed-v1"
         || !transition
             .generated_output_paths
             .iter()
             .map(String::as_str)
             .eq(
-                velnor_actions_contract::homebrew_adoption::HOMEBREW_ADOPTION_SEED_V2_OUTPUT_PATHS
+                velnor_actions_contract::homebrew_adoption::HOMEBREW_ADOPTION_SEED_V3_OUTPUT_PATHS
                     .iter()
                     .copied(),
             )
@@ -61,12 +72,17 @@ pub fn render_homebrew_adoption_seed(
     );
     let ci = render_caller_workflow(transition, sdk, &scope)?;
     let config = render_config(transition)?;
+    let review_completion = render_review_completion_seed(transition, sdk, pins)?;
     let mise = render_mise_config()?;
     let lock = render_mise_lock()?;
     let files = vec![
         RenderedFile {
             path: ".github/workflows/ci.yml".to_owned(),
             bytes: ci,
+        },
+        RenderedFile {
+            path: ".github/workflows/review-completion.yml".to_owned(),
+            bytes: review_completion,
         },
         RenderedFile {
             path: ".velnor/config.toml".to_owned(),
@@ -95,6 +111,52 @@ pub fn render_homebrew_adoption_seed(
         return Err(seed_error("renderer_output_inventory_mismatch"));
     }
     Ok(files)
+}
+
+fn render_review_completion_seed(
+    transition: &HomebrewAdoptionTransition,
+    sdk: &HomebrewAdoptionSeedSdkIdentity<'_>,
+    pins: &ProductReleasePins,
+) -> Result<String, RenderError> {
+    let config = review_completion_config();
+    let manifest =
+        std::str::from_utf8(sdk.manifest_bytes).map_err(|_| seed_error("sdk_manifest_utf8"))?;
+    let acquire = crate::native_helper::consumer_acquire_for_target(
+        ReleaseTarget::LinuxX86_64,
+        sdk.version,
+        Some(manifest),
+    )
+    .map_err(|error| match error {
+        crate::native_helper::ReleaseHelperError::Contract(error) => RenderError::Contract(error),
+        crate::native_helper::ReleaseHelperError::Render(error) => error,
+        _ => seed_error("review_completion_acquisition"),
+    })?;
+    let policy = ReviewCompletionPolicy {
+        schema: REVIEW_COMPLETION_POLICY_SCHEMA.to_owned(),
+        repository: transition.tap_repository.clone(),
+        default_branch: "main".to_owned(),
+        provider: config.provider,
+        check_name: config.check_name.clone(),
+    };
+    let rendered = render_review_completion(&ReviewCompletionSpec {
+        policy,
+        config,
+        generator_version: sdk.version.to_owned(),
+        setup: pins.linux_x86_64_setup.clone(),
+        acquire,
+        install_gh_argv: pins.install_gh_argv.clone(),
+    })?;
+    Ok(rendered.bytes)
+}
+
+fn review_completion_config() -> ReviewCompletionConfig {
+    ReviewCompletionConfig {
+        provider: ReviewCompletionProvider::CodexV1,
+        check_name: "Review completion".to_owned(),
+        app_id_variable: "REVIEW_COMPLETION_APP_ID".to_owned(),
+        app_private_key_secret: "REVIEW_COMPLETION_APP_PRIVATE_KEY".to_owned(),
+        reviewer_app_id_variable: "REVIEWER_APP_ID".to_owned(),
+    }
 }
 
 fn validate_sdk_identity(
@@ -208,13 +270,7 @@ fn render_config(transition: &HomebrewAdoptionTransition) -> Result<String, Rend
             default_branch: "main",
             generator_validation: "bootstrap",
             max_parallel_jobs: 2,
-            review_completion: SeedReviewCompletion {
-                provider: "codex-v1",
-                check_name: "Review completion",
-                app_id_variable: "REVIEW_COMPLETION_APP_ID",
-                app_private_key_secret: "REVIEW_COMPLETION_APP_PRIVATE_KEY",
-                reviewer_app_id_variable: "REVIEWER_APP_ID",
-            },
+            review_completion: review_completion_config(),
         },
         resources: SeedResources {
             compiler_process_budget: 2,
@@ -276,16 +332,7 @@ struct SeedWorkflow {
     default_branch: &'static str,
     generator_validation: &'static str,
     max_parallel_jobs: u32,
-    review_completion: SeedReviewCompletion,
-}
-
-#[derive(Serialize)]
-struct SeedReviewCompletion {
-    provider: &'static str,
-    check_name: &'static str,
-    app_id_variable: &'static str,
-    app_private_key_secret: &'static str,
-    reviewer_app_id_variable: &'static str,
+    review_completion: ReviewCompletionConfig,
 }
 
 #[derive(Serialize)]

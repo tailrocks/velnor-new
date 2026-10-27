@@ -81,6 +81,7 @@ pub(super) fn observe(operation: &Operation, number: u64) -> Result<Proposal, Or
                 .as_ref()
                 .map(|(role, stamp)| (*role, stamp.as_str())),
             (&operation.policy.repository, number),
+            operation.repository_id,
         ) {
             proposal.provider_digest = digest;
             proposal.state = decision;
@@ -162,10 +163,12 @@ fn restart_hint(
     let event =
         velnor_actions_contract::strict_json::parse_strict_json_bytes(&bytes, 4 * 1024 * 1024)
             .map_err(|_| internal("review_completion_event"))?;
-    let role = match event.pointer("/comment/body").and_then(Value::as_str) {
-        Some("@codex review") => "code",
-        Some("@codex security review") => "security",
-        _ => return Ok(None),
+    let Some(role) = event
+        .pointer("/comment/body")
+        .and_then(Value::as_str)
+        .and_then(provider::request_role)
+    else {
+        return Ok(None);
     };
     let stamp = event
         .pointer("/comment/updated_at")

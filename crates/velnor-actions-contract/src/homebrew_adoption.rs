@@ -22,8 +22,9 @@ use validation::{
 
 pub const HOMEBREW_ADOPTION_TRANSITION_SCHEMA_V1: &str = "velnor.homebrew-adoption-transition.v1";
 
-pub const HOMEBREW_ADOPTION_SEED_V2_OUTPUT_PATHS: &[&str] = &[
+pub const HOMEBREW_ADOPTION_SEED_V3_OUTPUT_PATHS: &[&str] = &[
     ".github/workflows/ci.yml",
+    ".github/workflows/review-completion.yml",
     ".velnor/config.toml",
     ".velnor/release-manifest.json",
     "mise.lock",
@@ -149,8 +150,9 @@ impl HomebrewAdoptionTransition {
             || self.tap_repository_id == 0
             || !full_sha(&self.base_sha)
             || !full_sha(&self.base_tree)
-            || self.template_version != 2
+            || self.template_version != 3
             || !stable_semver(&self.minimum_sdk_version)
+            || !minimum_sdk_version_at_least(&self.minimum_sdk_version, (0, 1, 58))
             || self.required_sdk_capability != "homebrew-adoption-seed-v1"
             || self.claude_source_path != "AGENTS.md"
             || !full_sha(&self.claude_source_blob_sha)
@@ -182,7 +184,7 @@ impl HomebrewAdoptionTransition {
                 .generated_output_paths
                 .iter()
                 .map(String::as_str)
-                .eq(HOMEBREW_ADOPTION_SEED_V2_OUTPUT_PATHS.iter().copied())
+                .eq(HOMEBREW_ADOPTION_SEED_V3_OUTPUT_PATHS.iter().copied())
             || self
                 .generated_output_paths
                 .iter()
@@ -236,6 +238,20 @@ impl HomebrewAdoptionTransition {
         changed.extend(self.generated_output_paths.iter().cloned());
         changed
     }
+}
+
+fn minimum_sdk_version_at_least(value: &str, minimum: (u64, u64, u64)) -> bool {
+    let mut components = value.split('.');
+    let Some(major) = components.next().and_then(|part| part.parse::<u64>().ok()) else {
+        return false;
+    };
+    let Some(minor) = components.next().and_then(|part| part.parse().ok()) else {
+        return false;
+    };
+    let Some(patch) = components.next().and_then(|part| part.parse().ok()) else {
+        return false;
+    };
+    components.next().is_none() && (major, minor, patch) >= minimum
 }
 
 pub fn parse_homebrew_adoption_transition(

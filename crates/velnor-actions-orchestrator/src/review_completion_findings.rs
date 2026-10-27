@@ -156,15 +156,19 @@ fn authenticate_comment(
         if updated != created {
             return Err(internal("review_finding_editor"));
         }
-    } else if node.pointer("/editor/databaseId").and_then(Value::as_u64) != Some(bot)
-        || node.pointer("/editor/__typename").and_then(Value::as_str) != Some("Bot")
-        || time::parse(
+    } else {
+        let edited = time::parse(
             node["lastEditedAt"]
                 .as_str()
                 .ok_or_else(|| internal("review_finding_editor"))?,
-        )? != updated
-    {
-        return Err(internal("review_finding_editor"));
+        )?;
+        if edited < created
+            || edited > updated
+            || node.pointer("/editor/databaseId").and_then(Value::as_u64) != Some(bot)
+            || node.pointer("/editor/__typename").and_then(Value::as_str) != Some("Bot")
+        {
+            return Err(internal("review_finding_editor"));
+        }
     }
     Ok(updated)
 }
