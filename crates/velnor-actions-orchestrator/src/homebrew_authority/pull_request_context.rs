@@ -361,7 +361,7 @@ pub(in crate::homebrew::authority) fn verify_checkout(
     checkout_head: &str,
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
-    if crate::homebrew::authority::read_git_value(root, "HEAD", deadline)? != checkout_head {
+    if super::read_git_value(root, "HEAD", deadline)? != checkout_head {
         return Err(internal("homebrew_authority_pull_request_checkout_changed"));
     }
     if checkout_head == head_sha {

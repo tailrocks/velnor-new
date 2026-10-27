@@ -56,15 +56,15 @@ pub(super) fn capture(
     )
 }
 
-struct RunnerContext {
-    repository: Option<String>,
-    sha: Option<String>,
-    git_ref: Option<String>,
-    run_id: Option<String>,
-    run_attempt: Option<String>,
+pub(crate) struct RunnerContext {
+    pub(crate) repository: Option<String>,
+    pub(crate) sha: Option<String>,
+    pub(crate) git_ref: Option<String>,
+    pub(crate) run_id: Option<String>,
+    pub(crate) run_attempt: Option<String>,
 }
 
-fn parse(
+pub(crate) fn parse(
     expected_repository: &str,
     repository_id: u64,
     expected_head: &str,

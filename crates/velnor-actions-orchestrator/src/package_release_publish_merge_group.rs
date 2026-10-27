@@ -9,7 +9,7 @@ use crate::{OrchestratorError, internal::internal};
 
 use super::{GitHubApi, WorkflowMetadata, github, github::WorkflowRunResponse};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct MergeGroupSelection {
     repository: String,
     repository_id: u64,

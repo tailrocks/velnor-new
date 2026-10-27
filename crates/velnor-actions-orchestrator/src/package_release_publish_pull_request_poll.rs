@@ -54,7 +54,7 @@ pub(super) fn read(
     ))
 }
 
-fn validate_identity(
+pub(super) fn validate_identity(
     response: &PublicPullRequestResponse,
     repository: &str,
     repository_id: u64,

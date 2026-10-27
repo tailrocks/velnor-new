@@ -8,9 +8,17 @@ use crate::{
     git_fixture,
     github_landed_pull::GitHubRestUser,
     homebrew::structural_cutover::{protected_transition, verify_author_policy},
+    internal_plan::native_homebrew_checks::{
+        NativeCheckAuthorityIdentity, NativeCheckIdentityExtension,
+    },
     package_release_publish::PublicPullRequestSnapshot,
 };
 use tempfile::TempDir;
+use velnor_actions_contract::{
+    WorkflowEvent,
+    config::{CheckPlatform, NativeHomebrewOperation},
+    package_release::PackageReleaseChannel,
+};
 use velnor_actions_mise::CheckDeadline;
 
 const REPOSITORY: &str = "jackin-project/homebrew-tap";
@@ -23,6 +31,7 @@ struct GitFixture {
     head: String,
     next_head: String,
     merge: String,
+    queue: String,
     unrelated: String,
     other_base: String,
 }
@@ -35,6 +44,7 @@ impl GitFixture {
         let head = commit(directory.path(), &[&base], "head")?;
         let next_head = commit(directory.path(), &[&base], "next head")?;
         let merge = commit(directory.path(), &[&base, &head], "merge")?;
+        let queue = commit(directory.path(), &[&base], "synthetic merge group")?;
         let unrelated = commit(directory.path(), &[], "unrelated")?;
         let other_base = commit(directory.path(), &[], "other base")?;
         git(
@@ -48,6 +58,7 @@ impl GitFixture {
             head,
             next_head,
             merge,
+            queue,
             unrelated,
             other_base,
         })
@@ -250,3 +261,37 @@ fn structural_cutover_author_admission_accepts_exact_head_or_merge_and_rejects_i
     assert!(wrong_author_result.is_err(), "wrong author");
     Ok(())
 }
+
+fn queue_identity(fixture: &GitFixture) -> NativeCheckIdentityExtension {
+    NativeCheckIdentityExtension {
+        schema: "homebrew-native-check-identity-v2".to_owned(),
+        check_id: "cutover".to_owned(),
+        operation: NativeHomebrewOperation::FormulaContract,
+        formula_channel: Some(PackageReleaseChannel::Preview),
+        operation_version: "native-homebrew-check-v1".to_owned(),
+        sdk_version: "0.1.57".to_owned(),
+        sdk_sha256: "0".repeat(64),
+        authority: NativeCheckAuthorityIdentity::Seed {
+            transition_id: "cutover".to_owned(),
+            transition_digest: "0".repeat(64),
+            base_tree: EMPTY_TREE.to_owned(),
+            sdk_source_sha: fixture.head.clone(),
+            sdk_version: "0.1.57".to_owned(),
+            sdk_manifest_sha256: "0".repeat(64),
+            sdk_seed_runner_binary_sha256: "0".repeat(64),
+        },
+        tap_repository: REPOSITORY.to_owned(),
+        tap_repository_id: REPOSITORY_ID,
+        tap_base_sha: fixture.base.clone(),
+        head: fixture.queue.clone(),
+        tree_object: EMPTY_TREE.to_owned(),
+        formula_path: None,
+        formula_blob_sha: None,
+        runner: "ubuntu-latest".to_owned(),
+        platform: CheckPlatform::LinuxX64,
+        tool_profile: "formula_contract-linux-x86_64".to_owned(),
+    }
+}
+
+#[path = "formula_cutover_author_merge_group_tests.rs"]
+mod merge_group_tests;

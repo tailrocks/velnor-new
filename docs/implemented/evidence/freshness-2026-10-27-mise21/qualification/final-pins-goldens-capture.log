@@ -1,0 +1,7 @@
+captured nested (plan exit 0)
+captured mbx-nextest (plan exit 0)
+captured empty-suite (plan exit 0)
+captured minimal-cargo (plan exit 0)
+captured dogfood (plan exit 0, tree identical)
+wrote /Users/donbeave/Projects/velnor-sdk57-freshness-20261027/docs/proposed/opentofu-goldens/cases
+retaining successful golden evidence workspace: /private/tmp/sdk57-tls-native-refresh-20261027.AHQUkw/scratch/velnor-goldens-work.VoiGNt

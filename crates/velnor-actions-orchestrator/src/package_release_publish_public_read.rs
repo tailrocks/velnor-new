@@ -15,6 +15,12 @@ use super::{GitHubApi, ReleaseAssetResponse, asset_tuples, asset_tuples_from_dow
 mod pull_request_merge_ref;
 #[path = "package_release_publish_pull_request_poll.rs"]
 mod pull_request_poll;
+#[path = "package_release_publish_pull_request_response.rs"]
+mod pull_request_response;
+
+pub(crate) use pull_request_response::{
+    parse_public_pull_request_response, read_public_merge_group_pull_request_response,
+};
 
 pub(crate) struct PublicReleaseSnapshot {
     pub(crate) release_id: u64,
@@ -92,26 +98,44 @@ pub(crate) fn read_public_pull_request(
     let api = GitHubApi::new(repository.to_owned()).with_deadline(deadline);
     api.verify_repository_identity(repository_id)?;
     let response = pull_request_poll::read(&api, repository, repository_id, number, deadline)?;
-    let base = response.base;
-    let head = response.head;
-    let (Some(base_repository), Some(head_repository)) = (base.repo, head.repo) else {
-        return Err(internal("package_public_pull_request_repository_missing"));
-    };
     deadline
         .remaining()
         .map_err(|_| internal("package_public_verification_deadline"))?;
     let merged = response.merged_at.is_some();
     let merge_ref_sha = if response.state == "open" && !merged {
         pull_request_merge_ref::read_public_pull_request_merge_ref(
-            &api, number, &base.sha, &head.sha, deadline,
+            &api,
+            number,
+            &response.base.sha,
+            &response.head.sha,
+            deadline,
         )?
     } else {
         None
     };
+    let snapshot =
+        public_pull_request_snapshot(response, repository, repository_id, merge_ref_sha)?;
+    deadline
+        .remaining()
+        .map_err(|_| internal("package_public_verification_deadline"))?;
+    Ok(snapshot)
+}
+
+fn public_pull_request_snapshot(
+    response: PublicPullRequestResponse,
+    repository: &str,
+    repository_id: u64,
+    merge_ref_sha: Option<String>,
+) -> Result<PublicPullRequestSnapshot, OrchestratorError> {
+    let base = response.base;
+    let head = response.head;
+    let (Some(base_repository), Some(head_repository)) = (base.repo, head.repo) else {
+        return Err(internal("package_public_pull_request_repository_missing"));
+    };
     let snapshot = PublicPullRequestSnapshot {
         state: response.state,
         draft: response.draft,
-        merged,
+        merged: response.merged_at.is_some(),
         base_repository: base_repository.full_name,
         base_repository_id: base_repository.id,
         base_ref: base.reference,
@@ -123,7 +147,10 @@ pub(crate) fn read_public_pull_request(
         merge_ref_sha,
         author: response.user,
     };
-    if !valid_head_reference(&snapshot.head_ref) {
+    if snapshot.base_repository != repository
+        || snapshot.base_repository_id != repository_id
+        || !valid_head_reference(&snapshot.head_ref)
+    {
         return Err(internal("package_public_pull_request_identity_mismatch"));
     }
     Ok(snapshot)
@@ -181,7 +208,7 @@ pub(crate) fn read_public_branch_tip(
 }
 
 #[derive(serde::Deserialize)]
-struct PublicPullRequestResponse {
+pub(super) struct PublicPullRequestResponse {
     number: u64,
     state: String,
     draft: bool,
@@ -193,7 +220,7 @@ struct PublicPullRequestResponse {
 }
 
 #[derive(serde::Deserialize, PartialEq, Eq)]
-struct PublicPullRequestRef {
+pub(super) struct PublicPullRequestRef {
     #[serde(rename = "ref")]
     reference: String,
     sha: String,
@@ -201,7 +228,7 @@ struct PublicPullRequestRef {
 }
 
 #[derive(serde::Deserialize, PartialEq, Eq)]
-struct PublicPullRequestRepository {
+pub(super) struct PublicPullRequestRepository {
     id: u64,
     full_name: String,
 }

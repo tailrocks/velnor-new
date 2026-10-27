@@ -48,6 +48,7 @@ pub(crate) fn load_cutover_replay_authority(
         tap_repository_id: repository_id,
         tap_base_sha: base.to_owned(),
         tap_head_sha: head.to_owned(),
+        merge_group: None,
         locator_blob_sha: crate::release_policy_admission::git_blob_sha1(&locator_bytes)?,
     })
 }

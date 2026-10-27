@@ -23,14 +23,14 @@ jobs:
           fetch-depth: "1"
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e
+        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d
         with:
           cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 2eb27467b6f369915ee76f18d66a0696cdb5c20e7ecc8cb49c2bfaca60f0fc9c
-          version: 2026.10.20
+          sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
+          version: 2026.10.21
       - name: Resolve project tool versions
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""

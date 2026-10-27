@@ -68,6 +68,13 @@ pub(crate) use merge_group::{
     MergeGroupFacts, MergeGroupSelection, verify_public_merge_group_context,
 };
 
+#[path = "package_release_publish_merge_group_pull.rs"]
+mod merge_group_pull;
+pub(crate) use merge_group_pull::{
+    MergeGroupPullRequest, parse_response as parse_merge_group_pull_request_response,
+    read_responses as read_merge_group_pull_request_responses,
+};
+
 #[path = "package_release_publish_workflow_dispatch.rs"]
 mod workflow_dispatch;
 pub(crate) use workflow_dispatch::{QualificationRunSelection, verify_public_qualification_run};
@@ -89,8 +96,10 @@ pub(crate) use preview_artifacts::{
 #[path = "package_release_publish_public_read.rs"]
 mod public_read;
 pub(crate) use public_read::{
-    PublicPullRequestSnapshot, PublicReleaseAsset, PublicReleaseSnapshot, read_public_branch_tip,
-    read_public_pull_request, read_public_release_snapshot, read_public_repository_identity,
+    PublicPullRequestSnapshot, PublicReleaseAsset, PublicReleaseSnapshot,
+    parse_public_pull_request_response, read_public_branch_tip,
+    read_public_merge_group_pull_request_response, read_public_pull_request,
+    read_public_release_snapshot, read_public_repository_identity,
 };
 
 #[path = "package_release_publish_public_repository.rs"]

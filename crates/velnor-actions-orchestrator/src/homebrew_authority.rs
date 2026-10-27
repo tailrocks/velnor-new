@@ -19,6 +19,9 @@ use crate::{OrchestratorError, internal::internal};
 
 #[path = "homebrew_authority/context.rs"]
 mod context;
+pub(crate) use context::verify_merge_group_checkout;
+#[cfg(test)]
+pub(crate) use context::{RunnerContext, parse_merge_group_event};
 #[path = "homebrew_authority/source.rs"]
 mod source;
 use source::{SourceProjection, load_source_projection, protected_locator};
@@ -43,6 +46,7 @@ pub(crate) struct VerifiedHomebrewAuthority {
     tap_repository_id: u64,
     tap_base_sha: String,
     tap_head_sha: String,
+    merge_group: Option<crate::package_release_publish::MergeGroupSelection>,
     locator_blob_sha: String,
 }
 
@@ -81,6 +85,12 @@ impl VerifiedHomebrewAuthority {
 
     pub(crate) fn tap_head_sha(&self) -> &str {
         &self.tap_head_sha
+    }
+
+    pub(crate) fn merge_group(
+        &self,
+    ) -> Option<&crate::package_release_publish::MergeGroupSelection> {
+        self.merge_group.as_ref()
     }
 
     pub(crate) fn locator_blob_sha(&self) -> &str {
@@ -200,7 +210,7 @@ pub(crate) fn probe_protected_homebrew_authority(
         deadline,
     )?;
 
-    let checkout_head = read_git_value(root, "HEAD", deadline)?;
+    let checkout_head = context::read_git_value(root, "HEAD", deadline)?;
     if checkout_head != *authenticated_head {
         return Err(internal("homebrew_authority_checkout_head"));
     }
@@ -216,6 +226,7 @@ pub(crate) fn probe_protected_homebrew_authority(
         tap_repository_id: *tap_repository_id,
         tap_base_sha: tap_base_sha.clone(),
         tap_head_sha: authenticated_head.clone(),
+        merge_group: tap_context.merge_group().cloned(),
         locator_blob_sha,
     }))
 }
@@ -275,28 +286,6 @@ pub(crate) fn protected_locator_absent_on_default_branch(
         &after,
         &after_tip,
     )
-}
-
-fn read_git_value(
-    root: &Path,
-    revision: &str,
-    deadline: CheckDeadline,
-) -> Result<String, OrchestratorError> {
-    let result =
-        velnor_actions_mise::GitRequest::rev_parse(vec![std::ffi::OsString::from(revision)])
-            .run_in_until(root, deadline)
-            .map_err(|_| internal("homebrew_authority_git_context"))?;
-    result
-        .require_success("git")
-        .map_err(|_| internal("homebrew_authority_git_context"))?;
-    let value = result
-        .stdout_text("git")
-        .map_err(|_| internal("homebrew_authority_git_context"))?;
-    let value = value.trim();
-    if !lowercase_sha(value) {
-        return Err(internal("homebrew_authority_git_context"));
-    }
-    Ok(value.to_owned())
 }
 
 fn lowercase_sha(value: &str) -> bool {
