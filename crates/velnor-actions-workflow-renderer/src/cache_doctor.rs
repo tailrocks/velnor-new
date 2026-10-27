@@ -4,13 +4,14 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::cache_family::{
-    CacheFamily, SOURCES_KEY_PLAN_EXPR, SOURCES_KEY_STEP_EXPR, SOURCES_RESTORE_KEYS_PLAN_EXPR,
-    SOURCES_RESTORE_KEYS_STEP_EXPR, SOURCES_SAVE_CONDITION, TOFU_PROVIDER_CACHE_BASE_EXPR,
-    TOFU_PROVIDERS_SAVE_CONDITION, is_plan_cache_output,
+    COMPLETE_STATE_ROOT_EXPR, COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, SOURCES_KEY_PLAN_EXPR,
+    SOURCES_KEY_STEP_EXPR, SOURCES_RESTORE_KEYS_PLAN_EXPR, SOURCES_RESTORE_KEYS_STEP_EXPR,
+    SOURCES_SAVE_CONDITION, TOFU_PROVIDER_CACHE_BASE_EXPR, TOFU_PROVIDERS_SAVE_CONDITION,
+    is_plan_cache_output,
 };
 use velnor_actions_contract::workflow::cache_family_mbx::{
-    MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_PATH_EXPR, MBX_BUNDLE_RESTORE_KEYS_EXPR,
-    MBX_BUNDLE_SAVE_CONDITION,
+    MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_RESTORE_KEYS_EXPR, MBX_BUNDLE_SAVE_CONDITION,
+    is_mbx_bundle_key_needs_expr, is_mbx_bundle_restore_keys_needs_expr,
 };
 use velnor_actions_contract::workflow::cache_family_steps::{
     STACK_FAMILIES, family_key_expr, family_save_condition,
@@ -105,7 +106,7 @@ fn family_for_key(key: &str) -> Option<Family> {
     if key == SOURCES_KEY_STEP_EXPR || key == SOURCES_KEY_PLAN_EXPR {
         return Some(Family::Runtime(CacheFamily::Sources));
     }
-    if key == MBX_BUNDLE_KEY_EXPR {
+    if key == MBX_BUNDLE_KEY_EXPR || is_mbx_bundle_key_needs_expr(key) {
         return Some(Family::Runtime(CacheFamily::MbxBundle));
     }
     if let Some(family) = STACK_FAMILIES
@@ -238,7 +239,10 @@ fn check_paths(job: &str, step: &Step, cache: &CacheUse<'_>) -> Result<(), Rende
                 })
         }
         (Family::Runtime(CacheFamily::MbxBundle), Some(path)) => {
-            path == MBX_BUNDLE_PATH_EXPR && mbx_bundle_restore_keys_ok(step, cache.save)
+            // The stale `velnor/mbx-bundle` path is rejected; the state transport
+            // payload (or the state root) is the only accepted bundle path.
+            (path == COMPLETE_STATE_TRANSPORT_EXPR || path == COMPLETE_STATE_ROOT_EXPR)
+                && mbx_bundle_restore_keys_ok(step, cache.save)
         }
         (
             Family::Runtime(
@@ -281,7 +285,11 @@ fn mbx_bundle_restore_keys_ok(step: &Step, save: bool) -> bool {
     if save {
         !with.contains_key("restore-keys")
     } else {
-        with.get("restore-keys").map(String::as_str) == Some(MBX_BUNDLE_RESTORE_KEYS_EXPR)
+        with.get("restore-keys")
+            .map(String::as_str)
+            .is_some_and(|keys| {
+                keys == MBX_BUNDLE_RESTORE_KEYS_EXPR || is_mbx_bundle_restore_keys_needs_expr(keys)
+            })
     }
 }
 

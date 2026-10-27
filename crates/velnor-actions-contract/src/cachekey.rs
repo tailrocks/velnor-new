@@ -43,10 +43,11 @@ pub const MISS_REASONS: [&str; 13] = [
     "source_missing",
 ];
 
-pub const FINAL_GATE_REASONS: [&str; 3] = [
+pub const FINAL_GATE_REASONS: [&str; 4] = [
     "planned_job_skipped",
     "gate_mismatch",
     "not_affected_on_full_event",
+    "needs_prepare",
 ];
 
 pub fn validate_final_miss_reason(reason: &str) -> Result<(), ContractError> {

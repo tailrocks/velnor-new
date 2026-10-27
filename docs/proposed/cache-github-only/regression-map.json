@@ -1,0 +1,528 @@
+{
+ "task": "T01",
+ "rule": "Each key names existing regression files frozen by T01. The owning behavior-changing task expands its exact files before scheduling; no other task may claim them.",
+ "regressions": {
+  "regressions/policies": {
+   "behavior_task": "T03",
+   "title": "Replace obsolete cache and grouping policies",
+   "test_files": [],
+   "registration": []
+  },
+  "regressions/identity_contract": {
+   "behavior_task": "T04",
+   "title": "Define cache identity and coverage types",
+   "test_files": [
+    "crates/velnor-actions-contract/tests/gc1_t04.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-contract/tests/velnor_contract.rs"
+   ]
+  },
+  "regressions/context_contract": {
+   "behavior_task": "T05",
+   "title": "Define execution context and outcome types",
+   "test_files": [
+    "crates/velnor-actions-contract/tests/gc1_t05.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-contract/tests/velnor_contract.rs"
+   ]
+  },
+  "regressions/coverage": {
+   "behavior_task": "T06",
+   "title": "Derive dependency coverage without application churn",
+   "test_files": [
+    "crates/velnor-actions-rust/tests/gc1_t06.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-rust/tests/velnor_rust.rs"
+   ]
+  },
+  "regressions/production_recipes": {
+   "behavior_task": "T07",
+   "title": "Enumerate actual production and helper recipes",
+   "test_files": [
+    "crates/velnor-actions-orchestrator/tests/gc1_t07.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs"
+   ]
+  },
+  "regressions/group_plan": {
+   "behavior_task": "T08",
+   "title": "Plan compatible groups and exact unit sets",
+   "test_files": [
+    "crates/velnor-actions-orchestrator/tests/gc1_t08.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs"
+   ]
+  },
+  "regressions/homes": {
+   "behavior_task": "T09",
+   "title": "Bind deterministic owned execution homes",
+   "test_files": [
+    "crates/velnor-actions-orchestrator/tests/gc1_t09.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs"
+   ]
+  },
+  "regressions/projection": {
+   "behavior_task": "T10",
+   "title": "Restore authenticated source objects and original metadata",
+   "test_files": [
+    "crates/velnor-actions-orchestrator/tests/gc1_t10.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs"
+   ]
+  },
+  "regressions/sources": {
+   "behavior_task": "T11",
+   "title": "Hydrate one verified source family",
+   "test_files": [
+    "crates/velnor-actions-mise/tests/gc1_t11.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-mise/tests/velnor_mise.rs"
+   ]
+  },
+  "regressions/private_sources": {
+   "behavior_task": "T12",
+   "title": "Preserve private source authorization boundaries",
+   "test_files": [
+    "crates/velnor-actions-orchestrator/tests/gc1_t12.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs"
+   ]
+  },
+  "regressions/tools_union": {
+   "behavior_task": "T13",
+   "title": "Create one tool set for each host",
+   "test_files": [
+    "crates/velnor-actions-workflow-renderer/tests/gc1_t13.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-workflow-renderer/tests/velnor_workflow_renderer.rs"
+   ]
+  },
+  "regressions/tool_integrity": {
+   "behavior_task": "T14",
+   "title": "Reuse verified immutable tool acquisition",
+   "test_files": [
+    "crates/velnor-actions-workflow-renderer/tests/gc1_t14.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-workflow-renderer/tests/velnor_workflow_renderer.rs"
+   ]
+  },
+  "regressions/qualified_tools": {
+   "behavior_task": "T15",
+   "title": "Hydrate qualified tools inside private checks",
+   "test_files": [
+    "crates/velnor-actions-orchestrator/tests/gc1_t15.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs"
+   ]
+  },
+  "regressions/render_homes": {
+   "behavior_task": "T16",
+   "title": "Render the shared tool and cache homes",
+   "test_files": [
+    "crates/velnor-actions-workflow-renderer/tests/gc1_t16.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-workflow-renderer/tests/velnor_workflow_renderer.rs"
+   ]
+  },
+  "regressions/rust_observer": {
+   "behavior_task": "T17",
+   "title": "Implement transparent Rust compiler observation",
+   "test_files": [
+    "crates/velnor-actions-mise/tests/gc1_t17.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-mise/tests/velnor_mise.rs"
+   ]
+  },
+  "regressions/native_observer": {
+   "behavior_task": "T18",
+   "title": "Observe supported native compiler boundaries",
+   "test_files": [
+    "crates/velnor-actions-mise/tests/gc1_t18.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-mise/tests/velnor_mise.rs"
+   ]
+  },
+  "regressions/observation_reports": {
+   "behavior_task": "T19",
+   "title": "Expose child compiler and acquisition evidence",
+   "test_files": [
+    "crates/velnor-actions-orchestrator/tests/gc1_t19.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs"
+   ]
+  },
+  "regressions/snapshot": {
+   "behavior_task": "T20",
+   "title": "Pack complete state and safe manifests",
+   "test_files": [
+    "crates/velnor-actions-orchestrator/tests/gc1_t20.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs"
+   ]
+  },
+  "regressions/envelope": {
+   "behavior_task": "T21",
+   "title": "Measure and qualify the outer archive envelope",
+   "test_files": [
+    "crates/velnor-actions-orchestrator/tests/gc1_t21.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs"
+   ]
+  },
+  "regressions/budget": {
+   "behavior_task": "T22",
+   "title": "Implement repository-wide byte admission",
+   "test_files": [
+    "crates/velnor-actions-orchestrator/tests/gc1_t22.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs"
+   ]
+  },
+  "regressions/family_catalog": {
+   "behavior_task": "T23",
+   "title": "Bind all cache families to the common contract",
+   "test_files": [
+    "crates/velnor-actions-contract/tests/gc1_t23.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-contract/tests/velnor_contract.rs"
+   ]
+  },
+  "regressions/discovery": {
+   "behavior_task": "T24",
+   "title": "Select exact generations and validate active intent",
+   "test_files": [
+    "crates/velnor-actions-orchestrator/tests/gc1_t24.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs"
+   ]
+  },
+  "regressions/closure_replay": {
+   "behavior_task": "T25",
+   "title": "Validate final coverage before publication",
+   "test_files": [
+    "crates/velnor-actions-orchestrator/tests/gc1_t25.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs"
+   ]
+  },
+  "regressions/publication": {
+   "behavior_task": "T26",
+   "title": "Publish immutable generations and verify remote bytes",
+   "test_files": [
+    "crates/velnor-actions-orchestrator/tests/gc1_t26.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs"
+   ]
+  },
+  "regressions/cleanup": {
+   "behavior_task": "T27",
+   "title": "Delete only verified superseded owned entries",
+   "test_files": [
+    "crates/velnor-actions-orchestrator/tests/gc1_t27.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs"
+   ]
+  },
+  "regressions/cli_binding": {
+   "behavior_task": "T28",
+   "title": "Expose existing-binary cache and observer operations",
+   "test_files": [
+    "crates/velnor-actions-cli/tests/gc1_t28.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-cli/tests/velnor_cli.rs"
+   ]
+  },
+  "regressions/observer_entry": {
+   "behavior_task": "T29",
+   "title": "Bind compiler adapter entry and environment",
+   "test_files": [
+    "crates/velnor-actions-cli/tests/gc1_t29.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-cli/tests/velnor_cli.rs"
+   ]
+  },
+  "regressions/transport_render": {
+   "behavior_task": "T30",
+   "title": "Render thin source tool and state transport",
+   "test_files": [
+    "crates/velnor-actions-workflow-renderer/tests/gc1_t30.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-workflow-renderer/tests/velnor_workflow_renderer.rs"
+   ]
+  },
+  "regressions/authority_render": {
+   "behavior_task": "T31",
+   "title": "Render event permissions and writer queues",
+   "test_files": [
+    "crates/velnor-actions-workflow-renderer/tests/gc1_t31.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-workflow-renderer/tests/velnor_workflow_renderer.rs"
+   ]
+  },
+  "regressions/combined_jobs": {
+   "behavior_task": "T32",
+   "title": "Integrate static reader writer and cleanup jobs",
+   "test_files": [
+    "crates/velnor-actions-orchestrator/tests/gc1_t32.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs"
+   ]
+  },
+  "regressions/lanes": {
+   "behavior_task": "T33",
+   "title": "Integrate exact commands into isolated group lanes",
+   "test_files": [
+    "crates/velnor-actions-orchestrator/tests/gc1_t33.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs"
+   ]
+  },
+  "regressions/required": {
+   "behavior_task": "T34",
+   "title": "Integrate unit-level Required validation",
+   "test_files": [
+    "crates/velnor-actions-orchestrator/tests/gc1_t34.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs"
+   ]
+  },
+  "regressions/required_bridge": {
+   "behavior_task": "T35",
+   "title": "Bind grouped ledgers through the actual final merge",
+   "test_files": [
+    "crates/velnor-actions-orchestrator/tests/gc1_t35.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs"
+   ]
+  },
+  "regressions/report_transport": {
+   "behavior_task": "T36",
+   "title": "Carry observation evidence through existing report artifacts",
+   "test_files": [
+    "crates/velnor-actions-orchestrator/tests/gc1_t36.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs"
+   ]
+  },
+  "regressions/measurement_binding": {
+   "behavior_task": "T37",
+   "title": "Validate owned measurement evidence and effective attempts",
+   "test_files": [
+    "scripts/hosted_phase_measurement/tests/test_gc1_observation.py"
+   ],
+   "registration": []
+  },
+  "regressions/measurement_aggregation": {
+   "behavior_task": "T38",
+   "title": "Integrate complete lifecycle counters into the existing collector",
+   "test_files": [
+    "scripts/hosted_phase_measurement/tests/test_gc1_observation.py"
+   ],
+   "registration": []
+  },
+  "regressions/named_checks": {
+   "behavior_task": "T39",
+   "title": "Integrate named checks with restored context",
+   "test_files": [
+    "crates/velnor-actions-orchestrator/tests/gc1_t39.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs"
+   ]
+  },
+  "regressions/preview": {
+   "behavior_task": "T40",
+   "title": "Integrate preview native producers",
+   "test_files": [
+    "crates/velnor-actions-orchestrator/tests/gc1_t40.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs"
+   ]
+  },
+  "regressions/native_release": {
+   "behavior_task": "T41",
+   "title": "Integrate stable and native build callers",
+   "test_files": [
+    "crates/velnor-actions-orchestrator/tests/gc1_t41.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs"
+   ]
+  },
+  "regressions/release_render": {
+   "behavior_task": "T42",
+   "title": "Bind product release build groups",
+   "test_files": [
+    "crates/velnor-actions-workflow-renderer/tests/gc1_t42.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-workflow-renderer/tests/velnor_workflow_renderer.rs"
+   ]
+  },
+  "regressions/bootstrap": {
+   "behavior_task": "T43",
+   "title": "Restore the pinned controller before cache operations",
+   "test_files": [
+    "crates/velnor-actions-workflow-renderer/tests/gc1_t43.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-workflow-renderer/tests/velnor_workflow_renderer.rs"
+   ]
+  },
+  "regressions/helpers": {
+   "behavior_task": "T44",
+   "title": "Integrate Plan and source-bound helper reuse",
+   "test_files": [
+    "crates/velnor-actions-workflow-renderer/tests/gc1_t44.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-workflow-renderer/tests/velnor_workflow_renderer.rs"
+   ]
+  },
+  "regressions/image_validation": {
+   "behavior_task": "T45",
+   "title": "Factor fixed image record and archive validation",
+   "test_files": [
+    "crates/velnor-actions-workflow-renderer/tests/gc1_t45.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-workflow-renderer/tests/velnor_workflow_renderer.rs"
+   ]
+  },
+  "regressions/image_publication": {
+   "behavior_task": "T46",
+   "title": "Factor fixed image identity and publication logic",
+   "test_files": [
+    "crates/velnor-actions-workflow-renderer/tests/gc1_t46.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-workflow-renderer/tests/velnor_workflow_renderer.rs"
+   ]
+  },
+  "regressions/image_body": {
+   "behavior_task": "T47",
+   "title": "Compose one source-free image authority body",
+   "test_files": [
+    "crates/velnor-actions-workflow-renderer/tests/gc1_t47.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-workflow-renderer/tests/velnor_workflow_renderer.rs"
+   ]
+  },
+  "regressions/image_render": {
+   "behavior_task": "T48",
+   "title": "Remove source execution from image authority jobs",
+   "test_files": [
+    "crates/velnor-actions-workflow-renderer/tests/gc1_t48.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-workflow-renderer/tests/velnor_workflow_renderer.rs"
+   ]
+  },
+  "regressions/other_families": {
+   "behavior_task": "T49",
+   "title": "Apply common admission to existing cache families",
+   "test_files": [
+    "crates/velnor-actions-orchestrator/tests/gc1_t49.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs"
+   ]
+  },
+  "regressions/qualification_writers": {
+   "behavior_task": "T50",
+   "title": "Replace unbounded qualification cache writers",
+   "test_files": [
+    "crates/velnor-actions-workflow-renderer/tests/gc1_t50.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-workflow-renderer/tests/velnor_workflow_renderer.rs"
+   ]
+  },
+  "regressions/config": {
+   "behavior_task": "T51",
+   "title": "Replace obsolete consumer cache settings",
+   "test_files": [
+    "crates/velnor-actions-orchestrator/tests/gc1_t51.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs"
+   ]
+  },
+  "regressions/binding": {
+   "behavior_task": "T52",
+   "title": "Complete cross-crate caller bindings",
+   "test_files": [
+    "crates/velnor-actions-orchestrator/tests/gc1_t52.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs"
+   ]
+  },
+  "regressions/remove_seed": {
+   "behavior_task": "T68",
+   "title": "Remove obsolete dependency seed implementation",
+   "test_files": [
+    "crates/velnor-actions-orchestrator/tests/gc1_t68.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs"
+   ]
+  },
+  "regressions/remove_mbx_store": {
+   "behavior_task": "T69",
+   "title": "Remove persisted MBX cache policies and rendering",
+   "test_files": [
+    "crates/velnor-actions-workflow-renderer/tests/gc1_t69.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-workflow-renderer/tests/velnor_workflow_renderer.rs"
+   ]
+  },
+  "regressions/remove_old_budget": {
+   "behavior_task": "T70",
+   "title": "Remove old family elections and pruning policies",
+   "test_files": [
+    "crates/velnor-actions-workflow-renderer/tests/gc1_t70.rs"
+   ],
+   "registration": [
+    "crates/velnor-actions-workflow-renderer/tests/velnor_workflow_renderer.rs"
+   ]
+  }
+ }
+}

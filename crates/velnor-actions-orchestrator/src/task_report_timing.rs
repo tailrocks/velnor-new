@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::OrchestratorError;
+use crate::OrchestratorError;
 use crate::internal::internal;
 
 pub(super) fn parse_exit_code(raw: &str) -> Result<i32, OrchestratorError> {

@@ -10,6 +10,9 @@ use super::{
 
 use crate::toolchain_env;
 
+pub(super) const MBX_TARGET_VIEWS_ENV: &str = "MBX_TARGET_VIEWS";
+pub(super) const MBX_TARGET_VIEWS_DISABLED: &str = "0";
+
 pub(super) fn validate_task_fields(
     argv: &[String],
     env: &BTreeMap<String, String>,
@@ -139,6 +142,15 @@ pub(super) fn declared_task_document(
     env.insert(
         RUNTIME_RUNNER_TEMP_ENV.to_owned(),
         RUNNER_TEMP_EXPRESSION.to_owned(),
+    );
+    // No compiler wrapper pointers here. Nothing creates observer files at
+    // task runtime: the observer installer is not wired into task startup
+    // and the pinned task helper does not create them. A dangling
+    // RUSTC_WRAPPER makes the mbx shim chain fail on a cold store, so
+    // declared tasks run unwrapped until an installer ships with a helper.
+    env.insert(
+        MBX_TARGET_VIEWS_ENV.to_owned(),
+        MBX_TARGET_VIEWS_DISABLED.to_owned(),
     );
     crate::commands::validate_composite_env(&env)?;
     let script = task_script(&shape.helper_version);

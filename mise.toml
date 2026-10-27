@@ -51,6 +51,7 @@ set -eu
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 bash images/resource-probe/test_build_runner_images.sh
+PYTHONDONTWRITEBYTECODE=1 python3 crates/velnor-actions-workflow-renderer/tests/test_job_image_authority_shared_publisher.py
 TEST_MEMBERS="$(VELNOR_INTERNAL_OP=repo-policy-v1 \
   VELNOR_REPO_POLICY_ACTION=test-members \
   VELNOR_REPO_POLICY_ROOT="$ROOT" \

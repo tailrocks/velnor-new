@@ -177,6 +177,194 @@ pub fn acquire_velnor_step(
     Ok(step)
 }
 
+pub const CACHE_BOOTSTRAP_SCRIPT: &str = include_str!("cache_bootstrap.py");
+
+pub const BOOTSTRAP_STEP_NAME: &str = "Restore pinned controller";
+pub const BOOTSTRAP_MISS_CODE: i32 = 10;
+pub const BOOTSTRAP_MAX_BYTES: u64 = 64 * 1024 * 1024;
+pub const BOOTSTRAP_MARKER_SUFFIX: &str = ".bootstrapped";
+
+pub const BOOTSTRAP_PAYLOAD_DIR_ENV: &str = "VELNOR_BOOTSTRAP_PAYLOAD_DIR";
+pub const BOOTSTRAP_MEMBER_ENV: &str = "VELNOR_BOOTSTRAP_MEMBER";
+pub const BOOTSTRAP_EXPECTED_SHA_ENV: &str = "VELNOR_BOOTSTRAP_EXPECTED_SHA256";
+pub const BOOTSTRAP_STAGED_PATH_ENV: &str = "VELNOR_BOOTSTRAP_STAGED_PATH";
+pub const BOOTSTRAP_MAX_BYTES_ENV: &str = "VELNOR_BOOTSTRAP_MAX_BYTES";
+pub const BOOTSTRAP_EXPECTED_KEY_ENV: &str = "VELNOR_BOOTSTRAP_EXPECTED_KEY";
+pub const BOOTSTRAP_MATCHED_KEY_ENV: &str = "VELNOR_BOOTSTRAP_MATCHED_KEY";
+pub const BOOTSTRAP_SHADOW_ENV: &str = "VELNOR_BOOTSTRAP_SHADOW_STATE";
+pub const BOOTSTRAP_SHADOW_CLEAR: &str = "clear";
+
+const BOOTSTRAP_MAX_MEMBER_LEN: usize = 256;
+const BOOTSTRAP_MAX_LIMIT: u64 = 2_147_483_647;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BootstrapBridge {
+    pub payload_dir: String,
+    pub member: String,
+    pub staged_path: String,
+    pub max_bytes: u64,
+    pub expected_key: Option<String>,
+    pub matched_key: Option<String>,
+    pub shadow_state: Option<String>,
+}
+
+fn bootstrap_member_part_ok(part: &str) -> bool {
+    if part.is_empty() || part == "." || part == ".." {
+        return false;
+    }
+    part.bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'.' || byte == b'_')
+}
+
+fn check_bootstrap_member(member: &str) -> Result<(), RenderError> {
+    if member.is_empty()
+        || member.len() > BOOTSTRAP_MAX_MEMBER_LEN
+        || member.starts_with('/')
+        || !member.split('/').all(bootstrap_member_part_ok)
+    {
+        return Err(RenderError::BadCommand("bootstrap_member".to_owned()));
+    }
+    Ok(())
+}
+
+fn check_bootstrap_path(value: &str, problem: &str) -> Result<(), RenderError> {
+    if value.is_empty()
+        || value.contains('\0')
+        || value.contains('\n')
+        || value.contains('\r')
+        || value.contains('"')
+        || value.contains('`')
+        || value.contains('\\')
+        || value.contains("$(")
+    {
+        return Err(RenderError::BadCommand(problem.to_owned()));
+    }
+    if !(value.starts_with('/')
+        || value.starts_with("$RUNNER_TEMP")
+        || value.starts_with("${{ runner.temp }}"))
+    {
+        return Err(RenderError::BadCommand(problem.to_owned()));
+    }
+    Ok(())
+}
+
+fn check_bootstrap_bridge(bridge: &BootstrapBridge) -> Result<(), RenderError> {
+    check_bootstrap_path(&bridge.payload_dir, "bootstrap_payload_dir")?;
+    check_bootstrap_member(&bridge.member)?;
+    check_bootstrap_path(&bridge.staged_path, "bootstrap_staged_path")?;
+    if bridge.max_bytes == 0 || bridge.max_bytes > BOOTSTRAP_MAX_LIMIT {
+        return Err(RenderError::BadCommand("bootstrap_max_bytes".to_owned()));
+    }
+    match (&bridge.expected_key, &bridge.matched_key) {
+        (None, None) => Ok(()),
+        (Some(expected), Some(_)) if !expected.is_empty() => Ok(()),
+        _ => Err(RenderError::BadCommand("bootstrap_entry_key".to_owned())),
+    }?;
+    if bridge.shadow_state.as_ref().is_some_and(|state| {
+        state.is_empty() || state.len() > 64 || state.contains(char::is_whitespace)
+    }) {
+        return Err(RenderError::BadCommand("bootstrap_shadow_state".to_owned()));
+    }
+    Ok(())
+}
+
+#[must_use]
+pub fn bootstrap_marker_for(staged_path: &str) -> String {
+    format!("{staged_path}{BOOTSTRAP_MARKER_SUFFIX}")
+}
+
+pub(crate) fn escape_bootstrap_for_printf(script: &str) -> Result<String, RenderError> {
+    if script.contains('\r') || script.contains('\0') {
+        return Err(RenderError::BadCommand("bootstrap_script_shape".to_owned()));
+    }
+    let mut out = String::with_capacity(script.len());
+    for ch in script.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '\'' => out.push_str("'\\''"),
+            '\n' => out.push_str("\\n"),
+            _ => out.push(ch),
+        }
+    }
+    Ok(out)
+}
+
+pub fn bootstrap_bridge_script(bridge: &BootstrapBridge) -> Result<String, RenderError> {
+    check_bootstrap_bridge(bridge)?;
+    let embedded = escape_bootstrap_for_printf(CACHE_BOOTSTRAP_SCRIPT)?;
+    let marker = bootstrap_marker_for(&bridge.staged_path);
+    Ok(format!(
+        "d=\"{staged}\"&&p=\"{payload}\"&&export {staged_env}=\"$d\" {payload_env}=\"$p\"&&printf '%b' '{embedded}' | python3 -;c=$?;if [ \"$c\" = 0 ];then : > \"{marker}\";elif [ \"$c\" = {miss} ];then rm -f \"{marker}\";else exit \"$c\";fi",
+        staged = bridge.staged_path,
+        payload = bridge.payload_dir,
+        staged_env = BOOTSTRAP_STAGED_PATH_ENV,
+        payload_env = BOOTSTRAP_PAYLOAD_DIR_ENV,
+        miss = BOOTSTRAP_MISS_CODE,
+    ))
+}
+
+pub fn bootstrap_bridge_step(
+    bridge: &BootstrapBridge,
+    expected_sha256: &str,
+) -> Result<Step, RenderError> {
+    check_bootstrap_bridge(bridge)?;
+    if !velnor_actions_contract::ids::is_lower_hex_len(expected_sha256, 64) {
+        return Err(RenderError::BadCommand("bootstrap_sha256".to_owned()));
+    }
+    let mut env = BTreeMap::from([
+        (BOOTSTRAP_MEMBER_ENV.to_owned(), bridge.member.clone()),
+        (
+            BOOTSTRAP_EXPECTED_SHA_ENV.to_owned(),
+            expected_sha256.to_owned(),
+        ),
+        (
+            BOOTSTRAP_MAX_BYTES_ENV.to_owned(),
+            bridge.max_bytes.to_string(),
+        ),
+    ]);
+    if let Some(expected) = &bridge.expected_key {
+        env.insert(BOOTSTRAP_EXPECTED_KEY_ENV.to_owned(), expected.clone());
+    }
+    if let Some(matched) = &bridge.matched_key {
+        env.insert(BOOTSTRAP_MATCHED_KEY_ENV.to_owned(), matched.clone());
+    }
+    if let Some(shadow) = &bridge.shadow_state {
+        env.insert(BOOTSTRAP_SHADOW_ENV.to_owned(), shadow.clone());
+    }
+    let script = bootstrap_bridge_script(bridge)?;
+    shell_step(
+        BOOTSTRAP_STEP_NAME,
+        vec!["sh".to_owned(), "-c".to_owned(), script],
+        env,
+    )
+}
+
+pub fn bootstrap_guarded_acquire_argv(
+    marker: &str,
+    acquire_argv: &[String],
+) -> Result<Vec<String>, RenderError> {
+    let body = match acquire_argv {
+        [shell, flag, body]
+            if (shell == "sh" || shell == "bash" || shell == "/bin/sh")
+                && flag == "-c"
+                && !body.trim().is_empty() =>
+        {
+            body
+        }
+        _ => {
+            return Err(RenderError::BadCommand(
+                "bootstrap_acquire_shape".to_owned(),
+            ));
+        }
+    };
+    commands::validate_command_argv(acquire_argv)?;
+    Ok(vec![
+        "sh".to_owned(),
+        "-c".to_owned(),
+        format!("if [ -f \"{marker}\" ]; then exit 0; else {body}; fi"),
+    ])
+}
+
 pub const TARGET_DIR_PREFIX: &str = "$RUNNER_TEMP/velnor/target/";
 
 #[must_use]

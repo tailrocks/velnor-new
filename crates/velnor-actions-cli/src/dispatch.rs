@@ -9,15 +9,16 @@ use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{
     ACQUIRE_PREVIEW_SOURCE_OP, ACQUIRE_RELEASE_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP,
-    ADMIT_RELEASE_AGGREGATE_OP, ADMIT_STABLE_TAG_ORIGIN_OP, BUN_ASSETS_EXPORT_OP,
-    BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP, BUN_ASSETS_REPOSITORY_CHECK_OP,
-    BUN_REGISTRY_INSTALL_OP, CAPTURE_REVIEW_COMPLETION_OP, DYNAMIC_MATRIX_OUTPUT_MODE,
-    EMIT_REVIEW_COMPLETION_OP, EXECUTE_CHECK_OP, EXECUTE_RELEASE_PRODUCER_OP, FETCH_OP,
-    FINALIZE_PREVIEW_SOURCE_OP, GITHUB_EVIDENCE_FETCH_OP, GITHUB_EVIDENCE_IMPORT_OP, GRADLE_RUN_OP,
-    MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP, OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP,
-    PLAYWRIGHT_INSTALL_OP, PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PRIVATE_FETCH_OP,
-    PRIVATE_REVOKE_OP, PUBLISH_PACKAGE_RELEASE_OP, PlanOutputMode, RECOVER_PACKAGE_RELEASE_OP,
-    REPORT_OP, REQUEST_FILE_ENV, SELECT_PREVIEW_SOURCE_OP, SELECT_RELEASE_TAP_CONTINUATION_OP,
+    ADMIT_RELEASE_AGGREGATE_OP, ADMIT_STABLE_TAG_ORIGIN_OP, ASSEMBLE_GROUP_LEDGERS_OP,
+    BUN_ASSETS_EXPORT_OP, BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP,
+    BUN_ASSETS_REPOSITORY_CHECK_OP, BUN_REGISTRY_INSTALL_OP, CAPTURE_REVIEW_COMPLETION_OP,
+    DYNAMIC_MATRIX_OUTPUT_MODE, EMIT_GROUP_LEDGER_OP, EMIT_REVIEW_COMPLETION_OP, EXECUTE_CHECK_OP,
+    EXECUTE_RELEASE_PRODUCER_OP, FETCH_OP, FINALIZE_PREVIEW_SOURCE_OP, GITHUB_EVIDENCE_FETCH_OP,
+    GITHUB_EVIDENCE_IMPORT_OP, GRADLE_RUN_OP, MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP,
+    OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PLAYWRIGHT_INSTALL_OP,
+    PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PRIVATE_FETCH_OP, PRIVATE_REVOKE_OP,
+    PUBLISH_PACKAGE_RELEASE_OP, PlanOutputMode, RECOVER_PACKAGE_RELEASE_OP, REPORT_OP,
+    REQUEST_FILE_ENV, SELECT_PREVIEW_SOURCE_OP, SELECT_RELEASE_TAP_CONTINUATION_OP,
     SELECT_STABLE_RELEASE_SOURCE_OP, SIGN_PACKAGE_RELEASE_OP, TASK_EXECUTION_RESOLVER_OP,
     WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP, WRITE_STABLE_TAG_INTENT_OP,
     WRITE_STABLE_TAG_ORIGIN_OP, execute_check, merge_internal, merge_passed, plan_internal,
@@ -29,8 +30,14 @@ use velnor_actions_orchestrator::{
 
 #[path = "dispatch/bun_assets.rs"]
 mod bun_assets;
+#[path = "dispatch/cache.rs"]
+mod cache;
 #[path = "dispatch/fileless.rs"]
 mod fileless;
+#[path = "dispatch/cache/ledger_assemble.rs"]
+mod ledger_assemble;
+#[path = "dispatch/cache/ledger_emit.rs"]
+mod ledger_emit;
 #[path = "dispatch_preview_production.rs"]
 mod preview_production;
 #[path = "dispatch/public.rs"]
@@ -81,6 +88,9 @@ pub(crate) fn try_internal() -> Option<ExitCode> {
 
 fn gate_request() -> Option<InternalRequest> {
     let op = internal_op()?;
+    if let Some(request) = ledger_emit::gate(op).or_else(|| ledger_assemble::gate(op)) {
+        return Some(request);
+    }
     if fileless::uses_runner_temp_gate(op) {
         return fileless::gate_runner_temp_operation(op);
     }
@@ -90,27 +100,32 @@ fn gate_request() -> Option<InternalRequest> {
     gate_file_request(op, path)
 }
 
+fn gated(
+    op: InternalOp,
+    path: &Path,
+    gate: impl FnOnce(&Path) -> Option<PathBuf>,
+) -> Option<InternalRequest> {
+    gate(path).map(|path| InternalRequest { op, path })
+}
+
 fn gate_file_request(op: InternalOp, path: PathBuf) -> Option<InternalRequest> {
     match op {
         InternalOp::TapContinuation => {
-            return tap_continuation::gate_request(&path).map(|path| InternalRequest { op, path });
+            return gated(op, &path, tap_continuation::gate_request);
         }
         InternalOp::CaptureReviewCompletion | InternalOp::EmitReviewCompletion => {
-            return review_completion::gate_request(&path).map(|path| InternalRequest { op, path });
+            return gated(op, &path, review_completion::gate_request);
         }
         InternalOp::WriteRequest if !request_can_be_materialized(&path) => return None,
         InternalOp::Plan | InternalOp::Merge if !path.is_file() => return None,
         InternalOp::ExecuteReleaseProducer => {
-            return package_release::gate_producer_request(&path)
-                .map(|path| InternalRequest { op, path });
+            return gated(op, &path, package_release::gate_producer_request);
         }
         InternalOp::PreviewSourceSelection | InternalOp::PreviewSourceFinalization => {
-            return package_release::gate_preview_source_seed_request(&path)
-                .map(|path| InternalRequest { op, path });
+            return gated(op, &path, package_release::gate_preview_source_seed_request);
         }
         InternalOp::PreviewSourceAcquisition => {
-            return package_release::gate_preview_source_acquisition(&path)
-                .map(|path| InternalRequest { op, path });
+            return gated(op, &path, package_release::gate_preview_source_acquisition);
         }
         InternalOp::ResolveQualification => {
             if !crate::dispatch_qualification::request_is_eligible(&path) {
@@ -126,21 +141,28 @@ fn gate_file_request(op: InternalOp, path: PathBuf) -> Option<InternalRequest> {
         | InternalOp::PackageRecovery
         | InternalOp::AdmitReleaseAggregate
         | InternalOp::AcquireReleaseLeaves => {
-            return package_release::gate_request(&path).map(|path| InternalRequest { op, path });
+            return gated(op, &path, package_release::gate_request);
         }
         InternalOp::TapAdmission => {
-            return tap_prepare::gate_admission_request(&path)
-                .map(|path| InternalRequest { op, path });
+            return gated(op, &path, tap_prepare::gate_admission_request);
         }
         InternalOp::TapPrepare => {
-            return tap_prepare::gate_request(&path).map(|path| InternalRequest { op, path });
+            return gated(op, &path, tap_prepare::gate_request);
         }
         InternalOp::TapWriter => {
-            return tap_prepare::gate_writer_request(&path)
-                .map(|path| InternalRequest { op, path });
+            return gated(op, &path, tap_prepare::gate_writer_request);
         }
         InternalOp::TapMerge => {
-            return tap_merge::gate_request(&path).map(|path| InternalRequest { op, path });
+            return gated(op, &path, tap_merge::gate_request);
+        }
+        InternalOp::CachePublish | InternalOp::CacheRecover | InternalOp::CacheCleanup => {
+            return gated(op, &path, |request| cache::gate_request(op, request));
+        }
+        InternalOp::EmitGroupLedger => {
+            return ledger_emit::gate(op);
+        }
+        InternalOp::AssembleGroupLedgers => {
+            return ledger_assemble::gate(op);
         }
         InternalOp::WriteRequest
         | InternalOp::Plan
@@ -257,6 +279,11 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::TapAdmission => tap_prepare::run_admission(),
         InternalOp::TapWriter => tap_prepare::run_writer(),
         InternalOp::TapMerge => tap_merge::run(),
+        InternalOp::CachePublish | InternalOp::CacheRecover | InternalOp::CacheCleanup => {
+            cache::run(request.op, &request.path)
+        }
+        InternalOp::EmitGroupLedger => ledger_emit::run(),
+        InternalOp::AssembleGroupLedgers => ledger_assemble::run(),
     }
 }
 

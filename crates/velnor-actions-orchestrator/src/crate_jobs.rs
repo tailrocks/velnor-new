@@ -12,7 +12,7 @@ use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
 
 use crate::OrchestratorError;
 use crate::config::private_wiring::PrivateWiring;
-use crate::crate_job_ids::{JobOwners, group_is_tofu, group_runnable};
+use crate::crate_job_ids::{CrateGroupKey, JobOwners, group_is_tofu, group_runnable};
 use crate::discover::Discovery;
 use crate::internal::internal;
 
@@ -25,13 +25,18 @@ pub(crate) mod dependency_seed;
 
 #[path = "crate_jobs_stage.rs"]
 mod stage;
+use stage::combined_branch_for;
+
+#[path = "crate_jobs_branches.rs"]
+mod branches;
+use branches::finalize_group_branches;
 
 #[path = "crate_jobs_gates.rs"]
 mod gates;
 
 #[path = "crate_jobs_build_jobs.rs"]
 mod build_jobs;
-use build_jobs::reject_unknown_crates;
+use build_jobs::{group_plan_for, reject_seed_needs, reject_unknown_crates};
 
 #[path = "crate_jobs_steps.rs"]
 mod job_steps;
@@ -99,70 +104,29 @@ fn build_crate_jobs_with_seed_timeout(
 ) -> Result<CrateBuild, OrchestratorError> {
     let CrateJobInputs {
         discovery,
-        catalog,
         max_parallel_jobs,
         ..
     } = input;
     let grouped = group_runnable(&discovery.proposals)?;
     let owners = JobOwners::from_grouped(&discovery.proposals, &grouped);
-    let mut jobs = Vec::with_capacity(grouped.len());
+    let mut jobs = Vec::with_capacity(stage::branch_job_count(grouped.len()));
     let mut drivers = BTreeMap::new();
-    let mut tofu_ids = Vec::new();
+    let mut tofu_branches = Vec::new();
     let mut seed_workspaces: BTreeMap<String, bool> = BTreeMap::new();
     for (key, tasks) in &grouped {
-        let first = tasks.first().ok_or_else(|| internal("crate_empty"))?;
-        let job_id = owners
-            .group_id(key)
-            .ok_or_else(|| internal("crate_job_id_missing"))?
-            .clone();
-        let manifest = first.identity.unit_path.clone();
-        let display = if group_is_tofu(tasks) {
-            tofu_display_name(&first.display_name)
-        } else {
-            crate_display_name(&first.display_name, &manifest, &key.configuration)
-        };
-        let use_rust = tasks.iter().any(|task| is_rust(task));
-        let use_mbx = tasks.iter().any(|task| is_mbx(task));
-        let use_nextest = tasks.iter().any(|task| is_nextest(task));
-        let use_opentofu = tasks.iter().any(|task| is_opentofu(task));
-        let driver = if use_mbx {
-            RenderDriver::Mbx
-        } else {
-            RenderDriver::Cargo
-        };
-        let model = CrateJob {
-            job_id: job_id.clone(),
-            display_name: display,
-            package_name: first.display_name.clone(),
-            package_id: key.package_id.clone(),
-            manifest,
-            configuration: key.configuration.clone(),
-            obligations: obligations_for(tasks, catalog)?,
-        };
-        model.validate()?;
-        let needs = gates::external_needs(tasks, &owners, &job_id)?;
-        let job = render_job(
-            &input,
-            &model,
-            use_rust,
-            use_mbx,
-            use_nextest,
-            use_opentofu,
-            needs,
-            private,
-        )?;
-        if use_mbx {
-            let root =
-                crate::source_prep::workspace_root_for_manifest(&model.manifest, input.fetch_roots);
-            *seed_workspaces.entry(root.to_owned()).or_default() |= use_nextest;
+        let output = build_group_job(&input, &owners, key, tasks, private)?;
+        if let Some(seed) = output.seed {
+            *seed_workspaces.entry(seed.root).or_default() |= seed.nextest;
         }
-        drivers.insert(job_id.clone(), driver);
-        if use_opentofu {
-            tofu_ids.push(job_id.clone());
+        drivers.insert(output.branch.reader.clone(), output.driver);
+        drivers.insert(output.branch.writer.clone(), output.driver);
+        if output.tofu {
+            tofu_branches.push(output.branch.clone());
         }
-        jobs.push((job_id, job));
+        jobs.push((output.branch.reader.clone(), output.reader));
+        jobs.push((output.branch.writer.clone(), output.writer));
     }
-    stage::stage_tofu_root_jobs(&mut jobs, &tofu_ids, max_parallel_jobs);
+    stage::stage_tofu_root_jobs(&mut jobs, &tofu_branches, max_parallel_jobs);
     jobs.sort_by(|left, right| left.0.cmp(&right.0));
     let workspaces: Vec<_> = seed_workspaces
         .into_iter()
@@ -177,6 +141,90 @@ fn build_crate_jobs_with_seed_timeout(
         jobs,
         drivers,
     })
+}
+
+struct GroupOutput {
+    branch: stage::CombinedBranch,
+    reader: Job,
+    writer: Job,
+    driver: RenderDriver,
+    seed: Option<dependency_seed::SeedWorkspace>,
+    tofu: bool,
+}
+
+fn build_group_job(
+    input: &CrateJobInputs<'_>,
+    owners: &JobOwners<'_>,
+    key: &CrateGroupKey,
+    tasks: &[&ProposedTask],
+    private: Option<&PrivateWiring>,
+) -> Result<GroupOutput, OrchestratorError> {
+    let first = tasks.first().ok_or_else(|| internal("crate_empty"))?;
+    let job_id = owners
+        .group_id(key)
+        .ok_or_else(|| internal("crate_job_id_missing"))?
+        .clone();
+    let manifest = first.identity.unit_path.clone();
+    let display = if group_is_tofu(tasks) {
+        tofu_display_name(&first.display_name)
+    } else {
+        crate_display_name(&first.display_name, &manifest, &key.configuration)
+    };
+    let use_rust = tasks.iter().any(|task| is_rust(task));
+    let use_mbx = tasks.iter().any(|task| is_mbx(task));
+    let use_nextest = tasks.iter().any(|task| is_nextest(task));
+    let use_opentofu = tasks.iter().any(|task| is_opentofu(task));
+    let model = CrateJob {
+        job_id: job_id.clone(),
+        display_name: display,
+        package_name: first.display_name.clone(),
+        package_id: key.package_id.clone(),
+        manifest,
+        configuration: key.configuration.clone(),
+        obligations: obligations_for(tasks, input.catalog)?,
+    };
+    model.validate()?;
+    let needs = gates::external_needs(tasks, owners, &job_id)?;
+    reject_seed_needs(&needs, &job_id)?;
+    let workspace_root =
+        crate::source_prep::workspace_root_for_manifest(&model.manifest, input.fetch_roots);
+    let plan = group_plan_for(&model, workspace_root, input.label, input.timeout)?;
+    let branch = combined_branch_for(&job_id).map_err(|error| contract_problem(&error))?;
+    let base = render_job(
+        input,
+        &model,
+        use_rust,
+        use_mbx,
+        use_nextest,
+        use_opentofu,
+        needs,
+        plan.timeout_minutes,
+        private,
+    )?;
+    let (reader, writer) = finalize_group_branches(base, &branch)?;
+    let driver = if use_mbx {
+        RenderDriver::Mbx
+    } else {
+        RenderDriver::Cargo
+    };
+    let seed = use_mbx.then(|| dependency_seed::SeedWorkspace {
+        root: workspace_root.to_owned(),
+        nextest: use_nextest,
+    });
+    Ok(GroupOutput {
+        branch,
+        reader,
+        writer,
+        driver,
+        seed,
+        tofu: use_opentofu,
+    })
+}
+
+fn contract_problem(error: &velnor_actions_contract::ContractError) -> OrchestratorError {
+    OrchestratorError::Contract {
+        problem: error.to_string(),
+    }
 }
 
 pub(crate) fn is_runnable(task: &ProposedTask) -> bool {
@@ -228,6 +276,7 @@ fn render_job(
     use_nextest: bool,
     use_opentofu: bool,
     needs: Vec<String>,
+    timeout: JobTimeout,
     private: Option<&PrivateWiring>,
 ) -> Result<Job, OrchestratorError> {
     let &CrateJobInputs {
@@ -294,10 +343,11 @@ fn render_job(
     steps.push(crate::matrix_step::crate_upload_step(&model.job_id)?);
     Ok(Job {
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         display_name: model.display_name.clone(),
         runs_on: label.to_owned(),
         check_runner: None,
-        timeout_minutes: input.timeout,
+        timeout_minutes: timeout,
         needs,
         condition: (use_rust && !use_opentofu)
             .then(|| velnor_actions_workflow_renderer::not_affected_gate(&model.job_id)),

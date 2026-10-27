@@ -87,6 +87,7 @@ fn seed_job(
     steps.push(mbx_producer_mark_step()?);
     Ok(Job {
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         display_name: display_name(&workspace.root),
         runs_on: input.label.to_owned(),
         check_runner: None,

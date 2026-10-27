@@ -15,7 +15,7 @@ pub fn check_mbx_gating(
 ) -> Result<(), RenderError> {
     for (id, job) in jobs {
         for step in &job.steps {
-            if !has_external_mbx_selector(step) {
+            if !is_action_ref_selection(step) {
                 continue;
             }
             if installs_only_the_action_mbx_version(step, job) {
@@ -47,6 +47,30 @@ pub fn check_mbx_gating(
         }
     }
     Ok(())
+}
+
+/// Decide whether a step selects the MBX action ref.
+///
+/// Installing the pinned tool inventory through the setup action is
+/// inventory filtering, never action ref selection. Only an explicit
+/// `mr-boxington` entry in the setup `tool_versions` input selects the
+/// action ref; every other surface keeps the external-selector rule.
+fn is_action_ref_selection(step: &Step) -> bool {
+    if let StepKind::Action { uses, with, .. } = &step.kind
+        && uses.starts_with(&format!("{}@", crate::setup::MISE_ACTION_NAME))
+    {
+        return with
+            .get("tool_versions")
+            .is_some_and(|specs| specs.split_whitespace().any(is_mbx_tool_selector));
+    }
+    has_external_mbx_selector(step)
+}
+
+fn is_mbx_tool_selector(word: &str) -> bool {
+    let selector = word.trim_matches(|character| {
+        matches!(character, '\'' | '"' | ',' | ';' | '&' | '|' | ')' | '(')
+    });
+    selector == "mr-boxington" || selector.starts_with("mr-boxington@")
 }
 
 fn installs_only_the_action_mbx_version(step: &Step, job: &Job) -> bool {

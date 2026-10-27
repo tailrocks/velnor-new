@@ -95,10 +95,12 @@ fn required_verdict_step(step: &Step) -> bool {
             Some(StepRole::PublishFinal) => uses == crate::steps::UPLOAD_ARTIFACT_USES,
             _ => false,
         },
-        StepKind::Shell { .. } => matches!(
-            step.role,
-            Some(StepRole::AcquireVelnor | StepRole::PreparePinnedTools)
-        ),
+        StepKind::Shell { .. } => {
+            matches!(
+                step.role,
+                Some(StepRole::AcquireVelnor | StepRole::PreparePinnedTools)
+            ) || step == &crate::steps_internal::group_ledger_steps::assemble_group_ledgers_step()
+        }
         StepKind::Internal { operation, .. } => {
             operation == steps::MERGE_OPERATION
                 || operation == steps::FETCH_OPERATION

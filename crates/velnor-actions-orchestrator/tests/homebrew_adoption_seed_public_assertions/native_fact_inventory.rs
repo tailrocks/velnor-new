@@ -1,7 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, error::Error, io};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    error::Error,
+    io,
+};
 use velnor_actions_orchestrator::GenerationPreparation;
 use velnor_actions_workflow_renderer::{
     native_authority::{
@@ -82,6 +86,7 @@ fn logical_job(task: &TofuTaskFact) -> LogicalJobFact {
         runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,
         needs: Vec::new(),
+        outputs: BTreeMap::new(),
         source: LogicalJobSource::Task(NativeTaskFact {
             compile_driver: None,
             unit: "infra".to_owned(),

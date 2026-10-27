@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, Step, StepKind, StepRole, WorkflowPolicy};
+use velnor_actions_contract::{Job, Step, StepKind, StepRole, VelnorConfig, WorkflowPolicy};
 
 use crate::render::{FINAL_JOB_ID, PLAN_JOB_ID};
 
@@ -18,7 +18,7 @@ pub struct CanonicalRuntimeInputs {
 }
 
 impl CanonicalRuntimeInputs {
-    pub(crate) fn new(
+    pub fn new(
         plan_consumer_env: BTreeMap<String, String>,
         report_helper_version: String,
         staged_binary: String,
@@ -131,6 +131,20 @@ impl CanonicalAuthoritySteps {
             producer_plan_shells,
             runtime,
         })
+    }
+
+    pub fn qualify_jobs(
+        jobs: &BTreeMap<String, Job>,
+        policy: WorkflowPolicy,
+        config: &VelnorConfig,
+        runner: &str,
+        tool_pins: Vec<String>,
+        runtime: CanonicalRuntimeInputs,
+    ) -> Result<Self, crate::RenderError> {
+        let binding = crate::native_authority::AuthorityBinding::qualify_direct(
+            jobs, policy, config, runner, tool_pins,
+        )?;
+        Self::from_native_jobs_inner(jobs, policy, None, &[], runtime, binding)
     }
 
     pub(super) fn validate_binding(

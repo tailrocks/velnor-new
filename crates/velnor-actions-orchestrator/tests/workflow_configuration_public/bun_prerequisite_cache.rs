@@ -8,10 +8,25 @@ use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use velnor_actions_contract::StepRole;
+use velnor_actions_contract::{Job, StepRole};
 use velnor_actions_orchestrator::{
     GenerationPreparation, finalized_jobs, prepare, render_staged_tree,
 };
+
+fn branch_job<'jobs>(
+    jobs: &'jobs BTreeMap<String, Job>,
+    base: &str,
+) -> Result<&'jobs Job, Box<dyn Error>> {
+    let read = format!("{base} (read)");
+    jobs.values()
+        .find(|job| job.display_name == read)
+        .or_else(|| {
+            jobs.values().find(|job| {
+                job.display_name == base || job.display_name == format!("{base} (write)")
+            })
+        })
+        .ok_or_else(|| format!("{base} job is missing").into())
+}
 
 #[test]
 fn root_bun_pin_and_lock_changes_change_the_emitted_tools_cache_key() -> Result<(), Box<dyn Error>>
@@ -126,10 +141,7 @@ fn emitted_tools_cache_key(
     use velnor_actions_contract::StepKind;
 
     let jobs = finalized_jobs(prepared)?;
-    let job = jobs
-        .values()
-        .find(|job| job.display_name == "Rust / velnor-actions-orchestrator")
-        .ok_or("Orchestrator task job is missing")?;
+    let job = branch_job(&jobs, "Rust / velnor-actions-orchestrator")?;
     let template = job
         .steps
         .iter()

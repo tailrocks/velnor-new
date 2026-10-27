@@ -6,13 +6,31 @@ use std::error::Error;
 use std::fs;
 use std::path::Path;
 
-use velnor_actions_contract::{StepKind, StepRole, WorkflowPolicy};
+use velnor_actions_contract::{Job, StepKind, StepRole, WorkflowPolicy};
 use velnor_actions_orchestrator::{
     GenerationPreparation, finalized_jobs, prepare, render_staged_tree,
 };
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::maintenance_features::owner_feature_repo;
+
+fn branch_jobs<'jobs>(
+    jobs: &'jobs std::collections::BTreeMap<String, Job>,
+    base: &str,
+) -> Result<Vec<&'jobs Job>, Box<dyn Error>> {
+    let read = format!("{base} (read)");
+    let write = format!("{base} (write)");
+    let matched: Vec<&Job> = jobs
+        .values()
+        .filter(|job| {
+            job.display_name == base || job.display_name == read || job.display_name == write
+        })
+        .collect();
+    if matched.is_empty() {
+        return Err(format!("{base} job is missing").into());
+    }
+    Ok(matched)
+}
 
 #[test]
 fn repository_orchestrator_tests_prepare_bun_without_changing_the_official_task_record()
@@ -68,9 +86,11 @@ fn assert_orchestrator_execution(
     let document = workflow
         .get(WORKFLOW_PATH)
         .ok_or("generated workflow is missing")?;
-    let job = jobs
-        .values()
-        .find(|job| job.display_name == "Rust / velnor-actions-orchestrator")
+    let branch = branch_jobs(&jobs, "Rust / velnor-actions-orchestrator")?;
+    let job = branch
+        .iter()
+        .find(|job| job.display_name.ends_with(" (read)"))
+        .or(branch.first())
         .ok_or("orchestrator crate job is missing")?;
     let preparation = job
         .steps
@@ -195,28 +215,27 @@ fn bun_tool_is_limited_to_repository_owned_orchestrator_tests() -> Result<(), Bo
         let prepared = prepare(repo.path())?;
         let jobs = finalized_jobs(&prepared)?;
         let target = format!("Rust / {package}");
-        let job = jobs
-            .values()
-            .find(|job| job.display_name == target)
-            .ok_or_else(|| format!("{target} job is missing"))?;
-        let has_bun = job.steps.iter().any(|step| {
-            matches!(
-                &step.kind,
-                StepKind::TaskExecution { argv, toolchain_inputs, .. }
-                    if argv.iter().any(|arg| arg.starts_with("bun@"))
-                        || toolchain_inputs.tools.iter().any(|tool| tool.starts_with("bun@"))
-            )
-        });
-        assert_eq!(has_bun, expected_bun, "{policy:?} {package}");
-        let prepares_bun = job.steps.iter().any(|step| {
-            step.role == Some(StepRole::PreparePinnedTools)
-                && matches!(
+        let branch = branch_jobs(&jobs, &target)?;
+        for job in branch {
+            let has_bun = job.steps.iter().any(|step| {
+                matches!(
                     &step.kind,
-                    StepKind::Shell { run, .. }
-                        if run.join(" ").contains("bun@${VELNOR_TOOL_BUN}")
+                    StepKind::TaskExecution { argv, toolchain_inputs, .. }
+                        if argv.iter().any(|arg| arg.starts_with("bun@"))
+                            || toolchain_inputs.tools.iter().any(|tool| tool.starts_with("bun@"))
                 )
-        });
-        assert_eq!(prepares_bun, expected_bun, "{policy:?} {package}");
+            });
+            assert_eq!(has_bun, expected_bun, "{policy:?} {package}");
+            let prepares_bun = job.steps.iter().any(|step| {
+                step.role == Some(StepRole::PreparePinnedTools)
+                    && matches!(
+                        &step.kind,
+                        StepKind::Shell { run, .. }
+                            if run.join(" ").contains("bun@${VELNOR_TOOL_BUN}")
+                    )
+            });
+            assert_eq!(prepares_bun, expected_bun, "{policy:?} {package}");
+        }
     }
     Ok(())
 }

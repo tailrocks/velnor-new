@@ -109,6 +109,7 @@ fn metadata_ir(
         job.runs_on.clone_from(&fact.runs_on);
         job.check_runner.clone_from(&fact.check_runner);
         job.needs.clone_from(&fact.needs);
+        job.outputs.clone_from(&fact.outputs);
         if let LogicalJobSource::WorkflowTask { owner }
         | LogicalJobSource::GeneratedWorkflowTask { owner, .. } = &fact.source
         {
@@ -262,6 +263,32 @@ impl AuthorityBinding {
             policy,
         )
     }
+
+    pub(crate) fn qualify_direct(
+        jobs: &BTreeMap<String, Job>,
+        policy: WorkflowPolicy,
+        config: &velnor_actions_contract::VelnorConfig,
+        runner: &str,
+        tool_pins: Vec<String>,
+    ) -> Result<Self, crate::RenderError> {
+        let graph = projection(jobs, policy).map_err(|error| {
+            crate::RenderError::InvalidWorkflow(format!("native_authority_graph:{error:?}"))
+        })?;
+        Ok(Self {
+            check_mise: super::check_mise::CheckMiseSetups::default(),
+            policy,
+            variants: vec![(graph, None)],
+            config: config.clone(),
+            runner: runner.to_owned(),
+            tool_pins,
+            validators: Vec::new(),
+            commands: Vec::new(),
+            workflow_owners: BTreeMap::new(),
+            generated: BTreeMap::new(),
+            workflow_required: BTreeSet::new(),
+            workflow_sources: BTreeMap::new(),
+        })
+    }
 }
 
 fn projection(
@@ -338,6 +365,7 @@ fn validators(
 fn metadata(runner: &str) -> Job {
     Job {
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         display_name: "Plan".to_owned(),
         runs_on: runner.to_owned(),
         check_runner: None,

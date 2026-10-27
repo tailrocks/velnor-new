@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
+
+from .report_events import resolve_effective_job
+
+_SOURCE_SHA = re.compile(r"^[0-9a-f]{40}$")
 
 
 CACHE_PHASES = {"cargo_source_restore", "cargo_source_save", "mbx_object_restore",
@@ -74,6 +79,162 @@ def build_actual_counters(event_steps: list[dict[str, Any]], timeline: dict[str,
                               for label in ("hits", "misses", "not_looked_up", "bypassed")},
             "scope": "sum of actual MBX summary counters only; zero is not compiler freshness or full cache-transfer telemetry"},
         **_unknown_actual_counters(timeline),
+    }
+
+
+def build_lifecycle_aggregates(*, repository: str, run_id: int, head_sha: str,
+                               jobs: list[dict[str, Any]],
+                               effective_jobs: dict[tuple[str, int], dict[str, Any]],
+                               collected: dict[str, Any],
+                               key_basis: str = "api-name-as-key") -> dict[str, Any]:
+    """Aggregate complete lifecycle work from verified owned observations.
+
+    Every accepted observation is resolved through the authenticated
+    effective-job map by its actual producer job/attempt, so a forged or
+    stale attempt fails instead of joining. Each real job, attempt, and
+    bound task report is counted exactly once: a retained successful job
+    contributes its original work once, and a rerun contributes its new
+    work in addition to earlier work because it carries a distinct actual
+    attempt. Executed lifecycle work covers every supplied authenticated
+    job record (bootstrap, helpers, preparation, replay, failed attempts)
+    with no role or conclusion filter, while effective Required results
+    cover exactly the retained-or-rerun jobs accepted for the current
+    verdict. Anything without a bound observation stays unknown, never
+    zero. Origin bytes, cache bytes, and historical MBX summaries are kept
+    in separate channels and never summed together.
+    """
+    if not isinstance(repository, str) or "/" not in repository or not repository.strip():
+        raise ValueError("lifecycle aggregates: repository is not an owner/repo path")
+    if type(run_id) is not int or run_id <= 0:
+        raise ValueError("lifecycle aggregates: run_id is not a positive integer")
+    if not isinstance(head_sha, str) or not _SOURCE_SHA.match(head_sha):
+        raise ValueError("lifecycle aggregates: head_sha is not the authenticated run source")
+    if not isinstance(collected, dict):
+        raise ValueError("lifecycle aggregates: collected observations are missing")
+    accepted = collected.get("accepted")
+    missing_reports = collected.get("missing_task_report_observations")
+    if not isinstance(accepted, dict) or not isinstance(missing_reports, list):
+        raise ValueError("lifecycle aggregates: collected observations lack accepted/missing bindings")
+    joined: list[dict[str, Any]] = []
+    seen_join_keys: set[tuple[str, int, int, int, str, str]] = set()
+    for task_report_id in sorted(accepted):
+        record = accepted[task_report_id]
+        if not isinstance(record, dict):
+            raise ValueError(f"lifecycle join: observation {task_report_id} is not a record")
+        job = resolve_effective_job(effective_jobs, producer_job=record["producer_job"],
+                                    producer_attempt=record["producer_attempt"])
+        if job["id"] != record.get("effective_job_id"):
+            raise ValueError(f"lifecycle join: observation {task_report_id} bound job id "
+                             f"{record.get('effective_job_id')} differs from effective record {job['id']}")
+        key = (repository, run_id, job["id"], record["producer_attempt"],
+               record["observation_session_id"], task_report_id)
+        if key in seen_join_keys:
+            raise ValueError(f"lifecycle join: duplicate observation for {key}")
+        seen_join_keys.add(key)
+        joined.append({"task_report_id": task_report_id,
+                       "producer_job": record["producer_job"],
+                       "producer_attempt": record["producer_attempt"],
+                       "effective_job_id": job["id"],
+                       "effective_job_conclusion": job.get("conclusion"),
+                       "observation_session_id": record["observation_session_id"]})
+    executed: list[dict[str, Any]] = []
+    seen_job_ids: dict[int, tuple[Any, Any]] = {}
+    for job in jobs:
+        job_id = job.get("id")
+        if type(job_id) is not int or job_id <= 0:
+            raise ValueError("lifecycle aggregates: a supplied job lacks a numeric job id")
+        identity = (job.get("name"), job.get("run_attempt"))
+        if job_id in seen_job_ids:
+            raise ValueError(f"lifecycle aggregates: duplicate supplied record for job id {job_id}")
+        seen_job_ids[job_id] = identity
+        executed.append({"job_id": job_id, "job_name": job.get("name"),
+                         "run_attempt": job.get("run_attempt"),
+                         "status": job.get("status"), "conclusion": job.get("conclusion")})
+    executed.sort(key=lambda row: row["job_id"])
+    by_conclusion: dict[str, int] = {}
+    for row in executed:
+        by_conclusion[str(row["conclusion"])] = by_conclusion.get(str(row["conclusion"]), 0) + 1
+    covered_ids = {row["effective_job_id"] for row in joined}
+    pair_tasks: dict[tuple[int, int], list[str]] = {}
+    for row in joined:
+        pair_tasks.setdefault((row["effective_job_id"], row["producer_attempt"]), []).append(row["task_report_id"])
+    covered = [{"job_id": job_id, "job_name": next(row["producer_job"] for row in joined
+                                                   if row["effective_job_id"] == job_id),
+                "actual_attempt": attempt,
+                "bound_task_reports": sorted(pair_tasks[(job_id, attempt)])}
+               for job_id, attempt in sorted(pair_tasks)]
+    uncovered = [row for row in executed if row["job_id"] not in covered_ids]
+    return {
+        "status": "verified",
+        "repository": repository,
+        "run_id": run_id,
+        "head_sha": head_sha,
+        "observation_envelope": {
+            "status": collected.get("status"),
+            "run_key": collected.get("run_key"),
+            "observation_count": collected.get("observation_count"),
+            "accepted": [accepted[task_report_id] for task_report_id in sorted(accepted)],
+            "missing_task_report_observations": missing_reports,
+            "digest_basis": collected.get("digest_basis"),
+        },
+        "dedup_key": ["repository", "run_id", "actual job id", "actual attempt",
+                      "observation session", "task report id"],
+        "dedup_scope": "each real job, attempt, and bound task report is counted exactly once; "
+                       "a retained job contributes its original work once and a rerun contributes "
+                       "its new work in addition to earlier work",
+        "join": {"status": "verified",
+                 "method": "each owned observation resolved through the authenticated effective-job "
+                           "map by actual producer job/attempt; forged or stale attempts fail instead of joining",
+                 "key_basis": key_basis,
+                 "observation_count": len(joined),
+                 "joined": joined},
+        "executed_lifecycle": {
+            "job_count": len(executed),
+            "jobs": executed,
+            "by_conclusion": by_conclusion,
+            "scope": "every supplied authenticated job record counted once; includes bootstrap, helpers, "
+                     "preparation, replay, and failed or cancelled attempts with no role or conclusion filter",
+        },
+        "effective_required": {
+            "covered_job_attempt_count": len(covered),
+            "covered_job_attempts": covered,
+            "bound_task_report_count": len(joined),
+            "scope": "exactly the retained-or-rerun jobs accepted for the current verdict",
+        },
+        "missing_coverage": {
+            "jobs_without_bound_observation": [
+                {**row, "disposition": "unknown",
+                 "unknown_reason": "No bound observation member covers this job; its work stays unknown, never zero."}
+                for row in uncovered],
+            "task_reports_without_observation": missing_reports,
+            "disposition": "unknown",
+            "unknown_reason": "Jobs and task reports without a bound observation stay unknown; "
+                              "they are never counted as zero work.",
+        },
+        "process_counts": {
+            "compiler_executions": None,
+            "compiler_executions_unknown_reason": "Owned bindings carry identity, not per-process compiler "
+                                                 "events; unobserved process work stays unknown, never zero.",
+            "native_process_executions": None,
+            "native_process_executions_unknown_reason": "Absolute native calls and unobserved build-script "
+                                                       "network access are not covered by owned bindings; "
+                                                       "they stay unknown, never zero.",
+        },
+        "byte_channels": {
+            "origin_acquisition_bytes": None,
+            "origin_acquisition_bytes_unknown_reason": "Owned observation bindings do not join to origin "
+                                                      "receipts in this collector; origin bytes stay unknown here.",
+            "cache_transfer_bytes": None,
+            "cache_transfer_bytes_unknown_reason": "Authoritative only in "
+                                                   "actual_counters.cache_transfer_totals_by_phase; the lifecycle "
+                                                   "view never re-sums them.",
+            "mbx_object_cache_summaries": None,
+            "mbx_object_cache_summaries_unknown_reason": "Corroborating observations only in "
+                                                        "actual_counters.mbx_object_cache_summary_totals; never "
+                                                        "promoted into compiler or cache-transfer counts.",
+            "separation_rule": "Origin bytes, cache bytes, and historical MBX summaries are kept separate "
+                               "and never summed together.",
+        },
     }
 
 

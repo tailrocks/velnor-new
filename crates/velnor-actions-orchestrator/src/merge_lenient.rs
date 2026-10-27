@@ -72,6 +72,7 @@ pub(crate) fn lenient_request(envelope: &serde_json::Value) -> Option<MergeReque
         check_proofs: raw.check_proofs,
         required_job_ids: raw.required_job_ids,
         required_jobs: raw.required_jobs,
+        group_ledgers: Vec::new(),
         assembly_errors,
         shard_proofs: raw.shard_proofs,
         limits: raw.limits,

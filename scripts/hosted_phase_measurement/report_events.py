@@ -5,11 +5,83 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from .measure_support import duration_ms, extract_log_evidence, parse_time, safe_log_key
+from .measure_support import duration_ms, extract_log_evidence, is_workflow_job_id, parse_time, safe_log_key
 from .step_phases import STEP_PHASES, normalize_step_name, phase_for_step
 
 
+def _source_key_by_display_name(workflow_graph: dict[str, Any]) -> dict[str, str]:
+    if not isinstance(workflow_graph, dict) or workflow_graph.get("status") != "verified":
+        raise ValueError("effective job map: workflow graph is not verified")
+    nodes = workflow_graph.get("nodes")
+    if not isinstance(nodes, list):
+        raise ValueError("effective job map: workflow graph has no nodes")
+    mapping = {}
+    for node in nodes:
+        if node.get("display_name") in mapping:
+            raise ValueError(f"effective job map: ambiguous display name {node.get('display_name')!r}")
+        mapping[node.get("display_name")] = node.get("job_id")
+    return mapping
+
+
+def build_effective_job_map(jobs: list[dict[str, Any]], *,
+                            workflow_graph: dict[str, Any] | None = None) -> dict[tuple[str, int], dict[str, Any]]:
+    """Index authenticated jobs by (workflow source job id, actual run attempt).
+
+    Every record here already passed identity validation (same run and
+    source; each record carries its own actual attempt), so presence in this
+    map is retention evidence: an earlier attempt's record is usable only
+    when GitHub still returns that exact record. A rerun job resolves to its
+    actual new attempt; nothing here overwrites an earlier record's attempt
+    number. Display names are labels only: with a verified workflow graph
+    each API job resolves through its exact display-name match to its source
+    job id, and without one only a charset-valid API name keys its own
+    record. Unresolvable records stay out of the map instead of joining by
+    display name.
+    """
+    display_to_source = _source_key_by_display_name(workflow_graph) if workflow_graph is not None else None
+    effective: dict[tuple[str, int], dict[str, Any]] = {}
+    for job in jobs:
+        attempt = job.get("run_attempt")
+        if not isinstance(job.get("id"), int) or job["id"] <= 0:
+            raise ValueError(f"effective job map: job {job.get('name')!r} lacks a numeric job id")
+        if type(attempt) is not int or attempt <= 0:
+            raise ValueError(f"effective job map: job {job.get('id')} lacks an actual attempt")
+        if display_to_source is not None:
+            source = display_to_source.get(job.get("name"))
+            if source is None:
+                continue
+        elif is_workflow_job_id(job.get("name")):
+            source = job.get("name")
+        else:
+            continue
+        key = (source, attempt)
+        if key in effective and effective[key]["id"] != job["id"]:
+            raise ValueError(f"effective job map: ambiguous records for job {source!r} attempt {attempt}")
+        effective[key] = job
+    return effective
+
+
+def resolve_effective_job(effective_jobs: dict[tuple[str, int], dict[str, Any]], *,
+                          producer_job: str, producer_attempt: int) -> dict[str, Any]:
+    """Return the authenticated record for a producer-claimed job/attempt.
+
+    A claim with no matching authenticated record — a forged effective attempt
+    or a stale attempt GitHub no longer retains — fails instead of joining.
+    """
+    job = effective_jobs.get((producer_job, producer_attempt))
+    if job is None:
+        raise ValueError(f"producer job/attempt {(producer_job, producer_attempt)} "
+                         "has no authenticated job record")
+    return job
+
+
 def collect_job_events(jobs: list[dict[str, Any]], log_entries: dict[str, bytes]) -> dict[str, Any]:
+    folders: dict[str, int] = {}
+    for job in jobs:
+        folder = str(job.get("name")).replace("/", "_")
+        if folder in folders:
+            raise ValueError(f"collect job events: ambiguous log folder {folder!r} for jobs {folders[folder]} and {job.get('id')}")
+        folders[folder] = job.get("id")
     job_rows, event_steps, missing = [], [], []
     phase_worker_ms: dict[str, int] = {}
     started: list[tuple[datetime, int]] = []

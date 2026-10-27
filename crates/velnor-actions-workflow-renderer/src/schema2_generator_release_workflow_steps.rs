@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::commands::join_argv_for_run;
+use crate::lane_target::target_dir_for_lane;
 use crate::setup::SETUP_MISE_NAME;
 use crate::steps::{ATTEST_BUILD_PROVENANCE_USES, DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
 use crate::yaml::Yaml;
 use crate::{MiseSetup, RenderError};
+use velnor_actions_contract::ReleaseTarget;
 
 use super::super::features::CHECKOUT_USES;
 
@@ -208,6 +210,30 @@ pub(super) fn download_step(name: &str, artifact: &str, path: &str) -> Yaml {
             ]),
         ),
     ])
+}
+
+pub(super) const RELEASE_BUILD_TARGET_ENV: &str = "CARGO_TARGET_DIR";
+
+#[must_use]
+pub(super) fn release_build_target_dir(target: ReleaseTarget) -> String {
+    target_dir_for_lane(&format!("release-{}", target.triple()))
+}
+
+#[must_use]
+pub(super) fn release_build_job_env(target: ReleaseTarget) -> Vec<(String, Yaml)> {
+    vec![(
+        RELEASE_BUILD_TARGET_ENV.to_owned(),
+        Yaml::str(release_build_target_dir(target)),
+    )]
+}
+
+#[must_use]
+pub(super) fn release_compiler_output_dir(target: ReleaseTarget) -> String {
+    if target == ReleaseTarget::MacosX86_64 {
+        format!("$CARGO_TARGET_DIR/{}/release", target.triple())
+    } else {
+        "$CARGO_TARGET_DIR/release".to_owned()
+    }
 }
 
 pub(super) fn download_step_by_id(name: &str, artifact_id: &str, path: &str) -> Yaml {

@@ -10,7 +10,8 @@ use std::{
 
 use sha2::{Digest, Sha256};
 use velnor_actions_contract::{
-    ObligationDecision, config::NativeHomebrewOperation, package_release::PackageReleaseChannel,
+    ObligationDecision, config::NativeHomebrewOperation, digest_b3,
+    package_release::PackageReleaseChannel,
 };
 use velnor_actions_mise::CheckDeadline;
 
@@ -19,6 +20,10 @@ use super::{
     VerifiedNativeHomebrewInstall,
 };
 use crate::OrchestratorError;
+use crate::check_runtime::preparation::{
+    RestoredGroupContext,
+    cache_execution_context::{OBSERVATION_DIR, OWNED_ROOT_DIR},
+};
 
 #[path = "install/release.rs"]
 mod release;
@@ -38,6 +43,7 @@ pub(crate) struct InstallRequest<'a> {
     pub(crate) entry_digest: &'a str,
     pub(crate) task_id: &'a str,
     pub(crate) check_id: &'a str,
+    pub(crate) group: &'a RestoredGroupContext,
 }
 
 pub(crate) fn install_formula(
@@ -57,8 +63,10 @@ pub(crate) fn install_formula(
         identity,
         event,
         deadline,
+        group,
         ..
     } = request;
+    verify_execution_context(group, runner_temp)?;
     let source = load_install_source(root, channel, identity, event, deadline)?;
     let installed = extract_install_files(&source, identity.platform)?;
     let custody = install_custody(&request, &source.formula_path)?;
@@ -70,6 +78,23 @@ pub(crate) fn install_formula(
         source.receipt_digest,
         hosted_profile_evidence(hosted),
     ))
+}
+
+fn verify_execution_context(
+    group: &RestoredGroupContext,
+    runner_temp: &Path,
+) -> Result<(), OrchestratorError> {
+    use crate::internal::internal;
+
+    let digest = group.context_digest();
+    let canonical = runner_temp
+        .canonicalize()
+        .map_err(|_| internal("native_check_execution_temp"))?;
+    let observed = canonical.join(OWNED_ROOT_DIR).join(OBSERVATION_DIR);
+    if digest_b3(observed.to_string_lossy().as_bytes()) != digest {
+        return Err(internal("native_check_execution_context_mismatch"));
+    }
+    Ok(())
 }
 
 fn extract_install_files(

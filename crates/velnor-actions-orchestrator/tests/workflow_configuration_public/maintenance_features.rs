@@ -290,26 +290,39 @@ fn assert_emitted_owner_tasks(
     proposal_paths: &BTreeMap<String, String>,
     include_member: bool,
 ) -> Result<(), Box<dyn Error>> {
-    let mut emitted = BTreeSet::new();
+    use super::support::logical_owner_id;
+    use std::collections::btree_map::Entry;
+    // Reader/writer branches run on mutually exclusive events, so each branch
+    // carries its owner's task executions and both belong to one logical owner.
+    let all: BTreeSet<&str> = owner_jobs.iter().map(|(id, _)| *id).collect();
+    let mut emitted: BTreeMap<String, &str> = BTreeMap::new();
     let mut owners_by_manifest: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
     for (owner_id, job) in owner_jobs {
+        let owner = logical_owner_id(&all, owner_id);
         let task_ids: Vec<_> = task_execution_ids(job).collect();
         assert!(!task_ids.is_empty(), "{owner_id} owns no task execution");
         for task_id in task_ids {
             let manifest = proposal_paths
                 .get(task_id)
                 .ok_or_else(|| format!("{owner_id} emits unknown task {task_id}"))?;
-            assert!(
-                emitted.insert(task_id.to_owned()),
-                "duplicate owner for {task_id}"
-            );
+            match emitted.entry(task_id.to_owned()) {
+                Entry::Vacant(entry) => {
+                    entry.insert(owner);
+                }
+                Entry::Occupied(entry) => {
+                    assert!(entry.get() == &owner, "duplicate owner for {task_id}");
+                }
+            }
             owners_by_manifest
                 .entry(manifest.as_str())
                 .or_default()
-                .insert(owner_id);
+                .insert(owner);
         }
     }
-    assert_eq!(emitted, proposal_paths.keys().cloned().collect());
+    assert_eq!(
+        emitted.keys().cloned().collect::<BTreeSet<_>>(),
+        proposal_paths.keys().cloned().collect::<BTreeSet<_>>()
+    );
     let expected_manifests = if include_member {
         BTreeSet::from(["Cargo.toml", "crates/maintenance/Cargo.toml"])
     } else {

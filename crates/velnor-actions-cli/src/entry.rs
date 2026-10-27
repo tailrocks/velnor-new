@@ -3,6 +3,8 @@
 
 #[path = "../src/args.rs"]
 mod args;
+#[path = "../src/dispatch/compiler.rs"]
+mod compiler;
 #[path = "../src/dispatch.rs"]
 mod dispatch;
 #[path = "../src/dispatch_config.rs"]
@@ -29,6 +31,9 @@ mod dispatch_unmanaged;
 use std::process::ExitCode;
 
 fn run_entry() -> ExitCode {
+    if let Some(outcome) = compiler::try_observer_entry() {
+        return outcome;
+    }
     if std::env::args_os().len() <= 1
         && let Some(outcome) = dispatch::try_internal()
     {

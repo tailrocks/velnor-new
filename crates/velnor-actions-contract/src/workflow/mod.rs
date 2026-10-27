@@ -2,10 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod artifacts;
+pub mod cache_context;
 pub mod cache_family;
 pub mod cache_family_mbx;
 pub mod cache_family_steps;
+pub mod cache_identity;
 pub mod cache_ids;
+pub mod cache_policy;
 pub mod crate_job;
 mod dependency_seed;
 pub mod dispatch;
@@ -45,7 +48,17 @@ pub use artifacts::{
     MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME, check_matrix_agreement, matrix_json_bytes,
     plan_json_bytes,
 };
+pub use cache_context::{
+    ApiConclusion, CacheCapability, CacheDriver, CacheRestoreOutcome, CompilerAdapterV1,
+    EffectiveJobBindingV1, ExecutionBranch, ExecutionContextV1, JobBindingV1, LaneContextV1,
+    MeasuredU64, ObservationGapCode, ObservationGapV1, SourceBindingV1, UnitLedgerV1, UnitOutcome,
+    UnitResultV1,
+};
+pub use cache_identity::{CompatibilityV1, Gc1Family, GenerationId};
 pub use cache_ids::EntryCacheIds;
+pub use cache_policy::{
+    CompletedCoverageV1, ImmutableObjectKind, ImmutableObjectV1, RecipeV1, RequestedCoverageV1,
+};
 pub use crate_job::{CrateJob, CrateObligation};
 pub use dispatch::{DispatchInput, DispatchInputType, WorkflowDispatch};
 pub use execute::{ExecuteTaskIds, ExecuteTaskRef};

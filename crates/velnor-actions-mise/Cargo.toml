@@ -9,6 +9,10 @@ rust-version.workspace = true
 license.workspace = true
 autotests = false
 
+[[test]]
+name = "velnor_mise"
+path = "tests/velnor_mise.rs"
+
 [lib]
 test = false
 

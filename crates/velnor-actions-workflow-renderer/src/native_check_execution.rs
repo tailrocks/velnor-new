@@ -23,6 +23,11 @@ pub(super) fn render(
             "native_check_step_kind_mismatch".to_owned(),
         ));
     };
+    if task_id != &format!("internal/native-check/{check_id}") {
+        return Err(RenderError::InvalidWorkflow(
+            "native_check_task_identity_mismatch".to_owned(),
+        ));
+    }
     if sdk_version != report_helper_version {
         return Err(RenderError::InvalidWorkflow(
             "native_check_sdk_version_mismatch".to_owned(),

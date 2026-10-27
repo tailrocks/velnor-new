@@ -29,21 +29,17 @@ pub(super) fn internal_env(
     {
         ctx.validate_runtime_authority()?;
     }
-    if op == steps::FETCH_OPERATION {
-        if !step_env.is_empty() {
-            return Err(RenderError::InvalidWorkflow(
-                "fetch_internal_env_not_supported".to_owned(),
-            ));
-        }
-        return Ok(Yaml::Map(vec![
-            ("GH_REPO".to_owned(), Yaml::str("${{ github.repository }}")),
-            ("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")),
-            (INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned())),
-        ]));
+    if let Some(env) = fetch_internal_env(op, step_env)? {
+        return Ok(env);
     }
     if let Some(env) = crate::document_evidence::internal_env(op, step_env)? {
         return Ok(env);
     }
+    // Group-ledger steps run the workspace CLI through `cargo run`, so the
+    // step environment already carries everything the op reads
+    // (`VELNOR_INTERNAL_OP`, plus `VELNOR_MATRIX_KEY` on emit): like the
+    // sibling self-describing ops, internal rendering only stamps the
+    // operation selector and passes the step env through.
     if op == velnor_actions_contract::PRIVATE_FETCH_OPERATION
         || op == velnor_actions_contract::PRIVATE_REVOKE_OPERATION
         || op == velnor_actions_contract::GRADLE_RUN_OPERATION
@@ -52,6 +48,8 @@ pub(super) fn internal_env(
         || op == velnor_actions_contract::BUN_ASSETS_PREPARE_OPERATION
         || op == velnor_actions_contract::BUN_ASSETS_IMPORT_OPERATION
         || op == velnor_actions_contract::config::playwright_lock::PLAYWRIGHT_INSTALL_OPERATION
+        || op == crate::steps_internal::group_ledger_steps::EMIT_GROUP_LEDGER_OPERATION
+        || op == crate::steps_internal::group_ledger_steps::ASSEMBLE_GROUP_LEDGERS_OPERATION
     {
         let mut env = vec![(INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned()))];
         env.extend(
@@ -98,6 +96,25 @@ pub(super) fn internal_env(
         env.push((key.clone(), Yaml::str(value.clone())));
     }
     Ok(Yaml::Map(env))
+}
+
+fn fetch_internal_env(
+    op: &str,
+    step_env: &BTreeMap<String, String>,
+) -> Result<Option<Yaml>, RenderError> {
+    if op != steps::FETCH_OPERATION {
+        return Ok(None);
+    }
+    if !step_env.is_empty() {
+        return Err(RenderError::InvalidWorkflow(
+            "fetch_internal_env_not_supported".to_owned(),
+        ));
+    }
+    Ok(Some(Yaml::Map(vec![
+        ("GH_REPO".to_owned(), Yaml::str("${{ github.repository }}")),
+        ("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")),
+        (INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned())),
+    ])))
 }
 
 fn bun_assets_repository_check_env(

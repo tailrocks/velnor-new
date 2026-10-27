@@ -37,6 +37,7 @@ pub(super) fn check_job_source(request: &CheckJobSourceRequest) -> Result<(), Or
     )?;
     if head.trim() != request.source_commit
         || env("GITHUB_SHA")? != request.source_commit
+        || env("GITHUB_WORKFLOW_SHA")? != request.source_commit
         || !is_sha1(&request.source_commit)
     {
         return Err(internal("image_candidate_source_identity"));

@@ -90,6 +90,7 @@ pub fn build_image_build_job(
     let timeout = JobTimeout::new(policy.image.timeout_minutes).map_err(RenderError::Contract)?;
     Ok(Job {
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         display_name: format!(
             "Build image {} ({})",
             policy.image.id,

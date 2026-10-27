@@ -11,7 +11,7 @@ generator_validation = "bootstrap"
 max_parallel_jobs = 2
 crate_timeout_minutes = 15
 plan_timeout_minutes = 15
-pull_request_cache_policy = "same-repository-scoped"
+pull_request_cache_policy = "read-only"
 
 [workflow.lint]
 # jactionlint's security and policy rules (hard decision 10); velnor-new is
@@ -158,6 +158,14 @@ inputs = [
   "crates/velnor-archive-guard/src/owned_archive_guard/qualification/manifest.rs",
   "crates/velnor-archive-guard/src/owned_archive_guard/stream.rs",
   "crates/velnor-archive-guard/src/owned_archive_guard/strict_json.rs",
+  "crates/velnor-actions-workflow-renderer/src/job_image_authority_registry.py",
+  "crates/velnor-actions-workflow-renderer/src/job_image_authority_identity.py",
+  "crates/velnor-actions-workflow-renderer/src/job_image_authority_oci.py",
+  "crates/velnor-actions-workflow-renderer/src/job_image_authority_record.py",
+  "crates/velnor-actions-workflow-renderer/src/job_image_authority_tar.py",
+  "crates/velnor-actions-workflow-renderer/src/job_image_authority_publish.py",
+  "crates/velnor-actions-workflow-renderer/tests/test_job_image_authority_shared_publisher.py",
+  "crates/velnor-actions-workflow-renderer/tests/job_image_authority_shared_publisher_fixture.py",
   "images/dind/Dockerfile",
   "images/dind/LICENSE-moby",
   "images/dind/README.md",

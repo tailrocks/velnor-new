@@ -66,6 +66,7 @@ pub(crate) fn insert_final_fanin(
         let at = fetch_insert_at(final_job);
         final_job.steps.insert(at, fetch_reports_step()?);
     }
+    insert_assemble_step(final_job);
     if !final_job
         .steps
         .iter()
@@ -74,6 +75,30 @@ pub(crate) fn insert_final_fanin(
         final_job.steps.push(publish_final_report_step()?);
     }
     Ok(())
+}
+
+pub(crate) fn insert_assemble_step(final_job: &mut Job) {
+    if final_job.steps.iter().any(|step| {
+        step.name == crate::steps_internal::group_ledger_steps::ASSEMBLE_GROUP_LEDGERS_STEP_NAME
+    }) {
+        return;
+    }
+    let at = assemble_insert_at(final_job);
+    final_job.steps.insert(
+        at,
+        crate::steps_internal::group_ledger_steps::assemble_group_ledgers_step(),
+    );
+}
+
+fn assemble_insert_at(job: &Job) -> usize {
+    if let Some(at) = job
+        .steps
+        .iter()
+        .position(|step| step.role == Some(StepRole::FetchReports))
+    {
+        return at + 1;
+    }
+    fetch_insert_at(job)
 }
 
 pub(crate) const ATTESTATION_DOWNLOAD_NAME: &str = "Download candidate attestation";
@@ -113,4 +138,68 @@ fn fetch_insert_at(job: &Job) -> usize {
     at(&want)
         .or_else(|| at(steps::MERGE_OPERATION))
         .unwrap_or(job.steps.len())
+}
+
+// gc1-t56 covers the Required-job fan-in: the assemble step lands after the
+// fetch-reports step and before write-request, exactly once.
+#[cfg(test)]
+mod gc1_t56 {
+    use velnor_actions_contract::{Job, JobTimeout, Step};
+
+    use super::{assemble_insert_at, fetch_insert_at, fetch_reports_step, insert_assemble_step};
+    use crate::RenderError;
+    use crate::steps_internal::group_ledger_steps::ASSEMBLE_GROUP_LEDGERS_STEP_NAME;
+
+    fn required_job(steps: Vec<Step>) -> Job {
+        Job {
+            display_name: "Required".to_owned(),
+            runs_on: "ubuntu-24.04".to_owned(),
+            check_runner: None,
+            timeout_minutes: JobTimeout::REQUIRED,
+            needs: Vec::new(),
+            condition: None,
+            permissions: None,
+            cache_mode: None,
+            environment: None,
+            services: Vec::new(),
+            outputs: std::collections::BTreeMap::new(),
+            steps,
+        }
+    }
+
+    fn step_names(job: &Job) -> Vec<&str> {
+        job.steps.iter().map(|step| step.name.as_str()).collect()
+    }
+
+    #[test]
+    fn assemble_lands_before_write_request() -> Result<(), RenderError> {
+        let mut job = required_job(vec![
+            crate::closure::download_plan_step()?,
+            fetch_reports_step()?,
+            crate::steps_internal::write_request_step(crate::steps::MERGE_OPERATION)?,
+            crate::steps::merge_step(),
+        ]);
+        insert_assemble_step(&mut job);
+        assert_eq!(
+            step_names(&job),
+            vec![
+                crate::closure::DOWNLOAD_PLAN_NAME,
+                super::FETCH_REPORTS_NAME,
+                ASSEMBLE_GROUP_LEDGERS_STEP_NAME,
+                "Write request",
+                "Merge reports",
+            ]
+        );
+        assert!(assemble_insert_at(&job) > fetch_insert_at(&job));
+        insert_assemble_step(&mut job);
+        assert_eq!(
+            job.steps
+                .iter()
+                .filter(|step| step.name == ASSEMBLE_GROUP_LEDGERS_STEP_NAME)
+                .count(),
+            1,
+            "assemble inserts exactly once"
+        );
+        Ok(())
+    }
 }

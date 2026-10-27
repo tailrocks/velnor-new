@@ -11,6 +11,7 @@ use velnor_actions_contract::{
 };
 use velnor_actions_mise::CheckDeadline;
 
+use crate::check_runtime::preparation::RestoredGroupContext;
 use crate::{OrchestratorError, internal::internal};
 
 use super::formula::verify_formula;
@@ -257,6 +258,7 @@ fn install_result(
         .check
         .formula_channel
         .ok_or_else(|| internal("native_check_formula_channel_missing"))?;
+    let group = RestoredGroupContext::resolve(temp)?;
     let (evidence, receipt_digest, hosted_profile) = install_formula(InstallRequest {
         root,
         runner_temp: temp,
@@ -270,6 +272,7 @@ fn install_result(
         entry_digest: &verified.loaded.digest,
         task_id,
         check_id,
+        group: &group,
     })?;
     Ok(NativeCheckResult {
         schema: 1,

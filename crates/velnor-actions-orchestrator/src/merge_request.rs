@@ -67,6 +67,7 @@ pub(crate) fn assemble_with_needs(
     );
     let (inventory, jobs) = parse_needs(needs, expected, &mut errors);
     let attestation = read_attestation(run_dir, &inventory, &mut errors);
+    let group_ledgers = read_group_ledgers(run_dir, &mut errors);
     let request = serde_json::json!({
         "schema": 1,
         "run_key": run_key,
@@ -80,9 +81,50 @@ pub(crate) fn assemble_with_needs(
         "check_proofs": check_proofs,
         "required_job_ids": inventory,
         "required_jobs": jobs,
+        "group_ledgers": group_ledgers,
         "assembly_errors": errors,
     });
     canonical_json_str(&request).map_err(internal_contract)
+}
+
+const GROUP_LEDGERS_FILENAME: &str = "group-ledgers.json";
+
+fn read_group_ledgers(run_dir: &Path, errors: &mut Vec<String>) -> Vec<serde_json::Value> {
+    match crate::retrieve_reports::read_staged_text(
+        &run_dir.join(GROUP_LEDGERS_FILENAME),
+        MAX_ASSEMBLY_JSON_BYTES,
+    ) {
+        Ok(text) => {
+            if let Ok(serde_json::Value::Array(mut ordered)) = parse_strict_json(&text) {
+                ordered.sort_by(|left, right| ledger_job_key(left).cmp(ledger_job_key(right)));
+                ordered
+            } else {
+                errors.push("unparsable_group_ledgers".to_owned());
+                Vec::new()
+            }
+        }
+        Err("missing") => Vec::new(),
+        Err("symlink") => {
+            errors.push("symlink_group_ledgers".to_owned());
+            Vec::new()
+        }
+        Err("oversize") => {
+            errors.push("oversize_group_ledgers".to_owned());
+            Vec::new()
+        }
+        Err(_) => {
+            errors.push("unreadable_group_ledgers".to_owned());
+            Vec::new()
+        }
+    }
+}
+
+fn ledger_job_key(ledger: &serde_json::Value) -> &str {
+    ledger
+        .get("job")
+        .and_then(|job| job.get("job_key"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
 }
 
 fn read_attestation(

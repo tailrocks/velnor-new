@@ -19,6 +19,7 @@ runs:
         GH_HOST: ""
         GH_TOKEN: ""
         GITHUB_TOKEN: ""
+        MBX_TARGET_VIEWS: "0"
         MISE_GITHUB_TOKEN: ""
         NODE_AUTH_TOKEN: ""
         NPM_TOKEN: ""

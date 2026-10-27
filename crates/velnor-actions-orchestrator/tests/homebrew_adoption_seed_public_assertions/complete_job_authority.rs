@@ -29,21 +29,42 @@ pub(crate) fn assert_complete_job_authority(
     Ok(())
 }
 
+/// Adding `actions: write` to a job that checks out source is rejected at
+/// generic validation (before render), so the render-rejection path is
+/// unreachable for this mutation. The tamper is still caught, fail-closed.
+fn assert_checkout_write_mutation_rejected_at_generic(
+    preparation: &GenerationPreparation,
+    job_id: &str,
+    field: &str,
+) -> Result<(), Box<dyn Error>> {
+    let mut changed = preparation.clone();
+    let job = changed
+        .workflow
+        .ir
+        .jobs
+        .get_mut(job_id)
+        .ok_or_else(|| io::Error::other(format!("preparation omitted {job_id}")))?;
+    job.permissions.get_or_insert_with(Default::default).actions = PermissionLevel::Write;
+    let error = changed.workflow.ir.validate().err().ok_or_else(|| {
+        io::Error::other(format!(
+            "generic validator accepted {field} checkout-write mutation"
+        ))
+    })?;
+    assert!(
+        error
+            .to_string()
+            .contains("actions_write_requires_checkout_free"),
+        "unexpected generic rejection for {field}: {error}"
+    );
+    Ok(())
+}
+
 fn assert_required_metadata(
     preparation: &GenerationPreparation,
     policy: WorkflowPolicy,
 ) -> Result<(), Box<dyn Error>> {
     let required_error = "required_verdict_candidate_execution";
-    assert_job_mutation_rejected(
-        preparation,
-        policy,
-        FINAL_JOB_ID,
-        required_error,
-        "permissions",
-        |job| {
-            job.permissions.get_or_insert_with(Default::default).actions = PermissionLevel::Write;
-        },
-    )?;
+    assert_checkout_write_mutation_rejected_at_generic(preparation, FINAL_JOB_ID, "permissions")?;
     assert_job_mutation_rejected(
         preparation,
         policy,
@@ -96,16 +117,7 @@ fn assert_producer_metadata(
     policy: WorkflowPolicy,
 ) -> Result<(), Box<dyn Error>> {
     let plan_error = "trusted_plan_candidate_execution";
-    assert_job_mutation_rejected(
-        preparation,
-        policy,
-        PLAN_JOB_ID,
-        plan_error,
-        "permissions",
-        |job| {
-            job.permissions.get_or_insert_with(Default::default).actions = PermissionLevel::Write;
-        },
-    )?;
+    assert_checkout_write_mutation_rejected_at_generic(preparation, PLAN_JOB_ID, "permissions")?;
     assert_job_mutation_rejected(
         preparation,
         policy,

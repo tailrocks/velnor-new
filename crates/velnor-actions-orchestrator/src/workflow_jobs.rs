@@ -56,6 +56,7 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
     lint.role = Some(StepRole::Jactionlint);
     Ok(Job {
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         display_name: LINT_DISPLAY_NAME.to_owned(),
         runs_on: label.to_owned(),
         check_runner: None,
