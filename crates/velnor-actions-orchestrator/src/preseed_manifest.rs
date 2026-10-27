@@ -163,9 +163,10 @@ mod input_digest_binding {
             std::path::Path::new(&out).join(super::MANIFEST_FILE),
         )
         .expect("preseed manifest text");
-        if !text.contains(&format!("\"input_digest\":\"{DIGEST}\"")) {
-            panic!("preseed manifest left its input digest:{text}");
-        }
+        assert!(
+            text.contains(&format!("\"input_digest\":\"{DIGEST}\"")),
+            "preseed manifest left its input digest:{text}"
+        );
     }
 
     #[test]
@@ -185,9 +186,10 @@ mod input_digest_binding {
             match result {
                 Ok(()) => panic!("preseed manifest accepted its bad input digest:{bad}"),
                 Err(error) => {
-                    if !error.to_string().contains("preseed_bad_input_digest") {
-                        panic!("preseed manifest left its digest rejection:{error}");
-                    }
+                    assert!(
+                        error.to_string().contains("preseed_bad_input_digest"),
+                        "preseed manifest left its digest rejection:{error}"
+                    );
                 }
             }
         }

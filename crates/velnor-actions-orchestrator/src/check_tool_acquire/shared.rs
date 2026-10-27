@@ -108,6 +108,7 @@ pub(super) fn fetch_archives(
     Ok((primary, dependencies))
 }
 
+#[expect(clippy::too_many_arguments, reason = "threaded fetch context")]
 fn fetch_extract(
     handle: &QualifiedCheck,
     tool: &QualifiedTool,

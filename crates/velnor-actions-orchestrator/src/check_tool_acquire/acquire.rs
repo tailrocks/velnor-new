@@ -51,6 +51,7 @@ pub(crate) fn acquire(
     Ok((receipts, ledger))
 }
 
+#[expect(clippy::too_many_arguments, reason = "threaded acquire context")]
 fn hydrate_tool(
     handle: &QualifiedCheck,
     check: &DiscoveredCheck,

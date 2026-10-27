@@ -4,6 +4,7 @@
 use std::error::Error;
 use std::fs;
 use std::io;
+use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
@@ -180,9 +181,96 @@ fn gzip_bytes(
     build(&mut builder)?;
     let encoder_bytes = builder.into_inner()?;
     let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-    use std::io::Write;
     encoder.write_all(&encoder_bytes)?;
     Ok(encoder.finish()?)
+}
+
+fn lane_root<'a>(lanes: &[(&'a str, &'a Path)], member: &str) -> Result<&'a Path, Box<dyn Error>> {
+    let rest = member
+        .strip_prefix("state/")
+        .ok_or_else(|| fail("state prefix"))?;
+    let (lane_id, _) = rest.split_once('/').ok_or_else(|| fail("lane split"))?;
+    lanes
+        .iter()
+        .find(|(id, _)| *id == lane_id)
+        .map(|(_, root)| *root)
+        .ok_or_else(|| fail("lane missing"))
+}
+
+fn append_index_members<W: io::Write>(
+    builder: &mut Builder<W>,
+    members: &[(&str, &[u8])],
+) -> Result<(), Box<dyn Error>> {
+    for (name, bytes) in members {
+        let size = u64::try_from(bytes.len())?;
+        let mut header = member_header(0o644, EntryType::Regular, size);
+        builder
+            .append_data(&mut header, name, *bytes)
+            .map_err(|error| fail(&error.to_string()))?;
+    }
+    Ok(())
+}
+
+fn append_state_member<W: io::Write>(
+    builder: &mut Builder<W>,
+    lanes: &[(&str, &Path)],
+    entry: &StateEntryV1,
+) -> Result<(), Box<dyn Error>> {
+    match entry.kind.as_str() {
+        "symlink" => {
+            let mut header = member_header(0o777, EntryType::Symlink, 0);
+            builder
+                .append_link(
+                    &mut header,
+                    entry.path.as_str(),
+                    Path::new(entry.link_target.as_deref().unwrap_or("")),
+                )
+                .map_err(|error| fail(&error.to_string()))?;
+        }
+        "directory" => {
+            let mut header = member_header(0o755, EntryType::Directory, 0);
+            builder
+                .append_data(&mut header, entry.path.as_str(), std::io::empty())
+                .map_err(|error| fail(&error.to_string()))?;
+        }
+        _ => {
+            let lane_relative = entry
+                .path
+                .strip_prefix("state/")
+                .and_then(|rest| rest.split_once('/').map(|(_, rel)| rel))
+                .ok_or_else(|| fail("state member"))?;
+            let absolute = lane_root(lanes, &entry.path)?.join(lane_relative);
+            let bytes = fs::read(&absolute)?;
+            let size = u64::try_from(bytes.len())?;
+            let mut header = member_header(entry.mode & 0o777, EntryType::Regular, size);
+            builder
+                .append_data(&mut header, entry.path.as_str(), bytes.as_slice())
+                .map_err(|error| fail(&error.to_string()))?;
+        }
+    }
+    Ok(())
+}
+
+fn append_projection_member<W: io::Write>(
+    builder: &mut Builder<W>,
+    staged: &Path,
+    record: &ProjectionEntry,
+) -> Result<(), Box<dyn Error>> {
+    let member = format!("projection/{}", record.path);
+    if let Some(target) = record.link_target.as_deref() {
+        let mut header = member_header(0o777, EntryType::Symlink, 0);
+        builder
+            .append_link(&mut header, member.as_str(), Path::new(target))
+            .map_err(|error| fail(&error.to_string()))?;
+    } else {
+        let bytes = fs::read(staged.join(&record.path))?;
+        let size = u64::try_from(bytes.len())?;
+        let mut header = member_header(record.mode & 0o777, EntryType::Regular, size);
+        builder
+            .append_data(&mut header, member.as_str(), bytes.as_slice())
+            .map_err(|error| fail(&error.to_string()))?;
+    }
+    Ok(())
 }
 
 fn repack_plan(
@@ -207,89 +295,29 @@ fn repack_plan(
         .iter()
         .map(|lane| (lane.lane_id.as_str(), lane.root.as_path()))
         .collect();
-    let lane_root = |member: &str| -> Result<&Path, Box<dyn Error>> {
-        let rest = member
-            .strip_prefix("state/")
-            .ok_or_else(|| fail("state prefix"))?;
-        let (lane_id, _) = rest.split_once('/').ok_or_else(|| fail("lane split"))?;
-        lanes
-            .iter()
-            .find(|(id, _)| *id == lane_id)
-            .map(|(_, root)| *root)
-            .ok_or_else(|| fail("lane missing"))
-    };
     let out = fixture.temp.path().join(out_name);
     let file = fs::File::create(&out)?;
     let encoder = GzEncoder::new(file, Compression::default());
     let mut builder = Builder::new(encoder);
-    for (name, bytes) in [
-        ("manifest.json", manifest_bytes.as_slice()),
-        ("state-index.json", state_bytes.as_slice()),
-        ("projection-index.json", projection_bytes.as_slice()),
-        ("required-output-index.json", required_bytes.as_slice()),
-    ] {
-        let size = u64::try_from(bytes.len())?;
-        let mut header = member_header(0o644, EntryType::Regular, size);
-        builder
-            .append_data(&mut header, name, bytes)
-            .map_err(|error| fail(&error.to_string()))?;
-    }
+    append_index_members(
+        &mut builder,
+        &[
+            ("manifest.json", manifest_bytes.as_slice()),
+            ("state-index.json", state_bytes.as_slice()),
+            ("projection-index.json", projection_bytes.as_slice()),
+            ("required-output-index.json", required_bytes.as_slice()),
+        ],
+    )?;
     for entry in state {
-        let lane_relative = entry
-            .path
-            .strip_prefix("state/")
-            .and_then(|rest| rest.split_once('/').map(|(_, rel)| rel))
-            .ok_or_else(|| fail("state member"))?;
-        let absolute = lane_root(&entry.path)?.join(lane_relative);
-        match entry.kind.as_str() {
-            "symlink" => {
-                let mut header = member_header(0o777, EntryType::Symlink, 0);
-                builder
-                    .append_link(
-                        &mut header,
-                        entry.path.as_str(),
-                        Path::new(entry.link_target.as_deref().unwrap_or("")),
-                    )
-                    .map_err(|error| fail(&error.to_string()))?;
-            }
-            "directory" => {
-                let mut header = member_header(0o755, EntryType::Directory, 0);
-                builder
-                    .append_data(&mut header, entry.path.as_str(), std::io::empty())
-                    .map_err(|error| fail(&error.to_string()))?;
-            }
-            _ => {
-                let bytes = fs::read(&absolute)?;
-                let size = u64::try_from(bytes.len())?;
-                let mut header = member_header(entry.mode & 0o777, EntryType::Regular, size);
-                builder
-                    .append_data(&mut header, entry.path.as_str(), bytes.as_slice())
-                    .map_err(|error| fail(&error.to_string()))?;
-            }
-        }
+        append_state_member(&mut builder, &lanes, entry)?;
     }
     for record in projection {
-        let member = format!("projection/{}", record.path);
-        if let Some(target) = record.link_target.as_deref() {
-            let mut header = member_header(0o777, EntryType::Symlink, 0);
-            builder
-                .append_link(&mut header, member.as_str(), Path::new(target))
-                .map_err(|error| fail(&error.to_string()))?;
-        } else {
-            let root = fixture.staged.as_path();
-            let bytes = fs::read(root.join(&record.path))?;
-            let size = u64::try_from(bytes.len())?;
-            let mut header = member_header(record.mode & 0o777, EntryType::Regular, size);
-            builder
-                .append_data(&mut header, member.as_str(), bytes.as_slice())
-                .map_err(|error| fail(&error.to_string()))?;
-        }
+        append_projection_member(&mut builder, fixture.staged.as_path(), record)?;
     }
     let encoder = builder
         .into_inner()
         .map_err(|error| fail(&error.to_string()))?;
     let mut file = encoder.finish().map_err(|error| fail(&error.to_string()))?;
-    use std::io::Write;
     file.flush()?;
     Ok(out)
 }
