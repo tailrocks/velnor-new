@@ -13,6 +13,10 @@ autotests = false
 name = "resource_probe_release_public"
 path = "tests/resource_probe_release_public.rs"
 
+[[test]]
+name = "runner_image_manifest_public"
+path = "tests/runner_image_manifest_public.rs"
+
 [[bin]]
 name = "velnor-resource-probe-release"
 path = "src/bin/velnor_resource_probe_release.rs"

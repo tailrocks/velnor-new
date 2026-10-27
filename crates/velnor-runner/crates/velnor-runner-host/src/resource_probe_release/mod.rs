@@ -7,6 +7,7 @@ use crate::error::HostError;
 
 mod files;
 mod manifest;
+pub(crate) mod runner_manifest;
 mod smoke;
 
 pub fn validate_smoke(output: &Path, root: &Path) -> Result<(), HostError> {
@@ -15,4 +16,12 @@ pub fn validate_smoke(output: &Path, root: &Path) -> Result<(), HostError> {
 
 pub fn write_manifest(inspect: &Path, archive: &Path, output: &Path) -> Result<(), HostError> {
     manifest::write(inspect, archive, output)
+}
+
+pub fn write_runner_image_manifest(
+    descriptors: &Path,
+    runner_lock: &Path,
+    output: &Path,
+) -> Result<(), HostError> {
+    runner_manifest::write(descriptors, runner_lock, output)
 }
