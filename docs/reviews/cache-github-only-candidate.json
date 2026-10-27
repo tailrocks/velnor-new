@@ -1,0 +1,52 @@
+{
+  "task": "T64",
+  "plan": "velnor-github-only-cache-plan",
+  "candidate_source": {
+    "branch": "chore/apache-2-license",
+    "sha": "58d0e7d814d65984ddd8d7d5a4b97f383f3064c9",
+    "pr": 407
+  },
+  "date_utc": "2026-10-27",
+  "generator": {
+    "workspace_version": "0.1.57",
+    "pinned_controller": "0.1.55",
+    "pinned_controller_commit": "693f3aae14406fb7851ac70f0aee647a869b5063",
+    "pinned_controller_sha256": "c8f1440e4f767ecc903e6611c56c2db4005011d33ee6f0fd566f4b7e5345eba4",
+    "lane_support_in_pinned_controller": false,
+    "lane_support_proof": "git grep GROUP_READER_SUFFIX at 693f3aae14 returns no match; GROUP_READER_SUFFIX first appears in 0f6079cb3a on this branch"
+  },
+  "generated_outputs": {
+    "ci_yml_blob_sha": "a783948a205ae1a03da21f2365d9924b1fb51333",
+    "generation_parity": "capture-opentofu-goldens capture reports tree identical; check reports ALL GOLDENS MATCH",
+    "git_diff_check": "clean"
+  },
+  "t63_verification_at_candidate": {
+    "cargo_fmt_all_check": "clean",
+    "cargo_clippy_locked_workspace_all_targets_deny_warnings": "0 errors",
+    "cargo_nextest_locked_workspace": "173 passed, 0 failed, 0 skipped",
+    "alint_check_fail_on_warning": "52 passing, 2 info, exit 0",
+    "opentofu_goldens": "ALL MATCH"
+  },
+  "remote_ci_verdict": {
+    "run": 40439911875,
+    "final_report_artifact": "velnor-final-r40439911875-a1",
+    "final_report_status": "not_run",
+    "miss_reasons": [],
+    "counts": "selected 96, executed 96, failed 0, not_run 0",
+    "required_job_results": "24 success, 18 skipped",
+    "plan_jobs": "19 base ids, all disposition run",
+    "required_job_ids": "42 suffixed ids (18 crates x read/write plus 6 checks)",
+    "root_cause": "Pinned 0.1.55 merge folds each required job against plan job ids by exact match. The 18 skipped writer jobs (-write suffix) are absent from the 0.1.55 plan, so fold_unplanned marks signals.not_run with no miss reason. Merge exits 1 silently. Local reproduction with staged CI artifacts confirms the fold path.",
+    "control": "main CI at f714692cf7 is green with single jobs under the same pinned 0.1.55 controller",
+    "failing_checks": ["Required verdict", "Required"],
+    "passing_checks": "all 24 executed jobs, Alint, Plan, Jactionlint, Cargo Deny, Cargo Machete, DCO"
+  },
+  "activation": {
+    "decision": "PENDING owner action",
+    "requires_real_controller_release": true,
+    "release_basis": "T64 step 4 and GOAL fixed-design block warm activation until the approved controller supports the new operations. Activation must not use a fabricated release or helper pin.",
+    "merge": "blocked: Required verdict is red; standing rule forbids merge on red",
+    "hosted_qualification": "NO-GO: no approved lane-aware controller release; cache usage 10434709127 bytes exceeds the 10000000000 byte ceiling",
+    "reviews": "3 stale bot COMMENTED reviews plus 21 inline findings on superseded revision 0f6079cb3a; P0 spot-checked resolved at HEAD (cache_admission.rs and cache_inventory.rs exist, workspace builds); preseed-digest P1 spot-checked resolved (PRESEED_MANIFEST_INPUT_DIGEST_ENV read in preseed_order.rs, covered by gc1_t44); remainder recorded addressed in prior session; re-review pending on final revision; no approvals, no change requests"
+  }
+}

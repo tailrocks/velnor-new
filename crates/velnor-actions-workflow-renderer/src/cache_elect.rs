@@ -3,9 +3,21 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, PullRequestCachePolicy, Step, StepKind, StepRole};
+use velnor_actions_contract::{CacheMode, Job, PullRequestCachePolicy, Step, StepKind, StepRole};
 
 use crate::RenderError;
+
+/// Explicit-read (reader) branches must never be elected as cache writers.
+/// Their saves would be suppressed to `false` by `dispatch_cache_boundary`
+/// and then rejected by `cache_doctor`, and an untrusted job must not write
+/// caches.
+fn is_cache_writer_eligible(jobs: &BTreeMap<String, Job>, id: &str) -> bool {
+    jobs.get(id).is_none_or(|job| {
+        !job.cache_mode
+            .as_ref()
+            .is_some_and(CacheMode::is_explicit_read)
+    })
+}
 
 pub fn elect_cache_writers(jobs: &mut BTreeMap<String, Job>) -> Result<(), RenderError> {
     elect_cache_writers_with_policy(jobs, PullRequestCachePolicy::ReadOnly)
@@ -47,14 +59,22 @@ fn plan_tools_saves(
     }
     let mut elected = BTreeMap::new();
     for ((key, digest), owners) in &by_identity {
-        let winner = owners
+        let trusted: Vec<&str> = owners
             .iter()
-            .find(|id| id.as_str() == crate::render::PLAN_JOB_ID)
+            .map(String::as_str)
+            .filter(|id| is_cache_writer_eligible(jobs, id))
+            .collect();
+        if trusted.is_empty() {
+            continue;
+        }
+        let winner = trusted
+            .iter()
+            .find(|id| **id == crate::render::PLAN_JOB_ID)
             .or_else(|| {
-                owners
+                trusted
                     .iter()
                     .filter(|id| {
-                        jobs.get(*id).is_some_and(|job| {
+                        jobs.get(**id).is_some_and(|job| {
                             !crate::matrix::suites::has_suite_matrix(job)
                                 && !crate::matrix::bun::has_bun_matrix(job)
                                 && !job.is_dependency_seed()
@@ -62,8 +82,8 @@ fn plan_tools_saves(
                     })
                     .min()
             })
-            .or_else(|| owners.iter().min())
-            .map(String::as_str)
+            .or_else(|| trusted.iter().min())
+            .copied()
             .unwrap_or_default();
         if elected
             .insert(winner.to_owned(), (key.clone(), digest.clone()))
@@ -164,7 +184,12 @@ fn plan_provider_saves(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Step
     }
     let mut planned = Vec::new();
     for (key, owners) in &by_key {
-        let Some(winner) = owners.iter().min() else {
+        let trusted: Vec<&str> = owners
+            .iter()
+            .map(String::as_str)
+            .filter(|id| is_cache_writer_eligible(jobs, id))
+            .collect();
+        let Some(winner) = trusted.into_iter().min() else {
             continue;
         };
         let Some(path) = path_for.get(key) else {
@@ -178,13 +203,13 @@ fn plan_provider_saves(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Step
                     "tofu_provider_owner_missing".to_owned(),
                 ));
             };
-            if owner != winner && has_provider_save(job) {
+            if owner.as_str() != winner && has_provider_save(job) {
                 return Err(RenderError::InvalidWorkflow(format!(
                     "tofu_provider_save_not_elected:{owner}"
                 )));
             }
             validate_provider_save(job, key, path)?;
-            if owner == winner && !has_provider_save(job) {
+            if owner.as_str() == winner && !has_provider_save(job) {
                 let mut save = crate::tofu_cache::tofu_providers_save_step()?;
                 save.condition = Some(
                     velnor_actions_contract::workflow::cache_family::TOFU_PROVIDERS_SAVE_CONDITION

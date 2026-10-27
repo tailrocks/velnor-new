@@ -76,22 +76,6 @@ pub(crate) fn validate_argv_for_role(
                 &action,
             )?)?
         }
-        Some(StepRole::MbxBundleImport) => {
-            let working_dir = bundle_working_dir(script)?;
-            shell_run(crate::cache_steps::mbx_bundle_import_step(
-                rust,
-                working_dir.as_deref(),
-                BTreeMap::new(),
-            )?)?
-        }
-        Some(StepRole::MbxBundleExport) => {
-            let working_dir = bundle_working_dir(script)?;
-            shell_run(crate::cache_steps::mbx_bundle_export_step(
-                rust,
-                working_dir.as_deref(),
-                BTreeMap::new(),
-            )?)?
-        }
         Some(StepRole::PreseedBuild) => {
             let with_toolchain = script.contains(&format!("+{rust}"));
             let build = candidate_build_argv(rust, with_toolchain);
@@ -128,25 +112,15 @@ pub(crate) fn validate_step_argv(
     }
 }
 
-fn bundle_working_dir(script: &str) -> Result<Option<String>, RenderError> {
-    const PREFIX: &str = "cd \"$GITHUB_WORKSPACE/";
-    let Some((_, after)) = script.split_once(PREFIX) else {
-        return Ok(None);
-    };
-    let (dir, _) = after
-        .split_once('"')
-        .ok_or_else(|| bad_shape("bundle_working_dir_unclosed"))?;
-    Ok(Some(dir.to_owned()))
-}
-
 fn role_uses_resolver(role: Option<StepRole>) -> bool {
+    // Bundle import/export are pure-shell tar operations over the state
+    // transport payload: they never invoke the action-owned binary, so they
+    // validate as generic shell. Their templates are pinned at build time.
     matches!(
         role,
         Some(
             StepRole::MbxVersionCheck
                 | StepRole::MbxWorkspaceCleanup
-                | StepRole::MbxBundleImport
-                | StepRole::MbxBundleExport
                 | StepRole::PreseedBuild
                 | StepRole::PreseedVerifyBuild
         )

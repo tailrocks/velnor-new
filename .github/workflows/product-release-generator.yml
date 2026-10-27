@@ -134,6 +134,7 @@ jobs:
       - verify-release-source
     if: inputs.release_action == 'build'
     env:
+      CARGO_TARGET_DIR: $RUNNER_TEMP/velnor/target/release-x86_64-unknown-linux-gnu
       VELNOR_RELEASE_TARGET: x86_64-unknown-linux-gnu
     steps:
       - name: Check out
@@ -256,6 +257,7 @@ jobs:
       - verify-release-source
     if: inputs.release_action == 'build'
     env:
+      CARGO_TARGET_DIR: $RUNNER_TEMP/velnor/target/release-aarch64-apple-darwin
       VELNOR_RELEASE_TARGET: aarch64-apple-darwin
     steps:
       - name: Check out
@@ -408,6 +410,7 @@ jobs:
       - verify-release-source
     if: inputs.release_action == 'build'
     env:
+      CARGO_TARGET_DIR: $RUNNER_TEMP/velnor/target/release-x86_64-apple-darwin
       VELNOR_RELEASE_TARGET: x86_64-apple-darwin
     steps:
       - name: Check out

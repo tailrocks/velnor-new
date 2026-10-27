@@ -135,6 +135,7 @@ pub fn plan_job(
     steps.extend(cached.save);
     Ok(Job {
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         display_name: "Plan".to_owned(),
         runs_on: label.to_owned(),
         check_runner: None,
@@ -164,10 +165,12 @@ pub fn final_job(
         vec![PinnedTool::Gh],
         true,
     )?);
+    steps.push(crate::steps_internal::group_ledger_steps::assemble_group_ledgers_step());
     steps.push(request_step(MERGE_OPERATION)?);
     steps.push(merge_step());
     Ok(Job {
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         display_name: FINAL_DISPLAY_NAME.to_owned(),
         runs_on: label.to_owned(),
         check_runner: None,

@@ -12,9 +12,20 @@ use crate::{
     },
 };
 
+#[path = "group_ledger_steps.rs"]
+pub(crate) mod group_ledger_steps;
+
 pub(crate) fn split_internal_operation(operation: &str) -> Result<(&str, &str), RenderError> {
     if operation == RESOLVE_QUALIFICATION_OPERATION {
         return Ok((operation, PLAN_OPERATION));
+    }
+    // Group-ledger producer ops: the steps run the workspace CLI through
+    // `cargo run` (pin-independent by design), so the operation selects
+    // itself and carries no request-file target.
+    if operation == group_ledger_steps::EMIT_GROUP_LEDGER_OPERATION
+        || operation == group_ledger_steps::ASSEMBLE_GROUP_LEDGERS_OPERATION
+    {
+        return Ok((operation, operation));
     }
     if operation == PLAN_OPERATION
         || operation == MERGE_OPERATION

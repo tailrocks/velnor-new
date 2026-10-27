@@ -6,6 +6,36 @@ use velnor_actions_contract::StepRole;
 
 pub use velnor_actions_contract::workflow::cache_family::SOURCE_SUBSET;
 
+pub const SOURCE_OBJECT_KINDS: [&str; 4] = ["source", "tool", "private_asset", "verification"];
+
+pub const DIGEST_PREFIX: &str = "s256-";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImmutableSourceObject {
+    pub object_id: String,
+    pub kind: String,
+    pub approved_origin_id: String,
+    pub content_digest: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SourceHydration {
+    Warm,
+    ColdFetch { missing_object_ids: Vec<String> },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ByteCounter {
+    pub value: Option<u64>,
+    pub unknown_reason: Option<&'static str>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceByteLedger {
+    pub origin_bytes: ByteCounter,
+    pub cache_bytes: ByteCounter,
+}
+
 pub const TRUSTED_WRITER_ROLE: &str = "plan";
 
 pub const NEVER_ARCHIVE_MARKERS: [&str; 3] = ["credentials", ".tfstate", ".tfplan"];
@@ -62,6 +92,204 @@ fn reject(path: &str) -> MiseError {
     MiseError::InvalidStepInput {
         field: "sources_path".to_owned(),
         value: path.to_owned(),
+    }
+}
+
+fn reject_object(field: &'static str, value: &str) -> MiseError {
+    MiseError::InvalidStepInput {
+        field: field.to_owned(),
+        value: value.to_owned(),
+    }
+}
+
+#[must_use]
+pub fn sha256_body_hex(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    let digest = hasher.finalize();
+    let mut out = String::with_capacity(64);
+    for byte in digest {
+        out.push(char::from(b"0123456789abcdef"[usize::from(byte >> 4)]));
+        out.push(char::from(b"0123456789abcdef"[usize::from(byte & 0x0f)]));
+    }
+    out
+}
+
+pub fn digest_body_hex(digest: &str) -> Result<&str, MiseError> {
+    let Some(body) = digest.strip_prefix(DIGEST_PREFIX) else {
+        return Err(MiseError::InvalidDigest {
+            value: digest.to_owned(),
+            problem: "missing_s256_prefix".to_owned(),
+        });
+    };
+    if body.len() != 64
+        || !body
+            .bytes()
+            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+    {
+        return Err(MiseError::InvalidDigest {
+            value: digest.to_owned(),
+            problem: "malformed_s256_body".to_owned(),
+        });
+    }
+    Ok(body)
+}
+
+impl ImmutableSourceObject {
+    pub fn validate(&self) -> Result<(), MiseError> {
+        if self.object_id.is_empty()
+            || self.object_id.contains('\0')
+            || self.object_id.contains("..")
+        {
+            return Err(reject_object("object_id", &self.object_id));
+        }
+        if !SOURCE_OBJECT_KINDS.contains(&self.kind.as_str()) {
+            return Err(reject_object("object_kind", &self.kind));
+        }
+        if self.approved_origin_id.is_empty() {
+            return Err(reject_object(
+                "approved_origin_id",
+                &self.approved_origin_id,
+            ));
+        }
+        digest_body_hex(&self.content_digest)?;
+        Ok(())
+    }
+}
+
+#[must_use]
+pub fn is_approved_origin(origin: &str, approved: &[&str]) -> bool {
+    !origin.is_empty() && approved.contains(&origin)
+}
+
+pub fn require_approved_origins(
+    required: &[ImmutableSourceObject],
+    approved: &[&str],
+) -> Result<(), MiseError> {
+    for object in required {
+        object.validate()?;
+        if !is_approved_origin(&object.approved_origin_id, approved) {
+            return Err(reject_object(
+                "approved_origin_id",
+                &object.approved_origin_id,
+            ));
+        }
+    }
+    Ok(())
+}
+
+pub fn verify_restored_object(
+    object: &ImmutableSourceObject,
+    restored: bool,
+    bytes: &[u8],
+) -> Result<bool, MiseError> {
+    object.validate()?;
+    if !restored {
+        return Ok(false);
+    }
+    Ok(sha256_body_hex(bytes) == digest_body_hex(&object.content_digest)?)
+}
+
+pub fn decide_hydration(
+    required: &[ImmutableSourceObject],
+    verified_present_ids: &[String],
+) -> Result<SourceHydration, MiseError> {
+    let mut seen: Vec<&str> = Vec::with_capacity(required.len());
+    for object in required {
+        object.validate()?;
+        if seen.contains(&object.object_id.as_str()) {
+            return Err(reject_object("object_id", &object.object_id));
+        }
+        seen.push(&object.object_id);
+    }
+    let mut missing: Vec<String> = Vec::new();
+    for object in required {
+        if !verified_present_ids
+            .iter()
+            .any(|present| present == &object.object_id)
+            && !missing.iter().any(|known| known == &object.object_id)
+        {
+            missing.push(object.object_id.clone());
+        }
+    }
+    if missing.is_empty() {
+        Ok(SourceHydration::Warm)
+    } else {
+        Ok(SourceHydration::ColdFetch {
+            missing_object_ids: missing,
+        })
+    }
+}
+
+impl ByteCounter {
+    #[must_use]
+    pub const fn measured(value: u64) -> Self {
+        Self {
+            value: Some(value),
+            unknown_reason: None,
+        }
+    }
+
+    #[must_use]
+    pub const fn unknown(reason: &'static str) -> Self {
+        Self {
+            value: None,
+            unknown_reason: Some(reason),
+        }
+    }
+
+    pub fn validate(&self) -> Result<(), MiseError> {
+        match (&self.value, &self.unknown_reason) {
+            (Some(_), None) | (None, Some(_)) => Ok(()),
+            _ => Err(MiseError::InvalidStepInput {
+                field: "byte_counter".to_owned(),
+                value: "exactly_one_of_value_or_unknown_reason".to_owned(),
+            }),
+        }
+    }
+
+    pub fn record(&mut self, bytes: u64) -> Result<(), MiseError> {
+        match self.value {
+            Some(current) => {
+                let next = current
+                    .checked_add(bytes)
+                    .ok_or(MiseError::InvalidStepInput {
+                        field: "byte_counter".to_owned(),
+                        value: "byte_overflow".to_owned(),
+                    })?;
+                self.value = Some(next);
+                Ok(())
+            }
+            None => Err(MiseError::InvalidStepInput {
+                field: "byte_counter".to_owned(),
+                value: "bytes_unknown".to_owned(),
+            }),
+        }
+    }
+}
+
+impl SourceByteLedger {
+    #[must_use]
+    pub const fn new(origin_bytes: ByteCounter, cache_bytes: ByteCounter) -> Self {
+        Self {
+            origin_bytes,
+            cache_bytes,
+        }
+    }
+
+    pub fn validate(&self) -> Result<(), MiseError> {
+        self.origin_bytes.validate()?;
+        self.cache_bytes.validate()?;
+        Ok(())
+    }
+
+    pub fn record_origin(&mut self, bytes: u64) -> Result<(), MiseError> {
+        self.origin_bytes.record(bytes)
+    }
+
+    pub fn record_cache(&mut self, bytes: u64) -> Result<(), MiseError> {
+        self.cache_bytes.record(bytes)
     }
 }
 

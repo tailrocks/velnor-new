@@ -10,6 +10,7 @@ use velnor_actions_contract::{Job, REQUIRED_JOB_ID, StepKind, StepRole, validate
 use velnor_actions_orchestrator::{GenerationPreparation, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
+use super::support::logical_owner_id;
 use super::workflow_configuration_fixture;
 
 #[test]
@@ -225,29 +226,44 @@ fn assert_rendered_seed_routing(
                         .any(|env| env.get(root_env).map(String::as_str) == Some(relative_root))
             })
             .collect();
-        assert_eq!(consumers.len(), 1);
-        let (consumer_id, consumer) = consumers
-            .first()
-            .copied()
-            .ok_or_else(|| format!("missing MBX consumer for {relative_root}"))?;
-        let consumer_keys = mbx_bundle_key_envs(consumer);
-        assert_eq!(consumer_keys.len(), 1);
-        let consumer_key_env = consumer_keys
-            .first()
-            .copied()
-            .ok_or_else(|| format!("consumer bundle key is missing for {relative_root}"))?;
-        assert_seed_bundle_key_unit(consumer)?;
-        assert_eq!(consumer_key_env, seed_key_env);
+        // Reader/writer branches run on mutually exclusive events, so a seed
+        // root is consumed by one logical owner (a branch pair), not one job.
         assert!(
-            consumer
-                .steps
-                .iter()
-                .any(|step| step.role == Some(StepRole::MbxCache))
+            !consumers.is_empty(),
+            "missing MBX consumer for {relative_root}"
         );
-        assert!(!consumer.needs.iter().any(|need| need.as_str() == seed_id));
-        assert!(!required.needs.iter().any(|need| need.as_str() == seed_id));
-        assert!(workflow.contains(seed_id), "{consumer_id}: {workflow}");
-        assert!(workflow.contains(relative_root), "{workflow}");
+        let all: BTreeSet<&str> = prepared
+            .workflow
+            .ir
+            .jobs
+            .keys()
+            .map(String::as_str)
+            .collect();
+        let logical: BTreeSet<&str> = consumers
+            .iter()
+            .map(|(id, _)| logical_owner_id(&all, id.as_str()))
+            .collect();
+        assert_eq!(logical.len(), 1);
+        for (consumer_id, consumer) in consumers {
+            let consumer_keys = mbx_bundle_key_envs(consumer);
+            assert_eq!(consumer_keys.len(), 1);
+            let consumer_key_env = consumer_keys
+                .first()
+                .copied()
+                .ok_or_else(|| format!("consumer bundle key is missing for {relative_root}"))?;
+            assert_seed_bundle_key_unit(consumer)?;
+            assert_eq!(consumer_key_env, seed_key_env);
+            assert!(
+                consumer
+                    .steps
+                    .iter()
+                    .any(|step| step.role == Some(StepRole::MbxCache))
+            );
+            assert!(!consumer.needs.iter().any(|need| need.as_str() == seed_id));
+            assert!(!required.needs.iter().any(|need| need.as_str() == seed_id));
+            assert!(workflow.contains(seed_id), "{consumer_id}: {workflow}");
+            assert!(workflow.contains(relative_root), "{workflow}");
+        }
     }
     Ok(())
 }

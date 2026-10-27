@@ -53,6 +53,81 @@ pub(crate) fn plan_uses_rust(discovery: &Discovery, policy: WorkflowPolicy) -> b
             .any(|task| Stack::from_id(&task.stack_id) == Some(Stack::Rust))
 }
 
+#[expect(
+    dead_code,
+    unreachable_pub,
+    reason = "T31 stages event authority here; the IR builder wires it next"
+)]
+mod authority {
+    use velnor_actions_contract::{CacheMode, Concurrency, Job, PermissionLevel};
+
+    use crate::OrchestratorError;
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum JobAuthority {
+        Reader,
+        TrustedWriter,
+        Cleanup,
+    }
+
+    #[must_use]
+    pub fn explicit_reader_cache_mode() -> CacheMode {
+        CacheMode::explicit_read()
+    }
+
+    #[must_use]
+    pub fn writer_queue_concurrency(group: &str) -> Concurrency {
+        Concurrency::writer_queue(group)
+    }
+
+    #[must_use]
+    pub fn is_checkout_free_job(job: &Job) -> bool {
+        !job.uses_checkout()
+    }
+
+    pub fn validate_job_authority(
+        job: &Job,
+        id: &str,
+        authority: JobAuthority,
+    ) -> Result<(), OrchestratorError> {
+        match authority {
+            JobAuthority::Reader => {
+                if job.cache_mode.as_ref() != Some(&explicit_reader_cache_mode()) {
+                    return Err(OrchestratorError::Contract {
+                        problem: format!("reader_requires_explicit_read:{id}"),
+                    });
+                }
+            }
+            JobAuthority::TrustedWriter => {
+                if job
+                    .cache_mode
+                    .as_ref()
+                    .is_none_or(|mode| !mode.grants_write())
+                {
+                    return Err(OrchestratorError::Contract {
+                        problem: format!("trusted_writer_requires_cache_write:{id}"),
+                    });
+                }
+            }
+            JobAuthority::Cleanup => {
+                if job.permissions.as_ref().is_some_and(|permissions| {
+                    !matches!(permissions.actions, PermissionLevel::Write)
+                }) {
+                    return Err(OrchestratorError::Contract {
+                        problem: format!("cleanup_requires_actions_write:{id}"),
+                    });
+                }
+                if !is_checkout_free_job(job) {
+                    return Err(OrchestratorError::Contract {
+                        problem: format!("actions_write_requires_checkout_free:{id}"),
+                    });
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 pub(crate) fn prepare_rust_components_step(
     catalog: &ToolCatalog,
 ) -> Result<Step, OrchestratorError> {

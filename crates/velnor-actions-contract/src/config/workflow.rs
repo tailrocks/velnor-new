@@ -165,6 +165,7 @@ impl WorkflowPolicy {
 
 impl WorkflowConfig {
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
+        self.validate_cache_policy(file)?;
         if self.name.trim().is_empty() {
             return Err(ContractError::config(file, "workflow.name", "empty_name"));
         }
@@ -231,6 +232,17 @@ impl WorkflowConfig {
         self.dispatch.validate(file)?;
         validate_preserve_workflows(&self.preserve_workflows, file)?;
         Ok(())
+    }
+
+    fn validate_cache_policy(&self, file: &str) -> Result<(), ContractError> {
+        match self.pull_request_cache_policy {
+            PullRequestCachePolicy::ReadOnly => Ok(()),
+            PullRequestCachePolicy::SameRepositoryScoped => Err(ContractError::config(
+                file,
+                "workflow.pull_request_cache_policy",
+                "obsolete_pr_write_policy:same-repository-scoped",
+            )),
+        }
     }
 
     fn validate_verification_branch(&self, file: &str) -> Result<(), ContractError> {
@@ -363,6 +375,9 @@ impl VerifyConfig {
         Ok(())
     }
 }
+
+#[path = "workflow_cache_policy.rs"]
+mod cache_policy;
 
 #[path = "workflow_task_suites_validate.rs"]
 mod task_suites_validate;

@@ -9,8 +9,8 @@ use velnor_actions_orchestrator::{GenerationPreparation, prepare, render_staged_
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::support::{
-    config_with_timeouts, discovered_rust_packages, rendered_job_block, rust_owner_jobs,
-    task_execution_ids, task_execution_steps,
+    config_with_timeouts, discovered_rust_packages, logical_owner_id, rendered_job_block,
+    rust_owner_jobs, task_execution_ids, task_execution_steps,
 };
 use super::workflow_configuration_fixture;
 
@@ -47,7 +47,9 @@ fn prepare_and_render_keep_one_parallel_rust_owner_per_package() -> Result<(), B
     let (unit_paths, expected_packages) = discovered_rust_packages(&prepared);
     assert_package_tasks_are_not_planned(&prepared, &unit_paths)?;
     let owner_jobs = rust_owner_jobs(&prepared);
-    assert_eq!(owner_jobs.len(), expected_packages.len());
+    let all: BTreeSet<&str> = owner_jobs.iter().map(|(id, _)| *id).collect();
+    let logical: BTreeSet<&str> = all.iter().map(|id| logical_owner_id(&all, id)).collect();
+    assert_eq!(logical.len(), expected_packages.len());
     let required = prepared
         .workflow
         .ir
@@ -84,6 +86,12 @@ pub(super) fn assert_package_tasks_are_not_planned(
     Ok(())
 }
 
+#[derive(Default)]
+struct OwnerMaps<'a> {
+    tasks: BTreeMap<&'a str, &'a str>,
+    by_package: BTreeMap<&'a str, BTreeSet<&'a str>>,
+}
+
 pub(super) fn assert_rust_owner_jobs(
     owner_jobs: &[(&str, &Job)],
     required: &Job,
@@ -91,28 +99,20 @@ pub(super) fn assert_rust_owner_jobs(
     expected_packages: &BTreeSet<&str>,
     workflow: &str,
 ) -> Result<(), Box<dyn Error>> {
-    let mut owner_tasks = BTreeMap::new();
-    let mut owners_by_package: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+    let mut maps = OwnerMaps::default();
+    let all: BTreeSet<&str> = owner_jobs.iter().map(|(id, _)| *id).collect();
     for &(id, job) in owner_jobs {
-        assert_rust_owner_job(
-            id,
-            job,
-            required,
-            unit_paths,
-            workflow,
-            &mut owner_tasks,
-            &mut owners_by_package,
-        )?;
+        assert_rust_owner_job(id, job, required, unit_paths, workflow, &all, &mut maps)?;
     }
     let package_task_ids: BTreeSet<_> = unit_paths.keys().copied().collect();
     assert_eq!(
-        owner_tasks.keys().copied().collect::<BTreeSet<_>>(),
+        maps.tasks.keys().copied().collect::<BTreeSet<_>>(),
         package_task_ids
     );
-    assert_eq!(owners_by_package.len(), expected_packages.len());
-    assert!(owners_by_package.values().all(|owners| owners.len() == 1));
+    assert_eq!(maps.by_package.len(), expected_packages.len());
+    assert!(maps.by_package.values().all(|owners| owners.len() == 1));
     assert_eq!(
-        owners_by_package.keys().copied().collect::<BTreeSet<_>>(),
+        maps.by_package.keys().copied().collect::<BTreeSet<_>>(),
         *expected_packages
     );
     Ok(())
@@ -124,8 +124,8 @@ fn assert_rust_owner_job<'a>(
     required: &Job,
     unit_paths: &BTreeMap<&'a str, &'a str>,
     workflow: &str,
-    owner_tasks: &mut BTreeMap<&'a str, &'a str>,
-    owners_by_package: &mut BTreeMap<&'a str, BTreeSet<&'a str>>,
+    all_ids: &BTreeSet<&'a str>,
+    maps: &mut OwnerMaps<'a>,
 ) -> Result<(), Box<dyn Error>> {
     assert_eq!(
         job.timeout_minutes.minutes(),
@@ -139,8 +139,16 @@ fn assert_rust_owner_job<'a>(
         let package = *unit_paths
             .get(*task_id)
             .ok_or_else(|| format!("{id} emitted undiscovered Rust task {task_id}"))?;
-        assert!(owner_tasks.insert(*task_id, id).is_none());
-        owners_by_package.entry(package).or_default().insert(id);
+        let owner = logical_owner_id(all_ids, id);
+        match maps.tasks.entry(*task_id) {
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                entry.insert(owner);
+            }
+            std::collections::btree_map::Entry::Occupied(entry) => {
+                assert!(entry.get() == &owner, "{id} duplicates owner for {task_id}");
+            }
+        }
+        maps.by_package.entry(package).or_default().insert(owner);
     }
 
     let build_index = task_steps

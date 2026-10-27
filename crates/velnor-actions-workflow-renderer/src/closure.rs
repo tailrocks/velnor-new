@@ -1,7 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::{Job, Step, StepKind, StepRole};
+use velnor_actions_contract::{
+    Job, RELEASE_MANIFEST_FILENAME, ReleaseManifest, ReleaseTarget, Step, StepKind, StepRole,
+    check_release_artifact,
+};
 
 use crate::{
     RenderError, preseed,
@@ -55,6 +58,94 @@ pub fn provision_acquire_step(
             Err(RenderError::InvalidWorkflow(SEED_REMEDIATION.to_owned()))
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BootstrapControllerPin {
+    pub version: String,
+    pub target_triple: String,
+    pub url: String,
+    pub sha256: String,
+    pub commit: String,
+}
+
+impl BootstrapControllerPin {
+    pub fn from_release_manifest(
+        manifest: &ReleaseManifest,
+        runner_label: &str,
+        expected_version: &str,
+    ) -> Result<Self, RenderError> {
+        manifest
+            .validate(RELEASE_MANIFEST_FILENAME)
+            .map_err(RenderError::Contract)?;
+        let target = ReleaseTarget::for_runner_label(runner_label)
+            .ok_or_else(|| RenderError::InvalidWorkflow("bootstrap_runner_target".to_owned()))?;
+        if manifest.version != expected_version {
+            return Err(RenderError::InvalidWorkflow(
+                "bootstrap_descriptor_version".to_owned(),
+            ));
+        }
+        if expected_version != env!("CARGO_PKG_VERSION") {
+            return Err(RenderError::InvalidWorkflow(
+                "bootstrap_generator_version".to_owned(),
+            ));
+        }
+        let record = manifest.record_for_target(target.triple()).ok_or_else(|| {
+            RenderError::InvalidWorkflow("bootstrap_descriptor_target".to_owned())
+        })?;
+        check_release_artifact(
+            &record.artifact,
+            &manifest.version,
+            &manifest.commit,
+            target.triple(),
+            RELEASE_MANIFEST_FILENAME,
+            "targets.artifact",
+        )
+        .map_err(RenderError::Contract)?;
+        Ok(Self {
+            version: manifest.version.clone(),
+            target_triple: target.triple().to_owned(),
+            url: record.artifact.clone(),
+            sha256: record.sha256.clone(),
+            commit: manifest.commit.clone(),
+        })
+    }
+}
+
+pub fn provision_bootstrap_acquire_steps(
+    pin: &BootstrapControllerPin,
+    provenance: &HelperProvenance,
+    acquire_argv: &[String],
+    bridge: &steps::BootstrapBridge,
+) -> Result<Vec<Step>, RenderError> {
+    let (url, sha256, commit) = match provenance {
+        HelperProvenance::ReleaseAsset {
+            url,
+            sha256,
+            commit,
+        } => (url, sha256, commit),
+        HelperProvenance::SeedRequired => {
+            return Err(RenderError::InvalidWorkflow(SEED_REMEDIATION.to_owned()));
+        }
+    };
+    if url != &pin.url || sha256 != &pin.sha256 || commit != &pin.commit {
+        return Err(RenderError::InvalidWorkflow(
+            "bootstrap_pin_provenance_mismatch".to_owned(),
+        ));
+    }
+    let bridge_step = steps::bootstrap_bridge_step(bridge, &pin.sha256)?;
+    if !acquire_argv
+        .iter()
+        .any(|arg| arg.contains(&bridge.staged_path))
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "bootstrap_staged_mismatch".to_owned(),
+        ));
+    }
+    let marker = steps::bootstrap_marker_for(&bridge.staged_path);
+    let guarded = steps::bootstrap_guarded_acquire_argv(&marker, acquire_argv)?;
+    let acquire = provision_acquire_step(provenance, guarded)?;
+    Ok(vec![bridge_step, acquire])
 }
 
 pub(crate) fn check_internal_staged(

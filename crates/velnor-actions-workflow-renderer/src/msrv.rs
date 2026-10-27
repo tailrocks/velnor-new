@@ -78,6 +78,7 @@ pub fn msrv_job(
     spec.validate()?;
     Ok(Job {
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         display_name: format!("MSRV {}", spec.package),
         runs_on: label.to_owned(),
         check_runner: None,
