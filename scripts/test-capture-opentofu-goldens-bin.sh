@@ -933,10 +933,18 @@ if [ "$source_digest" != "$copy_digest" ]; then
 fi
 WORKSPACES_BEFORE="$(find "$WORK/tmp workspace" -mindepth 1 -maxdepth 1 -type d \
   -name 'velnor-goldens-work.*' -print | LC_ALL=C sort)"
+FILE_UTILITY_MARKER="$WORK/undeclared file utility invoked"
+cat >"$STUB_BIN/file" <<'FILE'
+#!/bin/sh
+printf invoked >"$VELNOR_TEST_FILE_UTILITY_MARKER"
+exit 90
+FILE
+chmod 755 "$STUB_BIN/file"
 if (
   cd "$WORK" || exit 2
   TMPDIR="$WORK/tmp workspace" PATH="$STUB_BIN:$ORIGINAL_PATH" \
     VELNOR_TEST_CARGO_MARKER="$MARKER" \
+    VELNOR_TEST_FILE_UTILITY_MARKER="$FILE_UTILITY_MARKER" \
     VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
     run_collector check "space path/velnor-actions"
 ) >"$WORK/spaced-path.log" 2>&1; then
@@ -949,6 +957,10 @@ else
 fi
 if [ -e "$MARKER" ]; then
   echo "FAIL: explicit CLI path invoked the default cargo build" >&2
+  exit 1
+fi
+if [ -e "$FILE_UTILITY_MARKER" ]; then
+  echo "FAIL: explicit CLI check invoked the undeclared file utility" >&2
   exit 1
 fi
 WORKSPACES_AFTER="$(find "$WORK/tmp workspace" -mindepth 1 -maxdepth 1 -type d \
