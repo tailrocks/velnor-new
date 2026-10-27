@@ -20,7 +20,12 @@ private_mods!(cache_archive, cache_inventory);
 private_mods!(cache_snapshot);
 private_mods!(check_evidence, check_runtime);
 private_mods!(clippy_groups, config);
-private_mods!(config_stacks, cover);
+private_mods!(
+    config_stacks,
+    controller_approval,
+    controller_manifest_digest,
+    cover
+);
 private_mods!(crate_job_ids, crate_jobs);
 private_mods!(critical_path, derive_groups);
 private_mods!(discover, discover_index);

@@ -113,6 +113,10 @@ pub(super) fn owner_feature_repo(
             root.join(".velnor/generator.lock"),
             include_str!("../../../../.velnor/generator.lock"),
         )?;
+        fs::write(
+            root.join(".velnor/controller-approvals.json"),
+            include_str!("../../../../.velnor/controller-approvals.json"),
+        )?;
     }
     let mut root_manifest = fs::read_to_string(root.join("Cargo.toml"))?;
     root_manifest.push_str("\n[workspace]\nmembers = [\"crates/maintenance\"]\nresolver = \"2\"\n");

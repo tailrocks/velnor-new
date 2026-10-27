@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "repository": "tailrocks/velnor-new",
+  "workflow": ".github/workflows/product-release-generator.yml",
+  "active": {
+    "repository": "tailrocks/velnor-new",
+    "version": "0.1.55",
+    "commit": "693f3aae14406fb7851ac70f0aee647a869b5063",
+    "manifest_digest": "sha256:90ee052ab599c9c064afce1d26b65e6752c4b7cd8feecd3c57249ea0241afbd3",
+    "binaries": [
+      {
+        "target": "x86_64-unknown-linux-gnu",
+        "artifact": "https://github.com/tailrocks/velnor-new/releases/download/v0.1.55/velnor-actions-0.1.55-x86_64-unknown-linux-gnu",
+        "sha256": "c8f1440e4f767ecc903e6611c56c2db4005011d33ee6f0fd566f4b7e5345eba4"
+      },
+      {
+        "target": "aarch64-apple-darwin",
+        "artifact": "https://github.com/tailrocks/velnor-new/releases/download/v0.1.55/velnor-actions-0.1.55-aarch64-apple-darwin",
+        "sha256": "eb8690b6a05b18bf025a0d7876c8497cedc04d54df04fdb5a3c20d203478e756"
+      },
+      {
+        "target": "x86_64-apple-darwin",
+        "artifact": "https://github.com/tailrocks/velnor-new/releases/download/v0.1.55/velnor-actions-0.1.55-x86_64-apple-darwin",
+        "sha256": "0938a574c00b05a71735285bf0d2840235ca4f9559359909564dd53b27d77883"
+      }
+    ],
+    "gh": "2.103.2",
+    "mise": {
+      "version": "2026.10.21",
+      "artifact": "https://github.com/jdx/mise/releases/download/v2026.10.21/mise-v2026.10.21-linux-x64",
+      "sha256": "ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07"
+    },
+    "state": "active"
+  },
+  "staged": null
+}

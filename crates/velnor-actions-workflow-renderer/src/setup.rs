@@ -40,14 +40,16 @@ impl MiseSetup {
         })
     }
 
-    pub(crate) fn for_published_generator(
+    pub(crate) fn for_approved_generator(
         &self,
         lock: &velnor_actions_contract::GeneratorLock,
         target: velnor_actions_contract::ReleaseTarget,
+        approved: &velnor_actions_mise::catalog::lock::ApprovedGeneratorRelease<'_>,
     ) -> Result<Self, RenderError> {
-        let binary =
-            velnor_actions_mise::catalog::lock::mise_binary_for_published_generator(lock, target)
-                .map_err(|error| RenderError::BadCommand(error.to_string()))?;
+        let binary = velnor_actions_mise::catalog::lock::mise_binary_for_approved_generator(
+            lock, target, approved,
+        )
+        .map_err(|error| RenderError::BadCommand(error.to_string()))?;
         let current = self.for_target(target.triple())?;
         Ok(Self {
             version: binary.version.to_owned(),
