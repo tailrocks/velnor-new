@@ -1,7 +1,7 @@
 102a735348d32a62126f549f909a7d8bad8dacb73418da73d9b9b278db4068d4  ./.github/AGENTS.md
 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./.github/CLAUDE.md
 952c78c7e8f944dc89ae7733a76f912e2c6b7f7e6013bb2bad00ae85e5ceed3a  ./.github/PULL_REQUEST_TEMPLATE.md
-bc04488c295aa304023255dd2dd89af548cd75780b3fe387aa1d46d5613afb4c  ./.github/actions/declared-task-0/action.yml
+cd2ad06d1c549a08ba4513debafd9fcced55eb21c294255d2460e30a83dac337  ./.github/actions/declared-task-0/action.yml
 8ac88e4f296ea01c114587abd9756c2d9ac73c5656bb17a9d8040178af9bc754  ./.github/actions/generator-release-build-linux/action.yml
 3e626acb89a3bd24ac70b691a4ef225cf1f6e24f300c6a1622420042d6841500  ./.github/actions/generator-release-build-macos-intel/action.yml
 e3c651a2f568592fa0e9c1d285b5ee129805dd2b0270105fbe946bdb2d4a8dbd  ./.github/actions/generator-release-build-macos/action.yml
@@ -19,9 +19,9 @@ cb38bf61ca2e39a3174beb8fc586aebdfca62453f96fef322a4e643d74d730bc  ./.github/acti
 9d6d0bfb659598eeff0b4da40ea59c1d7708a4e430421b473b07cdfa94ed7623  ./.github/dco.yml
 9e20f0ebad372bcd61d3dcfa16e10e85a44dff72e938908e35b2f382e64b78aa  ./.github/jactionlint.yaml
 d8ff04373adde0d89d0c187096b5f7a3fa80f755f7d46874ea9e431ae278f531  ./.github/scripts/velnor-tools-cache-identity.sh
-d9c68148277cd5cf7e2c594ead3caff714714cc1f928e742189d21c8cc67409f  ./.github/velnor/task-execution-manifest-v1.json
+e9a84e1ff8d5e6640583ee09481c785e139ebd5a7d0571ec2494da472e86953a  ./.github/velnor/task-execution-manifest-v1.json
 faf8d7598306ad77bb393e73601b9f86ca38418baea30f1a4b944d2fae37187b  ./.github/workflows/cache-prune.yml
-5a000bae7ff9ec4cd266ea2db70250263f89ff0d6d4e2d8c0d74bfc67dff6907  ./.github/workflows/ci.yml
+8fd654377335afe3f3b3536fa11b06c9e011597a2d915027de052536d6656f9e  ./.github/workflows/ci.yml
 7fb3b3a5b6f3bb2c3673e2c3c70fed6c9e04df621b497cbe6d8b066323c52f15  ./.github/workflows/freshness.yml
 9d0880d8d094d003a7b308c741ab68de4243b64e5ad93658dea141247819aee9  ./.github/workflows/homebrew-adoption.yml
 803b7f0ecb79d7ce64e36354070d3839d438c84e9319312e802e2a6eb8043935  ./.github/workflows/job-image-candidate.yml
