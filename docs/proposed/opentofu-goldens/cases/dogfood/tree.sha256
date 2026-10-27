@@ -5,10 +5,10 @@ daecf1b0d4b6656c2e4525ba40df418441b9f915a2c241ee6819ffc9477c5642  ./.github/acti
 3ab87e1b574f6d609559c16901eeb2dc2532c2b4d1ab36fb7961c2fc64b9f3a5  ./.github/actions/generator-release-build-linux/action.yml
 092535c6b015c0f9653d9c97b9162cff17c68a1fb10124d679f719c880b57fd6  ./.github/actions/generator-release-build-macos-intel/action.yml
 9bbc2ab2aedfed4f97462e1c7a0e7997cb43a267c7f57d3229ee8a2cf44bcb4c  ./.github/actions/generator-release-build-macos/action.yml
-fb9d64286737039302e56e68160fb48bab891bf9ab3461c0cd52c60e079cc6fe  ./.github/actions/generator-release-qualify-homebrew/action.yml
-d6d02b88198e7f387687ee95e573a202e728eb800435de6c1ad666521d18b218  ./.github/actions/generator-release-qualify-linux/action.yml
-b9dffa4b6a13ffcbe0e04a11ef84dc8a051c3121e908b7b535d8181de68547a6  ./.github/actions/generator-release-qualify-macos-intel/action.yml
-30e18957614b367b192f0ef29c9ec2eaf5fd264f966690f29d2eb4da85aa8be3  ./.github/actions/generator-release-qualify-macos/action.yml
+a65a1c944eb14931ca50e3f5279c6e74fdafb43281ff07fc5334ebeae04e04e8  ./.github/actions/generator-release-qualify-homebrew/action.yml
+da38df717be98eb9b830d831a123401891718a3c9731c2167678090003327512  ./.github/actions/generator-release-qualify-linux/action.yml
+7a9b557285ecd59d02d002f2ccad1b8f3f6f0f35438496d631a803de8c578311  ./.github/actions/generator-release-qualify-macos-intel/action.yml
+cc1fe5f2dcb5caed37601b6e1cce852f3700bdfb846cdbffae69d7eed99fb943  ./.github/actions/generator-release-qualify-macos/action.yml
 dd176841919aaa7d99d73d4599b231aa66751a216c743843ca2dfab18a88fea7  ./.github/actions/u26/action.yml
 7ddb7ab32118ca1bcc86c7d18c475145e8e7e0d97b23cc3f1a3af105614ff23f  ./.github/actions/velnor-tool-seed/action.yml
 13c60cfe3a18ea4e50c8ab801e819554ad96ac6d3e71839d2be4340776e76630  ./.github/actions/velnor-tools-cache-restore/action.yml
@@ -19,10 +19,10 @@ e8f41f31f297b245285675a5989406035ec6738ad06e95745396df28beb0a63d  ./.github/acti
 303b28db9a3ef97c440643b101b66f30a2476836025ef17e1151829faf7612db  ./.github/dco.yml
 1bf7adc962708b49dcd89c3e3a7c00cd305ba4033c016e6706ec5afc526886ea  ./.github/jactionlint.yaml
 81f435efbb6b2017d3844b0f725eaefd97c55b15ed19beeb60986910b153daff  ./.github/scripts/velnor-tools-cache-identity.sh
-46b064701c8e6b143a710bd6e99332bc57f758ede6bc637855e6088e8e383b5e  ./.github/velnor/task-execution-manifest-v1.json
+e2103a50cc1a6d2e257f3f40109e6cc7280578819cdd5c74964915a510e7136d  ./.github/velnor/task-execution-manifest-v1.json
 10adbd6dd7eb4a17f718258ccab6a95c4b6cf4088029bafb1c25d4b39f5770ca  ./.github/workflows/cache-cleanup.yml
 ab19b468c92bf662aa4c507a179e2603d23038b8c98a30788d74d983166a53dc  ./.github/workflows/cache-prune.yml
-2715e01aa3f4223180d7b949c7ce32ee4c27d3510a070067f6b862650534f123  ./.github/workflows/ci.yml
+f0adf17e9a3cb73ba663b25fbf09bc34d7f04d08883fc81637419f390fe1936a  ./.github/workflows/ci.yml
 12299a04cca5298e585224df032291ca2f1d8b0f51983a7732bb568dde27140b  ./.github/workflows/freshness.yml
 6359b48c9ffd7b0c248bacfc0ce2e28a53b89183d5999fb776ebc2ec677bf59c  ./.github/workflows/homebrew-adoption.yml
 44c9a8236be3e09891bc2603fa11b7b155e8aaebab66188977e8ff755497477d  ./.github/workflows/job-image-candidate.yml

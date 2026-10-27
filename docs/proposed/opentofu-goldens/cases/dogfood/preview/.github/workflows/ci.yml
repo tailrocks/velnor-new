@@ -1465,6 +1465,10 @@ jobs:
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-2fa743d068c74a37e0d44af3c9cf540ebdf482709577b58c27d4ed842578b542"}
+      - name: Unit and integration tests
+        background: true
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-219fe3f0df556f9be60c962fddde5863fb54da3727917e8d246f39c0abdd089b"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]

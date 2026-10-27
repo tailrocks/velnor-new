@@ -142,3 +142,46 @@ The Docker-readiness fixture rewrites the entrypoint to no-op its absolute-path
 `wait-docker-sock` and `clear-dockerenv` commands because the fixture stub root
 does not provide those image paths. It verifies the Docker API-readiness gate
 only; it does not exercise those entrypoint preflights.
+
+## OpenTofu Release Goldens
+
+Golden capture and check require the checkout's independently built
+`velnor-archive-guard`. Build it with the current Rust build guard and MBX,
+then copy the executable into a user-owned directory with mode `0700`. Record
+its SHA-256 from the build output. The executable must be a regular file owned
+by the current user, have one link, and must not be writable by group or other
+users. The parent directory must be canonical and private.
+
+Pass both guard values to every collector command:
+
+For the full shell harness, also build the CLI package's
+`qualification-diagnostics` Cargo example in release mode through the same
+Rust build guard and MBX. Record its SHA-256 independently and pass its path
+and digest. This native executable shares the production CLI entry and adds
+controlled plan diagnostics without changing release manifests.
+
+```bash
+scripts/capture-opentofu-goldens.sh \
+  --archive-guard /private/path/velnor-archive-guard \
+  --archive-guard-sha256 <independent-64-character-sha256> check \
+  /private/path/velnor-actions
+scripts/test-capture-opentofu-goldens-bin.sh \
+  --archive-guard /private/path/velnor-archive-guard \
+  --archive-guard-sha256 <independent-64-character-sha256> \
+  --diagnostics-fixture /private/path/qualification-diagnostics \
+  --diagnostics-fixture-sha256 <independent-fixture-64-character-sha256> \
+  /private/path/velnor-actions
+```
+
+The collector checks file ownership, permissions, link count, canonical path,
+and the supplied digest before it runs the guard. It then verifies the guard's
+compiled source fingerprint against the current checkout. It checks the file
+identity, digest, and source fingerprint again during candidate execution. A
+missing or invalid explicit guard fails. The collector does not select another
+guard or run the builder after that failure. Both options are required.
+
+Use `check` to compare the five CLI goldens without changing checked-in files.
+Use `capture` only after a known-good local result. Use `check-release` with an
+independently supplied candidate manifest and its SHA-256 to check a package
+release. These modes also require both archive-guard options when running with
+an explicitly supplied guard.

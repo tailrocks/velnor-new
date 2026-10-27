@@ -39,6 +39,7 @@ struct TaskFactorContext<'a> {
     checkout_uses: &'a str,
     report_helper_version: &'a str,
     workflow_tasks: &'a [crate::verification_jobs::WorkflowTaskPolicy],
+    bun_lane_plan: Option<&'a velnor_actions_contract::BunLanePlan>,
     scale_set_selector: Option<&'a ScaleSetSelector>,
 }
 
@@ -59,12 +60,14 @@ pub(crate) fn factor_obligation_steps(
     generator_version: &str,
     report_helper_version: &str,
     workflow_tasks: &[crate::verification_jobs::WorkflowTaskPolicy],
+    bun_lane_plan: Option<&velnor_actions_contract::BunLanePlan>,
     scale_set_selector: Option<&ScaleSetSelector>,
 ) -> Result<(BTreeMap<String, Job>, Vec<RenderedFile>), RenderError> {
     let context = TaskFactorContext {
         checkout_uses,
         report_helper_version,
         workflow_tasks,
+        bun_lane_plan,
         scale_set_selector,
     };
     let collected = collect_task_executions(jobs, &context)?;
@@ -139,6 +142,7 @@ fn prepare_task_execution<'a>(
         job_id,
         &job.runs_on,
         context.workflow_tasks,
+        context.bun_lane_plan,
         context.scale_set_selector,
     ) {
         return Err(RenderError::InvalidWorkflow(format!(
@@ -297,6 +301,7 @@ fn supports_task_runner(
     job_id: &str,
     runs_on: &str,
     workflow_tasks: &[crate::verification_jobs::WorkflowTaskPolicy],
+    bun_lane_plan: Option<&velnor_actions_contract::BunLanePlan>,
     scale_set_selector: Option<&ScaleSetSelector>,
 ) -> bool {
     match RunsOn::parse(runs_on) {
@@ -313,15 +318,17 @@ fn supports_task_runner(
             }
             workflow_tasks
                 .iter()
-                .find(|task| task.owns_job_id(job_id))
-                .is_none_or(|task| {
-                    let crate::verification_jobs::WorkflowTaskPolicy::Verification(policy) = task
-                    else {
-                        return false;
-                    };
-                    policy.task.runner == VerificationRunner::LinuxX64
-                        && policy.runner_label == VerificationRunner::LinuxX64.runs_on()
-                        && policy.scale_set_token.as_deref() == Some(runs_on)
+                .find(|task| task.owns_projected_job_id(job_id, bun_lane_plan))
+                .is_none_or(|task| match task {
+                    crate::verification_jobs::WorkflowTaskPolicy::Verification(policy) => {
+                        policy.task.runner == VerificationRunner::LinuxX64
+                            && policy.runner_label == VerificationRunner::LinuxX64.runs_on()
+                            && policy.scale_set_token.as_deref() == Some(runs_on)
+                    }
+                    crate::verification_jobs::WorkflowTaskPolicy::Bun(_)
+                    | crate::verification_jobs::WorkflowTaskPolicy::BunSuite(_)
+                    | crate::verification_jobs::WorkflowTaskPolicy::BunAssets(_) => true,
+                    _ => false,
                 })
         }
         Err(_) => false,

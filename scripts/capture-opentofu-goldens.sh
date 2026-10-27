@@ -11,41 +11,96 @@
 # (plan-v1 response, expected-set, task report); this script pins the
 # user-facing plan text and generated YAML bytes around it.
 #
-# Usage: scripts/capture-opentofu-goldens.sh [capture|check [CLI_BINARY]]
-#        scripts/capture-opentofu-goldens.sh check-release CLI_BINARY CANDIDATE_MANIFEST MANIFEST_SHA256
+# Usage: scripts/capture-opentofu-goldens.sh --archive-guard PATH --archive-guard-sha256 SHA256 [capture|check [CLI_BINARY]]
+#        scripts/capture-opentofu-goldens.sh --archive-guard PATH --archive-guard-sha256 SHA256 check-release CLI_BINARY CANDIDATE_MANIFEST MANIFEST_SHA256
 #   capture  regenerate docs/proposed/opentofu-goldens/ (only at known-good)
 #   check    regenerate to temp and byte-diff (default; never writes goldens)
 #   CLI_BINARY uses that exact executable and skips the default debug build.
 set -uo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GOLDEN_DIR="$ROOT/docs/proposed/opentofu-goldens"
 WORK=""
-MODE="${1:-check}"
+MODE="check"
+MODE_EXPLICIT=0
 BIN_EXPLICIT=0
+POSITIONAL=()
 KEEP_WORK="${VELNOR_GOLDEN_KEEP_WORK:-0}"
-
+ARCHIVE_GUARD_INPUT_PATH=""
+ARCHIVE_GUARD_INPUT_SHA256=""
+SEEN_ARCHIVE_GUARD=0
+SEEN_ARCHIVE_GUARD_SHA256=0
+if [ "$#" -gt 0 ]; then
+  case "$1" in
+    capture|check|check-release) MODE="$1"; MODE_EXPLICIT=1; shift ;;
+  esac
+fi
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    capture|check|check-release)
+      if [ "$MODE_EXPLICIT" -ne 0 ]; then
+        echo "FATAL: usage: $0 [--archive-guard PATH --archive-guard-sha256 SHA256] [capture|check [CLI_BINARY]]"
+        exit 2
+      fi
+      MODE="$1"
+      MODE_EXPLICIT=1
+      shift
+      ;;
+    --archive-guard)
+      if [ "$SEEN_ARCHIVE_GUARD" -ne 0 ] || [ "$#" -lt 2 ]; then
+        echo "FATAL: archive guard options must appear once as a path and SHA-256 pair"
+        exit 2
+      fi
+      SEEN_ARCHIVE_GUARD=1
+      ARCHIVE_GUARD_INPUT_PATH="$2"
+      shift 2
+      ;;
+    --archive-guard-sha256)
+      if [ "$SEEN_ARCHIVE_GUARD_SHA256" -ne 0 ] || [ "$#" -lt 2 ]; then
+        echo "FATAL: archive guard options must appear once as a path and SHA-256 pair"
+        exit 2
+      fi
+      SEEN_ARCHIVE_GUARD_SHA256=1
+      ARCHIVE_GUARD_INPUT_SHA256="$2"
+      shift 2
+      ;;
+    --*)
+      echo "FATAL: usage: $0 [--archive-guard PATH --archive-guard-sha256 SHA256] [capture|check [CLI_BINARY]]"
+      exit 2
+      ;;
+    *) POSITIONAL+=("$1"); shift ;;
+  esac
+done
+if [ "$MODE_EXPLICIT" -eq 0 ] && [ "${#POSITIONAL[@]}" -gt 0 ]; then
+  echo "FATAL: usage: $0 [--archive-guard PATH --archive-guard-sha256 SHA256] [capture|check [CLI_BINARY]]"
+  exit 2
+fi
+if [ "$SEEN_ARCHIVE_GUARD" -ne "$SEEN_ARCHIVE_GUARD_SHA256" ]; then
+  echo "FATAL: archive guard path and SHA-256 must be supplied together"
+  exit 2
+fi
+if [ "$SEEN_ARCHIVE_GUARD" -ne 1 ]; then
+  echo "FATAL: an explicit archive guard path and SHA-256 are required"
+  exit 2
+fi
+if [ "$SEEN_ARCHIVE_GUARD" -eq 1 ] \
+  && { [ -z "$ARCHIVE_GUARD_INPUT_PATH" ] || [ -z "$ARCHIVE_GUARD_INPUT_SHA256" ]; }; then
+  echo "FATAL: archive guard path and SHA-256 must be non-empty"
+  exit 2
+fi
+if [ "$MODE" = "check-release" ]; then
+  if [ "${#POSITIONAL[@]}" -ne 3 ]; then
+    echo "FATAL: usage: $0 [--archive-guard PATH --archive-guard-sha256 SHA256] check-release CLI_BINARY CANDIDATE_MANIFEST MANIFEST_SHA256"
+    exit 2
+  fi
+elif [ "${#POSITIONAL[@]}" -gt 1 ]; then
+  echo "FATAL: usage: $0 [--archive-guard PATH --archive-guard-sha256 SHA256] [capture|check [CLI_BINARY]]"
+  exit 2
+fi
 case "$KEEP_WORK" in
   0|1) ;;
   *) echo "FATAL: VELNOR_GOLDEN_KEEP_WORK must be 0 or 1"; exit 2 ;;
 esac
-
-case "$MODE" in
-  capture|check|check-release) ;;
-  *)
-    echo "FATAL: usage: $0 [capture|check [CLI_BINARY]]"
-    exit 2
-    ;;
-esac
-if [ "$MODE" = "check-release" ]; then
-  if [ "$#" -ne 4 ]; then
-    echo "FATAL: usage: $0 check-release CLI_BINARY CANDIDATE_MANIFEST MANIFEST_SHA256"
-    exit 2
-  fi
-elif [ "$#" -gt 2 ]; then
-  echo "FATAL: usage: $0 [capture|check [CLI_BINARY]]"
-  exit 2
-fi
 if ! CALLER_DIR="$(pwd -P)"; then
   echo "FATAL: could not resolve caller directory"
   exit 2
@@ -74,11 +129,15 @@ if [ -n "${VELNOR_GOLDEN_DIR:-}" ]; then
     exit 2
   fi
 fi
+if ! CALLER_DIR="$(pwd -P)"; then
+  echo "FATAL: could not resolve caller directory"
+  exit 2
+fi
 if [ "$MODE" = "check-release" ]; then
   BIN_EXPLICIT=1
-  BIN_ARG="$2"
-  MANIFEST_ARG="$3"
-  CANDIDATE_MANIFEST_SHA256="$4"
+  BIN_ARG="${POSITIONAL[0]}"
+  MANIFEST_ARG="${POSITIONAL[1]}"
+  CANDIDATE_MANIFEST_SHA256="${POSITIONAL[2]}"
   if [ -z "$BIN_ARG" ] || [ -z "$MANIFEST_ARG" ] || [ -z "$CANDIDATE_MANIFEST_SHA256" ]; then
     echo "FATAL: explicit candidate binary, manifest path, and manifest SHA-256 are required"
     exit 2
@@ -91,9 +150,9 @@ if [ "$MODE" = "check-release" ]; then
     /*) CANDIDATE_MANIFEST="$MANIFEST_ARG" ;;
     *) CANDIDATE_MANIFEST="$CALLER_DIR/$MANIFEST_ARG" ;;
   esac
-elif [ "$#" -eq 2 ]; then
+elif [ "${#POSITIONAL[@]}" -eq 1 ]; then
   BIN_EXPLICIT=1
-  BIN_ARG="$2"
+  BIN_ARG="${POSITIONAL[0]}"
   if [ -z "$BIN_ARG" ]; then
     echo "FATAL: explicit CLI binary path is empty"
     exit 2
@@ -105,6 +164,8 @@ elif [ "$#" -eq 2 ]; then
 else
   BIN="$ROOT/target/debug/velnor-actions"
 fi
+QUALIFICATION_GUARD_INPUT_PATH="$ARCHIVE_GUARD_INPUT_PATH"
+QUALIFICATION_GUARD_INPUT_SHA256="$ARCHIVE_GUARD_INPUT_SHA256"
 
 FIXTURES="nested mbx-nextest empty-suite minimal-cargo"
 
@@ -113,6 +174,7 @@ note() { echo "$1"; }
 die() { echo "FAIL: $1"; fail=1; }
 
 source "$ROOT/scripts/generator-release/qualification-goldens.sh"
+prepare_qualification_guard || exit 2
 
 # Portable link-preserving recursive copy. Plain `cp -r` dereferences
 # symlinks (BSD: -r is -RL; GNU: -r on links is non-portable), which
@@ -122,7 +184,138 @@ copy_tree() {
   cp -RP "$1" "$2"
 }
 
-# Do not pin checkout-specific paths printed by CLI commands in stderr goldens.
+# Schema-only current-version input for disposable ConsumerV1 scratch repos.
+# Canonical URLs exercise the manifest shape; deterministic markers let the
+# checked-in oracle match check-release after it validates the exact candidate
+# manifest. These values are not release evidence and never leave this scratch
+# repo.
+fixture_binary_target() {
+  local header target file_size phoff phnum ph_index ph_offset ph_header
+  local interp_offset interp_size interp_path expected_interp matched_interpreters
+  local byte_index
+  local -a bytes ph_bytes
+  header="$(LC_ALL=C od -An -v -tu1 -N64 "$BIN" | LC_ALL=C tr '\n' ' ')" || return 1
+  read -r -a bytes <<<"$header"
+  if [ "${#bytes[@]}" -lt 20 ]; then
+    printf 'FATAL: unsupported or ambiguous fixture binary target: truncated executable header %s\n' "$header" >&2
+    return 1
+  fi
+
+  if [ "${bytes[0]}" = 127 ] && [ "${bytes[1]}" = 69 ] \
+    && [ "${bytes[2]}" = 76 ] && [ "${bytes[3]}" = 70 ]; then
+    if [ "${#bytes[@]}" -ne 64 ] || [ "${bytes[4]}" != 2 ] \
+      || [ "${bytes[5]}" != 1 ] || [ "${bytes[6]}" != 1 ] \
+      || { [ "${bytes[16]}" != 2 ] && [ "${bytes[16]}" != 3 ]; } \
+      || [ "${bytes[17]}" != 0 ] || [ "${bytes[18]}" != 62 ] \
+      || [ "${bytes[19]}" != 0 ] || [ "${bytes[20]}" != 1 ] \
+      || [ "${bytes[21]}" != 0 ] || [ "${bytes[22]}" != 0 ] \
+      || [ "${bytes[23]}" != 0 ] || [ "${bytes[52]}" != 64 ] \
+      || [ "${bytes[53]}" != 0 ] || [ "${bytes[54]}" != 56 ] \
+      || [ "${bytes[55]}" != 0 ]; then
+      printf 'FATAL: unsupported or ambiguous fixture binary target: invalid ELF64 x86-64 header %s\n' "$header" >&2
+      return 1
+    fi
+    for byte_index in 36 37 38 39; do
+      if [ "${bytes[$byte_index]}" != 0 ]; then
+        printf 'FATAL: unsupported or ambiguous fixture binary target: ELF program table offset exceeds the supported 32-bit file-offset range\n' >&2
+        return 1
+      fi
+    done
+    phoff=$((bytes[32] + (bytes[33] << 8) + (bytes[34] << 16) + (bytes[35] << 24)))
+    phnum=$((bytes[56] + (bytes[57] << 8)))
+    file_size="$(wc -c <"$BIN")" || return 1
+    if [ "$phnum" -eq 0 ] || [ "$phoff" -gt "$file_size" ] \
+      || [ "$((phnum * 56))" -gt "$((file_size - phoff))" ]; then
+      printf 'FATAL: unsupported or ambiguous fixture binary target: invalid ELF program table bounds\n' >&2
+      return 1
+    fi
+    expected_interp="$(printf '%s\000' /lib64/ld-linux-x86-64.so.2 | LC_ALL=C od -An -v -tu1 | LC_ALL=C tr '\n' ' ')"
+    matched_interpreters=0
+    for ((ph_index = 0; ph_index < phnum; ph_index++)); do
+      ph_offset=$((phoff + ph_index * 56))
+      ph_header="$(LC_ALL=C od -An -v -tu1 -j "$ph_offset" -N56 "$BIN" | LC_ALL=C tr '\n' ' ')" || return 1
+      read -r -a ph_bytes <<<"$ph_header"
+      if [ "${#ph_bytes[@]}" -ne 56 ]; then
+        printf 'FATAL: unsupported or ambiguous fixture binary target: truncated ELF program header\n' >&2
+        return 1
+      fi
+      if [ "${ph_bytes[0]}" = 3 ] && [ "${ph_bytes[1]}" = 0 ] \
+        && [ "${ph_bytes[2]}" = 0 ] && [ "${ph_bytes[3]}" = 0 ]; then
+        for byte_index in 12 13 14 15 36 37 38 39; do
+          if [ "${ph_bytes[$byte_index]}" != 0 ]; then
+            printf 'FATAL: unsupported or ambiguous fixture binary target: ELF interpreter exceeds the supported 32-bit file-offset range\n' >&2
+            return 1
+          fi
+        done
+        interp_offset=$((ph_bytes[8] + (ph_bytes[9] << 8) + (ph_bytes[10] << 16) + (ph_bytes[11] << 24)))
+        interp_size=$((ph_bytes[32] + (ph_bytes[33] << 8) + (ph_bytes[34] << 16) + (ph_bytes[35] << 24)))
+        if [ "$interp_size" -ne 28 ] || [ "$interp_offset" -gt "$file_size" ] \
+          || [ "$interp_size" -gt "$((file_size - interp_offset))" ]; then
+          printf 'FATAL: unsupported or ambiguous fixture binary target: invalid ELF interpreter bounds\n' >&2
+          return 1
+        fi
+        interp_path="$(LC_ALL=C od -An -v -tu1 -j "$interp_offset" -N"$interp_size" "$BIN" | LC_ALL=C tr '\n' ' ')" || return 1
+        if [ "$interp_path" = "$expected_interp" ]; then
+          matched_interpreters=$((matched_interpreters + 1))
+        else
+          printf 'FATAL: unsupported or ambiguous fixture binary target: unexpected ELF interpreter\n' >&2
+          return 1
+        fi
+      fi
+    done
+    if [ "$matched_interpreters" -eq 1 ]; then
+      printf '%s\n' x86_64-unknown-linux-gnu
+    else
+      printf 'FATAL: unsupported or ambiguous fixture binary target: missing or duplicate GNU ELF interpreter\n' >&2
+      return 1
+    fi
+  elif [ "${bytes[0]}" = 207 ] && [ "${bytes[1]}" = 250 ] \
+    && [ "${bytes[2]}" = 237 ] && [ "${bytes[3]}" = 254 ] \
+    && [ "${bytes[12]}" = 2 ] && [ "${bytes[13]}" = 0 ] \
+    && [ "${bytes[14]}" = 0 ] && [ "${bytes[15]}" = 0 ] \
+    && [ "${#bytes[@]}" -ge 32 ]; then
+    case "${bytes[4]}:${bytes[5]}:${bytes[6]}:${bytes[7]}" in
+      '12:0:0:1') printf '%s\n' aarch64-apple-darwin ;;
+      '7:0:0:1') printf '%s\n' x86_64-apple-darwin ;;
+      *) printf 'FATAL: unsupported or ambiguous fixture binary target: Mach-O header %s\n' "$header" >&2; return 1 ;;
+    esac
+  else
+    printf 'FATAL: unsupported or ambiguous fixture binary target: executable header %s\n' "$header" >&2
+    return 1
+  fi
+}
+
+write_schema_only_consumer_manifest() {
+  local repo="$1" manifest="$1/.velnor/release-manifest.json"
+  local version target commit digest targets_json binary_target binary_digest target_digest
+  if [ -e "$manifest" ] || [ -L "$manifest" ]; then
+    [ -f "$manifest" ] && [ ! -L "$manifest" ]
+    return $?
+  fi
+  if [ -L "$repo/.velnor" ] || { [ -e "$repo/.velnor" ] && [ ! -d "$repo/.velnor" ]; }; then
+    return 1
+  fi
+  mkdir -p "$repo/.velnor" || return 1
+  if ! version="$(run_qualification_candidate "$BIN" --version | awk 'NR == 1 && NF == 2 && $1 == "velnor-actions" { print $2; next } { exit 1 } END { if (NR != 1) exit 1 }')" \
+    || [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    return 1
+  fi
+  binary_target="$(fixture_binary_target)" || return 1
+  binary_digest="$(file_sha256 "$BIN")" || return 1
+  commit="$(printf '%040d' 0 | tr '0' 'b')"
+  digest="$(printf '%064d' 0 | tr '0' 'a')"
+  targets_json=""
+  for target in x86_64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin; do
+    if [ -n "$targets_json" ]; then targets_json+=","; fi
+    target_digest="$digest"
+    if [ "$target" = "$binary_target" ]; then target_digest="$binary_digest"; fi
+    targets_json+="{\"target\":\"$target\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v$version/velnor-actions-$version-$target\",\"sha256\":\"$target_digest\"}"
+  done
+  printf '{"schema":1,"version":"%s","repository":"tailrocks/velnor-new","commit":"%s","targets":[%s]}\n' \
+    "$version" "$commit" "$targets_json" >"$manifest"
+}
+
+# Do not pin checkout-specific paths printed by `generate` in stderr goldens.
 normalize_generate_stderr() {
   local path="$1" normalized="$1.normalized"
   if ! sed -e 's|^Preview: .*|Preview: <preview>|' \
@@ -193,8 +386,8 @@ setup_case() {
   fi
   if [ "$MODE" = "check-release" ]; then
     stage_candidate_manifest "$repo" "$case"
-  elif ! prepare_fixture_consumer_manifest "$repo" "$BIN"; then
-    echo "FATAL: could not prepare fixture-only consumer input for $case"
+  elif ! write_schema_only_consumer_manifest "$repo"; then
+    echo "FATAL: could not prepare schema-only consumer input for $case"
     exit 2
   fi
   local git_log="$WORK/$case-git-setup.log"
@@ -213,7 +406,7 @@ capture_case() {
   local preview="$out/preview"
   local raw="$WORK/raw/$case"
   mkdir -p "$out" "$preview" "$raw"
-  (cd "$repo" && "$BIN" plan >"$raw/plan.raw.txt" 2>"$raw/plan.stderr.raw.txt"; echo "$?" >"$out/plan.exit")
+  (cd "$repo" && run_qualification_candidate "$BIN" plan >"$out/plan.raw.txt" 2>"$raw/plan.stderr.raw.txt"; echo "$?" >"$out/plan.exit")
   if ! cp "$raw/plan.stderr.raw.txt" "$out/plan.stderr.txt" \
     || ! normalize_generate_stderr "$out/plan.stderr.txt"; then
     echo "FATAL: could not stage normalized plan diagnostics for $case"
@@ -224,16 +417,13 @@ capture_case() {
     exit 2
   fi
   sed -e "s|Repository: .*|Repository: <repo>|" -e "s|$head|<head>|g" \
-    "$raw/plan.raw.txt" >"$out/plan.txt"
-  if [ "$KEEP_WORK" -eq 1 ] && ! cp "$raw/plan.raw.txt" "$raw/plan.source-raw.txt"; then
+    "$out/plan.raw.txt" >"$out/plan.txt"
+  if [ "$KEEP_WORK" -eq 1 ] && ! cp "$out/plan.raw.txt" "$raw/plan.source-raw.txt"; then
     echo "FATAL: could not retain raw plan output for $case"
     exit 2
   fi
-  (cd "$repo" && "$BIN" generate --output-dir "$preview" >"$out/generate.stdout.txt" 2>"$raw/generate.stderr.raw.txt"; echo "$?" >"$out/generate.exit")
-  if ! cp "$raw/generate.stderr.raw.txt" "$out/generate.stderr.txt"; then
-    echo "FATAL: could not stage generate diagnostics for $case"
-    exit 2
-  fi
+  rm "$out/plan.raw.txt"
+  (cd "$repo" && run_qualification_candidate "$BIN" generate --output-dir "$preview" >"$out/generate.stdout.txt" 2>"$out/generate.stderr.txt"; echo "$?" >"$out/generate.exit")
   if ! normalize_generate_stderr "$out/generate.stderr.txt"; then
     echo "FATAL: could not normalize generate diagnostics for $case"
     exit 2
@@ -242,8 +432,10 @@ capture_case() {
     echo "FATAL: generate failed for $case"
     exit 2
   fi
-  if ! normalize_manifest_digests "$repo/.velnor/release-manifest.json" "$preview"; then
-    echo "FATAL: could not normalize fixture manifest values for $case"
+  local CANDIDATE_MANIFEST="$repo/.velnor/release-manifest.json"
+  if ! validate_candidate_output_bindings "$preview" \
+    || ! normalize_candidate_digests "$preview"; then
+    echo "FATAL: fixture output bindings failed for $case"
     exit 2
   fi
   hash_tree "$preview" "$out/tree.sha256"
@@ -252,7 +444,7 @@ capture_case() {
 check_release_policy_negative() {
   local repo="$WORK/hostile-config" output="$WORK/hostile-output"
   setup_case hostile-config >/dev/null
-  if (cd "$repo" && "$BIN" generate --output-dir "$output" >"$WORK/hostile.stdout" 2>"$WORK/hostile.stderr"); then
+  if (cd "$repo" && run_qualification_candidate "$BIN" generate --output-dir "$output" >"$WORK/hostile.stdout" 2>"$WORK/hostile.stderr"); then
     echo "FAIL: release candidate accepted the hostile policy fixture"
     fail=1
   elif ! grep -F '.velnor/config.toml: evil: unknown_config_field' "$WORK/hostile.stderr"; then
@@ -266,12 +458,12 @@ check_release_policy_negative() {
 capture_dogfood() {
   local out="$1"
   local preview="$out/preview"
-  local raw="$WORK/raw/dogfood"
   local compare="$WORK/dogfood-compare"
   local head diff_status
+  local raw="$WORK/raw/dogfood"
   mkdir -p "$out" "$preview" "$raw"
   head=$(git -C "$ROOT" rev-parse HEAD)
-  (cd "$ROOT" && "$BIN" plan >"$raw/plan.raw.txt" 2>"$raw/plan.stderr.raw.txt"; echo "$?" >"$out/plan.exit")
+  (cd "$ROOT" && run_qualification_candidate "$BIN" plan >"$out/plan.raw.txt" 2>"$raw/plan.stderr.raw.txt"; echo "$?" >"$out/plan.exit")
   if ! cp "$raw/plan.stderr.raw.txt" "$out/plan.stderr.txt" \
     || ! normalize_generate_stderr "$out/plan.stderr.txt"; then
     echo "FATAL: could not stage normalized dogfood plan diagnostics"
@@ -282,16 +474,13 @@ capture_dogfood() {
     exit 2
   fi
   sed -e "s|Repository: .*|Repository: <repo>|" -e "s|$head|<head>|g" -e "s|$ROOT|<root>|g" \
-    "$raw/plan.raw.txt" >"$out/plan.txt"
-  if [ "$KEEP_WORK" -eq 1 ] && ! cp "$raw/plan.raw.txt" "$raw/plan.source-raw.txt"; then
+    "$out/plan.raw.txt" >"$out/plan.txt"
+  if [ "$KEEP_WORK" -eq 1 ] && ! cp "$out/plan.raw.txt" "$raw/plan.source-raw.txt"; then
     echo "FATAL: could not retain raw dogfood plan output"
     exit 2
   fi
-  (cd "$ROOT" && "$BIN" generate --output-dir "$preview" >"$out/generate.stdout.txt" 2>"$raw/generate.stderr.raw.txt"; echo "$?" >"$out/generate.exit")
-  if ! cp "$raw/generate.stderr.raw.txt" "$out/generate.stderr.txt"; then
-    echo "FATAL: could not stage raw dogfood generate diagnostics"
-    exit 2
-  fi
+  rm "$out/plan.raw.txt"
+  (cd "$ROOT" && run_qualification_candidate "$BIN" generate --output-dir "$preview" >"$out/generate.stdout.txt" 2>"$out/generate.stderr.txt"; echo "$?" >"$out/generate.exit")
   if ! normalize_generate_stderr "$out/generate.stderr.txt"; then
     echo "FATAL: could not normalize dogfood generate diagnostics"
     exit 2
@@ -333,18 +522,16 @@ fi
 # shellcheck disable=SC2329
 cleanup_work() {
   local result=$?
-  if [ "$result" -eq 0 ] && [ "$KEEP_WORK" -ne 1 ]; then
-    if ! rm -rf "$WORK"; then
+  if [ "$result" -eq 0 ]; then
+    if [ "$KEEP_WORK" -eq 1 ]; then
+      echo "retaining successful golden evidence workspace: $WORK" >&2
+    elif ! rm -rf "$WORK"; then
       echo "FATAL: could not remove private golden workspace: $WORK" >&2
       trap - EXIT
       exit 2
     fi
   else
-    if [ "$result" -eq 0 ]; then
-      echo "retaining successful golden evidence workspace: $WORK" >&2
-    else
-      echo "retaining failed golden workspace: $WORK" >&2
-    fi
+    echo "retaining failed golden workspace: $WORK" >&2
   fi
 }
 trap cleanup_work EXIT

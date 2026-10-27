@@ -10,6 +10,8 @@ mod tests;
 
 pub(super) fn relevant(
     pull: &PullRequestResponse,
+    expected_repository_id: u64,
+    expected_repository: &str,
     branch_prefix: &str,
     receipt_marker: &str,
     expected_title: &str,
@@ -18,6 +20,11 @@ pub(super) fn relevant(
     match classify(
         &pull.head.ref_name,
         pull.body.as_deref().unwrap_or_default(),
+        pull.head
+            .repo
+            .as_ref()
+            .map(|repo| (repo.id, repo.full_name.as_str())),
+        (expected_repository_id, expected_repository),
         branch_prefix,
         receipt_marker,
     ) {

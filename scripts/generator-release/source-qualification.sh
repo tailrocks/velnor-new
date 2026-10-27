@@ -391,6 +391,12 @@ final_status=0
 if [ "$command_status" -ne 0 ] || [ "$identity_status" -ne 0 ] || [ "$artifact_status" -ne 0 ]; then
   final_status=1
 fi
+if [ "$final_status" -eq 0 ]; then
+  {
+    printf 'VELNOR_QUALIFICATION_ARCHIVE_GUARD=%s\n' "$guard"
+    printf 'VELNOR_QUALIFICATION_ARCHIVE_GUARD_SHA256=%s\n' "$digest"
+  } >>"$GITHUB_ENV" || final_status=1
+fi
 printf '%s\n' "$final_status" >"$evidence/logs/archive-guard-build.exit" || exit 1
 if [ "$artifact_status" -ne 0 ]; then
   printf 'artifact_status=1\n' >"$evidence/logs/archive-guard-build.artifact.exit" || true
@@ -593,6 +599,7 @@ evidence="$RUNNER_TEMP/source-qualification-artifacts"
 mise --no-config --no-env --no-hooks exec \
   "rust@$VELNOR_RUST_VERSION" "mr-boxington@$VELNOR_MBX_VERSION" -- \
   mbx build --locked --release --package velnor-actions-cli --bin velnor-actions \
+  --example qualification-diagnostics \
   >"$evidence/logs/cli-build.log" 2>&1
 command_status=$?
 identity_status=0
@@ -652,6 +659,28 @@ else
     cat "$evidence/cli-identity.txt" || artifact_status=1
   fi
 fi
+fixture="$CARGO_TARGET_DIR/release/examples/qualification-diagnostics"
+if [ "$command_status" -eq 0 ] && [ "$identity_status" -eq 0 ]; then
+  if [ -L "$fixture" ] || [ ! -f "$fixture" ] || [ ! -x "$fixture" ] \
+    || [ "$("$fixture" --version)" != "$version" ]; then
+    identity_status=1
+  else
+    fixture_digest="$(sha256sum "$fixture" | awk '{print $1}')"
+    if [[ ! "$fixture_digest" =~ ^[0-9a-f]{64}$ ]]; then
+      identity_status=1
+    elif ! {
+      printf 'diagnostics_fixture_path=%s\n' "$fixture"
+      printf 'diagnostics_fixture_sha256=%s\n' "$fixture_digest"
+    } >>"$evidence/cli-identity.txt"; then
+      artifact_status=1
+    elif ! {
+      printf 'VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE=%s\n' "$fixture"
+      printf 'VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE_SHA256=%s\n' "$fixture_digest"
+    } >>"$GITHUB_ENV"; then
+      artifact_status=1
+    fi
+  fi
+fi
 printf '%s\n' "$command_status" >"$evidence/logs/cli-build.command.exit" || artifact_status=1
 printf '%s\n' "$identity_status" >"$evidence/logs/cli-build.identity.exit" || artifact_status=1
 printf '%s\n' "$artifact_status" >"$evidence/logs/cli-build.artifact.exit" || artifact_status=1
@@ -682,7 +711,9 @@ fi
 mkdir -p "$oracle"
 set +e
 TMPDIR="$tmp" VELNOR_GOLDEN_DIR="$oracle" VELNOR_GOLDEN_KEEP_WORK=1 \
-  scripts/capture-opentofu-goldens.sh capture "$binary" \
+  scripts/capture-opentofu-goldens.sh \
+  --archive-guard "$VELNOR_QUALIFICATION_ARCHIVE_GUARD" \
+  --archive-guard-sha256 "$VELNOR_QUALIFICATION_ARCHIVE_GUARD_SHA256" capture "$binary" \
   >"$evidence/logs/external-capture.log" 2>&1
 command_status=$?
 artifact_status=0
@@ -740,7 +771,9 @@ if [ ! -x "$binary" ] || [ ! -d "$oracle/cases" ]; then
 fi
 set +e
 TMPDIR="$tmp" VELNOR_GOLDEN_DIR="$oracle" VELNOR_GOLDEN_KEEP_WORK=1 \
-  scripts/capture-opentofu-goldens.sh check "$binary" \
+  scripts/capture-opentofu-goldens.sh \
+  --archive-guard "$VELNOR_QUALIFICATION_ARCHIVE_GUARD" \
+  --archive-guard-sha256 "$VELNOR_QUALIFICATION_ARCHIVE_GUARD_SHA256" check "$binary" \
   >"$evidence/logs/external-check.log" 2>&1
 command_status=$?
 artifact_status=0
@@ -805,7 +838,11 @@ fi
 set +e
 TMPDIR="$RUNNER_TEMP/velnor-source-qualification-tmp" VELNOR_GOLDEN_DIR="$oracle" VELNOR_GOLDEN_KEEP_WORK=0 \
   mise --no-config --no-env --no-hooks exec node@26.12.0 -- \
-  scripts/test-capture-opentofu-goldens-bin.sh "$binary" \
+  scripts/test-capture-opentofu-goldens-bin.sh \
+  --archive-guard "$VELNOR_QUALIFICATION_ARCHIVE_GUARD" \
+  --archive-guard-sha256 "$VELNOR_QUALIFICATION_ARCHIVE_GUARD_SHA256" \
+  --diagnostics-fixture "$VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE" \
+  --diagnostics-fixture-sha256 "$VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE_SHA256" "$binary" \
   >"$evidence/logs/external-shell-harness.log" 2>&1
 command_status=$?
 artifact_status=0
@@ -859,7 +896,11 @@ fi
 set +e
 TMPDIR="$RUNNER_TEMP/velnor-source-qualification-tmp" VELNOR_GOLDEN_DIR="$oracle" \
   VELNOR_GOLDEN_KEEP_WORK=1 mise --no-config --no-env --no-hooks exec node@26.12.0 -- \
-  scripts/test-capture-opentofu-goldens-bin.sh "$binary" \
+  scripts/test-capture-opentofu-goldens-bin.sh \
+  --archive-guard "$VELNOR_QUALIFICATION_ARCHIVE_GUARD" \
+  --archive-guard-sha256 "$VELNOR_QUALIFICATION_ARCHIVE_GUARD_SHA256" \
+  --diagnostics-fixture "$VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE" \
+  --diagnostics-fixture-sha256 "$VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE_SHA256" "$binary" \
   >"$evidence/logs/$name.log" 2>&1
 command_status=$?
 artifact_status=0
@@ -909,21 +950,13 @@ proof_status=0
 preserve_mode_proofs() {
   local mode="$1" workspace_file="$2" command_file="$3" destination="$4"
   local command_status workspace require_complete mode_status copied missing
-  local root_physical workspace_physical backup_root fault_dir relative source target target_parent
-  local parent_status expected_count
+  local root_physical workspace_physical relative source target target_parent
+  local expected_count
   local files=(
     'output-binding manifest.json'
     'output-binding duplicate manifest.json'
+    'output-binding normalized manifest.json'
   )
-  local faults=(wrong-digest wrong-commit both missing-digest missing-url missing-commit wrong-url wrong-target)
-  local leaves=(original.json replacement.json receipt.json)
-  local fault leaf
-
-  for fault in "${faults[@]}"; do
-    for leaf in "${leaves[@]}"; do
-      files+=("manifest backups/$fault/$leaf")
-    done
-  done
   expected_count=${#files[@]}
   command_status=unavailable
   workspace=''
@@ -1001,23 +1034,8 @@ preserve_mode_proofs() {
   fi
 
   if [ "$mode_status" -eq 0 ]; then
-    backup_root="$workspace/manifest backups"
     for relative in "${files[@]}"; do
       source="$workspace/$relative"
-      parent_status=0
-      if [[ "$relative" == 'manifest backups/'* ]]; then
-        fault_dir="${relative#manifest backups/}"
-        fault_dir="$workspace/manifest backups/${fault_dir%%/*}"
-        if [ -L "$backup_root" ] \
-          || { [ -e "$backup_root" ] && [ ! -d "$backup_root" ]; } \
-          || [ -L "$fault_dir" ] \
-          || { [ -e "$fault_dir" ] && [ ! -d "$fault_dir" ]; }; then
-          printf 'proof parent is not a regular directory: %s\n' "$fault_dir" >&2
-          parent_status=1
-          mode_status=1
-        fi
-      fi
-      if [ "$parent_status" -ne 0 ]; then continue; fi
       if [ -L "$source" ] || { [ -e "$source" ] && [ ! -f "$source" ]; }; then
         printf 'proof file is not a regular non-symlink file: %s\n' "$source" >&2
         mode_status=1
@@ -1243,7 +1261,9 @@ if [ ! -x "$binary" ]; then
 fi
 set +e
 env -u VELNOR_GOLDEN_DIR TMPDIR="$RUNNER_TEMP/velnor-source-qualification-tmp" \
-  VELNOR_GOLDEN_KEEP_WORK=1 scripts/capture-opentofu-goldens.sh check "$binary" \
+  VELNOR_GOLDEN_KEEP_WORK=1 scripts/capture-opentofu-goldens.sh \
+  --archive-guard "$VELNOR_QUALIFICATION_ARCHIVE_GUARD" \
+  --archive-guard-sha256 "$VELNOR_QUALIFICATION_ARCHIVE_GUARD_SHA256" check "$binary" \
   >"$evidence/logs/repository-oracle-check.log" 2>&1
 command_status=$?
 artifact_status=0

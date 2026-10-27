@@ -3,6 +3,7 @@
 
 use super::{PreparedWorkflow, WorkflowBuildInput};
 use crate::OrchestratorError;
+use velnor_actions_bun::member_job_scripts;
 use velnor_actions_contract::Stack;
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::native_authority::{
@@ -142,6 +143,7 @@ pub(super) fn generated_sources(
 ) -> Result<Vec<GeneratedSourceFact>, OrchestratorError> {
     let mut generated_sources = Vec::new();
     for root in &input.discovery.bun.roots {
+        let bun_config = input.config.stacks.bun.as_ref();
         let private_assets = prepared
             .private
             .as_ref()
@@ -149,18 +151,16 @@ pub(super) fn generated_sources(
             .transpose()?
             .is_some_and(|steps| !steps.is_empty());
         for member in &root.workspace.members {
+            let has_member_job =
+                bun_config.is_some_and(|bun| !matches!(member_job_scripts(member, bun), Ok(None)));
+            let has_suites = bun_config
+                .and_then(|bun| bun.members.get(&member.name))
+                .is_some_and(|config| !config.suites.is_empty());
             generated_sources.push(GeneratedSourceFact::BunMember {
                 name: member.name.clone(),
                 workspace_root: root.workspace.root.clone(),
                 scripts: member.scripts.iter().cloned().collect(),
-                private_assets: private_assets
-                    && input
-                        .config
-                        .stacks
-                        .bun
-                        .as_ref()
-                        .and_then(|bun| bun.members.get(&member.name))
-                        .is_some_and(|member| !member.suites.is_empty()),
+                private_assets: private_assets && (has_member_job || has_suites),
             });
         }
     }
