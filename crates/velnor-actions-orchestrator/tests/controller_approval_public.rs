@@ -366,3 +366,19 @@ fn rotated_authority_accepts_new_and_rejects_old() -> Result<(), Box<dyn Error>>
     );
     Ok(())
 }
+
+#[test]
+fn symlinked_approvals_are_rejected() -> Result<(), Box<dyn Error>> {
+    let temp = fixture(Some(BASE_APPROVALS), BASE_LOCK)?;
+    let approvals = temp.path().join(".velnor/controller-approvals.json");
+    let outside = temp.path().join("outside-approvals.json");
+    fs::write(&outside, BASE_APPROVALS)?;
+    fs::remove_file(&approvals)?;
+    std::os::unix::fs::symlink(&outside, &approvals)?;
+    let error = prepare_error(temp.path())?;
+    assert!(
+        error.contains("symlink"),
+        "symlinked approvals must fail closed: {error}"
+    );
+    Ok(())
+}

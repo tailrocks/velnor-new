@@ -49,10 +49,19 @@ pub(crate) struct ControllerApprovedRelease {
 
 impl ControllerApprovedRelease {
     pub(crate) fn load_active_approval(root: &Path) -> Result<Self, OrchestratorError> {
-        let path = root.join(APPROVALS_REL);
-        let text = std::fs::read_to_string(&path).map_err(|err| {
-            OrchestratorError::io(path.display().to_string(), err.to_string())
-        })?;
+        let text = match crate::safe_read::read_repo_file(
+            root,
+            APPROVALS_REL,
+            crate::safe_read::MAX_REPO_FILE_BYTES,
+        )? {
+            crate::safe_read::RepoRead::Text(text) => text,
+            crate::safe_read::RepoRead::Absent => {
+                return Err(OrchestratorError::io(
+                    root.join(APPROVALS_REL).display().to_string(),
+                    "controller_approvals:missing_file".to_owned(),
+                ));
+            }
+        };
         Self::from_approvals_text(&text)
     }
 
