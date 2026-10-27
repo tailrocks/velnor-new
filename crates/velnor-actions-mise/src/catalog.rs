@@ -9,6 +9,13 @@ pub mod lock;
 #[path = "lock_verify.rs"]
 mod lock_verify;
 
+#[path = "catalog_mise_binary.rs"]
+mod mise_binary;
+pub use mise_binary::{
+    MISE_BINARY_SHA256_MACOS_ARM64, MISE_BINARY_SHA256_MACOS_X64, MiseBinaryIdentity,
+    current_mise_binary,
+};
+
 #[path = "release_plz.rs"]
 pub mod release_plz;
 

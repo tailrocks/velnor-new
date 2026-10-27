@@ -23,3 +23,11 @@ gh api -H 'X-GitHub-Api-Version: 2026-03-10' repos/jackin-project/jackin/git/ref
 The REST pull is closed and merged at `2026-10-22T22:39:28Z`, omits `merge_commit_sha`, and agrees with GraphQL on repository ID `1197700841`, head/base identity and timestamp. GraphQL supplies landed commit `9b296fc56a61bbc28db76805fe2bac730bc040eb`. Commit tree/parent objects omit `type`; the actual ref object includes `type: commit`.
 
 Official source references: [REST pull requests](https://docs.github.com/en/rest/pulls/pulls#get-a-pull-request), [GraphQL pull requests](https://docs.github.com/en/graphql/reference/pulls), [GraphQL repositories](https://docs.github.com/en/graphql/reference/repos), [Git commit objects](https://docs.github.com/en/rest/git/commits), and [Git references](https://docs.github.com/en/rest/git/refs).
+
+The passive commit-identity guard additionally uses `cutover-tap-base-git-commit.json`, captured read-only on 2026-10-27 and copied byte-identically from `/tmp/sdk57-cutover-initialization-draft-20261027/evidence/tap-transition-base-git-commit.json`. SHA256: `6a8ae37deb39f2d4aefe63e45906c7e2eefe92de8de9120abbab1ec740335e1b`.
+
+```sh
+gh api -H 'X-GitHub-Api-Version: 2026-03-10' repos/jackin-project/homebrew-tap/git/commits/921858f118256e16d3dc312c407814ab0fd8ef52
+```
+
+This is the existing transition-base commit, with tree `ce52780173323bcfcecce152cc147d342d17b6cc` and sole parent `95f57691a34919b77822c9236383a9227c7a8cc2`. It supplies authentic GET DTO input for exact commit/tree/parent checks. It does not prove an initialized cutover, a protected merge, SDK authentication or a successful POST. The reused `rest-git-commit.json` is PR1179's two-parent head object, not its landed merge commit.

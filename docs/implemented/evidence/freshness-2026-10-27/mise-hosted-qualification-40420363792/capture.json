@@ -1,0 +1,9 @@
+{
+  "observed_at": "2026-10-26T23:33:01.834Z",
+  "source": "https://github.com/tailrocks/velnor-new/actions/runs/40420363792",
+  "head_sha": "88333ee4113283c1d3a1f1c4ee268505248e9505",
+  "conclusion": "success",
+  "log_encoding": "gzip",
+  "log_sha256": "30f154d0859f8735212c024cf669ec6f443a9fcfd378b2ff7b103b5ddac31255",
+  "scope": "Mise 2026.10.20 exact version and binary digest on native hosted Linux x64 and macOS x64; not full final SDK qualification."
+}

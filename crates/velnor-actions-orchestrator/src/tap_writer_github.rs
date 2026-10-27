@@ -197,12 +197,12 @@ pub(super) struct BlobResponse {
 }
 
 #[derive(Debug, serde::Deserialize)]
-pub(super) struct CommitObject {
+pub(crate) struct CommitObject {
     pub sha: String,
 }
 
 #[derive(Debug, serde::Deserialize)]
-pub(super) struct CommitResponse {
+pub(crate) struct CommitResponse {
     pub sha: String,
     pub tree: CommitObject,
     pub parents: Vec<CommitObject>,

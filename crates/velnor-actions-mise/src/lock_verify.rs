@@ -139,3 +139,29 @@ pub fn catalog_for_published_generator(
     helper.project.remove(&PinnedTool::Gh);
     Ok(helper)
 }
+
+pub fn mise_binary_for_published_generator(
+    lock: &GeneratorLock,
+    target: ReleaseTarget,
+) -> Result<super::MiseBinaryIdentity, LockError> {
+    verify_lock_against_published_release(lock)?;
+    let (sha256, bytes) = match target {
+        ReleaseTarget::LinuxX86_64 => (
+            "3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d",
+            173_449_632,
+        ),
+        ReleaseTarget::MacosArm64 => (
+            "7dc61dfa71abbcda1c40d18440bc556b5d58b80e6042bc4f95fd106fa1bb3c66",
+            138_238_816,
+        ),
+        ReleaseTarget::MacosX86_64 => (
+            "8d5e1591811143f15334f690373cefb58c13bd6cbd0292008748fd777f6c99d8",
+            169_788_224,
+        ),
+    };
+    Ok(super::MiseBinaryIdentity {
+        version: "2026.10.19",
+        sha256,
+        bytes,
+    })
+}

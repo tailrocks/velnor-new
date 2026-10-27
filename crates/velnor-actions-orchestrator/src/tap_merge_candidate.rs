@@ -22,6 +22,9 @@ use crate::{
     },
 };
 
+#[path = "tap_merge_candidate_outcome.rs"]
+mod outcome;
+
 const LIMIT: u64 = 1024 * 1024;
 
 pub(super) struct MergeCandidate {
@@ -78,7 +81,8 @@ impl MergeCandidate {
                 candidate_proof_digest,
                 merged: Some((merge_sha, merged_at)),
             },
-            TapPromotionOutcome::SkippedStaleSource { .. } => return None,
+            TapPromotionOutcome::InitializedByCutover { .. }
+            | TapPromotionOutcome::SkippedStaleSource { .. } => return None,
         })
     }
 
@@ -191,70 +195,14 @@ fn validate_handoff(input: &HandoffValidation<'_>) -> Result<(), OrchestratorErr
         || proof.sdk_artifact_digest != *sdk_artifact_digest
         || proof.tap_config_digest != tap_digest
         || proof.new_formula_sha256 != sha256(formula)
-        || promotion.schema != "velnor.homebrew-tap-pr.v2"
+        || promotion.schema != "velnor.homebrew-tap-pr.v3"
         || promotion.repository != policy.repository
         || promotion.release_receipt_digest != release.receipt_digest
         || promotion.preparation_proof_digest != sha256(&proof_bytes)
     {
         return Err(internal("tap_merge_handoff_binding_mismatch"));
     }
-    validate_promotion_outcome(input)
-}
-
-fn validate_promotion_outcome(input: &HandoffValidation<'_>) -> Result<(), OrchestratorError> {
-    let HandoffValidation {
-        proof,
-        promotion,
-        release,
-        ..
-    } = input;
-    match &promotion.outcome {
-        TapPromotionOutcome::PullRequest {
-            pull_request,
-            head_sha,
-            base_sha,
-            branch,
-            candidate_proof_digest,
-        } if proof.disposition == TapPreparationDisposition::Changed
-            && *pull_request > 0
-            && base_sha == &proof.base_sha
-            && branch
-                == &expected_branch(
-                    &release.receipt_digest,
-                    base_sha,
-                    release.receipt.channel,
-                )?
-            && candidate_proof_digest == &promotion.preparation_proof_digest
-            && is_hex(head_sha, 40)
-            && is_hex(base_sha, 40) => {}
-        TapPromotionOutcome::AlreadyPromoted {
-            pull_request,
-            head_sha,
-            base_sha,
-            branch,
-            candidate_proof_digest,
-            merge_sha,
-            merged_at,
-        } if proof.disposition == TapPreparationDisposition::FormulaAlreadyCurrent
-            && proof.old_formula_sha256 == proof.new_formula_sha256
-            && *pull_request > 0
-            && branch
-                == &expected_branch(
-                    &release.receipt_digest,
-                    base_sha,
-                    release.receipt.channel,
-                )?
-            && is_hex(candidate_proof_digest, 64)
-            && is_hex(head_sha, 40)
-            && is_hex(base_sha, 40)
-            && is_hex(merge_sha, 40)
-            && !merged_at.is_empty() => {}
-        TapPromotionOutcome::SkippedStaleSource { .. } => {
-            return Err(internal("tap_merge_skipped_promotion_invalid"));
-        }
-        _ => return Err(internal("tap_merge_handoff_binding_mismatch")),
-    }
-    Ok(())
+    outcome::validate_promotion_outcome(input)
 }
 
 pub(super) fn validate_formula_at_base(

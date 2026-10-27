@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::{GeneratorLock, Job, VelnorConfig, WorkflowPolicy};
 use velnor_actions_mise::ToolCatalog;
 
+mod check_mise;
 mod graph;
 mod inputs;
 mod plan;

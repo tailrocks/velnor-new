@@ -5,8 +5,12 @@
 mod base;
 #[path = "homebrew_structural_cutover/candidate.rs"]
 mod candidate;
+#[path = "homebrew_cutover_marker.rs"]
+mod marker;
 
-pub(super) use base::protected_transition;
+pub(crate) use marker::{CutoverMarker, MARKER_LIMIT, MARKER_PATH, parse_marker, sha256};
+
+pub(crate) use base::protected_transition;
 pub(crate) use base::{
     HomebrewSeedOutputBaseIdentity, PrivateVerifiedSeedOutputBase, verify_seed_output_base,
 };

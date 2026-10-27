@@ -6,23 +6,6 @@ use crate::internal::internal;
 use std::path::Path;
 use velnor_actions_contract::config::CheckPlatform;
 use velnor_actions_mise::CheckDeadline;
-use velnor_actions_workflow_renderer::setup::{
-    MISE_BINARY_SHA256_LINUX_X64, MISE_BINARY_SHA256_MACOS_ARM64, MISE_BINARY_SHA256_MACOS_X64,
-};
-
-struct MiseBinaryPin {
-    sha256: &'static str,
-    max_bytes: u64,
-}
-
-fn mise_binary_pin(platform: CheckPlatform) -> MiseBinaryPin {
-    let (sha256, max_bytes) = match platform {
-        CheckPlatform::LinuxX64 => (MISE_BINARY_SHA256_LINUX_X64, 173_449_632),
-        CheckPlatform::MacosArm64 => (MISE_BINARY_SHA256_MACOS_ARM64, 138_238_816),
-        CheckPlatform::MacosX64 => (MISE_BINARY_SHA256_MACOS_X64, 169_788_224),
-    };
-    MiseBinaryPin { sha256, max_bytes }
-}
 
 pub(super) fn project_mise_binary(
     home: &Path,
@@ -31,12 +14,12 @@ pub(super) fn project_mise_binary(
 ) -> Result<(), OrchestratorError> {
     let source = velnor_actions_mise::command::resolve_check_program("mise")
         .map_err(|e| internal(&e.to_string()))?;
-    let pin = mise_binary_pin(platform);
+    let pin = velnor_actions_mise::current_mise_binary(platform.release_target());
     project_binary_until(
         Path::new(&source),
         &home.join("bin/mise"),
         pin.sha256,
-        pin.max_bytes,
+        pin.bytes,
         Some(deadline),
     )
 }

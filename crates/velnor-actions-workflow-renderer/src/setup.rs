@@ -8,6 +8,9 @@ use crate::{RenderError, steps};
 pub const MISE_ACTION_NAME: &str = "jdx/mise-action";
 pub const SETUP_MISE_NAME: &str = "Setup Mise";
 pub use velnor_actions_mise::MISE_BINARY_SHA256_LINUX_X64;
+pub use velnor_actions_mise::catalog::{
+    MISE_BINARY_SHA256_MACOS_ARM64, MISE_BINARY_SHA256_MACOS_X64,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MiseSetup {
@@ -15,11 +18,6 @@ pub struct MiseSetup {
     pub version: String,
     pub sha256: String,
 }
-
-pub const MISE_BINARY_SHA256_MACOS_ARM64: &str =
-    "7acfdbf412c8ec5b0d919d277417648c0534333d55f0242d5f9520d0d8ca7cc9";
-pub const MISE_BINARY_SHA256_MACOS_X64: &str =
-    "98b031e88eb0fd33c1507acb538f429747d26b770cd3cfe257408ec104ac9f6d";
 
 impl MiseSetup {
     pub fn for_target(&self, target: &str) -> Result<Self, RenderError> {
@@ -30,19 +28,31 @@ impl MiseSetup {
                 self.version
             )));
         }
-        let sha256 = match target {
-            "x86_64-unknown-linux-gnu" => MISE_BINARY_SHA256_LINUX_X64,
-            "aarch64-apple-darwin" => MISE_BINARY_SHA256_MACOS_ARM64,
-            "x86_64-apple-darwin" => MISE_BINARY_SHA256_MACOS_X64,
-            _ => {
-                return Err(RenderError::BadCommand(format!(
-                    "mise_setup_unsupported_target:{target}"
-                )));
-            }
-        };
+        let platform =
+            velnor_actions_contract::ReleaseTarget::parse_triple(target).ok_or_else(|| {
+                RenderError::BadCommand(format!("mise_setup_unsupported_target:{target}"))
+            })?;
+        let binary = velnor_actions_mise::current_mise_binary(platform);
         Ok(Self {
-            sha256: sha256.to_owned(),
+            version: binary.version.to_owned(),
+            sha256: binary.sha256.to_owned(),
             ..self.clone()
+        })
+    }
+
+    pub(crate) fn for_published_generator(
+        &self,
+        lock: &velnor_actions_contract::GeneratorLock,
+        target: velnor_actions_contract::ReleaseTarget,
+    ) -> Result<Self, RenderError> {
+        let binary =
+            velnor_actions_mise::catalog::lock::mise_binary_for_published_generator(lock, target)
+                .map_err(|error| RenderError::BadCommand(error.to_string()))?;
+        let current = self.for_target(target.triple())?;
+        Ok(Self {
+            version: binary.version.to_owned(),
+            sha256: binary.sha256.to_owned(),
+            ..current
         })
     }
 

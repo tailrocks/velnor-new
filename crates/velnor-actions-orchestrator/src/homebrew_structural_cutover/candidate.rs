@@ -49,6 +49,13 @@ pub(crate) fn expected_structural_output_tree(
         (0o100_644, witness.sdk_manifest().to_vec()),
     );
     overlay_channel_formulas(authority, verified_preview_formula, &mut expected)?;
+    expected.insert(
+        super::marker::MARKER_PATH.to_owned(),
+        (
+            0o100_644,
+            super::marker::marker_bytes(authority, witness, verified_preview_formula, deadline)?,
+        ),
+    );
     Ok(expected)
 }
 

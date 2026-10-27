@@ -15,6 +15,7 @@ use super::{
     internal,
 };
 use crate::tap_prepare::reconstruct_historical_candidate_proof;
+use crate::tap_writer_history_timestamp as timestamp;
 
 const PAGE_SIZE: usize = 100;
 const MAX_PAGES: usize = 100;
@@ -22,8 +23,8 @@ const TAP_BASE: &str = "main";
 
 #[path = "tap_writer_history_landed.rs"]
 mod landed;
-#[path = "tap_writer_history_timestamp.rs"]
-mod timestamp;
+#[path = "tap_writer_history_selection.rs"]
+mod selection;
 
 pub(super) struct HistoricalPromotion {
     pub(super) pull_request: u64,
@@ -38,7 +39,7 @@ pub(super) struct HistoricalPromotion {
 pub(super) fn find_already_promoted(
     inputs: &WriterInputs,
     bot: &BotIdentity,
-) -> Result<HistoricalPromotion, OrchestratorError> {
+) -> Result<Option<HistoricalPromotion>, OrchestratorError> {
     let pulls = all_pulls(&inputs.api)?;
     let receipt_marker = format!("Receipt digest: `{}`", inputs.release.receipt_digest);
     let branch_prefix = receipt_branch_prefix(
@@ -48,21 +49,12 @@ pub(super) fn find_already_promoted(
     let expected_title = expected_pr_title(&inputs.release);
     let mut candidates = Vec::new();
     for pull in pulls {
-        let branch_match = pull.head.ref_name.starts_with(&branch_prefix);
-        let marker_match = pull
-            .body
-            .as_deref()
-            .is_some_and(|body| body.contains(&receipt_marker));
-        if !branch_match {
-            continue;
+        if selection::relevant(&pull, &branch_prefix, &receipt_marker, &expected_title)? {
+            candidates.push(pull);
         }
-        if !marker_match {
-            return Err(internal("tap_historical_receipt_marker_conflict"));
-        }
-        if pull.title != expected_title {
-            return Err(internal("tap_historical_receipt_title_conflict"));
-        }
-        candidates.push(pull);
+    }
+    if candidates.is_empty() {
+        return Ok(None);
     }
     if candidates.iter().any(|pull| pull.state == "open") {
         return Err(internal("tap_already_current_open_pr_exists"));
@@ -78,15 +70,17 @@ pub(super) fn find_already_promoted(
         if detail.number != summary.number || detail.merged.is_none() {
             return Err(internal("tap_historical_pr_detail_invalid"));
         }
-        if detail.merged == Some(true) {
-            authenticated.push(authenticate_merged_pull(inputs, bot, &detail)?);
+        if detail.merged != Some(true) {
+            return Err(internal("tap_already_current_unmerged_pr_exists"));
         }
+        authenticated.push(authenticate_merged_pull(inputs, bot, &detail)?);
     }
     if authenticated.len() != 1 {
         return Err(internal("tap_already_current_historical_pr_count"));
     }
     authenticated
         .pop()
+        .map(Some)
         .ok_or_else(|| internal("tap_already_current_historical_pr_missing"))
 }
 
@@ -123,7 +117,7 @@ fn all_pulls(api: &TapGitHubApi) -> Result<Vec<PullRequestResponse>, Orchestrato
             return Err(internal("tap_historical_pull_page_invalid"));
         }
         pulls.extend(batch);
-        if len < PAGE_SIZE {
+        if selection::page_finished(len, page)? {
             return Ok(pulls);
         }
     }

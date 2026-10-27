@@ -5,6 +5,11 @@
 mod candidate;
 #[path = "tap_merge_completed.rs"]
 mod completed;
+#[path = "homebrew_cutover_initialization.rs"]
+mod cutover;
+#[path = "tap_merge_initialized.rs"]
+mod initialized;
+pub(crate) use cutover::{CutoverInput, observe_cutover_initialization};
 #[path = "tap_merge_feedback.rs"]
 mod feedback;
 #[path = "tap_merge_github.rs"]
@@ -42,6 +47,7 @@ pub enum TapMergeOutcome {
     Pending,
     Merged,
     AlreadyPromoted,
+    InitializedByCutover,
     SkippedStaleSource,
 }
 
@@ -63,6 +69,16 @@ fn merge_once() -> Result<TapMergeOutcome, OrchestratorError> {
         return Ok(TapMergeOutcome::SkippedStaleSource);
     }
     let (api, authority, observer) = authenticate_merge(&candidate)?;
+    if matches!(
+        &candidate.promotion.outcome,
+        crate::tap_prepare::TapPromotionOutcome::InitializedByCutover { .. }
+    ) {
+        let verified = initialized::verify(&candidate, &authority, &api, &observer)?;
+        if verified.into_outcome() != candidate.promotion.outcome {
+            return Err(internal("tap_merge_initialization_handoff_changed"));
+        }
+        return Ok(TapMergeOutcome::InitializedByCutover);
+    }
     if candidate
         .selection()
         .ok_or_else(|| internal("tap_merge_skipped_promotion_invalid"))?
