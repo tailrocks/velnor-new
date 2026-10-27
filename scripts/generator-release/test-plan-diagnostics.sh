@@ -14,6 +14,7 @@ OUTPUT="$parent/$(basename "$OUTPUT")"
 case "$OUTPUT" in "$ROOT"|"$ROOT"/*) echo 'diagnostic evidence must remain outside the repository' >&2; exit 2 ;; esac
 mkdir -m 700 "$OUTPUT"
 mkdir "$OUTPUT/bindings"
+DIAGNOSTICS_TMPDIR="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
 cd "$ROOT"
 source scripts/generator-release/qualification-goldens.sh
 command -v node >/dev/null
@@ -31,7 +32,8 @@ if [ "${1-}" = plan ]; then
       ;;
   esac
 fi
-if [ "${1-}" != generate ] || [ "$(pwd -P)" = "$VELNOR_PLAN_DIAGNOSTICS_ROOT" ]; then
+if { [ "${1-}" != plan ] && [ "${1-}" != generate ]; } \
+  || [ "$(pwd -P)" = "$VELNOR_PLAN_DIAGNOSTICS_ROOT" ]; then
   exec "$VELNOR_TEST_REAL_CLI_BIN" "$@"
 fi
 backup=$(mktemp -d "$VELNOR_PLAN_DIAGNOSTICS_BINDINGS/manifest.XXXXXX") || exit 2
@@ -79,11 +81,65 @@ export VELNOR_PLAN_DIAGNOSTICS_BINDINGS="$OUTPUT/bindings"
 
 run_collector() {
   local name=$1 mode=$2 operation=$3 status=0
-  VELNOR_PLAN_DIAGNOSTICS_MODE="$mode" VELNOR_GOLDEN_DIR="$OUTPUT/oracle" \
+  local workspace workspace_base workspace_parent raw case_name case_dir source destination
+  VELNOR_PLAN_DIAGNOSTICS_MODE="$mode" TMPDIR="$DIAGNOSTICS_TMPDIR" VELNOR_GOLDEN_DIR="$OUTPUT/oracle" \
     VELNOR_GOLDEN_KEEP_WORK=0 \
     bash "$ROOT/scripts/capture-opentofu-goldens.sh" "$operation" "$OUTPUT/candidate" \
     >"$OUTPUT/$name.log" 2>&1 || status=$?
   printf '%s\n' "$status" >"$OUTPUT/$name.exit"
+  workspace="$(sed -n -e 's/^retaining successful golden evidence workspace: //p' \
+    -e 's/^retaining failed golden workspace: //p' \
+    "$OUTPUT/$name.log" | tail -n 1)"
+  if [ -z "$workspace" ]; then return 0; fi
+  workspace_base="${workspace##*/}"
+  if [[ ! "$workspace_base" =~ ^velnor-goldens-work\.[A-Za-z0-9]+$ ]] \
+    || [ -L "$workspace" ] || [ ! -d "$workspace" ]; then
+    printf 'unsafe retained golden workspace: %s\n' "$workspace" >&2
+    return 1
+  fi
+  workspace_parent="$(cd "$workspace/.." 2>/dev/null && pwd -P)" || return 1
+  if [ "$workspace_parent" != "$DIAGNOSTICS_TMPDIR" ] \
+    || [ "$(cd "$workspace" && pwd -P)" != "$workspace" ]; then
+    printf 'retained golden workspace is outside physical TMPDIR: %s\n' "$workspace" >&2
+    return 1
+  fi
+  raw="$workspace/raw"
+  if [ -L "$raw" ]; then
+    printf 'unsafe retained raw diagnostics directory: %s\n' "$raw" >&2
+    return 1
+  fi
+  if [ ! -e "$raw" ]; then return 0; fi
+  if [ ! -d "$raw" ]; then
+    printf 'retained raw diagnostics path is not a directory: %s\n' "$raw" >&2
+    return 1
+  fi
+  for case_name in nested mbx-nextest empty-suite minimal-cargo dogfood; do
+    case_dir="$raw/$case_name"
+    if [ -L "$case_dir" ]; then
+      printf 'unsafe retained diagnostics case directory: %s\n' "$case_dir" >&2
+      return 1
+    fi
+    if [ ! -e "$case_dir" ]; then continue; fi
+    if [ ! -d "$case_dir" ]; then
+      printf 'retained diagnostics case path is not a directory: %s\n' "$case_dir" >&2
+      return 1
+    fi
+    source="$case_dir/plan.stderr.raw.txt"
+    if [ -L "$source" ]; then
+      printf 'unsafe retained plan diagnostics file: %s\n' "$source" >&2
+      return 1
+    fi
+    if [ ! -e "$source" ]; then continue; fi
+    if [ ! -f "$source" ]; then
+      printf 'retained plan diagnostics path is not a regular file: %s\n' "$source" >&2
+      return 1
+    fi
+    destination="$OUTPUT/$name-$case_name-plan.stderr.raw.txt"
+    if [ -e "$destination" ] || [ -L "$destination" ] || ! cp -p "$source" "$destination"; then
+      printf 'could not safely preserve retained plan diagnostics: %s\n' "$source" >&2
+      return 1
+    fi
+  done
 }
 run_collector capture control capture
 [[ "$(cat "$OUTPUT/capture.exit")" = 0 ]] || { cat "$OUTPUT/capture.log" >&2; exit 1; }

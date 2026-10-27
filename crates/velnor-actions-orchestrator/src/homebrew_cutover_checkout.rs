@@ -5,6 +5,10 @@ use crate::{OrchestratorError, internal::internal};
 use std::{ffi::OsString, path::Path};
 use velnor_actions_mise::{CheckDeadline, GitRequest, IsolatedCommand};
 
+#[cfg(test)]
+#[path = "homebrew_cutover_checkout_tests.rs"]
+mod tests;
+
 const MAX_OBJECT_BYTES: u64 = 64 * 1024 * 1024;
 const OUTPUT_LIMIT: usize = 1024 * 1024;
 
@@ -64,13 +68,59 @@ pub(super) fn capture(
             return Err(internal("homebrew_cutover_capture_commit"));
         }
     }
-    require_ancestor(root, &transition.transition().base_sha, base, deadline)?;
-    require_ancestor(root, base, landed, deadline)?;
-    require_ancestor(root, landed, "refs/remotes/origin/main", deadline)?;
+    validate_history(
+        root,
+        &transition.transition().base_sha,
+        base,
+        head,
+        landed,
+        deadline,
+    )?;
     validate_tree_bytes(root, base, deadline)?;
     validate_tree_bytes(root, head, deadline)?;
     run(root, &["checkout", "--quiet", "--detach", base], deadline)?;
     Ok(staging)
+}
+
+fn validate_history(
+    root: &Path,
+    protected_base: &str,
+    base: &str,
+    head: &str,
+    landed: &str,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    require_direct_parent(root, base, head, deadline)?;
+    require_ancestor(root, protected_base, base, deadline)?;
+    require_ancestor(root, base, landed, deadline)?;
+    require_ancestor(root, landed, "refs/remotes/origin/main", deadline)
+}
+
+fn require_direct_parent(
+    root: &Path,
+    base: &str,
+    head: &str,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    let output = GitRequest::show(
+        ["--no-patch", "--format=%P", head]
+            .map(OsString::from)
+            .to_vec(),
+    )
+    .command_in(root)
+    .with_env(&git_env(root))
+    .and_then(|command| command.run_until(OUTPUT_LIMIT, deadline))
+    .map_err(|_| internal("homebrew_cutover_capture_head_parent"))?;
+    output
+        .require_success("git")
+        .map_err(|_| internal("homebrew_cutover_capture_head_parent"))?;
+    let parents = output
+        .stdout_text("git")
+        .map_err(|_| internal("homebrew_cutover_capture_head_parent"))?;
+    if parents.trim() != base {
+        return Err(internal("homebrew_cutover_capture_head_parent"));
+    }
+    Ok(())
 }
 
 fn validate_tree_bytes(

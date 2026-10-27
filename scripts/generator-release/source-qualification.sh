@@ -9,6 +9,52 @@ if [ "$#" -ne 1 ]; then
   exit 64
 fi
 
+preserve_plan_diagnostics() {
+  local workspace="$1" destination="$2" tmp_root="$RUNNER_TEMP/velnor-source-qualification-tmp"
+  local physical_tmp workspace_parent workspace_base diagnostics file basename target
+  if [ -L "$tmp_root" ] || [ ! -d "$tmp_root" ]; then
+    printf 'controlled golden TMPDIR is absent or unsafe\n' >&2
+    return 1
+  fi
+  physical_tmp="$(cd "$tmp_root" && pwd -P)" || return 1
+  workspace_base="${workspace##*/}"
+  if [[ ! "$workspace_base" =~ ^velnor-goldens-bin-test\.[A-Za-z0-9]+$ ]] \
+    || [ -L "$workspace" ] || [ ! -d "$workspace" ]; then
+    printf 'retained harness workspace is absent or unsafe\n' >&2
+    return 1
+  fi
+  workspace_parent="$(cd "$workspace/.." && pwd -P)" || return 1
+  if [ "$workspace_parent" != "$physical_tmp" ] \
+    || [ "$(cd "$workspace" && pwd -P)" != "$workspace" ]; then
+    printf 'retained harness workspace is outside physical TMPDIR\n' >&2
+    return 1
+  fi
+  diagnostics="$workspace/plan-diagnostics"
+  if [ -L "$diagnostics" ]; then
+    printf 'retained plan diagnostics directory is a symlink\n' >&2
+    return 1
+  fi
+  if [ ! -e "$diagnostics" ]; then return 0; fi
+  if [ ! -d "$diagnostics" ] || [ -L "$destination" ] || [ ! -d "$destination" ]; then
+    printf 'retained plan diagnostics paths are not safe directories\n' >&2
+    return 1
+  fi
+  for file in "$diagnostics"/*.log "$diagnostics"/*.exit "$diagnostics"/*.txt; do
+    if [ ! -e "$file" ] && [ ! -L "$file" ]; then continue; fi
+    basename="${file##*/}"
+    if [ -L "$file" ] || [ ! -f "$file" ] \
+      || [[ ! "$basename" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*\.(log|exit|txt)$ ]]; then
+      printf 'retained plan diagnostics file is unsafe: %s\n' "$basename" >&2
+      return 1
+    fi
+    target="$destination/plan-diagnostics-$basename"
+    if [ -e "$target" ] || [ -L "$target" ] || ! cp -p "$file" "$target"; then
+      printf 'could not preserve retained plan diagnostics file: %s\n' "$basename" >&2
+      return 1
+    fi
+  done
+}
+
 case "$1" in
   prepare-external-evidence-directories)
 set -euo pipefail
@@ -777,6 +823,10 @@ case "$workspace" in
         fi
       fi
     done
+    if ! preserve_plan_diagnostics "$workspace" "$evidence/external-shell-harness-logs"; then
+      printf 'could not safely preserve plan diagnostics files\n' >>"$evidence/logs/external-shell-harness-workspace.txt"
+      artifact_status=1
+    fi
     ;;
   *)
     if [ "$command_status" -ne 0 ]; then
@@ -828,6 +878,10 @@ case "$workspace" in
           fi
         fi
       done
+      if ! preserve_plan_diagnostics "$workspace" "$evidence/external-shell-harness-keep-logs"; then
+        printf 'could not safely preserve plan diagnostics files\n' >>"$evidence/logs/$name-workspace.txt"
+        artifact_status=1
+      fi
     else
       printf 'retained harness workspace is not a safe directory\n' >>"$evidence/logs/$name-workspace.txt"
       artifact_status=1
