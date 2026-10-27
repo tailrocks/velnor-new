@@ -60,6 +60,7 @@ impl SuiteName {
 enum SuiteTool {
     GenerateValidators,
     OpenTofuExecution,
+    BunExecution,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -73,6 +74,10 @@ impl CrateSuite {
         self.tools.contains(&tool)
     }
 
+    pub(crate) fn owns_bun(self) -> bool {
+        self.owns(SuiteTool::BunExecution)
+    }
+
     const fn package_name(self) -> &'static str {
         self.name.package_name()
     }
@@ -81,11 +86,12 @@ impl CrateSuite {
 const NO_SUITE_TOOLS: &[SuiteTool] = &[];
 const GENERATE_VALIDATOR_TOOLS: &[SuiteTool] = &[SuiteTool::GenerateValidators];
 const OPENTOFU_TOOLS: &[SuiteTool] = &[SuiteTool::OpenTofuExecution];
+const ORCHESTRATOR_TOOLS: &[SuiteTool] = &[SuiteTool::GenerateValidators, SuiteTool::BunExecution];
 
 const SUITE_TOOL_OWNERS: [CrateSuite; 14] = [
     CrateSuite {
         name: SuiteName::Orchestrator,
-        tools: GENERATE_VALIDATOR_TOOLS,
+        tools: ORCHESTRATOR_TOOLS,
     },
     CrateSuite {
         name: SuiteName::Cli,
@@ -192,12 +198,35 @@ pub(crate) fn prepare_crate_tools_step(
     use_opentofu: bool,
     needs_validators: bool,
 ) -> Result<Step, OrchestratorError> {
+    prepare_crate_tools_step_with_bun(
+        catalog,
+        use_rust,
+        use_nextest,
+        use_opentofu,
+        needs_validators,
+        false,
+    )
+}
+
+#[expect(
+    clippy::fn_params_excessive_bools,
+    reason = "independent install flags mirror the existing driver selection"
+)]
+pub(crate) fn prepare_crate_tools_step_with_bun(
+    catalog: &ToolCatalog,
+    use_rust: bool,
+    use_nextest: bool,
+    use_opentofu: bool,
+    needs_validators: bool,
+    needs_bun: bool,
+) -> Result<Step, OrchestratorError> {
     let mut tools = task_driver_tools(use_rust, use_opentofu);
     tools.extend((use_rust && catalog.rust_mr_boxington()).then_some(PinnedTool::MrBoxington));
     if needs_validators {
         tools.extend([PinnedTool::Jactionlint, PinnedTool::Shellcheck]);
     }
     tools.extend(use_nextest.then_some(PinnedTool::Nextest));
+    tools.extend(needs_bun.then_some(PinnedTool::Bun));
     let prepare = PreparePinnedTools::new(tools, ToolHomes::runner_temp()).map_err(|err| {
         OrchestratorError::Contract {
             problem: err.to_string(),

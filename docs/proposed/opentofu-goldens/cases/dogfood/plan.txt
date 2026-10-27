@@ -32,14 +32,14 @@ Detected stacks
     evidence .config/nextest.toml:7 [profile.ci] [durable]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
     evidence mise.toml:19 ], mr_boxington = true } [durable]
-    evidence mise.toml:43 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
+    evidence mise.toml:44 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
   Profile crates/velnor-runner: mbx compile driver (declared), cargo_nextest test runner (declared)
   Nextest profile crates/velnor-runner: ci (crates/velnor-runner/.config/nextest.toml)
     evidence .config/nextest.toml:7 [profile.ci] [durable]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
     evidence crates/velnor-runner/.config/nextest.toml:4 [profile.ci] [durable]
     evidence mise.toml:19 ], mr_boxington = true } [durable]
-    evidence mise.toml:43 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
+    evidence mise.toml:44 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
 
 Workflow to generate
   .github/jactionlint.yaml
@@ -68,7 +68,7 @@ Workflow to generate
     - rust-velnor-actions-dbt (25 steps)
     - rust-velnor-actions-gradle (25 steps)
     - rust-velnor-actions-mise (26 steps)
-    - rust-velnor-actions-orchestrator (28 steps)
+    - rust-velnor-actions-orchestrator (29 steps)
     - rust-velnor-actions-rust (25 steps)
     - rust-velnor-actions-tofu (25 steps)
     - rust-velnor-actions-workflow-renderer (26 steps)

@@ -19,6 +19,8 @@ mod bun_malformed;
 mod bun_planning;
 #[path = "workflow_configuration_public/bun_planning_fixture.rs"]
 mod bun_planning_fixture;
+#[path = "workflow_configuration_public/bun_prerequisite.rs"]
+mod bun_prerequisite;
 #[path = "workflow_configuration_public/bun_private_credentials.rs"]
 mod bun_private_credentials;
 #[path = "workflow_configuration_public/bun_private_credentials_boundaries.rs"]

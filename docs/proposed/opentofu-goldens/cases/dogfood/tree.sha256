@@ -22,7 +22,7 @@ ac734a0c3935c4244437d2f70a11748cefb1448174a38342468efecc9d81effe  ./.github/acti
 e2103a50cc1a6d2e257f3f40109e6cc7280578819cdd5c74964915a510e7136d  ./.github/velnor/task-execution-manifest-v1.json
 10adbd6dd7eb4a17f718258ccab6a95c4b6cf4088029bafb1c25d4b39f5770ca  ./.github/workflows/cache-cleanup.yml
 ab19b468c92bf662aa4c507a179e2603d23038b8c98a30788d74d983166a53dc  ./.github/workflows/cache-prune.yml
-7495ea3b2f26f525d46730a7b206cb2c2cc116f922651721635cf1b83aa4a4c5  ./.github/workflows/ci.yml
+e2424bd25fbaa9336d2defbd1d2086412c3ba7c2fee54120676d1d60b3ced5b2  ./.github/workflows/ci.yml
 f5ca6a509d66c014c8e11ad1d53dbb2bc7bf316f7ddd8eb9163d64f8f33b9546  ./.github/workflows/freshness.yml
 09689198679a986459473031d496e34d08d8431aa31e81a35c9ea7981a1d66e1  ./.github/workflows/homebrew-adoption.yml
 f2ce8b6ddaa79bd96cb425c9e552e5cafda2d559c0f3f1a6dbd8e642c35258fe  ./.github/workflows/job-image-candidate.yml
