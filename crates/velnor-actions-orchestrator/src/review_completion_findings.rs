@@ -6,7 +6,7 @@ use crate::{OrchestratorError, internal::internal};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
-const QUERY: &str = "query($id:ID!,$cursor:String){node(id:$id){... on PullRequestReviewThread{id isResolved isOutdated pullRequest{number repository{nameWithOwner}} comments(first:100,after:$cursor){nodes{id databaseId body updatedAt lastEditedAt author{__typename ... on Bot{databaseId}} editor{__typename ... on Bot{databaseId}} pullRequestReview{databaseId}} pageInfo{hasNextPage endCursor}}}}";
+const QUERY: &str = "query($id:ID!,$cursor:String){node(id:$id){... on PullRequestReviewThread{id isResolved isOutdated pullRequest{number repository{nameWithOwner}} comments(first:100,after:$cursor){nodes{id fullDatabaseId body updatedAt lastEditedAt author{__typename ... on Bot{databaseId}} editor{__typename ... on Bot{databaseId}} pullRequestReview{fullDatabaseId}} pageInfo{hasNextPage endCursor}}}}}";
 
 pub(super) struct Findings {
     pub(super) latest: Option<time::Timestamp>,
@@ -87,7 +87,7 @@ fn collect_thread(
                 return Err(internal("review_finding_bound"));
             }
             let rest = expected
-                .remove(&positive(row, "databaseId")?)
+                .remove(&super::full_database_id(row).ok_or_else(|| internal("review_finding_id"))?)
                 .ok_or_else(|| internal("review_finding_comment_bijection"))?;
             let stamp = authenticate_comment(row, rest, records)?;
             result.latest = Some(result.latest.map_or(stamp, |old| old.max(stamp)));
@@ -122,10 +122,7 @@ fn authenticate_comment(
     if node["id"] != rest["node_id"]
         || node["body"] != rest["body"]
         || node["updatedAt"] != rest["updated_at"]
-        || node
-            .pointer("/pullRequestReview/databaseId")
-            .and_then(Value::as_u64)
-            != Some(review)
+        || super::full_database_id(&node["pullRequestReview"]) != Some(review)
         || !records
             .reviews
             .iter()

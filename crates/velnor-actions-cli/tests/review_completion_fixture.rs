@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{CODEX, Scenario, codex_edit, event_action, request_body, request_time, sonar_edit};
+use super::{CODEX, Scenario, event_action, request_body, request_time, sonar_edit};
 use serde_json::{Value, json};
 use std::{
     error::Error,
@@ -10,6 +10,11 @@ use std::{
     path::{Path, PathBuf},
     process::{Command, Output},
 };
+
+#[path = "review_completion_fixture/comment_editor.rs"]
+mod comment_editor;
+#[path = "review_completion_fixture/review_content.rs"]
+mod review_content;
 
 const REPOSITORY: &str = "jackin-project/homebrew-tap";
 const REPOSITORY_ID: u64 = 1_200_197_694;
@@ -188,7 +193,7 @@ fn write_fixture(state: &Path, scenario: Scenario) -> Result<(), Box<dyn Error>>
         &sonar_rest_updated,
     )?;
     write_static_responses(state, scenario)?;
-    write_editor_responses(
+    comment_editor::write_responses(
         state,
         scenario,
         &sonar_body,
@@ -207,6 +212,7 @@ fn write_comments(
     sonar_created: &Value,
     sonar_updated: &Value,
 ) -> Result<(), Box<dyn Error>> {
+    let (codex_comment_id, sonar_comment_id) = comment_editor::comment_ids(scenario);
     let mut comments = Vec::new();
     if scenario.has_live_request() {
         comments.push(json!({
@@ -215,13 +221,13 @@ fn write_comments(
         }));
     }
     comments.push(json!({
-        "id":6_405_682_853_u64,"node_id":"IC_codex_summary","user":{"id":199_175_422,"type":"Bot"},
+        "id":codex_comment_id,"node_id":"IC_codex_summary","user":{"id":199_175_422,"type":"Bot"},
         "created_at":"2026-10-26T00:42:04Z","updated_at":"2026-10-27T15:03:25Z","body":CODEX,
         "performed_via_github_app":{"id":1_144_995,"slug":"chatgpt-codex-connector","owner":{"id":14_957_082}}
     }));
     if scenario.has_sonar() {
         comments.push(json!({
-            "id":6_445_194_482_u64,"node_id":"IC_sonar_summary","user":{"id":39_514_782,"type":"Bot"},
+            "id":sonar_comment_id,"node_id":"IC_sonar_summary","user":{"id":39_514_782,"type":"Bot"},
             "created_at":sonar_created,"updated_at":sonar_updated,"body":sonar_body,
             "performed_via_github_app":{"id":12526,"slug":"sonarqubecloud","owner":{"id":545_988}}
         }));
@@ -257,31 +263,8 @@ fn write_static_responses(state: &Path, scenario: Scenario) -> Result<(), Box<dy
         state,
         "opinions.json",
         &json!({"data":{"repository":{"pullRequest":{"latestOpinionatedReviews":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}}),
-    )
-}
-
-fn write_editor_responses(
-    state: &Path,
-    scenario: Scenario,
-    sonar_body: &str,
-    sonar_updated: &Value,
-    sonar_edited: &Value,
-    sonar_editor: &Value,
-) -> Result<(), Box<dyn Error>> {
-    let (updated, edited, editor, body) = codex_edit(scenario);
-    put_json(
-        state,
-        "codex-editor.json",
-        &json!({"data":{"node":{"databaseId":6_405_682_853_u64,"body":body,"updatedAt":updated,"lastEditedAt":edited,"author":{"__typename":"Bot","databaseId":199_175_422},"editor":{"__typename":"Bot","databaseId":editor}}}}),
     )?;
-    if scenario.has_sonar() {
-        put_json(
-            state,
-            "sonar-editor.json",
-            &json!({"data":{"node":{"databaseId":6_445_194_482_u64,"body":sonar_body,"updatedAt":sonar_updated,"lastEditedAt":sonar_edited,"author":{"__typename":"Bot","databaseId":39_514_782},"editor":sonar_editor}}}),
-        )?;
-    }
-    Ok(())
+    review_content::write_responses(state, scenario)
 }
 
 fn write_sonar_check(state: &Path, scenario: Scenario) -> Result<(), Box<dyn Error>> {
@@ -305,6 +288,17 @@ fn write_sonar_check(state: &Path, scenario: Scenario) -> Result<(), Box<dyn Err
         | Scenario::ForkWrongApp
         | Scenario::ForkMissingFlag
         | Scenario::ForkFalseFlag => json!([]),
+        Scenario::SonarTargetWithForeignAssociation => json!([
+            {"number":NUMBER,"head":{"sha":HEAD},"base":{"repo":{"id":REPOSITORY_ID}}},
+            {"number":515,"head":{"sha":HEAD},"base":{"repo":{"id":REPOSITORY_ID}}}
+        ]),
+        Scenario::SonarDuplicateTargetAssociation => json!([
+            {"number":NUMBER,"head":{"sha":HEAD},"base":{"repo":{"id":REPOSITORY_ID}}},
+            {"number":NUMBER,"head":{"sha":HEAD},"base":{"repo":{"id":REPOSITORY_ID}}}
+        ]),
+        Scenario::SonarForeignAssociationOnly => json!([
+            {"number":515,"head":{"sha":HEAD},"base":{"repo":{"id":REPOSITORY_ID}}}
+        ]),
         _ => json!([{"number":NUMBER,"head":{"sha":HEAD},"base":{"repo":{"id":REPOSITORY_ID}}}]),
     };
     let check_head = if matches!(scenario, Scenario::ForkWrongHead) {

@@ -35,8 +35,8 @@ pub(super) fn request_role(body: &str) -> Option<&'static str> {
 
 const SUMMARY: &str = "<!-- codex-pull-request-review-summary -->";
 const STATE: &str = "<!-- codex-review-state:v1 ";
-const EDITOR: &str = "query($id:ID!){node(id:$id){... on IssueComment{databaseId body updatedAt lastEditedAt author{__typename ... on Bot{databaseId}} editor{__typename ... on Bot{databaseId}}}}}";
-const REVIEW_EDITOR: &str = "query($id:ID!){node(id:$id){... on PullRequestReview{databaseId body submittedAt lastEditedAt commit{oid} author{__typename ... on Bot{databaseId}} editor{__typename ... on Bot{databaseId}}}}}";
+const EDITOR: &str = "query($id:ID!){node(id:$id){... on IssueComment{fullDatabaseId body updatedAt lastEditedAt author{__typename ... on Bot{databaseId}} editor{__typename ... on Bot{databaseId}}}}}";
+const REVIEW_EDITOR: &str = "query($id:ID!){node(id:$id){... on PullRequestReview{fullDatabaseId body submittedAt lastEditedAt commit{oid} author{__typename ... on Bot{databaseId}} editor{__typename ... on Bot{databaseId}}}}}";
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -238,7 +238,7 @@ fn authenticate_review(
     let response: Value = api.graphql(REVIEW_EDITOR, &[("id", id.to_owned())])?;
     let node = &response["data"]["node"];
     if response.get("errors").is_some()
-        || node["databaseId"] != review["id"]
+        || full_database_id(node).is_none_or(|id| review["id"].as_u64() != Some(id))
         || node["body"] != review["body"]
         || node["submittedAt"] != review["submitted_at"]
         || node.pointer("/commit/oid").and_then(Value::as_str) != review["commit_id"].as_str()
@@ -304,7 +304,7 @@ fn validate_editor(summary: &Value, response: &Value) -> Result<(), Orchestrator
         return Err(internal("review_provider_editor"));
     }
     if response.get("errors").is_some()
-        || node["databaseId"] != summary["id"]
+        || full_database_id(node).is_none_or(|id| summary["id"].as_u64() != Some(id))
         || node["body"] != summary["body"]
         || node["updatedAt"] != summary["updated_at"]
         || node.pointer("/author/databaseId").and_then(Value::as_u64) != Some(PROVIDER_BOT)
@@ -342,6 +342,13 @@ fn validate_editor(summary: &Value, response: &Value) -> Result<(), Orchestrator
         return Err(internal("review_provider_editor"));
     }
     Ok(())
+}
+
+fn full_database_id(node: &Value) -> Option<u64> {
+    let raw = node["fullDatabaseId"].as_str()?;
+    raw.parse::<u64>()
+        .ok()
+        .filter(|id| *id > 0 && id.to_string() == raw)
 }
 
 fn parse_state(body: &str) -> Result<ReviewState, OrchestratorError> {

@@ -35,7 +35,9 @@ case "$route" in
  repos/jackin-project/homebrew-tap) reply 200 repository.json ;;
  repos/jackin-project/homebrew-tap/pulls/514) reply 200 pull.json ;;
  repos/jackin-project/homebrew-tap/pulls/514/commits?*) reply 200 commits.json ;;
- repos/jackin-project/homebrew-tap/pulls/514/reviews?*|repos/jackin-project/homebrew-tap/pulls/514/comments?*|repos/jackin-project/homebrew-tap/commits/*/comments?*) reply 200 empty-array.json ;;
+ repos/jackin-project/homebrew-tap/pulls/514/reviews?*) reply 200 reviews.json ;;
+ repos/jackin-project/homebrew-tap/pulls/514/comments?*) reply 200 review-comments.json ;;
+ repos/jackin-project/homebrew-tap/commits/*/comments?*) reply 200 empty-array.json ;;
  repos/jackin-project/homebrew-tap/issues/514/comments?*) reply 200 issue-comments.json ;;
  apps/chatgpt-codex-connector) reply 200 codex-app.json ;;
  apps/sonarqubecloud) reply 200 sonar-app.json ;;
@@ -66,6 +68,29 @@ case "$route" in
          IC_sonar_summary) reply 200 sonar-editor.json ;;
          *) transport_error unmapped-graphql-node ;;
        esac ;;
+     'query($id:ID!){node(id:$id){... on IssueComment{fullDatabaseId body updatedAt lastEditedAt author{__typename ... on Bot{databaseId}} editor{__typename ... on Bot{databaseId}}}}}')
+       [ "$node_count" -eq 1 ] && [ "$owner_count" -eq 0 ] && [ "$name_count" -eq 0 ] && [ "$number_count" -eq 0 ] && [ "$cursor_count" -eq 0 ] || transport_error invalid-editor-query-shape
+       case "$node" in
+         IC_codex_summary) reply 200 codex-full-editor.json ;;
+         IC_sonar_summary) reply 200 sonar-full-editor.json ;;
+         *) transport_error unmapped-graphql-node ;;
+       esac ;;
+     'query($id:ID!){node(id:$id){... on PullRequestReview{databaseId body submittedAt lastEditedAt commit{oid} author{__typename ... on Bot{databaseId}} editor{__typename ... on Bot{databaseId}}}}}')
+       [ "$node_count" -eq 1 ] && [ "$owner_count" -eq 0 ] && [ "$name_count" -eq 0 ] && [ "$number_count" -eq 0 ] && [ "$cursor_count" -eq 0 ] || transport_error invalid-review-editor-query-shape
+       [ "$node" = PRR_codex_review ] || transport_error unmapped-graphql-node
+       reply 200 review-editor.json ;;
+     'query($id:ID!){node(id:$id){... on PullRequestReview{fullDatabaseId body submittedAt lastEditedAt commit{oid} author{__typename ... on Bot{databaseId}} editor{__typename ... on Bot{databaseId}}}}}')
+       [ "$node_count" -eq 1 ] && [ "$owner_count" -eq 0 ] && [ "$name_count" -eq 0 ] && [ "$number_count" -eq 0 ] && [ "$cursor_count" -eq 0 ] || transport_error invalid-review-editor-query-shape
+       [ "$node" = PRR_codex_review ] || transport_error unmapped-graphql-node
+       reply 200 review-full-editor.json ;;
+     'query($id:ID!,$cursor:String){node(id:$id){... on PullRequestReviewThread{id isResolved isOutdated pullRequest{number repository{nameWithOwner}} comments(first:100,after:$cursor){nodes{id databaseId body updatedAt lastEditedAt author{__typename ... on Bot{databaseId}} editor{__typename ... on Bot{databaseId}} pullRequestReview{databaseId}} pageInfo{hasNextPage endCursor}}}}')
+       [ "$node_count" -eq 1 ] && [ "$owner_count" -eq 0 ] && [ "$name_count" -eq 0 ] && [ "$number_count" -eq 0 ] && [ "$cursor_count" -eq 0 ] || transport_error invalid-review-thread-query-shape
+       [ "$node" = PRRT_codex_inline ] || transport_error unmapped-graphql-node
+       reply 200 review-thread-syntax-error.json ;;
+     'query($id:ID!,$cursor:String){node(id:$id){... on PullRequestReviewThread{id isResolved isOutdated pullRequest{number repository{nameWithOwner}} comments(first:100,after:$cursor){nodes{id fullDatabaseId body updatedAt lastEditedAt author{__typename ... on Bot{databaseId}} editor{__typename ... on Bot{databaseId}} pullRequestReview{fullDatabaseId}} pageInfo{hasNextPage endCursor}}}}}')
+       [ "$node_count" -eq 1 ] && [ "$owner_count" -eq 0 ] && [ "$name_count" -eq 0 ] && [ "$number_count" -eq 0 ] && [ "$cursor_count" -eq 0 ] || transport_error invalid-review-thread-query-shape
+       [ "$node" = PRRT_codex_inline ] || transport_error unmapped-graphql-node
+       reply 200 review-thread-full.json ;;
      'query($owner:String!,$name:String!,$number:Int!,$cursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$cursor){nodes{id isResolved isOutdated} pageInfo{hasNextPage endCursor}}}}}')
        [ "$node_count" -eq 0 ] && [ "$owner_count" -eq 1 ] && [ "$name_count" -eq 1 ] && [ "$number_count" -eq 1 ] && [ "$cursor_count" -eq 0 ] && [ "$owner" = jackin-project ] && [ "$name" = homebrew-tap ] && [ "$number" = 514 ] && [ -z "$cursor" ] || transport_error invalid-threads-query-shape
        reply 200 threads.json ;;

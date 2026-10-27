@@ -12,7 +12,7 @@ const APP_OWNER: u64 = 545_988;
 const BOT_ID: u64 = 39_514_782;
 const APP: &str = "sonarqubecloud";
 const OWNER: &str = "SonarSource";
-const EDITOR: &str = "query($id:ID!){node(id:$id){... on IssueComment{databaseId body updatedAt lastEditedAt author{__typename ... on Bot{databaseId}} editor{__typename ... on Bot{databaseId}}}}}";
+const EDITOR: &str = "query($id:ID!){node(id:$id){... on IssueComment{fullDatabaseId body updatedAt lastEditedAt author{__typename ... on Bot{databaseId}} editor{__typename ... on Bot{databaseId}}}}}";
 const COMMENT_TEMPLATE: &str = "## [![Quality Gate Passed](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/checks/QualityGateBadge/qg-passed-20px.png 'Quality Gate Passed')](https://sonarcloud.io/dashboard?id={project}&pullRequest={number}) **Quality Gate passed**  \nIssues  \n![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/passed-16px.png '') [0 New issues](https://sonarcloud.io/project/issues?id={project}&pullRequest={number}&issueStatuses=OPEN,CONFIRMED&sinceLeakPeriod=true)  \n![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/accepted-16px.png '') [0 Accepted issues](https://sonarcloud.io/project/issues?id={project}&pullRequest={number}&issueStatuses=ACCEPTED)\n\nMeasures  \n![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/passed-16px.png '') [0 Security Hotspots](https://sonarcloud.io/project/security_hotspots?id={project}&pullRequest={number}&issueStatuses=OPEN,CONFIRMED&sinceLeakPeriod=true)  \n![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/passed-16px.png '') [{coverage}% Coverage on New Code](https://sonarcloud.io/component_measures?id={project}&pullRequest={number}&metric=new_coverage&view=list)  \n![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/passed-16px.png '') [{duplication}% Duplication on New Code](https://sonarcloud.io/component_measures?id={project}&pullRequest={number}&metric=new_duplicated_lines_density&view=list)  \n  \n<!-- sqra-placement-anchor -->\n[See analysis details on SonarQube Cloud](https://sonarcloud.io/dashboard?id={project}&pullRequest={number})\n\n";
 const CHECK_TEMPLATE: &str = "Issues  \n![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/passed.svg '') [0 New issues](https://sonarcloud.io/project/issues?id={project}&pullRequest={number}&issueStatuses=OPEN,CONFIRMED&sinceLeakPeriod=true)  \n![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/accepted.svg '') [0 Accepted issues](https://sonarcloud.io/project/issues?id={project}&pullRequest={number}&issueStatuses=ACCEPTED)\n\nMeasures  \n![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/passed.svg '') [0 Security Hotspots](https://sonarcloud.io/project/security_hotspots?id={project}&pullRequest={number}&issueStatuses=OPEN,CONFIRMED&sinceLeakPeriod=true)  \n![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/passed.svg '') [{coverage}% Coverage on New Code](https://sonarcloud.io/component_measures?id={project}&pullRequest={number}&metric=new_coverage&view=list)  \n![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/passed.svg '') [{duplication}% Duplication on New Code](https://sonarcloud.io/component_measures?id={project}&pullRequest={number}&metric=new_duplicated_lines_density&view=list)  \n  \n[See analysis details on SonarQube Cloud](https://sonarcloud.io/dashboard?id={project}&pullRequest={number})\n\n";
 
@@ -160,7 +160,7 @@ fn candidate(comment: &Value) -> bool {
 fn authenticate_editor(comment: &Value, response: &Value) -> Result<(), OrchestratorError> {
     let node = &response["data"]["node"];
     if response.get("errors").is_some()
-        || node["databaseId"] != comment["id"]
+        || super::full_database_id(node).is_none_or(|id| comment["id"].as_u64() != Some(id))
         || node["body"] != comment["body"]
         || node["updatedAt"] != comment["updated_at"]
         || node.pointer("/author/databaseId").and_then(Value::as_u64) != Some(BOT_ID)
@@ -249,10 +249,16 @@ fn valid_check(check: &Value, head: &str, location: (&str, u64, u64, Option<u64>
         && check.pointer("/app/owner/id").and_then(Value::as_u64) == Some(APP_OWNER)
         && check["pull_requests"].as_array().is_some_and(|pulls| {
             (pulls.is_empty() && location.3.is_some())
-                || (pulls.len() == 1
-                && pulls[0]["number"].as_u64() == Some(location.1)
-                && pulls[0].pointer("/head/sha").and_then(Value::as_str) == Some(head)
-                && pulls[0].pointer("/base/repo/id").and_then(Value::as_u64) == Some(location.2))
+                || pulls
+                    .iter()
+                    .filter(|pull| {
+                        pull["number"].as_u64() == Some(location.1)
+                            && pull.pointer("/head/sha").and_then(Value::as_str) == Some(head)
+                            && pull.pointer("/base/repo/id").and_then(Value::as_u64)
+                                == Some(location.2)
+                    })
+                    .count()
+                    == 1
         })
 }
 
