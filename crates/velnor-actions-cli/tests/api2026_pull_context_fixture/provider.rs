@@ -203,7 +203,12 @@ exec "$@"
 const GH: &str = r#"#!/bin/sh
 printf 'gh argc=%s prefix=%s,%s,%s,%s,%s\n' "$#" "${1-}" "${2-}" "${3-}" "${4-}" "${5-}" >> "$VELNOR_FIXTURE_STATE/requests.log"
 [ "$#" -eq 10 ] || { printf 'gh argument count rejected: %s\n' "$#" >> "$VELNOR_FIXTURE_STATE/requests.log"; exit 82; }
-[ "$1" = "api" ] && [ "$2" = "-H" ] && [ "$3" = "Accept: application/vnd.github+json" ] || exit 81
+[ "$1" = "api" ] && [ "$2" = "-H" ] || exit 81
+accept=$3
+case "$accept" in
+  'Accept: application/vnd.github+json'|'Accept: application/vnd.github.sha') ;;
+  *) exit 81 ;;
+esac
 [ "$4" = "-H" ] && [ "$5" = "X-GitHub-Api-Version: 2026-03-10" ] || exit 85
 route=$6
 [ "$7" = "-H" ] && [ "$8" = "Cache-Control: no-cache, no-store" ] || exit 86
@@ -224,6 +229,18 @@ strip_read_nonce() {
 }
 strip_read_nonce || exit 88
 printf 'route=%s\n' "$route" >> "$VELNOR_FIXTURE_STATE/requests.log"
+case "$route" in
+  repos/test-owner/test-tap/commits/$VELNOR_FIXTURE_HEAD) sha=$VELNOR_FIXTURE_HEAD ;;
+  repos/test-owner/test-tap/commits/$VELNOR_FIXTURE_BASE) sha=$VELNOR_FIXTURE_BASE ;;
+  repos/test-owner/test-tap/commits/$VELNOR_FIXTURE_MERGE) sha=$VELNOR_FIXTURE_MERGE ;;
+  *) sha= ;;
+esac
+if [ -n "$sha" ]; then
+  [ "$accept" = "Accept: application/vnd.github.sha" ] || exit 81
+  printf '%s\n' "$sha"
+  exit 0
+fi
+[ "$accept" = "Accept: application/vnd.github+json" ] || exit 81
 if [ "$route" = repos/test-owner/test-tap ]; then
   case "$(cat "$VELNOR_FIXTURE_STATE/failure")" in
     http)
@@ -258,9 +275,6 @@ case "$route" in
   repos/test-owner/test-tap/git/commits/$VELNOR_FIXTURE_MERGE) file=merge-commit.json ;;
   repos/test-owner/test-tap/git/commits/$VELNOR_FIXTURE_BASE) file=base-commit.json ;;
   repos/test-owner/test-tap/git/commits/$VELNOR_FIXTURE_HEAD) file=head-commit.json ;;
-  repos/test-owner/test-tap/commits/$VELNOR_FIXTURE_HEAD) file=head-commit.json ;;
-  repos/test-owner/test-tap/commits/$VELNOR_FIXTURE_BASE) file=base-commit.json ;;
-  repos/test-owner/test-tap/commits/$VELNOR_FIXTURE_MERGE) file=merge-commit.json ;;
   repos/test-owner/test-tap/git/matching-refs/heads/main) file=main-ref.json ;;
   repos/test-owner/test-tap/branches/main) file=branch.json ;;
   repos/test-owner/test-tap/compare/$VELNOR_FIXTURE_BASE...$VELNOR_FIXTURE_HEAD\?per_page=1\&page=2) file=compare.json ;;

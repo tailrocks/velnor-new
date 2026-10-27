@@ -28,6 +28,10 @@ name = "api2026_pull_context_public"
 path = "tests/api2026_pull_context_public.rs"
 
 [[test]]
+name = "preview_source_selection_public"
+path = "tests/preview_source_selection_public.rs"
+
+[[test]]
 name = "candidate_freshness_public"
 path = "tests/candidate_freshness_public.rs"
 
