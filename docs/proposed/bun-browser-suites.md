@@ -77,23 +77,26 @@ shards = 2                                   # 1..=64, per project when projects
   suites made empty has no disposition and no job.
 - `required = false` runs the job outside Required's `needs`; it is still
   reconstructed and checked like every other generated job.
-- In a repository whose `.velnor/deps.lock` pins release assets, suites never
-  copy the App-token block (HD-7). One job per member, `bun-<slug>--assets`
-  (`Bun / <name> / assets`, `needs: [plan]`, the member's disposition, not in
-  Required), runs the staged helper, mint, fetch and revoke, then bundles the
-  verified `.velnor/deps` tree as one bounded `tar.gz` file. Upload uses
-  `archive: false`, preserving executable bits and safe symlinks across
-  artifact transport; the filename is `velnor-pw-assets-<member job id>.tar.gz`
-  (1 day). Every suite job (each leg, and the report job) needs it. Before any
-  tool setup or repository install, the job removes stale or planted
+- In a repository whose `.velnor/deps.lock` pins release assets, no member,
+  suite or report job copies the App-token block (HD-7). One hosted job per
+  member, `bun-<slug>--assets` (`Bun / <name> / assets`, `needs: [plan]`, the
+  member's disposition, not directly in Required), runs the staged helper,
+  mint, fetch and revoke, then bundles the verified `.velnor/deps` tree as one
+  bounded `tar.gz` file. This producer also exists for a member without suites.
+  Native repository admission must succeed before minting and immediately
+  before upload; the destination must be private. Upload uses `archive: false`,
+  preserving executable bits and safe symlinks across artifact transport; the
+  filename is `velnor-pw-assets-<member job id>.tar.gz` (1 day).
+- Every member, suite leg and report job needs its assets producer. Before any
+  tool setup or repository install, each consumer removes stale or planted
   `.velnor/deps`, resets private runner-temp staging, downloads the one archive,
   extracts it through the bounded archive reader, and checks the typed
   `verified.json` release-asset digests against `VELNOR_BUN_ASSET_PINS`. The
   extractor rejects traversal, duplicate paths, special files and unsafe
   symlinks. The archive inventory includes nested files named
-  `velnor-assets.sha256` as ordinary payload. A failed fetch (a fork pull
-  request has no secret) skips the suites, so Required fails closed with
-  `planned_job_skipped`. The member job keeps its own block, unchanged.
+  `velnor-assets.sha256` as ordinary payload. A failed producer (including a
+  fork pull request without its secret) prevents consumer execution, so
+  Required fails closed with `planned_job_skipped`.
 
 Validation codes (`stacks.bun.members.suites`): `bad_suite_id:<id>`
 (`[a-z][a-z0-9-]{0,31}`, no trailing `-`), `reserved_suite_id:<id>`
