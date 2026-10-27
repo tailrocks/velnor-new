@@ -2,23 +2,23 @@ schema = 1
 
 [generator]
 binary = "velnor-actions"
-version = "0.1.59"
-commit = "4bb724119971fe49f07b12876c54c3c159edb5e5"
+version = "0.1.55"
+commit = "693f3aae14406fb7851ac70f0aee647a869b5063"
 
 [[generator.binaries]]
 target = "x86_64-unknown-linux-gnu"
-artifact = "https://github.com/tailrocks/velnor-new/releases/download/v0.1.59/velnor-actions-0.1.59-x86_64-unknown-linux-gnu"
-sha256 = "717be00d245f511bd5d324574cb80b72a34c5a83c639fafa6af1c0acb8649b26"
+artifact = "https://github.com/tailrocks/velnor-new/releases/download/v0.1.55/velnor-actions-0.1.55-x86_64-unknown-linux-gnu"
+sha256 = "c8f1440e4f767ecc903e6611c56c2db4005011d33ee6f0fd566f4b7e5345eba4"
 
 [[generator.binaries]]
 target = "aarch64-apple-darwin"
-artifact = "https://github.com/tailrocks/velnor-new/releases/download/v0.1.59/velnor-actions-0.1.59-aarch64-apple-darwin"
-sha256 = "36c47f77001e12c3ea80f4a2559d1b11700935c94488044a966735175b342667"
+artifact = "https://github.com/tailrocks/velnor-new/releases/download/v0.1.55/velnor-actions-0.1.55-aarch64-apple-darwin"
+sha256 = "eb8690b6a05b18bf025a0d7876c8497cedc04d54df04fdb5a3c20d203478e756"
 
 [[generator.binaries]]
 target = "x86_64-apple-darwin"
-artifact = "https://github.com/tailrocks/velnor-new/releases/download/v0.1.59/velnor-actions-0.1.59-x86_64-apple-darwin"
-sha256 = "20ad2cb971473595d730dd3eb07d8b6bf919f759ffbba2c3b54dca9222a80f7b"
+artifact = "https://github.com/tailrocks/velnor-new/releases/download/v0.1.55/velnor-actions-0.1.55-x86_64-apple-darwin"
+sha256 = "0938a574c00b05a71735285bf0d2840235ca4f9559359909564dd53b27d77883"
 
 [mise-bootstrap]
 version = "2026.10.21"
