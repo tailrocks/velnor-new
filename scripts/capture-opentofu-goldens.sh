@@ -21,10 +21,56 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 GOLDEN_DIR="$ROOT/docs/proposed/opentofu-goldens"
 WORK=""
+QUALIFICATION_BUN_BIN=""
 MODE="check"
 MODE_EXPLICIT=0
 BIN_EXPLICIT=0
 KEEP_WORK="${VELNOR_GOLDEN_KEEP_WORK:-0}"
+
+qualification_bun_bin() {
+  if [ -n "$QUALIFICATION_BUN_BIN" ]; then
+    return 0
+  fi
+  local declared candidate actual
+  if ! command -v mise >/dev/null 2>&1; then
+    echo 'FATAL: Mise is required to select the pinned Bun runtime' >&2
+    return 1
+  fi
+  declared="$(mise --no-config --no-env --no-hooks config get -f "$ROOT/mise.toml" tools.bun)" || return 1
+  if [ "$declared" != "1.4.4" ]; then
+    printf 'FATAL: collector requires the declared stable Bun pin 1.4.4, found %s\n' "$declared" >&2
+    return 1
+  fi
+  if [ "${VELNOR_BUN_VERSION+x}" = x ] && [ "$VELNOR_BUN_VERSION" != "$declared" ]; then
+    printf 'FATAL: supplied Bun version %s differs from the declared pin %s\n' "$VELNOR_BUN_VERSION" "$declared" >&2
+    return 1
+  fi
+  if [ "${VELNOR_BUN_BIN+x}" = x ]; then
+    case "$VELNOR_BUN_BIN" in
+      /*) candidate="$VELNOR_BUN_BIN" ;;
+      *) echo 'FATAL: supplied Bun executable path must be absolute' >&2; return 1 ;;
+    esac
+    if [ ! -x "$candidate" ]; then
+      printf 'FATAL: supplied Bun executable is unavailable: %s\n' "$candidate" >&2
+      return 1
+    fi
+  else
+    candidate="$(MISE_EXEC_AUTO_INSTALL=0 mise --no-config --no-env --no-hooks which bun --tool "bun@$declared")" || {
+      printf 'FATAL: pinned bun@%s is not installed; install it with Mise before running the collector\n' "$declared" >&2
+      return 1
+    }
+    case "$candidate" in
+      /*) ;;
+      *) printf 'FATAL: Mise returned a non-absolute Bun executable path: %s\n' "$candidate" >&2; return 1 ;;
+    esac
+  fi
+  actual="$("$candidate" --version)" || return 1
+  if [ "$actual" != "$declared" ]; then
+    printf 'FATAL: installed Bun %s differs from the declared pin %s\n' "$actual" "$declared" >&2
+    return 1
+  fi
+  QUALIFICATION_BUN_BIN="$candidate"
+}
 
 case "$KEEP_WORK" in
   0|1) ;;
@@ -294,9 +340,11 @@ normalize_generate_stderr() {
 }
 
 normalize_plan_stderr() {
-  local path="$1"
+  local path="$1" bun_bin
   shift
-  node - "$path" "$@" <<'NODE'
+  qualification_bun_bin || return 1
+  bun_bin="$QUALIFICATION_BUN_BIN"
+  "$bun_bin" --bun run -- - "$path" "$@" <<'NODE'
 const fs = require('node:fs');
 const file = process.argv[2];
 const args = process.argv.slice(3);
