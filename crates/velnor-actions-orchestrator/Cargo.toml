@@ -21,6 +21,10 @@ path = "tests/task_report_public.rs"
 name = "workflow_configuration_public"
 path = "tests/workflow_configuration_public.rs"
 
+[[test]]
+name = "public_source_lineage"
+path = "tests/public_source_lineage.rs"
+
 [lib]
 test = false
 

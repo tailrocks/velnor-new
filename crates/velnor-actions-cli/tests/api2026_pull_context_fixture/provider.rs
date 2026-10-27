@@ -36,7 +36,7 @@ pub(crate) fn write(
     fs::write(state.join("mergeability"), mergeability)?;
     write_identity(&state, ids, mergeability)?;
     write_merge(&state, ids, scenario)?;
-    write_lineage(&state, ids)?;
+    write_lineage(&state, ids, scenario)?;
     write_source_trees(&state, ids)?;
     write_programs(&bin, &state)
 }
@@ -98,12 +98,28 @@ fn write_merge(state: &Path, ids: &Identities, scenario: Scenario) -> Result<(),
     Ok(())
 }
 
-fn write_lineage(state: &Path, ids: &Identities) -> Result<(), Box<dyn Error>> {
+fn write_lineage(state: &Path, ids: &Identities, scenario: Scenario) -> Result<(), Box<dyn Error>> {
     response(
         state,
         "head-commit.json",
         &serde_json::json!({"sha":ids.head,"parents":[{"sha":ids.base}]}),
     )?;
+    let mut rest: serde_json::Value =
+        serde_json::from_slice(&fs::read(state.join("head-commit.json"))?)?;
+    if matches!(scenario, Scenario::LargeRestCommit) {
+        rest["files"] = serde_json::Value::Array(
+            (0..300)
+                .map(|index| {
+                    serde_json::json!({
+                        "filename": format!("file-{index}.txt"),
+                        "status": "modified", "patch": "x".repeat(3700)
+                    })
+                })
+                .collect(),
+        );
+        assert!(serde_json::to_vec(&rest)?.len() > 1_048_576);
+    }
+    response(state, "rest-head-commit.json", &rest)?;
     response(
         state,
         "main-ref.json",
@@ -252,7 +268,7 @@ case "$route" in
   repos/test-owner/test-tap/git/commits/$VELNOR_FIXTURE_MERGE) file=merge-commit.json ;;
   repos/test-owner/test-tap/git/commits/$VELNOR_FIXTURE_BASE) file=base-commit.json ;;
   repos/test-owner/test-tap/git/commits/$VELNOR_FIXTURE_HEAD) file=head-commit.json ;;
-  repos/test-owner/test-tap/commits/$VELNOR_FIXTURE_HEAD) file=head-commit.json ;;
+  repos/test-owner/test-tap/commits/$VELNOR_FIXTURE_HEAD) file=rest-head-commit.json ;;
   repos/test-owner/test-tap/commits/$VELNOR_FIXTURE_BASE) file=base-commit.json ;;
   repos/test-owner/test-tap/commits/$VELNOR_FIXTURE_MERGE) file=merge-commit.json ;;
   repos/test-owner/test-tap/git/matching-refs/heads/main) file=main-ref.json ;;

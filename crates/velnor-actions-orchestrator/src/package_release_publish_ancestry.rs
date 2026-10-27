@@ -38,7 +38,7 @@ pub(in crate::package_release_publish) fn verify_public_preview_main_ancestry(
     api.verify_preview_repository_identity(repository_id, branch)?;
     let captured_tip = public_protected_tip(api, branch)?;
     for sha in [source_sha, workflow_authority_sha, captured_tip.as_str()] {
-        let commit: Value = api.get_json(&api.route(&format!("commits/{sha}")))?;
+        let commit: Value = api.get_json(&api.route(&format!("git/commits/{sha}")))?;
         if commit.get("sha").and_then(Value::as_str) != Some(sha) {
             return Err(internal("package_public_preview_commit_mismatch"));
         }
@@ -71,7 +71,7 @@ pub(in crate::package_release_publish) fn verify_public_pull_request_lineage(
     if captured_tip != base_sha {
         return Err(internal("package_public_pr_base_not_current"));
     }
-    let head: Value = api.get_json(&api.route(&format!("commits/{head_sha}")))?;
+    let head: Value = api.get_json(&api.route(&format!("git/commits/{head_sha}")))?;
     if head.get("sha").and_then(Value::as_str) != Some(head_sha) {
         return Err(internal("package_public_pr_head_mismatch"));
     }
@@ -169,7 +169,7 @@ where
     }
 
     for sha in [source_sha, workflow_authority_sha, captured_tip.as_str()] {
-        let commit: Value = api.get_json(&api.route(&format!("commits/{sha}")))?;
+        let commit: Value = api.get_json(&api.route(&format!("git/commits/{sha}")))?;
         if commit.get("sha").and_then(Value::as_str) != Some(sha) {
             return Err(internal("package_publish_preview_commit_mismatch"));
         }

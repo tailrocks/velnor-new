@@ -25,6 +25,15 @@ fn absent_rest_merge_sha_reaches_owned_locator_gate() -> Result<(), Box<dyn Erro
 }
 
 #[test]
+fn large_patch_commit_reaches_owned_locator_gate_with_valid_public_lineage()
+-> Result<(), Box<dyn Error>> {
+    fixture::run(
+        fixture::Scenario::LargeRestCommit,
+        "homebrew_authority_locator_missing",
+    )
+}
+
+#[test]
 fn reversed_api_merge_parents_are_rejected() -> Result<(), Box<dyn Error>> {
     fixture::run(
         fixture::Scenario::ReversedParents,

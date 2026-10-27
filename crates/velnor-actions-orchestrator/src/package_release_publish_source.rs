@@ -18,7 +18,7 @@ pub(crate) fn verify_preview_main_tip(
     github::GitHubApi::new(repository.to_owned()).verify_preview_main_tip(repository_id, branch)
 }
 
-pub(crate) fn verify_public_protected_main_lineage(
+pub fn verify_public_protected_main_lineage(
     repository: &str,
     repository_id: u64,
     branch: &str,

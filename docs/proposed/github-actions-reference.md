@@ -420,3 +420,20 @@ It requires matching identity, Boolean private status and private visibility.
 The existing bounded native GitHub transport supplies fixed-origin HTTPS,
 workflow-token authentication and a deadline. Source:
 [Get a repository](https://docs.github.com/en/rest/repos/repos?apiVersion=2026-03-10#get-a-repository).
+
+## Bounded commit identity (2026-10-27)
+
+Lineage verification uses `GET /repos/{owner}/{repo}/git/commits/{commit_sha}`
+for commit identity. GitHub's ordinary repository commit response also includes
+file changes and patches, which are not identity evidence. A valid protected
+main commit in the historical Homebrew source returned 1,098,469 bytes through
+that endpoint; the Git Database response was 4,256 bytes with the same commit,
+tree and parent identities. Source:
+[Get a commit from the Git Database](https://docs.github.com/en/rest/git/commits?apiVersion=2026-03-10#get-a-commit).
+
+The 1 MiB response limit and 90-second maximum request timeout remain unchanged.
+Repository identity, protected main, exact source and authority identities,
+both ancestry comparisons, parent and last-page proofs, and the final main-tip
+recheck remain required. The read-only SDK operation
+`verify_public_protected_main_lineage` exposes the existing verifier for local
+admission checks without invoking hosted Homebrew installation.

@@ -138,8 +138,8 @@ pub use super::package_release_publish::{
     SELECT_STABLE_RELEASE_SOURCE_OP, WRITE_STABLE_TAG_INTENT_OP, WRITE_STABLE_TAG_ORIGIN_OP,
     admit_stable_tag_origin_from_env, publish_package_release_from_env,
     recover_package_release_from_env, select_release_tap_continuation_from_env,
-    select_stable_release_source_from_env, write_stable_tag_intent_from_env,
-    write_stable_tag_origin_from_env,
+    select_stable_release_source_from_env, verify_public_protected_main_lineage,
+    write_stable_tag_intent_from_env, write_stable_tag_origin_from_env,
 };
 pub use super::package_release_signer::{SIGN_PACKAGE_RELEASE_OP, sign_package_release_from_env};
 

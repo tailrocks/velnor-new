@@ -21,6 +21,7 @@ pub(crate) enum Scenario {
     #[cfg(not(debug_assertions))]
     ReleaseSentinel,
     Valid,
+    LargeRestCommit,
     ReversedParents,
     ChangedRef,
     MergePendingReady,
