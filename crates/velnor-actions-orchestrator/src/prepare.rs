@@ -4,7 +4,9 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-use velnor_actions_contract::{RunnerImageEvidence, RunnerSelection, VelnorConfig, WorkflowPolicy};
+use velnor_actions_contract::{
+    GeneratorLock, RunnerImageEvidence, RunnerSelection, VelnorConfig, WorkflowPolicy,
+};
 use velnor_actions_mise::{GitRequest, ToolCatalog};
 
 use crate::OrchestratorError;
@@ -78,18 +80,8 @@ fn prepare_inner(
         None => load_config(&canonical)?,
     };
     check_velnor_identity(&canonical, &config)?;
-    let published_generator_lock = if config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1 {
-        let lock =
-            crate::validate::verify_velnor_repository_files(&canonical)?.ok_or_else(|| {
-                OrchestratorError::Contract {
-                    problem: "required_verdict_requires_published_generator_lock".to_owned(),
-                }
-            })?;
-        crate::finalized::validate_published_generator_lock(&lock)?;
-        Some(lock)
-    } else {
-        None
-    };
+    let published_generator_lock =
+        load_published_generator_lock(&canonical, config.workflow.policy)?;
     let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&canonical, &config)?;
     let default_branch = resolve_default_branch(&canonical, &config)?;
     validate_verification_branch(&config, &default_branch)?;
@@ -121,7 +113,10 @@ fn prepare_inner(
     let audit = crate::lock_audit::audit_prepare_installs_with_catalog_and_verifiers(
         &canonical,
         &workflow.ir,
-        config.workflow.policy,
+        crate::lock_audit::InstallAuditAuthority {
+            policy: config.workflow.policy,
+            published_generator_lock: published_generator_lock.as_ref(),
+        },
         &runner_label,
         &workflow.context.validator_commands,
         &catalog,
@@ -145,6 +140,22 @@ fn prepare_inner(
         lock_audit_blocking: audit.blocking,
         catalog,
     })
+}
+
+fn load_published_generator_lock(
+    root: &Path,
+    policy: WorkflowPolicy,
+) -> Result<Option<GeneratorLock>, OrchestratorError> {
+    if policy != WorkflowPolicy::VelnorRepositoryV1 {
+        return Ok(None);
+    }
+    let lock = crate::validate::verify_velnor_repository_files(root)?.ok_or_else(|| {
+        OrchestratorError::Contract {
+            problem: "required_verdict_requires_published_generator_lock".to_owned(),
+        }
+    })?;
+    crate::finalized::validate_published_generator_lock(&lock)?;
+    Ok(Some(lock))
 }
 
 fn validate_verification_branch(

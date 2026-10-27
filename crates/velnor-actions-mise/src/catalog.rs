@@ -9,6 +9,13 @@ pub mod lock;
 #[path = "lock_verify.rs"]
 mod lock_verify;
 
+#[path = "catalog_mise_binary.rs"]
+mod mise_binary;
+pub use mise_binary::{
+    MISE_BINARY_SHA256_MACOS_ARM64, MISE_BINARY_SHA256_MACOS_X64, MiseBinaryIdentity,
+    current_mise_binary,
+};
+
 #[path = "release_plz.rs"]
 pub mod release_plz;
 
@@ -48,9 +55,9 @@ pub use tool::PinnedTool;
 pub mod project;
 use versions::tool_source;
 
-pub const MISE_VERSION: &str = "2026.10.19";
+pub const MISE_VERSION: &str = "2026.10.21";
 pub const MISE_BINARY_SHA256_LINUX_X64: &str =
-    "3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d";
+    "ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07";
 pub const RUST_VERSION: &str = "1.99.1";
 pub const MR_BOXINGTON_VERSION: &str = "1.28.0";
 pub const GH_VERSION: &str = "2.103.3";
@@ -66,7 +73,7 @@ pub const OPENTOFU_SHA256_DARWIN_AMD64: &str =
     "dc6e4eb1d3ed6550c2ef052596f933dbcd8c806957665ea83ae7537147cb3074";
 pub const OPENTOFU_SHA256_DARWIN_ARM64: &str =
     "0d1cdc85f38992055b48e7fb161304a2ddfe2e5ee0ff68ffec9d0349c8bd1b59";
-pub const RELEASE_PLZ_VERSION: &str = "0.4.1";
+pub const RELEASE_PLZ_VERSION: &str = "0.4.2";
 pub const CRANE_VERSION: &str = "0.22.1";
 pub const BUN_VERSION: &str = "1.4.4";
 pub const COSIGN_VERSION: &str = "3.1.4";

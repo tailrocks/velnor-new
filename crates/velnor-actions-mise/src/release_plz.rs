@@ -11,7 +11,7 @@ use crate::error::MiseError;
 use crate::requests::PinnedToolExec;
 
 pub const RELEASE_PLZ_CKSUM: &str =
-    "be09b48beb7dc1fa436c95c21aae9df393e0cccbce7dd7c114dfbbf0afdd121f";
+    "0174d748c692bfeeda6098467ddb2cb7d6f11be997b38a1d6ae3ee5990e4a9e2";
 
 pub const REGISTRY_TOKEN_ENV: &str = "CARGO_REGISTRY_TOKEN";
 

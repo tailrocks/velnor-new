@@ -40,6 +40,7 @@ pub(super) fn read(
             || first.merged_at != next.merged_at
             || first.base != next.base
             || first.head != next.head
+            || first.user != next.user
         {
             return Err(internal("package_public_pull_request_changed"));
         }
@@ -53,7 +54,7 @@ pub(super) fn read(
     ))
 }
 
-fn validate_identity(
+pub(super) fn validate_identity(
     response: &PublicPullRequestResponse,
     repository: &str,
     repository_id: u64,

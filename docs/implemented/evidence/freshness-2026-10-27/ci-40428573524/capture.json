@@ -1,0 +1,18 @@
+{
+  "run_id": 40428573524,
+  "source_sha": "ca2e269a25d944578c0f8465069230c5012e89c3",
+  "conclusion": "success",
+  "artifact_id": 12701465981,
+  "archive_sha256": "cdea9090529aab91789f28f7ddc5dbc964b18e10a6bc8f80ca60f8bc37eae6bc",
+  "logs": {
+    "maintenance.log": {
+      "sha256": "b9ae88f705f30be68a2e37307f50a31d989385f354f3a114000163087d32fb8e",
+      "bytes": 99355
+    },
+    "orchestrator.log": {
+      "sha256": "898c43b162c251a8d834f36028e8fdf10cf0f8f7735578c0abf8857ea7b42a09",
+      "bytes": 444819
+    }
+  },
+  "scope": "Successful hosted CI and acquired Nextest150 identity; check report platform binding unavailable, not platform-attested execution. Later inventory changes require final head CI."
+}

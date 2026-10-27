@@ -3,9 +3,6 @@
 
 #![allow(
     clippy::missing_errors_doc,
-    reason = "documentation comments are intentionally absent from this codebase"
-)]
-#![allow(
     missing_docs,
     reason = "documentation comments are intentionally absent from this codebase"
 )]
@@ -41,8 +38,11 @@ mod freshness_emit;
 mod generate;
 mod generator;
 mod gh_download;
+#[cfg(test)]
+mod git_fixture;
 mod git_paths;
 mod github_authority_read;
+mod github_landed_pull;
 mod homebrew;
 mod image_build_tasks;
 mod image_maintenance;
@@ -88,7 +88,6 @@ pub(crate) mod project_tool_sources;
 mod provenance;
 mod publish_emit;
 mod publish_release_steps;
-
 mod publish_steps;
 mod qualification_candidate;
 mod qualification_resolver;
@@ -119,9 +118,11 @@ mod select_tofu;
 mod source_cache;
 mod source_prep;
 mod stable_release_emit;
+mod tap_history_relevance;
 mod tap_merge;
 mod tap_prepare;
 mod tap_source_freshness;
+mod tap_writer_history_timestamp;
 mod task_execution;
 pub(crate) mod task_report;
 mod task_report_aggregate;

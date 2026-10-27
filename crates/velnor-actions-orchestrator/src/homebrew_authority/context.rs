@@ -8,6 +8,8 @@ use crate::package_release_publish::MergeGroupSelection;
 
 #[path = "merge_group.rs"]
 mod merge_group;
+#[cfg(test)]
+pub(crate) use merge_group::{RunnerContext, parse as parse_merge_group_event};
 #[path = "pull_request_context.rs"]
 pub(in crate::homebrew::authority) mod pull_request_context;
 
@@ -23,6 +25,12 @@ pub(super) struct TapContext {
     merge_group: Option<MergeGroupSelection>,
     pull_request: Option<pull_request_context::PullRequestSelection>,
     qualification: Option<qualification_context::QualificationSelection>,
+}
+
+impl TapContext {
+    pub(super) fn merge_group(&self) -> Option<&MergeGroupSelection> {
+        self.merge_group.as_ref()
+    }
 }
 
 struct EventAdmission {
@@ -46,7 +54,7 @@ pub(super) fn authenticate_tap_context(
         expected_tap_repository,
         deadline,
     )?;
-    let checkout_head = super::read_git_value(root, "HEAD", deadline)?;
+    let checkout_head = read_git_value(root, "HEAD", deadline)?;
     let admission = authenticate_event(
         &AdmissionRequest {
             root,
@@ -69,6 +77,48 @@ pub(super) fn authenticate_tap_context(
         pull_request: admission.pull_request,
         qualification: admission.qualification,
     })
+}
+
+pub(crate) fn verify_merge_group_checkout(
+    root: &Path,
+    selection: &MergeGroupSelection,
+    repository: &str,
+    repository_id: u64,
+    expected_base: &str,
+    expected_head: &str,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    if selection.repository() != repository
+        || selection.repository_id() != repository_id
+        || selection.base_sha() != expected_base
+        || selection.head_sha() != expected_head
+        || read_git_value(root, "HEAD", deadline)? != selection.head_sha()
+    {
+        return Err(internal("homebrew_authority_merge_group_checkout"));
+    }
+    Ok(())
+}
+
+pub(crate) fn read_git_value(
+    root: &Path,
+    revision: &str,
+    deadline: CheckDeadline,
+) -> Result<String, OrchestratorError> {
+    let result =
+        velnor_actions_mise::GitRequest::rev_parse(vec![std::ffi::OsString::from(revision)])
+            .run_in_until(root, deadline)
+            .map_err(|_| internal("homebrew_authority_git_context"))?;
+    result
+        .require_success("git")
+        .map_err(|_| internal("homebrew_authority_git_context"))?;
+    let value = result
+        .stdout_text("git")
+        .map_err(|_| internal("homebrew_authority_git_context"))?;
+    let value = value.trim();
+    if !super::lowercase_sha(value) {
+        return Err(internal("homebrew_authority_git_context"));
+    }
+    Ok(value.to_owned())
 }
 
 #[derive(Clone, Copy)]
@@ -225,7 +275,7 @@ pub(super) fn recheck_tap_context(
         deadline,
     )?;
     if final_tap_tip != context.protected_tap_tip
-        || super::read_git_value(root, "HEAD", deadline)? != context.checkout_head
+        || read_git_value(root, "HEAD", deadline)? != context.checkout_head
     {
         return Err(internal("homebrew_authority_tap_context_changed"));
     }

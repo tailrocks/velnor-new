@@ -53,6 +53,8 @@ mod parallel_owners;
 mod report_upload;
 #[path = "workflow_configuration_public/seed_ids.rs"]
 mod seed_ids;
+#[path = "workflow_configuration_public/source_qualification.rs"]
+mod source_qualification;
 #[path = "workflow_configuration_public/support.rs"]
 mod support;
 #[path = "workflow_configuration_public/timeouts.rs"]

@@ -1,0 +1,74 @@
+Release the package to the cargo registry and git forge.
+
+For each package not published to the cargo registry yet, create and push upstream a tag in the
+format of `<package>-v<version>`, and then publish the package to the cargo registry.
+
+You can run this command in the CI on every commit in the main branch.
+
+Usage: release-plz release [OPTIONS]
+
+Options:
+      --manifest-path <MANIFEST_PATH>
+          Path to the Cargo.toml of the project you want to release. If not provided, release-plz
+          will use the Cargo.toml of the current directory. Both Cargo workspaces and single
+          packages are supported
+
+      --registry <REGISTRY>
+          Registry where you want to publish the packages. The registry name needs to be present in
+          the Cargo config. If unspecified, the `publish` field of the package manifest is used. If
+          the `publish` field is empty, crates.io is used
+
+      --token <TOKEN>
+          Token used to publish to the cargo registry. Override the `CARGO_REGISTRY_TOKEN`
+          environment variable, or the `CARGO_REGISTRIES_<NAME>_TOKEN` environment variable, used
+          for registry specified in the `registry` input variable
+
+      --dry-run
+          Perform all checks without uploading
+
+      --no-verify
+          Don't verify the contents by building them. When you pass this flag, `release-plz` adds
+          the `--no-verify` flag to `cargo publish`
+
+      --allow-dirty
+          Allow dirty working directories to be packaged. When you pass this flag, `release-plz`
+          adds the `--allow-dirty` flag to `cargo publish`
+
+      --repo-url <REPO_URL>
+          GitHub/Gitea/GitLab repository url where your project is hosted. It is used to create the
+          git release. It defaults to the url of the default remote
+
+      --git-token <GIT_TOKEN>
+          Git token used to publish the GitHub/Gitea/GitLab release
+          
+          [env: GIT_TOKEN]
+
+      --forge <FORGE>
+          Kind of git forge
+          
+          [alias: --backend]
+          [possible values: github, gitea, gitlab]
+
+  -v, --verbose...
+          Print source location and additional information in logs.
+          
+          If this option is unspecified, logs are printed at the INFO level without verbosity. `-v`
+          adds verbosity to logs. `-vv` adds verbosity and sets the log level to DEBUG. `-vvv` adds
+          verbosity and sets the log level to TRACE. To change the log level without setting
+          verbosity, use the `RELEASE_PLZ_LOG` environment variable. E.g. `RELEASE_PLZ_LOG=DEBUG`.
+
+      --config <PATH>
+          Path to the release-plz config file.
+          
+          If not specified, the following paths are checked in order: `release-plz.toml`,
+          `.release-plz.toml`, `.config/release-plz.toml`.
+          
+          If a config file is not found, the default configuration is used.
+
+  -o, --output <OUTPUT>
+          Output format. If specified, prints the version and the tag of the released packages
+          
+          [possible values: json]
+
+  -h, --help
+          Print help (see a summary with '-h')

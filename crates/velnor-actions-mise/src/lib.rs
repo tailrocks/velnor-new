@@ -60,11 +60,11 @@ pub use catalog::project::{
 pub use catalog::{
     COSIGN_LINUX_AMD64_BYTES, COSIGN_LINUX_ARM64_BYTES, COSIGN_LINUX_ARM64_SHA256, GH_VERSION,
     JACTIONLINT_DIGESTS, JACTIONLINT_VERSION, JactionlintDigest, MISE_BINARY_SHA256_LINUX_X64,
-    MISE_VERSION, MR_BOXINGTON_VERSION, OPENTOFU_SHA256_DARWIN_AMD64, OPENTOFU_SHA256_DARWIN_ARM64,
-    OPENTOFU_SHA256_LINUX_AMD64, OPENTOFU_SHA256_LINUX_ARM64, OPENTOFU_VERSION, PinnedTool,
-    RUST_TARGET_TRIPLE, RUST_VERSION, SHELLCHECK_VERSION, ToolCatalog,
-    check_freshness_requirements, jactionlint_archive_sha256, jactionlint_executable_sha256,
-    validate_concrete_exact_version, validate_exact_version,
+    MISE_VERSION, MR_BOXINGTON_VERSION, MiseBinaryIdentity, OPENTOFU_SHA256_DARWIN_AMD64,
+    OPENTOFU_SHA256_DARWIN_ARM64, OPENTOFU_SHA256_LINUX_AMD64, OPENTOFU_SHA256_LINUX_ARM64,
+    OPENTOFU_VERSION, PinnedTool, RUST_TARGET_TRIPLE, RUST_VERSION, SHELLCHECK_VERSION,
+    ToolCatalog, check_freshness_requirements, current_mise_binary, jactionlint_archive_sha256,
+    jactionlint_executable_sha256, validate_concrete_exact_version, validate_exact_version,
 };
 pub use check_deadline::CheckDeadline;
 pub use checks::{

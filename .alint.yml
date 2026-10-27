@@ -176,8 +176,7 @@ rules:
       include:
         - "crates/velnor-actions-*/src/**/*.rs"
         - "crates/velnor-actions-*/tests/**/*.rs"
-        - "crates/velnor-archive-guard/src/**/*.rs"
-        - "crates/velnor-archive-guard/tests/**/*.rs"
+        - "crates/velnor-archive-guard/**/*.rs"
         - "crates/velnor-runner/crates/*/src/**/*.rs"
         - "crates/velnor-runner/crates/*/tests/**/*.rs"
       exclude:

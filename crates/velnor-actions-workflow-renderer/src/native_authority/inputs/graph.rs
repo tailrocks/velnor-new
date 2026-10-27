@@ -27,7 +27,14 @@ pub(in crate::native_authority) fn validate_graph(
         {
             return Err(invalid("native_graph_reserved_or_duplicate_job"));
         }
-        crate::guard::validate_runs_on(&fact.runs_on)?;
+        if matches!(&fact.source, LogicalJobSource::NamedCheck { .. }) {
+            fact.check_runner
+                .as_ref()
+                .ok_or_else(|| invalid("native_check_job_identity"))?
+                .validate("native_authority", "check_runner")?;
+        } else {
+            crate::guard::validate_runs_on(&fact.runs_on)?;
+        }
         let is_required = match &fact.source {
             LogicalJobSource::Task(task) => {
                 tasks.validate(fact, task, input, &mut tofu)?;

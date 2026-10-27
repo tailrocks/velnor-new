@@ -154,6 +154,12 @@ users. The parent directory must be canonical and private.
 
 Pass both guard values to every collector command:
 
+For the full shell harness, also build the CLI package's
+`qualification-diagnostics` Cargo example in release mode through the same
+Rust build guard and MBX. Record its SHA-256 independently and pass its path
+and digest. This native executable shares the production CLI entry and adds
+controlled plan diagnostics without changing release manifests.
+
 ```bash
 scripts/capture-opentofu-goldens.sh \
   --archive-guard /private/path/velnor-archive-guard \
@@ -162,6 +168,8 @@ scripts/capture-opentofu-goldens.sh \
 scripts/test-capture-opentofu-goldens-bin.sh \
   --archive-guard /private/path/velnor-archive-guard \
   --archive-guard-sha256 <independent-64-character-sha256> \
+  --diagnostics-fixture /private/path/qualification-diagnostics \
+  --diagnostics-fixture-sha256 <independent-fixture-64-character-sha256> \
   /private/path/velnor-actions
 ```
 
@@ -170,8 +178,7 @@ and the supplied digest before it runs the guard. It then verifies the guard's
 compiled source fingerprint against the current checkout. It checks the file
 identity, digest, and source fingerprint again during candidate execution. A
 missing or invalid explicit guard fails. The collector does not select another
-guard or run the builder after that failure. Omitting both options uses the
-normal isolated builder.
+guard or run the builder after that failure. Both options are required.
 
 Use `check` to compare the five CLI goldens without changing checked-in files.
 Use `capture` only after a known-good local result. Use `check-release` with an

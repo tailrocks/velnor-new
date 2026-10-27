@@ -98,9 +98,19 @@ impl GitHubApi {
         query: &str,
         fields: &[(&str, String)],
     ) -> Result<serde_json::Value, OrchestratorError> {
+        let response = serde_json::from_slice(&self.graphql_bytes(query, fields)?)
+            .map_err(|_| internal("package_publish_api_json"))?;
+        Ok(response)
+    }
+
+    pub(in crate::package_release_publish) fn graphql_bytes(
+        &self,
+        query: &str,
+        fields: &[(&str, String)],
+    ) -> Result<Vec<u8>, OrchestratorError> {
+        let bytes = self.request(graphql_arguments(query, fields), JSON_LIMIT)?;
         let response: serde_json::Value =
-            serde_json::from_slice(&self.request(graphql_arguments(query, fields), JSON_LIMIT)?)
-                .map_err(|_| internal("package_publish_api_json"))?;
+            serde_json::from_slice(&bytes).map_err(|_| internal("package_publish_api_json"))?;
         if response
             .get("errors")
             .and_then(serde_json::Value::as_array)
@@ -108,7 +118,7 @@ impl GitHubApi {
         {
             return Err(internal("package_publish_api_graphql_errors"));
         }
-        Ok(response)
+        Ok(bytes)
     }
 }
 

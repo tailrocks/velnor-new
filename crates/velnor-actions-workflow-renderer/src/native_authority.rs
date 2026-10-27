@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::{GeneratorLock, Job, VelnorConfig, WorkflowPolicy};
 use velnor_actions_mise::ToolCatalog;
 
+mod check_mise;
 mod graph;
 mod inputs;
 mod plan;
@@ -109,18 +110,14 @@ impl NativeAuthority {
             .map_err(NativeAuthorityError::Release)?;
             (version, acquire)
         };
+        let helper_catalog = plan::helper_catalog(&input, &catalog)?;
         let mise = tools::mise_setup(input.config, target)?;
         let runtime = runtime(&catalog, &version, input.tools.rust.has_compiler())?;
-        let mut required = crate::native_job_builders::final_job(
-            input.runner,
-            &required_ids,
-            Some(acquire.clone()),
-        )
-        .map_err(NativeAuthorityError::Job)?;
+        let mut required = plan::required_job(&input, &required_ids, acquire.clone())?;
         let mut producer_plan = if producer {
             Some(plan::build(
                 &input,
-                &catalog,
+                &helper_catalog,
                 acquire,
                 &fetch_roots,
                 &tofu_roots,

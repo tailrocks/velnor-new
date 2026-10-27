@@ -58,6 +58,15 @@ impl GitHubApi {
         self.get_json_bounded(route, JSON_LIMIT)
     }
 
+    pub(in crate::package_release_publish) fn get_json_bytes(
+        &self,
+        route: &str,
+    ) -> Result<Vec<u8>, OrchestratorError> {
+        let bytes = self.request(crate::github_authority_read::arguments(route)?, JSON_LIMIT)?;
+        decode_json_bounded::<serde_json::Value>(&bytes, JSON_LIMIT)?;
+        Ok(bytes)
+    }
+
     pub(in crate::package_release_publish) fn get_json_bounded<T: serde::de::DeserializeOwned>(
         &self,
         route: &str,
