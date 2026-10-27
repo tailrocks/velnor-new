@@ -3,7 +3,6 @@
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
-const https = require("node:https");
 const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
@@ -109,31 +108,44 @@ async function runCase({
   mode, name, timeoutMs = null, trustCertificate,
 }) {
   const liveSockets = new Set();
+  const upstreamSockets = new Set();
   const serverTimers = new Set();
   let connectionCount = 0;
-  const tlsServer = https.createServer({
-    key: fs.readFileSync(path.join(area, "key.pem")),
-    cert: fs.readFileSync(path.join(area, "cert.pem")),
-  }, (_request, response) => {
-    const body = mode === "wrong-body" ? Buffer.from("wrong channel bytes\n") : fixtureBody;
-    response.writeHead(200, {
-      "content-length": String(body.length),
-      "content-type": "text/plain",
-      connection: "close",
-    });
-    if (mode === "slow-body") {
-      response.flushHeaders();
-      const responseTimer = setTimeout(() => response.end(body), 10_000);
-      serverTimers.add(responseTimer);
-      response.once("close", () => {
-        clearTimeout(responseTimer);
-        serverTimers.delete(responseTimer);
-      });
-      return;
-    }
-    response.end(body);
+  const tlsServer = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    tls: {
+      key: Bun.file(path.join(area, "key.pem")),
+      cert: Bun.file(path.join(area, "cert.pem")),
+    },
+    fetch() {
+      const body = mode === "wrong-body" ? Buffer.from("wrong channel bytes\n") : fixtureBody;
+      const headers = {
+        "content-length": String(body.length),
+        "content-type": "text/plain",
+        connection: "close",
+      };
+      if (mode === "slow-body") {
+        let responseTimer;
+        const slowBody = new ReadableStream({
+          start(controller) {
+            responseTimer = setTimeout(() => {
+              serverTimers.delete(responseTimer);
+              controller.enqueue(body);
+              controller.close();
+            }, 10_000);
+            serverTimers.add(responseTimer);
+          },
+          cancel() {
+            if (responseTimer) clearTimeout(responseTimer);
+            serverTimers.delete(responseTimer);
+          },
+        });
+        return new Response(slowBody, { status: 200, headers });
+      }
+      return new Response(body, { status: 200, headers });
+    },
   });
-  tlsServer.on("tlsClientError", () => {});
   const tcpProxy = net.createServer((socket) => {
     connectionCount += 1;
     liveSockets.add(socket);
@@ -142,7 +154,13 @@ async function runCase({
       socket.destroy();
       return;
     }
-    tlsServer.emit("connection", socket);
+    const upstream = net.connect(tlsServer.port, "127.0.0.1");
+    upstreamSockets.add(upstream);
+    upstream.on("close", () => upstreamSockets.delete(upstream));
+    socket.once("error", () => upstream.destroy());
+    upstream.once("error", () => socket.destroy());
+    socket.pipe(upstream);
+    upstream.pipe(socket);
   });
   const startedAt = Date.now();
   let child;
@@ -222,7 +240,9 @@ async function runCase({
     }
     for (const timerId of serverTimers) clearTimeout(timerId);
     for (const socket of liveSockets) socket.destroy();
+    for (const socket of upstreamSockets) socket.destroy();
     if (tcpProxy.listening) await closeServer(tcpProxy);
+    await tlsServer.stop(true);
     if (processCleanupError) throw processCleanupError;
   }
 
@@ -292,7 +312,8 @@ async function runCase({
 }
 
 async function main() {
-  assert.equal(process.versions.node, "26.12.0", `expected Node 26.12.0, found ${process.versions.node}`);
+  assert.equal(process.versions.bun, Bun.version, "retry tests must run with Bun");
+  assert.ok(Bun.semver.satisfies(Bun.version, ">=1.4.4"), `expected Bun 1.4.4 or newer, found ${Bun.version}`);
   assert.equal(process.argv.length, 4, "usage: test-rust-verifier-retries.cjs <absolute-generated-action.yml> <absolute-receipt.json>");
   const [, , actionPath, receiptPath] = process.argv;
   assert.ok(path.isAbsolute(receiptPath), "receipt path must be absolute");
@@ -355,7 +376,7 @@ async function main() {
       digest_gate_sha256: crypto.createHash("sha256").update(generated.digestCheck).digest("hex"),
       fixture_sha256: fixtureSha256,
       get_function_sha256: generated.getFunctionSha256,
-      node: process.versions.node,
+      bun: Bun.version,
       openssl: opensslVersion,
       process_group_cleanup: lifecycleProbe,
       results,
@@ -378,7 +399,7 @@ async function main() {
         action_path: generated.actionPath,
         action_sha256: generated.actionSha256,
         error: error.message,
-        node: process.versions.node,
+        bun: Bun.version,
         results,
         scope: "generated restored-Rust verifier download bytes and adjacent channel digest gate; not full verifier or Rust toolchain validation",
       };
