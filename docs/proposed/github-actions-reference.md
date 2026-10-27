@@ -48,6 +48,21 @@ the host's `xcode-select` setting.
 
 ## Compatibility Rules and Verification Procedures
 
+### Ledger event and source identity (checked 2026-10-28)
+
+The runner's [`GitHubContext.GetRuntimeEnvironmentVariables`](https://github.com/actions/runner/blob/1ba885c2065fd9be317808ab3fd406f392635cf7/src/Runner.Worker/GitHubContext.cs)
+exports the supplied `sha`, `workflow_sha`, `event_name`, and `event_path` context values as environment variables.
+[`ExecutionContext.WriteWebhookPayload`](https://github.com/actions/runner/blob/1ba885c2065fd9be317808ab3fd406f392635cf7/src/Runner.Worker/ExecutionContext.cs)
+writes the event context to `event.json` and sets its exported path when that context exists.
+GitHub's [pull-request event contract](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request)
+identifies `GITHUB_SHA` as the test merge commit; the logical pull-request source is `github.event.pull_request.head.sha`.
+
+Planning and ledger emission therefore share Velnor's event classifier and reference resolver.
+Emission reads the bounded event file, rejects malformed JSON, and requires the independently resolved event and head to match the validated staged Plan before writing a ledger.
+Fork pull requests use the contract event `fork`; `workflow_dispatch` uses `qualification`.
+The original runner ref and workflow SHA remain unchanged, and Required keeps its strict source and event comparisons.
+Public CLI regressions cover a synthetic merge SHA distinct from the logical head, both event normalizations, and rejection without a ledger when event context is missing, malformed, or changed.
+
 ### Native release job authority (checked 2026-10-21)
 
 Jackin run `39495895585`, attempt 1, demonstrated executing producer jobs while the aggregate run remained `queued`; requiring only `in_progress` incorrectly rejected them before checkout. Aggregate status alone never establishes caller authority.

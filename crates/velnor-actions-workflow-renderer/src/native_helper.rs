@@ -58,6 +58,12 @@ pub fn consumer_acquire_for_target(
     acquire::consumer_acquire_for_target(target, version, json)
 }
 
+pub fn published_verdict_acquire_for_target(
+    target: velnor_actions_contract::ReleaseTarget,
+) -> Result<velnor_actions_contract::Step, ReleaseHelperError> {
+    acquire::published_verdict_acquire_for_target(target)
+}
+
 pub fn lock_acquire_for_target(
     lock: &velnor_actions_contract::GeneratorLock,
     target: velnor_actions_contract::ReleaseTarget,

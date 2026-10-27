@@ -22,7 +22,7 @@ pub(super) fn assert_published_helper_tools(
             Some("false")
         );
     }
-    for id in [PLAN_JOB_ID, FINAL_JOB_ID] {
+    for (id, expected_gh) in [(PLAN_JOB_ID, "gh@2.103.2"), (FINAL_JOB_ID, "gh@2.103.3")] {
         let job = jobs
             .get(id)
             .ok_or_else(|| io::Error::other(format!("missing helper job {id}")))?;
@@ -37,15 +37,17 @@ pub(super) fn assert_published_helper_tools(
         };
         assert_eq!(
             run.iter()
-                .filter(|argument| *argument == "gh@2.103.2")
+                .filter(|argument| *argument == expected_gh)
                 .count(),
             1,
-            "{id} omitted the published helper55 GH dependency"
+            "{id} omitted its authenticated helper GH dependency"
         );
-        assert!(
-            !run.contains(&format!("gh@{}", velnor_actions_mise::catalog::GH_VERSION)),
-            "{id} substituted candidate GH for helper55 GH"
-        );
+        if id == PLAN_JOB_ID {
+            assert!(
+                !run.contains(&format!("gh@{}", velnor_actions_mise::catalog::GH_VERSION)),
+                "{id} substituted candidate GH for the SDK55 helper GH"
+            );
+        }
         assert!(
             !run.iter()
                 .any(|argument| argument.contains("VELNOR_TOOL_GH")),
