@@ -51,6 +51,8 @@ mod feature_toggles;
 mod maintenance_features;
 #[path = "workflow_configuration_public/parallel_owners.rs"]
 mod parallel_owners;
+#[path = "workflow_configuration_public/release_bun_prerequisite.rs"]
+mod release_bun_prerequisite;
 #[path = "workflow_configuration_public/report_upload.rs"]
 mod report_upload;
 #[path = "workflow_configuration_public/seed_ids.rs"]
