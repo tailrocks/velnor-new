@@ -21,6 +21,7 @@ pub struct ProductReleasePins {
     pub install_intel_target_argv: Vec<String>,
     pub install_resource_probe_target_argv: Vec<String>,
     pub runner_build_argv: Vec<String>,
+    pub attestation_helper_build_argv: Vec<String>,
     pub resource_probe_build_argv: Vec<String>,
     pub install_resource_probe_release_tools_argv: Vec<String>,
     pub resource_probe_release_build_argv: Vec<String>,
