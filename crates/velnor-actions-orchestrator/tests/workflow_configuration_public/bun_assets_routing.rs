@@ -3,6 +3,7 @@
 
 use std::collections::BTreeSet;
 use std::error::Error;
+use std::fmt::Write as _;
 use std::fs;
 
 use super::bun_routing::make_bun_repo;
@@ -231,5 +232,195 @@ fn assert_named_asset_step_id(
         .find(|step| has_yaml_value(step, "name", step_name))
         .ok_or_else(|| format!("missing Bun asset handoff step: {step_name}"))?;
     assert_asset_id_count(step, member_id, 1);
+    Ok(())
+}
+
+#[test]
+fn schema2_bun_mixed_profiles_keep_private_asset_handoffs() -> Result<(), Box<dyn Error>> {
+    for (default_profile, suite_profile, default_runner, suite_runner) in [
+        (
+            "hosted",
+            "local",
+            "ubuntu-26.04",
+            "[velnor, ubuntu-26.04-scale-set]",
+        ),
+        (
+            "local",
+            "hosted",
+            "[velnor, ubuntu-26.04-scale-set]",
+            "ubuntu-26.04",
+        ),
+    ] {
+        let repo = make_mixed_private_assets_repo()?;
+        configure_mixed_profiles(repo.path(), default_profile, suite_profile)?;
+        let prepared = prepare(repo.path())?;
+        let rendered = render_staged_tree_with(&prepared, None)?;
+        let workflow = rendered
+            .get(WORKFLOW_PATH)
+            .ok_or("rendered CI workflow is missing")?;
+        assert_mixed_profile_routing(workflow, default_runner, suite_runner)?;
+    }
+    Ok(())
+}
+
+fn make_mixed_private_assets_repo() -> Result<tempfile::TempDir, Box<dyn Error>> {
+    let repo = make_bun_repo()?;
+    let config_path = repo.path().join(".velnor/config.toml");
+    let mut config = fs::read_to_string(&config_path)?;
+    config.push_str(
+        r#"
+[private_sources]
+owner = "fixture-owner"
+app_id_variable = "FIXTURE_APP_ID"
+app_private_key_secret = "FIXTURE_APP_PRIVATE_KEY"
+
+[[private_sources.release_assets]]
+id = "fixture-assets"
+repository = "fixture-owner/fixture-assets"
+tag = "v1.0.0"
+asset = "fixture-assets.tar.gz"
+extract_to = "fixture-assets"
+"#,
+    );
+    fs::write(&config_path, config)?;
+    fs::write(
+        repo.path().join(".velnor/deps.lock"),
+        r#"schema = 1
+
+[[release_assets]]
+id = "fixture-assets"
+repository = "fixture-owner/fixture-assets"
+tag = "v1.0.0"
+commit = "0123456789abcdef0123456789abcdef01234567"
+asset = "fixture-assets.tar.gz"
+sha256 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+extract_to = "fixture-assets"
+"#,
+    )?;
+    migrate_config(repo.path(), 2, true)?;
+    Ok(repo)
+}
+
+fn configure_mixed_profiles(
+    root: &std::path::Path,
+    default_profile: &str,
+    suite_profile: &str,
+) -> Result<(), Box<dyn Error>> {
+    let config_path = root.join(".velnor/config.toml");
+    let config = fs::read_to_string(&config_path)?;
+    let marker = "default_profile = \"hosted\"";
+    assert_eq!(config.matches(marker).count(), 1);
+    let mut config = config.replace(marker, &format!("default_profile = \"{default_profile}\""));
+    write!(
+        config,
+        r#"
+
+[execution.overrides."bun-fixture-web--unit"]
+profile = "{suite_profile}"
+role = "verification"
+
+[execution.overrides."bun-fixture-web--browser"]
+profile = "{suite_profile}"
+role = "verification"
+"#
+    )?;
+    fs::write(config_path, config)?;
+    Ok(())
+}
+
+fn assert_mixed_profile_routing(
+    workflow: &str,
+    default_runner: &str,
+    suite_runner: &str,
+) -> Result<(), Box<dyn Error>> {
+    let expected: BTreeSet<String> = [
+        "bun-fixture-ui",
+        "bun-fixture-ui--assets",
+        MEMBER_ID,
+        "bun-fixture-web--unit",
+        "bun-fixture-web--browser",
+        "bun-fixture-web--browser--report",
+        ASSETS_JOB_ID,
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect();
+    let actual: BTreeSet<String> = mixed_rendered_job_ids(workflow)
+        .into_iter()
+        .filter(|id| id.starts_with("bun-"))
+        .collect();
+    assert_eq!(actual, expected);
+    for id in [
+        "bun-fixture-ui",
+        MEMBER_ID,
+        "bun-fixture-web--browser--report",
+    ] {
+        assert_job_runner(workflow, id, default_runner)?;
+    }
+    for id in ["bun-fixture-ui--assets", ASSETS_JOB_ID] {
+        assert_job_runner(workflow, id, "ubuntu-26.04")?;
+    }
+    for id in SUITE_IDS {
+        assert_job_runner(workflow, id, suite_runner)?;
+    }
+    let archive_name = format!("velnor-pw-assets-{MEMBER_ID}.tar.gz");
+    let stage_dir = format!("${{{{ runner.temp }}}}/velnor/bun-assets/{MEMBER_ID}");
+    let producer = rendered_job_block(workflow, ASSETS_JOB_ID)?;
+    assert_eq!(
+        asset_archive_path(producer)?,
+        format!("{stage_dir}/{archive_name}")
+    );
+    assert_named_asset_step_id(producer, "Bundle verified private assets", MEMBER_ID)?;
+    for suite_id in SUITE_IDS {
+        let suite = rendered_job_block(workflow, suite_id)?;
+        assert_eq!(
+            needs_for_block(suite)?,
+            BTreeSet::from(["plan".to_owned(), ASSETS_JOB_ID.to_owned()])
+        );
+        assert!(has_yaml_value(suite, "name", &archive_name));
+        assert!(has_yaml_value(suite, "path", &stage_dir));
+        assert_named_asset_step_id(suite, "Prepare private asset handoff", MEMBER_ID)?;
+        assert_named_asset_step_id(suite, "Import and verify private assets", MEMBER_ID)?;
+    }
+    assert_browser_report_handoff(
+        workflow,
+        (
+            "bun-fixture-web--browser",
+            "bun-fixture-web--browser--report",
+        ),
+        (ASSETS_JOB_ID, "illegal-other-assets"),
+        MEMBER_ID,
+        "illegal-other-member",
+        &archive_name,
+        &stage_dir,
+    )?;
+    assert_mixed_report_artifacts(workflow)?;
+    Ok(())
+}
+
+fn mixed_rendered_job_ids(workflow: &str) -> BTreeSet<String> {
+    workflow
+        .lines()
+        .skip_while(|line| *line != "jobs:")
+        .skip(1)
+        .filter_map(|line| line.strip_prefix("  "))
+        .filter_map(|line| line.strip_suffix(':'))
+        .filter(|id| !id.starts_with(' '))
+        .map(str::to_owned)
+        .collect()
+}
+
+fn assert_mixed_report_artifacts(workflow: &str) -> Result<(), Box<dyn Error>> {
+    let suite_id = "bun-fixture-web--browser";
+    let suite = rendered_job_block(workflow, suite_id)?;
+    let report = rendered_job_block(workflow, "bun-fixture-web--browser--report")?;
+    assert!(suite.contains(&format!(
+        "name: velnor-pw-blob-{suite_id}-leg-${{{{ matrix.leg }}}}"
+    )));
+    assert!(suite.contains(&format!(
+        "name: velnor-pw-results-{suite_id}-leg-${{{{ matrix.leg }}}}"
+    )));
+    assert!(report.contains(&format!("pattern: velnor-pw-blob-{suite_id}-leg-*")));
+    assert!(report.contains("name: velnor-pw-report-bun-fixture-web--browser"));
     Ok(())
 }

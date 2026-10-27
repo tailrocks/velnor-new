@@ -9,12 +9,22 @@ mod branches;
 mod bun_assets_routing;
 #[path = "workflow_configuration_public/bun_dispositions.rs"]
 mod bun_dispositions;
+#[path = "workflow_configuration_public/bun_expansion.rs"]
+mod bun_expansion;
+#[path = "workflow_configuration_public/bun_malformed.rs"]
+mod bun_malformed;
+#[path = "workflow_configuration_public/bun_planning.rs"]
+mod bun_planning;
+#[path = "workflow_configuration_public/bun_planning_fixture.rs"]
+mod bun_planning_fixture;
 #[path = "workflow_configuration_public/bun_private_credentials.rs"]
 mod bun_private_credentials;
 #[path = "workflow_configuration_public/bun_private_credentials_boundaries.rs"]
 mod bun_private_credentials_boundaries;
 #[path = "workflow_configuration_public/bun_private_credentials_support.rs"]
 mod bun_private_credentials_support;
+#[path = "workflow_configuration_public/bun_request_lanes.rs"]
+mod bun_request_lanes;
 #[path = "workflow_configuration_public/bun_routing.rs"]
 mod bun_routing;
 #[path = "workflow_configuration_public/bun_runtime.rs"]
