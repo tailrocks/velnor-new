@@ -1,0 +1,24 @@
+{
+  "checked_at": "2026-10-27T21:52:24Z",
+  "source": "https://docs.github.com/en/actions/reference/runners/github-hosted-runners",
+  "document_sha256": "9cacc2278acfa36550be1af85fb4f0cf650922eed5618d29d33de1d17db8cc03",
+  "supported": [
+    "ubuntu-26.04",
+    "ubuntu-24.04",
+    "ubuntu-22.04"
+  ],
+  "default": "ubuntu-26.04",
+  "run_id": 40587663856,
+  "run_attempt": 1,
+  "source_commit": "2f181244cb94ac56f15d8691a19c0bfe71e55c24",
+  "job_id": 122483329794,
+  "job_conclusion": "success",
+  "runner_version": "2.338.0",
+  "operating_system": "Ubuntu 26.04.1 LTS",
+  "image": "ubuntu-26.04",
+  "image_version": "20261025.179.1",
+  "image_release": "https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261025.179",
+  "plan_log_sha256": "cdfd3eeb001ea1be66e92ed87a91fbf8dd803992979d6ef500b64b27051a1d6e",
+  "job_response_sha256": "611c93275984e3dd85e11d212a81f174a7e4fef4a4fcf28cb75f2e92553ab9ff",
+  "scope": "Official supported-label observation and successful normal main CI runtime; not formal cross-platform qualification."
+}
