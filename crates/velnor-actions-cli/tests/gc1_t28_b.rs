@@ -5,8 +5,8 @@ use super::*;
 
 #[test]
 fn gc1_t28_rejects_invalid_state() -> Result<(), Box<dyn Error>> {
-    let admitted = admission_record("admitted", &[]);
     let inventory = inventory_record();
+    let admitted = admission_record("admitted", &[], &bound_digest(&inventory)?);
     let key = generation_key(0);
     let expected = expected_body(&key);
 
@@ -61,7 +61,11 @@ fn gc1_t28_rejects_invalid_state() -> Result<(), Box<dyn Error>> {
     rejected(&run_cli("cache-nuke-v9", &root, &path)?, "unknown op tag")?;
     cleanup(&root);
 
-    let blocked = admission_record("blocked", &["unknown-inventory"]);
+    let blocked = admission_record(
+        "blocked",
+        &["unknown-inventory"],
+        &bound_digest(&inventory)?,
+    );
     let (root, path) = write_request(
         "cache-publish.json",
         &publish_body(&blocked, &inventory, &expected),
@@ -116,8 +120,8 @@ fn gc1_t28_rejects_stale_state() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn gc1_t28_rejects_tampered_state() -> Result<(), Box<dyn Error>> {
-    let admitted = admission_record("admitted", &[]);
     let inventory = inventory_record();
+    let admitted = admission_record("admitted", &[], &bound_digest(&inventory)?);
     let key = generation_key(0);
     let expected = expected_body(&key);
 

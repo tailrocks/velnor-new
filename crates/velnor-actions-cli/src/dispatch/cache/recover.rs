@@ -58,7 +58,9 @@ fn admit_recover(
     };
     let len = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
     if len != entry.size_in_bytes {
-        println!("::warning::cache_corrupt: state payload size disagrees with inventory; building cold");
+        println!(
+            "::warning::cache_corrupt: state payload size disagrees with inventory; building cold"
+        );
         drop(fs::remove_file(&payload));
         return Ok(None);
     }

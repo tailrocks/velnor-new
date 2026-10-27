@@ -9,15 +9,16 @@ use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{
     ACQUIRE_PREVIEW_SOURCE_OP, ACQUIRE_RELEASE_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP,
-    ADMIT_RELEASE_AGGREGATE_OP, ADMIT_STABLE_TAG_ORIGIN_OP, BUN_ASSETS_EXPORT_OP,
-    BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP, BUN_ASSETS_REPOSITORY_CHECK_OP,
-    BUN_REGISTRY_INSTALL_OP, CAPTURE_REVIEW_COMPLETION_OP, DYNAMIC_MATRIX_OUTPUT_MODE,
-    EMIT_REVIEW_COMPLETION_OP, EXECUTE_CHECK_OP, EXECUTE_RELEASE_PRODUCER_OP, FETCH_OP,
-    FINALIZE_PREVIEW_SOURCE_OP, GITHUB_EVIDENCE_FETCH_OP, GITHUB_EVIDENCE_IMPORT_OP, GRADLE_RUN_OP,
-    MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP, OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP,
-    PLAYWRIGHT_INSTALL_OP, PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PRIVATE_FETCH_OP,
-    PRIVATE_REVOKE_OP, PUBLISH_PACKAGE_RELEASE_OP, PlanOutputMode, RECOVER_PACKAGE_RELEASE_OP,
-    REPORT_OP, REQUEST_FILE_ENV, SELECT_PREVIEW_SOURCE_OP, SELECT_RELEASE_TAP_CONTINUATION_OP,
+    ADMIT_RELEASE_AGGREGATE_OP, ADMIT_STABLE_TAG_ORIGIN_OP, ASSEMBLE_GROUP_LEDGERS_OP,
+    BUN_ASSETS_EXPORT_OP, BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP,
+    BUN_ASSETS_REPOSITORY_CHECK_OP, BUN_REGISTRY_INSTALL_OP, CAPTURE_REVIEW_COMPLETION_OP,
+    DYNAMIC_MATRIX_OUTPUT_MODE, EMIT_GROUP_LEDGER_OP, EMIT_REVIEW_COMPLETION_OP, EXECUTE_CHECK_OP,
+    EXECUTE_RELEASE_PRODUCER_OP, FETCH_OP, FINALIZE_PREVIEW_SOURCE_OP, GITHUB_EVIDENCE_FETCH_OP,
+    GITHUB_EVIDENCE_IMPORT_OP, GRADLE_RUN_OP, MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP,
+    OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PLAYWRIGHT_INSTALL_OP,
+    PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PRIVATE_FETCH_OP, PRIVATE_REVOKE_OP,
+    PUBLISH_PACKAGE_RELEASE_OP, PlanOutputMode, RECOVER_PACKAGE_RELEASE_OP, REPORT_OP,
+    REQUEST_FILE_ENV, SELECT_PREVIEW_SOURCE_OP, SELECT_RELEASE_TAP_CONTINUATION_OP,
     SELECT_STABLE_RELEASE_SOURCE_OP, SIGN_PACKAGE_RELEASE_OP, TASK_EXECUTION_RESOLVER_OP,
     WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP, WRITE_STABLE_TAG_INTENT_OP,
     WRITE_STABLE_TAG_ORIGIN_OP, execute_check, merge_internal, merge_passed, plan_internal,
@@ -33,6 +34,10 @@ mod bun_assets;
 mod cache;
 #[path = "dispatch/fileless.rs"]
 mod fileless;
+#[path = "dispatch/cache/ledger_assemble.rs"]
+mod ledger_assemble;
+#[path = "dispatch/cache/ledger_emit.rs"]
+mod ledger_emit;
 #[path = "dispatch_preview_production.rs"]
 mod preview_production;
 #[path = "dispatch/public.rs"]
@@ -83,6 +88,9 @@ pub(crate) fn try_internal() -> Option<ExitCode> {
 
 fn gate_request() -> Option<InternalRequest> {
     let op = internal_op()?;
+    if let Some(request) = ledger_emit::gate(op).or_else(|| ledger_assemble::gate(op)) {
+        return Some(request);
+    }
     if fileless::uses_runner_temp_gate(op) {
         return fileless::gate_runner_temp_operation(op);
     }
@@ -149,6 +157,12 @@ fn gate_file_request(op: InternalOp, path: PathBuf) -> Option<InternalRequest> {
         }
         InternalOp::CachePublish | InternalOp::CacheRecover | InternalOp::CacheCleanup => {
             return gated(op, &path, |request| cache::gate_request(op, request));
+        }
+        InternalOp::EmitGroupLedger => {
+            return ledger_emit::gate(op);
+        }
+        InternalOp::AssembleGroupLedgers => {
+            return ledger_assemble::gate(op);
         }
         InternalOp::WriteRequest
         | InternalOp::Plan
@@ -268,6 +282,8 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::CachePublish | InternalOp::CacheRecover | InternalOp::CacheCleanup => {
             cache::run(request.op, &request.path)
         }
+        InternalOp::EmitGroupLedger => ledger_emit::run(),
+        InternalOp::AssembleGroupLedgers => ledger_assemble::run(),
     }
 }
 

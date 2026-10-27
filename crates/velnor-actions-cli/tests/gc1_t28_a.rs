@@ -5,14 +5,15 @@ use super::*;
 
 #[test]
 fn gc1_t28_preserves_contract() -> Result<(), Box<dyn Error>> {
-    let admitted = admission_record("admitted", &[]);
     let key = generation_key(0);
     let expected = expected_body(&key);
+    let first_inventory = inventory_record();
+    let admitted = admission_record("admitted", &[], &bound_digest(&first_inventory)?);
 
     let staging = scratch_root().join("staging-first");
     let (root, path) = write_request(
         "cache-publish.json",
-        &publish_body(&admitted, &inventory_record(), &expected),
+        &publish_body(&admitted, &first_inventory, &expected),
     )?;
     let first_bytes = make_tarball(&root, &staging, &["state/payload"])?;
     write_payload(&root, &first_bytes)?;
@@ -25,9 +26,10 @@ fn gc1_t28_preserves_contract() -> Result<(), Box<dyn Error>> {
     cleanup(&root);
 
     let exact_inventory = inventory_with(&[entry(7, 0, first_bytes.len() as u64)]);
+    let readmitted = admission_record("admitted", &[], &bound_digest(&exact_inventory)?);
     let (root, path) = write_request(
         "cache-publish.json",
-        &publish_body(&admitted, &exact_inventory, &expected),
+        &publish_body(&readmitted, &exact_inventory, &expected),
     )?;
     write_payload(&root, &first_bytes)?;
     let output = run_cli("cache-publish-v1", &root, &path)?;

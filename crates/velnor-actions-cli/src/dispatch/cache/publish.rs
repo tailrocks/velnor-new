@@ -47,10 +47,21 @@ fn admit_publish(
         Ok(inventory) => inventory,
         Err(error) => return Err(single_line(&error.to_string())),
     };
-    if let Err(error) = inventory_digest(&inventory) {
-        return Err(single_line(&error.to_string()));
-    }
+    let computed = match inventory_digest(&inventory) {
+        Ok(computed) => computed,
+        Err(error) => return Err(single_line(&error.to_string())),
+    };
     let expected = parse_expected(&request.expected_bytes)?;
+    // Bind the admission to the request it authorizes: a stale admission
+    // carries obsolete headroom and disk measurements, and a
+    // cross-generation admission authorizes a different candidate, so both
+    // bindings deny publication, following the decide_* denial shape.
+    if computed != admission.inventory_digest {
+        return Err("cache publish denied: inventory_digest_mismatch".to_owned());
+    }
+    if admission.generation.cache_key() != expected.key {
+        return Err("cache publish denied: generation_key_mismatch".to_owned());
+    }
     let ceiling = if admission.operating_ceiling_bytes != 0 {
         admission.operating_ceiling_bytes
     } else {

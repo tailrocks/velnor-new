@@ -87,7 +87,18 @@ fn rejected(output: &Output, what: &str) -> Result<(), Box<dyn Error>> {
     }
 }
 
-fn admission_record(decision: &str, blocked_reasons: &[&str]) -> Value {
+/// Compute the canonical inventory digest for the exact inventory JSON
+/// carried by the request, so the admission under test is bound to it.
+fn bound_digest(inventory: &Value) -> Result<String, Box<dyn Error>> {
+    let parsed: velnor_actions_orchestrator::InventoryV1 =
+        serde_json::from_value(inventory.clone())
+            .map_err(|error| fail(&format!("encode inventory: {error}")))?;
+    velnor_actions_orchestrator::inventory_digest(&parsed)
+        .map(|digest| digest.as_str().to_owned())
+        .map_err(|error| fail(&format!("digest inventory: {error}")))
+}
+
+fn admission_record(decision: &str, blocked_reasons: &[&str], inventory_digest: &str) -> Value {
     json!({
         "schema": 1,
         "job": {
@@ -112,7 +123,7 @@ fn admission_record(decision: &str, blocked_reasons: &[&str]) -> Value {
             "repair_revision": 0,
         },
         "active_intent_digest": digest(1),
-        "inventory_digest": digest(2),
+        "inventory_digest": inventory_digest,
         "hard_ceiling_bytes": HARD_CEILING_BYTES,
         "operating_ceiling_bytes": OPERATING_CEILING_BYTES,
         "inventory_bytes": {"value": 100, "unknown_reason": null},

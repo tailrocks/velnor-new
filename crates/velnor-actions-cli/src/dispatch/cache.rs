@@ -178,10 +178,15 @@ fn find_entry<'inventory>(
     inventory: &'inventory InventoryV1,
     expected: &Expected,
 ) -> Option<&'inventory EntryTupleV1> {
-    inventory
-        .entries
-        .iter()
-        .find(|entry| entry.key == expected.key)
+    // Match the complete (key, ref, version) tuple: the same logical key
+    // may exist under several refs or cache versions, and key-only lookup
+    // would select an unrelated entry and fail readback even when the
+    // correct entry is present.
+    inventory.entries.iter().find(|entry| {
+        entry.key == expected.key
+            && entry.ref_name == expected.ref_name
+            && entry.version == expected.version
+    })
 }
 
 fn observed_entry(entry: &EntryTupleV1) -> ObservedEntry {

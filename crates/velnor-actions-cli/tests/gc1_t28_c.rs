@@ -52,10 +52,7 @@ fn gc1_t28_recover_refuses_special_nodes() -> Result<(), Box<dyn Error>> {
     if !status.success() {
         return Err(fail("mkfifo failed"));
     }
-    if !fs::symlink_metadata(&fifo)
-        .map(|meta| meta.file_type().is_fifo())
-        .unwrap_or(false)
-    {
+    if !fs::symlink_metadata(&fifo).is_ok_and(|meta| meta.file_type().is_fifo()) {
         return Err(fail("fixture fifo was not created"));
     }
     let archive = build.join("special.tar.gz");
