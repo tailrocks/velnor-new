@@ -46,7 +46,9 @@ const CANDIDATE_PATH: &str = ".github/workflows/job-image-candidate.yml";
 const DRIVER: &str = r#"import hashlib
 import json
 import sys
+import tempfile
 from pathlib import Path
+from urllib.parse import parse_qsl, urlsplit
 
 ROOT = Path(sys.argv[1])
 
@@ -55,6 +57,73 @@ sys.path.insert(0, str(ROOT))
 import job_image_authority_oci as oci_module
 import job_image_authority_publish as publish_module
 import job_image_authority_record as record_module
+import job_image_authority_registry as registry_module
+
+
+class _FakeResponse:
+    def __init__(self, status, headers, body):
+        self.status = status
+        self.headers = {key.lower(): value for key, value in headers.items()}
+        self.body = body
+
+
+class _FakeRegistry:
+    """In-memory OCI registry for the data-only flow test; no network is opened."""
+
+    def __init__(self):
+        self.store = {}
+        self.puts = 0
+
+    def _key(self, path):
+        digest = path.rsplit("/", 1)[-1]
+        kind = "manifests" if "/manifests/" in path else "blobs"
+        return f"{kind}:{digest}", digest
+
+    def request(self, method, url, headers, body=None, length=0):
+        parts = urlsplit(url)
+        path = parts.path
+        if method == "GET" and path == "/v2/":
+            return _FakeResponse(401, {"www-authenticate": 'Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:tailrocks/velnor-job:pull,push"'}, b"")
+        if method == "GET" and path == "/token":
+            return _FakeResponse(200, {}, b'{"token": "flow-token-0123456789abcdef"}')
+        if method == "HEAD":
+            key, digest = self._key(path)
+            if key in self.store:
+                data = self.store[key]
+                return _FakeResponse(
+                    200,
+                    {
+                        "docker-content-digest": digest,
+                        "content-length": str(len(data)),
+                    },
+                    b"",
+                )
+            return _FakeResponse(404, {}, b"")
+        if method == "POST":
+            return _FakeResponse(
+                202,
+                {"location": "/v2/tailrocks/velnor-job/blobs/uploads/flow-uuid"},
+                b"",
+            )
+        if method == "PUT":
+            query = dict(parse_qsl(parts.query))
+            if "/manifests/" in path:
+                key, digest = self._key(path)
+                self.store[key] = body
+                self.puts += 1
+                return _FakeResponse(201, {"docker-content-digest": digest}, b"")
+            self.store[f"blobs:{query['digest']}"] = body
+            self.puts += 1
+            return _FakeResponse(201, {}, b"")
+        if method == "GET":
+            key, digest = self._key(path)
+            stored = self.store[key]
+            return _FakeResponse(
+                200,
+                {"docker-content-digest": digest, "content-length": str(len(stored))},
+                stored,
+            )
+        raise AssertionError(f"unexpected registry call: {method} {url}")
 
 
 def main():
@@ -75,6 +144,20 @@ def main():
         verified["platform_manifest_digest"],
         verified["platform_manifest_size_bytes"],
     )
+    manifest_value = json.loads(manifest)
+    blobs = {}
+    with tempfile.TemporaryDirectory(prefix="gc1-t48-flow-") as temp:
+        for digest, size in publish_module.blob_descriptors(manifest_value).items():
+            blobs[digest] = publish_module.extract_blob(
+                archive_path, digest, size, Path(temp)
+            ).read_bytes()
+        proof = publish_module.publish_image(
+            registry_module,
+            _FakeRegistry(),
+            "flow-token-0123456789abcdef",
+            manifest,
+            blobs,
+        )
     identity = json.loads(identity_path.read_text())
     ci = {"run_id": identity["run_id"], "run_attempt": identity["run_attempt"]}
     record_raw = record_path.read_bytes()
@@ -89,10 +172,13 @@ def main():
         verified,
         manifest,
         hashlib.sha256(record_raw).hexdigest(),
+        record["source"],
+        proof,
     )
     (ROOT / "evidence.json").write_bytes(evidence)
     publish_module.validate_evidence(json.loads(evidence))
     print("FLOW-OK")
+    print("puts=" + str(proof["manifest"]["size"]))
     print("digest_reference=" + json.loads(evidence)["digest_reference"])
 
 

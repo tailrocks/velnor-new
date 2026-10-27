@@ -144,7 +144,7 @@ pub(crate) fn record_json(parts: &ImageParts, archive: &[u8]) -> String {
     let layer_hex = sha256_hex(&parts.layer);
     format!(
         "{{\"schema\":\"velnor.job-image-candidate.v1\",\"source\":{{\"commit\":\"{}\",\"ref\":\"refs/heads/main\",\"inputs\":{{\".velnor/runner.lock\":\"{}\",\"images/job/ubuntu-26.04/Dockerfile\":\"{}\",\"images/job/ubuntu-26.04/README.md\":\"{}\",\"images/job/ubuntu-26.04/build-test.sh\":\"{}\",\"images/job/ubuntu-26.04/candidate/candidate.py\":\"{}\"}}}}",
-        "0".repeat(40),
+        SOURCE_SHA,
         "0".repeat(64),
         "1".repeat(64),
         "2".repeat(64),

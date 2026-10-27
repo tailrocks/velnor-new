@@ -15,6 +15,13 @@ use velnor_actions_contract::propose::{IdentityInputs, ProposedTask};
 use velnor_actions_mise::checks::CheckCapabilityProof;
 use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, MISE_VERSION, QualifiedCheck};
 
+#[path = "../src/cache_execution_context.rs"]
+mod cache_execution_context;
+
+use self::cache_execution_context::{
+    discard_private_home, ensure_private_placement, is_private_check_home, resolve_roots,
+};
+
 fn fail(message: &str) -> Box<dyn Error> {
     io::Error::other(message).into()
 }
@@ -306,5 +313,70 @@ fn gc1_t39_preserves_contract() -> Result<(), Box<dyn Error>> {
 #[test]
 fn gc1_t39_rejects_invalid_state() -> Result<(), Box<dyn Error>> {
     check_projection_rejects_invalid_state()?;
+    Ok(())
+}
+
+#[test]
+fn s10_placement_executes_selected_child() -> Result<(), Box<dyn Error>> {
+    let root = tempfile::tempdir()?;
+    let root = root.path().canonicalize()?;
+    let temp = tempfile::tempdir()?;
+    let temp = temp.path().canonicalize()?;
+    let cwd = root.join("repo");
+    fs::create_dir_all(&cwd)?;
+    let home = temp.join("velnor-check-s10-child");
+    fs::create_dir_all(&home)?;
+    ensure_private_placement(&root, &temp, &home).map_err(|error| fail(&error.to_string()))?;
+    let qualified = qualified_at(&home, &cwd)?;
+    stage_command(&qualified, &home)?;
+    let deadline = CheckDeadline::after(Duration::from_secs(120))?;
+    let output = qualified
+        .command(deadline)?
+        .run_until(8 * 1024 * 1024, deadline)?;
+    output.require_success("mise-check")?;
+    discard_private_home(&home);
+    if home.exists() {
+        return Err(fail("private home survived cleanup"));
+    }
+    Ok(())
+}
+
+#[test]
+fn s10_placement_rejects_temp_inside_checkout() -> Result<(), Box<dyn Error>> {
+    let root = tempfile::tempdir()?;
+    let root = root.path().canonicalize()?;
+    let temp = root.join("runner-temp");
+    fs::create_dir_all(&temp)?;
+    let home = temp.join("velnor-check-s10-child");
+    match ensure_private_placement(&root, &temp, &home) {
+        Err(error) if error.to_string().contains("execution_temp_inside_checkout") => Ok(()),
+        Err(error) => Err(fail(&format!("temp inside checkout escaped with {error}"))),
+        Ok(()) => Err(fail("temp inside checkout was accepted")),
+    }
+}
+
+#[test]
+fn s10_private_home_cleanup_keeps_shared_homes() -> Result<(), Box<dyn Error>> {
+    let temp = tempfile::tempdir()?;
+    let temp = temp.path().canonicalize()?;
+    let roots = resolve_roots(&temp).map_err(|error| fail(&error.to_string()))?;
+    let private = temp.join("velnor-check-s10-private");
+    fs::create_dir_all(private.join("data"))?;
+    fs::write(private.join("data/marker"), b"s10")?;
+    if !is_private_check_home(&private) {
+        return Err(fail("private home missed its prefix"));
+    }
+    let shared = temp.join("shared-home");
+    fs::create_dir_all(&shared)?;
+    fs::create_dir_all(&roots.cargo_home)?;
+    discard_private_home(&private);
+    discard_private_home(&shared);
+    discard_private_home(&roots.cargo_home);
+    if private.exists() {
+        return Err(fail("private home survived cleanup"));
+    }
+    if !shared.exists() || !roots.cargo_home.exists() {
+        return Err(fail("shared home was removed"));
+    }
     Ok(())
 }

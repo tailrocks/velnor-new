@@ -1,14 +1,25 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "cache/archive.rs"]
+mod archive;
+#[path = "cache/cleanup.rs"]
+mod cleanup;
+#[path = "cache/publish.rs"]
+mod publish;
+#[path = "cache/recover.rs"]
+mod recover;
+#[path = "cache/request.rs"]
+mod request;
+
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use velnor_actions_orchestrator::{
-    AdmissionDecision, inventory_digest, parse_admission_bytes, parse_inventory_bytes,
-};
+use velnor_actions_orchestrator::EntryTupleV1;
+use velnor_actions_orchestrator::InventoryV1;
+use velnor_actions_orchestrator::cache_recovery::ObservedEntry;
 
 use super::fail_internal;
 use super::operation::InternalOp;
@@ -26,6 +37,22 @@ const RECOVER_REQUEST_FILE: &str = "cache-recover.json";
 const CLEANUP_REQUEST_FILE: &str = "cache-cleanup.json";
 const MAX_CACHE_REQUEST_BYTES: u64 = 64 * 1024;
 const MAX_CLEANUP_CANDIDATES: usize = 8;
+
+/// Fixed transport layout, mirroring the renderer's complete-state literals.
+///
+/// The renderer derives these paths from the contract
+/// `COMPLETE_STATE_ROOT_EXPR`/`COMPLETE_STATE_TRANSPORT_EXPR` expressions;
+/// the CLI cannot depend on the contract crate, so the runner-relative
+/// suffixes are pinned here with a test that fails loudly on drift.
+const STATE_ROOT_REL: &str = "velnor-gc1/state";
+const STATE_TRANSPORT_REL: &str = "velnor-gc1/transport/state/payload.tar.gz";
+const STATE_STAGE_REL: &str = "velnor/state-stage";
+const STATE_BASE: &str = "state";
+
+/// Cap for the number of archive members the publish and recover bodies
+/// accept. Mirrors the orchestrator snapshot archive entry budget so a
+/// hostile or degenerate payload is refused before extraction.
+const MAX_ARCHIVE_MEMBERS: u64 = 100_000;
 
 const COMMAND_KEYS: [&str; 8] = [
     "command",
@@ -75,7 +102,14 @@ impl CacheOp {
 struct ValidatedCacheRequest {
     admission_bytes: Vec<u8>,
     inventory_bytes: Vec<u8>,
+    expected_bytes: Vec<u8>,
     candidate_ids: Vec<u64>,
+}
+
+struct Expected {
+    key: String,
+    ref_name: String,
+    version: String,
 }
 
 pub(super) fn gate_request(op: InternalOp, path: &Path) -> Option<PathBuf> {
@@ -115,168 +149,51 @@ pub(super) fn run(op: InternalOp, path: &Path) -> ExitCode {
         Ok(bytes) => bytes,
         Err(error) => return fail_internal(&format!("read cache request: {error}")),
     };
-    let request = match validate_request(cache_op, &bytes) {
+    let request = match request::validate_request(cache_op, &bytes) {
         Ok(request) => request,
         Err(problem) => return fail_internal(&problem),
     };
+    let Some(runner_temp) = runner_temp_dir() else {
+        return fail_internal("missing runner temp");
+    };
     match cache_op {
-        CacheOp::Publish => run_publish(&request.admission_bytes),
-        CacheOp::Recover => run_recover(&request.inventory_bytes),
-        CacheOp::Cleanup => run_cleanup(&request.inventory_bytes, &request.candidate_ids),
+        CacheOp::Publish => publish::run_publish(&request, &runner_temp),
+        CacheOp::Recover => recover::run_recover(&request, &runner_temp),
+        CacheOp::Cleanup => cleanup::run_cleanup(&request.inventory_bytes, &request.candidate_ids),
     }
 }
 
-fn validate_request(op: CacheOp, bytes: &[u8]) -> Result<ValidatedCacheRequest, String> {
-    if bytes.is_empty() || u64::try_from(bytes.len()).is_ok_and(|len| len > MAX_CACHE_REQUEST_BYTES)
-    {
-        return Err("cache_request_malformed".to_owned());
-    }
-    let value: serde_json::Value =
-        serde_json::from_slice(bytes).map_err(|_| "cache_request_malformed".to_owned())?;
-    let body = value
-        .as_object()
-        .ok_or_else(|| "cache_request_malformed".to_owned())?;
-    check_schema(body)?;
-    check_operation(op, body)?;
-    check_fields(op, body)?;
-    Ok(ValidatedCacheRequest {
-        admission_bytes: required_object(op, body, "admission")?,
-        inventory_bytes: required_object(op, body, "inventory")?,
-        candidate_ids: optional_candidate_ids(op, body)?,
-    })
-}
-
-fn check_schema(body: &serde_json::Map<String, serde_json::Value>) -> Result<(), String> {
-    let schema = body
-        .get("schema")
-        .and_then(serde_json::Value::as_u64)
-        .ok_or_else(|| "cache_request_schema_malformed".to_owned())?;
-    if schema != u64::from(CACHE_SCHEMA) {
-        return Err("cache_request_schema_unsupported".to_owned());
-    }
-    Ok(())
-}
-
-fn check_operation(
-    op: CacheOp,
-    body: &serde_json::Map<String, serde_json::Value>,
-) -> Result<(), String> {
-    let operation = body
-        .get("operation")
-        .and_then(serde_json::Value::as_str)
-        .ok_or_else(|| "cache_operation_malformed".to_owned())?;
-    if operation != op.operation_name() {
-        return Err("cache_operation_malformed".to_owned());
-    }
-    Ok(())
-}
-
-fn check_fields(
-    op: CacheOp,
-    body: &serde_json::Map<String, serde_json::Value>,
-) -> Result<(), String> {
-    for key in body.keys() {
-        if COMMAND_KEYS.contains(&key.as_str()) {
-            return Err("cache_request_rejected_command".to_owned());
-        }
-        if !is_allowed_field(op, key) {
-            return Err("cache_request_field_rejected".to_owned());
-        }
-    }
-    Ok(())
-}
-
-fn is_allowed_field(op: CacheOp, key: &str) -> bool {
-    match op {
-        CacheOp::Publish => matches!(key, "schema" | "operation" | "admission"),
-        CacheOp::Recover => matches!(key, "schema" | "operation" | "inventory"),
-        CacheOp::Cleanup => matches!(key, "schema" | "operation" | "inventory" | "candidate_ids"),
+fn runner_temp_dir() -> Option<PathBuf> {
+    let runner_temp = env::var_os(RUNNER_TEMP_ENV)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)?;
+    if runner_temp.is_absolute() {
+        Some(runner_temp)
+    } else {
+        None
     }
 }
 
-fn required_object(
-    op: CacheOp,
-    body: &serde_json::Map<String, serde_json::Value>,
-    key: &str,
-) -> Result<Vec<u8>, String> {
-    if !is_allowed_field(op, key) {
-        return Ok(Vec::new());
-    }
-    let object = body
-        .get(key)
-        .and_then(serde_json::Value::as_object)
-        .ok_or_else(|| format!("cache_{key}_malformed"))?;
-    serde_json::to_vec(object).map_err(|_| format!("cache_{key}_malformed"))
+fn find_entry<'inventory>(
+    inventory: &'inventory InventoryV1,
+    expected: &Expected,
+) -> Option<&'inventory EntryTupleV1> {
+    inventory
+        .entries
+        .iter()
+        .find(|entry| entry.key == expected.key)
 }
 
-fn optional_candidate_ids(
-    op: CacheOp,
-    body: &serde_json::Map<String, serde_json::Value>,
-) -> Result<Vec<u64>, String> {
-    if !matches!(op, CacheOp::Cleanup) {
-        return Ok(Vec::new());
+fn observed_entry(entry: &EntryTupleV1) -> ObservedEntry {
+    ObservedEntry {
+        repository_id: entry.repository_id,
+        cache_id: entry.cache_id,
+        ref_name: entry.ref_name.clone(),
+        key: entry.key.clone(),
+        version: entry.version.clone(),
+        size_in_bytes: entry.size_in_bytes,
+        created_at: entry.created_at.clone(),
     }
-    let ids = body
-        .get("candidate_ids")
-        .and_then(serde_json::Value::as_array)
-        .ok_or_else(|| "cache_candidate_ids_malformed".to_owned())?;
-    if ids.is_empty() || ids.len() > MAX_CLEANUP_CANDIDATES {
-        return Err("cache_candidate_ids_malformed".to_owned());
-    }
-    let mut candidates = Vec::with_capacity(ids.len());
-    for id in ids {
-        let id = id
-            .as_u64()
-            .filter(|value| *value != 0)
-            .ok_or_else(|| "cache_candidate_id_malformed".to_owned())?;
-        if candidates.contains(&id) {
-            return Err("cache_candidate_id_duplicate".to_owned());
-        }
-        candidates.push(id);
-    }
-    Ok(candidates)
-}
-
-fn run_publish(admission_bytes: &[u8]) -> ExitCode {
-    let admission = match parse_admission_bytes(admission_bytes) {
-        Ok(admission) => admission,
-        Err(error) => return fail_internal(&single_line(&error.to_string())),
-    };
-    match admission.decision {
-        AdmissionDecision::Admitted => ExitCode::SUCCESS,
-        AdmissionDecision::Blocked => fail_internal(&format!(
-            "cache publish blocked: {}",
-            admission.blocked_reasons.join(",")
-        )),
-    }
-}
-
-fn run_recover(inventory_bytes: &[u8]) -> ExitCode {
-    let inventory = match parse_inventory_bytes(inventory_bytes) {
-        Ok(inventory) => inventory,
-        Err(error) => return fail_internal(&single_line(&error.to_string())),
-    };
-    match inventory_digest(&inventory) {
-        Ok(_) => ExitCode::SUCCESS,
-        Err(error) => fail_internal(&single_line(&error.to_string())),
-    }
-}
-
-fn run_cleanup(inventory_bytes: &[u8], candidate_ids: &[u64]) -> ExitCode {
-    let inventory = match parse_inventory_bytes(inventory_bytes) {
-        Ok(inventory) => inventory,
-        Err(error) => return fail_internal(&single_line(&error.to_string())),
-    };
-    for candidate in candidate_ids {
-        let known = inventory
-            .entries
-            .iter()
-            .any(|entry| entry.cache_id == *candidate);
-        if !known {
-            return fail_internal("cache_cleanup_candidate_unknown");
-        }
-    }
-    ExitCode::SUCCESS
 }
 
 fn single_line(text: &str) -> String {

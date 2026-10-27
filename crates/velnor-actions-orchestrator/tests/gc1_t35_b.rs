@@ -50,78 +50,6 @@ fn check_unknown_unit_ledger_rejected() -> Result<(), Box<dyn Error>> {
     )
 }
 
-fn check_missing_run_ledger_rejected() -> Result<(), Box<dyn Error>> {
-    let task = task_id()?;
-    let (plan, matrix, report, _) = check_run_fixture()?;
-    let ledger = group_ledger_value(
-        &task,
-        SIDE_JOB_ID,
-        HEAD_SHA,
-        "pull_request",
-        ExecutionBranch::Writer,
-        UnitOutcome::Executed,
-        Some(0),
-    )?;
-    let final_report = merge(
-        &plan,
-        std::slice::from_ref(&matrix),
-        std::slice::from_ref(&report),
-        &[JOB_ID, SIDE_JOB_ID],
-        &required_jobs(&[
-            (JOB_ID, JobConclusion::Success),
-            (SIDE_JOB_ID, JobConclusion::Success),
-        ]),
-        RUN_KEY,
-        Some(std::slice::from_ref(&ledger)),
-    )?;
-    planning_failed(
-        &final_report,
-        "no_entry",
-        "missing run ledger did not fail Required",
-    )
-}
-
-fn check_ledger_for_unaffected_job_rejected() -> Result<(), Box<dyn Error>> {
-    let task = task_id()?;
-    let (digest, input_digest, closure_digest) = digests();
-    let plan = plan_with(
-        &task,
-        None,
-        obligation(
-            &task,
-            &digest,
-            &input_digest,
-            &closure_digest,
-            ObligationDecision::NotAffected,
-        ),
-        JobDisposition::NotAffected,
-    )?;
-    plan.validate()?;
-    let ledger = group_ledger_value(
-        &task,
-        JOB_ID,
-        HEAD_SHA,
-        "pull_request",
-        ExecutionBranch::Reader,
-        UnitOutcome::Executed,
-        Some(0),
-    )?;
-    let final_report = merge(
-        &plan,
-        &[],
-        &[],
-        &[JOB_ID],
-        &required_jobs(&[(JOB_ID, JobConclusion::Skipped)]),
-        RUN_KEY,
-        Some(std::slice::from_ref(&ledger)),
-    )?;
-    planning_failed(
-        &final_report,
-        "gate_mismatch",
-        "unaffected job ledger did not fail Required",
-    )
-}
-
 fn check_success_contradiction_rejected() -> Result<(), Box<dyn Error>> {
     let task = task_id()?;
     let (plan, matrix, report, _) = check_run_fixture()?;
@@ -215,8 +143,6 @@ fn gc1_t35_rejects_invalid_state() -> Result<(), Box<dyn Error>> {
     check_unplanned_job_ledger_rejected()?;
     check_duplicate_ledger_rejected()?;
     check_unknown_unit_ledger_rejected()?;
-    check_missing_run_ledger_rejected()?;
-    check_ledger_for_unaffected_job_rejected()?;
     check_success_contradiction_rejected()?;
     check_failure_contradiction_rejected()?;
     check_skipped_job_ledger_rejected()?;

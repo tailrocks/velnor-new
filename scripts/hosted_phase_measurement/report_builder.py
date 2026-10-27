@@ -45,7 +45,7 @@ def _source_receipts(args: Namespace, run: dict[str, Any], jobs_path: Path, work
 
 
 def _observed_lifecycle(args: Namespace, run: dict[str, Any], attempt: int,
-                        jobs: list[dict[str, Any]]) -> dict[str, Any]:
+                        jobs: list[dict[str, Any]], workflow: dict[str, Any]) -> dict[str, Any]:
     """Aggregate complete lifecycle work from verified owned observations.
 
     The final artifact ZIP is API-bound by validate_artifact before any
@@ -66,14 +66,16 @@ def _observed_lifecycle(args: Namespace, run: dict[str, Any], attempt: int,
                 "effective_required": None,
                 "effective_required_unknown_reason": "No retained-or-rerun jobs were accepted; "
                                                      "effective coverage stays unknown, never zero."}
-    effective_jobs = build_effective_job_map(jobs)
+    graph = workflow.get("job_graph") if workflow.get("status") == "verified" else None
+    effective_jobs = build_effective_job_map(jobs, workflow_graph=graph)
     run_key = f"r{run['id']}-a{attempt}"
     with zipfile.ZipFile(args.final_artifact) as archive:
         collected = collect_bound_observations(archive, run_key=run_key, head_sha=run["head_sha"],
                                                effective_jobs=effective_jobs)
     return build_lifecycle_aggregates(repository=args.repository, run_id=run["id"],
                                       head_sha=run["head_sha"], jobs=jobs,
-                                      effective_jobs=effective_jobs, collected=collected)
+                                      effective_jobs=effective_jobs, collected=collected,
+                                      key_basis="workflow-source-job-id" if graph is not None else "api-name-as-key")
 
 
 def build_report(args: Namespace) -> dict[str, Any]:
@@ -90,7 +92,7 @@ def build_report(args: Namespace) -> dict[str, Any]:
     timeline = workflow_timeline(run, jobs, events, dag_path)
     counters = build_actual_counters(events["steps"], timeline)
     validate_actual_counter_unknowns(counters)
-    lifecycle = _observed_lifecycle(args, run, attempt, jobs)
+    lifecycle = _observed_lifecycle(args, run, attempt, jobs, workflow)
     return {
         "schema": SCHEMA,
         "measurement_policy": {"durations": "GitHub Actions run/job/step API start and completion timestamps only",

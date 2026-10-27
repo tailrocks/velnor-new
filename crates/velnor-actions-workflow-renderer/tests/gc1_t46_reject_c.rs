@@ -182,5 +182,6 @@ fn gc1_t46_rejects_invalid_state() -> Result<(), Box<dyn Error>> {
     check_rejects_publication(&fixture)?;
     let evidence = check_accepts_evidence(&fixture)?;
     check_rejects_evidence(&fixture, &evidence)?;
+    check_rejects_mismatched_source(&fixture)?;
     Ok(())
 }

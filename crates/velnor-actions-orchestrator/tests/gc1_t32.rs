@@ -255,10 +255,11 @@ fn check_branch_decided_before_compilation() -> Result<(), Box<dyn Error>> {
         .condition
         .as_deref()
         .ok_or_else(|| fail("missing reader gate"))?;
-    if !reader_condition.contains(UNTRUSTED_READER_EVENT_GATE)
-        || !reader_condition.contains(",rust-demo,")
+    if !reader_condition.contains(",rust-demo,")
+        || reader_condition.contains(UNTRUSTED_READER_EVENT_GATE)
+        || reader_condition.contains(TRUSTED_WRITER_EVENT_GATE)
     {
-        return Err(fail("reader branch lost its static gate"));
+        return Err(fail("reader branch lost its first-run gate"));
     }
     if !writer.needs.contains(&branch.reader) {
         return Err(fail("writer branch unordered behind reader"));

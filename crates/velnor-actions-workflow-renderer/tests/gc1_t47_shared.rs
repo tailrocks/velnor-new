@@ -201,28 +201,42 @@ pub(crate) fn check_shared_body_publishes(
     check_shared_body_evidence(fixture, parts, archive, &manifest_hex)
 }
 
+pub(crate) fn evidence_body_envelope(
+    parts: &ImageParts,
+    archive: &[u8],
+    record_commit: &str,
+) -> String {
+    let oci = format!(
+        "{{\"archive_index_digest\":\"{index}\",\"platform_manifest_digest\":\"sha256:{manifest_hex}\",\"platform_manifest_size_bytes\":{manifest_len},\"image_configuration_digest\":\"sha256:{config_hex}\",\"image_configuration_size_bytes\":{config_len},\"layer_digests\":[\"sha256:{layer_hex}\"]}}",
+        index = sha256_hex(&parts.index),
+        manifest_hex = sha256_hex(&parts.manifest),
+        manifest_len = parts.manifest.len(),
+        config_len = parts.config.len(),
+        config_hex = sha256_hex(&parts.config),
+        layer_hex = sha256_hex(&parts.layer),
+    );
+    format!(
+        "{{\"identity\":{identity},\"ci\":{{\"run_id\":11,\"run_attempt\":1}},\"record_archive\":{{\"sha256\":\"{archive_sha}\",\"size_bytes\":{archive_len}}},\"oci\":{oci},\"manifest_hex\":\"{manifest_hex_bytes}\",\"record_sha256\":\"{record_sha}\",\"record_source\":{{\"commit\":\"{record_commit}\",\"ref\":\"refs/heads/main\"}},\"blobs\":{{\"sha256:{config_hex}\":\"{config_bytes}\",\"sha256:{layer_hex}\":\"{layer_bytes}\"}}}}",
+        identity = identity_envelope(),
+        archive_sha = sha256_hex(archive),
+        archive_len = archive.len(),
+        manifest_hex_bytes = hex_encode(&parts.manifest),
+        record_sha = sha256_hex(b"authority-record"),
+        record_commit = record_commit,
+        config_hex = sha256_hex(&parts.config),
+        config_bytes = hex_encode(&parts.config),
+        layer_hex = sha256_hex(&parts.layer),
+        layer_bytes = hex_encode(&parts.layer),
+    )
+}
+
 pub(crate) fn check_shared_body_evidence(
     fixture: &Fixture,
     parts: &ImageParts,
     archive: &[u8],
     manifest_hex: &str,
 ) -> Result<String, Box<dyn Error>> {
-    let oci = format!(
-        "{{\"archive_index_digest\":\"{index}\",\"platform_manifest_digest\":\"sha256:{manifest_hex}\",\"platform_manifest_size_bytes\":{manifest_len},\"image_configuration_digest\":\"sha256:{config_hex}\",\"image_configuration_size_bytes\":{config_len},\"layer_digests\":[\"sha256:{layer_hex}\"]}}",
-        index = sha256_hex(&parts.index),
-        manifest_len = parts.manifest.len(),
-        config_len = parts.config.len(),
-        config_hex = sha256_hex(&parts.config),
-        layer_hex = sha256_hex(&parts.layer),
-    );
-    let envelope = format!(
-        "{{\"identity\":{identity},\"ci\":{{\"run_id\":11,\"run_attempt\":1}},\"record_archive\":{{\"sha256\":\"{archive_sha}\",\"size_bytes\":{archive_len}}},\"oci\":{oci},\"manifest_hex\":\"{manifest_hex_bytes}\",\"record_sha256\":\"{record_sha}\"}}",
-        identity = identity_envelope(),
-        archive_sha = sha256_hex(archive),
-        archive_len = archive.len(),
-        manifest_hex_bytes = hex_encode(&parts.manifest),
-        record_sha = sha256_hex(b"authority-record"),
-    );
+    let envelope = evidence_body_envelope(parts, archive, SOURCE_SHA);
     let output = expect_ok(fixture, "evidence", &envelope, "evidence-ok", "EVIDENCE-OK")?;
     require(&output, "size=", "evidence acceptance")?;
     let evidence_path = fixture.root.path().join("evidence.json");

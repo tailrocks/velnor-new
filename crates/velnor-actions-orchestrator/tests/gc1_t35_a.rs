@@ -90,30 +90,33 @@ fn check_grouped_reader_branch_preserved() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn check_absent_ledgers_preserved() -> Result<(), Box<dyn Error>> {
-    let (plan, matrix, report, _) = check_run_fixture()?;
+fn check_absent_ledgers_rejected() -> Result<(), Box<dyn Error>> {
+    let task = task_id()?;
+    let (plan, matrix, report) = branch_evidence(&task, GROUP_ID)?;
     let final_report = merge(
         &plan,
         std::slice::from_ref(&matrix),
         std::slice::from_ref(&report),
-        &[JOB_ID],
-        &required_jobs(&[(JOB_ID, JobConclusion::Success)]),
+        &[GROUP_READER_ID, GROUP_WRITER_ID],
+        &required_jobs(&[
+            (GROUP_READER_ID, JobConclusion::Success),
+            (GROUP_WRITER_ID, JobConclusion::Success),
+        ]),
         RUN_KEY,
         None,
     )?;
-    if final_report.status != FinalStatus::Passed {
-        return Err(fail(
-            "request without ledgers did not preserve Required pass",
-        ));
-    }
-    Ok(())
+    planning_failed(
+        &final_report,
+        "no_entry",
+        "request without ledgers did not fail Required",
+    )
 }
 
 #[test]
 fn gc1_t35_preserves_contract() -> Result<(), Box<dyn Error>> {
     check_grouped_success_preserved()?;
     check_grouped_reader_branch_preserved()?;
-    check_absent_ledgers_preserved()?;
+    check_absent_ledgers_rejected()?;
     Ok(())
 }
 

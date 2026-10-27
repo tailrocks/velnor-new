@@ -17,7 +17,7 @@ pub(crate) fn stage_fixed_inputs(root: &Path) -> Result<std::path::PathBuf, Box<
     write_fixture_source(root, REGISTRY_FILE, REGISTRY_SOURCE)?;
     write_fixture_source(root, PUBLISH_FILE, PUBLISH_SOURCE)?;
     let driver = root.join("gc1_t46_driver.py");
-    std::fs::write(&driver, DRIVER)?;
+    std::fs::write(&driver, [DRIVER_A, DRIVER_B].concat())?;
     for name in [IDENTITY_FILE, REGISTRY_FILE, PUBLISH_FILE] {
         let output = Command::new("python3")
             .arg("-m")

@@ -5,6 +5,7 @@ are accepted; unbound zeros and forged effective attempts are rejected.
 Uncovered task reports stay explicitly unknown, never zero.
 """
 
+import base64
 import hashlib
 import json
 import sys
@@ -12,9 +13,11 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from hosted_phase_measurement import measure_hosted_run as R
 from hosted_phase_measurement import measure_support as S
 from hosted_phase_measurement import report_counters as C
 from hosted_phase_measurement import report_events as E
@@ -361,6 +364,224 @@ class Gc1ObservationTests(unittest.TestCase):
         self.assertTrue(channels["cache_transfer_bytes_unknown_reason"])
         self.assertTrue(channels["mbx_object_cache_summaries_unknown_reason"])
         self.assertIn("never summed together", channels["separation_rule"])
+
+
+RENAMED_DISPLAY = "Unit Job Build"
+RENAMED_ID = 201
+CONTROL_TASK = f"task-{RUN_KEY}-m-cccccccccccccccc-dddddddddddddddd"
+WF_PATH = "workflows/unit.yml"
+WF_TEXT = "name: hosted-measurement\non: push\njobs:\n  unit-job:\n    name: unit-job\n    runs-on: ubuntu-latest\n"
+
+
+def _verified_graph(nodes):
+    return {"status": "verified", "nodes": nodes,
+            "sha256": "0" * 64, "parser_scope": "test"}
+
+
+def _verified_attempt_with_graph(attempt, job_records, members, graph):
+    root = Path(tempfile.mkdtemp(prefix="gc1-f6-"))
+    run_key = f"r{RUN_ID}-a{attempt}"
+    run_path = root / "run.json"
+    jobs_path = root / "jobs.json"
+    zip_path = root / "final.zip"
+    artifact_path = root / "artifact.json"
+    run_path.write_text(json.dumps({"id": RUN_ID, "run_attempt": attempt, "head_sha": HEAD_SHA}),
+                        encoding="utf-8")
+    jobs_path.write_text(json.dumps({"total_count": len(job_records), "jobs": job_records}),
+                         encoding="utf-8")
+    members = dict(members)
+    members.setdefault("final-report.json", json.dumps(_final_report_for(attempt)))
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, payload in members.items():
+            archive.writestr(name, payload)
+    payload = zip_path.read_bytes()
+    artifact_path.write_text(json.dumps({
+        "total_count": 1,
+        "artifacts": [{"id": ARTIFACT_ID,
+                       "name": f"velnor-final-{run_key}",
+                       "url": f"https://api.github.com/repos/{REPOSITORY}/actions/artifacts/{ARTIFACT_ID}",
+                       "size_in_bytes": len(payload),
+                       "digest": f"sha256:{hashlib.sha256(payload).hexdigest()}",
+                       "workflow_run": {"id": RUN_ID, "head_sha": HEAD_SHA}}]}),
+        encoding="utf-8")
+    run = S.load_json(run_path)
+    jobs = S.validate_identity(run, S.load_json(jobs_path), REPOSITORY)
+    effective = E.build_effective_job_map(jobs, workflow_graph=graph)
+    S.validate_artifact(artifact_path, ARTIFACT_ID, zip_path, run, REPOSITORY)
+    with zipfile.ZipFile(zip_path) as archive:
+        collected = S.collect_bound_observations(
+            archive, run_key=run_key, head_sha=HEAD_SHA, effective_jobs=effective)
+    return jobs, collected
+
+
+def _write_control_packet(root):
+    payload = WF_TEXT.encode("utf-8")
+    blob = hashlib.sha1(b"blob " + str(len(payload)).encode() + b"\0" + payload).hexdigest()
+    run = {"id": RUN_ID, "run_attempt": ATTEMPT, "head_sha": HEAD_SHA,
+           "path": WF_PATH, "event": "push", "workflow_id": 9,
+           "status": "completed", "conclusion": "success",
+           "created_at": "2026-03-04T10:00:00Z"}
+    job = {"id": JOB_ID, "run_id": RUN_ID, "run_attempt": ATTEMPT,
+           "head_sha": HEAD_SHA, "name": JOB_NAME,
+           "run_url": f"https://api.github.com/repos/{REPOSITORY}/actions/runs/{RUN_ID}",
+           "html_url": f"https://github.com/{REPOSITORY}/actions/runs/{RUN_ID}/job/{JOB_ID}",
+           "status": "completed", "conclusion": "success",
+           "started_at": "2026-03-04T10:01:00Z", "completed_at": "2026-03-04T10:05:00Z",
+           "steps": [{"number": 1, "name": "Build", "status": "completed",
+                      "conclusion": "success",
+                      "started_at": "2026-03-04T10:01:10Z",
+                      "completed_at": "2026-03-04T10:04:50Z"}]}
+    run_path = root / "run.json"
+    jobs_path = root / "jobs.json"
+    logs_path = root / "logs.zip"
+    workflow_json_path = root / "workflow.json"
+    workflow_path = root / "unit.yml"
+    final_path = root / "final.zip"
+    artifact_path = root / "artifact.json"
+    task_dir = root / "task-reports" / f"velnor-crate-{RUN_KEY}-{JOB_NAME}" / "tasks"
+    task_dir.mkdir(parents=True)
+    run_path.write_text(json.dumps(run), encoding="utf-8")
+    jobs_path.write_text(json.dumps({"total_count": 1, "jobs": [job]}), encoding="utf-8")
+    with zipfile.ZipFile(logs_path, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("unit-job/1_Build.txt", "2026-03-04T10:01:10Z Build ok\n")
+    workflow_json_path.write_text(json.dumps({
+        "path": WF_PATH,
+        "url": f"https://api.github.com/repos/{REPOSITORY}/contents/{WF_PATH}?ref={HEAD_SHA}",
+        "encoding": "base64", "content": base64.b64encode(payload).decode("ascii"),
+        "sha": blob}), encoding="utf-8")
+    workflow_path.write_bytes(payload)
+    with zipfile.ZipFile(final_path, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("final-report.json", json.dumps(_final_report()))
+        archive.writestr(MEMBER, json.dumps(_binding()))
+        archive.writestr(f"{MATRIX_KEY}/tasks/{CONTROL_TASK}.json",
+                         json.dumps({"task_report_id": CONTROL_TASK}))
+    archive_payload = final_path.read_bytes()
+    artifact_path.write_text(json.dumps({
+        "total_count": 2,
+        "artifacts": [{"id": ARTIFACT_ID,
+                       "name": f"velnor-final-{RUN_KEY}",
+                       "url": f"https://api.github.com/repos/{REPOSITORY}/actions/artifacts/{ARTIFACT_ID}",
+                       "size_in_bytes": len(archive_payload),
+                       "digest": f"sha256:{hashlib.sha256(archive_payload).hexdigest()}",
+                       "workflow_run": {"id": RUN_ID, "head_sha": HEAD_SHA}},
+                      {"id": ARTIFACT_ID + 1,
+                       "name": f"velnor-crate-{RUN_KEY}-{JOB_NAME}",
+                       "url": f"https://api.github.com/repos/{REPOSITORY}/actions/artifacts/{ARTIFACT_ID + 1}",
+                       "workflow_run": {"id": RUN_ID, "head_sha": HEAD_SHA}}]}),
+        encoding="utf-8")
+    (task_dir / f"{CONTROL_TASK}.json").write_text(json.dumps(
+        {"run_key": RUN_KEY, "timing": {field: None for field in S.STAGE_TIMINGS}}),
+        encoding="utf-8")
+    out_path = root / "report.json"
+    return {"run": run_path, "jobs": jobs_path, "logs": logs_path,
+            "workflow_json": workflow_json_path, "workflow": workflow_path,
+            "artifact": artifact_path, "final": final_path,
+            "task_dir": root / "task-reports", "out": out_path}
+
+
+class F6JoinTests(unittest.TestCase):
+    def test_matching_control_cli_exit_zero(self):
+        root = Path(tempfile.mkdtemp(prefix="gc1-f6-control-"))
+        paths = _write_control_packet(root)
+        argv = ["measure-hosted-run", "--repository", REPOSITORY,
+                "--run-json", str(paths["run"]), "--jobs-json", str(paths["jobs"]),
+                "--logs-zip", str(paths["logs"]),
+                "--workflow-json", str(paths["workflow_json"]),
+                "--workflow-file", str(paths["workflow"]),
+                "--artifact-json", str(paths["artifact"]),
+                "--artifact-id", str(ARTIFACT_ID),
+                "--final-artifact", str(paths["final"]),
+                "--task-report-dir", str(paths["task_dir"]),
+                "--out", str(paths["out"])]
+        with mock.patch.object(sys, "argv", argv):
+            self.assertEqual(R.cli(), 0)
+        report = json.loads(paths["out"].read_text(encoding="utf-8"))
+        lifecycle = report["observed_lifecycle"]
+        self.assertEqual(lifecycle["status"], "verified")
+        self.assertEqual(lifecycle["join"]["key_basis"], "workflow-source-job-id")
+        self.assertEqual(lifecycle["join"]["observation_count"], 1)
+        envelope = lifecycle["observation_envelope"]
+        self.assertEqual(envelope["observation_count"], 1)
+        self.assertEqual(envelope["accepted"][0]["task_report_id"], TASK_REPORT_ID)
+        self.assertEqual(envelope["accepted"][0]["effective_job_id"], JOB_ID)
+        self.assertEqual(envelope["accepted"][0]["member_digest"], "b3-" + "ab" * 32)
+        missing = lifecycle["missing_coverage"]["task_reports_without_observation"]
+        self.assertEqual(len(missing), 1)
+        self.assertEqual(missing[0]["task_report_id"], CONTROL_TASK)
+        self.assertEqual(missing[0]["disposition"], "unknown")
+
+    def test_renamed_api_display_name_joins_via_workflow_graph(self):
+        attempt = 1
+        run_key = f"r{RUN_ID}-a{attempt}"
+        matrix = f"m-{'12' * 8}"
+        task = _task_id(attempt, "12" * 8, "34" * 8)
+        graph = _verified_graph([{"job_id": JOB_NAME, "display_name": RENAMED_DISPLAY,
+                                  "needs": []}])
+        jobs = [_job_record(RENAMED_DISPLAY, RENAMED_ID, attempt)]
+        members = {_obs_member(matrix, task): json.dumps(
+            _binding_for(run_key, JOB_NAME, attempt, task, _obs_member(matrix, task)))}
+        jobs, collected = _verified_attempt_with_graph(attempt, jobs, members, graph)
+        self.assertEqual(collected["observation_count"], 1)
+        record = collected["accepted"][task]
+        self.assertEqual(record["effective_job_id"], RENAMED_ID)
+        self.assertEqual(record["producer_attempt"], attempt)
+        lifecycle = C.build_lifecycle_aggregates(
+            repository=REPOSITORY, run_id=RUN_ID, head_sha=HEAD_SHA,
+            jobs=jobs, effective_jobs=E.build_effective_job_map(jobs, workflow_graph=graph),
+            collected=collected, key_basis="workflow-source-job-id")
+        self.assertEqual(lifecycle["join"]["joined"][0]["effective_job_id"], RENAMED_ID)
+        self.assertEqual(lifecycle["join"]["key_basis"], "workflow-source-job-id")
+
+    def test_retained_earlier_attempt_accepted_with_attempts_preserved(self):
+        attempt = 2
+        run_key = f"r{RUN_ID}-a{attempt}"
+        matrix = f"m-{'56' * 8}"
+        rerun_task = _task_id(attempt, "56" * 8, "78" * 8)
+        jobs = [_job_record(JOB_NAME, JOB_ID, 1),
+                _job_record(JOB_NAME, RERUN_JOB_ID, attempt, conclusion="failure"),
+                _job_record(HELPER_JOB, HELPER_ID, attempt)]
+        members = {_obs_member(matrix, rerun_task): json.dumps(
+            _binding_for(run_key, JOB_NAME, attempt, rerun_task,
+                         _obs_member(matrix, rerun_task)))}
+        jobs, collected = _verified_attempt(attempt, jobs, members)
+        attempts = sorted(job["run_attempt"] for job in jobs)
+        self.assertEqual(attempts, [1, 2, 2])
+        self.assertEqual(collected["observation_count"], 1)
+        lifecycle = C.build_lifecycle_aggregates(
+            repository=REPOSITORY, run_id=RUN_ID, head_sha=HEAD_SHA,
+            jobs=jobs, effective_jobs=E.build_effective_job_map(jobs),
+            collected=collected)
+        by_task = {row["task_report_id"]: row for row in lifecycle["join"]["joined"]}
+        self.assertEqual(by_task[rerun_task]["effective_job_id"], RERUN_JOB_ID)
+        self.assertEqual(by_task[rerun_task]["producer_attempt"], attempt)
+        executed = {row["job_id"]: row["run_attempt"]
+                    for row in lifecycle["executed_lifecycle"]["jobs"]}
+        self.assertEqual(executed, {JOB_ID: 1, RERUN_JOB_ID: 2, HELPER_ID: 2})
+        uncovered = lifecycle["missing_coverage"]["jobs_without_bound_observation"]
+        self.assertEqual({row["job_id"] for row in uncovered}, {JOB_ID, HELPER_ID})
+        for row in uncovered:
+            self.assertEqual(row["disposition"], "unknown")
+            self.assertTrue(row["unknown_reason"])
+
+    def test_display_name_claim_without_source_key_rejected(self):
+        attempt = 1
+        graph = _verified_graph([{"job_id": "build", "display_name": JOB_NAME,
+                                  "needs": []}])
+        jobs = [_job_record(JOB_NAME, RENAMED_ID, attempt)]
+        effective = E.build_effective_job_map(jobs, workflow_graph=graph)
+        self.assertEqual(list(effective), [("build", attempt)])
+        with self.assertRaises(ValueError):
+            E.resolve_effective_job(effective, producer_job=JOB_NAME,
+                                    producer_attempt=attempt)
+        with self.assertRaises(ValueError):
+            S.parse_observation_binding(json.dumps(_binding(producer_job=RENAMED_DISPLAY)),
+                                        MEMBER)
+
+    def test_ambiguous_log_folder_rejected(self):
+        jobs = [_job_record(JOB_NAME, JOB_ID, ATTEMPT),
+                _job_record(JOB_NAME, RERUN_JOB_ID, ATTEMPT)]
+        with self.assertRaises(ValueError):
+            E.collect_job_events(jobs, {})
 
 
 if __name__ == "__main__":

@@ -2,8 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::OrchestratorError;
-use crate::internal::internal;
 use std::path::{Path, PathBuf};
+
+fn internal(problem: &str) -> OrchestratorError {
+    // Local copy of `crate::internal::internal`: identical value, so this
+    // module stays includable by path from integration tests (the test crate
+    // has no `crate::internal` module to resolve that import from).
+    OrchestratorError::Internal {
+        problem: problem.to_owned(),
+    }
+}
 
 pub(crate) const OWNED_ROOT_DIR: &str = "velnor-gc1";
 pub(crate) const TRANSPORT_DIR: &str = "transport";
@@ -62,6 +70,12 @@ pub(crate) fn ensure_private_placement(
     if !workspace_root.is_absolute() {
         return Err(internal("execution_workspace_not_absolute"));
     }
+    if temp == workspace_root
+        || temp.starts_with(workspace_root)
+        || workspace_root.starts_with(temp)
+    {
+        return Err(internal("execution_temp_inside_checkout"));
+    }
     let roots = resolve_roots(temp)?;
     let all = roots.all();
     for root in all {
@@ -69,7 +83,9 @@ pub(crate) fn ensure_private_placement(
             return Err(internal("execution_root_inside_checkout"));
         }
     }
-    for (index, first) in all.iter().enumerate() {
+    // `all()[0]` is the owned parent that contains the other six roots by
+    // design, so pairwise disjointness only applies to the six siblings.
+    for (index, first) in all.iter().enumerate().skip(1) {
         for second in &all[index + 1..] {
             if first == second || first.starts_with(second) || second.starts_with(first) {
                 return Err(internal("execution_roots_overlap"));

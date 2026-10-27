@@ -85,7 +85,8 @@ def build_actual_counters(event_steps: list[dict[str, Any]], timeline: dict[str,
 def build_lifecycle_aggregates(*, repository: str, run_id: int, head_sha: str,
                                jobs: list[dict[str, Any]],
                                effective_jobs: dict[tuple[str, int], dict[str, Any]],
-                               collected: dict[str, Any]) -> dict[str, Any]:
+                               collected: dict[str, Any],
+                               key_basis: str = "api-name-as-key") -> dict[str, Any]:
     """Aggregate complete lifecycle work from verified owned observations.
 
     Every accepted observation is resolved through the authenticated
@@ -168,6 +169,14 @@ def build_lifecycle_aggregates(*, repository: str, run_id: int, head_sha: str,
         "repository": repository,
         "run_id": run_id,
         "head_sha": head_sha,
+        "observation_envelope": {
+            "status": collected.get("status"),
+            "run_key": collected.get("run_key"),
+            "observation_count": collected.get("observation_count"),
+            "accepted": [accepted[task_report_id] for task_report_id in sorted(accepted)],
+            "missing_task_report_observations": missing_reports,
+            "digest_basis": collected.get("digest_basis"),
+        },
         "dedup_key": ["repository", "run_id", "actual job id", "actual attempt",
                       "observation session", "task report id"],
         "dedup_scope": "each real job, attempt, and bound task report is counted exactly once; "
@@ -176,6 +185,7 @@ def build_lifecycle_aggregates(*, repository: str, run_id: int, head_sha: str,
         "join": {"status": "verified",
                  "method": "each owned observation resolved through the authenticated effective-job "
                            "map by actual producer job/attempt; forged or stale attempts fail instead of joining",
+                 "key_basis": key_basis,
                  "observation_count": len(joined),
                  "joined": joined},
         "executed_lifecycle": {

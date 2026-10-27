@@ -152,9 +152,9 @@ pub(crate) fn reader_branch_condition(
     match affected_gate {
         Some(gate) => {
             require_gate_text(gate)?;
-            Ok(format!("({gate}) && {UNTRUSTED_READER_EVENT_GATE}"))
+            Ok(format!("({gate})"))
         }
-        None => Ok(UNTRUSTED_READER_EVENT_GATE.to_owned()),
+        None => Ok("true".to_owned()),
     }
 }
 
@@ -276,10 +276,16 @@ fn validate_branch_conditions(
         ));
     }
     let reader_condition = branch_condition(jobs.reader, jobs.reader_job, "reader")?;
-    if !reader_condition.contains(UNTRUSTED_READER_EVENT_GATE) {
+    if reader_condition.contains(UNTRUSTED_READER_EVENT_GATE) {
         return Err(ContractError::identity(
             "crate_group.branches",
-            format!("reader_requires_untrusted_event:{}", jobs.reader_job),
+            format!("reader_excludes_trusted_event:{}", jobs.reader_job),
+        ));
+    }
+    if reader_condition.contains(TRUSTED_WRITER_EVENT_GATE) {
+        return Err(ContractError::identity(
+            "crate_group.branches",
+            format!("reader_excludes_untrusted_event:{}", jobs.reader_job),
         ));
     }
     if affected_gate.is_some() {

@@ -64,6 +64,32 @@ fn check_tofu_branches_count_against_limits() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn check_reader_first_execution() -> Result<(), Box<dyn Error>> {
+    let gate = "!contains(needs.plan.outputs.not_affected_jobs, ',rust-demo,')";
+    let reader_condition = reader_branch_condition(Some(gate))?;
+    if reader_condition.contains(UNTRUSTED_READER_EVENT_GATE) {
+        return Err(fail(
+            "reader still gated off push; push writers need a running reader",
+        ));
+    }
+    if reader_condition.contains(TRUSTED_WRITER_EVENT_GATE) {
+        return Err(fail("reader gated to push only; pull runs lose coverage"));
+    }
+    if !reader_condition.contains(",rust-demo,") {
+        return Err(fail("reader lost the affected group gate"));
+    }
+    if reader_branch_condition(None)? != "true" {
+        return Err(fail("gateless reader must run on every event"));
+    }
+    let writer_condition = writer_branch_condition(Some(gate))?;
+    if !writer_condition.contains(TRUSTED_WRITER_EVENT_GATE)
+        || !writer_condition.contains(",rust-demo,")
+    {
+        return Err(fail("writer lost trusted push gate"));
+    }
+    Ok(())
+}
+
 #[test]
 fn gc1_t32_preserves_contract() -> Result<(), Box<dyn Error>> {
     check_group_classification()?;
@@ -75,6 +101,7 @@ fn gc1_t32_preserves_contract() -> Result<(), Box<dyn Error>> {
     check_recheck_reader_matcher_rejects_lookalikes()?;
     check_recoverable_optional_cache()?;
     check_tofu_branches_count_against_limits()?;
+    check_reader_first_execution()?;
     Ok(())
 }
 

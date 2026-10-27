@@ -212,6 +212,18 @@ pub(crate) fn check_fixed_publish_markers() -> Result<(), Box<dyn Error>> {
     require(PUBLISH_SOURCE, "blob_descriptors", "publish fixed input")?;
     require(PUBLISH_SOURCE, "read_manifest_bytes", "publish fixed input")?;
     require(PUBLISH_SOURCE, "extract_blob", "publish fixed input")?;
+    require(PUBLISH_SOURCE, "check_record_source", "publish fixed input")?;
+    require(PUBLISH_SOURCE, "publish_image", "publish fixed input")?;
+    require(
+        PUBLISH_SOURCE,
+        "check_publication_proof",
+        "publish fixed input",
+    )?;
+    require(
+        PUBLISH_SOURCE,
+        "fetch_registry_token",
+        "publish fixed input",
+    )?;
     require(PUBLISH_SOURCE, "build_evidence", "publish fixed input")?;
     require(PUBLISH_SOURCE, "validate_evidence", "publish fixed input")?;
     Ok(())

@@ -63,15 +63,8 @@ pub(crate) fn check_rejects_invalid_inputs(
         )));
     }
     require(&output, "TAR-MEMBER-REJECTED", "tar rejection")?;
-    let envelope = "{\"manifest\":{}}";
-    expect_rejection(
-        fixture,
-        "descriptors",
-        envelope,
-        "descriptors-shape",
-        "DESCRIPTORS-REJECTED",
-        Some("OCI manifest blob descriptors are incorrect."),
-    )?;
+    check_rejects_descriptors_shape(fixture)?;
+    check_rejects_mismatched_source(fixture, parts, archive)?;
     let archive_path = write_bytes(fixture.root.path(), "sized.oci.tar", archive)?;
     let envelope = format!(
         "{{\"archive\":{},\"digest\":\"sha256:{}\",\"size\":{}}}",
@@ -86,6 +79,35 @@ pub(crate) fn check_rejects_invalid_inputs(
         "manifest-size",
         "MANIFEST-REJECTED",
         Some("OCI platform manifest bytes changed after validation."),
+    )?;
+    Ok(())
+}
+
+pub(crate) fn check_rejects_descriptors_shape(fixture: &Fixture) -> Result<(), Box<dyn Error>> {
+    expect_rejection(
+        fixture,
+        "descriptors",
+        "{\"manifest\":{}}",
+        "descriptors-shape",
+        "DESCRIPTORS-REJECTED",
+        Some("OCI manifest blob descriptors are incorrect."),
+    )?;
+    Ok(())
+}
+
+pub(crate) fn check_rejects_mismatched_source(
+    fixture: &Fixture,
+    parts: &ImageParts,
+    archive: &[u8],
+) -> Result<(), Box<dyn Error>> {
+    let envelope = evidence_body_envelope(parts, archive, &"b".repeat(40));
+    expect_rejection(
+        fixture,
+        "evidence",
+        &envelope,
+        "evidence-mismatched-source",
+        "EVIDENCE-REJECTED",
+        Some("Candidate source is not the authenticated source."),
     )?;
     Ok(())
 }

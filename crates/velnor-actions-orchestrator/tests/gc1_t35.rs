@@ -21,7 +21,12 @@ use velnor_actions_orchestrator::{MergeContext, merge_internal_with_context};
 
 const RUN_KEY: &str = "r4242-a1";
 const JOB_ID: &str = "unit-job";
-const SIDE_JOB_ID: &str = "side-job";
+const GROUP_ID: &str = "rust-unit-job";
+const GROUP_READER_ID: &str = "rust-unit-job-read";
+const GROUP_WRITER_ID: &str = "rust-unit-job-write";
+const SIDE_GROUP_ID: &str = "rust-side-job";
+const SIDE_READER_ID: &str = "rust-side-job-read";
+const SIDE_WRITER_ID: &str = "rust-side-job-write";
 const HEAD_SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 const OTHER_SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
@@ -66,6 +71,16 @@ fn run_entry(
     input_digest: &str,
     planned: &PlannedPlatform,
 ) -> Result<MatrixEntry, Box<dyn Error>> {
+    group_run_entry(task, digest, input_digest, planned, JOB_ID)
+}
+
+fn group_run_entry(
+    task: &str,
+    digest: &str,
+    input_digest: &str,
+    planned: &PlannedPlatform,
+    group: &str,
+) -> Result<MatrixEntry, Box<dyn Error>> {
     let execute = ExecuteTaskIds {
         tasks: BTreeMap::from([("group".to_owned(), ExecuteTaskRef::Single(task.to_owned()))]),
     };
@@ -78,7 +93,7 @@ fn run_entry(
         execute,
         input_digest,
         RUN_KEY,
-        JOB_ID,
+        group,
         planned.clone(),
     )?)
 }
@@ -90,6 +105,17 @@ fn obligation(
     closure_digest: &str,
     decision: ObligationDecision,
 ) -> PlanObligation {
+    group_obligation(task, digest, input_digest, closure_digest, decision, JOB_ID)
+}
+
+fn group_obligation(
+    task: &str,
+    digest: &str,
+    input_digest: &str,
+    closure_digest: &str,
+    decision: ObligationDecision,
+    group: &str,
+) -> PlanObligation {
     PlanObligation {
         task_id: task.to_owned(),
         decision,
@@ -97,8 +123,78 @@ fn obligation(
         task_digest: digest.to_owned(),
         input_digest: input_digest.to_owned(),
         closure_digest: closure_digest.to_owned(),
-        job_id: JOB_ID.to_owned(),
+        job_id: group.to_owned(),
     }
+}
+
+fn branch_plan(
+    task: &str,
+    entry: MatrixEntry,
+    obligation: PlanObligation,
+    group: &str,
+) -> Result<Plan, Box<dyn Error>> {
+    let mut plan = plan_with(task, Some(entry), obligation, JobDisposition::Run)?;
+    plan.jobs = vec![PlanJob {
+        job_id: group.to_owned(),
+        disposition: JobDisposition::Run,
+    }];
+    Ok(plan)
+}
+
+fn second_task() -> Result<String, Box<dyn Error>> {
+    Ok(task_id_for_internal("lint", "warm")?)
+}
+
+fn branch_typed(
+    task: &str,
+    group: &str,
+) -> Result<(Plan, MatrixReport, TaskReport, MatrixEntry), Box<dyn Error>> {
+    let (digest, input_digest, closure_digest) = digests();
+    let planned = planned_platform()?;
+    let entry = group_run_entry(task, &digest, &input_digest, &planned, group)?;
+    let plan = branch_plan(
+        task,
+        entry.clone(),
+        group_obligation(
+            task,
+            &digest,
+            &input_digest,
+            &closure_digest,
+            ObligationDecision::Execute,
+            group,
+        ),
+        group,
+    )?;
+    plan.validate()?;
+    let report = task_report(task, &digest, &entry, &planned)?;
+    report.validate()?;
+    let matrix = matrix_report(task, &report, &entry);
+    matrix.validate()?;
+    Ok((plan, matrix, report, entry))
+}
+
+fn branch_evidence(task: &str, group: &str) -> Result<(Plan, Value, Value), Box<dyn Error>> {
+    let (plan, matrix, report, _) = branch_typed(task, group)?;
+    Ok((
+        plan,
+        serde_json::to_value(&matrix)?,
+        serde_json::to_value(&report)?,
+    ))
+}
+
+fn push_plan(plan: &Plan) -> Plan {
+    let mut pushed = plan.clone();
+    pushed.event = WorkflowEvent::Push;
+    pushed.trust = trust_for_event(WorkflowEvent::Push);
+    pushed
+}
+
+fn push_report(report: &TaskReport) -> Result<Value, Box<dyn Error>> {
+    let mut pushed = report.clone();
+    pushed.event = WorkflowEvent::Push;
+    pushed.trust = trust_for_event(WorkflowEvent::Push);
+    pushed.validate()?;
+    Ok(serde_json::to_value(&pushed)?)
 }
 
 fn plan_with(
@@ -223,10 +319,36 @@ fn merge(
     run_key: &str,
     ledgers: Option<&[Value]>,
 ) -> Result<FinalReport, Box<dyn Error>> {
+    merge_with_event(
+        plan,
+        matrix_reports,
+        task_reports,
+        job_ids,
+        jobs,
+        run_key,
+        ledgers,
+        "pull_request",
+    )
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "merge fixture mirrors the request envelope plus the observed event"
+)]
+fn merge_with_event(
+    plan: &Plan,
+    matrix_reports: &[Value],
+    task_reports: &[Value],
+    job_ids: &[&str],
+    jobs: &Value,
+    run_key: &str,
+    ledgers: Option<&[Value]>,
+    event: &str,
+) -> Result<FinalReport, Box<dyn Error>> {
     let mut request = json!({
         "schema": 1,
         "run_key": run_key,
-        "actual_event": "pull_request",
+        "actual_event": event,
         "plan": plan,
         "matrix": plan.matrix,
         "matrix_reports": matrix_reports,
@@ -252,111 +374,15 @@ fn conclusion_of(report: &FinalReport, job_id: &str) -> Result<JobConclusion, Bo
         .ok_or_else(|| fail("required result missing for planned job"))
 }
 
-fn check_run_fixture() -> Result<(Plan, Value, Value, MatrixEntry), Box<dyn Error>> {
-    let task = task_id()?;
-    let (digest, input_digest, closure_digest) = digests();
-    let planned = planned_platform()?;
-    let entry = run_entry(&task, &digest, &input_digest, &planned)?;
-    let plan = plan_with(
-        &task,
-        Some(entry.clone()),
-        obligation(
-            &task,
-            &digest,
-            &input_digest,
-            &closure_digest,
-            ObligationDecision::Execute,
-        ),
-        JobDisposition::Run,
-    )?;
-    plan.validate()?;
-    let report = task_report(&task, &digest, &entry, &planned)?;
-    report.validate()?;
-    let matrix = matrix_report(&task, &report, &entry);
-    matrix.validate()?;
-    Ok((
-        plan,
-        serde_json::to_value(&matrix)?,
-        serde_json::to_value(&report)?,
-        entry,
-    ))
-}
-
-fn job_binding(
-    job_key: &str,
-    source_sha: &str,
-    event: &str,
-) -> Result<JobBindingV1, Box<dyn Error>> {
-    Ok(JobBindingV1 {
-        schema: 1,
-        repository_id: 1,
-        repository: "tailrocks/velnor-new".to_owned(),
-        run_id: 4242,
-        run_attempt: 1,
-        job_id: 7,
-        job_key: job_key.to_owned(),
-        event: event.to_owned(),
-        ref_name: "refs/pull/1/merge".to_owned(),
-        workflow_sha: HEAD_SHA.to_owned(),
-        source_sha: source_sha.to_owned(),
-        plan_digest: digest(b"gc1-t35-plan")?,
-    })
-}
-
-fn unit_result(
-    task: &str,
-    outcome: UnitOutcome,
-    exit_code: Option<i32>,
-) -> Result<UnitResultV1, Box<dyn Error>> {
-    Ok(UnitResultV1 {
-        unit_id: task.to_owned(),
-        recipe_id: digest(b"gc1-t35-recipe")?,
-        task_identity: task.to_owned(),
-        argv_digest: digest(b"gc1-t35-argv")?,
-        effective_input_digest: digest(b"gc1-t35-input")?,
-        outcome,
-        exit_code,
-        started_at: "2026-10-26T00:00:00Z".to_owned(),
-        finished_at: "2026-10-26T00:00:01Z".to_owned(),
-        report_digest: digest(b"gc1-t35-report")?,
-    })
-}
-
-fn group_ledger_value(
-    task: &str,
-    job_key: &str,
-    source_sha: &str,
-    event: &str,
-    branch: ExecutionBranch,
-    outcome: UnitOutcome,
-    exit_code: Option<i32>,
-) -> Result<Value, Box<dyn Error>> {
-    Ok(serde_json::to_value(UnitLedgerV1 {
-        schema: 1,
-        job: job_binding(job_key, source_sha, event)?,
-        group_digest: digest(b"gc1-t35-group")?,
-        execution_branch: branch,
-        selected_unit_ids: vec![task.to_owned()],
-        ordered_results: vec![unit_result(task, outcome, exit_code)?],
-        observation_digest: digest(b"gc1-t35-observation")?,
-        source_binding_digest: digest(b"gc1-t35-source-binding")?,
-    })?)
-}
-
-fn valid_ledger(task: &str) -> Result<Value, Box<dyn Error>> {
-    group_ledger_value(
-        task,
-        JOB_ID,
-        HEAD_SHA,
-        "pull_request",
-        ExecutionBranch::Writer,
-        UnitOutcome::Executed,
-        Some(0),
-    )
-}
-
 #[path = "gc1_t35_a.rs"]
 mod gc1_t35_a;
 #[path = "gc1_t35_b.rs"]
 mod gc1_t35_b;
+#[path = "gc1_t35_c.rs"]
+mod gc1_t35_c;
+#[path = "gc1_t35_d.rs"]
+mod gc1_t35_d;
+#[path = "gc1_t35_e.rs"]
+mod gc1_t35_e;
 pub(crate) use gc1_t35_a::*;
+pub(crate) use gc1_t35_e::*;

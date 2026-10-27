@@ -189,6 +189,7 @@ fn build_final(
     crate::required_dispositions::fold_planned_jobs(
         &plan.jobs,
         &request.required_jobs,
+        plan.event,
         &mut signals,
         &mut miss_reasons,
     );

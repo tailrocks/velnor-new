@@ -93,6 +93,15 @@ pub(crate) fn check_publish_data_only(text: &str) -> Result<(), Box<dyn Error>> 
     require(publish, "build_evidence", "publication program")?;
     require(publish, "read_manifest_bytes", "publication program")?;
     require(publish, "check_record_binding", "publication program")?;
+    require(publish, "publish_image", "publication upload")?;
+    require(publish, "fetch_registry_token", "publication upload")?;
+    require(publish, "extract_blob", "publication upload")?;
+    require(
+        publish,
+        "record[\\\"source\\\"]",
+        "publication source binding",
+    )?;
+    require(publish, "VELNOR_REGISTRY_TOKEN", "publication upload")?;
     require(publish, "VELNOR_ARTIFACT_ID", "publication identity")?;
     require(
         publish,

@@ -377,7 +377,7 @@ jobs:
     cache-mode: read
     needs:
       - plan
-    if: (!contains(needs.plan.outputs.not_affected_jobs, ',rust-a,')) && github.event_name != 'push'
+    if: (!contains(needs.plan.outputs.not_affected_jobs, ',rust-a,'))
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -640,7 +640,7 @@ jobs:
     cache-mode: read
     needs:
       - plan
-    if: (!contains(needs.plan.outputs.not_affected_jobs, ',rust-lib,')) && github.event_name != 'push'
+    if: (!contains(needs.plan.outputs.not_affected_jobs, ',rust-lib,'))
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

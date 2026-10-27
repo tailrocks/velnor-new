@@ -110,10 +110,74 @@ fn check_loose_files_ignored() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn check_group_ledgers_assembled() -> Result<(), Box<dyn Error>> {
+    let (plan, matrix, report, entry) = check_run_fixture()?;
+    let report_id = staged_report_id(&report)?;
+    let temp = tempfile::tempdir()?;
+    let tree = tree_of(&plan, &matrix, &report, &entry, &report_id);
+    stage_tree(temp.path(), &tree, None, false)?;
+    let request = assembled(temp.path())?;
+    let ledgers = request
+        .get("group_ledgers")
+        .and_then(Value::as_array)
+        .ok_or_else(|| fail("assembled request lost group ledgers"))?;
+    if !ledgers.is_empty() {
+        return Err(fail("absent group ledgers staged phantom evidence"));
+    }
+    if assembly_errors(&request)
+        .iter()
+        .any(|error| error.contains("group_ledger"))
+    {
+        return Err(fail("absent group ledgers left retrieval tokens"));
+    }
+    let staged = json!([
+        {"job": {"job_key": "b"}, "marker": 2},
+        {"job": {"job_key": "a"}, "marker": 1},
+    ]);
+    fs::write(
+        temp.path().join("group-ledgers.json"),
+        serde_json::to_string(&staged)?,
+    )?;
+    let request = assembled(temp.path())?;
+    let ledgers = request
+        .get("group_ledgers")
+        .and_then(Value::as_array)
+        .ok_or_else(|| fail("assembled request lost staged group ledgers"))?;
+    let keys: Vec<&str> = ledgers
+        .iter()
+        .filter_map(|ledger| {
+            ledger
+                .get("job")
+                .and_then(|job| job.get("job_key"))
+                .and_then(Value::as_str)
+        })
+        .collect();
+    if keys != ["a", "b"] {
+        return Err(fail("staged group ledgers lost order or content"));
+    }
+    fs::write(
+        temp.path().join("group-ledgers.json"),
+        "{\"not\":\"an-array\"}",
+    )?;
+    let request = assembled(temp.path())?;
+    if !assembly_errors(&request).contains(&"unparsable_group_ledgers".to_owned()) {
+        return Err(fail("malformed group ledgers left no retrieval token"));
+    }
+    let ledgers = request
+        .get("group_ledgers")
+        .and_then(Value::as_array)
+        .ok_or_else(|| fail("malformed group ledgers broke the request shape"))?;
+    if !ledgers.is_empty() {
+        return Err(fail("malformed group ledgers staged phantom evidence"));
+    }
+    Ok(())
+}
+
 #[test]
 fn gc1_t36_preserves_contract() -> Result<(), Box<dyn Error>> {
     check_transport_preserved()?;
     check_loose_files_ignored()?;
+    check_group_ledgers_assembled()?;
     Ok(())
 }
 

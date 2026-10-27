@@ -117,6 +117,33 @@ pub(crate) fn check_flow_rejects_tampered_record(fixture: &Fixture) -> Result<()
     Ok(())
 }
 
+pub(crate) fn check_flow_rejects_mismatched_source(
+    fixture: &Fixture,
+) -> Result<(), Box<dyn Error>> {
+    let parts = image_parts();
+    let archive = archive_bytes(&parts);
+    let record_path = write_bytes(
+        fixture.root.path(),
+        "candidate-identity.json",
+        record_json(&parts, &archive).as_bytes(),
+    )?;
+    let archive_path = write_bytes(fixture.root.path(), "sized.oci.tar", &archive)?;
+    let identity_path = write_bytes(
+        fixture.root.path(),
+        "identity-mismatch.json",
+        identity_envelope()
+            .replace(SOURCE_SHA, &"b".repeat(40))
+            .as_bytes(),
+    )?;
+    let (code, _) = run_flow(fixture, &record_path, &archive_path, &identity_path)?;
+    if code == 0 {
+        return Err(fail(
+            "fixed body relabeled unchanged bytes with another source SHA",
+        ));
+    }
+    Ok(())
+}
+
 pub(crate) fn check_flow_rejects_missing_fragment(fixture: &Fixture) -> Result<(), Box<dyn Error>> {
     let parts = image_parts();
     let archive = archive_bytes(&parts);
@@ -176,6 +203,7 @@ fn gc1_t48_rejects_invalid_state() -> Result<(), Box<dyn Error>> {
     let fixture = fixture()?;
     check_flow_rejects_tampered_archive(&fixture)?;
     check_flow_rejects_tampered_record(&fixture)?;
+    check_flow_rejects_mismatched_source(&fixture)?;
     check_flow_rejects_missing_fragment(&fixture)?;
     Ok(())
 }
