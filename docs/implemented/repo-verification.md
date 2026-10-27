@@ -18,6 +18,13 @@ file alone does not make Cargo discover or execute it: register or enable the
 Cargo target, confirm the generated task plan selects it, and check execution
 evidence to confirm that it ran.
 
+`scripts/verify-local.sh` first installs the exact Bun version declared in the
+root `mise.toml` and verifies that `mise.lock` declares the same version. It
+checks the resolved Bun binary with `bun --version` and fails if installation
+changes the committed lock. This Bun prerequisite is separate from the Rust
+policy `SPECS` comparison below. The repository-owned orchestrator test suite
+uses that same project Bun pin in its preparation step and tools-cache identity.
+
 `scripts/verify-local.sh` uses offline Cargo metadata to identify packages
 with Nextest-applicable targets (`test = true`). A successful empty result
 skips Nextest only for that workspace; metadata errors fail verification. The

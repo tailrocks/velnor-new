@@ -148,21 +148,36 @@ pub(crate) fn bun_words(
     catalog: &ToolCatalog,
     args: &[String],
 ) -> Result<String, OrchestratorError> {
+    const INSTALL_BRIDGE: &str = "const child=Bun.spawnSync([process.execPath,...process.argv.slice(2)],{stdin:\"inherit\",stdout:\"inherit\",stderr:\"inherit\"});if(child.signalCode)process.kill(process.pid,child.signalCode);process.exit(child.exitCode??1);";
     let mut args = args
         .iter()
         .map(std::ffi::OsString::from)
         .collect::<Vec<_>>();
-    if args.first().is_some_and(|arg| arg == "run") {
+    let install = args.first().is_some_and(|arg| arg == "install");
+    if install {
+        args.splice(
+            0..0,
+            ["--bun".into(), "run".into(), "--".into(), "-".into()],
+        );
+    } else if args.first().is_some_and(|arg| arg == "run") {
         args.insert(0, std::ffi::OsString::from("--bun"));
     }
     let request = PinnedToolExec::new(vec![PinnedTool::Bun], std::ffi::OsStr::new("bun"), args)
         .map_err(|err| contract(err.to_string()))?;
     let words = strings_of(request.argv(catalog)).map_err(contract)?;
-    Ok(words
+    let command = words
         .iter()
         .map(|word| quote(word))
         .collect::<Vec<_>>()
-        .join(" "))
+        .join(" ");
+    if install {
+        Ok(format!(
+            "printf '%s\\n' {} | {command}",
+            quote(INSTALL_BRIDGE)
+        ))
+    } else {
+        Ok(command)
+    }
 }
 
 pub(crate) fn dir_arg(dir: &str) -> String {
