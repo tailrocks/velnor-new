@@ -34,6 +34,16 @@ already names the same digest is idempotent; a tag naming different bytes is
 an error and must not be replaced. Readback must verify the published bytes
 and exact digest. Runtime consumers never select an image through this tag.
 
+`velnor-actions image-maintenance admit-runner-images` inspects the three OCI
+archives and writes schema-1 descriptors for the native manifest formatter.
+Its selected source must match the clean checkout and the committed runner
+lock. It derives manifest and config digests from authenticated archive bytes
+and preserves the [probe's closed execution profile](resource-probe-artifact.md).
+These descriptors are
+intermediate evidence, not publication authority or runtime qualification.
+The publisher must bind the same archives and lock to successful qualification
+before publishing or producing the release manifest.
+
 Source-tag publication requires exclusive writer authority. Keep every
 Runner-family tag writer under the protected product-release concurrency group
 `${{ github.repository }}-product-release` with `cancel-in-progress: false`,

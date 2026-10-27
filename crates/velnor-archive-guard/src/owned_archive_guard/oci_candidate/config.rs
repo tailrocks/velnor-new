@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::Value;
 
@@ -9,6 +9,7 @@ use super::{OciCandidateError, Result};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct OciImageConfiguration {
+    pub config_keys: BTreeSet<String>,
     pub labels: Option<BTreeMap<String, String>>,
     pub user: Option<String>,
     pub working_directory: Option<String>,
@@ -24,6 +25,7 @@ pub(super) fn project(image: &Value) -> Result<OciImageConfiguration> {
         Some(_) => return Err(OciCandidateError("oci_image_config_shape")),
     };
     Ok(OciImageConfiguration {
+        config_keys: configuration.keys().cloned().collect(),
         labels: labels(configuration.get("Labels"))?,
         user: string(configuration.get("User"))?,
         working_directory: string(configuration.get("WorkingDir"))?,

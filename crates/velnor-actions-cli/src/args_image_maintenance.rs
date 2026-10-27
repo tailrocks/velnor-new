@@ -48,4 +48,21 @@ pub(crate) enum ImageMaintenanceCommand {
         #[arg(long)]
         source_closure_path: PathBuf,
     },
+    #[command(
+        about = "Inspect exact-source Runner, DinD, and resource-probe OCI archives and write descriptors."
+    )]
+    AdmitRunnerImages {
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long)]
+        source_commit: String,
+        #[arg(long)]
+        runner_archive: PathBuf,
+        #[arg(long)]
+        dind_archive: PathBuf,
+        #[arg(long)]
+        probe_archive: PathBuf,
+        #[arg(long)]
+        descriptors_output: PathBuf,
+    },
 }

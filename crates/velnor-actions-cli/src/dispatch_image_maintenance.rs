@@ -4,9 +4,9 @@
 use crate::args::ImageMaintenanceCommand;
 use std::{process::ExitCode, time::Duration};
 use velnor_actions_orchestrator::{
-    BuildJobCandidateRequest, CheckDeadline, CheckJobSourceRequest, InstallBuildxRequest,
-    ValidateJobCandidateRequest, build_job_candidate, check_job_source, install_buildx,
-    validate_job_candidate,
+    AdmitRunnerImagesRequest, BuildJobCandidateRequest, CheckDeadline, CheckJobSourceRequest,
+    InstallBuildxRequest, ValidateJobCandidateRequest, admit_runner_images, build_job_candidate,
+    check_job_source, install_buildx, validate_job_candidate,
 };
 
 pub(crate) fn run(command: &ImageMaintenanceCommand) -> ExitCode {
@@ -61,6 +61,22 @@ pub(crate) fn run(command: &ImageMaintenanceCommand) -> ExitCode {
             archive_path: archive_path.clone(),
             record_path: record_path.clone(),
             source_closure_path: source_closure_path.clone(),
+            deadline,
+        }),
+        ImageMaintenanceCommand::AdmitRunnerImages {
+            root,
+            source_commit,
+            runner_archive,
+            dind_archive,
+            probe_archive,
+            descriptors_output,
+        } => admit_runner_images(&AdmitRunnerImagesRequest {
+            root: root.clone(),
+            source_commit: source_commit.clone(),
+            runner_archive: runner_archive.clone(),
+            dind_archive: dind_archive.clone(),
+            probe_archive: probe_archive.clone(),
+            descriptors_output: descriptors_output.clone(),
             deadline,
         }),
     };

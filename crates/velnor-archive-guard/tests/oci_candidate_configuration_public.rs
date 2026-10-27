@@ -26,6 +26,13 @@ fn configuration_projection_preserves_authenticated_evidence_and_values()
     assert_eq!(projected.evidence.image_configuration_digest.len(), 71);
     assert_eq!(projected.evidence.layer_digests.len(), 1);
     assert_eq!(
+        projected.configuration.config_keys,
+        ["Cmd", "Entrypoint", "Env", "Labels", "User", "WorkingDir"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect()
+    );
+    assert_eq!(
         projected
             .configuration
             .labels
@@ -62,24 +69,36 @@ fn configuration_projection_preserves_authenticated_evidence_and_values()
 
 #[test]
 fn absent_null_and_empty_configuration_values_remain_distinct() -> Result<(), Box<dyn Error>> {
-    let absent = support::fixture("{}", false)?;
-    let null_configuration = support::fixture("null", false)?;
-    let null = support::fixture(
+    let absent_fixture = support::fixture("{}", false)?;
+    let null_config_fixture = support::fixture("null", false)?;
+    let null_fields_fixture = support::fixture(
         r#"{"Labels":null,"User":null,"WorkingDir":null,"Entrypoint":null,"Cmd":null,"Env":null}"#,
         false,
     )?;
-    let empty = support::fixture(
+    let empty_fixture = support::fixture(
         r#"{"Labels":{},"User":"","WorkingDir":"","Entrypoint":[],"Cmd":[],"Env":[]}"#,
         false,
     )?;
-    let absent = inspect_oci_candidate_with_config(&absent.path)?.configuration;
-    let null = inspect_oci_candidate_with_config(&null.path)?.configuration;
-    let empty = inspect_oci_candidate_with_config(&empty.path)?.configuration;
+    let absent = inspect_oci_candidate_with_config(&absent_fixture.path)?.configuration;
+    let null = inspect_oci_candidate_with_config(&null_config_fixture.path)?.configuration;
+    let null_fields = inspect_oci_candidate_with_config(&null_fields_fixture.path)?.configuration;
+    let empty = inspect_oci_candidate_with_config(&empty_fixture.path)?.configuration;
 
     assert_eq!(absent, null);
+    assert_eq!(absent.config_keys, std::collections::BTreeSet::new());
+    assert_eq!(null.config_keys, std::collections::BTreeSet::new());
+    assert_eq!(null_fields.config_keys.len(), 6);
+    assert_eq!(null_fields.labels, absent.labels);
+    assert_eq!(null_fields.user, absent.user);
+    assert_eq!(null_fields.working_directory, absent.working_directory);
+    assert_eq!(null_fields.entrypoint, absent.entrypoint);
+    assert_eq!(null_fields.cmd, absent.cmd);
+    assert_eq!(null_fields.env, absent.env);
     assert_eq!(
-        absent,
-        inspect_oci_candidate_with_config(&null_configuration.path)?.configuration
+        inspect_oci_candidate_with_config(&null_config_fixture.path)?
+            .configuration
+            .config_keys,
+        std::collections::BTreeSet::new()
     );
     assert_eq!(absent.labels, None);
     assert_eq!(absent.user, None);
@@ -93,6 +112,7 @@ fn absent_null_and_empty_configuration_values_remain_distinct() -> Result<(), Bo
     assert_eq!(empty.entrypoint, Some(Vec::new()));
     assert_eq!(empty.cmd, Some(Vec::new()));
     assert_eq!(empty.env, Some(Vec::new()));
+    assert_eq!(empty.config_keys, null_fields.config_keys);
     Ok(())
 }
 

@@ -124,6 +124,50 @@ pub(super) fn ensure_clean_checkout(
     Ok(())
 }
 
+pub(super) fn verify_selected_source(
+    root: &Path,
+    source_commit: &str,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    if !is_sha1(source_commit) {
+        return Err(internal("runner_image_source_commit"));
+    }
+    let head = git_text(
+        root,
+        &GitRequest::rev_parse(vec![OsString::from("HEAD")]),
+        deadline,
+    )?;
+    if head.trim() != source_commit {
+        return Err(internal("runner_image_source_identity"));
+    }
+    ensure_clean_checkout(root, deadline)
+}
+
+pub(super) fn read_source_file(
+    root: &Path,
+    source_commit: &str,
+    relative: &str,
+    limit: usize,
+    deadline: CheckDeadline,
+) -> Result<Vec<u8>, OrchestratorError> {
+    if !is_sha1(source_commit)
+        || relative.starts_with('/')
+        || relative
+            .split('/')
+            .any(|part| part.is_empty() || part == "." || part == "..")
+    {
+        return Err(internal("runner_image_source_path"));
+    }
+    let spec = format!("{source_commit}:{relative}");
+    let output = GitRequest::show(vec![OsString::from(spec)])
+        .run_in_until(root, deadline)
+        .map_err(|_| internal("runner_image_source_git"))?;
+    if !output.success || output.stdout.len() > limit {
+        return Err(internal("runner_image_source_file"));
+    }
+    Ok(output.stdout)
+}
+
 pub(super) fn git_text(
     root: &Path,
     request: &GitRequest,
