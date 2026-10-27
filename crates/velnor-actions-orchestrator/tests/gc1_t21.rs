@@ -99,6 +99,7 @@ fn gc1_t21_preserves_contract() -> Result<(), Box<dyn Error>> {
     let hosted = measure_envelope(
         &measured.inner,
         &velnor_actions_orchestrator::PreflightMeasurement {
+            inner: measured.inner.clone(),
             measured_outer_bytes: measured.measured_outer_bytes,
             outer_sha256: measured.outer_sha256.clone(),
         },
@@ -164,6 +165,7 @@ fn reject_bad_measure(
     measured: &MeasuredEnvelope,
 ) -> Result<(), Box<dyn Error>> {
     let preflight = velnor_actions_orchestrator::PreflightMeasurement {
+        inner: (*inner).clone(),
         measured_outer_bytes: measured.measured_outer_bytes,
         outer_sha256: measured.outer_sha256.clone(),
     };

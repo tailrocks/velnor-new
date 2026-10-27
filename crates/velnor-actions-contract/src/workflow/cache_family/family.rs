@@ -37,15 +37,8 @@ pub const COMPLETE_STATE_TRANSPORT_EXPR: &str =
 
 const STATE_PATHS: [&str; 1] = [COMPLETE_STATE_ROOT_EXPR];
 
-/// One decimal accounting ceiling shared by every cache family.
-///
-/// This is the `Q = 10,000,000,000 bytes` policy from the repository cache
-/// budget. It replaces the old binary `10 * 1024 * 1024 * 1024` quota
-/// constant. The operating ceiling and reserve stay owned by the common
-/// admission policy; families never carry independent quota constants.
 pub const GC1_HARD_CEILING_BYTES: u64 = 10_000_000_000;
 
-/// Generation slots shared by every family/group under common admission.
 pub const GC1_MAX_GENERATION_SLOTS: u64 = 2;
 
 const MIB: u64 = 1024 * 1024;
@@ -66,11 +59,6 @@ pub enum CacheFamily {
 
     AnsibleCollections,
 
-    /// Complete-state family.
-    ///
-    /// This family persists complete Cargo target/build lanes with their
-    /// verified workspace input projection. It replaces the persisted MBX
-    /// object store; no MBX bundle path is persisted through this family.
     MbxBundle,
 }
 
@@ -205,11 +193,6 @@ impl CacheFamily {
         Ok(())
     }
 
-    /// Bind this family to the common contract family vocabulary.
-    ///
-    /// Rust families resolve to their common generation identity. Existing
-    /// non-Rust families keep their own payloads under the same common
-    /// admission policy and report no common generation identity.
     #[must_use]
     pub fn gc1_family(self) -> Option<Gc1Family> {
         match self {

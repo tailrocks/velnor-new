@@ -335,6 +335,49 @@ fn check_observation_rejects() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn check_transfer_ledger_reports_measured() -> Result<(), Box<dyn Error>> {
+    let context = velnor_actions_contract::digest_b3(b"gc1-t40-transfer-root");
+    let mut session = ObservationSession::begin(
+        "preview.producer.task",
+        "preview-producer",
+        &new_session_id(),
+        &context,
+    )?;
+    let compiler = session.compiler_evidence(None, None, None, None, None, "gc1-t40 compiler")?;
+    session.provide_compiler(compiler)?;
+    let native = session.native_evidence(None, None, None, None, "gc1-t40 native")?;
+    session.provide_native(native)?;
+    let origin = session.origin_evidence(
+        Some(2),
+        Some(150),
+        "tool artifacts fetched from origin during materialization",
+    )?;
+    session.provide_origin(origin)?;
+    let cache = session.cache_evidence(
+        Some(1000),
+        "tool artifacts reused from the shared archive cache",
+    )?;
+    session.provide_cache(cache)?;
+    let report: ObservationReport = session.finish(ChildOutcome::Success)?;
+    if report.origin_acquisitions.value != Some(2)
+        || report.origin_bytes.value != Some(150)
+        || report.cache_bytes.value != Some(1000)
+        || report.origin_acquisitions.unknown_reason.is_some()
+        || report.origin_bytes.unknown_reason.is_some()
+        || report.cache_bytes.unknown_reason.is_some()
+    {
+        return Err(fail("measured transfers missed their report"));
+    }
+    if report
+        .gaps
+        .iter()
+        .any(|gap| gap.detail.contains("materialization") || gap.detail.contains("shared archive"))
+    {
+        return Err(fail("measured transfers kept their unknown gaps"));
+    }
+    Ok(())
+}
+
 #[test]
 fn gc1_t40_preserves_contract() -> Result<(), Box<dyn Error>> {
     check_closure_union()?;
@@ -342,6 +385,7 @@ fn gc1_t40_preserves_contract() -> Result<(), Box<dyn Error>> {
     check_channel_variants()?;
     check_recipes()?;
     check_observation_reports_unknown()?;
+    check_transfer_ledger_reports_measured()?;
     Ok(())
 }
 

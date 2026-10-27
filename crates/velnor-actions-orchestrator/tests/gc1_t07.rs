@@ -105,9 +105,21 @@ fn check_stable() -> Result<(), Box<dyn Error>> {
     if musl.targets != ["x86_64-unknown-linux-musl"] {
         return Err(io::Error::other("resource probe musl target drifted").into());
     }
+    if musl.output_roles != ["target/x86_64-unknown-linux-musl/release"] {
+        return Err(io::Error::other("resource probe musl output missed its target dir").into());
+    }
+    let gnu = require_recipe("stable.resource-probe-release.gnu")?;
+    if gnu.targets != ["x86_64-unknown-linux-gnu"]
+        || gnu.output_roles != ["target/x86_64-unknown-linux-gnu/debug"]
+    {
+        return Err(io::Error::other("resource probe gnu output missed its target dir").into());
+    }
     let nextest = require_recipe("stable.resource-probe-release.nextest")?;
     if nextest.command_family != "test" || nextest.nextest_profile != "default" {
         return Err(io::Error::other("resource probe nextest recipe identity drifted").into());
+    }
+    if nextest.output_roles != ["target/x86_64-unknown-linux-gnu/debug"] {
+        return Err(io::Error::other("resource probe nextest output missed its target dir").into());
     }
     let nextest_argv = require_argv("stable.resource-probe-release.nextest")?;
     if !nextest_argv.contains(&"resource_probe_release_public".to_owned())

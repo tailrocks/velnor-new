@@ -93,6 +93,8 @@ mod gc1_t47_inputs;
 mod gc1_t47_reject;
 #[path = "gc1_t47_shared.rs"]
 mod gc1_t47_shared;
+#[path = "gc1_t47_verify.rs"]
+mod gc1_t47_verify;
 pub(crate) use gc1_t47_archive::*;
 pub(crate) use gc1_t47_argv::*;
 pub(crate) use gc1_t47_driver::*;

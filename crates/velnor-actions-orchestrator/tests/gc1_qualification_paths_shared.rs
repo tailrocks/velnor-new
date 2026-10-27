@@ -113,6 +113,7 @@ pub(crate) fn paths_envelope(
             .map_err(|_| invalid("fixture length out of range"))?,
     };
     let preflight = PreflightMeasurement {
+        inner: inner.clone(),
         measured_outer_bytes: measured_outer,
         outer_sha256: sha256_hex(b"gc1-qualification-paths-outer"),
     };

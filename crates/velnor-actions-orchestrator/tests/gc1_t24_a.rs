@@ -148,6 +148,25 @@ pub(crate) fn check_provenance_refusals() -> Result<(), Box<dyn Error>> {
             return Err(fail("distrusted exact missed its refusal"));
         }
     }
+    let predecessor = predecessor_generation(b"gc1-t24-older-coverage")?;
+    let distrusted_fallback = discovery_request(
+        generation.clone(),
+        vec![
+            exact_entry(7, &generation),
+            entry(
+                8,
+                &predecessor.cache_key(),
+                "refs/heads/main",
+                "2026-10-25T01:00:00Z",
+                EntryProvenance::Ambiguous,
+            ),
+        ],
+        Vec::new(),
+    )?;
+    let refused = decide_discovery(&distrusted_fallback)?;
+    if refused.decision != DiscoveryDecision::RefusedProvenance {
+        return Err(fail("ambiguous fallback candidate missed its refusal"));
+    }
     let longer_key = format!("{}-extra-suffix", primary_prefix(&generation));
     let bystander = discovery_request(
         generation.clone(),
@@ -163,9 +182,9 @@ pub(crate) fn check_provenance_refusals() -> Result<(), Box<dyn Error>> {
         ],
         Vec::new(),
     )?;
-    let refused = decide_discovery(&bystander)?;
-    if refused.decision != DiscoveryDecision::RefusedProvenance {
-        return Err(fail("ambiguous fallback candidate missed its refusal"));
+    let unblocked = decide_discovery(&bystander)?;
+    if unblocked.decision != DiscoveryDecision::ExactHit || unblocked.exact_candidate.is_none() {
+        return Err(fail("unrelated bystander blocked its trusted exact hit"));
     }
     let mut degraded = discovery_request(
         generation.clone(),

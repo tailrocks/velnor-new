@@ -69,6 +69,7 @@ pub(super) fn materialize_step() -> Yaml {
 }
 
 const VERIFY_PROGRAM: &str = r#"import hashlib
+import os
 import sys
 sys.path.insert(0, sys.argv[1])
 from pathlib import Path
@@ -79,13 +80,39 @@ record_path = Path(sys.argv[2])
 archive_path = Path(sys.argv[3])
 record = record_module.validate_record(record_module.load_record(record_path))
 verified = oci_module.verify_oci_archive(archive_path)
-raw = archive_path.read_bytes()
+hasher = hashlib.sha256()
+archive_size = 0
+with archive_path.open("rb") as archive_stream:
+    while chunk := archive_stream.read(1048576):
+        hasher.update(chunk)
+        archive_size += len(chunk)
 publish_module.check_record_binding(
     record,
-    hashlib.sha256(raw).hexdigest(),
-    len(raw),
+    hasher.hexdigest(),
+    archive_size,
     verified,
 )
+source = record["source"]
+if (
+    source["commit"] != os.environ["VELNOR_EXPECTED_SOURCE"]
+    or source["ref"] != os.environ["VELNOR_EXPECTED_REF"]
+):
+    raise publish_module.AuthorityError("Candidate source is not the current run source.")
+try:
+    expected_run_id = int(os.environ["VELNOR_EXPECTED_RUN_ID"])
+    expected_run_attempt = int(os.environ["VELNOR_EXPECTED_RUN_ATTEMPT"])
+except ValueError as error:
+    raise publish_module.AuthorityError("Candidate run identity is incorrect.") from error
+workflow = record["workflow"]
+if (
+    workflow["repository"] != os.environ["VELNOR_EXPECTED_REPOSITORY"]
+    or workflow["event"] != os.environ["VELNOR_EXPECTED_EVENT"]
+    or workflow["workflow_ref"] != os.environ["VELNOR_EXPECTED_WORKFLOW_REF"]
+    or workflow["authority_commit"] != os.environ["VELNOR_EXPECTED_SOURCE"]
+    or workflow["run_id"] != expected_run_id
+    or workflow["run_attempt"] != expected_run_attempt
+):
+    raise publish_module.AuthorityError("Candidate workflow is not the current run workflow.")
 print("fixed authority body accepted the candidate bytes")
 "#;
 
@@ -99,6 +126,41 @@ pub(super) fn verify_candidate_step(archive: &str, record: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(VERIFY_STEP_NAME)),
         ("shell".to_owned(), Yaml::str("bash")),
+        (
+            "env".to_owned(),
+            Yaml::Map(vec![
+                (
+                    "VELNOR_EXPECTED_SOURCE".to_owned(),
+                    Yaml::str("${{ github.sha }}"),
+                ),
+                (
+                    "VELNOR_EXPECTED_REF".to_owned(),
+                    Yaml::str("${{ github.ref }}"),
+                ),
+                (
+                    "VELNOR_EXPECTED_REPOSITORY".to_owned(),
+                    Yaml::str("${{ github.repository }}"),
+                ),
+                (
+                    "VELNOR_EXPECTED_EVENT".to_owned(),
+                    Yaml::str("${{ github.event_name }}"),
+                ),
+                (
+                    "VELNOR_EXPECTED_WORKFLOW_REF".to_owned(),
+                    Yaml::str(
+                        "${{ github.repository }}/.github/workflows/job-image-candidate.yml@${{ github.ref }}",
+                    ),
+                ),
+                (
+                    "VELNOR_EXPECTED_RUN_ID".to_owned(),
+                    Yaml::str("${{ github.run_id }}"),
+                ),
+                (
+                    "VELNOR_EXPECTED_RUN_ATTEMPT".to_owned(),
+                    Yaml::str("${{ github.run_attempt }}"),
+                ),
+            ]),
+        ),
         ("run".to_owned(), Yaml::str(run)),
     ])
 }
@@ -171,11 +233,17 @@ archive_path = Path(sys.argv[3])
 result_path = Path(sys.argv[4])
 record = record_module.validate_record(record_module.load_record(record_path))
 verified = oci_module.verify_oci_archive(archive_path)
-raw = archive_path.read_bytes()
+hasher = hashlib.sha256()
+archive_size = 0
+with archive_path.open("rb") as archive_stream:
+    while chunk := archive_stream.read(1048576):
+        hasher.update(chunk)
+        archive_size += len(chunk)
+archive_digest = hasher.hexdigest()
 publish_module.check_record_binding(
     record,
-    hashlib.sha256(raw).hexdigest(),
-    len(raw),
+    archive_digest,
+    archive_size,
     verified,
 )
 manifest = publish_module.read_manifest_bytes(
@@ -209,8 +277,8 @@ ci = {
     "run_attempt": int(os.environ["VELNOR_RUN_ATTEMPT"]),
 }
 record_archive = {
-    "sha256": hashlib.sha256(raw).hexdigest(),
-    "size_bytes": len(raw),
+    "sha256": archive_digest,
+    "size_bytes": archive_size,
 }
 evidence = publish_module.build_evidence(
     identity,

@@ -15,6 +15,7 @@ pub(crate) const PRESEED_BINARY_ENV: &str = "VELNOR_PRESEED_BINARY";
 pub(crate) const PRESEED_OUT_ENV: &str = "VELNOR_PRESEED_OUT";
 pub(crate) const PRESEED_TARGET_ENV: &str = "VELNOR_PRESEED_TARGET";
 pub(crate) const PRESEED_TOOLCHAIN_ENV: &str = "VELNOR_PRESEED_TOOLCHAIN";
+pub(crate) const PRESEED_INPUT_DIGEST_ENV: &str = "VELNOR_PRESEED_INPUT_DIGEST";
 const COMMIT_ENV: &str = "GITHUB_SHA";
 const RUNNER_TEMP_ENV: &str = "RUNNER_TEMP";
 
@@ -27,6 +28,7 @@ struct PreseedManifest<'a> {
     target: &'a str,
     toolchain: &'a str,
     sha256: String,
+    input_digest: &'a str,
 }
 
 pub fn write_preseed_manifest() -> Result<(), OrchestratorError> {
@@ -34,6 +36,7 @@ pub fn write_preseed_manifest() -> Result<(), OrchestratorError> {
     let out = nonempty_env(PRESEED_OUT_ENV)?;
     let target = nonempty_env(PRESEED_TARGET_ENV)?;
     let toolchain = nonempty_env(PRESEED_TOOLCHAIN_ENV)?;
+    let input_digest = nonempty_env(PRESEED_INPUT_DIGEST_ENV)?;
     let commit = nonempty_env(COMMIT_ENV)?;
     let temp = env::var_os(RUNNER_TEMP_ENV)
         .filter(|value| !value.is_empty())
@@ -43,6 +46,7 @@ pub fn write_preseed_manifest() -> Result<(), OrchestratorError> {
         &out,
         &target,
         &toolchain,
+        &input_digest,
         &commit,
         Path::new(&temp),
     )
@@ -53,6 +57,7 @@ pub(crate) fn write_preseed_manifest_to(
     out: &str,
     target: &str,
     toolchain: &str,
+    input_digest: &str,
     commit: &str,
     runner_temp: &Path,
 ) -> Result<(), OrchestratorError> {
@@ -61,6 +66,9 @@ pub(crate) fn write_preseed_manifest_to(
     }
     if !velnor_actions_contract::ids::is_lower_hex_len(commit, 40) {
         return Err(internal("preseed_bad_commit"));
+    }
+    if !velnor_actions_contract::ids::is_lower_hex_len(input_digest, 64) {
+        return Err(internal("preseed_bad_input_digest"));
     }
     if toolchain.is_empty() || toolchain.bytes().any(|b| b < 0x20 || b == 0x7f) {
         return Err(internal("preseed_bad_toolchain"));
@@ -89,6 +97,7 @@ pub(crate) fn write_preseed_manifest_to(
         target,
         toolchain,
         sha256,
+        input_digest,
     };
     let text = serde_json::to_string(&manifest).map_err(|err| internal(&err.to_string()))?;
     std::fs::write(out_path.join(MANIFEST_FILE), text)
@@ -111,4 +120,76 @@ fn hex_lower(bytes: &[u8]) -> String {
         out.push(HEX[(byte & 0xf) as usize] as char);
     }
     out
+}
+
+#[cfg(test)]
+mod input_digest_binding {
+    use super::write_preseed_manifest_to;
+
+    const TARGET: &str = "x86_64-unknown-linux-gnu";
+    const COMMIT: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const DIGEST: &str =
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+    fn staged_binary() -> (tempfile::TempDir, String, String, std::path::PathBuf) {
+        let root = tempfile::tempdir().expect("preseed test root");
+        let binary = root.path().join("velnor-actions");
+        std::fs::write(&binary, b"helper-bytes").expect("preseed test binary");
+        let temp = root.path().join("temp");
+        std::fs::create_dir_all(&temp).expect("preseed test temp");
+        let out = temp.join("out");
+        (
+            root,
+            binary.to_str().expect("preseed binary path").to_owned(),
+            out.to_str().expect("preseed out path").to_owned(),
+            temp,
+        )
+    }
+
+    #[test]
+    fn manifest_serializes_input_digest() {
+        let (_root, binary, out, temp) = staged_binary();
+        write_preseed_manifest_to(
+            &binary,
+            &out,
+            TARGET,
+            "rust@1.91.0",
+            DIGEST,
+            COMMIT,
+            &temp,
+        )
+        .expect("preseed manifest with input digest");
+        let text = std::fs::read_to_string(
+            std::path::Path::new(&out).join(super::MANIFEST_FILE),
+        )
+        .expect("preseed manifest text");
+        if !text.contains(&format!("\"input_digest\":\"{DIGEST}\"")) {
+            panic!("preseed manifest left its input digest:{text}");
+        }
+    }
+
+    #[test]
+    fn manifest_rejects_malformed_input_digest() {
+        let upper = "B".repeat(64);
+        for bad in ["", "not-a-digest", upper.as_str()] {
+            let (_root, binary, out, temp) = staged_binary();
+            let result = write_preseed_manifest_to(
+                &binary,
+                &out,
+                TARGET,
+                "rust@1.91.0",
+                bad,
+                COMMIT,
+                &temp,
+            );
+            match result {
+                Ok(()) => panic!("preseed manifest accepted its bad input digest:{bad}"),
+                Err(error) => {
+                    if !error.to_string().contains("preseed_bad_input_digest") {
+                        panic!("preseed manifest left its digest rejection:{error}");
+                    }
+                }
+            }
+        }
+    }
 }

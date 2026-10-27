@@ -246,6 +246,23 @@ pub(crate) fn check_body_composition() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+pub(crate) fn check_publish_job_pushes_before_evidence(text: &str) -> Result<(), Box<dyn Error>> {
+    for (marker, label) in [
+        (
+            "Assemble publication evidence with the fixed authority body",
+            "evidence step",
+        ),
+        ("VELNOR_REGISTRY_TOKEN", "registry token"),
+        ("fetch_registry_token", "registry token exchange"),
+        ("publish_image", "registry publication"),
+        ("verify_remote_manifest", "registry readback"),
+        ("check_publication_proof", "publication proof"),
+    ] {
+        require(text, marker, label)?;
+    }
+    Ok(())
+}
+
 pub(crate) fn check_modes_share_body(text: &str) -> Result<(), Box<dyn Error>> {
     require(text, "attest-image-candidate", "attestation mode")?;
     require(text, "publish-job-image", "publication mode")?;

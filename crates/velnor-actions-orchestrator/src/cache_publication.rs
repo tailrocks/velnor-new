@@ -255,6 +255,9 @@ impl PublicationV1 {
             if entry.key != self.generation.cache_key() {
                 return Err(publication_error("publication_entry_key_mismatch"));
             }
+            if entry.repository_id != self.job.repository_id {
+                return Err(publication_error("publication_entry_repository_mismatch"));
+            }
         }
         if let Some(digest) = &self.readback_archive_digest {
             validate_sha256_hex(digest).map_err(|error| publication_error(&error.problem))?;

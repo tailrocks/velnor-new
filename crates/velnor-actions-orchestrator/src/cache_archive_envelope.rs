@@ -180,6 +180,7 @@ impl OuterEnvelope {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreflightMeasurement {
+    pub inner: FrozenInnerPayload,
     pub measured_outer_bytes: u64,
     pub outer_sha256: String,
 }
@@ -254,7 +255,13 @@ pub fn run_preflight_packaging(
     if measured_outer_bytes == 0 || measured_outer_bytes > MAX_OUTER_BYTES {
         return Err(internal("envelope_outer_limit"));
     }
+    let inner = FrozenInnerPayload {
+        archive_sha256: sha256_hex(&bytes),
+        archive_bytes: size,
+    };
+    inner.validate()?;
     Ok(PreflightMeasurement {
+        inner,
         measured_outer_bytes,
         outer_sha256: sha256_hex(&outer),
     })
@@ -269,6 +276,9 @@ pub fn measure_envelope(
 ) -> Result<MeasuredEnvelope, OrchestratorError> {
     inner.validate()?;
     envelope_identity.validate()?;
+    if preflight.inner != *inner {
+        return Err(internal("envelope_preflight_inner_mismatch"));
+    }
     let candidate_upper_bound_bytes = preflight
         .measured_outer_bytes
         .checked_add(repack_allowance_bytes)

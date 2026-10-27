@@ -117,6 +117,9 @@ fn verify_member_contents(
     }
     for member in members {
         if let Some(entry) = states.get(&member.name) {
+            if entry.mode & !0o777 != 0 {
+                return Err(internal("snapshot_mode_special_bits"));
+            }
             match (entry.entry_kind()?, &member.kind) {
                 (EntryKind::File, RawKind::File) => {
                     if member.hash != entry.content_sha256 || member.size != entry.size {
@@ -135,6 +138,9 @@ fn verify_member_contents(
             }
         }
         if let Some(record) = projected.get(&member.name) {
+            if record.mode & !0o777 != 0 {
+                return Err(internal("snapshot_mode_special_bits"));
+            }
             match (&record.kind, &member.kind) {
                 (EntryKind::File, RawKind::File) => {
                     if member.hash != record.content_sha256 {
@@ -143,7 +149,9 @@ fn verify_member_contents(
                 }
                 (EntryKind::Directory, RawKind::Directory) => {}
                 (EntryKind::Symlink, RawKind::Symlink) => {
-                    if member.link_target.as_deref() != record.link_target.as_deref() {
+                    if member.link_target.as_deref() != record.link_target.as_deref()
+                        || member.hash != record.content_sha256
+                    {
                         return Err(internal("snapshot_archive_link_mismatch"));
                     }
                 }

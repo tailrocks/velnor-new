@@ -6,8 +6,9 @@ use super::constants::{
     BUILDER_PREVIEW_PRODUCER_TASK, BUILDER_RELEASE_ASSET_BUILD_STEPS,
     BUILDER_RESOURCE_PROBE_BUILD_ARGV, BUILDER_RESOURCE_PROBE_RELEASE_BUILD_ARGV,
     BUILDER_RESOURCE_PROBE_RELEASE_TEST_ARGV, BUILDER_RUNNER_BUILD_ARGV, GNU_LINUX,
-    HELPER_BINARY_ROLE, HOST_TARGET_DIR_ROLE, INTEL_TARGET_DIR_ROLE, MACOS_X86_64,
-    MBX_CLI_BUILD_ARGV, MBX_CLI_INTEL_BUILD_ARGV, MUSL_LINUX, NATIVE_IMAGE_ENV,
+    GNU_TARGET_DIR_ROLE, HELPER_BINARY_ROLE, HOST_TARGET_DIR_ROLE, INTEL_TARGET_DIR_ROLE,
+    MACOS_X86_64, MBX_CLI_BUILD_ARGV, MBX_CLI_INTEL_BUILD_ARGV, MUSL_LINUX, MUSL_TARGET_DIR_ROLE,
+    NATIVE_IMAGE_ENV,
     NATIVE_IMAGE_SOURCE_INPUTS, NEXTEST_DEFAULT, PACKAGE_CLI, PACKAGE_RESOURCE_PROBE,
     PACKAGE_RUNNER_CLI, PACKAGE_RUNNER_HOST, PREVIEW_HANDOFF_ENV, PREVIEW_OUTPUT_ROLES,
     PREVIEW_SOURCE_BINDINGS, PROFILE_RELEASE, RESOURCE_PROBE_MUSL_BUILD_ARGV,
@@ -230,7 +231,7 @@ const ALL_RECIPES: [CacheRecipe; 14] = [
         lane_id: "stable-resource-probe-musl",
         source_inputs: RUNNER_SOURCE_INPUTS,
         environment_inputs: &[],
-        output_roles: HOST_TARGET_DIR_ROLE,
+        output_roles: MUSL_TARGET_DIR_ROLE,
         source_bound_helper: false,
     },
     CacheRecipe {
@@ -249,7 +250,7 @@ const ALL_RECIPES: [CacheRecipe; 14] = [
         lane_id: "stable-resource-probe-release-gnu",
         source_inputs: RUNNER_SOURCE_INPUTS,
         environment_inputs: &[],
-        output_roles: HOST_TARGET_DIR_ROLE,
+        output_roles: GNU_TARGET_DIR_ROLE,
         source_bound_helper: false,
     },
     CacheRecipe {
@@ -268,7 +269,7 @@ const ALL_RECIPES: [CacheRecipe; 14] = [
         lane_id: "stable-resource-probe-release-test",
         source_inputs: RUNNER_SOURCE_INPUTS,
         environment_inputs: &[],
-        output_roles: HOST_TARGET_DIR_ROLE,
+        output_roles: GNU_TARGET_DIR_ROLE,
         source_bound_helper: false,
     },
     CacheRecipe {

@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::io;
+use std::process::Command;
 
 use velnor_actions_contract::{Step, StepKind, StepRole};
 use velnor_actions_workflow_renderer::preseed::{
@@ -124,7 +125,7 @@ fn plan_handoff() -> Result<Vec<Step>, Box<dyn Error>> {
 fn consumer_handoff() -> Result<Vec<Step>, Box<dyn Error>> {
     Ok(vec![
         preseed_download_step()?,
-        preseed_manifest_verify_step(target())?,
+        preseed_manifest_verify_step(&build_argv(), target())?,
         preseed_stage_step(PreseedStageSource::DownloadedArtifact, &staged())?,
     ])
 }
@@ -206,6 +207,97 @@ fn check_manifest_binds_helper_context() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn verify_script_of(step: &Step) -> Result<String, Box<dyn Error>> {
+    shell_run(step)?
+        .iter()
+        .find(|arg| arg.contains("preseed-manifest.json"))
+        .cloned()
+        .ok_or_else(|| fail("verify left its manifest script"))
+}
+
+fn staged_sha256(binary: &[u8]) -> Result<String, Box<dyn Error>> {
+    let root = tempfile::tempdir()?;
+    let path = root.path().join("velnor-actions");
+    std::fs::write(&path, binary)?;
+    let output = Command::new("sha256sum").arg(&path).output()?;
+    if !output.status.success() {
+        return Err(fail("sha256sum left its digest"));
+    }
+    String::from_utf8(output.stdout)?
+        .split_whitespace()
+        .next()
+        .map(str::to_owned)
+        .ok_or_else(|| fail("sha256sum left its shape"))
+}
+
+fn run_verify_script(
+    script: &str,
+    manifest: &str,
+    binary: &[u8],
+    sha: &str,
+) -> Result<(i32, String), Box<dyn Error>> {
+    let root = tempfile::tempdir()?;
+    let stage = root.path().join("velnor").join("preseed");
+    std::fs::create_dir_all(&stage)?;
+    std::fs::write(stage.join("preseed-manifest.json"), manifest)?;
+    std::fs::write(stage.join("velnor-actions"), binary)?;
+    let output = Command::new("sh")
+        .arg("-c")
+        .arg(script)
+        .env("RUNNER_TEMP", root.path())
+        .env("GITHUB_SHA", sha)
+        .output()?;
+    let code = output
+        .status
+        .code()
+        .ok_or_else(|| fail("verify left its exit code"))?;
+    let mut combined = String::from_utf8(output.stdout)?;
+    combined.push_str(&String::from_utf8(output.stderr)?);
+    Ok((code, combined))
+}
+
+fn check_verify_binds_input_digest() -> Result<(), Box<dyn Error>> {
+    let manifest = preseed_manifest_step(&build_argv(), target())?;
+    let digest = manifest_digest_of(&manifest)?.to_owned();
+    let step = preseed_manifest_verify_step(&build_argv(), target())?;
+    if step.role != Some(StepRole::PreseedVerifyManifest) {
+        return Err(fail("verify left its application role"));
+    }
+    let script = verify_script_of(&step)?;
+    require(&script, "input_digest", "verify digest field")?;
+    require(&script, &digest, "verify digest value")?;
+    let sha = "a".repeat(40);
+    let binary = b"staged-preseed-helper";
+    let sum = staged_sha256(binary)?;
+    let manifest_text = format!(
+        "{{\"schema\":1,\"commit\":\"{sha}\",\"target\":\"{target}\",\"toolchain\":\"rust@1.91.0\",\"sha256\":\"{sum}\",\"input_digest\":\"{digest}\"}}",
+        target = target()
+    );
+    let (code, output) = run_verify_script(&script, &manifest_text, binary, &sha)?;
+    if code != 0 {
+        return Err(fail(&format!(
+            "verify rejected its bound manifest:{output}"
+        )));
+    }
+    let tampered = manifest_text.replacen(&digest, &"c".repeat(64), 1);
+    let (code, _) = run_verify_script(&script, &tampered, binary, &sha)?;
+    if code == 0 {
+        return Err(fail("verify accepted its tampered digest"));
+    }
+    let missing = format!(
+        "{{\"schema\":1,\"commit\":\"{sha}\",\"target\":\"{target}\",\"toolchain\":\"rust@1.91.0\",\"sha256\":\"{sum}\"}}",
+        target = target()
+    );
+    let (code, _) = run_verify_script(&script, &missing, binary, &sha)?;
+    if code == 0 {
+        return Err(fail("verify accepted its missing digest"));
+    }
+    if preseed_manifest_verify_step(&build_argv(), "not-a-target").is_ok() {
+        return Err(fail("verify accepted its bad target"));
+    }
+    Ok(())
+}
+
 fn check_plan_runs_verified_handoff_first() -> Result<(), Box<dyn Error>> {
     let mut steps = plan_handoff()?;
     steps.insert(
@@ -242,6 +334,7 @@ fn gc1_t44_preserves_contract() -> Result<(), Box<dyn Error>> {
     check_digest_is_stable_identity()?;
     check_digest_follows_actual_inputs()?;
     check_manifest_binds_helper_context()?;
+    check_verify_binds_input_digest()?;
     check_plan_runs_verified_handoff_first()?;
     check_consumers_reuse_without_rebuild()?;
     Ok(())

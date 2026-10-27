@@ -112,6 +112,7 @@ pub(crate) fn hosted_request(
     let measured = measure_envelope(
         &inner,
         &velnor_actions_orchestrator::PreflightMeasurement {
+            inner: inner.clone(),
             measured_outer_bytes: bound,
             outer_sha256: sha256_hex(b"gc1-runtime-outer"),
         },

@@ -3,6 +3,7 @@
 
 use crate::OrchestratorError;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 fn internal(problem: &str) -> OrchestratorError {
     // Local copy of `crate::internal::internal`: identical value, so this
@@ -102,6 +103,41 @@ pub(crate) fn ensure_private_placement(
         return Err(internal("execution_home_inside_shared_roots"));
     }
     Ok(())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SharedFileWait {
+    Settled,
+    Oversized,
+    Expired,
+}
+
+pub(crate) fn await_shared_file_len(
+    path: &Path,
+    expected_len: u64,
+    deadline: velnor_actions_mise::CheckDeadline,
+) -> SharedFileWait {
+    loop {
+        match std::fs::symlink_metadata(path) {
+            Err(_) => return SharedFileWait::Expired,
+            Ok(metadata) => {
+                if metadata.file_type().is_symlink() || !metadata.is_file() {
+                    return SharedFileWait::Expired;
+                }
+                let len = metadata.len();
+                if len == expected_len {
+                    return SharedFileWait::Settled;
+                }
+                if len > expected_len {
+                    return SharedFileWait::Oversized;
+                }
+            }
+        }
+        if deadline.remaining().is_err() {
+            return SharedFileWait::Expired;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
 }
 
 pub(crate) fn is_private_check_home(home: &Path) -> bool {

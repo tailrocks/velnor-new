@@ -148,6 +148,51 @@ fn check_replacement_and_active_coverage_retained() -> Result<(), Box<dyn Error>
     Ok(())
 }
 
+fn check_out_of_scope_entries_retained() -> Result<(), Box<dyn Error>> {
+    let (mut request, _, _) = superseded_request()?;
+    let mut foreign_family = fixture_generation("coverage-foreign", 0)?;
+    foreign_family.family = Gc1Family::Tools;
+    let mut foreign_group = fixture_generation("coverage-foreign", 0)?;
+    foreign_group.group_digest = Digest::parse(&digest_b3(b"gc1-t27-other-group"))?;
+    let mut foreign_compat = fixture_generation("coverage-foreign", 0)?;
+    foreign_compat.compatibility_digest = Digest::parse(&digest_b3(b"gc1-t27-other-compat"))?;
+    for (cache_id, generation) in [
+        (13, foreign_family),
+        (14, foreign_group),
+        (15, foreign_compat),
+    ] {
+        request.candidates.push(CandidateEntry {
+            repository_id: 1,
+            cache_id,
+            ref_name: "refs/heads/main".to_owned(),
+            key: generation.cache_key(),
+            version: "v1".to_owned(),
+            size_in_bytes: 4096,
+        });
+    }
+    request.candidate_ids = vec![11, 12, 13, 14, 15];
+    let plan = decide_cleanup(&request)?;
+    if plan.deletable_ids != vec![11, 12] {
+        return Err(fail("out-of-scope entry was retired"));
+    }
+    let retained: Vec<u64> = plan
+        .entry_results
+        .iter()
+        .filter(|result| result.delete == DeleteOutcome::Retained)
+        .map(|result| result.cache_id)
+        .collect();
+    if retained != vec![13, 14, 15] {
+        return Err(fail("out-of-scope entries missed retention"));
+    }
+    for result in &plan.entry_results {
+        if result.recheck == RecheckOutcome::Superseded && result.delete != DeleteOutcome::Eligible
+        {
+            return Err(fail("superseded entry result misclassified"));
+        }
+    }
+    Ok(())
+}
+
 fn check_repair_keeps_predecessor() -> Result<(), Box<dyn Error>> {
     let (request, bad_entry) = repair_request()?;
     let plan = decide_cleanup(&request)?;
@@ -207,6 +252,7 @@ fn check_missing_readback_is_unverified() -> Result<(), Box<dyn Error>> {
 fn gc1_t27_preserves_contract() -> Result<(), Box<dyn Error>> {
     check_superseded_retires_only_superseded()?;
     check_replacement_and_active_coverage_retained()?;
+    check_out_of_scope_entries_retained()?;
     check_repair_keeps_predecessor()?;
     check_missing_readback_is_unverified()?;
     Ok(())

@@ -10,7 +10,9 @@ use flate2::write::GzEncoder;
 use tar::{Builder, EntryType, Header};
 use velnor_actions_contract::canonical_json_bytes;
 
-use super::types::{MAX_ARCHIVE_ENTRIES, PackRequest, PackedArchive};
+use super::types::{
+    MAX_ARCHIVE_ENTRIES, MAX_ARCHIVE_ENTRY_BYTES, PackRequest, PackedArchive,
+};
 use crate::OrchestratorError;
 use crate::cache_snapshot::{
     LaneRoot, MANIFEST_ARCHIVE_MEMBER, PROJECTION_ARCHIVE_PREFIX,
@@ -70,6 +72,9 @@ impl<W: Write> PackWriter<W> {
     ) -> Result<(), OrchestratorError> {
         self.admit()?;
         let size = u64::try_from(bytes.len()).map_err(|_| internal("snapshot_size_range"))?;
+        if size > MAX_ARCHIVE_ENTRY_BYTES {
+            return Err(internal("snapshot_archive_entry_size_limit"));
+        }
         let mut header = member_header(mode, EntryType::Regular, size);
         self.builder
             .append_data(&mut header, name, bytes)
@@ -127,6 +132,9 @@ fn pack_state_entry<W: Write>(
     lanes: &[LaneRoot],
     entry: &StateEntryV1,
 ) -> Result<(), OrchestratorError> {
+    if entry.mode & !0o777 != 0 {
+        return Err(internal("snapshot_mode_special_bits"));
+    }
     let (lane_id, lane_relative) = split_state_member(&entry.path)?;
     let lane_root = lane_fs_root(lanes, lane_id, &entry.path)?;
     let absolute = lane_root.join(lane_relative);
@@ -173,6 +181,9 @@ fn pack_projection_entry<W: Write>(
     lane_relative: &ProjectionEntry,
     staged: bool,
 ) -> Result<(), OrchestratorError> {
+    if lane_relative.mode & !0o777 != 0 {
+        return Err(internal("snapshot_mode_special_bits"));
+    }
     let root = if staged { staged_root } else { checkout_root };
     let absolute = root.join(&lane_relative.path);
     let member = format!("{PROJECTION_ARCHIVE_PREFIX}/{}", lane_relative.path);

@@ -107,6 +107,14 @@ fn check_rejects_verified_mismatch() -> Result<(), Box<dyn Error>> {
     let size = fixture_size()?;
     key.observed_entry = Some(fixture_entry(&other, size));
     must_fail!(publication_canonical_bytes(&key), "entry key drift");
+    let mut repository = fixture_verified()?;
+    if let Some(entry) = repository.observed_entry.as_mut() {
+        entry.repository_id = 2;
+    }
+    must_fail!(
+        publication_canonical_bytes(&repository),
+        "foreign repository readback"
+    );
     let mut step = fixture_verified()?;
     step.save_step_outcome = Some(String::new());
     must_fail!(publication_canonical_bytes(&step), "empty step outcome");

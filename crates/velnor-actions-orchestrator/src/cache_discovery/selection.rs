@@ -96,6 +96,27 @@ fn untrusted_selectable(entries: &[&SelectableEntry]) -> Option<u64> {
         .map(|entry| entry.cache_id)
 }
 
+fn provenance_scope<'a>(
+    request: &DiscoveryRequest,
+    entries: &[&'a SelectableEntry],
+) -> Vec<&'a SelectableEntry> {
+    let exact_key = request.generation.cache_key();
+    entries
+        .iter()
+        .copied()
+        .filter(|entry| {
+            if entry.key == exact_key {
+                return true;
+            }
+            entry.parsed_generation().is_some_and(|generation| {
+                generation.family == request.generation.family
+                    && generation.group_digest == request.generation.group_digest
+                    && generation.compatibility_digest == request.generation.compatibility_digest
+            })
+        })
+        .collect()
+}
+
 pub fn select_predecessor(
     request: &DiscoveryRequest,
     entries: &[&SelectableEntry],
@@ -237,7 +258,7 @@ fn decide_complete(
                 "conflicting_visible_ref_before_extraction".to_owned(),
             );
         }
-        if let Some(cache_id) = untrusted_selectable(visible) {
+        if let Some(cache_id) = untrusted_selectable(&provenance_scope(request, visible)) {
             return build_record(
                 request,
                 None,

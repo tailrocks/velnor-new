@@ -7,6 +7,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use velnor_actions_contract::config::{QualifiedTool, QualifiedToolPlatform};
 use velnor_actions_mise::{CheckDeadline, QualifiedCheck};
 
+use super::super::TransferLedger;
+use super::super::cache_execution_context;
 use super::{archive, layout, tree};
 use super::observe::{
     check_deadline, read_with_deadline, run, sha256_with_deadline, staged_read_error,
@@ -81,6 +83,7 @@ pub(super) fn fetch_archives(
     tool_home: &Path,
     deadline: CheckDeadline,
     expanded: &mut archive::ArchiveBudget,
+    ledger: &mut TransferLedger,
 ) -> Result<(Vec<PathBuf>, Vec<PathBuf>), OrchestratorError> {
     let primary = fetch_extract(
         handle,
@@ -90,6 +93,7 @@ pub(super) fn fetch_archives(
         tool_home,
         deadline,
         expanded,
+        ledger,
     )?;
     let dependencies = fetch_extract(
         handle,
@@ -99,6 +103,7 @@ pub(super) fn fetch_archives(
         tool_home,
         deadline,
         expanded,
+        ledger,
     )?;
     Ok((primary, dependencies))
 }
@@ -111,6 +116,7 @@ fn fetch_extract(
     tool_home: &Path,
     deadline: CheckDeadline,
     expanded: &mut archive::ArchiveBudget,
+    ledger: &mut TransferLedger,
 ) -> Result<Vec<PathBuf>, OrchestratorError> {
     let mut roots = Vec::new();
     for (index, artifact) in artifacts.iter().enumerate() {
@@ -120,6 +126,7 @@ fn fetch_extract(
         let downloaded = tool_home.join("downloads").join(&artifact.sha256);
         let reused = reuse_shared_archive(&shared_archive, &artifact.sha256, deadline)?;
         let bytes = if let Some(bytes) = reused {
+            ledger.record_cache(bytes.len());
             bytes
         } else {
             run(
@@ -134,6 +141,7 @@ fn fetch_extract(
             store_shared_archive(&shared_archive, &bytes, deadline)?;
             std::fs::remove_file(&downloaded)
                 .map_err(|_| internal("qualified_tool_archive_cleanup"))?;
+            ledger.record_origin(bytes.len());
             bytes
         };
         let name = format!(
@@ -205,9 +213,16 @@ fn store_shared_archive(
             check_deadline(deadline)
         }
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-            match reuse_shared_archive(path, &sha256_with_deadline(bytes, deadline)?, deadline)? {
-                Some(_) => Ok(()),
-                None => Err(internal("qualified_tool_shared_archive")),
+            let expected_sha = sha256_with_deadline(bytes, deadline)?;
+            let expected_len = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
+            match cache_execution_context::await_shared_file_len(path, expected_len, deadline) {
+                cache_execution_context::SharedFileWait::Settled => {
+                    match reuse_shared_archive(path, &expected_sha, deadline)? {
+                        Some(_) => Ok(()),
+                        None => Err(internal("qualified_tool_shared_archive")),
+                    }
+                }
+                _ => Err(internal("qualified_tool_shared_archive")),
             }
         }
         Err(_) => Err(internal("qualified_tool_shared_archive")),

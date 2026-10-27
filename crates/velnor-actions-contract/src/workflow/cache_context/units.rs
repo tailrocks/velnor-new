@@ -89,7 +89,9 @@ impl UnitResultV1 {
         }
         validate_rfc3339_utc("unit_result.started_at", &self.started_at)?;
         validate_rfc3339_utc("unit_result.finished_at", &self.finished_at)?;
-        if self.finished_at < self.started_at {
+        if compare_utc_timestamps(&self.started_at, &self.finished_at)
+            == std::cmp::Ordering::Greater
+        {
             return Err(ContractError::identity(
                 "unit_result.finished_at",
                 "finished_before_started",
@@ -112,6 +114,28 @@ impl UnitResultV1 {
     pub fn to_canonical_bytes(&self) -> Result<Vec<u8>, ContractError> {
         self.validate()?;
         canonical_json_bytes(self)
+    }
+}
+
+fn split_utc_timestamp(value: &str) -> Option<(&str, &str)> {
+    let body = value.strip_suffix('Z')?;
+    match body.split_once('.') {
+        Some((head, fraction)) => Some((head, fraction)),
+        None => Some((body, "")),
+    }
+}
+
+fn compare_fraction(left: &str, right: &str) -> std::cmp::Ordering {
+    let width = left.len().max(right.len());
+    format!("{left:0<width$}").cmp(&format!("{right:0<width$}"))
+}
+
+fn compare_utc_timestamps(started: &str, finished: &str) -> std::cmp::Ordering {
+    match (split_utc_timestamp(started), split_utc_timestamp(finished)) {
+        (Some((start_head, start_frac)), Some((finish_head, finish_frac))) => start_head
+            .cmp(finish_head)
+            .then_with(|| compare_fraction(start_frac, finish_frac)),
+        _ => started.cmp(finished),
     }
 }
 

@@ -122,6 +122,10 @@ pub(crate) fn check_admission_exact_fit_and_overflow() -> Result<(), Box<dyn Err
             archive_bytes: inner,
         },
         &PreflightMeasurement {
+            inner: velnor_actions_orchestrator::FrozenInnerPayload {
+                archive_sha256: sha256_hex(&bytes),
+                archive_bytes: inner,
+            },
             measured_outer_bytes: measured_outer,
             outer_sha256: sha256_hex(b"gc1-qualification-failure-outer"),
         },

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod cache_archive_review_threads;
 mod gc1_qualification_cases;
 mod gc1_qualification_support;
 mod gc1_runtime_cases;

@@ -4,6 +4,30 @@
 use super::compiler_observation::{
     ChildOutcome, ObservationReport, ObservationSession, new_session_id,
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) struct TransferLedger {
+    pub(crate) origin_acquisitions: u64,
+    pub(crate) origin_bytes: u64,
+    pub(crate) cache_bytes: u64,
+}
+
+impl TransferLedger {
+    fn saturating_len(len: usize) -> u64 {
+        u64::try_from(len).unwrap_or(u64::MAX)
+    }
+
+    pub(crate) fn record_origin(&mut self, bytes: usize) {
+        self.origin_acquisitions = self.origin_acquisitions.saturating_add(1);
+        self.origin_bytes = self
+            .origin_bytes
+            .saturating_add(Self::saturating_len(bytes));
+    }
+
+    pub(crate) fn record_cache(&mut self, bytes: usize) {
+        self.cache_bytes = self.cache_bytes.saturating_add(Self::saturating_len(bytes));
+    }
+}
 use crate::OrchestratorError;
 use crate::check_evidence::reject_link_components;
 use crate::internal::internal;
@@ -73,12 +97,14 @@ pub(crate) struct OwnedCheck {
     pub(crate) system_tools: Vec<SystemToolProof>,
     pub(crate) qualified_tools: Vec<crate::check_evidence::gate::tools::QualifiedToolReceipt>,
     observation: Option<ObservationSession>,
+    transfers: TransferLedger,
 }
 struct PreparedParts {
     qualified: QualifiedCheck,
     container: Option<container::OwnedContainer>,
     system_tools: Vec<SystemToolProof>,
     qualified_tools: Vec<crate::check_evidence::gate::tools::QualifiedToolReceipt>,
+    transfers: TransferLedger,
 }
 impl Deref for OwnedCheck {
     type Target = QualifiedCheck;
@@ -143,6 +169,7 @@ pub(crate) fn prepare_check_with_context(
             system_tools: parts.system_tools,
             qualified_tools: parts.qualified_tools,
             observation: Some(observation),
+            transfers: parts.transfers,
         }),
         Err(error) => {
             cache_execution_context::discard_private_home(&home);
@@ -187,9 +214,9 @@ impl OwnedCheck {
             .map_err(|error| internal(&error.to_string()))?;
         let origin = session
             .origin_evidence(
-                None,
-                None,
-                "origin fetch bytes unobserved on this execution path",
+                Some(self.transfers.origin_acquisitions),
+                Some(self.transfers.origin_bytes),
+                "tool artifacts fetched from origin during materialization",
             )
             .map_err(|error| internal(&error.to_string()))?;
         session
@@ -197,8 +224,8 @@ impl OwnedCheck {
             .map_err(|error| internal(&error.to_string()))?;
         let cache = session
             .cache_evidence(
-                None,
-                "cache-transfer bytes unattributed on this execution path",
+                Some(self.transfers.cache_bytes),
+                "tool artifacts reused from the shared archive cache",
             )
             .map_err(|error| internal(&error.to_string()))?;
         session
@@ -297,12 +324,14 @@ fn materialize(
         "check_config",
         || checkpoint(deadline),
     )?;
-    let qualified_tools = acquisition::acquire(&qualified, check, home, deadline)?;
+    let (qualified_tools, transfers) =
+        acquisition::acquire(&qualified, check, home, deadline)?;
     Ok(PreparedParts {
         qualified,
         container,
         system_tools,
         qualified_tools,
+        transfers,
     })
 }
 

@@ -15,6 +15,7 @@ use super::observe::{
     validate_installations,
 };
 use super::shared::{fetch_archives, publish_shared_prefix};
+use super::super::TransferLedger;
 use crate::OrchestratorError;
 use crate::check_evidence::gate::tools::{QualifiedToolReceipt, receipt};
 use crate::internal::internal;
@@ -24,9 +25,10 @@ pub(crate) fn acquire(
     check: &DiscoveredCheck,
     home: &Path,
     deadline: CheckDeadline,
-) -> Result<Vec<QualifiedToolReceipt>, OrchestratorError> {
+) -> Result<(Vec<QualifiedToolReceipt>, TransferLedger), OrchestratorError> {
     let mut receipts = Vec::new();
     let mut expanded = archive::ArchiveBudget::new();
+    let mut ledger = TransferLedger::default();
     let shared_root = shared_tool_root(home)?;
     for tool in &check.qualified_tools {
         receipts.push(hydrate_tool(
@@ -36,6 +38,7 @@ pub(crate) fn acquire(
             &shared_root,
             tool,
             &mut expanded,
+            &mut ledger,
             deadline,
         )?);
     }
@@ -45,7 +48,7 @@ pub(crate) fn acquire(
         home,
         deadline,
     )?;
-    Ok(receipts)
+    Ok((receipts, ledger))
 }
 
 fn hydrate_tool(
@@ -55,6 +58,7 @@ fn hydrate_tool(
     shared_root: &Path,
     tool: &QualifiedTool,
     expanded: &mut archive::ArchiveBudget,
+    ledger: &mut TransferLedger,
     deadline: CheckDeadline,
 ) -> Result<QualifiedToolReceipt, OrchestratorError> {
     let qualified = tool
@@ -79,7 +83,7 @@ fn hydrate_tool(
     let warm = restore_shared_prefix(qualified, &shared_prefix, &prefix, deadline)?;
     if !warm {
         let (primary, dependencies) =
-            fetch_archives(handle, tool, qualified, &tool_home, deadline, expanded)?;
+            fetch_archives(handle, tool, qualified, &tool_home, deadline, expanded, ledger)?;
         if source_mode(tool) {
             check_deadline(deadline)?;
             layout::prepare_cargo_source(

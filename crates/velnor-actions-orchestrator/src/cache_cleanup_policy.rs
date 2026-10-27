@@ -200,18 +200,29 @@ fn is_active(request: &CleanupRequest, entry: &CandidateEntry) -> bool {
     request.active_keys.iter().any(|key| key == &entry.key)
 }
 
+fn in_replacement_scope(entry: &CandidateEntry, replacement: &GenerationId) -> bool {
+    GenerationId::parse_key(&entry.key).is_ok_and(|generation| {
+        generation.family == replacement.family
+            && generation.group_digest == replacement.group_digest
+            && generation.compatibility_digest == replacement.compatibility_digest
+    })
+}
+
 fn plan_superseded(request: &CleanupRequest) -> Result<CleanupPlan, CleanupError> {
     let replacement = request
         .replacement_key
         .as_deref()
         .ok_or_else(|| cleanup_error("cleanup_replacement_missing"))?;
-    validate_replacement_key(replacement)?;
+    let replacement_generation = validate_replacement_key(replacement)?;
     let mut deletable_ids = Vec::new();
     let mut entry_results = Vec::new();
     for id in &request.candidate_ids {
         let entry = find_candidate(&request.candidates, *id)
             .ok_or_else(|| cleanup_error("cleanup_candidate_unknown"))?;
-        if entry.key == replacement || is_active(request, entry) {
+        if entry.key == replacement
+            || is_active(request, entry)
+            || !in_replacement_scope(entry, &replacement_generation)
+        {
             entry_results.push(EntryResult {
                 cache_id: *id,
                 recheck: RecheckOutcome::Retained,

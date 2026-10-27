@@ -199,6 +199,9 @@ fn ingest_typed_member(
             })
         }
         EntryType::Directory => {
+            if size != 0 {
+                return Err(internal("snapshot_archive_nonfile_payload"));
+            }
             create_member_directory(destination, &name)?;
             Ok(RawMember {
                 name,
@@ -209,6 +212,9 @@ fn ingest_typed_member(
             })
         }
         EntryType::Symlink => {
+            if size != 0 {
+                return Err(internal("snapshot_archive_nonfile_payload"));
+            }
             if directory_marker {
                 return Err(internal("snapshot_archive_file_directory_name"));
             }

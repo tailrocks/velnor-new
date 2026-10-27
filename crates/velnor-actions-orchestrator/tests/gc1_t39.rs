@@ -19,7 +19,8 @@ use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, MISE_VERSION, Qualifie
 mod cache_execution_context;
 
 use self::cache_execution_context::{
-    discard_private_home, ensure_private_placement, is_private_check_home, resolve_roots,
+    SharedFileWait, await_shared_file_len, discard_private_home, ensure_private_placement,
+    is_private_check_home, resolve_roots,
 };
 
 fn fail(message: &str) -> Box<dyn Error> {
@@ -337,6 +338,41 @@ fn s10_placement_executes_selected_child() -> Result<(), Box<dyn Error>> {
     discard_private_home(&home);
     if home.exists() {
         return Err(fail("private home survived cleanup"));
+    }
+    Ok(())
+}
+
+#[test]
+fn s10_shared_archive_wait_settles_complete_files() -> Result<(), Box<dyn Error>> {
+    let temp = tempfile::tempdir()?;
+    let path = temp.path().join("shared-archive");
+    fs::write(&path, b"0123456789")?;
+    let deadline = CheckDeadline::after(Duration::from_secs(30))?;
+    if await_shared_file_len(&path, 10, deadline) != SharedFileWait::Settled {
+        return Err(fail("complete shared archive missed its settle"));
+    }
+    let oversized = temp.path().join("oversized-archive");
+    fs::write(&oversized, b"0123456789ABCDEF")?;
+    let deadline = CheckDeadline::after(Duration::from_secs(30))?;
+    if await_shared_file_len(&oversized, 10, deadline) != SharedFileWait::Oversized {
+        return Err(fail("oversized shared archive escaped its bound"));
+    }
+    Ok(())
+}
+
+#[test]
+fn s10_shared_archive_wait_expires_on_partial_files() -> Result<(), Box<dyn Error>> {
+    let temp = tempfile::tempdir()?;
+    let path = temp.path().join("partial-archive");
+    fs::write(&path, b"01234")?;
+    let deadline = CheckDeadline::after(Duration::from_millis(50))?;
+    if await_shared_file_len(&path, 10, deadline) != SharedFileWait::Expired {
+        return Err(fail("partial shared archive skipped its wait"));
+    }
+    let missing = temp.path().join("missing-archive");
+    let deadline = CheckDeadline::after(Duration::from_secs(30))?;
+    if await_shared_file_len(&missing, 10, deadline) != SharedFileWait::Expired {
+        return Err(fail("missing shared archive skipped its expiry"));
     }
     Ok(())
 }

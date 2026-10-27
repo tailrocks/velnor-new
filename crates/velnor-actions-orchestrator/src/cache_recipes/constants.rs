@@ -150,6 +150,8 @@ pub(super) const NATIVE_IMAGE_ENV: &[&str] = &["VELNOR_NATIVE_IMAGE_ACTIONS"];
 
 pub(super) const HOST_TARGET_DIR_ROLE: &[&str] = &["target/release"];
 pub(super) const INTEL_TARGET_DIR_ROLE: &[&str] = &["target/x86_64-apple-darwin/release"];
+pub(super) const MUSL_TARGET_DIR_ROLE: &[&str] = &["target/x86_64-unknown-linux-musl/release"];
+pub(super) const GNU_TARGET_DIR_ROLE: &[&str] = &["target/x86_64-unknown-linux-gnu/debug"];
 pub(super) const HELPER_BINARY_ROLE: &[&str] = &["target/release/velnor-actions"];
 pub(super) const PREVIEW_OUTPUT_ROLES: &[&str] = &["dist/preview", "dist/preview/package-output.json"];
 pub(super) const STAGED_IMAGE_BINARY_ROLE: &[&str] = &["VELNOR_NATIVE_IMAGE_ACTIONS"];
