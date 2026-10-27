@@ -186,31 +186,44 @@ pub(crate) fn validate_bun_suite_job(
     jobs: &BTreeMap<String, Job>,
     policy: &BunSuitePolicy,
     checkout_uses: &str,
+    plan: Option<&velnor_actions_contract::BunLanePlan>,
 ) -> Result<Vec<String>, RenderError> {
-    let actual = jobs.get(&policy.id).ok_or_else(|| {
-        RenderError::InvalidWorkflow(format!("bun_suite_job_missing:{}", policy.id))
-    })?;
-    let expected = build_bun_suite_job(policy, checkout_uses)?;
-    if !same_bun_job(actual, &expected) {
-        return Err(RenderError::InvalidWorkflow(format!(
-            "bun_suite_job_contract:{}",
-            policy.id
-        )));
-    }
+    let suite_jobs = crate::verification_jobs::bun_lane_validation::project_job(
+        &policy.id,
+        &build_bun_suite_job(policy, checkout_uses)?,
+        plan,
+    )?;
+    validate_projected_suite_jobs(jobs, &suite_jobs, "bun_suite")?;
     if policy.report.is_some() {
-        let id = policy.report_id();
-        let actual = jobs
-            .get(&id)
-            .ok_or_else(|| RenderError::InvalidWorkflow(format!("bun_report_job_missing:{id}")))?;
-        if !same_bun_job(actual, &build_bun_report_job(policy, checkout_uses)?) {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "bun_report_job_contract:{id}"
-            )));
-        }
+        let report_id = policy.report_id();
+        let report_jobs = crate::verification_jobs::bun_lane_validation::project_job(
+            &report_id,
+            &build_bun_report_job(policy, checkout_uses)?,
+            plan,
+        )?;
+        validate_projected_suite_jobs(jobs, &report_jobs, "bun_report")?;
     }
     Ok(if policy.required {
-        vec![policy.id.clone()]
+        crate::verification_jobs::bun_lane_validation::output_ids(&policy.id, plan)?
     } else {
         Vec::new()
     })
+}
+
+fn validate_projected_suite_jobs(
+    jobs: &BTreeMap<String, Job>,
+    expected: &[(String, Job)],
+    label: &str,
+) -> Result<(), RenderError> {
+    for (id, expected_job) in expected {
+        let actual = jobs
+            .get(id)
+            .ok_or_else(|| RenderError::InvalidWorkflow(format!("{label}_job_missing:{id}")))?;
+        if !same_bun_job(actual, expected_job) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "{label}_job_contract:{id}"
+            )));
+        }
+    }
+    Ok(())
 }

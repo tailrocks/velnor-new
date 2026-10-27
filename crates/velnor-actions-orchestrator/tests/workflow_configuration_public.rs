@@ -5,6 +5,12 @@ mod workflow_configuration_fixture;
 
 #[path = "workflow_configuration_public/branches.rs"]
 mod branches;
+#[path = "workflow_configuration_public/bun_assets_routing.rs"]
+mod bun_assets_routing;
+#[path = "workflow_configuration_public/bun_dispositions.rs"]
+mod bun_dispositions;
+#[path = "workflow_configuration_public/bun_routing.rs"]
+mod bun_routing;
 #[path = "workflow_configuration_public/bun_runtime.rs"]
 mod bun_runtime;
 #[path = "workflow_configuration_public/empty_suite.rs"]

@@ -11,8 +11,8 @@
 # (plan-v1 response, expected-set, task report); this script pins the
 # user-facing plan text and generated YAML bytes around it.
 #
-# Usage: scripts/capture-opentofu-goldens.sh [capture|check [CLI_BINARY]]
-#        scripts/capture-opentofu-goldens.sh check-release CLI_BINARY CANDIDATE_MANIFEST MANIFEST_SHA256
+# Usage: scripts/capture-opentofu-goldens.sh --archive-guard PATH --archive-guard-sha256 SHA256 [capture|check [CLI_BINARY]]
+#        scripts/capture-opentofu-goldens.sh --archive-guard PATH --archive-guard-sha256 SHA256 check-release CLI_BINARY CANDIDATE_MANIFEST MANIFEST_SHA256
 #   capture  regenerate docs/proposed/opentofu-goldens/ (only at known-good)
 #   check    regenerate to temp and byte-diff (default; never writes goldens)
 #   CLI_BINARY uses that exact executable and skips the default debug build.
@@ -21,23 +21,75 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GOLDEN_DIR="$ROOT/docs/proposed/opentofu-goldens"
 WORK=""
-MODE="${1:-check}"
+MODE="check"
+MODE_EXPLICIT=0
 BIN_EXPLICIT=0
-
-case "$MODE" in
-  capture|check|check-release) ;;
-  *)
-    echo "FATAL: usage: $0 [capture|check [CLI_BINARY]]"
-    exit 2
-    ;;
-esac
+POSITIONAL=()
+ARCHIVE_GUARD_INPUT_PATH=""
+ARCHIVE_GUARD_INPUT_SHA256=""
+SEEN_ARCHIVE_GUARD=0
+SEEN_ARCHIVE_GUARD_SHA256=0
+if [ "$#" -gt 0 ]; then
+  case "$1" in
+    capture|check|check-release) MODE="$1"; MODE_EXPLICIT=1; shift ;;
+  esac
+fi
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    capture|check|check-release)
+      if [ "$MODE_EXPLICIT" -ne 0 ]; then
+        echo "FATAL: usage: $0 [--archive-guard PATH --archive-guard-sha256 SHA256] [capture|check [CLI_BINARY]]"
+        exit 2
+      fi
+      MODE="$1"
+      MODE_EXPLICIT=1
+      shift
+      ;;
+    --archive-guard)
+      if [ "$SEEN_ARCHIVE_GUARD" -ne 0 ] || [ "$#" -lt 2 ]; then
+        echo "FATAL: archive guard options must appear once as a path and SHA-256 pair"
+        exit 2
+      fi
+      SEEN_ARCHIVE_GUARD=1
+      ARCHIVE_GUARD_INPUT_PATH="$2"
+      shift 2
+      ;;
+    --archive-guard-sha256)
+      if [ "$SEEN_ARCHIVE_GUARD_SHA256" -ne 0 ] || [ "$#" -lt 2 ]; then
+        echo "FATAL: archive guard options must appear once as a path and SHA-256 pair"
+        exit 2
+      fi
+      SEEN_ARCHIVE_GUARD_SHA256=1
+      ARCHIVE_GUARD_INPUT_SHA256="$2"
+      shift 2
+      ;;
+    --*)
+      echo "FATAL: usage: $0 [--archive-guard PATH --archive-guard-sha256 SHA256] [capture|check [CLI_BINARY]]"
+      exit 2
+      ;;
+    *) POSITIONAL+=("$1"); shift ;;
+  esac
+done
+if [ "$MODE_EXPLICIT" -eq 0 ] && [ "${#POSITIONAL[@]}" -gt 0 ]; then
+  echo "FATAL: usage: $0 [--archive-guard PATH --archive-guard-sha256 SHA256] [capture|check [CLI_BINARY]]"
+  exit 2
+fi
+if [ "$SEEN_ARCHIVE_GUARD" -ne "$SEEN_ARCHIVE_GUARD_SHA256" ]; then
+  echo "FATAL: archive guard path and SHA-256 must be supplied together"
+  exit 2
+fi
+if [ "$SEEN_ARCHIVE_GUARD" -eq 1 ] \
+  && { [ -z "$ARCHIVE_GUARD_INPUT_PATH" ] || [ -z "$ARCHIVE_GUARD_INPUT_SHA256" ]; }; then
+  echo "FATAL: archive guard path and SHA-256 must be non-empty"
+  exit 2
+fi
 if [ "$MODE" = "check-release" ]; then
-  if [ "$#" -ne 4 ]; then
-    echo "FATAL: usage: $0 check-release CLI_BINARY CANDIDATE_MANIFEST MANIFEST_SHA256"
+  if [ "${#POSITIONAL[@]}" -ne 3 ]; then
+    echo "FATAL: usage: $0 [--archive-guard PATH --archive-guard-sha256 SHA256] check-release CLI_BINARY CANDIDATE_MANIFEST MANIFEST_SHA256"
     exit 2
   fi
-elif [ "$#" -gt 2 ]; then
-  echo "FATAL: usage: $0 [capture|check [CLI_BINARY]]"
+elif [ "${#POSITIONAL[@]}" -gt 1 ]; then
+  echo "FATAL: usage: $0 [--archive-guard PATH --archive-guard-sha256 SHA256] [capture|check [CLI_BINARY]]"
   exit 2
 fi
 if ! CALLER_DIR="$(pwd -P)"; then
@@ -46,9 +98,9 @@ if ! CALLER_DIR="$(pwd -P)"; then
 fi
 if [ "$MODE" = "check-release" ]; then
   BIN_EXPLICIT=1
-  BIN_ARG="$2"
-  MANIFEST_ARG="$3"
-  CANDIDATE_MANIFEST_SHA256="$4"
+  BIN_ARG="${POSITIONAL[0]}"
+  MANIFEST_ARG="${POSITIONAL[1]}"
+  CANDIDATE_MANIFEST_SHA256="${POSITIONAL[2]}"
   if [ -z "$BIN_ARG" ] || [ -z "$MANIFEST_ARG" ] || [ -z "$CANDIDATE_MANIFEST_SHA256" ]; then
     echo "FATAL: explicit candidate binary, manifest path, and manifest SHA-256 are required"
     exit 2
@@ -61,9 +113,9 @@ if [ "$MODE" = "check-release" ]; then
     /*) CANDIDATE_MANIFEST="$MANIFEST_ARG" ;;
     *) CANDIDATE_MANIFEST="$CALLER_DIR/$MANIFEST_ARG" ;;
   esac
-elif [ "$#" -eq 2 ]; then
+elif [ "${#POSITIONAL[@]}" -eq 1 ]; then
   BIN_EXPLICIT=1
-  BIN_ARG="$2"
+  BIN_ARG="${POSITIONAL[0]}"
   if [ -z "$BIN_ARG" ]; then
     echo "FATAL: explicit CLI binary path is empty"
     exit 2
@@ -75,6 +127,8 @@ elif [ "$#" -eq 2 ]; then
 else
   BIN="$ROOT/target/debug/velnor-actions"
 fi
+QUALIFICATION_GUARD_INPUT_PATH="$ARCHIVE_GUARD_INPUT_PATH"
+QUALIFICATION_GUARD_INPUT_SHA256="$ARCHIVE_GUARD_INPUT_SHA256"
 
 FIXTURES="nested mbx-nextest empty-suite minimal-cargo"
 
@@ -83,6 +137,7 @@ note() { echo "$1"; }
 die() { echo "FAIL: $1"; fail=1; }
 
 source "$ROOT/scripts/generator-release/qualification-goldens.sh"
+prepare_qualification_guard || exit 2
 
 # Portable link-preserving recursive copy. Plain `cp -r` dereferences
 # symlinks (BSD: -r is -RL; GNU: -r on links is non-portable), which
@@ -97,9 +152,21 @@ copy_tree() {
 # checked-in oracle match check-release after it validates the exact candidate
 # manifest. These values are not release evidence and never leave this scratch
 # repo.
+fixture_binary_target() {
+  local description
+  description="$(LC_ALL=C file -b -- "$BIN")" || return 1
+  case "$description" in
+    'Mach-O 64-bit executable arm64') printf '%s\n' aarch64-apple-darwin ;;
+    'Mach-O 64-bit executable x86_64') printf '%s\n' x86_64-apple-darwin ;;
+    'ELF 64-bit LSB '*executable*x86-64*'interpreter /lib64/ld-linux-x86-64.so.2'*)
+      printf '%s\n' x86_64-unknown-linux-gnu ;;
+    *) printf 'FATAL: unsupported or ambiguous fixture binary target: %s\n' "$description" >&2; return 1 ;;
+  esac
+}
+
 write_schema_only_consumer_manifest() {
   local repo="$1" manifest="$1/.velnor/release-manifest.json"
-  local version target commit digest targets_json
+  local version target commit digest targets_json binary_target binary_digest target_digest
   if [ -e "$manifest" ] || [ -L "$manifest" ]; then
     [ -f "$manifest" ] && [ ! -L "$manifest" ]
     return $?
@@ -108,16 +175,20 @@ write_schema_only_consumer_manifest() {
     return 1
   fi
   mkdir -p "$repo/.velnor" || return 1
-  if ! version="$("$BIN" --version | awk 'NR == 1 && NF == 2 && $1 == "velnor-actions" { print $2; next } { exit 1 } END { if (NR != 1) exit 1 }')" \
+  if ! version="$(run_qualification_candidate "$BIN" --version | awk 'NR == 1 && NF == 2 && $1 == "velnor-actions" { print $2; next } { exit 1 } END { if (NR != 1) exit 1 }')" \
     || [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     return 1
   fi
+  binary_target="$(fixture_binary_target)" || return 1
+  binary_digest="$(file_sha256 "$BIN")" || return 1
   commit="$(printf '%040d' 0 | tr '0' 'b')"
   digest="$(printf '%064d' 0 | tr '0' 'a')"
   targets_json=""
   for target in x86_64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin; do
     if [ -n "$targets_json" ]; then targets_json+=","; fi
-    targets_json+="{\"target\":\"$target\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v$version/velnor-actions-$version-$target\",\"sha256\":\"$digest\"}"
+    target_digest="$digest"
+    if [ "$target" = "$binary_target" ]; then target_digest="$binary_digest"; fi
+    targets_json+="{\"target\":\"$target\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v$version/velnor-actions-$version-$target\",\"sha256\":\"$target_digest\"}"
   done
   printf '{"schema":1,"version":"%s","repository":"tailrocks/velnor-new","commit":"%s","targets":[%s]}\n' \
     "$version" "$commit" "$targets_json" >"$manifest"
@@ -213,7 +284,7 @@ capture_case() {
   local case="$1" repo="$2" head="$3" out="$4"
   local preview="$out/preview"
   mkdir -p "$out" "$preview"
-  (cd "$repo" && "$BIN" plan >"$out/plan.raw.txt" 2>"$out/plan.stderr.txt"; echo "$?" >"$out/plan.exit")
+  (cd "$repo" && run_qualification_candidate "$BIN" plan >"$out/plan.raw.txt" 2>"$out/plan.stderr.txt"; echo "$?" >"$out/plan.exit")
   if [ "$(cat "$out/plan.exit")" != "0" ]; then
     echo "FATAL: plan failed for $case"
     exit 2
@@ -221,7 +292,7 @@ capture_case() {
   sed -e "s|Repository: .*|Repository: <repo>|" -e "s|$head|<head>|g" \
     "$out/plan.raw.txt" >"$out/plan.txt"
   rm "$out/plan.raw.txt"
-  (cd "$repo" && "$BIN" generate --output-dir "$preview" >"$out/generate.stdout.txt" 2>"$out/generate.stderr.txt"; echo "$?" >"$out/generate.exit")
+  (cd "$repo" && run_qualification_candidate "$BIN" generate --output-dir "$preview" >"$out/generate.stdout.txt" 2>"$out/generate.stderr.txt"; echo "$?" >"$out/generate.exit")
   if ! normalize_generate_stderr "$out/generate.stderr.txt"; then
     echo "FATAL: could not normalize generate diagnostics for $case"
     exit 2
@@ -230,13 +301,19 @@ capture_case() {
     echo "FATAL: generate failed for $case"
     exit 2
   fi
+  local CANDIDATE_MANIFEST="$repo/.velnor/release-manifest.json"
+  if ! validate_candidate_output_bindings "$preview" \
+    || ! normalize_candidate_digests "$preview"; then
+    echo "FATAL: fixture output bindings failed for $case"
+    exit 2
+  fi
   hash_tree "$preview" "$out/tree.sha256"
 }
 
 check_release_policy_negative() {
   local repo="$WORK/hostile-config" output="$WORK/hostile-output"
   setup_case hostile-config >/dev/null
-  if (cd "$repo" && "$BIN" generate --output-dir "$output" >"$WORK/hostile.stdout" 2>"$WORK/hostile.stderr"); then
+  if (cd "$repo" && run_qualification_candidate "$BIN" generate --output-dir "$output" >"$WORK/hostile.stdout" 2>"$WORK/hostile.stderr"); then
     echo "FAIL: release candidate accepted the hostile policy fixture"
     fail=1
   elif ! grep -F '.velnor/config.toml: evil: unknown_config_field' "$WORK/hostile.stderr"; then
@@ -254,7 +331,7 @@ capture_dogfood() {
   local head diff_status
   mkdir -p "$out" "$preview"
   head=$(git -C "$ROOT" rev-parse HEAD)
-  (cd "$ROOT" && "$BIN" plan >"$out/plan.raw.txt" 2>"$out/plan.stderr.txt"; echo "$?" >"$out/plan.exit")
+  (cd "$ROOT" && run_qualification_candidate "$BIN" plan >"$out/plan.raw.txt" 2>"$out/plan.stderr.txt"; echo "$?" >"$out/plan.exit")
   if [ "$(cat "$out/plan.exit")" != "0" ]; then
     echo "FATAL: dogfood plan failed"
     exit 2
@@ -262,7 +339,7 @@ capture_dogfood() {
   sed -e "s|Repository: .*|Repository: <repo>|" -e "s|$head|<head>|g" -e "s|$ROOT|<root>|g" \
     "$out/plan.raw.txt" >"$out/plan.txt"
   rm "$out/plan.raw.txt"
-  (cd "$ROOT" && "$BIN" generate --output-dir "$preview" >"$out/generate.stdout.txt" 2>"$out/generate.stderr.txt"; echo "$?" >"$out/generate.exit")
+  (cd "$ROOT" && run_qualification_candidate "$BIN" generate --output-dir "$preview" >"$out/generate.stdout.txt" 2>"$out/generate.stderr.txt"; echo "$?" >"$out/generate.exit")
   if ! normalize_generate_stderr "$out/generate.stderr.txt"; then
     echo "FATAL: could not normalize dogfood generate diagnostics"
     exit 2

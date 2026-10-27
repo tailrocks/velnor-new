@@ -62,9 +62,9 @@ pub use jobs::{
     is_safe_display_name, slugify_segment, tofu_display_name, validate_job_id,
 };
 pub use lanes::{
-    HOSTED_SUFFIX, LaneClass, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV,
-    NAMED_CHECK_LANES_ENV, NamedCheckLane, NamedCheckLaneVariant, SCALE_SUFFIX, expand_workflow,
-    lane_class, named_check_lanes,
+    BunLanePlan, HOSTED_SUFFIX, LaneClass, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV,
+    NAMED_CHECK_LANES_ENV, NamedCheckLane, NamedCheckLaneVariant, SCALE_SUFFIX, WorkflowExpansion,
+    expand_workflow_with_bun_plan, lane_class, named_check_lanes,
 };
 pub use needs::{
     NEEDS_CHANNEL_ENV, NEEDS_CHANNEL_EXPRESSION, NEEDS_EXPECTED_ENV, NeedsConclusions,

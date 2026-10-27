@@ -20,6 +20,8 @@ pub(crate) mod build_task_mise_tools;
 pub(crate) mod bun_artifact_steps;
 #[path = "bun_assets_jobs.rs"]
 pub(crate) mod bun_assets_jobs;
+#[path = "bun_lane_validation.rs"]
+pub(crate) mod bun_lane_validation;
 #[path = "bun_member_jobs.rs"]
 pub(crate) mod bun_member_jobs;
 #[path = "bun_registry_step.rs"]

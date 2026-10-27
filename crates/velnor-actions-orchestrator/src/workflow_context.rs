@@ -54,6 +54,7 @@ pub(super) fn render_context(
         validator_commands,
         preseed: runtime.preseed(),
         workflow_tasks: input.workflow_tasks,
+        bun_lane_plan: None,
         pull_request_cache_policy: input.config.workflow.pull_request_cache_policy,
         mise_quiet: input.config.workflow.mise_quiet,
         plan_consumer_env: runtime.plan_consumer_env().clone(),

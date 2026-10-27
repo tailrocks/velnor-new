@@ -251,8 +251,9 @@ fn checksum_check(
             let pins = pins.ok_or_else(|| {
                 RenderError::InvalidWorkflow("product_release_pins_missing".to_owned())
             })?;
-            Ok(super::generator_release::verify_published_manifest_script(
-                pins,
+            Ok(format!(
+                "(cd \"{root}\" && {})",
+                super::generator_release::verify_published_manifest_script(pins)
             ))
         }
     }
@@ -277,7 +278,7 @@ fn prepare_asset_verification(family: Family) -> String {
         .collect::<Vec<_>>();
     if family == Family::Generator {
         commands.push(format!(
-            "(cd \"$temp_dir\" && {}) || fail 'generator attestation bundle verification failed'",
+            "(cd \"$temp_dir\" && {})",
             super::generator_release::verify_attestation_bundles_script()
         ));
     }

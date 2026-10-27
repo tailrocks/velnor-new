@@ -67,15 +67,22 @@ pub(crate) fn validate_bun_assets_job(
     jobs: &BTreeMap<String, Job>,
     policy: &BunAssetsPolicy,
     checkout_uses: &str,
+    plan: Option<&velnor_actions_contract::BunLanePlan>,
 ) -> Result<Vec<String>, RenderError> {
-    let actual = jobs.get(&policy.id).ok_or_else(|| {
-        RenderError::InvalidWorkflow(format!("bun_assets_job_missing:{}", policy.id))
-    })?;
-    if !same_bun_job(actual, &build_bun_assets_job(policy, checkout_uses)?) {
-        return Err(RenderError::InvalidWorkflow(format!(
-            "bun_assets_job_contract:{}",
-            policy.id
-        )));
+    let expected = crate::verification_jobs::bun_lane_validation::project_job(
+        &policy.id,
+        &build_bun_assets_job(policy, checkout_uses)?,
+        plan,
+    )?;
+    for (id, expected_job) in &expected {
+        let actual = jobs
+            .get(id)
+            .ok_or_else(|| RenderError::InvalidWorkflow(format!("bun_assets_job_missing:{id}")))?;
+        if !same_bun_job(actual, expected_job) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "bun_assets_job_contract:{id}"
+            )));
+        }
     }
     Ok(Vec::new())
 }
