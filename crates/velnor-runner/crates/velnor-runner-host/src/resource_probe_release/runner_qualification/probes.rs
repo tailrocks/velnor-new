@@ -12,6 +12,7 @@ use futures_util::StreamExt;
 
 use crate::error::HostError;
 
+use super::mutation_lifecycle::{self, MutationKind, MutationResult, MutationValue};
 use super::resources::OwnedResources;
 use super::source::SourceSnapshot;
 use super::{append, create_options, deadline, mount, read_logs, remaining, wait_success};
@@ -144,11 +145,71 @@ async fn run_command(
     let end = Instant::now() + command.timeout;
     let volumes = command.socket_volume.into_iter().collect::<Vec<_>>();
     let name = resources.register_container(command.role)?;
+    let config = command_config(resources, &command);
+    let client = docker.clone();
+    let options = create_options(&name);
+    let create_timeout = remaining(end)?;
+    let mutation = mutation_lifecycle::spawn(
+        format!("container {name}"),
+        MutationKind::Container(name.clone()),
+        async move {
+            let created = match client.create_container(Some(options), config).await {
+                Ok(created) => created,
+                Err(error) => return mutation_lifecycle::uncertain_docker(&error),
+            };
+            if super::valid_container_id(&created.id).is_err() {
+                return mutation_lifecycle::uncertain(HostError::Identity);
+            }
+            MutationResult::Created(MutationValue::ContainerId(created.id))
+        },
+    );
+    let id = match resources.await_mutation(mutation, create_timeout).await? {
+        MutationValue::ContainerId(id) => id,
+        MutationValue::Volume => return Err(HostError::Identity),
+    };
+    resources.bind_container_id(&name, &id)?;
+    let inspect = deadline(docker.inspect_container(&id, None), remaining(end)?)
+        .await?
+        .map_err(|_| HostError::Docker)?;
+    resources.validate_inspect(
+        &inspect,
+        &name,
+        &id,
+        command.role,
+        command.image_id,
+        &volumes,
+    )?;
+    deadline(
+        docker.start_container(&id, None::<StartContainerOptions>),
+        remaining(end)?,
+    )
+    .await?
+    .map_err(|_| HostError::Docker)?;
+    wait_success(docker, &id, remaining(end)?).await?;
+    let output = read_logs(docker, &id, remaining(end)?).await?;
+    let inspect = deadline(docker.inspect_container(&id, None), remaining(end)?)
+        .await?
+        .map_err(|_| HostError::Docker)?;
+    resources.validate_inspect(
+        &inspect,
+        &name,
+        &id,
+        command.role,
+        command.image_id,
+        &volumes,
+    )?;
+    if inspect.state.and_then(|state| state.exit_code) != Some(0) {
+        return Err(HostError::Docker);
+    }
+    Ok(output)
+}
+
+fn command_config(resources: &OwnedResources, command: &CommandSpec<'_>) -> ContainerCreateBody {
     let mounts = command
         .socket_volume
         .map(|volume| vec![mount(volume, "/run")])
         .unwrap_or_default();
-    let config = ContainerCreateBody {
+    ContainerCreateBody {
         image: Some(command.image_id.to_owned()),
         entrypoint: Some(vec![command.entrypoint.to_owned()]),
         cmd: Some(
@@ -171,48 +232,7 @@ async fn run_command(
             ..Default::default()
         }),
         ..Default::default()
-    };
-    let create = deadline(
-        docker.create_container(Some(create_options(&name)), config),
-        remaining(end)?,
-    )
-    .await?
-    .map_err(|_| HostError::Docker)?;
-    resources.bind_container_id(&name, &create.id)?;
-    let inspect = deadline(docker.inspect_container(&create.id, None), remaining(end)?)
-        .await?
-        .map_err(|_| HostError::Docker)?;
-    resources.validate_inspect(
-        &inspect,
-        &name,
-        &create.id,
-        command.role,
-        command.image_id,
-        &volumes,
-    )?;
-    deadline(
-        docker.start_container(&create.id, None::<StartContainerOptions>),
-        remaining(end)?,
-    )
-    .await?
-    .map_err(|_| HostError::Docker)?;
-    wait_success(docker, &create.id, remaining(end)?).await?;
-    let output = read_logs(docker, &create.id, remaining(end)?).await?;
-    let inspect = deadline(docker.inspect_container(&create.id, None), remaining(end)?)
-        .await?
-        .map_err(|_| HostError::Docker)?;
-    resources.validate_inspect(
-        &inspect,
-        &name,
-        &create.id,
-        command.role,
-        command.image_id,
-        &volumes,
-    )?;
-    if inspect.state.and_then(|state| state.exit_code) != Some(0) {
-        return Err(HostError::Docker);
     }
-    Ok(output)
 }
 
 pub(super) async fn wait_inner_daemon(

@@ -45,6 +45,10 @@ pub(crate) enum OuterMutation {
 pub(crate) enum ApiFault {
     StallImageInspect,
     StallContainerCreate,
+    LateContainerCreate,
+    LateContainerCreateReplacement,
+    DisconnectThenLateContainerCreate,
+    NeverSettleContainerCreate,
     LoseContainerCreateResponse,
     StallContainerStart,
     StallContainerInspect,
@@ -53,6 +57,8 @@ pub(crate) enum ApiFault {
     StallExecCreate,
     StallExecStream,
     LoseVolumeCreateResponse,
+    LateVolumeCreate,
+    DisconnectThenLateVolumeCreate,
     NonzeroWait,
     ProbeStderr,
     MalformedOutput,
@@ -150,6 +156,8 @@ pub(crate) struct Snapshot {
     pub(crate) foreign_container_present: bool,
     pub(crate) foreign_volume_present: bool,
     pub(crate) outer_info_calls: usize,
+    pub(crate) pending_mutations: usize,
+    pub(crate) pending_identities: Vec<String>,
 }
 
 pub(super) struct FakeContainer {
@@ -168,6 +176,11 @@ pub(super) struct FakeContainer {
 pub(super) struct FakeVolume {
     pub(super) name: String,
     pub(super) labels: Value,
+}
+
+pub(super) enum DeferredMutation {
+    Container(FakeContainer),
+    Volume(FakeVolume),
 }
 
 pub(super) struct FakeExec {
@@ -195,6 +208,9 @@ pub(super) struct State {
     pub(super) volume_creations: usize,
     pub(super) api_requests: usize,
     pub(super) fault_reached: bool,
+    pub(super) pending_mutations: usize,
+    pub(super) provisional_missing_responses: usize,
+    pub(super) pending_identities: Vec<String>,
 }
 
 impl State {
@@ -217,6 +233,9 @@ impl State {
             volume_creations: 0,
             api_requests: 0,
             fault_reached: false,
+            pending_mutations: 0,
+            provisional_missing_responses: 0,
+            pending_identities: Vec::new(),
         };
         if state.plan.foreign_sentinel {
             state.add_foreign_sentinel();
@@ -251,7 +270,29 @@ impl State {
                 .any(|container| container.name == "foreign-sentinel"),
             foreign_volume_present: self.volumes.contains_key("foreign-sentinel"),
             outer_info_calls: self.outer_info_calls,
+            pending_mutations: self.pending_mutations,
+            pending_identities: self.pending_identities.clone(),
         }
+    }
+
+    pub(super) fn apply_deferred(&mut self, mutation: DeferredMutation) {
+        let identity = match &mutation {
+            DeferredMutation::Container(container) => format!("container {}", container.name),
+            DeferredMutation::Volume(volume) => format!("volume {}", volume.name),
+        };
+        match mutation {
+            DeferredMutation::Container(container) => {
+                self.created.push(evidence(&container));
+                self.containers.insert(container.id.clone(), container);
+            }
+            DeferredMutation::Volume(volume) => {
+                self.volumes.insert(volume.name.clone(), volume);
+                self.volume_creations += 1;
+            }
+        }
+        self.pending_mutations = self.pending_mutations.saturating_sub(1);
+        self.pending_identities
+            .retain(|pending| pending != &identity);
     }
 
     pub(super) fn next_container_id(&mut self) -> String {

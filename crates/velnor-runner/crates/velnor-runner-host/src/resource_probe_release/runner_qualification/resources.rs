@@ -6,30 +6,32 @@ use std::time::{Duration, Instant};
 
 use bollard::Docker;
 use bollard::models::{ContainerCreateBody, HostConfig, VolumeCreateRequest};
-use bollard::query_parameters::{
-    RemoveContainerOptionsBuilder, RemoveVolumeOptionsBuilder, StartContainerOptions,
-};
+use bollard::query_parameters::StartContainerOptions;
 
 use crate::error::HostError;
 
+use super::mutation_lifecycle::{
+    self, MutationKind, MutationResult, MutationValue, PendingMutation,
+};
 use super::{
-    QUALIFIER_LABEL, create_options, deadline, missing, mount, remaining, valid_container_id,
+    QUALIFIER_LABEL, create_options, deadline, mount, remaining, valid_container_id,
     validate_host_config, volume_owned,
 };
 
 const DOCKER_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub(super) struct OwnedResources {
-    run_id: String,
-    containers: Vec<TrackedContainer>,
-    volumes: Vec<String>,
+    pub(super) run_id: String,
+    pub(super) containers: Vec<TrackedContainer>,
+    pub(super) volumes: Vec<String>,
+    pub(super) pending_mutations: Vec<PendingMutation>,
     next_container: u8,
 }
 
-struct TrackedContainer {
-    name: String,
-    role: String,
-    id: Option<String>,
+pub(super) struct TrackedContainer {
+    pub(super) name: String,
+    pub(super) role: String,
+    pub(super) id: Option<String>,
 }
 
 impl OwnedResources {
@@ -45,6 +47,7 @@ impl OwnedResources {
             run_id,
             containers: Vec::new(),
             volumes: Vec::new(),
+            pending_mutations: Vec::new(),
             next_container: 0,
         })
     }
@@ -68,18 +71,35 @@ impl OwnedResources {
             _ => return Err(HostError::Identity),
         };
         self.volumes.push(name.clone());
-        let created = deadline(
-            docker.create_volume(VolumeCreateRequest {
-                name: Some(name.clone()),
-                labels: Some(self.labels(role)),
-                ..Default::default()
-            }),
-            DOCKER_TIMEOUT,
-        )
-        .await?
-        .map_err(|_| HostError::Docker)?;
-        if !volume_owned(&created, &name, &self.run_id, role) {
-            return Err(HostError::Ownership);
+        let request = VolumeCreateRequest {
+            name: Some(name.clone()),
+            labels: Some(self.labels(role)),
+            ..Default::default()
+        };
+        let client = docker.clone();
+        let expected_name = name.clone();
+        let expected_role = role.to_owned();
+        let run_id = self.run_id.clone();
+        let mutation = mutation_lifecycle::spawn(
+            format!("volume {name}"),
+            MutationKind::Volume(name.clone()),
+            async move {
+                let created = match client.create_volume(request).await {
+                    Ok(created) => created,
+                    Err(error) => return mutation_lifecycle::uncertain_docker(&error),
+                };
+                if volume_owned(&created, &expected_name, &run_id, &expected_role) {
+                    MutationResult::Created(MutationValue::Volume)
+                } else {
+                    mutation_lifecycle::uncertain(HostError::Ownership)
+                }
+            },
+        );
+        if !matches!(
+            self.await_mutation(mutation, DOCKER_TIMEOUT).await?,
+            MutationValue::Volume
+        ) {
+            return Err(HostError::Identity);
         }
         let inspected = deadline(docker.inspect_volume(&name), DOCKER_TIMEOUT)
             .await?
@@ -97,6 +117,30 @@ impl OwnedResources {
         socket_volume: &str,
         data_volume: &str,
     ) -> Result<String, HostError> {
+        let dind_deadline = Instant::now() + Duration::from_secs(10);
+        let (name, id) = self
+            .create_dind(docker, image_id, socket_volume, data_volume, dind_deadline)
+            .await?;
+        self.start_and_verify_dind(
+            docker,
+            image_id,
+            &[socket_volume, data_volume],
+            &name,
+            &id,
+            dind_deadline,
+        )
+        .await?;
+        Ok(id)
+    }
+
+    async fn create_dind(
+        &mut self,
+        docker: &Docker,
+        image_id: &str,
+        socket_volume: &str,
+        data_volume: &str,
+        dind_deadline: Instant,
+    ) -> Result<(String, String), HostError> {
         let name = self.register_container("dind")?;
         let mounts = vec![
             mount(socket_volume, "/run"),
@@ -115,52 +159,64 @@ impl OwnedResources {
             }),
             ..Default::default()
         };
-        let dind_deadline = Instant::now() + Duration::from_secs(10);
-        let create = deadline(
-            docker.create_container(Some(create_options(&name)), config),
-            remaining(dind_deadline)?,
-        )
-        .await?
-        .map_err(|_| HostError::Docker)?;
-        self.bind_container_id(&name, &create.id)?;
+        let client = docker.clone();
+        let options = create_options(&name);
+        let create_timeout = remaining(dind_deadline)?;
+        let mutation = mutation_lifecycle::spawn(
+            format!("container {name}"),
+            MutationKind::Container(name.clone()),
+            async move {
+                let created = match client.create_container(Some(options), config).await {
+                    Ok(created) => created,
+                    Err(error) => return mutation_lifecycle::uncertain_docker(&error),
+                };
+                if valid_container_id(&created.id).is_err() {
+                    return mutation_lifecycle::uncertain(HostError::Identity);
+                }
+                MutationResult::Created(MutationValue::ContainerId(created.id))
+            },
+        );
+        let id = match self.await_mutation(mutation, create_timeout).await? {
+            MutationValue::ContainerId(id) => id,
+            MutationValue::Volume => return Err(HostError::Identity),
+        };
+        self.bind_container_id(&name, &id)?;
+        Ok((name, id))
+    }
+
+    async fn start_and_verify_dind(
+        &self,
+        docker: &Docker,
+        image_id: &str,
+        volumes: &[&str],
+        name: &str,
+        id: &str,
+        dind_deadline: Instant,
+    ) -> Result<(), HostError> {
         let inspect = deadline(
-            docker.inspect_container(&create.id, None),
+            docker.inspect_container(id, None),
             remaining(dind_deadline)?,
         )
         .await?
         .map_err(|_| HostError::Docker)?;
-        self.validate_inspect(
-            &inspect,
-            &name,
-            &create.id,
-            "dind",
-            image_id,
-            &[socket_volume, data_volume],
-        )?;
+        self.validate_inspect(&inspect, name, id, "dind", image_id, volumes)?;
         deadline(
-            docker.start_container(&create.id, None::<StartContainerOptions>),
+            docker.start_container(id, None::<StartContainerOptions>),
             remaining(dind_deadline)?,
         )
         .await?
         .map_err(|_| HostError::Docker)?;
         let inspect = deadline(
-            docker.inspect_container(&create.id, None),
+            docker.inspect_container(id, None),
             remaining(dind_deadline)?,
         )
         .await?
         .map_err(|_| HostError::Docker)?;
-        self.validate_inspect(
-            &inspect,
-            &name,
-            &create.id,
-            "dind",
-            image_id,
-            &[socket_volume, data_volume],
-        )?;
+        self.validate_inspect(&inspect, name, id, "dind", image_id, volumes)?;
         if inspect.state.and_then(|state| state.running) != Some(true) {
             return Err(HostError::Docker);
         }
-        Ok(create.id)
+        Ok(())
     }
 
     pub(super) fn register_container(&mut self, role: &str) -> Result<String, HostError> {
@@ -248,129 +304,5 @@ impl OwnedResources {
                 role.to_owned(),
             ),
         ])
-    }
-
-    pub(super) async fn cleanup(&mut self, docker: &Docker) -> Result<(), HostError> {
-        let mut failed = false;
-        for container in self.containers.iter().rev() {
-            if self.cleanup_container(docker, container).await.is_err() {
-                failed = true;
-            }
-        }
-        for name in self.volumes.iter().rev() {
-            if self.cleanup_volume(docker, name).await.is_err() {
-                failed = true;
-            }
-        }
-        if failed {
-            Err(HostError::Cleanup)
-        } else {
-            Ok(())
-        }
-    }
-
-    async fn cleanup_container(
-        &self,
-        docker: &Docker,
-        container: &TrackedContainer,
-    ) -> Result<(), HostError> {
-        let inspect = match deadline(
-            docker.inspect_container(&container.name, None),
-            Duration::from_secs(3),
-        )
-        .await?
-        {
-            Ok(inspect) => inspect,
-            Err(error) if missing(&error) => return Ok(()),
-            Err(_) => return Err(HostError::Docker),
-        };
-        let id = self.validate_ownership(&inspect, container)?;
-        let options = RemoveContainerOptionsBuilder::new()
-            .force(true)
-            .v(false)
-            .build();
-        let removed = deadline(
-            docker.remove_container(id, Some(options)),
-            Duration::from_secs(3),
-        )
-        .await?;
-        match removed {
-            Ok(()) => {}
-            Err(error) if missing(&error) => {}
-            Err(_) => return Err(HostError::Cleanup),
-        }
-        match deadline(
-            docker.inspect_container(&container.name, None),
-            Duration::from_secs(3),
-        )
-        .await?
-        {
-            Err(error) if missing(&error) => Ok(()),
-            _ => Err(HostError::Cleanup),
-        }
-    }
-
-    fn validate_ownership<'a>(
-        &self,
-        inspect: &'a bollard::models::ContainerInspectResponse,
-        tracked: &TrackedContainer,
-    ) -> Result<&'a str, HostError> {
-        let id = inspect.id.as_deref().ok_or(HostError::Ownership)?;
-        valid_container_id(id)?;
-        if tracked.id.as_deref().is_some_and(|recorded| recorded != id)
-            || inspect
-                .name
-                .as_deref()
-                .is_none_or(|name| name.strip_prefix('/').unwrap_or(name) != tracked.name)
-        {
-            return Err(HostError::Ownership);
-        }
-        let labels = inspect
-            .config
-            .as_ref()
-            .and_then(|config| config.labels.as_ref())
-            .ok_or(HostError::Ownership)?;
-        if labels.get(QUALIFIER_LABEL).map(String::as_str) != Some(self.run_id.as_str())
-            || labels
-                .get("io.velnor.runner-image-qualifier.role")
-                .map(String::as_str)
-                != Some(tracked.role.as_str())
-        {
-            return Err(HostError::Ownership);
-        }
-        Ok(id)
-    }
-
-    async fn cleanup_volume(&self, docker: &Docker, name: &str) -> Result<(), HostError> {
-        let volume = match deadline(docker.inspect_volume(name), Duration::from_secs(3)).await? {
-            Ok(volume) => volume,
-            Err(error) if missing(&error) => return Ok(()),
-            Err(_) => return Err(HostError::Docker),
-        };
-        let role = if name == self.socket_volume() {
-            "socket"
-        } else if name == self.data_volume() {
-            "data"
-        } else {
-            return Err(HostError::Ownership);
-        };
-        if !volume_owned(&volume, name, &self.run_id, role) {
-            return Err(HostError::Ownership);
-        }
-        let options = RemoveVolumeOptionsBuilder::new().force(false).build();
-        let removed = deadline(
-            docker.remove_volume(name, Some(options)),
-            Duration::from_secs(3),
-        )
-        .await?;
-        match removed {
-            Ok(()) => {}
-            Err(error) if missing(&error) => {}
-            Err(_) => return Err(HostError::Cleanup),
-        }
-        match deadline(docker.inspect_volume(name), Duration::from_secs(3)).await? {
-            Err(error) if missing(&error) => Ok(()),
-            _ => Err(HostError::Cleanup),
-        }
     }
 }

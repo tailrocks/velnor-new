@@ -4,7 +4,7 @@
 use serde_json::{Value, json};
 
 use super::super::http::{Reply, Request};
-use super::super::state::{ApiFault, FakeVolume, State};
+use super::super::state::{ApiFault, DeferredMutation, FakeVolume, State};
 use super::{json_body, missing};
 
 pub(super) fn route(request: &Request, path: &str, state: &mut State) -> Option<Reply> {
@@ -24,6 +24,23 @@ fn create_volume(request: &Request, state: &mut State) -> Reply {
         name: name.clone(),
         labels: labels.clone(),
     };
+    if state.take_fault(ApiFault::DisconnectThenLateVolumeCreate) {
+        state.pending_mutations += 1;
+        state.pending_identities.push(format!("volume {name}"));
+        return Reply::bytes(500, Vec::new())
+            .disconnect()
+            .with_deferred_mutation_after(
+                DeferredMutation::Volume(volume),
+                std::time::Duration::from_secs(2),
+            );
+    }
+    if state.take_fault(ApiFault::LateVolumeCreate) {
+        state.pending_mutations += 1;
+        state.pending_identities.push(format!("volume {name}"));
+        return Reply::json(201, &volume_response(&name, &labels))
+            .with_delay(std::time::Duration::from_secs(7))
+            .with_deferred_mutation(DeferredMutation::Volume(volume));
+    }
     state.volumes.insert(name.clone(), volume);
     state.volume_creations += 1;
     if state.take_fault(ApiFault::LoseVolumeCreateResponse) {
@@ -35,6 +52,9 @@ fn create_volume(request: &Request, state: &mut State) -> Reply {
 fn inspect_volume(path: &str, state: &mut State) -> Reply {
     let name = path.strip_prefix("volumes/").unwrap_or_default();
     let Some(volume) = state.volumes.get(name) else {
+        if state.pending_mutations > 0 {
+            state.provisional_missing_responses += 1;
+        }
         return missing("volume");
     };
     Reply::json(200, &volume_response(&volume.name, &volume.labels))

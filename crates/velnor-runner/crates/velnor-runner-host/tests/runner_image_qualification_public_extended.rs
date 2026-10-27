@@ -155,3 +155,160 @@ fn public_qualifier_accepts_only_absent_volume_cleanup_as_success() -> TestResul
     }
     Ok(())
 }
+
+#[test]
+fn public_qualifier_recovers_late_container_and_volume_creates() -> TestResult<()> {
+    for fault in [ApiFault::LateContainerCreate, ApiFault::LateVolumeCreate] {
+        let git = GitFixture::new()?;
+        let mut plan = ApiPlan::new(git.source_sha());
+        plan.fault = Some(fault);
+        plan.foreign_sentinel = true;
+        let (output, api, elapsed) =
+            invoke_with_api(&git, git.source_sha(), plan, Duration::from_secs(20))?;
+        assert!(!output.status.success());
+        assert!(!String::from_utf8_lossy(&output.stdout).contains("qualified_runner_image_id"));
+        assert!(elapsed >= Duration::from_secs(4));
+        assert!(elapsed < Duration::from_secs(14));
+        let state = api.settled_snapshot(Duration::from_secs(10))?;
+        assert!(state.fault_reached);
+        assert_eq!(state.pending_mutations, 0);
+        assert_eq!(state.containers.len(), 1);
+        assert_eq!(state.containers[0].name, "foreign-sentinel");
+        assert_eq!(state.volumes, ["foreign-sentinel"]);
+        assert_eq!(state.images.len(), 2);
+        assert!(state.images.contains(&digest_id('a')));
+        assert!(state.images.contains(&digest_id('b')));
+        if fault == ApiFault::LateContainerCreate {
+            assert_eq!(state.created.len(), 1);
+            assert_eq!(state.created[0].role, "runner-listener");
+            assert_eq!(state.readiness_attempts, 0);
+        } else {
+            assert_eq!(state.volume_creations, 1);
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn public_qualifier_reconciles_disconnect_before_late_create_insertion() -> TestResult<()> {
+    for fault in [
+        ApiFault::DisconnectThenLateContainerCreate,
+        ApiFault::DisconnectThenLateVolumeCreate,
+    ] {
+        let git = GitFixture::new()?;
+        let mut plan = ApiPlan::new(git.source_sha());
+        plan.fault = Some(fault);
+        plan.foreign_sentinel = true;
+        let (output, api, elapsed) =
+            invoke_with_api(&git, git.source_sha(), plan, Duration::from_secs(20))?;
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success());
+        assert!(!String::from_utf8_lossy(&output.stdout).contains("qualified_runner_image_id"));
+        assert!(elapsed < Duration::from_secs(18));
+        let state = api.settled_snapshot(Duration::from_secs(8))?;
+        assert!(state.fault_reached);
+        assert_eq!(state.pending_mutations, 0);
+        let owned_containers = state
+            .containers
+            .iter()
+            .filter(|container| container.name != "foreign-sentinel")
+            .collect::<Vec<_>>();
+        let owned_volumes = state
+            .volumes
+            .iter()
+            .filter(|volume| *volume != "foreign-sentinel")
+            .collect::<Vec<_>>();
+        if !owned_containers.is_empty() || !owned_volumes.is_empty() {
+            if let Some(container) = owned_containers.first() {
+                assert!(stderr.contains("container create state is uncertain"));
+                assert!(
+                    stderr.contains(&format!("recovery identity: container {}", container.name))
+                );
+            }
+            if let Some(volume) = owned_volumes.first() {
+                assert!(stderr.contains("private-volume create state is uncertain"));
+                assert!(stderr.contains(&format!("recovery identity: volume {volume}")));
+            }
+        }
+        assert_eq!(state.containers.len(), 1 + owned_containers.len());
+        assert!(state.containers.iter().any(|container| {
+            container.name == "foreign-sentinel"
+                && container.labels["io.velnor.runner-image-qualifier.run"] == "foreign-run"
+        }));
+        assert_eq!(state.volumes.len(), 1 + owned_volumes.len());
+        assert!(
+            state
+                .volumes
+                .iter()
+                .any(|volume| volume == "foreign-sentinel")
+        );
+        assert_eq!(state.images.len(), 2);
+        assert!(state.images.contains(&digest_id('a')));
+        assert!(state.images.contains(&digest_id('b')));
+    }
+    Ok(())
+}
+
+#[test]
+fn public_qualifier_reports_unsettled_create_and_preserves_replacement() -> TestResult<()> {
+    let git = GitFixture::new()?;
+    let mut plan = ApiPlan::new(git.source_sha());
+    plan.fault = Some(ApiFault::NeverSettleContainerCreate);
+    plan.foreign_sentinel = true;
+    let (output, api, elapsed) =
+        invoke_with_api(&git, git.source_sha(), plan, Duration::from_secs(20))?;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success());
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("qualified_runner_image_id"));
+    assert!(stderr.contains("container create state is uncertain"));
+    assert!(stderr.contains("recovery identity: container velnor-qualify-runner-listener-"));
+    assert!(elapsed >= Duration::from_secs(9));
+    assert!(elapsed < Duration::from_secs(16));
+    let state = api.snapshot()?;
+    assert!(state.fault_reached);
+    assert_eq!(state.pending_mutations, 1);
+    let identity = state
+        .pending_identities
+        .first()
+        .ok_or("pending recovery identity is missing")?;
+    assert!(stderr.contains(&format!("recovery identity: {identity}")));
+    assert_eq!(state.containers.len(), 1);
+    assert_eq!(state.containers[0].name, "foreign-sentinel");
+    assert_eq!(state.volumes, ["foreign-sentinel"]);
+    assert!(state.images.contains(&digest_id('a')));
+    assert!(state.images.contains(&digest_id('b')));
+
+    let git = GitFixture::new()?;
+    let mut plan = ApiPlan::new(git.source_sha());
+    plan.fault = Some(ApiFault::LateContainerCreateReplacement);
+    plan.foreign_sentinel = true;
+    let (output, api, _) = invoke_with_api(&git, git.source_sha(), plan, Duration::from_secs(20))?;
+    assert!(!output.status.success());
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("qualified_runner_image_id"));
+    let state = api.settled_snapshot(Duration::from_secs(10))?;
+    assert!(state.fault_reached);
+    assert_eq!(state.pending_mutations, 0);
+    assert_eq!(state.containers.len(), 2);
+    assert_eq!(state.volumes, ["foreign-sentinel"]);
+    let replacement = state
+        .containers
+        .iter()
+        .find(|container| {
+            container
+                .name
+                .starts_with("velnor-qualify-runner-listener-")
+        })
+        .ok_or("replacement container is missing")?;
+    assert_eq!(replacement.id, "e".repeat(64));
+    assert_eq!(
+        replacement.labels["io.velnor.runner-image-qualifier.run"],
+        "foreign-run"
+    );
+    assert_eq!(
+        replacement.labels["io.velnor.runner-image-qualifier.role"],
+        "foreign"
+    );
+    assert!(state.images.contains(&digest_id('a')));
+    assert!(state.images.contains(&digest_id('b')));
+    Ok(())
+}

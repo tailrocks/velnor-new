@@ -6,6 +6,8 @@ use std::io::{self, Read, Write};
 use std::os::unix::net::UnixStream;
 use std::time::Duration;
 
+use super::state::DeferredMutation;
+
 const HEADER_LIMIT: usize = 64 * 1024;
 const BODY_LIMIT: usize = 1024 * 1024;
 
@@ -21,6 +23,8 @@ pub(super) struct Reply {
     pub(super) delay: Option<Duration>,
     pub(super) disconnect: bool,
     pub(super) upgraded: bool,
+    pub(super) deferred_mutation: Option<DeferredMutation>,
+    pub(super) deferred_delay: Option<Duration>,
 }
 
 impl Reply {
@@ -31,6 +35,8 @@ impl Reply {
             delay: None,
             disconnect: false,
             upgraded: false,
+            deferred_mutation: None,
+            deferred_delay: None,
         }
     }
 
@@ -41,6 +47,8 @@ impl Reply {
             delay: None,
             disconnect: false,
             upgraded: false,
+            deferred_mutation: None,
+            deferred_delay: None,
         }
     }
 
@@ -56,6 +64,21 @@ impl Reply {
 
     pub(super) fn upgrade(mut self) -> Self {
         self.upgraded = true;
+        self
+    }
+
+    pub(super) fn with_deferred_mutation(mut self, mutation: DeferredMutation) -> Self {
+        self.deferred_mutation = Some(mutation);
+        self
+    }
+
+    pub(super) fn with_deferred_mutation_after(
+        mut self,
+        mutation: DeferredMutation,
+        delay: Duration,
+    ) -> Self {
+        self.deferred_mutation = Some(mutation);
+        self.deferred_delay = Some(delay);
         self
     }
 }
@@ -114,7 +137,7 @@ pub(super) fn write_reply(stream: &mut UnixStream, reply: &Reply) -> io::Result<
         return Ok(());
     }
     if reply.disconnect {
-        return Ok(());
+        return stream.shutdown(std::net::Shutdown::Both);
     }
     if let Some(delay) = reply.delay {
         std::thread::sleep(delay);

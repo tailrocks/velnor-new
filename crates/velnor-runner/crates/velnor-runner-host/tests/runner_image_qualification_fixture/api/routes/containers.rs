@@ -6,7 +6,9 @@ use std::time::Duration;
 use serde_json::{Value, json};
 
 use super::super::http::{Reply, Request};
-use super::super::state::{ApiFault, ContainerEvidence, ContainerRole, FakeContainer, State};
+use super::super::state::{
+    ApiFault, ContainerEvidence, ContainerRole, DeferredMutation, FakeContainer, State,
+};
 use super::probes::probe_output;
 use super::{json_body, missing, path_id, server_error};
 
@@ -59,6 +61,35 @@ fn create_container(request: &Request, state: &mut State) -> Reply {
         running: false,
         exit_code: None,
     };
+    if state.take_fault(ApiFault::DisconnectThenLateContainerCreate) {
+        state.pending_mutations += 1;
+        state.pending_identities.push(format!("container {name}"));
+        return Reply::bytes(500, Vec::new())
+            .disconnect()
+            .with_deferred_mutation_after(
+                DeferredMutation::Container(container),
+                Duration::from_secs(2),
+            );
+    }
+    let delayed = [
+        ApiFault::LateContainerCreate,
+        ApiFault::LateContainerCreateReplacement,
+        ApiFault::NeverSettleContainerCreate,
+    ]
+    .into_iter()
+    .find(|fault| state.take_fault(*fault));
+    if let Some(fault) = delayed {
+        state.pending_mutations += 1;
+        state.pending_identities.push(format!("container {name}"));
+        let delay = if fault == ApiFault::NeverSettleContainerCreate {
+            Duration::from_secs(60)
+        } else {
+            Duration::from_secs(7)
+        };
+        return Reply::json(201, &json!({"Id": id, "Warnings": []}))
+            .with_delay(delay)
+            .with_deferred_mutation(DeferredMutation::Container(container));
+    }
     state.created.push(evidence(&container));
     state.containers.insert(id.clone(), container);
     if state.take_fault(ApiFault::LoseContainerCreateResponse) {
@@ -77,8 +108,28 @@ fn inspect_container(path: &str, state: &mut State) -> Reply {
         return missing("container");
     };
     let Some(mut key) = container_key(state, &id) else {
+        if state.pending_mutations > 0 {
+            state.provisional_missing_responses += 1;
+        }
         return missing("container");
     };
+    if state.plan.fault == Some(ApiFault::LateContainerCreateReplacement)
+        && state
+            .containers
+            .get(&key)
+            .is_some_and(|container| container.name == id)
+        && let Some(mut container) = state.containers.remove(&key)
+    {
+        let replacement = "e".repeat(64);
+        container.id.clone_from(&replacement);
+        "foreign".clone_into(&mut container.role);
+        container.labels = json!({
+            "io.velnor.runner-image-qualifier.run": "foreign-run",
+            "io.velnor.runner-image-qualifier.role": "foreign"
+        });
+        state.containers.insert(replacement.clone(), container);
+        key = replacement;
+    }
     if state.take_fault(ApiFault::ForeignOwnerAtTrackedName)
         && let Some(container) = state.containers.get_mut(&key)
     {

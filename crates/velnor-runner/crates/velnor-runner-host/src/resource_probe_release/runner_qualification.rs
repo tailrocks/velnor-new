@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod docker;
+mod mutation_cleanup;
+mod mutation_lifecycle;
 mod probes;
 mod resources;
 mod source;

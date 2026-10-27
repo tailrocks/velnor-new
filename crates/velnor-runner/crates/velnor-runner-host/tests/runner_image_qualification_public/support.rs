@@ -13,6 +13,16 @@ pub(super) fn qualify_with_timeout_timed(
     plan: ApiPlan,
     timeout: Duration,
 ) -> TestResult<(Output, Snapshot, Duration)> {
+    let (output, api, elapsed) = invoke_with_api(git, source_sha, plan, timeout)?;
+    Ok((output, api.snapshot()?, elapsed))
+}
+
+pub(super) fn invoke_with_api(
+    git: &GitFixture,
+    source_sha: &str,
+    plan: ApiPlan,
+    timeout: Duration,
+) -> TestResult<(Output, DockerApiFixture, Duration)> {
     let api = DockerApiFixture::new(plan)?;
     let (output, elapsed) = fixture::invoke_with_timeout_timed(
         git.root(),
@@ -22,7 +32,7 @@ pub(super) fn qualify_with_timeout_timed(
         api.socket(),
         timeout,
     )?;
-    Ok((output, api.snapshot()?, elapsed))
+    Ok((output, api, elapsed))
 }
 
 pub(super) fn qualify(
