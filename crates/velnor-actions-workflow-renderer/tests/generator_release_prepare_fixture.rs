@@ -167,6 +167,7 @@ fn pins(fake_gh: &Path) -> ProductReleasePins {
         install_intel_target_argv: fixture_pins::command_argv(),
         install_resource_probe_target_argv: fixture_pins::command_argv(),
         runner_build_argv: fixture_pins::command_argv(),
+        attestation_helper_build_argv: fixture_pins::command_argv(),
         resource_probe_build_argv: fixture_pins::command_argv(),
         install_resource_probe_release_tools_argv: fixture_pins::command_argv(),
         resource_probe_release_build_argv: fixture_pins::command_argv(),
