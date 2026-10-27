@@ -31,4 +31,4 @@ b0e0c197bb677cb54d6a19894011dbc8409c4a036f9da6ca90de470c43316d78  ./.github/work
 3350bbb3eed0cb8412034f4b3b4377a47be870a6b0dc3f264fa63a27518bb981  ./.github/workflows/product-release-images.yml
 afc49d30796d41f99fbe6b7b045fed6588a560a9e6394f3cdedf8ebf93d2db6c  ./.github/workflows/product-release.yml
 b37e35cde990814cf9f83aa058459b5412b96e1b120ef668fe405c389b2072b2  ./.github/workflows/qualification.yml
-1d843d13ceefff13333ed9d464b42b131102f350651cf0ac358bf9cae720968f  ./.github/workflows/source-qualification.yml
+8b84850bb69c8e0f794ae3fc920334a157a255edfd95779fedf5279218b4ddf1  ./.github/workflows/source-qualification.yml
