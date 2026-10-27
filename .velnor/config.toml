@@ -12,7 +12,6 @@ max_parallel_jobs = 2
 crate_timeout_minutes = 15
 plan_timeout_minutes = 15
 pull_request_cache_policy = "same-repository-scoped"
-preserve_workflows = [".github/workflows/source-qualification.yml"]
 
 [workflow.lint]
 # jactionlint's security and policy rules (hard decision 10); velnor-new is

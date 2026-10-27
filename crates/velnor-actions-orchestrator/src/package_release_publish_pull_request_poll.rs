@@ -40,6 +40,7 @@ pub(super) fn read(
             || first.merged_at != next.merged_at
             || first.base != next.base
             || first.head != next.head
+            || first.user != next.user
         {
             return Err(internal("package_public_pull_request_changed"));
         }

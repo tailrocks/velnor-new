@@ -19,7 +19,12 @@ pub(in crate::tap_merge) struct ObservedCutoverPull {
     pub(in crate::tap_merge) base: String,
     pub(in crate::tap_merge) landed: String,
     pub(in crate::tap_merge) merged_at: String,
+    pub(in crate::tap_merge) author: crate::github_landed_pull::GitHubRestUser,
 }
+
+#[cfg(test)]
+#[path = "homebrew_cutover_history_author_tests.rs"]
+mod author_tests;
 
 pub(super) fn find(
     api: &TapMergeGitHub,
@@ -27,6 +32,7 @@ pub(super) fn find(
     repository_id: u64,
     current_main: &str,
 ) -> Result<ObservedCutoverPull, OrchestratorError> {
+    let expected_author = expected_author()?;
     let path =
         super::super::observation::encode_segment(crate::homebrew::structural_cutover::MARKER_PATH);
     let commits = pages(
@@ -48,7 +54,7 @@ pub(super) fn find(
         .as_u64()
         .filter(|value| *value > 0)
         .ok_or_else(|| internal("homebrew_cutover_pull_number"))?;
-    let observed = read(api, repository, repository_id, number)?;
+    let observed = read_with_author(api, repository, repository_id, number, &expected_author)?;
     if observed.landed != marker_commit {
         return Err(internal("homebrew_cutover_marker_commit_mismatch"));
     }
@@ -61,20 +67,61 @@ pub(super) fn read(
     repository_id: u64,
     number: u64,
 ) -> Result<ObservedCutoverPull, OrchestratorError> {
+    let expected_author = expected_author()?;
+    read_with_author(api, repository, repository_id, number, &expected_author)
+}
+
+fn expected_author() -> Result<crate::github_landed_pull::GitHubRestUser, OrchestratorError> {
+    let transition = crate::homebrew::structural_cutover::protected_transition()?;
+    crate::homebrew::structural_cutover::verify_author_policy(transition.transition())
+}
+
+fn read_with_author(
+    api: &TapMergeGitHub,
+    repository: &str,
+    repository_id: u64,
+    number: u64,
+    expected_author: &crate::github_landed_pull::GitHubRestUser,
+) -> Result<ObservedCutoverPull, OrchestratorError> {
     let detail: Value = api.get(&format!("repos/{repository}/pulls/{number}"))?;
+    read_detail(
+        repository,
+        repository_id,
+        number,
+        &detail,
+        expected_author,
+        |query, fields| api.graphql(query, fields),
+    )
+}
+
+fn read_detail(
+    repository: &str,
+    repository_id: u64,
+    number: u64,
+    detail: &Value,
+    expected_author: &crate::github_landed_pull::GitHubRestUser,
+    graphql: impl FnOnce(&str, &[(&str, String)]) -> Result<Value, OrchestratorError>,
+) -> Result<ObservedCutoverPull, OrchestratorError> {
     if detail["number"].as_u64() != Some(number)
         || detail["state"].as_str() != Some("closed")
         || detail["merged"].as_bool() != Some(true)
         || detail["draft"].as_bool() != Some(false)
         || detail.pointer("/base/ref").and_then(Value::as_str) != Some("main")
-        || detail
-            .pointer("/user/id")
-            .and_then(Value::as_u64)
-            .is_none_or(|id| id == 0)
     {
         return Err(internal("homebrew_cutover_pull_identity"));
     }
-    let merged_at = text(&detail, "/merged_at")?;
+    let author: crate::github_landed_pull::GitHubRestUser = serde_json::from_value(
+        detail
+            .get("user")
+            .cloned()
+            .ok_or_else(|| internal("homebrew_cutover_pull_author"))?,
+    )
+    .map_err(|_| internal("homebrew_cutover_pull_author"))?;
+    if !author.is_user() {
+        return Err(internal("homebrew_cutover_pull_author"));
+    }
+    crate::homebrew::structural_cutover::require_author(expected_author, &author)?;
+    let merged_at = text(detail, "/merged_at")?;
     if !super::timestamp::valid_timestamp(merged_at) {
         return Err(internal("homebrew_cutover_pull_merge_time"));
     }
@@ -83,19 +130,18 @@ pub(super) fn read(
         state: "closed",
         merged: true,
         merged_at,
-        head: pull_ref(&detail, "/head")?,
-        base: pull_ref(&detail, "/base")?,
-        merge_sha: optional_merge_sha(&detail)?,
+        head: pull_ref(detail, "/head")?,
+        base: pull_ref(detail, "/base")?,
+        merge_sha: optional_merge_sha(detail)?,
     };
-    let landed = read_merge_oid(repository_id, repository, &rest, |query, fields| {
-        api.graphql(query, fields)
-    })?;
+    let landed = read_merge_oid(repository_id, repository, &rest, graphql)?;
     Ok(ObservedCutoverPull {
         number,
-        head: sha(&detail, "/head/sha")?,
-        base: sha(&detail, "/base/sha")?,
+        head: sha(detail, "/head/sha")?,
+        base: sha(detail, "/base/sha")?,
         landed,
         merged_at: merged_at.to_owned(),
+        author,
     })
 }
 

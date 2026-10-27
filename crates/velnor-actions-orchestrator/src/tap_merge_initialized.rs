@@ -64,6 +64,13 @@ pub(super) fn verify(
     {
         return Err(internal("tap_merge_initialization_changed"));
     }
+    verify_gate(
+        candidate,
+        authority,
+        api,
+        protection_reader,
+        &final_observed,
+    )?;
     if !super::history::capture_all(candidate, authority, api)?.is_empty() {
         return Err(internal(
             "tap_merge_initialization_promotion_history_exists",
