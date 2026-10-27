@@ -100,7 +100,7 @@ pub(crate) fn derive(
         formula_channel: check.formula_channel,
         operation_version: OPERATION_VERSION.to_owned(),
         sdk_version: generator.version.clone(),
-        sdk_sha256: generator.digest_b3.clone(),
+        sdk_sha256: generator.sha256.clone(),
         authority: authority.identity,
         tap_repository: context.repository,
         tap_repository_id: authority.repository_id,
@@ -216,7 +216,7 @@ fn seed_authority(
 
     let transition = seed.transition.transition();
     if generator.version != seed.sdk.version
-        || generator.digest_b3 != seed.sdk.seed_runner_binary_sha256
+        || generator.sha256 != seed.sdk.seed_runner_binary_sha256
         || seed.sdk.seed_runner_target != "x86_64-unknown-linux-gnu"
     {
         return Err(internal("sdk_running_executable_manifest_mismatch"));

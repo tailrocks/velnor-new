@@ -114,7 +114,7 @@ fn plan_with(
         generator: PlanGenerator {
             version: "0.1.55".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
-            digest_b3: digest_b3(b"gc1-t34-generator"),
+            sha256: "be16944e059d0cd80ac1d91b1000d694603b657387a239f75d4cfc24ca623a9f".to_owned(),
         },
         packages: Vec::new(),
         obligations: vec![obligation],

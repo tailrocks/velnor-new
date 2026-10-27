@@ -96,6 +96,23 @@ impl Scenario {
             .map(|obligation| obligation.task_digest.as_str())
             .ok_or_else(|| std::io::Error::other("task obligation missing").into())
     }
+
+    pub(super) fn stage_generator_wire_field(&self, field: &str) -> TestResult<()> {
+        let path = self.run_dir.join("plan.json");
+        let mut plan: serde_json::Value = serde_json::from_slice(&fs::read(&path)?)?;
+        if plan["schema"] != 2 {
+            return Err(io::Error::other("schema-2 plan required").into());
+        }
+        let source = &plan["generator"];
+        let mut generator = serde_json::Map::new();
+        for name in ["version", "target"] {
+            generator.insert(name.to_owned(), source[name].clone());
+        }
+        generator.insert(field.to_owned(), "a".repeat(64).into());
+        plan["generator"] = generator.into();
+        fs::write(path, serde_json::to_vec(&plan)?)?;
+        Ok(())
+    }
 }
 
 #[cfg(unix)]
@@ -185,7 +202,7 @@ fn make_plan(specs: &[(&str, &str)], run_key: &str) -> TestResult<Plan> {
         generator: PlanGenerator {
             version: "0.1.55".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
-            digest_b3: "a".repeat(64),
+            sha256: "a".repeat(64),
         },
         packages: Vec::new(),
         obligations,
@@ -237,7 +254,7 @@ fn make_tofu_plan(run_key: &str) -> TestResult<Plan> {
         generator: PlanGenerator {
             version: "0.1.55".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
-            digest_b3: "a".repeat(64),
+            sha256: "a".repeat(64),
         },
         packages: Vec::new(),
         obligations,
