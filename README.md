@@ -49,9 +49,12 @@ pins in that evidence were `jdx/mise-action` v5.2.0 and `asamarts/alint` v0.18.4
 [`freshness-evidence-2026-10-17.md`](docs/implemented/freshness-evidence-2026-10-17.md).
 The current catalog selects Mise 2026.10.20, ALint 0.20.1, Rust 1.99.1,
 MBX 1.28.0, GitHub CLI 2.103.3, Nextest 0.9.150, and release-plz 0.4.1.
-Mise release identity and qualification evidence are recorded in
+The earlier Mise 2026.10.19 qualification record is retained in
 [`mise-2026-10-19-qualification.md`](docs/implemented/mise-2026-10-19-qualification.md).
-The complete source freshness captures and timestamps are recorded in
+The latest source captures and scoped runtime evidence for the refreshed Mise,
+GitHub CLI, and Nextest pins are recorded in
+[`freshness-evidence-2026-10-27.md`](docs/implemented/freshness-evidence-2026-10-27.md).
+The prior source capture from 2026-10-25 remains in
 [`freshness-evidence-2026-10-25.md`](docs/implemented/freshness-evidence-2026-10-25.md).
 The selected stable compiler and workspace MSRV are both Rust 1.99.1 and
 1.99, respectively. `mise.toml` remains a read-only local developer input.
