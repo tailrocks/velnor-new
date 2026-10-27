@@ -266,8 +266,12 @@ mod gc1_t57 {
                 role: None,
                 condition: Some("always()".to_owned()),
                 parallel: false,
-                kind: StepKind::Shell {
-                    run: vec!["true".to_owned()],
+                kind: StepKind::Action {
+                    uses: crate::steps::UPLOAD_ARTIFACT_USES.to_owned(),
+                    with: std::collections::BTreeMap::from([(
+                        "name".to_owned(),
+                        "velnor-matrix-rtest-group".to_owned(),
+                    )]),
                     env: std::collections::BTreeMap::new(),
                 },
             });
@@ -339,7 +343,7 @@ mod gc1_t57 {
     }
 
     #[test]
-    fn emit_falls_back_to_tail_without_upload() {
+    fn emit_skipped_without_matrix_upload() {
         let mut jobs = std::collections::BTreeMap::from([(
             "group-read".to_owned(),
             branch_job("group-read", false),
@@ -347,7 +351,8 @@ mod gc1_t57 {
         append_emit_ledger_steps(&mut jobs);
         assert_eq!(
             step_names(&jobs["group-read"]),
-            vec!["Wait for parallel checks", EMIT_GROUP_LEDGER_STEP_NAME]
+            vec!["Wait for parallel checks"],
+            "single-unit jobs carry no matrix key, so no ledger is emitted"
         );
     }
 }

@@ -12,7 +12,7 @@ use crate::{
     yaml::Yaml,
 };
 use velnor_actions_contract::{
-    CacheMode, Job, Permissions, RunsOn, StepKind, StepRole, Trigger, WorkflowIr,
+    CacheMode, Job, Permissions, Trigger, WorkflowIr,
     workflow::{DispatchInput, DispatchInputType, permissions::PermissionLevel},
 };
 
@@ -281,100 +281,14 @@ fn dispatch_input_to_yaml(input: &DispatchInput) -> Yaml {
 }
 
 #[derive(Clone, Copy)]
-struct JobRenderPolicy<'a> {
-    native_mbx: bool,
-    plan_attempt: Option<&'static str>,
-    actions_read: bool,
-    workflow_env: &'a BTreeMap<String, String>,
+pub(super) struct JobRenderPolicy<'a> {
+    pub(super) native_mbx: bool,
+    pub(super) plan_attempt: Option<&'static str>,
+    pub(super) actions_read: bool,
+    pub(super) workflow_env: &'a BTreeMap<String, String>,
 }
 
-fn job_to_yaml(
-    id: &str,
-    job: &Job,
-    ctx: &RenderContext,
-    needs_envs: &[(String, String)],
-    shared: Option<&str>,
-    lanes: &crate::document_lanes::SharedLaneSteps<'_>,
-    policy: JobRenderPolicy<'_>,
-) -> Result<Yaml, RenderError> {
-    steps::scan_for_private_subcommands(&job.display_name)?;
-    let runner = RunsOn::parse(&job.runs_on).map_err(RenderError::Contract)?;
-    let scale_set = matches!(&runner, RunsOn::ScaleSet(_));
-    let runs_on = match runner {
-        RunsOn::Hosted(label) => Yaml::str(label),
-        RunsOn::ScaleSet(selector) => Yaml::Flow(selector.labels().to_vec()),
-    };
-    let source_steps = lanes
-        .env_steps
-        .get(id)
-        .map_or(job.steps.as_slice(), Vec::as_slice);
-    let step_has_env = source_steps.iter().any(|step| match &step.kind {
-        StepKind::Shell { env, .. }
-        | StepKind::Action { env, .. }
-        | StepKind::TaskExecution { env, .. } => !env.is_empty(),
-        StepKind::NativeCheckExecution { .. } | StepKind::Internal { .. } => false,
-    });
-    let mut job_env = if step_has_env
-        && ctx
-            .workflow_tasks
-            .iter()
-            .any(|task| task.owns_projected_job_id(id, ctx.bun_lane_plan.as_ref()))
-    {
-        crate::toolchain_env::credential_scrub()
-    } else {
-        BTreeMap::new()
-    };
-    if step_has_env {
-        for step in source_steps {
-            if let StepKind::Shell { env, .. }
-            | StepKind::Action { env, .. }
-            | StepKind::TaskExecution { env, .. } = &step.kind
-            {
-                if let Some(toolchain) = env.get("RUSTUP_TOOLCHAIN") {
-                    job_env.insert("RUSTUP_TOOLCHAIN".to_owned(), toolchain.clone());
-                    let (key, value) = crate::toolchain_env::CARGO_AUTO_CLEAN_ENV;
-                    job_env.insert(key.to_owned(), value.to_owned());
-                }
-                if step.role == Some(StepRole::AcquireVelnor) {
-                    for key in [
-                        crate::steps::ASSET_SHA_ENV,
-                        crate::steps::ASSET_URL_ENV,
-                        crate::steps::RELEASE_COMMIT_ENV,
-                    ] {
-                        if let Some(val) = env.get(key) {
-                            job_env.insert(key.to_owned(), val.to_owned());
-                        }
-                    }
-                }
-            }
-        }
-    }
-    crate::document_env::extend_job_env(&mut job_env, policy.native_mbx, policy.plan_attempt);
-    let mut entries = job_header_fields(job, runs_on);
-    append_job_options(&mut entries, job, scale_set, &job_env, policy.workflow_env)?;
-    let mut effective_env = policy.workflow_env.clone();
-    effective_env.extend(job_env.clone());
-    let mut rendered_steps = crate::document_lanes::render_job_steps(
-        id,
-        job,
-        ctx,
-        needs_envs,
-        shared,
-        lanes,
-        &crate::document_lanes::JobStepContext {
-            job_env: &effective_env,
-            runs_on: Some(&job.runs_on),
-            actions_read: policy.actions_read,
-            report_helper_version: &ctx.report_helper_version,
-        },
-    )?;
-    crate::cache_save_budget::apply(&mut rendered_steps, job.timeout_minutes.minutes())?;
-    crate::document_services::push_services(&mut entries, &job.services);
-    entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
-    Ok(Yaml::Map(entries))
-}
-
-fn job_header_fields(job: &Job, runs_on: Yaml) -> Vec<(String, Yaml)> {
+pub(super) fn job_header_fields(job: &Job, runs_on: Yaml) -> Vec<(String, Yaml)> {
     let timeout = Yaml::Int(i64::from(job.timeout_minutes.minutes()));
     vec![
         ("name".to_owned(), Yaml::str(job.display_name.clone())),
@@ -383,7 +297,7 @@ fn job_header_fields(job: &Job, runs_on: Yaml) -> Vec<(String, Yaml)> {
     ]
 }
 
-fn append_job_options(
+pub(super) fn append_job_options(
     entries: &mut Vec<(String, Yaml)>,
     job: &Job,
     scale_set: bool,
@@ -434,90 +348,8 @@ fn append_job_options(
     Ok(())
 }
 
+use super::document_jobs::job_to_yaml;
+
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::collections::BTreeMap;
-    use velnor_actions_contract::{CacheMode, Job, JobTimeout};
-
-    fn writer_job(condition: Option<&str>, cache_mode: Option<CacheMode>) -> Job {
-        Job {
-            display_name: "Writer".to_owned(),
-            runs_on: "ubuntu-24.04".to_owned(),
-            check_runner: None,
-            timeout_minutes: JobTimeout::DEFAULT,
-            needs: Vec::new(),
-            condition: condition.map(str::to_owned),
-            permissions: None,
-            cache_mode,
-            environment: None,
-            services: Vec::new(),
-            outputs: BTreeMap::new(),
-            steps: Vec::new(),
-        }
-    }
-
-    fn rendered_options(job: &Job) -> Vec<(String, Yaml)> {
-        let mut entries = Vec::new();
-        append_job_options(&mut entries, job, false, &BTreeMap::new(), &BTreeMap::new())
-            .expect("options render");
-        entries
-    }
-
-    fn cache_mode_entry(entries: &[(String, Yaml)]) -> Option<Yaml> {
-        entries
-            .iter()
-            .find(|(key, _)| key == "cache-mode")
-            .map(|(_, value)| value.clone())
-    }
-
-    #[test]
-    fn push_gated_writer_renders_literal_write() {
-        let gated = writer_job(
-            Some("(affected) && github.event_name == 'push'"),
-            Some(CacheMode::push_write_expression()),
-        );
-        assert_eq!(
-            cache_mode_entry(&rendered_options(&gated)),
-            Some(Yaml::Str("write".to_owned()))
-        );
-        let bare = writer_job(
-            Some("github.event_name == 'push'"),
-            Some(CacheMode::push_write_expression()),
-        );
-        assert_eq!(
-            cache_mode_entry(&rendered_options(&bare)),
-            Some(Yaml::Str("write".to_owned()))
-        );
-    }
-
-    #[test]
-    fn unprovable_writer_keeps_no_declaration() {
-        let unconditioned = writer_job(None, Some(CacheMode::push_write_expression()));
-        assert_eq!(cache_mode_entry(&rendered_options(&unconditioned)), None);
-        let pr_capable = writer_job(Some("(affected)"), Some(CacheMode::push_write_expression()));
-        assert_eq!(cache_mode_entry(&rendered_options(&pr_capable)), None);
-        let or_shaped = writer_job(
-            Some("(reader_ok) || (writer_ok) && github.event_name == 'push'"),
-            Some(CacheMode::push_write_expression()),
-        );
-        assert_eq!(cache_mode_entry(&rendered_options(&or_shaped)), None);
-        let narrowed = writer_job(
-            Some("((reader_ok) || (writer_ok)) && github.event_name == 'push'"),
-            Some(CacheMode::push_write_expression()),
-        );
-        assert_eq!(
-            cache_mode_entry(&rendered_options(&narrowed)),
-            Some(Yaml::Str("write".to_owned()))
-        );
-    }
-
-    #[test]
-    fn explicit_modes_render_unchanged() {
-        let reader = writer_job(Some("(affected)"), Some(CacheMode::explicit_read()));
-        assert_eq!(
-            cache_mode_entry(&rendered_options(&reader)),
-            Some(Yaml::Str("read".to_owned()))
-        );
-    }
-}
+#[path = "document_tests.rs"]
+mod tests;

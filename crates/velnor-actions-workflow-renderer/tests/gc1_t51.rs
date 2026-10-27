@@ -17,15 +17,13 @@ use std::io;
 use std::path::Path;
 use std::process::Command;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use velnor_actions_actionlint::actions::MISE_ACTION_SHA;
-use velnor_actions_contract::config::jactionlint_verifier::jactionlint_verifier_script;
-use velnor_actions_contract::{RoutingWorkflow, Step, StepKind};
+use velnor_actions_contract::RoutingWorkflow;
 use velnor_actions_mise::MISE_VERSION;
 use velnor_actions_workflow_renderer::setup::{MISE_BINARY_SHA256_LINUX_X64, MiseSetup};
-use velnor_actions_workflow_renderer::toolchain_env::credential_unset_prelude;
 use velnor_actions_workflow_renderer::{
-    ProductReleasePins, Schema2WorkflowRequest, VERIFY_PATH, render_schema2_workflows,
+    ProductReleasePins, Schema2WorkflowRequest, render_schema2_workflows,
 };
 
 const IDENTITY_SOURCE: &str = include_str!("../src/job_image_authority_identity.py");
@@ -34,7 +32,10 @@ const PUBLISH_SOURCE: &str = include_str!("../src/job_image_authority_publish.py
 const RECORD_SOURCE: &str = include_str!("../src/job_image_authority_record.py");
 const OCI_SOURCE: &str = include_str!("../src/job_image_authority_oci.py");
 const TAR_SOURCE: &str = include_str!("../src/job_image_authority_tar.py");
-const AUTHORITY_MODULE: &str = include_str!("../src/job_image_authority.rs");
+const AUTHORITY_MODULE: &str = concat!(
+    include_str!("../src/job_image_authority.rs"),
+    include_str!("../src/job_image_authority_verify.rs"),
+);
 
 const IDENTITY_FILE: &str = "job_image_authority_identity.py";
 const REGISTRY_FILE: &str = "job_image_authority_registry.py";
@@ -89,53 +90,6 @@ fn require_order(
     } else {
         Err(fail(&format!("{label} misordered:{first}:{second}")))
     }
-}
-
-fn sha256_hex(bytes: &[u8]) -> String {
-    use sha2::Digest;
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut hasher = sha2::Sha256::new();
-    hasher.update(bytes);
-    let digest = hasher.finalize();
-    let mut out = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        out.push(HEX[(byte >> 4) as usize] as char);
-        out.push(HEX[(byte & 0x0F) as usize] as char);
-    }
-    out
-}
-
-fn tar_entry(name: &str, data: &[u8], typeflag: u8) -> Vec<u8> {
-    let mut header = [0u8; 512];
-    let name_bytes = name.as_bytes();
-    header[..name_bytes.len()].copy_from_slice(name_bytes);
-    header[100..108].copy_from_slice(b"0000644\0");
-    header[108..116].copy_from_slice(b"0000000\0");
-    header[116..124].copy_from_slice(b"0000000\0");
-    let size_field = format!("{:011o}\0", data.len());
-    header[124..136].copy_from_slice(size_field.as_bytes());
-    header[148..156].copy_from_slice(b"        ");
-    header[156] = typeflag;
-    header[257..263].copy_from_slice(b"ustar\0");
-    header[263..265].copy_from_slice(b"00");
-    let checksum: u32 = header.iter().map(|byte| u32::from(*byte)).sum();
-    let checksum_field = format!("{checksum:06o}\0 ");
-    header[148..156].copy_from_slice(checksum_field.as_bytes());
-    let mut entry = header.to_vec();
-    entry.extend_from_slice(data);
-    while entry.len() % 512 != 0 {
-        entry.push(0);
-    }
-    entry
-}
-
-fn tar_archive(entries: &[(&str, &[u8])]) -> Vec<u8> {
-    let mut archive = Vec::new();
-    for (name, data) in entries {
-        archive.extend_from_slice(&tar_entry(name, data, b'0'));
-    }
-    archive.extend_from_slice(&[0u8; 1024]);
-    archive
 }
 
 pub(crate) struct ImageParts {
@@ -317,117 +271,6 @@ pub(crate) fn mise_setup() -> MiseSetup {
     }
 }
 
-fn argv(values: &[&str]) -> Vec<String> {
-    values.iter().map(|value| (*value).to_owned()).collect()
-}
-
-fn fixture_step() -> Step {
-    Step {
-        name: "fixture".to_owned(),
-        id: None,
-        role: None,
-        condition: None,
-        parallel: false,
-        kind: StepKind::Shell {
-            run: vec!["true".to_owned()],
-            env: BTreeMap::new(),
-        },
-    }
-}
-
-fn verify_rust_argv() -> Vec<String> {
-    argv(&[
-        "sh",
-        "-c",
-        &format!("{} exit 0", credential_unset_prelude()),
-    ])
-}
-
-fn verify_lint_argv() -> Vec<String> {
-    argv(&[
-        "sh",
-        "-c",
-        &jactionlint_verifier_script("${VELNOR_TOOL_JACTIONLINT}", VERIFY_PATH),
-    ])
-}
-
-fn install_runner_build_tools_argv() -> Vec<String> {
-    argv(&["mise", "install", "rust@1.91.0"])
-}
-
-fn install_resource_probe_target_argv() -> Vec<String> {
-    argv(&["rustup", "target", "add", "x86_64-unknown-linux-musl"])
-}
-
-fn runner_build_argv() -> Vec<String> {
-    argv(&[
-        "mbx",
-        "build",
-        "--locked",
-        "--manifest-path",
-        "crates/velnor-runner/Cargo.toml",
-        "--release",
-        "--package",
-        "velnor-runner-cli",
-        "--bin",
-        "velnor-host",
-    ])
-}
-
-fn resource_probe_build_argv() -> Vec<String> {
-    argv(&[
-        "mbx",
-        "build",
-        "--locked",
-        "--manifest-path",
-        "crates/velnor-runner/Cargo.toml",
-        "--package",
-        "velnor-resource-probe",
-        "--bin",
-        "velnor-resource-probe",
-        "--release",
-        "--target",
-        "x86_64-unknown-linux-musl",
-    ])
-}
-
-fn install_resource_probe_release_tools_argv() -> Vec<String> {
-    argv(&["mise", "install", "rust@1.91.0", "mr-boxington@1.0.0"])
-}
-
-fn resource_probe_release_build_argv() -> Vec<String> {
-    argv(&[
-        "mbx",
-        "build",
-        "--locked",
-        "--manifest-path",
-        "crates/velnor-runner/Cargo.toml",
-        "--package",
-        "velnor-runner-host",
-        "--bin",
-        "velnor-resource-probe-release",
-        "--target",
-        "x86_64-unknown-linux-gnu",
-    ])
-}
-
-fn resource_probe_release_test_argv() -> Vec<String> {
-    argv(&[
-        "mbx",
-        "nextest",
-        "run",
-        "--locked",
-        "--manifest-path",
-        "crates/velnor-runner/Cargo.toml",
-        "--package",
-        "velnor-runner-host",
-        "--test",
-        "resource_probe_release_public",
-        "--target",
-        "x86_64-unknown-linux-gnu",
-    ])
-}
-
 pub(crate) fn pins() -> ProductReleasePins {
     let setup = mise_setup();
     ProductReleasePins {
@@ -507,3 +350,8 @@ mod gc1_t51_stream;
 #[path = "gc1_t51_trust.rs"]
 mod gc1_t51_trust;
 pub(crate) use gc1_t51_stream::*;
+
+#[path = "gc1_t51_argv.rs"]
+mod gc1_t51_argv;
+
+use gc1_t51_argv::*;

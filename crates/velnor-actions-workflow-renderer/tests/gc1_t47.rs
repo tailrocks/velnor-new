@@ -23,7 +23,10 @@ const PUBLISH_SOURCE: &str = include_str!("../src/job_image_authority_publish.py
 const RECORD_SOURCE: &str = include_str!("../src/job_image_authority_record.py");
 const OCI_SOURCE: &str = include_str!("../src/job_image_authority_oci.py");
 const TAR_SOURCE: &str = include_str!("../src/job_image_authority_tar.py");
-const AUTHORITY_MODULE: &str = include_str!("../src/job_image_authority.rs");
+const AUTHORITY_MODULE: &str = concat!(
+    include_str!("../src/job_image_authority.rs"),
+    include_str!("../src/job_image_authority_verify.rs"),
+);
 
 const IDENTITY_FILE: &str = "job_image_authority_identity.py";
 const REGISTRY_FILE: &str = "job_image_authority_registry.py";

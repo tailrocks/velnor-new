@@ -20,29 +20,6 @@ use velnor_actions_workflow_renderer::{
     ProductReleasePins, RenderedFile, Schema2WorkflowRequest, VERIFY_PATH, render_schema2_workflows,
 };
 
-const IDENTITY_SOURCE: &str = include_str!("../src/job_image_authority_identity.py");
-const REGISTRY_SOURCE: &str = include_str!("../src/job_image_authority_registry.py");
-const PUBLISH_SOURCE: &str = include_str!("../src/job_image_authority_publish.py");
-const RECORD_SOURCE: &str = include_str!("../src/job_image_authority_record.py");
-const OCI_SOURCE: &str = include_str!("../src/job_image_authority_oci.py");
-const TAR_SOURCE: &str = include_str!("../src/job_image_authority_tar.py");
-
-const IDENTITY_FILE: &str = "job_image_authority_identity.py";
-const REGISTRY_FILE: &str = "job_image_authority_registry.py";
-const PUBLISH_FILE: &str = "job_image_authority_publish.py";
-const RECORD_FILE: &str = "job_image_authority_record.py";
-const OCI_FILE: &str = "job_image_authority_oci.py";
-const TAR_FILE: &str = "job_image_authority_tar.py";
-
-const STEP_NAME: &str = "Materialize fixed image authority implementation";
-const VERIFY_STEP_NAME: &str = "Verify candidate bytes with the fixed authority body";
-const EVIDENCE_STEP_NAME: &str = "Assemble publication evidence with the fixed authority body";
-const BODY_DIRECTORY: &str = "$RUNNER_TEMP/velnor-image-authority";
-const END_MARKER: &str = "VELNOR_IMAGE_AUTHORITY_EOF";
-const VERIFY_MARKER: &str = "VELNOR_IMAGE_VERIFY_EOF";
-const EVIDENCE_MARKER: &str = "VELNOR_IMAGE_EVIDENCE_EOF";
-const CANDIDATE_PATH: &str = ".github/workflows/job-image-candidate.yml";
-
 const DRIVER: &str = r#"import hashlib
 import json
 import sys
@@ -404,3 +381,8 @@ mod gc1_t48_pins;
 pub(crate) use gc1_t48_archive::*;
 pub(crate) use gc1_t48_checks::*;
 pub(crate) use gc1_t48_pins::*;
+
+#[path = "gc1_t48_sources.rs"]
+mod gc1_t48_sources;
+
+use gc1_t48_sources::*;

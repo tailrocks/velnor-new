@@ -8,6 +8,7 @@ mod lane;
 mod observation;
 mod source;
 mod units;
+mod units_digests;
 mod validation;
 
 pub use effective::{ApiConclusion, EffectiveJobBindingV1};

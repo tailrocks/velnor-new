@@ -3,6 +3,7 @@
 
 mod assemble;
 mod emit;
+mod emit_read;
 
 pub use assemble::{ASSEMBLE_GROUP_LEDGERS_OP, assemble_group_ledgers};
 pub use emit::{EMIT_GROUP_LEDGER_OP, emit_group_ledger};

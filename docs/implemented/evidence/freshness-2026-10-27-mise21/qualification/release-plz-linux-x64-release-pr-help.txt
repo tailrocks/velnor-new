@@ -42,7 +42,7 @@ Options:
       --changelog-config <PATH>
           Path to the git-cliff configuration file. If not provided, git-cliff's user configuration
           file is used if present
-          
+
           [env: GIT_CLIFF_CONFIG=]
 
       --allow-dirty
@@ -51,7 +51,7 @@ Options:
 
   -v, --verbose...
           Print source location and additional information in logs.
-          
+
           If this option is unspecified, logs are printed at the INFO level without verbosity. `-v`
           adds verbosity to logs. `-vv` adds verbosity and sets the log level to DEBUG. `-vvv` adds
           verbosity and sets the log level to TRACE. To change the log level without setting
@@ -63,15 +63,15 @@ Options:
 
       --config <PATH>
           Path to the release-plz config file.
-          
+
           If not specified, the following paths are checked in order: `release-plz.toml`,
           `.release-plz.toml`, `.config/release-plz.toml`.
-          
+
           If a config file is not found, the default configuration is used.
 
       --git-token <GIT_TOKEN>
           Git token used to create the pull request
-          
+
           [env: GIT_TOKEN]
           [alias: --github-token]
 
@@ -79,7 +79,7 @@ Options:
           Kind of git host where your project is hosted. If not specified, release-plz infers it
           from the repository host. Specify it explicitly for GitHub Enterprise Server, whose host
           can't be auto-detected
-          
+
           [alias: --backend]
           [possible values: github, gitea, gitlab]
 
@@ -89,7 +89,7 @@ Options:
 
   -o, --output <OUTPUT>
           Output format. If specified, prints the branch, URL and number of the release PR, if any
-          
+
           [possible values: json]
 
   -h, --help
