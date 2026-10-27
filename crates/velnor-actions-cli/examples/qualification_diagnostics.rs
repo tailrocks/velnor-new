@@ -40,19 +40,25 @@ fn emit_plan_diagnostics() {
         return;
     };
     let temp_dir = std::env::var_os("TMPDIR").unwrap_or_else(|| "/tmp".into());
+    let Some(source_root) = std::env::var_os("VELNOR_PLAN_DIAGNOSTICS_ROOT") else {
+        return;
+    };
     eprintln!("Repository: {}", root.display());
     eprintln!(
         "Preview: {}/diagnostic-preview-{}",
         Path::new(&temp_dir).display(),
         process::id()
     );
+    eprintln!(
+        "Plan context: repository={} source-root={}",
+        root.display(),
+        Path::new(&source_root).display()
+    );
 
     if mode == "fixture-warning" && root.file_name() == Some(OsStr::new("nested")) {
         eprintln!("warning: fixture-plan-diagnostic-regression");
     }
-    if mode == "dogfood-warning"
-        && std::env::var_os("VELNOR_PLAN_DIAGNOSTICS_ROOT").as_deref() == Some(root.as_os_str())
-    {
+    if mode == "dogfood-warning" && source_root == root.as_os_str() {
         eprintln!("warning: dogfood-plan-diagnostic-regression");
     }
 }

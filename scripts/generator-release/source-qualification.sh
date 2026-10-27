@@ -39,11 +39,11 @@ preserve_plan_diagnostics() {
     printf 'retained plan diagnostics paths are not safe directories\n' >&2
     return 1
   fi
-  for file in "$diagnostics"/*.log "$diagnostics"/*.exit "$diagnostics"/*.txt; do
+  for file in "$diagnostics"/*.log "$diagnostics"/*.exit "$diagnostics"/*.txt "$diagnostics"/*.diff; do
     if [ ! -e "$file" ] && [ ! -L "$file" ]; then continue; fi
     basename="${file##*/}"
     if [ -L "$file" ] || [ ! -f "$file" ] \
-      || [[ ! "$basename" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*\.(log|exit|txt)$ ]]; then
+      || [[ ! "$basename" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*\.(log|exit|txt|diff)$ ]]; then
       printf 'retained plan diagnostics file is unsafe: %s\n' "$basename" >&2
       return 1
     fi
