@@ -1166,6 +1166,39 @@ jobs:
           printf 'generate_statuses=0,0 identity_status=0 diff_statuses=%s,%s\n' \
             "$first_raw_diff_status" "$second_raw_diff_status" >"$evidence/logs/root-preview.exit"
 
+      - name: Test generated Rust verifier transport and digest gate
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          evidence="$RUNNER_TEMP/source-qualification-artifacts"
+          name=rust-verifier-retry
+          action="$evidence/previews/generated-1/.github/actions/velnor-verify-restored-rust/action.yml"
+          receipt="$evidence/rust-verifier-retry.json"
+          log="$evidence/logs/$name.log"
+          if [ -L "$evidence" ] || [ ! -d "$evidence" ]; then
+            printf 'source qualification evidence directory is missing or unsafe\n' >&2
+            exit 1
+          fi
+          set +e
+          mise --no-config --no-env --no-hooks exec node@26.12.0 -- \
+            scripts/generator-release/test-rust-verifier-retries.cjs \
+            "$action" "$receipt" >"$log" 2>&1
+          command_status=$?
+          set -u
+          if ! cat "$log"; then command_status=1; fi
+          artifact_status=0
+          if [ -L "$receipt" ] || [ ! -f "$receipt" ]; then
+            printf 'Rust verifier TLS retry receipt is missing or unsafe\n' >&2
+            artifact_status=1
+          fi
+          printf '%s\n' "$command_status" >"$evidence/logs/$name.command.exit" || artifact_status=1
+          printf '%s\n' "$artifact_status" >"$evidence/logs/$name.artifact.exit" || artifact_status=1
+          final_status=0
+          if [ "$command_status" -ne 0 ] || [ "$artifact_status" -ne 0 ]; then final_status=1; fi
+          printf '%s\n' "$final_status" >"$evidence/logs/$name.exit" || exit 1
+          exit "$final_status"
+
       - name: Check source output against checked-in repository goldens
         if: always()
         shell: bash
@@ -1242,7 +1275,7 @@ jobs:
           evidence="$RUNNER_TEMP/source-qualification-artifacts"
           archive="$evidence/source-qualification-preserved.tar.gz"
           final_status=0
-          for name in cargo-prefetch archive-guard-build validator-tool-install cli-build external-capture external-check \
+          for name in cargo-prefetch archive-guard-build validator-tool-install cli-build external-capture external-check rust-verifier-retry \
             external-shell-harness external-shell-harness-keep external-shell-harness-json-proof \
             repository-oracle-check; do
             status_file="$evidence/logs/$name.exit"
@@ -1263,6 +1296,7 @@ jobs:
             external-shell-harness-logs external-shell-harness-keep-logs repository-oracle-diff repository-oracle-stage repository-oracle-raw \
             external-shell-harness-json-proof external-shell-harness-keep-json-proof \
             external-shell-harness-json-proof.receipt.txt external-shell-harness-keep-json-proof.receipt.txt \
+            rust-verifier-retry.json \
             archive-guard-identity.txt qualification-final-status.txt \
             checkout-status.txt source-identity.txt source-inputs.sha256 build-environment.txt \
             tool-pins.json validator-tool-config-identity.before.txt validator-tool-identity.txt \
