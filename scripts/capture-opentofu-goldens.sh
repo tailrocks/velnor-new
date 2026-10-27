@@ -18,11 +18,17 @@
 #   CLI_BINARY uses that exact executable and skips the default debug build.
 set -uo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 GOLDEN_DIR="$ROOT/docs/proposed/opentofu-goldens"
 WORK=""
 MODE="${1:-check}"
 BIN_EXPLICIT=0
+KEEP_WORK="${VELNOR_GOLDEN_KEEP_WORK:-0}"
+
+case "$KEEP_WORK" in
+  0|1) ;;
+  *) echo "FATAL: VELNOR_GOLDEN_KEEP_WORK must be 0 or 1"; exit 2 ;;
+esac
 
 case "$MODE" in
   capture|check|check-release) ;;
@@ -43,6 +49,30 @@ fi
 if ! CALLER_DIR="$(pwd -P)"; then
   echo "FATAL: could not resolve caller directory"
   exit 2
+fi
+if [ -n "${VELNOR_GOLDEN_DIR:-}" ]; then
+  case "$VELNOR_GOLDEN_DIR" in
+    /*) requested_golden_dir="$VELNOR_GOLDEN_DIR" ;;
+    *) requested_golden_dir="$CALLER_DIR/$VELNOR_GOLDEN_DIR" ;;
+  esac
+  golden_name="${requested_golden_dir##*/}"
+  golden_parent="${requested_golden_dir%/*}"
+  if [ -z "$golden_name" ] || [ "$golden_name" = . ] || [ "$golden_name" = .. ] \
+    || ! golden_parent="$(cd -- "$golden_parent" 2>/dev/null && pwd -P)"; then
+    echo "FATAL: external golden directory parent must exist"
+    exit 2
+  fi
+  GOLDEN_DIR="$golden_parent/$golden_name"
+  case "$GOLDEN_DIR" in
+    "$ROOT"|"$ROOT"/*)
+      echo "FATAL: VELNOR_GOLDEN_DIR must be outside the repository"
+      exit 2
+      ;;
+  esac
+  if [ -L "$GOLDEN_DIR" ] || { [ -e "$GOLDEN_DIR" ] && [ ! -d "$GOLDEN_DIR" ]; }; then
+    echo "FATAL: external golden directory must be a regular directory path"
+    exit 2
+  fi
 fi
 if [ "$MODE" = "check-release" ]; then
   BIN_EXPLICIT=1
@@ -90,37 +120,6 @@ source "$ROOT/scripts/generator-release/qualification-goldens.sh"
 # is POSIX and pins link-as-link on both BSD and GNU cp.
 copy_tree() {
   cp -RP "$1" "$2"
-}
-
-# Schema-only current-version input for disposable ConsumerV1 scratch repos.
-# Canonical URLs exercise the manifest shape; deterministic markers let the
-# checked-in oracle match check-release after it validates the exact candidate
-# manifest. These values are not release evidence and never leave this scratch
-# repo.
-write_schema_only_consumer_manifest() {
-  local repo="$1" manifest="$1/.velnor/release-manifest.json"
-  local version target commit digest targets_json
-  if [ -e "$manifest" ] || [ -L "$manifest" ]; then
-    [ -f "$manifest" ] && [ ! -L "$manifest" ]
-    return $?
-  fi
-  if [ -L "$repo/.velnor" ] || { [ -e "$repo/.velnor" ] && [ ! -d "$repo/.velnor" ]; }; then
-    return 1
-  fi
-  mkdir -p "$repo/.velnor" || return 1
-  if ! version="$("$BIN" --version | awk 'NR == 1 && NF == 2 && $1 == "velnor-actions" { print $2; next } { exit 1 } END { if (NR != 1) exit 1 }')" \
-    || [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    return 1
-  fi
-  commit="$(printf '%040d' 0 | tr '0' 'b')"
-  digest="$(printf '%064d' 0 | tr '0' 'a')"
-  targets_json=""
-  for target in x86_64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin; do
-    if [ -n "$targets_json" ]; then targets_json+=","; fi
-    targets_json+="{\"target\":\"$target\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v$version/velnor-actions-$version-$target\",\"sha256\":\"$digest\"}"
-  done
-  printf '{"schema":1,"version":"%s","repository":"tailrocks/velnor-new","commit":"%s","targets":[%s]}\n' \
-    "$version" "$commit" "$targets_json" >"$manifest"
 }
 
 # Do not pin checkout-specific paths printed by `generate` in stderr goldens.
@@ -194,8 +193,8 @@ setup_case() {
   fi
   if [ "$MODE" = "check-release" ]; then
     stage_candidate_manifest "$repo" "$case"
-  elif ! write_schema_only_consumer_manifest "$repo"; then
-    echo "FATAL: could not prepare schema-only consumer input for $case"
+  elif ! prepare_fixture_consumer_manifest "$repo" "$BIN"; then
+    echo "FATAL: could not prepare fixture-only consumer input for $case"
     exit 2
   fi
   local git_log="$WORK/$case-git-setup.log"
@@ -212,22 +211,38 @@ setup_case() {
 capture_case() {
   local case="$1" repo="$2" head="$3" out="$4"
   local preview="$out/preview"
-  mkdir -p "$out" "$preview"
-  (cd "$repo" && "$BIN" plan >"$out/plan.raw.txt" 2>"$out/plan.stderr.txt"; echo "$?" >"$out/plan.exit")
+  local raw="$WORK/raw/$case"
+  mkdir -p "$out" "$preview" "$raw"
+  (cd "$repo" && "$BIN" plan >"$raw/plan.raw.txt" 2>"$raw/plan.stderr.raw.txt"; echo "$?" >"$out/plan.exit")
+  if ! : >"$out/plan.stderr.txt"; then
+    echo "FATAL: could not write the path-free plan stderr sentinel for $case"
+    exit 2
+  fi
   if [ "$(cat "$out/plan.exit")" != "0" ]; then
     echo "FATAL: plan failed for $case"
     exit 2
   fi
   sed -e "s|Repository: .*|Repository: <repo>|" -e "s|$head|<head>|g" \
-    "$out/plan.raw.txt" >"$out/plan.txt"
-  rm "$out/plan.raw.txt"
-  (cd "$repo" && "$BIN" generate --output-dir "$preview" >"$out/generate.stdout.txt" 2>"$out/generate.stderr.txt"; echo "$?" >"$out/generate.exit")
+    "$raw/plan.raw.txt" >"$out/plan.txt"
+  if [ "$KEEP_WORK" -eq 1 ] && ! cp "$raw/plan.raw.txt" "$raw/plan.source-raw.txt"; then
+    echo "FATAL: could not retain raw plan output for $case"
+    exit 2
+  fi
+  (cd "$repo" && "$BIN" generate --output-dir "$preview" >"$out/generate.stdout.txt" 2>"$raw/generate.stderr.raw.txt"; echo "$?" >"$out/generate.exit")
+  if ! cp "$raw/generate.stderr.raw.txt" "$out/generate.stderr.txt"; then
+    echo "FATAL: could not stage generate diagnostics for $case"
+    exit 2
+  fi
   if ! normalize_generate_stderr "$out/generate.stderr.txt"; then
     echo "FATAL: could not normalize generate diagnostics for $case"
     exit 2
   fi
   if [ "$(cat "$out/generate.exit")" != "0" ] || [ ! -d "$preview/.github" ]; then
     echo "FATAL: generate failed for $case"
+    exit 2
+  fi
+  if ! normalize_manifest_digests "$repo/.velnor/release-manifest.json" "$preview"; then
+    echo "FATAL: could not normalize fixture manifest values for $case"
     exit 2
   fi
   hash_tree "$preview" "$out/tree.sha256"
@@ -250,19 +265,31 @@ check_release_policy_negative() {
 capture_dogfood() {
   local out="$1"
   local preview="$out/preview"
+  local raw="$WORK/raw/dogfood"
   local compare="$WORK/dogfood-compare"
   local head diff_status
-  mkdir -p "$out" "$preview"
+  mkdir -p "$out" "$preview" "$raw"
   head=$(git -C "$ROOT" rev-parse HEAD)
-  (cd "$ROOT" && "$BIN" plan >"$out/plan.raw.txt" 2>"$out/plan.stderr.txt"; echo "$?" >"$out/plan.exit")
+  (cd "$ROOT" && "$BIN" plan >"$raw/plan.raw.txt" 2>"$raw/plan.stderr.raw.txt"; echo "$?" >"$out/plan.exit")
+  if ! : >"$out/plan.stderr.txt"; then
+    echo "FATAL: could not write the path-free dogfood plan stderr sentinel"
+    exit 2
+  fi
   if [ "$(cat "$out/plan.exit")" != "0" ]; then
     echo "FATAL: dogfood plan failed"
     exit 2
   fi
   sed -e "s|Repository: .*|Repository: <repo>|" -e "s|$head|<head>|g" -e "s|$ROOT|<root>|g" \
-    "$out/plan.raw.txt" >"$out/plan.txt"
-  rm "$out/plan.raw.txt"
-  (cd "$ROOT" && "$BIN" generate --output-dir "$preview" >"$out/generate.stdout.txt" 2>"$out/generate.stderr.txt"; echo "$?" >"$out/generate.exit")
+    "$raw/plan.raw.txt" >"$out/plan.txt"
+  if [ "$KEEP_WORK" -eq 1 ] && ! cp "$raw/plan.raw.txt" "$raw/plan.source-raw.txt"; then
+    echo "FATAL: could not retain raw dogfood plan output"
+    exit 2
+  fi
+  (cd "$ROOT" && "$BIN" generate --output-dir "$preview" >"$out/generate.stdout.txt" 2>"$raw/generate.stderr.raw.txt"; echo "$?" >"$out/generate.exit")
+  if ! cp "$raw/generate.stderr.raw.txt" "$out/generate.stderr.txt"; then
+    echo "FATAL: could not stage raw dogfood generate diagnostics"
+    exit 2
+  fi
   if ! normalize_generate_stderr "$out/generate.stderr.txt"; then
     echo "FATAL: could not normalize dogfood generate diagnostics"
     exit 2
@@ -304,14 +331,18 @@ fi
 # shellcheck disable=SC2329
 cleanup_work() {
   local result=$?
-  if [ "$result" -eq 0 ]; then
+  if [ "$result" -eq 0 ] && [ "$KEEP_WORK" -ne 1 ]; then
     if ! rm -rf "$WORK"; then
       echo "FATAL: could not remove private golden workspace: $WORK" >&2
       trap - EXIT
       exit 2
     fi
   else
-    echo "retaining failed golden workspace: $WORK" >&2
+    if [ "$result" -eq 0 ]; then
+      echo "retaining successful golden evidence workspace: $WORK" >&2
+    else
+      echo "retaining failed golden workspace: $WORK" >&2
+    fi
   fi
 }
 trap cleanup_work EXIT

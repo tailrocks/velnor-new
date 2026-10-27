@@ -133,6 +133,49 @@ host_target() {
   esac
 }
 
+prepare_fixture_consumer_manifest() {
+  local repo="$1" binary="$2" manifest="$1/.velnor/release-manifest.json"
+  local version target commit digest host_digest fixture_digest fixture_char targets_json host
+  if [ -e "$manifest" ] || [ -L "$manifest" ]; then
+    [ -f "$manifest" ] && [ ! -L "$manifest" ]
+    return $?
+  fi
+  if [ -L "$repo/.velnor" ] || { [ -e "$repo/.velnor" ] && [ ! -d "$repo/.velnor" ]; }; then
+    return 1
+  fi
+  mkdir -p "$repo/.velnor" || return 1
+  if ! version="$("$binary" --version | awk 'NR == 1 && NF == 2 && $1 == "velnor-actions" { print $2; next } { exit 1 } END { if (NR != 1) exit 1 }')" \
+    || [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    return 1
+  fi
+  commit="$(printf '%040d' 0 | tr '0' 'b')"
+  if ! host="$(host_target)" || ! host_digest="$(file_sha256 "$binary")"; then
+    return 1
+  fi
+  for fixture_char in a b c d e f 0 1; do
+    digest="$(printf '%064d' 0 | tr '0' "$fixture_char")"
+    if [ "$digest" != "$host_digest" ]; then
+      fixture_digest="$digest"
+      break
+    fi
+  done
+  if [ -z "$fixture_digest" ]; then
+    return 1
+  fi
+  targets_json=""
+  for target in x86_64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin; do
+    if [ -n "$targets_json" ]; then targets_json+=","; fi
+    if [ "$target" = "$host" ]; then
+      digest="$host_digest"
+    else
+      digest="$fixture_digest"
+    fi
+    targets_json+="{\"target\":\"$target\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v$version/velnor-actions-$version-$target\",\"sha256\":\"$digest\"}"
+  done
+  printf '{"schema":1,"version":"%s","repository":"tailrocks/velnor-new","commit":"%s","targets":[%s]}\n' \
+    "$version" "$commit" "$targets_json" >"$manifest"
+}
+
 validate_candidate_manifest() {
   local target version source_sha checkout_sha candidate_sha manifest_sha manifest_file_sha manifest_size
   local manifest_parent manifest_name physical_manifest_parent
@@ -319,18 +362,22 @@ validate_candidate_output_bindings() {
   verify_qualification_guard
 }
 
-normalize_candidate_digests() {
-  local preview="$1" digest file normalized placeholder commit commit_placeholder
+normalize_manifest_digests() {
+  local manifest="$1" preview="$2" digest file normalized placeholder commit commit_placeholder
   placeholder="$(printf '%064d' 0 | tr '0' 'a')"
   commit_placeholder="$(printf '%040d' 0 | tr '0' 'b')"
-  if ! commit="$(jq -er '.commit | strings' "$CANDIDATE_MANIFEST" 2>/dev/null)" \
+  if [ ! -d "$preview/.github" ] || [ ! -f "$manifest" ] || [ -L "$manifest" ]; then
+    echo "FATAL: manifest normalization requires a regular manifest and generated .github tree" >&2
+    return 1
+  fi
+  if ! commit="$(jq -er '.commit | strings' "$manifest" 2>/dev/null)" \
     || [[ ! "$commit" =~ ^[0-9a-f]{40}$ ]]; then
-    echo "FATAL: candidate manifest contains a malformed source commit" >&2
+    echo "FATAL: manifest contains a malformed source commit" >&2
     return 1
   fi
   while IFS= read -r digest; do
     if [[ ! "$digest" =~ ^[0-9a-f]{64}$ ]]; then
-      echo "FATAL: candidate manifest contains a malformed asset digest" >&2
+      echo "FATAL: manifest contains a malformed asset digest" >&2
       return 1
     fi
     while IFS= read -r file; do
@@ -342,7 +389,7 @@ normalize_candidate_digests() {
         return 1
       fi
     done < <(find "$preview/.github" -type f -print)
-  done < <(jq -r '.targets[].sha256' "$CANDIDATE_MANIFEST")
+  done < <(jq -r '.targets[].sha256' "$manifest")
   while IFS= read -r file; do
     normalized="$file.normalized"
     if ! sed -e "s/$commit/$commit_placeholder/g" "$file" >"$normalized" \
@@ -352,6 +399,10 @@ normalize_candidate_digests() {
       return 1
     fi
   done < <(find "$preview/.github" -type f -print)
+}
+
+normalize_candidate_digests() {
+  normalize_manifest_digests "$CANDIDATE_MANIFEST" "$1"
 }
 
 capture_release_dogfood() {

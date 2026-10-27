@@ -17,7 +17,192 @@ fi
 if [ "${1-}" != "generate" ]; then
   exec "$VELNOR_TEST_REAL_CLI_BIN" "$@"
 fi
-"$VELNOR_TEST_REAL_CLI_BIN" "$@" || exit $?
+fixture_manifest=.velnor/release-manifest.json
+fixture_backup_dir=${VELNOR_TEST_MANIFEST_BACKUP_DIR-}
+fixture_original=$fixture_backup_dir/original.json
+fixture_replacement=$fixture_backup_dir/replacement.json
+fixture_receipt=$fixture_backup_dir/receipt.json
+fixture_install=$fixture_manifest.fixture.$$
+fixture_backup_ready=0
+if [ -z "$fixture_backup_dir" ] || [ -L "$fixture_backup_dir" ] || [ ! -d "$fixture_backup_dir" ] \
+  || [ -L .velnor ] || [ ! -d .velnor ] || [ -L "$fixture_manifest" ] || [ ! -f "$fixture_manifest" ] \
+  || [ -e "$fixture_original" ] || [ -e "$fixture_replacement" ] || [ -e "$fixture_receipt" ] \
+  || [ -e "$fixture_install" ] || [ -L "$fixture_install" ]; then
+  echo 'FAIL: disposable manifest fixture paths are missing or unsafe' >&2
+  exit 1
+fi
+case "$fixture_backup_dir" in
+  "$PWD"|"$PWD"/*)
+    echo 'FAIL: disposable manifest evidence must remain outside the scratch repository' >&2
+    exit 1
+    ;;
+esac
+restore_fixture_manifest() {
+  if [ "$fixture_backup_ready" -ne 1 ]; then
+    return 0
+  fi
+  if [ -L .velnor ] || [ ! -d .velnor ]; then
+    echo 'FATAL: scratch manifest parent is missing or unsafe during restoration' >&2
+    return 1
+  fi
+  if [ -f "$fixture_original" ] && [ ! -L "$fixture_original" ] \
+    && { [ ! -f "$fixture_manifest" ] || [ -L "$fixture_manifest" ] \
+      || ! cmp -s "$fixture_original" "$fixture_manifest"; }; then
+    restore_tmp=$fixture_manifest.restore.$$
+    if ! cp -p "$fixture_original" "$restore_tmp" \
+      || ! mv -f "$restore_tmp" "$fixture_manifest" \
+      || ! cmp -s "$fixture_original" "$fixture_manifest"; then
+      rm -f "$restore_tmp"
+      echo 'FATAL: could not restore the exact scratch manifest bytes' >&2
+      return 1
+    fi
+  fi
+  return 0
+}
+cleanup_fixture_manifest() {
+  cleanup_status=$?
+  trap - EXIT HUP INT TERM
+  if ! restore_fixture_manifest; then cleanup_status=1; fi
+  rm -f "$fixture_install" "$fixture_manifest.restore.$$"
+  exit "$cleanup_status"
+}
+trap cleanup_fixture_manifest EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+if ! cp -p "$fixture_manifest" "$fixture_original" \
+  || ! cmp -s "$fixture_manifest" "$fixture_original"; then
+  echo 'FATAL: could not save the exact scratch manifest bytes outside the fixture' >&2
+  exit 1
+fi
+fixture_backup_ready=1
+if ! python3 - "$fixture_original" "$fixture_replacement" "$fixture_receipt" \
+  "$VELNOR_TEST_HOST_TARGET" "$VELNOR_TEST_REAL_CLI_SHA256" "$VELNOR_TEST_CANDIDATE_SHA256" "$PWD/$fixture_manifest" <<'PY'
+import hashlib
+import json
+import re
+from pathlib import Path
+import sys
+
+original_path, replacement_path, receipt_path = map(Path, sys.argv[1:4])
+host_target, real_sha, candidate_sha, manifest_path = sys.argv[4:]
+original = original_path.read_bytes()
+if not re.fullmatch(r'[0-9a-f]{64}', real_sha) or not re.fullmatch(r'[0-9a-f]{64}', candidate_sha):
+    raise SystemExit('fixture host digests are malformed')
+if real_sha == candidate_sha:
+    raise SystemExit('fixture requires distinct real and wrapper host digests')
+document = json.loads(original)
+targets = document.get('targets')
+if not isinstance(targets, list):
+    raise SystemExit('fixture manifest has no target list')
+matches = [row for row in targets if isinstance(row, dict) and row.get('target') == host_target]
+if len(matches) != 1 or matches[0].get('sha256') != candidate_sha:
+    raise SystemExit('fixture manifest does not contain one candidate-digest host row')
+token = f'"sha256": "{candidate_sha}"'.encode()
+if original.count(token) != 1:
+    raise SystemExit('candidate host digest token is not unique in fixture manifest bytes')
+replacement = original.replace(token, f'"sha256": "{real_sha}"'.encode(), 1)
+changed = json.loads(replacement)
+original_host = matches[0].copy()
+changed_targets = [row for row in changed['targets'] if row.get('target') == host_target]
+if len(changed_targets) != 1 or changed_targets[0].get('sha256') != real_sha:
+    raise SystemExit('replacement manifest does not bind the real CLI to the host row')
+changed_host = changed_targets[0].copy()
+original_host['sha256'] = real_sha
+if original_host != changed_host:
+    raise SystemExit('replacement changed another host-row field')
+for row in targets:
+    if row.get('target') != host_target:
+        other = [item for item in changed['targets'] if item.get('target') == row.get('target')]
+        if len(other) != 1 or other[0] != row:
+            raise SystemExit('replacement changed a non-host target row')
+original_top = {key: value for key, value in document.items() if key != 'targets'}
+changed_top = {key: value for key, value in changed.items() if key != 'targets'}
+if original_top != changed_top:
+    raise SystemExit('replacement changed a non-target manifest field')
+replacement_path.write_bytes(replacement)
+receipt = {
+    'candidate_sha256': candidate_sha,
+    'host_target': host_target,
+    'manifest_path': manifest_path,
+    'original_sha256': hashlib.sha256(original).hexdigest(),
+    'replacement_sha256': hashlib.sha256(replacement).hexdigest(),
+    'replacement_changes_only_unique_host_sha256': True,
+    'real_cli_sha256': real_sha,
+}
+receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + '\n')
+PY
+then
+  echo 'FATAL: could not prepare a host-only disposable manifest copy' >&2
+  exit 1
+fi
+if ! cp -p "$fixture_replacement" "$fixture_install" \
+  || ! mv -f "$fixture_install" "$fixture_manifest"; then
+  echo 'FATAL: could not atomically install the disposable scratch manifest' >&2
+  exit 1
+fi
+real_status=0
+"$VELNOR_TEST_REAL_CLI_BIN" "$@" || real_status=$?
+if ! restore_fixture_manifest; then exit 1; fi
+if ! cmp -s "$fixture_original" "$fixture_manifest"; then
+  echo 'FATAL: scratch manifest restoration was not byte exact' >&2
+  exit 1
+fi
+if ! python3 - "$fixture_receipt" "$fixture_manifest" <<'PY'
+import hashlib
+import json
+from pathlib import Path
+import sys
+
+receipt_path, manifest_path = map(Path, sys.argv[1:])
+receipt = json.loads(receipt_path.read_text())
+original = (receipt_path.parent / 'original.json').read_bytes()
+restored = manifest_path.read_bytes()
+receipt['restored_byte_exact'] = restored == original
+receipt['restored_sha256'] = hashlib.sha256(restored).hexdigest()
+if not receipt['restored_byte_exact']:
+    raise SystemExit('restored manifest bytes differ from the saved original')
+receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + '\n')
+PY
+then
+  echo 'FATAL: could not record exact scratch manifest restoration' >&2
+  exit 1
+fi
+trap - EXIT HUP INT TERM
+rm -f "$fixture_install" "$fixture_manifest.restore.$$"
+if [ "$real_status" -ne 0 ]; then exit "$real_status"; fi
+if ! python3 - "$3/.github" "$VELNOR_TEST_REAL_CLI_SHA256" "$VELNOR_TEST_CANDIDATE_SHA256" <<'PY'
+import os
+from pathlib import Path
+import re
+import stat
+import sys
+
+root = Path(sys.argv[1])
+real_sha, candidate_sha = (value.encode() for value in sys.argv[2:])
+pattern = re.compile(rb'(?m)^([ \t]*VELNOR_ASSET_SHA256: )' + re.escape(real_sha) + rb'(?=\r?$)')
+if root.is_symlink() or not root.is_dir():
+    raise SystemExit('generated workflow directory is missing or unsafe')
+changes = 0
+for directory, names, files in os.walk(root, followlinks=False):
+    names[:] = [name for name in names if not (Path(directory) / name).is_symlink()]
+    for name in files:
+        path = Path(directory) / name
+        mode = path.lstat().st_mode
+        if stat.S_ISLNK(mode) or not stat.S_ISREG(mode):
+            continue
+        data = path.read_bytes()
+        rewritten, count = pattern.subn(lambda match: match.group(1) + candidate_sha, data)
+        if count:
+            path.write_bytes(rewritten)
+            changes += count
+if changes == 0:
+    raise SystemExit('generated acquisition bindings contain no real host digest to translate')
+PY
+then
+  echo 'FATAL: could not translate only generated host acquisition bindings' >&2
+  exit 1
+fi
 workflow="$3/.github/workflows/ci.yml"
 wrong_url=''
 if [ "$VELNOR_TEST_OUTPUT_FAULT" = wrong-target ]; then
@@ -83,9 +268,11 @@ prepare_output_binding_candidate() {
   OUTPUT_BINDING_WRAPPER="$WORK/output-binding candidate"
   OUTPUT_BINDING_MANIFEST="$WORK/output-binding manifest.json"
   OUTPUT_BINDING_DUPLICATE_MANIFEST="$WORK/output-binding duplicate manifest.json"
+  OUTPUT_BINDING_MANIFEST_BACKUP_DIR="$WORK/manifest backups"
   OUTPUT_BINDING_REPO_POLICY_MARKER="$WORK/candidate repo-policy calls"
   write_output_binding_candidate_wrapper "$OUTPUT_BINDING_WRAPPER" || return 2
   OUTPUT_BINDING_BINARY_SHA="$(test_file_sha256 "$OUTPUT_BINDING_WRAPPER")" || return 2
+  mkdir -p "$OUTPUT_BINDING_MANIFEST_BACKUP_DIR" || return 2
   linux_sha="$TEST_LINUX_SHA"
   arm_sha="$TEST_ARM_SHA"
   intel_sha="$TEST_INTEL_SHA"
@@ -142,10 +329,70 @@ expected_output_binding_diagnostic() {
   esac
 }
 
+verify_output_binding_manifest_fixture() {
+  local fault="$1" retained="$2" backup_dir="$OUTPUT_BINDING_MANIFEST_BACKUP_DIR/$1"
+  if ! python3 - "$backup_dir" "$retained" "$OUTPUT_BINDING_MANIFEST" \
+    "$HOST_TARGET" "$CLI_SHA" "$OUTPUT_BINDING_BINARY_SHA" <<'PY'
+import hashlib
+import json
+from pathlib import Path
+import sys
+
+backup_dir, retained, candidate_manifest = map(Path, sys.argv[1:4])
+host, real_sha, candidate_sha = sys.argv[4:]
+original_path = backup_dir / 'original.json'
+replacement_path = backup_dir / 'replacement.json'
+receipt_path = backup_dir / 'receipt.json'
+if any(path.is_symlink() or not path.is_file() for path in
+       (original_path, replacement_path, receipt_path, candidate_manifest)):
+    raise SystemExit('fixture evidence or candidate manifest is missing or unsafe')
+original = original_path.read_bytes()
+replacement = replacement_path.read_bytes()
+if original != candidate_manifest.read_bytes():
+    raise SystemExit('saved scratch manifest differs from the exact candidate manifest')
+receipt = json.loads(receipt_path.read_text())
+if receipt.get('host_target') != host or receipt.get('real_cli_sha256') != real_sha \
+    or receipt.get('candidate_sha256') != candidate_sha \
+    or receipt.get('replacement_changes_only_unique_host_sha256') is not True \
+    or receipt.get('restored_byte_exact') is not True:
+    raise SystemExit('fixture receipt does not prove the approved host-only replacement and restore')
+if receipt.get('original_sha256') != hashlib.sha256(original).hexdigest() \
+    or receipt.get('replacement_sha256') != hashlib.sha256(replacement).hexdigest() \
+    or receipt.get('restored_sha256') != hashlib.sha256(original).hexdigest():
+    raise SystemExit('fixture receipt digest does not match retained bytes')
+document = json.loads(original)
+matches = [row for row in document['targets'] if row.get('target') == host]
+if len(matches) != 1 or matches[0].get('sha256') != candidate_sha:
+    raise SystemExit('saved fixture has no unique candidate-bound host row')
+token = f'"sha256": "{candidate_sha}"'.encode()
+if original.count(token) != 1 or replacement != original.replace(
+    token, f'"sha256": "{real_sha}"'.encode(), 1):
+    raise SystemExit('replacement did not change only the unique host SHA token')
+manifest_path = Path(receipt.get('manifest_path', ''))
+retained = retained.resolve(strict=True)
+if manifest_path.is_symlink() or manifest_path.parent.is_symlink() \
+    or not manifest_path.is_file() or manifest_path.read_bytes() != original:
+    raise SystemExit('scratch manifest was not restored byte-for-byte after generation')
+try:
+    manifest_path.relative_to(retained)
+except ValueError:
+    raise SystemExit('restored scratch manifest escaped the retained failed workspace')
+if manifest_path.parts[-2:] != ('.velnor', 'release-manifest.json'):
+    raise SystemExit('receipt does not identify the scratch release manifest')
+PY
+  then
+    echo "FAIL: disposable manifest host replacement or exact restore was not proven for $fault" >&2
+    return 1
+  fi
+  echo "passed host-only disposable manifest replacement and byte-exact restore: $fault"
+}
+
 expect_output_binding_fault_rejected() {
-  local fault="$1" expected status=0 log retained
+  local fault="$1" expected status=0 log retained backup_dir
   expected="$(expected_output_binding_diagnostic "$fault")" || return 2
   log="$WORK/output-binding-$fault.log"
+  backup_dir="$OUTPUT_BINDING_MANIFEST_BACKUP_DIR/$fault"
+  mkdir -p "$backup_dir" || return 2
   TMPDIR="$WORK/tmp workspace" \
     PATH="$STUB_BIN:$ORIGINAL_PATH" \
     VELNOR_TEST_CARGO_MARKER="$MARKER" \
@@ -155,6 +402,10 @@ expect_output_binding_fault_rejected() {
     VELNOR_TEST_REAL_CLI_BIN="$CLI_BIN" \
     VELNOR_TEST_OUTPUT_FAULT="$fault" \
     VELNOR_TEST_BAD_DIGEST="$OUTPUT_BINDING_BAD_DIGEST" \
+    VELNOR_TEST_HOST_TARGET="$HOST_TARGET" \
+    VELNOR_TEST_REAL_CLI_SHA256="$CLI_SHA" \
+    VELNOR_TEST_CANDIDATE_SHA256="$OUTPUT_BINDING_BINARY_SHA" \
+    VELNOR_TEST_MANIFEST_BACKUP_DIR="$backup_dir" \
     VELNOR_TEST_REPO_POLICY_MARKER="$OUTPUT_BINDING_REPO_POLICY_MARKER" \
     "$SCRIPT" check-release "$OUTPUT_BINDING_WRAPPER" "$OUTPUT_BINDING_MANIFEST" \
       "$OUTPUT_BINDING_MANIFEST_SHA" >"$log" 2>&1 || status=$?
@@ -183,6 +434,7 @@ expect_output_binding_fault_rejected() {
     echo "FAIL: candidate output binding $fault did not retain its failing workspace" >&2
     return 1
   fi
+  verify_output_binding_manifest_fixture "$fault" "$retained" || return $?
   rm -rf "$retained" || return 2
   echo "passed pre-normalization independent candidate binding rejection: $fault"
 }

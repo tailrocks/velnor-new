@@ -9,7 +9,11 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/generator-release/qualification-goldens.sh"
 SCRIPT="$ROOT/scripts/capture-opentofu-goldens.sh"
-GOLDEN_DIR="$ROOT/docs/proposed/opentofu-goldens"
+KEEP_WORK="${VELNOR_GOLDEN_KEEP_WORK:-0}"
+case "$KEEP_WORK" in
+  0|1) ;;
+  *) echo 'FATAL: VELNOR_GOLDEN_KEEP_WORK must be 0 or 1' >&2; exit 2 ;;
+esac
 CLI_ARG="${1:-}"
 if [ -z "$CLI_ARG" ]; then
   echo "FATAL: provide the CLI binary path"
@@ -18,6 +22,34 @@ fi
 if ! CALLER_DIR="$(pwd -P)"; then
   echo "FATAL: could not resolve caller directory"
   exit 2
+fi
+if [ -n "${VELNOR_GOLDEN_DIR:-}" ]; then
+  case "$VELNOR_GOLDEN_DIR" in
+    /*) requested_golden_dir="$VELNOR_GOLDEN_DIR" ;;
+    *) requested_golden_dir="$CALLER_DIR/$VELNOR_GOLDEN_DIR" ;;
+  esac
+  golden_name="${requested_golden_dir##*/}"
+  golden_parent="${requested_golden_dir%/*}"
+  if [ -z "$golden_name" ] || [ "$golden_name" = . ] || [ "$golden_name" = .. ] \
+    || ! golden_parent="$(cd -- "$golden_parent" 2>/dev/null && pwd -P)"; then
+    echo 'FATAL: external golden directory parent must exist' >&2
+    exit 2
+  fi
+  VELNOR_GOLDEN_DIR="$golden_parent/$golden_name"
+  case "$VELNOR_GOLDEN_DIR" in
+    "$ROOT"|"$ROOT"/*)
+      echo 'FATAL: VELNOR_GOLDEN_DIR must be outside the repository' >&2
+      exit 2
+      ;;
+  esac
+  if [ -L "$VELNOR_GOLDEN_DIR" ] || [ ! -d "$VELNOR_GOLDEN_DIR" ]; then
+    echo 'FATAL: external golden directory must be an existing regular directory' >&2
+    exit 2
+  fi
+  export VELNOR_GOLDEN_DIR
+  GOLDEN_DIR="$VELNOR_GOLDEN_DIR"
+else
+  GOLDEN_DIR="$ROOT/docs/proposed/opentofu-goldens"
 fi
 case "$CLI_ARG" in
   /*) CLI_BIN="$CLI_ARG" ;;
@@ -33,10 +65,14 @@ WORK="$(cd "$WORK" && pwd -P)" || exit 2
 cleanup_work() {
   local status=$?
   trap - EXIT
-  if [ "$status" -eq 0 ]; then
+  if [ "$status" -eq 0 ] && [ "$KEEP_WORK" -ne 1 ]; then
     rm -rf "$WORK"
   else
-    printf 'retaining failed golden harness workspace: %s\n' "$WORK" >&2
+    if [ "$status" -eq 0 ]; then
+      printf 'retaining successful golden harness evidence workspace: %s\n' "$WORK" >&2
+    else
+      printf 'retaining failed golden harness workspace: %s\n' "$WORK" >&2
+    fi
   fi
   exit "$status"
 }
@@ -113,26 +149,39 @@ case "$(uname -s):$(uname -m)" in
   Darwin:x86_64|Darwin:amd64) HOST_TARGET="x86_64-apple-darwin" ;;
   *) echo "FATAL: unsupported test host $(uname -s)/$(uname -m)" >&2; exit 2 ;;
 esac
+fixture_digest() {
+  local fixture_char candidate excluded="${1:-}"
+  for fixture_char in a b c d e f 0 1; do
+    candidate="$(printf '%064d' 0 | tr '0' "$fixture_char")"
+    if [ "$candidate" != "$CLI_SHA" ] && [ "$candidate" != "$excluded" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+TEST_FIXTURE_SHA_A="$(fixture_digest)" || exit 2
+TEST_FIXTURE_SHA_B="$(fixture_digest "$TEST_FIXTURE_SHA_A")" || exit 2
 case "$HOST_TARGET" in
   x86_64-unknown-linux-gnu)
     HOST_TARGET_INDEX=0
     OTHER_TARGET_INDEX=1
     TEST_LINUX_SHA="$CLI_SHA"
-    TEST_ARM_SHA="$(printf '%064d' 0 | tr '0' 'b')"
-    TEST_INTEL_SHA="$(printf '%064d' 0 | tr '0' 'c')"
+    TEST_ARM_SHA="$TEST_FIXTURE_SHA_A"
+    TEST_INTEL_SHA="$TEST_FIXTURE_SHA_B"
     ;;
   aarch64-apple-darwin)
     HOST_TARGET_INDEX=1
     OTHER_TARGET_INDEX=0
-    TEST_LINUX_SHA="$(printf '%064d' 0 | tr '0' 'b')"
+    TEST_LINUX_SHA="$TEST_FIXTURE_SHA_A"
     TEST_ARM_SHA="$CLI_SHA"
-    TEST_INTEL_SHA="$(printf '%064d' 0 | tr '0' 'c')"
+    TEST_INTEL_SHA="$TEST_FIXTURE_SHA_B"
     ;;
   x86_64-apple-darwin)
     HOST_TARGET_INDEX=2
     OTHER_TARGET_INDEX=0
-    TEST_LINUX_SHA="$(printf '%064d' 0 | tr '0' 'b')"
-    TEST_ARM_SHA="$(printf '%064d' 0 | tr '0' 'c')"
+    TEST_LINUX_SHA="$TEST_FIXTURE_SHA_A"
+    TEST_ARM_SHA="$TEST_FIXTURE_SHA_B"
     TEST_INTEL_SHA="$CLI_SHA"
     ;;
 esac
@@ -154,6 +203,25 @@ write_test_manifest() {
         sha256:$intel}
      ]}' >"$manifest"
 }
+
+test_manifest_host_binding() {
+  local manifest="$1"
+  if ! jq -e --arg host "$HOST_TARGET" --arg digest "$CLI_SHA" '
+    ([.targets[] | select(.target == $host) | .sha256] == [$digest]) and
+    ([.targets[] | select(.target != $host)] | length == 2 and all(.[]; .sha256 != $digest))
+  ' "$manifest" >/dev/null; then
+    echo 'FAIL: fixture manifest did not bind the exact CLI digest only to the host row' >&2
+    exit 1
+  fi
+  echo 'passed exact host-row fixture digest binding'
+}
+
+mkdir -p "$WORK/fixture consumer"
+if ! prepare_fixture_consumer_manifest "$WORK/fixture consumer" "$CLI_BIN"; then
+  echo 'FAIL: actual capture fixture manifest helper could not prepare consumer input' >&2
+  exit 1
+fi
+test_manifest_host_binding "$WORK/fixture consumer/.velnor/release-manifest.json"
 
 source "$ROOT/scripts/generator-release/test-fixture-git.sh"
 test_fixture_git_isolation || exit 1
@@ -437,6 +505,7 @@ WORKSPACES_BEFORE="$(find "$WORK/tmp workspace" -mindepth 1 -maxdepth 1 -type d 
 if (
   cd "$WORK" || exit 2
   TMPDIR="$WORK/tmp workspace" PATH="$STUB_BIN:$ORIGINAL_PATH" \
+    VELNOR_GOLDEN_KEEP_WORK=0 \
     VELNOR_TEST_CARGO_MARKER="$MARKER" \
     VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
     "$SCRIPT" check "space path/velnor-actions"
