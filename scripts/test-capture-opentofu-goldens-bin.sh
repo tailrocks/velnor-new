@@ -156,20 +156,20 @@ if [ "$status" -ne 0 ] || [ "$metadata" -ne 1 ]; then
   exit "$status"
 fi
 case "$mode" in
-  guard-mutation)
+  guard-mutation|metadata-failure)
+    current="$(pwd -P)" || exit 88
+    [ "${current##*/}" = nested ] || exit 0
     ;;
   dogfood-guard-mutation)
     current="$(pwd -P)" || exit 88
     [ "${current##*/}" = dogfood-repo ] || exit 0
-    ;;
-  metadata-failure)
     ;;
   *) exit 88 ;;
 esac
 mkdir "$base/claim" 2>/dev/null || exit 0
 printf invoked >"$base/metadata-succeeded" || exit 88
 if [ "$mode" = metadata-failure ]; then
-  printf 'real-mise-status=%s\nmode=%s\n' "$status" "$mode" >"$base/receipt" || exit 88
+  printf 'real-mise-status=%s\nmode=%s\nfixture=%s\n' "$status" "$mode" "${current##*/}" >"$base/receipt" || exit 88
   exit 57
 fi
 guard_copy="$(cat "$base/guard-copy")" || exit 88
@@ -183,8 +183,8 @@ if command -v sha256sum >/dev/null 2>&1; then
 else
   changed_sha="$(shasum -a 256 "$guard_copy" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')" || exit 88
 fi
-printf 'real-mise-status=%s\nmode=%s\nguard-copy=%s\nguard-sha256=%s\n' \
-  "$status" "$mode" "$guard_copy" "$changed_sha" >"$base/receipt" || exit 88
+printf 'real-mise-status=%s\nmode=%s\nfixture=%s\nguard-copy=%s\nguard-sha256=%s\n' \
+  "$status" "$mode" "${current##*/}" "$guard_copy" "$changed_sha" >"$base/receipt" || exit 88
 exit "$status"
 MISE
 chmod 700 "$FAULT_MISE_TEMPLATE/mise"
@@ -649,6 +649,7 @@ expect_execution_failure() {
   if [ ! -f "$mise_dir/metadata-succeeded" ] \
     || ! grep -Fq 'real-mise-status=0' "$mise_dir/receipt" \
     || ! grep -Fq 'mode=metadata-failure' "$mise_dir/receipt" \
+    || ! grep -Fq 'fixture=nested' "$mise_dir/receipt" \
     || [ -e "$MARKER" ]; then
     echo "FAIL: Cargo metadata failure did not run or implicit cargo build occurred" >&2
     exit 1
@@ -797,6 +798,7 @@ expect_guard_mutation_rejected() {
   if [ ! -f "$mise_dir/metadata-succeeded" ] \
     || ! grep -Fq 'real-mise-status=0' "$mise_dir/receipt" \
     || ! grep -Fq 'mode=guard-mutation' "$mise_dir/receipt" \
+    || ! grep -Fq 'fixture=nested' "$mise_dir/receipt" \
     || ! grep -Fq "guard-copy=$MUTATED_GUARD_PATH" "$mise_dir/receipt" \
     || ! grep -Fq "guard-sha256=$(test_file_sha256 "$MUTATED_GUARD_PATH")" "$mise_dir/receipt" \
     || [ "$(test_file_sha256 "$ARCHIVE_GUARD_INPUT_PATH")" != "$ARCHIVE_GUARD_INPUT_SHA256" ]; then
@@ -839,6 +841,7 @@ expect_dogfood_guard_mutation_rejected() {
   if [ "$status" -ne 2 ] || [ ! -f "$mise_dir/metadata-succeeded" ] \
     || ! grep -Fq 'real-mise-status=0' "$mise_dir/receipt" \
     || ! grep -Fq 'mode=dogfood-guard-mutation' "$mise_dir/receipt" \
+    || ! grep -Fq 'fixture=dogfood-repo' "$mise_dir/receipt" \
     || ! grep -Fq "guard-copy=$mutated" "$mise_dir/receipt" \
     || ! grep -Fq "guard-sha256=$(test_file_sha256 "$mutated")" "$mise_dir/receipt" \
     || [ "$(test_file_sha256 "$ARCHIVE_GUARD_INPUT_PATH")" != "$ARCHIVE_GUARD_INPUT_SHA256" ]; then
