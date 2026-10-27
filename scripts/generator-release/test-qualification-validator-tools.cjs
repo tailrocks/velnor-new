@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
@@ -8,6 +8,9 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
+
+assert.equal(process.versions.bun, Bun.version, "validator tests must run with Bun");
+assert.ok(Bun.semver.satisfies(Bun.version, ">=1.4.4"), "validator tests require Bun 1.4.4 or newer");
 
 const [helper, lockPath] = process.argv.slice(2);
 if (!helper || !lockPath || process.argv.length !== 4) {

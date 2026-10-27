@@ -105,6 +105,41 @@ if [ "$RUST_LOCAL" != "$RUST_POLICY" ] || [ "$MBX_LOCAL" != "$MBX_POLICY" ] ||
 fi
 SPECS="rust@$RUST_POLICY mr-boxington@$MBX_POLICY aqua:nextest-rs/nextest/cargo-nextest@$NEXTEST_POLICY"
 echo "pinned specs: $SPECS"
+BUN_PIN="$(toml_tool_pin mise.toml bun 2>/dev/null || true)"
+if [[ ! "$BUN_PIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  fail "toolchain (missing exact project Bun pin; log: $TOOLCHAIN_LOG)"
+  echo "verify-local: FAIL:$FAILURES"
+  exit 1
+fi
+if ! awk -v pin="$BUN_PIN" '$0 == "[[tools.bun]]" { inside=1; next } /^\[\[/ { inside=0 } inside && $0 == "version = \"" pin "\"" { found=1 } END { exit !found }' mise.lock; then
+  fail "toolchain (mise.lock Bun pin does not match mise.toml $BUN_PIN; log: $TOOLCHAIN_LOG)"
+  echo "verify-local: FAIL:$FAILURES"
+  exit 1
+fi
+cp mise.lock "$LOG_DIR/mise.lock.before-bun-install"
+if ! mise install --locked "bun@$BUN_PIN" >>"$TOOLCHAIN_LOG" 2>&1; then
+  fail "toolchain (Bun mise install failed; log: $TOOLCHAIN_LOG)"
+  echo "verify-local: FAIL:$FAILURES"
+  exit 1
+fi
+BUN_BIN="$(mise which bun --tool "bun@$BUN_PIN" 2>>"$TOOLCHAIN_LOG" || true)"
+if [ -z "$BUN_BIN" ]; then
+  fail "toolchain (mise did not resolve pinned Bun $BUN_PIN; log: $TOOLCHAIN_LOG)"
+  echo "verify-local: FAIL:$FAILURES"
+  exit 1
+fi
+BUN_VER="$("$BUN_BIN" --version 2>>"$TOOLCHAIN_LOG" || true)"
+if [ "$BUN_VER" != "$BUN_PIN" ]; then
+  fail "toolchain (effective Bun $BUN_VER != pin $BUN_PIN; log: $TOOLCHAIN_LOG)"
+  echo "verify-local: FAIL:$FAILURES"
+  exit 1
+fi
+if ! cmp -s "$LOG_DIR/mise.lock.before-bun-install" mise.lock; then
+  fail "toolchain (Bun installation changed mise.lock; log: $TOOLCHAIN_LOG)"
+  echo "verify-local: FAIL:$FAILURES"
+  exit 1
+fi
+echo "effective: bun $BUN_VER"
 # shellcheck disable=SC2206
 _PIN_PARTS=($SPECS)
 RUST_PIN="${_PIN_PARTS[0]#*@}"

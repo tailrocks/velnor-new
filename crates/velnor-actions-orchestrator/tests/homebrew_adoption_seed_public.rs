@@ -329,6 +329,7 @@ fn pins() -> ProductReleasePins {
         install_intel_target_argv: vec![],
         install_resource_probe_target_argv: vec![],
         runner_build_argv: vec![],
+        attestation_helper_build_argv: vec![],
         resource_probe_build_argv: vec![],
         install_resource_probe_release_tools_argv: vec![],
         resource_probe_release_build_argv: vec![],

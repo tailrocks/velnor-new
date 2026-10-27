@@ -96,7 +96,27 @@ QUALIFICATION_GUARD_INPUT_PATH="$ARCHIVE_GUARD_INPUT_PATH"
 QUALIFICATION_GUARD_INPUT_SHA256="$ARCHIVE_GUARD_INPUT_SHA256"
 source "$ROOT/scripts/generator-release/qualification-goldens.sh"
 cd "$ROOT"
-command -v node >/dev/null 2>&1 || { echo 'FATAL: Node.js is required for plan diagnostic qualification' >&2; exit 2; }
+qualification_bun_bin() {
+  local declared actual resolved
+  declared="$(mise --no-config --no-env --no-hooks config get -f "$ROOT/mise.toml" tools.bun)" || return 2
+  if [ -n "${VELNOR_BUN_VERSION:-}" ] && [ "$VELNOR_BUN_VERSION" != "$declared" ]; then
+    printf 'FATAL: Bun selection differs from mise.toml: %s != %s\n' "$VELNOR_BUN_VERSION" "$declared" >&2
+    return 2
+  fi
+  resolved="$(MISE_EXEC_AUTO_INSTALL=0 mise --no-config --no-env --no-hooks which bun --tool "bun@$declared")" || return 2
+  actual="$("$resolved" --version)" || return 2
+  if [ "$actual" != "$declared" ]; then
+    printf 'FATAL: installed Bun %s differs from pinned bun@%s\n' "$actual" "$declared" >&2
+    return 2
+  fi
+  printf '%s\n' "$resolved"
+}
+qualification_bun_stdin() {
+  local bun_bin
+  bun_bin="${VELNOR_BUN_BIN:-$(qualification_bun_bin)}" || return 2
+  "$bun_bin" --bun run -- - "$@"
+}
+QUALIFICATION_BUN_BIN="$(qualification_bun_bin)" || exit 2
 prepare_qualification_guard || exit 2
 verify_qualification_guard || exit 2
 CLI_SHA="$(file_sha256 "$CLI")" || exit 2
@@ -137,7 +157,7 @@ stdin_sha256() {
 }
 
 golden_fingerprint() {
-  node - "$1" <<'JS'
+  "$QUALIFICATION_BUN_BIN" --bun run -- - "$1" <<'JS'
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -362,7 +382,7 @@ run_collector() {
 }
 
 assert_plan_bytes() {
-  node - "$OUTPUT" "$1" "$2" "$3" "$4" "$ROOT" <<'JS'
+  "$QUALIFICATION_BUN_BIN" --bun run -- - "$OUTPUT" "$1" "$2" "$3" "$4" "$ROOT" <<'JS'
 const fs = require('node:fs');
 const [output, label, mode, caseName, repo, root] = process.argv.slice(2);
 const base = `${output}/${label}-${caseName}`;
@@ -594,7 +614,7 @@ if ! grep -Fq 'FATAL: plan failed for nested' "$OUTPUT/fail57.log" \
   echo 'FAIL: injected plan failure did not follow a successful plan without running generate' >&2
   record_behavior_failure 'fail57 did not preserve the post-plan failure boundary'
 fi
-node - "$OUTPUT/fail57.log" "$OUTPUT/fail57-nested-plan.stderr.raw.txt" <<'JS' \
+"$QUALIFICATION_BUN_BIN" --bun run -- - "$OUTPUT/fail57.log" "$OUTPUT/fail57-nested-plan.stderr.raw.txt" <<'JS' \
   || record_behavior_failure 'fail57 raw stderr was not surfaced byte-for-byte'
 const fs = require('node:fs');
 const [logPath, rawPath] = process.argv.slice(2);

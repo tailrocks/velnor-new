@@ -6,6 +6,18 @@ write_output_binding_candidate_wrapper() {
   local wrapper="$1"
   cat >"$wrapper" <<'WRAPPER'
 #!/bin/sh
+qualification_bun_stdin() {
+  if [ -z "${VELNOR_BUN_BIN-}" ] || [ ! -x "$VELNOR_BUN_BIN" ] || [ -z "${VELNOR_BUN_VERSION-}" ]; then
+    echo 'FAIL: validated Bun runtime is unavailable to the generated wrapper' >&2
+    return 2
+  fi
+  actual_bun_version="$("$VELNOR_BUN_BIN" --version)" || return 2
+  if [ "$actual_bun_version" != "$VELNOR_BUN_VERSION" ]; then
+    printf 'FAIL: generated wrapper Bun %s differs from the pin %s\n' "$actual_bun_version" "$VELNOR_BUN_VERSION" >&2
+    return 2
+  fi
+  "$VELNOR_BUN_BIN" --bun run -- - "$@"
+}
 if [ "${VELNOR_INTERNAL_OP-}" = "repo-policy-v1" ]; then
   if [ -n "${VELNOR_TEST_REPO_POLICY_MARKER-}" ]; then
     printf '%s\n' "${VELNOR_REPO_POLICY_ACTION-unset}" >>"$VELNOR_TEST_REPO_POLICY_MARKER"
@@ -77,7 +89,7 @@ if ! cp -p "$fixture_manifest" "$fixture_original" \
   exit 1
 fi
 fixture_backup_ready=1
-if ! node - "$fixture_original" "$fixture_replacement" "$fixture_receipt" \
+if ! qualification_bun_stdin "$fixture_original" "$fixture_replacement" "$fixture_receipt" \
   "$VELNOR_TEST_HOST_TARGET" "$VELNOR_TEST_REAL_CLI_SHA256" "$VELNOR_TEST_CANDIDATE_SHA256" "$PWD/$fixture_manifest" <<'JS'
 const fs = require('node:fs');
 const crypto = require('node:crypto');
@@ -140,7 +152,7 @@ if ! cmp -s "$fixture_original" "$fixture_manifest"; then
   echo 'FATAL: scratch manifest restoration was not byte exact' >&2
   exit 1
 fi
-if ! node - "$fixture_receipt" "$fixture_manifest" <<'JS'
+if ! qualification_bun_stdin "$fixture_receipt" "$fixture_manifest" <<'JS'
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 const [receiptPath, manifestPath] = process.argv.slice(2);
@@ -159,7 +171,7 @@ fi
 trap - EXIT HUP INT TERM
 rm -f "$fixture_install" "$fixture_manifest.restore.$$"
 if [ "$real_status" -ne 0 ]; then exit "$real_status"; fi
-if ! node - "$3/.github" "$fixture_original" "$fixture_receipt" \
+if ! qualification_bun_stdin "$3/.github" "$fixture_original" "$fixture_receipt" \
   "$VELNOR_TEST_HOST_TARGET" "$VELNOR_TEST_REAL_CLI_SHA256" "$VELNOR_TEST_CANDIDATE_SHA256" <<'JS'
 const fs = require('node:fs');
 const path = require('node:path');
@@ -468,7 +480,7 @@ expect_normalized_output_bindings_valid() {
 
 verify_output_binding_manifest_fixture() {
   local fault="$1" retained="$2" backup_dir="$OUTPUT_BINDING_MANIFEST_BACKUP_DIR/$1"
-  if ! node - "$backup_dir" "$retained" "$OUTPUT_BINDING_MANIFEST" \
+  if ! qualification_bun_stdin "$backup_dir" "$retained" "$OUTPUT_BINDING_MANIFEST" \
     "$HOST_TARGET" "$CLI_SHA" "$OUTPUT_BINDING_BINARY_SHA" <<'JS'
 const fs = require('node:fs');
 const path = require('node:path');

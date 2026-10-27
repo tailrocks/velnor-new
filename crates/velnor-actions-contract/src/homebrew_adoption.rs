@@ -152,7 +152,7 @@ impl HomebrewAdoptionTransition {
             || !full_sha(&self.base_tree)
             || self.template_version != 3
             || !stable_semver(&self.minimum_sdk_version)
-            || !minimum_sdk_version_at_least(&self.minimum_sdk_version, (0, 1, 58))
+            || !minimum_sdk_version_at_least(&self.minimum_sdk_version, (0, 1, 59))
             || self.required_sdk_capability != "homebrew-adoption-seed-v1"
             || self.claude_source_path != "AGENTS.md"
             || !full_sha(&self.claude_source_blob_sha)
