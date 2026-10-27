@@ -1391,7 +1391,7 @@ jobs:
             exit 1
           fi
           set +e
-          mise --no-config --no-env --no-hooks exec node@26.12.0 -- \
+          mise --no-config --no-env --no-hooks exec node@26.12.0 -- node \
             scripts/generator-release/test-rust-verifier-retries.cjs \
             "$action" "$receipt" >"$log" 2>&1
           command_status=$?
