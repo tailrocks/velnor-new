@@ -220,6 +220,24 @@ pub(crate) fn probe_protected_homebrew_authority(
     }))
 }
 
+pub(crate) fn verify_homebrew_authority_pull_request_checkout(
+    root: &Path,
+    pull: &crate::package_release_publish::PublicPullRequestSnapshot,
+    base_sha: &str,
+    head_sha: &str,
+    checkout_head: &str,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    context::pull_request_context::verify_checkout(
+        root,
+        pull,
+        base_sha,
+        head_sha,
+        checkout_head,
+        deadline,
+    )
+}
+
 pub(crate) fn protected_locator_absent_on_default_branch(
     repository: &str,
     deadline: CheckDeadline,

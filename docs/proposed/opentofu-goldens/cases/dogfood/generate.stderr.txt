@@ -32,6 +32,7 @@ Repository: <repo>
 .github/workflows/product-release-images.yml
 .github/workflows/product-release.yml
 .github/workflows/qualification.yml
+.github/workflows/source-qualification.yml
 mise.lock is read-only input; Velnor never modifies it
 mise.toml is read-only input; Velnor never modifies it
 rust-toolchain.toml is read-only input; Velnor never modifies it

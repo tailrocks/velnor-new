@@ -56,6 +56,8 @@ mod release;
 pub mod release_eligibility;
 #[path = "schema2_resource_probe_image.rs"]
 mod resource_probe_image;
+#[path = "schema2_generator_source_qualification.rs"]
+mod source_qualification;
 pub use product_release_pins::ProductReleasePins;
 
 pub fn render_consumer_binary_release(
@@ -126,6 +128,16 @@ pub fn render_schema2_workflows(
         for (path, action) in generated.actions {
             files.push(file(&path, &request.version, &action)?);
         }
+    }
+    if request
+        .workflows
+        .contains(&RoutingWorkflow::GeneratorRelease)
+    {
+        files.push(file(
+            source_qualification::WORKFLOW_PATH,
+            &request.version,
+            &source_qualification::render(request)?,
+        )?);
     }
     if request.workflows.contains(&RoutingWorkflow::ImageRelease) {
         files.push(job_image_candidate::render_candidate_workflow(request)?);

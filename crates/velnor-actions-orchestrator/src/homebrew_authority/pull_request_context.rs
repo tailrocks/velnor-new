@@ -353,7 +353,7 @@ fn parse_runner(
     })
 }
 
-fn verify_checkout(
+pub(in crate::homebrew::authority) fn verify_checkout(
     root: &Path,
     pull: &crate::package_release_publish::PublicPullRequestSnapshot,
     base_sha: &str,

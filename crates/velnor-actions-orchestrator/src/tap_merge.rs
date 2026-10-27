@@ -77,6 +77,17 @@ fn merge_once() -> Result<TapMergeOutcome, OrchestratorError> {
         if verified.into_outcome() != candidate.promotion.outcome {
             return Err(internal("tap_merge_initialization_handoff_changed"));
         }
+        if candidate.plan.channel
+            == velnor_actions_contract::package_release::PackageReleaseChannel::Preview
+            && !crate::tap_source_freshness::verify_preview_source_is_current(
+                &candidate.plan.repository,
+                &candidate.plan.default_branch,
+                candidate.release.receipt.repository.id,
+                &candidate.release.receipt.source.commit_sha,
+            )?
+        {
+            return Err(internal("tap_merge_source_superseded_during_operation"));
+        }
         return Ok(TapMergeOutcome::InitializedByCutover);
     }
     if candidate

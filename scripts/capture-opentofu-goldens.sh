@@ -122,7 +122,7 @@ copy_tree() {
   cp -RP "$1" "$2"
 }
 
-# Do not pin checkout-specific paths printed by `generate` in stderr goldens.
+# Do not pin checkout-specific paths printed by CLI commands in stderr goldens.
 normalize_generate_stderr() {
   local path="$1" normalized="$1.normalized"
   if ! sed -e 's|^Preview: .*|Preview: <preview>|' \
@@ -214,8 +214,9 @@ capture_case() {
   local raw="$WORK/raw/$case"
   mkdir -p "$out" "$preview" "$raw"
   (cd "$repo" && "$BIN" plan >"$raw/plan.raw.txt" 2>"$raw/plan.stderr.raw.txt"; echo "$?" >"$out/plan.exit")
-  if ! : >"$out/plan.stderr.txt"; then
-    echo "FATAL: could not write the path-free plan stderr sentinel for $case"
+  if ! cp "$raw/plan.stderr.raw.txt" "$out/plan.stderr.txt" \
+    || ! normalize_generate_stderr "$out/plan.stderr.txt"; then
+    echo "FATAL: could not stage normalized plan diagnostics for $case"
     exit 2
   fi
   if [ "$(cat "$out/plan.exit")" != "0" ]; then
@@ -271,8 +272,9 @@ capture_dogfood() {
   mkdir -p "$out" "$preview" "$raw"
   head=$(git -C "$ROOT" rev-parse HEAD)
   (cd "$ROOT" && "$BIN" plan >"$raw/plan.raw.txt" 2>"$raw/plan.stderr.raw.txt"; echo "$?" >"$out/plan.exit")
-  if ! : >"$out/plan.stderr.txt"; then
-    echo "FATAL: could not write the path-free dogfood plan stderr sentinel"
+  if ! cp "$raw/plan.stderr.raw.txt" "$out/plan.stderr.txt" \
+    || ! normalize_generate_stderr "$out/plan.stderr.txt"; then
+    echo "FATAL: could not stage normalized dogfood plan diagnostics"
     exit 2
   fi
   if [ "$(cat "$out/plan.exit")" != "0" ]; then

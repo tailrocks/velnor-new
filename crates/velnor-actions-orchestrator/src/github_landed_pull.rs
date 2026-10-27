@@ -28,6 +28,30 @@ pub(crate) struct RestLandedPull<'a> {
     pub(crate) merge_sha: Option<&'a str>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct GitHubRestUser {
+    pub(crate) id: u64,
+    pub(crate) login: String,
+    #[serde(rename = "type")]
+    pub(crate) account_type: String,
+}
+
+impl GitHubRestUser {
+    pub(crate) fn is_user(&self) -> bool {
+        self.id > 0 && self.account_type == "User" && Self::valid_login(&self.login)
+    }
+
+    pub(crate) fn valid_login(login: &str) -> bool {
+        !login.is_empty()
+            && login.len() <= 39
+            && login.as_bytes()[0].is_ascii_alphanumeric()
+            && login.as_bytes()[login.len() - 1].is_ascii_alphanumeric()
+            && login
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+    }
+}
+
 pub(crate) fn read_merge_oid(
     repository_id: u64,
     repository: &str,

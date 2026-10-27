@@ -532,6 +532,10 @@ if [ "$WORKSPACES_AFTER" != "$WORKSPACES_BEFORE" ]; then
   echo "FAIL: successful check left behind a private golden workspace" >&2
   exit 1
 fi
+if ! bash "$ROOT/scripts/generator-release/test-plan-diagnostics.sh" "$CLI_BIN" "$WORK/plan-diagnostics"; then
+  echo 'FAIL: successful plan diagnostic preservation regression' >&2
+  exit 1
+fi
 AFTER="$(golden_fingerprint)" || exit 2
 if [ "$AFTER" != "$BEFORE" ]; then
   echo "FAIL: successful check changed goldens" >&2

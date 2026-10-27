@@ -40,6 +40,7 @@ pub(crate) fn verify_formula(
     let seed_base =
         crate::homebrew::structural_cutover::verify_seed_output_base(root, &authority, deadline)?;
     if let Some(witness) = seed_base {
+        verify_cutover_author(root, identity, event, deadline)?;
         crate::homebrew::structural_cutover::validate_structural_candidate(
             root, &authority, &witness, deadline,
         )?;
@@ -48,6 +49,74 @@ pub(crate) fn verify_formula(
         verify_protected_formula_bytes(&authority, channel, &bytes, deadline)
     }
 }
+
+fn verify_cutover_author(
+    root: &Path,
+    identity: &crate::internal_plan::native_homebrew_checks::NativeCheckIdentityExtension,
+    event: velnor_actions_contract::WorkflowEvent,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    let transition = crate::homebrew::structural_cutover::protected_transition()?;
+    let expected =
+        crate::homebrew::structural_cutover::verify_author_policy(transition.transition())?;
+    let number = crate::internal_plan::native_homebrew_checks::pull_request_number_from_env(event)?
+        .ok_or_else(|| internal("homebrew_cutover_pull_request_missing"))?;
+    let pull = crate::package_release_publish::read_public_pull_request(
+        &transition.transition().tap_repository,
+        transition.transition().tap_repository_id,
+        number,
+        deadline,
+    )?;
+    admit_cutover_author_pull(
+        root,
+        &pull,
+        transition.transition(),
+        &identity.tap_base_sha,
+        &identity.head,
+        &expected,
+        deadline,
+    )
+}
+
+fn admit_cutover_author_pull(
+    root: &Path,
+    pull: &crate::package_release_publish::PublicPullRequestSnapshot,
+    transition: &velnor_actions_contract::homebrew_adoption::HomebrewAdoptionTransition,
+    expected_base: &str,
+    checkout_head: &str,
+    expected_author: &crate::github_landed_pull::GitHubRestUser,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    let observed_author = pull
+        .author
+        .as_ref()
+        .ok_or_else(|| internal("homebrew_cutover_pull_author"))?;
+    if pull.state != "open"
+        || pull.draft
+        || pull.merged
+        || pull.base_repository != transition.tap_repository
+        || pull.base_repository_id != transition.tap_repository_id
+        || pull.head_repository != transition.tap_repository
+        || pull.head_repository_id != transition.tap_repository_id
+        || pull.base_ref != "main"
+        || pull.base_sha != expected_base
+    {
+        return Err(internal("homebrew_cutover_author_mismatch"));
+    }
+    crate::homebrew::structural_cutover::require_author(expected_author, observed_author)?;
+    crate::homebrew::authority::verify_homebrew_authority_pull_request_checkout(
+        root,
+        pull,
+        expected_base,
+        &pull.head_sha,
+        checkout_head,
+        deadline,
+    )
+}
+
+#[cfg(test)]
+#[path = "formula_cutover_author_tests.rs"]
+mod cutover_author_tests;
 
 fn validate_formula_identity(
     identity: &crate::internal_plan::native_homebrew_checks::NativeCheckIdentityExtension,

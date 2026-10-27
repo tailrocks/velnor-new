@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 use velnor_actions_mise::CheckDeadline;
 
+use crate::github_landed_pull::GitHubRestUser;
 use crate::{OrchestratorError, internal::internal};
 use velnor_actions_contract::vcs::VcsInputs;
 
@@ -49,6 +50,7 @@ pub(crate) struct PublicPullRequestSnapshot {
     pub(crate) head_ref: String,
     pub(crate) head_sha: String,
     pub(crate) merge_ref_sha: Option<String>,
+    pub(crate) author: Option<GitHubRestUser>,
 }
 
 pub(crate) fn read_public_repository_identity(
@@ -119,6 +121,7 @@ pub(crate) fn read_public_pull_request(
         head_ref: head.reference,
         head_sha: head.sha,
         merge_ref_sha,
+        author: response.user,
     };
     if !valid_head_reference(&snapshot.head_ref) {
         return Err(internal("package_public_pull_request_identity_mismatch"));
@@ -186,6 +189,7 @@ struct PublicPullRequestResponse {
     mergeable: Option<bool>,
     base: PublicPullRequestRef,
     head: PublicPullRequestRef,
+    user: Option<GitHubRestUser>,
 }
 
 #[derive(serde::Deserialize, PartialEq, Eq)]
