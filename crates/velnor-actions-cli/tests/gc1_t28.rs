@@ -267,3 +267,5 @@ fn cleanup_body(inventory: &Value, candidate_ids: &Value) -> Value {
 mod gc1_t28_a;
 #[path = "gc1_t28_b.rs"]
 mod gc1_t28_b;
+#[path = "gc1_t28_c.rs"]
+mod gc1_t28_c;

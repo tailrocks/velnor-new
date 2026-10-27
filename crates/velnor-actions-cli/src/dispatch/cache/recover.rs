@@ -58,7 +58,9 @@ fn admit_recover(
     };
     let len = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
     if len != entry.size_in_bytes {
-        return Err("cache recover stored_bytes_mismatch".to_owned());
+        println!("::warning::cache_corrupt: state payload size disagrees with inventory; building cold");
+        drop(fs::remove_file(&payload));
+        return Ok(None);
     }
     Ok(Some(RecoverPlan {
         inventory,
@@ -201,6 +203,10 @@ fn symlink_sweep_refused(dir: &Path) -> bool {
             }
             if file_type.is_dir() {
                 stack.push(entry.path());
+            } else if !file_type.is_file() {
+                // FIFOs, sockets, and device nodes are never part of a
+                // state snapshot: refuse them before the rename handoff.
+                return true;
             }
         }
     }
