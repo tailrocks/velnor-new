@@ -43,6 +43,10 @@ path = "tests/bun_private_repository_public.rs"
 name = "bun_assets_handoff_public"
 path = "tests/bun_assets_handoff_public.rs"
 
+[[test]]
+name = "review_completion_public"
+path = "tests/review_completion_public.rs"
+
 [dependencies]
 serde_json = { workspace = true }
 velnor-actions-orchestrator = { version = "=0.1.60", path = "../velnor-actions-orchestrator" }

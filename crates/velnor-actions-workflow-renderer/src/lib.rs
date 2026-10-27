@@ -28,6 +28,7 @@ mod commands;
 mod commands_env;
 mod commands_scan;
 mod composite;
+mod crate_group_ledger_steps;
 mod crate_obligations;
 pub mod dco;
 mod dispatch_cache_boundary;

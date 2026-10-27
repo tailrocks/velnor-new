@@ -18,8 +18,8 @@ Workflow to generate
     - plan (14 steps)
     - required (10 steps)
     - required-gate (1 steps)
-    - rust-minimal-cargo-read (17 steps)
-    - rust-minimal-cargo-write (18 steps)
+    - rust-minimal-cargo-read (18 steps)
+    - rust-minimal-cargo-write (19 steps)
     - 2 Rust crate jobs
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> run tests -> doctests -> doc build -> format check

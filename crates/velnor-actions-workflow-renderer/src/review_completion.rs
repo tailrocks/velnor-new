@@ -54,7 +54,11 @@ pub fn render_review_completion(spec: &ReviewCompletionSpec) -> Result<RenderedF
         ),
         (
             "permissions".to_owned(),
-            map(&[("contents", "read"), ("pull-requests", "read")]),
+            map(&[
+                ("checks", "read"),
+                ("contents", "read"),
+                ("pull-requests", "read"),
+            ]),
         ),
         ("steps".to_owned(), Yaml::Seq(steps::render(spec)?)),
     ]);

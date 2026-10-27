@@ -99,11 +99,12 @@ fn required_verdict_step(step: &Step) -> bool {
             matches!(
                 step.role,
                 Some(StepRole::AcquireVelnor | StepRole::PreparePinnedTools)
-            ) || step == &crate::steps_internal::group_ledger_steps::assemble_group_ledgers_step()
+            )
         }
         StepKind::Internal { operation, .. } => {
             operation == steps::MERGE_OPERATION
                 || operation == steps::FETCH_OPERATION
+                || step == &crate::steps_internal::group_ledger_steps::assemble_group_ledgers_step()
                 || operation
                     == &format!(
                         "{}:{}",

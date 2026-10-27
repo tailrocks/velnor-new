@@ -165,7 +165,7 @@ fn validate_final_jobs(
     ctx: &RenderContext,
 ) -> Result<(), RenderError> {
     crate::cache_steps::append_bundle_postludes(jobs)?;
-    crate::steps_internal::group_ledger_steps::append_emit_ledger_steps(jobs);
+    crate::crate_group_ledger_steps::append(jobs, policy);
     crate::cache_steps::append_workspace_cleanups(jobs)?;
     execution_boundaries::validate_required_verdict(jobs, phase, &ctx.authority_steps)?;
     execution_boundaries::validate_trusted_plan(jobs, policy, phase, &ctx.authority_steps)?;
