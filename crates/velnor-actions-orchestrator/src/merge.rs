@@ -296,7 +296,7 @@ fn decide(signals: &Signals, plan: &Plan) -> FinalStatus {
         FinalStatus::Failed
     } else if signals.cancelled {
         FinalStatus::Cancelled
-    } else if signals.blocked {
+    } else if signals.blocked || signals.needs_prepare {
         FinalStatus::Blocked
     } else if signals.not_run {
         FinalStatus::NotRun

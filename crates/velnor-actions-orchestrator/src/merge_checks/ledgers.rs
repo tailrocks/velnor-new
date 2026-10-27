@@ -115,10 +115,24 @@ fn check_group_ledger_conclusion(
         return;
     };
     let coherent = match record.conclusion {
-        JobConclusion::Success => ledger
-            .ordered_results
-            .iter()
-            .all(UnitResultV1::is_successful_completion),
+        JobConclusion::Success => {
+            if ledger
+                .ordered_results
+                .iter()
+                .any(|result| result.outcome == UnitOutcome::Failed)
+            {
+                false
+            } else if ledger_complete(ledger) {
+                true
+            } else if ledger_defers_preparation(ledger) {
+                // Honest-but-incomplete evidence: the executing branch deferred
+                // units to its sibling. Coverage routes this to `needs_prepare`;
+                // it is not corruption.
+                return;
+            } else {
+                false
+            }
+        }
         JobConclusion::Failure => ledger
             .ordered_results
             .iter()
@@ -131,6 +145,65 @@ fn check_group_ledger_conclusion(
     if !coherent {
         signals.planning_failed = true;
         miss_reasons.insert("cache_corrupt".to_owned());
+    }
+}
+
+fn ledger_complete(ledger: &UnitLedgerV1) -> bool {
+    ledger
+        .ordered_results
+        .iter()
+        .all(UnitResultV1::is_successful_completion)
+}
+
+fn ledger_defers_preparation(ledger: &UnitLedgerV1) -> bool {
+    !ledger_complete(ledger)
+        && ledger.ordered_results.iter().all(|result| {
+            result.outcome == UnitOutcome::NeedsPrepare || result.is_successful_completion()
+        })
+}
+
+#[derive(Default)]
+struct GroupLedgerStats {
+    reader_ledgers: usize,
+    writer_ledgers: usize,
+    reader_complete: usize,
+    writer_complete: usize,
+    defers_preparation: bool,
+}
+
+fn group_ledger_stats(ledgers: &[UnitLedgerV1]) -> BTreeMap<&str, GroupLedgerStats> {
+    let mut per_group: BTreeMap<&str, GroupLedgerStats> = BTreeMap::new();
+    for ledger in ledgers {
+        let (group, _) = ledger_group_key(ledger.job.job_key.as_str());
+        let stats = per_group.entry(group).or_default();
+        match ledger.execution_branch {
+            ExecutionBranch::Reader => {
+                stats.reader_ledgers += 1;
+                if ledger_complete(ledger) {
+                    stats.reader_complete += 1;
+                }
+            }
+            ExecutionBranch::Writer => {
+                stats.writer_ledgers += 1;
+                if ledger_complete(ledger) {
+                    stats.writer_complete += 1;
+                }
+            }
+        }
+        if ledger_defers_preparation(ledger) {
+            stats.defers_preparation = true;
+        }
+    }
+    per_group
+}
+
+fn resolve_group_winner(stats: &GroupLedgerStats, writer_wins: bool) -> Option<ExecutionBranch> {
+    if stats.writer_complete > 0 && (writer_wins || stats.reader_complete == 0) {
+        Some(ExecutionBranch::Writer)
+    } else if stats.reader_complete > 0 {
+        Some(ExecutionBranch::Reader)
+    } else {
+        None
     }
 }
 
@@ -147,14 +220,29 @@ fn check_group_ledger_coverage(
         .filter(|job| is_branch_group(request, job.job_id.as_str()))
         .map(|job| job.job_id.as_str())
         .collect();
+    let per_group = group_ledger_stats(ledgers);
+    // Only a push can execute both branches: the writer (later, trusted)
+    // wins over the reader. Off-push the writer cannot run, so a complete
+    // writer ledger next to a complete reader ledger is forged evidence and
+    // stays `cache_corrupt` through the per-group check below.
+    let writer_wins = plan.event == WorkflowEvent::Push;
     let mut claimed = BTreeSet::new();
     for ledger in ledgers {
+        let (group, branch) = ledger_group_key(ledger.job.job_key.as_str());
+        // A complete ledger supersedes its sibling branch: the losing branch
+        // re-states the same units, so its claims are not duplicate evidence.
+        let superseded = branch.is_some_and(|branch| {
+            per_group.get(group).is_some_and(|stats| {
+                resolve_group_winner(stats, writer_wins)
+                    .is_some_and(|winner| winner != branch)
+            })
+        });
         for result in &ledger.ordered_results {
             if !plan.task_ids.contains(&result.unit_id) {
                 signals.planning_failed = true;
                 miss_reasons.insert("cache_corrupt".to_owned());
             }
-            if !claimed.insert(result.unit_id.as_str()) {
+            if !superseded && !claimed.insert(result.unit_id.as_str()) {
                 signals.planning_failed = true;
                 miss_reasons.insert("cache_corrupt".to_owned());
             }
@@ -176,28 +264,35 @@ fn check_group_ledger_coverage(
             miss_reasons.insert("no_entry".to_owned());
         }
     }
-    let mut per_group: BTreeMap<&str, usize> = BTreeMap::new();
-    for ledger in ledgers {
-        let (group, _) = ledger_group_key(ledger.job.job_key.as_str());
-        *per_group.entry(group).or_default() += 1;
-    }
     for job in &plan.jobs {
         if !is_branch_group(request, job.job_id.as_str()) {
             continue;
         }
-        let count = per_group.get(job.job_id.as_str()).copied().unwrap_or(0);
+        let stats = per_group.get(job.job_id.as_str());
         match job.disposition {
             JobDisposition::Run => {
-                if count == 0 {
+                let Some(stats) = stats else {
                     signals.planning_failed = true;
                     miss_reasons.insert("no_entry".to_owned());
-                } else if count > 1 {
+                    continue;
+                };
+                // Exactly one complete ledger carries the group: on push the
+                // writer wins over the reader and the superseded sibling is
+                // silent. Off-push the writer cannot execute, so two complete
+                // ledgers stay corrupt. A group with evidence but no complete
+                // ledger is missing its writer preparation, not corrupt.
+                if stats.writer_complete > 0 && stats.reader_complete > 0 && !writer_wins {
                     signals.planning_failed = true;
                     miss_reasons.insert("cache_corrupt".to_owned());
+                } else if resolve_group_winner(stats, writer_wins).is_none()
+                    && stats.defers_preparation
+                {
+                    signals.needs_prepare = true;
+                    miss_reasons.insert("needs_prepare".to_owned());
                 }
             }
             JobDisposition::NotAffected => {
-                if count > 0 {
+                if stats.is_some_and(|stats| stats.reader_ledgers + stats.writer_ledgers > 0) {
                     signals.planning_failed = true;
                     miss_reasons.insert("gate_mismatch".to_owned());
                 }
