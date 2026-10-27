@@ -200,7 +200,7 @@ fn remove_path(path: &Path) -> Result<(), OrchestratorError> {
 
 fn safe_id(value: &str) -> bool {
     !value.is_empty()
-        && value.len() <= 100
+        && value.len() <= 133
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))

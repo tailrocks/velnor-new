@@ -21,6 +21,8 @@ pub const BUN_ASSETS_PREPARE_OPERATION: &str = "bun-assets-prepare-v1";
 
 pub const BUN_ASSETS_IMPORT_OPERATION: &str = "bun-assets-import-v1";
 
+pub const BUN_ASSETS_REPOSITORY_CHECK_OPERATION: &str = "bun-assets-repository-check-v1";
+
 pub const GITHUB_EVIDENCE_FETCH_OPERATION: &str = "github-evidence-fetch-v1";
 
 pub const GITHUB_EVIDENCE_IMPORT_OPERATION: &str = "github-evidence-import-v1";

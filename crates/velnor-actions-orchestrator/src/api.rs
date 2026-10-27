@@ -13,10 +13,16 @@ pub use super::homebrew::source_policy::{
     check_homebrew_source_policy, export_homebrew_source_policy,
 };
 
+#[path = "bun_assets_repository.rs"]
+mod bun_assets_repository;
 #[path = "github_evidence.rs"]
 mod github_evidence;
 #[path = "github_evidence_http.rs"]
 pub(crate) mod github_evidence_http;
+pub use bun_assets_repository::{
+    BUN_ASSETS_REPOSITORY_CHECK_OP, BunAssetsRepositoryRead, check_bun_assets_repository,
+    run_bun_assets_repository_check,
+};
 
 pub use super::bun_assets_handoff::{
     ASSET_ID_ENV as BUN_ASSETS_ID_ENV, ASSET_PINS_ENV as BUN_ASSETS_PINS_ENV, BUN_ASSETS_EXPORT_OP,

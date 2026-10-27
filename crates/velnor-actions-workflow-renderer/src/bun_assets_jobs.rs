@@ -4,7 +4,8 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    BUN_ASSETS_EXPORT_OPERATION, Job, JobTimeout, Step, StepKind, StepRole,
+    BUN_ASSETS_EXPORT_OPERATION, BUN_ASSETS_REPOSITORY_CHECK_OPERATION, Job, JobTimeout, Step,
+    StepKind, StepRole,
 };
 
 use crate::verification_jobs::bun_artifact_steps::{BUN_ASSETS_STAGE_DIR, bun_assets_archive_name};
@@ -57,6 +58,11 @@ fn validate_asset_producer(id: &str, steps: &[Step]) -> Result<(), RenderError> 
     let mut revokes = Vec::new();
     let mut acquires = Vec::new();
     for (index, step) in steps.iter().enumerate() {
+        let expected_condition = (step.role == Some(StepRole::PrivateRevoke))
+            .then_some(crate::private_source_steps::PRIVATE_REVOKE_CONDITION);
+        if step.condition.as_deref() != expected_condition {
+            return Err(invalid("bun_assets_producer_condition"));
+        }
         let accepted = match (&step.kind, step.role) {
             (StepKind::Shell { .. }, Some(StepRole::AcquireVelnor)) => {
                 acquires.push(index);
@@ -114,7 +120,22 @@ pub fn build_bun_assets_job(
 ) -> Result<Job, RenderError> {
     policy.validate()?;
     let mut all = vec![steps::checkout_step(checkout_uses)?];
-    all.extend(policy.steps.iter().cloned());
+    for (index, step) in policy.steps.iter().enumerate() {
+        if index == 1 {
+            all.push(repository_check_step(
+                "Check Bun asset repository before token mint",
+            )?);
+        }
+        if matches!(
+            &step.kind,
+            StepKind::Action { uses, .. } if uses.starts_with("actions/upload-artifact@")
+        ) {
+            all.push(repository_check_step(
+                "Check Bun asset repository before upload",
+            )?);
+        }
+        all.push(step.clone());
+    }
     Ok(Job {
         services: Vec::new(),
         outputs: BTreeMap::new(),
@@ -129,6 +150,22 @@ pub fn build_bun_assets_job(
         steps: all,
         check_runner: None,
     })
+}
+
+fn repository_check_step(name: &str) -> Result<Step, RenderError> {
+    let mut step = steps::internal_step(name, BUN_ASSETS_REPOSITORY_CHECK_OPERATION)?;
+    step.role = Some(StepRole::BunAssetsHandoff);
+    let StepKind::Internal { env, .. } = &mut step.kind else {
+        return Err(RenderError::InvalidWorkflow(
+            "bun_assets_repository_check_not_internal".to_owned(),
+        ));
+    };
+    env.insert("GH_TOKEN".to_owned(), "${{ github.token }}".to_owned());
+    env.insert(
+        "VELNOR_BUN_ASSET_REPOSITORY".to_owned(),
+        "${{ github.repository }}".to_owned(),
+    );
+    Ok(step)
 }
 
 pub(crate) fn validate_bun_assets_job(

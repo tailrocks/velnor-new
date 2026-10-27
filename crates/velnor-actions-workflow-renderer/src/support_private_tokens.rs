@@ -4,8 +4,8 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    PRIVATE_FETCH_TOKEN_ENV, PRIVATE_NPM_READ_EXPR, PRIVATE_NPM_READ_TOKEN_ENV,
-    PRIVATE_TOKEN_OUTPUT_EXPR, Step, StepKind, StepRole,
+    BUN_ASSETS_REPOSITORY_CHECK_OPERATION, PRIVATE_FETCH_TOKEN_ENV, PRIVATE_NPM_READ_EXPR,
+    PRIVATE_NPM_READ_TOKEN_ENV, PRIVATE_TOKEN_OUTPUT_EXPR, Step, StepKind, StepRole,
 };
 
 use crate::{RenderError, toolchain_env::STEP_PRIVATE_FETCH_ALLOWLIST};
@@ -60,6 +60,23 @@ pub(super) fn check_private_binding(id: &str, step: &Step) -> Result<(), RenderE
         return check_mint(id, step);
     }
     let env = step_env(step);
+    if let StepKind::Internal { operation, env } = &step.kind {
+        let repository_check = operation == BUN_ASSETS_REPOSITORY_CHECK_OPERATION
+            && step.role == Some(StepRole::BunAssetsHandoff)
+            && is_bun_assets_job_id(id)
+            && env.len() == 2
+            && env.get("GH_TOKEN").map(String::as_str) == Some("${{ github.token }}")
+            && env.get("VELNOR_BUN_ASSET_REPOSITORY").map(String::as_str)
+                == Some("${{ github.repository }}");
+        if repository_check {
+            return Ok(());
+        }
+        if (step.role == Some(StepRole::BunAssetsHandoff) || operation.starts_with("bun-assets-"))
+            && env.contains_key("GH_TOKEN")
+        {
+            return Err(outside(&step.name));
+        }
+    }
     if !is_private_binding_role(step.role) {
         let keyed = STEP_PRIVATE_FETCH_ALLOWLIST
             .iter()
@@ -90,6 +107,14 @@ pub(super) fn check_private_binding(id: &str, step: &Step) -> Result<(), RenderE
         }
     }
     Ok(())
+}
+
+fn is_bun_assets_job_id(id: &str) -> bool {
+    id.strip_prefix("bun-")
+        .and_then(|id| {
+            id.strip_suffix(crate::verification_jobs::bun_assets_jobs::BUN_ASSETS_SUFFIX)
+        })
+        .is_some_and(|id| !id.is_empty())
 }
 
 fn check_mint(id: &str, step: &Step) -> Result<(), RenderError> {
