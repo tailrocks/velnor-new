@@ -45,19 +45,23 @@ pub(super) fn build(
         Some(ExecutionMode::ScaleSet),
         Some(ExecutionMode::Both),
     ] {
-        let expanded = match velnor_actions_contract::expand_workflow(&ir, input.config, dispatch) {
+        let expansion = match velnor_actions_contract::expand_workflow_with_bun_plan(
+            &ir,
+            input.config,
+            dispatch,
+        ) {
             Ok(expanded) => expanded,
             Err(error) if dispatch.is_none() => return Err(error.into()),
             Err(_) => continue,
         };
         projections.push((
-            projection(&expanded.jobs, input.config.workflow.policy)?,
+            projection(&expansion.ir.jobs, input.config.workflow.policy)?,
             selector(input.config, dispatch)?,
         ));
         variants.push((
-            expanded.jobs.get(crate::render::FINAL_JOB_ID).cloned(),
+            expansion.ir.jobs.get(crate::render::FINAL_JOB_ID).cloned(),
             if input.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1 {
-                expanded.jobs.get(crate::render::PLAN_JOB_ID).cloned()
+                expansion.ir.jobs.get(crate::render::PLAN_JOB_ID).cloned()
             } else {
                 None
             },

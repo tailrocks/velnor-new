@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::{Concurrency, Trigger, WorkflowIr};
+use velnor_actions_contract::{BunLanePlan, Concurrency, Trigger, WorkflowIr};
 
 use crate::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, RenderError,
@@ -42,6 +42,7 @@ pub(crate) fn check_single_label(
     ir: &WorkflowIr,
     label: &str,
     workflow_tasks: &[WorkflowTaskPolicy],
+    bun_lane_plan: Option<&BunLanePlan>,
 ) -> Result<(), RenderError> {
     for (id, job) in &ir.jobs {
         if let Some(runner) = &job.check_runner {
@@ -65,8 +66,8 @@ pub(crate) fn check_single_label(
         } else {
             let task_label = workflow_tasks
                 .iter()
-                .find(|task| task.owns_job_id(id))
-                .and_then(|task| task.runner_label_for_job(id));
+                .find(|task| task.owns_projected_job_id(id, bun_lane_plan))
+                .and_then(|task| task.runner_label_for_projected_job(id, bun_lane_plan));
             let suite_runner_ok = id.starts_with("suite-")
                 && velnor_actions_contract::RunsOn::parse(&job.runs_on).is_ok();
             if job.runs_on != label

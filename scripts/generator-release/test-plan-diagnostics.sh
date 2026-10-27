@@ -3,22 +3,75 @@
 # SPDX-License-Identifier: Apache-2.0
 set -uo pipefail
 
-if [ "$#" -eq 2 ]; then
+POSITIONAL=()
+ARCHIVE_GUARD_INPUT_PATH=""
+ARCHIVE_GUARD_INPUT_SHA256=""
+SEEN_ARCHIVE_GUARD=0
+SEEN_ARCHIVE_GUARD_SHA256=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --archive-guard)
+      if [ "$SEEN_ARCHIVE_GUARD" -ne 0 ] || [ "$#" -lt 2 ]; then
+        echo 'FATAL: archive guard options must appear once as a path and SHA-256 pair' >&2
+        exit 2
+      fi
+      SEEN_ARCHIVE_GUARD=1
+      ARCHIVE_GUARD_INPUT_PATH="$2"
+      shift 2
+      ;;
+    --archive-guard-sha256)
+      if [ "$SEEN_ARCHIVE_GUARD_SHA256" -ne 0 ] || [ "$#" -lt 2 ]; then
+        echo 'FATAL: archive guard options must appear once as a path and SHA-256 pair' >&2
+        exit 2
+      fi
+      SEEN_ARCHIVE_GUARD_SHA256=1
+      ARCHIVE_GUARD_INPUT_SHA256="$2"
+      shift 2
+      ;;
+    --focused-prebuilt)
+      POSITIONAL+=("$1")
+      shift
+      ;;
+    --*)
+      echo 'FATAL: usage: test-plan-diagnostics.sh ABSOLUTE_CLI FRESH_ABSOLUTE_OUTPUT [--focused-prebuilt ABSOLUTE_CANDIDATE ABSOLUTE_BUILD_EVIDENCE]' >&2
+      exit 2
+      ;;
+    *) POSITIONAL+=("$1"); shift ;;
+  esac
+done
+if [ "$SEEN_ARCHIVE_GUARD" -ne "$SEEN_ARCHIVE_GUARD_SHA256" ]; then
+  echo 'FATAL: archive guard path and SHA-256 must be supplied together' >&2
+  exit 2
+fi
+if [ "$SEEN_ARCHIVE_GUARD" -eq 1 ] \
+  && { [ -z "$ARCHIVE_GUARD_INPUT_PATH" ] || [ -z "$ARCHIVE_GUARD_INPUT_SHA256" ]; }; then
+  echo 'FATAL: archive guard path and SHA-256 must be non-empty' >&2
+  exit 2
+fi
+if [ "${#POSITIONAL[@]}" -eq 2 ]; then
   FOCUSED_PREBUILT=0
   PREBUILT_CLI=''
   PREBUILT_BUILD=''
-elif [ "$#" -eq 5 ] && [ "$3" = --focused-prebuilt ]; then
+elif [ "${#POSITIONAL[@]}" -eq 5 ] && [ "${POSITIONAL[2]}" = --focused-prebuilt ]; then
   FOCUSED_PREBUILT=1
-  PREBUILT_CLI=$4
-  PREBUILT_BUILD=$5
+  PREBUILT_CLI=${POSITIONAL[3]}
+  PREBUILT_BUILD=${POSITIONAL[4]}
 else
   echo 'usage: test-plan-diagnostics.sh ABSOLUTE_CLI FRESH_ABSOLUTE_OUTPUT [--focused-prebuilt ABSOLUTE_CANDIDATE ABSOLUTE_BUILD_EVIDENCE]' >&2
   exit 2
 fi
+QUALIFICATION_GUARD_INPUT_PATH="$ARCHIVE_GUARD_INPUT_PATH"
+QUALIFICATION_GUARD_INPUT_SHA256="$ARCHIVE_GUARD_INPUT_SHA256"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 source "$ROOT/scripts/generator-release/qualification-goldens.sh"
-CLI=$1
-OUTPUT=$2
+prepare_qualification_guard || exit 2
+if [ "$SEEN_ARCHIVE_GUARD" -eq 0 ]; then
+  ARCHIVE_GUARD_INPUT_PATH="$QUALIFICATION_GUARD_BIN"
+  ARCHIVE_GUARD_INPUT_SHA256="$QUALIFICATION_GUARD_SHA256"
+fi
+ARCHIVE_GUARD_ARGS=(--archive-guard "$ARCHIVE_GUARD_INPUT_PATH" --archive-guard-sha256 "$ARCHIVE_GUARD_INPUT_SHA256")
+CLI=${POSITIONAL[0]}
+OUTPUT=${POSITIONAL[1]}
 [[ "$CLI" = /* ]] || { echo 'FATAL: CLI path must be absolute' >&2; exit 2; }
 cli_parent="$(cd "$(dirname "$CLI")" 2>/dev/null && pwd -P)" || { echo 'FATAL: CLI parent must exist' >&2; exit 2; }
 CLI="$cli_parent/$(basename "$CLI")"
@@ -171,7 +224,7 @@ golden_fingerprint() {
 }
 
 CLI_SHA="$(file_sha256 "$CLI")" || exit 2
-CLI_VERSION="$("$CLI" --version | awk 'NR == 1 && NF == 2 && $1 == "velnor-actions" { print $2; next } { exit 1 } END { if (NR != 1) exit 1 }')" || exit 2
+CLI_VERSION="$(run_qualification_candidate "$CLI" --version | awk 'NR == 1 && NF == 2 && $1 == "velnor-actions" { print $2; next } { exit 1 } END { if (NR != 1) exit 1 }')" || exit 2
 printf '%s\n' "$CLI" >"$OUTPUT/input-cli.path"
 printf '%s\n' "$CLI_SHA" >"$OUTPUT/input-cli.sha256"
 printf '%s\n' "$CLI_VERSION" >"$OUTPUT/input-cli.version"
@@ -428,7 +481,7 @@ if [ ! -f "$DIAGNOSTIC_CLI" ] || [ ! -x "$DIAGNOSTIC_CLI" ]; then
   exit 2
 fi
 DIAGNOSTIC_SHA="$(file_sha256 "$DIAGNOSTIC_CLI")" || exit 2
-DIAGNOSTIC_VERSION="$("$DIAGNOSTIC_CLI" --version | awk 'NR == 1 && NF == 2 && $1 == "velnor-actions" { print $2; next } { exit 1 } END { if (NR != 1) exit 1 }')" || exit 2
+DIAGNOSTIC_VERSION="$(run_qualification_candidate "$DIAGNOSTIC_CLI" --version | awk 'NR == 1 && NF == 2 && $1 == "velnor-actions" { print $2; next } { exit 1 } END { if (NR != 1) exit 1 }')" || exit 2
 if [ "$DIAGNOSTIC_VERSION" != "$CLI_VERSION" ]; then
   echo "FATAL: diagnostic CLI version $DIAGNOSTIC_VERSION differs from supplied CLI version $CLI_VERSION" >&2
   exit 2
@@ -689,7 +742,7 @@ run_collector() {
     export VELNOR_TEST_MISE_RECEIPT="$mise_receipt"
     export VELNOR_TEST_PLAN_SOURCE_ROOT="$ROOT"
     if [ -n "$mode" ]; then export VELNOR_TEST_PLAN_DIAGNOSTIC_MODE="$mode"; else unset VELNOR_TEST_PLAN_DIAGNOSTIC_MODE; fi
-    bash "$ROOT/scripts/capture-opentofu-goldens.sh" check "$temp_bin"
+    bash "$ROOT/scripts/capture-opentofu-goldens.sh" "${ARCHIVE_GUARD_ARGS[@]}" check "$temp_bin"
   ) >"$log" 2>&1 || collector_rc=$?
   printf '%s\n' "$collector_rc" >"$OUTPUT/$label.exit"
   if ! preserve_raw_plan_evidence "$label"; then return 2; fi

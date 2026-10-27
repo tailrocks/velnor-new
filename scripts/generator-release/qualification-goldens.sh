@@ -9,6 +9,8 @@ source "$ROOT/scripts/generator-release/fixture-git.sh"
 
 MAX_CANDIDATE_MANIFEST_BYTES=8388608
 QUALIFICATION_GUARD_BIN="$ROOT/.velnor/archive-guard/bin/velnor-archive-guard"
+QUALIFICATION_GUARD_INPUT_PATH="${QUALIFICATION_GUARD_INPUT_PATH:-}"
+QUALIFICATION_GUARD_INPUT_SHA256="${QUALIFICATION_GUARD_INPUT_SHA256:-}"
 QUALIFICATION_GUARD_READY=0
 QUALIFICATION_GUARD_SHA256=''
 QUALIFICATION_GUARD_IDENTITY=''
@@ -383,12 +385,69 @@ qualification_guard_identity() {
   fi
 }
 
+stat_identity_for_guard_parent() {
+  if [[ "$(uname -s)" == Darwin ]]; then
+    stat -f '%u %Lp' "$1"
+  else
+    stat -c '%u %a' "$1"
+  fi
+}
+
+admit_qualification_guard_input() {
+  local path="$QUALIFICATION_GUARD_INPUT_PATH" expected="$QUALIFICATION_GUARD_INPUT_SHA256"
+  local parent basename physical_parent identity owner mode links actual_sha
+  if [[ -z "$path" || -z "$expected" || ! "$path" == /* \
+    || ! "$expected" =~ ^[0-9a-f]{64}$ ]]; then
+    echo "FATAL: explicit archive guard path and lowercase SHA-256 are required" >&2
+    return 1
+  fi
+  basename="${path##*/}"
+  parent="${path%/*}"
+  [[ -n "$parent" ]] || parent="/"
+  if [[ -z "$basename" || ! -d "$parent" || -L "$parent" \
+    || ! -f "$path" || -L "$path" || ! -x "$path" ]]; then
+    echo "FATAL: explicit archive guard must be a regular executable in a private directory" >&2
+    return 1
+  fi
+  if ! physical_parent="$(cd -- "$parent" 2>/dev/null && pwd -P)" \
+    || [[ "$physical_parent/$basename" != "$path" ]]; then
+    echo "FATAL: explicit archive guard path must be canonical" >&2
+    return 1
+  fi
+  if [[ "$(uname -s)" == Darwin ]]; then
+    identity="$(stat -f '%u %Lp %l' "$path")" || return 1
+  else
+    identity="$(stat -c '%u %a %h' "$path")" || return 1
+  fi
+  read -r owner mode links <<<"$identity"
+  if [[ "$owner" != "$(id -u)" || ! "$mode" =~ ^[0-7]+$ || "$links" != 1 ]] \
+    || (( (8#$mode & 022) != 0 || (8#$mode & 0111) == 0 )); then
+    echo "FATAL: explicit archive guard ownership, permissions, or link count are unsafe" >&2
+    return 1
+  fi
+  read -r owner mode <<<"$(stat_identity_for_guard_parent "$parent")" || return 1
+  if [[ "$owner" != "$(id -u)" || ! "$mode" =~ ^[0-7]+$ ]] \
+    || (( (8#$mode & 077) != 0 )); then
+    echo "FATAL: explicit archive guard parent must be private to the current user" >&2
+    return 1
+  fi
+  if ! actual_sha="$(file_sha256 "$path")" || [[ "$actual_sha" != "$expected" ]]; then
+    echo "FATAL: explicit archive guard SHA-256 does not match supplied value" >&2
+    return 1
+  fi
+  QUALIFICATION_GUARD_BIN="$path"
+  QUALIFICATION_GUARD_SHA256="$expected"
+  export QUALIFICATION_GUARD_INPUT_PATH QUALIFICATION_GUARD_INPUT_SHA256
+}
+
 prepare_qualification_guard() {
   local compiled_fingerprint source_fingerprint
   if [[ "$QUALIFICATION_GUARD_READY" == 1 ]]; then
     return 0
   fi
-  if ! bash "$ROOT/scripts/build-owned-archive-guard.sh" >/dev/null; then
+  if [[ -n "$QUALIFICATION_GUARD_INPUT_PATH" || -n "$QUALIFICATION_GUARD_INPUT_SHA256" ]]; then
+    admit_qualification_guard_input || return 1
+  elif ! bash "$ROOT/scripts/build-owned-archive-guard.sh" >/dev/null; then
     echo "FATAL: could not provision trusted qualification archive guard" >&2
     return 1
   fi
@@ -437,6 +496,15 @@ verify_qualification_guard() {
   fi
 }
 
+run_qualification_candidate() {
+  local status=0
+  prepare_qualification_guard || return 2
+  verify_qualification_guard || return 2
+  "$@" || status=$?
+  verify_qualification_guard || return 2
+  return "$status"
+}
+
 host_target() {
   case "$(uname -s):$(uname -m)" in
     Linux:x86_64|Linux:amd64) echo "x86_64-unknown-linux-gnu" ;;
@@ -447,7 +515,7 @@ host_target() {
 }
 
 prepare_fixture_consumer_manifest() {
-  local repo="$1" binary="$2" manifest="$1/.velnor/release-manifest.json"
+  local repo="$1" binary="$2" binary_target="${3:-}" manifest="$1/.velnor/release-manifest.json"
   local version target commit digest host_digest fixture_digest fixture_char targets_json host
   if [ -e "$manifest" ] || [ -L "$manifest" ]; then
     [ -f "$manifest" ] && [ ! -L "$manifest" ]
@@ -457,12 +525,20 @@ prepare_fixture_consumer_manifest() {
     return 1
   fi
   mkdir -p "$repo/.velnor" || return 1
-  if ! version="$("$binary" --version | awk 'NR == 1 && NF == 2 && $1 == "velnor-actions" { print $2; next } { exit 1 } END { if (NR != 1) exit 1 }')" \
+  if ! version="$(run_qualification_candidate "$binary" --version | awk 'NR == 1 && NF == 2 && $1 == "velnor-actions" { print $2; next } { exit 1 } END { if (NR != 1) exit 1 }')" \
     || [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     return 1
   fi
   commit="$(printf '%040d' 0 | tr '0' 'b')"
-  if ! host="$(host_target)" || ! host_digest="$(file_sha256 "$binary")"; then
+  if [ -n "$binary_target" ]; then
+    case "$binary_target" in
+      x86_64-unknown-linux-gnu|aarch64-apple-darwin|x86_64-apple-darwin) host="$binary_target" ;;
+      *) return 1 ;;
+    esac
+  elif ! host="$(host_target)"; then
+    return 1
+  fi
+  if ! host_digest="$(file_sha256 "$binary")"; then
     return 1
   fi
   for fixture_char in a b c d e f 0 1; do
@@ -554,7 +630,7 @@ validate_candidate_manifest() {
     echo "FATAL: trusted qualification archive guard is unavailable" >&2
     exit 2
   fi
-  if ! version="$("$BIN" --version | awk 'NR == 1 && NF == 2 && $1 == "velnor-actions" { print $2; next } { exit 1 } END { if (NR != 1) exit 1 }')"; then
+  if ! version="$(run_qualification_candidate "$BIN" --version | awk 'NR == 1 && NF == 2 && $1 == "velnor-actions" { print $2; next } { exit 1 } END { if (NR != 1) exit 1 }')"; then
     echo "FATAL: could not read candidate CLI version" >&2
     exit 2
   fi
@@ -612,7 +688,7 @@ stage_candidate_manifest() {
 capture_release_case() {
   local case="$1" repo="$2" out="$3" preview="$3/preview"
   mkdir -p "$out" "$preview"
-  (cd "$repo" && "$BIN" generate --output-dir "$preview" >"$out/stdout.txt" 2>"$out/stderr.txt") \
+  (cd "$repo" && run_qualification_candidate "$BIN" generate --output-dir "$preview" >"$out/stdout.txt" 2>"$out/stderr.txt") \
     || {
       emit_candidate_stderr "$out/stderr.txt"
       echo "FATAL: release candidate generate failed for $case"
@@ -751,7 +827,7 @@ capture_release_dogfood() {
       exit 2
     fi
   done
-  if ! (cd "$repo" && "$BIN" generate --output-dir "$preview" >"$out/stdout.txt" 2>"$out/stderr.txt"); then
+  if ! (cd "$repo" && run_qualification_candidate "$BIN" generate --output-dir "$preview" >"$out/stdout.txt" 2>"$out/stderr.txt"); then
     echo "FATAL: release candidate dogfood generate failed"
     exit 2
   fi
