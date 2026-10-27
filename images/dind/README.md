@@ -2,9 +2,17 @@
 
 Platform: `linux/amd64`. ARM64 is not the baseline. One `dockerd` per worker.
 
+To build and qualify this image with the matching Runner image from a clean,
+committed Git checkout, run:
+
 ```sh
-docker build --platform linux/amd64 -t velnor-dind:29.9.1 images/dind
+VELNOR_SOURCE_REVISION="$(git rev-parse HEAD)" bash images/resource-probe/build-runner-images.sh
 ```
+
+The builder checks the source revision and tree, tags both images uniquely,
+and verifies that the Runner client reaches this private daemon through the
+shared Unix socket and not the outer Docker daemon. The qualified images stay
+local under their unique tags.
 
 Docker Engine `29.9.1` is the latest [Moby release](https://github.com/moby/moby/releases/tag/v29.9.1),
 downloaded from the [official static archive](https://download.docker.com/linux/static/stable/x86_64/docker-29.9.1.tgz).
