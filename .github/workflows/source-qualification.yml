@@ -647,8 +647,9 @@ jobs:
                 && mise --no-config --no-env --no-hooks exec \
                   "jactionlint@$VELNOR_JACTIONLINT_VERSION" -- jactionlint --version \
                   >"$evidence/logs/jactionlint-version.log" 2>&1 \
-                && [ "$(cat "$evidence/logs/jactionlint-version.log")" = "$VELNOR_JACTIONLINT_VERSION" ]; then
-                jactionlint_version="$(cat "$evidence/logs/jactionlint-version.log")"
+                && IFS= read -r jactionlint_version \
+                  <"$evidence/logs/jactionlint-version.log" \
+                && [ "$jactionlint_version" = "$VELNOR_JACTIONLINT_VERSION" ]; then
                 if ! jactionlint_binary_sha="$(sha256sum "$jactionlint_binary" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')" \
                   || [[ ! "$jactionlint_binary_sha" =~ ^[0-9a-f]{64}$ ]]; then
                   identity_status=1
