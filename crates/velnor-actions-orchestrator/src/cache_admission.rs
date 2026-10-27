@@ -262,71 +262,10 @@ fn check_byteceiling_charges(request: &AdmissionRequest) -> Result<(), Orchestra
     Ok(())
 }
 
-fn collect_blocked(request: &AdmissionRequest, parts: &EnvelopeParts) -> Vec<String> {
-    let mut blocked: Vec<String> = Vec::new();
-    if request.inventory_bytes.value.is_none() {
-        blocked.push(BLOCKED_UNKNOWN_INVENTORY.to_owned());
-    }
-    if request.pending_owned_bytes.value.is_none() {
-        blocked.push(BLOCKED_UNKNOWN_PENDING_WRITES.to_owned());
-    }
-    if request.foreign_inflight_bytes.value.is_none() {
-        blocked.push(BLOCKED_UNKNOWN_FOREIGN_EXPOSURE.to_owned());
-    }
-    if parts.candidate_upper_bound_bytes.value.is_none() || !parts.qualified {
-        blocked.push(BLOCKED_UNKNOWN_RUNTIME_ENVELOPE.to_owned());
-    }
-    if request.occupied_generation_slots >= MAX_GENERATION_SLOTS {
-        blocked.push(BLOCKED_GENERATION_SLOTS_EXHAUSTED.to_owned());
-    }
-    collect_headroom_block(
-        request,
-        parts.candidate_upper_bound_bytes.value,
-        &mut blocked,
-    );
-    collect_disk_block(request, &mut blocked);
-    blocked.sort();
-    blocked.dedup();
-    blocked
-}
+#[path = "cache_admission_blocked.rs"]
+mod cache_admission_blocked;
 
-fn collect_headroom_block(
-    request: &AdmissionRequest,
-    bound: Option<u64>,
-    blocked: &mut Vec<String>,
-) {
-    if let (Some(inventory), Some(pending), Some(foreign), Some(bound)) = (
-        request.inventory_bytes.value,
-        request.pending_owned_bytes.value,
-        request.foreign_inflight_bytes.value,
-        bound,
-    ) {
-        let fits = inventory
-            .checked_add(pending)
-            .and_then(|total| total.checked_add(foreign))
-            .and_then(|total| total.checked_add(bound))
-            .is_some_and(|total| total <= request.operating_ceiling_bytes);
-        if !fits {
-            blocked.push(BLOCKED_INSUFFICIENT_HEADROOM.to_owned());
-        }
-    }
-}
-
-fn collect_disk_block(request: &AdmissionRequest, blocked: &mut Vec<String>) {
-    if let (Some(peak), Some(available)) = (
-        request.peak_local_disk_bound.value,
-        request.available_local_disk.value,
-    ) {
-        if peak
-            .checked_add(request.local_disk_reserve)
-            .is_none_or(|required| required > available)
-        {
-            blocked.push(BLOCKED_INSUFFICIENT_LOCAL_DISK.to_owned());
-        }
-    } else {
-        blocked.push(BLOCKED_UNKNOWN_LOCAL_DISK.to_owned());
-    }
-}
+use self::cache_admission_blocked::collect_blocked;
 
 pub fn decide_admission(request: &AdmissionRequest) -> Result<AdmissionV1, OrchestratorError> {
     if request.claimed_freed_bytes != 0 {
@@ -334,7 +273,7 @@ pub fn decide_admission(request: &AdmissionRequest) -> Result<AdmissionV1, Orche
     }
     check_byteceiling_charges(request)?;
     let parts = envelope_parts(&request.envelope)?;
-    let blocked = collect_blocked(request, &parts);
+    let blocked = collect_blocked(request, &parts, &request.envelope);
     let decision = if blocked.is_empty() {
         AdmissionDecision::Admitted
     } else {
@@ -393,3 +332,7 @@ fn admission_error(problem: &str) -> OrchestratorError {
         problem: problem.to_owned(),
     }
 }
+
+#[cfg(test)]
+#[path = "cache_admission_inner_identity_tests.rs"]
+mod admission_inner_identity_tests;

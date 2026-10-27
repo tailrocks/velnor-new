@@ -302,3 +302,90 @@ fn decide_complete(
 #[cfg(test)]
 #[path = "selection_gc1_t42.rs"]
 mod gc1_t42_newest_predecessor;
+
+#[cfg(test)]
+mod same_rank_newest_predecessor_tests {
+    use velnor_actions_contract::canonical::digest_b3_typed;
+    use velnor_actions_contract::workflow::cache_context::JobBindingV1;
+    use velnor_actions_contract::workflow::cache_identity::{Gc1Family, GenerationId};
+
+    use super::*;
+
+    fn test_job() -> JobBindingV1 {
+        JobBindingV1 {
+            schema: 1,
+            repository_id: 1,
+            repository: "tailrocks/velnor-new".to_owned(),
+            run_id: 7,
+            run_attempt: 1,
+            job_id: 11,
+            job_key: "writer".to_owned(),
+            event: "push".to_owned(),
+            ref_name: "refs/heads/main".to_owned(),
+            workflow_sha: format!("{:040x}", 0xa5a5),
+            source_sha: format!("{:040x}", 0x5a5a),
+            plan_digest: digest_b3_typed(b"selection-same-rank-plan"),
+        }
+    }
+
+    fn requested_generation() -> GenerationId {
+        GenerationId {
+            family: Gc1Family::State,
+            group_digest: digest_b3_typed(b"selection-same-rank-group"),
+            compatibility_digest: digest_b3_typed(b"selection-same-rank-compat"),
+            coverage_digest: digest_b3_typed(b"selection-same-rank-coverage"),
+            repair_revision: 0,
+        }
+    }
+
+    fn predecessor_generation() -> GenerationId {
+        GenerationId {
+            coverage_digest: digest_b3_typed(b"selection-same-rank-older-coverage"),
+            ..requested_generation()
+        }
+    }
+
+    fn entry(cache_id: u64, key: &str, created_at: &str, ref_name: &str) -> SelectableEntry {
+        SelectableEntry {
+            cache_id,
+            repository_id: 1,
+            ref_name: ref_name.to_owned(),
+            key: key.to_owned(),
+            version: "v1".to_owned(),
+            size_in_bytes: 512,
+            created_at: created_at.to_owned(),
+            provenance: EntryProvenance::Trusted,
+        }
+    }
+
+    #[test]
+    fn same_active_rank_selects_newest_snapshot() {
+        let requested = requested_generation();
+        let predecessor = predecessor_generation();
+        let key = predecessor.cache_key();
+        let request = DiscoveryRequest {
+            job: test_job(),
+            generation: requested,
+            expected_cache_version: "v1".to_owned(),
+            allowed_refs: vec![
+                "refs/heads/main".to_owned(),
+                "refs/heads/feature".to_owned(),
+            ],
+            current_ref: "refs/heads/main".to_owned(),
+            inventory_digest: digest_b3_typed(b"selection-same-rank-inventory"),
+            inventory_complete: true,
+            entries: vec![
+                entry(7, &key, "2026-10-20T00:00:00Z", "refs/heads/main"),
+                entry(9, &key, "2026-10-24T00:00:00Z", "refs/heads/feature"),
+            ],
+            active_coverage_ids: vec![predecessor.coverage_digest.as_str().to_owned()],
+        };
+        let visible: Vec<&SelectableEntry> = request.entries.iter().collect();
+        let selected = select_predecessor(&request, &visible)
+            .expect("same-rank predecessor selects a snapshot");
+        assert_eq!(
+            selected.entry.cache_id, 9,
+            "same active-coverage rank must select the newest snapshot",
+        );
+    }
+}

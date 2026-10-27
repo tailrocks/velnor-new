@@ -78,6 +78,8 @@ fn check_recovery_is_verified_operation(import: &Step) -> Result<(), Box<dyn Err
     for marker in [
         "$RUNNER_TEMP/velnor-gc1/transport/state/payload.tar.gz",
         "$RUNNER_TEMP/velnor-gc1/state",
+        "mbx cache import",
+        "import_failed",
         "tar -tzf",
         "tar -xzf",
         "state-discovery.record",
@@ -99,7 +101,6 @@ fn check_recovery_is_verified_operation(import: &Step) -> Result<(), Box<dyn Err
         }
     }
     for forbidden in [
-        "mbx cache import",
         "$mbx_bin",
         "mr-boxington",
         "tar -xzf \"$payload\" -C \"$parent\"",
@@ -113,11 +114,14 @@ fn check_recovery_is_verified_operation(import: &Step) -> Result<(), Box<dyn Err
     let screen = script
         .find("tar -tzf")
         .ok_or_else(|| fail("recovery lost its scan"))?;
+    let import = script
+        .find("mbx cache import")
+        .ok_or_else(|| fail("recovery lost its store import"))?;
     let extract = script
         .find("tar -xzf")
         .ok_or_else(|| fail("recovery lost its extract"))?;
-    if screen > extract {
-        return Err(fail("recovery extracts before screening members"));
+    if screen > import || import > extract {
+        return Err(fail("recovery imports before screening members"));
     }
     Ok(())
 }

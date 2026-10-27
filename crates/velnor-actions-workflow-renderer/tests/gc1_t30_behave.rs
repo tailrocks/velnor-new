@@ -17,25 +17,41 @@ fn shell_scratch(name: &str) -> Result<std::path::PathBuf, Box<dyn Error>> {
     Ok(root)
 }
 
+fn write_shimmed_executable(
+    bin: &std::path::Path,
+    name: &str,
+    body: &str,
+) -> Result<(), Box<dyn Error>> {
+    std::fs::write(bin.join(name), body)
+        .map_err(|error| fail(&format!("shim unwritable: {error}")))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        let mut permissions = std::fs::metadata(bin.join(name))
+            .map_err(|error| fail(&format!("shim unreadable: {error}")))?
+            .permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(bin.join(name), permissions)
+            .map_err(|error| fail(&format!("shim unexecutable: {error}")))?;
+    }
+    Ok(())
+}
+
 fn write_shimmed_path(scratch: &std::path::Path) -> Result<String, Box<dyn Error>> {
     let bin = scratch.join("shimbin");
     std::fs::create_dir_all(&bin)
         .map_err(|error| fail(&format!("shim dir unwritable: {error}")))?;
-    std::fs::write(
-        bin.join("sha256sum"),
-        "#!/bin/sh\nexec shasum -a 256 \"$@\"\n",
-    )
-    .map_err(|error| fail(&format!("shim unwritable: {error}")))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt as _;
-        let mut permissions = std::fs::metadata(bin.join("sha256sum"))
-            .map_err(|error| fail(&format!("shim unreadable: {error}")))?
-            .permissions();
-        permissions.set_mode(0o755);
-        std::fs::set_permissions(bin.join("sha256sum"), permissions)
-            .map_err(|error| fail(&format!("shim unexecutable: {error}")))?;
-    }
+    write_shimmed_executable(&bin, "sha256sum", "#!/bin/sh\nexec shasum -a 256 \"$@\"\n")?;
+    write_shimmed_executable(
+        &bin,
+        "mise",
+        "#!/bin/sh\nwhile [ $# -gt 0 ]; do case \"$1\" in --) shift; break ;; *) shift ;; esac; done\nexec \"$@\"\n",
+    )?;
+    write_shimmed_executable(
+        &bin,
+        "mbx",
+        "#!/bin/sh\necho \"mbx $*\" >> \"$MBX_STUB_LOG\"\ncase \"$1 $2\" in \"cache import\") [ -n \"$3\" ] && [ -f \"$3\" ] || exit 1 ;; *) exit 1 ;; esac\nexit 0\n",
+    )?;
     let path = std::env::var("PATH").unwrap_or_else(|_| "/usr/bin:/bin".to_owned());
     Ok(format!("{}:{path}", bin.display()))
 }
@@ -57,6 +73,7 @@ struct BehaveSetup {
     workspace: std::path::PathBuf,
     path_env: String,
     github_output: std::path::PathBuf,
+    stub_log: std::path::PathBuf,
     discover: String,
     recover: String,
 }
@@ -67,7 +84,7 @@ fn behave_setup() -> Result<BehaveSetup, Box<dyn Error>> {
     let scratch = shell_scratch("behave")?;
     let runner = scratch.join("runner");
     let workspace = scratch.join("workspace");
-    std::fs::create_dir_all(runner.join("velnor"))
+    std::fs::create_dir_all(runner.join("velnor/mbx/actions"))
         .map_err(|error| fail(&format!("runner unwritable: {error}")))?;
     std::fs::create_dir_all(&workspace)
         .map_err(|error| fail(&format!("workspace unwritable: {error}")))?;
@@ -76,6 +93,7 @@ fn behave_setup() -> Result<BehaveSetup, Box<dyn Error>> {
     let path_env = write_shimmed_path(&scratch)?;
     Ok(BehaveSetup {
         github_output: scratch.join("github-output"),
+        stub_log: scratch.join("stub-calls"),
         scratch,
         runner,
         workspace,
@@ -161,6 +179,8 @@ fn behave_run_recover(
         .env("PATH", &setup.path_env)
         .env("RUNNER_TEMP", &setup.runner)
         .env("GITHUB_WORKSPACE", &setup.workspace)
+        .env("MBX_CACHE_DIR", setup.runner.join("velnor/mbx"))
+        .env("MBX_STUB_LOG", &setup.stub_log)
         .status()
         .map_err(|error| fail(&format!("recover failed to run: {error}")))?;
     if !status.success() {
@@ -182,6 +202,11 @@ fn check_scripts_behave() -> Result<(), Box<dyn Error>> {
     }
     if !setup.runner.join("velnor-gc1/state/payload").is_file() {
         return Err(fail("recover lost the state root on exact hit"));
+    }
+    let calls = std::fs::read_to_string(&setup.stub_log)
+        .map_err(|error| fail(&format!("stub log unreadable: {error}")))?;
+    if !calls.contains("mbx cache import") {
+        return Err(fail("recover skipped its store import"));
     }
 
     let fallback_matched = format!("{restore_prefix}oldsnap-0");
@@ -230,6 +255,8 @@ fn check_scripts_behave() -> Result<(), Box<dyn Error>> {
         .env("PATH", &setup.path_env)
         .env("RUNNER_TEMP", &setup.runner)
         .env("GITHUB_WORKSPACE", &setup.workspace)
+        .env("MBX_CACHE_DIR", setup.runner.join("velnor/mbx"))
+        .env("MBX_STUB_LOG", &setup.stub_log)
         .status()
         .map_err(|error| fail(&format!("hostile recover failed to run: {error}")))?;
     if !hostile_run.success() {

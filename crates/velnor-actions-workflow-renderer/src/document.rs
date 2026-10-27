@@ -53,10 +53,7 @@ fn push_only_condition(condition: &str) -> bool {
 }
 
 fn push_gated_literal_mode(mode: &CacheMode, condition: Option<&str>) -> Option<CacheMode> {
-    let CacheMode::Expression(expr) = mode else {
-        return None;
-    };
-    if expr != velnor_actions_contract::CACHE_MODE_PUSH_WRITE_EXPR {
+    if !matches!(mode, CacheMode::Expression(_)) {
         return None;
     }
     if condition.is_some_and(push_only_condition) {
@@ -353,3 +350,7 @@ use super::document_jobs::job_to_yaml;
 #[cfg(test)]
 #[path = "document_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "document_authority_regression_tests.rs"]
+mod authority_regression_tests;

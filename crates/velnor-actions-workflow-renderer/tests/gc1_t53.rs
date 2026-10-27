@@ -194,6 +194,8 @@ fn check_export_bounds_uncompressed(export: &str) -> Result<(), Box<dyn Error>> 
     for marker in [
         "du -sb",
         "over_ceiling",
+        "mbx cache export",
+        "$d/export",
         "state-publication.staged",
         "exported=true",
         "readback verified",
@@ -279,6 +281,8 @@ fn gc1_t53_recover_bounds_uncompressed() -> Result<(), Box<dyn Error>> {
     check_recover_bounds_uncompressed()
 }
 
+#[path = "gc1_t53_cold.rs"]
+mod gc1_t53_cold;
 #[path = "gc1_t53_publish.rs"]
 mod gc1_t53_publish;
 #[path = "gc1_t53_recover.rs"]

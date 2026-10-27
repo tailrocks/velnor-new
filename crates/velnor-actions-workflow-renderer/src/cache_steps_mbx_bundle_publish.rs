@@ -101,7 +101,6 @@ pub(crate) fn publish_step(
         "skip() { if [ -n \"$out\" ]; then printf '%s\\n' 'exported=false' >> \"$out\"; fi; printf 'velnor: state snapshot not published (%s)\\n' \"$1\"; exit 0; }".to_owned(),
         "if [ ! -f \"$mark\" ] || [ -L \"$mark\" ]; then skip producer_not_succeeded; fi".to_owned(),
         format!("[ -n \"${{{MBX_EXPORT_GROUP_ENV}:-}}\" ] || skip export_group_missing"),
-        "if [ ! -d \"$root\" ] || [ -L \"$root\" ]; then skip state_not_built; fi".to_owned(),
         "command -v tar >/dev/null 2>&1 || { printf '%s\\n' '::warning::cache_unavailable: tar is missing; save refused'; skip tar_missing; }".to_owned(),
         "command -v wc >/dev/null 2>&1 || { printf '%s\\n' '::warning::cache_unavailable: wc is missing; save refused'; skip wc_missing; }".to_owned(),
         "command -v du >/dev/null 2>&1 || { printf '%s\\n' '::warning::cache_unavailable: du is missing; save refused'; skip du_missing; }".to_owned(),
@@ -124,6 +123,7 @@ pub(crate) fn publish_step(
         [
             "compat_now=\"s256-$h\"".to_owned(),
             "if [ \"$compat_now\" != \"$rec_compat\" ]; then skip coverage_drift; fi".to_owned(),
+            cold_produce_fragment(rust_toolchain, ceiling, ceiling_kb),
             format!("if du -sb \"$root\" > \"$d/uncompressed\"; then usize=; usize_rest=; read -r usize usize_rest < \"$d/uncompressed\" || [ -n \"$usize\" ]; case \"$usize\" in ''|*[!0-9]*) skip du_unreadable ;; esac; if [ \"$usize\" -gt {ceiling} ]; then printf '%s\\n' '::warning::over_ceiling: uncompressed state snapshot exceeds the family ceiling; save refused'; skip over_ceiling; fi; elif du -sk \"$root\" > \"$d/uncompressed_kb\"; then usize_kb=; usize_kb_rest=; read -r usize_kb usize_kb_rest < \"$d/uncompressed_kb\" || [ -n \"$usize_kb\" ]; case \"$usize_kb\" in ''|*[!0-9]*) skip du_unreadable ;; esac; if [ \"$usize_kb\" -gt {ceiling_kb} ]; then printf '%s\\n' '::warning::over_ceiling: uncompressed state snapshot exceeds the family ceiling; save refused'; skip over_ceiling; fi; else skip du_unreadable; fi"),
             format!("mkdir -p \"{payload_parent}\""),
             "rm -f \"$payload\"".to_owned(),
@@ -162,6 +162,19 @@ pub(crate) fn publish_step(
     step.condition = Some(MBX_BUNDLE_EXPORT_CONDITION.to_owned());
     step.role = Some(StepRole::MbxBundleExport);
     Ok(step)
+}
+
+fn cold_produce_fragment(rust_toolchain: &str, ceiling: u64, ceiling_kb: u64) -> String {
+    let produce = format!(
+        "command -v mise >/dev/null 2>&1 || skip export_unavailable; command -v mbx >/dev/null 2>&1 || skip export_unavailable; [ \"${{MBX_CACHE_DIR:-}}\" = \"$RUNNER_TEMP/velnor/mbx\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] || skip export_unavailable; rm -rf \"$d/export\"; if mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- mbx cache export --group \"$MBX_CACHE_EXPORT_GROUP\" --format directory \"$d/export\"; then :; else rm -rf \"$d/export\"; skip export_failed; fi; [ -d \"$d/export\" ] && [ ! -L \"$d/export\" ] || skip export_empty"
+    );
+    let measure = format!(
+        "if du -sb \"$d/export\" > \"$d/export_bytes\"; then esize=; esize_rest=; read -r esize esize_rest < \"$d/export_bytes\" || [ -n \"$esize\" ]; case \"$esize\" in ''|*[!0-9]*) rm -rf \"$d/export\"; skip export_unreadable ;; esac; if [ \"$esize\" -gt {ceiling} ]; then rm -rf \"$d/export\"; printf '%s\\n' '::warning::over_ceiling: exported state snapshot exceeds the family ceiling; save refused'; skip over_ceiling; fi; elif du -sk \"$d/export\" > \"$d/export_kb\"; then esize_kb=; esize_kb_rest=; read -r esize_kb esize_kb_rest < \"$d/export_kb\" || [ -n \"$esize_kb\" ]; case \"$esize_kb\" in ''|*[!0-9]*) rm -rf \"$d/export\"; skip export_unreadable ;; esac; if [ \"$esize_kb\" -gt {ceiling_kb} ]; then rm -rf \"$d/export\"; printf '%s\\n' '::warning::over_ceiling: exported state snapshot exceeds the family ceiling; save refused'; skip over_ceiling; fi; else rm -rf \"$d/export\"; skip export_unreadable; fi"
+    );
+    let install = "rm -rf \"$root\"; mkdir -p \"$parent\"; if mv \"$d/export\" \"$root\"; then :; else skip export_handoff; fi";
+    format!(
+        "if [ -d \"$root\" ] && [ ! -L \"$root\" ]; then :; else {produce}; {measure}; {install}; fi"
+    )
 }
 
 fn save_step() -> Result<Step, RenderError> {

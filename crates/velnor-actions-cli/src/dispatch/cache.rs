@@ -38,20 +38,11 @@ const CLEANUP_REQUEST_FILE: &str = "cache-cleanup.json";
 const MAX_CACHE_REQUEST_BYTES: u64 = 64 * 1024;
 const MAX_CLEANUP_CANDIDATES: usize = 8;
 
-/// Fixed transport layout, mirroring the renderer's complete-state literals.
-///
-/// The renderer derives these paths from the contract
-/// `COMPLETE_STATE_ROOT_EXPR`/`COMPLETE_STATE_TRANSPORT_EXPR` expressions;
-/// the CLI cannot depend on the contract crate, so the runner-relative
-/// suffixes are pinned here with a test that fails loudly on drift.
 const STATE_ROOT_REL: &str = "velnor-gc1/state";
 const STATE_TRANSPORT_REL: &str = "velnor-gc1/transport/state/payload.tar.gz";
 const STATE_STAGE_REL: &str = "velnor/state-stage";
 const STATE_BASE: &str = "state";
 
-/// Cap for the number of archive members the publish and recover bodies
-/// accept. Mirrors the orchestrator snapshot archive entry budget so a
-/// hostile or degenerate payload is refused before extraction.
 const MAX_ARCHIVE_MEMBERS: u64 = 100_000;
 
 const COMMAND_KEYS: [&str; 8] = [
@@ -178,10 +169,6 @@ fn find_entry<'inventory>(
     inventory: &'inventory InventoryV1,
     expected: &Expected,
 ) -> Option<&'inventory EntryTupleV1> {
-    // Match the complete (key, ref, version) tuple: the same logical key
-    // may exist under several refs or cache versions, and key-only lookup
-    // would select an unrelated entry and fail readback even when the
-    // correct entry is present.
     inventory.entries.iter().find(|entry| {
         entry.key == expected.key
             && entry.ref_name == expected.ref_name
