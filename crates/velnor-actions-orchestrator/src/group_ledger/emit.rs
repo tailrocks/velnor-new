@@ -9,7 +9,7 @@ use velnor_actions_contract::workflow::{
     ExecutionBranch, JobBindingV1, TaskExecutionManifestV1, UnitLedgerV1, UnitResultV1,
 };
 use velnor_actions_contract::{
-    Plan, parse_strict_json, plan_json_bytes, validate_matrix_key,
+    Plan, WorkflowEvent, parse_strict_json, plan_json_bytes, validate_matrix_key,
 };
 
 use crate::OrchestratorError;
@@ -84,12 +84,13 @@ fn emit_env_from_process() -> Result<EmitEnv, OrchestratorError> {
     if crate::origin::validate_repository_slug(&repository).is_none() {
         return Err(internal("bad_repository_slug"));
     }
+    let (event, source_sha) = event_source_from_process()?;
     Ok(EmitEnv {
         job_key: required_env("GITHUB_JOB")?,
         run_id,
         run_attempt,
-        event: required_env("GITHUB_EVENT_NAME")?,
-        source_sha: required_env("GITHUB_SHA")?,
+        event,
+        source_sha,
         ref_name: required_env("GITHUB_REF")?,
         repository,
         workflow_sha: required_env("GITHUB_WORKFLOW_SHA")?,
@@ -100,6 +101,31 @@ fn emit_env_from_process() -> Result<EmitEnv, OrchestratorError> {
         },
         job_status,
     })
+}
+
+fn event_source_from_process() -> Result<(String, String), OrchestratorError> {
+    let event_name = required_env("GITHUB_EVENT_NAME")?;
+    let github_sha = required_env("GITHUB_SHA")?;
+    let payload_path = env::var_os("GITHUB_EVENT_PATH")
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| internal("missing_event_payload"))?;
+    let payload_text = crate::safe_read::read_event_file(
+        Path::new(&payload_path),
+        crate::safe_read::MAX_REPO_FILE_BYTES,
+    )?;
+    let payload =
+        parse_strict_json(&payload_text).map_err(|_| internal("malformed_event_payload"))?;
+    let event = crate::request_event::workflow_event_for(&event_name, &payload)?;
+    let (_, head) = crate::request_event::request_refs(event, &payload, Some(&github_sha))?;
+    Ok((event_name_for(event)?, head))
+}
+
+fn event_name_for(event: WorkflowEvent) -> Result<String, OrchestratorError> {
+    serde_json::to_value(event)
+        .map_err(|_| internal("unserializable_workflow_event"))?
+        .as_str()
+        .map(str::to_owned)
+        .ok_or_else(|| internal("unserializable_workflow_event"))
 }
 
 fn required_env(name: &str) -> Result<String, OrchestratorError> {
@@ -132,6 +158,9 @@ pub(crate) fn emit_group_ledger_to(
     plan.validate().map_err(internal_contract)?;
     if plan.run_key != run_key {
         return Err(internal("ledger_run_mismatch"));
+    }
+    if emit.source_sha != plan.head || emit.event != event_name_for(plan.event)? {
+        return Err(internal("ledger_source_scope_mismatch"));
     }
     let manifest_text =
         crate::retrieve_reports::read_staged_text(manifest_path, MAX_MANIFEST_BYTES)

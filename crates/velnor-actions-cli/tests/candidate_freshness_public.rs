@@ -16,6 +16,9 @@ use velnor_actions_orchestrator::{finalized_jobs, prepare};
 mod candidate_freshness_public_support;
 use candidate_freshness_public_support::{status, write_mbx_transport, write_mise_transport};
 
+#[path = "candidate_freshness_public/group_ledger_source_scope.rs"]
+mod group_ledger_source_scope;
+
 const TASK_NAME: &str = "check-generated-workflow-freshness";
 const TASK_JOB: &str = "task-generated-workflow-freshness";
 
