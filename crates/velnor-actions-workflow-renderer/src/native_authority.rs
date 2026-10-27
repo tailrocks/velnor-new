@@ -160,8 +160,7 @@ impl NativeAuthority {
                     .map_err(NativeAuthorityError::Release)?;
             }
             None => {
-                crate::release_helpers::validate_published_generator_lock(lock)
-                    .map_err(NativeAuthorityError::Release)?;
+                return Err(invalid("controller_approvals:missing_approval"));
             }
         }
         let staged = format!(

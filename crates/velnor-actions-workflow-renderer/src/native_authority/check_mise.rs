@@ -24,7 +24,7 @@ impl CheckMiseSetups {
             let current = super::tools::mise_setup(input.config, target)?;
             let setup = match input.approved_release {
                 Some(approved) => current.for_approved_generator(lock, target, &approved)?,
-                None => current.for_published_generator(lock, target)?,
+                None => return Err(invalid("controller_approvals:missing_approval")),
             };
             checks.insert(format!("check-{}", check.id), (target, setup));
         }

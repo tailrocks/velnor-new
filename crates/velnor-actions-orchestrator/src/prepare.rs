@@ -176,7 +176,11 @@ fn load_published_generator_lock(
     })?;
     match approved {
         Some(approved) => crate::finalized::validate_approved_generator_lock(&lock, approved)?,
-        None => crate::finalized::validate_published_generator_lock(&lock)?,
+        None => {
+            return Err(OrchestratorError::Contract {
+                problem: "controller_approvals:missing_approval".to_owned(),
+            });
+        }
     }
     Ok(Some(lock))
 }

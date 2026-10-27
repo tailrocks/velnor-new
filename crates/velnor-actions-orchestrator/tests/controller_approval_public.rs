@@ -171,7 +171,7 @@ fn tampered_active_commit_is_rejected() -> Result<(), Box<dyn Error>> {
     let temp = fixture(Some(&tampered), BASE_LOCK)?;
     let error = prepare_error(temp.path())?;
     assert!(
-        error.contains("lock_mismatch:commit:"),
+        error.contains("controller_approvals:manifest_digest_mismatch"),
         "unexpected error: {error}"
     );
     Ok(())
@@ -181,7 +181,7 @@ const STAGED_ENTRY: &str = r#"{
     "repository": "tailrocks/velnor-new",
     "version": "0.1.60",
     "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "manifest_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "manifest_digest": "sha256:7c3653d3ad7448241bd6b8078ab80ba4f3a8274f602e37ede209572c0a01a0a4",
     "binaries": [
       {
         "target": "x86_64-unknown-linux-gnu",
@@ -228,6 +228,10 @@ fn rotated_approvals() -> String {
             "dddddddddddddddddddddddddddddddddddddddd",
             1,
         )
+        .replace(
+            "sha256:90ee052ab599c9c064afce1d26b65e6752c4b7cd8feecd3c57249ea0241afbd3",
+            "sha256:facc89e97684d9979c05c09401fb2f627cd4bc782fdfa7efead6429874050c39",
+        )
         .replace("v0.1.55", "v0.1.60")
         .replace("0.1.55-", "0.1.60-")
         .replace(
@@ -260,6 +264,86 @@ fn lock_for_version(version: &str, commit: &str) -> String {
     format!(
         "schema = 1\n\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\ncommit = \"{commit}\"\n{binaries}\n[mise-bootstrap]\nversion = \"2026.10.21\"\nartifact = \"https://github.com/jdx/mise/releases/download/v2026.10.21/mise-v2026.10.21-linux-x64\"\nsha256 = \"ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07\"\n"
     )
+}
+
+#[test]
+fn non_controller_workflow_is_rejected() -> Result<(), Box<dyn Error>> {
+    let tampered = BASE_APPROVALS.replace(
+        ".github/workflows/product-release-generator.yml",
+        ".github/workflows/ci.yml",
+    );
+    let temp = fixture(Some(&tampered), BASE_LOCK)?;
+    let error = prepare_error(temp.path())?;
+    assert!(
+        error.contains("controller_approvals:unexpected_workflow"),
+        "unexpected error: {error}"
+    );
+    Ok(())
+}
+
+#[test]
+fn stale_manifest_digest_is_rejected() -> Result<(), Box<dyn Error>> {
+    let tampered = BASE_APPROVALS
+        .replacen("\"version\": \"0.1.55\"", "\"version\": \"0.1.60\"", 1)
+        .replace("v0.1.55", "v0.1.60")
+        .replace("0.1.55-", "0.1.60-");
+    let temp = fixture(Some(&tampered), BASE_LOCK)?;
+    let error = prepare_error(temp.path())?;
+    assert!(
+        error.contains("controller_approvals:manifest_digest_mismatch"),
+        "unexpected error: {error}"
+    );
+    Ok(())
+}
+
+const ROTATED_MISE_VERSION: &str = "2026.10.22";
+const ROTATED_MISE_SHA: &str = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+
+fn approvals_with_mise(version: &str, sha: &str) -> String {
+    BASE_APPROVALS
+        .replace(
+            "\"version\": \"2026.10.21\"",
+            &format!("\"version\": \"{version}\""),
+        )
+        .replace(
+            "ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07",
+            sha,
+        )
+        .replace("v2026.10.21", &format!("v{version}"))
+}
+
+fn lock_with_mise_bootstrap(version: &str, sha: &str) -> String {
+    BASE_LOCK
+        .replace(
+            "version = \"2026.10.21\"",
+            &format!("version = \"{version}\""),
+        )
+        .replace(
+            "ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07",
+            sha,
+        )
+        .replace("v2026.10.21", &format!("v{version}"))
+}
+
+#[test]
+fn rotated_mise_identity_governs_lock() -> Result<(), Box<dyn Error>> {
+    let approvals = approvals_with_mise(ROTATED_MISE_VERSION, ROTATED_MISE_SHA);
+    let lock = lock_with_mise_bootstrap(ROTATED_MISE_VERSION, ROTATED_MISE_SHA);
+    let temp = fixture(Some(&approvals), &lock)?;
+    prepare(temp.path()).map_err(|error| {
+        io::Error::other(format!("matching rotated mise must be accepted: {error}"))
+    })?;
+    let stale_lock = lock_with_mise_bootstrap(
+        "2026.10.21",
+        "ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07",
+    );
+    let temp_old = fixture(Some(&approvals), &stale_lock)?;
+    let error = prepare_error(temp_old.path())?;
+    assert!(
+        error.contains("lock_mismatch:mise_bootstrap"),
+        "rotated mise must reject the old bootstrap: {error}"
+    );
+    Ok(())
 }
 
 #[test]

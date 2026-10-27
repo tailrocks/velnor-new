@@ -142,8 +142,7 @@ pub(super) fn helper_catalog(
             lock, catalog, &approved,
         )
         .map_err(map_err),
-        None => velnor_actions_mise::catalog::lock::catalog_for_published_generator(lock, catalog)
-            .map_err(map_err),
+        None => Err(invalid("controller_approvals:missing_approval")),
     }
 }
 

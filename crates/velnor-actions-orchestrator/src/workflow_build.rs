@@ -334,7 +334,8 @@ fn helper_catalog(
             lock, catalog, &approved,
         )
         .map_err(map_err),
-        None => velnor_actions_mise::catalog::lock::catalog_for_published_generator(lock, catalog)
-            .map_err(map_err),
+        None => Err(OrchestratorError::Contract {
+            problem: "controller_approvals:missing_approval".to_owned(),
+        }),
     }
 }
