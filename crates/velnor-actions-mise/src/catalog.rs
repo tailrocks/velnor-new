@@ -55,9 +55,9 @@ pub use tool::PinnedTool;
 pub mod project;
 use versions::tool_source;
 
-pub const MISE_VERSION: &str = "2026.10.20";
+pub const MISE_VERSION: &str = "2026.10.21";
 pub const MISE_BINARY_SHA256_LINUX_X64: &str =
-    "2eb27467b6f369915ee76f18d66a0696cdb5c20e7ecc8cb49c2bfaca60f0fc9c";
+    "ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07";
 pub const RUST_VERSION: &str = "1.99.1";
 pub const MR_BOXINGTON_VERSION: &str = "1.28.0";
 pub const GH_VERSION: &str = "2.103.3";
@@ -73,7 +73,7 @@ pub const OPENTOFU_SHA256_DARWIN_AMD64: &str =
     "dc6e4eb1d3ed6550c2ef052596f933dbcd8c806957665ea83ae7537147cb3074";
 pub const OPENTOFU_SHA256_DARWIN_ARM64: &str =
     "0d1cdc85f38992055b48e7fb161304a2ddfe2e5ee0ff68ffec9d0349c8bd1b59";
-pub const RELEASE_PLZ_VERSION: &str = "0.4.1";
+pub const RELEASE_PLZ_VERSION: &str = "0.4.2";
 pub const CRANE_VERSION: &str = "0.22.1";
 pub const BUN_VERSION: &str = "1.4.4";
 pub const COSIGN_VERSION: &str = "3.1.4";

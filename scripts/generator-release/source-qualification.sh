@@ -174,7 +174,7 @@ nextest="$(mise --no-config --no-env --no-hooks config get -f mise.toml 'tools."
 jactionlint="$(mise --no-config --no-env --no-hooks config get -f mise.toml tools.jactionlint)"
 shellcheck="$(mise --no-config --no-env --no-hooks config get -f mise.toml tools.shellcheck)"
 channel="$(mise --no-config --no-env --no-hooks config get -f rust-toolchain.toml toolchain.channel)"
-expected_mise=2026.10.20
+expected_mise=2026.10.21
 expected_rust=1.99.1
 expected_mbx=1.28.0
 expected_nextest=0.9.150
@@ -221,7 +221,7 @@ mise --no-config --no-env --no-hooks exec "node@$node_version" -- node - \
     `VELNOR_SHELLCHECK_VERSION=${shellcheck}\n`);
 JS
 mise --version | tee "$evidence/mise-version.txt"
-grep -Eq "(^|[[:space:]])2026\.10\.20([[:space:]]|$)" "$evidence/mise-version.txt"
+grep -Eq "(^|[[:space:]])2026\.10\.21([[:space:]]|$)" "$evidence/mise-version.txt"
     ;;
   install-pinned-rust-and-mbx)
 set -euo pipefail

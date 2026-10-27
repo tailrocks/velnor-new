@@ -1,0 +1,63 @@
+{
+  "Id": "sha256:157dc3d6e4a3e4f2c68d12df9df9ed6e808b59af6d4c3757b432b4f519916725",
+  "RepoTags": [
+    "ubuntu:26.04"
+  ],
+  "RepoDigests": [
+    "ubuntu@sha256:19fcd1bf268f02b60aca3bd30bd8a6d9a11759a430e32921833e65f16d87348a"
+  ],
+  "Comment": "Add rock control metadata",
+  "Created": "1970-01-01T00:00:00Z",
+  "Config": {
+    "Env": [
+      "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    ],
+    "Cmd": [
+      "/bin/bash"
+    ],
+    "Labels": {
+      "org.opencontainers.image.created": "2026-10-25T10:26:07.538865+00:00",
+      "org.opencontainers.image.description": "The Ubuntu container image maintained by Canonical\n\nUbuntu is a Debian-based Linux operating system that runs from the desktop to the cloud, to all your internet connected things.\nIt is the world's most popular operating system across public clouds and OpenStack clouds.\nIt is the number one platform for containers; from Docker to Kubernetes to LXD, Ubuntu can run your containers at scale.\nFast, secure and simple, Ubuntu powers millions of PCs worldwide.\n",
+      "org.opencontainers.image.title": "ubuntu",
+      "org.opencontainers.image.version": "26.04"
+    }
+  },
+  "Architecture": "amd64",
+  "Os": "linux",
+  "Size": 156948767,
+  "RootFS": {
+    "Type": "layers",
+    "Layers": [
+      "sha256:5cac300e390e2fd748b258618f403b7813229929ad6de903b0c52a210a930824",
+      "sha256:5f4be2c3badedfd7149d008a4902427c98e708c70031dc19b4264160a545df19"
+    ]
+  },
+  "Metadata": {
+    "LastTagTime": "2026-10-27T11:25:48.862216311Z"
+  },
+  "Descriptor": {
+    "mediaType": "application/vnd.oci.image.manifest.v1+json",
+    "digest": "sha256:157dc3d6e4a3e4f2c68d12df9df9ed6e808b59af6d4c3757b432b4f519916725",
+    "size": 1392,
+    "annotations": {
+      "com.docker.official-images.bashbrew.arch": "amd64",
+      "org.opencontainers.image.base.name": "scratch",
+      "org.opencontainers.image.created": "2026-10-24T00:00:00Z",
+      "org.opencontainers.image.revision": "99b35c853b4112950e5a62289fedf87e4e95ef7c",
+      "org.opencontainers.image.source": "https://git.launchpad.net/cloud-images/+oci/ubuntu-base",
+      "org.opencontainers.image.url": "https://hub.docker.com/_/ubuntu",
+      "org.opencontainers.image.version": "26.04"
+    },
+    "platform": {
+      "architecture": "amd64",
+      "os": "linux"
+    }
+  },
+  "Identity": {
+    "Pull": [
+      {
+        "Repository": "docker.io/library/ubuntu"
+      }
+    ]
+  }
+}

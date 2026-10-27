@@ -70,9 +70,9 @@ pub const ALINT_ACTION_VERSION: &str = "v0.20.1";
 
 pub const ALINT_ACTION_SHA: &str = "265d9fdc720bb8f59d00b87e33e4149869f77327";
 
-pub const MISE_ACTION_VERSION: &str = "v5.2.3";
+pub const MISE_ACTION_VERSION: &str = "v5.2.4";
 
-pub const MISE_ACTION_SHA: &str = "82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e";
+pub const MISE_ACTION_SHA: &str = "6be3c7ed4c21d4f76b208d351d95aac273ebb76d";
 
 pub const CHECKOUT_ACTION_VERSION: &str = "v7.0.1";
 

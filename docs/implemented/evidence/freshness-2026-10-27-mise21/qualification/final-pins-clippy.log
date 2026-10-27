@@ -1,0 +1,17 @@
+rust build guard: allowed; checked 1 filesystem(s)
+   Compiling velnor-actions-tofu v0.1.57 (/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/crates/velnor-actions-tofu)
+   Compiling velnor-archive-guard v0.1.57 (/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/crates/velnor-archive-guard)
+    Checking velnor-actions-contract v0.1.57 (/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/crates/velnor-actions-contract)
+    Checking velnor-actions-gradle v0.1.57 (/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/crates/velnor-actions-gradle)
+    Checking velnor-actions-mise v0.1.57 (/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/crates/velnor-actions-mise)
+    Checking velnor-actions-dbt v0.1.57 (/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/crates/velnor-actions-dbt)
+    Checking velnor-actions-bun v0.1.57 (/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/crates/velnor-actions-bun)
+    Checking velnor-actions-rust v0.1.57 (/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/crates/velnor-actions-rust)
+    Checking velnor-actions-actionlint v0.1.57 (/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/crates/velnor-actions-actionlint)
+    Checking velnor-actions-ansible v0.1.57 (/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/crates/velnor-actions-ansible)
+    Checking velnor-actions-workflow-renderer v0.1.57 (/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/crates/velnor-actions-workflow-renderer)
+    Checking velnor-actions-orchestrator v0.1.57 (/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/crates/velnor-actions-orchestrator)
+    Checking velnor-actions-cli v0.1.57 (/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/crates/velnor-actions-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 9.59s
+mbx[cache]: 15 hits, 7 misses, 17 not looked up, 22 incremental; 0 B downloaded, 0 B uploaded, 17.2 KiB stored locally
+mbx[savings]: 28d 45m saved across 109658 builds. put it toward something with a progress bar.

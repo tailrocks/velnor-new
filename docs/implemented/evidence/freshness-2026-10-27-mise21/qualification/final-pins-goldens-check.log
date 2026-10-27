@@ -1,0 +1,12 @@
+captured nested (plan exit 0)
+captured mbx-nextest (plan exit 0)
+captured empty-suite (plan exit 0)
+captured minimal-cargo (plan exit 0)
+captured dogfood (plan exit 0, tree identical)
+match: nested
+match: mbx-nextest
+match: empty-suite
+match: minimal-cargo
+match: dogfood
+ALL GOLDENS MATCH
+retaining successful golden evidence workspace: /private/tmp/sdk57-tls-native-refresh-20261027.AHQUkw/scratch/velnor-goldens-work.Z8qhvY

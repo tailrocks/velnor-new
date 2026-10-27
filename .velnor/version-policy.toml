@@ -21,7 +21,7 @@ check_interval_hours = 24
 max_exception_days = 14
 
 [tools]
-mise = "2026.10.20"
+mise = "2026.10.21"
 rust = "1.99.1"
 mr-boxington = "1.28.0"
 gh = "2.103.3"
@@ -29,7 +29,7 @@ jactionlint = "2.3.0"
 shellcheck = "0.11.0"
 nextest = "0.9.150"
 opentofu = "1.13.2"
-release-plz = "0.4.1"
+release-plz = "0.4.2"
 crane = "0.22.1"
 bun = "1.4.4"
 cosign = "3.1.4"
@@ -40,9 +40,9 @@ supported = ["ubuntu-26.04", "ubuntu-24.04", "ubuntu-22.04"]
 
 [[actions]]
 name = "jdx/mise-action"
-version = "v5.2.3"
-sha = "82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e"
-reviewed = "2026-10-24"
+version = "v5.2.4"
+sha = "6be3c7ed4c21d4f76b208d351d95aac273ebb76d"
+reviewed = "2026-10-27"
 
 [[actions]]
 name = "actions/checkout"

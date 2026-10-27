@@ -1,0 +1,96 @@
+Create a Pull Request representing the next release.
+
+The Pull request updates the package version and generates a changelog entry for the new version
+based on the commit messages. If there is a previously opened Release PR, release-plz will update it
+instead of opening a new one.
+
+Usage: release-plz release-pr [OPTIONS]
+
+Options:
+      --manifest-path <MANIFEST_PATH>
+          Path to the Cargo.toml of the project you want to update. If not provided, release-plz
+          will use the Cargo.toml of the current directory. Both Cargo workspaces and single
+          packages are supported
+
+      --registry-manifest-path <REGISTRY_MANIFEST_PATH>
+          Path to the Cargo.toml contained in the released version of the project you want to
+          update. If not provided, the packages of your project will be compared with the ones
+          published in the cargo registry. Normally, this parameter is used only if the published
+          version of your project is already available locally. For example, it could be the path to
+          the project with a `git checkout` on its latest tag. The git history of this project
+          should be behind the one of the project you want to update
+
+  -p, --package <PACKAGE>
+          Package to update. Use it when you want to update a single package rather than all the
+          packages contained in the workspace
+
+      --no-changelog
+          Don't create/update changelog
+
+      --release-date <RELEASE_DATE>
+          Date of the release. Format: %Y-%m-%d. It defaults to current Utc date
+
+      --registry <REGISTRY>
+          Registry where the packages are stored. The registry name needs to be present in the Cargo
+          config. If unspecified, the `publish` field of the package manifest is used. If the
+          `publish` field is empty, crates.io is used
+
+  -u, --update-deps
+          Update all the dependencies in the Cargo.lock file by running `cargo update`. If this flag
+          is not specified, only update the workspace packages by running `cargo update --workspace`
+
+      --changelog-config <PATH>
+          Path to the git-cliff configuration file. If not provided, git-cliff's user configuration
+          file is used if present
+          
+          [env: GIT_CLIFF_CONFIG=]
+
+      --allow-dirty
+          Allow dirty working directories to be updated. The uncommitted changes will be part of the
+          update
+
+  -v, --verbose...
+          Print source location and additional information in logs.
+          
+          If this option is unspecified, logs are printed at the INFO level without verbosity. `-v`
+          adds verbosity to logs. `-vv` adds verbosity and sets the log level to DEBUG. `-vvv` adds
+          verbosity and sets the log level to TRACE. To change the log level without setting
+          verbosity, use the `RELEASE_PLZ_LOG` environment variable. E.g. `RELEASE_PLZ_LOG=DEBUG`.
+
+      --repo-url <REPO_URL>
+          GitHub/Gitea repository url where your project is hosted. It is used to generate the
+          changelog release link. It defaults to the url of the default remote
+
+      --config <PATH>
+          Path to the release-plz config file.
+          
+          If not specified, the following paths are checked in order: `release-plz.toml`,
+          `.release-plz.toml`, `.config/release-plz.toml`.
+          
+          If a config file is not found, the default configuration is used.
+
+      --git-token <GIT_TOKEN>
+          Git token used to create the pull request
+          
+          [env: GIT_TOKEN]
+          [alias: --github-token]
+
+      --forge <FORGE>
+          Kind of git host where your project is hosted. If not specified, release-plz infers it
+          from the repository host. Specify it explicitly for GitHub Enterprise Server, whose host
+          can't be auto-detected
+          
+          [alias: --backend]
+          [possible values: github, gitea, gitlab]
+
+      --max-analyze-commits <MAX_ANALYZE_COMMITS>
+          Maximum number of commits to analyze when the package hasn't been published yet. Default:
+          1000
+
+  -o, --output <OUTPUT>
+          Output format. If specified, prints the branch, URL and number of the release PR, if any
+          
+          [possible values: json]
+
+  -h, --help
+          Print help (see a summary with '-h')
