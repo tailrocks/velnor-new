@@ -12,6 +12,7 @@ pub struct CanonicalRuntimeInputs {
     plan_consumer_env: BTreeMap<String, String>,
     report_helper_version: String,
     staged_binary: String,
+    required_staged_binary: String,
     request_dir: String,
     checkout_uses: String,
     preseed: bool,
@@ -30,6 +31,7 @@ impl CanonicalRuntimeInputs {
         Ok(Self {
             plan_consumer_env,
             report_helper_version,
+            required_staged_binary: staged_binary.clone(),
             staged_binary,
             request_dir,
             checkout_uses,
@@ -49,6 +51,16 @@ impl CanonicalRuntimeInputs {
     #[must_use]
     pub fn staged_binary(&self) -> &str {
         &self.staged_binary
+    }
+
+    pub(crate) fn with_required_helper_version(
+        mut self,
+        version: &str,
+    ) -> Result<Self, crate::RenderError> {
+        let staged = format!("{}{version}", crate::steps::STAGED_BINARY_PREFIX);
+        crate::guard::validate_staged_binary(&staged, version)?;
+        self.required_staged_binary = staged;
+        Ok(self)
     }
 
     #[must_use]
@@ -84,6 +96,10 @@ struct CanonicalAuthorityJobs {
 }
 
 impl CanonicalAuthoritySteps {
+    pub(crate) fn required_staged_binary(&self) -> &str {
+        &self.runtime.required_staged_binary
+    }
+
     pub(crate) fn from_native_jobs_inner(
         jobs: &BTreeMap<String, Job>,
         policy: WorkflowPolicy,

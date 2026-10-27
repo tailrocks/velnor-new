@@ -19,10 +19,10 @@ Workflow to generate
     - plan (18 steps)
     - required (10 steps)
     - required-gate (1 steps)
-    - rust-a-read (19 steps)
-    - rust-a-write (21 steps)
-    - rust-lib-read (19 steps)
-    - rust-lib-write (20 steps)
+    - rust-a-read (20 steps)
+    - rust-a-write (22 steps)
+    - rust-lib-read (20 steps)
+    - rust-lib-write (21 steps)
     - 4 Rust crate jobs
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> run tests -> doctests -> doc build -> format check

@@ -120,19 +120,17 @@ pub(crate) fn assemble_group_ledgers_step() -> Step {
         id: None,
         role: None,
         condition: None,
-        kind: StepKind::Shell {
-            run: cargo_run_argv(),
-            env: crate::toolchain_env::with_credential_scrub(&BTreeMap::from([(
-                crate::steps::INTERNAL_OP_ENV.to_owned(),
-                ASSEMBLE_GROUP_LEDGERS_OPERATION.to_owned(),
-            )])),
+        kind: StepKind::Internal {
+            operation: ASSEMBLE_GROUP_LEDGERS_OPERATION.to_owned(),
+            env: BTreeMap::new(),
         },
     }
 }
 
 // gc1-t56 pins the group-ledger step constructors: exact names, the
-// always() condition on emit only, the workspace `cargo run` command, the
-// op env wiring, and no upload step.
+// always() condition on emit only, the workspace `cargo run` command for emit,
+// the authenticated helper operation for assembly, the op env wiring for emit,
+// and no upload step.
 #[cfg(test)]
 mod gc1_t56 {
     use velnor_actions_contract::StepKind;
@@ -184,28 +182,12 @@ mod gc1_t56 {
         assert_eq!(step.name, ASSEMBLE_GROUP_LEDGERS_STEP_NAME);
         assert!(step.condition.is_none());
         assert!(!step.parallel);
-        let StepKind::Shell { run, env } = &step.kind else {
-            assert!(matches!(step.kind, StepKind::Shell { .. }));
+        let StepKind::Internal { operation, env } = &step.kind else {
+            assert!(matches!(step.kind, StepKind::Internal { .. }));
             return;
         };
-        assert!(run.iter().any(|arg| arg == "cargo"));
-        assert!(run.iter().any(|arg| arg == "run"));
-        assert!(crate::commands::validate_command_argv(run).is_ok());
-        assert!(crate::commands::validate_env(env).is_ok());
-        assert_eq!(
-            env.get(crate::steps::INTERNAL_OP_ENV).map(String::as_str),
-            Some(ASSEMBLE_GROUP_LEDGERS_OPERATION)
-        );
-        for key in crate::toolchain_env::STEP_CREDENTIAL_DENYLIST
-            .iter()
-            .chain(crate::toolchain_env::STEP_ENDPOINT_DENYLIST.iter())
-        {
-            assert_eq!(
-                env.get(*key).map(String::as_str),
-                Some(""),
-                "assemble scrubs credential env"
-            );
-        }
+        assert_eq!(operation, ASSEMBLE_GROUP_LEDGERS_OPERATION);
+        assert!(env.is_empty());
     }
 
     #[test]

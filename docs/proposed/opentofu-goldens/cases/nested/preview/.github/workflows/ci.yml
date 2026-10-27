@@ -314,10 +314,6 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: mise --no-config --no-env --no-hooks install gh@2.103.3
-      - name: Assemble group ledgers
-        env:
-          VELNOR_INTERNAL_OP: assemble-group-ledgers-v1
-        run: cargo run --locked -p velnor-actions-cli --bin velnor-actions
       - name: Download plan
         continue-on-error: true
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
@@ -329,6 +325,10 @@ jobs:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
           VELNOR_INTERNAL_OP: fetch-reports-v1
+        run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.60'"
+      - name: Assemble group ledgers
+        env:
+          VELNOR_INTERNAL_OP: assemble-group-ledgers-v1
         run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.60'"
       - name: Write request
         env:
@@ -472,6 +472,23 @@ jobs:
         with: {"digest": "b3-b658cd9a210ebf7276fe462093e1f215cf6bb13428b28cb83dcf4272909782dd"}
       - name: Wait for parallel checks
         wait-all:
+      - name: Emit group ledger
+        if: always()
+        env:
+          VELNOR_INTERNAL_OP: emit-group-ledger-v1
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+          VELNOR_JOB_STATUS: ${{ job.status }}
+        run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.60'"
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -600,6 +617,23 @@ jobs:
         with: {"digest": "b3-b658cd9a210ebf7276fe462093e1f215cf6bb13428b28cb83dcf4272909782dd"}
       - name: Wait for parallel checks
         wait-all:
+      - name: Emit group ledger
+        if: always()
+        env:
+          VELNOR_INTERNAL_OP: emit-group-ledger-v1
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+          VELNOR_JOB_STATUS: ${{ job.status }}
+        run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.60'"
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -736,6 +770,23 @@ jobs:
         with: {"digest": "b3-da9ec5705b9157505c57048e45a675cef86278ed9b4ffe8017c529f5a950a428"}
       - name: Wait for parallel checks
         wait-all:
+      - name: Emit group ledger
+        if: always()
+        env:
+          VELNOR_INTERNAL_OP: emit-group-ledger-v1
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+          VELNOR_JOB_STATUS: ${{ job.status }}
+        run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.60'"
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -859,6 +910,23 @@ jobs:
         with: {"digest": "b3-da9ec5705b9157505c57048e45a675cef86278ed9b4ffe8017c529f5a950a428"}
       - name: Wait for parallel checks
         wait-all:
+      - name: Emit group ledger
+        if: always()
+        env:
+          VELNOR_INTERNAL_OP: emit-group-ledger-v1
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+          VELNOR_JOB_STATUS: ${{ job.status }}
+        run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.60'"
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9

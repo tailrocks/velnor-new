@@ -78,16 +78,15 @@ pub(crate) fn insert_final_fanin(
 }
 
 pub(crate) fn insert_assemble_step(final_job: &mut Job) {
-    if final_job.steps.iter().any(|step| {
+    let existing = final_job.steps.iter().position(|step| {
         step.name == crate::steps_internal::group_ledger_steps::ASSEMBLE_GROUP_LEDGERS_STEP_NAME
-    }) {
-        return;
-    }
-    let at = assemble_insert_at(final_job);
-    final_job.steps.insert(
-        at,
-        crate::steps_internal::group_ledger_steps::assemble_group_ledgers_step(),
+    });
+    let step = existing.map_or_else(
+        crate::steps_internal::group_ledger_steps::assemble_group_ledgers_step,
+        |index| final_job.steps.remove(index),
     );
+    let at = assemble_insert_at(final_job);
+    final_job.steps.insert(at, step);
 }
 
 fn assemble_insert_at(job: &Job) -> usize {

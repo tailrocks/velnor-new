@@ -20,6 +20,47 @@ const PUBLISHED_GENERATOR_MACOS_ARM64_SHA256: &str =
     "eb8690b6a05b18bf025a0d7876c8497cedc04d54df04fdb5a3c20d203478e756";
 const PUBLISHED_GENERATOR_MACOS_X64_SHA256: &str =
     "0938a574c00b05a71735285bf0d2840235ca4f9559359909564dd53b27d77883";
+const PUBLISHED_VERDICT_VERSION: &str = "0.1.59";
+const PUBLISHED_VERDICT_GH_VERSION: &str = "2.103.3";
+const PUBLISHED_VERDICT_COMMIT: &str = "4bb724119971fe49f07b12876c54c3c159edb5e5";
+const PUBLISHED_VERDICT_LINUX_X64_SHA256: &str =
+    "717be00d245f511bd5d324574cb80b72a34c5a83c639fafa6af1c0acb8649b26";
+const PUBLISHED_VERDICT_MACOS_ARM64_SHA256: &str =
+    "36c47f77001e12c3ea80f4a2559d1b11700935c94488044a966735175b342667";
+const PUBLISHED_VERDICT_MACOS_X64_SHA256: &str =
+    "20ad2cb971473595d730dd3eb07d8b6bf919f759ffbba2c3b54dca9222a80f7b";
+
+#[must_use]
+pub fn published_verdict_manifest() -> ReleaseManifest {
+    ReleaseManifest {
+        schema: ReleaseManifest::SCHEMA,
+        version: PUBLISHED_VERDICT_VERSION.to_owned(),
+        repository: velnor_actions_contract::targets::EXPECTED_REPOSITORY.to_owned(),
+        commit: PUBLISHED_VERDICT_COMMIT.to_owned(),
+        targets: vec![
+            published_verdict_target(
+                ReleaseTarget::LinuxX86_64,
+                PUBLISHED_VERDICT_LINUX_X64_SHA256,
+            ),
+            published_verdict_target(
+                ReleaseTarget::MacosArm64,
+                PUBLISHED_VERDICT_MACOS_ARM64_SHA256,
+            ),
+            published_verdict_target(
+                ReleaseTarget::MacosX86_64,
+                PUBLISHED_VERDICT_MACOS_X64_SHA256,
+            ),
+        ],
+    }
+}
+
+#[must_use]
+pub fn catalog_for_published_verdict(catalog: &ToolCatalog) -> ToolCatalog {
+    let mut verdict = catalog.clone();
+    PUBLISHED_VERDICT_GH_VERSION.clone_into(&mut verdict.gh);
+    verdict.project.remove(&PinnedTool::Gh);
+    verdict
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct ApprovedGeneratorRelease<'a> {
@@ -124,6 +165,18 @@ fn published_target(target: ReleaseTarget, sha256: &str) -> TargetRecord {
         target: target.to_owned(),
         artifact: format!(
             "https://github.com/{}/releases/download/v{PUBLISHED_GENERATOR_VERSION}/velnor-actions-{PUBLISHED_GENERATOR_VERSION}-{target}",
+            velnor_actions_contract::targets::EXPECTED_REPOSITORY
+        ),
+        sha256: sha256.to_owned(),
+    }
+}
+
+fn published_verdict_target(target: ReleaseTarget, sha256: &str) -> TargetRecord {
+    let target = target.triple();
+    TargetRecord {
+        target: target.to_owned(),
+        artifact: format!(
+            "https://github.com/{}/releases/download/v{PUBLISHED_VERDICT_VERSION}/velnor-actions-{PUBLISHED_VERDICT_VERSION}-{target}",
             velnor_actions_contract::targets::EXPECTED_REPOSITORY
         ),
         sha256: sha256.to_owned(),

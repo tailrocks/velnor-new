@@ -204,6 +204,15 @@ MUST pin the same exact Mise release and SHA-256. Velnor Actions never creates
 or updates consumer `mise.toml`, `mise.lock`, `rust-toolchain.toml`, or
 `.mise-version` files.
 
+For the current Velnor workflow, `.velnor/generator.lock` remains on the
+authenticated v0.1.55 release and is used by Plan as the sole workflow-planning
+bootstrap. The Required verdict uses a separate closed, authenticated v0.1.59
+controller at main commit `4bb724119971fe49f07b12876c54c3c159edb5e5`, with its
+published platform hashes and GH 2.103.3 helper catalog. This final-only role
+does not advance the generator lock or Plan bootstrap; Setup Mise retains the
+default 2026.10.21 pin. The candidate binary never plans, evaluates Required, or
+provides pre-merge authority.
+
 ## 4. Candidate qualification and promotion
 
 The bootstrap binary alone plans the workflow graph. A candidate binary MUST

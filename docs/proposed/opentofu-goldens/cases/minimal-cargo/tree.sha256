@@ -12,4 +12,4 @@ b201878994c32c47bba7d126c07b7660e182ccb4d7e0e806073f277f398831d7  ./.github/jact
 d8ff04373adde0d89d0c187096b5f7a3fa80f755f7d46874ea9e431ae278f531  ./.github/scripts/velnor-tools-cache-identity.sh
 126fb39e54becb57a4e191100447707ac7976a2ea553ca875d9ac08eca27d26e  ./.github/velnor/task-execution-manifest-v1.json
 faf8d7598306ad77bb393e73601b9f86ca38418baea30f1a4b944d2fae37187b  ./.github/workflows/cache-prune.yml
-837c08188afdc539811880156596900e756d4bc8618df2f85b5783d3bf4ffb9e  ./.github/workflows/ci.yml
+01529f961766c90cdf3a775d2e3c395de6d9bfeb23013c77e5b6620d27986f64  ./.github/workflows/ci.yml
