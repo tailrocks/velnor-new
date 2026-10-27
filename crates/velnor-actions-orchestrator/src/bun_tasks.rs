@@ -105,29 +105,31 @@ fn push_member(
     let browsers = member_config.map_or(&[][..], |member| member.browsers.as_slice());
     let block = ctx.block;
     let acquire = ctx.acquire;
-    if let Some(scripts) = member_job_scripts(member, bun).map_err(|err| failure(err.code()))? {
-        let playwright = playwright_step(workspace, member, browsers, ctx.lock)?;
-        out.members.push(policy(
-            member,
-            &ctx.inputs(&scripts, playwright.as_ref(), None),
-            member_timeout,
-        )?);
-    }
+    let scripts = member_job_scripts(member, bun).map_err(|err| failure(err.code()))?;
     let suites = member_config.map(|member| &member.suites);
-    let handoff = if suites.is_some_and(|suites| !suites.is_empty()) && !block.is_empty() {
+    let has_suites = suites.is_some_and(|suites| !suites.is_empty());
+    let handoff = if !block.is_empty() && (scripts.is_some() || has_suites) {
         let (policy, steps) = assets_job(member, acquire, block, private, member_timeout)?;
         out.assets.push(policy);
         Some(steps)
     } else {
         None
     };
-    let suite_ctx = MemberCtx {
+    let consumer_ctx = MemberCtx {
         block: &[],
         handoff: handoff.as_deref().unwrap_or_default(),
         ..*ctx
     };
+    if let Some(scripts) = scripts {
+        let playwright = playwright_step(workspace, member, browsers, ctx.lock)?;
+        out.members.push(policy(
+            member,
+            &consumer_ctx.inputs(&scripts, playwright.as_ref(), None),
+            member_timeout,
+        )?);
+    }
     for (suite_id, suite) in suites.into_iter().flatten() {
-        let mut policy = suite_policy(&suite_ctx, suite_id, suite, member_timeout)?;
+        let mut policy = suite_policy(&consumer_ctx, suite_id, suite, member_timeout)?;
         policy.assets = handoff
             .as_ref()
             .map(|_| format!("{}{BUN_ASSETS_SUFFIX}", job_id(member)));
@@ -294,6 +296,8 @@ fn policy(
         id: job_id(member),
         timeout,
         steps: member_steps(inputs)?,
+        assets: (!inputs.handoff.is_empty())
+            .then(|| format!("{}{BUN_ASSETS_SUFFIX}", job_id(member))),
     })
 }
 

@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
-use velnor_actions_contract::{Job, Step, StepKind, StepRole};
+use velnor_actions_contract::{BunLanePlan, Job, Step, StepKind, StepRole};
 
 use crate::RenderError;
 use crate::render::RenderContext;
@@ -57,15 +57,7 @@ pub(crate) fn share_lanes(
     let mut files = Vec::new();
     let mut next = jobs.clone();
     let mut env_steps = BTreeMap::new();
-    if next.values().any(|job| {
-        job.steps
-            .iter()
-            .any(|step| step.role == Some(StepRole::TofuProvidersRestore))
-    }) {
-        files.push(crate::tofu_cache::provider_admission_file(
-            &ctx.generator_version,
-        )?);
-    }
+    append_provider_admission_file(&next, &ctx.generator_version, &mut files)?;
     for hosted_id in hosted_ids(jobs) {
         let Some(logical) = logical_id(&hosted_id) else {
             return Err(RenderError::InvalidWorkflow(format!(
@@ -79,10 +71,13 @@ pub(crate) fn share_lanes(
         let Some(hosted) = jobs.get(&hosted_id) else {
             continue;
         };
-        if [hosted, local]
-            .iter()
-            .any(|job| job.steps.iter().any(|step| step.parallel))
-        {
+        if should_skip_composite(
+            hosted,
+            local,
+            ctx.bun_lane_plan.as_ref(),
+            &hosted_id,
+            &local_id,
+        ) {
             continue;
         }
         let Some(parts) = split_pair(hosted, local, &ctx.checkout_uses) else {
@@ -127,6 +122,23 @@ pub(crate) fn share_lanes(
     };
     validate_serialized_scopes(&shared)?;
     Ok(shared)
+}
+
+fn append_provider_admission_file(
+    jobs: &BTreeMap<String, Job>,
+    generator_version: &str,
+    files: &mut Vec<RenderedFile>,
+) -> Result<(), RenderError> {
+    if jobs.values().any(|job| {
+        job.steps
+            .iter()
+            .any(|step| step.role == Some(StepRole::TofuProvidersRestore))
+    }) {
+        files.push(crate::tofu_cache::provider_admission_file(
+            generator_version,
+        )?);
+    }
+    Ok(())
 }
 
 fn validate_serialized_scopes(shared: &LaneShare) -> Result<(), RenderError> {
@@ -175,6 +187,37 @@ fn logical_id(hosted_id: &str) -> Option<&str> {
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_');
     ok.then_some(logical)
+}
+
+fn is_projected_bun_pair(plan: Option<&BunLanePlan>, hosted_id: &str, local_id: &str) -> bool {
+    let Some(plan) = plan else {
+        return false;
+    };
+    let Some(logical_id) = plan.logical_id_for_output(hosted_id) else {
+        return false;
+    };
+    if plan.logical_id_for_output(local_id) != Some(logical_id) {
+        return false;
+    }
+    let Ok(outputs) = plan.output_ids(logical_id) else {
+        return false;
+    };
+    outputs.len() == 2
+        && outputs.iter().any(|id| id.as_str() == hosted_id)
+        && outputs.iter().any(|id| id.as_str() == local_id)
+}
+
+fn should_skip_composite(
+    hosted: &Job,
+    local: &Job,
+    plan: Option<&BunLanePlan>,
+    hosted_id: &str,
+    local_id: &str,
+) -> bool {
+    [hosted, local]
+        .iter()
+        .any(|job| job.steps.iter().any(|step| step.parallel))
+        || is_projected_bun_pair(plan, hosted_id, local_id)
 }
 
 fn split_pair(hosted: &Job, local: &Job, checkout_uses: &str) -> Option<SharedLaneParts> {

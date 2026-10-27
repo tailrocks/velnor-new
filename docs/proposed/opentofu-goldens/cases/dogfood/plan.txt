@@ -19,7 +19,7 @@ Detected stacks
     - velnor-actions-orchestrator (crates/velnor-actions-orchestrator/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-ansible, velnor-actions-bun, velnor-actions-contract, velnor-actions-dbt, velnor-actions-gradle, velnor-actions-mise, velnor-actions-rust, velnor-actions-tofu, velnor-actions-workflow-renderer, velnor-archive-guard]
     - velnor-actions-rust (crates/velnor-actions-rust/Cargo.toml) [lib; depends on velnor-actions-contract]
     - velnor-actions-tofu (crates/velnor-actions-tofu/Cargo.toml) [lib; depends on velnor-actions-contract]
-    - velnor-actions-workflow-renderer (crates/velnor-actions-workflow-renderer/Cargo.toml) [lib; depends on velnor-actions-actionlint, velnor-actions-bun, velnor-actions-contract, velnor-actions-dbt, velnor-actions-mise, velnor-actions-rust, velnor-actions-tofu]
+    - velnor-actions-workflow-renderer (crates/velnor-actions-workflow-renderer/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-bun, velnor-actions-contract, velnor-actions-dbt, velnor-actions-mise, velnor-actions-rust, velnor-actions-tofu]
     - velnor-archive-guard (crates/velnor-archive-guard/Cargo.toml) [bin, lib]
     - velnor-resource-probe (crates/velnor-runner/crates/velnor-resource-probe/Cargo.toml) [bin, lib]
     - velnor-runner-attestation (crates/velnor-runner/crates/velnor-runner-attestation/Cargo.toml) [bin]
@@ -71,7 +71,7 @@ Workflow to generate
     - rust-velnor-actions-orchestrator (28 steps)
     - rust-velnor-actions-rust (25 steps)
     - rust-velnor-actions-tofu (25 steps)
-    - rust-velnor-actions-workflow-renderer (25 steps)
+    - rust-velnor-actions-workflow-renderer (26 steps)
     - rust-velnor-resource-probe (25 steps)
     - rust-velnor-runner-attestation (24 steps)
     - rust-velnor-runner-cli (25 steps)
@@ -162,6 +162,7 @@ Workflow to generate
         - stack/rust/crates/velnor-actions-workflow-renderer/doc/default
         - stack/rust/crates/velnor-actions-workflow-renderer/doctest/default
         - stack/rust/crates/velnor-actions-workflow-renderer/fmt/default
+        - stack/rust/crates/velnor-actions-workflow-renderer/nextest/default
         - stack/rust/crates/velnor-runner/crates/velnor-resource-probe/build/default
         - stack/rust/crates/velnor-runner/crates/velnor-resource-probe/clippy/default
         - stack/rust/crates/velnor-runner/crates/velnor-resource-probe/doc/default
@@ -216,7 +217,6 @@ Workflow to generate
   Ineligible: stack/rust/crates/velnor-actions-mise/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-actions-rust/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-actions-tofu/nextest/default has no test targets; no test command emitted
-  Ineligible: stack/rust/crates/velnor-actions-workflow-renderer/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-runner/crates/velnor-resource-probe/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/nextest/default has no test targets; no test command emitted
@@ -237,4 +237,4 @@ Recommendations
   mise.toml is read-only input; Velnor never modifies it
   rust-toolchain.toml is read-only input; Velnor never modifies it
   shadowed_nextest_config: .config/nextest.toml shadowed by crates/velnor-runner/.config/nextest.toml; profile selected from crates/velnor-runner/.config/nextest.toml
-  tool_install_unverified:2 installs skip verification: cargo-machete@0.9.2(no_entry), gh@2.103.2(no_entry); install on the CI platform and commit the lock to verify them
+  tool_install_unverified:2 installs skip verification: cargo-machete@0.9.2(no_entry), gh@2.103.3(no_entry); install on the CI platform and commit the lock to verify them
