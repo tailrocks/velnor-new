@@ -29,7 +29,7 @@ fn success_emits_validated_ledger() -> Result<(), crate::OrchestratorError> {
         out,
         fixture
             .run_dir
-            .join(&fixture.emit_env.matrix_key)
+            .join(&fixture.matrix_key)
             .join(super::GROUP_LEDGER_FILENAME)
     );
     let text = std::fs::read_to_string(&out).map_err(|err| fail(&err.to_string()))?;
@@ -64,7 +64,7 @@ fn success_emits_validated_ledger() -> Result<(), crate::OrchestratorError> {
     let report_bytes = std::fs::read(
         fixture
             .run_dir
-            .join(&fixture.emit_env.matrix_key)
+            .join(&fixture.matrix_key)
             .join("tasks")
             .join(report_file.as_str()),
     )
@@ -89,7 +89,7 @@ fn missing_report_on_success_is_loud() -> Result<(), crate::OrchestratorError> {
     std::fs::remove_file(
         fixture
             .run_dir
-            .join(&fixture.emit_env.matrix_key)
+            .join(&fixture.matrix_key)
             .join("tasks")
             .join(report_file.as_str()),
     )
@@ -119,7 +119,7 @@ fn missing_report_on_failure_defers() -> Result<(), crate::OrchestratorError> {
     std::fs::remove_file(
         fixture
             .run_dir
-            .join(&fixture.emit_env.matrix_key)
+            .join(&fixture.matrix_key)
             .join("tasks")
             .join(report_file.as_str()),
     )

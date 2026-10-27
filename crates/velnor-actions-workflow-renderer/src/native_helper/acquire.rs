@@ -10,6 +10,34 @@ use super::ReleaseHelperError;
 
 const GENERATOR_SEED_ROOT: &str = "/opt/velnor/seed";
 
+pub(super) fn published_verdict_acquire_for_target(
+    target: ReleaseTarget,
+) -> Result<Step, ReleaseHelperError> {
+    let manifest = velnor_actions_mise::catalog::lock::published_verdict_manifest();
+    manifest
+        .validate(velnor_actions_contract::RELEASE_MANIFEST_FILENAME)
+        .map_err(ReleaseHelperError::Contract)?;
+    let record = manifest.record_for_target(target.triple()).ok_or_else(|| {
+        ReleaseHelperError::Problem(format!("manifest_missing_target:{}", target.triple()))
+    })?;
+    velnor_actions_contract::check_release_artifact(
+        &record.artifact,
+        &manifest.version,
+        &manifest.commit,
+        target.triple(),
+        velnor_actions_contract::RELEASE_MANIFEST_FILENAME,
+        "targets.artifact",
+    )
+    .map_err(ReleaseHelperError::Contract)?;
+    acquire_step(
+        &record.artifact,
+        &record.sha256,
+        &manifest.commit,
+        &format!("{STAGED_BINARY_PREFIX}{}", manifest.version),
+        target,
+    )
+}
+
 pub(super) fn consumer_acquire_for_target(
     target: ReleaseTarget,
     version: &str,

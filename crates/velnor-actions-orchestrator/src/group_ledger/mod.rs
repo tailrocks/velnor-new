@@ -45,6 +45,7 @@ pub(crate) mod gc1_t54_support {
         pub(crate) emit_env: EmitEnv,
         pub(crate) task_id: String,
         pub(crate) report_id: String,
+        pub(crate) matrix_key: String,
     }
 
     struct Parts {
@@ -89,11 +90,12 @@ pub(crate) mod gc1_t54_support {
                 ref_name: "refs/pull/1/merge".to_owned(),
                 repository: "tailrocks/velnor-new".to_owned(),
                 workflow_sha: WORKFLOW_SHA.to_owned(),
-                matrix_key: parts.matrix_key.clone(),
+                matrix_key: Some(parts.matrix_key.clone()),
                 job_status: status,
             },
             task_id: parts.task_id.clone(),
             report_id,
+            matrix_key: parts.matrix_key.clone(),
         })
     }
 

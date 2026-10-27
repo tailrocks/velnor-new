@@ -146,7 +146,13 @@ pub(super) fn required_job(
     required_ids: &[String],
     acquire: Step,
 ) -> Result<Job, NativeAuthorityError> {
-    let catalog = helper_catalog(input, &ToolCatalog::pinned())?;
+    let catalog = if input.config.workflow.policy
+        == velnor_actions_contract::WorkflowPolicy::VelnorRepositoryV1
+    {
+        velnor_actions_mise::catalog::lock::catalog_for_published_verdict(&ToolCatalog::pinned())
+    } else {
+        helper_catalog(input, &ToolCatalog::pinned())?
+    };
     crate::native_job_builders::final_job(input.runner, required_ids, Some(acquire), &catalog)
         .map_err(NativeAuthorityError::Job)
 }
