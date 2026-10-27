@@ -25,8 +25,8 @@ fn schema2_bun_both_routes_private_asset_handoffs_once() -> Result<(), Box<dyn E
 fn schema2_bun_scale_set_routes_private_asset_handoffs_once() -> Result<(), Box<dyn Error>> {
     let workflow = render_bun_with_private_asset(ExecutionMode::ScaleSet)?;
     assert_private_asset_handoffs_for(&workflow)?;
+    assert_job_runner(&workflow, ASSETS_JOB_ID, "ubuntu-26.04")?;
     for id in [
-        ASSETS_JOB_ID,
         "bun-fixture-web--unit",
         "bun-fixture-web--browser",
         "bun-fixture-web--browser--report",

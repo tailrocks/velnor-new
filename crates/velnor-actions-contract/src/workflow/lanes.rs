@@ -215,6 +215,20 @@ pub(super) fn placement_for(
     if class != LaneClass::Verification {
         return Ok(Placement::HostedOnly);
     }
+    if bun_asset_producer(job_id) {
+        if execution
+            .overrides
+            .get(job_id)
+            .is_some_and(|over| over.profile == execution.scale_set_profile)
+        {
+            return Err(ContractError::config(
+                "config.toml",
+                format!("execution.overrides.{job_id}.profile"),
+                "bun_private_assets_hosted_only",
+            ));
+        }
+        return Ok(Placement::HostedOnly);
+    }
     if !workflow_task_supports_scale_set(job_id, job, config)? {
         if execution
             .overrides
@@ -266,6 +280,10 @@ pub(super) fn placement_for(
             format!("unknown_profile:{key}"),
         ))
     }
+}
+
+fn bun_asset_producer(job_id: &str) -> bool {
+    job_id.starts_with(crate::config::BUN_JOB_PREFIX) && job_id.ends_with("--assets")
 }
 
 fn workflow_task_supports_scale_set(

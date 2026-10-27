@@ -267,7 +267,7 @@ letting a Velnor pin override a project declaration.
 
 ## 6. One job per Bun workspace member with parallel script steps
 
-**Decision.** Each Bun workspace member owns exactly one generated CI job named
+**Decision.** Each Bun workspace member owns exactly one member check job named
 `Bun / <package name>` (job id `bun-<slug>`, for example `Bun / @chainargos/ui`). A
 single-package root (no `workspaces`) is one member. The job prepares checkout, pinned tools
 and the dependency install once; the member's `package.json` scripts (`typecheck`, `lint`,
@@ -295,7 +295,12 @@ members. Foreign lockfiles (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, 
   certificate (`bunfig_registry_override`).
 - Bun suites are not member jobs: declared `suites` run the scripts they claim in their own
   jobs (`bun-<slug>--<suite>`, optionally a Playwright shard matrix) beside the one member
-  job, as Rust suites sit beside crate jobs. No suite means byte-identical output.
+  check job, as Rust suites sit beside crate jobs. No suite means no suite job; without
+  private sources, no private-asset producer or handoff is added.
+- When locked private release assets are used, a separate hosted `bun-<slug>--assets` job
+  acquires and verifies them. The member and its suites/reports depend on that producer and
+  import the matching same-run artifact before verification, installation or scripts. This
+  does not split or duplicate the member's script checks.
 
 **Must not be reintroduced without owner approval:** a second package-manager adapter, one shared
 job for several members, scripts run before the install credential is gone, a repository-controlled
@@ -312,7 +317,11 @@ fetch steps before any repository-controlled step runs. `GITHUB_TOKEN` with
 scripts, Bun lifecycle scripts or Mise tasks. Maven artifacts for private
 consumers ship as release-asset bundles fetched with the App token, because
 GitHub Packages Maven cannot serve other private repositories with a scoped
-credential. Specification:
+credential. For Bun, only the hosted per-member assets producer receives the
+App private key and installation token; Bun members, suites, and reports use
+the producer's verified artifact. Explicit local producer placement is
+rejected. Registry authentication remains in its existing isolated install
+phase. Specification:
 [private sources contract](proposed/private-sources-contract.md).
 
 **Status.** Adopted per the split brief; owner may revisit. Recorded

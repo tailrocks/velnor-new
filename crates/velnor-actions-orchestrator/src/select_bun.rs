@@ -41,6 +41,7 @@ pub(crate) fn dispositions(
         .is_some_and(|sources| !sources.release_assets.is_empty());
     let mut jobs = Vec::new();
     for member in workspaces.iter().flat_map(|workspace| &workspace.members) {
+        let has_member_job = !matches!(member_job_scripts(member, bun), Ok(None));
         let disposition = if selected
             .as_ref()
             .is_none_or(|selected| selected.contains(&member.name))
@@ -49,7 +50,7 @@ pub(crate) fn dispositions(
         } else {
             JobDisposition::NotAffected
         };
-        if !matches!(member_job_scripts(member, bun), Ok(None)) {
+        if has_member_job {
             jobs.push(PlanJob {
                 job_id: job_id(member),
                 disposition,
@@ -67,7 +68,7 @@ pub(crate) fn dispositions(
                 disposition,
             });
         }
-        if !suites.is_empty() && has_release_assets {
+        if has_release_assets && (has_member_job || !suites.is_empty()) {
             jobs.push(PlanJob {
                 job_id: format!("{}{BUN_ASSETS_SUFFIX}", job_id(member)),
                 disposition,

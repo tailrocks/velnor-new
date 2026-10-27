@@ -10,7 +10,7 @@ pub use crate::matrix::bun::{BunLeg, BunLegMatrix};
 use crate::matrix::suites::SUITE_ALLOW_FAILURE_ENV;
 
 use crate::verification_jobs::bun_member_jobs::{
-    BUN_RUNNER, bun_permissions, same_bun_job, validate_bun_steps,
+    BUN_RUNNER, bun_permissions, same_bun_job, validate_bun_consumer, validate_bun_steps,
 };
 use crate::{RenderError, steps};
 
@@ -68,6 +68,7 @@ impl BunSuitePolicy {
             return Err(invalid("bun_suite_job_id"));
         }
         validate_bun_steps(&self.id, &self.steps)?;
+        validate_bun_consumer(&self.id, member_id, self.assets.as_deref(), &self.steps)?;
         if let Some(matrix) = &self.matrix {
             matrix.validate()?;
             if self.steps.iter().filter(|step| step.parallel).count() != 1 {
@@ -79,6 +80,12 @@ impl BunSuitePolicy {
                 return Err(invalid("bun_report_without_matrix"));
             }
             validate_bun_steps(&self.report_id(), &report.steps)?;
+            validate_bun_consumer(
+                &self.report_id(),
+                member_id,
+                self.assets.as_deref(),
+                &report.steps,
+            )?;
             if report.steps.iter().any(|step| step.parallel) {
                 return Err(invalid("bun_report_parallel_step"));
             }

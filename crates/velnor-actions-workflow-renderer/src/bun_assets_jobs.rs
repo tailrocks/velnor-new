@@ -3,8 +3,11 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, JobTimeout, Step, StepRole};
+use velnor_actions_contract::{
+    BUN_ASSETS_EXPORT_OPERATION, Job, JobTimeout, Step, StepKind, StepRole,
+};
 
+use crate::verification_jobs::bun_artifact_steps::{BUN_ASSETS_STAGE_DIR, bun_assets_archive_name};
 use crate::verification_jobs::bun_member_jobs::{
     BUN_RUNNER, bun_permissions, same_bun_job, validate_bun_steps,
 };
@@ -34,11 +37,75 @@ impl BunAssetsPolicy {
         {
             return Err(invalid("bun_assets_without_fetch"));
         }
+        validate_asset_producer(&self.id, &self.steps)?;
         if self.steps.iter().any(|step| step.parallel) {
             return Err(invalid("bun_assets_parallel_step"));
         }
         Ok(())
     }
+}
+
+fn validate_asset_producer(id: &str, steps: &[Step]) -> Result<(), RenderError> {
+    let invalid = |code: &str| RenderError::InvalidWorkflow(format!("{code}:{id}"));
+    let member_id = id
+        .strip_suffix(BUN_ASSETS_SUFFIX)
+        .ok_or_else(|| invalid("bun_assets_job_id"))?;
+    let archive = bun_assets_archive_name(member_id);
+    let archive_path = format!("{BUN_ASSETS_STAGE_DIR}/{member_id}/{archive}");
+    let mut exports = Vec::new();
+    let mut uploads = Vec::new();
+    let mut revokes = Vec::new();
+    let mut acquires = Vec::new();
+    for (index, step) in steps.iter().enumerate() {
+        let accepted = match (&step.kind, step.role) {
+            (StepKind::Shell { .. }, Some(StepRole::AcquireVelnor)) => {
+                acquires.push(index);
+                true
+            }
+            (StepKind::Action { uses, .. }, Some(StepRole::PrivateTokenMint)) => {
+                uses.starts_with("actions/create-github-app-token@")
+            }
+            (StepKind::Internal { .. }, Some(StepRole::PrivateFetch | StepRole::PrivateRevoke)) => {
+                if step.role == Some(StepRole::PrivateRevoke) {
+                    revokes.push(index);
+                }
+                true
+            }
+            (StepKind::Internal { operation, env }, Some(StepRole::BunAssetsHandoff))
+                if operation == BUN_ASSETS_EXPORT_OPERATION
+                    && env.get("VELNOR_BUN_ASSET_ID").map(String::as_str) == Some(member_id)
+                    && env
+                        .get("VELNOR_BUN_ASSET_PINS")
+                        .is_some_and(|pins| !pins.is_empty()) =>
+            {
+                exports.push(index);
+                true
+            }
+            (StepKind::Action { uses, with, .. }, None)
+                if uses.starts_with("actions/upload-artifact@")
+                    && with.get("path").map(String::as_str) == Some(archive_path.as_str())
+                    && with.get("archive").map(String::as_str) == Some("false")
+                    && with.get("if-no-files-found").map(String::as_str) == Some("error") =>
+            {
+                uploads.push(index);
+                true
+            }
+            _ => false,
+        };
+        if !accepted {
+            return Err(invalid("bun_assets_producer_untrusted_step"));
+        }
+    }
+    if acquires.as_slice() != [0]
+        || exports.len() != 1
+        || uploads.len() != 1
+        || revokes.len() != 1
+        || exports[0] != revokes[0] + 1
+        || uploads[0] != exports[0] + 1
+    {
+        return Err(invalid("bun_assets_handoff_malformed"));
+    }
+    Ok(())
 }
 
 pub fn build_bun_assets_job(

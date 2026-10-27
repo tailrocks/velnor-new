@@ -138,23 +138,27 @@ the `Fetch Cargo sources` step of
 - the Plan job (all lockful workspace roots), after moving the helper staging
   step up to just before the block, and
 - every Rust crate job, scoped to the roots the job fetches, and
-- every Bun member job, for the locked `release-assets` repositories only
-  (documentation-portal and platform pin release-asset bundles). The block is
-  the first thing in the job after the staged helper, so it is revoked before
-  `bun install` (registry and lifecycle phases) and every script runs. The
-  renderer rejects a Bun job whose block is partial, reordered, repeated or
-  preceded by any step other than the helper staging
-  (`bun_job_private_block`, `bun_job_private_block_late`).
-- the one assets job of a Bun member that declares suites
-  (`bun-<slug>--assets`), for the same `release-assets` repositories. Suite
-  jobs and Playwright legs never hold the block: they download the tree this
-  job verified as a same-run artifact and re-check it file by file and
-  against the lock's archive digests in `verified.json`
+- one hosted assets producer for each Bun member job that consumes locked
+  `release-assets` repositories (`bun-<slug>--assets`). Only this producer
+  stages the helper, mints the App token, fetches and revokes it, verifies the
+  archives, and uploads the same-run artifact. It runs no repository scripts,
+  Bun installation, lifecycle hooks, or package checks.
+- every consuming Bun member, suite, and report depends on its member's
+  producer and imports that producer's verified artifact before workspace
+  verification, registry installation, or scripts. Consumers cannot contain
+  the App mint, fetch, or revoke block. The renderer rejects a missing,
+  malformed, or mismatched artifact handoff. Each import re-checks files and
+  lock archive digests in `verified.json`
   ([Bun browser suites](bun-browser-suites.md)).
+
+The assets producer remains on the GitHub-hosted runner under ScaleSet,
+Both, local defaults, and consumer overrides. An explicit local producer
+override is rejected. Consumer placement and the one logical member check
+remain unchanged.
 
 The Plan job gets the block only when the repository has Cargo roots; a
 Bun-only repository has no Cargo source fetch to precede and its release
-assets belong to the jobs that name them.
+assets belong to the hosted Bun producers that name them.
 
 A job gets the block only when its allowlist is non-empty: Cargo git sources of
 its roots under `owner`, plus the locked repositories of the kinds a Rust job
