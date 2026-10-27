@@ -21,6 +21,10 @@ name = "velnor-archive-guard"
 path = "src/bin/velnor_archive_guard.rs"
 test = false
 
+[[test]]
+name = "oci_candidate_configuration_public"
+path = "tests/oci_candidate_configuration_public.rs"
+
 [dependencies]
 flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
 serde = { workspace = true }

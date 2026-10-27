@@ -3,6 +3,7 @@
 
 mod archive;
 mod archive_tar_framing;
+mod config;
 mod graph;
 mod json;
 mod layer;
@@ -10,6 +11,7 @@ mod layer;
 use std::path::Path;
 
 use archive::load_archive;
+pub use config::OciImageConfiguration;
 use graph::inspect_graph;
 
 pub const MAX_OCI_CANDIDATE_ARCHIVE_BYTES: u64 = 4 * 1024 * 1024 * 1024;
@@ -32,6 +34,12 @@ pub struct OciCandidateEvidence {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OciCandidateInspection {
+    pub evidence: OciCandidateEvidence,
+    pub configuration: OciImageConfiguration,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OciCandidateError(&'static str);
 
 impl std::fmt::Display for OciCandidateError {
@@ -47,4 +55,9 @@ pub(crate) type Result<T> = std::result::Result<T, OciCandidateError>;
 pub fn inspect_oci_candidate(path: &Path) -> Result<OciCandidateEvidence> {
     let archive = load_archive(path)?;
     inspect_graph(archive)
+}
+
+pub fn inspect_oci_candidate_with_config(path: &Path) -> Result<OciCandidateInspection> {
+    let archive = load_archive(path)?;
+    graph::inspect_graph_with_config(archive)
 }
