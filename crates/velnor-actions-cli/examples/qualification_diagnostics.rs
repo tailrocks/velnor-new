@@ -9,56 +9,73 @@
 include!("../src/entry.rs");
 
 fn main() -> ExitCode {
-    emit_plan_diagnostics();
-    run_entry()
-}
-
-fn emit_plan_diagnostics() {
-    use std::ffi::OsStr;
-    use std::path::Path;
-    use std::process;
-
-    let mut args = std::env::args_os();
-    if args.len() != 2 || args.nth(1).as_deref() != Some(OsStr::new("plan")) {
-        return;
+    let outcome = run_entry();
+    if outcome != ExitCode::SUCCESS || !is_plan_command() {
+        return outcome;
     }
 
-    let Ok(mode) = std::env::var("VELNOR_PLAN_DIAGNOSTICS_MODE") else {
-        return;
-    };
+    match emit_plan_diagnostics() {
+        Some(diagnostic_outcome) => diagnostic_outcome,
+        None => outcome,
+    }
+}
+
+fn is_plan_command() -> bool {
+    use std::ffi::OsStr;
+
+    let mut args = std::env::args_os();
+    args.len() == 2 && args.nth(1).as_deref() == Some(OsStr::new("plan"))
+}
+
+fn emit_plan_diagnostics() -> Option<ExitCode> {
+    use std::ffi::OsStr;
+    use std::path::Path;
+
+    let mode = std::env::var("VELNOR_PLAN_DIAGNOSTICS_MODE").ok()?;
+    if mode == "quiet" {
+        return Some(ExitCode::SUCCESS);
+    }
     if !matches!(
         mode.as_str(),
-        "control" | "fixture-warning" | "dogfood-warning"
+        "control" | "warning-all" | "nested-only" | "dogfood-only" | "fail57"
     ) {
-        return;
+        return Some(ExitCode::from(56));
     }
 
     let Some(root) = std::env::current_dir()
         .ok()
         .and_then(|path| path.canonicalize().ok())
     else {
-        return;
+        return Some(ExitCode::from(56));
     };
-    let temp_dir = std::env::var_os("TMPDIR").unwrap_or_else(|| "/tmp".into());
-    let Some(source_root) = std::env::var_os("VELNOR_PLAN_DIAGNOSTICS_ROOT") else {
-        return;
+    let Some(source_root) = std::env::var_os("VELNOR_PLAN_DIAGNOSTICS_ROOT")
+        .and_then(|path| Path::new(&path).canonicalize().ok())
+    else {
+        return Some(ExitCode::from(56));
     };
+    let is_nested = root.file_name() == Some(OsStr::new("nested"));
+    let is_dogfood = root == source_root;
+
     eprintln!("Repository: {}", root.display());
-    eprintln!(
-        "Preview: {}/diagnostic-preview-{}",
-        Path::new(&temp_dir).display(),
-        process::id()
-    );
+    eprintln!("Preview: {}", root.join("diagnostic-preview").display());
     eprintln!(
         "Plan context: repository={} source-root={}",
         root.display(),
-        Path::new(&source_root).display()
+        source_root.display()
     );
 
-    if mode == "fixture-warning" && root.file_name() == Some(OsStr::new("nested")) {
-        eprintln!("warning: fixture-plan-diagnostic-regression");
+    let emit_warning = match mode.as_str() {
+        "warning-all" => true,
+        "nested-only" | "fail57" => is_nested,
+        "dogfood-only" => is_dogfood,
+        _ => false,
+    };
+    if emit_warning {
+        eprintln!("warning: plan-diagnostic-regression");
     }
-    if mode == "dogfood-warning" && source_root == root.as_os_str() {
-        eprintln!("warning: dogfood-plan-diagnostic-regression");
+    if mode == "fail57" && is_nested {
+        Some(ExitCode::from(57))
+    } else {
+        Some(ExitCode::SUCCESS)
     }
 }

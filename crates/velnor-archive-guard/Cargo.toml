@@ -14,7 +14,7 @@ v1-task-owner = "repository-maintenance"
 
 [lib]
 path = "src/lib.rs"
-test = false
+test = true
 
 [[bin]]
 name = "velnor-archive-guard"
