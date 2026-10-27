@@ -15,6 +15,12 @@ use super::{GitHubApi, ReleaseAssetResponse, asset_tuples, asset_tuples_from_dow
 mod pull_request_merge_ref;
 #[path = "package_release_publish_pull_request_poll.rs"]
 mod pull_request_poll;
+#[path = "package_release_publish_pull_request_response.rs"]
+mod pull_request_response;
+
+pub(crate) use pull_request_response::{
+    parse_public_pull_request_response, read_public_merge_group_pull_request_response,
+};
 
 pub(crate) struct PublicReleaseSnapshot {
     pub(crate) release_id: u64,
@@ -113,42 +119,6 @@ pub(crate) fn read_public_pull_request(
         .remaining()
         .map_err(|_| internal("package_public_verification_deadline"))?;
     Ok(snapshot)
-}
-
-pub(crate) fn parse_public_pull_request_response(
-    bytes: &[u8],
-    repository: &str,
-    repository_id: u64,
-    number: u64,
-) -> Result<PublicPullRequestSnapshot, OrchestratorError> {
-    let response: PublicPullRequestResponse =
-        serde_json::from_slice(bytes).map_err(|_| internal("package_public_pull_request_json"))?;
-    pull_request_poll::validate_identity(&response, repository, repository_id, number)?;
-    public_pull_request_snapshot(response, repository, repository_id, None)
-}
-
-pub(crate) fn read_public_merge_group_pull_request_response(
-    repository: &str,
-    repository_id: u64,
-    number: u64,
-    deadline: CheckDeadline,
-) -> Result<Vec<u8>, OrchestratorError> {
-    if !velnor_actions_contract::vcs::is_safe_github_repository(repository)
-        || repository_id == 0
-        || number == 0
-    {
-        return Err(internal("package_public_pull_request_selection_invalid"));
-    }
-    deadline
-        .remaining()
-        .map_err(|_| internal("package_public_verification_deadline"))?;
-    let api = GitHubApi::new(repository.to_owned()).with_deadline(deadline);
-    api.verify_repository_identity(repository_id)?;
-    let bytes = api.get_json_bytes(&api.route(&format!("pulls/{number}")))?;
-    deadline
-        .remaining()
-        .map_err(|_| internal("package_public_verification_deadline"))?;
-    Ok(bytes)
 }
 
 fn public_pull_request_snapshot(
