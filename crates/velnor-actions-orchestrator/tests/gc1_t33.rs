@@ -144,6 +144,7 @@ fn check_group_plan() -> Result<(), Box<dyn Error>> {
         clippy_all_features: false,
         target: "x86_64-unknown-linux-gnu",
         explicit_fmt: true,
+        allow_empty_test_suite: false,
     })
     .map_err(|err| fail(&format!("derive failed: {err}")))?;
     let kinds: Vec<TaskKind> = groups.iter().map(|group| group.kind).collect();
@@ -202,6 +203,7 @@ fn check_exact_commands_preserved() -> Result<(), Box<dyn Error>> {
         clippy_all_features: false,
         target: "x86_64-unknown-linux-gnu",
         explicit_fmt: true,
+        allow_empty_test_suite: false,
     };
     let groups =
         derive_task_groups(&inputs).map_err(|err| fail(&format!("derive failed: {err}")))?;

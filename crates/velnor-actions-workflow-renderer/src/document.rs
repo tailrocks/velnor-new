@@ -72,7 +72,13 @@ pub(crate) fn workflow_to_yaml(
     ];
     if let Some(cache_mode) = &ir.cache_mode {
         steps::scan_for_private_subcommands(cache_mode.as_str())?;
-        top.push(Yaml::cache_mode_field(cache_mode));
+        // Same IR-only rule as job-level conditional modes above.
+        if !matches!(
+            cache_mode,
+            velnor_actions_contract::CacheMode::Expression(_)
+        ) {
+            top.push(Yaml::cache_mode_field(cache_mode));
+        }
     }
     top.extend([
         ("env".to_owned(), string_map_yaml(&workflow_env)),
@@ -306,6 +312,7 @@ fn job_to_yaml(
             job_env: &effective_env,
             runs_on: Some(&job.runs_on),
             actions_read: policy.actions_read,
+            report_helper_version: &ctx.report_helper_version,
         },
     )?;
     crate::cache_save_budget::apply(&mut rendered_steps, job.timeout_minutes.minutes())?;
@@ -350,7 +357,16 @@ fn append_job_options(
     }
     if let Some(cache_mode) = &job.cache_mode {
         steps::scan_for_private_subcommands(cache_mode.as_str())?;
-        entries.push(Yaml::cache_mode_field(cache_mode));
+        // Conditional (expression) modes stay IR-only: the emitted workflow
+        // declares only statically provable modes. A conditional writer runs
+        // only behind its push gate with push-gated save conditions, so the
+        // omitted declaration changes nothing at runtime.
+        if !matches!(
+            cache_mode,
+            velnor_actions_contract::CacheMode::Expression(_)
+        ) {
+            entries.push(Yaml::cache_mode_field(cache_mode));
+        }
     }
     if !job.needs.is_empty() {
         let needs: Vec<Yaml> = job
@@ -359,6 +375,9 @@ fn append_job_options(
             .map(|need| Yaml::str(need.clone()))
             .collect();
         entries.push(("needs".to_owned(), Yaml::Seq(needs)));
+    }
+    if !job.outputs.is_empty() {
+        entries.push(("outputs".to_owned(), string_map_yaml(&job.outputs)));
     }
     if let Some(condition) = &job.condition {
         steps::scan_for_private_subcommands(condition)?;

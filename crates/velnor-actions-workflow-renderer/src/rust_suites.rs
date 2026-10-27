@@ -319,6 +319,7 @@ fn suite_job_record(
 ) -> Job {
     Job {
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         display_name,
         runs_on: runs_on.to_owned(),
         check_runner: None,

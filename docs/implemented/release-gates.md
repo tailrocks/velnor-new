@@ -67,10 +67,12 @@ qualification is established by the release-source checks below.
   fix, then land any bootstrap-lock update in a SEPARATE reviewed change while
   ordinary CI keeps using its previous bootstrap. Report the overall
   coordinator conclusion separately from generator acceptance.
-- BOOT-3.4 (mise-bootstrap equality): half done (`.mise-version` ==
-  `MISE_VERSION` const). Unblock = seed creates `.velnor/generator.lock`
-  with the same exact Mise release + SHA-256; the equality check then
-  becomes mechanical.
+- BOOT-3.4 (mise-bootstrap equality): implemented. The committed
+  `.velnor/generator.lock` records authenticated Velnor 0.1.55 from commit
+  `693f3aae14406fb7851ac70f0aee647a869b5063`; required-verdict generation
+  validates its release-manifest shape and checks its Mise version against
+  the pinned catalog. This lock is a bootstrap input, not evidence of hosted
+  qualification for the current source or historical signed qualification.
 
 ## Freshness process gates (VER)
 

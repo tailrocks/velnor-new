@@ -7,13 +7,14 @@ use std::io;
 
 use velnor_actions_actionlint::actions::MISE_ACTION_SHA;
 use velnor_actions_contract::config::jactionlint_verifier::jactionlint_verifier_script;
-use velnor_actions_contract::{ReleaseTarget, RoutingWorkflow, Step, StepKind};
+use velnor_actions_contract::{
+    ReleaseTarget, RoutingWorkflow, Step, StepKind, require_release_version,
+};
 use velnor_actions_mise::MISE_VERSION;
 use velnor_actions_workflow_renderer::setup::{MISE_BINARY_SHA256_LINUX_X64, MiseSetup};
 use velnor_actions_workflow_renderer::toolchain_env::credential_unset_prelude;
 use velnor_actions_workflow_renderer::{
-    ProductReleasePins, RenderedFile, Schema2WorkflowRequest, VERIFY_PATH, check_release_build,
-    render_schema2_workflows,
+    ProductReleasePins, RenderedFile, Schema2WorkflowRequest, VERIFY_PATH, render_schema2_workflows,
 };
 
 fn fail(message: &str) -> Box<dyn Error> {
@@ -357,7 +358,7 @@ fn check_rejects_bad_mise_setup() -> Result<(), Box<dyn Error>> {
 }
 
 fn check_rejects_bad_release_version() -> Result<(), Box<dyn Error>> {
-    match check_release_build("not-a-version", "release.yml") {
+    match require_release_version("not-a-version", "release.yml") {
         Ok(()) => Err(fail("non-release build accepted")),
         Err(err) => require(&err.to_string(), "non_release_build", "release version"),
     }

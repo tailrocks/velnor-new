@@ -83,6 +83,7 @@ pub(crate) struct VerifierActionSet {
     pub(crate) restored_rust: VerifierAction,
     pub(crate) installed_rust: VerifierAction,
     pub(crate) jactionlint: VerifierAction,
+    inline_verifier_steps: [Step; 3],
     pub(crate) inline_rust_templates: BTreeMap<&'static str, Vec<InlineVerifierTemplate>>,
     pub(crate) inline_installed_rust_templates: Vec<InlineVerifierTemplate>,
     pub(crate) inline_jactionlint_templates: Vec<InlineVerifierTemplate>,
@@ -111,6 +112,11 @@ impl VerifierActionSet {
         let steps = verifier_steps(catalog)?;
         let inline_templates = inline_templates(&steps)?;
         Ok(Self {
+            inline_verifier_steps: [
+                steps.restored_rust.clone(),
+                steps.installed_rust.clone(),
+                steps.jactionlint.clone(),
+            ],
             restored_rust: verifier_action(
                 RUST_VERIFIER_USES[0],
                 crate::workflow::VERIFY_RESTORED_RUST_STEP,
@@ -150,6 +156,13 @@ impl VerifierActionSet {
         [&self.restored_rust, &self.installed_rust, &self.jactionlint]
             .into_iter()
             .find(|action| action.uses == uses)
+    }
+
+    pub(crate) fn by_canonical_inline_call(&self, step: &Step) -> Option<&VerifierAction> {
+        self.inline_verifier_steps
+            .iter()
+            .zip([&self.restored_rust, &self.installed_rust, &self.jactionlint])
+            .find_map(|(canonical, action)| (canonical == step).then_some(action))
     }
 
     pub(crate) fn canonical_call(step: &Step, action: &VerifierAction) -> bool {
@@ -260,19 +273,4 @@ fn verifier_action(
         role,
         file,
     })
-}
-
-pub(crate) fn call_step(name: &str, uses: &'static str, role: Option<StepRole>) -> Step {
-    Step {
-        name: name.to_owned(),
-        id: None,
-        role,
-        condition: None,
-        parallel: false,
-        kind: StepKind::Action {
-            uses: uses.to_owned(),
-            with: BTreeMap::new(),
-            env: BTreeMap::new(),
-        },
-    }
 }

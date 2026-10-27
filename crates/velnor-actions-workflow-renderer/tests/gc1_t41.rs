@@ -6,13 +6,15 @@ use std::error::Error;
 use std::io;
 
 use velnor_actions_contract::config::{
-    CheckExecutor, CheckPlatform, CheckRunner, NativeHomebrewOperation, PullRequestCachePolicy,
+    CheckExecutor, CheckPlatform, CheckRunner, NativeHomebrewOperation,
 };
 use velnor_actions_contract::{
-    Concurrency, Job, JobTimeout, Permissions, Step, StepKind, Trigger, WorkflowIr, WorkflowPolicy,
+    Concurrency, Job, JobTimeout, Permissions, Step, StepKind, Trigger, VelnorConfig, WorkflowIr,
+    WorkflowPolicy,
 };
 use velnor_actions_workflow_renderer::render::{
-    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, RenderContext, render_workflow_ir,
+    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, CanonicalAuthoritySteps, CanonicalRuntimeInputs,
+    EXPECTED_PR_TYPES, RenderContext, render_workflow_ir,
 };
 use velnor_actions_workflow_renderer::steps::{REQUEST_DIR_PREFIX, STAGED_BINARY_PREFIX};
 
@@ -61,12 +63,46 @@ fn native_check_job(step: Step) -> Job {
         cache_mode: None,
         environment: None,
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         steps: vec![step],
     }
 }
 
-fn context() -> RenderContext {
-    RenderContext {
+fn repository_config() -> Result<VelnorConfig, Box<dyn Error>> {
+    toml::from_str(include_str!("../../../.velnor/config.toml"))
+        .map_err(|error| fail(&format!("repository config rejected:{error}")))
+}
+
+fn plan_env() -> BTreeMap<String, String> {
+    velnor_actions_mise::ISOLATION_ENV
+        .into_iter()
+        .chain(velnor_actions_mise::NO_AUTO_INSTALL_ENV)
+        .map(|(key, value)| (key.to_owned(), value.to_owned()))
+        .collect()
+}
+
+fn context(jobs: &BTreeMap<String, Job>) -> Result<RenderContext, Box<dyn Error>> {
+    let config = repository_config()?;
+    let runtime = CanonicalRuntimeInputs::new(
+        plan_env(),
+        env!("CARGO_PKG_VERSION").to_owned(),
+        format!("{STAGED_BINARY_PREFIX}{}", env!("CARGO_PKG_VERSION")),
+        format!("{REQUEST_DIR_PREFIX}request"),
+        "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683".to_owned(),
+        false,
+    )
+    .map_err(|error| fail(&format!("authority rejected:{error}")))?;
+    let authority_steps = CanonicalAuthoritySteps::qualify_jobs(
+        jobs,
+        WorkflowPolicy::ConsumerV1,
+        &config,
+        "ubuntu-24.04",
+        Vec::new(),
+        runtime,
+    )
+    .map_err(|error| fail(&format!("authority rejected:{error}")))?;
+    Ok(RenderContext {
+        authority_steps,
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
         report_helper_version: env!("CARGO_PKG_VERSION").to_owned(),
         runs_on: "ubuntu-24.04".to_owned(),
@@ -75,14 +111,13 @@ fn context() -> RenderContext {
         request_dir: format!("{REQUEST_DIR_PREFIX}request"),
         checkout_uses: "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683".to_owned(),
         validator_commands: Vec::new(),
-        candidate: None,
         preseed: false,
         workflow_tasks: Vec::new(),
-        pull_request_cache_policy: PullRequestCachePolicy::ReadOnly,
-        mise_quiet: false,
-        plan_consumer_env: BTreeMap::new(),
+        pull_request_cache_policy: config.workflow.pull_request_cache_policy,
+        mise_quiet: config.workflow.mise_quiet,
+        plan_consumer_env: plan_env(),
         tool_pins: Vec::new(),
-    }
+    })
 }
 
 fn workflow(step: Step) -> WorkflowIr {
@@ -107,7 +142,7 @@ fn workflow(step: Step) -> WorkflowIr {
 
 fn rendered(check_id: &str, task_id: &str) -> Result<String, Box<dyn Error>> {
     let ir = workflow(native_check_step(check_id, task_id));
-    match render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &context()) {
+    match render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &context(&ir.jobs)?) {
         Ok(yaml) => Ok(yaml),
         Err(error) => Err(fail(&format!("render rejected:{error}"))),
     }
@@ -120,7 +155,7 @@ fn rejected(
     label: &str,
 ) -> Result<(), Box<dyn Error>> {
     let ir = workflow(native_check_step(check_id, task_id));
-    match render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &context()) {
+    match render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &context(&ir.jobs)?) {
         Ok(_) => Err(fail(&format!("{label} accepted:{check_id}:{task_id}"))),
         Err(error) => require(&error.to_string(), needle, label),
     }

@@ -48,7 +48,7 @@ Rust 1.98.1, Nextest 0.9.148, and release-plz 0.3.172. The workflow
 pins in that evidence were `jdx/mise-action` v5.2.0 and `asamarts/alint` v0.18.4. See
 [`freshness-evidence-2026-10-17.md`](docs/implemented/freshness-evidence-2026-10-17.md).
 The current catalog selects Mise 2026.10.19, ALint 0.20.1, Rust 1.99.1,
-MBX 1.27.0, Nextest 0.9.149, and release-plz 0.4.1.
+MBX 1.28.0, Nextest 0.9.149, and release-plz 0.4.1.
 Mise release identity and qualification evidence are recorded in
 [`mise-2026-10-19-qualification.md`](docs/implemented/mise-2026-10-19-qualification.md).
 The complete source freshness captures and timestamps are recorded in
@@ -95,9 +95,12 @@ source commit, asset URLs, and digests. A source build still fails
 consumer-policy generation by design (`consumer_requires_release_install`);
 it never emits an unverified download URL or a placeholder digest. Velnor's
 own repository instead uses the reserved `velnor-repository-v1` policy;
-`.velnor/generator.lock` does not exist yet (BOOT-3.4 NEEDS-HUMAN —
-seed creates it), so the lock half of the bootstrap cycle is future work,
-not a present claim.
+`.velnor/generator.lock` records the authenticated Velnor 0.1.55 release at
+commit `693f3aae14406fb7851ac70f0aee647a869b5063`, with its three supported
+binary artifact URLs and SHA-256 digests. Required-verdict generation checks
+the lock against the release manifest rules and the pinned Mise catalog. This
+bootstrap input does not establish hosted qualification of the current source
+or a historical signed qualification.
 
 ## Proposed V1 direction
 

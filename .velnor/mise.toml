@@ -1,0 +1,36 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
+min_version = "2026.10.18"
+
+[tools]
+"mr-boxington" = "1.28.0"
+"github:jdx/jactionlint" = "2.3.0"
+shellcheck = "0.11.0"
+
+[settings]
+lockfile = true
+idiomatic_version_file_enable_tools = ["rust"]
+
+[tasks.check-generated-workflow-freshness]
+description = "Verify generated GitHub workflows match the checked-in tree"
+tools = { rust = "1.99.1", "mr-boxington" = "1.28.0", "github:jdx/jactionlint" = "2.3.0", shellcheck = "0.11.0" }
+run = '''
+set -eu
+ROOT="$(git -C .. rev-parse --show-toplevel)"
+cd "$ROOT"
+PREVIEW_ROOT="${RUNNER_TEMP:?}/velnor-actions-freshness-${GITHUB_RUN_ID:?}-${GITHUB_RUN_ATTEMPT:?}"
+/bin/mkdir -m 700 "$PREVIEW_ROOT"
+trap 'rm -rf "$PREVIEW_ROOT"' EXIT
+GENERATED="$PREVIEW_ROOT/generated"
+MBX_CARGO_SHIM_MODE=1 mbx --config build.jobs=2 run --quiet --locked --package velnor-actions-cli --bin velnor-actions -- generate --output-dir "$GENERATED"
+diff -r --brief .github "$GENERATED/.github"
+SOURCE_CLAUDE=".github/CLAUDE.md"
+GENERATED_CLAUDE="$GENERATED/.github/CLAUDE.md"
+if [ -L "$GENERATED_CLAUDE" ]; then
+  test -L "$SOURCE_CLAUDE"
+  test "$(readlink "$SOURCE_CLAUDE")" = "$(readlink "$GENERATED_CLAUDE")"
+else
+  test ! -L "$SOURCE_CLAUDE"
+fi
+'''

@@ -11,19 +11,10 @@ use super::CrateJobInputs;
 use crate::OrchestratorError;
 use crate::config::private_wiring::PrivateWiring;
 
-pub(crate) const SEED_JOB_ID: &str = "dependency-seed";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SeedWorkspace {
     pub(crate) root: String,
     pub(crate) nextest: bool,
-}
-
-pub(crate) fn seed_job_id(root: &str) -> String {
-    if root.is_empty() {
-        SEED_JOB_ID.to_owned()
-    } else {
-        format!("{SEED_JOB_ID}-{}", root.replace('/', "-"))
-    }
 }
 
 pub(crate) fn seed_jobs(
@@ -32,15 +23,21 @@ pub(crate) fn seed_jobs(
     private: Option<&PrivateWiring>,
     timeout: JobTimeout,
 ) -> Result<Vec<(String, Job)>, OrchestratorError> {
+    let job_ids = unique_seed_job_ids(workspaces);
     workspaces
         .iter()
-        .map(|workspace| {
-            Ok((
-                seed_job_id(&workspace.root),
-                seed_job(input, workspace, private, timeout)?,
-            ))
-        })
+        .zip(job_ids)
+        .map(|(workspace, job_id)| Ok((job_id, seed_job(input, workspace, private, timeout)?)))
         .collect()
+}
+
+pub(crate) fn unique_seed_job_ids(workspaces: &[SeedWorkspace]) -> Vec<String> {
+    velnor_actions_workflow_renderer::native_authority::unique_dependency_seed_job_ids(
+        &workspaces
+            .iter()
+            .map(|workspace| workspace.root.clone())
+            .collect::<Vec<_>>(),
+    )
 }
 
 fn seed_job(
@@ -90,6 +87,7 @@ fn seed_job(
     steps.push(mbx_producer_mark_step()?);
     Ok(Job {
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         display_name: display_name(&workspace.root),
         runs_on: input.label.to_owned(),
         check_runner: None,

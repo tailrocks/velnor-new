@@ -50,6 +50,7 @@ pub fn build_bun_assets_job(
     all.extend(policy.steps.iter().cloned());
     Ok(Job {
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         display_name: format!("Bun / {} / assets", policy.member),
         runs_on: BUN_RUNNER.to_owned(),
         timeout_minutes: policy.timeout,

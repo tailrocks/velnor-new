@@ -19,8 +19,7 @@ pub(crate) use observation::{
     run_attempt, unit_observation_member_name, verify_unit_observation_binding,
     write_entry_reports,
 };
-pub(crate) use write::{
-    EXIT_CODE_ENV, START_MS_ENV, TASK_ID_ENV, entry_and_digest, entry_and_digest_for_job,
-    load_plan, terminal_task_report,
-};
 pub use write::{REPORT_OP, write_task_report};
+pub(crate) use write::{
+    TASK_ID_ENV, entry_and_digest, entry_and_digest_for_job, load_plan, terminal_task_report,
+};

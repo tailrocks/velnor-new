@@ -14,10 +14,13 @@ use crate::{
 #[path = "support_private_tokens.rs"]
 mod private;
 
-pub(crate) fn check_token_hygiene(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
+pub(crate) fn check_token_hygiene(
+    jobs: &BTreeMap<String, Job>,
+    report_helper_version: &str,
+) -> Result<(), RenderError> {
     for (id, job) in jobs {
         for step in &job.steps {
-            check_step_tokens(id, step)?;
+            check_step_tokens(id, step, report_helper_version)?;
         }
     }
     Ok(())
@@ -42,7 +45,11 @@ fn is_ambient_auth_role(role: Option<StepRole>) -> bool {
     )
 }
 
-fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
+fn check_step_tokens(
+    id: &str,
+    step: &Step,
+    report_helper_version: &str,
+) -> Result<(), RenderError> {
     private::check_private_binding(id, step)?;
     check_github_evidence_binding(id, step)?;
     if step.role == Some(StepRole::PrivateTokenMint) {
@@ -102,7 +109,13 @@ fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
             task_id,
             sdk_version,
             ..
-        } => validate_native_check_token_scope(id, check_id, task_id, sdk_version)?,
+        } => validate_native_check_token_scope(
+            id,
+            check_id,
+            task_id,
+            sdk_version,
+            report_helper_version,
+        )?,
     }
     if matches!(&step.kind, StepKind::Internal { operation, .. }
         if operation == crate::steps::RESOLVE_QUALIFICATION_OPERATION)
@@ -129,11 +142,12 @@ fn validate_native_check_token_scope(
     check_id: &str,
     task_id: &str,
     sdk_version: &str,
+    report_helper_version: &str,
 ) -> Result<(), RenderError> {
     if !check_id.is_empty()
         && job_id == format!("check-{check_id}")
         && task_id == format!("internal/native-check/{check_id}")
-        && sdk_version == env!("CARGO_PKG_VERSION")
+        && sdk_version == report_helper_version
     {
         Ok(())
     } else {
@@ -263,7 +277,7 @@ fn check_scrub_coverage(
     env: &BTreeMap<String, String>,
 ) -> Result<(), RenderError> {
     use crate::toolchain_env::STEP_CREDENTIAL_DENYLIST;
-    if id == super::RELEASE_JOB_ID || is_ambient_auth_role(role) {
+    if is_ambient_auth_role(role) {
         return Ok(());
     }
     let scoped = is_scoped_gh_token(id, env);

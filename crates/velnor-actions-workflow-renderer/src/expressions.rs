@@ -89,6 +89,13 @@ fn is_family_key_output(inner: &str) -> bool {
         .is_some_and(|stem| family_for_stem(stem).is_some())
 }
 
+fn is_mbx_bundle_reader_key(inner: &str) -> bool {
+    use velnor_actions_contract::workflow::cache_family_mbx::{
+        is_mbx_bundle_key_needs_inner, is_mbx_bundle_restore_keys_needs_inner,
+    };
+    is_mbx_bundle_key_needs_inner(inner) || is_mbx_bundle_restore_keys_needs_inner(inner)
+}
+
 fn is_tofu_providers_plan_key(inner: &str) -> bool {
     inner
         .strip_prefix("needs.plan.outputs.")
@@ -233,6 +240,7 @@ pub(crate) fn check_with_value(key: &str, value: &str) -> Result<(), RenderError
             && !is_matrix_field(inner)
             && !is_hash_files(inner)
             && !is_tofu_providers_plan_key(inner)
+            && !is_mbx_bundle_reader_key(inner)
             && !is_private_mint_input(key, inner)
             && !is_image_publish_output(inner)
             && !is_family_key_output(inner)

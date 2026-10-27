@@ -38,6 +38,8 @@ pub(super) use preview_reads::ReleaseArtifactApi;
 mod ancestry;
 pub(super) use ancestry::verify_public_preview_main_ancestry;
 pub(super) use ancestry::verify_public_pull_request_lineage;
+#[path = "package_release_publish_diagnostics.rs"]
+mod diagnostics;
 #[path = "package_release_publish_github_immutable_status.rs"]
 mod immutable_status;
 #[path = "package_release_publish_lookup.rs"]
@@ -303,12 +305,13 @@ impl GitHubApi {
             })
             .transpose()?
             .unwrap_or(API_TIMEOUT);
+        let diagnostic = diagnostics::RequestDiagnostic::new(exec.args(), timeout, limit);
         let result = exec
             .command(&self.catalog)
             .and_then(|command| command.run_bounded(limit, timeout))
-            .map_err(|_| internal("package_publish_api_failed"))?;
+            .map_err(|error| diagnostic.command_error(&error))?;
         if !result.success {
-            return Err(internal("package_publish_api_failed"));
+            return Err(diagnostic.unsuccessful(&result));
         }
         Ok(result.stdout)
     }

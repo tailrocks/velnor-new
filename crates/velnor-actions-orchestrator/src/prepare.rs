@@ -77,9 +77,22 @@ fn prepare_inner(
         Some(config) => config,
         None => load_config(&canonical)?,
     };
+    check_velnor_identity(&canonical, &config)?;
+    let published_generator_lock = if config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1 {
+        let lock =
+            crate::validate::verify_velnor_repository_files(&canonical)?.ok_or_else(|| {
+                OrchestratorError::Contract {
+                    problem: "required_verdict_requires_published_generator_lock".to_owned(),
+                }
+            })?;
+        crate::finalized::validate_published_generator_lock(&lock)?;
+        Some(lock)
+    } else {
+        None
+    };
     let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&canonical, &config)?;
     let default_branch = resolve_default_branch(&canonical, &config)?;
-    check_velnor_identity(&canonical, &config)?;
+    validate_verification_branch(&config, &default_branch)?;
     let mut discovery = match phases {
         Some(phases) => discover_with_phase_timings(&canonical, &config, &catalog, phases)?,
         None => discover(&canonical, &config, &catalog)?,
@@ -96,6 +109,7 @@ fn prepare_inner(
             discovery: &discovery,
             fetch_roots: &fetch_roots,
             consumer_release_version: env!("CARGO_PKG_VERSION"),
+            published_generator_lock: published_generator_lock.as_ref(),
             catalog: &emission,
         },
     )?;
@@ -107,6 +121,7 @@ fn prepare_inner(
     let audit = crate::lock_audit::audit_prepare_installs_with_catalog_and_verifiers(
         &canonical,
         &workflow.ir,
+        config.workflow.policy,
         &runner_label,
         &workflow.context.validator_commands,
         &catalog,
@@ -130,6 +145,20 @@ fn prepare_inner(
         lock_audit_blocking: audit.blocking,
         catalog,
     })
+}
+
+fn validate_verification_branch(
+    config: &VelnorConfig,
+    default_branch: &str,
+) -> Result<(), OrchestratorError> {
+    if config.workflow.verification_branch.as_deref() == Some(default_branch) {
+        return Err(OrchestratorError::config(
+            crate::config::CONFIG_REL,
+            "workflow.verification_branch",
+            "must_differ_from_default_branch",
+        ));
+    }
+    Ok(())
 }
 
 pub(crate) fn runner_label_for(config: &VelnorConfig) -> (String, RunnerSelection) {

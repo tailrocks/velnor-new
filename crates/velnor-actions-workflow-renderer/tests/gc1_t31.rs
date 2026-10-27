@@ -64,6 +64,7 @@ fn job_with(
         cache_mode,
         environment: None,
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         steps,
     }
 }

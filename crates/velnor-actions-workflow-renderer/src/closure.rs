@@ -290,6 +290,7 @@ fn final_download_at(job: &Job) -> usize {
 pub(crate) fn insert_plan_closure(
     jobs: &mut std::collections::BTreeMap<String, Job>,
     ctx: &RenderContext,
+    policy: velnor_actions_contract::WorkflowPolicy,
 ) -> Result<(), RenderError> {
     let Some(plan) = jobs.get_mut(PLAN_JOB_ID) else {
         return Ok(());
@@ -299,10 +300,11 @@ pub(crate) fn insert_plan_closure(
     }) else {
         return Ok(());
     };
-    if !plan
-        .steps
-        .iter()
-        .any(|step| step.role == Some(StepRole::CheckGenerated))
+    if policy != velnor_actions_contract::WorkflowPolicy::VelnorRepositoryV1
+        && !plan
+            .steps
+            .iter()
+            .any(|step| step.role == Some(StepRole::CheckGenerated))
     {
         let check = freshness_step(&ctx.staged_binary, FRESHNESS_OUTDIR, &ctx.plan_consumer_env)?;
         plan.steps.insert(at, check);

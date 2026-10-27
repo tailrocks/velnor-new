@@ -71,6 +71,8 @@ fn gc1_t32_preserves_contract() -> Result<(), Box<dyn Error>> {
     check_static_reader_writer_ids()?;
     check_branch_decided_before_compilation()?;
     check_recheck_after_queue_slot()?;
+    check_recheck_reads_reader_outputs()?;
+    check_recheck_reader_matcher_rejects_lookalikes()?;
     check_recoverable_optional_cache()?;
     check_tofu_branches_count_against_limits()?;
     Ok(())
@@ -171,5 +173,112 @@ pub(crate) fn check_rejects_bad_authority() -> Result<(), Box<dyn Error>> {
         ),
         "writer without branch condition"
     );
+    Ok(())
+}
+
+fn check_recheck_reads_reader_outputs() -> Result<(), Box<dyn Error>> {
+    use velnor_actions_contract::workflow::cache_family_mbx::{
+        MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_KEY_JOB_OUTPUT, MBX_BUNDLE_RESTORE_KEYS_EXPR,
+        MBX_BUNDLE_RESTORE_KEYS_JOB_OUTPUT, is_mbx_bundle_key_needs_expr,
+        is_mbx_bundle_restore_keys_needs_expr, mbx_bundle_key_needs_expr,
+        mbx_bundle_recheck_condition, mbx_bundle_restore_keys_needs_expr,
+    };
+    let mut with = BTreeMap::new();
+    with.insert("key".to_owned(), MBX_BUNDLE_KEY_EXPR.to_owned());
+    with.insert(
+        "restore-keys".to_owned(),
+        MBX_BUNDLE_RESTORE_KEYS_EXPR.to_owned(),
+    );
+    with.insert("path".to_owned(), "transport".to_owned());
+    let probe = Step {
+        name: "Restore state snapshot".to_owned(),
+        id: Some(StepId::MbxBundleRestore),
+        role: Some(StepRole::MbxBundleRestore),
+        condition: None,
+        parallel: false,
+        kind: StepKind::Action {
+            uses: "cache-restore".to_owned(),
+            with,
+            env: BTreeMap::new(),
+        },
+    };
+    let Some(mut recheck) = writer_recheck_step(std::slice::from_ref(&probe)) else {
+        return Err(fail("bundle probe has no recheck"));
+    };
+    rewrite_recheck_step_keys(&mut recheck, "rust-demo-read");
+    let StepKind::Action { with, .. } = &recheck.kind else {
+        return Err(fail("recheck lost its action"));
+    };
+    // The recheck runs before the writer's own key step, so it must read
+    // the reader branch outputs through `needs`, never a later step.
+    let key = with.get("key").map(String::as_str).unwrap_or_default();
+    let keys = with
+        .get("restore-keys")
+        .map(String::as_str)
+        .unwrap_or_default();
+    if key != mbx_bundle_key_needs_expr("rust-demo-read")
+        || keys != mbx_bundle_restore_keys_needs_expr("rust-demo-read")
+    {
+        return Err(fail("recheck does not read the reader outputs"));
+    }
+    if !is_mbx_bundle_key_needs_expr(key) || !is_mbx_bundle_restore_keys_needs_expr(keys) {
+        return Err(fail("recheck needs expressions rejected"));
+    }
+    if with.get("path").map(String::as_str) != Some("transport") {
+        return Err(fail("recheck rewrite touched non-key inputs"));
+    }
+    // The reader is skipped on writer events, so the recheck must skip
+    // instead of restoring with an empty key.
+    if recheck.condition.as_deref() != Some(&mbx_bundle_recheck_condition("rust-demo-read")[..]) {
+        return Err(fail("recheck missing the empty-key guard"));
+    }
+    // A probe without bundle key references is left untouched.
+    let Some(mut plain) = writer_recheck_step(&fixture_base_steps()) else {
+        return Err(fail("probe has no recheck"));
+    };
+    rewrite_recheck_step_keys(&mut plain, "rust-demo-read");
+    if plain.condition.is_some() {
+        return Err(fail("rewrite guarded a keyless recheck"));
+    }
+    if with
+        .values()
+        .any(|value| value.contains("steps.mbx-bundle-key"))
+    {
+        return Err(fail("recheck still references the later key step"));
+    }
+    // Pin the published output names: they must be valid GitHub job-output
+    // names and match what the reader publishes.
+    if MBX_BUNDLE_KEY_JOB_OUTPUT != "mbx_bundle_key"
+        || MBX_BUNDLE_RESTORE_KEYS_JOB_OUTPUT != "mbx_bundle_restore_keys"
+    {
+        return Err(fail("reader output names drifted"));
+    }
+    Ok(())
+}
+
+fn check_recheck_reader_matcher_rejects_lookalikes() -> Result<(), Box<dyn Error>> {
+    use velnor_actions_contract::workflow::cache_family_mbx::{
+        MBX_BUNDLE_KEY_EXPR, is_mbx_bundle_key_needs_expr, is_mbx_bundle_restore_keys_needs_expr,
+        mbx_bundle_key_needs_expr, mbx_bundle_restore_keys_needs_expr,
+    };
+    // The matcher accepts only well-formed `needs.<job>.outputs.<name>`
+    // references and rejects lookalikes.
+    if !is_mbx_bundle_key_needs_expr(&mbx_bundle_key_needs_expr("a-b_c9"))
+        || !is_mbx_bundle_restore_keys_needs_expr(&mbx_bundle_restore_keys_needs_expr("a-b_c9"))
+    {
+        return Err(fail("valid reader reference rejected"));
+    }
+    for bad in [
+        MBX_BUNDLE_KEY_EXPR,
+        "${{ needs.UPPER.outputs.mbx_bundle_key }}",
+        "${{ needs.dot.name.outputs.mbx_bundle_key }}",
+        "${{ needs.a.outputs.wrong_name }}",
+        "needs.a.outputs.mbx_bundle_key",
+        "${{ needs.a.outputs.mbx_bundle_key }} ",
+    ] {
+        if is_mbx_bundle_key_needs_expr(bad) || is_mbx_bundle_restore_keys_needs_expr(bad) {
+            return Err(fail("malformed reader reference accepted"));
+        }
+    }
     Ok(())
 }

@@ -21,6 +21,8 @@ pub(crate) fn build_check_jobs(
     policy: WorkflowPolicy,
     discovery: &Discovery,
     catalog: &ToolCatalog,
+    published_lock: Option<&velnor_actions_contract::GeneratorLock>,
+    helper_version: &str,
 ) -> Result<Vec<(String, Job)>, OrchestratorError> {
     let mut jobs = Vec::with_capacity(discovery.mise_checks.len() + discovery.native_checks.len());
     for discovered in &discovery.mise_checks {
@@ -31,10 +33,17 @@ pub(crate) fn build_check_jobs(
                 env!("CARGO_PKG_VERSION"),
                 discovery.consumer_manifest_json.as_deref(),
             )?),
-            WorkflowPolicy::VelnorRepositoryV1 => None,
+            WorkflowPolicy::VelnorRepositoryV1 => Some(published_lock_acquire_for_runner(
+                published_lock,
+                &check.runner,
+                helper_version,
+            )?),
         };
         let id = format!("check-{}", check.id);
-        jobs.push((id.clone(), check_job(discovered, &id, acquire, catalog)?));
+        jobs.push((
+            id.clone(),
+            check_job(discovered, &id, acquire, catalog, helper_version)?,
+        ));
     }
     for check in &discovery.native_checks {
         let id = format!("check-{}", check.id);
@@ -44,9 +53,16 @@ pub(crate) fn build_check_jobs(
                 env!("CARGO_PKG_VERSION"),
                 discovery.consumer_manifest_json.as_deref(),
             )?),
-            WorkflowPolicy::VelnorRepositoryV1 => None,
+            WorkflowPolicy::VelnorRepositoryV1 => Some(published_lock_acquire_for_runner(
+                published_lock,
+                &check.runner,
+                helper_version,
+            )?),
         };
-        jobs.push((id.clone(), native_check_job(check, &id, acquire, catalog)?));
+        jobs.push((
+            id.clone(),
+            native_check_job(check, &id, acquire, catalog, helper_version)?,
+        ));
     }
     jobs.sort_by(|left, right| left.0.cmp(&right.0));
     Ok(jobs)
@@ -57,6 +73,7 @@ fn native_check_job(
     job_id: &str,
     acquire: Option<Step>,
     catalog: &ToolCatalog,
+    helper_version: &str,
 ) -> Result<Job, OrchestratorError> {
     let task_id = format!("internal/native-check/{}", check.id);
     let step = Step {
@@ -69,7 +86,7 @@ fn native_check_job(
             check_id: check.id.clone(),
             operation: check.operation,
             task_id,
-            sdk_version: env!("CARGO_PKG_VERSION").to_owned(),
+            sdk_version: helper_version.to_owned(),
         },
     };
     let prepare_gh = crate::workflow_jobs::prepare_pinned_tools_step(
@@ -91,6 +108,7 @@ fn native_check_job(
         })?;
     Ok(Job {
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         display_name: format!("Homebrew / {}", check.id),
         runs_on: check.runner.label.clone(),
         check_runner: Some(check.runner.clone()),
@@ -109,12 +127,13 @@ fn check_job(
     job_id: &str,
     acquire: Option<Step>,
     catalog: &ToolCatalog,
+    helper_version: &str,
 ) -> Result<Job, OrchestratorError> {
     let check = &discovered.check;
     let mut steps = vec![crate::workflow::wire_w1::checkout_step_full()?];
     steps.extend(acquire);
     steps.push(crate::matrix_step::download_plan_step()?);
-    steps.push(execute_check_step(discovered, catalog)?);
+    steps.push(execute_check_step(discovered, catalog, helper_version)?);
     let mut upload = crate::matrix_step::crate_upload_step(job_id)?;
     upload.condition = Some("always()".to_owned());
     steps.push(upload);
@@ -124,6 +143,7 @@ fn check_job(
         })?;
     Ok(Job {
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         display_name: format!("Check / {}", check.id),
         runs_on: check.runner.label.clone(),
         check_runner: Some(check.runner.clone()),
@@ -138,9 +158,21 @@ fn check_job(
     })
 }
 
+fn published_lock_acquire_for_runner(
+    lock: Option<&velnor_actions_contract::GeneratorLock>,
+    runner: &velnor_actions_contract::config::CheckRunner,
+    helper_version: &str,
+) -> Result<Step, OrchestratorError> {
+    let lock = lock.ok_or_else(|| OrchestratorError::Contract {
+        problem: "required_verdict_requires_published_generator_lock".to_owned(),
+    })?;
+    crate::attach::published_lock_acquire_for_runner(lock, runner, helper_version)
+}
+
 fn execute_check_step(
     discovered: &DiscoveredCheck,
     catalog: &ToolCatalog,
+    helper_version: &str,
 ) -> Result<Step, OrchestratorError> {
     let identity = BTreeMap::from([
         ("VELNOR_CHECK_ID".to_owned(), discovered.check.id.clone()),
@@ -158,7 +190,7 @@ fn execute_check_step(
     let env = crate::matrix_step::task_step_env(catalog, &identity, false)?;
     velnor_actions_workflow_renderer::shell_step(
         "Execute named check",
-        vec![crate::matrix_step::helper_path_for_version()],
+        vec![crate::matrix_step::helper_path_for_version(helper_version)],
         env,
     )
     .map_err(OrchestratorError::from)

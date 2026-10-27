@@ -398,3 +398,11 @@ the qualified upload-host, authentication and binary-input source contract.
 See [optional dependency-seed failure isolation](../implemented/optional-dependency-seed.md)
 and [immutable preview API qualification](../implemented/immutable-preview-api-qualification.md).
 See [explicit-token tool launch](../implemented/explicit-token-tool-launch.md).
+
+## Pull Request Merge References
+
+Checked against [GitHub's mergeability guidance](https://docs.github.com/en/rest/guides/using-the-rest-api-to-interact-with-your-git-database#checking-mergeability-of-pull-requests) on 2026-10-26 UTC.
+
+A REST pull-request GET starts asynchronous calculation of the test merge commit. GitHub requires polling that endpoint until `mergeable` is `true` or `false` before reading the merge reference. Two equal reference observations while `mergeable` is null do not establish freshness.
+
+Velnor bounds this polling by attempts and the existing public-operation deadline. Each response must retain the original pull-request identity, repository identities, base and head, state, draft status, and merge status. After calculation finishes, Velnor retains the exact-reference checks, ordered base/head parent checks, and unchanged-reference recheck. The merge reference does not replace the independently verified pull-request context.

@@ -61,6 +61,7 @@ pub struct ToolFinding {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ToolchainSpec {
     pub channel: Option<String>,
+    pub profile: Option<String>,
     pub components: Vec<String>,
     pub targets: Vec<String>,
 }
@@ -233,6 +234,7 @@ fn parse_toolchain_for_path(path: &str, content: &str) -> Result<ToolchainSpec, 
         {
             Ok(ToolchainSpec {
                 channel: Some(trimmed.to_owned()),
+                profile: None,
                 components: Vec::new(),
                 targets: Vec::new(),
             })
@@ -265,6 +267,7 @@ fn parse_toolchain(content: &str) -> Result<ToolchainSpec, String> {
         let (key, value) = split_setting(code, index)?;
         match key {
             "channel" => spec.channel = Some(parse_string(value, index)?),
+            "profile" => spec.profile = Some(parse_string(value, index)?),
             "components" => spec.components = parse_string_list(value, index)?,
             "targets" => spec.targets = parse_string_list(value, index)?,
             _ => {}

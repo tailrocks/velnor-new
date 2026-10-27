@@ -49,8 +49,10 @@ pub mod project;
 use versions::tool_source;
 
 pub const MISE_VERSION: &str = "2026.10.19";
+pub const MISE_BINARY_SHA256_LINUX_X64: &str =
+    "3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d";
 pub const RUST_VERSION: &str = "1.99.1";
-pub const MR_BOXINGTON_VERSION: &str = "1.27.0";
+pub const MR_BOXINGTON_VERSION: &str = "1.28.0";
 pub const GH_VERSION: &str = "2.103.2";
 pub use velnor_actions_contract::config::jactionlint_verifier::JACTIONLINT_VERSION;
 pub const SHELLCHECK_VERSION: &str = "0.11.0";

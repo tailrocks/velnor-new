@@ -8,6 +8,12 @@ use velnor_actions_contract::workflow::jobs::validate_job_id;
 use velnor_actions_contract::{ContractError, Job, ProposedTask, Stack, Step, StepKind, StepRole};
 use velnor_actions_rust::tool_needs;
 
+#[path = "crate_jobs_recheck.rs"]
+mod recheck;
+pub(crate) use recheck::{
+    WRITER_RECHECK_STEP_NAME, is_recoverable_probe, rewrite_recheck_step_keys, writer_recheck_step,
+};
+
 pub(crate) fn needs(task: &ProposedTask) -> velnor_actions_rust::ToolNeeds {
     if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
         return velnor_actions_rust::ToolNeeds {
@@ -91,8 +97,6 @@ pub(crate) const BRANCHES_PER_GROUP: usize = 2;
 pub(crate) const TRUSTED_WRITER_EVENT_GATE: &str = "github.event_name == 'push'";
 
 pub(crate) const UNTRUSTED_READER_EVENT_GATE: &str = "github.event_name != 'push'";
-
-pub(crate) const WRITER_RECHECK_STEP_NAME: &str = "Recheck cache state after queue slot";
 
 const SUPPRESSED_SAVE_CONDITION: &str = "false";
 
@@ -180,22 +184,6 @@ pub(crate) fn writer_branch_needs(
     Ok(needs.into_iter().collect())
 }
 
-fn is_probe_role(role: Option<StepRole>) -> bool {
-    matches!(
-        role,
-        Some(
-            StepRole::ToolsCacheRestore
-                | StepRole::CargoSourcesRestore
-                | StepRole::MbxBundleRestore
-                | StepRole::FamilyRestore
-        )
-    )
-}
-
-pub(crate) fn is_recoverable_probe(step: &Step) -> bool {
-    is_probe_role(step.role) && matches!(step.kind, StepKind::Action { .. })
-}
-
 fn is_save_role(role: Option<StepRole>) -> bool {
     matches!(
         role,
@@ -212,19 +200,6 @@ fn is_save_role(role: Option<StepRole>) -> bool {
 fn executes(step: &Step) -> bool {
     matches!(step.kind, StepKind::TaskExecution { .. })
         || step.role == Some(StepRole::TofuProviderUse)
-}
-
-pub(crate) fn writer_recheck_step(base_steps: &[Step]) -> Option<Step> {
-    base_steps
-        .iter()
-        .find(|step| is_recoverable_probe(step))
-        .map(|probe| {
-            let mut recheck = probe.clone();
-            recheck.id = None;
-            WRITER_RECHECK_STEP_NAME.clone_into(&mut recheck.name);
-            recheck.condition = None;
-            recheck
-        })
 }
 
 pub(crate) struct BranchJobs<'a> {

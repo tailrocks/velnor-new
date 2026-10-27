@@ -17,7 +17,7 @@ from owned_tool_source import BASES
 
 UPSTREAM = {
     **BASES,
-    "mbx-action": ("jdx/mr-boxington-action", "47ce49b32025d93a7a2f4570815afaa2b7092240"),
+    "mbx-action": ("jdx/mr-boxington-action", "88acf2bb50552c7c508cbac13e5f8c576b95b1de"),
 }
 HOSTS = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu",
          "aarch64-apple-darwin"]

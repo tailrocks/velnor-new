@@ -8,57 +8,38 @@ use velnor_actions_contract::workflow::cache_family::{
     SOURCES_KEY_OUTPUT, SOURCES_RESTORE_KEYS_OUTPUT, SOURCES_SAVE_OUTPUT, SOURCES_SNAPSHOT_OUTPUT,
     TRUST_OUTPUT, tofu_providers_key_output,
 };
-use velnor_actions_contract::{Step, StepId, StepRole};
+use velnor_actions_contract::{Step, StepId, StepRole, validate_fetch_root};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
-use crate::OrchestratorError;
+use super::PlanSourcesError;
 
-#[expect(
-    dead_code,
-    unreachable_pub,
-    reason = "T24 registers discovery and intent here; the emission owner wires them next"
-)]
-#[path = "cache_discovery.rs"]
-pub mod cache_discovery;
-
-#[expect(
-    dead_code,
-    unreachable_pub,
-    reason = "T24 registers discovery and intent here; the emission owner wires them next"
-)]
-#[path = "cache_intent.rs"]
-pub mod cache_intent;
-
-pub(crate) const DEFAULT_REF_ENV: &str = "VELNOR_DEFAULT_REF";
-pub(crate) const HEAD_FORK_ENV: &str = "VELNOR_PR_HEAD_FORK";
+pub const DEFAULT_REF_ENV: &str = "VELNOR_DEFAULT_REF";
+pub const HEAD_FORK_ENV: &str = "VELNOR_PR_HEAD_FORK";
 const DEFAULT_REF_EXPR: &str =
     "${{ format('refs/heads/{0}', github.event.repository.default_branch) }}";
 const HEAD_FORK_EXPR: &str = "${{ github.event.pull_request.head.repo.fork }}";
 const OUTPUT_DELIMITER: &str = "VELNOR_CACHE_KEYS_EOF";
 const MAX_KEY: usize = velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES;
 
-pub(crate) fn cache_keys_step(
+pub fn cache_keys_step(
     catalog: &ToolCatalog,
     fetch_roots: &[String],
     tofu_roots: &[String],
-) -> Result<Option<Step>, OrchestratorError> {
+) -> Result<Option<Step>, PlanSourcesError> {
     if fetch_roots.is_empty() && tofu_roots.is_empty() {
         return Ok(None);
     }
-    let contract = |err: velnor_actions_contract::ContractError| OrchestratorError::Contract {
-        problem: err.to_string(),
-    };
     let mut script = prelude();
     if !fetch_roots.is_empty() {
         CacheFamily::Sources
             .validate_key_bound()
-            .map_err(contract)?;
+            .map_err(PlanSourcesError::Contract)?;
         script.extend(sources_commands(fetch_roots)?);
     }
     if !tofu_roots.is_empty() {
         CacheFamily::TofuProviders
             .validate_key_bound()
-            .map_err(contract)?;
+            .map_err(PlanSourcesError::Contract)?;
         script.extend(tofu_commands(catalog, tofu_roots)?);
     }
     script.push(format!(
@@ -68,14 +49,12 @@ pub(crate) fn cache_keys_step(
         (DEFAULT_REF_ENV.to_owned(), DEFAULT_REF_EXPR.to_owned()),
         (HEAD_FORK_ENV.to_owned(), HEAD_FORK_EXPR.to_owned()),
     ]);
-    let mut step = velnor_actions_workflow_renderer::shell_step(
+    let mut step = crate::steps::shell_step(
         CACHE_KEYS_STEP_NAME,
         vec!["sh".to_owned(), "-c".to_owned(), script.join("; ")],
         env,
     )
-    .map_err(|err| OrchestratorError::Contract {
-        problem: err.to_string(),
-    })?;
+    .map_err(PlanSourcesError::ShellRender)?;
     step.id = Some(StepId::CacheKeys);
     step.role = Some(StepRole::CacheKeys);
     Ok(Some(step))
@@ -116,7 +95,7 @@ fn compat_header(family: CacheFamily, root_locator: Option<&str>, file: &str) ->
     ]
 }
 
-fn sources_commands(fetch_roots: &[String]) -> Result<Vec<String>, OrchestratorError> {
+fn sources_commands(fetch_roots: &[String]) -> Result<Vec<String>, PlanSourcesError> {
     let prefix = CacheFamily::Sources.key_prefix();
     let home = CARGO_HOME_EXPR.replace(RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL);
     let mut script = compat_header(CacheFamily::Sources, None, "$d/sources-compat");
@@ -127,8 +106,8 @@ fn sources_commands(fetch_roots: &[String]) -> Result<Vec<String>, OrchestratorE
     script.push("compat=\"s256-$h\"".to_owned());
     script.push(": > \"$d/sources-locks\"".to_owned());
     for root in fetch_roots {
-        crate::source_prep::validate_root(root)?;
-        let lock = crate::discover::workspace_lock(root);
+        validate_fetch_root(root).map_err(PlanSourcesError::Contract)?;
+        let lock = workspace_lock(root);
         let label = if root.is_empty() { "." } else { root.as_str() };
         script.push(format!("s256 \"$GITHUB_WORKSPACE/{lock}\""));
         script.push(format!(
@@ -155,7 +134,7 @@ fn sources_commands(fetch_roots: &[String]) -> Result<Vec<String>, OrchestratorE
 fn tofu_commands(
     catalog: &ToolCatalog,
     tofu_roots: &[String],
-) -> Result<Vec<String>, OrchestratorError> {
+) -> Result<Vec<String>, PlanSourcesError> {
     let prefix = CacheFamily::TofuProviders.key_prefix();
     let spec = catalog.tool_spec(PinnedTool::Opentofu);
     let mut script = vec![
@@ -165,8 +144,9 @@ fn tofu_commands(
         ),
     ];
     for (ordinal, root) in tofu_roots.iter().enumerate() {
-        crate::source_prep::validate_root(root)?;
-        let locator = velnor_actions_tofu::tofu_root_locator(root)?;
+        validate_fetch_root(root).map_err(PlanSourcesError::Contract)?;
+        let locator =
+            velnor_actions_tofu::tofu_root_locator(root).map_err(PlanSourcesError::Contract)?;
         let file = format!("$d/tofu-compat-{ordinal}");
         let lock = if root.is_empty() {
             ".terraform.lock.hcl".to_owned()
@@ -191,4 +171,12 @@ fn tofu_commands(
         ]);
     }
     Ok(script)
+}
+
+fn workspace_lock(root: &str) -> String {
+    if root.is_empty() {
+        "Cargo.lock".to_owned()
+    } else {
+        format!("{root}/Cargo.lock")
+    }
 }

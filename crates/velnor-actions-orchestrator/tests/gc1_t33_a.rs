@@ -32,6 +32,7 @@ fn check_rejects_bad_inputs() -> Result<(), Box<dyn Error>> {
                 clippy_all_features: false,
                 target: "host",
                 explicit_fmt: false,
+                allow_empty_test_suite: false,
             }),
             "bad manifest accepted",
         );
@@ -46,6 +47,7 @@ fn check_rejects_bad_inputs() -> Result<(), Box<dyn Error>> {
         clippy_all_features: false,
         target: "host",
         explicit_fmt: false,
+        allow_empty_test_suite: false,
     })
     .map_err(|err| fail(&format!("derive failed: {err}")))?
     .into_iter()

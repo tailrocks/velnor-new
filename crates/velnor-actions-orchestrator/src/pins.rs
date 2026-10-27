@@ -9,9 +9,7 @@ use velnor_actions_contract::{
     BuildTaskRunner, GeneratorLock, ReleaseTarget, Step, VelnorConfig, VerificationRunner,
 };
 use velnor_actions_mise::MISE_VERSION;
-use velnor_actions_workflow_renderer::{
-    HelperProvenance, MiseSetup, STAGED_BINARY_PREFIX, provision_acquire_step,
-};
+use velnor_actions_workflow_renderer::{MiseSetup, release_helpers};
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
@@ -25,7 +23,6 @@ use velnor_actions_workflow_renderer::setup::{
 #[path = "pins_consumer_evidence.rs"]
 mod consumer_evidence;
 pub(crate) use consumer_evidence::consumer_evidence_helper;
-use consumer_evidence::validated_consumer_manifest;
 
 #[path = "pins_mise_pin_qualification.rs"]
 mod mise_pin_qualification;
@@ -148,20 +145,8 @@ pub(crate) fn consumer_acquire_for_target(
     version: &str,
     json: Option<&str>,
 ) -> Result<Step, OrchestratorError> {
-    let manifest = validated_consumer_manifest(target, version, json)?;
-    let record =
-        manifest
-            .record_for_target(target.triple())
-            .ok_or_else(|| OrchestratorError::Contract {
-                problem: format!("manifest_missing_target:{}", target.triple()),
-            })?;
-    acquire_step(
-        &record.artifact,
-        &record.sha256,
-        &manifest.commit,
-        &format!("{STAGED_BINARY_PREFIX}{version}"),
-        target,
-    )
+    release_helpers::consumer_acquire_for_target(target, version, json)
+        .map_err(crate::local_release_manifest::map_release_helper_error)
 }
 
 pub(crate) fn lock_acquire_step(
@@ -190,93 +175,15 @@ fn lock_acquire_for_target(
     target: ReleaseTarget,
     staged: &str,
 ) -> Result<Step, OrchestratorError> {
-    let record =
-        lock.binary_for_target(target.triple())
-            .ok_or_else(|| OrchestratorError::Contract {
-                problem: format!("lock_missing_target:{}", target.triple()),
-            })?;
-    acquire_step(
-        &record.artifact,
-        &record.sha256,
-        &lock.generator.commit,
-        staged,
-        target,
-    )
+    release_helpers::lock_acquire_for_target(lock, target, staged)
+        .map_err(crate::local_release_manifest::map_release_helper_error)
 }
-
-fn acquire_step(
-    url: &str,
-    sha: &str,
-    commit: &str,
-    staged: &str,
-    target: ReleaseTarget,
-) -> Result<Step, OrchestratorError> {
-    let provenance = HelperProvenance::ReleaseAsset {
-        url: url.to_owned(),
-        sha256: sha.to_owned(),
-        commit: commit.to_owned(),
-    };
-    Ok(provision_acquire_step(
-        &provenance,
-        acquire_argv(staged, target)?,
-    )?)
-}
-
-const GENERATOR_SEED_ROOT: &str = "/opt/velnor/seed";
 
 pub fn acquire_script_argv(
     staged: &str,
     seed_root: &str,
     target: ReleaseTarget,
 ) -> Result<Vec<String>, OrchestratorError> {
-    let digest = match target {
-        ReleaseTarget::LinuxX86_64 => "sha256sum -c -",
-        ReleaseTarget::MacosArm64 | ReleaseTarget::MacosX86_64 => "shasum -a 256 -c -",
-    };
-    if !absolute_token(seed_root) {
-        return Err(OrchestratorError::Contract {
-            problem: format!("bad_seed_root:{seed_root}"),
-        });
-    }
-    if !staged_path_token(staged) {
-        return Err(OrchestratorError::Contract {
-            problem: format!("bad_staged_path:{staged}"),
-        });
-    }
-    let name = staged.rsplit_once('/').map_or(staged, |(_, tail)| tail);
-    if !file_token(name) {
-        return Err(OrchestratorError::Contract {
-            problem: format!("bad_staged_name:{name}"),
-        });
-    }
-    let script = format!(
-        "d=\"{staged}\"&&mkdir -p \"${{d%/*}}\"&&s=\"{seed_root}/generator/${{d##*/}}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|{digest};then cp \"$s\" \"$d\";else curl -fsSL --connect-timeout 15 --max-time 120 --retry 5 --retry-all-errors --retry-max-time 180 --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|{digest};fi&&chmod +x \"$d\""
-    );
-    Ok(vec!["sh".to_owned(), "-c".to_owned(), script])
-}
-
-fn acquire_argv(staged: &str, target: ReleaseTarget) -> Result<Vec<String>, OrchestratorError> {
-    acquire_script_argv(staged, GENERATOR_SEED_ROOT, target)
-}
-
-fn absolute_token(value: &str) -> bool {
-    value.starts_with('/')
-        && !value.contains("..")
-        && !value.contains("//")
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-'))
-}
-
-fn staged_path_token(value: &str) -> bool {
-    value
-        .strip_prefix(STAGED_BINARY_PREFIX)
-        .map_or_else(|| absolute_token(value), file_token)
-}
-
-fn file_token(value: &str) -> bool {
-    !value.is_empty()
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+    release_helpers::acquire_script_argv(staged, seed_root, target)
+        .map_err(crate::local_release_manifest::map_release_helper_error)
 }

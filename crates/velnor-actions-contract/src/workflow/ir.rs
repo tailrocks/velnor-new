@@ -78,6 +78,13 @@ pub struct Job {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub services: Vec<super::services::ServiceContainer>,
 
+    /// Job-level outputs (`jobs.<id>.outputs`) published for `needs` readers.
+    /// Empty for jobs that publish nothing; the branch reader publishes the
+    /// bundle key outputs so the writer recheck can restore by the same key
+    /// before the writer's own key step runs.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub outputs: BTreeMap<String, String>,
+
     pub steps: Vec<Step>,
 }
 

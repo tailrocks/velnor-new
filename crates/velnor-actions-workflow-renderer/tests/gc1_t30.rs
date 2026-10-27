@@ -130,7 +130,7 @@ fn check_restore_uses_fixed_transport(restore: &Step) -> Result<(), Box<dyn Erro
 fn check_recovery_is_snapshot_operation(import: &Step) -> Result<(), Box<dyn Error>> {
     if import.name != MBX_BUNDLE_IMPORT_NAME
         || import.id.is_some()
-        || import.role.is_some()
+        || import.role != Some(StepRole::MbxBundleImport)
         || import.condition.as_deref() != Some(MBX_BUNDLE_IMPORT_CONDITION)
     {
         return Err(fail("recovery step lost its state identity"));
@@ -218,6 +218,7 @@ fn job_with(steps: Vec<Step>) -> Job {
         cache_mode: None,
         environment: None,
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         steps,
     }
 }
@@ -272,7 +273,7 @@ fn gc1_t30_preserves_contract() -> Result<(), Box<dyn Error>> {
             Some(StepRole::MbxVersionCheck),
             Some(StepRole::MbxBundleKey),
             Some(StepRole::MbxBundleRestore),
-            None,
+            Some(StepRole::MbxBundleImport),
         ]
     {
         return Err(fail("bundle prelude lost its transport lifecycle"));

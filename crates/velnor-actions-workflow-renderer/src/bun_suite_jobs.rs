@@ -124,6 +124,7 @@ pub fn build_bun_suite_job(
     all.extend(policy.marked_steps());
     Ok(Job {
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         display_name: format!("Bun / {} / {}", policy.member, policy.suite),
         runs_on: BUN_RUNNER.to_owned(),
         timeout_minutes: policy.timeout,
@@ -162,6 +163,7 @@ pub fn build_bun_report_job(
     }
     Ok(Job {
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         display_name: format!("Bun / {} / {} / report", policy.member, policy.suite),
         runs_on: BUN_RUNNER.to_owned(),
         timeout_minutes: report.timeout,

@@ -180,7 +180,7 @@ pub(crate) fn import_step(
         env,
     )?;
     step.condition = Some(MBX_BUNDLE_IMPORT_CONDITION.to_owned());
-    step.role = None;
+    step.role = Some(StepRole::MbxBundleImport);
     Ok(step)
 }
 
@@ -269,7 +269,7 @@ pub(crate) fn export_step(
     )?;
     step.id = Some(StepId::MbxBundleExport);
     step.condition = Some(MBX_BUNDLE_EXPORT_CONDITION.to_owned());
-    step.role = None;
+    step.role = Some(StepRole::MbxBundleExport);
     Ok(step)
 }
 

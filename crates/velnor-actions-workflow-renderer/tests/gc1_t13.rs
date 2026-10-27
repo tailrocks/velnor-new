@@ -71,6 +71,7 @@ fn job(payload: &ToolsCachePayload) -> Result<Job, Box<dyn Error>> {
         cache_mode: None,
         environment: None,
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         steps: vec![payload.runtime_prelude_step()?, payload.restore_step()?],
     })
 }

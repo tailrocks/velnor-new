@@ -215,6 +215,7 @@ pub(crate) fn composite_file(
         job_env: &empty_job_env,
         runs_on: None,
         actions_read: false,
+        report_helper_version: &ctx.report_helper_version,
     };
     for step in steps {
         rendered.push(step_to_yaml(logical, step, ctx, &[], true, &step_context)?);

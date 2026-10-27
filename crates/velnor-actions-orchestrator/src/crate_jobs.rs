@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    CacheMode, CrateJob, Job, JobTimeout, ProposedTask, Stack, Step, VelnorConfig, WorkflowPolicy,
+    CrateJob, Job, JobTimeout, ProposedTask, Stack, Step, VelnorConfig, WorkflowPolicy,
     crate_display_name, tofu_display_name,
 };
 use velnor_actions_mise::{TaskCacheMode, ToolCatalog};
@@ -25,10 +25,11 @@ pub(crate) mod dependency_seed;
 
 #[path = "crate_jobs_stage.rs"]
 mod stage;
-use stage::{
-    BranchJobs, combined_branch_for, is_recoverable_probe, reader_branch_condition,
-    validate_combined_branch, writer_branch_condition, writer_branch_needs, writer_recheck_step,
-};
+use stage::combined_branch_for;
+
+#[path = "crate_jobs_branches.rs"]
+mod branches;
+use branches::finalize_group_branches;
 
 #[path = "crate_jobs_gates.rs"]
 mod gates;
@@ -220,51 +221,6 @@ fn build_group_job(
     })
 }
 
-fn finalize_group_branches(
-    base: Job,
-    branch: &stage::CombinedBranch,
-) -> Result<(Job, Job), OrchestratorError> {
-    let affected_gate = base.condition.clone();
-    let base_had_probe = base.steps.iter().any(is_recoverable_probe);
-    let mut reader = base.clone();
-    reader.display_name = format!("{} (read)", base.display_name);
-    reader.condition = Some(
-        reader_branch_condition(affected_gate.as_deref())
-            .map_err(|error| contract_problem(&error))?,
-    );
-    reader.cache_mode = Some(CacheMode::explicit_read());
-    let mut writer_steps = Vec::with_capacity(base.steps.len() + 1);
-    if let Some(recheck) = writer_recheck_step(&base.steps) {
-        writer_steps.push(recheck);
-    }
-    writer_steps.extend(base.steps.clone());
-    let mut writer = base;
-    let writer_display = writer.display_name.clone();
-    writer.display_name = format!("{writer_display} (write)");
-    writer.steps = writer_steps;
-    writer.needs = writer_branch_needs(&writer.needs, &branch.reader)
-        .map_err(|error| contract_problem(&error))?;
-    reject_seed_needs(&writer.needs, &branch.writer)?;
-    writer.condition = Some(
-        writer_branch_condition(affected_gate.as_deref())
-            .map_err(|error| contract_problem(&error))?,
-    );
-    writer.cache_mode = Some(CacheMode::push_write_expression());
-    validate_combined_branch(
-        branch,
-        affected_gate.as_deref(),
-        base_had_probe,
-        &BranchJobs {
-            reader_job: &branch.reader,
-            reader: &reader,
-            writer_job: &branch.writer,
-            writer: &writer,
-        },
-    )
-    .map_err(|error| contract_problem(&error))?;
-    Ok((reader, writer))
-}
-
 fn contract_problem(error: &velnor_actions_contract::ContractError) -> OrchestratorError {
     OrchestratorError::Contract {
         problem: error.to_string(),
@@ -384,6 +340,7 @@ fn render_job(
     steps.push(crate::matrix_step::crate_upload_step(&model.job_id)?);
     Ok(Job {
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         display_name: model.display_name.clone(),
         runs_on: label.to_owned(),
         check_runner: None,

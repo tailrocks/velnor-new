@@ -6,8 +6,27 @@ use std::collections::BTreeMap;
 use crate::RenderError;
 use crate::verification_jobs::build_task_jobs::{BuildTaskArtifact, BuildTaskPolicy};
 
+#[path = "build_task_mise_tools_selector.rs"]
+mod selector;
+use selector::toml_option_string;
+pub(super) use selector::valid_github_matching_regex;
+
 pub(super) const BOLTFFI_KEY: &str = "github:boltffi/boltffi";
 pub(super) const BOLTFFI_MATCHING_REGEX: &str = r"^boltffi-(darwin-aarch64|darwin-x86_64|linux-aarch64(-musl)?|linux-x86_64(-musl)?|windows-arm64|windows-x86_64)\.(tar\.gz|zip)$";
+
+pub(super) fn valid_rust_toolchain_options(options: &BTreeMap<String, String>) -> bool {
+    options
+        .iter()
+        .all(|(key, value)| valid_rust_toolchain_option(key, value))
+}
+
+fn valid_rust_toolchain_option(key: &str, value: &str) -> bool {
+    match key {
+        "profile" => matches!(value, "minimal" | "default" | "complete"),
+        "components" | "targets" => safe_option_value(value),
+        _ => false,
+    }
+}
 
 pub(super) fn selected_mise_files(
     policy: &BuildTaskPolicy,
@@ -100,14 +119,6 @@ fn toml_string(value: &str) -> String {
     format!("\"{value}\"")
 }
 
-fn toml_option_string(name: &str, value: &str) -> String {
-    if name == "matching_regex" && value == BOLTFFI_MATCHING_REGEX {
-        format!("'{value}'")
-    } else {
-        toml_string(value)
-    }
-}
-
 fn append_lock_string(lines: &mut Vec<String>, key: &str, value: Option<&str>) {
     if let Some(value) = value {
         lines.push(format!("{key} = {}", toml_string(value)));
@@ -158,14 +169,7 @@ fn validate_tool_options(
         }
     } else if tool.key == "rust" {
         if tool.config_options != tool.lock_options
-            || tool
-                .config_options
-                .keys()
-                .any(|key| !matches!(key.as_str(), "components" | "targets"))
-            || tool
-                .config_options
-                .values()
-                .any(|value| !safe_option_value(value))
+            || !valid_rust_toolchain_options(&tool.config_options)
         {
             return Err(RenderError::InvalidWorkflow(
                 "build_task_rust_options".to_owned(),
@@ -186,9 +190,7 @@ fn validate_tool_options(
     for (key, value) in &tool.lock_options {
         let safe =
             (tool.key == BOLTFFI_KEY && key == "matching_regex" && value == BOLTFFI_MATCHING_REGEX)
-                || (tool.key == "rust"
-                    && matches!(key.as_str(), "components" | "targets")
-                    && safe_option_value(value));
+                || (tool.key == "rust" && valid_rust_toolchain_option(key, value));
         if !safe {
             return Err(RenderError::InvalidWorkflow(format!(
                 "build_task_tool_option_value:{}",
@@ -229,10 +231,7 @@ fn validate_tool_backend(
         ("rust", "core:rust", None)
             if tool.config_options == tool.lock_options
                 && exact_rust_version(&tool.version)
-                && tool
-                    .lock_options
-                    .keys()
-                    .all(|key| matches!(key.as_str(), "components" | "targets")) => {}
+                && valid_rust_toolchain_options(&tool.lock_options) => {}
         ("mr-boxington", "packslip:github.com/jdx/mr-boxington", Some(artifact))
             if tool.config_options.is_empty() && tool.lock_options.is_empty() =>
         {

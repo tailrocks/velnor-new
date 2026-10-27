@@ -144,6 +144,7 @@ fn fixture_group() -> TaskGroup {
         uses_network: false,
         uses_clock: false,
         uses_random: false,
+        allow_empty_test_suite: false,
     }
 }
 

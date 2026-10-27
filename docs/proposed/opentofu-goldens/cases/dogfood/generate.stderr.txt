@@ -21,7 +21,6 @@ Repository: <repo>
 .github/jactionlint.yaml
 .github/scripts/velnor-tools-cache-identity.sh
 .github/velnor/task-execution-manifest-v1.json
-.github/workflows/cache-cleanup.yml
 .github/workflows/cache-prune.yml
 .github/workflows/ci.yml
 .github/workflows/freshness.yml

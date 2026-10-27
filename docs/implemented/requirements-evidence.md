@@ -141,10 +141,10 @@ below are historical.
 |---|---|---|---|---|---|
 | BOOT: init+generate usable; consumer self-contained (no policy/lock); no floating `latest` | 8 | OR | `OR/src/generate.rs` | `MI/tests/impl_mise_catalog.rs:exact_version_validation_accepts_only_pins`, `OR/tests/zizmor_staging.rs:different_unpinned_tag_still_fails` | T |
 | BOOT: release = per-target immutable assets + versioned manifest; own-version validated; never unverified URL | 8 | CT/MI | `CT/src/candidate_manifest.rs` | `CT/tests/impl_contract_targets.rs:candidate_manifest_validates_all_fields`, `RD/tests/impl_renderer_f2close.rs:candidate_verify_script_checks_live_manifest`, `:candidate_job_verifies_manifest_before_running_binary` | T |
-| BOOT: lock one record/target == catalog; consumer never reads lock; `.mise-version`==lock Mise | 8 | MI/OR | `MI/src/catalog.rs` | `OR/tests/impl_gate8_e.rs:candidate_never_plans_and_lock_matches_catalog_per_target` + `RD/tests/impl_renderer_tree_policy.rs:candidate_never_plans_and_lock_matches_catalog_per_target`, `CLI/tests/impl_repo_freshness.rs:boot34_mise_version_matches_catalog` | T+F; `.velnor/generator.lock` file MISSING (BOOT-3.4 NEEDS-HUMAN) |
+| BOOT: lock one record/target == catalog; consumer never reads lock; `.mise-version`==lock Mise | 8 | MI/OR | `MI/src/catalog.rs`, `OR/src/finalized.rs` | `OR/tests/impl_gate8_e.rs:candidate_never_plans_and_lock_matches_catalog_per_target` + `RD/tests/impl_renderer_tree_policy.rs:candidate_never_plans_and_lock_matches_catalog_per_target`, `CLI/tests/impl_repo_freshness.rs:boot34_mise_version_matches_catalog`, `OR/tests/homebrew_adoption_seed_public.rs:public_velnor_repository_bootstrap_accepts_only_catalog_mise_lock` | T+F; committed `.velnor/generator.lock` records authenticated Velnor 0.1.55 from source commit `693f3aae14406fb7851ac70f0aee647a869b5063`; required-verdict finalization validates it against the catalog. Hosted qualification of current source remains unproved. |
 | BOOT/PLAN: bootstrap plans graph, never waits current-src binary; candidate artifact-only qual; never plans matrix | 8 | OR | `OR/src/qualify.rs`, `pins.rs` | `OR/tests/impl_orch_gen.rs:orch_gen_candidate_qualify_is_artifact_only`, `OR/tests/impl_e2e_wiring.rs:emitted_yaml_preseed_builds_once_and_shares_artifact` | T+F |
 | BOOT: fixed build vector via catalog pins; manifest+SHA recorded; downstream never rebuilds; golden oracle, real digests | 8 | MI/RD | `MI/src/build.rs`, `RD/src/preseed.rs` | `MI/tests/impl_mise_negative.rs:candidate_build_vector_pins_implemented_trio_form`, `RD/tests/impl_renderer_preseed.rs:preseed_templates_carry_trust_mark_and_exact_artifact`, `:strict_preseed_closure_rejects_gaps` | T+F |
-| BOOT: seed v0 (2 admin approvals + repro rebuild); protected release job; separate lock update; no PR promotion | 8 | — | — | SOURCE workflow implemented; seed, first immutable release, hosted run, external protection, and separate lock update remain unproved per `release-gates.md` BOOT-4.2/4.7/2.1 | MISSING |
+| BOOT: seed v0 (2 admin approvals + repro rebuild); protected release job; separate lock update; no PR promotion | 8 | — | — | SOURCE workflow implemented; seed approvals/reproducible rebuild, current-source hosted qualification, external protection, and successor lock update remain unproved per `release-gates.md` BOOT-4.2/4.7/2.1 | MISSING; the committed bootstrap lock records Velnor 0.1.55 from source commit `693f3aae14406fb7851ac70f0aee647a869b5063`; this does not close the hosted or seed gates. |
 | PLAN-8: plan→matrix→reports→final wiring; artifact IDs; candidate evidence validated; PR/push/merge_group; final never skipped | 8 | RD/OR | `RD/src/candidate.rs`, `final_steps.rs` | `OR/tests/impl_gate8_acquire.rs:consumer_plan_job_carries_acquire_step`, `:version_policy_drift_fails_velnor_generate`, `OR/tests/impl_wire_w2.rs:empty_matrix_folds_conclusions`, `RD/tests/impl_renderer_gate8.rs:artifact_steps_pin_actions_and_reject_empty` | T+F |
 | VER: newest-stable updates; exceptions ≤14d + expiry fail; security same-day; check script gates release | 8 | — | `scripts/check-freshness.sh`, `docs/implemented/update-procedure.md` (R) | `MI/tests/impl_adapter_wire_mise.rs:freshness_requirements_enforced`, `RD/tests/impl_renderer_planclose.rs:freshness_step_shape_exact` | T; human-run/release-gate halves NEEDS-HUMAN (VER-1.5/1.7/2.18/3.x/4.4) |
 | VER: runner inventory latest-default + exact supported; reject `*-latest`/absent; default==latest family | 8 | CT | `CT/src/config/workflow.rs`, `targets.rs` | `RS/tests/impl_rust_evidence.rs:conflicting_runners_rejected`, `RD/tests/impl_renderer_tree_policy.rs:concurrency_and_label_must_be_exact` | T |
@@ -168,10 +168,12 @@ not a deviation.
 
 ## MISSING summary (4 honest residues)
 
-1. Candidate archive admission plus `.velnor/generator.lock`, seed v0, hosted
-   release publication, and branch protection (archive guard integration is
-   pending; workflow wiring exists, while hosted qualification, environment
-   rules, and branch protections remain unproved).
+1. Seed v0, current-source hosted qualification, the required successor
+   release publication, and branch protection (workflow wiring exists, while
+   hosted qualification, environment rules, and branch protections remain
+   unproved). The committed `.velnor/generator.lock` records authenticated
+   Velnor 0.1.55 from source commit
+   `693f3aae14406fb7851ac70f0aee647a869b5063`; it does not close these gates.
    2. Human update/security runs (VER NEEDS-HUMAN; procedures exist but no
    current run is recorded). 3. Risk-triggered tool runs — mutants/fuzz/Miri/Loom/semver
    (manual procedure in `verification-triggers.md` only; no recorded runs).

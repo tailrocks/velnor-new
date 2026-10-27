@@ -7,6 +7,7 @@ use crate::{RenderError, steps};
 
 pub const MISE_ACTION_NAME: &str = "jdx/mise-action";
 pub const SETUP_MISE_NAME: &str = "Setup Mise";
+pub use velnor_actions_mise::MISE_BINARY_SHA256_LINUX_X64;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MiseSetup {
@@ -15,8 +16,6 @@ pub struct MiseSetup {
     pub sha256: String,
 }
 
-pub const MISE_BINARY_SHA256_LINUX_X64: &str =
-    "3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d";
 pub const MISE_BINARY_SHA256_MACOS_ARM64: &str =
     "7dc61dfa71abbcda1c40d18440bc556b5d58b80e6042bc4f95fd106fa1bb3c66";
 pub const MISE_BINARY_SHA256_MACOS_X64: &str =
@@ -25,7 +24,7 @@ pub const MISE_BINARY_SHA256_MACOS_X64: &str =
 impl MiseSetup {
     pub fn for_target(&self, target: &str) -> Result<Self, RenderError> {
         self.validate()?;
-        if self.version != "2026.10.19" {
+        if self.version != velnor_actions_mise::MISE_VERSION {
             return Err(RenderError::BadCommand(format!(
                 "mise_setup_unqualified_version:{}",
                 self.version

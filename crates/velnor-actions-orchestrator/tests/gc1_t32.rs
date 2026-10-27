@@ -27,8 +27,8 @@ use self::crate_jobs_stage::{
     BRANCHES_PER_GROUP, BranchJobs, CombinedBranch, STAGED_TOFU_JOB_CONDITION,
     TRUSTED_WRITER_EVENT_GATE, UNTRUSTED_READER_EVENT_GATE, WRITER_RECHECK_STEP_NAME,
     branch_job_count, combined_branch_for, is_mbx, is_nextest, is_opentofu, is_recoverable_probe,
-    is_rust, needs, reader_branch_condition, stage_tofu_root_jobs, validate_combined_branch,
-    writer_branch_condition, writer_branch_needs, writer_recheck_step,
+    is_rust, needs, reader_branch_condition, rewrite_recheck_step_keys, stage_tofu_root_jobs,
+    validate_combined_branch, writer_branch_condition, writer_branch_needs, writer_recheck_step,
 };
 
 fn fail(message: &str) -> Box<dyn Error> {
@@ -156,6 +156,7 @@ fn fixture_job(
         cache_mode,
         environment: None,
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         steps,
     })
 }

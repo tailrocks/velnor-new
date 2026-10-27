@@ -20,7 +20,7 @@ private_mods!(binary_preview_emit, binary_release_emit);
 private_mods!(build_task_tools, build_tasks);
 private_mods!(bun_assets_handoff, cache_admission);
 private_mods!(cache_archive, cache_inventory);
-private_mods!(cache_keys, cache_snapshot);
+private_mods!(cache_snapshot);
 private_mods!(check_evidence, check_runtime);
 private_mods!(clippy_groups, config);
 private_mods!(config_stacks, cover);
@@ -81,7 +81,7 @@ private_mods!(validate, validate_shell);
 private_mods!(validators, vectors);
 private_mods!(verification_tasks, verify);
 private_mods!(workflow, workflow_jobs);
-private_mods!(workflow_jobs_cache, workflow_task_jobs);
+private_mods!(workflow_task_jobs);
 #[expect(
     missing_debug_implementations,
     reason = "T52 binds the T26-owned publication interface; the Debug derive stays with the owning task"

@@ -38,7 +38,7 @@ pub fn source_bound_helper_digest(build: &[String], target: &str) -> Result<Stri
             "preseed_unsupported_target:{target}"
         )));
     }
-    let toolchain = crate::candidate::toolchain_identity(build)?;
+    let toolchain = crate::preseed::toolchain_identity(build)?;
     let mut digest = String::with_capacity(64);
     for byte in Sha256::digest(source_bound_helper_digest_input(build, target, &toolchain)) {
         digest.push(char::from(b"0123456789abcdef"[usize::from(byte >> 4)]));

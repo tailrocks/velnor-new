@@ -37,6 +37,9 @@ pub struct WorkflowConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_branch: Option<String>,
 
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verification_branch: Option<String>,
+
     pub generator_validation: GeneratorValidation,
 
     pub max_parallel_jobs: u32,
@@ -120,35 +123,6 @@ pub enum PullRequestCachePolicy {
     SameRepositoryScoped,
 }
 
-impl WorkflowConfig {
-    /// Fixed GitHub repository allowance in bytes.
-    ///
-    /// Part of the single GitHub-only cache policy configuration. Consumer
-    /// configuration cannot request a larger accounting ceiling.
-    pub const GITHUB_CACHE_ACCOUNTING_CEILING_BYTES: u64 = 10_000_000_000;
-
-    /// Provisional operating ceiling in bytes.
-    ///
-    /// Part of the single GitHub-only cache policy configuration. Only a
-    /// lower operating ceiling may be used; the accounting ceiling above is
-    /// never raised and paid overflow is never enabled.
-    pub const GITHUB_CACHE_DEFAULT_OPERATING_CEILING_BYTES: u64 = 8_000_000_000;
-
-    /// Minimum headroom below the accounting ceiling in bytes.
-    ///
-    /// Part of the single GitHub-only cache policy configuration. Repair
-    /// revisions advance only through a reviewed repair record, never through
-    /// consumer configuration, and legacy caching has no configuration knob.
-    pub const GITHUB_CACHE_MINIMUM_RESERVE_BYTES: u64 = 2_000_000_000;
-}
-
-const _: () = assert!(
-    WorkflowConfig::GITHUB_CACHE_DEFAULT_OPERATING_CEILING_BYTES
-        + WorkflowConfig::GITHUB_CACHE_MINIMUM_RESERVE_BYTES
-        == WorkflowConfig::GITHUB_CACHE_ACCOUNTING_CEILING_BYTES,
-    "operating ceiling plus minimum reserve must equal the accounting ceiling"
-);
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum WorkflowPolicy {
@@ -176,21 +150,16 @@ pub enum RunnerSelection {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VelnorSupportWorkflow {
     pub validators: Vec<ValidatorKind>,
-
-    pub candidate_validation: bool,
 }
 
 impl WorkflowPolicy {
     #[must_use]
-    pub fn support_workflow(&self, validation: GeneratorValidation) -> VelnorSupportWorkflow {
+    pub fn support_workflow(&self) -> VelnorSupportWorkflow {
         let validators = match self {
             Self::ConsumerV1 => Vec::new(),
             Self::VelnorRepositoryV1 => ValidatorKind::repository_validators().to_vec(),
         };
-        VelnorSupportWorkflow {
-            validators,
-            candidate_validation: validation == GeneratorValidation::Candidate,
-        }
+        VelnorSupportWorkflow { validators }
     }
 }
 
@@ -234,6 +203,7 @@ impl WorkflowConfig {
                 "malformed_branch",
             ));
         }
+        self.validate_verification_branch(file)?;
         if let Some(label) = &self.runner_label
             && !RUNNER_LABEL_CATALOG.contains(&label.as_str())
         {
@@ -273,6 +243,26 @@ impl WorkflowConfig {
                 "obsolete_pr_write_policy:same-repository-scoped",
             )),
         }
+    }
+
+    fn validate_verification_branch(&self, file: &str) -> Result<(), ContractError> {
+        if let Some(branch) = &self.verification_branch {
+            if !crate::is_valid_branch_name(branch) {
+                return Err(ContractError::config(
+                    file,
+                    "workflow.verification_branch",
+                    "malformed_branch",
+                ));
+            }
+            if self.default_branch.as_deref() == Some(branch.as_str()) {
+                return Err(ContractError::config(
+                    file,
+                    "workflow.verification_branch",
+                    "must_differ_from_default_branch",
+                ));
+            }
+        }
+        Ok(())
     }
 
     fn validate_tasks(&self, file: &str) -> Result<(), ContractError> {
@@ -385,6 +375,9 @@ impl VerifyConfig {
         Ok(())
     }
 }
+
+#[path = "workflow_cache_policy.rs"]
+mod cache_policy;
 
 #[path = "workflow_task_suites_validate.rs"]
 mod task_suites_validate;

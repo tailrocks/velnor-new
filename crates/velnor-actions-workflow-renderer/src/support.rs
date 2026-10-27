@@ -14,7 +14,6 @@ use velnor_actions_contract::{
 
 use crate::{
     RenderError,
-    candidate::{candidate_job, release_job},
     render::{
         ALINT_BINARY_VERSION, ALINT_USES, CANDIDATE_JOB_ID, FINAL_CONDITION, FINAL_DISPLAY_NAME,
         FINAL_JOB_ID, PLAN_JOB_ID, RenderContext, ValidatorCommand,
@@ -26,12 +25,6 @@ pub(crate) const LINT_JOB_ID: &str = "jactionlint";
 
 pub(crate) const LINT_DISPLAY_NAME: &str = "Jactionlint";
 
-pub(crate) const RELEASE_JOB_ID: &str = "release";
-
-pub(crate) const RELEASE_DISPLAY_NAME: &str = "Release";
-
-pub(crate) const RELEASE_REF_CONDITION: &str = "github.ref_protected == true";
-
 pub(crate) fn merge_consumer_verify(
     jobs: &mut BTreeMap<String, Job>,
     support: Option<&VelnorSupportWorkflow>,
@@ -41,14 +34,8 @@ pub(crate) fn merge_consumer_verify(
     let Some(workflow) = support else {
         return Ok(());
     };
-    if workflow.validators.is_empty() && !workflow.candidate_validation {
+    if workflow.validators.is_empty() {
         return Ok(());
-    }
-    if workflow.candidate_validation {
-        return Err(RenderError::PolicyRejected {
-            policy: "consumer-v1".to_owned(),
-            problem: "support_ir_rejected".to_owned(),
-        });
     }
     let allowed = ValidatorKind::consumer_verify();
     for validator in &workflow.validators {
@@ -72,13 +59,11 @@ fn reject_consumer_ir(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
             });
         }
     }
-    for id in [CANDIDATE_JOB_ID, RELEASE_JOB_ID] {
-        if jobs.contains_key(id) {
-            return Err(RenderError::PolicyRejected {
-                policy: "consumer-v1".to_owned(),
-                problem: format!("forbidden_job:{id}"),
-            });
-        }
+    if jobs.contains_key(CANDIDATE_JOB_ID) {
+        return Err(RenderError::PolicyRejected {
+            policy: "consumer-v1".to_owned(),
+            problem: format!("forbidden_job:{CANDIDATE_JOB_ID}"),
+        });
     }
     Ok(())
 }
@@ -126,34 +111,17 @@ pub(crate) fn merge_support_jobs(
         };
         insert_support_job(jobs, validator.job_id(), job, policy)?;
     }
-    if workflow.candidate_validation {
-        let Some(spec) = &ctx.candidate else {
-            return Err(RenderError::PolicyRejected {
-                policy: policy.to_owned(),
-                problem: "candidate_without_spec".to_owned(),
-            });
-        };
-        insert_support_job(jobs, CANDIDATE_JOB_ID, candidate_job(ctx, spec)?, policy)?;
-        insert_support_job(jobs, RELEASE_JOB_ID, release_job(ctx)?, policy)?;
-    }
-    extend_final_needs(jobs, &workflow.validators, workflow.candidate_validation);
+    extend_final_needs(jobs, &workflow.validators);
     Ok(())
 }
 
-fn extend_final_needs(
-    jobs: &mut BTreeMap<String, Job>,
-    validators: &[ValidatorKind],
-    candidate: bool,
-) {
+fn extend_final_needs(jobs: &mut BTreeMap<String, Job>, validators: &[ValidatorKind]) {
     let mut extra = Vec::new();
     for validator in validators {
         let id = validator.job_id();
         if jobs.contains_key(id) {
             extra.push(id.to_owned());
         }
-    }
-    if candidate && jobs.contains_key(CANDIDATE_JOB_ID) {
-        extra.push(CANDIDATE_JOB_ID.to_owned());
     }
     let Some(final_job) = jobs.get_mut(FINAL_JOB_ID) else {
         return;
@@ -192,6 +160,7 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
     steps::scan_for_private_subcommands(ALINT_USES)?;
     Ok(Job {
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         display_name: ValidatorKind::Alint.display_name().to_owned(),
         runs_on: ctx.runs_on.clone(),
         check_runner: None,
@@ -253,6 +222,7 @@ pub(crate) fn validator_job(
     job_steps.push(step);
     Ok(Job {
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         display_name: validator.display_name().to_owned(),
         runs_on: ctx.runs_on.clone(),
         check_runner: None,
@@ -313,10 +283,7 @@ pub(crate) fn check_candidate_invariants(jobs: &BTreeMap<String, Job>) -> Result
         }
     }
     for (id, job) in jobs {
-        if id.as_str() != FINAL_JOB_ID
-            && id.as_str() != RELEASE_JOB_ID
-            && job.needs.contains(&CANDIDATE_JOB_ID.to_owned())
-        {
+        if id.as_str() != FINAL_JOB_ID && job.needs.contains(&CANDIDATE_JOB_ID.to_owned()) {
             return Err(RenderError::InvalidWorkflow(
                 "task_must_not_consume_candidate".to_owned(),
             ));

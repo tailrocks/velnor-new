@@ -151,6 +151,7 @@ pub fn build_verification_task_job(
     let steps = verification_steps(policy, checkout_uses)?;
     Ok(Job {
         services: Vec::new(),
+        outputs: BTreeMap::new(),
         display_name: format!("Verify {}", policy.task.id),
         runs_on: policy.runner_label.clone(),
         check_runner: None,

@@ -18,7 +18,7 @@ pub(super) struct PullRequestSelection {
     event: WorkflowEvent,
     base_sha: String,
     head_sha: String,
-    merge_commit_sha: Option<String>,
+    merge_ref_sha: Option<String>,
     checkout_head: String,
     repository: String,
     runner_sha: String,
@@ -112,7 +112,7 @@ pub(super) fn authenticate(
         event,
         base_sha,
         head_sha,
-        merge_commit_sha: pull.merge_commit_sha.clone(),
+        merge_ref_sha: pull.merge_ref_sha.clone(),
         checkout_head: checkout_head.to_owned(),
         repository: repository.to_owned(),
         runner_sha: runner.sha,
@@ -184,7 +184,7 @@ pub(super) fn recheck(
         selection,
         &base_sha,
         &head_sha,
-        pull.merge_commit_sha.as_deref(),
+        pull.merge_ref_sha.as_deref(),
     ) {
         return Err(internal("homebrew_authority_pull_request_changed"));
     }
@@ -231,11 +231,11 @@ fn same_selection(
     selection: &PullRequestSelection,
     base_sha: &str,
     head_sha: &str,
-    merge_commit_sha: Option<&str>,
+    merge_ref_sha: Option<&str>,
 ) -> bool {
     selection.base_sha == base_sha
         && selection.head_sha == head_sha
-        && selection.merge_commit_sha.as_deref() == merge_commit_sha
+        && selection.merge_ref_sha.as_deref() == merge_ref_sha
 }
 
 pub(in crate::homebrew::authority) struct RunnerFacts {
@@ -367,7 +367,7 @@ fn verify_checkout(
     if checkout_head == head_sha {
         return Ok(());
     }
-    if pull.merge_commit_sha.as_deref() != Some(checkout_head) {
+    if pull.merge_ref_sha.as_deref() != Some(checkout_head) {
         return Err(internal("homebrew_authority_pull_request_merge_sha"));
     }
     let request =

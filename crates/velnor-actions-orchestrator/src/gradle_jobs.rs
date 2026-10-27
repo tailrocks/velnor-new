@@ -209,6 +209,7 @@ pub(crate) fn build_jobs(
                 job_id(&root.root, project),
                 Job {
                     services,
+                    outputs: BTreeMap::new(),
                     check_runner: None,
                     display_name: format!("Gradle / {}", project.trim_start_matches(':')),
                     runs_on: config.workflow.runner_label.clone().unwrap_or_else(|| {

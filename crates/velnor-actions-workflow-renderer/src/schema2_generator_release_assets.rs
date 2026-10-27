@@ -161,7 +161,7 @@ fn build_script(
     output_dir: &str,
 ) -> Result<String, crate::RenderError> {
     Ok(format!(
-        "set -eu\n: \"${{CARGO_TARGET_DIR:?missing shared release target dir}}\"\nenv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR {}\ncp {output_dir}/velnor-actions {asset}\ntest -s {asset}",
+        "set -eu\n: \"${{CARGO_TARGET_DIR:?missing shared release target dir}}\"\nenv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR {}\ncp \"{output_dir}/velnor-actions\" {asset}\ntest -s {asset}",
         crate::commands::join_argv_for_run(build_argv)?
     ))
 }
