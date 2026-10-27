@@ -83,8 +83,10 @@ pub(crate) fn insert_assemble_step(final_job: &mut Job) {
         .steps
         .iter()
         .position(|step| step.name == name)
-        .map(|at| final_job.steps.remove(at))
-        .unwrap_or_else(crate::steps_internal::group_ledger_steps::assemble_group_ledgers_step);
+        .map_or_else(
+            crate::steps_internal::group_ledger_steps::assemble_group_ledgers_step,
+            |at| final_job.steps.remove(at),
+        );
     let at = assemble_insert_at(final_job);
     final_job.steps.insert(at, assemble);
 }
