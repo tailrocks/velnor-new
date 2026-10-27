@@ -1,0 +1,21 @@
+{
+  "lockfileVersion": 2,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "lifecycle-root",
+      "dependencies": {
+        "runtime-probe": "file:./runtime-probe",
+        "runtime-probe-two": "file:./runtime-probe-two",
+      },
+    },
+  },
+  "trustedDependencies": [
+    "runtime-probe",
+  ],
+  "packages": {
+    "runtime-probe": ["runtime-probe@file:runtime-probe", { "hasInstallScript": true }],
+
+    "runtime-probe-two": ["runtime-probe-two@file:runtime-probe-two", { "bin": { "bun": "./bun.cjs" } }],
+  }
+}

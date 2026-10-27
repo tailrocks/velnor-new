@@ -246,12 +246,15 @@ fn render_job(
     if use_rust {
         steps.push(crate::workflow::verify_restored_rust_step(catalog));
     }
-    steps.push(crate::matrix_step::prepare_crate_tools_step(
+    let needs_bun = policy == WorkflowPolicy::VelnorRepositoryV1
+        && suite.is_some_and(crate::matrix_step::CrateSuite::owns_bun);
+    steps.push(crate::matrix_step::prepare_crate_tools_step_with_bun(
         catalog,
         use_rust,
         use_nextest,
         crate::matrix_step::prepare_install_opentofu(policy, suite, use_opentofu),
         needs_validators,
+        needs_bun,
     )?);
     let verify = needs_validators.then(|| crate::workflow::verify_jactionlint_step(catalog));
     steps.extend(verify);

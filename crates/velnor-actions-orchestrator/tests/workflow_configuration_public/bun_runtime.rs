@@ -7,6 +7,9 @@ use std::path::Path;
 
 use super::workflow_configuration_fixture;
 use velnor_actions_contract::StepKind;
+
+#[path = "bun_install_runtime.rs"]
+mod bun_install_runtime;
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::publish_render::PUBLISH_WORKFLOW_PATH;
 
@@ -79,6 +82,7 @@ fn assert_npm_publish_install_is_frozen(publish_workflow: &str) -> Result<(), Bo
         .lines()
         .find_map(|line| line.trim_start().strip_prefix("run: "))
         .ok_or("npm publication install command is missing")?;
+    let command = command.replace("'\\\\''", "'");
     let bun = command.find("'bun'");
     let install = command.find("'install'");
     let frozen = command.find("'--frozen-lockfile'");
@@ -90,8 +94,8 @@ fn assert_npm_publish_install_is_frozen(publish_workflow: &str) -> Result<(), Bo
         "npm publication install must run Bun install with --frozen-lockfile: {command}"
     );
     assert!(
-        !command.contains("'--bun'"),
-        "npm publication install must not use --bun: {command}"
+        command.contains("'bun' '--bun' 'run' '--' '-' 'install'"),
+        "npm publication install must run Bun install through Bun: {command}"
     );
     Ok(())
 }
@@ -198,15 +202,11 @@ fn assert_frozen_install_stays_unchanged(
             && run.len() == 3
         {
             let command = &run[2];
-            let install = command.find("'bun' 'install'");
+            let bun_run_install = command.find("'bun' '--bun' 'run' '--' '-' 'install'");
             let frozen = command.find("'--frozen-lockfile'");
             assert!(
-                matches!((install, frozen), (Some(install), Some(frozen)) if frozen > install),
-                "Bun install in {expected_job} must use --frozen-lockfile: {command}"
-            );
-            assert!(
-                !command.contains("'bun' '--bun' 'install'"),
-                "Bun install in {expected_job} must not use --bun: {command}"
+                matches!((bun_run_install, frozen), (Some(install), Some(frozen)) if frozen > install),
+                "Bun install in {expected_job} must use Bun runtime and --frozen-lockfile: {command}"
             );
         }
     }

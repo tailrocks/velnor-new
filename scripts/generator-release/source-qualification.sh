@@ -154,7 +154,8 @@ test ! -s "$evidence/checkout-status.txt"
       .velnor/qualification/homebrew/jackin/transition.json .velnor/qualification/homebrew/jackin/cutover-author-policy.json \
       .github/workflows/source-qualification.yml scripts/generator-release/source-qualification.sh \
       scripts/capture-opentofu-goldens.sh scripts/test-capture-opentofu-goldens-bin.sh \
-      scripts/generator-release/test-plan-diagnostics.sh scripts/generator-release/test-rust-verifier-retries.cjs \
+      scripts/generator-release/test-plan-diagnostics.sh scripts/generator-release/test-qualification-output-bindings.sh \
+      scripts/generator-release/test-rust-verifier-retries.cjs \
       scripts/generator-release/qualification-validator-tools.cjs \
       scripts/generator-release/test-qualification-validator-tools.cjs; do
   if [ -f "$path" ] && [ ! -L "$path" ]; then
@@ -189,27 +190,32 @@ if [ "$mise_version" != "$expected_mise" ] || [ "$rust" != "$expected_rust" ] \
     "$mise_version" "$rust" "$mbx" "$nextest" "$jactionlint" "$shellcheck" "$channel" >&2
   exit 1
 fi
-node_version=26.12.0
-mise --no-config --no-env --no-hooks install "node@$node_version"
-mise --no-config --no-env --no-hooks exec "node@$node_version" -- node --version \
-  | tee "$evidence/node-version.txt"
-grep -Fx "v$node_version" "$evidence/node-version.txt"
-mise --no-config --no-env --no-hooks exec "node@$node_version" -- node - \
+bun_version="$(mise --no-config --no-env --no-hooks config get -f mise.toml tools.bun)"
+expected_bun=1.4.4
+if [ "$bun_version" != "$expected_bun" ]; then
+  printf 'repository Bun pin mismatch: expected %s, found %s\n' "$expected_bun" "$bun_version" >&2
+  exit 1
+fi
+mise --no-config --no-env --no-hooks install "bun@$bun_version"
+bun_path="$(mise --no-config --no-env --no-hooks which bun --tool "bun@$bun_version")"
+"$bun_path" --version | tee "$evidence/bun-version.txt"
+grep -Fx "$bun_version" "$evidence/bun-version.txt"
+"$bun_path" --bun run -- - \
   "$mise_version" "$rust" "$mbx" "$nextest" "$jactionlint" "$shellcheck" \
-  "$channel" "$node_version" "$evidence/tool-pins.json" "$GITHUB_ENV" <<'JS'
+  "$channel" "$bun_version" "$evidence/tool-pins.json" "$GITHUB_ENV" <<'JS'
   const fs = require("node:fs");
   const crypto = require("node:crypto");
-  const [mise, rust, mbx, nextest, jactionlint, shellcheck, channel, node, receiptPath, envPath] = process.argv.slice(2);
-  const files = [".mise-version", "mise.toml", "rust-toolchain.toml"];
+  const [mise, rust, mbx, nextest, jactionlint, shellcheck, channel, bun, receiptPath, envPath] = process.argv.slice(2);
+  const files = [".mise-version", "mise.toml", "mise.lock", "rust-toolchain.toml"];
   const source_sha256 = Object.fromEntries(files.map((file) => [
     file,
     crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex"),
   ]));
   const receipt = {
     versions: {
-      mise, rust, "mr-boxington": mbx, nextest, jactionlint, shellcheck,
+      mise, rust, "mr-boxington": mbx, nextest, jactionlint, shellcheck, bun,
     },
-    rust_toolchain_channel: channel, node, source_sha256,
+    rust_toolchain_channel: channel, bun, source_sha256,
   };
   fs.writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
   fs.appendFileSync(envPath,
@@ -218,7 +224,8 @@ mise --no-config --no-env --no-hooks exec "node@$node_version" -- node - \
     `VELNOR_MBX_VERSION=${mbx}\n` +
     `VELNOR_NEXTEST_VERSION=${nextest}\n` +
     `VELNOR_JACTIONLINT_VERSION=${jactionlint}\n` +
-    `VELNOR_SHELLCHECK_VERSION=${shellcheck}\n`);
+    `VELNOR_SHELLCHECK_VERSION=${shellcheck}\n` +
+    `VELNOR_BUN_VERSION=${bun}\n`);
 JS
 mise --version | tee "$evidence/mise-version.txt"
 grep -Eq "(^|[[:space:]])2026\.10\.21([[:space:]]|$)" "$evidence/mise-version.txt"
@@ -238,12 +245,12 @@ mise --no-config --no-env --no-hooks exec "rust@$VELNOR_RUST_VERSION" -- rustc -
   >"$evidence/rustc-version.txt"
 mise --no-config --no-env --no-hooks exec "mr-boxington@$VELNOR_MBX_VERSION" -- mbx --version \
   >"$evidence/mbx-version.txt"
-mise --no-config --no-env --no-hooks exec node@26.12.0 -- node --version \
-  >"$evidence/node-version.txt"
-cat "$evidence/rustc-version.txt" "$evidence/mbx-version.txt" "$evidence/node-version.txt"
+bun_path="$(mise --no-config --no-env --no-hooks which bun --tool "bun@$VELNOR_BUN_VERSION")"
+"$bun_path" --version >"$evidence/bun-version.txt"
+cat "$evidence/rustc-version.txt" "$evidence/mbx-version.txt" "$evidence/bun-version.txt"
 grep -F "rustc $VELNOR_RUST_VERSION " "$evidence/rustc-version.txt"
 grep -Eq "(^|[^0-9])$VELNOR_MBX_VERSION([^0-9]|$)" "$evidence/mbx-version.txt"
-grep -Fx "v26.12.0" "$evidence/node-version.txt"
+grep -Fx "$VELNOR_BUN_VERSION" "$evidence/bun-version.txt"
     ;;
   prefetch-locked-sources-for-qualification-workspaces)
 set -uo pipefail
@@ -439,8 +446,8 @@ config_before="$(sha256sum mise.toml | awk '{print $1}')"
   printf 'committed_lock_path=mise.lock\ncommitted_lock_sha256_before=%s\n' "$lock_before"
 } >"$evidence/validator-tool-config-identity.before.txt"
 set +e
-spec_output="$(MISE_NO_CONFIG=1 mise --no-config --no-env --no-hooks exec node@26.12.0 -- \
-  node scripts/generator-release/qualification-validator-tools.cjs plan mise.lock \
+validator_bun="$(mise --no-config --no-env --no-hooks which bun --tool "bun@$VELNOR_BUN_VERSION")"
+spec_output="$(MISE_NO_CONFIG=1 "$validator_bun" --bun run scripts/generator-release/qualification-validator-tools.cjs plan mise.lock \
   "$platform" "$validator_jactionlint" "$validator_shellcheck" "$tool_plan" 2>"$log")"
 plan_status=$?
 set -e
@@ -571,8 +578,7 @@ name='validator-tool-lock-admission'
 receipt="$evidence/validator-tool-lock-admission.txt"
 log="$evidence/logs/$name.log"
 set +e
-MISE_NO_CONFIG=1 mise --no-config --no-env --no-hooks exec node@26.12.0 -- node \
-  scripts/generator-release/test-qualification-validator-tools.cjs \
+MISE_NO_CONFIG=1 "$(mise --no-config --no-env --no-hooks which bun --tool "bun@$VELNOR_BUN_VERSION")" --bun run scripts/generator-release/test-qualification-validator-tools.cjs \
   scripts/generator-release/qualification-validator-tools.cjs mise.lock \
   >"$log" 2>&1
 command_status=$?
@@ -836,9 +842,10 @@ if [ ! -x "$binary" ] || [ ! -d "$oracle/cases" ]; then
   exit 1
 fi
 set +e
-TMPDIR="$RUNNER_TEMP/velnor-source-qualification-tmp" VELNOR_GOLDEN_DIR="$oracle" VELNOR_GOLDEN_KEEP_WORK=0 \
-  mise --no-config --no-env --no-hooks exec node@26.12.0 -- \
-  scripts/test-capture-opentofu-goldens-bin.sh \
+bun_path="$(mise --no-config --no-env --no-hooks which bun --tool "bun@$VELNOR_BUN_VERSION")" || exit 2
+PATH="${bun_path%/*}:$PATH" VELNOR_BUN_BIN="$bun_path" VELNOR_BUN_VERSION="$VELNOR_BUN_VERSION" \
+  TMPDIR="$RUNNER_TEMP/velnor-source-qualification-tmp" VELNOR_GOLDEN_DIR="$oracle" VELNOR_GOLDEN_KEEP_WORK=0 \
+  bash scripts/test-capture-opentofu-goldens-bin.sh \
   --archive-guard "$VELNOR_QUALIFICATION_ARCHIVE_GUARD" \
   --archive-guard-sha256 "$VELNOR_QUALIFICATION_ARCHIVE_GUARD_SHA256" \
   --diagnostics-fixture "$VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE" \
@@ -894,9 +901,10 @@ if [ ! -x "$binary" ] || [ ! -d "$oracle/cases" ]; then
   exit 1
 fi
 set +e
-TMPDIR="$RUNNER_TEMP/velnor-source-qualification-tmp" VELNOR_GOLDEN_DIR="$oracle" \
-  VELNOR_GOLDEN_KEEP_WORK=1 mise --no-config --no-env --no-hooks exec node@26.12.0 -- \
-  scripts/test-capture-opentofu-goldens-bin.sh \
+bun_path="$(mise --no-config --no-env --no-hooks which bun --tool "bun@$VELNOR_BUN_VERSION")" || exit 2
+PATH="${bun_path%/*}:$PATH" VELNOR_BUN_BIN="$bun_path" VELNOR_BUN_VERSION="$VELNOR_BUN_VERSION" \
+  TMPDIR="$RUNNER_TEMP/velnor-source-qualification-tmp" VELNOR_GOLDEN_DIR="$oracle" \
+  VELNOR_GOLDEN_KEEP_WORK=1 bash scripts/test-capture-opentofu-goldens-bin.sh \
   --archive-guard "$VELNOR_QUALIFICATION_ARCHIVE_GUARD" \
   --archive-guard-sha256 "$VELNOR_QUALIFICATION_ARCHIVE_GUARD_SHA256" \
   --diagnostics-fixture "$VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE" \
@@ -1115,7 +1123,7 @@ printf '%s\n' "$first_status" >"$evidence/logs/root-preview-1.exit"
 second_status=$?
 printf '%s\n' "$second_status" >"$evidence/logs/root-preview-2.exit"
 cat "$evidence/logs/root-preview-1.log" "$evidence/logs/root-preview-2.log"
-mise --no-config --no-env --no-hooks exec node@26.12.0 -- node - \
+"$(mise --no-config --no-env --no-hooks which bun --tool "bun@$VELNOR_BUN_VERSION")" --bun run -- - \
   "$GITHUB_WORKSPACE/.github" "$preview_root/generated-1/.github" \
   "$preview_root/generated-2/.github" "$evidence/previews" \
   >"$evidence/logs/root-preview-identity.log" 2>&1 <<'JS'
@@ -1229,8 +1237,7 @@ if [ -L "$evidence" ] || [ ! -d "$evidence" ]; then
   exit 1
 fi
 set +e
-mise --no-config --no-env --no-hooks exec node@26.12.0 -- node \
-  scripts/generator-release/test-rust-verifier-retries.cjs \
+"$(mise --no-config --no-env --no-hooks which bun --tool "bun@$VELNOR_BUN_VERSION")" --bun run scripts/generator-release/test-rust-verifier-retries.cjs \
   "$action" "$receipt" >"$log" 2>&1
 command_status=$?
 set -u
@@ -1347,7 +1354,7 @@ for path in external-oracle captured-stage captured-raw external-check-stage ext
   validator-tool-install-plan.json validator-tool-install-specs.txt validator-tool-lock-admission.txt \
   cargo-fetch-lock-identity.txt cargo-fetch-locks.before.txt cargo-fetch-locks.after.txt \
   mise-version.txt rustc-version.txt \
-  mbx-version.txt jactionlint-version.txt shellcheck-version.txt node-version.txt cli-identity.txt; do
+  mbx-version.txt jactionlint-version.txt shellcheck-version.txt bun-version.txt cli-identity.txt; do
   if [ -e "$evidence/$path" ] || [ -L "$evidence/$path" ]; then
     paths+=("$path")
   fi
