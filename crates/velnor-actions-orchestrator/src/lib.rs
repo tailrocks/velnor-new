@@ -72,7 +72,11 @@ private_mods!(select_reads_lex, select_reads_scan);
 private_mods!(select_symlinks, select_tofu);
 private_mods!(source_cache, source_prep);
 private_mods!(stable_release_emit, tap_history_relevance, tap_merge);
-private_mods!(tap_prepare, tap_source_freshness, tap_writer_history_timestamp);
+private_mods!(
+    tap_prepare,
+    tap_source_freshness,
+    tap_writer_history_timestamp
+);
 private_mods!(task_execution, task_report_aggregate);
 private_mods!(tofu_apply_emit, tofu_cache);
 private_mods!(toolcheck, toolfindings, utf8);
