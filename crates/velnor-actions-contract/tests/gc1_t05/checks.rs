@@ -21,13 +21,13 @@ pub(super) fn rejects_bad_job() -> Result<(), Box<dyn Error>> {
     assert!(bad.validate().is_err());
     let mut bad = fixture_job()?;
     bad.repository_id = 0;
-    assert!(bad.validate().is_err());
+    assert!(bad.validate().is_ok());
     let mut bad = fixture_job()?;
     bad.run_attempt = 0;
     assert!(bad.validate().is_err());
     let mut bad = fixture_job()?;
     bad.job_id = 0;
-    assert!(bad.validate().is_err());
+    assert!(bad.validate().is_ok());
     let mut bad = fixture_job()?;
     "not-a-sha".clone_into(&mut bad.workflow_sha);
     assert!(bad.validate().is_err());

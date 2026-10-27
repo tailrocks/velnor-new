@@ -122,7 +122,10 @@ fn check_group_ledger_conclusion(
                 .any(|result| result.outcome == UnitOutcome::Failed)
             {
                 false
-            } else if ledger_complete(ledger) {
+            } else if ledger_covers_group(ledger) {
+                // Complete execution or complete cache reuse: a warm writer
+                // that observed complete coverage prepares nothing and carries
+                // the group with cache hits. That is coverage, not corruption.
                 true
             } else if ledger_defers_preparation(ledger) {
                 // Honest-but-incomplete evidence: the executing branch deferred
@@ -155,6 +158,13 @@ fn ledger_complete(ledger: &UnitLedgerV1) -> bool {
         .all(UnitResultV1::is_successful_completion)
 }
 
+fn ledger_covers_group(ledger: &UnitLedgerV1) -> bool {
+    ledger
+        .ordered_results
+        .iter()
+        .all(|result| result.is_successful_completion() || result.outcome == UnitOutcome::CacheHit)
+}
+
 fn ledger_defers_preparation(ledger: &UnitLedgerV1) -> bool {
     !ledger_complete(ledger)
         && ledger.ordered_results.iter().all(|result| {
@@ -179,13 +189,13 @@ fn group_ledger_stats(ledgers: &[UnitLedgerV1]) -> BTreeMap<&str, GroupLedgerSta
         match ledger.execution_branch {
             ExecutionBranch::Reader => {
                 stats.reader_ledgers += 1;
-                if ledger_complete(ledger) {
+                if ledger_covers_group(ledger) {
                     stats.reader_complete += 1;
                 }
             }
             ExecutionBranch::Writer => {
                 stats.writer_ledgers += 1;
-                if ledger_complete(ledger) {
+                if ledger_covers_group(ledger) {
                     stats.writer_complete += 1;
                 }
             }
@@ -276,11 +286,13 @@ fn check_group_ledger_coverage(
                     miss_reasons.insert("no_entry".to_owned());
                     continue;
                 };
-                // Exactly one complete ledger carries the group: on push the
+                // Exactly one covering ledger carries the group: on push the
                 // writer wins over the reader and the superseded sibling is
-                // silent. Off-push the writer cannot execute, so two complete
-                // ledgers stay corrupt. A group with evidence but no complete
-                // ledger is missing its writer preparation, not corrupt.
+                // silent. Complete means executed or cache-hit: a warm writer
+                // that reused every unit still carries the group. Off-push the
+                // writer cannot execute, so two covering ledgers stay corrupt.
+                // A group with evidence but no covering ledger is missing its
+                // writer preparation, not corrupt.
                 if stats.writer_complete > 0 && stats.reader_complete > 0 && !writer_wins {
                     signals.planning_failed = true;
                     miss_reasons.insert("cache_corrupt".to_owned());

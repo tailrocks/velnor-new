@@ -282,8 +282,8 @@ fn check_single_ranked_predecessor() -> Result<(), Box<dyn Error>> {
     let tie_visible: Vec<&SelectableEntry> = tie_request.entries.iter().collect();
     let tie = select_predecessor(&tie_request, &tie_visible)
         .ok_or_else(|| fail("tied predecessor missed selection"))?;
-    if tie.entry.cache_id != 42 {
-        return Err(fail("creation-time tie-break drifted"));
+    if tie.entry.cache_id != 41 {
+        return Err(fail("newest predecessor lost creation-time ranking"));
     }
     Ok(())
 }

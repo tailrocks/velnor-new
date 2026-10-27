@@ -30,12 +30,12 @@ pub struct JobBindingV1 {
 impl JobBindingV1 {
     pub fn validate(&self) -> Result<(), ContractError> {
         check_schema(self.schema, "job.schema")?;
-        if self.repository_id == 0 {
-            return Err(ContractError::identity(
-                "job.repository_id",
-                "must_be_positive",
-            ));
-        }
+        // `repository_id == 0` means unresolvable in tokenless emit: the
+        // group-ledger producer runs without a GitHub token, so the numeric
+        // repository and job ids cannot be looked up. Zero is honest here,
+        // not a wildcard: ledger identity binds on the repository slug,
+        // `run_id`, `run_attempt`, and `job_key`, and no verified consumer
+        // reads the numeric ids.
         if self.run_id == 0 {
             return Err(ContractError::identity("job.run_id", "must_be_positive"));
         }
@@ -45,9 +45,10 @@ impl JobBindingV1 {
                 "must_be_positive",
             ));
         }
-        if self.job_id == 0 {
-            return Err(ContractError::identity("job.job_id", "must_be_positive"));
-        }
+        // `job_id == 0` carries the same tokenless-emit meaning as
+        // `repository_id == 0` above: the numeric job id is unresolvable
+        // without a token, and identity binds on `job_key` instead.
+        // No verified consumer reads the numeric job id.
         require_nonempty("job.repository", &self.repository)?;
         require_nonempty("job.job_key", &self.job_key)?;
         require_nonempty("job.event", &self.event)?;

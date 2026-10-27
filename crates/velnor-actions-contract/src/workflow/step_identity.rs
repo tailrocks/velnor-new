@@ -176,6 +176,8 @@ pub enum StepRole {
 
     MbxBundleSave,
 
+    MbxBundleRecord,
+
     FamilyKeys,
 
     FamilyRestore,
@@ -277,6 +279,7 @@ impl StepRole {
             | Self::MbxProducerMark
             | Self::MbxSeedBuild
             | Self::MbxBundleExport
+            | Self::MbxBundleRecord
             | Self::PrepareRustComponents
             | Self::CargoDeny
             | Self::CargoMachete

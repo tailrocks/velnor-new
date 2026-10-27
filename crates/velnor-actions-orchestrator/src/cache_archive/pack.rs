@@ -57,6 +57,9 @@ impl<W: Write> PackWriter<W> {
     fn append_json(&mut self, name: &str, bytes: &[u8]) -> Result<(), OrchestratorError> {
         self.admit()?;
         let size = u64::try_from(bytes.len()).map_err(|_| internal("snapshot_size_range"))?;
+        if size > MAX_ARCHIVE_ENTRY_BYTES {
+            return Err(internal("snapshot_archive_entry_size_limit"));
+        }
         let mut header = member_header(0o644, EntryType::Regular, size);
         self.builder
             .append_data(&mut header, name, bytes)
@@ -324,4 +327,49 @@ pub fn pack_snapshot_archive(
         archive_bytes: u64::try_from(bytes.len()).map_err(|_| internal("snapshot_size_range"))?,
         member_count,
     })
+}
+
+#[cfg(test)]
+mod gc1_t43_json_entry_limit {
+    use super::*;
+
+    fn writer() -> PackWriter<Vec<u8>> {
+        PackWriter {
+            builder: tar::Builder::new(Vec::new()),
+            count: 0,
+        }
+    }
+
+    #[test]
+    fn gc1_t43_append_json_accepts_small_index() -> Result<(), Box<dyn std::error::Error>> {
+        let mut pack = writer();
+        pack.append_json("manifest.json", b"{}")?;
+        if pack.count != 1 {
+            return Err(std::io::Error::other("accepted index lost its member count").into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn gc1_t43_append_json_rejects_oversize_index() -> Result<(), Box<dyn std::error::Error>> {
+        // `scan_archive_members` in extract.rs rejects every member larger than
+        // `MAX_ARCHIVE_ENTRY_BYTES` at restore time, so pack must refuse the
+        // same bytes instead of publishing an unrestorable archive.
+        let mut pack = writer();
+        let big = vec![
+            0u8;
+            usize::try_from(MAX_ARCHIVE_ENTRY_BYTES)
+                .expect("archive ceiling fits the address space") + 1
+        ];
+        let error = pack
+            .append_json("state-index.json", &big)
+            .expect_err("oversize generated index must be rejected at pack time");
+        if !error
+            .to_string()
+            .contains("snapshot_archive_entry_size_limit")
+        {
+            return Err(std::io::Error::other(format!("unexpected pack error: {error}")).into());
+        }
+        Ok(())
+    }
 }

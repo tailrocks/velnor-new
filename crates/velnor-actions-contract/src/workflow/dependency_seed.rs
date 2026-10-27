@@ -85,6 +85,7 @@ fn cache_role(role: StepRole) -> bool {
             | StepRole::MbxSeedBuild
             | StepRole::MbxBundleExport
             | StepRole::MbxBundleSave
+            | StepRole::MbxBundleRecord
             | StepRole::PrivateTokenMint
             | StepRole::PrivateFetch
             | StepRole::PrivateRevoke

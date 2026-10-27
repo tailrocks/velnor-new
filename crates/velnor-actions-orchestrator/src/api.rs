@@ -209,3 +209,9 @@ pub use super::image_maintenance::{
     validate_job_candidate,
 };
 pub use velnor_actions_mise::CheckDeadline;
+
+#[path = "group_ledger/mod.rs"]
+mod group_ledger;
+pub use self::group_ledger::{
+    ASSEMBLE_GROUP_LEDGERS_OP, EMIT_GROUP_LEDGER_OP, assemble_group_ledgers, emit_group_ledger,
+};
