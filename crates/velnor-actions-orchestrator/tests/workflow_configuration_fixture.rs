@@ -9,7 +9,7 @@ use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 use velnor_actions_contract::SUPPORTED_TARGETS;
 
-#[path = "../../test_support/git_fixture.rs"]
+#[path = "../src/git_fixture.rs"]
 mod git_fixture;
 
 pub(crate) fn make_repo(config: &str) -> Result<TempDir, Box<dyn Error>> {
