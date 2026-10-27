@@ -19,14 +19,16 @@
   "pin_freshness": {
     "command": "bash scripts/check-freshness.sh --check-upstream",
     "exit_code": 0,
-    "stale_pins_deferred_to_owner": [
-      "mise pinned 2026.10.19, latest v2026.10.20",
-      "mr-boxington pinned 1.27.0, latest v1.28.0",
-      "gh pinned 2.103.2, latest v2.103.3",
-      "nextest pinned 0.9.149, latest 0.9.150",
-      "jdx/mr-boxington-action pinned v1.7.2, latest v1.7.3"
+    "date_utc": "2026-10-27",
+    "upstream_probes": "all lookup_failed on global timeout; tolerated by script",
+    "currency": "unknown while upstream unreachable; tree pins unchanged by this run",
+    "tree_pins_observed": [
+      "mr-boxington 1.28.0 with mr-boxington-action v1.7.3 already in tree",
+      "cargo-nextest 0.9.149",
+      "gh 2.103.2 per inventory"
     ],
-    "note": "Plan boundary keeps existing approved pins. No bump applied."
+    "previously_reported_newer": "a prior reachable check reported newer mise, gh, nextest; unverifiable now; pin-bump decision stays with owner",
+    "note": "Plan boundary keeps existing approved pins. No bump applied. No files changed by refresh."
   },
   "remote_ci_on_base": {
     "pr": 407,
