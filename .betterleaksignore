@@ -2944,9 +2944,9 @@ f714692cf7bb2631da74dd2802a9f2a542938ee4:docs/proposed/opentofu-goldens/cases/mb
 f714692cf7bb2631da74dd2802a9f2a542938ee4:docs/proposed/opentofu-goldens/cases/minimal-cargo/preview/.github/velnor/task-execution-manifest-v1.json:generic-api-key:2
 f714692cf7bb2631da74dd2802a9f2a542938ee4:docs/proposed/opentofu-goldens/cases/nested/preview/.github/velnor/task-execution-manifest-v1.json:generic-api-key:2
 
-# Reason: two immutable maintenance evidence archive entries contain only public
-# typed matrix, relative manifest-path, and CI run identifiers (80 detections).
-# Recursive JSON field validation covered both complete entries. BetterLeaks
+# Reason: the 80 detections in two immutable maintenance evidence archive entries
+# concern public typed matrix, relative manifest-path, and CI run identifiers.
+# Recursive JSON key-field validation covered both complete entries. BetterLeaks
 # fragments reset columns on minified JSON; not all archive spans were individually
 # column-verified. These exact historical fingerprints do not cover later content.
 3e34ae71ef70cc1b4bc281e01b65a4b68ac8c083:docs/implemented/evidence/freshness-2026-10-27/ci-40428573524/maintenance.zip!matrix.json:generic-api-key:1
