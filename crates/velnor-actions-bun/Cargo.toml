@@ -16,7 +16,7 @@ test = false
 workspace = true
 
 [dependencies]
-velnor-actions-contract = { version = "=0.1.61", path = "../velnor-actions-contract" }
+velnor-actions-contract = { version = "=0.1.62", path = "../velnor-actions-contract" }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 toml = { version = "=1.1.8" }
