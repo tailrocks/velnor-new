@@ -50,6 +50,13 @@ pub fn validate_published_generator_lock(
     published_lock::validate_published_generator_lock(lock)
 }
 
+pub fn validate_approved_generator_lock(
+    lock: &velnor_actions_contract::GeneratorLock,
+    approved: &velnor_actions_mise::catalog::lock::ApprovedGeneratorRelease<'_>,
+) -> Result<(), ReleaseHelperError> {
+    published_lock::validate_approved_generator_lock(lock, approved)
+}
+
 pub fn consumer_acquire_for_target(
     target: velnor_actions_contract::ReleaseTarget,
     version: &str,

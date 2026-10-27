@@ -35,6 +35,7 @@ pub(super) fn build(
         config: input.config,
         runner: input.label,
         published_generator_lock: input.published_generator_lock,
+        approved_release: input.approved_release,
         consumer_manifest_json: input.discovery.consumer_manifest_json.as_deref(),
         tool_pins: &pins,
         rust_source: if catalog.exports_rustup_toolchain() {

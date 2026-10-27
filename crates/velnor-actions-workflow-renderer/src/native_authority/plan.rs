@@ -132,13 +132,19 @@ pub(super) fn helper_catalog(
     let lock = input
         .published_generator_lock
         .ok_or_else(|| invalid("required_verdict_requires_published_generator_lock"))?;
-    velnor_actions_mise::catalog::lock::catalog_for_published_generator(lock, catalog).map_err(
-        |error| {
-            NativeAuthorityError::Release(crate::release_helpers::ReleaseHelperError::Problem(
-                error.to_string(),
-            ))
-        },
-    )
+    let map_err = |error: velnor_actions_mise::catalog::lock::LockError| {
+        NativeAuthorityError::Release(crate::release_helpers::ReleaseHelperError::Problem(
+            error.to_string(),
+        ))
+    };
+    match input.approved_release {
+        Some(approved) => velnor_actions_mise::catalog::lock::catalog_for_approved_generator(
+            lock, catalog, &approved,
+        )
+        .map_err(map_err),
+        None => velnor_actions_mise::catalog::lock::catalog_for_published_generator(lock, catalog)
+            .map_err(map_err),
+    }
 }
 
 pub(super) fn required_job(

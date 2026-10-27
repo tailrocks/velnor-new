@@ -80,8 +80,8 @@ fn prepare_inner(
         None => load_config(&canonical)?,
     };
     check_velnor_identity(&canonical, &config)?;
-    let published_generator_lock =
-        load_published_generator_lock(&canonical, config.workflow.policy)?;
+    let (published_generator_lock, approved_release) =
+        load_generator_admission(&canonical, config.workflow.policy)?;
     let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&canonical, &config)?;
     let default_branch = resolve_default_branch(&canonical, &config)?;
     validate_verification_branch(&config, &default_branch)?;
@@ -102,6 +102,9 @@ fn prepare_inner(
             fetch_roots: &fetch_roots,
             consumer_release_version: env!("CARGO_PKG_VERSION"),
             published_generator_lock: published_generator_lock.as_ref(),
+            approved_release: approved_release
+                .as_ref()
+                .map(crate::controller_approval::ControllerApprovedRelease::as_authority),
             catalog: &emission,
         },
     )?;
@@ -116,6 +119,7 @@ fn prepare_inner(
         crate::lock_audit::InstallAuditAuthority {
             policy: config.workflow.policy,
             published_generator_lock: published_generator_lock.as_ref(),
+            approved_release: approved_release.as_ref(),
         },
         &runner_label,
         &workflow.context.validator_commands,
@@ -142,9 +146,25 @@ fn prepare_inner(
     })
 }
 
+fn load_generator_admission(
+    root: &Path,
+    policy: WorkflowPolicy,
+) -> Result<
+    (
+        Option<GeneratorLock>,
+        Option<crate::controller_approval::ControllerApprovedRelease>,
+    ),
+    OrchestratorError,
+> {
+    let approved = crate::controller_approval::load_policy_approval(root, policy)?;
+    let lock = load_published_generator_lock(root, policy, approved.as_ref())?;
+    Ok((lock, approved))
+}
+
 fn load_published_generator_lock(
     root: &Path,
     policy: WorkflowPolicy,
+    approved: Option<&crate::controller_approval::ControllerApprovedRelease>,
 ) -> Result<Option<GeneratorLock>, OrchestratorError> {
     if policy != WorkflowPolicy::VelnorRepositoryV1 {
         return Ok(None);
@@ -154,7 +174,10 @@ fn load_published_generator_lock(
             problem: "required_verdict_requires_published_generator_lock".to_owned(),
         }
     })?;
-    crate::finalized::validate_published_generator_lock(&lock)?;
+    match approved {
+        Some(approved) => crate::finalized::validate_approved_generator_lock(&lock, approved)?,
+        None => crate::finalized::validate_published_generator_lock(&lock)?,
+    }
     Ok(Some(lock))
 }
 

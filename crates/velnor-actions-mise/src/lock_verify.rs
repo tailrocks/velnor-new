@@ -21,6 +21,19 @@ const PUBLISHED_GENERATOR_MACOS_ARM64_SHA256: &str =
 const PUBLISHED_GENERATOR_MACOS_X64_SHA256: &str =
     "0938a574c00b05a71735285bf0d2840235ca4f9559359909564dd53b27d77883";
 
+#[derive(Debug, Clone, Copy)]
+pub struct ApprovedGeneratorRelease<'a> {
+    pub manifest: &'a ReleaseManifest,
+    pub gh_version: &'a str,
+}
+
+fn default_approved_release(manifest: &ReleaseManifest) -> ApprovedGeneratorRelease<'_> {
+    ApprovedGeneratorRelease {
+        manifest,
+        gh_version: PUBLISHED_GENERATOR_GH_VERSION,
+    }
+}
+
 pub fn verify_lock_against_manifest(
     lock: &GeneratorLock,
     manifest: &ReleaseManifest,
@@ -57,8 +70,11 @@ pub fn verify_lock_against_manifest(
     Ok(())
 }
 
-pub fn verify_lock_against_published_release(lock: &GeneratorLock) -> Result<(), LockError> {
-    let manifest = published_generator_manifest();
+pub fn verify_lock_against_approved_release(
+    lock: &GeneratorLock,
+    approved: &ApprovedGeneratorRelease<'_>,
+) -> Result<(), LockError> {
+    let manifest = approved.manifest;
     manifest
         .validate("published-generator-manifest")
         .map_err(|err| LockError::Invalid {
@@ -70,8 +86,13 @@ pub fn verify_lock_against_published_release(lock: &GeneratorLock) -> Result<(),
             lock.generator.binary
         )));
     }
-    verify_lock_against_manifest(lock, &manifest)?;
+    verify_lock_against_manifest(lock, manifest)?;
     verify_mise_bootstrap(lock)
+}
+
+pub fn verify_lock_against_published_release(lock: &GeneratorLock) -> Result<(), LockError> {
+    let manifest = published_generator_manifest();
+    verify_lock_against_approved_release(lock, &default_approved_release(&manifest))
 }
 
 fn published_generator_manifest() -> ReleaseManifest {
@@ -129,22 +150,32 @@ fn verify_mise_bootstrap(lock: &GeneratorLock) -> Result<(), LockError> {
     Ok(())
 }
 
-pub fn catalog_for_published_generator(
+pub fn catalog_for_approved_generator(
     lock: &GeneratorLock,
     catalog: &ToolCatalog,
+    approved: &ApprovedGeneratorRelease<'_>,
 ) -> Result<ToolCatalog, LockError> {
-    verify_lock_against_published_release(lock)?;
+    verify_lock_against_approved_release(lock, approved)?;
     let mut helper = catalog.clone();
-    PUBLISHED_GENERATOR_GH_VERSION.clone_into(&mut helper.gh);
+    approved.gh_version.clone_into(&mut helper.gh);
     helper.project.remove(&PinnedTool::Gh);
     Ok(helper)
 }
 
-pub fn mise_binary_for_published_generator(
+pub fn catalog_for_published_generator(
+    lock: &GeneratorLock,
+    catalog: &ToolCatalog,
+) -> Result<ToolCatalog, LockError> {
+    let manifest = published_generator_manifest();
+    catalog_for_approved_generator(lock, catalog, &default_approved_release(&manifest))
+}
+
+pub fn mise_binary_for_approved_generator(
     lock: &GeneratorLock,
     target: ReleaseTarget,
+    approved: &ApprovedGeneratorRelease<'_>,
 ) -> Result<super::MiseBinaryIdentity, LockError> {
-    verify_lock_against_published_release(lock)?;
+    verify_lock_against_approved_release(lock, approved)?;
     let (sha256, bytes) = match target {
         ReleaseTarget::LinuxX86_64 => (
             "3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d",
@@ -164,4 +195,12 @@ pub fn mise_binary_for_published_generator(
         sha256,
         bytes,
     })
+}
+
+pub fn mise_binary_for_published_generator(
+    lock: &GeneratorLock,
+    target: ReleaseTarget,
+) -> Result<super::MiseBinaryIdentity, LockError> {
+    let manifest = published_generator_manifest();
+    mise_binary_for_approved_generator(lock, target, &default_approved_release(&manifest))
 }

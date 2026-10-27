@@ -22,7 +22,10 @@ impl CheckMiseSetups {
         for check in &input.config.checks {
             let target = check.runner.platform.release_target();
             let current = super::tools::mise_setup(input.config, target)?;
-            let setup = current.for_published_generator(lock, target)?;
+            let setup = match input.approved_release {
+                Some(approved) => current.for_approved_generator(lock, target, &approved)?,
+                None => current.for_published_generator(lock, target)?,
+            };
             checks.insert(format!("check-{}", check.id), (target, setup));
         }
         Ok(Self { checks })

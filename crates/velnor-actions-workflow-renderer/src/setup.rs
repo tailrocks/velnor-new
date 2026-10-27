@@ -56,6 +56,24 @@ impl MiseSetup {
         })
     }
 
+    pub(crate) fn for_approved_generator(
+        &self,
+        lock: &velnor_actions_contract::GeneratorLock,
+        target: velnor_actions_contract::ReleaseTarget,
+        approved: &velnor_actions_mise::catalog::lock::ApprovedGeneratorRelease<'_>,
+    ) -> Result<Self, RenderError> {
+        let binary = velnor_actions_mise::catalog::lock::mise_binary_for_approved_generator(
+            lock, target, approved,
+        )
+        .map_err(|error| RenderError::BadCommand(error.to_string()))?;
+        let current = self.for_target(target.triple())?;
+        Ok(Self {
+            version: binary.version.to_owned(),
+            sha256: binary.sha256.to_owned(),
+            ..current
+        })
+    }
+
     pub fn validate(&self) -> Result<(), RenderError> {
         steps::validate_uses(&self.uses)?;
         if !self.uses.starts_with(&format!("{MISE_ACTION_NAME}@")) {
