@@ -76,62 +76,53 @@ if ! cp -p "$fixture_manifest" "$fixture_original" \
   exit 1
 fi
 fixture_backup_ready=1
-if ! python3 - "$fixture_original" "$fixture_replacement" "$fixture_receipt" \
-  "$VELNOR_TEST_HOST_TARGET" "$VELNOR_TEST_REAL_CLI_SHA256" "$VELNOR_TEST_CANDIDATE_SHA256" "$PWD/$fixture_manifest" <<'PY'
-import hashlib
-import json
-import re
-from pathlib import Path
-import sys
-
-original_path, replacement_path, receipt_path = map(Path, sys.argv[1:4])
-host_target, real_sha, candidate_sha, manifest_path = sys.argv[4:]
-original = original_path.read_bytes()
-if not re.fullmatch(r'[0-9a-f]{64}', real_sha) or not re.fullmatch(r'[0-9a-f]{64}', candidate_sha):
-    raise SystemExit('fixture host digests are malformed')
-if real_sha == candidate_sha:
-    raise SystemExit('fixture requires distinct real and wrapper host digests')
-document = json.loads(original)
-targets = document.get('targets')
-if not isinstance(targets, list):
-    raise SystemExit('fixture manifest has no target list')
-matches = [row for row in targets if isinstance(row, dict) and row.get('target') == host_target]
-if len(matches) != 1 or matches[0].get('sha256') != candidate_sha:
-    raise SystemExit('fixture manifest does not contain one candidate-digest host row')
-token = f'"sha256": "{candidate_sha}"'.encode()
-if original.count(token) != 1:
-    raise SystemExit('candidate host digest token is not unique in fixture manifest bytes')
-replacement = original.replace(token, f'"sha256": "{real_sha}"'.encode(), 1)
-changed = json.loads(replacement)
-original_host = matches[0].copy()
-changed_targets = [row for row in changed['targets'] if row.get('target') == host_target]
-if len(changed_targets) != 1 or changed_targets[0].get('sha256') != real_sha:
-    raise SystemExit('replacement manifest does not bind the real CLI to the host row')
-changed_host = changed_targets[0].copy()
-original_host['sha256'] = real_sha
-if original_host != changed_host:
-    raise SystemExit('replacement changed another host-row field')
-for row in targets:
-    if row.get('target') != host_target:
-        other = [item for item in changed['targets'] if item.get('target') == row.get('target')]
-        if len(other) != 1 or other[0] != row:
-            raise SystemExit('replacement changed a non-host target row')
-original_top = {key: value for key, value in document.items() if key != 'targets'}
-changed_top = {key: value for key, value in changed.items() if key != 'targets'}
-if original_top != changed_top:
-    raise SystemExit('replacement changed a non-target manifest field')
-replacement_path.write_bytes(replacement)
-receipt = {
-    'candidate_sha256': candidate_sha,
-    'host_target': host_target,
-    'manifest_path': manifest_path,
-    'original_sha256': hashlib.sha256(original).hexdigest(),
-    'replacement_sha256': hashlib.sha256(replacement).hexdigest(),
-    'replacement_changes_only_unique_host_sha256': True,
-    'real_cli_sha256': real_sha,
+if ! node - "$fixture_original" "$fixture_replacement" "$fixture_receipt" \
+  "$VELNOR_TEST_HOST_TARGET" "$VELNOR_TEST_REAL_CLI_SHA256" "$VELNOR_TEST_CANDIDATE_SHA256" "$PWD/$fixture_manifest" <<'JS'
+const fs = require('node:fs');
+const crypto = require('node:crypto');
+const { isDeepStrictEqual } = require('node:util');
+const [originalPath, replacementPath, receiptPath, hostTarget, realSha, candidateSha, manifestPath] = process.argv.slice(2);
+const fail = message => { throw new Error(message); };
+const digest = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
+const parse = bytes => JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+const original = fs.readFileSync(originalPath);
+if (!/^[0-9a-f]{64}$/.test(realSha) || !/^[0-9a-f]{64}$/.test(candidateSha)) fail('fixture host digests are malformed');
+if (realSha === candidateSha) fail('fixture requires distinct real and wrapper host digests');
+const document = parse(original);
+const targets = document.targets;
+if (!Array.isArray(targets)) fail('fixture manifest has no target list');
+const matches = targets.filter(row => row !== null && typeof row === 'object' && !Array.isArray(row) && row.target === hostTarget);
+if (matches.length !== 1 || matches[0].sha256 !== candidateSha) fail('fixture manifest does not contain one candidate-digest host row');
+const token = Buffer.from(`"sha256": "${candidateSha}"`);
+const replacementToken = Buffer.from(`"sha256": "${realSha}"`);
+const tokenIndex = original.indexOf(token);
+if (tokenIndex < 0 || original.indexOf(token, tokenIndex + 1) >= 0) fail('candidate host digest token is not unique in fixture manifest bytes');
+const replacement = Buffer.concat([original.subarray(0, tokenIndex), replacementToken, original.subarray(tokenIndex + token.length)]);
+const changed = parse(replacement);
+const changedTargets = changed.targets.filter(row => row !== null && typeof row === 'object' && row.target === hostTarget);
+if (changedTargets.length !== 1 || changedTargets[0].sha256 !== realSha) fail('replacement manifest does not bind the real CLI to the host row');
+const expectedHost = { ...matches[0], sha256: realSha };
+if (!isDeepStrictEqual(expectedHost, changedTargets[0])) fail('replacement changed another host-row field');
+for (const row of targets) {
+  if (row.target !== hostTarget) {
+    const other = changed.targets.filter(item => item.target === row.target);
+    if (other.length !== 1 || !isDeepStrictEqual(other[0], row)) fail('replacement changed a non-host target row');
+  }
 }
-receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + '\n')
-PY
+const top = value => Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'targets'));
+if (!isDeepStrictEqual(top(document), top(changed))) fail('replacement changed a non-target manifest field');
+fs.writeFileSync(replacementPath, replacement);
+const receipt = {
+  candidate_sha256: candidateSha,
+  host_target: hostTarget,
+  manifest_path: manifestPath,
+  original_sha256: digest(original),
+  replacement_sha256: digest(replacement),
+  replacement_changes_only_unique_host_sha256: true,
+  real_cli_sha256: realSha,
+};
+fs.writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
+JS
 then
   echo 'FATAL: could not prepare a host-only disposable manifest copy' >&2
   exit 1
@@ -148,22 +139,18 @@ if ! cmp -s "$fixture_original" "$fixture_manifest"; then
   echo 'FATAL: scratch manifest restoration was not byte exact' >&2
   exit 1
 fi
-if ! python3 - "$fixture_receipt" "$fixture_manifest" <<'PY'
-import hashlib
-import json
-from pathlib import Path
-import sys
-
-receipt_path, manifest_path = map(Path, sys.argv[1:])
-receipt = json.loads(receipt_path.read_text())
-original = (receipt_path.parent / 'original.json').read_bytes()
-restored = manifest_path.read_bytes()
-receipt['restored_byte_exact'] = restored == original
-receipt['restored_sha256'] = hashlib.sha256(restored).hexdigest()
-if not receipt['restored_byte_exact']:
-    raise SystemExit('restored manifest bytes differ from the saved original')
-receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + '\n')
-PY
+if ! node - "$fixture_receipt" "$fixture_manifest" <<'JS'
+const fs = require('node:fs');
+const crypto = require('node:crypto');
+const [receiptPath, manifestPath] = process.argv.slice(2);
+const receipt = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(fs.readFileSync(receiptPath)));
+const original = fs.readFileSync(`${require('node:path').dirname(receiptPath)}/original.json`);
+const restored = fs.readFileSync(manifestPath);
+receipt.restored_byte_exact = restored.equals(original);
+receipt.restored_sha256 = crypto.createHash('sha256').update(restored).digest('hex');
+if (!receipt.restored_byte_exact) throw new Error('restored manifest bytes differ from the saved original');
+fs.writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
+JS
 then
   echo 'FATAL: could not record exact scratch manifest restoration' >&2
   exit 1
@@ -171,34 +158,57 @@ fi
 trap - EXIT HUP INT TERM
 rm -f "$fixture_install" "$fixture_manifest.restore.$$"
 if [ "$real_status" -ne 0 ]; then exit "$real_status"; fi
-if ! python3 - "$3/.github" "$VELNOR_TEST_REAL_CLI_SHA256" "$VELNOR_TEST_CANDIDATE_SHA256" <<'PY'
-import os
-from pathlib import Path
-import re
-import stat
-import sys
-
-root = Path(sys.argv[1])
-real_sha, candidate_sha = (value.encode() for value in sys.argv[2:])
-pattern = re.compile(rb'(?m)^([ \t]*VELNOR_ASSET_SHA256: )' + re.escape(real_sha) + rb'(?=\r?$)')
-if root.is_symlink() or not root.is_dir():
-    raise SystemExit('generated workflow directory is missing or unsafe')
-changes = 0
-for directory, names, files in os.walk(root, followlinks=False):
-    names[:] = [name for name in names if not (Path(directory) / name).is_symlink()]
-    for name in files:
-        path = Path(directory) / name
-        mode = path.lstat().st_mode
-        if stat.S_ISLNK(mode) or not stat.S_ISREG(mode):
-            continue
-        data = path.read_bytes()
-        rewritten, count = pattern.subn(lambda match: match.group(1) + candidate_sha, data)
-        if count:
-            path.write_bytes(rewritten)
-            changes += count
-if changes == 0:
-    raise SystemExit('generated acquisition bindings contain no real host digest to translate')
-PY
+if ! node - "$3/.github" "$VELNOR_TEST_REAL_CLI_SHA256" "$VELNOR_TEST_CANDIDATE_SHA256" <<'JS'
+const fs = require('node:fs');
+const path = require('node:path');
+const [root, realSha, candidateSha] = process.argv.slice(2);
+const fail = message => { throw new Error(message); };
+const real = Buffer.from(realSha);
+const candidate = Buffer.from(candidateSha);
+const prefix = Buffer.from('VELNOR_ASSET_SHA256: ');
+const rootInfo = fs.lstatSync(root);
+if (rootInfo.isSymbolicLink() || !rootInfo.isDirectory()) fail('generated workflow directory is missing or unsafe');
+let changes = 0;
+function visit(directory) {
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const file = path.join(directory, entry.name);
+    const info = fs.lstatSync(file);
+    if (info.isSymbolicLink()) continue;
+    if (info.isDirectory()) {
+      visit(file);
+      continue;
+    }
+    if (!info.isFile()) continue;
+    const data = fs.readFileSync(file);
+    const chunks = [];
+    let start = 0;
+    let count = 0;
+    for (let end = 0; end <= data.length; end += 1) {
+      if (end !== data.length && data[end] !== 10) continue;
+      let lineEnd = end;
+      if (lineEnd > start && data[lineEnd - 1] === 13) lineEnd -= 1;
+      let fieldStart = start;
+      while (fieldStart < lineEnd && (data[fieldStart] === 32 || data[fieldStart] === 9)) fieldStart += 1;
+      const valueStart = fieldStart + prefix.length;
+      const valueEnd = valueStart + real.length;
+      if (data.subarray(fieldStart, valueStart).equals(prefix) && data.subarray(valueStart, valueEnd).equals(real)
+          && valueEnd === lineEnd) {
+        chunks.push(data.subarray(start, valueStart), candidate, data.subarray(valueEnd, end + (end < data.length ? 1 : 0)));
+        count += 1;
+      } else {
+        chunks.push(data.subarray(start, end + (end < data.length ? 1 : 0)));
+      }
+      start = end + 1;
+    }
+    if (count) {
+      fs.writeFileSync(file, Buffer.concat(chunks));
+      changes += count;
+    }
+  }
+}
+visit(root);
+if (changes === 0) fail('generated acquisition bindings contain no real host digest to translate');
+JS
 then
   echo 'FATAL: could not translate only generated host acquisition bindings' >&2
   exit 1
@@ -331,55 +341,48 @@ expected_output_binding_diagnostic() {
 
 verify_output_binding_manifest_fixture() {
   local fault="$1" retained="$2" backup_dir="$OUTPUT_BINDING_MANIFEST_BACKUP_DIR/$1"
-  if ! python3 - "$backup_dir" "$retained" "$OUTPUT_BINDING_MANIFEST" \
-    "$HOST_TARGET" "$CLI_SHA" "$OUTPUT_BINDING_BINARY_SHA" <<'PY'
-import hashlib
-import json
-from pathlib import Path
-import sys
-
-backup_dir, retained, candidate_manifest = map(Path, sys.argv[1:4])
-host, real_sha, candidate_sha = sys.argv[4:]
-original_path = backup_dir / 'original.json'
-replacement_path = backup_dir / 'replacement.json'
-receipt_path = backup_dir / 'receipt.json'
-if any(path.is_symlink() or not path.is_file() for path in
-       (original_path, replacement_path, receipt_path, candidate_manifest)):
-    raise SystemExit('fixture evidence or candidate manifest is missing or unsafe')
-original = original_path.read_bytes()
-replacement = replacement_path.read_bytes()
-if original != candidate_manifest.read_bytes():
-    raise SystemExit('saved scratch manifest differs from the exact candidate manifest')
-receipt = json.loads(receipt_path.read_text())
-if receipt.get('host_target') != host or receipt.get('real_cli_sha256') != real_sha \
-    or receipt.get('candidate_sha256') != candidate_sha \
-    or receipt.get('replacement_changes_only_unique_host_sha256') is not True \
-    or receipt.get('restored_byte_exact') is not True:
-    raise SystemExit('fixture receipt does not prove the approved host-only replacement and restore')
-if receipt.get('original_sha256') != hashlib.sha256(original).hexdigest() \
-    or receipt.get('replacement_sha256') != hashlib.sha256(replacement).hexdigest() \
-    or receipt.get('restored_sha256') != hashlib.sha256(original).hexdigest():
-    raise SystemExit('fixture receipt digest does not match retained bytes')
-document = json.loads(original)
-matches = [row for row in document['targets'] if row.get('target') == host]
-if len(matches) != 1 or matches[0].get('sha256') != candidate_sha:
-    raise SystemExit('saved fixture has no unique candidate-bound host row')
-token = f'"sha256": "{candidate_sha}"'.encode()
-if original.count(token) != 1 or replacement != original.replace(
-    token, f'"sha256": "{real_sha}"'.encode(), 1):
-    raise SystemExit('replacement did not change only the unique host SHA token')
-manifest_path = Path(receipt.get('manifest_path', ''))
-retained = retained.resolve(strict=True)
-if manifest_path.is_symlink() or manifest_path.parent.is_symlink() \
-    or not manifest_path.is_file() or manifest_path.read_bytes() != original:
-    raise SystemExit('scratch manifest was not restored byte-for-byte after generation')
-try:
-    manifest_path.relative_to(retained)
-except ValueError:
-    raise SystemExit('restored scratch manifest escaped the retained failed workspace')
-if manifest_path.parts[-2:] != ('.velnor', 'release-manifest.json'):
-    raise SystemExit('receipt does not identify the scratch release manifest')
-PY
+  if ! node - "$backup_dir" "$retained" "$OUTPUT_BINDING_MANIFEST" \
+    "$HOST_TARGET" "$CLI_SHA" "$OUTPUT_BINDING_BINARY_SHA" <<'JS'
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+const [backupDir, retainedPath, candidatePath, host, realSha, candidateSha] = process.argv.slice(2);
+const fail = message => { throw new Error(message); };
+const readSafe = file => {
+  const info = fs.lstatSync(file);
+  if (info.isSymbolicLink() || !info.isFile()) fail('fixture evidence or candidate manifest is missing or unsafe');
+  return fs.readFileSync(file);
+};
+const originalPath = path.join(backupDir, 'original.json');
+const replacementPath = path.join(backupDir, 'replacement.json');
+const receiptPath = path.join(backupDir, 'receipt.json');
+const original = readSafe(originalPath);
+const replacement = readSafe(replacementPath);
+if (!original.equals(readSafe(candidatePath))) fail('saved scratch manifest differs from the exact candidate manifest');
+const receipt = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(readSafe(receiptPath)));
+if (receipt.host_target !== host || receipt.real_cli_sha256 !== realSha || receipt.candidate_sha256 !== candidateSha
+    || receipt.replacement_changes_only_unique_host_sha256 !== true || receipt.restored_byte_exact !== true) {
+  fail('fixture receipt does not prove the approved host-only replacement and restore');
+}
+const digest = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
+if (receipt.original_sha256 !== digest(original) || receipt.replacement_sha256 !== digest(replacement)
+    || receipt.restored_sha256 !== digest(original)) fail('fixture receipt digest does not match retained bytes');
+const document = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(original));
+const matches = document.targets.filter(row => row !== null && typeof row === 'object' && row.target === host);
+if (matches.length !== 1 || matches[0].sha256 !== candidateSha) fail('saved fixture has no unique candidate-bound host row');
+const token = Buffer.from(`"sha256": "${candidateSha}"`);
+const index = original.indexOf(token);
+if (index < 0 || original.indexOf(token, index + 1) >= 0) fail('replacement did not change only the unique host SHA token');
+const expected = Buffer.concat([original.subarray(0, index), Buffer.from(`"sha256": "${realSha}"`), original.subarray(index + token.length)]);
+if (!replacement.equals(expected)) fail('replacement did not change only the unique host SHA token');
+const manifestPath = receipt.manifest_path;
+const parentInfo = fs.lstatSync(path.dirname(manifestPath));
+if (parentInfo.isSymbolicLink() || !fs.realpathSync(manifestPath).startsWith(`${fs.realpathSync(retainedPath)}${path.sep}`)
+    || !readSafe(manifestPath).equals(original)) fail('scratch manifest was not restored byte-for-byte after generation');
+const relative = path.relative(fs.realpathSync(retainedPath), fs.realpathSync(manifestPath));
+if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) fail('restored scratch manifest escaped the retained failed workspace');
+if (!manifestPath.endsWith(`${path.sep}.velnor${path.sep}release-manifest.json`)) fail('receipt does not identify the scratch release manifest');
+JS
   then
     echo "FAIL: disposable manifest host replacement or exact restore was not proven for $fault" >&2
     return 1

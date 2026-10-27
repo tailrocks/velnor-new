@@ -6,6 +6,11 @@
 # Exercise the collector's explicit CLI path without changing checked-in goldens.
 set -uo pipefail
 
+if ! command -v node >/dev/null 2>&1; then
+  echo 'FATAL: Node.js is required for the qualification output binding harness' >&2
+  exit 2
+fi
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/generator-release/qualification-goldens.sh"
 SCRIPT="$ROOT/scripts/capture-opentofu-goldens.sh"
