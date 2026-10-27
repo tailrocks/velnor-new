@@ -168,9 +168,9 @@
       "latest": "v2026.10.20",
       "name": "mise",
       "pinned": "2026.10.20",
-      "qualified": "2026.10.19",
+      "qualified": "2026.10.20",
       "source": "https://api.github.com/repos/jdx/mise/releases/latest",
-      "status": "stale"
+      "status": "current"
     },
     {
       "checked_at": "2026-10-26T21:45:19Z",
@@ -196,9 +196,9 @@
       "latest": "v2.103.3",
       "name": "gh",
       "pinned": "2.103.3",
-      "qualified": "2.103.2",
+      "qualified": "2.103.3",
       "source": "https://api.github.com/repos/cli/cli/releases/latest",
-      "status": "stale"
+      "status": "current"
     },
     {
       "checked_at": "2026-10-26T21:45:20Z",
@@ -223,9 +223,9 @@
       "latest": "0.9.150",
       "name": "nextest",
       "pinned": "0.9.150",
-      "qualified": "0.9.149",
+      "qualified": "0.9.150",
       "source": "https://crates.io/api/v1/crates/cargo-nextest",
-      "status": "stale"
+      "status": "current"
     },
     {
       "checked_at": "2026-10-26T21:45:21Z",
