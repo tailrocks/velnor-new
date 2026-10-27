@@ -136,3 +136,112 @@ fn fold_unplanned(conclusion: JobConclusion, signals: &mut Signals) {
         JobConclusion::Failure | JobConclusion::Missing => signals.failed = true,
     }
 }
+
+#[cfg(test)]
+mod writer_skip_tests {
+    use super::*;
+    use velnor_actions_contract::{JobDisposition, PlanJob, RequiredJobResult};
+
+    const GROUP: &str = "rust-velnor-actions-actionlint";
+
+    fn planned_run_group() -> Vec<PlanJob> {
+        vec![PlanJob {
+            job_id: GROUP.to_owned(),
+            disposition: JobDisposition::Run,
+        }]
+    }
+
+    fn result(job_id: &str, conclusion: JobConclusion) -> RequiredJobResult {
+        RequiredJobResult {
+            job_id: job_id.to_owned(),
+            conclusion,
+        }
+    }
+
+    fn fold(
+        planned: &[PlanJob],
+        jobs: &[RequiredJobResult],
+        event: WorkflowEvent,
+    ) -> (Signals, BTreeSet<String>) {
+        let mut signals = Signals::default();
+        let mut miss_reasons = BTreeSet::new();
+        fold_planned_jobs(planned, jobs, event, &mut signals, &mut miss_reasons);
+        (signals, miss_reasons)
+    }
+
+    fn quiet(signals: &Signals) -> bool {
+        !signals.planning_failed
+            && !signals.failed
+            && !signals.cancelled
+            && !signals.blocked
+            && !signals.not_run
+    }
+
+    #[test]
+    fn planned_writer_skipped_off_push_is_accepted() {
+        let planned = planned_run_group();
+        let jobs = vec![result(
+            "rust-velnor-actions-actionlint-write",
+            JobConclusion::Skipped,
+        )];
+        let (signals, miss_reasons) =
+            fold(&planned, &jobs, WorkflowEvent::PullRequest);
+        assert!(
+            quiet(&signals) && miss_reasons.is_empty(),
+            "planned writer skipped off push must stay quiet"
+        );
+    }
+
+    #[test]
+    fn planned_writer_skipped_on_push_still_blocks() {
+        let planned = planned_run_group();
+        let jobs = vec![result(
+            "rust-velnor-actions-actionlint-write",
+            JobConclusion::Skipped,
+        )];
+        let (signals, miss_reasons) = fold(&planned, &jobs, WorkflowEvent::Push);
+        assert!(signals.not_run, "planned writer skipped on push must block");
+        assert!(
+            miss_reasons.contains(PLANNED_JOB_SKIPPED),
+            "push skip must name its reason"
+        );
+    }
+
+    #[test]
+    fn planned_reader_skipped_off_push_still_blocks() {
+        let planned = planned_run_group();
+        let jobs = vec![result(
+            "rust-velnor-actions-actionlint-read",
+            JobConclusion::Skipped,
+        )];
+        let (signals, _) = fold(&planned, &jobs, WorkflowEvent::PullRequest);
+        assert!(
+            signals.not_run,
+            "the carve-out covers writers only, never readers"
+        );
+    }
+
+    #[test]
+    fn planned_writer_failure_off_push_still_blocks() {
+        let planned = planned_run_group();
+        let jobs = vec![result(
+            "rust-velnor-actions-actionlint-write",
+            JobConclusion::Failure,
+        )];
+        let (signals, _) = fold(&planned, &jobs, WorkflowEvent::PullRequest);
+        assert!(signals.failed, "writer failure must block on every event");
+    }
+
+    #[test]
+    fn unplanned_writer_skipped_off_push_still_blocks() {
+        let (signals, _) = fold(
+            &planned_run_group(),
+            &[result("rust-velnor-actions-unknown-write", JobConclusion::Skipped)],
+            WorkflowEvent::PullRequest,
+        );
+        assert!(
+            signals.not_run,
+            "writers outside the plan keep the old unplanned rule"
+        );
+    }
+}
