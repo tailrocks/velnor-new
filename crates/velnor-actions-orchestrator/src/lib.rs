@@ -3,9 +3,6 @@
 
 #![allow(
     clippy::missing_errors_doc,
-    reason = "documentation comments are intentionally absent from this codebase"
-)]
-#![allow(
     missing_docs,
     reason = "documentation comments are intentionally absent from this codebase"
 )]
@@ -92,7 +89,6 @@ pub(crate) mod project_tool_sources;
 mod provenance;
 mod publish_emit;
 mod publish_release_steps;
-
 mod publish_steps;
 mod qualification_candidate;
 mod qualification_resolver;

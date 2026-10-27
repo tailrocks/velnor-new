@@ -49,7 +49,14 @@ pub(super) fn find_already_promoted(
     let expected_title = expected_pr_title(&inputs.release);
     let mut candidates = Vec::new();
     for pull in pulls {
-        if selection::relevant(&pull, &branch_prefix, &receipt_marker, &expected_title)? {
+        if selection::relevant(
+            &pull,
+            bot.repository_id,
+            &inputs.policy.repository,
+            &branch_prefix,
+            &receipt_marker,
+            &expected_title,
+        )? {
             candidates.push(pull);
         }
     }

@@ -53,7 +53,7 @@ pub(super) fn capture_all(
     authority: &MergeAuthority,
     api: &TapMergeGitHub,
 ) -> Result<Vec<AuthenticatedPull>, OrchestratorError> {
-    let summaries = list_receipt_prs(candidate, api)?;
+    let summaries = list_receipt_prs(candidate, authority, api)?;
     let mut authenticated = Vec::with_capacity(summaries.len());
     for summary in summaries {
         authenticated.push(authenticate_pull(candidate, authority, api, &summary)?);
@@ -70,6 +70,7 @@ pub(super) fn capture_all(
 
 fn list_receipt_prs(
     candidate: &MergeCandidate,
+    authority: &MergeAuthority,
     api: &TapMergeGitHub,
 ) -> Result<Vec<Value>, OrchestratorError> {
     let digest_marker = format!("Receipt digest: `{}`", candidate.release.receipt_digest);
@@ -100,7 +101,17 @@ fn list_receipt_prs(
                 .and_then(Value::as_str)
                 .ok_or_else(|| internal("tap_merge_history_branch"))?;
             let body = pull["body"].as_str().unwrap_or_default();
-            if belongs_to_receipt(branch, body, &receipt_prefix, &digest_marker)? {
+            let head_repository = pull
+                .pointer("/head/repo")
+                .and_then(|repo| Some((repo["id"].as_u64()?, repo["full_name"].as_str()?)));
+            if belongs_to_receipt(
+                branch,
+                body,
+                head_repository,
+                (authority.repo_id, candidate.policy.repository.as_str()),
+                &receipt_prefix,
+                &digest_marker,
+            )? {
                 selected.push(pull.clone());
             }
         }

@@ -145,54 +145,74 @@ record_arguments() {
   done
 }
 
-printf 'metadata-request-begin pid=%s\n' "$request_pid" >>"$RECEIPT"
+printf 'cargo-request-begin pid=%s\n' "$request_pid" >>"$RECEIPT"
 record_arguments original "$@"
 
 reject_request() {
   local reason="$1"
-  printf 'metadata-request-rejected pid=%s reason=%s\n' "$request_pid" "$reason" >>"$RECEIPT"
+  printf 'cargo-request-rejected pid=%s reason=%s\n' "$request_pid" "$reason" >>"$RECEIPT"
   printf 'request-exit pid=%s code=78\n' "$request_pid" >>"$RECEIPT"
-  printf 'metadata-request-end pid=%s\n' "$request_pid" >>"$RECEIPT"
+  printf 'cargo-request-end pid=%s\n' "$request_pid" >>"$RECEIPT"
   echo "FATAL: test Mise adapter rejected Cargo request: $reason" >&2
   exit 78
 }
 
-if [ "$#" -ne 13 ] && [ "$#" -ne 15 ]; then
-  reject_request 'unsupported-argv-count'
-fi
-if [[ "${arguments[0]}" != --no-config || "${arguments[1]}" != --no-env \
-  || "${arguments[2]}" != --no-hooks || "${arguments[3]}" != exec \
-  || "${arguments[5]}" != -- || "${arguments[6]}" != cargo \
-  || "${arguments[7]}" != metadata || "${arguments[8]}" != --format-version \
-  || "${arguments[9]}" != 1 ]]; then
-  reject_request 'unsupported-mise-or-metadata-argv'
+if [[ "${arguments[0]:-}" != --no-config || "${arguments[1]:-}" != --no-env \
+  || "${arguments[2]:-}" != --no-hooks || "${arguments[3]:-}" != exec \
+  || "${arguments[5]:-}" != -- || "${arguments[6]:-}" != cargo ]]; then
+  reject_request 'unsupported-mise-or-cargo-argv'
 fi
 
 rust_spec="${arguments[4]}"
+request_kind="${arguments[7]:-}"
+case "$request_kind" in
+  metadata|fetch) ;;
+  *) reject_request 'unsupported-cargo-command' ;;
+esac
+printf 'request-kind pid=%s value=%s\n' "$request_pid" "$request_kind" >>"$RECEIPT"
+
+manifest_path=""
+metadata_shape=""
+if [ "$request_kind" = fetch ]; then
+  if [ "$#" -ne 9 ] || [ "${arguments[8]:-}" != --locked ]; then
+    reject_request 'unsupported-fetch-argv'
+  fi
+elif [ "$request_kind" = metadata ]; then
+  if [ "$#" -ne 13 ] && [ "$#" -ne 15 ]; then
+    reject_request 'unsupported-argv-count'
+  fi
+  if [[ "${arguments[8]:-}" != --format-version || "${arguments[9]:-}" != 1 ]]; then
+    reject_request 'unsupported-metadata-argv'
+  fi
+  if [ "$#" -eq 13 ]; then
+    if [[ "${arguments[10]:-}" != --no-deps || "${arguments[11]:-}" != --manifest-path ]]; then
+      reject_request 'unsupported-metadata-options'
+    fi
+    manifest_path="${arguments[12]}"
+    metadata_shape=discovery
+  else
+    if [[ "${arguments[10]:-}" != --locked || "${arguments[11]:-}" != --offline \
+      || "${arguments[12]:-}" != --all-features || "${arguments[13]:-}" != --manifest-path ]]; then
+      reject_request 'unsupported-metadata-options'
+    fi
+    manifest_path="${arguments[14]}"
+    metadata_shape=qualification
+  fi
+else
+  reject_request 'unsupported-cargo-command'
+fi
+
 if [[ ! "$rust_spec" =~ ^rust@[0-9]+\.[0-9]+\.[0-9]+$ || "$rust_spec" != "$RUST_SPEC" ]]; then
   reject_request 'rust-spec-mismatch'
 fi
 printf 'rust-spec pid=%s value=%s\n' "$request_pid" "$rust_spec" >>"$RECEIPT"
 
-if [ "$#" -eq 13 ]; then
-  if [[ "${arguments[10]}" != --no-deps || "${arguments[11]}" != --manifest-path ]]; then
-    reject_request 'unsupported-metadata-options'
-  fi
-  manifest_path="${arguments[12]}"
-  metadata_shape=discovery
-else
-  if [[ "${arguments[10]}" != --locked || "${arguments[11]}" != --offline \
-    || "${arguments[12]}" != --all-features || "${arguments[13]}" != --manifest-path ]]; then
-    reject_request 'unsupported-metadata-options'
-  fi
-  manifest_path="${arguments[14]}"
-  metadata_shape=qualification
-fi
-
 original_cwd="$(pwd -P)" || reject_request 'original-cwd-unavailable'
 if [ ! -x "$CARGO_PATH" ]; then
   reject_request 'real-mise-cargo-path-unavailable'
 fi
+
+printf 'original-cwd pid=%s value=%s\n' "$request_pid" "$original_cwd" >>"$RECEIPT"
 
 identity_rc=0
 rustc_identity="$("$REAL_MISE" --no-config --no-env --no-hooks exec "$rust_spec" -- rustc --version 2>&1)" \
@@ -201,67 +221,75 @@ if [ "$identity_rc" -ne 0 ] \
   || [[ ! "$rustc_identity" =~ ^rustc[[:space:]]([0-9]+\.[0-9]+\.[0-9]+)([[:space:]]|$) ]] \
   || [ "${BASH_REMATCH[1]:-}" != "$RUST_VERSION" ]; then
   printf 'rustc-identity pid=%s output=%s\n' "$request_pid" "$rustc_identity" >>"$RECEIPT"
-  printf 'request-exit pid=%s code=78\n' "$request_pid" >>"$RECEIPT"
-  printf 'metadata-request-end pid=%s\n' "$request_pid" >>"$RECEIPT"
-  echo 'FATAL: test Mise adapter Rust toolchain identity differs from the requested pin' >&2
-  exit 78
+  reject_request 'rustc-toolchain-identity-mismatch'
 fi
 printf 'rustc-version pid=%s value=%s\n' "$request_pid" "${BASH_REMATCH[1]}" >>"$RECEIPT"
 printf 'rustc-identity pid=%s output=%s\n' "$request_pid" "$rustc_identity" >>"$RECEIPT"
 printf 'real-cargo-path pid=%s value=%s\n' "$request_pid" "$CARGO_PATH" >>"$RECEIPT"
-printf 'original-cwd pid=%s value=%s\n' "$request_pid" "$original_cwd" >>"$RECEIPT"
-printf 'manifest-original pid=%s value=%s\n' "$request_pid" "$manifest_path" >>"$RECEIPT"
-printf 'metadata-shape pid=%s value=%s\n' "$request_pid" "$metadata_shape" >>"$RECEIPT"
+if [ "$request_kind" = metadata ]; then
+  printf 'manifest-original pid=%s value=%s\n' "$request_pid" "$manifest_path" >>"$RECEIPT"
+  printf 'metadata-shape pid=%s value=%s\n' "$request_pid" "$metadata_shape" >>"$RECEIPT"
+fi
 
 if [ -z "$GUARD" ]; then
   "$REAL_MISE" "$@"
   request_rc=$?
   printf 'request-exit pid=%s code=%s\n' "$request_pid" "$request_rc" >>"$RECEIPT"
-  printf 'metadata-request-end pid=%s\n' "$request_pid" >>"$RECEIPT"
+  printf 'cargo-request-end pid=%s\n' "$request_pid" >>"$RECEIPT"
   exit "$request_rc"
 fi
 
-if [[ "$manifest_path" != /* || "${manifest_path##*/}" != Cargo.toml \
-  || ! -f "$manifest_path" || -L "$manifest_path" ]]; then
-  reject_request 'manifest-is-not-absolute-regular-Cargo.toml'
-fi
-manifest_parent="$(cd "$(dirname "$manifest_path")" 2>/dev/null && pwd -P)" \
-  || reject_request 'manifest-parent-unavailable'
-manifest_translated="$manifest_parent/Cargo.toml"
-if [ ! -f "$manifest_translated" ] || [ -L "$manifest_translated" ]; then
-  reject_request 'translated-manifest-unavailable'
-fi
-if [ "$original_cwd" != "$manifest_parent" ]; then
-  case "$original_cwd" in
-    /) ;;
-    *) [[ "$manifest_parent" == "$original_cwd"/* ]] || reject_request 'manifest-parent-is-not-below-original-cwd' ;;
-  esac
-  config_dir="$manifest_parent"
-  while [ "$config_dir" != "$original_cwd" ]; do
-    if [ -e "$config_dir/.cargo/config" ] || [ -L "$config_dir/.cargo/config" ] \
-      || [ -e "$config_dir/.cargo/config.toml" ] || [ -L "$config_dir/.cargo/config.toml" ]; then
-      reject_request 'manifest-parent-cwd-would-change-cargo-config'
-    fi
-    config_dir="$(dirname "$config_dir")"
-  done
-fi
-printf 'manifest-parent pid=%s value=%s\n' "$request_pid" "$manifest_parent" >>"$RECEIPT"
-
-translated=(--no-config --no-env --no-hooks exec "$rust_spec" -- "$GUARD" -- mise exec -- cargo metadata --format-version 1)
-if [ "$metadata_shape" = discovery ]; then
-  translated+=(--no-deps --manifest-path Cargo.toml)
+translated=(--no-config --no-env --no-hooks exec "$rust_spec" -- "$GUARD" -- mise exec -- cargo)
+if [ "$request_kind" = metadata ]; then
+  if [[ "$manifest_path" != /* || "${manifest_path##*/}" != Cargo.toml \
+    || ! -f "$manifest_path" || -L "$manifest_path" ]]; then
+    reject_request 'manifest-is-not-absolute-regular-Cargo.toml'
+  fi
+  manifest_parent="$(cd "$(dirname "$manifest_path")" 2>/dev/null && pwd -P)" \
+    || reject_request 'manifest-parent-unavailable'
+  manifest_translated="$manifest_parent/Cargo.toml"
+  if [ ! -f "$manifest_translated" ] || [ -L "$manifest_translated" ]; then
+    reject_request 'translated-manifest-unavailable'
+  fi
+  if [ "$original_cwd" != "$manifest_parent" ]; then
+    case "$original_cwd" in
+      /) ;;
+      *) [[ "$manifest_parent" == "$original_cwd"/* ]] || reject_request 'manifest-parent-is-not-below-original-cwd' ;;
+    esac
+    config_dir="$manifest_parent"
+    while [ "$config_dir" != "$original_cwd" ]; do
+      if [ -e "$config_dir/.cargo/config" ] || [ -L "$config_dir/.cargo/config" ] \
+        || [ -e "$config_dir/.cargo/config.toml" ] || [ -L "$config_dir/.cargo/config.toml" ]; then
+        reject_request 'manifest-parent-cwd-would-change-cargo-config'
+      fi
+      config_dir="$(dirname "$config_dir")"
+    done
+  fi
+  printf 'manifest-parent pid=%s value=%s\n' "$request_pid" "$manifest_parent" >>"$RECEIPT"
+  translated+=(metadata --format-version 1)
+  if [ "$metadata_shape" = discovery ]; then
+    translated+=(--no-deps --manifest-path Cargo.toml)
+  else
+    translated+=(--locked --offline --all-features --manifest-path Cargo.toml)
+  fi
+  translated_cwd="$manifest_parent"
 else
-  translated+=(--locked --offline --all-features --manifest-path Cargo.toml)
+  translated+=(fetch --locked)
+  translated_cwd="$original_cwd"
 fi
-printf 'translated-cwd pid=%s value=%s\n' "$request_pid" "$manifest_parent" >>"$RECEIPT"
+
+printf 'translated-cwd pid=%s value=%s\n' "$request_pid" "$translated_cwd" >>"$RECEIPT"
 record_arguments translated "${translated[@]}"
 
-(cd "$manifest_parent" && "$REAL_MISE" "${translated[@]}")
-metadata_rc=$?
-printf 'guarded-metadata-exit pid=%s code=%s\n' "$request_pid" "$metadata_rc" >>"$RECEIPT"
-printf 'request-exit pid=%s code=%s\n' "$request_pid" "$metadata_rc" >>"$RECEIPT"
-printf 'metadata-request-end pid=%s\n' "$request_pid" >>"$RECEIPT"
-exit "$metadata_rc"
+(
+  cd "$translated_cwd" \
+    && MISE_NO_CONFIG=1 MISE_NO_ENV=1 MISE_NO_HOOKS=1 "$REAL_MISE" "${translated[@]}"
+)
+request_rc=$?
+printf 'guarded-request-exit pid=%s code=%s\n' "$request_pid" "$request_rc" >>"$RECEIPT"
+printf 'request-exit pid=%s code=%s\n' "$request_pid" "$request_rc" >>"$RECEIPT"
+printf 'cargo-request-end pid=%s\n' "$request_pid" >>"$RECEIPT"
+exit "$request_rc"
 ADAPTER
   chmod u+x "$adapter_dir/mise" || return 1
   TEST_MISE_ADAPTER_BIN="$adapter_dir"
@@ -273,8 +301,14 @@ ADAPTER
 }
 
 test_mise_adapter_verify() {
-  local label="$1" receipt="$2" rust_version="$3" guard="$4"
-  if [ ! -s "$receipt" ] || ! awk -v expected_version="$rust_version" -v guard_required="$([ -n "$guard" ] && echo 1 || echo 0)" '
+  local label="$1" receipt="$2" rust_version="$3" guard="$4" expected_fetch_count="${5:-0}"
+  if [[ ! "$expected_fetch_count" =~ ^[0-9]+$ ]]; then
+    echo "FAIL: expected fetch count is invalid for $label" >&2
+    return 1
+  fi
+  if [ ! -s "$receipt" ] || ! awk -v expected_version="$rust_version" \
+    -v expected_fetch_count="$expected_fetch_count" \
+    -v guard_required="$([ -n "$guard" ] && echo 1 || echo 0)" '
     function field(name, field_number, prefix) {
       prefix = name "="
       for (field_number = 1; field_number <= NF; field_number++) {
@@ -282,12 +316,20 @@ test_mise_adapter_verify() {
       }
       return ""
     }
-    /^metadata-request-begin / {
+    /^cargo-request-begin / {
       id = field("pid")
       if (id == "" || started[id]++) failed = 1
       requests++
     }
-    /^metadata-request-rejected / { failed = 1 }
+    /^request-kind / {
+      id = field("pid")
+      kind = field("value")
+      if (!started[id] || kinds[id]++ || (kind != "metadata" && kind != "fetch")) failed = 1
+      request_kind[id] = kind
+      if (kind == "metadata") metadata_requests++
+      else if (kind == "fetch") fetch_requests++
+    }
+    /^cargo-request-rejected / { failed = 1 }
     /^rust-spec / {
       id = field("pid")
       if (!started[id] || field("value") != "rust@" expected_version) failed = 1
@@ -298,7 +340,31 @@ test_mise_adapter_verify() {
       if (!started[id] || field("value") != expected_version) failed = 1
       identities[id]++
     }
-    /^guarded-metadata-exit / {
+    /^original-cwd / {
+      id = field("pid")
+      path = $0
+      sub(/^original-cwd pid=[^ ]+ value=/, "", path)
+      if (!started[id] || path == "") failed = 1
+      original_cwd[id] = path
+      original_cwd_count[id]++
+    }
+    /^metadata-shape / {
+      id = field("pid")
+      shape = field("value")
+      if (!started[id] || (shape != "discovery" && shape != "qualification")) failed = 1
+      metadata_shapes[id]++
+    }
+    /^manifest-original / {
+      id = field("pid")
+      if (!started[id]) failed = 1
+      manifest_originals[id]++
+    }
+    /^manifest-parent / {
+      id = field("pid")
+      if (!started[id]) failed = 1
+      manifest_parents[id]++
+    }
+    /^guarded-request-exit / {
       id = field("pid")
       if (!started[id] || field("code") != "0") failed = 1
       guards[id]++
@@ -308,15 +374,22 @@ test_mise_adapter_verify() {
       if (!started[id] || field("code") != "0") failed = 1
       completions[id]++
     }
-    /^metadata-request-end / {
+    /^cargo-request-end / {
       id = field("pid")
       if (!started[id]) failed = 1
       endings[id]++
     }
     END {
-      if (requests == 0) failed = 1
+      if (requests == 0 || metadata_requests == 0 || fetch_requests != expected_fetch_count) failed = 1
       for (id in started) {
-        if (specs[id] != 1 || identities[id] != 1 || completions[id] != 1 || endings[id] != 1) failed = 1
+        if (kinds[id] != 1 || specs[id] != 1 || identities[id] != 1 \
+          || completions[id] != 1 || endings[id] != 1 || original_cwd_count[id] != 1) failed = 1
+        if (request_kind[id] == "metadata" \
+          && (metadata_shapes[id] != 1 || manifest_originals[id] != 1 \
+            || (guard_required && manifest_parents[id] != 1) \
+            || (!guard_required && manifest_parents[id] != 0))) failed = 1
+        if (request_kind[id] == "fetch" \
+          && (metadata_shapes[id] != 0 || manifest_originals[id] != 0 || manifest_parents[id] != 0)) failed = 1
         if (guard_required && guards[id] != 1) failed = 1
         if (!guard_required && guards[id] != 0) failed = 1
       }
@@ -324,7 +397,7 @@ test_mise_adapter_verify() {
     }
   ' "$receipt"; then
     cat "$receipt" >&2
-    echo "FAIL: test Mise adapter did not complete a guarded metadata request for $label" >&2
+    echo "FAIL: test Mise adapter did not complete guarded Cargo requests for $label" >&2
     return 1
   fi
 }
@@ -445,12 +518,11 @@ prepare_qualification_guard() {
   if [[ "$QUALIFICATION_GUARD_READY" == 1 ]]; then
     return 0
   fi
-  if [[ -n "$QUALIFICATION_GUARD_INPUT_PATH" || -n "$QUALIFICATION_GUARD_INPUT_SHA256" ]]; then
-    admit_qualification_guard_input || return 1
-  elif ! bash "$ROOT/scripts/build-owned-archive-guard.sh" >/dev/null; then
-    echo "FATAL: could not provision trusted qualification archive guard" >&2
+  if [[ -z "$QUALIFICATION_GUARD_INPUT_PATH" || -z "$QUALIFICATION_GUARD_INPUT_SHA256" ]]; then
+    echo "FATAL: explicit archive guard path and SHA-256 are required" >&2
     return 1
   fi
+  admit_qualification_guard_input || return 1
   if [[ ! -f "$QUALIFICATION_GUARD_BIN" || -L "$QUALIFICATION_GUARD_BIN" \
     || ! -x "$QUALIFICATION_GUARD_BIN" ]]; then
     echo "FATAL: trusted qualification archive guard is missing or unsafe" >&2
@@ -822,7 +894,7 @@ capture_release_dogfood() {
   # Same HOME/mise environment as the candidate run below, so the same
   # cache is warmed. `--locked` keeps a lock rewrite from slipping in.
   for manifest in "$repo/Cargo.toml" "$repo/crates/velnor-runner/Cargo.toml"; do
-    if ! mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo fetch --locked --manifest-path "$manifest"; then
+    if ! (cd "$(dirname "$manifest")" && mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo fetch --locked); then
       echo "FATAL: could not fetch dogfood cargo sources for $manifest"
       exit 2
     fi

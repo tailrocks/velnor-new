@@ -23,6 +23,10 @@ ARCHIVE_GUARD_INPUT_PATH=""
 ARCHIVE_GUARD_INPUT_SHA256=""
 SEEN_ARCHIVE_GUARD=0
 SEEN_ARCHIVE_GUARD_SHA256=0
+DIAGNOSTICS_FIXTURE_INPUT_PATH=""
+DIAGNOSTICS_FIXTURE_INPUT_SHA256=""
+SEEN_DIAGNOSTICS_FIXTURE=0
+SEEN_DIAGNOSTICS_FIXTURE_SHA256=0
 CLI_ARG=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -44,13 +48,31 @@ while [ "$#" -gt 0 ]; do
       ARCHIVE_GUARD_INPUT_SHA256="$2"
       shift 2
       ;;
+    --diagnostics-fixture)
+      if [ "$SEEN_DIAGNOSTICS_FIXTURE" -ne 0 ] || [ "$#" -lt 2 ]; then
+        echo "FATAL: diagnostics fixture options must appear once as a path and SHA-256 pair" >&2
+        exit 2
+      fi
+      SEEN_DIAGNOSTICS_FIXTURE=1
+      DIAGNOSTICS_FIXTURE_INPUT_PATH="$2"
+      shift 2
+      ;;
+    --diagnostics-fixture-sha256)
+      if [ "$SEEN_DIAGNOSTICS_FIXTURE_SHA256" -ne 0 ] || [ "$#" -lt 2 ]; then
+        echo "FATAL: diagnostics fixture options must appear once as a path and SHA-256 pair" >&2
+        exit 2
+      fi
+      SEEN_DIAGNOSTICS_FIXTURE_SHA256=1
+      DIAGNOSTICS_FIXTURE_INPUT_SHA256="$2"
+      shift 2
+      ;;
     --*)
-      echo "FATAL: usage: $0 --archive-guard PATH --archive-guard-sha256 SHA256 CLI_BINARY"
+      echo "FATAL: usage: $0 --archive-guard PATH --archive-guard-sha256 SHA256 --diagnostics-fixture PATH --diagnostics-fixture-sha256 SHA256 CLI_BINARY"
       exit 2
       ;;
     *)
       if [ -n "$CLI_ARG" ]; then
-        echo "FATAL: usage: $0 --archive-guard PATH --archive-guard-sha256 SHA256 CLI_BINARY"
+        echo "FATAL: usage: $0 --archive-guard PATH --archive-guard-sha256 SHA256 --diagnostics-fixture PATH --diagnostics-fixture-sha256 SHA256 CLI_BINARY"
         exit 2
       fi
       CLI_ARG="$1"
@@ -60,6 +82,24 @@ while [ "$#" -gt 0 ]; do
 done
 if [ "$SEEN_ARCHIVE_GUARD" -ne "$SEEN_ARCHIVE_GUARD_SHA256" ]; then
   echo "FATAL: archive guard path and SHA-256 must be supplied together" >&2
+  exit 2
+fi
+if [ "$SEEN_DIAGNOSTICS_FIXTURE" -ne "$SEEN_DIAGNOSTICS_FIXTURE_SHA256" ]; then
+  echo "FATAL: diagnostics fixture path and SHA-256 must be supplied together" >&2
+  exit 2
+fi
+if [ "$SEEN_DIAGNOSTICS_FIXTURE" -ne 1 ] \
+  || [ -z "$DIAGNOSTICS_FIXTURE_INPUT_PATH" ] \
+  || [ -z "$DIAGNOSTICS_FIXTURE_INPUT_SHA256" ]; then
+  echo "FATAL: an explicit diagnostics fixture path and SHA-256 are required" >&2
+  exit 2
+fi
+if [[ "$DIAGNOSTICS_FIXTURE_INPUT_PATH" != /* \
+  || ! "$DIAGNOSTICS_FIXTURE_INPUT_SHA256" =~ ^[0-9a-f]{64}$ ]] \
+  || [ -L "$DIAGNOSTICS_FIXTURE_INPUT_PATH" ] \
+  || [ ! -f "$DIAGNOSTICS_FIXTURE_INPUT_PATH" ] \
+  || [ ! -x "$DIAGNOSTICS_FIXTURE_INPUT_PATH" ]; then
+  echo "FATAL: diagnostics fixture must be an absolute regular executable with a lowercase SHA-256" >&2
   exit 2
 fi
 if [ -z "$CLI_ARG" ]; then
@@ -202,8 +242,51 @@ MISE_ADAPTER_BIN="$TEST_MISE_ADAPTER_BIN"
 MISE_CARGO_PATH="$TEST_MISE_CARGO_PATH"
 
 verify_guard_receipt() {
-  local label="$1" receipt="$2" direct_receipt="$3"
-  test_mise_adapter_verify "$label" "$receipt" "$RUST_VERSION" "$VELNOR_TEST_CARGO_GUARD" || return 1
+  local label="$1" receipt="$2" direct_receipt="$3" expected_fetch_count="${4:-0}"
+  test_mise_adapter_verify "$label" "$receipt" "$RUST_VERSION" \
+    "$VELNOR_TEST_CARGO_GUARD" "$expected_fetch_count" || return 1
+  if [ "$expected_fetch_count" -eq 2 ] && ! awk '
+      function field(name, field_number, prefix) {
+        prefix = name "="
+        for (field_number = 1; field_number <= NF; field_number++) {
+          if (index($field_number, prefix) == 1) return substr($field_number, length(prefix) + 1)
+        }
+        return ""
+      }
+      function ends_with(value, suffix) {
+        return length(value) >= length(suffix) \
+          && substr(value, length(value) - length(suffix) + 1) == suffix
+      }
+      /^request-kind / { request_kind[field("pid")] = field("value") }
+      /^original-cwd / {
+        id = field("pid")
+        path = $0
+        sub(/^original-cwd pid=[^ ]+ value=/, "", path)
+        original_cwd[id] = path
+      }
+      END {
+        for (id in request_kind) {
+          if (request_kind[id] != "fetch") continue
+          fetches++
+          path = original_cwd[id]
+          if (ends_with(path, "/dogfood-repo")) {
+            root_count++
+            root_path = path
+          } else if (ends_with(path, "/dogfood-repo/crates/velnor-runner")) {
+            nested_count++
+            nested_path = path
+          } else {
+            unexpected++
+          }
+        }
+        if (fetches != 2 || root_count != 1 || nested_count != 1 || unexpected \
+          || nested_path != root_path "/crates/velnor-runner") exit 1
+      }
+    ' "$receipt"; then
+    cat "$receipt" >&2
+    echo "FAIL: release check did not fetch the exact dogfood workspace roots: $label" >&2
+    return 1
+  fi
   if [ -s "$direct_receipt" ] && [ -n "$VELNOR_TEST_CARGO_GUARD" ] && ! awk '
       /^cargo-invocation=/ { requested++ }
       /^guard-exit=/ { completed++; if ($0 != "guard-exit=0") failed=1 }
@@ -215,7 +298,7 @@ verify_guard_receipt() {
   fi
   if [ -s "$direct_receipt" ] && [ -z "$VELNOR_TEST_CARGO_GUARD" ]; then
     cat "$direct_receipt" >&2
-    echo "FAIL: collector bypassed real Mise metadata routing: $label" >&2
+    echo "FAIL: collector bypassed real Mise Cargo routing: $label" >&2
     return 1
   fi
 }
@@ -536,7 +619,8 @@ expect_release_check_match() {
   : >"$GUARD_RECEIPT"
   : >"$MISE_RECEIPT"
   rm -f "$MARKER"
-  env -u CARGO_TARGET_DIR -u CARGO_BUILD_TARGET \
+  (
+    unset CARGO_TARGET_DIR CARGO_BUILD_TARGET || exit 2
     TMPDIR="$WORK/tmp symlink" MBX_GC_AUTO=0 GITHUB_SHA="$SOURCE_SHA" GITHUB_REPOSITORY=tailrocks/velnor-new \
     PATH="$STUB_BIN:$MISE_ADAPTER_BIN:$ORIGINAL_PATH" VELNOR_TEST_CARGO_MARKER="$MARKER" \
     VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
@@ -544,13 +628,14 @@ expect_release_check_match() {
     VELNOR_TEST_RUST_VERSION="$RUST_VERSION" VELNOR_TEST_CARGO_GUARD="$VELNOR_TEST_CARGO_GUARD" \
     VELNOR_TEST_MISE_CARGO_PATH="$MISE_CARGO_PATH" VELNOR_TEST_MISE_RECEIPT="$MISE_RECEIPT" \
     run_collector check-release "$CLI_BIN" "$manifest" \
-      "$(test_file_sha256 "$manifest")" >"$log" 2>&1 || status=$?
+      "$(test_file_sha256 "$manifest")"
+  ) >"$log" 2>&1 || status=$?
   if [ "$status" -ne 0 ] || ! grep -Fq 'ALL RELEASE FIXTURE GOLDENS AND DOGFOOD PARITY MATCH' "$log"; then
     cat "$log" >&2
     echo "FAIL: valid candidate did not match release fixture goldens (exit $status)" >&2
     exit 1
   fi
-  if ! verify_guard_receipt release-check "$MISE_RECEIPT" "$GUARD_RECEIPT"; then cat "$log" >&2; exit 1; fi
+  if ! verify_guard_receipt release-check "$MISE_RECEIPT" "$GUARD_RECEIPT" 2; then cat "$log" >&2; exit 1; fi
   if [ -e "$MARKER" ]; then echo "FAIL: release qualification invoked cargo build" >&2; exit 1; fi
   after="$(golden_fingerprint)" || exit 2
   if [ "$after" != "$BEFORE" ]; then echo "FAIL: successful release check changed goldens" >&2; exit 1; fi
@@ -758,8 +843,8 @@ expect_unsupported_binary() {
     echo "FAIL: unsupported executable target was not reported (exit $status)" >&2
     exit 1
   fi
-  if [ ! -f "$WORK/failing binary invoked" ] || [ -e "$MARKER" ]; then
-    echo "FAIL: explicit failing binary was not run or cargo fallback occurred" >&2
+  if [ -e "$WORK/failing binary invoked" ] || [ -e "$MARKER" ]; then
+    echo "FAIL: unsupported executable ran or cargo fallback occurred" >&2
     exit 1
   fi
   if ! grep -Fq 'retaining failed golden workspace:' "$log"; then
@@ -927,6 +1012,7 @@ if ! grep -Fq 'trusted qualification archive guard source fingerprint is stale' 
 fi
 MUTATED_GUARD_PATH="$WORK/guard test/mutable guard"
 cp "$ARCHIVE_GUARD_INPUT_PATH" "$MUTATED_GUARD_PATH"
+chmod 700 "$MUTATED_GUARD_PATH"
 MUTATED_GUARD_SHA="$(test_file_sha256 "$MUTATED_GUARD_PATH")"
 expect_guard_mutation_rejected() {
   local status=0 log="$WORK/guard-mutation.log"
@@ -993,6 +1079,7 @@ expect_dogfood_guard_mutation_rejected() {
   : >"$GUARD_RECEIPT"
   : >"$MISE_RECEIPT"
   cp "$ARCHIVE_GUARD_INPUT_PATH" "$mutated" || exit 2
+  chmod 700 "$mutated" || exit 2
   digest="$(test_file_sha256 "$mutated")" || exit 2
   if (
     cd "$WORK" || exit 2
@@ -1022,7 +1109,7 @@ expect_dogfood_guard_mutation_rejected() {
     echo "FAIL: dogfood mutation did not run real Cargo metadata and fail closed (exit $status)" >&2
     exit 1
   fi
-  if ! verify_guard_receipt dogfood-guard-mutation "$MISE_RECEIPT" "$GUARD_RECEIPT"; then
+  if ! verify_guard_receipt dogfood-guard-mutation "$MISE_RECEIPT" "$GUARD_RECEIPT" 2; then
     cat "$log" >&2
     exit 1
   fi
@@ -1123,8 +1210,8 @@ FILE
 chmod 755 "$STUB_BIN/file"
 if (
   cd "$WORK" || exit 2
-  env -u CARGO_TARGET_DIR -u CARGO_BUILD_TARGET \
-    TMPDIR="$WORK/tmp workspace" MBX_GC_AUTO=0 PATH="$STUB_BIN:$MISE_ADAPTER_BIN:$ORIGINAL_PATH" \
+  unset CARGO_TARGET_DIR CARGO_BUILD_TARGET || exit 2
+  TMPDIR="$WORK/tmp workspace" MBX_GC_AUTO=0 PATH="$STUB_BIN:$MISE_ADAPTER_BIN:$ORIGINAL_PATH" \
     VELNOR_GOLDEN_KEEP_WORK=0 \
     VELNOR_TEST_CARGO_MARKER="$MARKER" \
     VELNOR_TEST_FILE_UTILITY_MARKER="$FILE_UTILITY_MARKER" \
@@ -1159,8 +1246,12 @@ if [ "$WORKSPACES_AFTER" != "$WORKSPACES_BEFORE" ]; then
   echo "FAIL: successful check left behind a private golden workspace" >&2
   exit 1
 fi
-if ! bash "$ROOT/scripts/generator-release/test-plan-diagnostics.sh" \
-  "${ARCHIVE_GUARD_ARGS[@]}" "$CLI_BIN" "$WORK/plan-diagnostics"; then
+if ! PATH="$ORIGINAL_PATH" "$REAL_BASH" \
+  "$ROOT/scripts/generator-release/test-plan-diagnostics.sh" \
+  "${ARCHIVE_GUARD_ARGS[@]}" \
+  --diagnostics-fixture "$DIAGNOSTICS_FIXTURE_INPUT_PATH" \
+  --diagnostics-fixture-sha256 "$DIAGNOSTICS_FIXTURE_INPUT_SHA256" \
+  "$CLI_BIN" "$WORK/plan-diagnostics"; then
   echo 'FAIL: successful plan diagnostic preservation regression' >&2
   exit 1
 fi

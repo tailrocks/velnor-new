@@ -159,17 +159,57 @@ fi
 trap - EXIT HUP INT TERM
 rm -f "$fixture_install" "$fixture_manifest.restore.$$"
 if [ "$real_status" -ne 0 ]; then exit "$real_status"; fi
-if ! node - "$3/.github" "$VELNOR_TEST_REAL_CLI_SHA256" "$VELNOR_TEST_CANDIDATE_SHA256" <<'JS'
+if ! node - "$3/.github" "$fixture_original" "$fixture_receipt" \
+  "$VELNOR_TEST_HOST_TARGET" "$VELNOR_TEST_REAL_CLI_SHA256" "$VELNOR_TEST_CANDIDATE_SHA256" <<'JS'
 const fs = require('node:fs');
 const path = require('node:path');
-const [root, realSha, candidateSha] = process.argv.slice(2);
+const [root, originalPath, receiptPath, hostTarget, realSha, candidateSha] = process.argv.slice(2);
 const fail = message => { throw new Error(message); };
+const digest = bytes => require('node:crypto').createHash('sha256').update(bytes).digest('hex');
+const parse = bytes => JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+if (!/^[0-9a-f]{64}$/.test(realSha) || !/^[0-9a-f]{64}$/.test(candidateSha) || realSha === candidateSha)
+  fail('fixture host digests are malformed or identical');
+const originalBytes = fs.readFileSync(originalPath);
+const original = parse(originalBytes);
+const targets = original.targets;
+if (!Array.isArray(targets)) fail('saved original manifest has no target list');
+const hostRows = targets.filter(row => row !== null && typeof row === 'object' && !Array.isArray(row) && row.target === hostTarget);
+if (hostRows.length !== 1 || hostRows[0].sha256 !== candidateSha || typeof hostRows[0].artifact !== 'string' || !hostRows[0].artifact)
+  fail('saved original manifest does not uniquely bind the candidate host row and artifact');
+const receipt = parse(fs.readFileSync(receiptPath));
+if (receipt.host_target !== hostTarget || receipt.candidate_sha256 !== candidateSha || receipt.real_cli_sha256 !== realSha ||
+    receipt.original_sha256 !== digest(originalBytes) || receipt.replacement_changes_only_unique_host_sha256 !== true ||
+    receipt.restored_byte_exact !== true || receipt.restored_sha256 !== receipt.original_sha256)
+  fail('manifest fixture receipt does not match the saved original host row');
+const hostArtifact = Buffer.from(hostRows[0].artifact);
+const shaPrefix = Buffer.from('VELNOR_ASSET_SHA256: ');
+const urlPrefix = Buffer.from('VELNOR_ASSET_URL: ');
 const real = Buffer.from(realSha);
 const candidate = Buffer.from(candidateSha);
-const prefix = Buffer.from('VELNOR_ASSET_SHA256: ');
 const rootInfo = fs.lstatSync(root);
 if (rootInfo.isSymbolicLink() || !rootInfo.isDirectory()) fail('generated workflow directory is missing or unsafe');
-let changes = 0;
+let hostBindings = 0;
+let translations = 0;
+const pending = [];
+function lineSpans(data) {
+  const result = [];
+  let start = 0;
+  while (start < data.length) {
+    const newline = data.indexOf(10, start);
+    const end = newline < 0 ? data.length : newline;
+    let contentEnd = end;
+    if (contentEnd > start && data[contentEnd - 1] === 13) contentEnd -= 1;
+    result.push({ start, contentEnd, end: newline < 0 ? data.length : newline + 1 });
+    start = newline < 0 ? data.length : newline + 1;
+  }
+  return result;
+}
+function fieldValue(data, line, prefix) {
+  let start = line.start;
+  while (start < line.contentEnd && (data[start] === 32 || data[start] === 9)) start += 1;
+  if (!data.subarray(start, start + prefix.length).equals(prefix)) return null;
+  return { start: start + prefix.length, end: line.contentEnd };
+}
 function visit(directory) {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     const file = path.join(directory, entry.name);
@@ -181,34 +221,30 @@ function visit(directory) {
     }
     if (!info.isFile()) continue;
     const data = fs.readFileSync(file);
-    const chunks = [];
-    let start = 0;
-    let count = 0;
-    for (let end = 0; end <= data.length; end += 1) {
-      if (end !== data.length && data[end] !== 10) continue;
-      let lineEnd = end;
-      if (lineEnd > start && data[lineEnd - 1] === 13) lineEnd -= 1;
-      let fieldStart = start;
-      while (fieldStart < lineEnd && (data[fieldStart] === 32 || data[fieldStart] === 9)) fieldStart += 1;
-      const valueStart = fieldStart + prefix.length;
-      const valueEnd = valueStart + real.length;
-      if (data.subarray(fieldStart, valueStart).equals(prefix) && data.subarray(valueStart, valueEnd).equals(real)
-          && valueEnd === lineEnd) {
-        chunks.push(data.subarray(start, valueStart), candidate, data.subarray(valueEnd, end + (end < data.length ? 1 : 0)));
-        count += 1;
-      } else {
-        chunks.push(data.subarray(start, end + (end < data.length ? 1 : 0)));
-      }
-      start = end + 1;
+    const lines = lineSpans(data);
+    const edits = [];
+    for (let index = 0; index < lines.length; index += 1) {
+      const url = fieldValue(data, lines[index], urlPrefix);
+      if (!url || !data.subarray(url.start, url.end).equals(hostArtifact)) continue;
+      hostBindings += 1;
+      if (index === 0) fail('generated host acquisition binding has no digest field');
+      const sha = fieldValue(data, lines[index - 1], shaPrefix);
+      if (!sha || !data.subarray(sha.start, sha.end).equals(real))
+        fail('generated host acquisition binding does not use the real CLI digest');
+      edits.push({ start: sha.start, end: sha.end });
+      translations += 1;
     }
-    if (count) {
-      fs.writeFileSync(file, Buffer.concat(chunks));
-      changes += count;
-    }
+    if (edits.length) pending.push({ file, data, edits });
   }
 }
 visit(root);
-if (changes === 0) fail('generated acquisition bindings contain no real host digest to translate');
+if (translations !== hostBindings) fail('generated host acquisition binding translation count does not match');
+for (const item of pending) {
+  let updated = item.data;
+  for (const edit of item.edits.sort((left, right) => right.start - left.start))
+    updated = Buffer.concat([updated.subarray(0, edit.start), candidate, updated.subarray(edit.end)]);
+  fs.writeFileSync(item.file, updated);
+}
 JS
 then
   echo 'FATAL: could not translate only generated host acquisition bindings' >&2

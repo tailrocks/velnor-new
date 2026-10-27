@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
-set -uo pipefail
+set -euo pipefail
 
 POSITIONAL=()
 ARCHIVE_GUARD_INPUT_PATH=""
 ARCHIVE_GUARD_INPUT_SHA256=""
+DIAGNOSTICS_FIXTURE_INPUT_PATH=""
+DIAGNOSTICS_FIXTURE_INPUT_SHA256=""
 SEEN_ARCHIVE_GUARD=0
 SEEN_ARCHIVE_GUARD_SHA256=0
+SEEN_DIAGNOSTICS_FIXTURE=0
+SEEN_DIAGNOSTICS_FIXTURE_SHA256=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --archive-guard)
       if [ "$SEEN_ARCHIVE_GUARD" -ne 0 ] || [ "$#" -lt 2 ]; then
-        echo 'FATAL: archive guard options must appear once as a path and SHA-256 pair' >&2
+        echo 'FATAL: archive guard path and SHA-256 options must appear once' >&2
         exit 2
       fi
       SEEN_ARCHIVE_GUARD=1
@@ -21,117 +25,108 @@ while [ "$#" -gt 0 ]; do
       ;;
     --archive-guard-sha256)
       if [ "$SEEN_ARCHIVE_GUARD_SHA256" -ne 0 ] || [ "$#" -lt 2 ]; then
-        echo 'FATAL: archive guard options must appear once as a path and SHA-256 pair' >&2
+        echo 'FATAL: archive guard path and SHA-256 options must appear once' >&2
         exit 2
       fi
       SEEN_ARCHIVE_GUARD_SHA256=1
       ARCHIVE_GUARD_INPUT_SHA256="$2"
       shift 2
       ;;
-    --focused-prebuilt)
-      POSITIONAL+=("$1")
-      shift
+    --diagnostics-fixture)
+      if [ "$SEEN_DIAGNOSTICS_FIXTURE" -ne 0 ] || [ "$#" -lt 2 ]; then
+        echo 'FATAL: diagnostics fixture path and SHA-256 options must appear once' >&2
+        exit 2
+      fi
+      SEEN_DIAGNOSTICS_FIXTURE=1
+      DIAGNOSTICS_FIXTURE_INPUT_PATH="$2"
+      shift 2
+      ;;
+    --diagnostics-fixture-sha256)
+      if [ "$SEEN_DIAGNOSTICS_FIXTURE_SHA256" -ne 0 ] || [ "$#" -lt 2 ]; then
+        echo 'FATAL: diagnostics fixture path and SHA-256 options must appear once' >&2
+        exit 2
+      fi
+      SEEN_DIAGNOSTICS_FIXTURE_SHA256=1
+      DIAGNOSTICS_FIXTURE_INPUT_SHA256="$2"
+      shift 2
       ;;
     --*)
-      echo 'FATAL: usage: test-plan-diagnostics.sh ABSOLUTE_CLI FRESH_ABSOLUTE_OUTPUT [--focused-prebuilt ABSOLUTE_CANDIDATE ABSOLUTE_BUILD_EVIDENCE]' >&2
+      echo 'usage: test-plan-diagnostics.sh --archive-guard PATH --archive-guard-sha256 SHA --diagnostics-fixture PATH --diagnostics-fixture-sha256 SHA ABSOLUTE_CLI FRESH_ABSOLUTE_OUTPUT' >&2
       exit 2
       ;;
     *) POSITIONAL+=("$1"); shift ;;
   esac
 done
-if [ "$SEEN_ARCHIVE_GUARD" -ne "$SEEN_ARCHIVE_GUARD_SHA256" ]; then
-  echo 'FATAL: archive guard path and SHA-256 must be supplied together' >&2
+if [ "$SEEN_ARCHIVE_GUARD" -ne 1 ] || [ "$SEEN_ARCHIVE_GUARD_SHA256" -ne 1 ] \
+  || [ "$SEEN_DIAGNOSTICS_FIXTURE" -ne 1 ] || [ "$SEEN_DIAGNOSTICS_FIXTURE_SHA256" -ne 1 ] \
+  || [ "${#POSITIONAL[@]}" -ne 2 ] \
+  || [ -z "$ARCHIVE_GUARD_INPUT_PATH" ] || [ -z "$ARCHIVE_GUARD_INPUT_SHA256" ] \
+  || [ -z "$DIAGNOSTICS_FIXTURE_INPUT_PATH" ] || [ -z "$DIAGNOSTICS_FIXTURE_INPUT_SHA256" ]; then
+  echo 'FATAL: explicit archive guard, diagnostics fixture, CLI, and output arguments are required' >&2
   exit 2
 fi
-if [ "$SEEN_ARCHIVE_GUARD" -eq 1 ] \
-  && { [ -z "$ARCHIVE_GUARD_INPUT_PATH" ] || [ -z "$ARCHIVE_GUARD_INPUT_SHA256" ]; }; then
-  echo 'FATAL: archive guard path and SHA-256 must be non-empty' >&2
+if [[ ! "$ARCHIVE_GUARD_INPUT_SHA256" =~ ^[0-9a-f]{64}$ \
+  || ! "$DIAGNOSTICS_FIXTURE_INPUT_SHA256" =~ ^[0-9a-f]{64}$ \
+  || "$DIAGNOSTICS_FIXTURE_INPUT_PATH" != /* ]]; then
+  echo 'FATAL: archive guard and diagnostics fixture identities must use absolute paths and lowercase SHA-256 values' >&2
   exit 2
 fi
-if [ "${#POSITIONAL[@]}" -eq 2 ]; then
-  FOCUSED_PREBUILT=0
-  PREBUILT_CLI=''
-  PREBUILT_BUILD=''
-elif [ "${#POSITIONAL[@]}" -eq 5 ] && [ "${POSITIONAL[2]}" = --focused-prebuilt ]; then
-  FOCUSED_PREBUILT=1
-  PREBUILT_CLI=${POSITIONAL[3]}
-  PREBUILT_BUILD=${POSITIONAL[4]}
-else
-  echo 'usage: test-plan-diagnostics.sh ABSOLUTE_CLI FRESH_ABSOLUTE_OUTPUT [--focused-prebuilt ABSOLUTE_CANDIDATE ABSOLUTE_BUILD_EVIDENCE]' >&2
-  exit 2
-fi
-QUALIFICATION_GUARD_INPUT_PATH="$ARCHIVE_GUARD_INPUT_PATH"
-QUALIFICATION_GUARD_INPUT_SHA256="$ARCHIVE_GUARD_INPUT_SHA256"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
-source "$ROOT/scripts/generator-release/qualification-goldens.sh"
-prepare_qualification_guard || exit 2
-if [ "$SEEN_ARCHIVE_GUARD" -eq 0 ]; then
-  ARCHIVE_GUARD_INPUT_PATH="$QUALIFICATION_GUARD_BIN"
-  ARCHIVE_GUARD_INPUT_SHA256="$QUALIFICATION_GUARD_SHA256"
-fi
-ARCHIVE_GUARD_ARGS=(--archive-guard "$ARCHIVE_GUARD_INPUT_PATH" --archive-guard-sha256 "$ARCHIVE_GUARD_INPUT_SHA256")
-CLI=${POSITIONAL[0]}
-OUTPUT=${POSITIONAL[1]}
+CLI="${POSITIONAL[0]}"
+OUTPUT="${POSITIONAL[1]}"
 [[ "$CLI" = /* ]] || { echo 'FATAL: CLI path must be absolute' >&2; exit 2; }
 cli_parent="$(cd "$(dirname "$CLI")" 2>/dev/null && pwd -P)" || { echo 'FATAL: CLI parent must exist' >&2; exit 2; }
 CLI="$cli_parent/$(basename "$CLI")"
-[[ -f "$CLI" && -x "$CLI" ]] || { echo 'FATAL: CLI must resolve to an executable file' >&2; exit 2; }
-if [ "$FOCUSED_PREBUILT" -eq 1 ]; then
-  [[ "$PREBUILT_CLI" = /* && "$PREBUILT_BUILD" = /* ]] \
-    || { echo 'FATAL: focused prebuilt paths must be absolute' >&2; exit 2; }
-  prebuilt_cli_parent="$(cd "$(dirname "$PREBUILT_CLI")" 2>/dev/null && pwd -P)" \
-    || { echo 'FATAL: prebuilt CLI parent must exist' >&2; exit 2; }
-  PREBUILT_CLI="$prebuilt_cli_parent/$(basename "$PREBUILT_CLI")"
-  [[ -f "$PREBUILT_CLI" && -x "$PREBUILT_CLI" ]] \
-    || { echo 'FATAL: focused prebuilt CLI must resolve to an executable file' >&2; exit 2; }
-  [[ -d "$PREBUILT_BUILD" && ! -L "$PREBUILT_BUILD" ]] \
-    || { echo 'FATAL: focused build evidence must be a regular directory' >&2; exit 2; }
-  PREBUILT_BUILD="$(cd "$PREBUILT_BUILD" && pwd -P)"
-fi
-[[ "$OUTPUT" = /* && ! -e "$OUTPUT" && ! -L "$OUTPUT" ]] || { echo 'FATAL: output must be a fresh absolute path' >&2; exit 2; }
-parent="$(cd "$(dirname "$OUTPUT")" 2>/dev/null && pwd -P)" || { echo 'FATAL: output parent must exist' >&2; exit 2; }
-OUTPUT="$parent/$(basename "$OUTPUT")"
+[[ -f "$CLI" && -x "$CLI" ]] || { echo 'FATAL: CLI must be an executable file' >&2; exit 2; }
+[[ -f "$DIAGNOSTICS_FIXTURE_INPUT_PATH" && ! -L "$DIAGNOSTICS_FIXTURE_INPUT_PATH" \
+  && -x "$DIAGNOSTICS_FIXTURE_INPUT_PATH" ]] \
+  || { echo 'FATAL: diagnostics fixture must be a regular executable file' >&2; exit 2; }
+fixture_parent="$(cd "$(dirname "$DIAGNOSTICS_FIXTURE_INPUT_PATH")" 2>/dev/null && pwd -P)" \
+  || { echo 'FATAL: diagnostics fixture parent must exist' >&2; exit 2; }
+FIXTURE="$fixture_parent/$(basename "$DIAGNOSTICS_FIXTURE_INPUT_PATH")"
+[[ "$OUTPUT" = /* && ! -e "$OUTPUT" && ! -L "$OUTPUT" ]] \
+  || { echo 'FATAL: output must be a fresh absolute path' >&2; exit 2; }
+output_parent="$(cd "$(dirname "$OUTPUT")" 2>/dev/null && pwd -P)" \
+  || { echo 'FATAL: output parent must exist' >&2; exit 2; }
+OUTPUT="$output_parent/$(basename "$OUTPUT")"
 case "$OUTPUT" in "$ROOT"|"$ROOT"/*) echo 'FATAL: diagnostic evidence must remain outside the repository' >&2; exit 2 ;; esac
-mkdir -m 700 "$OUTPUT" || exit 2
+CALLER_DIR="$(pwd -P)"
+mkdir -m 700 "$OUTPUT"
+QUALIFICATION_GUARD_INPUT_PATH="$ARCHIVE_GUARD_INPUT_PATH"
+QUALIFICATION_GUARD_INPUT_SHA256="$ARCHIVE_GUARD_INPUT_SHA256"
+source "$ROOT/scripts/generator-release/qualification-goldens.sh"
+cd "$ROOT"
+command -v node >/dev/null 2>&1 || { echo 'FATAL: Node.js is required for plan diagnostic qualification' >&2; exit 2; }
+prepare_qualification_guard || exit 2
+verify_qualification_guard || exit 2
+CLI_SHA="$(file_sha256 "$CLI")" || exit 2
+FIXTURE_SHA256="$DIAGNOSTICS_FIXTURE_INPUT_SHA256"
+[[ "$(file_sha256 "$FIXTURE")" = "$FIXTURE_SHA256" ]] \
+  || { echo 'FATAL: diagnostics fixture SHA-256 does not match the supplied identity' >&2; exit 2; }
+cp -p "$FIXTURE" "$OUTPUT/qualification-diagnostics fixture"
+FIXTURE_COPY="$OUTPUT/qualification-diagnostics fixture"
+[[ "$(file_sha256 "$FIXTURE_COPY")" = "$FIXTURE_SHA256" ]] \
+  || { echo 'FATAL: retained diagnostics fixture copy changed identity' >&2; exit 2; }
 
-SOURCE_SHA="$(git -C "$ROOT" rev-parse HEAD)" || exit 2
-ORIGINAL_PATH="$PATH"
-REAL_MISE="$(command -v mise 2>/dev/null)" || REAL_MISE=''
-case "$REAL_MISE" in
-  /*) ;;
-  '' ) echo 'FATAL: real Mise executable is unavailable' >&2; exit 2 ;;
-  *)
-    real_mise_parent="$(cd "$(dirname "$REAL_MISE")" 2>/dev/null && pwd -P)" \
-      || { echo 'FATAL: real Mise executable parent is unavailable' >&2; exit 2; }
-    REAL_MISE="$real_mise_parent/$(basename "$REAL_MISE")"
-    ;;
-esac
-if [ ! -x "$REAL_MISE" ]; then
-  echo "FATAL: real Mise executable is unavailable: $REAL_MISE" >&2
-  exit 2
+if [ -n "${VELNOR_GOLDEN_DIR:-}" ]; then
+  case "$VELNOR_GOLDEN_DIR" in
+    /*) requested_oracle="$VELNOR_GOLDEN_DIR" ;;
+    *) requested_oracle="$CALLER_DIR/$VELNOR_GOLDEN_DIR" ;;
+  esac
+  oracle_name="${requested_oracle##*/}"
+  oracle_parent="${requested_oracle%/*}"
+  [[ -n "$oracle_name" && "$oracle_name" != . && "$oracle_name" != .. ]] \
+    || { echo 'FATAL: selected external oracle path is invalid' >&2; exit 2; }
+  oracle_parent="$(cd "$oracle_parent" 2>/dev/null && pwd -P)" \
+    || { echo 'FATAL: selected external oracle parent must exist' >&2; exit 2; }
+  ORACLE="$oracle_parent/$oracle_name"
+  case "$ORACLE" in "$ROOT"|"$ROOT"/*) echo 'FATAL: selected external oracle must remain outside the repository' >&2; exit 2 ;; esac
+else
+  ORACLE="$ROOT/docs/proposed/opentofu-goldens"
 fi
-PINNED_RUST_VERSION="$(test_mise_rust_version)" || {
-  echo 'FATAL: could not resolve the owned pinned Rust version' >&2
-  exit 2
-}
-GUARD="${VELNOR_TEST_CARGO_GUARD:-${VELNOR_TEST_RUST_BUILD_GUARD:-}}"
-if [[ "$(uname -s)" == Darwin && "${GITHUB_ACTIONS:-}" != true && -z "$GUARD" ]]; then
-  echo 'FATAL: set VELNOR_TEST_CARGO_GUARD to the required Rust build guard' >&2
-  exit 2
-fi
-if [[ -n "$GUARD" && ( ! -f "$GUARD" || ! -x "$GUARD" ) ]]; then
-  echo "FATAL: the configured Rust build guard is unavailable: $GUARD" >&2
-  exit 2
-fi
-export VELNOR_TEST_CARGO_GUARD="$GUARD"
-
-file_sha256() {
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$1" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }'
-  else
-    shasum -a 256 "$1" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }'
-  fi
-}
+[[ -d "$ORACLE" && ! -L "$ORACLE" && -d "$ORACLE/cases" && ! -L "$ORACLE/cases" ]] \
+  || { echo 'FATAL: selected golden oracle must be an existing regular directory tree' >&2; exit 2; }
+printf '%s\n' "$ORACLE" >"$OUTPUT/selected-oracle.path.txt"
 
 stdin_sha256() {
   if command -v sha256sum >/dev/null 2>&1; then
@@ -141,380 +136,89 @@ stdin_sha256() {
   fi
 }
 
-apply_diagnostic_source_mutation() {
-  node - "$1" <<'NODE'
+golden_fingerprint() {
+  node - "$1" <<'JS'
 const fs = require('node:fs');
-const path = process.argv[2];
-const input = fs.readFileSync(path, 'utf8');
-const marker = [
-  '    print!("{text}");',
-  "    if !text.ends_with('\\n') {",
-  '        println!();',
-  '    }',
-  ''
-].join('\n');
-const tail = '    ExitCode::SUCCESS\n';
-const addition = [
-  '    if let Ok(mode) = std::env::var("VELNOR_TEST_PLAN_DIAGNOSTIC_MODE") {',
-  '        let emit = match mode.as_str() {',
-  '            "quiet" => false,',
-  '            "warning-all" | "fail57" => true,',
-  '            "nested-only" => cwd.file_name().is_some_and(|name| name == "nested"),',
-  '            "dogfood-only" => match std::env::var_os("VELNOR_TEST_PLAN_SOURCE_ROOT") {',
-  '                Some(root) => match (cwd.canonicalize(), std::fs::canonicalize(root)) {',
-  '                    (Ok(cwd), Ok(root)) => cwd == root,',
-  '                    _ => return ExitCode::from(56),',
-  '                },',
-  '                None => return ExitCode::from(56),',
-  '            },',
-  '            _ => return ExitCode::from(56),',
-  '        };',
-  '        if emit {',
-  '            let repo = match cwd.canonicalize() { Ok(path) => path, Err(_) => return ExitCode::from(56) };',
-  '            let root = match std::env::var_os("VELNOR_TEST_PLAN_SOURCE_ROOT") {',
-  '                Some(path) => match std::fs::canonicalize(path) { Ok(path) => path, Err(_) => return ExitCode::from(56) },',
-  '                None => return ExitCode::from(56),',
-  '            };',
-  '            let temp = match std::env::var_os("TMPDIR") {',
-  '                Some(path) => match std::fs::canonicalize(path) { Ok(path) => path, Err(_) => return ExitCode::from(56) },',
-  '                None => return ExitCode::from(56),',
-  '            };',
-  '            let entries = match std::fs::read_dir(temp) { Ok(entries) => entries, Err(_) => return ExitCode::from(56) };',
-  '            let mut work = None;',
-  '            for entry in entries {',
-  '                let entry = match entry { Ok(entry) => entry, Err(_) => return ExitCode::from(56) };',
-  '                if entry.file_name().to_string_lossy().starts_with("velnor-goldens-work.") {',
-  '                    if work.is_some() { return ExitCode::from(56); }',
-  '                    work = match entry.path().canonicalize() { Ok(path) => Some(path), Err(_) => return ExitCode::from(56) };',
-  '                }',
-  '            }',
-  '            let work = match work { Some(path) => path, None => return ExitCode::from(56) };',
-  '            eprintln!("plan-diagnostic-warning repository={} source-root={} work={}", repo.display(), root.display(), work.display());',
-  '        }',
-  '        if mode == "fail57" { return ExitCode::from(57); }',
-  '    }',
-  ''
-].join('\n');
-if (input.split(marker + tail).length !== 2) {
-  process.stderr.write('FATAL: diagnostic source mutation marker count was not exactly one\n');
-  process.exit(2);
+const path = require('node:path');
+const crypto = require('node:crypto');
+const root = process.argv[2];
+const rows = [];
+function digest(bytes) { return crypto.createHash('sha256').update(bytes).digest('hex'); }
+function walk(directory, relative) {
+  for (const name of fs.readdirSync(directory).sort()) {
+    const absolute = path.join(directory, name);
+    const next = relative ? `${relative}/${name}` : name;
+    const info = fs.lstatSync(absolute);
+    if (info.isSymbolicLink()) rows.push(`link ./${next} -> ${fs.readlinkSync(absolute)}`);
+    else if (info.isDirectory()) walk(absolute, next);
+    else if (info.isFile()) rows.push(`${digest(fs.readFileSync(absolute))}  ./${next}`);
+    else throw new Error(`unsupported oracle entry: ${next}`);
+  }
 }
-fs.writeFileSync(path, input.replace(marker + tail, marker + addition + tail));
-NODE
+walk(root, '');
+process.stdout.write(`${digest(Buffer.from(`${rows.sort().join('\n')}\n`))}\n`);
+JS
 }
 
-golden_fingerprint() {
-  local directory="$1"
+rebuild_oracle_manifest() {
+  local directory="$1/cases" output="$1/MANIFEST.sha256"
   (
     cd "$directory" || exit 2
-    {
-      files="$(find . -type f -print | LC_ALL=C sort)" || exit 2
-      if [ -n "$files" ]; then
-        if command -v sha256sum >/dev/null 2>&1; then
-          printf '%s\n' "$files" | tr '\n' '\0' | xargs -0 sha256sum || exit 2
-        else
-          printf '%s\n' "$files" | tr '\n' '\0' | xargs -0 shasum -a 256 || exit 2
-        fi
+    files="$(find . -type f -print | LC_ALL=C sort)" || exit 2
+    if [ -n "$files" ]; then
+      if command -v sha256sum >/dev/null 2>&1; then
+        printf '%s\n' "$files" | tr '\n' '\0' | xargs -0 sha256sum || exit 2
+      else
+        printf '%s\n' "$files" | tr '\n' '\0' | xargs -0 shasum -a 256 || exit 2
       fi
-      find . -type l -print | LC_ALL=C sort | while IFS= read -r path; do
-        printf 'link %s -> %s\n' "$path" "$(readlink "$path")"
-      done
-    } | stdin_sha256
-  )
+    fi
+    find . -type l -print | LC_ALL=C sort | while IFS= read -r link; do
+      printf 'link %s -> %s\n' "$link" "$(readlink "$link")"
+    done
+  ) >"$output"
 }
 
-CLI_SHA="$(file_sha256 "$CLI")" || exit 2
-CLI_VERSION="$(run_qualification_candidate "$CLI" --version | awk 'NR == 1 && NF == 2 && $1 == "velnor-actions" { print $2; next } { exit 1 } END { if (NR != 1) exit 1 }')" || exit 2
-printf '%s\n' "$CLI" >"$OUTPUT/input-cli.path"
-printf '%s\n' "$CLI_SHA" >"$OUTPUT/input-cli.sha256"
-printf '%s\n' "$CLI_VERSION" >"$OUTPUT/input-cli.version"
-printf '%s\n' "$SOURCE_SHA" >"$OUTPUT/source.commit"
+ORACLE_BEFORE="$(golden_fingerprint "$ORACLE")" || exit 2
+printf '%s\n' "$ORACLE_BEFORE" >"$OUTPUT/selected-oracle.fingerprint.before.txt"
+for case_name in nested mbx-nextest empty-suite minimal-cargo dogfood; do
+  plan_stderr="$ORACLE/cases/$case_name/plan.stderr.txt"
+  [[ -f "$plan_stderr" && ! -L "$plan_stderr" && ! -s "$plan_stderr" ]] \
+    || { printf 'FATAL: selected external plan stderr oracle must be empty for %s\n' "$case_name" >&2; exit 2; }
+done
+EMPTY_ORACLE="$OUTPUT/oracle-empty"
+CONTROL_ORACLE="$OUTPUT/oracle-control"
+EXPECTED_ORACLE="$OUTPUT/oracle-warning"
+mkdir -m 700 "$EMPTY_ORACLE" "$CONTROL_ORACLE"
+cp -RP "$ORACLE/." "$EMPTY_ORACLE/"
+cp -RP "$ORACLE/." "$CONTROL_ORACLE/"
+[[ "$(golden_fingerprint "$EMPTY_ORACLE")" = "$ORACLE_BEFORE" ]] \
+  || { echo 'FATAL: copied empty oracle differs from the selected oracle' >&2; exit 2; }
 
-BUILD="$OUTPUT/build"
-mkdir -m 700 "$BUILD" || exit 2
-if [ "$FOCUSED_PREBUILT" -eq 1 ]; then
-  PREBUILT_SOURCE="$PREBUILT_BUILD/source"
-  PREBUILT_PUBLIC="$PREBUILT_SOURCE/crates/velnor-actions-cli/src/dispatch/public.rs"
-  PREBUILT_ARCHIVE_SHA="$(cat "$PREBUILT_BUILD/source.tar.sha256" 2>/dev/null)"
-  PREBUILT_ORIGINAL_SHA="$(cat "$PREBUILT_BUILD/public.rs.original.sha256" 2>/dev/null)"
-  PREBUILT_MUTATED_SHA="$(cat "$PREBUILT_BUILD/public.rs.mutated.sha256" 2>/dev/null)"
-  PREBUILT_TARGET="$(cat "$PREBUILT_BUILD/target-directory.physical" 2>/dev/null)"
-  PREBUILT_RECEIPT="$PREBUILT_BUILD/receipt.txt"
-  ARCHIVE_SHA="$(git -C "$ROOT" archive --format=tar "$SOURCE_SHA" | stdin_sha256)" || exit 2
-  ORIGINAL_GIT_SHA="$(git -C "$ROOT" show "$SOURCE_SHA:crates/velnor-actions-cli/src/dispatch/public.rs" | stdin_sha256)" || exit 2
-  if [ ! -d "$PREBUILT_SOURCE" ] || [ -L "$PREBUILT_SOURCE" ] \
-    || [ ! -f "$PREBUILT_BUILD/source.tar" ] \
-    || [ ! -f "$PREBUILT_BUILD/public.rs.original" ] \
-    || [ ! -f "$PREBUILT_BUILD/public.rs.patch" ] \
-    || [ ! -f "$PREBUILT_BUILD/metadata.json" ] \
-    || [ ! -f "$PREBUILT_BUILD/build.log" ] \
-    || [ ! -f "$PREBUILT_RECEIPT" ] \
-    || [ "$(cat "$PREBUILT_BUILD/build.exit" 2>/dev/null)" != 0 ] \
-    || [ "$(cat "$PREBUILT_BUILD/metadata.exit" 2>/dev/null)" != 0 ] \
-    || [ "$PREBUILT_ARCHIVE_SHA" != "$ARCHIVE_SHA" ] \
-    || [ "$PREBUILT_ORIGINAL_SHA" != "$ORIGINAL_GIT_SHA" ] \
-    || [ -z "$PREBUILT_MUTATED_SHA" ] \
-    || [[ "$PREBUILT_TARGET" != /* ]]; then
-    echo 'FATAL: focused prebuilt evidence does not match the selected source and successful build' >&2
-    exit 2
-  fi
-  if [ "$(file_sha256 "$PREBUILT_BUILD/source.tar")" != "$ARCHIVE_SHA" ] \
-    || [ "$(file_sha256 "$PREBUILT_BUILD/public.rs.original")" != "$ORIGINAL_GIT_SHA" ] \
-    || [ "$(file_sha256 "$PREBUILT_PUBLIC")" != "$PREBUILT_MUTATED_SHA" ]; then
-    echo 'FATAL: focused prebuilt archive or source hashes differ from the selected commit' >&2
-    exit 2
-  fi
-  EXPECTED_PUBLIC="$BUILD/public.rs.expected"
-  if ! cp "$PREBUILT_BUILD/public.rs.original" "$EXPECTED_PUBLIC" \
-    || ! apply_diagnostic_source_mutation "$EXPECTED_PUBLIC" \
-    || ! cmp -s "$EXPECTED_PUBLIC" "$PREBUILT_PUBLIC"; then
-    echo 'FATAL: focused prebuilt source does not contain the exact diagnostic-only mutation' >&2
-    exit 2
-  fi
-  diff_rc=0
-  diff -u "$PREBUILT_BUILD/public.rs.original" "$PREBUILT_PUBLIC" >"$BUILD/public.rs.patch.check" || diff_rc=$?
-  if [ "$diff_rc" -ne 1 ] || ! cmp -s "$BUILD/public.rs.patch.check" "$PREBUILT_BUILD/public.rs.patch"; then
-    echo 'FATAL: focused prebuilt public.rs mutation differs from its retained patch' >&2
-    exit 2
-  fi
-  receipt_value() {
-    awk -F= -v key="$2" '$1 == key { value = $2; count++ } END { if (count != 1) exit 1; print value }' "$1"
-  }
-  PREBUILT_CLI_SHA="$(cat "$PREBUILT_BUILD/diagnostic-cli.sha256" 2>/dev/null)"
-  PREBUILT_CLI_VERSION="$(cat "$PREBUILT_BUILD/diagnostic-cli.version" 2>/dev/null)"
-  PREBUILT_RECEIPT_CLI_SHA="$(receipt_value "$PREBUILT_RECEIPT" cli_sha256)" || exit 2
-  PREBUILT_RECEIPT_VERSION="$(receipt_value "$PREBUILT_RECEIPT" cli_version)" || exit 2
-  PREBUILT_RECEIPT_SOURCE="$(receipt_value "$PREBUILT_RECEIPT" source_commit)" || exit 2
-  PREBUILT_RECEIPT_ARCHIVE="$(receipt_value "$PREBUILT_RECEIPT" source_archive_sha256)" || exit 2
-  PREBUILT_RECEIPT_MUTATED="$(receipt_value "$PREBUILT_RECEIPT" mutated_public_rs_sha256)" || exit 2
-  PREBUILT_RECEIPT_TARGET="$(receipt_value "$PREBUILT_RECEIPT" target_directory)" || exit 2
-  PREBUILT_RECEIPT_CLI="$(receipt_value "$PREBUILT_RECEIPT" cli_path)" || exit 2
-  PREBUILT_RECEIPT_INPUT="$(receipt_value "$PREBUILT_RECEIPT" input_cli_sha256)" || exit 2
-  PREBUILT_LINK_TARGET="$(cd "$PREBUILT_SOURCE/target" 2>/dev/null && pwd -P)" || exit 2
-  case "$PREBUILT_TARGET" in
-    */mbx/targets/*) ;;
-    *) echo 'FATAL: focused candidate target is outside the MBX-managed target root' >&2; exit 2 ;;
-  esac
-  if [ ! -L "$PREBUILT_SOURCE/target" ] \
-    || [ ! -d "$PREBUILT_TARGET" ] \
-    || [ "$PREBUILT_LINK_TARGET" != "$PREBUILT_TARGET" ] \
-    || [ "$PREBUILT_CLI" != "$PREBUILT_TARGET/release/velnor-actions" ] \
-    || [ "$PREBUILT_RECEIPT_TARGET" != "$PREBUILT_TARGET" ] \
-    || [ "$PREBUILT_RECEIPT_CLI" != "$PREBUILT_CLI" ] \
-    || [ "$PREBUILT_CLI_SHA" != "$PREBUILT_RECEIPT_CLI_SHA" ] \
-    || [ "$PREBUILT_RECEIPT_VERSION" != "$CLI_VERSION" ] \
-    || [ "$PREBUILT_CLI_VERSION" != "$CLI_VERSION" ] \
-    || [ "$PREBUILT_RECEIPT_SOURCE" != "$SOURCE_SHA" ] \
-    || [ "$PREBUILT_RECEIPT_ARCHIVE" != "$ARCHIVE_SHA" ] \
-    || [ "$PREBUILT_RECEIPT_MUTATED" != "$PREBUILT_MUTATED_SHA" ] \
-    || [ "$PREBUILT_RECEIPT_INPUT" != "$CLI_SHA" ] \
-    || [ "$(file_sha256 "$PREBUILT_CLI")" != "$PREBUILT_CLI_SHA" ]; then
-    echo 'FATAL: focused candidate identity differs from its source, target mapping, or build receipt' >&2
-    exit 2
-  fi
-  METADATA_TARGET="$(node - "$PREBUILT_BUILD/metadata.json" <<'NODE'
-const fs = require('node:fs');
-const value = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-if (typeof value.target_directory !== 'string') process.exit(2);
-process.stdout.write(value.target_directory);
-NODE
-)" || exit 2
-  if [ "$METADATA_TARGET" != "$PREBUILT_SOURCE/target" ] \
-    || ! grep -Eq '^ *Finished .*release.*profile' "$PREBUILT_BUILD/build.log"; then
-    echo 'FATAL: focused build metadata or completion log differs from the retained MBX candidate' >&2
-    exit 2
-  fi
-  printf 'source_commit=%s\nsource_archive_sha256=%s\npublic_rs_original_sha256=%s\npublic_rs_mutated_sha256=%s\ntarget_directory=%s\ncli_path=%s\ncli_sha256=%s\ncli_version=%s\ninput_cli_sha256=%s\n' \
-    "$SOURCE_SHA" "$ARCHIVE_SHA" "$ORIGINAL_GIT_SHA" "$PREBUILT_MUTATED_SHA" \
-    "$PREBUILT_TARGET" "$PREBUILT_CLI" "$PREBUILT_CLI_SHA" "$PREBUILT_CLI_VERSION" "$CLI_SHA" \
-    >"$BUILD/prebuilt-reuse.receipt" || exit 2
-  SOURCE="$PREBUILT_SOURCE"
-  DIAGNOSTIC_CLI="$PREBUILT_CLI"
-  DIAGNOSTIC_SHA="$PREBUILT_CLI_SHA"
-  DIAGNOSTIC_VERSION="$PREBUILT_CLI_VERSION"
-  cp "$PREBUILT_BUILD/build.log" "$BUILD/build.log" || exit 2
-  cp "$PREBUILT_BUILD/build.exit" "$BUILD/build.exit" || exit 2
-  cp "$PREBUILT_BUILD/build.command" "$BUILD/build.command" || exit 2
-  cp "$PREBUILT_BUILD/metadata.json" "$BUILD/metadata.json" || exit 2
-  cp "$PREBUILT_BUILD/metadata.stderr" "$BUILD/metadata.stderr" || exit 2
-  cp "$PREBUILT_BUILD/metadata.exit" "$BUILD/metadata.exit" || exit 2
-  cp "$PREBUILT_BUILD/source.tar.sha256" "$BUILD/source.tar.sha256" || exit 2
-  cp "$PREBUILT_BUILD/public.rs.original.sha256" "$BUILD/public.rs.original.sha256" || exit 2
-  cp "$PREBUILT_BUILD/public.rs.mutated.sha256" "$BUILD/public.rs.mutated.sha256" || exit 2
-else
-  SOURCE="$BUILD/source"
-  mkdir -m 700 "$SOURCE" || exit 2
-if ! git -C "$ROOT" archive --format=tar "$SOURCE_SHA" >"$BUILD/source.tar"; then
-  echo 'FATAL: could not export exact source commit for diagnostic CLI' >&2
-  exit 2
-fi
-if ! tar -xf "$BUILD/source.tar" -C "$SOURCE"; then
-  echo 'FATAL: could not extract exact source commit for diagnostic CLI' >&2
-  exit 2
-fi
-PUBLIC="$SOURCE/crates/velnor-actions-cli/src/dispatch/public.rs"
-if [ ! -f "$PUBLIC" ] || ! cp "$PUBLIC" "$BUILD/public.rs.original"; then
-  echo 'FATAL: could not preserve diagnostic fixture source input' >&2
-  exit 2
-fi
-if ! apply_diagnostic_source_mutation "$PUBLIC"; then
-  echo 'FATAL: could not apply the exact diagnostic-only CLI source mutation' >&2
-  exit 2
-fi
-
-patch_rc=0
-diff -u "$BUILD/public.rs.original" "$PUBLIC" >"$BUILD/public.rs.patch" || patch_rc=$?
-if [ "$patch_rc" -ne 1 ]; then
-  echo "FATAL: diagnostic source patch did not produce one expected diff (exit $patch_rc)" >&2
-  exit 2
-fi
-file_sha256 "$BUILD/source.tar" >"$BUILD/source.tar.sha256" || exit 2
-file_sha256 "$BUILD/public.rs.original" >"$BUILD/public.rs.original.sha256" || exit 2
-file_sha256 "$PUBLIC" >"$BUILD/public.rs.mutated.sha256" || exit 2
-
-HOSTED=0
-if [ "${GITHUB_ACTIONS:-}" = true ]; then
-  HOSTED=1
-  RUST_VERSION="${VELNOR_RUST_VERSION:-}"
-  MBX_VERSION="${VELNOR_MBX_VERSION:-}"
-  if [ -z "$RUST_VERSION" ] || [ -z "$MBX_VERSION" ]; then
-    echo 'FATAL: pinned hosted Rust and MBX versions are unavailable' >&2
-    exit 2
-  fi
-  if [ "$RUST_VERSION" != "$PINNED_RUST_VERSION" ]; then
-    echo 'FATAL: hosted Rust build pin differs from the owned workspace request pin' >&2
-    exit 2
-  fi
-  printf 'env -u CARGO_TARGET_DIR -u CARGO_BUILD_TARGET MISE_NO_CONFIG=1 MBX_GC_AUTO=0 mise --no-config --no-env --no-hooks exec rust@%s mr-boxington@%s -- mbx build --release --locked -p velnor-actions-cli\n' \
-    "$RUST_VERSION" "$MBX_VERSION" >"$BUILD/build.command"
-  (
-    cd "$SOURCE" || exit 2
-    env -u CARGO_TARGET_DIR -u CARGO_BUILD_TARGET MISE_NO_CONFIG=1 MBX_GC_AUTO=0 \
-      mise --no-config --no-env --no-hooks exec "rust@$RUST_VERSION" "mr-boxington@$MBX_VERSION" -- \
-      mbx build --release --locked -p velnor-actions-cli
-  ) >"$BUILD/build.log" 2>&1
-  build_rc=$?
-else
-  if [ -z "$GUARD" ]; then
-    echo 'FATAL: set VELNOR_TEST_CARGO_GUARD to the required Rust build guard' >&2
-    exit 2
-  fi
-  if ! git -C "$ROOT" show "$SOURCE_SHA:mise.toml" >"$BUILD/mise.toml.expected" \
-    || ! cmp -s "$BUILD/mise.toml.expected" "$SOURCE/mise.toml"; then
-    echo 'FATAL: exported mise configuration does not match the exact source commit' >&2
-    exit 2
-  fi
-  file_sha256 "$SOURCE/mise.toml" >"$BUILD/mise.toml.sha256" || exit 2
-  if mise trust "$SOURCE/mise.toml" >"$BUILD/mise-trust.log" 2>&1; then
-    printf 'mise_trust_exit=0\ntrusted_mise_config=%s\ntrusted_mise_config_sha256=%s\n' \
-      "$SOURCE/mise.toml" "$(cat "$BUILD/mise.toml.sha256")" >"$BUILD/mise-trust.receipt"
-  else
-    trust_rc=$?
-    printf 'mise_trust_exit=%s\ntrusted_mise_config=%s\ntrusted_mise_config_sha256=%s\n' \
-      "$trust_rc" "$SOURCE/mise.toml" "$(cat "$BUILD/mise.toml.sha256")" >"$BUILD/mise-trust.receipt"
-    cat "$BUILD/mise-trust.log" >&2
-    exit 2
-  fi
-  printf 'env -u CARGO_TARGET_DIR -u CARGO_BUILD_TARGET MBX_GC_AUTO=0 %s -- mise exec -- cargo build --release --locked -p velnor-actions-cli\n' \
-    "$GUARD" >"$BUILD/build.command"
-  (
-    cd "$SOURCE" || exit 2
-    env -u CARGO_TARGET_DIR -u CARGO_BUILD_TARGET MBX_GC_AUTO=0 \
-      "$GUARD" -- mise exec -- cargo build --release --locked -p velnor-actions-cli
-  ) >"$BUILD/build.log" 2>&1
-  build_rc=$?
-fi
-printf '%s\n' "$build_rc" >"$BUILD/build.exit"
-if [ "$build_rc" -ne 0 ]; then
-  cat "$BUILD/build.log" >&2
-  echo "FATAL: diagnostic CLI build failed with exit $build_rc; evidence: $BUILD" >&2
-  exit 2
-fi
-
-if [ "$HOSTED" = 1 ]; then
-  printf 'env -u CARGO_TARGET_DIR -u CARGO_BUILD_TARGET MISE_NO_CONFIG=1 MBX_GC_AUTO=0 mise --no-config --no-env --no-hooks exec rust@%s mr-boxington@%s -- mbx metadata --format-version 1 --no-deps --manifest-path Cargo.toml\n' \
-    "$RUST_VERSION" "$MBX_VERSION" >"$BUILD/metadata.command"
-  (
-    cd "$SOURCE" || exit 2
-    env -u CARGO_TARGET_DIR -u CARGO_BUILD_TARGET MISE_NO_CONFIG=1 MBX_GC_AUTO=0 \
-      mise --no-config --no-env --no-hooks exec "rust@$RUST_VERSION" "mr-boxington@$MBX_VERSION" -- \
-      mbx metadata --format-version 1 --no-deps --manifest-path Cargo.toml
-  ) >"$BUILD/metadata.json" 2>"$BUILD/metadata.stderr"
-  metadata_rc=$?
-else
-  printf 'env -u CARGO_TARGET_DIR -u CARGO_BUILD_TARGET MBX_GC_AUTO=0 %s -- mise exec -- cargo metadata --format-version 1 --no-deps --manifest-path Cargo.toml\n' \
-    "$GUARD" >"$BUILD/metadata.command"
-  (
-    cd "$SOURCE" || exit 2
-    env -u CARGO_TARGET_DIR -u CARGO_BUILD_TARGET MBX_GC_AUTO=0 \
-      "$GUARD" -- mise exec -- cargo metadata --format-version 1 --no-deps --manifest-path Cargo.toml
-  ) >"$BUILD/metadata.json" 2>"$BUILD/metadata.stderr"
-  metadata_rc=$?
-fi
-printf '%s\n' "$metadata_rc" >"$BUILD/metadata.exit"
-if [ "$metadata_rc" -ne 0 ]; then
-  cat "$BUILD/metadata.stderr" >&2
-  echo "FATAL: guarded diagnostic target metadata failed with exit $metadata_rc; evidence: $BUILD" >&2
-  exit 2
-fi
-fi
-TARGET_DIR_LEXICAL="$(node - "$BUILD/metadata.json" <<'NODE'
-const fs = require('node:fs');
-const value = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-if (typeof value.target_directory !== 'string' || !value.target_directory.startsWith('/')) process.exit(2);
-process.stdout.write(value.target_directory);
-NODE
-)" || { echo 'FATAL: diagnostic metadata did not identify an absolute target directory' >&2; exit 2; }
-if [ "$TARGET_DIR_LEXICAL" != "$SOURCE/target" ] || [ ! -L "$TARGET_DIR_LEXICAL" ]; then
-  echo "FATAL: diagnostic target is not the archive workspace's MBX-managed target link: $TARGET_DIR_LEXICAL" >&2
-  exit 2
-fi
-TARGET_DIR="$(cd "$TARGET_DIR_LEXICAL" 2>/dev/null && pwd -P)" || { echo 'FATAL: diagnostic target directory could not be resolved' >&2; exit 2; }
-case "$TARGET_DIR" in "$OUTPUT"|"$OUTPUT"/*|"$SOURCE"|"$SOURCE"/*)
-  echo "FATAL: diagnostic build target resolves inside evidence source: $TARGET_DIR" >&2
-  exit 2
-  ;;
+ORIGINAL_PATH="$PATH"
+REAL_MISE="$(command -v mise 2>/dev/null)" || REAL_MISE=''
+case "$REAL_MISE" in
+  /*) ;;
+  '') echo 'FATAL: real Mise executable is unavailable' >&2; exit 2 ;;
+  *) REAL_MISE="$(cd "$(dirname "$REAL_MISE")" 2>/dev/null && pwd -P)/$(basename "$REAL_MISE")" || exit 2 ;;
 esac
-DIAGNOSTIC_CLI="$TARGET_DIR/release/velnor-actions"
-if [ ! -f "$DIAGNOSTIC_CLI" ] || [ ! -x "$DIAGNOSTIC_CLI" ]; then
-  echo "FATAL: diagnostic CLI build succeeded without producing $DIAGNOSTIC_CLI" >&2
+[[ -x "$REAL_MISE" ]] || { echo "FATAL: real Mise executable is unavailable: $REAL_MISE" >&2; exit 2; }
+RUST_VERSION="$(test_mise_rust_version)" || { echo 'FATAL: could not resolve the pinned Rust version' >&2; exit 2; }
+CARGO_GUARD="${VELNOR_TEST_CARGO_GUARD:-${VELNOR_TEST_RUST_BUILD_GUARD:-}}"
+if [[ "$(uname -s)" = Darwin && "${GITHUB_ACTIONS:-}" != true && -z "$CARGO_GUARD" ]]; then
+  echo 'FATAL: set VELNOR_TEST_CARGO_GUARD to the required Rust build guard' >&2
   exit 2
 fi
-DIAGNOSTIC_SHA="$(file_sha256 "$DIAGNOSTIC_CLI")" || exit 2
-DIAGNOSTIC_VERSION="$(run_qualification_candidate "$DIAGNOSTIC_CLI" --version | awk 'NR == 1 && NF == 2 && $1 == "velnor-actions" { print $2; next } { exit 1 } END { if (NR != 1) exit 1 }')" || exit 2
-if [ "$DIAGNOSTIC_VERSION" != "$CLI_VERSION" ]; then
-  echo "FATAL: diagnostic CLI version $DIAGNOSTIC_VERSION differs from supplied CLI version $CLI_VERSION" >&2
+if [[ -n "$CARGO_GUARD" && ( "$CARGO_GUARD" != /* || ! -f "$CARGO_GUARD" || ! -x "$CARGO_GUARD" ) ]]; then
+  echo "FATAL: the configured Rust build guard is unavailable: $CARGO_GUARD" >&2
   exit 2
 fi
-if [ "$(file_sha256 "$CLI")" != "$CLI_SHA" ]; then
-  echo 'FATAL: diagnostic build changed the supplied CLI binary' >&2
-  exit 2
-fi
-printf '%s\n' "$TARGET_DIR" >"$BUILD/target-directory.physical"
-printf '%s\n' "$DIAGNOSTIC_CLI" >"$BUILD/diagnostic-cli.path"
-printf '%s\n' "$DIAGNOSTIC_SHA" >"$BUILD/diagnostic-cli.sha256"
-printf '%s\n' "$DIAGNOSTIC_VERSION" >"$BUILD/diagnostic-cli.version"
-printf 'source_commit=%s\nsource_archive_sha256=%s\nmutated_public_rs_sha256=%s\ntarget_directory=%s\ncli_path=%s\ncli_sha256=%s\ncli_version=%s\ninput_cli_sha256=%s\n' \
-  "$SOURCE_SHA" "$(cat "$BUILD/source.tar.sha256")" "$(cat "$BUILD/public.rs.mutated.sha256")" \
-  "$TARGET_DIR" "$DIAGNOSTIC_CLI" "$DIAGNOSTIC_SHA" "$DIAGNOSTIC_VERSION" "$CLI_SHA" >"$BUILD/receipt.txt"
-cp "$BUILD/build.log" "$OUTPUT/diagnostic-build.log" || exit 2
-cp "$BUILD/build.exit" "$OUTPUT/diagnostic-build.exit" || exit 2
-cp "$BUILD/build.command" "$OUTPUT/diagnostic-build.command.txt" || exit 2
-cp "$BUILD/receipt.txt" "$OUTPUT/diagnostic-build.receipt.txt" || exit 2
-cp "$BUILD/metadata.stderr" "$OUTPUT/diagnostic-metadata.stderr.txt" || exit 2
-cp "$BUILD/metadata.exit" "$OUTPUT/diagnostic-metadata.exit" || exit 2
-printf '%s\n' "$DIAGNOSTIC_CLI" >"$OUTPUT/diagnostic-cli.path.txt"
-printf '%s\n' "$DIAGNOSTIC_SHA" >"$OUTPUT/diagnostic-cli.sha256.txt"
-printf '%s\n' "$SOURCE_SHA" >"$OUTPUT/diagnostic-source.commit.txt"
-
-STUB_BIN="$OUTPUT/stub-bin"
-MARKERS="$OUTPUT/guard-markers"
-CARGO_BUILD_MARKER="$OUTPUT/cargo-build-invoked"
-MISE_ADAPTER_BIN="$OUTPUT/mise-adapter-bin"
-mkdir -m 700 "$STUB_BIN" "$MARKERS" || exit 2
+STUB_BIN="$OUTPUT/stub bin"
+MISE_ADAPTER_BIN="$OUTPUT/mise adapter"
+CARGO_BUILD_MARKER="$OUTPUT/implicit cargo build invoked"
+mkdir -m 700 "$STUB_BIN"
 cat >"$STUB_BIN/cargo" <<'STUB'
 #!/bin/sh
-if [ "${1-}" = "build" ]; then
+if [ "${1-}" = build ]; then
   printf invoked >"$VELNOR_TEST_CARGO_MARKER"
   exit 79
 fi
@@ -529,417 +233,392 @@ if [ -n "${VELNOR_TEST_CARGO_GUARD:-}" ]; then
 fi
 exit 79
 STUB
-chmod u+x "$STUB_BIN/cargo" || exit 2
-
-if ! test_mise_resolve_cargo "$REAL_MISE" "$PINNED_RUST_VERSION" \
-  "$OUTPUT/mise-cargo-resolution" "$STUB_BIN/cargo"; then
-  exit 2
-fi
+chmod 755 "$STUB_BIN/cargo"
+test_mise_resolve_cargo "$REAL_MISE" "$RUST_VERSION" "$OUTPUT/mise-cargo-resolution" "$STUB_BIN/cargo"
 MISE_CARGO_PATH="$TEST_MISE_CARGO_PATH"
-test_mise_adapter_create "$MISE_ADAPTER_BIN" "$REAL_MISE" "$ORIGINAL_PATH" \
-  "$GUARD" "$PINNED_RUST_VERSION" || exit 2
+test_mise_adapter_create "$MISE_ADAPTER_BIN" "$REAL_MISE" "$ORIGINAL_PATH" "$CARGO_GUARD" "$RUST_VERSION"
+MISE_ADAPTER_BIN="$TEST_MISE_ADAPTER_BIN"
+export VELNOR_TEST_CARGO_GUARD="$CARGO_GUARD"
 
-verify_guard_receipt() {
-  local label="$1" marker="$2" direct_receipt="$3"
-  if ! test_mise_adapter_verify "$label" "$marker" "$PINNED_RUST_VERSION" "$GUARD"; then
-    return 1
-  fi
-  if [ -s "$direct_receipt" ] && [ -n "$GUARD" ] && ! awk '
-      /^cargo-invocation=/ { requested++ }
-      /^guard-exit=/ { completed++; if ($0 != "guard-exit=0") failed=1 }
-      /^build-blocked$/ { failed=1 }
-      END { if (requested == 0 || requested != completed || failed) exit 1 }
-    ' "$direct_receipt"; then
-    cat "$direct_receipt" >&2
-    echo "FAIL: direct collector Cargo request lacked a successful guard receipt: $label" >&2
-    return 1
-  fi
-  if [ -s "$direct_receipt" ] && [ -z "$GUARD" ]; then
-    cat "$direct_receipt" >&2
-    echo "FAIL: collector bypassed real Mise metadata routing: $label" >&2
+TMP_ROOT="$OUTPUT/tmp workspace"
+SPACE_TMP_TARGET="$OUTPUT/physical tmp target"
+SPACE_TMP_LINK="$OUTPUT/symlink tmpdir"
+mkdir -m 700 "$TMP_ROOT" "$SPACE_TMP_TARGET"
+ln -s "$SPACE_TMP_TARGET" "$SPACE_TMP_LINK"
+[[ -L "$SPACE_TMP_LINK" && "$(cd "$SPACE_TMP_LINK" && pwd -P)" = "$(cd "$SPACE_TMP_TARGET" && pwd -P)" ]] \
+  || { echo 'FATAL: spaced TMPDIR symlink fixture was not created' >&2; exit 2; }
+
+ARCHIVE_GUARD_ARGS=(--archive-guard "$ARCHIVE_GUARD_INPUT_PATH" --archive-guard-sha256 "$ARCHIVE_GUARD_INPUT_SHA256")
+CASES=(nested mbx-nextest empty-suite minimal-cargo dogfood)
+
+verify_direct_cargo_receipt() {
+  local label="$1" receipt="$2"
+  if [ ! -s "$receipt" ]; then return 0; fi
+  if [ -z "$CARGO_GUARD" ] || ! awk '
+    /^cargo-invocation=/ { requested++ }
+    /^guard-exit=/ { completed++; if ($0 != "guard-exit=0") failed=1 }
+    END { if (requested == 0 || requested != completed || failed) exit 1 }
+  ' "$receipt"; then
+    cat "$receipt" >&2
+    echo "FAIL: direct collector Cargo request did not complete through the configured guard: $label" >&2
     return 1
   fi
 }
 
-printf '%s\n' "$PINNED_RUST_VERSION" >"$OUTPUT/mise-rust-version.txt"
-
-GOLDEN_DIR="$ROOT/docs/proposed/opentofu-goldens"
-if [ -n "${VELNOR_GOLDEN_DIR:-}" ]; then
-  CALLER_DIR="$(pwd -P)" || { echo 'FATAL: could not resolve caller directory' >&2; exit 2; }
-  case "$VELNOR_GOLDEN_DIR" in
-    /*) requested_golden_dir="$VELNOR_GOLDEN_DIR" ;;
-    *) requested_golden_dir="$CALLER_DIR/$VELNOR_GOLDEN_DIR" ;;
-  esac
-  golden_name="${requested_golden_dir##*/}"
-  golden_parent="${requested_golden_dir%/*}"
-  if [ -z "$golden_name" ] || [ "$golden_name" = . ] || [ "$golden_name" = .. ] \
-    || ! golden_parent="$(cd -- "$golden_parent" 2>/dev/null && pwd -P)"; then
-    echo 'FATAL: external golden directory parent must exist' >&2
-    exit 2
-  fi
-  GOLDEN_DIR="$golden_parent/$golden_name"
-  case "$GOLDEN_DIR" in
-    "$ROOT"|"$ROOT"/*)
-      echo 'FATAL: VELNOR_GOLDEN_DIR must be outside the repository' >&2
-      exit 2
-      ;;
-  esac
-fi
-if [ -L "$GOLDEN_DIR" ] || [ ! -d "$GOLDEN_DIR" ]; then
-  echo 'FATAL: selected external plan diagnostic oracle must be an existing regular directory' >&2
-  exit 2
-fi
-printf '%s\n' "$GOLDEN_DIR" >"$OUTPUT/selected-oracle.path.txt" || exit 2
-BEFORE="$(golden_fingerprint "$GOLDEN_DIR")" || exit 2
-printf '%s\n' "$BEFORE" >"$OUTPUT/selected-oracle.fingerprint.txt" || exit 2
-EMPTY_ORACLE="$OUTPUT/oracle-empty"
-EXPECTED_ORACLE="$OUTPUT/oracle-warning"
-mkdir -m 700 "$EMPTY_ORACLE" || exit 2
-cp -RP "$GOLDEN_DIR/." "$EMPTY_ORACLE/" || exit 2
-if [ "$(golden_fingerprint "$EMPTY_ORACLE")" != "$BEFORE" ]; then
-  echo 'FATAL: copied empty plan oracle differs from the selected external oracle' >&2
-  exit 2
-fi
-for case in nested mbx-nextest empty-suite minimal-cargo dogfood; do
-  if [ -s "$GOLDEN_DIR/cases/$case/plan.stderr.txt" ]; then
-    echo "FATAL: selected plan stderr oracle is not empty for $case" >&2
-    exit 2
-  fi
-done
-mkdir -m 700 "$EXPECTED_ORACLE" || exit 2
-cp -RP "$EMPTY_ORACLE/." "$EXPECTED_ORACLE/" || exit 2
-for case in nested mbx-nextest empty-suite minimal-cargo dogfood; do
-  if [ "$case" = dogfood ]; then
-    normalized='plan-diagnostic-warning repository=<root> source-root=<root> work=<work>'
-  else
-    normalized='plan-diagnostic-warning repository=<repo> source-root=<root> work=<work>'
-  fi
-  printf '%s\n' "$normalized" >"$EXPECTED_ORACLE/cases/$case/plan.stderr.txt" || exit 2
-done
-
-diagnostic_workspace_from_log() {
-  local label="$1" log="$OUTPUT/$1.log" tmp_root workspace physical_tmp
-  workspace="$(sed -n \
-    -e 's/^retaining successful golden evidence workspace: //p' \
-    -e 's/^retaining failed golden workspace: //p' "$log" | tail -1)"
-  if [ -z "$workspace" ] || [ ! -d "$workspace" ]; then
-    echo "FAIL: collector did not retain its evidence workspace: $log" >&2
-    return 1
-  fi
-  tmp_root="$(cat "$OUTPUT/$label.tmp-root.txt")" || return 1
-  physical_tmp="$(cd "$tmp_root" 2>/dev/null && pwd -P)" || return 1
-  case "$workspace" in
-    "$physical_tmp"/velnor-goldens-work.*) ;;
-    *) echo "FAIL: collector workspace escaped its scenario TMPDIR: $workspace" >&2; return 1 ;;
-  esac
-  printf '%s\n' "$workspace" >"$OUTPUT/$label.workpath.txt" || return 1
-  printf '%s\n' "$workspace"
-}
-
-preserve_raw_plan_evidence() {
-  local label="$1" workspace workspace_base workspace_parent physical_tmp raw case_name case_dir source destination
+workspace_from_log() {
+  local label="$1" workspace physical_tmp
   workspace="$(sed -n \
     -e 's/^retaining successful golden evidence workspace: //p' \
     -e 's/^retaining failed golden workspace: //p' "$OUTPUT/$label.log" | tail -n 1)"
-  if [ -z "$workspace" ]; then return 0; fi
-  workspace="$(diagnostic_workspace_from_log "$label")" || return 1
-  workspace_base="${workspace##*/}"
-  if [[ ! "$workspace_base" =~ ^velnor-goldens-work\.[A-Za-z0-9]+$ ]] \
-    || [ -L "$workspace" ] || [ ! -d "$workspace" ]; then
-    printf 'unsafe retained golden workspace: %s\n' "$workspace" >&2
+  [[ -n "$workspace" && ! -L "$workspace" && -d "$workspace" ]] || {
+    echo "FAIL: collector did not retain its workspace for $label" >&2
     return 1
-  fi
-  workspace_parent="$(cd "$workspace/.." 2>/dev/null && pwd -P)" || return 1
-  physical_tmp="$(cd "$(cat "$OUTPUT/$label.tmp-root.txt")" 2>/dev/null && pwd -P)" || return 1
-  if [ "$workspace_parent" != "$physical_tmp" ] \
-    || [ "$(cd "$workspace" && pwd -P)" != "$workspace" ]; then
-    printf 'retained golden workspace is outside physical TMPDIR: %s\n' "$workspace" >&2
+  }
+  [[ "${workspace##*/}" =~ ^velnor-goldens-work\.[A-Za-z0-9]+$ ]] || {
+    echo "FAIL: retained workspace has an unexpected name for $label: $workspace" >&2
     return 1
-  fi
-  raw="$workspace/raw"
-  if [ -L "$raw" ]; then
-    echo "unsafe retained raw diagnostics directory: $raw" >&2
+  }
+  physical_tmp="$(cd "$(cat "$OUTPUT/$label.tmpdir.txt")" 2>/dev/null && pwd -P)" || return 1
+  [[ "$(cd "$workspace/.." 2>/dev/null && pwd -P)" = "$physical_tmp" \
+    && "$(cd "$workspace" 2>/dev/null && pwd -P)" = "$workspace" ]] || {
+    echo "FAIL: retained workspace is outside the selected physical TMPDIR for $label" >&2
     return 1
+  }
+  printf '%s\n' "$workspace" >"$OUTPUT/$label.workspace.txt"
+  printf '%s\n' "$workspace"
+}
+
+preserve_plan_evidence() {
+  local label="$1" workspace="$2" case_name="$3" required="$4"
+  local raw_case="$workspace/raw/$case_name" stage_case="$workspace/stage/$case_name"
+  local raw_source="$raw_case/plan.stderr.raw.txt" staged_source="$stage_case/plan.stderr.txt" exit_source="$stage_case/plan.exit"
+  if [[ ! -d "$raw_case" || -L "$raw_case" || ! -d "$stage_case" || -L "$stage_case" ]]; then
+    if [ "$required" = 1 ]; then
+      echo "FAIL: collector did not retain plan evidence for $label/$case_name" >&2
+      return 1
+    fi
+    return 0
   fi
-  if [ ! -e "$raw" ]; then return 0; fi
-  if [ ! -d "$raw" ]; then
-    printf 'retained raw diagnostics path is not a directory: %s\n' "$raw" >&2
-    return 1
-  fi
-  for case_name in nested mbx-nextest empty-suite minimal-cargo dogfood; do
-    case_dir="$raw/$case_name"
-    if [ -L "$case_dir" ]; then
-      printf 'unsafe retained diagnostics case directory: %s\n' "$case_dir" >&2
-      return 1
-    fi
-    if [ ! -e "$case_dir" ]; then continue; fi
-    if [ ! -d "$case_dir" ]; then
-      printf 'retained diagnostics case path is not a directory: %s\n' "$case_dir" >&2
-      return 1
-    fi
-    source="$case_dir/plan.stderr.raw.txt"
-    if [ -L "$source" ]; then
-      printf 'unsafe retained plan diagnostics file: %s\n' "$source" >&2
-      return 1
-    fi
-    if [ ! -e "$source" ]; then continue; fi
-    if [ ! -f "$source" ]; then
-      printf 'retained plan diagnostics path is not a regular file: %s\n' "$source" >&2
-      return 1
-    fi
-    destination="$OUTPUT/$label-$case_name-plan.stderr.raw.txt"
-    if [ -e "$destination" ] || [ -L "$destination" ] || ! cp -p "$source" "$destination"; then
-      printf 'could not safely preserve retained plan diagnostics: %s\n' "$source" >&2
-      return 1
-    fi
+  for source in "$raw_source" "$staged_source" "$exit_source"; do
+    [[ -f "$source" && ! -L "$source" ]] || {
+      if [ "$required" = 1 ]; then
+        echo "FAIL: collector plan evidence is missing or unsafe for $label/$case_name" >&2
+        return 1
+      fi
+      return 0
+    }
   done
+  cp -p "$raw_source" "$OUTPUT/$label-$case_name-plan.stderr.raw.txt"
+  cp -p "$staged_source" "$OUTPUT/$label-$case_name-plan.stderr.txt"
+  cp -p "$exit_source" "$OUTPUT/$label-$case_name-plan.exit"
 }
 
 run_collector() {
-  local label="$1" mode="$2" oracle="$3" spaced="$4" log="$OUTPUT/$1.log"
-  local receipt="$MARKERS/$label" tmp_root="$OUTPUT/tmp/$label" temp_bin="$DIAGNOSTIC_CLI" temp_dir="$OUTPUT/tmp/$label/TMPDIR with spaces"
-  local mise_receipt="$MARKERS/$label.mise"
-  local collector_rc=0
-  if [ "$label" = baseline ]; then temp_bin="$CLI"; fi
-  mkdir -p "$tmp_root" || return 2
-  if [ "$spaced" = 1 ]; then
-    temp_dir="$tmp_root/actual temporary root"
-    mkdir -m 700 "$temp_dir" || return 2
-    local symlink_tmp="$tmp_root/TMPDIR symlink"
-    ln -s "$temp_dir" "$symlink_tmp" || return 2
-    temp_dir="$symlink_tmp"
-    local spaced_dir="$tmp_root/space path"
-    mkdir -m 700 "$spaced_dir" || return 2
-    temp_bin="$spaced_dir/velnor-actions"
-    ln -s "$DIAGNOSTIC_CLI" "$temp_bin" || return 2
-    if [ "$(file_sha256 "$temp_bin")" != "$DIAGNOSTIC_SHA" ]; then
-      echo 'FAIL: spaced diagnostic CLI path changed binary identity' >&2
-      return 1
-    fi
-  else
-    mkdir -m 700 "$temp_dir" || return 2
-  fi
-  printf '%s\n' "$temp_dir" >"$OUTPUT/$label.tmp-root.txt" || return 2
-  : >"$receipt" || return 2
-  : >"$mise_receipt" || return 2
+  local label="$1" mode="$2" oracle="$3" operation="$4" candidate="$5" tmpdir="$6" cases="$7"
+  local mise_receipt="$OUTPUT/$label.mise.receipt" direct_receipt="$OUTPUT/$label.direct-cargo.receipt"
+  local status=0 workspace case_name
+  : >"$mise_receipt"
+  : >"$direct_receipt"
   rm -f "$CARGO_BUILD_MARKER"
-  printf 'TMPDIR=%s\nCLI=%s\nmode=%s\n' "$temp_dir" "$temp_bin" "$mode" >"$OUTPUT/$label.command.txt"
-  (
+  printf 'operation=%s\nmode=%s\ncandidate=%s\nTMPDIR=%s\noracle=%s\n' \
+    "$operation" "$mode" "$candidate" "$tmpdir" "$oracle" >"$OUTPUT/$label.command.txt"
+  if (
     unset CARGO_TARGET_DIR CARGO_BUILD_TARGET
     export PATH="$STUB_BIN:$MISE_ADAPTER_BIN:$ORIGINAL_PATH"
     export MBX_GC_AUTO=0
-    export TMPDIR="$temp_dir"
+    export TMPDIR="$tmpdir"
     export VELNOR_GOLDEN_DIR="$oracle"
     export VELNOR_GOLDEN_KEEP_WORK=1
     export VELNOR_TEST_CARGO_MARKER="$CARGO_BUILD_MARKER"
-    export VELNOR_TEST_CARGO_RECEIPT="$receipt"
+    export VELNOR_TEST_CARGO_RECEIPT="$direct_receipt"
     export VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH"
-    export VELNOR_TEST_CARGO_GUARD="$GUARD"
+    export VELNOR_TEST_CARGO_GUARD="$CARGO_GUARD"
     export VELNOR_TEST_REAL_MISE="$REAL_MISE"
     export VELNOR_TEST_ORIGINAL_PATH="$ORIGINAL_PATH"
-    export VELNOR_TEST_RUST_VERSION="$PINNED_RUST_VERSION"
+    export VELNOR_TEST_RUST_VERSION="$RUST_VERSION"
     export VELNOR_TEST_MISE_CARGO_PATH="$MISE_CARGO_PATH"
     export VELNOR_TEST_MISE_RECEIPT="$mise_receipt"
-    export VELNOR_TEST_PLAN_SOURCE_ROOT="$ROOT"
-    if [ -n "$mode" ]; then export VELNOR_TEST_PLAN_DIAGNOSTIC_MODE="$mode"; else unset VELNOR_TEST_PLAN_DIAGNOSTIC_MODE; fi
-    bash "$ROOT/scripts/capture-opentofu-goldens.sh" "${ARCHIVE_GUARD_ARGS[@]}" check "$temp_bin"
-  ) >"$log" 2>&1 || collector_rc=$?
-  printf '%s\n' "$collector_rc" >"$OUTPUT/$label.exit"
-  if ! preserve_raw_plan_evidence "$label"; then return 2; fi
-  if ! verify_guard_receipt "$label" "$mise_receipt" "$receipt"; then
-    cat "$log" >&2
-    return 2
+    export VELNOR_PLAN_DIAGNOSTICS_ROOT="$ROOT"
+    if [ -n "$mode" ]; then export VELNOR_PLAN_DIAGNOSTICS_MODE="$mode"; else unset VELNOR_PLAN_DIAGNOSTICS_MODE; fi
+    bash "$ROOT/scripts/capture-opentofu-goldens.sh" "${ARCHIVE_GUARD_ARGS[@]}" "$operation" "$candidate"
+  ) >"$OUTPUT/$label.log" 2>&1; then
+    status=0
+  else
+    status=$?
   fi
+  printf '%s\n' "$status" >"$OUTPUT/$label.exit"
+  test_mise_adapter_verify "$label" "$mise_receipt" "$RUST_VERSION" "$CARGO_GUARD" || return 1
+  verify_direct_cargo_receipt "$label" "$direct_receipt" || return 1
+  verify_qualification_guard || return 1
   if [ -e "$CARGO_BUILD_MARKER" ]; then
-    cat "$log" >&2
-    echo "FAIL: collector invoked an implicit cargo build: $label" >&2
-    return 2
+    echo "FAIL: collector invoked an implicit Cargo build for $label" >&2
+    return 1
   fi
-  DIAGNOSTIC_LAST_LOG="$log"
-  DIAGNOSTIC_LAST_RC="$collector_rc"
+  printf '%s\n' "$tmpdir" >"$OUTPUT/$label.tmpdir.txt"
+  workspace="$(workspace_from_log "$label")" || return 1
+  for case_name in $cases; do
+    preserve_plan_evidence "$label" "$workspace" "$case_name" 1 || return 1
+  done
 }
 
-assert_plan_outputs() {
-  local label="$1" mode="$2" work case repo raw staged plan_exit expected_raw expected_normalized should_warn failed=0 expected_raw_file expected_normalized_file
-  work="$(diagnostic_workspace_from_log "$label")" || return 1
-  for case in nested mbx-nextest empty-suite minimal-cargo dogfood; do
-    if [ "$case" = dogfood ]; then repo="$ROOT"; else repo="$work/$case"; fi
-    raw="$work/raw/$case/plan.stderr.raw.txt"
-    staged="$work/stage/$case/plan.stderr.txt"
-    plan_exit="$work/stage/$case/plan.exit"
-    if [ ! -f "$raw" ] || [ ! -f "$staged" ] || [ ! -f "$plan_exit" ]; then
-      echo "FAIL: collector did not retain raw and staged plan evidence for $label/$case" >&2
-      failed=1
-      continue
-    fi
-    cp "$raw" "$OUTPUT/$label.$case.plan.stderr.raw.txt" || { failed=1; continue; }
-    cp "$staged" "$OUTPUT/$label.$case.plan.stderr.txt" || { failed=1; continue; }
-    cp "$plan_exit" "$OUTPUT/$label.$case.plan.exit" || { failed=1; continue; }
-    if [ "$(cat "$plan_exit")" != 0 ]; then
-      echo "FAIL: successful diagnostic plan returned nonzero for $label/$case" >&2
-      failed=1
-      continue
-    fi
-    should_warn=0
-    case "$mode:$case" in
-      warning-all:*|fail57:*) should_warn=1 ;;
-      nested-only:nested|dogfood-only:dogfood) should_warn=1 ;;
-    esac
-    if [ "$should_warn" = 1 ]; then
-      if [ "$case" = dogfood ]; then
-        expected_raw="plan-diagnostic-warning repository=$ROOT source-root=$ROOT work=$work"
-        expected_normalized='plan-diagnostic-warning repository=<root> source-root=<root> work=<work>'
-      else
-        expected_raw="plan-diagnostic-warning repository=$repo source-root=$ROOT work=$work"
-        expected_normalized='plan-diagnostic-warning repository=<repo> source-root=<root> work=<work>'
-      fi
-      expected_raw_file="$OUTPUT/$label.$case.expected-plan.stderr.raw.txt"
-      expected_normalized_file="$OUTPUT/$label.$case.expected-plan.stderr.normalized.txt"
-      printf '%s\n' "$expected_raw" >"$expected_raw_file"
-      printf '%s\n' "$expected_normalized" >"$expected_normalized_file"
-      if ! cmp -s "$expected_raw_file" "$raw" \
-        || ! cmp -s "$expected_normalized_file" "$staged"; then
-        echo "FAIL: raw and normalized plan warning bytes differ for $label/$case" >&2
-        failed=1
-      fi
-    elif [ -s "$raw" ] || [ -s "$staged" ]; then
-      echo "FAIL: unaffected plan emitted diagnostic stderr for $label/$case" >&2
-      failed=1
-    fi
-  done
-  return "$failed"
+assert_plan_bytes() {
+  node - "$OUTPUT" "$1" "$2" "$3" "$4" "$ROOT" <<'JS'
+const fs = require('node:fs');
+const [output, label, mode, caseName, repo, root] = process.argv.slice(2);
+const base = `${output}/${label}-${caseName}`;
+const raw = fs.readFileSync(`${base}-plan.stderr.raw.txt`);
+const staged = fs.readFileSync(`${base}-plan.stderr.txt`);
+const exit = fs.readFileSync(`${base}-plan.exit`, 'utf8');
+let expectedRaw;
+let expectedStaged;
+let warning = '';
+const warn = mode === 'warning-all'
+  || ((mode === 'nested-only' || mode === 'fail57') && caseName === 'nested')
+  || (mode === 'dogfood-only' && caseName === 'dogfood');
+if (warn) warning = 'warning: plan-diagnostic-regression\n';
+if (mode === 'baseline' || mode === 'quiet') {
+  expectedRaw = Buffer.alloc(0);
+  expectedStaged = Buffer.alloc(0);
+} else {
+  const lines = raw.toString('utf8').split('\n');
+  if (lines.length !== (warn ? 5 : 4) || lines[0] !== `Repository: ${repo}`
+      || lines[1] !== `Preview: ${repo}/diagnostic-preview`
+      || lines[2] !== `Plan context: repository=${repo} source-root=${root}`) {
+    throw new Error(`raw plan diagnostics have an unexpected shape for ${label}/${caseName}`);
+  }
+  expectedRaw = Buffer.from(`Repository: ${repo}\nPreview: ${repo}/diagnostic-preview\nPlan context: repository=${repo} source-root=${root}\n${warning}`);
+  const normalizedRepo = caseName === 'dogfood' ? '<root>' : '<repo>';
+  expectedStaged = Buffer.from(`Repository: ${normalizedRepo}\nPreview: ${normalizedRepo}/diagnostic-preview\nPlan context: repository=${normalizedRepo} source-root=<root>\n${warning}`);
+}
+const expectedExit = mode === 'fail57' && caseName === 'nested' ? '57\n' : '0\n';
+if (!raw.equals(expectedRaw) || !staged.equals(expectedStaged) || exit !== expectedExit) {
+  throw new Error(`raw, staged, or exit evidence differs for ${label}/${caseName}`);
+}
+JS
 }
 
 assert_mismatch_scope() {
-  local label="$1" expected_case="$2" work="$3" mismatch_count diff_count diff_header
-  mismatch_count="$(grep -Fc 'FAIL: golden mismatch:' "$OUTPUT/$label.log" || true)"
-  if [ "$mismatch_count" != 1 ] || ! grep -Fq "FAIL: golden mismatch: $expected_case " "$OUTPUT/$label.log"; then
-    cat "$OUTPUT/$label.log" >&2
-    echo "FAIL: collector mismatch scope differs from $expected_case for $label" >&2
+  local label="$1" expected_case="$2" oracle="$3" workspace="$4" case_name difference
+  if [ "$(grep -Fc 'FAIL: golden mismatch:' "$OUTPUT/$label.log" || true)" != 1 ] \
+    || ! grep -Fq "FAIL: golden mismatch: $expected_case " "$OUTPUT/$label.log"; then
+    echo "FAIL: expected one isolated golden mismatch for $label/$expected_case" >&2
     return 1
   fi
-  diff_header="$work/check-diff/$expected_case.diff"
-  diff_count="$(grep -c '^diff -r ' "$diff_header" || true)"
-  if [ "$diff_count" != 1 ] || ! grep -Fq '/plan.stderr.txt' "$diff_header"; then
-    cat "$diff_header" >&2
-    echo "FAIL: $label mismatch included output beyond plan.stderr.txt" >&2
-    return 1
-  fi
+  for case_name in "${CASES[@]}"; do
+    difference="$workspace/check-diff/$case_name.diff"
+    if [ "$case_name" = "$expected_case" ]; then
+      if [ "$(grep -c '^diff -r ' "$difference" || true)" != 1 ] \
+        || ! grep -Fq '/plan.stderr.txt' "$difference" \
+        || ! diff -r -x plan.stderr.txt "$oracle/cases/$case_name" "$workspace/stage/$case_name" \
+          >"$OUTPUT/$label-$case_name.nonstderr.diff"; then
+        echo "FAIL: $label changed files beyond the expected plan stderr" >&2
+        return 1
+      fi
+    elif [ -s "$difference" ] \
+      || ! diff -r "$oracle/cases/$case_name" "$workspace/stage/$case_name" \
+        >"$OUTPUT/$label-$case_name.unaffected.diff"; then
+      echo "FAIL: $label changed an unaffected scenario: $case_name" >&2
+      return 1
+    fi
+  done
+  cp -p "$workspace/check-diff/$expected_case.diff" "$OUTPUT/$label.diff" \
+    || { echo "FATAL: could not retain mismatch evidence for $label/$expected_case" >&2; exit 2; }
 }
 
-BEHAVIOR_FAILED=0
-: >"$OUTPUT/behavior-failures.log"
+behavior_failures=0
 record_behavior_failure() {
-  printf '%s\n' "$*" >>"$OUTPUT/behavior-failures.log"
-  printf 'FAIL: %s\n' "$*" >&2
-  BEHAVIOR_FAILED=1
+  printf 'FAIL: behavior assertion: %s\n' "$1" >&2
+  behavior_failures=$((behavior_failures + 1))
 }
 
-run_collector baseline '' "$EMPTY_ORACLE" 0 || exit $?
-if [ "$DIAGNOSTIC_LAST_RC" -ne 0 ] || ! grep -Fq 'ALL GOLDENS MATCH' "$DIAGNOSTIC_LAST_LOG"; then
-  cat "$DIAGNOSTIC_LAST_LOG" >&2
-  echo 'FAIL: supplied CLI does not pass the copied empty plan stderr oracle' >&2
-  exit 1
-fi
-assert_plan_outputs baseline quiet >/dev/null || exit $?
-
-run_collector quiet quiet "$EMPTY_ORACLE" 0 || exit $?
-if [ "$DIAGNOSTIC_LAST_RC" -ne 0 ] || ! grep -Fq 'ALL GOLDENS MATCH' "$DIAGNOSTIC_LAST_LOG"; then
-  cat "$DIAGNOSTIC_LAST_LOG" >&2
-  echo 'FAIL: quiet compiled CLI does not pass the copied empty plan stderr oracle' >&2
-  exit 1
-fi
-assert_plan_outputs quiet quiet >/dev/null || exit $?
-
-run_collector warning-empty warning-all "$EMPTY_ORACLE" 0 || exit $?
-warning_work="$(diagnostic_workspace_from_log warning-empty)" || exit 2
-if ! assert_plan_outputs warning-empty warning-all >/dev/null; then
-  record_behavior_failure 'warning-empty raw/staged warning bytes did not match every scenario'
-fi
-if [ "$DIAGNOSTIC_LAST_RC" -ne 1 ] \
-  || [ "$(grep -Fc 'FAIL: golden mismatch:' "$DIAGNOSTIC_LAST_LOG" || true)" != 5 ]; then
-  record_behavior_failure 'warning-empty did not produce five plan-stderr mismatches'
-fi
-for case in nested mbx-nextest empty-suite minimal-cargo dogfood; do
-  diff_header="$warning_work/check-diff/$case.diff"
-  if [ "$(grep -c '^diff -r ' "$diff_header" || true)" != 1 ] \
-    || ! grep -Fq '/plan.stderr.txt' "$diff_header"; then
-    record_behavior_failure "warning-all changed output beyond plan.stderr.txt for $case"
+assert_all_diagnostics_differ_only_in_stderr() {
+  local label="$1" oracle="$2" workspace="$3" case_name difference
+  if [ "$(grep -Fc 'FAIL: golden mismatch:' "$OUTPUT/$label.log" || true)" != 5 ]; then
+    echo "FAIL: $label did not produce exactly five plan stderr mismatches" >&2
+    return 1
   fi
+  for case_name in "${CASES[@]}"; do
+    difference="$workspace/check-diff/$case_name.diff"
+    if [ "$(grep -c '^diff -r ' "$difference" || true)" != 1 ] \
+      || ! grep -Fq '/plan.stderr.txt' "$difference" \
+      || ! grep -Fq "FAIL: golden mismatch: $case_name " "$OUTPUT/$label.log" \
+      || ! diff -r -x plan.stderr.txt "$oracle/cases/$case_name" "$workspace/stage/$case_name" \
+        >"$OUTPUT/$label-$case_name.nonstderr.diff"; then
+      echo "FAIL: $label mismatch scope was broader than plan stderr for $case_name" >&2
+      return 1
+    fi
+  done
+}
+
+assert_collector_status() {
+  local label="$1" expected="$2" actual
+  actual="$(cat "$OUTPUT/$label.exit")"
+  if [ "$actual" != "$expected" ]; then
+    cat "$OUTPUT/$label.log" >&2
+    printf 'FAIL: collector exit for %s was %s, expected %s\n' "$label" "$actual" "$expected" >&2
+    return 1
+  fi
+}
+
+mkdir -m 700 "$OUTPUT/oracle-warning"
+cp -RP "$CONTROL_ORACLE/." "$EXPECTED_ORACLE/"
+for case_name in "${CASES[@]}"; do
+  if [ "$case_name" = dogfood ]; then normalized_repo='<root>'; else normalized_repo='<repo>'; fi
+  printf 'Repository: %s\nPreview: %s/diagnostic-preview\nPlan context: repository=%s source-root=<root>\nwarning: plan-diagnostic-regression\n' \
+    "$normalized_repo" "$normalized_repo" "$normalized_repo" >"$EXPECTED_ORACLE/cases/$case_name/plan.stderr.txt"
+done
+rebuild_oracle_manifest "$EXPECTED_ORACLE"
+
+NORMAL_TMPDIR="$TMP_ROOT"
+run_collector baseline '' "$EMPTY_ORACLE" check "$CLI" "$NORMAL_TMPDIR" 'nested mbx-nextest empty-suite minimal-cargo dogfood'
+assert_collector_status baseline 0 || record_behavior_failure 'baseline collector exit'
+[[ "$(grep -Fc 'ALL GOLDENS MATCH' "$OUTPUT/baseline.log")" = 1 ]] \
+  || record_behavior_failure 'baseline all-goldens-match output'
+for case_name in "${CASES[@]}"; do
+  repo="$OUTPUT/baseline.workspace.txt"
+  repo="$(cat "$repo")/$case_name"
+  if [ "$case_name" = dogfood ]; then repo="$ROOT"; fi
+  assert_plan_bytes baseline baseline "$case_name" "$repo" \
+    || record_behavior_failure "baseline plan bytes for $case_name"
 done
 
-run_collector warning-expected warning-all "$EXPECTED_ORACLE" 0 || exit $?
-if [ "$DIAGNOSTIC_LAST_RC" -ne 0 ] || ! grep -Fq 'ALL GOLDENS MATCH' "$DIAGNOSTIC_LAST_LOG"; then
-  record_behavior_failure 'warning-all did not match the hand-authored external oracle'
-fi
-if ! assert_plan_outputs warning-expected warning-all >/dev/null; then
-  record_behavior_failure 'warning-expected raw/staged warning bytes did not match every scenario'
-fi
+run_collector quiet quiet "$EMPTY_ORACLE" check "$FIXTURE_COPY" "$NORMAL_TMPDIR" 'nested mbx-nextest empty-suite minimal-cargo dogfood'
+assert_collector_status quiet 0 || record_behavior_failure 'quiet collector exit'
+[[ "$(grep -Fc 'ALL GOLDENS MATCH' "$OUTPUT/quiet.log")" = 1 ]] \
+  || record_behavior_failure 'quiet all-goldens-match output'
+for case_name in "${CASES[@]}"; do
+  workspace="$(cat "$OUTPUT/quiet.workspace.txt")"
+  repo="$workspace/$case_name"
+  if [ "$case_name" = dogfood ]; then repo="$ROOT"; fi
+  assert_plan_bytes quiet quiet "$case_name" "$repo" \
+    || record_behavior_failure "quiet plan bytes for $case_name"
+done
 
-run_collector nested-only nested-only "$EMPTY_ORACLE" 0 || exit $?
- if ! assert_plan_outputs nested-only nested-only >/dev/null; then
-  record_behavior_failure 'nested-only raw/staged warning bytes did not match the intended nested case'
-fi
-nested_work="$(diagnostic_workspace_from_log nested-only)" || exit 2
-if [ "$DIAGNOSTIC_LAST_RC" -ne 1 ]; then
-  record_behavior_failure 'nested-only warning did not produce one collector mismatch'
-fi
-if ! assert_mismatch_scope nested-only nested "$nested_work"; then
-  record_behavior_failure 'nested-only mismatch scope did not isolate the nested plan stderr'
-fi
+run_collector control-capture control "$CONTROL_ORACLE" capture "$FIXTURE_COPY" "$NORMAL_TMPDIR" 'nested mbx-nextest empty-suite minimal-cargo dogfood'
+assert_collector_status control-capture 0 || record_behavior_failure 'control capture collector exit'
+for case_name in "${CASES[@]}"; do
+  workspace="$(cat "$OUTPUT/control-capture.workspace.txt")"
+  repo="$workspace/$case_name"
+  if [ "$case_name" = dogfood ]; then repo="$ROOT"; fi
+  assert_plan_bytes control-capture control "$case_name" "$repo" \
+    || record_behavior_failure "control capture plan bytes for $case_name"
+done
+run_collector control-check control "$CONTROL_ORACLE" check "$FIXTURE_COPY" "$NORMAL_TMPDIR" 'nested mbx-nextest empty-suite minimal-cargo dogfood'
+assert_collector_status control-check 0 || record_behavior_failure 'control check collector exit'
+[[ "$(grep -Fc 'ALL GOLDENS MATCH' "$OUTPUT/control-check.log")" = 1 ]] \
+  || record_behavior_failure 'control check all-goldens-match output'
+for case_name in "${CASES[@]}"; do
+  workspace="$(cat "$OUTPUT/control-check.workspace.txt")"
+  repo="$workspace/$case_name"
+  if [ "$case_name" = dogfood ]; then repo="$ROOT"; fi
+  assert_plan_bytes control-check control "$case_name" "$repo" \
+    || record_behavior_failure "control check plan bytes for $case_name"
+done
 
-run_collector dogfood-only dogfood-only "$EMPTY_ORACLE" 0 || exit $?
-if ! assert_plan_outputs dogfood-only dogfood-only >/dev/null; then
-  record_behavior_failure 'dogfood-only raw/staged warning bytes did not match the intended dogfood case'
-fi
-dogfood_work="$(diagnostic_workspace_from_log dogfood-only)" || exit 2
-if [ "$DIAGNOSTIC_LAST_RC" -ne 1 ]; then
-  record_behavior_failure 'dogfood-only warning did not produce one collector mismatch'
-fi
-if ! assert_mismatch_scope dogfood-only dogfood "$dogfood_work"; then
-  record_behavior_failure 'dogfood-only mismatch scope did not isolate the dogfood plan stderr'
-fi
+run_collector warning-empty warning-all "$EMPTY_ORACLE" check "$FIXTURE_COPY" "$NORMAL_TMPDIR" 'nested mbx-nextest empty-suite minimal-cargo dogfood'
+assert_collector_status warning-empty 1 || record_behavior_failure 'warning-empty collector exit'
+workspace="$(cat "$OUTPUT/warning-empty.workspace.txt")"
+for case_name in "${CASES[@]}"; do
+  repo="$workspace/$case_name"
+  if [ "$case_name" = dogfood ]; then repo="$ROOT"; fi
+  assert_plan_bytes warning-empty warning-all "$case_name" "$repo" \
+    || record_behavior_failure "warning-empty plan bytes for $case_name"
+done
+assert_all_diagnostics_differ_only_in_stderr warning-empty "$EMPTY_ORACLE" "$workspace" \
+  || record_behavior_failure 'warning-empty mismatch scope'
 
-run_collector warning-spaced-symlink warning-all "$EXPECTED_ORACLE" 1 || exit $?
-if [ "$DIAGNOSTIC_LAST_RC" -ne 0 ] || ! grep -Fq 'ALL GOLDENS MATCH' "$DIAGNOSTIC_LAST_LOG"; then
-  record_behavior_failure 'warning candidate failed with spaced executable or symlinked TMPDIR'
-fi
-if ! assert_plan_outputs warning-spaced-symlink warning-all >/dev/null; then
-  record_behavior_failure 'warning candidate with spaced executable did not preserve exact diagnostics'
-fi
+run_collector warning-expected warning-all "$EXPECTED_ORACLE" check "$FIXTURE_COPY" "$NORMAL_TMPDIR" 'nested mbx-nextest empty-suite minimal-cargo dogfood'
+assert_collector_status warning-expected 0 || record_behavior_failure 'warning-expected collector exit'
+[[ "$(grep -Fc 'ALL GOLDENS MATCH' "$OUTPUT/warning-expected.log")" = 1 ]] \
+  || record_behavior_failure 'warning-expected all-goldens-match output'
+workspace="$(cat "$OUTPUT/warning-expected.workspace.txt")"
+for case_name in "${CASES[@]}"; do
+  repo="$workspace/$case_name"
+  if [ "$case_name" = dogfood ]; then repo="$ROOT"; fi
+  assert_plan_bytes warning-expected warning-all "$case_name" "$repo" \
+    || record_behavior_failure "warning-expected plan bytes for $case_name"
+done
 
-run_collector failure57 fail57 "$EMPTY_ORACLE" 0 || exit $?
-failure_work="$(diagnostic_workspace_from_log failure57)" || exit $?
-if [ "$DIAGNOSTIC_LAST_RC" -ne 2 ] \
-  || ! grep -Fq 'FATAL: plan failed for nested' "$DIAGNOSTIC_LAST_LOG" \
-  || [ "$(cat "$failure_work/stage/nested/plan.exit")" != 57 ]; then
-  record_behavior_failure 'nonzero plan exit was not retained and reported'
-fi
-printf 'plan-diagnostic-warning repository=%s source-root=%s work=%s\n' \
-  "$failure_work/nested" "$ROOT" "$failure_work" >"$OUTPUT/expected-failure.raw"
-printf 'plan-diagnostic-warning repository=<repo> source-root=<root> work=<work>\n' \
-  >"$OUTPUT/expected-failure.normalized"
-if ! cmp -s "$OUTPUT/expected-failure.raw" "$failure_work/raw/nested/plan.stderr.raw.txt" \
-  || ! cmp -s "$OUTPUT/expected-failure.normalized" "$failure_work/stage/nested/plan.stderr.txt"; then
-  record_behavior_failure 'fail57 did not retain exact raw and normalized warning bytes'
-fi
-cp "$failure_work/raw/nested/plan.stderr.raw.txt" "$OUTPUT/failure57.nested.plan.stderr.raw.txt" || exit 2
-cp "$failure_work/stage/nested/plan.stderr.txt" "$OUTPUT/failure57.nested.plan.stderr.txt" || exit 2
-cp "$failure_work/stage/nested/plan.exit" "$OUTPUT/failure57.nested.plan.exit" || exit 2
+run_collector nested-only nested-only "$CONTROL_ORACLE" check "$FIXTURE_COPY" "$NORMAL_TMPDIR" 'nested mbx-nextest empty-suite minimal-cargo dogfood'
+assert_collector_status nested-only 1 || record_behavior_failure 'nested-only collector exit'
+workspace="$(cat "$OUTPUT/nested-only.workspace.txt")"
+for case_name in "${CASES[@]}"; do
+  repo="$workspace/$case_name"
+  if [ "$case_name" = dogfood ]; then repo="$ROOT"; fi
+  assert_plan_bytes nested-only nested-only "$case_name" "$repo" \
+    || record_behavior_failure "nested-only plan bytes for $case_name"
+done
+assert_mismatch_scope nested-only nested "$CONTROL_ORACLE" "$workspace" \
+  || record_behavior_failure 'nested-only mismatch scope'
 
-AFTER="$(golden_fingerprint "$GOLDEN_DIR")" || exit 2
-if [ "$AFTER" != "$BEFORE" ]; then
-  echo 'FAIL: diagnostic tests changed the checked-in golden oracle' >&2
+run_collector dogfood-only dogfood-only "$CONTROL_ORACLE" check "$FIXTURE_COPY" "$NORMAL_TMPDIR" 'nested mbx-nextest empty-suite minimal-cargo dogfood'
+assert_collector_status dogfood-only 1 || record_behavior_failure 'dogfood-only collector exit'
+workspace="$(cat "$OUTPUT/dogfood-only.workspace.txt")"
+for case_name in "${CASES[@]}"; do
+  repo="$workspace/$case_name"
+  if [ "$case_name" = dogfood ]; then repo="$ROOT"; fi
+  assert_plan_bytes dogfood-only dogfood-only "$case_name" "$repo" \
+    || record_behavior_failure "dogfood-only plan bytes for $case_name"
+done
+assert_mismatch_scope dogfood-only dogfood "$CONTROL_ORACLE" "$workspace" \
+  || record_behavior_failure 'dogfood-only mismatch scope'
+
+SPACED_FIXTURE_DIR="$OUTPUT/space path"
+mkdir -m 700 "$SPACED_FIXTURE_DIR"
+SPACED_FIXTURE="$SPACED_FIXTURE_DIR/qualification-diagnostics"
+cp -p "$FIXTURE_COPY" "$SPACED_FIXTURE"
+[[ "$(file_sha256 "$SPACED_FIXTURE")" = "$FIXTURE_SHA256" ]] \
+  || { echo 'FATAL: spaced diagnostics fixture copy changed identity' >&2; exit 2; }
+run_collector warning-spaced warning-all "$EXPECTED_ORACLE" check "$SPACED_FIXTURE" "$SPACE_TMP_LINK" 'nested mbx-nextest empty-suite minimal-cargo dogfood'
+assert_collector_status warning-spaced 0 || record_behavior_failure 'warning-spaced collector exit'
+[[ "$(grep -Fc 'ALL GOLDENS MATCH' "$OUTPUT/warning-spaced.log")" = 1 ]] \
+  || record_behavior_failure 'warning-spaced all-goldens-match output'
+workspace="$(cat "$OUTPUT/warning-spaced.workspace.txt")"
+for case_name in "${CASES[@]}"; do
+  repo="$workspace/$case_name"
+  if [ "$case_name" = dogfood ]; then repo="$ROOT"; fi
+  assert_plan_bytes warning-spaced warning-all "$case_name" "$repo" \
+    || record_behavior_failure "warning-spaced plan bytes for $case_name"
+done
+
+run_collector fail57 fail57 "$CONTROL_ORACLE" check "$FIXTURE_COPY" "$NORMAL_TMPDIR" nested
+assert_collector_status fail57 2 || record_behavior_failure 'fail57 collector exit'
+workspace="$(cat "$OUTPUT/fail57.workspace.txt")"
+repo="$workspace/nested"
+assert_plan_bytes fail57 fail57 nested "$repo" \
+  || record_behavior_failure 'fail57 plan bytes'
+if ! grep -Fq 'FATAL: plan failed for nested' "$OUTPUT/fail57.log" \
+  || [ -e "$workspace/stage/nested/generate.exit" ] \
+  || [ -d "$workspace/stage/nested/preview/.github" ]; then
+  cat "$OUTPUT/fail57.log" >&2
+  echo 'FAIL: injected plan failure did not follow a successful plan without running generate' >&2
+  record_behavior_failure 'fail57 did not preserve the post-plan failure boundary'
+fi
+node - "$OUTPUT/fail57.log" "$OUTPUT/fail57-nested-plan.stderr.raw.txt" <<'JS' \
+  || record_behavior_failure 'fail57 raw stderr was not surfaced byte-for-byte'
+const fs = require('node:fs');
+const [logPath, rawPath] = process.argv.slice(2);
+const log = fs.readFileSync(logPath);
+const raw = fs.readFileSync(rawPath);
+if (raw.length === 0 || log.indexOf(raw) < 0) {
+  throw new Error('failed plan stderr was not surfaced byte-for-byte in the collector log');
+}
+JS
+
+ORACLE_AFTER="$(golden_fingerprint "$ORACLE")" || exit 2
+[[ "$ORACLE_AFTER" = "$ORACLE_BEFORE" ]] \
+  || { echo 'FATAL: diagnostic qualification changed the selected oracle' >&2; exit 2; }
+[[ "$(file_sha256 "$CLI")" = "$CLI_SHA" \
+  && "$(file_sha256 "$FIXTURE")" = "$FIXTURE_SHA256" ]] \
+  || { echo 'FATAL: diagnostic qualification changed the CLI or fixture identity' >&2; exit 2; }
+verify_qualification_guard || exit 2
+printf 'selected_oracle_sha256=%s\ncontrol_oracle_sha256=%s\nexpected_warning_oracle_sha256=%s\ncli_sha256=%s\nfixture_sha256=%s\narchive_guard_sha256=%s\n' \
+  "$ORACLE_AFTER" "$(golden_fingerprint "$CONTROL_ORACLE")" \
+  "$(golden_fingerprint "$EXPECTED_ORACLE")" "$CLI_SHA" "$FIXTURE_SHA256" \
+  "$QUALIFICATION_GUARD_SHA256" >"$OUTPUT/result.txt"
+printf 'baseline=0 quiet=0 control_capture=0 control_check=0 warning_empty=1 warning_expected=0 nested_only=1 dogfood_only=1 warning_spaced=0 fail57=2\n'
+printf 'diagnostic evidence: %s\n' "$OUTPUT"
+if [ "$behavior_failures" -ne 0 ]; then
+  printf 'diagnostic behavior failures=%s\n' "$behavior_failures" >&2
   exit 1
 fi
-printf 'baseline=%s quiet=%s warning_empty=%s warning_expected=%s nested_only=%s dogfood_only=%s spaced_symlink=%s fail57=%s\n' \
-  "$(cat "$OUTPUT/baseline.exit")" "$(cat "$OUTPUT/quiet.exit")" \
-  "$(cat "$OUTPUT/warning-empty.exit")" "$(cat "$OUTPUT/warning-expected.exit")" \
-  "$(cat "$OUTPUT/nested-only.exit")" "$(cat "$OUTPUT/dogfood-only.exit")" \
-  "$(cat "$OUTPUT/warning-spaced-symlink.exit")" "$(cat "$OUTPUT/failure57.exit")" \
-  >"$OUTPUT/result.txt"
-if [ "$BEHAVIOR_FAILED" -ne 0 ]; then
-  echo 'FAIL: one or more plan diagnostic behavior assertions failed' >&2
-  exit 1
-fi
-echo 'passed compiled plan stderr baseline, warning rejection, exact normalization, scoped warnings, symlink paths, and exit 57'
