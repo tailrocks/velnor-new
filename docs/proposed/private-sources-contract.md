@@ -374,3 +374,21 @@ statement in hard decision 6 concerns the suites amendment and its non-private
 `fixtures/bun-workspace` golden, as recorded in `bun-browser-suites.md`. That
 non-private golden remains unchanged. The adopted hard-decision text is not
 changed by this correction, and no new owner approval is claimed.
+
+### Bun artifact repository admission
+
+Private Bun asset handoffs require a private consuming repository. A canonical
+native check reads current repository metadata from the fixed GitHub API before
+App-token acquisition and again immediately before artifact upload. Both checks
+must succeed. The response must match the destination repository and contain
+Boolean `private: true` with `visibility: "private"`. Public, internal, missing,
+malformed or conflicting metadata, transport errors and expired deadlines fail
+the producer. The checks use only the ordinary workflow token and execute no
+repository scripts. They are generated outside caller-supplied producer steps,
+so matching policy and job edits cannot remove or condition the checks.
+
+Artifact access follows the consuming repository's read permissions. The check
+does not encrypt the handoff or change its access controls. An owner must remove
+private handoff artifacts before changing repository visibility or granting
+untrusted readers access. Current API checks do not promise confidentiality
+after a later owner permission change.

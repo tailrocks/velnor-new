@@ -27,6 +27,14 @@ path = "tests/api2026_pull_context_public.rs"
 name = "candidate_freshness_public"
 path = "tests/candidate_freshness_public.rs"
 
+[[test]]
+name = "bun_private_repository_public"
+path = "tests/bun_private_repository_public.rs"
+
+[[test]]
+name = "bun_assets_handoff_public"
+path = "tests/bun_assets_handoff_public.rs"
+
 [dependencies]
 serde_json = { workspace = true }
 velnor-actions-orchestrator = { version = "=0.1.57", path = "../velnor-actions-orchestrator" }

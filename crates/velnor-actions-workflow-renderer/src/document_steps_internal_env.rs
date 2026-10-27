@@ -19,6 +19,9 @@ pub(super) fn internal_env(
     job_env: &BTreeMap<String, String>,
     step_env: &BTreeMap<String, String>,
 ) -> Result<Yaml, RenderError> {
+    if let Some(env) = bun_assets_repository_check_env(job_id, op, step_env)? {
+        return Ok(env);
+    }
     commands::validate_env(step_env)?;
     if job_id == crate::render::PLAN_JOB_ID
         && op == steps::PLAN_OPERATION
@@ -95,4 +98,46 @@ pub(super) fn internal_env(
         env.push((key.clone(), Yaml::str(value.clone())));
     }
     Ok(Yaml::Map(env))
+}
+
+fn bun_assets_repository_check_env(
+    job_id: &str,
+    op: &str,
+    step_env: &BTreeMap<String, String>,
+) -> Result<Option<Yaml>, RenderError> {
+    if op != velnor_actions_contract::BUN_ASSETS_REPOSITORY_CHECK_OPERATION {
+        return Ok(None);
+    }
+    let expected = BTreeMap::from([
+        ("GH_TOKEN".to_owned(), "${{ github.token }}".to_owned()),
+        (
+            "VELNOR_BUN_ASSET_REPOSITORY".to_owned(),
+            "${{ github.repository }}".to_owned(),
+        ),
+    ]);
+    if !is_bun_assets_job_id(job_id) || step_env != &expected {
+        return Err(RenderError::InvalidWorkflow(
+            "bun_assets_repository_check_scope".to_owned(),
+        ));
+    }
+    Ok(Some(Yaml::Map(vec![
+        ("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")),
+        (
+            "VELNOR_BUN_ASSET_REPOSITORY".to_owned(),
+            Yaml::str("${{ github.repository }}"),
+        ),
+        (
+            INTERNAL_OP_ENV.to_owned(),
+            Yaml::str(velnor_actions_contract::BUN_ASSETS_REPOSITORY_CHECK_OPERATION),
+        ),
+    ])))
+}
+
+fn is_bun_assets_job_id(job_id: &str) -> bool {
+    job_id
+        .strip_prefix("bun-")
+        .and_then(|id| {
+            id.strip_suffix(crate::verification_jobs::bun_assets_jobs::BUN_ASSETS_SUFFIX)
+        })
+        .is_some_and(|id| !id.is_empty())
 }

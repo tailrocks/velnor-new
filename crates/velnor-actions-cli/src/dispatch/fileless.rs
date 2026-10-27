@@ -21,6 +21,7 @@ pub(super) fn uses_runner_temp_gate(op: InternalOp) -> bool {
             | InternalOp::BunRegistryInstall
             | InternalOp::GradleRun
             | InternalOp::PlaywrightInstall
+            | InternalOp::BunAssetsRepositoryCheck
             | InternalOp::BunAssetsExport
             | InternalOp::BunAssetsPrepare
             | InternalOp::BunAssetsImport
@@ -54,6 +55,7 @@ pub(super) fn gate_runner_temp_operation(op: InternalOp) -> Option<InternalReque
         | InternalOp::BunRegistryInstall
         | InternalOp::GradleRun
         | InternalOp::PlaywrightInstall
+        | InternalOp::BunAssetsRepositoryCheck
         | InternalOp::BunAssetsExport
         | InternalOp::BunAssetsPrepare
         | InternalOp::BunAssetsImport
