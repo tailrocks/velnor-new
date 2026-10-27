@@ -359,3 +359,18 @@ The fetch is the internal operation `private-fetch-v1` (the design's `deps
 fetch`) and the revocation is `private-revoke-v1`, both selected through
 `VELNOR_INTERNAL_OP` with no request file; they are deliberately not public
 subcommands.
+
+### Bun member-job decision scope
+
+The private-asset producer is generator-owned acquisition work. It runs no
+member scripts and does not split a member's check job. Each member still
+installs once and runs its declared checks in its single member job; declared
+suites keep their separate jobs.
+
+This security correction changes workflows that consume locked private release
+assets, including members without suites. It does not claim byte-identical
+output for those private workflows. The historical no-suite compatibility
+statement in hard decision 6 concerns the suites amendment and its non-private
+`fixtures/bun-workspace` golden, as recorded in `bun-browser-suites.md`. That
+non-private golden remains unchanged. The adopted hard-decision text is not
+changed by this correction, and no new owner approval is claimed.

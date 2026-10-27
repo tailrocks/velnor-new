@@ -307,6 +307,104 @@ expect_duplicate_manifest_keys_rejected() {
   echo "passed independent duplicate candidate manifest rejection"
 }
 
+expect_public_output_binding_fault_rejected() {
+  local scope="$WORK/public output-binding fault" status=0 after log baseline_var=BEFORE
+  local baseline_fingerprint="${!baseline_var}"
+  mkdir -p "$scope/bin" "$scope/scratch" || return 2
+  command -v stat >"$scope/bin/real-stat" || return 2
+  command -v sed >"$scope/bin/real-sed" || return 2
+  printf '%s\n' "$scope" >"$scope/bin/scope" || return 2
+  printf '%s\n' "$OUTPUT_BINDING_BAD_DIGEST" >"$scope/bin/digest" || return 2
+  cat >"$scope/bin/stat" <<'STAT'
+#!/bin/sh
+base=${0%/*}
+IFS= read -r real_stat <"$base/real-stat" || exit 88
+"$real_stat" "$@"
+status=$?
+[ "$status" -eq 0 ] || exit "$status"
+IFS= read -r scope <"$base/scope" || exit 88
+for preview in "$scope"/scratch/*/stage/nested/preview/.github; do
+  [ -d "$preview" ] || continue
+  mkdir "$scope/claimed" 2>/dev/null || continue
+  IFS= read -r digest <"$base/digest" || exit 88
+  changed=0
+  for workflow in "$preview"/workflows/*.yml; do
+    [ -f "$workflow" ] || continue
+    if ! awk '/^[[:space:]]*VELNOR_ASSET_SHA256: [0-9a-f]+$/ { found=1 } END { exit !found }' "$workflow"; then
+      continue
+    fi
+    if command -v sha256sum >/dev/null 2>&1; then
+      sha256sum "$workflow" >"$scope/before.sha256" || exit 88
+    else
+      shasum -a 256 "$workflow" >"$scope/before.sha256" || exit 88
+    fi
+    awk -v digest="$digest" '
+      !changed && /^[[:space:]]*VELNOR_ASSET_SHA256: [0-9a-f]+$/ {
+        sub(/[0-9a-f]+$/, digest)
+        changed=1
+      }
+      { print }
+      END { if (!changed) exit 1 }
+    ' "$workflow" >"$workflow.fault" || exit 88
+    mv "$workflow.fault" "$workflow" || exit 88
+    if command -v sha256sum >/dev/null 2>&1; then
+      sha256sum "$workflow" >"$scope/after.sha256" || exit 88
+    else
+      shasum -a 256 "$workflow" >"$scope/after.sha256" || exit 88
+    fi
+    printf '%s\n' "$workflow" >"$scope/mutated-path" || exit 88
+    changed=1
+    break
+  done
+  [ "$changed" -eq 1 ] || exit 88
+done
+exit "$status"
+STAT
+  cat >"$scope/bin/sed" <<'SED'
+#!/bin/sh
+base=${0%/*}
+IFS= read -r real_sed <"$base/real-sed" || exit 88
+IFS= read -r scope <"$base/scope" || exit 88
+for argument do
+  case "$argument" in
+    "$scope"/scratch/*/stage/nested/preview/.github/*)
+      printf '%s\n' "$argument" >>"$scope/normalization-reached" || exit 88
+      ;;
+  esac
+done
+exec "$real_sed" "$@"
+SED
+  chmod 755 "$scope/bin/stat" "$scope/bin/sed" || return 2
+  log="$scope/collector.log"
+  GITHUB_SHA="$SOURCE_SHA" GITHUB_REPOSITORY=tailrocks/velnor-new \
+    TMPDIR="$scope/scratch" PATH="$scope/bin:$STUB_BIN:$ORIGINAL_PATH" \
+    VELNOR_TEST_CARGO_MARKER="$MARKER" VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
+    "$SCRIPT" check-release "$CLI_BIN" "$OUTPUT_BINDING_MANIFEST" \
+      "$OUTPUT_BINDING_MANIFEST_SHA" >"$log" 2>&1 || status=$?
+  if [ "$status" -ne 2 ] \
+    || ! grep -Fq 'candidate output binding mismatch: wrong digest for target' "$log" \
+    || ! grep -Fq 'FATAL: release candidate output bindings do not match candidate manifest for nested' "$log" \
+    || [ ! -s "$scope/mutated-path" ] \
+    || [ ! -s "$scope/before.sha256" ] || [ ! -s "$scope/after.sha256" ] \
+    || cmp -s "$scope/before.sha256" "$scope/after.sha256" \
+    || [ -e "$scope/normalization-reached" ]; then
+    cat "$log" >&2
+    echo "FAIL: public collector did not reject mutated output before normalization (exit $status)" >&2
+    return 1
+  fi
+  if [ -e "$MARKER" ]; then
+    echo 'FAIL: public output-binding rejection invoked Cargo build' >&2
+    return 1
+  fi
+  after="$(golden_fingerprint)" || return 2
+  if [ "$after" != "$baseline_fingerprint" ]; then
+    echo 'FAIL: public output-binding rejection changed goldens' >&2
+    return 1
+  fi
+  verify_qualification_guard || return 2
+  echo 'passed public output-binding rejection before normalization'
+}
+
 run_candidate_output_binding_tests() {
   local fault
   prepare_output_binding_candidate || return $?
@@ -314,6 +412,7 @@ run_candidate_output_binding_tests() {
     expect_output_binding_fault_rejected "$fault" || return $?
   done
   expect_normalized_output_bindings_valid || return $?
+  expect_public_output_binding_fault_rejected || return $?
   sed 's/"schema": 1/"schema": 1, "schema": 1/' \
     "$OUTPUT_BINDING_MANIFEST" >"$OUTPUT_BINDING_DUPLICATE_MANIFEST" || return 2
   expect_duplicate_manifest_keys_rejected || return $?

@@ -153,15 +153,99 @@ copy_tree() {
 # manifest. These values are not release evidence and never leave this scratch
 # repo.
 fixture_binary_target() {
-  local description
-  description="$(LC_ALL=C file -b -- "$BIN")" || return 1
-  case "$description" in
-    'Mach-O 64-bit executable arm64') printf '%s\n' aarch64-apple-darwin ;;
-    'Mach-O 64-bit executable x86_64') printf '%s\n' x86_64-apple-darwin ;;
-    'ELF 64-bit LSB '*executable*x86-64*'interpreter /lib64/ld-linux-x86-64.so.2'*)
-      printf '%s\n' x86_64-unknown-linux-gnu ;;
-    *) printf 'FATAL: unsupported or ambiguous fixture binary target: %s\n' "$description" >&2; return 1 ;;
-  esac
+  local header target file_size phoff phnum ph_index ph_offset ph_header
+  local interp_offset interp_size interp_path expected_interp matched_interpreters
+  local byte_index
+  local -a bytes ph_bytes
+  header="$(LC_ALL=C od -An -v -tu1 -N64 "$BIN" | LC_ALL=C tr '\n' ' ')" || return 1
+  read -r -a bytes <<<"$header"
+  if [ "${#bytes[@]}" -lt 20 ]; then
+    printf 'FATAL: unsupported or ambiguous fixture binary target: truncated executable header %s\n' "$header" >&2
+    return 1
+  fi
+
+  if [ "${bytes[0]}" = 127 ] && [ "${bytes[1]}" = 69 ] \
+    && [ "${bytes[2]}" = 76 ] && [ "${bytes[3]}" = 70 ]; then
+    if [ "${#bytes[@]}" -ne 64 ] || [ "${bytes[4]}" != 2 ] \
+      || [ "${bytes[5]}" != 1 ] || [ "${bytes[6]}" != 1 ] \
+      || { [ "${bytes[16]}" != 2 ] && [ "${bytes[16]}" != 3 ]; } \
+      || [ "${bytes[17]}" != 0 ] || [ "${bytes[18]}" != 62 ] \
+      || [ "${bytes[19]}" != 0 ] || [ "${bytes[20]}" != 1 ] \
+      || [ "${bytes[21]}" != 0 ] || [ "${bytes[22]}" != 0 ] \
+      || [ "${bytes[23]}" != 0 ] || [ "${bytes[52]}" != 64 ] \
+      || [ "${bytes[53]}" != 0 ] || [ "${bytes[54]}" != 56 ] \
+      || [ "${bytes[55]}" != 0 ]; then
+      printf 'FATAL: unsupported or ambiguous fixture binary target: invalid ELF64 x86-64 header %s\n' "$header" >&2
+      return 1
+    fi
+    for byte_index in 36 37 38 39; do
+      if [ "${bytes[$byte_index]}" != 0 ]; then
+        printf 'FATAL: unsupported or ambiguous fixture binary target: ELF program table offset exceeds the supported 32-bit file-offset range\n' >&2
+        return 1
+      fi
+    done
+    phoff=$((bytes[32] + (bytes[33] << 8) + (bytes[34] << 16) + (bytes[35] << 24)))
+    phnum=$((bytes[56] + (bytes[57] << 8)))
+    file_size="$(wc -c <"$BIN")" || return 1
+    if [ "$phnum" -eq 0 ] || [ "$phoff" -gt "$file_size" ] \
+      || [ "$((phnum * 56))" -gt "$((file_size - phoff))" ]; then
+      printf 'FATAL: unsupported or ambiguous fixture binary target: invalid ELF program table bounds\n' >&2
+      return 1
+    fi
+    expected_interp="$(printf '%s\000' /lib64/ld-linux-x86-64.so.2 | LC_ALL=C od -An -v -tu1 | LC_ALL=C tr '\n' ' ')"
+    matched_interpreters=0
+    for ((ph_index = 0; ph_index < phnum; ph_index++)); do
+      ph_offset=$((phoff + ph_index * 56))
+      ph_header="$(LC_ALL=C od -An -v -tu1 -j "$ph_offset" -N56 "$BIN" | LC_ALL=C tr '\n' ' ')" || return 1
+      read -r -a ph_bytes <<<"$ph_header"
+      if [ "${#ph_bytes[@]}" -ne 56 ]; then
+        printf 'FATAL: unsupported or ambiguous fixture binary target: truncated ELF program header\n' >&2
+        return 1
+      fi
+      if [ "${ph_bytes[0]}" = 3 ] && [ "${ph_bytes[1]}" = 0 ] \
+        && [ "${ph_bytes[2]}" = 0 ] && [ "${ph_bytes[3]}" = 0 ]; then
+        for byte_index in 12 13 14 15 36 37 38 39; do
+          if [ "${ph_bytes[$byte_index]}" != 0 ]; then
+            printf 'FATAL: unsupported or ambiguous fixture binary target: ELF interpreter exceeds the supported 32-bit file-offset range\n' >&2
+            return 1
+          fi
+        done
+        interp_offset=$((ph_bytes[8] + (ph_bytes[9] << 8) + (ph_bytes[10] << 16) + (ph_bytes[11] << 24)))
+        interp_size=$((ph_bytes[32] + (ph_bytes[33] << 8) + (ph_bytes[34] << 16) + (ph_bytes[35] << 24)))
+        if [ "$interp_size" -ne 28 ] || [ "$interp_offset" -gt "$file_size" ] \
+          || [ "$interp_size" -gt "$((file_size - interp_offset))" ]; then
+          printf 'FATAL: unsupported or ambiguous fixture binary target: invalid ELF interpreter bounds\n' >&2
+          return 1
+        fi
+        interp_path="$(LC_ALL=C od -An -v -tu1 -j "$interp_offset" -N"$interp_size" "$BIN" | LC_ALL=C tr '\n' ' ')" || return 1
+        if [ "$interp_path" = "$expected_interp" ]; then
+          matched_interpreters=$((matched_interpreters + 1))
+        else
+          printf 'FATAL: unsupported or ambiguous fixture binary target: unexpected ELF interpreter\n' >&2
+          return 1
+        fi
+      fi
+    done
+    if [ "$matched_interpreters" -eq 1 ]; then
+      printf '%s\n' x86_64-unknown-linux-gnu
+    else
+      printf 'FATAL: unsupported or ambiguous fixture binary target: missing or duplicate GNU ELF interpreter\n' >&2
+      return 1
+    fi
+  elif [ "${bytes[0]}" = 207 ] && [ "${bytes[1]}" = 250 ] \
+    && [ "${bytes[2]}" = 237 ] && [ "${bytes[3]}" = 254 ] \
+    && [ "${bytes[12]}" = 2 ] && [ "${bytes[13]}" = 0 ] \
+    && [ "${bytes[14]}" = 0 ] && [ "${bytes[15]}" = 0 ] \
+    && [ "${#bytes[@]}" -ge 32 ]; then
+    case "${bytes[4]}:${bytes[5]}:${bytes[6]}:${bytes[7]}" in
+      '12:0:0:1') printf '%s\n' aarch64-apple-darwin ;;
+      '7:0:0:1') printf '%s\n' x86_64-apple-darwin ;;
+      *) printf 'FATAL: unsupported or ambiguous fixture binary target: Mach-O header %s\n' "$header" >&2; return 1 ;;
+    esac
+  else
+    printf 'FATAL: unsupported or ambiguous fixture binary target: executable header %s\n' "$header" >&2
+    return 1
+  fi
 }
 
 write_schema_only_consumer_manifest() {
