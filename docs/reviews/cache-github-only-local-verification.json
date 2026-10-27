@@ -1,16 +1,17 @@
 {
   "task": "T63",
   "plan": "velnor-github-only-cache-plan",
-  "base_revision": "862a5f7fe294a4e24ec115d29f44d47499fb6e02",
+  "base_revision": "58d0e7d814d65984ddd8d7d5a4b97f383f3064c9",
   "branch": "chore/apache-2-license",
-  "date_utc": "2026-10-26",
+  "date_utc": "2026-10-27",
   "root_verification": {
     "cargo_check_locked_workspace_all_targets": "0 errors",
     "cargo_clippy_locked_workspace_all_targets_deny_warnings": "0 errors",
     "cargo_fmt_all_check": "clean",
     "git_diff_check": "clean",
-    "cargo_nextest_locked_workspace": "130 passed, 0 failed, 0 skipped",
-    "alint_check_fail_on_warning": "52 passing, 2 info, exit 0"
+    "cargo_nextest_locked_workspace": "173 passed, 0 failed, 0 skipped",
+    "alint_check_fail_on_warning": "52 passing, 2 info, exit 0",
+    "opentofu_goldens_capture_check": "tree identical, ALL GOLDENS MATCH"
   },
   "nested_runner_verification": {
     "cargo_check_locked_runner_workspace_all_targets": "0 errors"
@@ -29,9 +30,10 @@
   },
   "remote_ci_on_base": {
     "pr": 407,
-    "build_linux_job_image_candidate": "pass",
-    "attest_linux_job_image_candidate": "pending",
-    "dco": "fail on pre-existing unsigned commits; this record changes no finding"
+    "run": 40439911875,
+    "executed_jobs": "24 success, 18 skipped, 0 failed",
+    "required_verdict": "fail: status not_run, empty miss_reasons; 18 skipped writer jobs unplanned under pinned 0.1.55 controller; see cache-github-only-candidate.json",
+    "dco": "pass"
   },
   "review": {
     "t52_t62": "pass recorded in prior session; registration 63/63 zero orphaned",
