@@ -19,6 +19,8 @@ mod bun_malformed;
 mod bun_planning;
 #[path = "workflow_configuration_public/bun_planning_fixture.rs"]
 mod bun_planning_fixture;
+#[path = "workflow_configuration_public/bun_prerequisite.rs"]
+mod bun_prerequisite;
 #[path = "workflow_configuration_public/bun_private_credentials.rs"]
 mod bun_private_credentials;
 #[path = "workflow_configuration_public/bun_private_credentials_boundaries.rs"]
@@ -49,6 +51,8 @@ mod feature_toggles;
 mod maintenance_features;
 #[path = "workflow_configuration_public/parallel_owners.rs"]
 mod parallel_owners;
+#[path = "workflow_configuration_public/release_bun_prerequisite.rs"]
+mod release_bun_prerequisite;
 #[path = "workflow_configuration_public/report_upload.rs"]
 mod report_upload;
 #[path = "workflow_configuration_public/seed_ids.rs"]

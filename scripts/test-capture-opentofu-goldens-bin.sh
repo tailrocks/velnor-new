@@ -6,13 +6,34 @@
 # Exercise the collector's explicit CLI path without changing checked-in goldens.
 set -uo pipefail
 
-if ! command -v node >/dev/null 2>&1; then
-  echo 'FATAL: Node.js is required for the qualification output binding harness' >&2
-  exit 2
-fi
+command -v mise >/dev/null 2>&1 || { echo 'FATAL: Mise is required for the pinned Bun runtime' >&2; exit 2; }
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPT="$ROOT/scripts/capture-opentofu-goldens.sh"
+qualification_bun_bin() {
+  local declared actual resolved
+  declared="$(mise --no-config --no-env --no-hooks config get -f "$ROOT/mise.toml" tools.bun)" || return 2
+  if [ -n "${VELNOR_BUN_VERSION:-}" ] && [ "$VELNOR_BUN_VERSION" != "$declared" ]; then
+    printf 'FATAL: Bun selection differs from mise.toml: %s != %s\n' "$VELNOR_BUN_VERSION" "$declared" >&2
+    return 2
+  fi
+  resolved="$(MISE_EXEC_AUTO_INSTALL=0 mise --no-config --no-env --no-hooks which bun --tool "bun@$declared")" || return 2
+  actual="$("$resolved" --version)" || return 2
+  if [ "$actual" != "$declared" ]; then
+    printf 'FATAL: installed Bun %s differs from pinned bun@%s\n' "$actual" "$declared" >&2
+    return 2
+  fi
+  printf '%s\n' "$resolved"
+}
+
+qualification_bun_stdin() {
+  local bun_bin
+  bun_bin="${VELNOR_BUN_BIN:-$(qualification_bun_bin)}" || return 2
+  "$bun_bin" --bun run -- - "$@"
+}
+VELNOR_BUN_BIN="$(qualification_bun_bin)" || exit 2
+VELNOR_BUN_VERSION="$(mise --no-config --no-env --no-hooks config get -f "$ROOT/mise.toml" tools.bun)" || exit 2
+export VELNOR_BUN_BIN VELNOR_BUN_VERSION
 KEEP_WORK="${VELNOR_GOLDEN_KEEP_WORK:-0}"
 case "$KEEP_WORK" in
   0|1) ;;

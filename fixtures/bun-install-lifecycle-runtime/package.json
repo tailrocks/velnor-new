@@ -1,0 +1,1 @@
+{"name":"lifecycle-root","version":"1.0.0","private":true,"packageManager":"bun@1.4.4","trustedDependencies":["runtime-probe"],"dependencies":{"runtime-probe":"file:./runtime-probe","runtime-probe-two":"file:./runtime-probe-two"},"scripts":{"probe":"true"}}

@@ -139,6 +139,21 @@ Every Bun invocation runs under `mise exec` with the isolation environment and
 `bun.lock`): restored before the install, saved after it on a trusted push.
 `node_modules` is never cached; every job rebuilds it from that cache.
 
+Lifecycle-enabled installs use the pinned Bun through `bun --bun run -- - install`
+with the original frozen-lockfile and configuration arguments. Fixed stdin
+JavaScript starts `[process.execPath, ...process.argv.slice(2)]` and propagates
+the child status or signal. The forced runtime PATH reaches the installer and
+its lifecycle children. Selecting the running executable directly prevents a
+package script named `bun` or a dependency-provided `.bin/bun` from replacing
+the installer. A plain install, including `bun --bun install`, does not provide
+that lifecycle guarantee in Bun 1.4.4.
+
+The execution regression uses trusted local dependencies, a frozen lockfile and
+controlled Node and installer-shadow sentinels. It requires the lifecycle
+script's actual Bun version and executable, no sentinel invocation, unchanged
+lock bytes and failure for a changed manifest. The credential-bearing registry
+phase below remains a direct install with `--ignore-scripts`.
+
 ### Registry phase (`bun_registry_install`)
 
 When `[private_sources] npm_scopes` is non-empty, step 3 becomes two phases

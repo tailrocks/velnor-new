@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
@@ -141,6 +141,11 @@ function writeReceipt(pathname, bytes) {
 }
 
 function main() {
+  if (process.versions.bun !== Bun.version || !Bun.semver.satisfies(Bun.version, ">=1.4.4")) {
+    process.stderr.write("qualification validator requires Bun 1.4.4 or newer\n");
+    process.exitCode = 1;
+    return;
+  }
   if (process.argv.length !== 8 || process.argv[2] !== "plan") {
     process.stderr.write("validator tool lock rejected\n");
     process.exitCode = 1;

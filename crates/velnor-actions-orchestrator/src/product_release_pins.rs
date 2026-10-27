@@ -180,6 +180,7 @@ fn qualify_install_argv(catalog: &ToolCatalog) -> Result<Vec<String>, Orchestrat
     install_argv(
         &[
             PinnedTool::Rust,
+            PinnedTool::Bun,
             PinnedTool::Jactionlint,
             PinnedTool::Shellcheck,
         ],
