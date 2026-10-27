@@ -20,6 +20,8 @@ jobs:
       contents: read
     env:
       MBX_GC_AUTO: "0"
+      MISE_BACKENDS_JACTIONLINT: github:jdx/jactionlint
+      MISE_BACKENDS_SHELLCHECK: aqua:koalaman/shellcheck
       PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
       PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
     steps:
@@ -174,70 +176,6 @@ jobs:
               "$mise_version" "$rust" "$mbx" "$nextest" "$jactionlint" "$shellcheck" "$channel" >&2
             exit 1
           fi
-          python3 - "$evidence/validator-tool-lock.json" "$GITHUB_ENV" <<'PY'
-          import hashlib
-          import json
-          from pathlib import Path
-          import sys
-          import tomllib
-
-          receipt_path = Path(sys.argv[1])
-          env_path = Path(sys.argv[2])
-          source_files = [Path('.velnor/mise.toml'), Path('.velnor/mise.lock')]
-          if any(path.is_symlink() or not path.is_file() for path in source_files):
-              raise SystemExit('validator Mise source or lock is missing or unsafe')
-          configured_tools = tomllib.loads(source_files[0].read_text())['tools']
-          validator_lock = tomllib.loads(source_files[1].read_text())['tools']
-          expected_validators = {
-              'jactionlint': {
-                  'config_key': 'github:jdx/jactionlint',
-                  'backend': 'github:jdx/jactionlint',
-                  'version': '2.3.0',
-                  'checksum': 'sha256:907e6f6a59e181879f7e6936e19ee2eca1cbc51de134fb85460cfa8d65a71f28',
-                  'url': 'https://github.com/jdx/jactionlint/releases/download/v2.3.0/jactionlint_2.3.0_linux_amd64.tar.gz',
-              },
-              'shellcheck': {
-                  'config_key': 'shellcheck',
-                  'backend': 'aqua:koalaman/shellcheck',
-                  'version': '0.11.0',
-                  'checksum': 'sha256:8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198',
-                  'url': 'https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz',
-              },
-          }
-          validated = {}
-          for name, expected_validator in expected_validators.items():
-              if configured_tools.get(expected_validator['config_key']) != expected_validator['version']:
-                  raise SystemExit(f'{name} Mise tool pin does not match the qualification contract')
-              entries = validator_lock.get(expected_validator['config_key'])
-              if not isinstance(entries, list) or len(entries) != 1:
-                  raise SystemExit(f'{name} Mise lock entry is missing or ambiguous')
-              entry = entries[0]
-              platform = entry.get('platforms.linux-x64')
-              if entry.get('backend') != expected_validator['backend'] or entry.get('version') != expected_validator['version'] \
-                  or not isinstance(platform, dict) \
-                  or platform.get('checksum') != expected_validator['checksum'] \
-                  or platform.get('url') != expected_validator['url']:
-                  raise SystemExit(f'{name} Linux x64 lock entry does not match the qualification contract')
-              validated[name] = {
-                  **expected_validator,
-                  'archive': expected_validator['url'].rsplit('/', 1)[1],
-                  'binary': name,
-              }
-          receipt = {
-              'platform': 'linux-x64',
-              'source_sha256': {
-                  str(path): hashlib.sha256(path.read_bytes()).hexdigest()
-                  for path in source_files
-              },
-              'tools': validated,
-          }
-          receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + '\n')
-          with env_path.open('a') as stream:
-              for name, item in validated.items():
-                  env_name = name.upper()
-                  stream.write(f"VELNOR_{env_name}_URL={item['url']}\n")
-                  stream.write(f"VELNOR_{env_name}_SHA256={item['checksum'].removeprefix('sha256:')}\n")
-          PY
           node_version=26.12.0
           mise --no-config --no-env --no-hooks install "node@$node_version"
           mise --no-config --no-env --no-hooks exec "node@$node_version" -- node --version \
@@ -309,8 +247,8 @@ jobs:
           before="$evidence/cargo-fetch-locks.before.txt"
           after="$evidence/cargo-fetch-locks.after.txt"
           identity="$evidence/cargo-fetch-lock-identity.txt"
-          manifests=(Cargo.toml crates/velnor-runner/Cargo.toml fixtures/nested/Cargo.toml)
-          locks=(Cargo.lock crates/velnor-runner/Cargo.lock fixtures/nested/Cargo.lock)
+          manifests=(Cargo.toml crates/velnor-runner/Cargo.toml)
+          locks=(Cargo.lock crates/velnor-runner/Cargo.lock)
           final_status=0
           : >"$log"
           : >"$identity"
@@ -359,7 +297,7 @@ jobs:
           fi
           {
             printf 'source_head=%s\n' "$GITHUB_SHA"
-            printf 'fetch_scope=root-runner-and-nested-parent\n'
+            printf 'fetch_scope=root-and-runner\n'
             printf 'target_filter=none\n'
             printf 'locked=true\n'
             printf 'before_sha256\n'
@@ -454,202 +392,91 @@ jobs:
           fi
           exit "$final_status"
 
-      - name: Provision checksum-locked validator tools
+      - name: Install locked validator tools with native Mise
         shell: bash
         run: |
-          set -uo pipefail
+          set -euo pipefail
           evidence="$RUNNER_TEMP/source-qualification-artifacts"
-          archives="$evidence/validator-tool-archives"
-          log="$evidence/logs/validator-tool-provision.log"
-          mkdir -p "$archives"
-          : >"$log"
-          printf '%s\n' \
-            'curl --fail --location --proto =https --proto-redir =https <locked-url>' \
-            'sha256sum --check <locked-sha256>' \
-            'archive guard validation, followed by tar -xOf for the one locked binary member' \
-            >"$evidence/logs/validator-tool-provision.command"
-          command_status=0
+          tool_config_root="$RUNNER_TEMP/velnor-source-qualification-validator-config"
+          log="$evidence/logs/validator-tool-install.log"
+          status_file="$evidence/logs/validator-tool-install.exit"
+          if [ -e "$tool_config_root" ] || [ -L "$tool_config_root" ]; then
+            printf 'FATAL: isolated validator Mise config path already exists or is unsafe\n' >"$log"
+            printf '1\n' >"$status_file"
+            exit 1
+          fi
+          if [ -L mise.toml ] || [ ! -f mise.toml ] \
+            || [ -L mise.lock ] || [ ! -f mise.lock ]; then
+            printf 'FATAL: committed validator Mise config or lock is missing or unsafe\n' >"$log"
+            printf '1\n' >"$status_file"
+            exit 1
+          fi
+          validator_jactionlint="$(mise --no-config --no-env --no-hooks config get \
+            -f mise.toml tools.jactionlint)"
+          validator_shellcheck="$(mise --no-config --no-env --no-hooks config get \
+            -f mise.toml tools.shellcheck)"
+          if [ "$validator_jactionlint" != 2.3.0 ] || [ "$validator_shellcheck" != 0.11.0 ]; then
+            printf 'FATAL: committed validator Mise pins differ from qualification pins\n' >"$log"
+            printf '1\n' >"$status_file"
+            exit 1
+          fi
+          mkdir -m 700 "$tool_config_root"
+          cat >"$tool_config_root/mise.toml" <<'TOML'
+          [tools]
+          jactionlint = "2.3.0"
+          shellcheck = "0.11.0"
+          TOML
+          cp -p mise.lock "$tool_config_root/mise.lock"
+          config_before="$(sha256sum "$tool_config_root/mise.toml" | awk '{print $1}')"
+          lock_before="$(sha256sum "$tool_config_root/mise.lock" | awk '{print $1}')"
+          source_lock_before="$(sha256sum mise.lock | awk '{print $1}')"
+          if [ "$lock_before" != "$source_lock_before" ]; then
+            printf 'FATAL: isolated validator lock differs from committed lock\n' >"$log"
+            printf '1\n' >"$status_file"
+            exit 1
+          fi
+          {
+            printf 'mise_version=%s\n' "$VELNOR_MISE_VERSION"
+            printf 'config_path=%s\n' "$tool_config_root/mise.toml"
+            printf 'config_sha256_before=%s\n' "$config_before"
+            printf 'lock_path=%s\n' "$tool_config_root/mise.lock"
+            printf 'lock_sha256_before=%s\n' "$lock_before"
+            printf 'source_lock_path=mise.lock\n'
+            printf 'source_lock_sha256_before=%s\n' "$source_lock_before"
+            printf 'install_command=mise --no-env --no-hooks -C <isolated-config-root> install --locked jactionlint@2.3.0 shellcheck@0.11.0\n'
+          } >"$evidence/validator-tool-config-identity.before.txt"
+          set +e
+          mise --no-env --no-hooks -C "$tool_config_root" install --locked \
+            jactionlint@2.3.0 shellcheck@0.11.0 >"$log" 2>&1
+          command_status=$?
+          set -e
+          cat "$log"
           identity_status=0
-          artifact_status=0
-          jactionlint_download_status=1
-          jactionlint_checksum_status=1
-          jactionlint_guard_status=1
-          jactionlint_extract_status=1
-          shellcheck_download_status=1
-          shellcheck_checksum_status=1
-          shellcheck_guard_status=1
-          shellcheck_extract_status=1
-          jactionlint_archive="$archives/jactionlint_2.3.0_linux_amd64.tar.gz"
-          shellcheck_archive="$archives/shellcheck-v0.11.0.linux.x86_64.tar.xz"
-          jactionlint_members="$archives/jactionlint.members.txt"
-          shellcheck_members="$archives/shellcheck.members.txt"
-          jactionlint_member_count=unavailable
-          shellcheck_member_count=unavailable
-          jactionlint_member_inventory_sha=unavailable
-          shellcheck_member_inventory_sha=unavailable
-          guard_profile_source_sha=unavailable
-          if [ "$RUNNER_OS" != Linux ] || [ "$RUNNER_ARCH" != X64 ]; then
-            printf 'FATAL: checksum entries are locked only for Linux x64\n' >>"$log"
-            command_status=1
+          if [ "$(sha256sum "$tool_config_root/mise.toml" | awk '{print $1}')" != "$config_before" ] \
+            || [ "$(sha256sum "$tool_config_root/mise.lock" | awk '{print $1}')" != "$lock_before" ] \
+            || [ "$(sha256sum mise.lock | awk '{print $1}')" != "$source_lock_before" ]; then
+            identity_status=1
+            printf 'FATAL: native validator install changed config or lock bytes\n' >&2
           fi
-          if curl --fail --location --silent --show-error --proto '=https' --proto-redir '=https' \
-            --output "$jactionlint_archive" "$VELNOR_JACTIONLINT_URL" >>"$log" 2>&1; then
-            jactionlint_download_status=0
-          else
-            command_status=1
-          fi
-          if curl --fail --location --silent --show-error --proto '=https' --proto-redir '=https' \
-            --output "$shellcheck_archive" "$VELNOR_SHELLCHECK_URL" >>"$log" 2>&1; then
-            shellcheck_download_status=0
-          else
-            command_status=1
-          fi
-          if [ "$jactionlint_download_status" -eq 0 ]; then
-            printf '%s  %s\n' "$VELNOR_JACTIONLINT_SHA256" "$jactionlint_archive" \
-              >"$archives/jactionlint.sha256"
-            if sha256sum --check "$archives/jactionlint.sha256" >>"$log" 2>&1; then
-              jactionlint_checksum_status=0
-            else
-              command_status=1
-            fi
-          fi
-          if [ "$shellcheck_download_status" -eq 0 ]; then
-            printf '%s  %s\n' "$VELNOR_SHELLCHECK_SHA256" "$shellcheck_archive" \
-              >"$archives/shellcheck.sha256"
-            if sha256sum --check "$archives/shellcheck.sha256" >>"$log" 2>&1; then
-              shellcheck_checksum_status=0
-            else
-              command_status=1
-            fi
-          fi
-          guard="$GITHUB_WORKSPACE/.velnor/archive-guard/bin/velnor-archive-guard"
-          if [ -f "$GITHUB_WORKSPACE/crates/velnor-archive-guard/src/owned_archive_guard/profile.rs" ] \
-            && [ ! -L "$GITHUB_WORKSPACE/crates/velnor-archive-guard/src/owned_archive_guard/profile.rs" ]; then
-            if ! guard_profile_source_sha="$(sha256sum "$GITHUB_WORKSPACE/crates/velnor-archive-guard/src/owned_archive_guard/profile.rs" \
-              | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')" \
-              || [[ ! "$guard_profile_source_sha" =~ ^[0-9a-f]{64}$ ]]; then
-              command_status=1
-            fi
-          else
-            command_status=1
-          fi
-          guard_expected_sha="$(awk -F= '$1 == "binary_sha256" { print $2 }' "$evidence/archive-guard-identity.txt")"
-          if ! guard_actual_sha="$(sha256sum "$guard" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')" \
-            || [[ ! "$guard_actual_sha" =~ ^[0-9a-f]{64}$ ]]; then command_status=1; fi
-          if ! guard_fingerprint="$("$guard" --fingerprint)" \
-            || [[ ! "$guard_fingerprint" =~ ^[0-9a-f]{64}$ ]]; then command_status=1; fi
-          if ! guard_source_fingerprint="$("$guard" source-fingerprint "$GITHUB_WORKSPACE")" \
-            || [[ ! "$guard_source_fingerprint" =~ ^[0-9a-f]{64}$ ]]; then command_status=1; fi
-          if [ -L "$guard" ] || [ ! -f "$guard" ] || [ ! -x "$guard" ] \
-            || [[ ! "$guard_expected_sha" =~ ^[0-9a-f]{64}$ ]] \
-            || [ "$guard_actual_sha" != "$guard_expected_sha" ] \
-            || [ "$guard_source_fingerprint" != "$guard_fingerprint" ]; then
-            printf 'FATAL: checkout-owned archive guard identity changed before tool archive validation\n' >>"$log"
-            command_status=1
-          else
-            if [ "$jactionlint_checksum_status" -eq 0 ]; then
-              if "$guard" cargo-package <"$jactionlint_archive" >>"$log" 2>&1 \
-                && tar -tzf "$jactionlint_archive" >"$jactionlint_members" 2>>"$log"; then
-                jactionlint_member_count="$(wc -l <"$jactionlint_members" | tr -d '[:space:]')"
-                if ! jactionlint_member_inventory_sha="$(sha256sum "$jactionlint_members" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')" \
-                  || [[ ! "$jactionlint_member_inventory_sha" =~ ^[0-9a-f]{64}$ ]]; then
-                  command_status=1
-                fi
-                if [ "$jactionlint_member_count" = 72 ] \
-                  && [ "$(awk '$0 == "jactionlint" { count++ } END { print count + 0 }' "$jactionlint_members")" = 1 ]; then
-                  jactionlint_guard_status=0
-                else
-                  printf 'FATAL: jactionlint locked archive member inventory differs from the reviewed release archive\n' >>"$log"
-                  command_status=1
-                fi
-              else
-                command_status=1
-              fi
-            fi
-            if [ "$shellcheck_checksum_status" -eq 0 ]; then
-              if xz -dc -- "$shellcheck_archive" 2>>"$log" \
-                | "$guard" candidate >>"$log" 2>&1 \
-                && xz -dc -- "$shellcheck_archive" 2>>"$log" \
-                  | tar -tf - >"$shellcheck_members" 2>>"$log"; then
-                shellcheck_member_count="$(wc -l <"$shellcheck_members" | tr -d '[:space:]')"
-                if ! shellcheck_member_inventory_sha="$(sha256sum "$shellcheck_members" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')" \
-                  || [[ ! "$shellcheck_member_inventory_sha" =~ ^[0-9a-f]{64}$ ]]; then
-                  command_status=1
-                fi
-                if [ "$shellcheck_member_count" = 3 ] \
-                  && [ "$(awk '$0 == "shellcheck-v0.11.0/shellcheck" { count++ } END { print count + 0 }' "$shellcheck_members")" = 1 ]; then
-                  shellcheck_guard_status=0
-                else
-                  printf 'FATAL: ShellCheck locked archive member inventory differs from the reviewed release archive\n' >>"$log"
-                  command_status=1
-                fi
-              else
-                command_status=1
-              fi
-            fi
-          fi
-          mise_installs="$MISE_DATA_DIR/installs"
-          jactionlint_root="$mise_installs/jactionlint"
-          shellcheck_root="$mise_installs/shellcheck"
-          jactionlint_dir="$jactionlint_root/$VELNOR_JACTIONLINT_VERSION"
-          shellcheck_dir="$shellcheck_root/$VELNOR_SHELLCHECK_VERSION"
-          jactionlint_binary="$jactionlint_dir/jactionlint"
-          shellcheck_binary="$shellcheck_dir/shellcheck-v0.11.0/shellcheck"
-          if [ "$jactionlint_guard_status" -eq 0 ] && [ "$shellcheck_guard_status" -eq 0 ]; then
-            if [ -L "$MISE_DATA_DIR" ] || [ ! -d "$MISE_DATA_DIR" ] \
-              || [ -L "$mise_installs" ] || [ ! -d "$mise_installs" ] \
-              || [ -e "$jactionlint_root" ] || [ -L "$jactionlint_root" ] \
-              || [ -e "$shellcheck_root" ] || [ -L "$shellcheck_root" ]; then
-              printf 'FATAL: isolated Mise install roots already exist or are unsafe\n' >>"$log"
-              command_status=1
-            elif mkdir -m 700 "$jactionlint_root" "$shellcheck_root" \
-              && mkdir -m 700 "$jactionlint_dir" "$shellcheck_dir" \
-              && mkdir -m 700 "$shellcheck_dir/shellcheck-v0.11.0"; then
-              printf 'short = "jactionlint"\nfull = "github:jdx/jactionlint"\nexplicit_backend = true\n' \
-                >"$jactionlint_root/.mise.backend.toml"
-              printf 'short = "shellcheck"\nfull = "aqua:koalaman/shellcheck"\nexplicit_backend = true\n' \
-                >"$shellcheck_root/.mise.backend.toml"
-              chmod 600 "$jactionlint_root/.mise.backend.toml" "$shellcheck_root/.mise.backend.toml"
-              if tar -xOf "$jactionlint_archive" jactionlint >"$jactionlint_binary" 2>>"$log" \
-                && xz -dc -- "$shellcheck_archive" 2>>"$log" \
-                  | tar -xOf - shellcheck-v0.11.0/shellcheck >"$shellcheck_binary" 2>>"$log"; then
-                chmod 755 "$jactionlint_binary" "$shellcheck_binary"
-                if [ -f "$jactionlint_binary" ] && [ ! -L "$jactionlint_binary" ] \
-                  && [ -x "$jactionlint_binary" ] && [ -f "$shellcheck_binary" ] \
-                  && [ ! -L "$shellcheck_binary" ] && [ -x "$shellcheck_binary" ]; then
-                  jactionlint_extract_status=0
-                  shellcheck_extract_status=0
-                else
-                  printf 'FATAL: extracted validator executable is missing or unsafe\n' >>"$log"
-                  command_status=1
-                fi
-              else
-                printf 'FATAL: could not extract exact locked validator archive members\n' >>"$log"
-                command_status=1
-              fi
-            else
-              printf 'FATAL: could not create isolated Mise backend install layout\n' >>"$log"
-              command_status=1
-            fi
-          fi
-          jactionlint_which=unavailable
-          shellcheck_which=unavailable
           jactionlint_version=unavailable
           shellcheck_version=unavailable
+          jactionlint_which=unavailable
+          shellcheck_which=unavailable
           jactionlint_binary_sha=unavailable
           shellcheck_binary_sha=unavailable
-          if [ "$jactionlint_extract_status" -eq 0 ]; then
+          if [ "$command_status" -eq 0 ]; then
             if mise --no-config --no-env --no-hooks which --tool \
-              "jactionlint@$VELNOR_JACTIONLINT_VERSION" jactionlint \
-              >"$evidence/logs/jactionlint-which.log" 2>&1; then
+              jactionlint@2.3.0 jactionlint >"$evidence/logs/jactionlint-which.log" 2>&1; then
               jactionlint_which="$(cat "$evidence/logs/jactionlint-which.log")"
-              if [ "$jactionlint_which" = "$jactionlint_binary" ] \
+              if [ -f "$jactionlint_which" ] && [ ! -L "$jactionlint_which" ] \
+                && [ -x "$jactionlint_which" ] \
                 && mise --no-config --no-env --no-hooks exec \
-                  "jactionlint@$VELNOR_JACTIONLINT_VERSION" -- jactionlint --version \
-                  >"$evidence/logs/jactionlint-version.log" 2>&1 \
-                && [ "$(cat "$evidence/logs/jactionlint-version.log")" = "$VELNOR_JACTIONLINT_VERSION" ]; then
-                jactionlint_version="$(cat "$evidence/logs/jactionlint-version.log")"
-                if ! jactionlint_binary_sha="$(sha256sum "$jactionlint_binary" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')" \
+                jactionlint@2.3.0 -- jactionlint --version \
+                >"$evidence/logs/jactionlint-version.log" 2>&1 \
+                && IFS= read -r jactionlint_version \
+                  <"$evidence/logs/jactionlint-version.log" \
+                && [ "$jactionlint_version" = 2.3.0 ]; then
+                if ! jactionlint_binary_sha="$(sha256sum "$jactionlint_which" | awk '{print $1}')" \
                   || [[ ! "$jactionlint_binary_sha" =~ ^[0-9a-f]{64}$ ]]; then
                   identity_status=1
                 fi
@@ -659,22 +486,17 @@ jobs:
             else
               identity_status=1
             fi
-          else
-            identity_status=1
-          fi
-          if [ "$shellcheck_extract_status" -eq 0 ]; then
             if mise --no-config --no-env --no-hooks which --tool \
-              "shellcheck@$VELNOR_SHELLCHECK_VERSION" shellcheck \
-              >"$evidence/logs/shellcheck-which.log" 2>&1; then
+              shellcheck@0.11.0 shellcheck >"$evidence/logs/shellcheck-which.log" 2>&1; then
               shellcheck_which="$(cat "$evidence/logs/shellcheck-which.log")"
-              if [ "$shellcheck_which" = "$shellcheck_binary" ] \
+              if [ -f "$shellcheck_which" ] && [ ! -L "$shellcheck_which" ] \
+                && [ -x "$shellcheck_which" ] \
                 && mise --no-config --no-env --no-hooks exec \
-                  "shellcheck@$VELNOR_SHELLCHECK_VERSION" -- shellcheck --version \
-                  >"$evidence/logs/shellcheck-version.log" 2>&1 \
-                && grep -Fxq "version: $VELNOR_SHELLCHECK_VERSION" \
-                  "$evidence/logs/shellcheck-version.log"; then
-                shellcheck_version="$VELNOR_SHELLCHECK_VERSION"
-                if ! shellcheck_binary_sha="$(sha256sum "$shellcheck_binary" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')" \
+                shellcheck@0.11.0 -- shellcheck --version \
+                >"$evidence/logs/shellcheck-version.log" 2>&1 \
+                && grep -Fxq 'version: 0.11.0' "$evidence/logs/shellcheck-version.log"; then
+                shellcheck_version=0.11.0
+                if ! shellcheck_binary_sha="$(sha256sum "$shellcheck_which" | awk '{print $1}')" \
                   || [[ ! "$shellcheck_binary_sha" =~ ^[0-9a-f]{64}$ ]]; then
                   identity_status=1
                 fi
@@ -687,65 +509,37 @@ jobs:
           else
             identity_status=1
           fi
-          if [ "$command_status" -ne 0 ]; then identity_status=1; fi
-          if ! cp -p "$evidence/logs/jactionlint-version.log" "$evidence/jactionlint-version.txt" \
-            || ! cp -p "$evidence/logs/shellcheck-version.log" "$evidence/shellcheck-version.txt"; then
-            artifact_status=1
+          if [ "$identity_status" -eq 0 ]; then
+            cp -p "$evidence/logs/jactionlint-version.log" "$evidence/jactionlint-version.txt"
+            cp -p "$evidence/logs/shellcheck-version.log" "$evidence/shellcheck-version.txt"
           fi
-          if ! {
+          {
             printf 'source_head=%s\n' "$GITHUB_SHA"
             printf 'platform=%s/%s\n' "$RUNNER_OS" "$RUNNER_ARCH"
             printf 'mise_data_dir=%s\n' "$MISE_DATA_DIR"
-            printf 'archive_guard_sha256=%s\n' "$guard_actual_sha"
-            printf 'archive_guard_source_fingerprint=%s\n' "$guard_fingerprint"
-            printf 'archive_guard_profile_source=crates/velnor-archive-guard/src/owned_archive_guard/profile.rs\n'
-            printf 'archive_guard_profile_source_sha256=%s\n' "$guard_profile_source_sha"
-            printf 'jactionlint_backend=github:jdx/jactionlint\n'
+            printf 'isolated_config_root=%s\n' "$tool_config_root"
+            printf 'config_sha256_before=%s\n' "$config_before"
+            printf 'config_sha256_after=%s\n' "$(sha256sum "$tool_config_root/mise.toml" | awk '{print $1}')"
+            printf 'committed_lock_sha256_before=%s\n' "$source_lock_before"
+            printf 'isolated_lock_sha256_before=%s\n' "$lock_before"
+            printf 'isolated_lock_sha256_after=%s\n' "$(sha256sum "$tool_config_root/mise.lock" | awk '{print $1}')"
+            printf 'jactionlint_backend=%s\n' "$MISE_BACKENDS_JACTIONLINT"
             printf 'jactionlint_version=%s\n' "$jactionlint_version"
-            printf 'jactionlint_url=%s\n' "$VELNOR_JACTIONLINT_URL"
-            printf 'jactionlint_archive_sha256=sha256:%s\n' "$VELNOR_JACTIONLINT_SHA256"
-            printf 'jactionlint_archive_profile=cargo-package(gzip;input<=128MiB;expanded<=544MiB;payload<=512MiB;members<=30000;regular+directory;pax=allowed)\n'
-            printf 'jactionlint_archive_member_count=%s\n' "$jactionlint_member_count"
-            printf 'jactionlint_archive_member_inventory_sha256=%s\n' "$jactionlint_member_inventory_sha"
-            printf 'jactionlint_executable_member=jactionlint\n'
-            printf 'jactionlint_binary_path=%s\n' "$jactionlint_binary"
-            printf 'jactionlint_mise_which=%s\n' "$jactionlint_which"
+            printf 'jactionlint_binary_path=%s\n' "$jactionlint_which"
             printf 'jactionlint_binary_sha256=%s\n' "$jactionlint_binary_sha"
-            printf 'shellcheck_backend=aqua:koalaman/shellcheck\n'
+            printf 'shellcheck_backend=%s\n' "$MISE_BACKENDS_SHELLCHECK"
             printf 'shellcheck_version=%s\n' "$shellcheck_version"
-            printf 'shellcheck_url=%s\n' "$VELNOR_SHELLCHECK_URL"
-            printf 'shellcheck_archive_sha256=sha256:%s\n' "$VELNOR_SHELLCHECK_SHA256"
-            printf 'shellcheck_archive_profile=candidate(raw-tar-after-xz;input<=1088MiB;payload<=1024MiB;members<=16;regular+directory;pax=forbidden)\n'
-            printf 'shellcheck_archive_member_count=%s\n' "$shellcheck_member_count"
-            printf 'shellcheck_archive_member_inventory_sha256=%s\n' "$shellcheck_member_inventory_sha"
-            printf 'shellcheck_executable_member=shellcheck-v0.11.0/shellcheck\n'
-            printf 'shellcheck_binary_path=%s\n' "$shellcheck_binary"
-            printf 'shellcheck_mise_which=%s\n' "$shellcheck_which"
+            printf 'shellcheck_binary_path=%s\n' "$shellcheck_which"
             printf 'shellcheck_binary_sha256=%s\n' "$shellcheck_binary_sha"
-          } >"$evidence/validator-tool-identity.txt"; then
-            artifact_status=1
-          fi
-          printf '%s\n' "$jactionlint_download_status" >"$evidence/logs/jactionlint-download.exit" || artifact_status=1
-          printf '%s\n' "$jactionlint_checksum_status" >"$evidence/logs/jactionlint-checksum.exit" || artifact_status=1
-          printf '%s\n' "$jactionlint_guard_status" >"$evidence/logs/jactionlint-archive-guard.exit" || artifact_status=1
-          printf '%s\n' "$jactionlint_extract_status" >"$evidence/logs/jactionlint-extract.exit" || artifact_status=1
-          printf '%s\n' "$shellcheck_download_status" >"$evidence/logs/shellcheck-download.exit" || artifact_status=1
-          printf '%s\n' "$shellcheck_checksum_status" >"$evidence/logs/shellcheck-checksum.exit" || artifact_status=1
-          printf '%s\n' "$shellcheck_guard_status" >"$evidence/logs/shellcheck-archive-guard.exit" || artifact_status=1
-          printf '%s\n' "$shellcheck_extract_status" >"$evidence/logs/shellcheck-extract.exit" || artifact_status=1
-          printf '%s\n' "$command_status" >"$evidence/logs/validator-tool-install.command.exit" || artifact_status=1
-          printf '%s\n' "$identity_status" >"$evidence/logs/validator-tool-install.identity.exit" || artifact_status=1
-          printf '%s\n' "$artifact_status" >"$evidence/logs/validator-tool-install.artifact.exit" || exit 1
+          } >"$evidence/validator-tool-identity.txt"
+          printf '%s\n' "$command_status" >"$evidence/logs/validator-tool-install.command.exit"
+          printf '%s\n' "$identity_status" >"$evidence/logs/validator-tool-install.identity.exit"
           final_status=0
-          if [ "$command_status" -ne 0 ] || [ "$identity_status" -ne 0 ] \
-            || [ "$artifact_status" -ne 0 ]; then
+          if [ "$command_status" -ne 0 ] || [ "$identity_status" -ne 0 ]; then
             final_status=1
+            printf 'FATAL: native locked validator installation or identity check failed\n' >&2
           fi
-          printf '%s\n' "$final_status" >"$evidence/logs/validator-tool-install.exit" || exit 1
-          if ! cat "$log"; then final_status=1; fi
-          if [ "$final_status" -ne 0 ]; then
-            printf 'FATAL: locked validator tool provisioning or identity check failed\n' >&2
-          fi
+          printf '%s\n' "$final_status" >"$status_file"
           exit "$final_status"
 
       - name: Build source CLI with pinned MBX
@@ -1471,7 +1265,7 @@ jobs:
             external-shell-harness-json-proof.receipt.txt external-shell-harness-keep-json-proof.receipt.txt \
             archive-guard-identity.txt qualification-final-status.txt \
             checkout-status.txt source-identity.txt source-inputs.sha256 build-environment.txt \
-            tool-pins.json validator-tool-lock.json validator-tool-identity.txt validator-tool-archives \
+            tool-pins.json validator-tool-config-identity.before.txt validator-tool-identity.txt \
             cargo-fetch-lock-identity.txt cargo-fetch-locks.before.txt cargo-fetch-locks.after.txt \
             mise-version.txt rustc-version.txt \
             mbx-version.txt jactionlint-version.txt shellcheck-version.txt node-version.txt cli-identity.txt; do
