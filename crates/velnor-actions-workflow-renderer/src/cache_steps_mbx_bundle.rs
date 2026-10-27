@@ -118,11 +118,17 @@ fn compat_head_lines(
     toolchain: &str,
     root: &str,
     unit: &str,
+    unit_is_literal: bool,
 ) -> Vec<String> {
     let spec = CacheFamily::MbxBundle.spec();
+    let unit_arg = if unit_is_literal {
+        format!("'unit={unit}'")
+    } else {
+        format!("\"unit={unit}\"")
+    };
     vec![
         format!(
-            "printf '%s\\n' 'family={}' 'schema={}' '{}' 'unit={unit}' \"mbx={version}\" \"toolchain={toolchain}\" \"root={root}\" 'ceiling={}' > \"{dir}/compat\"",
+            "printf '%s\\n' 'family={}' 'schema={}' '{}' {unit_arg} \"mbx={version}\" \"toolchain={toolchain}\" \"root={root}\" 'ceiling={}' > \"{dir}/compat\"",
             spec.layer,
             spec.schema,
             spec.shell_paths(None).join("' '"),
@@ -170,6 +176,7 @@ fn discover_step(
         &format!("${{{TOOLCHAIN_ENV}}}"),
         &format!("${{{ROOT_ENV}}}"),
         unit,
+        true,
     ));
     script.extend(
         [

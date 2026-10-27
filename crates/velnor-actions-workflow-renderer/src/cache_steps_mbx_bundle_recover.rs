@@ -81,6 +81,7 @@ pub(crate) fn recover_step(
         "$rec_toolchain",
         "$rec_root",
         "$rec_unit",
+        false,
     ));
     script.extend(
         [
