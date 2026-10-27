@@ -67,6 +67,24 @@ class _FakeResponse:
         self.body = body
 
 
+class _FakeStream:
+    def __init__(self, status, headers, data):
+        self.status = status
+        self.headers = {key.lower(): value for key, value in headers.items()}
+        self._data = data
+        self._offset = 0
+
+    def read(self, size=-1):
+        if size is None or size < 0:
+            size = len(self._data) - self._offset
+        chunk = self._data[self._offset:self._offset + size]
+        self._offset += len(chunk)
+        return chunk
+
+    def close(self):
+        pass
+
+
 class _FakeRegistry:
     """In-memory OCI registry for the data-only flow test; no network is opened."""
 
@@ -109,21 +127,37 @@ class _FakeRegistry:
             query = dict(parse_qsl(parts.query))
             if "/manifests/" in path:
                 key, digest = self._key(path)
+                if not isinstance(body, bytes) or len(body) != length:
+                    raise AssertionError("manifest PUT must send exact bytes")
                 self.store[key] = body
                 self.puts += 1
                 return _FakeResponse(201, {"docker-content-digest": digest}, b"")
-            self.store[f"blobs:{query['digest']}"] = body
+            if isinstance(body, (bytes, bytearray, memoryview)):
+                raise AssertionError("blob PUT must stream a temp file, not bytes")
+            chunks = []
+            with open(body, "rb") as stream:
+                while chunk := stream.read(65536):
+                    chunks.append(chunk)
+            data = b"".join(chunks)
+            if len(data) != length:
+                raise AssertionError("streamed blob PUT length changed")
+            self.store[f"blobs:{query['digest']}"] = data
             self.puts += 1
             return _FakeResponse(201, {}, b"")
         if method == "GET":
-            key, digest = self._key(path)
-            stored = self.store[key]
-            return _FakeResponse(
-                200,
-                {"docker-content-digest": digest, "content-length": str(len(stored))},
-                stored,
-            )
+            raise AssertionError("blob and manifest GET must use the streaming call")
         raise AssertionError(f"unexpected registry call: {method} {url}")
+
+    def stream(self, method, url, headers):
+        if method != "GET":
+            raise AssertionError(f"unexpected stream call: {method} {url}")
+        key, digest = self._key(urlsplit(url).path)
+        stored = self.store[key]
+        return _FakeStream(
+            200,
+            {"docker-content-digest": digest, "content-length": str(len(stored))},
+            stored,
+        )
 
 
 def main():
@@ -145,18 +179,18 @@ def main():
         verified["platform_manifest_size_bytes"],
     )
     manifest_value = json.loads(manifest)
-    blobs = {}
+    blob_paths = {}
     with tempfile.TemporaryDirectory(prefix="gc1-t48-flow-") as temp:
         for digest, size in publish_module.blob_descriptors(manifest_value).items():
-            blobs[digest] = publish_module.extract_blob(
+            blob_paths[digest] = publish_module.extract_blob(
                 archive_path, digest, size, Path(temp)
-            ).read_bytes()
+            )
         proof = publish_module.publish_image(
             registry_module,
             _FakeRegistry(),
             "flow-token-0123456789abcdef",
             manifest,
-            blobs,
+            blob_paths,
         )
     identity = json.loads(identity_path.read_text())
     ci = {"run_id": identity["run_id"], "run_attempt": identity["run_attempt"]}

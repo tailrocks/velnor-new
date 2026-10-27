@@ -165,6 +165,7 @@ pub fn final_job(
         vec![PinnedTool::Gh],
         true,
     )?);
+    steps.push(crate::steps_internal::group_ledger_steps::assemble_group_ledgers_step());
     steps.push(request_step(MERGE_OPERATION)?);
     steps.push(merge_step());
     Ok(Job {

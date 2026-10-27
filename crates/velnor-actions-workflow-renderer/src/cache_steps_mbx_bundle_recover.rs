@@ -29,8 +29,10 @@ use super::{
 /// is recomputed and must match discovery time) + safe extraction (every
 /// member is screened: only the state root family may land, so a hostile
 /// `tools/` member or symlink is refused before anything is written) +
-/// admission (payload size against the family ceiling) + publication of the
-/// recovery record + exact readback (the payload digest must be stable
+/// admission (payload size against the family ceiling, then the extracted
+/// state root's uncompressed bytes against the same ceiling so a highly
+/// compressible archive cannot exhaust the runner disk) + publication of
+/// the recovery record + exact readback (the payload digest must be stable
 /// across extraction and the manifest must verify).
 ///
 /// This is a common snapshot operation over fixed literals: unpack the
@@ -47,6 +49,7 @@ pub(crate) fn recover_step(
     let root = shell_literal(COMPLETE_STATE_ROOT_EXPR)?;
     let (parent, base) = split_shell(&root)?;
     let ceiling = CacheFamily::MbxBundle.spec().ceiling_bytes;
+    let ceiling_kb = ceiling.div_ceil(1024);
     let mut script = vec![
         "set -eu".to_owned(),
         RUNNER_TEMP_GUARD.to_owned(),
@@ -106,6 +109,7 @@ pub(crate) fn recover_step(
             "size=; size_rest=; wc -c < \"$payload\" > \"$d/size\"; read -r size size_rest < \"$d/size\" || [ -n \"$size\" ]".to_owned(),
             "case \"$size\" in ''|*[!0-9]*) corrupt \"size unreadable\" ;; esac".to_owned(),
             format!("if [ \"$size\" -gt {ceiling} ]; then corrupt \"over ceiling\"; fi"),
+            format!("if du -sb \"$root\" > \"$d/uncompressed\"; then usize=; usize_rest=; read -r usize usize_rest < \"$d/uncompressed\" || [ -n \"$usize\" ]; case \"$usize\" in ''|*[!0-9]*) corrupt \"uncompressed size unreadable\" ;; esac; if [ \"$usize\" -gt {ceiling} ]; then corrupt \"over ceiling\"; fi; elif du -sk \"$root\" > \"$d/uncompressed_kb\"; then usize_kb=; usize_kb_rest=; read -r usize_kb usize_kb_rest < \"$d/uncompressed_kb\" || [ -n \"$usize_kb\" ]; case \"$usize_kb\" in ''|*[!0-9]*) corrupt \"uncompressed size unreadable\" ;; esac; if [ \"$usize_kb\" -gt {ceiling_kb} ]; then corrupt \"over ceiling\"; fi; else corrupt \"uncompressed size unreadable\"; fi"),
             "find \"$root\" -type f | sort > \"$d/files\"".to_owned(),
             "if command -v sha256sum >/dev/null 2>&1; then while IFS= read -r f || [ -n \"$f\" ]; do sha256sum \"$f\"; done < \"$d/files\" > \"$d/manifest\"; else while IFS= read -r f || [ -n \"$f\" ]; do shasum -a 256 \"$f\"; done < \"$d/files\" > \"$d/manifest\"; fi".to_owned(),
             "if [ ! -s \"$d/manifest\" ]; then corrupt \"empty manifest\"; fi".to_owned(),

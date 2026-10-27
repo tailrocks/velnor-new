@@ -123,6 +123,7 @@ fn attest_job(hosted: Yaml, artifact_id: &str) -> (String, Yaml) {
     let archive = format!("{ATTESTATION_RUNTIME_CANDIDATE}/{ARCHIVE}");
     let record = format!("{ATTESTATION_RUNTIME_CANDIDATE}/{RECORD}");
     let closure = native::CLOSURE;
+    let closure_path = format!("{ATTESTATION_RUNTIME_CANDIDATE}/{closure}");
     let attest = Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Attest all candidate bytes.")),
         ("uses".to_owned(), Yaml::str(ATTEST_BUILD_PROVENANCE_USES)),
@@ -140,7 +141,7 @@ fn attest_job(hosted: Yaml, artifact_id: &str) -> (String, Yaml) {
         artifact_id_check_step(artifact_id),
         download_step(artifact_id, ATTESTATION_CANDIDATE),
         authority::materialize_step(),
-        authority::verify_candidate_step(&archive, &record),
+        authority::verify_candidate_step(&archive, &record, &closure_path),
         attest,
     ];
     let fields = vec![
@@ -179,6 +180,10 @@ fn publish_job(hosted: Yaml, artifact_id: &str) -> (String, Yaml) {
     let steps = vec![
         artifact_id_check_step(artifact_id),
         download_step(artifact_id, "candidate"),
+        fetch_ci_runs_step(),
+        fetch_artifact_response_step(),
+        fetch_source_inputs_step(),
+        verify_attestations_step(&archive, &record),
         authority::materialize_step(),
         authority::assemble_evidence_step(&archive, &record, result, artifact_id),
         publication_evidence_upload_step("${{ runner.temp }}/job-image-publication.json"),
@@ -225,6 +230,140 @@ fn publish_job(hosted: Yaml, artifact_id: &str) -> (String, Yaml) {
         ("steps".to_owned(), Yaml::Seq(steps)),
     ];
     ("publish-job-image".to_owned(), Yaml::Map(fields))
+}
+
+fn gh_env() -> Yaml {
+    // `gh` also reads GITHUB_TOKEN; GH_TOKEN stays out of the rendered jobs so
+    // the data-only gates keep passing unchanged.
+    Yaml::Map(vec![(
+        "GITHUB_TOKEN".to_owned(),
+        Yaml::str("${{ secrets.GITHUB_TOKEN }}"),
+    )])
+}
+
+fn fetch_ci_runs_step() -> Yaml {
+    Yaml::Map(vec![
+        (
+            "name".to_owned(),
+            Yaml::str("Fetch canonical CI runs for the candidate source"),
+        ),
+        ("shell".to_owned(), Yaml::str("bash")),
+        ("env".to_owned(), gh_env()),
+        (
+            "run".to_owned(),
+            Yaml::str(format!(
+                "set -euo pipefail\ngh api \"repos/${{{{ github.repository }}}}/actions/workflows/ci.yml/runs?head_sha=${{{{ github.sha }}}}&per_page=100\" > \"{}\"",
+                authority::CI_RUNS_PATH
+            )),
+        ),
+    ])
+}
+
+fn fetch_artifact_response_step() -> Yaml {
+    Yaml::Map(vec![
+        (
+            "name".to_owned(),
+            Yaml::str("Fetch candidate artifact record"),
+        ),
+        ("shell".to_owned(), Yaml::str("bash")),
+        ("env".to_owned(), gh_env()),
+        (
+            "run".to_owned(),
+            Yaml::str(format!(
+                "set -euo pipefail\ngh api \"repos/${{{{ github.repository }}}}/actions/runs/${{{{ github.run_id }}}}/artifacts?per_page=100\" > \"{}\"",
+                authority::ARTIFACT_RESPONSE_PATH
+            )),
+        ),
+    ])
+}
+
+fn fetch_source_inputs_step() -> Yaml {
+    const RUN: &str = r#"set -euo pipefail
+python3 - <<'VELNOR_SOURCE_INPUTS_EOF'
+import base64
+import hashlib
+import json
+import os
+import re
+import subprocess
+repo = os.environ["VELNOR_SOURCE_REPO"]
+sha = os.environ["VELNOR_SOURCE_SHA"]
+out = os.environ["VELNOR_SOURCE_OUTPUT"]
+paths = (
+    ".velnor/runner.lock",
+    "images/job/ubuntu-26.04/Dockerfile",
+    "images/job/ubuntu-26.04/README.md",
+    "images/job/ubuntu-26.04/build-test.sh",
+    "images/job/ubuntu-26.04/candidate/candidate.py",
+)
+if not re.fullmatch(r"[0-9a-f]{40}", sha or ""):
+    raise SystemExit("authenticated source commit is incorrect")
+inputs = {}
+for name in paths:
+    raw = subprocess.check_output(
+        ["gh", "api", f"repos/{repo}/contents/{name}?ref={sha}"],
+        timeout=60,
+    )
+    if len(raw) > 1048576:
+        raise SystemExit(f"source file response too large: {name}")
+    payload = json.loads(raw)
+    if payload.get("type") != "file" or payload.get("encoding") != "base64":
+        raise SystemExit(f"source file is not a file: {name}")
+    content = base64.b64decode("".join(payload["content"].split()))
+    if len(content) > 1048576:
+        raise SystemExit(f"source file too large: {name}")
+    inputs[name] = hashlib.sha256(content).hexdigest()
+with open(out, "w", encoding="utf-8") as stream:
+    stream.write(json.dumps({"commit": sha, "inputs": inputs}, sort_keys=True) + "\n")
+VELNOR_SOURCE_INPUTS_EOF"#;
+    Yaml::Map(vec![
+        (
+            "name".to_owned(),
+            Yaml::str("Fetch authenticated source inputs"),
+        ),
+        ("shell".to_owned(), Yaml::str("bash")),
+        (
+            "env".to_owned(),
+            Yaml::Map(vec![
+                (
+                    "GITHUB_TOKEN".to_owned(),
+                    Yaml::str("${{ secrets.GITHUB_TOKEN }}"),
+                ),
+                (
+                    "VELNOR_SOURCE_REPO".to_owned(),
+                    Yaml::str("${{ github.repository }}"),
+                ),
+                (
+                    "VELNOR_SOURCE_SHA".to_owned(),
+                    Yaml::str("${{ github.sha }}"),
+                ),
+                (
+                    "VELNOR_SOURCE_OUTPUT".to_owned(),
+                    Yaml::str(authority::AUTHENTICATED_SOURCE_PATH),
+                ),
+            ]),
+        ),
+        ("run".to_owned(), Yaml::str(RUN)),
+    ])
+}
+
+fn verify_attestations_step(archive: &str, record: &str) -> Yaml {
+    Yaml::Map(vec![
+        (
+            "name".to_owned(),
+            Yaml::str("Verify candidate attestations with Sigstore"),
+        ),
+        ("shell".to_owned(), Yaml::str("bash")),
+        ("env".to_owned(), gh_env()),
+        (
+            "run".to_owned(),
+            Yaml::str(format!(
+                "set -euo pipefail\nrepo=\"${{{{ github.repository }}}}\"\nsha=\"${{{{ github.sha }}}}\"\nworkflow=\"$repo/.github/workflows/job-image-candidate.yml\"\ngh attestation verify \"{archive}\" --repo \"$repo\" --source-ref \"refs/heads/main\" --source-digest \"$sha\" --signer-workflow \"$workflow\" --signer-digest \"$sha\" --format json > \"{}\"\ngh attestation verify \"{record}\" --repo \"$repo\" --source-ref \"refs/heads/main\" --source-digest \"$sha\" --signer-workflow \"$workflow\" --signer-digest \"$sha\" --format json > \"{}\"",
+                authority::ARCHIVE_ATTESTATION_PATH,
+                authority::RECORD_ATTESTATION_PATH
+            )),
+        ),
+    ])
 }
 
 fn checkout_step(name: &str) -> Yaml {

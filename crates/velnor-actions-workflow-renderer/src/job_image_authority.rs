@@ -69,15 +69,18 @@ pub(super) fn materialize_step() -> Yaml {
 }
 
 const VERIFY_PROGRAM: &str = r#"import hashlib
+import json
 import os
 import sys
 sys.path.insert(0, sys.argv[1])
 from pathlib import Path
+import job_image_authority_identity as identity_module
 import job_image_authority_oci as oci_module
 import job_image_authority_publish as publish_module
 import job_image_authority_record as record_module
 record_path = Path(sys.argv[2])
 archive_path = Path(sys.argv[3])
+closure_path = Path(sys.argv[4])
 record = record_module.validate_record(record_module.load_record(record_path))
 verified = oci_module.verify_oci_archive(archive_path)
 hasher = hashlib.sha256()
@@ -92,33 +95,43 @@ publish_module.check_record_binding(
     archive_size,
     verified,
 )
-source = record["source"]
-if (
-    source["commit"] != os.environ["VELNOR_EXPECTED_SOURCE"]
-    or source["ref"] != os.environ["VELNOR_EXPECTED_REF"]
-):
-    raise publish_module.AuthorityError("Candidate source is not the current run source.")
 try:
     expected_run_id = int(os.environ["VELNOR_EXPECTED_RUN_ID"])
     expected_run_attempt = int(os.environ["VELNOR_EXPECTED_RUN_ATTEMPT"])
 except ValueError as error:
     raise publish_module.AuthorityError("Candidate run identity is incorrect.") from error
-workflow = record["workflow"]
+identity = {
+    "repository": os.environ["VELNOR_EXPECTED_REPOSITORY"],
+    "event": os.environ["VELNOR_EXPECTED_EVENT"],
+    "workflow_ref": os.environ["VELNOR_EXPECTED_WORKFLOW_REF"],
+    "ref": os.environ["VELNOR_EXPECTED_REF"],
+    "authority_commit": os.environ["VELNOR_EXPECTED_SOURCE"],
+    "run_id": expected_run_id,
+    "run_attempt": expected_run_attempt,
+    "source": os.environ["VELNOR_EXPECTED_SOURCE"],
+}
+identity_module.validate_same_run_candidate(record, identity)
+if closure_path.is_symlink() or not closure_path.is_file():
+    raise publish_module.AuthorityError("Candidate source closure must be a regular file.")
+if closure_path.stat().st_size > 1048576:
+    raise publish_module.AuthorityError("Candidate source closure exceeds its size limit.")
+try:
+    closure = json.loads(closure_path.read_bytes())
+except (UnicodeDecodeError, json.JSONDecodeError) as error:
+    raise publish_module.AuthorityError("Candidate source closure has an incorrect format.") from error
 if (
-    workflow["repository"] != os.environ["VELNOR_EXPECTED_REPOSITORY"]
-    or workflow["event"] != os.environ["VELNOR_EXPECTED_EVENT"]
-    or workflow["workflow_ref"] != os.environ["VELNOR_EXPECTED_WORKFLOW_REF"]
-    or workflow["authority_commit"] != os.environ["VELNOR_EXPECTED_SOURCE"]
-    or workflow["run_id"] != expected_run_id
-    or workflow["run_attempt"] != expected_run_attempt
+    not isinstance(closure, dict)
+    or closure.get("schema") != "velnor.job-image-native-source-closure.v1"
 ):
-    raise publish_module.AuthorityError("Candidate workflow is not the current run workflow.")
+    raise publish_module.AuthorityError("Candidate source closure has an incorrect schema.")
+if closure.get("source_commit") != os.environ["VELNOR_EXPECTED_SOURCE"]:
+    raise publish_module.AuthorityError("Candidate source closure is not the current run source.")
 print("fixed authority body accepted the candidate bytes")
 "#;
 
-pub(super) fn verify_candidate_step(archive: &str, record: &str) -> Yaml {
+pub(super) fn verify_candidate_step(archive: &str, record: &str, closure: &str) -> Yaml {
     let mut run = format!(
-        "set -euo pipefail\nauthority=\"$VELNOR_IMAGE_AUTHORITY_DIR\"\narchive=\"{archive}\"\nrecord=\"{record}\"\npython3 - \"$authority\" \"$record\" \"$archive\" <<'{VERIFY_MARKER}'\n"
+        "set -euo pipefail\nauthority=\"$VELNOR_IMAGE_AUTHORITY_DIR\"\narchive=\"{archive}\"\nrecord=\"{record}\"\nclosure=\"{closure}\"\npython3 - \"$authority\" \"$record\" \"$archive\" \"$closure\" <<'{VERIFY_MARKER}'\n"
     );
     run.push_str(VERIFY_PROGRAM);
     run.push_str(VERIFY_MARKER);
@@ -173,30 +186,50 @@ import sys
 import tempfile
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
+import job_image_authority_identity as identity_module
 import job_image_authority_oci as oci_module
 import job_image_authority_publish as publish_module
 import job_image_authority_record as record_module
 import job_image_authority_registry as registry_module
+RESPONSE_BODY_LIMIT = 65536
 class _RegistryResponse:
     def __init__(self, status, headers, body):
         self.status = status
         self.headers = {key.lower(): value for key, value in headers.items()}
         self.body = body
+class _RegistryStream:
+    def __init__(self, connection, response):
+        self.status = response.status
+        self.headers = {key.lower(): value for key, value in response.getheaders()}
+        self._connection = connection
+        self._response = response
+    def read(self, size=-1):
+        try:
+            return self._response.read(size)
+        except (OSError, http.client.HTTPException, TimeoutError) as error:
+            raise publish_module.AuthorityError("Registry request failed or timed out.") from error
+    def close(self):
+        try:
+            self._response.close()
+        finally:
+            self._connection.close()
+def _check_origin(parts):
+    allowed = (registry_module.REGISTRY, registry_module.DOWNLOAD_HOST)
+    if (
+        parts.scheme != "https"
+        or parts.hostname not in allowed
+        or parts.port not in (None, 443)
+        or parts.username is not None
+        or parts.password is not None
+        or parts.fragment
+    ):
+        raise publish_module.AuthorityError("Registry URL is outside the fixed HTTPS origin.")
 class _RegistryTransport:
     def __init__(self, timeout):
         self.timeout = timeout
-    def request(self, method, url, headers, body=None, length=0):
+    def _connect(self, method, url, headers):
         parts = urlsplit(url)
-        allowed = (registry_module.REGISTRY, registry_module.DOWNLOAD_HOST)
-        if (
-            parts.scheme != "https"
-            or parts.hostname not in allowed
-            or parts.port not in (None, 443)
-            or parts.username is not None
-            or parts.password is not None
-            or parts.fragment
-        ):
-            raise publish_module.AuthorityError("Registry URL is outside the fixed HTTPS origin.")
+        _check_origin(parts)
         for name, value in headers.items():
             if "\r" in name + value or "\n" in name + value:
                 raise publish_module.AuthorityError("Registry request header has an incorrect format.")
@@ -206,32 +239,112 @@ class _RegistryTransport:
             connection.putrequest(method, target)
             for name, value in headers.items():
                 connection.putheader(name, value)
+        except (OSError, http.client.HTTPException, TimeoutError) as error:
+            connection.close()
+            raise publish_module.AuthorityError("Registry request failed or timed out.") from error
+        return connection
+    def request(self, method, url, headers, body=None, length=0):
+        connection = self._connect(method, url, headers)
+        try:
             if body is not None:
-                if not isinstance(body, bytes) or len(body) != length:
-                    raise publish_module.AuthorityError("Registry request body length changed.")
-                connection.putheader("Content-Length", str(length))
-            connection.endheaders()
-            if body is not None:
-                connection.send(body)
+                if isinstance(body, Path):
+                    try:
+                        actual = body.stat().st_size
+                    except OSError as error:
+                        raise publish_module.AuthorityError("Registry request body is missing.") from error
+                    if actual != length:
+                        raise publish_module.AuthorityError("Registry request body length changed.")
+                    connection.putheader("Content-Length", str(length))
+                    connection.endheaders()
+                    with body.open("rb") as stream:
+                        while chunk := stream.read(65536):
+                            connection.send(chunk)
+                else:
+                    if not isinstance(body, bytes) or len(body) != length:
+                        raise publish_module.AuthorityError("Registry request body length changed.")
+                    connection.putheader("Content-Length", str(length))
+                    connection.endheaders()
+                    connection.send(body)
+            else:
+                connection.endheaders()
             response = connection.getresponse()
             chunks = bytearray()
-            limit = publish_module.MAX_UPLOAD_BYTES + 1
-            while True:
-                chunk = response.read(min(65536, limit - len(chunks)))
+            while len(chunks) <= RESPONSE_BODY_LIMIT:
+                chunk = response.read(min(65536, RESPONSE_BODY_LIMIT + 1 - len(chunks)))
                 if not chunk:
                     break
                 chunks.extend(chunk)
-                if len(chunks) > publish_module.MAX_UPLOAD_BYTES:
-                    raise publish_module.AuthorityError("Registry response exceeds its size limit.")
+            if len(chunks) > RESPONSE_BODY_LIMIT:
+                raise publish_module.AuthorityError("Registry response exceeds its size limit.")
             return _RegistryResponse(response.status, dict(response.getheaders()), bytes(chunks))
         except (OSError, http.client.HTTPException, TimeoutError) as error:
             raise publish_module.AuthorityError("Registry request failed or timed out.") from error
         finally:
             connection.close()
+    def stream(self, method, url, headers):
+        connection = self._connect(method, url, headers)
+        try:
+            connection.endheaders()
+            response = connection.getresponse()
+        except (OSError, http.client.HTTPException, TimeoutError) as error:
+            connection.close()
+            raise publish_module.AuthorityError("Registry request failed or timed out.") from error
+        return _RegistryStream(connection, response)
+def _read_limited_json(path, limit, label):
+    if path.is_symlink() or not path.is_file():
+        raise publish_module.AuthorityError(f"{label} must be a regular file.")
+    if path.stat().st_size > limit:
+        raise publish_module.AuthorityError(f"{label} exceeds its size limit.")
+    with path.open("rb") as stream:
+        raw = stream.read(limit + 1)
+    if len(raw) > limit:
+        raise publish_module.AuthorityError(f"{label} exceeds its size limit.")
+    try:
+        return json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise publish_module.AuthorityError(f"{label} has an incorrect format.") from error
 record_path = Path(sys.argv[2])
 archive_path = Path(sys.argv[3])
 result_path = Path(sys.argv[4])
+ci_runs_path = Path(sys.argv[5])
+authenticated_source_path = Path(sys.argv[6])
+artifact_response_path = Path(sys.argv[7])
+archive_attestation_path = Path(sys.argv[8])
+record_attestation_path = Path(sys.argv[9])
+try:
+    expected_run_id = int(os.environ["VELNOR_RUN_ID"])
+    expected_run_attempt = int(os.environ["VELNOR_RUN_ATTEMPT"])
+    expected_artifact_id = int(os.environ["VELNOR_ARTIFACT_ID"])
+    expected_repository_id = int(os.environ["VELNOR_IDENTITY_REPOSITORY_ID"])
+except ValueError as error:
+    raise publish_module.AuthorityError("Publication identity is incorrect.") from error
+identity = {
+    "repository": os.environ["VELNOR_IDENTITY_REPOSITORY"],
+    "repository_id": expected_repository_id,
+    "event": os.environ["VELNOR_IDENTITY_EVENT"],
+    "workflow_ref": os.environ["VELNOR_WORKFLOW_REF"],
+    "ref": os.environ["VELNOR_IDENTITY_REF"],
+    "authority_commit": os.environ["VELNOR_IDENTITY_SOURCE"],
+    "run_id": expected_run_id,
+    "run_attempt": expected_run_attempt,
+    "source": os.environ["VELNOR_IDENTITY_SOURCE"],
+    "artifact_id": expected_artifact_id,
+}
+identity = identity_module.validate_identity(identity)
 record = record_module.validate_record(record_module.load_record(record_path))
+identity_module.validate_candidate_identity(record, identity)
+authenticated_source = _read_limited_json(authenticated_source_path, 1048576, "Authenticated source")
+identity_module.validate_source_inputs(record["source"], authenticated_source)
+artifact_response = _read_limited_json(artifact_response_path, 2097152, "Candidate artifact response")
+identity_module.validate_artifact_record(artifact_response, identity)
+ci_runs = _read_limited_json(ci_runs_path, 2097152, "Canonical CI run response")
+ci = identity_module.select_ci_run(ci_runs, identity["source"])
+for label, attestation_path in (
+    ("Candidate archive", archive_attestation_path),
+    ("Candidate record", record_attestation_path),
+):
+    attestation = _read_limited_json(attestation_path, 1048576, f"{label} attestation")
+    identity_module.validate_attestation_output(attestation, identity["source"])
 verified = oci_module.verify_oci_archive(archive_path)
 hasher = hashlib.sha256()
 archive_size = 0
@@ -252,10 +365,10 @@ manifest = publish_module.read_manifest_bytes(
     verified["platform_manifest_size_bytes"],
 )
 manifest_value = json.loads(manifest)
-blobs = {}
+blob_paths = {}
 with tempfile.TemporaryDirectory(prefix="velnor-image-publish-") as temp:
     for digest, size in publish_module.blob_descriptors(manifest_value).items():
-        blobs[digest] = publish_module.extract_blob(archive_path, digest, size, Path(temp)).read_bytes()
+        blob_paths[digest] = publish_module.extract_blob(archive_path, digest, size, Path(temp))
     transport = _RegistryTransport(30)
     token = publish_module.fetch_registry_token(
         registry_module,
@@ -263,27 +376,15 @@ with tempfile.TemporaryDirectory(prefix="velnor-image-publish-") as temp:
         os.environ["VELNOR_REGISTRY_ACTOR"],
         os.environ["VELNOR_REGISTRY_TOKEN"],
     )
-    proof = publish_module.publish_image(registry_module, transport, token, manifest, blobs)
+    proof = publish_module.publish_image(registry_module, transport, token, manifest, blob_paths)
 record_raw = record_path.read_bytes()
-identity = {
-    "source": os.environ["VELNOR_IDENTITY_SOURCE"],
-    "workflow_ref": os.environ["VELNOR_WORKFLOW_REF"],
-    "run_id": int(os.environ["VELNOR_RUN_ID"]),
-    "run_attempt": int(os.environ["VELNOR_RUN_ATTEMPT"]),
-    "artifact_id": int(os.environ["VELNOR_ARTIFACT_ID"]),
-}
-ci = {
-    "run_id": int(os.environ["VELNOR_RUN_ID"]),
-    "run_attempt": int(os.environ["VELNOR_RUN_ATTEMPT"]),
-}
-record_archive = {
-    "sha256": archive_digest,
-    "size_bytes": archive_size,
-}
 evidence = publish_module.build_evidence(
     identity,
     ci,
-    record_archive,
+    {
+        "sha256": archive_digest,
+        "size_bytes": archive_size,
+    },
     verified,
     manifest,
     hashlib.sha256(record_raw).hexdigest(),
@@ -294,6 +395,12 @@ result_path.write_bytes(evidence)
 print("fixed authority body assembled the publication evidence")
 "#;
 
+pub(super) const CI_RUNS_PATH: &str = "$RUNNER_TEMP/velnor-ci-runs.json";
+pub(super) const AUTHENTICATED_SOURCE_PATH: &str = "$RUNNER_TEMP/velnor-authenticated-source.json";
+pub(super) const ARTIFACT_RESPONSE_PATH: &str = "$RUNNER_TEMP/velnor-candidate-artifact.json";
+pub(super) const ARCHIVE_ATTESTATION_PATH: &str = "$RUNNER_TEMP/velnor-archive-attestation.json";
+pub(super) const RECORD_ATTESTATION_PATH: &str = "$RUNNER_TEMP/velnor-record-attestation.json";
+
 pub(super) fn assemble_evidence_step(
     archive: &str,
     record: &str,
@@ -301,7 +408,7 @@ pub(super) fn assemble_evidence_step(
     artifact_id: &str,
 ) -> Yaml {
     let mut run = format!(
-        "set -euo pipefail\nauthority=\"$VELNOR_IMAGE_AUTHORITY_DIR\"\narchive=\"{archive}\"\nrecord=\"{record}\"\nresult=\"{result}\"\npython3 - \"$authority\" \"$record\" \"$archive\" \"$result\" <<'{EVIDENCE_MARKER}'\n"
+        "set -euo pipefail\nauthority=\"$VELNOR_IMAGE_AUTHORITY_DIR\"\narchive=\"{archive}\"\nrecord=\"{record}\"\nresult=\"{result}\"\nci_runs=\"{CI_RUNS_PATH}\"\nauthenticated_source=\"{AUTHENTICATED_SOURCE_PATH}\"\nartifact_response=\"{ARTIFACT_RESPONSE_PATH}\"\narchive_attestation=\"{ARCHIVE_ATTESTATION_PATH}\"\nrecord_attestation=\"{RECORD_ATTESTATION_PATH}\"\npython3 - \"$authority\" \"$record\" \"$archive\" \"$result\" \"$ci_runs\" \"$authenticated_source\" \"$artifact_response\" \"$archive_attestation\" \"$record_attestation\" <<'{EVIDENCE_MARKER}'\n"
     );
     run.push_str(EVIDENCE_PROGRAM);
     run.push_str(EVIDENCE_MARKER);
@@ -315,6 +422,22 @@ pub(super) fn assemble_evidence_step(
                 (
                     "VELNOR_IDENTITY_SOURCE".to_owned(),
                     Yaml::str("${{ github.sha }}"),
+                ),
+                (
+                    "VELNOR_IDENTITY_REPOSITORY".to_owned(),
+                    Yaml::str("${{ github.repository }}"),
+                ),
+                (
+                    "VELNOR_IDENTITY_REPOSITORY_ID".to_owned(),
+                    Yaml::str("${{ env.GITHUB_REPOSITORY_ID }}"),
+                ),
+                (
+                    "VELNOR_IDENTITY_EVENT".to_owned(),
+                    Yaml::str("${{ github.event_name }}"),
+                ),
+                (
+                    "VELNOR_IDENTITY_REF".to_owned(),
+                    Yaml::str("${{ github.ref }}"),
                 ),
                 (
                     "VELNOR_WORKFLOW_REF".to_owned(),

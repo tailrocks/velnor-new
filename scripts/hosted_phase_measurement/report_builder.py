@@ -87,8 +87,9 @@ def build_report(args: Namespace) -> dict[str, Any]:
     workflow = workflow_receipt(args.workflow_json, args.workflow_file, run, args.repository)
     with zipfile.ZipFile(args.logs_zip) as archive:
         log_entries, archive_counts = read_step_logs(archive)
-    events = collect_job_events(jobs, log_entries)
-    dag_path = _workflow_path(workflow, run, attempt, jobs, events)
+    current_attempt_jobs = [job for job in jobs if job.get("run_attempt") == attempt]
+    events = collect_job_events(current_attempt_jobs, log_entries)
+    dag_path = _workflow_path(workflow, run, attempt, current_attempt_jobs, events)
     timeline = workflow_timeline(run, jobs, events, dag_path)
     counters = build_actual_counters(events["steps"], timeline)
     validate_actual_counter_unknowns(counters)

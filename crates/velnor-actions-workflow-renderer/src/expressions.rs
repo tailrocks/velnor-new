@@ -34,7 +34,8 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
     Some(spans)
 }
 
-const ENV_EXPRESSIONS: [&str; 14] = [
+const ENV_EXPRESSIONS: [&str; 15] = [
+    "job.status",
     "runner.temp",
     "format('refs/heads/{0}', github.event.repository.default_branch)",
     "github.event.pull_request.head.repo.fork",

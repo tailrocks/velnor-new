@@ -14,6 +14,24 @@ stdlib transport). Every registry URL, redirect, and response is
 validated through the registry helpers passed in as ``registry`` (the
 sibling ``job_image_authority_registry`` module in the rendered body),
 so this module keeps its standard-library-only imports.
+
+Transport contract (``transport`` is the rendered bounded HTTPS layer):
+
+* ``transport.request(method, url, headers, body=None, length=0)`` sends one
+  control or manifest request and returns a response with ``status``,
+  lowercased ``headers``, and buffered ``body`` bytes. ``body`` is either
+  ``bytes`` (small control and manifest payloads, never buffered above the
+  transport's own small control cap) or a temp-file path object that the
+  transport streams from disk in chunks. The returned ``body`` is only ever
+  used for small control responses; blob bytes never flow through it.
+* ``transport.stream(method, url, headers)`` opens one blob GET and returns a
+  stream with ``status``, lowercased ``headers``, ``read(count)``, and
+  ``close()``. The caller reads incrementally and always closes. Blob bytes
+  are compared chunk by chunk against the extracted temp file, so even a
+  1 GiB blob needs only a small constant buffer.
+
+``publish_image`` therefore takes a mapping of descriptor digest to extracted
+temp-file path (see ``extract_blob``), never a mapping of digest to bytes.
 """
 import hashlib
 import json
@@ -188,6 +206,29 @@ def _request(transport, method, url, headers, body=None, length=0):
         raise AuthorityError("Registry request failed or timed out.") from error
 
 
+def _open_stream(transport, method, url, headers):
+    """Open a streaming GET; the caller reads incrementally and closes it."""
+    try:
+        return transport.stream(method, url, headers)
+    except AuthorityError:
+        raise
+    except Exception as error:
+        raise AuthorityError("Registry request failed or timed out.") from error
+
+
+def _read_exact(reader, count):
+    """Read exactly count bytes, looping short reads; short means EOF."""
+    chunks = []
+    remaining = count
+    while remaining:
+        chunk = reader.read(min(65536, remaining))
+        if not chunk:
+            break
+        chunks.append(bytes(chunk))
+        remaining -= len(chunk)
+    return b"".join(chunks)
+
+
 def fetch_registry_token(registry, transport, actor, password):
     """Exchange actor credentials for a pull/push registry token."""
     if (
@@ -246,44 +287,94 @@ def _head_manifest(registry, transport, token, digest, size):
     )
 
 
-def _remote_bytes(registry, transport, token, kind, digest, size):
-    media = (
-        "application/vnd.oci.image.manifest.v1+json"
-        if kind == "manifests"
-        else "application/octet-stream"
-    )
-    url = registry.registry_url(f"{kind}/{digest}")
+def _open_blob_stream(registry, transport, token, digest):
+    """Open the blob GET, following the single permitted download redirect."""
     headers = _authorization(token)
-    headers["Accept"] = media
-    response = _request(transport, "GET", url, headers)
-    request_path = f"/v2/{registry.PACKAGE}/{kind}/{digest}"
+    headers["Accept"] = "application/octet-stream"
+    first = _open_stream(transport, "GET", registry.registry_url(f"blobs/{digest}"), headers)
+    request_path = f"/v2/{registry.PACKAGE}/blobs/{digest}"
     target = registry.redirect_target(
-        request_path, digest, response.status, response.headers.get("location", "")
+        request_path, digest, first.status, first.headers.get("location", "")
     )
     if target is None:
-        return response.status, response.headers, response.body
+        return first
     download_url = f"https://{registry.DOWNLOAD_HOST}{target}"
-    final = _request(
-        transport, "GET", download_url, {"Accept": "application/octet-stream"}
-    )
-    return final.status, final.headers, final.body
+    try:
+        second = _open_stream(transport, "GET", download_url, {"Accept": "application/octet-stream"})
+    except AuthorityError:
+        first.close()
+        raise
+    first.close()
+    return second
 
 
-def verify_remote_blob(registry, transport, token, digest, expected, size):
-    """GET the blob and prove the remote bytes equal the local bytes."""
-    if not isinstance(expected, bytes) or len(expected) != size:
-        raise AuthorityError("OCI blob descriptor size is incorrect.")
-    status, headers, body = _remote_bytes(registry, transport, token, "blobs", digest, size)
-    registry.check_get_response(status, headers, body, digest, size, expected)
-    return {"digest": digest, "size": size, "remote_sha256": digest.removeprefix("sha256:")}
+def verify_remote_blob(registry, transport, token, digest, path, size):
+    """GET the blob and prove the remote bytes equal the local temp file.
+
+    Streams both sides in lockstep: the registry response is never buffered
+    and the local file is compared chunk by chunk, so a 1 GiB blob needs only
+    a small constant buffer.
+    """
+    _require_blob_file(digest, path, size)
+    expected_hex = digest.removeprefix("sha256:")
+    stream = _open_blob_stream(registry, transport, token, digest)
+    try:
+        if stream.status != 200:
+            raise AuthorityError(f"Registry GET status is incorrect: {stream.status}.")
+        if stream.headers.get("content-length") != str(size):
+            raise AuthorityError("Registry GET size is different from the specified size.")
+        if stream.headers.get("docker-content-digest") not in (None, digest):
+            raise AuthorityError("Registry GET digest header is different from the requested digest.")
+        hasher = hashlib.sha256()
+        remaining = size
+        try:
+            local = open(path, "rb")
+        except OSError as error:
+            raise AuthorityError("OCI blob file is missing.") from error
+        with local:
+            while remaining:
+                want = min(65536, remaining)
+                remote_chunk = _read_exact(stream, want)
+                local_chunk = _read_exact(local, want)
+                if len(remote_chunk) != want or remote_chunk != local_chunk:
+                    raise AuthorityError("Registry retrieved bytes changed during publication.")
+                hasher.update(remote_chunk)
+                remaining -= len(remote_chunk)
+            if stream.read(1):
+                raise AuthorityError("Registry GET size is different from the specified size.")
+        if hasher.hexdigest() != expected_hex:
+            raise AuthorityError("Registry response bytes have an incorrect digest or size.")
+    finally:
+        stream.close()
+    return {"digest": digest, "size": size, "remote_sha256": expected_hex}
 
 
 def verify_remote_manifest(registry, transport, token, manifest, digest, size):
     """GET the manifest and prove the remote bytes equal the local bytes."""
+    if type(size) is not int or not 1 <= size <= MAX_MANIFEST_BYTES:
+        raise AuthorityError("OCI manifest exceeds its size limit.")
     if not isinstance(manifest, bytes) or len(manifest) != size:
         raise AuthorityError("OCI manifest exceeds its size limit.")
-    status, headers, body = _remote_bytes(registry, transport, token, "manifests", digest, size)
-    registry.check_get_response(status, headers, body, digest, size, manifest)
+    headers = _authorization(token)
+    headers["Accept"] = "application/vnd.oci.image.manifest.v1+json"
+    stream = _open_stream(transport, "GET", registry.registry_url(f"manifests/{digest}"), headers)
+    try:
+        registry.redirect_target(
+            f"/v2/{registry.PACKAGE}/manifests/{digest}",
+            digest,
+            stream.status,
+            stream.headers.get("location", ""),
+        )
+        body = bytearray()
+        while len(body) <= size:
+            chunk = stream.read(min(65536, size + 1 - len(body)))
+            if not chunk:
+                break
+            body.extend(chunk)
+        status, response_headers, response_body = stream.status, stream.headers, bytes(body)
+    finally:
+        stream.close()
+    registry.check_get_response(status, response_headers, response_body, digest, size, manifest)
     return {
         "digest": digest,
         "size": size,
@@ -291,15 +382,32 @@ def verify_remote_manifest(registry, transport, token, manifest, digest, size):
     }
 
 
-def _require_blob(digest, data):
+def _require_blob_file(digest, path, size):
+    """Require a temp-file handle for a blob; bytes would materialize the image.
+
+    Plain ``open``/``seek`` keeps this module free of ``os`` (the fixed-input
+    hermeticity gate pins the import list); the size probe rejects missing,
+    truncated, and padded files without reading them.
+    """
     if not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
         raise AuthorityError("OCI blob descriptor is incorrect.")
-    if (
-        not isinstance(data, bytes)
-        or len(data) < 1
-        or len(data) > MAX_UPLOAD_BYTES
-    ):
+    if isinstance(path, (str, bytes, bytearray, memoryview)):
+        raise AuthorityError("OCI blob must be a temporary file path, not bytes.")
+    if type(size) is not int or not 1 <= size <= MAX_UPLOAD_BYTES:
         raise AuthorityError("OCI blob descriptor size is incorrect.")
+    try:
+        stream = open(path, "rb")
+    except (OSError, ValueError, TypeError):
+        raise AuthorityError("OCI blob file is missing.")
+    with stream:
+        try:
+            stream.seek(0, 2)
+            actual = stream.tell()
+        except (OSError, ValueError):
+            raise AuthorityError("OCI blob file is missing.") from None
+    if actual != size:
+        raise AuthorityError("OCI blob descriptor size is incorrect.")
+    return path
 
 
 def _begin_upload(registry, transport, token):
@@ -315,9 +423,13 @@ def _begin_upload(registry, transport, token):
     return registry.validate_upload_location(start, response.headers["location"])
 
 
-def upload_blob(registry, transport, token, digest, data):
-    """Upload one blob, then require HEAD to prove it landed."""
-    size = len(data)
+def upload_blob(registry, transport, token, digest, path, size):
+    """Upload one blob from its temp file, then require HEAD to prove it landed.
+
+    The temp file is streamed from disk through the transport; it is never
+    loaded into memory.
+    """
+    _require_blob_file(digest, path, size)
     location = _begin_upload(registry, transport, token)
     target = registry.upload_target(location, digest)
     try:
@@ -326,7 +438,7 @@ def upload_blob(registry, transport, token, digest, data):
             "PUT",
             target,
             {**_authorization(token), "Content-Type": "application/octet-stream"},
-            body=data,
+            body=path,
             length=size,
         )
     except AuthorityError:
@@ -371,13 +483,12 @@ def upload_manifest(registry, transport, token, manifest, digest):
     verify_remote_manifest(registry, transport, token, manifest, digest, size)
 
 
-def publish_blob(registry, transport, token, digest, data):
-    """Upload a blob when absent, then prove the remote bytes with HEAD and GET."""
-    _require_blob(digest, data)
-    size = len(data)
+def publish_blob(registry, transport, token, digest, path, size):
+    """Upload a blob temp file when absent, then prove the remote bytes with HEAD and GET."""
+    _require_blob_file(digest, path, size)
     if not head_blob(registry, transport, token, digest, size):
-        upload_blob(registry, transport, token, digest, data)
-    verify_remote_blob(registry, transport, token, digest, data, size)
+        upload_blob(registry, transport, token, digest, path, size)
+    verify_remote_blob(registry, transport, token, digest, path, size)
     return {
         "digest": digest,
         "size": size,
@@ -405,8 +516,13 @@ def publish_manifest_receipt(registry, transport, token, manifest):
     }
 
 
-def publish_image(registry, transport, token, manifest, blobs):
-    """Publish every blob and the platform manifest; prove every remote byte.
+def publish_image(registry, transport, token, manifest, blob_paths):
+    """Publish every blob temp file and the platform manifest; prove every remote byte.
+
+    ``blob_paths`` maps each manifest descriptor digest to the extracted temp
+    file holding exactly those bytes (see ``extract_blob``). Blobs are
+    streamed from disk for upload and compared chunk by chunk on readback;
+    the complete image is never materialized in memory.
 
     Returns a publication proof binding each descriptor digest and the
     manifest digest to verified remote bytes. Anything missing, mismatched,
@@ -422,19 +538,22 @@ def publish_image(registry, transport, token, manifest, blobs):
         raise AuthorityError("OCI manifest exceeds its size limit.")
     manifest_value = _json_bytes(manifest, "OCI manifest")
     expected = blob_descriptors(manifest_value)
-    if not isinstance(blobs, dict) or set(blobs) != set(expected):
+    if not isinstance(blob_paths, dict) or set(blob_paths) != set(expected):
         raise AuthorityError(
             "Publication blob set is not the same as the OCI manifest descriptors."
         )
     for digest, size in expected.items():
-        if not isinstance(blobs[digest], bytes) or len(blobs[digest]) != size:
-            raise AuthorityError("OCI blob descriptor size is incorrect.")
+        _require_blob_file(digest, blob_paths[digest], size)
     receipts = {}
     for digest in sorted(expected):
-        receipts[digest] = publish_blob(registry, transport, token, digest, blobs[digest])
+        receipts[digest] = publish_blob(
+            registry, transport, token, digest, blob_paths[digest], expected[digest]
+        )
     manifest_receipt = publish_manifest_receipt(registry, transport, token, manifest)
     for digest in sorted(expected):
-        verify_remote_blob(registry, transport, token, digest, blobs[digest], expected[digest])
+        verify_remote_blob(
+            registry, transport, token, digest, blob_paths[digest], expected[digest]
+        )
     return {"blobs": receipts, "manifest": manifest_receipt}
 
 

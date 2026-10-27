@@ -128,6 +128,7 @@ fn finalize_suite_workflow_jobs(
     }
     crate::cache_p08::elect_cache_writers_with_policy(jobs, spec.pull_request_cache_policy)?;
     crate::cache_steps::append_bundle_postludes(jobs)?;
+    crate::steps_internal::group_ledger_steps::append_emit_ledger_steps(jobs);
     crate::cache_steps::append_workspace_cleanups(jobs)?;
     crate::cache_doctor::check(jobs)
 }

@@ -215,7 +215,7 @@ pub(crate) fn check_accepts_registry_publication(fixture: &Fixture) -> Result<()
         &envelope,
         "publish-tampered",
         "PUBLISH-REJECTED",
-        Some("Registry response bytes have an incorrect digest or size."),
+        Some("Registry retrieved bytes changed during publication."),
     )?;
     let output = expect_ok(
         fixture,

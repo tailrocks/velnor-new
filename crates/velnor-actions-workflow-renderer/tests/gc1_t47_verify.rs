@@ -55,11 +55,20 @@ pub(crate) fn run_verify_program(
         record_text.as_bytes(),
     )?;
     let archive_path = write_bytes(fixture.root.path(), "verify.oci.tar", archive)?;
+    let closure_path = write_bytes(
+        fixture.root.path(),
+        "verify-closure.json",
+        format!(
+            "{{\"schema\":\"velnor.job-image-native-source-closure.v1\",\"source_commit\":\"{SOURCE_SHA}\",\"inputs\":{{}}}}"
+        )
+        .as_bytes(),
+    )?;
     let output = Command::new("python3")
         .arg(&script)
         .arg(fixture.root.path())
         .arg(&record_path)
         .arg(&archive_path)
+        .arg(&closure_path)
         .env("VELNOR_EXPECTED_SOURCE", SOURCE_SHA)
         .env("VELNOR_EXPECTED_REF", "refs/heads/main")
         .env("VELNOR_EXPECTED_REPOSITORY", "tailrocks/velnor-new")
@@ -91,12 +100,12 @@ fn gc1_t47_verify_program_binds_source() -> Result<(), Box<dyn Error>> {
     )?;
     require(AUTHORITY_MODULE, "VELNOR_EXPECTED_SOURCE", "source binding")?;
     require(
-        AUTHORITY_MODULE,
+        IDENTITY_SOURCE,
         "Candidate source is not the current run source.",
         "source binding",
     )?;
     require(
-        AUTHORITY_MODULE,
+        IDENTITY_SOURCE,
         "Candidate workflow is not the current run workflow.",
         "source binding",
     )?;

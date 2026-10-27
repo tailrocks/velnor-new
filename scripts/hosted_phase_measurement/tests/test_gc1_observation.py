@@ -12,6 +12,7 @@ import sys
 import tempfile
 import unittest
 import zipfile
+from argparse import Namespace
 from pathlib import Path
 from unittest import mock
 
@@ -19,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from hosted_phase_measurement import measure_hosted_run as R
 from hosted_phase_measurement import measure_support as S
+from hosted_phase_measurement import report_builder as B
 from hosted_phase_measurement import report_counters as C
 from hosted_phase_measurement import report_events as E
 
@@ -582,6 +584,45 @@ class F6JoinTests(unittest.TestCase):
                 _job_record(JOB_NAME, RERUN_JOB_ID, ATTEMPT)]
         with self.assertRaises(ValueError):
             E.collect_job_events(jobs, {})
+
+    def test_rerun_attempt_partitions_log_rows(self):
+        root = Path(tempfile.mkdtemp(prefix="gc1-f6-rerun-logs-"))
+        run_path = root / "run.json"
+        jobs_path = root / "jobs.json"
+        logs_path = root / "logs.zip"
+        run_path.write_text(json.dumps(
+            {"id": RUN_ID, "run_attempt": 2, "head_sha": HEAD_SHA}), encoding="utf-8")
+
+        def _logged_job(name, numeric_id, attempt):
+            record = _job_record(name, numeric_id, attempt)
+            record.update({
+                "started_at": "2026-03-04T10:01:00Z",
+                "completed_at": "2026-03-04T10:05:00Z",
+                "steps": [{"number": 1, "name": "Build", "status": "completed",
+                           "conclusion": "success",
+                           "started_at": "2026-03-04T10:01:10Z",
+                           "completed_at": "2026-03-04T10:04:50Z"}]})
+            return record
+
+        jobs_path.write_text(json.dumps({
+            "total_count": 2,
+            "jobs": [_logged_job(JOB_NAME, JOB_ID, 1),
+                     _logged_job(JOB_NAME, RERUN_JOB_ID, 2)]}), encoding="utf-8")
+        with zipfile.ZipFile(logs_path, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("unit-job/1_Build.txt", "2026-03-04T10:01:10Z Build ok\n")
+        args = Namespace(repository=REPOSITORY, run_json=run_path,
+                         jobs_json=jobs_path, logs_zip=logs_path,
+                         workflow_json=None, workflow_file=None,
+                         artifact_json=None, artifact_id=None,
+                         final_artifact=None, task_report_dir=None,
+                         out=root / "report.json")
+        report = B.build_report(args)
+        self.assertEqual([row["job_id"] for row in report["jobs"]], [RERUN_JOB_ID])
+        self.assertEqual(report["jobs"][0]["run_attempt"], 2)
+        step = report["jobs"][0]["steps"][0]
+        self.assertIsNotNone(step["log_evidence"])
+        self.assertEqual(step["log_evidence"]["log_file"], "unit-job/1_Build.txt")
+        self.assertEqual(report["run_identity"]["run_attempt"], 2)
 
 
 if __name__ == "__main__":

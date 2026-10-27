@@ -132,6 +132,45 @@ def validate_candidate_identity(record, identity):
     return record
 
 
+def validate_same_run_candidate(record, identity):
+    """Bind a candidate record to the same-run workflow identity (any trigger).
+
+    Attest-time binding: the producer job and the attestation job run in the
+    same workflow run, so the record must name this run's repository, event,
+    workflow ref, source, and run counters. Unlike validate_candidate_identity
+    it accepts any trigger event (push or workflow_dispatch) and never consults
+    canonical publish constants; the dispatch-on-main hardening stays in
+    validate_candidate_identity for the publish path.
+    """
+    if not isinstance(identity, dict):
+        raise AuthorityError("Attestation run identity has an incorrect format.")
+    for name in (
+        "repository", "event", "workflow_ref", "ref",
+        "authority_commit", "run_id", "run_attempt", "source",
+    ):
+        if name not in identity:
+            raise AuthorityError("Attestation run identity has unknown or missing fields.")
+    source = record.get("source") if isinstance(record, dict) else None
+    if (
+        not isinstance(source, dict)
+        or source.get("commit") != identity["source"]
+        or source.get("ref") != identity["ref"]
+    ):
+        raise AuthorityError("Candidate source is not the current run source.")
+    workflow = record.get("workflow") if isinstance(record, dict) else None
+    if (
+        not isinstance(workflow, dict)
+        or workflow.get("repository") != identity["repository"]
+        or workflow.get("event") != identity["event"]
+        or workflow.get("workflow_ref") != identity["workflow_ref"]
+        or workflow.get("authority_commit") != identity["authority_commit"]
+        or workflow.get("run_id") != identity["run_id"]
+        or workflow.get("run_attempt") != identity["run_attempt"]
+    ):
+        raise AuthorityError("Candidate workflow is not the current run workflow.")
+    return record
+
+
 def validate_artifact_record(value, identity):
     if not isinstance(value, dict) or not isinstance(value.get("artifacts"), list):
         raise AuthorityError("Candidate artifact response has an incorrect format.")

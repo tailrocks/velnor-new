@@ -138,10 +138,12 @@ while IFS= read -r -d '' tool_dir; do
       [ "$version" = .mise.backend.toml ] && [ -f "$dir" ] && [ ! -x "$dir" ] || rm -rf "$dir"
       continue
     fi
-    if reason=$(verify_install "$dir" "$tool" "$version"); then
+    if verify_install "$dir" "$tool" "$version" >"$work/verify.out" 2>&1; then
+      cat "$work/verify.out"
       verified="$verified$version "
       printf 'velnor: restored %s@%s matches its mise.lock archive\n' "$tool" "$version"
     else
+      reason=$(cat "$work/verify.out")
       discard "$tool@$version" "${reason:-verification failed}" "$dir"
     fi
   done < <(entries "$tool_dir")

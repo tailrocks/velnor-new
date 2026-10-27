@@ -12,9 +12,58 @@ use crate::{
     yaml::Yaml,
 };
 use velnor_actions_contract::{
-    Job, Permissions, RunsOn, StepKind, StepRole, Trigger, WorkflowIr,
+    CacheMode, Job, Permissions, RunsOn, StepKind, StepRole, Trigger, WorkflowIr,
     workflow::{DispatchInput, DispatchInputType, permissions::PermissionLevel},
 };
+
+const PUSH_EVENT_GATE: &str = "github.event_name == 'push'";
+
+fn outer_wrapped(text: &str) -> bool {
+    if !text.starts_with('(') {
+        return false;
+    }
+    let mut depth = 0i32;
+    for (index, byte) in text.bytes().enumerate() {
+        if byte == b'(' {
+            depth += 1;
+        } else if byte == b')' {
+            depth -= 1;
+            if depth == 0 && index != text.len() - 1 {
+                return false;
+            }
+        }
+        if depth < 0 {
+            return false;
+        }
+    }
+    depth == 0
+}
+
+fn push_only_condition(condition: &str) -> bool {
+    if condition == PUSH_EVENT_GATE {
+        return true;
+    }
+    let Some(head) = condition.strip_suffix(PUSH_EVENT_GATE) else {
+        return false;
+    };
+    let Some(head) = head.trim_end().strip_suffix("&&") else {
+        return false;
+    };
+    outer_wrapped(head.trim_end())
+}
+
+fn push_gated_literal_mode(mode: &CacheMode, condition: Option<&str>) -> Option<CacheMode> {
+    let CacheMode::Expression(expr) = mode else {
+        return None;
+    };
+    if expr != velnor_actions_contract::CACHE_MODE_PUSH_WRITE_EXPR {
+        return None;
+    }
+    if condition.is_some_and(push_only_condition) {
+        return Some(CacheMode::Write);
+    }
+    None
+}
 
 pub(crate) fn workflow_to_yaml(
     ir: &WorkflowIr,
@@ -361,14 +410,9 @@ fn append_job_options(
     }
     if let Some(cache_mode) = &job.cache_mode {
         steps::scan_for_private_subcommands(cache_mode.as_str())?;
-        // Conditional (expression) modes stay IR-only: the emitted workflow
-        // declares only statically provable modes. A conditional writer runs
-        // only behind its push gate with push-gated save conditions, so the
-        // omitted declaration changes nothing at runtime.
-        if !matches!(
-            cache_mode,
-            velnor_actions_contract::CacheMode::Expression(_)
-        ) {
+        if let Some(literal) = push_gated_literal_mode(cache_mode, job.condition.as_deref()) {
+            entries.push(Yaml::cache_mode_field(&literal));
+        } else if !matches!(cache_mode, CacheMode::Expression(_)) {
             entries.push(Yaml::cache_mode_field(cache_mode));
         }
     }
@@ -388,4 +432,92 @@ fn append_job_options(
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+    use velnor_actions_contract::{CacheMode, Job, JobTimeout};
+
+    fn writer_job(condition: Option<&str>, cache_mode: Option<CacheMode>) -> Job {
+        Job {
+            display_name: "Writer".to_owned(),
+            runs_on: "ubuntu-24.04".to_owned(),
+            check_runner: None,
+            timeout_minutes: JobTimeout::DEFAULT,
+            needs: Vec::new(),
+            condition: condition.map(str::to_owned),
+            permissions: None,
+            cache_mode,
+            environment: None,
+            services: Vec::new(),
+            outputs: BTreeMap::new(),
+            steps: Vec::new(),
+        }
+    }
+
+    fn rendered_options(job: &Job) -> Vec<(String, Yaml)> {
+        let mut entries = Vec::new();
+        append_job_options(&mut entries, job, false, &BTreeMap::new(), &BTreeMap::new())
+            .expect("options render");
+        entries
+    }
+
+    fn cache_mode_entry(entries: &[(String, Yaml)]) -> Option<Yaml> {
+        entries
+            .iter()
+            .find(|(key, _)| key == "cache-mode")
+            .map(|(_, value)| value.clone())
+    }
+
+    #[test]
+    fn push_gated_writer_renders_literal_write() {
+        let gated = writer_job(
+            Some("(affected) && github.event_name == 'push'"),
+            Some(CacheMode::push_write_expression()),
+        );
+        assert_eq!(
+            cache_mode_entry(&rendered_options(&gated)),
+            Some(Yaml::Str("write".to_owned()))
+        );
+        let bare = writer_job(
+            Some("github.event_name == 'push'"),
+            Some(CacheMode::push_write_expression()),
+        );
+        assert_eq!(
+            cache_mode_entry(&rendered_options(&bare)),
+            Some(Yaml::Str("write".to_owned()))
+        );
+    }
+
+    #[test]
+    fn unprovable_writer_keeps_no_declaration() {
+        let unconditioned = writer_job(None, Some(CacheMode::push_write_expression()));
+        assert_eq!(cache_mode_entry(&rendered_options(&unconditioned)), None);
+        let pr_capable = writer_job(Some("(affected)"), Some(CacheMode::push_write_expression()));
+        assert_eq!(cache_mode_entry(&rendered_options(&pr_capable)), None);
+        let or_shaped = writer_job(
+            Some("(reader_ok) || (writer_ok) && github.event_name == 'push'"),
+            Some(CacheMode::push_write_expression()),
+        );
+        assert_eq!(cache_mode_entry(&rendered_options(&or_shaped)), None);
+        let narrowed = writer_job(
+            Some("((reader_ok) || (writer_ok)) && github.event_name == 'push'"),
+            Some(CacheMode::push_write_expression()),
+        );
+        assert_eq!(
+            cache_mode_entry(&rendered_options(&narrowed)),
+            Some(Yaml::Str("write".to_owned()))
+        );
+    }
+
+    #[test]
+    fn explicit_modes_render_unchanged() {
+        let reader = writer_job(Some("(affected)"), Some(CacheMode::explicit_read()));
+        assert_eq!(
+            cache_mode_entry(&rendered_options(&reader)),
+            Some(Yaml::Str("read".to_owned()))
+        );
+    }
 }
