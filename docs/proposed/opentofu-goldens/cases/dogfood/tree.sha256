@@ -1,7 +1,7 @@
 9051dfa842ec24d41643009b0226dd18c7696ae7688d2b58c93502c81f191fdf  ./.github/AGENTS.md
 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./.github/CLAUDE.md
 952c78c7e8f944dc89ae7733a76f912e2c6b7f7e6013bb2bad00ae85e5ceed3a  ./.github/PULL_REQUEST_TEMPLATE.md
-2ac9aded5c133280add653fc5abb37a8f8561ef3062fb6aa85db2ba4d891a785  ./.github/actions/declared-task-0/action.yml
+9fdc04bbf97a90240fbe8c12b6e53fd5e4f40420ecf634a4294a017a846acf7c  ./.github/actions/declared-task-0/action.yml
 7aac42a4e6d2668a7aa747ee0dd7f37705608942cf47ae634c47c1398dcab6c0  ./.github/actions/generator-release-build-linux/action.yml
 aa2800e87402190c76aca809987e4d4adaef321dd37f4400a89a9c98b6707b6d  ./.github/actions/generator-release-build-macos-intel/action.yml
 aadda9b1c021dab4bed090475e9c77bd6b0e59d814e91cd8b3e45a59699101db  ./.github/actions/generator-release-build-macos/action.yml

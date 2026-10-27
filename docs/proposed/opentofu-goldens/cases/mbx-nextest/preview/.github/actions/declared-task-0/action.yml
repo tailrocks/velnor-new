@@ -15,8 +15,6 @@ runs:
         ACTIONS_ID_TOKEN_REQUEST_URL: ""
         ACTIONS_RUNTIME_TOKEN: ""
         CARGO_REGISTRY_TOKEN: ""
-        CC: ${{ runner.temp }}/velnor/wrappers/cc
-        CXX: ${{ runner.temp }}/velnor/wrappers/cxx
         GH_CONFIG_DIR: ""
         GH_HOST: ""
         GH_TOKEN: ""
@@ -25,8 +23,6 @@ runs:
         MISE_GITHUB_TOKEN: ""
         NODE_AUTH_TOKEN: ""
         NPM_TOKEN: ""
-        RUSTC_WRAPPER: ${{ runner.temp }}/velnor/wrappers/rustc
-        RUSTDOC: ${{ runner.temp }}/velnor/wrappers/rustdoc
         VELNOR_GENERATOR_VERSION: 0.1.57
         VELNOR_RUNTIME_RUNNER_TEMP: ${{ runner.temp }}
         VELNOR_TASK_EXECUTION_DIGEST: ${{ inputs.digest }}

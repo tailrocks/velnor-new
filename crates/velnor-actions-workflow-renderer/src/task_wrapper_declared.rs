@@ -10,22 +10,8 @@ use super::{
 
 use crate::toolchain_env;
 
-pub(super) const OBSERVER_WRAPPER_DIR_EXPRESSION: &str = "${{ runner.temp }}/velnor/wrappers";
-pub(super) const RUSTC_WRAPPER_ENV: &str = "RUSTC_WRAPPER";
-pub(super) const RUSTDOC_ENTRY_ENV: &str = "RUSTDOC";
-pub(super) const CC_ENTRY_ENV: &str = "CC";
-pub(super) const CXX_ENTRY_ENV: &str = "CXX";
 pub(super) const MBX_TARGET_VIEWS_ENV: &str = "MBX_TARGET_VIEWS";
 pub(super) const MBX_TARGET_VIEWS_DISABLED: &str = "0";
-pub(super) const RUSTC_OBSERVER_ENTRY: &str = "rustc";
-pub(super) const RUSTDOC_OBSERVER_ENTRY: &str = "rustdoc";
-pub(super) const CC_OBSERVER_ENTRY: &str = "cc";
-pub(super) const CXX_OBSERVER_ENTRY: &str = "cxx";
-
-#[must_use]
-pub(super) fn observer_wrapper_path(entry: &str) -> String {
-    format!("{OBSERVER_WRAPPER_DIR_EXPRESSION}/{entry}")
-}
 
 pub(super) fn validate_task_fields(
     argv: &[String],
@@ -157,22 +143,11 @@ pub(super) fn declared_task_document(
         RUNTIME_RUNNER_TEMP_ENV.to_owned(),
         RUNNER_TEMP_EXPRESSION.to_owned(),
     );
-    env.insert(
-        RUSTC_WRAPPER_ENV.to_owned(),
-        observer_wrapper_path(RUSTC_OBSERVER_ENTRY),
-    );
-    env.insert(
-        RUSTDOC_ENTRY_ENV.to_owned(),
-        observer_wrapper_path(RUSTDOC_OBSERVER_ENTRY),
-    );
-    env.insert(
-        CC_ENTRY_ENV.to_owned(),
-        observer_wrapper_path(CC_OBSERVER_ENTRY),
-    );
-    env.insert(
-        CXX_ENTRY_ENV.to_owned(),
-        observer_wrapper_path(CXX_OBSERVER_ENTRY),
-    );
+    // No compiler wrapper pointers here. Nothing creates observer files at
+    // task runtime: the observer installer is not wired into task startup
+    // and the pinned task helper does not create them. A dangling
+    // RUSTC_WRAPPER makes the mbx shim chain fail on a cold store, so
+    // declared tasks run unwrapped until an installer ships with a helper.
     env.insert(
         MBX_TARGET_VIEWS_ENV.to_owned(),
         MBX_TARGET_VIEWS_DISABLED.to_owned(),
