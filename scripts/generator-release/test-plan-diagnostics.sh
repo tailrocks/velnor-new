@@ -332,13 +332,13 @@ if [ "${GITHUB_ACTIONS:-}" = true ]; then
     echo 'FATAL: hosted Rust build pin differs from the owned workspace request pin' >&2
     exit 2
   fi
-  printf 'env -u CARGO_TARGET_DIR -u CARGO_BUILD_TARGET MISE_NO_CONFIG=1 MBX_GC_AUTO=0 mise --no-config --no-env --no-hooks exec rust@%s mr-boxington@%s -- cargo build --release --locked -p velnor-actions-cli\n' \
+  printf 'env -u CARGO_TARGET_DIR -u CARGO_BUILD_TARGET MISE_NO_CONFIG=1 MBX_GC_AUTO=0 mise --no-config --no-env --no-hooks exec rust@%s mr-boxington@%s -- mbx build --release --locked -p velnor-actions-cli\n' \
     "$RUST_VERSION" "$MBX_VERSION" >"$BUILD/build.command"
   (
     cd "$SOURCE" || exit 2
     env -u CARGO_TARGET_DIR -u CARGO_BUILD_TARGET MISE_NO_CONFIG=1 MBX_GC_AUTO=0 \
       mise --no-config --no-env --no-hooks exec "rust@$RUST_VERSION" "mr-boxington@$MBX_VERSION" -- \
-      cargo build --release --locked -p velnor-actions-cli
+      mbx build --release --locked -p velnor-actions-cli
   ) >"$BUILD/build.log" 2>&1
   build_rc=$?
 else
@@ -379,13 +379,13 @@ if [ "$build_rc" -ne 0 ]; then
 fi
 
 if [ "$HOSTED" = 1 ]; then
-  printf 'env -u CARGO_TARGET_DIR -u CARGO_BUILD_TARGET MISE_NO_CONFIG=1 MBX_GC_AUTO=0 mise --no-config --no-env --no-hooks exec rust@%s mr-boxington@%s -- cargo metadata --format-version 1 --no-deps --manifest-path Cargo.toml\n' \
+  printf 'env -u CARGO_TARGET_DIR -u CARGO_BUILD_TARGET MISE_NO_CONFIG=1 MBX_GC_AUTO=0 mise --no-config --no-env --no-hooks exec rust@%s mr-boxington@%s -- mbx metadata --format-version 1 --no-deps --manifest-path Cargo.toml\n' \
     "$RUST_VERSION" "$MBX_VERSION" >"$BUILD/metadata.command"
   (
     cd "$SOURCE" || exit 2
     env -u CARGO_TARGET_DIR -u CARGO_BUILD_TARGET MISE_NO_CONFIG=1 MBX_GC_AUTO=0 \
       mise --no-config --no-env --no-hooks exec "rust@$RUST_VERSION" "mr-boxington@$MBX_VERSION" -- \
-      cargo metadata --format-version 1 --no-deps --manifest-path Cargo.toml
+      mbx metadata --format-version 1 --no-deps --manifest-path Cargo.toml
   ) >"$BUILD/metadata.json" 2>"$BUILD/metadata.stderr"
   metadata_rc=$?
 else
@@ -583,6 +583,65 @@ diagnostic_workspace_from_log() {
   printf '%s\n' "$workspace"
 }
 
+preserve_raw_plan_evidence() {
+  local label="$1" workspace workspace_base workspace_parent physical_tmp raw case_name case_dir source destination
+  workspace="$(sed -n \
+    -e 's/^retaining successful golden evidence workspace: //p' \
+    -e 's/^retaining failed golden workspace: //p' "$OUTPUT/$label.log" | tail -n 1)"
+  if [ -z "$workspace" ]; then return 0; fi
+  workspace="$(diagnostic_workspace_from_log "$label")" || return 1
+  workspace_base="${workspace##*/}"
+  if [[ ! "$workspace_base" =~ ^velnor-goldens-work\.[A-Za-z0-9]+$ ]] \
+    || [ -L "$workspace" ] || [ ! -d "$workspace" ]; then
+    printf 'unsafe retained golden workspace: %s\n' "$workspace" >&2
+    return 1
+  fi
+  workspace_parent="$(cd "$workspace/.." 2>/dev/null && pwd -P)" || return 1
+  physical_tmp="$(cd "$(cat "$OUTPUT/$label.tmp-root.txt")" 2>/dev/null && pwd -P)" || return 1
+  if [ "$workspace_parent" != "$physical_tmp" ] \
+    || [ "$(cd "$workspace" && pwd -P)" != "$workspace" ]; then
+    printf 'retained golden workspace is outside physical TMPDIR: %s\n' "$workspace" >&2
+    return 1
+  fi
+  raw="$workspace/raw"
+  if [ -L "$raw" ]; then
+    echo "unsafe retained raw diagnostics directory: $raw" >&2
+    return 1
+  fi
+  if [ ! -e "$raw" ]; then return 0; fi
+  if [ ! -d "$raw" ]; then
+    printf 'retained raw diagnostics path is not a directory: %s\n' "$raw" >&2
+    return 1
+  fi
+  for case_name in nested mbx-nextest empty-suite minimal-cargo dogfood; do
+    case_dir="$raw/$case_name"
+    if [ -L "$case_dir" ]; then
+      printf 'unsafe retained diagnostics case directory: %s\n' "$case_dir" >&2
+      return 1
+    fi
+    if [ ! -e "$case_dir" ]; then continue; fi
+    if [ ! -d "$case_dir" ]; then
+      printf 'retained diagnostics case path is not a directory: %s\n' "$case_dir" >&2
+      return 1
+    fi
+    source="$case_dir/plan.stderr.raw.txt"
+    if [ -L "$source" ]; then
+      printf 'unsafe retained plan diagnostics file: %s\n' "$source" >&2
+      return 1
+    fi
+    if [ ! -e "$source" ]; then continue; fi
+    if [ ! -f "$source" ]; then
+      printf 'retained plan diagnostics path is not a regular file: %s\n' "$source" >&2
+      return 1
+    fi
+    destination="$OUTPUT/$label-$case_name-plan.stderr.raw.txt"
+    if [ -e "$destination" ] || [ -L "$destination" ] || ! cp -p "$source" "$destination"; then
+      printf 'could not safely preserve retained plan diagnostics: %s\n' "$source" >&2
+      return 1
+    fi
+  done
+}
+
 run_collector() {
   local label="$1" mode="$2" oracle="$3" spaced="$4" log="$OUTPUT/$1.log"
   local receipt="$MARKERS/$label" tmp_root="$OUTPUT/tmp/$label" temp_bin="$DIAGNOSTIC_CLI" temp_dir="$OUTPUT/tmp/$label/TMPDIR with spaces"
@@ -633,6 +692,7 @@ run_collector() {
     bash "$ROOT/scripts/capture-opentofu-goldens.sh" check "$temp_bin"
   ) >"$log" 2>&1 || collector_rc=$?
   printf '%s\n' "$collector_rc" >"$OUTPUT/$label.exit"
+  if ! preserve_raw_plan_evidence "$label"; then return 2; fi
   if ! verify_guard_receipt "$label" "$mise_receipt" "$receipt"; then
     cat "$log" >&2
     return 2

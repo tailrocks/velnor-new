@@ -41,6 +41,9 @@ mod freshness_emit;
 mod generate;
 mod generator;
 mod gh_download;
+#[cfg(test)]
+#[path = "../../test_support/git_fixture.rs"]
+mod git_fixture;
 mod git_paths;
 mod github_authority_read;
 mod github_landed_pull;

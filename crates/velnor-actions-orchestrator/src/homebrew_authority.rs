@@ -21,7 +21,7 @@ use crate::{OrchestratorError, internal::internal};
 mod context;
 #[path = "homebrew_authority/source.rs"]
 mod source;
-use source::{SourceProjection, load_source_projection};
+use source::{SourceProjection, load_source_projection, protected_locator};
 #[path = "homebrew_authority/applicability.rs"]
 mod applicability;
 #[path = "homebrew_authority/cutover.rs"]
@@ -397,21 +397,4 @@ fn admit_pull_request_context(
         "checkout_head"
     );
     Ok((pull.base_sha.clone(), pull.head_sha.clone()))
-}
-
-fn protected_locator(
-    expected_tap_repository: &str,
-    tap_repository_id: u64,
-    tap_base_sha: &str,
-    deadline: CheckDeadline,
-) -> Result<Option<Vec<u8>>, OrchestratorError> {
-    crate::package_release_publish::try_read_protected_source_file(
-        expected_tap_repository,
-        tap_repository_id,
-        "main",
-        tap_base_sha,
-        HOMEBREW_SOURCE_AUTHORITY_LOCATOR_PATH,
-        MAX_HOMEBREW_SOURCE_AUTHORITY_LOCATOR_BYTES,
-        deadline,
-    )
 }

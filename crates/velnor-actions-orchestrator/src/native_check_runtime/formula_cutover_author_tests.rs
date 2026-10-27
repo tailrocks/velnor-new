@@ -5,15 +5,13 @@ use std::{error::Error, path::Path, time::Duration};
 
 use super::admit_cutover_author_pull;
 use crate::{
+    git_fixture,
     github_landed_pull::GitHubRestUser,
     homebrew::structural_cutover::{protected_transition, verify_author_policy},
     package_release_publish::PublicPullRequestSnapshot,
 };
 use tempfile::TempDir;
 use velnor_actions_mise::CheckDeadline;
-
-#[path = "../../../test_support/git_fixture.rs"]
-mod git_fixture;
 
 const REPOSITORY: &str = "jackin-project/homebrew-tap";
 const REPOSITORY_ID: u64 = 1_200_197_694;
