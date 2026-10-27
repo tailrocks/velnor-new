@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{CODEX, Scenario, codex_edit, request_body, request_time, sonar_edit};
+use super::{CODEX, Scenario, codex_edit, event_action, request_body, request_time, sonar_edit};
 use serde_json::{Value, json};
 use std::{
     error::Error,
@@ -46,7 +46,7 @@ impl Fixture {
         write_executable(&bin.join("gh"), GH)?;
         let event = root.join("event.json");
         let value = json!({
-            "action":"created",
+            "action":event_action(scenario),
             "repository":{"id":REPOSITORY_ID,"full_name":REPOSITORY},
             "issue":{"number":NUMBER,"pull_request":{"url":"fixture"}},
             "comment":{"body":request_body(scenario),"updated_at":request_time(scenario)}
@@ -187,7 +187,7 @@ fn write_fixture(state: &Path, scenario: Scenario) -> Result<(), Box<dyn Error>>
         &sonar_created,
         &sonar_rest_updated,
     )?;
-    write_static_responses(state)?;
+    write_static_responses(state, scenario)?;
     write_editor_responses(
         state,
         scenario,
@@ -207,17 +207,18 @@ fn write_comments(
     sonar_created: &Value,
     sonar_updated: &Value,
 ) -> Result<(), Box<dyn Error>> {
-    let mut comments = vec![
-        json!({
+    let mut comments = Vec::new();
+    if scenario.has_live_request() {
+        comments.push(json!({
             "id":6_402_121_074_u64,"node_id":"IC_contextual_request","user":{"id":139_017,"type":"User"},
             "created_at":"2026-10-27T14:50:00Z","updated_at":request_time(scenario),"body":request_body(scenario)
-        }),
-        json!({
-            "id":6_405_682_853_u64,"node_id":"IC_codex_summary","user":{"id":199_175_422,"type":"Bot"},
-            "created_at":"2026-10-26T00:42:04Z","updated_at":"2026-10-27T15:03:25Z","body":CODEX,
-            "performed_via_github_app":{"id":1_144_995,"slug":"chatgpt-codex-connector","owner":{"id":14_957_082}}
-        }),
-    ];
+        }));
+    }
+    comments.push(json!({
+        "id":6_405_682_853_u64,"node_id":"IC_codex_summary","user":{"id":199_175_422,"type":"Bot"},
+        "created_at":"2026-10-26T00:42:04Z","updated_at":"2026-10-27T15:03:25Z","body":CODEX,
+        "performed_via_github_app":{"id":1_144_995,"slug":"chatgpt-codex-connector","owner":{"id":14_957_082}}
+    }));
     if scenario.has_sonar() {
         comments.push(json!({
             "id":6_445_194_482_u64,"node_id":"IC_sonar_summary","user":{"id":39_514_782,"type":"Bot"},
@@ -228,8 +229,8 @@ fn write_comments(
     put_json(state, "issue-comments.json", &Value::Array(comments))
 }
 
-fn write_static_responses(state: &Path) -> Result<(), Box<dyn Error>> {
-    put_json(state, "pull.json", &pull())?;
+fn write_static_responses(state: &Path, scenario: Scenario) -> Result<(), Box<dyn Error>> {
+    put_json(state, "pull.json", &pull(scenario))?;
     put_json(
         state,
         "repository.json",
@@ -297,13 +298,32 @@ fn write_sonar_check(state: &Path, scenario: Scenario) -> Result<(), Box<dyn Err
     if matches!(scenario, Scenario::SonarFinding) {
         sonar_text = sonar_text.replace("[0 New issues]", "[1 New issues]");
     }
+    let association = match scenario {
+        Scenario::ForkEmptyAssociation
+        | Scenario::SameRepositoryEmptyAssociation
+        | Scenario::ForkWrongHead
+        | Scenario::ForkWrongApp
+        | Scenario::ForkMissingFlag
+        | Scenario::ForkFalseFlag => json!([]),
+        _ => json!([{"number":NUMBER,"head":{"sha":HEAD},"base":{"repo":{"id":REPOSITORY_ID}}}]),
+    };
+    let check_head = if matches!(scenario, Scenario::ForkWrongHead) {
+        "wrong-head"
+    } else {
+        HEAD
+    };
+    let check_app_id = if matches!(scenario, Scenario::ForkWrongApp) {
+        12_527
+    } else {
+        12_526
+    };
     let sonar_check = json!({
-        "id":122_263_237_931_u64,"name":"SonarCloud Code Analysis","head_sha":HEAD,"status":"completed","conclusion":"success",
+        "id":122_263_237_931_u64,"name":"SonarCloud Code Analysis","head_sha":check_head,"status":"completed","conclusion":"success",
         "started_at":"2026-10-27T14:52:13Z","completed_at":"2026-10-27T14:52:22Z",
         "details_url":"https://sonarcloud.io/dashboard?id=jackin-project_homebrew-tap&pullRequest=514",
         "output":{"title":"Quality Gate passed","summary":sonar_text,"annotations_count":0},
-        "app":{"id":12526,"slug":"sonarqubecloud","owner":{"id":545_988}},
-        "pull_requests":[{"number":NUMBER,"head":{"sha":HEAD},"base":{"repo":{"id":REPOSITORY_ID}}}]
+        "app":{"id":check_app_id,"slug":"sonarqubecloud","owner":{"id":545_988}},
+        "pull_requests":association
     });
     if scenario.has_sonar() {
         put_json(state, "sonar-check.json", &sonar_check)?;
@@ -311,9 +331,20 @@ fn write_sonar_check(state: &Path, scenario: Scenario) -> Result<(), Box<dyn Err
     Ok(())
 }
 
-fn pull() -> Value {
+fn pull(scenario: Scenario) -> Value {
+    let (head_repository_id, fork_flag) =
+        super::fork_head_repository(scenario).unwrap_or((REPOSITORY_ID, Some(false)));
+    let full_name = if head_repository_id == REPOSITORY_ID {
+        REPOSITORY
+    } else {
+        "JonathanBrouwer/rust"
+    };
+    let mut head_repository = json!({"id":head_repository_id,"full_name":full_name});
+    if let Some(fork) = fork_flag {
+        head_repository["fork"] = json!(fork);
+    }
     json!({"number":NUMBER,"state":"open","draft":false,"commits":1,
-        "head":{"sha":HEAD,"ref":"fixture","repo":{"id":REPOSITORY_ID,"full_name":REPOSITORY}},
+        "head":{"sha":HEAD,"ref":"fixture","repo":head_repository},
         "base":{"sha":BASE,"ref":"main","repo":{"id":REPOSITORY_ID,"full_name":REPOSITORY}}})
 }
 

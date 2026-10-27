@@ -82,6 +82,13 @@ pub(super) fn observe(operation: &Operation, number: u64) -> Result<Proposal, Or
                 .map(|(role, stamp)| (*role, stamp.as_str())),
             (&operation.policy.repository, number),
             operation.repository_id,
+            pull.pointer("/head/repo/id")
+                .and_then(Value::as_u64)
+                .filter(|id| {
+                    *id > 0
+                        && *id != operation.repository_id
+                        && pull.pointer("/head/repo/fork").and_then(Value::as_bool) == Some(true)
+                }),
         ) {
             proposal.provider_digest = digest;
             proposal.state = decision;
@@ -99,6 +106,8 @@ pub(super) fn observe(operation: &Operation, number: u64) -> Result<Proposal, Or
     if current.pointer("/head/sha").and_then(Value::as_str) != Some(head)
         || current["state"] != pull["state"]
         || current["draft"] != pull["draft"]
+        || current.pointer("/head/repo/id") != pull.pointer("/head/repo/id")
+        || current.pointer("/head/repo/fork") != pull.pointer("/head/repo/fork")
     {
         return Err(internal("review_completion_pull_changed"));
     }
@@ -163,6 +172,9 @@ fn restart_hint(
     let event =
         velnor_actions_contract::strict_json::parse_strict_json_bytes(&bytes, 4 * 1024 * 1024)
             .map_err(|_| internal("review_completion_event"))?;
+    if !matches!(event["action"].as_str(), Some("created" | "edited")) {
+        return Ok(None);
+    }
     let Some(role) = event
         .pointer("/comment/body")
         .and_then(Value::as_str)

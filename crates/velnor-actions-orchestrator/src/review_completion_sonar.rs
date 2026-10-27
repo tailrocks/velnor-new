@@ -23,7 +23,7 @@ pub(super) fn classify(
     head: &str,
     terminal: (time::Timestamp, time::Timestamp),
     restart: Option<(&str, &str)>,
-    location: (&str, u64, u64),
+    location: (&str, u64, u64, Option<u64>),
 ) -> Result<(bool, Vec<Value>), OrchestratorError> {
     if let Some((role, stamp)) = restart {
         let stamp = time::parse(stamp)?;
@@ -73,7 +73,7 @@ fn authenticate(
     api: &TapMergeGitHub,
     comment: &Value,
     head: &str,
-    location: (&str, u64, u64),
+    location: (&str, u64, u64, Option<u64>),
 ) -> Result<Option<Value>, OrchestratorError> {
     if !candidate(comment) {
         return Ok(None);
@@ -142,7 +142,7 @@ fn authenticate(
     {
         return Err(internal("review_sonar_evidence"));
     }
-    Ok(Some(json!({"app":app,"editor":editor,"check":check})))
+    Ok(Some(json!({"app":app,"editor":editor,"check":check,"fork_head_repository_id":location.3})))
 }
 
 fn candidate(comment: &Value) -> bool {
@@ -233,7 +233,7 @@ fn valid_project_key(project: &str) -> bool {
     !bytes.is_empty()
 }
 
-fn valid_check(check: &Value, head: &str, location: (&str, u64, u64), project: &str) -> bool {
+fn valid_check(check: &Value, head: &str, location: (&str, u64, u64, Option<u64>), project: &str) -> bool {
     let link = format!(
         "https://sonarcloud.io/dashboard?id={project}&pullRequest={}",
         location.1
@@ -248,10 +248,11 @@ fn valid_check(check: &Value, head: &str, location: (&str, u64, u64), project: &
         && check.pointer("/app/slug").and_then(Value::as_str) == Some(APP)
         && check.pointer("/app/owner/id").and_then(Value::as_u64) == Some(APP_OWNER)
         && check["pull_requests"].as_array().is_some_and(|pulls| {
-            pulls.len() == 1
+            (pulls.is_empty() && location.3.is_some())
+                || (pulls.len() == 1
                 && pulls[0]["number"].as_u64() == Some(location.1)
                 && pulls[0].pointer("/head/sha").and_then(Value::as_str) == Some(head)
-                && pulls[0].pointer("/base/repo/id").and_then(Value::as_u64) == Some(location.2)
+                && pulls[0].pointer("/base/repo/id").and_then(Value::as_u64) == Some(location.2))
         })
 }
 

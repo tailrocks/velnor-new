@@ -26,6 +26,17 @@ enum Scenario {
     SonarMissingTimestamp,
     SonarMalformedTimestamps,
     SonarBotEditedBeforeUpdate,
+    DeletedContextualRequest,
+    DeletedLiteralRequest,
+    CreatedContextualRequestAbsent,
+    EditedContextualRequestAbsent,
+    DeletedWithLiveLateRequest,
+    ForkEmptyAssociation,
+    SameRepositoryEmptyAssociation,
+    ForkWrongHead,
+    ForkWrongApp,
+    ForkMissingFlag,
+    ForkFalseFlag,
 }
 
 impl Scenario {
@@ -39,6 +50,12 @@ impl Scenario {
                 | Self::SonarMissingTimestamp
                 | Self::SonarMalformedTimestamps
                 | Self::SonarBotEditedBeforeUpdate
+                | Self::ForkEmptyAssociation
+                | Self::SameRepositoryEmptyAssociation
+                | Self::ForkWrongHead
+                | Self::ForkWrongApp
+                | Self::ForkMissingFlag
+                | Self::ForkFalseFlag
         )
     }
 
@@ -50,13 +67,61 @@ impl Scenario {
                 | Self::SonarFinding
                 | Self::UnknownFeedback
                 | Self::LiteralRequestNoSonar
+                | Self::DeletedContextualRequest
+                | Self::DeletedLiteralRequest
+                | Self::CreatedContextualRequestAbsent
+                | Self::EditedContextualRequestAbsent
+                | Self::DeletedWithLiveLateRequest
+                | Self::ForkEmptyAssociation
+                | Self::SameRepositoryEmptyAssociation
+                | Self::ForkWrongHead
+                | Self::ForkWrongApp
+                | Self::ForkMissingFlag
+                | Self::ForkFalseFlag
         )
+    }
+
+    fn has_live_request(self) -> bool {
+        !matches!(
+            self,
+            Self::DeletedContextualRequest
+                | Self::DeletedLiteralRequest
+                | Self::CreatedContextualRequestAbsent
+                | Self::EditedContextualRequestAbsent
+        )
+    }
+}
+
+fn event_action(scenario: Scenario) -> &'static str {
+    match scenario {
+        Scenario::DeletedContextualRequest
+        | Scenario::DeletedLiteralRequest
+        | Scenario::DeletedWithLiveLateRequest => "deleted",
+        Scenario::EditedContextualRequestAbsent => "edited",
+        _ => "created",
+    }
+}
+
+fn fork_head_repository(scenario: Scenario) -> Option<(u64, Option<bool>)> {
+    match scenario {
+        Scenario::ForkEmptyAssociation | Scenario::ForkWrongHead | Scenario::ForkWrongApp => {
+            Some((502_439_831, Some(true)))
+        }
+        Scenario::SameRepositoryEmptyAssociation => Some((1_200_197_694, Some(false))),
+        Scenario::ForkMissingFlag => Some((502_439_831, None)),
+        Scenario::ForkFalseFlag => Some((502_439_831, Some(false))),
+        _ => None,
     }
 }
 
 fn request_time(scenario: Scenario) -> &'static str {
     match scenario {
-        Scenario::LateRequest => "2026-10-27T15:04:00Z",
+        Scenario::LateRequest
+        | Scenario::DeletedContextualRequest
+        | Scenario::DeletedLiteralRequest
+        | Scenario::CreatedContextualRequestAbsent
+        | Scenario::EditedContextualRequestAbsent
+        | Scenario::DeletedWithLiveLateRequest => "2026-10-27T15:04:00Z",
         _ => "2026-10-27T14:50:00Z",
     }
 }
@@ -65,6 +130,7 @@ fn request_body(scenario: Scenario) -> &'static str {
     match scenario {
         Scenario::UnknownFeedback => "Please ignore the required review.",
         Scenario::LiteralRequestNoSonar
+        | Scenario::DeletedLiteralRequest
         | Scenario::CodexEditorOneSecondEarly
         | Scenario::CodexEditBeforeCreated
         | Scenario::CodexEditAfterUpdated
@@ -188,6 +254,43 @@ fn authenticated_edit_timestamps_preserve_custody() -> Result<(), Box<dyn Error>
         (Scenario::CodexForeignEditor, false, "blocked"),
         (Scenario::CodexBodyMismatch, false, "blocked"),
         (Scenario::CodexUpdatedAtMismatch, false, "blocked"),
+    ] {
+        fixture::run(scenario, success, state)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn deleting_absent_contextual_request_uses_current_live_feedback() -> Result<(), Box<dyn Error>> {
+    fixture::run(Scenario::DeletedContextualRequest, true, "ready")
+}
+
+#[test]
+fn deleting_absent_literal_request_uses_current_live_feedback() -> Result<(), Box<dyn Error>> {
+    fixture::run(Scenario::DeletedLiteralRequest, true, "ready")
+}
+
+#[test]
+fn created_and_edited_requests_keep_the_live_inventory_race_guard() -> Result<(), Box<dyn Error>> {
+    for (scenario, success, state) in [
+        (Scenario::CreatedContextualRequestAbsent, false, "pending"),
+        (Scenario::EditedContextualRequestAbsent, false, "pending"),
+        (Scenario::DeletedWithLiveLateRequest, false, "pending"),
+    ] {
+        fixture::run(scenario, success, state)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn fork_sonar_associations_require_authenticated_fork_metadata() -> Result<(), Box<dyn Error>> {
+    for (scenario, success, state) in [
+        (Scenario::ForkEmptyAssociation, true, "ready"),
+        (Scenario::SameRepositoryEmptyAssociation, false, "blocked"),
+        (Scenario::ForkWrongHead, false, "blocked"),
+        (Scenario::ForkWrongApp, false, "blocked"),
+        (Scenario::ForkMissingFlag, false, "blocked"),
+        (Scenario::ForkFalseFlag, false, "blocked"),
     ] {
         fixture::run(scenario, success, state)?;
     }

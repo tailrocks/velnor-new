@@ -60,6 +60,7 @@ pub(super) fn inspect(
     restart: Option<(&str, &str)>,
     location: (&str, u64),
     repository_id: u64,
+    fork_head_repository_id: Option<u64>,
 ) -> Result<(CompletionState, Option<String>), OrchestratorError> {
     let Some(authenticated) = authenticate(api, records)? else {
         return Ok((CompletionState::Pending, None));
@@ -92,7 +93,7 @@ pub(super) fn inspect(
         head,
         (code_time, security_time),
         restart,
-        (location.0, location.1, repository_id),
+        (location.0, location.1, repository_id, fork_head_repository_id),
     ) else {
         return Ok((CompletionState::Blocked, Some(evidence)));
     };

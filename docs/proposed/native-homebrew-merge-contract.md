@@ -102,9 +102,17 @@ instantaneous cross-repository latestness guarantee. A mutable URL changing afte
 formula validation produces a checksum failure, never permission to accept new
 bytes. Stable uses permanent version-tagged assets and cannot be downgraded.
 
-The protected Homebrew seed transition uses the closed version-two template.
-Its output inventory includes `.velnor/release-manifest.json`, rendered from
-the exact authenticated SDK manifest bytes used to qualify the seed. This keeps
-the Tap's committed SDK identity aligned with the SDK that produced its
-workflow and tool files. The transition rejects older template inventories and
-candidate evidence that omits or changes the manifest.
+The protected Homebrew seed transition uses the closed version-three template
+and requires SDK 0.1.59 or newer. Its eight authored outputs include
+`.velnor/release-manifest.json`, rendered from the exact authenticated SDK manifest
+bytes used to qualify the seed, and `.github/workflows/review-completion.yml`,
+rendered through the ordinary review-completion renderer and authenticated SDK
+acquisition path. This keeps the Tap's committed SDK identity aligned with the
+SDK that produced its workflow and tool files. The transition rejects older
+template inventories, missing review-completion workflows, and candidate evidence
+that omits or changes the manifest. Immutable SDK 0.1.57 and 0.1.58 retain their
+original version-two implementation.
+
+The candidate workflow establishes no pre-merge authority. The protected
+default-branch review-completion workflow remains authoritative until the seed
+lands through the normal protected merge.
