@@ -111,6 +111,21 @@ pub(super) fn runner_build_argv() -> Vec<String> {
     ])
 }
 
+pub(super) fn attestation_helper_build_argv() -> Vec<String> {
+    argv(&[
+        "mbx",
+        "build",
+        "--locked",
+        "--manifest-path",
+        "crates/velnor-runner/Cargo.toml",
+        "--release",
+        "--package",
+        "velnor-runner-attestation",
+        "--bin",
+        "velnor-runner-attestation-helper",
+    ])
+}
+
 pub(super) fn resource_probe_build_argv() -> Vec<String> {
     argv(&[
         "mbx",

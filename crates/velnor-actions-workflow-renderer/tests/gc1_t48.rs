@@ -273,103 +273,6 @@ fn fixture_step() -> Step {
     }
 }
 
-fn argv(values: &[&str]) -> Vec<String> {
-    values.iter().map(|value| (*value).to_owned()).collect()
-}
-
-fn verify_rust_argv() -> Vec<String> {
-    argv(&[
-        "sh",
-        "-c",
-        &format!("{} exit 0", credential_unset_prelude()),
-    ])
-}
-
-fn verify_lint_argv() -> Vec<String> {
-    argv(&[
-        "sh",
-        "-c",
-        &jactionlint_verifier_script("${VELNOR_TOOL_JACTIONLINT}", VERIFY_PATH),
-    ])
-}
-
-fn install_runner_build_tools_argv() -> Vec<String> {
-    argv(&["mise", "install", "rust@1.91.0"])
-}
-
-fn install_resource_probe_target_argv() -> Vec<String> {
-    argv(&["rustup", "target", "add", "x86_64-unknown-linux-musl"])
-}
-
-fn runner_build_argv() -> Vec<String> {
-    argv(&[
-        "mbx",
-        "build",
-        "--locked",
-        "--manifest-path",
-        "crates/velnor-runner/Cargo.toml",
-        "--release",
-        "--package",
-        "velnor-runner-cli",
-        "--bin",
-        "velnor-host",
-    ])
-}
-
-fn resource_probe_build_argv() -> Vec<String> {
-    argv(&[
-        "mbx",
-        "build",
-        "--locked",
-        "--manifest-path",
-        "crates/velnor-runner/Cargo.toml",
-        "--package",
-        "velnor-resource-probe",
-        "--bin",
-        "velnor-resource-probe",
-        "--release",
-        "--target",
-        "x86_64-unknown-linux-musl",
-    ])
-}
-
-fn install_resource_probe_release_tools_argv() -> Vec<String> {
-    argv(&["mise", "install", "rust@1.91.0", "mr-boxington@1.0.0"])
-}
-
-fn resource_probe_release_build_argv() -> Vec<String> {
-    argv(&[
-        "mbx",
-        "build",
-        "--locked",
-        "--manifest-path",
-        "crates/velnor-runner/Cargo.toml",
-        "--package",
-        "velnor-runner-host",
-        "--bin",
-        "velnor-resource-probe-release",
-        "--target",
-        "x86_64-unknown-linux-gnu",
-    ])
-}
-
-fn resource_probe_release_test_argv() -> Vec<String> {
-    argv(&[
-        "mbx",
-        "nextest",
-        "run",
-        "--locked",
-        "--manifest-path",
-        "crates/velnor-runner/Cargo.toml",
-        "--package",
-        "velnor-runner-host",
-        "--test",
-        "resource_probe_release_public",
-        "--target",
-        "x86_64-unknown-linux-gnu",
-    ])
-}
-
 #[path = "gc1_t48_archive.rs"]
 mod gc1_t48_archive;
 #[path = "gc1_t48_checks.rs"]
@@ -386,3 +289,7 @@ pub(crate) use gc1_t48_pins::*;
 mod gc1_t48_sources;
 
 use gc1_t48_sources::*;
+
+#[path = "gc1_t48_argv.rs"]
+mod gc1_t48_argv;
+pub(crate) use gc1_t48_argv::*;

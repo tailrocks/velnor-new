@@ -267,6 +267,10 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: mise --no-config --no-env --no-hooks install gh@2.103.3
+      - name: Assemble group ledgers
+        env:
+          VELNOR_INTERNAL_OP: assemble-group-ledgers-v1
+        run: cargo run --locked -p velnor-actions-cli --bin velnor-actions
       - name: Download plan
         continue-on-error: true
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
@@ -427,6 +431,7 @@ jobs:
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.57/velnor-actions-0.1.57-x86_64-unknown-linux-gnu
       VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
       VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
+    cache-mode: write
     needs:
       - plan
       - rust-minimal-cargo-read

@@ -116,6 +116,7 @@ fn pins() -> ProductReleasePins {
         install_intel_target_argv: argv(&["rustup", "target", "add", "x86_64-apple-darwin"]),
         install_resource_probe_target_argv: Vec::new(),
         runner_build_argv: Vec::new(),
+        attestation_helper_build_argv: Vec::new(),
         resource_probe_build_argv: Vec::new(),
         install_resource_probe_release_tools_argv: Vec::new(),
         resource_probe_release_build_argv: Vec::new(),

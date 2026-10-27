@@ -337,7 +337,7 @@ jobs:
         name: Recover state snapshot
         if: steps.mbx-bundle-restore.outputs.cache-matched-key != ''
         env: *m16
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; payload=\"$RUNNER_TEMP/velnor-gc1/transport/state/payload.tar.gz\"; root=\"$RUNNER_TEMP/velnor-gc1/state\"; parent=\"$RUNNER_TEMP/velnor-gc1\"; base=\"state\"; record=\"$RUNNER_TEMP/velnor/state-discovery.record\"; expected=\"${{steps.mbx-bundle-key.outputs.key}}\"; matched=\"${{steps.mbx-bundle-restore.outputs.cache-matched-key}}\"; d=\"$RUNNER_TEMP/velnor/state-recover\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }; cold() { printf '\\''%s\\n'\\'' \"velnor: state snapshot no_entry ($1)\"; exit 0; }; corrupt() { printf '\\''%s\\n'\\'' \"::warning::cache_corrupt: state snapshot $1; building cold\"; rm -rf \"$root\"; rm -f \"$payload\"; exit 0; }; refused() { printf '\\''%s\\n'\\'' \"::warning::cache_corrupt: state snapshot refused ($1); building cold\"; rm -rf \"$root\"; rm -f \"$payload\"; exit 0; }; if [ ! -f \"$payload\" ] || [ -L \"$payload\" ]; then cold no_entry; fi; if [ ! -s \"$payload\" ]; then printf '\\''%s\\n'\\'' '\\''::warning::cache_corrupt: state payload empty; building cold'\\''; rm -f \"$payload\"; exit 0; fi; if [ -L \"$root\" ]; then printf '\\''%s\\n'\\'' '\\''::warning::cache_corrupt: state root is a symlink; building cold'\\''; exit 0; fi; if [ -z \"$matched\" ]; then cold cold-missing; fi; if [ ! -f \"$record\" ] || [ -L \"$record\" ]; then refused refused-provenance; fi; expected_prefix=\"\"; compat=\"\"; provenance=\"\"; ceiling=\"\"; rec_unit=\"\"; rec_mbx=\"\"; rec_toolchain=\"\"; rec_root=\"\"; line=; while IFS= read -r line || [ -n \"$line\" ]; do case \"$line\" in restore_prefix=*) expected_prefix=${line#restore_prefix=} ;; compat=*) compat=${line#compat=} ;; provenance=*) provenance=${line#provenance=} ;; ceiling=*) ceiling=${line#ceiling=} ;; unit=*) rec_unit=${line#unit=} ;; mbx_version=*) rec_mbx=${line#mbx_version=} ;; toolchain=*) rec_toolchain=${line#toolchain=} ;; root=*) rec_root=${line#root=} ;; esac; done < \"$record\"; case \"$ceiling\" in '\\'''\\''|*[!0-9]*) refused refused-provenance ;; esac; if [ -z \"$expected_prefix\" ] || [ -z \"$compat\" ] || [ -z \"$provenance\" ] || [ -z \"$rec_unit\" ] || [ -z \"$rec_mbx\" ] || [ -z \"$rec_toolchain\" ] || [ -z \"$rec_root\" ]; then refused refused-provenance; fi; if [ -n \"$expected\" ] && [ \"$matched\" = \"$expected\" ]; then decision=exact-hit; elif [ -n \"$matched\" ] && [ -n \"$expected_prefix\" ]; then case \"$matched\" in \"$expected_prefix\"*) decision=predecessor-fallback ;; *) refused refused-provenance ;; esac; else refused refused-provenance; fi; printf '\\''%s\\n'\\'' '\\''family=state'\\'' '\\''schema=1'\\'' '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' \"unit=$rec_unit\" \"mbx=$rec_mbx\" \"toolchain=$rec_toolchain\" \"root=$rec_root\" '\\''ceiling=402653184'\\'' > \"$d/compat\"; uname -s >> \"$d/compat\"; uname -m >> \"$d/compat\"; s256 \"$d/compat\"; compat_now=\"s256-$h\"; if [ \"$compat_now\" != \"$compat\" ]; then corrupt \"coverage drift\"; fi; if tar -tzf \"$payload\" > \"$d/members\"; then :; else corrupt \"payload unreadable\"; fi; members_n=; members_rest=; wc -l < \"$d/members\" > \"$d/count\"; read -r members_n members_rest < \"$d/count\" || [ -n \"$members_n\" ]; case \"$members_n\" in '\\'''\\''|*[!0-9]*) corrupt \"member count unreadable\" ;; esac; if [ \"$members_n\" -gt 100000 ]; then refused refused-shadow; fi; m=; while IFS= read -r m || [ -n \"$m\" ]; do case \"$m\" in \"\") ;; \"$base\"|\"$base\"/*) ;; /*) refused refused-shadow ;; ..|../*|*/..|*/../*) refused refused-shadow ;; *) refused refused-shadow ;; esac; done < \"$d/members\"; stage=\"$RUNNER_TEMP/velnor/state-stage\"; rm -rf \"$stage\"; mkdir -p \"$stage\"; if tar -xzf \"$payload\" -C \"$stage\"; then :; else rm -rf \"$stage\"; corrupt \"payload unreadable\"; fi; if [ -d \"$stage/$base\" ] && [ ! -L \"$stage/$base\" ]; then :; else rm -rf \"$stage\"; corrupt \"payload missed the state root\"; fi; find \"$stage/$base\" -type l > \"$d/links\"; if [ -s \"$d/links\" ]; then rm -rf \"$stage\"; refused refused-shadow; fi; find \"$stage/$base\" \\( -type p -o -type s \\) > \"$d/special\"; if [ -s \"$d/special\" ]; then rm -rf \"$stage\"; refused refused-shadow; fi; rm -rf \"$root\"; mkdir -p \"$parent\"; if mv \"$stage/$base\" \"$root\"; then :; else rm -rf \"$stage\"; corrupt \"state root handoff failed\"; fi; rmdir \"$stage\" 2>/dev/null || true; size=; size_rest=; wc -c < \"$payload\" > \"$d/size\"; read -r size size_rest < \"$d/size\" || [ -n \"$size\" ]; case \"$size\" in '\\'''\\''|*[!0-9]*) corrupt \"size unreadable\" ;; esac; if [ \"$size\" -gt 402653184 ]; then corrupt \"over ceiling\"; fi; find \"$root\" -type f | sort > \"$d/files\"; if command -v sha256sum >/dev/null 2>&1; then while IFS= read -r f || [ -n \"$f\" ]; do sha256sum \"$f\"; done < \"$d/files\" > \"$d/manifest\"; else while IFS= read -r f || [ -n \"$f\" ]; do shasum -a 256 \"$f\"; done < \"$d/files\" > \"$d/manifest\"; fi; if [ ! -s \"$d/manifest\" ]; then corrupt \"empty manifest\"; fi; s256 \"$d/manifest\"; manifest=\"$h\"; s256 \"$payload\"; digest_one=\"$h\"; s256 \"$payload\"; digest_two=\"$h\"; if [ \"$digest_one\" != \"$digest_two\" ]; then corrupt \"readback mismatch\"; fi; printf '\\''%s\\n'\\'' \"decision=$decision\" \"matched=$matched\" \"manifest=$manifest\" \"payload=$digest_one\" \"size=$size\" > \"$RUNNER_TEMP/velnor/state-recovery.record\"; printf '\\''velnor: state snapshot recovered (decision=%s manifest=%s)\\n'\\'' \"$decision\" \"$manifest\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; payload=\"$RUNNER_TEMP/velnor-gc1/transport/state/payload.tar.gz\"; root=\"$RUNNER_TEMP/velnor-gc1/state\"; parent=\"$RUNNER_TEMP/velnor-gc1\"; base=\"state\"; record=\"$RUNNER_TEMP/velnor/state-discovery.record\"; expected=\"${{steps.mbx-bundle-key.outputs.key}}\"; matched=\"${{steps.mbx-bundle-restore.outputs.cache-matched-key}}\"; d=\"$RUNNER_TEMP/velnor/state-recover\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }; cold() { printf '\\''%s\\n'\\'' \"velnor: state snapshot no_entry ($1)\"; exit 0; }; corrupt() { printf '\\''%s\\n'\\'' \"::warning::cache_corrupt: state snapshot $1; building cold\"; rm -rf \"$root\"; rm -f \"$payload\"; exit 0; }; refused() { printf '\\''%s\\n'\\'' \"::warning::cache_corrupt: state snapshot refused ($1); building cold\"; rm -rf \"$root\"; rm -f \"$payload\"; exit 0; }; if [ ! -f \"$payload\" ] || [ -L \"$payload\" ]; then cold no_entry; fi; if [ ! -s \"$payload\" ]; then printf '\\''%s\\n'\\'' '\\''::warning::cache_corrupt: state payload empty; building cold'\\''; rm -f \"$payload\"; exit 0; fi; if [ -L \"$root\" ]; then printf '\\''%s\\n'\\'' '\\''::warning::cache_corrupt: state root is a symlink; building cold'\\''; exit 0; fi; if [ -z \"$matched\" ]; then cold cold-missing; fi; if [ ! -f \"$record\" ] || [ -L \"$record\" ]; then refused refused-provenance; fi; expected_prefix=\"\"; compat=\"\"; provenance=\"\"; ceiling=\"\"; rec_unit=\"\"; rec_mbx=\"\"; rec_toolchain=\"\"; rec_root=\"\"; line=; while IFS= read -r line || [ -n \"$line\" ]; do case \"$line\" in restore_prefix=*) expected_prefix=${line#restore_prefix=} ;; compat=*) compat=${line#compat=} ;; provenance=*) provenance=${line#provenance=} ;; ceiling=*) ceiling=${line#ceiling=} ;; unit=*) rec_unit=${line#unit=} ;; mbx_version=*) rec_mbx=${line#mbx_version=} ;; toolchain=*) rec_toolchain=${line#toolchain=} ;; root=*) rec_root=${line#root=} ;; esac; done < \"$record\"; case \"$ceiling\" in '\\'''\\''|*[!0-9]*) refused refused-provenance ;; esac; if [ -z \"$expected_prefix\" ] || [ -z \"$compat\" ] || [ -z \"$provenance\" ] || [ -z \"$rec_unit\" ] || [ -z \"$rec_mbx\" ] || [ -z \"$rec_toolchain\" ] || [ -z \"$rec_root\" ]; then refused refused-provenance; fi; if [ -n \"$expected\" ] && [ \"$matched\" = \"$expected\" ]; then decision=exact-hit; elif [ -n \"$matched\" ] && [ -n \"$expected_prefix\" ]; then case \"$matched\" in \"$expected_prefix\"*) decision=predecessor-fallback ;; *) refused refused-provenance ;; esac; else refused refused-provenance; fi; printf '\\''%s\\n'\\'' '\\''family=state'\\'' '\\''schema=1'\\'' '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' \"unit=$rec_unit\" \"mbx=$rec_mbx\" \"toolchain=$rec_toolchain\" \"root=$rec_root\" '\\''ceiling=402653184'\\'' > \"$d/compat\"; uname -s >> \"$d/compat\"; uname -m >> \"$d/compat\"; s256 \"$d/compat\"; compat_now=\"s256-$h\"; if [ \"$compat_now\" != \"$compat\" ]; then corrupt \"coverage drift\"; fi; if tar -tzf \"$payload\" > \"$d/members\"; then :; else corrupt \"payload unreadable\"; fi; members_n=; members_rest=; wc -l < \"$d/members\" > \"$d/count\"; read -r members_n members_rest < \"$d/count\" || [ -n \"$members_n\" ]; case \"$members_n\" in '\\'''\\''|*[!0-9]*) corrupt \"member count unreadable\" ;; esac; if [ \"$members_n\" -gt 100000 ]; then refused refused-shadow; fi; m=; while IFS= read -r m || [ -n \"$m\" ]; do case \"$m\" in \"\") ;; \"$base\"|\"$base\"/*) ;; /*) refused refused-shadow ;; ..|../*|*/..|*/../*) refused refused-shadow ;; *) refused refused-shadow ;; esac; done < \"$d/members\"; stage=\"$RUNNER_TEMP/velnor/state-stage\"; rm -rf \"$stage\"; mkdir -p \"$stage\"; if tar -xzf \"$payload\" -C \"$stage\"; then :; else rm -rf \"$stage\"; corrupt \"payload unreadable\"; fi; if [ -d \"$stage/$base\" ] && [ ! -L \"$stage/$base\" ]; then :; else rm -rf \"$stage\"; corrupt \"payload missed the state root\"; fi; find \"$stage/$base\" -type l > \"$d/links\"; if [ -s \"$d/links\" ]; then rm -rf \"$stage\"; refused refused-shadow; fi; find \"$stage/$base\" \\( -type p -o -type s \\) > \"$d/special\"; if [ -s \"$d/special\" ]; then rm -rf \"$stage\"; refused refused-shadow; fi; rm -rf \"$root\"; mkdir -p \"$parent\"; if mv \"$stage/$base\" \"$root\"; then :; else rm -rf \"$stage\"; corrupt \"state root handoff failed\"; fi; rmdir \"$stage\" 2>/dev/null || true; size=; size_rest=; wc -c < \"$payload\" > \"$d/size\"; read -r size size_rest < \"$d/size\" || [ -n \"$size\" ]; case \"$size\" in '\\'''\\''|*[!0-9]*) corrupt \"size unreadable\" ;; esac; if [ \"$size\" -gt 402653184 ]; then corrupt \"over ceiling\"; fi; if du -sb \"$root\" > \"$d/uncompressed\"; then usize=; usize_rest=; read -r usize usize_rest < \"$d/uncompressed\" || [ -n \"$usize\" ]; case \"$usize\" in '\\'''\\''|*[!0-9]*) corrupt \"uncompressed size unreadable\" ;; esac; if [ \"$usize\" -gt 402653184 ]; then corrupt \"over ceiling\"; fi; elif du -sk \"$root\" > \"$d/uncompressed_kb\"; then usize_kb=; usize_kb_rest=; read -r usize_kb usize_kb_rest < \"$d/uncompressed_kb\" || [ -n \"$usize_kb\" ]; case \"$usize_kb\" in '\\'''\\''|*[!0-9]*) corrupt \"uncompressed size unreadable\" ;; esac; if [ \"$usize_kb\" -gt 393216 ]; then corrupt \"over ceiling\"; fi; else corrupt \"uncompressed size unreadable\"; fi; find \"$root\" -type f | sort > \"$d/files\"; if command -v sha256sum >/dev/null 2>&1; then while IFS= read -r f || [ -n \"$f\" ]; do sha256sum \"$f\"; done < \"$d/files\" > \"$d/manifest\"; else while IFS= read -r f || [ -n \"$f\" ]; do shasum -a 256 \"$f\"; done < \"$d/files\" > \"$d/manifest\"; fi; if [ ! -s \"$d/manifest\" ]; then corrupt \"empty manifest\"; fi; s256 \"$d/manifest\"; manifest=\"$h\"; s256 \"$payload\"; digest_one=\"$h\"; s256 \"$payload\"; digest_two=\"$h\"; if [ \"$digest_one\" != \"$digest_two\" ]; then corrupt \"readback mismatch\"; fi; printf '\\''%s\\n'\\'' \"decision=$decision\" \"matched=$matched\" \"manifest=$manifest\" \"payload=$digest_one\" \"size=$size\" > \"$RUNNER_TEMP/velnor/state-recovery.record\"; printf '\\''velnor: state snapshot recovered (decision=%s manifest=%s)\\n'\\'' \"$decision\" \"$manifest\"'"
       - &s25
         name: Fetch Cargo sources
         env: *m14
@@ -359,7 +359,7 @@ jobs:
         id: mbx-bundle-export
         if: always() && !cancelled() && steps.mbx-ready.outcome == 'success' && steps.mbx-bundle-key.outputs.save == 'true' && steps.mbx-bundle-restore.outputs.cache-hit != 'true'
         env: *m16
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; payload=\"$RUNNER_TEMP/velnor-gc1/transport/state/payload.tar.gz\"; root=\"$RUNNER_TEMP/velnor-gc1/state\"; parent=\"$RUNNER_TEMP/velnor-gc1\"; base=\"state\"; mark=\"$RUNNER_TEMP/velnor/state-producer-ok\"; record=\"$RUNNER_TEMP/velnor/state-discovery.record\"; d=\"$RUNNER_TEMP/velnor/state-publish\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }; out=${GITHUB_OUTPUT-}; skip() { if [ -n \"$out\" ]; then printf '\\''%s\\n'\\'' '\\''exported=false'\\'' >> \"$out\"; fi; printf '\\''velnor: state snapshot not published (%s)\\n'\\'' \"$1\"; exit 0; }; if [ ! -f \"$mark\" ] || [ -L \"$mark\" ]; then skip producer_not_succeeded; fi; [ -n \"${MBX_CACHE_EXPORT_GROUP:-}\" ] || skip export_group_missing; if [ ! -d \"$root\" ] || [ -L \"$root\" ]; then skip state_not_built; fi; command -v tar >/dev/null 2>&1 || { printf '\\''%s\\n'\\'' '\\''::warning::cache_unavailable: tar is missing; save refused'\\''; skip tar_missing; }; command -v wc >/dev/null 2>&1 || { printf '\\''%s\\n'\\'' '\\''::warning::cache_unavailable: wc is missing; save refused'\\''; skip wc_missing; }; command -v sha256sum >/dev/null 2>&1 || command -v shasum >/dev/null 2>&1 || { printf '\\''%s\\n'\\'' '\\''::warning::cache_unavailable: no digest tool; save refused'\\''; skip digest_unavailable; }; if [ ! -f \"$record\" ] || [ -L \"$record\" ]; then skip provenance_unavailable; fi; provenance=\"\"; rec_compat=\"\"; rec_unit=\"\"; rec_mbx=\"\"; rec_toolchain=\"\"; rec_root=\"\"; line=; while IFS= read -r line || [ -n \"$line\" ]; do case \"$line\" in provenance=*) provenance=${line#provenance=} ;; compat=*) rec_compat=${line#compat=} ;; unit=*) rec_unit=${line#unit=} ;; mbx_version=*) rec_mbx=${line#mbx_version=} ;; toolchain=*) rec_toolchain=${line#toolchain=} ;; root=*) rec_root=${line#root=} ;; esac; done < \"$record\"; if [ \"$provenance\" != trusted ]; then skip provenance_refused; fi; if [ -z \"$rec_compat\" ] || [ -z \"$rec_unit\" ] || [ -z \"$rec_mbx\" ] || [ -z \"$rec_toolchain\" ] || [ -z \"$rec_root\" ]; then skip provenance_refused; fi; printf '\\''%s\\n'\\'' '\\''family=state'\\'' '\\''schema=1'\\'' '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' \"unit=$rec_unit\" \"mbx=$rec_mbx\" \"toolchain=$rec_toolchain\" \"root=$rec_root\" '\\''ceiling=402653184'\\'' > \"$d/compat\"; uname -s >> \"$d/compat\"; uname -m >> \"$d/compat\"; s256 \"$d/compat\"; compat_now=\"s256-$h\"; if [ \"$compat_now\" != \"$rec_compat\" ]; then skip coverage_drift; fi; mkdir -p \"$RUNNER_TEMP/velnor-gc1/transport/state\"; rm -f \"$payload\"; if tar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 -czf \"$payload\" -C \"$parent\" \"$base\"; then :; else rm -f \"$payload\"; if tar -czf \"$payload\" -C \"$parent\" \"$base\"; then :; else rm -f \"$payload\"; printf '\\''%s\\n'\\'' '\\''::warning::cache_unavailable: state snapshot pack failed'\\''; skip pack_failed; fi; fi; if [ ! -f \"$payload\" ] || [ -L \"$payload\" ]; then printf '\\''%s\\n'\\'' '\\''::warning::cache_unavailable: state payload missing after pack'\\''; skip pack_missing; fi; wc -c < \"$payload\" > \"$RUNNER_TEMP/velnor/state-payload.size\"; size=; rest=; read -r size rest < \"$RUNNER_TEMP/velnor/state-payload.size\" || [ -n \"$size\" ]; case \"$size\" in '\\'''\\''|*[!0-9]*) rm -f \"$payload\"; skip size_unreadable ;; esac; if [ \"$size\" -gt 402653184 ]; then rm -f \"$payload\"; printf '\\''%s\\n'\\'' '\\''::warning::over_ceiling: state snapshot exceeds the family ceiling; save refused'\\''; skip over_ceiling; fi; if [ \"$size\" -eq 0 ]; then rm -f \"$payload\"; skip empty_snapshot; fi; s256 \"$payload\"; digest_one=\"$h\"; if tar -tzf \"$payload\" > \"$d/members\"; then :; else rm -f \"$payload\"; skip pack_unreadable; fi; members_n=; members_rest=; wc -l < \"$d/members\" > \"$d/count\"; read -r members_n members_rest < \"$d/count\" || [ -n \"$members_n\" ]; case \"$members_n\" in '\\'''\\''|*[!0-9]*) rm -f \"$payload\"; skip member_count_unreadable ;; esac; if [ \"$members_n\" -gt 100000 ]; then rm -f \"$payload\"; skip member_over_budget; fi; m=; while IFS= read -r m || [ -n \"$m\" ]; do case \"$m\" in \"\") ;; \"$base\"|\"$base\"/*) ;; *) rm -f \"$payload\"; skip readback_refused ;; esac; done < \"$d/members\"; find \"$root\" -type f | sort > \"$d/files\"; if command -v sha256sum >/dev/null 2>&1; then while IFS= read -r f || [ -n \"$f\" ]; do sha256sum \"$f\"; done < \"$d/files\" > \"$d/manifest\"; else while IFS= read -r f || [ -n \"$f\" ]; do shasum -a 256 \"$f\"; done < \"$d/files\" > \"$d/manifest\"; fi; if [ ! -s \"$d/manifest\" ]; then rm -f \"$payload\"; skip empty_manifest; fi; s256 \"$d/manifest\"; manifest=\"$h\"; s256 \"$payload\"; digest_two=\"$h\"; size_two=; size_two_rest=; wc -c < \"$payload\" > \"$d/size_two\"; read -r size_two size_two_rest < \"$d/size_two\" || [ -n \"$size_two\" ]; if [ \"$digest_one\" != \"$digest_two\" ] || [ \"$size\" != \"$size_two\" ]; then rm -f \"$payload\"; skip readback_mismatch; fi; printf '\\''%s\\n'\\'' \"payload=$digest_one\" \"size=$size\" \"members=$members_n\" \"manifest=$manifest\" \"compat=$compat_now\" > \"$RUNNER_TEMP/velnor/state-publication.record\"; printf '\\''velnor: state snapshot readback verified (sha256:%s)\\n'\\'' \"$digest_one\"; if [ -n \"$out\" ]; then printf '\\''%s\\n'\\'' '\\''exported=true'\\'' >> \"$out\"; fi; printf '\\''velnor: state snapshot published (%s bytes, sha256:%s)\\n'\\'' \"$size\" \"$digest_one\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; payload=\"$RUNNER_TEMP/velnor-gc1/transport/state/payload.tar.gz\"; root=\"$RUNNER_TEMP/velnor-gc1/state\"; parent=\"$RUNNER_TEMP/velnor-gc1\"; base=\"state\"; mark=\"$RUNNER_TEMP/velnor/state-producer-ok\"; record=\"$RUNNER_TEMP/velnor/state-discovery.record\"; d=\"$RUNNER_TEMP/velnor/state-publish\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }; out=${GITHUB_OUTPUT-}; skip() { if [ -n \"$out\" ]; then printf '\\''%s\\n'\\'' '\\''exported=false'\\'' >> \"$out\"; fi; printf '\\''velnor: state snapshot not published (%s)\\n'\\'' \"$1\"; exit 0; }; if [ ! -f \"$mark\" ] || [ -L \"$mark\" ]; then skip producer_not_succeeded; fi; [ -n \"${MBX_CACHE_EXPORT_GROUP:-}\" ] || skip export_group_missing; if [ ! -d \"$root\" ] || [ -L \"$root\" ]; then skip state_not_built; fi; command -v tar >/dev/null 2>&1 || { printf '\\''%s\\n'\\'' '\\''::warning::cache_unavailable: tar is missing; save refused'\\''; skip tar_missing; }; command -v wc >/dev/null 2>&1 || { printf '\\''%s\\n'\\'' '\\''::warning::cache_unavailable: wc is missing; save refused'\\''; skip wc_missing; }; command -v du >/dev/null 2>&1 || { printf '\\''%s\\n'\\'' '\\''::warning::cache_unavailable: du is missing; save refused'\\''; skip du_missing; }; command -v sha256sum >/dev/null 2>&1 || command -v shasum >/dev/null 2>&1 || { printf '\\''%s\\n'\\'' '\\''::warning::cache_unavailable: no digest tool; save refused'\\''; skip digest_unavailable; }; if [ ! -f \"$record\" ] || [ -L \"$record\" ]; then skip provenance_unavailable; fi; provenance=\"\"; rec_compat=\"\"; rec_unit=\"\"; rec_mbx=\"\"; rec_toolchain=\"\"; rec_root=\"\"; line=; while IFS= read -r line || [ -n \"$line\" ]; do case \"$line\" in provenance=*) provenance=${line#provenance=} ;; compat=*) rec_compat=${line#compat=} ;; unit=*) rec_unit=${line#unit=} ;; mbx_version=*) rec_mbx=${line#mbx_version=} ;; toolchain=*) rec_toolchain=${line#toolchain=} ;; root=*) rec_root=${line#root=} ;; esac; done < \"$record\"; if [ \"$provenance\" != trusted ]; then skip provenance_refused; fi; if [ -z \"$rec_compat\" ] || [ -z \"$rec_unit\" ] || [ -z \"$rec_mbx\" ] || [ -z \"$rec_toolchain\" ] || [ -z \"$rec_root\" ]; then skip provenance_refused; fi; printf '\\''%s\\n'\\'' '\\''family=state'\\'' '\\''schema=1'\\'' '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' \"unit=$rec_unit\" \"mbx=$rec_mbx\" \"toolchain=$rec_toolchain\" \"root=$rec_root\" '\\''ceiling=402653184'\\'' > \"$d/compat\"; uname -s >> \"$d/compat\"; uname -m >> \"$d/compat\"; s256 \"$d/compat\"; compat_now=\"s256-$h\"; if [ \"$compat_now\" != \"$rec_compat\" ]; then skip coverage_drift; fi; if du -sb \"$root\" > \"$d/uncompressed\"; then usize=; usize_rest=; read -r usize usize_rest < \"$d/uncompressed\" || [ -n \"$usize\" ]; case \"$usize\" in '\\'''\\''|*[!0-9]*) skip du_unreadable ;; esac; if [ \"$usize\" -gt 402653184 ]; then printf '\\''%s\\n'\\'' '\\''::warning::over_ceiling: uncompressed state snapshot exceeds the family ceiling; save refused'\\''; skip over_ceiling; fi; elif du -sk \"$root\" > \"$d/uncompressed_kb\"; then usize_kb=; usize_kb_rest=; read -r usize_kb usize_kb_rest < \"$d/uncompressed_kb\" || [ -n \"$usize_kb\" ]; case \"$usize_kb\" in '\\'''\\''|*[!0-9]*) skip du_unreadable ;; esac; if [ \"$usize_kb\" -gt 393216 ]; then printf '\\''%s\\n'\\'' '\\''::warning::over_ceiling: uncompressed state snapshot exceeds the family ceiling; save refused'\\''; skip over_ceiling; fi; else skip du_unreadable; fi; mkdir -p \"$RUNNER_TEMP/velnor-gc1/transport/state\"; rm -f \"$payload\"; if tar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 -czf \"$payload\" -C \"$parent\" \"$base\"; then :; else rm -f \"$payload\"; if tar -czf \"$payload\" -C \"$parent\" \"$base\"; then :; else rm -f \"$payload\"; printf '\\''%s\\n'\\'' '\\''::warning::cache_unavailable: state snapshot pack failed'\\''; skip pack_failed; fi; fi; if [ ! -f \"$payload\" ] || [ -L \"$payload\" ]; then printf '\\''%s\\n'\\'' '\\''::warning::cache_unavailable: state payload missing after pack'\\''; skip pack_missing; fi; wc -c < \"$payload\" > \"$RUNNER_TEMP/velnor/state-payload.size\"; size=; rest=; read -r size rest < \"$RUNNER_TEMP/velnor/state-payload.size\" || [ -n \"$size\" ]; case \"$size\" in '\\'''\\''|*[!0-9]*) rm -f \"$payload\"; skip size_unreadable ;; esac; if [ \"$size\" -gt 402653184 ]; then rm -f \"$payload\"; printf '\\''%s\\n'\\'' '\\''::warning::over_ceiling: state snapshot exceeds the family ceiling; save refused'\\''; skip over_ceiling; fi; if [ \"$size\" -eq 0 ]; then rm -f \"$payload\"; skip empty_snapshot; fi; s256 \"$payload\"; digest_one=\"$h\"; if tar -tzf \"$payload\" > \"$d/members\"; then :; else rm -f \"$payload\"; skip pack_unreadable; fi; members_n=; members_rest=; wc -l < \"$d/members\" > \"$d/count\"; read -r members_n members_rest < \"$d/count\" || [ -n \"$members_n\" ]; case \"$members_n\" in '\\'''\\''|*[!0-9]*) rm -f \"$payload\"; skip member_count_unreadable ;; esac; if [ \"$members_n\" -gt 100000 ]; then rm -f \"$payload\"; skip member_over_budget; fi; m=; while IFS= read -r m || [ -n \"$m\" ]; do case \"$m\" in \"\") ;; \"$base\"|\"$base\"/*) ;; *) rm -f \"$payload\"; skip readback_refused ;; esac; done < \"$d/members\"; find \"$root\" -type f | sort > \"$d/files\"; if command -v sha256sum >/dev/null 2>&1; then while IFS= read -r f || [ -n \"$f\" ]; do sha256sum \"$f\"; done < \"$d/files\" > \"$d/manifest\"; else while IFS= read -r f || [ -n \"$f\" ]; do shasum -a 256 \"$f\"; done < \"$d/files\" > \"$d/manifest\"; fi; if [ ! -s \"$d/manifest\" ]; then rm -f \"$payload\"; skip empty_manifest; fi; s256 \"$d/manifest\"; manifest=\"$h\"; s256 \"$payload\"; digest_two=\"$h\"; size_two=; size_two_rest=; wc -c < \"$payload\" > \"$d/size_two\"; read -r size_two size_two_rest < \"$d/size_two\" || [ -n \"$size_two\" ]; if [ \"$digest_one\" != \"$digest_two\" ] || [ \"$size\" != \"$size_two\" ]; then rm -f \"$payload\"; skip readback_mismatch; fi; printf '\\''%s\\n'\\'' \"payload=$digest_one\" \"size=$size\" \"members=$members_n\" \"manifest=$manifest\" \"compat=$compat_now\" > \"$RUNNER_TEMP/velnor/state-publication.staged\"; printf '\\''velnor: state snapshot readback verified (sha256:%s)\\n'\\'' \"$digest_one\"; if [ -n \"$out\" ]; then printf '\\''%s\\n'\\'' '\\''exported=true'\\'' >> \"$out\"; fi'"
       - &s28
         name: Admit optional cache save
         id: velnor-optional-mbx-bundle-save-budget
@@ -385,6 +385,10 @@ jobs:
         if: always() && !cancelled() && steps.velnor-optional-mbx-bundle-save.outcome == 'failure'
         run: *r3
       - &s31
+        name: Record state publication
+        if: always() && !cancelled() && steps.velnor-optional-mbx-bundle-save.outcome == 'success'
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; payload=\"$RUNNER_TEMP/velnor-gc1/transport/state/payload.tar.gz\"; staged=\"$RUNNER_TEMP/velnor/state-publication.staged\"; record=\"$RUNNER_TEMP/velnor/state-publication.record\"; d=\"$RUNNER_TEMP/velnor/state-record\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }; if [ ! -f \"$staged\" ] || [ -L \"$staged\" ]; then printf '\\''%s\\n'\\'' '\\''::warning::cache_unavailable: state publication attestation missing; evidence refused'\\''; exit 0; fi; digest=\"\"; size=\"\"; members=\"\"; manifest=\"\"; compat=\"\"; line=; while IFS= read -r line || [ -n \"$line\" ]; do case \"$line\" in payload=*) digest=${line#payload=} ;; size=*) size=${line#size=} ;; members=*) members=${line#members=} ;; manifest=*) manifest=${line#manifest=} ;; compat=*) compat=${line#compat=} ;; esac; done < \"$staged\"; if [ -z \"$digest\" ] || [ -z \"$size\" ] || [ -z \"$members\" ] || [ -z \"$manifest\" ] || [ -z \"$compat\" ]; then printf '\\''%s\\n'\\'' '\\''::warning::cache_unavailable: state publication attestation malformed; evidence refused'\\''; exit 0; fi; if [ ! -f \"$payload\" ] || [ -L \"$payload\" ]; then printf '\\''%s\\n'\\'' '\\''::warning::cache_unavailable: state payload missing after save; evidence refused'\\''; exit 0; fi; s256 \"$payload\"; if [ \"$h\" != \"$digest\" ]; then printf '\\''%s\\n'\\'' '\\''::warning::cache_unavailable: state payload changed after save; evidence refused'\\''; exit 0; fi; printf '\\''%s\\n'\\'' \"payload=$digest\" \"size=$size\" \"members=$members\" \"manifest=$manifest\" \"compat=$compat\" > \"$record\"; printf '\\''velnor: state snapshot published (%s bytes, sha256:%s)\\n'\\'' \"$size\" \"$digest\"'"
+      - &s32
         name: Clean MBX workspace outputs
         if: always() && steps.mbx-ready.outcome == 'success'
         env: *m16
@@ -411,7 +415,7 @@ jobs:
       - *s17
       - *s18
       - *s19
-      - &s32
+      - &s33
         name: Set up MBX
         uses: jdx/mr-boxington-action@88acf2bb50552c7c508cbac13e5f8c576b95b1de
         with:
@@ -421,7 +425,7 @@ jobs:
           working-directory: crates/velnor-runner
         env: *m16
       - *s21
-      - &s33
+      - &s34
         name: Compute state snapshot key
         id: mbx-bundle-key
         env:
@@ -433,10 +437,10 @@ jobs:
         run: *r9
       - *s23
       - *s24
-      - &s34
+      - &s35
         name: Fetch Cargo sources (crates/velnor-runner/Cargo.toml)
         env: *m14
-        run: &r15 "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; echo \"velnor: sources downloaded=0\"; else echo \"velnor: sources miss (source_missing), fetching\"; status=0; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" 2> \"$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log\" || status=$?; cat \"$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log\" >&2; grep -Ec '\\''^ *Downloaded [^ ]+ v[0-9]'\\'' \"$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log\" > \"$RUNNER_TEMP/velnor/cargo-clean/fetch-downloads\" || true; n=; read -r n < \"$RUNNER_TEMP/velnor/cargo-clean/fetch-downloads\" || true; echo \"velnor: sources downloaded=${n:-0}\"; exit $status; fi'"
+        run: &r16 "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; echo \"velnor: sources downloaded=0\"; else echo \"velnor: sources miss (source_missing), fetching\"; status=0; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" 2> \"$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log\" || status=$?; cat \"$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log\" >&2; grep -Ec '\\''^ *Downloaded [^ ]+ v[0-9]'\\'' \"$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log\" > \"$RUNNER_TEMP/velnor/cargo-clean/fetch-downloads\" || true; n=; read -r n < \"$RUNNER_TEMP/velnor/cargo-clean/fetch-downloads\" || true; echo \"velnor: sources downloaded=${n:-0}\"; exit $status; fi'"
       - name: Compile test executables (seed)
         env: *m14
         run: "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec 'rust@'\"${VELNOR_TOOL_RUST}\" 'aqua:nextest-rs/nextest/cargo-nextest@'\"${VELNOR_TOOL_NEXTEST}\" -- mbx nextest list --list-type binaries-only --locked --offline --manifest-path crates/velnor-runner/Cargo.toml --workspace"
@@ -451,7 +455,8 @@ jobs:
       - *s28
       - *s29
       - *s30
-      - &s35
+      - *s31
+      - &s36
         name: Clean MBX workspace outputs
         if: always() && steps.mbx-ready.outcome == 'success'
         env: *m16
@@ -477,7 +482,7 @@ jobs:
       - *s4
       - name: Prepare pinned tools
         run: "mise --no-config --no-env --no-hooks install 'jactionlint@'\"${VELNOR_TOOL_JACTIONLINT}\" 'shellcheck@'\"${VELNOR_TOOL_SHELLCHECK}\""
-      - &s36
+      - &s37
         name: Verify jactionlint
         uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]
       - name: Run jactionlint
@@ -509,7 +514,7 @@ jobs:
       sources_key: ${{ steps.cache-keys.outputs.sources_key }}
       sources_restore_keys: ${{ steps.cache-keys.outputs.sources_restore_keys }}
     steps:
-      - &s37
+      - &s38
         name: Record optional cache budget
         id: velnor-cache-clock
         run: *r1
@@ -555,8 +560,7 @@ jobs:
         id: cache-keys
         env:
           VELNOR_DEFAULT_REF: ${{ format('refs/heads/{0}', github.event.repository.default_branch) }}
-          VELNOR_PR_HEAD_FORK: ${{ github.event.pull_request.head.repo.fork }}
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/cache-keys\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }; uname -s > \"$d/platform\"; uname -m >> \"$d/platform\"; default_ref=\"${VELNOR_DEFAULT_REF:-}\"; trust=none; if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; elif [ \"${GITHUB_EVENT_NAME:-}\" = pull_request ] && [ \"${VELNOR_PR_HEAD_FORK:-}\" = false ]; then trust=pr; fi; check_key() { [ \"${#1}\" -le 512 ] || { printf '\\''cache key exceeds 512 bytes: %s\\n'\\'' \"$1\" >&2; exit 1; }; }; printf '\\''%s\\n'\\'' \"family=sources\" \"schema=2\" \"$RUNNER_TEMP/velnor/cargo/registry/index\" \"$RUNNER_TEMP/velnor/cargo/registry/cache\" \"$RUNNER_TEMP/velnor/cargo/git/db\" > \"$d/sources-compat\"; cat \"$d/platform\" >> \"$d/sources-compat\"; printf '\\''%s\\n'\\'' \"$RUNNER_TEMP/velnor/cargo\" >> \"$d/sources-compat\"; s256 \"$d/sources-compat\"; compat=\"s256-$h\"; : > \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \".\" \"$h\" >> \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \"crates/velnor-runner\" \"$h\" >> \"$d/sources-locks\"; LC_ALL=C sort \"$d/sources-locks\" > \"$d/sources-snapshot\"; s256 \"$d/sources-snapshot\"; snap=\"s256-$h\"; trusted=\"velnor-v2-sources-trusted-$compat-\"; if [ \"$trust\" = pr ]; then key=\"velnor-v2-sources-pr-$compat-$snap\"; else key=\"$trusted$snap\"; fi; check_key \"$key\"; save=false; [ \"$trust\" = none ] || save=true; printf '\\''%s\\n'\\'' \"sources_key=$key\" \"sources_save=$save\" \"sources_snapshot=$snap\" '\\''sources_restore_keys<<VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; if [ \"$trust\" = pr ]; then printf '\\''%s\\n'\\'' \"$trusted$snap\" >> \"$GITHUB_OUTPUT\"; fi; printf '\\''%s\\n'\\'' \"$trusted\" '\\''VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''velnor: cache trust=%s sources key=%s save=%s\\n'\\'' \"$trust\" \"$key\" \"$save\"; printf '\\''%s\\n'\\'' \"trust=$trust\" >> \"$GITHUB_OUTPUT\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/cache-keys\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }; uname -s > \"$d/platform\"; uname -m >> \"$d/platform\"; default_ref=\"${VELNOR_DEFAULT_REF:-}\"; trust=none; if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; fi; check_key() { [ \"${#1}\" -le 512 ] || { printf '\\''cache key exceeds 512 bytes: %s\\n'\\'' \"$1\" >&2; exit 1; }; }; printf '\\''%s\\n'\\'' \"family=sources\" \"schema=2\" \"$RUNNER_TEMP/velnor/cargo/registry/index\" \"$RUNNER_TEMP/velnor/cargo/registry/cache\" \"$RUNNER_TEMP/velnor/cargo/git/db\" > \"$d/sources-compat\"; cat \"$d/platform\" >> \"$d/sources-compat\"; printf '\\''%s\\n'\\'' \"$RUNNER_TEMP/velnor/cargo\" >> \"$d/sources-compat\"; s256 \"$d/sources-compat\"; compat=\"s256-$h\"; : > \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \".\" \"$h\" >> \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \"crates/velnor-runner\" \"$h\" >> \"$d/sources-locks\"; LC_ALL=C sort \"$d/sources-locks\" > \"$d/sources-snapshot\"; s256 \"$d/sources-snapshot\"; snap=\"s256-$h\"; trusted=\"velnor-v2-sources-trusted-$compat-\"; key=\"$trusted$snap\"; check_key \"$key\"; save=false; [ \"$trust\" = none ] || save=true; printf '\\''%s\\n'\\'' \"sources_key=$key\" \"sources_save=$save\" \"sources_snapshot=$snap\" '\\''sources_restore_keys<<VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''%s\\n'\\'' \"$trusted\" '\\''VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''velnor: cache trust=%s sources key=%s save=%s\\n'\\'' \"$trust\" \"$key\" \"$save\"; printf '\\''%s\\n'\\'' \"trust=$trust\" >> \"$GITHUB_OUTPUT\"'"
       - name: Restore Cargo sources
         id: sources-restore
         if: github.event_name != 'workflow_dispatch'
@@ -569,20 +573,20 @@ jobs:
       - name: Fetch Cargo sources (crates/velnor-runner/Cargo.toml)
         id: sources-fetch
         env: *m14
-        run: *r15
+        run: *r16
       - name: Write request
         env:
           VELNOR_INTERNAL_OP: write-request-v1
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/plan-v1-request.json
           VELNOR_NAMED_CHECK_LANES_JSON: "{\"check-maintenance-helpers\":[{\"job_id\":\"check-maintenance-helpers\"}]}"
-        run: &r17 "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.55'"
+        run: &r18 "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.55'"
       - name: Resolve qualification predecessor
         if: github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
           VELNOR_INTERNAL_OP: resolve-qualification-v1
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/plan-v1-request.json
-        run: *r17
+        run: *r18
       - name: Plan
         id: plan
         env:
@@ -593,7 +597,7 @@ jobs:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: *r17
+        run: *r18
       - name: Publish plan
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -688,6 +692,10 @@ jobs:
       - name: Prepare pinned tools
         env: *m14
         run: mise --no-config --no-env --no-hooks install gh@2.103.2
+      - name: Assemble group ledgers
+        env:
+          VELNOR_INTERNAL_OP: assemble-group-ledgers-v1
+        run: cargo run --locked -p velnor-actions-cli --bin velnor-actions
       - name: Download plan
         continue-on-error: true
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
@@ -697,14 +705,14 @@ jobs:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
           VELNOR_INTERNAL_OP: fetch-reports-v1
-        run: *r17
+        run: *r18
       - name: Write request
         env:
           VELNOR_INTERNAL_OP: write-request-v1
           VELNOR_NEEDS_JSON: ${{ toJSON(needs) }}
           VELNOR_NEEDS_EXPECTED: "[\"alint\",\"cargo-deny\",\"cargo-machete\",\"check-maintenance-helpers\",\"jactionlint\",\"plan\",\"rust-velnor-actions-actionlint-read\",\"rust-velnor-actions-actionlint-write\",\"rust-velnor-actions-ansible-read\",\"rust-velnor-actions-ansible-write\",\"rust-velnor-actions-bun-read\",\"rust-velnor-actions-bun-write\",\"rust-velnor-actions-cli-read\",\"rust-velnor-actions-cli-write\",\"rust-velnor-actions-contract-read\",\"rust-velnor-actions-contract-write\",\"rust-velnor-actions-dbt-read\",\"rust-velnor-actions-dbt-write\",\"rust-velnor-actions-gradle-read\",\"rust-velnor-actions-gradle-write\",\"rust-velnor-actions-mise-read\",\"rust-velnor-actions-mise-write\",\"rust-velnor-actions-orchestrator-read\",\"rust-velnor-actions-orchestrator-write\",\"rust-velnor-actions-rust-read\",\"rust-velnor-actions-rust-write\",\"rust-velnor-actions-tofu-read\",\"rust-velnor-actions-tofu-write\",\"rust-velnor-actions-workflow-renderer-read\",\"rust-velnor-actions-workflow-renderer-write\",\"rust-velnor-resource-probe-read\",\"rust-velnor-resource-probe-write\",\"rust-velnor-runner-attestation-read\",\"rust-velnor-runner-attestation-write\",\"rust-velnor-runner-cli-read\",\"rust-velnor-runner-cli-write\",\"rust-velnor-runner-core-read\",\"rust-velnor-runner-core-write\",\"rust-velnor-runner-github-read\",\"rust-velnor-runner-github-write\",\"rust-velnor-runner-host-read\",\"rust-velnor-runner-host-write\"]"
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
-        run: *r17
+        run: *r18
       - name: Merge reports
         env:
           GH_TOKEN: ${{ github.token }}
@@ -712,7 +720,7 @@ jobs:
           VELNOR_NEEDS_JSON: ${{ toJSON(needs) }}
           VELNOR_NEEDS_EXPECTED: "[\"alint\",\"cargo-deny\",\"cargo-machete\",\"check-maintenance-helpers\",\"jactionlint\",\"plan\",\"rust-velnor-actions-actionlint-read\",\"rust-velnor-actions-actionlint-write\",\"rust-velnor-actions-ansible-read\",\"rust-velnor-actions-ansible-write\",\"rust-velnor-actions-bun-read\",\"rust-velnor-actions-bun-write\",\"rust-velnor-actions-cli-read\",\"rust-velnor-actions-cli-write\",\"rust-velnor-actions-contract-read\",\"rust-velnor-actions-contract-write\",\"rust-velnor-actions-dbt-read\",\"rust-velnor-actions-dbt-write\",\"rust-velnor-actions-gradle-read\",\"rust-velnor-actions-gradle-write\",\"rust-velnor-actions-mise-read\",\"rust-velnor-actions-mise-write\",\"rust-velnor-actions-orchestrator-read\",\"rust-velnor-actions-orchestrator-write\",\"rust-velnor-actions-rust-read\",\"rust-velnor-actions-rust-write\",\"rust-velnor-actions-tofu-read\",\"rust-velnor-actions-tofu-write\",\"rust-velnor-actions-workflow-renderer-read\",\"rust-velnor-actions-workflow-renderer-write\",\"rust-velnor-resource-probe-read\",\"rust-velnor-resource-probe-write\",\"rust-velnor-runner-attestation-read\",\"rust-velnor-runner-attestation-write\",\"rust-velnor-runner-cli-read\",\"rust-velnor-runner-cli-write\",\"rust-velnor-runner-core-read\",\"rust-velnor-runner-core-write\",\"rust-velnor-runner-github-read\",\"rust-velnor-runner-github-write\",\"rust-velnor-runner-host-read\",\"rust-velnor-runner-host-write\"]"
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
-        run: *r17
+        run: *r18
       - name: Publish final report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -774,7 +782,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - &s38
+      - &s39
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-05f45df83a0f122cbff0204e6359d0bdcd27de43ba3b3d237b9fafb128aabfba"}
@@ -796,7 +804,7 @@ jobs:
         with: {"digest": "b3-668f4ef096da7759731140f1320fd9415eb98bcd748f08bc0109c62c80a32c5e"}
       - name: Wait for parallel checks
         wait-all:
-      - &s39
+      - &s40
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -806,19 +814,20 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s31
+      - *s32
   rust-velnor-actions-actionlint-write:
     name: Rust / velnor-actions-actionlint (write)
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     env: *m27
+    cache-mode: write
     needs:
       - plan
       - rust-velnor-actions-actionlint-read
     if: (!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-actionlint,')) && github.event_name == 'push'
     steps:
-      - *s37
-      - &s40
+      - *s38
+      - &s41
         name: Recheck cache state after queue slot
         if: github.event_name != 'workflow_dispatch'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -842,7 +851,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - *s38
+      - *s39
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -861,8 +870,8 @@ jobs:
         with: {"digest": "b3-668f4ef096da7759731140f1320fd9415eb98bcd748f08bc0109c62c80a32c5e"}
       - name: Wait for parallel checks
         wait-all:
-      - *s39
-      - &s41
+      - *s40
+      - &s42
         name: Admit optional cache save
         id: velnor-optional-tools-save-budget
         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
@@ -870,7 +879,7 @@ jobs:
         env: *m26
       - *s6
       - *s7
-      - *s31
+      - *s32
   rust-velnor-actions-ansible-read:
     name: Rust / velnor-actions-ansible (read)
     runs-on: ubuntu-26.04
@@ -903,7 +912,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - &s42
+      - &s43
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-8f6a9b75f757fb8ca7629bf9c69db1c55fdf6183926e74d462e8fba61aab57d0"}
@@ -925,7 +934,7 @@ jobs:
         with: {"digest": "b3-e0a009ad60dcfa851afeb19c7cbcfca29127d2a0b2903dd76dfb500d91d066d2"}
       - name: Wait for parallel checks
         wait-all:
-      - &s43
+      - &s44
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -935,18 +944,19 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s31
+      - *s32
   rust-velnor-actions-ansible-write:
     name: Rust / velnor-actions-ansible (write)
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     env: *m27
+    cache-mode: write
     needs:
       - plan
       - rust-velnor-actions-ansible-read
     if: (!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-ansible,')) && github.event_name == 'push'
     steps:
-      - *s40
+      - *s41
       - *s1
       - *s3
       - *s12
@@ -966,7 +976,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - *s42
+      - *s43
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -985,8 +995,8 @@ jobs:
         with: {"digest": "b3-e0a009ad60dcfa851afeb19c7cbcfca29127d2a0b2903dd76dfb500d91d066d2"}
       - name: Wait for parallel checks
         wait-all:
-      - *s43
-      - *s31
+      - *s44
+      - *s32
   rust-velnor-actions-bun-read:
     name: Rust / velnor-actions-bun (read)
     runs-on: ubuntu-26.04
@@ -1019,7 +1029,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - &s44
+      - &s45
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-b82a90628eb2549c61b0d37638430f92d16af9c708d04fdca0ef53efeaa2fb2d"}
@@ -1041,7 +1051,7 @@ jobs:
         with: {"digest": "b3-c65c91de3af4bee4a8f59182852f13e17809f4620f007b71c2dca6edd266d7af"}
       - name: Wait for parallel checks
         wait-all:
-      - &s45
+      - &s46
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1051,18 +1061,19 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s31
+      - *s32
   rust-velnor-actions-bun-write:
     name: Rust / velnor-actions-bun (write)
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     env: *m27
+    cache-mode: write
     needs:
       - plan
       - rust-velnor-actions-bun-read
     if: (!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-bun,')) && github.event_name == 'push'
     steps:
-      - *s40
+      - *s41
       - *s1
       - *s3
       - *s12
@@ -1082,7 +1093,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - *s44
+      - *s45
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1101,8 +1112,8 @@ jobs:
         with: {"digest": "b3-c65c91de3af4bee4a8f59182852f13e17809f4620f007b71c2dca6edd266d7af"}
       - name: Wait for parallel checks
         wait-all:
-      - *s45
-      - *s31
+      - *s46
+      - *s32
   rust-velnor-actions-cli-read:
     name: Rust / velnor-actions-cli (read)
     runs-on: ubuntu-26.04
@@ -1118,12 +1129,12 @@ jobs:
     steps:
       - *s1
       - *s3
-      - &s46
+      - &s47
         name: Resolve project tool versions
         env: *m12
         shell: /bin/bash --noprofile --norc -p -e -o pipefail {0}
         run: "function_env_unset=(); function_env_scan_complete=0; while IFS= read -r -d '' env_entry; do case \"$env_entry\" in BASH_FUNC_*=*) function_env_unset+=(-u \"${env_entry%%=*}\");; VELNOR_VERIFIER_ENV_SCAN_COMPLETE) function_env_scan_complete=$((function_env_scan_complete + 1));; esac; done < <({ /usr/bin/env -0 && printf '%s\\000' 'VELNOR_VERIFIER_ENV_SCAN_COMPLETE'; }); [ \"$function_env_scan_complete\" -eq 1 ] || exit 1; exec /usr/bin/env \"${function_env_unset[@]}\" -u BASH_ENV -u ENV -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR /bin/bash --noprofile --norc -p -e -o pipefail -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu\n: \"${GITHUB_ENV:?missing GITHUB_ENV}\"\n: \"${RUNNER_TEMP:?missing RUNNER_TEMP}\"\nvelnor_dir=\"$RUNNER_TEMP/velnor-project-tool\"\nvelnor_db=\"$velnor_dir/declared\"\nvelnor_tab=$(printf '\\''\\t'\\'')\nvelnor_safe() { printf '\\''%s'\\'' \"$1\" | cut -c1-64 | tr -c '\\''A-Za-z0-9._/@+-'\\'' '\\''?'\\''; }\nvelnor_fail() { printf '\\''velnor: %s\\n'\\'' \"$1\" >&2; exit 1; }\nvelnor_capture_physical_path() {\n  [ \"$#\" -eq 2 ] || return 1\n  (cd -P \"$1\" && pwd -P) > \"$2\" || return 1\n  resolved_path=\n  newline='\\''\n'\\''\n  while IFS= read -r path_line; do\n    resolved_path=$resolved_path$path_line\"$newline\"\n  done < \"$2\"\n  case \"$resolved_path\" in\n    *\"$newline\") resolved_path=${resolved_path%\"$newline\"} ;;\n    *) return 1 ;;\n  esac\n  printf '\\''%s\\n'\\'' \"$resolved_path\" > \"$2\" || return 1\n}; velnor_bind_selected_mise() { [ \"$#\" -eq 1 ] || return 5; mise_data_dir=${MISE_DATA_DIR-}; if [ -z \"$mise_data_dir\" ]; then if [ -n \"${XDG_DATA_HOME-}\" ]; then mise_data_dir=\"$XDG_DATA_HOME/mise\"; elif [ -n \"${HOME-}\" ]; then mise_data_dir=\"$HOME/.local/share/mise\"; else return 1; fi; fi; case \"$mise_data_dir\" in /*) ;; *) mise_data_dir=./$mise_data_dir;; esac; case \"$mise_data_dir\" in /) ;; */) mise_data_dir=${mise_data_dir%/};; esac; [ -d \"$mise_data_dir\" ] || return 2; velnor_capture_physical_path \"$mise_data_dir\" \"$1\" || return 3; resolved_mise_data_dir=$resolved_path; [ -d \"$resolved_mise_data_dir/bin\" ] || return 4; velnor_capture_physical_path \"$resolved_mise_data_dir/bin\" \"$1\" || return 4; resolved_mise_bin_dir=$resolved_path; mise_bin=\"$resolved_mise_bin_dir/mise\"; [ -f \"$mise_bin\" ] && [ -x \"$mise_bin\" ] && [ ! -L \"$mise_bin\" ] || return 4; MISE_DATA_DIR=\"$resolved_mise_data_dir\"; export MISE_DATA_DIR; return 0; }\nvelnor_mise() { \"$mise_bin\" --no-config --no-env --no-hooks \"$@\"; }\nrm -rf \"$velnor_dir\"\nmkdir -p \"$velnor_dir\"\n: > \"$velnor_db\"\nvelnor_bind_selected_mise \"$velnor_dir/mise-data-dir\" || { velnor_mise_status=$?; velnor_fail \"Setup Mise data directory or binary is invalid (status $velnor_mise_status)\"; }\nvelnor_regular() {\n  if [ -L \"$1\" ] || [ ! -f \"$1\" ]; then velnor_fail \"$1 must be a regular file\"; fi\n}\nvelnor_toml() {\n  cp -- \"$1\" \"$velnor_dir/src.toml\"\n  velnor_mise config get -f \"$velnor_dir/src.toml\" > /dev/null 2>&1 || velnor_fail \"$1 is not valid TOML\"\n}\nvelnor_tools() {\n  velnor_toml \"$1\"\n  if velnor_mise config get -f \"$velnor_dir/src.toml\" tools > \"$velnor_dir/tools\" 2>/dev/null; then\n    awk -v file=\"$1\" '\\''\nfunction unq(s) {\n  if (s ~ /^\"[^\"\\\\]*\"$/ || s ~ /^\\047[^\\047]*\\047$/) { return substr(s, 2, length(s) - 2) }\n  return s\n}\nBEGIN { OFS = \"\\t\"; cur = \"\"; multi = \"\" }\n{\n  line = $0\n  if (multi != \"\") { if (index(line, multi) > 0) { multi = \"\" } next }\n  if (line ~ /^[ \\t]*(#|$)/) { next }\n  if (line ~ /^[ \\t]*\\[/) {\n    hdr = line\n    sub(/^[ \\t]*\\[+[ \\t]*/, \"\", hdr)\n    sub(/[ \\t]*\\]+[ \\t]*$/, \"\", hdr)\n    cur = unq(hdr)\n    if (cur == \"\") { cur = \"?\" }\n    next\n  }\n  eq = index(line, \" = \")\n  if (eq == 0) { next }\n  k = unq(substr(line, 1, eq - 1))\n  v = substr(line, eq + 3)\n  if (v ~ /^\"\"\"/ || v ~ /^\\047\\047\\047/) {\n    d = substr(v, 1, 3)\n    if (index(substr(v, 4), d) == 0) { multi = d }\n    v = d\n  } else {\n    v = unq(v)\n  }\n  if (cur == \"\") { print file, k, v } else if (k == \"version\") { print file, cur, v }\n}'\\'' \"$velnor_dir/tools\" >> \"$velnor_db\"\n  fi\n}\nvelnor_tool_versions() {\n  awk -v file=\"$1\" '\\''\nBEGIN { OFS = \"\\t\" }\n{\n  sub(/[ \\t]*#.*$/, \"\")\n  if ($0 ~ /^[ \\t]*$/) { next }\n  line = $0\n  sub(/^[ \\t]+/, \"\", line)\n  k = line\n  sub(/[ \\t].*$/, \"\", k)\n  v = line\n  if (v == k) { v = \"\" } else { sub(/^[^ \\t]+[ \\t]+/, \"\", v); sub(/[ \\t]+$/, \"\", v) }\n  print file, k, v\n}'\\'' \"$1\" >> \"$velnor_db\"\n}\nvelnor_toolchain() {\n  if grep -q '\\''^[[:space:]]*\\['\\'' \"$1\"; then\n    velnor_toml \"$1\"\n    if velnor_mise config get -f \"$velnor_dir/src.toml\" toolchain.channel > \"$velnor_dir/channel\" 2>/dev/null; then\n      awk -v file=\"$1\" '\\''BEGIN { OFS = \"\\t\" } NR == 1 { v = $0; next } { v = v \" \" $0 } END { print file, \"rust\", v }'\\'' \"$velnor_dir/channel\" >> \"$velnor_db\"\n    fi\n  else\n    printf '\\''%s\\t%s\\t%s\\n'\\'' \"$1\" rust \"$(tr -d '\\'' \\t\\r\\n'\\'' < \"$1\")\" >> \"$velnor_db\"\n  fi\n}\nvelnor_exact() {\n  case \"$2\" in\n    '\\'''\\''|*[!0-9.]*|.*|*.|*..*|*.*.*.*|0[0-9]*|*.0[0-9]*) velnor_fail \"$1 must declare one exact X.Y.Z version, not '\\''$(velnor_safe \"$2\")'\\''\" ;;\n    *.*.*) ;;\n    *) velnor_fail \"$1 must declare one exact X.Y.Z version, not '\\''$(velnor_safe \"$2\")'\\''\" ;;\n  esac\n}\nvelnor_tool() {\n  name=$1\n  shift\n  resolved=\n  origin=\n  while IFS=\"$velnor_tab\" read -r file key value; do\n    matched=0\n    for want in \"$@\"; do\n      if [ \"$key\" = \"$want\" ]; then matched=1; fi\n    done\n    if [ \"$matched\" = 0 ]; then continue; fi\n    velnor_exact \"$file $key\" \"$value\"\n    if [ -n \"$resolved\" ] && [ \"$resolved\" != \"$value\" ]; then\n      velnor_fail \"$name: $file $key declares $value, $origin declares $resolved\"\n    fi\n    if [ -z \"$resolved\" ]; then origin=\"$file $key\"; fi\n    resolved=$value\n  done < \"$velnor_db\"\n  [ -n \"$resolved\" ] || velnor_fail \"$name: the project config no longer declares this tool; regenerate the workflow\"\n  printf '\\''%s=%s\\n'\\'' \"$name\" \"$resolved\" >> \"$GITHUB_ENV\"\n  if [ \"$name\" = VELNOR_TOOL_RUST ] && [ \"${velnor_export_rustup-0}\" = 1 ]; then\n    printf '\\''RUSTUP_TOOLCHAIN=%s\\n'\\'' \"$resolved\" >> \"$GITHUB_ENV\"\n  fi\n  printf '\\''velnor: %s=%s\\n'\\'' \"$name\" \"$resolved\"\n}\n# shellcheck disable=SC2016 # awk program text: awk, not the shell, expands it\nvelnor_lock_awk='\\''BEGIN { q = \"\\\"\"; e1 = \"[[tools.\" key \"]]\"; e2 = \"[[tools.\" q key q \"]]\"; e3 = \"[tools.\" key \"]\"; e4 = \"[tools.\" q key q \"]\"; s1 = \"[tools.\" key \".\"; s2 = \"[tools.\" q key q \".\"; p1 = s1 q \"platforms.\" platform q \"]\"; p2 = s2 q \"platforms.\" platform q \"]\"; p3 = s1 \"platforms.\" platform \"]\"; p4 = s2 \"platforms.\" platform \"]\"; want = \"version = \" q version q; inline = q \"platforms.\" platform q \" = {\"; state = 0 }\n{ line = $0; sub(/^[ \\t]+/, \"\", line); sub(/[ \\t\\r]+$/, \"\", line) }\nline == \"\" || substr(line, 1, 1) == \"#\" { next }\nsubstr(line, 1, 1) == \"[\" {\n  matched = state == 2 || state == 3 || state == 4; other = state == 1 || state == 5\n  if (line == e1 || line == e2 || line == e3 || line == e4) state = 1\n  else if (line == p1 || line == p2 || line == p3 || line == p4) state = matched ? 3 : (other ? 5 : 0)\n  else if (index(line, s1) == 1 || index(line, s2) == 1) state = matched ? 4 : (other ? 5 : 0)\n  else state = 0\n  next\n}\nstate == 1 && line == want { state = 2; next }\nstate == 3 && (index(line, \"checksum = \") == 1 || index(line, \"url = \") == 1) { print lock \" \" key \" \" line; next }\nstate == 2 && index(line, inline) == 1 {\n  if (match(line, /checksum = \"[^\"]*\"/)) print lock \" \" key \" \" substr(line, RSTART, RLENGTH)\n  if (match(line, /[{ ,]url = \"[^\"]*\"/)) print lock \" \" key \" \" substr(line, RSTART + 1, RLENGTH - 1)\n}'\\''\nvelnor_lock() {\n  name=$1\n  shift\n  case \"${RUNNER_OS-}:${RUNNER_ARCH-}\" in\n    Linux:X64) platform=linux-x64 ;;\n    Linux:ARM64) platform=linux-arm64 ;;\n    macOS:X64) platform=macos-x64 ;;\n    macOS:ARM64) platform=macos-arm64 ;;\n    Windows:X64) platform=windows-x64 ;;\n    Windows:ARM64) platform=windows-arm64 ;;\n    *) velnor_fail \"$name: unsupported runner platform '\\''${RUNNER_OS-}:${RUNNER_ARCH-}'\\''\" ;;\n  esac\n  : > \"$velnor_dir/lock\"\n  for lock in $velnor_locks; do\n    if [ ! -e \"$lock\" ] && [ ! -L \"$lock\" ]; then continue; fi\n    velnor_regular \"$lock\"\n    for key in \"$@\"; do\n      awk -v lock=\"$lock\" -v key=\"$key\" -v version=\"$resolved\" -v platform=\"$platform\" \"$velnor_lock_awk\" \"$lock\" >> \"$velnor_dir/lock\" || velnor_fail \"$lock could not be read\"\n    done\n  done\n  lock_digest=unlocked\n  if [ -s \"$velnor_dir/lock\" ]; then\n    if command -v sha256sum >/dev/null 2>&1; then\n      lock_digest=$(sha256sum < \"$velnor_dir/lock\") || velnor_fail \"$name: lock digest failed\"\n    else\n      lock_digest=$(shasum -a 256 < \"$velnor_dir/lock\") || velnor_fail \"$name: lock digest failed\"\n    fi\n    lock_digest=${lock_digest%% *}\n    case \"$lock_digest\" in\n      *[!0-9a-f]*) velnor_fail \"$name: lock digest is not hexadecimal\" ;;\n    esac\n    [ \"${#lock_digest}\" -eq 64 ] || velnor_fail \"$name: lock digest is not SHA-256\"\n  fi\n  printf '\\''%s=%s\\n'\\'' \"$name\" \"$lock_digest\" >> \"$GITHUB_ENV\"\n  printf '\\''velnor: %s=%s\\n'\\'' \"$name\" \"$lock_digest\"\n}\nvelnor_locks='\\''mise.lock .mise.lock'\\''\nfor velnor_file in mise.toml .mise.toml mise.*.toml .mise.*.toml .config/mise.toml .config/mise.*.toml .config/mise/config.toml .config/mise/config.*.toml .config/mise/conf.d/*.toml mise/config.toml mise/config.*.toml .mise/config.toml .mise/config.*.toml; do\n  if [ ! -e \"$velnor_file\" ] && [ ! -L \"$velnor_file\" ]; then continue; fi\n  velnor_regular \"$velnor_file\"\n  velnor_tools \"$velnor_file\"\ndone\nif [ -e .tool-versions ] || [ -L .tool-versions ]; then\n  velnor_regular .tool-versions\n  velnor_tool_versions .tool-versions\nfi\nif [ -e rust-toolchain.toml ] || [ -L rust-toolchain.toml ]; then\n  velnor_regular rust-toolchain.toml\n  velnor_toolchain rust-toolchain.toml\nfi\nif [ -e rust-toolchain ] || [ -L rust-toolchain ]; then\n  velnor_regular rust-toolchain\n  velnor_toolchain rust-toolchain\nfi\nvelnor_tool VELNOR_TOOL_JACTIONLINT '\\''jactionlint'\\'' '\\''github:jdx/jactionlint'\\'' '\\''packslip:github.com/jdx/jactionlint'\\''\nvelnor_lock VELNOR_TOOL_JACTIONLINT_LOCK '\\''jactionlint'\\'' '\\''github:jdx/jactionlint'\\'' '\\''packslip:github.com/jdx/jactionlint'\\''\nvelnor_tool VELNOR_TOOL_MR_BOXINGTON '\\''mr-boxington'\\'' '\\''mbx'\\'' '\\''github:jdx/mr-boxington'\\'' '\\''packslip:github.com/jdx/mr-boxington'\\''\nvelnor_lock VELNOR_TOOL_MR_BOXINGTON_LOCK '\\''mr-boxington'\\'' '\\''mbx'\\'' '\\''github:jdx/mr-boxington'\\'' '\\''packslip:github.com/jdx/mr-boxington'\\''\nvelnor_tool VELNOR_TOOL_NEXTEST '\\''aqua:nextest-rs/nextest/cargo-nextest'\\'' '\\''cargo-nextest'\\'' '\\''cargo:cargo-nextest'\\'' '\\''github:nextest-rs/nextest'\\'' '\\''ubi:nextest-rs/nextest'\\''\nvelnor_lock VELNOR_TOOL_NEXTEST_LOCK '\\''aqua:nextest-rs/nextest/cargo-nextest'\\'' '\\''cargo-nextest'\\'' '\\''cargo:cargo-nextest'\\'' '\\''github:nextest-rs/nextest'\\'' '\\''ubi:nextest-rs/nextest'\\''\nvelnor_tool VELNOR_TOOL_RUST '\\''rust'\\'' '\\''core:rust'\\''\nvelnor_lock VELNOR_TOOL_RUST_LOCK '\\''rust'\\'' '\\''core:rust'\\''\nvelnor_tool VELNOR_TOOL_SHELLCHECK '\\''shellcheck'\\'' '\\''aqua:koalaman/shellcheck'\\''\nvelnor_lock VELNOR_TOOL_SHELLCHECK_LOCK '\\''shellcheck'\\'' '\\''aqua:koalaman/shellcheck'\\''\nrm -rf \"$velnor_dir\"\n'" # zizmor: ignore[github-env]
-      - &s47
+      - &s48
         name: V2 identity
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
@@ -1133,11 +1144,11 @@ jobs:
       - *s9
       - *s10
       - *s14
-      - &s48
+      - &s49
         name: Prepare pinned tools
         env: *m14
         run: "mise --no-config --no-env --no-hooks install 'rust@'\"${VELNOR_TOOL_RUST}\" 'mr-boxington@'\"${VELNOR_TOOL_MR_BOXINGTON}\" 'jactionlint@'\"${VELNOR_TOOL_JACTIONLINT}\" 'shellcheck@'\"${VELNOR_TOOL_SHELLCHECK}\" 'aqua:nextest-rs/nextest/cargo-nextest@'\"${VELNOR_TOOL_NEXTEST}\""
-      - *s36
+      - *s37
       - *s16
       - *s17
       - *s18
@@ -1148,8 +1159,8 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - *s34
-      - &s49
+      - *s35
+      - &s50
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-fbf2f972337f3476da09c00d6b59614caf46e41380401c0b41fa7ac9382299ce"}
@@ -1171,7 +1182,7 @@ jobs:
         with: {"digest": "b3-83933af35f12ec9b891ab77cc25a11882c3e984584c27b7e408255f091f7095c"}
       - name: Wait for parallel checks
         wait-all:
-      - &s50
+      - &s51
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1181,29 +1192,30 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s31
+      - *s32
   rust-velnor-actions-cli-write:
     name: Rust / velnor-actions-cli (write)
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     env: *m27
+    cache-mode: write
     needs:
       - plan
       - rust-velnor-actions-cli-read
     if: (!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-cli,')) && github.event_name == 'push'
     steps:
-      - *s37
-      - *s40
+      - *s38
+      - *s41
       - *s1
       - *s3
-      - *s46
       - *s47
+      - *s48
       - *s4
       - *s9
       - *s10
       - *s14
-      - *s48
-      - *s36
+      - *s49
+      - *s37
       - *s16
       - *s17
       - *s18
@@ -1214,8 +1226,8 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - *s34
-      - *s49
+      - *s35
+      - *s50
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1234,11 +1246,11 @@ jobs:
         with: {"digest": "b3-83933af35f12ec9b891ab77cc25a11882c3e984584c27b7e408255f091f7095c"}
       - name: Wait for parallel checks
         wait-all:
-      - *s50
-      - *s41
+      - *s51
+      - *s42
       - *s6
       - *s7
-      - *s31
+      - *s32
   rust-velnor-actions-contract-read:
     name: Rust / velnor-actions-contract (read)
     runs-on: ubuntu-26.04
@@ -1271,7 +1283,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - &s51
+      - &s52
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-15d691a28a28f7ad88a4db79f131c4d6417894898a977dbe16db8810ab70b3fe"}
@@ -1297,7 +1309,7 @@ jobs:
         with: {"digest": "b3-e9d683b497c2cae7f4e12fccf691ff047a3c1c1299a79c0f1e112a7964dfc5f7"}
       - name: Wait for parallel checks
         wait-all:
-      - &s52
+      - &s53
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1307,18 +1319,19 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s31
+      - *s32
   rust-velnor-actions-contract-write:
     name: Rust / velnor-actions-contract (write)
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     env: *m27
+    cache-mode: write
     needs:
       - plan
       - rust-velnor-actions-contract-read
     if: (!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-contract,')) && github.event_name == 'push'
     steps:
-      - *s40
+      - *s41
       - *s1
       - *s3
       - *s12
@@ -1338,7 +1351,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - *s51
+      - *s52
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1361,8 +1374,8 @@ jobs:
         with: {"digest": "b3-e9d683b497c2cae7f4e12fccf691ff047a3c1c1299a79c0f1e112a7964dfc5f7"}
       - name: Wait for parallel checks
         wait-all:
-      - *s52
-      - *s31
+      - *s53
+      - *s32
   rust-velnor-actions-dbt-read:
     name: Rust / velnor-actions-dbt (read)
     runs-on: ubuntu-26.04
@@ -1395,7 +1408,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - &s53
+      - &s54
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-64e26a3f41063b18f30d8732a8b6190b4e76809fdbef39b4e64c88bb33773b64"}
@@ -1417,7 +1430,7 @@ jobs:
         with: {"digest": "b3-92efde7e333a3f73de069572b3fee526f84b5e188a80ab9ebdadb867ab20987c"}
       - name: Wait for parallel checks
         wait-all:
-      - &s54
+      - &s55
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1427,18 +1440,19 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s31
+      - *s32
   rust-velnor-actions-dbt-write:
     name: Rust / velnor-actions-dbt (write)
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     env: *m27
+    cache-mode: write
     needs:
       - plan
       - rust-velnor-actions-dbt-read
     if: (!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-dbt,')) && github.event_name == 'push'
     steps:
-      - *s40
+      - *s41
       - *s1
       - *s3
       - *s12
@@ -1458,7 +1472,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - *s53
+      - *s54
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1477,8 +1491,8 @@ jobs:
         with: {"digest": "b3-92efde7e333a3f73de069572b3fee526f84b5e188a80ab9ebdadb867ab20987c"}
       - name: Wait for parallel checks
         wait-all:
-      - *s54
-      - *s31
+      - *s55
+      - *s32
   rust-velnor-actions-gradle-read:
     name: Rust / velnor-actions-gradle (read)
     runs-on: ubuntu-26.04
@@ -1511,7 +1525,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - &s55
+      - &s56
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-12e501c8034381ab6de1705803323f01c1e6649553d85ecfa2e5d122f061c5fc"}
@@ -1533,7 +1547,7 @@ jobs:
         with: {"digest": "b3-74d108ca928ad0368f40c8c4ee1219fbc24732cfa43b6e6b7bd34a65e5c5eb45"}
       - name: Wait for parallel checks
         wait-all:
-      - &s56
+      - &s57
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1543,18 +1557,19 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s31
+      - *s32
   rust-velnor-actions-gradle-write:
     name: Rust / velnor-actions-gradle (write)
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     env: *m27
+    cache-mode: write
     needs:
       - plan
       - rust-velnor-actions-gradle-read
     if: (!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-gradle,')) && github.event_name == 'push'
     steps:
-      - *s40
+      - *s41
       - *s1
       - *s3
       - *s12
@@ -1574,7 +1589,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - *s55
+      - *s56
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1593,8 +1608,8 @@ jobs:
         with: {"digest": "b3-74d108ca928ad0368f40c8c4ee1219fbc24732cfa43b6e6b7bd34a65e5c5eb45"}
       - name: Wait for parallel checks
         wait-all:
-      - *s56
-      - *s31
+      - *s57
+      - *s32
   rust-velnor-actions-mise-read:
     name: Rust / velnor-actions-mise (read)
     runs-on: ubuntu-26.04
@@ -1610,12 +1625,12 @@ jobs:
     steps:
       - *s1
       - *s3
-      - &s57
+      - &s58
         name: Resolve project tool versions
         env: *m12
         shell: /bin/bash --noprofile --norc -p -e -o pipefail {0}
         run: "function_env_unset=(); function_env_scan_complete=0; while IFS= read -r -d '' env_entry; do case \"$env_entry\" in BASH_FUNC_*=*) function_env_unset+=(-u \"${env_entry%%=*}\");; VELNOR_VERIFIER_ENV_SCAN_COMPLETE) function_env_scan_complete=$((function_env_scan_complete + 1));; esac; done < <({ /usr/bin/env -0 && printf '%s\\000' 'VELNOR_VERIFIER_ENV_SCAN_COMPLETE'; }); [ \"$function_env_scan_complete\" -eq 1 ] || exit 1; exec /usr/bin/env \"${function_env_unset[@]}\" -u BASH_ENV -u ENV -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR /bin/bash --noprofile --norc -p -e -o pipefail -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu\n: \"${GITHUB_ENV:?missing GITHUB_ENV}\"\n: \"${RUNNER_TEMP:?missing RUNNER_TEMP}\"\nvelnor_dir=\"$RUNNER_TEMP/velnor-project-tool\"\nvelnor_db=\"$velnor_dir/declared\"\nvelnor_tab=$(printf '\\''\\t'\\'')\nvelnor_safe() { printf '\\''%s'\\'' \"$1\" | cut -c1-64 | tr -c '\\''A-Za-z0-9._/@+-'\\'' '\\''?'\\''; }\nvelnor_fail() { printf '\\''velnor: %s\\n'\\'' \"$1\" >&2; exit 1; }\nvelnor_capture_physical_path() {\n  [ \"$#\" -eq 2 ] || return 1\n  (cd -P \"$1\" && pwd -P) > \"$2\" || return 1\n  resolved_path=\n  newline='\\''\n'\\''\n  while IFS= read -r path_line; do\n    resolved_path=$resolved_path$path_line\"$newline\"\n  done < \"$2\"\n  case \"$resolved_path\" in\n    *\"$newline\") resolved_path=${resolved_path%\"$newline\"} ;;\n    *) return 1 ;;\n  esac\n  printf '\\''%s\\n'\\'' \"$resolved_path\" > \"$2\" || return 1\n}; velnor_bind_selected_mise() { [ \"$#\" -eq 1 ] || return 5; mise_data_dir=${MISE_DATA_DIR-}; if [ -z \"$mise_data_dir\" ]; then if [ -n \"${XDG_DATA_HOME-}\" ]; then mise_data_dir=\"$XDG_DATA_HOME/mise\"; elif [ -n \"${HOME-}\" ]; then mise_data_dir=\"$HOME/.local/share/mise\"; else return 1; fi; fi; case \"$mise_data_dir\" in /*) ;; *) mise_data_dir=./$mise_data_dir;; esac; case \"$mise_data_dir\" in /) ;; */) mise_data_dir=${mise_data_dir%/};; esac; [ -d \"$mise_data_dir\" ] || return 2; velnor_capture_physical_path \"$mise_data_dir\" \"$1\" || return 3; resolved_mise_data_dir=$resolved_path; [ -d \"$resolved_mise_data_dir/bin\" ] || return 4; velnor_capture_physical_path \"$resolved_mise_data_dir/bin\" \"$1\" || return 4; resolved_mise_bin_dir=$resolved_path; mise_bin=\"$resolved_mise_bin_dir/mise\"; [ -f \"$mise_bin\" ] && [ -x \"$mise_bin\" ] && [ ! -L \"$mise_bin\" ] || return 4; MISE_DATA_DIR=\"$resolved_mise_data_dir\"; export MISE_DATA_DIR; return 0; }\nvelnor_mise() { \"$mise_bin\" --no-config --no-env --no-hooks \"$@\"; }\nrm -rf \"$velnor_dir\"\nmkdir -p \"$velnor_dir\"\n: > \"$velnor_db\"\nvelnor_bind_selected_mise \"$velnor_dir/mise-data-dir\" || { velnor_mise_status=$?; velnor_fail \"Setup Mise data directory or binary is invalid (status $velnor_mise_status)\"; }\nvelnor_regular() {\n  if [ -L \"$1\" ] || [ ! -f \"$1\" ]; then velnor_fail \"$1 must be a regular file\"; fi\n}\nvelnor_toml() {\n  cp -- \"$1\" \"$velnor_dir/src.toml\"\n  velnor_mise config get -f \"$velnor_dir/src.toml\" > /dev/null 2>&1 || velnor_fail \"$1 is not valid TOML\"\n}\nvelnor_tools() {\n  velnor_toml \"$1\"\n  if velnor_mise config get -f \"$velnor_dir/src.toml\" tools > \"$velnor_dir/tools\" 2>/dev/null; then\n    awk -v file=\"$1\" '\\''\nfunction unq(s) {\n  if (s ~ /^\"[^\"\\\\]*\"$/ || s ~ /^\\047[^\\047]*\\047$/) { return substr(s, 2, length(s) - 2) }\n  return s\n}\nBEGIN { OFS = \"\\t\"; cur = \"\"; multi = \"\" }\n{\n  line = $0\n  if (multi != \"\") { if (index(line, multi) > 0) { multi = \"\" } next }\n  if (line ~ /^[ \\t]*(#|$)/) { next }\n  if (line ~ /^[ \\t]*\\[/) {\n    hdr = line\n    sub(/^[ \\t]*\\[+[ \\t]*/, \"\", hdr)\n    sub(/[ \\t]*\\]+[ \\t]*$/, \"\", hdr)\n    cur = unq(hdr)\n    if (cur == \"\") { cur = \"?\" }\n    next\n  }\n  eq = index(line, \" = \")\n  if (eq == 0) { next }\n  k = unq(substr(line, 1, eq - 1))\n  v = substr(line, eq + 3)\n  if (v ~ /^\"\"\"/ || v ~ /^\\047\\047\\047/) {\n    d = substr(v, 1, 3)\n    if (index(substr(v, 4), d) == 0) { multi = d }\n    v = d\n  } else {\n    v = unq(v)\n  }\n  if (cur == \"\") { print file, k, v } else if (k == \"version\") { print file, cur, v }\n}'\\'' \"$velnor_dir/tools\" >> \"$velnor_db\"\n  fi\n}\nvelnor_tool_versions() {\n  awk -v file=\"$1\" '\\''\nBEGIN { OFS = \"\\t\" }\n{\n  sub(/[ \\t]*#.*$/, \"\")\n  if ($0 ~ /^[ \\t]*$/) { next }\n  line = $0\n  sub(/^[ \\t]+/, \"\", line)\n  k = line\n  sub(/[ \\t].*$/, \"\", k)\n  v = line\n  if (v == k) { v = \"\" } else { sub(/^[^ \\t]+[ \\t]+/, \"\", v); sub(/[ \\t]+$/, \"\", v) }\n  print file, k, v\n}'\\'' \"$1\" >> \"$velnor_db\"\n}\nvelnor_toolchain() {\n  if grep -q '\\''^[[:space:]]*\\['\\'' \"$1\"; then\n    velnor_toml \"$1\"\n    if velnor_mise config get -f \"$velnor_dir/src.toml\" toolchain.channel > \"$velnor_dir/channel\" 2>/dev/null; then\n      awk -v file=\"$1\" '\\''BEGIN { OFS = \"\\t\" } NR == 1 { v = $0; next } { v = v \" \" $0 } END { print file, \"rust\", v }'\\'' \"$velnor_dir/channel\" >> \"$velnor_db\"\n    fi\n  else\n    printf '\\''%s\\t%s\\t%s\\n'\\'' \"$1\" rust \"$(tr -d '\\'' \\t\\r\\n'\\'' < \"$1\")\" >> \"$velnor_db\"\n  fi\n}\nvelnor_exact() {\n  case \"$2\" in\n    '\\'''\\''|*[!0-9.]*|.*|*.|*..*|*.*.*.*|0[0-9]*|*.0[0-9]*) velnor_fail \"$1 must declare one exact X.Y.Z version, not '\\''$(velnor_safe \"$2\")'\\''\" ;;\n    *.*.*) ;;\n    *) velnor_fail \"$1 must declare one exact X.Y.Z version, not '\\''$(velnor_safe \"$2\")'\\''\" ;;\n  esac\n}\nvelnor_tool() {\n  name=$1\n  shift\n  resolved=\n  origin=\n  while IFS=\"$velnor_tab\" read -r file key value; do\n    matched=0\n    for want in \"$@\"; do\n      if [ \"$key\" = \"$want\" ]; then matched=1; fi\n    done\n    if [ \"$matched\" = 0 ]; then continue; fi\n    velnor_exact \"$file $key\" \"$value\"\n    if [ -n \"$resolved\" ] && [ \"$resolved\" != \"$value\" ]; then\n      velnor_fail \"$name: $file $key declares $value, $origin declares $resolved\"\n    fi\n    if [ -z \"$resolved\" ]; then origin=\"$file $key\"; fi\n    resolved=$value\n  done < \"$velnor_db\"\n  [ -n \"$resolved\" ] || velnor_fail \"$name: the project config no longer declares this tool; regenerate the workflow\"\n  printf '\\''%s=%s\\n'\\'' \"$name\" \"$resolved\" >> \"$GITHUB_ENV\"\n  if [ \"$name\" = VELNOR_TOOL_RUST ] && [ \"${velnor_export_rustup-0}\" = 1 ]; then\n    printf '\\''RUSTUP_TOOLCHAIN=%s\\n'\\'' \"$resolved\" >> \"$GITHUB_ENV\"\n  fi\n  printf '\\''velnor: %s=%s\\n'\\'' \"$name\" \"$resolved\"\n}\n# shellcheck disable=SC2016 # awk program text: awk, not the shell, expands it\nvelnor_lock_awk='\\''BEGIN { q = \"\\\"\"; e1 = \"[[tools.\" key \"]]\"; e2 = \"[[tools.\" q key q \"]]\"; e3 = \"[tools.\" key \"]\"; e4 = \"[tools.\" q key q \"]\"; s1 = \"[tools.\" key \".\"; s2 = \"[tools.\" q key q \".\"; p1 = s1 q \"platforms.\" platform q \"]\"; p2 = s2 q \"platforms.\" platform q \"]\"; p3 = s1 \"platforms.\" platform \"]\"; p4 = s2 \"platforms.\" platform \"]\"; want = \"version = \" q version q; inline = q \"platforms.\" platform q \" = {\"; state = 0 }\n{ line = $0; sub(/^[ \\t]+/, \"\", line); sub(/[ \\t\\r]+$/, \"\", line) }\nline == \"\" || substr(line, 1, 1) == \"#\" { next }\nsubstr(line, 1, 1) == \"[\" {\n  matched = state == 2 || state == 3 || state == 4; other = state == 1 || state == 5\n  if (line == e1 || line == e2 || line == e3 || line == e4) state = 1\n  else if (line == p1 || line == p2 || line == p3 || line == p4) state = matched ? 3 : (other ? 5 : 0)\n  else if (index(line, s1) == 1 || index(line, s2) == 1) state = matched ? 4 : (other ? 5 : 0)\n  else state = 0\n  next\n}\nstate == 1 && line == want { state = 2; next }\nstate == 3 && (index(line, \"checksum = \") == 1 || index(line, \"url = \") == 1) { print lock \" \" key \" \" line; next }\nstate == 2 && index(line, inline) == 1 {\n  if (match(line, /checksum = \"[^\"]*\"/)) print lock \" \" key \" \" substr(line, RSTART, RLENGTH)\n  if (match(line, /[{ ,]url = \"[^\"]*\"/)) print lock \" \" key \" \" substr(line, RSTART + 1, RLENGTH - 1)\n}'\\''\nvelnor_lock() {\n  name=$1\n  shift\n  case \"${RUNNER_OS-}:${RUNNER_ARCH-}\" in\n    Linux:X64) platform=linux-x64 ;;\n    Linux:ARM64) platform=linux-arm64 ;;\n    macOS:X64) platform=macos-x64 ;;\n    macOS:ARM64) platform=macos-arm64 ;;\n    Windows:X64) platform=windows-x64 ;;\n    Windows:ARM64) platform=windows-arm64 ;;\n    *) velnor_fail \"$name: unsupported runner platform '\\''${RUNNER_OS-}:${RUNNER_ARCH-}'\\''\" ;;\n  esac\n  : > \"$velnor_dir/lock\"\n  for lock in $velnor_locks; do\n    if [ ! -e \"$lock\" ] && [ ! -L \"$lock\" ]; then continue; fi\n    velnor_regular \"$lock\"\n    for key in \"$@\"; do\n      awk -v lock=\"$lock\" -v key=\"$key\" -v version=\"$resolved\" -v platform=\"$platform\" \"$velnor_lock_awk\" \"$lock\" >> \"$velnor_dir/lock\" || velnor_fail \"$lock could not be read\"\n    done\n  done\n  lock_digest=unlocked\n  if [ -s \"$velnor_dir/lock\" ]; then\n    if command -v sha256sum >/dev/null 2>&1; then\n      lock_digest=$(sha256sum < \"$velnor_dir/lock\") || velnor_fail \"$name: lock digest failed\"\n    else\n      lock_digest=$(shasum -a 256 < \"$velnor_dir/lock\") || velnor_fail \"$name: lock digest failed\"\n    fi\n    lock_digest=${lock_digest%% *}\n    case \"$lock_digest\" in\n      *[!0-9a-f]*) velnor_fail \"$name: lock digest is not hexadecimal\" ;;\n    esac\n    [ \"${#lock_digest}\" -eq 64 ] || velnor_fail \"$name: lock digest is not SHA-256\"\n  fi\n  printf '\\''%s=%s\\n'\\'' \"$name\" \"$lock_digest\" >> \"$GITHUB_ENV\"\n  printf '\\''velnor: %s=%s\\n'\\'' \"$name\" \"$lock_digest\"\n}\nvelnor_locks='\\''mise.lock .mise.lock'\\''\nfor velnor_file in mise.toml .mise.toml mise.*.toml .mise.*.toml .config/mise.toml .config/mise.*.toml .config/mise/config.toml .config/mise/config.*.toml .config/mise/conf.d/*.toml mise/config.toml mise/config.*.toml .mise/config.toml .mise/config.*.toml; do\n  if [ ! -e \"$velnor_file\" ] && [ ! -L \"$velnor_file\" ]; then continue; fi\n  velnor_regular \"$velnor_file\"\n  velnor_tools \"$velnor_file\"\ndone\nif [ -e .tool-versions ] || [ -L .tool-versions ]; then\n  velnor_regular .tool-versions\n  velnor_tool_versions .tool-versions\nfi\nif [ -e rust-toolchain.toml ] || [ -L rust-toolchain.toml ]; then\n  velnor_regular rust-toolchain.toml\n  velnor_toolchain rust-toolchain.toml\nfi\nif [ -e rust-toolchain ] || [ -L rust-toolchain ]; then\n  velnor_regular rust-toolchain\n  velnor_toolchain rust-toolchain\nfi\nvelnor_tool VELNOR_TOOL_MR_BOXINGTON '\\''mr-boxington'\\'' '\\''mbx'\\'' '\\''github:jdx/mr-boxington'\\'' '\\''packslip:github.com/jdx/mr-boxington'\\''\nvelnor_lock VELNOR_TOOL_MR_BOXINGTON_LOCK '\\''mr-boxington'\\'' '\\''mbx'\\'' '\\''github:jdx/mr-boxington'\\'' '\\''packslip:github.com/jdx/mr-boxington'\\''\nvelnor_tool VELNOR_TOOL_NEXTEST '\\''aqua:nextest-rs/nextest/cargo-nextest'\\'' '\\''cargo-nextest'\\'' '\\''cargo:cargo-nextest'\\'' '\\''github:nextest-rs/nextest'\\'' '\\''ubi:nextest-rs/nextest'\\''\nvelnor_lock VELNOR_TOOL_NEXTEST_LOCK '\\''aqua:nextest-rs/nextest/cargo-nextest'\\'' '\\''cargo-nextest'\\'' '\\''cargo:cargo-nextest'\\'' '\\''github:nextest-rs/nextest'\\'' '\\''ubi:nextest-rs/nextest'\\''\nvelnor_tool VELNOR_TOOL_OPENTOFU '\\''opentofu'\\'' '\\''aqua:opentofu/opentofu'\\''\nvelnor_lock VELNOR_TOOL_OPENTOFU_LOCK '\\''opentofu'\\'' '\\''aqua:opentofu/opentofu'\\''\nvelnor_tool VELNOR_TOOL_RUST '\\''rust'\\'' '\\''core:rust'\\''\nvelnor_lock VELNOR_TOOL_RUST_LOCK '\\''rust'\\'' '\\''core:rust'\\''\nrm -rf \"$velnor_dir\"\n'" # zizmor: ignore[github-env]
-      - &s58
+      - &s59
         name: V2 identity
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
@@ -1625,7 +1640,7 @@ jobs:
       - *s9
       - *s10
       - *s14
-      - &s59
+      - &s60
         name: Prepare pinned tools
         env: *m14
         run: "mise --no-config --no-env --no-hooks install 'rust@'\"${VELNOR_TOOL_RUST}\" 'opentofu@'\"${VELNOR_TOOL_OPENTOFU}\" 'mr-boxington@'\"${VELNOR_TOOL_MR_BOXINGTON}\" 'aqua:nextest-rs/nextest/cargo-nextest@'\"${VELNOR_TOOL_NEXTEST}\""
@@ -1639,7 +1654,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - &s60
+      - &s61
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-d66d0e8c6a8110126dca163380844b320365634d6e49bf4fa7281eb6d9253c59"}
@@ -1665,7 +1680,7 @@ jobs:
         with: {"digest": "b3-343cf1e0360cae67dd45c22b9cc81be878c90f00fc156d238ae1eb63592d53cf"}
       - name: Wait for parallel checks
         wait-all:
-      - &s61
+      - &s62
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1675,28 +1690,29 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s31
+      - *s32
   rust-velnor-actions-mise-write:
     name: Rust / velnor-actions-mise (write)
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     env: *m27
+    cache-mode: write
     needs:
       - plan
       - rust-velnor-actions-mise-read
     if: (!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-mise,')) && github.event_name == 'push'
     steps:
-      - *s37
-      - *s40
+      - *s38
+      - *s41
       - *s1
       - *s3
-      - *s57
       - *s58
+      - *s59
       - *s4
       - *s9
       - *s10
       - *s14
-      - *s59
+      - *s60
       - *s16
       - *s17
       - *s18
@@ -1707,7 +1723,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - *s60
+      - *s61
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1730,11 +1746,11 @@ jobs:
         with: {"digest": "b3-343cf1e0360cae67dd45c22b9cc81be878c90f00fc156d238ae1eb63592d53cf"}
       - name: Wait for parallel checks
         wait-all:
-      - *s61
-      - *s41
+      - *s62
+      - *s42
       - *s6
       - *s7
-      - *s31
+      - *s32
   rust-velnor-actions-orchestrator-read:
     name: Rust / velnor-actions-orchestrator (read)
     runs-on: ubuntu-26.04
@@ -1750,14 +1766,14 @@ jobs:
     steps:
       - *s1
       - *s3
-      - *s46
       - *s47
+      - *s48
       - *s4
       - *s9
       - *s10
       - *s14
-      - *s48
-      - *s36
+      - *s49
+      - *s37
       - *s16
       - *s17
       - *s18
@@ -1768,8 +1784,8 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - *s34
-      - &s62
+      - *s35
+      - &s63
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-3079965685343a87a54bf23586a697d48b4c90de20f36fbe63a6272c06d126c0"}
@@ -1795,7 +1811,7 @@ jobs:
         with: {"digest": "b3-79bdfc648bb17cee7e4e6e0887730b365f4ddf60c7e961e49e302ccf7f7ced40"}
       - name: Wait for parallel checks
         wait-all:
-      - &s63
+      - &s64
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1805,28 +1821,29 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s31
+      - *s32
   rust-velnor-actions-orchestrator-write:
     name: Rust / velnor-actions-orchestrator (write)
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     env: *m27
+    cache-mode: write
     needs:
       - plan
       - rust-velnor-actions-orchestrator-read
     if: (!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-orchestrator,')) && github.event_name == 'push'
     steps:
-      - *s40
+      - *s41
       - *s1
       - *s3
-      - *s46
       - *s47
+      - *s48
       - *s4
       - *s9
       - *s10
       - *s14
-      - *s48
-      - *s36
+      - *s49
+      - *s37
       - *s16
       - *s17
       - *s18
@@ -1837,8 +1854,8 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - *s34
-      - *s62
+      - *s35
+      - *s63
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1861,8 +1878,8 @@ jobs:
         with: {"digest": "b3-79bdfc648bb17cee7e4e6e0887730b365f4ddf60c7e961e49e302ccf7f7ced40"}
       - name: Wait for parallel checks
         wait-all:
-      - *s63
-      - *s31
+      - *s64
+      - *s32
   rust-velnor-actions-rust-read:
     name: Rust / velnor-actions-rust (read)
     runs-on: ubuntu-26.04
@@ -1895,7 +1912,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - &s64
+      - &s65
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-ffd94822b2436bd2e28efb104719c58c1e09f9ff2ffe7830712a7eb7b4afe14f"}
@@ -1921,7 +1938,7 @@ jobs:
         with: {"digest": "b3-e458300bede8a692129e016e641d59cab5ac4a62abf139990b2254e1cbc38b78"}
       - name: Wait for parallel checks
         wait-all:
-      - &s65
+      - &s66
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1931,18 +1948,19 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s31
+      - *s32
   rust-velnor-actions-rust-write:
     name: Rust / velnor-actions-rust (write)
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     env: *m27
+    cache-mode: write
     needs:
       - plan
       - rust-velnor-actions-rust-read
     if: (!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-rust,')) && github.event_name == 'push'
     steps:
-      - *s40
+      - *s41
       - *s1
       - *s3
       - *s12
@@ -1962,7 +1980,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - *s64
+      - *s65
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1985,8 +2003,8 @@ jobs:
         with: {"digest": "b3-e458300bede8a692129e016e641d59cab5ac4a62abf139990b2254e1cbc38b78"}
       - name: Wait for parallel checks
         wait-all:
-      - *s65
-      - *s31
+      - *s66
+      - *s32
   rust-velnor-actions-tofu-read:
     name: Rust / velnor-actions-tofu (read)
     runs-on: ubuntu-26.04
@@ -2019,7 +2037,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - &s66
+      - &s67
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-ff7a7a389fb4e2abbe4a6683237fd8743499ba5b5ea3a6dda7def29cd087866d"}
@@ -2041,7 +2059,7 @@ jobs:
         with: {"digest": "b3-03793adf258f1039c4e24688ff98a181ef8c4c2539b438494ab2dc9388ca0141"}
       - name: Wait for parallel checks
         wait-all:
-      - &s67
+      - &s68
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2051,18 +2069,19 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s31
+      - *s32
   rust-velnor-actions-tofu-write:
     name: Rust / velnor-actions-tofu (write)
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     env: *m27
+    cache-mode: write
     needs:
       - plan
       - rust-velnor-actions-tofu-read
     if: (!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-tofu,')) && github.event_name == 'push'
     steps:
-      - *s40
+      - *s41
       - *s1
       - *s3
       - *s12
@@ -2082,7 +2101,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - *s66
+      - *s67
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -2101,8 +2120,8 @@ jobs:
         with: {"digest": "b3-03793adf258f1039c4e24688ff98a181ef8c4c2539b438494ab2dc9388ca0141"}
       - name: Wait for parallel checks
         wait-all:
-      - *s67
-      - *s31
+      - *s68
+      - *s32
   rust-velnor-actions-workflow-renderer-read:
     name: Rust / velnor-actions-workflow-renderer (read)
     runs-on: ubuntu-26.04
@@ -2135,7 +2154,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - &s68
+      - &s69
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-b39abf90211b667967df99765eece336ff73cfa95bd8f357af876544de8aa146"}
@@ -2161,7 +2180,7 @@ jobs:
         with: {"digest": "b3-c47a3006e3bddbcb053dd4c889c68352890493b7ca8142ba41623694df9731cc"}
       - name: Wait for parallel checks
         wait-all:
-      - &s69
+      - &s70
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2171,18 +2190,19 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s31
+      - *s32
   rust-velnor-actions-workflow-renderer-write:
     name: Rust / velnor-actions-workflow-renderer (write)
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     env: *m27
+    cache-mode: write
     needs:
       - plan
       - rust-velnor-actions-workflow-renderer-read
     if: (!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-workflow-renderer,')) && github.event_name == 'push'
     steps:
-      - *s40
+      - *s41
       - *s1
       - *s3
       - *s12
@@ -2202,7 +2222,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - *s68
+      - *s69
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -2225,8 +2245,8 @@ jobs:
         with: {"digest": "b3-c47a3006e3bddbcb053dd4c889c68352890493b7ca8142ba41623694df9731cc"}
       - name: Wait for parallel checks
         wait-all:
-      - *s69
-      - *s31
+      - *s70
+      - *s32
   rust-velnor-resource-probe-read:
     name: Rust / velnor-resource-probe (read)
     runs-on: ubuntu-26.04
@@ -2253,13 +2273,13 @@ jobs:
       - *s17
       - *s18
       - *s19
-      - *s32
-      - *s21
       - *s33
+      - *s21
+      - *s34
       - *s23
       - *s24
-      - *s34
-      - &s70
+      - *s35
+      - &s71
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-5d86d0a58aef8ead3e8dde6d3290d50d4987c924da455793612fd5fb6bead02a"}
@@ -2281,7 +2301,7 @@ jobs:
         with: {"digest": "b3-122a3a33773b10d2ec237ac784bec935a5cf5841133a1cd2ea669ec5002a1092"}
       - name: Wait for parallel checks
         wait-all:
-      - &s71
+      - &s72
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2291,18 +2311,19 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s35
+      - *s36
   rust-velnor-resource-probe-write:
     name: Rust / velnor-resource-probe (write)
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     env: *m27
+    cache-mode: write
     needs:
       - plan
       - rust-velnor-resource-probe-read
     if: (!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-resource-probe,')) && github.event_name == 'push'
     steps:
-      - *s40
+      - *s41
       - *s1
       - *s3
       - *s12
@@ -2316,13 +2337,13 @@ jobs:
       - *s17
       - *s18
       - *s19
-      - *s32
-      - *s21
       - *s33
+      - *s21
+      - *s34
       - *s23
       - *s24
-      - *s34
-      - *s70
+      - *s35
+      - *s71
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -2341,8 +2362,8 @@ jobs:
         with: {"digest": "b3-122a3a33773b10d2ec237ac784bec935a5cf5841133a1cd2ea669ec5002a1092"}
       - name: Wait for parallel checks
         wait-all:
-      - *s71
-      - *s35
+      - *s72
+      - *s36
   rust-velnor-runner-attestation-read:
     name: Rust / velnor-runner-attestation (read)
     runs-on: ubuntu-26.04
@@ -2369,13 +2390,13 @@ jobs:
       - *s17
       - *s18
       - *s19
-      - *s32
-      - *s21
       - *s33
+      - *s21
+      - *s34
       - *s23
       - *s24
-      - *s34
-      - &s72
+      - *s35
+      - &s73
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-e34e9b671ee0385b54bb81a5f7c9ff0a73f71656fbf463c18a80bf7018078112"}
@@ -2393,7 +2414,7 @@ jobs:
         with: {"digest": "b3-4da0800f3107345add790011d0b733aeafa22bf08391945b1c01196c0383afdf"}
       - name: Wait for parallel checks
         wait-all:
-      - &s73
+      - &s74
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2403,18 +2424,19 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s35
+      - *s36
   rust-velnor-runner-attestation-write:
     name: Rust / velnor-runner-attestation (write)
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     env: *m27
+    cache-mode: write
     needs:
       - plan
       - rust-velnor-runner-attestation-read
     if: (!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-runner-attestation,')) && github.event_name == 'push'
     steps:
-      - *s40
+      - *s41
       - *s1
       - *s3
       - *s12
@@ -2428,13 +2450,13 @@ jobs:
       - *s17
       - *s18
       - *s19
-      - *s32
-      - *s21
       - *s33
+      - *s21
+      - *s34
       - *s23
       - *s24
-      - *s34
-      - *s72
+      - *s35
+      - *s73
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -2449,8 +2471,8 @@ jobs:
         with: {"digest": "b3-4da0800f3107345add790011d0b733aeafa22bf08391945b1c01196c0383afdf"}
       - name: Wait for parallel checks
         wait-all:
-      - *s73
-      - *s35
+      - *s74
+      - *s36
   rust-velnor-runner-cli-read:
     name: Rust / velnor-runner-cli (read)
     runs-on: ubuntu-26.04
@@ -2477,13 +2499,13 @@ jobs:
       - *s17
       - *s18
       - *s19
-      - *s32
-      - *s21
       - *s33
+      - *s21
+      - *s34
       - *s23
       - *s24
-      - *s34
-      - &s74
+      - *s35
+      - &s75
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-585a3ea6635dd099443e7bff5544e7e2456cb1fa2e4285cfe8cb78db87c4285a"}
@@ -2505,7 +2527,7 @@ jobs:
         with: {"digest": "b3-ab9c73ecaff0ddee739070e4750f958ef50887a56ab81b1a3c0cdfd94cc59e0f"}
       - name: Wait for parallel checks
         wait-all:
-      - &s75
+      - &s76
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2515,18 +2537,19 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s35
+      - *s36
   rust-velnor-runner-cli-write:
     name: Rust / velnor-runner-cli (write)
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     env: *m27
+    cache-mode: write
     needs:
       - plan
       - rust-velnor-runner-cli-read
     if: (!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-runner-cli,')) && github.event_name == 'push'
     steps:
-      - *s40
+      - *s41
       - *s1
       - *s3
       - *s12
@@ -2540,13 +2563,13 @@ jobs:
       - *s17
       - *s18
       - *s19
-      - *s32
-      - *s21
       - *s33
+      - *s21
+      - *s34
       - *s23
       - *s24
-      - *s34
-      - *s74
+      - *s35
+      - *s75
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -2565,8 +2588,8 @@ jobs:
         with: {"digest": "b3-ab9c73ecaff0ddee739070e4750f958ef50887a56ab81b1a3c0cdfd94cc59e0f"}
       - name: Wait for parallel checks
         wait-all:
-      - *s75
-      - *s35
+      - *s76
+      - *s36
   rust-velnor-runner-core-read:
     name: Rust / velnor-runner-core (read)
     runs-on: ubuntu-26.04
@@ -2593,13 +2616,13 @@ jobs:
       - *s17
       - *s18
       - *s19
-      - *s32
-      - *s21
       - *s33
+      - *s21
+      - *s34
       - *s23
       - *s24
-      - *s34
-      - &s76
+      - *s35
+      - &s77
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-83140afed84138e2c7b9ca66650422e7995374aa0373510ec679ad4acd722eed"}
@@ -2621,7 +2644,7 @@ jobs:
         with: {"digest": "b3-685a637d4681b82f348c372a5b4607b5adb82fee7695c23d804b74ee06565d43"}
       - name: Wait for parallel checks
         wait-all:
-      - &s77
+      - &s78
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2631,18 +2654,19 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s35
+      - *s36
   rust-velnor-runner-core-write:
     name: Rust / velnor-runner-core (write)
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     env: *m27
+    cache-mode: write
     needs:
       - plan
       - rust-velnor-runner-core-read
     if: (!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-runner-core,')) && github.event_name == 'push'
     steps:
-      - *s40
+      - *s41
       - *s1
       - *s3
       - *s12
@@ -2656,13 +2680,13 @@ jobs:
       - *s17
       - *s18
       - *s19
-      - *s32
-      - *s21
       - *s33
+      - *s21
+      - *s34
       - *s23
       - *s24
-      - *s34
-      - *s76
+      - *s35
+      - *s77
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -2681,8 +2705,8 @@ jobs:
         with: {"digest": "b3-685a637d4681b82f348c372a5b4607b5adb82fee7695c23d804b74ee06565d43"}
       - name: Wait for parallel checks
         wait-all:
-      - *s77
-      - *s35
+      - *s78
+      - *s36
   rust-velnor-runner-github-read:
     name: Rust / velnor-runner-github (read)
     runs-on: ubuntu-26.04
@@ -2709,13 +2733,13 @@ jobs:
       - *s17
       - *s18
       - *s19
-      - *s32
-      - *s21
       - *s33
+      - *s21
+      - *s34
       - *s23
       - *s24
-      - *s34
-      - &s78
+      - *s35
+      - &s79
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-1dcdda4b54db5e73eeebfe50ad4de166e4f87f72f8af3d89c72a5cca77e308b1"}
@@ -2737,7 +2761,7 @@ jobs:
         with: {"digest": "b3-d119f6ad77706ebb8aa5ade2887b4fa0ad0ec547898693002c7c55d6224f614e"}
       - name: Wait for parallel checks
         wait-all:
-      - &s79
+      - &s80
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2747,18 +2771,19 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s35
+      - *s36
   rust-velnor-runner-github-write:
     name: Rust / velnor-runner-github (write)
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     env: *m27
+    cache-mode: write
     needs:
       - plan
       - rust-velnor-runner-github-read
     if: (!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-runner-github,')) && github.event_name == 'push'
     steps:
-      - *s40
+      - *s41
       - *s1
       - *s3
       - *s12
@@ -2772,13 +2797,13 @@ jobs:
       - *s17
       - *s18
       - *s19
-      - *s32
-      - *s21
       - *s33
+      - *s21
+      - *s34
       - *s23
       - *s24
-      - *s34
-      - *s78
+      - *s35
+      - *s79
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -2797,8 +2822,8 @@ jobs:
         with: {"digest": "b3-d119f6ad77706ebb8aa5ade2887b4fa0ad0ec547898693002c7c55d6224f614e"}
       - name: Wait for parallel checks
         wait-all:
-      - *s79
-      - *s35
+      - *s80
+      - *s36
   rust-velnor-runner-host-read:
     name: Rust / velnor-runner-host (read)
     runs-on: ubuntu-26.04
@@ -2825,13 +2850,13 @@ jobs:
       - *s17
       - *s18
       - *s19
-      - *s32
-      - *s21
       - *s33
+      - *s21
+      - *s34
       - *s23
       - *s24
-      - *s34
-      - &s80
+      - *s35
+      - &s81
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-72c368f14fa0565df4ee70641a508a7810cd9d6515f46dc124712e3f95d43f5b"}
@@ -2857,7 +2882,7 @@ jobs:
         with: {"digest": "b3-13e81d27fc1865421daf6bd8c5b5b2f67f762c78690f1373331df0a288954934"}
       - name: Wait for parallel checks
         wait-all:
-      - &s81
+      - &s82
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2867,18 +2892,19 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s35
+      - *s36
   rust-velnor-runner-host-write:
     name: Rust / velnor-runner-host (write)
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     env: *m27
+    cache-mode: write
     needs:
       - plan
       - rust-velnor-runner-host-read
     if: (!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-runner-host,')) && github.event_name == 'push'
     steps:
-      - *s40
+      - *s41
       - *s1
       - *s3
       - *s12
@@ -2892,13 +2918,13 @@ jobs:
       - *s17
       - *s18
       - *s19
-      - *s32
-      - *s21
       - *s33
+      - *s21
+      - *s34
       - *s23
       - *s24
-      - *s34
-      - *s80
+      - *s35
+      - *s81
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -2921,5 +2947,5 @@ jobs:
         with: {"digest": "b3-13e81d27fc1865421daf6bd8c5b5b2f67f762c78690f1373331df0a288954934"}
       - name: Wait for parallel checks
         wait-all:
-      - *s81
-      - *s35
+      - *s82
+      - *s36

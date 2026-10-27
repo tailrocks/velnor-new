@@ -28,7 +28,7 @@ pub(super) fn fetch_ci_runs_step() -> Yaml {
         (
             "run".to_owned(),
             Yaml::str(format!(
-                "set -euo pipefail\ngh api \"repos/${{{{ github.repository }}}}/actions/workflows/ci.yml/runs?head_sha=${{{{ github.sha }}}}&per_page=100\" > \"{}\"",
+                "set -euo pipefail\ngh api \"repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&per_page=100\" > \"{}\"",
                 authority::CI_RUNS_PATH
             )),
         ),
@@ -46,7 +46,7 @@ pub(super) fn fetch_artifact_response_step() -> Yaml {
         (
             "run".to_owned(),
             Yaml::str(format!(
-                "set -euo pipefail\ngh api \"repos/${{{{ github.repository }}}}/actions/runs/${{{{ github.run_id }}}}/artifacts?per_page=100\" > \"{}\"",
+                "set -euo pipefail\ngh api \"repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100\" > \"{}\"",
                 authority::ARTIFACT_RESPONSE_PATH
             )),
         ),
@@ -134,7 +134,7 @@ pub(super) fn verify_attestations_step(archive: &str, record: &str) -> Yaml {
         (
             "run".to_owned(),
             Yaml::str(format!(
-                "set -euo pipefail\nrepo=\"${{{{ github.repository }}}}\"\nsha=\"${{{{ github.sha }}}}\"\nworkflow=\"$repo/.github/workflows/job-image-candidate.yml\"\ngh attestation verify \"{archive}\" --repo \"$repo\" --source-ref \"refs/heads/main\" --source-digest \"$sha\" --signer-workflow \"$workflow\" --signer-digest \"$sha\" --format json > \"{}\"\ngh attestation verify \"{record}\" --repo \"$repo\" --source-ref \"refs/heads/main\" --source-digest \"$sha\" --signer-workflow \"$workflow\" --signer-digest \"$sha\" --format json > \"{}\"",
+                "set -euo pipefail\nrepo=\"$GITHUB_REPOSITORY\"\nsha=\"$GITHUB_SHA\"\nworkflow=\"$repo/.github/workflows/job-image-candidate.yml\"\ngh attestation verify \"{archive}\" --repo \"$repo\" --source-ref \"refs/heads/main\" --source-digest \"$sha\" --signer-workflow \"$workflow\" --signer-digest \"$sha\" --format json > \"{}\"\ngh attestation verify \"{record}\" --repo \"$repo\" --source-ref \"refs/heads/main\" --source-digest \"$sha\" --signer-workflow \"$workflow\" --signer-digest \"$sha\" --format json > \"{}\"",
                 authority::ARCHIVE_ATTESTATION_PATH,
                 authority::RECORD_ATTESTATION_PATH
             )),

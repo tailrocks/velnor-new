@@ -174,8 +174,7 @@ jobs:
         id: cache-keys
         env:
           VELNOR_DEFAULT_REF: ${{ format('refs/heads/{0}', github.event.repository.default_branch) }}
-          VELNOR_PR_HEAD_FORK: ${{ github.event.pull_request.head.repo.fork }}
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/cache-keys\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }; uname -s > \"$d/platform\"; uname -m >> \"$d/platform\"; default_ref=\"${VELNOR_DEFAULT_REF:-}\"; trust=none; if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; elif [ \"${GITHUB_EVENT_NAME:-}\" = pull_request ] && [ \"${VELNOR_PR_HEAD_FORK:-}\" = false ]; then trust=pr; fi; check_key() { [ \"${#1}\" -le 512 ] || { printf '\\''cache key exceeds 512 bytes: %s\\n'\\'' \"$1\" >&2; exit 1; }; }; printf '\\''%s\\n'\\'' \"family=sources\" \"schema=2\" \"$RUNNER_TEMP/velnor/cargo/registry/index\" \"$RUNNER_TEMP/velnor/cargo/registry/cache\" \"$RUNNER_TEMP/velnor/cargo/git/db\" > \"$d/sources-compat\"; cat \"$d/platform\" >> \"$d/sources-compat\"; printf '\\''%s\\n'\\'' \"$RUNNER_TEMP/velnor/cargo\" >> \"$d/sources-compat\"; s256 \"$d/sources-compat\"; compat=\"s256-$h\"; : > \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \".\" \"$h\" >> \"$d/sources-locks\"; LC_ALL=C sort \"$d/sources-locks\" > \"$d/sources-snapshot\"; s256 \"$d/sources-snapshot\"; snap=\"s256-$h\"; trusted=\"velnor-v2-sources-trusted-$compat-\"; if [ \"$trust\" = pr ]; then key=\"velnor-v2-sources-pr-$compat-$snap\"; else key=\"$trusted$snap\"; fi; check_key \"$key\"; save=false; [ \"$trust\" = none ] || save=true; printf '\\''%s\\n'\\'' \"sources_key=$key\" \"sources_save=$save\" \"sources_snapshot=$snap\" '\\''sources_restore_keys<<VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; if [ \"$trust\" = pr ]; then printf '\\''%s\\n'\\'' \"$trusted$snap\" >> \"$GITHUB_OUTPUT\"; fi; printf '\\''%s\\n'\\'' \"$trusted\" '\\''VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''velnor: cache trust=%s sources key=%s save=%s\\n'\\'' \"$trust\" \"$key\" \"$save\"; printf '\\''%s\\n'\\'' \"trust=$trust\" >> \"$GITHUB_OUTPUT\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/cache-keys\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }; uname -s > \"$d/platform\"; uname -m >> \"$d/platform\"; default_ref=\"${VELNOR_DEFAULT_REF:-}\"; trust=none; if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; fi; check_key() { [ \"${#1}\" -le 512 ] || { printf '\\''cache key exceeds 512 bytes: %s\\n'\\'' \"$1\" >&2; exit 1; }; }; printf '\\''%s\\n'\\'' \"family=sources\" \"schema=2\" \"$RUNNER_TEMP/velnor/cargo/registry/index\" \"$RUNNER_TEMP/velnor/cargo/registry/cache\" \"$RUNNER_TEMP/velnor/cargo/git/db\" > \"$d/sources-compat\"; cat \"$d/platform\" >> \"$d/sources-compat\"; printf '\\''%s\\n'\\'' \"$RUNNER_TEMP/velnor/cargo\" >> \"$d/sources-compat\"; s256 \"$d/sources-compat\"; compat=\"s256-$h\"; : > \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \".\" \"$h\" >> \"$d/sources-locks\"; LC_ALL=C sort \"$d/sources-locks\" > \"$d/sources-snapshot\"; s256 \"$d/sources-snapshot\"; snap=\"s256-$h\"; trusted=\"velnor-v2-sources-trusted-$compat-\"; key=\"$trusted$snap\"; check_key \"$key\"; save=false; [ \"$trust\" = none ] || save=true; printf '\\''%s\\n'\\'' \"sources_key=$key\" \"sources_save=$save\" \"sources_snapshot=$snap\" '\\''sources_restore_keys<<VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''%s\\n'\\'' \"$trusted\" '\\''VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''velnor: cache trust=%s sources key=%s save=%s\\n'\\'' \"$trust\" \"$key\" \"$save\"; printf '\\''%s\\n'\\'' \"trust=$trust\" >> \"$GITHUB_OUTPUT\"'"
       - name: Restore Cargo sources
         id: sources-restore
         if: github.event_name != 'workflow_dispatch'
@@ -315,6 +314,10 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: mise --no-config --no-env --no-hooks install gh@2.103.3
+      - name: Assemble group ledgers
+        env:
+          VELNOR_INTERNAL_OP: assemble-group-ledgers-v1
+        run: cargo run --locked -p velnor-actions-cli --bin velnor-actions
       - name: Download plan
         continue-on-error: true
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
@@ -489,6 +492,7 @@ jobs:
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.57/velnor-actions-0.1.57-x86_64-unknown-linux-gnu
       VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
       VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
+    cache-mode: write
     needs:
       - plan
       - rust-a-read
@@ -752,6 +756,7 @@ jobs:
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.57/velnor-actions-0.1.57-x86_64-unknown-linux-gnu
       VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
       VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
+    cache-mode: write
     needs:
       - plan
       - rust-lib-read

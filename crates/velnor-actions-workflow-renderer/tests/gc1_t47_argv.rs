@@ -60,6 +60,21 @@ pub(crate) fn runner_build_argv() -> Vec<String> {
     ])
 }
 
+pub(crate) fn attestation_helper_build_argv() -> Vec<String> {
+    argv(&[
+        "mbx",
+        "build",
+        "--locked",
+        "--manifest-path",
+        "crates/velnor-runner/Cargo.toml",
+        "--release",
+        "--package",
+        "velnor-runner-attestation",
+        "--bin",
+        "velnor-runner-attestation-helper",
+    ])
+}
+
 pub(crate) fn resource_probe_build_argv() -> Vec<String> {
     argv(&[
         "mbx",
@@ -151,6 +166,7 @@ pub(crate) fn pins() -> ProductReleasePins {
         install_intel_target_argv: argv(&["rustup", "target", "add", "x86_64-apple-darwin"]),
         install_resource_probe_target_argv: install_resource_probe_target_argv(),
         runner_build_argv: runner_build_argv(),
+        attestation_helper_build_argv: attestation_helper_build_argv(),
         resource_probe_build_argv: resource_probe_build_argv(),
         install_resource_probe_release_tools_argv: install_resource_probe_release_tools_argv(),
         resource_probe_release_build_argv: resource_probe_release_build_argv(),

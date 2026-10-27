@@ -16,7 +16,7 @@ Workflow to generate
   Jobs:
     - jactionlint (8 steps)
     - plan (14 steps)
-    - required (9 steps)
+    - required (10 steps)
     - required-gate (1 steps)
     - rust-minimal-cargo-read (17 steps)
     - rust-minimal-cargo-write (18 steps)
