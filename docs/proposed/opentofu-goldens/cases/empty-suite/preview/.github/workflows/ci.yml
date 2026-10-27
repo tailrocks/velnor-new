@@ -145,7 +145,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 8eed55b9349a0f82bc568d13ba9317b1378edd1e3c0c8566f56a557c8d925039
+          d: 518488df9487b29890040fd90fba1195439d3a63eefaa78109141a72eee8d29e
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -162,7 +162,7 @@ jobs:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install rust@1.99.1 jactionlint@2.3.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.149
+        run: mise --no-config --no-env --no-hooks install rust@1.99.1 jactionlint@2.3.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.150
       - name: Verify jactionlint
         uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]
       - name: Verify Rust channel manifest
@@ -266,7 +266,7 @@ jobs:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install gh@2.103.2
+        run: mise --no-config --no-env --no-hooks install gh@2.103.3
       - name: Download plan
         continue-on-error: true
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
@@ -348,7 +348,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 87ad734a9b725ec282318a29b67dbe726a7da8af2ef89bfe325422e87e61ec9c
+          d: 9a3058481476aaca751408a5ffda3ec3e85f98862744c94db0ff7dbc85659539
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -373,7 +373,7 @@ jobs:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install rust@1.99.1 jactionlint@2.3.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.149
+        run: mise --no-config --no-env --no-hooks install rust@1.99.1 jactionlint@2.3.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.150
       - name: Verify jactionlint
         uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]
       - name: Prepare Rust components
@@ -387,19 +387,19 @@ jobs:
         uses: ./.github/actions/velnor-verify-rust-manifest # zizmor: ignore[self-repository]
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-b8cde998df834395adf8c8dffdc3e3c9f4d52a253a6cf28323e77b22f0f20a31"}
+        with: {"digest": "b3-1286b0c99695302391a7501d5708070ae5f6fd9cca82004d567bb56e1519bfe3"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-5aef1ff1805249627de5b0cb72ab655faf76c70755d1f69dfb0e0fcd569c42eb"}
+        with: {"digest": "b3-9c7cf25525b6dce74d08dad235b32504f1b31d4d5edae38498cfa639c1caad0f"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-a29361641795a2d0fc6600bd87efd5f5c1b8751bef9bccb0d6554b13d05e610c"}
+        with: {"digest": "b3-d4c8e7c44e8682aff857a8ea5eed19471497ac8fd4030b4482cb63e73aec7dea"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-074ba12174e1c8bbc74ae30ac390cb374c0e42e7e9d5a86481d18f5f846cc6b8"}
+        with: {"digest": "b3-55ab2de860b6f05e9f299f26b54a39fb082b854ed86b98439d09659ee180f0df"}
       - name: Wait for parallel checks
         wait-all:
       - name: Upload crate reports
@@ -449,7 +449,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 87ad734a9b725ec282318a29b67dbe726a7da8af2ef89bfe325422e87e61ec9c
+          d: 9a3058481476aaca751408a5ffda3ec3e85f98862744c94db0ff7dbc85659539
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -474,7 +474,7 @@ jobs:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install rust@1.99.1 jactionlint@2.3.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.149
+        run: mise --no-config --no-env --no-hooks install rust@1.99.1 jactionlint@2.3.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.150
       - name: Verify jactionlint
         uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]
       - name: Prepare Rust components
@@ -488,19 +488,19 @@ jobs:
         uses: ./.github/actions/velnor-verify-rust-manifest # zizmor: ignore[self-repository]
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-b8cde998df834395adf8c8dffdc3e3c9f4d52a253a6cf28323e77b22f0f20a31"}
+        with: {"digest": "b3-1286b0c99695302391a7501d5708070ae5f6fd9cca82004d567bb56e1519bfe3"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-5aef1ff1805249627de5b0cb72ab655faf76c70755d1f69dfb0e0fcd569c42eb"}
+        with: {"digest": "b3-9c7cf25525b6dce74d08dad235b32504f1b31d4d5edae38498cfa639c1caad0f"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-a29361641795a2d0fc6600bd87efd5f5c1b8751bef9bccb0d6554b13d05e610c"}
+        with: {"digest": "b3-d4c8e7c44e8682aff857a8ea5eed19471497ac8fd4030b4482cb63e73aec7dea"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-074ba12174e1c8bbc74ae30ac390cb374c0e42e7e9d5a86481d18f5f846cc6b8"}
+        with: {"digest": "b3-55ab2de860b6f05e9f299f26b54a39fb082b854ed86b98439d09659ee180f0df"}
       - name: Wait for parallel checks
         wait-all:
       - name: Upload crate reports

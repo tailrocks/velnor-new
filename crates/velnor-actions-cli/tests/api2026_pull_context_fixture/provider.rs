@@ -189,7 +189,7 @@ fn executable(path: &Path) -> Result<(), Box<dyn Error>> {
 const MISE: &str = r#"#!/bin/sh
 printf 'mise argc=%s prefix=%s,%s,%s,%s,%s,%s,%s\n' "$#" "${1-}" "${2-}" "${3-}" "${4-}" "${5-}" "${6-}" "${7-}" >> "$VELNOR_FIXTURE_STATE/requests.log"
 [ "$1" = "--no-config" ] && [ "$2" = "--no-env" ] && [ "$3" = "--no-hooks" ] && [ "$4" = "exec" ] || exit 91
-[ "$5" = "gh@2.103.2" ] && [ "$6" = "--" ] && [ "$7" = "gh" ] || exit 92
+[ "$5" = "gh@2.103.3" ] && [ "$6" = "--" ] && [ "$7" = "gh" ] || exit 92
 shift 6
 exec "$@"
 "#;

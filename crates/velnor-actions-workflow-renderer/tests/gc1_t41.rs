@@ -102,6 +102,7 @@ fn context(jobs: &BTreeMap<String, Job>) -> Result<RenderContext, Box<dyn Error>
     )
     .map_err(|error| fail(&format!("authority rejected:{error}")))?;
     Ok(RenderContext {
+        bun_lane_plan: None,
         authority_steps,
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
         report_helper_version: env!("CARGO_PKG_VERSION").to_owned(),

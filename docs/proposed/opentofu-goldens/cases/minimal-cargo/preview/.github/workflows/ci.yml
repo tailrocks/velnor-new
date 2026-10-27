@@ -266,7 +266,7 @@ jobs:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install gh@2.103.2
+        run: mise --no-config --no-env --no-hooks install gh@2.103.3
       - name: Download plan
         continue-on-error: true
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333

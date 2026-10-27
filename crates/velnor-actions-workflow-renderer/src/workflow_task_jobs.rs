@@ -86,13 +86,39 @@ impl WorkflowTaskPolicy {
             Self::Stack(policy) => policy.id == job_id,
         }
     }
+
+    #[must_use]
+    pub fn owns_projected_job_id(
+        &self,
+        job_id: &str,
+        plan: Option<&velnor_actions_contract::BunLanePlan>,
+    ) -> bool {
+        self.owns_job_id(job_id)
+            || plan
+                .and_then(|plan| plan.logical_id_for_output(job_id))
+                .is_some_and(|logical_id| self.owns_job_id(logical_id))
+    }
+
+    #[must_use]
+    pub fn runner_label_for_projected_job(
+        &self,
+        job_id: &str,
+        plan: Option<&velnor_actions_contract::BunLanePlan>,
+    ) -> Option<&str> {
+        self.runner_label_for_job(job_id).or_else(|| {
+            plan.and_then(|plan| plan.logical_id_for_output(job_id))
+                .and_then(|logical_id| self.runner_label_for_job(logical_id))
+        })
+    }
 }
 
 pub(crate) fn validate_workflow_task_jobs(
     jobs: &BTreeMap<String, Job>,
     policies: &[WorkflowTaskPolicy],
     checkout_uses: &str,
+    plan: Option<&velnor_actions_contract::BunLanePlan>,
 ) -> Result<Vec<String>, RenderError> {
+    crate::verification_jobs::bun_lane_validation::validate_output_set(jobs, policies, plan)?;
     let mut previous = None;
     let mut seen = BTreeSet::new();
     let mut job_ids = Vec::new();
@@ -128,7 +154,7 @@ pub(crate) fn validate_workflow_task_jobs(
             WorkflowTaskPolicy::Bun(_)
             | WorkflowTaskPolicy::BunSuite(_)
             | WorkflowTaskPolicy::BunAssets(_) => {
-                job_ids.extend(bun_task_job_ids(jobs, policy, checkout_uses)?);
+                job_ids.extend(bun_task_job_ids(jobs, policy, checkout_uses, plan)?);
             }
             WorkflowTaskPolicy::Stack(task) => {
                 let ids = crate::verification_jobs::stack_jobs::validate_stack_job(
@@ -165,17 +191,18 @@ fn bun_task_job_ids(
     jobs: &BTreeMap<String, Job>,
     policy: &WorkflowTaskPolicy,
     checkout_uses: &str,
+    plan: Option<&velnor_actions_contract::BunLanePlan>,
 ) -> Result<Vec<String>, RenderError> {
     use crate::verification_jobs::{bun_assets_jobs, bun_member_jobs, bun_suite_jobs};
     match policy {
         WorkflowTaskPolicy::Bun(task) => {
-            bun_member_jobs::validate_bun_member_job(jobs, task, checkout_uses)
+            bun_member_jobs::validate_bun_member_job(jobs, task, checkout_uses, plan)
         }
         WorkflowTaskPolicy::BunSuite(task) => {
-            bun_suite_jobs::validate_bun_suite_job(jobs, task, checkout_uses)
+            bun_suite_jobs::validate_bun_suite_job(jobs, task, checkout_uses, plan)
         }
         WorkflowTaskPolicy::BunAssets(task) => {
-            bun_assets_jobs::validate_bun_assets_job(jobs, task, checkout_uses)
+            bun_assets_jobs::validate_bun_assets_job(jobs, task, checkout_uses, plan)
         }
         _ => Ok(Vec::new()),
     }

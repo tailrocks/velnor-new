@@ -141,10 +141,15 @@ fn bun(
         playwright: None,
     };
     let id = velnor_actions_bun::job_id(&member);
-    if velnor_actions_bun::member_job_scripts(&member, config)
+    let has_member_job = velnor_actions_bun::member_job_scripts(&member, config)
         .map_err(|error| invalid(error.code()))?
-        .is_some()
-    {
+        .is_some();
+    let suites = config.members.get(name).map(|member| &member.suites);
+    let has_suites = suites.is_some_and(|suites| !suites.is_empty());
+    let private_assets = private_assets && (has_member_job || has_suites);
+    let assets =
+        private_assets.then(|| format!("{}{}", id, crate::verification_jobs::BUN_ASSETS_SUFFIX));
+    if has_member_job {
         insert(
             owners,
             OwnerSpec {
@@ -154,15 +159,12 @@ fn bun(
                 suite: None,
                 required: true,
                 report: false,
-                assets: None,
+                assets: assets.clone(),
             },
         )?;
     }
-    let suites = config.members.get(name).map(|member| &member.suites);
-    let assets =
-        private_assets.then(|| format!("{}{}", id, crate::verification_jobs::BUN_ASSETS_SUFFIX));
     if private_assets {
-        if input.config.private_sources.is_none() || suites.is_none_or(BTreeMap::is_empty) {
+        if input.config.private_sources.is_none() {
             return Err(invalid("native_bun_assets_without_sources"));
         }
         insert_assets(

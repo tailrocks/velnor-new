@@ -26,6 +26,8 @@ use velnor_actions_workflow_renderer::private_source_steps::{
     PrivateSourcesSpec, private_source_steps,
 };
 
+mod toolchain_expressions;
+
 fn fail(message: &str) -> Box<dyn Error> {
     io::Error::other(message).into()
 }
@@ -279,6 +281,7 @@ fn gc1_t12_preserves_contract() -> Result<(), Box<dyn Error>> {
     check_triple_ordering()?;
     check_mint_carries_no_credential()?;
     check_fetch_and_revoke_token_binding()?;
+    toolchain_expressions::check_generated_toolchain_expressions()?;
     check_allowlist_gates_payload()?;
     check_approved_assets_restore_at_stable_paths()?;
     Ok(())
@@ -378,6 +381,7 @@ fn check_rejects_unapproved_or_tampered_assets() -> Result<(), Box<dyn Error>> {
 #[test]
 fn gc1_t12_rejects_invalid_state() -> Result<(), Box<dyn Error>> {
     check_rejects_unauthorized_payloads()?;
+    toolchain_expressions::check_rejects_unowned_toolchain_expressions()?;
     check_rejects_unapproved_or_tampered_assets()?;
     Ok(())
 }

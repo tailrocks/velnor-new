@@ -63,4 +63,4 @@ Recommendations
   mise.lock not found; Velnor will not create or refresh it
   mise.toml is read-only input; Velnor never modifies it
   rust-toolchain.toml not found; Velnor will not create it
-  tool_install_unverified:3 installs skip verification (no mise.lock): gh@2.103.2, nextest@0.9.149, shellcheck@0.11.0; install on the CI platform and commit the resulting lock
+  tool_install_unverified:3 installs skip verification (no mise.lock): gh@2.103.3, nextest@0.9.150, shellcheck@0.11.0; install on the CI platform and commit the resulting lock
