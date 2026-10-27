@@ -2,9 +2,16 @@
 
 Platform: `linux/amd64`. ARM64 is not the baseline. One `dockerd` per worker.
 
+Build with one standard command:
+
 ```sh
 docker build --platform linux/amd64 -t velnor-dind:29.9.1 images/dind
 ```
+
+Build and integration qualification are separate operations. Required
+qualification checks cover immutable image IDs, the private Unix socket,
+distinct daemon identities, and preservation of both built images. See the
+[Runner image release contract](../../docs/proposed/runner-image-release.md).
 
 Docker Engine `29.9.1` is the latest [Moby release](https://github.com/moby/moby/releases/tag/v29.9.1),
 downloaded from the [official static archive](https://download.docker.com/linux/static/stable/x86_64/docker-29.9.1.tgz).

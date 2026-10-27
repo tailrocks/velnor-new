@@ -31,6 +31,9 @@ fn run() -> Result<(), HostError> {
         (Some("write-manifest"), [inspect, archive, output]) => {
             resource_probe_release::write_manifest(inspect, archive, output)
         }
+        (Some("write-runner-image-manifest"), [descriptors, runner_lock, output]) => {
+            resource_probe_release::write_runner_image_manifest(descriptors, runner_lock, output)
+        }
         _ => Err(HostError::Identity),
     }
 }
