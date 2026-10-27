@@ -21,6 +21,6 @@ artifact = "https://github.com/tailrocks/velnor-new/releases/download/v0.1.55/ve
 sha256 = "0938a574c00b05a71735285bf0d2840235ca4f9559359909564dd53b27d77883"
 
 [mise-bootstrap]
-version = "2026.10.19"
-artifact = "https://github.com/jdx/mise/releases/download/v2026.10.19/mise-v2026.10.19-linux-x64"
-sha256 = "3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d"
+version = "2026.10.20"
+artifact = "https://github.com/jdx/mise/releases/download/v2026.10.20/mise-v2026.10.20-linux-x64"
+sha256 = "2eb27467b6f369915ee76f18d66a0696cdb5c20e7ecc8cb49c2bfaca60f0fc9c"

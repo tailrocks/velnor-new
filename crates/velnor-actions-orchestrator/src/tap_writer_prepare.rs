@@ -127,7 +127,7 @@ pub(super) fn create_pull_request(
         }
     };
     let result = TapPromotionReceipt {
-        schema: "velnor.homebrew-tap-pr.v2".to_owned(),
+        schema: "velnor.homebrew-tap-pr.v3".to_owned(),
         repository: inputs.policy.repository.clone(),
         release_receipt_digest: inputs.release.receipt_digest.clone(),
         preparation_proof_digest: proof_digest.to_owned(),
@@ -145,7 +145,7 @@ pub(super) fn create_pull_request(
 
 fn stale_source_receipt(inputs: &WriterInputs, proof_digest: &str) -> TapPromotionReceipt {
     TapPromotionReceipt {
-        schema: "velnor.homebrew-tap-pr.v2".to_owned(),
+        schema: "velnor.homebrew-tap-pr.v3".to_owned(),
         repository: inputs.policy.repository.clone(),
         release_receipt_digest: inputs.release.receipt_digest.clone(),
         preparation_proof_digest: proof_digest.to_owned(),

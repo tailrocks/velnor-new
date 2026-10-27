@@ -191,6 +191,14 @@ impl CanonicalAuthoritySteps {
         self.binding.required_workflow_ids(jobs)
     }
 
+    pub(super) fn check_mise_setup(
+        &self,
+        id: &str,
+        target: &str,
+    ) -> Result<Option<crate::MiseSetup>, crate::RenderError> {
+        self.binding.check_mise_setup(id, target)
+    }
+
     pub(super) fn matches_runtime(&self, context: &crate::render::RenderContext) -> bool {
         self.runtime.plan_consumer_env == context.plan_consumer_env
             && self.runtime.report_helper_version == context.report_helper_version

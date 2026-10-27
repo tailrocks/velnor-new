@@ -13,6 +13,7 @@ use velnor_actions_workflow_renderer::{
 };
 
 mod complete_job_authority;
+mod helper_tools;
 mod lock_trust;
 mod native_context_authority;
 mod native_fact_inventory;
@@ -26,32 +27,7 @@ pub(super) use complete_job_authority::assert_complete_job_authority;
 pub(super) use lock_trust::assert_lock_trust_rejections;
 pub(super) use native_context_authority::assert_native_context_rejections;
 
-pub(super) const BOOTSTRAP_CONFIG: &str = r#"schema = 2
-[workflow]
-policy = "velnor-repository-v1"
-default_branch = "main"
-generator_validation = "bootstrap"
-[execution]
-default_profile = "hosted"
-hosted_profile = "hosted"
-scale_set_profile = "local"
-[execution.profiles.hosted]
-kind = "github-hosted"
-label = "ubuntu-26.04"
-platform = "linux/amd64"
-[execution.profiles.local]
-kind = "github-scale-set"
-name = "ubuntu-26.04-scale-set"
-labels = ["velnor", "ubuntu-26.04-scale-set"]
-platform = "linux/amd64"
-[[native_checks]]
-id = "fixture-native-tree"
-operation = "tap_tree"
-[native_checks.runner]
-label = "ubuntu-26.04"
-platform = "linux_x64"
-executor = "hosted"
-"#;
+pub(super) use helper_tools::{BOOTSTRAP_CONFIG, CONSUMER_CONFIG};
 
 pub(super) fn assert_raw_consumer_render(
     preparation: &GenerationPreparation,
@@ -101,6 +77,8 @@ pub(super) fn assert_bootstrap_authority(
     assert_plan_authority(jobs, lock)?;
     assert_source_free_boundary(jobs)?;
     assert_helper_versions(jobs, helper_version);
+    helper_tools::assert_published_helper_tools(preparation, jobs)?;
+    helper_tools::assert_named_check_runner_rejections(preparation)?;
     assert_native_check(jobs, lock, helper_version)?;
     assert_finalized_mise_jobs(jobs)
 }
@@ -164,7 +142,7 @@ pub(super) fn assert_finalized_mise_jobs(
             "{id} must retain exactly one official Mise setup"
         );
     }
-    Ok(())
+    helper_tools::assert_current_mise_jobs(jobs)
 }
 
 fn assert_generator_versions(preparation: &GenerationPreparation, helper_version: &str) {

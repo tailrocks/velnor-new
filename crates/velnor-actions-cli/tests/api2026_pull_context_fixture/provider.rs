@@ -150,7 +150,13 @@ fn write_programs(bin: &Path, state: &Path) -> Result<(), Box<dyn Error>> {
     fs::write(state.join("ref-count"), "0")?;
     fs::write(state.join("pull-count"), "0")?;
     fs::write(state.join("requests.log"), "")?;
-    fs::write(bin.join("mise"), MISE)?;
+    fs::write(
+        bin.join("mise"),
+        MISE.replace(
+            "@VELNOR_GH_SELECTOR@",
+            &format!("gh@{}", velnor_actions_mise::catalog::GH_VERSION),
+        ),
+    )?;
     fs::write(bin.join("gh"), GH)?;
     executable(&bin.join("mise"))?;
     executable(&bin.join("gh"))?;
@@ -189,7 +195,7 @@ fn executable(path: &Path) -> Result<(), Box<dyn Error>> {
 const MISE: &str = r#"#!/bin/sh
 printf 'mise argc=%s prefix=%s,%s,%s,%s,%s,%s,%s\n' "$#" "${1-}" "${2-}" "${3-}" "${4-}" "${5-}" "${6-}" "${7-}" >> "$VELNOR_FIXTURE_STATE/requests.log"
 [ "$1" = "--no-config" ] && [ "$2" = "--no-env" ] && [ "$3" = "--no-hooks" ] && [ "$4" = "exec" ] || exit 91
-[ "$5" = "gh@2.103.2" ] && [ "$6" = "--" ] && [ "$7" = "gh" ] || exit 92
+[ "$5" = "@VELNOR_GH_SELECTOR@" ] && [ "$6" = "--" ] && [ "$7" = "gh" ] || exit 92
 shift 6
 exec "$@"
 "#;

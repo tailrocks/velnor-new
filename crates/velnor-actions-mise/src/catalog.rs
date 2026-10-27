@@ -9,6 +9,13 @@ pub mod lock;
 #[path = "lock_verify.rs"]
 mod lock_verify;
 
+#[path = "catalog_mise_binary.rs"]
+mod mise_binary;
+pub use mise_binary::{
+    MISE_BINARY_SHA256_MACOS_ARM64, MISE_BINARY_SHA256_MACOS_X64, MiseBinaryIdentity,
+    current_mise_binary,
+};
+
 #[path = "release_plz.rs"]
 pub mod release_plz;
 
@@ -48,15 +55,15 @@ pub use tool::PinnedTool;
 pub mod project;
 use versions::tool_source;
 
-pub const MISE_VERSION: &str = "2026.10.19";
+pub const MISE_VERSION: &str = "2026.10.20";
 pub const MISE_BINARY_SHA256_LINUX_X64: &str =
-    "3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d";
+    "2eb27467b6f369915ee76f18d66a0696cdb5c20e7ecc8cb49c2bfaca60f0fc9c";
 pub const RUST_VERSION: &str = "1.99.1";
 pub const MR_BOXINGTON_VERSION: &str = "1.28.0";
-pub const GH_VERSION: &str = "2.103.2";
+pub const GH_VERSION: &str = "2.103.3";
 pub use velnor_actions_contract::config::jactionlint_verifier::JACTIONLINT_VERSION;
 pub const SHELLCHECK_VERSION: &str = "0.11.0";
-pub const NEXTEST_VERSION: &str = "0.9.149";
+pub const NEXTEST_VERSION: &str = "0.9.150";
 pub const OPENTOFU_VERSION: &str = "1.13.2";
 pub const OPENTOFU_SHA256_LINUX_AMD64: &str =
     "ac05d9952662c7db28dd57e93f0a68018837bfdf9342384ec0987977c16a9645";

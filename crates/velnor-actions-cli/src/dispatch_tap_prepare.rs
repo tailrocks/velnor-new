@@ -241,6 +241,16 @@ fn writer_outputs(receipt: &TapPromotionReceipt) -> String {
         } => format!(
             "promotion_state=already_promoted\npr_number={pull_request}\nhead_sha={head_sha}\nbase_sha={base_sha}\ncandidate_proof_digest={candidate_proof_digest}\nmerge_sha={merge_sha}\nmerged_at={merged_at}\n"
         ),
+        TapPromotionOutcome::InitializedByCutover {
+            cutover_pull_request,
+            head_sha,
+            base_sha,
+            merge_sha,
+            merged_at,
+            marker_sha256,
+        } => format!(
+            "promotion_state=initialized_by_cutover\ncutover_pr_number={cutover_pull_request}\nhead_sha={head_sha}\nbase_sha={base_sha}\nmerge_sha={merge_sha}\nmerged_at={merged_at}\nmarker_sha256={marker_sha256}\n"
+        ),
         TapPromotionOutcome::SkippedStaleSource { source_sha } => {
             format!("promotion_state=skipped_stale_source\nsource_sha={source_sha}\n")
         }

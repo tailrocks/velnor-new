@@ -29,8 +29,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d
-          version: 2026.10.19
+          sha256: 2eb27467b6f369915ee76f18d66a0696cdb5c20e7ecc8cb49c2bfaca60f0fc9c
+          version: 2026.10.20
       - name: Resolve project tool versions
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""

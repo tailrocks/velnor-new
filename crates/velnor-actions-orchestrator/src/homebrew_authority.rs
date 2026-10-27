@@ -24,6 +24,9 @@ mod source;
 use source::{SourceProjection, load_source_projection};
 #[path = "homebrew_authority/applicability.rs"]
 mod applicability;
+#[path = "homebrew_authority/cutover.rs"]
+mod cutover;
+pub(crate) use cutover::load_cutover_replay_authority;
 
 const SOURCE_DOCUMENT_LIMIT: usize =
     velnor_actions_contract::package_release_policy::MAX_CARGO_VERSION_MANIFEST_BYTES;

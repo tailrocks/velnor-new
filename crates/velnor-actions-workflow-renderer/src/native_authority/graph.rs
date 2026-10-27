@@ -10,6 +10,7 @@ use velnor_actions_contract::{
 
 #[derive(Debug, Clone)]
 pub(crate) struct AuthorityBinding {
+    check_mise: super::check_mise::CheckMiseSetups,
     policy: WorkflowPolicy,
     variants: Vec<(Vec<u8>, Option<velnor_actions_contract::ScaleSetSelector>)>,
     config: velnor_actions_contract::VelnorConfig,
@@ -75,6 +76,7 @@ pub(super) fn build(
         .collect();
     Ok((
         AuthorityBinding {
+            check_mise: super::check_mise::CheckMiseSetups::build(input)?,
             workflow_sources: super::task_sources::admit(input.config, input.workflow_sources)?,
             generated,
             workflow_required,
@@ -147,6 +149,14 @@ fn metadata_ir(
 }
 
 impl AuthorityBinding {
+    pub(crate) fn check_mise_setup(
+        &self,
+        id: &str,
+        target: &str,
+    ) -> Result<Option<crate::MiseSetup>, crate::RenderError> {
+        self.check_mise.for_job(id, target)
+    }
+
     pub(crate) fn validate(
         &self,
         jobs: &BTreeMap<String, Job>,

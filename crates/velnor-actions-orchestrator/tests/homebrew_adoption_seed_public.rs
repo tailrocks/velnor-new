@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod completed_generator_verification;
 mod homebrew_adoption_seed_public_assertions;
 
 use std::{error::Error, fs, io, path::Path, process::Command};
@@ -25,24 +26,7 @@ fn public_consumer_required_verdict_never_executes_candidate_prelude() -> Result
     fs::create_dir_all(temp.path().join(".velnor"))?;
     fs::write(
         temp.path().join(".velnor/config.toml"),
-        r#"schema = 2
-[workflow]
-policy = "consumer-v1"
-default_branch = "main"
-[execution]
-default_profile = "hosted"
-hosted_profile = "hosted"
-scale_set_profile = "local"
-[execution.profiles.hosted]
-kind = "github-hosted"
-label = "ubuntu-26.04"
-platform = "linux/amd64"
-[execution.profiles.local]
-kind = "github-scale-set"
-name = "ubuntu-26.04-scale-set"
-labels = ["velnor", "ubuntu-26.04-scale-set"]
-platform = "linux/amd64"
-"#,
+        homebrew_adoption_seed_public_assertions::CONSUMER_CONFIG,
     )?;
     fs::write(
         temp.path().join(MANIFEST_PATH),
@@ -94,7 +78,7 @@ platform = "linux/amd64"
     assert!(required.steps.iter().any(|step| {
         step.role == Some(StepRole::PreparePinnedTools)
             && matches!(&step.kind,
-            StepKind::Shell { run, .. } if run.join(" ").contains("gh@2.103.2"))
+            StepKind::Shell { run, .. } if run.join(" ").contains(&format!("gh@{}", velnor_actions_mise::catalog::GH_VERSION)))
     }));
     homebrew_adoption_seed_public_assertions::assert_trusted_required_steps(
         &required.steps,
@@ -157,6 +141,10 @@ fn public_velnor_repository_bootstrap_accepts_only_catalog_mise_lock() -> Result
     fs::write(
         temp.path().join(".velnor/config.toml"),
         homebrew_adoption_seed_public_assertions::BOOTSTRAP_CONFIG,
+    )?;
+    fs::write(
+        temp.path().join("mise.toml"),
+        "[tasks.fixture-check]\nrun = \"true\"\n",
     )?;
     let lock_path = temp.path().join(".velnor/generator.lock");
     let lock_text = include_str!("../../../.velnor/generator.lock");

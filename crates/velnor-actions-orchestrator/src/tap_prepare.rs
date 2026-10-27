@@ -30,6 +30,7 @@ pub use execute::{
 };
 pub use proof::{HomebrewTapPreparationProof, TapPreparationDisposition};
 pub(super) use snapshot::sha256;
+pub(crate) use writer::CommitResponse;
 pub use writer::{
     TapPromotionOutcome, TapPromotionReceipt, WRITE_HOMEBREW_TAP_PR_OP,
     write_homebrew_tap_pr_from_env,
