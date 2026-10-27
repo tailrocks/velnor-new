@@ -8,7 +8,7 @@
       "qualified_sha": "1e69f48acb82d1966a394da916b4c1698aa569d6",
       "latest": "v4.2.2",
       "source": "https://api.github.com/repos/actions/attest/releases/latest",
-      "checked_at": "2026-10-26T20:07:55Z",
+      "checked_at": "2026-10-27T11:10:06.673Z",
       "status": "current"
     },
     {
@@ -19,11 +19,11 @@
       "qualified_sha": "4d101475d8b20a2381f78447822ac1eab6504dd8",
       "latest": "v4.2.2",
       "source": "https://api.github.com/repos/actions/attest-build-provenance/releases/latest",
-      "checked_at": "2026-10-26T20:07:55Z",
+      "checked_at": "2026-10-27T11:10:07.284Z",
       "status": "current"
     },
     {
-      "checked_at": "2026-10-26T20:07:55Z",
+      "checked_at": "2026-10-27T11:10:07.816Z",
       "key": "actions/cache/restore",
       "latest": "v6.1.0",
       "pinned_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
@@ -34,7 +34,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-26T20:07:55Z",
+      "checked_at": "2026-10-27T11:10:08.328Z",
       "key": "actions/cache/save",
       "latest": "v6.1.0",
       "pinned_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
@@ -45,7 +45,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-26T20:07:55Z",
+      "checked_at": "2026-10-27T11:10:08.956Z",
       "key": "actions/checkout",
       "latest": "v7.0.1",
       "pinned_sha": "3d3c42e5aac5ba805825da76410c181273ba90b1",
@@ -63,11 +63,11 @@
       "qualified_sha": "64ab729a6294000f5aa4a4bc0b73d1f32bc45510",
       "latest": "v3.3.0",
       "source": "https://api.github.com/repos/actions/create-github-app-token/releases/latest",
-      "checked_at": "2026-10-26T20:07:55Z",
+      "checked_at": "2026-10-27T11:10:09.437Z",
       "status": "current"
     },
     {
-      "checked_at": "2026-10-26T20:07:55Z",
+      "checked_at": "2026-10-27T11:10:10.014Z",
       "key": "actions/download-artifact",
       "latest": "v8.0.2",
       "pinned_sha": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
@@ -78,7 +78,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-26T20:07:56Z",
+      "checked_at": "2026-10-27T11:10:10.509Z",
       "key": "actions/github-script",
       "latest": "v9.0.0",
       "pinned_sha": "3a2844b7e9c422d3c10d287c895573f7108da1b3",
@@ -89,7 +89,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-26T20:07:56Z",
+      "checked_at": "2026-10-27T11:10:11.037Z",
       "key": "actions/upload-artifact",
       "latest": "v7.0.2",
       "pinned_sha": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
@@ -100,7 +100,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-26T20:07:56Z",
+      "checked_at": "2026-10-27T11:10:11.715Z",
       "key": "asamarts/alint",
       "latest": "v0.20.1",
       "pinned_sha": "265d9fdc720bb8f59d00b87e33e4149869f77327",
@@ -111,7 +111,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-26T20:07:56Z",
+      "checked_at": "2026-10-27T11:10:12.250Z",
       "key": "aws-actions/configure-aws-credentials",
       "latest": "v6.3.0",
       "pinned_sha": "e1253824e5c10ff9df46874f81ed3ec929e19cfd",
@@ -122,18 +122,18 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-26T20:07:56Z",
+      "checked_at": "2026-10-27T11:10:12.849Z",
       "key": "jdx/mise-action",
-      "latest": "v5.2.3",
-      "pinned_sha": "82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e",
-      "pinned_version": "v5.2.3",
-      "qualified_sha": "82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e",
-      "qualified_version": "v5.2.3",
+      "latest": "v5.2.4",
+      "pinned_sha": "6be3c7ed4c21d4f76b208d351d95aac273ebb76d",
+      "pinned_version": "v5.2.4",
+      "qualified_sha": "6be3c7ed4c21d4f76b208d351d95aac273ebb76d",
+      "qualified_version": "v5.2.4",
       "source": "https://api.github.com/repos/jdx/mise-action/releases/latest",
       "status": "current"
     },
     {
-      "checked_at": "2026-10-26T14:11:25Z",
+      "checked_at": "2026-10-27T11:10:13.389Z",
       "key": "jdx/mr-boxington-action",
       "latest": "v1.7.3",
       "pinned_sha": "88acf2bb50552c7c508cbac13e5f8c576b95b1de",
@@ -146,7 +146,7 @@
     }
   ],
   "check_interval_hours": 24,
-  "checked_at": "2026-10-26T14:11:25Z",
+  "checked_at": "2026-10-27T11:10:18.385Z",
   "exceptions": [],
   "max_exception_days": 14,
   "runner": {
@@ -158,22 +158,22 @@
       "ubuntu-24.04",
       "ubuntu-22.04"
     ],
-    "checked_at": "2026-10-26T20:07:58Z"
+    "checked_at": "2026-10-26T21:46:50Z"
   },
   "schema": 1,
   "temporary_holds": [],
   "tools": [
     {
-      "checked_at": "2026-10-26T20:07:54Z",
-      "latest": "v2026.10.19",
+      "checked_at": "2026-10-27T11:10:00.312Z",
+      "latest": "v2026.10.21",
       "name": "mise",
-      "pinned": "2026.10.19",
-      "qualified": "2026.10.19",
+      "pinned": "2026.10.21",
+      "qualified": "2026.10.21",
       "source": "https://api.github.com/repos/jdx/mise/releases/latest",
       "status": "current"
     },
     {
-      "checked_at": "2026-10-26T20:07:54Z",
+      "checked_at": "2026-10-27T11:10:01.346Z",
       "latest": "1.99.1",
       "name": "rust",
       "pinned": "1.99.1",
@@ -182,7 +182,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-26T14:11:25Z",
+      "checked_at": "2026-10-27T11:10:01.545Z",
       "latest": "v1.28.0",
       "name": "mr-boxington",
       "pinned": "1.28.0",
@@ -192,7 +192,7 @@
       "latest_sha": "44f50c329a83dedd012e1e49cf9f265f79226a83"
     },
     {
-      "checked_at": "2026-10-26T20:07:54Z",
+      "checked_at": "2026-10-27T11:10:02.179Z",
       "latest": "v2.103.3",
       "name": "gh",
       "pinned": "2.103.3",
@@ -201,7 +201,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-26T20:07:54Z",
+      "checked_at": "2026-10-27T11:10:02.726Z",
       "latest": "v2.3.0",
       "name": "jactionlint",
       "pinned": "2.3.0",
@@ -210,7 +210,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-26T20:07:54Z",
+      "checked_at": "2026-10-27T11:10:03.384Z",
       "latest": "v0.11.0",
       "name": "shellcheck",
       "pinned": "0.11.0",
@@ -219,7 +219,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-26T20:07:54Z",
+      "checked_at": "2026-10-27T11:10:17.116Z",
       "latest": "0.9.150",
       "name": "nextest",
       "pinned": "0.9.150",
@@ -228,7 +228,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-26T20:07:54Z",
+      "checked_at": "2026-10-27T11:10:03.891Z",
       "latest": "v1.13.2",
       "name": "opentofu",
       "pinned": "1.13.2",
@@ -237,16 +237,16 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-26T20:07:54Z",
-      "latest": "0.4.1",
+      "checked_at": "2026-10-27T11:10:18.385Z",
+      "latest": "0.4.2",
       "name": "release-plz",
-      "pinned": "0.4.1",
-      "qualified": "0.4.1",
+      "pinned": "0.4.2",
+      "qualified": "0.4.2",
       "source": "https://crates.io/api/v1/crates/release-plz",
       "status": "current"
     },
     {
-      "checked_at": "2026-10-26T20:07:54Z",
+      "checked_at": "2026-10-27T11:10:04.903Z",
       "latest": "v0.22.1",
       "name": "crane",
       "pinned": "0.22.1",
@@ -255,7 +255,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-26T20:07:54Z",
+      "checked_at": "2026-10-27T11:10:05.448Z",
       "latest": "bun-v1.4.4",
       "name": "bun",
       "pinned": "1.4.4",
@@ -273,7 +273,7 @@
       "arm64_sha256": "ade83b7aac62e131cacfe96d958948b2150cc9efec46a570a2649b8e27dedad2",
       "arm64_bytes": 136437761,
       "source": "https://api.github.com/repos/sigstore/cosign/releases/latest",
-      "checked_at": "2026-10-26T20:07:55Z",
+      "checked_at": "2026-10-27T11:10:06.087Z",
       "status": "current"
     }
   ]

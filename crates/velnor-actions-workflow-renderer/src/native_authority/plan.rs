@@ -121,3 +121,32 @@ fn strings(values: Vec<OsString>) -> Result<Vec<String>, NativeAuthorityError> {
         })
         .collect()
 }
+
+pub(super) fn helper_catalog(
+    input: &NativeAuthorityInput<'_>,
+    catalog: &ToolCatalog,
+) -> Result<ToolCatalog, NativeAuthorityError> {
+    if input.config.workflow.policy != velnor_actions_contract::WorkflowPolicy::VelnorRepositoryV1 {
+        return Ok(catalog.clone());
+    }
+    let lock = input
+        .published_generator_lock
+        .ok_or_else(|| invalid("required_verdict_requires_published_generator_lock"))?;
+    velnor_actions_mise::catalog::lock::catalog_for_published_generator(lock, catalog).map_err(
+        |error| {
+            NativeAuthorityError::Release(crate::release_helpers::ReleaseHelperError::Problem(
+                error.to_string(),
+            ))
+        },
+    )
+}
+
+pub(super) fn required_job(
+    input: &NativeAuthorityInput<'_>,
+    required_ids: &[String],
+    acquire: Step,
+) -> Result<Job, NativeAuthorityError> {
+    let catalog = helper_catalog(input, &ToolCatalog::pinned())?;
+    crate::native_job_builders::final_job(input.runner, required_ids, Some(acquire), &catalog)
+        .map_err(NativeAuthorityError::Job)
+}

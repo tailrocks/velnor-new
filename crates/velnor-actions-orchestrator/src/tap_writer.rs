@@ -30,6 +30,7 @@ mod identity;
 mod receipt;
 #[path = "tap_writer_result.rs"]
 mod result;
+pub(crate) use github::CommitResponse;
 use github::{TapGitHubApi, encode_segment};
 use identity::BotIdentity;
 pub use receipt::{TapPromotionOutcome, TapPromotionReceipt};
@@ -78,13 +79,8 @@ fn already_promoted(
     {
         return Err(internal("tap_already_current_formula_mismatch"));
     }
-    let historical = history::find_already_promoted(inputs, bot)?;
-    let result = TapPromotionReceipt {
-        schema: "velnor.homebrew-tap-pr.v2".to_owned(),
-        repository: inputs.policy.repository.clone(),
-        release_receipt_digest: inputs.release.receipt_digest.clone(),
-        preparation_proof_digest: preparation_proof_digest.to_owned(),
-        outcome: TapPromotionOutcome::AlreadyPromoted {
+    let outcome = match history::find_already_promoted(inputs, bot)? {
+        Some(historical) => TapPromotionOutcome::AlreadyPromoted {
             pull_request: historical.pull_request,
             head_sha: historical.head_sha,
             base_sha: historical.base_sha,
@@ -93,6 +89,23 @@ fn already_promoted(
             merge_sha: historical.merge_sha,
             merged_at: historical.merged_at,
         },
+        None => {
+            crate::tap_merge::observe_cutover_initialization(&crate::tap_merge::CutoverInput {
+                policy: &inputs.policy,
+                spec: inputs.spec.as_ref(),
+                plan: &inputs.plan,
+                release: &inputs.release,
+                formula: &inputs.proposed,
+                sdk_artifact_digest: &inputs.sdk_artifact_digest,
+            })?
+        }
+    };
+    let result = TapPromotionReceipt {
+        schema: "velnor.homebrew-tap-pr.v3".to_owned(),
+        repository: inputs.policy.repository.clone(),
+        release_receipt_digest: inputs.release.receipt_digest.clone(),
+        preparation_proof_digest: preparation_proof_digest.to_owned(),
+        outcome,
     };
     persist_result(&inputs.root, &result)?;
     Ok(Some(result))

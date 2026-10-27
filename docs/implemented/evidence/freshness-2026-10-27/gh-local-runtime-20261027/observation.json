@@ -1,0 +1,13 @@
+{
+  "observed_at": "2026-10-27T00:52:06.657Z",
+  "platform": "aarch64-apple-darwin",
+  "binary": "/Users/donbeave/.local/share/mise/installs/gh/2.103.3/gh_2.103.3_macOS_arm64/bin/gh",
+  "binary_sha256": "5f8d7527e2bdf584249b030cdd1550c91d75e8afb40aa3c11573d416817a1260",
+  "version_stdout": "gh version 2.103.3 (2026-10-26)\nhttps://github.com/cli/cli/releases/tag/v2.103.3\n",
+  "api_argv": [
+    "api",
+    "repos/tailrocks/velnor-new/git/ref/heads/main"
+  ],
+  "scope": "Actual local macOS ARM64 CLI version and successful GitHub API request; no Linux execution or full SDK qualification claim.",
+  "response_body_sha256": "d10cc244bef4bf243d2166bcd46ae3afcf493ab873e94550754e114a54f7d29c"
+}

@@ -6,6 +6,7 @@ file crates/velnor-archive-guard/Cargo.toml
 file crates/velnor-archive-guard/build.rs
 file crates/velnor-archive-guard/build_support/archive_guard_inputs.rs
 file crates/velnor-archive-guard/build_support/archive_guard_inputs_filesystem.rs
+file crates/velnor-archive-guard/build_support/archive_guard_inputs_filesystem_tests.rs
 file scripts/build-owned-archive-guard.sh
 file scripts/archive-guard-build-namespace.sh
 file scripts/check-owned-archive-guard-sources.sh

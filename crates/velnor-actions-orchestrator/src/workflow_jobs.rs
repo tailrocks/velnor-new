@@ -93,9 +93,15 @@ pub(crate) fn final_job(
     label: &str,
     crate_job_ids: &[String],
     acquire: Option<Step>,
+    catalog: &ToolCatalog,
 ) -> Result<Job, OrchestratorError> {
-    velnor_actions_workflow_renderer::native_job_builders::final_job(label, crate_job_ids, acquire)
-        .map_err(map_native_job_builder_error)
+    velnor_actions_workflow_renderer::native_job_builders::final_job(
+        label,
+        crate_job_ids,
+        acquire,
+        catalog,
+    )
+    .map_err(map_native_job_builder_error)
 }
 
 pub(crate) fn read_actions_permissions() -> Permissions {

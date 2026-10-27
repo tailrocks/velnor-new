@@ -123,7 +123,9 @@ pub fn finalize_jobs(
                 RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
             })?;
         let default_target = crate::runs_on::target_for_runner(&ctx.runs_on);
-        let setup = if job.check_runner.is_some() || default_target != Some(target) {
+        let setup = if let Some(helper) = ctx.authority_steps.check_mise_setup(id, target)? {
+            helper
+        } else if job.check_runner.is_some() || default_target != Some(target) {
             mise.for_target(target)?
         } else {
             mise.clone()

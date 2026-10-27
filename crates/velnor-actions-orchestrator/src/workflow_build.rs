@@ -43,6 +43,7 @@ pub(crate) struct WorkflowBuildInput<'a> {
 struct PreparedWorkflow {
     private: Option<crate::config::private_wiring::PrivateWiring>,
     catalog: ToolCatalog,
+    helper_catalog: ToolCatalog,
     report_helper_version: String,
     generator_version: &'static str,
     policy: WorkflowPolicy,
@@ -175,6 +176,7 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
     Ok(PreparedWorkflow {
         private,
         catalog: catalog.clone(),
+        helper_catalog: helper_catalog(input, catalog)?,
         report_helper_version,
         generator_version,
         policy,
@@ -195,7 +197,7 @@ fn build_workflow_plan(
     let mut plan = plan_job(
         input.label,
         prepared.acquire.clone(),
-        &prepared.catalog,
+        &prepared.helper_catalog,
         prepared.needs,
         input.fetch_roots,
         &tofu_roots,
@@ -283,13 +285,34 @@ fn build_workflow_jobs(
     }
     required_ids.extend(suite_required_ids);
     crate::workflow_task_jobs::insert_jobs(&mut jobs, &prepared.workflow_tasks)?;
+    let required_catalog = helper_catalog(input, &ToolCatalog::pinned())?;
     insert_gate_jobs(
         &mut jobs,
         input.label,
         &required_ids,
         prepared.acquire.take(),
         &prepared.catalog,
+        &required_catalog,
     )?;
     wire_w1::check_crate_mbx_gating(&jobs, &built.drivers)?;
     Ok(jobs)
+}
+
+fn helper_catalog(
+    input: &WorkflowBuildInput<'_>,
+    catalog: &ToolCatalog,
+) -> Result<ToolCatalog, OrchestratorError> {
+    if input.config.workflow.policy != WorkflowPolicy::VelnorRepositoryV1 {
+        return Ok(catalog.clone());
+    }
+    let lock = input
+        .published_generator_lock
+        .ok_or_else(|| OrchestratorError::Contract {
+            problem: "required_verdict_requires_published_generator_lock".to_owned(),
+        })?;
+    velnor_actions_mise::catalog::lock::catalog_for_published_generator(lock, catalog).map_err(
+        |error| OrchestratorError::Contract {
+            problem: error.to_string(),
+        },
+    )
 }

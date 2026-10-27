@@ -3,6 +3,8 @@
 
 #[path = "tap_merge_history_identity.rs"]
 mod identity;
+#[path = "tap_merge_history_landed.rs"]
+mod landed;
 
 use serde_json::Value;
 use velnor_actions_contract::{canonical_json_bytes, homebrew_merge_gate::TapHistoricalFeedback};
@@ -51,7 +53,7 @@ pub(super) fn capture_all(
     authority: &MergeAuthority,
     api: &TapMergeGitHub,
 ) -> Result<Vec<AuthenticatedPull>, OrchestratorError> {
-    let summaries = list_receipt_prs(candidate, api)?;
+    let summaries = list_receipt_prs(candidate, authority, api)?;
     let mut authenticated = Vec::with_capacity(summaries.len());
     for summary in summaries {
         authenticated.push(authenticate_pull(candidate, authority, api, &summary)?);
@@ -68,6 +70,7 @@ pub(super) fn capture_all(
 
 fn list_receipt_prs(
     candidate: &MergeCandidate,
+    authority: &MergeAuthority,
     api: &TapMergeGitHub,
 ) -> Result<Vec<Value>, OrchestratorError> {
     let digest_marker = format!("Receipt digest: `{}`", candidate.release.receipt_digest);
@@ -98,7 +101,17 @@ fn list_receipt_prs(
                 .and_then(Value::as_str)
                 .ok_or_else(|| internal("tap_merge_history_branch"))?;
             let body = pull["body"].as_str().unwrap_or_default();
-            if belongs_to_receipt(branch, body, &receipt_prefix, &digest_marker)? {
+            let head_repository = pull
+                .pointer("/head/repo")
+                .and_then(|repo| Some((repo["id"].as_u64()?, repo["full_name"].as_str()?)));
+            if belongs_to_receipt(
+                branch,
+                body,
+                head_repository,
+                (authority.repo_id, candidate.policy.repository.as_str()),
+                &receipt_prefix,
+                &digest_marker,
+            )? {
                 selected.push(pull.clone());
             }
         }
@@ -133,7 +146,8 @@ fn authenticate_pull(
         candidate.release.receipt.channel,
     )?;
     let observed_base_sha = required_sha(&detail, "/base/sha", "tap_merge_history_base")?;
-    let (merged, merge_sha, merged_at) = merged_fields(&detail)?;
+    let (merged, merge_sha, merged_at) =
+        landed::merged_fields(candidate, authority, api, number, &detail)?;
     identity::validate_observed_base(&detail, &base_sha, merged)?;
     let formula = validate_historical_formula(candidate, api, number, &detail, &branch, &head_sha)?;
     verify_commit(
@@ -245,24 +259,6 @@ fn validate_historical_formula(
         head_bytes: head_formula,
         proof_digest,
     })
-}
-
-fn merged_fields(
-    detail: &Value,
-) -> Result<(bool, Option<String>, Option<String>), OrchestratorError> {
-    let merged = detail["merged"]
-        .as_bool()
-        .ok_or_else(|| internal("tap_merge_history_merged_missing"))?;
-    if merged {
-        if detail["state"].as_str() != Some("closed") {
-            return Err(internal("tap_merge_history_merged_state"));
-        }
-        let sha = required_sha(detail, "/merge_commit_sha", "tap_merge_history_merge_sha")?;
-        let at = required_text(detail, "/merged_at", "tap_merge_history_merged_at")?;
-        Ok((true, Some(sha), Some(at.to_owned())))
-    } else {
-        Ok((false, None, None))
-    }
 }
 
 fn reconstruct_historical_proof(

@@ -3,9 +3,6 @@
 
 #![allow(
     clippy::missing_errors_doc,
-    reason = "documentation comments are intentionally absent from this codebase"
-)]
-#![allow(
     missing_docs,
     reason = "documentation comments are intentionally absent from this codebase"
 )]
@@ -32,7 +29,9 @@ private_mods!(exclusive_write, extension_schemas);
 private_mods!(filesystem_owner, finalized);
 private_mods!(freshness_emit, generate);
 private_mods!(generator, gh_download, git_paths);
-private_mods!(github_authority_read, homebrew);
+#[cfg(test)]
+mod git_fixture;
+private_mods!(github_authority_read, github_landed_pull, homebrew);
 private_mods!(image_build_tasks, image_maintenance);
 private_mods!(image_prebuilt, init, internal);
 private_mods!(internal_plan, internal_request);
@@ -72,8 +71,8 @@ private_mods!(select_edges, select_reads);
 private_mods!(select_reads_lex, select_reads_scan);
 private_mods!(select_symlinks, select_tofu);
 private_mods!(source_cache, source_prep);
-private_mods!(stable_release_emit, tap_merge);
-private_mods!(tap_prepare, tap_source_freshness);
+private_mods!(stable_release_emit, tap_history_relevance, tap_merge);
+private_mods!(tap_prepare, tap_source_freshness, tap_writer_history_timestamp);
 private_mods!(task_execution, task_report_aggregate);
 private_mods!(tofu_apply_emit, tofu_cache);
 private_mods!(toolcheck, toolfindings, utf8);

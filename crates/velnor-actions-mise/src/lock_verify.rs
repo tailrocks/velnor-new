@@ -4,7 +4,7 @@
 use velnor_actions_contract::{GeneratorLock, ReleaseManifest, ReleaseTarget, TargetRecord};
 
 use super::{
-    MISE_VERSION,
+    MISE_VERSION, PinnedTool, ToolCatalog,
     lock::{LockError, mismatch},
     source_build_bootstrap::{
         SourceBuildBootstrapHost, SourceBuildBootstrapTool, official as bootstrap_asset,
@@ -12,6 +12,7 @@ use super::{
 };
 
 const PUBLISHED_GENERATOR_VERSION: &str = "0.1.55";
+const PUBLISHED_GENERATOR_GH_VERSION: &str = "2.103.2";
 const PUBLISHED_GENERATOR_COMMIT: &str = "693f3aae14406fb7851ac70f0aee647a869b5063";
 const PUBLISHED_GENERATOR_LINUX_X64_SHA256: &str =
     "c8f1440e4f767ecc903e6611c56c2db4005011d33ee6f0fd566f4b7e5345eba4";
@@ -126,4 +127,41 @@ fn verify_mise_bootstrap(lock: &GeneratorLock) -> Result<(), LockError> {
         return Err(mismatch("mise_bootstrap_sha256".to_owned()));
     }
     Ok(())
+}
+
+pub fn catalog_for_published_generator(
+    lock: &GeneratorLock,
+    catalog: &ToolCatalog,
+) -> Result<ToolCatalog, LockError> {
+    verify_lock_against_published_release(lock)?;
+    let mut helper = catalog.clone();
+    PUBLISHED_GENERATOR_GH_VERSION.clone_into(&mut helper.gh);
+    helper.project.remove(&PinnedTool::Gh);
+    Ok(helper)
+}
+
+pub fn mise_binary_for_published_generator(
+    lock: &GeneratorLock,
+    target: ReleaseTarget,
+) -> Result<super::MiseBinaryIdentity, LockError> {
+    verify_lock_against_published_release(lock)?;
+    let (sha256, bytes) = match target {
+        ReleaseTarget::LinuxX86_64 => (
+            "3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d",
+            173_449_632,
+        ),
+        ReleaseTarget::MacosArm64 => (
+            "7dc61dfa71abbcda1c40d18440bc556b5d58b80e6042bc4f95fd106fa1bb3c66",
+            138_238_816,
+        ),
+        ReleaseTarget::MacosX86_64 => (
+            "8d5e1591811143f15334f690373cefb58c13bd6cbd0292008748fd777f6c99d8",
+            169_788_224,
+        ),
+    };
+    Ok(super::MiseBinaryIdentity {
+        version: "2026.10.19",
+        sha256,
+        bytes,
+    })
 }

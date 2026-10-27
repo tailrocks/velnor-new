@@ -1,0 +1,183 @@
+{
+  "verified_at": "2026-10-26T22:05:00Z",
+  "mise": {
+    "tag": "v2026.10.20",
+    "published_at": "2026-10-26T21:21:55Z",
+    "source_commit": "8aceb1944c07138fb5ad2cbd2aadcdeceadbfa2f",
+    "source_tree": "1f62a09d508643fbac16eaa7b9325538204b1401",
+    "commit_signature_verified": true,
+    "checksum_file_sha256": "10e8a7a66129cabb85a04c8254432f58a6d0d24c847604dd602fd965211d011f",
+    "signature_file_sha256": "7e8cdf108d0749851df011ae2bd06c447c3204dff0801999506f4e3617a628d3",
+    "minisign_verification": "passed",
+    "minisign_key_shared_with_v2026_10_19": true,
+    "minisign_key_file_sha256": "647782ec4f81cc3b9be690bd266e30191acd6711cf0ff8163b7d1e46cd8f96a1",
+    "platforms": [
+      {
+        "name": "mise-v2026.10.20-linux-x64",
+        "bytes": 175451280,
+        "release_asset_sha256": "2eb27467b6f369915ee76f18d66a0696cdb5c20e7ecc8cb49c2bfaca60f0fc9c",
+        "signed_checksum_sha256": "2eb27467b6f369915ee76f18d66a0696cdb5c20e7ecc8cb49c2bfaca60f0fc9c",
+        "api_matches_signed_checksum": true
+      },
+      {
+        "name": "mise-v2026.10.20-macos-arm64",
+        "bytes": 138770976,
+        "release_asset_sha256": "7acfdbf412c8ec5b0d919d277417648c0534333d55f0242d5f9520d0d8ca7cc9",
+        "signed_checksum_sha256": "7acfdbf412c8ec5b0d919d277417648c0534333d55f0242d5f9520d0d8ca7cc9",
+        "api_matches_signed_checksum": true
+      },
+      {
+        "name": "mise-v2026.10.20-macos-x64",
+        "bytes": 170157952,
+        "release_asset_sha256": "98b031e88eb0fd33c1507acb538f429747d26b770cd3cfe257408ec104ac9f6d",
+        "signed_checksum_sha256": "98b031e88eb0fd33c1507acb538f429747d26b770cd3cfe257408ec104ac9f6d",
+        "api_matches_signed_checksum": true
+      }
+    ],
+    "source_build_bootstrap_platforms": [
+      {
+        "platform": "linux-x64-raw",
+        "name": "mise-v2026.10.20-linux-x64",
+        "bytes": 175451280,
+        "release_asset_sha256": "2eb27467b6f369915ee76f18d66a0696cdb5c20e7ecc8cb49c2bfaca60f0fc9c",
+        "signed_checksum_sha256": "2eb27467b6f369915ee76f18d66a0696cdb5c20e7ecc8cb49c2bfaca60f0fc9c",
+        "binary_sha256": "2eb27467b6f369915ee76f18d66a0696cdb5c20e7ecc8cb49c2bfaca60f0fc9c"
+      },
+      {
+        "platform": "linux-arm64-tar-gz",
+        "name": "mise-v2026.10.20-linux-arm64.tar.gz",
+        "bytes": 60405944,
+        "release_asset_sha256": "edc691d8b31d2951a13be8e476f894ea053c04b79eae17cd65d75d4d15404e5a",
+        "signed_checksum_sha256": "edc691d8b31d2951a13be8e476f894ea053c04b79eae17cd65d75d4d15404e5a",
+        "binary_sha256": "81047ebf136016297f4515132265c3e5fc052f2c4090130a4e8d68fd64b96b57"
+      },
+      {
+        "platform": "macos-arm64-tar-gz",
+        "name": "mise-v2026.10.20-macos-arm64.tar.gz",
+        "bytes": 47874329,
+        "release_asset_sha256": "c47629720ff02d5a1f7b3e5923d7cd523baa7ad9531e0ab86d9153ec2f9d25c7",
+        "signed_checksum_sha256": "c47629720ff02d5a1f7b3e5923d7cd523baa7ad9531e0ab86d9153ec2f9d25c7",
+        "binary_sha256": "7acfdbf412c8ec5b0d919d277417648c0534333d55f0242d5f9520d0d8ca7cc9"
+      }
+    ],
+    "binary_observations": [
+      {
+        "artifact": "mise-v2026.10.20-macos-arm64.tar.gz",
+        "binary_sha256": "7acfdbf412c8ec5b0d919d277417648c0534333d55f0242d5f9520d0d8ca7cc9",
+        "command": "mise --version",
+        "stdout": "2026.10.20 macos-arm64 (2026-10-26)"
+      },
+      {
+        "artifact": "mise-v2026.10.20-linux-x64",
+        "binary_sha256": "2eb27467b6f369915ee76f18d66a0696cdb5c20e7ecc8cb49c2bfaca60f0fc9c",
+        "command": "mise --no-config --no-env --no-hooks version",
+        "stdout": "2026.10.20 linux-x64 (2026-10-26)",
+        "scope": "Linux/amd64 execution under emulation in an existing Ubuntu26 image; no native hosted qualification or installation claim"
+      }
+    ],
+    "probe_attempts": [
+      {
+        "command": "mise --no-config --no-env --no-hooks --version",
+        "exit": 1,
+        "reason": "The CLI accepted only a subcommand for version; it printed usage. No product ABI failure is inferred."
+      },
+      {
+        "command": "mise --no-config --no-env --no-hooks version",
+        "exit": 0,
+        "stdout": "2026.10.20 linux-x64 (2026-10-26)",
+        "stderr": "",
+        "scope": "isolated Linux/amd64 emulation; no hosted/native qualification"
+      }
+    ]
+  },
+  "gh": {
+    "tag": "v2.103.3",
+    "published_at": "2026-10-26T19:20:08Z",
+    "source_commit": "63837fb778d6a39f02be0ce76ff89f2bc8d74bdc",
+    "source_tree": "bda6d94df1932516804907a320cb70e1524339b6",
+    "commit_signature_verified": true,
+    "commit_signature_reason": "valid",
+    "checksums_file_sha256": "f756e7859d90dbb5e85aae5194206c37da220bec9bac23d3d659078a8e766fdc",
+    "asset_attestation_endpoint": "404 Not Found",
+    "platforms": [
+      {
+        "name": "gh_2.103.3_linux_amd64.tar.gz",
+        "bytes": 15031972,
+        "release_asset_sha256": "4c806978ffce1cec70853302a56d70ac6da4f19bae7adca4e1a8ab00633dd91d",
+        "checksums_file_sha256": "4c806978ffce1cec70853302a56d70ac6da4f19bae7adca4e1a8ab00633dd91d",
+        "api_matches_checksums": true
+      },
+      {
+        "name": "gh_2.103.3_macOS_arm64.zip",
+        "bytes": 14106091,
+        "release_asset_sha256": "d700207eae9ae98fe2b89535c2c087c07823d4628c56364695a5a07ef311c062",
+        "checksums_file_sha256": "d700207eae9ae98fe2b89535c2c087c07823d4628c56364695a5a07ef311c062",
+        "api_matches_checksums": true
+      },
+      {
+        "name": "gh_2.103.3_macOS_amd64.zip",
+        "bytes": 15702601,
+        "release_asset_sha256": "a2f86418f4350ae6e9ec60d5000bdf7665728436946a97fc27fe50e6ae752682",
+        "checksums_file_sha256": "a2f86418f4350ae6e9ec60d5000bdf7665728436946a97fc27fe50e6ae752682",
+        "api_matches_checksums": true
+      }
+    ],
+    "binary_observations": [
+      {
+        "artifact": "gh_2.103.3_macOS_arm64.zip",
+        "binary_sha256": "5f8d7527e2bdf584249b030cdd1550c91d75e8afb40aa3c11573d416817a1260",
+        "command": "gh version",
+        "stdout": "gh version 2.103.3 (2026-10-26)"
+      }
+    ]
+  },
+  "nextest": {
+    "version": "0.9.150",
+    "published_at": "2026-10-26T18:33:24.184308Z",
+    "yanked": false,
+    "crate_sha256": "3f9cefe4968341a1776682f84ffd1305cae82a8bff2e1f5cbde866a452b6ccd5",
+    "tag_commit": "d225b1daf362c1ca8e5e048132618c1a81c57a28",
+    "tag_signature_verified": false,
+    "tag_signature_reason": "bad_cert",
+    "asset_attestation_endpoint": "404 Not Found",
+    "platforms": [
+      {
+        "platform": "x86_64-unknown-linux-gnu",
+        "name": "cargo-nextest-0.9.150-x86_64-unknown-linux-gnu.tar.gz",
+        "bytes": 12155366,
+        "release_asset_sha256": "b0959bc64232974224cf9fb22c915845398c0e8668fa7831eb5b43fb1eef781f",
+        "sidecar_sha256": "b0959bc64232974224cf9fb22c915845398c0e8668fa7831eb5b43fb1eef781f",
+        "downloaded_asset_sha256": "b0959bc64232974224cf9fb22c915845398c0e8668fa7831eb5b43fb1eef781f",
+        "all_match": true,
+        "executable_sha256": "62dcc4348e189f5fbd5881f6b753c59d62f2e664b28c6357898644288d703c02",
+        "install_tree_sha256": "3f62f104025b5bbdb1bc2f8d6bba90c03b3fcedc85b6fc3ce1ec06d48e926ed2",
+        "tree_hash_method": "reproduces existing 0.9.149 qualified tree hash from its recorded executable SHA"
+      },
+      {
+        "platform": "universal-apple-darwin",
+        "name": "cargo-nextest-0.9.150-universal-apple-darwin.tar.gz",
+        "bytes": 16804268,
+        "release_asset_sha256": "82a759b4d218d38359424196ab244c470e8f7c7d149c814fbbeef4d67c3c301a",
+        "sidecar_sha256": "82a759b4d218d38359424196ab244c470e8f7c7d149c814fbbeef4d67c3c301a",
+        "downloaded_asset_sha256": "82a759b4d218d38359424196ab244c470e8f7c7d149c814fbbeef4d67c3c301a",
+        "all_match": true,
+        "executable_sha256": "aad9d409cd2f0a81fcaed49d7672a133254179458436c1e957505e4a11655329"
+      }
+    ],
+    "binary_observations": [
+      {
+        "artifact": "cargo-nextest-0.9.150-universal-apple-darwin.tar.gz",
+        "executable_sha256": "aad9d409cd2f0a81fcaed49d7672a133254179458436c1e957505e4a11655329",
+        "command": "cargo-nextest --version",
+        "stdout": "cargo-nextest 0.9.150 (d225b1daf 2026-10-26)\nrelease: 0.9.150\ncommit-hash: d225b1daf362c1ca8e5e048132618c1a81c57a28\ncommit-date: 2026-10-26\nhost: aarch64-apple-darwin"
+      },
+      {
+        "artifact": "cargo-nextest-0.9.150-x86_64-unknown-linux-gnu.tar.gz",
+        "executable_sha256": "62dcc4348e189f5fbd5881f6b753c59d62f2e664b28c6357898644288d703c02",
+        "command": "cargo-nextest --version",
+        "stdout": "cargo-nextest 0.9.150 (d225b1daf 2026-10-26)\nrelease: 0.9.150\ncommit-hash: d225b1daf362c1ca8e5e048132618c1a81c57a28\ncommit-date: 2026-10-26\nhost: x86_64-unknown-linux-gnu",
+        "scope": "actual Linux/amd64 binary execution under emulation in an existing Ubuntu26 image; no hosted/native qualification or installation claim"
+      }
+    ]
+  }
+}

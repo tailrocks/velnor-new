@@ -35,6 +35,7 @@ mod cache;
 mod fileless;
 #[path = "dispatch_preview_production.rs"]
 mod preview_production;
+#[path = "dispatch/public.rs"]
 mod public;
 #[path = "dispatch_review_completion.rs"]
 mod review_completion;
@@ -64,6 +65,7 @@ const GITHUB_EVENT_ENV: &str = "GITHUB_EVENT_NAME";
 
 const GITHUB_EVENT_PATH_ENV: &str = "GITHUB_EVENT_PATH";
 
+#[path = "dispatch/operation.rs"]
 mod operation;
 use operation::{InternalOp, from_env as internal_op};
 

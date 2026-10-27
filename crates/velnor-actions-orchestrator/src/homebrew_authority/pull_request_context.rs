@@ -353,7 +353,7 @@ fn parse_runner(
     })
 }
 
-fn verify_checkout(
+pub(in crate::homebrew::authority) fn verify_checkout(
     root: &Path,
     pull: &crate::package_release_publish::PublicPullRequestSnapshot,
     base_sha: &str,
@@ -361,7 +361,7 @@ fn verify_checkout(
     checkout_head: &str,
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
-    if crate::homebrew::authority::read_git_value(root, "HEAD", deadline)? != checkout_head {
+    if super::read_git_value(root, "HEAD", deadline)? != checkout_head {
         return Err(internal("homebrew_authority_pull_request_checkout_changed"));
     }
     if checkout_head == head_sha {

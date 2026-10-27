@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_actions_contract::{Step, StepKind, StepRole, WorkflowPolicy};
-use velnor_actions_mise::toolfiles::lockfile::InstallSubject;
+use velnor_actions_mise::toolfiles::lockfile::{InstallSubject, subject_for_install_spec};
+use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::render::ValidatorCommand;
 
 use crate::workflow::verifier_actions::VerifierActionSet;
 
 use super::{
-    CommandInstalls, MiseVectors, validator_argv_specs, validator_subject,
+    CommandInstalls, InstallAuditAuthority, MiseVectors, validator_argv_specs, validator_subject,
     vectors::classify_mise_vectors,
 };
 
@@ -171,4 +172,50 @@ pub(super) fn audit_validator_command(
             }
         }
     }
+}
+
+pub(super) fn published_helper_catalog(
+    authority: InstallAuditAuthority<'_>,
+    catalog: &ToolCatalog,
+    blocking: &mut Vec<String>,
+) -> Option<ToolCatalog> {
+    if authority.policy != WorkflowPolicy::VelnorRepositoryV1 {
+        return None;
+    }
+    let Some(lock) = authority.published_generator_lock else {
+        blocking.push("required_verdict_requires_published_generator_lock".to_owned());
+        return None;
+    };
+    match velnor_actions_mise::catalog::lock::catalog_for_published_generator(lock, catalog) {
+        Ok(helper) => Some(helper),
+        Err(error) => {
+            blocking.push(error.to_string());
+            None
+        }
+    }
+}
+
+pub(super) fn install_subject(
+    job_id: &str,
+    role: Option<StepRole>,
+    spec: &str,
+    catalog: &ToolCatalog,
+    helper_catalog: Option<&ToolCatalog>,
+) -> Option<InstallSubject> {
+    subject_for_install_spec(spec, catalog).or_else(|| {
+        if role != Some(StepRole::PreparePinnedTools)
+            || !matches!(
+                job_id,
+                velnor_actions_workflow_renderer::render::PLAN_JOB_ID
+                    | velnor_actions_workflow_renderer::render::FINAL_JOB_ID
+            )
+        {
+            return None;
+        }
+        let helper = helper_catalog?;
+        if spec != helper.tool_spec(PinnedTool::Gh) {
+            return None;
+        }
+        subject_for_install_spec(spec, helper)
+    })
 }

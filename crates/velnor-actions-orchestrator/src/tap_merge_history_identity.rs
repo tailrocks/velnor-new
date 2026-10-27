@@ -25,16 +25,24 @@ pub(super) fn branch_prefix(
 pub(super) fn belongs_to_receipt(
     branch: &str,
     body: &str,
+    observed_head_repository: Option<(u64, &str)>,
+    expected_repository: (u64, &str),
     receipt_branch_prefix: &str,
     digest_marker: &str,
 ) -> Result<bool, OrchestratorError> {
-    if !branch.starts_with(receipt_branch_prefix) {
-        return Ok(false);
+    use crate::tap_history_relevance::{ReceiptHistoryRelevance, classify};
+    match classify(
+        branch,
+        body,
+        observed_head_repository,
+        expected_repository,
+        receipt_branch_prefix,
+        digest_marker,
+    ) {
+        ReceiptHistoryRelevance::Unrelated => Ok(false),
+        ReceiptHistoryRelevance::Relevant => Ok(true),
+        ReceiptHistoryRelevance::Conflict => Err(internal("tap_merge_history_marker_conflict")),
     }
-    if !body.contains(digest_marker) {
-        return Err(internal("tap_merge_history_marker_conflict"));
-    }
-    Ok(true)
 }
 
 pub(super) fn branch_base(

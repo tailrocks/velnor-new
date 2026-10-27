@@ -4,10 +4,10 @@
 use std::io::Read;
 use std::path::Path;
 
-use velnor_actions_contract::{ReleaseTarget, StepRole, WorkflowIr, WorkflowPolicy};
+use velnor_actions_contract::{GeneratorLock, ReleaseTarget, StepRole, WorkflowIr, WorkflowPolicy};
 use velnor_actions_mise::toolfiles::lockfile::{
     InstallCoverage, InstallSubject, audit_install_coverage, mise_platform_for_target,
-    parse_mise_lockfile, subject_for_install_spec,
+    parse_mise_lockfile,
 };
 use velnor_actions_mise::{MISE_LOCK_FILE, ToolCatalog};
 use velnor_actions_workflow_renderer::render::ValidatorCommand;
@@ -27,9 +27,15 @@ use vectors::classify_mise_vectors;
 #[path = "lock_audit_prepare.rs"]
 mod prepare_sequence;
 use prepare_sequence::{
-    audit_validator_command, bare_install, jactionlint_verifier_sequence_valid, prepare_specs,
-    rust_verifier_sequence_valid, verifier_positions,
+    audit_validator_command, bare_install, install_subject, jactionlint_verifier_sequence_valid,
+    prepare_specs, published_helper_catalog, rust_verifier_sequence_valid, verifier_positions,
 };
+
+#[derive(Clone, Copy)]
+pub(crate) struct InstallAuditAuthority<'a> {
+    pub policy: WorkflowPolicy,
+    pub published_generator_lock: Option<&'a GeneratorLock>,
+}
 
 pub(crate) struct LockAuditOutcome {
     pub recommendation: Option<String>,
@@ -53,7 +59,7 @@ enum MiseVectors {
 pub(crate) fn audit_prepare_installs_with_catalog_and_verifiers(
     root: &Path,
     ir: &WorkflowIr,
-    policy: WorkflowPolicy,
+    authority: InstallAuditAuthority<'_>,
     label: &str,
     validator_commands: &[ValidatorCommand],
     catalog: &ToolCatalog,
@@ -61,8 +67,9 @@ pub(crate) fn audit_prepare_installs_with_catalog_and_verifiers(
 ) -> LockAuditOutcome {
     let mut blocking = Vec::new();
     let mut subjects: Vec<InstallSubject> = Vec::new();
+    let helper_catalog = published_helper_catalog(authority, catalog, &mut blocking);
     for (id, job) in &ir.jobs {
-        let positions = verifier_positions(id, job, verifiers, policy, &mut blocking);
+        let positions = verifier_positions(id, job, verifiers, authority.policy, &mut blocking);
         let mut rust_sequence_reported = false;
         let mut jactionlint_sequence_reported = false;
         for (step_index, step) in job.steps.iter().enumerate() {
@@ -78,7 +85,7 @@ pub(crate) fn audit_prepare_installs_with_catalog_and_verifiers(
             }
             for spec in specs {
                 let spec = catalog.materialize(&spec);
-                match subject_for_install_spec(&spec, catalog) {
+                match install_subject(id, step.role, &spec, catalog, helper_catalog.as_ref()) {
                     Some(subject) if is_rust(&subject) => {
                         if rust_verifier_sequence_valid(job, &positions, Some(step_index)) {
                             rust_manifest_coverage(&subject, &mut blocking);

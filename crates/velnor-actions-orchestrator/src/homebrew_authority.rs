@@ -19,11 +19,17 @@ use crate::{OrchestratorError, internal::internal};
 
 #[path = "homebrew_authority/context.rs"]
 mod context;
+pub(crate) use context::verify_merge_group_checkout;
+#[cfg(test)]
+pub(crate) use context::{RunnerContext, parse_merge_group_event};
 #[path = "homebrew_authority/source.rs"]
 mod source;
-use source::{SourceProjection, load_source_projection};
+use source::{SourceProjection, load_source_projection, protected_locator};
 #[path = "homebrew_authority/applicability.rs"]
 mod applicability;
+#[path = "homebrew_authority/cutover.rs"]
+mod cutover;
+pub(crate) use cutover::load_cutover_replay_authority;
 
 const SOURCE_DOCUMENT_LIMIT: usize =
     velnor_actions_contract::package_release_policy::MAX_CARGO_VERSION_MANIFEST_BYTES;
@@ -40,6 +46,7 @@ pub(crate) struct VerifiedHomebrewAuthority {
     tap_repository_id: u64,
     tap_base_sha: String,
     tap_head_sha: String,
+    merge_group: Option<crate::package_release_publish::MergeGroupSelection>,
     locator_blob_sha: String,
 }
 
@@ -78,6 +85,12 @@ impl VerifiedHomebrewAuthority {
 
     pub(crate) fn tap_head_sha(&self) -> &str {
         &self.tap_head_sha
+    }
+
+    pub(crate) fn merge_group(
+        &self,
+    ) -> Option<&crate::package_release_publish::MergeGroupSelection> {
+        self.merge_group.as_ref()
     }
 
     pub(crate) fn locator_blob_sha(&self) -> &str {
@@ -197,7 +210,7 @@ pub(crate) fn probe_protected_homebrew_authority(
         deadline,
     )?;
 
-    let checkout_head = read_git_value(root, "HEAD", deadline)?;
+    let checkout_head = context::read_git_value(root, "HEAD", deadline)?;
     if checkout_head != *authenticated_head {
         return Err(internal("homebrew_authority_checkout_head"));
     }
@@ -213,8 +226,27 @@ pub(crate) fn probe_protected_homebrew_authority(
         tap_repository_id: *tap_repository_id,
         tap_base_sha: tap_base_sha.clone(),
         tap_head_sha: authenticated_head.clone(),
+        merge_group: tap_context.merge_group().cloned(),
         locator_blob_sha,
     }))
+}
+
+pub(crate) fn verify_homebrew_authority_pull_request_checkout(
+    root: &Path,
+    pull: &crate::package_release_publish::PublicPullRequestSnapshot,
+    base_sha: &str,
+    head_sha: &str,
+    checkout_head: &str,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    context::pull_request_context::verify_checkout(
+        root,
+        pull,
+        base_sha,
+        head_sha,
+        checkout_head,
+        deadline,
+    )
 }
 
 pub(crate) fn protected_locator_absent_on_default_branch(
@@ -254,28 +286,6 @@ pub(crate) fn protected_locator_absent_on_default_branch(
         &after,
         &after_tip,
     )
-}
-
-fn read_git_value(
-    root: &Path,
-    revision: &str,
-    deadline: CheckDeadline,
-) -> Result<String, OrchestratorError> {
-    let result =
-        velnor_actions_mise::GitRequest::rev_parse(vec![std::ffi::OsString::from(revision)])
-            .run_in_until(root, deadline)
-            .map_err(|_| internal("homebrew_authority_git_context"))?;
-    result
-        .require_success("git")
-        .map_err(|_| internal("homebrew_authority_git_context"))?;
-    let value = result
-        .stdout_text("git")
-        .map_err(|_| internal("homebrew_authority_git_context"))?;
-    let value = value.trim();
-    if !lowercase_sha(value) {
-        return Err(internal("homebrew_authority_git_context"));
-    }
-    Ok(value.to_owned())
 }
 
 fn lowercase_sha(value: &str) -> bool {
@@ -376,21 +386,4 @@ fn admit_pull_request_context(
         "checkout_head"
     );
     Ok((pull.base_sha.clone(), pull.head_sha.clone()))
-}
-
-fn protected_locator(
-    expected_tap_repository: &str,
-    tap_repository_id: u64,
-    tap_base_sha: &str,
-    deadline: CheckDeadline,
-) -> Result<Option<Vec<u8>>, OrchestratorError> {
-    crate::package_release_publish::try_read_protected_source_file(
-        expected_tap_repository,
-        tap_repository_id,
-        "main",
-        tap_base_sha,
-        HOMEBREW_SOURCE_AUTHORITY_LOCATOR_PATH,
-        MAX_HOMEBREW_SOURCE_AUTHORITY_LOCATOR_BYTES,
-        deadline,
-    )
 }

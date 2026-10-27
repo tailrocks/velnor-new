@@ -37,6 +37,17 @@ impl Identity {
     }
 }
 
+fn root_identity_matches(named: &Stat, held: &Stat, is_final: bool) -> bool {
+    let named = Identity::from_stat(named);
+    let held = Identity::from_stat(held);
+    if is_final {
+        named == held
+    } else {
+        (named.device, named.inode, named.mode, named.uid)
+            == (held.device, held.inode, held.mode, held.uid)
+    }
+}
+
 pub(super) fn collect_tree_files_from(
     root: &File,
     relative: &str,
@@ -211,13 +222,14 @@ pub(super) fn open_root(path: &Path) -> Result<File, Box<dyn Error>> {
                 .ok_or_else(|| invalid("archive checkout path is not UTF-8"))?,
         )?;
         let next = openat_directory(&current, &name)?;
-        if index + 1 == parts.len() {
+        let is_final = index + 1 == parts.len();
+        if is_final {
             validate_directory(&next, true)?;
         } else {
             validate_ancestor(&next)?;
         }
         let named = ufs::statat(&current, name.as_c_str(), AtFlags::SYMLINK_NOFOLLOW)?;
-        if Identity::from_stat(&named) != Identity::from_stat(&ufs::fstat(&next)?) {
+        if !root_identity_matches(&named, &ufs::fstat(&next)?, is_final) {
             return Err(invalid("archive checkout ancestry changed during verification").into());
         }
         current = next;
@@ -343,3 +355,7 @@ pub(super) fn is_not_found(error: &(dyn Error + 'static)) -> bool {
 fn invalid(message: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message)
 }
+
+#[cfg(test)]
+#[path = "archive_guard_inputs_filesystem_tests.rs"]
+mod tests;

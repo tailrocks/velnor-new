@@ -14,6 +14,12 @@ use crate::{OrchestratorError, internal::internal};
 use velnor_actions_contract::config::NativeHomebrewOperation;
 use velnor_actions_contract::digest_b3;
 
+#[path = "formula_cutover_author.rs"]
+mod cutover_author;
+#[cfg(test)]
+use cutover_author::admit_cutover_author_pull;
+use cutover_author::verify_cutover_author;
+
 pub(crate) fn verify_formula(
     root: &Path,
     channel: PackageReleaseChannel,
@@ -40,6 +46,14 @@ pub(crate) fn verify_formula(
     let seed_base =
         crate::homebrew::structural_cutover::verify_seed_output_base(root, &authority, deadline)?;
     if let Some(witness) = seed_base {
+        verify_cutover_author(
+            root,
+            identity,
+            event,
+            authority.merge_group(),
+            deadline,
+            crate::package_release_publish::read_merge_group_pull_request_responses,
+        )?;
         crate::homebrew::structural_cutover::validate_structural_candidate(
             root, &authority, &witness, deadline,
         )?;
@@ -48,6 +62,10 @@ pub(crate) fn verify_formula(
         verify_protected_formula_bytes(&authority, channel, &bytes, deadline)
     }
 }
+
+#[cfg(test)]
+#[path = "formula_cutover_author_tests.rs"]
+mod cutover_author_tests;
 
 fn validate_formula_identity(
     identity: &crate::internal_plan::native_homebrew_checks::NativeCheckIdentityExtension,

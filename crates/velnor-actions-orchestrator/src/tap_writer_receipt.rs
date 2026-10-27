@@ -32,6 +32,14 @@ pub enum TapPromotionOutcome {
         merge_sha: String,
         merged_at: String,
     },
+    InitializedByCutover {
+        cutover_pull_request: u64,
+        head_sha: String,
+        base_sha: String,
+        merge_sha: String,
+        merged_at: String,
+        marker_sha256: String,
+    },
     SkippedStaleSource {
         source_sha: String,
     },

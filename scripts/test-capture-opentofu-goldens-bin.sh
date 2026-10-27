@@ -6,13 +6,27 @@
 # Exercise the collector's explicit CLI path without changing checked-in goldens.
 set -uo pipefail
 
+if ! command -v node >/dev/null 2>&1; then
+  echo 'FATAL: Node.js is required for the qualification output binding harness' >&2
+  exit 2
+fi
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPT="$ROOT/scripts/capture-opentofu-goldens.sh"
+KEEP_WORK="${VELNOR_GOLDEN_KEEP_WORK:-0}"
+case "$KEEP_WORK" in
+  0|1) ;;
+  *) echo 'FATAL: VELNOR_GOLDEN_KEEP_WORK must be 0 or 1' >&2; exit 2 ;;
+esac
 GOLDEN_DIR="$ROOT/docs/proposed/opentofu-goldens"
 ARCHIVE_GUARD_INPUT_PATH=""
 ARCHIVE_GUARD_INPUT_SHA256=""
 SEEN_ARCHIVE_GUARD=0
 SEEN_ARCHIVE_GUARD_SHA256=0
+DIAGNOSTICS_FIXTURE_INPUT_PATH=""
+DIAGNOSTICS_FIXTURE_INPUT_SHA256=""
+SEEN_DIAGNOSTICS_FIXTURE=0
+SEEN_DIAGNOSTICS_FIXTURE_SHA256=0
 CLI_ARG=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -34,13 +48,31 @@ while [ "$#" -gt 0 ]; do
       ARCHIVE_GUARD_INPUT_SHA256="$2"
       shift 2
       ;;
+    --diagnostics-fixture)
+      if [ "$SEEN_DIAGNOSTICS_FIXTURE" -ne 0 ] || [ "$#" -lt 2 ]; then
+        echo "FATAL: diagnostics fixture options must appear once as a path and SHA-256 pair" >&2
+        exit 2
+      fi
+      SEEN_DIAGNOSTICS_FIXTURE=1
+      DIAGNOSTICS_FIXTURE_INPUT_PATH="$2"
+      shift 2
+      ;;
+    --diagnostics-fixture-sha256)
+      if [ "$SEEN_DIAGNOSTICS_FIXTURE_SHA256" -ne 0 ] || [ "$#" -lt 2 ]; then
+        echo "FATAL: diagnostics fixture options must appear once as a path and SHA-256 pair" >&2
+        exit 2
+      fi
+      SEEN_DIAGNOSTICS_FIXTURE_SHA256=1
+      DIAGNOSTICS_FIXTURE_INPUT_SHA256="$2"
+      shift 2
+      ;;
     --*)
-      echo "FATAL: usage: $0 --archive-guard PATH --archive-guard-sha256 SHA256 CLI_BINARY"
+      echo "FATAL: usage: $0 --archive-guard PATH --archive-guard-sha256 SHA256 --diagnostics-fixture PATH --diagnostics-fixture-sha256 SHA256 CLI_BINARY"
       exit 2
       ;;
     *)
       if [ -n "$CLI_ARG" ]; then
-        echo "FATAL: usage: $0 --archive-guard PATH --archive-guard-sha256 SHA256 CLI_BINARY"
+        echo "FATAL: usage: $0 --archive-guard PATH --archive-guard-sha256 SHA256 --diagnostics-fixture PATH --diagnostics-fixture-sha256 SHA256 CLI_BINARY"
         exit 2
       fi
       CLI_ARG="$1"
@@ -48,8 +80,30 @@ while [ "$#" -gt 0 ]; do
       ;;
   esac
 done
-if [ "$SEEN_ARCHIVE_GUARD" -ne "$SEEN_ARCHIVE_GUARD_SHA256" ] || [ -z "$CLI_ARG" ]; then
-  echo "FATAL: archive guard path and SHA-256 must be supplied together with a CLI binary"
+if [ "$SEEN_ARCHIVE_GUARD" -ne "$SEEN_ARCHIVE_GUARD_SHA256" ]; then
+  echo "FATAL: archive guard path and SHA-256 must be supplied together" >&2
+  exit 2
+fi
+if [ "$SEEN_DIAGNOSTICS_FIXTURE" -ne "$SEEN_DIAGNOSTICS_FIXTURE_SHA256" ]; then
+  echo "FATAL: diagnostics fixture path and SHA-256 must be supplied together" >&2
+  exit 2
+fi
+if [ "$SEEN_DIAGNOSTICS_FIXTURE" -ne 1 ] \
+  || [ -z "$DIAGNOSTICS_FIXTURE_INPUT_PATH" ] \
+  || [ -z "$DIAGNOSTICS_FIXTURE_INPUT_SHA256" ]; then
+  echo "FATAL: an explicit diagnostics fixture path and SHA-256 are required" >&2
+  exit 2
+fi
+if [[ "$DIAGNOSTICS_FIXTURE_INPUT_PATH" != /* \
+  || ! "$DIAGNOSTICS_FIXTURE_INPUT_SHA256" =~ ^[0-9a-f]{64}$ ]] \
+  || [ -L "$DIAGNOSTICS_FIXTURE_INPUT_PATH" ] \
+  || [ ! -f "$DIAGNOSTICS_FIXTURE_INPUT_PATH" ] \
+  || [ ! -x "$DIAGNOSTICS_FIXTURE_INPUT_PATH" ]; then
+  echo "FATAL: diagnostics fixture must be an absolute regular executable with a lowercase SHA-256" >&2
+  exit 2
+fi
+if [ -z "$CLI_ARG" ]; then
+  echo "FATAL: provide the CLI binary path" >&2
   exit 2
 fi
 if [ "$SEEN_ARCHIVE_GUARD" -eq 1 ] \
@@ -65,6 +119,34 @@ if ! CALLER_DIR="$(pwd -P)"; then
   echo "FATAL: could not resolve caller directory"
   exit 2
 fi
+if [ -n "${VELNOR_GOLDEN_DIR:-}" ]; then
+  case "$VELNOR_GOLDEN_DIR" in
+    /*) requested_golden_dir="$VELNOR_GOLDEN_DIR" ;;
+    *) requested_golden_dir="$CALLER_DIR/$VELNOR_GOLDEN_DIR" ;;
+  esac
+  golden_name="${requested_golden_dir##*/}"
+  golden_parent="${requested_golden_dir%/*}"
+  if [ -z "$golden_name" ] || [ "$golden_name" = . ] || [ "$golden_name" = .. ] \
+    || ! golden_parent="$(cd -- "$golden_parent" 2>/dev/null && pwd -P)"; then
+    echo 'FATAL: external golden directory parent must exist' >&2
+    exit 2
+  fi
+  VELNOR_GOLDEN_DIR="$golden_parent/$golden_name"
+  case "$VELNOR_GOLDEN_DIR" in
+    "$ROOT"|"$ROOT"/*)
+      echo 'FATAL: VELNOR_GOLDEN_DIR must be outside the repository' >&2
+      exit 2
+      ;;
+  esac
+  if [ -L "$VELNOR_GOLDEN_DIR" ] || [ ! -d "$VELNOR_GOLDEN_DIR" ]; then
+    echo 'FATAL: external golden directory must be an existing regular directory' >&2
+    exit 2
+  fi
+  export VELNOR_GOLDEN_DIR
+  GOLDEN_DIR="$VELNOR_GOLDEN_DIR"
+else
+  GOLDEN_DIR="$ROOT/docs/proposed/opentofu-goldens"
+fi
 case "$CLI_ARG" in
   /*) CLI_BIN="$CLI_ARG" ;;
   *) CLI_BIN="$CALLER_DIR/$CLI_ARG" ;;
@@ -79,17 +161,50 @@ WORK="$(cd "$WORK" && pwd -P)" || exit 2
 cleanup_work() {
   local status=$?
   trap - EXIT
-  if [ "$status" -eq 0 ]; then
+  if [ "$status" -eq 0 ] && [ "$KEEP_WORK" -ne 1 ]; then
     rm -rf "$WORK"
   else
-    printf 'retaining failed golden harness workspace: %s\n' "$WORK" >&2
+    if [ "$status" -eq 0 ]; then
+      printf 'retaining successful golden harness evidence workspace: %s\n' "$WORK" >&2
+    else
+      printf 'retaining failed golden harness workspace: %s\n' "$WORK" >&2
+    fi
   fi
   exit "$status"
 }
 trap cleanup_work EXIT
 STUB_BIN="$WORK/stub bin"
 MARKER="$WORK/cargo-invoked"
+GUARD_RECEIPT="$WORK/cargo-guard-receipt"
+MISE_RECEIPT="$WORK/mise-metadata-receipt"
 ORIGINAL_PATH="$PATH"
+REAL_MISE="$(command -v mise 2>/dev/null)" || REAL_MISE=''
+case "$REAL_MISE" in
+  /*) ;;
+  '' ) echo 'FATAL: real Mise executable is unavailable' >&2; exit 2 ;;
+  *)
+    real_mise_parent="$(cd "$(dirname "$REAL_MISE")" 2>/dev/null && pwd -P)" \
+      || { echo 'FATAL: real Mise executable parent is unavailable' >&2; exit 2; }
+    REAL_MISE="$real_mise_parent/$(basename "$REAL_MISE")"
+    ;;
+esac
+if [ ! -x "$REAL_MISE" ]; then
+  echo "FATAL: real Mise executable is unavailable: $REAL_MISE" >&2
+  exit 2
+fi
+VELNOR_TEST_CARGO_GUARD="${VELNOR_TEST_CARGO_GUARD:-${VELNOR_TEST_RUST_BUILD_GUARD:-}}"
+if [ "$(uname -s)" = Darwin ] && [ "${GITHUB_ACTIONS:-}" != true ] && [ -z "$VELNOR_TEST_CARGO_GUARD" ]; then
+  echo 'FATAL: set VELNOR_TEST_CARGO_GUARD to the required Rust build guard' >&2
+  exit 2
+fi
+if [ -n "$VELNOR_TEST_CARGO_GUARD" ] \
+  && { [ ! -f "$VELNOR_TEST_CARGO_GUARD" ] || [ ! -x "$VELNOR_TEST_CARGO_GUARD" ]; }; then
+  echo "FATAL: the configured Rust build guard is unavailable: $VELNOR_TEST_CARGO_GUARD" >&2
+  exit 2
+fi
+VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH"
+VELNOR_TEST_CARGO_RECEIPT="$GUARD_RECEIPT"
+export VELNOR_TEST_CARGO_GUARD VELNOR_TEST_REAL_CARGO_PATH VELNOR_TEST_CARGO_RECEIPT
 mkdir -p "$STUB_BIN" "$WORK/tmp workspace"
 ln -s "$WORK/tmp workspace" "$WORK/tmp symlink"
 # Only `cargo build` is the collector's implicit debug build. `plan` runs
@@ -101,21 +216,93 @@ if [ "${1-}" = "build" ]; then
   printf invoked >"$VELNOR_TEST_CARGO_MARKER"
   exit 79
 fi
+printf 'cargo-invocation=%s\n' "$*" >>"$VELNOR_TEST_CARGO_RECEIPT"
 PATH="$VELNOR_TEST_REAL_CARGO_PATH"
 export PATH
-cargo "$@"
+if [ -n "${VELNOR_TEST_CARGO_GUARD:-}" ]; then
+  "$VELNOR_TEST_CARGO_GUARD" -- mise exec -- cargo "$@"
+  guard_rc=$?
+  printf 'guard-exit=%s\n' "$guard_rc" >>"$VELNOR_TEST_CARGO_RECEIPT"
+  exit "$guard_rc"
+fi
+exit 79
 STUB
 chmod u+x "$STUB_BIN/cargo"
 
-REAL_MISE="$(command -v mise)"
-if [ -z "$REAL_MISE" ]; then
-  echo 'FATAL: mise is required for Cargo metadata fault tests' >&2
+RUST_VERSION="$(test_mise_rust_version)" || {
+  echo 'FATAL: could not resolve the owned pinned Rust version' >&2
+  exit 2
+}
+if ! test_mise_resolve_cargo "$REAL_MISE" "$RUST_VERSION" "$WORK/mise-cargo-resolution" "$STUB_BIN/cargo"; then
   exit 2
 fi
-case "$REAL_MISE" in
-  /*) ;;
-  *) REAL_MISE="$(cd "$(dirname "$REAL_MISE")" && pwd -P)/$(basename "$REAL_MISE")" || exit 2 ;;
-esac
+test_mise_adapter_create "$WORK/mise-adapter-bin" "$REAL_MISE" "$ORIGINAL_PATH" \
+  "$VELNOR_TEST_CARGO_GUARD" "$RUST_VERSION" || exit 2
+MISE_ADAPTER_BIN="$TEST_MISE_ADAPTER_BIN"
+MISE_CARGO_PATH="$TEST_MISE_CARGO_PATH"
+
+verify_guard_receipt() {
+  local label="$1" receipt="$2" direct_receipt="$3" expected_fetch_count="${4:-0}"
+  test_mise_adapter_verify "$label" "$receipt" "$RUST_VERSION" \
+    "$VELNOR_TEST_CARGO_GUARD" "$expected_fetch_count" || return 1
+  if [ "$expected_fetch_count" -eq 2 ] && ! awk '
+      function field(name, field_number, prefix) {
+        prefix = name "="
+        for (field_number = 1; field_number <= NF; field_number++) {
+          if (index($field_number, prefix) == 1) return substr($field_number, length(prefix) + 1)
+        }
+        return ""
+      }
+      function ends_with(value, suffix) {
+        return length(value) >= length(suffix) \
+          && substr(value, length(value) - length(suffix) + 1) == suffix
+      }
+      /^request-kind / { request_kind[field("pid")] = field("value") }
+      /^original-cwd / {
+        id = field("pid")
+        path = $0
+        sub(/^original-cwd pid=[^ ]+ value=/, "", path)
+        original_cwd[id] = path
+      }
+      END {
+        for (id in request_kind) {
+          if (request_kind[id] != "fetch") continue
+          fetches++
+          path = original_cwd[id]
+          if (ends_with(path, "/dogfood-repo")) {
+            root_count++
+            root_path = path
+          } else if (ends_with(path, "/dogfood-repo/crates/velnor-runner")) {
+            nested_count++
+            nested_path = path
+          } else {
+            unexpected++
+          }
+        }
+        if (fetches != 2 || root_count != 1 || nested_count != 1 || unexpected \
+          || nested_path != root_path "/crates/velnor-runner") exit 1
+      }
+    ' "$receipt"; then
+    cat "$receipt" >&2
+    echo "FAIL: release check did not fetch the exact dogfood workspace roots: $label" >&2
+    return 1
+  fi
+  if [ -s "$direct_receipt" ] && [ -n "$VELNOR_TEST_CARGO_GUARD" ] && ! awk '
+      /^cargo-invocation=/ { requested++ }
+      /^guard-exit=/ { completed++; if ($0 != "guard-exit=0") failed=1 }
+      END { if (requested == 0 || requested != completed || failed) exit 1 }
+    ' "$direct_receipt"; then
+    cat "$direct_receipt" >&2
+    echo "FAIL: direct collector Cargo request lacked a successful guard receipt: $label" >&2
+    return 1
+  fi
+  if [ -s "$direct_receipt" ] && [ -z "$VELNOR_TEST_CARGO_GUARD" ]; then
+    cat "$direct_receipt" >&2
+    echo "FAIL: collector bypassed real Mise Cargo routing: $label" >&2
+    return 1
+  fi
+}
+
 FAULT_MISE_TEMPLATE="$WORK/mise fault template"
 mkdir -m 700 "$FAULT_MISE_TEMPLATE" || exit 2
 cat >"$FAULT_MISE_TEMPLATE/mise" <<'MISE'
@@ -124,6 +311,12 @@ set -u
 base="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)" || exit 88
 real_mise="$(cat "$base/realpath")" || exit 88
 mode="$(cat "$base/mode")" || exit 88
+adapter_bin="$(cat "$base/adapter-bin")" || exit 88
+original_path="$(cat "$base/original-path")" || exit 88
+rust_version="$(cat "$base/rust-version")" || exit 88
+guard="$(cat "$base/guard")" || exit 88
+cargo_path="$(cat "$base/cargo-path")" || exit 88
+mise_receipt="$(cat "$base/mise-receipt")" || exit 88
 args=("$@")
 metadata=0
 if [ "${#args[@]}" -ge 12 ] \
@@ -150,7 +343,13 @@ if [ "${#args[@]}" -ge 12 ] \
     metadata=1
   fi
 fi
-"$real_mise" "${args[@]}"
+VELNOR_TEST_REAL_MISE="$real_mise" \
+  VELNOR_TEST_ORIGINAL_PATH="$original_path" \
+  VELNOR_TEST_RUST_VERSION="$rust_version" \
+  VELNOR_TEST_CARGO_GUARD="$guard" \
+  VELNOR_TEST_MISE_CARGO_PATH="$cargo_path" \
+  VELNOR_TEST_MISE_RECEIPT="$mise_receipt" \
+  "$adapter_bin/mise" "${args[@]}"
 status=$?
 if [ "$status" -ne 0 ] || [ "$metadata" -ne 1 ]; then
   exit "$status"
@@ -195,6 +394,12 @@ prepare_fault_mise() {
   cp "$FAULT_MISE_TEMPLATE/mise" "$fault_dir/mise" || return 2
   chmod 700 "$fault_dir/mise" || return 2
   printf '%s\n' "$REAL_MISE" >"$fault_dir/realpath" || return 2
+  printf '%s\n' "$MISE_ADAPTER_BIN" >"$fault_dir/adapter-bin" || return 2
+  printf '%s\n' "$ORIGINAL_PATH" >"$fault_dir/original-path" || return 2
+  printf '%s\n' "$RUST_VERSION" >"$fault_dir/rust-version" || return 2
+  printf '%s\n' "$VELNOR_TEST_CARGO_GUARD" >"$fault_dir/guard" || return 2
+  printf '%s\n' "$MISE_CARGO_PATH" >"$fault_dir/cargo-path" || return 2
+  printf '%s\n' "$MISE_RECEIPT" >"$fault_dir/mise-receipt" || return 2
   printf '%s\n' "$mode" >"$fault_dir/mode" || return 2
   printf '%s\n' "$guard_copy" >"$fault_dir/guard-copy" || return 2
   printf '%s\n' "$fault_dir"
@@ -280,7 +485,7 @@ fi
 ARCHIVE_GUARD_ARGS=(--archive-guard "$ARCHIVE_GUARD_INPUT_PATH" --archive-guard-sha256 "$ARCHIVE_GUARD_INPUT_SHA256")
 PATH="$STUB_BIN:$ORIGINAL_PATH"
 export PATH
-CLI_VERSION="$("$CLI_BIN" --version | awk 'NR == 1 && NF == 2 && $1 == "velnor-actions" { print $2; next } { exit 1 } END { if (NR != 1) exit 1 }')" || exit 2
+CLI_VERSION="$(run_qualification_candidate "$CLI_BIN" --version | awk 'NR == 1 && NF == 2 && $1 == "velnor-actions" { print $2; next } { exit 1 } END { if (NR != 1) exit 1 }')" || exit 2
 verify_qualification_guard || exit 2
 if command -v sha256sum >/dev/null 2>&1; then
   CLI_SHA="$(sha256sum "$CLI_BIN" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')" || exit 2
@@ -293,26 +498,39 @@ case "$(uname -s):$(uname -m)" in
   Darwin:x86_64|Darwin:amd64) HOST_TARGET="x86_64-apple-darwin" ;;
   *) echo "FATAL: unsupported test host $(uname -s)/$(uname -m)" >&2; exit 2 ;;
 esac
+fixture_digest() {
+  local fixture_char candidate excluded="${1:-}"
+  for fixture_char in a b c d e f 0 1; do
+    candidate="$(printf '%064d' 0 | tr '0' "$fixture_char")"
+    if [ "$candidate" != "$CLI_SHA" ] && [ "$candidate" != "$excluded" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+TEST_FIXTURE_SHA_A="$(fixture_digest)" || exit 2
+TEST_FIXTURE_SHA_B="$(fixture_digest "$TEST_FIXTURE_SHA_A")" || exit 2
 case "$HOST_TARGET" in
   x86_64-unknown-linux-gnu)
     HOST_TARGET_INDEX=0
     OTHER_TARGET_INDEX=1
     TEST_LINUX_SHA="$CLI_SHA"
-    TEST_ARM_SHA="$(printf '%064d' 0 | tr '0' 'b')"
-    TEST_INTEL_SHA="$(printf '%064d' 0 | tr '0' 'c')"
+    TEST_ARM_SHA="$TEST_FIXTURE_SHA_A"
+    TEST_INTEL_SHA="$TEST_FIXTURE_SHA_B"
     ;;
   aarch64-apple-darwin)
     HOST_TARGET_INDEX=1
     OTHER_TARGET_INDEX=0
-    TEST_LINUX_SHA="$(printf '%064d' 0 | tr '0' 'b')"
+    TEST_LINUX_SHA="$TEST_FIXTURE_SHA_A"
     TEST_ARM_SHA="$CLI_SHA"
-    TEST_INTEL_SHA="$(printf '%064d' 0 | tr '0' 'c')"
+    TEST_INTEL_SHA="$TEST_FIXTURE_SHA_B"
     ;;
   x86_64-apple-darwin)
     HOST_TARGET_INDEX=2
     OTHER_TARGET_INDEX=0
-    TEST_LINUX_SHA="$(printf '%064d' 0 | tr '0' 'b')"
-    TEST_ARM_SHA="$(printf '%064d' 0 | tr '0' 'c')"
+    TEST_LINUX_SHA="$TEST_FIXTURE_SHA_A"
+    TEST_ARM_SHA="$TEST_FIXTURE_SHA_B"
     TEST_INTEL_SHA="$CLI_SHA"
     ;;
 esac
@@ -334,6 +552,25 @@ write_test_manifest() {
         sha256:$intel}
      ]}' >"$manifest"
 }
+
+test_manifest_host_binding() {
+  local manifest="$1"
+  if ! jq -e --arg host "$HOST_TARGET" --arg digest "$CLI_SHA" '
+    ([.targets[] | select(.target == $host) | .sha256] == [$digest]) and
+    ([.targets[] | select(.target != $host)] | length == 2 and all(.[]; .sha256 != $digest))
+  ' "$manifest" >/dev/null; then
+    echo 'FAIL: fixture manifest did not bind the exact CLI digest only to the host row' >&2
+    exit 1
+  fi
+  echo 'passed exact host-row fixture digest binding'
+}
+
+mkdir -p "$WORK/fixture consumer"
+if ! prepare_fixture_consumer_manifest "$WORK/fixture consumer" "$CLI_BIN" "$HOST_TARGET"; then
+  echo 'FAIL: actual capture fixture manifest helper could not prepare consumer input' >&2
+  exit 1
+fi
+test_manifest_host_binding "$WORK/fixture consumer/.velnor/release-manifest.json"
 
 source "$ROOT/scripts/generator-release/test-fixture-git.sh"
 test_fixture_git_isolation || exit 1
@@ -379,16 +616,26 @@ test_candidate_stderr_diagnostic
 expect_release_check_match() {
   local status=0 log="$WORK/release-check.log" after
   local manifest="${1:-$WORK/valid manifest.json}"
-  TMPDIR="$WORK/tmp symlink" GITHUB_SHA="$SOURCE_SHA" GITHUB_REPOSITORY=tailrocks/velnor-new \
-    PATH="$STUB_BIN:$ORIGINAL_PATH" VELNOR_TEST_CARGO_MARKER="$MARKER" \
+  : >"$GUARD_RECEIPT"
+  : >"$MISE_RECEIPT"
+  rm -f "$MARKER"
+  (
+    unset CARGO_TARGET_DIR CARGO_BUILD_TARGET || exit 2
+    TMPDIR="$WORK/tmp symlink" MBX_GC_AUTO=0 GITHUB_SHA="$SOURCE_SHA" GITHUB_REPOSITORY=tailrocks/velnor-new \
+    PATH="$STUB_BIN:$MISE_ADAPTER_BIN:$ORIGINAL_PATH" VELNOR_TEST_CARGO_MARKER="$MARKER" \
     VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
+    VELNOR_TEST_REAL_MISE="$REAL_MISE" VELNOR_TEST_ORIGINAL_PATH="$ORIGINAL_PATH" \
+    VELNOR_TEST_RUST_VERSION="$RUST_VERSION" VELNOR_TEST_CARGO_GUARD="$VELNOR_TEST_CARGO_GUARD" \
+    VELNOR_TEST_MISE_CARGO_PATH="$MISE_CARGO_PATH" VELNOR_TEST_MISE_RECEIPT="$MISE_RECEIPT" \
     run_collector check-release "$CLI_BIN" "$manifest" \
-      "$(test_file_sha256 "$manifest")" >"$log" 2>&1 || status=$?
+      "$(test_file_sha256 "$manifest")"
+  ) >"$log" 2>&1 || status=$?
   if [ "$status" -ne 0 ] || ! grep -Fq 'ALL RELEASE FIXTURE GOLDENS AND DOGFOOD PARITY MATCH' "$log"; then
     cat "$log" >&2
     echo "FAIL: valid candidate did not match release fixture goldens (exit $status)" >&2
     exit 1
   fi
+  if ! verify_guard_receipt release-check "$MISE_RECEIPT" "$GUARD_RECEIPT" 2; then cat "$log" >&2; exit 1; fi
   if [ -e "$MARKER" ]; then echo "FAIL: release qualification invoked cargo build" >&2; exit 1; fi
   after="$(golden_fingerprint)" || exit 2
   if [ "$after" != "$BEFORE" ]; then echo "FAIL: successful release check changed goldens" >&2; exit 1; fi
@@ -529,24 +776,21 @@ cp "$WORK/valid manifest.json" "$WORK/tmp workspace/valid manifest.json"
 OUTPUT_BINDING_SCRIPT="$WORK/run_collector"
 cat >"$OUTPUT_BINDING_SCRIPT" <<'WRAPPER'
 #!/usr/bin/env bash
-exec "$VELNOR_TEST_CAPTURE_SCRIPT" --archive-guard "$VELNOR_TEST_ARCHIVE_GUARD_PATH" \
-  --archive-guard-sha256 "$VELNOR_TEST_ARCHIVE_GUARD_SHA256" "$@"
+exec "$VELNOR_TEST_CAPTURE_SCRIPT" "$@"
 WRAPPER
 chmod u+x "$OUTPUT_BINDING_SCRIPT"
 SCRIPT_WITH_GUARD="$SCRIPT"
 export VELNOR_TEST_CAPTURE_SCRIPT="$SCRIPT_WITH_GUARD"
-export VELNOR_TEST_ARCHIVE_GUARD_PATH="$ARCHIVE_GUARD_INPUT_PATH"
-export VELNOR_TEST_ARCHIVE_GUARD_SHA256="$ARCHIVE_GUARD_INPUT_SHA256"
 if [ "${VELNOR_TEST_QUALIFICATION_OUTPUT_ONLY:-0}" = 1 ]; then
   SCRIPT="$OUTPUT_BINDING_SCRIPT"
-  run_candidate_output_binding_tests || exit $?
+  run_candidate_output_binding_tests "$BEFORE" || exit $?
   exit 0
 fi
 expect_release_check_match "$WORK/tmp symlink/valid manifest.json"
 SCRIPT="$OUTPUT_BINDING_SCRIPT"
-run_candidate_output_binding_tests || exit $?
+run_candidate_output_binding_tests "$BEFORE" || exit $?
 SCRIPT="$SCRIPT_WITH_GUARD"
-unset VELNOR_TEST_CAPTURE_SCRIPT VELNOR_TEST_ARCHIVE_GUARD_PATH VELNOR_TEST_ARCHIVE_GUARD_SHA256
+unset VELNOR_TEST_CAPTURE_SCRIPT
 ln -s "$WORK/valid manifest.json" "$WORK/symlink manifest.json"
 expect_release_rejected symlink-manifest 'candidate manifest must be a regular non-symlink file' \
   "$WORK/symlink manifest.json" "$(test_file_sha256 "$WORK/valid manifest.json")" "$SOURCE_SHA"
@@ -599,8 +843,8 @@ expect_unsupported_binary() {
     echo "FAIL: unsupported executable target was not reported (exit $status)" >&2
     exit 1
   fi
-  if [ ! -f "$WORK/failing binary invoked" ] || [ -e "$MARKER" ]; then
-    echo "FAIL: explicit failing binary was not run or cargo fallback occurred" >&2
+  if [ -e "$WORK/failing binary invoked" ] || [ -e "$MARKER" ]; then
+    echo "FAIL: unsupported executable ran or cargo fallback occurred" >&2
     exit 1
   fi
   if ! grep -Fq 'retaining failed golden workspace:' "$log"; then
@@ -628,6 +872,8 @@ expect_unsupported_binary() {
 expect_execution_failure() {
   local status=0 log="$WORK/executed-plan-failure.log"
   local mise_dir="$METADATA_FAILURE_MISE_DIR"
+  : >"$GUARD_RECEIPT"
+  : >"$MISE_RECEIPT"
   if (
     cd "$WORK" || exit 2
     TMPDIR="$WORK/tmp workspace" PATH="$mise_dir:$STUB_BIN:$ORIGINAL_PATH" \
@@ -652,6 +898,10 @@ expect_execution_failure() {
     || ! grep -Fq 'fixture=nested' "$mise_dir/receipt" \
     || [ -e "$MARKER" ]; then
     echo "FAIL: Cargo metadata failure did not run or implicit cargo build occurred" >&2
+    exit 1
+  fi
+  if ! verify_guard_receipt metadata-failure "$MISE_RECEIPT" "$GUARD_RECEIPT"; then
+    cat "$log" >&2
     exit 1
   fi
   if ! grep -Fq 'retaining failed golden workspace:' "$log"; then
@@ -762,10 +1012,13 @@ if ! grep -Fq 'trusted qualification archive guard source fingerprint is stale' 
 fi
 MUTATED_GUARD_PATH="$WORK/guard test/mutable guard"
 cp "$ARCHIVE_GUARD_INPUT_PATH" "$MUTATED_GUARD_PATH"
+chmod 700 "$MUTATED_GUARD_PATH"
 MUTATED_GUARD_SHA="$(test_file_sha256 "$MUTATED_GUARD_PATH")"
 expect_guard_mutation_rejected() {
   local status=0 log="$WORK/guard-mutation.log"
   local mise_dir="$GUARD_MUTATION_MISE_DIR"
+  : >"$GUARD_RECEIPT"
+  : >"$MISE_RECEIPT"
   if (
     cd "$WORK" || exit 2
     TMPDIR="$WORK/tmp workspace" PATH="$mise_dir:$STUB_BIN:$ORIGINAL_PATH" \
@@ -805,6 +1058,10 @@ expect_guard_mutation_rejected() {
     echo "FAIL: archive guard mutation did not run real Cargo metadata" >&2
     exit 1
   fi
+  if ! verify_guard_receipt guard-mutation "$MISE_RECEIPT" "$GUARD_RECEIPT"; then
+    cat "$log" >&2
+    exit 1
+  fi
   local after
   after="$(golden_fingerprint)" || exit 2
   if [ "$after" != "$BEFORE" ]; then
@@ -819,7 +1076,10 @@ expect_guard_mutation_rejected
 expect_dogfood_guard_mutation_rejected() {
   local mutated="$WORK/guard test/dogfood mutable guard" digest status=0 log="$WORK/dogfood-guard-mutation.log"
   local mise_dir="$DOGFOOD_GUARD_MUTATION_MISE_DIR"
+  : >"$GUARD_RECEIPT"
+  : >"$MISE_RECEIPT"
   cp "$ARCHIVE_GUARD_INPUT_PATH" "$mutated" || exit 2
+  chmod 700 "$mutated" || exit 2
   digest="$(test_file_sha256 "$mutated")" || exit 2
   if (
     cd "$WORK" || exit 2
@@ -847,6 +1107,10 @@ expect_dogfood_guard_mutation_rejected() {
     || [ "$(test_file_sha256 "$ARCHIVE_GUARD_INPUT_PATH")" != "$ARCHIVE_GUARD_INPUT_SHA256" ]; then
     cat "$log" >&2
     echo "FAIL: dogfood mutation did not run real Cargo metadata and fail closed (exit $status)" >&2
+    exit 1
+  fi
+  if ! verify_guard_receipt dogfood-guard-mutation "$MISE_RECEIPT" "$GUARD_RECEIPT" 2; then
+    cat "$log" >&2
     exit 1
   fi
   local retained dogfood_stderr after
@@ -933,6 +1197,10 @@ if [ "$source_digest" != "$copy_digest" ]; then
 fi
 WORKSPACES_BEFORE="$(find "$WORK/tmp workspace" -mindepth 1 -maxdepth 1 -type d \
   -name 'velnor-goldens-work.*' -print | LC_ALL=C sort)"
+: >"$GUARD_RECEIPT"
+: >"$MISE_RECEIPT"
+rm -f "$MARKER"
+
 FILE_UTILITY_MARKER="$WORK/undeclared file utility invoked"
 cat >"$STUB_BIN/file" <<'FILE'
 #!/bin/sh
@@ -942,10 +1210,18 @@ FILE
 chmod 755 "$STUB_BIN/file"
 if (
   cd "$WORK" || exit 2
-  TMPDIR="$WORK/tmp workspace" PATH="$STUB_BIN:$ORIGINAL_PATH" \
+  unset CARGO_TARGET_DIR CARGO_BUILD_TARGET || exit 2
+  TMPDIR="$WORK/tmp workspace" MBX_GC_AUTO=0 PATH="$STUB_BIN:$MISE_ADAPTER_BIN:$ORIGINAL_PATH" \
+    VELNOR_GOLDEN_KEEP_WORK=0 \
     VELNOR_TEST_CARGO_MARKER="$MARKER" \
     VELNOR_TEST_FILE_UTILITY_MARKER="$FILE_UTILITY_MARKER" \
     VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
+    VELNOR_TEST_REAL_MISE="$REAL_MISE" \
+    VELNOR_TEST_ORIGINAL_PATH="$ORIGINAL_PATH" \
+    VELNOR_TEST_RUST_VERSION="$RUST_VERSION" \
+    VELNOR_TEST_CARGO_GUARD="$VELNOR_TEST_CARGO_GUARD" \
+    VELNOR_TEST_MISE_CARGO_PATH="$MISE_CARGO_PATH" \
+    VELNOR_TEST_MISE_RECEIPT="$MISE_RECEIPT" \
     run_collector check "space path/velnor-actions"
 ) >"$WORK/spaced-path.log" 2>&1; then
   cat "$WORK/spaced-path.log"
@@ -959,6 +1235,7 @@ if [ -e "$MARKER" ]; then
   echo "FAIL: explicit CLI path invoked the default cargo build" >&2
   exit 1
 fi
+if ! verify_guard_receipt spaced-path "$MISE_RECEIPT" "$GUARD_RECEIPT"; then cat "$WORK/spaced-path.log" >&2; exit 1; fi
 if [ -e "$FILE_UTILITY_MARKER" ]; then
   echo "FAIL: explicit CLI check invoked the undeclared file utility" >&2
   exit 1
@@ -967,6 +1244,15 @@ WORKSPACES_AFTER="$(find "$WORK/tmp workspace" -mindepth 1 -maxdepth 1 -type d \
   -name 'velnor-goldens-work.*' -print | LC_ALL=C sort)"
 if [ "$WORKSPACES_AFTER" != "$WORKSPACES_BEFORE" ]; then
   echo "FAIL: successful check left behind a private golden workspace" >&2
+  exit 1
+fi
+if ! PATH="$ORIGINAL_PATH" "$REAL_BASH" \
+  "$ROOT/scripts/generator-release/test-plan-diagnostics.sh" \
+  "${ARCHIVE_GUARD_ARGS[@]}" \
+  --diagnostics-fixture "$DIAGNOSTICS_FIXTURE_INPUT_PATH" \
+  --diagnostics-fixture-sha256 "$DIAGNOSTICS_FIXTURE_INPUT_SHA256" \
+  "$CLI_BIN" "$WORK/plan-diagnostics"; then
+  echo 'FAIL: successful plan diagnostic preservation regression' >&2
   exit 1
 fi
 AFTER="$(golden_fingerprint)" || exit 2

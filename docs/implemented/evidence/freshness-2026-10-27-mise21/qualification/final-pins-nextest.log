@@ -1,0 +1,135 @@
+rust build guard: allowed; checked 1 filesystem(s)
+   Compiling velnor-actions-actionlint v0.1.57 (/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/crates/velnor-actions-actionlint)
+   Compiling velnor-actions-mise v0.1.57 (/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/crates/velnor-actions-mise)
+   Compiling velnor-archive-guard v0.1.57 (/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/crates/velnor-archive-guard)
+   Compiling velnor-actions-workflow-renderer v0.1.57 (/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/crates/velnor-actions-workflow-renderer)
+   Compiling velnor-actions-orchestrator v0.1.57 (/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/crates/velnor-actions-orchestrator)
+   Compiling velnor-actions-cli v0.1.57 (/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/crates/velnor-actions-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 23.62s
+info: using target runner `mbx-test-runner aarch64-apple-darwin` defined by environment variable `CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER`
+────────────
+ Nextest run ID f9aab7e7-c21d-4d1b-a814-a78bf6aa6f92 with nextest profile: default
+    Starting 119 tests across 9 binaries
+        PASS [   0.369s] (  1/119) velnor-actions-cli::candidate_freshness_public candidate_mode_requires_a_report_aware_trusted_helper
+        PASS [   1.008s] (  2/119) velnor-actions-cli::bun_private_repository_public private_asset_check_rejects_a_different_destination_before_requesting_metadata
+        PASS [   1.029s] (  3/119) velnor-actions-cli::bun_assets_handoff_public invalid_member_ids_fail_before_staging_or_workspace_mutation
+        PASS [   1.060s] (  4/119) velnor-actions-cli::bun_assets_handoff_public maximum_member_id_round_trips_verified_assets
+        PASS [   0.072s] (  5/119) velnor-actions-orchestrator github_landed_pull::tests::landed_merge_oid_accepts_missing_or_matching_rest_merge_sha
+        PASS [   0.062s] (  6/119) velnor-actions-orchestrator github_landed_pull::tests::landed_merge_oid_rejects_inconsistent_rest_merge_sha
+        PASS [   0.039s] (  7/119) velnor-actions-orchestrator github_landed_pull::tests::landed_merge_oid_rejects_substituted_or_incomplete_graphql_identity
+        PASS [   0.177s] (  8/119) velnor-actions-orchestrator homebrew::runtime::formula::cutover_author_tests::merge_group_tests::merge_group_cutover_author_accepts_associated_pull_request
+        PASS [   0.985s] (  9/119) velnor-actions-cli::candidate_freshness_public verification_task_rejects_a_mise_lock_with_a_different_rust_profile
+        PASS [   1.461s] ( 10/119) velnor-actions-cli::api2026_pull_context_public github_api_http_failure_reports_safe_context
+        PASS [   1.474s] ( 11/119) velnor-actions-cli::api2026_pull_context_public github_api_stderr_limit_reports_safe_context
+        PASS [   0.399s] ( 12/119) velnor-actions-orchestrator homebrew::runtime::formula::cutover_author_tests::merge_group_tests::merge_group_cutover_author_rejects_stale_or_mismatched_associations
+        PASS [   0.136s] ( 13/119) velnor-actions-orchestrator homebrew::structural_cutover::author_policy::tests::policy_rejects_binding_changes_and_noncanonical_documents
+        PASS [   0.023s] ( 14/119) velnor-actions-orchestrator homebrew::structural_cutover::author_policy::tests::rest_user_dto_requires_positive_id_safe_login_and_literal_user_type
+        PASS [   1.498s] ( 15/119) velnor-actions-cli::api2026_pull_context_public github_api_stdout_limit_reports_safe_context
+        PASS [   0.245s] ( 16/119) velnor-actions-orchestrator homebrew::structural_cutover::author_policy::tests::compiled_policy_matches_the_protected_transition
+        PASS [   0.042s] ( 17/119) velnor-actions-orchestrator homebrew::structural_cutover::author_policy::tests::policy_rejects_mismatched_transition_identity
+        PASS [   0.016s] ( 18/119) velnor-actions-orchestrator homebrew::structural_cutover::marker::tests::cutover_marker_parser_roundtrips_canonical_passive_data
+        PASS [   0.018s] ( 19/119) velnor-actions-orchestrator homebrew::structural_cutover::marker::tests::cutover_marker_parser_rejects_invalid_encodings
+        PASS [   0.015s] ( 20/119) velnor-actions-orchestrator tap_history_relevance::tests::receipt_history_relevance_distinguishes_absence_from_conflict
+        PASS [   0.016s] ( 21/119) velnor-actions-orchestrator tap_history_relevance::tests::receipt_history_ignores_foreign_head_repositories
+        PASS [   1.587s] ( 22/119) velnor-actions-cli::api2026_pull_context_public reversed_api_merge_parents_are_rejected
+        PASS [   1.594s] ( 23/119) velnor-actions-cli::api2026_pull_context_public changed_merge_ref_is_rejected
+        PASS [   0.088s] ( 24/119) velnor-actions-orchestrator tap_merge::cutover::replay::tests::cutover_commit_guard_binds_the_actual_commit_object
+        PASS [   0.022s] ( 25/119) velnor-actions-orchestrator tap_prepare::writer::github::tests::git_commit_dtos_accept_captured_tree_and_parents_without_ref_types
+        PASS [   0.020s] ( 26/119) velnor-actions-orchestrator tap_prepare::writer::github::tests::git_ref_objects_still_require_the_captured_object_type
+        PASS [   0.020s] ( 27/119) velnor-actions-orchestrator tap_prepare::writer::history::selection::tests::history_enumeration_rejects_an_incomplete_last_page
+        PASS [   0.116s] ( 28/119) velnor-actions-orchestrator tap_merge::cutover::history::author_tests::cutover_history_reader_rejects_authenticated_author_drift
+        PASS [   0.623s] ( 29/119) velnor-actions-orchestrator homebrew::runtime::formula::cutover_author_tests::structural_cutover_author_admission_accepts_exact_head_or_merge_and_rejects_identity_drift
+        PASS [   0.273s] ( 30/119) velnor-actions-orchestrator tap_merge::cutover::checkout::tests::cutover_checkout_history_rejects_two_parent_merge_head
+        PASS [   0.277s] ( 31/119) velnor-actions-orchestrator tap_merge::cutover::checkout::tests::cutover_checkout_history_rejects_unrelated_single_parent_head
+        PASS [   0.283s] ( 32/119) velnor-actions-orchestrator tap_merge::cutover::checkout::tests::cutover_checkout_history_rejects_head_two_commits_above_base
+        PASS [   1.797s] ( 33/119) velnor-actions-cli::api2026_pull_context_public absent_rest_merge_sha_reaches_owned_locator_gate
+        PASS [   0.056s] ( 34/119) velnor-actions-orchestrator::task_report_public build_failure_generates_blocked_downstream_reports
+        PASS [   0.380s] ( 35/119) velnor-actions-orchestrator tap_merge::cutover::checkout::tests::cutover_checkout_history_accepts_direct_single_parent_head
+        PASS [   0.107s] ( 36/119) velnor-actions-orchestrator::task_report_public reports_move_not_run_to_passed_through_public_writer
+        PASS [   0.196s] ( 37/119) velnor-actions-orchestrator::task_report_public provider_hit_does_not_reclassify_executed_task
+        PASS [   2.009s] ( 38/119) velnor-actions-cli::candidate_freshness_public verification_task_checks_claude_symlink_identity_without_repair
+        PASS [   0.179s] ( 39/119) velnor-actions-orchestrator::task_report_public valid_selected_noop_reports_block_tasks
+        PASS [   2.056s] ( 40/119) velnor-actions-cli::candidate_freshness_public verification_task_checks_generated_workflow_content_without_repair
+        PASS [   0.481s] ( 41/119) velnor-actions-orchestrator::homebrew_adoption_seed_public public_consumer_required_verdict_never_executes_candidate_prelude
+        PASS [   0.215s] ( 42/119) velnor-actions-orchestrator::workflow_configuration_public branches::prepare_rejects_equal_and_malformed_verification_branches
+        PASS [   0.258s] ( 43/119) velnor-actions-orchestrator::workflow_configuration_public bun_assets_routing::schema2_bun_both_routes_private_asset_handoffs_once
+        PASS [   0.665s] ( 44/119) velnor-actions-orchestrator::homebrew_adoption_seed_public completed_generator_verification::public_completed_generator_integrity_reaches_rejecting_attestation_boundary
+        PASS [   0.233s] ( 45/119) velnor-actions-orchestrator::workflow_configuration_public bun_assets_routing::schema2_bun_scale_set_routes_private_asset_handoffs_once
+        PASS [   0.460s] ( 46/119) velnor-actions-orchestrator::workflow_configuration_public branches::prepare_preserves_default_and_optional_verification_branches
+        PASS [   2.350s] ( 47/119) velnor-actions-cli::api2026_pull_context_public pull_request_changed_during_mergeability_refresh_is_rejected
+        PASS [   0.722s] ( 48/119) velnor-actions-orchestrator::homebrew_adoption_seed_public public_seed_manifest_replaces_legacy_consumer_manifest
+        PASS [   0.455s] ( 49/119) velnor-actions-orchestrator::workflow_configuration_public bun_assets_routing::schema2_bun_mixed_profiles_keep_private_asset_handoffs
+        PASS [   0.494s] ( 50/119) velnor-actions-orchestrator::workflow_configuration_public branches::prepare_resolves_verification_branch_against_origin_default
+        PASS [   0.230s] ( 51/119) velnor-actions-orchestrator::workflow_configuration_public bun_malformed::schema2_bun_renderer_rejects_missing_and_extra_outputs
+        PASS [   0.232s] ( 52/119) velnor-actions-orchestrator::workflow_configuration_public bun_malformed::schema2_bun_renderer_rejects_noncanonical_fields
+        PASS [   0.798s] ( 53/119) velnor-actions-orchestrator::task_report_public shared_job_artifact_is_downloaded_once
+        PASS [   2.597s] ( 54/119) velnor-actions-cli::api2026_pull_context_public pending_mergeability_refreshes_before_trusting_merge_ref
+        PASS [   0.346s] ( 55/119) velnor-actions-orchestrator::workflow_configuration_public bun_expansion::public_expansion_preserves_bun_context_for_strict_rendering
+        PASS [   0.163s] ( 56/119) velnor-actions-orchestrator::workflow_configuration_public bun_private_credentials_boundaries::explicit_local_private_asset_producer_override_is_rejected
+        PASS [   0.547s] ( 57/119) velnor-actions-orchestrator::workflow_configuration_public bun_expansion::expanded_bun_jobs_gate_on_their_unsuffixed_plan_identity
+        PASS [   1.008s] ( 58/119) velnor-actions-orchestrator::homebrew_adoption_seed_public public_velnor_repository_bootstrap_accepts_only_catalog_mise_lock
+        PASS [   0.258s] ( 59/119) velnor-actions-orchestrator::workflow_configuration_public bun_private_credentials_boundaries::mixed_default_and_member_overrides_keep_private_producers_hosted
+        PASS [   2.752s] ( 60/119) velnor-actions-cli::api2026_pull_context_public conflicting_pull_request_finishes_mergeability_refresh
+        PASS [   0.161s] ( 61/119) velnor-actions-orchestrator::workflow_configuration_public bun_private_credentials_boundaries::renderer_rejects_conditionally_skipped_member_asset_prepare
+        PASS [   0.257s] ( 62/119) velnor-actions-orchestrator::workflow_configuration_public bun_private_credentials_boundaries::renderer_rejects_conditionally_skipped_member_asset_download
+        PASS [   0.247s] ( 63/119) velnor-actions-orchestrator::workflow_configuration_public bun_private_credentials_boundaries::renderer_rejects_conditionally_skipped_member_asset_import
+        PASS [   0.177s] ( 64/119) velnor-actions-orchestrator::workflow_configuration_public bun_private_credentials_boundaries::renderer_rejects_member_without_its_asset_producer_dependency
+        PASS [   0.206s] ( 65/119) velnor-actions-orchestrator::workflow_configuration_public bun_private_credentials_boundaries::renderer_rejects_missing_member_asset_import
+        PASS [   0.239s] ( 66/119) velnor-actions-orchestrator::workflow_configuration_public bun_private_credentials_boundaries::renderer_rejects_registry_install_before_member_asset_handoff
+        PASS [   0.230s] ( 67/119) velnor-actions-orchestrator::workflow_configuration_public bun_private_credentials_boundaries::renderer_rejects_unrecognized_setup_before_member_asset_handoff
+        PASS [   0.550s] ( 68/119) velnor-actions-orchestrator::workflow_configuration_public bun_planning::bun_workspace_dependency_runs_selected_workspace_members
+        PASS [   0.030s] ( 69/119) velnor-actions-orchestrator::workflow_configuration_public bun_private_repository_metadata::private_asset_repository_visibility_is_checked_again_before_upload
+        PASS [   0.154s] ( 70/119) velnor-actions-orchestrator::workflow_configuration_public bun_private_repository_conditions::private_asset_cleanup_cannot_lose_its_canonical_failure_condition
+        PASS [   0.096s] ( 71/119) velnor-actions-orchestrator::workflow_configuration_public bun_private_repository_metadata::private_asset_repository_transport_and_deadline_fail_closed
+        PASS [   0.146s] ( 72/119) velnor-actions-orchestrator::workflow_configuration_public bun_private_repository_metadata::private_asset_repository_admission_rejects_unverifiable_visibility
+        PASS [   0.822s] ( 73/119) velnor-actions-orchestrator::workflow_configuration_public bun_dispositions::both_mode_required_results_follow_logical_bun_dispositions
+        PASS [   0.218s] ( 74/119) velnor-actions-orchestrator::workflow_configuration_public bun_private_profiles::maximum_scoped_member_keeps_its_private_handoff
+        PASS [   0.234s] ( 75/119) velnor-actions-orchestrator::workflow_configuration_public bun_private_profiles::private_producer_accepts_designated_hosted_with_local_consumer
+        PASS [   0.224s] ( 76/119) velnor-actions-orchestrator::workflow_configuration_public bun_private_repository::private_asset_handoffs_require_current_private_repository
+        PASS [   0.220s] ( 77/119) velnor-actions-orchestrator::workflow_configuration_public bun_private_repository_conditions::private_asset_upload_cannot_run_after_repository_admission_fails
+        PASS [   0.260s] ( 78/119) velnor-actions-orchestrator::workflow_configuration_public bun_private_profiles::private_producers_reject_every_profile_except_designated_hosted
+        PASS [   0.689s] ( 79/119) velnor-actions-orchestrator::workflow_configuration_public bun_planning::configured_bun_both_projects_single_job_dispositions_into_required
+        PASS [   0.732s] ( 80/119) velnor-actions-orchestrator::workflow_configuration_public bun_private_credentials::private_asset_app_key_minting_stays_on_hosted_producer
+        PASS [   0.211s] ( 81/119) velnor-actions-orchestrator::workflow_configuration_public bun_routing::schema2_bun_both_mode_emits_one_hosted_job_and_keeps_handoffs
+        PASS [   0.211s] ( 82/119) velnor-actions-orchestrator::workflow_configuration_public bun_routing::schema2_bun_hosted_mode_keeps_five_hosted_jobs
+        PASS [   0.227s] ( 83/119) velnor-actions-orchestrator::workflow_configuration_public bun_routing::schema2_bun_scale_set_mode_keeps_five_jobs_on_exact_selector
+        PASS [   1.554s] ( 84/119) velnor-actions-orchestrator::homebrew_adoption_seed_public completed_generator_verification::public_completed_generator_rejects_corrupt_downloaded_integrity
+        PASS [   0.146s] ( 85/119) velnor-actions-orchestrator::workflow_configuration_public source_qualification::aggregation_accepts_complete_success_receipts_and_retains_result
+        PASS [   0.372s] ( 86/119) velnor-actions-orchestrator::workflow_configuration_public bun_routing::schema1_bun_output_ignores_execution_dispatch
+        PASS [   0.391s] ( 87/119) velnor-actions-orchestrator::workflow_configuration_public bun_runtime::prepared_bun_workflow_forces_bun_for_scripts_and_keeps_frozen_install
+        PASS [   0.368s] ( 88/119) velnor-actions-orchestrator::workflow_configuration_public feature_toggles::prepare_and_render_select_each_package_feature_set_when_all_features
+        PASS [   0.576s] ( 89/119) velnor-actions-orchestrator::workflow_configuration_public bun_request_lanes::public_push_writer_request_reaches_plan_internal_without_lane_field
+        PASS [   0.484s] ( 90/119) velnor-actions-orchestrator::workflow_configuration_public parallel_owners::prepare_and_render_keep_one_parallel_rust_owner_per_package
+        PASS [   0.459s] ( 91/119) velnor-actions-orchestrator::workflow_configuration_public report_upload::prepare_and_render_upload_owner_reports_after_parallel_checks
+        PASS [   0.235s] ( 92/119) velnor-actions-orchestrator::workflow_configuration_public source_qualification::phase_dispatch_rejects_unknown_and_extra_arguments_before_side_effects
+        PASS [   0.241s] ( 93/119) velnor-actions-orchestrator::workflow_configuration_public source_qualification::source_qualification_reservations_reject_collisions_and_allow_unrelated_entries
+        PASS [   0.581s] ( 94/119) velnor-actions-orchestrator::workflow_configuration_public empty_suite::prepare_emits_fail_by_default_and_warn_for_unsharded_nextest_when_opted_in
+        PASS [   0.650s] ( 95/119) velnor-actions-orchestrator::workflow_configuration_public feature_toggles::prepare_and_render_apply_clippy_all_features_only_to_clippy_tasks
+        PASS [   0.770s] ( 96/119) velnor-actions-orchestrator::workflow_configuration_public bun_private_repository_tamper::private_asset_repository_checks_cannot_be_removed_or_weakened_by_job_edits
+        PASS [   0.196s] ( 97/119) velnor-actions-orchestrator::workflow_configuration_public verification_tools::verification_task_rejects_noncanonical_hk_backend
+        PASS [   0.555s] ( 98/119) velnor-actions-orchestrator::workflow_configuration_public source_qualification::aggregation_fails_and_retains_status_for_missing_failed_or_unsafe_receipts
+        PASS [   0.239s] ( 99/119) velnor-actions-orchestrator::workflow_configuration_public verification_tools::verification_task_rejects_mismatched_github_selector_lock
+        PASS [   0.634s] (100/119) velnor-actions-orchestrator::workflow_configuration_public seed_ids::prepare_and_render_keep_distinct_seed_ids_for_colliding_nested_roots
+        PASS [   0.219s] (101/119) velnor-actions-orchestrator::workflow_configuration_public workspace_format::workspace_format_outcome_emitter_keeps_native_mise_admission
+        PASS [   0.630s] (102/119) velnor-actions-orchestrator::workflow_configuration_public seed_ids::prepare_and_render_keep_valid_seed_ids_for_dotted_and_hyphenated_roots
+        PASS [   0.422s] (103/119) velnor-actions-orchestrator::workflow_configuration_public verification_tools::verification_task_preserves_seven_tool_hook_closure_and_required_fan_in
+        PASS [   0.354s] (104/119) velnor-actions-orchestrator::workflow_configuration_public verification_tools::verification_task_rejects_unknown_selector_option
+        PASS [   0.456s] (105/119) velnor-actions-orchestrator::workflow_configuration_public workspace_format::prepare_and_render_emit_workspace_format_with_outcome_and_report_tail
+        PASS [   0.659s] (106/119) velnor-actions-orchestrator::workflow_configuration_public timeouts::prepare_and_render_keep_plan_and_crate_timeouts_independent
+        PASS [   1.121s] (107/119) velnor-actions-orchestrator::workflow_configuration_public maintenance_features::prepare_and_render_scope_repository_maintenance_owner_and_feature_union
+        PASS [   0.579s] (108/119) velnor-actions-workflow-renderer::generator_release_prepare_public generator_release_rejects_corrupt_binary_without_completion
+        PASS [   0.794s] (109/119) velnor-actions-orchestrator::workflow_configuration_public verification_tools::verification_task_rejects_template_selectors_even_with_matching_lock
+        PASS [   0.597s] (110/119) velnor-actions-workflow-renderer::generator_release_prepare_public generator_release_rejects_mismatched_manifest_without_completion
+        PASS [   0.706s] (111/119) velnor-actions-workflow-renderer::generator_release_prepare_public generator_release_rejects_attestation_refusal_without_completion
+        PASS [   0.644s] (112/119) velnor-actions-workflow-renderer::generator_release_prepare_public generator_release_rejects_wrong_provenance_source_without_completion
+        PASS [   0.763s] (113/119) velnor-actions-workflow-renderer::generator_release_prepare_public existing_generator_release_completes_without_checkout_assets
+        PASS [   0.853s] (114/119) velnor-actions-workflow-renderer::generator_release_prepare_public generator_release_rejects_partial_attestation_refusal_without_completion
+        PASS [   0.825s] (115/119) velnor-actions-workflow-renderer::generator_release_prepare_public generator_release_rejects_wrong_provenance_toolchain_without_completion
+        PASS [   5.703s] (116/119) velnor-actions-cli::api2026_pull_context_public github_api_deadline_reports_safe_context
+        PASS [   5.803s] (117/119) velnor-actions-orchestrator::workflow_configuration_public source_qualification::generator_release_owns_source_qualification_lifecycle
+        PASS [  10.932s] (118/119) velnor-actions-cli::api2026_pull_context_public mergeability_polling_obeys_the_public_operation_deadline
+        PASS [  15.542s] (119/119) velnor-actions-cli::api2026_pull_context_public unresolved_mergeability_never_produces_a_plan
+────────────
+     Summary [  15.542s] 119 tests run: 119 passed, 0 skipped
+mbx[cache]: 0 hits, 4 misses, 13 not looked up, 15 incremental; 0 B downloaded, 0 B uploaded, 16.5 KiB stored locally
+mbx[savings]: every checkout believes it owns 6.3 TiB of outputs. the disk keeps one copy and says nothing.

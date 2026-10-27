@@ -132,11 +132,12 @@ fn insert_gate_jobs(
     crate_ids: &[String],
     acquire: Option<Step>,
     catalog: &ToolCatalog,
+    helper_catalog: &ToolCatalog,
 ) -> Result<(), OrchestratorError> {
     jobs.insert(LINT_JOB_ID.to_owned(), lint_job(label, catalog)?);
     jobs.insert(
         FINAL_JOB_ID.to_owned(),
-        final_job(label, crate_ids, acquire)?,
+        final_job(label, crate_ids, acquire, helper_catalog)?,
     );
     Ok(())
 }

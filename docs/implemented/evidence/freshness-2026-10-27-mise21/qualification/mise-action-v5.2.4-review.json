@@ -1,0 +1,22 @@
+{
+  "repository": "jdx/mise-action",
+  "tag": "v5.2.4",
+  "commit": "6be3c7ed4c21d4f76b208d351d95aac273ebb76d",
+  "review": {
+    "action_metadata_changed": false,
+    "new_inputs_permissions_or_protocol_authority": false,
+    "cache_disabled_by_consumer": true,
+    "explicit_version_and_sha256_configured": true,
+    "binary_sha256_checked_before_path_addition_and_version_probe": true
+  },
+  "reviewed_source_receipts": {
+    "action.yml": {
+      "bytes": 8945,
+      "sha256": "db2cc426cc50904c3cb8e5a4955b37395b32d92333a48e926c2b9b8424ab666b"
+    },
+    "src/index.ts": {
+      "bytes": 57797,
+      "sha256": "18e4f6dfef51351c1b5d9dbea360edbbe21d618a5b3ebceed4dc3298397ee404"
+    }
+  }
+}

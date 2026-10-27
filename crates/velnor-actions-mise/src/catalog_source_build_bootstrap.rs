@@ -126,23 +126,23 @@ pub const fn official(
 const fn mise(host: SourceBuildBootstrapHost) -> SourceBuildBootstrapAsset {
     let (asset_url, archive_sha256, binary_sha256, asset_format, binary_member) = match host {
         SourceBuildBootstrapHost::LinuxAmd64 => (
-            "https://github.com/jdx/mise/releases/download/v2026.10.19/mise-v2026.10.19-linux-x64",
+            "https://github.com/jdx/mise/releases/download/v2026.10.21/mise-v2026.10.21-linux-x64",
             MISE_BINARY_SHA256_LINUX_X64,
             MISE_BINARY_SHA256_LINUX_X64,
             SourceBuildBootstrapFormat::Binary,
             "",
         ),
         SourceBuildBootstrapHost::LinuxArm64 => (
-            "https://github.com/jdx/mise/releases/download/v2026.10.19/mise-v2026.10.19-linux-arm64.tar.gz",
-            "f6dbd376928095d3bc8fde72eb1b27a8450d35c1795aa80c05aacf1ce42584aa",
-            "4a4ca53b28e5433c527f4f73fac1f98f992a17cf32ca136a58e2e375f790f627",
+            "https://github.com/jdx/mise/releases/download/v2026.10.21/mise-v2026.10.21-linux-arm64.tar.gz",
+            "1c05e4d4baaf1b4a9bf929e9c39b3512deb937c8d4c1bd52927499624018834f",
+            "a7c96627e56c075543fe1c1aafeb289d2588d6ddfd4d705fce4ae140c57e190c",
             SourceBuildBootstrapFormat::TarGzip,
             "mise/bin/mise",
         ),
         SourceBuildBootstrapHost::MacosArm64 => (
-            "https://github.com/jdx/mise/releases/download/v2026.10.19/mise-v2026.10.19-macos-arm64.tar.gz",
-            "a8a581e115f4ebdbe2931c237949dbac7624bd8b4024bf3eb9da7981bde490c9",
-            "7dc61dfa71abbcda1c40d18440bc556b5d58b80e6042bc4f95fd106fa1bb3c66",
+            "https://github.com/jdx/mise/releases/download/v2026.10.21/mise-v2026.10.21-macos-arm64.tar.gz",
+            "d67b6006cb1144131910ce80d6cf52134f55b9c7da55648bd717df36b3f238d6",
+            "b20d30788a819fade398a1cb92aee56c383e3c34324162ec39fb8567dee79ba6",
             SourceBuildBootstrapFormat::TarGzip,
             "mise/bin/mise",
         ),
@@ -150,18 +150,18 @@ const fn mise(host: SourceBuildBootstrapHost) -> SourceBuildBootstrapAsset {
     SourceBuildBootstrapAsset {
         tool: SourceBuildBootstrapTool::Mise,
         host,
-        selector: "github:jdx/mise@2026.10.19",
+        selector: "github:jdx/mise@2026.10.21",
         asset_url,
         archive_sha256,
         binary_sha256,
         asset_format,
         binary_member,
         source_repository: "https://github.com/jdx/mise",
-        source_commit: "860cdc0969db81b1a076b1eb4574bd4b49bdf4e0",
-        source_tree: "2fa25d5f04874ce37e374e25681fb35f4e9e5169",
+        source_commit: "61eb04dbc806cb646821e342b7abbbdaf1581e84",
+        source_tree: "65c7692f05c45170f6a42352a9ada4c0f667e48d",
         owner: "jdx/mise",
-        version: "2026.10.19",
-        abi: "mise-cli-v2026.10.19",
+        version: "2026.10.21",
+        abi: "mise-cli-v2026.10.21",
     }
 }
 
