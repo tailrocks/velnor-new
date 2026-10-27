@@ -164,7 +164,7 @@ fn plan_with(dispositions: &[(&str, JobDisposition)]) -> Plan {
         generator: PlanGenerator {
             version: "0.1.55".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
-            digest_b3: "0".repeat(64),
+            sha256: "0".repeat(64),
         },
         packages: Vec::new(),
         obligations: vec![PlanObligation {

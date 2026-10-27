@@ -21,6 +21,43 @@ const BUILD_FAILURE_TEST: &str = "build_failure_generates_blocked_downstream_rep
 const NOOP_TEST: &str = "valid_selected_noop_reports_block_tasks";
 const SHARED_ARTIFACT_TEST: &str = "shared_job_artifact_is_downloaded_once";
 const PROVIDER_HIT_TEST: &str = "provider_hit_does_not_reclassify_executed_task";
+const GENERATOR_WIRE_TEST: &str = "schema_2_generator_sha256_wire_field_is_strict";
+#[test]
+fn schema_2_generator_sha256_wire_field_is_strict() -> TestResult<()> {
+    if process::child_mode(GENERATOR_WIRE_TEST)? {
+        return Ok(());
+    }
+    let jobs = [("crate_clippy", "success")];
+    let write = |scenario: &fixture::Scenario, label: &str| {
+        report_files::write_task(
+            scenario,
+            GENERATOR_WIRE_TEST,
+            label,
+            &scenario.plan.task_ids[0],
+            0,
+            None,
+        )
+    };
+    let positive = fixture::Scenario::new(&[("clippy", "crate_clippy")])?;
+    positive.stage_generator_wire_field("sha256")?;
+    let positive_written = write(&positive, "sha256-wire");
+    let positive_status = if positive_written.as_ref().is_ok_and(|count| *count == 1) {
+        report_files::stage_all(&positive)?;
+        let request =
+            report_files::assemble(&positive, GENERATOR_WIRE_TEST, "sha256-merge", &jobs)?;
+        Some(report_files::merge(&request)?.status)
+    } else {
+        None
+    };
+    let negative = fixture::Scenario::new(&[("clippy", "crate_clippy")])?;
+    negative.stage_generator_wire_field("digest_b3")?;
+    let negative_rejected = write(&negative, "digest-b3-wire").is_err();
+    assert!(
+        positive_status == Some(FinalStatus::Passed) && negative_rejected,
+        "schema-2 sha256 generator must write and merge; digest_b3-only generator must reject"
+    );
+    Ok(())
+}
 
 #[test]
 fn reports_move_not_run_to_passed_through_public_writer() -> TestResult<()> {
