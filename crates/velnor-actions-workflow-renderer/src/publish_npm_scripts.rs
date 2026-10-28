@@ -42,16 +42,16 @@ pub fn verify_script(member: &str) -> String {
 pub fn publish_script(member: &str) -> String {
     let stem = tarball_stem(member);
     let dir = NPM_DIR;
-    let document = r#"{_id: $name, name: $name, "dist-tags": {latest: $ver}, versions: {($ver): ($manifest[0] + {_id: ($name + "@" + $ver), name: $name, version: $ver, dist: {integrity: $integrity, shasum: $sha1, tarball: ("https://npm.pkg.github.com/download/" + $name + "/" + $ver + "/" + $sha1)}})}, _attachments: {($tgz): {content_type: "application/octet-stream", data: $data, length: $len}}}"#;
+    let document = r#"{_id: $name, name: $name, "dist-tags": {latest: $ver}, versions: {($ver): ($manifest[0] + {_id: ($name + "@" + $ver), name: $name, version: $ver, dist: {integrity: $integrity, shasum: $sha1, tarball: ("http://npm.pkg.github.com/" + $name + "/-/" + $archive)}})}, _attachments: {($archive): {content_type: "application/octet-stream", data: $data, length: $len}}}"#;
     format!(
-        "set -eu; ver=${{GITHUB_REF_NAME##*-v}}; cd -- \"{dir}\"; tgz='{stem}'-\"$ver\".tgz; \
+        "set -eu; ver=${{GITHUB_REF_NAME##*-v}}; cd -- \"{dir}\"; tgz='{stem}'-\"$ver\".tgz; archive='{member}'-\"$ver\".tgz; \
          sha1sum -- \"$tgz\" > sha1.txt; read -r sha1 rest < sha1.txt; \
          openssl dgst -sha512 -binary \"$tgz\" > sha512.bin; \
          openssl base64 -A -in sha512.bin > sha512.b64; printf '\\n' >> sha512.b64; \
          read -r b64 < sha512.b64; rm -- sha512.bin sha512.b64; \
          wc -c < \"$tgz\" > size.txt; read -r len < size.txt; \
          openssl base64 -A -in \"$tgz\" > data.b64; tar -xOf \"$tgz\" package/package.json > manifest.json; \
-         jq -n --arg name '{member}' --arg ver \"$ver\" --arg tgz \"$tgz\" --arg sha1 \"$sha1\" \
+         jq -n --arg name '{member}' --arg ver \"$ver\" --arg archive \"$archive\" --arg sha1 \"$sha1\" \
          --arg integrity \"sha512-$b64\" --argjson len \"$len\" --rawfile data data.b64 \
          --slurpfile manifest manifest.json '{document}' > document.json; \
          route='{route}'; \
