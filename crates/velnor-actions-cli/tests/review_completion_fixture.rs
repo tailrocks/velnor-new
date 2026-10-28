@@ -13,6 +13,8 @@ use std::{
 
 #[path = "review_completion_fixture/comment_editor.rs"]
 mod comment_editor;
+#[path = "review_completion_fixture/dispositions.rs"]
+mod dispositions;
 #[path = "review_completion_fixture/review_content.rs"]
 mod review_content;
 

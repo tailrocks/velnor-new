@@ -80,6 +80,11 @@ pub(super) fn write_responses(state: &Path, scenario: Scenario) -> Result<(), Bo
         "review-thread-full.json",
         &thread_detail(scenario, true, review),
     )?;
+    super::put_json(
+        state,
+        "review-thread-expanded.json",
+        &thread_expanded(scenario, review),
+    )?;
     Ok(())
 }
 
@@ -180,6 +185,23 @@ fn thread_detail(scenario: Scenario, full: bool, review_id: u64) -> Value {
     });
     if !full {
         response["errors"] = json!([{"message":"Int cannot represent this value","path":["node","comments","nodes",0,"databaseId"]}]);
+    }
+    response
+}
+
+fn thread_expanded(scenario: Scenario, review_id: u64) -> Value {
+    let mut response = thread_detail(scenario, true, review_id);
+    if has_inline_comment(scenario) {
+        let created = comment_record()["created_at"].clone();
+        if let Some(rows) = response
+            .pointer_mut("/data/node/comments/nodes")
+            .and_then(Value::as_array_mut)
+        {
+            for root in rows {
+                root["createdAt"] = created.clone();
+                root["replyTo"] = Value::Null;
+            }
+        }
     }
     response
 }

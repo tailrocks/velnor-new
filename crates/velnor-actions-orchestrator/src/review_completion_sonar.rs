@@ -142,7 +142,9 @@ fn authenticate(
     {
         return Err(internal("review_sonar_evidence"));
     }
-    Ok(Some(json!({"app":app,"editor":editor,"check":check,"fork_head_repository_id":location.3})))
+    Ok(Some(
+        json!({"app":app,"editor":editor,"check":check,"fork_head_repository_id":location.3}),
+    ))
 }
 
 fn candidate(comment: &Value) -> bool {
@@ -233,7 +235,12 @@ fn valid_project_key(project: &str) -> bool {
     !bytes.is_empty()
 }
 
-fn valid_check(check: &Value, head: &str, location: (&str, u64, u64, Option<u64>), project: &str) -> bool {
+fn valid_check(
+    check: &Value,
+    head: &str,
+    location: (&str, u64, u64, Option<u64>),
+    project: &str,
+) -> bool {
     let link = format!(
         "https://sonarcloud.io/dashboard?id={project}&pullRequest={}",
         location.1

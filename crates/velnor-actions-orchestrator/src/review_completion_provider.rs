@@ -12,6 +12,8 @@ use serde::Deserialize;
 use serde_json::Value;
 use velnor_actions_contract::{canonical_json_bytes, digest_b3};
 
+#[path = "review_completion_dispositions.rs"]
+mod dispositions;
 #[path = "review_completion_findings.rs"]
 mod findings;
 #[path = "review_completion_sonar.rs"]
@@ -93,15 +95,24 @@ pub(super) fn inspect(
         head,
         (code_time, security_time),
         restart,
-        (location.0, location.1, repository_id, fork_head_repository_id),
+        (
+            location.0,
+            location.1,
+            repository_id,
+            fork_head_repository_id,
+        ),
     ) else {
         return Ok((CompletionState::Blocked, Some(evidence)));
     };
     if !fresh {
         return Ok((CompletionState::Pending, Some(evidence)));
     }
-    let Some((covered, mut review_metadata)) =
-        authenticate_reviews(api, records, (code_time, security_time))?
+    let Some((covered, mut review_metadata)) = dispositions::authenticate_reviews(
+        api,
+        records,
+        &finding.human_review_ids,
+        (code_time, security_time),
+    )?
     else {
         return Ok((CompletionState::Blocked, Some(evidence)));
     };
@@ -123,59 +134,6 @@ pub(super) fn inspect(
         },
         Some(evidence),
     ))
-}
-
-fn authenticate_reviews(
-    api: &TapMergeGitHub,
-    records: &FeedbackRecords,
-    terminal: (time::Timestamp, time::Timestamp),
-) -> Result<Option<(bool, Vec<Value>)>, OrchestratorError> {
-    let mut covered = true;
-    let mut ids = std::collections::BTreeSet::new();
-    let mut review_metadata = Vec::new();
-    for review in &records.reviews {
-        let id = review["id"]
-            .as_u64()
-            .filter(|n| *n > 0)
-            .ok_or_else(|| internal("review_provider_review_id"))?;
-        if !ids.insert(id)
-            || review.pointer("/user/id").and_then(Value::as_u64) != Some(PROVIDER_BOT)
-            || review["state"].as_str() != Some("COMMENTED")
-            || !review["body"]
-                .as_str()
-                .is_some_and(|b| b.starts_with("<!-- codex-review-receipt:v1 -->"))
-        {
-            return Ok(None);
-        }
-        let code = receipt_is_code(
-            review["body"]
-                .as_str()
-                .ok_or_else(|| internal("review_provider_receipt"))?,
-        )?;
-        let (metadata, activity) = authenticate_review(api, review)?;
-        covered &= activity <= if code { terminal.0 } else { terminal.1 };
-        review_metadata.push(metadata);
-    }
-    Ok(Some((covered, review_metadata)))
-}
-
-fn receipt_is_code(body: &str) -> Result<bool, OrchestratorError> {
-    if body.lines().next() != Some("<!-- codex-review-receipt:v1 -->") {
-        return Err(internal("review_provider_receipt"));
-    }
-    let code = body
-        .lines()
-        .filter(|line| *line == "### 💡 Codex Review")
-        .count();
-    let security = body
-        .lines()
-        .filter(|line| *line == "### 🛡️ Codex Security Review")
-        .count();
-    match (code, security) {
-        (1, 0) => Ok(true),
-        (0, 1) => Ok(false),
-        _ => Err(internal("review_provider_receipt_role")),
-    }
 }
 
 fn evidence_digest(
