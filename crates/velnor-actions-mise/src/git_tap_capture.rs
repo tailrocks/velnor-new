@@ -7,6 +7,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[path = "git_tap_capture/checkout_modes.rs"]
+mod checkout_modes;
 #[path = "git_tap_capture/homebrew_pinned_source.rs"]
 pub mod homebrew_pinned_source;
 
@@ -228,6 +230,19 @@ fn materialize(
     .stdout
     .clone();
     if head != expected_sha || !status.is_empty() {
+        return Err(invalid("tap_checkout_not_clean_at_captured_main"));
+    }
+    let entries = read_tap_tree(destination, expected_sha, deadline)?;
+    checkout_modes::normalize(destination, &entries, deadline)?;
+    let status = run_git(
+        Some(destination),
+        ["status", "--porcelain=v1", "-z", "--untracked-files=all"],
+        deadline,
+    )?
+    .require_success("git")?
+    .stdout
+    .clone();
+    if !status.is_empty() {
         return Err(invalid("tap_checkout_not_clean_at_captured_main"));
     }
     Ok(())
