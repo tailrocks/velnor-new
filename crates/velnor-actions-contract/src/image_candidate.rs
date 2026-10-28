@@ -7,6 +7,8 @@ mod image_candidate_closure;
 mod image_candidate_record;
 #[path = "image_candidate/runner_publication.rs"]
 mod runner_publication;
+#[path = "image_candidate/runner_publication_context.rs"]
+mod runner_publication_context;
 
 pub use image_candidate_closure::{
     IMAGE_NATIVE_CLOSURE_SCHEMA, ImageCandidateSourceClosure, NATIVE_IMAGE_CANDIDATE_INPUTS,
@@ -24,4 +26,7 @@ pub use runner_publication::{
     RunnerImagePublicationQualification, RunnerImagePublicationRecord,
     RunnerImagePublicationReferencedWorkflow, RunnerImagePublicationSource,
     parse_runner_image_publication_record, validate_runner_image_publication_record,
+};
+pub use runner_publication_context::{
+    RunnerPublicationDockerfileContext, runner_publication_dockerfile_context,
 };

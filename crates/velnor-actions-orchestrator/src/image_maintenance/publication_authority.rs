@@ -19,6 +19,19 @@ use runner_profiles::ImageKind;
 
 #[path = "publication_authority_oci.rs"]
 mod oci;
+#[path = "publication_authority_source.rs"]
+mod source;
+
+pub(super) fn verify_source_inputs(
+    candidate: &CandidateRecord,
+    source_files: &BTreeMap<String, Vec<u8>>,
+) -> Result<(), OrchestratorError> {
+    source::verify_source_inputs(candidate, source_files)
+}
+
+pub(super) fn source_paths(profile: ImagePublicationProfile) -> &'static [&'static str] {
+    source::source_paths(profile)
+}
 
 pub(super) fn inspect_archive(
     request: &PublishImageRequest,
@@ -214,72 +227,6 @@ pub(super) fn verify_archive_bytes(
 
 pub(super) fn record_file_digest(path: &Path) -> Result<String, OrchestratorError> {
     hash_regular_file(path, MAX_RECORD_BYTES, None).map(|(digest, _)| digest)
-}
-
-pub(super) fn verify_source_inputs(
-    candidate: &CandidateRecord,
-    source_files: &BTreeMap<String, Vec<u8>>,
-) -> Result<(), OrchestratorError> {
-    if source_files.len() != source_paths(candidate.profile).len()
-        || source_files.keys().ne(candidate.source_inputs.keys())
-    {
-        return Err(internal("image_publication_source_inventory"));
-    }
-    for (path, bytes) in source_files {
-        if candidate.source_inputs.get(path).map(String::as_str)
-            != Some(hex(&Sha256::digest(bytes)).as_str())
-        {
-            return Err(internal("image_publication_source_digest"));
-        }
-    }
-    let lock_bytes = source_files
-        .get(".velnor/runner.lock")
-        .ok_or_else(|| internal("image_publication_lock_missing"))?;
-    let lock: RunnerLockVersions = toml::from_str(
-        std::str::from_utf8(lock_bytes).map_err(|_| internal("image_publication_lock_utf8"))?,
-    )
-    .map_err(|_| internal("image_publication_lock_parse"))?;
-    if [
-        &lock.runner,
-        &lock.docker,
-        &lock.buildx,
-        &lock.compose,
-        &lock.node,
-    ]
-    .iter()
-    .any(|version| !velnor_actions_contract::config::is_exact_semver(version))
-    {
-        return Err(internal("image_publication_lock_versions"));
-    }
-    if let Some(expected) = &candidate.lock
-        && (expected.sha256 != hex(&Sha256::digest(lock_bytes))
-            || expected.runner_version != lock.runner
-            || expected.docker_version != lock.docker
-            || expected.buildx_version != lock.buildx
-            || expected.compose_version != lock.compose
-            || expected.node_version != lock.node)
-    {
-        return Err(internal("image_publication_runner_lock_identity"));
-    }
-    if let Some(builder) = &candidate.buildx_builder {
-        let version = validate::buildx_release_version(builder)
-            .ok_or_else(|| internal("image_publication_job_buildx_identity"))?;
-        if version != lock.buildx {
-            return Err(internal("image_publication_job_buildx_identity"));
-        }
-    }
-    Ok(())
-}
-
-pub(super) fn source_paths(profile: ImagePublicationProfile) -> &'static [&'static str] {
-    match profile {
-        ImagePublicationProfile::Job => &velnor_actions_contract::IMAGE_CANDIDATE_SOURCE_INPUTS,
-        ImagePublicationProfile::Runner
-        | ImagePublicationProfile::Dind
-        | ImagePublicationProfile::ResourceProbe => {
-            &velnor_actions_contract::RUNNER_PUBLICATION_SOURCE_INPUTS
-        }
-    }
 }
 
 pub(super) const fn image_name(profile: ImagePublicationProfile) -> &'static str {

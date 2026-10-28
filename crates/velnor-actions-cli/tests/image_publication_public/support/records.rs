@@ -314,7 +314,7 @@ fn hex(bytes: &[u8]) -> String {
         .collect()
 }
 
-fn encode_base64(bytes: &[u8]) -> String {
+pub(super) fn encode_base64(bytes: &[u8]) -> String {
     const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut output = String::new();
     for chunk in bytes.chunks(3) {

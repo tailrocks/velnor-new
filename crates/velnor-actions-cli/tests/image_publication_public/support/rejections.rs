@@ -46,6 +46,39 @@ impl RejectionCase {
 }
 
 impl Fixture {
+    pub(crate) fn set_source_response(
+        &self,
+        path: &str,
+        bytes: &[u8],
+    ) -> Result<(), Box<dyn Error>> {
+        let mut state = self.read_state()?;
+        state["source_files"][path] = json!(super::records::encode_base64(bytes));
+        self.write_state(&state)
+    }
+
+    pub(crate) fn replace_authenticated_source(
+        &self,
+        path: &str,
+        bytes: &[u8],
+    ) -> Result<(), Box<dyn Error>> {
+        self.set_source_response(path, bytes)?;
+        let mut record: Value = serde_json::from_slice(&fs::read(&self.record)?)?;
+        record["source"]["inputs"][path] = json!(hex(&Sha256::digest(bytes)));
+        let record_bytes = serde_json::to_vec(&record)?;
+        fs::write(&self.record, &record_bytes)?;
+        let record_digest = hex(&Sha256::digest(&record_bytes));
+        let mut state = self.read_state()?;
+        let subjects = state["attestation"][0]["verificationResult"]["statement"]["subject"]
+            .as_array_mut()
+            .ok_or("fixture attestation has no subjects")?;
+        let subject = subjects
+            .iter_mut()
+            .find(|subject| subject["name"] == self.profile.record_name())
+            .ok_or("fixture attestation has no publication record subject")?;
+        subject["digest"]["sha256"] = json!(record_digest);
+        self.write_state(&state)
+    }
+
     pub(crate) fn apply_rejection(&self, case: RejectionCase) -> Result<(), Box<dyn Error>> {
         match case {
             RejectionCase::WrongRepository => self.update_state(|state| {
