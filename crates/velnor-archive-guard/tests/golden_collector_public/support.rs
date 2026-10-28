@@ -216,3 +216,33 @@ pub(super) fn retained_workspace(output: &Output) -> Option<PathBuf> {
         .find_map(|line| line.strip_prefix("retaining golden evidence workspace: "))
         .map(PathBuf::from)
 }
+
+pub(super) fn dogfood_plan_difference(
+    output: &Output,
+    root: &Path,
+) -> Result<String, Box<dyn Error>> {
+    let workspace = retained_workspace(output).ok_or("failed workspace was not retained")?;
+    let expected =
+        fs::read_to_string(root.join("docs/proposed/opentofu-goldens/cases/dogfood/plan.txt"))?;
+    let actual = fs::read_to_string(workspace.join("stage/dogfood/plan.txt"))?;
+    let mut expected_lines = expected.lines();
+    let mut actual_lines = actual.lines();
+    let mut line = 1;
+    loop {
+        match (expected_lines.next(), actual_lines.next()) {
+            (Some(expected), Some(actual)) if expected == actual => line += 1,
+            (Some(expected), Some(actual)) => {
+                return Ok(format!(
+                    "differs at line {line}: expected {expected:?}, actual {actual:?}"
+                ));
+            }
+            (Some(expected), None) => {
+                return Ok(format!("ends before expected line {line}: {expected:?}"));
+            }
+            (None, Some(actual)) => {
+                return Ok(format!("has extra line {line}: {actual:?}"));
+            }
+            (None, None) => return Ok("matches".to_owned()),
+        }
+    }
+}

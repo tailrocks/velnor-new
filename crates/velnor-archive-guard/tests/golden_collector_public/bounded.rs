@@ -13,7 +13,8 @@ use std::{
 
 use super::mutation::{copy_mutation_repository, private_directory};
 use super::support::{
-    Harness, copy_executable, copy_tree, diagnostics_candidate, retained_workspace, sha256,
+    Harness, copy_executable, copy_tree, diagnostics_candidate, dogfood_plan_difference,
+    retained_workspace, sha256,
 };
 
 const OUTPUT_CAP: usize = 1_048_576;
@@ -369,36 +370,6 @@ fn plan_evidence(output: &std::process::Output) -> Result<PlanEvidence, Box<dyn 
         termination: fs::read_to_string(raw.join("plan.termination"))?,
         exit: fs::read_to_string(workspace.join("stage/nested/plan.exit"))?,
     })
-}
-
-fn dogfood_plan_difference(
-    output: &std::process::Output,
-    root: &Path,
-) -> Result<String, Box<dyn Error>> {
-    let workspace = retained_workspace(output).ok_or("failed workspace was not retained")?;
-    let expected =
-        fs::read_to_string(root.join("docs/proposed/opentofu-goldens/cases/dogfood/plan.txt"))?;
-    let actual = fs::read_to_string(workspace.join("stage/dogfood/plan.txt"))?;
-    let mut expected_lines = expected.lines();
-    let mut actual_lines = actual.lines();
-    let mut line = 1;
-    loop {
-        match (expected_lines.next(), actual_lines.next()) {
-            (Some(expected), Some(actual)) if expected == actual => line += 1,
-            (Some(expected), Some(actual)) => {
-                return Ok(format!(
-                    "differs at line {line}: expected {expected:?}, actual {actual:?}"
-                ));
-            }
-            (Some(expected), None) => {
-                return Ok(format!("ends before expected line {line}: {expected:?}"));
-            }
-            (None, Some(actual)) => {
-                return Ok(format!("has extra line {line}: {actual:?}"));
-            }
-            (None, None) => return Ok("matches".to_owned()),
-        }
-    }
 }
 
 fn contains(bytes: &[u8], needle: &[u8]) -> bool {
