@@ -41,6 +41,27 @@ pub(super) fn assert_raw_consumer_render(
     raw_step_authority::assert_raw_step_authority(preparation, WorkflowPolicy::ConsumerV1)
 }
 
+pub(super) fn assert_seed_pull_request_events(yaml: &str) {
+    let pull_request_types = yaml
+        .lines()
+        .skip_while(|line| *line != "  pull_request:")
+        .skip(1)
+        .take_while(|line| line.starts_with("    "))
+        .filter_map(|line| line.trim().strip_prefix("- "))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        pull_request_types,
+        [
+            "opened",
+            "edited",
+            "synchronize",
+            "reopened",
+            "ready_for_review"
+        ],
+        "seed must re-plan pull requests after base retargets and when drafts become ready"
+    );
+}
+
 pub(super) fn assert_raw_producer_render(
     preparation: &GenerationPreparation,
 ) -> Result<(), Box<dyn Error>> {
