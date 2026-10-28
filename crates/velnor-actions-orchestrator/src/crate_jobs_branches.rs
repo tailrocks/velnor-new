@@ -24,9 +24,11 @@ pub(super) fn finalize_group_branches(
             .map_err(|error| contract_problem(&error))?,
     );
     reader.cache_mode = Some(CacheMode::explicit_read());
-    if base.steps.iter().any(|step| {
-        step.id == Some(velnor_actions_contract::StepId::MbxBundleKey)
-    }) {
+    if base
+        .steps
+        .iter()
+        .any(|step| step.id == Some(velnor_actions_contract::StepId::MbxBundleKey))
+    {
         // Publish the key computation for the writer recheck: the recheck
         // runs before the writer's own key step, so it reads the reader's
         // outputs through `needs` instead of a later step's outputs.
