@@ -261,8 +261,19 @@ fn approved_runtime_for_check(
     root: &Path,
     check: &DiscoveredCheck,
 ) -> Result<velnor_actions_mise::catalog::lock::ApprovedMiseRuntime, OrchestratorError> {
-    let approved = crate::controller_approval::ControllerApprovedRelease::load_active_approval(root)?;
+    use velnor_actions_mise::catalog::lock::ApprovedMiseRuntime;
+
     let target = check.check.runner.platform.release_target();
+    if !root.join(".velnor/controller-approvals.json").is_file() {
+        let pin = velnor_actions_mise::current_mise_binary(target);
+        return Ok(ApprovedMiseRuntime {
+            target,
+            version: pin.version.to_owned(),
+            sha256: pin.sha256.to_owned(),
+            bytes: pin.bytes,
+        });
+    }
+    let approved = crate::controller_approval::ControllerApprovedRelease::load_active_approval(root)?;
     approved
         .as_authority()
         .mise_runtime
