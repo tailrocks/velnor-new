@@ -264,3 +264,6 @@ fn invalid_runtime_tables_fail_closed() -> Result<(), Box<dyn Error>> {
     }
     Ok(())
 }
+
+#[path = "runtime_plan.rs"]
+mod plan_runtime;

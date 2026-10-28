@@ -14,10 +14,33 @@ pub(crate) fn resolve_mise_runtime(
     check: &velnor_actions_mise::DiscoveredCheck,
     deadline: CheckDeadline,
 ) -> Result<ApprovedMiseRuntime, OrchestratorError> {
-    let target = check.check.runner.platform.release_target();
-    if let Some(approved) =
-        crate::controller_approval::load_policy_approval_until(root, policy, deadline)?
-    {
+    resolve_mise_runtime_until(root, policy, check.check.runner.platform, deadline)
+}
+
+pub(crate) fn resolve_mise_runtime_for_platform(
+    root: &Path,
+    policy: velnor_actions_contract::WorkflowPolicy,
+    platform: CheckPlatform,
+) -> Result<ApprovedMiseRuntime, OrchestratorError> {
+    let approved = crate::controller_approval::load_policy_approval(root, policy)?;
+    runtime_for_target(approved, platform.release_target())
+}
+
+pub(crate) fn resolve_mise_runtime_until(
+    root: &Path,
+    policy: velnor_actions_contract::WorkflowPolicy,
+    platform: CheckPlatform,
+    deadline: CheckDeadline,
+) -> Result<ApprovedMiseRuntime, OrchestratorError> {
+    let approved = crate::controller_approval::load_policy_approval_until(root, policy, deadline)?;
+    runtime_for_target(approved, platform.release_target())
+}
+
+fn runtime_for_target(
+    approved: Option<crate::controller_approval::ControllerApprovedRelease>,
+    target: velnor_actions_contract::ReleaseTarget,
+) -> Result<ApprovedMiseRuntime, OrchestratorError> {
+    if let Some(approved) = approved {
         return select_runtime_for_target(&approved, target)
             .ok_or_else(|| internal("mise_runtime_missing_target"));
     }

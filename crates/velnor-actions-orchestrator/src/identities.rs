@@ -258,7 +258,12 @@ pub(crate) fn toolchain_inputs_for(
     catalog: &ToolCatalog,
 ) -> Result<ToolchainInputs, ContractError> {
     match Stack::require_known(&task.stack_id)? {
-        Stack::Mise => return super::named_checks::toolchain_inputs(task, catalog),
+        Stack::Mise => {
+            return Err(ContractError::identity(
+                "mise_runtime",
+                "effective_runtime_required",
+            ));
+        }
         Stack::Native => {
             return Err(ContractError::identity(
                 "native_check",

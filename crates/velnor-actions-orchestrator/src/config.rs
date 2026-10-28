@@ -96,7 +96,11 @@ pub(crate) fn load_config_until(
         }
         crate::safe_read::RepoRead::Text(text) => text,
     };
-    load_config_from_text(&text)
+    let config = load_config_from_text(&text)?;
+    deadline
+        .remaining()
+        .map_err(|error| crate::internal::internal(&error.to_string()))?;
+    Ok(config)
 }
 
 pub(crate) fn load_config_from_text(text: &str) -> Result<VelnorConfig, OrchestratorError> {
