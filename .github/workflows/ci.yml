@@ -1153,7 +1153,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 5a83b914e809942d9c71823f445ced0ce1e224b12c0ff5a0f2bf6c8af7853a4e-${{ env.VELNOR_TOOL_JACTIONLINT }}-${{ env.VELNOR_TOOL_JACTIONLINT_LOCK }}-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}-${{ env.VELNOR_TOOL_SHELLCHECK }}-${{ env.VELNOR_TOOL_SHELLCHECK_LOCK }}
+          d: 1e134e27d86b01d1382d53d1c74f8acf15422db3f9dc18560d195ceb9e084ddc-${{ env.VELNOR_TOOL_JACTIONLINT }}-${{ env.VELNOR_TOOL_JACTIONLINT_LOCK }}-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}-${{ env.VELNOR_TOOL_SHELLCHECK }}-${{ env.VELNOR_TOOL_SHELLCHECK_LOCK }}
       - *s4
       - *s9
       - *s10
@@ -1161,7 +1161,7 @@ jobs:
       - &s50
         name: Prepare pinned tools
         env: *m14
-        run: "mise --no-config --no-env --no-hooks install 'rust@'\"${VELNOR_TOOL_RUST}\" 'mr-boxington@'\"${VELNOR_TOOL_MR_BOXINGTON}\" 'jactionlint@'\"${VELNOR_TOOL_JACTIONLINT}\" 'shellcheck@'\"${VELNOR_TOOL_SHELLCHECK}\" 'aqua:nextest-rs/nextest/cargo-nextest@'\"${VELNOR_TOOL_NEXTEST}\""
+        run: "mise --no-config --no-env --no-hooks install 'rust@'\"${VELNOR_TOOL_RUST}\" 'mr-boxington@'\"${VELNOR_TOOL_MR_BOXINGTON}\" 'jactionlint@'\"${VELNOR_TOOL_JACTIONLINT}\" 'shellcheck@'\"${VELNOR_TOOL_SHELLCHECK}\" 'aqua:nextest-rs/nextest/cargo-nextest@'\"${VELNOR_TOOL_NEXTEST}\" crane@0.22.1"
       - *s37
       - *s16
       - *s17
