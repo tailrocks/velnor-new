@@ -66,7 +66,13 @@ pub(crate) fn create_for(profile: FixtureProfile, source: &str) -> Result<Layout
             return create(source);
         }
         FixtureProfile::Runner | FixtureProfile::Dind => {
-            json!({"Labels":{"org.opencontainers.image.revision":source},"User":"fixture"})
+            json!({
+                "Labels": {
+                    "org.opencontainers.image.revision": source,
+                    "io.velnor.image.kind": profile.name(),
+                },
+                "User": "fixture",
+            })
         }
         FixtureProfile::ResourceProbe => json!({
             "Labels":{"org.opencontainers.image.revision":source},

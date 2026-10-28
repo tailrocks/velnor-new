@@ -16,6 +16,7 @@ use super::source::SourceSnapshot;
 
 const IMAGE_TIMEOUT: Duration = Duration::from_secs(5);
 const SOURCE_LABEL: &str = "org.opencontainers.image.revision";
+const IMAGE_KIND_LABEL: &str = "io.velnor.image.kind";
 
 pub(super) struct Qualification {
     pub(super) outer: DaemonIdentity,
@@ -45,8 +46,8 @@ async fn qualify_with_resources(
     dind_id: &str,
     resources: &mut OwnedResources,
 ) -> Result<Qualification, HostError> {
-    inspect_image(docker, source, runner_id).await?;
-    inspect_image(docker, source, dind_id).await?;
+    inspect_image(docker, source, runner_id, "runner").await?;
+    inspect_image(docker, source, dind_id, "dind").await?;
     let outer = probes::inspect_outer(docker).await?;
     let versions = probes::verify_versions(docker, source, runner_id, dind_id, resources).await?;
     let socket_volume = resources.create_volume(docker, "socket").await?;
@@ -63,8 +64,8 @@ async fn qualify_with_resources(
     if runner_id_from_socket != inner_id {
         return Err(HostError::Identity);
     }
-    inspect_image(docker, source, runner_id).await?;
-    inspect_image(docker, source, dind_id).await?;
+    inspect_image(docker, source, runner_id, "runner").await?;
+    inspect_image(docker, source, dind_id, "dind").await?;
     let final_outer = probes::inspect_outer(docker).await?;
     if final_outer != outer {
         return Err(HostError::Identity);
@@ -80,6 +81,7 @@ async fn inspect_image(
     docker: &Docker,
     source: &SourceSnapshot,
     image_id: &str,
+    expected_kind: &str,
 ) -> Result<(), HostError> {
     let image = deadline(docker.inspect_image(image_id), IMAGE_TIMEOUT)
         .await?
@@ -90,13 +92,14 @@ async fn inspect_image(
                 HostError::Docker
             }
         })?;
-    validate_image(&image, source, image_id)
+    validate_image(&image, source, image_id, expected_kind)
 }
 
 fn validate_image(
     image: &ImageInspect,
     source: &SourceSnapshot,
     image_id: &str,
+    expected_kind: &str,
 ) -> Result<(), HostError> {
     if image.id.as_deref() != Some(image_id)
         || image.os.as_deref() != Some("linux")
@@ -113,7 +116,14 @@ fn validate_image(
         .as_ref()
         .and_then(|config| config.labels.as_ref())
         .and_then(|labels| labels.get(SOURCE_LABEL));
-    if revision.map(String::as_str) != Some(source.source_sha.as_str()) {
+    let image_kind = image
+        .config
+        .as_ref()
+        .and_then(|config| config.labels.as_ref())
+        .and_then(|labels| labels.get(IMAGE_KIND_LABEL));
+    if revision.map(String::as_str) != Some(source.source_sha.as_str())
+        || image_kind.map(String::as_str) != Some(expected_kind)
+    {
         return Err(HostError::Identity);
     }
     Ok(())

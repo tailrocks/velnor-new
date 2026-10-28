@@ -83,6 +83,28 @@ pub(crate) fn for_kind(
     )
 }
 
+pub(crate) fn with_wrong_role(
+    directory: &Path,
+    kind: &str,
+    source: &str,
+) -> Result<OciImage, Box<dyn Error>> {
+    let mut config = match kind {
+        "runner" => runner_config(source),
+        "dind" => dind_config(source),
+        _ => return Err(format!("unknown image kind: {kind}").into()),
+    };
+    config["Labels"]["io.velnor.image.kind"] =
+        json!(if kind == "runner" { "dind" } else { "runner" });
+    write_image(
+        directory,
+        &next_filename("wrong-role"),
+        &config,
+        "linux",
+        "amd64",
+        false,
+    )
+}
+
 pub(crate) fn probe_mutation(
     directory: &Path,
     source: &str,
@@ -112,7 +134,10 @@ pub(crate) fn probe_mutation(
 
 fn runner_config(source: &str) -> Value {
     json!({
-        "Labels": {"org.opencontainers.image.revision": source},
+        "Labels": {
+            "org.opencontainers.image.revision": source,
+            "io.velnor.image.kind": "runner",
+        },
         "User": "runner-flexible-user",
         "WorkingDir": "/runner-flexible",
         "Entrypoint": ["/runner-flexible"],
@@ -123,7 +148,10 @@ fn runner_config(source: &str) -> Value {
 
 fn dind_config(source: &str) -> Value {
     json!({
-        "Labels": {"org.opencontainers.image.revision": source},
+        "Labels": {
+            "org.opencontainers.image.revision": source,
+            "io.velnor.image.kind": "dind",
+        },
         "User": "dind-flexible-user",
         "WorkingDir": "/dind-flexible",
         "Entrypoint": ["/dind-flexible"],

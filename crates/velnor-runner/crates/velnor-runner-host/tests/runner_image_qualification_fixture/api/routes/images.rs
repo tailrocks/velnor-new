@@ -74,6 +74,10 @@ fn inspect_image(path: &str, state: &mut State) -> Reply {
     let mut reported_id = expected.to_owned();
     let mut architecture = "amd64";
     let mut revision = state.plan.source_sha.clone();
+    let mut image_kind = match role {
+        ImageRole::Runner => "runner",
+        ImageRole::Dind => "dind",
+    };
     let fault_reached = match state.plan.image_fault {
         Some((target, ImageFault::Id)) if target == role => {
             reported_id = digest_id('c');
@@ -85,6 +89,10 @@ fn inspect_image(path: &str, state: &mut State) -> Reply {
         }
         Some((target, ImageFault::Source)) if target == role => {
             revision = "f".repeat(40);
+            true
+        }
+        Some((target, ImageFault::Kind)) if target == role => {
+            image_kind = wrong_image_kind(role);
             true
         }
         Some((target, ImageFault::Reinspection)) if target == role && *count > 1 => {
@@ -113,13 +121,23 @@ fn inspect_image(path: &str, state: &mut State) -> Reply {
             "Os": "linux",
             "Architecture": architecture,
             "Variant": "",
-            "Config": {"Labels": {"org.opencontainers.image.revision": revision}}
+            "Config": {"Labels": {
+                "org.opencontainers.image.revision": revision,
+                "io.velnor.image.kind": image_kind
+            }}
         }),
     );
     if delayed {
         reply.with_delay(Duration::from_secs(6))
     } else {
         reply
+    }
+}
+
+fn wrong_image_kind(role: ImageRole) -> &'static str {
+    match role {
+        ImageRole::Runner => "dind",
+        ImageRole::Dind => "runner",
     }
 }
 

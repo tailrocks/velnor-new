@@ -123,6 +123,38 @@ fn public_qualifier_rejects_image_identity_and_platform_mismatches() -> TestResu
 }
 
 #[test]
+fn public_qualifier_rejects_wrong_image_kind_before_resources() -> TestResult<()> {
+    let git = GitFixture::new()?;
+    let mut plan = ApiPlan::new(git.source_sha());
+    plan.foreign_sentinel = true;
+    plan.image_fault = Some((ImageRole::Dind, ImageFault::Kind));
+    let (output, state) = qualify(&git, git.source_sha(), plan)?;
+
+    assert!(
+        !output.status.success(),
+        "accepted wrong-role image; api_requests={}, image_inspections={}, volume_creations={}, containers={:?}, volumes={:?}",
+        state.api_requests,
+        state.image_inspections,
+        state.volume_creations,
+        state.containers,
+        state.volumes
+    );
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("qualified_runner_image_id"));
+    assert!(state.fault_reached);
+    assert_eq!(state.image_inspections, 2);
+    assert_eq!(state.volume_creations, 0);
+    assert!(state.created.is_empty());
+    assert!(state.foreign_container_present && state.foreign_volume_present);
+    assert_eq!(state.containers.len(), 1);
+    assert_eq!(state.containers[0].name, "foreign-sentinel");
+    assert_eq!(state.volumes, ["foreign-sentinel"]);
+    assert_eq!(state.images.len(), 2);
+    assert!(state.images.contains(&digest_id('a')));
+    assert!(state.images.contains(&digest_id('b')));
+    Ok(())
+}
+
+#[test]
 fn public_qualifier_rejects_each_locked_image_version_mismatch() -> TestResult<()> {
     for probe in [
         Probe::RunnerListener,

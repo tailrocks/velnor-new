@@ -120,8 +120,20 @@ fn validate_image_configuration(
     source_commit: &str,
 ) -> Result<(), OrchestratorError> {
     super::runner_profiles::validate_revision(configuration, source_commit)?;
-    if matches!(kind, ImageKind::ResourceProbe) {
-        super::runner_profiles::validate_probe_profile(configuration)?;
+    match kind {
+        ImageKind::Runner => {
+            if !super::runner_profiles::has_image_kind(configuration, "runner") {
+                return Err(internal("runner_image_kind"));
+            }
+        }
+        ImageKind::Dind => {
+            if !super::runner_profiles::has_image_kind(configuration, "dind") {
+                return Err(internal("runner_image_kind"));
+            }
+        }
+        ImageKind::ResourceProbe => {
+            super::runner_profiles::validate_probe_profile(configuration)?;
+        }
     }
     Ok(())
 }

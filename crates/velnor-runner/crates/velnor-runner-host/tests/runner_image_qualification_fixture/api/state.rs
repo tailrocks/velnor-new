@@ -31,6 +31,7 @@ pub(crate) enum ImageFault {
     Id,
     Platform,
     Source,
+    Kind,
     Reinspection,
 }
 

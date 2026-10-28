@@ -309,6 +309,24 @@ fn each_image_must_match_source_platform_and_authenticated_graph() -> Result<(),
 }
 
 #[test]
+fn runner_and_dind_archives_must_match_their_image_kind() -> Result<(), Box<dyn Error>> {
+    let fixture = AdmissionFixture::new()?;
+    for (slot, kind) in [(0, "runner"), (1, "dind")] {
+        let mut images = fixture.images.clone();
+        images.replace(
+            slot,
+            oci::with_wrong_role(&fixture.image_dir, kind, &fixture.source)?,
+        );
+        let output = support::invoke(&fixture, &images)?;
+        assert!(
+            !output.status.success() && !fixture.output.exists(),
+            "accepted {kind} archive carrying the opposite image-kind label: {output:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn probe_profile_is_exact_while_runner_and_dind_remain_flexible() -> Result<(), Box<dyn Error>> {
     let fixture = AdmissionFixture::new()?;
     for mutation in [

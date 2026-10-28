@@ -40,6 +40,17 @@ pub(super) fn validate_revision(
     Ok(())
 }
 
+pub(super) fn has_image_kind(
+    configuration: &OciImageConfiguration,
+    expected_kind: &str,
+) -> bool {
+    configuration
+        .labels
+        .as_ref()
+        .and_then(|labels| labels.get("io.velnor.image.kind"))
+        .is_some_and(|image_kind| image_kind == expected_kind)
+}
+
 pub(super) fn validate_probe_profile(
     configuration: &OciImageConfiguration,
 ) -> Result<(), OrchestratorError> {

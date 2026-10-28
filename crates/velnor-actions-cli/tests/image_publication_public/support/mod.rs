@@ -95,6 +95,21 @@ impl Fixture {
         Self::new_with_profile(FixtureProfile::Job, image_config, RUN_ATTEMPT)
     }
 
+    pub(crate) fn new_for_image_kind(
+        profile: FixtureProfile,
+        image_kind: &str,
+    ) -> Result<Self, Box<dyn Error>> {
+        let source = "a".repeat(40);
+        let image = oci::create_with_image_config(&json!({
+            "Labels": {
+                "org.opencontainers.image.revision": source,
+                "io.velnor.image.kind": image_kind,
+            },
+            "User": "fixture",
+        }))?;
+        Self::new_with_image(profile, image, RUN_ATTEMPT, profile.artifact_id())
+    }
+
     pub(crate) fn new_with_raw_tar() -> Result<Self, Box<dyn Error>> {
         let source = "a".repeat(40);
         Self::new_with_image(

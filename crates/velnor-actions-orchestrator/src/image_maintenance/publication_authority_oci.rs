@@ -40,8 +40,21 @@ pub(super) fn inspect_archive(
     }
     if let Some(configuration) = configuration {
         runner_profiles::validate_revision(&configuration, &candidate.source_commit)?;
-        if candidate.profile == ImagePublicationProfile::ResourceProbe {
-            runner_profiles::validate_probe_profile(&configuration)?;
+        match candidate.profile {
+            ImagePublicationProfile::Job => (),
+            ImagePublicationProfile::Runner => {
+                if !runner_profiles::has_image_kind(&configuration, "runner") {
+                    return Err(internal("image_publication_image_kind"));
+                }
+            }
+            ImagePublicationProfile::Dind => {
+                if !runner_profiles::has_image_kind(&configuration, "dind") {
+                    return Err(internal("image_publication_image_kind"));
+                }
+            }
+            ImagePublicationProfile::ResourceProbe => {
+                runner_profiles::validate_probe_profile(&configuration)?;
+            }
         }
     }
     Ok(actual)
