@@ -2,11 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{path::Path, process::ExitCode};
+use velnor_actions_orchestrator::OperatorToolchainGuard;
 
 use crate::args::HomebrewCommand;
 use crate::dispatch::fail_public;
 
-pub(crate) fn run(command: &HomebrewCommand) -> ExitCode {
+pub(crate) fn run(
+    command: &HomebrewCommand,
+    guard: Option<&OperatorToolchainGuard>,
+) -> ExitCode {
     let report = match command {
         HomebrewCommand::SourcePolicy {
             root,
@@ -14,12 +18,29 @@ pub(crate) fn run(command: &HomebrewCommand) -> ExitCode {
             check,
         } => {
             let result = if *check {
-                velnor_actions_orchestrator::check_homebrew_source_policy(Path::new(root))
+                match guard {
+                    Some(guard) => {
+                        velnor_actions_orchestrator::check_homebrew_source_policy_with_operator_guard(
+                            Path::new(root),
+                            guard,
+                        )
+                    }
+                    None => velnor_actions_orchestrator::check_homebrew_source_policy(Path::new(root)),
+                }
             } else if let Some(output) = output {
-                velnor_actions_orchestrator::export_homebrew_source_policy(
-                    Path::new(root),
-                    Path::new(output),
-                )
+                match guard {
+                    Some(guard) => {
+                        velnor_actions_orchestrator::export_homebrew_source_policy_with_operator_guard(
+                            Path::new(root),
+                            Path::new(output),
+                            guard,
+                        )
+                    }
+                    None => velnor_actions_orchestrator::export_homebrew_source_policy(
+                        Path::new(root),
+                        Path::new(output),
+                    ),
+                }
             } else {
                 return fail_public(&velnor_actions_orchestrator::OrchestratorError::Internal {
                     problem: "homebrew_source_policy_mode_required".to_owned(),

@@ -18,6 +18,7 @@ impl IsolatedCommand {
             cwd: None,
             extra_env,
             policy: EnvPolicy::Discovery,
+            operator_guarded: false,
         }
     }
 }

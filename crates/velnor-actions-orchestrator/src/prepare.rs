@@ -7,12 +7,12 @@ use std::path::{Path, PathBuf};
 use velnor_actions_contract::{
     GeneratorLock, RunnerImageEvidence, RunnerSelection, VelnorConfig, WorkflowPolicy,
 };
-use velnor_actions_mise::{GitRequest, ToolCatalog};
+use velnor_actions_mise::{GitRequest, OperatorToolchainGuard, ToolCatalog};
 
 use crate::OrchestratorError;
 use crate::config::load_config;
 use crate::decisions::runner_image_evidence;
-use crate::discover::{Discovery, discover, discover_with_phase_timings};
+use crate::discover::{Discovery, discover_with_options};
 use crate::internal::phase_timing::PlanPhaseTimings;
 use crate::source_prep::lockful_roots;
 use crate::workflow::{DEFAULT_RUNNER_LABEL, WorkflowPlan};
@@ -31,6 +31,7 @@ pub struct GenerationPreparation {
     pub runner_image: RunnerImageEvidence,
     pub lock_audit_blocking: Vec<String>,
     pub catalog: ToolCatalog,
+    operator_toolchain_guard: Option<OperatorToolchainGuard>,
 }
 
 impl GenerationPreparation {
@@ -38,10 +39,21 @@ impl GenerationPreparation {
     pub fn emission_catalog(&self) -> ToolCatalog {
         self.catalog.for_emission()
     }
+
+    pub(crate) fn operator_toolchain_guard(&self) -> Option<&OperatorToolchainGuard> {
+        self.operator_toolchain_guard.as_ref()
+    }
 }
 
 pub fn prepare(root: &Path) -> Result<GenerationPreparation, OrchestratorError> {
-    prepare_inner(root, None, None)
+    prepare_inner(root, None, None, None)
+}
+
+pub fn prepare_with_operator_guard(
+    root: &Path,
+    guard: &OperatorToolchainGuard,
+) -> Result<GenerationPreparation, OrchestratorError> {
+    prepare_inner(root, None, None, Some(guard))
 }
 
 pub(crate) fn prepare_with_config(
@@ -52,20 +64,21 @@ pub(crate) fn prepare_with_config(
         .validate(crate::config::CONFIG_REL)
         .map_err(crate::config::config_error)?;
     crate::config::check_policy_mode(&config)?;
-    prepare_inner(root, None, Some(config))
+    prepare_inner(root, None, Some(config), None)
 }
 
 pub(crate) fn prepare_with_phase_timings(
     root: &Path,
     phases: &mut PlanPhaseTimings,
 ) -> Result<GenerationPreparation, OrchestratorError> {
-    prepare_inner(root, Some(phases), None)
+    prepare_inner(root, Some(phases), None, None)
 }
 
 fn prepare_inner(
     root: &Path,
     phases: Option<&mut PlanPhaseTimings>,
     admitted_config: Option<VelnorConfig>,
+    guard: Option<&OperatorToolchainGuard>,
 ) -> Result<GenerationPreparation, OrchestratorError> {
     let canonical = root
         .canonicalize()
@@ -85,10 +98,8 @@ fn prepare_inner(
     let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&canonical, &config)?;
     let default_branch = resolve_default_branch(&canonical, &config)?;
     validate_verification_branch(&config, &default_branch)?;
-    let mut discovery = match phases {
-        Some(phases) => discover_with_phase_timings(&canonical, &config, &catalog, phases)?,
-        None => discover(&canonical, &config, &catalog)?,
-    };
+    let mut discovery =
+        discover_with_options(&canonical, &config, &catalog, phases, guard)?;
     let fetch_roots = lockful_roots(&canonical, &discovery.workspaces);
     let (runner_label, runner_selection) = runner_label_for(&config);
     let emission = catalog.for_emission();
@@ -143,6 +154,7 @@ fn prepare_inner(
         runner_image,
         lock_audit_blocking: audit.blocking,
         catalog,
+        operator_toolchain_guard: guard.cloned(),
     })
 }
 

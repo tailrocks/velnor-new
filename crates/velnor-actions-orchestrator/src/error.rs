@@ -28,6 +28,8 @@ pub enum OrchestratorError {
     Detection { problem: String },
     #[error("inventory: {problem}")]
     Inventory { problem: String },
+    #[error("{problem}")]
+    ToolchainGuard { problem: String },
     #[error("preparation_incomplete: {manifest}: {problem}")]
     PreparationIncomplete { manifest: String, problem: String },
     #[error("profile: {problem}")]
