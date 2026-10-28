@@ -109,7 +109,7 @@ fn assert_exact_inventory(transition: &HomebrewAdoptionTransition) -> Result<(),
         assert_eq!(entry.mode, 0o100_644, "unexpected mode for {path}");
         assert_eq!(entry.blob_sha, blob_sha, "unexpected blob for {path}");
     }
-    assert_eq!(transition.minimum_sdk_version, "0.1.65");
+    assert_eq!(transition.minimum_sdk_version, "0.1.66");
     transition.validate()?;
     Ok(())
 }
