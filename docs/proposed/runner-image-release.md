@@ -44,6 +44,14 @@ intermediate evidence, not publication authority or runtime qualification.
 The publisher must bind the same archives and lock to successful qualification
 before publishing or producing the release manifest.
 
+Native OCI materialization uses an absent destination inside a caller-owned
+private scratch directory and creates it exclusively. The caller keeps that
+scratch directory private and owned through Crane consumption, and consumes
+the projection only after materialization returns successfully. On failure,
+the materializer removes only the directory it created; if cleanup fails, the
+error identifies the destination for recovery. Existing destinations are
+never reused, overwritten or removed.
+
 Source-tag publication requires exclusive writer authority. Keep every
 Runner-family tag writer under the protected product-release concurrency group
 `${{ github.repository }}-product-release` with `cancel-in-progress: false`,

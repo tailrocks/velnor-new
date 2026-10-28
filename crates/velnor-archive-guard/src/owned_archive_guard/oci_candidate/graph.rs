@@ -27,17 +27,24 @@ enum ConfigurationProjection {
 
 pub(super) fn inspect_graph(archive: OciArchive) -> Result<OciCandidateEvidence> {
     inspect_graph_inner(archive, ConfigurationProjection::Ignore)
-        .map(|inspection| inspection.evidence)
+        .map(|(inspection, _)| inspection.evidence)
+}
+
+pub(super) fn inspect_graph_preserving_archive(
+    archive: OciArchive,
+) -> Result<(OciCandidateEvidence, OciArchive)> {
+    inspect_graph_inner(archive, ConfigurationProjection::Ignore)
+        .map(|(inspection, archive)| (inspection.evidence, archive))
 }
 
 pub(super) fn inspect_graph_with_config(archive: OciArchive) -> Result<OciCandidateInspection> {
-    inspect_graph_inner(archive, ConfigurationProjection::Include)
+    inspect_graph_inner(archive, ConfigurationProjection::Include).map(|(inspection, _)| inspection)
 }
 
 fn inspect_graph_inner(
     mut archive: OciArchive,
     projection: ConfigurationProjection,
-) -> Result<OciCandidateInspection> {
+) -> Result<(OciCandidateInspection, OciArchive)> {
     let layout = parse(&archive.layout)?;
     if layout.as_object().is_none_or(|map| {
         map.len() != 1
@@ -100,7 +107,7 @@ fn inspect_manifest(
     manifest_descriptor: &Descriptor,
     manifest_raw: &[u8],
     projection: ConfigurationProjection,
-) -> Result<OciCandidateInspection> {
+) -> Result<(OciCandidateInspection, OciArchive)> {
     let manifest = parse(manifest_raw)?;
     let manifest_obj = manifest
         .as_object()
@@ -159,7 +166,7 @@ fn inspect_config_and_blobs(
     config: &Descriptor,
     layers: &[LayerDescriptor],
     projection: ConfigurationProjection,
-) -> Result<OciCandidateInspection> {
+) -> Result<(OciCandidateInspection, OciArchive)> {
     let (expected_diff_ids, configuration) =
         read_expected_diff_ids(&mut archive, config, layers.len(), projection)?;
     let referenced = collect_references(manifest_descriptor, config, layers)?;
@@ -180,10 +187,13 @@ fn inspect_config_and_blobs(
         archive_digest,
         archive_size,
     )?;
-    Ok(OciCandidateInspection {
-        evidence,
-        configuration,
-    })
+    Ok((
+        OciCandidateInspection {
+            evidence,
+            configuration,
+        },
+        archive,
+    ))
 }
 
 fn collect_references(
