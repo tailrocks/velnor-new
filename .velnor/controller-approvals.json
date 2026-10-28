@@ -1,5 +1,5 @@
 {
-  "schema": 1,
+  "schema": 2,
   "repository": "tailrocks/velnor-new",
   "workflow": ".github/workflows/product-release-generator.yml",
   "active": {
@@ -25,11 +25,31 @@
       }
     ],
     "gh": "2.103.2",
-    "mise": {
+    "mise_bootstrap": {
       "version": "2026.10.21",
       "artifact": "https://github.com/jdx/mise/releases/download/v2026.10.21/mise-v2026.10.21-linux-x64",
       "sha256": "ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07"
     },
+    "mise_runtime": [
+      {
+        "target": "x86_64-unknown-linux-gnu",
+        "version": "2026.10.19",
+        "sha256": "3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d",
+        "bytes": 173449632
+      },
+      {
+        "target": "aarch64-apple-darwin",
+        "version": "2026.10.19",
+        "sha256": "7dc61dfa71abbcda1c40d18440bc556b5d58b80e6042bc4f95fd106fa1bb3c66",
+        "bytes": 138238816
+      },
+      {
+        "target": "x86_64-apple-darwin",
+        "version": "2026.10.19",
+        "sha256": "8d5e1591811143f15334f690373cefb58c13bd6cbd0292008748fd777f6c99d8",
+        "bytes": 169788224
+      }
+    ],
     "state": "active"
   },
   "staged": null

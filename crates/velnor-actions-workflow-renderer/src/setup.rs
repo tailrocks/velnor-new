@@ -46,15 +46,15 @@ impl MiseSetup {
         target: velnor_actions_contract::ReleaseTarget,
         approved: &velnor_actions_mise::catalog::lock::ApprovedGeneratorRelease<'_>,
     ) -> Result<Self, RenderError> {
+        self.validate()?;
         let binary = velnor_actions_mise::catalog::lock::mise_binary_for_approved_generator(
             lock, target, approved,
         )
         .map_err(|error| RenderError::BadCommand(error.to_string()))?;
-        let current = self.for_target(target.triple())?;
         Ok(Self {
             version: binary.version.to_owned(),
             sha256: binary.sha256.to_owned(),
-            ..current
+            ..self.clone()
         })
     }
 

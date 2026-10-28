@@ -13,8 +13,8 @@ use velnor_actions_contract::{
 use super::{MISE_VERSION, PinnedTool, ToolCatalog};
 
 pub use super::lock_verify::{
-    ApprovedGeneratorRelease, catalog_for_approved_generator, catalog_for_published_verdict,
-    mise_binary_for_approved_generator, published_verdict_manifest,
+    ApprovedGeneratorRelease, ApprovedMiseRuntime, catalog_for_approved_generator,
+    catalog_for_published_verdict, mise_binary_for_approved_generator, published_verdict_manifest,
     verify_lock_against_approved_release, verify_lock_against_manifest,
 };
 
