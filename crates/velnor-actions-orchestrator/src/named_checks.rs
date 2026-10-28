@@ -9,8 +9,9 @@ use std::path::Path;
 use velnor_actions_contract::cachekey::ToolchainInputs;
 use velnor_actions_contract::{
     ClosureBuilder, ContractError, NamedCheckIdentityExtension, ProposedTask, Provenance, Stack,
-    StackExtension, TaskInputClosure, digest_b3,
+    StackExtension, TaskInputClosure, canonical_json_bytes, digest_b3,
 };
+use velnor_actions_mise::catalog::lock::ApprovedMiseRuntime;
 use velnor_actions_mise::{DiscoveredCheck, ToolCatalog};
 
 pub(crate) fn discovered<'a>(
@@ -51,6 +52,7 @@ pub(crate) fn metadata_for(item: &DiscoveredCheck) -> Result<serde_json::Value, 
 pub(crate) fn toolchain_inputs(
     task: &ProposedTask,
     _catalog: &ToolCatalog,
+    runtime: &ApprovedMiseRuntime,
 ) -> Result<ToolchainInputs, ContractError> {
     require_mise(task)?;
     let mut tools: Vec<String> = task
@@ -59,18 +61,30 @@ pub(crate) fn toolchain_inputs(
         .iter()
         .filter_map(|flag| flag.strip_prefix("tool:").map(str::to_owned))
         .collect();
-    tools.push(format!("mise@{}", velnor_actions_mise::MISE_VERSION));
+    tools.push(format!("mise@{}", runtime.version));
     tools.sort();
     tools.dedup();
+    let mut components: Vec<String> = task
+        .identity
+        .flags
+        .iter()
+        .filter(|flag| flag.starts_with("qualified_tools:"))
+        .cloned()
+        .collect();
+    components.push(format!(
+        "mise_runtime:{}",
+        digest_b3(&canonical_json_bytes(&(
+            runtime.target.triple(),
+            runtime.version.as_str(),
+            runtime.sha256.as_str(),
+            runtime.bytes,
+        ))?)
+    ));
+    components.sort();
+    components.dedup();
     Ok(ToolchainInputs {
         tools,
-        components: task
-            .identity
-            .flags
-            .iter()
-            .filter(|flag| flag.starts_with("qualified_tools:"))
-            .cloned()
-            .collect(),
+        components,
         compile_driver: "mise".to_owned(),
         test_runner: "mise".to_owned(),
     })

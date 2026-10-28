@@ -44,6 +44,10 @@ name = "bun_assets_handoff_public"
 path = "tests/bun_assets_handoff_public.rs"
 
 [[test]]
+name = "check_runtime_identity_public"
+path = "tests/check_runtime_identity_public.rs"
+
+[[test]]
 name = "review_completion_public"
 path = "tests/review_completion_public.rs"
 
