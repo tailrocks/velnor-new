@@ -106,7 +106,9 @@ The generic protected Homebrew seed contract uses the closed version-three
 template, whose format floor remains SDK 0.1.60. Each compiled transition sets
 its own `minimum_sdk_version`, which determines the SDK required to author that
 transition. The current Jackin transition binds the first complete 19-deletion,
-27-path inventory and requires SDK 0.1.66. Its eight authored outputs include
+27-path inventory and requires SDK 0.1.67. Its canonical transition digest is
+`b3-187b6ff3096c2f3e0eeee555b8642a10e8ccada39cad7b30a241235ec27623f1`. Its
+eight authored outputs include
 `.velnor/release-manifest.json`, rendered from the exact authenticated SDK manifest
 bytes used to qualify the seed, and `.github/workflows/review-completion.yml`,
 rendered through the ordinary review-completion renderer and authenticated SDK

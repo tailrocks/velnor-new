@@ -18,10 +18,13 @@ pub(super) fn assert_candidate_inventory(
     transition: &HomebrewAdoptionTransition,
 ) -> Result<(), Box<dyn Error>> {
     let accepted = Candidate::for_transition(transition)?;
-    assert_eq!(accepted.claude_candidate, b"@AGENTS.md\n");
     assert_eq!(
-        accepted.claude_candidate,
-        velnor_actions_contract::CLAUDE_MD_POINTER_BODY.as_bytes()
+        accepted.file_bytes.get("CLAUDE.md").map(Vec::as_slice),
+        Some(b"@AGENTS.md\n".as_slice())
+    );
+    assert_eq!(
+        accepted.file_bytes.get("CLAUDE.md").map(Vec::as_slice),
+        Some(velnor_actions_contract::CLAUDE_MD_POINTER_BODY.as_bytes())
     );
     let evidence = accepted.validate(transition)?;
     let actual = evidence
@@ -99,7 +102,7 @@ fn assert_claude_pointer_candidate(
         .iter_mut()
         .find(|file| file.path == "AGENTS.md")
         .ok_or_else(|| io::Error::other("candidate omitted AGENTS.md"))?;
-    agents.blob_sha = "2222222222222222222222222222222222222222".to_owned();
+    "2222222222222222222222222222222222222222".clone_into(&mut agents.blob_sha);
     assert!(changed_source.validate(transition).is_err());
 
     for mode in [0o100_755, 0o120_000] {
@@ -122,7 +125,6 @@ struct Candidate {
     file_bytes: BTreeMap<String, Vec<u8>>,
     locator: Vec<u8>,
     claude_output: Vec<u8>,
-    claude_candidate: Vec<u8>,
 }
 
 impl Candidate {
@@ -134,9 +136,6 @@ impl Candidate {
             file_bytes: BTreeMap::new(),
             locator: transition.source_authority_locator.canonical_bytes()?,
             claude_output: velnor_actions_contract::CLAUDE_MD_POINTER_BODY
-                .as_bytes()
-                .to_vec(),
-            claude_candidate: velnor_actions_contract::CLAUDE_MD_POINTER_BODY
                 .as_bytes()
                 .to_vec(),
         };
@@ -161,7 +160,7 @@ impl Candidate {
             .push(tree_file("CLAUDE.md", 0o100_644, placeholder));
         candidate
             .file_bytes
-            .insert("CLAUDE.md".to_owned(), candidate.claude_candidate.clone());
+            .insert("CLAUDE.md".to_owned(), candidate.claude_output.clone());
         candidate.file_bytes.insert(
             velnor_actions_contract::homebrew_authority::HOMEBREW_SOURCE_AUTHORITY_LOCATOR_PATH
                 .to_owned(),
@@ -175,22 +174,7 @@ impl Candidate {
             new_blob_sha: Some(placeholder.to_owned()),
             status: "T".to_owned(),
         });
-        for path in &transition.generated_output_paths {
-            let bytes = path.as_bytes().to_vec();
-            candidate.generated.insert(path.clone(), bytes.clone());
-            candidate.file_bytes.insert(path.clone(), bytes);
-            candidate
-                .files
-                .push(tree_file(path, 0o100_644, placeholder));
-            candidate.changes.push(HomebrewAdoptionTreeChange {
-                path: path.clone(),
-                old_mode: Some(0o100_644),
-                new_mode: Some(0o100_644),
-                old_blob_sha: Some("5555555555555555555555555555555555555555".to_owned()),
-                new_blob_sha: Some(placeholder.to_owned()),
-                status: "M".to_owned(),
-            });
-        }
+        add_generated_output_files(&mut candidate, transition, placeholder);
         let locator_path =
             velnor_actions_contract::homebrew_authority::HOMEBREW_SOURCE_AUTHORITY_LOCATOR_PATH;
         candidate
@@ -236,9 +220,8 @@ impl Candidate {
     }
 
     fn set_claude_candidate(&mut self, bytes: &[u8]) {
-        self.claude_candidate = bytes.to_vec();
         self.file_bytes
-            .insert("CLAUDE.md".to_owned(), self.claude_candidate.clone());
+            .insert("CLAUDE.md".to_owned(), bytes.to_vec());
     }
 
     fn set_claude_mode(&mut self, mode: u32) {
@@ -252,6 +235,29 @@ impl Candidate {
         {
             change.new_mode = Some(mode);
         }
+    }
+}
+
+fn add_generated_output_files(
+    candidate: &mut Candidate,
+    transition: &HomebrewAdoptionTransition,
+    placeholder: &str,
+) {
+    for path in &transition.generated_output_paths {
+        let bytes = path.as_bytes().to_vec();
+        candidate.generated.insert(path.clone(), bytes.clone());
+        candidate.file_bytes.insert(path.clone(), bytes);
+        candidate
+            .files
+            .push(tree_file(path, 0o100_644, placeholder));
+        candidate.changes.push(HomebrewAdoptionTreeChange {
+            path: path.clone(),
+            old_mode: Some(0o100_644),
+            new_mode: Some(0o100_644),
+            old_blob_sha: Some("5555555555555555555555555555555555555555".to_owned()),
+            new_blob_sha: Some(placeholder.to_owned()),
+            status: "M".to_owned(),
+        });
     }
 }
 
