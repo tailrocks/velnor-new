@@ -35,6 +35,7 @@ use prepare_sequence::{
 pub(crate) struct InstallAuditAuthority<'a> {
     pub policy: WorkflowPolicy,
     pub published_generator_lock: Option<&'a GeneratorLock>,
+    pub approved_release: Option<&'a crate::controller_approval::ControllerApprovedRelease>,
 }
 
 pub(crate) struct LockAuditOutcome {

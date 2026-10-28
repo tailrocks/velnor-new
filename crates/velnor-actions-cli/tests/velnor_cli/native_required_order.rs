@@ -74,6 +74,10 @@ fn create_fixture(repo: &Path) -> Result<(), Box<dyn Error>> {
     fs::write(repo.join(".velnor/config.toml"), CONFIG)?;
     for (path, contents) in [
         (
+            ".velnor/controller-approvals.json",
+            include_str!("../../../../.velnor/controller-approvals.json"),
+        ),
+        (
             ".velnor/generator.lock",
             include_str!("../../../../.velnor/generator.lock"),
         ),

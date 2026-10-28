@@ -31,6 +31,7 @@ pub(crate) fn assert_tofu_inventory_rejected(
         config: &preparation.config,
         runner: "ubuntu-26.04",
         published_generator_lock: None,
+        approved_release: None,
         consumer_manifest_json: preparation.discovery.consumer_manifest_json.as_deref(),
         tool_pins: &[],
         rust_source: NativeRustSource::ConfigOrDefault,

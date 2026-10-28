@@ -10,11 +10,15 @@ use crate::OrchestratorError;
 use crate::pins::resolve_mise_setup;
 use crate::prepare::GenerationPreparation;
 
-pub(crate) fn validate_published_generator_lock(
+pub(crate) fn validate_approved_generator_lock(
     lock: &velnor_actions_contract::GeneratorLock,
+    approved: &crate::controller_approval::ControllerApprovedRelease,
 ) -> Result<(), OrchestratorError> {
-    velnor_actions_workflow_renderer::release_helpers::validate_published_generator_lock(lock)
-        .map_err(crate::local_release_manifest::map_release_helper_error)
+    velnor_actions_workflow_renderer::release_helpers::validate_approved_generator_lock(
+        lock,
+        &approved.as_authority(),
+    )
+    .map_err(crate::local_release_manifest::map_release_helper_error)
 }
 
 pub fn finalized_jobs(
