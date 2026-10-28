@@ -87,6 +87,17 @@ fn source_admission_rejects_dirty_checkout_and_hidden_lock_changes() -> Result<(
 }
 
 #[test]
+fn source_admission_rejects_skip_worktree_runner_dockerfile_change() -> Result<(), Box<dyn Error>> {
+    reject_hidden_runner_dockerfile_change("--skip-worktree")
+}
+
+#[test]
+fn source_admission_rejects_assume_unchanged_runner_dockerfile_change() -> Result<(), Box<dyn Error>>
+{
+    reject_hidden_runner_dockerfile_change("--assume-unchanged")
+}
+
+#[test]
 fn selected_source_must_be_the_clean_checkout_head() -> Result<(), Box<dyn Error>> {
     let fixture = AdmissionFixture::new()?;
     fixture.advance_head()?;
@@ -223,5 +234,20 @@ fn assert_object_keys(value: &serde_json::Value, expected: &[&str]) -> Result<()
     let actual = object.keys().map(String::as_str).collect::<BTreeSet<_>>();
     let expected = expected.iter().copied().collect::<BTreeSet<_>>();
     assert_eq!(actual, expected);
+    Ok(())
+}
+
+fn reject_hidden_runner_dockerfile_change(index_flag: &str) -> Result<(), Box<dyn Error>> {
+    let fixture = AdmissionFixture::new()?;
+    let changed_bytes = fixture.hide_and_change_runner_dockerfile(index_flag)?;
+    let output = support::invoke(&fixture, &fixture.images)?;
+    let error = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !output.status.success() && error.contains("runner_image_source_index_flags"),
+        "accepted Runner Dockerfile change hidden by {index_flag}: status={:?} stderr={error}",
+        output.status
+    );
+    assert!(!fixture.output.exists());
+    fixture.preserve_hidden_runner_dockerfile_state(index_flag, &changed_bytes)?;
     Ok(())
 }

@@ -3,6 +3,10 @@
 
 use std::{error::Error, fs, path::PathBuf, process::Command};
 
+const RUNNER_DOCKERFILE_PATH: &str = "images/runner/ubuntu-26.04/Dockerfile";
+const RUNNER_DOCKERFILE: &[u8] =
+    include_bytes!("../../../../../images/runner/ubuntu-26.04/Dockerfile");
+
 pub(super) struct GitFixture {
     root: PathBuf,
 }
@@ -10,8 +14,10 @@ pub(super) struct GitFixture {
 impl GitFixture {
     pub(super) fn new(root: PathBuf) -> Result<Self, Box<dyn Error>> {
         fs::create_dir_all(root.join(".velnor"))?;
+        fs::create_dir_all(root.join("images/runner/ubuntu-26.04"))?;
         fs::write(root.join(".velnor/runner.lock"), valid_lock())?;
         fs::write(root.join("tracked.txt"), b"selected source\n")?;
+        fs::write(root.join(RUNNER_DOCKERFILE_PATH), RUNNER_DOCKERFILE)?;
         let fixture = Self { root };
         fixture.git(&["init", "--quiet"])?;
         fixture.git(&["config", "user.name", "Admission fixture"])?;
@@ -60,6 +66,59 @@ impl GitFixture {
                 String::from_utf8_lossy(&status.stdout)
             )
             .into());
+        }
+        Ok(())
+    }
+
+    pub(super) fn hide_and_change_runner_dockerfile(
+        &self,
+        flag: &str,
+    ) -> Result<Vec<u8>, Box<dyn Error>> {
+        self.git(&["update-index", flag, RUNNER_DOCKERFILE_PATH])?;
+        let path = self.root.join(RUNNER_DOCKERFILE_PATH);
+        let mut changed = fs::read(&path)?;
+        changed.extend_from_slice(b"\nfixture hidden source change\n");
+        fs::write(&path, &changed)?;
+
+        let diff = self.git_raw(&["diff", "--quiet", "HEAD", "--", RUNNER_DOCKERFILE_PATH])?;
+        if !diff.status.success() {
+            return Err("hidden Runner Dockerfile change is visible to git diff".into());
+        }
+        let committed = self.git(&["show", &format!("HEAD:{RUNNER_DOCKERFILE_PATH}")])?;
+        if committed.stdout != RUNNER_DOCKERFILE || committed.stdout == changed {
+            return Err("hidden change is not based on the committed Runner Dockerfile".into());
+        }
+        let status = self.git(&["status", "--porcelain"])?;
+        if !status.stdout.is_empty() {
+            return Err(format!(
+                "hidden Runner Dockerfile fixture is not Git-clean: {}",
+                String::from_utf8_lossy(&status.stdout)
+            )
+            .into());
+        }
+        Ok(changed)
+    }
+
+    pub(super) fn preserve_hidden_runner_dockerfile_state(
+        &self,
+        flag: &str,
+        expected_bytes: &[u8],
+    ) -> Result<(), Box<dyn Error>> {
+        let actual_bytes = fs::read(self.root.join(RUNNER_DOCKERFILE_PATH))?;
+        if actual_bytes != expected_bytes {
+            return Err("Runner Dockerfile bytes changed during admission".into());
+        }
+        let expected_flag = match flag {
+            "--skip-worktree" => b'S',
+            "--assume-unchanged" => b'h',
+            _ => return Err("unknown Runner Dockerfile index flag".into()),
+        };
+        let mut expected_record = vec![expected_flag, b' '];
+        expected_record.extend_from_slice(RUNNER_DOCKERFILE_PATH.as_bytes());
+        expected_record.push(0);
+        let actual_record = self.git(&["ls-files", "-v", "-z", "--", RUNNER_DOCKERFILE_PATH])?;
+        if actual_record.stdout != expected_record {
+            return Err("Runner Dockerfile index flag changed during admission".into());
         }
         Ok(())
     }

@@ -62,6 +62,22 @@ impl AdmissionFixture {
         self.repository.hide_and_change_lock(flag)
     }
 
+    pub(crate) fn hide_and_change_runner_dockerfile(
+        &self,
+        flag: &str,
+    ) -> Result<Vec<u8>, Box<dyn Error>> {
+        self.repository.hide_and_change_runner_dockerfile(flag)
+    }
+
+    pub(crate) fn preserve_hidden_runner_dockerfile_state(
+        &self,
+        flag: &str,
+        expected_bytes: &[u8],
+    ) -> Result<(), Box<dyn Error>> {
+        self.repository
+            .preserve_hidden_runner_dockerfile_state(flag, expected_bytes)
+    }
+
     pub(crate) fn remove_source_lock_and_create_ignored_replacement(
         &mut self,
     ) -> Result<(), Box<dyn Error>> {

@@ -132,6 +132,13 @@ pub(super) fn verify_selected_source(
     if !is_sha1(source_commit) {
         return Err(internal("runner_image_source_commit"));
     }
+    let index = GitRequest::ls_files(vec![OsString::from("-v"), OsString::from("-z")])
+        .run_in_until(root, deadline)
+        .map_err(|_| internal("runner_image_source_index"))?;
+    if !index.success {
+        return Err(internal("runner_image_source_index"));
+    }
+    validate_index_flags(&index.stdout)?;
     let head = git_text(
         root,
         &GitRequest::rev_parse(vec![OsString::from("HEAD")]),
@@ -141,6 +148,20 @@ pub(super) fn verify_selected_source(
         return Err(internal("runner_image_source_identity"));
     }
     ensure_clean_checkout(root, deadline)
+}
+
+fn validate_index_flags(output: &[u8]) -> Result<(), OrchestratorError> {
+    let entries = output
+        .strip_suffix(b"\0")
+        .ok_or_else(|| internal("runner_image_source_index_flags"))?;
+    if entries.is_empty()
+        || entries
+            .split(|byte| *byte == 0)
+            .any(|entry| entry.len() < 3 || entry[0] != b'H' || entry[1] != b' ')
+    {
+        return Err(internal("runner_image_source_index_flags"));
+    }
+    Ok(())
 }
 
 pub(super) fn read_source_file(
