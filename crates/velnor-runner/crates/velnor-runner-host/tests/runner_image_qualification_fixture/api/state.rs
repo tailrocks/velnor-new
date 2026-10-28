@@ -50,6 +50,8 @@ pub(crate) enum ApiFault {
     LateContainerCreateReplacement,
     DisconnectThenLateContainerCreate,
     NeverSettleContainerCreate,
+    OwnedUnsettledDindCreate,
+    OwnedUnsettledDindRemovalFailure,
     LoseContainerCreateResponse,
     StallContainerStart,
     StallContainerInspect,

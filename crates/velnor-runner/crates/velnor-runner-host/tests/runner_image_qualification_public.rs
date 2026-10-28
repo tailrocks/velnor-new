@@ -7,6 +7,8 @@ mod extended;
 mod fixture;
 #[path = "runner_image_qualification_public/support.rs"]
 mod support;
+#[path = "runner_image_qualification_public/uncertain_cleanup.rs"]
+mod uncertain_cleanup;
 
 use std::error::Error;
 use std::time::Duration;

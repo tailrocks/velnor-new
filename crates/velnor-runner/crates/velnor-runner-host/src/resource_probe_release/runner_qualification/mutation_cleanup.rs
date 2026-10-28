@@ -28,6 +28,11 @@ enum Observation {
     Owned(MutationValue),
 }
 
+struct ContainerCleanup {
+    failed: bool,
+    unresolved_uncertain: bool,
+}
+
 impl OwnedResources {
     pub(super) async fn cleanup(&mut self, docker: &Docker) -> Result<(), HostError> {
         let mut failed = false;
@@ -69,13 +74,14 @@ impl OwnedResources {
                 }
             }
         }
-        failed |= self
+        let containers = self
             .cleanup_containers(docker, &uncertain_containers, &observed_containers)
             .await;
+        failed |= containers.failed;
         failed |= self
             .cleanup_volumes(
                 docker,
-                &uncertain_containers,
+                containers.unresolved_uncertain,
                 &uncertain_volumes,
                 &observed_volumes,
             )
@@ -200,14 +206,19 @@ impl OwnedResources {
         docker: &Docker,
         uncertain: &[String],
         observed: &[String],
-    ) -> bool {
-        let mut failed = false;
+    ) -> ContainerCleanup {
+        let mut cleanup = ContainerCleanup {
+            failed: false,
+            unresolved_uncertain: false,
+        };
         for container in self.containers.iter().rev() {
-            let unresolved = uncertain.iter().any(|name| name == &container.name)
-                && !observed.iter().any(|name| name == &container.name);
-            failed |= unresolved || self.cleanup_container(docker, container).await.is_err();
+            let was_uncertain = uncertain.iter().any(|name| name == &container.name);
+            let unresolved = was_uncertain && !observed.iter().any(|name| name == &container.name);
+            let failed = unresolved || self.cleanup_container(docker, container).await.is_err();
+            cleanup.failed |= failed;
+            cleanup.unresolved_uncertain |= was_uncertain && failed;
         }
-        failed
+        cleanup
     }
 
     async fn cleanup_container(
@@ -254,13 +265,13 @@ impl OwnedResources {
     async fn cleanup_volumes(
         &self,
         docker: &Docker,
-        uncertain_containers: &[String],
+        unresolved_containers: bool,
         uncertain_volumes: &[String],
         observed_volumes: &[String],
     ) -> bool {
         let mut failed = false;
         for name in self.volumes.iter().rev() {
-            if !uncertain_containers.is_empty()
+            if unresolved_containers
                 || (uncertain_volumes.iter().any(|uncertain| uncertain == name)
                     && !observed_volumes.iter().any(|observed| observed == name))
             {
