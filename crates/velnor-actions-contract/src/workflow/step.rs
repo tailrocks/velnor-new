@@ -198,6 +198,7 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
         StepId::Plan => {
             matches!(kind, StepKind::Internal { operation, .. } if operation == "plan-v1")
         }
+        StepId::BuildTaskRun => matches!(kind, StepKind::Shell { .. }),
         StepId::ToolsCacheIdentity => super::step_identity::valid_tools_cache_identity(kind),
         StepId::TofuProviders => {
             matches!(kind, StepKind::Action { uses, .. } if uses == TOFU_PROVIDER_ADMISSION_USES)

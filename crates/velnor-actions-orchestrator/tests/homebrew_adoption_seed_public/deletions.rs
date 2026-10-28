@@ -1,18 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    error::Error,
-    io,
-};
+use std::{collections::BTreeSet, error::Error, io};
 
 use velnor_actions_contract::homebrew_adoption::{
-    HomebrewAdoptionCandidateInput, HomebrewAdoptionTransition, HomebrewAdoptionTreeChange,
-    HomebrewAdoptionTreeFile, parse_homebrew_adoption_transition,
+    HomebrewAdoptionTransition, parse_homebrew_adoption_transition,
 };
 
-const EXPECTED_LEGACY_PATHS: [&str; 19] = [
+pub(super) const EXPECTED_LEGACY_PATHS: [&str; 19] = [
     ".github/actions/u26/action.yml",
     ".github/actions/velnor-tool-seed/action.yml",
     ".github/actions/velnor-tools-cache-restore/action.yml",
@@ -87,7 +82,7 @@ fn public_seed_transition_binds_exact_legacy_inventory_and_candidate() -> Result
     assert!(parse_homebrew_adoption_transition(&noncanonical).is_err());
     assert_exact_inventory(&transition)?;
     assert_transition_digest_binding(&transition)?;
-    assert_candidate_inventory(&transition)?;
+    crate::homebrew_adoption_seed_public_candidate::assert_candidate_inventory(&transition)?;
     assert_other_github_deletion_classes_rejected(&transition);
     Ok(())
 }
@@ -136,61 +131,6 @@ fn assert_transition_digest_binding(
     Ok(())
 }
 
-fn assert_candidate_inventory(
-    transition: &HomebrewAdoptionTransition,
-) -> Result<(), Box<dyn Error>> {
-    let accepted = Candidate::for_transition(transition)?;
-    let evidence = accepted.validate(transition)?;
-    let actual = evidence
-        .changed_paths
-        .iter()
-        .map(String::as_str)
-        .collect::<BTreeSet<_>>();
-    let mut expected = BTreeSet::from(EXPECTED_LEGACY_PATHS);
-    expected.extend(transition.generated_output_paths.iter().map(String::as_str));
-    expected.insert("CLAUDE.md");
-    expected.insert(
-        velnor_actions_contract::homebrew_authority::HOMEBREW_SOURCE_AUTHORITY_LOCATOR_PATH,
-    );
-    assert_eq!(actual, expected);
-    assert_eq!(actual.len(), 27);
-
-    let mut extra = Candidate::for_transition(transition)?;
-    extra.changes.push(deletion(
-        "README.md",
-        0o100_644,
-        "1111111111111111111111111111111111111111",
-    ));
-    extra
-        .changes
-        .sort_by(|left, right| left.path.cmp(&right.path));
-    assert!(extra.validate(transition).is_err());
-
-    let mut retained = Candidate::for_transition(transition)?;
-    let removed = retained.changes[0].clone();
-    retained.files.push(HomebrewAdoptionTreeFile {
-        path: removed.path.clone(),
-        mode: removed
-            .old_mode
-            .ok_or_else(|| io::Error::other("deletion lacks old mode"))?,
-        blob_sha: removed
-            .old_blob_sha
-            .clone()
-            .ok_or_else(|| io::Error::other("deletion lacks old blob"))?,
-    });
-    assert!(retained.validate(transition).is_err());
-
-    let mut wrong_blob = Candidate::for_transition(transition)?;
-    wrong_blob.changes[0].old_blob_sha =
-        Some("2222222222222222222222222222222222222222".to_owned());
-    assert!(wrong_blob.validate(transition).is_err());
-
-    let mut wrong_mode = Candidate::for_transition(transition)?;
-    wrong_mode.changes[0].old_mode = Some(0o100_755);
-    assert!(wrong_mode.validate(transition).is_err());
-    Ok(())
-}
-
 fn assert_other_github_deletion_classes_rejected(transition: &HomebrewAdoptionTransition) {
     for path in [
         ".github/workflows/unrelated.yml",
@@ -209,138 +149,5 @@ fn assert_other_github_deletion_classes_rejected(transition: &HomebrewAdoptionTr
             .deletions
             .sort_by(|left, right| left.path.cmp(&right.path));
         assert!(altered.validate().is_err(), "accepted deletion {path}");
-    }
-}
-
-struct Candidate {
-    files: Vec<HomebrewAdoptionTreeFile>,
-    changes: Vec<HomebrewAdoptionTreeChange>,
-    generated: BTreeMap<String, Vec<u8>>,
-    file_bytes: BTreeMap<String, Vec<u8>>,
-    locator: Vec<u8>,
-}
-
-impl Candidate {
-    fn for_transition(transition: &HomebrewAdoptionTransition) -> Result<Self, Box<dyn Error>> {
-        let mut candidate = Self {
-            files: Vec::new(),
-            changes: Vec::new(),
-            generated: BTreeMap::new(),
-            file_bytes: BTreeMap::new(),
-            locator: transition.source_authority_locator.canonical_bytes()?,
-        };
-        let placeholder = "3333333333333333333333333333333333333333";
-        for identity in &transition.deletions {
-            candidate
-                .changes
-                .push(deletion(&identity.path, identity.mode, &identity.blob_sha));
-        }
-        for inert in &transition.unchanged_inert_files {
-            candidate
-                .files
-                .push(tree_file(&inert.path, inert.mode, &inert.blob_sha));
-        }
-        candidate.files.push(tree_file(
-            "AGENTS.md",
-            0o100_644,
-            &transition.claude_source_blob_sha,
-        ));
-        candidate
-            .files
-            .push(tree_file("CLAUDE.md", 0o100_644, placeholder));
-        candidate
-            .file_bytes
-            .insert("CLAUDE.md".to_owned(), b"source".to_vec());
-        candidate.file_bytes.insert(
-            velnor_actions_contract::homebrew_authority::HOMEBREW_SOURCE_AUTHORITY_LOCATOR_PATH
-                .to_owned(),
-            candidate.locator.clone(),
-        );
-        candidate.changes.push(HomebrewAdoptionTreeChange {
-            path: "CLAUDE.md".to_owned(),
-            old_mode: Some(0o120_000),
-            new_mode: Some(0o100_644),
-            old_blob_sha: Some("4444444444444444444444444444444444444444".to_owned()),
-            new_blob_sha: Some(placeholder.to_owned()),
-            status: "T".to_owned(),
-        });
-        for path in &transition.generated_output_paths {
-            let bytes = path.as_bytes().to_vec();
-            candidate.generated.insert(path.clone(), bytes.clone());
-            candidate.file_bytes.insert(path.clone(), bytes);
-            candidate
-                .files
-                .push(tree_file(path, 0o100_644, placeholder));
-            candidate.changes.push(HomebrewAdoptionTreeChange {
-                path: path.clone(),
-                old_mode: Some(0o100_644),
-                new_mode: Some(0o100_644),
-                old_blob_sha: Some("5555555555555555555555555555555555555555".to_owned()),
-                new_blob_sha: Some(placeholder.to_owned()),
-                status: "M".to_owned(),
-            });
-        }
-        let locator_path =
-            velnor_actions_contract::homebrew_authority::HOMEBREW_SOURCE_AUTHORITY_LOCATOR_PATH;
-        candidate
-            .files
-            .push(tree_file(locator_path, 0o100_644, placeholder));
-        candidate.changes.push(HomebrewAdoptionTreeChange {
-            path: locator_path.to_owned(),
-            old_mode: None,
-            new_mode: Some(0o100_644),
-            old_blob_sha: None,
-            new_blob_sha: Some(placeholder.to_owned()),
-            status: "A".to_owned(),
-        });
-        candidate
-            .files
-            .sort_by(|left, right| left.path.cmp(&right.path));
-        candidate
-            .changes
-            .sort_by(|left, right| left.path.cmp(&right.path));
-        Ok(candidate)
-    }
-
-    fn validate(
-        &self,
-        transition: &HomebrewAdoptionTransition,
-    ) -> Result<velnor_actions_contract::homebrew_adoption::HomebrewAdoptionEvidence, Box<dyn Error>>
-    {
-        let source = b"source";
-        Ok(
-            transition.validate_candidate_tree(HomebrewAdoptionCandidateInput {
-                base: (&transition.base_sha, &transition.base_tree),
-                head: (
-                    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-                    "cccccccccccccccccccccccccccccccccccccccc",
-                ),
-                changes: &self.changes,
-                candidate_files: &self.files,
-                claude: (source, source),
-                locator: &self.locator,
-                generated_files: &self.generated,
-                candidate_file_bytes: &self.file_bytes,
-            })?,
-        )
-    }
-}
-
-fn tree_file(path: &str, mode: u32, blob_sha: &str) -> HomebrewAdoptionTreeFile {
-    HomebrewAdoptionTreeFile {
-        path: path.to_owned(),
-        mode,
-        blob_sha: blob_sha.to_owned(),
-    }
-}
-
-fn deletion(path: &str, mode: u32, blob_sha: &str) -> HomebrewAdoptionTreeChange {
-    HomebrewAdoptionTreeChange {
-        path: path.to_owned(),
-        old_mode: Some(mode),
-        new_mode: None,
-        old_blob_sha: Some(blob_sha.to_owned()),
-        new_blob_sha: None,
-        status: "D".to_owned(),
     }
 }
