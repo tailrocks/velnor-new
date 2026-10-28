@@ -109,6 +109,26 @@ fn source_admission_rejects_dirty_checkout_and_hidden_lock_changes() -> Result<(
 }
 
 #[test]
+fn ambient_git_routing_cannot_select_clean_decoy_for_dirty_source() -> Result<(), Box<dyn Error>> {
+    let fixture = AdmissionFixture::new()?;
+    let decoy = fixture.same_commit_decoy()?;
+    let archives = fixture.images.bytes()?;
+    let dockerfile = fixture.root.join("images/runner/ubuntu-26.04/Dockerfile");
+    let mut changed = fs::read(&dockerfile)?;
+    changed.extend_from_slice(b"\nambient Git routing fixture change\n");
+    fs::write(&dockerfile, changed)?;
+
+    let output = support::invoke_with_git_routing(&fixture, &fixture.images, &decoy)?;
+    assert_eq!(fixture.images.bytes()?, archives);
+    assert!(
+        !output.status.success() && !fixture.output.exists(),
+        "accepted dirty source through a clean Git decoy: {output:?}; descriptors exist: {}",
+        fixture.output.exists()
+    );
+    Ok(())
+}
+
+#[test]
 fn replacement_ref_keeps_physical_source_a_admissible() -> Result<(), Box<dyn Error>> {
     let fixture = AdmissionFixture::new()?;
     let source = fixture.source.clone();

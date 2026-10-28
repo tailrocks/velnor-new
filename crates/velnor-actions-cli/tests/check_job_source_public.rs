@@ -100,7 +100,47 @@ impl CheckJobFixture {
         Ok(())
     }
 
+    fn same_commit_decoy(&self) -> Result<PathBuf, Box<dyn Error>> {
+        let decoy = self.directory.path().join("decoy");
+        let path = std::env::var_os("PATH").ok_or("PATH is unavailable")?;
+        let output = Command::new("git")
+            .env_clear()
+            .env("PATH", path)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .args(["clone", "--quiet", "--no-hardlinks"])
+            .arg(&self.root)
+            .arg(&decoy)
+            .output()?;
+        if !output.status.success() {
+            return Err(format!(
+                "git clone decoy failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )
+            .into());
+        }
+        let head = String::from_utf8(git(&decoy, &["rev-parse", "HEAD"])?.stdout)?;
+        if head.trim() != self.source
+            || fs::read(decoy.join(".velnor/runner.lock"))?
+                != fs::read(self.root.join(".velnor/runner.lock"))?
+        {
+            return Err("decoy does not match selected source".into());
+        }
+        Ok(decoy)
+    }
+
     fn invoke(&self) -> Result<Output, Box<dyn Error>> {
+        self.invoke_with_git_routing(None)
+    }
+
+    fn invoke_routed(&self, decoy: &std::path::Path) -> Result<Output, Box<dyn Error>> {
+        self.invoke_with_git_routing(Some(decoy))
+    }
+
+    fn invoke_with_git_routing(
+        &self,
+        decoy: Option<&std::path::Path>,
+    ) -> Result<Output, Box<dyn Error>> {
         let path = std::env::var_os("PATH").ok_or("PATH is unavailable")?;
         let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-actions"));
         command
@@ -115,6 +155,12 @@ impl CheckJobFixture {
             .arg(&self.root)
             .args(["--source-commit", &self.source, "--source-closure-path"])
             .arg(&self.closure);
+        if let Some(decoy) = decoy {
+            command
+                .env("GIT_DIR", decoy.join(".git"))
+                .env("GIT_WORK_TREE", decoy)
+                .env("GIT_INDEX_FILE", decoy.join(".git/index"));
+        }
         Ok(command.output()?)
     }
 
@@ -181,6 +227,37 @@ fn replacement_ref_rejects_physical_source_b_without_closure() -> Result<(), Box
         "accepted physical source B as A: {output:?}"
     );
     assert!(!fixture.closure.exists());
+    Ok(())
+}
+
+#[test]
+fn ambient_git_routing_cannot_select_clean_decoy_for_dirty_source() -> Result<(), Box<dyn Error>> {
+    let fixture = CheckJobFixture::new()?;
+    let decoy = fixture.same_commit_decoy()?;
+    let dockerfile = "images/job/ubuntu-26.04/Dockerfile";
+    let mut changed = fs::read(fixture.root.join(dockerfile))?;
+    changed.extend_from_slice(b"\nambient Git routing fixture change\n");
+    fs::write(fixture.root.join(dockerfile), &changed)?;
+
+    let output = fixture.invoke_routed(&decoy)?;
+    let emitted_hash = if fixture.closure.exists() {
+        Some(
+            parse_image_candidate_source_closure(&fs::read(&fixture.closure)?)?
+                .inputs
+                .get(dockerfile)
+                .cloned()
+                .ok_or("Runner Dockerfile hash is absent from closure")?,
+        )
+    } else {
+        None
+    };
+    if let Some(emitted_hash) = &emitted_hash {
+        assert_eq!(*emitted_hash, sha256(&changed));
+    }
+    assert!(
+        !output.status.success() && emitted_hash.is_none(),
+        "accepted dirty source through a clean Git decoy: {output:?}; emitted Dockerfile hash: {emitted_hash:?}"
+    );
     Ok(())
 }
 

@@ -16,7 +16,7 @@ use velnor_actions_contract::{
     IMAGE_CANDIDATE_SOURCE_INPUTS, ImageCandidateSourceClosure, NATIVE_IMAGE_CANDIDATE_INPUTS,
     serialize_image_candidate_source_closure,
 };
-use velnor_actions_mise::{CheckDeadline, GitRequest, MiseError, ProcessOutput};
+use velnor_actions_mise::{CheckDeadline, GitRequest, IsolatedCommand, MiseError, ProcessOutput};
 
 use crate::{OrchestratorError, internal::internal};
 
@@ -209,12 +209,24 @@ fn run_git_until(
     request: &GitRequest,
     deadline: CheckDeadline,
 ) -> Result<ProcessOutput, MiseError> {
-    request
-        .command_in(root)
-        .with_env(&[(
-            OsString::from("GIT_NO_REPLACE_OBJECTS"),
-            OsString::from("1"),
-        )])?
+    let mut args = Vec::with_capacity(request.args().len() + 1);
+    args.push(OsString::from(request.verb()));
+    args.extend(request.args().iter().cloned());
+    IsolatedCommand::repo_task(
+        "git",
+        args,
+        &[
+            (
+                OsString::from("GIT_NO_REPLACE_OBJECTS"),
+                OsString::from("1"),
+            ),
+            (
+                OsString::from("GIT_OPTIONAL_LOCKS"),
+                OsString::from("0"),
+            ),
+        ],
+    )?
+        .with_cwd(root.to_path_buf())
         .run_until(GIT_OUTPUT_CAPTURE_LIMIT_BYTES, deadline)
 }
 

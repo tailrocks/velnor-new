@@ -65,6 +65,10 @@ impl AdmissionFixture {
         self.repository.add_replacement_ref(checkout_replacement)
     }
 
+    pub(crate) fn same_commit_decoy(&self) -> Result<PathBuf, Box<dyn Error>> {
+        self.repository.same_commit_decoy()
+    }
+
     pub(crate) fn hide_and_change_lock(&self, flag: &str) -> Result<(), Box<dyn Error>> {
         self.repository.hide_and_change_lock(flag)
     }
@@ -159,6 +163,30 @@ pub(crate) fn invoke_to(
     source: &str,
     output: &Path,
 ) -> Result<Output, std::io::Error> {
+    invoke_to_with_git_routing(fixture, images, source, output, None)
+}
+
+pub(crate) fn invoke_with_git_routing(
+    fixture: &AdmissionFixture,
+    images: &ImageSet,
+    decoy: &Path,
+) -> Result<Output, std::io::Error> {
+    invoke_to_with_git_routing(
+        fixture,
+        images,
+        &fixture.source,
+        &fixture.output,
+        Some(decoy),
+    )
+}
+
+fn invoke_to_with_git_routing(
+    fixture: &AdmissionFixture,
+    images: &ImageSet,
+    source: &str,
+    output: &Path,
+    decoy: Option<&Path>,
+) -> Result<Output, std::io::Error> {
     let path = std::env::var_os("PATH").unwrap_or_default();
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-actions"));
     command
@@ -180,8 +208,14 @@ pub(crate) fn invoke_to(
         .arg("--probe-archive")
         .arg(&images.resource_probe.path)
         .arg("--descriptors-output")
-        .arg(output)
-        .output()
+        .arg(output);
+    if let Some(decoy) = decoy {
+        command
+            .env("GIT_DIR", decoy.join(".git"))
+            .env("GIT_WORK_TREE", decoy)
+            .env("GIT_INDEX_FILE", decoy.join(".git/index"));
+    }
+    command.output()
 }
 
 pub(crate) fn lock_with_mutation(pin: &str, mutation: &str) -> Vec<u8> {

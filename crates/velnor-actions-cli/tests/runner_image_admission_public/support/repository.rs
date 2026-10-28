@@ -61,6 +61,40 @@ impl GitFixture {
         Ok(())
     }
 
+    pub(super) fn same_commit_decoy(&self) -> Result<PathBuf, Box<dyn Error>> {
+        let decoy = self
+            .root
+            .parent()
+            .ok_or("fixture source has no parent")?
+            .join("decoy");
+        let path = std::env::var_os("PATH").ok_or("PATH is unavailable")?;
+        let output = Command::new("git")
+            .env_clear()
+            .env("PATH", path)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .args(["clone", "--quiet", "--no-hardlinks"])
+            .arg(&self.root)
+            .arg(&decoy)
+            .output()?;
+        if !output.status.success() {
+            return Err(format!(
+                "git clone decoy failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )
+            .into());
+        }
+        let head = git_at(&decoy, &["rev-parse", "HEAD"])?;
+        let source = self.head()?;
+        if head != source
+            || fs::read(decoy.join(".velnor/runner.lock"))?
+                != fs::read(self.root.join(".velnor/runner.lock"))?
+        {
+            return Err("decoy does not match selected source".into());
+        }
+        Ok(decoy)
+    }
+
     pub(super) fn root(&self) -> &std::path::Path {
         &self.root
     }
@@ -229,6 +263,27 @@ impl GitFixture {
             .args(args)
             .output()?)
     }
+}
+
+fn git_at(root: &std::path::Path, args: &[&str]) -> Result<String, Box<dyn Error>> {
+    let path = std::env::var_os("PATH").ok_or("PATH is unavailable")?;
+    let output = Command::new("git")
+        .env_clear()
+        .env("PATH", path)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .arg("-C")
+        .arg(root)
+        .args(args)
+        .output()?;
+    if !output.status.success() {
+        return Err(format!(
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
+    }
+    Ok(String::from_utf8(output.stdout)?.trim().to_owned())
 }
 
 pub(super) fn valid_lock() -> Vec<u8> {
