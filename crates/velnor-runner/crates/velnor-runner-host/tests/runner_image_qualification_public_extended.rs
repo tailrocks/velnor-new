@@ -27,6 +27,21 @@ fn public_qualifier_rejects_hidden_and_ignored_lock_changes() -> TestResult<()> 
 }
 
 #[test]
+fn public_qualifier_rejects_hidden_tracked_changes_before_docker() -> TestResult<()> {
+    for hide_change in [
+        GitFixture::hide_tracked_skip_worktree_change,
+        GitFixture::hide_tracked_assume_unchanged_change,
+    ] {
+        let git = GitFixture::new()?;
+        hide_change(&git)?;
+        assert!(git.diff_head_is_clean()?);
+        let (output, state) = qualify(&git, git.source_sha(), ApiPlan::new(git.source_sha()))?;
+        assert_source_rejected_before_api(&output, &state);
+    }
+    Ok(())
+}
+
+#[test]
 fn public_qualifier_rejects_invalid_image_ids_and_socket_arguments() -> TestResult<()> {
     let git = GitFixture::new()?;
     let api = DockerApiFixture::new(ApiPlan::new(git.source_sha()))?;
@@ -310,5 +325,37 @@ fn public_qualifier_reports_unsettled_create_and_preserves_replacement() -> Test
     );
     assert!(state.images.contains(&digest_id('a')));
     assert!(state.images.contains(&digest_id('b')));
+    Ok(())
+}
+
+#[test]
+fn public_qualifier_rejects_hidden_tracked_changes_during_inspection() -> TestResult<()> {
+    for mutate in [
+        ApiPlan::mutate_skip_worktree_on_first_image_inspect,
+        ApiPlan::mutate_assume_unchanged_on_first_image_inspect,
+    ] {
+        let git = GitFixture::new()?;
+        assert!(git.diff_head_is_clean()?);
+        let mut plan = ApiPlan::new(git.source_sha());
+        plan.foreign_sentinel = true;
+        mutate(&mut plan, git.root().to_path_buf());
+        let (output, state) = qualify(&git, git.source_sha(), plan)?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success());
+        assert!(stderr.contains("worker identity"), "{stderr}");
+        assert!(!stdout.contains("qualified_runner_image_id"));
+        assert!(matches!(state.hidden_index_mutation, Some(Ok(()))));
+        assert!(git.diff_head_is_clean()?);
+        assert!(state.api_requests > 0);
+        assert!(state.image_inspections > 0);
+        assert!(state.foreign_container_present && state.foreign_volume_present);
+        assert_eq!(state.containers.len(), 1);
+        assert_eq!(state.containers[0].name, "foreign-sentinel");
+        assert_eq!(state.volumes, ["foreign-sentinel"]);
+        assert_eq!(state.images.len(), 2);
+        assert!(state.images.contains(&digest_id('a')));
+        assert!(state.images.contains(&digest_id('b')));
+    }
     Ok(())
 }

@@ -3,6 +3,7 @@
 
 use std::error::Error;
 use std::fs;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
 use std::process::{Child, Command, Output, Stdio};
 use std::thread;
@@ -11,6 +12,21 @@ use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
 const RUNNER_LOCK: &str = include_str!("../../../../../../.velnor/runner.lock");
+
+#[derive(Clone, Copy)]
+pub(super) enum HiddenIndexFlag {
+    SkipWorktree,
+    AssumeUnchanged,
+}
+
+impl HiddenIndexFlag {
+    fn argument(self) -> &'static str {
+        match self {
+            Self::SkipWorktree => "--skip-worktree",
+            Self::AssumeUnchanged => "--assume-unchanged",
+        }
+    }
+}
 
 pub(crate) struct GitFixture {
     temp: TempDir,
@@ -32,6 +48,7 @@ impl GitFixture {
         let temp = tempfile::Builder::new()
             .prefix("velnor-runner-qualifier-")
             .tempdir_in(temp_root)?;
+        fs::set_permissions(temp.path(), fs::Permissions::from_mode(0o700))?;
         run_git(temp.path(), &["init", "--quiet"])?;
         run_git(temp.path(), &["config", "user.name", "Fixture"])?;
         run_git(
@@ -108,6 +125,104 @@ impl GitFixture {
         )?;
         self.change_lock()
     }
+
+    pub(crate) fn hide_tracked_skip_worktree_change(&self) -> Result<(), Box<dyn Error>> {
+        mutate_tracked_file(self.root(), HiddenIndexFlag::SkipWorktree)
+    }
+
+    pub(crate) fn hide_tracked_assume_unchanged_change(&self) -> Result<(), Box<dyn Error>> {
+        mutate_tracked_file(self.root(), HiddenIndexFlag::AssumeUnchanged)
+    }
+
+    pub(crate) fn diff_head_is_clean(&self) -> Result<bool, Box<dyn Error>> {
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(self.root())
+            .args(["diff", "--quiet", "HEAD", "--"])
+            .output()?;
+        match output.status.code() {
+            Some(0) => Ok(true),
+            Some(1) => Ok(false),
+            _ => Err(format!(
+                "git diff --quiet HEAD failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )
+            .into()),
+        }
+    }
+}
+
+pub(super) fn mutate_tracked_file(
+    root: &Path,
+    flag: HiddenIndexFlag,
+) -> Result<(), Box<dyn Error>> {
+    let canonical = root.canonicalize()?;
+    let temp_root = std::env::temp_dir().canonicalize()?;
+    let name = canonical.file_name().and_then(|name| name.to_str());
+    let root_metadata = fs::symlink_metadata(&canonical)?;
+    if canonical != root
+        || canonical.parent() != Some(temp_root.as_path())
+        || !name.is_some_and(|name| name.starts_with("velnor-runner-qualifier-"))
+        || !root_metadata.is_dir()
+        || root_metadata.file_type().is_symlink()
+        || root_metadata.uid() != rustix::process::geteuid().as_raw()
+        || root_metadata.permissions().mode() & 0o777 != 0o700
+    {
+        return Err(format!(
+            "hidden-index mutation requires a private fixture root: root={} temp={} name={name:?} uid={} mode={:o}",
+            canonical.display(),
+            temp_root.display(),
+            root_metadata.uid(),
+            root_metadata.permissions().mode() & 0o777
+        )
+        .into());
+    }
+    let git_dir = canonical.join(".git");
+    let git_metadata = fs::symlink_metadata(&git_dir)?;
+    let tracked = canonical.join("tracked.txt");
+    let tracked_metadata = fs::symlink_metadata(&tracked)?;
+    if !git_metadata.is_dir()
+        || git_metadata.file_type().is_symlink()
+        || !tracked_metadata.is_file()
+        || tracked_metadata.file_type().is_symlink()
+        || tracked_metadata.uid() != rustix::process::geteuid().as_raw()
+        || tracked_metadata.nlink() != 1
+        || tracked.canonicalize()? != tracked
+        || fs::read(&tracked)? != b"parent fixture\n"
+    {
+        return Err("hidden-index mutation target is not the fixture file".into());
+    }
+    let path = std::env::var_os("PATH").ok_or("PATH is unavailable")?;
+    let output = Command::new("git")
+        .env_clear()
+        .env("PATH", path)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .arg("-C")
+        .arg(&canonical)
+        .args(["update-index", flag.argument(), "--", "tracked.txt"])
+        .output()?;
+    if !output.status.success() {
+        return Err(format!(
+            "git update-index failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
+    }
+    fs::write(&tracked, b"changed during qualification\n")?;
+    let after = fs::symlink_metadata(&tracked)?;
+    if !after.is_file()
+        || after.file_type().is_symlink()
+        || after.uid() != rustix::process::geteuid().as_raw()
+        || after.nlink() != 1
+        || after.dev() != tracked_metadata.dev()
+        || after.ino() != tracked_metadata.ino()
+    {
+        return Err("hidden-index mutation changed the fixture file identity".into());
+    }
+    Ok(())
 }
 
 pub(crate) fn invoke(

@@ -78,6 +78,9 @@ async fn validate_source(root: &Path, source_sha: &str) -> Result<(), HostError>
     if one_line(&head.stdout)? != source_sha {
         return Err(HostError::Identity);
     }
+    let index = git(root, &["ls-files", "-v", "-z"]).await?;
+    require_success(&index)?;
+    validate_index_flags(&index.stdout)?;
     let diff = git(
         root,
         &[
@@ -96,6 +99,19 @@ async fn validate_source(root: &Path, source_sha: &str) -> Result<(), HostError>
     let untracked = git(root, &["ls-files", "--others", "--exclude-standard", "-z"]).await?;
     if !untracked.status.success() || !untracked.stdout.is_empty() {
         return Err(HostError::Identity);
+    }
+    Ok(())
+}
+
+fn validate_index_flags(output: &[u8]) -> Result<(), HostError> {
+    let entries = output.strip_suffix(b"\0").ok_or(HostError::Identity)?;
+    if entries.is_empty() {
+        return Err(HostError::Identity);
+    }
+    for entry in entries.split(|byte| *byte == 0) {
+        if entry.len() < 3 || entry[1] != b' ' || entry[0] != b'H' {
+            return Err(HostError::Identity);
+        }
     }
     Ok(())
 }

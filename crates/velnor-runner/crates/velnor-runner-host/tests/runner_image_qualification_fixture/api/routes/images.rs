@@ -7,7 +7,7 @@ use std::time::Duration;
 use serde_json::json;
 
 use super::super::http::{Reply, Request};
-use super::super::state::{ApiFault, ImageFault, ImageRole, State, digest_id};
+use super::super::state::{ApiFault, HiddenIndexMutation, ImageFault, ImageRole, State, digest_id};
 use super::{missing, path_id};
 
 pub(super) fn route(request: &Request, path: &str, state: &mut State) -> Option<Reply> {
@@ -95,6 +95,7 @@ fn inspect_image(path: &str, state: &mut State) -> Reply {
         state.fault_reached = true;
         drop(fs::write(source_file, "changed during qualification\n"));
     }
+    mutate_hidden_index_on_first_image_inspect(state);
     let reply = Reply::json(
         200,
         &json!({
@@ -110,4 +111,24 @@ fn inspect_image(path: &str, state: &mut State) -> Reply {
     } else {
         reply
     }
+}
+
+fn mutate_hidden_index_on_first_image_inspect(state: &mut State) {
+    let Some(mutation) = state.plan.mutate_hidden_index_on_first_image_inspect.take() else {
+        return;
+    };
+    state.fault_reached = true;
+    let result = match mutation {
+        HiddenIndexMutation::SkipWorktree(root) => super::super::super::git::mutate_tracked_file(
+            &root,
+            super::super::super::git::HiddenIndexFlag::SkipWorktree,
+        ),
+        HiddenIndexMutation::AssumeUnchanged(root) => {
+            super::super::super::git::mutate_tracked_file(
+                &root,
+                super::super::super::git::HiddenIndexFlag::AssumeUnchanged,
+            )
+        }
+    };
+    state.hidden_index_mutation = Some(result.map_err(|error| error.to_string()));
 }

@@ -97,8 +97,14 @@ pub(crate) struct ApiPlan {
     pub(crate) outer_mutation: OuterMutation,
     pub(crate) mutate_lock_on_first_image_inspect: Option<PathBuf>,
     pub(crate) mutate_source_on_first_image_inspect: Option<PathBuf>,
+    pub(super) mutate_hidden_index_on_first_image_inspect: Option<HiddenIndexMutation>,
     pub(crate) fault: Option<ApiFault>,
     pub(crate) foreign_sentinel: bool,
+}
+
+pub(super) enum HiddenIndexMutation {
+    SkipWorktree(PathBuf),
+    AssumeUnchanged(PathBuf),
 }
 
 impl ApiPlan {
@@ -119,9 +125,20 @@ impl ApiPlan {
             outer_mutation: OuterMutation::None,
             mutate_lock_on_first_image_inspect: None,
             mutate_source_on_first_image_inspect: None,
+            mutate_hidden_index_on_first_image_inspect: None,
             fault: None,
             foreign_sentinel: false,
         }
+    }
+
+    pub(crate) fn mutate_skip_worktree_on_first_image_inspect(&mut self, root: PathBuf) {
+        self.mutate_hidden_index_on_first_image_inspect =
+            Some(HiddenIndexMutation::SkipWorktree(root));
+    }
+
+    pub(crate) fn mutate_assume_unchanged_on_first_image_inspect(&mut self, root: PathBuf) {
+        self.mutate_hidden_index_on_first_image_inspect =
+            Some(HiddenIndexMutation::AssumeUnchanged(root));
     }
 }
 
@@ -153,6 +170,7 @@ pub(crate) struct Snapshot {
     pub(crate) volume_creations: usize,
     pub(crate) api_requests: usize,
     pub(crate) fault_reached: bool,
+    pub(crate) hidden_index_mutation: Option<Result<(), String>>,
     pub(crate) foreign_container_present: bool,
     pub(crate) foreign_volume_present: bool,
     pub(crate) outer_info_calls: usize,
@@ -208,6 +226,7 @@ pub(super) struct State {
     pub(super) volume_creations: usize,
     pub(super) api_requests: usize,
     pub(super) fault_reached: bool,
+    pub(super) hidden_index_mutation: Option<Result<(), String>>,
     pub(super) pending_mutations: usize,
     pub(super) provisional_missing_responses: usize,
     pub(super) pending_identities: Vec<String>,
@@ -233,6 +252,7 @@ impl State {
             volume_creations: 0,
             api_requests: 0,
             fault_reached: false,
+            hidden_index_mutation: None,
             pending_mutations: 0,
             provisional_missing_responses: 0,
             pending_identities: Vec::new(),
@@ -264,6 +284,7 @@ impl State {
             volume_creations: self.volume_creations,
             api_requests: self.api_requests,
             fault_reached: self.fault_reached,
+            hidden_index_mutation: self.hidden_index_mutation.clone(),
             foreign_container_present: self
                 .containers
                 .values()
