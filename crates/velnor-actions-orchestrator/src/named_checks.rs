@@ -11,6 +11,7 @@ use velnor_actions_contract::{
     ClosureBuilder, ContractError, NamedCheckIdentityExtension, ProposedTask, Provenance, Stack,
     StackExtension, TaskInputClosure, digest_b3,
 };
+use velnor_actions_mise::catalog::lock::ApprovedMiseRuntime;
 use velnor_actions_mise::{DiscoveredCheck, ToolCatalog};
 
 pub(crate) fn discovered<'a>(
@@ -51,6 +52,7 @@ pub(crate) fn metadata_for(item: &DiscoveredCheck) -> Result<serde_json::Value, 
 pub(crate) fn toolchain_inputs(
     task: &ProposedTask,
     _catalog: &ToolCatalog,
+    runtime: &ApprovedMiseRuntime,
 ) -> Result<ToolchainInputs, ContractError> {
     require_mise(task)?;
     let mut tools: Vec<String> = task
@@ -59,7 +61,7 @@ pub(crate) fn toolchain_inputs(
         .iter()
         .filter_map(|flag| flag.strip_prefix("tool:").map(str::to_owned))
         .collect();
-    tools.push(format!("mise@{}", velnor_actions_mise::MISE_VERSION));
+    tools.push(format!("mise@{}", runtime.version));
     tools.sort();
     tools.dedup();
     Ok(ToolchainInputs {
