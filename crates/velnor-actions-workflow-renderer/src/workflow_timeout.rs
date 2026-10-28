@@ -119,16 +119,11 @@ pub(super) fn pull_request_only() -> Yaml {
         Yaml::Map(vec![(
             "types".to_owned(),
             Yaml::Seq(
-                [
-                    "opened",
-                    "edited",
-                    "synchronize",
-                    "reopened",
-                    "ready_for_review",
-                ]
-                .into_iter()
-                .map(Yaml::str)
-                .collect(),
+                crate::render::EXPECTED_PR_TYPES
+                    .iter()
+                    .copied()
+                    .map(Yaml::str)
+                    .collect(),
             ),
         )]),
     )])

@@ -97,8 +97,13 @@ outputs, and 27-path candidate boundary. Its transition minimum is 0.1.66 and
 its canonical digest is
 `b3-9dd1ba5238f729a3918a98d72c10d33abb77dd6006f4de4a1371823598aca4ed`.
 The retarget regression reproduced the four-event output before the fix; SDK66
-adds only `edited` to that caller event list. The workspace build, all 419
-tests, Clippy, and Rustdoc checks have passed; native generation and immutable
-publication remain separate gates.
+adds only `edited` to that caller event list. The seed now shares the ordinary
+workflow's event constant, while the public regression checks an independent
+literal event list, so the two production policies cannot drift separately.
+After integrating the approved-runtime execution fix from PR #424, the
+workspace build, all 426 tests, Clippy, and Rustdoc checks passed. Two native
+generations matched the applied tree, and all five goldens matched, including
+the dogfood tree. The coordinated named-check planning-identity repair remains
+required before SDK66 release acceptance.
 Protected merge, immutable SDK publication, Tap adoption, and binary
 installation remain separate acceptance gates.

@@ -92,7 +92,15 @@ pub(crate) fn execute_check_to(
         return Err(internal("check_lane_variant_mismatch"));
     }
     bind_check(root, &item, &plan, entry, task_id, &catalog, deadline)?;
-    let outcome = run_check(root, temp, &item, &plan, entry, deadline);
+    let outcome = run_check(
+        root,
+        temp,
+        config.workflow.policy,
+        &item,
+        &plan,
+        entry,
+        deadline,
+    );
     let (code, receipt) = match &outcome {
         Ok(success) => (0, success.evidence.as_ref()),
         Err(_) => (1, None),
@@ -198,6 +206,7 @@ struct ChildExecution {
 fn run_check(
     root: &Path,
     temp: &Path,
+    policy: velnor_actions_contract::WorkflowPolicy,
     item: &DiscoveredCheck,
     plan: &Plan,
     entry: &MatrixEntry,
@@ -211,7 +220,7 @@ fn run_check(
         }
     }
     let group = RestoredGroupContext::resolve(temp)?;
-    let mut owned = prepare_check_with_context(root, &group, item, deadline)?;
+    let mut owned = prepare_check_with_context(root, &group, policy, item, deadline)?;
     let executed = run_owned(root, item, plan, deadline, &owned);
     let outcome = if executed.is_err() {
         compiler_observation::ChildOutcome::Failure

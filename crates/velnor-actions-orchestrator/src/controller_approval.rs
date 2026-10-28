@@ -23,6 +23,17 @@ pub(crate) fn load_policy_approval(
     ControllerApprovedRelease::load_active_approval(root).map(Some)
 }
 
+pub(crate) fn load_policy_approval_until(
+    root: &Path,
+    policy: velnor_actions_contract::WorkflowPolicy,
+    deadline: velnor_actions_mise::CheckDeadline,
+) -> Result<Option<ControllerApprovedRelease>, OrchestratorError> {
+    if policy != velnor_actions_contract::WorkflowPolicy::VelnorRepositoryV1 {
+        return Ok(None);
+    }
+    ControllerApprovedRelease::load_active_approval_until(root, deadline).map(Some)
+}
+
 const APPROVALS_REL: &str = ".velnor/controller-approvals.json";
 const APPROVALS_FILE: &str = "controller-approvals.json";
 
@@ -52,6 +63,27 @@ impl ControllerApprovedRelease {
             root,
             APPROVALS_REL,
             crate::safe_read::MAX_REPO_FILE_BYTES,
+        )? {
+            crate::safe_read::RepoRead::Text(text) => text,
+            crate::safe_read::RepoRead::Absent => {
+                return Err(OrchestratorError::io(
+                    root.join(APPROVALS_REL).display().to_string(),
+                    "controller_approvals:missing_file".to_owned(),
+                ));
+            }
+        };
+        Self::from_approvals_text(&text)
+    }
+
+    pub(crate) fn load_active_approval_until(
+        root: &Path,
+        deadline: velnor_actions_mise::CheckDeadline,
+    ) -> Result<Self, OrchestratorError> {
+        let text = match crate::safe_read::read_repo_file_until(
+            root,
+            APPROVALS_REL,
+            crate::safe_read::MAX_REPO_FILE_BYTES,
+            deadline,
         )? {
             crate::safe_read::RepoRead::Text(text) => text,
             crate::safe_read::RepoRead::Absent => {
