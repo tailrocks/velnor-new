@@ -297,6 +297,8 @@ fn render_job(
     }
     let needs_bun = policy == WorkflowPolicy::VelnorRepositoryV1
         && suite.is_some_and(crate::matrix_step::CrateSuite::owns_bun);
+    let needs_crane = policy == WorkflowPolicy::VelnorRepositoryV1
+        && suite.is_some_and(crate::matrix_step::CrateSuite::owns_crane);
     steps.push(crate::matrix_step::prepare_crate_tools_step_with_bun(
         catalog,
         use_rust,
@@ -304,6 +306,7 @@ fn render_job(
         crate::matrix_step::prepare_install_opentofu(policy, suite, use_opentofu),
         needs_validators,
         needs_bun,
+        needs_crane,
     )?);
     let verify = needs_validators.then(|| crate::workflow::verify_jactionlint_step(catalog));
     steps.extend(verify);
