@@ -63,14 +63,14 @@ deletions. Independent review confirmed that a second runtime marker fetch
 would not restrict the authority of these already reviewed immutable blobs, so
 no additional authoring seam or network path was introduced.
 
-The transition now requires SDK 0.1.64, lists 19 deletions, and admits exactly
+The transition now requires SDK 0.1.65, lists 19 deletions, and admits exactly
 27 changed paths: its six generated outputs, regular `CLAUDE.md`, the
 source-authority locator, and those deletions. The seed retires the old
 SDK48 `cache-prune.yml` and `jactionlint.yaml`; the structural cutover then
 regenerates the current jactionlint config as part of normal Velnor output.
 The existing `.github/AGENTS.md` remains unchanged and retained. The
 cutover-author policy binds the canonical transition digest
-`b3-fc314f6b4e240c2e493bbfbbbba1a0aeebfaa8f3322896babb5af38d50081dbf`.
+`b3-30753ff7f1b759bee09484993c88a6ba0d3ca7132d317a308f386afeec1a6190`.
 Formula and inert-file identities remain unchanged. Independently reviewed
 public regressions first reproduced the missing trigger and eight missing
 deletions; the SDK63 baseline also showed the two newly reviewed deletions
@@ -83,7 +83,10 @@ the production canonical parser, rejects an appended newline, and checks the
 author policy's exact canonical bytes. This exposed trailing newlines in both
 updated JSON files; removing them preserves the reviewed transition digest.
 The canonical parser regression failed before that correction, then the
-complete SDK64 public seed target passed six tests with no skips. Immutable
-publication remains a separate verification gate.
+complete SDK64 public seed target passed six tests with no skips. After the
+SDK65 minimum-version and digest rebinding, the full workspace suite passed
+all 419 tests across all targets and features, including the public seed
+scenarios, with no skips. Immutable publication remains a separate
+verification gate.
 Protected merge, immutable SDK publication, Tap adoption, and binary
 installation remain separate acceptance gates.

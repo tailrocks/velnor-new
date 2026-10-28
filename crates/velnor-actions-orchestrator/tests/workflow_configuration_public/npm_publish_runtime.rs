@@ -19,6 +19,8 @@ use super::{make_bun_repo, write_bun_fixture};
 
 const MEMBER: &str = "@fixture/web";
 const VERSION: &str = "1.2.3";
+const PUBLISH_TARBALL_NAME: &str = "@fixture/web-1.2.3.tgz";
+const PUBLISH_TARBALL_URI: &str = "http://npm.pkg.github.com/@fixture/web/-/@fixture/web-1.2.3.tgz";
 
 #[test]
 fn generated_package_publisher_sends_verified_archive_metadata() -> Result<(), Box<dyn Error>> {
@@ -58,13 +60,9 @@ fn generated_package_publisher_sends_verified_archive_metadata() -> Result<(), B
     let version = &request["versions"][VERSION];
     assert_eq!(version["dist"]["shasum"], sha1);
     assert_eq!(version["dist"]["integrity"], format!("sha512-{sha512}"));
-    assert_eq!(
-        version["dist"]["tarball"],
-        format!("https://npm.pkg.github.com/download/{MEMBER}/{VERSION}/{sha1}")
-    );
+    assert_eq!(version["dist"]["tarball"], PUBLISH_TARBALL_URI);
 
-    let attachment_name = format!("fixture-web-{VERSION}.tgz");
-    let attachment = &request["_attachments"][&attachment_name];
+    let attachment = &request["_attachments"][PUBLISH_TARBALL_NAME];
     assert_eq!(attachment["content_type"], "application/octet-stream");
     assert_eq!(attachment["length"], archive_bytes.len());
     assert_eq!(
