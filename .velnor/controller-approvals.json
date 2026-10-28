@@ -4,24 +4,24 @@
   "workflow": ".github/workflows/product-release-generator.yml",
   "active": {
     "repository": "tailrocks/velnor-new",
-    "version": "0.1.55",
-    "commit": "693f3aae14406fb7851ac70f0aee647a869b5063",
-    "manifest_digest": "sha256:90ee052ab599c9c064afce1d26b65e6752c4b7cd8feecd3c57249ea0241afbd3",
+    "version": "0.1.63",
+    "commit": "4afd0a059ce19d03a3e88f5cdc03e7e533c20218",
+    "manifest_digest": "sha256:a868a81bba2e8dda4c43316dfd8c0c19d5aa02470eead6ada4a0de077bf92853",
     "binaries": [
       {
         "target": "x86_64-unknown-linux-gnu",
-        "artifact": "https://github.com/tailrocks/velnor-new/releases/download/v0.1.55/velnor-actions-0.1.55-x86_64-unknown-linux-gnu",
-        "sha256": "c8f1440e4f767ecc903e6611c56c2db4005011d33ee6f0fd566f4b7e5345eba4"
+        "artifact": "https://github.com/tailrocks/velnor-new/releases/download/v0.1.63/velnor-actions-0.1.63-x86_64-unknown-linux-gnu",
+        "sha256": "4b9ab0e070a8126402d4fb2c987a7f2a24d486ca480c13388f9d3a7dc6768179"
       },
       {
         "target": "aarch64-apple-darwin",
-        "artifact": "https://github.com/tailrocks/velnor-new/releases/download/v0.1.55/velnor-actions-0.1.55-aarch64-apple-darwin",
-        "sha256": "eb8690b6a05b18bf025a0d7876c8497cedc04d54df04fdb5a3c20d203478e756"
+        "artifact": "https://github.com/tailrocks/velnor-new/releases/download/v0.1.63/velnor-actions-0.1.63-aarch64-apple-darwin",
+        "sha256": "876f5f8f2d4281946a858ea3bf0598fab13a4b5c9a27836e444a6e274d19aa13"
       },
       {
         "target": "x86_64-apple-darwin",
-        "artifact": "https://github.com/tailrocks/velnor-new/releases/download/v0.1.55/velnor-actions-0.1.55-x86_64-apple-darwin",
-        "sha256": "0938a574c00b05a71735285bf0d2840235ca4f9559359909564dd53b27d77883"
+        "artifact": "https://github.com/tailrocks/velnor-new/releases/download/v0.1.63/velnor-actions-0.1.63-x86_64-apple-darwin",
+        "sha256": "eddb0930e40ac004a678e93af55fad700a2ec92681f913e2545ea5c634fd6cb9"
       }
     ],
     "gh": "2.103.2",
