@@ -49,17 +49,19 @@ pub(super) fn create_runtime(
 }
 
 fn fixture_executable() -> Result<PathBuf, Box<dyn Error>> {
-    let cli = PathBuf::from(env!("CARGO_BIN_EXE_velnor-actions"));
-    let examples = cli
-        .parent()
-        .ok_or("CLI executable has no parent directory")?
-        .join("examples");
-    let executable = examples.join(format!(
-        "image-publication-fixture{}",
-        std::env::consts::EXE_SUFFIX
-    ));
-    if !executable.is_file() {
-        return Err(format!("registered image-publication-fixture is missing at {}; run package nextest so Cargo builds examples", executable.display()).into());
+    let executable = std::env::var_os("VELNOR_IMAGE_PUBLICATION_FIXTURE")
+        .map(PathBuf::from)
+        .ok_or("VELNOR_IMAGE_PUBLICATION_FIXTURE is required")?;
+    if !executable.is_absolute() {
+        return Err("VELNOR_IMAGE_PUBLICATION_FIXTURE must be absolute".into());
+    }
+    let metadata = fs::symlink_metadata(&executable)?;
+    if !metadata.file_type().is_file() || metadata.permissions().mode() & 0o111 == 0 {
+        return Err(format!(
+            "VELNOR_IMAGE_PUBLICATION_FIXTURE is not an executable file: {}",
+            executable.display()
+        )
+        .into());
     }
     Ok(executable)
 }
