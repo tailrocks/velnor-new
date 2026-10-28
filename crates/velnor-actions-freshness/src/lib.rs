@@ -5,6 +5,7 @@
     missing_docs,
     reason = "documentation comments are intentionally absent from this codebase"
 )]
+mod cargo_artifact_kind;
 mod context;
 mod dependencies;
 mod evidence;
@@ -17,24 +18,10 @@ mod release_support;
 mod time;
 mod validation;
 
+use crate::context::FreshnessContext;
 use std::path::{Path, PathBuf};
 
-use crate::context::FreshnessContext;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CargoArtifactKind {
-    Bin,
-    Example,
-}
-
-impl CargoArtifactKind {
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Bin => "bin",
-            Self::Example => "example",
-        }
-    }
-}
+pub use cargo_artifact_kind::CargoArtifactKind;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
