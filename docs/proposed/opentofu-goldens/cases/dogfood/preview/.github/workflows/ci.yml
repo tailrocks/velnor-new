@@ -167,9 +167,9 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     env:
-      VELNOR_ASSET_SHA256: 4b9ab0e070a8126402d4fb2c987a7f2a24d486ca480c13388f9d3a7dc6768179
-      VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.63/velnor-actions-0.1.63-x86_64-unknown-linux-gnu
-      VELNOR_RELEASE_COMMIT: 4afd0a059ce19d03a3e88f5cdc03e7e533c20218
+      VELNOR_ASSET_SHA256: c8f1440e4f767ecc903e6611c56c2db4005011d33ee6f0fd566f4b7e5345eba4
+      VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.55/velnor-actions-0.1.55-x86_64-unknown-linux-gnu
+      VELNOR_RELEASE_COMMIT: 693f3aae14406fb7851ac70f0aee647a869b5063
       VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
     permissions:
       contents: read
@@ -194,7 +194,7 @@ jobs:
       - &s9
         name: Acquire Velnor
         timeout-minutes: 6
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.63\"&&mkdir -p \"${d%/*}\"&&s=\"/opt/velnor/seed/generator/${d##*/}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|sha256sum -c -;then cp \"$s\" \"$d\";else curl -fsSL --connect-timeout 15 --max-time 120 --retry 5 --retry-all-errors --retry-max-time 180 --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|sha256sum -c -;fi&&chmod +x \"$d\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.55\"&&mkdir -p \"${d%/*}\"&&s=\"/opt/velnor/seed/generator/${d##*/}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|sha256sum -c -;then cp \"$s\" \"$d\";else curl -fsSL --connect-timeout 15 --max-time 120 --retry 5 --retry-all-errors --retry-max-time 180 --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|sha256sum -c -;fi&&chmod +x \"$d\"'"
       - &s10
         name: Download plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
@@ -208,7 +208,7 @@ jobs:
           VELNOR_CHECK_LANE_VARIANT: single
           VELNOR_INTERNAL_OP: execute-check-v1
           VELNOR_TASK_ID: stack/mise/maintenance-helpers/check/default
-        run: "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR \"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.63'"
+        run: "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR \"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.55'"
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -495,9 +495,9 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     env:
-      VELNOR_ASSET_SHA256: 4b9ab0e070a8126402d4fb2c987a7f2a24d486ca480c13388f9d3a7dc6768179
-      VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.63/velnor-actions-0.1.63-x86_64-unknown-linux-gnu
-      VELNOR_RELEASE_COMMIT: 4afd0a059ce19d03a3e88f5cdc03e7e533c20218
+      VELNOR_ASSET_SHA256: c8f1440e4f767ecc903e6611c56c2db4005011d33ee6f0fd566f4b7e5345eba4
+      VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.55/velnor-actions-0.1.55-x86_64-unknown-linux-gnu
+      VELNOR_RELEASE_COMMIT: 693f3aae14406fb7851ac70f0aee647a869b5063
       VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
     permissions:
       contents: read
@@ -579,7 +579,7 @@ jobs:
           VELNOR_INTERNAL_OP: write-request-v1
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/plan-v1-request.json
           VELNOR_NAMED_CHECK_LANES_JSON: "{\"check-maintenance-helpers\":[{\"job_id\":\"check-maintenance-helpers\"}]}"
-        run: &r18 "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.63'"
+        run: &r18 "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.55'"
       - name: Resolve qualification predecessor
         if: github.event_name == 'workflow_dispatch'
         env:
@@ -634,9 +634,9 @@ jobs:
     env:
       CARGO_CACHE_AUTO_CLEAN_FREQUENCY: never
       RUSTUP_TOOLCHAIN: 1.99.1
-      VELNOR_ASSET_SHA256: 4b9ab0e070a8126402d4fb2c987a7f2a24d486ca480c13388f9d3a7dc6768179
-      VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.63/velnor-actions-0.1.63-x86_64-unknown-linux-gnu
-      VELNOR_RELEASE_COMMIT: 4afd0a059ce19d03a3e88f5cdc03e7e533c20218
+      VELNOR_ASSET_SHA256: 717be00d245f511bd5d324574cb80b72a34c5a83c639fafa6af1c0acb8649b26
+      VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.59/velnor-actions-0.1.59-x86_64-unknown-linux-gnu
+      VELNOR_RELEASE_COMMIT: 4bb724119971fe49f07b12876c54c3c159edb5e5
       VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
     permissions:
       contents: read
@@ -688,7 +688,9 @@ jobs:
     steps:
       - *s8
       - *s3
-      - *s9
+      - name: Acquire Velnor
+        timeout-minutes: 6
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.59\"&&mkdir -p \"${d%/*}\"&&s=\"/opt/velnor/seed/generator/${d##*/}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|sha256sum -c -;then cp \"$s\" \"$d\";else curl -fsSL --connect-timeout 15 --max-time 120 --retry 5 --retry-all-errors --retry-max-time 180 --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|sha256sum -c -;fi&&chmod +x \"$d\"'"
       - name: Prepare pinned tools
         env: *m14
         run: mise --no-config --no-env --no-hooks install gh@2.103.3
@@ -701,18 +703,18 @@ jobs:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
           VELNOR_INTERNAL_OP: fetch-reports-v1
-        run: *r18
+        run: &r19 "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.59'"
       - name: Assemble group ledgers
         env:
           VELNOR_INTERNAL_OP: assemble-group-ledgers-v1
-        run: *r18
+        run: *r19
       - name: Write request
         env:
           VELNOR_INTERNAL_OP: write-request-v1
           VELNOR_NEEDS_JSON: ${{ toJSON(needs) }}
           VELNOR_NEEDS_EXPECTED: "[\"alint\",\"cargo-deny\",\"cargo-machete\",\"check-maintenance-helpers\",\"jactionlint\",\"plan\",\"rust-velnor-actions-actionlint-read\",\"rust-velnor-actions-actionlint-write\",\"rust-velnor-actions-ansible-read\",\"rust-velnor-actions-ansible-write\",\"rust-velnor-actions-bun-read\",\"rust-velnor-actions-bun-write\",\"rust-velnor-actions-cli-read\",\"rust-velnor-actions-cli-write\",\"rust-velnor-actions-contract-read\",\"rust-velnor-actions-contract-write\",\"rust-velnor-actions-dbt-read\",\"rust-velnor-actions-dbt-write\",\"rust-velnor-actions-gradle-read\",\"rust-velnor-actions-gradle-write\",\"rust-velnor-actions-mise-read\",\"rust-velnor-actions-mise-write\",\"rust-velnor-actions-orchestrator-read\",\"rust-velnor-actions-orchestrator-write\",\"rust-velnor-actions-rust-read\",\"rust-velnor-actions-rust-write\",\"rust-velnor-actions-tofu-read\",\"rust-velnor-actions-tofu-write\",\"rust-velnor-actions-workflow-renderer-read\",\"rust-velnor-actions-workflow-renderer-write\",\"rust-velnor-resource-probe-read\",\"rust-velnor-resource-probe-write\",\"rust-velnor-runner-attestation-read\",\"rust-velnor-runner-attestation-write\",\"rust-velnor-runner-cli-read\",\"rust-velnor-runner-cli-write\",\"rust-velnor-runner-core-read\",\"rust-velnor-runner-core-write\",\"rust-velnor-runner-github-read\",\"rust-velnor-runner-github-write\",\"rust-velnor-runner-host-read\",\"rust-velnor-runner-host-write\"]"
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
-        run: *r18
+        run: *r19
       - name: Merge reports
         env:
           GH_TOKEN: ${{ github.token }}
@@ -720,7 +722,7 @@ jobs:
           VELNOR_NEEDS_JSON: ${{ toJSON(needs) }}
           VELNOR_NEEDS_EXPECTED: "[\"alint\",\"cargo-deny\",\"cargo-machete\",\"check-maintenance-helpers\",\"jactionlint\",\"plan\",\"rust-velnor-actions-actionlint-read\",\"rust-velnor-actions-actionlint-write\",\"rust-velnor-actions-ansible-read\",\"rust-velnor-actions-ansible-write\",\"rust-velnor-actions-bun-read\",\"rust-velnor-actions-bun-write\",\"rust-velnor-actions-cli-read\",\"rust-velnor-actions-cli-write\",\"rust-velnor-actions-contract-read\",\"rust-velnor-actions-contract-write\",\"rust-velnor-actions-dbt-read\",\"rust-velnor-actions-dbt-write\",\"rust-velnor-actions-gradle-read\",\"rust-velnor-actions-gradle-write\",\"rust-velnor-actions-mise-read\",\"rust-velnor-actions-mise-write\",\"rust-velnor-actions-orchestrator-read\",\"rust-velnor-actions-orchestrator-write\",\"rust-velnor-actions-rust-read\",\"rust-velnor-actions-rust-write\",\"rust-velnor-actions-tofu-read\",\"rust-velnor-actions-tofu-write\",\"rust-velnor-actions-workflow-renderer-read\",\"rust-velnor-actions-workflow-renderer-write\",\"rust-velnor-resource-probe-read\",\"rust-velnor-resource-probe-write\",\"rust-velnor-runner-attestation-read\",\"rust-velnor-runner-attestation-write\",\"rust-velnor-runner-cli-read\",\"rust-velnor-runner-cli-write\",\"rust-velnor-runner-core-read\",\"rust-velnor-runner-core-write\",\"rust-velnor-runner-github-read\",\"rust-velnor-runner-github-write\",\"rust-velnor-runner-host-read\",\"rust-velnor-runner-host-write\"]"
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
-        run: *r18
+        run: *r19
       - name: Publish final report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -751,9 +753,9 @@ jobs:
       MBX_CC: "0"
       MBX_GC_AUTO: "0"
       MBX_SHARE_OUT_DIR: "0"
-      VELNOR_ASSET_SHA256: 4b9ab0e070a8126402d4fb2c987a7f2a24d486ca480c13388f9d3a7dc6768179
-      VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.63/velnor-actions-0.1.63-x86_64-unknown-linux-gnu
-      VELNOR_RELEASE_COMMIT: 4afd0a059ce19d03a3e88f5cdc03e7e533c20218
+      VELNOR_ASSET_SHA256: c8f1440e4f767ecc903e6611c56c2db4005011d33ee6f0fd566f4b7e5345eba4
+      VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.55/velnor-actions-0.1.55-x86_64-unknown-linux-gnu
+      VELNOR_RELEASE_COMMIT: 693f3aae14406fb7851ac70f0aee647a869b5063
       VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
     cache-mode: read
     needs:
@@ -785,23 +787,23 @@ jobs:
       - &s39
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-fcfd33a6fedb7ceba97bc3617c1d128603afa5c231ab3af66707a9d5fd9001be"}
+        with: {"digest": "b3-05f45df83a0f122cbff0204e6359d0bdcd27de43ba3b3d237b9fafb128aabfba"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-a46643493e260280949cdcfad4682ad451898775611ca762e6a0aa588172fe26"}
+        with: {"digest": "b3-b069c836a72da340704353574f684b2e8f69ba4b6f515b9452aa989ba9896a2e"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-8f187756cafaadfa4c49510d891297386febc466e437e7d3789f7cbdc50afebe"}
+        with: {"digest": "b3-636e49e817805aa97634471e4000f008d9678639ed0d7c1de14caf9a4972cab8"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-334e88f3cb3dd0d91664d1f012712bee122161490410ccd09ad99216e1868ab7"}
+        with: {"digest": "b3-7d20caff813a6ea54b22232f71be6ee4739c48989df0767bc4888783221eeba8"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-7c051ca0b02a68ca5e338c5b0f077b313cb8674b313268bede907f494ae5112b"}
+        with: {"digest": "b3-668f4ef096da7759731140f1320fd9415eb98bcd748f08bc0109c62c80a32c5e"}
       - name: Wait for parallel checks
         wait-all:
       - &s40
@@ -862,19 +864,19 @@ jobs:
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-a46643493e260280949cdcfad4682ad451898775611ca762e6a0aa588172fe26"}
+        with: {"digest": "b3-b069c836a72da340704353574f684b2e8f69ba4b6f515b9452aa989ba9896a2e"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-8f187756cafaadfa4c49510d891297386febc466e437e7d3789f7cbdc50afebe"}
+        with: {"digest": "b3-636e49e817805aa97634471e4000f008d9678639ed0d7c1de14caf9a4972cab8"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-334e88f3cb3dd0d91664d1f012712bee122161490410ccd09ad99216e1868ab7"}
+        with: {"digest": "b3-7d20caff813a6ea54b22232f71be6ee4739c48989df0767bc4888783221eeba8"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-7c051ca0b02a68ca5e338c5b0f077b313cb8674b313268bede907f494ae5112b"}
+        with: {"digest": "b3-668f4ef096da7759731140f1320fd9415eb98bcd748f08bc0109c62c80a32c5e"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -923,23 +925,23 @@ jobs:
       - &s44
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-b4bf5826181b237114eca5c929e5a054c60ae35542533fa4a9e18f42b9866dce"}
+        with: {"digest": "b3-8f6a9b75f757fb8ca7629bf9c69db1c55fdf6183926e74d462e8fba61aab57d0"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-af4679a1ff5c8f040da382731f4e67fd9955d149790b9ddd01058e6658f587d4"}
+        with: {"digest": "b3-550c4aa94329d3249d67b5e7f332d72f6d2dd1e8ffa81609535fa2039f82e0c8"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-22d49fdc3bcff2cb73e822bb00a6866ef7b4d56d9994fe53928d4d8f5e3f8db3"}
+        with: {"digest": "b3-8998c94f791261911b2c2e022c0ec85f05a07a4daa6eb6657f2a0ec44ae2aeea"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-8f596878f3da5dbce8c2383ef4265d59b10c8a81fc783175c980dece074bad3e"}
+        with: {"digest": "b3-20f1eb9014a4a39ddc9c6491b10413f8606ab23da0fd0b3ac5c349df2a9c18a7"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-a2e5d3553616859cfe4468d11c6c4a40f9dc62126dcf96810db36dcfc168f430"}
+        with: {"digest": "b3-e0a009ad60dcfa851afeb19c7cbcfca29127d2a0b2903dd76dfb500d91d066d2"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -989,19 +991,19 @@ jobs:
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-af4679a1ff5c8f040da382731f4e67fd9955d149790b9ddd01058e6658f587d4"}
+        with: {"digest": "b3-550c4aa94329d3249d67b5e7f332d72f6d2dd1e8ffa81609535fa2039f82e0c8"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-22d49fdc3bcff2cb73e822bb00a6866ef7b4d56d9994fe53928d4d8f5e3f8db3"}
+        with: {"digest": "b3-8998c94f791261911b2c2e022c0ec85f05a07a4daa6eb6657f2a0ec44ae2aeea"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-8f596878f3da5dbce8c2383ef4265d59b10c8a81fc783175c980dece074bad3e"}
+        with: {"digest": "b3-20f1eb9014a4a39ddc9c6491b10413f8606ab23da0fd0b3ac5c349df2a9c18a7"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-a2e5d3553616859cfe4468d11c6c4a40f9dc62126dcf96810db36dcfc168f430"}
+        with: {"digest": "b3-e0a009ad60dcfa851afeb19c7cbcfca29127d2a0b2903dd76dfb500d91d066d2"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -1042,23 +1044,23 @@ jobs:
       - &s46
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-99f7ad7a8eb9680208e703c5c96661ac17f032f9a901cae25601b79afc34fbd7"}
+        with: {"digest": "b3-b82a90628eb2549c61b0d37638430f92d16af9c708d04fdca0ef53efeaa2fb2d"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-3f59dc5eecfc33fc8a77c4c0bc559f348963f22146c5b9f0c312aaef9fb4db67"}
+        with: {"digest": "b3-5176384031ad6ee84b2fa5a0b9ec94d7a033fbe1e4a203389411d4dca7e3c5b8"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-bf0199c59875ecdb2a152ed64e88156b2384480e082258daa351fe47423ba4b2"}
+        with: {"digest": "b3-bdbb83c4c24125795344d87b2dffeef4f746fe08d0fdd650a5435611e6d44434"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-416cc2cfad82bfd2e9a341c015ec38d9bd953e53c065f7d4bd8bb1845e9abfb1"}
+        with: {"digest": "b3-b34d946e4716c989aaf0e3d41b9f8fa3be32d3586840b5a51c8761fcfe48a272"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-2e9b55d3b9f0961ed4101cbf87e084b8497a89d3969015e67ff3886f6922a466"}
+        with: {"digest": "b3-c65c91de3af4bee4a8f59182852f13e17809f4620f007b71c2dca6edd266d7af"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -1108,19 +1110,19 @@ jobs:
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-3f59dc5eecfc33fc8a77c4c0bc559f348963f22146c5b9f0c312aaef9fb4db67"}
+        with: {"digest": "b3-5176384031ad6ee84b2fa5a0b9ec94d7a033fbe1e4a203389411d4dca7e3c5b8"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-bf0199c59875ecdb2a152ed64e88156b2384480e082258daa351fe47423ba4b2"}
+        with: {"digest": "b3-bdbb83c4c24125795344d87b2dffeef4f746fe08d0fdd650a5435611e6d44434"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-416cc2cfad82bfd2e9a341c015ec38d9bd953e53c065f7d4bd8bb1845e9abfb1"}
+        with: {"digest": "b3-b34d946e4716c989aaf0e3d41b9f8fa3be32d3586840b5a51c8761fcfe48a272"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-2e9b55d3b9f0961ed4101cbf87e084b8497a89d3969015e67ff3886f6922a466"}
+        with: {"digest": "b3-c65c91de3af4bee4a8f59182852f13e17809f4620f007b71c2dca6edd266d7af"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -1175,23 +1177,23 @@ jobs:
       - &s51
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-eba17c00e787f43686ed697f0bec5f246ed2739e237c11519643ba9addc41133"}
+        with: {"digest": "b3-fbf2f972337f3476da09c00d6b59614caf46e41380401c0b41fa7ac9382299ce"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-f3b02f72c35908442bf810ba8a832219cc33c4af14b7fdd1810f9886b382ffb8"}
+        with: {"digest": "b3-c36cf9ae77fc8fb9759a1b35730aae24741b0a83d95c5ba857c91f38e615e400"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-cc3184114b6da5dfa23f68c0a577b94adbb1a3197fbee27baef62c6ac20e99d0"}
+        with: {"digest": "b3-b11946b1736660b4a4ba4933088930c9957caa92c3e7ea7fdd858383716bcc36"}
       - name: Unit and integration tests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-63af3d2196236185c6110cbf3ad605cc5ee6e273ee8cfa31c9efb1f68b7f04d7"}
+        with: {"digest": "b3-2512d7397dfd89baecd181879901f14ec53a41d19acb5b753a4be5e2967703c3"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-c46c7c39e6dc81dfbfe9141787051a466acb9b7639bd8ce4bf8ecb2aac79fec8"}
+        with: {"digest": "b3-83933af35f12ec9b891ab77cc25a11882c3e984584c27b7e408255f091f7095c"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -1244,19 +1246,19 @@ jobs:
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-f3b02f72c35908442bf810ba8a832219cc33c4af14b7fdd1810f9886b382ffb8"}
+        with: {"digest": "b3-c36cf9ae77fc8fb9759a1b35730aae24741b0a83d95c5ba857c91f38e615e400"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-cc3184114b6da5dfa23f68c0a577b94adbb1a3197fbee27baef62c6ac20e99d0"}
+        with: {"digest": "b3-b11946b1736660b4a4ba4933088930c9957caa92c3e7ea7fdd858383716bcc36"}
       - name: Unit and integration tests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-63af3d2196236185c6110cbf3ad605cc5ee6e273ee8cfa31c9efb1f68b7f04d7"}
+        with: {"digest": "b3-2512d7397dfd89baecd181879901f14ec53a41d19acb5b753a4be5e2967703c3"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-c46c7c39e6dc81dfbfe9141787051a466acb9b7639bd8ce4bf8ecb2aac79fec8"}
+        with: {"digest": "b3-83933af35f12ec9b891ab77cc25a11882c3e984584c27b7e408255f091f7095c"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -1300,27 +1302,27 @@ jobs:
       - &s53
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-10ecb364be6a2894e4506712244e7f7bda884653a1a93d77546c6b4341bbfd0b"}
+        with: {"digest": "b3-15d691a28a28f7ad88a4db79f131c4d6417894898a977dbe16db8810ab70b3fe"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-c2b4974a97b460161736795419e5a911d1e1d979dd79ca48a61b3e35b2eaebb9"}
+        with: {"digest": "b3-a1711b77d70ffda1e2baabba5ba32df74452742eac4684b49109a2b2ff556fd4"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-cc4a2ec0d92e51b684daac7ee566a54cde475f6843defdcd97335a00f08cba17"}
+        with: {"digest": "b3-8010609a7be8863154cbd1bedde255fe38fcb3f7ffc73736681b7d70b3b8583d"}
       - name: Unit and integration tests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-688af4d7c3dfc16f466745d0dbdc4da7cfea7333c5991e1b68c424ca8c58d406"}
+        with: {"digest": "b3-15c86882d2e68c28ac194be80a44ada97783ae0ee142856a61a637bc866d87cc"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-44cc83859264f6bef9aa0bf8e9d22f3c1fe363209cff5150815a67f54630669f"}
+        with: {"digest": "b3-b57c8c2e4ba5a7aa15349df5cc5867545d424576992f31f2503f9fa3411de976"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-44d325a2c3dfa2beb76388f66bebfcb6bef64a876bdf971cf6042f0731dfcec5"}
+        with: {"digest": "b3-e9d683b497c2cae7f4e12fccf691ff047a3c1c1299a79c0f1e112a7964dfc5f7"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -1370,23 +1372,23 @@ jobs:
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-c2b4974a97b460161736795419e5a911d1e1d979dd79ca48a61b3e35b2eaebb9"}
+        with: {"digest": "b3-a1711b77d70ffda1e2baabba5ba32df74452742eac4684b49109a2b2ff556fd4"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-cc4a2ec0d92e51b684daac7ee566a54cde475f6843defdcd97335a00f08cba17"}
+        with: {"digest": "b3-8010609a7be8863154cbd1bedde255fe38fcb3f7ffc73736681b7d70b3b8583d"}
       - name: Unit and integration tests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-688af4d7c3dfc16f466745d0dbdc4da7cfea7333c5991e1b68c424ca8c58d406"}
+        with: {"digest": "b3-15c86882d2e68c28ac194be80a44ada97783ae0ee142856a61a637bc866d87cc"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-44cc83859264f6bef9aa0bf8e9d22f3c1fe363209cff5150815a67f54630669f"}
+        with: {"digest": "b3-b57c8c2e4ba5a7aa15349df5cc5867545d424576992f31f2503f9fa3411de976"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-44d325a2c3dfa2beb76388f66bebfcb6bef64a876bdf971cf6042f0731dfcec5"}
+        with: {"digest": "b3-e9d683b497c2cae7f4e12fccf691ff047a3c1c1299a79c0f1e112a7964dfc5f7"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -1427,23 +1429,23 @@ jobs:
       - &s55
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-fb0274412adc6579915afeecdd1f71d1596b785f6f0a9c187970ad25353ea42a"}
+        with: {"digest": "b3-64e26a3f41063b18f30d8732a8b6190b4e76809fdbef39b4e64c88bb33773b64"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-a5daac6f6084bd4d4464d6fceb855199acec6158be861e7b44056ba54bcc49c2"}
+        with: {"digest": "b3-def783b2e72f3d807d68bf27b8994ba532a9f05a5cc54c7489b4f8cc048d43ec"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-18793e19c404b9d309163288da29ed178e62ac1fdfce131ec574e8d61d797d35"}
+        with: {"digest": "b3-0fcff133bd515d0103b10b15738fe2b75e3b838393112318c2bfda4182b6878c"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-758dc5ba6114e3ad3aabf5321ddbc3dba9dc688c5d4da0fd671c06c10cfa463d"}
+        with: {"digest": "b3-e2dc12721db0886ccf5acc0d2b8a77da1a078941dd5a3487925a9a9861efebbd"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-d0fc30033c15037104af571f7dcdac2c368b70f3726b5917aeb165829cb5b4f6"}
+        with: {"digest": "b3-92efde7e333a3f73de069572b3fee526f84b5e188a80ab9ebdadb867ab20987c"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -1493,19 +1495,19 @@ jobs:
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-a5daac6f6084bd4d4464d6fceb855199acec6158be861e7b44056ba54bcc49c2"}
+        with: {"digest": "b3-def783b2e72f3d807d68bf27b8994ba532a9f05a5cc54c7489b4f8cc048d43ec"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-18793e19c404b9d309163288da29ed178e62ac1fdfce131ec574e8d61d797d35"}
+        with: {"digest": "b3-0fcff133bd515d0103b10b15738fe2b75e3b838393112318c2bfda4182b6878c"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-758dc5ba6114e3ad3aabf5321ddbc3dba9dc688c5d4da0fd671c06c10cfa463d"}
+        with: {"digest": "b3-e2dc12721db0886ccf5acc0d2b8a77da1a078941dd5a3487925a9a9861efebbd"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-d0fc30033c15037104af571f7dcdac2c368b70f3726b5917aeb165829cb5b4f6"}
+        with: {"digest": "b3-92efde7e333a3f73de069572b3fee526f84b5e188a80ab9ebdadb867ab20987c"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -1546,23 +1548,23 @@ jobs:
       - &s57
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-c6dc9123381ab77de3a17f1e398b7dc541be53a2263b0fd5b768d183449d06ff"}
+        with: {"digest": "b3-12e501c8034381ab6de1705803323f01c1e6649553d85ecfa2e5d122f061c5fc"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-ed160aa5b15d285bd505ec04592f6bdd3b8ce6587ab1e0f142d2980a70548cde"}
+        with: {"digest": "b3-e24e35578fe4b8a324e065233ba2f2dd5bcd56bf613a7ae1e1666c5df2e205a8"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-71691342e9bf9ac4856284020210c098012cba82d5b5014b1558e1e200f43c63"}
+        with: {"digest": "b3-0db8fea643d79c8af824a320e3dcda6581c7cf6a943b21c29b537da6e482b4eb"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-d74a6e75f9d2fc9f8d2a897f28cfdb0db8aa1e602be6da560b023df306cd8633"}
+        with: {"digest": "b3-e95472c1703a8ad51139c24975c87a5eb4f626c58b9f1335ebdf54bb8bf16be8"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-9e6840ebbe74975bbccd645fa2f4a2a16c5eb8baae81ac7614312fb818cfe1b4"}
+        with: {"digest": "b3-74d108ca928ad0368f40c8c4ee1219fbc24732cfa43b6e6b7bd34a65e5c5eb45"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -1612,19 +1614,19 @@ jobs:
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-ed160aa5b15d285bd505ec04592f6bdd3b8ce6587ab1e0f142d2980a70548cde"}
+        with: {"digest": "b3-e24e35578fe4b8a324e065233ba2f2dd5bcd56bf613a7ae1e1666c5df2e205a8"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-71691342e9bf9ac4856284020210c098012cba82d5b5014b1558e1e200f43c63"}
+        with: {"digest": "b3-0db8fea643d79c8af824a320e3dcda6581c7cf6a943b21c29b537da6e482b4eb"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-d74a6e75f9d2fc9f8d2a897f28cfdb0db8aa1e602be6da560b023df306cd8633"}
+        with: {"digest": "b3-e95472c1703a8ad51139c24975c87a5eb4f626c58b9f1335ebdf54bb8bf16be8"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-9e6840ebbe74975bbccd645fa2f4a2a16c5eb8baae81ac7614312fb818cfe1b4"}
+        with: {"digest": "b3-74d108ca928ad0368f40c8c4ee1219fbc24732cfa43b6e6b7bd34a65e5c5eb45"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -1677,27 +1679,27 @@ jobs:
       - &s62
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-8e8270b8e23d4e0ca1e7811a1c6454d6b3a034feb94a057606bf429bc6e69580"}
+        with: {"digest": "b3-d66d0e8c6a8110126dca163380844b320365634d6e49bf4fa7281eb6d9253c59"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-23537c399e6cc9532f8825cbe7145bec04aec4f5a48bc7eca4de0f8a22de8d87"}
+        with: {"digest": "b3-f36a393f045bab7c2492a50e0fc2481e4809d31216810bb5b68f7e3a0aa3a1d9"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-cc5abcd48fff9cffd4b45eb31cd5181ae1f9581db0db4a227ff364abceb17773"}
+        with: {"digest": "b3-347f7fb44ee901d6fa96b9a4c519c82ebb14a249975410fdfe9d3154872fc9d4"}
       - name: Unit and integration tests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-723b7a158c92e1223fa6d34c5e132d7a8d5584baba4f8400f3b8d71a5252d8e4"}
+        with: {"digest": "b3-595b7436ae215b9c08654a9632a11bb1176657d0a69cd58e78ee5cc5b561ba0a"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-a8c347c234cef9bfc2f7ccc3854114ab5264d0506172926e5a3a1fb40b383697"}
+        with: {"digest": "b3-978991e9beb94a9302333f419e59e28f76e8992be7f932babc0de3a8c8ba3600"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-12198374f1cf021585c5c774bffc6d5fc00655dc8369ceab31c0fb112bbb8e45"}
+        with: {"digest": "b3-343cf1e0360cae67dd45c22b9cc81be878c90f00fc156d238ae1eb63592d53cf"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -1748,23 +1750,23 @@ jobs:
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-23537c399e6cc9532f8825cbe7145bec04aec4f5a48bc7eca4de0f8a22de8d87"}
+        with: {"digest": "b3-f36a393f045bab7c2492a50e0fc2481e4809d31216810bb5b68f7e3a0aa3a1d9"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-cc5abcd48fff9cffd4b45eb31cd5181ae1f9581db0db4a227ff364abceb17773"}
+        with: {"digest": "b3-347f7fb44ee901d6fa96b9a4c519c82ebb14a249975410fdfe9d3154872fc9d4"}
       - name: Unit and integration tests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-723b7a158c92e1223fa6d34c5e132d7a8d5584baba4f8400f3b8d71a5252d8e4"}
+        with: {"digest": "b3-595b7436ae215b9c08654a9632a11bb1176657d0a69cd58e78ee5cc5b561ba0a"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-a8c347c234cef9bfc2f7ccc3854114ab5264d0506172926e5a3a1fb40b383697"}
+        with: {"digest": "b3-978991e9beb94a9302333f419e59e28f76e8992be7f932babc0de3a8c8ba3600"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-12198374f1cf021585c5c774bffc6d5fc00655dc8369ceab31c0fb112bbb8e45"}
+        with: {"digest": "b3-343cf1e0360cae67dd45c22b9cc81be878c90f00fc156d238ae1eb63592d53cf"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -1822,27 +1824,27 @@ jobs:
       - &s67
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-2d2b210f79abe7a8745bf6944abc94f1534ddc05b76780b68d4c487133592e21"}
+        with: {"digest": "b3-3079965685343a87a54bf23586a697d48b4c90de20f36fbe63a6272c06d126c0"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-de24d2e039799b65fff4f8125748256be7583c7f73c3e38354bbc0b9746f43a2"}
+        with: {"digest": "b3-32668cbd47549ab55c388eec70279b9e6c12cc0f9b4653e157ea9948b1fda420"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-ff8d6a93d1d17512b50af575638d77042b50b7da95ee971e591eea5a055e590a"}
+        with: {"digest": "b3-2bbb99c4e0b190b49e41dc539262f34436fbb958ea9882fc61137b29b68a6e4f"}
       - name: Unit and integration tests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-484c450d1ca7c534ed85a84442de1e3eb3bf50a0399c828adba23cae37b39d4d"}
+        with: {"digest": "b3-295dd9142f252dfc4868f19f99bdfb6e8fc3f4e6091bd542e932f4a05b6e9973"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-2c1f7eb9f29d96e1f6c2be19c710e6410809ab7d4e78925bd35673ef8857c361"}
+        with: {"digest": "b3-3150cbc5a65d195223681fee0ca6e7ab2b4f4e4b53163681ef2c01f1d01d54ea"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-d3420a3d8c37126ba437fc721ccd7155b3cf85ca5b3d4ffcbb903068ac8f7d71"}
+        with: {"digest": "b3-79bdfc648bb17cee7e4e6e0887730b365f4ddf60c7e961e49e302ccf7f7ced40"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -1895,23 +1897,23 @@ jobs:
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-de24d2e039799b65fff4f8125748256be7583c7f73c3e38354bbc0b9746f43a2"}
+        with: {"digest": "b3-32668cbd47549ab55c388eec70279b9e6c12cc0f9b4653e157ea9948b1fda420"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-ff8d6a93d1d17512b50af575638d77042b50b7da95ee971e591eea5a055e590a"}
+        with: {"digest": "b3-2bbb99c4e0b190b49e41dc539262f34436fbb958ea9882fc61137b29b68a6e4f"}
       - name: Unit and integration tests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-484c450d1ca7c534ed85a84442de1e3eb3bf50a0399c828adba23cae37b39d4d"}
+        with: {"digest": "b3-295dd9142f252dfc4868f19f99bdfb6e8fc3f4e6091bd542e932f4a05b6e9973"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-2c1f7eb9f29d96e1f6c2be19c710e6410809ab7d4e78925bd35673ef8857c361"}
+        with: {"digest": "b3-3150cbc5a65d195223681fee0ca6e7ab2b4f4e4b53163681ef2c01f1d01d54ea"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-d3420a3d8c37126ba437fc721ccd7155b3cf85ca5b3d4ffcbb903068ac8f7d71"}
+        with: {"digest": "b3-79bdfc648bb17cee7e4e6e0887730b365f4ddf60c7e961e49e302ccf7f7ced40"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -1955,27 +1957,27 @@ jobs:
       - &s69
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-2320048c24befd7923c31f2035b1d63ccee13b0b66ed7131f54c45dbd106edea"}
+        with: {"digest": "b3-ffd94822b2436bd2e28efb104719c58c1e09f9ff2ffe7830712a7eb7b4afe14f"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-abc101d09f2c081dd074252fea514edc9bd8ffae18a1fcbd935b5465a1cc8d76"}
+        with: {"digest": "b3-2b9c4190294aaf51935ad4f2581f8c226791c07c8bce60625c42345b7330a23e"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-d6174a19077df1da4806f3a0746170ee62675e85db37fb6f6c1570beb102e73e"}
+        with: {"digest": "b3-fac99a3f4b9d3ac68966382375700d1eeb4845c04e731733651fc42b10805448"}
       - name: Unit and integration tests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-8ac5c7a2be4c2fa64d346c5c2688a9303c7841abd24d1cb14e9d54dd228f9299"}
+        with: {"digest": "b3-9775b70274f11434cb241ff1972fc3b18d12f2af9758af97b73989ce5d4a65ca"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-65152976d17237a6d4057a9e39e91c61e677179219408474e412984c761fca1b"}
+        with: {"digest": "b3-44f6db1b3b65b05ac345ba9e7b2d55f614085c00524764c5c158a06df7507381"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-ad32d9f6dbab132a7d7ccdfb48c76692742d4f96e9140eaee87a2b664e5f9d56"}
+        with: {"digest": "b3-e458300bede8a692129e016e641d59cab5ac4a62abf139990b2254e1cbc38b78"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -2025,23 +2027,23 @@ jobs:
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-abc101d09f2c081dd074252fea514edc9bd8ffae18a1fcbd935b5465a1cc8d76"}
+        with: {"digest": "b3-2b9c4190294aaf51935ad4f2581f8c226791c07c8bce60625c42345b7330a23e"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-d6174a19077df1da4806f3a0746170ee62675e85db37fb6f6c1570beb102e73e"}
+        with: {"digest": "b3-fac99a3f4b9d3ac68966382375700d1eeb4845c04e731733651fc42b10805448"}
       - name: Unit and integration tests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-8ac5c7a2be4c2fa64d346c5c2688a9303c7841abd24d1cb14e9d54dd228f9299"}
+        with: {"digest": "b3-9775b70274f11434cb241ff1972fc3b18d12f2af9758af97b73989ce5d4a65ca"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-65152976d17237a6d4057a9e39e91c61e677179219408474e412984c761fca1b"}
+        with: {"digest": "b3-44f6db1b3b65b05ac345ba9e7b2d55f614085c00524764c5c158a06df7507381"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-ad32d9f6dbab132a7d7ccdfb48c76692742d4f96e9140eaee87a2b664e5f9d56"}
+        with: {"digest": "b3-e458300bede8a692129e016e641d59cab5ac4a62abf139990b2254e1cbc38b78"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -2082,23 +2084,23 @@ jobs:
       - &s71
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-cdd520a4c94b8cb5272c8fae1149ac94f86e33642cf8fe07d5db04b0d9825f45"}
+        with: {"digest": "b3-ff7a7a389fb4e2abbe4a6683237fd8743499ba5b5ea3a6dda7def29cd087866d"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-ad04a9febe8458738aba0d7e85d2fe18dd94737ebdca400be271b037b2ac24cd"}
+        with: {"digest": "b3-501ba6808b88cb4846ab439e57e1474e83c6bf7db39c904bf048a0d40e2a95e5"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-e81406873955d68708ba4c82465696c925dd2b5f40aa33f1ad9d96c44ee1c942"}
+        with: {"digest": "b3-10cd903264fa7351db4ea464b84080e0477efad4b2fd35a59cbfe4f98a298c81"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-3e444d0978d91ffb8f4a3f7a5d525bec6a5b1bbabb44263dff82f81519786061"}
+        with: {"digest": "b3-48d11bf132ba4321b26129a84effe73729588fed37a3274f421cc1e872bb1274"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-88e809bb6f9f11ed910be3e0514dc39b430fd3e66bffad0caa058bf51a1fe8fe"}
+        with: {"digest": "b3-03793adf258f1039c4e24688ff98a181ef8c4c2539b438494ab2dc9388ca0141"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -2148,19 +2150,19 @@ jobs:
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-ad04a9febe8458738aba0d7e85d2fe18dd94737ebdca400be271b037b2ac24cd"}
+        with: {"digest": "b3-501ba6808b88cb4846ab439e57e1474e83c6bf7db39c904bf048a0d40e2a95e5"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-e81406873955d68708ba4c82465696c925dd2b5f40aa33f1ad9d96c44ee1c942"}
+        with: {"digest": "b3-10cd903264fa7351db4ea464b84080e0477efad4b2fd35a59cbfe4f98a298c81"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-3e444d0978d91ffb8f4a3f7a5d525bec6a5b1bbabb44263dff82f81519786061"}
+        with: {"digest": "b3-48d11bf132ba4321b26129a84effe73729588fed37a3274f421cc1e872bb1274"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-88e809bb6f9f11ed910be3e0514dc39b430fd3e66bffad0caa058bf51a1fe8fe"}
+        with: {"digest": "b3-03793adf258f1039c4e24688ff98a181ef8c4c2539b438494ab2dc9388ca0141"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -2201,27 +2203,27 @@ jobs:
       - &s73
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-1ee292ba86f9a20ee66ef1d2f27604fab7a656042e52ee96a7920b7e91cf8420"}
+        with: {"digest": "b3-b39abf90211b667967df99765eece336ff73cfa95bd8f357af876544de8aa146"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-9856dd6bb2284f84910fa0d64c40521ccf4207f957170053aba1842e3ce26f65"}
+        with: {"digest": "b3-7dfce81674a9b2fe8c173f8deedcfe364951ee0d95e720504d3b0914d2e42df2"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-07175e9a7a6de09194b61603d38f0af7a77bf0e0963daeaca9637bf27d3f67da"}
+        with: {"digest": "b3-2fa743d068c74a37e0d44af3c9cf540ebdf482709577b58c27d4ed842578b542"}
       - name: Unit and integration tests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-49c632ce2521bea32876a1794068f94bf543be409734aa3bddc9b7d3e7554571"}
+        with: {"digest": "b3-219fe3f0df556f9be60c962fddde5863fb54da3727917e8d246f39c0abdd089b"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-e2052af274802a1aa5cf25864332c66ea5c05b4b3aa2974da94e9282b5041d7e"}
+        with: {"digest": "b3-efcda8a9c918c22f08bf504600dd17ff287a5e0a291c5514c7baaca296ecedcc"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-2c2ff540c1011d2e71d7595370dc890aaf73a2e24da7b90b1691fa72013492d7"}
+        with: {"digest": "b3-c47a3006e3bddbcb053dd4c889c68352890493b7ca8142ba41623694df9731cc"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -2271,23 +2273,23 @@ jobs:
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-9856dd6bb2284f84910fa0d64c40521ccf4207f957170053aba1842e3ce26f65"}
+        with: {"digest": "b3-7dfce81674a9b2fe8c173f8deedcfe364951ee0d95e720504d3b0914d2e42df2"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-07175e9a7a6de09194b61603d38f0af7a77bf0e0963daeaca9637bf27d3f67da"}
+        with: {"digest": "b3-2fa743d068c74a37e0d44af3c9cf540ebdf482709577b58c27d4ed842578b542"}
       - name: Unit and integration tests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-49c632ce2521bea32876a1794068f94bf543be409734aa3bddc9b7d3e7554571"}
+        with: {"digest": "b3-219fe3f0df556f9be60c962fddde5863fb54da3727917e8d246f39c0abdd089b"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-e2052af274802a1aa5cf25864332c66ea5c05b4b3aa2974da94e9282b5041d7e"}
+        with: {"digest": "b3-efcda8a9c918c22f08bf504600dd17ff287a5e0a291c5514c7baaca296ecedcc"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-2c2ff540c1011d2e71d7595370dc890aaf73a2e24da7b90b1691fa72013492d7"}
+        with: {"digest": "b3-c47a3006e3bddbcb053dd4c889c68352890493b7ca8142ba41623694df9731cc"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -2328,23 +2330,23 @@ jobs:
       - &s75
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-776605751c9c9a3b9eb73bac6ff01db13b9e2dbb7d029f64b12953f43e0d51a2"}
+        with: {"digest": "b3-5d86d0a58aef8ead3e8dde6d3290d50d4987c924da455793612fd5fb6bead02a"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-c623251d056bd95cf40edc2a78c2f832349ebdabf1fbddae0b952172fed79a06"}
+        with: {"digest": "b3-d6240fb9a87ebdc0b411be2925d3f6bae8872d91439303db79108917206b1f8f"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-14772b91087bfb45cc1e825d88566e8e606139bc8ae9ffd2d6c829ad3040ba0a"}
+        with: {"digest": "b3-bb2327cfe32075ef19ccf45539067b3a7e1b5c6ac4899a1d7dbdfca6a5a321b1"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-349da63714cce63b1223e40122fdeeceda6a937a8b8ed0d2563f0850faaf844f"}
+        with: {"digest": "b3-277ce11348212da05111c04400c25c38316db0e517c45681c8ec105119aac06c"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-3cd812f512adf31c1e5022b751bc19e2a63e5c72ca1d60df3eba26d4a7f02be6"}
+        with: {"digest": "b3-122a3a33773b10d2ec237ac784bec935a5cf5841133a1cd2ea669ec5002a1092"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -2394,19 +2396,19 @@ jobs:
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-c623251d056bd95cf40edc2a78c2f832349ebdabf1fbddae0b952172fed79a06"}
+        with: {"digest": "b3-d6240fb9a87ebdc0b411be2925d3f6bae8872d91439303db79108917206b1f8f"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-14772b91087bfb45cc1e825d88566e8e606139bc8ae9ffd2d6c829ad3040ba0a"}
+        with: {"digest": "b3-bb2327cfe32075ef19ccf45539067b3a7e1b5c6ac4899a1d7dbdfca6a5a321b1"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-349da63714cce63b1223e40122fdeeceda6a937a8b8ed0d2563f0850faaf844f"}
+        with: {"digest": "b3-277ce11348212da05111c04400c25c38316db0e517c45681c8ec105119aac06c"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-3cd812f512adf31c1e5022b751bc19e2a63e5c72ca1d60df3eba26d4a7f02be6"}
+        with: {"digest": "b3-122a3a33773b10d2ec237ac784bec935a5cf5841133a1cd2ea669ec5002a1092"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -2447,19 +2449,19 @@ jobs:
       - &s77
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-9aa13e8f310d78ebb85ae03b164965aacf8a3b564cd7d51a9694cad6e1b98484"}
+        with: {"digest": "b3-e34e9b671ee0385b54bb81a5f7c9ff0a73f71656fbf463c18a80bf7018078112"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-5cf928fb921860aa1e1eb59ae2338a1b9789ae2235b4e353a58462dcc685fad0"}
+        with: {"digest": "b3-df44dc446f56e68e6ef378de5422d50f1e8c620d1e45e3fcb34d0abce40f7a28"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-31ad86a82c04fe97d63f972be939a1f48e33f5a67812da5f29726c247c124593"}
+        with: {"digest": "b3-1efd7424feaa866947d06fd9ced4f1b1b80bcf35e4dea1d9f706547719daae05"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-4d2b96d2a689482ef321ef5b49b01da1846b4fec5ec270fb438cb3d9a62fa79a"}
+        with: {"digest": "b3-4da0800f3107345add790011d0b733aeafa22bf08391945b1c01196c0383afdf"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -2509,15 +2511,15 @@ jobs:
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-5cf928fb921860aa1e1eb59ae2338a1b9789ae2235b4e353a58462dcc685fad0"}
+        with: {"digest": "b3-df44dc446f56e68e6ef378de5422d50f1e8c620d1e45e3fcb34d0abce40f7a28"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-31ad86a82c04fe97d63f972be939a1f48e33f5a67812da5f29726c247c124593"}
+        with: {"digest": "b3-1efd7424feaa866947d06fd9ced4f1b1b80bcf35e4dea1d9f706547719daae05"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-4d2b96d2a689482ef321ef5b49b01da1846b4fec5ec270fb438cb3d9a62fa79a"}
+        with: {"digest": "b3-4da0800f3107345add790011d0b733aeafa22bf08391945b1c01196c0383afdf"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -2558,23 +2560,23 @@ jobs:
       - &s79
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-d2a09961ab5dff643bc9c2059a9213eaf2a704b983d7250b66b6add60f041a50"}
+        with: {"digest": "b3-585a3ea6635dd099443e7bff5544e7e2456cb1fa2e4285cfe8cb78db87c4285a"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-6600dfd03bc2b672b2b3fdf919833ad110d016a28fbfc1529bba79c4949c2687"}
+        with: {"digest": "b3-091dfb436ca7cd9da1a892803b5d345bf54a32a8d47b537daed4d852f7be2c76"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-e7ffee62d01d36b93503cdc58aefce1b055e00efdae8b840286fab1839cfb01c"}
+        with: {"digest": "b3-a7bf3b2d8e0b0a8411a8ac240572a67404b9bbdb79f282a467a85601dd2913fd"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-feb1be20ec0f009d2a54d8346ad868c0065767364926ba98f6d475389d583fa5"}
+        with: {"digest": "b3-e25fce605c35e0b51a6cef7f52393bffff9dbce54c55ab22b6ad08f3d151d49c"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-8c24ee68efc97085349cd1f9d777aaf6e37e5526e328fa4dcec98dad5f947509"}
+        with: {"digest": "b3-ab9c73ecaff0ddee739070e4750f958ef50887a56ab81b1a3c0cdfd94cc59e0f"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -2624,19 +2626,19 @@ jobs:
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-6600dfd03bc2b672b2b3fdf919833ad110d016a28fbfc1529bba79c4949c2687"}
+        with: {"digest": "b3-091dfb436ca7cd9da1a892803b5d345bf54a32a8d47b537daed4d852f7be2c76"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-e7ffee62d01d36b93503cdc58aefce1b055e00efdae8b840286fab1839cfb01c"}
+        with: {"digest": "b3-a7bf3b2d8e0b0a8411a8ac240572a67404b9bbdb79f282a467a85601dd2913fd"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-feb1be20ec0f009d2a54d8346ad868c0065767364926ba98f6d475389d583fa5"}
+        with: {"digest": "b3-e25fce605c35e0b51a6cef7f52393bffff9dbce54c55ab22b6ad08f3d151d49c"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-8c24ee68efc97085349cd1f9d777aaf6e37e5526e328fa4dcec98dad5f947509"}
+        with: {"digest": "b3-ab9c73ecaff0ddee739070e4750f958ef50887a56ab81b1a3c0cdfd94cc59e0f"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -2677,23 +2679,23 @@ jobs:
       - &s81
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-9b9c9a563fee217378ad39c81b8663463748515f2e373f1eaa6d1a6120dcab55"}
+        with: {"digest": "b3-83140afed84138e2c7b9ca66650422e7995374aa0373510ec679ad4acd722eed"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-c3f930fbd8c29a6efb36050440776944469b2d0496e5ac363661a3de8a6ec382"}
+        with: {"digest": "b3-e3db37b106c1e4efbdcd67cbd762ae35d9b18ffe6af4e9bea206fb2b6afcc708"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-eb23717ebbdeb54fd81b3b6b186f06c770981ff37f050e6c8fcef51838fa29b6"}
+        with: {"digest": "b3-7e642f3fef9d552fbbfe18fea74738fd8071476548fa71f9c6e08ae06687f2aa"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-dbfbfa115fd61d5b9f6c7f846853a1d2cd31919191eab9f0846cf8b8840b15ab"}
+        with: {"digest": "b3-9a8b5e3264469693f813710d57e75607ed2a89b987da15d103e9f29834756693"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-3eb853c2df80077e535e4814ba88f32f9b1bde32ce2fba5db6618f0b53bc7f0b"}
+        with: {"digest": "b3-685a637d4681b82f348c372a5b4607b5adb82fee7695c23d804b74ee06565d43"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -2743,19 +2745,19 @@ jobs:
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-c3f930fbd8c29a6efb36050440776944469b2d0496e5ac363661a3de8a6ec382"}
+        with: {"digest": "b3-e3db37b106c1e4efbdcd67cbd762ae35d9b18ffe6af4e9bea206fb2b6afcc708"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-eb23717ebbdeb54fd81b3b6b186f06c770981ff37f050e6c8fcef51838fa29b6"}
+        with: {"digest": "b3-7e642f3fef9d552fbbfe18fea74738fd8071476548fa71f9c6e08ae06687f2aa"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-dbfbfa115fd61d5b9f6c7f846853a1d2cd31919191eab9f0846cf8b8840b15ab"}
+        with: {"digest": "b3-9a8b5e3264469693f813710d57e75607ed2a89b987da15d103e9f29834756693"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-3eb853c2df80077e535e4814ba88f32f9b1bde32ce2fba5db6618f0b53bc7f0b"}
+        with: {"digest": "b3-685a637d4681b82f348c372a5b4607b5adb82fee7695c23d804b74ee06565d43"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -2796,23 +2798,23 @@ jobs:
       - &s83
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-5d182a458e09db8aca750c59811ec0d87947f263e27637dc14c088ee3f34a87a"}
+        with: {"digest": "b3-1dcdda4b54db5e73eeebfe50ad4de166e4f87f72f8af3d89c72a5cca77e308b1"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-85ca380e07a8e32e8520fbc6d40d1246f4af5145fa010c8a7ba634e670290aaf"}
+        with: {"digest": "b3-1417c14a75b465e24ad6d8eac67807f3855ded2c0cec798b58639f7932e1a708"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-7b1ff833805f9b6f38e56ab888a638ba910023c1a4ecee11fb94152f3d5329fe"}
+        with: {"digest": "b3-34da243175012cf77bcd0ac2d8d23b591e8a6f12ba9b21800f4669e258d0ce23"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-2626b3b06d475634bd1948d1b368be5a57f045df328bb2639e9b6c59f1443314"}
+        with: {"digest": "b3-85be4efa4b25698cac71d1d64cf5df9de3ac6ef5cf3aaa895b8142c4f1ab1e92"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-34b9b03198e1eaa863c56b40633f1b95a7018c28d535e9f83b34b30f5a5e7a8b"}
+        with: {"digest": "b3-d119f6ad77706ebb8aa5ade2887b4fa0ad0ec547898693002c7c55d6224f614e"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -2862,19 +2864,19 @@ jobs:
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-85ca380e07a8e32e8520fbc6d40d1246f4af5145fa010c8a7ba634e670290aaf"}
+        with: {"digest": "b3-1417c14a75b465e24ad6d8eac67807f3855ded2c0cec798b58639f7932e1a708"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-7b1ff833805f9b6f38e56ab888a638ba910023c1a4ecee11fb94152f3d5329fe"}
+        with: {"digest": "b3-34da243175012cf77bcd0ac2d8d23b591e8a6f12ba9b21800f4669e258d0ce23"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-2626b3b06d475634bd1948d1b368be5a57f045df328bb2639e9b6c59f1443314"}
+        with: {"digest": "b3-85be4efa4b25698cac71d1d64cf5df9de3ac6ef5cf3aaa895b8142c4f1ab1e92"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-34b9b03198e1eaa863c56b40633f1b95a7018c28d535e9f83b34b30f5a5e7a8b"}
+        with: {"digest": "b3-d119f6ad77706ebb8aa5ade2887b4fa0ad0ec547898693002c7c55d6224f614e"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -2915,27 +2917,27 @@ jobs:
       - &s85
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-9b0c884f034193ab25e37a9ffffd0d97a7ef0227263f77427c2db4b79e51c725"}
+        with: {"digest": "b3-72c368f14fa0565df4ee70641a508a7810cd9d6515f46dc124712e3f95d43f5b"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-bc5d3a22b9b6925f27f036ceff814319d2897b54eaed40b2e89d5487abc16598"}
+        with: {"digest": "b3-9b4ee4ad3a5c929f3166b5d3994205c1fd0ef6876d22ec05f0eb11e600306f3e"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-7c356a9b55999741d15eb723e9f05e07cd183e4e3a179fcf28d622ef54748abb"}
+        with: {"digest": "b3-04bc1d43534e73a9b87eb9d7beb36f0afe16ccf4d7a10a97c973254b681aa75f"}
       - name: Unit and integration tests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-187d52a47f75e3d3ee292862b3a9f6ce82128fec6220ed8b640f9ebda6f751de"}
+        with: {"digest": "b3-6f39f93f69809c878e170d9d1ea77cc7c8c05ec8946a34a214127145eb0713ba"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-9988e3c7d123246f32fec9f51b82e4fd9ae34193200cd9a3954306af583fc274"}
+        with: {"digest": "b3-325b8ed9cd9edaae6bd1e22cee0688ba9d72fe433f5655cdeafecafe29e9e256"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-900eb3b755c2354d72a67e73ef4ee8b4363f277ca77b05297cff3d185a392e5b"}
+        with: {"digest": "b3-13e81d27fc1865421daf6bd8c5b5b2f67f762c78690f1373331df0a288954934"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
@@ -2985,23 +2987,23 @@ jobs:
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-bc5d3a22b9b6925f27f036ceff814319d2897b54eaed40b2e89d5487abc16598"}
+        with: {"digest": "b3-9b4ee4ad3a5c929f3166b5d3994205c1fd0ef6876d22ec05f0eb11e600306f3e"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-7c356a9b55999741d15eb723e9f05e07cd183e4e3a179fcf28d622ef54748abb"}
+        with: {"digest": "b3-04bc1d43534e73a9b87eb9d7beb36f0afe16ccf4d7a10a97c973254b681aa75f"}
       - name: Unit and integration tests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-187d52a47f75e3d3ee292862b3a9f6ce82128fec6220ed8b640f9ebda6f751de"}
+        with: {"digest": "b3-6f39f93f69809c878e170d9d1ea77cc7c8c05ec8946a34a214127145eb0713ba"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-9988e3c7d123246f32fec9f51b82e4fd9ae34193200cd9a3954306af583fc274"}
+        with: {"digest": "b3-325b8ed9cd9edaae6bd1e22cee0688ba9d72fe433f5655cdeafecafe29e9e256"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-900eb3b755c2354d72a67e73ef4ee8b4363f277ca77b05297cff3d185a392e5b"}
+        with: {"digest": "b3-13e81d27fc1865421daf6bd8c5b5b2f67f762c78690f1373331df0a288954934"}
       - name: Wait for parallel checks
         wait-all:
       - *s40
