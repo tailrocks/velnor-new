@@ -120,19 +120,24 @@ pub(super) fn render(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderErr
     }
     let runner = super::RunnerSpec::hosted(&request.hosted_label)?;
     let mut steps = vec![checkout_step()];
-    steps.extend(
-        PHASES
-            .iter()
-            .take(2)
-            .map(|(name, phase, always)| phase_step(name, phase, *always)),
-    );
+    steps.extend(PHASES.iter().take(2).map(|(name, phase, always)| {
+        phase_step(name, phase, if *always { Some("always()") } else { None })
+    }));
     steps.push(mise_step(pins)?);
-    steps.extend(
-        PHASES
-            .iter()
-            .skip(2)
-            .map(|(name, phase, always)| phase_step(name, phase, *always)),
-    );
+    for (name, phase, always) in PHASES.iter().skip(2) {
+        steps.push(phase_step(
+            name,
+            phase,
+            if *always { Some("always()") } else { None },
+        ));
+        if *phase == "build-source-cli-with-pinned-mbx" {
+            steps.push(phase_step(
+                "Author Linux x64 native validator candidates",
+                "qualify-linux-x64-native-validator-tools",
+                Some("success() && github.event_name == 'workflow_dispatch'"),
+            ));
+        }
+    }
     steps.push(upload_step());
     let mut job = vec![
         ("name".to_owned(), Yaml::str("Source qualification")),
@@ -232,10 +237,10 @@ fn mise_step(pins: &ProductReleasePins) -> Result<Yaml, RenderError> {
     Ok(step)
 }
 
-fn phase_step(name: &str, phase: &str, always: bool) -> Yaml {
+fn phase_step(name: &str, phase: &str, condition: Option<&str>) -> Yaml {
     let mut fields = vec![("name".to_owned(), Yaml::str(name))];
-    if always {
-        fields.push(("if".to_owned(), Yaml::str("always()")));
+    if let Some(condition) = condition {
+        fields.push(("if".to_owned(), Yaml::str(condition)));
     }
     fields.extend([
         ("shell".to_owned(), Yaml::str("bash")),
