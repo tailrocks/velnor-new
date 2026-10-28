@@ -121,7 +121,12 @@ fn diagnostic_fixture() -> io::Result<PathBuf> {
         ));
     }
     let path = fs::canonicalize(path)?;
-    executable_file(&path)?;
+    let metadata = fs::symlink_metadata(&path)?;
+    if !metadata.file_type().is_file() || metadata.permissions().mode() & 0o111 == 0 {
+        return Err(io::Error::other(
+            "diagnostics fixture must resolve to a regular executable",
+        ));
+    }
     Ok(path)
 }
 
