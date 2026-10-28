@@ -55,10 +55,6 @@ pub(super) fn verify_release_attestation(
             .ok_or_else(|| internal("package_attestation_repository_invalid"))?
             .0
     );
-    let invocation_uri = format!(
-        "https://github.com/{}/actions/runs/{}/attempts/{}",
-        expected.repository, expected.run_id, expected.run_attempt
-    );
     let expectation = AttestationExpectation {
         repository_uri: &repository_uri,
         owner_uri: &owner_uri,
@@ -72,7 +68,6 @@ pub(super) fn verify_release_attestation(
         run_attempt: expected.run_attempt,
         repository_id: expected.repository_id.to_string(),
         trigger: expected.event.as_str(),
-        invocation_uri: &invocation_uri,
     };
 
     for (name, digest) in &subjects {
@@ -267,7 +262,11 @@ struct AttestationExpectation<'a> {
     run_attempt: u32,
     repository_id: String,
     trigger: &'a str,
-    invocation_uri: &'a str,
+}
+
+pub(super) struct AttestationRunIdentity {
+    pub(super) run_id: u64,
+    pub(super) run_attempt: u32,
 }
 
 fn validate_output(
@@ -277,22 +276,8 @@ fn validate_output(
     requested_name: &str,
     requested_digest: &str,
 ) -> Result<(), OrchestratorError> {
-    validate_output_with_additional_names(bytes, expected_subjects, &[], expected)?;
-    let attestations: Vec<VerifiedAttestation> = serde_json::from_slice(bytes)
-        .map_err(|_| internal("package_attestation_output_invalid"))?;
-    let verified = &attestations[0].verification_result;
-    let found = verified
-        .statement
-        .subject
-        .iter()
-        .filter_map(|subject| {
-            subject
-                .digest
-                .get("sha256")
-                .map(|digest| (subject.name.as_str(), digest.as_str()))
-        })
-        .collect::<BTreeMap<_, _>>();
-    if found.get(requested_name).copied() != Some(requested_digest) {
+    let subjects = validate_output_with_additional_names(bytes, expected_subjects, &[], expected)?;
+    if subjects.get(requested_name).map(String::as_str) != Some(requested_digest) {
         return Err(internal("package_attestation_subject_inventory_mismatch"));
     }
     Ok(())
@@ -301,7 +286,7 @@ fn validate_output(
 fn validate_certificate(
     certificate: &Certificate,
     expected: &AttestationExpectation<'_>,
-) -> Result<(), OrchestratorError> {
+) -> Result<AttestationRunIdentity, OrchestratorError> {
     if certificate.issuer != OIDC_ISSUER
         || certificate.subject_alternative_name != expected.signer_workflow_uri
         || certificate.source_repository_uri != expected.repository_uri
@@ -314,26 +299,50 @@ fn validate_certificate(
         || certificate.build_config_uri != expected.caller_workflow_uri
         || certificate.build_config_digest != expected.caller_workflow_sha
         || certificate.build_trigger != expected.trigger
-        || certificate.run_invocation_uri != expected.invocation_uri
         || certificate.runner_environment != "github-hosted"
     {
         return Err(internal("package_attestation_identity_mismatch"));
     }
-    let expected_invocation = format!(
-        "https://github.com/{}/actions/runs/{}/attempts/{}",
-        expected
-            .repository_uri
-            .strip_prefix("https://github.com/")
-            .ok_or_else(|| internal("package_attestation_repository_invalid"))?,
-        expected.run_id,
-        expected.run_attempt
-    );
-    if certificate.run_invocation_uri != expected_invocation
-        || certificate.run_invocation_uri != expected.invocation_uri
+    parse_attestation_invocation(&certificate.run_invocation_uri, expected.repository_uri)
+}
+
+fn parse_attestation_invocation(
+    value: &str,
+    repository_uri: &str,
+) -> Result<AttestationRunIdentity, OrchestratorError> {
+    if repository_uri
+        .strip_prefix("https://github.com/")
+        .is_none_or(str::is_empty)
     {
+        return Err(internal("package_attestation_repository_invalid"));
+    }
+    let prefix = format!("{repository_uri}/actions/runs/");
+    let identity = value
+        .strip_prefix(&prefix)
+        .ok_or_else(|| internal("package_attestation_run_identity_mismatch"))?;
+    let (run_id, run_attempt) = identity
+        .split_once("/attempts/")
+        .ok_or_else(|| internal("package_attestation_run_identity_mismatch"))?;
+    if run_id.contains('/') || run_attempt.contains('/') {
         return Err(internal("package_attestation_run_identity_mismatch"));
     }
-    Ok(())
+    let run_id = parse_positive_canonical_integer(run_id)?;
+    let run_attempt = u32::try_from(parse_positive_canonical_integer(run_attempt)?)
+        .map_err(|_| internal("package_attestation_run_identity_mismatch"))?;
+    Ok(AttestationRunIdentity {
+        run_id,
+        run_attempt,
+    })
+}
+
+fn parse_positive_canonical_integer(value: &str) -> Result<u64, OrchestratorError> {
+    let parsed = value
+        .parse::<u64>()
+        .map_err(|_| internal("package_attestation_run_identity_mismatch"))?;
+    if parsed == 0 || parsed.to_string() != value {
+        return Err(internal("package_attestation_run_identity_mismatch"));
+    }
+    Ok(parsed)
 }
 
 fn is_sha256(value: &str) -> bool {
@@ -353,10 +362,10 @@ fn sha256(bytes: &[u8]) -> String {
     output
 }
 
-#[path = "package_release_signer_attestation_sdk.rs"]
-mod sdk;
 #[path = "package_release_signer_attestation_output.rs"]
 mod output;
+#[path = "package_release_signer_attestation_sdk.rs"]
+mod sdk;
 use output::validate_output_with_additional_names;
 #[path = "package_release_signer_attestation_image.rs"]
 mod image;

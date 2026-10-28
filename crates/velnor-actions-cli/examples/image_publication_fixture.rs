@@ -139,7 +139,10 @@ fn attestation(
     {
         return Err("attestation requested for an unattested subject".into());
     }
-    Ok(state["attestation"].clone())
+    Ok(state
+        .get("attestation_response")
+        .cloned()
+        .unwrap_or_else(|| state["attestation"].clone()))
 }
 
 fn hex(bytes: &[u8]) -> String {
