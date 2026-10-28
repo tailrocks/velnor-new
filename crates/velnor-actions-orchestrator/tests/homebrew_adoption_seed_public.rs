@@ -118,19 +118,7 @@ fn public_seed_manifest_replaces_legacy_consumer_manifest() -> Result<(), Box<dy
         .iter()
         .find(|file| file.path == ".github/workflows/ci.yml")
         .ok_or_else(|| io::Error::other("seed omitted its pull request caller"))?;
-    let pull_request_types = caller
-        .bytes
-        .lines()
-        .skip_while(|line| *line != "  pull_request:")
-        .skip(1)
-        .take_while(|line| line.starts_with("    "))
-        .filter_map(|line| line.trim().strip_prefix("- "))
-        .collect::<Vec<_>>();
-    assert_eq!(
-        pull_request_types,
-        ["opened", "synchronize", "reopened", "ready_for_review"],
-        "seed must validate pull requests when drafts become ready"
-    );
+    homebrew_adoption_seed_public_assertions::assert_seed_pull_request_events(&caller.bytes);
     let rendered_manifest = rendered
         .iter()
         .find(|file| file.path == MANIFEST_PATH)

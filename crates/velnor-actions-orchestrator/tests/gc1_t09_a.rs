@@ -124,6 +124,7 @@ fn check_rejects_bad_homes() -> Result<(), Box<dyn Error>> {
         discovered(),
         CheckCapabilityProof { container: None },
         &[],
+        velnor_actions_mise::MISE_VERSION.to_owned(),
     )
     .is_ok()
     {

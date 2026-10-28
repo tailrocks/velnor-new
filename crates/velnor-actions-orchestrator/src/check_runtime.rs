@@ -13,10 +13,16 @@ use velnor_actions_contract::{
     MatrixEntry, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, NamedCheckLane,
     NamedCheckLaneVariant, ObligationDecision, Plan, canonical_json_bytes,
 };
-use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, ToolCatalog, discover_checks_until};
+use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, discover_checks_until};
 #[path = "check_prepare.rs"]
 pub(crate) mod preparation;
-use preparation::{RestoredGroupContext, prepare_check_with_context};
+use preparation::{
+    RestoredGroupContext, prepare_check_with_runtime, resolve_mise_runtime,
+};
+use velnor_actions_mise::catalog::lock::ApprovedMiseRuntime;
+#[path = "check_binding.rs"]
+mod check_binding;
+use check_binding::CheckBinding;
 #[path = "compiler_observation.rs"]
 mod compiler_observation;
 
@@ -91,8 +97,26 @@ pub(crate) fn execute_check_to(
     if entry.lane_variant != lane_variant {
         return Err(internal("check_lane_variant_mismatch"));
     }
-    bind_check(root, &item, &plan, entry, task_id, &catalog, deadline)?;
-    let outcome = run_check(root, temp, &item, &plan, entry, deadline);
+    let runtime = resolve_mise_runtime(root, config.workflow.policy, &item, deadline)?;
+    bind_check(CheckBinding {
+        root,
+        item: &item,
+        plan: &plan,
+        entry,
+        task_id,
+        catalog: &catalog,
+        runtime: &runtime,
+        deadline,
+    })?;
+    let outcome = run_check(
+        root,
+        temp,
+        &item,
+        &plan,
+        entry,
+        &runtime,
+        deadline,
+    );
     let (code, receipt) = match &outcome {
         Ok(success) => (0, success.evidence.as_ref()),
         Err(_) => (1, None),
@@ -118,15 +142,17 @@ pub(crate) fn execute_check_to(
     outcome.map(|_| 1)
 }
 
-fn bind_check(
-    root: &Path,
-    item: &DiscoveredCheck,
-    plan: &Plan,
-    entry: &MatrixEntry,
-    task_id: &str,
-    catalog: &ToolCatalog,
-    deadline: CheckDeadline,
-) -> Result<(), OrchestratorError> {
+fn bind_check(binding: CheckBinding<'_>) -> Result<(), OrchestratorError> {
+    let CheckBinding {
+        root,
+        item,
+        plan,
+        entry,
+        task_id,
+        catalog,
+        runtime,
+        deadline,
+    } = binding;
     if item.proposal.task_id != task_id {
         return Err(internal("check_task_identity"));
     }
@@ -148,7 +174,7 @@ fn bind_check(
             item,
             &plan.run_key,
             &plan.generator,
-            catalog,
+            crate::internal_plan::named_checks::plan::RuntimeToolchain { catalog, runtime },
             &[lane],
             Some(deadline),
         )?;
@@ -201,6 +227,7 @@ fn run_check(
     item: &DiscoveredCheck,
     plan: &Plan,
     entry: &MatrixEntry,
+    runtime: &ApprovedMiseRuntime,
     deadline: CheckDeadline,
 ) -> Result<CheckOutcome, OrchestratorError> {
     deadline.remaining().map_err(|e| internal(&e.to_string()))?;
@@ -211,7 +238,7 @@ fn run_check(
         }
     }
     let group = RestoredGroupContext::resolve(temp)?;
-    let mut owned = prepare_check_with_context(root, &group, item, deadline)?;
+    let mut owned = prepare_check_with_runtime(root, &group, item, runtime, deadline)?;
     let executed = run_owned(root, item, plan, deadline, &owned);
     let outcome = if executed.is_err() {
         compiler_observation::ChildOutcome::Failure

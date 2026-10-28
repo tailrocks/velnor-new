@@ -71,6 +71,38 @@ pub(crate) fn load_config(root: &Path) -> Result<VelnorConfig, OrchestratorError
     load_config_from_text(&text)
 }
 
+pub(crate) fn load_workflow_policy_until(
+    root: &Path,
+    deadline: velnor_actions_mise::CheckDeadline,
+) -> Result<WorkflowPolicy, OrchestratorError> {
+    Ok(load_config_until(root, deadline)?.workflow.policy)
+}
+
+pub(crate) fn load_config_until(
+    root: &Path,
+    deadline: velnor_actions_mise::CheckDeadline,
+) -> Result<VelnorConfig, OrchestratorError> {
+    let path = root.join(CONFIG_REL);
+    let text = match crate::safe_read::read_repo_file_until(
+        root,
+        CONFIG_REL,
+        crate::safe_read::MAX_REPO_FILE_BYTES,
+        deadline,
+    )? {
+        crate::safe_read::RepoRead::Absent => {
+            return Err(OrchestratorError::ConfigMissing {
+                path: path.display().to_string(),
+            });
+        }
+        crate::safe_read::RepoRead::Text(text) => text,
+    };
+    let config = load_config_from_text(&text)?;
+    deadline
+        .remaining()
+        .map_err(|error| crate::internal::internal(&error.to_string()))?;
+    Ok(config)
+}
+
 pub(crate) fn load_config_from_text(text: &str) -> Result<VelnorConfig, OrchestratorError> {
     if u64::try_from(text.len()).map_or(true, |length| {
         length > crate::safe_read::MAX_REPO_FILE_BYTES
@@ -269,5 +301,65 @@ impl PartialActions {
         ActionsConfig {
             overrides: self.overrides,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{load_config_until, load_workflow_policy_until};
+    use std::path::PathBuf;
+    use velnor_actions_contract::WorkflowPolicy;
+
+    fn fixture_root_with_repo_config(test: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "velnor-policy-{test}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock must advance")
+                .as_nanos()
+        ));
+        let source =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.velnor/config.toml");
+        let config_text = std::fs::read_to_string(&source).expect("repo config must exist");
+        std::fs::create_dir_all(dir.join(".velnor")).expect("fixture must build");
+        std::fs::write(dir.join(".velnor/config.toml"), config_text)
+            .expect("fixture must write");
+        dir
+    }
+
+    fn expired_deadline() -> velnor_actions_mise::CheckDeadline {
+        let start = std::time::Instant::now()
+            .checked_sub(std::time::Duration::from_secs(10))
+            .expect("past instant must build");
+        velnor_actions_mise::CheckDeadline::from_start(start, std::time::Duration::from_secs(1))
+            .expect("past deadline must build")
+    }
+
+    #[test]
+    fn policy_load_reads_config_with_live_deadline() {
+        let dir = fixture_root_with_repo_config("live");
+        let deadline = velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(
+            60,
+        ))
+        .expect("test deadline must build");
+        let policy =
+            load_workflow_policy_until(&dir, deadline).expect("live policy load must succeed");
+        assert_eq!(policy, WorkflowPolicy::VelnorRepositoryV1);
+        let config = load_config_until(&dir, deadline).expect("live config load must succeed");
+        assert_eq!(config.workflow.policy, policy);
+        std::fs::remove_dir_all(&dir).expect("temp dir must clean");
+    }
+
+    #[test]
+    fn policy_load_refuses_expired_deadline() {
+        let dir = fixture_root_with_repo_config("expired");
+        let error = load_workflow_policy_until(&dir, expired_deadline())
+            .expect_err("expired deadline must refuse the read");
+        assert!(
+            format!("{error:?}").contains("deadline_exhausted"),
+            "unexpected error: {error:?}"
+        );
+        std::fs::remove_dir_all(&dir).expect("temp dir must clean");
     }
 }

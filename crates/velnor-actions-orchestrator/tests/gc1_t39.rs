@@ -111,6 +111,7 @@ fn qualified_at(home: &Path, cwd: &Path) -> Result<QualifiedCheck, Box<dyn Error
         found,
         CheckCapabilityProof { container: None },
         &[],
+        velnor_actions_mise::MISE_VERSION.to_owned(),
     )?)
 }
 

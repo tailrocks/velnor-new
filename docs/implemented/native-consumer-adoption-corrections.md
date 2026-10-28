@@ -23,13 +23,16 @@ CLI target passed 18 tests with no skips. A private development generator also
 planned the actual Jackin checkout and generated two byte-identical trees;
 these checks do not prove publication or authorize installing that generator.
 
-Tap PR 515 identified two additional seed defects. The native adoption caller
-now explicitly requests `opened`, `synchronize`, `reopened`, and
-`ready_for_review`. The renderer and its strict caller-scope validator share
-the same event representation. This preserves the default pull-request
-activities and validates a draft when it becomes ready.
+Tap PR 515 identified additional seed defects. The SDK65 caller initially
+requested `opened`, `synchronize`, `reopened`, and `ready_for_review`, but
+omitted `edited`. The initial seed event regression expected only those four
+events, so it missed the required base-retarget behavior. SDK66 adds `edited`
+to the same shared event representation used by the strict caller-scope
+validator. The seed now requests `opened`, `edited`, `synchronize`, `reopened`,
+and `ready_for_review`, so base retargets are re-planned while draft-ready
+validation remains enabled.
 
-The protected Jackin transition also retires eight obsolete generated files.
+The protected Jackin transition also retires ten obsolete generated files.
 Each has mode `100644` in the unchanged protected base
 `921858f118256e16d3dc312c407814ab0fd8ef52`, tree
 `ce52780173323bcfcecce152cc147d342d17b6cc`. Both independent API inspection and
@@ -45,28 +48,82 @@ local Git inspection verified their identities. Every file begins with
 | `.github/actions/velnor-verify-jactionlint/action.yml` | `7c3531af09cbdcd3421b59bb7bbf84e74e59d47a` |
 | `.github/actions/velnor-verify-restored-rust/action.yml` | `a84e33502e294d8c47c322fcad5422409d45f16c` |
 | `.github/actions/velnor-verify-rust-manifest/action.yml` | `b579164d33c2641e1f9ccad378557285d05fa9e8` |
+| `.github/jactionlint.yaml` | `f8549ccba3f6d2b345ec3db07b1f918b2e17ba70` |
 | `.github/scripts/velnor-tools-cache-identity.sh` | `b0b3fb1ebabc599dad940465e58c231565d42fb0` |
+| `.github/workflows/cache-prune.yml` | `5fcab017f0388a7aa6ce18ae5d8694d2bf34eff0` |
 
 The generic transition contract admits only a single action-directory
 component followed by `action.yml`, the exact generated cache-identity script,
-and the existing root `scripts/` class. This does not authorize deleting every
-matching path: the compiled protected transition remains the exact permission
-inventory. Authoring still binds the protected base tree and every listed
-path, mode, and Git blob. Candidate validation still requires the exact diff
-and rejects extra, retained, or identity-changed deletions. Independent review
-confirmed that a second runtime marker fetch would not restrict the authority
-of these already reviewed immutable blobs, so no additional authoring seam or
-network path was introduced.
+the exact `.github/jactionlint.yaml` and
+`.github/workflows/cache-prune.yml` paths, and the existing root `scripts/`
+class. The two new workflow/config deletions are exact paths, not general
+permissions for `.github/workflows/` or `.github/` files. This does not
+authorize deleting every matching path: the compiled protected transition
+remains the exact permission inventory. Authoring still binds the protected
+base tree and every listed path, mode, and Git blob. Candidate validation
+still requires the exact diff and rejects extra, retained, or identity-changed
+deletions. Independent review confirmed that a second runtime marker fetch
+would not restrict the authority of these already reviewed immutable blobs, so
+no additional authoring seam or network path was introduced.
 
-The transition now lists 17 deletions and exactly 25 changed paths, including
-its six generated outputs, regular `CLAUDE.md`, and source-authority locator.
-The cutover-author policy binds the new canonical transition digest
-`b3-f67ad06043906c44d396ee2d2548ed3895d1a4b4671f3b20ba2adde131c668ab`.
+At SDK65, the transition required SDK 0.1.65, listed 19 deletions, and admitted
+exactly 27 changed paths: its six generated outputs, regular `CLAUDE.md`, the
+source-authority locator, and those deletions. The seed retires the old
+SDK48 `cache-prune.yml` and `jactionlint.yaml`; the structural cutover then
+regenerates the current jactionlint config as part of normal Velnor output.
+The existing `.github/AGENTS.md` remains unchanged and retained. The
+SDK65 cutover-author policy bound the canonical transition digest
+`b3-30753ff7f1b759bee09484993c88a6ba0d3ca7132d317a308f386afeec1a6190`.
 Formula and inert-file identities remain unchanged. Independently reviewed
 public regressions first reproduced the missing trigger and eight missing
-deletions. Their positive scenario checks the complete changed-path evidence;
-negative cases cover extra paths, retained files, changed blob or mode, nested
-action paths, sibling action files, traversal, and unrelated GitHub scripts.
-The complete public seed target then passed six tests with no skips.
+deletions; the SDK63 baseline also showed the two newly reviewed deletions
+missing from its 17-file inventory. The positive scenario checks the complete
+changed-path evidence and all 19 path/mode/blob identities; negative cases
+cover extra paths, retained files, changed blob or mode, nested action paths,
+sibling action files, traversal, unrelated GitHub scripts, and workflow/config
+siblings. The existing scenario now loads the protected transition through
+the production canonical parser, rejects an appended newline, and checks the
+author policy's exact canonical bytes. This exposed trailing newlines in both
+updated JSON files; removing them preserves the reviewed transition digest.
+The canonical parser regression failed before that correction, then the
+complete SDK64 public seed target passed six tests with no skips. After the
+SDK65 minimum-version and digest rebinding, the full workspace suite passed
+all 419 tests across all targets and features, including the public seed
+scenarios, with no skips. Immutable publication remains a separate
+verification gate.
+
+SDK66 keeps the same protected base, 19 deletion identities, six generated
+outputs, and 27-path candidate boundary. Its transition minimum is 0.1.66 and
+its canonical digest is
+`b3-9dd1ba5238f729a3918a98d72c10d33abb77dd6006f4de4a1371823598aca4ed`.
+The retarget regression reproduced the four-event output before the fix; SDK66
+adds only `edited` to that caller event list. The seed now shares the ordinary
+workflow's event constant, while the public regression checks an independent
+literal event list, so the two production policies cannot drift separately.
+After integrating the approved-runtime execution fix from PR #424, the
+workspace build, all 426 tests, Clippy, and Rustdoc checks passed. Two native
+generations matched the applied tree, and all five goldens matched, including
+the dogfood tree.
+
+Named checks now resolve the approved Mise runtime for their actual runner
+target during planning and share that typed runtime with staged-plan binding
+and execution. The toolchain identity retains the executable version selector
+and adds a canonical component fingerprint of target, version, SHA-256, and
+byte bound. Version alone was insufficient because valid approvals can change
+a target's SHA or byte bound without changing its version.
+
+Earlier coverage checked runtime acquisition and changed version and binary
+identity together. It did not compare plans at a fixed checkout or reject an
+old staged plan after one runtime field changed. Two public scenarios now
+cover version rotation, separate same-version SHA and byte-bound changes,
+unaffected runner targets, ConsumerV1 fallback, and fresh versus stale CLI
+execution. Both reproduced the compiled-pin defect and the version-only
+identity gap before passing with the complete runtime fingerprint. Their
+fixtures exclude unrelated Rust discovery while retaining the real declared
+input files. The combined workspace suite passes all 428 tests with no skips;
+strict Clippy and Rustdoc checks also pass. Two native generations match the
+applied workflow tree, and all five goldens match. The 18 golden metadata
+queries have matching guard admission and explicit MBX execution receipts.
+Immutable release acceptance remains a separate gate for this final repair.
 Protected merge, immutable SDK publication, Tap adoption, and binary
 installation remain separate acceptance gates.

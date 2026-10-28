@@ -102,16 +102,22 @@ instantaneous cross-repository latestness guarantee. A mutable URL changing afte
 formula validation produces a checksum failure, never permission to accept new
 bytes. Stable uses permanent version-tagged assets and cannot be downgraded.
 
-The protected Homebrew seed transition uses the closed version-three template
-and requires SDK 0.1.60 or newer. Its eight authored outputs include
+The generic protected Homebrew seed contract uses the closed version-three
+template, whose format floor remains SDK 0.1.60. Each compiled transition sets
+its own `minimum_sdk_version`, which determines the SDK required to author that
+transition. The current Jackin transition binds the first complete 19-deletion,
+27-path inventory and requires SDK 0.1.66. Its eight authored outputs include
 `.velnor/release-manifest.json`, rendered from the exact authenticated SDK manifest
 bytes used to qualify the seed, and `.github/workflows/review-completion.yml`,
 rendered through the ordinary review-completion renderer and authenticated SDK
 acquisition path. This keeps the Tap's committed SDK identity aligned with the
 SDK that produced its workflow and tool files. The transition rejects older
 template inventories, missing review-completion workflows, and candidate evidence
-that omits or changes the manifest. Immutable SDK 0.1.57, 0.1.58, and 0.1.59
-retain their original version-two implementation.
+that omits or changes the manifest. The seed caller also requests the
+`pull_request` `edited` activity so base retargets rerun the required plan;
+it retains `opened`, `synchronize`, `reopened`, and `ready_for_review`.
+Immutable SDK 0.1.57, 0.1.58, and 0.1.59 retain their original version-two
+implementation.
 
 For Velnor's current workflow, `.velnor/generator.lock` and the Plan bootstrap
 remain on authenticated SDK 0.1.55. The Required verdict job separately acquires

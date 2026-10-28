@@ -7,7 +7,7 @@ use std::path::Path;
 use serde::Serialize;
 use velnor_actions_contract::{
     MatrixEntry, NamedCheckLane, PlanObligation, PlannedPlatform, ProposedTask, Stack,
-    canonical_json_bytes, digest_b3,
+    WorkflowPolicy, canonical_json_bytes, digest_b3,
 };
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_mise::restore::probe_tool_availability;
@@ -35,6 +35,7 @@ pub(crate) struct GroupInputs<'a> {
     pub(crate) job_owners: &'a crate::crate_job_ids::JobOwners<'a>,
     pub(crate) task: &'a ProposedTask,
     pub(crate) run_key: &'a str,
+    pub(crate) policy: WorkflowPolicy,
     pub(crate) label: &'a str,
     pub(crate) lane: u32,
     pub(crate) catalog: &'a ToolCatalog,
@@ -91,21 +92,7 @@ pub(crate) fn plan_group(
         );
     }
     if Stack::from_id(&task.stack_id) == Some(Stack::Mise) {
-        let item = crate::internal_plan::named_checks::discovered(inputs.discovery, task)
-            .map_err(internal_contract)?;
-        let job_id = format!("check-{}", item.check.id);
-        let check_lanes = inputs
-            .named_check_lanes
-            .get(&job_id)
-            .ok_or_else(|| internal("named_check_lane_missing"))?;
-        return crate::internal_plan::named_checks::plan::derive_lanes(
-            inputs.root,
-            item,
-            inputs.run_key,
-            inputs.wire.generator,
-            inputs.catalog,
-            check_lanes,
-        );
+        return plan_named_mise_group(inputs);
     }
     let _ = inputs.lane;
     let toolchain = toolchain_id(task, inputs.catalog).map_err(internal_contract)?;
@@ -152,6 +139,32 @@ pub(crate) fn plan_group(
         reuse,
     )
     .map(|(obligation, entry)| (obligation, vec![entry]))
+}
+
+fn plan_named_mise_group(
+    inputs: &GroupInputs<'_>,
+) -> Result<(PlanObligation, Vec<MatrixEntry>), OrchestratorError> {
+    let item = crate::internal_plan::named_checks::discovered(inputs.discovery, inputs.task)
+        .map_err(internal_contract)?;
+    let job_id = format!("check-{}", item.check.id);
+    let check_lanes = inputs
+        .named_check_lanes
+        .get(&job_id)
+        .ok_or_else(|| internal("named_check_lane_missing"))?;
+    let runtime = crate::check_runtime::preparation::resolve_mise_runtime_for_platform(
+        inputs.root,
+        inputs.policy,
+        item.check.runner.platform,
+    )?;
+    crate::internal_plan::named_checks::plan::derive_lanes(
+        inputs.root,
+        item,
+        inputs.run_key,
+        inputs.wire.generator,
+        inputs.catalog,
+        &runtime,
+        check_lanes,
+    )
 }
 
 fn complete_group(
