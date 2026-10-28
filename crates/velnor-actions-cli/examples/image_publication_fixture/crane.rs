@@ -25,6 +25,14 @@ struct ManifestLookupBarrier {
     reference: String,
 }
 
+struct TemporaryMarker(PathBuf);
+
+impl Drop for TemporaryMarker {
+    fn drop(&mut self) {
+        let _cleanup_result = fs::remove_file(&self.0);
+    }
+}
+
 pub(super) fn run(
     args: &[OsString],
     state: &mut Value,
@@ -158,12 +166,7 @@ fn wait_at_manifest_lookup_barrier(
     let home = PathBuf::from(env::var_os("HOME").ok_or("missing fixture home")?);
     let ready = home.join(".image-publication-manifest-ready");
     let release = home.join(".image-publication-manifest-release");
-    let mut ready_file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(ready)?;
-    ready_file.write_all(reference.as_bytes())?;
-    drop(ready_file);
+    publish_ready_marker(&ready, reference.as_bytes())?;
     let deadline = Instant::now() + Duration::from_secs(40);
     loop {
         match fs::symlink_metadata(&release) {
@@ -178,6 +181,24 @@ fn wait_at_manifest_lookup_barrier(
         thread::sleep(Duration::from_millis(5));
     }
     *state = serde_json::from_slice(&fs::read(state_path)?)?;
+    Ok(())
+}
+
+fn publish_ready_marker(path: &Path, contents: &[u8]) -> Result<(), Box<dyn Error>> {
+    let file_name = path.file_name().ok_or("ready marker has no file name")?;
+    let mut temporary_name = file_name.to_os_string();
+    temporary_name.push(format!(".tmp-{}", std::process::id()));
+    let temporary = path.with_file_name(temporary_name);
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temporary)?;
+    let _temporary_marker = TemporaryMarker(temporary.clone());
+    let write_result = file.write_all(contents);
+    drop(file);
+    write_result?;
+    fs::hard_link(&temporary, path)?;
+    fs::remove_file(&temporary)?;
     Ok(())
 }
 

@@ -173,6 +173,7 @@ inputs = [
   "crates/velnor-actions-cli/tests/image_publication_public/registry_cases.rs",
   "crates/velnor-actions-cli/tests/image_publication_public/readback_retention.rs",
   "crates/velnor-actions-cli/tests/image_publication_public/required_ci.rs",
+  "crates/velnor-actions-cli/tests/image_publication_public/runner_source.rs",
   "crates/velnor-actions-cli/tests/image_publication_public/source_closure.rs",
   "crates/velnor-actions-cli/tests/image_publication_public/support/ci_publication.rs",
   "crates/velnor-actions-cli/tests/image_publication_public/support/manifest_outcomes.rs",

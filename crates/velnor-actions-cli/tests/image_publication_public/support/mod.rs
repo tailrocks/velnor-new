@@ -34,6 +34,7 @@ pub(crate) struct Fixture {
     pub(crate) profile: FixtureProfile,
     pub(crate) source: String,
     pub(crate) authority_sha: String,
+    pub(crate) current_main_sha: String,
     pub(crate) producer_run_id: u64,
     pub(crate) producer_run_attempt: u32,
     pub(crate) artifact_id: u64,
@@ -147,36 +148,78 @@ impl Fixture {
         run_attempt: u32,
         artifact_id: u64,
     ) -> Result<Self, Box<dyn Error>> {
-        let temp = tempfile::tempdir()?;
-        let base = temp.path().canonicalize()?;
         let source = "a".repeat(40);
-        let authority_sha = profile.authority_sha(&source);
-        let subjects =
-            write_subjects(&base, profile, &source, &authority_sha, &image, run_attempt)?;
-        let attestation = records::attestation(
+        let authority_sha = source.clone();
+        let current_main_sha = profile.current_main_sha(&source);
+        Self::new_with_image_and_heads(
             profile,
+            image,
+            run_attempt,
+            artifact_id,
             &source,
             &authority_sha,
+            &current_main_sha,
+        )
+    }
+
+    pub(crate) fn new_with_producer_head(
+        profile: FixtureProfile,
+        producer_head: &str,
+    ) -> Result<Self, Box<dyn Error>> {
+        let source = "a".repeat(40);
+        let image = oci::create_for(profile, &source)?;
+        let current_main_sha = profile.current_main_sha(&source);
+        Self::new_with_image_and_heads(
+            profile,
+            image,
+            RUN_ATTEMPT,
+            profile.artifact_id(),
+            &source,
+            producer_head,
+            &current_main_sha,
+        )
+    }
+
+    fn new_with_image_and_heads(
+        profile: FixtureProfile,
+        image: oci::Layout,
+        run_attempt: u32,
+        artifact_id: u64,
+        source: &str,
+        authority_sha: &str,
+        current_main_sha: &str,
+    ) -> Result<Self, Box<dyn Error>> {
+        let temp = tempfile::tempdir()?;
+        let base = temp.path().canonicalize()?;
+        let subjects = write_subjects(&base, profile, source, authority_sha, &image, run_attempt)?;
+        let attestation = records::attestation(
+            profile,
+            source,
+            authority_sha,
             &subjects.archive_sha256,
             &subjects.record_sha256,
             run_attempt,
         );
         let state = records::state_value(
             profile,
-            &source,
-            &authority_sha,
+            records::FixtureHeads {
+                source,
+                authority_sha,
+                current_main_sha,
+            },
             subjects.source_files,
             &attestation,
             run_attempt,
             artifact_id,
         );
-        let runtime = runtime::create_runtime(&base, state, profile, &source)?;
+        let runtime = runtime::create_runtime(&base, state, profile, source)?;
         let platform_digest = image.identity.platform_manifest_digest.clone();
         Ok(Self {
             _temp: temp,
             profile,
-            source,
-            authority_sha,
+            source: source.to_owned(),
+            authority_sha: authority_sha.to_owned(),
+            current_main_sha: current_main_sha.to_owned(),
             producer_run_id: profile.run_id(),
             producer_run_attempt: run_attempt,
             artifact_id,
