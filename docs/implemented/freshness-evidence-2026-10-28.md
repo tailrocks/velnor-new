@@ -1,0 +1,11 @@
+# Freshness evidence — 2026-10-28
+
+The first SDK67 publication attempt, [40678063296](https://github.com/tailrocks/velnor-new/actions/runs/40678063296), stopped at its freshness gate before creating a release. The recorded tool and action observations had crossed the 24-hour validity limit while the source completed its normal verification. The limit remains unchanged.
+
+Two new authenticated GitHub captures, bounded Rust-manifest requests, and repeated crates.io probes agree with every existing tool version and action commit. The [agreement](evidence/freshness-2026-10-28/capture-agreement.json) binds the collector and retained responses by SHA-256. Each response receipt records its actual request and observation times, source URL, byte count, and digest. Captures ran from `2026-10-28T11:19:43Z` through `11:21:07Z`. The Rust response is exactly 131,072 bytes with HTTP 206 and `Content-Range: bytes 0-131071/943486`; it reports stable Rust `1.99.1`. All pinned and latest action tags resolve to the existing inventory SHAs.
+
+The independent [native upstream probe](evidence/freshness-2026-10-28/native-upstream-probe.log) reports all 25 live tool/action checks as `pinned==latest`. Its overall exit status was 1 because it also checked the old, expired recorded observations. The native command is read-only and cannot update those records.
+
+Only supported tool/action observation timestamps are refreshed. Tool pins, action SHAs, qualification claims, exceptions, runner evidence, generated workflows, and SDK version `0.1.67` remain unchanged. The captures establish current upstream observations; they do not qualify a different tool or SDK source. A new normal protected merge and exact-source CI are required before another official publication attempt. The publication acceptance verifier must bind that new merge SHA, rather than the earlier SDK67 source.
+
+After the receipt-backed observation updates, the [native freshness check including live upstream probes](evidence/freshness-2026-10-28/refreshed-native-freshness.log) exited successfully. Alint configuration and repository checks passed. Independent review verified both captures and the exact 25-field observation update; no other inventory fields changed.
