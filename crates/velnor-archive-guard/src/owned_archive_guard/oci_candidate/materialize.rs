@@ -13,6 +13,7 @@ use sha2::Digest;
 use super::{
     OciCandidateError, OciCandidateEvidence, OciMaterializeError, Result,
     archive::{Blob, OciArchive, authenticate_archive, hex, load_archive},
+    check_deadline,
     graph::inspect_graph_preserving_archive,
 };
 
@@ -29,13 +30,17 @@ pub(super) fn materialize_oci_candidate(
     destination: &Path,
     expected: &OciCandidateEvidence,
 ) -> MaterializeResult<OciCandidateEvidence> {
+    check_deadline()?;
     let archive = load_archive(archive_path)?;
     let (evidence, mut archive) = inspect_graph_preserving_archive(archive)?;
     if &evidence != expected {
         return Err(OciCandidateError("oci_candidate_evidence_mismatch").into());
     }
+    check_deadline()?;
     let identity = create_destination(destination)?;
-    let result = materialize_contents(&mut archive, destination, &evidence);
+    let result = check_deadline()
+        .and_then(|()| materialize_contents(&mut archive, destination, &evidence))
+        .and_then(|()| check_deadline());
     match result {
         Ok(()) => Ok(evidence),
         Err(error) => {
@@ -82,20 +87,26 @@ fn materialize_contents(
     destination: &Path,
     evidence: &OciCandidateEvidence,
 ) -> Result<()> {
+    check_deadline()?;
     write_metadata(&destination.join("oci-layout"), &archive.layout)?;
+    check_deadline()?;
     write_metadata(&destination.join("index.json"), &archive.index)?;
     let blobs = destination.join("blobs");
     create_private_directory(&blobs)?;
+    check_deadline()?;
     let sha256 = blobs.join("sha256");
     create_private_directory(&sha256)?;
+    check_deadline()?;
     let blobs = archive
         .blobs
         .iter()
         .map(|(digest, blob)| (digest.clone(), *blob))
         .collect::<Vec<_>>();
     for (digest, blob) in blobs {
+        check_deadline()?;
         write_blob(archive, &blob, &digest, &sha256.join(&digest))?;
     }
+    check_deadline()?;
     let (digest, size) = authenticate_archive(archive)?;
     if digest != evidence.archive_sha256 || size != evidence.archive_size_bytes {
         return Err(OciCandidateError("oci_projection_archive_changed"));
@@ -122,20 +133,35 @@ fn create_private_file(path: &Path) -> Result<File> {
 }
 
 fn write_metadata(path: &Path, bytes: &[u8]) -> Result<()> {
+    check_deadline()?;
     let mut output = create_private_file(path)?;
-    output
-        .write_all(bytes)
-        .map_err(|_| OciCandidateError("oci_projection_metadata_write"))?;
+    for chunk in bytes.chunks(64 * 1024) {
+        check_deadline()?;
+        output
+            .write_all(chunk)
+            .map_err(|_| OciCandidateError("oci_projection_metadata_write"))?;
+    }
+    check_deadline()?;
     output
         .sync_all()
         .map_err(|_| OciCandidateError("oci_projection_metadata_sync"))?;
+    check_deadline()?;
     output
         .seek(SeekFrom::Start(0))
         .map_err(|_| OciCandidateError("oci_projection_metadata_seek"))?;
     let mut copied = Vec::with_capacity(bytes.len());
-    output
-        .read_to_end(&mut copied)
-        .map_err(|_| OciCandidateError("oci_projection_metadata_read"))?;
+    let mut buffer = [0_u8; 8192];
+    loop {
+        check_deadline()?;
+        let count = output
+            .read(&mut buffer)
+            .map_err(|_| OciCandidateError("oci_projection_metadata_read"))?;
+        if count == 0 {
+            break;
+        }
+        copied.extend_from_slice(&buffer[..count]);
+    }
+    check_deadline()?;
     if copied != bytes {
         return Err(OciCandidateError("oci_projection_metadata_mismatch"));
     }
@@ -148,6 +174,7 @@ fn write_blob(
     digest: &str,
     destination: &Path,
 ) -> Result<()> {
+    check_deadline()?;
     archive
         .file
         .seek(SeekFrom::Start(blob.offset))
@@ -158,6 +185,7 @@ fn write_blob(
     let buffer_size =
         u64::try_from(buffer.len()).map_err(|_| OciCandidateError("oci_projection_blob_size"))?;
     while remaining > 0 {
+        check_deadline()?;
         let amount = usize::try_from(remaining.min(buffer_size))
             .map_err(|_| OciCandidateError("oci_projection_blob_size"))?;
         archive
@@ -167,6 +195,7 @@ fn write_blob(
         output
             .write_all(&buffer[..amount])
             .map_err(|_| OciCandidateError("oci_projection_blob_write"))?;
+        check_deadline()?;
         remaining -=
             u64::try_from(amount).map_err(|_| OciCandidateError("oci_projection_blob_size"))?;
     }
@@ -181,12 +210,14 @@ fn write_blob(
 }
 
 fn hash_copied_blob(file: &mut File, limit: u64) -> Result<(String, u64)> {
+    check_deadline()?;
     file.seek(SeekFrom::Start(0))
         .map_err(|_| OciCandidateError("oci_projection_blob_seek"))?;
     let mut digest = sha2::Sha256::new();
     let mut size = 0_u64;
     let mut buffer = vec![0; 128 * 1024];
     loop {
+        check_deadline()?;
         let count = file
             .read(&mut buffer)
             .map_err(|_| OciCandidateError("oci_projection_blob_read"))?;
@@ -201,6 +232,7 @@ fn hash_copied_blob(file: &mut File, limit: u64) -> Result<(String, u64)> {
             .ok_or(OciCandidateError("oci_projection_blob_size"))?;
         sha2::Digest::update(&mut digest, &buffer[..count]);
     }
+    check_deadline()?;
     Ok((hex(&sha2::Digest::finalize(digest)), size))
 }
 

@@ -60,12 +60,23 @@ pub(super) fn admit_runner_images(
     let lock = read_exact_lock(&root, &request.source_commit, request.deadline)?;
     validate::validate_runner_lock(&lock)?;
     let runner_lock_sha256 = source::hex(&Sha256::digest(&lock));
-    let runner = inspect_image(&request.runner_archive, ImageKind::Runner, &request.source_commit)?;
-    let dind = inspect_image(&request.dind_archive, ImageKind::Dind, &request.source_commit)?;
+    let runner = inspect_image(
+        &request.runner_archive,
+        ImageKind::Runner,
+        &request.source_commit,
+        request.deadline,
+    )?;
+    let dind = inspect_image(
+        &request.dind_archive,
+        ImageKind::Dind,
+        &request.source_commit,
+        request.deadline,
+    )?;
     let probe = inspect_image(
         &request.probe_archive,
         ImageKind::ResourceProbe,
         &request.source_commit,
+        request.deadline,
     )?;
     let bytes = serialize_descriptors(
         &request.source_commit,
@@ -85,9 +96,18 @@ fn inspect_image(
     path: &Path,
     kind: ImageKind,
     source_commit: &str,
+    deadline: CheckDeadline,
 ) -> Result<InspectedImage, OrchestratorError> {
-    let inspection = inspect_oci_candidate_with_config(path)
-        .map_err(|_| internal("runner_image_oci_invalid"))?;
+    let inspection = deadline
+        .scope(|| inspect_oci_candidate_with_config(path))
+        .map_err(|_| internal("runner_image_deadline"))?
+        .map_err(|error| {
+            if error.is_deadline_exceeded() {
+                internal("runner_image_deadline")
+            } else {
+                internal("runner_image_oci_invalid")
+            }
+        })?;
     validate_image_configuration(kind, &inspection.configuration, source_commit)?;
     Ok(InspectedImage {
         evidence: inspection.evidence,

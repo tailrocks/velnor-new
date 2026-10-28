@@ -4,7 +4,7 @@
 use super::{
     OciCandidateError, OciCandidateEvidence, OciCandidateInspection, OciImageConfiguration, Result,
     archive::{OciArchive, authenticate_archive, hash_blob},
-    config,
+    check_deadline, config,
     json::parse,
     layer::{LayerDescriptor, verify_layers},
 };
@@ -45,6 +45,7 @@ fn inspect_graph_inner(
     mut archive: OciArchive,
     projection: ConfigurationProjection,
 ) -> Result<(OciCandidateInspection, OciArchive)> {
+    check_deadline()?;
     let layout = parse(&archive.layout)?;
     if layout.as_object().is_none_or(|map| {
         map.len() != 1
@@ -99,6 +100,7 @@ fn inspect_graph_inner(
         return Err(OciCandidateError("oci_platform_identity"));
     }
     let manifest_raw = read_referenced(&mut archive, &descriptor)?;
+    check_deadline()?;
     inspect_manifest(archive, &descriptor, &manifest_raw, projection)
 }
 
@@ -215,6 +217,7 @@ fn collect_references(
         &config.media_type,
     )?;
     for layer in layers {
+        check_deadline()?;
         add_reference(
             &mut referenced,
             &layer.digest,
@@ -258,6 +261,7 @@ fn verify_blob_hashes(
     referenced: &std::collections::BTreeMap<String, (u64, String)>,
 ) -> Result<()> {
     for (digest, (expected_size, _)) in referenced {
+        check_deadline()?;
         let blob = archive
             .blobs
             .get(digest)
@@ -329,12 +333,14 @@ fn read_expected_diff_ids(
     let diff_ids = values
         .iter()
         .map(|value| {
+            check_deadline()?;
             value
                 .as_str()
                 .map(str::to_owned)
                 .ok_or(OciCandidateError("oci_diff_id_shape"))
         })
         .collect::<Result<Vec<_>>>()?;
+    check_deadline()?;
     let projected = match projection {
         ConfigurationProjection::Ignore => OciImageConfiguration::default(),
         ConfigurationProjection::Include => config::project(&image_config)?,

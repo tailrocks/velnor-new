@@ -3,11 +3,15 @@
 
 use crate::MiseError;
 use crate::checks::invalid;
-use std::cell::Cell;
 use std::time::{Duration, Instant};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
 
 thread_local! {
     static OPERATION_DEADLINE: Cell<Option<CheckDeadline>> = const { Cell::new(None) };
+    static CLOCK_PROVIDER: RefCell<Option<Rc<dyn Fn() -> Instant>>> = const { RefCell::new(None) };
 }
 
 struct RestoreDeadline(Option<CheckDeadline>);
@@ -18,10 +22,37 @@ impl Drop for RestoreDeadline {
     }
 }
 
+struct RestoreClock(Option<Rc<dyn Fn() -> Instant>>);
+
+impl Drop for RestoreClock {
+    fn drop(&mut self) {
+        CLOCK_PROVIDER.with(|provider| {
+            let _ = provider.replace(self.0.take());
+        });
+    }
+}
+
+fn now() -> Instant {
+    let provider = CLOCK_PROVIDER.with(|current| current.borrow().clone());
+    provider.map_or_else(Instant::now, |clock| clock())
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CheckDeadline(Instant);
 
 impl CheckDeadline {
+    #[doc(hidden)]
+    pub fn with_clock<T>(
+        clock: impl Fn() -> Instant + 'static,
+        operation: impl FnOnce() -> T,
+    ) -> T {
+        let restore =
+            RestoreClock(CLOCK_PROVIDER.with(|provider| provider.replace(Some(Rc::new(clock)))));
+        let result = operation();
+        drop(restore);
+        result
+    }
+
     pub fn scope<T>(self, operation: impl FnOnce() -> T) -> Result<T, MiseError> {
         let effective = self.effective();
         effective.remaining()?;
@@ -64,13 +95,13 @@ impl CheckDeadline {
     }
 
     pub fn after(timeout: Duration) -> Result<Self, MiseError> {
-        Self::from_start(Instant::now(), timeout)
+        Self::from_start(now(), timeout)
     }
 
     pub fn remaining(self) -> Result<Duration, MiseError> {
         self.effective()
             .0
-            .checked_duration_since(Instant::now())
+            .checked_duration_since(now())
             .filter(|remaining| !remaining.is_zero())
             .ok_or_else(|| invalid("check_timeout", "deadline_exhausted"))
     }

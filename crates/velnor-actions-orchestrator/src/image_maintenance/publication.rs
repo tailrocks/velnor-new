@@ -123,13 +123,23 @@ fn materialize(
     evidence: &velnor_archive_guard::owned_archive_guard::oci_candidate::OciCandidateEvidence,
     layout: &Path,
 ) -> Result<(), OrchestratorError> {
-    let materialized =
-        velnor_archive_guard::owned_archive_guard::oci_candidate::materialize_oci_candidate(
-            &request.archive_path,
-            layout,
-            evidence,
-        )
-        .map_err(|error| internal(&error.to_string()))?;
+    let materialized = request
+        .deadline
+        .scope(|| {
+            velnor_archive_guard::owned_archive_guard::oci_candidate::materialize_oci_candidate(
+                &request.archive_path,
+                layout,
+                evidence,
+            )
+        })
+        .map_err(|_| internal("image_publication_deadline"))?
+        .map_err(|error| {
+            if error.is_deadline_exceeded() {
+                internal("image_publication_deadline")
+            } else {
+                internal(&error.to_string())
+            }
+        })?;
     if &materialized != evidence {
         return Err(internal("image_publication_materialization_identity"));
     }

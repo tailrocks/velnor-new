@@ -6,13 +6,14 @@ use std::{
     io::{Read, Seek, SeekFrom},
 };
 
-use super::{OciCandidateError, Result};
+use super::{OciCandidateError, Result, check_deadline};
 
 const BLOCK: usize = 512;
 const EXTENSION_LIMIT: u64 = 1024 * 1024;
 const EXTENSION_TOTAL_LIMIT: u64 = 4 * 1024 * 1024;
 
 pub(super) fn scan_archive_extensions(file: &mut File, archive_size: u64) -> Result<()> {
+    check_deadline()?;
     let mut first = [0; 6];
     let read = read_bounded(file, &mut first, archive_size)?;
     if read != first.len() {
@@ -33,6 +34,7 @@ fn scan_tar_extensions(file: &mut File, archive_size: u64) -> Result<()> {
     let mut extension_total = 0_u64;
     let mut header = [0; BLOCK];
     loop {
+        check_deadline()?;
         let mut filled = 0;
         while filled < header.len() {
             let read = read_bounded(file, &mut header[filled..], archive_size)?;
@@ -75,6 +77,7 @@ fn scan_tar_extensions(file: &mut File, archive_size: u64) -> Result<()> {
 }
 
 fn validate_terminator_and_padding(file: &mut File, archive_size: u64) -> Result<()> {
+    check_deadline()?;
     let mut second = [0; BLOCK];
     let mut filled = 0;
     while filled < second.len() {
@@ -90,6 +93,7 @@ fn validate_terminator_and_padding(file: &mut File, archive_size: u64) -> Result
 
     let mut padding = vec![0; 64 * 1024];
     loop {
+        check_deadline()?;
         let read = read_bounded(file, &mut padding, archive_size)?;
         if read == 0 {
             return Ok(());
@@ -101,6 +105,7 @@ fn validate_terminator_and_padding(file: &mut File, archive_size: u64) -> Result
 }
 
 fn read_bounded(file: &mut File, buffer: &mut [u8], archive_size: u64) -> Result<usize> {
+    check_deadline()?;
     let position = file
         .stream_position()
         .map_err(|_| OciCandidateError("tar_scan_seek"))?;
@@ -112,8 +117,11 @@ fn read_bounded(file: &mut File, buffer: &mut [u8], archive_size: u64) -> Result
     if amount == 0 {
         return Ok(0);
     }
-    file.read(&mut buffer[..amount])
-        .map_err(|_| OciCandidateError("tar_scan_read"))
+    let count = file
+        .read(&mut buffer[..amount])
+        .map_err(|_| OciCandidateError("tar_scan_read"))?;
+    check_deadline()?;
+    Ok(count)
 }
 
 fn tar_size(field: &[u8]) -> Result<u64> {

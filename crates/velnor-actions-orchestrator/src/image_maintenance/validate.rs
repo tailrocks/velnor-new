@@ -50,10 +50,21 @@ pub(super) fn validate_job_candidate(
     {
         return Err(internal("image_candidate_archive_file"));
     }
-    let graph = velnor_archive_guard::owned_archive_guard::oci_candidate::inspect_oci_candidate(
-        &request.archive_path,
-    )
-    .map_err(|_| internal("image_candidate_oci_invalid"))?;
+    let graph = request
+        .deadline
+        .scope(|| {
+            velnor_archive_guard::owned_archive_guard::oci_candidate::inspect_oci_candidate(
+                &request.archive_path,
+            )
+        })
+        .map_err(|_| internal("image_candidate_deadline"))?
+        .map_err(|error| {
+            if error.is_deadline_exceeded() {
+                internal("image_candidate_deadline")
+            } else {
+                internal("image_candidate_oci_invalid")
+            }
+        })?;
     if record.archive.size_bytes != graph.archive_size_bytes
         || record.archive.sha256 != graph.archive_sha256
         || record.oci.archive_index_digest != graph.archive_index_digest

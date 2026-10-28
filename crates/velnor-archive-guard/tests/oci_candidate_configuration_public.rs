@@ -10,6 +10,9 @@ use velnor_archive_guard::owned_archive_guard::oci_candidate::{
 #[path = "oci_candidate_configuration_public/support.rs"]
 mod support;
 
+#[path = "oci_candidate_configuration_public/deadline.rs"]
+mod deadline;
+
 #[test]
 fn configuration_projection_preserves_authenticated_evidence_and_values()
 -> Result<(), Box<dyn Error>> {

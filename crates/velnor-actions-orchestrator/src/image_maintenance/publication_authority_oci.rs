@@ -15,20 +15,26 @@ pub(super) fn inspect_archive(
     request: &PublishImageRequest,
     candidate: &CandidateRecord,
 ) -> Result<OciCandidateEvidence, OrchestratorError> {
-    let (actual, configuration) = match candidate.profile {
-        ImagePublicationProfile::Job => (
-            inspect_oci_candidate(&request.archive_path)
-                .map_err(|_| internal("image_publication_oci_invalid"))?,
-            None,
-        ),
-        ImagePublicationProfile::Runner
-        | ImagePublicationProfile::Dind
-        | ImagePublicationProfile::ResourceProbe => {
-            let inspection = inspect_oci_candidate_with_config(&request.archive_path)
-                .map_err(|_| internal("image_publication_oci_invalid"))?;
-            (inspection.evidence, Some(inspection.configuration))
-        }
-    };
+    let (actual, configuration) = request
+        .deadline
+        .scope(|| match candidate.profile {
+            ImagePublicationProfile::Job => inspect_oci_candidate(&request.archive_path)
+                .map(|evidence| (evidence, None)),
+            ImagePublicationProfile::Runner
+            | ImagePublicationProfile::Dind
+            | ImagePublicationProfile::ResourceProbe => {
+                inspect_oci_candidate_with_config(&request.archive_path)
+                    .map(|inspection| (inspection.evidence, Some(inspection.configuration)))
+            }
+        })
+        .map_err(|_| internal("image_publication_deadline"))?
+        .map_err(|error| {
+            if error.is_deadline_exceeded() {
+                internal("image_publication_deadline")
+            } else {
+                internal("image_publication_oci_invalid")
+            }
+        })?;
     if !same_oci_evidence(&actual, &candidate.archive, &candidate.oci) {
         return Err(internal("image_publication_oci_attested_graph"));
     }
