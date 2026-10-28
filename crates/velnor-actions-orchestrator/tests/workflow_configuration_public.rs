@@ -43,10 +43,14 @@ mod bun_request_lanes;
 mod bun_routing;
 #[path = "workflow_configuration_public/bun_runtime.rs"]
 mod bun_runtime;
+#[path = "workflow_configuration_public/crane_prerequisite.rs"]
+mod crane_prerequisite;
 #[path = "workflow_configuration_public/empty_suite.rs"]
 mod empty_suite;
 #[path = "workflow_configuration_public/feature_toggles.rs"]
 mod feature_toggles;
+#[path = "workflow_configuration_public/final_fanin.rs"]
+mod final_fanin;
 #[path = "workflow_configuration_public/maintenance_features.rs"]
 mod maintenance_features;
 #[path = "workflow_configuration_public/native_artifacts.rs"]
@@ -69,6 +73,8 @@ mod seed_ids;
 mod source_qualification;
 #[path = "workflow_configuration_public/source_qualification_checkout.rs"]
 mod source_qualification_checkout;
+#[path = "workflow_configuration_public/source_qualification_manual_dispatch.rs"]
+mod source_qualification_manual_dispatch;
 #[path = "workflow_configuration_public/support.rs"]
 mod support;
 #[path = "workflow_configuration_public/timeouts.rs"]

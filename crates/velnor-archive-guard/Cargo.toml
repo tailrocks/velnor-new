@@ -21,20 +21,32 @@ name = "velnor-archive-guard"
 path = "src/bin/velnor_archive_guard.rs"
 test = false
 
+[[bin]]
+name = "velnor-golden-collector"
+path = "src/bin/velnor_golden_collector.rs"
+test = false
+
+[[test]]
+name = "oci_candidate_configuration_public"
+path = "tests/oci_candidate_configuration_public.rs"
+
+[[test]]
+name = "golden_collector_public"
+path = "tests/golden_collector_public.rs"
+
 [dependencies]
 flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
 serde = { workspace = true }
 rustix = { version = "=1.1.5", default-features = false, features = ["fs", "process", "std"] }
 serde_json = { workspace = true }
+velnor-actions-mise = { version = "=0.1.69", path = "../velnor-actions-mise" }
 sha2 = { version = "=0.11.1", default-features = false }
 tar = { version = "=0.4.46", default-features = false }
+tempfile = { version = "=3.27.0" }
 
 [build-dependencies]
 rustix = { version = "=1.1.5", default-features = false, features = ["fs", "process", "std"] }
 sha2 = { version = "=0.11.1", default-features = false }
-
-[dev-dependencies]
-tempfile = { version = "=3.27.0" }
 
 [lints]
 workspace = true

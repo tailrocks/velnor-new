@@ -299,7 +299,10 @@ pub(crate) fn check_modes_share_body(text: &str) -> Result<(), Box<dyn Error>> {
         ("REPOSITORY = ", "identity head"),
         ("def validate_build_lock", "identity tail"),
         ("REGISTRY = ", "registry head"),
-        ("def redirect_target", "registry tail"),
+        (
+            "def redirect_target(path, digest, status, location, package=PACKAGE):",
+            "registry tail",
+        ),
         ("EVIDENCE_SCHEMA = ", "publication head"),
         ("def validate_evidence", "publication tail"),
         ("INPUT_PATHS = (", "record head"),

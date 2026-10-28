@@ -5,6 +5,12 @@ image, publication, or host-consumer qualification is claimed yet.
 
 **Design baseline:** `657443419928de54512fb788c45440ce8cc46949`.
 
+The [Runner image release contract](runner-image-release.md) supersedes this
+baseline's archive distribution and manifest inventory. The protocol and fixed
+probe execution requirements below remain applicable. Archive implementation
+details and store observations record the earlier design; they do not authorize
+an archive fallback in the GHCR consumer.
+
 ## Purpose and boundaries
 
 The resource probe is a small Linux/amd64 container image that returns bounded
@@ -114,7 +120,7 @@ path, then validate one bounded protocol record. This proves the packaged
 static executable starts under the declared profile; it does not qualify the
 host's security options or resource policy.
 
-## Build, manifest, and publication
+## Historical archive build, manifest, and publication
 
 At the design baseline, the renderer's active image path is
 `schema2_product_release.render` →

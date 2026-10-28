@@ -16,13 +16,14 @@ use velnor_actions_contract::{
     IMAGE_CANDIDATE_SOURCE_INPUTS, ImageCandidateSourceClosure, NATIVE_IMAGE_CANDIDATE_INPUTS,
     serialize_image_candidate_source_closure,
 };
-use velnor_actions_mise::{CheckDeadline, GitRequest};
+use velnor_actions_mise::{CheckDeadline, GitRequest, IsolatedCommand, MiseError, ProcessOutput};
 
 use crate::{OrchestratorError, internal::internal};
 
 use super::CheckJobSourceRequest;
 
 const MAX_SOURCE_FILE_BYTES: u64 = 16 * 1024 * 1024;
+const GIT_OUTPUT_CAPTURE_LIMIT_BYTES: usize = 8 * 1024 * 1024;
 
 pub(super) fn check_job_source(request: &CheckJobSourceRequest) -> Result<(), OrchestratorError> {
     request
@@ -94,8 +95,7 @@ pub(super) fn ensure_clean_checkout(
         "HEAD".into(),
         "--".into(),
     ]);
-    let tracked_status = tracked
-        .run_in_until(root, deadline)
+    let tracked_status = run_git_until(root, &tracked, deadline)
         .map_err(|_| internal("image_candidate_git_status"))?;
     if !tracked_status.success {
         return Err(internal("image_candidate_tracked_changes"));
@@ -107,16 +107,14 @@ pub(super) fn ensure_clean_checkout(
         "HEAD".into(),
         "--".into(),
     ]);
-    if !cached
-        .run_in_until(root, deadline)
+    if !run_git_until(root, &cached, deadline)
         .map_err(|_| internal("image_candidate_git_status"))?
         .success
     {
         return Err(internal("image_candidate_index_changes"));
     }
     let untracked = GitRequest::ls_files(vec!["--others".into(), "--exclude-standard".into()]);
-    let output = untracked
-        .run_in_until(root, deadline)
+    let output = run_git_until(root, &untracked, deadline)
         .map_err(|_| internal("image_candidate_git_status"))?;
     if !output.success || !output.stdout.is_empty() {
         return Err(internal("image_candidate_untracked_files"));
@@ -124,13 +122,79 @@ pub(super) fn ensure_clean_checkout(
     Ok(())
 }
 
+pub(super) fn verify_selected_source(
+    root: &Path,
+    source_commit: &str,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    if !is_sha1(source_commit) {
+        return Err(internal("runner_image_source_commit"));
+    }
+    let index = run_git_until(
+        root,
+        &GitRequest::ls_files(vec![OsString::from("-v"), OsString::from("-z")]),
+        deadline,
+    )
+        .map_err(|_| internal("runner_image_source_index"))?;
+    if !index.success {
+        return Err(internal("runner_image_source_index"));
+    }
+    validate_index_flags(&index.stdout)?;
+    let head = git_text(
+        root,
+        &GitRequest::rev_parse(vec![OsString::from("HEAD")]),
+        deadline,
+    )?;
+    if head.trim() != source_commit {
+        return Err(internal("runner_image_source_identity"));
+    }
+    ensure_clean_checkout(root, deadline)
+}
+
+fn validate_index_flags(output: &[u8]) -> Result<(), OrchestratorError> {
+    let entries = output
+        .strip_suffix(b"\0")
+        .ok_or_else(|| internal("runner_image_source_index_flags"))?;
+    if entries.is_empty()
+        || entries
+            .split(|byte| *byte == 0)
+            .any(|entry| entry.len() < 3 || entry[0] != b'H' || entry[1] != b' ')
+    {
+        return Err(internal("runner_image_source_index_flags"));
+    }
+    Ok(())
+}
+
+pub(super) fn read_source_file(
+    root: &Path,
+    source_commit: &str,
+    relative: &str,
+    limit: usize,
+    deadline: CheckDeadline,
+) -> Result<Vec<u8>, OrchestratorError> {
+    if !is_sha1(source_commit)
+        || relative.starts_with('/')
+        || relative
+            .split('/')
+            .any(|part| part.is_empty() || part == "." || part == "..")
+    {
+        return Err(internal("runner_image_source_path"));
+    }
+    let spec = format!("{source_commit}:{relative}");
+    let output = run_git_until(root, &GitRequest::show(vec![OsString::from(spec)]), deadline)
+        .map_err(|_| internal("runner_image_source_git"))?;
+    if !output.success || output.stdout.len() > limit {
+        return Err(internal("runner_image_source_file"));
+    }
+    Ok(output.stdout)
+}
+
 pub(super) fn git_text(
     root: &Path,
     request: &GitRequest,
     deadline: CheckDeadline,
 ) -> Result<String, OrchestratorError> {
-    let output = request
-        .run_in_until(root, deadline)
+    let output = run_git_until(root, request, deadline)
         .map_err(|_| internal("image_candidate_git"))?;
     output
         .require_success("git")
@@ -138,6 +202,32 @@ pub(super) fn git_text(
     output
         .stdout_text("git")
         .map_err(|_| internal("image_candidate_git_utf8"))
+}
+
+fn run_git_until(
+    root: &Path,
+    request: &GitRequest,
+    deadline: CheckDeadline,
+) -> Result<ProcessOutput, MiseError> {
+    let mut args = Vec::with_capacity(request.args().len() + 1);
+    args.push(OsString::from(request.verb()));
+    args.extend(request.args().iter().cloned());
+    IsolatedCommand::repo_task(
+        "git",
+        args,
+        &[
+            (
+                OsString::from("GIT_NO_REPLACE_OBJECTS"),
+                OsString::from("1"),
+            ),
+            (
+                OsString::from("GIT_OPTIONAL_LOCKS"),
+                OsString::from("0"),
+            ),
+        ],
+    )?
+        .with_cwd(root.to_path_buf())
+        .run_until(GIT_OUTPUT_CAPTURE_LIMIT_BYTES, deadline)
 }
 
 pub(super) fn hash_source_file(root: &Path, relative: &str) -> Result<String, OrchestratorError> {

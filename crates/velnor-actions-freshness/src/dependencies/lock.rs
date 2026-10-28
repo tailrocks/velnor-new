@@ -13,12 +13,14 @@ use toml::Value;
 
 use crate::context::FreshnessContext;
 
-use super::{manifest_label, path_text, read_toml_row, workspace};
+use super::{MemberOwners, manifest_label, path_text, read_toml_row, workspace};
 
 pub(super) fn check_workspace(
     ctx: &mut FreshnessContext,
     relative: &str,
     document: &Value,
+    owners: &MemberOwners,
+    manifests: &[PathBuf],
 ) -> Vec<Value> {
     let label = manifest_label(relative);
     let inherited = document
@@ -36,7 +38,6 @@ pub(super) fn check_workspace(
     let Some(locked) = read_lock(ctx, relative) else {
         return Vec::new();
     };
-    let manifests = workspace::member_manifests(ctx, relative, document);
     if manifests.is_empty() {
         ctx.fail_row(
             "lock-staleness",
@@ -44,12 +45,15 @@ pub(super) fn check_workspace(
             "no workspace member manifests found",
         );
     }
-    let (members, declared) = workspace::read_member_manifests(ctx, &manifests, inherited);
+    let inherited_base = ctx.root.join(relative);
+    let (members, declared) =
+        workspace::read_member_manifests(ctx, manifests, inherited, &inherited_base);
     let by_name = index_lock(&locked);
-    identity::check_declared(ctx, relative, &declared, &by_name, &members);
-    graph::check_membership(ctx, relative, &locked, &members);
+    let path_packages =
+        identity::check_declared(ctx, relative, &declared, &by_name, &members, owners);
+    graph::check_membership(ctx, relative, &locked, &members, &path_packages);
     graph::check_lock_graph(ctx, relative, &locked, &by_name, &members);
-    graph::check_lock_mtime(ctx, relative, &manifests);
+    graph::check_lock_mtime(ctx, relative, manifests);
     locked
 }
 fn read_lock(ctx: &mut FreshnessContext, relative: &str) -> Option<Vec<Value>> {

@@ -66,6 +66,35 @@ pub struct ProcessOutput {
     pub success: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BoundedCommandStatus {
+    NotStarted,
+    Exited(i32),
+    Signaled(i32),
+    Unavailable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BoundedCommandTermination {
+    Completed,
+    TimedOut,
+    OutputLimitExceeded,
+    Cancelled,
+    SpawnFailed,
+    ExecutionFailed,
+    CleanupFailed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BoundedCommandOutput {
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
+    pub status: BoundedCommandStatus,
+    pub termination: BoundedCommandTermination,
+    pub execution_error: Option<String>,
+    pub cleanup_error: Option<String>,
+}
+
 #[derive(Debug)]
 #[must_use]
 pub struct ProcessGroupDrainReceipt {

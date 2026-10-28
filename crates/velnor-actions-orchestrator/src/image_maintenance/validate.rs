@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{fs, io::Read, os::unix::fs::MetadataExt, path::Path};
+
+use serde::Deserialize;
 use velnor_actions_contract::{
     ImageCandidateRecord, parse_image_candidate_record, parse_image_candidate_source_closure,
 };
@@ -48,10 +50,21 @@ pub(super) fn validate_job_candidate(
     {
         return Err(internal("image_candidate_archive_file"));
     }
-    let graph = velnor_archive_guard::owned_archive_guard::oci_candidate::inspect_oci_candidate(
-        &request.archive_path,
-    )
-    .map_err(|_| internal("image_candidate_oci_invalid"))?;
+    let graph = request
+        .deadline
+        .scope(|| {
+            velnor_archive_guard::owned_archive_guard::oci_candidate::inspect_oci_candidate(
+                &request.archive_path,
+            )
+        })
+        .map_err(|_| internal("image_candidate_deadline"))?
+        .map_err(|error| {
+            if error.is_deadline_exceeded() {
+                internal("image_candidate_deadline")
+            } else {
+                internal("image_candidate_oci_invalid")
+            }
+        })?;
     if record.archive.size_bytes != graph.archive_size_bytes
         || record.archive.sha256 != graph.archive_sha256
         || record.oci.archive_index_digest != graph.archive_index_digest
@@ -155,6 +168,39 @@ pub(super) struct BuildxLock {
     pub(super) version: String,
     pub(super) url: String,
     pub(super) sha256: String,
+}
+
+#[derive(Deserialize)]
+struct RunnerLockVersions {
+    #[serde(rename = "runner_version")]
+    runner: String,
+    #[serde(rename = "docker_version")]
+    docker: String,
+    #[serde(rename = "buildx_version")]
+    buildx: String,
+    #[serde(rename = "compose_version")]
+    compose: String,
+    #[serde(rename = "node_version")]
+    node: String,
+}
+
+pub(super) fn validate_runner_lock(bytes: &[u8]) -> Result<(), OrchestratorError> {
+    let text = std::str::from_utf8(bytes).map_err(|_| internal("runner_image_lock_utf8"))?;
+    let lock: RunnerLockVersions =
+        toml::from_str(text).map_err(|_| internal("runner_image_lock_parse"))?;
+    if [
+        &lock.runner,
+        &lock.docker,
+        &lock.buildx,
+        &lock.compose,
+        &lock.node,
+    ]
+    .iter()
+    .any(|version| !velnor_actions_contract::config::is_exact_semver(version))
+    {
+        return Err(internal("runner_image_lock_version"));
+    }
+    Ok(())
 }
 
 pub(super) fn read_lock(root: &Path) -> Result<BuildxLock, OrchestratorError> {

@@ -1157,6 +1157,7 @@ dependencies = [
  "sha2",
  "tar",
  "tempfile",
+ "velnor-actions-mise",
 ]
 
 [[package]]

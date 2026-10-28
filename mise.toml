@@ -50,11 +50,40 @@ run = '''
 set -eu
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
+bash images/resource-probe/test_build_runner_images.sh
+PYTHONDONTWRITEBYTECODE=1 python3 crates/velnor-actions-workflow-renderer/tests/test_job_image_authority_shared_publisher.py
+ARTIFACT_MESSAGES="$(mktemp)"
+trap 'rm -f "$ARTIFACT_MESSAGES"' EXIT
+cargo --config build.jobs=2 build --locked -p velnor-actions-cli \
+  --example qualification-diagnostics --message-format=json >"$ARTIFACT_MESSAGES"
+DIAGNOSTICS_FIXTURE="$(VELNOR_INTERNAL_OP=repo-policy-v1 \
+  VELNOR_REPO_POLICY_ACTION=artifact-executable \
+  VELNOR_REPO_POLICY_ROOT="$ROOT" \
+  VELNOR_REPO_POLICY_MESSAGES="$ARTIFACT_MESSAGES" \
+  VELNOR_REPO_POLICY_MANIFEST=crates/velnor-actions-cli/Cargo.toml \
+  VELNOR_REPO_POLICY_TARGET=qualification-diagnostics \
+  VELNOR_REPO_POLICY_ARTIFACT_KIND=example \
+  cargo --config build.jobs=2 run --quiet --locked --package velnor-actions-cli \
+    --bin velnor-actions)"
+case "$DIAGNOSTICS_FIXTURE" in
+  /*) ;;
+  *) echo "qualification diagnostics artifact is missing" >&2; exit 1 ;;
+esac
+if [ ! -x "$DIAGNOSTICS_FIXTURE" ]; then
+  echo "qualification diagnostics artifact is not executable" >&2
+  exit 1
+fi
+export VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE="$DIAGNOSTICS_FIXTURE"
 TEST_MEMBERS="$(VELNOR_INTERNAL_OP=repo-policy-v1 \
   VELNOR_REPO_POLICY_ACTION=test-members \
   VELNOR_REPO_POLICY_ROOT="$ROOT" \
   VELNOR_REPO_POLICY_MANIFEST_PATH='' \
   cargo --config build.jobs=2 run --quiet --locked --package velnor-actions-cli --bin velnor-actions)"
+cargo fetch --locked
+(
+  cd "$ROOT/crates/velnor-runner"
+  cargo fetch --locked
+)
 for package in velnor-actions-freshness velnor-archive-guard; do
   case " $TEST_MEMBERS " in
     *" $package "*)

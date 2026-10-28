@@ -13,6 +13,14 @@ autotests = false
 name = "resource_probe_release_public"
 path = "tests/resource_probe_release_public.rs"
 
+[[test]]
+name = "runner_image_manifest_public"
+path = "tests/runner_image_manifest_public.rs"
+
+[[test]]
+name = "runner_image_qualification_public"
+path = "tests/runner_image_qualification_public.rs"
+
 [[bin]]
 name = "velnor-resource-probe-release"
 path = "src/bin/velnor_resource_probe_release.rs"
@@ -43,6 +51,7 @@ toml = { workspace = true }
 turso = { workspace = true }
 uuid = { version = "=1.28.0", features = ["v4"] }
 zeroize = { workspace = true }
+velnor-actions-contract = { version = "=0.1.69", path = "../../../velnor-actions-contract" }
 velnor-runner-core = { version = "=0.1.0", path = "../velnor-runner-core" }
 velnor-runner-github = { version = "=0.1.0", path = "../velnor-runner-github" }
 

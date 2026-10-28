@@ -16,12 +16,13 @@ use tar::EntryType;
 use super::archive_tar_framing::scan_archive_extensions;
 use super::{
     MAX_OCI_CANDIDATE_ARCHIVE_BYTES, MAX_OCI_CANDIDATE_ARCHIVE_MEMBERS,
-    MAX_OCI_CANDIDATE_BLOB_BYTES, OciCandidateError, Result,
+    MAX_OCI_CANDIDATE_BLOB_BYTES, OciCandidateError, Result, check_deadline,
 };
 
 const METADATA_LIMIT: usize = 1024 * 1024;
 const BLOB_LIMIT: usize = 64;
 
+#[derive(Clone, Copy)]
 pub(super) struct Blob {
     pub(super) offset: u64,
     pub(super) size: u64,
@@ -43,6 +44,7 @@ struct ArchiveEntries {
 }
 
 pub(super) fn load_archive(path: &Path) -> Result<OciArchive> {
+    check_deadline()?;
     let mut file = open_regular(path)?;
     let initial = file
         .metadata()
@@ -55,6 +57,7 @@ pub(super) fn load_archive(path: &Path) -> Result<OciArchive> {
         .map_err(|_| OciCandidateError("archive_seek"))?;
     let mut archive = tar::Archive::new(file);
     let entries = read_archive_entries(&mut archive)?;
+    check_deadline()?;
     let mut file = archive.into_inner();
     file.seek(SeekFrom::Start(0))
         .map_err(|_| OciCandidateError("archive_seek"))?;
@@ -82,6 +85,7 @@ fn read_archive_entries(archive: &mut tar::Archive<File>) -> Result<ArchiveEntri
     let mut index = None;
     let mut blobs = BTreeMap::new();
     for (count, result) in entries.enumerate() {
+        check_deadline()?;
         if count >= MAX_OCI_CANDIDATE_ARCHIVE_MEMBERS {
             return Err(OciCandidateError("archive_member_limit"));
         }
@@ -147,6 +151,7 @@ fn read_archive_entries(archive: &mut tar::Archive<File>) -> Result<ArchiveEntri
 }
 
 pub(super) fn authenticate_archive(archive: &mut OciArchive) -> Result<(String, u64)> {
+    check_deadline()?;
     verify_file_identity(&archive.path, &archive.file, &archive.initial)?;
     archive
         .file
@@ -156,6 +161,7 @@ pub(super) fn authenticate_archive(archive: &mut OciArchive) -> Result<(String, 
     let mut size = 0_u64;
     let mut buffer = vec![0_u8; 128 * 1024];
     loop {
+        check_deadline()?;
         let count = archive
             .file
             .read(&mut buffer)
@@ -169,6 +175,7 @@ pub(super) fn authenticate_archive(archive: &mut OciArchive) -> Result<(String, 
             .ok_or(OciCandidateError("archive_size"))?;
         sha2::Digest::update(&mut digest, &buffer[..count]);
     }
+    check_deadline()?;
     if size != archive.initial.len() {
         return Err(OciCandidateError("archive_size_changed"));
     }
@@ -177,6 +184,7 @@ pub(super) fn authenticate_archive(archive: &mut OciArchive) -> Result<(String, 
 }
 
 pub(super) fn read_blob(file: &mut File, blob: &Blob, limit: u64) -> Result<Vec<u8>> {
+    check_deadline()?;
     if blob.size > limit {
         return Err(OciCandidateError("blob_read_limit"));
     }
@@ -184,18 +192,27 @@ pub(super) fn read_blob(file: &mut File, blob: &Blob, limit: u64) -> Result<Vec<
     file.seek(SeekFrom::Start(blob.offset))
         .map_err(|_| OciCandidateError("blob_seek"))?;
     let mut bytes = vec![0; size];
-    file.read_exact(&mut bytes)
-        .map_err(|_| OciCandidateError("blob_truncated"))?;
+    let mut offset = 0;
+    while offset < bytes.len() {
+        check_deadline()?;
+        let end = offset.saturating_add(128 * 1024).min(bytes.len());
+        file.read_exact(&mut bytes[offset..end])
+            .map_err(|_| OciCandidateError("blob_truncated"))?;
+        offset = end;
+    }
+    check_deadline()?;
     Ok(bytes)
 }
 
 pub(super) fn hash_blob(file: &mut File, blob: &Blob) -> Result<(String, u64)> {
+    check_deadline()?;
     file.seek(SeekFrom::Start(blob.offset))
         .map_err(|_| OciCandidateError("blob_seek"))?;
     let mut remaining = blob.size;
     let mut buffer = vec![0; 128 * 1024];
     let mut digest = sha2::Sha256::new();
     while remaining > 0 {
+        check_deadline()?;
         let buffer_size =
             u64::try_from(buffer.len()).map_err(|_| OciCandidateError("blob_size_conversion"))?;
         let amount = usize::try_from(remaining.min(buffer_size))
@@ -206,18 +223,32 @@ pub(super) fn hash_blob(file: &mut File, blob: &Blob) -> Result<(String, u64)> {
         remaining -=
             u64::try_from(amount).map_err(|_| OciCandidateError("blob_size_conversion"))?;
     }
+    check_deadline()?;
     Ok((hex(&sha2::Digest::finalize(digest)), blob.size))
 }
 
 fn read_metadata(entry: &mut tar::Entry<'_, File>, size: u64) -> Result<Vec<u8>> {
+    check_deadline()?;
     let size = usize::try_from(size).map_err(|_| OciCandidateError("metadata_size_conversion"))?;
     if size > METADATA_LIMIT {
         return Err(OciCandidateError("metadata_size_limit"));
     }
     let mut bytes = Vec::with_capacity(size);
-    entry
-        .read_to_end(&mut bytes)
-        .map_err(|_| OciCandidateError("metadata_read"))?;
+    let mut remaining = size;
+    let mut buffer = [0_u8; 8192];
+    while remaining > 0 {
+        check_deadline()?;
+        let amount = remaining.min(buffer.len());
+        let count = entry
+            .read(&mut buffer[..amount])
+            .map_err(|_| OciCandidateError("metadata_read"))?;
+        if count == 0 {
+            return Err(OciCandidateError("metadata_truncated"));
+        }
+        bytes.extend_from_slice(&buffer[..count]);
+        remaining -= count;
+    }
+    check_deadline()?;
     if bytes.len() != size {
         return Err(OciCandidateError("metadata_truncated"));
     }
@@ -225,6 +256,7 @@ fn read_metadata(entry: &mut tar::Entry<'_, File>, size: u64) -> Result<Vec<u8>>
 }
 
 fn open_regular(path: &Path) -> Result<File> {
+    check_deadline()?;
     let before = fs::symlink_metadata(path).map_err(|_| OciCandidateError("archive_stat"))?;
     if !before.is_file() || before.file_type().is_symlink() {
         return Err(OciCandidateError("archive_not_regular"));
@@ -236,6 +268,7 @@ fn open_regular(path: &Path) -> Result<File> {
     )
     .map_err(|_| OciCandidateError("archive_open"))?;
     let file = File::from(descriptor);
+    check_deadline()?;
     let opened = file
         .metadata()
         .map_err(|_| OciCandidateError("archive_stat"))?;
@@ -290,7 +323,7 @@ fn is_hex_digest(value: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
-fn hex(bytes: &[u8]) -> String {
+pub(super) fn hex(bytes: &[u8]) -> String {
     const DIGITS: &[u8; 16] = b"0123456789abcdef";
     let mut encoded = String::with_capacity(bytes.len() * 2);
     for byte in bytes {

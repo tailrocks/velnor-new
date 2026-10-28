@@ -5,6 +5,7 @@
     missing_docs,
     reason = "documentation comments are intentionally absent from this codebase"
 )]
+mod cargo_artifact_kind;
 mod context;
 mod dependencies;
 mod evidence;
@@ -17,9 +18,10 @@ mod release_support;
 mod time;
 mod validation;
 
+use crate::context::FreshnessContext;
 use std::path::{Path, PathBuf};
 
-use crate::context::FreshnessContext;
+pub use cargo_artifact_kind::CargoArtifactKind;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
@@ -48,6 +50,16 @@ pub enum Operation {
 
         target_name: String,
     },
+
+    CargoArtifactExecutableForKind {
+        messages_path: PathBuf,
+
+        manifest_path: PathBuf,
+
+        target_name: String,
+
+        kind: CargoArtifactKind,
+    },
 }
 
 #[must_use]
@@ -74,6 +86,19 @@ pub fn run(root: &Path, operation: &Operation) -> i32 {
             messages_path,
             manifest_path,
             target_name,
+            CargoArtifactKind::Bin,
+        ),
+        Operation::CargoArtifactExecutableForKind {
+            messages_path,
+            manifest_path,
+            target_name,
+            kind,
+        } => release_support::print_cargo_artifact_executable(
+            root,
+            messages_path,
+            manifest_path,
+            target_name,
+            *kind,
         ),
     }
 }

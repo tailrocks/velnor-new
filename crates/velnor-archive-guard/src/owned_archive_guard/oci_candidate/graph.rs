@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    OciCandidateError, OciCandidateEvidence, Result,
+    OciCandidateError, OciCandidateEvidence, OciCandidateInspection, OciImageConfiguration, Result,
     archive::{OciArchive, authenticate_archive, hash_blob},
+    check_deadline, config,
     json::parse,
     layer::{LayerDescriptor, verify_layers},
 };
@@ -18,7 +19,33 @@ const INDEX_MEDIA_TYPE: &str = "application/vnd.oci.image.index.v1+json";
 const MANIFEST_MEDIA_TYPE: &str = "application/vnd.oci.image.manifest.v1+json";
 const CONFIG_MEDIA_TYPE: &str = "application/vnd.oci.image.config.v1+json";
 
-pub(super) fn inspect_graph(mut archive: OciArchive) -> Result<OciCandidateEvidence> {
+#[derive(Clone, Copy)]
+enum ConfigurationProjection {
+    Ignore,
+    Include,
+}
+
+pub(super) fn inspect_graph(archive: OciArchive) -> Result<OciCandidateEvidence> {
+    inspect_graph_inner(archive, ConfigurationProjection::Ignore)
+        .map(|(inspection, _)| inspection.evidence)
+}
+
+pub(super) fn inspect_graph_preserving_archive(
+    archive: OciArchive,
+) -> Result<(OciCandidateEvidence, OciArchive)> {
+    inspect_graph_inner(archive, ConfigurationProjection::Ignore)
+        .map(|(inspection, archive)| (inspection.evidence, archive))
+}
+
+pub(super) fn inspect_graph_with_config(archive: OciArchive) -> Result<OciCandidateInspection> {
+    inspect_graph_inner(archive, ConfigurationProjection::Include).map(|(inspection, _)| inspection)
+}
+
+fn inspect_graph_inner(
+    mut archive: OciArchive,
+    projection: ConfigurationProjection,
+) -> Result<(OciCandidateInspection, OciArchive)> {
+    check_deadline()?;
     let layout = parse(&archive.layout)?;
     if layout.as_object().is_none_or(|map| {
         map.len() != 1
@@ -73,14 +100,16 @@ pub(super) fn inspect_graph(mut archive: OciArchive) -> Result<OciCandidateEvide
         return Err(OciCandidateError("oci_platform_identity"));
     }
     let manifest_raw = read_referenced(&mut archive, &descriptor)?;
-    inspect_manifest(archive, &descriptor, &manifest_raw)
+    check_deadline()?;
+    inspect_manifest(archive, &descriptor, &manifest_raw, projection)
 }
 
 fn inspect_manifest(
     archive: OciArchive,
     manifest_descriptor: &Descriptor,
     manifest_raw: &[u8],
-) -> Result<OciCandidateEvidence> {
+    projection: ConfigurationProjection,
+) -> Result<(OciCandidateInspection, OciArchive)> {
     let manifest = parse(manifest_raw)?;
     let manifest_obj = manifest
         .as_object()
@@ -130,7 +159,7 @@ fn inspect_manifest(
     {
         return Err(OciCandidateError("oci_layer_media_type"));
     }
-    inspect_config_and_blobs(archive, manifest_descriptor, &config, &layers)
+    inspect_config_and_blobs(archive, manifest_descriptor, &config, &layers, projection)
 }
 
 fn inspect_config_and_blobs(
@@ -138,8 +167,10 @@ fn inspect_config_and_blobs(
     manifest_descriptor: &Descriptor,
     config: &Descriptor,
     layers: &[LayerDescriptor],
-) -> Result<OciCandidateEvidence> {
-    let expected_diff_ids = read_expected_diff_ids(&mut archive, config, layers.len())?;
+    projection: ConfigurationProjection,
+) -> Result<(OciCandidateInspection, OciArchive)> {
+    let (expected_diff_ids, configuration) =
+        read_expected_diff_ids(&mut archive, config, layers.len(), projection)?;
     let referenced = collect_references(manifest_descriptor, config, layers)?;
     validate_blob_inventory(&archive, &referenced)?;
     let expected = expected_diff_ids
@@ -150,14 +181,21 @@ fn inspect_config_and_blobs(
     verify_layers(&mut archive, layers, &expected)?;
     verify_blob_hashes(&mut archive, &referenced)?;
     let (archive_digest, archive_size) = authenticate_archive(&mut archive)?;
-    candidate_evidence(
+    let evidence = candidate_evidence(
         &archive,
         manifest_descriptor,
         config,
         digests,
         archive_digest,
         archive_size,
-    )
+    )?;
+    Ok((
+        OciCandidateInspection {
+            evidence,
+            configuration,
+        },
+        archive,
+    ))
 }
 
 fn collect_references(
@@ -179,6 +217,7 @@ fn collect_references(
         &config.media_type,
     )?;
     for layer in layers {
+        check_deadline()?;
         add_reference(
             &mut referenced,
             &layer.digest,
@@ -222,6 +261,7 @@ fn verify_blob_hashes(
     referenced: &std::collections::BTreeMap<String, (u64, String)>,
 ) -> Result<()> {
     for (digest, (expected_size, _)) in referenced {
+        check_deadline()?;
         let blob = archive
             .blobs
             .get(digest)
@@ -267,10 +307,11 @@ fn read_expected_diff_ids(
     archive: &mut OciArchive,
     config: &Descriptor,
     layer_count: usize,
-) -> Result<Vec<String>> {
+    projection: ConfigurationProjection,
+) -> Result<(Vec<String>, OciImageConfiguration)> {
     let config_raw = read_referenced(archive, config)?;
-    let config = parse(&config_raw)?;
-    let object = config
+    let image_config = parse(&config_raw)?;
+    let object = image_config
         .as_object()
         .ok_or(OciCandidateError("oci_config_shape"))?;
     if object.get("os").and_then(serde_json::Value::as_str) != Some("linux")
@@ -289,13 +330,20 @@ fn read_expected_diff_ids(
         .and_then(serde_json::Value::as_array)
         .filter(|values| values.len() == layer_count)
         .ok_or(OciCandidateError("oci_diff_ids"))?;
-    values
+    let diff_ids = values
         .iter()
         .map(|value| {
+            check_deadline()?;
             value
                 .as_str()
                 .map(str::to_owned)
                 .ok_or(OciCandidateError("oci_diff_id_shape"))
         })
-        .collect()
+        .collect::<Result<Vec<_>>>()?;
+    check_deadline()?;
+    let projected = match projection {
+        ConfigurationProjection::Ignore => OciImageConfiguration::default(),
+        ConfigurationProjection::Include => config::project(&image_config)?,
+    };
+    Ok((diff_ids, projected))
 }

@@ -79,13 +79,17 @@ The `velnor-actions` binary is owned by package `velnor-actions-cli`. Future sta
 | `velnor-actions-cli` | Clap parser, typed dispatch, concise deterministic human plan renderer, generation output, and exit-code formatting; emits binary `velnor-actions` | Orchestration algorithms or Rust, Mise, and renderer domain rules; process creation or any `std::process` item but `ExitCode`, under any import spelling or namespace alias (checked on Rust syntax by `impl_repo_deps_process_policy.rs`) |
 | `velnor-actions-tofu` | All OpenToFu/HCL discovery, root/module interpretation, task payloads, affected selection, identity extensions | Rust/Cargo, Mise execution, workflow YAML, process details, non-tofu stacks |
 | `velnor-actions-freshness` (repository-only support) | Read-only repository freshness/pin/lock/advisory checks and bounded bootstrap metadata operations behind the existing CLI private gate | V1 planning, task graph or selection, runner behavior, product evidence claims, public commands, or workflow generation |
-| `velnor-archive-guard` (repository-only security utility) | Bounded validation of owned candidate and Cargo package archive bytes through its explicit modes | V1 stack behavior, task derivation, workflow generation, or product dependencies |
+| `velnor-archive-guard` (repository-only security utility) | Bounded validation of owned candidate and Cargo package archive bytes through its explicit modes; repository-only golden collection | V1 stack behavior, task derivation, workflow generation, or product dependencies |
 
 Both repository-only members are outside the eight-product V1 task graph. The
 CLI private gate consumes freshness at runtime, repository scripts provision
 archive guard, and the orchestrator links only archive guard's bounded, pure
-OCI validation API. Freshness stays outside the product dependency graph;
-archive guard owns no processes, workflow generation, or product tasks.
+OCI validation API. Freshness stays outside the product dependency graph.
+Archive validation remains pure. Its repository-only golden collector MAY
+reuse `velnor-actions-mise`'s bounded process-group owner for candidate version,
+plan, generation, output-binding, guard-fingerprint, and fixture-Git commands;
+it MUST NOT add a second process implementation. The collector remains outside
+V1 behavior, workflow generation, and product tasks.
 The canonical repository's `maintenance-helpers` named Mise check runs their
 package test suites independently of Rust task derivation and the product
 matrix; this repository's VelnorRepositoryV1 configuration makes it required.

@@ -61,6 +61,7 @@ enum SuiteTool {
     GenerateValidators,
     OpenTofuExecution,
     BunExecution,
+    CraneExecution,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -78,13 +79,17 @@ impl CrateSuite {
         self.owns(SuiteTool::BunExecution)
     }
 
+    pub(crate) fn owns_crane(self) -> bool {
+        self.owns(SuiteTool::CraneExecution)
+    }
+
     const fn package_name(self) -> &'static str {
         self.name.package_name()
     }
 }
 
 const NO_SUITE_TOOLS: &[SuiteTool] = &[];
-const GENERATE_VALIDATOR_TOOLS: &[SuiteTool] = &[SuiteTool::GenerateValidators];
+const CLI_TOOLS: &[SuiteTool] = &[SuiteTool::GenerateValidators, SuiteTool::CraneExecution];
 const OPENTOFU_TOOLS: &[SuiteTool] = &[SuiteTool::OpenTofuExecution];
 const ORCHESTRATOR_TOOLS: &[SuiteTool] = &[SuiteTool::GenerateValidators, SuiteTool::BunExecution];
 
@@ -95,7 +100,7 @@ const SUITE_TOOL_OWNERS: [CrateSuite; 14] = [
     },
     CrateSuite {
         name: SuiteName::Cli,
-        tools: GENERATE_VALIDATOR_TOOLS,
+        tools: CLI_TOOLS,
     },
     CrateSuite {
         name: SuiteName::Contract,
@@ -205,6 +210,7 @@ pub(crate) fn prepare_crate_tools_step(
         use_opentofu,
         needs_validators,
         false,
+        false,
     )
 }
 
@@ -219,6 +225,7 @@ pub(crate) fn prepare_crate_tools_step_with_bun(
     use_opentofu: bool,
     needs_validators: bool,
     needs_bun: bool,
+    needs_crane: bool,
 ) -> Result<Step, OrchestratorError> {
     let mut tools = task_driver_tools(use_rust, use_opentofu);
     tools.extend((use_rust && catalog.rust_mr_boxington()).then_some(PinnedTool::MrBoxington));
@@ -227,6 +234,7 @@ pub(crate) fn prepare_crate_tools_step_with_bun(
     }
     tools.extend(use_nextest.then_some(PinnedTool::Nextest));
     tools.extend(needs_bun.then_some(PinnedTool::Bun));
+    tools.extend(needs_crane.then_some(PinnedTool::Crane));
     let prepare = PreparePinnedTools::new(tools, ToolHomes::runner_temp()).map_err(|err| {
         OrchestratorError::Contract {
             problem: err.to_string(),

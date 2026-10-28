@@ -276,14 +276,20 @@ def head_blob(registry, transport, token, digest, size):
     )
 
 
-def _head_manifest(registry, transport, token, digest, size):
+def _head_manifest_reference(registry, transport, token, reference, digest, size):
     headers = _authorization(token)
     headers["Accept"] = "application/vnd.oci.image.manifest.v1+json"
     response = _request(
-        transport, "HEAD", registry.registry_url(f"manifests/{digest}"), headers
+        transport, "HEAD", registry.registry_url(f"manifests/{reference}"), headers
     )
     return registry.check_head_response(
         response.status, response.headers, digest, size
+    )
+
+
+def _head_manifest(registry, transport, token, digest, size):
+    return _head_manifest_reference(
+        registry, transport, token, digest, digest, size
     )
 
 
@@ -349,18 +355,24 @@ def verify_remote_blob(registry, transport, token, digest, path, size):
     return {"digest": digest, "size": size, "remote_sha256": expected_hex}
 
 
-def verify_remote_manifest(registry, transport, token, manifest, digest, size):
+def verify_remote_manifest(registry, transport, token, manifest, digest, size, reference=None):
     """GET the manifest and prove the remote bytes equal the local bytes."""
     if type(size) is not int or not 1 <= size <= MAX_MANIFEST_BYTES:
         raise AuthorityError("OCI manifest exceeds its size limit.")
     if not isinstance(manifest, bytes) or len(manifest) != size:
         raise AuthorityError("OCI manifest exceeds its size limit.")
+    if reference is None:
+        reference = digest
+    if not isinstance(reference, str) or not re.fullmatch(
+        r"(?:sha256:[0-9a-f]{64}|sha-[0-9a-f]{40})", reference
+    ):
+        raise AuthorityError("OCI manifest reference is incorrect.")
     headers = _authorization(token)
     headers["Accept"] = "application/vnd.oci.image.manifest.v1+json"
-    stream = _open_stream(transport, "GET", registry.registry_url(f"manifests/{digest}"), headers)
+    stream = _open_stream(transport, "GET", registry.registry_url(f"manifests/{reference}"), headers)
     try:
         registry.redirect_target(
-            f"/v2/{registry.PACKAGE}/manifests/{digest}",
+            f"/v2/{registry.PACKAGE}/manifests/{reference}",
             digest,
             stream.status,
             stream.headers.get("location", ""),
@@ -516,6 +528,46 @@ def publish_manifest_receipt(registry, transport, token, manifest):
     }
 
 
+def publish_source_tag(registry, transport, token, manifest, source_sha):
+    if not isinstance(source_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", source_sha):
+        raise AuthorityError("Authenticated source is incorrect.")
+    digest = "sha256:" + _sha(manifest)
+    size = len(manifest)
+    tag = f"sha-{source_sha}"
+    if _head_manifest_reference(registry, transport, token, tag, digest, size):
+        verify_remote_manifest(
+            registry, transport, token, manifest, digest, size, reference=tag
+        )
+        return
+    response = _request(
+        transport,
+        "PUT",
+        registry.registry_url(f"manifests/{tag}"),
+        {
+            **_authorization(token),
+            "Content-Type": "application/vnd.oci.image.manifest.v1+json",
+        },
+        body=manifest,
+        length=size,
+    )
+    if response.status != 201:
+        if _head_manifest_reference(registry, transport, token, tag, digest, size):
+            verify_remote_manifest(
+                registry, transport, token, manifest, digest, size, reference=tag
+            )
+            return
+        raise AuthorityError("Registry source tag upload did not complete.")
+    if response.headers.get("docker-content-digest") not in (None, digest):
+        raise AuthorityError(
+            "Registry response has a source tag digest that is different from the requested digest."
+        )
+    if not _head_manifest_reference(registry, transport, token, tag, digest, size):
+        raise AuthorityError("Registry source tag is absent after upload.")
+    verify_remote_manifest(
+        registry, transport, token, manifest, digest, size, reference=tag
+    )
+
+
 def publish_image(registry, transport, token, manifest, blob_paths):
     """Publish every blob temp file and the platform manifest; prove every remote byte.
 
@@ -554,6 +606,9 @@ def publish_image(registry, transport, token, manifest, blob_paths):
         verify_remote_blob(
             registry, transport, token, digest, blob_paths[digest], expected[digest]
         )
+    source_sha = getattr(registry, "SOURCE_SHA", None)
+    if source_sha is not None:
+        publish_source_tag(registry, transport, token, manifest, source_sha)
     return {"blobs": receipts, "manifest": manifest_receipt}
 
 

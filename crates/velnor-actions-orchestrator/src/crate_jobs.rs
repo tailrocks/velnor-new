@@ -42,7 +42,10 @@ use build_jobs::{group_plan_for, reject_seed_needs, reject_unknown_crates};
 mod job_steps;
 #[path = "crate_jobs_obligations.rs"]
 mod obligations;
-use job_steps::obligation_steps;
+use job_steps::{
+    image_publication_fixture_step, obligation_steps,
+    prepare_crate_tools_steps as prepare_tools_steps,
+};
 use obligations::obligations_for;
 
 pub(crate) use stage::{is_mbx, is_nextest, is_opentofu, is_rust};
@@ -289,24 +292,12 @@ fn render_job(
     let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
     steps.extend(input.acquire.cloned());
     steps.push(crate::matrix_step::download_plan_step()?);
-    let suite: Option<crate::matrix_step::CrateSuite> =
-        crate::matrix_step::suite_for_package(&model.package_name);
+    let suite = crate::matrix_step::suite_for_package(&model.package_name);
     let needs_validators = crate::matrix_step::crate_needs_generate_validators(policy, suite);
     if use_rust {
         steps.push(crate::workflow::verify_restored_rust_step(catalog));
     }
-    let needs_bun = policy == WorkflowPolicy::VelnorRepositoryV1
-        && suite.is_some_and(crate::matrix_step::CrateSuite::owns_bun);
-    steps.push(crate::matrix_step::prepare_crate_tools_step_with_bun(
-        catalog,
-        use_rust,
-        use_nextest,
-        crate::matrix_step::prepare_install_opentofu(policy, suite, use_opentofu),
-        needs_validators,
-        needs_bun,
-    )?);
-    let verify = needs_validators.then(|| crate::workflow::verify_jactionlint_step(catalog));
-    steps.extend(verify);
+    steps.extend(prepare_tools_steps(input, suite, use_rust, use_nextest, use_opentofu)?);
     if use_rust {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
         steps.push(crate::workflow::verify_rust_manifest_step(catalog));
@@ -339,6 +330,7 @@ fn render_job(
         TaskCacheMode::Off,
         "",
     )?);
+    steps.extend(image_publication_fixture_step(input, model)?);
     steps.extend(obligation_steps(input, model, use_opentofu)?);
     steps.push(crate::matrix_step::crate_upload_step(&model.job_id)?);
     Ok(Job {

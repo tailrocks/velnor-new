@@ -163,7 +163,8 @@ test ! -s "$evidence/checkout-status.txt"
       scripts/generator-release/test-plan-diagnostics.sh scripts/generator-release/test-qualification-output-bindings.sh \
       scripts/generator-release/test-rust-verifier-retries.cjs \
       scripts/generator-release/qualification-validator-tools.cjs \
-      scripts/generator-release/test-qualification-validator-tools.cjs; do
+      scripts/generator-release/test-qualification-validator-tools.cjs \
+      scripts/generator-release/source-qualification-validator-recipes.json; do
   if [ -f "$path" ] && [ ! -L "$path" ]; then
     sha256sum "$path" >>"$evidence/source-inputs.sha256"
   else
@@ -705,6 +706,12 @@ if [ "$artifact_status" -ne 0 ]; then
   printf 'artifact_status=1\n' >"$evidence/logs/cli-build.artifact.exit" || true
 fi
 exit "$final_status"
+    ;;
+  qualify-linux-x64-native-validator-tools)
+if [ "${GITHUB_EVENT_NAME:-}" != workflow_dispatch ]; then printf 'FATAL: native validator authoring requires a workflow_dispatch event\n' >&2; exit 64; fi
+for path in "${RUNNER_TEMP:-}" "${CARGO_TARGET_DIR:-}"; do case "$path" in /*) ;; *) printf 'FATAL: qualification paths must be absolute\n' >&2; exit 1 ;; esac; done
+umask 077
+VELNOR_INTERNAL_OP=qualify-validator-tools-v1 "$CARGO_TARGET_DIR/release/velnor-actions"
     ;;
   capture-all-five-external-goldens)
 set -uo pipefail
@@ -1346,9 +1353,19 @@ done
     "$evidence/logs/root-preview.exit"; then
   final_status=1
 fi
+paths=(logs previews)
+qualification_dir=native-validator-tool-qualification
+if [ -e "$evidence/$qualification_dir" ] || [ -L "$evidence/$qualification_dir" ]; then
+  if [ -L "$evidence/$qualification_dir" ] || [ ! -d "$evidence/$qualification_dir" ] \
+    || [ -L "$evidence/$qualification_dir/status.txt" ] \
+    || [ ! -f "$evidence/$qualification_dir/status.txt" ] \
+    || ! grep -Fxq 'result=success' "$evidence/$qualification_dir/status.txt"; then
+    final_status=1
+  fi
+  paths+=("$qualification_dir")
+fi
 if ! printf 'qualification_checks_status=%s\n' "$final_status" \
   >"$evidence/qualification-final-status.txt"; then final_status=1; fi
-paths=(logs previews)
 for path in external-oracle captured-stage captured-raw external-check-stage external-check-raw external-check-diff \
   external-shell-harness-logs external-shell-harness-keep-logs repository-oracle-diff repository-oracle-stage repository-oracle-raw \
   external-shell-harness-json-proof external-shell-harness-keep-json-proof \

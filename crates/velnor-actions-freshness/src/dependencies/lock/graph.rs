@@ -20,6 +20,7 @@ pub(super) fn check_membership(
     relative: &str,
     locked: &[Value],
     members: &BTreeSet<String>,
+    path_packages: &BTreeSet<String>,
 ) {
     let local = locked
         .iter()
@@ -31,17 +32,21 @@ pub(super) fn check_membership(
     } else {
         format!("{relative}/(lock-membership)")
     };
-    if local == *members {
+    let expected = members
+        .union(path_packages)
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    if local == expected {
         ctx.pass_row(
             "lock-staleness",
             &subject,
-            &format!("{} members", members.len()),
+            &format!("{} members and declared path packages", expected.len()),
         );
     } else {
         ctx.fail_row(
             "lock-staleness",
             &subject,
-            &format!("local lock {local:?} != members {members:?}"),
+            &format!("local lock {local:?} != expected packages {expected:?}"),
         );
     }
 }
