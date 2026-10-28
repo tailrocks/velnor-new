@@ -6,7 +6,19 @@ use std::{collections::BTreeSet, error::Error, fs};
 #[path = "runner_image_admission_public/support/mod.rs"]
 mod support;
 
+use sha2::{Digest, Sha256};
 use support::{AdmissionFixture, oci};
+
+fn lock_sha256(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let digest = Sha256::digest(bytes);
+    let mut output = String::with_capacity(digest.len() * 2);
+    for byte in &digest {
+        output.push(char::from(HEX[usize::from(byte >> 4)]));
+        output.push(char::from(HEX[usize::from(byte & 15)]));
+    }
+    output
+}
 
 #[test]
 fn public_admission_writes_exact_descriptors_and_preserves_inputs() -> Result<(), Box<dyn Error>> {
@@ -17,10 +29,20 @@ fn public_admission_writes_exact_descriptors_and_preserves_inputs() -> Result<()
     let value: serde_json::Value = serde_json::from_slice(&fs::read(&fixture.output)?)?;
     assert_object_keys(
         &value,
-        &["schema_version", "source_commit", "platform", "images"],
+        &[
+            "schema_version",
+            "runner_lock_sha256",
+            "source_commit",
+            "platform",
+            "images",
+        ],
     )?;
     assert_object_keys(&value["images"], &["runner", "dind", "resource_probe"])?;
-    assert_eq!(value["schema_version"], 1);
+    assert_eq!(value["schema_version"], 2);
+    assert_eq!(
+        value["runner_lock_sha256"],
+        lock_sha256(&fs::read(fixture.root.join(".velnor/runner.lock"))?)
+    );
     assert_eq!(value["source_commit"], fixture.source);
     assert_eq!(value["platform"], "linux/amd64");
     for (name, image, repository) in fixture.images.entries() {

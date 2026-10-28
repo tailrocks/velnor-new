@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 #[serde(deny_unknown_fields)]
 pub(crate) struct DescriptorDocument {
     pub(crate) schema_version: u8,
+    pub(crate) runner_lock_sha256: String,
     pub(crate) source_commit: String,
     pub(crate) platform: String,
     pub(crate) images: ImageEntries,

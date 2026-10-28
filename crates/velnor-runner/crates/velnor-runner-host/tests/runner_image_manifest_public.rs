@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::process::{Command, Output};
 
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 
 const SOURCE: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const OTHER_SOURCE: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -27,7 +28,8 @@ fn image(repository: &str, digest: char) -> Value {
 
 fn descriptors() -> Value {
     json!({
-        "schema_version": 1,
+        "schema_version": 2,
+        "runner_lock_sha256": lock_sha256(LOCK.as_bytes()),
         "source_commit": SOURCE,
         "platform": "linux/amd64",
         "images": {
@@ -36,6 +38,23 @@ fn descriptors() -> Value {
             "resource_probe": image("ghcr.io/tailrocks/velnor-resource-probe", '3')
         }
     })
+}
+
+fn lock_sha256(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let digest = Sha256::digest(bytes);
+    let mut output = String::with_capacity(digest.len() * 2);
+    for byte in &digest {
+        output.push(char::from(HEX[usize::from(byte >> 4)]));
+        output.push(char::from(HEX[usize::from(byte & 15)]));
+    }
+    output
+}
+
+fn descriptors_for_lock(lock: &str) -> Value {
+    let mut value = descriptors();
+    value["runner_lock_sha256"] = json!(lock_sha256(lock.as_bytes()));
+    value
 }
 
 fn invoke(
@@ -135,6 +154,24 @@ fn inventory_and_digest_failure_cases() -> TestResult<Vec<InvalidCase>> {
     cases.push(default_failure_case("unknown field", &value)?);
 
     let mut value = descriptors();
+    value
+        .as_object_mut()
+        .ok_or_else(|| std::io::Error::other("descriptors object"))?
+        .remove("runner_lock_sha256");
+    cases.push(default_failure_case("missing runner lock digest", &value)?);
+
+    let mut value = descriptors();
+    value["runner_lock_sha256"] = json!("A".repeat(64));
+    cases.push(default_failure_case(
+        "malformed runner lock digest",
+        &value,
+    )?);
+
+    let mut value = descriptors();
+    value["schema_version"] = json!(1);
+    cases.push(default_failure_case("wrong descriptor schema", &value)?);
+
+    let mut value = descriptors();
     value["images"]["runner"]["config_digest"] = json!(format!("sha256:{}", "z".repeat(64)));
     cases.push(default_failure_case("invalid digest", &value)?);
 
@@ -163,15 +200,22 @@ fn source_and_lock_failure_cases() -> TestResult<Vec<InvalidCase>> {
     )?];
     cases.push(input_case(
         "missing lock version",
-        &descriptors(),
+        &descriptors_for_lock(&LOCK.replace("node_version = \"26.12.0\"\n", "")),
         LOCK.replace("node_version = \"26.12.0\"\n", ""),
+        SOURCE,
+        SOURCE,
+    )?);
+    cases.push(input_case(
+        "runner lock digest mismatch",
+        &descriptors(),
+        LOCK.replace("2.338.0", "2.339.0"),
         SOURCE,
         SOURCE,
     )?);
     let bytes = serde_json::to_vec(&descriptors())?;
     let duplicate = String::from_utf8(bytes)?.replacen(
-        "\"schema_version\":1",
-        "\"schema_version\":1,\"schema_version\":1",
+        "\"schema_version\":2",
+        "\"schema_version\":2,\"schema_version\":2",
         1,
     );
     cases.push(InvalidCase {
