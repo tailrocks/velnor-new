@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use velnor_actions_mise::CheckDeadline;
 
@@ -116,4 +116,14 @@ pub fn admit_runner_images(
 
 pub fn publish_image(request: &PublishImageRequest) -> Result<(), OrchestratorError> {
     publication::publish_image(request)
+}
+
+pub(crate) fn read_source_file(
+    root: &Path,
+    source_commit: &str,
+    relative: &str,
+    limit: usize,
+    deadline: CheckDeadline,
+) -> Result<Vec<u8>, OrchestratorError> {
+    source::read_source_file(root, source_commit, relative, limit, deadline)
 }

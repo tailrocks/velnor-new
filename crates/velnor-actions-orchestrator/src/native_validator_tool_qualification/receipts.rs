@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::io::Write;
+use std::{io::Write, time::Duration, time::Instant};
 use std::path::Path;
 
 use serde_json::{Value, json};
@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 use super::{Archive, Context, MAX_RECEIPT_BYTES, contains_line, read_runner_text, sha256};
 use crate::OrchestratorError;
 use crate::internal::internal;
-use crate::safe_read::{RepoBytes, RepoRead, read_repo_bytes, read_repo_file};
+use crate::safe_read::{RepoBytes, read_repo_bytes};
 
 pub(super) fn admitted_archives(
     context: &Context,
@@ -87,13 +87,22 @@ pub(super) fn write_request(
     phase: &Path,
     archives: &[Archive],
 ) -> Result<(), OrchestratorError> {
-    let RepoRead::Text(template) = read_repo_file(
+    let recipe_limit = usize::try_from(MAX_RECEIPT_BYTES)
+        .map_err(|_| internal("native_validator_recipe_limit"))?;
+    let deadline = velnor_actions_mise::CheckDeadline::from_start_with_cleanup_reserve(
+        Instant::now(),
+        Duration::from_secs(30),
+    )
+    .map_err(|_| internal("native_validator_recipe_deadline"))?;
+    let template = crate::image_maintenance::read_source_file(
         &context.workspace,
+        &context.source_head,
         super::RECIPE_FILE,
-        MAX_RECEIPT_BYTES,
-    )? else {
-        return Err(internal("native_validator_recipe_unavailable"));
-    };
+        recipe_limit,
+        deadline,
+    )?;
+    let template = String::from_utf8(template)
+        .map_err(|_| internal("native_validator_recipe_encoding"))?;
     let mut request = velnor_actions_contract::strict_json::parse_strict_json_with_limit(
         &template,
         usize::try_from(MAX_RECEIPT_BYTES).unwrap_or(usize::MAX),
@@ -153,4 +162,99 @@ fn string_field<'a>(value: &'a Value, name: &str) -> Result<&'a str, Orchestrato
         .get(name)
         .and_then(Value::as_str)
         .ok_or_else(|| internal("native_validator_receipt_shape"))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{error::Error, fs, path::Path};
+
+    use serde_json::{Value, json};
+    use super::{Archive, Context, write_request};
+    use crate::git_fixture;
+
+    const RECIPE: &str =
+        include_str!("../../../../scripts/generator-release/source-qualification-validator-recipes.json");
+
+    #[test]
+    fn request_uses_recipe_at_selected_source_commit() -> Result<(), Box<dyn Error>> {
+        let repository = tempfile::tempdir()?;
+        let root = repository.path();
+        git(root, &["init", "--quiet"])?;
+        let recipe_path = root.join(super::super::RECIPE_FILE);
+        fs::create_dir_all(recipe_path.parent().ok_or("recipe parent")?)?;
+        fs::write(&recipe_path, RECIPE)?;
+        git(root, &["add", "--", super::super::RECIPE_FILE])?;
+        git(root, &["commit", "--quiet", "-m", "recipe A"])?;
+        let source_head = git(root, &["rev-parse", "HEAD"])?;
+
+        let mut worktree_recipe: Value = serde_json::from_str(RECIPE)?;
+        worktree_recipe["timeout_seconds"] = json!(181);
+        fs::write(&recipe_path, serde_json::to_vec_pretty(&worktree_recipe)?)?;
+
+        let phase = tempfile::tempdir()?;
+        let archives = [
+            Archive {
+                url: "https://example.invalid/jactionlint.tar.gz".to_owned(),
+                checksum: "a".repeat(64),
+                path: phase.path().join("archives/jactionlint-linux-x64.tar.gz"),
+            },
+            Archive {
+                url: "https://example.invalid/shellcheck.tar.xz".to_owned(),
+                checksum: "b".repeat(64),
+                path: phase.path().join("archives/shellcheck-linux-x64.tar.xz"),
+            },
+        ];
+        let context = Context {
+            workspace: root.to_path_buf(),
+            runner_temp: root.to_path_buf(),
+            target_dir: root.to_path_buf(),
+            binary_receipt_path: String::new(),
+            event_name: "workflow_dispatch".to_owned(),
+            source_head,
+            current_executable: root.join("velnor-actions"),
+            binary_version: "0.1.69".to_owned(),
+        };
+
+        write_request(&context, phase.path(), &archives)?;
+
+        let request: Value = serde_json::from_slice(&fs::read(phase.path().join("request.json"))?)?;
+        assert_eq!(request["timeout_seconds"], json!(180));
+        assert_ne!(request["timeout_seconds"], json!(181));
+        let tools = request["tools"].as_array().ok_or("request tools")?;
+        for (tool, archive) in tools.iter().zip(&archives) {
+            let path = archive.path.to_str().ok_or("archive path")?;
+            assert_eq!(
+                tool["recipe"]["platforms"][0]["artifacts"][0]["url"],
+                archive.url
+            );
+            assert_eq!(
+                tool["archives"],
+                json!([{
+                    "path": path,
+                    "url": archive.url,
+                    "sha256": archive.checksum
+                }])
+            );
+        }
+        Ok(())
+    }
+
+    fn git(root: &Path, args: &[&str]) -> Result<String, Box<dyn Error>> {
+        let mut command = if root.join(".git").exists() {
+            git_fixture::command(root)?
+        } else {
+            let mut command = git_fixture::sterile_command();
+            command.current_dir(root);
+            command
+        };
+        let output = command.args(args).output()?;
+        if !output.status.success() {
+            return Err(format!(
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )
+            .into());
+        }
+        Ok(String::from_utf8(output.stdout)?.trim().to_owned())
+    }
 }
