@@ -3,6 +3,8 @@
 
 mod completed_generator_verification;
 mod homebrew_adoption_seed_public_assertions;
+#[path = "homebrew_adoption_seed_public/deletions.rs"]
+mod homebrew_adoption_seed_public_deletions;
 
 use std::{error::Error, fs, io, path::Path, process::Command};
 
@@ -112,6 +114,23 @@ fn public_seed_manifest_replaces_legacy_consumer_manifest() -> Result<(), Box<dy
         "configured native review completion workflow omitted from seed"
     );
     assert_eq!(rendered.len(), 6);
+    let caller = rendered
+        .iter()
+        .find(|file| file.path == ".github/workflows/ci.yml")
+        .ok_or_else(|| io::Error::other("seed omitted its pull request caller"))?;
+    let pull_request_types = caller
+        .bytes
+        .lines()
+        .skip_while(|line| *line != "  pull_request:")
+        .skip(1)
+        .take_while(|line| line.starts_with("    "))
+        .filter_map(|line| line.trim().strip_prefix("- "))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        pull_request_types,
+        ["opened", "synchronize", "reopened", "ready_for_review"],
+        "seed must validate pull requests when drafts become ready"
+    );
     let rendered_manifest = rendered
         .iter()
         .find(|file| file.path == MANIFEST_PATH)

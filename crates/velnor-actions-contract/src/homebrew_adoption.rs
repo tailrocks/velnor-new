@@ -172,7 +172,7 @@ impl HomebrewAdoptionTransition {
             || self
                 .deletions
                 .iter()
-                .any(|entry| !entry.path.starts_with("scripts/"))
+                .any(|entry| !allowed_deletion_path(&entry.path))
         {
             return Err(invalid("homebrew_adoption_deletion_inventory"));
         }
@@ -238,6 +238,15 @@ impl HomebrewAdoptionTransition {
         changed.extend(self.generated_output_paths.iter().cloned());
         changed
     }
+}
+
+fn allowed_deletion_path(path: &str) -> bool {
+    path.starts_with("scripts/")
+        || path == ".github/scripts/velnor-tools-cache-identity.sh"
+        || path
+            .strip_prefix(".github/actions/")
+            .and_then(|suffix| suffix.strip_suffix("/action.yml"))
+            .is_some_and(|name| !name.is_empty() && !name.contains('/'))
 }
 
 fn minimum_sdk_version_at_least(value: &str, minimum: (u64, u64, u64)) -> bool {
