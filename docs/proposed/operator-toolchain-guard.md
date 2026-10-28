@@ -56,6 +56,21 @@ User-facing diagnostics distinguish the following conditions:
 
 ## Local guard compatibility
 
+The golden collector also accepts an explicit `--toolchain-guard` option with
+the same executable-path requirements. Guarded collection requires an explicit
+positional CLI binary and delegates every Plan/Generate operation through that
+binary's global option. Binary version and archive identity checks retain their
+existing admission path. Ambient environment variables do not select a guard.
+
+Release dogfood collection delegates both locked Cargo fetches through
+`GUARD -- mise exec -- cargo fetch --locked`. Before fetching, it verifies that
+the staged root `mise.toml` is a regular, non-symlink file whose bytes match the
+indexed candidate tree. Each guarded fetch receives invocation-only Mise trust
+for that exact file through `MISE_TRUSTED_CONFIG_PATHS`. This replaces inherited
+trust paths for the fetch, changes no persistent trust state, and permits the
+guard to evaluate the actual staged project environment. Collection without an
+explicit guard retains the existing hosted behavior.
+
 An external guard must explicitly admit the isolated pinned MBX metadata form.
 Removing isolation flags or tool pins to fit an older guard is not compatible.
 Its environment preflight must use the same Mise isolation flags and exact tool

@@ -81,6 +81,8 @@ ARCHIVE_GUARD_INPUT_PATH=""
 ARCHIVE_GUARD_INPUT_SHA256=""
 SEEN_ARCHIVE_GUARD=0
 SEEN_ARCHIVE_GUARD_SHA256=0
+OPERATOR_GUARD_INPUT_PATH=""
+SEEN_OPERATOR_GUARD=0
 if [ "$#" -gt 0 ]; then
   case "$1" in
     capture|check|check-release) MODE="$1"; MODE_EXPLICIT=1; shift ;;
@@ -90,7 +92,7 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     capture|check|check-release)
       if [ "$MODE_EXPLICIT" -ne 0 ]; then
-        echo "FATAL: usage: $0 [--archive-guard PATH --archive-guard-sha256 SHA256] [capture|check [CLI_BINARY]]"
+        echo "FATAL: usage: $0 [--archive-guard PATH --archive-guard-sha256 SHA256] [--toolchain-guard PATH] [capture|check [CLI_BINARY]]"
         exit 2
       fi
       MODE="$1"
@@ -115,15 +117,24 @@ while [ "$#" -gt 0 ]; do
       ARCHIVE_GUARD_INPUT_SHA256="$2"
       shift 2
       ;;
+    --toolchain-guard)
+      if [ "$SEEN_OPERATOR_GUARD" -ne 0 ] || [ "$#" -lt 2 ]; then
+        echo "FATAL: toolchain guard path must appear once" >&2
+        exit 2
+      fi
+      SEEN_OPERATOR_GUARD=1
+      OPERATOR_GUARD_INPUT_PATH="$2"
+      shift 2
+      ;;
     --*)
-      echo "FATAL: usage: $0 [--archive-guard PATH --archive-guard-sha256 SHA256] [capture|check [CLI_BINARY]]"
+      echo "FATAL: usage: $0 [--archive-guard PATH --archive-guard-sha256 SHA256] [--toolchain-guard PATH] [capture|check [CLI_BINARY]]"
       exit 2
       ;;
     *) POSITIONAL+=("$1"); shift ;;
   esac
 done
 if [ "$MODE_EXPLICIT" -eq 0 ] && [ "${#POSITIONAL[@]}" -gt 0 ]; then
-  echo "FATAL: usage: $0 [--archive-guard PATH --archive-guard-sha256 SHA256] [capture|check [CLI_BINARY]]"
+  echo "FATAL: usage: $0 [--archive-guard PATH --archive-guard-sha256 SHA256] [--toolchain-guard PATH] [capture|check [CLI_BINARY]]"
   exit 2
 fi
 if [ "$SEEN_ARCHIVE_GUARD" -ne "$SEEN_ARCHIVE_GUARD_SHA256" ]; then
@@ -137,11 +148,11 @@ if [ "$SEEN_ARCHIVE_GUARD" -eq 1 ] \
 fi
 if [ "$MODE" = "check-release" ]; then
   if [ "${#POSITIONAL[@]}" -ne 3 ]; then
-    echo "FATAL: usage: $0 [--archive-guard PATH --archive-guard-sha256 SHA256] check-release CLI_BINARY CANDIDATE_MANIFEST MANIFEST_SHA256"
+    echo "FATAL: usage: $0 [--archive-guard PATH --archive-guard-sha256 SHA256] [--toolchain-guard PATH] check-release CLI_BINARY CANDIDATE_MANIFEST MANIFEST_SHA256"
     exit 2
   fi
 elif [ "${#POSITIONAL[@]}" -gt 1 ]; then
-  echo "FATAL: usage: $0 [--archive-guard PATH --archive-guard-sha256 SHA256] [capture|check [CLI_BINARY]]"
+  echo "FATAL: usage: $0 [--archive-guard PATH --archive-guard-sha256 SHA256] [--toolchain-guard PATH] [capture|check [CLI_BINARY]]"
   exit 2
 fi
 if ! CALLER_DIR="$(pwd -P)"; then
@@ -213,6 +224,27 @@ note() { echo "$1"; }
 die() { echo "FAIL: $1"; fail=1; }
 
 source "$ROOT/scripts/generator-release/qualification-goldens.sh"
+if [ "$SEEN_OPERATOR_GUARD" -eq 1 ]; then
+  case "$OPERATOR_GUARD_INPUT_PATH" in
+    /*) ;;
+    *) echo 'FATAL: operator toolchain guard requires an absolute path' >&2; exit 2 ;;
+  esac
+  if [ ! -f "$OPERATOR_GUARD_INPUT_PATH" ] || [ ! -x "$OPERATOR_GUARD_INPUT_PATH" ]; then
+    echo 'FATAL: operator toolchain guard requires an executable regular file' >&2
+    exit 2
+  fi
+  if ! operator_guard_parent="$(cd -- "$(dirname "$OPERATOR_GUARD_INPUT_PATH")" && pwd -P)" \
+    || [ -L "$OPERATOR_GUARD_INPUT_PATH" ] \
+    || [ "$operator_guard_parent/$(basename "$OPERATOR_GUARD_INPUT_PATH")" != "$OPERATOR_GUARD_INPUT_PATH" ]; then
+    echo 'FATAL: operator toolchain guard requires a canonical path' >&2
+    exit 2
+  fi
+  if [ "$BIN_EXPLICIT" -ne 1 ]; then
+    echo 'FATAL: operator toolchain guard requires an explicit CLI binary' >&2
+    exit 2
+  fi
+  OPERATOR_TOOLCHAIN_GUARD="$OPERATOR_GUARD_INPUT_PATH"
+fi
 prepare_qualification_guard || exit 2
 
 # Portable link-preserving recursive copy. Plain `cp -r` dereferences
@@ -459,7 +491,7 @@ capture_case() {
   local preview="$out/preview"
   local raw="$WORK/raw/$case"
   mkdir -p "$out" "$preview" "$raw"
-  (cd "$repo" && run_qualification_candidate "$BIN" plan >"$raw/plan.raw.txt" 2>"$raw/plan.stderr.raw.txt"; echo "$?" >"$out/plan.exit")
+  (cd "$repo" && run_qualification_metadata_candidate "$BIN" plan >"$raw/plan.raw.txt" 2>"$raw/plan.stderr.raw.txt"; echo "$?" >"$out/plan.exit")
   if ! cp "$raw/plan.stderr.raw.txt" "$out/plan.stderr.txt" \
     || ! normalize_plan_stderr "$out/plan.stderr.txt" \
       "$repo" '<repo>' "$ROOT" '<root>' "$WORK" '<work>'; then
@@ -477,7 +509,7 @@ capture_case() {
     echo "FATAL: could not retain raw plan output for $case"
     exit 2
   fi
-  (cd "$repo" && run_qualification_candidate "$BIN" generate --output-dir "$preview" >"$out/generate.stdout.txt" 2>"$raw/generate.stderr.raw.txt"; echo "$?" >"$out/generate.exit")
+  (cd "$repo" && run_qualification_metadata_candidate "$BIN" generate --output-dir "$preview" >"$out/generate.stdout.txt" 2>"$raw/generate.stderr.raw.txt"; echo "$?" >"$out/generate.exit")
   if ! cp "$raw/generate.stderr.raw.txt" "$out/generate.stderr.txt"; then
     echo "FATAL: could not stage generate diagnostics for $case"
     exit 2
@@ -502,7 +534,7 @@ capture_case() {
 check_release_policy_negative() {
   local repo="$WORK/hostile-config" output="$WORK/hostile-output"
   setup_case hostile-config >/dev/null
-  if (cd "$repo" && run_qualification_candidate "$BIN" generate --output-dir "$output" >"$WORK/hostile.stdout" 2>"$WORK/hostile.stderr"); then
+  if (cd "$repo" && run_qualification_metadata_candidate "$BIN" generate --output-dir "$output" >"$WORK/hostile.stdout" 2>"$WORK/hostile.stderr"); then
     echo "FAIL: release candidate accepted the hostile policy fixture"
     fail=1
   elif ! grep -F '.velnor/config.toml: evil: unknown_config_field' "$WORK/hostile.stderr"; then
@@ -521,7 +553,7 @@ capture_dogfood() {
   local head diff_status
   mkdir -p "$out" "$preview" "$raw"
   head=$(git -C "$ROOT" rev-parse HEAD)
-  (cd "$ROOT" && run_qualification_candidate "$BIN" plan >"$raw/plan.raw.txt" 2>"$raw/plan.stderr.raw.txt"; echo "$?" >"$out/plan.exit")
+  (cd "$ROOT" && run_qualification_metadata_candidate "$BIN" plan >"$raw/plan.raw.txt" 2>"$raw/plan.stderr.raw.txt"; echo "$?" >"$out/plan.exit")
   if ! cp "$raw/plan.stderr.raw.txt" "$out/plan.stderr.txt" \
     || ! normalize_plan_stderr "$out/plan.stderr.txt" \
       "$ROOT" '<root>' "$WORK" '<work>'; then
@@ -539,7 +571,7 @@ capture_dogfood() {
     echo "FATAL: could not retain raw dogfood plan output"
     exit 2
   fi
-  (cd "$ROOT" && run_qualification_candidate "$BIN" generate --output-dir "$preview" >"$out/generate.stdout.txt" 2>"$raw/generate.stderr.raw.txt"; echo "$?" >"$out/generate.exit")
+  (cd "$ROOT" && run_qualification_metadata_candidate "$BIN" generate --output-dir "$preview" >"$out/generate.stdout.txt" 2>"$raw/generate.stderr.raw.txt"; echo "$?" >"$out/generate.exit")
   if ! cp "$raw/generate.stderr.raw.txt" "$out/generate.stderr.txt"; then
     echo "FATAL: could not stage raw dogfood generate diagnostics"
     exit 2

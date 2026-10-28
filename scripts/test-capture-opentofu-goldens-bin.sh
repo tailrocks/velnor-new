@@ -48,6 +48,8 @@ DIAGNOSTICS_FIXTURE_INPUT_PATH=""
 DIAGNOSTICS_FIXTURE_INPUT_SHA256=""
 SEEN_DIAGNOSTICS_FIXTURE=0
 SEEN_DIAGNOSTICS_FIXTURE_SHA256=0
+OPERATOR_GUARD_INPUT_PATH=""
+SEEN_OPERATOR_GUARD=0
 CLI_ARG=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -85,6 +87,15 @@ while [ "$#" -gt 0 ]; do
       fi
       SEEN_DIAGNOSTICS_FIXTURE_SHA256=1
       DIAGNOSTICS_FIXTURE_INPUT_SHA256="$2"
+      shift 2
+      ;;
+    --toolchain-guard)
+      if [ "$SEEN_OPERATOR_GUARD" -ne 0 ] || [ "$#" -lt 2 ]; then
+        echo "FATAL: toolchain guard path must appear once" >&2
+        exit 2
+      fi
+      SEEN_OPERATOR_GUARD=1
+      OPERATOR_GUARD_INPUT_PATH="$2"
       shift 2
       ;;
     --*)
@@ -125,6 +136,14 @@ if [[ "$DIAGNOSTICS_FIXTURE_INPUT_PATH" != /* \
 fi
 if [ -z "$CLI_ARG" ]; then
   echo "FATAL: provide the CLI binary path" >&2
+  exit 2
+fi
+if [ "$SEEN_OPERATOR_GUARD" -eq 1 ] \
+  && { [[ "$OPERATOR_GUARD_INPUT_PATH" != /* ]] \
+    || [ ! -f "$OPERATOR_GUARD_INPUT_PATH" ] \
+    || [ -L "$OPERATOR_GUARD_INPUT_PATH" ] \
+    || [ ! -x "$OPERATOR_GUARD_INPUT_PATH" ]; }; then
+  echo 'FATAL: toolchain guard must be an absolute regular executable' >&2
   exit 2
 fi
 if [ "$SEEN_ARCHIVE_GUARD" -eq 1 ] \
@@ -257,10 +276,41 @@ RUST_VERSION="$(test_mise_rust_version)" || {
 if ! test_mise_resolve_cargo "$REAL_MISE" "$RUST_VERSION" "$WORK/mise-cargo-resolution" "$STUB_BIN/cargo"; then
   exit 2
 fi
+MBX_VERSION="$(test_mise_mbx_version)" || {
+  echo 'FATAL: could not resolve the owned pinned Mr. Boxington version' >&2
+  exit 2
+}
 test_mise_adapter_create "$WORK/mise-adapter-bin" "$REAL_MISE" "$ORIGINAL_PATH" \
-  "$VELNOR_TEST_CARGO_GUARD" "$RUST_VERSION" || exit 2
+  "$VELNOR_TEST_CARGO_GUARD" "$RUST_VERSION" "$MBX_VERSION" || exit 2
 MISE_ADAPTER_BIN="$TEST_MISE_ADAPTER_BIN"
 MISE_CARGO_PATH="$TEST_MISE_CARGO_PATH"
+VELNOR_TEST_MBX_VERSION="$MBX_VERSION"
+export VELNOR_TEST_MBX_VERSION
+
+test_mise_adapter_normal_fetch() {
+  local transport_guard="$WORK/normal fetch transport guard"
+  cat >"$transport_guard" <<'TRANSPORT'
+#!/usr/bin/env bash
+if [ "$#" -eq 7 ] && [ "$1" = -- ] && [ "$2" = mise ] \
+  && [ "$3" = exec ] && [ "$4" = -- ] && [ "$5" = cargo ] \
+  && [ "$6" = fetch ] && [ "$7" = --locked ]; then
+  exit 0
+fi
+exit 78
+TRANSPORT
+  chmod 700 "$transport_guard" || return 2
+  : >"$MISE_RECEIPT"
+  if ! VELNOR_TEST_REAL_MISE="$REAL_MISE" VELNOR_TEST_ORIGINAL_PATH="$ORIGINAL_PATH" \
+    VELNOR_TEST_RUST_VERSION="$RUST_VERSION" VELNOR_TEST_MBX_VERSION="$MBX_VERSION" \
+    VELNOR_TEST_CARGO_GUARD="$transport_guard" VELNOR_TEST_MISE_CARGO_PATH="$MISE_CARGO_PATH" \
+    VELNOR_TEST_MISE_RECEIPT="$MISE_RECEIPT" "$MISE_ADAPTER_BIN/mise" exec -- cargo fetch --locked; then
+    echo 'FAIL: test Mise adapter rejected normal cargo fetch transport' >&2
+    return 1
+  fi
+  echo 'passed normal Mise cargo fetch transport'
+}
+
+test_mise_adapter_normal_fetch || exit $?
 
 verify_guard_receipt() {
   local label="$1" receipt="$2" direct_receipt="$3" expected_fetch_count="${4:-0}"
@@ -468,6 +518,12 @@ run_collector() {
   "$SCRIPT" "${guard_args[@]}" "$@"
 }
 
+run_collector_guarded() {
+  local operator_guard="$1"
+  shift
+  "$SCRIPT" "${ARCHIVE_GUARD_ARGS[@]}" --toolchain-guard "$operator_guard" "$@"
+}
+
 test_stdin_sha256() {
   if command -v sha256sum >/dev/null 2>&1; then
     sha256sum | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }'
@@ -637,30 +693,210 @@ test_candidate_stderr_diagnostic
 expect_release_check_match() {
   local status=0 log="$WORK/release-check.log" after
   local manifest="${1:-$WORK/valid manifest.json}"
+  local operator_guard="${2:-}"
   : >"$GUARD_RECEIPT"
   : >"$MISE_RECEIPT"
   rm -f "$MARKER"
   (
     unset CARGO_TARGET_DIR CARGO_BUILD_TARGET || exit 2
-    TMPDIR="$WORK/tmp symlink" MBX_GC_AUTO=0 GITHUB_SHA="$SOURCE_SHA" GITHUB_REPOSITORY=tailrocks/velnor-new \
-    PATH="$STUB_BIN:$MISE_ADAPTER_BIN:$ORIGINAL_PATH" VELNOR_TEST_CARGO_MARKER="$MARKER" \
-    VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
-    VELNOR_TEST_REAL_MISE="$REAL_MISE" VELNOR_TEST_ORIGINAL_PATH="$ORIGINAL_PATH" \
-    VELNOR_TEST_RUST_VERSION="$RUST_VERSION" VELNOR_TEST_CARGO_GUARD="$VELNOR_TEST_CARGO_GUARD" \
-    VELNOR_TEST_MISE_CARGO_PATH="$MISE_CARGO_PATH" VELNOR_TEST_MISE_RECEIPT="$MISE_RECEIPT" \
-    run_collector check-release "$CLI_BIN" "$manifest" \
-      "$(test_file_sha256 "$manifest")"
+    export TMPDIR="$WORK/tmp symlink" MBX_GC_AUTO=0 GITHUB_SHA="$SOURCE_SHA" GITHUB_REPOSITORY=tailrocks/velnor-new \
+      PATH="$STUB_BIN:$MISE_ADAPTER_BIN:$ORIGINAL_PATH" VELNOR_TEST_CARGO_MARKER="$MARKER" \
+      VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
+      VELNOR_TEST_REAL_MISE="$REAL_MISE" VELNOR_TEST_ORIGINAL_PATH="$ORIGINAL_PATH" \
+      VELNOR_TEST_RUST_VERSION="$RUST_VERSION" \
+      VELNOR_TEST_MISE_CARGO_PATH="$MISE_CARGO_PATH" VELNOR_TEST_MISE_RECEIPT="$MISE_RECEIPT"
+    if [ -n "$operator_guard" ]; then
+      run_collector_guarded "$operator_guard" check-release "$CLI_BIN" "$manifest" \
+        "$(test_file_sha256 "$manifest")"
+    else
+      run_collector check-release "$CLI_BIN" "$manifest" \
+        "$(test_file_sha256 "$manifest")"
+    fi
   ) >"$log" 2>&1 || status=$?
   if [ "$status" -ne 0 ] || ! grep -Fq 'ALL RELEASE FIXTURE GOLDENS AND DOGFOOD PARITY MATCH' "$log"; then
     cat "$log" >&2
     echo "FAIL: valid candidate did not match release fixture goldens (exit $status)" >&2
     exit 1
   fi
-  if ! verify_guard_receipt release-check "$MISE_RECEIPT" "$GUARD_RECEIPT" 2; then cat "$log" >&2; exit 1; fi
+  if [ -z "$operator_guard" ] \
+    && ! verify_guard_receipt release-check "$MISE_RECEIPT" "$GUARD_RECEIPT" 2; then
+    cat "$log" >&2
+    exit 1
+  fi
   if [ -e "$MARKER" ]; then echo "FAIL: release qualification invoked cargo build" >&2; exit 1; fi
   after="$(golden_fingerprint)" || exit 2
   if [ "$after" != "$BEFORE" ]; then echo "FAIL: successful release check changed goldens" >&2; exit 1; fi
   echo "passed positive release candidate fixture oracle"
+}
+
+expect_guarded_capture_match() {
+  local captured_oracle="$WORK/guarded capture oracle" status=0 log="$WORK/guarded-capture.log" after
+  mkdir -p "$captured_oracle" || exit 2
+  (
+    unset CARGO_TARGET_DIR CARGO_BUILD_TARGET || exit 2
+    TMPDIR="$WORK/tmp symlink" MBX_GC_AUTO=0 GITHUB_SHA="$SOURCE_SHA" GITHUB_REPOSITORY=tailrocks/velnor-new \
+    PATH="$STUB_BIN:$MISE_ADAPTER_BIN:$ORIGINAL_PATH" VELNOR_TEST_CARGO_MARKER="$MARKER" \
+    VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
+    VELNOR_TEST_REAL_MISE="$REAL_MISE" VELNOR_TEST_ORIGINAL_PATH="$ORIGINAL_PATH" \
+    VELNOR_TEST_RUST_VERSION="$RUST_VERSION" \
+    VELNOR_TEST_MISE_CARGO_PATH="$MISE_CARGO_PATH" VELNOR_TEST_MISE_RECEIPT="$MISE_RECEIPT" \
+    VELNOR_GOLDEN_DIR="$captured_oracle" run_collector_guarded "$OPERATOR_GUARD_INPUT_PATH" capture "$CLI_BIN"
+  ) >"$log" 2>&1 || status=$?
+  if [ "$status" -ne 0 ]; then
+    cat "$log" >&2
+    echo "FAIL: guarded capture did not reproduce the complete five-case oracle (exit $status)" >&2
+    exit 1
+  fi
+  if ! cmp "$GOLDEN_DIR/MANIFEST.sha256" "$captured_oracle/MANIFEST.sha256" \
+    >"$WORK/guarded-capture.diff" 2>&1 \
+    || ! diff -r "$GOLDEN_DIR/cases" "$captured_oracle/cases" \
+      >>"$WORK/guarded-capture.diff" 2>&1; then
+    cat "$WORK/guarded-capture.diff" >&2
+    echo 'FAIL: guarded capture differs from the admitted manifest or case tree' >&2
+    exit 1
+  fi
+  after="$(golden_fingerprint)" || exit 2
+  if [ "$after" != "$BEFORE" ]; then
+    echo 'FAIL: guarded capture changed the independent admitted oracle' >&2
+    exit 1
+  fi
+  status=0
+  (
+    unset CARGO_TARGET_DIR CARGO_BUILD_TARGET || exit 2
+    TMPDIR="$WORK/tmp symlink" MBX_GC_AUTO=0 GITHUB_SHA="$SOURCE_SHA" GITHUB_REPOSITORY=tailrocks/velnor-new \
+    PATH="$STUB_BIN:$MISE_ADAPTER_BIN:$ORIGINAL_PATH" VELNOR_TEST_CARGO_MARKER="$MARKER" \
+    VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
+    VELNOR_TEST_REAL_MISE="$REAL_MISE" VELNOR_TEST_ORIGINAL_PATH="$ORIGINAL_PATH" \
+    VELNOR_TEST_RUST_VERSION="$RUST_VERSION" \
+    VELNOR_TEST_MISE_CARGO_PATH="$MISE_CARGO_PATH" VELNOR_TEST_MISE_RECEIPT="$MISE_RECEIPT" \
+    VELNOR_GOLDEN_DIR="$captured_oracle" run_collector_guarded "$OPERATOR_GUARD_INPUT_PATH" check "$CLI_BIN"
+  ) >"$WORK/guarded-check.log" 2>&1 || status=$?
+  if [ "$status" -ne 0 ] || ! grep -Fq 'ALL GOLDENS MATCH' "$WORK/guarded-check.log"; then
+    cat "$WORK/guarded-check.log" >&2
+    echo "FAIL: guarded repeat-check did not match the captured oracle (exit $status)" >&2
+    exit 1
+  fi
+  echo 'passed guarded capture and repeat-check against the independent five-case oracle'
+}
+
+expect_release_metadata_denied() {
+  local denied_guard="$WORK/deny operator metadata guard" denied_output="$WORK/denied capture"
+  local status=0 log="$WORK/metadata-denied.log"
+  cat >"$denied_guard" <<'DENY'
+#!/usr/bin/env bash
+exit 77
+DENY
+  chmod 700 "$denied_guard" || exit 2
+  mkdir -p "$denied_output" || exit 2
+  (
+    unset CARGO_TARGET_DIR CARGO_BUILD_TARGET || exit 2
+    TMPDIR="$WORK/tmp symlink" MBX_GC_AUTO=0 GITHUB_SHA="$SOURCE_SHA" GITHUB_REPOSITORY=tailrocks/velnor-new \
+    PATH="$STUB_BIN:$MISE_ADAPTER_BIN:$ORIGINAL_PATH" VELNOR_TEST_CARGO_MARKER="$MARKER" \
+    VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
+    VELNOR_TEST_REAL_MISE="$REAL_MISE" VELNOR_TEST_ORIGINAL_PATH="$ORIGINAL_PATH" \
+    VELNOR_TEST_RUST_VERSION="$RUST_VERSION" \
+    VELNOR_TEST_MISE_CARGO_PATH="$MISE_CARGO_PATH" VELNOR_TEST_MISE_RECEIPT="$MISE_RECEIPT" \
+    VELNOR_GOLDEN_DIR="$denied_output" run_collector_guarded "$denied_guard" capture "$CLI_BIN"
+  ) >"$log" 2>&1 || status=$?
+  if [ "$status" -eq 0 ] || ! grep -Fq 'operator toolchain guard rejected metadata' "$log"; then
+    cat "$log" >&2
+    echo "FAIL: denied metadata capture did not fail through the operator guard (exit $status)" >&2
+    exit 1
+  fi
+  if [ -e "$denied_output/MANIFEST.sha256" ] || [ -e "$denied_output/cases" ]; then
+    echo 'FAIL: denied metadata capture published a partial golden manifest or corpus' >&2
+    exit 1
+  fi
+  echo 'passed denied metadata capture without a golden manifest'
+}
+
+expect_release_fetch_denied() {
+  local denied_guard="$WORK/deny dogfood fetch guard"
+  local status=0 log="$WORK/fetch-denied.log" after
+  cat >"$denied_guard" <<'DENY'
+#!/usr/bin/env bash
+set -u
+real_guard="${VELNOR_TEST_FETCH_REAL_GUARD:-}"
+if [[ "$real_guard" != /* || ! -x "$real_guard" ]]; then exit 125; fi
+previous=''
+for argument in "$@"; do
+  if [ "$previous" = cargo ] && [ "$argument" = fetch ]; then exit 77; fi
+  previous="$argument"
+done
+exec "$real_guard" "$@"
+DENY
+  chmod 700 "$denied_guard" || exit 2
+  : >"$MISE_RECEIPT"
+  (
+    unset CARGO_TARGET_DIR CARGO_BUILD_TARGET || exit 2
+    TMPDIR="$WORK/tmp symlink" MBX_GC_AUTO=0 GITHUB_SHA="$SOURCE_SHA" GITHUB_REPOSITORY=tailrocks/velnor-new \
+    PATH="$STUB_BIN:$MISE_ADAPTER_BIN:$ORIGINAL_PATH" VELNOR_TEST_CARGO_MARKER="$MARKER" \
+    VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
+    VELNOR_TEST_REAL_MISE="$REAL_MISE" VELNOR_TEST_ORIGINAL_PATH="$ORIGINAL_PATH" \
+    VELNOR_TEST_RUST_VERSION="$RUST_VERSION" \
+    VELNOR_TEST_FETCH_REAL_GUARD="$VELNOR_TEST_CARGO_GUARD" \
+    VELNOR_TEST_MISE_CARGO_PATH="$MISE_CARGO_PATH" VELNOR_TEST_MISE_RECEIPT="$MISE_RECEIPT" \
+    run_collector_guarded "$denied_guard" check-release "$CLI_BIN" \
+      "$WORK/tmp symlink/valid manifest.json" \
+      "$(test_file_sha256 "$WORK/tmp symlink/valid manifest.json")"
+  ) >"$log" 2>&1 || status=$?
+  if [ "$status" -eq 0 ] || ! grep -Fq 'could not fetch dogfood cargo sources' "$log"; then
+    cat "$log" >&2
+    echo "FAIL: dogfood fetch denial did not stop public check-release (exit $status)" >&2
+    exit 1
+  fi
+  after="$(golden_fingerprint)" || exit 2
+  if [ "$after" != "$BEFORE" ]; then
+    echo 'FAIL: denied dogfood fetch changed the admitted golden oracle' >&2
+    exit 1
+  fi
+  echo 'passed check-release dogfood fetch denial without changing the admitted oracle'
+}
+
+expect_collector_guard_preflight_rejected() {
+  local label="$1" guard="$2" expected="$3" output="$WORK/$1 output"
+  local status=0 log="$WORK/$label.log"
+  mkdir -p "$output" || exit 2
+  rm -f "$MARKER"
+  (
+    unset CARGO_TARGET_DIR CARGO_BUILD_TARGET || exit 2
+    PATH="$STUB_BIN:$MISE_ADAPTER_BIN:$ORIGINAL_PATH" \
+      VELNOR_TEST_CARGO_MARKER="$MARKER" VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
+      VELNOR_GOLDEN_DIR="$output" run_collector_guarded "$guard" capture "$CLI_BIN"
+  ) >"$log" 2>&1 || status=$?
+  if [ "$status" -eq 0 ] || ! grep -Fq "$expected" "$log"; then
+    cat "$log" >&2
+    echo "FAIL: collector did not reject $label before capture (exit $status)" >&2
+    exit 1
+  fi
+  if [ -e "$output/MANIFEST.sha256" ] || [ -e "$output/cases" ] || [ -e "$MARKER" ]; then
+    echo "FAIL: collector $label rejection wrote artifacts or invoked the implicit build" >&2
+    exit 1
+  fi
+  echo "passed collector guard preflight rejection: $label"
+}
+
+expect_collector_guard_requires_explicit_binary() {
+  local output="$WORK/guard without binary output" status=0 log="$WORK/guard-without-binary.log"
+  mkdir -p "$output" || exit 2
+  rm -f "$MARKER"
+  (
+    unset CARGO_TARGET_DIR CARGO_BUILD_TARGET || exit 2
+    PATH="$STUB_BIN:$MISE_ADAPTER_BIN:$ORIGINAL_PATH" \
+      VELNOR_TEST_CARGO_MARKER="$MARKER" VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
+      VELNOR_GOLDEN_DIR="$output" run_collector_guarded "$OPERATOR_GUARD_INPUT_PATH" capture
+  ) >"$log" 2>&1 || status=$?
+  if [ "$status" -eq 0 ] \
+    || ! grep -Fq 'operator toolchain guard requires an explicit CLI binary' "$log"; then
+    cat "$log" >&2
+    echo "FAIL: guarded collector accepted a missing explicit CLI binary (exit $status)" >&2
+    exit 1
+  fi
+  if [ -e "$output/MANIFEST.sha256" ] || [ -e "$output/cases" ] || [ -e "$MARKER" ]; then
+    echo 'FAIL: guarded collector without a CLI binary wrote artifacts or invoked the implicit build' >&2
+    exit 1
+  fi
+  echo 'passed guarded collector explicit-binary preflight'
 }
 
 expect_release_rejected() {
@@ -808,6 +1044,17 @@ if [ "${VELNOR_TEST_QUALIFICATION_OUTPUT_ONLY:-0}" = 1 ]; then
   exit 0
 fi
 expect_release_check_match "$WORK/tmp symlink/valid manifest.json"
+if [ "$SEEN_OPERATOR_GUARD" -eq 1 ]; then
+  expect_release_check_match "$WORK/tmp symlink/valid manifest.json" "$OPERATOR_GUARD_INPUT_PATH"
+  expect_guarded_capture_match
+  expect_release_metadata_denied
+  expect_release_fetch_denied
+  expect_collector_guard_preflight_rejected relative-operator-guard relative-guard \
+    'operator toolchain guard requires an absolute path'
+  expect_collector_guard_preflight_rejected missing-operator-guard "$WORK/missing operator guard" \
+    'operator toolchain guard requires an executable regular file'
+  expect_collector_guard_requires_explicit_binary
+fi
 SCRIPT="$OUTPUT_BINDING_SCRIPT"
 run_candidate_output_binding_tests "$BEFORE" || exit $?
 SCRIPT="$SCRIPT_WITH_GUARD"
