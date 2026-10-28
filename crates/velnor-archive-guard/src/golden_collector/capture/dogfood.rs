@@ -4,7 +4,6 @@
 use std::fs;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
-use std::process::Command;
 
 use super::super::{CollectorError, filesystem};
 use super::Context;
@@ -101,7 +100,7 @@ fn run_candidate(
     out: &Path,
     name: &str,
 ) -> Result<BoundedCommandOutput, CollectorError> {
-    let mut command = Command::new(context.cli);
+    let mut command = context.cli.command();
     command.current_dir(context.root);
     if operation == "plan" {
         command.arg("plan");
@@ -112,8 +111,8 @@ fn run_candidate(
         }
     }
     context
-        .guard
-        .run_candidate(context.root, &mut command, |result| {
+        .cli
+        .run_candidate(context.guard, context.root, &mut command, |result| {
             output::persist_result(raw, name, out, result)
         })
 }

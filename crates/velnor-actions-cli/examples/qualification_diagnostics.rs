@@ -6,6 +6,9 @@
     reason = "documentation comments are intentionally absent from this codebase"
 )]
 
+#[path = "qualification_diagnostics/executable.rs"]
+mod executable;
+
 include!("../src/entry.rs");
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -21,14 +24,27 @@ enum DiagnosticsMode {
     ReplaceCopiedGuardThenSleep,
     ChangeCopiedSourceThenStderrOverflow,
     StdoutOverflow,
+    ReplaceOriginalAfterNestedPlan,
+    ReplaceCurrentAfterVersion,
+    ReplaceCurrentAfterNestedPlan,
 }
 
 fn main() -> ExitCode {
+    let mode_value = std::env::var("VELNOR_PLAN_DIAGNOSTICS_MODE").ok();
+    if mode_value.as_deref() == Some("replace-current-after-version") && is_version_command() {
+        return executable::run_version_then_replace_current();
+    }
     let outcome = run_entry();
-    if outcome != ExitCode::SUCCESS || !is_plan_command() {
+    if outcome != ExitCode::SUCCESS {
         return outcome;
     }
-    let Some(mode_value) = std::env::var("VELNOR_PLAN_DIAGNOSTICS_MODE").ok() else {
+    if is_version_command() {
+        return outcome;
+    }
+    if !is_plan_command() {
+        return outcome;
+    }
+    let Some(mode_value) = mode_value else {
         return outcome;
     };
     let Some(mode) = DiagnosticsMode::parse(&mode_value) else {
@@ -37,7 +53,14 @@ fn main() -> ExitCode {
     if let Err(exit) = emit_plan_diagnostics(mode) {
         return exit;
     }
-    if mutate_after_plan(mode).is_err() {
+    if let Err(error) = mutate_after_plan(mode) {
+        if matches!(
+            mode,
+            DiagnosticsMode::ReplaceOriginalAfterNestedPlan
+                | DiagnosticsMode::ReplaceCurrentAfterNestedPlan
+        ) {
+            eprintln!("qualification diagnostics replacement failed: {error}");
+        }
         return ExitCode::from(56);
     }
     if let Err(exit) = run_after_plan(mode) {
@@ -62,6 +85,9 @@ impl DiagnosticsMode {
                 Some(Self::ChangeCopiedSourceThenStderrOverflow)
             }
             "stdout-overflow" => Some(Self::StdoutOverflow),
+            "replace-original-after-nested-plan" => Some(Self::ReplaceOriginalAfterNestedPlan),
+            "replace-current-after-version" => Some(Self::ReplaceCurrentAfterVersion),
+            "replace-current-after-nested-plan" => Some(Self::ReplaceCurrentAfterNestedPlan),
             _ => None,
         }
     }
@@ -74,11 +100,24 @@ fn is_plan_command() -> bool {
     args.len() == 2 && args.nth(1).as_deref() == Some(OsStr::new("plan"))
 }
 
+fn is_version_command() -> bool {
+    use std::ffi::OsStr;
+
+    let mut args = std::env::args_os();
+    args.len() == 2 && args.nth(1).as_deref() == Some(OsStr::new("--version"))
+}
+
 fn emit_plan_diagnostics(mode: DiagnosticsMode) -> Result<(), ExitCode> {
     use std::ffi::OsStr;
     use std::path::Path;
 
-    if mode == DiagnosticsMode::Quiet {
+    if matches!(
+        mode,
+        DiagnosticsMode::Quiet
+            | DiagnosticsMode::ReplaceOriginalAfterNestedPlan
+            | DiagnosticsMode::ReplaceCurrentAfterVersion
+            | DiagnosticsMode::ReplaceCurrentAfterNestedPlan
+    ) {
         return Ok(());
     }
     let Some(root) = std::env::current_dir()
@@ -119,7 +158,10 @@ fn emit_plan_diagnostics(mode: DiagnosticsMode) -> Result<(), ExitCode> {
         | DiagnosticsMode::ChangeCopiedSource
         | DiagnosticsMode::ReplaceCopiedGuardThenSleep
         | DiagnosticsMode::ChangeCopiedSourceThenStderrOverflow
-        | DiagnosticsMode::StdoutOverflow => false,
+        | DiagnosticsMode::StdoutOverflow
+        | DiagnosticsMode::ReplaceOriginalAfterNestedPlan
+        | DiagnosticsMode::ReplaceCurrentAfterVersion
+        | DiagnosticsMode::ReplaceCurrentAfterNestedPlan => false,
     };
     if emit_warning {
         eprintln!("warning: plan-diagnostic-regression");
@@ -140,6 +182,8 @@ fn mutate_after_plan(mode: DiagnosticsMode) -> std::io::Result<()> {
             | DiagnosticsMode::ChangeCopiedSource
             | DiagnosticsMode::ReplaceCopiedGuardThenSleep
             | DiagnosticsMode::ChangeCopiedSourceThenStderrOverflow
+            | DiagnosticsMode::ReplaceOriginalAfterNestedPlan
+            | DiagnosticsMode::ReplaceCurrentAfterNestedPlan
     ) {
         return Ok(());
     }
@@ -147,7 +191,7 @@ fn mutate_after_plan(mode: DiagnosticsMode) -> std::io::Result<()> {
     if current.file_name() != Some(OsStr::new("nested")) {
         return Ok(());
     }
-    let root = private_mutation_root()?;
+    let root = executable::private_mutation_root()?;
     let source_root = std::env::var_os("VELNOR_PLAN_DIAGNOSTICS_ROOT")
         .map(std::path::PathBuf::from)
         .ok_or_else(|| std::io::Error::other("diagnostics source root is missing"))?
@@ -171,6 +215,8 @@ fn mutate_after_plan(mode: DiagnosticsMode) -> std::io::Result<()> {
             }
             change_copied_source(&root.join("Cargo.toml"), &root)
         }
+        DiagnosticsMode::ReplaceOriginalAfterNestedPlan => executable::replace_external_original(),
+        DiagnosticsMode::ReplaceCurrentAfterNestedPlan => executable::replace_current(),
         _ => Ok(()),
     }
 }
@@ -208,60 +254,6 @@ fn write_overflow(mut output: impl std::io::Write) -> Result<(), ExitCode> {
         output.write_all(&block).map_err(|_| ExitCode::from(56))?;
     }
     Ok(())
-}
-
-#[cfg(unix)]
-fn private_mutation_root() -> std::io::Result<std::path::PathBuf> {
-    use std::os::unix::fs::MetadataExt;
-    use std::path::{Path, PathBuf};
-
-    let requested = std::env::var_os("VELNOR_PLAN_DIAGNOSTICS_MUTATION_ROOT")
-        .map(PathBuf::from)
-        .ok_or_else(|| std::io::Error::other("diagnostics mutation root is missing"))?;
-    if !requested.is_absolute() {
-        return Err(std::io::Error::other(
-            "diagnostics mutation root must be absolute",
-        ));
-    }
-    let metadata = std::fs::symlink_metadata(&requested)?;
-    let root = std::fs::canonicalize(&requested)?;
-    if !metadata.file_type().is_dir()
-        || root != requested
-        || metadata.uid() != rustix::process::geteuid().as_raw()
-        || metadata.mode() & 0o077 != 0
-    {
-        return Err(std::io::Error::other(
-            "diagnostics mutation root must be a private real directory owned by the current user",
-        ));
-    }
-    let manifest = std::fs::canonicalize(env!("CARGO_MANIFEST_DIR"))?;
-    let workspace = manifest
-        .parent()
-        .and_then(Path::parent)
-        .ok_or_else(|| std::io::Error::other("CLI workspace root is missing"))?;
-    let executable = std::env::current_exe()?.canonicalize()?;
-    let target = std::env::var_os("CARGO_TARGET_DIR")
-        .map(PathBuf::from)
-        .map(std::fs::canonicalize)
-        .transpose()?;
-    if overlaps(&root, workspace)
-        || executable
-            .parent()
-            .is_some_and(|path| overlaps(&root, path))
-        || target.as_deref().is_some_and(|path| overlaps(&root, path))
-    {
-        return Err(std::io::Error::other(
-            "diagnostics mutation root overlaps the checkout or a build artifact",
-        ));
-    }
-    Ok(root)
-}
-
-#[cfg(not(unix))]
-fn private_mutation_root() -> std::io::Result<std::path::PathBuf> {
-    Err(std::io::Error::other(
-        "diagnostics filesystem faults require Unix ownership checks",
-    ))
 }
 
 #[cfg(unix)]
@@ -365,9 +357,4 @@ fn owned_regular_file(
         ));
     }
     Ok(metadata)
-}
-
-#[cfg(unix)]
-fn overlaps(left: &std::path::Path, right: &std::path::Path) -> bool {
-    left.starts_with(right) || right.starts_with(left)
 }

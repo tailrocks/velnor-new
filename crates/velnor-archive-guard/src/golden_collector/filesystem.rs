@@ -140,17 +140,6 @@ pub(super) fn tree_hash(tree: &Tree) -> Vec<u8> {
     output
 }
 
-pub(super) fn sha256_file(path: &Path) -> Result<String, CollectorError> {
-    let metadata = fs::symlink_metadata(path).map_err(CollectorError::operational)?;
-    if !metadata.file_type().is_file() {
-        return Err(CollectorError::operational(
-            "expected a regular non-symlink file",
-        ));
-    }
-    let bytes = read_regular(path, &metadata)?;
-    Ok(hex(&Sha256::digest(bytes)))
-}
-
 pub(super) fn hex(bytes: &[u8]) -> String {
     const DIGITS: &[u8; 16] = b"0123456789abcdef";
     let mut output = String::with_capacity(bytes.len() * 2);

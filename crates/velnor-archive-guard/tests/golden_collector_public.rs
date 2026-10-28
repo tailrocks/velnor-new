@@ -8,6 +8,8 @@ use std::process::Command;
 
 #[path = "golden_collector_public/bounded.rs"]
 mod bounded;
+#[path = "golden_collector_public/executable_custody.rs"]
+mod executable_custody;
 #[path = "golden_collector_public/mutation.rs"]
 mod mutation;
 #[path = "golden_collector_public/support.rs"]

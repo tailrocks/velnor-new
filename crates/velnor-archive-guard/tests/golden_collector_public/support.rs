@@ -107,7 +107,8 @@ impl Harness {
             .env_remove("VELNOR_GOLDEN_KEEP_WORK")
             .env_remove("VELNOR_PLAN_DIAGNOSTICS_MODE")
             .env_remove("VELNOR_PLAN_DIAGNOSTICS_ROOT")
-            .env_remove("VELNOR_PLAN_DIAGNOSTICS_MUTATION_ROOT");
+            .env_remove("VELNOR_PLAN_DIAGNOSTICS_MUTATION_ROOT")
+            .env_remove("VELNOR_PLAN_DIAGNOSTICS_EXECUTABLE_TARGET");
         if let Some(golden_dir) = golden_dir {
             command.env("VELNOR_GOLDEN_DIR", golden_dir);
         }

@@ -3,6 +3,7 @@
 
 mod case;
 mod dogfood;
+mod executable;
 mod fixture_git;
 mod golden_manifest;
 mod manifest;
@@ -12,13 +13,13 @@ use std::env;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use tempfile::Builder;
 
+use self::executable::Executable;
 use super::filesystem;
 use super::guard::Guard;
-use super::{Arguments, CollectorError, binary_format};
+use super::{Arguments, CollectorError};
 
 const FIXTURES: [&str; 4] = ["nested", "mbx-nextest", "empty-suite", "minimal-cargo"];
 
@@ -30,7 +31,7 @@ pub(super) enum Mode {
 
 struct Context<'a> {
     root: &'a Path,
-    cli: &'a Path,
+    cli: &'a Executable,
     guard: &'a Guard,
     workspace: &'a Path,
     version: &'a str,
@@ -41,7 +42,7 @@ struct Context<'a> {
 struct WorkspaceRun<'a> {
     mode: Mode,
     root: &'a Path,
-    cli: &'a Path,
+    cli: &'a Executable,
     golden_dir: &'a Path,
     guard: &'a Guard,
     workspace: &'a Path,
@@ -51,7 +52,7 @@ struct WorkspaceRun<'a> {
 
 pub(super) fn run(args: Arguments) -> Result<(), CollectorError> {
     let root = fs::canonicalize(args.root).map_err(CollectorError::operational)?;
-    let cli = validate_cli(args.cli)?;
+    let cli_path = validate_cli(args.cli)?;
     let golden_dir = golden_dir(&root)?;
     let guard = Guard::admit(
         args.guard,
@@ -60,21 +61,16 @@ pub(super) fn run(args: Arguments) -> Result<(), CollectorError> {
         args.command_timeout,
         args.output_cap_bytes,
     )?;
-    let cli_sha256 = filesystem::sha256_file(&cli)?;
-    let target = {
-        let mut binary = fs::File::open(&cli).map_err(CollectorError::operational)?;
-        let size = binary
-            .metadata()
-            .map_err(CollectorError::operational)?
-            .len();
-        binary_format::target(&mut binary, size).map_err(CollectorError::operational)?
-    };
     let keep = keep_work()?;
     let temp = Builder::new()
         .prefix("velnor-goldens-work.")
+        .permissions(fs::Permissions::from_mode(0o700))
         .tempdir()
         .map_err(CollectorError::operational)?;
     let workspace = fs::canonicalize(temp.path()).map_err(CollectorError::operational)?;
+    let cli = Executable::admit(&cli_path, &workspace)?;
+    let target = cli.target();
+    let cli_sha256 = cli.sha256();
     let result = run_in_workspace(&WorkspaceRun {
         mode: args.mode,
         root: &root,
@@ -83,7 +79,7 @@ pub(super) fn run(args: Arguments) -> Result<(), CollectorError> {
         guard: &guard,
         workspace: &workspace,
         target,
-        cli_sha256: &cli_sha256,
+        cli_sha256,
     });
     if let Err(error) = result {
         retain(temp);
@@ -245,12 +241,14 @@ fn check_goldens(golden_dir: &Path, stage: &Path) -> Result<(), CollectorError> 
 fn candidate_version(
     guard: &Guard,
     root: &Path,
-    cli: &Path,
+    cli: &Executable,
     workspace: &Path,
 ) -> Result<String, CollectorError> {
     let raw = workspace.join("raw/version");
     fs::create_dir_all(&raw).map_err(CollectorError::operational)?;
-    let output = guard.run_candidate(root, Command::new(cli).arg("--version"), |result| {
+    let mut command = cli.command();
+    command.arg("--version");
+    let output = cli.run_candidate(guard, root, &mut command, |result| {
         output::persist_result(&raw, "version", &raw, result)
     })?;
     if output.status != velnor_actions_mise::BoundedCommandStatus::Exited(0) {

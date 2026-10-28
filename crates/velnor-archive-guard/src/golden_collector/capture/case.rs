@@ -91,15 +91,15 @@ fn run_candidate(
     out: &Path,
     name: &str,
 ) -> Result<BoundedCommandOutput, CollectorError> {
-    let mut command = Command::new(context.cli);
+    let mut command = context.cli.command();
     command.current_dir(repo).args(args);
     if let Some(path) = final_arg {
         command.arg(path);
     }
     fixture_git::isolate_git_environment(&mut command);
     context
-        .guard
-        .run_candidate(context.root, &mut command, |output| {
+        .cli
+        .run_candidate(context.guard, context.root, &mut command, |output| {
             output::persist_result(raw, name, out, output)
         })
 }

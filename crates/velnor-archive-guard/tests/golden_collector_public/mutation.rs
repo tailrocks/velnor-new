@@ -16,8 +16,20 @@ pub(super) fn copy_mutation_repository(
     destination: &Path,
 ) -> Result<(), Box<dyn Error>> {
     copy_fingerprint_inputs(source, destination)?;
-    for directory in [".github", ".velnor", "crates", "fixtures", "scripts"] {
+    for directory in [
+        ".config", ".github", ".velnor", "crates", "fixtures", "images", "scripts",
+    ] {
         copy_tree(&source.join(directory), &destination.join(directory))?;
+    }
+    for file in [
+        ".mise/tasks/test",
+        "docs/implemented/repo-verification.md",
+        "docs/proposed/rust-quality-contract.md",
+    ] {
+        let input = source.join(file);
+        let output = destination.join(file);
+        fs::create_dir_all(output.parent().ok_or("fixture file has no parent")?)?;
+        fs::copy(input, output)?;
     }
     for file in [
         ".gitignore",
