@@ -684,7 +684,7 @@ inputs = [
   "scripts/verify-local.sh",
   "scripts/owned_archive_preflight.py",
 ]
-tools = ["cargo-nextest", "rust"]
+tools = ["cargo-nextest", "jactionlint-linux-x64", "rust", "shellcheck-linux-x64"]
 timeout_minutes = 5
 [checks.runner]
 label = "ubuntu-26.04"
@@ -711,6 +711,25 @@ sha256 = "62dcc4348e189f5fbd5881f6b753c59d62f2e664b28c6357898644288d703c02"
 probe = { kind = "cargo_nextest_version", expected = "cargo-nextest 0.9.150 (d225b1daf 2026-10-26)" }
 
 [[qualified_tools]]
+id = "jactionlint-linux-x64"
+backend = { kind = "aqua", package = "jdx/jactionlint" }
+version = "2.3.0"
+options = { kind = "default" }
+depends_on = []
+[[qualified_tools.platforms]]
+platform = "linux_x64"
+artifacts = [
+  { url = "https://github.com/jdx/jactionlint/releases/download/v2.3.0/jactionlint_2.3.0_linux_amd64.tar.gz", sha256 = "907e6f6a59e181879f7e6936e19ee2eca1cbc51de134fb85460cfa8d65a71f28" },
+]
+dependency_artifacts = []
+install_tree_sha256 = "c24a9c88693262944ab6b94845adb7bbd780aefa868e96cc29691eef2bba0265"
+[[qualified_tools.platforms.executables]]
+name = "jactionlint"
+path = "jactionlint"
+sha256 = "3566633b33780130c5bea5342ad8c5505092e40094c7d6e25ee74e382899a5c7"
+probe = { kind = "version", expected = "2.3.0" }
+
+[[qualified_tools]]
 id = "rust"
 backend = { kind = "core", tool = "rust" }
 version = "1.99.1"
@@ -735,3 +754,22 @@ name = "rustc"
 path = "bin/rustc"
 sha256 = "b53b780f77f952062f8ca8a3b70aef2390b1e45ad91939be94afdc9543026853"
 probe = { kind = "rustc_verbose", expected = "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1" }
+
+[[qualified_tools]]
+id = "shellcheck-linux-x64"
+backend = { kind = "aqua", package = "koalaman/shellcheck" }
+version = "0.11.0"
+options = { kind = "default" }
+depends_on = []
+[[qualified_tools.platforms]]
+platform = "linux_x64"
+artifacts = [
+  { url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz", sha256 = "8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198" },
+]
+dependency_artifacts = []
+install_tree_sha256 = "7749409e35f099392243174fb0f8d90619339f3b1f81643901df731cfda31fe2"
+[[qualified_tools.platforms.executables]]
+name = "shellcheck"
+path = "shellcheck"
+sha256 = "4da528ddb3a4d1b7b24a59d4e16eb2f5fd960f4bd9a3708a15baddbdf1d5a55b"
+probe = { kind = "shellcheck_version", expected = "ShellCheck - shell script analysis tool\nversion: 0.11.0\nlicense: GNU General Public License, version 3\nwebsite: https://www.shellcheck.net" }
