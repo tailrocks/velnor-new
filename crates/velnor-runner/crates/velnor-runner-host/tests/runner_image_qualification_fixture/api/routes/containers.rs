@@ -90,8 +90,12 @@ fn create_container(request: &Request, state: &mut State) -> Reply {
             .with_delay(delay)
             .with_deferred_mutation(DeferredMutation::Container(container));
     }
+    let is_dind = container.role == "dind";
     state.created.push(evidence(&container));
     state.containers.insert(id.clone(), container);
+    if let Some(reply) = unsettled_dind_reply(state, is_dind, &id, &name) {
+        return reply;
+    }
     if state.take_fault(ApiFault::LoseContainerCreateResponse) {
         return Reply::bytes(500, Vec::new()).disconnect();
     }
@@ -101,6 +105,24 @@ fn create_container(request: &Request, state: &mut State) -> Reply {
     } else {
         reply
     }
+}
+
+fn unsettled_dind_reply(state: &mut State, is_dind: bool, id: &str, name: &str) -> Option<Reply> {
+    if !is_dind {
+        return None;
+    }
+    let fault = [
+        ApiFault::OwnedUnsettledDindCreate,
+        ApiFault::OwnedUnsettledDindRemovalFailure,
+    ]
+    .into_iter()
+    .any(|fault| state.take_fault(fault));
+    if !fault {
+        return None;
+    }
+    state.pending_mutations += 1;
+    state.pending_identities.push(format!("container {name}"));
+    Some(Reply::json(201, &json!({"Id": id, "Warnings": []})).with_delay(Duration::from_secs(60)))
 }
 
 fn inspect_container(path: &str, state: &mut State) -> Reply {
@@ -256,6 +278,14 @@ fn remove_container(path: &str, state: &mut State) -> Reply {
     let Some(id) = path_id(path, "containers/", "") else {
         return missing("container");
     };
+    if state.plan.fault == Some(ApiFault::OwnedUnsettledDindRemovalFailure)
+        && state
+            .containers
+            .get(&id)
+            .is_some_and(|container| container.role == "dind")
+    {
+        return server_error();
+    }
     if state.take_fault(ApiFault::CleanupNotFound) {
         state.containers.remove(&id);
         return missing("container");

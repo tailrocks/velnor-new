@@ -7,6 +7,8 @@ mod extended;
 mod fixture;
 #[path = "runner_image_qualification_public/support.rs"]
 mod support;
+#[path = "runner_image_qualification_public/uncertain_cleanup.rs"]
+mod uncertain_cleanup;
 
 use std::error::Error;
 use std::time::Duration;
@@ -125,12 +127,27 @@ fn public_qualifier_rejects_wrong_daemon_relationships_and_changes() -> TestResu
         let (output, state) = qualify(&git, git.source_sha(), plan)?;
         assert_failed_and_cleaned(&output, &state);
     }
-    for change in [OuterMutation::Id, OuterMutation::Root] {
+    for change in [
+        OuterMutation::Id,
+        OuterMutation::Root,
+        OuterMutation::Version,
+    ] {
         let git = GitFixture::new()?;
         let mut plan = ApiPlan::new(git.source_sha());
         plan.outer_mutation = change;
+        plan.foreign_sentinel = true;
         let (output, state) = qualify(&git, git.source_sha(), plan)?;
-        assert_failed_and_cleaned(&output, &state);
+        assert!(!output.status.success());
+        assert!(!String::from_utf8_lossy(&output.stdout).contains("qualified_runner_image_id"));
+        assert!(state.fault_reached);
+        assert_eq!(state.outer_info_calls, 2);
+        assert!(state.foreign_container_present && state.foreign_volume_present);
+        assert_eq!(state.containers.len(), 1);
+        assert_eq!(state.containers[0].name, "foreign-sentinel");
+        assert_eq!(state.volumes, ["foreign-sentinel"]);
+        assert_eq!(state.images.len(), 2);
+        assert!(state.images.contains(&digest_id('a')));
+        assert!(state.images.contains(&digest_id('b')));
     }
     let git = GitFixture::new()?;
     let mut plan = ApiPlan::new(git.source_sha());

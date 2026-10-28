@@ -127,3 +127,26 @@ queries have matching guard admission and explicit MBX execution receipts.
 Immutable release acceptance remains a separate gate for this final repair.
 Protected merge, immutable SDK publication, Tap adoption, and binary
 installation remain separate acceptance gates.
+
+The P2 review after SDK66 found an instruction-source duplication defect: seed
+authoring fetched and verified protected `AGENTS.md`, then wrote those bytes to
+regular `CLAUDE.md`, while candidate validation accepted the same body. SDK67
+now emits `@AGENTS.md` followed by one newline as regular mode `100644`;
+candidate validation requires those exact bytes and the `CLAUDE.md` type change.
+Protected `AGENTS.md` reads, blob checks, and unchanged tree identity remain.
+Candidate transport still rejects symlinks. The candidate contract now takes
+only candidate `CLAUDE.md` bytes and adds no source-hash requirement.
+
+The earlier public candidate fixture encoded the copied body as its only
+positive case. Its replacement checks an independent literal import, rejects
+the old copied body, and preserves the inventory, source-identity, mode, and
+byte-mismatch cases. The import failed against the old contract with
+`homebrew_adoption_expected_bytes`, then all six seed scenarios passed after
+the repair. The full workspace run passed 438 tests with no skips; strict
+Clippy and Rustdoc passed, and the seed scenarios passed again after fixture
+lint cleanup. Two native generations and the applied 33-file tree match.
+All five CLI goldens match, including the ordinary `merge_group` workflow
+events. Their metadata queries retain matching guard and explicit MBX receipts.
+The transition requires SDK67 and binds digest
+`b3-187b6ff3096c2f3e0eeee555b8642a10e8ccada39cad7b30a241235ec27623f1`;
+the published SDK66 controller and generator lock remain unchanged.

@@ -33,9 +33,9 @@ pub(super) fn author(
         crate::safe_read::read_event_file(manifest_path, MAX_SDK_MANIFEST_BYTES)?.into_bytes();
     let sdk = authenticate_sdk(&transition, &manifest_bytes, deadline)?;
     let base_sha = protected_base_tip(&transition, deadline)?;
-    let (files_by_path, claude) = read_seed_base(&transition, &base_sha, deadline)?;
+    let files_by_path = read_seed_base(&transition, &base_sha, deadline)?;
     ensure_locator_absent(&transition, &base_sha, &files_by_path, deadline)?;
-    let files = render_seed_files(&transition, &sdk, &manifest_bytes, claude)?;
+    let files = render_seed_files(&transition, &sdk, &manifest_bytes)?;
     ensure_base_tip(&transition, &base_sha, deadline)?;
     output::write_overlay(
         &parent,
@@ -68,7 +68,7 @@ fn read_seed_base(
     transition: &HomebrewAdoptionTransition,
     base_sha: &str,
     deadline: CheckDeadline,
-) -> Result<(VerifiedBaseInventory, Vec<u8>), OrchestratorError> {
+) -> Result<VerifiedBaseInventory, OrchestratorError> {
     let symlink_sha =
         crate::release_policy_admission::git_blob_sha1(transition.claude_source_path.as_bytes())?;
     let tree = crate::package_release_publish::read_protected_adoption_seed_base_tree_identity(
@@ -93,7 +93,7 @@ fn read_seed_base(
     {
         return Err(internal("homebrew_adoption_claude_source_mismatch"));
     }
-    Ok((inventory, claude))
+    Ok(inventory)
 }
 
 pub(super) const MAX_TAP_AGENTS_BYTES: usize = MAX_CARGO_VERSION_MANIFEST_BYTES;
@@ -127,7 +127,6 @@ fn render_seed_files(
     transition: &HomebrewAdoptionTransition,
     sdk: &crate::homebrew::sdk_binding::PublishedSdkBindingIdentity,
     manifest_bytes: &[u8],
-    claude: Vec<u8>,
 ) -> Result<BTreeMap<String, (u32, Vec<u8>)>, OrchestratorError> {
     let locator_path =
         velnor_actions_contract::homebrew_authority::HOMEBREW_SOURCE_AUTHORITY_LOCATOR_PATH;
@@ -147,7 +146,15 @@ fn render_seed_files(
         .into_iter()
         .map(|file| (file.path, (0o100_644, file.bytes.into_bytes())))
         .collect::<BTreeMap<_, _>>();
-    files.insert("CLAUDE.md".to_owned(), (0o100_644, claude));
+    files.insert(
+        "CLAUDE.md".to_owned(),
+        (
+            0o100_644,
+            velnor_actions_contract::CLAUDE_MD_POINTER_BODY
+                .as_bytes()
+                .to_vec(),
+        ),
+    );
     files.insert(
         locator_path.to_owned(),
         (

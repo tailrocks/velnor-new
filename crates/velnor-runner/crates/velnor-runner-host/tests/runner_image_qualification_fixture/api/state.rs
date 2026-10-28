@@ -39,6 +39,7 @@ pub(crate) enum OuterMutation {
     None,
     Id,
     Root,
+    Version,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -49,6 +50,8 @@ pub(crate) enum ApiFault {
     LateContainerCreateReplacement,
     DisconnectThenLateContainerCreate,
     NeverSettleContainerCreate,
+    OwnedUnsettledDindCreate,
+    OwnedUnsettledDindRemovalFailure,
     LoseContainerCreateResponse,
     StallContainerStart,
     StallContainerInspect,

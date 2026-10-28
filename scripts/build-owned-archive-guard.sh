@@ -312,7 +312,9 @@ validate_local_cargo_closure() {
         case "$package_path" in
           /*)
             case "$package_path" in
-              "$repository/crates/velnor-archive-guard") ;;
+              "$repository/crates/velnor-archive-guard"|\
+                "$repository/crates/velnor-actions-mise"|\
+                "$repository/crates/velnor-actions-contract") ;;
               *) fail "local Cargo dependency is outside the source closure: $package_path" ;;
             esac
             ;;

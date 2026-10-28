@@ -18,7 +18,7 @@ impl HomebrewAdoptionTransition {
         let changes = change_map(input.changes)?;
         validate_change_set(self, &candidate, &changes)?;
         let locator = self.source_authority_locator.canonical_bytes()?;
-        if input.locator != locator || input.claude.1 != input.claude.0 {
+        if input.locator != locator || input.claude != crate::CLAUDE_MD_POINTER_BODY.as_bytes() {
             return Err(invalid("homebrew_adoption_expected_bytes"));
         }
         validate_generated_bytes(self, &input, &candidate, &changes, &locator)?;
@@ -189,7 +189,7 @@ fn validate_generated_bytes(
     locator: &[u8],
 ) -> Result<(), ContractError> {
     let mut expected = input.generated_files.clone();
-    expected.insert("CLAUDE.md".to_owned(), input.claude.0.to_vec());
+    expected.insert("CLAUDE.md".to_owned(), input.claude.to_vec());
     expected.insert(
         crate::homebrew_authority::HOMEBREW_SOURCE_AUTHORITY_LOCATOR_PATH.to_owned(),
         locator.to_vec(),
