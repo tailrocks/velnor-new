@@ -66,16 +66,16 @@ path = "tests/image_publication_public.rs"
 
 [dependencies]
 serde_json = { workspace = true }
-velnor-actions-orchestrator = { version = "=0.1.66", path = "../velnor-actions-orchestrator" }
-velnor-actions-freshness = { version = "=0.1.66", path = "../velnor-actions-freshness" }
+velnor-actions-orchestrator = { version = "=0.1.67", path = "../velnor-actions-orchestrator" }
+velnor-actions-freshness = { version = "=0.1.67", path = "../velnor-actions-freshness" }
 clap = { version = "=4.6.7", features = ["derive"] }
 
 [lints]
 workspace = true
 
 [dev-dependencies]
-velnor-actions-contract = { version = "=0.1.66", path = "../velnor-actions-contract" }
-velnor-actions-mise = { version = "=0.1.66", path = "../velnor-actions-mise" }
+velnor-actions-contract = { version = "=0.1.67", path = "../velnor-actions-contract" }
+velnor-actions-mise = { version = "=0.1.67", path = "../velnor-actions-mise" }
 proc-macro2 = "=1.0.107"
 flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
 rustix = { version = "=1.1.5", features = ["fs", "process"] }

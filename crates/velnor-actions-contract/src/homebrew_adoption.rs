@@ -113,7 +113,7 @@ pub struct HomebrewAdoptionCandidateInput<'a> {
 
     pub candidate_files: &'a [HomebrewAdoptionTreeFile],
 
-    pub claude: (&'a [u8], &'a [u8]),
+    pub claude: &'a [u8],
 
     pub locator: &'a [u8],
 
