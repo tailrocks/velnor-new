@@ -244,6 +244,7 @@ else
   echo "--- verify-local: generated-tree"
   if "${MISE_EXEC[@]}" cargo build --locked --message-format=json \
     -p velnor-actions-cli --bin velnor-actions --example qualification-diagnostics \
+    --example image-publication-fixture \
     >"$GENERATED_ARTIFACTS" \
     2>"$GENERATED_BUILD_LOG"; then
     BIN="$(VELNOR_REPO_POLICY_ACTION=artifact-executable \
@@ -269,9 +270,28 @@ else
       DIAGNOSTICS_FIXTURE=""
     fi
     export VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE="$DIAGNOSTICS_FIXTURE"
+    IMAGE_PUBLICATION_FIXTURE="$(env \
+      VELNOR_INTERNAL_OP=repo-policy-v1 \
+      VELNOR_REPO_POLICY_ACTION=artifact-executable \
+      VELNOR_REPO_POLICY_ROOT="$ROOT" \
+      VELNOR_REPO_POLICY_MESSAGES="$GENERATED_ARTIFACTS" \
+      VELNOR_REPO_POLICY_MANIFEST=crates/velnor-actions-cli/Cargo.toml \
+      VELNOR_REPO_POLICY_TARGET=image-publication-fixture \
+      VELNOR_REPO_POLICY_ARTIFACT_KIND=example \
+      "${MISE_EXEC[@]}" cargo run --quiet --locked -p velnor-actions-cli \
+        --bin velnor-actions 2>>"$GENERATED_BUILD_LOG")" || IMAGE_PUBLICATION_FIXTURE=""
+    case "$IMAGE_PUBLICATION_FIXTURE" in
+      /*) ;;
+      *) IMAGE_PUBLICATION_FIXTURE="" ;;
+    esac
+    if [ ! -x "$IMAGE_PUBLICATION_FIXTURE" ]; then
+      IMAGE_PUBLICATION_FIXTURE=""
+    fi
+    export VELNOR_IMAGE_PUBLICATION_FIXTURE="$IMAGE_PUBLICATION_FIXTURE"
     : >"$GENERATED_RUN_LOG"
     : >"$GENERATED_DIFF_LOG"
     if [ -n "$BIN" ] && [ -x "$BIN" ] && [ -n "$DIAGNOSTICS_FIXTURE" ] && \
+      [ -n "$IMAGE_PUBLICATION_FIXTURE" ] && \
       "$BIN" generate --output-dir "$GEN_DIR/tree" \
       >"$GENERATED_RUN_LOG" 2>&1 &&
       diff -r --brief .github "$GEN_DIR/tree/.github" \

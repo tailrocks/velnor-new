@@ -1173,6 +1173,10 @@ jobs:
       - *s25
       - *s35
       - &s51
+        name: Prepare image publication fixture
+        env: *m14
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; cd \"${GITHUB_WORKSPACE:?}\"; trap '\\''rm -f \"$RUNNER_TEMP/velnor-image-publication-fixture-artifacts.json\" \"$RUNNER_TEMP/velnor-image-publication-fixture-path.txt\"'\\'' EXIT; mise --no-config --no-env --no-hooks exec '\\''rust@'\\''\"'\"${VELNOR_TOOL_RUST}\"'\" -- mbx build --locked -p velnor-actions-cli --example image-publication-fixture --message-format=json > \"$RUNNER_TEMP/velnor-image-publication-fixture-artifacts.json\"; VELNOR_INTERNAL_OP=repo-policy-v1 VELNOR_REPO_POLICY_ACTION=artifact-executable VELNOR_REPO_POLICY_ROOT=\"$GITHUB_WORKSPACE\" VELNOR_REPO_POLICY_MESSAGES=\"$RUNNER_TEMP/velnor-image-publication-fixture-artifacts.json\" VELNOR_REPO_POLICY_MANIFEST=crates/velnor-actions-cli/Cargo.toml VELNOR_REPO_POLICY_TARGET=image-publication-fixture VELNOR_REPO_POLICY_ARTIFACT_KIND=example mise --no-config --no-env --no-hooks exec '\\''rust@'\\''\"'\"${VELNOR_TOOL_RUST}\"'\" -- mbx run --quiet --locked -p velnor-actions-cli --bin velnor-actions > \"$RUNNER_TEMP/velnor-image-publication-fixture-path.txt\"; IFS= read -r fixture < \"$RUNNER_TEMP/velnor-image-publication-fixture-path.txt\"; case \"$fixture\" in /*) test -x \"$fixture\"; printf '\\''VELNOR_IMAGE_PUBLICATION_FIXTURE=%s\\n'\\'' \"$fixture\" >> \"$GITHUB_ENV\" ;; *) printf '\\''%s\\n'\\'' '\\''Cargo did not select an absolute image publication fixture'\\'' >&2; exit 1 ;; esac'"
+      - &s52
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-ab62e76471dd3a534609e0633694a84768403d72dc4e3c6ace445b88c06d11a5"}
@@ -1195,7 +1199,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - &s52
+      - &s53
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1241,6 +1245,7 @@ jobs:
       - *s25
       - *s35
       - *s51
+      - *s52
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1260,7 +1265,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - *s52
+      - *s53
       - *s43
       - *s6
       - *s7
@@ -1297,7 +1302,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - &s53
+      - &s54
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-f82b0f31807be3966d2ae9e48a4e3f16588b3b6c32b311747f17907f1516dc20"}
@@ -1324,7 +1329,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - &s54
+      - &s55
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1366,7 +1371,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - *s53
+      - *s54
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1390,7 +1395,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - *s54
+      - *s55
       - *s32
   rust-velnor-actions-dbt-read:
     name: Rust / velnor-actions-dbt (read)
@@ -1424,7 +1429,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - &s55
+      - &s56
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-a70f8332da73579f2962dfbc7567b9f477486bf21bad31c0860e80fb7e1697f7"}
@@ -1447,7 +1452,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - &s56
+      - &s57
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1489,7 +1494,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - *s55
+      - *s56
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1509,7 +1514,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - *s56
+      - *s57
       - *s32
   rust-velnor-actions-gradle-read:
     name: Rust / velnor-actions-gradle (read)
@@ -1543,7 +1548,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - &s57
+      - &s58
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-b1e6b6b4f88b269006d665f7b5414f86dc6be29ceea687a69bd3a029cd48bbba"}
@@ -1566,7 +1571,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - &s58
+      - &s59
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1608,7 +1613,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - *s57
+      - *s58
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1628,7 +1633,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - *s58
+      - *s59
       - *s32
   rust-velnor-actions-mise-read:
     name: Rust / velnor-actions-mise (read)
@@ -1645,12 +1650,12 @@ jobs:
     steps:
       - *s1
       - *s3
-      - &s59
+      - &s60
         name: Resolve project tool versions
         env: *m12
         shell: /bin/bash --noprofile --norc -p -e -o pipefail {0}
         run: "function_env_unset=(); function_env_scan_complete=0; while IFS= read -r -d '' env_entry; do case \"$env_entry\" in BASH_FUNC_*=*) function_env_unset+=(-u \"${env_entry%%=*}\");; VELNOR_VERIFIER_ENV_SCAN_COMPLETE) function_env_scan_complete=$((function_env_scan_complete + 1));; esac; done < <({ /usr/bin/env -0 && printf '%s\\000' 'VELNOR_VERIFIER_ENV_SCAN_COMPLETE'; }); [ \"$function_env_scan_complete\" -eq 1 ] || exit 1; exec /usr/bin/env \"${function_env_unset[@]}\" -u BASH_ENV -u ENV -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR /bin/bash --noprofile --norc -p -e -o pipefail -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu\n: \"${GITHUB_ENV:?missing GITHUB_ENV}\"\n: \"${RUNNER_TEMP:?missing RUNNER_TEMP}\"\nvelnor_dir=\"$RUNNER_TEMP/velnor-project-tool\"\nvelnor_db=\"$velnor_dir/declared\"\nvelnor_tab=$(printf '\\''\\t'\\'')\nvelnor_safe() { printf '\\''%s'\\'' \"$1\" | cut -c1-64 | tr -c '\\''A-Za-z0-9._/@+-'\\'' '\\''?'\\''; }\nvelnor_fail() { printf '\\''velnor: %s\\n'\\'' \"$1\" >&2; exit 1; }\nvelnor_capture_physical_path() {\n  [ \"$#\" -eq 2 ] || return 1\n  (cd -P \"$1\" && pwd -P) > \"$2\" || return 1\n  resolved_path=\n  newline='\\''\n'\\''\n  while IFS= read -r path_line; do\n    resolved_path=$resolved_path$path_line\"$newline\"\n  done < \"$2\"\n  case \"$resolved_path\" in\n    *\"$newline\") resolved_path=${resolved_path%\"$newline\"} ;;\n    *) return 1 ;;\n  esac\n  printf '\\''%s\\n'\\'' \"$resolved_path\" > \"$2\" || return 1\n}; velnor_bind_selected_mise() { [ \"$#\" -eq 1 ] || return 5; mise_data_dir=${MISE_DATA_DIR-}; if [ -z \"$mise_data_dir\" ]; then if [ -n \"${XDG_DATA_HOME-}\" ]; then mise_data_dir=\"$XDG_DATA_HOME/mise\"; elif [ -n \"${HOME-}\" ]; then mise_data_dir=\"$HOME/.local/share/mise\"; else return 1; fi; fi; case \"$mise_data_dir\" in /*) ;; *) mise_data_dir=./$mise_data_dir;; esac; case \"$mise_data_dir\" in /) ;; */) mise_data_dir=${mise_data_dir%/};; esac; [ -d \"$mise_data_dir\" ] || return 2; velnor_capture_physical_path \"$mise_data_dir\" \"$1\" || return 3; resolved_mise_data_dir=$resolved_path; [ -d \"$resolved_mise_data_dir/bin\" ] || return 4; velnor_capture_physical_path \"$resolved_mise_data_dir/bin\" \"$1\" || return 4; resolved_mise_bin_dir=$resolved_path; mise_bin=\"$resolved_mise_bin_dir/mise\"; [ -f \"$mise_bin\" ] && [ -x \"$mise_bin\" ] && [ ! -L \"$mise_bin\" ] || return 4; MISE_DATA_DIR=\"$resolved_mise_data_dir\"; export MISE_DATA_DIR; return 0; }\nvelnor_mise() { \"$mise_bin\" --no-config --no-env --no-hooks \"$@\"; }\nrm -rf \"$velnor_dir\"\nmkdir -p \"$velnor_dir\"\n: > \"$velnor_db\"\nvelnor_bind_selected_mise \"$velnor_dir/mise-data-dir\" || { velnor_mise_status=$?; velnor_fail \"Setup Mise data directory or binary is invalid (status $velnor_mise_status)\"; }\nvelnor_regular() {\n  if [ -L \"$1\" ] || [ ! -f \"$1\" ]; then velnor_fail \"$1 must be a regular file\"; fi\n}\nvelnor_toml() {\n  cp -- \"$1\" \"$velnor_dir/src.toml\"\n  velnor_mise config get -f \"$velnor_dir/src.toml\" > /dev/null 2>&1 || velnor_fail \"$1 is not valid TOML\"\n}\nvelnor_tools() {\n  velnor_toml \"$1\"\n  if velnor_mise config get -f \"$velnor_dir/src.toml\" tools > \"$velnor_dir/tools\" 2>/dev/null; then\n    awk -v file=\"$1\" '\\''\nfunction unq(s) {\n  if (s ~ /^\"[^\"\\\\]*\"$/ || s ~ /^\\047[^\\047]*\\047$/) { return substr(s, 2, length(s) - 2) }\n  return s\n}\nBEGIN { OFS = \"\\t\"; cur = \"\"; multi = \"\" }\n{\n  line = $0\n  if (multi != \"\") { if (index(line, multi) > 0) { multi = \"\" } next }\n  if (line ~ /^[ \\t]*(#|$)/) { next }\n  if (line ~ /^[ \\t]*\\[/) {\n    hdr = line\n    sub(/^[ \\t]*\\[+[ \\t]*/, \"\", hdr)\n    sub(/[ \\t]*\\]+[ \\t]*$/, \"\", hdr)\n    cur = unq(hdr)\n    if (cur == \"\") { cur = \"?\" }\n    next\n  }\n  eq = index(line, \" = \")\n  if (eq == 0) { next }\n  k = unq(substr(line, 1, eq - 1))\n  v = substr(line, eq + 3)\n  if (v ~ /^\"\"\"/ || v ~ /^\\047\\047\\047/) {\n    d = substr(v, 1, 3)\n    if (index(substr(v, 4), d) == 0) { multi = d }\n    v = d\n  } else {\n    v = unq(v)\n  }\n  if (cur == \"\") { print file, k, v } else if (k == \"version\") { print file, cur, v }\n}'\\'' \"$velnor_dir/tools\" >> \"$velnor_db\"\n  fi\n}\nvelnor_tool_versions() {\n  awk -v file=\"$1\" '\\''\nBEGIN { OFS = \"\\t\" }\n{\n  sub(/[ \\t]*#.*$/, \"\")\n  if ($0 ~ /^[ \\t]*$/) { next }\n  line = $0\n  sub(/^[ \\t]+/, \"\", line)\n  k = line\n  sub(/[ \\t].*$/, \"\", k)\n  v = line\n  if (v == k) { v = \"\" } else { sub(/^[^ \\t]+[ \\t]+/, \"\", v); sub(/[ \\t]+$/, \"\", v) }\n  print file, k, v\n}'\\'' \"$1\" >> \"$velnor_db\"\n}\nvelnor_toolchain() {\n  if grep -q '\\''^[[:space:]]*\\['\\'' \"$1\"; then\n    velnor_toml \"$1\"\n    if velnor_mise config get -f \"$velnor_dir/src.toml\" toolchain.channel > \"$velnor_dir/channel\" 2>/dev/null; then\n      awk -v file=\"$1\" '\\''BEGIN { OFS = \"\\t\" } NR == 1 { v = $0; next } { v = v \" \" $0 } END { print file, \"rust\", v }'\\'' \"$velnor_dir/channel\" >> \"$velnor_db\"\n    fi\n  else\n    printf '\\''%s\\t%s\\t%s\\n'\\'' \"$1\" rust \"$(tr -d '\\'' \\t\\r\\n'\\'' < \"$1\")\" >> \"$velnor_db\"\n  fi\n}\nvelnor_exact() {\n  case \"$2\" in\n    '\\'''\\''|*[!0-9.]*|.*|*.|*..*|*.*.*.*|0[0-9]*|*.0[0-9]*) velnor_fail \"$1 must declare one exact X.Y.Z version, not '\\''$(velnor_safe \"$2\")'\\''\" ;;\n    *.*.*) ;;\n    *) velnor_fail \"$1 must declare one exact X.Y.Z version, not '\\''$(velnor_safe \"$2\")'\\''\" ;;\n  esac\n}\nvelnor_tool() {\n  name=$1\n  shift\n  resolved=\n  origin=\n  while IFS=\"$velnor_tab\" read -r file key value; do\n    matched=0\n    for want in \"$@\"; do\n      if [ \"$key\" = \"$want\" ]; then matched=1; fi\n    done\n    if [ \"$matched\" = 0 ]; then continue; fi\n    velnor_exact \"$file $key\" \"$value\"\n    if [ -n \"$resolved\" ] && [ \"$resolved\" != \"$value\" ]; then\n      velnor_fail \"$name: $file $key declares $value, $origin declares $resolved\"\n    fi\n    if [ -z \"$resolved\" ]; then origin=\"$file $key\"; fi\n    resolved=$value\n  done < \"$velnor_db\"\n  [ -n \"$resolved\" ] || velnor_fail \"$name: the project config no longer declares this tool; regenerate the workflow\"\n  printf '\\''%s=%s\\n'\\'' \"$name\" \"$resolved\" >> \"$GITHUB_ENV\"\n  if [ \"$name\" = VELNOR_TOOL_RUST ] && [ \"${velnor_export_rustup-0}\" = 1 ]; then\n    printf '\\''RUSTUP_TOOLCHAIN=%s\\n'\\'' \"$resolved\" >> \"$GITHUB_ENV\"\n  fi\n  printf '\\''velnor: %s=%s\\n'\\'' \"$name\" \"$resolved\"\n}\n# shellcheck disable=SC2016 # awk program text: awk, not the shell, expands it\nvelnor_lock_awk='\\''BEGIN { q = \"\\\"\"; e1 = \"[[tools.\" key \"]]\"; e2 = \"[[tools.\" q key q \"]]\"; e3 = \"[tools.\" key \"]\"; e4 = \"[tools.\" q key q \"]\"; s1 = \"[tools.\" key \".\"; s2 = \"[tools.\" q key q \".\"; p1 = s1 q \"platforms.\" platform q \"]\"; p2 = s2 q \"platforms.\" platform q \"]\"; p3 = s1 \"platforms.\" platform \"]\"; p4 = s2 \"platforms.\" platform \"]\"; want = \"version = \" q version q; inline = q \"platforms.\" platform q \" = {\"; state = 0 }\n{ line = $0; sub(/^[ \\t]+/, \"\", line); sub(/[ \\t\\r]+$/, \"\", line) }\nline == \"\" || substr(line, 1, 1) == \"#\" { next }\nsubstr(line, 1, 1) == \"[\" {\n  matched = state == 2 || state == 3 || state == 4; other = state == 1 || state == 5\n  if (line == e1 || line == e2 || line == e3 || line == e4) state = 1\n  else if (line == p1 || line == p2 || line == p3 || line == p4) state = matched ? 3 : (other ? 5 : 0)\n  else if (index(line, s1) == 1 || index(line, s2) == 1) state = matched ? 4 : (other ? 5 : 0)\n  else state = 0\n  next\n}\nstate == 1 && line == want { state = 2; next }\nstate == 3 && (index(line, \"checksum = \") == 1 || index(line, \"url = \") == 1) { print lock \" \" key \" \" line; next }\nstate == 2 && index(line, inline) == 1 {\n  if (match(line, /checksum = \"[^\"]*\"/)) print lock \" \" key \" \" substr(line, RSTART, RLENGTH)\n  if (match(line, /[{ ,]url = \"[^\"]*\"/)) print lock \" \" key \" \" substr(line, RSTART + 1, RLENGTH - 1)\n}'\\''\nvelnor_lock() {\n  name=$1\n  shift\n  case \"${RUNNER_OS-}:${RUNNER_ARCH-}\" in\n    Linux:X64) platform=linux-x64 ;;\n    Linux:ARM64) platform=linux-arm64 ;;\n    macOS:X64) platform=macos-x64 ;;\n    macOS:ARM64) platform=macos-arm64 ;;\n    Windows:X64) platform=windows-x64 ;;\n    Windows:ARM64) platform=windows-arm64 ;;\n    *) velnor_fail \"$name: unsupported runner platform '\\''${RUNNER_OS-}:${RUNNER_ARCH-}'\\''\" ;;\n  esac\n  : > \"$velnor_dir/lock\"\n  for lock in $velnor_locks; do\n    if [ ! -e \"$lock\" ] && [ ! -L \"$lock\" ]; then continue; fi\n    velnor_regular \"$lock\"\n    for key in \"$@\"; do\n      awk -v lock=\"$lock\" -v key=\"$key\" -v version=\"$resolved\" -v platform=\"$platform\" \"$velnor_lock_awk\" \"$lock\" >> \"$velnor_dir/lock\" || velnor_fail \"$lock could not be read\"\n    done\n  done\n  lock_digest=unlocked\n  if [ -s \"$velnor_dir/lock\" ]; then\n    if command -v sha256sum >/dev/null 2>&1; then\n      lock_digest=$(sha256sum < \"$velnor_dir/lock\") || velnor_fail \"$name: lock digest failed\"\n    else\n      lock_digest=$(shasum -a 256 < \"$velnor_dir/lock\") || velnor_fail \"$name: lock digest failed\"\n    fi\n    lock_digest=${lock_digest%% *}\n    case \"$lock_digest\" in\n      *[!0-9a-f]*) velnor_fail \"$name: lock digest is not hexadecimal\" ;;\n    esac\n    [ \"${#lock_digest}\" -eq 64 ] || velnor_fail \"$name: lock digest is not SHA-256\"\n  fi\n  printf '\\''%s=%s\\n'\\'' \"$name\" \"$lock_digest\" >> \"$GITHUB_ENV\"\n  printf '\\''velnor: %s=%s\\n'\\'' \"$name\" \"$lock_digest\"\n}\nvelnor_locks='\\''mise.lock .mise.lock'\\''\nfor velnor_file in mise.toml .mise.toml mise.*.toml .mise.*.toml .config/mise.toml .config/mise.*.toml .config/mise/config.toml .config/mise/config.*.toml .config/mise/conf.d/*.toml mise/config.toml mise/config.*.toml .mise/config.toml .mise/config.*.toml; do\n  if [ ! -e \"$velnor_file\" ] && [ ! -L \"$velnor_file\" ]; then continue; fi\n  velnor_regular \"$velnor_file\"\n  velnor_tools \"$velnor_file\"\ndone\nif [ -e .tool-versions ] || [ -L .tool-versions ]; then\n  velnor_regular .tool-versions\n  velnor_tool_versions .tool-versions\nfi\nif [ -e rust-toolchain.toml ] || [ -L rust-toolchain.toml ]; then\n  velnor_regular rust-toolchain.toml\n  velnor_toolchain rust-toolchain.toml\nfi\nif [ -e rust-toolchain ] || [ -L rust-toolchain ]; then\n  velnor_regular rust-toolchain\n  velnor_toolchain rust-toolchain\nfi\nvelnor_tool VELNOR_TOOL_MR_BOXINGTON '\\''mr-boxington'\\'' '\\''mbx'\\'' '\\''github:jdx/mr-boxington'\\'' '\\''packslip:github.com/jdx/mr-boxington'\\''\nvelnor_lock VELNOR_TOOL_MR_BOXINGTON_LOCK '\\''mr-boxington'\\'' '\\''mbx'\\'' '\\''github:jdx/mr-boxington'\\'' '\\''packslip:github.com/jdx/mr-boxington'\\''\nvelnor_tool VELNOR_TOOL_NEXTEST '\\''aqua:nextest-rs/nextest/cargo-nextest'\\'' '\\''cargo-nextest'\\'' '\\''cargo:cargo-nextest'\\'' '\\''github:nextest-rs/nextest'\\'' '\\''ubi:nextest-rs/nextest'\\''\nvelnor_lock VELNOR_TOOL_NEXTEST_LOCK '\\''aqua:nextest-rs/nextest/cargo-nextest'\\'' '\\''cargo-nextest'\\'' '\\''cargo:cargo-nextest'\\'' '\\''github:nextest-rs/nextest'\\'' '\\''ubi:nextest-rs/nextest'\\''\nvelnor_tool VELNOR_TOOL_OPENTOFU '\\''opentofu'\\'' '\\''aqua:opentofu/opentofu'\\''\nvelnor_lock VELNOR_TOOL_OPENTOFU_LOCK '\\''opentofu'\\'' '\\''aqua:opentofu/opentofu'\\''\nvelnor_tool VELNOR_TOOL_RUST '\\''rust'\\'' '\\''core:rust'\\''\nvelnor_lock VELNOR_TOOL_RUST_LOCK '\\''rust'\\'' '\\''core:rust'\\''\nrm -rf \"$velnor_dir\"\n'" # zizmor: ignore[github-env]
-      - &s60
+      - &s61
         name: V2 identity
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
@@ -1660,7 +1665,7 @@ jobs:
       - *s9
       - *s10
       - *s14
-      - &s61
+      - &s62
         name: Prepare pinned tools
         env: *m14
         run: "mise --no-config --no-env --no-hooks install 'rust@'\"${VELNOR_TOOL_RUST}\" 'opentofu@'\"${VELNOR_TOOL_OPENTOFU}\" 'mr-boxington@'\"${VELNOR_TOOL_MR_BOXINGTON}\" 'aqua:nextest-rs/nextest/cargo-nextest@'\"${VELNOR_TOOL_NEXTEST}\""
@@ -1674,7 +1679,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - &s62
+      - &s63
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-7c7006a314f4c326dc3a065bbb51911c7de95165bc8bbb5cb34f96d936ecf8a6"}
@@ -1701,7 +1706,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - &s63
+      - &s64
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1727,13 +1732,13 @@ jobs:
       - *s42
       - *s1
       - *s3
-      - *s59
       - *s60
+      - *s61
       - *s4
       - *s9
       - *s10
       - *s14
-      - *s61
+      - *s62
       - *s16
       - *s17
       - *s18
@@ -1744,7 +1749,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - *s62
+      - *s63
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1768,7 +1773,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - *s63
+      - *s64
       - *s43
       - *s6
       - *s7
@@ -1788,12 +1793,12 @@ jobs:
     steps:
       - *s1
       - *s3
-      - &s64
+      - &s65
         name: Resolve project tool versions
         env: *m12
         shell: /bin/bash --noprofile --norc -p -e -o pipefail {0}
         run: "function_env_unset=(); function_env_scan_complete=0; while IFS= read -r -d '' env_entry; do case \"$env_entry\" in BASH_FUNC_*=*) function_env_unset+=(-u \"${env_entry%%=*}\");; VELNOR_VERIFIER_ENV_SCAN_COMPLETE) function_env_scan_complete=$((function_env_scan_complete + 1));; esac; done < <({ /usr/bin/env -0 && printf '%s\\000' 'VELNOR_VERIFIER_ENV_SCAN_COMPLETE'; }); [ \"$function_env_scan_complete\" -eq 1 ] || exit 1; exec /usr/bin/env \"${function_env_unset[@]}\" -u BASH_ENV -u ENV -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR /bin/bash --noprofile --norc -p -e -o pipefail -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu\n: \"${GITHUB_ENV:?missing GITHUB_ENV}\"\n: \"${RUNNER_TEMP:?missing RUNNER_TEMP}\"\nvelnor_dir=\"$RUNNER_TEMP/velnor-project-tool\"\nvelnor_db=\"$velnor_dir/declared\"\nvelnor_tab=$(printf '\\''\\t'\\'')\nvelnor_safe() { printf '\\''%s'\\'' \"$1\" | cut -c1-64 | tr -c '\\''A-Za-z0-9._/@+-'\\'' '\\''?'\\''; }\nvelnor_fail() { printf '\\''velnor: %s\\n'\\'' \"$1\" >&2; exit 1; }\nvelnor_capture_physical_path() {\n  [ \"$#\" -eq 2 ] || return 1\n  (cd -P \"$1\" && pwd -P) > \"$2\" || return 1\n  resolved_path=\n  newline='\\''\n'\\''\n  while IFS= read -r path_line; do\n    resolved_path=$resolved_path$path_line\"$newline\"\n  done < \"$2\"\n  case \"$resolved_path\" in\n    *\"$newline\") resolved_path=${resolved_path%\"$newline\"} ;;\n    *) return 1 ;;\n  esac\n  printf '\\''%s\\n'\\'' \"$resolved_path\" > \"$2\" || return 1\n}; velnor_bind_selected_mise() { [ \"$#\" -eq 1 ] || return 5; mise_data_dir=${MISE_DATA_DIR-}; if [ -z \"$mise_data_dir\" ]; then if [ -n \"${XDG_DATA_HOME-}\" ]; then mise_data_dir=\"$XDG_DATA_HOME/mise\"; elif [ -n \"${HOME-}\" ]; then mise_data_dir=\"$HOME/.local/share/mise\"; else return 1; fi; fi; case \"$mise_data_dir\" in /*) ;; *) mise_data_dir=./$mise_data_dir;; esac; case \"$mise_data_dir\" in /) ;; */) mise_data_dir=${mise_data_dir%/};; esac; [ -d \"$mise_data_dir\" ] || return 2; velnor_capture_physical_path \"$mise_data_dir\" \"$1\" || return 3; resolved_mise_data_dir=$resolved_path; [ -d \"$resolved_mise_data_dir/bin\" ] || return 4; velnor_capture_physical_path \"$resolved_mise_data_dir/bin\" \"$1\" || return 4; resolved_mise_bin_dir=$resolved_path; mise_bin=\"$resolved_mise_bin_dir/mise\"; [ -f \"$mise_bin\" ] && [ -x \"$mise_bin\" ] && [ ! -L \"$mise_bin\" ] || return 4; MISE_DATA_DIR=\"$resolved_mise_data_dir\"; export MISE_DATA_DIR; return 0; }\nvelnor_mise() { \"$mise_bin\" --no-config --no-env --no-hooks \"$@\"; }\nrm -rf \"$velnor_dir\"\nmkdir -p \"$velnor_dir\"\n: > \"$velnor_db\"\nvelnor_bind_selected_mise \"$velnor_dir/mise-data-dir\" || { velnor_mise_status=$?; velnor_fail \"Setup Mise data directory or binary is invalid (status $velnor_mise_status)\"; }\nvelnor_regular() {\n  if [ -L \"$1\" ] || [ ! -f \"$1\" ]; then velnor_fail \"$1 must be a regular file\"; fi\n}\nvelnor_toml() {\n  cp -- \"$1\" \"$velnor_dir/src.toml\"\n  velnor_mise config get -f \"$velnor_dir/src.toml\" > /dev/null 2>&1 || velnor_fail \"$1 is not valid TOML\"\n}\nvelnor_tools() {\n  velnor_toml \"$1\"\n  if velnor_mise config get -f \"$velnor_dir/src.toml\" tools > \"$velnor_dir/tools\" 2>/dev/null; then\n    awk -v file=\"$1\" '\\''\nfunction unq(s) {\n  if (s ~ /^\"[^\"\\\\]*\"$/ || s ~ /^\\047[^\\047]*\\047$/) { return substr(s, 2, length(s) - 2) }\n  return s\n}\nBEGIN { OFS = \"\\t\"; cur = \"\"; multi = \"\" }\n{\n  line = $0\n  if (multi != \"\") { if (index(line, multi) > 0) { multi = \"\" } next }\n  if (line ~ /^[ \\t]*(#|$)/) { next }\n  if (line ~ /^[ \\t]*\\[/) {\n    hdr = line\n    sub(/^[ \\t]*\\[+[ \\t]*/, \"\", hdr)\n    sub(/[ \\t]*\\]+[ \\t]*$/, \"\", hdr)\n    cur = unq(hdr)\n    if (cur == \"\") { cur = \"?\" }\n    next\n  }\n  eq = index(line, \" = \")\n  if (eq == 0) { next }\n  k = unq(substr(line, 1, eq - 1))\n  v = substr(line, eq + 3)\n  if (v ~ /^\"\"\"/ || v ~ /^\\047\\047\\047/) {\n    d = substr(v, 1, 3)\n    if (index(substr(v, 4), d) == 0) { multi = d }\n    v = d\n  } else {\n    v = unq(v)\n  }\n  if (cur == \"\") { print file, k, v } else if (k == \"version\") { print file, cur, v }\n}'\\'' \"$velnor_dir/tools\" >> \"$velnor_db\"\n  fi\n}\nvelnor_tool_versions() {\n  awk -v file=\"$1\" '\\''\nBEGIN { OFS = \"\\t\" }\n{\n  sub(/[ \\t]*#.*$/, \"\")\n  if ($0 ~ /^[ \\t]*$/) { next }\n  line = $0\n  sub(/^[ \\t]+/, \"\", line)\n  k = line\n  sub(/[ \\t].*$/, \"\", k)\n  v = line\n  if (v == k) { v = \"\" } else { sub(/^[^ \\t]+[ \\t]+/, \"\", v); sub(/[ \\t]+$/, \"\", v) }\n  print file, k, v\n}'\\'' \"$1\" >> \"$velnor_db\"\n}\nvelnor_toolchain() {\n  if grep -q '\\''^[[:space:]]*\\['\\'' \"$1\"; then\n    velnor_toml \"$1\"\n    if velnor_mise config get -f \"$velnor_dir/src.toml\" toolchain.channel > \"$velnor_dir/channel\" 2>/dev/null; then\n      awk -v file=\"$1\" '\\''BEGIN { OFS = \"\\t\" } NR == 1 { v = $0; next } { v = v \" \" $0 } END { print file, \"rust\", v }'\\'' \"$velnor_dir/channel\" >> \"$velnor_db\"\n    fi\n  else\n    printf '\\''%s\\t%s\\t%s\\n'\\'' \"$1\" rust \"$(tr -d '\\'' \\t\\r\\n'\\'' < \"$1\")\" >> \"$velnor_db\"\n  fi\n}\nvelnor_exact() {\n  case \"$2\" in\n    '\\'''\\''|*[!0-9.]*|.*|*.|*..*|*.*.*.*|0[0-9]*|*.0[0-9]*) velnor_fail \"$1 must declare one exact X.Y.Z version, not '\\''$(velnor_safe \"$2\")'\\''\" ;;\n    *.*.*) ;;\n    *) velnor_fail \"$1 must declare one exact X.Y.Z version, not '\\''$(velnor_safe \"$2\")'\\''\" ;;\n  esac\n}\nvelnor_tool() {\n  name=$1\n  shift\n  resolved=\n  origin=\n  while IFS=\"$velnor_tab\" read -r file key value; do\n    matched=0\n    for want in \"$@\"; do\n      if [ \"$key\" = \"$want\" ]; then matched=1; fi\n    done\n    if [ \"$matched\" = 0 ]; then continue; fi\n    velnor_exact \"$file $key\" \"$value\"\n    if [ -n \"$resolved\" ] && [ \"$resolved\" != \"$value\" ]; then\n      velnor_fail \"$name: $file $key declares $value, $origin declares $resolved\"\n    fi\n    if [ -z \"$resolved\" ]; then origin=\"$file $key\"; fi\n    resolved=$value\n  done < \"$velnor_db\"\n  [ -n \"$resolved\" ] || velnor_fail \"$name: the project config no longer declares this tool; regenerate the workflow\"\n  printf '\\''%s=%s\\n'\\'' \"$name\" \"$resolved\" >> \"$GITHUB_ENV\"\n  if [ \"$name\" = VELNOR_TOOL_RUST ] && [ \"${velnor_export_rustup-0}\" = 1 ]; then\n    printf '\\''RUSTUP_TOOLCHAIN=%s\\n'\\'' \"$resolved\" >> \"$GITHUB_ENV\"\n  fi\n  printf '\\''velnor: %s=%s\\n'\\'' \"$name\" \"$resolved\"\n}\n# shellcheck disable=SC2016 # awk program text: awk, not the shell, expands it\nvelnor_lock_awk='\\''BEGIN { q = \"\\\"\"; e1 = \"[[tools.\" key \"]]\"; e2 = \"[[tools.\" q key q \"]]\"; e3 = \"[tools.\" key \"]\"; e4 = \"[tools.\" q key q \"]\"; s1 = \"[tools.\" key \".\"; s2 = \"[tools.\" q key q \".\"; p1 = s1 q \"platforms.\" platform q \"]\"; p2 = s2 q \"platforms.\" platform q \"]\"; p3 = s1 \"platforms.\" platform \"]\"; p4 = s2 \"platforms.\" platform \"]\"; want = \"version = \" q version q; inline = q \"platforms.\" platform q \" = {\"; state = 0 }\n{ line = $0; sub(/^[ \\t]+/, \"\", line); sub(/[ \\t\\r]+$/, \"\", line) }\nline == \"\" || substr(line, 1, 1) == \"#\" { next }\nsubstr(line, 1, 1) == \"[\" {\n  matched = state == 2 || state == 3 || state == 4; other = state == 1 || state == 5\n  if (line == e1 || line == e2 || line == e3 || line == e4) state = 1\n  else if (line == p1 || line == p2 || line == p3 || line == p4) state = matched ? 3 : (other ? 5 : 0)\n  else if (index(line, s1) == 1 || index(line, s2) == 1) state = matched ? 4 : (other ? 5 : 0)\n  else state = 0\n  next\n}\nstate == 1 && line == want { state = 2; next }\nstate == 3 && (index(line, \"checksum = \") == 1 || index(line, \"url = \") == 1) { print lock \" \" key \" \" line; next }\nstate == 2 && index(line, inline) == 1 {\n  if (match(line, /checksum = \"[^\"]*\"/)) print lock \" \" key \" \" substr(line, RSTART, RLENGTH)\n  if (match(line, /[{ ,]url = \"[^\"]*\"/)) print lock \" \" key \" \" substr(line, RSTART + 1, RLENGTH - 1)\n}'\\''\nvelnor_lock() {\n  name=$1\n  shift\n  case \"${RUNNER_OS-}:${RUNNER_ARCH-}\" in\n    Linux:X64) platform=linux-x64 ;;\n    Linux:ARM64) platform=linux-arm64 ;;\n    macOS:X64) platform=macos-x64 ;;\n    macOS:ARM64) platform=macos-arm64 ;;\n    Windows:X64) platform=windows-x64 ;;\n    Windows:ARM64) platform=windows-arm64 ;;\n    *) velnor_fail \"$name: unsupported runner platform '\\''${RUNNER_OS-}:${RUNNER_ARCH-}'\\''\" ;;\n  esac\n  : > \"$velnor_dir/lock\"\n  for lock in $velnor_locks; do\n    if [ ! -e \"$lock\" ] && [ ! -L \"$lock\" ]; then continue; fi\n    velnor_regular \"$lock\"\n    for key in \"$@\"; do\n      awk -v lock=\"$lock\" -v key=\"$key\" -v version=\"$resolved\" -v platform=\"$platform\" \"$velnor_lock_awk\" \"$lock\" >> \"$velnor_dir/lock\" || velnor_fail \"$lock could not be read\"\n    done\n  done\n  lock_digest=unlocked\n  if [ -s \"$velnor_dir/lock\" ]; then\n    if command -v sha256sum >/dev/null 2>&1; then\n      lock_digest=$(sha256sum < \"$velnor_dir/lock\") || velnor_fail \"$name: lock digest failed\"\n    else\n      lock_digest=$(shasum -a 256 < \"$velnor_dir/lock\") || velnor_fail \"$name: lock digest failed\"\n    fi\n    lock_digest=${lock_digest%% *}\n    case \"$lock_digest\" in\n      *[!0-9a-f]*) velnor_fail \"$name: lock digest is not hexadecimal\" ;;\n    esac\n    [ \"${#lock_digest}\" -eq 64 ] || velnor_fail \"$name: lock digest is not SHA-256\"\n  fi\n  printf '\\''%s=%s\\n'\\'' \"$name\" \"$lock_digest\" >> \"$GITHUB_ENV\"\n  printf '\\''velnor: %s=%s\\n'\\'' \"$name\" \"$lock_digest\"\n}\nvelnor_locks='\\''mise.lock .mise.lock'\\''\nfor velnor_file in mise.toml .mise.toml mise.*.toml .mise.*.toml .config/mise.toml .config/mise.*.toml .config/mise/config.toml .config/mise/config.*.toml .config/mise/conf.d/*.toml mise/config.toml mise/config.*.toml .mise/config.toml .mise/config.*.toml; do\n  if [ ! -e \"$velnor_file\" ] && [ ! -L \"$velnor_file\" ]; then continue; fi\n  velnor_regular \"$velnor_file\"\n  velnor_tools \"$velnor_file\"\ndone\nif [ -e .tool-versions ] || [ -L .tool-versions ]; then\n  velnor_regular .tool-versions\n  velnor_tool_versions .tool-versions\nfi\nif [ -e rust-toolchain.toml ] || [ -L rust-toolchain.toml ]; then\n  velnor_regular rust-toolchain.toml\n  velnor_toolchain rust-toolchain.toml\nfi\nif [ -e rust-toolchain ] || [ -L rust-toolchain ]; then\n  velnor_regular rust-toolchain\n  velnor_toolchain rust-toolchain\nfi\nvelnor_tool VELNOR_TOOL_BUN '\\''bun'\\'' '\\''core:bun'\\''\nvelnor_lock VELNOR_TOOL_BUN_LOCK '\\''bun'\\'' '\\''core:bun'\\''\nvelnor_tool VELNOR_TOOL_JACTIONLINT '\\''jactionlint'\\'' '\\''github:jdx/jactionlint'\\'' '\\''packslip:github.com/jdx/jactionlint'\\''\nvelnor_lock VELNOR_TOOL_JACTIONLINT_LOCK '\\''jactionlint'\\'' '\\''github:jdx/jactionlint'\\'' '\\''packslip:github.com/jdx/jactionlint'\\''\nvelnor_tool VELNOR_TOOL_MR_BOXINGTON '\\''mr-boxington'\\'' '\\''mbx'\\'' '\\''github:jdx/mr-boxington'\\'' '\\''packslip:github.com/jdx/mr-boxington'\\''\nvelnor_lock VELNOR_TOOL_MR_BOXINGTON_LOCK '\\''mr-boxington'\\'' '\\''mbx'\\'' '\\''github:jdx/mr-boxington'\\'' '\\''packslip:github.com/jdx/mr-boxington'\\''\nvelnor_tool VELNOR_TOOL_NEXTEST '\\''aqua:nextest-rs/nextest/cargo-nextest'\\'' '\\''cargo-nextest'\\'' '\\''cargo:cargo-nextest'\\'' '\\''github:nextest-rs/nextest'\\'' '\\''ubi:nextest-rs/nextest'\\''\nvelnor_lock VELNOR_TOOL_NEXTEST_LOCK '\\''aqua:nextest-rs/nextest/cargo-nextest'\\'' '\\''cargo-nextest'\\'' '\\''cargo:cargo-nextest'\\'' '\\''github:nextest-rs/nextest'\\'' '\\''ubi:nextest-rs/nextest'\\''\nvelnor_tool VELNOR_TOOL_RUST '\\''rust'\\'' '\\''core:rust'\\''\nvelnor_lock VELNOR_TOOL_RUST_LOCK '\\''rust'\\'' '\\''core:rust'\\''\nvelnor_tool VELNOR_TOOL_SHELLCHECK '\\''shellcheck'\\'' '\\''aqua:koalaman/shellcheck'\\''\nvelnor_lock VELNOR_TOOL_SHELLCHECK_LOCK '\\''shellcheck'\\'' '\\''aqua:koalaman/shellcheck'\\''\nrm -rf \"$velnor_dir\"\n'" # zizmor: ignore[github-env]
-      - &s65
+      - &s66
         name: V2 identity
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
@@ -1803,7 +1808,7 @@ jobs:
       - *s9
       - *s10
       - *s14
-      - &s66
+      - &s67
         name: Prepare pinned tools
         env: *m14
         run: "mise --no-config --no-env --no-hooks install 'rust@'\"${VELNOR_TOOL_RUST}\" 'mr-boxington@'\"${VELNOR_TOOL_MR_BOXINGTON}\" 'jactionlint@'\"${VELNOR_TOOL_JACTIONLINT}\" 'shellcheck@'\"${VELNOR_TOOL_SHELLCHECK}\" 'aqua:nextest-rs/nextest/cargo-nextest@'\"${VELNOR_TOOL_NEXTEST}\" 'bun@'\"${VELNOR_TOOL_BUN}\""
@@ -1819,7 +1824,7 @@ jobs:
       - *s24
       - *s25
       - *s35
-      - &s67
+      - &s68
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-29669651bcfedea8ea0acd687dc7ead970122a86520cafb19bbda681d35cfb00"}
@@ -1846,7 +1851,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - &s68
+      - &s69
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1872,13 +1877,13 @@ jobs:
       - *s42
       - *s1
       - *s3
-      - *s64
       - *s65
+      - *s66
       - *s4
       - *s9
       - *s10
       - *s14
-      - *s66
+      - *s67
       - *s37
       - *s16
       - *s17
@@ -1891,7 +1896,7 @@ jobs:
       - *s24
       - *s25
       - *s35
-      - *s67
+      - *s68
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1915,7 +1920,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - *s68
+      - *s69
       - *s43
       - *s6
       - *s7
@@ -1952,7 +1957,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - &s69
+      - &s70
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-10e7ebeb0cf8602ea5bb8e80179fb3b3f90ba182332c9524bc958a113f65a2dd"}
@@ -1979,7 +1984,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - &s70
+      - &s71
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2021,7 +2026,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - *s69
+      - *s70
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -2045,7 +2050,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - *s70
+      - *s71
       - *s32
   rust-velnor-actions-tofu-read:
     name: Rust / velnor-actions-tofu (read)
@@ -2079,7 +2084,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - &s71
+      - &s72
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-5d467f696f370879756d8dd1c612a4348988eab85ac42d257a8b7896329486be"}
@@ -2102,7 +2107,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - &s72
+      - &s73
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2144,7 +2149,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - *s71
+      - *s72
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -2164,7 +2169,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - *s72
+      - *s73
       - *s32
   rust-velnor-actions-workflow-renderer-read:
     name: Rust / velnor-actions-workflow-renderer (read)
@@ -2198,7 +2203,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - &s73
+      - &s74
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-096047eef81db569a46dfc54bd76bb4e3248976876ca694c619e550c926d94e8"}
@@ -2225,7 +2230,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - &s74
+      - &s75
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2267,7 +2272,7 @@ jobs:
       - *s23
       - *s24
       - *s25
-      - *s73
+      - *s74
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -2291,7 +2296,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - *s74
+      - *s75
       - *s32
   rust-velnor-resource-probe-read:
     name: Rust / velnor-resource-probe (read)
@@ -2325,7 +2330,7 @@ jobs:
       - *s23
       - *s24
       - *s35
-      - &s75
+      - &s76
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-af1361ae1129242e5cd7600fd5a8d0a1bc03284a24e91066d8f76725f735a49a"}
@@ -2348,7 +2353,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - &s76
+      - &s77
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2390,7 +2395,7 @@ jobs:
       - *s23
       - *s24
       - *s35
-      - *s75
+      - *s76
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -2410,7 +2415,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - *s76
+      - *s77
       - *s36
   rust-velnor-runner-attestation-read:
     name: Rust / velnor-runner-attestation (read)
@@ -2444,7 +2449,7 @@ jobs:
       - *s23
       - *s24
       - *s35
-      - &s77
+      - &s78
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-9b932720f023c0315aadaa4d33a699647e44920ef2b5dd02e36ec97e5e0be3b7"}
@@ -2463,7 +2468,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - &s78
+      - &s79
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2505,7 +2510,7 @@ jobs:
       - *s23
       - *s24
       - *s35
-      - *s77
+      - *s78
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -2521,7 +2526,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - *s78
+      - *s79
       - *s36
   rust-velnor-runner-cli-read:
     name: Rust / velnor-runner-cli (read)
@@ -2555,7 +2560,7 @@ jobs:
       - *s23
       - *s24
       - *s35
-      - &s79
+      - &s80
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-b601b778c3ecf89401ac30e519cade4232b5b83ab6fec574fd52dbb1b27671e1"}
@@ -2578,7 +2583,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - &s80
+      - &s81
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2620,7 +2625,7 @@ jobs:
       - *s23
       - *s24
       - *s35
-      - *s79
+      - *s80
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -2640,7 +2645,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - *s80
+      - *s81
       - *s36
   rust-velnor-runner-core-read:
     name: Rust / velnor-runner-core (read)
@@ -2674,7 +2679,7 @@ jobs:
       - *s23
       - *s24
       - *s35
-      - &s81
+      - &s82
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-ccdff9bddebe827830f83537657e6c6ca9fefbfa1a572c8fe10477f6f6d460f7"}
@@ -2697,7 +2702,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - &s82
+      - &s83
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2739,7 +2744,7 @@ jobs:
       - *s23
       - *s24
       - *s35
-      - *s81
+      - *s82
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -2759,7 +2764,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - *s82
+      - *s83
       - *s36
   rust-velnor-runner-github-read:
     name: Rust / velnor-runner-github (read)
@@ -2793,7 +2798,7 @@ jobs:
       - *s23
       - *s24
       - *s35
-      - &s83
+      - &s84
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-06415fc18b9940a32d773e4198c5dde7153d3d71c332132602cb10d28ce8f76d"}
@@ -2816,7 +2821,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - &s84
+      - &s85
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2858,7 +2863,7 @@ jobs:
       - *s23
       - *s24
       - *s35
-      - *s83
+      - *s84
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -2878,7 +2883,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - *s84
+      - *s85
       - *s36
   rust-velnor-runner-host-read:
     name: Rust / velnor-runner-host (read)
@@ -2912,7 +2917,7 @@ jobs:
       - *s23
       - *s24
       - *s35
-      - &s85
+      - &s86
         name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-e805cff1c52c68c559a7d235e66d321b0867d7a44c5d23ce7e7750e446c60012"}
@@ -2939,7 +2944,7 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - &s86
+      - &s87
         name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2981,7 +2986,7 @@ jobs:
       - *s23
       - *s24
       - *s35
-      - *s85
+      - *s86
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -3005,5 +3010,5 @@ jobs:
       - name: Wait for parallel checks
         wait-all:
       - *s40
-      - *s86
+      - *s87
       - *s36

@@ -3,8 +3,101 @@
 
 use super::{CrateJobInputs, build_jobs::cap_cargo_jobs};
 use crate::{OrchestratorError, internal::internal};
-use std::collections::BTreeSet;
-use velnor_actions_contract::{CrateJob, CrateObligation, Step};
+use std::collections::{BTreeMap, BTreeSet};
+use velnor_actions_contract::{CrateJob, CrateObligation, Step, WorkflowPolicy};
+use velnor_actions_mise::{PinnedTool, ToolCatalog};
+
+pub(super) fn prepare_crate_tools_steps(
+    input: &CrateJobInputs<'_>,
+    suite: Option<crate::matrix_step::CrateSuite>,
+    use_rust: bool,
+    use_nextest: bool,
+    use_opentofu: bool,
+) -> Result<Vec<Step>, OrchestratorError> {
+    let needs_validators = crate::matrix_step::crate_needs_generate_validators(input.policy, suite);
+    let needs_bun = input.policy == WorkflowPolicy::VelnorRepositoryV1
+        && suite.is_some_and(crate::matrix_step::CrateSuite::owns_bun);
+    let needs_crane = input.policy == WorkflowPolicy::VelnorRepositoryV1
+        && suite.is_some_and(crate::matrix_step::CrateSuite::owns_crane);
+    let mut steps = vec![crate::matrix_step::prepare_crate_tools_step_with_bun(
+        input.catalog,
+        use_rust,
+        use_nextest,
+        crate::matrix_step::prepare_install_opentofu(input.policy, suite, use_opentofu),
+        needs_validators,
+        needs_bun,
+        needs_crane,
+    )?];
+    let verify = needs_validators.then(|| crate::workflow::verify_jactionlint_step(input.catalog));
+    steps.extend(verify);
+    Ok(steps)
+}
+
+pub(super) fn image_publication_fixture_step(
+    input: &CrateJobInputs<'_>,
+    model: &CrateJob,
+) -> Result<Vec<Step>, OrchestratorError> {
+    if input.policy != WorkflowPolicy::VelnorRepositoryV1
+        || model.package_name != "velnor-actions-cli"
+    {
+        return Ok(Vec::new());
+    }
+    let env = crate::matrix_step::task_step_env(
+        input.catalog,
+        &BTreeMap::new(),
+        true,
+    )?;
+    let build = mbx_image_fixture_argv(
+        input.catalog,
+        &[
+            "build",
+            "--locked",
+            "-p",
+            "velnor-actions-cli",
+            "--example",
+            "image-publication-fixture",
+            "--message-format=json",
+        ],
+    )?;
+    let resolve = mbx_image_fixture_argv(
+        input.catalog,
+        &[
+            "run",
+            "--quiet",
+            "--locked",
+            "-p",
+            "velnor-actions-cli",
+            "--bin",
+            "velnor-actions",
+        ],
+    )?;
+    let script = format!(
+        r#"set -eu; cd "${{GITHUB_WORKSPACE:?}}"; trap 'rm -f "$RUNNER_TEMP/velnor-image-publication-fixture-artifacts.json" "$RUNNER_TEMP/velnor-image-publication-fixture-path.txt"' EXIT; {build} > "$RUNNER_TEMP/velnor-image-publication-fixture-artifacts.json"; VELNOR_INTERNAL_OP=repo-policy-v1 VELNOR_REPO_POLICY_ACTION=artifact-executable VELNOR_REPO_POLICY_ROOT="$GITHUB_WORKSPACE" VELNOR_REPO_POLICY_MESSAGES="$RUNNER_TEMP/velnor-image-publication-fixture-artifacts.json" VELNOR_REPO_POLICY_MANIFEST=crates/velnor-actions-cli/Cargo.toml VELNOR_REPO_POLICY_TARGET=image-publication-fixture VELNOR_REPO_POLICY_ARTIFACT_KIND=example {resolve} > "$RUNNER_TEMP/velnor-image-publication-fixture-path.txt"; IFS= read -r fixture < "$RUNNER_TEMP/velnor-image-publication-fixture-path.txt"; case "$fixture" in /*) test -x "$fixture"; printf 'VELNOR_IMAGE_PUBLICATION_FIXTURE=%s\n' "$fixture" >> "$GITHUB_ENV" ;; *) printf '%s\n' 'Cargo did not select an absolute image publication fixture' >&2; exit 1 ;; esac"#
+    );
+    let step = velnor_actions_workflow_renderer::shell_step(
+        "Prepare image publication fixture",
+        vec![
+            "bash".to_owned(),
+            "-c".to_owned(),
+            script,
+        ],
+        env,
+    )?;
+    Ok(vec![step])
+}
+
+fn mbx_image_fixture_argv(
+    catalog: &ToolCatalog,
+    cargo_args: &[&str],
+) -> Result<String, OrchestratorError> {
+    let argv = crate::vectors::exec_argv(
+        vec![PinnedTool::Rust],
+        "mbx",
+        cargo_args,
+        catalog,
+    )?;
+    velnor_actions_workflow_renderer::join_argv_for_run(&argv).map_err(OrchestratorError::from)
+}
 
 pub(super) fn obligation_steps(
     input: &CrateJobInputs<'_>,
