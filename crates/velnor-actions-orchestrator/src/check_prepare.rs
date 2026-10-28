@@ -160,7 +160,8 @@ pub(crate) fn prepare_check_with_context(
         &group.context_digest(),
     )
     .map_err(|error| internal(&error.to_string()))?;
-    let prepared = materialize(group, &home, cwd, check, deadline);
+    let runtime = approved_runtime_for_check(&root, check)?;
+    let prepared = materialize(group, &home, cwd, check, &runtime, deadline);
     match prepared {
         Ok(parts) => Ok(OwnedCheck {
             qualified: parts.qualified,
@@ -256,11 +257,27 @@ fn verify_source(
     }
 }
 
+fn approved_runtime_for_check(
+    root: &Path,
+    check: &DiscoveredCheck,
+) -> Result<velnor_actions_mise::catalog::lock::ApprovedMiseRuntime, OrchestratorError> {
+    let approved = crate::controller_approval::ControllerApprovedRelease::load_active_approval(root)?;
+    let target = check.check.runner.platform.release_target();
+    approved
+        .as_authority()
+        .mise_runtime
+        .iter()
+        .find(|runtime| runtime.target == target)
+        .cloned()
+        .ok_or_else(|| internal("mise_runtime_missing_target"))
+}
+
 fn materialize(
     group: &RestoredGroupContext,
     home: &Path,
     cwd: PathBuf,
     check: &DiscoveredCheck,
+    runtime: &velnor_actions_mise::catalog::lock::ApprovedMiseRuntime,
     deadline: CheckDeadline,
 ) -> Result<PreparedParts, OrchestratorError> {
     for name in [
@@ -277,7 +294,7 @@ fn materialize(
         std::fs::create_dir(home.join(name)).map_err(|_| internal("check_home_creation"))?;
         checkpoint(deadline)?;
     }
-    binary::project_mise_binary(home, check.check.runner.platform, deadline)?;
+    binary::project_mise_binary(home, check.check.runner.platform, runtime, deadline)?;
     crate::exclusive_write::write_exclusive_until(
         &home.join("empty.toml"),
         b"",
