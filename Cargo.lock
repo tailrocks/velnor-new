@@ -975,14 +975,14 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-actionlint"
-version = "0.1.66"
+version = "0.1.67"
 dependencies = [
  "velnor-actions-contract",
 ]
 
 [[package]]
 name = "velnor-actions-ansible"
-version = "0.1.66"
+version = "0.1.67"
 dependencies = [
  "thiserror",
  "toml",
@@ -991,7 +991,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-bun"
-version = "0.1.66"
+version = "0.1.67"
 dependencies = [
  "serde_json",
  "thiserror",
@@ -1001,7 +1001,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-cli"
-version = "0.1.66"
+version = "0.1.67"
 dependencies = [
  "clap",
  "flate2",
@@ -1020,7 +1020,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-contract"
-version = "0.1.66"
+version = "0.1.67"
 dependencies = [
  "blake3",
  "serde",
@@ -1031,7 +1031,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-dbt"
-version = "0.1.66"
+version = "0.1.67"
 dependencies = [
  "thiserror",
  "toml",
@@ -1040,7 +1040,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-freshness"
-version = "0.1.66"
+version = "0.1.67"
 dependencies = [
  "flate2",
  "rustix",
@@ -1055,14 +1055,14 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-gradle"
-version = "0.1.66"
+version = "0.1.67"
 dependencies = [
  "sha2",
 ]
 
 [[package]]
 name = "velnor-actions-mise"
-version = "0.1.66"
+version = "0.1.67"
 dependencies = [
  "rustix",
  "serde",
@@ -1074,7 +1074,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator"
-version = "0.1.66"
+version = "0.1.67"
 dependencies = [
  "base64",
  "flate2",
@@ -1109,7 +1109,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-rust"
-version = "0.1.66"
+version = "0.1.67"
 dependencies = [
  "serde",
  "serde_json",
@@ -1119,7 +1119,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-tofu"
-version = "0.1.66"
+version = "0.1.67"
 dependencies = [
  "hcl-rs",
  "serde",
@@ -1129,7 +1129,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-workflow-renderer"
-version = "0.1.66"
+version = "0.1.67"
 dependencies = [
  "rustix",
  "serde",
@@ -1148,7 +1148,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-archive-guard"
-version = "0.1.66"
+version = "0.1.67"
 dependencies = [
  "flate2",
  "rustix",

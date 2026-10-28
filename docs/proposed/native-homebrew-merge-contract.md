@@ -106,7 +106,9 @@ The generic protected Homebrew seed contract uses the closed version-three
 template, whose format floor remains SDK 0.1.60. Each compiled transition sets
 its own `minimum_sdk_version`, which determines the SDK required to author that
 transition. The current Jackin transition binds the first complete 19-deletion,
-27-path inventory and requires SDK 0.1.66. Its eight authored outputs include
+27-path inventory and requires SDK 0.1.67. Its canonical transition digest is
+`b3-187b6ff3096c2f3e0eeee555b8642a10e8ccada39cad7b30a241235ec27623f1`. Its
+eight authored outputs include
 `.velnor/release-manifest.json`, rendered from the exact authenticated SDK manifest
 bytes used to qualify the seed, and `.github/workflows/review-completion.yml`,
 rendered through the ordinary review-completion renderer and authenticated SDK
@@ -119,12 +121,26 @@ it retains `opened`, `synchronize`, `reopened`, and `ready_for_review`.
 Immutable SDK 0.1.57, 0.1.58, and 0.1.59 retain their original version-two
 implementation.
 
-For Velnor's current workflow, `.velnor/generator.lock` and the Plan bootstrap
-remain on authenticated SDK 0.1.55. The Required verdict job separately acquires
-the fully published and authenticated SDK 0.1.59 controller from source commit
-`4bb724119971fe49f07b12876c54c3c159edb5e5`, using its closed platform hashes
-and GH 2.103.3 helper catalog. This Required-only controller role does not advance
-the project generator lock or change Plan's bootstrap. Its Setup Mise step keeps
+The seed is a one-time transition from an exact protected base, admitted only
+through an authenticated pull request. Its three checkout boundaries use the
+verified pull-request head. It does not support merge queues; adding a
+`merge_group` trigger alone cannot authenticate a queue commit. GitHub requires
+that separate event [when using merge queues](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue).
+Before merging
+the seed, verify that the Tap does not require a merge queue. Structural cutover
+replaces this bootstrap workflow with the ordinary generated Homebrew workflow,
+which supports `merge_group`.
+
+The seed emits regular `CLAUDE.md` containing exactly `@AGENTS.md` followed by
+one newline. Claude resolves this [relative import](https://code.claude.com/docs/en/memory#import-additional-files) from the repository root, so
+`AGENTS.md` remains the single instruction source. Protected source reads and
+blob checks remain required; candidate validation also requires its unchanged
+mode and blob identity. Candidate transport still rejects symlinks.
+
+For Velnor's current workflow, `.velnor/generator.lock`, the Plan bootstrap,
+and the Required controller use authenticated SDK 0.1.66 from source commit
+`ecee0521d8631315790662107231dabf2ba6b1ec`. Controller approvals and the lock
+bind its published manifest and platform hashes. The Setup Mise step keeps
 the default 2026.10.21 pin.
 
 The candidate workflow establishes no pre-merge authority. The protected

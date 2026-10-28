@@ -3,6 +3,8 @@
 
 mod completed_generator_verification;
 mod homebrew_adoption_seed_public_assertions;
+#[path = "homebrew_adoption_seed_public/candidate.rs"]
+mod homebrew_adoption_seed_public_candidate;
 #[path = "homebrew_adoption_seed_public/deletions.rs"]
 mod homebrew_adoption_seed_public_deletions;
 
