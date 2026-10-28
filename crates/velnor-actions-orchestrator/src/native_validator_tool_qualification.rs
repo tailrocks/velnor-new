@@ -1,14 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ffi::OsString;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write, copy};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use sha2::{Digest, Sha256};
-use velnor_actions_mise::IsolatedCommand;
+
+#[path = "native_validator_tool_qualification/download.rs"]
+mod download;
+use download::download_archive;
 
 #[path = "native_validator_tool_qualification/receipts.rs"]
 mod receipts;
@@ -29,10 +30,7 @@ const PHASE_DIR: &str = "native-validator-tool-qualification";
 const PLAN_FILE: &str = "validator-tool-install-plan.json";
 const ADMISSION_FILE: &str = "validator-tool-lock-admission.txt";
 const RECIPE_FILE: &str = "scripts/generator-release/source-qualification-validator-recipes.json";
-const CURL: &str = "/usr/bin/curl";
 const MAX_RECEIPT_BYTES: u64 = 1024 * 1024;
-const PROCESS_OUTPUT_BYTES: usize = 64 * 1024;
-const ARCHIVE_TIMEOUT: Duration = Duration::from_secs(300);
 
 struct Context {
     workspace: PathBuf,
@@ -106,7 +104,12 @@ pub fn run_native_validator_tool_qualification_from_env(
             Err(log_error) => Err(log_error),
         },
     };
-    let status = write_status(&phase.join("status.txt"), &source_head, &event_name, operation.is_ok());
+    let status = write_status(
+        &phase.join("status.txt"),
+        &source_head,
+        &event_name,
+        operation.is_ok(),
+    );
     match (operation, status) {
         (Ok(()), Ok(())) => Ok(()),
         (Err(error), _) | (Ok(()), Err(error)) => Err(error),
@@ -131,7 +134,8 @@ fn run_owned_phase(
     let request = phase.join("request.json");
     let work_dir = phase.join("work");
     let candidate = phase.join("candidate.json");
-    if let Err(error) = crate::qualification_candidate::qualify_tools(&request, &work_dir, &candidate)
+    if let Err(error) =
+        crate::qualification_candidate::qualify_tools(&request, &work_dir, &candidate)
     {
         append_log(&mut log, error.to_string().as_bytes())?;
         append_log(&mut log, b"\n")?;
@@ -166,71 +170,26 @@ fn validate_cli_identity(context: &Context, evidence: &Path) -> Result<(), Orche
         return Err(internal("native_validator_source_cli_path_mismatch"));
     }
     let binary_sha256 = hash_regular_file(&binary)?;
-    let identity = read_runner_text(&evidence.join("cli-identity.txt"), "native_validator_cli_identity")?;
+    let identity = read_runner_text(
+        &evidence.join("cli-identity.txt"),
+        "native_validator_cli_identity",
+    )?;
     if !contains_line(&identity, &format!("source_head={}", context.source_head))
         || !contains_line(
             &identity,
             &format!("binary_path={}", context.binary_receipt_path),
         )
-        || !contains_line(&identity, &format!("expected_version={}", context.binary_version))
-        || !contains_line(&identity, &format!("binary_version={}", context.binary_version))
+        || !contains_line(
+            &identity,
+            &format!("expected_version={}", context.binary_version),
+        )
+        || !contains_line(
+            &identity,
+            &format!("binary_version={}", context.binary_version),
+        )
         || !contains_line(&identity, &format!("binary_sha256={binary_sha256}"))
     {
         return Err(internal("native_validator_source_cli_identity_mismatch"));
-    }
-    Ok(())
-}
-
-fn download_archive(archive: &Archive, log: &mut File) -> Result<(), OrchestratorError> {
-    drop(create_private_file(&archive.path)?);
-    let args: Vec<OsString> = [
-        "--fail",
-        "--location",
-        "--silent",
-        "--show-error",
-        "--proto",
-        "=https",
-        "--proto-redir",
-        "=https",
-        "--connect-timeout",
-        "15",
-        "--max-time",
-        "300",
-        "--retry",
-        "3",
-        "--retry-all-errors",
-        "--retry-delay",
-        "1",
-        "--output",
-    ]
-    .into_iter()
-    .map(OsString::from)
-    .chain([
-        archive.path.as_os_str().to_owned(),
-        OsString::from(archive.url.as_str()),
-    ])
-    .collect();
-    let command = IsolatedCommand::repo_task(CURL, args, &[])
-        .map_err(|error| internal(&format!("native_validator_curl_command:{error}")))?;
-    let output = command.run_bounded(PROCESS_OUTPUT_BYTES, ARCHIVE_TIMEOUT);
-    match output {
-        Ok(output) => {
-            append_log(log, &output.stdout)?;
-            append_log(log, &output.stderr)?;
-            if !output.success {
-                return Err(internal("native_validator_archive_download_failed"));
-            }
-        }
-        Err(error) => {
-            append_log(log, error.to_string().as_bytes())?;
-            append_log(log, b"\n")?;
-            return Err(internal("native_validator_archive_download_failed"));
-        }
-    }
-    let metadata = fs::symlink_metadata(&archive.path)
-        .map_err(|error| io_error(&archive.path, error))?;
-    if metadata.file_type().is_symlink() || !metadata.is_file() {
-        return Err(internal("native_validator_archive_download_unsafe"));
     }
     Ok(())
 }
@@ -259,9 +218,7 @@ fn create_private_directory(path: &Path) -> Result<(), OrchestratorError> {
         use std::os::unix::fs::DirBuilderExt;
         builder.mode(0o700);
     }
-    builder
-        .create(path)
-        .map_err(|error| io_error(path, error))
+    builder.create(path).map_err(|error| io_error(path, error))
 }
 
 fn create_private_file(path: &Path) -> Result<File, OrchestratorError> {
