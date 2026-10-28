@@ -148,6 +148,11 @@ other task kind. The generated job key is `task-{id}`. This native job remains
 a single hosted macOS 26 ARM64 job in every schema-2 execution mode; it checks out the same run source and
 does not accept a repository or ref override.
 
+The observed `task-{id}` job must match exactly one registered workflow-task
+owner and that owner's declared runner. Velnor admits the registered source
+before runner validation; unknown sources, ambiguous owners, runner mismatches,
+and missing `Required` fan-in still fail closed.
+
 The job checks for Xcode 26.6 build 17F113 and macOS SDK 26.5 under
 `/Applications/Xcode_26.6.app/Contents/Developer`. Checkout disables
 persisted credentials. The pinned Mise action sets up only Mise itself. The
@@ -178,6 +183,15 @@ artifacts = [
   { name = "native-evidence", paths = ["artifacts/native-evidence.json"], when = "always", retention_days = 7 },
 ]
 ```
+
+Velnor accepts at most 500 artifact entries for one build task and rejects any
+path pattern containing `$`. The task step has the stable ID
+`build-task-run`. A `success` upload uses
+`always() && steps.build-task-run.outcome == 'success'`; a `failure` upload uses
+`always() && steps.build-task-run.outcome == 'failure'`; `always` uses
+`always()`. Build-task uploads set `include-hidden-files: true`, so a declared
+hidden file follows the same required-file behavior as any other path. Rust
+Suite uploads keep their existing hidden-file and warn-on-missing behavior.
 
 The renderer appends one upload step after the task for each entry and sets
 `if-no-files-found: error`. An absent or empty `artifacts` list adds no upload
