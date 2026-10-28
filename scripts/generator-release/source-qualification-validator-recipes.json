@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "platform": "linux_x64",
+  "timeout_seconds": 180,
+  "tools": [
+    {
+      "recipe": {
+        "id": "jactionlint-linux-x64",
+        "backend": { "kind": "aqua", "package": "jdx/jactionlint" },
+        "version": "2.3.0",
+        "options": { "kind": "default" },
+        "depends_on": [],
+        "platforms": [
+          {
+            "platform": "linux_x64",
+            "artifacts": [{ "url": "" }],
+            "dependency_artifacts": [],
+            "executables": [
+              {
+                "name": "jactionlint",
+                "path": "jactionlint",
+                "probe": { "kind": "version", "expected": "2.3.0" }
+              }
+            ]
+          }
+        ]
+      },
+      "archives": []
+    },
+    {
+      "recipe": {
+        "id": "shellcheck-linux-x64",
+        "backend": { "kind": "aqua", "package": "koalaman/shellcheck" },
+        "version": "0.11.0",
+        "options": { "kind": "default" },
+        "depends_on": [],
+        "platforms": [
+          {
+            "platform": "linux_x64",
+            "artifacts": [{ "url": "" }],
+            "dependency_artifacts": [],
+            "executables": [
+              {
+                "name": "shellcheck",
+                "path": "shellcheck",
+                "probe": {
+                  "kind": "shellcheck_version",
+                  "expected": "ShellCheck - shell script analysis tool\nversion: 0.11.0\nlicense: GNU General Public License, version 3\nwebsite: https://www.shellcheck.net"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "archives": []
+    }
+  ]
+}

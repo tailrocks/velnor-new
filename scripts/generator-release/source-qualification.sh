@@ -163,7 +163,8 @@ test ! -s "$evidence/checkout-status.txt"
       scripts/generator-release/test-plan-diagnostics.sh scripts/generator-release/test-qualification-output-bindings.sh \
       scripts/generator-release/test-rust-verifier-retries.cjs \
       scripts/generator-release/qualification-validator-tools.cjs \
-      scripts/generator-release/test-qualification-validator-tools.cjs; do
+      scripts/generator-release/test-qualification-validator-tools.cjs \
+      scripts/generator-release/source-qualification-validator-recipes.json; do
   if [ -f "$path" ] && [ ! -L "$path" ]; then
     sha256sum "$path" >>"$evidence/source-inputs.sha256"
   else
@@ -705,6 +706,64 @@ if [ "$artifact_status" -ne 0 ]; then
   printf 'artifact_status=1\n' >"$evidence/logs/cli-build.artifact.exit" || true
 fi
 exit "$final_status"
+    ;;
+  qualify-linux-x64-native-validator-tools)
+if [ "${GITHUB_EVENT_NAME:-}" != workflow_dispatch ]; then printf 'FATAL: native validator authoring requires a workflow_dispatch event\n' >&2; exit 64; fi
+set -uo pipefail
+for path in "${RUNNER_TEMP:-}" "${CARGO_TARGET_DIR:-}"; do case "$path" in /*) ;; *) printf 'FATAL: qualification paths must be absolute\n' >&2; exit 1 ;; esac; done
+evidence="$RUNNER_TEMP/source-qualification-artifacts"
+phase_dir="$evidence/native-validator-tool-qualification"
+if [ -L "$evidence" ] || [ ! -d "$evidence" ] || [ -L "$evidence/logs" ] || [ ! -d "$evidence/logs" ] \
+  || [ -e "$phase_dir" ] || [ -L "$phase_dir" ] || ! mkdir -m 700 "$phase_dir"; then
+  printf 'FATAL: native validator evidence path is unavailable\n' >&2; exit 1
+fi
+status_file="$phase_dir/status.txt" log="$phase_dir/qualification.log" request="$phase_dir/request.json" candidate="$phase_dir/candidate.json"
+archive_root="$phase_dir/archives" work_dir="$phase_dir/work" binary="$CARGO_TARGET_DIR/release/velnor-actions"
+identity="$evidence/cli-identity.txt" source_head="${GITHUB_SHA:-unavailable}" plan="$evidence/validator-tool-install-plan.json"
+admission="$evidence/validator-tool-lock-admission.txt"
+record_qualification_status() {
+  local exit_status=$? result=failed
+  [ "$exit_status" -eq 0 ] && result=success
+  trap - EXIT
+  if ! printf 'source_head=%s\nevent=%s\nresult=%s\nexit_status=%s\n' "$source_head" "$GITHUB_EVENT_NAME" "$result" "$exit_status" >"$status_file"; then [ "$exit_status" -ne 0 ] || exit_status=1; fi
+  exit "$exit_status"
+}
+trap record_qualification_status EXIT
+umask 077
+fail_qualification() { printf 'FATAL: %s\n' "$1" >&2; exit 1; }
+if [ -L "$identity" ] || [ ! -f "$identity" ] || [ -L "$plan" ] || [ ! -f "$plan" ] || [ -L "$admission" ] || [ ! -f "$admission" ] \
+  || ! grep -Fxq 0 "$evidence/logs/validator-tool-install.exit" || ! grep -Fxq 0 "$evidence/logs/validator-tool-lock-admission.exit"; then fail_qualification 'admitted plan or source CLI identity is unavailable'; fi
+if [ -L "$binary" ] || [ ! -f "$binary" ] || [ ! -x "$binary" ]; then fail_qualification 'source CLI is unavailable'; fi
+cli_version="$("$binary" --version)"
+cli_sha256="$(sha256sum "$binary" | cut -d' ' -f1)"
+if [[ ! "$source_head" =~ ^[0-9a-f]{40}$ ]] || [[ ! "$cli_sha256" =~ ^[0-9a-f]{64}$ ]] \
+  || ! grep -Fqx "source_head=$source_head" "$identity" || ! grep -Fqx "binary_path=$binary" "$identity" \
+  || ! grep -Fqx "expected_version=$cli_version" "$identity" || ! grep -Fqx "binary_version=$cli_version" "$identity" \
+  || ! grep -Fqx "binary_sha256=$cli_sha256" "$identity"; then fail_qualification 'source CLI differs from its build identity receipt'; fi
+lock_sha256="$(sha256sum mise.lock | cut -d' ' -f1)"
+if ! grep -Fqx "source_head=$source_head" "$admission" || ! grep -Fqx "lock_sha256=$lock_sha256" "$admission"; then fail_qualification 'validator lock admission receipt differs from this source'; fi
+plan_values="$(jq -er --arg lock_sha256 "$lock_sha256" 'if .lock_sha256 == $lock_sha256 and .platform == "linux-x64" and ([.tools[].tool] == ["jactionlint", "shellcheck"]) and all(.tools[]; (.url | startswith("https://")) and (.checksum | test("^sha256:[0-9a-f]{64}$"))) then [.tools[0].url, (.tools[0].checksum | ltrimstr("sha256:")), .tools[1].url, (.tools[1].checksum | ltrimstr("sha256:"))] | @tsv else error("validator plan differs from admitted lock") end' "$plan")" || fail_qualification 'validator plan differs from admitted Linux x64 lock'
+IFS=$'\t' read -r jactionlint_url jactionlint_sha256 shellcheck_url shellcheck_sha256 <<<"$plan_values"
+jactionlint_archive="$archive_root/jactionlint-linux-x64.tar.gz"
+shellcheck_archive="$archive_root/shellcheck-linux-x64.tar.xz"
+mkdir -m 700 "$archive_root" || fail_qualification 'could not create archive directory'
+download_archive() { curl --fail --location --silent --show-error --proto '=https' --proto-redir '=https' --connect-timeout 15 --max-time 300 --retry 3 --retry-all-errors --retry-delay 1 --output "$2" "$1" >>"$log" 2>&1; }
+if ! download_archive "$jactionlint_url" "$jactionlint_archive" \
+  || ! download_archive "$shellcheck_url" "$shellcheck_archive"; then
+  cat "$log" >&2
+  fail_qualification 'pinned validator archive download failed'
+fi
+if [ -L "$jactionlint_archive" ] || [ ! -f "$jactionlint_archive" ] || [ -L "$shellcheck_archive" ] || [ ! -f "$shellcheck_archive" ]; then fail_qualification 'validator archive downloads are unsafe'; fi
+if ! jq --arg jpath "$jactionlint_archive" --arg jurl "$jactionlint_url" --arg jsha "$jactionlint_sha256" \
+  --arg spath "$shellcheck_archive" --arg surl "$shellcheck_url" --arg ssha "$shellcheck_sha256" \
+  '.tools[0].recipe.platforms[0].artifacts[0].url=$jurl | .tools[0].archives=[{path:$jpath,url:$jurl,sha256:$jsha}] | .tools[1].recipe.platforms[0].artifacts[0].url=$surl | .tools[1].archives=[{path:$spath,url:$surl,sha256:$ssha}]' \
+  scripts/generator-release/source-qualification-validator-recipes.json >"$request" 2>>"$log"; then cat "$log" >&2; fail_qualification 'native validator request could not be encoded'; fi
+if ! "$binary" qualify-tools --request "$request" --work-dir "$work_dir" \
+  --output "$candidate" >>"$log" 2>&1; then
+  cat "$log" >&2
+  fail_qualification 'source CLI rejected Linux x64 validator authoring'
+fi
+cat "$log"
     ;;
   capture-all-five-external-goldens)
 set -uo pipefail
@@ -1346,9 +1405,19 @@ done
     "$evidence/logs/root-preview.exit"; then
   final_status=1
 fi
+paths=(logs previews)
+qualification_dir=native-validator-tool-qualification
+if [ -e "$evidence/$qualification_dir" ] || [ -L "$evidence/$qualification_dir" ]; then
+  if [ -L "$evidence/$qualification_dir" ] || [ ! -d "$evidence/$qualification_dir" ] \
+    || [ -L "$evidence/$qualification_dir/status.txt" ] \
+    || [ ! -f "$evidence/$qualification_dir/status.txt" ] \
+    || ! grep -Fxq 'result=success' "$evidence/$qualification_dir/status.txt"; then
+    final_status=1
+  fi
+  paths+=("$qualification_dir")
+fi
 if ! printf 'qualification_checks_status=%s\n' "$final_status" \
   >"$evidence/qualification-final-status.txt"; then final_status=1; fi
-paths=(logs previews)
 for path in external-oracle captured-stage captured-raw external-check-stage external-check-raw external-check-diff \
   external-shell-harness-logs external-shell-harness-keep-logs repository-oracle-diff repository-oracle-stage repository-oracle-raw \
   external-shell-harness-json-proof external-shell-harness-keep-json-proof \

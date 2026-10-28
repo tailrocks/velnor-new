@@ -69,6 +69,10 @@ jobs:
       - name: Build source CLI with pinned MBX
         shell: bash
         run: bash scripts/generator-release/source-qualification.sh build-source-cli-with-pinned-mbx
+      - name: Author Linux x64 native validator candidates
+        if: success() && github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: bash scripts/generator-release/source-qualification.sh qualify-linux-x64-native-validator-tools
       - name: Capture all five external goldens
         if: always()
         shell: bash
