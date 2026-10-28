@@ -9,10 +9,10 @@ use std::{
 
 use velnor_actions_contract::homebrew_adoption::{
     HomebrewAdoptionCandidateInput, HomebrewAdoptionTransition, HomebrewAdoptionTreeChange,
-    HomebrewAdoptionTreeFile,
+    HomebrewAdoptionTreeFile, parse_homebrew_adoption_transition,
 };
 
-const EXPECTED_LEGACY_PATHS: [&str; 17] = [
+const EXPECTED_LEGACY_PATHS: [&str; 19] = [
     ".github/actions/u26/action.yml",
     ".github/actions/velnor-tool-seed/action.yml",
     ".github/actions/velnor-tools-cache-restore/action.yml",
@@ -21,6 +21,8 @@ const EXPECTED_LEGACY_PATHS: [&str; 17] = [
     ".github/actions/velnor-verify-restored-rust/action.yml",
     ".github/actions/velnor-verify-rust-manifest/action.yml",
     ".github/scripts/velnor-tools-cache-identity.sh",
+    ".github/jactionlint.yaml",
+    ".github/workflows/cache-prune.yml",
     "scripts/homebrew_install_policy.py",
     "scripts/package-update.py",
     "scripts/package-update.sh",
@@ -32,7 +34,7 @@ const EXPECTED_LEGACY_PATHS: [&str; 17] = [
     "scripts/test_package_update.py",
 ];
 
-const NEW_LEGACY_IDENTITIES: [(&str, &str); 8] = [
+const NEW_LEGACY_IDENTITIES: [(&str, &str); 10] = [
     (
         ".github/actions/u26/action.yml",
         "a9c967b569da832c684cfc2aa58eb5f428270707",
@@ -65,14 +67,24 @@ const NEW_LEGACY_IDENTITIES: [(&str, &str); 8] = [
         ".github/scripts/velnor-tools-cache-identity.sh",
         "b0b3fb1ebabc599dad940465e58c231565d42fb0",
     ),
+    (
+        ".github/jactionlint.yaml",
+        "f8549ccba3f6d2b345ec3db07b1f918b2e17ba70",
+    ),
+    (
+        ".github/workflows/cache-prune.yml",
+        "5fcab017f0388a7aa6ce18ae5d8694d2bf34eff0",
+    ),
 ];
 
 #[test]
 fn public_seed_transition_binds_exact_legacy_inventory_and_candidate() -> Result<(), Box<dyn Error>>
 {
-    let transition: HomebrewAdoptionTransition = serde_json::from_slice(include_bytes!(
-        "../../../../.velnor/qualification/homebrew/jackin/transition.json"
-    ))?;
+    let bytes = include_bytes!("../../../../.velnor/qualification/homebrew/jackin/transition.json");
+    let transition = parse_homebrew_adoption_transition(bytes)?;
+    let mut noncanonical = bytes.to_vec();
+    noncanonical.push(b'\n');
+    assert!(parse_homebrew_adoption_transition(&noncanonical).is_err());
     assert_exact_inventory(&transition)?;
     assert_transition_digest_binding(&transition)?;
     assert_candidate_inventory(&transition)?;
@@ -87,7 +99,7 @@ fn assert_exact_inventory(transition: &HomebrewAdoptionTransition) -> Result<(),
         .map(|entry| entry.path.as_str())
         .collect::<BTreeSet<_>>();
     assert_eq!(paths, BTreeSet::from(EXPECTED_LEGACY_PATHS));
-    assert_eq!(transition.deletions.len(), 17);
+    assert_eq!(transition.deletions.len(), 19);
     for (path, blob_sha) in NEW_LEGACY_IDENTITIES {
         let entry = transition
             .deletions
@@ -97,6 +109,7 @@ fn assert_exact_inventory(transition: &HomebrewAdoptionTransition) -> Result<(),
         assert_eq!(entry.mode, 0o100_644, "unexpected mode for {path}");
         assert_eq!(entry.blob_sha, blob_sha, "unexpected blob for {path}");
     }
+    assert_eq!(transition.minimum_sdk_version, "0.1.64");
     transition.validate()?;
     Ok(())
 }
@@ -107,6 +120,12 @@ fn assert_transition_digest_binding(
     let policy: serde_json::Value = serde_json::from_slice(include_bytes!(
         "../../../../.velnor/qualification/homebrew/jackin/cutover-author-policy.json"
     ))?;
+    assert_eq!(
+        velnor_actions_contract::canonical_json_bytes(&policy)?,
+        include_bytes!(
+            "../../../../.velnor/qualification/homebrew/jackin/cutover-author-policy.json"
+        )
+    );
     let digest = transition.digest()?;
     assert_eq!(
         policy
@@ -134,7 +153,7 @@ fn assert_candidate_inventory(
         velnor_actions_contract::homebrew_authority::HOMEBREW_SOURCE_AUTHORITY_LOCATOR_PATH,
     );
     assert_eq!(actual, expected);
-    assert_eq!(actual.len(), 25);
+    assert_eq!(actual.len(), 27);
 
     let mut extra = Candidate::for_transition(transition)?;
     extra.changes.push(deletion(
@@ -175,6 +194,10 @@ fn assert_candidate_inventory(
 fn assert_other_github_deletion_classes_rejected(transition: &HomebrewAdoptionTransition) {
     for path in [
         ".github/workflows/unrelated.yml",
+        ".github/workflows/cache-prune-extra.yml",
+        ".github/workflows/nested/cache-prune.yml",
+        ".github/jactionlint.yml",
+        ".github/jactionlint.yaml.bak",
         ".github/actions/unlisted/extra.yml",
         ".github/actions/example/nested/action.yml",
         ".github/actions/../action.yml",

@@ -200,11 +200,16 @@ const STAGED_ENTRY: &str = r#"{
       }
     ],
     "gh": "2.103.2",
-    "mise": {
+    "mise_bootstrap": {
       "version": "2026.10.21",
       "artifact": "https://github.com/jdx/mise/releases/download/v2026.10.21/mise-v2026.10.21-linux-x64",
       "sha256": "ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07"
     },
+    "mise_runtime": [
+      {"target": "x86_64-unknown-linux-gnu", "version": "2026.10.20", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bytes": 173449633},
+      {"target": "aarch64-apple-darwin", "version": "2026.10.20", "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "bytes": 138238817},
+      {"target": "x86_64-apple-darwin", "version": "2026.10.20", "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "bytes": 169788225}
+    ],
     "state": "staged"
   }"#;
 
@@ -382,3 +387,6 @@ fn symlinked_approvals_are_rejected() -> Result<(), Box<dyn Error>> {
     );
     Ok(())
 }
+
+#[path = "controller_approval_public/runtime.rs"]
+mod runtime_public;

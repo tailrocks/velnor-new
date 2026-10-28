@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::Deserialize;
-use velnor_actions_contract::ids::is_lower_hex_len;
+use std::collections::BTreeSet;
+use velnor_actions_contract::{ReleaseTarget, ids::is_lower_hex_len};
 
 use crate::OrchestratorError;
 
@@ -15,7 +16,8 @@ pub(crate) struct ApprovalEntry {
     pub(crate) manifest_digest: String,
     pub(crate) binaries: Vec<ApprovalBinary>,
     pub(crate) gh: String,
-    pub(crate) mise: ApprovalMise,
+    pub(crate) mise_bootstrap: ApprovalMiseBootstrap,
+    pub(crate) mise_runtime: Vec<ApprovalMiseRuntime>,
     pub(crate) state: String,
 }
 
@@ -29,10 +31,19 @@ pub(crate) struct ApprovalBinary {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct ApprovalMise {
+pub(crate) struct ApprovalMiseBootstrap {
     pub(crate) version: String,
     pub(crate) artifact: String,
     pub(crate) sha256: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ApprovalMiseRuntime {
+    pub(crate) target: String,
+    pub(crate) version: String,
+    pub(crate) sha256: String,
+    pub(crate) bytes: u64,
 }
 
 const KNOWN_TARGETS: [&str; 3] = [
@@ -50,58 +61,43 @@ impl ApprovalEntry {
                 "controller_approvals:state_slot_mismatch:{slot}"
             )));
         }
-        check_semver_format(&self.version).map_err(|()| {
-            contract("controller_approvals:malformed_semver".to_owned())
-        })?;
+        check_semver_format(&self.version)
+            .map_err(|()| contract("controller_approvals:malformed_semver".to_owned()))?;
         if !is_lower_hex_len(&self.commit, 40) {
-            return Err(contract(
-                "controller_approvals:malformed_commit".to_owned(),
-            ));
+            return Err(contract("controller_approvals:malformed_commit".to_owned()));
         }
-        let digest = self.manifest_digest.strip_prefix("sha256:").ok_or_else(|| {
-            contract("controller_approvals:malformed_sha256".to_owned())
-        })?;
+        let digest = self
+            .manifest_digest
+            .strip_prefix("sha256:")
+            .ok_or_else(|| contract("controller_approvals:malformed_sha256".to_owned()))?;
         if !is_lower_hex_len(digest, 64) {
-            return Err(contract(
-                "controller_approvals:malformed_sha256".to_owned(),
-            ));
+            return Err(contract("controller_approvals:malformed_sha256".to_owned()));
         }
         if self.binaries.len() != 3 {
-            return Err(contract(
-                "controller_approvals:missing_target".to_owned(),
-            ));
+            return Err(contract("controller_approvals:missing_target".to_owned()));
         }
         for binary in &self.binaries {
             if !is_lower_hex_len(&binary.sha256, 64) {
-                return Err(contract(
-                    "controller_approvals:malformed_sha256".to_owned(),
-                ));
+                return Err(contract("controller_approvals:malformed_sha256".to_owned()));
             }
         }
         check_semver_format(&self.gh)
             .map_err(|()| contract("controller_approvals:malformed_semver".to_owned()))?;
-        check_semver_format(&self.mise.version)
+        check_semver_format(&self.mise_bootstrap.version)
             .map_err(|()| contract("controller_approvals:malformed_semver".to_owned()))?;
-        if !is_lower_hex_len(&self.mise.sha256, 64) {
-            return Err(contract(
-                "controller_approvals:malformed_sha256".to_owned(),
-            ));
+        if !is_lower_hex_len(&self.mise_bootstrap.sha256, 64) {
+            return Err(contract("controller_approvals:malformed_sha256".to_owned()));
         }
-        if !is_https_url(&self.mise.artifact) {
-            return Err(contract(
-                "controller_approvals:malformed_url".to_owned(),
-            ));
+        if !is_https_url(&self.mise_bootstrap.artifact) {
+            return Err(contract("controller_approvals:malformed_url".to_owned()));
         }
+        self.validate_mise_runtime()?;
         for binary in &self.binaries {
             if !KNOWN_TARGETS.contains(&binary.target.as_str()) {
-                return Err(contract(
-                    "controller_approvals:unknown_target".to_owned(),
-                ));
+                return Err(contract("controller_approvals:unknown_target".to_owned()));
             }
             if !is_https_url(&binary.artifact) {
-                return Err(contract(
-                    "controller_approvals:malformed_url".to_owned(),
-                ));
+                return Err(contract("controller_approvals:malformed_url".to_owned()));
             }
         }
         let mut expected = String::from("sha256:");
@@ -110,6 +106,60 @@ impl ApprovalEntry {
             return Err(contract(
                 "controller_approvals:manifest_digest_mismatch".to_owned(),
             ));
+        }
+        Ok(())
+    }
+
+    fn validate_mise_runtime(&self) -> Result<(), OrchestratorError> {
+        if self.mise_runtime.len() != ReleaseTarget::ALL.len() {
+            return Err(contract(
+                "controller_approvals:missing_runtime_target".to_owned(),
+            ));
+        }
+        let mut targets = BTreeSet::new();
+        let mut version = None;
+        for runtime in &self.mise_runtime {
+            if ReleaseTarget::parse_triple(&runtime.target).is_none() {
+                return Err(contract(
+                    "controller_approvals:unknown_runtime_target".to_owned(),
+                ));
+            }
+            if !targets.insert(runtime.target.as_str()) {
+                return Err(contract(
+                    "controller_approvals:duplicate_runtime_target".to_owned(),
+                ));
+            }
+            if !check_exact_version_format(&runtime.version) {
+                return Err(contract(
+                    "controller_approvals:malformed_runtime_version".to_owned(),
+                ));
+            }
+            if let Some(expected) = version {
+                if runtime.version.as_str() != expected {
+                    return Err(contract(
+                        "controller_approvals:inconsistent_runtime_version".to_owned(),
+                    ));
+                }
+            } else {
+                version = Some(runtime.version.as_str());
+            }
+            if !is_lower_hex_len(&runtime.sha256, 64) {
+                return Err(contract(
+                    "controller_approvals:malformed_runtime_sha256".to_owned(),
+                ));
+            }
+            if runtime.bytes == 0 {
+                return Err(contract(
+                    "controller_approvals:zero_runtime_bytes".to_owned(),
+                ));
+            }
+        }
+        for target in ReleaseTarget::ALL {
+            if !targets.contains(target.triple()) {
+                return Err(contract(
+                    "controller_approvals:missing_runtime_target".to_owned(),
+                ));
+            }
         }
         Ok(())
     }
@@ -191,9 +241,18 @@ fn check_semver_format(version: &str) -> Result<(), ()> {
     Ok(())
 }
 
+fn check_exact_version_format(version: &str) -> bool {
+    check_semver_format(version).is_ok()
+        && version
+            .split('.')
+            .all(|part| part.len() == 1 || !part.starts_with('0'))
+}
+
 fn is_https_url(url: &str) -> bool {
     url.starts_with("https://")
-        && !url.bytes().any(|byte| byte.is_ascii_whitespace() || byte.is_ascii_control())
+        && !url
+            .bytes()
+            .any(|byte| byte.is_ascii_whitespace() || byte.is_ascii_control())
 }
 
 fn contract(problem: String) -> OrchestratorError {

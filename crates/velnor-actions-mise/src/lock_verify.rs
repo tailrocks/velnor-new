@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+use velnor_actions_contract::ids::is_lower_hex_len;
 use velnor_actions_contract::{GeneratorLock, ReleaseManifest, ReleaseTarget, TargetRecord};
 
 use super::{
@@ -54,9 +56,18 @@ pub fn catalog_for_published_verdict(catalog: &ToolCatalog) -> ToolCatalog {
 pub struct ApprovedGeneratorRelease<'a> {
     pub manifest: &'a ReleaseManifest,
     pub gh_version: &'a str,
-    pub mise_version: &'a str,
-    pub mise_artifact: &'a str,
-    pub mise_sha256: &'a str,
+    pub mise_bootstrap_version: &'a str,
+    pub mise_bootstrap_artifact: &'a str,
+    pub mise_bootstrap_sha256: &'a str,
+    pub mise_runtime: &'a [ApprovedMiseRuntime],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApprovedMiseRuntime {
+    pub target: ReleaseTarget,
+    pub version: String,
+    pub sha256: String,
+    pub bytes: u64,
 }
 
 pub fn verify_lock_against_manifest(
@@ -106,6 +117,7 @@ pub fn verify_lock_against_approved_release(
         )));
     }
     verify_lock_against_manifest(lock, manifest)?;
+    verify_approved_mise_runtime(approved)?;
     verify_approved_mise_bootstrap(lock, approved)
 }
 
@@ -125,16 +137,16 @@ fn verify_approved_mise_bootstrap(
     lock: &GeneratorLock,
     approved: &ApprovedGeneratorRelease<'_>,
 ) -> Result<(), LockError> {
-    if lock.mise_bootstrap.version != approved.mise_version {
+    if lock.mise_bootstrap.version != approved.mise_bootstrap_version {
         return Err(mismatch(format!(
             "mise_bootstrap:{}:{}",
-            lock.mise_bootstrap.version, approved.mise_version
+            lock.mise_bootstrap.version, approved.mise_bootstrap_version
         )));
     }
-    if lock.mise_bootstrap.artifact != approved.mise_artifact {
+    if lock.mise_bootstrap.artifact != approved.mise_bootstrap_artifact {
         return Err(mismatch("mise_bootstrap_artifact".to_owned()));
     }
-    if lock.mise_bootstrap.sha256 != approved.mise_sha256 {
+    if lock.mise_bootstrap.sha256 != approved.mise_bootstrap_sha256 {
         return Err(mismatch("mise_bootstrap_sha256".to_owned()));
     }
     Ok(())
@@ -152,29 +164,60 @@ pub fn catalog_for_approved_generator(
     Ok(helper)
 }
 
-pub fn mise_binary_for_approved_generator(
+pub fn mise_binary_for_approved_generator<'a>(
     lock: &GeneratorLock,
     target: ReleaseTarget,
-    approved: &ApprovedGeneratorRelease<'_>,
-) -> Result<super::MiseBinaryIdentity, LockError> {
+    approved: &ApprovedGeneratorRelease<'a>,
+) -> Result<super::MiseBinaryIdentity<'a>, LockError> {
     verify_lock_against_approved_release(lock, approved)?;
-    let (sha256, bytes) = match target {
-        ReleaseTarget::LinuxX86_64 => (
-            "3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d",
-            173_449_632,
-        ),
-        ReleaseTarget::MacosArm64 => (
-            "7dc61dfa71abbcda1c40d18440bc556b5d58b80e6042bc4f95fd106fa1bb3c66",
-            138_238_816,
-        ),
-        ReleaseTarget::MacosX86_64 => (
-            "8d5e1591811143f15334f690373cefb58c13bd6cbd0292008748fd777f6c99d8",
-            169_788_224,
-        ),
-    };
+    let runtime = approved
+        .mise_runtime
+        .iter()
+        .find(|runtime| runtime.target == target)
+        .ok_or_else(|| invalid(format!("mise_runtime_missing_target:{}", target.triple())))?;
     Ok(super::MiseBinaryIdentity {
-        version: "2026.10.19",
-        sha256,
-        bytes,
+        version: &runtime.version,
+        sha256: &runtime.sha256,
+        bytes: runtime.bytes,
     })
+}
+
+fn verify_approved_mise_runtime(approved: &ApprovedGeneratorRelease<'_>) -> Result<(), LockError> {
+    if approved.mise_runtime.len() != ReleaseTarget::ALL.len() {
+        return Err(invalid("mise_runtime_missing_target".to_owned()));
+    }
+    let mut targets = BTreeSet::new();
+    let mut version = None;
+    for runtime in approved.mise_runtime {
+        if !targets.insert(runtime.target) {
+            return Err(invalid("mise_runtime_duplicate_target".to_owned()));
+        }
+        if super::validate_concrete_exact_version("mise", &runtime.version).is_err() {
+            return Err(invalid("mise_runtime_malformed_version".to_owned()));
+        }
+        if let Some(expected) = version {
+            if runtime.version.as_str() != expected {
+                return Err(invalid("mise_runtime_inconsistent_version".to_owned()));
+            }
+        } else {
+            version = Some(runtime.version.as_str());
+        }
+        if !is_lower_hex_len(&runtime.sha256, 64) {
+            return Err(invalid("mise_runtime_malformed_sha256".to_owned()));
+        }
+        if runtime.bytes == 0 {
+            return Err(invalid("mise_runtime_zero_bytes".to_owned()));
+        }
+    }
+    if ReleaseTarget::ALL
+        .iter()
+        .any(|target| !targets.contains(target))
+    {
+        return Err(invalid("mise_runtime_missing_target".to_owned()));
+    }
+    Ok(())
+}
+
+fn invalid(problem: String) -> LockError {
+    LockError::Invalid { problem }
 }

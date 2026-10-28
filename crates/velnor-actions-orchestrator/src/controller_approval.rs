@@ -4,8 +4,8 @@
 use std::path::Path;
 
 use serde::Deserialize;
-use velnor_actions_contract::{EXPECTED_REPOSITORY, ReleaseManifest, TargetRecord};
-use velnor_actions_mise::catalog::lock::ApprovedGeneratorRelease;
+use velnor_actions_contract::{EXPECTED_REPOSITORY, ReleaseManifest, ReleaseTarget, TargetRecord};
+use velnor_actions_mise::catalog::lock::{ApprovedGeneratorRelease, ApprovedMiseRuntime};
 
 use crate::OrchestratorError;
 use crate::controller_manifest_digest::ApprovalEntry;
@@ -18,9 +18,7 @@ pub(crate) fn load_policy_approval(
         return Ok(None);
     }
     if !root.join(APPROVALS_REL).is_file() {
-        return Err(contract(
-            "controller_approvals:missing_approval".to_owned(),
-        ));
+        return Err(contract("controller_approvals:missing_approval".to_owned()));
     }
     ControllerApprovedRelease::load_active_approval(root).map(Some)
 }
@@ -42,9 +40,10 @@ struct ApprovalsFile {
 pub(crate) struct ControllerApprovedRelease {
     manifest: ReleaseManifest,
     gh_version: String,
-    mise_version: String,
-    mise_artifact: String,
-    mise_sha256: String,
+    mise_bootstrap_version: String,
+    mise_bootstrap_artifact: String,
+    mise_bootstrap_sha256: String,
+    mise_runtime: Vec<ApprovedMiseRuntime>,
 }
 
 impl ControllerApprovedRelease {
@@ -66,9 +65,8 @@ impl ControllerApprovedRelease {
     }
 
     pub(crate) fn from_approvals_text(text: &str) -> Result<Self, OrchestratorError> {
-        let approvals: ApprovalsFile = serde_json::from_str(text).map_err(|err| {
-            contract(format!("controller_approvals:malformed_json:{err}"))
-        })?;
+        let approvals: ApprovalsFile = serde_json::from_str(text)
+            .map_err(|err| contract(format!("controller_approvals:malformed_json:{err}")))?;
         approvals.validate()?;
         let active = &approvals.active;
         let manifest = ReleaseManifest {
@@ -89,12 +87,28 @@ impl ControllerApprovedRelease {
         manifest
             .validate(APPROVALS_FILE)
             .map_err(|err| contract(format!("controller_approvals:manifest:{err}")))?;
+        let mise_runtime = active
+            .mise_runtime
+            .iter()
+            .map(|runtime| {
+                let target = ReleaseTarget::parse_triple(&runtime.target).ok_or_else(|| {
+                    contract("controller_approvals:unknown_runtime_target".to_owned())
+                })?;
+                Ok(ApprovedMiseRuntime {
+                    target,
+                    version: runtime.version.clone(),
+                    sha256: runtime.sha256.clone(),
+                    bytes: runtime.bytes,
+                })
+            })
+            .collect::<Result<Vec<_>, OrchestratorError>>()?;
         Ok(Self {
             manifest,
             gh_version: active.gh.clone(),
-            mise_version: active.mise.version.clone(),
-            mise_artifact: active.mise.artifact.clone(),
-            mise_sha256: active.mise.sha256.clone(),
+            mise_bootstrap_version: active.mise_bootstrap.version.clone(),
+            mise_bootstrap_artifact: active.mise_bootstrap.artifact.clone(),
+            mise_bootstrap_sha256: active.mise_bootstrap.sha256.clone(),
+            mise_runtime,
         })
     }
 
@@ -102,16 +116,17 @@ impl ControllerApprovedRelease {
         ApprovedGeneratorRelease {
             manifest: &self.manifest,
             gh_version: &self.gh_version,
-            mise_version: &self.mise_version,
-            mise_artifact: &self.mise_artifact,
-            mise_sha256: &self.mise_sha256,
+            mise_bootstrap_version: &self.mise_bootstrap_version,
+            mise_bootstrap_artifact: &self.mise_bootstrap_artifact,
+            mise_bootstrap_sha256: &self.mise_bootstrap_sha256,
+            mise_runtime: &self.mise_runtime,
         }
     }
 }
 
 impl ApprovalsFile {
     fn validate(&self) -> Result<(), OrchestratorError> {
-        if self.schema != 1 {
+        if self.schema != 2 {
             return Err(contract(
                 "controller_approvals:unsupported_schema".to_owned(),
             ));
@@ -191,8 +206,7 @@ mod tests {
             env!("CARGO_MANIFEST_DIR")
         );
         let text = std::fs::read_to_string(path).expect("approvals file must exist");
-        let approval =
-            ControllerApprovedRelease::from_approvals_text(&text).expect("must parse");
+        let approval = ControllerApprovedRelease::from_approvals_text(&text).expect("must parse");
         assert_eq!(approval.as_authority().manifest.version, "0.1.55");
     }
 
