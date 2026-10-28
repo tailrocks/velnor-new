@@ -141,6 +141,10 @@ fn public_authority_rejections_preserve_registry_inputs_and_foreign_resources()
         Case::MissingAttestationSubject,
         Case::WrongRunnerLock,
         Case::FailedQualification,
+        Case::BareRunnerJobName,
+        Case::WrongRunnerJobCallerPrefix,
+        Case::DuplicateRunnerJobName,
+        Case::FailedRunnerJob,
         Case::ArchiveSubstitution,
     ] {
         let fixture = support::Fixture::new_for(case.profile())?;
@@ -156,6 +160,7 @@ fn public_authority_rejections_preserve_registry_inputs_and_foreign_resources()
             !output.status.success(),
             "accepted authority rejection {case:?}"
         );
+        assert_producer_job_rejection(case, &output.stderr);
         assert!(!fixture.receipt.exists(), "receipt for {case:?}");
         assert_eq!(
             fixture.registry_state()?,
@@ -197,6 +202,22 @@ fn public_authority_rejections_preserve_registry_inputs_and_foreign_resources()
         }
     }
     Ok(())
+}
+
+fn assert_producer_job_rejection(case: support::RejectionCase, stderr: &[u8]) {
+    if matches!(
+        case,
+        support::RejectionCase::BareRunnerJobName
+            | support::RejectionCase::WrongRunnerJobCallerPrefix
+            | support::RejectionCase::DuplicateRunnerJobName
+            | support::RejectionCase::FailedRunnerJob
+    ) {
+        let output = String::from_utf8_lossy(stderr);
+        assert!(
+            output.contains("image_publication_producer_job"),
+            "wrong producer job rejection for {case:?}: {output}"
+        );
+    }
 }
 
 #[test]

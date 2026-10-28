@@ -301,9 +301,9 @@ fn producer_job_names(profile: ImagePublicationProfile) -> &'static [&'static st
         ImagePublicationProfile::Runner
         | ImagePublicationProfile::Dind
         | ImagePublicationProfile::ResourceProbe => &[
-            "Build runner images",
-            "Attest runner images",
-            "qualify-images",
+            "Run runner images release graph / Build runner images",
+            "Run runner images release graph / Attest runner images",
+            "Run runner images release graph / qualify-images",
         ],
     }
 }

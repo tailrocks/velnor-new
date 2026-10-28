@@ -31,6 +31,10 @@ pub(crate) enum RejectionCase {
     MissingAttestationSubject,
     WrongRunnerLock,
     FailedQualification,
+    BareRunnerJobName,
+    WrongRunnerJobCallerPrefix,
+    DuplicateRunnerJobName,
+    FailedRunnerJob,
     ArchiveSubstitution,
 }
 
@@ -49,6 +53,10 @@ impl RejectionCase {
             | Self::MissingAttestationSubject
             | Self::WrongRunnerLock
             | Self::FailedQualification
+            | Self::BareRunnerJobName
+            | Self::WrongRunnerJobCallerPrefix
+            | Self::DuplicateRunnerJobName
+            | Self::FailedRunnerJob
             | Self::ArchiveSubstitution => FixtureProfile::Runner,
         }
     }
@@ -188,6 +196,25 @@ impl Fixture {
             })?,
             RejectionCase::FailedQualification => self.update_record(|record| {
                 record["qualification"]["conclusion"] = json!("failure");
+            })?,
+            RejectionCase::BareRunnerJobName => self.update_state(|state| {
+                state["jobs"][0]["name"] = json!("Build runner images");
+                state["jobs"][1]["name"] = json!("Attest runner images");
+                state["jobs"][2]["name"] = json!("qualify-images");
+            })?,
+            RejectionCase::WrongRunnerJobCallerPrefix => self.update_state(|state| {
+                state["jobs"][0]["name"] =
+                    json!("Run unrelated release graph / Build runner images");
+            })?,
+            RejectionCase::DuplicateRunnerJobName => self.update_state(|state| {
+                let mut jobs = state["jobs"].as_array().cloned().unwrap_or_default();
+                if let Some(first) = jobs.first().cloned() {
+                    jobs.push(first);
+                }
+                state["jobs"] = json!(jobs);
+            })?,
+            RejectionCase::FailedRunnerJob => self.update_state(|state| {
+                state["jobs"][0]["conclusion"] = json!("failure");
             })?,
             RejectionCase::ArchiveSubstitution => {
                 let mut archive = fs::read(&self.archive)?;

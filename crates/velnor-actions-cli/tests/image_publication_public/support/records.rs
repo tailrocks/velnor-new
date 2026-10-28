@@ -236,9 +236,9 @@ pub(super) fn state_value(
             {"name":"Attest Linux job image candidate","status":"completed","conclusion":"success"}
         ]),
         FixtureProfile::Runner | FixtureProfile::Dind | FixtureProfile::ResourceProbe => json!([
-            {"name":"Build runner images","status":"completed","conclusion":"success"},
-            {"name":"Attest runner images","status":"completed","conclusion":"success"},
-            {"name":"qualify-images","status":"completed","conclusion":"success"}
+            {"name":"Run runner images release graph / Build runner images","status":"completed","conclusion":"success"},
+            {"name":"Run runner images release graph / Attest runner images","status":"completed","conclusion":"success"},
+            {"name":"Run runner images release graph / qualify-images","status":"completed","conclusion":"success"}
         ]),
     };
     let tag_reference = format!("{}:sha-{source}", profile.repository());
