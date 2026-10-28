@@ -131,7 +131,7 @@ fn active_release_and_runtime_rotation_changes_all_three_rendered_targets()
 -> Result<(), Box<dyn Error>> {
     let commit = "dddddddddddddddddddddddddddddddddddddddd";
     let approvals = rotated_runtime_approvals(&rotated_approvals())?;
-    let lock = lock_for_version("0.1.60", commit);
+    let lock = lock_for_version("0.1.67", commit);
     let ci = rendered_ci(&approvals, &lock)?;
     assert_runtime_identities(&ci, "2026.10.22", ROTATED_RUNTIME_SHA256)?;
     for hash in CURRENT_RUNTIME_SHA256 {

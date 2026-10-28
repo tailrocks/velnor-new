@@ -25,18 +25,18 @@ fn public_generation_keeps_plan_bootstrap_and_uses_required_verdict_controller()
     let workflow = fs::read_to_string(paths.repo.join(".github/workflows/ci.yml"))?;
     let plan = workflow_job(&workflow, "plan")?;
     assert!(
-        plan.contains("/v0.1.55/velnor-actions-0.1.55-x86_64-unknown-linux-gnu"),
-        "Plan no longer uses the immutable SDK55 bootstrap"
+        plan.contains("/v0.1.66/velnor-actions-0.1.66-x86_64-unknown-linux-gnu"),
+        "Plan no longer uses the immutable SDK66 bootstrap"
     );
     assert!(plan.contains("gh@2.103.2"), "Plan helper catalog changed");
-    assert!(!plan.contains("velnor-actions-0.1.59"));
+    assert!(!plan.contains("velnor-actions-0.1.55"));
     let required = workflow_job(&workflow, "required")?;
     assert!(
-        required.contains("/v0.1.59/velnor-actions-0.1.59-x86_64-unknown-linux-gnu"),
-        "Required verdict does not acquire the authenticated SDK59 controller"
+        required.contains("/v0.1.66/velnor-actions-0.1.66-x86_64-unknown-linux-gnu"),
+        "Required verdict does not acquire the authenticated SDK66 controller"
     );
-    assert!(required.contains("717be00d245f511bd5d324574cb80b72a34c5a83c639fafa6af1c0acb8649b26"));
-    assert!(required.contains("4bb724119971fe49f07b12876c54c3c159edb5e5"));
+    assert!(required.contains("fe7cc33aae28b9be2fe9a0561e148c666516f30e53d65a069a6f3f5575a53298"));
+    assert!(required.contains("ecee0521d8631315790662107231dabf2ba6b1ec"));
     assert!(
         required.contains("gh@2.103.3"),
         "Required helper catalog changed"
