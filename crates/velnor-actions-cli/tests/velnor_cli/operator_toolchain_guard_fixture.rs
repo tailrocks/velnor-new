@@ -3,6 +3,7 @@
 
 use std::{
     error::Error,
+    fmt::Write as _,
     fs,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
@@ -84,12 +85,21 @@ impl Fixture {
     }
 
     pub(super) fn invoke(&self, args: &[&str]) -> Result<Output, Box<dyn Error>> {
+        self.invoke_with_guard_policy(args, false)
+    }
+
+    pub(super) fn invoke_with_guard_policy(
+        &self,
+        args: &[&str],
+        require_guard: bool,
+    ) -> Result<Output, Box<dyn Error>> {
         let path = std::env::join_paths([
             self.root.join("bin"),
             PathBuf::from("/usr/bin"),
             PathBuf::from("/bin"),
         ])?;
-        Ok(Command::new(env!("CARGO_BIN_EXE_velnor-actions"))
+        let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-actions"));
+        command
             .args(args)
             .current_dir(&self.repo)
             .env_clear()
@@ -98,8 +108,48 @@ impl Fixture {
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("GIT_TERMINAL_PROMPT", "0")
-            .env("GITHUB_REPOSITORY", "example/probe")
-            .output()?)
+            .env("GITHUB_REPOSITORY", "example/probe");
+        if require_guard {
+            command.env("VELNOR_TEST_GUARD_REQUIRED", "1");
+        }
+        Ok(command.output()?)
+    }
+
+    pub(super) fn generate_unguarded(&self, output: &Path) -> Result<Output, Box<dyn Error>> {
+        self.invoke(&[
+            "generate",
+            "--output-dir",
+            output.to_str().ok_or("non-UTF-8 output path")?,
+        ])
+    }
+
+    pub(super) fn generate_with_guard_policy(
+        &self,
+        mode: &str,
+        output: &Path,
+    ) -> Result<Output, Box<dyn Error>> {
+        self.write_guard_mode(mode)?;
+        self.invoke_with_guard_policy(
+            &[
+                "--toolchain-guard",
+                self.guard.to_str().ok_or("non-UTF-8 guard path")?,
+                "generate",
+                "--output-dir",
+                output.to_str().ok_or("non-UTF-8 output path")?,
+            ],
+            true,
+        )
+    }
+
+    pub(super) fn enable_release(&self, registry: &str) -> Result<(), Box<dyn Error>> {
+        let config = self.repo.join(".velnor/config.toml");
+        let mut contents = fs::read_to_string(&config)?;
+        writeln!(
+            contents,
+            "\n[stacks.rust.release]\nenabled = true\npackages = [\"probe\"]\nregistry = \"{registry}\""
+        )?;
+        fs::write(config, contents)?;
+        Ok(())
     }
 
     pub(super) fn generate(&self, mode: &str, output: &Path) -> Result<Output, Box<dyn Error>> {
@@ -152,11 +202,14 @@ impl Fixture {
 
     pub(super) fn plan(&self, mode: &str) -> Result<Output, Box<dyn Error>> {
         self.write_guard_mode(mode)?;
-        self.invoke(&[
-            "--toolchain-guard",
-            self.guard.to_str().ok_or("non-UTF-8 guard path")?,
-            "plan",
-        ])
+        self.invoke_with_guard_policy(
+            &[
+                "--toolchain-guard",
+                self.guard.to_str().ok_or("non-UTF-8 guard path")?,
+                "plan",
+            ],
+            true,
+        )
     }
 
     pub(super) fn source_check(&self, mode: &str) -> Result<Output, Box<dyn Error>> {
@@ -173,10 +226,10 @@ impl Fixture {
     }
 
     fn write_guard_mode(&self, mode: &str) -> Result<(), Box<dyn Error>> {
-        let body = if mode == "deny" {
-            "exit 77\n"
-        } else {
-            "exec \"$@\"\n"
+        let body = match mode {
+            "deny" => "exit 77\n",
+            "allow" => "export VELNOR_TEST_GUARD_ADMITTED=1\nexec \"$@\"\n",
+            _ => return Err("unknown guard mode".into()),
         };
         Self::write_guard(&self.guard, body)
     }

@@ -24,6 +24,13 @@ operator configuration is a fatal execution-policy error. Existing public
 library entry points retain their default behavior; explicit typed preparation
 options carry the operator policy through the supported paths.
 
+Guarded preparation retains the validated guard as a private capability in
+`GenerationPreparation`. All later planning and rendering use that capability,
+including registry release selection and git-tag publication metadata. Library
+callers use the existing generation and rendering APIs after guarded preparation;
+they do not select the guard again. Preparations must be constructed through the
+preparation APIs rather than external struct literals.
+
 Guarded Rust metadata execution uses catalog-selected exact Rust and Mr.
 Boxington versions:
 
@@ -43,6 +50,7 @@ installation restrictions, process-group cleanup, output cap, and deadline.
 Guard failure is not an ordinary incomplete inventory. A rejected command,
 unavailable guard, or invalid guard path aborts preparation before generation or
 policy export. Check operations preserve existing policy bytes on failure.
+Render-time guard failures are also fatal and never retry without the guard.
 
 User-facing diagnostics distinguish the following conditions:
 
@@ -96,6 +104,12 @@ temporary delegation-bypass mutation must fail because a denying guard no longer
 prevents a valid artifact or successful check. Restore the exact source and
 repeat the successful run. An unknown-option failure alone is insufficient proof
 of fail-closed delegation.
+
+Registry and git-tag release journeys separately exercise late metadata during
+planning and generation. Their unguarded controls establish valid release
+artifacts. A strict external Mise policy then permits metadata only when the
+selected guard admits that subprocess. This exposes rendering paths that would
+otherwise lose the preparation policy, without relying on call counts or order.
 
 The external host guard receives a separate functional replay: exact discovery
 and locked/offline qualification succeed; altered payloads, additional tools,

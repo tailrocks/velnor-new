@@ -81,6 +81,66 @@ fn guarded_generate_and_plan_succeed_and_denial_writes_nothing() -> Result<(), B
 }
 
 #[test]
+fn guarded_generate_keeps_guard_for_release_rendering() -> Result<(), Box<dyn Error>> {
+    for (registry, outputs) in [
+        ("crates-io", &[".github/workflows/release.yml"][..]),
+        (
+            "git-tag",
+            &[".github/workflows/publish.yml", ".github/release-plz.toml"][..],
+        ),
+    ] {
+        let fixture = fixture::Fixture::new()?;
+        fixture.enable_release(registry)?;
+        let control_plan = fixture.invoke(&["plan"])?;
+        assert!(
+            control_plan.status.success(),
+            "{}",
+            fixture::stderr(&control_plan)
+        );
+        let control_output = fixture.root.join("unguarded-release");
+        let control = fixture.generate_unguarded(&control_output)?;
+        assert!(control.status.success(), "{}", fixture::stderr(&control));
+        for &path in outputs {
+            assert!(control_output.join(path).is_file(), "missing {path}");
+        }
+
+        let guarded_plan = fixture.plan("allow")?;
+        assert!(
+            guarded_plan.status.success(),
+            "{}",
+            fixture::stderr(&guarded_plan)
+        );
+        assert_eq!(guarded_plan.stdout, control_plan.stdout);
+
+        let guarded_output = fixture.root.join("guarded-release");
+        let guarded = fixture.generate_with_guard_policy("allow", &guarded_output)?;
+        assert!(guarded.status.success(), "{}", fixture::stderr(&guarded));
+        for &path in outputs {
+            assert!(guarded_output.join(path).is_file(), "missing {path}");
+            assert_eq!(
+                fs::read(control_output.join(path))?,
+                fs::read(guarded_output.join(path))?,
+                "guarded {registry} output differs at {path}"
+            );
+        }
+
+        let denied_plan = fixture.plan("deny")?;
+        assert!(!denied_plan.status.success());
+        assert!(
+            fixture::stderr(&denied_plan).contains("operator toolchain guard rejected metadata")
+        );
+        assert_eq!(denied_plan.stdout, b"");
+
+        let denied_output = fixture.root.join("denied-release");
+        let denied = fixture.generate("deny", &denied_output)?;
+        assert!(!denied.status.success());
+        assert!(fixture::stderr(&denied).contains("operator toolchain guard rejected metadata"));
+        assert!(!denied_output.exists());
+    }
+    Ok(())
+}
+
+#[test]
 fn source_policy_export_and_check_use_guard_and_preserve_policy() -> Result<(), Box<dyn Error>> {
     let fixture = fixture::Fixture::new()?;
     let exported = fixture.root.join("source-policy.json");

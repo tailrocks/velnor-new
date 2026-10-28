@@ -31,12 +31,17 @@ pub struct GenerationPreparation {
     pub runner_image: RunnerImageEvidence,
     pub lock_audit_blocking: Vec<String>,
     pub catalog: ToolCatalog,
+    operator_toolchain_guard: Option<OperatorToolchainGuard>,
 }
 
 impl GenerationPreparation {
     #[must_use]
     pub fn emission_catalog(&self) -> ToolCatalog {
         self.catalog.for_emission()
+    }
+
+    pub(crate) fn operator_toolchain_guard(&self) -> Option<&OperatorToolchainGuard> {
+        self.operator_toolchain_guard.as_ref()
     }
 }
 
@@ -149,6 +154,7 @@ fn prepare_inner(
         runner_image,
         lock_audit_blocking: audit.blocking,
         catalog,
+        operator_toolchain_guard: guard.cloned(),
     })
 }
 

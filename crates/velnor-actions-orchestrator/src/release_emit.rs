@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::config::{ReleaseAuthentication, ReleaseRegistry, RustReleaseConfig};
-use velnor_actions_mise::{MetadataDiscovery, ToolCatalog};
+use velnor_actions_mise::MetadataDiscovery;
 use velnor_actions_rust::release_select::{
     DEFAULT_REGISTRY, ReleaseRequest as SelectRequest, ReleaseScope, ReleaseSelection,
     select_release_set,
@@ -147,7 +147,7 @@ fn select_packages(
     prep: &GenerationPreparation,
     release: &RustReleaseConfig,
 ) -> Result<ReleaseSelection, OrchestratorError> {
-    let json = release_metadata_json(&prep.root, release.manifest_path.as_str(), &prep.catalog)?;
+    let json = release_metadata_json(prep, release.manifest_path.as_str())?;
     select_from_json(prep, release, &json)
 }
 
@@ -181,17 +181,26 @@ pub(crate) fn select_from_json(
 }
 
 pub(crate) fn release_metadata_json(
-    root: &std::path::Path,
+    prep: &GenerationPreparation,
     manifest: &str,
-    catalog: &ToolCatalog,
 ) -> Result<String, OrchestratorError> {
+    let catalog = &prep.catalog;
+    if let Some(guard) = prep.operator_toolchain_guard() {
+        crate::inventory::require_metadata_tools(catalog, Some(guard))?;
+        return MetadataDiscovery::new(prep.root.join(manifest))
+            .and_then(|request| request.run_with_operator_guard(catalog, guard))
+            .map_err(|_| OrchestratorError::ToolchainGuard {
+                problem: "operator toolchain guard rejected metadata".to_owned(),
+            });
+    }
     let incomplete = |problem: String| OrchestratorError::PreparationIncomplete {
         manifest: manifest.to_owned(),
         problem,
     };
     crate::inventory::require_rust_pin(catalog).map_err(|err| incomplete(err.to_string()))?;
     let request =
-        MetadataDiscovery::new(root.join(manifest)).map_err(|err| incomplete(err.to_string()))?;
+        MetadataDiscovery::new(prep.root.join(manifest))
+            .map_err(|err| incomplete(err.to_string()))?;
     let command = request
         .command(catalog)
         .map_err(|err| incomplete(err.to_string()))?;

@@ -84,4 +84,7 @@ else
 fi
 [ "$1" = "--manifest-path" ] || exit 103
 [ "$2" = "@MANIFEST_PATH@" ] || exit 104
+if [ "${VELNOR_TEST_GUARD_REQUIRED:-0}" = "1" ] && [ "${VELNOR_TEST_GUARD_ADMITTED:-0}" != "1" ]; then
+  exit 105
+fi
 cat "$(dirname "$0")/metadata.json"
