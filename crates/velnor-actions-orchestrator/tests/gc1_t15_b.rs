@@ -39,6 +39,7 @@ fn check_rejects_unknown_shared_context(root: &Path) -> Result<(), Box<dyn Error
         discovered(platform, tools),
         CheckCapabilityProof { container: None },
         &[],
+        velnor_actions_mise::MISE_VERSION.to_owned(),
     )
     .is_ok()
     {

@@ -143,6 +143,7 @@ pub(crate) fn prepare_check_with_context(
     if group.temp.starts_with(&root) {
         return Err(internal("check_temp_inside_repository"));
     }
+    let runtime = binary::resolve_mise_runtime(&root, check, deadline)?;
     let n = NEXT_HOME.fetch_add(1, Ordering::Relaxed);
     let home = group
         .temp
@@ -160,7 +161,6 @@ pub(crate) fn prepare_check_with_context(
         &group.context_digest(),
     )
     .map_err(|error| internal(&error.to_string()))?;
-    let runtime = approved_runtime_for_check(&root, check)?;
     let prepared = materialize(group, &home, cwd, check, &runtime, deadline);
     match prepared {
         Ok(parts) => Ok(OwnedCheck {
@@ -257,32 +257,6 @@ fn verify_source(
     }
 }
 
-fn approved_runtime_for_check(
-    root: &Path,
-    check: &DiscoveredCheck,
-) -> Result<velnor_actions_mise::catalog::lock::ApprovedMiseRuntime, OrchestratorError> {
-    use velnor_actions_mise::catalog::lock::ApprovedMiseRuntime;
-
-    let target = check.check.runner.platform.release_target();
-    if !root.join(".velnor/controller-approvals.json").is_file() {
-        let pin = velnor_actions_mise::current_mise_binary(target);
-        return Ok(ApprovedMiseRuntime {
-            target,
-            version: pin.version.to_owned(),
-            sha256: pin.sha256.to_owned(),
-            bytes: pin.bytes,
-        });
-    }
-    let approved = crate::controller_approval::ControllerApprovedRelease::load_active_approval(root)?;
-    approved
-        .as_authority()
-        .mise_runtime
-        .iter()
-        .find(|runtime| runtime.target == target)
-        .cloned()
-        .ok_or_else(|| internal("mise_runtime_missing_target"))
-}
-
 fn materialize(
     group: &RestoredGroupContext,
     home: &Path,
@@ -333,6 +307,7 @@ fn materialize(
         check.clone(),
         proof.proof,
         &system_tools,
+        runtime.version.clone(),
     )
     .map_err(|e| internal(&e.to_string()))?;
     qualified
