@@ -4,6 +4,7 @@
 use std::path::Path;
 
 use crate::error::HostError;
+use sha2::{Digest, Sha256};
 
 pub(crate) mod model;
 
@@ -68,7 +69,11 @@ fn load_manifest(
     super::manifest::validate_workflow_identity(&source_commit, &authority_sha)?;
     validate_descriptors(&descriptors, &source_commit)?;
     validate_images(&descriptors.images, &source_commit)?;
-    let versions = read_versions(runner_lock_path)?;
+    let runner_lock = super::files::read_bounded_regular(runner_lock_path, MANIFEST_LIMIT)?;
+    if sha256_hex(&runner_lock) != descriptors.runner_lock_sha256 {
+        return Err(HostError::Identity);
+    }
+    let versions = read_versions(&runner_lock)?;
     Ok(manifest(
         descriptors.images,
         source_commit,
@@ -81,9 +86,10 @@ fn validate_descriptors(
     descriptors: &DescriptorDocument,
     source_commit: &str,
 ) -> Result<(), HostError> {
-    if descriptors.schema_version != 1
+    if descriptors.schema_version != 2
         || descriptors.source_commit != source_commit
         || descriptors.platform != PLATFORM
+        || !is_lower_sha256(&descriptors.runner_lock_sha256)
     {
         return Err(HostError::Identity);
     }
@@ -113,9 +119,8 @@ fn validate_image(
     Ok(())
 }
 
-fn read_versions(path: &Path) -> Result<Versions, HostError> {
-    let bytes = super::files::read_bounded_regular(path, MANIFEST_LIMIT)?;
-    let lock_text = std::str::from_utf8(&bytes).map_err(|_| HostError::Identity)?;
+fn read_versions(bytes: &[u8]) -> Result<Versions, HostError> {
+    let lock_text = std::str::from_utf8(bytes).map_err(|_| HostError::Identity)?;
     let lock: RunnerLockVersions = toml::from_str(lock_text).map_err(|_| HostError::Identity)?;
     if [
         &lock.runner,
@@ -176,4 +181,22 @@ fn is_digest(value: &str) -> bool {
         && hex
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn is_lower_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let digest = Sha256::digest(bytes);
+    let mut output = String::with_capacity(digest.len() * 2);
+    for byte in &digest {
+        output.push(char::from(HEX[usize::from(byte >> 4)]));
+        output.push(char::from(HEX[usize::from(byte & 15)]));
+    }
+    output
 }

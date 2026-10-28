@@ -3,8 +3,12 @@
 
 use std::{error::Error, fs};
 
+#[path = "image_publication_public/attempt_identity.rs"]
+mod attempt_identity;
 #[path = "image_publication_public/registry_cases.rs"]
 mod registry_cases;
+#[path = "image_publication_public/source_closure.rs"]
+mod source_closure;
 #[path = "image_publication_public/support/mod.rs"]
 mod support;
 

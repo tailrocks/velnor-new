@@ -11,10 +11,26 @@ use super::image_candidate_record::{
 
 pub const RUNNER_IMAGE_PUBLICATION_SCHEMA: &str = "velnor.runner-image-publication.v1";
 
-pub const RUNNER_PUBLICATION_SOURCE_INPUTS: [&str; 5] = [
+pub const RUNNER_PUBLICATION_SOURCE_INPUTS: [&str; 21] = [
     ".velnor/runner.lock",
-    "images/runner/ubuntu-26.04/Dockerfile",
     "images/dind/Dockerfile",
+    "images/dind/LICENSE-moby",
+    "images/dind/cgroup-v2-delegation.sh",
+    "images/dind/entrypoint.sh",
+    "images/runner/ubuntu-26.04/Dockerfile",
+    "images/runner/ubuntu-26.04/clear-dockerenv.sh",
+    "images/runner/ubuntu-26.04/entrypoint.sh",
+    "images/runner/ubuntu-26.04/tar-absolute.sh",
+    "images/runner/ubuntu-26.04/tar-dir-meta.pl",
+    "images/runner/ubuntu-26.04/tar-extract-plan.sh",
+    "images/runner/ubuntu-26.04/tar-extract.sh",
+    "images/runner/ubuntu-26.04/tar-member-rewrite.pl",
+    "images/runner/ubuntu-26.04/tar-member-stream.pl",
+    "images/runner/ubuntu-26.04/tar-member.pl",
+    "images/runner/ubuntu-26.04/tar-pax.pl",
+    "images/runner/ubuntu-26.04/tar-shim.sh",
+    "images/runner/ubuntu-26.04/wait-docker-api.sh",
+    "images/runner/ubuntu-26.04/wait-docker-sock.sh",
     "images/resource-probe/Dockerfile",
     "images/resource-probe/build-image.sh",
 ];

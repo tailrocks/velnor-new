@@ -8,6 +8,15 @@ use sha2::{Digest, Sha256};
 
 use super::{Fixture, FixtureProfile};
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum AttemptArtifactCase {
+    OlderAndCurrent,
+    OlderOnly,
+    PreviousArtifactId,
+    UnqualifiedCurrentName,
+    DuplicateCurrentName,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RejectionCase {
     WrongRepository,
@@ -46,6 +55,101 @@ impl RejectionCase {
 }
 
 impl Fixture {
+    pub(crate) fn configure_attempt_two_artifacts(
+        &mut self,
+        case: AttemptArtifactCase,
+    ) -> Result<(), Box<dyn Error>> {
+        if self.profile != FixtureProfile::Runner || self.producer_run_attempt != 2 {
+            return Err("attempt-two artifact fixture requires the Runner profile".into());
+        }
+        let mut state = self.read_state()?;
+        let current = state["artifacts"]
+            .as_array()
+            .and_then(|artifacts| artifacts.first())
+            .cloned()
+            .ok_or("fixture has no producer artifact")?;
+        let current_id = current["id"].as_u64().ok_or("fixture artifact has no id")?;
+        let previous_id = current_id
+            .checked_sub(1)
+            .ok_or("fixture current artifact id cannot identify its predecessor")?;
+        let mut previous = current.clone();
+        previous["id"] = json!(previous_id);
+        previous["name"] = json!("image-assets-1");
+        let mut current = current;
+        current["name"] = json!("image-assets-2");
+        let artifacts = match case {
+            AttemptArtifactCase::OlderAndCurrent => vec![previous, current],
+            AttemptArtifactCase::OlderOnly => vec![previous],
+            AttemptArtifactCase::PreviousArtifactId => {
+                self.artifact_id = previous_id;
+                vec![previous, current]
+            }
+            AttemptArtifactCase::UnqualifiedCurrentName => {
+                let mut unqualified = current;
+                unqualified["name"] = json!("image-assets");
+                vec![previous, unqualified]
+            }
+            AttemptArtifactCase::DuplicateCurrentName => {
+                let mut duplicate = current.clone();
+                duplicate["id"] = json!(
+                    current_id
+                        .checked_add(1)
+                        .ok_or("fixture artifact id overflow")?
+                );
+                vec![previous, current, duplicate]
+            }
+        };
+        state["artifacts"] = json!(artifacts);
+        self.write_state(&state)
+    }
+
+    pub(crate) fn artifact_ids(&self) -> Result<Vec<u64>, Box<dyn Error>> {
+        let state = self.read_state()?;
+        state["artifacts"]
+            .as_array()
+            .ok_or("fixture artifact list is missing")?
+            .iter()
+            .map(|artifact| {
+                artifact["id"]
+                    .as_u64()
+                    .ok_or_else(|| "fixture artifact ID is invalid".into())
+            })
+            .collect()
+    }
+
+    pub(crate) fn set_source_response(
+        &self,
+        path: &str,
+        bytes: &[u8],
+    ) -> Result<(), Box<dyn Error>> {
+        let mut state = self.read_state()?;
+        state["source_files"][path] = json!(super::records::encode_base64(bytes));
+        self.write_state(&state)
+    }
+
+    pub(crate) fn replace_authenticated_source(
+        &self,
+        path: &str,
+        bytes: &[u8],
+    ) -> Result<(), Box<dyn Error>> {
+        self.set_source_response(path, bytes)?;
+        let mut record: Value = serde_json::from_slice(&fs::read(&self.record)?)?;
+        record["source"]["inputs"][path] = json!(hex(&Sha256::digest(bytes)));
+        let record_bytes = serde_json::to_vec(&record)?;
+        fs::write(&self.record, &record_bytes)?;
+        let record_digest = hex(&Sha256::digest(&record_bytes));
+        let mut state = self.read_state()?;
+        let subjects = state["attestation"][0]["verificationResult"]["statement"]["subject"]
+            .as_array_mut()
+            .ok_or("fixture attestation has no subjects")?;
+        let subject = subjects
+            .iter_mut()
+            .find(|subject| subject["name"] == self.profile.record_name())
+            .ok_or("fixture attestation has no publication record subject")?;
+        subject["digest"]["sha256"] = json!(record_digest);
+        self.write_state(&state)
+    }
+
     pub(crate) fn apply_rejection(&self, case: RejectionCase) -> Result<(), Box<dyn Error>> {
         match case {
             RejectionCase::WrongRepository => self.update_state(|state| {
@@ -65,7 +169,7 @@ impl Fixture {
                 state["producer"]["run_attempt"] = json!(2);
             })?,
             RejectionCase::WrongArtifact => self.update_state(|state| {
-                state["artifact"]["id"] = json!(987_654_329_u64);
+                state["artifacts"][0]["id"] = json!(987_654_329_u64);
             })?,
             RejectionCase::FailedLatestCi => self.update_state(|state| {
                 state["ci_runs"] = ci_runs(self, "completed", Some("failure"));

@@ -59,10 +59,13 @@ an error and must not be replaced. Readback must verify the published bytes
 and exact digest. Runtime consumers never select an image through this tag.
 
 `velnor-actions image-maintenance admit-runner-images` inspects the three OCI
-archives and writes schema-1 descriptors for the native manifest formatter.
-Its selected source must match the clean checkout and the committed runner
-lock. It derives manifest and config digests from authenticated archive bytes
-and preserves the [probe's closed execution profile](resource-probe-artifact.md).
+archives and writes schema-2 descriptors for the native manifest formatter.
+The descriptor includes a lowercase SHA-256 digest of the exact committed
+runner-lock bytes. The formatter checks that digest against one bounded lock
+read before parsing that same buffer. The selected source must match the clean
+checkout and the committed runner lock. The admission command derives manifest
+and config digests from authenticated archive bytes and preserves the
+[probe's closed execution profile](resource-probe-artifact.md).
 These descriptors are
 intermediate evidence, not publication authority or runtime qualification.
 The publisher must bind the same archives and lock to successful qualification

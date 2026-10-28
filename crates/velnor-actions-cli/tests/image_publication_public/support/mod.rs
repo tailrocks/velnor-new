@@ -25,7 +25,7 @@ use tempfile::TempDir;
 pub(crate) use manifest_outcomes::{CapturedOutcome, ReplayMutation};
 pub(crate) use profile::FixtureProfile;
 pub(crate) use registry_state::{BlobFault, ExistingTag, MovedTag};
-pub(crate) use rejections::RejectionCase;
+pub(crate) use rejections::{AttemptArtifactCase, RejectionCase};
 
 const RUN_ATTEMPT: u32 = 1;
 
@@ -35,6 +35,7 @@ pub(crate) struct Fixture {
     pub(crate) source: String,
     pub(crate) authority_sha: String,
     pub(crate) producer_run_id: u64,
+    pub(crate) producer_run_attempt: u32,
     pub(crate) artifact_id: u64,
     pub(crate) archive: PathBuf,
     pub(crate) record: PathBuf,
@@ -77,13 +78,20 @@ impl Fixture {
     }
 
     pub(crate) fn new_for(profile: FixtureProfile) -> Result<Self, Box<dyn Error>> {
-        Self::new_with_profile(profile, None)
+        Self::new_for_attempt(profile, RUN_ATTEMPT)
+    }
+
+    pub(crate) fn new_for_attempt(
+        profile: FixtureProfile,
+        run_attempt: u32,
+    ) -> Result<Self, Box<dyn Error>> {
+        Self::new_with_profile(profile, None, run_attempt)
     }
 
     pub(crate) fn new_with_image_config(
         image_config: Option<Value>,
     ) -> Result<Self, Box<dyn Error>> {
-        Self::new_with_profile(FixtureProfile::Job, image_config)
+        Self::new_with_profile(FixtureProfile::Job, image_config, RUN_ATTEMPT)
     }
 
     pub(crate) fn new_with_raw_tar() -> Result<Self, Box<dyn Error>> {
@@ -94,6 +102,8 @@ impl Fixture {
                 "Labels":{"org.opencontainers.image.revision":source},
                 "User":"fixture"
             }))?,
+            RUN_ATTEMPT,
+            FixtureProfile::Job.artifact_id(),
         )
     }
 
@@ -105,32 +115,51 @@ impl Fixture {
                 "Labels":{"org.opencontainers.image.revision":source},
                 "User":"fixture"
             }))?,
+            RUN_ATTEMPT,
+            FixtureProfile::Job.artifact_id(),
         )
     }
 
     fn new_with_profile(
         profile: FixtureProfile,
         image_config: Option<Value>,
+        run_attempt: u32,
     ) -> Result<Self, Box<dyn Error>> {
+        let attempt_offset = u64::from(
+            run_attempt
+                .checked_sub(1)
+                .ok_or("fixture run attempt must be positive")?,
+        );
+        let artifact_id = profile
+            .artifact_id()
+            .checked_add(attempt_offset)
+            .ok_or("fixture artifact ID overflow")?;
         let image = match image_config {
             Some(config) => oci::create_with_image_config(&config)?,
             None => oci::create_for(profile, &"a".repeat(40))?,
         };
-        Self::new_with_image(profile, image)
+        Self::new_with_image(profile, image, run_attempt, artifact_id)
     }
 
-    fn new_with_image(profile: FixtureProfile, image: oci::Layout) -> Result<Self, Box<dyn Error>> {
+    fn new_with_image(
+        profile: FixtureProfile,
+        image: oci::Layout,
+        run_attempt: u32,
+        artifact_id: u64,
+    ) -> Result<Self, Box<dyn Error>> {
         let temp = tempfile::tempdir()?;
         let base = temp.path().canonicalize()?;
         let source = "a".repeat(40);
         let authority_sha = profile.authority_sha(&source);
-        let subjects = write_subjects(&base, profile, &source, &authority_sha, &image)?;
+        let subjects =
+            write_subjects(&base, profile, &source, &authority_sha, &image, run_attempt)?;
         let attestation = records::attestation(
             profile,
             &source,
             &authority_sha,
             &subjects.archive_sha256,
             &subjects.record_sha256,
+            run_attempt,
         );
         let state = records::state_value(
             profile,
@@ -138,6 +167,8 @@ impl Fixture {
             &authority_sha,
             subjects.source_files,
             &attestation,
+            run_attempt,
+            artifact_id,
         );
         let runtime = runtime::create_runtime(&base, state, profile, &source)?;
         let platform_digest = image.identity.platform_manifest_digest.clone();
@@ -147,7 +178,8 @@ impl Fixture {
             source,
             authority_sha,
             producer_run_id: profile.run_id(),
-            artifact_id: profile.artifact_id(),
+            producer_run_attempt: run_attempt,
+            artifact_id,
             archive: subjects.archive,
             record: subjects.record,
             receipt: base.join("receipt.json"),
@@ -196,7 +228,10 @@ impl Fixture {
             ])
             .arg(&self.source)
             .args(["--producer-run-id", &self.producer_run_id.to_string()])
-            .args(["--producer-run-attempt", &RUN_ATTEMPT.to_string()])
+            .args([
+                "--producer-run-attempt",
+                &self.producer_run_attempt.to_string(),
+            ])
             .args([
                 "--artifact-id",
                 &self.artifact_id.to_string(),
@@ -296,6 +331,7 @@ fn write_subjects(
     source: &str,
     authority_sha: &str,
     image: &oci::Layout,
+    run_attempt: u32,
 ) -> Result<FixtureSubjects, Box<dyn Error>> {
     let source_files = records::source_files(profile)?;
     let source_inputs = source_files
@@ -310,15 +346,16 @@ fn write_subjects(
     fs::write(&archive, &image.archive)?;
     let record = base.join(profile.record_name());
     let archive_sha256 = hex(&Sha256::digest(&image.archive));
-    let record_bytes = records::make_record(
+    let record_bytes = records::make_record(records::RecordInput {
         profile,
         source,
         authority_sha,
-        &source_inputs,
-        &archive_sha256,
+        inputs: &source_inputs,
+        archive_sha: &archive_sha256,
         image,
-        &source_files,
-    )?;
+        source_files: &source_files,
+        run_attempt,
+    })?;
     fs::write(&record, &record_bytes)?;
     Ok(FixtureSubjects {
         archive,

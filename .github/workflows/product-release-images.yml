@@ -135,7 +135,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
-          name: image-assets
+          name: image-assets-${{ github.run_attempt }}
           path: "velnor-runner-linux-amd64.tar\nvelnor-dind-linux-amd64.tar\nvelnor-resource-probe-linux-amd64.tar\nRESOURCE_PROBE_MANIFEST.json\nLICENSE\nNOTICE\nSHA256SUMS"
           retention-days: 1
   attest-images:
@@ -156,7 +156,7 @@ jobs:
       - name: Download built assets
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
-          name: image-assets
+          name: image-assets-${{ github.run_attempt }}
           path: assets
       - name: Attest built artifacts
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
@@ -196,7 +196,7 @@ jobs:
       - name: Download built assets
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
-          name: image-assets
+          name: image-assets-${{ github.run_attempt }}
           path: assets
         if: inputs.release_action == 'build'
       - name: Publish GitHub release

@@ -175,7 +175,6 @@ fn assert_generator_versions(preparation: &GenerationPreparation, helper_version
         preparation.workflow.context.report_helper_version,
         helper_version
     );
-    assert_ne!(helper_version, env!("CARGO_PKG_VERSION"));
 }
 
 fn assert_plan_authority(

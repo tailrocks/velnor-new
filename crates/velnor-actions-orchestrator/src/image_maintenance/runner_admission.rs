@@ -3,6 +3,7 @@
 
 use std::path::Path;
 
+use sha2::{Digest, Sha256};
 use serde::Serialize;
 use velnor_archive_guard::owned_archive_guard::oci_candidate::{
     OciCandidateEvidence, OciImageConfiguration, inspect_oci_candidate_with_config,
@@ -20,6 +21,7 @@ const RUNNER_LOCK_LIMIT: usize = 1024 * 1024;
 #[derive(Serialize)]
 struct DescriptorDocument<'a> {
     schema_version: u8,
+    runner_lock_sha256: &'a str,
     source_commit: &'a str,
     platform: &'static str,
     images: ImageEntries<'a>,
@@ -57,6 +59,7 @@ pub(super) fn admit_runner_images(
     validate_output_path(&root, &request.descriptors_output)?;
     let lock = read_exact_lock(&root, &request.source_commit, request.deadline)?;
     validate::validate_runner_lock(&lock)?;
+    let runner_lock_sha256 = source::hex(&Sha256::digest(&lock));
     let runner = inspect_image(&request.runner_archive, ImageKind::Runner, &request.source_commit)?;
     let dind = inspect_image(&request.dind_archive, ImageKind::Dind, &request.source_commit)?;
     let probe = inspect_image(
@@ -64,7 +67,13 @@ pub(super) fn admit_runner_images(
         ImageKind::ResourceProbe,
         &request.source_commit,
     )?;
-    let bytes = serialize_descriptors(&request.source_commit, &runner, &dind, &probe)?;
+    let bytes = serialize_descriptors(
+        &request.source_commit,
+        &runner_lock_sha256,
+        &runner,
+        &dind,
+        &probe,
+    )?;
     source::verify_selected_source(&root, &request.source_commit, request.deadline)?;
     if read_exact_lock(&root, &request.source_commit, request.deadline)? != lock {
         return Err(internal("runner_image_lock_changed"));
@@ -99,12 +108,14 @@ fn validate_image_configuration(
 
 fn serialize_descriptors(
     source_commit: &str,
+    runner_lock_sha256: &str,
     runner: &InspectedImage,
     dind: &InspectedImage,
     probe: &InspectedImage,
 ) -> Result<Vec<u8>, OrchestratorError> {
     let document = DescriptorDocument {
-        schema_version: 1,
+        schema_version: 2,
+        runner_lock_sha256,
         source_commit,
         platform: PLATFORM,
         images: ImageEntries {
