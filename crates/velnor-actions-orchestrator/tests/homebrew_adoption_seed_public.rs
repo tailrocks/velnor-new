@@ -128,8 +128,14 @@ fn public_seed_manifest_replaces_legacy_consumer_manifest() -> Result<(), Box<dy
         .collect::<Vec<_>>();
     assert_eq!(
         pull_request_types,
-        ["opened", "synchronize", "reopened", "ready_for_review"],
-        "seed must validate pull requests when drafts become ready"
+        [
+            "opened",
+            "edited",
+            "synchronize",
+            "reopened",
+            "ready_for_review"
+        ],
+        "seed must re-plan pull requests after base retargets and when drafts become ready"
     );
     let rendered_manifest = rendered
         .iter()

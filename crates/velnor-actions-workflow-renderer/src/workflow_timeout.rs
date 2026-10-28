@@ -119,10 +119,16 @@ pub(super) fn pull_request_only() -> Yaml {
         Yaml::Map(vec![(
             "types".to_owned(),
             Yaml::Seq(
-                ["opened", "synchronize", "reopened", "ready_for_review"]
-                    .into_iter()
-                    .map(Yaml::str)
-                    .collect(),
+                [
+                    "opened",
+                    "edited",
+                    "synchronize",
+                    "reopened",
+                    "ready_for_review",
+                ]
+                .into_iter()
+                .map(Yaml::str)
+                .collect(),
             ),
         )]),
     )])
