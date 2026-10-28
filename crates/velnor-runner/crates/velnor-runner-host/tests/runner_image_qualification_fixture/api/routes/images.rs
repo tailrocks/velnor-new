@@ -12,10 +12,20 @@ use super::{missing, path_id};
 
 pub(super) fn route(request: &Request, path: &str, state: &mut State) -> Option<Reply> {
     match (request.method.as_str(), path) {
-        ("GET", "version") => Some(Reply::json(
-            200,
-            &json!({"Version": state.plan.docker_version.as_str(), "ApiVersion": "1.45"}),
-        )),
+        ("GET", "version") => {
+            let changed = state.outer_info_calls > 0
+                && state.plan.outer_mutation == super::super::state::OuterMutation::Version;
+            state.fault_reached |= changed;
+            let version = if changed {
+                "99.0.0"
+            } else {
+                state.plan.docker_version.as_str()
+            };
+            Some(Reply::json(
+                200,
+                &json!({"Version": version, "ApiVersion": "1.45"}),
+            ))
+        }
         ("GET", "info") => Some(info(state)),
         ("GET", _) if path.starts_with("images/") && path.ends_with("/json") => {
             Some(inspect_image(path, state))

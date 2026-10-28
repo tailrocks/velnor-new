@@ -66,7 +66,7 @@ async fn qualify_with_resources(
     inspect_image(docker, source, runner_id).await?;
     inspect_image(docker, source, dind_id).await?;
     let final_outer = probes::inspect_outer(docker).await?;
-    if final_outer.id != outer.id || final_outer.root != outer.root {
+    if final_outer != outer {
         return Err(HostError::Identity);
     }
     Ok(Qualification {

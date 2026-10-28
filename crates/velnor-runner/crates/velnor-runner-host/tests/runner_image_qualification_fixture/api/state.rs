@@ -39,6 +39,7 @@ pub(crate) enum OuterMutation {
     None,
     Id,
     Root,
+    Version,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
